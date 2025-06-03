@@ -1,0 +1,8 @@
+node_modules
+dist
+bun.lock
+*.tgz
+.env
+.eslintcache
+.cache
+*.tsbuildinfo

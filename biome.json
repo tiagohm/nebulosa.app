@@ -64,6 +64,9 @@
 				"noForEach": "off",
 				"noUselessStringConcat": "error",
 				"useDateNow": "error"
+			},
+			"a11y": {
+				"useAltText": "off"
 			}
 		}
 	},

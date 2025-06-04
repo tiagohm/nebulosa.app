@@ -8,7 +8,8 @@
 	"scripts": {
 		"dev": "bun --hot main.ts",
 		"lint": "biome lint --write src/",
-		"format": "biome format --write src/"
+		"format": "biome format --write src/",
+		"typecheck": "tsc --noEmit"
 	},
 	"author": {
 		"name": "Tiago Melo",
@@ -19,8 +20,12 @@
 		"@elysiajs/cors": "latest",
 		"@elysiajs/cron": "latest",
 		"@elysiajs/static": "latest",
+		"@heroui/react": "2.8.0-beta.6",
+		"@uidotdev/usehooks": "2.4.1",
 		"bun-plugin-tailwind": "latest",
+		"date-fns": "4.1.0",
 		"elysia": "latest",
+		"lucide-react": "0.512.0",
 		"nebulosa": "github:tiagohm/nebulosa.ts",
 		"react": "19",
 		"react-dom": "19",
@@ -34,5 +39,5 @@
 		"@types/node": "latest",
 		"typescript": "latest"
 	},
-	"trustedDependencies": ["@biomejs/biome", "@tailwindcss/oxide", "esbuild", "nebulosa", "sharp"]
+	"trustedDependencies": ["@biomejs/biome", "@heroui/shared-utils", "@tailwindcss/oxide", "esbuild", "nebulosa", "sharp"]
 }

@@ -140,4 +140,4 @@ app.ws('/ws', {
 
 app.listen({ hostname, port })
 
-console.info(`server is started at port: ${app.server!.port}`)
+console.info(`server is started at: http://${app.server!.hostname}:${app.server!.port}`)

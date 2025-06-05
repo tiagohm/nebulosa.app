@@ -29,7 +29,8 @@
 		"nebulosa": "github:tiagohm/nebulosa.ts",
 		"react": "19",
 		"react-dom": "19",
-		"tailwindcss": "4"
+		"tailwindcss": "4",
+		"wretch": "2.11.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "latest",

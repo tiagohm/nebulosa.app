@@ -50,10 +50,12 @@
 				"useForOf": "off",
 				"useNodejsImportProtocol": "off",
 				"useNumberNamespace": "off",
-				"useThrowOnlyError": "error"
+				"useThrowOnlyError": "error",
+				"useSelfClosingElements": "off"
 			},
 			"correctness": {
-				"noPrecisionLoss": "off"
+				"noPrecisionLoss": "off",
+				"useExhaustiveDependencies": "off"
 			},
 			"suspicious": {
 				"noAssignInExpressions": "off",

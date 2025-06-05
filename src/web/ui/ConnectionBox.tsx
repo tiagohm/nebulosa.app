@@ -143,7 +143,7 @@ export function ConnectionBox({ isConnected = false, isDisabled = false, onConne
 											<Lucide.Computer size={12} />
 											{item.host}:{item.port}
 											<Lucide.Clock size={12} />
-											{item.connectedAt ? format(item.connectedAt, 'YYYY-MM-dd HH:mm:ss') : 'never'}
+											{item.connectedAt ? format(item.connectedAt, 'yyyy-MM-dd HH:mm:ss') : 'never'}
 										</span>
 									</div>
 									<div className='flex items-center'>
@@ -182,9 +182,9 @@ export function ConnectionBox({ isConnected = false, isDisabled = false, onConne
 							</ModalHeader>
 							<ModalBody>
 								<div className='flex w-full flex-col flex-wrap md:flex-nowrap gap-4'>
-									<Input label='Name' placeholder='Local' type='text' maxLength={64} value={editedConnection.name} onValueChange={(value) => handleEditedConnectionInputChange('name', value)} />
-									<Input label='Host' placeholder='localhost' type='text' maxLength={128} value={editedConnection.host} onValueChange={(value) => handleEditedConnectionInputChange('host', value)} />
-									<NumberInput label='Port' placeholder='7624' minValue={80} maxValue={65535} value={editedConnection.port} onValueChange={(value) => handleEditedConnectionInputChange('port', value)} />
+									<Input label='Name' size='sm' placeholder='Local' type='text' maxLength={64} value={editedConnection.name} onValueChange={(value) => handleEditedConnectionInputChange('name', value)} />
+									<Input label='Host' size='sm' placeholder='localhost' type='text' maxLength={128} value={editedConnection.host} onValueChange={(value) => handleEditedConnectionInputChange('host', value)} />
+									<NumberInput label='Port' size='sm' placeholder='7624' minValue={80} maxValue={65535} value={editedConnection.port} onValueChange={(value) => handleEditedConnectionInputChange('port', value)} />
 								</div>
 							</ModalBody>
 							<ModalFooter>

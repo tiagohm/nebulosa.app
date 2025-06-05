@@ -10,7 +10,13 @@ import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import type { ImageInfo, ImageTransformation, OpenImage } from './types'
 import { X_IMAGE_INFO_HEADER } from './types'
 
+// Image API
+
+// Endpoint for opening and transforming images
+// This endpoint processes FITS files, applies transformations, and returns image information
+// It supports various transformations like debayering, flipping, SCNR, stretching, and inversion
 export class ImageEndpoint {
+	// Opens an image file, reads its FITS/XISF data, and applies transformations
 	async open(req: OpenImage) {
 		if (req.path) {
 			const handle = await fs.open(req.path)
@@ -104,6 +110,7 @@ export class ImageEndpoint {
 	statistics() {}
 }
 
+// Creates an instance of Elysia with image endpoints
 export function image(image: ImageEndpoint) {
 	const app = new Elysia({ prefix: '/image' })
 

@@ -41,6 +41,6 @@
 	"[html]": {
 		"editor.defaultFormatter": "vscode.html-language-features"
 	},
-	"tailwindCSS.classAttributes": ["className", "classNames"],
+	"tailwindCSS.classAttributes": ["class", "className", "classNames"],
 	"tailwindCSS.rootFontSize": 12
 }

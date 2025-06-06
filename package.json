@@ -25,7 +25,7 @@
 		"bun-plugin-tailwind": "latest",
 		"date-fns": "4.1.0",
 		"elysia": "latest",
-		"lucide-react": "0.512.0",
+		"lucide-react": "latest",
 		"nebulosa": "github:tiagohm/nebulosa.ts",
 		"react": "19",
 		"react-dom": "19",

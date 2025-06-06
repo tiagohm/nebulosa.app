@@ -4,6 +4,14 @@
 @source '../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
 @custom-variant dark (&:is(.dark *));
 
+.dark {
+	--heroui-background: 0 0% 6%;
+}
+
+html {
+	@apply m-0 h-screen overflow-hidden p-0;
+}
+
 html,
 body {
 	font-size: 14px;
@@ -14,29 +22,25 @@ body {
 }
 
 .no-scrollbar::-webkit-scrollbar {
-	display: none;
+	@apply hidden;
 }
 
 ::-webkit-scrollbar {
-	width: 4px;
-	height: 4px;
+	@apply w-1.5 h-1.5;
 }
 
 ::-webkit-scrollbar-thumb {
-	background: hsla(0deg, 0%, 39.2%, 0.5);
-	border-radius: 10px;
-	background-clip: content-box;
+	@apply bg-clip-content rounded-xl bg-gray-600/50;
 }
 
 ::-webkit-scrollbar-track {
-	border-radius: 10px;
-	background-color: transparent;
+	@apply rounded-xl bg-transparent;
 }
 
 ::-webkit-scrollbar-track-piece {
-	background-color: transparent;
+	@apply bg-transparent;
 }
 
 ::-webkit-scrollbar-corner {
-	background-color: transparent;
+	@apply bg-transparent;
 }

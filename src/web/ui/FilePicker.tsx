@@ -14,10 +14,11 @@ export interface FilePickerProps {
 	readonly filter?: string
 	readonly mode?: FilePickerMode
 	readonly multiple?: boolean
+	readonly header?: React.ReactNode
 	readonly onChoose?: (entries?: string[]) => void
 }
 
-export function FilePicker({ draggable, path, filter, mode, multiple, onChoose }: FilePickerProps) {
+export function FilePicker({ draggable, path, filter, mode, multiple, header, onChoose }: FilePickerProps) {
 	const directoryEntries = useRef<FileEntry[]>([])
 	const [filteredDirectoryEntries, setFilteredDirectoryEntries] = useState<FileEntry[]>([])
 	const [directoryTree, setDirectoryTree] = useState<DirectoryEntry[]>([])
@@ -128,35 +129,35 @@ export function FilePicker({ draggable, path, filter, mode, multiple, onChoose }
 				{(onClose) => (
 					<>
 						<ModalHeader {...draggable.moveProps} className='flex flex-row gap-1'>
-							{mode === 'directory' ? 'Open Directory' : 'Open File'}
+							{header ?? (mode === 'directory' ? 'Open Directory' : 'Open File')}
 						</ModalHeader>
 						<ModalBody>
 							<div className='flex w-full flex-col flex-wrap gap-4'>
 								<div className='flex flex-row items-center gap-2'>
 									<Tooltip content='Go Back' showArrow>
-										<Button isIconOnly isDisabled={history.length === 0} color='secondary' variant='light' onPress={navigateBack}>
+										<Button isIconOnly isDisabled={history.length === 0} color='secondary' variant='light' onPointerUp={navigateBack}>
 											<Lucide.ArrowLeft size={16} />
 										</Button>
 									</Tooltip>
 									<Breadcrumbs className='flex-1' itemsAfterCollapse={2} itemsBeforeCollapse={1} maxItems={3}>
 										{directoryTree.map((e) => (
-											<BreadcrumbItem key={e.name} startContent={e.name ? undefined : <Lucide.FolderRoot size={16} />} onPress={() => navigateTo(e)}>
+											<BreadcrumbItem key={e.name} startContent={e.name ? undefined : <Lucide.FolderRoot size={16} />} onPointerUp={() => navigateTo(e)}>
 												{e.name}
 											</BreadcrumbItem>
 										))}
 									</Breadcrumbs>
 									<Tooltip content='Go To Parent' showArrow>
-										<Button isIconOnly isDisabled={directoryTree.length <= 1} color='secondary' variant='light' onPress={navigateToParent}>
+										<Button isIconOnly isDisabled={directoryTree.length <= 1} color='secondary' variant='light' onPointerUp={navigateToParent}>
 											<Lucide.ArrowUp size={16} />
 										</Button>
 									</Tooltip>
 									<Tooltip content='New Directory' showArrow>
-										<Button isIconOnly color='warning' variant='light' onPress={() => setCreateDirectory(!createDirectory)}>
+										<Button isIconOnly color='warning' variant='light' onPointerUp={() => setCreateDirectory(!createDirectory)}>
 											<Lucide.FolderPlus size={16} />
 										</Button>
 									</Tooltip>
 									<Tooltip content='Refresh' showArrow>
-										<Button isIconOnly color='primary' variant='light' onPress={refresh}>
+										<Button isIconOnly color='primary' variant='light' onPointerUp={refresh}>
 											<Lucide.RefreshCcw size={16} />
 										</Button>
 									</Tooltip>
@@ -166,7 +167,7 @@ export function FilePicker({ draggable, path, filter, mode, multiple, onChoose }
 									<div className='flex flex-row items-center gap-2'>
 										<Input label='Name' size='sm' value={directoryName} onValueChange={setDirectoryName} />
 										<Tooltip content='Create' showArrow>
-											<Button isIconOnly isDisabled={directoryName.length === 0} color='success' variant='light' onPress={handleCreateDirectory}>
+											<Button isIconOnly isDisabled={directoryName.length === 0} color='success' variant='light' onPointerUp={handleCreateDirectory}>
 												<Lucide.Check size={16} />
 											</Button>
 										</Tooltip>
@@ -187,12 +188,12 @@ export function FilePicker({ draggable, path, filter, mode, multiple, onChoose }
 												<div className='flex flex-col justify-center gap-1'>
 													<span className='break-all whitespace-nowrap w-0'>{e.name}</span>
 													<div className='w-full flex flex-row items-center justify-between gap-1'>
-														{!e.directory && <span className='text-xs text-gray-500'>{e.size} B</span>}
 														<span className='text-xs text-gray-500'>{format(e.updatedAt, 'yyyy-MM-dd HH:mm:ss')}</span>
+														{!e.directory && <span className='text-xs text-gray-500'> · {e.size} B</span>}
 													</div>
 												</div>
 												{mode === 'directory' && (
-													<Button isIconOnly variant='light' color='secondary' onPress={() => navigateTo(e)}>
+													<Button isIconOnly variant='light' color='secondary' onPointerUp={() => navigateTo(e)}>
 														<Lucide.FolderOpen size={16} />
 													</Button>
 												)}
@@ -203,11 +204,11 @@ export function FilePicker({ draggable, path, filter, mode, multiple, onChoose }
 							</div>
 						</ModalBody>
 						<ModalFooter>
-							<Button color='danger' variant='light' startContent={<Lucide.X />} onPress={onClose}>
+							<Button color='danger' variant='light' startContent={<Lucide.X />} onPointerUp={onClose}>
 								Close
 							</Button>
 							<Badge color='success' content={selectedEntries.size} showOutline={false}>
-								<Button isDisabled={selectedEntries.size === 0} color='success' variant='light' startContent={<Lucide.Check />} onPress={handleChooseSelectedEntries}>
+								<Button isDisabled={selectedEntries.size === 0} color='success' variant='light' startContent={<Lucide.Check />} onPointerUp={handleChooseSelectedEntries}>
 									Choose
 								</Button>
 							</Badge>

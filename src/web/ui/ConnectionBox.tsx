@@ -1,4 +1,5 @@
 import { useDraggableModal } from '@/shared/hooks'
+import { stopPropagation } from '@/shared/utils'
 // biome-ignore format:
 import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem, type SharedSelection, Tooltip } from '@heroui/react'
 import { useLocalStorage } from '@uidotdev/usehooks'
@@ -106,7 +107,7 @@ export function ConnectionBox({ isConnected = false, isDisabled = false, onConne
 		<>
 			<div className='w-full flex flex-row items-center gap-2'>
 				<Tooltip content='New Connection' showArrow>
-					<Button isIconOnly color='success' variant='light' onPress={showNewConnectionModal} isDisabled={isDisabled}>
+					<Button isIconOnly color='success' variant='light' onPointerUp={showNewConnectionModal} isDisabled={isDisabled}>
 						<Lucide.Plus />
 					</Button>
 				</Tooltip>
@@ -153,15 +154,15 @@ export function ConnectionBox({ isConnected = false, isDisabled = false, onConne
 								<div className='flex justify-center items-center'>
 									<Dropdown>
 										<DropdownTrigger>
-											<Button isIconOnly variant='light' onPointerUp={(e) => e.stopPropagation()}>
+											<Button isIconOnly variant='light' onPointerUp={stopPropagation}>
 												<Lucide.EllipsisVertical />
 											</Button>
 										</DropdownTrigger>
 										<DropdownMenu aria-label='Static Actions' disabledKeys={connections.length === 1 ? ['delete'] : []}>
-											<DropdownItem key='edit' startContent={<Lucide.Pencil size={12} />} onPress={() => showEditConnectionModal(item)}>
+											<DropdownItem key='edit' startContent={<Lucide.Pencil size={12} />} onPointerUp={() => showEditConnectionModal(item)}>
 												Edit
 											</DropdownItem>
-											<DropdownItem key='delete' startContent={<Lucide.Trash size={12} />} className='text-danger' color='danger' onPress={() => removeConnection(item)}>
+											<DropdownItem key='delete' startContent={<Lucide.Trash size={12} />} className='text-danger' color='danger' onPointerUp={() => removeConnection(item)}>
 												Delete
 											</DropdownItem>
 										</DropdownMenu>
@@ -171,7 +172,7 @@ export function ConnectionBox({ isConnected = false, isDisabled = false, onConne
 						</SelectItem>
 					)}
 				</Select>
-				<ConnectButton isConnected={isConnected} isDisabled={isDisabled} onPress={connectOrDisconnect} />
+				<ConnectButton isConnected={isConnected} isDisabled={isDisabled} onPointerUp={connectOrDisconnect} />
 			</div>
 			<Modal size='sm' ref={connectionModalRef.targetRef} isOpen={connectionModalRef.isOpen} onOpenChange={connectionModalRef.onOpenChange}>
 				<ModalContent>
@@ -188,10 +189,10 @@ export function ConnectionBox({ isConnected = false, isDisabled = false, onConne
 								</div>
 							</ModalBody>
 							<ModalFooter>
-								<Button color='danger' variant='light' startContent={<Lucide.X />} onPress={onClose}>
+								<Button color='danger' variant='light' startContent={<Lucide.X />} onPointerUp={onClose}>
 									Close
 								</Button>
-								<Button isDisabled={!editedConnection.name || !editedConnection.host || !editedConnection.port} color='success' variant='light' startContent={<Lucide.Check />} onPress={saveEditedConnection}>
+								<Button isDisabled={!editedConnection.name || !editedConnection.host || !editedConnection.port} color='success' variant='light' startContent={<Lucide.Check />} onPointerUp={saveEditedConnection}>
 									Save
 								</Button>
 							</ModalFooter>

@@ -20,7 +20,7 @@
 		"@elysiajs/cors": "latest",
 		"@elysiajs/cron": "latest",
 		"@elysiajs/static": "latest",
-		"@heroui/react": "2.8.0-beta.6",
+		"@heroui/react": "2.8.0-beta.7",
 		"@uidotdev/usehooks": "2.4.1",
 		"bun-plugin-tailwind": "latest",
 		"date-fns": "4.1.0",

@@ -25,7 +25,13 @@ import * as Lucide from 'lucide-react'
 import { useState } from 'react'
 import { type Connection, ConnectionBox } from './ConnectionBox'
 import { FilePicker } from './FilePicker'
-import { ImageWorkspace } from './Image'
+import { ImageWorkspace } from './ImageWorkspace'
+
+export interface Image {
+	readonly key: string
+	index: number
+	readonly path: string
+}
 
 const POPUP_ITEMS = [
 	{ key: 'camera', label: 'Camera', icon: cameraPng },
@@ -52,28 +58,39 @@ const POPUP_ITEMS = [
 type PopupItemKey = (typeof POPUP_ITEMS)[number]['key']
 
 export default function Home() {
-	const [paths, setPaths] = useState<string[]>([])
+	const [images, setImages] = useState<Image[]>([])
 
-	function handleImageChoose(newPaths: string[]) {
-		const uniquePaths = paths.filter((e) => !newPaths.includes(e))
-		uniquePaths.push(...newPaths)
-		setPaths(uniquePaths)
+	function handleImageOpen(paths: string[]) {
+		const newImages = [...images]
+
+		for (const path of paths) {
+			const image: Image = { key: `${path}:${Date.now()}`, index: images.length, path }
+			newImages.push(image)
+		}
+
+		setImages(newImages)
+	}
+
+	function handleImageClose(image: Image) {
+		const newImages = images.filter((e) => e.key !== image.key)
+		for (let i = 0; i < newImages.length; i++) newImages[i].index = i
+		setImages(newImages)
 	}
 
 	return (
 		<div className='w-full h-full flex flex-col'>
-			<TopBar onPopupItemPress={alert} onImageChoose={handleImageChoose} />
-			<ImageWorkspace paths={paths} />
+			<TopBar onPopupItemPress={alert} onImageOpen={handleImageOpen} />
+			<ImageWorkspace images={images} onClose={handleImageClose} />
 		</div>
 	)
 }
 
 interface TopBarProps {
 	readonly onPopupItemPress: (key: PopupItemKey) => void
-	readonly onImageChoose?: (paths: string[]) => void
+	readonly onImageOpen?: (paths: string[]) => void
 }
 
-function TopBar({ onPopupItemPress: onPopupButtonPress, onImageChoose }: TopBarProps) {
+function TopBar({ onPopupItemPress: onPopupButtonPress, onImageOpen }: TopBarProps) {
 	const [connected, setConnected] = useState(false)
 	const [openImagePath, setOpenImagePath] = useLocalStorage('image.open.path', '')
 	const openImageModal = useDraggableModal()
@@ -86,10 +103,10 @@ function TopBar({ onPopupItemPress: onPopupButtonPress, onImageChoose }: TopBarP
 		openImageModal.show()
 	}
 
-	function handleImageChoose(path?: string[]) {
+	function handleImageOpen(path?: string[]) {
 		if (path?.length) {
 			setOpenImagePath(path[0])
-			onImageChoose?.(path)
+			onImageOpen?.(path)
 		}
 	}
 
@@ -127,7 +144,7 @@ function TopBar({ onPopupItemPress: onPopupButtonPress, onImageChoose }: TopBarP
 					</div>
 				</NavbarContent>
 			</Navbar>
-			<FilePicker draggable={openImageModal} path={openImagePath} onChoose={handleImageChoose} filter='*.{fits,fit,xisf}' header='Open Image' multiple />
+			<FilePicker draggable={openImageModal} path={openImagePath} onChoose={handleImageOpen} filter='*.{fits,fit,xisf}' header='Open Image' multiple />
 		</>
 	)
 }

@@ -1,7 +1,5 @@
 import { type UseDisclosureProps, useDisclosure, useDraggable } from '@heroui/react'
-import { useLocalStorage } from '@uidotdev/usehooks'
-import { useEffect, useRef } from 'react'
-import { useMutative } from 'use-mutative'
+import { useRef } from 'react'
 
 export interface UseDraggableModalProps extends UseDisclosureProps {
 	readonly canOverflow?: boolean
@@ -22,16 +20,4 @@ export function useDraggableModal({ canOverflow, ...props }: UseDraggableModalPr
 	const targetRef = useRef<HTMLElement>(null)
 	const { moveProps } = useDraggable({ targetRef: targetRef as never, canOverflow, isDisabled: !isOpen })
 	return { isOpen, show, close, onOpenChange, targetRef, moveProps }
-}
-
-export function useMutativeLocalStorage<T>(key: string, initialValue: T) {
-	const [storedData, setStoredData] = useLocalStorage<T>(key, initialValue)
-	const [data, setData] = useMutative<T>(storedData)
-
-	useEffect(() => {
-		console.info('storing', data)
-		setStoredData(data as never)
-	}, [data])
-
-	return [data, setData] as const
 }

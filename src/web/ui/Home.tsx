@@ -18,20 +18,14 @@ import sequencerPng from '@/assets/sequencer.png'
 import settingsPng from '@/assets/settings.png'
 import skyAtlasPng from '@/assets/sky-atlas.png'
 import { useDraggableModal } from '@/shared/hooks'
+import { homeStore } from '@/stores/home'
 // biome-ignore format:
 import { Button, Navbar, NavbarBrand, NavbarContent, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
 import { useLocalStorage } from '@uidotdev/usehooks'
 import * as Lucide from 'lucide-react'
-import { useState } from 'react'
-import { type Connection, ConnectionBox } from './ConnectionBox'
+import { ConnectionBox } from './ConnectionBox'
 import { FilePicker } from './FilePicker'
 import { ImageWorkspace } from './ImageWorkspace'
-
-export interface Image {
-	readonly key: string
-	index: number
-	readonly path: string
-}
 
 const POPUP_ITEMS = [
 	{ key: 'camera', label: 'Camera', icon: cameraPng },
@@ -58,55 +52,33 @@ const POPUP_ITEMS = [
 type PopupItemKey = (typeof POPUP_ITEMS)[number]['key']
 
 export default function Home() {
-	const [images, setImages] = useState<Image[]>([])
-
-	function handleImageOpen(paths: string[]) {
-		const newImages = [...images]
-
-		for (const path of paths) {
-			const image: Image = { key: `${path}:${Date.now()}`, index: images.length, path }
-			newImages.push(image)
-		}
-
-		setImages(newImages)
-	}
-
-	function handleImageClose(image: Image) {
-		const newImages = images.filter((e) => e.key !== image.key)
-		for (let i = 0; i < newImages.length; i++) newImages[i].index = i
-		setImages(newImages)
-	}
-
 	return (
 		<div className='w-full h-full flex flex-col'>
-			<TopBar onPopupItemPress={alert} onImageOpen={handleImageOpen} />
-			<ImageWorkspace images={images} onClose={handleImageClose} />
+			<TopBar onPopupItemPress={alert} />
+			<ImageWorkspace />
 		</div>
 	)
 }
 
 interface TopBarProps {
 	readonly onPopupItemPress: (key: PopupItemKey) => void
-	readonly onImageOpen?: (paths: string[]) => void
 }
 
-function TopBar({ onPopupItemPress: onPopupButtonPress, onImageOpen }: TopBarProps) {
-	const [connected, setConnected] = useState(false)
+function TopBar({ onPopupItemPress }: TopBarProps) {
 	const [openImagePath, setOpenImagePath] = useLocalStorage('image.open.path', '')
 	const openImageModal = useDraggableModal()
-
-	function onConnected(connection: Connection) {
-		setConnected(!connected)
-	}
 
 	function showOpenImageModal() {
 		openImageModal.show()
 	}
 
-	function handleImageOpen(path?: string[]) {
-		if (path?.length) {
-			setOpenImagePath(path[0])
-			onImageOpen?.(path)
+	function handleImageOpen(paths?: string[]) {
+		if (paths?.length) {
+			setOpenImagePath(paths[0])
+
+			for (const path of paths) {
+				homeStore.addImage(path)
+			}
 		}
 	}
 
@@ -114,7 +86,7 @@ function TopBar({ onPopupItemPress: onPopupButtonPress, onImageOpen }: TopBarPro
 		<>
 			<Navbar isBlurred={false} className='bg-neutral-900 shadow'>
 				<NavbarBrand>
-					<ConnectionBox onConnected={onConnected} isConnected={connected} />
+					<ConnectionBox />
 				</NavbarBrand>
 				<NavbarContent className='hidden sm:flex gap-4 flex-1' justify='center'>
 					<div className='flex flex-row w-full justify-start items-center gap-2'>
@@ -128,7 +100,7 @@ function TopBar({ onPopupItemPress: onPopupButtonPress, onImageOpen }: TopBarPro
 								<div className='grid grid-cols-8 gap-2 p-4'>
 									{POPUP_ITEMS.map((item) => (
 										<Tooltip key={item.key} content={item.label} placement='bottom' showArrow>
-											<Button isIconOnly size='lg' color='secondary' variant='light' onPointerUp={() => onPopupButtonPress(item.key)}>
+											<Button isIconOnly size='lg' color='secondary' variant='light' onPointerUp={() => onPopupItemPress(item.key)}>
 												<img src={item.icon} className='w-9' />
 											</Button>
 										</Tooltip>

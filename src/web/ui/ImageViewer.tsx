@@ -1,17 +1,15 @@
 import { Api } from '@/shared/api'
-import { useMutativeLocalStorage } from '@/shared/hooks'
 import { PanZoom, type PanZoomOptions } from '@/shared/panzoom'
+import { simpleLocalStorage } from '@/shared/storage'
+import type { Image } from '@/shared/types'
 import { stopPropagation } from '@/shared/utils'
+import { type HomeState, homeState } from '@/stores/home'
 import { Spacer, Switch, cn } from '@heroui/react'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@radix-ui/react-context-menu'
 import * as Lucide from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import type { ImageInfo, ImageTransformation } from 'src/api/types'
-import { DEFAULT_IMAGE_TRANSFORMATION } from 'src/api/types'
+import type { ImageInfo } from 'src/api/types'
 import { Crosshair } from './Crosshair'
-import type { Image } from './Home'
-
-export type ImageViewerActionType = 'h-mirror' | 'v-mirror'
 
 interface CachedImage {
 	url: string
@@ -22,27 +20,12 @@ interface CachedImage {
 
 export interface ImageViewerProps {
 	readonly image: Image
-	readonly owner: HTMLDivElement
-	readonly onPointerUp?: (e: React.PointerEvent<HTMLImageElement>) => void
-	readonly onClose?: () => void
-}
-
-export interface ImageViewerState {
-	transformation: ImageTransformation
-	crosshair: boolean
-}
-
-const DEFAULT_IMAGE_VIEWER_STATE: ImageViewerState = {
-	transformation: DEFAULT_IMAGE_TRANSFORMATION,
-	crosshair: false,
 }
 
 const imageMap = new Map<string, CachedImage>()
 
-export function ImageViewer({ image: { key, path, index }, owner, onPointerUp, onClose }: ImageViewerProps) {
-	const wrapper = useRef<HTMLDivElement>(null)
+export function ImageViewer({ image: { key, path, transformation, index } }: ImageViewerProps) {
 	const image = useRef<HTMLImageElement>(null)
-	const [state, setState] = useMutativeLocalStorage<ImageViewerState>('image.state', DEFAULT_IMAGE_VIEWER_STATE)
 
 	useEffect(() => {
 		let isMounted = true
@@ -52,7 +35,7 @@ export function ImageViewer({ image: { key, path, index }, owner, onPointerUp, o
 		async function load() {
 			if (imageMap.has(key)) {
 				if (image.current && isMounted) {
-					console.info('image loaded from cache', key)
+					console.info('image from cache', key)
 					const entry = imageMap.get(key)!
 					image.current.src = entry.url
 				}
@@ -60,7 +43,7 @@ export function ImageViewer({ image: { key, path, index }, owner, onPointerUp, o
 				return
 			}
 
-			url = await openImage(state!.transformation, controller)
+			url = await open(controller)
 		}
 
 		load()
@@ -80,17 +63,16 @@ export function ImageViewer({ image: { key, path, index }, owner, onPointerUp, o
 
 	useEffect(() => {
 		return () => {
-			console.info('image unref')
+			console.info('image unref', key)
 			imageMap.get(key)?.close()
 			imageMap.delete(key)
 		}
 	}, [image])
 
-	async function openImage(transformation: ImageTransformation, controller?: AbortController) {
+	async function open(controller?: AbortController) {
 		try {
 			console.info('opening image', key)
-
-			const { blob, info } = await Api.Image.open({ path, transformation }, controller)
+			const { blob, info } = await Api.Image.open({ path, transformation: homeState.images[key].transformation }, controller)
 
 			const url = URL.createObjectURL(blob)
 			image.current!.src = url
@@ -112,23 +94,23 @@ export function ImageViewer({ image: { key, path, index }, owner, onPointerUp, o
 			if (!cached) {
 				console.info('image PanZoom created', key)
 
-				const imageWrapper = wrapper.current!
-
-				const panZoom = new PanZoom(imageWrapper, options, owner)
+				const wrapper = image.current!.closest('.wrapper') as HTMLElement
+				const workspace = image.current!.closest('.workspace') as HTMLElement
+				const panZoom = new PanZoom(wrapper, options, workspace)
 
 				function handleWheel(e: WheelEvent) {
 					if (e.shiftKey) {
 						// this.rotateWithWheel(e)
-					} else if (!e.target || e.target === owner || e.target === imageWrapper || e.target === image.current /*|| e.target === this.roi().nativeElement*/ || (e.target as HTMLElement).tagName === 'circle') {
+					} else if (!e.target || e.target === workspace || e.target === wrapper || e.target === image.current /*|| e.target === this.roi().nativeElement*/ || (e.target as HTMLElement).tagName === 'circle') {
 						panZoom.zoomWithWheel(e)
 					}
 				}
 
-				imageWrapper.addEventListener('wheel', handleWheel)
+				wrapper.addEventListener('wheel', handleWheel)
 
 				function close() {
 					panZoom.destroy()
-					imageWrapper.removeEventListener('wheel', handleWheel)
+					wrapper.removeEventListener('wheel', handleWheel)
 				}
 
 				imageMap.set(key, { url, info, panZoom, close })
@@ -143,41 +125,34 @@ export function ImageViewer({ image: { key, path, index }, owner, onPointerUp, o
 		}
 	}
 
-	function updateImageTransformationAndOpen(action: (transformation: ImageTransformation) => void) {
-		let open = false
+	function transformImageAndOpen(name: keyof HomeState['images'][string]['transformation'], value?: unknown) {
+		const transformation = homeState.images[key].transformation
 
-		setState((s) => {
-			action(s.transformation)
-
-			if (!open) {
-				open = true
-				openImage(s.transformation)
+		try {
+			if (name === 'horizontalMirror') transformation.horizontalMirror = !transformation.horizontalMirror
+			else if (name === 'verticalMirror') transformation.verticalMirror = !transformation.verticalMirror
+			else if (name === 'invert') transformation.invert = !transformation.invert
+			else {
+				if (name === 'crosshair') transformation.crosshair = !transformation.crosshair
+				return
 			}
-		})
+		} finally {
+			simpleLocalStorage.set('image.transformation', transformation)
+		}
+
+		open()
 	}
 
-	function handleHorizontalMirror() {
-		updateImageTransformationAndOpen((t) => void (t.horizontalMirror = !t.horizontalMirror))
-	}
-
-	function handleVerticalMirror() {
-		updateImageTransformationAndOpen((t) => void (t.verticalMirror = !t.verticalMirror))
-	}
-
-	function handleInvert() {
-		updateImageTransformationAndOpen((t) => void (t.invert = !t.invert))
-	}
-
-	function handleCrosshair() {
-		setState((d) => void (d.crosshair = !d.crosshair))
+	function close() {
+		delete homeState.images[key]
 	}
 
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger className='block' onContextMenu={(e) => console.info(e, e.nativeEvent.offsetX)}>
-				<div className='inline-block absolute wrapper' ref={wrapper} style={{ zIndex: index }}>
-					<img ref={image} className='image select-none shadow-md' onPointerUp={onPointerUp} />
-					{state.crosshair && <Crosshair />}
+				<div className='inline-block absolute wrapper' style={{ zIndex: index }}>
+					<img ref={image} className='image select-none shadow-md' onPointerUp={bringToFront} />
+					{transformation.crosshair && <Crosshair />}
 				</div>
 			</ContextMenuTrigger>
 			<ContextMenuContent>
@@ -210,13 +185,13 @@ export function ImageViewer({ image: { key, path, index }, owner, onPointerUp, o
 							<ContextMenuItem>
 								<Lucide.Palette size={16} /> Adjustment
 							</ContextMenuItem>
-							<ContextMenuItem className={cn({ selected: state.transformation.horizontalMirror })} onPointerUp={handleHorizontalMirror}>
+							<ContextMenuItem className={cn({ selected: transformation.horizontalMirror })} onPointerUp={() => transformImageAndOpen('horizontalMirror')}>
 								<Lucide.FlipHorizontal size={16} /> Horizontal Mirror
 							</ContextMenuItem>
-							<ContextMenuItem className={cn({ selected: state.transformation.verticalMirror })} onPointerUp={handleVerticalMirror}>
+							<ContextMenuItem className={cn({ selected: transformation.verticalMirror })} onPointerUp={() => transformImageAndOpen('verticalMirror')}>
 								<Lucide.FlipVertical size={16} /> Vertical Mirror
 							</ContextMenuItem>
-							<ContextMenuItem className={cn({ selected: state.transformation.invert })} onPointerUp={handleInvert}>
+							<ContextMenuItem className={cn({ selected: transformation.invert })} onPointerUp={() => transformImageAndOpen('invert')}>
 								<Lucide.Image size={16} /> Invert
 							</ContextMenuItem>
 							<ContextMenuItem>
@@ -233,7 +208,7 @@ export function ImageViewer({ image: { key, path, index }, owner, onPointerUp, o
 					</ContextMenuSubTrigger>
 					<ContextMenuPortal>
 						<ContextMenuSubContent>
-							<ContextMenuItem className={cn({ selected: state.crosshair })} onPointerUp={handleCrosshair}>
+							<ContextMenuItem className={cn({ selected: transformation.crosshair })} onPointerUp={() => transformImageAndOpen('crosshair')}>
 								<Lucide.Crosshair size={16} /> Crosshair
 							</ContextMenuItem>
 							<ContextMenuItem>
@@ -273,10 +248,38 @@ export function ImageViewer({ image: { key, path, index }, owner, onPointerUp, o
 					<Lucide.Frame size={16} /> Frame at this coordinate
 				</ContextMenuItem>
 				<ContextMenuSeparator />
-				<ContextMenuItem className='danger' onPointerUp={onClose}>
+				<ContextMenuItem className='danger' onPointerUp={close}>
 					<Lucide.X size={16} /> Close
 				</ContextMenuItem>
 			</ContextMenuContent>
 		</ContextMenu>
 	)
+}
+
+function bringToFront(e: React.PointerEvent<HTMLImageElement>) {
+	const target = e.target as HTMLImageElement
+	const wrapper = target.closest('.wrapper') as HTMLElement
+	const workspace = wrapper.closest('.workspace') as HTMLElement
+	const wrappers = workspace.querySelectorAll('.wrapper') ?? []
+	const newZIndex = wrappers.length - 1
+
+	// Already at the top, no need to change z-index
+	if (parseInt(wrapper.style.zIndex) === newZIndex) {
+		return
+	}
+
+	// Find the wrapper with the same z-index as newZIndex
+	// and set it to the z-index of the clicked image viewer
+	// and bring the clicked image viewer to the front
+	// by setting its z-index to newZIndex
+	for (const div of wrappers) {
+		const zIndex = parseInt((div as HTMLElement).style.zIndex)
+
+		if (zIndex === newZIndex) {
+			// Bring the clicked image viewer to the front
+			;(div as HTMLElement).style.zIndex = wrapper.style.zIndex
+			wrapper.style.zIndex = newZIndex.toFixed(0)
+			break
+		}
+	}
 }

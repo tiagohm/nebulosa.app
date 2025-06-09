@@ -11,10 +11,6 @@ export interface Image {
 	readonly key: string
 	readonly index: number
 	readonly path: string
-	readonly transformation: ImageTransformation & {
-		crosshair: boolean
-		rotation: number
-	}
 }
 
 export const DEFAULT_CONNECTION: Connection = {
@@ -23,17 +19,4 @@ export const DEFAULT_CONNECTION: Connection = {
 	host: 'localhost',
 	port: 7624,
 	type: 'INDI',
-}
-
-export const DEFAULT_IMAGE_TRANSFORMATION: Image['transformation'] = {
-	stretch: structuredClone(DEFAULT_IMAGE_STRETCH),
-	debayer: true,
-	horizontalMirror: false,
-	verticalMirror: false,
-	invert: false,
-	scnr: structuredClone(DEFAULT_IMAGE_SCNR),
-	useJPEG: true,
-	adjustment: structuredClone(DEFAULT_IMAGE_ADJUSTMENT),
-	crosshair: false,
-	rotation: 0,
 }

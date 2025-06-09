@@ -1,31 +1,35 @@
 import { Api } from '@/shared/api'
+import { ImageMolecule } from '@/shared/molecules'
 import { PanZoom, type PanZoomOptions } from '@/shared/panzoom'
-import { simpleLocalStorage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
 import { stopPropagation } from '@/shared/utils'
-import { type HomeState, homeState } from '@/stores/home'
 import { Spacer, Switch, cn } from '@heroui/react'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@radix-ui/react-context-menu'
+import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import type { ImageInfo } from 'src/api/types'
+import { useSnapshot } from 'valtio'
 import { Crosshair } from './Crosshair'
 
 interface CachedImage {
 	url: string
 	info: ImageInfo
 	readonly panZoom: PanZoom
-	readonly close: () => void
+	readonly destroy: () => void
 }
 
 export interface ImageViewerProps {
+	readonly index: number
 	readonly image: Image
 }
 
-const imageMap = new Map<string, CachedImage>()
+const imageCache = new Map<string, CachedImage>()
 
-export function ImageViewer({ image: { key, path, transformation, index } }: ImageViewerProps) {
-	const image = useRef<HTMLImageElement>(null)
+export function ImageViewer({ image: { key, path, index } }: ImageViewerProps) {
+	const img = useRef<HTMLImageElement>(null)
+	const image = useMolecule(ImageMolecule)
+	const { url, info, crosshair, transformation } = useSnapshot(image.state)
 
 	useEffect(() => {
 		let isMounted = true
@@ -33,11 +37,12 @@ export function ImageViewer({ image: { key, path, transformation, index } }: Ima
 		let url: string | undefined
 
 		async function load() {
-			if (imageMap.has(key)) {
-				if (image.current && isMounted) {
+			if (imageCache.has(key)) {
+				if (img.current && isMounted) {
 					console.info('image from cache', key)
-					const entry = imageMap.get(key)!
-					image.current.src = entry.url
+
+					const entry = imageCache.get(key)!
+					image.refresh(entry.url, entry.info)
 				}
 
 				return
@@ -49,33 +54,33 @@ export function ImageViewer({ image: { key, path, transformation, index } }: Ima
 		load()
 
 		return () => {
-			console.info('image clean up', key)
+			console.info('image aborted', key)
 
 			isMounted = false
 
-			// Clean up the image element
-			url && URL.revokeObjectURL(url)
-
 			// Abort any ongoing image loading
 			controller.abort()
+
+			// Clean up the image element
+			url && URL.revokeObjectURL(url)
 		}
 	}, [path])
 
 	useEffect(() => {
 		return () => {
-			console.info('image unref', key)
-			imageMap.get(key)?.close()
-			imageMap.delete(key)
+			console.info('image disposed', key)
+			imageCache.get(key)?.destroy()
+			imageCache.delete(key)
 		}
-	}, [image])
+	}, [img])
 
 	async function open(controller?: AbortController) {
 		try {
 			console.info('opening image', key)
-			const { blob, info } = await Api.Image.open({ path, transformation: homeState.images[key].transformation }, controller)
+			const { blob, info } = await Api.Image.open({ path, transformation: image.state.transformation }, controller)
 
 			const url = URL.createObjectURL(blob)
-			image.current!.src = url
+			image.refresh(url, info)
 
 			const options: Partial<PanZoomOptions> = {
 				maxScale: 500,
@@ -89,32 +94,34 @@ export function ImageViewer({ image: { key, path, transformation, index } }: Ima
 				},
 			}
 
-			const cached = imageMap.get(key)
+			const cached = imageCache.get(key)
 
 			if (!cached) {
 				console.info('image PanZoom created', key)
 
-				const wrapper = image.current!.closest('.wrapper') as HTMLElement
-				const workspace = image.current!.closest('.workspace') as HTMLElement
+				const wrapper = img.current!.closest('.wrapper') as HTMLElement
+				const workspace = img.current!.closest('.workspace') as HTMLElement
 				const panZoom = new PanZoom(wrapper, options, workspace)
 
 				function handleWheel(e: WheelEvent) {
 					if (e.shiftKey) {
 						// this.rotateWithWheel(e)
-					} else if (!e.target || e.target === workspace || e.target === wrapper || e.target === image.current /*|| e.target === this.roi().nativeElement*/ || (e.target as HTMLElement).tagName === 'circle') {
+					} else if (!e.target || e.target === workspace || e.target === wrapper || e.target === img.current /*|| e.target === this.roi().nativeElement*/ || (e.target as HTMLElement).tagName === 'circle') {
 						panZoom.zoomWithWheel(e)
 					}
 				}
 
 				wrapper.addEventListener('wheel', handleWheel)
 
-				function close() {
+				function destroy() {
 					panZoom.destroy()
 					wrapper.removeEventListener('wheel', handleWheel)
 				}
 
-				imageMap.set(key, { url, info, panZoom, close })
+				imageCache.set(key, { url, info, panZoom, destroy })
 			} else {
+				URL.revokeObjectURL(cached.url)
+
 				cached.url = url
 				cached.info = info
 			}
@@ -125,34 +132,24 @@ export function ImageViewer({ image: { key, path, transformation, index } }: Ima
 		}
 	}
 
-	function transformImageAndOpen(name: keyof HomeState['images'][string]['transformation'], value?: unknown) {
-		const transformation = homeState.images[key].transformation
-
-		try {
-			if (name === 'horizontalMirror') transformation.horizontalMirror = !transformation.horizontalMirror
-			else if (name === 'verticalMirror') transformation.verticalMirror = !transformation.verticalMirror
-			else if (name === 'invert') transformation.invert = !transformation.invert
-			else {
-				if (name === 'crosshair') transformation.crosshair = !transformation.crosshair
-				return
-			}
-		} finally {
-			simpleLocalStorage.set('image.transformation', transformation)
+	function transformImageAndOpen(name: string, value?: unknown) {
+		if (name === 'horizontalMirror') image.toggleHorizontalMirror()
+		else if (name === 'verticalMirror') image.toggleVerticalMirror()
+		else if (name === 'invert') image.toggleInvert()
+		else {
+			if (name === 'crosshair') image.toggleCrosshair()
+			return
 		}
 
 		open()
-	}
-
-	function close() {
-		delete homeState.images[key]
 	}
 
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger className='block' onContextMenu={(e) => console.info(e, e.nativeEvent.offsetX)}>
 				<div className='inline-block absolute wrapper' style={{ zIndex: index }}>
-					<img ref={image} className='image select-none shadow-md' onPointerUp={bringToFront} />
-					{transformation.crosshair && <Crosshair />}
+					<img ref={img} src={url} className='image select-none shadow-md' onPointerUp={bringToFront} />
+					{crosshair && <Crosshair />}
 				</div>
 			</ContextMenuTrigger>
 			<ContextMenuContent>
@@ -208,7 +205,7 @@ export function ImageViewer({ image: { key, path, transformation, index } }: Ima
 					</ContextMenuSubTrigger>
 					<ContextMenuPortal>
 						<ContextMenuSubContent>
-							<ContextMenuItem className={cn({ selected: transformation.crosshair })} onPointerUp={() => transformImageAndOpen('crosshair')}>
+							<ContextMenuItem className={cn({ selected: crosshair })} onPointerUp={() => transformImageAndOpen('crosshair')}>
 								<Lucide.Crosshair size={16} /> Crosshair
 							</ContextMenuItem>
 							<ContextMenuItem>
@@ -248,7 +245,7 @@ export function ImageViewer({ image: { key, path, transformation, index } }: Ima
 					<Lucide.Frame size={16} /> Frame at this coordinate
 				</ContextMenuItem>
 				<ContextMenuSeparator />
-				<ContextMenuItem className='danger' onPointerUp={close}>
+				<ContextMenuItem className='danger' onPointerUp={() => image.close(key)}>
 					<Lucide.X size={16} /> Close
 				</ContextMenuItem>
 			</ContextMenuContent>

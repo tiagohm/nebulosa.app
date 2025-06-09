@@ -18,11 +18,12 @@ import sequencerPng from '@/assets/sequencer.png'
 import settingsPng from '@/assets/settings.png'
 import skyAtlasPng from '@/assets/sky-atlas.png'
 import { useDraggableModal } from '@/shared/hooks'
-import { homeStore } from '@/stores/home'
+import { FilePickerScope, HomeMolecule } from '@/shared/molecules'
 // biome-ignore format:
 import { Button, Navbar, NavbarBrand, NavbarContent, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
-import { useLocalStorage } from '@uidotdev/usehooks'
+import { ScopeProvider, useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { useSnapshot } from 'valtio'
 import { ConnectionBox } from './ConnectionBox'
 import { FilePicker } from './FilePicker'
 import { ImageWorkspace } from './ImageWorkspace'
@@ -65,19 +66,18 @@ interface TopBarProps {
 }
 
 function TopBar({ onPopupItemPress }: TopBarProps) {
-	const [openImagePath, setOpenImagePath] = useLocalStorage('image.open.path', '')
+	const home = useMolecule(HomeMolecule)
+	const { openImageLastPath } = useSnapshot(home.state)
 	const openImageModal = useDraggableModal()
 
 	function showOpenImageModal() {
 		openImageModal.show()
 	}
 
-	function handleImageOpen(paths?: string[]) {
+	function handleImageChoose(paths?: string[]) {
 		if (paths?.length) {
-			setOpenImagePath(paths[0])
-
 			for (const path of paths) {
-				homeStore.addImage(path)
+				home.addImage(path)
 			}
 		}
 	}
@@ -116,7 +116,9 @@ function TopBar({ onPopupItemPress }: TopBarProps) {
 					</div>
 				</NavbarContent>
 			</Navbar>
-			<FilePicker draggable={openImageModal} path={openImagePath} onChoose={handleImageOpen} filter='*.{fits,fit,xisf}' header='Open Image' multiple />
+			<ScopeProvider scope={FilePickerScope} value={{ path: openImageLastPath, filter: '*.{fits,fit,xisf}', multiple: true }}>
+				<FilePicker draggable={openImageModal} onChoose={handleImageChoose} header='Open Image' />
+			</ScopeProvider>
 		</>
 	)
 }

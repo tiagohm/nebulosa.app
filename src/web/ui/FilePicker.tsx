@@ -1,125 +1,25 @@
-import { Api } from '@/shared/api'
 import type { UseDraggableModalResult } from '@/shared/hooks'
+import { FilePickerMolecule } from '@/shared/molecules'
 import { Badge, BreadcrumbItem, Breadcrumbs, Button, Input, Listbox, ListboxItem, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Tooltip } from '@heroui/react'
+import { useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
 import * as Lucide from 'lucide-react'
-import { type Key, useEffect, useRef, useState } from 'react'
-import type { DirectoryEntry, FileEntry } from 'src/api/types'
+import { useSnapshot } from 'valtio'
 
 export type FilePickerMode = 'file' | 'directory'
 
 export interface FilePickerProps {
 	readonly draggable: UseDraggableModalResult
-	readonly path?: string
-	readonly filter?: string
-	readonly mode?: FilePickerMode
-	readonly multiple?: boolean
 	readonly header?: React.ReactNode
 	readonly onChoose?: (entries?: string[]) => void
 }
 
-export function FilePicker({ draggable, path, filter, mode, multiple, header, onChoose }: FilePickerProps) {
-	const directoryEntries = useRef<FileEntry[]>([])
-	const [filteredDirectoryEntries, setFilteredDirectoryEntries] = useState<FileEntry[]>([])
-	const [directoryTree, setDirectoryTree] = useState<DirectoryEntry[]>([])
-	const [selectedEntries, setSelectedEntries] = useState(new Set<Key>())
-	const [history, setHistory] = useState<string[]>([])
-	const [filterText, setFilterText] = useState('')
-	const [directoryName, setDirectoryName] = useState('')
-	const [createDirectory, setCreateDirectory] = useState(false)
-	const currentPath = useRef(path)
+export function FilePicker({ draggable, header, onChoose }: FilePickerProps) {
+	const filePicker = useMolecule(FilePickerMolecule)
+	const { mode, filtered, selected, directoryTree, filter, createDirectory, directoryName } = useSnapshot(filePicker.state)
 
-	useEffect(() => {
-		if (draggable.isOpen) {
-			currentPath.current = path
-			setSelectedEntries(new Set())
-			setHistory([])
-			listDirectory()
-		}
-	}, [draggable.isOpen])
-
-	useEffect(() => {
-		if (filterText.trim().length === 0) {
-			setFilteredDirectoryEntries(directoryEntries.current)
-		} else {
-			const text = filterText.toLowerCase()
-			const entries = directoryEntries.current.filter((entry) => entry.name.toLowerCase().includes(text))
-			setFilteredDirectoryEntries(entries)
-		}
-	}, [filterText, directoryEntries.current])
-
-	async function listDirectory() {
-		const { entries, tree } = await Api.FileSystem.list({ path: currentPath.current, filter, directoryOnly: mode === 'directory' })
-
-		directoryEntries.current = entries
-		setFilteredDirectoryEntries(entries)
-		setDirectoryTree(tree)
-	}
-
-	function navigateTo(entry: DirectoryEntry) {
-		setHistory([...history, currentPath.current!])
-		currentPath.current = entry.path
-		listDirectory()
-	}
-
-	function navigateBack() {
-		if (history.length === 0) return
-
-		const path = history.pop()
-		setHistory([...history])
-
-		currentPath.current = path
-		listDirectory()
-	}
-
-	function navigateToParent() {
-		if (directoryTree.length <= 1) return
-
-		navigateTo(directoryTree[directoryTree.length - 2])
-	}
-
-	function refresh() {
-		listDirectory()
-	}
-
-	async function handleCreateDirectory() {
-		const { path } = await Api.FileSystem.create({ path: currentPath.current!, name: directoryName })
-
-		if (path) {
-			setCreateDirectory(false)
-			setDirectoryName('')
-			refresh()
-		}
-	}
-
-	function handleEntryAction(path: Key) {
-		const entry = directoryEntries.current.find((e) => e.path === path)
-
-		if (!entry) return
-
-		if (mode !== 'directory' && entry.directory) {
-			navigateTo(entry)
-			return
-		}
-
-		const data = new Set(selectedEntries)
-
-		if (selectedEntries.has(path)) {
-			data.delete(path)
-			setSelectedEntries(data)
-		} else if (multiple) {
-			setSelectedEntries(data.add(path))
-		} else {
-			data.clear()
-			setSelectedEntries(data.add(path))
-		}
-	}
-
-	function handleChooseSelectedEntries() {
-		if (onChoose) {
-			onChoose(selectedEntries.size === 0 ? undefined : (Array.from(selectedEntries) as string[]))
-		}
-
+	function choose() {
+		onChoose?.(selected.length === 0 ? undefined : (selected as string[]))
 		draggable.close()
 	}
 
@@ -135,39 +35,39 @@ export function FilePicker({ draggable, path, filter, mode, multiple, header, on
 							<div className='flex w-full flex-col flex-wrap gap-4'>
 								<div className='flex flex-row items-center gap-2'>
 									<Tooltip content='Go Back' showArrow>
-										<Button isIconOnly isDisabled={history.length === 0} color='secondary' variant='light' onPointerUp={navigateBack}>
+										<Button isIconOnly isDisabled={history.length === 0} color='secondary' variant='light' onPointerUp={() => filePicker.navigateBack()}>
 											<Lucide.ArrowLeft size={16} />
 										</Button>
 									</Tooltip>
 									<Breadcrumbs className='flex-1' itemsAfterCollapse={2} itemsBeforeCollapse={1} maxItems={3}>
-										{directoryTree.map((e) => (
-											<BreadcrumbItem key={e.name} startContent={e.name ? undefined : <Lucide.FolderRoot size={16} />} onPointerUp={() => navigateTo(e)}>
-												{e.name}
+										{directoryTree.map((item) => (
+											<BreadcrumbItem key={item.name} startContent={item.name ? undefined : <Lucide.FolderRoot size={16} />} onPointerUp={() => filePicker.navigateTo(item)}>
+												{item.name}
 											</BreadcrumbItem>
 										))}
 									</Breadcrumbs>
 									<Tooltip content='Go To Parent' showArrow>
-										<Button isIconOnly isDisabled={directoryTree.length <= 1} color='secondary' variant='light' onPointerUp={navigateToParent}>
+										<Button isIconOnly isDisabled={directoryTree.length <= 1} color='secondary' variant='light' onPointerUp={() => filePicker.navigateToParent()}>
 											<Lucide.ArrowUp size={16} />
 										</Button>
 									</Tooltip>
 									<Tooltip content='New Directory' showArrow>
-										<Button isIconOnly color='warning' variant='light' onPointerUp={() => setCreateDirectory(!createDirectory)}>
+										<Button isIconOnly color='warning' variant='light' onPointerUp={() => filePicker.toggleCreateDirectory()}>
 											<Lucide.FolderPlus size={16} />
 										</Button>
 									</Tooltip>
 									<Tooltip content='Refresh' showArrow>
-										<Button isIconOnly color='primary' variant='light' onPointerUp={refresh}>
+										<Button isIconOnly color='primary' variant='light' onPointerUp={() => filePicker.list()}>
 											<Lucide.RefreshCcw size={16} />
 										</Button>
 									</Tooltip>
 								</div>
-								{!createDirectory && <Input label='Filter' size='sm' value={filterText} onValueChange={setFilterText} />}
+								{!createDirectory && <Input label='Filter' size='sm' value={filter} onValueChange={(value) => filePicker.filter(value)} />}
 								{createDirectory && (
 									<div className='flex flex-row items-center gap-2'>
-										<Input label='Name' size='sm' value={directoryName} onValueChange={setDirectoryName} />
+										<Input label='Name' size='sm' value={directoryName} onValueChange={(value) => (filePicker.state.directoryName = value)} />
 										<Tooltip content='Create' showArrow>
-											<Button isIconOnly isDisabled={directoryName.length === 0} color='success' variant='light' onPointerUp={handleCreateDirectory}>
+											<Button isIconOnly isDisabled={directoryName.length === 0} color='success' variant='light' onPointerUp={() => filePicker.createDirectory()}>
 												<Lucide.Check size={16} />
 											</Button>
 										</Tooltip>
@@ -176,24 +76,24 @@ export function FilePicker({ draggable, path, filter, mode, multiple, header, on
 								<Listbox
 									aria-label='Actions'
 									isVirtualized
-									onAction={handleEntryAction}
+									onAction={(path) => filePicker.select(path)}
 									selectionMode='none'
 									virtualization={{
 										maxListboxHeight: 200,
 										itemHeight: 48,
 									}}>
-									{filteredDirectoryEntries.map((e) => (
-										<ListboxItem key={e.path} startContent={e.directory ? <Lucide.Folder color='orange' /> : <Lucide.File color='gray' />} endContent={selectedEntries.has(e.path) && <Lucide.Check size={16} color='green' />}>
+									{filtered.map((item) => (
+										<ListboxItem key={item.path} startContent={item.directory ? <Lucide.Folder color='orange' /> : <Lucide.File color='gray' />} endContent={selected.includes(item.path) && <Lucide.Check size={16} color='green' />}>
 											<div className='flex flex-row items-center justify-between gap-1'>
 												<div className='flex flex-col justify-center gap-1'>
-													<span className='break-all whitespace-nowrap w-0'>{e.name}</span>
+													<span className='break-all whitespace-nowrap w-0'>{item.name}</span>
 													<div className='w-full flex flex-row items-center justify-between gap-1'>
-														<span className='text-xs text-gray-500'>{format(e.updatedAt, 'yyyy-MM-dd HH:mm:ss')}</span>
-														{!e.directory && <span className='text-xs text-gray-500'> · {e.size} B</span>}
+														<span className='text-xs text-gray-500'>{format(item.updatedAt, 'yyyy-MM-dd HH:mm:ss')}</span>
+														{!item.directory && <span className='text-xs text-gray-500'> · {item.size} B</span>}
 													</div>
 												</div>
 												{mode === 'directory' && (
-													<Button isIconOnly variant='light' color='secondary' onPointerUp={() => navigateTo(e)}>
+													<Button isIconOnly variant='light' color='secondary' onPointerUp={() => filePicker.navigateTo(item)}>
 														<Lucide.FolderOpen size={16} />
 													</Button>
 												)}
@@ -207,8 +107,8 @@ export function FilePicker({ draggable, path, filter, mode, multiple, header, on
 							<Button color='danger' variant='light' startContent={<Lucide.X />} onPointerUp={onClose}>
 								Close
 							</Button>
-							<Badge color='success' content={selectedEntries.size} showOutline={false}>
-								<Button isDisabled={selectedEntries.size === 0} color='success' variant='light' startContent={<Lucide.Check />} onPointerUp={handleChooseSelectedEntries}>
+							<Badge color='success' content={selected.length} showOutline={false}>
+								<Button isDisabled={selected.length === 0} color='success' variant='light' startContent={<Lucide.Check />} onPointerUp={choose}>
 									Choose
 								</Button>
 							</Badge>

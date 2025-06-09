@@ -24,6 +24,7 @@
 		"@radix-ui/react-context-menu": "2.2.15",
 		"@uidotdev/usehooks": "2.4.1",
 		"bun-plugin-tailwind": "latest",
+		"bunshi": "2.1.5",
 		"date-fns": "4.1.0",
 		"elysia": "latest",
 		"lucide-react": "latest",
@@ -36,10 +37,10 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "latest",
-		"@types/react": "19",
-		"@types/react-dom": "19",
 		"@types/bun": "latest",
 		"@types/node": "latest",
+		"@types/react": "19",
+		"@types/react-dom": "19",
 		"typescript": "latest"
 	},
 	"trustedDependencies": ["@biomejs/biome", "@heroui/shared-utils", "@tailwindcss/oxide", "esbuild", "nebulosa", "sharp"]

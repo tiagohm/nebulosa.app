@@ -1,13 +1,12 @@
 import { useDraggableModal } from '@/shared/hooks'
-import { type Connection, DEFAULT_CONNECTION } from '@/shared/types'
+import { ConnectionMolecule } from '@/shared/molecules'
 import { stopPropagation } from '@/shared/utils'
-import { homeState, homeStore } from '@/stores/home'
 // biome-ignore format:
 import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem, type SharedSelection, Tooltip } from '@heroui/react'
+import { useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
-import { deepClone } from 'valtio/utils'
 import { ConnectButton } from './ConnectButton'
 
 export interface ConnectionBoxProps {
@@ -15,32 +14,14 @@ export interface ConnectionBoxProps {
 }
 
 export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
-	const home = useSnapshot(homeState)
 	const modal = useDraggableModal()
+	const connection = useMolecule(ConnectionMolecule)
+	const state = useSnapshot(connection.state)
 
-	function create() {
-		homeState.connection.edited = structuredClone(DEFAULT_CONNECTION)
-		modal.show()
-	}
-
-	function edit(connection: Connection) {
-		homeState.connection.edited = deepClone(connection)
-		modal.show()
-	}
-
-	function save() {
-		homeStore.saveConnection()
-		modal.close()
-	}
-
-	function handleConnectionChange(keys: SharedSelection) {
+	function connectionChanged(keys: SharedSelection) {
 		if (keys instanceof Set) {
-			const key = keys.values().next().value
-			const selected = homeState.connections.find((c) => c.id === key)
-
-			if (selected) {
-				homeState.connection.selected = selected
-			}
+			const id = keys.values().next().value
+			typeof id === 'string' && connection.selectWith(id)
 		}
 	}
 
@@ -48,7 +29,7 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 		<>
 			<div className='w-full flex flex-row items-center gap-2'>
 				<Tooltip content='New Connection' showArrow>
-					<Button isIconOnly color='success' variant='light' onPointerUp={create} isDisabled={isDisabled}>
+					<Button isIconOnly color='success' variant='light' onPointerUp={() => [connection.create(), modal.show()]} isDisabled={isDisabled}>
 						<Lucide.Plus />
 					</Button>
 				</Tooltip>
@@ -58,9 +39,9 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 					disallowEmptySelection
 					selectionMode='single'
 					isDisabled={isDisabled}
-					items={home.connections}
-					selectedKeys={new Set([home.connection.selected.id])}
-					onSelectionChange={handleConnectionChange}
+					items={state.connections}
+					selectedKeys={new Set([state.selected.id])}
+					onSelectionChange={connectionChanged}
 					renderValue={(selected) => {
 						return selected.map((item) => (
 							<div key={item.data?.id} className='p-1 flex items-center justify-between gap-0'>
@@ -100,11 +81,14 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 												<Lucide.EllipsisVertical />
 											</Button>
 										</DropdownTrigger>
-										<DropdownMenu aria-label='Static Actions' disabledKeys={home.connections.length === 1 ? ['delete'] : []}>
-											<DropdownItem key='edit' startContent={<Lucide.Pencil size={12} />} onPointerUp={() => edit(item)}>
+										<DropdownMenu aria-label='Static Actions' disabledKeys={state.connections.length === 1 ? ['delete'] : []}>
+											<DropdownItem key='edit' startContent={<Lucide.Pencil size={12} />} onPointerUp={() => [connection.edit(item), modal.show()]}>
 												Edit
 											</DropdownItem>
-											<DropdownItem key='delete' startContent={<Lucide.Trash size={12} />} className='text-danger' color='danger' onPointerUp={() => homeStore.removeConnection(item)}>
+											<DropdownItem key='duplicate' startContent={<Lucide.Copy size={12} />} onPointerUp={() => connection.duplicate(item)}>
+												Duplicate
+											</DropdownItem>
+											<DropdownItem key='delete' startContent={<Lucide.Trash size={12} />} className='text-danger' color='danger' onPointerUp={() => connection.remove(item)}>
 												Delete
 											</DropdownItem>
 										</DropdownMenu>
@@ -114,7 +98,7 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 						</SelectItem>
 					)}
 				</Select>
-				<ConnectButton isConnected={!!home.connection.connected} isDisabled={isDisabled} onPointerUp={() => homeStore.connect()} />
+				<ConnectButton isConnected={!!state.connected} isDisabled={isDisabled} onPointerUp={() => connection.connect()} />
 			</div>
 			<Modal size='sm' ref={modal.targetRef} isOpen={modal.isOpen} onOpenChange={modal.onOpenChange}>
 				<ModalContent>
@@ -125,16 +109,16 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 							</ModalHeader>
 							<ModalBody>
 								<div className='flex w-full flex-col flex-wrap md:flex-nowrap gap-4'>
-									<Input label='Name' size='sm' placeholder='Local' type='text' maxLength={64} value={home.connection.edited?.name ?? ''} onValueChange={(value) => (homeState.connection.edited!.name = value)} />
-									<Input label='Host' size='sm' placeholder='localhost' type='text' maxLength={128} value={home.connection.edited?.host} onValueChange={(value) => (homeState.connection.edited!.host = value)} />
-									<NumberInput label='Port' size='sm' placeholder='7624' minValue={80} maxValue={65535} value={home.connection.edited?.port} onValueChange={(value) => (homeState.connection.edited!.port = value)} />
+									<Input label='Name' size='sm' placeholder='Local' type='text' maxLength={64} value={state.edited?.name} onValueChange={(value) => connection.update('name', value)} />
+									<Input label='Host' size='sm' placeholder='localhost' type='text' maxLength={128} value={state.edited?.host} onValueChange={(value) => connection.update('host', value)} />
+									<NumberInput label='Port' size='sm' placeholder='7624' minValue={80} maxValue={65535} value={state.edited?.port} onValueChange={(value) => connection.update('port', value)} />
 								</div>
 							</ModalBody>
 							<ModalFooter>
 								<Button color='danger' variant='light' startContent={<Lucide.X />} onPointerUp={onClose}>
 									Close
 								</Button>
-								<Button isDisabled={!home.connection.edited?.name || !home.connection.edited?.host || !home.connection.edited?.port} color='success' variant='light' startContent={<Lucide.Check />} onPointerUp={save}>
+								<Button isDisabled={!state.edited?.name || !state.edited?.host || !state.edited?.port} color='success' variant='light' startContent={<Lucide.Check />} onPointerUp={() => [connection.save(), modal.close()]}>
 									Save
 								</Button>
 							</ModalFooter>

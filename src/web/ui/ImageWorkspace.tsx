@@ -1,16 +1,18 @@
-import { HomeMolecule } from '@/shared/molecules'
-import { useMolecule } from 'bunshi/react'
+import { HomeMolecule, ImageViewerScope } from '@/shared/molecules'
+import { ScopeProvider, useMolecule } from 'bunshi/react'
 import { useSnapshot } from 'valtio'
 import { ImageViewer } from './ImageViewer'
 
 export function ImageWorkspace() {
-	const molecule = useMolecule(HomeMolecule)
-	const { images } = useSnapshot(molecule.state)
+	const home = useMolecule(HomeMolecule)
+	const { images } = useSnapshot(home.state)
 
 	return (
 		<div className='workspace relative h-full w-full'>
-			{images.map((image, index) => (
-				<ImageViewer key={image.key} image={image} index={index} />
+			{images.map((image) => (
+				<ScopeProvider key={image.key} scope={ImageViewerScope} value={{ image }}>
+					<ImageViewer />
+				</ScopeProvider>
 			))}
 		</div>
 	)

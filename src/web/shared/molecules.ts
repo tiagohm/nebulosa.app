@@ -1,12 +1,13 @@
 import type { FilePickerMode } from '@/ui/FilePicker'
-import { ComponentScope, createScope, molecule, onMount } from 'bunshi'
+import { createScope, molecule, onMount } from 'bunshi'
 import type { Key } from 'react'
 import { DEFAULT_IMAGE_TRANSFORMATION, type DirectoryEntry, type FileEntry, type ImageInfo, type ImageTransformation } from 'src/api/types'
 import { proxy, subscribe } from 'valtio'
 import { deepClone } from 'valtio/utils'
 import { Api } from './api'
+import { PanZoom, type PanZoomOptions } from './panzoom'
 import { simpleLocalStorage } from './storage'
-import { type Connection, DEFAULT_CONNECTION, type Image } from './types'
+import { type Connection, DEFAULT_CONNECTION } from './types'
 
 export interface ConnectionState {
 	readonly connections: Connection[]
@@ -15,11 +16,24 @@ export interface ConnectionState {
 	connected?: Connection
 }
 
+export interface Image {
+	readonly key: string
+	readonly index: number
+	readonly path: string
+}
+
+export interface ImageWorkspaceState {
+	selected?: Image
+}
+
+export interface ImageViewerScopeValue {
+	readonly image: Image
+}
+
 export interface ImageState {
 	readonly transformation: ImageTransformation
 	crosshair: boolean
 	rotation: number
-	url?: string
 	info?: ImageInfo
 }
 
@@ -46,6 +60,13 @@ export interface FilePickerState {
 	createDirectory: boolean
 	directoryName: string
 	readonly mode: FilePickerMode
+}
+
+export interface CachedImage {
+	url: string
+	info: ImageInfo
+	panZoom?: PanZoom
+	destroy?: () => void
 }
 
 export const ConnectionComparator = (a: Connection, b: Connection) => {
@@ -153,15 +174,33 @@ export const ConnectionMolecule = molecule(() => {
 	return { state, create, edit, update, select, selectWith, save, connect, add, duplicate, remove } as const
 })
 
-export const ImageMolecule = molecule((mol, scope) => {
-	scope(ComponentScope)
+export const ImageWorkspaceMolecule = molecule((mol, scope) => {
+	const state = proxy<ImageWorkspaceState>({})
 
-	const home = mol(HomeMolecule)
+	return { state }
+})
+
+const imageCache = new Map<string, CachedImage>()
+
+export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { key: '', path: '', index: 0 } })
+
+export const ImageViewerMolecule = molecule((m, s) => {
+	const scope = s(ImageViewerScope)
+
+	const home = m(HomeMolecule)
+	const workspace = m(ImageWorkspaceMolecule)
+	const { key, index, path } = scope.image
+
+	console.info('image viewer', key, index, path)
+
 	const state = proxy<ImageState>({
 		transformation: simpleLocalStorage.get('image.transformation', () => structuredClone(DEFAULT_IMAGE_TRANSFORMATION)),
 		crosshair: simpleLocalStorage.get('image.crosshair', false),
 		rotation: simpleLocalStorage.get('image.rotation', 0),
 	})
+
+	let loading = false
+	let currentImage: HTMLImageElement | undefined
 
 	onMount(() => {
 		const unsubscribe = subscribe(state, () => {
@@ -170,35 +209,186 @@ export const ImageMolecule = molecule((mol, scope) => {
 			simpleLocalStorage.set('image.rotation', state.rotation)
 		})
 
-		return () => unsubscribe()
+		return () => {
+			unsubscribe()
+		}
 	})
+
+	function toggleAutoStretch() {
+		state.transformation.stretch.auto = !state.transformation.stretch.auto
+		return load(true)
+	}
+
+	function toggleDebayer() {
+		state.transformation.debayer = !state.transformation.debayer
+		return load(true)
+	}
 
 	function toggleHorizontalMirror() {
 		state.transformation.horizontalMirror = !state.transformation.horizontalMirror
+		return load(true)
 	}
 
 	function toggleVerticalMirror() {
 		state.transformation.verticalMirror = !state.transformation.verticalMirror
+		return load(true)
 	}
 
 	function toggleInvert() {
 		state.transformation.invert = !state.transformation.invert
+		return load(true)
 	}
 
 	function toggleCrosshair() {
 		state.crosshair = !state.crosshair
 	}
 
-	function refresh(url: string, info: ImageInfo) {
-		state.url = url
-		state.info = info
-	}
-
-	function close(image: Image | string) {
+	// Removes the image
+	function remove(image: Image) {
 		home.removeImage(image)
 	}
 
-	return { state, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, refresh, close }
+	// Loads the image from path
+	async function load(force: boolean = false, image?: HTMLImageElement) {
+		console.info('loading image', key, loading)
+
+		if (loading) return
+
+		if (image) currentImage = image
+
+		const cached = imageCache.get(key)
+
+		// Not loaded yet or forced to load
+		if (!cached || force) {
+			await open(image)
+		} else {
+			// Load the image from cache
+			image ??= currentImage ?? (document.getElementById(key) as HTMLImageElement | undefined)
+
+			if (image) {
+				currentImage = image
+				image.src = cached.url
+				console.info('image loaded from cache', key, cached.url)
+			} else {
+				console.warn('image not mounted yet', key)
+			}
+		}
+	}
+
+	// Opens the image from path and save it into cache
+	async function open(image?: HTMLImageElement) {
+		try {
+			loading = true
+
+			console.info('opening image', key, index, path)
+
+			// Load the image
+			const { blob, info } = await Api.Image.open({ path: scope.image.path, transformation: state.transformation })
+			const url = URL.createObjectURL(blob)
+
+			// Update the state
+			state.info = info
+
+			// Add the image to cache
+			const cached = imageCache.get(key)
+
+			if (cached) {
+				URL.revokeObjectURL(cached.url)
+
+				cached.url = url
+				cached.info = info
+			} else {
+				imageCache.set(key, { url, info })
+			}
+
+			image ??= currentImage ?? (document.getElementById(key) as HTMLImageElement | undefined)
+
+			if (image) {
+				image.src = url
+				console.info('image loaded', key, url)
+			} else {
+				console.warn('image not mounted yet', key)
+			}
+
+			return url
+		} catch (e) {
+			console.error('failed to open image', key, e)
+		} finally {
+			loading = false
+		}
+	}
+
+	// Attaches the PanZoom and other things to image
+	function attach(e?: HTMLImageElement) {
+		const image = e ?? (document.getElementById(key) as HTMLImageElement | null)
+
+		if (!image) {
+			console.warn('image not mounted yet', key)
+			return
+		}
+
+		const cached = imageCache.get(key)
+
+		if (!cached) {
+			return console.warn('cached image not found', key)
+		}
+
+		if (cached.panZoom) {
+			return console.info('PanZoom has already been created', key)
+		}
+
+		const options: Partial<PanZoomOptions> = {
+			maxScale: 500,
+			canExclude: (e) => {
+				return !!e.tagName && (e.classList.contains('roi') || e.classList.contains('moveable-control'))
+			},
+			on: (event, detail) => {
+				if (event === 'panzoomzoom') {
+					// this.zoom.scale = detail.transformation.scale
+				}
+			},
+		}
+
+		const wrapper = image.closest('.wrapper') as HTMLElement
+		const owner = image.closest('.workspace') as HTMLElement
+		const panZoom = new PanZoom(wrapper, options, owner)
+
+		function handleWheel(e: WheelEvent) {
+			if (e.shiftKey) {
+				// this.rotateWithWheel(e)
+			} else if (!e.target || e.target === owner || e.target === wrapper || e.target === image /*|| e.target === this.roi().nativeElement*/ || (e.target as HTMLElement).tagName === 'circle') {
+				panZoom.zoomWithWheel(e)
+			}
+		}
+
+		wrapper.addEventListener('wheel', handleWheel)
+
+		function destroy() {
+			panZoom.destroy()
+			wrapper.removeEventListener('wheel', handleWheel)
+		}
+
+		cached.panZoom = panZoom
+		cached.destroy = destroy
+
+		console.info('image attached', key)
+	}
+
+	function detach() {
+		const cached = imageCache.get(key)
+
+		if (cached) {
+			console.info('image detached', key)
+			cached.destroy?.()
+			imageCache.delete(key)
+		}
+
+		if (!loading) adjustZIndexAfterBeRemoved()
+
+		currentImage = undefined
+	}
+
+	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, bringToFront }
 })
 
 export const HomeMolecule = molecule(() => {
@@ -208,16 +398,15 @@ export const HomeMolecule = molecule(() => {
 	})
 
 	function addImage(path: string) {
-		const key = `${path}:${Date.now()}`
-		const index = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => e.index))
+		const index = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => e.index)) + 1
+		const key = `image-${Date.now()}-${index}`
 		state.images.push({ path, key, index })
 		state.openImageLastPath = path
 		simpleLocalStorage.set('image.path', path)
 	}
 
-	function removeImage(image: Image | string) {
-		const key = typeof image === 'string' ? image : image.key
-		const index = state.images.findIndex((e) => e.key === key)
+	function removeImage(image: Image) {
+		const index = state.images.findIndex((e) => e.key === image.key)
 		index >= 0 && state.images.splice(index, 1)
 	}
 
@@ -226,11 +415,11 @@ export const HomeMolecule = molecule(() => {
 
 export const FilePickerScope = createScope<FilePickerScopeValue>({})
 
-export const FilePickerMolecule = molecule((mol, scope) => {
-	const value = scope(FilePickerScope)
+export const FilePickerMolecule = molecule((m, s) => {
+	const scope = s(FilePickerScope)
 
 	const state = proxy<FilePickerState>({
-		path: value.path ?? '',
+		path: scope.path ?? '',
 		entries: [],
 		directoryTree: [],
 		filtered: [],
@@ -239,12 +428,12 @@ export const FilePickerMolecule = molecule((mol, scope) => {
 		filter: '',
 		createDirectory: false,
 		directoryName: '',
-		mode: value.mode ?? 'file',
+		mode: scope.mode ?? 'file',
 	})
 
-	onMount(() => {
-		list()
-	})
+	let loading = false
+
+	list()
 
 	function filter(text?: string) {
 		if (text !== undefined) state.filter = text
@@ -260,13 +449,21 @@ export const FilePickerMolecule = molecule((mol, scope) => {
 	}
 
 	async function list() {
-		const { entries, tree } = await Api.FileSystem.list({ path: state.path, filter: value.filter, directoryOnly: state.mode === 'directory' })
+		if (loading) return
 
-		state.entries.splice(0)
-		state.entries.push(...entries)
-		filter()
-		state.directoryTree.splice(0)
-		state.directoryTree.push(...tree)
+		try {
+			loading = true
+
+			const { entries, tree } = await Api.FileSystem.list({ path: state.path, filter: scope.filter, directoryOnly: state.mode === 'directory' })
+
+			state.entries.splice(0)
+			state.entries.push(...entries)
+			filter()
+			state.directoryTree.splice(0)
+			state.directoryTree.push(...tree)
+		} finally {
+			loading = false
+		}
 	}
 
 	function navigateTo(entry: DirectoryEntry) {
@@ -316,7 +513,7 @@ export const FilePickerMolecule = molecule((mol, scope) => {
 
 		if (index >= 0) {
 			state.selected.splice(index, 1)
-		} else if (value.multiple || state.selected.length === 0) {
+		} else if (scope.multiple || state.selected.length === 0) {
 			state.selected.push(path)
 		} else {
 			state.selected[0] = path
@@ -325,3 +522,56 @@ export const FilePickerMolecule = molecule((mol, scope) => {
 
 	return { state, filter, list, navigateTo, navigateBack, navigateToParent, toggleCreateDirectory, createDirectory, select }
 })
+
+function adjustZIndexAfterBeRemoved() {
+	const wrappers = document.querySelectorAll('.workspace .wrapper') ?? []
+
+	// There is nothing to do
+	if (wrappers.length <= 0) return
+
+	// Get the z-index for each element that is not the target
+	const elements = new Array<HTMLElement>(wrappers.length)
+
+	for (const div of wrappers) {
+		const zIndex = parseInt((div as HTMLElement).style.zIndex)
+		elements[zIndex] = div as HTMLElement
+	}
+
+	// Update the z-index
+	for (let i = 0, z = 0; i < elements.length; i++) {
+		if (elements[i]) elements[i].style.zIndex = (z++).toFixed(0)
+	}
+}
+
+// Brings the selected image to front
+function bringToFront(e: HTMLElement) {
+	const selected = e.closest('.wrapper') as HTMLElement
+	const workspace = selected.closest('.workspace') as HTMLElement
+	const wrappers = workspace.querySelectorAll('.wrapper') ?? []
+
+	// Only exist one element and it is already at the top
+	if (wrappers.length === 1) return
+
+	// Selected element z-index
+	const zIndex = parseInt((selected as HTMLElement).style.zIndex)
+	const max = wrappers.length - 1
+
+	// It is already at the top
+	if (zIndex === max) return
+
+	// Get the z-index for each element
+	const elements = new Array<HTMLElement>(wrappers.length)
+
+	for (const div of wrappers) {
+		const zIndex = parseInt((div as HTMLElement).style.zIndex)
+		elements[zIndex] = div as HTMLElement
+	}
+
+	// Shift the element z-index until selected element
+	for (let i = elements.length - 1; i > zIndex; i--) {
+		elements[i].style.zIndex = (i - 1).toFixed(0)
+	}
+
+	// Update the selected element z-index
+	elements[zIndex].style.zIndex = max.toFixed(0)
+}

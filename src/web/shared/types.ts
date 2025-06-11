@@ -7,12 +7,6 @@ export interface Connection extends Connect {
 	status?: ConnectionStatus
 }
 
-export interface Image {
-	readonly key: string
-	readonly index: number
-	readonly path: string
-}
-
 export const DEFAULT_CONNECTION: Connection = {
 	id: '0',
 	name: 'Local',

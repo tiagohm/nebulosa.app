@@ -75,11 +75,11 @@ export class ConnectionEndpoint {
 export function connection(connection: ConnectionProvider, indiClientHandler: IndiClientHandler) {
 	const app = new Elysia({ prefix: '/connections' })
 
-	app.get('/', () => {
+	app.get('', () => {
 		return connection.list()
 	})
 
-	app.post('/', async ({ body }) => {
+	app.post('', async ({ body }) => {
 		return await connection.connect(body as never, indiClientHandler)
 	})
 

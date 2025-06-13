@@ -15,7 +15,7 @@ export class StarDetectionEndpoint {
 export function starDetection(starDetection: StarDetectionEndpoint) {
 	const app = new Elysia({ prefix: '/starDetection' })
 
-	app.post('/', ({ body }) => {
+	app.post('', ({ body }) => {
 		return starDetection.detectStars(body as never)
 	})
 

@@ -704,7 +704,7 @@ export function indi(indi: IndiEndpoint, connection: ConnectionProvider) {
 export function cameras(indi: IndiEndpoint) {
 	const app = new Elysia({ prefix: '/cameras' })
 
-	app.get('/', () => {
+	app.get('', () => {
 		return indi.cameras()
 	})
 
@@ -718,7 +718,7 @@ export function cameras(indi: IndiEndpoint) {
 export function thermometers(indi: IndiEndpoint) {
 	const app = new Elysia({ prefix: '/thermometers' })
 
-	app.get('/', () => {
+	app.get('', () => {
 		return indi.thermometers()
 	})
 
@@ -732,7 +732,7 @@ export function thermometers(indi: IndiEndpoint) {
 export function guideOutputs(indi: IndiEndpoint, connection: ConnectionProvider) {
 	const app = new Elysia({ prefix: '/guide-outputs' })
 
-	app.get('/', () => {
+	app.get('', () => {
 		return indi.guideOutputs()
 	})
 

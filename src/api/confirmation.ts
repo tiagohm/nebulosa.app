@@ -38,7 +38,7 @@ export class ConfirmationEndpoint {
 export function confirmation(confirmation: ConfirmationEndpoint) {
 	const app = new Elysia({ prefix: '/confirmation' })
 
-	app.post('/', ({ body }) => {
+	app.post('', ({ body }) => {
 		confirmation.confirm(body as never)
 	})
 

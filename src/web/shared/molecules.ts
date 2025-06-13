@@ -1,7 +1,9 @@
 import type { FilePickerMode } from '@/ui/FilePicker'
 import { createScope, molecule, onMount } from 'bunshi'
+import type { DetectedStar } from 'nebulosa/src/stardetector'
 import type { Key } from 'react'
-import { DEFAULT_IMAGE_TRANSFORMATION, type DirectoryEntry, type FileEntry, type ImageInfo, type ImageTransformation } from 'src/api/types'
+import type { DirectoryEntry, FileEntry, ImageInfo, ImageTransformation, StarDetection } from 'src/api/types'
+import { DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_STAR_DETECTION } from 'src/api/types'
 import { proxy, subscribe } from 'valtio'
 import { deepClone } from 'valtio/utils'
 import { Api } from './api'
@@ -35,6 +37,19 @@ export interface ImageState {
 	crosshair: boolean
 	rotation: number
 	info?: ImageInfo
+	readonly starDetection: {
+		show: boolean
+		loading: boolean
+		stars: DetectedStar[]
+		selected?: DetectedStar
+		request: StarDetection
+		computed: {
+			hfd: number
+			snr: number
+			fluxMin: number
+			fluxMax: number
+		}
+	}
 }
 
 export interface HomeState {
@@ -64,8 +79,8 @@ export interface FilePickerState {
 
 export interface CachedImage {
 	url: string
-	info: ImageInfo
 	panZoom?: PanZoom
+	state: ImageState
 	destroy?: () => void
 }
 
@@ -191,22 +206,41 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	const workspace = m(ImageWorkspaceMolecule)
 	const { key, index, path } = scope.image
 
-	console.info('image viewer', key, index, path)
+	const transformation = simpleLocalStorage.get('image.transformation', () => structuredClone(DEFAULT_IMAGE_TRANSFORMATION))
+	const starDetectionRequest = simpleLocalStorage.get('image.starDetection', () => structuredClone(DEFAULT_STAR_DETECTION))
 
-	const state = proxy<ImageState>({
-		transformation: simpleLocalStorage.get('image.transformation', () => structuredClone(DEFAULT_IMAGE_TRANSFORMATION)),
-		crosshair: simpleLocalStorage.get('image.crosshair', false),
-		rotation: simpleLocalStorage.get('image.rotation', 0),
-	})
+	starDetectionRequest.path = path
+
+	const state =
+		imageCache.get(key)?.state ??
+		proxy<ImageState>({
+			transformation,
+			crosshair: simpleLocalStorage.get('image.crosshair', false),
+			rotation: simpleLocalStorage.get('image.rotation', 0),
+			starDetection: {
+				show: false,
+				loading: false,
+				stars: [],
+				request: starDetectionRequest,
+				computed: {
+					hfd: 0,
+					snr: 0,
+					fluxMin: 0,
+					fluxMax: 0,
+				},
+			},
+		})
 
 	let loading = false
 	let currentImage: HTMLImageElement | undefined
 
 	onMount(() => {
+		// TODO: Subcribe individuallly
 		const unsubscribe = subscribe(state, () => {
 			simpleLocalStorage.set('image.transformation', state.transformation)
 			simpleLocalStorage.set('image.crosshair', state.crosshair)
 			simpleLocalStorage.set('image.rotation', state.rotation)
+			simpleLocalStorage.set('image.starDetection', state.starDetection.request)
 		})
 
 		return () => {
@@ -241,6 +275,10 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 	function toggleCrosshair() {
 		state.crosshair = !state.crosshair
+	}
+
+	function toggleDetectedStars(enabled?: boolean) {
+		state.starDetection.show = enabled ?? !state.starDetection.show
 	}
 
 	// Removes the image
@@ -296,9 +334,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 				URL.revokeObjectURL(cached.url)
 
 				cached.url = url
-				cached.info = info
 			} else {
-				imageCache.set(key, { url, info })
+				imageCache.set(key, { url, state })
 			}
 
 			image ??= currentImage ?? (document.getElementById(key) as HTMLImageElement | undefined)
@@ -354,9 +391,11 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		const panZoom = new PanZoom(wrapper, options, owner)
 
 		function handleWheel(e: WheelEvent) {
+			const target = e.target as HTMLElement
+
 			if (e.shiftKey) {
 				// this.rotateWithWheel(e)
-			} else if (!e.target || e.target === owner || e.target === wrapper || e.target === image /*|| e.target === this.roi().nativeElement*/ || (e.target as HTMLElement).tagName === 'circle') {
+			} else if (target === owner || target === wrapper || target === image /*|| target === this.roi().nativeElement*/ || target.tagName === 'circle' || target.tagName === 'text') {
 				panZoom.zoomWithWheel(e)
 			}
 		}
@@ -388,7 +427,48 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		currentImage = undefined
 	}
 
-	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, bringToFront }
+	async function detectStars() {
+		try {
+			state.starDetection.loading = true
+
+			const stars = await Api.StarDetection.detect(state.starDetection.request)
+
+			state.starDetection.stars = stars
+			state.starDetection.show = stars.length > 0
+
+			let hfd = 0
+			let snr = 0
+			let fluxMin = Number.MAX_VALUE
+			let fluxMax = Number.MIN_VALUE
+
+			for (const star of stars) {
+				hfd += star.hfd
+				snr += star.snr
+				fluxMin = Math.min(fluxMin, star.flux)
+				fluxMax = Math.max(fluxMax, star.flux)
+			}
+
+			hfd /= stars.length
+			snr /= stars.length
+
+			state.starDetection.computed = { hfd, snr, fluxMin, fluxMax }
+		} catch (e) {
+			console.error('failed to detect stars', e)
+		} finally {
+			state.starDetection.loading = false
+		}
+	}
+
+	function selectDetectedStar(star: DetectedStar) {
+		state.starDetection.selected = star
+
+		const image = document.getElementById(key) as HTMLImageElement
+		const canvas = document.getElementById(`${key}-selected-star`) as HTMLCanvasElement
+		const ctx = canvas.getContext('2d')
+		ctx?.drawImage(image, star.x - 8.5, star.y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
+	}
+
+	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, bringToFront, toggleDetectedStars, detectStars, selectDetectedStar }
 })
 
 export const HomeMolecule = molecule(() => {

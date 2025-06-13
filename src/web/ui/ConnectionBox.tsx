@@ -100,18 +100,18 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 				</Select>
 				<ConnectButton isConnected={!!state.connected} isDisabled={isDisabled} onPointerUp={() => connection.connect()} />
 			</div>
-			<Modal size='sm' ref={modal.targetRef} isOpen={modal.isOpen} onOpenChange={modal.onOpenChange}>
+			<Modal size='sm' ref={modal.targetRef} isOpen={modal.isOpen} onOpenChange={modal.onOpenChange} backdrop='transparent' classNames={{ wrapper: 'pointer-events-none' }} isDismissable={false}>
 				<ModalContent>
 					{(onClose) => (
 						<>
-							<ModalHeader {...modal.moveProps} className='flex flex-row gap-1'>
+							<ModalHeader {...modal.moveProps} className='flex flex-row items-center'>
 								Connection
 							</ModalHeader>
 							<ModalBody>
-								<div className='flex w-full flex-col flex-wrap md:flex-nowrap gap-4'>
-									<Input label='Name' size='sm' placeholder='Local' type='text' maxLength={64} value={state.edited?.name} onValueChange={(value) => connection.update('name', value)} />
-									<Input label='Host' size='sm' placeholder='localhost' type='text' maxLength={128} value={state.edited?.host} onValueChange={(value) => connection.update('host', value)} />
-									<NumberInput label='Port' size='sm' placeholder='7624' minValue={80} maxValue={65535} value={state.edited?.port} onValueChange={(value) => connection.update('port', value)} />
+								<div className='grid grid-cols-6 gap-2'>
+									<Input label='Name' size='sm' className='col-span-full' placeholder='Local' type='text' maxLength={64} value={state.edited?.name} onValueChange={(value) => connection.update('name', value)} />
+									<Input label='Host' size='sm' className='col-span-4' placeholder='localhost' type='text' maxLength={128} value={state.edited?.host} onValueChange={(value) => connection.update('host', value)} />
+									<NumberInput label='Port' size='sm' className='col-span-2' placeholder='7624' minValue={80} maxValue={65535} value={state.edited?.port} onValueChange={(value) => connection.update('port', value)} />
 								</div>
 							</ModalBody>
 							<ModalFooter>

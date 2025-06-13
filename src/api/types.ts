@@ -154,6 +154,7 @@ export interface CloseImage {
 
 export interface ImageInfo {
 	path: string
+	originalPath: string
 	width: number
 	height: number
 	mono: boolean
@@ -314,6 +315,15 @@ export interface StarDetection {
 	minSNR: number
 	maxStars: number
 	slot: number
+}
+
+export const DEFAULT_STAR_DETECTION: StarDetection = {
+	type: 'ASTAP',
+	path: '',
+	timeout: 30000,
+	minSNR: 0,
+	maxStars: 0,
+	slot: 0,
 }
 
 // Misc

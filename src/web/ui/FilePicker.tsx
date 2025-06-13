@@ -24,15 +24,15 @@ export function FilePicker({ draggable, header, onChoose }: FilePickerProps) {
 	}
 
 	return (
-		<Modal size='sm' ref={draggable.targetRef} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} classNames={{ base: 'max-w-[480px]' }}>
+		<Modal size='sm' ref={draggable.targetRef} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} classNames={{ base: 'max-w-[480px]', wrapper: 'pointer-events-none' }} backdrop='transparent'>
 			<ModalContent>
 				{(onClose) => (
 					<>
-						<ModalHeader {...draggable.moveProps} className='flex flex-row gap-1'>
+						<ModalHeader {...draggable.moveProps} className='flex flex-row items-center'>
 							{header ?? (mode === 'directory' ? 'Open Directory' : 'Open File')}
 						</ModalHeader>
 						<ModalBody>
-							<div className='flex w-full flex-col flex-wrap gap-4'>
+							<div className='flex w-full flex-col flex-wrap gap-2'>
 								<div className='flex flex-row items-center gap-2'>
 									<Tooltip content='Go Back' showArrow>
 										<Button isIconOnly isDisabled={history.length === 0} color='secondary' variant='light' onPointerUp={() => filePicker.navigateBack()}>

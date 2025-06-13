@@ -1,11 +1,10 @@
-import type { CreateDirectory, FileSystem, ImageInfo, ListDirectory, OpenImage } from 'src/api/types'
+import type { DetectedStar } from 'nebulosa/src/stardetector'
+import type { CreateDirectory, FileSystem, ImageInfo, ListDirectory, OpenImage, StarDetection } from 'src/api/types'
 import { X_IMAGE_INFO_HEADER } from 'src/api/types'
-import wretch, { type Wretch } from 'wretch'
-import { abortAddon } from 'wretch/addons'
+import wretch from 'wretch'
 
 const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 const w = wretch(uri, { cache: 'no-cache' })
-const wa = w.addon(abortAddon())
 
 export namespace Api {
 	export namespace FileSystem {
@@ -19,12 +18,17 @@ export namespace Api {
 	}
 
 	export namespace Image {
-		export async function open(req: OpenImage, controller?: AbortController) {
-			const wr = (controller ? wa.signal(controller) : w) as Wretch
-			const response = await wr.url('/image/open').post(req).res()
+		export async function open(req: OpenImage) {
+			const response = await w.url('/image/open').post(req).res()
 			const blob = await response.blob()
 			const info = JSON.parse(response.headers.get(X_IMAGE_INFO_HEADER)!) as ImageInfo
 			return { blob, info }
+		}
+	}
+
+	export namespace StarDetection {
+		export function detect(req: StarDetection) {
+			return w.url('/starDetection').post(req).json<DetectedStar[]>()
 		}
 	}
 }

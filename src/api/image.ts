@@ -35,6 +35,7 @@ export class ImageEndpoint {
 					if (output) {
 						const info: ImageInfo = {
 							path,
+							originalPath: req.path,
 							width: output.width,
 							height: output.height,
 							mono: output.channels === 1,

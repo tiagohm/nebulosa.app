@@ -60,7 +60,8 @@
 			"suspicious": {
 				"noAssignInExpressions": "off",
 				"noConsoleLog": "off",
-				"useAwait": "error"
+				"useAwait": "error",
+				"noEmptyInterface": "off"
 			},
 			"complexity": {
 				"noForEach": "off",

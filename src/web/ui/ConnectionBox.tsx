@@ -77,7 +77,7 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 								<div className='flex justify-center items-center'>
 									<Dropdown>
 										<DropdownTrigger>
-											<Button isIconOnly variant='light' onPointerUp={stopPropagation}>
+											<Button isIconOnly variant='light' onMouseUp={stopPropagation}>
 												<Lucide.EllipsisVertical />
 											</Button>
 										</DropdownTrigger>
@@ -98,7 +98,7 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 						</SelectItem>
 					)}
 				</Select>
-				<ConnectButton isConnected={!!state.connected} isDisabled={isDisabled} onPointerUp={() => connection.connect()} />
+				<ConnectButton isLoading={state.loading} isConnected={!!state.connected} isDisabled={isDisabled} onPointerUp={() => connection.connect()} />
 			</div>
 			<Modal size='sm' ref={modal.targetRef} isOpen={modal.isOpen} onOpenChange={modal.onOpenChange} backdrop='transparent' classNames={{ wrapper: 'pointer-events-none' }} isDismissable={false}>
 				<ModalContent>

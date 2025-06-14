@@ -1,7 +1,7 @@
 import { Button, type ButtonProps, Tooltip } from '@heroui/react'
 import * as Lucide from 'lucide-react'
 
-export interface ConnectButtonProps extends Omit<ButtonProps, 'isIconOnly' | 'isLoading' | 'color' | 'variant'> {
+export interface ConnectButtonProps extends Omit<ButtonProps, 'isIconOnly' | 'color' | 'variant'> {
 	readonly isConnected: boolean
 }
 

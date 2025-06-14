@@ -13,6 +13,7 @@ import { type Connection, DEFAULT_CONNECTION } from './types'
 
 export interface ConnectionState {
 	readonly connections: Connection[]
+	loading: boolean
 	selected: Connection
 	edited?: Connection
 	connected?: Connection
@@ -94,6 +95,7 @@ export const ConnectionMolecule = molecule(() => {
 
 	const state = proxy<ConnectionState>({
 		connections,
+		loading: false,
 		selected: connections[0],
 	})
 
@@ -448,8 +450,13 @@ export const ImageViewerMolecule = molecule((m, s) => {
 				fluxMax = Math.max(fluxMax, star.flux)
 			}
 
-			hfd /= stars.length
-			snr /= stars.length
+			if (stars.length) {
+				hfd /= stars.length
+				snr /= stars.length
+			} else {
+				fluxMin = 0
+				fluxMax = 0
+			}
 
 			state.starDetection.computed = { hfd, snr, fluxMin, fluxMax }
 		} catch (e) {
@@ -462,9 +469,10 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	function selectDetectedStar(star: DetectedStar) {
 		state.starDetection.selected = star
 
-		const image = document.getElementById(key) as HTMLImageElement
-		const canvas = document.getElementById(`${key}-selected-star`) as HTMLCanvasElement
+		const canvas = document.getElementById(`${key}-selected-star`) as HTMLCanvasElement | null
+		if (!canvas) return
 		const ctx = canvas.getContext('2d')
+		const image = document.getElementById(key) as HTMLImageElement
 		ctx?.drawImage(image, star.x - 8.5, star.y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
 	}
 

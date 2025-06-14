@@ -1,6 +1,6 @@
 import '@/index.css'
 import Home from '@/ui/Home'
-import { HeroUIProvider } from '@heroui/react'
+import { HeroUIProvider, ToastProvider } from '@heroui/react'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 
@@ -8,7 +8,16 @@ function start() {
 	const root = createRoot(document.getElementById('root')!)
 	root.render(
 		<React.StrictMode>
-			<HeroUIProvider>
+			<HeroUIProvider disableAnimation disableRipple>
+				<ToastProvider
+					placement='bottom-center'
+					toastProps={{
+						radius: 'sm',
+						color: 'secondary',
+						variant: 'solid',
+						timeout: 4500,
+					}}
+				/>
 				<main className='w-screen h-screen'>
 					<Home />
 				</main>

@@ -1,4 +1,5 @@
 import type { FilePickerMode } from '@/ui/FilePicker'
+import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount } from 'bunshi'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import type { Key } from 'react'
@@ -438,6 +439,10 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			state.starDetection.stars = stars
 			state.starDetection.show = stars.length > 0
 
+			if (!stars.length) {
+				addToast({ description: 'No stars detected', color: 'primary', title: 'INFO' })
+			}
+
 			let hfd = 0
 			let snr = 0
 			let fluxMin = Number.MAX_VALUE
@@ -459,8 +464,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			}
 
 			state.starDetection.computed = { hfd, snr, fluxMin, fluxMax }
-		} catch (e) {
-			console.error('failed to detect stars', e)
+		} catch {
+			addToast({ description: 'Failed to detect stars', color: 'danger', title: 'ERROR' })
 		} finally {
 			state.starDetection.loading = false
 		}

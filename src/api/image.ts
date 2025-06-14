@@ -39,7 +39,7 @@ export class ImageEndpoint {
 							width: output.width,
 							height: output.height,
 							mono: output.channels === 1,
-							metatada: image.metadata,
+							metadata: image.metadata,
 							transformation: req.transformation,
 							headers: image.header,
 						}

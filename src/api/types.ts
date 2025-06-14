@@ -158,7 +158,7 @@ export interface ImageInfo {
 	width: number
 	height: number
 	mono: boolean
-	metatada: ImageMetadata
+	metadata: ImageMetadata
 	transformation: ImageTransformation
 	rightAscension?: Angle
 	declination?: Angle

@@ -21,7 +21,6 @@
 		"@elysiajs/cron": "latest",
 		"@elysiajs/static": "latest",
 		"@heroui/react": "beta",
-		"@radix-ui/react-context-menu": "2.2.15",
 		"@uidotdev/usehooks": "2.4.1",
 		"bun-plugin-tailwind": "latest",
 		"bunshi": "2.1.5",

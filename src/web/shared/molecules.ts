@@ -285,8 +285,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	}
 
 	// Removes the image
-	function remove(image: Image) {
-		home.removeImage(image)
+	function remove() {
+		home.removeImage(scope.image)
 	}
 
 	// Loads the image from path
@@ -356,6 +356,11 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		} finally {
 			loading = false
 		}
+	}
+
+	function select(e: HTMLImageElement) {
+		workspace.state.selected = scope.image
+		bringToFront(e)
 	}
 
 	// Attaches the PanZoom and other things to image
@@ -428,6 +433,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		if (!loading) adjustZIndexAfterBeRemoved()
 
 		currentImage = undefined
+		workspace.state.selected = undefined
 	}
 
 	async function detectStars() {
@@ -481,7 +487,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		ctx?.drawImage(image, star.x - 8.5, star.y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
 	}
 
-	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, bringToFront, toggleDetectedStars, detectStars, selectDetectedStar }
+	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, select, toggleDetectedStars, detectStars, selectDetectedStar }
 })
 
 export const HomeMolecule = molecule(() => {
@@ -639,8 +645,7 @@ function adjustZIndexAfterBeRemoved() {
 // Brings the selected image to front
 function bringToFront(e: HTMLElement) {
 	const selected = e.closest('.wrapper') as HTMLElement
-	const workspace = selected.closest('.workspace') as HTMLElement
-	const wrappers = workspace.querySelectorAll('.wrapper') ?? []
+	const wrappers = selected.closest('.workspace')?.querySelectorAll('.wrapper') ?? []
 
 	// Only exist one element and it is already at the top
 	if (wrappers.length === 1) return

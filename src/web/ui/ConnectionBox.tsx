@@ -75,7 +75,7 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 									</div>
 								</div>
 								<div className='flex justify-center items-center'>
-									<Dropdown>
+									<Dropdown showArrow>
 										<DropdownTrigger>
 											<Button isIconOnly variant='light' onMouseUp={stopPropagation}>
 												<Lucide.EllipsisVertical />

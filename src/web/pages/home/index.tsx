@@ -10,7 +10,7 @@ function start() {
 		<React.StrictMode>
 			<HeroUIProvider disableAnimation disableRipple>
 				<ToastProvider
-					placement='bottom-center'
+					placement='top-center'
 					toastProps={{
 						radius: 'sm',
 						color: 'secondary',

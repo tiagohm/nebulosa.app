@@ -52,7 +52,7 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 									</span>
 								</div>
 								<div className='flex items-center'>
-									<Chip color='primary'>{item.data?.type}</Chip>
+									<Chip size='sm' color='primary'>{item.data?.type}</Chip>
 								</div>
 							</div>
 						))
@@ -60,7 +60,7 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 					{(item) => (
 						<SelectItem key={item.id} textValue={item.name}>
 							<div className='flex items-center justify-between gap-2'>
-								<div className='flex flex-1 items-center justify-between gap-0'>
+								<div className='flex flex-1 items-center justify-between gap-1'>
 									<div className='flex flex-col gap-1 mt-1'>
 										<span className='font-bold'>{item.name}</span>
 										<span className='text-default-500 text-tiny flex gap-1 items-center'>
@@ -71,13 +71,13 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 										</span>
 									</div>
 									<div className='flex items-center'>
-										<Chip color='primary'>{item.type}</Chip>
+										<Chip size='sm' color='primary'>{item.type}</Chip>
 									</div>
 								</div>
 								<div className='flex justify-center items-center'>
 									<Dropdown showArrow>
 										<DropdownTrigger>
-											<Button isIconOnly variant='light' onMouseUp={stopPropagation}>
+											<Button isIconOnly variant='light' onPointerUp={stopPropagation}>
 												<Lucide.EllipsisVertical />
 											</Button>
 										</DropdownTrigger>

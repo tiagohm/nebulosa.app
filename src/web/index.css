@@ -54,6 +54,18 @@ div[data-radix-popper-content-wrapper]:has(div[role="menu"]) {
 	@apply text-sm;
 }
 
+/* Tooltip */
+
+div[role="tooltip"] {
+	@apply pointer-events-none;
+}
+
+/* Popover */
+
+div[data-slot="popover"] {
+	@apply !w-fit;
+}
+
 /* Utilities */
 
 .pixelated {

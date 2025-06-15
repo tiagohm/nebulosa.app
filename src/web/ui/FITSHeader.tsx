@@ -21,7 +21,7 @@ export function FITSHeader({ draggable }: FITSHeaderProps) {
 							FITS Header
 						</ModalHeader>
 						<ModalBody>
-							<div className='w-full px-1 py-2 rounded-small'>
+							<div className='w-full px-1 py-2'>
 								<Listbox
 									selectionMode='none'
 									isVirtualized

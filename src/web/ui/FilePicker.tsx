@@ -74,7 +74,6 @@ export function FilePicker({ draggable, header, onChoose }: FilePickerProps) {
 									</div>
 								)}
 								<Listbox
-									aria-label='Actions'
 									isVirtualized
 									onAction={(path) => filePicker.select(path)}
 									selectionMode='none'

@@ -49,11 +49,6 @@ export function ImageToolbar({ tooltipPlacement = 'top', onButtonPress, ...props
 						<Lucide.Grid3X3 />
 					</ToggleButton>
 				</Tooltip>
-				<Tooltip content='Adjustment' placement={tooltipPlacement}>
-					<Button isIconOnly color='secondary' variant='flat'>
-						<Lucide.Wand />
-					</Button>
-				</Tooltip>
 				<Tooltip content='Rotate' placement={tooltipPlacement}>
 					<Button isIconOnly color='secondary' variant='flat'>
 						<Lucide.RotateCw />
@@ -67,6 +62,11 @@ export function ImageToolbar({ tooltipPlacement = 'top', onButtonPress, ...props
 					</PopoverTrigger>
 					<PopoverContent>
 						<div className='flex flex-row items-center justify-center gap-2 p-2'>
+							<Tooltip content='Adjustment' placement={tooltipPlacement}>
+								<Button isIconOnly color='secondary' variant='flat'>
+									<Lucide.Wand />
+								</Button>
+							</Tooltip>
 							<Tooltip content='Horizontal mirror' placement={tooltipPlacement}>
 								<ToggleButton color='primary' isSelected={transformation.horizontalMirror} onPointerUp={() => viewer.toggleHorizontalMirror()}>
 									<Lucide.FlipHorizontal />

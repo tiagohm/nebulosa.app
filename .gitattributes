@@ -21,3 +21,5 @@
 *.so            binary
 *.zip           binary
 *.pdf           binary
+*.ico           binary
+*.webp          binary

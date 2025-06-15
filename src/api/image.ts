@@ -121,7 +121,7 @@ export function image(image: ImageEndpoint) {
 		if (info) {
 			return new Response(Bun.file(info.path), {
 				headers: {
-					[X_IMAGE_INFO_HEADER]: JSON.stringify(info),
+					[X_IMAGE_INFO_HEADER]: encodeURIComponent(JSON.stringify(info)),
 				},
 			})
 		} else {

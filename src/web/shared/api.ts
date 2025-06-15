@@ -21,7 +21,7 @@ export namespace Api {
 		export async function open(req: OpenImage) {
 			const response = await w.url('/image/open').post(req).res()
 			const blob = await response.blob()
-			const info = JSON.parse(response.headers.get(X_IMAGE_INFO_HEADER)!) as ImageInfo
+			const info = JSON.parse(decodeURIComponent(response.headers.get(X_IMAGE_INFO_HEADER)!)) as ImageInfo
 			return { blob, info }
 		}
 	}

@@ -7,7 +7,10 @@ import { Crosshair } from './Crosshair'
 import { DetectedStars } from './DetectedStars'
 import { FITSHeader } from './FITSHeader'
 import { ImageToolbar, type ImageToolbarButtonType } from './ImageToolbar'
+import { PlateSolver } from './PlateSolver'
+import { SCNR } from './SCNR'
 import { StarDetection } from './StarDetection'
+import { Stretch } from './Stretch'
 
 export function ImageViewer() {
 	const ref = useRef<HTMLImageElement>(null)
@@ -17,8 +20,11 @@ export function ImageViewer() {
 	const { image } = viewer.scope
 	const { selected } = useSnapshot(workspace.state)
 
-	const starDetectionModal = useDraggableModal()
-	const fitsHeaderModal = useDraggableModal()
+	const stretchModal = useDraggableModal({ name: `stretch-${image.key}` })
+	const scnrModal = useDraggableModal({ name: `scnr-${image.key}` })
+	const plateSolverModal = useDraggableModal({ name: `plate-solver-${image.key}` })
+	const starDetectionModal = useDraggableModal({ name: `star-detection-${image.key}` })
+	const fitsHeaderModal = useDraggableModal({ name: `fits-header-${image.key}` })
 
 	useEffect(() => {
 		if (ref.current) {
@@ -34,6 +40,9 @@ export function ImageViewer() {
 	function handleImageToolbarButtonPress(type: ImageToolbarButtonType) {
 		if (type === 'fits-header') fitsHeaderModal.show()
 		else if (type === 'star-detection') starDetectionModal.show()
+		else if (type === 'stretch') stretchModal.show()
+		else if (type === 'plate-solver') plateSolverModal.show()
+		else if (type === 'scnr') scnrModal.show()
 	}
 
 	return (
@@ -44,6 +53,9 @@ export function ImageViewer() {
 				{crosshair && <Crosshair />}
 				{starDetection.show && <DetectedStars rotation={0} stars={starDetection.stars} />}
 			</div>
+			<Stretch draggable={stretchModal} />
+			<PlateSolver draggable={plateSolverModal} />
+			<SCNR draggable={scnrModal} />
 			<StarDetection draggable={starDetectionModal} />
 			<FITSHeader draggable={fitsHeaderModal} />
 		</>

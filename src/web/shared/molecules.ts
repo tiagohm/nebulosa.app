@@ -2,12 +2,12 @@ import type { FilePickerMode } from '@/ui/FilePicker'
 import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount } from 'bunshi'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
-import type { Key } from 'react'
 import type { DirectoryEntry, FileEntry, ImageInfo, ImageTransformation, StarDetection } from 'src/api/types'
 import { DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_STAR_DETECTION } from 'src/api/types'
 import { proxy, subscribe } from 'valtio'
 import { deepClone } from 'valtio/utils'
 import { Api } from './api'
+import type { UseDraggableModalResult } from './hooks'
 import { PanZoom, type PanZoomOptions } from './panzoom'
 import { simpleLocalStorage } from './storage'
 import { type Connection, DEFAULT_CONNECTION } from './types'
@@ -71,7 +71,7 @@ export interface FilePickerState {
 	readonly entries: FileEntry[]
 	readonly directoryTree: DirectoryEntry[]
 	readonly filtered: FileEntry[]
-	readonly selected: Key[]
+	readonly selected: string[]
 	readonly history: string[]
 	filter: string
 	createDirectory: boolean
@@ -108,12 +108,14 @@ export const ConnectionMolecule = molecule(() => {
 		return () => unsubscribe()
 	})
 
-	function create() {
+	function create(modal: UseDraggableModalResult) {
 		state.edited = deepClone(DEFAULT_CONNECTION)
+		modal.show()
 	}
 
-	function edit(connection: Connection) {
+	function edit(connection: Connection, modal: UseDraggableModalResult) {
 		state.edited = deepClone(connection)
+		modal.show()
 	}
 
 	function add(connection: Connection) {
@@ -141,7 +143,7 @@ export const ConnectionMolecule = molecule(() => {
 		selected && select(selected)
 	}
 
-	function save() {
+	function save(modal: UseDraggableModalResult) {
 		const { edited } = state
 
 		if (edited) {
@@ -157,6 +159,8 @@ export const ConnectionMolecule = molecule(() => {
 					state.connections[index] = edited
 				}
 			}
+
+			modal.close()
 		}
 	}
 
@@ -189,7 +193,7 @@ export const ConnectionMolecule = molecule(() => {
 		}
 	}
 
-	return { state, create, edit, update, select, selectWith, save, connect, add, duplicate, remove } as const
+	return { state, create, edit, update, select, selectWith, save, connect, duplicate, remove } as const
 })
 
 export const ImageWorkspaceMolecule = molecule((mol, scope) => {
@@ -598,7 +602,7 @@ export const FilePickerMolecule = molecule((m, s) => {
 		}
 	}
 
-	function select(path: Key) {
+	function select(path: string) {
 		const entry = state.entries.find((e) => e.path === path)
 
 		if (!entry) return
@@ -673,3 +677,17 @@ function bringToFront(e: HTMLElement) {
 	// Update the selected element z-index
 	elements[zIndex].style.zIndex = max.toFixed(0)
 }
+
+export const ZIndexMolecule = molecule(() => {
+	const state = proxy({ zIndex: 1000000, key: '' })
+
+	function increment(key: string) {
+		if (state.key !== key) {
+			state.key = key
+			state.zIndex++
+			document.documentElement.style.setProperty(`--z-index-${key}`, state.zIndex.toFixed(0))
+		}
+	}
+
+	return { state, increment }
+})

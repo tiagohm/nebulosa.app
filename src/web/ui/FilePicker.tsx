@@ -24,7 +24,7 @@ export function FilePicker({ draggable, header, onChoose }: FilePickerProps) {
 	}
 
 	return (
-		<Modal size='sm' ref={draggable.targetRef} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} classNames={{ base: 'max-w-[480px]', wrapper: 'pointer-events-none' }} backdrop='transparent'>
+		<Modal size='sm' ref={draggable.targetRef} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} classNames={{ base: 'max-w-[480px]', wrapper: 'pointer-events-none' }} backdrop='transparent' isDismissable={false} onPointerUp={draggable.onPointerUp}>
 			<ModalContent>
 				{(onClose) => (
 					<>
@@ -75,7 +75,7 @@ export function FilePicker({ draggable, header, onChoose }: FilePickerProps) {
 								)}
 								<Listbox
 									isVirtualized
-									onAction={(path) => filePicker.select(path)}
+									onAction={(path) => filePicker.select(path as string)}
 									selectionMode='none'
 									virtualization={{
 										maxListboxHeight: 200,
@@ -103,11 +103,8 @@ export function FilePicker({ draggable, header, onChoose }: FilePickerProps) {
 							</div>
 						</ModalBody>
 						<ModalFooter>
-							<Button color='danger' variant='light' startContent={<Lucide.X />} onPointerUp={onClose}>
-								Close
-							</Button>
 							<Badge color='success' content={selected.length} showOutline={false}>
-								<Button isDisabled={selected.length === 0} color='success' variant='light' startContent={<Lucide.Check />} onPointerUp={choose}>
+								<Button isDisabled={selected.length === 0} color='success' variant='flat' startContent={<Lucide.Check />} onPointerUp={choose}>
 									Choose
 								</Button>
 							</Badge>

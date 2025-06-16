@@ -23,8 +23,8 @@ export default function Home() {
 function TopBar() {
 	const home = useMolecule(HomeMolecule)
 	const { openImageLastPath } = useSnapshot(home.state)
-	const openImageModal = useDraggableModal()
-	const aboutModal = useDraggableModal()
+	const openImageModal = useDraggableModal({ name: 'open-image' })
+	const aboutModal = useDraggableModal({ name: 'about' })
 
 	function handleImageChoose(paths?: string[]) {
 		if (paths?.length) {

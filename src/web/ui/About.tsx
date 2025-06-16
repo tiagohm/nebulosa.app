@@ -11,7 +11,7 @@ export interface AboutProps {
 
 export function About({ draggable }: AboutProps) {
 	return (
-		<Modal size='sm' ref={draggable.targetRef} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} classNames={{ base: 'max-w-[480px] max-h-[90vh]', wrapper: 'pointer-events-none' }} backdrop='transparent' isDismissable={false}>
+		<Modal size='sm' ref={draggable.targetRef} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} classNames={{ base: 'max-w-[480px] max-h-[90vh]', wrapper: 'pointer-events-none' }} backdrop='transparent' isDismissable={false} onPointerUp={draggable.onPointerUp}>
 			<ModalContent>
 				{() => (
 					<>
@@ -45,7 +45,7 @@ export function About({ draggable }: AboutProps) {
 										Lucide
 									</a>
 								</div>
-								<div className='col-span-10 mt-4 flex flex-row flex-wrap items-center justify-center gap-1 text-sm'>
+								<div className='col-span-10 mt-4 mb-1 flex flex-row flex-wrap items-center justify-center gap-1 text-sm'>
 									Powered by
 									<a href='https://react.dev/' target='_blank' rel='noreferrer' className='bg-neutral-700 px-1 rounded'>
 										React
@@ -54,7 +54,7 @@ export function About({ draggable }: AboutProps) {
 									<a href='https://bun.sh/' target='_blank' rel='noreferrer' className='bg-neutral-700 px-1 rounded'>
 										Bun
 									</a>
-									and built with <Lucide.Heart color='red' size={15} /> by
+									and developed with <Lucide.Heart color='red' size={15} /> by
 									<a href='https://github.com/tiagohm' target='_blank' rel='noreferrer' className='bg-neutral-700 px-1 rounded'>
 										Me
 									</a>

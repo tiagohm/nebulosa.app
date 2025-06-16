@@ -5,7 +5,7 @@ import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
 import { ToggleButton } from './ToggleButton'
 
-export type ImageToolbarButtonType = 'fits-header' | 'star-detection'
+export type ImageToolbarButtonType = 'stretch' | 'scnr' | 'plate-solver' | 'fits-header' | 'star-detection'
 
 export interface ImageToolbarProps extends React.HTMLAttributes<HTMLDivElement> {
 	readonly tooltipPlacement?: 'bottom' | 'top'
@@ -18,20 +18,20 @@ export function ImageToolbar({ tooltipPlacement = 'top', onButtonPress, ...props
 
 	return (
 		<div {...props}>
-			<div className='flex flex-row items-center justify-center gap-2 w-full'>
+			<div className='flex flex-row items-center justify-center gap-2 p-2 mx-auto w-fit rounded-xl bg-black/20'>
 				<Tooltip content='Save' placement={tooltipPlacement}>
 					<Button isIconOnly color='secondary' variant='flat'>
 						<Lucide.Save />
 					</Button>
 				</Tooltip>
 				<Tooltip content='Plate Solver' placement={tooltipPlacement}>
-					<Button isIconOnly color='secondary' variant='flat'>
+					<Button isIconOnly color='secondary' variant='flat' onPointerUp={() => onButtonPress('plate-solver')}>
 						<Lucide.Sigma />
 					</Button>
 				</Tooltip>
 				<Tooltip content='Stretch' placement={tooltipPlacement}>
-					<Button isIconOnly color='secondary' variant='flat'>
-						<Lucide.ChartColumnDecreasing />
+					<Button isIconOnly color='secondary' variant='flat' onPointerUp={() => onButtonPress('stretch')}>
+						<Lucide.SquareDashedKanban transform='rotate(180)' />
 					</Button>
 				</Tooltip>
 				<Tooltip content='Auto Stretch' placement={tooltipPlacement}>
@@ -39,16 +39,20 @@ export function ImageToolbar({ tooltipPlacement = 'top', onButtonPress, ...props
 						<Lucide.WandSparkles />
 					</ToggleButton>
 				</Tooltip>
-				<Tooltip content='SCNR' placement={tooltipPlacement}>
-					<Button isIconOnly color='secondary' variant='flat' isDisabled={info?.mono}>
-						<Lucide.Blend />
-					</Button>
-				</Tooltip>
-				<Tooltip content='Debayer' placement={tooltipPlacement}>
-					<ToggleButton color='primary' isDisabled={!info?.metadata.bayer || info?.metadata.channels !== 1} isSelected={transformation.debayer} onPointerUp={() => viewer.toggleDebayer()}>
-						<Lucide.Grid3X3 />
-					</ToggleButton>
-				</Tooltip>
+				{!info?.mono && (
+					<Tooltip content='SCNR' placement={tooltipPlacement}>
+						<Button isIconOnly color='secondary' variant='flat' onPointerUp={() => onButtonPress('scnr')}>
+							<Lucide.Blend />
+						</Button>
+					</Tooltip>
+				)}
+				{info?.metadata.bayer && info?.metadata.channels === 1 && (
+					<Tooltip content='Debayer' placement={tooltipPlacement}>
+						<ToggleButton color='primary' isSelected={transformation.debayer} onPointerUp={() => viewer.toggleDebayer()}>
+							<Lucide.Grid3X3 />
+						</ToggleButton>
+					</Tooltip>
+				)}
 				<Tooltip content='Rotate' placement={tooltipPlacement}>
 					<Button isIconOnly color='secondary' variant='flat'>
 						<Lucide.RotateCw />

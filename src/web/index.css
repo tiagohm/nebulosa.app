@@ -47,13 +47,14 @@ div[role="separator"] {
 /* Dialog */
 
 section[role="dialog"] {
-	@apply pointer-events-auto opacity-97;
+	@apply pointer-events-auto opacity-98;
 }
 
 /* Tooltip */
 
 div[role="tooltip"] {
 	@apply pointer-events-none;
+	z-index: 10000001 !important;
 }
 
 /* Select Popover */
@@ -65,7 +66,7 @@ div[data-slot="popover"] {
 /** Popover Menu */
 
 div:has(div[data-slot="base"][data-open="true"][role="dialog"]) {
-	z-index: 999999999 !important;
+	z-index: 10000000 !important;
 }
 
 /* Utilities */

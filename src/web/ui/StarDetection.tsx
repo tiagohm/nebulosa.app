@@ -24,7 +24,7 @@ export function StarDetection({ draggable }: StarDetectionProps) {
 						</ModalHeader>
 						<ModalBody>
 							<div className='mt-2 grid grid-cols-12 gap-2'>
-								<Select disallowEmptySelection className='col-span-4' size='sm' selectionMode='single' label='Type' selectedKeys={new Set([starDetection.request.type])} onSelectionChange={(value) => (viewer.state.starDetection.request.type = (value as Set<string>).values().next().value as never)}>
+								<Select disallowEmptySelection className='col-span-4' size='sm' selectionMode='single' label='Detector' selectedKeys={new Set([starDetection.request.type])} onSelectionChange={(value) => (viewer.state.starDetection.request.type = (value as Set<string>).values().next().value as never)}>
 									<SelectItem key='ASTAP'>Astap</SelectItem>
 								</Select>
 								<NumberInput label='Min SNR' className='col-span-4' size='sm' minValue={0} maxValue={500} value={starDetection.request.minSNR} onValueChange={(value) => (viewer.state.starDetection.request.minSNR = value)} />

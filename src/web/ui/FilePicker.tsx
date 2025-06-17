@@ -18,7 +18,7 @@ export function FilePicker({ draggable, header, onChoose }: FilePickerProps) {
 	const filePicker = useMolecule(FilePickerMolecule)
 	const { mode, filtered, selected, directoryTree, filter, createDirectory, directoryName } = useSnapshot(filePicker.state)
 
-	function choose() {
+	function handleChoose() {
 		onChoose?.(selected.length === 0 ? undefined : (selected as string[]))
 		draggable.close()
 	}
@@ -26,7 +26,7 @@ export function FilePicker({ draggable, header, onChoose }: FilePickerProps) {
 	return (
 		<Modal size='sm' ref={draggable.targetRef} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} classNames={{ base: 'max-w-[480px]', wrapper: 'pointer-events-none' }} backdrop='transparent' isDismissable={false} onPointerUp={draggable.onPointerUp}>
 			<ModalContent>
-				{(onClose) => (
+				{() => (
 					<>
 						<ModalHeader {...draggable.moveProps} className='flex flex-row items-center'>
 							{header ?? (mode === 'directory' ? 'Open Directory' : 'Open File')}
@@ -104,7 +104,7 @@ export function FilePicker({ draggable, header, onChoose }: FilePickerProps) {
 						</ModalBody>
 						<ModalFooter>
 							<Badge color='success' content={selected.length} showOutline={false}>
-								<Button isDisabled={selected.length === 0} color='success' variant='flat' startContent={<Lucide.Check />} onPointerUp={choose}>
+								<Button isDisabled={selected.length === 0} color='success' variant='flat' startContent={<Lucide.Check />} onPointerUp={handleChoose}>
 									Choose
 								</Button>
 							</Badge>

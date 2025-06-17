@@ -34,6 +34,9 @@
 		"formatter": {
 			"enabled": true,
 			"trailingCommas": "none"
+		},
+		"assist": {
+			"enabled": false
 		}
 	},
 	"linter": {
@@ -51,17 +54,27 @@
 				"useNodejsImportProtocol": "off",
 				"useNumberNamespace": "off",
 				"useThrowOnlyError": "error",
-				"useSelfClosingElements": "off"
+				"useSelfClosingElements": "off",
+				"useAsConstAssertion": "error",
+				"useDefaultParameterLast": "error",
+				"useSingleVarDeclarator": "error",
+				"noUnusedTemplateLiteral": "error"
 			},
 			"correctness": {
 				"noPrecisionLoss": "off",
-				"useExhaustiveDependencies": "off"
+				"useExhaustiveDependencies": "off",
+				"noUnusedFunctionParameters": "off"
 			},
 			"suspicious": {
 				"noAssignInExpressions": "off",
-				"noConsoleLog": "off",
 				"useAwait": "error",
-				"noEmptyInterface": "off"
+				"noEmptyInterface": "off",
+				"noConsole": {
+					"level": "error",
+					"options": {
+						"allow": ["info", "warn", "error", "debug"]
+					}
+				}
 			},
 			"complexity": {
 				"noForEach": "off",
@@ -71,10 +84,18 @@
 			"a11y": {
 				"useAltText": "off",
 				"noSvgWithoutTitle": "off"
+			},
+			"nursery": {
+				"noFloatingPromises": "error"
 			}
 		}
 	},
-	"organizeImports": {
-		"enabled": true
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": "on",
+				"useSortedAttributes": "on"
+			}
+		}
 	}
 }

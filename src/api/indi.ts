@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 import type { CfaPattern } from 'nebulosa/src/image'
-// biome-ignore format:
+// biome-ignore format: too many
 import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, IndiClient, IndiClientHandler, OneNumber, PropertyState, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
 import type { ConnectionProvider } from './connection'
 import type { Camera, Device, DeviceType, GuideOutput, GuidePulse, SubDeviceType, Thermometer } from './types'
@@ -416,7 +416,7 @@ export class IndiEndpoint implements IndiClientHandler {
 	}
 
 	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
-		const device = this.device(message.device)
+		// const device = this.device(message.device)
 	}
 
 	device(id: string): Device | undefined {

@@ -16,7 +16,7 @@ export default function Home() {
 function TopBar() {
 	return (
 		<>
-			<Navbar isBlurred={false} className='bg-neutral-900 shadow'>
+			<Navbar className='bg-neutral-900 shadow' isBlurred={false}>
 				<NavbarBrand>
 					<ConnectionBox />
 				</NavbarBrand>

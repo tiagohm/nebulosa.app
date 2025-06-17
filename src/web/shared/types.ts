@@ -1,4 +1,4 @@
-import { type Connect, type ConnectionStatus, DEFAULT_IMAGE_ADJUSTMENT, DEFAULT_IMAGE_SCNR, DEFAULT_IMAGE_STRETCH, type ImageTransformation } from 'src/api/types'
+import type { Connect, ConnectionStatus } from 'src/api/types'
 
 export interface Connection extends Connect {
 	id: string

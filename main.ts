@@ -9,7 +9,7 @@ import { ConnectionEndpoint, connection } from './src/api/connection'
 import { FileSystemEndpoint, fileSystem } from './src/api/filesystem'
 import { FramingEndpoint, framing } from './src/api/framing'
 import { ImageEndpoint, image } from './src/api/image'
-import { type IndiDeviceEventHandler, IndiEndpoint, cameras, guideOutputs, indi, thermometers } from './src/api/indi'
+import { cameras, guideOutputs, type IndiDeviceEventHandler, IndiEndpoint, indi, thermometers } from './src/api/indi'
 import { WebSocketMessageHandler } from './src/api/message'
 import { PlateSolverEndpoint, plateSolver } from './src/api/platesolver'
 import { StarDetectionEndpoint, starDetection } from './src/api/stardetection'
@@ -102,7 +102,7 @@ app.use(
 		name: 'heartbeat',
 		pattern: '0 */15 * * * *',
 		run() {
-			console.log('Heartbeat')
+			console.info('Heartbeat')
 		},
 	}),
 )

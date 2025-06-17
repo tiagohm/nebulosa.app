@@ -2,7 +2,7 @@ import Elysia from 'elysia'
 import { arcsec, deg, parseAngle } from 'nebulosa/src/angle'
 import { astapPlateSolve } from 'nebulosa/src/astap'
 import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebulosa/src/astrometrynet'
-import { type PlateSolution, fovFrom } from 'nebulosa/src/platesolver'
+import { fovFrom, type PlateSolution } from 'nebulosa/src/platesolver'
 import type { PlateSolveStart, PlateSolveStop } from './types'
 
 export class PlateSolverEndpoint {

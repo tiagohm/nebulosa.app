@@ -1,9 +1,9 @@
-import type { UseDraggableModalResult } from '@/shared/hooks'
-import { ImageViewerMolecule } from '@/shared/molecules'
 import { Button, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
+import type { UseDraggableModalResult } from '@/shared/hooks'
+import { ImageViewerMolecule } from '@/shared/molecules'
 
 export interface StarDetectionProps {
 	readonly draggable: UseDraggableModalResult
@@ -14,7 +14,7 @@ export function StarDetection({ draggable }: StarDetectionProps) {
 	const { starDetection, info } = useSnapshot(viewer.state)
 
 	return (
-		<Modal size='sm' ref={draggable.targetRef} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} classNames={{ base: 'max-w-[410px] max-h-[90vh]', wrapper: 'pointer-events-none' }} backdrop='transparent' isDismissable={false} onPointerUp={draggable.onPointerUp}>
+		<Modal backdrop='transparent' classNames={{ base: 'max-w-[410px] max-h-[90vh]', wrapper: 'pointer-events-none' }} isDismissable={false} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} onPointerUp={draggable.onPointerUp} ref={draggable.targetRef} size='sm'>
 			<ModalContent>
 				{() => (
 					<>
@@ -24,32 +24,32 @@ export function StarDetection({ draggable }: StarDetectionProps) {
 						</ModalHeader>
 						<ModalBody>
 							<div className='mt-2 grid grid-cols-12 gap-2'>
-								<Select disallowEmptySelection className='col-span-4' size='sm' selectionMode='single' label='Detector' selectedKeys={new Set([starDetection.request.type])} onSelectionChange={(value) => (viewer.state.starDetection.request.type = (value as Set<string>).values().next().value as never)}>
+								<Select className='col-span-4' disallowEmptySelection label='Detector' onSelectionChange={(value) => (viewer.state.starDetection.request.type = (value as Set<string>).values().next().value as never)} selectedKeys={new Set([starDetection.request.type])} selectionMode='single' size='sm'>
 									<SelectItem key='ASTAP'>Astap</SelectItem>
 								</Select>
-								<NumberInput label='Min SNR' className='col-span-4' size='sm' minValue={0} maxValue={500} value={starDetection.request.minSNR} onValueChange={(value) => (viewer.state.starDetection.request.minSNR = value)} />
-								<NumberInput label='Max Stars' className='col-span-4' size='sm' minValue={0} maxValue={2000} value={starDetection.request.maxStars} onValueChange={(value) => (viewer.state.starDetection.request.maxStars = value)} />
+								<NumberInput className='col-span-4' label='Min SNR' maxValue={500} minValue={0} onValueChange={(value) => (viewer.state.starDetection.request.minSNR = value)} size='sm' value={starDetection.request.minSNR} />
+								<NumberInput className='col-span-4' label='Max Stars' maxValue={2000} minValue={0} onValueChange={(value) => (viewer.state.starDetection.request.maxStars = value)} size='sm' value={starDetection.request.maxStars} />
 								<div className='col-span-full mt-1'>
 									<span className='text-sm font-bold'>COMPUTED</span>
 								</div>
-								<Input isReadOnly className='col-span-2' size='sm' label='Stars' value={starDetection.stars.length.toFixed(0)} />
-								<Input isReadOnly className='col-span-2' size='sm' label='HFD' value={starDetection.computed.hfd.toFixed(2)} />
-								<Input isReadOnly className='col-span-2' size='sm' label='SNR' value={starDetection.computed.snr.toFixed(0)} />
-								<Input isReadOnly className='col-span-6' size='sm' label='Flux' value={`${starDetection.computed.fluxMin.toFixed(0)} | ${starDetection.computed.fluxMax.toFixed(0)}`} />
+								<Input className='col-span-2' isReadOnly label='Stars' size='sm' value={starDetection.stars.length.toFixed(0)} />
+								<Input className='col-span-2' isReadOnly label='HFD' size='sm' value={starDetection.computed.hfd.toFixed(2)} />
+								<Input className='col-span-2' isReadOnly label='SNR' size='sm' value={starDetection.computed.snr.toFixed(0)} />
+								<Input className='col-span-6' isReadOnly label='Flux' size='sm' value={`${starDetection.computed.fluxMin.toFixed(0)} | ${starDetection.computed.fluxMax.toFixed(0)}`} />
 								<div className='col-span-full mt-1'>
 									<span className='text-sm font-bold'>SELECTED</span>
 								</div>
 								<div className='col-span-4 row-span-4 flex justify-center'>
-									<canvas id={`${viewer.scope.image.key}-selected-star`} className='pixelated h-27 w-27 rounded-md bg-slate-950' />
+									<canvas className='pixelated h-27 w-27 rounded-md bg-slate-950' id={`${viewer.scope.image.key}-selected-star`} />
 								</div>
-								<Input isReadOnly className='col-span-4' size='sm' label='X | Y' value={`${starDetection.selected?.x.toFixed(0) ?? '0'} | ${starDetection.selected?.y.toFixed(0) ?? '0'}`} />
-								<Input isReadOnly className='col-span-4' size='sm' label='Flux' value={starDetection.selected?.flux.toFixed(0) ?? '0'} />
-								<Input isReadOnly className='col-span-4' size='sm' label='HFD' value={starDetection.selected?.hfd.toFixed(2) ?? '0'} />
-								<Input isReadOnly className='col-span-4' size='sm' label='SNR' value={starDetection.selected?.snr.toFixed(0) ?? '0'} />
+								<Input className='col-span-4' isReadOnly label='X | Y' size='sm' value={`${starDetection.selected?.x.toFixed(0) ?? '0'} | ${starDetection.selected?.y.toFixed(0) ?? '0'}`} />
+								<Input className='col-span-4' isReadOnly label='Flux' size='sm' value={starDetection.selected?.flux.toFixed(0) ?? '0'} />
+								<Input className='col-span-4' isReadOnly label='HFD' size='sm' value={starDetection.selected?.hfd.toFixed(2) ?? '0'} />
+								<Input className='col-span-4' isReadOnly label='SNR' size='sm' value={starDetection.selected?.snr.toFixed(0) ?? '0'} />
 							</div>
 						</ModalBody>
 						<ModalFooter>
-							<Button isLoading={starDetection.loading} color='success' variant='flat' startContent={<Lucide.Check />} onPointerUp={() => viewer.detectStars()}>
+							<Button color='success' isLoading={starDetection.loading} onPointerUp={() => viewer.detectStars()} startContent={<Lucide.Check />} variant='flat'>
 								Detect
 							</Button>
 						</ModalFooter>

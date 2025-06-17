@@ -1,8 +1,8 @@
+import { Chip, Modal, ModalBody, ModalContent, ModalHeader } from '@heroui/react'
+import * as Lucide from 'lucide-react'
 import brazilLogo from '@/assets/brazil.png'
 import nebulosaLogo from '@/assets/nebulosa.ico'
 import type { UseDraggableModalResult } from '@/shared/hooks'
-import { Chip, Modal, ModalBody, ModalContent, ModalHeader } from '@heroui/react'
-import * as Lucide from 'lucide-react'
 import packageJson from '../../../package.json'
 
 export interface AboutProps {
@@ -11,7 +11,7 @@ export interface AboutProps {
 
 export function About({ draggable }: AboutProps) {
 	return (
-		<Modal size='sm' ref={draggable.targetRef} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} classNames={{ base: 'max-w-[480px] max-h-[90vh]', wrapper: 'pointer-events-none' }} backdrop='transparent' isDismissable={false} onPointerUp={draggable.onPointerUp}>
+		<Modal backdrop='transparent' classNames={{ base: 'max-w-[480px] max-h-[90vh]', wrapper: 'pointer-events-none' }} isDismissable={false} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} onPointerUp={draggable.onPointerUp} ref={draggable.targetRef} size='sm'>
 			<ModalContent>
 				{() => (
 					<>
@@ -22,7 +22,7 @@ export function About({ draggable }: AboutProps) {
 							<div className='w-full grid grid-cols-12 gap-2'>
 								<div className='col-span-2 row-span-6 flex flex-col gap-2'>
 									<img src={nebulosaLogo} />
-									<a target='_blank' rel='noreferrer' href='https://github.com/tiagohm/nebulosa.app'>
+									<a href='https://github.com/tiagohm/nebulosa.app' rel='noreferrer' target='_blank'>
 										<img src='https://img.shields.io/github/stars/tiagohm/nebulosa.app?style=flat&label=GitHub&color=%231a1e23' />
 									</a>
 								</div>
@@ -31,31 +31,31 @@ export function About({ draggable }: AboutProps) {
 								</div>
 								<div className='col-span-10 text-gray-300 text-center'>The complete integrated solution for all of your astronomical imaging needs.</div>
 								<div className='col-span-10 text-xs flex flex-row items-center gap-1 italic justify-center'>
-									© 2022-{new Date().getFullYear()} Tiago Melo <img src={brazilLogo} className='mx-1 w-6' /> All rights eserved
+									© 2022-{new Date().getFullYear()} Tiago Melo <img className='mx-1 w-6' src={brazilLogo} /> All rights eserved
 								</div>
 								<div className='col-span-10 mt-4 p-4 bg-blue-600/10 rounded-2xl text-center'>This software is WIP, comes with absolutely no warranty and the copyright holder is not liable or responsible for anything.</div>
 								<div className='col-span-10 px-4 py-2 bg-green-600/10 rounded-2xl flex flex-row gap-2 justify-center items-center'>
 									<Lucide.Link size={14} />
 									Icons from
-									<a href='https://www.flaticon.com/' target='_blank' rel='noreferrer' className='underline'>
+									<a className='underline' href='https://www.flaticon.com/' rel='noreferrer' target='_blank'>
 										Flaticon
 									</a>
 									and
-									<a href='https://lucide.dev/icons/' target='_blank' rel='noreferrer' className='underline'>
+									<a className='underline' href='https://lucide.dev/icons/' rel='noreferrer' target='_blank'>
 										Lucide
 									</a>
 								</div>
 								<div className='col-span-10 mt-4 mb-1 flex flex-row flex-wrap items-center justify-center gap-1 text-sm'>
 									Powered by
-									<a href='https://react.dev/' target='_blank' rel='noreferrer' className='bg-neutral-700 px-1 rounded'>
+									<a className='bg-neutral-700 px-1 rounded' href='https://react.dev/' rel='noreferrer' target='_blank'>
 										React
 									</a>
 									and
-									<a href='https://bun.sh/' target='_blank' rel='noreferrer' className='bg-neutral-700 px-1 rounded'>
+									<a className='bg-neutral-700 px-1 rounded' href='https://bun.sh/' rel='noreferrer' target='_blank'>
 										Bun
 									</a>
 									and developed with <Lucide.Heart color='red' size={15} /> by
-									<a href='https://github.com/tiagohm' target='_blank' rel='noreferrer' className='bg-neutral-700 px-1 rounded'>
+									<a className='bg-neutral-700 px-1 rounded' href='https://github.com/tiagohm' rel='noreferrer' target='_blank'>
 										Me
 									</a>
 								</div>

@@ -1,8 +1,8 @@
 import '@/index.css'
-import Home from '@/ui/Home'
 import { HeroUIProvider, ToastProvider } from '@heroui/react'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
+import Home from '@/ui/Home'
 
 function start() {
 	const root = createRoot(document.getElementById('root')!)

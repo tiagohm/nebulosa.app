@@ -1,9 +1,9 @@
-import { useDraggableModal } from '@/shared/hooks'
-import { ImageViewerMolecule } from '@/shared/molecules'
 import { Button, Popover, PopoverContent, PopoverTrigger, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
+import { useDraggableModal } from '@/shared/hooks'
+import { ImageViewerMolecule } from '@/shared/molecules'
 import { FITSHeader } from './FITSHeader'
 import { PlateSolver } from './PlateSolver'
 import { SCNR } from './SCNR'
@@ -31,17 +31,17 @@ export function ImageToolbar(props: ImageToolbarProps) {
 			<div {...props}>
 				<div className='flex flex-row items-center justify-center gap-2 p-2 mx-auto w-fit rounded-xl bg-black/20'>
 					<Tooltip content='Save' placement='top'>
-						<Button isIconOnly color='secondary' variant='flat'>
+						<Button color='secondary' isIconOnly variant='flat'>
 							<Lucide.Save />
 						</Button>
 					</Tooltip>
 					<Tooltip content='Plate Solver' placement='top'>
-						<Button isIconOnly color='secondary' variant='flat' onPointerUp={() => plateSolverModal.show()}>
+						<Button color='secondary' isIconOnly onPointerUp={() => plateSolverModal.show()} variant='flat'>
 							<Lucide.Sigma />
 						</Button>
 					</Tooltip>
 					<Tooltip content='Stretch' placement='top'>
-						<Button isIconOnly color='secondary' variant='flat' onPointerUp={() => stretchModal.show()}>
+						<Button color='secondary' isIconOnly onPointerUp={() => stretchModal.show()} variant='flat'>
 							<Lucide.SquareDashedKanban transform='rotate(180)' />
 						</Button>
 					</Tooltip>
@@ -52,7 +52,7 @@ export function ImageToolbar(props: ImageToolbarProps) {
 					</Tooltip>
 					{!info?.mono && (
 						<Tooltip content='SCNR' placement='top'>
-							<Button isIconOnly color='secondary' variant='flat' onPointerUp={() => scnrModal.show()}>
+							<Button color='secondary' isIconOnly onPointerUp={() => scnrModal.show()} variant='flat'>
 								<Lucide.Blend />
 							</Button>
 						</Tooltip>
@@ -65,20 +65,20 @@ export function ImageToolbar(props: ImageToolbarProps) {
 						</Tooltip>
 					)}
 					<Tooltip content='Rotate' placement='top'>
-						<Button isIconOnly color='secondary' variant='flat'>
+						<Button color='secondary' isIconOnly variant='flat'>
 							<Lucide.RotateCw />
 						</Button>
 					</Tooltip>
 					<Popover placement='bottom' showArrow>
 						<PopoverTrigger>
-							<Button isIconOnly color='success' variant='flat'>
+							<Button color='success' isIconOnly variant='flat'>
 								<Lucide.Palette />
 							</Button>
 						</PopoverTrigger>
 						<PopoverContent>
 							<div className='flex flex-row items-center justify-center gap-2 p-2'>
 								<Tooltip content='Adjustment' placement='top'>
-									<Button isIconOnly color='secondary' variant='flat'>
+									<Button color='secondary' isIconOnly variant='flat'>
 										<Lucide.Wand />
 									</Button>
 								</Tooltip>
@@ -102,7 +102,7 @@ export function ImageToolbar(props: ImageToolbarProps) {
 					</Popover>
 					<Popover placement='bottom' showArrow>
 						<PopoverTrigger>
-							<Button isIconOnly color='success' variant='flat'>
+							<Button color='success' isIconOnly variant='flat'>
 								<Lucide.BringToFront />
 							</Button>
 						</PopoverTrigger>
@@ -114,25 +114,25 @@ export function ImageToolbar(props: ImageToolbarProps) {
 									</ToggleButton>
 								</Tooltip>
 								<Tooltip content='Annotatation' placement='top'>
-									<Button isIconOnly color='secondary' variant='flat'>
+									<Button color='secondary' isIconOnly variant='flat'>
 										<Lucide.Pen />
 									</Button>
 								</Tooltip>
 								<div className='flex flex-col gap-2 justify-center'>
 									<Tooltip content='Star Detection' placement='top'>
-										<Button isIconOnly color='secondary' variant='flat' onPress={() => starDetectionModal.show()}>
+										<Button color='secondary' isIconOnly onPress={() => starDetectionModal.show()} variant='flat'>
 											<Lucide.Stars />
 										</Button>
 									</Tooltip>
-									{starDetection.stars.length > 0 && <Switch size='sm' isSelected={starDetection.show} onValueChange={(value) => (viewer.state.starDetection.show = value)} />}
+									{starDetection.stars.length > 0 && <Switch isSelected={starDetection.show} onValueChange={(value) => (viewer.state.starDetection.show = value)} size='sm' />}
 								</div>
 								<Tooltip content='ROI' placement='top'>
-									<Button isIconOnly color='secondary' variant='flat'>
+									<Button color='secondary' isIconOnly variant='flat'>
 										<Lucide.Crop />
 									</Button>
 								</Tooltip>
 								<Tooltip content='FOV' placement='top'>
-									<Button isIconOnly color='secondary' variant='flat'>
+									<Button color='secondary' isIconOnly variant='flat'>
 										<Lucide.Scan />
 									</Button>
 								</Tooltip>
@@ -140,22 +140,22 @@ export function ImageToolbar(props: ImageToolbarProps) {
 						</PopoverContent>
 					</Popover>
 					<Tooltip content='Statistics' placement='top'>
-						<Button isIconOnly color='secondary' variant='flat'>
+						<Button color='secondary' isIconOnly variant='flat'>
 							<Lucide.ChartNoAxesColumnIncreasing />
 						</Button>
 					</Tooltip>
 					<Tooltip content='FITS Header' placement='top'>
-						<Button isIconOnly color='secondary' variant='flat' onPress={() => fitsHeaderModal.show()}>
+						<Button color='secondary' isIconOnly onPress={() => fitsHeaderModal.show()} variant='flat'>
 							<Lucide.List />
 						</Button>
 					</Tooltip>
 					<Tooltip content='Mouse Coordinate' placement='top'>
-						<Button isIconOnly color='secondary' variant='flat'>
+						<Button color='secondary' isIconOnly variant='flat'>
 							<Lucide.MousePointerClick />
 						</Button>
 					</Tooltip>
 					<Tooltip content='Close' placement='top'>
-						<Button isIconOnly color='danger' variant='solid' className='ms-2' onPointerUp={() => viewer.remove()}>
+						<Button className='ms-2' color='danger' isIconOnly onPointerUp={() => viewer.remove()} variant='solid'>
 							<Lucide.X />
 						</Button>
 					</Tooltip>

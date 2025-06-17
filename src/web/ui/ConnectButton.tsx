@@ -8,7 +8,7 @@ export interface ConnectButtonProps extends Omit<ButtonProps, 'isIconOnly' | 'co
 export function ConnectButton({ isConnected, isDisabled = false, ...props }: ConnectButtonProps) {
 	return (
 		<Tooltip content={isConnected ? 'Disconnect' : 'Connect'} showArrow>
-			<Button {...props} isIconOnly isDisabled={isDisabled} color={isConnected ? 'danger' : 'primary'} variant='light'>
+			<Button {...props} color={isConnected ? 'danger' : 'primary'} isDisabled={isDisabled} isIconOnly variant='light'>
 				{isConnected ? <Lucide.X /> : <Lucide.Plug />}
 			</Button>
 		</Tooltip>

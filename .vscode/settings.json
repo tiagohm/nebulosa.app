@@ -15,7 +15,9 @@
 	"css.lint.unknownAtRules": "ignore",
 	"json.format.keepLines": true,
 	"editor.codeActionsOnSave": {
-		"source.organizeImports": "explicit"
+		"source.organizeImports": "never",
+		"source.action.useSortedAttributes.biome": "explicit",
+		"source.fixAll.biome": "explicit"
 	},
 	"[javascript]": {
 		"editor.defaultFormatter": "biomejs.biome"

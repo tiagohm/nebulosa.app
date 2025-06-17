@@ -1,8 +1,8 @@
-import type { UseDraggableModalResult } from '@/shared/hooks'
-import { ImageViewerMolecule } from '@/shared/molecules'
 import { Listbox, ListboxItem, Modal, ModalBody, ModalContent, ModalHeader } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { useSnapshot } from 'valtio'
+import type { UseDraggableModalResult } from '@/shared/hooks'
+import { ImageViewerMolecule } from '@/shared/molecules'
 
 export interface FITSHeaderProps {
 	readonly draggable: UseDraggableModalResult
@@ -13,7 +13,7 @@ export function FITSHeader({ draggable }: FITSHeaderProps) {
 	const { info } = useSnapshot(viewer.state)
 
 	return (
-		<Modal size='sm' ref={draggable.targetRef} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} classNames={{ base: 'max-w-[390px] max-h-[90vh]', wrapper: 'pointer-events-none' }} backdrop='transparent' isDismissable={false}>
+		<Modal backdrop='transparent' classNames={{ base: 'max-w-[390px] max-h-[90vh]', wrapper: 'pointer-events-none' }} isDismissable={false} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} ref={draggable.targetRef} size='sm'>
 			<ModalContent>
 				{() => (
 					<>
@@ -23,14 +23,14 @@ export function FITSHeader({ draggable }: FITSHeaderProps) {
 						<ModalBody>
 							<div className='w-full px-1 py-2'>
 								<Listbox
-									selectionMode='none'
 									isVirtualized
+									selectionMode='none'
 									virtualization={{
 										maxListboxHeight: 400,
 										itemHeight: 40,
 									}}>
 									{Object.entries(info?.headers ?? {}).map(([key, value]) => (
-										<ListboxItem key={key} description={key}>
+										<ListboxItem description={key} key={key}>
 											{value === true ? 'T' : value === false ? 'F' : value}
 										</ListboxItem>
 									))}

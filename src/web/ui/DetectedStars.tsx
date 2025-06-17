@@ -1,6 +1,6 @@
-import { ImageViewerMolecule } from '@/shared/molecules'
 import { useMolecule } from 'bunshi/react'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
+import { ImageViewerMolecule } from '@/shared/molecules'
 
 export interface DetectedStarsProps {
 	readonly rotation: number
@@ -14,9 +14,9 @@ export function DetectedStars({ rotation, stars }: DetectedStarsProps) {
 		<>
 			<svg className='pointer-events-none absolute top-0 left-0 h-full w-full select-none'>
 				{stars.map((s) => (
-					<g key={`${s.x}-${s.y}`} className='pointer-events-auto cursor-pointer' onPointerUp={() => viewer.selectDetectedStar(s)}>
-						<circle cx={s.x - 0.5} cy={s.y - 0.5} r={4} stroke='#FDD835' strokeWidth={1} fill='transparent'></circle>
-						<text x={s.x} y={s.y + 0.5} fill='#00897B' className='text-xs font-bold' style={{ textAnchor: 'middle', alignmentBaseline: 'before-edge', transform: `rotate(${rotation}deg)` }}>
+					<g className='pointer-events-auto cursor-pointer' key={`${s.x}-${s.y}`} onPointerUp={() => viewer.selectDetectedStar(s)}>
+						<circle cx={s.x - 0.5} cy={s.y - 0.5} fill='transparent' r={4} stroke='#FDD835' strokeWidth={1}></circle>
+						<text className='text-xs font-bold' fill='#00897B' style={{ textAnchor: 'middle', alignmentBaseline: 'before-edge', transform: `rotate(${rotation}deg)` }} x={s.x} y={s.y + 0.5}>
 							{s.hfd.toFixed(1)}
 						</text>
 					</g>

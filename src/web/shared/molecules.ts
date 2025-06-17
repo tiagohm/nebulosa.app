@@ -1,4 +1,3 @@
-import type { FilePickerMode } from '@/ui/FilePicker'
 import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount } from 'bunshi'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
@@ -6,6 +5,7 @@ import type { DirectoryEntry, FileEntry, ImageInfo, ImageTransformation, StarDet
 import { DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_STAR_DETECTION } from 'src/api/types'
 import { proxy, subscribe } from 'valtio'
 import { deepClone } from 'valtio/utils'
+import type { FilePickerMode } from '@/ui/FilePicker'
 import { Api } from './api'
 import type { UseDraggableModalResult } from './hooks'
 import { PanZoom, type PanZoomOptions } from './panzoom'
@@ -196,7 +196,7 @@ export const ConnectionMolecule = molecule(() => {
 	return { state, create, edit, update, select, selectWith, save, connect, duplicate, remove } as const
 })
 
-export const ImageWorkspaceMolecule = molecule((mol, scope) => {
+export const ImageWorkspaceMolecule = molecule(() => {
 	const state = proxy<ImageWorkspaceState>({})
 
 	return { state }
@@ -536,6 +536,7 @@ export const FilePickerMolecule = molecule((m, s) => {
 
 	let loading = false
 
+	// biome-ignore lint/nursery/noFloatingPromises: react
 	list()
 
 	function filter(text?: string) {
@@ -572,13 +573,13 @@ export const FilePickerMolecule = molecule((m, s) => {
 	function navigateTo(entry: DirectoryEntry) {
 		state.history.push(state.path)
 		state.path = entry.path
-		list()
+		return list()
 	}
 
 	function navigateBack() {
 		if (state.history.length === 0) return
 		state.path = state.history.pop()!
-		list()
+		return list()
 	}
 
 	function navigateToParent() {
@@ -597,7 +598,7 @@ export const FilePickerMolecule = molecule((m, s) => {
 			if (path) {
 				state.createDirectory = false
 				state.directoryName = ''
-				list()
+				await list()
 			}
 		}
 	}

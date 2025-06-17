@@ -1,12 +1,11 @@
-import { useDraggableModal } from '@/shared/hooks'
-import { ConnectionMolecule } from '@/shared/molecules'
-import { stopPropagation } from '@/shared/utils'
-// biome-ignore format:
 import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, SelectItem, type SharedSelection, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
+import { useDraggableModal } from '@/shared/hooks'
+import { ConnectionMolecule } from '@/shared/molecules'
+import { stopPropagation } from '@/shared/utils'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
 
@@ -30,22 +29,19 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 		<>
 			<div className='w-full flex flex-row items-center gap-2'>
 				<Tooltip content='New Connection' showArrow>
-					<Button isIconOnly color='success' variant='light' onPointerUp={() => connection.create(connectionModal)} isDisabled={isDisabled}>
+					<Button color='success' isDisabled={isDisabled} isIconOnly onPointerUp={() => connection.create(connectionModal)} variant='light'>
 						<Lucide.Plus />
 					</Button>
 				</Tooltip>
 				<Select
 					className='flex-1'
-					size='lg'
 					disallowEmptySelection
-					selectionMode='single'
 					isDisabled={isDisabled}
 					items={state.connections}
-					selectedKeys={new Set([state.selected.id])}
 					onSelectionChange={connectionChanged}
 					renderValue={(selected) => {
 						return selected.map((item) => (
-							<div key={item.data?.id} className='p-1 flex items-center justify-between gap-0'>
+							<div className='p-1 flex items-center justify-between gap-0' key={item.data?.id}>
 								<div className='flex flex-col gap-0'>
 									<span className='font-bold'>{item.data?.name}</span>
 									<span className='text-default-500 text-tiny flex gap-1 items-center'>
@@ -53,13 +49,16 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 									</span>
 								</div>
 								<div className='hidden sm:flex items-center'>
-									<Chip size='sm' color='primary'>
+									<Chip color='primary' size='sm'>
 										{item.data?.type}
 									</Chip>
 								</div>
 							</div>
 						))
-					}}>
+					}}
+					selectedKeys={new Set([state.selected.id])}
+					selectionMode='single'
+					size='lg'>
 					{(item) => (
 						<SelectItem key={item.id} textValue={item.name}>
 							<div className='flex items-center justify-between gap-2'>
@@ -67,7 +66,7 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 									<div className='flex flex-col gap-1 mt-1'>
 										<span className='font-bold flex items-center gap-2'>
 											{item.name}
-											<Chip size='sm' color='primary'>
+											<Chip color='primary' size='sm'>
 												{item.type}
 											</Chip>
 										</span>
@@ -82,18 +81,18 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 								<div className='flex justify-center items-center'>
 									<Dropdown showArrow>
 										<DropdownTrigger>
-											<Button isIconOnly variant='light' onPointerUp={stopPropagation}>
+											<Button isIconOnly onPointerUp={stopPropagation} variant='light'>
 												<Lucide.EllipsisVertical />
 											</Button>
 										</DropdownTrigger>
 										<DropdownMenu aria-label='Static Actions' disabledKeys={state.connections.length === 1 ? ['delete'] : []}>
-											<DropdownItem key='edit' startContent={<Lucide.Pencil size={12} />} onPointerUp={() => connection.edit(item, connectionModal)}>
+											<DropdownItem key='edit' onPointerUp={() => connection.edit(item, connectionModal)} startContent={<Lucide.Pencil size={12} />}>
 												Edit
 											</DropdownItem>
-											<DropdownItem key='duplicate' startContent={<Lucide.Copy size={12} />} onPointerUp={() => connection.duplicate(item)}>
+											<DropdownItem key='duplicate' onPointerUp={() => connection.duplicate(item)} startContent={<Lucide.Copy size={12} />}>
 												Duplicate
 											</DropdownItem>
-											<DropdownItem key='delete' startContent={<Lucide.Trash size={12} />} className='text-danger' color='danger' onPointerUp={() => connection.remove(item)}>
+											<DropdownItem className='text-danger' color='danger' key='delete' onPointerUp={() => connection.remove(item)} startContent={<Lucide.Trash size={12} />}>
 												Delete
 											</DropdownItem>
 										</DropdownMenu>
@@ -103,7 +102,7 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 						</SelectItem>
 					)}
 				</Select>
-				<ConnectButton isLoading={state.loading} isConnected={!!state.connected} isDisabled={isDisabled} onPointerUp={() => connection.connect()} />
+				<ConnectButton isConnected={!!state.connected} isDisabled={isDisabled} isLoading={state.loading} onPointerUp={() => connection.connect()} />
 			</div>
 			<ConnectionEdit draggable={connectionModal} />
 		</>

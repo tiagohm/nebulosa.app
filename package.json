@@ -36,12 +36,19 @@
 		"wretch": "2.11.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "latest",
+		"@biomejs/biome": "2",
 		"@types/bun": "latest",
 		"@types/node": "latest",
 		"@types/react": "19",
 		"@types/react-dom": "19",
 		"typescript": "latest"
 	},
-	"trustedDependencies": ["@biomejs/biome", "@heroui/shared-utils", "@tailwindcss/oxide", "esbuild", "nebulosa", "sharp"]
+	"trustedDependencies": [
+		"@biomejs/biome",
+		"@heroui/shared-utils",
+		"@tailwindcss/oxide",
+		"esbuild",
+		"nebulosa",
+		"sharp"
+	]
 }

@@ -2,7 +2,7 @@ import { Navbar, NavbarBrand, NavbarContent } from '@heroui/react'
 import { ConnectionBox } from './ConnectionBox'
 import { HomeMenu } from './HomeMenu'
 import { ImageWorkspace } from './ImageWorkspace'
-import { OpenImageButton } from './OpenImageButton'
+import { ImagePickerButton } from './ImagePickerButton'
 
 export default function Home() {
 	return (
@@ -23,7 +23,7 @@ function TopBar() {
 				<NavbarContent className='flex gap-4 flex-1' justify='center'>
 					<div className='flex flex-row w-full justify-start items-center gap-2'>
 						<HomeMenu />
-						<OpenImageButton />
+						<ImagePickerButton />
 					</div>
 				</NavbarContent>
 			</Navbar>

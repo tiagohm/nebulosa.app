@@ -8,11 +8,11 @@ import { HomeMolecule } from '@/shared/molecules'
 import packageJson from '../../../package.json'
 
 export function About() {
-	const modal = useModal()
 	const home = useMolecule(HomeMolecule)
+	const modal = useModal(() => (home.state.about.showModal = false))
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[460px] max-h-[90vh]', wrapper: 'pointer-events-none' }} onOpenChange={(value) => (home.state.about.showModal = value)}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[460px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>

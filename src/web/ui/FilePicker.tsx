@@ -14,16 +14,16 @@ export interface FilePickerProps {
 }
 
 export function FilePicker({ header, onChoose }: FilePickerProps) {
-	const modal = useModal()
 	const filePicker = useMolecule(FilePickerMolecule)
 	const { mode, filtered, selected, directoryTree, filter, createDirectory, directoryName } = useSnapshot(filePicker.state)
+	const modal = useModal(() => onChoose?.())
 
 	function handleChoose() {
 		onChoose?.(selected.length === 0 ? undefined : (selected as string[]))
 	}
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[480px]', wrapper: 'pointer-events-none' }} onOpenChange={(value) => !value && onChoose?.()}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[480px]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>

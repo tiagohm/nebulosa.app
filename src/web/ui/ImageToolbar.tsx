@@ -1,4 +1,5 @@
 import { Button, Popover, PopoverContent, PopoverTrigger, Switch, Tooltip } from '@heroui/react'
+import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
@@ -29,7 +30,7 @@ export function ImageToolbar(props: ImageToolbarProps) {
 					</Tooltip>
 					<Tooltip content='Stretch' placement='top'>
 						<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('stretch')} variant='flat'>
-							<Lucide.SquareDashedKanban transform='rotate(180)' />
+							<Tabler.IconChartCandle transform='rotate(90)' />
 						</Button>
 					</Tooltip>
 					<Tooltip content='Auto Stretch' placement='top'>
@@ -37,14 +38,14 @@ export function ImageToolbar(props: ImageToolbarProps) {
 							<Lucide.WandSparkles />
 						</ToggleButton>
 					</Tooltip>
-					{!info?.mono && (
+					{!info.mono && (
 						<Tooltip content='SCNR' placement='top'>
 							<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('scnr')} variant='flat'>
 								<Lucide.Blend />
 							</Button>
 						</Tooltip>
 					)}
-					{info?.metadata.bayer && info?.metadata.channels === 1 && (
+					{info.metadata.bayer && info.metadata.channels === 1 && (
 						<Tooltip content='Debayer' placement='top'>
 							<ToggleButton color='primary' isSelected={transformation.debayer} onPointerUp={() => viewer.toggleDebayer()}>
 								<Lucide.Grid3X3 />
@@ -53,7 +54,7 @@ export function ImageToolbar(props: ImageToolbarProps) {
 					)}
 					<Tooltip content='Rotate' placement='top'>
 						<Button color='secondary' isIconOnly variant='flat'>
-							<Lucide.RotateCw />
+							<Tabler.IconRotateClockwise2 />
 						</Button>
 					</Tooltip>
 					<Popover placement='bottom' showArrow>
@@ -81,7 +82,7 @@ export function ImageToolbar(props: ImageToolbarProps) {
 								</Tooltip>
 								<Tooltip content='Invert' placement='top'>
 									<ToggleButton color='primary' isSelected={transformation.invert} onPointerUp={() => viewer.toggleInvert()}>
-										<Lucide.Image />
+										<Tabler.IconContrastFilled />
 									</ToggleButton>
 								</Tooltip>
 							</div>
@@ -128,12 +129,12 @@ export function ImageToolbar(props: ImageToolbarProps) {
 					</Popover>
 					<Tooltip content='Statistics' placement='top'>
 						<Button color='secondary' isIconOnly variant='flat'>
-							<Lucide.ChartNoAxesColumnIncreasing />
+							<Tabler.IconChartColumn />
 						</Button>
 					</Tooltip>
 					<Tooltip content='FITS Header' placement='top'>
 						<Button color='secondary' isIconOnly onPress={() => viewer.showModal('fitsHeader')} variant='flat'>
-							<Lucide.List />
+							<Tabler.IconAlignJustified />
 						</Button>
 					</Tooltip>
 					<Tooltip content='Mouse Coordinate' placement='top'>

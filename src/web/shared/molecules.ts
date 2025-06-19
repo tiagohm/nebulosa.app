@@ -5,7 +5,7 @@ import type { DetectedStar } from 'nebulosa/src/stardetector'
 import type { DirectoryEntry, FileEntry, ImageInfo, ImageTransformation, StarDetection } from 'src/api/types'
 import { DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_STAR_DETECTION } from 'src/api/types'
 import { proxy, subscribe } from 'valtio'
-import { deepClone } from 'valtio/utils'
+import { deepClone, subscribeKey } from 'valtio/utils'
 import type { FilePickerMode } from '@/ui/FilePicker'
 import { Api } from './api'
 import { PanZoom, type PanZoomOptions } from './panzoom'
@@ -28,6 +28,9 @@ export interface Image {
 }
 
 export interface ImageWorkspaceState {
+	readonly images: Image[]
+	lastPath: string
+	showModal: boolean
 	selected?: Image
 }
 
@@ -39,7 +42,7 @@ export interface ImageState {
 	readonly transformation: ImageTransformation
 	crosshair: boolean
 	rotation: number
-	info?: ImageInfo
+	info: ImageInfo
 	readonly starDetection: {
 		showModal: boolean
 		show: boolean
@@ -67,14 +70,17 @@ export interface ImageState {
 	readonly fitsHeader: {
 		showModal: boolean
 	}
+	readonly roi: {
+		show: boolean
+		x: number
+		y: number
+		width: number
+		height: number
+		rotation: number
+	}
 }
 
 export interface HomeState {
-	readonly images: Image[]
-	readonly openImage: {
-		showModal: boolean
-		lastPath: string
-	}
 	readonly about: {
 		showModal: boolean
 	}
@@ -126,10 +132,12 @@ export interface CachedImage {
 	destroy?: () => void
 }
 
+// Compares two connections based on their connectedAt timestamp
 export const ConnectionComparator = (a: Connection, b: Connection) => {
 	return (a.connectedAt ?? 0) - (b.connectedAt ?? 0)
 }
 
+// Molecule that manages connections
 export const ConnectionMolecule = molecule(() => {
 	const connections = simpleLocalStorage.get('connections', () => [structuredClone(DEFAULT_CONNECTION)])
 	connections.sort(ConnectionComparator)
@@ -149,41 +157,50 @@ export const ConnectionMolecule = molecule(() => {
 		return () => unsubscribe()
 	})
 
+	// Shows the modal for creating a new connection
 	function create() {
 		state.edited = deepClone(DEFAULT_CONNECTION)
 		state.showModal = true
 	}
 
+	// Shows the modal for editing an existing connection
 	function edit(connection: Connection) {
 		state.edited = deepClone(connection)
 		state.showModal = true
 	}
 
+	// Adds a new connection to the list
 	function add(connection: Connection) {
 		state.connections.push(connection)
 	}
 
+	// Duplicates an existing connection
+	// If the connection is the default one, it generates a new id
 	function duplicate(connection: Connection) {
 		const duplicated = deepClone(connection)
 		if (duplicated.id === DEFAULT_CONNECTION.id) duplicated.id = Date.now().toFixed(0)
 		add(duplicated)
 	}
 
+	// Updates a specific property of the edited connection
 	function update<K extends keyof Connection>(name: K, value: Connection[K]) {
 		if (state.edited) {
 			state.edited[name] = value
 		}
 	}
 
+	// Selects a connection
 	function select(connection: Connection) {
 		state.selected = connection
 	}
 
+	// Selects a connection by its id
 	function selectWith(id: string) {
 		const selected = state.connections.find((c) => c.id === id)
 		selected && select(selected)
 	}
 
+	// Saves the edited connection
 	function save() {
 		const { edited } = state
 
@@ -213,6 +230,7 @@ export const ConnectionMolecule = molecule(() => {
 		return true
 	}
 
+	// Removes a connection
 	function remove(connection: Connection) {
 		if (!removeOnly(connection)) return
 
@@ -226,6 +244,8 @@ export const ConnectionMolecule = molecule(() => {
 		}
 	}
 
+	// Connects to the selected connection
+	// If already connected, it disconnects
 	function connect() {
 		if (state.connected) {
 			state.connected = undefined
@@ -237,20 +257,43 @@ export const ConnectionMolecule = molecule(() => {
 	return { state, create, edit, update, select, selectWith, save, connect, duplicate, remove } as const
 })
 
+// Molecule that manages the image workspace
 export const ImageWorkspaceMolecule = molecule(() => {
-	const state = proxy<ImageWorkspaceState>({})
+	const state = proxy<ImageWorkspaceState>({
+		images: [],
+		showModal: false,
+		lastPath: simpleLocalStorage.get('image.path', ''),
+	})
 
-	return { state }
+	// Add an image to the workspace from a given path
+	// It generates a unique key for the image and adds it to the state
+	function add(path: string) {
+		const index = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => e.index)) + 1
+		const key = `image-${Date.now()}-${index}`
+		state.images.push({ path, key, index })
+		state.lastPath = path
+		simpleLocalStorage.set('image.path', path)
+	}
+
+	// Removes an image from the workspace
+	function remove(image: Image) {
+		const index = state.images.findIndex((e) => e.key === image.key)
+		index >= 0 && state.images.splice(index, 1)
+	}
+
+	return { state, add, remove }
 })
 
 const imageCache = new Map<string, CachedImage>()
+const imageSubscriptionKeys: (keyof ImageState)[] = ['transformation', 'crosshair', 'rotation']
 
 export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { key: '', path: '', index: 0 } })
 
+// Molecule that manages the image viewer
+// It handles loading, transformations, star detection, and other image-related functionalities
 export const ImageViewerMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 
-	const home = m(HomeMolecule)
 	const workspace = m(ImageWorkspaceMolecule)
 	const { key, index, path } = scope.image
 
@@ -265,6 +308,24 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			transformation,
 			crosshair: simpleLocalStorage.get('image.crosshair', false),
 			rotation: simpleLocalStorage.get('image.rotation', 0),
+			info: {
+				path: '',
+				originalPath: '',
+				width: 0,
+				height: 0,
+				mono: false,
+				metadata: {
+					width: 0,
+					height: 0,
+					channels: 1,
+					strideInPixels: 0,
+					pixelCount: 0,
+					pixelSizeInBytes: 0,
+					bitpix: 8,
+				},
+				transformation,
+				headers: {},
+			},
 			starDetection: {
 				showModal: false,
 				show: false,
@@ -291,68 +352,78 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			fitsHeader: {
 				showModal: false,
 			},
+			roi: {
+				show: false,
+				x: 0,
+				y: 0,
+				width: 0,
+				height: 0,
+				rotation: 0,
+			},
 		})
+
+	imageCache.set(key, { url: '', state })
 
 	let loading = false
 	let currentImage: HTMLImageElement | undefined
 
 	onMount(() => {
-		// TODO: Subcribe individuallly
-		const unsubscribe = subscribe(state, () => {
-			simpleLocalStorage.set('image.transformation', state.transformation)
-			simpleLocalStorage.set('image.crosshair', state.crosshair)
-			simpleLocalStorage.set('image.rotation', state.rotation)
-			simpleLocalStorage.set('image.starDetection', state.starDetection.request)
-		})
+		const unsubscribes: VoidFunction[] = []
 
-		return () => {
-			unsubscribe()
+		for (const key of imageSubscriptionKeys) {
+			const unsubscribe = subscribeKey(state, key, (e) => simpleLocalStorage.set(`image.${key}`, e))
+			unsubscribes.push(unsubscribe)
 		}
+
+		return () => unsubscribes.forEach((e) => e())
 	})
 
+	// Toggles the auto-stretch transformation
 	function toggleAutoStretch() {
 		state.transformation.stretch.auto = !state.transformation.stretch.auto
 		return load(true)
 	}
 
+	// Toggles the debayer transformation
 	function toggleDebayer() {
 		state.transformation.debayer = !state.transformation.debayer
 		return load(true)
 	}
 
+	// Toggles the horizontal mirror transformation
 	function toggleHorizontalMirror() {
 		state.transformation.horizontalMirror = !state.transformation.horizontalMirror
 		return load(true)
 	}
 
+	// Toggles the vertical mirror transformation
 	function toggleVerticalMirror() {
 		state.transformation.verticalMirror = !state.transformation.verticalMirror
 		return load(true)
 	}
 
+	// Toggles the invert transformation
 	function toggleInvert() {
 		state.transformation.invert = !state.transformation.invert
 		return load(true)
 	}
 
+	// Toggles the crosshair visibility
 	function toggleCrosshair() {
 		state.crosshair = !state.crosshair
 	}
 
-	function toggleDetectedStars(enabled?: boolean) {
-		state.starDetection.show = enabled ?? !state.starDetection.show
-	}
-
+	// Shows a modal
 	function showModal(key: 'starDetection' | 'scnr' | 'stretch' | 'fitsHeader' | 'plateSolver') {
 		state[key].showModal = true
 	}
 
-	// Removes the image
+	// Removes the image from the workspace
 	function remove() {
-		home.removeImage(scope.image)
+		workspace.remove(scope.image)
 	}
 
-	// Loads the image from path
+	// Loads the current image
 	async function load(force: boolean = false, image?: HTMLImageElement) {
 		console.info('loading image', key, loading)
 
@@ -363,7 +434,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		const cached = imageCache.get(key)
 
 		// Not loaded yet or forced to load
-		if (!cached || force) {
+		if (!cached?.url || force) {
 			await open(image)
 		} else {
 			// Load the image from cache
@@ -379,7 +450,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		}
 	}
 
-	// Opens the image from path and save it into cache
+	// Opens the current image and saves it into cache
 	async function open(image?: HTMLImageElement) {
 		try {
 			loading = true
@@ -400,6 +471,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 				URL.revokeObjectURL(cached.url)
 
 				cached.url = url
+				cached.state.info = info
 			} else {
 				imageCache.set(key, { url, state })
 			}
@@ -408,7 +480,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 			if (image) {
 				image.src = url
-				console.info('image loaded', key, url)
+				console.info('image loaded', key, url, info)
 			} else {
 				console.warn('image not mounted yet', key)
 			}
@@ -421,6 +493,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		}
 	}
 
+	// Selects the image and brings it to the front
 	function select(e: HTMLImageElement) {
 		workspace.state.selected = scope.image
 		bringToFront(e)
@@ -484,6 +557,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		console.info('image attached', key)
 	}
 
+	// Detaches the image from the workspace
+	// It destroys the PanZoom instance and removes the image from cache
 	function detach() {
 		const cached = imageCache.get(key)
 
@@ -499,14 +574,38 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		workspace.state.selected = undefined
 	}
 
-	async function detectStars() {
+	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, select, showModal }
+})
+
+// Molecule that manages star detection
+export const StarDetectionMolecule = molecule((m, s) => {
+	const scope = s(ImageViewerScope)
+	const viewer = m(ImageViewerMolecule)
+	const key = scope.image.key
+	const starDetection = viewer.state.starDetection
+
+	onMount(() => {
+		const unsubscribe = subscribe(starDetection.request, () => {
+			simpleLocalStorage.set('image.starDetection', starDetection.request)
+		})
+
+		return () => unsubscribe()
+	})
+
+	// Toggles the visibility of detected stars
+	function toggle(enabled?: boolean) {
+		starDetection.show = enabled ?? !starDetection.show
+	}
+
+	// Detects stars in the image
+	async function detect() {
 		try {
-			state.starDetection.loading = true
+			starDetection.loading = true
 
-			const stars = await Api.StarDetection.detect(state.starDetection.request)
+			const stars = await Api.StarDetection.detect(starDetection.request)
 
-			state.starDetection.stars = stars
-			state.starDetection.show = stars.length > 0
+			starDetection.stars = stars
+			starDetection.show = stars.length > 0
 
 			if (!stars.length) {
 				addToast({ description: 'No stars detected', color: 'primary', title: 'INFO' })
@@ -532,16 +631,17 @@ export const ImageViewerMolecule = molecule((m, s) => {
 				fluxMax = 0
 			}
 
-			state.starDetection.computed = { hfd, snr, fluxMin, fluxMax }
+			starDetection.computed = { hfd, snr, fluxMin, fluxMax }
 		} catch {
 			addToast({ description: 'Failed to detect stars', color: 'danger', title: 'ERROR' })
 		} finally {
-			state.starDetection.loading = false
+			starDetection.loading = false
 		}
 	}
 
-	function selectDetectedStar(star: DetectedStar) {
-		state.starDetection.selected = star
+	// Selects a detected star and draws it on a canvas
+	function select(star: DetectedStar) {
+		starDetection.selected = star
 
 		const canvas = document.getElementById(`${key}-selected-star`) as HTMLCanvasElement | null
 		if (!canvas) return
@@ -550,41 +650,28 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		ctx?.drawImage(image, star.x - 8.5, star.y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
 	}
 
-	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, select, toggleDetectedStars, detectStars, selectDetectedStar, showModal }
+	return { state: starDetection, viewer, scope, toggle, detect, select }
 })
 
+// Molecule that manages the home state
 export const HomeMolecule = molecule(() => {
 	const state = proxy<HomeState>({
-		images: [],
-		openImage: {
-			showModal: false,
-			lastPath: simpleLocalStorage.get('image.path', ''),
-		},
 		about: {
 			showModal: false,
 		},
 	})
 
-	function addImage(path: string) {
-		const index = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => e.index)) + 1
-		const key = `image-${Date.now()}-${index}`
-		state.images.push({ path, key, index })
-		state.openImage.lastPath = path
-		simpleLocalStorage.set('image.path', path)
-	}
-
-	function removeImage(image: Image) {
-		const index = state.images.findIndex((e) => e.key === image.key)
-		index >= 0 && state.images.splice(index, 1)
-	}
-
-	return { state, addImage, removeImage }
+	return { state }
 })
 
 const modalTransformMap = new Map<string, ModalState['transform']>()
 
 export const ModalScope = createScope<ModalScopeValue>({ name: '' })
 
+// Molecule that manages modals
+// It handles the position, transformation, and z-index of modals
+// It allows dragging and moving modals within the workspace
+// It also ensures that modals are always on top of other elements
 export const ModalMolecule = molecule((m, s) => {
 	const scope = s(ModalScope)
 
@@ -601,6 +688,9 @@ export const ModalMolecule = molecule((m, s) => {
 	})
 
 	const zIndex = m(ZIndexMolecule)
+
+	// Increment the z-index for the modal
+	zIndex.increment(scope.name, scope.isAlwaysOnTop ?? false)
 
 	let targetRef: HTMLElement | undefined
 
@@ -667,11 +757,14 @@ export const ModalMolecule = molecule((m, s) => {
 		}
 	}
 
-	zIndex.increment(scope.name, scope.isAlwaysOnTop ?? false)
+	function onOpenChange(isOpen: boolean) {
+		if (!isOpen) zIndex.remove(scope.name)
+	}
 
 	const props = {
 		ref,
 		onPointerUp,
+		onOpenChange,
 		backdrop: 'transparent',
 		size: 'sm',
 		isDismissable: false,
@@ -683,6 +776,9 @@ export const ModalMolecule = molecule((m, s) => {
 
 export const FilePickerScope = createScope<FilePickerScopeValue>({})
 
+// Molecule that manages the file picker
+// It allows users to navigate through directories, filter files, and select files or directories
+// It also supports creating new directories and managing the file system
 export const FilePickerMolecule = molecule((m, s) => {
 	const scope = s(FilePickerScope)
 
@@ -792,6 +888,67 @@ export const FilePickerMolecule = molecule((m, s) => {
 	return { state, filter, list, navigateTo, navigateBack, navigateToParent, toggleCreateDirectory, createDirectory, select }
 })
 
+// Keys and values for z-index management
+const zIndex: [string, number][] = []
+
+// Molecule that manages z-index for modals and other elements
+// It allows to increment the z-index for a specific key and manage the order of elements
+// It is used to ensure that the elements are always on top of each other in the correct order
+export const ZIndexMolecule = molecule(() => {
+	// Returns the maximum z-index value
+	function max() {
+		return zIndex.length === 0 ? 1000000 : zIndex[zIndex.length - 1][1]
+	}
+
+	// Updates the z-index for a specific key
+	function update(key: string, value: number) {
+		document.documentElement.style.setProperty(`--z-index-${key}`, value.toFixed(0))
+	}
+
+	// Computes the new z-index for a specific key for ensuring that it is always on top
+	function increment(key: string, force: boolean = false) {
+		const index = zIndex.findIndex((e) => e[0] === key)
+
+		if (index < 0) {
+			const value = max() + 1
+			zIndex.push([key, value])
+			update(key, value)
+			return value
+		} else if (force) {
+			const maxIndex = zIndex.length - 1
+
+			// If the key is not at the top, we need to shift the z-index of the other elements
+			// and move the key to the top
+			if (index !== maxIndex) {
+				const max = zIndex[maxIndex][1]
+
+				for (let i = maxIndex; i > index; i--) {
+					zIndex[i][1]--
+					update(...zIndex[i])
+				}
+
+				zIndex.splice(index, 1)
+				zIndex.push([key, max])
+				update(key, max)
+				return max
+			}
+
+			return zIndex[index][1]
+		} else {
+			update(...zIndex[index])
+		}
+	}
+
+	function remove(key: string) {
+		const index = zIndex.findIndex((e) => e[0] === key)
+		if (index < 0) return
+		zIndex.splice(index, 1)
+	}
+
+	return { increment, remove }
+})
+
+// Adjusts the z-index of elements after one is removed
 function adjustZIndexAfterBeRemoved() {
 	const wrappers = document.querySelectorAll('.workspace .wrapper') ?? []
 
@@ -843,58 +1000,3 @@ function bringToFront(e: HTMLElement) {
 	// Update the selected element z-index
 	elements[zIndex].style.zIndex = max.toFixed(0)
 }
-
-// Keys and values for z-index management
-const zIndexK: string[] = []
-const zIndexV: number[] = []
-
-// Molecule to manage z-index for modals and other elements
-// It allows to increment the z-index for a specific key and manage the order of elements
-// It is used to ensure that the elements are always on top of each other in the correct order
-export const ZIndexMolecule = molecule(() => {
-	// Returns the maximum z-index value
-	function max() {
-		return zIndexV.length === 0 ? 1000000 : Math.max(...zIndexV)
-	}
-
-	// Updates the z-index for a specific key
-	function update(key: string, value: number) {
-		document.documentElement.style.setProperty(`--z-index-${key}`, value.toFixed(0))
-	}
-
-	// Computes the new z-index for a specific key for ensuring that it is always on top
-	function increment(key: string, force: boolean = false) {
-		const index = zIndexK.indexOf(key)
-
-		if (index < 0) {
-			const value = max() + 1
-			zIndexK.push(key)
-			zIndexV.push(value)
-			update(key, value)
-			return value
-		} else if (force) {
-			const maxIndex = zIndexK.length - 1
-			const max = zIndexV[maxIndex]
-
-			if (index !== maxIndex) {
-				for (let i = maxIndex; i > index; i--) {
-					zIndexV[i]--
-					update(zIndexK[i], zIndexV[i])
-				}
-
-				zIndexK.splice(index, 1)
-				zIndexV.splice(index, 1)
-				zIndexK.push(key)
-				zIndexV.push(max)
-				update(key, max)
-				return max
-			}
-
-			return zIndexV[index]
-		} else {
-			update(zIndexK[index], zIndexV[index])
-		}
-	}
-
-	return { increment }
-})

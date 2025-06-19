@@ -7,7 +7,7 @@ import { DetectedStars } from './DetectedStars'
 import { FITSHeader } from './FITSHeader'
 import { ImageToolbar } from './ImageToolbar'
 import { PlateSolver } from './PlateSolver'
-import { SCNR } from './SCNR'
+import { Scnr } from './Scnr'
 import { StarDetection } from './StarDetection'
 import { Stretch } from './Stretch'
 
@@ -50,7 +50,7 @@ export function ImageViewer() {
 			)}
 			{scnr.showModal && (
 				<ScopeProvider scope={ModalScope} value={{ name: `scnr-${image.key}` }}>
-					<SCNR />
+					<Scnr />
 				</ScopeProvider>
 			)}
 			{starDetection.showModal && (

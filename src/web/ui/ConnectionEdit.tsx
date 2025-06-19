@@ -6,12 +6,12 @@ import { useModal } from '@/shared/hooks'
 import { ConnectionMolecule } from '@/shared/molecules'
 
 export function ConnectionEdit() {
-	const modal = useModal()
 	const connection = useMolecule(ConnectionMolecule)
 	const state = useSnapshot(connection.state)
+	const modal = useModal(() => (connection.state.showModal = false))
 
 	return (
-		<Modal {...modal.props} classNames={{ wrapper: 'pointer-events-none' }} onOpenChange={(value) => (connection.state.showModal = value)}>
+		<Modal {...modal.props} classNames={{ wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>

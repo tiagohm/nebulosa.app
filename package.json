@@ -22,6 +22,7 @@
 		"@elysiajs/cron": "latest",
 		"@elysiajs/static": "latest",
 		"@heroui/react": "beta",
+		"@tabler/icons-react": "latest",
 		"@uidotdev/usehooks": "2.4.1",
 		"bun-plugin-tailwind": "latest",
 		"bunshi": "2.1.5",

@@ -5,12 +5,12 @@ import { useModal } from '@/shared/hooks'
 import { ImageViewerMolecule } from '@/shared/molecules'
 
 export function FITSHeader() {
-	const modal = useModal()
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { info } = useSnapshot(viewer.state)
+	const modal = useModal(() => (viewer.state.fitsHeader.showModal = false))
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[390px] max-h-[90vh]', wrapper: 'pointer-events-none' }} onOpenChange={(value) => (viewer.state.fitsHeader.showModal = value)}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[390px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>
@@ -26,7 +26,7 @@ export function FITSHeader() {
 										maxListboxHeight: 400,
 										itemHeight: 40,
 									}}>
-									{Object.entries(info?.headers ?? {}).map(([key, value]) => (
+									{Object.entries(info.headers).map(([key, value]) => (
 										<ListboxItem description={key} key={key}>
 											{value === true ? 'T' : value === false ? 'F' : value}
 										</ListboxItem>

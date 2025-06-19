@@ -113,7 +113,7 @@ export interface ImageStretch {
 	shadow: number // 0 - 65536
 	highlight: number // 0 - 65536
 	midtone: number // 0 - 65536
-	meanBackground?: number
+	meanBackground: number
 }
 
 export interface ImageScnr {
@@ -421,8 +421,8 @@ export const DEFAULT_IMAGE_STRETCH: ImageStretch = {
 }
 
 export const DEFAULT_IMAGE_SCNR: ImageScnr = {
-	channel: 'GREEN',
-	amount: 0,
+	channel: undefined,
+	amount: 0.5,
 	method: 'MAXIMUM_MASK',
 }
 

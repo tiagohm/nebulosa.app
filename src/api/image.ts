@@ -75,9 +75,9 @@ export class ImageEndpoint {
 
 			image = stf(image, midtone, shadow, highlight)
 
-			transformation.stretch.midtone = midtone * 65536
-			transformation.stretch.shadow = shadow * 65536
-			transformation.stretch.highlight = highlight * 65536
+			transformation.stretch.midtone = Math.trunc(midtone * 65536)
+			transformation.stretch.shadow = Math.trunc(shadow * 65536)
+			transformation.stretch.highlight = Math.trunc(highlight * 65536)
 		} else {
 			const { midtone, shadow, highlight } = transformation.stretch
 			image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536)

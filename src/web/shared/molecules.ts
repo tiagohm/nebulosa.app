@@ -150,9 +150,7 @@ export const ConnectionMolecule = molecule(() => {
 	})
 
 	onMount(() => {
-		const unsubscribe = subscribe(state.connections, () => {
-			simpleLocalStorage.set('connections', state.connections)
-		})
+		const unsubscribe = subscribe(state.connections, () => simpleLocalStorage.set('connections', state.connections))
 
 		return () => unsubscribe()
 	})
@@ -285,7 +283,6 @@ export const ImageWorkspaceMolecule = molecule(() => {
 })
 
 const imageCache = new Map<string, CachedImage>()
-const imageSubscriptionKeys: (keyof ImageState)[] = ['transformation', 'crosshair', 'rotation']
 
 export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { key: '', path: '', index: 0 } })
 
@@ -370,10 +367,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	onMount(() => {
 		const unsubscribes: VoidFunction[] = []
 
-		for (const key of imageSubscriptionKeys) {
-			const unsubscribe = subscribeKey(state, key, (e) => simpleLocalStorage.set(`image.${key}`, e))
-			unsubscribes.push(unsubscribe)
-		}
+		unsubscribes[0] = subscribeKey(state, 'crosshair', (e) => simpleLocalStorage.set('image.crosshair', e))
+		unsubscribes[1] = subscribe(state.transformation, () => simpleLocalStorage.set('image.transformation', state.transformation))
 
 		return () => unsubscribes.forEach((e) => e())
 	})
@@ -463,6 +458,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 			// Update the state
 			state.info = info
+			updateTransformationFromInfo(info)
 
 			// Add the image to cache
 			const cached = imageCache.get(key)
@@ -472,6 +468,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 				cached.url = url
 				cached.state.info = info
+				updateTransformationFromInfo(info, cached.state)
 			} else {
 				imageCache.set(key, { url, state })
 			}
@@ -491,6 +488,14 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		} finally {
 			loading = false
 		}
+	}
+
+	function updateTransformationFromInfo(info: ImageInfo, s: ImageState = state) {
+		// Update stretch transformation
+		s.transformation.stretch.auto = info.transformation.stretch.auto
+		s.transformation.stretch.shadow = info.transformation.stretch.shadow
+		s.transformation.stretch.highlight = info.transformation.stretch.highlight
+		s.transformation.stretch.midtone = info.transformation.stretch.midtone
 	}
 
 	// Selects the image and brings it to the front
@@ -585,9 +590,7 @@ export const StarDetectionMolecule = molecule((m, s) => {
 	const starDetection = viewer.state.starDetection
 
 	onMount(() => {
-		const unsubscribe = subscribe(starDetection.request, () => {
-			simpleLocalStorage.set('image.starDetection', starDetection.request)
-		})
+		const unsubscribe = subscribe(starDetection.request, () => simpleLocalStorage.set('image.starDetection', starDetection.request))
 
 		return () => unsubscribe()
 	})
@@ -651,6 +654,50 @@ export const StarDetectionMolecule = molecule((m, s) => {
 	}
 
 	return { state: starDetection, viewer, scope, toggle, detect, select }
+})
+
+// Molecule that stretches the image
+export const StretchMolecule = molecule((m, s) => {
+	const scope = s(ImageViewerScope)
+	const viewer = m(ImageViewerMolecule)
+
+	function update<K extends keyof ImageTransformation['stretch']>(key: K, value: ImageTransformation['stretch'][K]) {
+		viewer.state.transformation.stretch[key] = value
+	}
+
+	function auto() {
+		return apply(true)
+	}
+
+	function reset() {
+		viewer.state.transformation.stretch.midtone = 32768
+		viewer.state.transformation.stretch.shadow = 0
+		viewer.state.transformation.stretch.highlight = 65536
+		return apply()
+	}
+
+	function apply(auto: boolean = false) {
+		viewer.state.transformation.stretch.auto = auto
+		return viewer.load(true)
+	}
+
+	return { state: viewer.state.transformation.stretch, scope, viewer, update, auto, reset, apply }
+})
+
+// Molecule that apply SCNR (Subtractive Color Noise Reduction) to the image
+export const ScnrMolecule = molecule((m, s) => {
+	const scope = s(ImageViewerScope)
+	const viewer = m(ImageViewerMolecule)
+
+	function update<K extends keyof ImageTransformation['scnr']>(key: K, value: ImageTransformation['scnr'][K]) {
+		viewer.state.transformation.scnr[key] = value
+	}
+
+	function apply() {
+		return viewer.load(true)
+	}
+
+	return { state: viewer.state.transformation.scnr, scope, viewer, update, apply }
 })
 
 // Molecule that manages the home state

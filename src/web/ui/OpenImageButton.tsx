@@ -1,16 +1,13 @@
 import { Button, Tooltip } from '@heroui/react'
 import { ScopeProvider, useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
-import { createPortal } from 'react-dom'
 import { useSnapshot } from 'valtio'
-import { useDraggableModal } from '@/shared/hooks'
-import { FilePickerScope, HomeMolecule } from '@/shared/molecules'
+import { FilePickerScope, HomeMolecule, ModalScope } from '@/shared/molecules'
 import { FilePicker } from './FilePicker'
 
 export function OpenImageButton() {
 	const home = useMolecule(HomeMolecule)
-	const { openImageLastPath } = useSnapshot(home.state)
-	const openImageModal = useDraggableModal({ name: 'open-image' })
+	const { openImage } = useSnapshot(home.state)
 
 	function handleChoose(paths?: string[]) {
 		if (paths?.length) {
@@ -18,22 +15,24 @@ export function OpenImageButton() {
 				home.addImage(path)
 			}
 		}
+
+		home.state.openImage.showModal = false
 	}
 
 	return (
 		<>
 			<Tooltip content='Open Image' showArrow>
-				<Button color='secondary' isIconOnly onPointerUp={() => openImageModal.show()} variant='light'>
+				<Button color='secondary' isIconOnly onPointerUp={() => (home.state.openImage.showModal = true)} variant='light'>
 					<Lucide.ImagePlus />
 				</Button>
 			</Tooltip>
-			{openImageModal.isOpen &&
-				createPortal(
-					<ScopeProvider scope={FilePickerScope} value={{ path: openImageLastPath, filter: '*.{fits,fit,xisf}', multiple: true }}>
-						<FilePicker draggable={openImageModal} header='Open Image' onChoose={handleChoose} />
-					</ScopeProvider>,
-					document.body,
-				)}
+			{openImage.showModal && (
+				<ScopeProvider scope={FilePickerScope} value={{ path: openImage.lastPath, filter: '*.{fits,fit,xisf}', multiple: true }}>
+					<ScopeProvider scope={ModalScope} value={{ name: 'open-image', isAlwaysOnTop: true }}>
+						<FilePicker header='Open Image' onChoose={handleChoose} />
+					</ScopeProvider>
+				</ScopeProvider>
+			)}
 		</>
 	)
 }

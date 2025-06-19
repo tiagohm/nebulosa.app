@@ -1,6 +1,7 @@
 import { Button, Chip, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
+import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
-import { createPortal } from 'react-dom'
+import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
 import alignmentIcon from '@/assets/alignment.webp'
 import autoFocusIcon from '@/assets/auto-focus.webp'
@@ -22,7 +23,7 @@ import sequencerIcon from '@/assets/sequencer.webp'
 import settingsIcon from '@/assets/settings.webp'
 import skyAtlasIcon from '@/assets/sky-atlas.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
-import { useDraggableModal } from '@/shared/hooks'
+import { HomeMolecule } from '@/shared/molecules'
 import { About } from './About'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
@@ -32,7 +33,8 @@ export interface HomeMenuProps {
 }
 
 export function HomeMenu({ onItemPointerUp }: HomeMenuProps) {
-	const aboutModal = useDraggableModal({ name: 'about' })
+	const home = useMolecule(HomeMolecule)
+	const { about } = useSnapshot(home.state)
 
 	return (
 		<>
@@ -145,7 +147,7 @@ export function HomeMenu({ onItemPointerUp }: HomeMenuProps) {
 							</Button>
 						</Tooltip>
 						<Tooltip content='About' placement='bottom' showArrow>
-							<Button color='secondary' isIconOnly onPointerUp={() => aboutModal.show()} size='lg' variant='light'>
+							<Button color='secondary' isIconOnly onPointerUp={() => (home.state.about.showModal = true)} size='lg' variant='light'>
 								<img className='w-9' src={aboutIcon} />
 							</Button>
 						</Tooltip>
@@ -164,7 +166,7 @@ export function HomeMenu({ onItemPointerUp }: HomeMenuProps) {
 					</div>
 				</PopoverContent>
 			</Popover>
-			{aboutModal.isOpen && createPortal(<About draggable={aboutModal} />, document.body)}
+			{about.showModal && <About />}
 		</>
 	)
 }

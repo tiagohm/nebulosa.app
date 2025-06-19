@@ -2,23 +2,20 @@ import { Button, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
-import type { UseDraggableModalResult } from '@/shared/hooks'
+import { useModal } from '@/shared/hooks'
 import { ImageViewerMolecule } from '@/shared/molecules'
 
-export interface StarDetectionProps {
-	readonly draggable: UseDraggableModalResult
-}
-
-export function StarDetection({ draggable }: StarDetectionProps) {
+export function StarDetection() {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { starDetection, info } = useSnapshot(viewer.state)
+	const modal = useModal()
 
 	return (
-		<Modal backdrop='transparent' classNames={{ base: 'max-w-[410px] max-h-[90vh]', wrapper: 'pointer-events-none' }} isDismissable={false} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} onPointerUp={draggable.onPointerUp} ref={draggable.targetRef} size='sm'>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[360px] max-h-[90vh]', wrapper: 'pointer-events-none' }} onOpenChange={(value) => (viewer.state.starDetection.showModal = value)}>
 			<ModalContent>
 				{() => (
 					<>
-						<ModalHeader {...draggable.moveProps} className='flex flex-col gap-0'>
+						<ModalHeader {...modal.moveProps} className='flex flex-col gap-0'>
 							<span>Star Detection</span>
 							<span className='text-xs font-normal text-gray-400'>{info?.originalPath}</span>
 						</ModalHeader>
@@ -48,7 +45,7 @@ export function StarDetection({ draggable }: StarDetectionProps) {
 								<Input className='col-span-4' isReadOnly label='SNR' size='sm' value={starDetection.selected?.snr.toFixed(0) ?? '0'} />
 							</div>
 						</ModalBody>
-						<ModalFooter>
+						<ModalFooter {...modal.moveProps}>
 							<Button color='success' isLoading={starDetection.loading} onPointerUp={() => viewer.detectStars()} startContent={<Lucide.Check />} variant='flat'>
 								Detect
 							</Button>

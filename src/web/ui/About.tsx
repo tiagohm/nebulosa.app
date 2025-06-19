@@ -1,24 +1,25 @@
 import { Chip, Modal, ModalBody, ModalContent, ModalHeader } from '@heroui/react'
+import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import brazilLogo from '@/assets/brazil.png'
 import nebulosaLogo from '@/assets/nebulosa.ico'
-import type { UseDraggableModalResult } from '@/shared/hooks'
+import { useModal } from '@/shared/hooks'
+import { HomeMolecule } from '@/shared/molecules'
 import packageJson from '../../../package.json'
 
-export interface AboutProps {
-	readonly draggable: UseDraggableModalResult
-}
+export function About() {
+	const modal = useModal()
+	const home = useMolecule(HomeMolecule)
 
-export function About({ draggable }: AboutProps) {
 	return (
-		<Modal backdrop='transparent' classNames={{ base: 'max-w-[480px] max-h-[90vh]', wrapper: 'pointer-events-none' }} isDismissable={false} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} onPointerUp={draggable.onPointerUp} ref={draggable.targetRef} size='sm'>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[460px] max-h-[90vh]', wrapper: 'pointer-events-none' }} onOpenChange={(value) => (home.state.about.showModal = value)}>
 			<ModalContent>
 				{() => (
 					<>
-						<ModalHeader {...draggable.moveProps} className='flex flex-row items-center'>
+						<ModalHeader {...modal.moveProps} className='flex flex-row items-center'>
 							About
 						</ModalHeader>
-						<ModalBody>
+						<ModalBody {...modal.moveProps}>
 							<div className='w-full grid grid-cols-12 gap-2'>
 								<div className='col-span-2 row-span-6 flex flex-col gap-2'>
 									<img src={nebulosaLogo} />

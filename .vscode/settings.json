@@ -15,7 +15,7 @@
 	"css.lint.unknownAtRules": "ignore",
 	"json.format.keepLines": true,
 	"editor.codeActionsOnSave": {
-		"source.organizeImports": "never",
+		"source.removeUnusedImports": "explicit",
 		"source.action.useSortedAttributes.biome": "explicit",
 		"source.fixAll.biome": "explicit"
 	},

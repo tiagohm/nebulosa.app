@@ -2,13 +2,7 @@ import { Button, Popover, PopoverContent, PopoverTrigger, Switch, Tooltip } from
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
-import { useDraggableModal } from '@/shared/hooks'
 import { ImageViewerMolecule } from '@/shared/molecules'
-import { FITSHeader } from './FITSHeader'
-import { PlateSolver } from './PlateSolver'
-import { SCNR } from './SCNR'
-import { StarDetection } from './StarDetection'
-import { Stretch } from './Stretch'
 import { ToggleButton } from './ToggleButton'
 
 export type ImageToolbarButtonType = 'stretch' | 'scnr' | 'plate-solver' | 'fits-header' | 'star-detection'
@@ -18,30 +12,23 @@ export interface ImageToolbarProps extends React.HTMLAttributes<HTMLDivElement> 
 export function ImageToolbar(props: ImageToolbarProps) {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { transformation, crosshair, info, starDetection } = useSnapshot(viewer.state)
-	const { image } = viewer.scope
-
-	const stretchModal = useDraggableModal({ name: `stretch-${image.key}` })
-	const scnrModal = useDraggableModal({ name: `scnr-${image.key}` })
-	const plateSolverModal = useDraggableModal({ name: `plate-solver-${image.key}` })
-	const starDetectionModal = useDraggableModal({ name: `star-detection-${image.key}` })
-	const fitsHeaderModal = useDraggableModal({ name: `fits-header-${image.key}` })
 
 	return (
 		<>
 			<div {...props}>
-				<div className='flex flex-row items-center justify-center gap-2 p-2 mx-auto w-fit rounded-xl bg-black/20'>
+				<div className='flex flex-row items-center justify-center gap-2 px-2 py-1.5 mx-auto w-fit rounded-xl bg-black'>
 					<Tooltip content='Save' placement='top'>
 						<Button color='secondary' isIconOnly variant='flat'>
 							<Lucide.Save />
 						</Button>
 					</Tooltip>
 					<Tooltip content='Plate Solver' placement='top'>
-						<Button color='secondary' isIconOnly onPointerUp={() => plateSolverModal.show()} variant='flat'>
+						<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('plateSolver')} variant='flat'>
 							<Lucide.Sigma />
 						</Button>
 					</Tooltip>
 					<Tooltip content='Stretch' placement='top'>
-						<Button color='secondary' isIconOnly onPointerUp={() => stretchModal.show()} variant='flat'>
+						<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('stretch')} variant='flat'>
 							<Lucide.SquareDashedKanban transform='rotate(180)' />
 						</Button>
 					</Tooltip>
@@ -52,7 +39,7 @@ export function ImageToolbar(props: ImageToolbarProps) {
 					</Tooltip>
 					{!info?.mono && (
 						<Tooltip content='SCNR' placement='top'>
-							<Button color='secondary' isIconOnly onPointerUp={() => scnrModal.show()} variant='flat'>
+							<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('scnr')} variant='flat'>
 								<Lucide.Blend />
 							</Button>
 						</Tooltip>
@@ -120,7 +107,7 @@ export function ImageToolbar(props: ImageToolbarProps) {
 								</Tooltip>
 								<div className='flex flex-col gap-2 justify-center'>
 									<Tooltip content='Star Detection' placement='top'>
-										<Button color='secondary' isIconOnly onPress={() => starDetectionModal.show()} variant='flat'>
+										<Button color='secondary' isIconOnly onPress={() => viewer.showModal('starDetection')} variant='flat'>
 											<Lucide.Stars />
 										</Button>
 									</Tooltip>
@@ -145,7 +132,7 @@ export function ImageToolbar(props: ImageToolbarProps) {
 						</Button>
 					</Tooltip>
 					<Tooltip content='FITS Header' placement='top'>
-						<Button color='secondary' isIconOnly onPress={() => fitsHeaderModal.show()} variant='flat'>
+						<Button color='secondary' isIconOnly onPress={() => viewer.showModal('fitsHeader')} variant='flat'>
 							<Lucide.List />
 						</Button>
 					</Tooltip>
@@ -161,11 +148,6 @@ export function ImageToolbar(props: ImageToolbarProps) {
 					</Tooltip>
 				</div>
 			</div>
-			{stretchModal.isOpen && <Stretch draggable={stretchModal} />}
-			{plateSolverModal.isOpen && <PlateSolver draggable={plateSolverModal} />}
-			{scnrModal.isOpen && <SCNR draggable={scnrModal} />}
-			{starDetectionModal.isOpen && <StarDetection draggable={starDetectionModal} />}
-			{fitsHeaderModal.isOpen && <FITSHeader draggable={fitsHeaderModal} />}
 		</>
 	)
 }

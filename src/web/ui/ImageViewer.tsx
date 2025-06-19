@@ -1,16 +1,21 @@
-import { useMolecule } from 'bunshi/react'
+import { ScopeProvider, useMolecule } from 'bunshi/react'
 import { useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerMolecule, ImageWorkspaceMolecule } from '@/shared/molecules'
+import { ImageViewerMolecule, ImageWorkspaceMolecule, ModalScope } from '@/shared/molecules'
 import { Crosshair } from './Crosshair'
 import { DetectedStars } from './DetectedStars'
+import { FITSHeader } from './FITSHeader'
 import { ImageToolbar } from './ImageToolbar'
+import { PlateSolver } from './PlateSolver'
+import { SCNR } from './SCNR'
+import { StarDetection } from './StarDetection'
+import { Stretch } from './Stretch'
 
 export function ImageViewer() {
 	const ref = useRef<HTMLImageElement>(null)
 	const viewer = useMolecule(ImageViewerMolecule)
 	const workspace = useMolecule(ImageWorkspaceMolecule)
-	const { crosshair, starDetection } = useSnapshot(viewer.state)
+	const { crosshair, starDetection, stretch, plateSolver, fitsHeader, scnr } = useSnapshot(viewer.state)
 	const { image } = viewer.scope
 	const { selected } = useSnapshot(workspace.state)
 
@@ -23,7 +28,7 @@ export function ImageViewer() {
 		return () => {
 			viewer.detach()
 		}
-	}, [ref])
+	}, [ref.current])
 
 	return (
 		<>
@@ -33,6 +38,31 @@ export function ImageViewer() {
 				{crosshair && <Crosshair />}
 				{starDetection.show && <DetectedStars rotation={0} stars={starDetection.stars} />}
 			</div>
+			{stretch.showModal && (
+				<ScopeProvider scope={ModalScope} value={{ name: `stretch-${image.key}` }}>
+					<Stretch />
+				</ScopeProvider>
+			)}
+			{plateSolver.showModal && (
+				<ScopeProvider scope={ModalScope} value={{ name: `plate-solver-${image.key}` }}>
+					<PlateSolver />
+				</ScopeProvider>
+			)}
+			{scnr.showModal && (
+				<ScopeProvider scope={ModalScope} value={{ name: `scnr-${image.key}` }}>
+					<SCNR />
+				</ScopeProvider>
+			)}
+			{starDetection.showModal && (
+				<ScopeProvider scope={ModalScope} value={{ name: `star-detection-${image.key}` }}>
+					<StarDetection />
+				</ScopeProvider>
+			)}
+			{fitsHeader.showModal && (
+				<ScopeProvider scope={ModalScope} value={{ name: `fits-header-${image.key}` }}>
+					<FITSHeader />
+				</ScopeProvider>
+			)}
 		</>
 	)
 }

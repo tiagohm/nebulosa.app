@@ -1,5 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
+import { memo } from 'react'
 import { ImageViewerMolecule } from '@/shared/molecules'
 
 export interface DetectedStarsProps {
@@ -7,7 +8,7 @@ export interface DetectedStarsProps {
 	readonly stars: readonly DetectedStar[]
 }
 
-export function DetectedStars({ rotation, stars }: DetectedStarsProps) {
+export const DetectedStars = memo(({ rotation, stars }: DetectedStarsProps) => {
 	const viewer = useMolecule(ImageViewerMolecule)
 
 	return (
@@ -24,4 +25,4 @@ export function DetectedStars({ rotation, stars }: DetectedStarsProps) {
 			</svg>
 		</>
 	)
-}
+})

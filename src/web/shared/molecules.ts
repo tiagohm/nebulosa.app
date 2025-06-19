@@ -1,4 +1,5 @@
 import { addToast } from '@heroui/react'
+import type { MoveMoveEvent } from '@react-types/shared'
 import { createScope, molecule, onMount } from 'bunshi'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import type { DirectoryEntry, FileEntry, ImageInfo, ImageTransformation, StarDetection } from 'src/api/types'
@@ -7,12 +8,12 @@ import { proxy, subscribe } from 'valtio'
 import { deepClone } from 'valtio/utils'
 import type { FilePickerMode } from '@/ui/FilePicker'
 import { Api } from './api'
-import type { UseDraggableModalResult } from './hooks'
 import { PanZoom, type PanZoomOptions } from './panzoom'
 import { simpleLocalStorage } from './storage'
 import { type Connection, DEFAULT_CONNECTION } from './types'
 
 export interface ConnectionState {
+	showModal: boolean
 	readonly connections: Connection[]
 	loading: boolean
 	selected: Connection
@@ -40,6 +41,7 @@ export interface ImageState {
 	rotation: number
 	info?: ImageInfo
 	readonly starDetection: {
+		showModal: boolean
 		show: boolean
 		loading: boolean
 		stars: DetectedStar[]
@@ -52,11 +54,49 @@ export interface ImageState {
 			fluxMax: number
 		}
 	}
+	readonly plateSolver: {
+		showModal: boolean
+		loading: boolean
+	}
+	readonly scnr: {
+		showModal: boolean
+	}
+	readonly stretch: {
+		showModal: boolean
+	}
+	readonly fitsHeader: {
+		showModal: boolean
+	}
 }
 
 export interface HomeState {
 	readonly images: Image[]
-	openImageLastPath: string
+	readonly openImage: {
+		showModal: boolean
+		lastPath: string
+	}
+	readonly about: {
+		showModal: boolean
+	}
+}
+
+export interface ModalScopeValue {
+	readonly name: string
+	readonly canOverflow?: boolean
+	readonly isAlwaysOnTop?: boolean
+}
+
+export interface ModalState {
+	readonly boundary: {
+		minLeft: number
+		minTop: number
+		maxLeft: number
+		maxTop: number
+	}
+	readonly transform: {
+		offsetX: number
+		offsetY: number
+	}
 }
 
 export interface FilePickerScopeValue {
@@ -95,6 +135,7 @@ export const ConnectionMolecule = molecule(() => {
 	connections.sort(ConnectionComparator)
 
 	const state = proxy<ConnectionState>({
+		showModal: false,
 		connections,
 		loading: false,
 		selected: connections[0],
@@ -108,14 +149,14 @@ export const ConnectionMolecule = molecule(() => {
 		return () => unsubscribe()
 	})
 
-	function create(modal: UseDraggableModalResult) {
+	function create() {
 		state.edited = deepClone(DEFAULT_CONNECTION)
-		modal.show()
+		state.showModal = true
 	}
 
-	function edit(connection: Connection, modal: UseDraggableModalResult) {
+	function edit(connection: Connection) {
 		state.edited = deepClone(connection)
-		modal.show()
+		state.showModal = true
 	}
 
 	function add(connection: Connection) {
@@ -143,7 +184,7 @@ export const ConnectionMolecule = molecule(() => {
 		selected && select(selected)
 	}
 
-	function save(modal: UseDraggableModalResult) {
+	function save() {
 		const { edited } = state
 
 		if (edited) {
@@ -160,7 +201,7 @@ export const ConnectionMolecule = molecule(() => {
 				}
 			}
 
-			modal.close()
+			state.showModal = false
 		}
 	}
 
@@ -225,6 +266,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			crosshair: simpleLocalStorage.get('image.crosshair', false),
 			rotation: simpleLocalStorage.get('image.rotation', 0),
 			starDetection: {
+				showModal: false,
 				show: false,
 				loading: false,
 				stars: [],
@@ -235,6 +277,19 @@ export const ImageViewerMolecule = molecule((m, s) => {
 					fluxMin: 0,
 					fluxMax: 0,
 				},
+			},
+			plateSolver: {
+				showModal: false,
+				loading: false,
+			},
+			scnr: {
+				showModal: false,
+			},
+			stretch: {
+				showModal: false,
+			},
+			fitsHeader: {
+				showModal: false,
 			},
 		})
 
@@ -286,6 +341,10 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 	function toggleDetectedStars(enabled?: boolean) {
 		state.starDetection.show = enabled ?? !state.starDetection.show
+	}
+
+	function showModal(key: 'starDetection' | 'scnr' | 'stretch' | 'fitsHeader' | 'plateSolver') {
+		state[key].showModal = true
 	}
 
 	// Removes the image
@@ -491,20 +550,26 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		ctx?.drawImage(image, star.x - 8.5, star.y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
 	}
 
-	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, select, toggleDetectedStars, detectStars, selectDetectedStar }
+	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, select, toggleDetectedStars, detectStars, selectDetectedStar, showModal }
 })
 
 export const HomeMolecule = molecule(() => {
 	const state = proxy<HomeState>({
-		openImageLastPath: simpleLocalStorage.get('image.path', ''),
 		images: [],
+		openImage: {
+			showModal: false,
+			lastPath: simpleLocalStorage.get('image.path', ''),
+		},
+		about: {
+			showModal: false,
+		},
 	})
 
 	function addImage(path: string) {
 		const index = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => e.index)) + 1
 		const key = `image-${Date.now()}-${index}`
 		state.images.push({ path, key, index })
-		state.openImageLastPath = path
+		state.openImage.lastPath = path
 		simpleLocalStorage.set('image.path', path)
 	}
 
@@ -514,6 +579,106 @@ export const HomeMolecule = molecule(() => {
 	}
 
 	return { state, addImage, removeImage }
+})
+
+const modalTransformMap = new Map<string, ModalState['transform']>()
+
+export const ModalScope = createScope<ModalScopeValue>({ name: '' })
+
+export const ModalMolecule = molecule((m, s) => {
+	const scope = s(ModalScope)
+
+	const transform = modalTransformMap.get(scope.name) ?? { offsetX: 0, offsetY: 0 }
+
+	const state = proxy<ModalState>({
+		boundary: {
+			minLeft: 0,
+			minTop: 0,
+			maxLeft: 0,
+			maxTop: 0,
+		},
+		transform,
+	})
+
+	const zIndex = m(ZIndexMolecule)
+
+	let targetRef: HTMLElement | undefined
+
+	// https://github.com/heroui-inc/heroui/blob/canary/packages/hooks/use-draggable/src/index.ts
+
+	// Handles the start of a move event, calculating boundaries based
+	// on the current position and size of the target element.
+	function onMoveStart() {
+		if (!targetRef) return
+
+		zIndex.increment(scope.name, true)
+
+		const { offsetX, offsetY } = state.transform
+		const { left, top, width, height } = targetRef.getBoundingClientRect()
+		const { clientWidth, clientHeight } = document.documentElement
+
+		// Calculate the boundaries for the modal based on its position and size
+		const borderWidth = targetRef.clientWidth - 64
+		const borderHeight = targetRef.clientHeight - 64
+		state.boundary.minLeft = -left + offsetX - borderWidth
+		state.boundary.minTop = -top + offsetY - borderHeight
+		state.boundary.maxLeft = clientWidth - left - width + offsetX + borderWidth
+		state.boundary.maxTop = clientHeight - top - height + offsetY + borderHeight
+	}
+
+	// Handles the move event, updating the position of the target element
+	// based on the delta values from the move event.
+	// It also ensures that the element does not overflow its boundaries.
+	function onMove(e: MoveMoveEvent) {
+		if (!targetRef) return
+
+		let offsetX = state.transform.offsetX + e.deltaX
+		let offsetY = state.transform.offsetY + e.deltaY
+
+		if (!scope.canOverflow) {
+			const { minLeft, minTop, maxLeft, maxTop } = state.boundary
+			offsetX = Math.min(Math.max(offsetX, minLeft), maxLeft)
+			offsetY = Math.min(Math.max(offsetY, minTop), maxTop)
+		}
+
+		state.transform.offsetX = offsetX
+		state.transform.offsetY = offsetY
+		modalTransformMap.set(scope.name, { offsetX, offsetY })
+		targetRef.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+	}
+
+	// Handles the pointer up event, which increments the z-index of the modal
+	// to ensure it is on top of other elements.
+	// This is useful for ensuring that the modal remains interactive after being dragged.
+	function onPointerUp() {
+		zIndex.increment(scope.name, true)
+	}
+
+	// Sets the reference to the target element and applies the initial transform.
+	// It also sets the z-index of the parent element to ensure it is on top.
+	function ref(node: HTMLElement | null) {
+		if (node && node !== targetRef) {
+			targetRef = node
+			targetRef.style.transform = `translate(${state.transform.offsetX}px, ${state.transform.offsetY}px)`
+
+			if (node.parentElement) {
+				node.parentElement.style.zIndex = `var(--z-index-${scope.name}) !important`
+			}
+		}
+	}
+
+	zIndex.increment(scope.name, scope.isAlwaysOnTop ?? false)
+
+	const props = {
+		ref,
+		onPointerUp,
+		backdrop: 'transparent',
+		size: 'sm',
+		isDismissable: false,
+		isOpen: true,
+	} as const
+
+	return { state, scope, props, onMoveStart, onMove }
 })
 
 export const FilePickerScope = createScope<FilePickerScopeValue>({})
@@ -679,16 +844,57 @@ function bringToFront(e: HTMLElement) {
 	elements[zIndex].style.zIndex = max.toFixed(0)
 }
 
-export const ZIndexMolecule = molecule(() => {
-	const state = proxy({ zIndex: 1000000, key: '' })
+// Keys and values for z-index management
+const zIndexK: string[] = []
+const zIndexV: number[] = []
 
-	function increment(key: string) {
-		if (state.key !== key) {
-			state.key = key
-			state.zIndex++
-			document.documentElement.style.setProperty(`--z-index-${key}`, state.zIndex.toFixed(0))
+// Molecule to manage z-index for modals and other elements
+// It allows to increment the z-index for a specific key and manage the order of elements
+// It is used to ensure that the elements are always on top of each other in the correct order
+export const ZIndexMolecule = molecule(() => {
+	// Returns the maximum z-index value
+	function max() {
+		return zIndexV.length === 0 ? 1000000 : Math.max(...zIndexV)
+	}
+
+	// Updates the z-index for a specific key
+	function update(key: string, value: number) {
+		document.documentElement.style.setProperty(`--z-index-${key}`, value.toFixed(0))
+	}
+
+	// Computes the new z-index for a specific key for ensuring that it is always on top
+	function increment(key: string, force: boolean = false) {
+		const index = zIndexK.indexOf(key)
+
+		if (index < 0) {
+			const value = max() + 1
+			zIndexK.push(key)
+			zIndexV.push(value)
+			update(key, value)
+			return value
+		} else if (force) {
+			const maxIndex = zIndexK.length - 1
+			const max = zIndexV[maxIndex]
+
+			if (index !== maxIndex) {
+				for (let i = maxIndex; i > index; i--) {
+					zIndexV[i]--
+					update(zIndexK[i], zIndexV[i])
+				}
+
+				zIndexK.splice(index, 1)
+				zIndexV.splice(index, 1)
+				zIndexK.push(key)
+				zIndexV.push(max)
+				update(key, max)
+				return max
+			}
+
+			return zIndexV[index]
+		} else {
+			update(zIndexK[index], zIndexV[index])
 		}
 	}
 
-	return { state, increment }
+	return { increment }
 })

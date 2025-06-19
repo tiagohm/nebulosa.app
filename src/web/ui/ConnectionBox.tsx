@@ -1,10 +1,9 @@
 import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, SelectItem, type SharedSelection, Tooltip } from '@heroui/react'
-import { useMolecule } from 'bunshi/react'
+import { ScopeProvider, useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
-import { useDraggableModal } from '@/shared/hooks'
-import { ConnectionMolecule } from '@/shared/molecules'
+import { ConnectionMolecule, ModalScope } from '@/shared/molecules'
 import { stopPropagation } from '@/shared/utils'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
@@ -14,7 +13,6 @@ export interface ConnectionBoxProps {
 }
 
 export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
-	const connectionModal = useDraggableModal({ name: 'connection' })
 	const connection = useMolecule(ConnectionMolecule)
 	const state = useSnapshot(connection.state)
 
@@ -29,7 +27,7 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 		<>
 			<div className='w-full flex flex-row items-center gap-2'>
 				<Tooltip content='New Connection' showArrow>
-					<Button color='success' isDisabled={isDisabled} isIconOnly onPointerUp={() => connection.create(connectionModal)} variant='light'>
+					<Button color='success' isDisabled={isDisabled} isIconOnly onPointerUp={() => connection.create()} variant='light'>
 						<Lucide.Plus />
 					</Button>
 				</Tooltip>
@@ -86,7 +84,7 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 											</Button>
 										</DropdownTrigger>
 										<DropdownMenu aria-label='Static Actions' disabledKeys={state.connections.length === 1 ? ['delete'] : []}>
-											<DropdownItem key='edit' onPointerUp={() => connection.edit(item, connectionModal)} startContent={<Lucide.Pencil size={12} />}>
+											<DropdownItem key='edit' onPointerUp={() => connection.edit(item)} startContent={<Lucide.Pencil size={12} />}>
 												Edit
 											</DropdownItem>
 											<DropdownItem key='duplicate' onPointerUp={() => connection.duplicate(item)} startContent={<Lucide.Copy size={12} />}>
@@ -104,7 +102,11 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 				</Select>
 				<ConnectButton isConnected={!!state.connected} isDisabled={isDisabled} isLoading={state.loading} onPointerUp={() => connection.connect()} />
 			</div>
-			<ConnectionEdit draggable={connectionModal} />
+			{state.showModal && (
+				<ScopeProvider scope={ModalScope} value={{ name: 'connection', isAlwaysOnTop: true }}>
+					<ConnectionEdit />
+				</ScopeProvider>
+			)}
 		</>
 	)
 }

@@ -3,32 +3,31 @@ import { useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
-import type { UseDraggableModalResult } from '@/shared/hooks'
+import { useModal } from '@/shared/hooks'
 import { FilePickerMolecule } from '@/shared/molecules'
 
 export type FilePickerMode = 'file' | 'directory'
 
 export interface FilePickerProps {
-	readonly draggable: UseDraggableModalResult
 	readonly header?: React.ReactNode
 	readonly onChoose?: (entries?: string[]) => void
 }
 
-export function FilePicker({ draggable, header, onChoose }: FilePickerProps) {
+export function FilePicker({ header, onChoose }: FilePickerProps) {
+	const modal = useModal()
 	const filePicker = useMolecule(FilePickerMolecule)
 	const { mode, filtered, selected, directoryTree, filter, createDirectory, directoryName } = useSnapshot(filePicker.state)
 
 	function handleChoose() {
 		onChoose?.(selected.length === 0 ? undefined : (selected as string[]))
-		draggable.close()
 	}
 
 	return (
-		<Modal backdrop='transparent' classNames={{ base: 'max-w-[480px]', wrapper: 'pointer-events-none' }} isDismissable={false} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} onPointerUp={draggable.onPointerUp} ref={draggable.targetRef} size='sm'>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[480px]', wrapper: 'pointer-events-none' }} onOpenChange={(value) => !value && onChoose?.()}>
 			<ModalContent>
 				{() => (
 					<>
-						<ModalHeader {...draggable.moveProps} className='flex flex-row items-center'>
+						<ModalHeader {...modal.moveProps} className='flex flex-row items-center'>
 							{header ?? (mode === 'directory' ? 'Open Directory' : 'Open File')}
 						</ModalHeader>
 						<ModalBody>
@@ -102,7 +101,7 @@ export function FilePicker({ draggable, header, onChoose }: FilePickerProps) {
 								</Listbox>
 							</div>
 						</ModalBody>
-						<ModalFooter>
+						<ModalFooter {...modal.moveProps}>
 							<Badge color='success' content={selected.length} showOutline={false}>
 								<Button color='success' isDisabled={selected.length === 0} onPointerUp={handleChoose} startContent={<Lucide.Check />} variant='flat'>
 									Choose

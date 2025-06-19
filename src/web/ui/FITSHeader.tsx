@@ -1,23 +1,20 @@
-import { Listbox, ListboxItem, Modal, ModalBody, ModalContent, ModalHeader } from '@heroui/react'
+import { Listbox, ListboxItem, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { useSnapshot } from 'valtio'
-import type { UseDraggableModalResult } from '@/shared/hooks'
+import { useModal } from '@/shared/hooks'
 import { ImageViewerMolecule } from '@/shared/molecules'
 
-export interface FITSHeaderProps {
-	readonly draggable: UseDraggableModalResult
-}
-
-export function FITSHeader({ draggable }: FITSHeaderProps) {
+export function FITSHeader() {
+	const modal = useModal()
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { info } = useSnapshot(viewer.state)
 
 	return (
-		<Modal backdrop='transparent' classNames={{ base: 'max-w-[390px] max-h-[90vh]', wrapper: 'pointer-events-none' }} isDismissable={false} isOpen={draggable.isOpen} onOpenChange={draggable.onOpenChange} ref={draggable.targetRef} size='sm'>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[390px] max-h-[90vh]', wrapper: 'pointer-events-none' }} onOpenChange={(value) => (viewer.state.fitsHeader.showModal = value)}>
 			<ModalContent>
 				{() => (
 					<>
-						<ModalHeader {...draggable.moveProps} className='flex flex-row items-center'>
+						<ModalHeader {...modal.moveProps} className='flex flex-row items-center'>
 							FITS Header
 						</ModalHeader>
 						<ModalBody>
@@ -37,6 +34,7 @@ export function FITSHeader({ draggable }: FITSHeaderProps) {
 								</Listbox>
 							</div>
 						</ModalBody>
+						<ModalFooter {...modal.moveProps}></ModalFooter>
 					</>
 				)}
 			</ModalContent>

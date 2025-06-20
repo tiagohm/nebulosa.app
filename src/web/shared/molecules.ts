@@ -67,6 +67,12 @@ export interface ImageState {
 	readonly stretch: {
 		showModal: boolean
 	}
+	readonly adjustment: {
+		showModal: boolean
+	}
+	readonly filter: {
+		showModal: boolean
+	}
 	readonly fitsHeader: {
 		showModal: boolean
 	}
@@ -346,6 +352,12 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			stretch: {
 				showModal: false,
 			},
+			adjustment: {
+				showModal: false,
+			},
+			filter: {
+				showModal: false,
+			},
 			fitsHeader: {
 				showModal: false,
 			},
@@ -410,7 +422,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	}
 
 	// Shows a modal
-	function showModal(key: 'starDetection' | 'scnr' | 'stretch' | 'fitsHeader' | 'plateSolver') {
+	function showModal(key: 'starDetection' | 'scnr' | 'stretch' | 'fitsHeader' | 'plateSolver' | 'adjustment' | 'filter') {
 		state[key].showModal = true
 	}
 
@@ -658,18 +670,21 @@ export const StarDetectionMolecule = molecule((m, s) => {
 })
 
 // Molecule that stretches the image
-export const StretchMolecule = molecule((m, s) => {
+export const ImageStretchMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
 
+	// Updates the stretch transformation for a specific key
 	function update<K extends keyof ImageTransformation['stretch']>(key: K, value: ImageTransformation['stretch'][K]) {
 		viewer.state.transformation.stretch[key] = value
 	}
 
+	// Apply the auto-stretch transformation to the image
 	function auto() {
 		return apply(true)
 	}
 
+	// Resets the stretch transformation to default values
 	function reset() {
 		viewer.state.transformation.stretch.midtone = 32768
 		viewer.state.transformation.stretch.shadow = 0
@@ -677,6 +692,7 @@ export const StretchMolecule = molecule((m, s) => {
 		return apply()
 	}
 
+	// Applies the stretch transformation to the image
 	function apply(auto: boolean = false) {
 		viewer.state.transformation.stretch.auto = auto
 		return viewer.load(true)
@@ -686,19 +702,74 @@ export const StretchMolecule = molecule((m, s) => {
 })
 
 // Molecule that apply SCNR (Subtractive Color Noise Reduction) to the image
-export const ScnrMolecule = molecule((m, s) => {
+export const ImageScnrMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
 
+	// Updates the SCNR transformation for a specific key
 	function update<K extends keyof ImageTransformation['scnr']>(key: K, value: ImageTransformation['scnr'][K]) {
 		viewer.state.transformation.scnr[key] = value
 	}
 
+	// Applies the SCNR transformation to the image
 	function apply() {
 		return viewer.load(true)
 	}
 
 	return { state: viewer.state.transformation.scnr, scope, viewer, update, apply }
+})
+
+// Molecule that applies the adjustment transformation to the image
+export const ImageAdjustmentMolecule = molecule((m, s) => {
+	const scope = s(ImageViewerScope)
+	const viewer = m(ImageViewerMolecule)
+
+	// Updates the adjustment transformation for a specific key
+	function update<K extends keyof ImageTransformation['adjustment']>(key: K, value: ImageTransformation['adjustment'][K]) {
+		viewer.state.transformation.adjustment[key] = value
+	}
+
+	// Resets the adjustment transformation to default values
+	function reset() {
+		viewer.state.transformation.adjustment.brightness = 1
+		viewer.state.transformation.adjustment.gamma = 1
+		viewer.state.transformation.adjustment.saturation = 1
+		viewer.state.transformation.adjustment.normalize = false
+		return apply()
+	}
+
+	// Applies the adjustment transformation to the image
+	function apply() {
+		return viewer.load(true)
+	}
+
+	return { state: viewer.state.transformation.adjustment, scope, viewer, update, reset, apply }
+})
+
+// Molecule that applies the filter transformation to the image
+export const ImageFilterMolecule = molecule((m, s) => {
+	const scope = s(ImageViewerScope)
+	const viewer = m(ImageViewerMolecule)
+
+	// Updates the filter transformation for a specific key
+	function update<K extends keyof ImageTransformation['filter']>(key: K, value: ImageTransformation['filter'][K]) {
+		viewer.state.transformation.filter[key] = value
+	}
+
+	// Resets the filter transformation to default values
+	function reset() {
+		viewer.state.transformation.filter.sharpen = false
+		viewer.state.transformation.filter.blur = false
+		viewer.state.transformation.filter.median = false
+		return apply()
+	}
+
+	// Applies the filter transformation to the image
+	function apply() {
+		return viewer.load(true)
+	}
+
+	return { state: viewer.state.transformation.filter, scope, viewer, update, reset, apply }
 })
 
 // Molecule that manages the home state

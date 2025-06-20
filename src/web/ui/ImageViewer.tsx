@@ -5,17 +5,19 @@ import { ImageViewerMolecule, ImageWorkspaceMolecule, ModalScope } from '@/share
 import { Crosshair } from './Crosshair'
 import { DetectedStars } from './DetectedStars'
 import { FITSHeader } from './FITSHeader'
+import { ImageAdjustment } from './ImageAdjustment'
+import { ImageFilter } from './ImageFilter'
+import { ImageScnr } from './ImageScnr'
+import { ImageStretch } from './ImageStretch'
 import { ImageToolbar } from './ImageToolbar'
 import { PlateSolver } from './PlateSolver'
-import { Scnr } from './Scnr'
 import { StarDetection } from './StarDetection'
-import { Stretch } from './Stretch'
 
 export function ImageViewer() {
 	const ref = useRef<HTMLImageElement>(null)
 	const viewer = useMolecule(ImageViewerMolecule)
 	const workspace = useMolecule(ImageWorkspaceMolecule)
-	const { crosshair, starDetection, stretch, plateSolver, fitsHeader, scnr } = useSnapshot(viewer.state)
+	const { crosshair, starDetection, stretch, plateSolver, fitsHeader, scnr, adjustment, filter } = useSnapshot(viewer.state)
 	const { image } = viewer.scope
 	const { selected } = useSnapshot(workspace.state)
 
@@ -40,7 +42,7 @@ export function ImageViewer() {
 			</div>
 			{stretch.showModal && (
 				<ScopeProvider scope={ModalScope} value={{ name: `stretch-${image.key}` }}>
-					<Stretch />
+					<ImageStretch />
 				</ScopeProvider>
 			)}
 			{plateSolver.showModal && (
@@ -50,7 +52,17 @@ export function ImageViewer() {
 			)}
 			{scnr.showModal && (
 				<ScopeProvider scope={ModalScope} value={{ name: `scnr-${image.key}` }}>
-					<Scnr />
+					<ImageScnr />
+				</ScopeProvider>
+			)}
+			{adjustment.showModal && (
+				<ScopeProvider scope={ModalScope} value={{ name: `adjustment-${image.key}` }}>
+					<ImageAdjustment />
+				</ScopeProvider>
+			)}
+			{filter.showModal && (
+				<ScopeProvider scope={ModalScope} value={{ name: `filter-${image.key}` }}>
+					<ImageFilter />
 				</ScopeProvider>
 			)}
 			{starDetection.showModal && (

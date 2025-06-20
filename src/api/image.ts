@@ -87,7 +87,7 @@ export class ImageEndpoint {
 			image = invert(image)
 		}
 
-		const { adjustment } = transformation
+		const { adjustment, filter } = transformation
 
 		const options: WriteImageToFormatOptions = {
 			format: format === 'jpeg' ? { quality: 70, chromaSubsampling: '4:4:4' } : format === 'png' ? { effort: 1 } : undefined,
@@ -95,6 +95,9 @@ export class ImageEndpoint {
 			normalize: adjustment.enabled ? adjustment.normalize : undefined,
 			gamma: adjustment.enabled ? adjustment.gamma : undefined,
 			saturation: adjustment.enabled ? adjustment.saturation : undefined,
+			sharpen: filter.enabled && filter.sharpen,
+			blur: filter.enabled && filter.blur,
+			median: filter.enabled && filter.median,
 		}
 
 		return writeImageToFormat(image, path, format as never, options) // TODO: Handle FITS and XISF

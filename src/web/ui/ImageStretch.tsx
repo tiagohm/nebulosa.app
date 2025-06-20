@@ -4,10 +4,10 @@ import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
 import { useModal } from '@/shared/hooks'
-import { StretchMolecule } from '@/shared/molecules'
+import { ImageStretchMolecule } from '@/shared/molecules'
 
-export function Stretch() {
-	const stretch = useMolecule(StretchMolecule)
+export function ImageStretch() {
+	const stretch = useMolecule(ImageStretchMolecule)
 	const { auto, shadow, midtone, highlight, meanBackground } = useSnapshot(stretch.state)
 	const { info } = useSnapshot(stretch.viewer.state)
 	const modal = useModal(() => (stretch.viewer.state.stretch.showModal = false))

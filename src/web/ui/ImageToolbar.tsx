@@ -38,13 +38,6 @@ export function ImageToolbar(props: ImageToolbarProps) {
 							<Lucide.WandSparkles />
 						</ToggleButton>
 					</Tooltip>
-					{!info.mono && (
-						<Tooltip content='SCNR' placement='top'>
-							<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('scnr')} variant='flat'>
-								<Lucide.Blend />
-							</Button>
-						</Tooltip>
-					)}
 					{info.metadata.bayer && info.metadata.channels === 1 && (
 						<Tooltip content='Debayer' placement='top'>
 							<ToggleButton color='primary' isSelected={transformation.debayer} onPointerUp={() => viewer.toggleDebayer()}>
@@ -65,9 +58,21 @@ export function ImageToolbar(props: ImageToolbarProps) {
 						</PopoverTrigger>
 						<PopoverContent>
 							<div className='flex flex-row items-center justify-center gap-2 p-2'>
+								{!info.mono && (
+									<Tooltip content='SCNR' placement='top'>
+										<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('scnr')} variant='flat'>
+											<Lucide.Blend />
+										</Button>
+									</Tooltip>
+								)}
 								<Tooltip content='Adjustment' placement='top'>
-									<Button color='secondary' isIconOnly variant='flat'>
+									<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('adjustment')} variant='flat'>
 										<Lucide.Wand />
+									</Button>
+								</Tooltip>
+								<Tooltip content='Filter' placement='top'>
+									<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('filter')} variant='flat'>
+										<Tabler.IconFilters />
 									</Button>
 								</Tooltip>
 								<Tooltip content='Horizontal mirror' placement='top'>

@@ -130,6 +130,13 @@ export interface ImageAdjustment {
 	saturation: number
 }
 
+export interface ImageFilter {
+	enabled: boolean
+	blur: boolean
+	median: boolean
+	sharpen: boolean
+}
+
 export interface ImageTransformation {
 	calibrationGroup?: string
 	debayer: boolean
@@ -140,6 +147,7 @@ export interface ImageTransformation {
 	scnr: ImageScnr
 	useJPEG: boolean
 	adjustment: ImageAdjustment
+	filter: ImageFilter
 }
 
 export interface OpenImage {
@@ -434,6 +442,13 @@ export const DEFAULT_IMAGE_ADJUSTMENT: ImageAdjustment = {
 	saturation: 1,
 }
 
+export const DEFAULT_IMAGE_FILTER: ImageFilter = {
+	enabled: false,
+	blur: false,
+	median: false,
+	sharpen: false,
+}
+
 export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	debayer: true,
 	stretch: DEFAULT_IMAGE_STRETCH,
@@ -443,6 +458,7 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	scnr: DEFAULT_IMAGE_SCNR,
 	useJPEG: true,
 	adjustment: DEFAULT_IMAGE_ADJUSTMENT,
+	filter: DEFAULT_IMAGE_FILTER,
 }
 
 export function isCamera(device: Device): device is Camera {

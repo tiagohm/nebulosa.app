@@ -292,7 +292,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 
 	const workspace = m(ImageWorkspaceMolecule)
-	const { key, index, path } = scope.image
+	const { key, path } = scope.image
 
 	const transformation = simpleLocalStorage.get('image.transformation', () => structuredClone(DEFAULT_IMAGE_TRANSFORMATION))
 	const starDetectionRequest = simpleLocalStorage.get('image.starDetection', () => structuredClone(DEFAULT_STAR_DETECTION))
@@ -359,6 +359,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			},
 		})
 
+	// Save the state in the cache
 	imageCache.set(key, { url: '', state })
 
 	let loading = false
@@ -420,9 +421,9 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 	// Loads the current image
 	async function load(force: boolean = false, image?: HTMLImageElement) {
-		console.info('loading image', key, loading)
-
 		if (loading) return
+
+		console.info('loading image', key)
 
 		if (image) currentImage = image
 
@@ -450,7 +451,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		try {
 			loading = true
 
-			console.info('opening image', key, index, path)
+			console.info('opening image', key)
 
 			// Load the image
 			const { blob, info } = await Api.Image.open({ path: scope.image.path, transformation: state.transformation })
@@ -467,8 +468,6 @@ export const ImageViewerMolecule = molecule((m, s) => {
 				URL.revokeObjectURL(cached.url)
 
 				cached.url = url
-				cached.state.info = info
-				updateTransformationFromInfo(info, cached.state)
 			} else {
 				imageCache.set(key, { url, state })
 			}
@@ -490,12 +489,12 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		}
 	}
 
-	function updateTransformationFromInfo(info: ImageInfo, s: ImageState = state) {
+	function updateTransformationFromInfo(info: ImageInfo) {
 		// Update stretch transformation
-		s.transformation.stretch.auto = info.transformation.stretch.auto
-		s.transformation.stretch.shadow = info.transformation.stretch.shadow
-		s.transformation.stretch.highlight = info.transformation.stretch.highlight
-		s.transformation.stretch.midtone = info.transformation.stretch.midtone
+		state.transformation.stretch.auto = info.transformation.stretch.auto
+		state.transformation.stretch.shadow = info.transformation.stretch.shadow
+		state.transformation.stretch.highlight = info.transformation.stretch.highlight
+		state.transformation.stretch.midtone = info.transformation.stretch.midtone
 	}
 
 	// Selects the image and brings it to the front
@@ -565,6 +564,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	// Detaches the image from the workspace
 	// It destroys the PanZoom instance and removes the image from cache
 	function detach() {
+		if (loading) return
+
 		const cached = imageCache.get(key)
 
 		if (cached) {
@@ -573,7 +574,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			imageCache.delete(key)
 		}
 
-		if (!loading) adjustZIndexAfterBeRemoved()
+		adjustZIndexAfterBeRemoved()
 
 		currentImage = undefined
 		workspace.state.selected = undefined

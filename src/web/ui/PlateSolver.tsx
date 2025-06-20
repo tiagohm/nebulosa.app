@@ -1,11 +1,12 @@
 import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { useModal } from '@/shared/hooks'
 import { ImageViewerMolecule } from '@/shared/molecules'
 
-export function PlateSolver() {
+export const PlateSolver = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { plateSolver, info } = useSnapshot(viewer.state)
 	const modal = useModal(() => (viewer.state.plateSolver.showModal = false))
@@ -32,4 +33,4 @@ export function PlateSolver() {
 			</ModalContent>
 		</Modal>
 	)
-}
+})

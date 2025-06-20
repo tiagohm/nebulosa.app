@@ -1,5 +1,4 @@
 import { addToast } from '@heroui/react'
-import type { MoveMoveEvent } from '@react-types/shared'
 import { createScope, molecule, onMount } from 'bunshi'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import type { DirectoryEntry, FileEntry, ImageInfo, ImageTransformation, StarDetection } from 'src/api/types'
@@ -783,8 +782,6 @@ export const HomeMolecule = molecule(() => {
 	return { state }
 })
 
-const modalTransformMap = new Map<string, ModalState['transform']>()
-
 export const ModalScope = createScope<ModalScopeValue>({ name: '' })
 
 // Molecule that manages modals
@@ -793,19 +790,6 @@ export const ModalScope = createScope<ModalScopeValue>({ name: '' })
 // It also ensures that modals are always on top of other elements
 export const ModalMolecule = molecule((m, s) => {
 	const scope = s(ModalScope)
-
-	const transform = modalTransformMap.get(scope.name) ?? { offsetX: 0, offsetY: 0 }
-
-	const state = proxy<ModalState>({
-		boundary: {
-			minLeft: 0,
-			minTop: 0,
-			maxLeft: 0,
-			maxTop: 0,
-		},
-		transform,
-	})
-
 	const zIndex = m(ZIndexMolecule)
 
 	// Increment the z-index for the modal
@@ -813,62 +797,23 @@ export const ModalMolecule = molecule((m, s) => {
 
 	let targetRef: HTMLElement | undefined
 
-	// https://github.com/heroui-inc/heroui/blob/canary/packages/hooks/use-draggable/src/index.ts
-
-	// Handles the start of a move event, calculating boundaries based
-	// on the current position and size of the target element.
+	// Sets the z-index of the modal to ensure it is on top when the move starts
 	function onMoveStart() {
 		if (!targetRef) return
 
 		zIndex.increment(scope.name, true)
-
-		const { offsetX, offsetY } = state.transform
-		const { left, top, width, height } = targetRef.getBoundingClientRect()
-		const { clientWidth, clientHeight } = document.documentElement
-
-		// Calculate the boundaries for the modal based on its position and size
-		const borderWidth = targetRef.clientWidth - 64
-		const borderHeight = targetRef.clientHeight - 64
-		state.boundary.minLeft = -left + offsetX - borderWidth
-		state.boundary.minTop = -top + offsetY - borderHeight
-		state.boundary.maxLeft = clientWidth - left - width + offsetX + borderWidth
-		state.boundary.maxTop = clientHeight - top - height + offsetY + borderHeight
-	}
-
-	// Handles the move event, updating the position of the target element
-	// based on the delta values from the move event.
-	// It also ensures that the element does not overflow its boundaries.
-	function onMove(e: MoveMoveEvent) {
-		if (!targetRef) return
-
-		let offsetX = state.transform.offsetX + e.deltaX
-		let offsetY = state.transform.offsetY + e.deltaY
-
-		if (!scope.canOverflow) {
-			const { minLeft, minTop, maxLeft, maxTop } = state.boundary
-			offsetX = Math.min(Math.max(offsetX, minLeft), maxLeft)
-			offsetY = Math.min(Math.max(offsetY, minTop), maxTop)
-		}
-
-		state.transform.offsetX = offsetX
-		state.transform.offsetY = offsetY
-		modalTransformMap.set(scope.name, { offsetX, offsetY })
-		targetRef.style.transform = `translate(${offsetX}px, ${offsetY}px)`
 	}
 
 	// Handles the pointer up event, which increments the z-index of the modal
 	// to ensure it is on top of other elements.
-	// This is useful for ensuring that the modal remains interactive after being dragged.
 	function onPointerUp() {
 		zIndex.increment(scope.name, true)
 	}
 
-	// Sets the reference to the target element and applies the initial transform.
-	// It also sets the z-index of the parent element to ensure it is on top.
+	// Sets the reference to the target element and sets the z-index of the parent element to ensure it is on top.
 	function ref(node: HTMLElement | null) {
 		if (node && node !== targetRef) {
 			targetRef = node
-			targetRef.style.transform = `translate(${state.transform.offsetX}px, ${state.transform.offsetY}px)`
 
 			if (node.parentElement) {
 				node.parentElement.style.zIndex = `var(--z-index-${scope.name}) !important`
@@ -876,6 +821,10 @@ export const ModalMolecule = molecule((m, s) => {
 		}
 	}
 
+	// Handles the open change event of the modal
+	// If the modal is closed, it removes the z-index from the modal
+	// This ensures that the modal will be on top of other elements when it is opened again
+	// by requesting a new z-index.
 	function onOpenChange(isOpen: boolean) {
 		if (!isOpen) zIndex.remove(scope.name)
 	}
@@ -890,7 +839,7 @@ export const ModalMolecule = molecule((m, s) => {
 		isOpen: true,
 	} as const
 
-	return { state, scope, props, onMoveStart, onMove }
+	return { scope, props, onMoveStart, targetRef }
 })
 
 export const FilePickerScope = createScope<FilePickerScopeValue>({})

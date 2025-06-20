@@ -2,11 +2,12 @@ import { Button, Checkbox, Modal, ModalBody, ModalContent, ModalFooter, ModalHea
 import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { useModal } from '@/shared/hooks'
 import { ImageAdjustmentMolecule } from '@/shared/molecules'
 
-export function ImageAdjustment() {
+export const ImageAdjustment = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
 	const { enabled, brightness, gamma, normalize, saturation } = useSnapshot(adjustment.state)
 	const { info } = useSnapshot(adjustment.viewer.state)
@@ -47,4 +48,4 @@ export function ImageAdjustment() {
 			</ModalContent>
 		</Modal>
 	)
-}
+})

@@ -1,17 +1,18 @@
 import { Button, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { useModal } from '@/shared/hooks'
 import { ConnectionMolecule } from '@/shared/molecules'
 
-export function ConnectionEdit() {
+export const ConnectionEdit = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
 	const state = useSnapshot(connection.state)
 	const modal = useModal(() => (connection.state.showModal = false))
 
 	return (
-		<Modal {...modal.props} classNames={{ wrapper: 'pointer-events-none' }}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[300px]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>
@@ -35,4 +36,4 @@ export function ConnectionEdit() {
 			</ModalContent>
 		</Modal>
 	)
-}
+})

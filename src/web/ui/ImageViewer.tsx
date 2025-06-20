@@ -1,5 +1,5 @@
 import { ScopeProvider, useMolecule } from 'bunshi/react'
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerMolecule, ImageWorkspaceMolecule, ModalScope } from '@/shared/molecules'
 import { Crosshair } from './Crosshair'
@@ -13,12 +13,12 @@ import { ImageToolbar } from './ImageToolbar'
 import { PlateSolver } from './PlateSolver'
 import { StarDetection } from './StarDetection'
 
-export function ImageViewer() {
+export const ImageViewer = memo(() => {
 	const ref = useRef<HTMLImageElement>(null)
 	const viewer = useMolecule(ImageViewerMolecule)
+	const { image } = viewer.scope
 	const workspace = useMolecule(ImageWorkspaceMolecule)
 	const { crosshair, starDetection, stretch, plateSolver, fitsHeader, scnr, adjustment, filter } = useSnapshot(viewer.state)
-	const { image } = viewer.scope
 	const { selected } = useSnapshot(workspace.state)
 
 	useEffect(() => {
@@ -34,11 +34,11 @@ export function ImageViewer() {
 
 	return (
 		<>
-			{selected?.key === image.key && <ImageToolbar className='w-full fixed bottom-0 mb-1 p-1 z-[99999]' />}
+			{selected?.key === image.key && <ImageToolbar />}
 			<div className='inline-block absolute wrapper' style={{ zIndex: image.index }}>
 				<img className='image select-none shadow-md max-w-none border-dashed border-white' id={image.key} onLoad={(e) => viewer.attach(e.currentTarget)} onPointerUp={(e) => viewer.select(e.currentTarget)} ref={ref} />
 				{crosshair && <Crosshair />}
-				{starDetection.show && <DetectedStars rotation={0} stars={starDetection.stars} />}
+				{starDetection.show && <DetectedStars />}
 			</div>
 			{stretch.showModal && (
 				<ScopeProvider scope={ModalScope} value={{ name: `stretch-${image.key}` }}>
@@ -77,4 +77,4 @@ export function ImageViewer() {
 			)}
 		</>
 	)
-}
+})

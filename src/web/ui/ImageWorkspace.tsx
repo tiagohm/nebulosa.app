@@ -1,9 +1,10 @@
 import { ScopeProvider, useMolecule } from 'bunshi/react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerScope, ImageWorkspaceMolecule } from '@/shared/molecules'
 import { ImageViewer } from './ImageViewer'
 
-export function ImageWorkspace() {
+export const ImageWorkspace = memo(() => {
 	const workspace = useMolecule(ImageWorkspaceMolecule)
 	const { images } = useSnapshot(workspace.state)
 
@@ -16,4 +17,4 @@ export function ImageWorkspace() {
 			))}
 		</div>
 	)
-}
+})

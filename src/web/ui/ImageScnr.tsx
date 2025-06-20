@@ -1,11 +1,12 @@
 import { Button, ButtonGroup, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { useModal } from '@/shared/hooks'
 import { ImageScnrMolecule } from '@/shared/molecules'
 
-export function ImageScnr() {
+export const ImageScnr = memo(() => {
 	const scnr = useMolecule(ImageScnrMolecule)
 	const { method, amount, channel } = useSnapshot(scnr.state)
 	const { info } = useSnapshot(scnr.viewer.state)
@@ -56,4 +57,4 @@ export function ImageScnr() {
 			</ModalContent>
 		</Modal>
 	)
-}
+})

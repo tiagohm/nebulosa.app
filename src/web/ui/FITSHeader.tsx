@@ -1,10 +1,11 @@
 import { Listbox, ListboxItem, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { useModal } from '@/shared/hooks'
 import { ImageViewerMolecule } from '@/shared/molecules'
 
-export function FITSHeader() {
+export const FITSHeader = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { info } = useSnapshot(viewer.state)
 	const modal = useModal(() => (viewer.state.fitsHeader.showModal = false))
@@ -40,4 +41,4 @@ export function FITSHeader() {
 			</ModalContent>
 		</Modal>
 	)
-}
+})

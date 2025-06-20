@@ -2,11 +2,12 @@ import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Numbe
 import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { useModal } from '@/shared/hooks'
 import { ImageStretchMolecule } from '@/shared/molecules'
 
-export function ImageStretch() {
+export const ImageStretch = memo(() => {
 	const stretch = useMolecule(ImageStretchMolecule)
 	const { auto, shadow, midtone, highlight, meanBackground } = useSnapshot(stretch.state)
 	const { info } = useSnapshot(stretch.viewer.state)
@@ -54,4 +55,4 @@ export function ImageStretch() {
 			</ModalContent>
 		</Modal>
 	)
-}
+})

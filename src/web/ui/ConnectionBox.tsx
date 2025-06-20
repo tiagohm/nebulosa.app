@@ -2,6 +2,7 @@ import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Se
 import { ScopeProvider, useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
 import * as Lucide from 'lucide-react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule, ModalScope } from '@/shared/molecules'
 import { stopPropagation } from '@/shared/utils'
@@ -12,7 +13,7 @@ export interface ConnectionBoxProps {
 	readonly isDisabled?: boolean
 }
 
-export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
+export const ConnectionBox = memo(({ isDisabled = false }: ConnectionBoxProps) => {
 	const connection = useMolecule(ConnectionMolecule)
 	const state = useSnapshot(connection.state)
 
@@ -109,4 +110,4 @@ export function ConnectionBox({ isDisabled = false }: ConnectionBoxProps) {
 			)}
 		</>
 	)
-}
+})

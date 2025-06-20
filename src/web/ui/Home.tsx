@@ -1,8 +1,8 @@
 import { Navbar, NavbarBrand, NavbarContent } from '@heroui/react'
 import { ConnectionBox } from './ConnectionBox'
 import { HomeMenu } from './HomeMenu'
-import { ImageWorkspace } from './ImageWorkspace'
 import { ImagePickerButton } from './ImagePickerButton'
+import { ImageWorkspace } from './ImageWorkspace'
 
 export default function Home() {
 	return (

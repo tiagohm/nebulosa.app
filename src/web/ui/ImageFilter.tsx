@@ -2,11 +2,12 @@ import { Button, Checkbox, Modal, ModalBody, ModalContent, ModalFooter, ModalHea
 import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { useModal } from '@/shared/hooks'
 import { ImageFilterMolecule } from '@/shared/molecules'
 
-export function ImageFilter() {
+export const ImageFilter = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
 	const { enabled, blur, median, sharpen } = useSnapshot(filter.state)
 	const { info } = useSnapshot(filter.viewer.state)
@@ -50,4 +51,4 @@ export function ImageFilter() {
 			</ModalContent>
 		</Modal>
 	)
-}
+})

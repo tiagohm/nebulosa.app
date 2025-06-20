@@ -1,13 +1,14 @@
 import { Chip, Modal, ModalBody, ModalContent, ModalHeader } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { memo } from 'react'
 import brazilLogo from '@/assets/brazil.png'
 import nebulosaLogo from '@/assets/nebulosa.ico'
 import { useModal } from '@/shared/hooks'
 import { HomeMolecule } from '@/shared/molecules'
 import packageJson from '../../../package.json'
 
-export function About() {
+export const About = memo(() => {
 	const home = useMolecule(HomeMolecule)
 	const modal = useModal(() => (home.state.about.showModal = false))
 
@@ -67,4 +68,4 @@ export function About() {
 			</ModalContent>
 		</Modal>
 	)
-}
+})

@@ -2,21 +2,20 @@ import { Button, Popover, PopoverContent, PopoverTrigger, Switch, Tooltip } from
 import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerMolecule } from '@/shared/molecules'
 import { ToggleButton } from './ToggleButton'
 
 export type ImageToolbarButtonType = 'stretch' | 'scnr' | 'plate-solver' | 'fits-header' | 'star-detection'
 
-export interface ImageToolbarProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-export function ImageToolbar(props: ImageToolbarProps) {
+export const ImageToolbar = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { transformation, crosshair, info, starDetection } = useSnapshot(viewer.state)
 
 	return (
 		<>
-			<div {...props}>
+			<div className='w-full fixed bottom-0 mb-1 p-1 z-[99999]'>
 				<div className='flex flex-row items-center justify-center gap-2 px-2 py-1.5 mx-auto w-fit rounded-xl bg-black'>
 					<Tooltip content='Save' placement='top'>
 						<Button color='secondary' isIconOnly variant='flat'>
@@ -156,4 +155,4 @@ export function ImageToolbar(props: ImageToolbarProps) {
 			</div>
 		</>
 	)
-}
+})

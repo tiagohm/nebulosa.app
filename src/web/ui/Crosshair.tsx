@@ -1,8 +1,10 @@
+import { memo } from 'react'
+
 export interface CrosshairProps {
 	readonly angle?: number
 }
 
-export function Crosshair({ angle = 0 }: CrosshairProps) {
+export const Crosshair = memo(({ angle = 0 }: CrosshairProps) => {
 	return (
 		<svg className='absolute left-0 top-0 pointer-events-none h-full w-full' stroke='#E53935' strokeWidth={3}>
 			<line x1='0' x2='100%' y1='50%' y2='50%'></line>
@@ -13,4 +15,4 @@ export function Crosshair({ angle = 0 }: CrosshairProps) {
 			<circle cx='50%' cy='50%' fill='transparent' r='30%'></circle>
 		</svg>
 	)
-}
+})

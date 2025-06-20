@@ -1,11 +1,12 @@
 import { Button, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { useModal } from '@/shared/hooks'
 import { StarDetectionMolecule } from '@/shared/molecules'
 
-export function StarDetection() {
+export const StarDetection = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
 	const { loading, stars, request, computed, selected } = useSnapshot(starDetection.state)
 	const { info } = useSnapshot(starDetection.viewer.state)
@@ -56,4 +57,4 @@ export function StarDetection() {
 			</ModalContent>
 		</Modal>
 	)
-}
+})

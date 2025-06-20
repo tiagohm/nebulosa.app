@@ -8,7 +8,7 @@ import type { PlateSolveStart, PlateSolveStop } from './types'
 export class PlateSolverEndpoint {
 	private readonly tasks = new Map<string, AbortController>()
 
-	async start(req: PlateSolveStart): Promise<PlateSolution | undefined> {
+	async start(req: PlateSolveStart): Promise<PlateSolution | { solved: false }> {
 		const ra = parseAngle(req.ra, { isHour: true })
 		const dec = parseAngle(req.dec)
 		const radius = req.blind || !req.radius ? 0 : deg(req.radius)
@@ -65,12 +65,14 @@ export class PlateSolverEndpoint {
 				if (solution?.solved) {
 					return solution
 				}
+			} catch (e) {
+				console.error('Plate solving failed:', e)
 			} finally {
 				this.tasks.delete(req.id)
 			}
 		}
 
-		return undefined
+		return { solved: false }
 	}
 
 	stop(req: PlateSolveStop) {

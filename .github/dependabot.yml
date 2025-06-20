@@ -6,20 +6,6 @@
 version: 2
 
 updates:
-    - package-ecosystem: 'bun'
-      directory: '/'
-      schedule:
-          interval: 'weekly'
-          day: 'friday'
-          time: '17:30'
-          timezone: "America/Sao_Paulo"
-      target-branch: 'main'
-      groups:
-          react:
-              patterns:
-                  - 'react*'
-                  - '@types/react*'
-
     - package-ecosystem: 'github-actions'
       directory: '/'
       schedule:

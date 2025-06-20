@@ -1,6 +1,6 @@
 import Elysia from 'elysia'
 import fs from 'fs/promises'
-import { readFits } from 'nebulosa/src/fits'
+import { declination, readFits, rightAscension } from 'nebulosa/src/fits'
 import { adf, debayer, horizontalFlip, type Image, type ImageFormat, invert, readImageFromFits, scnr, stf, verticalFlip, type WriteImageToFormatOptions, writeImageToFormat } from 'nebulosa/src/image'
 import { fileHandleSource } from 'nebulosa/src/io'
 import os from 'os'
@@ -42,6 +42,8 @@ export class ImageEndpoint {
 							metadata: image.metadata,
 							transformation: req.transformation,
 							headers: image.header,
+							rightAscension: rightAscension(image.header),
+							declination: declination(image.header),
 						}
 
 						return info

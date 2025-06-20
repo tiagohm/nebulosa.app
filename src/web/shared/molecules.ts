@@ -1,8 +1,9 @@
 import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount } from 'bunshi'
+import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
-import type { DirectoryEntry, FileEntry, ImageInfo, ImageTransformation, StarDetection } from 'src/api/types'
-import { DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_STAR_DETECTION } from 'src/api/types'
+import type { DirectoryEntry, FileEntry, ImageInfo, ImageTransformation, PlateSolveStart, StarDetection } from 'src/api/types'
+import { DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION } from 'src/api/types'
 import { proxy, subscribe } from 'valtio'
 import { deepClone, subscribeKey } from 'valtio/utils'
 import type { FilePickerMode } from '@/ui/FilePicker'
@@ -59,6 +60,7 @@ export interface ImageState {
 	readonly plateSolver: {
 		showModal: boolean
 		loading: boolean
+		request: PlateSolveStart
 	}
 	readonly scnr: {
 		showModal: boolean
@@ -301,8 +303,11 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 	const transformation = simpleLocalStorage.get('image.transformation', () => structuredClone(DEFAULT_IMAGE_TRANSFORMATION))
 	const starDetectionRequest = simpleLocalStorage.get('image.starDetection', () => structuredClone(DEFAULT_STAR_DETECTION))
+	const plateSolverRequest = simpleLocalStorage.get('image.plateSolver', () => structuredClone(DEFAULT_PLATE_SOLVE_START))
 
 	starDetectionRequest.path = path
+	plateSolverRequest.id = key
+	plateSolverRequest.path = path
 
 	const state =
 		imageCache.get(key)?.state ??
@@ -344,6 +349,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			plateSolver: {
 				showModal: false,
 				loading: false,
+				request: plateSolverRequest,
 			},
 			scnr: {
 				showModal: false,
@@ -506,6 +512,17 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		state.transformation.stretch.shadow = info.transformation.stretch.shadow
 		state.transformation.stretch.highlight = info.transformation.stretch.highlight
 		state.transformation.stretch.midtone = info.transformation.stretch.midtone
+
+		// Update plate solver request
+		state.plateSolver.request.ra = info.rightAscension ? formatRA(info.rightAscension) : DEFAULT_PLATE_SOLVE_START.ra
+		state.plateSolver.request.dec = info.declination ? formatDEC(info.declination) : DEFAULT_PLATE_SOLVE_START.dec
+		state.plateSolver.request.blind = !info.rightAscension || !info.declination
+
+		// Update plate solver request with FITS header information
+		if (info.headers) {
+			if (info.headers.FOCALLEN) state.plateSolver.request.focalLength = parseInt(info.headers.FOCALLEN as never)
+			if (info.headers.XPIXSZ) state.plateSolver.request.pixelSize = parseFloat(info.headers.XPIXSZ as never)
+		}
 	}
 
 	// Selects the image and brings it to the front
@@ -592,6 +609,43 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	}
 
 	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, select, showModal }
+})
+
+// Molecule that manages the plate solver
+export const PlateSolverMolecule = molecule((m, s) => {
+	const scope = s(ImageViewerScope)
+	const viewer = m(ImageViewerMolecule)
+	const plateSolver = viewer.state.plateSolver
+
+	onMount(() => {
+		const unsubscribe = subscribe(plateSolver.request, () => simpleLocalStorage.set('image.plateSolver', plateSolver.request))
+
+		return () => unsubscribe()
+	})
+
+	// Updates a specific property of the plate solver request
+	function update<K extends keyof PlateSolveStart>(key: K, value: PlateSolveStart[K]) {
+		viewer.state.plateSolver.request[key] = value
+	}
+
+	// Solves the plate using the current request
+	async function start() {
+		try {
+			plateSolver.loading = true
+
+			const solution = await Api.PlateSolver.start(viewer.state.plateSolver.request)
+			console.info(solution, typeof solution)
+		} finally {
+			plateSolver.loading = false
+		}
+	}
+
+	// Stops the plate solving process
+	function stop() {
+		return Api.PlateSolver.stop({ id: scope.image.key })
+	}
+
+	return { state: viewer.state.plateSolver, viewer, scope, update, start, stop }
 })
 
 // Molecule that manages star detection

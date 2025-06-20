@@ -311,6 +311,18 @@ export interface PlateSolveStop {
 	id: string
 }
 
+export const DEFAULT_PLATE_SOLVE_START: PlateSolveStart = {
+	id: '',
+	type: 'ASTAP',
+	executable: '',
+	path: '',
+	focalLength: 0,
+	pixelSize: 0,
+	blind: true,
+	ra: '00 00 00',
+	dec: '+000 00 00',
+}
+
 // Star Detection
 
 export type StarDetectionType = 'ASTAP'

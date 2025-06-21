@@ -100,6 +100,10 @@ export function useDraggable({ name, canOverflow }: UseDraggableProps) {
 	return { onMoveStart, onMove, onMoveEnd, ref }
 }
 
+const preventDefault = (e: Event) => {
+	if (e.cancelable) e.preventDefault()
+}
+
 // A hook for managing a modal with draggable functionality.
 export function useModal(onClose?: () => void) {
 	const modal = useMolecule(ModalMolecule)
@@ -128,7 +132,22 @@ export function useModal(onClose?: () => void) {
 		[modal, onClose],
 	)
 
+	let timer: NodeJS.Timeout | undefined
+
+	const onTouchStart = useCallback(() => {
+		clearTimeout(timer)
+		// This is necessary to prevent the page from scrolling while dragging
+		// the modal on touch devices.
+		document.body.addEventListener('touchmove', preventDefault, { passive: false })
+	}, [])
+
+	const onTouchEnd = useCallback(() => {
+		timer = setTimeout(() => {
+			document.body.removeEventListener('touchmove', preventDefault)
+		}, 250)
+	}, [])
+
 	const moveProps = { ...move.moveProps, style: { cursor: 'move' } }
 
-	return { props: { ...modal.props, ref, onOpenChange }, moveProps }
+	return { props: { ...modal.props, ref, onOpenChange, onTouchStart, onTouchEnd }, moveProps }
 }

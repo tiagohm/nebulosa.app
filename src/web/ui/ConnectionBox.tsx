@@ -5,7 +5,7 @@ import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule, ModalScope } from '@/shared/molecules'
-import { stopPropagation } from '@/shared/utils'
+import { stopPropagation } from '@/shared/util'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
 

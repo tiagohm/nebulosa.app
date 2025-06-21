@@ -1,5 +1,7 @@
 // Adapted from https://github.com/timmywil/panzoom
 
+import { registerPreventDefaultOnTouchMove, unregisterPreventDefaultOnTouchMove } from './util'
+
 export type PanZoomEvent = 'panzoomstart' | 'panzoomchange' | 'panzoompan' | 'panzoomzoom' | 'panzoomreset' | 'panzoomend'
 
 export type PanZoomOriginalEvent = PointerEvent | TouchEvent | MouseEvent
@@ -98,6 +100,7 @@ export class PanZoom {
 	private startClientX?: number
 	private startClientY?: number
 	private bound = false
+	private touchmoveTimer?: NodeJS.Timeout
 
 	constructor(
 		private readonly element: HTMLElement,
@@ -137,6 +140,7 @@ export class PanZoom {
 		this.element.addEventListener('pointerdown', this.handleDown)
 		document.addEventListener('pointermove', this.handleMove, { passive: true })
 		document.addEventListener('pointerup', this.handleUp, { passive: true })
+		document.addEventListener('pointercancel', this.handleUp, { passive: true })
 	}
 
 	unbind() {
@@ -149,6 +153,7 @@ export class PanZoom {
 		this.element.removeEventListener('pointerdown', this.handleDown)
 		document.removeEventListener('pointermove', this.handleMove)
 		document.removeEventListener('pointerup', this.handleUp)
+		document.removeEventListener('pointercancel', this.handleUp)
 	}
 
 	zoom(scale: number, zoomOptions?: Partial<PanZoomZoomOptions>, originalEvent?: PanZoomOriginalEvent) {
@@ -387,11 +392,14 @@ export class PanZoom {
 		return result
 	}
 
-	private readonly handleDown = (event: MouseEvent) => {
+	private readonly handleDown = (event: PointerEvent) => {
 		// Don't handle this event if the target is excluded
 		if (event.button !== 0 || isExcluded(event.target as Element, this.options)) {
 			return
 		}
+
+		clearTimeout(this.touchmoveTimer)
+		registerPreventDefaultOnTouchMove()
 
 		this.isPanning = true
 		this.options.handleStartEvent(event)
@@ -404,7 +412,7 @@ export class PanZoom {
 		this.startClientY = event.clientY
 	}
 
-	private readonly handleMove = (event: MouseEvent) => {
+	private readonly handleMove = (event: PointerEvent) => {
 		if (!this.isPanning || this.origX === undefined || this.origY === undefined || this.startClientX === undefined || this.startClientY === undefined) {
 			return
 		}
@@ -412,12 +420,16 @@ export class PanZoom {
 		this.pan(this.origX + (event.clientX - this.startClientX) / this.scale, this.origY + (event.clientY - this.startClientY) / this.scale, undefined, event)
 	}
 
-	private readonly handleUp = (event: MouseEvent) => {
+	private readonly handleUp = (event: PointerEvent) => {
 		this.triggerEvent('panzoomend', { transformation: this.transformation, originalEvent: event }, this.options)
 
 		if (!this.isPanning) {
 			return
 		}
+
+		this.touchmoveTimer = setTimeout(() => {
+			unregisterPreventDefaultOnTouchMove()
+		}, 1000)
 
 		this.isPanning = false
 		this.origX = this.origY = this.startClientX = this.startClientY = undefined

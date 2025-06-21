@@ -2,6 +2,7 @@ import { type MoveMoveEvent, useMove } from '@react-aria/interactions'
 import { useMolecule } from 'bunshi/react'
 import { useCallback } from 'react'
 import { ModalMolecule } from './molecules'
+import { registerPreventDefaultOnTouchMove, unregisterPreventDefaultOnTouchMove } from './util'
 
 export interface UseDraggableProps {
 	name: string
@@ -100,10 +101,6 @@ export function useDraggable({ name, canOverflow }: UseDraggableProps) {
 	return { onMoveStart, onMove, onMoveEnd, ref }
 }
 
-const preventDefault = (e: Event) => {
-	if (e.cancelable) e.preventDefault()
-}
-
 // A hook for managing a modal with draggable functionality.
 export function useModal(onClose?: () => void) {
 	const modal = useMolecule(ModalMolecule)
@@ -132,22 +129,19 @@ export function useModal(onClose?: () => void) {
 		[modal, onClose],
 	)
 
+	// To prevent the page from scrolling while dragging the modal on touch devices,
 	let timer: NodeJS.Timeout | undefined
 
 	const onTouchStart = useCallback(() => {
 		clearTimeout(timer)
-		// This is necessary to prevent the page from scrolling while dragging
-		// the modal on touch devices.
-		document.body.addEventListener('touchmove', preventDefault, { passive: false })
+		registerPreventDefaultOnTouchMove()
 	}, [])
 
 	const onTouchEnd = useCallback(() => {
-		timer = setTimeout(() => {
-			document.body.removeEventListener('touchmove', preventDefault)
-		}, 250)
+		timer = setTimeout(() => unregisterPreventDefaultOnTouchMove(), 1000)
 	}, [])
 
-	const moveProps = { ...move.moveProps, style: { cursor: 'move' } }
+	const moveProps = { ...move.moveProps, onTouchStart, onTouchEnd, onTouchCancel: onTouchEnd, style: { cursor: 'move' } }
 
-	return { props: { ...modal.props, ref, onOpenChange, onTouchStart, onTouchEnd }, moveProps }
+	return { props: { ...modal.props, ref, onOpenChange }, moveProps }
 }

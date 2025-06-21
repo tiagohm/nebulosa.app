@@ -112,7 +112,7 @@ export const ImageToolbar = memo(() => {
 								</Tooltip>
 								<div className='flex flex-col gap-2 justify-center'>
 									<Tooltip content='Star Detection' placement='top'>
-										<Button color='secondary' isIconOnly onPress={() => viewer.showModal('starDetection')} variant='flat'>
+										<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('starDetection')} variant='flat'>
 											<Lucide.Stars />
 										</Button>
 									</Tooltip>
@@ -137,13 +137,18 @@ export const ImageToolbar = memo(() => {
 						</Button>
 					</Tooltip>
 					<Tooltip content='FITS Header' placement='top'>
-						<Button color='secondary' isIconOnly onPress={() => viewer.showModal('fitsHeader')} variant='flat'>
+						<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('fitsHeader')} variant='flat'>
 							<Tabler.IconAlignJustified />
 						</Button>
 					</Tooltip>
 					<Tooltip content='Mouse Coordinate' placement='top'>
 						<Button color='secondary' isIconOnly variant='flat'>
 							<Lucide.MousePointerClick />
+						</Button>
+					</Tooltip>
+					<Tooltip content='Settings' placement='top'>
+						<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('settings')} variant='flat'>
+							<Lucide.Settings />
 						</Button>
 					</Tooltip>
 					<Tooltip content='Close' placement='top'>

@@ -88,6 +88,10 @@ export interface ImageState {
 		height: number
 		rotation: number
 	}
+	readonly settings: {
+		showModal: boolean
+		pixelated: boolean
+	}
 }
 
 export interface HomeState {
@@ -140,6 +144,11 @@ export interface CachedImage {
 	panZoom?: PanZoom
 	state: ImageState
 	destroy?: () => void
+}
+
+export const DEFAULT_IMAGE_SETTINGS: ImageState['settings'] = {
+	showModal: false,
+	pixelated: true,
 }
 
 // Compares two connections based on their connectedAt timestamp
@@ -307,10 +316,12 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	const transformation = simpleLocalStorage.get('image.transformation', () => structuredClone(DEFAULT_IMAGE_TRANSFORMATION))
 	const starDetectionRequest = simpleLocalStorage.get('image.starDetection', () => structuredClone(DEFAULT_STAR_DETECTION))
 	const plateSolverRequest = simpleLocalStorage.get('image.plateSolver', () => structuredClone(DEFAULT_PLATE_SOLVE_START))
+	const settings = simpleLocalStorage.get<ImageState['settings']>('image.settings', () => structuredClone(DEFAULT_IMAGE_SETTINGS))
 
 	starDetectionRequest.path = path
 	plateSolverRequest.id = key
 	plateSolverRequest.path = path
+	settings.showModal = false
 
 	const state =
 		imageCache.get(key)?.state ??
@@ -377,13 +388,13 @@ export const ImageViewerMolecule = molecule((m, s) => {
 				height: 0,
 				rotation: 0,
 			},
+			settings,
 		})
 
 	// Save the state in the cache
 	imageCache.set(key, { url: '', state })
 
 	let loading = false
-	let currentImage: HTMLImageElement | undefined
 
 	onMount(() => {
 		const unsubscribes: VoidFunction[] = []
@@ -393,6 +404,10 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 		return () => unsubscribes.forEach((e) => e())
 	})
+
+	function currentImage() {
+		return document.getElementById(key) as HTMLImageElement | undefined
+	}
 
 	// Toggles the auto-stretch transformation
 	function toggleAutoStretch() {
@@ -430,7 +445,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	}
 
 	// Shows a modal
-	function showModal(key: 'starDetection' | 'scnr' | 'stretch' | 'fitsHeader' | 'plateSolver' | 'adjustment' | 'filter') {
+	function showModal(key: 'starDetection' | 'scnr' | 'stretch' | 'fitsHeader' | 'plateSolver' | 'adjustment' | 'filter' | 'settings') {
 		state[key].showModal = true
 	}
 
@@ -445,8 +460,6 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 		console.info('loading image', key)
 
-		if (image) currentImage = image
-
 		const cached = imageCache.get(key)
 
 		// Not loaded yet or forced to load
@@ -454,11 +467,11 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			await open(image)
 		} else {
 			// Load the image from cache
-			image ??= currentImage ?? (document.getElementById(key) as HTMLImageElement | undefined)
+			image ??= currentImage()
 
 			if (image) {
-				currentImage = image
 				image.src = cached.url
+				apply()
 				console.info('image loaded from cache', key, cached.url)
 			} else {
 				console.warn('image not mounted yet', key)
@@ -492,10 +505,11 @@ export const ImageViewerMolecule = molecule((m, s) => {
 				imageCache.set(key, { url, state })
 			}
 
-			image ??= currentImage ?? (document.getElementById(key) as HTMLImageElement | undefined)
+			image ??= currentImage()
 
 			if (image) {
 				image.src = url
+				apply()
 				console.info('image loaded', key, url, info)
 			} else {
 				console.warn('image not mounted yet', key)
@@ -533,15 +547,24 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		state.plateSolver.solution = info.solution
 	}
 
+	// Applies the current settings to the image
+	function apply() {
+		const image = currentImage()
+		if (!image) return
+		image.classList.toggle('pixelated', state.settings.pixelated)
+	}
+
 	// Selects the image and brings it to the front
-	function select(e: HTMLImageElement) {
+	function select() {
+		const image = currentImage()
+		if (!image) return
 		workspace.state.selected = scope.image
-		bringToFront(e)
+		bringToFront(image)
 	}
 
 	// Attaches the PanZoom and other things to image
-	function attach(e?: HTMLImageElement) {
-		const image = e ?? (document.getElementById(key) as HTMLImageElement | null)
+	function attach() {
+		const image = currentImage()
 
 		if (!image) {
 			console.warn('image not mounted yet', key)
@@ -612,11 +635,10 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 		adjustZIndexAfterBeRemoved()
 
-		currentImage = undefined
 		workspace.state.selected = undefined
 	}
 
-	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, select, showModal }
+	return { state, scope, currentImage, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, select, showModal, apply }
 })
 
 // Molecule that manages the plate solver
@@ -839,6 +861,41 @@ export const ImageFilterMolecule = molecule((m, s) => {
 	}
 
 	return { state: viewer.state.transformation.filter, scope, viewer, update, reset, apply }
+})
+
+// Molecule that manages the image settings
+export const ImageSettingsMolecule = molecule((m, s) => {
+	const scope = s(ImageViewerScope)
+	const viewer = m(ImageViewerMolecule)
+
+	onMount(() => {
+		const unsubscribe = subscribe(viewer.state.settings, () => simpleLocalStorage.set('image.settings', viewer.state.settings))
+
+		return () => unsubscribe()
+	})
+
+	// Updates the image settings for a specific key
+	function update<K extends keyof ImageState['settings']>(key: K, value: ImageState['settings'][K]) {
+		viewer.state.settings[key] = value
+		viewer.apply()
+	}
+
+	// Updates the image format
+	function updateFormat(format: ImageTransformation['format']) {
+		viewer.state.transformation.format = format
+		return viewer.load(true)
+	}
+
+	// Resets the image settings to default values
+	function reset() {
+		const load = viewer.state.transformation.format !== DEFAULT_IMAGE_TRANSFORMATION.format
+		viewer.state.transformation.format = DEFAULT_IMAGE_TRANSFORMATION.format
+		viewer.state.settings.pixelated = true
+		viewer.apply()
+		if (load) void viewer.load(true)
+	}
+
+	return { state: viewer.state.settings, scope, viewer, update, updateFormat, reset }
 })
 
 // Molecule that manages the home state

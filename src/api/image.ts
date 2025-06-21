@@ -5,12 +5,41 @@ import { adf, debayer, horizontalFlip, type Image, type ImageFormat, invert, rea
 import { fileHandleSource } from 'nebulosa/src/io'
 import os from 'os'
 import { join } from 'path'
+import type { JpegOptions, PngOptions, WebpOptions } from 'sharp'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import type { ImageInfo, ImageTransformation, OpenImage } from './types'
 import { X_IMAGE_INFO_HEADER } from './types'
 
 // Image API
+
+const JPEG_OPTIONS: JpegOptions = {
+	quality: 70, // Lower quality for faster processing
+	progressive: true, // Enable progressive JPEG for better loading
+	chromaSubsampling: '4:2:0', // Use 4:2:0 chroma subsampling for smaller file size
+}
+
+const PNG_OPTIONS: PngOptions = {
+	effort: 1, // Low effort for faster processing
+	quality: 100, // Maximum quality
+	compressionLevel: 9, // Maximum compression level
+	adaptiveFiltering: false, // Disable adaptive filtering for faster processing
+	progressive: false, // Disable progressive PNG
+}
+
+const WEBP_OPTIONS: WebpOptions = {
+	effort: 0, // Low effort for faster processing
+	quality: 70, // Lower quality for faster processing
+	lossless: false, // Use lossy compression for smaller file size
+	nearLossless: false, // Disable near-lossless compression
+}
+
+const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOptions['format']>> = {
+	jpg: JPEG_OPTIONS,
+	jpeg: JPEG_OPTIONS,
+	webp: WEBP_OPTIONS,
+	png: PNG_OPTIONS,
+}
 
 // Endpoint for opening and transforming images
 // This endpoint processes FITS files, applies transformations, and returns image information
@@ -28,7 +57,7 @@ export class ImageEndpoint {
 
 				if (image) {
 					const id = Bun.MD5.hash(req.path, 'hex')
-					const format = req.transformation.useJPEG ? 'jpeg' : 'png'
+					const format = req.transformation.format
 					const path = join(os.tmpdir(), `${id}.${format}`)
 					const output = await this.transformImageAndSave(image, path, format, req.transformation)
 
@@ -92,7 +121,7 @@ export class ImageEndpoint {
 		const { adjustment, filter } = transformation
 
 		const options: WriteImageToFormatOptions = {
-			format: format === 'jpeg' ? { quality: 70, chromaSubsampling: '4:4:4' } : format === 'png' ? { effort: 1 } : undefined,
+			format: IMAGE_FORMAT_OPTIONS[format],
 			brightness: adjustment.enabled ? adjustment.brightness : undefined,
 			normalize: adjustment.enabled ? adjustment.normalize : undefined,
 			gamma: adjustment.enabled ? adjustment.gamma : undefined,

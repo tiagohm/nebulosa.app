@@ -8,6 +8,7 @@ import { FITSHeader } from './FITSHeader'
 import { ImageAdjustment } from './ImageAdjustment'
 import { ImageFilter } from './ImageFilter'
 import { ImageScnr } from './ImageScnr'
+import { ImageSettings } from './ImageSettings'
 import { ImageStretch } from './ImageStretch'
 import { ImageToolbar } from './ImageToolbar'
 import { PlateSolver } from './PlateSolver'
@@ -18,13 +19,13 @@ export const ImageViewer = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { image } = viewer.scope
 	const workspace = useMolecule(ImageWorkspaceMolecule)
-	const { crosshair, starDetection, stretch, plateSolver, fitsHeader, scnr, adjustment, filter } = useSnapshot(viewer.state)
+	const { crosshair, starDetection, stretch, plateSolver, fitsHeader, scnr, adjustment, filter, settings } = useSnapshot(viewer.state)
 	const { selected } = useSnapshot(workspace.state)
 
 	useEffect(() => {
 		if (ref.current) {
 			viewer.load(false, ref.current)
-			viewer.select(ref.current)
+			viewer.select()
 		}
 
 		return () => {
@@ -36,7 +37,7 @@ export const ImageViewer = memo(() => {
 		<>
 			{selected?.key === image.key && <ImageToolbar />}
 			<div className='inline-block absolute wrapper' style={{ zIndex: image.index }}>
-				<img className='image select-none shadow-md max-w-none border-dashed border-white' id={image.key} onLoad={(e) => viewer.attach(e.currentTarget)} onPointerUp={(e) => viewer.select(e.currentTarget)} ref={ref} />
+				<img className='image select-none shadow-md max-w-none border-dashed border-white' id={image.key} onLoad={(e) => viewer.attach()} onPointerUp={(e) => viewer.select()} ref={ref} />
 				{crosshair && <Crosshair />}
 				{starDetection.show && <DetectedStars />}
 			</div>
@@ -73,6 +74,11 @@ export const ImageViewer = memo(() => {
 			{fitsHeader.showModal && (
 				<ScopeProvider scope={ModalScope} value={{ name: `fits-header-${image.key}` }}>
 					<FITSHeader />
+				</ScopeProvider>
+			)}
+			{settings.showModal && (
+				<ScopeProvider scope={ModalScope} value={{ name: `fits-header-${image.key}` }}>
+					<ImageSettings />
 				</ScopeProvider>
 			)}
 		</>

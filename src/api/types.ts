@@ -1,6 +1,6 @@
 import type { Angle } from 'nebulosa/src/angle'
 import type { FitsHeader } from 'nebulosa/src/fits'
-import type { CfaPattern, ImageChannel, ImageMetadata } from 'nebulosa/src/image'
+import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
 import type { PropertyState } from 'nebulosa/src/indi'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 
@@ -145,7 +145,7 @@ export interface ImageTransformation {
 	verticalMirror: boolean
 	invert: boolean
 	scnr: ImageScnr
-	useJPEG: boolean
+	format: ImageFormat
 	adjustment: ImageAdjustment
 	filter: ImageFilter
 }
@@ -476,7 +476,7 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	verticalMirror: false,
 	invert: false,
 	scnr: DEFAULT_IMAGE_SCNR,
-	useJPEG: true,
+	format: 'jpeg',
 	adjustment: DEFAULT_IMAGE_ADJUSTMENT,
 	filter: DEFAULT_IMAGE_FILTER,
 }

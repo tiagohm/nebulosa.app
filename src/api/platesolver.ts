@@ -1,18 +1,17 @@
 import Elysia from 'elysia'
-import { arcsec, deg, parseAngle } from 'nebulosa/src/angle'
+import { deg, parseAngle } from 'nebulosa/src/angle'
 import { astapPlateSolve } from 'nebulosa/src/astap'
 import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebulosa/src/astrometrynet'
-import { fovFrom, type PlateSolution } from 'nebulosa/src/platesolver'
+import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { PlateSolveStart, PlateSolveStop } from './types'
 
 export class PlateSolverEndpoint {
 	private readonly tasks = new Map<string, AbortController>()
 
-	async start(req: PlateSolveStart): Promise<PlateSolution | { solved: false }> {
+	async start(req: PlateSolveStart): Promise<PlateSolution | { failed: true }> {
 		const ra = parseAngle(req.ra, { isHour: true })
 		const dec = parseAngle(req.dec)
 		const radius = req.blind || !req.radius ? 0 : deg(req.radius)
-		const fov = arcsec(fovFrom(req.focalLength, req.pixelSize))
 
 		const aborter = new AbortController()
 		this.tasks.set(req.id, aborter)
@@ -20,17 +19,9 @@ export class PlateSolverEndpoint {
 		let solver: Promise<PlateSolution | undefined> | undefined
 
 		if (req.type === 'ASTAP') {
-			solver = astapPlateSolve(
-				req.path,
-				{
-					...req,
-					fov,
-					ra,
-					dec,
-					radius,
-				},
-				aborter.signal,
-			)
+			solver = astapPlateSolve(req.path, { ...req, ra, dec, radius }, aborter.signal)
+		} else if (req.type === 'ASTROMETRY_NET') {
+			solver = localAstrometryNetPlateSolve(req.path, { ...req, ra, dec, radius }, aborter.signal)
 		} else if (req.type === 'NOVA_ASTROMETRY_NET') {
 			solver = novaAstrometryNetPlateSolve(
 				req.path,
@@ -38,21 +29,9 @@ export class PlateSolverEndpoint {
 					ra,
 					dec,
 					radius,
-					scaleType: fov <= 0 ? 'ul' : 'ev',
-					scaleEstimated: fov <= 0 ? undefined : fov,
-					scaleError: fov <= 0 ? undefined : 10, // %
-				},
-				aborter.signal,
-			)
-		} else if (req.type === 'ASTROMETRY_NET') {
-			solver = localAstrometryNetPlateSolve(
-				req.path,
-				{
-					...req,
-					fov,
-					ra,
-					dec,
-					radius,
+					scaleType: req.fov <= 0 ? 'ul' : 'ev',
+					scaleEstimated: req.fov <= 0 ? undefined : req.fov,
+					scaleError: req.fov <= 0 ? undefined : 10, // %
 				},
 				aborter.signal,
 			)
@@ -62,7 +41,7 @@ export class PlateSolverEndpoint {
 			try {
 				const solution = await solver
 
-				if (solution?.solved) {
+				if (solution) {
 					return solution
 				}
 			} catch (e) {
@@ -72,7 +51,7 @@ export class PlateSolverEndpoint {
 			}
 		}
 
-		return { solved: false }
+		return { failed: true }
 	}
 
 	stop(req: PlateSolveStop) {

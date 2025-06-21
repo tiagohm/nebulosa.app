@@ -21,6 +21,7 @@ export namespace Api {
 	export namespace Image {
 		export async function open(req: OpenImage) {
 			const response = await w.url('/image/open').post(req).res()
+			if (response.status < 200 || response.status >= 300) throw new Error(await response.text())
 			const blob = await response.blob()
 			const info = JSON.parse(decodeURIComponent(response.headers.get(X_IMAGE_INFO_HEADER)!)) as ImageInfo
 			return { blob, info }
@@ -29,7 +30,7 @@ export namespace Api {
 
 	export namespace PlateSolver {
 		export function start(req: PlateSolveStart) {
-			return w.url('/plateSolver/start').post(req).json<PlateSolution | { solved: false }>()
+			return w.url('/plateSolver/start').post(req).json<PlateSolution | { failed: true }>()
 		}
 
 		export function stop(req: PlateSolveStop) {

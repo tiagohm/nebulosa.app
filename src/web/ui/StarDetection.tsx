@@ -1,10 +1,11 @@
-import { Button, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem } from '@heroui/react'
+import { Button, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { useModal } from '@/shared/hooks'
 import { StarDetectionMolecule } from '@/shared/molecules'
+import { StarDetectionSelect } from './StarDetectionSelect'
 
 export const StarDetection = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
@@ -23,9 +24,7 @@ export const StarDetection = memo(() => {
 						</ModalHeader>
 						<ModalBody>
 							<div className='mt-2 grid grid-cols-12 gap-2'>
-								<Select className='col-span-4' disallowEmptySelection label='Detector' onSelectionChange={(value) => (starDetection.state.request.type = (value as Set<string>).values().next().value as never)} selectedKeys={new Set([request.type])} selectionMode='single' size='sm'>
-									<SelectItem key='ASTAP'>Astap</SelectItem>
-								</Select>
+								<StarDetectionSelect className='col-span-4' onValueChange={(value) => (starDetection.state.request.type = value)} value={request.type} />
 								<NumberInput className='col-span-4' label='Min SNR' maxValue={500} minValue={0} onValueChange={(value) => (starDetection.state.request.minSNR = value)} size='sm' value={request.minSNR} />
 								<NumberInput className='col-span-4' label='Max Stars' maxValue={2000} minValue={0} onValueChange={(value) => (starDetection.state.request.maxStars = value)} size='sm' value={request.maxStars} />
 								<div className='col-span-full mt-1'>

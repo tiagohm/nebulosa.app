@@ -1,7 +1,9 @@
 import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount } from 'bunshi'
-import { formatDEC, formatRA } from 'nebulosa/src/angle'
+import { arcsec, formatDEC, formatRA } from 'nebulosa/src/angle'
+import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
+import { angularSizeOfPixel } from 'nebulosa/src/util'
 import type { DirectoryEntry, FileEntry, ImageInfo, ImageTransformation, PlateSolveStart, StarDetection } from 'src/api/types'
 import { DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION } from 'src/api/types'
 import { proxy, subscribe } from 'valtio'
@@ -61,6 +63,7 @@ export interface ImageState {
 		showModal: boolean
 		loading: boolean
 		request: PlateSolveStart
+		solution?: PlateSolution
 	}
 	readonly scnr: {
 		showModal: boolean
@@ -501,6 +504,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			return url
 		} catch (e) {
 			console.error('failed to open image', key, e)
+			addToast({ title: 'ERROR', description: 'Failed to open image', color: 'danger' })
+			remove()
 		} finally {
 			loading = false
 		}
@@ -523,6 +528,9 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			if (info.headers.FOCALLEN) state.plateSolver.request.focalLength = parseInt(info.headers.FOCALLEN as never)
 			if (info.headers.XPIXSZ) state.plateSolver.request.pixelSize = parseFloat(info.headers.XPIXSZ as never)
 		}
+
+		// Update plate solver solution
+		state.plateSolver.solution = info.solution
 	}
 
 	// Selects the image and brings it to the front
@@ -633,8 +641,16 @@ export const PlateSolverMolecule = molecule((m, s) => {
 		try {
 			plateSolver.loading = true
 
-			const solution = await Api.PlateSolver.start(viewer.state.plateSolver.request)
-			console.info(solution, typeof solution)
+			const request = viewer.state.plateSolver.request
+			request.fov = arcsec(angularSizeOfPixel(request.focalLength, request.pixelSize) * viewer.state.info.height)
+
+			const solution = await Api.PlateSolver.start(request)
+
+			if ('failed' in solution) {
+				addToast({ description: 'Plate solving failed', color: 'danger', title: 'ERROR' })
+			} else {
+				viewer.state.plateSolver.solution = solution
+			}
 		} finally {
 			plateSolver.loading = false
 		}

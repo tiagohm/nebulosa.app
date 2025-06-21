@@ -292,19 +292,21 @@ export interface Notification extends WebSocketMessage {
 
 export type PlateSolverType = 'ASTAP' | 'PIXINSIGHT' | 'ASTROMETRY_NET' | 'NOVA_ASTROMETRY_NET' | 'SIRIL'
 
-export interface PlateSolveStart extends Omit<PlateSolveOptions, 'ra' | 'dec'> {
+export interface PlateSolveStart extends Omit<PlateSolveOptions, 'ra' | 'dec' | 'radius'> {
 	id: string
 	type: PlateSolverType
 	executable: string
 	path: string
 	focalLength: number
 	pixelSize: number
+	fov: number
 	apiUrl?: string
 	apiKey?: string
 	slot?: number
 	blind: boolean
 	ra: string | number // hours
 	dec: string | number // deg
+	radius: number // deg
 }
 
 export interface PlateSolveStop {
@@ -318,9 +320,15 @@ export const DEFAULT_PLATE_SOLVE_START: PlateSolveStart = {
 	path: '',
 	focalLength: 0,
 	pixelSize: 0,
+	fov: 0,
 	blind: true,
 	ra: '00 00 00',
 	dec: '+000 00 00',
+	radius: 4,
+	downsample: 0,
+	timeout: 300000, // 5 minutes
+	apiUrl: '',
+	apiKey: '',
 }
 
 // Star Detection

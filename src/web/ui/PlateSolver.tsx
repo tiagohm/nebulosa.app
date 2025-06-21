@@ -2,6 +2,7 @@ import { Button, Checkbox, Input, Modal, ModalBody, ModalContent, ModalFooter, M
 import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/angle'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { useModal } from '@/shared/hooks'
@@ -12,7 +13,7 @@ import { RightAscensionInput } from './RightAscensionInput'
 
 export const PlateSolver = memo(() => {
 	const solver = useMolecule(PlateSolverMolecule)
-	const { request, loading } = useSnapshot(solver.state)
+	const { request, loading, solution } = useSnapshot(solver.state)
 	const { info } = useSnapshot(solver.viewer.state)
 	const modal = useModal(() => (solver.state.showModal = false))
 
@@ -37,12 +38,12 @@ export const PlateSolver = memo(() => {
 								<NumberInput className='col-span-6' label='Focal Length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} size='sm' value={request.focalLength} />
 								<NumberInput className='col-span-6' label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} size='sm' step={0.01} value={request.pixelSize} />
 								<div className='col-span-full font-bold text-sm my-1'>SOLUTION</div>
-								<RightAscensionInput className='col-span-4' isReadOnly value={info.solution?.rightAscension} />
-								<DeclinationInput className='col-span-4' isReadOnly value={info.solution?.declination} />
-								<Input className='col-span-4' isReadOnly label='Orientation (°)' size='sm' value={info.solution?.orientation.toFixed(4) ?? '0.0000'} />
-								<Input className='col-span-4' isReadOnly label='Scale (arcsec/px)' size='sm' value={info.solution?.scale.toFixed(4) ?? '0.0000'} />
-								<Input className='col-span-4' isReadOnly label='Size (arcmin)' size='sm' value={`${info.solution?.width.toFixed(2) ?? '0.00'} x ${info.solution?.height.toFixed(2) ?? '0.00'}`} />
-								<Input className='col-span-4' isReadOnly label='Radius (°)' size='sm' value={info.solution?.radius.toFixed(4) ?? '0.0000'} />
+								<Input className='col-span-4' isReadOnly label='RA' size='sm' value={formatRA(solution?.rightAscension ?? 0)} />
+								<Input className='col-span-4' isReadOnly label='DEC' size='sm' value={formatDEC(solution?.declination ?? 0)} />
+								<Input className='col-span-4' isReadOnly label='Orientation (°)' size='sm' value={toDeg(solution?.orientation ?? 0).toFixed(4)} />
+								<Input className='col-span-4' isReadOnly label='Scale (arcsec/px)' size='sm' value={toArcsec(solution?.scale ?? 0).toFixed(4)} />
+								<Input className='col-span-4' isReadOnly label='Size (arcmin)' size='sm' value={`${toArcmin(solution?.width ?? 0).toFixed(2)} x ${toArcmin(solution?.height ?? 0).toFixed(2)}`} />
+								<Input className='col-span-4' isReadOnly label='Radius (°)' size='sm' value={toDeg(solution?.radius ?? 0).toFixed(4)} />
 								<div className='col-span-full flex items-center justify-center gap-2'>
 									<Button color='primary' startContent={<Lucide.RefreshCw />} variant='flat'>
 										Sync

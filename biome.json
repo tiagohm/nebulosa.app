@@ -63,7 +63,8 @@
 			"correctness": {
 				"noPrecisionLoss": "off",
 				"useExhaustiveDependencies": "off",
-				"noUnusedFunctionParameters": "off"
+				"noUnusedFunctionParameters": "off",
+				"noUnusedVariables": "off"
 			},
 			"suspicious": {
 				"noAssignInExpressions": "off",

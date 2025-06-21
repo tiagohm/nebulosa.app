@@ -10,6 +10,7 @@
 		"dev": "bun --hot main.ts",
 		"lint": "biome lint --write src/",
 		"format": "biome format --write src/",
+		"compile": "bun build --compile --minify --production main.ts --outfile nebulosa.exe",
 		"typecheck": "tsc --noEmit"
 	},
 	"author": {

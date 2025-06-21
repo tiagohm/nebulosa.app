@@ -16,7 +16,7 @@ export const ImageToolbar = memo(() => {
 	return (
 		<>
 			<div className='w-full fixed bottom-0 mb-1 p-1 z-[99999]'>
-				<div className='flex flex-row items-center justify-center gap-2 px-2 py-1.5 mx-auto w-fit rounded-xl bg-black'>
+				<div className='flex flex-row items-center justify-start gap-2 px-2 py-1.5 mx-auto w-fit rounded-xl bg-black max-w-full overflow-scroll no-scrollbar'>
 					<Tooltip content='Save' placement='top'>
 						<Button color='secondary' isIconOnly variant='flat'>
 							<Lucide.Save />

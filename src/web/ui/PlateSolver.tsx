@@ -45,16 +45,16 @@ export const PlateSolver = memo(() => {
 								<Input className='col-span-4' isReadOnly label='Size (arcmin)' size='sm' value={`${toArcmin(solution?.width ?? 0).toFixed(2)} x ${toArcmin(solution?.height ?? 0).toFixed(2)}`} />
 								<Input className='col-span-4' isReadOnly label='Radius (°)' size='sm' value={toDeg(solution?.radius ?? 0).toFixed(4)} />
 								<div className='col-span-full flex items-center justify-center gap-2'>
-									<Button color='primary' startContent={<Lucide.RefreshCw />} variant='flat'>
+									<Button color='primary' isDisabled={!solution} startContent={<Lucide.RefreshCw />} variant='flat'>
 										Sync
 									</Button>
-									<Button color='success' startContent={<Lucide.Telescope />} variant='flat'>
+									<Button color='success' isDisabled={!solution} startContent={<Lucide.Telescope />} variant='flat'>
 										Go To
 									</Button>
-									<Button color='success' startContent={<Lucide.Telescope />} variant='flat'>
+									<Button color='success' isDisabled={!solution} startContent={<Lucide.Telescope />} variant='flat'>
 										Slew
 									</Button>
-									<Button color='secondary' startContent={<Lucide.Scan />} variant='flat'>
+									<Button color='secondary' isDisabled={!solution} startContent={<Lucide.Scan />} variant='flat'>
 										Frame
 									</Button>
 								</div>

@@ -26,7 +26,7 @@ export const ConnectionBox = memo(({ isDisabled = false }: ConnectionBoxProps) =
 
 	return (
 		<>
-			<div className='w-full flex flex-row items-center gap-2'>
+			<div className='w-full flex flex-row items-center gap-2 max-w-120'>
 				<Tooltip content='New Connection' showArrow>
 					<Button color='success' isDisabled={isDisabled} isIconOnly onPointerUp={() => connection.create()} variant='light'>
 						<Lucide.Plus />

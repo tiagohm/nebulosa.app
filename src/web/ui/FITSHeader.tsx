@@ -11,7 +11,7 @@ export const FITSHeader = memo(() => {
 	const modal = useModal(() => (viewer.state.fitsHeader.showModal = false))
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[390px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[340px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>

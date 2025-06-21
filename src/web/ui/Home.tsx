@@ -17,7 +17,7 @@ function TopBar() {
 	return (
 		<>
 			<Navbar className='bg-neutral-900 shadow' isBlurred={false}>
-				<NavbarBrand>
+				<NavbarBrand className='flex-auto'>
 					<ConnectionBox />
 				</NavbarBrand>
 				<NavbarContent className='flex gap-4 flex-1' justify='center'>

@@ -4,7 +4,7 @@ import { arcsec, formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
-import type { ConnectionStatus, DirectoryEntry, FileEntry, ImageInfo, ImageTransformation, PlateSolveStart, StarDetection } from 'src/api/types'
+import type { Camera, ConnectionStatus, DeviceEvent, DeviceType, DirectoryEntry, FileEntry, GuideOutput, ImageInfo, ImageTransformation, PlateSolveStart, StarDetection, SubDeviceType, Thermometer } from 'src/api/types'
 import { DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION } from 'src/api/types'
 import { proxy, subscribe } from 'valtio'
 import { deepClone, subscribeKey } from 'valtio/utils'
@@ -96,6 +96,14 @@ export interface ImageState {
 }
 
 export interface HomeState {
+	readonly devices: {
+		readonly cameras: Camera[]
+		readonly guideOutputs: GuideOutput[]
+		readonly thermometers: Thermometer[]
+	}
+	readonly menu: {
+		deviceType?: DeviceType | SubDeviceType
+	}
 	readonly about: {
 		showModal: boolean
 	}
@@ -271,12 +279,9 @@ export const ConnectionMolecule = molecule(() => {
 		} else {
 			try {
 				state.loading = true
-
-				const status = await Api.Connection.connect(state.selected)
-
-				state.connected = status
-			} catch {
-				addToast({ title: 'ERROR', description: 'Failed to connect', color: 'danger' })
+				state.connected = await Api.Connection.connect(state.selected)
+			} catch (e) {
+				addToast({ title: 'ERROR', description: (e as Error).message, color: 'danger' })
 			} finally {
 				state.loading = false
 			}
@@ -284,6 +289,52 @@ export const ConnectionMolecule = molecule(() => {
 	}
 
 	return { state, create, edit, update, select, selectWith, save, connect, duplicate, remove } as const
+})
+
+export const WebSocketMolecule = molecule((m) => {
+	const home = m(HomeMolecule)
+
+	const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
+	const ws = new WebSocket(`${uri}/ws`)
+
+	ws.addEventListener('open', () => console.info('web socket open'))
+	ws.addEventListener('close', (e) => console.info('web socket close', e))
+
+	ws.addEventListener('message', (message) => {
+		const data = JSON.parse(message.data) as DeviceEvent
+
+		switch (data.type) {
+			case 'camera.add':
+				home.addDevice('cameras', data.device)
+				break
+			case 'camera.remove':
+				home.removeDevice('cameras', data.device)
+				break
+			case 'camera.update':
+				home.updateDevice('cameras', data.device, data.property, data.value)
+				break
+			case 'guide_output.add':
+				home.addDevice('guideOutputs', data.device)
+				break
+			case 'guide_output.remove':
+				home.removeDevice('guideOutputs', data.device)
+				break
+			case 'guide_output.update':
+				home.updateDevice('guideOutputs', data.device, data.property, data.value)
+				break
+			case 'thermometer.add':
+				home.addDevice('thermometers', data.device)
+				break
+			case 'thermometer.remove':
+				home.removeDevice('thermometers', data.device)
+				break
+			case 'thermometer.update':
+				home.updateDevice('thermometers', data.device, data.property, data.value)
+				break
+		}
+	})
+
+	return { ws }
 })
 
 // Molecule that manages the image workspace
@@ -530,8 +581,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 			return url
 		} catch (e) {
-			console.error('failed to open image', key, e)
-			addToast({ title: 'ERROR', description: 'Failed to open image', color: 'danger' })
+			addToast({ title: 'ERROR', description: (e as Error).message, color: 'danger' })
 			remove()
 		} finally {
 			loading = false
@@ -679,13 +729,9 @@ export const PlateSolverMolecule = molecule((m, s) => {
 			const request = viewer.state.plateSolver.request
 			request.fov = arcsec(angularSizeOfPixel(request.focalLength, request.pixelSize) * viewer.state.info.height)
 
-			const solution = await Api.PlateSolver.start(request)
-
-			if ('failed' in solution) {
-				addToast({ description: 'Plate solving failed', color: 'danger', title: 'ERROR' })
-			} else {
-				viewer.state.plateSolver.solution = solution
-			}
+			viewer.state.plateSolver.solution = await Api.PlateSolver.start(request)
+		} catch (e) {
+			addToast({ description: (e as Error).message, color: 'danger', title: 'ERROR' })
 		} finally {
 			plateSolver.loading = false
 		}
@@ -728,7 +774,7 @@ export const StarDetectionMolecule = molecule((m, s) => {
 			starDetection.show = stars.length > 0
 
 			if (!stars.length) {
-				addToast({ description: 'No stars detected', color: 'primary', title: 'INFO' })
+				addToast({ description: 'No stars detected', color: 'warning', title: 'WARN' })
 			}
 
 			let hfd = 0
@@ -752,8 +798,8 @@ export const StarDetectionMolecule = molecule((m, s) => {
 			}
 
 			starDetection.computed = { hfd, snr, fluxMin, fluxMax }
-		} catch {
-			addToast({ description: 'Failed to detect stars', color: 'danger', title: 'ERROR' })
+		} catch (e) {
+			addToast({ description: (e as Error).message, color: 'danger', title: 'ERROR' })
 		} finally {
 			starDetection.loading = false
 		}
@@ -911,15 +957,47 @@ export const ImageSettingsMolecule = molecule((m, s) => {
 	return { state: viewer.state.settings, scope, viewer, update, updateFormat, reset }
 })
 
-// Molecule that manages the home state
+// Molecule that manages the home
 export const HomeMolecule = molecule(() => {
 	const state = proxy<HomeState>({
+		devices: {
+			cameras: [],
+			guideOutputs: [],
+			thermometers: [],
+		},
+		menu: {
+			deviceType: undefined,
+		},
 		about: {
 			showModal: false,
 		},
 	})
 
-	return { state }
+	function addDevice<T extends keyof HomeState['devices']>(type: T, device: HomeState['devices'][T][number]) {
+		state.devices[type].push(device as never)
+	}
+
+	function updateDevice<T extends keyof HomeState['devices']>(type: T, name: string, property: keyof HomeState['devices'][T][number], value: HomeState['devices'][T][number][keyof HomeState['devices'][T][number]]) {
+		const device = state.devices[type].find((e) => e.name === name)
+		if (!device) return console.warn('device not found:', name)
+		;(device as Record<keyof HomeState['devices'][T][number], unknown>)[property] = value
+	}
+
+	function removeDevice<T extends keyof HomeState['devices']>(type: T, device: HomeState['devices'][T][number]) {
+		const devices = state.devices[type]
+		const index = devices.findIndex((e) => e.name === device.name)
+		index >= 0 && devices.splice(index, 1)
+	}
+
+	function toggleDeviceType(type: HomeState['menu']['deviceType']) {
+		if (state.menu.deviceType === type) {
+			state.menu.deviceType = undefined
+		} else {
+			state.menu.deviceType = type
+		}
+	}
+
+	return { state, addDevice, updateDevice, removeDevice, toggleDeviceType }
 })
 
 export const ModalScope = createScope<ModalScopeValue>({ name: '' })

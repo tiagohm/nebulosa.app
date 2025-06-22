@@ -1,23 +1,33 @@
 import Elysia from 'elysia'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi'
+import { badRequest, internalServerError, noActiveConnection } from './exceptions'
 import type { Connect, ConnectionStatus } from './types'
 
+// Provider interface for managing connections to INDI servers
 export interface ConnectionProvider {
-	readonly client: (id?: string) => IndiClient | undefined
+	readonly client: (id?: string) => IndiClient
 	readonly connect: (req: Connect, indiClientHandler: IndiClientHandler) => Promise<ConnectionStatus | undefined>
 	readonly disconnect: (id: string) => void
 	readonly status: (key: string | IndiClient) => ConnectionStatus | undefined
 	readonly list: () => ConnectionStatus[]
 }
 
-export class ConnectionEndpoint {
+// Manager that handles connections to INDI servers
+export class ConnectionManager implements ConnectionProvider {
 	private readonly clients = new Map<string, IndiClient>()
 
-	client(id?: string): IndiClient | undefined {
-		if (!id) return this.clients.values().next().value
-		else return this.clients.get(id)
+	// Returns the first client if no id is provided, or the client with the specified id
+	client(id?: string) {
+		let client: IndiClient | undefined
+		if (!id) client = this.clients.values().next().value
+		else client = this.clients.get(id)
+
+		if (!client) throw noActiveConnection()
+		else return client
 	}
 
+	// Connects to an INDI server based on the provided request
+	// If a client with the same port and host/IP already exists, returns its status
 	async connect(req: Connect, indiClientHandler: IndiClientHandler): Promise<ConnectionStatus | undefined> {
 		for (const [, client] of this.clients) {
 			if (client.localPort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) {
@@ -28,16 +38,21 @@ export class ConnectionEndpoint {
 		if (req.type === 'INDI') {
 			const client = new IndiClient({ handler: indiClientHandler })
 
-			if (await client.connect(req.host, req.port)) {
-				const id = Bun.MD5.hash(`${client.remoteIp}:${client.remotePort}:INDI`, 'hex')
-				this.clients.set(id, client)
-				return this.status(client)
+			try {
+				if (await client.connect(req.host, req.port)) {
+					const id = Bun.MD5.hash(`${client.remoteIp}:${client.remotePort}:INDI`, 'hex')
+					this.clients.set(id, client)
+					return this.status(client)
+				}
+			} catch (e) {
+				throw internalServerError('Failed to connect to INDI server')
 			}
 		}
 
-		return undefined
+		throw badRequest('Invalid connection request')
 	}
 
+	// Disconnects the client with the specified id
 	disconnect(id: string) {
 		const client = this.clients.get(id)
 
@@ -47,6 +62,7 @@ export class ConnectionEndpoint {
 		}
 	}
 
+	// Returns the status of a client based on its id or the client instance
 	status(key: string | IndiClient): ConnectionStatus | undefined {
 		if (typeof key === 'string') {
 			const client = this.clients.get(key)
@@ -65,6 +81,7 @@ export class ConnectionEndpoint {
 		return undefined
 	}
 
+	// Lists all active connections
 	list() {
 		return Array.from(this.clients.values())
 			.map((e) => this.status(e))
@@ -72,6 +89,7 @@ export class ConnectionEndpoint {
 	}
 }
 
+// Creates an instance of Elysia with connection endpoints
 export function connection(connection: ConnectionProvider, indiClientHandler: IndiClientHandler) {
 	const app = new Elysia({ prefix: '/connections' })
 

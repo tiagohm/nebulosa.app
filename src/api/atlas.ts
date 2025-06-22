@@ -9,7 +9,8 @@ import type { AltitudeChartOfBody, BodyPosition, PositionOfBody } from './types'
 
 export const HORIZONS_QUANTITIES: Quantity[] = [Quantity.ASTROMETRIC_RA_DEC, Quantity.APPARENT_RA_DEC, Quantity.APPARENT_AZ_EL, Quantity.VISUAL_MAG_SURFACE_BRGHT, Quantity.ONE_WAY_DOWN_LEG_LIGHT_TIME, Quantity.ILLUMINATED_FRACTION, Quantity.SUN_OBSERVER_TARGET_ELONG_ANGLE, Quantity.CONSTELLATION_ID]
 
-export class AtlasEndpoint {
+// Manager for handling astronomical atlas requests
+export class AtlasManager {
 	private readonly positions = new Map<string, Map<number, Readonly<BodyPosition>>>()
 
 	imageOfSun() {}
@@ -156,7 +157,8 @@ function timeWithoutSeconds(dateTime: DateTime) {
 // '/satellites/:id/position'
 // '/satellites/:id/altitude-chart'
 
-export function atlas(atlas: AtlasEndpoint) {
+// Creates an instance of Elysia for atlas endpoints
+export function atlas(atlas: AtlasManager) {
 	const app = new Elysia({ prefix: '/atlas' })
 
 	app.post('/sun/position', ({ body }) => {

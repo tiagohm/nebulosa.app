@@ -1,19 +1,21 @@
 import { cors } from '@elysiajs/cors'
 import { cron } from '@elysiajs/cron'
 import Elysia from 'elysia'
-import type { PropertyState } from 'nebulosa/src/indi'
+import { CameraHandler, CameraManager, cameras } from 'src/api/camera'
+import { ApiError } from 'src/api/exceptions'
+import { GuideOutputHandler, GuideOutputManager, guideOutputs } from 'src/api/guideoutput'
+import { ThermometerHandler, ThermometerManager, thermometers } from 'src/api/thermometer'
 import { parseArgs } from 'util'
-import { AtlasEndpoint, atlas } from './src/api/atlas'
-import { ConfirmationEndpoint, confirmation } from './src/api/confirmation'
-import { ConnectionEndpoint, connection } from './src/api/connection'
-import { FileSystemEndpoint, fileSystem } from './src/api/filesystem'
-import { FramingEndpoint, framing } from './src/api/framing'
-import { ImageEndpoint, image } from './src/api/image'
-import { cameras, guideOutputs, type IndiDeviceEventHandler, IndiEndpoint, indi, thermometers } from './src/api/indi'
+import { AtlasManager, atlas } from './src/api/atlas'
+import { ConfirmationManager, confirmation } from './src/api/confirmation'
+import { ConnectionManager, connection } from './src/api/connection'
+import { FileSystemManager, fileSystem } from './src/api/filesystem'
+import { FramingManager, framing } from './src/api/framing'
+import { ImageManager, image } from './src/api/image'
+import { IndiDeviceManager, indi } from './src/api/indi'
 import { WebSocketMessageHandler } from './src/api/message'
-import { PlateSolverEndpoint, plateSolver } from './src/api/platesolver'
-import { StarDetectionEndpoint, starDetection } from './src/api/stardetection'
-import type { Device, DeviceType, SubDeviceType } from './src/api/types'
+import { PlateSolverManager, plateSolver } from './src/api/platesolver'
+import { StarDetectionManager, starDetection } from './src/api/stardetection'
 import { X_IMAGE_INFO_HEADER } from './src/api/types'
 import homeHtml from './src/web/pages/home/index.html'
 
@@ -30,49 +32,36 @@ const args = parseArgs({
 const hostname = args.values.host || '0.0.0.0'
 const port = parseInt(args.values.port || '1234')
 
-class IndiDeviceEventHandlers implements IndiDeviceEventHandler {
-	private readonly handlers: IndiDeviceEventHandler[] = []
-
-	constructor(private readonly webSocketMessageHandler: WebSocketMessageHandler) {}
-
-	// TODO: Handle close event to remove clients
-
-	addHandler(handler: IndiDeviceEventHandler) {
-		this.handlers.push(handler)
-	}
-
-	deviceUpdated(device: Device, property: string, state?: PropertyState) {
-		console.debug('updated:', property, JSON.stringify((device as never)[property]))
-		this.webSocketMessageHandler.send({ type: 'CAMERA.UPDATED', device })
-		this.handlers.forEach((e) => e.deviceUpdated?.(device, property, state))
-	}
-
-	deviceAdded(device: Device, type: DeviceType | SubDeviceType) {
-		console.debug('added:', type, device.name)
-		this.webSocketMessageHandler.send({ type: 'CAMERA.ADDED', device })
-		this.handlers.forEach((e) => e.deviceAdded?.(device, type))
-	}
-
-	deviceRemoved(device: Device, type: DeviceType | SubDeviceType) {
-		console.debug('removed:', type, device.name)
-		this.webSocketMessageHandler.send({ type: 'CAMERA.REMOVED', device })
-		this.handlers.forEach((e) => e.deviceRemoved?.(device, type))
-	}
-}
-
-// Endpoints
+// Handlers
 
 const webSocketMessageHandler = new WebSocketMessageHandler()
-const indiDeviceEventHandlers = new IndiDeviceEventHandlers(webSocketMessageHandler)
-const connectionEndpoint = new ConnectionEndpoint()
-const indiEndpoint = new IndiEndpoint(indiDeviceEventHandlers, connectionEndpoint)
-const confirmationEndpoint = new ConfirmationEndpoint(webSocketMessageHandler)
-const atlasEndpoint = new AtlasEndpoint()
-const imageEndpoint = new ImageEndpoint()
-const framingEndpoint = new FramingEndpoint()
-const fileSystemEndpoint = new FileSystemEndpoint()
-const starDetectionEndpoint = new StarDetectionEndpoint()
-const plateSolverEndpoint = new PlateSolverEndpoint()
+
+// TODO: Handle close event to remove clients
+
+const cameraHandler = new CameraHandler(webSocketMessageHandler)
+const thermometerHandler = new ThermometerHandler(webSocketMessageHandler)
+const guideOutputHandler = new GuideOutputHandler(webSocketMessageHandler)
+
+// Managers
+
+const connectionManager = new ConnectionManager()
+const indiDeviceManager = new IndiDeviceManager(connectionManager)
+const cameraManager = new CameraManager(cameraHandler, indiDeviceManager, connectionManager)
+const guideOutputManager = new GuideOutputManager(guideOutputHandler, indiDeviceManager, connectionManager)
+const thermometerManager = new ThermometerManager(thermometerHandler, indiDeviceManager)
+const confirmationManager = new ConfirmationManager(webSocketMessageHandler)
+const atlasManager = new AtlasManager()
+const imageManager = new ImageManager()
+const framingManager = new FramingManager()
+const fileSystemManager = new FileSystemManager()
+const starDetectionManager = new StarDetectionManager()
+const plateSolverManager = new PlateSolverManager()
+
+indiDeviceManager.addDeviceHandler('CAMERA', cameraHandler)
+indiDeviceManager.addDeviceHandler('THERMOMETER', thermometerHandler)
+indiDeviceManager.addDeviceHandler('GUIDE_OUTPUT', guideOutputHandler)
+
+// App
 
 const app = new Elysia({
 	serve: {
@@ -87,7 +76,7 @@ const app = new Elysia({
 	},
 })
 
-// CORS
+// Cross-Origin Resource Sharing (CORS)
 
 app.use(
 	cors({
@@ -109,24 +98,26 @@ app.use(
 
 // Error Handling
 
-app.onError(({ code, error }) => {
-	return Response.json({ message: `${error}`, code })
+app.onError(({ error }) => {
+	if (error instanceof ApiError) {
+		return new Response(JSON.stringify(error.message), { status: error.status })
+	}
 })
 
 // Endpoints
 
-app.use(connection(connectionEndpoint, indiEndpoint))
-app.use(confirmation(confirmationEndpoint))
-app.use(indi(indiEndpoint, connectionEndpoint))
-app.use(cameras(indiEndpoint))
-app.use(thermometers(indiEndpoint))
-app.use(guideOutputs(indiEndpoint, connectionEndpoint))
-app.use(atlas(atlasEndpoint))
-app.use(image(imageEndpoint))
-app.use(framing(framingEndpoint))
-app.use(starDetection(starDetectionEndpoint))
-app.use(plateSolver(plateSolverEndpoint))
-app.use(fileSystem(fileSystemEndpoint))
+app.use(connection(connectionManager, indiDeviceManager))
+app.use(confirmation(confirmationManager))
+app.use(indi(indiDeviceManager, connectionManager))
+app.use(cameras(cameraManager))
+app.use(thermometers(thermometerManager))
+app.use(guideOutputs(guideOutputManager))
+app.use(atlas(atlasManager))
+app.use(image(imageManager))
+app.use(framing(framingManager))
+app.use(starDetection(starDetectionManager))
+app.use(plateSolver(plateSolverManager))
+app.use(fileSystem(fileSystemManager))
 
 // WebSocket
 

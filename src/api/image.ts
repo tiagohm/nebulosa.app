@@ -8,6 +8,7 @@ import { join } from 'path'
 import type { JpegOptions, PngOptions, WebpOptions } from 'sharp'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
+import { badRequest, internalServerError, notFound } from './exceptions'
 import type { ImageInfo, ImageTransformation, OpenImage } from './types'
 import { X_IMAGE_INFO_HEADER } from './types'
 
@@ -41,10 +42,10 @@ const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOption
 	png: PNG_OPTIONS,
 }
 
-// Endpoint for opening and transforming images
+// Manager for opening and transforming images
 // This endpoint processes FITS files, applies transformations, and returns image information
 // It supports various transformations like debayering, flipping, SCNR, stretching, and inversion
-export class ImageEndpoint {
+export class ImageManager {
 	// Opens an image file, reads its FITS/XISF data, and applies transformations
 	async open(req: OpenImage) {
 		if (req.path) {
@@ -76,12 +77,18 @@ export class ImageEndpoint {
 						}
 
 						return info
+					} else {
+						throw internalServerError('Failed to generate image')
 					}
+				} else {
+					throw internalServerError('Failed to read image from file')
 				}
+			} else {
+				throw notFound('No image file found')
 			}
 		}
 
-		return undefined
+		throw badRequest('Image path is required')
 	}
 
 	private transformImageAndSave(image: Image, path: string, format: ImageFormat, transformation: ImageTransformation) {
@@ -146,21 +153,17 @@ export class ImageEndpoint {
 }
 
 // Creates an instance of Elysia with image endpoints
-export function image(image: ImageEndpoint) {
+export function image(image: ImageManager) {
 	const app = new Elysia({ prefix: '/image' })
 
-	app.post('/open', async ({ body, status }) => {
+	app.post('/open', async ({ body }) => {
 		const info = await image.open(body as never)
 
-		if (info) {
-			return new Response(Bun.file(info.path), {
-				headers: {
-					[X_IMAGE_INFO_HEADER]: encodeURIComponent(JSON.stringify(info)),
-				},
-			})
-		} else {
-			return status(500)
-		}
+		return new Response(Bun.file(info.path), {
+			headers: {
+				[X_IMAGE_INFO_HEADER]: encodeURIComponent(JSON.stringify(info)),
+			},
+		})
 	})
 
 	app.post('/analyze', () => {

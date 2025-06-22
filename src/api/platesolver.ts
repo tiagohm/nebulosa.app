@@ -3,12 +3,15 @@ import { deg, parseAngle } from 'nebulosa/src/angle'
 import { astapPlateSolve } from 'nebulosa/src/astap'
 import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebulosa/src/astrometrynet'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
+import { badRequest, internalServerError } from './exceptions'
 import type { PlateSolveStart, PlateSolveStop } from './types'
 
-export class PlateSolverEndpoint {
+// Manager for handling plate solving requests
+export class PlateSolverManager {
 	private readonly tasks = new Map<string, AbortController>()
 
-	async start(req: PlateSolveStart): Promise<PlateSolution | { failed: true }> {
+	// Starts a plate solving task based on the request parameters
+	async start(req: PlateSolveStart): Promise<PlateSolution> {
 		const ra = parseAngle(req.ra, { isHour: true })
 		const dec = parseAngle(req.dec)
 		const radius = req.blind || !req.radius ? 0 : deg(req.radius)
@@ -44,30 +47,32 @@ export class PlateSolverEndpoint {
 				if (solution) {
 					return solution
 				}
-			} catch (e) {
-				console.error('Plate solving failed:', e)
+			} catch {
+				throw internalServerError('Failed to plate solve image')
 			} finally {
 				this.tasks.delete(req.id)
 			}
 		}
 
-		return { failed: true }
+		throw badRequest('Invalid plate solving request type')
 	}
 
+	// Stops a plate solving task by its id
 	stop(req: PlateSolveStop) {
 		this.tasks.get(req.id)?.abort()
 	}
 }
 
-export function plateSolver(plateSolver: PlateSolverEndpoint) {
+// Creates an instance of Elysia for plate solving endpoints
+export function plateSolver(solver: PlateSolverManager) {
 	const app = new Elysia({ prefix: '/plateSolver' })
 
 	app.post('/start', ({ body }) => {
-		return plateSolver.start(body as never)
+		return solver.start(body as never)
 	})
 
 	app.post('/stop', ({ body }) => {
-		return plateSolver.stop(body as never)
+		return solver.stop(body as never)
 	})
 
 	return app

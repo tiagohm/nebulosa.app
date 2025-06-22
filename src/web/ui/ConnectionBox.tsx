@@ -9,13 +9,9 @@ import { stopPropagation } from '@/shared/util'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
 
-export interface ConnectionBoxProps {
-	readonly isDisabled?: boolean
-}
-
-export const ConnectionBox = memo(({ isDisabled = false }: ConnectionBoxProps) => {
+export const ConnectionBox = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
-	const state = useSnapshot(connection.state)
+	const { connections, loading, selected, connected, showModal } = useSnapshot(connection.state)
 
 	function connectionChanged(keys: SharedSelection) {
 		if (keys instanceof Set) {
@@ -28,15 +24,15 @@ export const ConnectionBox = memo(({ isDisabled = false }: ConnectionBoxProps) =
 		<>
 			<div className='w-full flex flex-row items-center gap-2 max-w-120'>
 				<Tooltip content='New Connection' showArrow>
-					<Button color='success' isDisabled={isDisabled} isIconOnly onPointerUp={() => connection.create()} variant='light'>
+					<Button color='success' isDisabled={loading || !!connected} isIconOnly onPointerUp={() => connection.create()} variant='light'>
 						<Lucide.Plus />
 					</Button>
 				</Tooltip>
 				<Select
 					className='flex-1'
 					disallowEmptySelection
-					isDisabled={isDisabled}
-					items={state.connections}
+					isDisabled={loading || !!connected}
+					items={connections}
 					onSelectionChange={connectionChanged}
 					renderValue={(selected) => {
 						return selected.map((item) => (
@@ -55,7 +51,7 @@ export const ConnectionBox = memo(({ isDisabled = false }: ConnectionBoxProps) =
 							</div>
 						))
 					}}
-					selectedKeys={new Set([state.selected.id])}
+					selectedKeys={new Set([selected.id])}
 					selectionMode='single'
 					size='lg'>
 					{(item) => (
@@ -84,7 +80,7 @@ export const ConnectionBox = memo(({ isDisabled = false }: ConnectionBoxProps) =
 												<Lucide.EllipsisVertical />
 											</Button>
 										</DropdownTrigger>
-										<DropdownMenu aria-label='Static Actions' disabledKeys={state.connections.length === 1 ? ['delete'] : []}>
+										<DropdownMenu aria-label='Static Actions' disabledKeys={connections.length === 1 ? ['delete'] : []}>
 											<DropdownItem key='edit' onPointerUp={() => connection.edit(item)} startContent={<Lucide.Pencil size={12} />}>
 												Edit
 											</DropdownItem>
@@ -101,9 +97,9 @@ export const ConnectionBox = memo(({ isDisabled = false }: ConnectionBoxProps) =
 						</SelectItem>
 					)}
 				</Select>
-				<ConnectButton isConnected={!!state.connected} isDisabled={isDisabled} isLoading={state.loading} onPointerUp={() => connection.connect()} />
+				<ConnectButton isConnected={!!connected} isLoading={loading} onPointerUp={() => connection.connect()} />
 			</div>
-			{state.showModal && (
+			{showModal && (
 				<ScopeProvider scope={ModalScope} value={{ name: 'connection', isAlwaysOnTop: true }}>
 					<ConnectionEdit />
 				</ScopeProvider>

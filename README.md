@@ -17,3 +17,9 @@ To start a development server:
 ```bash
 bun dev
 ```
+
+To generate a production-ready executable:
+
+```bash
+bun compile
+```

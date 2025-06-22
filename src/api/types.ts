@@ -42,7 +42,7 @@ export interface Confirm {
 }
 
 export interface Confirmation extends WebSocketMessage {
-	readonly type: 'CONFIRMATION'
+	readonly type: 'confirmation'
 	key: string
 	message: string
 }
@@ -178,9 +178,53 @@ export interface ImageInfo {
 
 export type DeviceType = 'CAMERA' | 'MOUNT' | 'WHEEL' | 'FOCUSER' | 'ROTATOR' | 'GPS' | 'DOME' | 'GUIDE_OUTPUT' | 'LIGHT_BOX' | 'DUST_CAP'
 
-export type SubDeviceType = 'GUIDE_OUTPUT' | 'THERMOMETER' | 'GPS'
+export type SubDeviceType = 'GUIDE_OUTPUT' | 'THERMOMETER' | 'GPS' | 'DEW_HEATER'
 
 export type GuideDirection = 'NORTH' | 'SOUTH' | 'WEST' | 'EAST'
+
+export interface DeviceAdded<T extends Lowercase<DeviceType | SubDeviceType>, D extends Device> extends WebSocketMessage {
+	readonly type: `${T}.add`
+	readonly device: D
+}
+
+export interface DeviceUpdated<T extends Lowercase<DeviceType | SubDeviceType>, D extends Device> extends WebSocketMessage {
+	readonly type: `${T}.update`
+	readonly device: string
+	readonly property: keyof D
+	readonly value: D[keyof D]
+	readonly state?: PropertyState
+}
+
+export interface DeviceRemoved<T extends Lowercase<DeviceType | SubDeviceType>, D extends Device> extends WebSocketMessage {
+	readonly type: `${T}.remove`
+	readonly device: D
+}
+
+export type CameraAdded = DeviceAdded<'camera', Camera>
+
+export type CameraUpdated = DeviceUpdated<'camera', Camera>
+
+export type CameraRemoved = DeviceRemoved<'camera', Camera>
+
+export type CameraEvent = CameraAdded | CameraUpdated | CameraRemoved
+
+export type GuideOutputAdded = DeviceAdded<'guide_output', GuideOutput>
+
+export type GuideOutputUpdated = DeviceUpdated<'guide_output', GuideOutput>
+
+export type GuideOutputRemoved = DeviceRemoved<'guide_output', GuideOutput>
+
+export type GuideOutputEvent = GuideOutputAdded | GuideOutputUpdated | GuideOutputRemoved
+
+export type ThermometerAdded = DeviceAdded<'thermometer', Thermometer>
+
+export type ThermometerUpdated = DeviceUpdated<'thermometer', Thermometer>
+
+export type ThermometerRemoved = DeviceRemoved<'thermometer', Thermometer>
+
+export type ThermometerEvent = ThermometerAdded | ThermometerUpdated | ThermometerRemoved
+
+export type DeviceEvent = CameraEvent | GuideOutputEvent | ThermometerEvent
 
 export interface DriverInfo {
 	executable: string
@@ -273,7 +317,7 @@ export interface GuidePulse {
 // Message
 
 export interface WebSocketMessage {
-	type: string
+	type: 'notification' | 'confirmation' | `${Lowercase<DeviceType | SubDeviceType>}.${'add' | 'update' | 'remove'}`
 }
 
 // Notification
@@ -281,7 +325,7 @@ export interface WebSocketMessage {
 export type Severity = 'info' | 'success' | 'warn' | 'error'
 
 export interface Notification extends WebSocketMessage {
-	readonly type: 'NOTIFICATION'
+	readonly type: 'notification'
 	target?: string
 	severity?: Severity
 	title?: string

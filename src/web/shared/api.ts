@@ -32,7 +32,7 @@ export namespace Api {
 		}
 
 		export function disconnect(id: string) {
-			return w.url(`/connections/${id}`).delete().json<void>()
+			return w.url(`/connections/${id}`).delete().res()
 		}
 	}
 
@@ -48,11 +48,11 @@ export namespace Api {
 
 	export namespace PlateSolver {
 		export function start(req: PlateSolveStart) {
-			return w.url('/plateSolver/start').post(req).json<PlateSolution | { failed: true }>()
+			return w.url('/plateSolver/start').post(req).json<PlateSolution>()
 		}
 
 		export function stop(req: PlateSolveStop) {
-			return w.url('/plateSolver/stop').post(req).json<void>()
+			return w.url('/plateSolver/stop').post(req).res()
 		}
 	}
 

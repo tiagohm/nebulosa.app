@@ -14,9 +14,9 @@ export const FileEntryComparator = (a: FileEntry, b: FileEntry) => {
 	else return 1
 }
 
-// Endpoint for file system operations
+// Manager for file system operations
 // This endpoint provides methods to list directories and create new directories
-export class FileSystemEndpoint {
+export class FileSystemManager {
 	// Lists directories and files in a specified path
 	// If no path is specified, it defaults to the user's home directory
 	// It can filter results based on a glob pattern and whether to include only directories
@@ -55,7 +55,7 @@ export class FileSystemEndpoint {
 }
 
 // Creates an instance of Elysia with file system endpoints
-export function fileSystem(fileSystem: FileSystemEndpoint) {
+export function fileSystem(fileSystem: FileSystemManager) {
 	const app = new Elysia({ prefix: '/fileSystem' })
 
 	app.post('/list', ({ body }) => {

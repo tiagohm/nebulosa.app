@@ -4,7 +4,8 @@ import { hips2Fits } from 'nebulosa/src/hips2fits'
 import hipsSurveys from '../../data/hips-surveys.json' with { type: 'json' }
 import type { Framing } from './types'
 
-export class FramingEndpoint {
+// Manager for handling framing requests
+export class FramingManager {
 	frame(req: Framing) {
 		const rightAscension = parseAngle(req.rightAscension, { isHour: true }) ?? 0
 		const declination = parseAngle(req.declination) ?? 0
@@ -14,7 +15,8 @@ export class FramingEndpoint {
 	}
 }
 
-export function framing(framing: FramingEndpoint) {
+// Creates an instance of Elysia for framing endpoints
+export function framing(framing: FramingManager) {
 	const app = new Elysia({ prefix: '/framing' })
 
 	app.get('/hipsSurveys', hipsSurveys)

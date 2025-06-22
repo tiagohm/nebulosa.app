@@ -45,6 +45,7 @@ export interface ImageState {
 	crosshair: boolean
 	rotation: number
 	info: ImageInfo
+	zoom: number
 	readonly starDetection: {
 		showModal: boolean
 		show: boolean
@@ -329,6 +330,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			transformation,
 			crosshair: simpleLocalStorage.get('image.crosshair', false),
 			rotation: simpleLocalStorage.get('image.rotation', 0),
+			zoom: 1,
 			info: {
 				path: '',
 				originalPath: '',
@@ -588,14 +590,14 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			},
 			on: (event, detail) => {
 				if (event === 'panzoomzoom') {
-					// this.zoom.scale = detail.transformation.scale
+					state.zoom = detail.transformation.scale
 				}
 			},
 		}
 
 		const wrapper = image.closest('.wrapper') as HTMLElement
-		const owner = image.closest('.workspace') as HTMLElement
-		const panZoom = new PanZoom(wrapper, options, owner)
+		const owner = wrapper.closest('.workspace') as HTMLElement
+		const panZoom = new PanZoom(wrapper, owner, options)
 
 		function handleWheel(e: WheelEvent) {
 			const target = e.target as HTMLElement

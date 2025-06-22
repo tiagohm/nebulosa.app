@@ -7,10 +7,11 @@ import { DetectedStars } from './DetectedStars'
 import { FITSHeader } from './FITSHeader'
 import { ImageAdjustment } from './ImageAdjustment'
 import { ImageFilter } from './ImageFilter'
+import { ImageInfo } from './ImageInfo'
 import { ImageScnr } from './ImageScnr'
 import { ImageSettings } from './ImageSettings'
 import { ImageStretch } from './ImageStretch'
-import { ImageToolbar } from './ImageToolbar'
+import { ImageToolBar } from './ImageToolBar'
 import { PlateSolver } from './PlateSolver'
 import { StarDetection } from './StarDetection'
 
@@ -35,9 +36,10 @@ export const ImageViewer = memo(() => {
 
 	return (
 		<>
-			{selected?.key === image.key && <ImageToolbar />}
+			{selected?.key === image.key && <ImageToolBar />}
+			{selected?.key === image.key && <ImageInfo />}
 			<div className='inline-block absolute wrapper' style={{ zIndex: image.index }}>
-				<img className='image select-none shadow-md max-w-none border-dashed border-white' id={image.key} onLoad={(e) => viewer.attach()} onPointerUp={(e) => viewer.select()} ref={ref} />
+				<img className='image select-none max-w-none shadow-[0_0_80px_black]' id={image.key} onLoad={() => viewer.attach()} onPointerUp={() => viewer.select()} ref={ref} />
 				{crosshair && <Crosshair />}
 				{starDetection.show && <DetectedStars />}
 			</div>

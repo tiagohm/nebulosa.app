@@ -7,9 +7,7 @@ import { useSnapshot } from 'valtio'
 import { ImageViewerMolecule } from '@/shared/molecules'
 import { ToggleButton } from './ToggleButton'
 
-export type ImageToolbarButtonType = 'stretch' | 'scnr' | 'plate-solver' | 'fits-header' | 'star-detection'
-
-export const ImageToolbar = memo(() => {
+export const ImageToolBar = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { transformation, crosshair, info, starDetection } = useSnapshot(viewer.state)
 

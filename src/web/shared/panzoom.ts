@@ -21,11 +21,11 @@ export interface PanZoomEventDetail {
 }
 
 interface PanZoomMiscOptions {
-	canExclude: (element: Element) => boolean
+	canExclude?: (element: Element) => boolean
 	force: boolean
-	handleStartEvent: (event: Event) => void
+	handleStartEvent?: (event: Event) => void
 	noBind: boolean
-	setTransform: typeof setTransform
+	setTransform?: typeof defaultSetTransform
 	silent: boolean
 	startX: number
 	startY: number
@@ -56,8 +56,17 @@ export type PanZoomPanOptions = PanZoomMiscOptions & PanZoomPanOnlyOptions
 export type PanZoomZoomOptions = PanZoomMiscOptions & PanZoomZoomOnlyOptions
 export type PanZoomOptions = PanZoomPanOptions & PanZoomZoomOptions & PanZoomMiscOptions & { on?: (event: string, detail: PanZoomEventDetail) => void }
 
-export function setTransform(elem: HTMLElement | SVGElement, { x, y, scale }: PanZoomTransformation) {
+function defaultSetTransform(elem: HTMLElement | SVGElement, { x, y, scale }: PanZoomTransformation) {
 	elem.style.transform = `scale(${scale}) translate(${x}px, ${y}px)`
+}
+
+function defaultCanExclude() {
+	return false
+}
+
+function defaultHandleStartEvent(e: Event) {
+	e.preventDefault()
+	e.stopPropagation()
 }
 
 export const DEFAULT_OPTIONS: PanZoomOptions = {
@@ -65,16 +74,10 @@ export const DEFAULT_OPTIONS: PanZoomOptions = {
 	disableZoom: false,
 	disableXAxis: false,
 	disableYAxis: false,
-	canExclude: () => false,
-	handleStartEvent: (e) => {
-		e.preventDefault()
-		e.stopPropagation()
-	},
 	maxScale: 4,
 	minScale: 0.125,
 	panOnlyWhenZoomed: false,
 	relative: false,
-	setTransform,
 	startX: 0,
 	startY: 0,
 	startScale: 1,
@@ -89,7 +92,7 @@ export const DEFAULT_OPTIONS: PanZoomOptions = {
 // Provides a way to pan and zoom an HTML element within its parent container.
 // It allows for pinch-to-zoom, mouse wheel zooming, and panning with mouse drag.
 export class PanZoom {
-	private readonly options = DEFAULT_OPTIONS
+	private readonly options = structuredClone(DEFAULT_OPTIONS)
 
 	private x = 0
 	private y = 0
@@ -104,26 +107,20 @@ export class PanZoom {
 
 	constructor(
 		private readonly element: HTMLElement,
+		private readonly wrapper: HTMLElement,
 		options?: Omit<Partial<PanZoomOptions>, 'force'>,
-		private readonly wrapper: HTMLElement = element.parentElement!,
 	) {
 		if (options) {
-			for (const key in this.options) {
-				if (key in options) {
-					this.options[key] = options[key]
-				}
-			}
+			Object.assign(this.options, options)
 		}
+
+		this.options.canExclude ??= defaultCanExclude
+		this.options.setTransform ??= defaultSetTransform
+		this.options.handleStartEvent ??= defaultHandleStartEvent
 
 		if (!this.options.noBind) {
 			this.bind()
 		}
-
-		this.zoom(this.options.startScale, { force: true })
-
-		setTimeout(() => {
-			this.pan(this.options.startX, this.options.startY, { force: true })
-		})
 	}
 
 	get transformation(): PanZoomTransformation {
@@ -402,7 +399,7 @@ export class PanZoom {
 		registerPreventDefaultOnTouchMove()
 
 		this.isPanning = true
-		this.options.handleStartEvent(event)
+		this.options.handleStartEvent!(event)
 		this.origX = this.x
 		this.origY = this.y
 
@@ -437,7 +434,7 @@ export class PanZoom {
 
 	private setTransformWithEvent(eventName: PanZoomEvent, opts: PanZoomOptions, originalEvent?: PanZoomOriginalEvent) {
 		const value: PanZoomEventDetail = { transformation: this.transformation, originalEvent }
-		opts.setTransform(this.element, value.transformation)
+		opts.setTransform!(this.element, value.transformation)
 		this.triggerEvent(eventName, value, opts)
 		this.triggerEvent('panzoomchange', value, opts)
 	}
@@ -452,6 +449,8 @@ export class PanZoom {
 }
 
 function isExcluded(elem: Element, options: PanZoomOptions) {
+	if (!options.canExclude) return false
+
 	let cur: Element | null = elem
 
 	while (cur) {

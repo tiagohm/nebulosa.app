@@ -4,7 +4,7 @@ import { arcsec, formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
-import type { DirectoryEntry, FileEntry, ImageInfo, ImageTransformation, PlateSolveStart, StarDetection } from 'src/api/types'
+import type { ConnectionStatus, DirectoryEntry, FileEntry, ImageInfo, ImageTransformation, PlateSolveStart, StarDetection } from 'src/api/types'
 import { DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION } from 'src/api/types'
 import { proxy, subscribe } from 'valtio'
 import { deepClone, subscribeKey } from 'valtio/utils'
@@ -20,7 +20,7 @@ export interface ConnectionState {
 	loading: boolean
 	selected: Connection
 	edited?: Connection
-	connected?: Connection
+	connected?: ConnectionStatus
 }
 
 export interface Image {
@@ -264,11 +264,22 @@ export const ConnectionMolecule = molecule(() => {
 
 	// Connects to the selected connection
 	// If already connected, it disconnects
-	function connect() {
+	async function connect() {
 		if (state.connected) {
+			void Api.Connection.disconnect(state.connected.id)
 			state.connected = undefined
 		} else {
-			state.connected = state.selected
+			try {
+				state.loading = true
+
+				const status = await Api.Connection.connect(state.selected)
+
+				state.connected = status
+			} catch {
+				addToast({ title: 'ERROR', description: 'Failed to connect', color: 'danger' })
+			} finally {
+				state.loading = false
+			}
 		}
 	}
 

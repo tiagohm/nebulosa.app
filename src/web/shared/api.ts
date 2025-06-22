@@ -1,6 +1,6 @@
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
-import type { CreateDirectory, FileSystem, ImageInfo, ListDirectory, OpenImage, PlateSolveStart, PlateSolveStop, StarDetection } from 'src/api/types'
+import type { Connect, ConnectionStatus, CreateDirectory, FileSystem, ImageInfo, ListDirectory, OpenImage, PlateSolveStart, PlateSolveStop, StarDetection } from 'src/api/types'
 import { X_IMAGE_INFO_HEADER } from 'src/api/types'
 import wretch from 'wretch'
 
@@ -15,6 +15,24 @@ export namespace Api {
 
 		export function create(req: CreateDirectory) {
 			return w.url('/fileSystem/create').post(req).json<{ path: string }>()
+		}
+	}
+
+	export namespace Connection {
+		export function list() {
+			return w.url('/connections').get().json<ConnectionStatus[]>()
+		}
+
+		export function connect(req: Connect) {
+			return w.url('/connections').post(req).json<ConnectionStatus>()
+		}
+
+		export function get(id: string) {
+			return w.url(`/connections/${id}`).get().json<ConnectionStatus>()
+		}
+
+		export function disconnect(id: string) {
+			return w.url(`/connections/${id}`).delete().json<void>()
 		}
 	}
 

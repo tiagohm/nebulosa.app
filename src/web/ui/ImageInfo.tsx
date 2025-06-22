@@ -11,7 +11,7 @@ export const ImageInfo = memo(() => {
 	if (!info) return null
 
 	return (
-		<div className='text-sm top-2 left-2 select-none absolute p-1 opacity-80 hover:opacity-80 z-[999999]'>
+		<div className='text-sm top-2 left-2 pointer-events-none select-none absolute p-1 opacity-80 hover:opacity-80 z-[999999]'>
 			<div className='flex flex-col gap-0'>
 				<span className='text-xs text-neutral-400'>{info.originalPath}</span>
 				<div className='flex flex-row items-center gap-1'>

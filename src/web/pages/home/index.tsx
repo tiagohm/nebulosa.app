@@ -15,7 +15,8 @@ function start() {
 						radius: 'sm',
 						color: 'secondary',
 						variant: 'solid',
-						timeout: 4500,
+						timeout: 3000,
+						hideCloseButton: true,
 					}}
 				/>
 				<main className='w-screen h-screen'>

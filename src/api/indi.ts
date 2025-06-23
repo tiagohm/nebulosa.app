@@ -65,6 +65,7 @@ interface DeviceHandlerMap {
 	readonly DOME: IndiDeviceEventHandler<Device>[]
 	readonly LIGHT_BOX: IndiDeviceEventHandler<Device>[]
 	readonly DUST_CAP: IndiDeviceEventHandler<Device>[]
+	readonly DEW_HEATER: IndiDeviceEventHandler<Device>[]
 }
 
 export function isInterfaceType(value: number, type: DeviceInterfaceType) {
@@ -100,6 +101,7 @@ export class IndiDeviceManager implements IndiClientHandler {
 		DOME: [],
 		LIGHT_BOX: [],
 		DUST_CAP: [],
+		DEW_HEATER: [],
 	}
 
 	constructor(private readonly connection: ConnectionProvider) {}

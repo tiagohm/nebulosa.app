@@ -2,7 +2,7 @@ import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerMolecule } from '@/shared/molecules'
+import { ImageViewerMolecule } from '@/molecules/image/viewer'
 
 export const ImageInfo = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)

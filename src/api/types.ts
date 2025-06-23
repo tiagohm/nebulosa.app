@@ -206,7 +206,7 @@ export type CameraUpdated = DeviceUpdated<'camera', Camera>
 
 export type CameraRemoved = DeviceRemoved<'camera', Camera>
 
-export type CameraEvent = CameraAdded | CameraUpdated | CameraRemoved
+export type CameraMessageEvent = CameraAdded | CameraUpdated | CameraRemoved
 
 export type GuideOutputAdded = DeviceAdded<'guide_output', GuideOutput>
 
@@ -214,7 +214,7 @@ export type GuideOutputUpdated = DeviceUpdated<'guide_output', GuideOutput>
 
 export type GuideOutputRemoved = DeviceRemoved<'guide_output', GuideOutput>
 
-export type GuideOutputEvent = GuideOutputAdded | GuideOutputUpdated | GuideOutputRemoved
+export type GuideOutputMessageEvent = GuideOutputAdded | GuideOutputUpdated | GuideOutputRemoved
 
 export type ThermometerAdded = DeviceAdded<'thermometer', Thermometer>
 
@@ -222,9 +222,9 @@ export type ThermometerUpdated = DeviceUpdated<'thermometer', Thermometer>
 
 export type ThermometerRemoved = DeviceRemoved<'thermometer', Thermometer>
 
-export type ThermometerEvent = ThermometerAdded | ThermometerUpdated | ThermometerRemoved
+export type ThermometerMessageEvent = ThermometerAdded | ThermometerUpdated | ThermometerRemoved
 
-export type DeviceEvent = CameraEvent | GuideOutputEvent | ThermometerEvent
+export type DeviceMessageEvent = CameraMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent
 
 export interface DriverInfo {
 	executable: string

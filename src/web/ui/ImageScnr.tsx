@@ -3,14 +3,15 @@ import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
+import { ImageScnrMolecule } from '@/molecules/image/scnr'
 import { useModal } from '@/shared/hooks'
-import { ImageScnrMolecule } from '@/shared/molecules'
 
 export const ImageScnr = memo(() => {
 	const scnr = useMolecule(ImageScnrMolecule)
+	const { viewer } = scnr
 	const { method, amount, channel } = useSnapshot(scnr.state)
-	const { info } = useSnapshot(scnr.viewer.state)
-	const modal = useModal(() => (scnr.viewer.state.scnr.showModal = false))
+	const { info } = useSnapshot(viewer.state)
+	const modal = useModal(() => viewer.closeModal('scnr'))
 
 	return (
 		<Modal {...modal.props} classNames={{ base: 'max-w-[320px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>

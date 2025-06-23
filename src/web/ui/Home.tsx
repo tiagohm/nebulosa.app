@@ -1,5 +1,5 @@
 import { useMolecule } from 'bunshi/react'
-import { WebSocketMolecule } from '@/shared/molecules'
+import { WebSocketMolecule } from '@/molecules/ws'
 import { HomeNavBar } from './HomeNavBar'
 import { ImageWorkspace } from './ImageWorkspace'
 

@@ -3,23 +3,21 @@ import { useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
+import { FilePickerMolecule } from '@/molecules/file-picker'
 import { useModal } from '@/shared/hooks'
-import { FilePickerMolecule } from '@/shared/molecules'
-
-export type FilePickerMode = 'file' | 'directory'
 
 export interface FilePickerProps {
 	readonly header?: React.ReactNode
-	readonly onChoose?: (entries?: string[]) => void
+	readonly onChoose: (entries?: string[]) => void
 }
 
 export function FilePicker({ header, onChoose }: FilePickerProps) {
 	const filePicker = useMolecule(FilePickerMolecule)
 	const { mode, filtered, selected, directoryTree, filter, createDirectory, directoryName } = useSnapshot(filePicker.state)
-	const modal = useModal(() => onChoose?.())
+	const modal = useModal(() => onChoose())
 
 	function handleChoose() {
-		onChoose?.(selected.length === 0 ? undefined : (selected as string[]))
+		onChoose(selected.length === 0 ? undefined : (selected as string[]))
 	}
 
 	return (

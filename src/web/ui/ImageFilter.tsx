@@ -4,14 +4,15 @@ import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
+import { ImageFilterMolecule } from '@/molecules/image/filter'
 import { useModal } from '@/shared/hooks'
-import { ImageFilterMolecule } from '@/shared/molecules'
 
 export const ImageFilter = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
+	const { viewer } = filter
 	const { enabled, blur, median, sharpen } = useSnapshot(filter.state)
-	const { info } = useSnapshot(filter.viewer.state)
-	const modal = useModal(() => (filter.viewer.state.filter.showModal = false))
+	const { info } = useSnapshot(viewer.state)
+	const modal = useModal(() => viewer.closeModal('filter'))
 
 	return (
 		<Modal {...modal.props} classNames={{ base: 'max-w-[230px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>

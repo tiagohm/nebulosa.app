@@ -3,15 +3,16 @@ import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
+import { ImageSettingsMolecule } from '@/molecules/image/settings'
 import { useModal } from '@/shared/hooks'
-import { ImageSettingsMolecule } from '@/shared/molecules'
 import { ImageFormatSelect } from './ImageFormatSelect'
 
 export const ImageSettings = memo(() => {
 	const settings = useMolecule(ImageSettingsMolecule)
+	const { viewer } = settings
 	const { pixelated } = useSnapshot(settings.state)
-	const { info, transformation } = useSnapshot(settings.viewer.state)
-	const modal = useModal(() => (settings.state.showModal = false))
+	const { info, transformation } = useSnapshot(viewer.state)
+	const modal = useModal(() => viewer.closeModal('settings'))
 
 	return (
 		<Modal {...modal.props} classNames={{ base: 'max-w-[230px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>

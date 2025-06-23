@@ -4,13 +4,13 @@ import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import brazilLogo from '@/assets/brazil.png'
 import nebulosaLogo from '@/assets/nebulosa.ico'
+import { HomeMolecule } from '@/molecules/home'
 import { useModal } from '@/shared/hooks'
-import { HomeMolecule } from '@/shared/molecules'
 import packageJson from '../../../package.json'
 
 export const About = memo(() => {
 	const home = useMolecule(HomeMolecule)
-	const modal = useModal(() => (home.state.about.showModal = false))
+	const modal = useModal(() => home.closeModal('about'))
 
 	return (
 		<Modal {...modal.props} classNames={{ base: 'max-w-[460px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>

@@ -1,10 +1,18 @@
 import type { Connect, ConnectionStatus } from 'src/api/types'
 
+export type FilePickerMode = 'file' | 'directory'
+
 export interface Connection extends Connect {
 	id: string
 	name: string
 	connectedAt?: number
 	status?: ConnectionStatus
+}
+
+export interface Image {
+	readonly key: string
+	readonly index: number
+	readonly path: string
 }
 
 export const DEFAULT_CONNECTION: Connection = {

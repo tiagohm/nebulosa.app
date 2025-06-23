@@ -3,7 +3,9 @@ import { ScopeProvider, useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { FilePickerScope, ImageWorkspaceMolecule, ModalScope } from '@/shared/molecules'
+import { FilePickerScope } from '@/molecules/file-picker'
+import { ImageWorkspaceMolecule } from '@/molecules/image/workspace'
+import { ModalScope } from '@/molecules/modal'
 import { FilePicker } from './FilePicker'
 
 export const ImagePickerButton = memo(() => {

@@ -4,19 +4,20 @@ import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
+import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { useModal } from '@/shared/hooks'
-import { ImageStretchMolecule } from '@/shared/molecules'
 
 export const ImageStretch = memo(() => {
 	const stretch = useMolecule(ImageStretchMolecule)
+	const { viewer } = stretch
 	const { auto, shadow, midtone, highlight, meanBackground } = useSnapshot(stretch.state)
-	const { info } = useSnapshot(stretch.viewer.state)
-	const modal = useModal(() => (stretch.viewer.state.stretch.showModal = false))
+	const { info } = useSnapshot(viewer.state)
+	const modal = useModal(() => viewer.closeModal('stretch'))
 
 	function handleShadowHighlightChange(value?: number | number[]) {
 		if (Array.isArray(value)) {
-			stretch.viewer.state.transformation.stretch.shadow = value[0]
-			stretch.viewer.state.transformation.stretch.highlight = value[1]
+			viewer.state.transformation.stretch.shadow = value[0]
+			viewer.state.transformation.stretch.highlight = value[1]
 		}
 	}
 

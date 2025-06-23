@@ -2,13 +2,13 @@ import { Listbox, ListboxItem, Modal, ModalBody, ModalContent, ModalFooter, Moda
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
+import { ImageViewerMolecule } from '@/molecules/image/viewer'
 import { useModal } from '@/shared/hooks'
-import { ImageViewerMolecule } from '@/shared/molecules'
 
 export const FITSHeader = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { info } = useSnapshot(viewer.state)
-	const modal = useModal(() => (viewer.state.fitsHeader.showModal = false))
+	const modal = useModal(() => viewer.closeModal('fitsHeader'))
 
 	return (
 		<Modal {...modal.props} classNames={{ base: 'max-w-[340px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>

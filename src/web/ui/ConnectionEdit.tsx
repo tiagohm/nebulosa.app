@@ -3,8 +3,8 @@ import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
+import { ConnectionMolecule } from '@/molecules/connection'
 import { useModal } from '@/shared/hooks'
-import { ConnectionMolecule } from '@/shared/molecules'
 
 export const ConnectionEdit = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)

@@ -5,17 +5,18 @@ import * as Lucide from 'lucide-react'
 import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/angle'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
+import { ImageSolverMolecule } from '@/molecules/image/solver'
 import { useModal } from '@/shared/hooks'
-import { PlateSolverMolecule } from '@/shared/molecules'
 import { DeclinationInput } from './DeclinationInput'
 import { PlateSolverSelect } from './PlateSolverSelect'
 import { RightAscensionInput } from './RightAscensionInput'
 
 export const PlateSolver = memo(() => {
-	const solver = useMolecule(PlateSolverMolecule)
+	const solver = useMolecule(ImageSolverMolecule)
+	const { viewer } = solver
 	const { request, loading, solution } = useSnapshot(solver.state)
-	const { info } = useSnapshot(solver.viewer.state)
-	const modal = useModal(() => (solver.state.showModal = false))
+	const { info } = useSnapshot(viewer.state)
+	const modal = useModal(() => viewer.closeModal('plateSolver'))
 
 	return (
 		<Modal {...modal.props} classNames={{ base: 'max-w-[390px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>

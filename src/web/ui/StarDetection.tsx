@@ -3,15 +3,16 @@ import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
+import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 import { useModal } from '@/shared/hooks'
-import { StarDetectionMolecule } from '@/shared/molecules'
 import { StarDetectionSelect } from './StarDetectionSelect'
 
 export const StarDetection = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
+	const { viewer } = starDetection
 	const { loading, stars, request, computed, selected } = useSnapshot(starDetection.state)
-	const { info } = useSnapshot(starDetection.viewer.state)
-	const modal = useModal(() => (starDetection.state.showModal = false))
+	const { info } = useSnapshot(viewer.state)
+	const modal = useModal(() => viewer.closeModal('starDetection'))
 
 	return (
 		<Modal {...modal.props} classNames={{ base: 'max-w-[360px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>

@@ -1,7 +1,7 @@
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { StarDetectionMolecule } from '@/shared/molecules'
+import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 
 export const DetectedStars = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)

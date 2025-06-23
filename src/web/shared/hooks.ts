@@ -1,7 +1,7 @@
 import { type MoveMoveEvent, useMove } from '@react-aria/interactions'
 import { useMolecule } from 'bunshi/react'
 import { useCallback } from 'react'
-import { ModalMolecule } from './molecules'
+import { ModalMolecule } from '@/molecules/modal'
 import { registerPreventDefaultOnTouchMove, unregisterPreventDefaultOnTouchMove } from './util'
 
 export interface UseDraggableProps {

@@ -7,16 +7,13 @@ import { DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_D
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import type { PanZoom, PanZoomOptions } from '@/shared/panzoom'
 import { simpleLocalStorage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
 import { ImageWorkspaceMolecule } from './workspace'
 
 export interface CachedImage {
 	url: string
-	panZoom?: PanZoom
 	state: ImageState
-	destroy?: () => void
 }
 
 export interface ImageState {
@@ -24,7 +21,7 @@ export interface ImageState {
 	crosshair: boolean
 	rotation: number
 	info: ImageInfo
-	zoom: number
+	scale: number
 	readonly starDetection: {
 		showModal: boolean
 		show: boolean
@@ -111,7 +108,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			transformation,
 			crosshair: simpleLocalStorage.get('image.crosshair', false),
 			rotation: simpleLocalStorage.get('image.rotation', 0),
-			zoom: 1,
+			scale: 1,
 			info: {
 				path: '',
 				originalPath: '',
@@ -349,64 +346,6 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		bringToFront(image)
 	}
 
-	// Attaches the PanZoom and other things to image
-	function attach() {
-		const image = currentImage()
-
-		if (!image) {
-			console.warn('image not mounted yet', key)
-			return
-		}
-
-		const cached = imageCache.get(key)
-
-		if (!cached) {
-			return console.warn('cached image not found', key)
-		}
-
-		if (cached.panZoom) {
-			return console.info('PanZoom has already been created', key)
-		}
-
-		const options: Partial<PanZoomOptions> = {
-			maxScale: 500,
-			canExclude: (e) => {
-				return !!e.tagName && (e.classList.contains('roi') || e.classList.contains('moveable-control'))
-			},
-			on: (event, detail) => {
-				if (event === 'panzoomzoom') {
-					state.zoom = detail.transformation.scale
-				}
-			},
-		}
-
-		const wrapper = image.closest('.wrapper') as HTMLElement
-		const owner = wrapper.closest('.workspace') as HTMLElement
-		// const panZoom = new PanZoom(wrapper, owner, options)
-
-		function handleWheel(e: WheelEvent) {
-			const target = e.target as HTMLElement
-
-			if (e.shiftKey) {
-				// this.rotateWithWheel(e)
-			} else if (target === owner || target === wrapper || target === image /*|| target === this.roi().nativeElement*/ || target.tagName === 'circle' || target.tagName === 'text') {
-				// panZoom.zoomWithWheel(e)
-			}
-		}
-
-		// wrapper.addEventListener('wheel', handleWheel)
-
-		function destroy() {
-			// panZoom.destroy()
-			// wrapper.removeEventListener('wheel', handleWheel)
-		}
-
-		// cached.panZoom = panZoom
-		cached.destroy = destroy
-
-		console.info('image attached', key)
-	}
-
 	// Detaches the image from the workspace
 	// It destroys the PanZoom instance and removes the image from cache
 	function detach() {
@@ -416,7 +355,6 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 		if (cached) {
 			console.info('image detached', key)
-			cached.destroy?.()
 			imageCache.delete(key)
 		}
 
@@ -425,7 +363,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		workspace.state.selected = undefined
 	}
 
-	return { state, scope, currentImage, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, attach, remove, detach, select, showModal, closeModal, apply }
+	return { state, scope, currentImage, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, remove, detach, select, showModal, closeModal, apply }
 })
 
 // Adjusts the z-index of elements after one is removed

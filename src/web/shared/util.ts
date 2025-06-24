@@ -7,12 +7,3 @@ export function stopPropagation(event: Event | React.PointerEvent) {
 export function preventDefault(event: Event) {
 	event.cancelable && event.preventDefault()
 }
-
-// This is necessary to prevent the page from scrolling while dragging the modal or image on touch devices.
-export function registerPreventDefaultOnTouchMove() {
-	document.body.addEventListener('touchmove', preventDefault, { passive: false })
-}
-
-export function unregisterPreventDefaultOnTouchMove() {
-	document.body.removeEventListener('touchmove', preventDefault)
-}

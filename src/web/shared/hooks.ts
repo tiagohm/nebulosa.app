@@ -1,124 +1,76 @@
-import { type MoveMoveEvent, useMove } from '@react-aria/interactions'
+import { createUseGesture, dragAction } from '@use-gesture/react'
 import { useMolecule } from 'bunshi/react'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { ModalMolecule } from '@/molecules/modal'
-import { registerPreventDefaultOnTouchMove, unregisterPreventDefaultOnTouchMove } from './util'
 
 export interface UseDraggableProps {
 	name: string
 	canOverflow?: boolean
 }
 
-export interface DraggableState {
-	boundary: {
-		minLeft: number
-		minTop: number
-		maxLeft: number
-		maxTop: number
-	}
-	transform: {
-		offsetX: number
-		offsetY: number
-	}
-}
+// Better tree shaking with createUseGesture
+const useGesture = createUseGesture([dragAction])
 
-const draggableStateMap = new Map<string, DraggableState>()
-
-// A hook for managing draggable functionality for a modal or any other element.
-export function useDraggable({ name, canOverflow }: UseDraggableProps) {
-	let targetRef: HTMLElement | undefined
-
-	const state = draggableStateMap.get(name) ?? {
-		boundary: {
-			minLeft: 0,
-			minTop: 0,
-			maxLeft: 0,
-			maxTop: 0,
-		},
-		transform: {
-			offsetX: 0,
-			offsetY: 0,
-		},
-	}
-
-	// https://github.com/heroui-inc/heroui/blob/canary/packages/hooks/use-draggable/src/index.ts
-
-	// Handles the start of a move event, calculating boundaries based
-	// on the current position and size of the target element.
-	function onMoveStart() {
-		if (!targetRef) return
-
-		const { offsetX, offsetY } = state.transform
-		const { left, top, width, height } = targetRef.getBoundingClientRect()
-		const { clientWidth, clientHeight } = document.documentElement
-
-		// Calculate the boundaries for the modal based on its position and size
-		const paddingWidth = targetRef.clientWidth - 64
-		const paddingHeight = targetRef.clientHeight - 64
-		state.boundary.minLeft = -left + offsetX - paddingWidth
-		state.boundary.minTop = -top + offsetY - paddingHeight
-		state.boundary.maxLeft = clientWidth - left - width + offsetX + paddingWidth
-		state.boundary.maxTop = clientHeight - top - height + offsetY + paddingHeight
-	}
-
-	// Handles the move event, updating the position of the target element
-	// based on the delta values from the move event.
-	// It also ensures that the element does not overflow its boundaries.
-	function onMove(e: MoveMoveEvent) {
-		if (!targetRef) return
-
-		let offsetX = state.transform.offsetX + e.deltaX
-		let offsetY = state.transform.offsetY + e.deltaY
-
-		if (!canOverflow) {
-			const { minLeft, minTop, maxLeft, maxTop } = state.boundary
-			offsetX = Math.min(Math.max(offsetX, minLeft), maxLeft)
-			offsetY = Math.min(Math.max(offsetY, minTop), maxTop)
-		}
-
-		state.transform.offsetX = offsetX
-		state.transform.offsetY = offsetY
-		targetRef.style.transform = `translate(${offsetX}px, ${offsetY}px)`
-	}
-
-	// Handles the end of a move event, saving the current state of the draggable
-	// element so that it can be restored later if needed.
-	function onMoveEnd() {
-		if (!targetRef) return
-
-		draggableStateMap.set(name, state)
-	}
-
-	// Sets the reference to the target element and applies the initial transform.
-	// It also sets the z-index of the parent element to ensure it is on top.
-	function ref(node: HTMLElement | null) {
-		if (node && node !== targetRef) {
-			targetRef = node
-			targetRef.style.transform = `translate(${state.transform.offsetX}px, ${state.transform.offsetY}px)`
-		}
-	}
-
-	return { onMoveStart, onMove, onMoveEnd, ref }
-}
+const modalTransformMap = new Map<string, { x: number; y: number }>()
 
 // A hook for managing a modal with draggable functionality.
 export function useModal(onClose?: () => void) {
 	const modal = useMolecule(ModalMolecule)
-	const draggable = useDraggable(modal.scope)
+	const modalRef = useRef<HTMLElement>(null)
+	const xy = useRef(modalTransformMap.get(modal.scope.name) ?? { x: 0, y: 0 })
+	const boundary = useRef({ minLeft: 0, minTop: 0, maxLeft: 0, maxTop: 0 })
 
-	const onMoveStart = useCallback(() => {
-		modal.onMoveStart()
-		draggable.onMoveStart()
-	}, [modal, draggable])
+	// Initialize the position of the modal if it doesn't exist in the map
+	modalTransformMap.set(modal.scope.name, xy.current)
 
-	const move = useMove({ onMoveStart, onMove: draggable.onMove, onMoveEnd: draggable.onMoveEnd })
+	const bind = useGesture(
+		{
+			onDragStart: () => {
+				modal.onDragStart()
+
+				if (!modalRef.current) return
+
+				const { x, y } = xy.current
+				const { left, top, width, height } = modalRef.current.getBoundingClientRect()
+				const { clientWidth, clientHeight } = document.documentElement
+
+				// Calculate the boundaries for the modal based on its position and size
+				const remainingWidth = modalRef.current.clientWidth - 64
+				const remainingHeight = modalRef.current.clientHeight - 64
+				boundary.current.minLeft = -left + x - remainingWidth
+				boundary.current.minTop = -top + y - remainingHeight
+				boundary.current.maxLeft = clientWidth - left - width + x + remainingWidth
+				boundary.current.maxTop = clientHeight - top - height + y + remainingHeight
+			},
+			onDrag: ({ offset, cancel }) => {
+				if (!modalRef.current) return cancel()
+
+				xy.current.x = Math.min(Math.max(offset[0], boundary.current.minLeft), boundary.current.maxLeft)
+				xy.current.y = Math.min(Math.max(offset[1], boundary.current.minTop), boundary.current.maxTop)
+
+				modalRef.current.style.transform = `translate(${xy.current.x}px, ${xy.current.y}px)`
+			},
+		},
+		{
+			drag: {
+				from: () => [xy.current.x, xy.current.y],
+				pointer: { mouse: true }, // Enable mouse dragging
+				button: 0, // Left mouse button
+			},
+		},
+	)
 
 	const ref = useCallback(
 		(node: HTMLElement | null) => {
-			modal.props.ref(node)
-			draggable.ref(node)
+			if (node) {
+				modal.props.ref(node)
+				modalRef.current = node
+
+				// Set the initial position of the modal based on the stored values
+				modalRef.current.style.transform = `translate(${xy.current.x}px, ${xy.current.y}px)`
+			}
 		},
-		[modal, draggable],
+		[modal],
 	)
 
 	const onOpenChange = useCallback(
@@ -129,19 +81,7 @@ export function useModal(onClose?: () => void) {
 		[modal, onClose],
 	)
 
-	// To prevent the page from scrolling while dragging the modal on touch devices,
-	let timer: NodeJS.Timeout | undefined
-
-	const onTouchStart = useCallback(() => {
-		clearTimeout(timer)
-		registerPreventDefaultOnTouchMove()
-	}, [])
-
-	const onTouchEnd = useCallback(() => {
-		timer = setTimeout(() => unregisterPreventDefaultOnTouchMove(), 1000)
-	}, [])
-
-	const moveProps = { ...move.moveProps, onTouchStart, onTouchEnd, onTouchCancel: onTouchEnd, style: { cursor: 'move' } }
+	const moveProps = { ...bind(), style: { cursor: 'move' } }
 
 	return { props: { ...modal.props, ref, onOpenChange }, moveProps }
 }

@@ -14,7 +14,7 @@ import { ImageScnr } from './ImageScnr'
 import { ImageSettings } from './ImageSettings'
 import { ImageStretch } from './ImageStretch'
 import { ImageToolBar } from './ImageToolBar'
-import { Interactable } from './Interactable'
+import { Interactable, type InteractTransform } from './Interactable'
 import { PlateSolver } from './PlateSolver'
 import { StarDetection } from './StarDetection'
 
@@ -37,12 +37,16 @@ export const ImageViewer = memo(() => {
 		}
 	}, [ref.current])
 
+	function handleGesture({ scale }: InteractTransform) {
+		viewer.state.scale = scale
+	}
+
 	return (
 		<>
 			{selected?.key === image.key && <ImageToolBar />}
 			{selected?.key === image.key && <ImageInfo />}
-			<Interactable>
-				<img className='image select-none touch-none pointer-events-none max-w-none shadow-[0_0_80px_black]' draggable={false} id={image.key} onContextMenu={(e) => e.preventDefault()} onLoad={() => viewer.attach()} onPointerUp={() => viewer.select()} ref={ref} />
+			<Interactable onGesture={handleGesture} onTap={() => viewer.select()} zIndex={image.index}>
+				<img className='image select-none touch-none pointer-events-none max-w-none shadow-[0_0_80px_black]' draggable={false} id={image.key} onContextMenu={(e) => e.preventDefault()} ref={ref} />
 				{crosshair && <Crosshair />}
 				{starDetection.show && <DetectedStars />}
 			</Interactable>

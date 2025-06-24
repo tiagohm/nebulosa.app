@@ -10,12 +10,13 @@
 }
 
 html {
-	@apply m-0 h-screen overflow-hidden p-0 scroll-smooth;
+	@apply m-0 h-screen overflow-hidden p-0 scroll-smooth touch-none;
 }
 
 html,
 body {
 	font-size: 14px;
+	overscroll-behavior: none;
 }
 
 /* Context Menu */

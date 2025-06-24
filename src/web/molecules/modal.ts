@@ -36,7 +36,7 @@ export const ModalMolecule = molecule((m, s) => {
 	let targetRef: HTMLElement | undefined
 
 	// Sets the z-index of the modal to ensure it is on top when the move starts
-	function onMoveStart() {
+	function onDragStart() {
 		if (!targetRef) return
 
 		zIndex.increment(scope.name, true)
@@ -77,5 +77,5 @@ export const ModalMolecule = molecule((m, s) => {
 		isOpen: true,
 	} as const
 
-	return { scope, props, onMoveStart, targetRef }
+	return { scope, props, onDragStart, targetRef }
 })

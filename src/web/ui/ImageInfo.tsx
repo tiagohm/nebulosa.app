@@ -6,7 +6,7 @@ import { ImageViewerMolecule } from '@/molecules/image/viewer'
 
 export const ImageInfo = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
-	const { info, zoom } = useSnapshot(viewer.state)
+	const { info, scale } = useSnapshot(viewer.state)
 
 	if (!info) return null
 
@@ -17,7 +17,7 @@ export const ImageInfo = memo(() => {
 				<div className='flex flex-row items-center gap-1'>
 					{info.width}x{info.height}
 					<Lucide.ZoomIn size={16} />
-					{zoom.toFixed(2)}
+					{scale.toFixed(2)}
 				</div>
 			</div>
 		</div>

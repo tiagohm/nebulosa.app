@@ -25,6 +25,7 @@
 		"@heroui/react": "2.8.0-beta.10",
 		"@tabler/icons-react": "latest",
 		"@uidotdev/usehooks": "2.4.1",
+		"@use-gesture/react": "10.3.1",
 		"bun-plugin-tailwind": "latest",
 		"bunshi": "2.1.5",
 		"date-fns": "4.1.0",

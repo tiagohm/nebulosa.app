@@ -7,7 +7,7 @@ import { DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_D
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { PanZoom, type PanZoomOptions } from '@/shared/panzoom'
+import type { PanZoom, PanZoomOptions } from '@/shared/panzoom'
 import { simpleLocalStorage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
 import { ImageWorkspaceMolecule } from './workspace'
@@ -382,7 +382,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 		const wrapper = image.closest('.wrapper') as HTMLElement
 		const owner = wrapper.closest('.workspace') as HTMLElement
-		const panZoom = new PanZoom(wrapper, owner, options)
+		// const panZoom = new PanZoom(wrapper, owner, options)
 
 		function handleWheel(e: WheelEvent) {
 			const target = e.target as HTMLElement
@@ -390,18 +390,18 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			if (e.shiftKey) {
 				// this.rotateWithWheel(e)
 			} else if (target === owner || target === wrapper || target === image /*|| target === this.roi().nativeElement*/ || target.tagName === 'circle' || target.tagName === 'text') {
-				panZoom.zoomWithWheel(e)
+				// panZoom.zoomWithWheel(e)
 			}
 		}
 
-		wrapper.addEventListener('wheel', handleWheel)
+		// wrapper.addEventListener('wheel', handleWheel)
 
 		function destroy() {
-			panZoom.destroy()
-			wrapper.removeEventListener('wheel', handleWheel)
+			// panZoom.destroy()
+			// wrapper.removeEventListener('wheel', handleWheel)
 		}
 
-		cached.panZoom = panZoom
+		// cached.panZoom = panZoom
 		cached.destroy = destroy
 
 		console.info('image attached', key)

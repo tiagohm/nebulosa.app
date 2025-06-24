@@ -14,6 +14,7 @@ import { ImageScnr } from './ImageScnr'
 import { ImageSettings } from './ImageSettings'
 import { ImageStretch } from './ImageStretch'
 import { ImageToolBar } from './ImageToolBar'
+import { Interactable } from './Interactable'
 import { PlateSolver } from './PlateSolver'
 import { StarDetection } from './StarDetection'
 
@@ -40,11 +41,12 @@ export const ImageViewer = memo(() => {
 		<>
 			{selected?.key === image.key && <ImageToolBar />}
 			{selected?.key === image.key && <ImageInfo />}
-			<div className='inline-block absolute wrapper' style={{ zIndex: image.index }}>
-				<img className='image select-none max-w-none shadow-[0_0_80px_black]' id={image.key} onLoad={() => viewer.attach()} onPointerUp={() => viewer.select()} ref={ref} />
+			<Interactable>
+				<img className='image select-none touch-none pointer-events-none max-w-none shadow-[0_0_80px_black]' draggable={false} id={image.key} onContextMenu={(e) => e.preventDefault()} onLoad={() => viewer.attach()} onPointerUp={() => viewer.select()} ref={ref} />
 				{crosshair && <Crosshair />}
 				{starDetection.show && <DetectedStars />}
-			</div>
+			</Interactable>
+			{/* <div className='inline-block absolute wrapper' style={{ zIndex: image.index }}></div> */}
 			{stretch.showModal && (
 				<ScopeProvider scope={ModalScope} value={{ name: `stretch-${image.key}` }}>
 					<ImageStretch />

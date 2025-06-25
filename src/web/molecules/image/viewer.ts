@@ -82,7 +82,7 @@ export const DEFAULT_IMAGE_SETTINGS: ImageState['settings'] = {
 
 const imageCache = new Map<string, CachedImage>()
 
-export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { key: '', path: '', position: 0 } })
+export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { key: '', path: '', position: 0, type: 'file' } })
 
 // Molecule that manages the image viewer
 // It handles loading, transformations, star detection, and other image-related functionalities
@@ -91,6 +91,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 	const workspace = m(ImageWorkspaceMolecule)
 	const { key, path } = scope.image
+
+	let target = document.getElementById(key) as HTMLImageElement | null
 
 	const transformation = simpleLocalStorage.get('image.transformation', () => structuredClone(DEFAULT_IMAGE_TRANSFORMATION))
 	const starDetectionRequest = simpleLocalStorage.get('image.starDetection', () => structuredClone(DEFAULT_STAR_DETECTION))
@@ -182,12 +184,10 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		unsubscribes[0] = subscribeKey(state, 'crosshair', (e) => simpleLocalStorage.set('image.crosshair', e))
 		unsubscribes[1] = subscribe(state.transformation, () => simpleLocalStorage.set('image.transformation', state.transformation))
 
-		return () => unsubscribes.forEach((e) => e())
+		return () => {
+			unsubscribes.forEach((e) => e())
+		}
 	})
-
-	function currentImage() {
-		return document.getElementById(key) as HTMLImageElement | undefined
-	}
 
 	// Toggles the auto-stretch transformation
 	function toggleAutoStretch() {
@@ -240,8 +240,10 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	}
 
 	// Loads the current image
-	async function load(force: boolean = false, image?: HTMLImageElement) {
+	async function load(force: boolean = false) {
 		if (loading) return
+
+		loading = true
 
 		console.info('loading image', key)
 
@@ -249,30 +251,30 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 		// Not loaded yet or forced to load
 		if (!cached?.url || force) {
-			await open(image)
-		} else {
-			// Load the image from cache
-			image ??= currentImage()
-
-			if (image) {
-				image.src = cached.url
-				apply()
-				console.info('image loaded from cache', key, cached.url)
-			} else {
-				console.warn('image not mounted yet', key)
-			}
+			await open()
 		}
+		// Load the image from cache
+		else if (target) {
+			target.src = cached.url
+			apply()
+			console.info('image loaded from cache', key, cached.url)
+		} else {
+			console.warn('image not mounted yet', key)
+		}
+
+		loading = false
 	}
 
 	// Opens the current image and saves it into cache
-	async function open(image?: HTMLImageElement) {
+	async function open() {
 		try {
 			loading = true
 
 			console.info('opening image', key)
 
 			// Load the image
-			const { blob, info } = await Api.Image.open({ path: scope.image.path, transformation: state.transformation })
+			const path = scope.image.path.split('#')[0]
+			const { blob, info } = await Api.Image.open({ path, transformation: state.transformation })
 			const url = URL.createObjectURL(blob)
 
 			// Update the state
@@ -290,10 +292,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 				imageCache.set(key, { url, state })
 			}
 
-			image ??= currentImage()
-
-			if (image) {
-				image.src = url
+			if (target) {
+				target.src = url
 				apply()
 				console.info('image loaded', key, url, info)
 			} else {
@@ -333,17 +333,24 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 	// Applies the current settings to the image
 	function apply() {
-		const image = currentImage()
-		if (!image) return
-		image.classList.toggle('pixelated', state.settings.pixelated)
+		if (!target) return
+		target.classList.toggle('pixelated', state.settings.pixelated)
 	}
 
 	// Selects the image and brings it to the front
 	function select() {
-		const image = currentImage()
-		if (!image) return
+		if (!target) return
 		workspace.state.selected = scope.image
-		bringToFront(image)
+		bringToFront(target)
+	}
+
+	// Attaches the image to the viewer
+	function attach(node: HTMLImageElement | null) {
+		if (node) {
+			target = node
+			void load(false)
+			select()
+		}
 	}
 
 	// Detaches the image from the workspace
@@ -363,7 +370,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		workspace.state.selected = undefined
 	}
 
-	return { state, scope, currentImage, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, load, open, remove, detach, select, showModal, closeModal, apply }
+	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, attach, load, open, remove, detach, select, showModal, closeModal, apply }
 })
 
 // Adjusts the z-index of elements after one is removed

@@ -15,7 +15,7 @@ export const ImagePickerButton = memo(() => {
 	function handleChoose(paths?: string[]) {
 		if (paths?.length) {
 			for (const path of paths) {
-				workspace.add(path)
+				workspace.add(path, undefined, 'file')
 			}
 		}
 

@@ -28,21 +28,14 @@ export const ImageViewer = memo(() => {
 
 	useEffect(() => {
 		if (ref.current) {
-			viewer.load(false, ref.current)
-			viewer.select()
+			viewer.attach(ref.current)
+			workspace.link(image, viewer)
 		}
 
 		return () => {
 			viewer.detach()
 		}
 	}, [ref.current])
-
-	useEffect(() => {
-		if (ref.current && image.path) {
-			console.info('image path changed')
-			viewer.load(true, ref.current)
-		}
-	}, [image.path])
 
 	function handleGesture({ scale }: InteractTransform) {
 		viewer.state.scale = scale

@@ -1,4 +1,4 @@
-import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem } from '@heroui/react'
+import { Button, Checkbox, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { memo } from 'react'
@@ -10,7 +10,7 @@ import { RightAscensionInput } from './RightAscensionInput'
 
 export const Framing = memo(() => {
 	const framing = useMolecule(FramingMolecule)
-	const { request, hipsSurveys, loading } = useSnapshot(framing.state)
+	const { request, hipsSurveys, loading, openNewImage } = useSnapshot(framing.state)
 	const modal = useModal(() => framing.close())
 
 	return (
@@ -60,6 +60,9 @@ export const Framing = memo(() => {
 										</SelectItem>
 									)}
 								</Select>
+								<Checkbox className='col-span-full' isDisabled={loading} isSelected={openNewImage} onValueChange={(value) => (framing.state.openNewImage = value)} size='sm'>
+									Open in new image
+								</Checkbox>
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>

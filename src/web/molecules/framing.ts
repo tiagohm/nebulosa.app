@@ -1,9 +1,11 @@
 import { addToast } from '@heroui/react'
-import { molecule } from 'bunshi'
+import { molecule, onMount } from 'bunshi'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import { DEFAULT_FRAMING, type Framing } from 'src/api/types'
-import { proxy } from 'valtio'
+import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
+import { simpleLocalStorage } from '@/shared/storage'
+import type { Image } from '@/shared/types'
 import { ImageWorkspaceMolecule } from './image/workspace'
 
 export interface FramingState {
@@ -11,17 +13,29 @@ export interface FramingState {
 	readonly request: Framing
 	hipsSurveys: HipsSurvey[]
 	loading: boolean
+	openNewImage: boolean
+	readonly images: Image[]
 }
 
 // Molecule that manages the Framing modal
 export const FramingMolecule = molecule((m) => {
 	const workspace = m(ImageWorkspaceMolecule)
 
+	const request = simpleLocalStorage.get('framing', () => structuredClone(DEFAULT_FRAMING))
+
 	const state = proxy<FramingState>({
 		showModal: false,
-		request: structuredClone(DEFAULT_FRAMING),
+		request,
 		hipsSurveys: [],
 		loading: false,
+		openNewImage: request.id !== DEFAULT_FRAMING.id,
+		images: [],
+	})
+
+	onMount(() => {
+		const unsubscribe = subscribe(state.request, () => simpleLocalStorage.set('framing', state.request))
+
+		return () => unsubscribe()
 	})
 
 	Api.Framing.hipsSurveys().then((hipsSurveys) => (state.hipsSurveys = hipsSurveys))
@@ -35,8 +49,15 @@ export const FramingMolecule = molecule((m) => {
 	async function load() {
 		try {
 			state.loading = true
+
+			if (state.openNewImage) state.request.id = Date.now().toFixed(0)
+			else state.request.id = DEFAULT_FRAMING.id
+
 			const { path } = await Api.Framing.frame(state.request)
-			workspace.add(path, 'framing', 'framing')
+			const image = workspace.add(path, state.request.id, 'framing')
+
+			const index = state.images.findIndex((e) => e.key === image.key)
+			index >= 0 ? (state.images[index] = image) : state.images.push(image)
 		} catch {
 			addToast({ title: 'ERROR', description: 'Failed to load framing', color: 'danger' })
 		} finally {

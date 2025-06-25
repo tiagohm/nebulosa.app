@@ -13,6 +13,7 @@ export interface Image {
 	readonly key: string
 	readonly position: number
 	path: string
+	readonly type: 'file' | 'framing'
 }
 
 export const DEFAULT_CONNECTION: Connection = {

@@ -2,6 +2,8 @@ import { molecule } from 'bunshi'
 import { proxy } from 'valtio'
 import { simpleLocalStorage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
+import type { Atom } from '@/shared/util'
+import type { ImageViewerMolecule } from './viewer'
 
 export interface ImageWorkspaceState {
 	readonly images: Image[]
@@ -12,37 +14,53 @@ export interface ImageWorkspaceState {
 
 // Molecule that manages all the images
 export const ImageWorkspaceMolecule = molecule(() => {
+	const viewers = new Map<string, Atom<typeof ImageViewerMolecule>>()
+
 	const state = proxy<ImageWorkspaceState>({
 		images: [],
 		showModal: false,
 		lastPath: simpleLocalStorage.get('image.path', ''),
 	})
 
+	function link(image: Image, viewer: Atom<typeof ImageViewerMolecule>) {
+		viewers.set(image.key, viewer)
+	}
+
 	// Add an image to the workspace from a given path
 	// It generates a unique key for the image and adds it to the state
-	function add(path: string, key: string | undefined | null, type: 'file' | 'framing') {
+	function add(path: string, key: string | undefined | null, type: Image['type']) {
 		const position = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => e.position)) + 1
-		key ||= `image-${Date.now()}-${position}`
+		key ||= `${Date.now()}-${position}`
+		key = `${type}-${key}`
 
 		const index = state.images.findIndex((e) => e.key === key)
+		let image: Image
 
 		if (index >= 0) {
 			state.images[index].path = path
+			image = state.images[index]
+			viewers.get(image.key)?.load(true)
 		} else {
-			state.images.push({ path, key, position })
+			image = { path, key, position, type }
+			state.images.push(image)
 		}
+
+		console.info('image added', image)
 
 		if (type === 'file') {
 			state.lastPath = path
 			simpleLocalStorage.set('image.path', path)
 		}
+
+		return image
 	}
 
 	// Removes an image from the workspace
 	function remove(image: Image) {
 		const index = state.images.findIndex((e) => e.key === image.key)
 		index >= 0 && state.images.splice(index, 1)
+		viewers.delete(image.key)
 	}
 
-	return { state, add, remove }
+	return { state, link, add, remove }
 })

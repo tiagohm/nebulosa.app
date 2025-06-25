@@ -97,7 +97,7 @@ export interface FileSystem {
 // Framing
 
 export interface Framing {
-	id?: string
+	id: string
 	hipsSurvey: string
 	rightAscension: string | Angle
 	declination: string | Angle
@@ -110,6 +110,7 @@ export interface Framing {
 }
 
 export const DEFAULT_FRAMING: Framing = {
+	id: '0',
 	hipsSurvey: 'CDS/P/DSS2/color',
 	rightAscension: '00 00 00',
 	declination: '+000 00 00',

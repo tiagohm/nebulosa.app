@@ -97,13 +97,28 @@ export interface FileSystem {
 // Framing
 
 export interface Framing {
+	id?: string
 	hipsSurvey: string
 	rightAscension: string | Angle
 	declination: string | Angle
 	width: number
 	height: number
-	fov: number // deg
+	fov?: number // deg
+	focalLength?: number // mm
+	pixelSize?: number // µm
 	rotation: number // deg
+}
+
+export const DEFAULT_FRAMING: Framing = {
+	hipsSurvey: 'CDS/P/DSS2/color',
+	rightAscension: '00 00 00',
+	declination: '+000 00 00',
+	width: 800,
+	height: 600,
+	fov: 1,
+	focalLength: 500,
+	pixelSize: 3.5,
+	rotation: 0,
 }
 
 // Image

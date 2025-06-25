@@ -1,5 +1,5 @@
 import { Button, Chip, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
-import { useMolecule } from 'bunshi/react'
+import { ScopeProvider, useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
@@ -23,18 +23,28 @@ import sequencerIcon from '@/assets/sequencer.webp'
 import settingsIcon from '@/assets/settings.webp'
 import skyAtlasIcon from '@/assets/sky-atlas.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
+import { AboutMolecule } from '@/molecules/about'
+import { FramingMolecule } from '@/molecules/framing'
 import { HomeMolecule } from '@/molecules/home'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
+import { ModalScope } from '@/molecules/modal'
 import { About } from './About'
+import { Framing } from './Framing'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
 
 export function HomeMenu() {
 	const home = useMolecule(HomeMolecule)
-	const { about } = useSnapshot(home.state)
 	const { deviceType, devices } = useSnapshot(home.state.menu)
+
 	const equipment = useMolecule(EquipmentMolecule)
 	const { cameras, guideOutputs, thermometers } = useSnapshot(equipment.state)
+
+	const framing = useMolecule(FramingMolecule)
+	const { showModal: showFramingModal } = useSnapshot(framing.state)
+
+	const about = useMolecule(AboutMolecule)
+	const { showModal: showAboutModal } = useSnapshot(about.state)
 
 	return (
 		<>
@@ -107,7 +117,7 @@ export function HomeMenu() {
 							</Button>
 						</Tooltip>
 						<Tooltip content='Framing' placement='bottom' showArrow>
-							<Button color='secondary' isIconOnly size='lg' variant='light'>
+							<Button color='secondary' isIconOnly onPointerUp={() => framing.show()} size='lg' variant='light'>
 								<img className='w-9' src={framingIcon} />
 							</Button>
 						</Tooltip>
@@ -147,7 +157,7 @@ export function HomeMenu() {
 							</Button>
 						</Tooltip>
 						<Tooltip content='About' placement='bottom' showArrow>
-							<Button color='secondary' isIconOnly onPointerUp={() => home.showModal('about')} size='lg' variant='light'>
+							<Button color='secondary' isIconOnly onPointerUp={() => about.show()} size='lg' variant='light'>
 								<img className='w-9' src={aboutIcon} />
 							</Button>
 						</Tooltip>
@@ -164,7 +174,16 @@ export function HomeMenu() {
 					</div>
 				</PopoverContent>
 			</Popover>
-			{about.showModal && <About />}
+			{showFramingModal && (
+				<ScopeProvider scope={ModalScope} value={{ name: 'framing' }}>
+					<Framing />
+				</ScopeProvider>
+			)}
+			{showAboutModal && (
+				<ScopeProvider scope={ModalScope} value={{ name: 'about' }}>
+					<About />
+				</ScopeProvider>
+			)}
 		</>
 	)
 }

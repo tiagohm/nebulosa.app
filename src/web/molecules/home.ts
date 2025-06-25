@@ -8,9 +8,6 @@ export interface HomeState {
 		deviceType?: DeviceType | SubDeviceType
 		devices: Device[]
 	}
-	readonly about: {
-		showModal: boolean
-	}
 }
 
 // Molecule that manages the home
@@ -22,18 +19,7 @@ export const HomeMolecule = molecule((m) => {
 			deviceType: undefined,
 			devices: [],
 		},
-		about: {
-			showModal: false,
-		},
 	})
-
-	function showModal(type: 'about') {
-		state[type].showModal = true
-	}
-
-	function closeModal(type: 'about') {
-		state[type].showModal = false
-	}
 
 	function showDevices(type: DeviceType | SubDeviceType) {
 		const devices = type === 'CAMERA' ? equipment.state.cameras : type === 'GUIDE_OUTPUT' ? equipment.state.guideOutputs : type === 'THERMOMETER' ? equipment.state.thermometers : undefined
@@ -47,5 +33,5 @@ export const HomeMolecule = molecule((m) => {
 		}
 	}
 
-	return { state, showModal, closeModal, showDevices }
+	return { state, showDevices }
 })

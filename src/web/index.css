@@ -61,7 +61,13 @@ div[role="tooltip"] {
 /* Select Popover */
 
 div[data-slot="popover"] {
-	@apply !w-fit;
+	@apply !min-w-fit;
+}
+
+/* Select Trigger */
+
+div[data-slot="base"] div[data-slot="mainWrapper"] button[data-slot="trigger"] {
+	@apply min-h-fit;
 }
 
 /** Popover Menu */

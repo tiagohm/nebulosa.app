@@ -82,7 +82,7 @@ export const DEFAULT_IMAGE_SETTINGS: ImageState['settings'] = {
 
 const imageCache = new Map<string, CachedImage>()
 
-export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { key: '', path: '', index: 0 } })
+export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { key: '', path: '', position: 0 } })
 
 // Molecule that manages the image viewer
 // It handles loading, transformations, star detection, and other image-related functionalities

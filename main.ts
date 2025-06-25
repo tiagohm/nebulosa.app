@@ -1,6 +1,9 @@
 import { cors } from '@elysiajs/cors'
 import { cron } from '@elysiajs/cron'
 import Elysia from 'elysia'
+import fs from 'fs'
+import os from 'os'
+import { join } from 'path'
 import { CameraHandler, CameraManager, cameras } from 'src/api/camera'
 import { ApiError } from 'src/api/exceptions'
 import { GuideOutputHandler, GuideOutputManager, guideOutputs } from 'src/api/guideoutput'
@@ -31,6 +34,16 @@ const args = parseArgs({
 
 const hostname = args.values.host || '0.0.0.0'
 const port = parseInt(args.values.port || '1234')
+
+// Initialize environment variables
+if (process.platform === 'linux') {
+	Bun.env.appDir = join(os.homedir(), '.nebulosa')
+} else if (process.platform === 'win32') {
+	Bun.env.appDir = '' // TODO: https://stackoverflow.com/a/64807054
+}
+
+Bun.env.framingDir = join(Bun.env.appDir, 'framing')
+fs.mkdirSync(Bun.env.framingDir, { recursive: true })
 
 // Handlers
 
@@ -99,6 +112,8 @@ app.use(
 // Error Handling
 
 app.onError(({ error }) => {
+	console.error(error)
+
 	if (error instanceof ApiError) {
 		return new Response(JSON.stringify(error.message), { status: error.status })
 	}

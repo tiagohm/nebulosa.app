@@ -37,6 +37,13 @@ export const ImageViewer = memo(() => {
 		}
 	}, [ref.current])
 
+	useEffect(() => {
+		if (ref.current && image.path) {
+			console.info('image path changed')
+			viewer.load(true, ref.current)
+		}
+	}, [image.path])
+
 	function handleGesture({ scale }: InteractTransform) {
 		viewer.state.scale = scale
 	}
@@ -45,7 +52,7 @@ export const ImageViewer = memo(() => {
 		<>
 			{selected?.key === image.key && <ImageToolBar />}
 			{selected?.key === image.key && <ImageInfo />}
-			<Interactable onGesture={handleGesture} onTap={() => viewer.select()} zIndex={image.index}>
+			<Interactable onGesture={handleGesture} onTap={() => viewer.select()} zIndex={image.position}>
 				<img className='image select-none touch-none pointer-events-none max-w-none shadow-[0_0_80px_black]' draggable={false} id={image.key} onContextMenu={(e) => e.preventDefault()} ref={ref} />
 				{crosshair && <Crosshair />}
 				{starDetection.show && <DetectedStars />}

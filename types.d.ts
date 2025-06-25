@@ -1,3 +1,10 @@
+declare module 'bun' {
+	interface Env {
+		appDir: string
+		framingDir: string
+	}
+}
+
 declare module '*.svg' {
 	const path: `${string}.svg`
 	export = path

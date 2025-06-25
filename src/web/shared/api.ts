@@ -1,6 +1,7 @@
+import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
-import type { Connect, ConnectionStatus, CreateDirectory, FileSystem, ImageInfo, ListDirectory, OpenImage, PlateSolveStart, PlateSolveStop, StarDetection } from 'src/api/types'
+import type { Connect, ConnectionStatus, CreateDirectory, FileSystem, Framing, ImageInfo, ListDirectory, OpenImage, PlateSolveStart, PlateSolveStop, StarDetection } from 'src/api/types'
 import { X_IMAGE_INFO_HEADER } from 'src/api/types'
 import wretch from 'wretch'
 
@@ -59,6 +60,16 @@ export namespace Api {
 	export namespace StarDetection {
 		export function detect(req: StarDetection) {
 			return w.url('/starDetection').post(req).json<DetectedStar[]>()
+		}
+	}
+
+	export namespace Framing {
+		export function hipsSurveys() {
+			return w.url('/framing/hipsSurveys').get().json<HipsSurvey[]>()
+		}
+
+		export function frame(req: Framing) {
+			return w.url('/framing').post(req).json<{ path: string }>()
 		}
 	}
 }

@@ -11,8 +11,8 @@ export interface Connection extends Connect {
 
 export interface Image {
 	readonly key: string
-	readonly index: number
-	readonly path: string
+	readonly position: number
+	path: string
 }
 
 export const DEFAULT_CONNECTION: Connection = {

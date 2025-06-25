@@ -1,19 +1,6 @@
 import { createScope, molecule } from 'bunshi'
 import { ZIndexMolecule } from './zindex'
 
-export interface ModalState {
-	readonly boundary: {
-		minLeft: number
-		minTop: number
-		maxLeft: number
-		maxTop: number
-	}
-	readonly transform: {
-		offsetX: number
-		offsetY: number
-	}
-}
-
 export interface ModalScopeValue {
 	readonly name: string
 	readonly canOverflow?: boolean

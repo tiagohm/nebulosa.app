@@ -53,5 +53,8 @@
 		"esbuild",
 		"nebulosa",
 		"sharp"
-	]
+	],
+	"overrides": {
+		"@types/node": "latest"
+	}
 }

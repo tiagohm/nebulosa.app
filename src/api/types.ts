@@ -104,8 +104,8 @@ export interface Framing {
 	width: number
 	height: number
 	fov?: number // deg
-	focalLength?: number // mm
-	pixelSize?: number // µm
+	focalLength: number // mm
+	pixelSize: number // µm
 	rotation: number // deg
 }
 

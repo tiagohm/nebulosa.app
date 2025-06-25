@@ -3,7 +3,7 @@ import { useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
 import * as Lucide from 'lucide-react'
 import { useSnapshot } from 'valtio'
-import { FilePickerMolecule } from '@/molecules/file-picker'
+import { FilePickerMolecule } from '@/molecules/filepicker'
 import { useModal } from '@/shared/hooks'
 
 export interface FilePickerProps {

@@ -15,8 +15,7 @@ html {
 
 html,
 body {
-	font-size: 14px;
-	overscroll-behavior: none;
+	@apply text-[14px] overscroll-none;
 }
 
 /* Context Menu */
@@ -47,6 +46,10 @@ div[role="separator"] {
 
 /* Dialog */
 
+div[data-slot="wrapper"]:has(section[role="dialog"]) {
+	@apply overflow-hidden;
+}
+
 section[role="dialog"] {
 	@apply pointer-events-auto opacity-98;
 }
@@ -54,8 +57,7 @@ section[role="dialog"] {
 /* Tooltip */
 
 div[role="tooltip"] {
-	@apply pointer-events-none;
-	z-index: 10000001 !important;
+	@apply pointer-events-none !z-[10000001];
 }
 
 /* Select Popover */
@@ -73,7 +75,7 @@ div[data-slot="base"] div[data-slot="mainWrapper"] button[data-slot="trigger"] {
 /** Popover Menu */
 
 div:has(div[data-slot="base"][data-open="true"][role="dialog"]) {
-	z-index: 10000000 !important;
+	@apply !z-[10000000];
 }
 
 /* Utilities */

@@ -189,10 +189,23 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		}
 	})
 
+	// Resets the stretch transformation to default values
+	function resetStretch() {
+		state.transformation.stretch.auto = false
+		state.transformation.stretch.midtone = 32768
+		state.transformation.stretch.shadow = 0
+		state.transformation.stretch.highlight = 65536
+		return load(true)
+	}
+
 	// Toggles the auto-stretch transformation
 	function toggleAutoStretch() {
-		state.transformation.stretch.auto = !state.transformation.stretch.auto
-		return load(true)
+		if (state.transformation.stretch.auto) {
+			return resetStretch()
+		} else {
+			state.transformation.stretch.auto = true
+			return load(true)
+		}
 	}
 
 	// Toggles the debayer transformation
@@ -370,7 +383,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		workspace.state.selected = undefined
 	}
 
-	return { state, scope, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, attach, load, open, remove, detach, select, showModal, closeModal, apply }
+	return { state, scope, resetStretch, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, attach, load, open, remove, detach, select, showModal, closeModal, apply }
 })
 
 // Adjusts the z-index of elements after one is removed

@@ -35,7 +35,7 @@ export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'ro
 
 export function HomeMenu() {
 	const home = useMolecule(HomeMolecule)
-	const { deviceType, devices } = useSnapshot(home.state.menu)
+	const { show, deviceType, devices } = useSnapshot(home.state.menu)
 
 	const equipment = useMolecule(EquipmentMolecule)
 	const { cameras, guideOutputs, thermometers } = useSnapshot(equipment.state)
@@ -48,7 +48,7 @@ export function HomeMenu() {
 
 	return (
 		<>
-			<Popover placement='bottom' showArrow>
+			<Popover isOpen={show} onOpenChange={home.toggleMenu} placement='bottom' showArrow>
 				<PopoverTrigger>
 					<Button color='secondary' isIconOnly variant='light'>
 						<Lucide.Menu />
@@ -117,7 +117,7 @@ export function HomeMenu() {
 							</Button>
 						</Tooltip>
 						<Tooltip content='Framing' placement='bottom' showArrow>
-							<Button color='secondary' isIconOnly onPointerUp={() => framing.show()} size='lg' variant='light'>
+							<Button color='secondary' isIconOnly onPointerUp={framing.show} size='lg' variant='light'>
 								<img className='w-9' src={framingIcon} />
 							</Button>
 						</Tooltip>
@@ -157,7 +157,7 @@ export function HomeMenu() {
 							</Button>
 						</Tooltip>
 						<Tooltip content='About' placement='bottom' showArrow>
-							<Button color='secondary' isIconOnly onPointerUp={() => about.show()} size='lg' variant='light'>
+							<Button color='secondary' isIconOnly onPointerUp={about.show} size='lg' variant='light'>
 								<img className='w-9' src={aboutIcon} />
 							</Button>
 						</Tooltip>

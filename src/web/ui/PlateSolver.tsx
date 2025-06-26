@@ -62,10 +62,10 @@ export const PlateSolver = memo(() => {
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='danger' isDisabled={!loading} onPointerUp={() => solver.stop()} startContent={<Tabler.IconPlayerStopFilled />} variant='flat'>
+							<Button color='danger' isDisabled={!loading} onPointerUp={solver.stop} startContent={<Tabler.IconPlayerStopFilled />} variant='flat'>
 								Stop
 							</Button>
-							<Button color='success' isLoading={loading} onPointerUp={() => solver.start()} startContent={<Lucide.Sigma />} variant='flat'>
+							<Button color='success' isLoading={loading} onPointerUp={solver.start} startContent={<Lucide.Sigma />} variant='flat'>
 								Solve
 							</Button>
 						</ModalFooter>

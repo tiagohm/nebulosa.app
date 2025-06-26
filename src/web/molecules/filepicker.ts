@@ -81,7 +81,10 @@ export const FilePickerMolecule = molecule((m, s) => {
 	}
 
 	function navigateTo(entry: DirectoryEntry) {
-		state.history.push(state.path)
+		if (state.history.length === 0 || state.history[state.history.length - 1] !== state.path) {
+			state.history.push(state.path)
+		}
+
 		state.path = entry.path
 		return list()
 	}

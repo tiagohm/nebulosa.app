@@ -13,7 +13,7 @@ export interface FilePickerProps {
 
 export function FilePicker({ header, onChoose }: FilePickerProps) {
 	const filePicker = useMolecule(FilePickerMolecule)
-	const { mode, filtered, selected, directoryTree, filter, createDirectory, directoryName } = useSnapshot(filePicker.state)
+	const { mode, history, filtered, selected, directoryTree, filter, createDirectory, directoryName } = useSnapshot(filePicker.state)
 	const modal = useModal(() => onChoose())
 
 	function handleChoose() {
@@ -32,7 +32,7 @@ export function FilePicker({ header, onChoose }: FilePickerProps) {
 							<div className='flex w-full flex-col flex-wrap gap-2'>
 								<div className='flex flex-row items-center gap-2'>
 									<Tooltip content='Go Back' showArrow>
-										<Button color='secondary' isDisabled={history.length === 0} isIconOnly onPointerUp={() => filePicker.navigateBack()} variant='light'>
+										<Button color='secondary' isDisabled={history.length === 0} isIconOnly onPointerUp={filePicker.navigateBack} variant='light'>
 											<Lucide.ArrowLeft size={16} />
 										</Button>
 									</Tooltip>
@@ -44,17 +44,17 @@ export function FilePicker({ header, onChoose }: FilePickerProps) {
 										))}
 									</Breadcrumbs>
 									<Tooltip content='Go To Parent' showArrow>
-										<Button color='secondary' isDisabled={directoryTree.length <= 1} isIconOnly onPointerUp={() => filePicker.navigateToParent()} variant='light'>
+										<Button color='secondary' isDisabled={directoryTree.length <= 1} isIconOnly onPointerUp={filePicker.navigateToParent} variant='light'>
 											<Lucide.ArrowUp size={16} />
 										</Button>
 									</Tooltip>
 									<Tooltip content='New Directory' showArrow>
-										<Button color='warning' isIconOnly onPointerUp={() => filePicker.toggleCreateDirectory()} variant='light'>
+										<Button color='warning' isIconOnly onPointerUp={filePicker.toggleCreateDirectory} variant='light'>
 											<Lucide.FolderPlus size={16} />
 										</Button>
 									</Tooltip>
 									<Tooltip content='Refresh' showArrow>
-										<Button color='primary' isIconOnly onPointerUp={() => filePicker.list()} variant='light'>
+										<Button color='primary' isIconOnly onPointerUp={filePicker.list} variant='light'>
 											<Lucide.RefreshCcw size={16} />
 										</Button>
 									</Tooltip>
@@ -64,7 +64,7 @@ export function FilePicker({ header, onChoose }: FilePickerProps) {
 									<div className='flex flex-row items-center gap-2'>
 										<Input label='Name' onValueChange={(value) => (filePicker.state.directoryName = value)} size='sm' value={directoryName} />
 										<Tooltip content='Create' showArrow>
-											<Button color='success' isDisabled={directoryName.length === 0} isIconOnly onPointerUp={() => filePicker.createDirectory()} variant='light'>
+											<Button color='success' isDisabled={directoryName.length === 0} isIconOnly onPointerUp={filePicker.createDirectory} variant='light'>
 												<Lucide.Check size={16} />
 											</Button>
 										</Tooltip>

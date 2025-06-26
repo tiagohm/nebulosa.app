@@ -31,13 +31,13 @@ export const ImageToolBar = memo(() => {
 						</Button>
 					</Tooltip>
 					<Tooltip content='Auto Stretch' placement='top'>
-						<ToggleButton color='primary' isSelected={transformation.stretch.auto} onPointerUp={() => viewer.toggleAutoStretch()}>
+						<ToggleButton color='primary' isSelected={transformation.stretch.auto} onPointerUp={viewer.toggleAutoStretch}>
 							<Lucide.WandSparkles />
 						</ToggleButton>
 					</Tooltip>
 					{info.metadata.bayer && info.metadata.channels === 1 && (
 						<Tooltip content='Debayer' placement='top'>
-							<ToggleButton color='primary' isSelected={transformation.debayer} onPointerUp={() => viewer.toggleDebayer()}>
+							<ToggleButton color='primary' isSelected={transformation.debayer} onPointerUp={viewer.toggleDebayer}>
 								<Lucide.Grid3X3 />
 							</ToggleButton>
 						</Tooltip>
@@ -68,17 +68,17 @@ export const ImageToolBar = memo(() => {
 									</Button>
 								</Tooltip>
 								<Tooltip content='Horizontal mirror' placement='top'>
-									<ToggleButton color='primary' isSelected={transformation.horizontalMirror} onPointerUp={() => viewer.toggleHorizontalMirror()}>
+									<ToggleButton color='primary' isSelected={transformation.horizontalMirror} onPointerUp={viewer.toggleHorizontalMirror}>
 										<Lucide.FlipHorizontal />
 									</ToggleButton>
 								</Tooltip>
 								<Tooltip content='Vertical Mirror' placement='top'>
-									<ToggleButton color='primary' isSelected={transformation.verticalMirror} onPointerUp={() => viewer.toggleVerticalMirror()}>
+									<ToggleButton color='primary' isSelected={transformation.verticalMirror} onPointerUp={viewer.toggleVerticalMirror}>
 										<Lucide.FlipVertical />
 									</ToggleButton>
 								</Tooltip>
 								<Tooltip content='Invert' placement='top'>
-									<ToggleButton color='primary' isSelected={transformation.invert} onPointerUp={() => viewer.toggleInvert()}>
+									<ToggleButton color='primary' isSelected={transformation.invert} onPointerUp={viewer.toggleInvert}>
 										<Tabler.IconContrastFilled />
 									</ToggleButton>
 								</Tooltip>
@@ -94,7 +94,7 @@ export const ImageToolBar = memo(() => {
 						<PopoverContent>
 							<div className='flex flex-row justify-center items-start gap-2 p-2'>
 								<Tooltip content='Crosshair' placement='top'>
-									<ToggleButton color='primary' isSelected={crosshair} onPointerUp={() => viewer.toggleCrosshair()}>
+									<ToggleButton color='primary' isSelected={crosshair} onPointerUp={viewer.toggleCrosshair}>
 										<Lucide.Crosshair />
 									</ToggleButton>
 								</Tooltip>
@@ -145,7 +145,7 @@ export const ImageToolBar = memo(() => {
 						</Button>
 					</Tooltip>
 					<Tooltip content='Close' placement='top'>
-						<Button className='ms-2' color='danger' isIconOnly onPointerUp={() => viewer.remove()} variant='solid'>
+						<Button className='ms-2' color='danger' isIconOnly onPointerUp={viewer.remove} variant='solid'>
 							<Lucide.X />
 						</Button>
 					</Tooltip>

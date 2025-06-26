@@ -14,20 +14,17 @@ export const ImageStretchMolecule = molecule((m, s) => {
 
 	// Apply the auto-stretch transformation to the image
 	function auto() {
-		return apply(true)
+		viewer.state.transformation.stretch.auto = true
+		return apply()
 	}
 
 	// Resets the stretch transformation to default values
 	function reset() {
-		viewer.state.transformation.stretch.midtone = 32768
-		viewer.state.transformation.stretch.shadow = 0
-		viewer.state.transformation.stretch.highlight = 65536
-		return apply()
+		return viewer.resetStretch()
 	}
 
 	// Applies the stretch transformation to the image
-	function apply(auto: boolean = false) {
-		viewer.state.transformation.stretch.auto = auto
+	function apply() {
 		return viewer.load(true)
 	}
 

@@ -45,7 +45,7 @@ export const ImageViewer = memo(() => {
 		<>
 			{selected?.key === image.key && <ImageToolBar />}
 			{selected?.key === image.key && <ImageInfo />}
-			<Interactable onGesture={handleGesture} onTap={() => viewer.select()} zIndex={image.position}>
+			<Interactable onGesture={handleGesture} onTap={viewer.select} zIndex={image.position}>
 				<img className='image select-none touch-none pointer-events-none max-w-none shadow-[0_0_80px_black]' draggable={false} id={image.key} onContextMenu={(e) => e.preventDefault()} ref={ref} />
 				{crosshair && <Crosshair />}
 				{starDetection.show && <DetectedStars />}

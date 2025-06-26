@@ -9,6 +9,7 @@ import { type Connection, DEFAULT_CONNECTION } from '@/shared/types'
 
 export interface ConnectionState {
 	showModal: boolean
+	mode: 'create' | 'edit'
 	readonly connections: Connection[]
 	loading: boolean
 	selected: Connection
@@ -28,6 +29,9 @@ export const ConnectionMolecule = molecule(() => {
 
 	const state = proxy<ConnectionState>({
 		showModal: false,
+		mode: 'create',
+		edited: undefined,
+		connected: undefined,
 		connections,
 		loading: false,
 		selected: connections[0],
@@ -41,12 +45,14 @@ export const ConnectionMolecule = molecule(() => {
 
 	// Shows the modal for creating a new connection
 	function create() {
+		state.mode = 'create'
 		state.edited = deepClone(DEFAULT_CONNECTION)
 		state.showModal = true
 	}
 
 	// Shows the modal for editing an existing connection
 	function edit(connection: Connection) {
+		state.mode = 'edit'
 		state.edited = deepClone(connection)
 		state.showModal = true
 	}
@@ -88,9 +94,18 @@ export const ConnectionMolecule = molecule(() => {
 
 		if (edited) {
 			if (edited.id === DEFAULT_CONNECTION.id) {
-				removeOnly(DEFAULT_CONNECTION)
+				// If the edited connection is the default one, we remove it first
+				if (state.mode === 'edit') {
+					removeOnly(DEFAULT_CONNECTION)
+				}
+
+				// Generate a new id for the edited connection
 				edited.id = Date.now().toFixed(0)
+
+				// Add the edited connection to the list
 				add(edited)
+
+				// Set the edited connection as the selected one
 				state.selected = edited
 			} else {
 				const index = state.connections.findIndex((e) => e.id === edited.id)
@@ -138,6 +153,7 @@ export const ConnectionMolecule = molecule(() => {
 			try {
 				state.loading = true
 				state.connected = await Api.Connection.connect(state.selected)
+				state.selected.connectedAt = Date.now()
 			} catch (e) {
 				addToast({ title: 'ERROR', description: (e as Error).message, color: 'danger' })
 			} finally {

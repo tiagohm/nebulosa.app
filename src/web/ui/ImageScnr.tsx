@@ -1,4 +1,5 @@
 import { Button, ButtonGroup, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem } from '@heroui/react'
+import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { memo } from 'react'
@@ -49,7 +50,10 @@ export const ImageScnr = memo(() => {
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='success' onPointerUp={() => scnr.apply()} startContent={<Lucide.Check />} variant='flat'>
+							<Button color='danger' onPointerUp={scnr.reset} startContent={<Tabler.IconRestore />} variant='flat'>
+								Reset
+							</Button>
+							<Button color='success' onPointerUp={scnr.apply} startContent={<Lucide.Check />} variant='flat'>
 								Apply
 							</Button>
 						</ModalFooter>

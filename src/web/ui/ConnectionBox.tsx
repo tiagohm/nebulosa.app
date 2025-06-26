@@ -24,7 +24,7 @@ export const ConnectionBox = memo(() => {
 		<>
 			<div className='w-full flex flex-row items-center gap-2 max-w-120'>
 				<Tooltip content='New Connection' showArrow>
-					<Button color='success' isDisabled={loading || !!connected} isIconOnly onPointerUp={() => connection.create()} variant='light'>
+					<Button color='success' isDisabled={loading || !!connected} isIconOnly onPointerUp={connection.create} variant='light'>
 						<Lucide.Plus />
 					</Button>
 				</Tooltip>
@@ -97,7 +97,7 @@ export const ConnectionBox = memo(() => {
 						</SelectItem>
 					)}
 				</Select>
-				<ConnectButton isConnected={!!connected} isLoading={loading} onPointerUp={() => connection.connect()} />
+				<ConnectButton isConnected={!!connected} isLoading={loading} onPointerUp={connection.connect} />
 			</div>
 			{showModal && (
 				<ScopeProvider scope={ModalScope} value={{ name: 'connection', isAlwaysOnTop: true }}>

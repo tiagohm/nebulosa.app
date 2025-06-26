@@ -5,6 +5,7 @@ import { EquipmentMolecule } from './indi/equipment'
 
 export interface HomeState {
 	readonly menu: {
+		show: boolean
 		deviceType?: DeviceType | SubDeviceType
 		devices: Device[]
 	}
@@ -16,10 +17,15 @@ export const HomeMolecule = molecule((m) => {
 
 	const state = proxy<HomeState>({
 		menu: {
+			show: false,
 			deviceType: undefined,
 			devices: [],
 		},
 	})
+
+	function toggleMenu(force?: boolean) {
+		state.menu.show = force !== undefined ? force : !state.menu.show
+	}
 
 	function showDevices(type: DeviceType | SubDeviceType) {
 		const devices = type === 'CAMERA' ? equipment.state.cameras : type === 'GUIDE_OUTPUT' ? equipment.state.guideOutputs : type === 'THERMOMETER' ? equipment.state.thermometers : undefined
@@ -33,5 +39,5 @@ export const HomeMolecule = molecule((m) => {
 		}
 	}
 
-	return { state, showDevices }
+	return { state, toggleMenu, showDevices }
 })

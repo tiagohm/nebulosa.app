@@ -32,7 +32,7 @@ export const ImageSettings = memo(() => {
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='danger' onPointerUp={() => settings.reset()} startContent={<Tabler.IconRestore />} variant='flat'>
+							<Button color='danger' onPointerUp={settings.reset} startContent={<Tabler.IconRestore />} variant='flat'>
 								Reset
 							</Button>
 						</ModalFooter>

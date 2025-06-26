@@ -45,7 +45,7 @@ export const Framing = memo(() => {
 							<div className='flex-1 flex items-center select-none'>
 								<Chip color='primary'>{fov}</Chip>
 							</div>
-							<Button color='success' isLoading={loading} onPointerUp={() => framing.load()} startContent={<Lucide.Download />} variant='flat'>
+							<Button color='success' isLoading={loading} onPointerUp={framing.load} startContent={<Lucide.Download />} variant='flat'>
 								Load
 							</Button>
 						</ModalFooter>

@@ -1,7 +1,5 @@
 // Adapted from https://github.com/timmywil/panzoom
 
-import { registerPreventDefaultOnTouchMove, unregisterPreventDefaultOnTouchMove } from './util'
-
 export type PanZoomEvent = 'panzoomstart' | 'panzoomchange' | 'panzoompan' | 'panzoomzoom' | 'panzoomreset' | 'panzoomend'
 
 export type PanZoomOriginalEvent = PointerEvent | TouchEvent | MouseEvent
@@ -103,7 +101,6 @@ export class PanZoom {
 	private startClientX?: number
 	private startClientY?: number
 	private bound = false
-	private touchmoveTimer?: NodeJS.Timeout
 
 	constructor(
 		private readonly element: HTMLElement,
@@ -395,9 +392,6 @@ export class PanZoom {
 			return
 		}
 
-		clearTimeout(this.touchmoveTimer)
-		registerPreventDefaultOnTouchMove()
-
 		this.isPanning = true
 		this.options.handleStartEvent!(event)
 		this.origX = this.x
@@ -423,10 +417,6 @@ export class PanZoom {
 		if (!this.isPanning) {
 			return
 		}
-
-		this.touchmoveTimer = setTimeout(() => {
-			unregisterPreventDefaultOnTouchMove()
-		}, 1000)
 
 		this.isPanning = false
 		this.origX = this.origY = this.startClientX = this.startClientY = undefined

@@ -2,7 +2,7 @@ import { SelectItem } from '@heroui/react'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import { FilterableSelect, type FilterableSelectProps } from './FilterableSelect'
 
-export interface HipsSurveyProps extends Omit<FilterableSelectProps<HipsSurvey>, 'children' | 'disallowEmptySelection' | 'isVirtualized' | 'itemHeight' | 'onSelectionChange' | 'renderValue' | 'selectedKeys' | 'value' | 'onValueChange' | 'selectionMode'> {
+export interface HipsSurveyProps extends Omit<FilterableSelectProps<HipsSurvey>, 'children' | 'filter' | 'disallowEmptySelection' | 'isVirtualized' | 'itemHeight' | 'onSelectionChange' | 'renderValue' | 'selectedKeys' | 'value' | 'onValueChange' | 'selectionMode'> {
 	readonly value?: string
 	readonly onValueChange?: (value: string) => void
 }

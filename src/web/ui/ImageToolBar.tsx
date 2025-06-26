@@ -42,11 +42,6 @@ export const ImageToolBar = memo(() => {
 							</ToggleButton>
 						</Tooltip>
 					)}
-					<Tooltip content='Rotate' placement='top'>
-						<Button color='secondary' isIconOnly variant='flat'>
-							<Tabler.IconRotateClockwise2 />
-						</Button>
-					</Tooltip>
 					<Popover placement='bottom' showArrow>
 						<PopoverTrigger>
 							<Button color='success' isIconOnly variant='flat'>

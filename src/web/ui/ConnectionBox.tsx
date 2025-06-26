@@ -6,7 +6,6 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
 import { ModalScope } from '@/molecules/modal'
-import { stopPropagation } from '@/shared/util'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
 
@@ -77,7 +76,7 @@ export const ConnectionBox = memo(() => {
 								<div className='flex justify-center items-center'>
 									<Dropdown showArrow>
 										<DropdownTrigger>
-											<Button isIconOnly onPointerUp={stopPropagation} variant='light'>
+											<Button isIconOnly variant='light'>
 												<Lucide.EllipsisVertical />
 											</Button>
 										</DropdownTrigger>

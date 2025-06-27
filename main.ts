@@ -115,7 +115,7 @@ app.onError(({ error }) => {
 	console.error(error)
 
 	if (error instanceof ApiError) {
-		return new Response(JSON.stringify(error.message), { status: error.status })
+		return Response.json(error.message, { status: error.status })
 	}
 })
 

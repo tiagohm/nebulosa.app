@@ -1,9 +1,10 @@
+import { addToast } from '@heroui/react'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import type { Connect, ConnectionStatus, CreateDirectory, FileSystem, Framing, ImageInfo, ListDirectory, OpenImage, PlateSolveStart, PlateSolveStop, StarDetection } from 'src/api/types'
 import { X_IMAGE_INFO_HEADER } from 'src/api/types'
-import wretch from 'wretch'
+import wretch, { type WretchError } from 'wretch'
 
 const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 const w = wretch(uri, { cache: 'no-cache' })
@@ -25,7 +26,7 @@ export namespace Api {
 		}
 
 		export function connect(req: Connect) {
-			return w.url('/connections').post(req).json<ConnectionStatus>()
+			return w.url('/connections').post(req).error(500, handleErrorAndShowToast).json<ConnectionStatus | undefined>()
 		}
 
 		export function get(id: string) {
@@ -72,4 +73,10 @@ export namespace Api {
 			return w.url('/framing').post(req).json<{ path: string }>()
 		}
 	}
+}
+
+function handleErrorAndShowToast(e: WretchError) {
+	const description = e.json || e.message || 'Unknown error'
+	addToast({ title: 'ERROR', description, color: 'danger' })
+	return undefined
 }

@@ -1,4 +1,3 @@
-import { addToast } from '@heroui/react'
 import { molecule, onMount } from 'bunshi'
 import type { ConnectionStatus } from 'src/api/types'
 import { proxy, subscribe } from 'valtio'
@@ -152,10 +151,13 @@ export const ConnectionMolecule = molecule(() => {
 		} else {
 			try {
 				state.loading = true
-				state.connected = await Api.Connection.connect(state.selected)
-				state.selected.connectedAt = Date.now()
-			} catch (e) {
-				addToast({ title: 'ERROR', description: (e as Error).message, color: 'danger' })
+
+				const status = await Api.Connection.connect(state.selected)
+
+				if (status) {
+					state.connected = status
+					state.selected.connectedAt = Date.now()
+				}
 			} finally {
 				state.loading = false
 			}

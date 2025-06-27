@@ -9,7 +9,7 @@ The complete integrated solution for all of your astronomical imaging needs.
 To install dependencies:
 
 ```bash
-bun i
+bun i --production
 ```
 
 To start a development server:

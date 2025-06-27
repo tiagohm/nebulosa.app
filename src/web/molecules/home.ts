@@ -27,8 +27,8 @@ export const HomeMolecule = molecule((m) => {
 		state.menu.show = force !== undefined ? force : !state.menu.show
 	}
 
-	function showDevices(type: DeviceType | SubDeviceType) {
-		const devices = type === 'CAMERA' ? equipment.state.cameras : type === 'GUIDE_OUTPUT' ? equipment.state.guideOutputs : type === 'THERMOMETER' ? equipment.state.thermometers : undefined
+	function showMenuDevices(type: DeviceType | SubDeviceType) {
+		const devices = equipment.state[type] ?? []
 
 		if (!devices || state.menu.devices === devices) {
 			state.menu.deviceType = undefined
@@ -39,5 +39,5 @@ export const HomeMolecule = molecule((m) => {
 		}
 	}
 
-	return { state, toggleMenu, showDevices }
+	return { state, toggleMenu, showMenuDevices }
 })

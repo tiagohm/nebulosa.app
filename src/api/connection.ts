@@ -30,7 +30,7 @@ export class ConnectionManager implements ConnectionProvider {
 	// If a client with the same port and host/IP already exists, returns its status
 	async connect(req: Connect, indiClientHandler: IndiClientHandler): Promise<ConnectionStatus | undefined> {
 		for (const [, client] of this.clients) {
-			if (client.localPort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) {
+			if (client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) {
 				return this.status(client)
 			}
 		}

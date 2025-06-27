@@ -2,7 +2,8 @@ import { addToast } from '@heroui/react'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
-import type { Connect, ConnectionStatus, CreateDirectory, FileSystem, Framing, ImageInfo, ListDirectory, OpenImage, PlateSolveStart, PlateSolveStop, StarDetection } from 'src/api/types'
+// biome-ignore format: too long
+import type { Camera, Connect, ConnectionStatus, CreateDirectory, FileSystem, Framing, ImageInfo, ListDirectory, OpenImage, PlateSolveStart, PlateSolveStop, StarDetection } from 'src/api/types'
 import { X_IMAGE_INFO_HEADER } from 'src/api/types'
 import wretch, { type WretchError } from 'wretch'
 
@@ -45,6 +46,12 @@ export namespace Api {
 			const blob = await response.blob()
 			const info = JSON.parse(decodeURIComponent(response.headers.get(X_IMAGE_INFO_HEADER)!)) as ImageInfo
 			return { blob, info }
+		}
+	}
+
+	export namespace Cameras {
+		export function list() {
+			return w.url('/cameras').get().json<Camera[]>()
 		}
 	}
 

@@ -17,31 +17,31 @@ export const WebSocketMolecule = molecule((m) => {
 
 		switch (data.type) {
 			case 'camera.add':
-				equipment.register('cameras', data.device)
+				equipment.register('CAMERA', data.device)
 				break
 			case 'camera.remove':
-				equipment.unregister('cameras', data.device)
+				equipment.unregister('CAMERA', data.device)
 				break
 			case 'camera.update':
-				equipment.update('cameras', data.device, data.property, data.value)
+				equipment.update('CAMERA', data.device, data.property, data.value)
 				break
 			case 'guide_output.add':
-				equipment.register('guideOutputs', data.device)
+				equipment.register('GUIDE_OUTPUT', data.device)
 				break
 			case 'guide_output.remove':
-				equipment.unregister('guideOutputs', data.device)
+				equipment.unregister('GUIDE_OUTPUT', data.device)
 				break
 			case 'guide_output.update':
-				equipment.update('guideOutputs', data.device, data.property, data.value)
+				equipment.update('GUIDE_OUTPUT', data.device, data.property, data.value)
 				break
 			case 'thermometer.add':
-				equipment.register('thermometers', data.device)
+				equipment.register('THERMOMETER', data.device)
 				break
 			case 'thermometer.remove':
-				equipment.unregister('thermometers', data.device)
+				equipment.unregister('THERMOMETER', data.device)
 				break
 			case 'thermometer.update':
-				equipment.update('thermometers', data.device, data.property, data.value)
+				equipment.update('THERMOMETER', data.device, data.property, data.value)
 				break
 		}
 	})

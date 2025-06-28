@@ -7,7 +7,7 @@ import type { Connect, ConnectionStatus } from './types'
 export interface ConnectionProvider {
 	readonly client: (id?: string) => IndiClient
 	readonly connect: (req: Connect, indiClientHandler: IndiClientHandler) => Promise<ConnectionStatus | undefined>
-	readonly disconnect: (id: string) => void
+	readonly disconnect: (id: string | IndiClient) => void
 	readonly status: (key: string | IndiClient) => ConnectionStatus | undefined
 	readonly list: () => ConnectionStatus[]
 }
@@ -52,13 +52,23 @@ export class ConnectionManager implements ConnectionProvider {
 		throw badRequest('Invalid connection request')
 	}
 
-	// Disconnects the client with the specified id
-	disconnect(id: string) {
-		const client = this.clients.get(id)
+	// Disconnects the client with the specified id or the client instance
+	disconnect(id: string | IndiClient) {
+		if (typeof id === 'string') {
+			const client = this.clients.get(id)
 
-		if (client) {
-			client.close()
-			this.clients.delete(id)
+			if (client) {
+				client.close()
+				this.clients.delete(id)
+			}
+		} else {
+			for (const [key, client] of this.clients) {
+				if (client === id) {
+					client.close()
+					this.clients.delete(key)
+					break
+				}
+			}
 		}
 	}
 

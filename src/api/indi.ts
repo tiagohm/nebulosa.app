@@ -118,7 +118,9 @@ export class IndiDeviceManager implements IndiClientHandler {
 		index >= 0 && handlers.splice(index, 1)
 	}
 
-	close() {
+	close(client: IndiClient, server: boolean) {
+		this.connection.disconnect(client)
+
 		this.cameraMap.values().forEach((e) => this.removeCamera(e))
 		this.thermometerMap.values().forEach((e) => this.removeThermometer(e))
 		this.guideOutputMap.values().forEach((e) => this.removeGuideOutput(e))

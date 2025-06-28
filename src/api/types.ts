@@ -274,6 +274,8 @@ export type ExposureTimeUnit = 'MINUTES' | 'SECONDS' | 'MILLISECONDS' | 'MICROSE
 
 export type ExposureMode = 'SINGLE' | 'FIXED' | 'LOOP'
 
+export type AutoSubFolderMode = 'OFF' | 'NOON' | 'TARGET' | 'MIDNIGHT'
+
 export interface Camera extends GuideOutput, Thermometer {
 	hasCoolerControl: boolean
 	coolerPower: number
@@ -331,6 +333,49 @@ export interface Camera extends GuideOutput, Thermometer {
 		x: number
 		y: number
 	}
+}
+
+export interface CameraCaptureStart {
+	exposureTime: number
+	exposureTimeUnit: ExposureTimeUnit
+	frameType: FrameType
+	exposureMode: ExposureMode
+	delay: number
+	count: number
+	x: number
+	y: number
+	width: number
+	height: number
+	subframe: boolean
+	binX: number
+	binY: number
+	frameFormat: string
+	gain: number
+	offset: number
+	autoSave: boolean
+	savePath?: string
+	autoSubFolderMode: AutoSubFolderMode
+}
+
+export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
+	exposureTime: 0,
+	exposureTimeUnit: 'MICROSECONDS',
+	frameType: 'LIGHT',
+	exposureMode: 'SINGLE',
+	delay: 0,
+	count: 1,
+	x: 0,
+	y: 0,
+	width: 0,
+	height: 0,
+	subframe: false,
+	binX: 1,
+	binY: 1,
+	frameFormat: '',
+	gain: 0,
+	offset: 0,
+	autoSave: true,
+	autoSubFolderMode: 'OFF',
 }
 
 export interface GuidePulse {

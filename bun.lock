@@ -555,7 +555,7 @@
 
     "ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
 
-    "nebulosa": ["nebulosa@github:tiagohm/nebulosa.ts#b117b8e", { "optionalDependencies": { "sharp": "0.34.2" }, "peerDependencies": { "@types/bun": "latest", "@types/node": "latest", "dayjs": "1.11.13", "typescript": "latest", "utility-types": "latest" } }, "tiagohm-nebulosa.ts-b117b8e"],
+    "nebulosa": ["nebulosa@github:tiagohm/nebulosa.ts#e9e3f07", { "optionalDependencies": { "sharp": "0.34.2" }, "peerDependencies": { "@types/bun": "latest", "@types/node": "latest", "dayjs": "1.11.13", "typescript": "latest", "utility-types": "latest" } }, "tiagohm-nebulosa.ts-e9e3f07"],
 
     "node-cache": ["node-cache@5.1.2", "", { "dependencies": { "clone": "2.x" } }, "sha512-t1QzWwnk4sjLWaQAS8CHgOJ+RAfmHpxFWmc36IWTiWHQfs0w5JDMBS1b1ZxQteo0vVVuWJvIUKHDkkeK7vIGCg=="],
 

@@ -3,8 +3,6 @@ import type { Camera, CameraUpdated, Confirmation, GuideOutput, GuideOutputUpdat
 
 export type BusListener<T> = (arg: T) => void
 
-export type BusUnsubscriber = VoidFunction
-
 export interface BusListenerMap {
 	readonly confirmation: Confirmation
 	readonly toggleHomeMenu: boolean
@@ -19,12 +17,12 @@ export interface BusListenerMap {
 	readonly removeThermometer: Thermometer
 }
 
+const bus = new Map<string, Set<BusListener<never>>>()
+
 // Molecule that manages the bus for inter-component communication
 export const BusMolecule = molecule(() => {
-	const bus = new Map<string, Set<BusListener<never>>>()
-
 	// Subscribes to an event
-	function subscribe<K extends keyof BusListenerMap>(event: K, listener: BusListener<BusListenerMap[K]>): BusUnsubscriber {
+	function subscribe<K extends keyof BusListenerMap>(event: K, listener: BusListener<BusListenerMap[K]>): VoidFunction {
 		if (!bus.has(event)) bus.set(event, new Set())
 		bus.get(event)!.add(listener as never)
 		return () => unsubscribe(event, listener)

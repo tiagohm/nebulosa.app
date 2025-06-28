@@ -8,6 +8,7 @@
 	"module": "main.ts",
 	"scripts": {
 		"dev": "bun --hot main.ts",
+		"prod": "NODE_ENV=production bun --production main.ts",
 		"lint": "biome lint --write src/",
 		"format": "biome format --write src/",
 		"compile": "bun build --compile --minify --production main.ts --outfile nebulosa.exe",

@@ -22,9 +22,9 @@ export const HomeMolecule = molecule((m) => {
 	})
 
 	onMount(() => {
-		const unsubscribe = bus.subscribe('toggleHomeMenu', (enabled) => toggleMenu(enabled))
+		const unsubscriber = bus.subscribe('toggleHomeMenu', (enabled) => toggleMenu(enabled))
 
-		return () => unsubscribe()
+		return () => unsubscriber()
 	})
 
 	function toggleMenu(force?: boolean) {

@@ -1,7 +1,7 @@
 import { molecule, onMount } from 'bunshi'
 import type { Camera, Device, DeviceType, GuideOutput, SubDeviceType, Thermometer } from 'src/api/types'
 import { proxy } from 'valtio'
-import { BusMolecule, type BusUnsubscriber } from '../bus'
+import { BusMolecule } from '../bus'
 
 export type EquipmentDevice<T extends Device> = T & {
 	show?: boolean
@@ -42,7 +42,7 @@ export const EquipmentMolecule = molecule((m) => {
 	})
 
 	onMount(() => {
-		const unsubscribers: BusUnsubscriber[] = []
+		const unsubscribers: VoidFunction[] = []
 
 		// Subscribe to bus events to handle device updates
 		unsubscribers.push(bus.subscribe('addCamera', (event) => register('CAMERA', event)))

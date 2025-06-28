@@ -5,7 +5,7 @@ import { deepClone } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 import { type Connection, DEFAULT_CONNECTION } from '@/shared/types'
-import { EquipmentMolecule } from './indi/equipment'
+import { BusMolecule } from './bus'
 
 export interface ConnectionState {
 	showModal: boolean
@@ -24,7 +24,7 @@ export const ConnectionComparator = (a: Connection, b: Connection) => {
 
 // Molecule that manages connections
 export const ConnectionMolecule = molecule((m) => {
-	const equipment = m(EquipmentMolecule)
+	const bus = m(BusMolecule)
 
 	const connections = simpleLocalStorage.get('connections', () => [structuredClone(DEFAULT_CONNECTION)])
 	connections.sort(ConnectionComparator)
@@ -46,7 +46,7 @@ export const ConnectionMolecule = molecule((m) => {
 			if (index >= 0) {
 				state.connected = connection
 
-				Api.Cameras.list().then((cameras) => cameras.forEach((camera) => equipment.register('CAMERA', camera)))
+				Api.Cameras.list().then((cameras) => cameras.forEach((camera) => bus.emit('addCamera', camera)))
 			}
 		}
 	})

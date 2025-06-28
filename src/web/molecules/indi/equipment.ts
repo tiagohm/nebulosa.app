@@ -1,6 +1,7 @@
-import { molecule } from 'bunshi'
+import { molecule, onMount } from 'bunshi'
 import type { Camera, Device, DeviceType, GuideOutput, SubDeviceType, Thermometer } from 'src/api/types'
 import { proxy } from 'valtio'
+import { BusMolecule, type BusUnsubscriber } from '../bus'
 
 export type EquipmentDevice<T extends Device> = T & {
 	show?: boolean
@@ -22,7 +23,9 @@ export interface EquipmentState {
 }
 
 // Molecule that manages all the connected devices
-export const EquipmentMolecule = molecule(() => {
+export const EquipmentMolecule = molecule((m) => {
+	const bus = m(BusMolecule)
+
 	const state = proxy<EquipmentState>({
 		CAMERA: [],
 		MOUNT: [],
@@ -36,6 +39,26 @@ export const EquipmentMolecule = molecule(() => {
 		DUST_CAP: [],
 		THERMOMETER: [],
 		DEW_HEATER: [],
+	})
+
+	onMount(() => {
+		const unsubscribers: BusUnsubscriber[] = []
+
+		// Subscribe to bus events to handle device updates
+		unsubscribers.push(bus.subscribe('addCamera', (event) => register('CAMERA', event)))
+		unsubscribers.push(bus.subscribe('removeCamera', (event) => unregister('CAMERA', event)))
+		unsubscribers.push(bus.subscribe('updateCamera', (event) => update('CAMERA', event.device, event.property, event.value)))
+		unsubscribers.push(bus.subscribe('addGuideOutput', (event) => register('GUIDE_OUTPUT', event)))
+		unsubscribers.push(bus.subscribe('removeGuideOutput', (event) => unregister('GUIDE_OUTPUT', event)))
+		unsubscribers.push(bus.subscribe('updateGuideOutput', (event) => update('GUIDE_OUTPUT', event.device, event.property, event.value)))
+		unsubscribers.push(bus.subscribe('addThermometer', (event) => register('THERMOMETER', event)))
+		unsubscribers.push(bus.subscribe('removeThermometer', (event) => unregister('THERMOMETER', event)))
+		unsubscribers.push(bus.subscribe('updateThermometer', (event) => update('THERMOMETER', event.device, event.property, event.value)))
+
+		return () => {
+			// Unsubscribe from all bus events when the molecule is destroyed
+			unsubscribers.forEach((unsubscriber) => unsubscriber())
+		}
 	})
 
 	// Registers a new device of a specific type
@@ -62,6 +85,7 @@ export const EquipmentMolecule = molecule(() => {
 	// Shows the modal for a specific device type
 	function showModal(type: DeviceType | SubDeviceType, device: Device) {
 		state[type].find((e) => e.name === device.name)!.show = true
+		bus.emit('toggleHomeMenu', false)
 	}
 
 	// Closes the modal for a specific device type

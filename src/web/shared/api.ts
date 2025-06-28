@@ -53,6 +53,10 @@ export namespace Api {
 		export function list() {
 			return w.url('/cameras').get().json<Camera[]>()
 		}
+
+		export function get(name: string) {
+			return w.url(`/cameras/${name}`).get().json<Camera>()
+		}
 	}
 
 	export namespace PlateSolver {

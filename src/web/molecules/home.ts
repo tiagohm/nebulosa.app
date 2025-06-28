@@ -1,43 +1,43 @@
-import { molecule } from 'bunshi'
-import type { Device, DeviceType, SubDeviceType } from 'src/api/types'
+import { molecule, onMount } from 'bunshi'
+import type { DeviceType, SubDeviceType } from 'src/api/types'
 import { proxy } from 'valtio'
-import { EquipmentMolecule } from './indi/equipment'
+import { BusMolecule } from './bus'
 
 export interface HomeState {
 	readonly menu: {
 		show: boolean
-		deviceType?: DeviceType | SubDeviceType
-		devices: Device[]
+		activeDevice?: DeviceType | SubDeviceType
 	}
 }
 
 // Molecule that manages the home
 export const HomeMolecule = molecule((m) => {
-	const equipment = m(EquipmentMolecule)
+	const bus = m(BusMolecule)
 
 	const state = proxy<HomeState>({
 		menu: {
 			show: false,
-			deviceType: undefined,
-			devices: [],
+			activeDevice: undefined,
 		},
+	})
+
+	onMount(() => {
+		const unsubscribe = bus.subscribe('toggleHomeMenu', (enabled) => toggleMenu(enabled))
+
+		return () => unsubscribe()
 	})
 
 	function toggleMenu(force?: boolean) {
 		state.menu.show = force !== undefined ? force : !state.menu.show
 	}
 
-	function showMenuDevices(type: DeviceType | SubDeviceType) {
-		const devices = equipment.state[type] ?? []
-
-		if (!devices || state.menu.devices === devices) {
-			state.menu.deviceType = undefined
-			state.menu.devices = []
+	function toggleActiveDevice(type: HomeState['menu']['activeDevice']) {
+		if (state.menu.activeDevice === type) {
+			state.menu.activeDevice = undefined
 		} else {
-			state.menu.deviceType = type
-			state.menu.devices = devices
+			state.menu.activeDevice = type
 		}
 	}
 
-	return { state, toggleMenu, showMenuDevices }
+	return { state, toggleMenu, toggleActiveDevice }
 })

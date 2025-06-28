@@ -76,11 +76,11 @@ export const ConnectionBox = memo(() => {
 								<div className='flex justify-center items-center'>
 									<Dropdown showArrow>
 										<DropdownTrigger>
-											<Button isIconOnly variant='light'>
+											<Button isIconOnly size='sm' variant='light'>
 												<Lucide.EllipsisVertical />
 											</Button>
 										</DropdownTrigger>
-										<DropdownMenu aria-label='Static Actions' disabledKeys={connections.length === 1 ? ['delete'] : []}>
+										<DropdownMenu disabledKeys={connections.length === 1 ? ['delete'] : []}>
 											<DropdownItem key='edit' onPointerUp={() => connection.edit(item)} startContent={<Lucide.Pencil size={12} />}>
 												Edit
 											</DropdownItem>

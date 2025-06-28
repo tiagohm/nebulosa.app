@@ -266,6 +266,14 @@ export interface GuideOutput extends Device {
 	pulseGuiding: boolean
 }
 
+// Camera
+
+export type FrameType = 'LIGHT' | 'DARK' | 'FLAT' | 'BIAS'
+
+export type ExposureTimeUnit = 'MINUTES' | 'SECONDS' | 'MILLISECONDS' | 'MICROSECONDS'
+
+export type ExposureMode = 'SINGLE' | 'FIXED' | 'LOOP'
+
 export interface Camera extends GuideOutput, Thermometer {
 	hasCoolerControl: boolean
 	coolerPower: number

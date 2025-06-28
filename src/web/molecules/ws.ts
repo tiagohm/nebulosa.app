@@ -1,10 +1,10 @@
 import { molecule } from 'bunshi'
 import type { DeviceMessageEvent } from 'src/api/types'
-import { EquipmentMolecule } from './indi/equipment'
+import { BusMolecule } from './bus'
 
 // Molecule that manages WebSocket connection for receiving messages
 export const WebSocketMolecule = molecule((m) => {
-	const equipment = m(EquipmentMolecule)
+	const bus = m(BusMolecule)
 
 	const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 	const ws = new WebSocket(`${uri}/ws`)
@@ -17,31 +17,31 @@ export const WebSocketMolecule = molecule((m) => {
 
 		switch (data.type) {
 			case 'camera.add':
-				equipment.register('CAMERA', data.device)
+				bus.emit('addCamera', data.device)
 				break
 			case 'camera.remove':
-				equipment.unregister('CAMERA', data.device)
+				bus.emit('removeCamera', data.device)
 				break
 			case 'camera.update':
-				equipment.update('CAMERA', data.device, data.property, data.value)
+				bus.emit('updateCamera', data)
 				break
 			case 'guide_output.add':
-				equipment.register('GUIDE_OUTPUT', data.device)
+				bus.emit('addGuideOutput', data.device)
 				break
 			case 'guide_output.remove':
-				equipment.unregister('GUIDE_OUTPUT', data.device)
+				bus.emit('removeGuideOutput', data.device)
 				break
 			case 'guide_output.update':
-				equipment.update('GUIDE_OUTPUT', data.device, data.property, data.value)
+				bus.emit('updateGuideOutput', data)
 				break
 			case 'thermometer.add':
-				equipment.register('THERMOMETER', data.device)
+				bus.emit('addThermometer', data.device)
 				break
 			case 'thermometer.remove':
-				equipment.unregister('THERMOMETER', data.device)
+				bus.emit('removeThermometer', data.device)
 				break
 			case 'thermometer.update':
-				equipment.update('THERMOMETER', data.device, data.property, data.value)
+				bus.emit('updateThermometer', data)
 				break
 		}
 	})

@@ -22,7 +22,7 @@ export const ImageStretch = memo(() => {
 	}
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[300px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[290px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>
@@ -41,13 +41,13 @@ export const ImageStretch = memo(() => {
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='primary' onPointerUp={stretch.auto} startContent={<Lucide.WandSparkles />} variant={auto ? 'solid' : 'flat'}>
+							<Button color='primary' onPointerUp={stretch.auto} startContent={<Lucide.WandSparkles size={16} />} variant={auto ? 'solid' : 'flat'}>
 								Auto
 							</Button>
-							<Button color='danger' onPointerUp={stretch.reset} startContent={<Tabler.IconRestore />} variant='flat'>
+							<Button color='danger' onPointerUp={stretch.reset} startContent={<Tabler.IconRestore size={16} />} variant='flat'>
 								Reset
 							</Button>
-							<Button color='success' onPointerUp={stretch.apply} startContent={<Lucide.Check />} variant='flat'>
+							<Button color='success' onPointerUp={stretch.apply} startContent={<Lucide.Check size={16} />} variant='flat'>
 								Stretch
 							</Button>
 						</ModalFooter>

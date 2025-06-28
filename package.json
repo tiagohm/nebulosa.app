@@ -39,9 +39,8 @@
 		"wretch": "2.11.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.0.5",
+		"@biomejs/biome": "latest",
 		"@types/bun": "latest",
-		"@types/node": "latest",
 		"@types/react": "19.1.8",
 		"@types/react-dom": "19.1.6",
 		"typescript": "latest"
@@ -53,8 +52,5 @@
 		"esbuild",
 		"nebulosa",
 		"sharp"
-	],
-	"overrides": {
-		"@types/node": "latest"
-	}
+	]
 }

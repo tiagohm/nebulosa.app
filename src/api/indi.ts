@@ -118,6 +118,15 @@ export class IndiDeviceManager implements IndiClientHandler {
 		index >= 0 && handlers.splice(index, 1)
 	}
 
+	close() {
+		this.cameraMap.values().forEach((e) => this.removeCamera(e))
+		this.thermometerMap.values().forEach((e) => this.removeThermometer(e))
+		this.guideOutputMap.values().forEach((e) => this.removeGuideOutput(e))
+		this.enqueuedMessages.length = 0
+		this.devicePropertyMap.clear()
+		this.rejectedDevices.clear()
+	}
+
 	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
 		const device = this.deviceIfExists(message.device)
 

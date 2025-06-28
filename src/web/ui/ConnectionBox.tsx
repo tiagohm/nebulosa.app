@@ -77,7 +77,7 @@ export const ConnectionBox = memo(() => {
 									<Dropdown showArrow>
 										<DropdownTrigger>
 											<Button isIconOnly size='sm' variant='light'>
-												<Lucide.EllipsisVertical />
+												<Lucide.EllipsisVertical size={16} />
 											</Button>
 										</DropdownTrigger>
 										<DropdownMenu disabledKeys={connections.length === 1 ? ['delete'] : []}>

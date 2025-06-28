@@ -101,7 +101,7 @@ export function FilePicker({ header, onChoose }: FilePickerProps) {
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
 							<Badge color='success' content={selected.length} showOutline={false}>
-								<Button color='success' isDisabled={selected.length === 0} onPointerUp={handleChoose} startContent={<Lucide.Check />} variant='flat'>
+								<Button color='success' isDisabled={selected.length === 0} onPointerUp={handleChoose} startContent={<Lucide.Check size={16} />} variant='flat'>
 									Choose
 								</Button>
 							</Badge>

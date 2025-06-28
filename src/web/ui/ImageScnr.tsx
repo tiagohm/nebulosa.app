@@ -15,7 +15,7 @@ export const ImageScnr = memo(() => {
 	const modal = useModal(() => viewer.closeModal('scnr'))
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[320px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[300px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>
@@ -50,10 +50,10 @@ export const ImageScnr = memo(() => {
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='danger' onPointerUp={scnr.reset} startContent={<Tabler.IconRestore />} variant='flat'>
+							<Button color='danger' onPointerUp={scnr.reset} startContent={<Tabler.IconRestore size={16} />} variant='flat'>
 								Reset
 							</Button>
-							<Button color='success' onPointerUp={scnr.apply} startContent={<Lucide.Check />} variant='flat'>
+							<Button color='success' onPointerUp={scnr.apply} startContent={<Lucide.Check size={16} />} variant='flat'>
 								Apply
 							</Button>
 						</ModalFooter>

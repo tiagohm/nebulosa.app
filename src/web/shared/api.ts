@@ -3,7 +3,7 @@ import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { Camera, Connect, ConnectionStatus, CreateDirectory, FileSystem, Framing, ImageInfo, ListDirectory, OpenImage, PlateSolveStart, PlateSolveStop, StarDetection } from 'src/api/types'
+import type { Camera, Confirm, Connect, ConnectionStatus, CreateDirectory, FileSystem, Framing, ImageInfo, ListDirectory, OpenImage, PlateSolveStart, PlateSolveStop, StarDetection } from 'src/api/types'
 import { X_IMAGE_INFO_HEADER } from 'src/api/types'
 import wretch, { type WretchError } from 'wretch'
 
@@ -36,6 +36,12 @@ export namespace Api {
 
 		export function disconnect(id: string) {
 			return w.url(`/connections/${id}`).delete().res()
+		}
+	}
+
+	export namespace Confirmation {
+		export function confirm(req: Confirm) {
+			return w.url('/confirmation').post(req).res()
 		}
 	}
 

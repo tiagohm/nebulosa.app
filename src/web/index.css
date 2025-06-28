@@ -15,7 +15,7 @@ html {
 
 html,
 body {
-	@apply text-[14px] overscroll-none;
+	@apply text-[13px] overscroll-none;
 }
 
 /* Context Menu */

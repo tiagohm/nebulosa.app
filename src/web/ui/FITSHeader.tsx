@@ -11,7 +11,7 @@ export const FITSHeader = memo(() => {
 	const modal = useModal(() => viewer.closeModal('fitsHeader'))
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[340px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[320px] max-h-[70vh]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>
@@ -24,7 +24,7 @@ export const FITSHeader = memo(() => {
 									isVirtualized
 									selectionMode='none'
 									virtualization={{
-										maxListboxHeight: 400,
+										maxListboxHeight: 300,
 										itemHeight: 40,
 									}}>
 									{Object.entries(info.headers).map(([key, value]) => (

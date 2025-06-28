@@ -17,8 +17,10 @@ export const ModalMolecule = molecule((m, s) => {
 	const scope = s(ModalScope)
 	const zIndex = m(ZIndexMolecule)
 
+	const name = scope.name.replace(/[^\w-]/g, '-').toLowerCase()
+
 	// Increment the z-index for the modal
-	zIndex.increment(scope.name, scope.isAlwaysOnTop ?? false)
+	zIndex.increment(name, scope.isAlwaysOnTop ?? false)
 
 	let targetRef: HTMLElement | undefined
 
@@ -26,13 +28,13 @@ export const ModalMolecule = molecule((m, s) => {
 	function onDragStart() {
 		if (!targetRef) return
 
-		zIndex.increment(scope.name, true)
+		zIndex.increment(name, true)
 	}
 
 	// Handles the pointer up event, which increments the z-index of the modal
 	// to ensure it is on top of other elements.
 	function onPointerUp() {
-		zIndex.increment(scope.name, true)
+		zIndex.increment(name, true)
 	}
 
 	// Sets the reference to the target element and sets the z-index of the parent element to ensure it is on top.
@@ -41,7 +43,7 @@ export const ModalMolecule = molecule((m, s) => {
 			targetRef = node
 
 			if (node.parentElement) {
-				node.parentElement.style.zIndex = `var(--z-index-${scope.name}) !important`
+				node.parentElement.style.zIndex = `var(--z-index-${name}) !important`
 			}
 		}
 	}
@@ -51,7 +53,7 @@ export const ModalMolecule = molecule((m, s) => {
 	// This ensures that the modal will be on top of other elements when it is opened again
 	// by requesting a new z-index.
 	function onOpenChange(isOpen: boolean) {
-		if (!isOpen) zIndex.remove(scope.name)
+		if (!isOpen) zIndex.remove(name)
 	}
 
 	const props = {

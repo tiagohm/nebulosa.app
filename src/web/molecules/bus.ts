@@ -1,11 +1,12 @@
 import { molecule } from 'bunshi'
-import type { Camera, CameraUpdated, GuideOutput, GuideOutputUpdated, Thermometer, ThermometerUpdated } from 'src/api/types'
+import type { Camera, CameraUpdated, Confirmation, GuideOutput, GuideOutputUpdated, Thermometer, ThermometerUpdated } from 'src/api/types'
 
 export type BusListener<T> = (arg: T) => void
 
 export type BusUnsubscriber = VoidFunction
 
 export interface BusListenerMap {
+	readonly confirmation: Confirmation
 	readonly toggleHomeMenu: boolean
 	readonly addCamera: Camera
 	readonly updateCamera: CameraUpdated

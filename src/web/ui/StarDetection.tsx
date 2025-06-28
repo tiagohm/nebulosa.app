@@ -15,7 +15,7 @@ export const StarDetection = memo(() => {
 	const modal = useModal(() => viewer.closeModal('starDetection'))
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[360px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[330px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>
@@ -31,10 +31,10 @@ export const StarDetection = memo(() => {
 								<div className='col-span-full mt-1'>
 									<span className='text-sm font-bold'>COMPUTED</span>
 								</div>
-								<Input className='col-span-2' isReadOnly label='Stars' size='sm' value={stars.length.toFixed(0)} />
-								<Input className='col-span-2' isReadOnly label='HFD' size='sm' value={computed.hfd.toFixed(2)} />
+								<Input className='col-span-3' isReadOnly label='Stars' size='sm' value={stars.length.toFixed(0)} />
+								<Input className='col-span-3' isReadOnly label='HFD' size='sm' value={computed.hfd.toFixed(2)} />
 								<Input className='col-span-2' isReadOnly label='SNR' size='sm' value={computed.snr.toFixed(0)} />
-								<Input className='col-span-6' isReadOnly label='Flux' size='sm' value={`${computed.fluxMin.toFixed(0)} | ${computed.fluxMax.toFixed(0)}`} />
+								<Input className='col-span-4' isReadOnly label='Flux' size='sm' value={`${computed.fluxMin.toFixed(0)} | ${computed.fluxMax.toFixed(0)}`} />
 								<div className='col-span-full mt-1'>
 									<span className='text-sm font-bold'>SELECTED</span>
 								</div>
@@ -48,7 +48,7 @@ export const StarDetection = memo(() => {
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='success' isLoading={loading} onPointerUp={starDetection.detect} startContent={<Lucide.Check />} variant='flat'>
+							<Button color='success' isLoading={loading} onPointerUp={starDetection.detect} startContent={<Lucide.Check size={16} />} variant='flat'>
 								Detect
 							</Button>
 						</ModalFooter>

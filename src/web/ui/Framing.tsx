@@ -21,7 +21,7 @@ export const Framing = memo(() => {
 	}, [request.focalLength, request.pixelSize, request.width, request.height])
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[325px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[310px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>
@@ -39,13 +39,19 @@ export const Framing = memo(() => {
 								<Checkbox className='col-span-full' isDisabled={loading} isSelected={openNewImage} onValueChange={(value) => (framing.state.openNewImage = value)} size='sm'>
 									Open in new image
 								</Checkbox>
+								<div className='col-span-full text-center mt-2 text-neutral-500 text-sm'>
+									Powered by&nbsp;
+									<a className='bg-neutral-800 px-1 rounded p-1' href='https://alasky.cds.unistra.fr/hips-image-services/hips2fits' rel='noreferrer' target='_blank'>
+										hips2fits
+									</a>
+								</div>
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
 							<div className='flex-1 flex items-center select-none'>
 								<Chip color='primary'>{fov}</Chip>
 							</div>
-							<Button color='success' isLoading={loading} onPointerUp={framing.load} startContent={<Lucide.Download />} variant='flat'>
+							<Button color='success' isLoading={loading} onPointerUp={framing.load} startContent={<Lucide.Download size={16} />} variant='flat'>
 								Load
 							</Button>
 						</ModalFooter>

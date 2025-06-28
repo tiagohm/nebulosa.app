@@ -19,7 +19,7 @@ export const PlateSolver = memo(() => {
 	const modal = useModal(() => viewer.closeModal('plateSolver'))
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[390px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[360px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>
@@ -46,26 +46,26 @@ export const PlateSolver = memo(() => {
 								<Input className='col-span-4' isReadOnly label='Size (arcmin)' size='sm' value={`${toArcmin(solution?.width ?? 0).toFixed(2)} x ${toArcmin(solution?.height ?? 0).toFixed(2)}`} />
 								<Input className='col-span-4' isReadOnly label='Radius (°)' size='sm' value={toDeg(solution?.radius ?? 0).toFixed(4)} />
 								<div className='col-span-full flex items-center justify-center gap-2'>
-									<Button color='primary' isDisabled={!solution} startContent={<Lucide.RefreshCw />} variant='flat'>
+									<Button color='primary' isDisabled={!solution} startContent={<Lucide.RefreshCw size={16} />} variant='flat'>
 										Sync
 									</Button>
-									<Button color='success' isDisabled={!solution} startContent={<Lucide.Telescope />} variant='flat'>
+									<Button color='success' isDisabled={!solution} startContent={<Lucide.Telescope size={16} />} variant='flat'>
 										Go To
 									</Button>
-									<Button color='success' isDisabled={!solution} startContent={<Lucide.Telescope />} variant='flat'>
+									<Button color='success' isDisabled={!solution} startContent={<Lucide.Telescope size={16} />} variant='flat'>
 										Slew
 									</Button>
-									<Button color='secondary' isDisabled={!solution} startContent={<Lucide.Scan />} variant='flat'>
+									<Button color='secondary' isDisabled={!solution} startContent={<Lucide.Scan size={16} />} variant='flat'>
 										Frame
 									</Button>
 								</div>
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='danger' isDisabled={!loading} onPointerUp={solver.stop} startContent={<Tabler.IconPlayerStopFilled />} variant='flat'>
+							<Button color='danger' isDisabled={!loading} onPointerUp={solver.stop} startContent={<Tabler.IconPlayerStopFilled size={16} />} variant='flat'>
 								Stop
 							</Button>
-							<Button color='success' isLoading={loading} onPointerUp={solver.start} startContent={<Lucide.Sigma />} variant='flat'>
+							<Button color='success' isLoading={loading} onPointerUp={solver.start} startContent={<Lucide.Sigma size={16} />} variant='flat'>
 								Solve
 							</Button>
 						</ModalFooter>

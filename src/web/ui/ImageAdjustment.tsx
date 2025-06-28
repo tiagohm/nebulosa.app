@@ -37,10 +37,10 @@ export const ImageAdjustment = memo(() => {
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='danger' isDisabled={!enabled} onPointerUp={adjustment.reset} startContent={<Tabler.IconRestore />} variant='flat'>
+							<Button color='danger' isDisabled={!enabled} onPointerUp={adjustment.reset} startContent={<Tabler.IconRestore size={16} />} variant='flat'>
 								Reset
 							</Button>
-							<Button color='success' onPointerUp={adjustment.apply} startContent={<Lucide.Check />} variant='flat'>
+							<Button color='success' onPointerUp={adjustment.apply} startContent={<Lucide.Check size={16} />} variant='flat'>
 								Adjust
 							</Button>
 						</ModalFooter>

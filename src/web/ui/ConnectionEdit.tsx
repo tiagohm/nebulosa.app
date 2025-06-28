@@ -12,7 +12,7 @@ export const ConnectionEdit = memo(() => {
 	const modal = useModal(() => (connection.state.showModal = false))
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[300px]', wrapper: 'pointer-events-none' }}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[260px]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>
@@ -20,14 +20,14 @@ export const ConnectionEdit = memo(() => {
 							Connection
 						</ModalHeader>
 						<ModalBody>
-							<div className='grid grid-cols-6 gap-2'>
+							<div className='grid grid-cols-12 gap-2'>
 								<Input className='col-span-full' label='Name' maxLength={64} onValueChange={(value) => connection.update('name', value)} placeholder='Local' size='sm' type='text' value={state.edited?.name} />
-								<Input className='col-span-4' label='Host' maxLength={128} onValueChange={(value) => connection.update('host', value)} placeholder='localhost' size='sm' type='text' value={state.edited?.host} />
-								<NumberInput className='col-span-2' label='Port' maxValue={65535} minValue={80} onValueChange={(value) => connection.update('port', value)} placeholder='7624' size='sm' value={state.edited?.port} />
+								<Input className='col-span-7' label='Host' maxLength={128} onValueChange={(value) => connection.update('host', value)} placeholder='localhost' size='sm' type='text' value={state.edited?.host} />
+								<NumberInput className='col-span-5' label='Port' maxValue={65535} minValue={80} onValueChange={(value) => connection.update('port', value)} placeholder='7624' size='sm' value={state.edited?.port} />
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='success' isDisabled={!state.edited?.name || !state.edited?.host || !state.edited?.port} onPointerUp={connection.save} startContent={<Lucide.Check />} variant='flat'>
+							<Button color='success' isDisabled={!state.edited?.name || !state.edited?.host || !state.edited?.port} onPointerUp={connection.save} startContent={<Lucide.Check size={16} />} variant='flat'>
 								Save
 							</Button>
 						</ModalFooter>

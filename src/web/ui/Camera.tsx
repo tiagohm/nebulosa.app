@@ -20,7 +20,7 @@ export function Camera() {
 	const modal = useModal(() => equipment.closeModal('CAMERA', camera.scope.camera))
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'min-w-[420px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
+		<Modal {...modal.props} classNames={{ base: 'min-w-[380px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>
@@ -34,10 +34,10 @@ export function Camera() {
 						</ModalHeader>
 						<ModalBody>
 							<div className='mt-2 grid grid-cols-12 gap-2'>
-								<Switch className='col-span-3 flex-col-reverse gap-0.5 max-w-none' classNames={{ label: 'text-xs ms-0' }} size='sm'>
+								<Switch className='col-span-3 flex-col-reverse gap-0.2 max-w-none' classNames={{ label: 'text-xs ms-0' }} size='sm'>
 									Cooler ({(coolerPower * 100).toFixed(1)}%)
 								</Switch>
-								<Switch className='col-span-3 flex-col-reverse gap-0.5 max-w-none' classNames={{ label: 'text-xs ms-0' }} size='sm'>
+								<Switch className='col-span-3 flex-col-reverse gap-0.2 max-w-none' classNames={{ label: 'text-xs ms-0' }} size='sm'>
 									Dew Heater
 								</Switch>
 								<div className='col-span-6 flex flex-row items-center gap-1'>
@@ -60,12 +60,12 @@ export function Camera() {
 								<FrameTypeSelect className='col-span-6' onValueChange={(value) => camera.update('frameType', value)} value={frameType} />
 								<ExposureModeButtonGroup className='col-span-6' color='secondary' onValueChange={(value) => camera.update('exposureMode', value)} value={exposureMode} />
 								<NumberInput className='col-span-3' isDisabled={exposureMode === 'SINGLE'} label='Delay (ms)' onValueChange={(value) => camera.update('delay', value)} size='sm' value={delay} />
-								<NumberInput className='col-span-3' isDisabled={exposureMode !== 'FIXED'} label='Count' onValueChange={(value) => camera.update('count', value)} size='sm' value={count} />
+								<NumberInput className='col-span-3' isDisabled={exposureMode !== 'FIXED'} label='Count' minValue={1} onValueChange={(value) => camera.update('count', value)} size='sm' value={count} />
 								<NumberInput className='col-span-3' isDisabled={!subframe} label='X' onValueChange={(value) => camera.update('x', value)} size='sm' value={x} />
 								<NumberInput className='col-span-3' isDisabled={!subframe} label='Y' onValueChange={(value) => camera.update('y', value)} size='sm' value={y} />
 								<NumberInput className='col-span-3' isDisabled={!subframe} label='Width' onValueChange={(value) => camera.update('width', value)} size='sm' value={width} />
 								<NumberInput className='col-span-3' isDisabled={!subframe} label='Height' onValueChange={(value) => camera.update('height', value)} size='sm' value={height} />
-								<Switch className='col-span-3 flex-col-reverse gap-0.5 max-w-none' classNames={{ label: 'text-xs ms-0' }} isSelected={subframe} onValueChange={(value) => camera.update('subframe', value)} size='sm'>
+								<Switch className='col-span-3 flex-col-reverse gap-0.2 max-w-none' classNames={{ label: 'text-xs ms-0' }} isSelected={subframe} onValueChange={(value) => camera.update('subframe', value)} size='sm'>
 									Subframe
 								</Switch>
 								<div className='col-span-3 flex items-center justify-center'>
@@ -82,10 +82,10 @@ export function Camera() {
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='danger' isDisabled={!capturing} onPointerUp={camera.stop} startContent={<Tabler.IconPlayerStopFilled />} variant='flat'>
+							<Button color='danger' isDisabled={!capturing} onPointerUp={camera.stop} startContent={<Tabler.IconPlayerStopFilled size={16} />} variant='flat'>
 								Stop
 							</Button>
-							<Button color='success' isLoading={capturing} onPointerUp={camera.start} startContent={<Lucide.Play />} variant='flat'>
+							<Button color='success' isLoading={capturing} onPointerUp={camera.start} startContent={<Tabler.IconPlayerPlayFilled size={16} />} variant='flat'>
 								Start
 							</Button>
 						</ModalFooter>

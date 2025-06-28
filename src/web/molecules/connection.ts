@@ -19,7 +19,7 @@ export interface ConnectionState {
 
 // Compares two connections based on their connectedAt timestamp
 export const ConnectionComparator = (a: Connection, b: Connection) => {
-	return (a.connectedAt ?? 0) - (b.connectedAt ?? 0)
+	return (b.connectedAt ?? 0) - (a.connectedAt ?? 0)
 }
 
 // Molecule that manages connections
@@ -39,14 +39,18 @@ export const ConnectionMolecule = molecule((m) => {
 		selected: connections[0],
 	})
 
+	// Connect to an existing connection
 	Api.Connection.list().then((connections) => {
 		for (const connection of connections) {
 			const index = state.connections.findIndex((c) => c.id === connection.id || (c.port === connection.port && (c.host === connection.host || c.host === connection.ip) && c.type === connection.type))
 
 			if (index >= 0) {
+				state.selected = state.connections[index]
 				state.connected = connection
 
 				Api.Cameras.list().then((cameras) => cameras.forEach((camera) => bus.emit('addCamera', camera)))
+
+				break
 			}
 		}
 	})

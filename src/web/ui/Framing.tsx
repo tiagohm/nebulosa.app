@@ -27,7 +27,7 @@ export const Framing = memo(() => {
 					<>
 						<ModalHeader {...modal.moveProps}>Framing</ModalHeader>
 						<ModalBody>
-							<div className='mt-2 grid grid-cols-12 gap-2'>
+							<div className='mt-0 grid grid-cols-12 gap-2'>
 								<RightAscensionInput className='col-span-6' isDisabled={loading} label='RA (J2000)' onValueChange={(value) => framing.update('rightAscension', value)} value={request.rightAscension} />
 								<DeclinationInput className='col-span-6' isDisabled={loading} label='DEC (J2000)' onValueChange={(value) => framing.update('declination', value)} value={request.declination} />
 								<NumberInput className='col-span-4' isDisabled={loading} label='Width' maxValue={8192} minValue={100} onValueChange={(value) => framing.update('width', value)} size='sm' value={request.width} />

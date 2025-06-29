@@ -24,7 +24,7 @@ export const StarDetection = memo(() => {
 							<span className='text-xs font-normal text-gray-400'>{info.originalPath}</span>
 						</ModalHeader>
 						<ModalBody>
-							<div className='mt-2 grid grid-cols-12 gap-2'>
+							<div className='mt-0 grid grid-cols-12 gap-2'>
 								<StarDetectionSelect className='col-span-4' onValueChange={(value) => (starDetection.state.request.type = value)} value={request.type} />
 								<NumberInput className='col-span-4' label='Min SNR' maxValue={500} minValue={0} onValueChange={(value) => (starDetection.state.request.minSNR = value)} size='sm' value={request.minSNR} />
 								<NumberInput className='col-span-4' label='Max Stars' maxValue={2000} minValue={0} onValueChange={(value) => (starDetection.state.request.maxStars = value)} size='sm' value={request.maxStars} />

@@ -24,7 +24,7 @@ export const ImageFilter = memo(() => {
 							<span className='text-xs font-normal text-gray-400'>{info.originalPath}</span>
 						</ModalHeader>
 						<ModalBody>
-							<div className='mt-2 grid grid-cols-12 gap-2'>
+							<div className='mt-0 grid grid-cols-12 gap-2'>
 								<Checkbox className='col-span-full' isSelected={enabled} onValueChange={(value) => filter.update('enabled', value)}>
 									Enabled
 								</Checkbox>

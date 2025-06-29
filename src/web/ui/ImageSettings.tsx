@@ -24,7 +24,7 @@ export const ImageSettings = memo(() => {
 							<span className='text-xs font-normal text-gray-400'>{info.originalPath}</span>
 						</ModalHeader>
 						<ModalBody>
-							<div className='mt-2 grid grid-cols-12 gap-2'>
+							<div className='mt-0 grid grid-cols-12 gap-2'>
 								<ImageFormatSelect className='col-span-full' onValueChange={(value) => settings.updateFormat(value)} value={transformation.format} />
 								<Checkbox isSelected={pixelated} onValueChange={(value) => settings.update('pixelated', value)}>
 									Pixelated

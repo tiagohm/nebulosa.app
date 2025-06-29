@@ -112,7 +112,7 @@ export class IndiDeviceHandler implements IndiClientHandler {
 	}
 
 	// Removes a handler for a specific device type
-	removeDeviceHandler(type: keyof DeviceHandlerMap, handler: IndiDeviceEventHandler) {
+	removeDeviceHandler<K extends keyof DeviceHandlerMap>(type: K, handler: DeviceHandlerMap[K][number]) {
 		const handlers = this.handlers[type]
 		const index = handlers.indexOf(handler as never)
 		index >= 0 && handlers.splice(index, 1)
@@ -290,7 +290,7 @@ export class IndiDeviceHandler implements IndiClientHandler {
 					}
 
 					if (device.exposure.state === 'Busy' || device.exposure.state === 'Ok') {
-						device.exposure.time = Math.trunc(value.value * 1000000)
+						device.exposure.time = value.value
 						update = true
 					}
 
@@ -503,6 +503,14 @@ export class IndiDeviceHandler implements IndiClientHandler {
 		if (device.connected) {
 			client.sendSwitch({ device: device.name, name: 'CONNECTION', elements: { DISCONNECT: true } })
 		}
+	}
+
+	enableBlob(client: IndiClient, device: Device) {
+		client.enableBlob({ device: device.name, value: 'Also' })
+	}
+
+	disableBlob(client: IndiClient, device: Device) {
+		client.enableBlob({ device: device.name, value: 'Never' })
 	}
 
 	cameras() {

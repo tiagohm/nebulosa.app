@@ -1,10 +1,10 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import { type Camera, type CameraCaptureStart, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_START } from 'src/api/types'
+import { type Camera, type CameraCaptureStart, type CameraCaptureTaskEvent, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_TASK_EVENT } from 'src/api/types'
 import { proxy, subscribe } from 'valtio'
-import { deepClone } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 import { BusMolecule } from '../bus'
+import { EquipmentMolecule } from './equipment'
 
 export interface CameraScopeValue {
 	readonly camera: Camera
@@ -13,6 +13,7 @@ export interface CameraScopeValue {
 export interface CameraState {
 	readonly camera: Camera
 	readonly request: CameraCaptureStart
+	readonly progress: CameraCaptureTaskEvent
 	connecting: boolean
 	capturing: boolean
 	targetTemperature: number
@@ -26,17 +27,19 @@ const cameraStateMap = new Map<string, CameraState>()
 export const CameraMolecule = molecule((m, s) => {
 	const scope = s(CameraScope)
 	const bus = m(BusMolecule)
+	const equipment = m(EquipmentMolecule)
 
 	const cameraCaptureStartRequest = simpleLocalStorage.get<CameraCaptureStart>(`camera.${scope.camera.name}.request`, () => structuredClone(DEFAULT_CAMERA_CAPTURE_START))
 
 	const state =
 		cameraStateMap.get(scope.camera.name) ??
 		proxy<CameraState>({
-			camera: deepClone(scope.camera),
+			camera: equipment.get('CAMERA', scope.camera.name) as Camera,
+			request: cameraCaptureStartRequest,
+			progress: structuredClone(DEFAULT_CAMERA_CAPTURE_TASK_EVENT),
 			connecting: false,
 			capturing: false,
 			targetTemperature: scope.camera.temperature,
-			request: cameraCaptureStartRequest,
 		})
 
 	cameraStateMap.set(scope.camera.name, state)
@@ -48,16 +51,18 @@ export const CameraMolecule = molecule((m, s) => {
 	})
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(3)
+		const unsubscribers = new Array<VoidFunction>(4)
 
 		unsubscribers[0] = bus.subscribe('CAMERA_UPDATE', (event) => {
 			if (event.device.name === state.camera.name) {
-				state.camera[event.property] = event.device[event.property] as never
-
 				if (event.property === 'connected') {
 					state.connecting = false
 				} else if (event.property === 'frame') {
 					updateRequestFrame(event.device[event.property]!)
+				} else if (event.property === 'exposure') {
+					if (event.state === 'Ok') {
+						state.capturing = false
+					}
 				}
 			}
 		})
@@ -68,7 +73,13 @@ export const CameraMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[2] = subscribe(state.request, () => simpleLocalStorage.set(`camera.${scope.camera.name}.request`, state.request))
+		unsubscribers[2] = bus.subscribe('CAMERA_CAPTURE', (event) => {
+			if (event.device === state.camera.name) {
+				Object.assign(state.progress, event)
+			}
+		})
+
+		unsubscribers[3] = subscribe(state.request, () => simpleLocalStorage.set(`camera.${scope.camera.name}.request`, state.request))
 
 		return () => {
 			unsubscribers.forEach((unsubscriber) => unsubscriber())
@@ -109,9 +120,14 @@ export const CameraMolecule = molecule((m, s) => {
 		state.request.height = state.camera.frame.maxHeight
 	}
 
-	function start() {}
+	function start() {
+		state.capturing = true
+		return Api.Cameras.start(state.camera, state.request)
+	}
 
-	function stop() {}
+	function stop() {
+		return Api.Cameras.stop(state.camera)
+	}
 
 	return { scope, state, connectOrDisconnect, update, fullscreen, start, stop }
 })

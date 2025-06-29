@@ -24,7 +24,7 @@ export const ImageScnr = memo(() => {
 							<span className='text-xs font-normal text-gray-400'>{info.originalPath}</span>
 						</ModalHeader>
 						<ModalBody>
-							<div className='mt-2 grid grid-cols-12 gap-2'>
+							<div className='mt-0 grid grid-cols-12 gap-2'>
 								<ButtonGroup className='col-span-full'>
 									<Button color='secondary' onPointerUp={() => scnr.update('channel', undefined)} variant={channel === undefined ? 'flat' : 'light'}>
 										NONE

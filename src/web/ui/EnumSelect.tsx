@@ -1,6 +1,6 @@
 import { Select, type SelectProps } from '@heroui/react'
 
-export interface EnumSelectProps<T extends string> extends Omit<SelectProps, 'value' | 'onValueChange' | 'size' | 'disallowEmptySelection' | 'selectionMode'> {
+export interface EnumSelectProps<T extends string> extends Omit<SelectProps, 'value' | 'onValueChange' | 'size' | 'disallowEmptySelection' | 'selectionMode' | 'items'> {
 	value: T
 	onValueChange: (value: T) => void
 }

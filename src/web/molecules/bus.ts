@@ -1,5 +1,5 @@
 import { molecule } from 'bunshi'
-import type { Camera, CameraUpdated, Confirmation, GuideOutput, GuideOutputUpdated, Thermometer, ThermometerUpdated } from 'src/api/types'
+import type { Camera, CameraCaptureTaskEvent, CameraUpdated, Confirmation, GuideOutput, GuideOutputUpdated, Thermometer, ThermometerUpdated } from 'src/api/types'
 
 export type BusListener<T> = (arg: T) => void
 
@@ -15,6 +15,7 @@ export interface BusEventType {
 	readonly THERMOMETER_ADD: Thermometer
 	readonly THERMOMETER_UPDATE: ThermometerUpdated
 	readonly THERMOMETER_REMOVE: Thermometer
+	readonly CAMERA_CAPTURE: CameraCaptureTaskEvent
 }
 
 const BUS: Partial<Record<keyof BusEventType, Set<(event: BusEventType[keyof BusEventType]) => void>>> = {}
@@ -35,7 +36,6 @@ export const BusMolecule = molecule(() => {
 
 	// Emits an event to all subscribers
 	function emit<K extends keyof typeof BUS>(event: K, arg: BusEventType[K]) {
-		console.info('emitting event:', event, arg)
 		BUS[event]?.forEach((e) => e(arg as never))
 	}
 

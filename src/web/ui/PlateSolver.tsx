@@ -28,7 +28,7 @@ export const PlateSolver = memo(() => {
 							<span className='text-xs font-normal text-gray-400'>{info.originalPath}</span>
 						</ModalHeader>
 						<ModalBody>
-							<div className='mt-2 grid grid-cols-12 gap-2'>
+							<div className='mt-0 grid grid-cols-12 gap-2'>
 								<PlateSolverSelect className='col-span-8' onValueChange={(value) => solver.update('type', value)} value={request.type} />
 								<Checkbox className='col-span-3 col-end-13' isSelected={request.blind} onValueChange={(value) => solver.update('blind', value)}>
 									Blind

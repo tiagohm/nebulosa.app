@@ -255,11 +255,13 @@ export interface GuideOutput extends Device {
 
 export type FrameType = 'LIGHT' | 'DARK' | 'FLAT' | 'BIAS'
 
-export type ExposureTimeUnit = 'MINUTES' | 'SECONDS' | 'MILLISECONDS' | 'MICROSECONDS'
+export type ExposureTimeUnit = 'MINUTE' | 'SECOND' | 'MILLISECOND' | 'MICROSECOND'
 
 export type ExposureMode = 'SINGLE' | 'FIXED' | 'LOOP'
 
 export type AutoSubFolderMode = 'OFF' | 'NOON' | 'TARGET' | 'MIDNIGHT'
+
+export type CameraCaptureState = 'IDLE' | 'EXPOSURE_STARTED' | 'EXPOSING' | 'WAITING' | 'SETTLING' | 'DITHERING' | 'STACKING' | 'PAUSING' | 'PAUSED' | 'EXPOSURE_FINISHED'
 
 export interface Camera extends GuideOutput, Thermometer {
 	hasCoolerControl: boolean
@@ -342,17 +344,57 @@ export interface CameraCaptureStart {
 	autoSubFolderMode: AutoSubFolderMode
 }
 
-export interface CameraCaptureTaskEvent {}
+export interface CameraCaptureProgress {
+	remainingTime: number
+	elapsedTime: number
+	progress: number
+}
+
+export interface CameraCaptureTaskEvent extends WebSocketMessage {
+	readonly type: 'CAMERA_CAPTURE'
+	device: string
+	count: number
+	remainingCount: number
+	elapsedCount: number
+	state: CameraCaptureState
+	totalExposureTime: number
+	frameExposureTime: number
+	totalProgress: CameraCaptureProgress
+	frameProgress: CameraCaptureProgress
+	savedPath?: string
+}
 
 export interface GuidePulse {
 	direction: GuideDirection
 	duration: number
 }
 
+export const DEFAULT_CAMERA_CAPTURE_TASK_EVENT: CameraCaptureTaskEvent = {
+	type: 'CAMERA_CAPTURE',
+	device: '',
+	state: 'IDLE',
+	count: 0,
+	remainingCount: 0,
+	elapsedCount: 0,
+	totalExposureTime: 0,
+	frameExposureTime: 0,
+	totalProgress: {
+		remainingTime: 0,
+		elapsedTime: 0,
+		progress: 0,
+	},
+	frameProgress: {
+		remainingTime: 0,
+		elapsedTime: 0,
+		progress: 0,
+	},
+	savedPath: undefined,
+}
+
 // Message
 
 export interface WebSocketMessage {
-	type: 'NOTIFICATION' | 'CONFIRMATION' | `${DeviceType}_${'ADD' | 'UPDATE' | 'REMOVE'}`
+	readonly type: string
 }
 
 // Notification
@@ -417,7 +459,7 @@ export const X_IMAGE_INFO_HEADER = 'X-Image-Info'
 
 export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	exposureTime: 0,
-	exposureTimeUnit: 'MICROSECONDS',
+	exposureTimeUnit: 'MICROSECOND',
 	frameType: 'LIGHT',
 	exposureMode: 'SINGLE',
 	delay: 0,

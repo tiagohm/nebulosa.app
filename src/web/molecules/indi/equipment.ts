@@ -44,14 +44,14 @@ export const EquipmentMolecule = molecule((m) => {
 	onMount(() => {
 		const unsubscribers: VoidFunction[] = []
 
-		unsubscribers.push(bus.subscribe('CAMERA_ADD', (event) => register('CAMERA', event)))
-		unsubscribers.push(bus.subscribe('CAMERA_REMOVE', (event) => unregister('CAMERA', event)))
+		unsubscribers.push(bus.subscribe('CAMERA_ADD', (event) => add('CAMERA', event)))
+		unsubscribers.push(bus.subscribe('CAMERA_REMOVE', (event) => remove('CAMERA', event)))
 		unsubscribers.push(bus.subscribe('CAMERA_UPDATE', (event) => update('CAMERA', event.device.name, event.property, event.device[event.property]!)))
-		unsubscribers.push(bus.subscribe('GUIDE_OUTPUT_ADD', (event) => register('GUIDE_OUTPUT', event)))
-		unsubscribers.push(bus.subscribe('GUIDE_OUTPUT_REMOVE', (event) => unregister('GUIDE_OUTPUT', event)))
+		unsubscribers.push(bus.subscribe('GUIDE_OUTPUT_ADD', (event) => add('GUIDE_OUTPUT', event)))
+		unsubscribers.push(bus.subscribe('GUIDE_OUTPUT_REMOVE', (event) => remove('GUIDE_OUTPUT', event)))
 		unsubscribers.push(bus.subscribe('GUIDE_OUTPUT_UPDATE', (event) => update('GUIDE_OUTPUT', event.device.name, event.property, event.device[event.property]!)))
-		unsubscribers.push(bus.subscribe('THERMOMETER_ADD', (event) => register('THERMOMETER', event)))
-		unsubscribers.push(bus.subscribe('THERMOMETER_REMOVE', (event) => unregister('THERMOMETER', event)))
+		unsubscribers.push(bus.subscribe('THERMOMETER_ADD', (event) => add('THERMOMETER', event)))
+		unsubscribers.push(bus.subscribe('THERMOMETER_REMOVE', (event) => remove('THERMOMETER', event)))
 		unsubscribers.push(bus.subscribe('THERMOMETER_UPDATE', (event) => update('THERMOMETER', event.device.name, event.property, event.device[event.property]!)))
 
 		return () => {
@@ -59,8 +59,12 @@ export const EquipmentMolecule = molecule((m) => {
 		}
 	})
 
+	function get(type: DeviceType, name: string): Device | undefined {
+		return state[type].find((e) => e.name === name)
+	}
+
 	// Registers a new device of a specific type
-	function register<T extends DeviceType>(type: T, device: EquipmentState[T][number]) {
+	function add<T extends DeviceType>(type: T, device: EquipmentState[T][number]) {
 		const devices = state[type]
 		const index = devices.findIndex((e) => e.name === device.name)
 		index < 0 && state[type].push(device as never)
@@ -74,7 +78,7 @@ export const EquipmentMolecule = molecule((m) => {
 	}
 
 	// Unregisters a device of a specific type
-	function unregister<T extends DeviceType>(type: T, device: EquipmentState[T][number]) {
+	function remove<T extends DeviceType>(type: T, device: EquipmentState[T][number]) {
 		const devices = state[type]
 		const index = devices.findIndex((e) => e.name === device.name)
 		index >= 0 && devices.splice(index, 1)
@@ -91,5 +95,5 @@ export const EquipmentMolecule = molecule((m) => {
 		state[type].find((e) => e.name === device.name)!.show = false
 	}
 
-	return { state, register, update, unregister, showModal, closeModal }
+	return { state, get, add, update, remove, showModal, closeModal }
 })

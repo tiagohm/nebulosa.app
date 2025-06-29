@@ -4,7 +4,7 @@ import Elysia from 'elysia'
 import fs from 'fs'
 import os from 'os'
 import { join } from 'path'
-import { CameraHandler, CameraManager, cameras } from 'src/api/camera'
+import { CameraHandler, cameras } from 'src/api/camera'
 import { ApiError } from 'src/api/exceptions'
 import { GuideOutputHandler, GuideOutputManager, guideOutputs } from 'src/api/guideoutput'
 import { ThermometerHandler, ThermometerManager, thermometers } from 'src/api/thermometer'
@@ -58,7 +58,6 @@ const cameraHandler = new CameraHandler(webSocketMessageHandler, indiDeviceHandl
 const thermometerHandler = new ThermometerHandler(webSocketMessageHandler)
 const guideOutputHandler = new GuideOutputHandler(webSocketMessageHandler)
 
-const cameraManager = new CameraManager(webSocketMessageHandler, cameraHandler, indiDeviceHandler, connectionManager)
 const guideOutputManager = new GuideOutputManager(guideOutputHandler, indiDeviceHandler, connectionManager)
 const thermometerManager = new ThermometerManager(thermometerHandler, indiDeviceHandler)
 const confirmationManager = new ConfirmationManager(webSocketMessageHandler)
@@ -123,7 +122,7 @@ app.onError(({ error }) => {
 app.use(connection(connectionManager, indiDeviceHandler))
 app.use(confirmation(confirmationManager))
 app.use(indi(indiDeviceHandler, connectionManager))
-app.use(cameras(cameraManager))
+app.use(cameras(cameraHandler, indiDeviceHandler, connectionManager))
 app.use(thermometers(thermometerManager))
 app.use(guideOutputs(guideOutputManager))
 app.use(atlas(atlasManager))

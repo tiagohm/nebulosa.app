@@ -3,6 +3,7 @@ import type { FitsHeader } from 'nebulosa/src/fits'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
 import type { PropertyState } from 'nebulosa/src/indi'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
+import type { Required } from 'utility-types'
 
 // Atlas
 
@@ -42,7 +43,7 @@ export interface Confirm {
 }
 
 export interface Confirmation extends WebSocketMessage {
-	readonly type: 'confirmation'
+	readonly type: 'CONFIRMATION'
 	key: string
 	message: string
 }
@@ -107,19 +108,6 @@ export interface Framing {
 	focalLength: number // mm
 	pixelSize: number // µm
 	rotation: number // deg
-}
-
-export const DEFAULT_FRAMING: Framing = {
-	id: '0',
-	hipsSurvey: 'CDS/P/DSS2/color',
-	rightAscension: '00 00 00',
-	declination: '+000 00 00',
-	width: 800,
-	height: 600,
-	fov: 1,
-	focalLength: 500,
-	pixelSize: 3.5,
-	rotation: 0,
 }
 
 // Image
@@ -192,51 +180,48 @@ export interface ImageInfo {
 
 // INDI
 
-export type DeviceType = 'CAMERA' | 'MOUNT' | 'WHEEL' | 'FOCUSER' | 'ROTATOR' | 'GPS' | 'DOME' | 'GUIDE_OUTPUT' | 'LIGHT_BOX' | 'DUST_CAP'
-
-export type SubDeviceType = 'GUIDE_OUTPUT' | 'THERMOMETER' | 'GPS' | 'DEW_HEATER'
+export type DeviceType = 'CAMERA' | 'MOUNT' | 'WHEEL' | 'FOCUSER' | 'ROTATOR' | 'GPS' | 'DOME' | 'GUIDE_OUTPUT' | 'LIGHT_BOX' | 'DUST_CAP' | 'THERMOMETER' | 'DEW_HEATER'
 
 export type GuideDirection = 'NORTH' | 'SOUTH' | 'WEST' | 'EAST'
 
-export interface DeviceAdded<T extends Lowercase<DeviceType | SubDeviceType>, D extends Device> extends WebSocketMessage {
-	readonly type: `${T}.add`
+export interface DeviceAdded<T extends DeviceType, D extends Device> extends WebSocketMessage {
+	readonly type: `${T}_ADD`
 	readonly device: D
 }
 
-export interface DeviceUpdated<T extends Lowercase<DeviceType | SubDeviceType>, D extends Device> extends WebSocketMessage {
-	readonly type: `${T}.update`
-	readonly device: string
+export interface DeviceUpdated<T extends DeviceType, D extends Device> extends WebSocketMessage {
+	readonly type: `${T}_UPDATE`
+	readonly device: Required<Partial<D>, 'name'>
 	readonly property: keyof D
-	readonly value: D[keyof D]
 	readonly state?: PropertyState
 }
 
-export interface DeviceRemoved<T extends Lowercase<DeviceType | SubDeviceType>, D extends Device> extends WebSocketMessage {
-	readonly type: `${T}.remove`
+export interface DeviceRemoved<T extends DeviceType, D extends Device> extends WebSocketMessage {
+	readonly type: `${T}_REMOVE`
 	readonly device: D
 }
 
-export type CameraAdded = DeviceAdded<'camera', Camera>
+export type CameraAdded = DeviceAdded<'CAMERA', Camera>
 
-export type CameraUpdated = DeviceUpdated<'camera', Camera>
+export type CameraUpdated = DeviceUpdated<'CAMERA', Camera>
 
-export type CameraRemoved = DeviceRemoved<'camera', Camera>
+export type CameraRemoved = DeviceRemoved<'CAMERA', Camera>
 
 export type CameraMessageEvent = CameraAdded | CameraUpdated | CameraRemoved
 
-export type GuideOutputAdded = DeviceAdded<'guide_output', GuideOutput>
+export type GuideOutputAdded = DeviceAdded<'GUIDE_OUTPUT', GuideOutput>
 
-export type GuideOutputUpdated = DeviceUpdated<'guide_output', GuideOutput>
+export type GuideOutputUpdated = DeviceUpdated<'GUIDE_OUTPUT', GuideOutput>
 
-export type GuideOutputRemoved = DeviceRemoved<'guide_output', GuideOutput>
+export type GuideOutputRemoved = DeviceRemoved<'GUIDE_OUTPUT', GuideOutput>
 
 export type GuideOutputMessageEvent = GuideOutputAdded | GuideOutputUpdated | GuideOutputRemoved
 
-export type ThermometerAdded = DeviceAdded<'thermometer', Thermometer>
+export type ThermometerAdded = DeviceAdded<'THERMOMETER', Thermometer>
 
-export type ThermometerUpdated = DeviceUpdated<'thermometer', Thermometer>
+export type ThermometerUpdated = DeviceUpdated<'THERMOMETER', Thermometer>
 
-export type ThermometerRemoved = DeviceRemoved<'thermometer', Thermometer>
+export type ThermometerRemoved = DeviceRemoved<'THERMOMETER', Thermometer>
 
 export type ThermometerMessageEvent = ThermometerAdded | ThermometerUpdated | ThermometerRemoved
 
@@ -357,26 +342,7 @@ export interface CameraCaptureStart {
 	autoSubFolderMode: AutoSubFolderMode
 }
 
-export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
-	exposureTime: 0,
-	exposureTimeUnit: 'MICROSECONDS',
-	frameType: 'LIGHT',
-	exposureMode: 'SINGLE',
-	delay: 0,
-	count: 1,
-	x: 0,
-	y: 0,
-	width: 0,
-	height: 0,
-	subframe: false,
-	binX: 1,
-	binY: 1,
-	frameFormat: '',
-	gain: 0,
-	offset: 0,
-	autoSave: true,
-	autoSubFolderMode: 'OFF',
-}
+export interface CameraCaptureTaskEvent {}
 
 export interface GuidePulse {
 	direction: GuideDirection
@@ -386,7 +352,7 @@ export interface GuidePulse {
 // Message
 
 export interface WebSocketMessage {
-	type: 'notification' | 'confirmation' | `${Lowercase<DeviceType | SubDeviceType>}.${'add' | 'update' | 'remove'}`
+	type: 'NOTIFICATION' | 'CONFIRMATION' | `${DeviceType}_${'ADD' | 'UPDATE' | 'REMOVE'}`
 }
 
 // Notification
@@ -394,7 +360,7 @@ export interface WebSocketMessage {
 export type Severity = 'info' | 'success' | 'warn' | 'error'
 
 export interface Notification extends WebSocketMessage {
-	readonly type: 'notification'
+	readonly type: 'NOTIFICATION'
 	target?: string
 	severity?: Severity
 	title?: string
@@ -426,6 +392,50 @@ export interface PlateSolveStop {
 	id: string
 }
 
+// Star Detection
+
+export type StarDetectionType = 'ASTAP'
+
+export interface StarDetection {
+	type: StarDetectionType
+	executable?: string
+	path: string
+	timeout: number
+	minSNR: number
+	maxStars: number
+	slot: number
+}
+
+// Misc
+
+export interface Point {
+	x: number
+	y: number
+}
+
+export const X_IMAGE_INFO_HEADER = 'X-Image-Info'
+
+export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
+	exposureTime: 0,
+	exposureTimeUnit: 'MICROSECONDS',
+	frameType: 'LIGHT',
+	exposureMode: 'SINGLE',
+	delay: 0,
+	count: 1,
+	x: 0,
+	y: 0,
+	width: 0,
+	height: 0,
+	subframe: false,
+	binX: 1,
+	binY: 1,
+	frameFormat: '',
+	gain: 0,
+	offset: 0,
+	autoSave: true,
+	autoSubFolderMode: 'OFF',
+}
+
 export const DEFAULT_PLATE_SOLVE_START: PlateSolveStart = {
 	id: '',
 	type: 'ASTAP',
@@ -444,18 +454,17 @@ export const DEFAULT_PLATE_SOLVE_START: PlateSolveStart = {
 	apiKey: '',
 }
 
-// Star Detection
-
-export type StarDetectionType = 'ASTAP'
-
-export interface StarDetection {
-	type: StarDetectionType
-	executable?: string
-	path: string
-	timeout: number
-	minSNR: number
-	maxStars: number
-	slot: number
+export const DEFAULT_FRAMING: Framing = {
+	id: '0',
+	hipsSurvey: 'CDS/P/DSS2/color',
+	rightAscension: '00 00 00',
+	declination: '+000 00 00',
+	width: 800,
+	height: 600,
+	fov: 1,
+	focalLength: 500,
+	pixelSize: 3.5,
+	rotation: 0,
 }
 
 export const DEFAULT_STAR_DETECTION: StarDetection = {
@@ -466,15 +475,6 @@ export const DEFAULT_STAR_DETECTION: StarDetection = {
 	maxStars: 0,
 	slot: 0,
 }
-
-// Misc
-
-export interface Point {
-	x: number
-	y: number
-}
-
-export const X_IMAGE_INFO_HEADER = 'X-Image-Info'
 
 export const DEFAULT_CAMERA: Camera = {
 	hasCoolerControl: false,

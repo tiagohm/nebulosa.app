@@ -1,12 +1,12 @@
 import { molecule, onMount } from 'bunshi'
-import type { DeviceType, SubDeviceType } from 'src/api/types'
+import type { DeviceType } from 'src/api/types'
 import { proxy } from 'valtio'
 import { BusMolecule } from './bus'
 
 export interface HomeState {
 	readonly menu: {
 		show: boolean
-		activeDevice?: DeviceType | SubDeviceType
+		activeDevice?: DeviceType
 	}
 }
 
@@ -22,7 +22,7 @@ export const HomeMolecule = molecule((m) => {
 	})
 
 	onMount(() => {
-		const unsubscriber = bus.subscribe('toggleHomeMenu', (enabled) => toggleMenu(enabled))
+		const unsubscriber = bus.subscribe('TOGGLE_HOME_MENU', (enabled) => toggleMenu(enabled))
 
 		return () => unsubscriber()
 	})

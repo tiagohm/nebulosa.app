@@ -19,7 +19,7 @@ export const PlateSolver = memo(() => {
 	const modal = useModal(() => viewer.closeModal('plateSolver'))
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[360px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[370px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>

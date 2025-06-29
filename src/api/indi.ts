@@ -4,7 +4,7 @@ import type { CfaPattern } from 'nebulosa/src/image'
 import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, IndiClient, IndiClientHandler, OneNumber, PropertyState, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
 import type { ConnectionProvider } from './connection'
 import { deviceNotFound } from './exceptions'
-import type { Camera, Device, DeviceType, GuideOutput, SubDeviceType, Thermometer } from './types'
+import type { Camera, Device, DeviceType, GuideOutput, Thermometer } from './types'
 import { DEFAULT_CAMERA, isCamera, isGuideOutput } from './types'
 
 export enum DeviceInterfaceType {
@@ -33,8 +33,8 @@ export enum DeviceInterfaceType {
 // This interface defines the methods that should be implemented by any class that handles INDI device events.
 export interface IndiDeviceEventHandler<T extends Device = Device> {
 	readonly deviceUpdated: (device: T, property: keyof T & string, state?: PropertyState) => void
-	readonly deviceAdded: (device: T, type: DeviceType | SubDeviceType) => void
-	readonly deviceRemoved: (device: T, type: DeviceType | SubDeviceType) => void
+	readonly deviceAdded: (device: T, type: DeviceType) => void
+	readonly deviceRemoved: (device: T, type: DeviceType) => void
 }
 
 // This is an abstract class that provides a base implementation for handling devices in INDI.
@@ -77,11 +77,11 @@ export function ask(client: IndiClient, device: Device) {
 	client.getProperties({ device: device.name })
 }
 
-const THERMOMETER_PROPERTIES = ['termometer']
-const GUIDE_OUTPUT_PROPERTIES = ['pulseGuiding']
+const THERMOMETER_PROPERTIES = ['temperature', 'connected']
+const GUIDE_OUTPUT_PROPERTIES = ['pulseGuiding', 'connected']
 
-// Manager for INDI devices and their properties.
-export class IndiDeviceManager implements IndiClientHandler {
+// Handles all the INDI devices.
+export class IndiDeviceHandler implements IndiClientHandler {
 	private readonly cameraMap = new Map<string, Camera>()
 	private readonly thermometerMap = new Map<string, Thermometer>()
 	private readonly guideOutputMap = new Map<string, GuideOutput>()
@@ -563,15 +563,15 @@ export class IndiDeviceManager implements IndiClientHandler {
 		}
 	}
 
-	private fireDeviceUpdated(device: Device, property: string, state: PropertyState | undefined, type: DeviceType | SubDeviceType) {
+	private fireDeviceUpdated(device: Device, property: string, state: PropertyState | undefined, type: DeviceType) {
 		this.handlers[type].forEach((handler) => handler.deviceUpdated(device as never, property as never, state))
 	}
 
-	private fireDeviceAdded(device: Device, type: DeviceType | SubDeviceType) {
+	private fireDeviceAdded(device: Device, type: DeviceType) {
 		this.handlers[type].forEach((handler) => handler.deviceAdded(device as never, type))
 	}
 
-	private fireDeviceRemoved(device: Device, type: DeviceType | SubDeviceType) {
+	private fireDeviceRemoved(device: Device, type: DeviceType) {
 		this.handlers[type].forEach((handler) => handler.deviceRemoved(device as never, type))
 	}
 
@@ -677,7 +677,7 @@ export class IndiDeviceManager implements IndiClientHandler {
 	}
 }
 
-export function indi(indi: IndiDeviceManager, connection: ConnectionProvider) {
+export function indi(indi: IndiDeviceHandler, connection: ConnectionProvider) {
 	const app = new Elysia({ prefix: '/indi' })
 
 	app.get('/:id', ({ params }) => {

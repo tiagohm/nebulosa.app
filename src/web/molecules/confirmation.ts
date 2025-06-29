@@ -21,7 +21,7 @@ export const ConfirmationMolecule = molecule((m) => {
 	})
 
 	onMount(() => {
-		const unsubscriber = bus.subscribe('confirmation', show)
+		const unsubscriber = bus.subscribe('CONFIRMATION', show)
 
 		return () => unsubscriber()
 	})

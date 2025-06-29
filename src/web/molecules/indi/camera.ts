@@ -11,11 +11,11 @@ export interface CameraScopeValue {
 }
 
 export interface CameraState {
-	camera: Camera
+	readonly camera: Camera
+	readonly request: CameraCaptureStart
 	connecting: boolean
 	capturing: boolean
 	targetTemperature: number
-	readonly request: CameraCaptureStart
 }
 
 export const CameraScope = createScope<CameraScopeValue>({ camera: DEFAULT_CAMERA })
@@ -48,32 +48,29 @@ export const CameraMolecule = molecule((m, s) => {
 	})
 
 	onMount(() => {
-		console.info('camera mounted', scope.camera.name)
-
 		const unsubscribers = new Array<VoidFunction>(3)
 
-		unsubscribers[0] = bus.subscribe('updateCamera', (event) => {
-			if (event.device === state.camera.name) {
-				state.camera[event.property] = event.value as never
+		unsubscribers[0] = bus.subscribe('CAMERA_UPDATE', (event) => {
+			if (event.device.name === state.camera.name) {
+				state.camera[event.property] = event.device[event.property] as never
 
 				if (event.property === 'connected') {
 					state.connecting = false
 				} else if (event.property === 'frame') {
-					updateRequestFrame(event.value as never)
+					updateRequestFrame(event.device[event.property]!)
 				}
 			}
 		})
 
-		unsubscribers[1] = bus.subscribe('removeCamera', (event) => {
-			if (event.name === state.camera.name) {
-				cameraStateMap.delete(event.name)
+		unsubscribers[1] = bus.subscribe('CAMERA_REMOVE', (camera) => {
+			if (camera.name === state.camera.name) {
+				cameraStateMap.delete(camera.name)
 			}
 		})
 
 		unsubscribers[2] = subscribe(state.request, () => simpleLocalStorage.set(`camera.${scope.camera.name}.request`, state.request))
 
 		return () => {
-			console.info('camera unmounted', scope.camera.name)
 			unsubscribers.forEach((unsubscriber) => unsubscriber())
 		}
 	})

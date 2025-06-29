@@ -16,35 +16,19 @@ export const WebSocketMolecule = molecule((m) => {
 		const data = JSON.parse(message.data) as DeviceMessageEvent | Confirmation
 
 		switch (data.type) {
-			case 'confirmation':
-				bus.emit('confirmation', data)
+			case 'CONFIRMATION':
+			case 'CAMERA_UPDATE':
+			case 'GUIDE_OUTPUT_UPDATE':
+			case 'THERMOMETER_UPDATE':
+				bus.emit(data.type, data)
 				break
-			case 'camera.add':
-				bus.emit('addCamera', data.device)
-				break
-			case 'camera.remove':
-				bus.emit('removeCamera', data.device)
-				break
-			case 'camera.update':
-				bus.emit('updateCamera', data)
-				break
-			case 'guide_output.add':
-				bus.emit('addGuideOutput', data.device)
-				break
-			case 'guide_output.remove':
-				bus.emit('removeGuideOutput', data.device)
-				break
-			case 'guide_output.update':
-				bus.emit('updateGuideOutput', data)
-				break
-			case 'thermometer.add':
-				bus.emit('addThermometer', data.device)
-				break
-			case 'thermometer.remove':
-				bus.emit('removeThermometer', data.device)
-				break
-			case 'thermometer.update':
-				bus.emit('updateThermometer', data)
+			case 'CAMERA_ADD':
+			case 'CAMERA_REMOVE':
+			case 'GUIDE_OUTPUT_ADD':
+			case 'GUIDE_OUTPUT_REMOVE':
+			case 'THERMOMETER_ADD':
+			case 'THERMOMETER_REMOVE':
+				bus.emit(data.type, data.device)
 				break
 		}
 	})

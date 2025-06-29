@@ -2,8 +2,6 @@ import Elysia from 'elysia'
 import type { WebSocketMessageHandler } from './message'
 import type { Confirm, Confirmation } from './types'
 
-export const CONFIRMATION_TYPE = 'confirmation'
-
 export type ConfirmationResolver = (value?: boolean | PromiseLike<boolean>) => void
 
 // Manager that handles confirmation requests sent to the client
@@ -30,7 +28,7 @@ export class ConfirmationManager {
 			resolve(value)
 		})
 
-		this.webSocketMessageHandler.send<Confirmation>({ ...message, type: CONFIRMATION_TYPE })
+		this.webSocketMessageHandler.send<Confirmation>({ ...message, type: 'CONFIRMATION' })
 
 		return promise
 	}

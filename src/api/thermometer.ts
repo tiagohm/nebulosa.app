@@ -1,6 +1,6 @@
 import Elysia from 'elysia'
 import type { PropertyState } from 'nebulosa/src/indi'
-import { DeviceHandler, type IndiDeviceManager } from './indi'
+import { DeviceHandler, type IndiDeviceHandler } from './indi'
 import type { WebSocketMessageHandler } from './message'
 import type { Thermometer, ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from './types'
 
@@ -11,15 +11,15 @@ export class ThermometerHandler extends DeviceHandler<Thermometer> {
 	}
 
 	deviceAdded(device: Thermometer) {
-		this.webSocketMessageHandler.send<ThermometerAdded>({ type: 'thermometer.add', device })
+		this.webSocketMessageHandler.send<ThermometerAdded>({ type: 'THERMOMETER_ADD', device })
 	}
 
 	deviceUpdated(device: Thermometer, property: keyof Thermometer, state?: PropertyState) {
-		this.webSocketMessageHandler.send<ThermometerUpdated>({ type: 'thermometer.update', device: device.name, property, value: device[property], state })
+		this.webSocketMessageHandler.send<ThermometerUpdated>({ type: 'THERMOMETER_UPDATE', device: { name: device.name, [property]: device[property] }, property, state })
 	}
 
 	deviceRemoved(device: Thermometer) {
-		this.webSocketMessageHandler.send<ThermometerRemoved>({ type: 'thermometer.remove', device })
+		this.webSocketMessageHandler.send<ThermometerRemoved>({ type: 'THERMOMETER_REMOVE', device })
 	}
 }
 
@@ -27,7 +27,7 @@ export class ThermometerHandler extends DeviceHandler<Thermometer> {
 export class ThermometerManager {
 	constructor(
 		private readonly handler: ThermometerHandler,
-		private readonly indi: IndiDeviceManager,
+		private readonly indi: IndiDeviceHandler,
 	) {}
 
 	list() {

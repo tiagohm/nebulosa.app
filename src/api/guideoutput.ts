@@ -1,7 +1,7 @@
 import Elysia from 'elysia'
 import type { IndiClient, PropertyState } from 'nebulosa/src/indi'
 import type { ConnectionProvider } from './connection'
-import { DeviceHandler, type IndiDeviceManager } from './indi'
+import { DeviceHandler, type IndiDeviceHandler } from './indi'
 import type { WebSocketMessageHandler } from './message'
 import type { GuideOutput, GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from './types'
 
@@ -12,15 +12,15 @@ export class GuideOutputHandler extends DeviceHandler<GuideOutput> {
 	}
 
 	deviceAdded(device: GuideOutput) {
-		this.webSocketMessageHandler.send<GuideOutputAdded>({ type: 'guide_output.add', device })
+		this.webSocketMessageHandler.send<GuideOutputAdded>({ type: 'GUIDE_OUTPUT_ADD', device })
 	}
 
 	deviceUpdated(device: GuideOutput, property: keyof GuideOutput, state?: PropertyState) {
-		this.webSocketMessageHandler.send<GuideOutputUpdated>({ type: 'guide_output.update', device: device.name, property, value: device[property], state })
+		this.webSocketMessageHandler.send<GuideOutputUpdated>({ type: 'GUIDE_OUTPUT_UPDATE', device: { name: device.name, [property]: device[property] }, property, state })
 	}
 
 	deviceRemoved(device: GuideOutput) {
-		this.webSocketMessageHandler.send<GuideOutputRemoved>({ type: 'guide_output.remove', device })
+		this.webSocketMessageHandler.send<GuideOutputRemoved>({ type: 'GUIDE_OUTPUT_REMOVE', device })
 	}
 
 	guideNorth(client: IndiClient, device: GuideOutput, duration: number) {
@@ -59,7 +59,7 @@ export class GuideOutputHandler extends DeviceHandler<GuideOutput> {
 export class GuideOutputManager {
 	constructor(
 		private readonly handler: GuideOutputHandler,
-		private readonly indi: IndiDeviceManager,
+		private readonly indi: IndiDeviceHandler,
 		private readonly connection: ConnectionProvider,
 	) {}
 

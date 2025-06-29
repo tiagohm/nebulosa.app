@@ -48,7 +48,7 @@ export const ConnectionMolecule = molecule((m) => {
 				state.selected = state.connections[index]
 				state.connected = connection
 
-				Api.Cameras.list().then((cameras) => cameras.forEach((camera) => bus.emit('addCamera', camera)))
+				Api.Cameras.list().then((cameras) => cameras.forEach((camera) => bus.emit('CAMERA_ADD', camera)))
 
 				break
 			}

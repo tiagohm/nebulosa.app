@@ -15,7 +15,7 @@ import { ConnectionManager, connection } from './src/api/connection'
 import { FileSystemManager, fileSystem } from './src/api/filesystem'
 import { FramingManager, framing } from './src/api/framing'
 import { ImageManager, image } from './src/api/image'
-import { IndiDeviceManager, indi } from './src/api/indi'
+import { IndiDeviceHandler, indi } from './src/api/indi'
 import { WebSocketMessageHandler } from './src/api/message'
 import { PlateSolverManager, plateSolver } from './src/api/platesolver'
 import { StarDetectionManager, starDetection } from './src/api/stardetection'
@@ -45,23 +45,22 @@ if (process.platform === 'linux') {
 Bun.env.framingDir = join(Bun.env.appDir, 'framing')
 fs.mkdirSync(Bun.env.framingDir, { recursive: true })
 
-// Handlers
+// Handlers & Managers
 
 const webSocketMessageHandler = new WebSocketMessageHandler()
 
+const connectionManager = new ConnectionManager()
+const indiDeviceHandler = new IndiDeviceHandler(connectionManager)
+
 // TODO: Handle close event to remove clients
 
-const cameraHandler = new CameraHandler(webSocketMessageHandler)
+const cameraHandler = new CameraHandler(webSocketMessageHandler, indiDeviceHandler)
 const thermometerHandler = new ThermometerHandler(webSocketMessageHandler)
 const guideOutputHandler = new GuideOutputHandler(webSocketMessageHandler)
 
-// Managers
-
-const connectionManager = new ConnectionManager()
-const indiDeviceManager = new IndiDeviceManager(connectionManager)
-const cameraManager = new CameraManager(cameraHandler, indiDeviceManager, connectionManager)
-const guideOutputManager = new GuideOutputManager(guideOutputHandler, indiDeviceManager, connectionManager)
-const thermometerManager = new ThermometerManager(thermometerHandler, indiDeviceManager)
+const cameraManager = new CameraManager(webSocketMessageHandler, cameraHandler, indiDeviceHandler, connectionManager)
+const guideOutputManager = new GuideOutputManager(guideOutputHandler, indiDeviceHandler, connectionManager)
+const thermometerManager = new ThermometerManager(thermometerHandler, indiDeviceHandler)
 const confirmationManager = new ConfirmationManager(webSocketMessageHandler)
 const atlasManager = new AtlasManager()
 const imageManager = new ImageManager()
@@ -70,9 +69,9 @@ const fileSystemManager = new FileSystemManager()
 const starDetectionManager = new StarDetectionManager()
 const plateSolverManager = new PlateSolverManager()
 
-indiDeviceManager.addDeviceHandler('CAMERA', cameraHandler)
-indiDeviceManager.addDeviceHandler('THERMOMETER', thermometerHandler)
-indiDeviceManager.addDeviceHandler('GUIDE_OUTPUT', guideOutputHandler)
+indiDeviceHandler.addDeviceHandler('CAMERA', cameraHandler)
+indiDeviceHandler.addDeviceHandler('THERMOMETER', thermometerHandler)
+indiDeviceHandler.addDeviceHandler('GUIDE_OUTPUT', guideOutputHandler)
 
 // App
 
@@ -121,9 +120,9 @@ app.onError(({ error }) => {
 
 // Endpoints
 
-app.use(connection(connectionManager, indiDeviceManager))
+app.use(connection(connectionManager, indiDeviceHandler))
 app.use(confirmation(confirmationManager))
-app.use(indi(indiDeviceManager, connectionManager))
+app.use(indi(indiDeviceHandler, connectionManager))
 app.use(cameras(cameraManager))
 app.use(thermometers(thermometerManager))
 app.use(guideOutputs(guideOutputManager))

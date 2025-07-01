@@ -42,10 +42,14 @@ if (process.platform === 'linux') {
 	Bun.env.appDir = '' // TODO: https://stackoverflow.com/a/64807054
 }
 
+Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
 Bun.env.framingDir = join(Bun.env.appDir, 'framing')
+
+// Create application sub-directories if it doesn't exist
+fs.mkdirSync(Bun.env.capturesDir, { recursive: true })
 fs.mkdirSync(Bun.env.framingDir, { recursive: true })
 
-// Handlers & Managers
+// Services
 
 const webSocketMessageHandler = new WebSocketMessageHandler()
 

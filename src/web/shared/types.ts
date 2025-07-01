@@ -2,6 +2,8 @@ import type { Connect, ConnectionStatus } from 'src/api/types'
 
 export type FilePickerMode = 'file' | 'directory'
 
+export type ImageSource = 'file' | 'framing' | 'camera'
+
 export interface Connection extends Connect {
 	id: string
 	name: string
@@ -13,7 +15,7 @@ export interface Image {
 	readonly key: string
 	readonly position: number
 	path: string
-	readonly type: 'file' | 'framing'
+	readonly source: ImageSource
 }
 
 export const DEFAULT_CONNECTION: Connection = {

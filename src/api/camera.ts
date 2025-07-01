@@ -1,5 +1,6 @@
 import Elysia from 'elysia'
 import type { IndiClient, PropertyState } from 'nebulosa/src/indi'
+import { join } from 'path'
 import type { ConnectionProvider } from './connection'
 import { DeviceHandler, type IndiDeviceEventHandler, type IndiDeviceHandler } from './indi'
 import type { WebSocketMessageHandler } from './message'
@@ -146,7 +147,7 @@ export class CameraCaptureTask implements IndiDeviceEventHandler<Camera> {
 	}
 
 	deviceUpdated(device: Camera, property: keyof Camera, state?: PropertyState) {
-		if (this.camera.id === device.id) {
+		if (this.camera.name === device.name) {
 			if (property === 'exposure') {
 				const { exposure } = device
 
@@ -228,6 +229,17 @@ export class CameraCaptureTask implements IndiDeviceEventHandler<Camera> {
 
 	deviceRemoved(device: Camera, type: DeviceType) {
 		// nothing
+	}
+
+	async blobReceived(device: Camera, data: string) {
+		if (this.camera.name === device.name) {
+			const path = join(Bun.env.capturesDir, device.name, 'capture.fits')
+			await Bun.write(path, Buffer.from(data, 'base64'))
+
+			this.event.savedPath = path
+			this.handleCameraCaptureTaskEvent(this.event)
+			this.event.savedPath = undefined
+		}
 	}
 
 	start() {

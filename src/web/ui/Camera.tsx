@@ -75,7 +75,7 @@ export function Camera() {
 								/>
 								<FrameTypeSelect className='col-span-6' isDisabled={!connected || capturing} onValueChange={(value) => camera.update('frameType', value)} value={request.frameType} />
 								<ExposureModeButtonGroup className='col-span-6' color='secondary' isDisabled={!connected || capturing} onValueChange={(value) => camera.update('exposureMode', value)} value={request.exposureMode} />
-								<NumberInput className='col-span-3' isDisabled={!connected || request.exposureMode === 'SINGLE' || capturing} label='Delay (s)' onValueChange={(value) => camera.update('delay', value)} size='sm' value={request.delay} />
+								<NumberInput className='col-span-3' isDisabled={!connected || request.exposureMode === 'SINGLE' || capturing} label='Delay (s)' minValue={0} onValueChange={(value) => camera.update('delay', value)} size='sm' value={request.delay} />
 								<NumberInput className='col-span-3' isDisabled={!connected || request.exposureMode !== 'FIXED' || capturing} label='Count' minValue={1} onValueChange={(value) => camera.update('count', value)} size='sm' value={request.count} />
 								<NumberInput className='col-span-3' isDisabled={!connected || !request.subframe || capturing} label='X' maxValue={frame.maxX} minValue={frame.minX} onValueChange={(value) => camera.update('x', value)} size='sm' value={request.x} />
 								<NumberInput className='col-span-3' isDisabled={!connected || !request.subframe || capturing} label='Y' maxValue={frame.maxY} minValue={frame.minY} onValueChange={(value) => camera.update('y', value)} size='sm' value={request.y} />

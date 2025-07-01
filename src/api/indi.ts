@@ -35,6 +35,7 @@ export interface IndiDeviceEventHandler<T extends Device = Device> {
 	readonly deviceUpdated: (device: T, property: keyof T & string, state?: PropertyState) => void
 	readonly deviceAdded: (device: T, type: DeviceType) => void
 	readonly deviceRemoved: (device: T, type: DeviceType) => void
+	readonly blobReceived?: (device: T, data: string) => void
 }
 
 // This is an abstract class that provides a base implementation for handling devices in INDI.
@@ -476,7 +477,28 @@ export class IndiDeviceHandler implements IndiClientHandler {
 	}
 
 	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
-		// const device = this.device(message.device)
+		const device = this.deviceIfExists(message.device)
+
+		if (!device) {
+			return
+		}
+
+		switch (message.name) {
+			case 'CCD1':
+				if (isCamera(device)) {
+					if (tag[0] === 's') {
+						const value = message.elements.CCD1?.value
+
+						if (value) {
+							this.handlers.CAMERA.forEach((handler) => handler.blobReceived?.(device as never, value))
+						} else {
+							console.warn(`received empty BLOB for device ${device.name}`)
+						}
+					}
+				}
+
+				break
+		}
 	}
 
 	deviceIfExists(id: string): Device | undefined {
@@ -564,7 +586,9 @@ export class IndiDeviceHandler implements IndiClientHandler {
 
 				for (const key in message.elements) {
 					if (key in properties.elements) {
-						properties.elements[key].value = message.elements[key].value
+						const value = message.elements[key].value
+						if (Buffer.isBuffer(value)) continue
+						properties.elements[key].value = value
 					}
 				}
 			}

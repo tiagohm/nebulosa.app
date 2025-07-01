@@ -28,10 +28,10 @@ export const ImageWorkspaceMolecule = molecule(() => {
 
 	// Add an image to the workspace from a given path
 	// It generates a unique key for the image and adds it to the state
-	function add(path: string, key: string | undefined | null, type: Image['type']) {
+	function add(path: string, key: string | undefined | null, source: Image['source']) {
 		const position = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => e.position)) + 1
 		key ||= `${Date.now()}-${position}`
-		key = `${type}-${key}`
+		key = `${source}-${key}`
 
 		const index = state.images.findIndex((e) => e.key === key)
 		let image: Image
@@ -41,13 +41,13 @@ export const ImageWorkspaceMolecule = molecule(() => {
 			image = state.images[index]
 			viewers.get(image.key)?.load(true)
 		} else {
-			image = { path, key, position, type }
+			image = { path, key, position, source: source }
 			state.images.push(image)
 		}
 
 		console.info('image added', image)
 
-		if (type === 'file') {
+		if (source === 'file') {
 			state.lastPath = path
 			simpleLocalStorage.set('image.path', path)
 		}

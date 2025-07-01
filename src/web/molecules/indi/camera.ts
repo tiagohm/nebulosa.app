@@ -4,6 +4,7 @@ import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 import { BusMolecule } from '../bus'
+import { ImageWorkspaceMolecule } from '../image/workspace'
 import { EquipmentMolecule } from './equipment'
 
 export interface CameraScopeValue {
@@ -28,6 +29,7 @@ export const CameraMolecule = molecule((m, s) => {
 	const scope = s(CameraScope)
 	const bus = m(BusMolecule)
 	const equipment = m(EquipmentMolecule)
+	const workspace = m(ImageWorkspaceMolecule)
 
 	const cameraCaptureStartRequest = simpleLocalStorage.get<CameraCaptureStart>(`camera.${scope.camera.name}.request`, () => structuredClone(DEFAULT_CAMERA_CAPTURE_START))
 
@@ -58,11 +60,9 @@ export const CameraMolecule = molecule((m, s) => {
 				if (event.property === 'connected') {
 					state.connecting = false
 				} else if (event.property === 'frame') {
-					updateRequestFrame(event.device[event.property]!)
-				} else if (event.property === 'exposure') {
-					if (event.state === 'Ok') {
-						state.capturing = false
-					}
+					updateRequestFrame(event.device.frame!)
+				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
+					state.request.frameFormat ||= event.device.frameFormats[0]
 				}
 			}
 		})
@@ -75,7 +75,15 @@ export const CameraMolecule = molecule((m, s) => {
 
 		unsubscribers[2] = bus.subscribe('CAMERA_CAPTURE', (event) => {
 			if (event.device === state.camera.name) {
-				Object.assign(state.progress, event)
+				if (event.savedPath) {
+					workspace.add(event.savedPath, `camera-${event.device}`, 'camera')
+				} else {
+					Object.assign(state.progress, event)
+				}
+
+				if (event.state === 'IDLE') {
+					state.capturing = false
+				}
 			}
 		})
 

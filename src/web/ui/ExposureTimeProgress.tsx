@@ -9,7 +9,7 @@ export interface ExposureTimeProgressProps extends React.HTMLAttributes<HTMLDivE
 export function ExposureTimeProgress({ progress, className = '', ...props }: ExposureTimeProgressProps) {
 	return (
 		<div {...props} className={`flex flex-row items-center gap-2 ${className}`}>
-			<Chip color='success' size='sm'>
+			<Chip className='lowercase' color='success' size='sm'>
 				{status(progress.state)}
 			</Chip>
 			<Chip color='warning' size='sm' startContent={<MaterialDesignIcon.Counter size={12} />}>
@@ -25,26 +25,15 @@ export function ExposureTimeProgress({ progress, className = '', ...props }: Exp
 	)
 }
 
-function status(state: CameraCaptureState): string {
+function status(state: CameraCaptureState) {
 	switch (state) {
-		case 'IDLE':
-			return 'idle'
 		case 'EXPOSURE_STARTED':
 		case 'EXPOSING':
-		case 'EXPOSURE_FINISHED':
 			return 'exposing'
-		case 'WAITING':
-			return 'waiting'
-		case 'SETTLING':
-			return 'settling'
-		case 'DITHERING':
-			return 'dithering'
-		case 'STACKING':
-			return 'stacking'
-		case 'PAUSING':
-			return 'pausing'
-		case 'PAUSED':
-			return 'paused'
+		case 'EXPOSURE_FINISHED':
+			return 'downloading'
+		default:
+			return state
 	}
 }
 

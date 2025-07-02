@@ -1,4 +1,5 @@
 import { Chip } from '@heroui/react'
+import { useState } from 'react'
 import type { CameraCaptureState, CameraCaptureTaskEvent } from 'src/api/types'
 import * as MaterialDesignIcon from './MaterialDesignIcon'
 
@@ -7,19 +8,28 @@ export interface ExposureTimeProgressProps extends React.HTMLAttributes<HTMLDivE
 }
 
 export function ExposureTimeProgress({ progress, className = '', ...props }: ExposureTimeProgressProps) {
+	const [showRemainingTime, setShowRemainingTime] = useState(true)
+
 	return (
 		<div {...props} className={`flex flex-row items-center gap-2 ${className}`}>
 			<Chip className='lowercase' color='success' size='sm'>
 				{status(progress.state)}
 			</Chip>
 			<Chip color='warning' size='sm' startContent={<MaterialDesignIcon.Counter size={12} />}>
-				{progress.elapsedCount} / {progress.count}
+				{progress.elapsedCount}
+				{!progress.loop && <span> / {progress.count}</span>}
 			</Chip>
-			<Chip color='secondary' size='sm' startContent={<MaterialDesignIcon.TimerSand size={12} />}>
-				{formatTime(progress.totalProgress.remainingTime)} ({progress.totalProgress.progress.toFixed(2)}%)
+			<Chip color='secondary' onPointerUp={() => setShowRemainingTime(!showRemainingTime)} size='sm' startContent={<MaterialDesignIcon.TimerSand size={12} />}>
+				{progress.loop ? (
+					<span>{formatTime(progress.totalProgress.elapsedTime)}</span>
+				) : (
+					<span>
+						{formatTime(showRemainingTime ? progress.totalProgress.remainingTime : progress.totalProgress.elapsedTime)} ({progress.totalProgress.progress.toFixed(2)}%)
+					</span>
+				)}
 			</Chip>
-			<Chip color='primary' size='sm' startContent={<MaterialDesignIcon.TimerSand size={12} />}>
-				{formatTime(progress.frameProgress.remainingTime)} ({progress.frameProgress.progress.toFixed(2)}%)
+			<Chip color='primary' onPointerUp={() => setShowRemainingTime(!showRemainingTime)} size='sm' startContent={<MaterialDesignIcon.TimerSand size={12} />}>
+				{formatTime(showRemainingTime ? progress.frameProgress.remainingTime : progress.frameProgress.elapsedTime)} ({progress.frameProgress.progress.toFixed(2)}%)
 			</Chip>
 		</div>
 	)

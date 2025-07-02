@@ -1,26 +1,29 @@
+import { getDefaultInjector, molecule } from 'bunshi'
 import Elysia from 'elysia'
-import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi'
+import { IndiClient } from 'nebulosa/src/indi'
+import { BusMolecule } from './bus'
 import { badRequest, internalServerError, noActiveConnection } from './exceptions'
+import { IndiMolecule } from './indi'
 import type { Connect, ConnectionStatus } from './types'
 
-// Provider interface for managing connections to INDI servers
-export interface ConnectionProvider {
-	readonly client: (id?: string) => IndiClient
-	readonly connect: (req: Connect, indiClientHandler: IndiClientHandler) => Promise<ConnectionStatus | undefined>
-	readonly disconnect: (id: string | IndiClient) => void
-	readonly status: (key: string | IndiClient) => ConnectionStatus | undefined
-	readonly list: () => ConnectionStatus[]
-}
+const injector = getDefaultInjector()
 
-// Manager that handles connections to INDI servers
-export class ConnectionManager implements ConnectionProvider {
-	private readonly clients = new Map<string, IndiClient>()
+// Molecule that handles connections to INDI servers
+export const ConnectionMolecule = molecule((m) => {
+	const bus = m(BusMolecule)
+
+	const clients = new Map<string, IndiClient>()
+
+	bus.subscribe('indi:close', (client: IndiClient) => {
+		// Remove the client from the active connections
+		disconnect(client)
+	})
 
 	// Returns the first client if no id is provided, or the client with the specified id
-	client(id?: string) {
+	function get(id?: string) {
 		let client: IndiClient | undefined
-		if (!id) client = this.clients.values().next().value
-		else client = this.clients.get(id)
+		if (!id) client = clients.values().next().value
+		else client = clients.get(id)
 
 		if (!client) throw noActiveConnection()
 		else return client
@@ -28,21 +31,22 @@ export class ConnectionManager implements ConnectionProvider {
 
 	// Connects to an INDI server based on the provided request
 	// If a client with the same port and host/IP already exists, returns its status
-	async connect(req: Connect, indiClientHandler: IndiClientHandler): Promise<ConnectionStatus | undefined> {
-		for (const [, client] of this.clients) {
+	async function connect(req: Connect): Promise<ConnectionStatus | undefined> {
+		for (const [, client] of clients) {
 			if (client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) {
-				return this.status(client)
+				return status(client)
 			}
 		}
 
 		if (req.type === 'INDI') {
-			const client = new IndiClient({ handler: indiClientHandler })
+			const indi = injector.get(IndiMolecule)
+			const client = new IndiClient({ handler: indi })
 
 			try {
 				if (await client.connect(req.host, req.port)) {
 					const id = Bun.MD5.hash(`${client.remoteIp}:${client.remotePort}:INDI`, 'hex')
-					this.clients.set(id, client)
-					return this.status(client)
+					clients.set(id, client)
+					return status(client)
 				}
 			} catch (e) {
 				throw internalServerError('Failed to connect to INDI server')
@@ -53,19 +57,19 @@ export class ConnectionManager implements ConnectionProvider {
 	}
 
 	// Disconnects the client with the specified id or the client instance
-	disconnect(id: string | IndiClient) {
+	function disconnect(id: string | IndiClient) {
 		if (typeof id === 'string') {
-			const client = this.clients.get(id)
+			const client = clients.get(id)
 
 			if (client) {
 				client.close()
-				this.clients.delete(id)
+				clients.delete(id)
 			}
 		} else {
-			for (const [key, client] of this.clients) {
+			for (const [key, client] of clients) {
 				if (client === id) {
 					client.close()
-					this.clients.delete(key)
+					clients.delete(key)
 					break
 				}
 			}
@@ -73,17 +77,17 @@ export class ConnectionManager implements ConnectionProvider {
 	}
 
 	// Returns the status of a client based on its id or the client instance
-	status(key: string | IndiClient): ConnectionStatus | undefined {
+	function status(key: string | IndiClient): ConnectionStatus | undefined {
 		if (typeof key === 'string') {
-			const client = this.clients.get(key)
+			const client = clients.get(key)
 
 			if (client) {
 				return { type: 'INDI', id: key, ip: client.remoteIp, host: client.remoteHost!, port: client.remotePort! }
 			}
 		} else {
-			for (const [id, client] of this.clients) {
+			for (const [id, client] of clients) {
 				if (client === key) {
-					return { type: 'INDI', id, ip: key.remoteIp, host: key.remoteHost!, port: key.remotePort! }
+					return { type: 'INDI', id, ip: client.remoteIp, host: client.remoteHost!, port: client.remotePort! }
 				}
 			}
 		}
@@ -92,32 +96,28 @@ export class ConnectionManager implements ConnectionProvider {
 	}
 
 	// Lists all active connections
-	list() {
-		return Array.from(this.clients.values())
-			.map((e) => this.status(e))
-			.filter((e) => !!e)
+	function list() {
+		return Array.from(clients.values()).map((e) => status(e)!)
 	}
-}
 
-// Creates an instance of Elysia with connection endpoints
-export function connection(connection: ConnectionProvider, indiClientHandler: IndiClientHandler) {
+	// The endpoints for managing connections
 	const app = new Elysia({ prefix: '/connections' })
 
 	app.get('', () => {
-		return connection.list()
+		return list()
 	})
 
 	app.post('', async ({ body }) => {
-		return await connection.connect(body as never, indiClientHandler)
+		return await connect(body as never)
 	})
 
 	app.get('/:id', ({ params }) => {
-		return connection.status(params.id)
+		return status(params.id)
 	})
 
 	app.delete('/:id', ({ params }) => {
-		connection.disconnect(params.id)
+		disconnect(params.id)
 	})
 
-	return app
-}
+	return { get, connect, disconnect, status, list, app } as const
+})

@@ -1,55 +1,88 @@
+import { molecule } from 'bunshi'
 import Elysia from 'elysia'
-import type { PropertyState } from 'nebulosa/src/indi'
-import { DeviceHandler, type IndiDeviceHandler } from './indi'
-import type { WebSocketMessageHandler } from './message'
-import type { Thermometer, ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from './types'
+import type { DefNumberVector, IndiClient, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
+import { BusMolecule } from './bus'
+import { WebSocketMessageMolecule } from './message'
+import type { CameraUpdated, Thermometer, ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from './types'
 
-// Handler for managing thermometer devices and their properties
-export class ThermometerHandler extends DeviceHandler<Thermometer> {
-	constructor(private readonly webSocketMessageHandler: WebSocketMessageHandler) {
-		super()
+export const ThermometerMolecule = molecule((m) => {
+	const bus = m(BusMolecule)
+	const wsm = m(WebSocketMessageMolecule)
+
+	const thermometers = new Map<string, Thermometer>()
+
+	bus.subscribe('indi:close', (client: IndiClient) => {
+		// Remove all thermometers associated with the client
+		thermometers.forEach((device) => remove(device))
+	})
+
+	function numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
+		const device = thermometers.get(message.device)
+
+		if (!device) return
+
+		switch (message.name) {
+			case 'CCD_TEMPERATURE':
+				if (device.hasThermometer) {
+					const temperature = message.elements.CCD_TEMPERATURE_VALUE!.value
+
+					if (temperature !== device.temperature) {
+						device.temperature = temperature
+						sendUpdate(device, 'temperature', message.state)
+					}
+				}
+
+				return
+		}
 	}
 
-	deviceAdded(device: Thermometer) {
-		this.webSocketMessageHandler.send<ThermometerAdded>({ type: 'THERMOMETER_ADD', device })
+	// Sends an update for a thermometer device
+	function sendUpdate(device: Thermometer, property: keyof Thermometer, state?: PropertyState) {
+		const value = { name: device.name, [property]: device[property] }
+		if (device.type === 'CAMERA') wsm.send<CameraUpdated>({ type: 'CAMERA_UPDATE', device: value, property, state })
+		wsm.send<ThermometerUpdated>({ type: 'THERMOMETER_UPDATE', device: value, property, state })
+		bus.emit('thermometer:update', value)
 	}
 
-	deviceUpdated(device: Thermometer, property: keyof Thermometer, state?: PropertyState) {
-		this.webSocketMessageHandler.send<ThermometerUpdated>({ type: 'THERMOMETER_UPDATE', device: { name: device.name, [property]: device[property] }, property, state })
+	// Adds a thermometer device
+	function add(device: Thermometer) {
+		thermometers.set(device.name, device)
+		wsm.send<ThermometerAdded>({ type: 'THERMOMETER_ADD', device })
+		bus.emit('thermometer:add', device)
 	}
 
-	deviceRemoved(device: Thermometer) {
-		this.webSocketMessageHandler.send<ThermometerRemoved>({ type: 'THERMOMETER_REMOVE', device })
-	}
-}
+	// Removes a thermometer device
+	function remove(device: Thermometer) {
+		if (thermometers.has(device.name)) {
+			thermometers.delete(device.name)
 
-// Manager for thermometer operations
-export class ThermometerManager {
-	constructor(
-		private readonly handler: ThermometerHandler,
-		private readonly indi: IndiDeviceHandler,
-	) {}
+			device.hasThermometer = false
+			sendUpdate(device, 'hasThermometer')
 
-	list() {
-		return this.indi.thermometers()
+			wsm.send<ThermometerRemoved>({ type: 'THERMOMETER_REMOVE', device })
+			bus.emit('thermometer:remove', device)
+		}
 	}
 
-	get(id: string) {
-		return this.indi.thermometer(id)
+	// Lists all thermometer devices
+	function list() {
+		return Array.from(thermometers.values())
 	}
-}
 
-// Creates an instance of Elysia with thermometer endpoints
-export function thermometers(thermometer: ThermometerManager) {
+	// Gets a thermometer device by its id
+	function get(id: string) {
+		return thermometers.get(id)
+	}
+
 	const app = new Elysia({ prefix: '/thermometers' })
 
 	app.get('', () => {
-		return thermometer.list()
+		return list()
 	})
 
 	app.get('/:id', ({ params }) => {
-		return thermometer.get(decodeURIComponent(params.id))
+		return get(decodeURIComponent(params.id))
 	})
 
-	return app
-}
+	return { numberVector, add, remove, list, get, app } as const
+})

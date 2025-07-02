@@ -1,22 +1,23 @@
 import { cors } from '@elysiajs/cors'
 import { cron } from '@elysiajs/cron'
+import { getDefaultInjector } from 'bunshi'
 import Elysia from 'elysia'
 import fs from 'fs'
 import os from 'os'
 import { join } from 'path'
-import { CameraHandler, cameras } from 'src/api/camera'
+import { CameraMolecule } from 'src/api/camera'
+import { ConnectionMolecule } from 'src/api/connection'
 import { ApiError } from 'src/api/exceptions'
-import { GuideOutputHandler, GuideOutputManager, guideOutputs } from 'src/api/guideoutput'
-import { ThermometerHandler, ThermometerManager, thermometers } from 'src/api/thermometer'
+import { GuideOutputMolecule } from 'src/api/guideoutput'
+import { IndiMolecule } from 'src/api/indi'
+import { WebSocketMessageMolecule } from 'src/api/message'
+import { ThermometerMolecule } from 'src/api/thermometer'
 import { parseArgs } from 'util'
 import { AtlasManager, atlas } from './src/api/atlas'
 import { ConfirmationManager, confirmation } from './src/api/confirmation'
-import { ConnectionManager, connection } from './src/api/connection'
 import { FileSystemManager, fileSystem } from './src/api/filesystem'
 import { FramingManager, framing } from './src/api/framing'
 import { ImageManager, image } from './src/api/image'
-import { IndiDeviceHandler, indi } from './src/api/indi'
-import { WebSocketMessageHandler } from './src/api/message'
 import { PlateSolverManager, plateSolver } from './src/api/platesolver'
 import { StarDetectionManager, starDetection } from './src/api/stardetection'
 import { X_IMAGE_INFO_HEADER } from './src/api/types'
@@ -49,32 +50,24 @@ Bun.env.framingDir = join(Bun.env.appDir, 'framing')
 fs.mkdirSync(Bun.env.capturesDir, { recursive: true })
 fs.mkdirSync(Bun.env.framingDir, { recursive: true })
 
-// Services
+// Molecules
 
-const webSocketMessageHandler = new WebSocketMessageHandler()
+const injector = getDefaultInjector()
 
-const connectionManager = new ConnectionManager()
-const indiDeviceHandler = new IndiDeviceHandler(connectionManager)
+const wsm = injector.get(WebSocketMessageMolecule)
+const connection = injector.get(ConnectionMolecule)
+const camera = injector.get(CameraMolecule)
+const guideOutput = injector.get(GuideOutputMolecule)
+const thermometer = injector.get(ThermometerMolecule)
+const indi = injector.get(IndiMolecule)
 
-// TODO: Handle close event to remove clients
-
-const cameraHandler = new CameraHandler(webSocketMessageHandler, indiDeviceHandler)
-const thermometerHandler = new ThermometerHandler(webSocketMessageHandler)
-const guideOutputHandler = new GuideOutputHandler(webSocketMessageHandler)
-
-const guideOutputManager = new GuideOutputManager(guideOutputHandler, indiDeviceHandler, connectionManager)
-const thermometerManager = new ThermometerManager(thermometerHandler, indiDeviceHandler)
-const confirmationManager = new ConfirmationManager(webSocketMessageHandler)
+const confirmationManager = new ConfirmationManager(wsm)
 const atlasManager = new AtlasManager()
 const imageManager = new ImageManager()
 const framingManager = new FramingManager()
 const fileSystemManager = new FileSystemManager()
 const starDetectionManager = new StarDetectionManager()
 const plateSolverManager = new PlateSolverManager()
-
-indiDeviceHandler.addDeviceHandler('CAMERA', cameraHandler)
-indiDeviceHandler.addDeviceHandler('THERMOMETER', thermometerHandler)
-indiDeviceHandler.addDeviceHandler('GUIDE_OUTPUT', guideOutputHandler)
 
 // App
 
@@ -123,12 +116,12 @@ app.onError(({ error }) => {
 
 // Endpoints
 
-app.use(connection(connectionManager, indiDeviceHandler))
+app.use(connection.app)
 app.use(confirmation(confirmationManager))
-app.use(indi(indiDeviceHandler, connectionManager))
-app.use(cameras(cameraHandler, indiDeviceHandler, connectionManager))
-app.use(thermometers(thermometerManager))
-app.use(guideOutputs(guideOutputManager))
+app.use(indi.app)
+app.use(camera.app)
+app.use(thermometer.app)
+app.use(guideOutput.app)
 app.use(atlas(atlasManager))
 app.use(image(imageManager))
 app.use(framing(framingManager))
@@ -139,9 +132,9 @@ app.use(fileSystem(fileSystemManager))
 // WebSocket
 
 app.ws('/ws', {
-	open: (socket) => webSocketMessageHandler.open(socket.raw),
-	// message: (socket, message) => webSocketMessageHandler.message(socket.raw, message),
-	close: (socket, code, reason) => webSocketMessageHandler.close(socket.raw, code, reason),
+	open: (socket) => wsm.open(socket.raw),
+	// message: (socket, message) => wsm.message(socket.raw, message),
+	close: (socket, code, reason) => wsm.close(socket.raw, code, reason),
 })
 
 // Start!

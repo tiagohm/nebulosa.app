@@ -1,7 +1,7 @@
 import type { Angle } from 'nebulosa/src/angle'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
-import type { PropertyState } from 'nebulosa/src/indi'
+import type { DefVector, PropertyState } from 'nebulosa/src/indi'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { Required } from 'utility-types'
 
@@ -238,7 +238,7 @@ export interface Device {
 	name: string
 	connected: boolean
 	driver: DriverInfo
-	client: ConnectionStatus
+	properties: Record<string, DefVector | undefined>
 }
 
 export interface Thermometer extends Device {
@@ -354,6 +354,7 @@ export interface CameraCaptureTaskEvent extends WebSocketMessage {
 	readonly type: 'CAMERA_CAPTURE'
 	device: string
 	count: number
+	loop: boolean
 	remainingCount: number
 	elapsedCount: number
 	state: CameraCaptureState
@@ -585,14 +586,9 @@ export const DEFAULT_CAMERA: Camera = {
 		executable: '',
 		version: '',
 	},
-	client: {
-		id: '',
-		type: 'INDI',
-		host: '',
-		port: 0,
-	},
 	hasThermometer: false,
 	temperature: 0,
+	properties: {},
 }
 
 export const DEFAULT_IMAGE_STRETCH: ImageStretch = {

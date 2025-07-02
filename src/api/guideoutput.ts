@@ -1,96 +1,137 @@
+import { getDefaultInjector, molecule } from 'bunshi'
 import Elysia from 'elysia'
-import type { IndiClient, PropertyState } from 'nebulosa/src/indi'
-import type { ConnectionProvider } from './connection'
-import { DeviceHandler, type IndiDeviceHandler } from './indi'
-import type { WebSocketMessageHandler } from './message'
-import type { GuideOutput, GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from './types'
+import type { DefNumberVector, IndiClient, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
+import { BusMolecule } from './bus'
+import { ConnectionMolecule } from './connection'
+import { WebSocketMessageMolecule } from './message'
+import type { CameraUpdated, GuideOutput, GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from './types'
 
-// Handler for managing guide output devices and their properties
-export class GuideOutputHandler extends DeviceHandler<GuideOutput> {
-	constructor(private readonly webSocketMessageHandler: WebSocketMessageHandler) {
-		super()
+const injector = getDefaultInjector()
+
+// Molecule for managing guide output devices
+export const GuideOutputMolecule = molecule((m) => {
+	const bus = m(BusMolecule)
+	const wsm = m(WebSocketMessageMolecule)
+
+	const guideOutputs = new Map<string, GuideOutput>()
+
+	bus.subscribe('indi:close', (client: IndiClient) => {
+		// Remove all guide outputs associated with the client
+		guideOutputs.forEach((device) => remove(device))
+	})
+
+	// Handles incoming number vector messages.
+	function numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
+		const device = guideOutputs.get(message.device)
+
+		if (!device) return
+
+		switch (message.name) {
+			case 'TELESCOPE_TIMED_GUIDE_NS':
+			case 'TELESCOPE_TIMED_GUIDE_WE':
+				if (device.canPulseGuide) {
+					const pulseGuiding = message.state === 'Busy'
+
+					if (pulseGuiding !== device.pulseGuiding) {
+						device.pulseGuiding = pulseGuiding
+						sendUpdate(device, 'pulseGuiding', message.state)
+					}
+				}
+
+				return
+		}
 	}
 
-	deviceAdded(device: GuideOutput) {
-		this.webSocketMessageHandler.send<GuideOutputAdded>({ type: 'GUIDE_OUTPUT_ADD', device })
+	// Sends an update for a guide output device
+	function sendUpdate(device: GuideOutput, property: keyof GuideOutput, state?: PropertyState) {
+		const value = { name: device.name, [property]: device[property] }
+		if (device.type === 'CAMERA') wsm.send<CameraUpdated>({ type: 'CAMERA_UPDATE', device: value, property, state })
+		wsm.send<GuideOutputUpdated>({ type: 'GUIDE_OUTPUT_UPDATE', device: value, property, state })
+		bus.emit('guideOutput:update', value)
 	}
 
-	deviceUpdated(device: GuideOutput, property: keyof GuideOutput, state?: PropertyState) {
-		this.webSocketMessageHandler.send<GuideOutputUpdated>({ type: 'GUIDE_OUTPUT_UPDATE', device: { name: device.name, [property]: device[property] }, property, state })
+	// Adds a guide output device
+	function add(device: GuideOutput) {
+		guideOutputs.set(device.name, device)
+
+		wsm.send<GuideOutputAdded>({ type: 'GUIDE_OUTPUT_ADD', device })
+		bus.emit('guideOutput:add', device)
 	}
 
-	deviceRemoved(device: GuideOutput) {
-		this.webSocketMessageHandler.send<GuideOutputRemoved>({ type: 'GUIDE_OUTPUT_REMOVE', device })
+	// Removes a guide output device
+	function remove(device: GuideOutput) {
+		if (guideOutputs.has(device.name)) {
+			guideOutputs.delete(device.name)
+
+			device.canPulseGuide = false
+			sendUpdate(device, 'canPulseGuide')
+
+			wsm.send<GuideOutputRemoved>({ type: 'GUIDE_OUTPUT_REMOVE', device })
+			bus.emit('guideOutput:remove', device)
+		}
 	}
 
-	guideNorth(client: IndiClient, device: GuideOutput, duration: number) {
+	// Lists all guide output devices
+	function list() {
+		return Array.from(guideOutputs.values())
+	}
+
+	// Gets a guide output device by its id
+	function get(id: string) {
+		return guideOutputs.get(id)
+	}
+
+	// Pulses the guide output towards the north direction for the given duration
+	function pulseNorth(client: IndiClient, device: GuideOutput, duration: number) {
 		if (device.canPulseGuide) {
 			client.sendNumber({ device: device.name, name: 'TELESCOPE_TIMED_GUIDE_NS', elements: { TIMED_GUIDE_N: duration, TIMED_GUIDE_S: 0 } })
 		}
 	}
 
-	guideSouth(client: IndiClient, device: GuideOutput, duration: number) {
+	// Pulses the guide output towards the south direction for the given duration
+	function pulseSouth(client: IndiClient, device: GuideOutput, duration: number) {
 		if (device.canPulseGuide) {
 			client.sendNumber({ device: device.name, name: 'TELESCOPE_TIMED_GUIDE_NS', elements: { TIMED_GUIDE_S: duration, TIMED_GUIDE_N: 0 } })
 		}
 	}
 
-	guideWest(client: IndiClient, device: GuideOutput, duration: number) {
+	// Pulses the guide output towards the west direction for the given duration
+	function pulseWest(client: IndiClient, device: GuideOutput, duration: number) {
 		if (device.canPulseGuide) {
 			client.sendNumber({ device: device.name, name: 'TELESCOPE_TIMED_GUIDE_WE', elements: { TIMED_GUIDE_W: duration, TIMED_GUIDE_E: 0 } })
 		}
 	}
 
-	guideEast(client: IndiClient, device: GuideOutput, duration: number) {
+	// Pulses the guide output towards the east direction for the given duration
+	function pulseEast(client: IndiClient, device: GuideOutput, duration: number) {
 		if (device.canPulseGuide) {
 			client.sendNumber({ device: device.name, name: 'TELESCOPE_TIMED_GUIDE_WE', elements: { TIMED_GUIDE_E: duration, TIMED_GUIDE_W: 0 } })
 		}
 	}
 
-	guide(client: IndiClient, device: GuideOutput, direction: string, duration: number) {
-		if (direction === 'NORTH') this.guideNorth(client, device, duration)
-		else if (direction === 'SOUTH') this.guideSouth(client, device, duration)
-		else if (direction === 'WEST') this.guideWest(client, device, duration)
-		else if (direction === 'EAST') this.guideEast(client, device, duration)
-	}
-}
-
-// Manager for guide output operations
-export class GuideOutputManager {
-	constructor(
-		private readonly handler: GuideOutputHandler,
-		private readonly indi: IndiDeviceHandler,
-		private readonly connection: ConnectionProvider,
-	) {}
-
-	list() {
-		return this.indi.guideOutputs()
+	// Pulses the guide output towards the specified direction for the given duration
+	function pulse(client: IndiClient, device: GuideOutput, req: GuidePulse) {
+		if (req.direction === 'NORTH') pulseNorth(client, device, req.duration)
+		else if (req.direction === 'SOUTH') pulseSouth(client, device, req.duration)
+		else if (req.direction === 'WEST') pulseWest(client, device, req.duration)
+		else if (req.direction === 'EAST') pulseEast(client, device, req.duration)
 	}
 
-	get(id: string) {
-		return this.indi.guideOutput(id)
-	}
-
-	pulse(id: string, req: GuidePulse) {
-		this.handler.guide(this.connection.client(), this.get(id), req.direction, req.duration)
-	}
-}
-
-// Creates an instance of Elysia with guide output endpoints
-export function guideOutputs(guideOutput: GuideOutputManager) {
+	// The endpoints for managing guide outputs
 	const app = new Elysia({ prefix: '/guide-outputs' })
 
 	app.get('', () => {
-		return guideOutput.list()
+		return list()
 	})
 
 	app.get('/:id', ({ params }) => {
-		return guideOutput.get(decodeURIComponent(params.id))
+		return get(decodeURIComponent(params.id))
 	})
 
 	app.post('/:id/pulse', ({ params, body }) => {
-		return guideOutput.pulse(decodeURIComponent(params.id), body as GuidePulse)
+		const connection = injector.get(ConnectionMolecule)
+		return pulse(connection.get(), get(decodeURIComponent(params.id))!, body as GuidePulse)
 	})
 
-	return app
-}
+	return { numberVector, add, remove, list, get, pulseNorth, pulseSouth, pulseWest, pulseEast, pulse, app } as const
+})

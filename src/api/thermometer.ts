@@ -1,9 +1,9 @@
 import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import type { DefNumberVector, IndiClient, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
-import { BusMolecule } from './bus'
+import { BusMolecule } from '../shared/bus'
+import type { CameraUpdated, Thermometer, ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from '../shared/types'
 import { WebSocketMessageMolecule } from './message'
-import type { CameraUpdated, Thermometer, ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from './types'
 
 export const ThermometerMolecule = molecule((m) => {
 	const bus = m(BusMolecule)
@@ -39,15 +39,15 @@ export const ThermometerMolecule = molecule((m) => {
 	// Sends an update for a thermometer device
 	function sendUpdate(device: Thermometer, property: keyof Thermometer, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
-		if (device.type === 'CAMERA') wsm.send<CameraUpdated>({ type: 'CAMERA_UPDATE', device: value, property, state })
-		wsm.send<ThermometerUpdated>({ type: 'THERMOMETER_UPDATE', device: value, property, state })
+		if (device.type === 'CAMERA') wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
+		wsm.send<ThermometerUpdated>({ type: 'thermometer:update', device: value, property, state })
 		bus.emit('thermometer:update', value)
 	}
 
 	// Adds a thermometer device
 	function add(device: Thermometer) {
 		thermometers.set(device.name, device)
-		wsm.send<ThermometerAdded>({ type: 'THERMOMETER_ADD', device })
+		wsm.send<ThermometerAdded>({ type: 'thermometer:add', device })
 		bus.emit('thermometer:add', device)
 	}
 
@@ -59,7 +59,7 @@ export const ThermometerMolecule = molecule((m) => {
 			device.hasThermometer = false
 			sendUpdate(device, 'hasThermometer')
 
-			wsm.send<ThermometerRemoved>({ type: 'THERMOMETER_REMOVE', device })
+			wsm.send<ThermometerRemoved>({ type: 'thermometer:remove', device })
 			bus.emit('thermometer:remove', device)
 		}
 	}

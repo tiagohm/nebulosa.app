@@ -1,6 +1,6 @@
 import { Chip } from '@heroui/react'
 import { useState } from 'react'
-import type { CameraCaptureState, CameraCaptureTaskEvent } from 'src/api/types'
+import type { CameraCaptureState, CameraCaptureTaskEvent } from 'src/shared/types'
 import * as MaterialDesignIcon from './MaterialDesignIcon'
 
 export interface ExposureTimeProgressProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -63,7 +63,7 @@ function formatTime(us: number) {
 	} else if (ms > 0) {
 		return `${padNumber(ms, 3)}ms`
 	} else if (us > 0) {
-		return `${padNumber(us, 6)}μs`
+		return `${padNumber(us, 3)}μs`
 	} else {
 		return '0'
 	}

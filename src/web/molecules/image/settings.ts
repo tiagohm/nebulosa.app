@@ -1,5 +1,5 @@
 import { molecule, onMount } from 'bunshi'
-import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation } from 'src/api/types'
+import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation } from 'src/shared/types'
 import { subscribe } from 'valtio'
 import { simpleLocalStorage } from '@/shared/storage'
 import { type ImageState, ImageViewerMolecule, ImageViewerScope } from './viewer'

@@ -3,14 +3,14 @@ import Elysia from 'elysia'
 import type { CfaPattern } from 'nebulosa/src/image'
 import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, IndiClient, OneNumber, PropertyState, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import { join } from 'path'
-import { BusMolecule } from './bus'
+import { BusMolecule } from '../shared/bus'
+import { type Camera, type CameraAdded, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_TASK_EVENT, type FrameType } from '../shared/types'
+import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import { ConnectionMolecule } from './connection'
 import { GuideOutputMolecule } from './guideoutput'
 import { addProperty, ask, DeviceInterfaceType, enableBlob, handleConnection, isInterfaceType } from './indi'
 import { WebSocketMessageMolecule } from './message'
 import { ThermometerMolecule } from './thermometer'
-import { type Camera, type CameraAdded, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_TASK_EVENT, type FrameType } from './types'
-import { exposureTimeInMicroseconds, exposureTimeInSeconds } from './util'
 
 const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
 
@@ -409,7 +409,7 @@ export const CameraMolecule = molecule((m) => {
 	// Sends an update for a camera device
 	function sendUpdate(device: Camera, property: keyof Camera, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
-		wsm.send<CameraUpdated>({ type: 'CAMERA_UPDATE', device: value, property, state })
+		wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
 		bus.emit('camera:update', value)
 		tasks.forEach((task) => task.cameraUpdated(device, property, state))
 	}
@@ -417,7 +417,7 @@ export const CameraMolecule = molecule((m) => {
 	// Adds a camera device
 	function add(device: Camera) {
 		cameras.set(device.name, device)
-		wsm.send<CameraAdded>({ type: 'CAMERA_ADD', device })
+		wsm.send<CameraAdded>({ type: 'camera:add', device })
 		bus.emit('camera:add', device)
 	}
 
@@ -430,7 +430,7 @@ export const CameraMolecule = molecule((m) => {
 			guideOutput.remove(device)
 			thermometer.remove(device)
 
-			wsm.send<CameraRemoved>({ type: 'CAMERA_REMOVE', device })
+			wsm.send<CameraRemoved>({ type: 'camera:remove', device })
 			bus.emit('camera:remove', device)
 		}
 	}
@@ -615,6 +615,7 @@ export class CameraCaptureTask {
 		}
 	}
 
+	// Starts the camera exposure
 	start() {
 		if (this.event.remainingCount > 0) {
 			this.event.state = 'EXPOSURE_STARTED'
@@ -636,6 +637,7 @@ export class CameraCaptureTask {
 		}
 	}
 
+	// Stops the camera exposure
 	stop() {
 		if (this.stopped) return
 		this.stopped = true
@@ -662,6 +664,7 @@ async function waitFor(us: number, stop: { readonly isStopped: boolean }, callba
 	}
 }
 
+// Handles the gain property of a camera
 function handleGain(gain: Camera['gain'], element: DefNumber | OneNumber, tag: string) {
 	let update = false
 
@@ -679,6 +682,7 @@ function handleGain(gain: Camera['gain'], element: DefNumber | OneNumber, tag: s
 	return update
 }
 
+// Handles the offset property of a camera
 function handleOffset(offset: Camera['offset'], element: DefNumber | OneNumber, tag: string) {
 	let update = false
 

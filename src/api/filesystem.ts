@@ -4,7 +4,7 @@ import Elysia from 'elysia'
 import fs from 'fs/promises'
 import os from 'os'
 import { basename, dirname, join } from 'path'
-import type { CreateDirectory, DirectoryEntry, FileEntry, FileSystem, ListDirectory } from './types'
+import type { CreateDirectory, DirectoryEntry, FileEntry, FileSystem, ListDirectory } from '../shared/types'
 
 // Comparator for sorting file entries
 export const FileEntryComparator = (a: FileEntry, b: FileEntry) => {

@@ -1,7 +1,7 @@
 import { addToast } from '@heroui/react'
 import { molecule, onMount } from 'bunshi'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
-import { DEFAULT_FRAMING, type Framing } from 'src/api/types'
+import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
@@ -52,11 +52,11 @@ export const FramingMolecule = molecule((m) => {
 		try {
 			state.loading = true
 
-			if (state.openNewImage) state.request.id = Date.now().toFixed(0)
+			if (state.openNewImage) state.request.id = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => parseInt(e.key))) + 1
 			else state.request.id = DEFAULT_FRAMING.id
 
 			const { path } = await Api.Framing.frame(state.request)
-			const image = workspace.add(path, state.request.id, 'framing')
+			const image = workspace.add(path, state.request.id.toFixed(0), 'framing')
 
 			const index = state.images.findIndex((e) => e.key === image.key)
 			index >= 0 ? (state.images[index] = image) : state.images.push(image)

@@ -20,7 +20,7 @@ import { FramingMolecule } from './src/api/framing'
 import { ImageMolecule } from './src/api/image'
 import { PlateSolverMolecule } from './src/api/platesolver'
 import { StarDetectionMolecule } from './src/api/stardetection'
-import { X_IMAGE_INFO_HEADER } from './src/api/types'
+import { X_IMAGE_INFO_HEADER } from './src/shared/types'
 import homeHtml from './src/web/pages/home/index.html'
 
 const args = parseArgs({

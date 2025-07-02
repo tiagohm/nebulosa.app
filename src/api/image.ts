@@ -9,9 +9,9 @@ import { join } from 'path'
 import type { JpegOptions, PngOptions, WebpOptions } from 'sharp'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
+import type { ImageInfo, ImageTransformation, OpenImage } from '../shared/types'
+import { X_IMAGE_INFO_HEADER } from '../shared/types'
 import { badRequest, internalServerError, notFound } from './exceptions'
-import type { ImageInfo, ImageTransformation, OpenImage } from './types'
-import { X_IMAGE_INFO_HEADER } from './types'
 
 const JPEG_OPTIONS: JpegOptions = {
 	quality: 70, // Lower quality for faster processing

@@ -1,9 +1,9 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import { type Camera, type CameraCaptureStart, type CameraCaptureTaskEvent, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_TASK_EVENT } from 'src/api/types'
+import { BusMolecule } from 'src/shared/bus'
+import { type Camera, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_TASK_EVENT } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
-import { BusMolecule } from '../bus'
 import { ImageWorkspaceMolecule } from '../image/workspace'
 import { EquipmentMolecule } from './equipment'
 
@@ -36,7 +36,7 @@ export const CameraMolecule = molecule((m, s) => {
 	const state =
 		cameraStateMap.get(scope.camera.name) ??
 		proxy<CameraState>({
-			camera: equipment.get('CAMERA', scope.camera.name) as Camera,
+			camera: equipment.get('camera', scope.camera.name) as Camera,
 			request: cameraCaptureStartRequest,
 			progress: structuredClone(DEFAULT_CAMERA_CAPTURE_TASK_EVENT),
 			connecting: false,
@@ -55,7 +55,7 @@ export const CameraMolecule = molecule((m, s) => {
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(4)
 
-		unsubscribers[0] = bus.subscribe('CAMERA_UPDATE', (event) => {
+		unsubscribers[0] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
 			if (event.device.name === state.camera.name) {
 				if (event.property === 'connected') {
 					state.connecting = false
@@ -67,13 +67,13 @@ export const CameraMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[1] = bus.subscribe('CAMERA_REMOVE', (camera) => {
+		unsubscribers[1] = bus.subscribe<Camera>('camera:remove', (camera) => {
 			if (camera.name === state.camera.name) {
 				cameraStateMap.delete(camera.name)
 			}
 		})
 
-		unsubscribers[2] = bus.subscribe('CAMERA_CAPTURE', (event) => {
+		unsubscribers[2] = bus.subscribe<CameraCaptureTaskEvent>('camera:capture', (event) => {
 			if (event.device === state.camera.name) {
 				if (event.savedPath) {
 					workspace.add(event.savedPath, `camera-${event.device}`, 'camera')

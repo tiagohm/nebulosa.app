@@ -1,11 +1,11 @@
 import { molecule, onMount } from 'bunshi'
-import type { ConnectionStatus } from 'src/api/types'
+import { BusMolecule } from 'src/shared/bus'
+import type { ConnectionStatus } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { deepClone } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 import { type Connection, DEFAULT_CONNECTION } from '@/shared/types'
-import { BusMolecule } from './bus'
 
 export interface ConnectionState {
 	showModal: boolean
@@ -48,7 +48,7 @@ export const ConnectionMolecule = molecule((m) => {
 				state.selected = state.connections[index]
 				state.connected = connection
 
-				Api.Cameras.list().then((cameras) => cameras.forEach((camera) => bus.emit('CAMERA_ADD', camera)))
+				Api.Cameras.list().then((cameras) => cameras.forEach((camera) => bus.emit('camera:add', camera)))
 
 				break
 			}

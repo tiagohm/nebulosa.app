@@ -41,6 +41,9 @@ export function useModal(onClose?: () => void) {
 				boundary.current.minTop = -top + y - remainingHeight
 				boundary.current.maxLeft = clientWidth - left - width + x + remainingWidth
 				boundary.current.maxTop = clientHeight - top - height + y + remainingHeight
+
+				// Disable text selection while dragging
+				document.body.style.userSelect = 'none'
 			},
 			onDrag: ({ offset, cancel }) => {
 				if (!modalRef.current) return cancel()
@@ -49,6 +52,10 @@ export function useModal(onClose?: () => void) {
 				xy.current.y = Math.min(Math.max(offset[1], boundary.current.minTop), boundary.current.maxTop)
 
 				modalRef.current.style.transform = `translate(${xy.current.x}px, ${xy.current.y}px)`
+			},
+			onDragEnd: () => {
+				// Re-enable text selection after dragging
+				document.body.style.userSelect = ''
 			},
 		},
 		{

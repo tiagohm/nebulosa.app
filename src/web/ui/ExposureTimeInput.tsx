@@ -1,7 +1,7 @@
 import { NumberInput, type NumberInputProps } from '@heroui/react'
 import { useMemo } from 'react'
-import type { ExposureTimeUnit } from 'src/api/types'
-import { exposureTimeIn } from 'src/api/util'
+import type { ExposureTimeUnit } from 'src/shared/types'
+import { exposureTimeIn } from 'src/shared/util'
 import { ExposureTimeUnitDropdown } from './ExposureTimeUnitDropdown'
 
 export interface ExposureTimeInputProps extends Omit<NumberInputProps, 'size' | 'minValue' | 'maxValue' | 'endContent' | 'value' | 'onValueChange'> {

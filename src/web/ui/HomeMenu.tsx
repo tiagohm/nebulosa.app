@@ -35,7 +35,7 @@ export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'ro
 
 export function HomeMenu() {
 	const home = useMolecule(HomeMolecule)
-	const { show, activeDevice } = useSnapshot(home.state.menu)
+	const { show, selected } = useSnapshot(home.state.menu)
 
 	const equipment = useMolecule(EquipmentMolecule)
 	const devices = useSnapshot(equipment.state)
@@ -57,52 +57,52 @@ export function HomeMenu() {
 				<PopoverContent>
 					<div className='grid grid-cols-6 gap-2 p-4'>
 						<Tooltip content='Camera' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled={devices.CAMERA.length === 0} isIconOnly onPointerUp={() => home.toggleActiveDevice('CAMERA')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled={devices.camera.length === 0} isIconOnly onPointerUp={() => home.select('camera')} size='lg' variant='light'>
 								<img className='w-9' src={cameraIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Mount' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.toggleActiveDevice('MOUNT')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.select('mount')} size='lg' variant='light'>
 								<img className='w-9' src={mountIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Filter Wheel' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.toggleActiveDevice('WHEEL')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.select('wheel')} size='lg' variant='light'>
 								<img className='w-9' src={filterWheelIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Focuser' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.toggleActiveDevice('FOCUSER')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.select('focuser')} size='lg' variant='light'>
 								<img className='w-9' src={focuserIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Rotator' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.toggleActiveDevice('ROTATOR')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.select('rotator')} size='lg' variant='light'>
 								<img className='w-9' src={rotatorIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Light Box' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.toggleActiveDevice('LIGHT_BOX')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.select('lightBox')} size='lg' variant='light'>
 								<img className='w-9' src={lightBoxIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Dust Cap' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.toggleActiveDevice('DUST_CAP')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.select('dustCap')} size='lg' variant='light'>
 								<img className='w-9' src={dustCapIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Guide Output' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled={devices.GUIDE_OUTPUT.length === 0} isIconOnly onPointerUp={() => home.toggleActiveDevice('GUIDE_OUTPUT')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled={devices.guideOutput.length === 0} isIconOnly onPointerUp={() => home.select('guideOutput')} size='lg' variant='light'>
 								<img className='w-9' src={guideOutputIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Dew Heater' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.toggleActiveDevice('DEW_HEATER')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.select('dewHeater')} size='lg' variant='light'>
 								<img className='w-9' src={heaterIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Thermometer' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled={devices.THERMOMETER.length === 0} isIconOnly onPointerUp={() => home.toggleActiveDevice('THERMOMETER')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled={devices.thermometer.length === 0} isIconOnly onPointerUp={() => home.select('thermometer')} size='lg' variant='light'>
 								<img className='w-9' src={thermometerIcon} />
 							</Button>
 						</Tooltip>
@@ -122,27 +122,27 @@ export function HomeMenu() {
 							</Button>
 						</Tooltip>
 						<Tooltip content='Aligment' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled={devices.CAMERA.length === 0} isIconOnly size='lg' variant='light'>
+							<Button color='secondary' isDisabled={devices.camera.length === 0} isIconOnly size='lg' variant='light'>
 								<img className='w-9' src={alignmentIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Auto Focus' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled={devices.CAMERA.length === 0} isIconOnly size='lg' variant='light'>
+							<Button color='secondary' isDisabled={devices.camera.length === 0} isIconOnly size='lg' variant='light'>
 								<img className='w-9' src={autoFocusIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Flat Wizard' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled={devices.CAMERA.length === 0} isIconOnly size='lg' variant='light'>
+							<Button color='secondary' isDisabled={devices.camera.length === 0} isIconOnly size='lg' variant='light'>
 								<img className='w-9' src={flatWizardIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Sequencer' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled={devices.CAMERA.length === 0} isIconOnly size='lg' variant='light'>
+							<Button color='secondary' isDisabled={devices.camera.length === 0} isIconOnly size='lg' variant='light'>
 								<img className='w-9' src={sequencerIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='INDI' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled={devices.CAMERA.length === 0} isIconOnly size='lg' variant='light'>
+							<Button color='secondary' isDisabled={devices.camera.length === 0} isIconOnly size='lg' variant='light'>
 								<img className='w-9' src={indiIcon} />
 							</Button>
 						</Tooltip>
@@ -161,18 +161,11 @@ export function HomeMenu() {
 								<img className='w-9' src={aboutIcon} />
 							</Button>
 						</Tooltip>
-						{activeDevice !== undefined && (
+						{selected !== undefined && (
 							<div className='col-span-full my-2 flex flex-col items-center justify-center gap-2 flex-wrap'>
-								<span className='font-bold text-sm mt-2'>{activeDevice}</span>
-								{devices[activeDevice].map((device) => (
-									<Chip
-										className='min-w-full cursor-pointer'
-										color={device.connected ? 'success' : 'danger'}
-										endContent={<Lucide.Settings size={20} />}
-										key={device.name}
-										onClose={() => equipment.showModal(activeDevice, device)}
-										onPointerUp={() => equipment.showModal(activeDevice, device)}
-										variant='flat'>
+								<span className='font-bold text-sm mt-2 uppercase'>{selected}</span>
+								{devices[selected].map((device) => (
+									<Chip className='min-w-full cursor-pointer' color={device.connected ? 'success' : 'danger'} endContent={<Lucide.Settings size={20} />} key={device.name} onClose={() => equipment.showModal(selected, device)} onPointerUp={() => equipment.showModal(selected, device)} variant='flat'>
 										{device.name}
 									</Chip>
 								))}

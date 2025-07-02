@@ -1,6 +1,6 @@
 import { molecule } from 'bunshi'
+import type { Notification } from '../shared/types'
 import { WebSocketMessageMolecule } from './message'
-import type { Notification } from './types'
 
 // Molecule for sending notifications via WebSocket
 export const NotificationMolecule = molecule((m) => {

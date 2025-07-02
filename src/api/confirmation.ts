@@ -1,7 +1,7 @@
 import { molecule } from 'bunshi'
 import Elysia from 'elysia'
+import type { Confirm, Confirmation } from '../shared/types'
 import { WebSocketMessageMolecule } from './message'
-import type { Confirm, Confirmation } from './types'
 
 export type ConfirmationResolver = (value?: boolean | PromiseLike<boolean>) => void
 
@@ -32,7 +32,7 @@ export const ConfirmationMolecule = molecule((m) => {
 			resolve(value)
 		})
 
-		wsm.send<Confirmation>({ ...message, type: 'CONFIRMATION' })
+		wsm.send<Confirmation>({ ...message, type: 'confirmation' })
 
 		return promise
 	}

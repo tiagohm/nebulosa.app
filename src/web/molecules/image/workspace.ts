@@ -1,4 +1,5 @@
 import { molecule } from 'bunshi'
+import { BusMolecule } from 'src/shared/bus'
 import { proxy } from 'valtio'
 import { simpleLocalStorage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
@@ -13,7 +14,9 @@ export interface ImageWorkspaceState {
 }
 
 // Molecule that manages all the images
-export const ImageWorkspaceMolecule = molecule(() => {
+export const ImageWorkspaceMolecule = molecule((m) => {
+	const bus = m(BusMolecule)
+
 	const viewers = new Map<string, Atom<typeof ImageViewerMolecule>>()
 
 	const state = proxy<ImageWorkspaceState>({
@@ -45,6 +48,8 @@ export const ImageWorkspaceMolecule = molecule(() => {
 			state.images.push(image)
 		}
 
+		bus.emit('image.add', image)
+
 		console.info('image added', image)
 
 		if (source === 'file') {
@@ -58,7 +63,7 @@ export const ImageWorkspaceMolecule = molecule(() => {
 	// Removes an image from the workspace
 	function remove(image: Image) {
 		const index = state.images.findIndex((e) => e.key === image.key)
-		index >= 0 && state.images.splice(index, 1)
+		index >= 0 && state.images.splice(index, 1) && bus.emit('image.remove', image)
 		viewers.delete(image.key)
 	}
 

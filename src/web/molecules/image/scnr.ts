@@ -1,5 +1,5 @@
 import { molecule } from 'bunshi'
-import { DEFAULT_IMAGE_SCNR, type ImageTransformation } from 'src/api/types'
+import { DEFAULT_IMAGE_SCNR, type ImageTransformation } from 'src/shared/types'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
 // Molecule that apply SCNR (Subtractive Color Noise Reduction) to the image

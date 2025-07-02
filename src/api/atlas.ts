@@ -6,7 +6,7 @@ import type { CsvRow } from 'nebulosa/src/csv'
 import { type DateTime, dateFrom } from 'nebulosa/src/datetime'
 import { type Distance, meter } from 'nebulosa/src/distance'
 import { observer, Quantity } from 'nebulosa/src/horizons'
-import type { BodyPosition, ChartOfBody, PositionOfBody } from './types'
+import type { BodyPosition, ChartOfBody, PositionOfBody } from '../shared/types'
 
 export const HORIZONS_QUANTITIES: Quantity[] = [Quantity.ASTROMETRIC_RA_DEC, Quantity.APPARENT_RA_DEC, Quantity.APPARENT_AZ_EL, Quantity.VISUAL_MAG_SURFACE_BRGHT, Quantity.ONE_WAY_DOWN_LEG_LIGHT_TIME, Quantity.ILLUMINATED_FRACTION, Quantity.SUN_OBSERVER_TARGET_ELONG_ANGLE, Quantity.CONSTELLATION_ID]
 
@@ -164,7 +164,7 @@ export const AtlasMolecule = molecule(() => {
 		positionOfSatellite,
 		chartOfSatellite,
 		app,
-	}
+	} as const
 })
 
 function makeBodyPositionFromEphemeris(ephemeris: CsvRow[]): readonly [number, BodyPosition][] {

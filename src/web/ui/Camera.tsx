@@ -19,7 +19,7 @@ export function Camera() {
 	const camera = useMolecule(CameraMolecule)
 	// biome-ignore format: don't break lines!
 	const { camera: { connected, coolerPower, temperature, canSetTemperature, exposure, canAbort, frame, canSubFrame, canBin, bin, gain, offset, frameFormats }, connecting, capturing, targetTemperature, request, progress } = useSnapshot(camera.state)
-	const modal = useModal(() => equipment.closeModal('CAMERA', camera.scope.camera))
+	const modal = useModal(() => equipment.closeModal('camera', camera.scope.camera))
 
 	return (
 		<Modal {...modal.props} classNames={{ base: 'min-w-[380px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>

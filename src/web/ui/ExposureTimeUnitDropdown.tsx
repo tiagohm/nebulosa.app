@@ -1,6 +1,6 @@
 import { Button, type ButtonProps, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
-import type { ExposureTimeUnit } from 'src/api/types'
-import { exposureTimeUnitCode } from 'src/api/util'
+import type { ExposureTimeUnit } from 'src/shared/types'
+import { exposureTimeUnitCode } from 'src/shared/util'
 
 export interface ExposureTimeUnitDropdownProps extends Omit<ButtonProps, 'isIconOnly'> {
 	readonly value: ExposureTimeUnit

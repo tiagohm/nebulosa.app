@@ -2,10 +2,10 @@ import { molecule } from 'bunshi'
 
 export type BusCallback<T> = (data: T) => void
 
+const bus = new Map<string, Set<BusCallback<never>>>()
+
 // Molecule for managing a simple publish-subscribe bus
 export const BusMolecule = molecule(() => {
-	const bus = new Map<string, Set<BusCallback<never>>>()
-
 	// Subscribes to a topic with a callback
 	function subscribe<T>(topic: string, callback: BusCallback<T>) {
 		if (!bus.has(topic)) bus.set(topic, new Set())

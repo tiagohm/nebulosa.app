@@ -1,5 +1,5 @@
 import { createScope, molecule } from 'bunshi'
-import type { DirectoryEntry, FileEntry } from 'src/api/types'
+import type { DirectoryEntry, FileEntry } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import type { FilePickerMode } from '@/shared/types'

@@ -62,6 +62,10 @@ export function Interactable({ zIndex, children, onGesture, onTap }: Interactabl
 
 	useGesture(
 		{
+			onDragStart: () => {
+				// Disable text selection during drag
+				document.body.style.userSelect = 'none'
+			},
 			onDrag: ({ event, pinching, cancel, offset, tap }) => {
 				if (pinching || tap) return cancel()
 
@@ -69,6 +73,10 @@ export function Interactable({ zIndex, children, onGesture, onTap }: Interactabl
 				transformation.current.y = offset[1]
 
 				transform('drag', event)
+			},
+			onDragEnd: () => {
+				// Re-enable text selection after dragging
+				document.body.style.userSelect = ''
 			},
 			onPinch: ({ event, origin: [ox, oy], first, offset: [s, a], memo }) => {
 				if (first) {

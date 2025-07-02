@@ -2,12 +2,12 @@ import { getDefaultInjector, molecule } from 'bunshi'
 import { Elysia } from 'elysia'
 // biome-ignore format: too many
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, IndiClient, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
-import { BusMolecule } from './bus'
+import { BusMolecule } from '../shared/bus'
+import type { Device } from '../shared/types'
 import { CameraMolecule } from './camera'
 import { ConnectionMolecule } from './connection'
 import { GuideOutputMolecule } from './guideoutput'
 import { ThermometerMolecule } from './thermometer'
-import type { Device } from './types'
 
 export enum DeviceInterfaceType {
 	TELESCOPE = 0x0001, // Telescope interface, must subclass INDI::Telescope.

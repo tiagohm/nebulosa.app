@@ -1,5 +1,5 @@
 import { molecule } from 'bunshi'
-import type { ImageTransformation } from 'src/api/types'
+import type { ImageTransformation } from 'src/shared/types'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
 // Molecule that applies the filter transformation to the image

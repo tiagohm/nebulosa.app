@@ -23,7 +23,7 @@ export default function Home() {
 		<div className='w-full h-full flex flex-col'>
 			<HomeNavBar />
 			<ImageWorkspace />
-			{devices.CAMERA.map(
+			{devices.camera.map(
 				(camera) =>
 					camera.show && (
 						<ScopeProvider key={camera.name} scope={ModalScope} value={{ name: `camera-${camera.name}` }}>

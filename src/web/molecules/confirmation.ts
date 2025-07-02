@@ -1,8 +1,8 @@
 import { molecule, onMount } from 'bunshi'
-import type { Confirmation } from 'src/api/types'
+import { BusMolecule } from 'src/shared/bus'
+import type { Confirmation } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
-import { BusMolecule } from './bus'
 
 export interface ConfirmationState {
 	show: boolean
@@ -21,7 +21,7 @@ export const ConfirmationMolecule = molecule((m) => {
 	})
 
 	onMount(() => {
-		const unsubscriber = bus.subscribe('CONFIRMATION', show)
+		const unsubscriber = bus.subscribe('confirmation', show)
 
 		return () => unsubscriber()
 	})

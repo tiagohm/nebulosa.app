@@ -1,10 +1,10 @@
 import { getDefaultInjector, molecule } from 'bunshi'
 import Elysia from 'elysia'
 import type { DefNumberVector, IndiClient, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
-import { BusMolecule } from './bus'
+import { BusMolecule } from '../shared/bus'
+import type { CameraUpdated, GuideOutput, GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from '../shared/types'
 import { ConnectionMolecule } from './connection'
 import { WebSocketMessageMolecule } from './message'
-import type { CameraUpdated, GuideOutput, GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from './types'
 
 const injector = getDefaultInjector()
 
@@ -45,8 +45,8 @@ export const GuideOutputMolecule = molecule((m) => {
 	// Sends an update for a guide output device
 	function sendUpdate(device: GuideOutput, property: keyof GuideOutput, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
-		if (device.type === 'CAMERA') wsm.send<CameraUpdated>({ type: 'CAMERA_UPDATE', device: value, property, state })
-		wsm.send<GuideOutputUpdated>({ type: 'GUIDE_OUTPUT_UPDATE', device: value, property, state })
+		if (device.type === 'CAMERA') wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
+		wsm.send<GuideOutputUpdated>({ type: 'guideOutput:update', device: value, property, state })
 		bus.emit('guideOutput:update', value)
 	}
 
@@ -54,7 +54,7 @@ export const GuideOutputMolecule = molecule((m) => {
 	function add(device: GuideOutput) {
 		guideOutputs.set(device.name, device)
 
-		wsm.send<GuideOutputAdded>({ type: 'GUIDE_OUTPUT_ADD', device })
+		wsm.send<GuideOutputAdded>({ type: 'guideOutput:add', device })
 		bus.emit('guideOutput:add', device)
 	}
 
@@ -66,7 +66,7 @@ export const GuideOutputMolecule = molecule((m) => {
 			device.canPulseGuide = false
 			sendUpdate(device, 'canPulseGuide')
 
-			wsm.send<GuideOutputRemoved>({ type: 'GUIDE_OUTPUT_REMOVE', device })
+			wsm.send<GuideOutputRemoved>({ type: 'guideOutput:remove', device })
 			bus.emit('guideOutput:remove', device)
 		}
 	}

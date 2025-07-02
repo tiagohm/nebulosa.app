@@ -1,5 +1,5 @@
 import { SelectItem } from '@heroui/react'
-import type { FrameType } from 'src/api/types'
+import type { FrameType } from 'src/shared/types'
 import { EnumSelect, type EnumSelectProps } from './EnumSelect'
 
 export function FrameTypeSelect({ label = 'Frame Type', value, onValueChange, ...props }: Omit<EnumSelectProps<FrameType>, 'children'>) {

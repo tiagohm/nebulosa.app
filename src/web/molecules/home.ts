@@ -1,12 +1,12 @@
 import { molecule, onMount } from 'bunshi'
-import type { DeviceType } from 'src/api/types'
+import { BusMolecule } from 'src/shared/bus'
 import { proxy } from 'valtio'
-import { BusMolecule } from './bus'
+import type { EquipmentState } from './indi/equipment'
 
 export interface HomeState {
 	readonly menu: {
 		show: boolean
-		activeDevice?: DeviceType
+		selected?: keyof EquipmentState
 	}
 }
 
@@ -17,27 +17,29 @@ export const HomeMolecule = molecule((m) => {
 	const state = proxy<HomeState>({
 		menu: {
 			show: false,
-			activeDevice: undefined,
+			selected: undefined,
 		},
 	})
 
 	onMount(() => {
-		const unsubscriber = bus.subscribe('TOGGLE_HOME_MENU', (enabled) => toggleMenu(enabled))
+		const unsubscriber = bus.subscribe<boolean>('homeMenu:toggle', (enabled) => toggleMenu(enabled))
 
 		return () => unsubscriber()
 	})
 
+	// Toggles the home menu
 	function toggleMenu(force?: boolean) {
 		state.menu.show = force !== undefined ? force : !state.menu.show
 	}
 
-	function toggleActiveDevice(type: HomeState['menu']['activeDevice']) {
-		if (state.menu.activeDevice === type) {
-			state.menu.activeDevice = undefined
+	// Shows or hides the devices list
+	function select(type: HomeState['menu']['selected']) {
+		if (state.menu.selected === type) {
+			state.menu.selected = undefined
 		} else {
-			state.menu.activeDevice = type
+			state.menu.selected = type
 		}
 	}
 
-	return { state, toggleMenu, toggleActiveDevice }
+	return { state, toggleMenu, select }
 })

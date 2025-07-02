@@ -44,7 +44,7 @@ export interface Confirm {
 }
 
 export interface Confirmation extends WebSocketMessage {
-	readonly type: 'CONFIRMATION'
+	readonly type: 'confirmation'
 	key: string
 	message: string
 }
@@ -99,7 +99,7 @@ export interface FileSystem {
 // Framing
 
 export interface Framing {
-	id: string
+	id: number
 	hipsSurvey: string
 	rightAscension: string | Angle
 	declination: string | Angle
@@ -185,44 +185,44 @@ export type DeviceType = 'CAMERA' | 'MOUNT' | 'WHEEL' | 'FOCUSER' | 'ROTATOR' | 
 
 export type GuideDirection = 'NORTH' | 'SOUTH' | 'WEST' | 'EAST'
 
-export interface DeviceAdded<T extends DeviceType, D extends Device> extends WebSocketMessage {
-	readonly type: `${T}_ADD`
+export interface DeviceAdded<T extends string, D extends Device> extends WebSocketMessage {
+	readonly type: `${T}:add`
 	readonly device: D
 }
 
-export interface DeviceUpdated<T extends DeviceType, D extends Device> extends WebSocketMessage {
-	readonly type: `${T}_UPDATE`
+export interface DeviceUpdated<T extends string, D extends Device> extends WebSocketMessage {
+	readonly type: `${T}:update`
 	readonly device: Required<Partial<D>, 'name'>
 	readonly property: keyof D
 	readonly state?: PropertyState
 }
 
-export interface DeviceRemoved<T extends DeviceType, D extends Device> extends WebSocketMessage {
-	readonly type: `${T}_REMOVE`
+export interface DeviceRemoved<T extends string, D extends Device> extends WebSocketMessage {
+	readonly type: `${T}:remove`
 	readonly device: D
 }
 
-export type CameraAdded = DeviceAdded<'CAMERA', Camera>
+export type CameraAdded = DeviceAdded<'camera', Camera>
 
-export type CameraUpdated = DeviceUpdated<'CAMERA', Camera>
+export type CameraUpdated = DeviceUpdated<'camera', Camera>
 
-export type CameraRemoved = DeviceRemoved<'CAMERA', Camera>
+export type CameraRemoved = DeviceRemoved<'camera', Camera>
 
 export type CameraMessageEvent = CameraAdded | CameraUpdated | CameraRemoved
 
-export type GuideOutputAdded = DeviceAdded<'GUIDE_OUTPUT', GuideOutput>
+export type GuideOutputAdded = DeviceAdded<'guideOutput', GuideOutput>
 
-export type GuideOutputUpdated = DeviceUpdated<'GUIDE_OUTPUT', GuideOutput>
+export type GuideOutputUpdated = DeviceUpdated<'guideOutput', GuideOutput>
 
-export type GuideOutputRemoved = DeviceRemoved<'GUIDE_OUTPUT', GuideOutput>
+export type GuideOutputRemoved = DeviceRemoved<'guideOutput', GuideOutput>
 
 export type GuideOutputMessageEvent = GuideOutputAdded | GuideOutputUpdated | GuideOutputRemoved
 
-export type ThermometerAdded = DeviceAdded<'THERMOMETER', Thermometer>
+export type ThermometerAdded = DeviceAdded<'thermometer', Thermometer>
 
-export type ThermometerUpdated = DeviceUpdated<'THERMOMETER', Thermometer>
+export type ThermometerUpdated = DeviceUpdated<'thermometer', Thermometer>
 
-export type ThermometerRemoved = DeviceRemoved<'THERMOMETER', Thermometer>
+export type ThermometerRemoved = DeviceRemoved<'thermometer', Thermometer>
 
 export type ThermometerMessageEvent = ThermometerAdded | ThermometerUpdated | ThermometerRemoved
 
@@ -352,7 +352,7 @@ export interface CameraCaptureProgress {
 }
 
 export interface CameraCaptureTaskEvent extends WebSocketMessage {
-	readonly type: 'CAMERA_CAPTURE'
+	readonly type: 'camera:capture'
 	device: string
 	count: number
 	loop: boolean
@@ -372,7 +372,7 @@ export interface GuidePulse {
 }
 
 export const DEFAULT_CAMERA_CAPTURE_TASK_EVENT: CameraCaptureTaskEvent = {
-	type: 'CAMERA_CAPTURE',
+	type: 'camera:capture',
 	device: '',
 	state: 'IDLE',
 	count: 0,
@@ -500,7 +500,7 @@ export const DEFAULT_PLATE_SOLVE_START: PlateSolveStart = {
 }
 
 export const DEFAULT_FRAMING: Framing = {
-	id: '0',
+	id: 0,
 	hipsSurvey: 'CDS/P/DSS2/color',
 	rightAscension: '00 00 00',
 	declination: '+000 00 00',

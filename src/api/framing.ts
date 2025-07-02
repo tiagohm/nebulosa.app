@@ -5,7 +5,7 @@ import { hips2Fits } from 'nebulosa/src/hips2fits'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import { join } from 'path/posix'
 import hipsSurveys from '../../data/hips-surveys.json' with { type: 'json' }
-import type { Framing } from './types'
+import type { Framing } from '../shared/types'
 
 // Molecule for handling framing requests
 export const FramingMolecule = molecule(() => {

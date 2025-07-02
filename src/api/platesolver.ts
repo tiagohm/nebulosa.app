@@ -4,8 +4,8 @@ import { deg, parseAngle } from 'nebulosa/src/angle'
 import { astapPlateSolve } from 'nebulosa/src/astap'
 import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebulosa/src/astrometrynet'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
+import type { PlateSolveStart, PlateSolveStop } from '../shared/types'
 import { badRequest, internalServerError } from './exceptions'
-import type { PlateSolveStart, PlateSolveStop } from './types'
 
 // Molecule for handling plate solving
 export const PlateSolverMolecule = molecule(() => {

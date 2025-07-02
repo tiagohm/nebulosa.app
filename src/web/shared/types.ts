@@ -1,4 +1,4 @@
-import type { Connect, ConnectionStatus } from 'src/api/types'
+import type { Connect, ConnectionStatus } from 'src/shared/types'
 
 export type FilePickerMode = 'file' | 'directory'
 

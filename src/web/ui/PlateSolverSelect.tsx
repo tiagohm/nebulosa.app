@@ -1,5 +1,5 @@
 import { SelectItem } from '@heroui/react'
-import type { PlateSolverType } from 'src/api/types'
+import type { PlateSolverType } from 'src/shared/types'
 import { EnumSelect, type EnumSelectProps } from './EnumSelect'
 
 export function PlateSolverSelect({ label = 'Solver', value, onValueChange, ...props }: Omit<EnumSelectProps<PlateSolverType>, 'children'>) {

@@ -1,5 +1,5 @@
 import { Button, ButtonGroup, type ButtonGroupProps, type ButtonProps } from '@heroui/react'
-import type { ExposureMode } from 'src/api/types'
+import type { ExposureMode } from 'src/shared/types'
 
 export interface ExposureModeButtonGroupProps extends ButtonGroupProps, Pick<ButtonProps, 'color'> {
 	readonly variant?: Exclude<ButtonProps['variant'], 'solid'>

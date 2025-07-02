@@ -1,5 +1,5 @@
 import { molecule } from 'bunshi'
-import type { WebSocketMessage } from './types'
+import type { WebSocketMessage } from '../shared/types'
 
 // Interface for sending messages over WebSocket
 export interface Messager {

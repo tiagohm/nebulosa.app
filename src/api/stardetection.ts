@@ -1,7 +1,7 @@
 import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import { astapDetectStars } from 'nebulosa/src/astap'
-import type { StarDetection } from './types'
+import type { StarDetection } from '../shared/types'
 
 export const StarDetectionMolecule = molecule(() => {
 	// Detects stars based on the request parameters

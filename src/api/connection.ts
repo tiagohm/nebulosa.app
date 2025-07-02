@@ -1,10 +1,10 @@
 import { getDefaultInjector, molecule } from 'bunshi'
 import Elysia from 'elysia'
 import { IndiClient } from 'nebulosa/src/indi'
-import { BusMolecule } from './bus'
+import { BusMolecule } from '../shared/bus'
+import type { Connect, ConnectionStatus } from '../shared/types'
 import { badRequest, internalServerError, noActiveConnection } from './exceptions'
 import { IndiMolecule } from './indi'
-import type { Connect, ConnectionStatus } from './types'
 
 const injector = getDefaultInjector()
 

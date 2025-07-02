@@ -1,25 +1,25 @@
 import { molecule, onMount } from 'bunshi'
-import type { Camera, Device, DeviceType, GuideOutput, Thermometer } from 'src/api/types'
+import { BusMolecule } from 'src/shared/bus'
+import type { Camera, CameraUpdated, Device, GuideOutput, GuideOutputUpdated, Thermometer, ThermometerUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { BusMolecule } from '../bus'
 
 export type EquipmentDevice<T extends Device> = T & {
 	show?: boolean
 }
 
 export interface EquipmentState {
-	readonly CAMERA: EquipmentDevice<Camera>[]
-	readonly MOUNT: EquipmentDevice<Device>[]
-	readonly WHEEL: EquipmentDevice<Device>[]
-	readonly FOCUSER: EquipmentDevice<Device>[]
-	readonly ROTATOR: EquipmentDevice<Device>[]
-	readonly GPS: EquipmentDevice<Device>[]
-	readonly DOME: EquipmentDevice<Device>[]
-	readonly GUIDE_OUTPUT: EquipmentDevice<GuideOutput>[]
-	readonly LIGHT_BOX: EquipmentDevice<Device>[]
-	readonly DUST_CAP: EquipmentDevice<Device>[]
-	readonly THERMOMETER: EquipmentDevice<Thermometer>[]
-	readonly DEW_HEATER: EquipmentDevice<Device>[]
+	readonly camera: EquipmentDevice<Camera>[]
+	readonly mount: EquipmentDevice<Device>[]
+	readonly wheel: EquipmentDevice<Device>[]
+	readonly focuser: EquipmentDevice<Device>[]
+	readonly rotator: EquipmentDevice<Device>[]
+	readonly gps: EquipmentDevice<Device>[]
+	readonly dome: EquipmentDevice<Device>[]
+	readonly guideOutput: EquipmentDevice<GuideOutput>[]
+	readonly lightBox: EquipmentDevice<Device>[]
+	readonly dustCap: EquipmentDevice<Device>[]
+	readonly thermometer: EquipmentDevice<Thermometer>[]
+	readonly dewHeater: EquipmentDevice<Device>[]
 }
 
 // Molecule that manages all the connected devices
@@ -27,71 +27,71 @@ export const EquipmentMolecule = molecule((m) => {
 	const bus = m(BusMolecule)
 
 	const state = proxy<EquipmentState>({
-		CAMERA: [],
-		MOUNT: [],
-		WHEEL: [],
-		FOCUSER: [],
-		ROTATOR: [],
-		GPS: [],
-		DOME: [],
-		GUIDE_OUTPUT: [],
-		LIGHT_BOX: [],
-		DUST_CAP: [],
-		THERMOMETER: [],
-		DEW_HEATER: [],
+		camera: [],
+		mount: [],
+		wheel: [],
+		focuser: [],
+		rotator: [],
+		gps: [],
+		dome: [],
+		guideOutput: [],
+		lightBox: [],
+		dustCap: [],
+		thermometer: [],
+		dewHeater: [],
 	})
 
 	onMount(() => {
 		const unsubscribers: VoidFunction[] = []
 
-		unsubscribers.push(bus.subscribe('CAMERA_ADD', (event) => add('CAMERA', event)))
-		unsubscribers.push(bus.subscribe('CAMERA_REMOVE', (event) => remove('CAMERA', event)))
-		unsubscribers.push(bus.subscribe('CAMERA_UPDATE', (event) => update('CAMERA', event.device.name, event.property, event.device[event.property]!)))
-		unsubscribers.push(bus.subscribe('GUIDE_OUTPUT_ADD', (event) => add('GUIDE_OUTPUT', event)))
-		unsubscribers.push(bus.subscribe('GUIDE_OUTPUT_REMOVE', (event) => remove('GUIDE_OUTPUT', event)))
-		unsubscribers.push(bus.subscribe('GUIDE_OUTPUT_UPDATE', (event) => update('GUIDE_OUTPUT', event.device.name, event.property, event.device[event.property]!)))
-		unsubscribers.push(bus.subscribe('THERMOMETER_ADD', (event) => add('THERMOMETER', event)))
-		unsubscribers.push(bus.subscribe('THERMOMETER_REMOVE', (event) => remove('THERMOMETER', event)))
-		unsubscribers.push(bus.subscribe('THERMOMETER_UPDATE', (event) => update('THERMOMETER', event.device.name, event.property, event.device[event.property]!)))
+		unsubscribers.push(bus.subscribe<Camera>('camera:add', (event) => add('camera', event)))
+		unsubscribers.push(bus.subscribe<Camera>('camera:remove', (event) => remove('camera', event)))
+		unsubscribers.push(bus.subscribe<CameraUpdated>('camera:update', (event) => update('camera', event.device.name, event.property, event.device[event.property]!)))
+		unsubscribers.push(bus.subscribe<GuideOutput>('guideOutput:add', (event) => add('guideOutput', event)))
+		unsubscribers.push(bus.subscribe<GuideOutput>('guideOutput:remove', (event) => remove('guideOutput', event)))
+		unsubscribers.push(bus.subscribe<GuideOutputUpdated>('guideOutput:update', (event) => update('guideOutput', event.device.name, event.property, event.device[event.property]!)))
+		unsubscribers.push(bus.subscribe<Thermometer>('thermometer:add', (event) => add('thermometer', event)))
+		unsubscribers.push(bus.subscribe<Thermometer>('thermometer:remove', (event) => remove('thermometer', event)))
+		unsubscribers.push(bus.subscribe<ThermometerUpdated>('thermometer:update', (event) => update('thermometer', event.device.name, event.property, event.device[event.property]!)))
 
 		return () => {
 			unsubscribers.forEach((unsubscriber) => unsubscriber())
 		}
 	})
 
-	function get(type: DeviceType, name: string): Device | undefined {
+	function get(type: keyof EquipmentState, name: string): Device | undefined {
 		return state[type].find((e) => e.name === name)
 	}
 
 	// Registers a new device of a specific type
-	function add<T extends DeviceType>(type: T, device: EquipmentState[T][number]) {
+	function add<T extends keyof EquipmentState>(type: T, device: EquipmentState[T][number]) {
 		const devices = state[type]
 		const index = devices.findIndex((e) => e.name === device.name)
 		index < 0 && state[type].push(device as never)
 	}
 
 	// Updates a specific property of a device
-	function update<T extends DeviceType, P extends keyof EquipmentState[T][number]>(type: T, name: string, property: P, value: EquipmentState[T][number][P]) {
+	function update<T extends keyof EquipmentState, P extends keyof EquipmentState[T][number]>(type: T, name: string, property: P, value: EquipmentState[T][number][P]) {
 		const device = state[type].find((e) => e.name === name)
 		if (!device) return console.warn('device not found:', name)
 		;(device as Record<keyof EquipmentState[T][number], unknown>)[property] = value
 	}
 
 	// Unregisters a device of a specific type
-	function remove<T extends DeviceType>(type: T, device: EquipmentState[T][number]) {
+	function remove<T extends keyof EquipmentState>(type: T, device: EquipmentState[T][number]) {
 		const devices = state[type]
 		const index = devices.findIndex((e) => e.name === device.name)
 		index >= 0 && devices.splice(index, 1)
 	}
 
 	// Shows the modal for a specific device type
-	function showModal(type: DeviceType, device: Device) {
+	function showModal(type: keyof EquipmentState, device: Device) {
 		state[type].find((e) => e.name === device.name)!.show = true
-		bus.emit('TOGGLE_HOME_MENU', false)
+		bus.emit('homeMenu:toggle', false)
 	}
 
 	// Closes the modal for a specific device type
-	function closeModal(type: DeviceType, device: Device) {
+	function closeModal(type: keyof EquipmentState, device: Device) {
 		state[type].find((e) => e.name === device.name)!.show = false
 	}
 

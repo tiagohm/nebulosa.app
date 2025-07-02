@@ -31,11 +31,13 @@ export const StarDetectionMolecule = molecule((m, s) => {
 
 			const stars = await Api.StarDetection.detect(starDetection.request)
 
-			starDetection.stars = stars
-			starDetection.show = stars.length > 0
+			if (!stars) return
 
-			if (!stars.length) {
+			if (stars.length === 0) {
 				addToast({ description: 'No stars detected', color: 'warning', title: 'WARN' })
+			} else {
+				starDetection.stars = stars
+				starDetection.show = stars.length > 0
 			}
 
 			let hfd = 0

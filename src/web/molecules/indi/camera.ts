@@ -48,6 +48,7 @@ export const CameraMolecule = molecule((m, s) => {
 
 	// Fetches the camera
 	Api.Cameras.get(scope.camera.name).then((camera) => {
+		if (!camera) return
 		Object.assign(state.camera, camera)
 		updateRequestFrame(camera.frame)
 	})

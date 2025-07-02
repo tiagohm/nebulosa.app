@@ -1,4 +1,3 @@
-import { addToast } from '@heroui/react'
 import { molecule, onMount } from 'bunshi'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
@@ -40,7 +39,7 @@ export const FramingMolecule = molecule((m) => {
 		return () => unsubscribe()
 	})
 
-	Api.Framing.hipsSurveys().then((hipsSurveys) => (state.hipsSurveys = hipsSurveys))
+	Api.Framing.hipsSurveys().then((hipsSurveys) => (state.hipsSurveys = hipsSurveys ?? []))
 
 	// Updates the framing state
 	function update<K extends keyof FramingState['request']>(key: K, value: FramingState['request'][K]) {
@@ -55,13 +54,13 @@ export const FramingMolecule = molecule((m) => {
 			if (state.openNewImage) state.request.id = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => parseInt(e.key))) + 1
 			else state.request.id = DEFAULT_FRAMING.id
 
-			const { path } = await Api.Framing.frame(state.request)
-			const image = workspace.add(path, state.request.id.toFixed(0), 'framing')
+			const frame = await Api.Framing.frame(state.request)
 
-			const index = state.images.findIndex((e) => e.key === image.key)
-			index >= 0 ? (state.images[index] = image) : state.images.push(image)
-		} catch {
-			addToast({ title: 'ERROR', description: 'Failed to load framing', color: 'danger' })
+			if (frame) {
+				const image = workspace.add(frame.path, state.request.id.toFixed(0), 'framing')
+				const index = state.images.findIndex((e) => e.key === image.key)
+				index >= 0 ? (state.images[index] = image) : state.images.push(image)
+			}
 		} finally {
 			state.loading = false
 		}

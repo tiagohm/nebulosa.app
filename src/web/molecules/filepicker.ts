@@ -68,13 +68,15 @@ export const FilePickerMolecule = molecule((m, s) => {
 		try {
 			loading = true
 
-			const { entries, tree } = await Api.FileSystem.list({ path: state.path, filter: scope.filter, directoryOnly: state.mode === 'directory' })
+			const directory = await Api.FileSystem.list({ path: state.path, filter: scope.filter, directoryOnly: state.mode === 'directory' })
 
-			state.entries.splice(0)
-			state.entries.push(...entries)
-			filter()
-			state.directoryTree.splice(0)
-			state.directoryTree.push(...tree)
+			if (directory) {
+				state.entries.splice(0)
+				state.entries.push(...directory.entries)
+				filter()
+				state.directoryTree.splice(0)
+				state.directoryTree.push(...directory.tree)
+			}
 		} finally {
 			loading = false
 		}
@@ -106,9 +108,9 @@ export const FilePickerMolecule = molecule((m, s) => {
 
 	async function createDirectory() {
 		if (state.directoryName) {
-			const { path } = await Api.FileSystem.create({ path: state.path, name: state.directoryName })
+			const directory = await Api.FileSystem.create({ path: state.path, name: state.directoryName })
 
-			if (path) {
+			if (directory?.path) {
 				state.createDirectory = false
 				state.directoryName = ''
 				await list()

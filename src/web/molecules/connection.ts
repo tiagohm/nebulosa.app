@@ -41,6 +41,8 @@ export const ConnectionMolecule = molecule((m) => {
 
 	// Connect to an existing connection
 	Api.Connection.list().then((connections) => {
+		if (!connections) return
+
 		for (const connection of connections) {
 			const index = state.connections.findIndex((c) => c.id === connection.id || (c.port === connection.port && (c.host === connection.host || c.host === connection.ip) && c.type === connection.type))
 
@@ -48,7 +50,7 @@ export const ConnectionMolecule = molecule((m) => {
 				state.selected = state.connections[index]
 				state.connected = connection
 
-				Api.Cameras.list().then((cameras) => cameras.forEach((camera) => bus.emit('camera:add', camera)))
+				Api.Cameras.list().then((cameras) => cameras?.forEach((camera) => bus.emit('camera:add', camera)))
 
 				break
 			}

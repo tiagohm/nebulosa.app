@@ -13,35 +13,35 @@ const w = wretch(uri, { cache: 'no-cache' })
 export namespace Api {
 	export namespace FileSystem {
 		export function list(req: ListDirectory) {
-			return w.url('/fileSystem/list').post(req).json<FileSystem>()
+			return json<FileSystem>('/fileSystem/list', 'post', req)
 		}
 
 		export function create(req: CreateDirectory) {
-			return w.url('/fileSystem/create').post(req).json<{ path: string }>()
+			return json<{ path: string }>('/fileSystem/create', 'post', req)
 		}
 	}
 
 	export namespace Connection {
 		export function list() {
-			return w.url('/connections').get().json<ConnectionStatus[]>()
+			return json<ConnectionStatus[]>('/connections', 'get')
 		}
 
 		export function connect(req: Connect) {
-			return w.url('/connections').post(req).error(500, handleErrorAndShowToast).json<ConnectionStatus | undefined>()
+			return json<ConnectionStatus>('/connections', 'post', req)
 		}
 
 		export function get(id: string) {
-			return w.url(`/connections/${id}`).get().json<ConnectionStatus>()
+			return json<ConnectionStatus>(`/connections/${id}`, 'get')
 		}
 
 		export function disconnect(id: string) {
-			return w.url(`/connections/${id}`).delete().res()
+			return res(`/connections/${id}`, 'delete')
 		}
 	}
 
 	export namespace Confirmation {
 		export function confirm(req: Confirm) {
-			return w.url('/confirmation').post(req).res()
+			return res('/confirmation', 'post', req)
 		}
 	}
 
@@ -57,57 +57,69 @@ export namespace Api {
 
 	export namespace Indi {
 		export function connect(device: Device) {
-			return w.url(`/indi/${device.name}/connect`).post().res()
+			return res(`/indi/${device.name}/connect`, 'post')
 		}
 
 		export function disconnect(device: Device) {
-			return w.url(`/indi/${device.name}/disconnect`).post().res()
+			return res(`/indi/${device.name}/disconnect`, 'post')
 		}
 	}
 
 	export namespace Cameras {
 		export function list() {
-			return w.url('/cameras').get().json<Camera[]>()
+			return json<Camera[]>('/cameras', 'get')
 		}
 
 		export function get(name: string) {
-			return w.url(`/cameras/${name}`).get().json<Camera>()
+			return json<Camera>(`/cameras/${name}`, 'get')
 		}
 
 		export function start(camera: Camera, req: CameraCaptureStart) {
-			return w.url(`/cameras/${camera.name}/start`).post(req).res()
+			return res(`/cameras/${camera.name}/start`, 'post', req)
 		}
 
 		export function stop(camera: Camera) {
-			return w.url(`/cameras/${camera.name}/stop`).post().res()
+			return res(`/cameras/${camera.name}/stop`, 'post')
 		}
 	}
 
 	export namespace PlateSolver {
 		export function start(req: PlateSolveStart) {
-			return w.url('/plateSolver/start').post(req).json<PlateSolution>()
+			return json<PlateSolution>('/plateSolver/start', 'post', req)
 		}
 
 		export function stop(req: PlateSolveStop) {
-			return w.url('/plateSolver/stop').post(req).res()
+			return res('/plateSolver/stop', 'post', req)
 		}
 	}
 
 	export namespace StarDetection {
 		export function detect(req: StarDetection) {
-			return w.url('/starDetection').post(req).json<DetectedStar[]>()
+			return json<DetectedStar[]>('/starDetection', 'post', req)
 		}
 	}
 
 	export namespace Framing {
 		export function hipsSurveys() {
-			return w.url('/framing/hipsSurveys').get().json<HipsSurvey[]>()
+			return json<HipsSurvey[]>('/framing/hipsSurveys', 'get')
 		}
 
 		export function frame(req: Framing) {
-			return w.url('/framing').post(req).json<{ path: string }>()
+			return json<{ path: string }>('/framing', 'post', req)
 		}
 	}
+}
+
+function req(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {
+	return w.url(path)[method](method === 'get' || method === 'delete' ? undefined : (body as never))
+}
+
+function json<T>(path: string, method: 'get' | 'post' | 'put', body?: unknown) {
+	return req(path, method, body).json<T>().catch(handleErrorAndShowToast)
+}
+
+function res(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {
+	req(path, method, body).res().catch(handleErrorAndShowToast)
 }
 
 function handleErrorAndShowToast(e: WretchError) {

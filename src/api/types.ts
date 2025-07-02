@@ -3,7 +3,7 @@ import type { FitsHeader } from 'nebulosa/src/fits'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
 import type { DefVector, PropertyState } from 'nebulosa/src/indi'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
-import type { Required } from 'utility-types'
+import type { PickByValue, Required } from 'utility-types'
 
 // Atlas
 
@@ -14,7 +14,8 @@ export interface PositionOfBody {
 	elevation: number
 }
 
-export interface AltitudeChartOfBody {
+export interface ChartOfBody {
+	type: keyof PickByValue<BodyPosition, number>
 	dateTime: string
 	stepSize: number
 }
@@ -377,6 +378,7 @@ export const DEFAULT_CAMERA_CAPTURE_TASK_EVENT: CameraCaptureTaskEvent = {
 	count: 0,
 	remainingCount: 0,
 	elapsedCount: 0,
+	loop: false,
 	totalExposureTime: 0,
 	frameExposureTime: 0,
 	totalProgress: {

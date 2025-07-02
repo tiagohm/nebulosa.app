@@ -1,26 +1,24 @@
+import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import { astapDetectStars } from 'nebulosa/src/astap'
 import type { StarDetection } from './types'
 
-// Manager for handling star detection requests
-export class StarDetectionManager {
+export const StarDetectionMolecule = molecule(() => {
 	// Detects stars based on the request parameters
-	async detect(req: StarDetection) {
+	async function detect(req: StarDetection) {
 		if (req.type === 'ASTAP') {
 			return await astapDetectStars(req.path, req)
 		}
 
 		return []
 	}
-}
 
-// Creates an instance of Elysia for star detection endpoints
-export function starDetection(starDetection: StarDetectionManager) {
+	// The endpoints for star detection
 	const app = new Elysia({ prefix: '/starDetection' })
 
 	app.post('', ({ body }) => {
-		return starDetection.detect(body as never)
+		return detect(body as never)
 	})
 
-	return app
-}
+	return { detect, app } as const
+})

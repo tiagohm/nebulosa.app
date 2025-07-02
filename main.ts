@@ -13,13 +13,13 @@ import { IndiMolecule } from 'src/api/indi'
 import { WebSocketMessageMolecule } from 'src/api/message'
 import { ThermometerMolecule } from 'src/api/thermometer'
 import { parseArgs } from 'util'
-import { AtlasManager, atlas } from './src/api/atlas'
-import { ConfirmationManager, confirmation } from './src/api/confirmation'
-import { FileSystemManager, fileSystem } from './src/api/filesystem'
-import { FramingManager, framing } from './src/api/framing'
-import { ImageManager, image } from './src/api/image'
-import { PlateSolverManager, plateSolver } from './src/api/platesolver'
-import { StarDetectionManager, starDetection } from './src/api/stardetection'
+import { AtlasMolecule } from './src/api/atlas'
+import { ConfirmationMolecule } from './src/api/confirmation'
+import { FileSystemMolecule } from './src/api/filesystem'
+import { FramingMolecule } from './src/api/framing'
+import { ImageMolecule } from './src/api/image'
+import { PlateSolverMolecule } from './src/api/platesolver'
+import { StarDetectionMolecule } from './src/api/stardetection'
 import { X_IMAGE_INFO_HEADER } from './src/api/types'
 import homeHtml from './src/web/pages/home/index.html'
 
@@ -60,14 +60,13 @@ const camera = injector.get(CameraMolecule)
 const guideOutput = injector.get(GuideOutputMolecule)
 const thermometer = injector.get(ThermometerMolecule)
 const indi = injector.get(IndiMolecule)
-
-const confirmationManager = new ConfirmationManager(wsm)
-const atlasManager = new AtlasManager()
-const imageManager = new ImageManager()
-const framingManager = new FramingManager()
-const fileSystemManager = new FileSystemManager()
-const starDetectionManager = new StarDetectionManager()
-const plateSolverManager = new PlateSolverManager()
+const confirmation = injector.get(ConfirmationMolecule)
+const framing = injector.get(FramingMolecule)
+const fileSystem = injector.get(FileSystemMolecule)
+const starDetection = injector.get(StarDetectionMolecule)
+const plateSolver = injector.get(PlateSolverMolecule)
+const atlas = injector.get(AtlasMolecule)
+const image = injector.get(ImageMolecule)
 
 // App
 
@@ -117,17 +116,17 @@ app.onError(({ error }) => {
 // Endpoints
 
 app.use(connection.app)
-app.use(confirmation(confirmationManager))
+app.use(confirmation.app)
 app.use(indi.app)
 app.use(camera.app)
 app.use(thermometer.app)
 app.use(guideOutput.app)
-app.use(atlas(atlasManager))
-app.use(image(imageManager))
-app.use(framing(framingManager))
-app.use(starDetection(starDetectionManager))
-app.use(plateSolver(plateSolverManager))
-app.use(fileSystem(fileSystemManager))
+app.use(atlas.app)
+app.use(image.app)
+app.use(framing.app)
+app.use(starDetection.app)
+app.use(plateSolver.app)
+app.use(fileSystem.app)
 
 // WebSocket
 

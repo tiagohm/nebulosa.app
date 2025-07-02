@@ -1,3 +1,4 @@
+import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import { arcsec, deg, parseAngle } from 'nebulosa/src/angle'
 import { hips2Fits } from 'nebulosa/src/hips2fits'
@@ -6,9 +7,10 @@ import { join } from 'path/posix'
 import hipsSurveys from '../../data/hips-surveys.json' with { type: 'json' }
 import type { Framing } from './types'
 
-// Manager for handling framing requests
-export class FramingManager {
-	async frame(req: Framing) {
+// Molecule for handling framing requests
+export const FramingMolecule = molecule(() => {
+	// Retrieves a FITS file from a HIPS survey based on the provided parameters
+	async function frame(req: Framing) {
 		const rightAscension = parseAngle(req.rightAscension, { isHour: true }) ?? 0
 		const declination = parseAngle(req.declination) ?? 0
 		req.fov = req.focalLength && req.pixelSize ? arcsec(angularSizeOfPixel(req.focalLength, req.pixelSize)) * Math.max(req.width, req.height) : deg(req.fov || 1)
@@ -18,17 +20,15 @@ export class FramingManager {
 		await Bun.write(path, fits)
 		return { path }
 	}
-}
 
-// Creates an instance of Elysia for framing endpoints
-export function framing(framing: FramingManager) {
+	// The endpoints for framing
 	const app = new Elysia({ prefix: '/framing' })
 
 	app.get('/hipsSurveys', hipsSurveys)
 
 	app.post('', ({ body }) => {
-		return framing.frame(body as never)
+		return frame(body as never)
 	})
 
-	return app
-}
+	return { frame, app } as const
+})

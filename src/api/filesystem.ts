@@ -1,11 +1,10 @@
 import { Glob } from 'bun'
+import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import fs from 'fs/promises'
 import os from 'os'
 import { basename, dirname, join } from 'path'
 import type { CreateDirectory, DirectoryEntry, FileEntry, FileSystem, ListDirectory } from './types'
-
-// File System API
 
 // Comparator for sorting file entries
 export const FileEntryComparator = (a: FileEntry, b: FileEntry) => {
@@ -14,15 +13,15 @@ export const FileEntryComparator = (a: FileEntry, b: FileEntry) => {
 	else return 1
 }
 
-// Manager for file system operations
-// This endpoint provides methods to list directories and create new directories
-export class FileSystemManager {
+// Molecule for handing file system operations
+export const FileSystemMolecule = molecule(() => {
 	// Lists directories and files in a specified path
 	// If no path is specified, it defaults to the user's home directory
 	// It can filter results based on a glob pattern and whether to include only directories
 	// Returns a structured response containing the path, directory tree, and entries
-	async list(req?: ListDirectory): Promise<FileSystem> {
+	async function list(req?: ListDirectory): Promise<FileSystem> {
 		const path = (await findDirectory(req?.path)) || os.homedir()
+		const tree = makeDirectoryTree(path)
 		const glob = req?.filter ? new Glob(req.filter) : undefined
 		const entries: FileEntry[] = []
 
@@ -43,31 +42,29 @@ export class FileSystemManager {
 
 		entries.sort(FileEntryComparator)
 
-		return { path, tree: makeDirectoryTree(path), entries }
+		return { path, tree, entries }
 	}
 
 	// Creates a new directory at the specified path with the given name
-	async create(req: CreateDirectory) {
+	async function create(req: CreateDirectory) {
 		const path = join(req.path, req.name.trim())
 		await fs.mkdir(path, req)
 		return { path }
 	}
-}
 
-// Creates an instance of Elysia with file system endpoints
-export function fileSystem(fileSystem: FileSystemManager) {
+	// The endpoints for file system operations
 	const app = new Elysia({ prefix: '/fileSystem' })
 
 	app.post('/list', ({ body }) => {
-		return fileSystem.list(body as never)
+		return list(body as never)
 	})
 
 	app.post('/create', ({ body }) => {
-		return fileSystem.create(body as never)
+		return create(body as never)
 	})
 
-	return app
-}
+	return { list, create, app } as const
+})
 
 // Finds the first directory in the path hierarchy
 // If the path is undefined or does not exist, it returns undefined

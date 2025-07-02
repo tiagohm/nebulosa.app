@@ -1,12 +1,15 @@
-import type { WebSocketMessageHandler } from './message'
+import { molecule } from 'bunshi'
+import { WebSocketMessageMolecule } from './message'
 import type { Notification } from './types'
 
-// Manager for sending notifications via WebSocket
-export class NotificationManager {
-	constructor(private readonly webSocketMessageHandler: WebSocketMessageHandler) {}
+// Molecule for sending notifications via WebSocket
+export const NotificationMolecule = molecule((m) => {
+	const wsm = m(WebSocketMessageMolecule)
 
 	// Sends a notification message to all connected WebSocket clients
-	send(message: Omit<Notification, 'type'>) {
-		this.webSocketMessageHandler.send<Notification>({ ...message, type: 'NOTIFICATION' })
+	function send(message: Omit<Notification, 'type'>) {
+		wsm.send<Notification>({ ...message, type: 'NOTIFICATION' })
 	}
-}
+
+	return { send } as const
+})

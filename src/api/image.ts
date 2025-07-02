@@ -1,3 +1,4 @@
+import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import fs from 'fs/promises'
 import { declination, readFits, rightAscension } from 'nebulosa/src/fits'
@@ -11,8 +12,6 @@ import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import { badRequest, internalServerError, notFound } from './exceptions'
 import type { ImageInfo, ImageTransformation, OpenImage } from './types'
 import { X_IMAGE_INFO_HEADER } from './types'
-
-// Image API
 
 const JPEG_OPTIONS: JpegOptions = {
 	quality: 70, // Lower quality for faster processing
@@ -42,12 +41,10 @@ const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOption
 	png: PNG_OPTIONS,
 }
 
-// Manager for opening and transforming images
-// This endpoint processes FITS files, applies transformations, and returns image information
-// It supports various transformations like debayering, flipping, SCNR, stretching, and inversion
-export class ImageManager {
+// Molecule for opening and transforming images
+export const ImageMolecule = molecule(() => {
 	// Opens an image file, reads its FITS/XISF data, and applies transformations
-	async open(req: OpenImage) {
+	async function open(req: OpenImage) {
 		if (req.path) {
 			const handle = await fs.open(req.path)
 			await using source = fileHandleSource(handle)
@@ -60,7 +57,7 @@ export class ImageManager {
 					const id = Bun.MD5.hash(req.path, 'hex')
 					const format = req.transformation.format
 					const path = join(os.tmpdir(), `${id}.${format}`)
-					const output = await this.transformImageAndSave(image, path, format, req.transformation)
+					const output = await transformImageAndSave(image, path, format, req.transformation)
 
 					if (output) {
 						const info: ImageInfo = {
@@ -91,7 +88,7 @@ export class ImageManager {
 		throw badRequest('Image path is required')
 	}
 
-	private transformImageAndSave(image: Image, path: string, format: ImageFormat, transformation: ImageTransformation) {
+	function transformImageAndSave(image: Image, path: string, format: ImageFormat, transformation: ImageTransformation) {
 		if (transformation.debayer) {
 			image = debayer(image) ?? image
 		}
@@ -141,49 +138,43 @@ export class ImageManager {
 		return writeImageToFormat(image, path, format as never, options) // TODO: Handle FITS and XISF
 	}
 
-	save() {}
+	function save() {}
 
-	analyze() {}
+	function analyze() {}
 
-	annotate() {}
+	function annotate() {}
 
-	coordinateInterpolation() {}
+	function coordinateInterpolation() {}
 
-	statistics() {}
-}
+	function statistics() {}
 
-// Creates an instance of Elysia with image endpoints
-export function image(image: ImageManager) {
+	// The endpoints for open and transform images
 	const app = new Elysia({ prefix: '/image' })
 
 	app.post('/open', async ({ body }) => {
-		const info = await image.open(body as never)
-
-		return new Response(Bun.file(info.path), {
-			headers: {
-				[X_IMAGE_INFO_HEADER]: encodeURIComponent(JSON.stringify(info)),
-			},
-		})
+		const info = await open(body as never)
+		const headers: HeadersInit = { [X_IMAGE_INFO_HEADER]: encodeURIComponent(JSON.stringify(info)) }
+		return new Response(Bun.file(info.path), { headers })
 	})
 
 	app.post('/analyze', () => {
-		return image.analyze()
+		return analyze()
 	})
 
 	app.post('/annotate', () => {
-		return image.annotate()
+		return annotate()
 	})
 
 	app.post('/coordinateInterpolation', () => {
-		return image.coordinateInterpolation()
+		return coordinateInterpolation()
 	})
 
 	app.post('/statistics', () => {
-		return image.statistics()
+		return statistics()
 	})
 
 	app.get('/fovCameras', fovCameras)
 	app.get('/fovTelescopes', fovTelescopes)
 
-	return app
-}
+	return { open, save, analyze, annotate, coordinateInterpolation, statistics, app } as const
+})

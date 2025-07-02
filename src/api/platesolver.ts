@@ -1,3 +1,4 @@
+import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import { deg, parseAngle } from 'nebulosa/src/angle'
 import { astapPlateSolve } from 'nebulosa/src/astap'
@@ -6,18 +7,18 @@ import type { PlateSolution } from 'nebulosa/src/platesolver'
 import { badRequest, internalServerError } from './exceptions'
 import type { PlateSolveStart, PlateSolveStop } from './types'
 
-// Manager for handling plate solving requests
-export class PlateSolverManager {
-	private readonly tasks = new Map<string, AbortController>()
+// Molecule for handling plate solving
+export const PlateSolverMolecule = molecule(() => {
+	const tasks = new Map<string, AbortController>()
 
 	// Starts a plate solving task based on the request parameters
-	async start(req: PlateSolveStart): Promise<PlateSolution> {
+	async function start(req: PlateSolveStart): Promise<PlateSolution> {
 		const ra = parseAngle(req.ra, { isHour: true })
 		const dec = parseAngle(req.dec)
 		const radius = req.blind || !req.radius ? 0 : deg(req.radius)
 
 		const aborter = new AbortController()
-		this.tasks.set(req.id, aborter)
+		tasks.set(req.id, aborter)
 
 		let solver: Promise<PlateSolution | undefined> | undefined
 
@@ -50,7 +51,7 @@ export class PlateSolverManager {
 			} catch {
 				throw internalServerError('Failed to plate solve image')
 			} finally {
-				this.tasks.delete(req.id)
+				tasks.delete(req.id)
 			}
 		}
 
@@ -58,22 +59,20 @@ export class PlateSolverManager {
 	}
 
 	// Stops a plate solving task by its id
-	stop(req: PlateSolveStop) {
-		this.tasks.get(req.id)?.abort()
+	function stop(req: PlateSolveStop) {
+		tasks.get(req.id)?.abort()
 	}
-}
 
-// Creates an instance of Elysia for plate solving endpoints
-export function plateSolver(solver: PlateSolverManager) {
+	// The endpoints for plate solving
 	const app = new Elysia({ prefix: '/plateSolver' })
 
 	app.post('/start', ({ body }) => {
-		return solver.start(body as never)
+		return start(body as never)
 	})
 
 	app.post('/stop', ({ body }) => {
-		return solver.stop(body as never)
+		return stop(body as never)
 	})
 
-	return app
-}
+	return { start, stop, app } as const
+})

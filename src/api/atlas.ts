@@ -1,3 +1,4 @@
+import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import { type Angle, deg, parseAngle } from 'nebulosa/src/angle'
 import { AU_KM, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
@@ -5,101 +6,166 @@ import type { CsvRow } from 'nebulosa/src/csv'
 import { type DateTime, dateFrom } from 'nebulosa/src/datetime'
 import { type Distance, meter } from 'nebulosa/src/distance'
 import { observer, Quantity } from 'nebulosa/src/horizons'
-import type { AltitudeChartOfBody, BodyPosition, PositionOfBody } from './types'
+import type { BodyPosition, ChartOfBody, PositionOfBody } from './types'
 
 export const HORIZONS_QUANTITIES: Quantity[] = [Quantity.ASTROMETRIC_RA_DEC, Quantity.APPARENT_RA_DEC, Quantity.APPARENT_AZ_EL, Quantity.VISUAL_MAG_SURFACE_BRGHT, Quantity.ONE_WAY_DOWN_LEG_LIGHT_TIME, Quantity.ILLUMINATED_FRACTION, Quantity.SUN_OBSERVER_TARGET_ELONG_ANGLE, Quantity.CONSTELLATION_ID]
 
-// Manager for handling astronomical atlas requests
-export class AtlasManager {
-	private readonly positions = new Map<string, Map<number, Readonly<BodyPosition>>>()
+// Molecule for handling astronomical atlas requests
+export const AtlasMolecule = molecule(() => {
+	const ephemeris = new Map<string, Map<number, Readonly<BodyPosition>>>()
 
-	imageOfSun() {}
+	function imageOfSun() {}
 
-	positionOfSun(req: PositionOfBody) {
-		return this.computeEphemeris('10', dateFrom(req.dateTime, true), deg(req.longitude), deg(req.latitude), meter(req.elevation))
+	function positionOfSun(req: PositionOfBody) {
+		return computePositionAt('10', dateFrom(req.dateTime, true), deg(req.longitude), deg(req.latitude), meter(req.elevation))
 	}
 
-	altitudeChartOfSun(req: AltitudeChartOfBody) {
-		return this.computeAltitudeChart('10', dateFrom(req.dateTime, true), req.stepSize)
+	function chartOfSun(req: ChartOfBody) {
+		return computeChart('10', dateFrom(req.dateTime, true), req.stepSize, req.type || 'altitude')
 	}
 
-	earthSeasons() {}
+	function earthSeasons() {}
 
-	positionOfMoon(req: PositionOfBody) {
-		return this.computeEphemeris('301', dateFrom(req.dateTime, true), deg(req.longitude), deg(req.latitude), meter(req.elevation))
+	function positionOfMoon(req: PositionOfBody) {
+		return computePositionAt('301', dateFrom(req.dateTime, true), deg(req.longitude), deg(req.latitude), meter(req.elevation))
 	}
 
-	altitudeChartOfMoon(req: AltitudeChartOfBody) {
-		return this.computeAltitudeChart('301', dateFrom(req.dateTime, true), req.stepSize)
+	function chartOfMoon(req: ChartOfBody) {
+		return computeChart('301', dateFrom(req.dateTime, true), req.stepSize, req.type || 'altitude')
 	}
 
-	moonPhases() {}
+	function moonPhases() {}
 
-	twilight() {}
+	function twilight() {}
 
-	positionOfPlanet(code: string, req: PositionOfBody) {
-		return this.computeEphemeris(code, dateFrom(req.dateTime, true), deg(req.longitude), deg(req.latitude), meter(req.elevation))
+	function positionOfPlanet(code: string, req: PositionOfBody) {
+		return computePositionAt(code, dateFrom(req.dateTime, true), deg(req.longitude), deg(req.latitude), meter(req.elevation))
 	}
 
-	altitudeChartOfPlanet(code: string, req: AltitudeChartOfBody) {
-		return this.computeAltitudeChart(code, dateFrom(req.dateTime, true), req.stepSize)
+	function chartOfPlanet(code: string, req: ChartOfBody) {
+		return computeChart(code, dateFrom(req.dateTime, true), req.stepSize, req.type || 'altitude')
 	}
 
-	searchMinorPlanet() {}
+	function searchMinorPlanet() {}
 
-	closeApproachesForMinorPlanets() {}
+	function closeApproachesForMinorPlanets() {}
 
-	searchSkyObject() {}
+	function searchSkyObject() {}
 
-	skyObjectTypes() {}
+	function skyObjectTypes() {}
 
-	positionOfSkyObject(req: PositionOfBody, id: string) {}
+	function positionOfSkyObject(req: PositionOfBody, id: string) {}
 
-	altitudeChartOfSkyObject(req: AltitudeChartOfBody) {}
+	function chartOfSkyObject(req: ChartOfBody) {}
 
-	searchSatellites() {}
+	function searchSatellites() {}
 
-	positionOfSatellite(req: PositionOfBody, id: string) {}
+	function positionOfSatellite(req: PositionOfBody, id: string) {}
 
-	altitudeChartOfSatellite(req: AltitudeChartOfBody) {}
+	function chartOfSatellite(req: ChartOfBody) {}
 
-	private async computeEphemeris(code: string, dateTime: DateTime, longitude: number, latitude: Angle, elevation: Distance) {
+	async function computePositionAt(code: string, dateTime: DateTime, longitude: number, latitude: Angle, elevation: Distance) {
 		const time = timeWithoutSeconds(dateTime)
 
-		const position = this.positions.get(code)?.get(time)
+		const position = ephemeris.get(code)?.get(time)
+
 		if (position) return position
 
 		let startTime = dateTime.set('hour', 12).set('minute', 0).set('second', 0).set('millisecond', 0)
 		if (dateTime.hour() < 12) startTime = startTime.subtract(1, 'day')
 		const endTime = startTime.add(1, 'day')
 
-		const ephemeris = await observer(code, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES)
-		const positions = makeBodyPositionFromEphemeris(ephemeris!)
-		if (!this.positions.has(code)) this.positions.set(code, new Map())
-		const map = this.positions.get(code)!
+		const computedEphemeris = await observer(code, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES)
+		const positions = makeBodyPositionFromEphemeris(computedEphemeris!)
+		if (!ephemeris.has(code)) ephemeris.set(code, new Map())
+		const map = ephemeris.get(code)!
 		positions.forEach((e) => map.set(e[0], e[1]))
 		return map.get(time)!
 	}
 
-	private computeAltitudeChart(code: string, dateTime: DateTime, stepSizeInMinutes: number) {
-		const positions = this.positions.get(code)!
+	function computeChart(code: string, dateTime: DateTime, stepSizeInMinutes: number, type: ChartOfBody['type']) {
+		const positions = ephemeris.get(code)!
 
 		let startTime = dateTime.set('hour', 12).set('minute', 0).set('second', 0).set('millisecond', 0)
 		if (dateTime.hour() < 12) startTime = startTime.subtract(1, 'day')
 		const time = timeWithoutSeconds(startTime)
-		const altitude: number[] = []
+		const chart: number[] = []
 
-		altitude.push(positions.get(time)!.altitude)
+		chart.push(positions.get(time)![type])
 
 		for (let i = stepSizeInMinutes; i <= 1440 - stepSizeInMinutes; i += stepSizeInMinutes) {
-			altitude.push(positions.get(time + i * 60)!.altitude)
+			chart.push(positions.get(time + i * 60)![type])
 		}
 
-		altitude.push(positions.get(time + 1440 * 60)!.altitude)
+		chart.push(positions.get(time + 1440 * 60)![type])
 
-		return altitude
+		return chart
 	}
-}
+
+	// The endpoints for astronomical atlas requests
+	const app = new Elysia({ prefix: '/atlas' })
+
+	// '/sun/image'
+	// '/earth/seasons'
+	// '/moon/phases'
+	// '/twilight'
+	// '/minorplanets'
+	// '/minorplanets/closeapproaches'
+	// '/skyobjects'
+	// '/skyobjects/types'
+	// '/skyobjects/:id/position'
+	// '/skyobjects/:id/chart'
+	// '/satellites'
+	// '/satellites/:id/position'
+	// '/satellites/:id/chart'
+
+	app.post('/sun/position', ({ body }) => {
+		return positionOfSun(body as never)
+	})
+
+	app.post('/sun/chart', ({ body }) => {
+		return chartOfSun(body as never)
+	})
+
+	app.post('/moon/position', ({ body }) => {
+		return positionOfMoon(body as never)
+	})
+
+	app.post('/moon/chart', ({ body }) => {
+		return chartOfMoon(body as never)
+	})
+
+	app.post('/planets/:code/position', ({ params, body }) => {
+		return positionOfPlanet(params.code, body as never)
+	})
+
+	app.post('/planets/:code/chart', ({ params, body }) => {
+		return chartOfPlanet(params.code, body as never)
+	})
+
+	return {
+		imageOfSun,
+		positionOfSun,
+		chartOfSun,
+		earthSeasons,
+		positionOfMoon,
+		chartOfMoon,
+		moonPhases,
+		twilight,
+		positionOfPlanet,
+		chartOfPlanet,
+		searchMinorPlanet,
+		closeApproachesForMinorPlanets,
+		searchSkyObject,
+		skyObjectTypes,
+		positionOfSkyObject,
+		chartOfSkyObject,
+		searchSatellites,
+		positionOfSatellite,
+		chartOfSatellite,
+		app,
+	}
+})
 
 function makeBodyPositionFromEphemeris(ephemeris: CsvRow[]): readonly [number, BodyPosition][] {
 	ephemeris.splice(0, 1)
@@ -141,49 +207,4 @@ function timeWithoutSeconds(dateTime: DateTime) {
 	const seconds = dateTime.unix()
 	const remaining = Math.trunc(seconds % 60)
 	return seconds - remaining
-}
-
-// '/sun/image'
-// '/earth/seasons'
-// '/moon/phases'
-// '/twilight'
-// '/minor-planets'
-// '/minor-planets/close-approaches'
-// '/sky-objects'
-// '/sky-objects/types'
-// '/sky-objects/:id/position'
-// '/sky-objects/:id/altitude-chart'
-// '/satellites'
-// '/satellites/:id/position'
-// '/satellites/:id/altitude-chart'
-
-// Creates an instance of Elysia for atlas endpoints
-export function atlas(atlas: AtlasManager) {
-	const app = new Elysia({ prefix: '/atlas' })
-
-	app.post('/sun/position', ({ body }) => {
-		return atlas.positionOfSun(body as never)
-	})
-
-	app.post('/sun/altitudeChart', ({ body }) => {
-		return atlas.altitudeChartOfSun(body as never)
-	})
-
-	app.post('/moon/position', ({ body }) => {
-		return atlas.positionOfMoon(body as never)
-	})
-
-	app.post('/moon/altitudeChart', ({ body }) => {
-		return atlas.altitudeChartOfMoon(body as never)
-	})
-
-	app.post('/planets/:code/position', ({ params, body }) => {
-		return atlas.positionOfPlanet(params.code, body as never)
-	})
-
-	app.post('/planets/:code/altitudeChart', ({ params, body }) => {
-		return atlas.altitudeChartOfPlanet(params.code, body as never)
-	})
-
-	return app
 }

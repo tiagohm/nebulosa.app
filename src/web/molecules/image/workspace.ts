@@ -1,9 +1,9 @@
 import { molecule } from 'bunshi'
 import { BusMolecule } from 'src/shared/bus'
+import type { Atom } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { simpleLocalStorage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
-import type { Atom } from '@/shared/util'
 import type { ImageViewerMolecule } from './viewer'
 
 export interface ImageWorkspaceState {

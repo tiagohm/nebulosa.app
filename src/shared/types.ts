@@ -1,9 +1,12 @@
+import type { MoleculeOrInterface } from 'bunshi'
 import type { Angle } from 'nebulosa/src/angle'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
 import type { DefVector, PropertyState } from 'nebulosa/src/indi'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { PickByValue, Required } from 'utility-types'
+
+export type Atom<T> = T extends MoleculeOrInterface<infer X> ? X : never
 
 // Atlas
 
@@ -184,6 +187,12 @@ export interface ImageInfo {
 export type DeviceType = 'CAMERA' | 'MOUNT' | 'WHEEL' | 'FOCUSER' | 'ROTATOR' | 'GPS' | 'DOME' | 'GUIDE_OUTPUT' | 'LIGHT_BOX' | 'DUST_CAP' | 'THERMOMETER' | 'DEW_HEATER'
 
 export type GuideDirection = 'NORTH' | 'SOUTH' | 'WEST' | 'EAST'
+
+export interface IndiSpawn {
+	port?: number
+	drivers: string[]
+	verbose?: number
+}
 
 export interface DeviceAdded<T extends string, D extends Device> extends WebSocketMessage {
 	readonly type: `${T}:add`

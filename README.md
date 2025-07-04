@@ -18,6 +18,12 @@ To start a development server:
 bun dev
 ```
 
+To start a production server:
+
+```bash
+bun prod
+```
+
 To generate a production-ready executable:
 
 ```bash

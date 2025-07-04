@@ -1,6 +1,6 @@
 import { molecule } from 'bunshi'
 import { BusMolecule } from 'src/shared/bus'
-import type { CameraCaptureTaskEvent, Confirmation, DeviceMessageEvent } from 'src/shared/types'
+import type { DeviceMessageEvent } from 'src/shared/types'
 
 // Molecule that manages WebSocket connection for receiving messages
 export const WebSocketMolecule = molecule((m) => {
@@ -13,16 +13,9 @@ export const WebSocketMolecule = molecule((m) => {
 	ws.addEventListener('close', (e) => console.info('web socket close', e))
 
 	ws.addEventListener('message', (message) => {
-		const data = JSON.parse(message.data) as DeviceMessageEvent | Confirmation | CameraCaptureTaskEvent
+		const data = JSON.parse(message.data) as DeviceMessageEvent
 
 		switch (data.type) {
-			case 'confirmation':
-			case 'camera:update':
-			case 'guideOutput:update':
-			case 'thermometer:update':
-			case 'camera:capture':
-				bus.emit(data.type, data)
-				break
 			case 'camera:add':
 			case 'camera:remove':
 			case 'guideOutput:add':
@@ -30,6 +23,9 @@ export const WebSocketMolecule = molecule((m) => {
 			case 'thermometer:add':
 			case 'thermometer:remove':
 				bus.emit(data.type, data.device)
+				break
+			default:
+				bus.emit(data.type, data)
 				break
 		}
 	})

@@ -1,8 +1,8 @@
 // https://pictogrammers.com/library/mdi/icon
 
 export interface MaterialDesignIconProps extends Partial<Omit<React.ComponentPropsWithoutRef<'svg'>, 'stroke'>> {
-	size?: string | number
-	stroke?: string | number
+	readonly size?: string | number
+	readonly stroke?: string | number
 }
 
 export const Counter = ({ size, stroke = 1, color = 'currentColor', ...props }: MaterialDesignIconProps) => {

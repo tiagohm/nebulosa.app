@@ -269,7 +269,7 @@ export type ExposureTimeUnit = 'MINUTE' | 'SECOND' | 'MILLISECOND' | 'MICROSECON
 
 export type ExposureMode = 'SINGLE' | 'FIXED' | 'LOOP'
 
-export type AutoSubFolderMode = 'OFF' | 'NOON' | 'TARGET' | 'MIDNIGHT'
+export type AutoSubFolderMode = 'OFF' | 'NOON' | 'MIDNIGHT'
 
 export type CameraCaptureState = 'IDLE' | 'EXPOSURE_STARTED' | 'EXPOSING' | 'WAITING' | 'SETTLING' | 'DITHERING' | 'PAUSING' | 'PAUSED' | 'EXPOSURE_FINISHED'
 

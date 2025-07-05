@@ -2,6 +2,7 @@ import { Badge, BreadcrumbItem, Breadcrumbs, Button, Input, Listbox, ListboxItem
 import { useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
 import * as Lucide from 'lucide-react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerMolecule } from '@/molecules/filepicker'
 import { useModal } from '@/shared/hooks'
@@ -11,7 +12,7 @@ export interface FilePickerProps {
 	readonly onChoose: (entries?: string[]) => void
 }
 
-export function FilePicker({ header, onChoose }: FilePickerProps) {
+export const FilePicker = memo(({ header, onChoose }: FilePickerProps) => {
 	const filePicker = useMolecule(FilePickerMolecule)
 	const { mode, history, filtered, selected, directoryTree, filter, createDirectory, directoryName } = useSnapshot(filePicker.state)
 	const modal = useModal(() => onChoose())
@@ -21,7 +22,7 @@ export function FilePicker({ header, onChoose }: FilePickerProps) {
 	}
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[480px]', wrapper: 'pointer-events-none' }}>
+		<Modal {...modal.props} classNames={{ base: 'max-w-[420px]', wrapper: 'pointer-events-none' }}>
 			<ModalContent>
 				{() => (
 					<>
@@ -48,9 +49,9 @@ export function FilePicker({ header, onChoose }: FilePickerProps) {
 											<Lucide.ArrowUp size={16} />
 										</Button>
 									</Tooltip>
-									<Tooltip content='New Directory' showArrow>
+									<Tooltip content={createDirectory ? 'Filter' : 'New Directory'} showArrow>
 										<Button color='warning' isIconOnly onPointerUp={filePicker.toggleCreateDirectory} variant='light'>
-											<Lucide.FolderPlus size={16} />
+											{createDirectory ? <Lucide.Filter size={16} /> : <Lucide.FolderPlus size={16} />}
 										</Button>
 									</Tooltip>
 									<Tooltip content='Refresh' showArrow>
@@ -101,7 +102,7 @@ export function FilePicker({ header, onChoose }: FilePickerProps) {
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
 							<Badge color='success' content={selected.length} showOutline={false}>
-								<Button color='success' isDisabled={selected.length === 0} onPointerUp={handleChoose} startContent={<Lucide.Check size={16} />} variant='flat'>
+								<Button color='success' endContent={selected.length ? <Lucide.CircleX color='#F44336' onPointerUp={filePicker.unselectAll} size={16} /> : null} isDisabled={selected.length === 0} onPointerUp={handleChoose} startContent={<Lucide.Check size={16} />} variant='flat'>
 									Choose
 								</Button>
 							</Badge>
@@ -111,4 +112,4 @@ export function FilePicker({ header, onChoose }: FilePickerProps) {
 			</ModalContent>
 		</Modal>
 	)
-}
+})

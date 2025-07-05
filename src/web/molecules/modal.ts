@@ -33,7 +33,8 @@ export const ModalMolecule = molecule((m, s) => {
 
 	// Handles the pointer up event, which increments the z-index of the modal
 	// to ensure it is on top of other elements.
-	function onPointerUp() {
+	function onPointerUp(event: React.PointerEvent<HTMLElement> | Event) {
+		event.stopPropagation()
 		zIndex.increment(name, true)
 	}
 

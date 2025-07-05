@@ -2,24 +2,31 @@ import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Numbe
 import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { memo, useCallback } from 'react'
 import { useSnapshot } from 'valtio'
 import { CameraMolecule } from '@/molecules/indi/camera'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { useModal } from '@/shared/hooks'
+import { AutoSaveButton } from './AutoSaveButton'
+import { AutoSubFolderModeButton } from './AutoSubFolderButton'
 import { ConnectButton } from './ConnectButton'
 import { EnumSelect } from './EnumSelect'
 import { ExposureModeButtonGroup } from './ExposureModeButtonGroup'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { ExposureTimeProgress } from './ExposureTimeProgress'
+import { FilePickerInput } from './FilePickerInput'
 import { FrameTypeSelect } from './FrameTypeSelect'
 
-// TODO: memo
-export function Camera() {
+export const Camera = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
 	const camera = useMolecule(CameraMolecule)
 	// biome-ignore format: don't break lines!
 	const { camera: { connected, coolerPower, temperature, canSetTemperature, exposure, canAbort, frame, canSubFrame, canBin, bin, gain, offset, frameFormats }, connecting, capturing, targetTemperature, request, progress } = useSnapshot(camera.state)
 	const modal = useModal(() => equipment.closeModal('camera', camera.scope.camera))
+
+	const updateSavePath = useCallback((value?: string) => {
+		camera.update('savePath', value)
+	}, [])
 
 	return (
 		<Modal {...modal.props} classNames={{ base: 'min-w-[380px] max-h-[90vh]', wrapper: 'pointer-events-none' }}>
@@ -37,6 +44,11 @@ export function Camera() {
 						<ModalBody>
 							<div className='mt-0 grid grid-cols-12 gap-2'>
 								<ExposureTimeProgress className='col-span-full mb-2' progress={progress} />
+								<div className='col-span-full flex flex-row items-center gap-1'>
+									<AutoSaveButton onValueChange={(value) => camera.update('autoSave', value)} value={request.autoSave} />
+									<AutoSubFolderModeButton isDisabled={!request.autoSave} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={request.autoSubFolderMode} />
+									<FilePickerInput isDisabled={!request.autoSave} mode='directory' name={`camera-${camera.scope.camera.name}`} onValueChange={updateSavePath} value={request.savePath} />
+								</div>
 								<Switch className='col-span-3 flex-col-reverse gap-0.2 max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || capturing} size='sm'>
 									Cooler ({(coolerPower * 100).toFixed(1)}%)
 								</Switch>
@@ -115,4 +127,4 @@ export function Camera() {
 			</ModalContent>
 		</Modal>
 	)
-}
+})

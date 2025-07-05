@@ -1,8 +1,8 @@
 import { Input, type InputProps } from '@heroui/react'
 
 export interface RightAscensionInputProps extends Omit<InputProps, 'size' | 'value' | 'onValueChange'> {
-	value?: string | number
-	onValueChange?: (value: string) => void
+	readonly value?: string | number
+	readonly onValueChange?: (value: string) => void
 }
 
 export function RightAscensionInput({ label = 'RA', value, isReadOnly, onValueChange, ...props }: RightAscensionInputProps) {

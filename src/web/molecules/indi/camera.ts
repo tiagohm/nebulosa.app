@@ -51,6 +51,7 @@ export const CameraMolecule = molecule((m, s) => {
 		if (!camera) return
 		Object.assign(state.camera, camera)
 		updateRequestFrame(camera.frame)
+		updateFrameFormat(camera.frameFormats)
 	})
 
 	onMount(() => {
@@ -63,7 +64,7 @@ export const CameraMolecule = molecule((m, s) => {
 				} else if (event.property === 'frame') {
 					updateRequestFrame(event.device.frame!)
 				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
-					state.request.frameFormat ||= event.device.frameFormats[0]
+					updateFrameFormat(event.device.frameFormats)
 				}
 			}
 		})
@@ -104,6 +105,14 @@ export const CameraMolecule = molecule((m, s) => {
 
 		if (!state.request.height) state.request.height = frame.maxHeight
 		else state.request.height = Math.min(state.request.height, frame.maxHeight)
+	}
+
+	function updateFrameFormat(frameFormats?: string[]) {
+		if (!frameFormats?.length) return
+
+		if (!state.request.frameFormat || !frameFormats.includes(state.request.frameFormat)) {
+			state.request.frameFormat = frameFormats[0]
+		}
 	}
 
 	// Updates the camera state with the given key and value

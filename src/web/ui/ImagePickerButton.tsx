@@ -1,7 +1,7 @@
 import { Button, Tooltip } from '@heroui/react'
 import { ScopeProvider, useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
-import { memo } from 'react'
+import { memo, useCallback } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerScope } from '@/molecules/filepicker'
 import { ImageWorkspaceMolecule } from '@/molecules/image/workspace'
@@ -12,7 +12,7 @@ export const ImagePickerButton = memo(() => {
 	const workspace = useMolecule(ImageWorkspaceMolecule)
 	const { showModal } = useSnapshot(workspace.state)
 
-	function handleChoose(paths?: string[]) {
+	const handleChoose = useCallback((paths?: string[]) => {
 		if (paths?.length) {
 			for (const path of paths) {
 				workspace.add(path, undefined, 'file')
@@ -20,7 +20,7 @@ export const ImagePickerButton = memo(() => {
 		}
 
 		workspace.state.showModal = false
-	}
+	}, [])
 
 	return (
 		<>

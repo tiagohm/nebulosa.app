@@ -1,4 +1,4 @@
-import { createScope, molecule } from 'bunshi'
+import { createScope, molecule, onMount } from 'bunshi'
 import type { DirectoryEntry, FileEntry } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
@@ -45,9 +45,9 @@ export const FilePickerMolecule = molecule((m, s) => {
 		mode: scope.mode ?? 'file',
 	})
 
-	let loading = false
-
-	void list()
+	onMount(() => {
+		void list()
+	})
 
 	function filter(text?: string) {
 		if (text !== undefined) state.filter = text
@@ -63,22 +63,14 @@ export const FilePickerMolecule = molecule((m, s) => {
 	}
 
 	async function list() {
-		if (loading) return
+		const directory = await Api.FileSystem.list({ path: state.path, filter: scope.filter, directoryOnly: state.mode === 'directory' })
 
-		try {
-			loading = true
-
-			const directory = await Api.FileSystem.list({ path: state.path, filter: scope.filter, directoryOnly: state.mode === 'directory' })
-
-			if (directory) {
-				state.entries.splice(0)
-				state.entries.push(...directory.entries)
-				filter()
-				state.directoryTree.splice(0)
-				state.directoryTree.push(...directory.tree)
-			}
-		} finally {
-			loading = false
+		if (directory) {
+			state.entries.splice(0)
+			state.entries.push(...directory.entries)
+			filter()
+			state.directoryTree.splice(0)
+			state.directoryTree.push(...directory.tree)
 		}
 	}
 
@@ -139,5 +131,10 @@ export const FilePickerMolecule = molecule((m, s) => {
 		}
 	}
 
-	return { state, filter, list, navigateTo, navigateBack, navigateToParent, toggleCreateDirectory, createDirectory, select }
+	function unselectAll(event?: React.PointerEvent<HTMLElement>) {
+		event?.stopPropagation()
+		state.selected.length = 0
+	}
+
+	return { state, filter, list, navigateTo, navigateBack, navigateToParent, toggleCreateDirectory, createDirectory, select, unselectAll }
 })

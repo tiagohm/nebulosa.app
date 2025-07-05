@@ -1,7 +1,7 @@
 import { Button, type ButtonProps } from '@heroui/react'
 
 export interface ToggleButtonProps extends Omit<ButtonProps, 'variant' | 'isIconOnly'> {
-	isSelected: boolean
+	readonly isSelected: boolean
 }
 
 export function ToggleButton({ isSelected, ...props }: ToggleButtonProps) {

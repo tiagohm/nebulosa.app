@@ -1,5 +1,7 @@
 import { getDefaultInjector, molecule } from 'bunshi'
 import Elysia from 'elysia'
+import fs, { mkdir } from 'fs/promises'
+import { now } from 'nebulosa/src/datetime'
 import type { CfaPattern } from 'nebulosa/src/image'
 import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, IndiClient, OneNumber, PropertyState, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import { join } from 'path'
@@ -69,6 +71,7 @@ export function offset(client: IndiClient, camera: Camera, value: number) {
 }
 
 export function startExposure(client: IndiClient, camera: Camera, exposureTimeInSeconds: number) {
+	client.sendSwitch({ device: camera.name, name: 'CCD_COMPRESSION', elements: { INDI_DISABLED: true } })
 	client.sendSwitch({ device: camera.name, name: 'CCD_TRANSFER_FORMAT', elements: { FORMAT_FITS: true } })
 	client.sendNumber({ device: camera.name, name: 'CCD_EXPOSURE', elements: { CCD_EXPOSURE_VALUE: exposureTimeInSeconds } })
 }
@@ -467,6 +470,20 @@ export const CameraMolecule = molecule((m) => {
 		return get(decodeURIComponent(params.id))
 	})
 
+	app.post('/:id/cooler', ({ params, body }) => {
+		const camera = get(decodeURIComponent(params.id))!
+		const connection = injector.get(ConnectionMolecule)
+		const client = connection.get()
+		cooler(client, camera, body as never)
+	})
+
+	app.post('/:id/temperature', ({ params, body }) => {
+		const camera = get(decodeURIComponent(params.id))!
+		const connection = injector.get(ConnectionMolecule)
+		const client = connection.get()
+		temperature(client, camera, body as never)
+	})
+
 	app.post('/:id/start', ({ params, body }) => {
 		const camera = get(decodeURIComponent(params.id))!
 
@@ -606,8 +623,11 @@ export class CameraCaptureTask {
 
 	async blobReceived(device: Camera, data: string) {
 		if (this.camera.name === device.name) {
-			const path = join(Bun.env.capturesDir, device.name, 'capture.fits')
+			const savePath = await savePathFor(this.request)
+			const name = this.request.autoSave ? now().format('YYYYMMDD.HHmmssSSS') : device.name
+			const path = join(savePath, `${name}.fit`)
 			await Bun.write(path, Buffer.from(data, 'base64'))
+			console.info('saved frame to', path)
 
 			this.event.savedPath = path
 			this.handleCameraCaptureTaskEvent(this.event)
@@ -698,4 +718,20 @@ function handleOffset(offset: Camera['offset'], element: DefNumber | OneNumber, 
 	}
 
 	return update
+}
+
+async function savePathFor(req: CameraCaptureStart) {
+	if (req.autoSave) {
+		const savePath = req.savePath && (await fs.exists(req.savePath)) ? req.savePath : Bun.env.capturesDir
+
+		if (req.autoSubFolderMode === 'OFF') return savePath
+
+		const date = now()
+		const directory = req.autoSubFolderMode === 'MIDNIGHT' || date.hour() < 12 ? date.format('YYYY-MM-DD') : date.subtract(12, 'h').format('YYYY-MM-dd')
+		const path = join(savePath, directory)
+		await mkdir(path, { recursive: true })
+		return path
+	}
+
+	return Bun.env.capturesDir
 }

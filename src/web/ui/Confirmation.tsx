@@ -23,10 +23,10 @@ export const Confirmation = memo(() => {
 							<div className='w-full px-1 py-2'></div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='danger' onPointerUp={confirmation.reject} startContent={<Lucide.X size={16} />} variant='flat'>
+							<Button color='danger' onPointerUp={confirmation.reject} startContent={<Lucide.X size={18} />} variant='flat'>
 								Cancel
 							</Button>
-							<Button color='success' onPointerUp={confirmation.accept} startContent={<Lucide.Check size={16} />} variant='flat'>
+							<Button color='success' onPointerUp={confirmation.accept} startContent={<Lucide.Check size={18} />} variant='flat'>
 								OK
 							</Button>
 						</ModalFooter>

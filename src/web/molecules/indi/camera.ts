@@ -131,6 +131,14 @@ export const CameraMolecule = molecule((m, s) => {
 		}
 	}
 
+	function cooler(enabled: boolean) {
+		return Api.Cameras.cooler(state.camera, enabled)
+	}
+
+	function temperature(value: number) {
+		return Api.Cameras.temperature(state.camera, value)
+	}
+
 	function fullscreen() {
 		state.request.x = state.camera.frame.minX
 		state.request.y = state.camera.frame.minY
@@ -147,5 +155,5 @@ export const CameraMolecule = molecule((m, s) => {
 		return Api.Cameras.stop(state.camera)
 	}
 
-	return { scope, state, connectOrDisconnect, update, fullscreen, start, stop }
+	return { scope, state, connectOrDisconnect, update, cooler, temperature, fullscreen, start, stop }
 })

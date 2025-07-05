@@ -40,10 +40,10 @@ export const ImageFilter = memo(() => {
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='danger' isDisabled={!enabled} onPointerUp={filter.reset} startContent={<Tabler.IconRestore size={16} />} variant='flat'>
+							<Button color='danger' isDisabled={!enabled} onPointerUp={filter.reset} startContent={<Tabler.IconRestore size={18} />} variant='flat'>
 								Reset
 							</Button>
-							<Button color='success' onPointerUp={filter.apply} startContent={<Lucide.Check size={16} />} variant='flat'>
+							<Button color='success' onPointerUp={filter.apply} startContent={<Lucide.Check size={18} />} variant='flat'>
 								Apply
 							</Button>
 						</ModalFooter>

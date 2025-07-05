@@ -42,15 +42,15 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 		if (index >= 0) {
 			state.images[index].path = path
 			image = state.images[index]
-			viewers.get(image.key)?.load(true)
+			viewers.get(image.key)?.load(true, path)
+			console.info('image updated', image, index)
 		} else {
 			image = { path, key, position, source: source }
 			state.images.push(image)
+			console.info('image added', image)
 		}
 
 		bus.emit('image.add', image)
-
-		console.info('image added', image)
 
 		if (source === 'file') {
 			state.lastPath = path

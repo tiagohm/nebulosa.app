@@ -47,8 +47,8 @@ export namespace Api {
 
 	export namespace Image {
 		export async function open(req: OpenImage) {
-			const response = await w.url('/image/open').post(req).res()
-			if (response.status < 200 || response.status >= 300) throw new Error(await response.text())
+			const response = await res('/image/open', 'post', req)
+			if (!response || response.status < 200 || response.status >= 300) return undefined
 			const blob = await response.blob()
 			const info = JSON.parse(decodeURIComponent(response.headers.get(X_IMAGE_INFO_HEADER)!)) as ImageInfo
 			return { blob, info }
@@ -72,6 +72,14 @@ export namespace Api {
 
 		export function get(name: string) {
 			return json<Camera>(`/cameras/${name}`, 'get')
+		}
+
+		export function cooler(camera: Camera, enabled: boolean) {
+			return res(`/cameras/${camera.name}/cooler`, 'post', enabled)
+		}
+
+		export function temperature(camera: Camera, value: number) {
+			return res(`/cameras/${camera.name}/temperature`, 'post', value)
 		}
 
 		export function start(camera: Camera, req: CameraCaptureStart) {
@@ -119,7 +127,7 @@ function json<T>(path: string, method: 'get' | 'post' | 'put', body?: unknown) {
 }
 
 function res(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {
-	req(path, method, body).res().catch(handleErrorAndShowToast)
+	return req(path, method, body).res().catch(handleErrorAndShowToast)
 }
 
 function handleErrorAndShowToast(e: WretchError) {

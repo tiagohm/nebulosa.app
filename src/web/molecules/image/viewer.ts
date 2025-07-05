@@ -1,4 +1,3 @@
-import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
@@ -253,7 +252,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	}
 
 	// Loads the current image
-	async function load(force: boolean = false) {
+	async function load(force: boolean = false, path?: string) {
 		if (loading) return
 
 		loading = true
@@ -263,8 +262,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		const cached = imageCache.get(key)
 
 		// Not loaded yet or forced to load
-		if (!cached?.url || force) {
-			await open()
+		if (!cached?.url || force || path) {
+			await open(path)
 		}
 		// Load the image from cache
 		else if (target) {
@@ -279,20 +278,23 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	}
 
 	// Opens the current image and saves it into cache
-	async function open() {
+	async function open(path?: string) {
 		try {
 			loading = true
 
 			console.info('opening image', key)
 
 			// Load the image
-			const path = scope.image.path.split('#')[0]
-			const { blob, info } = await Api.Image.open({ path, transformation: state.transformation })
-			const url = URL.createObjectURL(blob)
+			path ||= scope.image.path.split('#')[0]
+			const image = await Api.Image.open({ path, transformation: state.transformation })
+
+			if (!image) return remove()
+
+			const url = URL.createObjectURL(image.blob)
 
 			// Update the state
-			state.info = info
-			updateTransformationFromInfo(info)
+			state.info = image.info
+			updateTransformationFromInfo(image.info)
 
 			// Add the image to cache
 			const cached = imageCache.get(key)
@@ -308,15 +310,10 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			if (target) {
 				target.src = url
 				apply()
-				console.info('image loaded', key, url, info)
+				console.info('image loaded', key, url, image.info)
 			} else {
 				console.warn('image not mounted yet', key)
 			}
-
-			return url
-		} catch (e) {
-			addToast({ title: 'ERROR', description: (e as Error).message, color: 'danger' })
-			remove()
 		} finally {
 			loading = false
 		}

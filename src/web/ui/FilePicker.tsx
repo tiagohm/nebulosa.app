@@ -34,29 +34,29 @@ export const FilePicker = memo(({ header, onChoose }: FilePickerProps) => {
 								<div className='flex flex-row items-center gap-2'>
 									<Tooltip content='Go Back' showArrow>
 										<Button color='secondary' isDisabled={history.length === 0} isIconOnly onPointerUp={filePicker.navigateBack} variant='light'>
-											<Lucide.ArrowLeft size={16} />
+											<Lucide.ArrowLeft size={18} />
 										</Button>
 									</Tooltip>
 									<Breadcrumbs className='flex-1' itemsAfterCollapse={2} itemsBeforeCollapse={1} maxItems={3}>
 										{directoryTree.map((item) => (
-											<BreadcrumbItem key={item.name} onPointerUp={() => filePicker.navigateTo(item)} startContent={item.name ? undefined : <Lucide.FolderRoot size={16} />}>
+											<BreadcrumbItem key={item.name} onPointerUp={() => filePicker.navigateTo(item)} startContent={item.name ? undefined : <Lucide.FolderRoot size={18} />}>
 												{item.name}
 											</BreadcrumbItem>
 										))}
 									</Breadcrumbs>
 									<Tooltip content='Go To Parent' showArrow>
 										<Button color='secondary' isDisabled={directoryTree.length <= 1} isIconOnly onPointerUp={filePicker.navigateToParent} variant='light'>
-											<Lucide.ArrowUp size={16} />
+											<Lucide.ArrowUp size={18} />
 										</Button>
 									</Tooltip>
 									<Tooltip content={createDirectory ? 'Filter' : 'New Directory'} showArrow>
 										<Button color='warning' isIconOnly onPointerUp={filePicker.toggleCreateDirectory} variant='light'>
-											{createDirectory ? <Lucide.Filter size={16} /> : <Lucide.FolderPlus size={16} />}
+											{createDirectory ? <Lucide.Filter size={18} /> : <Lucide.FolderPlus size={18} />}
 										</Button>
 									</Tooltip>
 									<Tooltip content='Refresh' showArrow>
 										<Button color='primary' isIconOnly onPointerUp={filePicker.list} variant='light'>
-											<Lucide.RefreshCcw size={16} />
+											<Lucide.RefreshCcw size={18} />
 										</Button>
 									</Tooltip>
 								</div>
@@ -66,7 +66,7 @@ export const FilePicker = memo(({ header, onChoose }: FilePickerProps) => {
 										<Input label='Name' onValueChange={(value) => (filePicker.state.directoryName = value)} size='sm' value={directoryName} />
 										<Tooltip content='Create' showArrow>
 											<Button color='success' isDisabled={directoryName.length === 0} isIconOnly onPointerUp={filePicker.createDirectory} variant='light'>
-												<Lucide.Check size={16} />
+												<Lucide.Check size={18} />
 											</Button>
 										</Tooltip>
 									</div>
@@ -80,7 +80,7 @@ export const FilePicker = memo(({ header, onChoose }: FilePickerProps) => {
 										itemHeight: 48,
 									}}>
 									{filtered.map((item) => (
-										<ListboxItem endContent={selected.includes(item.path) && <Lucide.Check color='green' size={16} />} key={item.path} startContent={item.directory ? <Lucide.Folder color='orange' /> : <Lucide.File color='gray' />}>
+										<ListboxItem endContent={selected.includes(item.path) && <Lucide.Check color='green' size={18} />} key={item.path} startContent={item.directory ? <Lucide.Folder color='orange' /> : <Lucide.File color='gray' />}>
 											<div className='flex flex-row items-center justify-between gap-1'>
 												<div className='flex flex-col justify-center gap-1'>
 													<span className='break-all whitespace-nowrap w-0'>{item.name}</span>
@@ -91,7 +91,7 @@ export const FilePicker = memo(({ header, onChoose }: FilePickerProps) => {
 												</div>
 												{mode === 'directory' && (
 													<Button color='secondary' isIconOnly onPointerUp={() => filePicker.navigateTo(item)} variant='light'>
-														<Lucide.FolderOpen size={16} />
+														<Lucide.FolderOpen size={18} />
 													</Button>
 												)}
 											</div>
@@ -102,7 +102,7 @@ export const FilePicker = memo(({ header, onChoose }: FilePickerProps) => {
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
 							<Badge color='success' content={selected.length} showOutline={false}>
-								<Button color='success' endContent={selected.length ? <Lucide.CircleX color='#F44336' onPointerUp={filePicker.unselectAll} size={16} /> : null} isDisabled={selected.length === 0} onPointerUp={handleChoose} startContent={<Lucide.Check size={16} />} variant='flat'>
+								<Button color='success' endContent={selected.length ? <Lucide.CircleX color='#F44336' onPointerUp={filePicker.unselectAll} size={18} /> : null} isDisabled={selected.length === 0} onPointerUp={handleChoose} startContent={<Lucide.Check size={18} />} variant='flat'>
 									Choose
 								</Button>
 							</Badge>

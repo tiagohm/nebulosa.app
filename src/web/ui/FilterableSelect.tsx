@@ -22,7 +22,7 @@ export function FilterableSelect<T extends object>({ showFilter = true, items, f
 			{...props}
 			items={filtered}
 			listboxProps={{
-				topContent: showFilter && <Input className='w-full' isClearable onValueChange={(value) => setSearch(value)} placeholder={filterPlaceholder} startContent={<Lucide.Search size={16} />} value={search} />,
+				topContent: showFilter && <Input className='w-full' isClearable onValueChange={(value) => setSearch(value)} placeholder={filterPlaceholder} startContent={<Lucide.Search size={18} />} value={search} />,
 			}}
 		/>
 	)

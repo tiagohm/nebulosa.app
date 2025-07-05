@@ -33,7 +33,7 @@ export const FilePickerInput = memo(({ filter, mode, name, value, onValueChange,
 			<div className='flex flex-row items-center gap-1 w-full flex-1'>
 				<Input
 					{...props}
-					endContent={<Lucide.CircleX className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} size={12} />}
+					endContent={value ? <Lucide.CircleX className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} size={12} /> : null}
 					isClearable={false}
 					isReadOnly={isReadOnly}
 					size='sm'

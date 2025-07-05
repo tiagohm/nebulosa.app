@@ -48,7 +48,7 @@ export const StarDetection = memo(() => {
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='success' isLoading={loading} onPointerUp={starDetection.detect} startContent={<Lucide.Check size={16} />} variant='flat'>
+							<Button color='success' isLoading={loading} onPointerUp={starDetection.detect} startContent={<Lucide.Check size={18} />} variant='flat'>
 								Detect
 							</Button>
 						</ModalFooter>

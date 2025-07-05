@@ -2,7 +2,7 @@ import type { MoleculeOrInterface } from 'bunshi'
 import type { Angle } from 'nebulosa/src/angle'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
-import type { DefVector, PropertyState } from 'nebulosa/src/indi'
+import type { DefVector, PropertyState, VectorType } from 'nebulosa/src/indi'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { PickByValue, Required } from 'utility-types'
 
@@ -242,13 +242,17 @@ export interface DriverInfo {
 	version: string
 }
 
+export type DeviceProperty = DefVector & {
+	type: VectorType
+}
+
 export interface Device {
 	type: DeviceType
 	id: string
 	name: string
 	connected: boolean
 	driver: DriverInfo
-	properties: Record<string, DefVector | undefined>
+	properties: Record<string, DeviceProperty | undefined>
 }
 
 export interface Thermometer extends Device {

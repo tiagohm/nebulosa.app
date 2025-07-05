@@ -3,7 +3,7 @@ import { Elysia } from 'elysia'
 // biome-ignore format: too many
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, IndiClient, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
 import { BusMolecule } from '../shared/bus'
-import type { Device } from '../shared/types'
+import type { Device, DeviceProperty } from '../shared/types'
 import { CameraMolecule } from './camera'
 import { ConnectionMolecule } from './connection'
 import { GuideOutputMolecule } from './guideoutput'
@@ -103,7 +103,7 @@ export const IndiMolecule = molecule((m) => {
 	}
 
 	// Gets a device by its id.
-	function get(id: string) {
+	function get(id: string): Device | undefined {
 		return camera.get(id) || guideOutput.get(id) || thermometer.get(id)
 	}
 
@@ -138,7 +138,9 @@ export const IndiMolecule = molecule((m) => {
 // Adds or updates a device's property.
 export function addProperty(device: Device, message: DefVector | SetVector, tag: string) {
 	if (tag[0] === 'd') {
-		device.properties[message.name] = message as DefVector
+		const property = message as DeviceProperty
+		property.type = tag.includes('Switch') ? 'Switch' : tag.includes('Number') ? 'Number' : tag.includes('Text') ? 'Text' : tag.includes('BLOB') ? 'BLOB' : 'Light'
+		device.properties[message.name] = property
 	} else {
 		const vector = device.properties[message.name]
 

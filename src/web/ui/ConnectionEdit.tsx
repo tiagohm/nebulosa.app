@@ -27,7 +27,7 @@ export const ConnectionEdit = memo(() => {
 							</div>
 						</ModalBody>
 						<ModalFooter {...modal.moveProps}>
-							<Button color='success' isDisabled={!state.edited?.name || !state.edited?.host || !state.edited?.port} onPointerUp={connection.save} startContent={<Lucide.Check size={16} />} variant='flat'>
+							<Button color='success' isDisabled={!state.edited?.name || !state.edited?.host || !state.edited?.port} onPointerUp={connection.save} startContent={<Lucide.Check size={18} />} variant='flat'>
 								Save
 							</Button>
 						</ModalFooter>

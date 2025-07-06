@@ -10,6 +10,7 @@ function start() {
 		<React.StrictMode>
 			<HeroUIProvider disableAnimation disableRipple>
 				<ToastProvider
+					maxVisibleToasts={1}
 					placement='top-center'
 					toastProps={{
 						radius: 'sm',

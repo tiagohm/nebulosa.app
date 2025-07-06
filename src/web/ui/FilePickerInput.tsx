@@ -1,4 +1,4 @@
-import { Input, type InputProps } from '@heroui/react'
+import { Button, Input, type InputProps } from '@heroui/react'
 import { ScopeProvider } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { memo, useCallback, useRef, useState } from 'react'
@@ -33,11 +33,21 @@ export const FilePickerInput = memo(({ filter, mode, name, value, onValueChange,
 			<div className='flex flex-row items-center gap-1 w-full flex-1'>
 				<Input
 					{...props}
-					endContent={value ? <Lucide.CircleX className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} size={12} /> : null}
+					endContent={
+						value ? (
+							<Button isIconOnly size='sm' variant='light'>
+								<Lucide.CircleX className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} size={12} />
+							</Button>
+						) : null
+					}
 					isClearable={false}
 					isReadOnly={isReadOnly}
 					size='sm'
-					startContent={<Lucide.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} size={12} />}
+					startContent={
+						<Button isIconOnly size='sm' variant='light'>
+							<Lucide.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} size={12} />
+						</Button>
+					}
 					value={value}
 				/>
 			</div>

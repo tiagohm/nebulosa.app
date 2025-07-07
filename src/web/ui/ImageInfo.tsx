@@ -16,7 +16,7 @@ export const ImageInfo = memo(() => {
 				<span className='text-xs text-neutral-400'>{info.originalPath}</span>
 				<div className='flex flex-row items-center gap-1'>
 					{info.width}x{info.height}
-					<Lucide.ZoomIn size={18} />
+					<Lucide.ZoomIn size={14} />
 					{scale.toFixed(2)}
 				</div>
 			</div>

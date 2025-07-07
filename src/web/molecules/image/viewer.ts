@@ -2,7 +2,8 @@ import { createScope, molecule, onMount } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
-import { DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
+import { BusMolecule } from 'src/shared/bus'
+import { type CameraCaptureTaskEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -87,9 +88,10 @@ export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { ke
 // It handles loading, transformations, star detection, and other image-related functionalities
 export const ImageViewerMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
+	const bus = m(BusMolecule)
 
 	const workspace = m(ImageWorkspaceMolecule)
-	const { key, path } = scope.image
+	const { key, path, camera } = scope.image
 
 	let target = document.getElementById(key) as HTMLImageElement | null
 
@@ -178,13 +180,21 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	let loading = false
 
 	onMount(() => {
-		const unsubscribes: VoidFunction[] = []
+		const unsubscribers = new Array<VoidFunction | undefined>(3)
 
-		unsubscribes[0] = subscribeKey(state, 'crosshair', (e) => simpleLocalStorage.set('image.crosshair', e))
-		unsubscribes[1] = subscribe(state.transformation, () => simpleLocalStorage.set('image.transformation', state.transformation))
+		unsubscribers[0] = subscribeKey(state, 'crosshair', (e) => simpleLocalStorage.set('image.crosshair', e))
+		unsubscribers[1] = subscribe(state.transformation, () => simpleLocalStorage.set('image.transformation', state.transformation))
+
+		if (camera) {
+			unsubscribers[2] = bus.subscribe<CameraCaptureTaskEvent>('camera:capture', (event) => {
+				if (event.device === camera.name && event.savedPath) {
+					void load(true, event.savedPath)
+				}
+			})
+		}
 
 		return () => {
-			unsubscribes.forEach((e) => e())
+			unsubscribers.forEach((e) => e?.())
 		}
 	})
 
@@ -309,7 +319,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 			if (target) {
 				target.src = url
-				apply()
+				afterLoad()
+				bus.emit('image:load', scope.image)
 				console.info('image loaded', key, url, image.info)
 			} else {
 				console.warn('image not mounted yet', key)
@@ -339,6 +350,22 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 		// Update plate solver solution
 		state.plateSolver.solution = info.solution
+	}
+
+	function afterLoad() {
+		apply()
+		resetStarDetection()
+	}
+
+	function resetStarDetection() {
+		if (state.starDetection.stars.length) {
+			state.starDetection.stars = []
+			state.starDetection.selected = undefined
+			state.starDetection.computed.hfd = 0
+			state.starDetection.computed.snr = 0
+			state.starDetection.computed.fluxMin = 0
+			state.starDetection.computed.fluxMax = 0
+		}
 	}
 
 	// Applies the current settings to the image

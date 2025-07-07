@@ -1,9 +1,10 @@
 import { createScope, molecule, onMount } from 'bunshi'
 import { BusMolecule } from 'src/shared/bus'
 import { type Camera, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_TASK_EVENT } from 'src/shared/types'
-import { proxy, subscribe } from 'valtio'
+import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
+import type { Image } from '@/shared/types'
 import { ImageWorkspaceMolecule } from '../image/workspace'
 import { EquipmentMolecule } from './equipment'
 
@@ -18,6 +19,7 @@ export interface CameraState {
 	connecting: boolean
 	capturing: boolean
 	targetTemperature: number
+	image?: Image
 }
 
 export const CameraScope = createScope<CameraScopeValue>({ camera: DEFAULT_CAMERA })
@@ -55,7 +57,7 @@ export const CameraMolecule = molecule((m, s) => {
 	})
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(4)
+		const unsubscribers = new Array<VoidFunction>(5)
 
 		unsubscribers[0] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
 			if (event.device.name === state.camera.name) {
@@ -77,8 +79,9 @@ export const CameraMolecule = molecule((m, s) => {
 
 		unsubscribers[2] = bus.subscribe<CameraCaptureTaskEvent>('camera:capture', (event) => {
 			if (event.device === state.camera.name) {
-				if (event.savedPath) {
-					workspace.add(event.savedPath, `camera-${event.device}`, 'camera')
+				if (event.savedPath && !state.image) {
+					const image = workspace.add(event.savedPath, `camera-${event.device}`, scope.camera)
+					state.image = ref(image)
 				} else {
 					Object.assign(state.progress, event)
 				}
@@ -89,7 +92,13 @@ export const CameraMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[3] = subscribe(state.request, () => simpleLocalStorage.set(`camera.${scope.camera.name}.request`, state.request))
+		unsubscribers[3] = bus.subscribe<Image>('image:remove', (image) => {
+			if (image.key === state.image?.key) {
+				state.image = undefined
+			}
+		})
+
+		unsubscribers[4] = subscribe(state.request, () => simpleLocalStorage.set(`camera.${scope.camera.name}.request`, state.request))
 
 		return () => {
 			unsubscribers.forEach((unsubscriber) => unsubscriber())

@@ -1,4 +1,4 @@
-import type { Connect, ConnectionStatus } from 'src/shared/types'
+import type { Camera, Connect, ConnectionStatus } from 'src/shared/types'
 
 export type FilePickerMode = 'file' | 'directory'
 
@@ -16,6 +16,7 @@ export interface Image {
 	readonly position: number
 	path: string
 	readonly source: ImageSource
+	readonly camera?: Camera
 }
 
 export const DEFAULT_CONNECTION: Connection = {

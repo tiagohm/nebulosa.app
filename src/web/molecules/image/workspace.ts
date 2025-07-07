@@ -1,6 +1,6 @@
 import { molecule } from 'bunshi'
 import { BusMolecule } from 'src/shared/bus'
-import type { Atom } from 'src/shared/types'
+import type { Atom, Camera } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { simpleLocalStorage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
@@ -31,7 +31,7 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 
 	// Add an image to the workspace from a given path
 	// It generates a unique key for the image and adds it to the state
-	function add(path: string, key: string | undefined | null, source: Image['source']) {
+	function add(path: string, key: string | undefined | null, source: Image['source'] | Camera) {
 		const position = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => e.position)) + 1
 		key ||= `${Date.now()}-${position}`
 		key = `${source}-${key}`
@@ -45,12 +45,11 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 			viewers.get(image.key)?.load(true, path)
 			console.info('image updated', image, index)
 		} else {
-			image = { path, key, position, source: source }
+			image = { path, key, position, source: typeof source === 'string' ? source : 'camera', camera: typeof source === 'object' ? source : undefined }
 			state.images.push(image)
 			console.info('image added', image)
+			bus.emit('image:add', image)
 		}
-
-		bus.emit('image.add', image)
 
 		if (source === 'file') {
 			state.lastPath = path
@@ -63,8 +62,12 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 	// Removes an image from the workspace
 	function remove(image: Image) {
 		const index = state.images.findIndex((e) => e.key === image.key)
-		index >= 0 && state.images.splice(index, 1) && bus.emit('image.remove', image)
-		viewers.delete(image.key)
+
+		if (index >= 0) {
+			state.images.splice(index, 1)
+			viewers.delete(image.key)
+			bus.emit('image:remove', image)
+		}
 	}
 
 	return { state, link, add, remove }

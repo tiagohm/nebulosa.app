@@ -1,6 +1,7 @@
 import { Button, Chip, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
 import { ScopeProvider, useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
 import alignmentIcon from '@/assets/alignment.webp'
@@ -24,16 +25,18 @@ import settingsIcon from '@/assets/settings.webp'
 import skyAtlasIcon from '@/assets/sky-atlas.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
 import { AboutMolecule } from '@/molecules/about'
+import { CalculatorMolecule } from '@/molecules/calculator'
 import { FramingMolecule } from '@/molecules/framing'
 import { HomeMolecule } from '@/molecules/home'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { ModalScope } from '@/molecules/modal'
 import { About } from './About'
+import { Calculator } from './Calculator'
 import { Framing } from './Framing'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
 
-export function HomeMenu() {
+export const HomeMenu = memo(() => {
 	const home = useMolecule(HomeMolecule)
 	const { show, selected } = useSnapshot(home.state.menu)
 
@@ -42,6 +45,9 @@ export function HomeMenu() {
 
 	const framing = useMolecule(FramingMolecule)
 	const { showModal: showFramingModal } = useSnapshot(framing.state)
+
+	const calculator = useMolecule(CalculatorMolecule)
+	const { show: showCalculator } = useSnapshot(calculator.state)
 
 	const about = useMolecule(AboutMolecule)
 	const { showModal: showAboutModal } = useSnapshot(about.state)
@@ -147,7 +153,7 @@ export function HomeMenu() {
 							</Button>
 						</Tooltip>
 						<Tooltip content='Calculator' placement='bottom' showArrow>
-							<Button color='secondary' isIconOnly size='lg' variant='light'>
+							<Button color='secondary' isIconOnly onPointerUp={calculator.show} size='lg' variant='light'>
 								<img className='w-9' src={calculatorIcon} />
 							</Button>
 						</Tooltip>
@@ -184,6 +190,11 @@ export function HomeMenu() {
 					<About />
 				</ScopeProvider>
 			)}
+			{showCalculator && (
+				<ScopeProvider scope={ModalScope} value={{ name: 'calculator' }}>
+					<Calculator />
+				</ScopeProvider>
+			)}
 		</>
 	)
-}
+})

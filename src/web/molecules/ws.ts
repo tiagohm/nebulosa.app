@@ -18,6 +18,8 @@ export const WebSocketMolecule = molecule((m) => {
 		switch (data.type) {
 			case 'camera:add':
 			case 'camera:remove':
+			case 'mount:add':
+			case 'mount:remove':
 			case 'guideOutput:add':
 			case 'guideOutput:remove':
 			case 'thermometer:add':

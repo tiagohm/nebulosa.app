@@ -105,13 +105,12 @@ export const CameraMolecule = molecule((m) => {
 		addProperty(device, message, tag)
 
 		switch (message.name) {
-			case 'CONNECTION': {
+			case 'CONNECTION':
 				if (handleConnection(client, device, message)) {
 					sendUpdate(device, 'connected', message.state)
 				}
 
 				return
-			}
 			case 'CCD_COOLER': {
 				if (tag[0] === 'd') {
 					if (!device.hasCoolerControl) {
@@ -129,15 +128,14 @@ export const CameraMolecule = molecule((m) => {
 
 				return
 			}
-			case 'CCD_CAPTURE_FORMAT': {
+			case 'CCD_CAPTURE_FORMAT':
 				if (tag[0] === 'd') {
 					device.frameFormats = Object.keys(message.elements)
 					sendUpdate(device, 'frameFormats', message.state)
 				}
 
 				return
-			}
-			case 'CCD_ABORT_EXPOSURE': {
+			case 'CCD_ABORT_EXPOSURE':
 				if (tag[0] === 'd') {
 					const canAbort = (message as DefSwitchVector).permission !== 'ro'
 
@@ -148,7 +146,6 @@ export const CameraMolecule = molecule((m) => {
 				}
 
 				return
-			}
 		}
 	}
 
@@ -211,7 +208,7 @@ export const CameraMolecule = molecule((m) => {
 
 				return
 			}
-			case 'CCD_TEMPERATURE': {
+			case 'CCD_TEMPERATURE':
 				if (tag[0] === 'd') {
 					if (!device.hasCooler) {
 						device.hasCooler = true
@@ -233,7 +230,6 @@ export const CameraMolecule = molecule((m) => {
 				}
 
 				return
-			}
 			case 'CCD_FRAME': {
 				const x = message.elements.X!
 				const y = message.elements.Y!
@@ -352,10 +348,11 @@ export const CameraMolecule = molecule((m) => {
 	function textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		if (message.name === 'DRIVER_INFO') {
 			const type = parseInt(message.elements.DRIVER_INTERFACE!.value)
-			const executable = message.elements.DRIVER_EXEC!.value
-			const version = message.elements.DRIVER_VERSION!.value
 
 			if (isInterfaceType(type, DeviceInterfaceType.CCD)) {
+				const executable = message.elements.DRIVER_EXEC!.value
+				const version = message.elements.DRIVER_VERSION!.value
+
 				if (!cameras.has(message.device)) {
 					const camera: Camera = { ...structuredClone(DEFAULT_CAMERA), id: message.device, name: message.device, driver: { executable, version } }
 					add(camera)
@@ -473,15 +470,13 @@ export const CameraMolecule = molecule((m) => {
 	app.post('/:id/cooler', ({ params, body }) => {
 		const camera = get(decodeURIComponent(params.id))!
 		const connection = injector.get(ConnectionMolecule)
-		const client = connection.get()
-		cooler(client, camera, body as never)
+		cooler(connection.get(), camera, body as never)
 	})
 
 	app.post('/:id/temperature', ({ params, body }) => {
 		const camera = get(decodeURIComponent(params.id))!
 		const connection = injector.get(ConnectionMolecule)
-		const client = connection.get()
-		temperature(client, camera, body as never)
+		temperature(connection.get(), camera, body as never)
 	})
 
 	app.post('/:id/start', ({ params, body }) => {

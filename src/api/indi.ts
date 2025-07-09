@@ -7,6 +7,7 @@ import type { Device, DeviceProperty } from '../shared/types'
 import { CameraMolecule } from './camera'
 import { ConnectionMolecule } from './connection'
 import { GuideOutputMolecule } from './guideoutput'
+import { MountMolecule } from './mount'
 import { ThermometerMolecule } from './thermometer'
 
 export enum DeviceInterfaceType {
@@ -74,6 +75,7 @@ export const IndiMolecule = molecule((m) => {
 	const camera = m(CameraMolecule)
 	const guideOutput = m(GuideOutputMolecule)
 	const thermometer = m(ThermometerMolecule)
+	const mount = m(MountMolecule)
 
 	// Handles the connection close event
 	function close(client: IndiClient, server: boolean) {
@@ -83,11 +85,13 @@ export const IndiMolecule = molecule((m) => {
 	// Handles incoming switch vector messages.
 	function switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
 		camera.switchVector(client, message, tag)
+		mount.switchVector(client, message, tag)
 	}
 
 	// Handles incoming number vector messages.
 	function numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
 		camera.numberVector(client, message, tag)
+		mount.numberVector(client, message, tag)
 		guideOutput.numberVector(client, message, tag)
 		thermometer.numberVector(client, message, tag)
 	}
@@ -95,6 +99,7 @@ export const IndiMolecule = molecule((m) => {
 	// Handles incoming text vector messages.
 	function textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		camera.textVector(client, message, tag)
+		mount.textVector(client, message, tag)
 	}
 
 	// Handles incoming blob vector messages.
@@ -104,7 +109,7 @@ export const IndiMolecule = molecule((m) => {
 
 	// Gets a device by its id.
 	function get(id: string): Device | undefined {
-		return camera.get(id) || guideOutput.get(id) || thermometer.get(id)
+		return camera.get(id) || mount.get(id) || guideOutput.get(id) || thermometer.get(id)
 	}
 
 	// The endpoints for managing INDI devices.

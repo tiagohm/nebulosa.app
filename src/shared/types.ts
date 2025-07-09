@@ -1,5 +1,5 @@
 import type { MoleculeOrInterface } from 'bunshi'
-import type { Angle } from 'nebulosa/src/angle'
+import { type Angle, toHour } from 'nebulosa/src/angle'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
 import type { DefVector, PropertyState, VectorType } from 'nebulosa/src/indi'
@@ -219,6 +219,14 @@ export type CameraRemoved = DeviceRemoved<'camera', Camera>
 
 export type CameraMessageEvent = CameraAdded | CameraUpdated | CameraRemoved
 
+export type MountAdded = DeviceAdded<'mount', Mount>
+
+export type MountUpdated = DeviceUpdated<'mount', Mount>
+
+export type MountRemoved = DeviceRemoved<'mount', Mount>
+
+export type MountMessageEvent = MountAdded | MountUpdated | MountRemoved
+
 export type GuideOutputAdded = DeviceAdded<'guideOutput', GuideOutput>
 
 export type GuideOutputUpdated = DeviceUpdated<'guideOutput', GuideOutput>
@@ -235,7 +243,7 @@ export type ThermometerRemoved = DeviceRemoved<'thermometer', Thermometer>
 
 export type ThermometerMessageEvent = ThermometerAdded | ThermometerUpdated | ThermometerRemoved
 
-export type DeviceMessageEvent = CameraMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent
+export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent
 
 export interface DriverInfo {
 	executable: string
@@ -255,14 +263,23 @@ export interface Device {
 	properties: Record<string, DeviceProperty | undefined>
 }
 
+// Thermometer
+
 export interface Thermometer extends Device {
 	hasThermometer: boolean
 	temperature: number
 }
 
+// Guide Output
+
 export interface GuideOutput extends Device {
 	canPulseGuide: boolean
 	pulseGuiding: boolean
+}
+
+export interface GuidePulse {
+	direction: GuideDirection
+	duration: number
 }
 
 // Camera
@@ -379,11 +396,6 @@ export interface CameraCaptureTaskEvent extends WebSocketMessage {
 	savedPath?: string
 }
 
-export interface GuidePulse {
-	direction: GuideDirection
-	duration: number
-}
-
 export const DEFAULT_CAMERA_CAPTURE_TASK_EVENT: CameraCaptureTaskEvent = {
 	type: 'camera:capture',
 	device: '',
@@ -405,6 +417,64 @@ export const DEFAULT_CAMERA_CAPTURE_TASK_EVENT: CameraCaptureTaskEvent = {
 		progress: 0,
 	},
 	savedPath: undefined,
+}
+
+// GPS
+
+export interface Gps extends Device {
+	hasGps: boolean
+	readonly geographicCoordinate: {
+		latitude: number // deg
+		longitude: number // deg
+		elevation: number // m
+	}
+}
+
+// Mount
+
+export type PierSide = 'EAST' | 'WEST' | 'NEITHER'
+
+export type MountType = 'ALTAZ' | 'EQ_FORK' | 'EQ_GEM'
+
+export type TrackMode = 'SIDEREAL' | 'SOLAR' | 'LUNAR' | 'KING' | 'CUSTOM'
+
+export type TargetCoordinateType = 'J2000' | 'JNOW' | 'ALTAZ'
+
+export interface Parkable {
+	canPark: boolean
+	parking: boolean
+	parked: boolean
+}
+
+export interface SlewRate {
+	name: string
+	label: string
+}
+
+export interface Mount extends GuideOutput, Gps, Parkable {
+	slewing: boolean
+	tracking: boolean
+	canAbort: boolean
+	canSync: boolean
+	canGoTo: boolean
+	canHome: boolean
+	slewRates: SlewRate[]
+	slewRate?: SlewRate['name']
+	mountType: MountType
+	trackModes: TrackMode[]
+	trackMode: TrackMode
+	pierSide: PierSide
+	guideRateWE: number
+	guideRateNS: number
+	readonly equatorialCoordinate: {
+		rightAscension: Angle
+		declination: Angle
+	}
+}
+
+export function expectedPierSide(rightAscension: Angle, declination: Angle, lst: Angle): PierSide {
+	if (Math.abs(declination) === Math.PI / 2) return 'NEITHER'
+	return (toHour(rightAscension - lst) + 24) % 24 < 12 ? 'WEST' : 'EAST'
 }
 
 // Message
@@ -606,6 +676,46 @@ export const DEFAULT_CAMERA: Camera = {
 	properties: {},
 }
 
+export const DEFAULT_MOUNT: Mount = {
+	slewing: false,
+	tracking: false,
+	canAbort: false,
+	canSync: false,
+	canGoTo: false,
+	canHome: false,
+	canPark: false,
+	slewRates: [],
+	mountType: 'EQ_GEM',
+	trackModes: [],
+	trackMode: 'SIDEREAL',
+	pierSide: 'NEITHER',
+	guideRateWE: 0,
+	guideRateNS: 0,
+	equatorialCoordinate: {
+		rightAscension: 0,
+		declination: 0,
+	},
+	canPulseGuide: false,
+	pulseGuiding: false,
+	type: 'MOUNT',
+	id: '',
+	name: '',
+	connected: false,
+	driver: {
+		executable: '',
+		version: '',
+	},
+	properties: {},
+	hasGps: false,
+	geographicCoordinate: {
+		latitude: 0,
+		longitude: 0,
+		elevation: 0,
+	},
+	parking: false,
+	parked: false,
+}
+
 export const DEFAULT_IMAGE_STRETCH: ImageStretch = {
 	auto: true,
 	shadow: 0,
@@ -657,4 +767,8 @@ export function isThermometer(device: Device): device is Thermometer {
 
 export function isGuideOutput(device: Device): device is GuideOutput {
 	return 'canPulseGuide' in device && device.canPulseGuide !== undefined
+}
+
+export function isGPS(device: Device): device is Gps {
+	return 'hasGPS' in device && device.hasGPS !== undefined
 }

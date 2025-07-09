@@ -3,7 +3,7 @@ import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, CreateDirectory, Device, FileSystem, Framing, ImageInfo, ListDirectory, OpenImage, PlateSolveStart, PlateSolveStop, StarDetection } from 'src/shared/types'
+import type { Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, CreateDirectory, Device, FileSystem, Framing, ImageInfo, ListDirectory, Mount, OpenImage, PlateSolveStart, PlateSolveStop, SlewRate, StarDetection, TrackMode } from 'src/shared/types'
 import { X_IMAGE_INFO_HEADER } from 'src/shared/types'
 import wretch, { type WretchError } from 'wretch'
 
@@ -65,7 +65,7 @@ export namespace Api {
 		}
 	}
 
-	export namespace Cameras {
+	export namespace Camera {
 		export function list() {
 			return json<Camera[]>('/cameras', 'get')
 		}
@@ -88,6 +88,40 @@ export namespace Api {
 
 		export function stop(camera: Camera) {
 			return res(`/cameras/${camera.name}/stop`, 'post')
+		}
+	}
+
+	export namespace Mount {
+		export function list() {
+			return json<Mount[]>('/mounts', 'get')
+		}
+
+		export function get(name: string) {
+			return json<Mount>(`/mounts/${name}`, 'get')
+		}
+
+		export function park(mount: Mount) {
+			return res(`/mounts/${mount.name}/park`, 'post')
+		}
+
+		export function unpark(mount: Mount) {
+			return res(`/mounts/${mount.name}/unpark`, 'post')
+		}
+
+		export function home(mount: Mount) {
+			return res(`/mounts/${mount.name}/home`, 'post')
+		}
+
+		export function tracking(mount: Mount, enable: boolean) {
+			return res(`/mounts/${mount.name}/tracking`, 'post', enable)
+		}
+
+		export function trackMode(mount: Mount, mode: TrackMode) {
+			return res(`/mounts/${mount.name}/trackMode`, 'post', mode)
+		}
+
+		export function slewRate(mount: Mount, rate: SlewRate | string) {
+			return res(`/mounts/${mount.name}/slewRate`, 'post', rate)
 		}
 	}
 

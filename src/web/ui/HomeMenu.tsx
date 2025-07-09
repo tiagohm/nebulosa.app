@@ -68,7 +68,7 @@ export const HomeMenu = memo(() => {
 							</Button>
 						</Tooltip>
 						<Tooltip content='Mount' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => home.select('mount')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled={devices.mount.length === 0} isIconOnly onPointerUp={() => home.select('mount')} size='lg' variant='light'>
 								<img className='w-9' src={mountIcon} />
 							</Button>
 						</Tooltip>

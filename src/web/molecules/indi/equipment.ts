@@ -1,6 +1,6 @@
 import { molecule, onMount } from 'bunshi'
 import { BusMolecule } from 'src/shared/bus'
-import type { Camera, CameraUpdated, Device, GuideOutput, GuideOutputUpdated, Thermometer, ThermometerUpdated } from 'src/shared/types'
+import type { Camera, CameraUpdated, Device, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 
 export type EquipmentDevice<T extends Device> = T & {
@@ -9,7 +9,7 @@ export type EquipmentDevice<T extends Device> = T & {
 
 export interface EquipmentState {
 	readonly camera: EquipmentDevice<Camera>[]
-	readonly mount: EquipmentDevice<Device>[]
+	readonly mount: EquipmentDevice<Mount>[]
 	readonly wheel: EquipmentDevice<Device>[]
 	readonly focuser: EquipmentDevice<Device>[]
 	readonly rotator: EquipmentDevice<Device>[]
@@ -47,6 +47,9 @@ export const EquipmentMolecule = molecule((m) => {
 		unsubscribers.push(bus.subscribe<Camera>('camera:add', (event) => add('camera', event)))
 		unsubscribers.push(bus.subscribe<Camera>('camera:remove', (event) => remove('camera', event)))
 		unsubscribers.push(bus.subscribe<CameraUpdated>('camera:update', (event) => update('camera', event.device.name, event.property, event.device[event.property]!)))
+		unsubscribers.push(bus.subscribe<Mount>('mount:add', (event) => add('mount', event)))
+		unsubscribers.push(bus.subscribe<Mount>('mount:remove', (event) => remove('mount', event)))
+		unsubscribers.push(bus.subscribe<MountUpdated>('mount:update', (event) => update('mount', event.device.name, event.property, event.device[event.property]!)))
 		unsubscribers.push(bus.subscribe<GuideOutput>('guideOutput:add', (event) => add('guideOutput', event)))
 		unsubscribers.push(bus.subscribe<GuideOutput>('guideOutput:remove', (event) => remove('guideOutput', event)))
 		unsubscribers.push(bus.subscribe<GuideOutputUpdated>('guideOutput:update', (event) => update('guideOutput', event.device.name, event.property, event.device[event.property]!)))

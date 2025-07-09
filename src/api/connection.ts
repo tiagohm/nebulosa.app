@@ -34,6 +34,7 @@ export const ConnectionMolecule = molecule((m) => {
 	async function connect(req: Connect): Promise<ConnectionStatus | undefined> {
 		for (const [, client] of clients) {
 			if (client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) {
+				console.info('reusing existing connection to INDI server', client.remoteIp, client.remotePort)
 				return status(client)
 			}
 		}
@@ -46,6 +47,7 @@ export const ConnectionMolecule = molecule((m) => {
 				if (await client.connect(req.host, req.port)) {
 					const id = Bun.MD5.hash(`${client.remoteIp}:${client.remotePort}:INDI`, 'hex')
 					clients.set(id, client)
+					console.info('new connection to INDI server', client.remoteIp, client.remotePort)
 					return status(client)
 				}
 			} catch (e) {
@@ -64,12 +66,14 @@ export const ConnectionMolecule = molecule((m) => {
 			if (client) {
 				client.close()
 				clients.delete(id)
+				console.info('disconnected from INDI server', client.remoteIp, client.remotePort)
 			}
 		} else {
 			for (const [key, client] of clients) {
 				if (client === id) {
 					client.close()
 					clients.delete(key)
+					console.info('disconnected from INDI server', client.remoteIp, client.remotePort)
 					break
 				}
 			}

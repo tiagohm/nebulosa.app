@@ -8,6 +8,34 @@ import { WebSocketMessageMolecule } from './message'
 
 const injector = getDefaultInjector()
 
+// Pulses the guide output towards the north direction for the given duration
+export function pulseNorth(client: IndiClient, device: GuideOutput, duration: number) {
+	if (device.canPulseGuide) {
+		client.sendNumber({ device: device.name, name: 'TELESCOPE_TIMED_GUIDE_NS', elements: { TIMED_GUIDE_N: duration, TIMED_GUIDE_S: 0 } })
+	}
+}
+
+// Pulses the guide output towards the south direction for the given duration
+export function pulseSouth(client: IndiClient, device: GuideOutput, duration: number) {
+	if (device.canPulseGuide) {
+		client.sendNumber({ device: device.name, name: 'TELESCOPE_TIMED_GUIDE_NS', elements: { TIMED_GUIDE_S: duration, TIMED_GUIDE_N: 0 } })
+	}
+}
+
+// Pulses the guide output towards the west direction for the given duration
+export function pulseWest(client: IndiClient, device: GuideOutput, duration: number) {
+	if (device.canPulseGuide) {
+		client.sendNumber({ device: device.name, name: 'TELESCOPE_TIMED_GUIDE_WE', elements: { TIMED_GUIDE_W: duration, TIMED_GUIDE_E: 0 } })
+	}
+}
+
+// Pulses the guide output towards the east direction for the given duration
+export function pulseEast(client: IndiClient, device: GuideOutput, duration: number) {
+	if (device.canPulseGuide) {
+		client.sendNumber({ device: device.name, name: 'TELESCOPE_TIMED_GUIDE_WE', elements: { TIMED_GUIDE_E: duration, TIMED_GUIDE_W: 0 } })
+	}
+}
+
 // Molecule for managing guide output devices
 export const GuideOutputMolecule = molecule((m) => {
 	const bus = m(BusMolecule)
@@ -81,34 +109,6 @@ export const GuideOutputMolecule = molecule((m) => {
 		return guideOutputs.get(id)
 	}
 
-	// Pulses the guide output towards the north direction for the given duration
-	function pulseNorth(client: IndiClient, device: GuideOutput, duration: number) {
-		if (device.canPulseGuide) {
-			client.sendNumber({ device: device.name, name: 'TELESCOPE_TIMED_GUIDE_NS', elements: { TIMED_GUIDE_N: duration, TIMED_GUIDE_S: 0 } })
-		}
-	}
-
-	// Pulses the guide output towards the south direction for the given duration
-	function pulseSouth(client: IndiClient, device: GuideOutput, duration: number) {
-		if (device.canPulseGuide) {
-			client.sendNumber({ device: device.name, name: 'TELESCOPE_TIMED_GUIDE_NS', elements: { TIMED_GUIDE_S: duration, TIMED_GUIDE_N: 0 } })
-		}
-	}
-
-	// Pulses the guide output towards the west direction for the given duration
-	function pulseWest(client: IndiClient, device: GuideOutput, duration: number) {
-		if (device.canPulseGuide) {
-			client.sendNumber({ device: device.name, name: 'TELESCOPE_TIMED_GUIDE_WE', elements: { TIMED_GUIDE_W: duration, TIMED_GUIDE_E: 0 } })
-		}
-	}
-
-	// Pulses the guide output towards the east direction for the given duration
-	function pulseEast(client: IndiClient, device: GuideOutput, duration: number) {
-		if (device.canPulseGuide) {
-			client.sendNumber({ device: device.name, name: 'TELESCOPE_TIMED_GUIDE_WE', elements: { TIMED_GUIDE_E: duration, TIMED_GUIDE_W: 0 } })
-		}
-	}
-
 	// Pulses the guide output towards the specified direction for the given duration
 	function pulse(client: IndiClient, device: GuideOutput, req: GuidePulse) {
 		if (req.direction === 'NORTH') pulseNorth(client, device, req.duration)
@@ -133,5 +133,5 @@ export const GuideOutputMolecule = molecule((m) => {
 		return pulse(connection.get(), get(decodeURIComponent(params.id))!, body as GuidePulse)
 	})
 
-	return { numberVector, add, remove, list, get, pulseNorth, pulseSouth, pulseWest, pulseEast, pulse, app } as const
+	return { numberVector, add, remove, list, get, pulse, app } as const
 })

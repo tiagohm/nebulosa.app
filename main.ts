@@ -11,6 +11,7 @@ import { ApiError } from 'src/api/exceptions'
 import { GuideOutputMolecule } from 'src/api/guideoutput'
 import { IndiMolecule } from 'src/api/indi'
 import { WebSocketMessageMolecule } from 'src/api/message'
+import { MountMolecule } from 'src/api/mount'
 import { ThermometerMolecule } from 'src/api/thermometer'
 import { parseArgs } from 'util'
 import { AtlasMolecule } from './src/api/atlas'
@@ -57,6 +58,7 @@ const injector = getDefaultInjector()
 const wsm = injector.get(WebSocketMessageMolecule)
 const connection = injector.get(ConnectionMolecule)
 const camera = injector.get(CameraMolecule)
+const mount = injector.get(MountMolecule)
 const guideOutput = injector.get(GuideOutputMolecule)
 const thermometer = injector.get(ThermometerMolecule)
 const indi = injector.get(IndiMolecule)
@@ -119,6 +121,7 @@ app.use(connection.app)
 app.use(confirmation.app)
 app.use(indi.app)
 app.use(camera.app)
+app.use(mount.app)
 app.use(thermometer.app)
 app.use(guideOutput.app)
 app.use(atlas.app)

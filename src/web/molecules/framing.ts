@@ -1,5 +1,6 @@
 import { molecule, onMount } from 'bunshi'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
+import { BusMolecule } from 'src/shared/bus'
 import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
@@ -19,6 +20,7 @@ export interface FramingState {
 
 // Molecule that manages the Framing modal
 export const FramingMolecule = molecule((m) => {
+	const bus = m(BusMolecule)
 	const home = m(HomeMolecule)
 	const workspace = m(ImageWorkspaceMolecule)
 
@@ -34,9 +36,19 @@ export const FramingMolecule = molecule((m) => {
 	})
 
 	onMount(() => {
-		const unsubscribe = subscribe(state.request, () => simpleLocalStorage.set('framing', state.request))
+		const subscribers = new Array<VoidFunction>(2)
 
-		return () => unsubscribe()
+		subscribers[0] = subscribe(state.request, () => simpleLocalStorage.set('framing', state.request))
+
+		subscribers[1] = bus.subscribe<Partial<Framing>>('framing:load', (request) => {
+			Object.assign(state.request, request)
+			state.showModal = true
+			void load()
+		})
+
+		return () => {
+			subscribers.forEach((e) => e())
+		}
 	})
 
 	Api.Framing.hipsSurveys().then((hipsSurveys) => (state.hipsSurveys = hipsSurveys ?? []))

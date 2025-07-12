@@ -6,5 +6,5 @@ export interface DeclinationInputProps extends Omit<InputProps, 'size' | 'value'
 }
 
 export function DeclinationInput({ label = 'DEC', value, isReadOnly, onValueChange, ...props }: DeclinationInputProps) {
-	return <Input {...props} isReadOnly={isReadOnly} label={label} onValueChange={onValueChange} placeholder='+DDD MM SS.ss' size='sm' value={value?.toString() || '+000 00 00'} />
+	return <Input {...props} isReadOnly={isReadOnly} label={label} onValueChange={onValueChange} placeholder='+DDD MM SS.ss' size='sm' value={value?.toString() || '+00 00 00'} />
 }

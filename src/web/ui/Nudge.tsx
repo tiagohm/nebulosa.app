@@ -2,10 +2,12 @@ import { Button, type ButtonProps } from '@heroui/react'
 import * as Lucide from 'lucide-react'
 import { useCallback, useRef } from 'react'
 
+export type NudgeDirection = 'upLeft' | 'up' | 'upRight' | 'left' | 'right' | 'downLeft' | 'down' | 'downRight'
+
 export interface NudgeProps extends React.HTMLAttributes<HTMLDivElement> {
 	readonly isDisabled?: boolean
 	readonly isCancelDisabled?: boolean
-	readonly onNudge: (direction: 'up' | 'down' | 'left' | 'right' | 'upLeft' | 'upRight' | 'downLeft' | 'downRight', down: boolean) => void
+	readonly onNudge: (direction: NudgeDirection, down: boolean) => void
 	readonly onCancel?: () => void
 }
 
@@ -17,7 +19,7 @@ export function Nudge({ onNudge, onCancel, isDisabled, isCancelDisabled, ...prop
 				<NudgeButton className='col-span-4' color='secondary' icon={Lucide.ArrowUp} isDisabled={isDisabled} onPointer={(down) => onNudge('up', down)} />
 				<NudgeButton className='col-span-4' color='secondary' icon={Lucide.ArrowUpRight} isDisabled={isDisabled} onPointer={(down) => onNudge('upRight', down)} />
 				<NudgeButton className='col-span-4' color='secondary' icon={Lucide.ArrowLeft} isDisabled={isDisabled} onPointer={(down) => onNudge('left', down)} />
-				<NudgeButton className='col-span-4' color='danger' icon={Lucide.X} isDisabled={isDisabled || isCancelDisabled} onPointer={() => onCancel?.()} />
+				<NudgeButton className='col-span-4' color='danger' icon={Lucide.X} isDisabled={isDisabled || isCancelDisabled} onPointer={(down) => down && onCancel?.()} />
 				<NudgeButton className='col-span-4' color='secondary' icon={Lucide.ArrowRight} isDisabled={isDisabled} onPointer={(down) => onNudge('right', down)} />
 				<NudgeButton className='col-span-4' color='secondary' icon={Lucide.ArrowDownLeft} isDisabled={isDisabled} onPointer={(down) => onNudge('downLeft', down)} />
 				<NudgeButton className='col-span-4' color='secondary' icon={Lucide.ArrowDown} isDisabled={isDisabled} onPointer={(down) => onNudge('down', down)} />
@@ -45,7 +47,7 @@ export function NudgeButton({ icon: Icon, onPointer, ...props }: NudgeButtonProp
 		[onPointer],
 	)
 
-	const handlePointerLeave = useCallback(
+	const handlePointerUp = useCallback(
 		(e: React.PointerEvent<HTMLButtonElement>) => {
 			if (entered.current) {
 				entered.current = false
@@ -56,7 +58,7 @@ export function NudgeButton({ icon: Icon, onPointer, ...props }: NudgeButtonProp
 	)
 
 	return (
-		<Button {...props} isIconOnly onPointerCancel={(e) => onPointer(false, e)} onPointerDown={handlePointerDown} onPointerLeave={handlePointerLeave} onPointerOut={(e) => onPointer(false, e)} onPointerUp={(e) => onPointer(false, e)} size='md' variant='light'>
+		<Button {...props} isIconOnly onPointerCancel={handlePointerUp} onPointerDown={handlePointerDown} onPointerLeave={handlePointerUp} onPointerOut={handlePointerUp} onPointerUp={handlePointerUp} size='md' variant='light'>
 			<Icon size={16} strokeWidth={4} />
 		</Button>
 	)

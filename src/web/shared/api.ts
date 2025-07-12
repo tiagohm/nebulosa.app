@@ -3,7 +3,7 @@ import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, CreateDirectory, Device, FileSystem, Framing, ImageInfo, ListDirectory, Mount, OpenImage, PlateSolveStart, PlateSolveStop, SlewRate, StarDetection, TrackMode } from 'src/shared/types'
+import type { Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, CreateDirectory, Device, EquatorialCoordinate, FileSystem, Framing, ImageInfo, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, SlewRate, StarDetection, TrackMode } from 'src/shared/types'
 import { X_IMAGE_INFO_HEADER } from 'src/shared/types'
 import wretch, { type WretchError } from 'wretch'
 
@@ -100,6 +100,18 @@ export namespace Api {
 			return json<Mount>(`/mounts/${name}`, 'get')
 		}
 
+		export function goTo(mount: Mount, coordinate: EquatorialCoordinate) {
+			return res(`/mounts/${mount.name}/goto`, 'post', coordinate)
+		}
+
+		export function slew(mount: Mount, coordinate: EquatorialCoordinate) {
+			return res(`/mounts/${mount.name}/slew`, 'post', coordinate)
+		}
+
+		export function sync(mount: Mount, coordinate: EquatorialCoordinate) {
+			return res(`/mounts/${mount.name}/sync`, 'post', coordinate)
+		}
+
 		export function park(mount: Mount) {
 			return res(`/mounts/${mount.name}/park`, 'post')
 		}
@@ -117,11 +129,35 @@ export namespace Api {
 		}
 
 		export function trackMode(mount: Mount, mode: TrackMode) {
-			return res(`/mounts/${mount.name}/trackMode`, 'post', mode)
+			return res(`/mounts/${mount.name}/trackmode`, 'post', mode)
 		}
 
 		export function slewRate(mount: Mount, rate: SlewRate | string) {
-			return res(`/mounts/${mount.name}/slewRate`, 'post', rate)
+			return res(`/mounts/${mount.name}/slewrate`, 'post', rate)
+		}
+
+		export function moveNorth(mount: Mount, enable: boolean) {
+			return res(`/mounts/${mount.name}/movenorth`, 'post', enable)
+		}
+
+		export function moveSouth(mount: Mount, enable: boolean) {
+			return res(`/mounts/${mount.name}/movesouth`, 'post', enable)
+		}
+
+		export function moveEast(mount: Mount, enable: boolean) {
+			return res(`/mounts/${mount.name}/moveeast`, 'post', enable)
+		}
+
+		export function moveWest(mount: Mount, enable: boolean) {
+			return res(`/mounts/${mount.name}/movewest`, 'post', enable)
+		}
+
+		export function stop(mount: Mount) {
+			return res(`/mounts/${mount.name}/stop`, 'post')
+		}
+
+		export function position(mount: Mount) {
+			return json<MountEquatorialCoordinatePosition>(`/mounts/${mount.name}/position`, 'get')
 		}
 	}
 

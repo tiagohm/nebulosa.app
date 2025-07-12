@@ -1,5 +1,6 @@
 import type { MoleculeOrInterface } from 'bunshi'
 import { type Angle, toHour } from 'nebulosa/src/angle'
+import type { Constellation } from 'nebulosa/src/constellation'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
 import type { DefVector, PropertyState, VectorType } from 'nebulosa/src/indi'
@@ -7,6 +8,11 @@ import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { PickByValue, Required } from 'utility-types'
 
 export type Atom<T> = T extends MoleculeOrInterface<infer X> ? X : never
+
+export interface EquatorialCoordinate {
+	rightAscension: string | Angle
+	declination: string | Angle
+}
 
 // Atlas
 
@@ -101,11 +107,9 @@ export interface FileSystem {
 
 // Framing
 
-export interface Framing {
+export interface Framing extends EquatorialCoordinate {
 	id: number
 	hipsSurvey: string
-	rightAscension: string | Angle
-	declination: string | Angle
 	width: number
 	height: number
 	fov?: number // deg
@@ -396,29 +400,6 @@ export interface CameraCaptureTaskEvent extends WebSocketMessage {
 	savedPath?: string
 }
 
-export const DEFAULT_CAMERA_CAPTURE_TASK_EVENT: CameraCaptureTaskEvent = {
-	type: 'camera:capture',
-	device: '',
-	state: 'IDLE',
-	count: 0,
-	remainingCount: 0,
-	elapsedCount: 0,
-	loop: false,
-	totalExposureTime: 0,
-	frameExposureTime: 0,
-	totalProgress: {
-		remainingTime: 0,
-		elapsedTime: 0,
-		progress: 0,
-	},
-	frameProgress: {
-		remainingTime: 0,
-		elapsedTime: 0,
-		progress: 0,
-	},
-	savedPath: undefined,
-}
-
 // GPS
 
 export interface Gps extends Device {
@@ -470,6 +451,19 @@ export interface Mount extends GuideOutput, Gps, Parkable {
 		rightAscension: Angle
 		declination: Angle
 	}
+}
+
+export interface MountEquatorialCoordinatePosition {
+	readonly rightAscension: Angle
+	readonly declination: Angle
+	readonly rightAscensionJ2000: Angle
+	readonly declinationJ2000: Angle
+	readonly azimuth: Angle
+	readonly altitude: Angle
+	readonly lst: string
+	readonly constellation: Constellation
+	readonly meridianAt: string
+	readonly pierSide: PierSide
 }
 
 export function expectedPierSide(rightAscension: Angle, declination: Angle, lst: Angle): PierSide {
@@ -564,6 +558,29 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	autoSubFolderMode: 'OFF',
 }
 
+export const DEFAULT_CAMERA_CAPTURE_TASK_EVENT: CameraCaptureTaskEvent = {
+	type: 'camera:capture',
+	device: '',
+	state: 'IDLE',
+	count: 0,
+	remainingCount: 0,
+	elapsedCount: 0,
+	loop: false,
+	totalExposureTime: 0,
+	frameExposureTime: 0,
+	totalProgress: {
+		remainingTime: 0,
+		elapsedTime: 0,
+		progress: 0,
+	},
+	frameProgress: {
+		remainingTime: 0,
+		elapsedTime: 0,
+		progress: 0,
+	},
+	savedPath: undefined,
+}
+
 export const DEFAULT_PLATE_SOLVE_START: PlateSolveStart = {
 	id: '',
 	type: 'ASTAP',
@@ -574,7 +591,7 @@ export const DEFAULT_PLATE_SOLVE_START: PlateSolveStart = {
 	fov: 0,
 	blind: true,
 	ra: '00 00 00',
-	dec: '+000 00 00',
+	dec: '+00 00 00',
 	radius: 4,
 	downsample: 0,
 	timeout: 300000, // 5 minutes
@@ -586,7 +603,7 @@ export const DEFAULT_FRAMING: Framing = {
 	id: 0,
 	hipsSurvey: 'CDS/P/DSS2/color',
 	rightAscension: '00 00 00',
-	declination: '+000 00 00',
+	declination: '+00 00 00',
 	width: 800,
 	height: 600,
 	fov: 1,
@@ -714,6 +731,19 @@ export const DEFAULT_MOUNT: Mount = {
 	},
 	parking: false,
 	parked: false,
+}
+
+export const DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION: MountEquatorialCoordinatePosition = {
+	rightAscension: 0,
+	declination: 0,
+	rightAscensionJ2000: 0,
+	declinationJ2000: 0,
+	azimuth: 0,
+	altitude: 0,
+	lst: '00:00',
+	constellation: 'AND',
+	meridianAt: '00:00 (00:00)',
+	pierSide: 'NEITHER',
 }
 
 export const DEFAULT_IMAGE_STRETCH: ImageStretch = {

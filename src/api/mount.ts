@@ -1,10 +1,17 @@
 import { getDefaultInjector, molecule } from 'bunshi'
 import Elysia from 'elysia'
-import { type Angle, deg, hour, toDeg, toHour } from 'nebulosa/src/angle'
+import { type Angle, deg, formatHMS, hour, parseAngle, toDeg, toHour } from 'nebulosa/src/angle'
+import { altaz } from 'nebulosa/src/astrometry'
+import { constellation } from 'nebulosa/src/constellation'
 import { meter } from 'nebulosa/src/distance'
+import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
+import { precessFk5ToJ2000 } from 'nebulosa/src/fk5'
 import type { DefNumberVector, DefSwitch, DefSwitchVector, DefTextVector, IndiClient, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
+import { type GeographicPosition, geodeticLocation, lst } from 'nebulosa/src/location'
+import { timeNow } from 'nebulosa/src/time'
+import { earth } from 'nebulosa/src/vsop87e'
 import { BusMolecule } from 'src/shared/bus'
-import { DEFAULT_MOUNT, type Mount, type MountAdded, type MountRemoved, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
+import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, expectedPierSide, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoved, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
 import { ConnectionMolecule } from './connection'
 import { GuideOutputMolecule } from './guideoutput'
 import { addProperty, ask, DeviceInterfaceType, handleConnection, isInterfaceType } from './indi'
@@ -95,6 +102,7 @@ export const MountMolecule = molecule((m) => {
 	const guideOutput = m(GuideOutputMolecule)
 
 	const mounts = new Map<string, Mount>()
+	const geographicPositions = new Map<Mount, GeographicPosition>()
 
 	bus.subscribe('indi:close', (client: IndiClient) => {
 		// Remove all mounts associated with the client
@@ -320,6 +328,7 @@ export const MountMolecule = molecule((m) => {
 				}
 
 				if (updated) {
+					geographicPositions.set(device, geodeticLocation(deg(longitude), deg(latitude), meter(elevation)))
 					sendUpdate(device, 'geographicCoordinate', message.state)
 				}
 
@@ -409,6 +418,11 @@ export const MountMolecule = molecule((m) => {
 		return mounts.get(id)
 	}
 
+	function deviceAndConnection(deviceId: string) {
+		const connection = injector.get(ConnectionMolecule)
+		return [get(decodeURIComponent(deviceId))!, connection.get()] as const
+	}
+
 	// The endpoints for managing mounts.
 	const app = new Elysia({ prefix: '/mounts' })
 
@@ -420,40 +434,108 @@ export const MountMolecule = molecule((m) => {
 		return get(decodeURIComponent(params.id))
 	})
 
+	app.post('/:id/goto', ({ params, body }) => {
+		const [device, connection] = deviceAndConnection(params.id)
+		const { rightAscension, declination } = body as EquatorialCoordinate
+		goTo(connection, device, parseAngle(rightAscension, { isHour: true })!, parseAngle(declination)!)
+	})
+
+	app.post('/:id/slew', ({ params, body }) => {
+		const [device, connection] = deviceAndConnection(params.id)
+		const { rightAscension, declination } = body as EquatorialCoordinate
+		slewTo(connection, device, parseAngle(rightAscension, { isHour: true })!, parseAngle(declination)!)
+	})
+
+	app.post('/:id/sync', ({ params, body }) => {
+		const [device, connection] = deviceAndConnection(params.id)
+		const { rightAscension, declination } = body as EquatorialCoordinate
+		sync(connection, device, parseAngle(rightAscension, { isHour: true })!, parseAngle(declination)!)
+	})
+
 	app.post('/:id/park', ({ params }) => {
-		const device = get(decodeURIComponent(params.id))!
-		const connection = injector.get(ConnectionMolecule)
-		park(connection.get(), device)
+		const [device, connection] = deviceAndConnection(params.id)
+		park(connection, device)
 	})
 
 	app.post('/:id/unpark', ({ params }) => {
-		const device = get(decodeURIComponent(params.id))!
-		const connection = injector.get(ConnectionMolecule)
-		unpark(connection.get(), device)
+		const [device, connection] = deviceAndConnection(params.id)
+		unpark(connection, device)
 	})
 
 	app.post('/:id/home', ({ params }) => {
-		const device = get(decodeURIComponent(params.id))!
-		const connection = injector.get(ConnectionMolecule)
-		home(connection.get(), device)
+		const [device, connection] = deviceAndConnection(params.id)
+		home(connection, device)
 	})
 
 	app.post('/:id/tracking', ({ params, body }) => {
-		const device = get(decodeURIComponent(params.id))!
-		const connection = injector.get(ConnectionMolecule)
-		tracking(connection.get(), device, body as never)
+		const [device, connection] = deviceAndConnection(params.id)
+		tracking(connection, device, body as never)
 	})
 
-	app.post('/:id/trackMode', ({ params, body }) => {
-		const device = get(decodeURIComponent(params.id))!
-		const connection = injector.get(ConnectionMolecule)
-		trackMode(connection.get(), device, body as never)
+	app.post('/:id/trackmode', ({ params, body }) => {
+		const [device, connection] = deviceAndConnection(params.id)
+		trackMode(connection, device, body as never)
 	})
 
-	app.post('/:id/slewRate', ({ params, body }) => {
+	app.post('/:id/slewrate', ({ params, body }) => {
+		const [device, connection] = deviceAndConnection(params.id)
+		slewRate(connection, device, body as never)
+	})
+
+	app.get('/:id/position', ({ params }) => {
 		const device = get(decodeURIComponent(params.id))!
-		const connection = injector.get(ConnectionMolecule)
-		slewRate(connection.get(), device, body as never)
+		const { rightAscension, declination } = device.equatorialCoordinate
+
+		const location = geographicPositions.get(device)
+		if (!location) return { ...DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, rightAscension, declination }
+
+		const now = timeNow()
+		now.location = location
+
+		const ebpv = earth(now)
+		const fk5 = eraS2c(rightAscension, declination)
+		const fk5J2000 = precessFk5ToJ2000(fk5, now)
+		const [rightAscensionJ2000, declinationJ2000] = eraC2s(...fk5J2000)
+		const [azimuth, altitude] = altaz(fk5J2000, now, ebpv)!
+		const lstTime = lst(now)
+
+		return {
+			rightAscension,
+			declination,
+			rightAscensionJ2000,
+			declinationJ2000,
+			azimuth,
+			altitude,
+			constellation: constellation(rightAscension, declination, now),
+			lst: formatHMS(lstTime),
+			meridianAt: '00:00 (-12:00)',
+			pierSide: expectedPierSide(rightAscension, declination, lstTime),
+		} satisfies MountEquatorialCoordinatePosition
+	})
+
+	app.post('/:id/movenorth', ({ params, body }) => {
+		const [device, connection] = deviceAndConnection(params.id)
+		moveNorth(connection, device, body as never)
+	})
+
+	app.post('/:id/movesouth', ({ params, body }) => {
+		const [device, connection] = deviceAndConnection(params.id)
+		moveSouth(connection, device, body as never)
+	})
+
+	app.post('/:id/moveeast', ({ params, body }) => {
+		const [device, connection] = deviceAndConnection(params.id)
+		moveEast(connection, device, body as never)
+	})
+
+	app.post('/:id/movewest', ({ params, body }) => {
+		const [device, connection] = deviceAndConnection(params.id)
+		moveWest(connection, device, body as never)
+	})
+
+	app.post('/:id/stop', ({ params }) => {
+		const [device, connection] = deviceAndConnection(params.id)
+		stopMotion(connection, device)
 	})
 
 	return { switchVector, numberVector, textVector, add, remove, list, get, app }

@@ -9,18 +9,31 @@ import type { PickByValue, Required } from 'utility-types'
 
 export type Atom<T> = T extends MoleculeOrInterface<infer X> ? X : never
 
-export interface EquatorialCoordinate {
-	rightAscension: string | Angle
-	declination: string | Angle
+export interface EquatorialCoordinate<T = Angle> {
+	rightAscension: T
+	declination: T
+}
+
+export interface EquatorialCoordinateJ2000<T = Angle> {
+	rightAscensionJ2000: T
+	declinationJ2000: T
+}
+
+export interface HorizontalCoordinate<T = Angle> {
+	azimuth: T
+	altitude: T
+}
+
+export interface GeographicCoordinate {
+	latitude: number // deg
+	longitude: number // deg
+	elevation: number // m
 }
 
 // Atlas
 
-export interface PositionOfBody {
+export interface PositionOfBody extends GeographicCoordinate {
 	dateTime: string
-	longitude: number
-	latitude: number
-	elevation: number
 }
 
 export interface ChartOfBody {
@@ -29,13 +42,7 @@ export interface ChartOfBody {
 	stepSize: number
 }
 
-export interface BodyPosition {
-	rightAscensionJ2000: number
-	declinationJ2000: number
-	rightAscension: number
-	declination: number
-	azimuth: number
-	altitude: number
+export interface BodyPosition extends EquatorialCoordinate, EquatorialCoordinateJ2000, HorizontalCoordinate {
 	magnitude: number
 	constellation: string
 	distance: number
@@ -107,7 +114,7 @@ export interface FileSystem {
 
 // Framing
 
-export interface Framing extends EquatorialCoordinate {
+export interface Framing extends EquatorialCoordinate<string | Angle> {
 	id: number
 	hipsSurvey: string
 	width: number
@@ -172,7 +179,7 @@ export interface CloseImage {
 	id: string
 }
 
-export interface ImageInfo {
+export interface ImageInfo extends Partial<EquatorialCoordinate> {
 	path: string
 	originalPath: string
 	width: number
@@ -180,8 +187,6 @@ export interface ImageInfo {
 	mono: boolean
 	metadata: ImageMetadata
 	transformation: ImageTransformation
-	rightAscension?: Angle
-	declination?: Angle
 	headers: FitsHeader
 	solution?: PlateSolution
 }
@@ -404,11 +409,7 @@ export interface CameraCaptureTaskEvent extends WebSocketMessage {
 
 export interface Gps extends Device {
 	hasGps: boolean
-	readonly geographicCoordinate: {
-		latitude: number // deg
-		longitude: number // deg
-		elevation: number // m
-	}
+	readonly geographicCoordinate: GeographicCoordinate
 }
 
 // Mount
@@ -447,19 +448,10 @@ export interface Mount extends GuideOutput, Gps, Parkable {
 	pierSide: PierSide
 	guideRateWE: number
 	guideRateNS: number
-	readonly equatorialCoordinate: {
-		rightAscension: Angle
-		declination: Angle
-	}
+	readonly equatorialCoordinate: EquatorialCoordinate
 }
 
-export interface MountEquatorialCoordinatePosition {
-	readonly rightAscension: Angle
-	readonly declination: Angle
-	readonly rightAscensionJ2000: Angle
-	readonly declinationJ2000: Angle
-	readonly azimuth: Angle
-	readonly altitude: Angle
+export interface MountEquatorialCoordinatePosition extends Readonly<EquatorialCoordinate>, Readonly<EquatorialCoordinateJ2000>, Readonly<HorizontalCoordinate> {
 	readonly lst: string
 	readonly constellation: Constellation
 	readonly meridianAt: string

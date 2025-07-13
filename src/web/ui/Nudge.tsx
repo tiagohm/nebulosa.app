@@ -59,7 +59,7 @@ export function NudgeButton({ icon: Icon, onPointer, ...props }: NudgeButtonProp
 
 	return (
 		<Button {...props} isIconOnly onPointerCancel={handlePointerUp} onPointerDown={handlePointerDown} onPointerLeave={handlePointerUp} onPointerOut={handlePointerUp} onPointerUp={handlePointerUp} size='md' variant='light'>
-			<Icon size={16} strokeWidth={4} />
+			<Icon size={18} strokeWidth={4} />
 		</Button>
 	)
 }

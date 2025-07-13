@@ -11,7 +11,7 @@ import { type GeographicPosition, geodeticLocation, lst } from 'nebulosa/src/loc
 import { timeNow } from 'nebulosa/src/time'
 import { earth } from 'nebulosa/src/vsop87e'
 import { BusMolecule } from 'src/shared/bus'
-import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, expectedPierSide, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoved, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
+import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, expectedPierSide, type GeographicCoordinate, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoved, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
 import { ConnectionMolecule } from './connection'
 import { GuideOutputMolecule } from './guideoutput'
 import { addProperty, ask, DeviceInterfaceType, handleConnection, isInterfaceType } from './indi'
@@ -45,6 +45,10 @@ export function home(client: IndiClient, mount: Mount) {
 
 export function equatorialCoordinate(client: IndiClient, mount: Mount, rightAscension: Angle, declination: Angle) {
 	client.sendNumber({ device: mount.name, name: 'EQUATORIAL_EOD_COORD', elements: { RA: toHour(rightAscension), DEC: toDeg(declination) } })
+}
+
+export function geographicCoordinate(client: IndiClient, mount: Mount, { latitude, longitude, elevation }: GeographicCoordinate) {
+	client.sendNumber({ device: mount.name, name: 'GEOGRAPHIC_COORD', elements: { LAT: latitude, LONG: longitude, ELEV: elevation } })
 }
 
 export function sync(client: IndiClient, mount: Mount, rightAscension: Angle, declination: Angle) {
@@ -307,9 +311,9 @@ export const MountMolecule = molecule((m) => {
 				return
 			}
 			case 'GEOGRAPHIC_COORD': {
-				const longitude = deg(message.elements.LONG!.value)
-				const latitude = deg(message.elements.LAT!.value)
-				const elevation = meter(message.elements.ELEV!.value)
+				const longitude = message.elements.LONG!.value
+				const latitude = message.elements.LAT!.value
+				const elevation = message.elements.ELEV!.value
 				let updated = false
 
 				if (device.geographicCoordinate.longitude !== longitude) {
@@ -436,19 +440,19 @@ export const MountMolecule = molecule((m) => {
 
 	app.post('/:id/goto', ({ params, body }) => {
 		const [device, connection] = deviceAndConnection(params.id)
-		const { rightAscension, declination } = body as EquatorialCoordinate
+		const { rightAscension, declination } = body as EquatorialCoordinate<string | Angle>
 		goTo(connection, device, parseAngle(rightAscension, { isHour: true })!, parseAngle(declination)!)
 	})
 
 	app.post('/:id/slew', ({ params, body }) => {
 		const [device, connection] = deviceAndConnection(params.id)
-		const { rightAscension, declination } = body as EquatorialCoordinate
+		const { rightAscension, declination } = body as EquatorialCoordinate<string | Angle>
 		slewTo(connection, device, parseAngle(rightAscension, { isHour: true })!, parseAngle(declination)!)
 	})
 
 	app.post('/:id/sync', ({ params, body }) => {
 		const [device, connection] = deviceAndConnection(params.id)
-		const { rightAscension, declination } = body as EquatorialCoordinate
+		const { rightAscension, declination } = body as EquatorialCoordinate<string | Angle>
 		sync(connection, device, parseAngle(rightAscension, { isHour: true })!, parseAngle(declination)!)
 	})
 
@@ -531,6 +535,11 @@ export const MountMolecule = molecule((m) => {
 	app.post('/:id/movewest', ({ params, body }) => {
 		const [device, connection] = deviceAndConnection(params.id)
 		moveWest(connection, device, body as never)
+	})
+
+	app.post('/:id/location', ({ params, body }) => {
+		const [device, connection] = deviceAndConnection(params.id)
+		geographicCoordinate(connection, device, body as never)
 	})
 
 	app.post('/:id/stop', ({ params }) => {

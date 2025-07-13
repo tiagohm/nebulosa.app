@@ -21,7 +21,7 @@ export function DropdownButton<T extends string = string>({ buttonProps, label, 
 			<Dropdown placement='bottom-end'>
 				<DropdownTrigger>
 					<Button {...dropdownButtonProps} isIconOnly size={size}>
-						<ChevronDownIcon size={16} />
+						<ChevronDownIcon size={18} />
 					</Button>
 				</DropdownTrigger>
 				<DropdownMenu {...dropdownMenuProps} disallowEmptySelection onSelectionChange={(value) => onValueChange?.((value as Set<string>).values().next().value as never)} selectedKeys={new Set([value])} selectionMode='single'>

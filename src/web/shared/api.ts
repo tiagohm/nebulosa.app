@@ -1,9 +1,10 @@
 import { addToast } from '@heroui/react'
+import type { Angle } from 'nebulosa/src/angle'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, CreateDirectory, Device, EquatorialCoordinate, FileSystem, Framing, ImageInfo, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, SlewRate, StarDetection, TrackMode } from 'src/shared/types'
+import type { Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, CreateDirectory, Device, EquatorialCoordinate, FileSystem, Framing, GeographicCoordinate, ImageInfo, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, SlewRate, StarDetection, TrackMode } from 'src/shared/types'
 import { X_IMAGE_INFO_HEADER } from 'src/shared/types'
 import wretch, { type WretchError } from 'wretch'
 
@@ -100,15 +101,15 @@ export namespace Api {
 			return json<Mount>(`/mounts/${name}`, 'get')
 		}
 
-		export function goTo(mount: Mount, coordinate: EquatorialCoordinate) {
+		export function goTo(mount: Mount, coordinate: EquatorialCoordinate<string | Angle>) {
 			return res(`/mounts/${mount.name}/goto`, 'post', coordinate)
 		}
 
-		export function slew(mount: Mount, coordinate: EquatorialCoordinate) {
+		export function slew(mount: Mount, coordinate: EquatorialCoordinate<string | Angle>) {
 			return res(`/mounts/${mount.name}/slew`, 'post', coordinate)
 		}
 
-		export function sync(mount: Mount, coordinate: EquatorialCoordinate) {
+		export function sync(mount: Mount, coordinate: EquatorialCoordinate<string | Angle>) {
 			return res(`/mounts/${mount.name}/sync`, 'post', coordinate)
 		}
 
@@ -150,6 +151,10 @@ export namespace Api {
 
 		export function moveWest(mount: Mount, enable: boolean) {
 			return res(`/mounts/${mount.name}/movewest`, 'post', enable)
+		}
+
+		export function location(mount: Mount, coordinate: GeographicCoordinate) {
+			return res(`/mounts/${mount.name}/location`, 'post', coordinate)
 		}
 
 		export function stop(mount: Mount) {

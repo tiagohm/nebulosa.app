@@ -1,6 +1,6 @@
 import { createScope, molecule, onMount } from 'bunshi'
 import { BusMolecule } from 'src/shared/bus'
-import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type Framing, type Mount, type MountEquatorialCoordinatePosition, type MountUpdated, type TargetCoordinateType, type TrackMode } from 'src/shared/types'
+import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, type Framing, type GeographicCoordinate, type Mount, type MountEquatorialCoordinatePosition, type MountUpdated, type TargetCoordinateType, type TrackMode } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
@@ -13,10 +13,8 @@ export interface MountScopeValue {
 	readonly mount: Mount
 }
 
-export interface MountTargetCoordinate {
+export interface MountTargetCoordinate extends EquatorialCoordinate<string> {
 	type: TargetCoordinateType
-	rightAscension: string
-	declination: string
 	action: TargetCoordinateAction
 }
 
@@ -25,6 +23,10 @@ export interface MountState {
 	connecting: boolean
 	readonly targetCoordinate: MountTargetCoordinate
 	readonly currentCoordinate: MountEquatorialCoordinatePosition
+	readonly location: {
+		showModal: boolean
+		coordinate: Mount['geographicCoordinate']
+	}
 }
 
 const DEFAULT_TARGET_COORDINATE: MountState['targetCoordinate'] = {
@@ -51,6 +53,10 @@ export const MountMolecule = molecule((m, s) => {
 			connecting: false,
 			targetCoordinate: simpleLocalStorage.get<MountState['targetCoordinate']>(`mount.${scope.mount.name}.targetCoordinate`, () => structuredClone(DEFAULT_TARGET_COORDINATE)),
 			currentCoordinate: DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION,
+			location: {
+				showModal: false,
+				coordinate: scope.mount.geographicCoordinate,
+			},
 		})
 
 	mountStateMap.set(scope.mount.name, state)
@@ -59,6 +65,10 @@ export const MountMolecule = molecule((m, s) => {
 	Api.Mount.get(scope.mount.name).then((mount) => {
 		if (!mount) return
 		Object.assign(state.mount, mount)
+
+		if (mount.connected && !mount.parked) {
+			void updateCurrentCoordinate()
+		}
 	})
 
 	onMount(() => {
@@ -176,9 +186,18 @@ export const MountMolecule = molecule((m, s) => {
 		}
 	}
 
+	function location(coordinate: GeographicCoordinate) {
+		console.info(coordinate)
+		return Api.Mount.location(scope.mount, coordinate)
+	}
+
 	function stop() {
 		return Api.Mount.stop(scope.mount)
 	}
 
-	return { state, scope, connectOrDisconnect, updateTargetCoordinate, handleTargetCoordinateAction, park, unpark, togglePark, home, tracking, trackMode, slewRate, moveTo, stop }
+	function toggleLocationModal(force?: boolean) {
+		state.location.showModal = force ?? !state.location.showModal
+	}
+
+	return { state, scope, connectOrDisconnect, updateTargetCoordinate, handleTargetCoordinateAction, toggleLocationModal, park, unpark, togglePark, home, tracking, trackMode, slewRate, moveTo, location, stop }
 })

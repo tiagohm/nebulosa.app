@@ -114,7 +114,7 @@ export interface FileSystem {
 
 // Framing
 
-export interface Framing extends EquatorialCoordinate<string | Angle> {
+export interface Framing extends EquatorialCoordinate<string> {
 	id: number
 	hipsSurvey: string
 	width: number
@@ -485,7 +485,7 @@ export interface Notification extends WebSocketMessage {
 
 export type PlateSolverType = 'ASTAP' | 'PIXINSIGHT' | 'ASTROMETRY_NET' | 'NOVA_ASTROMETRY_NET' | 'SIRIL'
 
-export interface PlateSolveStart extends Omit<PlateSolveOptions, 'ra' | 'dec' | 'radius'> {
+export interface PlateSolveStart extends Omit<PlateSolveOptions, 'ra' | 'dec' | 'radius'>, EquatorialCoordinate<string> {
 	id: string
 	type: PlateSolverType
 	executable: string
@@ -497,8 +497,6 @@ export interface PlateSolveStart extends Omit<PlateSolveOptions, 'ra' | 'dec' | 
 	apiKey?: string
 	slot?: number
 	blind: boolean
-	ra: string | number // hours
-	dec: string | number // deg
 	radius: number // deg
 }
 
@@ -582,8 +580,8 @@ export const DEFAULT_PLATE_SOLVE_START: PlateSolveStart = {
 	pixelSize: 0,
 	fov: 0,
 	blind: true,
-	ra: '00 00 00',
-	dec: '+00 00 00',
+	rightAscension: '00 00 00',
+	declination: '+00 00 00',
 	radius: 4,
 	downsample: 0,
 	timeout: 300000, // 5 minutes
@@ -594,8 +592,8 @@ export const DEFAULT_PLATE_SOLVE_START: PlateSolveStart = {
 export const DEFAULT_FRAMING: Framing = {
 	id: 0,
 	hipsSurvey: 'CDS/P/DSS2/color',
-	rightAscension: '00 00 00',
-	declination: '+00 00 00',
+	rightAscension: '00 00 00.00',
+	declination: '+00 00 00.00',
 	width: 800,
 	height: 600,
 	fov: 1,

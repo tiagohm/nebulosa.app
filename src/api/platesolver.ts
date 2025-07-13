@@ -13,8 +13,8 @@ export const PlateSolverMolecule = molecule(() => {
 
 	// Starts a plate solving task based on the request parameters
 	async function start(req: PlateSolveStart): Promise<PlateSolution> {
-		const ra = parseAngle(req.ra, { isHour: true })
-		const dec = parseAngle(req.dec)
+		const ra = parseAngle(req.rightAscension, { isHour: true })
+		const dec = parseAngle(req.declination)
 		const radius = req.blind || !req.radius ? 0 : deg(req.radius)
 
 		const aborter = new AbortController()

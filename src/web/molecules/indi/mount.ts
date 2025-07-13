@@ -199,5 +199,9 @@ export const MountMolecule = molecule((m, s) => {
 		state.location.showModal = force ?? !state.location.showModal
 	}
 
-	return { state, scope, connectOrDisconnect, updateTargetCoordinate, handleTargetCoordinateAction, toggleLocationModal, park, unpark, togglePark, home, tracking, trackMode, slewRate, moveTo, location, stop }
+	function close() {
+		equipment.closeModal('mount', scope.mount)
+	}
+
+	return { state, scope, connectOrDisconnect, updateTargetCoordinate, handleTargetCoordinateAction, toggleLocationModal, park, unpark, togglePark, home, tracking, trackMode, slewRate, moveTo, location, stop, close }
 })

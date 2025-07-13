@@ -4,7 +4,6 @@ import { ConfirmationMolecule } from '@/molecules/confirmation'
 import { CameraScope } from '@/molecules/indi/camera'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { MountScope } from '@/molecules/indi/mount'
-import { ModalScope } from '@/molecules/modal'
 import { WebSocketMolecule } from '@/molecules/ws'
 import { Camera } from './Camera'
 import { Confirmation } from './Confirmation'
@@ -28,28 +27,20 @@ export default function Home() {
 			{devices.camera.map(
 				(camera) =>
 					camera.show && (
-						<ScopeProvider key={camera.name} scope={ModalScope} value={{ name: `camera-${camera.name}` }}>
-							<ScopeProvider scope={CameraScope} value={{ camera: camera as never }}>
-								<Camera />
-							</ScopeProvider>
+						<ScopeProvider key={camera.name} scope={CameraScope} value={{ camera: camera as never }}>
+							<Camera />
 						</ScopeProvider>
 					),
 			)}
 			{devices.mount.map(
 				(mount) =>
 					mount.show && (
-						<ScopeProvider key={mount.name} scope={ModalScope} value={{ name: `mount-${mount.name}` }}>
-							<ScopeProvider scope={MountScope} value={{ mount: mount as never }}>
-								<Mount />
-							</ScopeProvider>
+						<ScopeProvider key={mount.name} scope={MountScope} value={{ mount: mount as never }}>
+							<Mount />
 						</ScopeProvider>
 					),
 			)}
-			{showConfirmation && (
-				<ScopeProvider scope={ModalScope} value={{ name: 'confirmation' }}>
-					<Confirmation />
-				</ScopeProvider>
-			)}
+			{showConfirmation && <Confirmation />}
 		</div>
 	)
 }

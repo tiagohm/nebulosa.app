@@ -33,7 +33,7 @@ export function HipsSurveySelect({ items, isDisabled, onValueChange, value, ...p
 
 export function HipsSurveySelectItem({ item }: { item: HipsSurvey }) {
 	return (
-		<div className='p-1 flex flex-col justify-center gap-0'>
+		<div className='p-1 w-full flex flex-col justify-center gap-0'>
 			<span className='font-bold whitespace-nowrap'>{item.id}</span>
 			<span className='text-default-500 text-xs flex gap-1 items-center'>
 				{item.regime} ({(item.skyFraction * 100).toFixed(1)}%)

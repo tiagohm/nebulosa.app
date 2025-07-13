@@ -5,7 +5,6 @@ import { memo, useCallback } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerScope } from '@/molecules/filepicker'
 import { ImageWorkspaceMolecule } from '@/molecules/image/workspace'
-import { ModalScope } from '@/molecules/modal'
 import { FilePicker } from './FilePicker'
 
 export const ImagePickerButton = memo(() => {
@@ -31,9 +30,7 @@ export const ImagePickerButton = memo(() => {
 			</Tooltip>
 			{showModal && (
 				<ScopeProvider scope={FilePickerScope} value={{ path: workspace.state.lastPath, filter: '*.{fits,fit,xisf}', multiple: true }}>
-					<ScopeProvider scope={ModalScope} value={{ name: 'open-image', isAlwaysOnTop: true }}>
-						<FilePicker header='Open Image' onChoose={handleChoose} />
-					</ScopeProvider>
+					<FilePicker header='Open Image' name='open-image' onChoose={handleChoose} />
 				</ScopeProvider>
 			)}
 		</>

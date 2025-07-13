@@ -91,7 +91,7 @@ export const FilePickerMolecule = molecule((m, s) => {
 
 	function navigateToParent() {
 		if (state.directoryTree.length <= 1) return
-		navigateTo(state.directoryTree[state.directoryTree.length - 2])
+		void navigateTo(state.directoryTree[state.directoryTree.length - 2])
 	}
 
 	function toggleCreateDirectory() {
@@ -116,7 +116,7 @@ export const FilePickerMolecule = molecule((m, s) => {
 		if (!entry) return
 
 		if (state.mode !== 'directory' && entry.directory) {
-			navigateTo(entry)
+			void navigateTo(entry)
 			return
 		}
 
@@ -131,7 +131,7 @@ export const FilePickerMolecule = molecule((m, s) => {
 		}
 	}
 
-	function unselectAll(event?: React.PointerEvent<HTMLElement>) {
+	function unselectAll(event?: React.PointerEvent<Element>) {
 		event?.stopPropagation()
 		state.selected.length = 0
 	}

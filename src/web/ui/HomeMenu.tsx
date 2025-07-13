@@ -1,5 +1,5 @@
 import { Button, Chip, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
-import { ScopeProvider, useMolecule } from 'bunshi/react'
+import { useMolecule } from 'bunshi/react'
 import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -29,7 +29,6 @@ import { CalculatorMolecule } from '@/molecules/calculator'
 import { FramingMolecule } from '@/molecules/framing'
 import { HomeMolecule } from '@/molecules/home'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
-import { ModalScope } from '@/molecules/modal'
 import { About } from './About'
 import { Calculator } from './Calculator'
 import { Framing } from './Framing'
@@ -180,21 +179,9 @@ export const HomeMenu = memo(() => {
 					</div>
 				</PopoverContent>
 			</Popover>
-			{showFramingModal && (
-				<ScopeProvider scope={ModalScope} value={{ name: 'framing' }}>
-					<Framing />
-				</ScopeProvider>
-			)}
-			{showAboutModal && (
-				<ScopeProvider scope={ModalScope} value={{ name: 'about' }}>
-					<About />
-				</ScopeProvider>
-			)}
-			{showCalculator && (
-				<ScopeProvider scope={ModalScope} value={{ name: 'calculator' }}>
-					<Calculator />
-				</ScopeProvider>
-			)}
+			{showFramingModal && <Framing />}
+			{showAboutModal && <About />}
+			{showCalculator && <Calculator />}
 		</>
 	)
 })

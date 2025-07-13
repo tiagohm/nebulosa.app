@@ -1,11 +1,10 @@
 import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, SelectItem, type SharedSelection, Tooltip } from '@heroui/react'
-import { ScopeProvider, useMolecule } from 'bunshi/react'
+import { useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
 import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
-import { ModalScope } from '@/molecules/modal'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
 
@@ -99,11 +98,7 @@ export const ConnectionBox = memo(() => {
 				</Select>
 				<ConnectButton isConnected={!!connected} isLoading={loading} onPointerUp={connection.connect} />
 			</div>
-			{showModal && (
-				<ScopeProvider scope={ModalScope} value={{ name: 'connection', isAlwaysOnTop: true }}>
-					<ConnectionEdit />
-				</ScopeProvider>
-			)}
+			{showModal && <ConnectionEdit />}
 		</>
 	)
 })

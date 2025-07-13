@@ -13,10 +13,10 @@ export interface MapViewerProps extends React.HTMLAttributes<HTMLDivElement> {
 	readonly onPositionChange?: (position: LatLngTuple) => void
 }
 
-export function MapViewer({ position = [0, 0], zoom = 2, width = 200, height = 200, onPositionChange, ...props }: MapViewerProps) {
+export function MapViewer({ position = [0, 0], zoom = 5, width = 200, height = 200, onPositionChange, ...props }: MapViewerProps) {
 	return (
 		<div {...props}>
-			<MapContainer center={position} doubleClickZoom={false} style={{ height, width }} zoom={zoom}>
+			<MapContainer center={position} doubleClickZoom={false} style={{ height, width }} zoom={zoom} zoomControl={false}>
 				<TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' />
 				<DraggableMarker onPositionChange={onPositionChange} position={position} />
 			</MapContainer>

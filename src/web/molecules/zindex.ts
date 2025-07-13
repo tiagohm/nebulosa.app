@@ -3,6 +3,8 @@ import { molecule } from 'bunshi'
 // Keys and values for z-index management
 const zIndex: [string, number][] = []
 
+const NAME_INVALID_CHAR_REGEX = /[\W]+/g
+
 // Molecule that manages z-index for modals and other elements
 // It allows to increment the z-index for a specific key and manage the order of elements
 // It is used to ensure that the elements are always on top of each other in the correct order
@@ -19,6 +21,8 @@ export const ZIndexMolecule = molecule(() => {
 
 	// Computes the new z-index for a specific key for ensuring that it is always on top
 	function increment(key: string, force: boolean = false) {
+		key = key.replace(NAME_INVALID_CHAR_REGEX, '-')
+
 		const index = zIndex.findIndex((e) => e[0] === key)
 
 		if (index < 0) {
@@ -51,11 +55,17 @@ export const ZIndexMolecule = molecule(() => {
 		}
 	}
 
+	function apply(element: HTMLElement, key: string) {
+		key = key.replace(NAME_INVALID_CHAR_REGEX, '-')
+		element.style.zIndex = `var(--z-index-${key}) !important`
+	}
+
 	function remove(key: string) {
+		key = key.replace(NAME_INVALID_CHAR_REGEX, '-')
 		const index = zIndex.findIndex((e) => e[0] === key)
 		if (index < 0) return
 		zIndex.splice(index, 1)
 	}
 
-	return { increment, remove }
+	return { increment, apply, remove }
 })

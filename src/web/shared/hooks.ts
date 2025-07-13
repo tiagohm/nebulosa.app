@@ -1,7 +1,7 @@
 import { createUseGesture, dragAction } from '@use-gesture/react'
 import { useMolecule } from 'bunshi/react'
-import { useCallback, useRef } from 'react'
-import { ModalMolecule } from '@/molecules/modal'
+import { useCallback, useEffect, useRef } from 'react'
+import { ZIndexMolecule } from '@/molecules/zindex'
 
 export interface UseDraggableProps {
 	name: string
@@ -14,21 +14,21 @@ const useGesture = createUseGesture([dragAction])
 const modalTransformMap = new Map<string, { x: number; y: number }>()
 
 // A hook for managing a modal with draggable functionality.
-export function useModal(onClose?: () => void) {
-	const modal = useMolecule(ModalMolecule)
+export function useModal(name: string, onClose?: VoidFunction) {
+	const zIndex = useMolecule(ZIndexMolecule)
 	const modalRef = useRef<HTMLElement>(null)
-	const xy = useRef(modalTransformMap.get(modal.scope.name) ?? { x: 0, y: 0 })
+	const xy = useRef(modalTransformMap.get(name) ?? { x: 0, y: 0 })
 	const boundary = useRef({ minLeft: 0, minTop: 0, maxLeft: 0, maxTop: 0 })
 
 	// Initialize the position of the modal if it doesn't exist in the map
-	modalTransformMap.set(modal.scope.name, xy.current)
+	modalTransformMap.set(name, xy.current)
 
 	const bind = useGesture(
 		{
 			onDragStart: () => {
-				modal.onDragStart()
-
 				if (!modalRef.current) return
+
+				zIndex.increment(name, true)
 
 				const { x, y } = xy.current
 				const { left, top, width, height } = modalRef.current.getBoundingClientRect()
@@ -67,28 +67,28 @@ export function useModal(onClose?: () => void) {
 		},
 	)
 
-	const ref = useCallback(
-		(node: HTMLElement | null) => {
-			if (node) {
-				modal.props.ref(node)
-				modalRef.current = node
+	const ref = useCallback((node: HTMLElement | null) => {
+		if (node) {
+			modalRef.current = node
 
-				// Set the initial position of the modal based on the stored values
-				modalRef.current.style.transform = `translate(${xy.current.x}px, ${xy.current.y}px)`
-			}
-		},
-		[modal],
-	)
+			// Set the initial position of the modal based on the stored values
+			modalRef.current.style.transform = `translate(${xy.current.x}px, ${xy.current.y}px)`
 
-	const onOpenChange = useCallback(
-		(isOpen: boolean) => {
-			modal.props.onOpenChange(isOpen)
-			if (!isOpen && onClose) onClose()
-		},
-		[modal, onClose],
-	)
+			// Set the z-index of the modal
+			zIndex.apply(modalRef.current, name)
+		}
+	}, [])
+
+	const close = useCallback(() => {
+		zIndex.remove(name)
+		onClose?.()
+	}, [])
+
+	useEffect(() => {
+		zIndex.increment(name, true)
+	}, [])
 
 	const moveProps = { ...bind(), style: { cursor: 'move' } }
 
-	return { props: { ...modal.props, ref, onOpenChange }, moveProps }
+	return { ref, close, moveProps }
 }

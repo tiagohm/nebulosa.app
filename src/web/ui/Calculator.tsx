@@ -1,53 +1,42 @@
-import { Card, CardBody, CardHeader, Chip, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Tab, Tabs } from '@heroui/react'
+import { Card, CardBody, CardHeader, Chip, NumberInput, Tab, Tabs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { CalculatorMolecule } from '@/molecules/calculator'
-import { useModal } from '@/shared/hooks'
+import { Modal } from './Modal'
 
 export const Calculator = memo(() => {
 	const calculator = useMolecule(CalculatorMolecule)
-	const modal = useModal(() => calculator.close())
 
 	return (
-		<Modal {...modal.props} classNames={{ base: 'max-w-[440px] max-h-[70vh]', wrapper: 'pointer-events-none' }}>
-			<ModalContent>
-				{() => (
-					<>
-						<ModalHeader {...modal.moveProps} className='flex flex-row items-center'>
-							Calculator
-						</ModalHeader>
-						<ModalBody>
-							<div className='w-full px-1 py-2'>
-								<Tabs classNames={{ panel: 'w-full' }} isVertical>
-									<Tab key='focalLength' title='Focal Length'>
-										<FocalLength />
-									</Tab>
-									<Tab key='focalRatio' title='Focal Ratio'>
-										<FocalRatio />
-									</Tab>
-									<Tab key='dawes' title='Dawes Limit'>
-										<DawesLimit />
-									</Tab>
-									<Tab key='rayleigh' title='Rayleigh Limit'>
-										<RayleighLimit />
-									</Tab>
-									<Tab key='limitingMagnitude' title='Limiting Magnitude'>
-										<LimitingMagnitude />
-									</Tab>
-									<Tab key='lightGraspRatio' title='Light Grasp Ratio'>
-										<LightGraspRatio />
-									</Tab>
-									<Tab key='ccdResolution' title='CCD Resolution'>
-										<CCDResolution />
-									</Tab>
-								</Tabs>
-							</div>
-						</ModalBody>
-						<ModalFooter {...modal.moveProps}></ModalFooter>
-					</>
-				)}
-			</ModalContent>
+		<Modal header='Calculator' name='calculator' onClose={calculator.close}>
+			<div className='max-w-[440px]'>
+				<div className='w-full px-1 py-2'>
+					<Tabs classNames={{ panel: 'w-full' }} isVertical>
+						<Tab key='focalLength' title='Focal Length'>
+							<FocalLength />
+						</Tab>
+						<Tab key='focalRatio' title='Focal Ratio'>
+							<FocalRatio />
+						</Tab>
+						<Tab key='dawes' title='Dawes Limit'>
+							<DawesLimit />
+						</Tab>
+						<Tab key='rayleigh' title='Rayleigh Limit'>
+							<RayleighLimit />
+						</Tab>
+						<Tab key='limitingMagnitude' title='Limiting Magnitude'>
+							<LimitingMagnitude />
+						</Tab>
+						<Tab key='lightGraspRatio' title='Light Grasp Ratio'>
+							<LightGraspRatio />
+						</Tab>
+						<Tab key='ccdResolution' title='CCD Resolution'>
+							<CCDResolution />
+						</Tab>
+					</Tabs>
+				</div>
+			</div>
 		</Modal>
 	)
 })

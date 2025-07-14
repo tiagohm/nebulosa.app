@@ -49,7 +49,7 @@ export const CameraMolecule = molecule((m, s) => {
 	cameraStateMap.set(scope.camera.name, state)
 
 	// Fetches the camera
-	Api.Camera.get(scope.camera.name).then((camera) => {
+	Api.Cameras.get(scope.camera.name).then((camera) => {
 		if (!camera) return
 		Object.assign(state.camera, camera)
 		updateRequestFrame(camera.frame)
@@ -141,11 +141,11 @@ export const CameraMolecule = molecule((m, s) => {
 	}
 
 	function cooler(enabled: boolean) {
-		return Api.Camera.cooler(state.camera, enabled)
+		return Api.Cameras.cooler(state.camera, enabled)
 	}
 
 	function temperature(value: number) {
-		return Api.Camera.temperature(state.camera, value)
+		return Api.Cameras.temperature(state.camera, value)
 	}
 
 	function fullscreen() {
@@ -157,16 +157,16 @@ export const CameraMolecule = molecule((m, s) => {
 
 	function start() {
 		state.capturing = true
-		return Api.Camera.start(state.camera, state.request)
+		return Api.Cameras.start(state.camera, state.request)
 	}
 
 	function stop() {
-		return Api.Camera.stop(state.camera)
+		return Api.Cameras.stop(state.camera)
 	}
 
 	function close() {
 		return equipment.closeModal('camera', scope.camera)
 	}
 
-	return { scope, state, connectOrDisconnect, update, cooler, temperature, fullscreen, start, stop, close }
+	return { scope, state, connectOrDisconnect, update, cooler, temperature, fullscreen, start, stop, close } as const
 })

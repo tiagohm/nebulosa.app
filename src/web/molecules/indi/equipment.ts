@@ -98,5 +98,5 @@ export const EquipmentMolecule = molecule((m) => {
 		state[type].find((e) => e.name === device.name)!.show = false
 	}
 
-	return { state, get, add, update, remove, showModal, closeModal }
+	return { state, get, add, update, remove, showModal, closeModal } as const
 })

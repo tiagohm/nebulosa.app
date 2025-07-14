@@ -4,7 +4,7 @@ import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, CreateDirectory, Device, EquatorialCoordinate, FileSystem, Framing, GeographicCoordinate, ImageInfo, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, SlewRate, StarDetection, TrackMode } from 'src/shared/types'
+import type { Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, CreateDirectory, Device, EquatorialCoordinate, FileSystem, Framing, GeographicCoordinate, ImageInfo, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
 import { X_IMAGE_INFO_HEADER } from 'src/shared/types'
 import wretch, { type WretchError } from 'wretch'
 
@@ -22,7 +22,7 @@ export namespace Api {
 		}
 	}
 
-	export namespace Connection {
+	export namespace Connections {
 		export function list() {
 			return json<ConnectionStatus[]>('/connections', 'get')
 		}
@@ -66,7 +66,7 @@ export namespace Api {
 		}
 	}
 
-	export namespace Camera {
+	export namespace Cameras {
 		export function list() {
 			return json<Camera[]>('/cameras', 'get')
 		}
@@ -92,7 +92,7 @@ export namespace Api {
 		}
 	}
 
-	export namespace Mount {
+	export namespace Mounts {
 		export function list() {
 			return json<Mount[]>('/mounts', 'get')
 		}
@@ -163,6 +163,16 @@ export namespace Api {
 
 		export function position(mount: Mount) {
 			return json<MountEquatorialCoordinatePosition>(`/mounts/${mount.name}/position`, 'get')
+		}
+	}
+
+	export namespace Thermometers {
+		export function list() {
+			return json<Thermometer[]>('/thermometers', 'get')
+		}
+
+		export function get(name: string) {
+			return json<Thermometer>(`/thermometers/${name}`, 'get')
 		}
 	}
 

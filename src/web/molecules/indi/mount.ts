@@ -62,7 +62,7 @@ export const MountMolecule = molecule((m, s) => {
 	mountStateMap.set(scope.mount.name, state)
 
 	// Fetches the mount
-	Api.Mount.get(scope.mount.name).then((mount) => {
+	Api.Mounts.get(scope.mount.name).then((mount) => {
 		if (!mount) return
 		Object.assign(state.mount, mount)
 
@@ -112,7 +112,7 @@ export const MountMolecule = molecule((m, s) => {
 	}
 
 	async function updateCurrentCoordinate() {
-		const position = await Api.Mount.position(scope.mount)
+		const position = await Api.Mounts.position(scope.mount)
 		if (!position) return
 		Object.assign(state.currentCoordinate, position)
 	}
@@ -120,11 +120,11 @@ export const MountMolecule = molecule((m, s) => {
 	function handleTargetCoordinateAction() {
 		switch (state.targetCoordinate.action) {
 			case 'goto':
-				return Api.Mount.goTo(scope.mount, state.targetCoordinate)
+				return Api.Mounts.goTo(scope.mount, state.targetCoordinate)
 			case 'slew':
-				return Api.Mount.slew(scope.mount, state.targetCoordinate)
+				return Api.Mounts.slew(scope.mount, state.targetCoordinate)
 			case 'sync':
-				return Api.Mount.sync(scope.mount, state.targetCoordinate)
+				return Api.Mounts.sync(scope.mount, state.targetCoordinate)
 			case 'frame': {
 				const request: Partial<Framing> = {
 					// TODO: Use computed target coordinates RA/DEC
@@ -138,11 +138,11 @@ export const MountMolecule = molecule((m, s) => {
 	}
 
 	function park() {
-		return Api.Mount.park(scope.mount)
+		return Api.Mounts.park(scope.mount)
 	}
 
 	function unpark() {
-		return Api.Mount.unpark(scope.mount)
+		return Api.Mounts.unpark(scope.mount)
 	}
 
 	function togglePark() {
@@ -150,58 +150,59 @@ export const MountMolecule = molecule((m, s) => {
 	}
 
 	function home() {
-		return Api.Mount.home(scope.mount)
+		return Api.Mounts.home(scope.mount)
 	}
 
 	function tracking(enabled: boolean) {
-		return Api.Mount.tracking(scope.mount, enabled)
+		return Api.Mounts.tracking(scope.mount, enabled)
 	}
 
 	function trackMode(mode: TrackMode) {
-		return Api.Mount.trackMode(scope.mount, mode)
+		return Api.Mounts.trackMode(scope.mount, mode)
 	}
 
 	function slewRate(rate: string) {
-		return Api.Mount.slewRate(scope.mount, rate)
+		return Api.Mounts.slewRate(scope.mount, rate)
 	}
 
 	function moveTo(direction: NudgeDirection, down: boolean) {
 		switch (direction) {
 			case 'upLeft':
-				return Promise.all([Api.Mount.moveNorth(scope.mount, down), Api.Mount.moveWest(scope.mount, down)])
+				return Promise.all([Api.Mounts.moveNorth(scope.mount, down), Api.Mounts.moveWest(scope.mount, down)])
 			case 'upRight':
-				return Promise.all([Api.Mount.moveNorth(scope.mount, down), Api.Mount.moveEast(scope.mount, down)])
+				return Promise.all([Api.Mounts.moveNorth(scope.mount, down), Api.Mounts.moveEast(scope.mount, down)])
 			case 'downLeft':
-				return Promise.all([Api.Mount.moveSouth(scope.mount, down), Api.Mount.moveWest(scope.mount, down)])
+				return Promise.all([Api.Mounts.moveSouth(scope.mount, down), Api.Mounts.moveWest(scope.mount, down)])
 			case 'downRight':
-				return Promise.all([Api.Mount.moveSouth(scope.mount, down), Api.Mount.moveEast(scope.mount, down)])
+				return Promise.all([Api.Mounts.moveSouth(scope.mount, down), Api.Mounts.moveEast(scope.mount, down)])
 			case 'up':
-				return Api.Mount.moveNorth(scope.mount, down)
+				return Api.Mounts.moveNorth(scope.mount, down)
 			case 'down':
-				return Api.Mount.moveSouth(scope.mount, down)
+				return Api.Mounts.moveSouth(scope.mount, down)
 			case 'left':
-				return Api.Mount.moveWest(scope.mount, down)
+				return Api.Mounts.moveWest(scope.mount, down)
 			case 'right':
-				return Api.Mount.moveEast(scope.mount, down)
+				return Api.Mounts.moveEast(scope.mount, down)
 		}
 	}
 
 	function location(coordinate: GeographicCoordinate) {
 		console.info(coordinate)
-		return Api.Mount.location(scope.mount, coordinate)
+		return Api.Mounts.location(scope.mount, coordinate)
 	}
 
 	function stop() {
-		return Api.Mount.stop(scope.mount)
+		return Api.Mounts.stop(scope.mount)
 	}
 
 	function toggleLocationModal(force?: boolean) {
 		state.location.showModal = force ?? !state.location.showModal
 	}
 
+	// Closes the mount modal
 	function close() {
 		equipment.closeModal('mount', scope.mount)
 	}
 
-	return { state, scope, connectOrDisconnect, updateTargetCoordinate, handleTargetCoordinateAction, toggleLocationModal, park, unpark, togglePark, home, tracking, trackMode, slewRate, moveTo, location, stop, close }
+	return { state, scope, connectOrDisconnect, updateTargetCoordinate, handleTargetCoordinateAction, toggleLocationModal, park, unpark, togglePark, home, tracking, trackMode, slewRate, moveTo, location, stop, close } as const
 })

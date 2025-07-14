@@ -13,6 +13,8 @@ export const WebSocketMolecule = molecule((m) => {
 	ws.addEventListener('close', (e) => console.info('web socket close', e))
 
 	ws.addEventListener('message', (message) => {
+		if (!bus.hasSubscribers()) return
+
 		const data = JSON.parse(message.data) as DeviceMessageEvent
 
 		switch (data.type) {

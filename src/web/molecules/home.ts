@@ -41,5 +41,5 @@ export const HomeMolecule = molecule((m) => {
 		}
 	}
 
-	return { state, toggleMenu, select }
+	return { state, toggleMenu, select } as const
 })

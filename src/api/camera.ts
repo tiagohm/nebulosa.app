@@ -419,6 +419,7 @@ export const CameraMolecule = molecule((m) => {
 		cameras.set(device.name, device)
 		wsm.send<CameraAdded>({ type: 'camera:add', device })
 		bus.emit('camera:add', device)
+		console.info('camera added:', device.name)
 	}
 
 	// Removes a camera device
@@ -432,6 +433,7 @@ export const CameraMolecule = molecule((m) => {
 
 			wsm.send<CameraRemoved>({ type: 'camera:remove', device })
 			bus.emit('camera:remove', device)
+			console.info('camera removed:', device.name)
 		}
 	}
 

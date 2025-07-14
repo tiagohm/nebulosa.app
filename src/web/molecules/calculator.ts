@@ -89,5 +89,5 @@ export const CalculatorMolecule = molecule((m) => {
 		else if (property === 'ccdResolution') state.ccdResolution.resolution = (state.ccdResolution.pixelSize / state.ccdResolution.focalLength) * 206.265
 	}
 
-	return { state, show, close, update }
+	return { state, show, close, update } as const
 })

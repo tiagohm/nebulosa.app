@@ -7,6 +7,7 @@ import { useSnapshot } from 'valtio'
 import { FramingMolecule } from '@/molecules/framing'
 import { HipsSurveySelect } from './HipsSurveySelect'
 import { Modal } from './Modal'
+import { PoweredBy } from './PoweredBy'
 
 export const Framing = memo(() => {
 	const framing = useMolecule(FramingMolecule)
@@ -30,7 +31,12 @@ export const Framing = memo(() => {
 					</Button>
 				</>
 			}
-			header='Framing'
+			header={
+				<div className='flex flex-row items-center gap-2'>
+					<span>Framing</span>
+					<PoweredBy href='https://alasky.cds.unistra.fr/hips-image-services/hips2fits' label='hips2Fits' />
+				</div>
+			}
 			maxWidth='300px'
 			name='framing'
 			onClose={framing.close}>

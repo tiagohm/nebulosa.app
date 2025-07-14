@@ -84,6 +84,7 @@ export const GuideOutputMolecule = molecule((m) => {
 
 		wsm.send<GuideOutputAdded>({ type: 'guideOutput:add', device })
 		bus.emit('guideOutput:add', device)
+		console.info('guide output added:', device.name)
 	}
 
 	// Removes a guide output device
@@ -96,6 +97,7 @@ export const GuideOutputMolecule = molecule((m) => {
 
 			wsm.send<GuideOutputRemoved>({ type: 'guideOutput:remove', device })
 			bus.emit('guideOutput:remove', device)
+			console.info('guide output removed:', device.name)
 		}
 	}
 

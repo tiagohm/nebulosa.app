@@ -49,6 +49,7 @@ export const ThermometerMolecule = molecule((m) => {
 		thermometers.set(device.name, device)
 		wsm.send<ThermometerAdded>({ type: 'thermometer:add', device })
 		bus.emit('thermometer:add', device)
+		console.info('thermometer added:', device.name)
 	}
 
 	// Removes a thermometer device
@@ -61,6 +62,7 @@ export const ThermometerMolecule = molecule((m) => {
 
 			wsm.send<ThermometerRemoved>({ type: 'thermometer:remove', device })
 			bus.emit('thermometer:remove', device)
+			console.info('thermometer removed:', device.name)
 		}
 	}
 

@@ -25,5 +25,5 @@ export const AboutMolecule = molecule((m) => {
 		state.showModal = false
 	}
 
-	return { state, show, close }
+	return { state, show, close } as const
 })

@@ -397,6 +397,7 @@ export const MountMolecule = molecule((m) => {
 		mounts.set(device.name, device)
 		wsm.send<MountAdded>({ type: 'mount:add', device })
 		bus.emit('mount:add', device)
+		console.info('mount added:', device.name)
 	}
 
 	// Removes a mount device
@@ -409,6 +410,7 @@ export const MountMolecule = molecule((m) => {
 
 			wsm.send<MountRemoved>({ type: 'mount:remove', device })
 			bus.emit('mount:remove', device)
+			console.info('mount removed:', device.name)
 		}
 	}
 

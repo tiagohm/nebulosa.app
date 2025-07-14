@@ -136,5 +136,5 @@ export const FilePickerMolecule = molecule((m, s) => {
 		state.selected.length = 0
 	}
 
-	return { state, filter, list, navigateTo, navigateBack, navigateToParent, toggleCreateDirectory, createDirectory, select, unselectAll }
+	return { state, filter, list, navigateTo, navigateBack, navigateToParent, toggleCreateDirectory, createDirectory, select, unselectAll } as const
 })

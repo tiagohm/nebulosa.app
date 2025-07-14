@@ -736,6 +736,20 @@ export const DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION: MountEquatorialCoordi
 	pierSide: 'NEITHER',
 }
 
+export const DEFAULT_THERMOMETER: Thermometer = {
+	hasThermometer: true,
+	temperature: 0,
+	type: 'THERMOMETER',
+	id: '',
+	name: '',
+	connected: false,
+	driver: {
+		executable: '',
+		version: '',
+	},
+	properties: {},
+}
+
 export const DEFAULT_IMAGE_STRETCH: ImageStretch = {
 	auto: true,
 	shadow: 0,

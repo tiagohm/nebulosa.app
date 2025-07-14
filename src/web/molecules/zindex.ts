@@ -67,5 +67,5 @@ export const ZIndexMolecule = molecule(() => {
 		zIndex.splice(index, 1)
 	}
 
-	return { increment, apply, remove }
+	return { increment, apply, remove } as const
 })

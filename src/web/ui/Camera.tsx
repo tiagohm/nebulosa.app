@@ -44,7 +44,6 @@ export const Camera = memo(() => {
 						<span className='leading-5'>Camera</span>
 						<span className='text-xs font-normal text-gray-400 max-w-full'>{camera.scope.camera.name}</span>
 					</div>
-					<div className='flex flex-row items-center gap-2 me-6'></div>
 				</div>
 			}
 			maxWidth='380px'

@@ -89,5 +89,5 @@ export const FramingMolecule = molecule((m) => {
 		state.showModal = false
 	}
 
-	return { state, update, load, show, close }
+	return { state, update, load, show, close } as const
 })

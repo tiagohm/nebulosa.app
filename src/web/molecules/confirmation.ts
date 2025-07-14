@@ -48,5 +48,5 @@ export const ConfirmationMolecule = molecule((m) => {
 		return Api.Confirmation.confirm({ key: state.key, accepted: false })
 	}
 
-	return { state, show, close, accept, reject }
+	return { state, show, close, accept, reject } as const
 })

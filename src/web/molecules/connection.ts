@@ -40,7 +40,7 @@ export const ConnectionMolecule = molecule((m) => {
 	})
 
 	// Connect to an existing connection
-	Api.Connection.list().then((connections) => {
+	Api.Connections.list().then((connections) => {
 		if (!connections) return
 
 		for (const connection of connections) {
@@ -50,8 +50,9 @@ export const ConnectionMolecule = molecule((m) => {
 				state.selected = state.connections[index]
 				state.connected = connection
 
-				Api.Camera.list().then((cameras) => cameras?.forEach((camera) => bus.emit('camera:add', camera)))
-				Api.Mount.list().then((mounts) => mounts?.forEach((mount) => bus.emit('mount:add', mount)))
+				Api.Cameras.list().then((cameras) => cameras?.forEach((camera) => bus.emit('camera:add', camera)))
+				Api.Mounts.list().then((mounts) => mounts?.forEach((mount) => bus.emit('mount:add', mount)))
+				Api.Thermometers.list().then((thermometers) => thermometers?.forEach((thermometer) => bus.emit('thermometer:add', thermometer)))
 
 				break
 			}
@@ -168,13 +169,13 @@ export const ConnectionMolecule = molecule((m) => {
 	// If already connected, it disconnects
 	async function connect() {
 		if (state.connected) {
-			void Api.Connection.disconnect(state.connected.id)
+			void Api.Connections.disconnect(state.connected.id)
 			state.connected = undefined
 		} else {
 			try {
 				state.loading = true
 
-				const status = await Api.Connection.connect(state.selected)
+				const status = await Api.Connections.connect(state.selected)
 
 				if (status) {
 					state.connected = status

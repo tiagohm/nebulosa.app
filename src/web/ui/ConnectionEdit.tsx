@@ -18,9 +18,10 @@ export const ConnectionEdit = memo(() => {
 				</Button>
 			}
 			header='Connection'
+			maxWidth='240px'
 			name='connection'
 			onClose={connection.close}>
-			<div className='max-w-[260px] w-full grid grid-cols-12 gap-2'>
+			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Input className='col-span-full' label='Name' maxLength={64} onValueChange={(value) => connection.update('name', value)} placeholder='Local' size='sm' type='text' value={state.edited?.name} />
 				<Input className='col-span-7' label='Host' maxLength={128} onValueChange={(value) => connection.update('host', value)} placeholder='localhost' size='sm' type='text' value={state.edited?.host} />
 				<NumberInput className='col-span-5' label='Port' maxValue={65535} minValue={80} onValueChange={(value) => connection.update('port', value)} placeholder='7624' size='sm' value={state.edited?.port} />

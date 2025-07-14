@@ -31,9 +31,10 @@ export const ImageScnr = memo(() => {
 					<span className='text-xs font-normal text-gray-400 max-w-full'>{info.originalPath}</span>
 				</div>
 			}
+			maxWidth='295px'
 			name={`scnr-${scnr.scope.image.key}`}
 			onClose={() => viewer.closeModal('scnr')}>
-			<div className='max-w-[260px] mt-0 grid grid-cols-12 gap-2'>
+			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<ButtonGroup className='col-span-full'>
 					<Button color='secondary' onPointerUp={() => scnr.update('channel', undefined)} variant={channel === undefined ? 'flat' : 'light'}>
 						NONE

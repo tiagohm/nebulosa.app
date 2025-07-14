@@ -31,9 +31,10 @@ export const ImageAdjustment = memo(() => {
 					<span className='text-xs font-normal text-gray-400 max-w-full'>{info.originalPath}</span>
 				</div>
 			}
+			maxWidth='202px'
 			name={`adjustment-${adjustment.scope.image.key}`}
 			onClose={() => viewer.closeModal('adjustment')}>
-			<div className='max-w-[190px] mt-0 grid grid-cols-12 gap-2'>
+			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Checkbox className='col-span-full' isSelected={enabled} onValueChange={(value) => adjustment.update('enabled', value)}>
 					Enabled
 				</Checkbox>

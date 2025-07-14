@@ -12,8 +12,8 @@ export const About = memo(() => {
 	const about = useMolecule(AboutMolecule)
 
 	return (
-		<Modal name='about' onClose={about.close}>
-			<div className='max-w-[450px] grid grid-cols-12 gap-2'>
+		<Modal maxWidth='450px' name='about' onClose={about.close}>
+			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full sm:col-span-3 row-span-6 flex flex-col items-center gap-2'>
 					<img className='max-h-35' src={nebulosaLogo} />
 					<a href='https://github.com/tiagohm/nebulosa.app' rel='noreferrer' target='_blank'>

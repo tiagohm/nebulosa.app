@@ -34,9 +34,10 @@ export const Mount = memo(() => {
 						<div className='flex flex-row items-center gap-2 me-6'></div>
 					</div>
 				}
+				maxWidth='400px'
 				name={`mount-${mount.scope.mount.name}`}
 				onClose={mount.close}>
-				<div className='max-w-[380px] mt-0 grid grid-cols-12 gap-2'>
+				<div className='mt-0 grid grid-cols-12 gap-2'>
 					<div className='col-span-full flex flex-row items-center justify-between'>
 						<Chip color='primary' size='sm'>
 							{parking ? 'parking' : parked ? 'parked' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}

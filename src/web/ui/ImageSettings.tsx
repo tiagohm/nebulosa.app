@@ -26,9 +26,10 @@ export const ImageSettings = memo(() => {
 					<span className='text-xs font-normal text-gray-400 max-w-full'>{info.originalPath}</span>
 				</div>
 			}
+			maxWidth='199px'
 			name={`settings-${settings.scope.image.key}`}
 			onClose={() => viewer.closeModal('settings')}>
-			<div className='max-w-[190px] mt-0 grid grid-cols-12 gap-2'>
+			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<ImageFormatSelect className='col-span-full' onValueChange={(value) => settings.updateFormat(value)} value={transformation.format} />
 				<Checkbox isSelected={pixelated} onValueChange={(value) => settings.update('pixelated', value)}>
 					Pixelated

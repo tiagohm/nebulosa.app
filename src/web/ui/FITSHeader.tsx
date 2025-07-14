@@ -17,9 +17,10 @@ export const FITSHeader = memo(() => {
 					<span className='text-xs font-normal text-gray-400 max-w-full'>{info.originalPath}</span>
 				</div>
 			}
+			maxWidth='300px'
 			name={`fits-header-${viewer.scope.image.key}`}
 			onClose={() => viewer.closeModal('fitsHeader')}>
-			<div className='max-w-[320px] px-1 py-2'>
+			<div className='mt-0 px-1 py-2'>
 				<Listbox
 					isVirtualized
 					selectionMode='none'

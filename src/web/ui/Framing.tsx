@@ -31,9 +31,10 @@ export const Framing = memo(() => {
 				</>
 			}
 			header='Framing'
+			maxWidth='300px'
 			name='framing'
 			onClose={framing.close}>
-			<div className='mt-0 grid grid-cols-12 gap-2 max-w-[280px]'>
+			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Input className='col-span-6' isDisabled={loading} label='RA (J2000)' onValueChange={(value) => framing.update('rightAscension', value)} size='sm' value={rightAscension} />
 				<Input className='col-span-6' isDisabled={loading} label='DEC (J2000)' onValueChange={(value) => framing.update('declination', value)} size='sm' value={declination} />
 				<NumberInput className='col-span-4' isDisabled={loading} label='Width' maxValue={8192} minValue={100} onValueChange={(value) => framing.update('width', value)} size='sm' value={width} />
@@ -45,12 +46,6 @@ export const Framing = memo(() => {
 				<Checkbox className='col-span-full' isDisabled={loading} isSelected={openNewImage} onValueChange={(value) => (framing.state.openNewImage = value)}>
 					Open in new image
 				</Checkbox>
-				<div className='col-span-full text-center mt-2 text-neutral-500 text-sm'>
-					Powered by&nbsp;
-					<a className='bg-neutral-800 px-1 rounded p-1' href='https:alasky.cds.unistra.fr/hips-image-services/hips2fits' rel='noreferrer' target='_blank'>
-						hips2fits
-					</a>
-				</div>
 			</div>
 		</Modal>
 	)

@@ -26,9 +26,10 @@ export const StarDetection = memo(() => {
 					<span className='text-xs font-normal text-gray-400 max-w-full'>{info.originalPath}</span>
 				</div>
 			}
+			maxWidth='310px'
 			name={`star-detection-${starDetection.scope.image.key}`}
 			onClose={() => viewer.closeModal('starDetection')}>
-			<div className='max-w-[290px] mt-0 grid grid-cols-12 gap-2'>
+			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<StarDetectionSelect className='col-span-4' onValueChange={(value) => (starDetection.state.request.type = value)} value={request.type} />
 				<NumberInput className='col-span-4' label='Min SNR' maxValue={500} minValue={0} onValueChange={(value) => (starDetection.state.request.minSNR = value)} size='sm' value={request.minSNR} />
 				<NumberInput className='col-span-4' label='Max Stars' maxValue={2000} minValue={0} onValueChange={(value) => (starDetection.state.request.maxStars = value)} size='sm' value={request.maxStars} />
@@ -36,9 +37,9 @@ export const StarDetection = memo(() => {
 					<span className='text-sm font-bold'>COMPUTED</span>
 				</div>
 				<Input className='col-span-3' isReadOnly label='Stars' size='sm' value={stars.length.toFixed(0)} />
-				<Input className='col-span-3' isReadOnly label='HFD' size='sm' value={computed.hfd.toFixed(2)} />
+				<Input className='col-span-2' isReadOnly label='HFD' size='sm' value={computed.hfd.toFixed(2)} />
 				<Input className='col-span-2' isReadOnly label='SNR' size='sm' value={computed.snr.toFixed(0)} />
-				<Input className='col-span-4' isReadOnly label='Flux' size='sm' value={`${computed.fluxMin.toFixed(0)} | ${computed.fluxMax.toFixed(0)}`} />
+				<Input className='col-span-5' isReadOnly label='Flux' size='sm' value={`${computed.fluxMin.toFixed(0)} | ${computed.fluxMax.toFixed(0)}`} />
 				<div className='col-span-full mt-1'>
 					<span className='text-sm font-bold'>SELECTED</span>
 				</div>

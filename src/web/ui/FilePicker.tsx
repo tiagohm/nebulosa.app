@@ -24,16 +24,22 @@ export const FilePicker = memo(({ name, header, onChoose }: FilePickerProps) => 
 	return (
 		<Modal
 			footer={
-				<Badge color='success' content={selected.length} showOutline={false}>
-					<Button color='success' endContent={selected.length ? <Lucide.CircleX color='#F44336' onPointerUp={filePicker.unselectAll} size={18} /> : null} isDisabled={selected.length === 0} onPointerUp={handleChoose} startContent={<Lucide.Check size={18} />} variant='flat'>
-						Choose
+				<>
+					<Button color='danger' isDisabled={selected.length === 0} onPointerUp={filePicker.unselectAll} startContent={<Lucide.Trash size={18} />} variant='flat'>
+						Clear
 					</Button>
-				</Badge>
+					<Badge color='success' content={selected.length} showOutline={false}>
+						<Button color='success' isDisabled={selected.length === 0} onPointerUp={handleChoose} startContent={<Lucide.Check size={18} />} variant='flat'>
+							Choose
+						</Button>
+					</Badge>
+				</>
 			}
 			header={header ?? (mode === 'directory' ? 'Open Directory' : 'Open File')}
+			maxWidth='420px'
 			name={name}
 			onClose={onChoose}>
-			<div className='flex max-w-[420px] flex-col flex-wrap gap-2'>
+			<div className='mt-0 flex flex-col flex-wrap gap-2'>
 				<div className='flex flex-row items-center gap-2'>
 					<Tooltip content='Go Back' showArrow>
 						<Button color='secondary' isDisabled={history.length === 0} isIconOnly onPointerUp={filePicker.navigateBack} variant='light'>
@@ -89,7 +95,7 @@ export const FilePicker = memo(({ name, header, onChoose }: FilePickerProps) => 
 									<span className='break-all whitespace-nowrap w-0'>{item.name}</span>
 									<div className='w-full flex flex-row items-center justify-between gap-1'>
 										<span className='text-xs text-gray-500'>{format(item.updatedAt, 'yyyy-MM-dd HH:mm:ss')}</span>
-										{!item.directory && <span className='text-xs text-gray-500'> · {item.size} B</span>}
+										{!item.directory && <span className='text-xs text-gray-500'>{item.size} B</span>}
 									</div>
 								</div>
 								{mode === 'directory' && (

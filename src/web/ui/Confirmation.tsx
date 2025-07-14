@@ -23,9 +23,10 @@ export const Confirmation = memo(() => {
 				</>
 			}
 			header='Confirmation'
+			maxWidth='340px'
 			name='confirmation'
 			onClose={confirmation.close}>
-			<div className='max-w-[340px] px-1 py-2'>{message}</div>
+			<div className='px-1 py-2'>{message}</div>
 		</Modal>
 	)
 })

@@ -41,9 +41,10 @@ export const ImageStretch = memo(() => {
 					<span className='text-xs font-normal text-gray-400 max-w-full'>{info.originalPath}</span>
 				</div>
 			}
+			maxWidth='289px'
 			name={`stretch-${stretch.scope.image.key}`}
 			onClose={() => viewer.closeModal('stretch')}>
-			<div className='max-w-[255px] mt-0 grid grid-cols-12 gap-2'>
+			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<NumberInput className='col-span-6' label='Shadow' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('shadow', value)} size='sm' value={shadow} />
 				<NumberInput className='col-span-6' label='Highlight' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('highlight', value)} size='sm' value={highlight} />
 				<Slider className='col-span-full' maxValue={65536} minValue={0} onChange={handleShadowHighlightChange} step={8} value={[shadow, highlight]} />

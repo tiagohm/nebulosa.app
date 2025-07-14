@@ -47,9 +47,10 @@ export const Camera = memo(() => {
 					<div className='flex flex-row items-center gap-2 me-6'></div>
 				</div>
 			}
+			maxWidth='380px'
 			name={`camera-${camera.scope.camera.name}`}
 			onClose={camera.close}>
-			<div className='max-w-[340px] mt-0 grid grid-cols-12 gap-2'>
+			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<ExposureTimeProgress className='col-span-full mb-2' progress={progress} />
 				<div className='col-span-full flex flex-row items-center gap-1'>
 					<AutoSaveButton onValueChange={(value) => camera.update('autoSave', value)} value={request.autoSave} />

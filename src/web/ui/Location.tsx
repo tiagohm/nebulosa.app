@@ -39,15 +39,16 @@ export function Location({ name, initialPosition, onPositionChange, onClose }: L
 				</Button>
 			}
 			header='Location'
+			maxWidth='330px'
 			name={name || 'location'}
 			onClose={onClose}>
-			<div className='max-w-[300px] flex flex-col gap-2'>
+			<div className='mt-0 flex flex-col gap-2'>
 				<div className='grid grid-cols-3 gap-2'>
 					<NumberInput className='col-span-1' label='Latitude (°)' maxValue={90} minValue={-90} onValueChange={(value) => updatePosition('latitude', value)} size='sm' step={0.01} value={position[0]} />
 					<NumberInput className='col-span-1' label='Longitude (°)' maxValue={180} minValue={-180} onValueChange={(value) => updatePosition('longitude', value)} size='sm' step={0.01} value={position[1]} />
 					<NumberInput className='col-span-1' label='Elevation (m)' maxValue={10000} minValue={-100} onValueChange={(value) => updatePosition('elevation', value)} size='sm' step={1} value={position[2] ?? 0} />
 				</div>
-				<MapViewer onPositionChange={handlePositionChange} position={position} width={301} />
+				<MapViewer onPositionChange={handlePositionChange} position={position} width={298} />
 			</div>
 		</Modal>
 	)

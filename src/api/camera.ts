@@ -108,6 +108,11 @@ export const CameraMolecule = molecule((m) => {
 			case 'CONNECTION':
 				if (handleConnection(client, device, message)) {
 					sendUpdate(device, 'connected', message.state)
+
+					if (!device.connected) {
+						guideOutput.remove(device)
+						thermometer.remove(device)
+					}
 				}
 
 				return

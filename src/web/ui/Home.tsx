@@ -17,7 +17,7 @@ export default function Home() {
 	const webSocket = useMolecule(WebSocketMolecule)
 
 	const equipment = useMolecule(EquipmentMolecule)
-	const devices = useSnapshot(equipment.state)
+	const { devices } = useSnapshot(equipment.state)
 
 	const confirmation = useMolecule(ConfirmationMolecule)
 	const { show: showConfirmation } = useSnapshot(confirmation.state)

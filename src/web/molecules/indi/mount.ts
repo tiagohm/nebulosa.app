@@ -65,6 +65,7 @@ export const MountMolecule = molecule((m, s) => {
 	Api.Mounts.get(scope.mount.name).then((mount) => {
 		if (!mount) return
 		Object.assign(state.mount, mount)
+		state.connecting = false
 
 		if (mount.connected && !mount.parked) {
 			void updateCurrentCoordinate()
@@ -201,7 +202,7 @@ export const MountMolecule = molecule((m, s) => {
 
 	// Closes the mount modal
 	function close() {
-		equipment.closeModal('mount', scope.mount)
+		equipment.close('mount', scope.mount)
 	}
 
 	return { state, scope, connectOrDisconnect, updateTargetCoordinate, handleTargetCoordinateAction, toggleLocationModal, park, unpark, togglePark, home, tracking, trackMode, slewRate, moveTo, location, stop, close } as const

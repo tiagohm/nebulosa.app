@@ -52,6 +52,7 @@ export const CameraMolecule = molecule((m, s) => {
 	Api.Cameras.get(scope.camera.name).then((camera) => {
 		if (!camera) return
 		Object.assign(state.camera, camera)
+		state.connecting = false
 		updateRequestFrame(camera.frame)
 		updateFrameFormat(camera.frameFormats)
 	})
@@ -165,7 +166,7 @@ export const CameraMolecule = molecule((m, s) => {
 	}
 
 	function close() {
-		return equipment.closeModal('camera', scope.camera)
+		return equipment.close('camera', scope.camera)
 	}
 
 	return { scope, state, connectOrDisconnect, update, cooler, temperature, fullscreen, start, stop, close } as const

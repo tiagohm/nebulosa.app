@@ -37,6 +37,7 @@ export const ThermometerMolecule = molecule((m, s) => {
 	Api.Thermometers.get(scope.thermometer.name).then((thermometer) => {
 		if (!thermometer) return
 		Object.assign(state.thermometer, thermometer)
+		state.connecting = false
 	})
 
 	onMount(() => {
@@ -66,7 +67,7 @@ export const ThermometerMolecule = molecule((m, s) => {
 
 	// Closes the thermometer modal
 	function close() {
-		equipment.closeModal('thermometer', scope.thermometer)
+		equipment.close('thermometer', scope.thermometer)
 	}
 
 	return { state, scope, connectOrDisconnect, close } as const

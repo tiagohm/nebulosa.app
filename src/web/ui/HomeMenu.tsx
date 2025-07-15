@@ -28,7 +28,7 @@ import { AboutMolecule } from '@/molecules/about'
 import { CalculatorMolecule } from '@/molecules/calculator'
 import { FramingMolecule } from '@/molecules/framing'
 import { HomeMolecule } from '@/molecules/home'
-import { EquipmentMolecule } from '@/molecules/indi/equipment'
+import { type EquipmentDeviceType, EquipmentMolecule } from '@/molecules/indi/equipment'
 import { About } from './About'
 import { Calculator } from './Calculator'
 import { Framing } from './Framing'
@@ -168,7 +168,7 @@ export const HomeMenu = memo(() => {
 						</Tooltip>
 						{selected !== undefined && (
 							<div className='col-span-full my-2 flex flex-col items-center justify-center gap-2 flex-wrap'>
-								<span className='font-bold text-sm mt-2 uppercase'>{selected}</span>
+								<span className='font-bold text-sm mt-2 uppercase'>{formattedDeviceName(selected)}</span>
 								{devices[selected].map((device) => (
 									<Chip className='min-w-full cursor-pointer' color={device.connected ? 'success' : 'danger'} endContent={<Lucide.Settings size={20} />} key={device.name} onClose={() => equipment.show(selected, device)} onPointerUp={() => equipment.show(selected, device)} variant='flat'>
 										{device.name}
@@ -185,3 +185,12 @@ export const HomeMenu = memo(() => {
 		</>
 	)
 })
+
+function formattedDeviceName(type: EquipmentDeviceType) {
+	if (type === 'guideOutput') return 'Guide Output'
+	else if (type === 'lightBox') return 'Light Box'
+	else if (type === 'dustCap') return 'Dust Cap'
+	else if (type === 'dewHeater') return 'Dew Heater'
+	else if (type === 'wheel') return 'Filter Wheel'
+	else return type
+}

@@ -4,7 +4,7 @@ import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, CreateDirectory, Device, EquatorialCoordinate, FileSystem, Framing, GeographicCoordinate, ImageInfo, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
+import type { Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, CreateDirectory, Device, EquatorialCoordinate, FileSystem, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
 import { X_IMAGE_INFO_HEADER } from 'src/shared/types'
 import wretch, { type WretchError } from 'wretch'
 
@@ -173,6 +173,20 @@ export namespace Api {
 
 		export function get(name: string) {
 			return json<Thermometer>(`/thermometers/${name}`, 'get')
+		}
+	}
+
+	export namespace GuideOutputs {
+		export function list() {
+			return json<GuideOutput[]>('/guideoutputs', 'get')
+		}
+
+		export function get(name: string) {
+			return json<GuideOutput>(`/guideoutputs/${name}`, 'get')
+		}
+
+		export function pulse(guideOutput: GuideOutput, req: GuidePulse) {
+			return res(`/guideoutputs/${guideOutput.name}/pulse`, 'post', req)
 		}
 	}
 

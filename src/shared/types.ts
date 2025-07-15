@@ -750,6 +750,20 @@ export const DEFAULT_THERMOMETER: Thermometer = {
 	properties: {},
 }
 
+export const DEFAULT_GUIDE_OUTPUT: GuideOutput = {
+	canPulseGuide: false,
+	pulseGuiding: false,
+	type: 'GUIDE_OUTPUT',
+	id: '',
+	name: '',
+	connected: false,
+	driver: {
+		executable: '',
+		version: '',
+	},
+	properties: {},
+}
+
 export const DEFAULT_IMAGE_STRETCH: ImageStretch = {
 	auto: true,
 	shadow: 0,

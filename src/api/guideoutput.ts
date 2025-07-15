@@ -120,7 +120,7 @@ export const GuideOutputMolecule = molecule((m) => {
 	}
 
 	// The endpoints for managing guide outputs
-	const app = new Elysia({ prefix: '/guide-outputs' })
+	const app = new Elysia({ prefix: '/guideoutputs' })
 
 	app.get('', () => {
 		return list()

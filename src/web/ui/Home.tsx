@@ -3,11 +3,13 @@ import { useSnapshot } from 'valtio'
 import { ConfirmationMolecule } from '@/molecules/confirmation'
 import { CameraScope } from '@/molecules/indi/camera'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
+import { GuideOutputScope } from '@/molecules/indi/guideoutput'
 import { MountScope } from '@/molecules/indi/mount'
 import { ThermometerScope } from '@/molecules/indi/thermometer'
 import { WebSocketMolecule } from '@/molecules/ws'
 import { Camera } from './Camera'
 import { Confirmation } from './Confirmation'
+import { GuideOutput } from './GuideOutput'
 import { HomeNavBar } from './HomeNavBar'
 import { ImageWorkspace } from './ImageWorkspace'
 import { Mount } from './Mount'
@@ -47,6 +49,14 @@ export default function Home() {
 					thermometer.show && (
 						<ScopeProvider key={thermometer.name} scope={ThermometerScope} value={{ thermometer: thermometer as never }}>
 							<Thermometer />
+						</ScopeProvider>
+					),
+			)}
+			{devices.guideOutput.map(
+				(guideOutput) =>
+					guideOutput.show && (
+						<ScopeProvider key={guideOutput.name} scope={GuideOutputScope} value={{ guideOutput: guideOutput as never }}>
+							<GuideOutput />
 						</ScopeProvider>
 					),
 			)}

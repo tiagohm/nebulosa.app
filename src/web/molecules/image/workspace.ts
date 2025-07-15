@@ -13,6 +13,8 @@ export interface ImageWorkspaceState {
 	selected?: Image
 }
 
+const KEY_INVALID_CHAR_REGEX = /[\W]+/g
+
 // Molecule that manages all the images
 export const ImageWorkspaceMolecule = molecule((m) => {
 	const bus = m(BusMolecule)
@@ -32,8 +34,11 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 	// Add an image to the workspace from a given path
 	// It generates a unique key for the image and adds it to the state
 	function add(path: string, key: string | undefined | null, source: Image['source'] | Camera) {
+		const camera = typeof source === 'object' ? source : undefined
+		source = typeof source === 'string' ? source : 'camera'
+
 		const position = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => e.position)) + 1
-		key ||= `${Date.now()}-${position}`
+		key = key?.replace(KEY_INVALID_CHAR_REGEX, '-') || `${Date.now()}-${position}`
 		key = `${source}-${key}`
 
 		const index = state.images.findIndex((e) => e.key === key)
@@ -45,7 +50,7 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 			viewers.get(image.key)?.load(true, path)
 			console.info('image updated', image, index)
 		} else {
-			image = { path, key, position, source: typeof source === 'string' ? source : 'camera', camera: typeof source === 'object' ? source : undefined }
+			image = { path, key, position, source, camera }
 			state.images.push(image)
 			console.info('image added', image)
 			bus.emit('image:add', image)

@@ -81,7 +81,7 @@ export const CameraMolecule = molecule((m, s) => {
 		unsubscribers[2] = bus.subscribe<CameraCaptureTaskEvent>('camera:capture', (event) => {
 			if (event.device === state.camera.name) {
 				if (event.savedPath && !state.image) {
-					const image = workspace.add(event.savedPath, `camera-${event.device}`, scope.camera)
+					const image = workspace.add(event.savedPath, event.device, scope.camera)
 					state.image = ref(image)
 				} else {
 					Object.assign(state.progress, event)

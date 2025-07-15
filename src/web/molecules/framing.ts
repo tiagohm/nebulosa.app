@@ -62,9 +62,7 @@ export const FramingMolecule = molecule((m) => {
 	async function load() {
 		try {
 			state.loading = true
-
-			if (state.openNewImage) state.request.id = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => parseInt(e.key))) + 1
-			else state.request.id = DEFAULT_FRAMING.id
+			state.request.id = state.openNewImage ? Date.now() : DEFAULT_FRAMING.id
 
 			const frame = await Api.Framing.frame(state.request)
 

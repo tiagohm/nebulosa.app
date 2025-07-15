@@ -12,7 +12,8 @@ import { PlateSolverSelect } from './PlateSolverSelect'
 export const PlateSolver = memo(() => {
 	const solver = useMolecule(ImageSolverMolecule)
 	const { viewer } = solver
-	const { request, loading, solution } = useSnapshot(solver.state)
+	const { loading, solution } = useSnapshot(solver.state)
+	const request = useSnapshot(solver.state.request, { sync: true })
 	const { info } = useSnapshot(viewer.state)
 
 	return (

@@ -11,8 +11,8 @@ import { PoweredBy } from './PoweredBy'
 
 export const Framing = memo(() => {
 	const framing = useMolecule(FramingMolecule)
-	// biome-ignore format: too long!
-	const { request: { rightAscension, declination, width, height, rotation, focalLength, pixelSize, hipsSurvey }, hipsSurveys, loading, openNewImage } = useSnapshot(framing.state)
+	const { hipsSurveys, loading, openNewImage } = useSnapshot(framing.state)
+	const { rightAscension, declination, width, height, rotation, focalLength, pixelSize, hipsSurvey } = useSnapshot(framing.state.request, { sync: true })
 
 	const fov = useMemo(() => {
 		const size = angularSizeOfPixel(focalLength, pixelSize)

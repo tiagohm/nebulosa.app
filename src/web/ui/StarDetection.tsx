@@ -10,7 +10,8 @@ import { StarDetectionSelect } from './StarDetectionSelect'
 export const StarDetection = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
 	const { viewer } = starDetection
-	const { loading, stars, request, computed, selected } = useSnapshot(starDetection.state)
+	const { loading, stars, computed, selected } = useSnapshot(starDetection.state)
+	const request = useSnapshot(starDetection.state.request, { sync: true })
 	const { info } = useSnapshot(viewer.state)
 
 	return (

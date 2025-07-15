@@ -15,7 +15,7 @@ export interface FilePickerProps {
 
 export const FilePicker = memo(({ name, header, onChoose }: FilePickerProps) => {
 	const filePicker = useMolecule(FilePickerMolecule)
-	const { mode, history, filtered, selected, directoryTree, filter, createDirectory, directoryName } = useSnapshot(filePicker.state)
+	const { mode, history, filtered, selected, directoryTree, filter, createDirectory, directoryName } = useSnapshot(filePicker.state, { sync: true })
 
 	function handleChoose() {
 		onChoose(selected.length === 0 ? undefined : (selected as string[]))

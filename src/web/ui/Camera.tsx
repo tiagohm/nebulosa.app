@@ -18,8 +18,9 @@ import { Modal } from './Modal'
 
 export const Camera = memo(() => {
 	const camera = useMolecule(CameraMolecule)
-	// biome-ignore format: don't break lines!
-	const { camera: { connected, hasCooler, cooler, coolerPower, temperature, canSetTemperature, exposure, canAbort, frame, canSubFrame, canBin, bin, gain, offset, frameFormats }, connecting, capturing, targetTemperature, request, progress } = useSnapshot(camera.state)
+	const { connecting, capturing, progress } = useSnapshot(camera.state)
+	const { connected, hasCooler, cooler, coolerPower, temperature, canSetTemperature, exposure, canAbort, frame, canSubFrame, canBin, bin, gain, offset, frameFormats } = useSnapshot(camera.state.camera)
+	const { targetTemperature, request } = useSnapshot(camera.state, { sync: true })
 
 	const updateSavePath = useCallback((value?: string) => {
 		camera.update('savePath', value)

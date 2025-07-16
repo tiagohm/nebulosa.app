@@ -15,12 +15,14 @@ import { ExposureTimeProgress } from './ExposureTimeProgress'
 import { FilePickerInput } from './FilePickerInput'
 import { FrameTypeSelect } from './FrameTypeSelect'
 import { Modal } from './Modal'
+import { MountDropdown } from './MountDropdown'
 
 export const Camera = memo(() => {
 	const camera = useMolecule(CameraMolecule)
 	const { connecting, capturing, progress } = useSnapshot(camera.state)
 	const { connected, hasCooler, cooler, coolerPower, temperature, canSetTemperature, exposure, canAbort, frame, canSubFrame, canBin, bin, gain, offset, frameFormats } = useSnapshot(camera.state.camera)
 	const { targetTemperature, request } = useSnapshot(camera.state, { sync: true })
+	const { mount } = useSnapshot(camera.state.equipment)
 
 	const updateSavePath = useCallback((value?: string) => {
 		camera.update('savePath', value)
@@ -51,7 +53,12 @@ export const Camera = memo(() => {
 			name={`camera-${camera.scope.camera.name}`}
 			onClose={camera.close}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<ExposureTimeProgress className='col-span-full mb-2' progress={progress} />
+				<div className='col-span-full flex flex-row items-center justify-between mb-2'>
+					<ExposureTimeProgress progress={progress} />
+					<div className='flex flex-row items-center gap-1'>
+						<MountDropdown onValueChange={(value) => (camera.state.equipment.mount = value)} value={mount} />
+					</div>
+				</div>
 				<div className='col-span-full flex flex-row items-center gap-1'>
 					<AutoSaveButton onValueChange={(value) => camera.update('autoSave', value)} value={request.autoSave} />
 					<AutoSubFolderModeButton isDisabled={!request.autoSave} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={request.autoSubFolderMode} />

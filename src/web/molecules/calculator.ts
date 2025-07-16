@@ -4,7 +4,7 @@ import { simpleLocalStorage } from '@/shared/storage'
 import { HomeMolecule } from './home'
 
 export interface CalculatorState {
-	show: boolean
+	showModal: boolean
 	readonly focalLength: {
 		aperture: number
 		focalRatio: number
@@ -44,7 +44,7 @@ export const CalculatorMolecule = molecule((m) => {
 	const home = m(HomeMolecule)
 
 	const state = proxy<CalculatorState>({
-		show: false,
+		showModal: false,
 		focalLength: simpleLocalStorage.get<CalculatorState['focalLength']>('calculator.focalLength', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
 		focalRatio: simpleLocalStorage.get<CalculatorState['focalRatio']>('calculator.focalRatio', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
 		dawes: simpleLocalStorage.get<CalculatorState['dawes']>('calculator.dawes', () => ({ aperture: 152, resolution: 0.763 })),
@@ -70,11 +70,11 @@ export const CalculatorMolecule = molecule((m) => {
 
 	function show() {
 		home.toggleMenu(false)
-		state.show = true
+		state.showModal = true
 	}
 
 	function close() {
-		state.show = false
+		state.showModal = false
 	}
 
 	function update<P extends keyof Omit<CalculatorState, 'show'>, K extends keyof CalculatorState[P]>(property: P, key: K, value: CalculatorState[P][K]) {

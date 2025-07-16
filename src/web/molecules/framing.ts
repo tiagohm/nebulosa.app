@@ -36,7 +36,7 @@ export const FramingMolecule = molecule((m) => {
 	})
 
 	onMount(() => {
-		const subscribers = new Array<VoidFunction>(2)
+		const subscribers = new Array<VoidFunction>(3)
 
 		subscribers[0] = subscribe(state.request, () => simpleLocalStorage.set('framing', state.request))
 
@@ -44,6 +44,11 @@ export const FramingMolecule = molecule((m) => {
 			Object.assign(state.request, request)
 			state.showModal = true
 			void load()
+		})
+
+		subscribers[2] = bus.subscribe<Image>('image:remove', (image) => {
+			const index = state.images.findIndex((e) => e.key === image.key)
+			index >= 0 && state.images.splice(index, 1)
 		})
 
 		return () => {
@@ -62,7 +67,7 @@ export const FramingMolecule = molecule((m) => {
 	async function load() {
 		try {
 			state.loading = true
-			state.request.id = state.openNewImage ? Date.now() : DEFAULT_FRAMING.id
+			state.request.id = state.openNewImage ? state.images.length : DEFAULT_FRAMING.id
 
 			const frame = await Api.Framing.frame(state.request)
 

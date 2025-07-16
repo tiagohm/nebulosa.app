@@ -46,7 +46,7 @@ export const HomeMenu = memo(() => {
 	const { showModal: showFramingModal } = useSnapshot(framing.state)
 
 	const calculator = useMolecule(CalculatorMolecule)
-	const { show: showCalculator } = useSnapshot(calculator.state)
+	const { showModal: showCalculator } = useSnapshot(calculator.state)
 
 	const about = useMolecule(AboutMolecule)
 	const { showModal: showAboutModal } = useSnapshot(about.state)

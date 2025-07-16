@@ -1,5 +1,5 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import { BusMolecule } from 'src/shared/bus'
+import { BusMolecule, unsubscribe } from 'src/shared/bus'
 import { DEFAULT_GUIDE_OUTPUT, type GuideOutput, type GuideOutputUpdated, type GuidePulse } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
@@ -54,7 +54,7 @@ export const GuideOutputMolecule = molecule((m, s) => {
 	const state =
 		guideOutputStateMap.get(scope.guideOutput.name) ??
 		proxy<GuideOutputState>({
-			guideOutput: equipment.get('guideOutput', scope.guideOutput.name) as GuideOutput,
+			guideOutput: equipment.get('guideOutput', scope.guideOutput.name)!,
 			connecting: false,
 			request: simpleLocalStorage.get(`guideOutput.${scope.guideOutput.name}.request`, () => structuredClone(DEFAULT_GUIDE_OUTPUT_REQUEST)),
 		})
@@ -82,7 +82,7 @@ export const GuideOutputMolecule = molecule((m, s) => {
 		unsubscribers[1] = subscribe(state.request, () => simpleLocalStorage.set(`guideOutput.${scope.guideOutput.name}.request`, state.request))
 
 		return () => {
-			unsubscribers.forEach((e) => e())
+			unsubscribe(unsubscribers)
 		}
 	})
 

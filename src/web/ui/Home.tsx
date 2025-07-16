@@ -22,7 +22,7 @@ export default function Home() {
 	const { devices } = useSnapshot(equipment.state)
 
 	const confirmation = useMolecule(ConfirmationMolecule)
-	const { show: showConfirmation } = useSnapshot(confirmation.state)
+	const { showModal: showConfirmationModal } = useSnapshot(confirmation.state)
 
 	return (
 		<div className='w-full h-full flex flex-col'>
@@ -60,7 +60,7 @@ export default function Home() {
 						</ScopeProvider>
 					),
 			)}
-			{showConfirmation && <Confirmation />}
+			{showConfirmationModal && <Confirmation />}
 		</div>
 	)
 }

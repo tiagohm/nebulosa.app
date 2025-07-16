@@ -1,8 +1,7 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
-import { BusMolecule } from 'src/shared/bus'
+import { BusMolecule, unsubscribe } from 'src/shared/bus'
 import { type CameraCaptureTaskEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -194,7 +193,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		}
 
 		return () => {
-			unsubscribers.forEach((e) => e?.())
+			unsubscribe(unsubscribers)
 		}
 	})
 
@@ -336,17 +335,6 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		state.transformation.stretch.shadow = info.transformation.stretch.shadow
 		state.transformation.stretch.highlight = info.transformation.stretch.highlight
 		state.transformation.stretch.midtone = info.transformation.stretch.midtone
-
-		// Update plate solver request
-		state.plateSolver.request.ra = info.rightAscension ? formatRA(info.rightAscension) : DEFAULT_PLATE_SOLVE_START.ra
-		state.plateSolver.request.dec = info.declination ? formatDEC(info.declination) : DEFAULT_PLATE_SOLVE_START.dec
-		state.plateSolver.request.blind = !info.rightAscension || !info.declination
-
-		// Update plate solver request with FITS header information
-		if (info.headers) {
-			if (info.headers.FOCALLEN) state.plateSolver.request.focalLength = parseInt(info.headers.FOCALLEN as never)
-			if (info.headers.XPIXSZ) state.plateSolver.request.pixelSize = parseFloat(info.headers.XPIXSZ as never)
-		}
 
 		// Update plate solver solution
 		state.plateSolver.solution = info.solution

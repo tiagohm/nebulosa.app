@@ -57,3 +57,7 @@ export const BusMolecule = molecule(() => {
 
 	return { subscribe, subscribeOnce, unsubscribe, emit, hasSubscribers, hasSubscribersForTopic } as const
 })
+
+export function unsubscribe(subscribers?: (VoidFunction | undefined)[]) {
+	subscribers?.forEach((e) => e?.())
+}

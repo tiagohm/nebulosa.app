@@ -1,5 +1,5 @@
 import { molecule, onMount } from 'bunshi'
-import { BusMolecule } from 'src/shared/bus'
+import { BusMolecule, unsubscribe } from 'src/shared/bus'
 import type { Camera, CameraUpdated, Device, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 
@@ -65,12 +65,18 @@ export const EquipmentMolecule = molecule((m) => {
 		unsubscribers.push(bus.subscribe<ThermometerUpdated>('thermometer:update', (event) => update('thermometer', event.device.name, event.property, event.device[event.property]!)))
 
 		return () => {
-			unsubscribers.forEach((unsubscriber) => unsubscriber())
+			unsubscribe(unsubscribers)
 		}
 	})
 
-	function get(type: EquipmentDeviceType, name: string): Device | undefined {
-		return state.devices[type].find((e) => e.name === name)
+	// Gets a device of a specific type by its name
+	function get<T extends Device = Device>(type: EquipmentDeviceType, name: string) {
+		return state.devices[type].find((e) => e.name === name) as T | undefined
+	}
+
+	// Lists all devices of a specific type
+	function list<T extends Device = Device>(type: EquipmentDeviceType) {
+		return state.devices[type] as T[]
 	}
 
 	// Registers a new device of a specific type
@@ -121,5 +127,5 @@ export const EquipmentMolecule = molecule((m) => {
 		state.devices[type].find((e) => e.name === device.name)!.show = false
 	}
 
-	return { state, get, add, update, remove, select, show, close } as const
+	return { state, get, list, add, update, remove, select, show, close } as const
 })

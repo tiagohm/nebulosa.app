@@ -1,6 +1,6 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import { BusMolecule } from 'src/shared/bus'
-import { type Camera, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_TASK_EVENT } from 'src/shared/types'
+import { BusMolecule, unsubscribe } from 'src/shared/bus'
+import { type Camera, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_TASK_EVENT, type Mount } from 'src/shared/types'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
@@ -20,6 +20,9 @@ export interface CameraState {
 	capturing: boolean
 	targetTemperature: number
 	image?: Image
+	readonly equipment: {
+		mount?: Mount
+	}
 }
 
 export const CameraScope = createScope<CameraScopeValue>({ camera: DEFAULT_CAMERA })
@@ -38,12 +41,15 @@ export const CameraMolecule = molecule((m, s) => {
 	const state =
 		cameraStateMap.get(scope.camera.name) ??
 		proxy<CameraState>({
-			camera: equipment.get('camera', scope.camera.name) as Camera,
+			camera: equipment.get('camera', scope.camera.name)!,
 			request: cameraCaptureStartRequest,
 			progress: structuredClone(DEFAULT_CAMERA_CAPTURE_TASK_EVENT),
 			connecting: false,
 			capturing: false,
 			targetTemperature: scope.camera.temperature,
+			equipment: {
+				mount: equipment.get('mount', cameraCaptureStartRequest.mount ?? ''),
+			},
 		})
 
 	cameraStateMap.set(scope.camera.name, state)
@@ -102,7 +108,7 @@ export const CameraMolecule = molecule((m, s) => {
 		unsubscribers[4] = subscribe(state.request, () => simpleLocalStorage.set(`camera.${scope.camera.name}.request`, state.request))
 
 		return () => {
-			unsubscribers.forEach((unsubscriber) => unsubscriber())
+			unsubscribe(unsubscribers)
 		}
 	})
 
@@ -158,6 +164,7 @@ export const CameraMolecule = molecule((m, s) => {
 
 	function start() {
 		state.capturing = true
+		state.request.mount = state.equipment.mount?.name
 		return Api.Cameras.start(state.camera, state.request)
 	}
 

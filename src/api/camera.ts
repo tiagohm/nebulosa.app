@@ -6,12 +6,13 @@ import type { CfaPattern } from 'nebulosa/src/image'
 import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, IndiClient, OneNumber, PropertyState, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import { join } from 'path'
 import { BusMolecule } from '../shared/bus'
-import { type Camera, type CameraAdded, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_TASK_EVENT, type FrameType } from '../shared/types'
+import { type Camera, type CameraAdded, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_TASK_EVENT, type FrameType, type Mount } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import { ConnectionMolecule } from './connection'
 import { GuideOutputMolecule } from './guideoutput'
 import { addProperty, ask, DeviceInterfaceType, enableBlob, handleConnection, isInterfaceType } from './indi'
 import { WebSocketMessageMolecule } from './message'
+import { MountMolecule } from './mount'
 import { ThermometerMolecule } from './thermometer'
 
 const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
@@ -78,6 +79,10 @@ export function startExposure(client: IndiClient, camera: Camera, exposureTimeIn
 
 export function stopExposure(client: IndiClient, camera: Camera) {
 	client.sendSwitch({ device: camera.name, name: 'CCD_ABORT_EXPOSURE', elements: { ABORT: true } })
+}
+
+export function snoop(client: IndiClient, camera: Camera, mount?: Mount) {
+	client.sendText({ device: camera.name, name: 'ACTIVE_DEVICES', elements: { ACTIVE_TELESCOPE: mount?.name ?? '', ACTIVE_ROTATOR: '', ACTIVE_FOCUSER: '', ACTIVE_FILTER: '' } })
 }
 
 const injector = getDefaultInjector()
@@ -497,8 +502,12 @@ export const CameraMolecule = molecule((m) => {
 
 		// Start a new task for the camera
 		const connection = injector.get(ConnectionMolecule)
-		const task = new CameraCaptureTask(camera, body as never, connection.get(), handleCameraCaptureTaskEvent)
+		const mount = injector.get(MountMolecule)
+		const request = body as CameraCaptureStart
+		const client = connection.get()
+		const task = new CameraCaptureTask(camera, request, client, handleCameraCaptureTaskEvent)
 		tasks.set(camera.name, task)
+		snoop(client, camera, request.mount ? mount.get(request.mount) : undefined)
 		task.start()
 	})
 

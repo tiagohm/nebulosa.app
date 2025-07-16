@@ -28,3 +28,19 @@ export const TimerSandComplete = ({ size, stroke = 1, color = 'currentColor', ..
 		</svg>
 	)
 }
+
+export const CameraIris = ({ size, stroke = 1, color = 'currentColor', ...props }: MaterialDesignIconProps) => {
+	return (
+		<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' {...props}>
+			<path d='M13.73,15L9.83,21.76C10.53,21.91 11.25,22 12,22C14.4,22 16.6,21.15 18.32,19.75L14.66,13.4M2.46,15C3.38,17.92 5.61,20.26 8.45,21.34L12.12,15M8.54,12L4.64,5.25C3,7 2,9.39 2,12C2,12.68 2.07,13.35 2.2,14H9.69M21.8,10H14.31L14.6,10.5L19.36,18.75C21,16.97 22,14.6 22,12C22,11.31 21.93,10.64 21.8,10M21.54,9C20.62,6.07 18.39,3.74 15.55,2.66L11.88,9M9.4,10.5L14.17,2.24C13.47,2.09 12.75,2 12,2C9.6,2 7.4,2.84 5.68,4.25L9.34,10.6L9.4,10.5Z' />
+		</svg>
+	)
+}
+
+export const Telescope = ({ size, stroke = 1, color = 'currentColor', ...props }: MaterialDesignIconProps) => {
+	return (
+		<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' {...props}>
+			<path d='M21.9,8.9L20.2,9.9L16.2,3L17.9,2L21.9,8.9M9.8,7.9L12.8,13.1L18.9,9.6L15.9,4.4L9.8,7.9M11.4,12.7L9.4,9.2L5.1,11.7L7.1,15.2L11.4,12.7M2.1,14.6L3.1,16.3L5.7,14.8L4.7,13.1L2.1,14.6M12.1,14L11.8,13.6L7.5,16.1L7.8,16.5C8,16.8 8.3,17.1 8.6,17.3L7,22H9L10.4,17.7H10.5L12,22H14L12.1,16.4C12.6,15.7 12.6,14.8 12.1,14Z' />
+		</svg>
+	)
+}

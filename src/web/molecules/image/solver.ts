@@ -1,6 +1,7 @@
 import { addToast } from '@heroui/react'
 import { molecule, onMount } from 'bunshi'
-import { arcsec } from 'nebulosa/src/angle'
+import { arcsec, formatDEC, formatRA } from 'nebulosa/src/angle'
+import { numericKeyword } from 'nebulosa/src/fits.util'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import type { PlateSolveStart } from 'src/shared/types'
 import { subscribe } from 'valtio'
@@ -15,6 +16,18 @@ export const ImageSolverMolecule = molecule((m, s) => {
 	const plateSolver = viewer.state.plateSolver
 
 	onMount(() => {
+		const { info } = viewer.state
+
+		// Update plate solver request with FITS header information
+		plateSolver.request.rightAscension = formatRA(info.rightAscension ?? 0)
+		plateSolver.request.declination = formatDEC(info.declination ?? 0)
+		plateSolver.request.blind = info.rightAscension !== undefined && info.declination !== undefined
+
+		if (info.headers) {
+			plateSolver.request.focalLength = numericKeyword(info.headers, 'FOCALLEN', plateSolver.request.focalLength)
+			plateSolver.request.pixelSize = numericKeyword(info.headers, 'XPIXSZ', plateSolver.request.pixelSize)
+		}
+
 		const unsubscribe = subscribe(plateSolver.request, () => simpleLocalStorage.set('image.plateSolver', plateSolver.request))
 
 		return () => unsubscribe()

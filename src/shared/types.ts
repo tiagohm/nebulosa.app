@@ -382,6 +382,7 @@ export interface CameraCaptureStart {
 	autoSave: boolean
 	savePath?: string
 	autoSubFolderMode: AutoSubFolderMode
+	mount?: string
 }
 
 export interface CameraCaptureProgress {

@@ -27,7 +27,7 @@ export const ThermometerMolecule = molecule((m, s) => {
 	const state =
 		thermometerStateMap.get(scope.thermometer.name) ??
 		proxy<ThermometerState>({
-			thermometer: equipment.get('thermometer', scope.thermometer.name) as Thermometer,
+			thermometer: equipment.get('thermometer', scope.thermometer.name)!,
 			connecting: false,
 		})
 

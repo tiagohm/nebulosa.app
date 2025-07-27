@@ -70,12 +70,8 @@
 				"noAssignInExpressions": "off",
 				"useAwait": "error",
 				"noEmptyInterface": "off",
-				"noConsole": {
-					"level": "error",
-					"options": {
-						"allow": ["info", "warn", "error", "debug"]
-					}
-				}
+				"noConsole": "off",
+				"noArrayIndexKey": "off"
 			},
 			"complexity": {
 				"noForEach": "off",

@@ -78,6 +78,12 @@ div:has(div[data-slot="base"][data-open="true"][role="dialog"]) {
 	@apply !z-[10000000];
 }
 
+/* Select Label With Chips */
+
+/* label[data-slot="label"]:has(+ div[data-slot="innerWrapper"] span[data-slot="value"] *) {
+	padding-bottom: 4px;
+} */
+
 /* Utilities */
 
 .pixelated {

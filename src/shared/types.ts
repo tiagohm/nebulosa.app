@@ -1,10 +1,14 @@
+import type { SortDescriptor } from '@heroui/react'
 import type { MoleculeOrInterface } from 'bunshi'
 import { type Angle, toHour } from 'nebulosa/src/angle'
 import type { Constellation } from 'nebulosa/src/constellation'
+import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
 import type { DefVector, PropertyState, VectorType } from 'nebulosa/src/indi'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
+import type { StellariumObjectType } from 'nebulosa/src/stellarium'
+import type { Velocity } from 'nebulosa/src/velocity'
 import type { PickByValue, Required } from 'utility-types'
 
 export type Atom<T> = T extends MoleculeOrInterface<infer X> ? X : never
@@ -33,23 +37,62 @@ export interface GeographicCoordinate {
 // Atlas
 
 export interface PositionOfBody extends GeographicCoordinate {
-	dateTime: string
+	utcTime: number // milliseconds since epoch
+	utcOffset: number // minutes
 }
 
 export interface ChartOfBody {
 	type: keyof PickByValue<BodyPosition, number>
-	dateTime: string
+	utcTime: number
 	stepSize: number
 }
 
-export interface BodyPosition extends EquatorialCoordinate, EquatorialCoordinateJ2000, HorizontalCoordinate {
-	magnitude: number
-	constellation: string
-	distance: number
-	distanceUnit: string
-	illuminated: number
-	elongation: number
-	leading: boolean
+export interface SkyObjectSearch extends GeographicCoordinate {
+	name: string
+	nameType: number
+	constellations: number[]
+	types: StellariumObjectType[]
+	magnitudeMin: number
+	magnitudeMax: number
+	rightAscension: string // hour
+	declination: string // deg
+	radius: number // deg
+	visible: boolean
+	visibleAbove: number // deg
+	utcTime: number // milliseconds since epoch
+	utcOffset: number // minutes
+	page: number
+	limit: number
+	sort: SortDescriptor
+}
+
+export interface SkyObjectSearchResult {
+	readonly id: number
+	readonly magnitude: number
+	readonly type: StellariumObjectType
+	readonly constellation: number
+	readonly name: string
+}
+
+export interface SkyObjectResult extends EquatorialCoordinate {
+	readonly id: number
+	readonly type: StellariumObjectType
+	readonly magnitude: number
+	readonly pmRa: Angle
+	readonly pmDec: Angle
+	readonly distance: Distance
+	readonly rv: Velocity
+	readonly constellation: number
+}
+
+export interface BodyPosition extends Readonly<EquatorialCoordinate>, Readonly<EquatorialCoordinateJ2000>, Readonly<HorizontalCoordinate> {
+	readonly magnitude: number
+	readonly constellation: Constellation
+	readonly distance: Distance
+	readonly illuminated: number
+	readonly elongation: number
+	readonly leading: boolean
+	readonly names?: readonly string[]
 }
 
 // Confirmation
@@ -804,6 +847,47 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	format: 'jpeg',
 	adjustment: DEFAULT_IMAGE_ADJUSTMENT,
 	filter: DEFAULT_IMAGE_FILTER,
+}
+
+export const DEFAULT_SKY_OBJECT_SEARCH: SkyObjectSearch = {
+	name: '',
+	nameType: -1,
+	constellations: [],
+	types: [],
+	magnitudeMin: -30,
+	magnitudeMax: 30,
+	rightAscension: '00 00 00.00',
+	declination: '+00 00 00.00',
+	radius: 0,
+	visible: false,
+	visibleAbove: 0,
+	latitude: 0,
+	longitude: 0,
+	elevation: 0,
+	utcTime: 0,
+	utcOffset: 0,
+	page: 1,
+	limit: 5,
+	sort: {
+		column: 'magnitude',
+		direction: 'ascending',
+	},
+}
+
+export const DEFAULT_BODY_POSITION: BodyPosition = {
+	magnitude: 0,
+	constellation: 'AND',
+	distance: 0,
+	illuminated: 0,
+	elongation: 0,
+	leading: false,
+	rightAscension: 0,
+	declination: 0,
+	rightAscensionJ2000: 0,
+	declinationJ2000: 0,
+	azimuth: 0,
+	altitude: 0,
+	names: [],
 }
 
 export function isCamera(device: Device): device is Camera {

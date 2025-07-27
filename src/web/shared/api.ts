@@ -4,8 +4,8 @@ import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, CreateDirectory, Device, EquatorialCoordinate, FileSystem, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
-import { X_IMAGE_INFO_HEADER } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, CreateDirectory, Device, EquatorialCoordinate, FileSystem, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
+import { type SkyObjectSearchResult, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 import wretch, { type WretchError } from 'wretch'
 
 const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -187,6 +187,16 @@ export namespace Api {
 
 		export function pulse(guideOutput: GuideOutput, req: GuidePulse) {
 			return res(`/guideoutputs/${guideOutput.name}/pulse`, 'post', req)
+		}
+	}
+
+	export namespace SkyAtlas {
+		export function skyObjectSearch(req: SkyObjectSearch) {
+			return json<SkyObjectSearchResult[]>('/atlas/skyobjects/search', 'post', req)
+		}
+
+		export function skyObjectPosition(req: PositionOfBody, id: string | number) {
+			return json<BodyPosition>(`/atlas/skyobjects/${id}/position`, 'post', req)
 		}
 	}
 

@@ -31,6 +31,11 @@ declare module '*.shared' {
 	export = path
 }
 
+declare module '*.sqlite' {
+	const db: import('bun:sqlite').Database
+	export = db
+}
+
 declare module '*.module.css' {
 	const classes: { readonly [key: string]: string }
 	export = classes

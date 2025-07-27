@@ -29,9 +29,11 @@ import { CalculatorMolecule } from '@/molecules/calculator'
 import { FramingMolecule } from '@/molecules/framing'
 import { HomeMolecule } from '@/molecules/home'
 import { type EquipmentDeviceType, EquipmentMolecule } from '@/molecules/indi/equipment'
+import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { About } from './About'
 import { Calculator } from './Calculator'
 import { Framing } from './Framing'
+import { SkyAtlas } from './SkyAtlas'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
 
@@ -41,6 +43,9 @@ export const HomeMenu = memo(() => {
 
 	const equipment = useMolecule(EquipmentMolecule)
 	const { selected, devices } = useSnapshot(equipment.state)
+
+	const skyAtlas = useMolecule(SkyAtlasMolecule)
+	const { showModal: showSkyAtlasModal } = useSnapshot(skyAtlas.state)
 
 	const framing = useMolecule(FramingMolecule)
 	const { showModal: showFramingModal } = useSnapshot(framing.state)
@@ -117,7 +122,7 @@ export const HomeMenu = memo(() => {
 							</Button>
 						</Tooltip>
 						<Tooltip content='Sky Atlas' placement='bottom' showArrow>
-							<Button color='secondary' isIconOnly size='lg' variant='light'>
+							<Button color='secondary' isIconOnly onPointerUp={skyAtlas.show} size='lg' variant='light'>
 								<img className='w-9' src={skyAtlasIcon} />
 							</Button>
 						</Tooltip>
@@ -179,6 +184,7 @@ export const HomeMenu = memo(() => {
 					</div>
 				</PopoverContent>
 			</Popover>
+			{showSkyAtlasModal && <SkyAtlas />}
 			{showFramingModal && <Framing />}
 			{showAboutModal && <About />}
 			{showCalculator && <Calculator />}

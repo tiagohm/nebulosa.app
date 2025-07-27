@@ -55,7 +55,7 @@ export const Camera = memo(() => {
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row items-center justify-between mb-2'>
 					<ExposureTimeProgress progress={progress} />
-					<div className='flex flex-row items-center gap-1'>
+					<div className='flex flex-row items-center gap-1' style={{ visibility: capturing ? 'hidden' : 'visible' }}>
 						<MountDropdown onValueChange={(value) => (camera.state.equipment.mount = value)} value={mount} />
 					</div>
 				</div>

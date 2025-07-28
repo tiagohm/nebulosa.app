@@ -1,4 +1,4 @@
-import { Button, Checkbox, Input, NumberInput, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
+import { Button, Checkbox, Input, NumberInput, Popover, PopoverContent, PopoverTrigger, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { CONSTELLATION_LIST, CONSTELLATIONS } from 'nebulosa/src/constellation'
@@ -15,56 +15,39 @@ import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 
 export const SkyAtlas = memo(() => {
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
-	const dsos = useSnapshot(skyAtlas.dsos.state.request, { sync: true })
+	const { tab } = useSnapshot(skyAtlas.state)
+	const { page, sort } = useSnapshot(skyAtlas.dsos.state.request, { sync: true })
 	const { loading, result: dsosResult, selected, position } = useSnapshot(skyAtlas.dsos.state)
 
 	return (
-		<Modal header='Sky Atlas' maxWidth='540px' name='sky-atlas' onClose={skyAtlas.close}>
-			<div className='mt-0 flex flex-col gap-2'>
-				<Tabs>
-					<Tab title={<Icons.Sun />}></Tab>
-					<Tab title={<Icons.Moon />}></Tab>
-					<Tab title={<Icons.Planet />}></Tab>
-					<Tab title={<Icons.Meteor />}></Tab>
-					<Tab title={<Icons.Galaxy />}>
-						<div className='grid grid-cols-12 gap-2 items-center'>
-							<Input
-								className='col-span-6 sm:col-span-4'
-								isDisabled={loading}
-								onValueChange={(value) => skyAtlas.dsos.update('name', value)}
-								placeholder='Search'
-								startContent={<SkyObjectNameTypeDropdown color='secondary' onValueChange={(value) => skyAtlas.dsos.update('nameType', value)} value={dsos.nameType} />}
-								value={dsos.name}
-							/>
-							<ConstellationSelect className='col-span-6 sm:col-span-4' isDisabled={loading} onValueChange={(value) => skyAtlas.dsos.update('constellations', value)} value={dsos.constellations} />
-							<StellariumObjectTypeSelect className='col-span-6 sm:col-span-4' isDisabled={loading} onValueChange={(value) => skyAtlas.dsos.update('types', value)} value={dsos.types} />
-							<Slider
-								className='col-span-6 sm:col-span-4'
-								getValue={(value) => `min: ${(value as number[])[0].toFixed(1)} max: ${(value as number[])[1].toFixed(1)}`}
-								isDisabled={loading}
-								label='Magnitude'
-								maxValue={30}
-								minValue={-30}
-								onChange={(value) => {
-									skyAtlas.dsos.update('magnitudeMin', (value as number[])[0])
-									skyAtlas.dsos.update('magnitudeMax', (value as number[])[1])
-								}}
-								step={0.1}
-								value={[dsos.magnitudeMin, dsos.magnitudeMax]}
-							/>
-							<Input className='col-span-4 sm:col-span-3' isDisabled={dsos.radius <= 0 || loading} label='RA' onValueChange={(value) => skyAtlas.dsos.update('rightAscension', value)} size='sm' value={dsos.rightAscension} />
-							<Input className='col-span-4 sm:col-span-3' isDisabled={dsos.radius <= 0 || loading} label='DEC' onValueChange={(value) => skyAtlas.dsos.update('declination', value)} size='sm' value={dsos.declination} />
-							<NumberInput className='col-span-4 sm:col-span-2' isDisabled={loading} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => skyAtlas.dsos.update('radius', value)} size='sm' step={0.1} value={dsos.radius} />
-							<Checkbox className='col-span-5 sm:col-span-4' isDisabled={loading} isSelected={dsos.visible} onValueChange={(value) => skyAtlas.dsos.update('visible', value)}>
-								Show only visible
-							</Checkbox>
-							<NumberInput className='col-span-5 sm:col-span-3' isDisabled={!dsos.visible || loading} label='Visible above (°)' maxValue={89} minValue={0} onValueChange={(value) => skyAtlas.dsos.update('visibleAbove', value)} size='sm' value={dsos.visibleAbove} />
-							<div className='col-span-2 sm:col-span-5 flex flex-row items-center justify-center'>
-								<Button color='primary' isDisabled={loading} isIconOnly onPointerUp={() => skyAtlas.dsos.search()} variant='flat'>
-									<Icons.Search />
+		<Modal
+			header={
+				<div className='flex flex-row items-center justify-between'>
+					<span>Sky Atlas</span>
+					{tab === 'dsos' && (
+						<Popover className='max-w-160' placement='bottom' showArrow={true}>
+							<PopoverTrigger>
+								<Button color='secondary' isIconOnly variant='flat'>
+									<Icons.Filter />
 								</Button>
-							</div>
-							<Table className='mt-3 col-span-full' onRowAction={(key) => skyAtlas.dsos.select(+(key as never))} onSortChange={(value) => skyAtlas.dsos.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={dsos.sort}>
+							</PopoverTrigger>
+							<PopoverContent>{tab === 'dsos' && <DeepSkyObjectFilter />}</PopoverContent>
+						</Popover>
+					)}
+				</div>
+			}
+			maxWidth='490px'
+			name='sky-atlas'
+			onClose={skyAtlas.close}>
+			<div className='mt-0 flex flex-col gap-2'>
+				<Tabs classNames={{ base: 'absolute top-[-42px] right-[88px] z-10', panel: 'pt-0' }} onSelectionChange={(value) => (skyAtlas.state.tab = value as never)} selectedKey={tab}>
+					<Tab key='sun' title={<Icons.Sun />}></Tab>
+					<Tab key='moon' title={<Icons.Moon />}></Tab>
+					<Tab key='planets' title={<Icons.Planet />}></Tab>
+					<Tab key='minor-planets' title={<Icons.Meteor />}></Tab>
+					<Tab key='dsos' title={<Icons.Galaxy />}>
+						<div className='grid grid-cols-12 gap-2 items-center'>
+							<Table className='mt-3 col-span-full' onRowAction={(key) => skyAtlas.dsos.select(+(key as never))} onSortChange={(value) => skyAtlas.dsos.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
 								<TableHeader>
 									<TableColumn key='name'>Name</TableColumn>
 									<TableColumn allowsSorting className='text-center' key='magnitude'>
@@ -80,20 +63,20 @@ export const SkyAtlas = memo(() => {
 								<TableBody items={dsosResult}>
 									{(item) => (
 										<TableRow key={item.id}>
-											<TableCell>{formatSkyObjectName(item)}</TableCell>
+											<TableCell className='whitespace-nowrap max-w-50 overflow-hidden'>{formatSkyObjectName(item)}</TableCell>
 											<TableCell className='text-center'>{item.magnitude}</TableCell>
-											<TableCell className='text-center'>{formatSkyObjectType(item.type)}</TableCell>
+											<TableCell className='text-center whitespace-nowrap max-w-40 overflow-hidden'>{formatSkyObjectType(item.type)}</TableCell>
 											<TableCell className='text-center'>{CONSTELLATION_LIST[item.constellation]}</TableCell>
 										</TableRow>
 									)}
 								</TableBody>
 							</Table>
 							<div className='col-span-full flex flex-row items-center justify-center gap-3'>
-								<Button color='secondary' isDisabled={dsos.page <= 1 || loading} isIconOnly onPointerUp={() => skyAtlas.dsos.update('page', dsos.page - 1)} variant='flat'>
+								<Button color='secondary' isDisabled={page <= 1 || loading} isIconOnly onPointerUp={() => skyAtlas.dsos.update('page', page - 1)} variant='flat'>
 									<Icons.ChevronLeft />
 								</Button>
-								<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} hideStepper={true} isDisabled={!dsosResult.length || loading} onValueChange={(value) => skyAtlas.dsos.update('page', value)} size='sm' step={1} value={dsos.page} />
-								<Button color='secondary' isDisabled={!dsosResult.length || loading} isIconOnly onPointerUp={() => skyAtlas.dsos.update('page', dsos.page + 1)} variant='flat'>
+								<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} hideStepper={true} isDisabled={!dsosResult.length || loading} isWheelDisabled minValue={1} onValueChange={(value) => skyAtlas.dsos.update('page', value)} size='sm' step={1} value={page} />
+								<Button color='secondary' isDisabled={!dsosResult.length || loading} isIconOnly onPointerUp={() => skyAtlas.dsos.update('page', page + 1)} variant='flat'>
 									<Icons.ChevronRight />
 								</Button>
 							</div>
@@ -104,10 +87,49 @@ export const SkyAtlas = memo(() => {
 							)}
 						</div>
 					</Tab>
-					<Tab title={<Icons.Satellite />}></Tab>
+					<Tab key='satellites' title={<Icons.Satellite />}></Tab>
 				</Tabs>
 			</div>
 		</Modal>
+	)
+})
+
+export const DeepSkyObjectFilter = memo(() => {
+	const skyAtlas = useMolecule(SkyAtlasMolecule)
+	const { name, nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, rightAscension, declination, radius } = useSnapshot(skyAtlas.dsos.state.request, { sync: true })
+	const { loading } = useSnapshot(skyAtlas.dsos.state)
+
+	return (
+		<div className='grid grid-cols-12 gap-2 items-center p-2'>
+			<Input className='col-span-full' onValueChange={(value) => skyAtlas.dsos.update('name', value)} placeholder='Search' startContent={<SkyObjectNameTypeDropdown color='secondary' onValueChange={(value) => skyAtlas.dsos.update('nameType', value)} value={nameType} />} value={name} />
+			<ConstellationSelect className='col-span-6' onValueChange={(value) => skyAtlas.dsos.update('constellations', value)} value={constellations} />
+			<StellariumObjectTypeSelect className='col-span-6' onValueChange={(value) => skyAtlas.dsos.update('types', value)} value={types} />
+			<Slider
+				className='col-span-full sm:col-span-4'
+				getValue={(value) => `min: ${(value as number[])[0].toFixed(1)} max: ${(value as number[])[1].toFixed(1)}`}
+				label='Magnitude'
+				maxValue={30}
+				minValue={-30}
+				onChange={(value) => {
+					skyAtlas.dsos.update('magnitudeMin', (value as number[])[0])
+					skyAtlas.dsos.update('magnitudeMax', (value as number[])[1])
+				}}
+				step={0.1}
+				value={[magnitudeMin, magnitudeMax]}
+			/>
+			<Input className='col-span-4 sm:col-span-3' isDisabled={radius <= 0 || loading} label='RA' onValueChange={(value) => skyAtlas.dsos.update('rightAscension', value)} size='sm' value={rightAscension} />
+			<Input className='col-span-4 sm:col-span-3' isDisabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => skyAtlas.dsos.update('declination', value)} size='sm' value={declination} />
+			<NumberInput className='col-span-4 sm:col-span-2' label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => skyAtlas.dsos.update('radius', value)} size='sm' step={0.1} value={radius} />
+			<Checkbox className='col-span-5 sm:col-span-4' isSelected={visible} onValueChange={(value) => skyAtlas.dsos.update('visible', value)}>
+				Show only visible
+			</Checkbox>
+			<NumberInput className='col-span-5 sm:col-span-3' isDisabled={!visible || loading} label='Visible above (°)' maxValue={89} minValue={0} onValueChange={(value) => skyAtlas.dsos.update('visibleAbove', value)} size='sm' value={visibleAbove} />
+			<div className='col-span-2 sm:col-span-5 flex flex-row items-center justify-center'>
+				<Button color='primary' isDisabled={loading} isIconOnly onPointerUp={() => skyAtlas.dsos.search()} variant='flat'>
+					<Icons.Search />
+				</Button>
+			</div>
+		</div>
 	)
 })
 
@@ -120,18 +142,18 @@ export function PositionOfBody({ position, item }: PositionOfBodyProps) {
 	return (
 		<div className='w-full grid grid-cols-12 gap-2 p-0'>
 			<div className='col-span-full text-center text-sm font-bold'>{position.names?.map((e) => formatSkyObjectName({ name: e, constellation: item!.constellation })).join(', ')}</div>
-			<Input className='col-span-6 sm:col-span-3' isReadOnly label='RA' size='sm' value={formatRA(position.rightAscension)} />
-			<Input className='col-span-6 sm:col-span-3' isReadOnly label='DEC' size='sm' value={formatDEC(position.declination)} />
-			<Input className='col-span-6 sm:col-span-3' isReadOnly label='RA (J2000)' size='sm' value={formatRA(position.rightAscensionJ2000)} />
-			<Input className='col-span-6 sm:col-span-3' isReadOnly label='DEC (J2000)' size='sm' value={formatDEC(position.declinationJ2000)} />
-			<Input className='col-span-6 sm:col-span-3' isReadOnly label='AZ' size='sm' value={formatAZ(position.azimuth)} />
-			<Input className='col-span-6 sm:col-span-3' isReadOnly label='ALT' size='sm' value={formatALT(position.altitude)} />
-			<Input className='col-span-6 sm:col-span-3' isReadOnly label='Magnitude' size='sm' value={position.magnitude.toFixed(2)} />
-			<Input className='col-span-6 sm:col-span-3' isReadOnly label='Constellation' size='sm' value={position.constellation} />
-			<Input className='col-span-6 sm:col-span-3' isReadOnly label='Distance' size='sm' value={formatDistance(position.distance)} />
-			<Input className='col-span-6 sm:col-span-3' isReadOnly label='Illuminated (%)' size='sm' value={position.illuminated.toFixed(2)} />
-			<Input className='col-span-6 sm:col-span-3' isReadOnly label='Elongation (°)' size='sm' value={position.elongation.toFixed(2)} />
-			<Input className='col-span-6 sm:col-span-3' isReadOnly label='Pier Side' size='sm' value={position.pierSide} />
+			<Input className='col-span-3 sm:col-span-3' isReadOnly label='RA' size='sm' value={formatRA(position.rightAscension)} />
+			<Input className='col-span-3 sm:col-span-3' isReadOnly label='DEC' size='sm' value={formatDEC(position.declination)} />
+			<Input className='col-span-3 sm:col-span-3' isReadOnly label='RA (J2000)' size='sm' value={formatRA(position.rightAscensionJ2000)} />
+			<Input className='col-span-3 sm:col-span-3' isReadOnly label='DEC (J2000)' size='sm' value={formatDEC(position.declinationJ2000)} />
+			<Input className='col-span-4 sm:col-span-3' isReadOnly label='AZ' size='sm' value={formatAZ(position.azimuth)} />
+			<Input className='col-span-4 sm:col-span-3' isReadOnly label='ALT' size='sm' value={formatALT(position.altitude)} />
+			<Input className='col-span-2 sm:col-span-2' isReadOnly label='Mag.' size='sm' value={position.magnitude.toFixed(2)} />
+			<Input className='col-span-2 sm:col-span-2' isReadOnly label='Const.' size='sm' value={position.constellation} />
+			<Input className='col-span-3 sm:col-span-2' isReadOnly label='Distance' size='sm' value={formatDistance(position.distance)} />
+			<Input className='col-span-3 sm:col-span-2' isReadOnly label='Illuminated' size='sm' value={`${position.illuminated.toFixed(2)} %`} />
+			<Input className='col-span-3 sm:col-span-2' isReadOnly label='Elongation' size='sm' value={`${position.elongation.toFixed(2)} °`} />
+			<Input className='col-span-3 sm:col-span-2' isReadOnly label='Pier Side' size='sm' value={position.pierSide} />
 		</div>
 	)
 }
@@ -202,6 +224,7 @@ function formatSkyObjectType(type: SkyObjectSearchResult['type']) {
 
 function formatDistance(distance: Distance) {
 	if (distance >= 63241.077084266280268653583182) return `${toLightYear(distance).toFixed(2)} ly`
-	if (distance >= 1) return `${distance} au`
-	return `${(toKilometer(distance)).toFixed(3)} km`
+	if (distance >= 1) return `${distance.toFixed(1)} au`
+	if (distance <= 0) return '-'
+	return `${(toKilometer(distance)).toFixed(0)} km`
 }

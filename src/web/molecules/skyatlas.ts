@@ -7,6 +7,7 @@ import { HomeMolecule } from './home'
 
 export interface SkyAtlasState {
 	showModal: boolean
+	tab: 'sun' | 'moon' | 'planets' | 'minor-planets' | 'dsos' | 'satellites'
 }
 
 export interface DsoState {
@@ -17,18 +18,24 @@ export interface DsoState {
 	readonly position: BodyPosition
 }
 
+let skyAtlasDeepSkyObjectState: DsoState | undefined
+
 // Molecule that manages the Sky Atlas DSOs
-export const SkyAtlasDsoMolecule = molecule((m) => {
+export const SkyAtlasDeepSkyObjectMolecule = molecule(() => {
 	const request = simpleLocalStorage.get<SkyObjectSearch>('skyAtlas.dsos.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
 
 	request.page = 1
 
-	const state = proxy<DsoState>({
-		loading: false,
-		request,
-		result: [],
-		position: structuredClone(DEFAULT_BODY_POSITION),
-	})
+	const state =
+		skyAtlasDeepSkyObjectState ??
+		proxy<DsoState>({
+			loading: false,
+			request,
+			result: [],
+			position: structuredClone(DEFAULT_BODY_POSITION),
+		})
+
+	skyAtlasDeepSkyObjectState = state
 
 	onMount(() => {
 		const unsubscriber = subscribe(state.request, () => simpleLocalStorage.set('skyAtlas.dsos.request', state.request))
@@ -86,7 +93,7 @@ export const SkyAtlasDsoMolecule = molecule((m) => {
 	// Handles the periodic updates
 	function tick() {
 		if (state.request.visible) {
-			void search()
+			void search(false)
 		}
 
 		if (state.selected) {
@@ -97,14 +104,21 @@ export const SkyAtlasDsoMolecule = molecule((m) => {
 	return { state, update, search, select }
 })
 
+let skyAtlasState: SkyAtlasState | undefined
+
 // Molecule that manages the Sky Atlas
 export const SkyAtlasMolecule = molecule((m) => {
 	const home = m(HomeMolecule)
-	const dsos = m(SkyAtlasDsoMolecule)
+	const dsos = m(SkyAtlasDeepSkyObjectMolecule)
 
-	const state = proxy<SkyAtlasState>({
-		showModal: false,
-	})
+	const state =
+		skyAtlasState ??
+		proxy<SkyAtlasState>({
+			showModal: false,
+			tab: 'sun',
+		})
+
+	skyAtlasState = state
 
 	// Shows the modal
 	function show() {

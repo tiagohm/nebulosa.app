@@ -1,10 +1,9 @@
 import { Button, Checkbox } from '@heroui/react'
-import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageFilterMolecule } from '@/molecules/image/filter'
+import { Icons } from './Icon'
 import { Modal } from './Modal'
 
 export const ImageFilter = memo(() => {
@@ -17,10 +16,10 @@ export const ImageFilter = memo(() => {
 		<Modal
 			footer={
 				<>
-					<Button color='danger' isDisabled={!enabled} onPointerUp={filter.reset} startContent={<Tabler.IconRestore size={18} />} variant='flat'>
+					<Button color='danger' isDisabled={!enabled} onPointerUp={filter.reset} startContent={<Icons.Restore />} variant='flat'>
 						Reset
 					</Button>
-					<Button color='success' onPointerUp={filter.apply} startContent={<Lucide.Check size={18} />} variant='flat'>
+					<Button color='success' onPointerUp={filter.apply} startContent={<Icons.Check />} variant='flat'>
 						Apply
 					</Button>
 				</>

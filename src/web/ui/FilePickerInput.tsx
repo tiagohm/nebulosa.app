@@ -1,9 +1,9 @@
 import { Button, Input, type InputProps } from '@heroui/react'
 import { ScopeProvider } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo, useCallback, useRef, useState } from 'react'
 import { FilePickerScope, type FilePickerScopeValue } from '@/molecules/filepicker'
 import { FilePicker } from './FilePicker'
+import { Icons } from './Icon'
 
 export interface FilePickerInputProps extends Omit<FilePickerScopeValue, 'multiple' | 'path'>, Omit<InputProps, 'size' | 'value' | 'onValueChange' | 'onClear' | 'startContent' | 'endContent' | 'isClearable'> {
 	readonly name: string
@@ -35,7 +35,7 @@ export const FilePickerInput = memo(({ filter, mode, name, value, onValueChange,
 					endContent={
 						value ? (
 							<Button isIconOnly size='sm' variant='light'>
-								<Lucide.CircleX className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} size={12} />
+								<Icons.CloseCircle className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} size={12} />
 							</Button>
 						) : null
 					}
@@ -44,7 +44,7 @@ export const FilePickerInput = memo(({ filter, mode, name, value, onValueChange,
 					size='sm'
 					startContent={
 						<Button isIconOnly size='sm' variant='light'>
-							<Lucide.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} size={12} />
+							<Icons.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} size={12} />
 						</Button>
 					}
 					value={value}

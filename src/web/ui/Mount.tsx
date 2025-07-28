@@ -1,13 +1,12 @@
 import { Button, Chip, DropdownItem, Input, Switch, Tooltip } from '@heroui/react'
-import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { memo, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { MountMolecule, type MountState } from '@/molecules/indi/mount'
 import { ConnectButton } from './ConnectButton'
 import { DropdownButton } from './DropdownButton'
+import { Icons } from './Icon'
 import { Location } from './Location'
 import { Modal } from './Modal'
 import { Nudge } from './Nudge'
@@ -45,7 +44,7 @@ export const Mount = memo(() => {
 						<div className='flex flex-row items-center gap-2'>
 							<Tooltip content='Location'>
 								<Button color='danger' isDisabled={!connected || moving} isIconOnly onPointerUp={() => mount.toggleLocationModal()} size='sm' variant='light'>
-									<Tabler.IconMapPinFilled size={18} />
+									<Icons.MapMarker />
 								</Button>
 							</Tooltip>
 						</div>
@@ -98,16 +97,16 @@ export const Mount = memo(() => {
 						onValueChange={(value) => mount.updateTargetCoordinate('action', value)}
 						size='sm'
 						value={targetCoordinate.action}>
-						<DropdownItem key='goto' startContent={<Lucide.Telescope size={18} />}>
+						<DropdownItem key='goto' startContent={<Icons.Telescope />}>
 							Go To
 						</DropdownItem>
-						<DropdownItem key='slew' startContent={<Lucide.Telescope size={18} />}>
+						<DropdownItem key='slew' startContent={<Icons.Telescope />}>
 							Slew
 						</DropdownItem>
-						<DropdownItem key='sync' startContent={<Lucide.RefreshCw size={18} />}>
+						<DropdownItem key='sync' startContent={<Icons.Sync />}>
 							Sync
 						</DropdownItem>
-						<DropdownItem key='frame' startContent={<Lucide.Image size={18} />}>
+						<DropdownItem key='frame' startContent={<Icons.Image />}>
 							Frame
 						</DropdownItem>
 					</DropdownButton>
@@ -118,12 +117,12 @@ export const Mount = memo(() => {
 					<div className='col-span-3 flex flex-row items-center justify-center gap-2'>
 						<Tooltip content={parked ? 'Unpark' : 'Park'}>
 							<Button color={parked ? 'success' : 'danger'} isDisabled={!connected || !canPark || moving} isIconOnly onPointerUp={mount.togglePark} variant='flat'>
-								{parked ? <Lucide.Play size={18} /> : <Tabler.IconPlayerStopFilled size={18} />}
+								{parked ? <Icons.Play /> : <Icons.Stop />}
 							</Button>
 						</Tooltip>
 						<Tooltip content='Home'>
 							<Button color='primary' isDisabled={!connected || !canHome || moving || parked} isIconOnly onPointerUp={mount.home} variant='flat'>
-								<Lucide.Home size={18} />
+								<Icons.Home />
 							</Button>
 						</Tooltip>
 					</div>
@@ -141,10 +140,10 @@ export interface TargetCoordinateDropdownButtonLabelProps {
 }
 
 const TARGET_COORDINATE_DROPDOWN_BUTTON_LABELS_AND_ICONS = {
-	goto: { label: 'Go To', icon: Lucide.Telescope },
-	slew: { label: 'Slew', icon: Lucide.Telescope },
-	sync: { label: 'Sync', icon: Lucide.RefreshCw },
-	frame: { label: 'Frame', icon: Lucide.Image },
+	goto: { label: 'Go To', icon: Icons.Telescope },
+	slew: { label: 'Slew', icon: Icons.Telescope },
+	sync: { label: 'Sync', icon: Icons.Sync },
+	frame: { label: 'Frame', icon: Icons.Image },
 } as const
 
 export function TargetCoordinateDropdownButtonLabel({ action }: TargetCoordinateDropdownButtonLabelProps) {
@@ -153,7 +152,7 @@ export function TargetCoordinateDropdownButtonLabel({ action }: TargetCoordinate
 
 	return (
 		<div className='flex items-center gap-1 text-medium'>
-			{Icon && <Icon size={18} />} {label}
+			{Icon && <Icon />} {label}
 		</div>
 	)
 }

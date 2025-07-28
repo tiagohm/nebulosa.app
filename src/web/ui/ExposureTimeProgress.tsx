@@ -1,7 +1,7 @@
 import { Chip } from '@heroui/react'
 import { useState } from 'react'
 import type { CameraCaptureState, CameraCaptureTaskEvent } from 'src/shared/types'
-import * as MaterialDesignIcon from './MaterialDesignIcon'
+import { Icons } from './Icon'
 
 export interface ExposureTimeProgressProps extends React.HTMLAttributes<HTMLDivElement> {
 	readonly progress: CameraCaptureTaskEvent
@@ -15,11 +15,11 @@ export function ExposureTimeProgress({ progress, className = '', ...props }: Exp
 			<Chip className='lowercase' color='success' size='sm'>
 				{status(progress.state)}
 			</Chip>
-			<Chip color='warning' size='sm' startContent={<MaterialDesignIcon.Counter size={12} />}>
+			<Chip color='warning' size='sm' startContent={<Icons.Counter size={12} />}>
 				{progress.elapsedCount}
 				{!progress.loop && <span> / {progress.count}</span>}
 			</Chip>
-			<Chip color='secondary' onPointerUp={() => setShowRemainingTime(!showRemainingTime)} size='sm' startContent={<MaterialDesignIcon.TimerSand size={12} />}>
+			<Chip color='secondary' onPointerUp={() => setShowRemainingTime(!showRemainingTime)} size='sm' startContent={<Icons.TimerSand size={12} />}>
 				{progress.loop ? (
 					<span>{formatTime(progress.totalProgress.elapsedTime)}</span>
 				) : (
@@ -28,7 +28,7 @@ export function ExposureTimeProgress({ progress, className = '', ...props }: Exp
 					</span>
 				)}
 			</Chip>
-			<Chip color='primary' onPointerUp={() => setShowRemainingTime(!showRemainingTime)} size='sm' startContent={<MaterialDesignIcon.TimerSand size={12} />}>
+			<Chip color='primary' onPointerUp={() => setShowRemainingTime(!showRemainingTime)} size='sm' startContent={<Icons.TimerSand size={12} />}>
 				{formatTime(showRemainingTime ? progress.frameProgress.remainingTime : progress.frameProgress.elapsedTime)} ({progress.frameProgress.progress.toFixed(2)}%)
 			</Chip>
 		</div>

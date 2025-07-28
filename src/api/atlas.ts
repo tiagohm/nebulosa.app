@@ -16,7 +16,7 @@ import { bcrs, type Star, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
 import { earth } from 'nebulosa/src/vsop87e'
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
-import type { BodyPosition, ChartOfBody, PositionOfBody, SkyObjectResult, SkyObjectSearch, SkyObjectSearchResult } from '../shared/types'
+import { type BodyPosition, type ChartOfBody, expectedPierSide, type PositionOfBody, type SkyObjectResult, type SkyObjectSearch, type SkyObjectSearchResult } from '../shared/types'
 
 const HORIZONS_QUANTITIES: Quantity[] = [Quantity.ASTROMETRIC_RA_DEC, Quantity.APPARENT_RA_DEC, Quantity.APPARENT_AZ_EL, Quantity.VISUAL_MAG_SURFACE_BRGHT, Quantity.ONE_WAY_DOWN_LEG_LIGHT_TIME, Quantity.ILLUMINATED_FRACTION, Quantity.SUN_OBSERVER_TARGET_ELONG_ANGLE, Quantity.CONSTELLATION_ID]
 const CACHED_STARS = new Map<number, Star>()
@@ -102,7 +102,7 @@ export const AtlasMolecule = molecule(() => {
 			const time = timeUnix(req.utcTime / 1000)
 			const lha = lst(time, location as never, true)
 
-			where.push(`(asin(sin(d.declination) * sin(${latitude}) + cos(d.declination) * cos(${latitude}) * cos(${lha} - d.rightAscension)) > ${req.visibleAbove})`)
+			where.push(`(asin(sin(d.declination) * ${Math.sin(latitude)} + cos(d.declination) * ${Math.cos(latitude)} * cos(${lha} - d.rightAscension)) >= ${deg(req.visibleAbove)})`)
 		}
 
 		if (!where.length) where.push('1 = 1')
@@ -157,6 +157,7 @@ export const AtlasMolecule = molecule(() => {
 			azimuth,
 			altitude,
 			names: names.map((n) => n.name),
+			pierSide: expectedPierSide(rightAscension, declination, lst(time, location, true)),
 		} satisfies BodyPosition
 	}
 
@@ -311,6 +312,7 @@ function makeBodyPositionFromEphemeris(ephemeris: CsvRow[]): readonly [number, B
 				illuminated: parseFloat(e[12]),
 				elongation: parseAngle(e[13]),
 				leading: e[14] === '/L',
+				pierSide: 'NEITHER',
 			} as BodyPosition,
 		]
 	})

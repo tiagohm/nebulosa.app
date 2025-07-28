@@ -1,6 +1,6 @@
 import { Button, type ButtonProps, Tooltip } from '@heroui/react'
-import * as Lucide from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { Icons } from './Icon'
 
 export interface AutoSaveButtonProps extends Omit<ButtonProps, 'isIconOnly' | 'onPointerUp' | 'variant' | 'size' | 'value' | 'onValueChange'> {
 	readonly value: boolean
@@ -15,7 +15,7 @@ export function AutoSaveButton({ value, onValueChange, ...props }: AutoSaveButto
 	return (
 		<Tooltip content={`Auto save: ${enabled ? 'ON' : 'OFF'}`} placement='bottom' showArrow>
 			<Button {...props} isIconOnly onPointerUp={() => setEnabled(!enabled)} size='sm' variant='light'>
-				{enabled ? <Lucide.Save color='#2196F3' size={14} /> : <Lucide.SaveOff color='#9E9E9E' size={14} />}
+				{enabled ? <Icons.Save color='#9353d3' size={14} /> : <Icons.SaveOff color='#9E9E9E' size={14} />}
 			</Button>
 		</Tooltip>
 	)

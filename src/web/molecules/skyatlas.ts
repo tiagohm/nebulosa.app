@@ -41,7 +41,8 @@ export const SkyAtlasDsoMolecule = molecule((m) => {
 		}
 	})
 
-	tick()
+	if (state.request.visible) tick()
+	else void search()
 
 	// Updates the request state and triggers a search if necessary
 	function update<K extends keyof SkyObjectSearch>(key: K, value: SkyObjectSearch[K]) {

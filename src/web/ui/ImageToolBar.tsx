@@ -1,10 +1,9 @@
 import { Button, Popover, PopoverContent, PopoverTrigger, Switch, Tooltip } from '@heroui/react'
-import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
+import { Icons } from './Icon'
 import { ToggleButton } from './ToggleButton'
 
 export const ImageToolBar = memo(() => {
@@ -16,35 +15,35 @@ export const ImageToolBar = memo(() => {
 			<div className='flex flex-row items-center justify-start gap-2 px-2 py-1.5 mx-auto w-fit rounded-xl bg-black max-w-full overflow-scroll no-scrollbar'>
 				<Tooltip content='Save' placement='top'>
 					<Button color='secondary' isIconOnly variant='flat'>
-						<Lucide.Save />
+						<Icons.Save />
 					</Button>
 				</Tooltip>
 				<Tooltip content='Plate Solver' placement='top'>
 					<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('plateSolver')} variant='flat'>
-						<Lucide.Sigma />
+						<Icons.Sigma />
 					</Button>
 				</Tooltip>
 				<Tooltip content='Stretch' placement='top'>
 					<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('stretch')} variant='flat'>
-						<Tabler.IconChartCandle transform='rotate(90)' />
+						<Icons.Tune />
 					</Button>
 				</Tooltip>
 				<Tooltip content='Auto Stretch' placement='top'>
 					<ToggleButton color='primary' isSelected={transformation.stretch.auto} onPointerUp={viewer.toggleAutoStretch}>
-						<Lucide.WandSparkles />
+						<Icons.WandSparkles />
 					</ToggleButton>
 				</Tooltip>
 				{info.metadata.bayer && info.metadata.channels === 1 && (
 					<Tooltip content='Debayer' placement='top'>
 						<ToggleButton color='primary' isSelected={transformation.debayer} onPointerUp={viewer.toggleDebayer}>
-							<Lucide.Grid3X3 />
+							<Icons.Grid />
 						</ToggleButton>
 					</Tooltip>
 				)}
 				<Popover placement='bottom' showArrow>
 					<PopoverTrigger>
 						<Button color='success' isIconOnly variant='flat'>
-							<Lucide.Palette />
+							<Icons.Palette />
 						</Button>
 					</PopoverTrigger>
 					<PopoverContent>
@@ -52,33 +51,33 @@ export const ImageToolBar = memo(() => {
 							{!info.mono && (
 								<Tooltip content='SCNR' placement='top'>
 									<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('scnr')} variant='flat'>
-										<Lucide.Blend />
+										<Icons.Swatch />
 									</Button>
 								</Tooltip>
 							)}
 							<Tooltip content='Adjustment' placement='top'>
 								<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('adjustment')} variant='flat'>
-									<Lucide.Wand />
+									<Icons.ImageEdit />
 								</Button>
 							</Tooltip>
 							<Tooltip content='Filter' placement='top'>
 								<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('filter')} variant='flat'>
-									<Tabler.IconFilters />
+									<Icons.Brush />
 								</Button>
 							</Tooltip>
 							<Tooltip content='Horizontal mirror' placement='top'>
 								<ToggleButton color='primary' isSelected={transformation.horizontalMirror} onPointerUp={viewer.toggleHorizontalMirror}>
-									<Lucide.FlipHorizontal />
+									<Icons.FlipHorizontal />
 								</ToggleButton>
 							</Tooltip>
 							<Tooltip content='Vertical Mirror' placement='top'>
 								<ToggleButton color='primary' isSelected={transformation.verticalMirror} onPointerUp={viewer.toggleVerticalMirror}>
-									<Lucide.FlipVertical />
+									<Icons.FlipVertical />
 								</ToggleButton>
 							</Tooltip>
 							<Tooltip content='Invert' placement='top'>
 								<ToggleButton color='primary' isSelected={transformation.invert} onPointerUp={viewer.toggleInvert}>
-									<Tabler.IconContrastFilled />
+									<Icons.InvertColor />
 								</ToggleButton>
 							</Tooltip>
 						</div>
@@ -87,37 +86,37 @@ export const ImageToolBar = memo(() => {
 				<Popover placement='bottom' showArrow>
 					<PopoverTrigger>
 						<Button color='success' isIconOnly variant='flat'>
-							<Lucide.BringToFront />
+							<Icons.BringToFront />
 						</Button>
 					</PopoverTrigger>
 					<PopoverContent>
 						<div className='flex flex-row justify-center items-start gap-2 p-2'>
 							<Tooltip content='Crosshair' placement='top'>
 								<ToggleButton color='primary' isSelected={crosshair} onPointerUp={viewer.toggleCrosshair}>
-									<Lucide.Crosshair />
+									<Icons.Crosshair />
 								</ToggleButton>
 							</Tooltip>
-							<Tooltip content='Annotatation' placement='top'>
+							<Tooltip content='Annotation' placement='top'>
 								<Button color='secondary' isIconOnly variant='flat'>
-									<Lucide.Pen />
+									<Icons.Pen />
 								</Button>
 							</Tooltip>
 							<div className='flex flex-col gap-2 justify-center'>
 								<Tooltip content='Star Detection' placement='top'>
 									<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('starDetection')} variant='flat'>
-										<Lucide.Stars />
+										<Icons.Stars />
 									</Button>
 								</Tooltip>
 								{starDetection.stars.length > 0 && <Switch isSelected={starDetection.show} onValueChange={(value) => (viewer.state.starDetection.show = value)} size='sm' />}
 							</div>
 							<Tooltip content='ROI' placement='top'>
 								<Button color='secondary' isIconOnly variant='flat'>
-									<Lucide.Crop />
+									<Icons.Box />
 								</Button>
 							</Tooltip>
 							<Tooltip content='FOV' placement='top'>
 								<Button color='secondary' isIconOnly variant='flat'>
-									<Lucide.Scan />
+									<Icons.Fullscreen />
 								</Button>
 							</Tooltip>
 						</div>
@@ -125,27 +124,27 @@ export const ImageToolBar = memo(() => {
 				</Popover>
 				<Tooltip content='Statistics' placement='top'>
 					<Button color='secondary' isIconOnly variant='flat'>
-						<Tabler.IconChartColumn />
+						<Icons.Histogram />
 					</Button>
 				</Tooltip>
 				<Tooltip content='FITS Header' placement='top'>
 					<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('fitsHeader')} variant='flat'>
-						<Tabler.IconAlignJustified />
+						<Icons.Text />
 					</Button>
 				</Tooltip>
 				<Tooltip content='Mouse Coordinate' placement='top'>
 					<Button color='secondary' isIconOnly variant='flat'>
-						<Lucide.MousePointerClick />
+						<Icons.MousePointerClick />
 					</Button>
 				</Tooltip>
 				<Tooltip content='Settings' placement='top'>
 					<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('settings')} variant='flat'>
-						<Lucide.Settings />
+						<Icons.Cog />
 					</Button>
 				</Tooltip>
 				<Tooltip content='Close' placement='top'>
 					<Button className='ms-2' color='danger' isIconOnly onPointerUp={viewer.remove} variant='solid'>
-						<Lucide.X />
+						<Icons.Close />
 					</Button>
 				</Tooltip>
 			</div>

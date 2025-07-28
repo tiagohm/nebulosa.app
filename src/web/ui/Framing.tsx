@@ -1,11 +1,11 @@
 import { Button, Checkbox, Chip, Input, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import { memo, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FramingMolecule } from '@/molecules/framing'
 import { HipsSurveySelect } from './HipsSurveySelect'
+import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { PoweredBy } from './PoweredBy'
 
@@ -26,7 +26,7 @@ export const Framing = memo(() => {
 					<div className='flex-1 flex items-center'>
 						<Chip color='primary'>{fov}</Chip>
 					</div>
-					<Button color='success' isLoading={loading} onPointerUp={framing.load} startContent={<Lucide.Download size={18} />} variant='flat'>
+					<Button color='success' isLoading={loading} onPointerUp={framing.load} startContent={<Icons.Download />} variant='flat'>
 						Load
 					</Button>
 				</>

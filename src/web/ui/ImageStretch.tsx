@@ -1,10 +1,9 @@
 import { Button, NumberInput, Slider } from '@heroui/react'
-import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
+import { Icons } from './Icon'
 import { Modal } from './Modal'
 
 export const ImageStretch = memo(() => {
@@ -24,13 +23,13 @@ export const ImageStretch = memo(() => {
 		<Modal
 			footer={
 				<>
-					<Button color='primary' onPointerUp={stretch.auto} startContent={<Lucide.WandSparkles size={18} />} variant={auto ? 'solid' : 'flat'}>
+					<Button color='primary' onPointerUp={stretch.auto} startContent={<Icons.WandSparkles />} variant={auto ? 'solid' : 'flat'}>
 						Auto
 					</Button>
-					<Button color='danger' onPointerUp={stretch.reset} startContent={<Tabler.IconRestore size={18} />} variant='flat'>
+					<Button color='danger' onPointerUp={stretch.reset} startContent={<Icons.Restore />} variant='flat'>
 						Reset
 					</Button>
-					<Button color='success' onPointerUp={stretch.apply} startContent={<Lucide.Check size={18} />} variant='flat'>
+					<Button color='success' onPointerUp={stretch.apply} startContent={<Icons.Check />} variant='flat'>
 						Stretch
 					</Button>
 				</>

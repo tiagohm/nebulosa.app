@@ -1,9 +1,9 @@
 import { Button, Input, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
+import { Icons } from './Icon'
 import { Modal } from './Modal'
 
 export const ConnectionEdit = memo(() => {
@@ -13,7 +13,7 @@ export const ConnectionEdit = memo(() => {
 	return (
 		<Modal
 			footer={
-				<Button color='success' isDisabled={!edited?.name || !edited?.host || !edited?.port} onPointerUp={connection.save} startContent={<Lucide.Check size={18} />} variant='flat'>
+				<Button color='success' isDisabled={!edited?.name || !edited?.host || !edited?.port} onPointerUp={connection.save} startContent={<Icons.Check />} variant='flat'>
 					Save
 				</Button>
 			}

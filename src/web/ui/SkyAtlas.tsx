@@ -1,19 +1,19 @@
 import { Button, Checkbox, Input, NumberInput, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
-import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { CONSTELLATION_LIST, CONSTELLATIONS } from 'nebulosa/src/constellation'
 import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/distance'
+import { memo } from 'react'
 import type { BodyPosition, SkyObjectSearchResult } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { ConstellationSelect } from './ConstellationSelect'
+import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { SKY_OBJECT_NAME_TYPES, SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 
-export function SkyAtlas() {
+export const SkyAtlas = memo(() => {
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
 	const dsos = useSnapshot(skyAtlas.dsos.state.request, { sync: true })
 	const { loading, result: dsosResult, selected, position } = useSnapshot(skyAtlas.dsos.state)
@@ -22,11 +22,11 @@ export function SkyAtlas() {
 		<Modal header='Sky Atlas' maxWidth='540px' name='sky-atlas' onClose={skyAtlas.close}>
 			<div className='mt-0 flex flex-col gap-2'>
 				<Tabs>
-					<Tab title={<Tabler.IconSun />}></Tab>
-					<Tab title={<Tabler.IconMoon />}></Tab>
-					<Tab title={<Tabler.IconPlanet />}></Tab>
-					<Tab title={<Tabler.IconComet />}></Tab>
-					<Tab title={<Tabler.IconGalaxy />}>
+					<Tab title={<Icons.Sun />}></Tab>
+					<Tab title={<Icons.Moon />}></Tab>
+					<Tab title={<Icons.Planet />}></Tab>
+					<Tab title={<Icons.Meteor />}></Tab>
+					<Tab title={<Icons.Galaxy />}>
 						<div className='grid grid-cols-12 gap-2 items-center'>
 							<Input
 								className='col-span-6 sm:col-span-4'
@@ -61,7 +61,7 @@ export function SkyAtlas() {
 							<NumberInput className='col-span-5 sm:col-span-3' isDisabled={!dsos.visible || loading} label='Visible above (°)' maxValue={89} minValue={0} onValueChange={(value) => skyAtlas.dsos.update('visibleAbove', value)} size='sm' value={dsos.visibleAbove} />
 							<div className='col-span-2 sm:col-span-5 flex flex-row items-center justify-center'>
 								<Button color='primary' isDisabled={loading} isIconOnly onPointerUp={() => skyAtlas.dsos.search()} variant='flat'>
-									<Lucide.Search size={18} />
+									<Icons.Search />
 								</Button>
 							</div>
 							<Table className='mt-3 col-span-full' onRowAction={(key) => skyAtlas.dsos.select(+(key as never))} onSortChange={(value) => skyAtlas.dsos.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={dsos.sort}>
@@ -90,11 +90,11 @@ export function SkyAtlas() {
 							</Table>
 							<div className='col-span-full flex flex-row items-center justify-center gap-3'>
 								<Button color='secondary' isDisabled={dsos.page <= 1 || loading} isIconOnly onPointerUp={() => skyAtlas.dsos.update('page', dsos.page - 1)} variant='flat'>
-									<Lucide.ChevronLeft size={18} />
+									<Icons.ChevronLeft />
 								</Button>
 								<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} hideStepper={true} isDisabled={!dsosResult.length || loading} onValueChange={(value) => skyAtlas.dsos.update('page', value)} size='sm' step={1} value={dsos.page} />
 								<Button color='secondary' isDisabled={!dsosResult.length || loading} isIconOnly onPointerUp={() => skyAtlas.dsos.update('page', dsos.page + 1)} variant='flat'>
-									<Lucide.ChevronRight size={18} />
+									<Icons.ChevronRight />
 								</Button>
 							</div>
 							{selected && (
@@ -104,12 +104,12 @@ export function SkyAtlas() {
 							)}
 						</div>
 					</Tab>
-					<Tab title={<Tabler.IconSatellite />}></Tab>
+					<Tab title={<Icons.Satellite />}></Tab>
 				</Tabs>
 			</div>
 		</Modal>
 	)
-}
+})
 
 export interface PositionOfBodyProps {
 	readonly position: BodyPosition
@@ -131,6 +131,7 @@ export function PositionOfBody({ position, item }: PositionOfBodyProps) {
 			<Input className='col-span-6 sm:col-span-3' isReadOnly label='Distance' size='sm' value={formatDistance(position.distance)} />
 			<Input className='col-span-6 sm:col-span-3' isReadOnly label='Illuminated (%)' size='sm' value={position.illuminated.toFixed(2)} />
 			<Input className='col-span-6 sm:col-span-3' isReadOnly label='Elongation (°)' size='sm' value={position.elongation.toFixed(2)} />
+			<Input className='col-span-6 sm:col-span-3' isReadOnly label='Pier Side' size='sm' value={position.pierSide} />
 		</div>
 	)
 }

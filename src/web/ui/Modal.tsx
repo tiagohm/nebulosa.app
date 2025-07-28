@@ -1,7 +1,7 @@
 import { Button, Card, CardBody, CardFooter, CardHeader } from '@heroui/react'
-import * as Lucide from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
 import { useModal } from '@/shared/hooks'
+import { Icons } from './Icon'
 
 export interface ModalProps {
 	readonly name: string
@@ -21,7 +21,7 @@ export function Modal({ name, onClose, header, footer, children, maxWidth }: Mod
 				<CardHeader {...modal.moveProps} className='w-full flex flex-row items-center justify-between gap-2'>
 					<div className='w-full text-lg font-semibold text-neutral-900 dark:text-neutral-100'>{header}</div>
 					<Button className='rounded-full' color='danger' isIconOnly onPointerUp={modal.close} variant='flat'>
-						<Lucide.X className='w-4 h-4' />
+						<Icons.Close className='w-4 h-4' />
 					</Button>
 				</CardHeader>
 				<CardBody className='overflow-visible'>{children}</CardBody>

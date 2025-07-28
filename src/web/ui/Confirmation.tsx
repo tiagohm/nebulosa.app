@@ -1,9 +1,9 @@
 import { Button } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConfirmationMolecule } from '@/molecules/confirmation'
+import { Icons } from './Icon'
 import { Modal } from './Modal'
 
 export const Confirmation = memo(() => {
@@ -14,10 +14,10 @@ export const Confirmation = memo(() => {
 		<Modal
 			footer={
 				<>
-					<Button color='danger' onPointerUp={confirmation.reject} startContent={<Lucide.X size={18} />} variant='flat'>
+					<Button color='danger' onPointerUp={confirmation.reject} startContent={<Icons.Close />} variant='flat'>
 						Cancel
 					</Button>
-					<Button color='success' onPointerUp={confirmation.accept} startContent={<Lucide.Check size={18} />} variant='flat'>
+					<Button color='success' onPointerUp={confirmation.accept} startContent={<Icons.Check />} variant='flat'>
 						OK
 					</Button>
 				</>

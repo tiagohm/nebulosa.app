@@ -1,7 +1,5 @@
 import { Button, Checkbox, NumberInput, SelectItem, Switch, Tooltip } from '@heroui/react'
-import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo, useCallback } from 'react'
 import { useSnapshot } from 'valtio'
 import { CameraMolecule } from '@/molecules/indi/camera'
@@ -14,6 +12,7 @@ import { ExposureTimeInput } from './ExposureTimeInput'
 import { ExposureTimeProgress } from './ExposureTimeProgress'
 import { FilePickerInput } from './FilePickerInput'
 import { FrameTypeSelect } from './FrameTypeSelect'
+import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { MountDropdown } from './MountDropdown'
 
@@ -32,10 +31,10 @@ export const Camera = memo(() => {
 		<Modal
 			footer={
 				<>
-					<Button color='danger' isDisabled={!connected || !canAbort || !capturing} onPointerUp={camera.stop} startContent={<Tabler.IconPlayerStopFilled size={18} />} variant='flat'>
+					<Button color='danger' isDisabled={!connected || !canAbort || !capturing} onPointerUp={camera.stop} startContent={<Icons.Stop />} variant='flat'>
 						Stop
 					</Button>
-					<Button color='success' isDisabled={!connected} isLoading={capturing} onPointerUp={camera.start} startContent={<Tabler.IconPlayerPlayFilled size={18} />} variant='flat'>
+					<Button color='success' isDisabled={!connected} isLoading={capturing} onPointerUp={camera.start} startContent={<Icons.Play />} variant='flat'>
 						Start
 					</Button>
 				</>
@@ -75,7 +74,7 @@ export const Camera = memo(() => {
 						endContent={
 							<Tooltip content='Apply' placement='bottom'>
 								<Button color='success' isIconOnly onPointerUp={() => camera.temperature(targetTemperature)} size='sm' variant='light'>
-									<Lucide.Check size={18} />
+									<Icons.Check />
 								</Button>
 							</Tooltip>
 						}
@@ -109,7 +108,7 @@ export const Camera = memo(() => {
 					</Checkbox>
 					<Tooltip content='Fullscreen' placement='bottom'>
 						<Button color='secondary' isDisabled={!connected || !request.subframe || capturing} isIconOnly onPointerUp={camera.fullscreen} variant='light'>
-							<Lucide.Fullscreen size={18} />
+							<Icons.Fullscreen />
 						</Button>
 					</Tooltip>
 				</div>

@@ -93,6 +93,7 @@ export interface BodyPosition extends Readonly<EquatorialCoordinate>, Readonly<E
 	readonly elongation: number
 	readonly leading: boolean
 	readonly names?: readonly string[]
+	readonly pierSide: PierSide
 }
 
 // Confirmation
@@ -888,6 +889,7 @@ export const DEFAULT_BODY_POSITION: BodyPosition = {
 	azimuth: 0,
 	altitude: 0,
 	names: [],
+	pierSide: 'NEITHER',
 }
 
 export function isCamera(device: Device): device is Camera {

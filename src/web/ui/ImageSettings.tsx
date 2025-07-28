@@ -1,9 +1,9 @@
 import { Button, Checkbox } from '@heroui/react'
-import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageSettingsMolecule } from '@/molecules/image/settings'
+import { Icons } from './Icon'
 import { ImageFormatSelect } from './ImageFormatSelect'
 import { Modal } from './Modal'
 
@@ -16,7 +16,7 @@ export const ImageSettings = memo(() => {
 	return (
 		<Modal
 			footer={
-				<Button color='danger' onPointerUp={settings.reset} startContent={<Tabler.IconRestore size={18} />} variant='flat'>
+				<Button color='danger' onPointerUp={settings.reset} startContent={<Icons.Restore />} variant='flat'>
 					Reset
 				</Button>
 			}

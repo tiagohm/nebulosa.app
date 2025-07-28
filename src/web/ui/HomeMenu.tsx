@@ -1,6 +1,5 @@
 import { Button, Chip, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
@@ -33,6 +32,7 @@ import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { About } from './About'
 import { Calculator } from './Calculator'
 import { Framing } from './Framing'
+import { Icons } from './Icon'
 import { SkyAtlas } from './SkyAtlas'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
@@ -61,7 +61,7 @@ export const HomeMenu = memo(() => {
 			<Popover isOpen={show} onOpenChange={home.toggleMenu} placement='bottom' showArrow>
 				<PopoverTrigger>
 					<Button color='secondary' isIconOnly variant='light'>
-						<Lucide.Menu />
+						<Icons.Menu />
 					</Button>
 				</PopoverTrigger>
 				<PopoverContent>
@@ -175,7 +175,7 @@ export const HomeMenu = memo(() => {
 							<div className='col-span-full my-2 flex flex-col items-center justify-center gap-2 flex-wrap'>
 								<span className='font-bold text-sm mt-2 uppercase'>{formattedDeviceName(selected)}</span>
 								{devices[selected].map((device) => (
-									<Chip className='min-w-full cursor-pointer' color={device.connected ? 'success' : 'danger'} endContent={<Lucide.Settings size={20} />} key={device.name} onClose={() => equipment.show(selected, device)} onPointerUp={() => equipment.show(selected, device)} variant='flat'>
+									<Chip className='min-w-full cursor-pointer' color={device.connected ? 'success' : 'danger'} endContent={<Icons.Cog />} key={device.name} onClose={() => equipment.show(selected, device)} onPointerUp={() => equipment.show(selected, device)} variant='flat'>
 										{device.name}
 									</Chip>
 								))}

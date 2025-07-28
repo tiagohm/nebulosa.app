@@ -1,8 +1,8 @@
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
+import { Icons } from './Icon'
 
 export const ImageInfo = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
@@ -16,7 +16,7 @@ export const ImageInfo = memo(() => {
 				<span className='text-xs text-neutral-400'>{info.originalPath}</span>
 				<div className='flex flex-row items-center gap-1'>
 					{info.width}x{info.height}
-					<Lucide.ZoomIn size={14} />
+					<Icons.ZoomIn size={14} />
 					{scale.toFixed(2)}
 				</div>
 			</div>

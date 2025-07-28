@@ -1,11 +1,11 @@
 import { Button, Tooltip } from '@heroui/react'
 import { ScopeProvider, useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo, useCallback } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerScope } from '@/molecules/filepicker'
 import { ImageWorkspaceMolecule } from '@/molecules/image/workspace'
 import { FilePicker } from './FilePicker'
+import { Icons } from './Icon'
 
 export const ImagePickerButton = memo(() => {
 	const workspace = useMolecule(ImageWorkspaceMolecule)
@@ -25,7 +25,7 @@ export const ImagePickerButton = memo(() => {
 		<>
 			<Tooltip content='Open Image' showArrow>
 				<Button color='secondary' isIconOnly onPointerUp={() => (workspace.state.showModal = true)} variant='light'>
-					<Lucide.ImagePlus />
+					<Icons.ImagePlus />
 				</Button>
 			</Tooltip>
 			{showModal && (

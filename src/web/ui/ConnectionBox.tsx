@@ -1,12 +1,12 @@
 import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, SelectItem, type SharedSelection, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
-import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
+import { Icons } from './Icon'
 
 export const ConnectionBox = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
@@ -24,7 +24,7 @@ export const ConnectionBox = memo(() => {
 			<div className='w-full flex flex-row items-center gap-2 max-w-120'>
 				<Tooltip content='New Connection' showArrow>
 					<Button color='success' isDisabled={loading || !!connected} isIconOnly onPointerUp={connection.create} variant='light'>
-						<Lucide.Plus />
+						<Icons.Plus />
 					</Button>
 				</Tooltip>
 				<Select
@@ -65,9 +65,9 @@ export const ConnectionBox = memo(() => {
 											</Chip>
 										</span>
 										<span className='text-default-500 text-tiny flex gap-1 items-center'>
-											<Lucide.Computer size={12} />
+											<Icons.Laptop size={12} />
 											{item.host}:{item.port}
-											<Lucide.Clock size={12} />
+											<Icons.Clock size={12} />
 											{item.connectedAt ? format(item.connectedAt, 'yyyy-MM-dd HH:mm:ss') : 'never'}
 										</span>
 									</div>
@@ -76,17 +76,17 @@ export const ConnectionBox = memo(() => {
 									<Dropdown showArrow>
 										<DropdownTrigger>
 											<Button isIconOnly size='sm' variant='light'>
-												<Lucide.EllipsisVertical size={18} />
+												<Icons.VerticalMenu />
 											</Button>
 										</DropdownTrigger>
 										<DropdownMenu disabledKeys={connections.length === 1 ? ['delete'] : []}>
-											<DropdownItem key='edit' onPointerUp={() => connection.edit(item)} startContent={<Lucide.Pencil size={12} />}>
+											<DropdownItem key='edit' onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit size={12} />}>
 												Edit
 											</DropdownItem>
-											<DropdownItem key='duplicate' onPointerUp={() => connection.duplicate(item)} startContent={<Lucide.Copy size={12} />}>
+											<DropdownItem key='duplicate' onPointerUp={() => connection.duplicate(item)} startContent={<Icons.Copy size={12} />}>
 												Duplicate
 											</DropdownItem>
-											<DropdownItem className='text-danger' color='danger' key='delete' onPointerUp={() => connection.remove(item)} startContent={<Lucide.Trash size={12} />}>
+											<DropdownItem className='text-danger' color='danger' key='delete' onPointerUp={() => connection.remove(item)} startContent={<Icons.Trash size={12} />}>
 												Delete
 											</DropdownItem>
 										</DropdownMenu>

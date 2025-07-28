@@ -1,8 +1,8 @@
 import { Button, NumberInput } from '@heroui/react'
 import type { LatLngTuple } from 'leaflet'
-import * as Lucide from 'lucide-react'
 import { useCallback, useState } from 'react'
 import type { GeographicCoordinate } from 'src/shared/types'
+import { Icons } from './Icon'
 import { MapViewer } from './MapViewer'
 import { Modal } from './Modal'
 
@@ -34,7 +34,7 @@ export function Location({ name, initialPosition, onPositionChange, onClose }: L
 	return (
 		<Modal
 			footer={
-				<Button color='success' onPointerUp={handlePositionChoose} startContent={<Lucide.Check size={18} />} variant='flat'>
+				<Button color='success' onPointerUp={handlePositionChoose} startContent={<Icons.Check />} variant='flat'>
 					Choose
 				</Button>
 			}

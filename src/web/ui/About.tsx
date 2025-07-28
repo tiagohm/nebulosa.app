@@ -1,11 +1,11 @@
 import { Chip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import brazilLogo from '@/assets/brazil.png'
 import nebulosaLogo from '@/assets/nebulosa.ico'
 import { AboutMolecule } from '@/molecules/about'
 import packageJson from '../../../package.json'
+import { Icons } from './Icon'
 import { Modal } from './Modal'
 
 export const About = memo(() => {
@@ -29,18 +29,20 @@ export const About = memo(() => {
 				</div>
 				<div className='col-span-full sm:col-span-9 mt-4 p-4 bg-blue-600/10 rounded-2xl text-center'>This software is WIP, comes with absolutely no warranty and the copyright holder is not liable or responsible for anything.</div>
 				<div className='col-span-full sm:col-span-9 px-4 py-2 bg-green-600/10 rounded-2xl flex flex-row flex-nowrap gap-1 justify-center items-center text-sm'>
-					<Lucide.Link size={14} />
+					<Icons.Link size={14} />
 					Icons from
 					<a className='underline' href='https://www.flaticon.com/' rel='noreferrer' target='_blank'>
-						Flaticon
+						Flaticon,
 					</a>
-					,
 					<a className='underline' href='https://lucide.dev/icons/' rel='noreferrer' target='_blank'>
-						Lucide
+						Lucide,
 					</a>
-					and
 					<a className='underline' href='https://tabler.io/icons/' rel='noreferrer' target='_blank'>
 						Tabler
+					</a>
+					and
+					<a className='underline' href='https://pictogrammers.com/library/mdi/' rel='noreferrer' target='_blank'>
+						MDI
 					</a>
 				</div>
 				<div className='col-span-full sm:col-span-9 mt-4 mb-1 flex flex-row flex-wrap items-center justify-center gap-1 text-xs'>
@@ -52,7 +54,7 @@ export const About = memo(() => {
 					<a className='bg-neutral-700 px-1 rounded' href='https://bun.sh/' rel='noreferrer' target='_blank'>
 						Bun
 					</a>
-					and developed with <Lucide.Heart color='red' size={15} /> by
+					and developed with <Icons.Heart color='red' size={15} /> by
 					<a className='bg-neutral-700 px-1 rounded' href='https://github.com/tiagohm' rel='noreferrer' target='_blank'>
 						Me
 					</a>

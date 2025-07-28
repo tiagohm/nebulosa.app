@@ -1,6 +1,6 @@
 import { Input, Select, type SelectProps } from '@heroui/react'
-import * as Lucide from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { Icons } from './Icon'
 
 export interface FilterableSelectProps<T extends object> extends Omit<SelectProps<T>, 'listboxProps' | 'items'> {
 	readonly items: readonly Readonly<T>[]
@@ -22,7 +22,7 @@ export function FilterableSelect<T extends object>({ showFilter = true, items, f
 			{...props}
 			items={filtered}
 			listboxProps={{
-				topContent: showFilter && <Input className='w-full' isClearable onValueChange={(value) => setSearch(value)} placeholder={filterPlaceholder} startContent={<Lucide.Search size={18} />} value={search} />,
+				topContent: showFilter && <Input className='w-full' isClearable onValueChange={(value) => setSearch(value)} placeholder={filterPlaceholder} startContent={<Icons.Search />} value={search} />,
 			}}
 		/>
 	)

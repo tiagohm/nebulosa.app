@@ -1,10 +1,9 @@
 import { Button, Checkbox, NumberInput } from '@heroui/react'
-import * as Tabler from '@tabler/icons-react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
+import { Icons } from './Icon'
 import { Modal } from './Modal'
 
 export const ImageAdjustment = memo(() => {
@@ -17,10 +16,10 @@ export const ImageAdjustment = memo(() => {
 		<Modal
 			footer={
 				<>
-					<Button color='danger' isDisabled={!enabled} onPointerUp={adjustment.reset} startContent={<Tabler.IconRestore size={18} />} variant='flat'>
+					<Button color='danger' isDisabled={!enabled} onPointerUp={adjustment.reset} startContent={<Icons.Restore />} variant='flat'>
 						Reset
 					</Button>
-					<Button color='success' onPointerUp={adjustment.apply} startContent={<Lucide.Check size={18} />} variant='flat'>
+					<Button color='success' onPointerUp={adjustment.apply} startContent={<Icons.Check />} variant='flat'>
 						Adjust
 					</Button>
 				</>

@@ -1,11 +1,11 @@
 import { Button, Input, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import * as Lucide from 'lucide-react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 import { Modal } from './Modal'
 import { StarDetectionSelect } from './StarDetectionSelect'
+import { Icons } from './Icon'
 
 export const StarDetection = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
@@ -17,7 +17,7 @@ export const StarDetection = memo(() => {
 	return (
 		<Modal
 			footer={
-				<Button color='success' isLoading={loading} onPointerUp={starDetection.detect} startContent={<Lucide.Check size={18} />} variant='flat'>
+				<Button color='success' isLoading={loading} onPointerUp={starDetection.detect} startContent={<Icons.Check />} variant='flat'>
 					Detect
 				</Button>
 			}

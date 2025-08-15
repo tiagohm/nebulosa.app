@@ -1,12 +1,13 @@
 import { Database } from 'bun:sqlite'
 import fs from 'fs/promises'
-import type { Angle } from 'nebulosa/src/angle'
+import { type Angle, deg, mas } from 'nebulosa/src/angle'
 import { CONSTELLATION_LIST, type Constellation, constellation } from 'nebulosa/src/constellation'
 import type { Distance } from 'nebulosa/src/distance'
 import { readHygCatalog } from 'nebulosa/src/hyg'
 import { fileHandleSource } from 'nebulosa/src/io'
+import { simbadQuery } from 'nebulosa/src/simbad'
 import { readCatalogDat, readNamesDat, StellariumObjectType } from 'nebulosa/src/stellarium'
-import type { Velocity } from 'nebulosa/src/velocity'
+import { kilometerPerSecond, type Velocity } from 'nebulosa/src/velocity'
 
 const NAME = 0
 const NGC = 1
@@ -45,8 +46,64 @@ const BENNETT = 33
 const DUNLOP = 34
 const HERSHEL = 35
 const GUM = 36
+const BOCHUM = 37
 
-const CATALOGS = { NAME, NGC, IC, BAYER, FLAMSTEED, HD, HR, HIP, M, C, B, SH2, LBN, LDN, CR, MEL, ARP, ABELL, PGC, TR, ST, RU, UGC, CED, RCW, VDB, VV, PK, PNG, ACO, ESO, SNRG, DWB, BENNETT, DUNLOP, HERSHEL, GUM }
+const ALESSI = 38
+const ALICANTE = 39
+const ALTER = 40
+const ANTALOVA = 41
+const APRIAMASWILI = 42
+const CL_ARP = 43
+const BARHATOVA = 44
+const BASEL = 45
+const BERKELEY = 46
+const BICA = 47
+const BIURAKAN = 48
+const BLANCO = 49
+const CHUPINA = 50
+const CZERNIK = 51
+const DANKS = 52
+const DIAS = 53
+const DJORG = 54
+const DOLIDZE_DZIM = 55
+const DOLIDZE = 56
+const DUFAY = 57
+const FEINSTEIN = 58
+const FERRERO = 59
+const GRAFF = 60
+const GULLIVER = 61
+const HAFFNER = 62
+const HARVARD = 63
+const HAUTE_PROVENCE = 64
+const HOGG = 65
+const ISKURZDAJAN = 66
+const JOHANSSON = 67
+const KHARCHENKO = 68
+const KING = 69
+const KRON = 70
+const LINDSAY = 71
+const LODEN = 72
+const LYNGA = 73
+const MAMAJEK = 74
+const MOFFAT = 75
+const MRK = 76
+const PAL = 77
+const PISMIS = 78
+const PLATAIS = 79
+const ROSLUND = 80
+const SAURER = 81
+const SHER = 82
+const SKIFF = 83
+const STEPHENSON = 84
+const TERZAN = 85
+const TOMBAUGH = 86
+const TURNER = 87
+const UPGREN = 88
+const WATERLOO = 89
+const WESTERLUND = 90
+const ZWICKY = 91
+
+const CATALOGS = { NAME, NGC, IC, BAYER, FLAMSTEED, HD, HR, HIP, M, C, B, SH2, LBN, LDN, CR, MEL, ARP, ABELL, PGC, TR, ST, RU, UGC, CED, RCW, VDB, VV, PK, PNG, ACO, ESO, SNRG, DWB, BENNETT, DUNLOP, HERSHEL, GUM, BOCHUM }
 
 // https://www.docdb.net/tutorials/bennett_catalogue.php
 const BENNETT_CATALOG: [string, number, string][] = [
@@ -778,7 +835,7 @@ const db = new Database('data/nebulosa.sqlite')
 
 db.run('PRAGMA journal_mode = WAL;')
 
-db.run('CREATE TABLE IF NOT EXISTS dsos (id INTEGER PRIMARY KEY, type INTEGER, rightAscension REAL, declination REAL, magnitude REAL, pmRa REAL, pmDec REAL, distance INTEGER, rv REAL, constellation INTEGER);')
+db.run('CREATE TABLE IF NOT EXISTS dsos (id INTEGER PRIMARY KEY, type INTEGER, rightAscension REAL, declination REAL, magnitude REAL, pmRa REAL, pmDec REAL, distance INTEGER, rv REAL, constellation INTEGER, spmType TEXT);')
 db.run('CREATE TABLE IF NOT EXISTS names (dsoId INTEGER, type INTEGER, name TEXT COLLATE NOCASE, PRIMARY KEY (dsoId, type, name), FOREIGN KEY (dsoId) REFERENCES dsos(id)) WITHOUT ROWID;')
 
 function mapNameWithGreekLetter(name: string) {
@@ -836,16 +893,17 @@ for await (const entry of readNamesDat(fileHandleSource(await fs.open('data/name
 NAMES.get(IC)!.push(['342', 'Hidden Galaxy'])
 NAMES.get(NGC)!.push(['6752', 'Great Peacock Globular'])
 
-function addDso(id: number, type: number, ra: Angle, dec: Angle, mag: number, pmRa: Angle, pmDec: Angle, distance: Distance, rv: Velocity, cnst?: Constellation) {
-	const data = [id, type, ra, dec, mag.toFixed(2), pmRa, pmDec, Math.abs(distance).toFixed(0), rv, CONSTELLATION_LIST.indexOf(cnst ?? constellation(ra, dec))]
-	db.run('INSERT OR IGNORE INTO dsos(id, type, rightAscension, declination, magnitude, pmRa, pmDec, distance, rv, constellation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);', data)
+function addDso(id: number, type: StellariumObjectType, ra: Angle, dec: Angle, mag: number, pmRa: Angle, pmDec: Angle, distance: Distance, rv: Velocity, spmType?: string | null, cnst?: Constellation) {
+	spmType = spmType && spmType[0] !== '-' && ((type >= 1 && type <= 4) || (type >= 21 && type <= 23) || type === 29 || type === 34) && Number.isNaN(+spmType[0]) ? spmType : null
+	const data = [id, type, ra, dec, mag.toFixed(2), pmRa, pmDec, Math.abs(distance).toFixed(0), rv, CONSTELLATION_LIST.indexOf(cnst ?? constellation(ra, dec)), spmType]
+	return db.run('INSERT OR IGNORE INTO dsos(id, type, rightAscension, declination, magnitude, pmRa, pmDec, distance, rv, constellation, spmType) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);', data).lastInsertRowid
 }
 
-function addName(dsoId: number, type: number, name: string) {
-	db.run('INSERT OR IGNORE INTO names(dsoId, type, name) VALUES (?, ?, ?);', [dsoId, type, name])
+function addName(dsoId: number | bigint, type: number, name: string) {
+	return db.run('INSERT OR IGNORE INTO names(dsoId, type, name) VALUES (?, ?, ?);', [dsoId, type, name]).lastInsertRowid
 }
 
-function addNameFromTypeAndId(dsoId: number, type: number, id: string, useIt: boolean = true) {
+function addNameFromTypeAndId(dsoId: number | bigint, type: number, id: string, useIt: boolean = true) {
 	const names = NAMES.get(type)?.filter((entry) => entry[0] === id)
 	names?.forEach((e) => addName(dsoId, NAME, e[1]))
 
@@ -913,7 +971,7 @@ async function readDsosFromStellarium() {
 
 		if (add) {
 			const magnitude = mV === 99 ? 99 : type === StellariumObjectType.DARK_NEBULA ? 99 - mV : Math.min(mV, mB)
-			addDso(id, type, rightAscension, declination, magnitude, 0, 0, distance, 0)
+			addDso(id, type, rightAscension, declination, magnitude, 0, 0, distance, 0, entry.mType)
 		}
 	}
 
@@ -924,7 +982,7 @@ async function readStarsFromHyg() {
 	console.time('hyg')
 
 	for await (const row of readHygCatalog(fileHandleSource(await fs.open('data/hyg_v42.csv')))) {
-		const { id, rightAscension, declination, magnitude, pmRa, pmDec, distance, rv, constellation, hd, hip, hr, bayer, flamsteed, name } = row
+		const { id, rightAscension, declination, magnitude, pmRa, pmDec, distance, rv, constellation, hd, hip, hr, bayer, flamsteed, name, spType } = row
 
 		if (id > 0 && magnitude <= 7 && (bayer || flamsteed || name)) {
 			if (name) addName(id, NAME, name)
@@ -934,7 +992,7 @@ async function readStarsFromHyg() {
 			if (hip) addName(id, HIP, hip.toFixed(0))
 			if (hr) addName(id, HR, hr.toFixed(0))
 
-			addDso(id, StellariumObjectType.STAR, rightAscension, declination, magnitude, pmRa, pmDec, distance, rv, constellation)
+			addDso(id, StellariumObjectType.STAR, rightAscension, declination, magnitude, pmRa, pmDec, distance, rv, spType, constellation)
 		}
 	}
 
@@ -943,6 +1001,136 @@ async function readStarsFromHyg() {
 
 await readStarsFromHyg()
 await readDsosFromStellarium()
+
+const SIMBAD_STAR_CLUSTER_QUERY = `
+select distinct b.oid, b.ra, b.dec, b.otype, b.pmra, b.pmdec, b.plx_value, b.rvz_radvel, f.V, f.B, f.J, f.H, ids.ids from basic b
+join ident i on b.oid = i.oidref and i.id like 'Cl %'
+join ids ids on b.oid = ids.oidref
+left join allfluxes f on f.oidref = b.oid
+where b.ra is not null and b.dec is not null and (b.otype = 'Cl*..' or b.otype = 'As*..')
+order by oid asc
+`
+
+const CL_REGEX = /Cl\s+([-\w]+)\s+(\d+\w?)/
+const NGC_REGEX = /NGC\s+(\d+)/
+const IC_REGEX = /IC\s+(\d+)/
+
+const ADDITIONAL_STAR_CLUSTER_CATALOGS: Record<string, number> = {
+	Alessi: ALESSI,
+	Alicante: ALICANTE,
+	Alter: ALTER,
+	Antalova: ANTALOVA,
+	Apriamaswili: APRIAMASWILI,
+	Arp: CL_ARP,
+	Barhatova: BARHATOVA,
+	Basel: BASEL,
+	Berkeley: BERKELEY,
+	Bica: BICA,
+	Biurakan: BIURAKAN,
+	Blanco: BLANCO,
+	Bochum: BOCHUM,
+	Chupina: CHUPINA,
+	Czernik: CZERNIK,
+	Danks: DANKS,
+	Dias: DIAS,
+	Djorg: DJORG,
+	'Dolidze-Dzim': DOLIDZE_DZIM,
+	Dolidze: DOLIDZE,
+	Dufay: DUFAY,
+	Feinstein: FEINSTEIN,
+	Ferrero: FERRERO,
+	Graff: GRAFF,
+	Gulliver: GULLIVER,
+	Haffner: HAFFNER,
+	Harvard: HARVARD,
+	'Haute-Provence': HAUTE_PROVENCE,
+	Hogg: HOGG,
+	Iskurzdajan: ISKURZDAJAN,
+	Johansson: JOHANSSON,
+	Kharchenko: KHARCHENKO,
+	King: KING,
+	Kron: KRON,
+	Lindsay: LINDSAY,
+	Loden: LODEN,
+	Lynga: LYNGA,
+	Mamajek: MAMAJEK,
+	Moffat: MOFFAT,
+	Mrk: MRK,
+	Pal: PAL,
+	Pismis: PISMIS,
+	Platais: PLATAIS,
+	Roslund: ROSLUND,
+	Saurer: SAURER,
+	Sher: SHER,
+	Skiff: SKIFF,
+	Stephenson: STEPHENSON,
+	Terzan: TERZAN,
+	Tombaugh: TOMBAUGH,
+	Turner: TURNER,
+	Upgren: UPGREN,
+	Waterloo: WATERLOO,
+	Westerlund: WESTERLUND,
+	Zwicky: ZWICKY,
+}
+
+let c = 0
+
+for (const item of (await simbadQuery(SIMBAD_STAR_CLUSTER_QUERY))!) {
+	const identifiers = item[12]
+		.split('|')
+		.map((e) => CL_REGEX.exec(e) ?? NGC_REGEX.exec(e) ?? IC_REGEX.exec(e))
+		.filter((e) => !!e)
+	const cl = identifiers.filter((e) => e[0].startsWith('Cl'))?.[0]
+
+	if (!cl) {
+		console.warn('invalid star cluster name', item[12])
+		continue
+	}
+
+	const [, name, id] = cl
+
+	if (!(name in ADDITIONAL_STAR_CLUSTER_CATALOGS)) continue
+
+	let dsoId = 0
+	const ngc = identifiers.filter((e) => e[0].startsWith('NGC'))?.[0]
+	const ic = identifiers.filter((e) => e[0].startsWith('IC'))?.[0]
+
+	if (ngc && ngc.length > 1) {
+		const row = db.query<{ dsoId: number }, []>(`SELECT n.dsoId FROM names n WHERE n.type = 1 and n.name = '${ngc[1]}'`).get()
+		dsoId = row?.dsoId ?? 0
+		if (!dsoId) console.info('NGC', ngc[1], dsoId, item[12])
+	}
+	if (!dsoId && ic && ic.length > 1) {
+		const row = db.query<{ dsoId: number }, []>(`SELECT n.dsoId FROM names n WHERE n.type = 2 and n.name = '${ic[1]}'`).get()
+		dsoId = row?.dsoId ?? 0
+		if (!dsoId) console.info('IC', ic[1], dsoId, item[12])
+	}
+
+	const ra = deg(+item[1])
+	const dec = deg(+item[2])
+	const otype = item[3]
+	const pmRa = mas(+item[4]) / Math.cos(dec)
+	const pmDec = mas(+item[5])
+	const plx = mas(+item[6])
+	const distance = plx ? 1 / Math.abs(plx) : 0
+	const rv = kilometerPerSecond(+item[7])
+	const mV = item[8] ? +item[8] : 99
+	const mB = item[9] ? +item[9] : 99
+	const mJ = item[10] ? +item[10] : 99
+	const mH = item[11] ? +item[11] : 99
+	const mag = mV < 99 ? mV : Math.min(mB, mJ, mH)
+	const type = otype === 'Opc' ? StellariumObjectType.OPEN_STAR_CLUSTER : otype === 'Cl*' ? StellariumObjectType.STAR_CLUSTER : otype === 'ClC' ? StellariumObjectType.GLOBULAR_STAR_CLUSTER : StellariumObjectType.STELLAR_ASSOCIATION
+
+	if (dsoId) {
+		// Update existing DSO?
+	} else {
+		dsoId = 2000000 + c
+		addDso(dsoId, type, ra, dec, mag, pmRa, pmDec, distance, rv)
+		c++
+	}
+
+	addName(dsoId, ADDITIONAL_STAR_CLUSTER_CATALOGS[name], id)
+}
 
 // db.run('CREATE INDEX IF NOT EXISTS idx_dsos_type ON dsos(type);')
 // db.run('CREATE INDEX IF NOT EXISTS idx_dsos_magnitude ON dsos(magnitude);')

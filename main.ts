@@ -46,10 +46,12 @@ if (process.platform === 'linux') {
 
 Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
 Bun.env.framingDir = join(Bun.env.appDir, 'framing')
+Bun.env.spksDir = join(Bun.env.appDir, 'spks')
 
 // Create application sub-directories if it doesn't exist
 fs.mkdirSync(Bun.env.capturesDir, { recursive: true })
 fs.mkdirSync(Bun.env.framingDir, { recursive: true })
+fs.mkdirSync(Bun.env.spksDir, { recursive: true })
 
 // Molecules
 

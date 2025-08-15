@@ -1,7 +1,7 @@
 import { getDefaultInjector, molecule } from 'bunshi'
 import Elysia from 'elysia'
 import fs, { mkdir } from 'fs/promises'
-import { now } from 'nebulosa/src/datetime'
+import { dateNow } from 'nebulosa/src/datetime'
 import type { CfaPattern } from 'nebulosa/src/image'
 import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, IndiClient, OneNumber, PropertyState, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import { join } from 'path'
@@ -357,7 +357,7 @@ export const CameraMolecule = molecule((m) => {
 	// Handles incoming text vector messages.
 	function textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		if (message.name === 'DRIVER_INFO') {
-			const type = parseInt(message.elements.DRIVER_INTERFACE!.value)
+			const type = +message.elements.DRIVER_INTERFACE!.value
 
 			if (isInterfaceType(type, DeviceInterfaceType.CCD)) {
 				const executable = message.elements.DRIVER_EXEC!.value
@@ -385,8 +385,8 @@ export const CameraMolecule = molecule((m) => {
 
 		switch (message.name) {
 			case 'CCD_CFA':
-				device.cfa.offsetX = parseInt(message.elements.CFA_OFFSET_X!.value)
-				device.cfa.offsetY = parseInt(message.elements.CFA_OFFSET_Y!.value)
+				device.cfa.offsetX = +message.elements.CFA_OFFSET_X!.value
+				device.cfa.offsetY = +message.elements.CFA_OFFSET_Y!.value
 				device.cfa.type = message.elements.CFA_TYPE!.value as CfaPattern
 				sendUpdate(device, 'cfa', message.state)
 
@@ -591,9 +591,9 @@ export class CameraCaptureTask {
 
 								if (!this.event.loop) {
 									this.event.totalProgress.remainingTime = this.totalExposureProgress[0] - elapsedTime
-									this.event.totalProgress.elapsedTime = this.totalExposureProgress[1] + elapsedTime
 								}
 
+								this.event.totalProgress.elapsedTime = this.totalExposureProgress[1] + elapsedTime
 								this.event.totalProgress.progress = (1 - this.event.totalProgress.remainingTime / this.event.totalExposureTime) * 100
 								this.event.frameProgress.remainingTime = remainingTime
 								this.event.frameProgress.elapsedTime = this.waitingTime - remainingTime
@@ -635,7 +635,7 @@ export class CameraCaptureTask {
 	async blobReceived(device: Camera, data: string) {
 		if (this.camera.name === device.name) {
 			const savePath = await savePathFor(this.request)
-			const name = this.request.autoSave ? now().format('YYYYMMDD.HHmmssSSS') : device.name
+			const name = this.request.autoSave ? dateNow().format('YYYYMMDD.HHmmssSSS') : device.name
 			const path = join(savePath, `${name}.fit`)
 			await Bun.write(path, Buffer.from(data, 'base64'))
 			console.info('saved frame to', path)
@@ -737,7 +737,7 @@ async function savePathFor(req: CameraCaptureStart) {
 
 		if (req.autoSubFolderMode === 'OFF') return savePath
 
-		const date = now()
+		const date = dateNow()
 		const directory = req.autoSubFolderMode === 'MIDNIGHT' || date.hour() < 12 ? date.format('YYYY-MM-DD') : date.subtract(12, 'h').format('YYYY-MM-dd')
 		const path = join(savePath, directory)
 		await mkdir(path, { recursive: true })

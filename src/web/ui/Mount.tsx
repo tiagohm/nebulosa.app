@@ -110,7 +110,7 @@ export const Mount = memo(() => {
 							Frame
 						</DropdownItem>
 					</DropdownButton>
-					<Nudge className='col-span-5 row-span-2' isCancelDisabled={!canAbort || parked || !moving} isDisabled={!connected || moving || parked} onCancel={mount.stop} onNudge={mount.moveTo} />
+					<Nudge className='col-span-5 row-span-2' isCancelDisabled={!canAbort || parked || !moving} isDisabled={!connected || parked} isNudgeDisabled={moving} onCancel={mount.stop} onNudge={mount.moveTo} />
 					<Switch className='col-span-4 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || moving || parked} isSelected={tracking} onValueChange={(value) => mount.tracking(value)}>
 						Tracking
 					</Switch>

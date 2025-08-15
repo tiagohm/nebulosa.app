@@ -9,7 +9,7 @@ import type { DefVector, PropertyState, VectorType } from 'nebulosa/src/indi'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
 import type { Velocity } from 'nebulosa/src/velocity'
-import type { PickByValue, Required } from 'utility-types'
+import type { Required } from 'utility-types'
 
 export type Atom<T> = T extends MoleculeOrInterface<infer X> ? X : never
 
@@ -36,34 +36,32 @@ export interface GeographicCoordinate {
 
 // Atlas
 
-export interface PositionOfBody extends GeographicCoordinate {
-	utcTime: number // milliseconds since epoch
-	utcOffset: number // minutes
+export interface PositionOfBody extends Readonly<GeographicCoordinate> {
+	readonly utcTime: number // milliseconds since epoch
+	readonly utcOffset: number // minutes
 }
 
-export interface ChartOfBody {
-	type: keyof PickByValue<BodyPosition, number>
-	utcTime: number
-	stepSize: number
+export interface ChartOfBody extends PositionOfBody {
+	readonly type: 'rightAscension' | 'declination' | 'azimuth' | 'altitude' | 'magnitude'
 }
 
 export interface SkyObjectSearch extends GeographicCoordinate {
-	name: string
-	nameType: number
-	constellations: number[]
-	types: StellariumObjectType[]
-	magnitudeMin: number
-	magnitudeMax: number
-	rightAscension: string // hour
-	declination: string // deg
-	radius: number // deg
-	visible: boolean
-	visibleAbove: number // deg
+	readonly name: string
+	readonly nameType: number
+	readonly constellations: number[]
+	readonly types: StellariumObjectType[]
+	readonly magnitudeMin: number
+	readonly magnitudeMax: number
+	readonly rightAscension: string // hour
+	readonly declination: string // deg
+	readonly radius: number // deg
+	readonly visible: boolean
+	readonly visibleAbove: number // deg
 	utcTime: number // milliseconds since epoch
 	utcOffset: number // minutes
 	page: number
-	limit: number
-	sort: SortDescriptor
+	readonly limit: number
+	readonly sort: SortDescriptor
 }
 
 export interface SkyObjectSearchResult {
@@ -93,14 +91,21 @@ export interface BodyPosition extends Readonly<EquatorialCoordinate>, Readonly<E
 	readonly elongation: number
 	readonly leading: boolean
 	readonly names?: readonly string[]
-	readonly pierSide: PierSide
+	pierSide: PierSide
+}
+
+export interface SolarSeasons {
+	readonly spring: number
+	readonly summer: number
+	readonly autumn: number
+	readonly winter: number
 }
 
 // Confirmation
 
 export interface Confirm {
-	key: string
-	accepted: boolean
+	readonly key: string
+	readonly accepted: boolean
 }
 
 export interface Confirmation extends WebSocketMessage {

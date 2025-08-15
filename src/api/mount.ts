@@ -7,7 +7,7 @@ import { meter } from 'nebulosa/src/distance'
 import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { precessFk5ToJ2000 } from 'nebulosa/src/fk5'
 import type { DefNumberVector, DefSwitch, DefSwitchVector, DefTextVector, IndiClient, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
-import { type GeographicPosition, geodeticLocation, lst } from 'nebulosa/src/location'
+import { type GeographicPosition, geodeticLocation, localSiderealTime } from 'nebulosa/src/location'
 import { timeNow } from 'nebulosa/src/time'
 import { earth } from 'nebulosa/src/vsop87e'
 import { BusMolecule } from 'src/shared/bus'
@@ -355,7 +355,7 @@ export const MountMolecule = molecule((m) => {
 	// Handles incoming text vector messages.
 	function textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		if (message.name === 'DRIVER_INFO') {
-			const type = parseInt(message.elements.DRIVER_INTERFACE!.value)
+			const type = +message.elements.DRIVER_INTERFACE!.value
 
 			if (isInterfaceType(type, DeviceInterfaceType.TELESCOPE)) {
 				const executable = message.elements.DRIVER_EXEC!.value
@@ -500,10 +500,9 @@ export const MountMolecule = molecule((m) => {
 
 		const ebpv = earth(now)
 		const fk5 = eraS2c(rightAscension, declination)
-		const fk5J2000 = precessFk5ToJ2000(fk5, now)
-		const [rightAscensionJ2000, declinationJ2000] = eraC2s(...fk5J2000)
-		const [azimuth, altitude] = altaz(fk5J2000, now, ebpv)!
-		const lstTime = lst(now)
+		const [rightAscensionJ2000, declinationJ2000] = eraC2s(...precessFk5ToJ2000(fk5, now))
+		const [azimuth, altitude] = altaz(fk5, now, ebpv)!
+		const lst = localSiderealTime(now)
 
 		return {
 			rightAscension,
@@ -513,9 +512,9 @@ export const MountMolecule = molecule((m) => {
 			azimuth,
 			altitude,
 			constellation: constellation(rightAscension, declination, now),
-			lst: formatHMS(lstTime),
+			lst: formatHMS(lst),
 			meridianAt: '00:00 (-12:00)',
-			pierSide: expectedPierSide(rightAscension, declination, lstTime),
+			pierSide: expectedPierSide(rightAscension, declination, lst),
 		} satisfies MountEquatorialCoordinatePosition
 	})
 

@@ -179,6 +179,61 @@ function formatSkyObjectName(item: Pick<SkyObjectSearchResult, 'name' | 'constel
 	if (typeId === 34) return `Dunlop ${name}`
 	if (typeId === 35) return `Hershel ${name}`
 	if (typeId === 36) return `Gum ${name}`
+	if (typeId === 37) return `Bochum ${name}`
+	if (typeId === 38) return `Alessi ${name}`
+	if (typeId === 39) return `Alicante ${name}`
+	if (typeId === 40) return `Alter ${name}`
+	if (typeId === 41) return `Antalova ${name}`
+	if (typeId === 42) return `Apriamaswili ${name}`
+	if (typeId === 43) return `Arp ${name}`
+	if (typeId === 44) return `Barhatova ${name}`
+	if (typeId === 45) return `Basel ${name}`
+	if (typeId === 46) return `Berkeley ${name}`
+	if (typeId === 47) return `Bica ${name}`
+	if (typeId === 48) return `Biurakan ${name}`
+	if (typeId === 49) return `Blanco ${name}`
+	if (typeId === 50) return `Chupina ${name}`
+	if (typeId === 51) return `Czernik ${name}`
+	if (typeId === 52) return `Danks ${name}`
+	if (typeId === 53) return `Dias ${name}`
+	if (typeId === 54) return `Djorg ${name}`
+	if (typeId === 55) return `Dolidze-Dzim ${name}`
+	if (typeId === 56) return `Dolidze ${name}`
+	if (typeId === 57) return `Dufay ${name}`
+	if (typeId === 58) return `Feinstein ${name}`
+	if (typeId === 59) return `Ferrero ${name}`
+	if (typeId === 60) return `Graff ${name}`
+	if (typeId === 61) return `Gulliver ${name}`
+	if (typeId === 62) return `Haffner ${name}`
+	if (typeId === 63) return `Harvard ${name}`
+	if (typeId === 64) return `Haute-Provence ${name}`
+	if (typeId === 65) return `Hogg ${name}`
+	if (typeId === 66) return `Iskurzdajan ${name}`
+	if (typeId === 67) return `Johansson ${name}`
+	if (typeId === 68) return `Kharchenko ${name}`
+	if (typeId === 69) return `King ${name}`
+	if (typeId === 70) return `Kron ${name}`
+	if (typeId === 71) return `Lindsay ${name}`
+	if (typeId === 72) return `Loden ${name}`
+	if (typeId === 73) return `Lynga ${name}`
+	if (typeId === 74) return `Mamajek ${name}`
+	if (typeId === 75) return `Moffat ${name}`
+	if (typeId === 76) return `Mrk ${name}`
+	if (typeId === 77) return `Pal ${name}`
+	if (typeId === 78) return `Pismis ${name}`
+	if (typeId === 79) return `Platais ${name}`
+	if (typeId === 80) return `Roslund ${name}`
+	if (typeId === 81) return `Saurer ${name}`
+	if (typeId === 82) return `Sher ${name}`
+	if (typeId === 83) return `Skiff ${name}`
+	if (typeId === 84) return `Stephenson ${name}`
+	if (typeId === 85) return `Terzan ${name}`
+	if (typeId === 86) return `Tombaugh ${name}`
+	if (typeId === 87) return `Turner ${name}`
+	if (typeId === 88) return `Upgren ${name}`
+	if (typeId === 89) return `Waterloo ${name}`
+	if (typeId === 90) return `Westerlund ${name}`
+	if (typeId === 91) return `Zwicky ${name}`
 	return `${SKY_OBJECT_NAME_TYPES[typeId + 1]} ${name}`
 }
 
@@ -223,8 +278,8 @@ function formatSkyObjectType(type: SkyObjectSearchResult['type']) {
 }
 
 function formatDistance(distance: Distance) {
-	if (distance >= 63241.077084266280268653583182) return `${toLightYear(distance).toFixed(2)} ly`
-	if (distance >= 1) return `${distance.toFixed(1)} au`
+	if (distance >= 63241.077084266280268653583182) return `${toLightYear(distance).toFixed(0)} ly`
+	if (distance >= 1) return `${distance.toFixed(2)} au`
 	if (distance <= 0) return '-'
 	return `${(toKilometer(distance)).toFixed(0)} km`
 }

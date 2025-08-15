@@ -1,7 +1,7 @@
 import { addToast } from '@heroui/react'
 import { molecule, onMount } from 'bunshi'
 import { arcsec, formatDEC, formatRA } from 'nebulosa/src/angle'
-import { numericKeyword } from 'nebulosa/src/fits.util'
+import { numericKeyword } from 'nebulosa/src/fits'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import type { PlateSolveStart } from 'src/shared/types'
 import { subscribe } from 'valtio'

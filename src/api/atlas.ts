@@ -2,7 +2,7 @@ import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import { type Angle, deg, parseAngle } from 'nebulosa/src/angle'
 import { altaz } from 'nebulosa/src/astrometry'
-import { AU_KM, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
+import { AU_KM, DAYSEC, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import type { CartesianCoordinate } from 'nebulosa/src/coordinate'
 import type { CsvRow } from 'nebulosa/src/csv'
@@ -10,43 +10,77 @@ import { type DateTime, dateFrom } from 'nebulosa/src/datetime'
 import { type Distance, meter } from 'nebulosa/src/distance'
 import { eraC2s } from 'nebulosa/src/erfa'
 import { fk5, precessFk5FromJ2000 } from 'nebulosa/src/fk5'
-import { observer, Quantity } from 'nebulosa/src/horizons'
-import { Ellipsoid, type GeographicPosition, lst } from 'nebulosa/src/location'
+import { observer, type Quantity } from 'nebulosa/src/horizons'
+import { type GeographicPosition, geodeticLocation, localSiderealTime } from 'nebulosa/src/location'
 import { bcrs, type Star, star } from 'nebulosa/src/star'
-import { timeUnix } from 'nebulosa/src/time'
+import { season } from 'nebulosa/src/sun'
+import { type Time, timeUnix, toUnix } from 'nebulosa/src/time'
 import { earth } from 'nebulosa/src/vsop87e'
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
-import { type BodyPosition, type ChartOfBody, expectedPierSide, type PositionOfBody, type SkyObjectResult, type SkyObjectSearch, type SkyObjectSearchResult } from '../shared/types'
+import { type BodyPosition, type ChartOfBody, expectedPierSide, type PositionOfBody, type SkyObjectResult, type SkyObjectSearch, type SkyObjectSearchResult, type SolarSeasons } from '../shared/types'
 
-const HORIZONS_QUANTITIES: Quantity[] = [Quantity.ASTROMETRIC_RA_DEC, Quantity.APPARENT_RA_DEC, Quantity.APPARENT_AZ_EL, Quantity.VISUAL_MAG_SURFACE_BRGHT, Quantity.ONE_WAY_DOWN_LEG_LIGHT_TIME, Quantity.ILLUMINATED_FRACTION, Quantity.SUN_OBSERVER_TARGET_ELONG_ANGLE, Quantity.CONSTELLATION_ID]
-const CACHED_STARS = new Map<number, Star>()
+const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
 
 // Molecule for handling astronomical atlas requests
 export const AtlasMolecule = molecule(() => {
-	const ephemeris = new Map<string, Map<number, Readonly<BodyPosition>>>()
+	const ephemeris: Record<string, Map<number, BodyPosition>> = {}
+	const starMap = new Map<number, Star>()
+	const geographicPositions: GeographicPosition[] = []
+	const timeMap = new Map<number, Time>()
+
+	// Returns a geographic position given longitude, latitude and elevation
+	function geographicPositionFor(position: Pick<PositionOfBody, 'latitude' | 'longitude' | 'elevation'>) {
+		const latitude = deg(position.latitude)
+		const longitude = deg(position.longitude)
+		const elevation = meter(position.elevation)
+		geographicPositions.find((e) => e.latitude === latitude && e.longitude === longitude && e.elevation === elevation) ?? geographicPositions.push(geodeticLocation(longitude, latitude, elevation))
+		return geographicPositions[geographicPositions.length - 1]
+	}
+
+	// Returns a time for a given UTC time and location
+	function timeFor(utcTime: number, location?: GeographicPosition) {
+		const seconds = Math.trunc(utcTime / 1000)
+		const time = timeMap.get(seconds) ?? timeUnix(seconds)
+		timeMap.set(seconds, time)
+
+		if (location && time.location !== location) {
+			time.location = location
+			time.tdbMinusTt = undefined
+		}
+
+		return time
+	}
 
 	function imageOfSun() {}
 
 	// Computes the position of the Sun based on its ephemeris data
 	function positionOfSun(req: PositionOfBody) {
-		return computeFromNasaPositionAt('10', dateFrom(req.utcTime, true), deg(req.longitude), deg(req.latitude), meter(req.elevation))
+		return computeFromHorizonsPositionAt('10', req, deg(req.longitude), deg(req.latitude), meter(req.elevation))
 	}
 
 	// Generates a chart for the Sun based on its ephemeris data
 	function chartOfSun(req: ChartOfBody) {
-		return computeChart('10', dateFrom(req.utcTime, true), req.stepSize, req.type || 'altitude')
+		return computeChart('10', dateFrom(req.utcTime, true), 1, req.type || 'altitude')
 	}
 
-	function earthSeasons() {}
+	// Computes the seasons for a given date
+	function seasons(req: PositionOfBody): SolarSeasons {
+		const date = dateFrom(req.utcTime, true)
+		const spring = toUnix(season(date.year(), 'SPRING')) // Autumn in southern hemisphere
+		const summer = toUnix(season(date.year(), 'SUMMER')) // Winter in southern hemisphere
+		const autumn = toUnix(season(date.year(), 'AUTUMN')) // Spring in southern hemisphere
+		const winter = toUnix(season(date.year(), 'WINTER')) // Summer in southern hemisphere
+		return { spring, summer, autumn, winter }
+	}
 
 	// Computes the position of the Moon based on its ephemeris data
 	function positionOfMoon(req: PositionOfBody) {
-		return computeFromNasaPositionAt('301', dateFrom(req.utcTime, true), deg(req.longitude), deg(req.latitude), meter(req.elevation))
+		return computeFromHorizonsPositionAt('301', req, deg(req.longitude), deg(req.latitude), meter(req.elevation))
 	}
 
 	// Generates a chart for the Moon based on its ephemeris data
 	function chartOfMoon(req: ChartOfBody) {
-		return computeChart('301', dateFrom(req.utcTime, true), req.stepSize, req.type || 'altitude')
+		return computeChart('301', dateFrom(req.utcTime, true), 1, req.type || 'altitude')
 	}
 
 	function moonPhases() {}
@@ -55,12 +89,12 @@ export const AtlasMolecule = molecule(() => {
 
 	// Computes the position of a planet based on its ephemeris data
 	function positionOfPlanet(code: string, req: PositionOfBody) {
-		return computeFromNasaPositionAt(code, dateFrom(req.utcTime, true), deg(req.longitude), deg(req.latitude), meter(req.elevation))
+		return computeFromHorizonsPositionAt(code, req, deg(req.longitude), deg(req.latitude), meter(req.elevation))
 	}
 
 	// Generates a chart for a planet based on its ephemeris data
 	function chartOfPlanet(code: string, req: ChartOfBody) {
-		return computeChart(code, dateFrom(req.utcTime, true), req.stepSize, req.type || 'altitude')
+		return computeChart(code, dateFrom(req.utcTime, true), 1, req.type || 'altitude')
 	}
 
 	function searchMinorPlanet() {}
@@ -90,19 +124,16 @@ export const AtlasMolecule = molecule(() => {
 		if (req.radius > 0 && req.rightAscension && req.declination) {
 			const rightAscension = parseAngle(req.rightAscension, { isHour: true })!
 			const declination = parseAngle(req.declination)!
-			const radius = deg(req.radius)
 
-			where.push(`(acos(sin(d.declination) * ${Math.sin(declination)} + cos(d.declination) * ${Math.cos(declination)} * cos(d.rightAscension - ${rightAscension})) <= ${radius})`)
+			where.push(`(acos(sin(d.declination) * ${Math.sin(declination)} + cos(d.declination) * ${Math.cos(declination)} * cos(d.rightAscension - ${rightAscension})) <= ${deg(req.radius)})`)
 		}
 
 		if (req.visible && req.visibleAbove >= 0) {
-			const latitude = deg(req.latitude)
-			const longitude = deg(req.longitude)
-			const location: Partial<GeographicPosition> = { latitude, longitude }
-			const time = timeUnix(req.utcTime / 1000)
-			const lha = lst(time, location as never, true)
+			const location = geographicPositionFor(req)
+			const time = timeFor(req.utcTime, location)
+			const lst = localSiderealTime(time, location, true)
 
-			where.push(`(asin(sin(d.declination) * ${Math.sin(latitude)} + cos(d.declination) * ${Math.cos(latitude)} * cos(${lha} - d.rightAscension)) >= ${deg(req.visibleAbove)})`)
+			where.push(`(asin(sin(d.declination) * ${Math.sin(location.latitude)} + cos(d.declination) * ${Math.cos(location.latitude)} * cos(${lst} - d.rightAscension)) >= ${deg(req.visibleAbove)})`)
 		}
 
 		if (!where.length) where.push('1 = 1')
@@ -114,24 +145,20 @@ export const AtlasMolecule = molecule(() => {
 		return nebulosa.query(q).all() as SkyObjectSearchResult[]
 	}
 
-	function positionOfSkyObject(req: PositionOfBody, id: string | number) {
-		const dso = nebulosa.query(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get() as SkyObjectResult
+	// Computes the position of a sky object based on its id
+	function positionOfSkyObject(req: PositionOfBody, id: string | number | SkyObjectResult): BodyPosition {
+		const dso = typeof id === 'object' ? id : (nebulosa.query(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get() as SkyObjectResult)
 		const names = nebulosa.query(`SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ${id}`).all() as { name: string }[]
 
-		const latitude = deg(req.latitude)
-		const longitude = deg(req.longitude)
-		const elevation = meter(req.elevation)
-		const location: GeographicPosition = { latitude, longitude, elevation, ellipsoid: Ellipsoid.IERS2010 }
-
-		const time = timeUnix(req.utcTime / 1000)
-		time.location = location
+		const location = geographicPositionFor(req)
+		const time = timeFor(req.utcTime, location)
 
 		let icrs: CartesianCoordinate
 
 		if (dso.pmRa && dso.pmDec) {
 			const px = dso.distance > 0 ? 1 / dso.distance : 0
-			const s = CACHED_STARS.get(dso.id) ?? star(dso.rightAscension, dso.declination, dso.pmRa, dso.pmDec, px, dso.rv)
-			CACHED_STARS.set(dso.id, s)
+			const s = starMap.get(dso.id) ?? star(dso.rightAscension, dso.declination, dso.pmRa, dso.pmDec, px, dso.rv)
+			starMap.set(dso.id, s)
 			icrs = bcrs(s, time)[0]
 		} else {
 			icrs = fk5(dso.rightAscension, dso.declination)
@@ -157,11 +184,58 @@ export const AtlasMolecule = molecule(() => {
 			azimuth,
 			altitude,
 			names: names.map((n) => n.name),
-			pierSide: expectedPierSide(rightAscension, declination, lst(time, location, true)),
-		} satisfies BodyPosition
+			pierSide: expectedPierSide(rightAscension, declination, localSiderealTime(time, location, true)),
+		}
 	}
 
-	function chartOfSkyObject(req: ChartOfBody, id: string) {}
+	// Generates a chart for a sky object based on its id
+	function chartOfSkyObject(req: ChartOfBody, id: string) {
+		const data = new Array<number>(1441)
+		const date = timeWithoutHourMinuteAndSecond(req.utcTime / 1000 + req.utcOffset * 60)
+		const offset = date % DAYSEC >= 43200 ? 0 : DAYSEC // If the time is after noon, we want the next (julian) day
+		const startTime = date + offset - req.utcOffset * 60 - 43200 // Start at noon UTC
+
+		const dso = nebulosa.query(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get() as SkyObjectResult
+		const location = geographicPositionFor(req)
+		const type = req.type || 'altitude'
+
+		let utcTime = startTime * 1000
+
+		// Generate chart data for each minute
+		for (let i = 0; i < data.length; i++) {
+			if (type === 'magnitude') {
+				data[i] = dso.magnitude
+				continue
+			}
+
+			const time = timeFor(utcTime, location)
+
+			let icrs: CartesianCoordinate
+
+			if (dso.pmRa && dso.pmDec) {
+				const px = dso.distance > 0 ? 1 / dso.distance : 0
+				const s = starMap.get(dso.id) ?? star(dso.rightAscension, dso.declination, dso.pmRa, dso.pmDec, px, dso.rv)
+				starMap.set(dso.id, s)
+				icrs = bcrs(s, time)[0]
+			} else {
+				icrs = fk5(dso.rightAscension, dso.declination)
+			}
+
+			if (type === 'azimuth' || type === 'altitude') {
+				const ebpv = earth(time)
+				const [azimuth, altitude] = altaz(icrs, time, ebpv)!
+				data[i] = type === 'altitude' ? altitude : azimuth
+			} else {
+				icrs = precessFk5FromJ2000(icrs, time)
+				const [rightAscension, declination] = eraC2s(...icrs)
+				data[i] = type === 'declination' ? declination : rightAscension
+			}
+
+			utcTime += 60000
+		}
+
+		return data
+	}
 
 	function searchSatellites() {}
 
@@ -169,42 +243,52 @@ export const AtlasMolecule = molecule(() => {
 
 	function chartOfSatellite(req: ChartOfBody) {}
 
-	// Computes the position of a celestial body (planets, minor planets or satellites) from NASA's Horizons system
-	async function computeFromNasaPositionAt(code: string, dateTime: DateTime, longitude: number, latitude: Angle, elevation: Distance) {
-		const time = timeWithoutSeconds(dateTime)
+	// Computes the position of a celestial body (planets, minor planets or satellites) from NASA JPL Horizons
+	async function computeFromHorizonsPositionAt(code: string, req: PositionOfBody, longitude: Angle, latitude: Angle, elevation: Distance) {
+		const minutes = timeWithoutSeconds(req.utcTime / 1000)
+		const location = geographicPositionFor(req)
 
-		const position = ephemeris.get(code)?.get(time)
+		let position = ephemeris[code]?.get(minutes)
 
-		if (position) return position
+		if (!position) {
+			const dateTime = dateFrom(req.utcTime, true)
+			// Check if passed the (local) noon
+			let startTime = dateTime.set('minute', 0).set('second', 0).set('millisecond', 0).add(req.utcOffset, 'm')
+			// if not passed noon, go to the previous day
+			if (startTime.hour() < 12) startTime = startTime.subtract(1, 'day')
+			// set to UTC noon + local offset
+			startTime = startTime.set('hour', 12).subtract(req.utcOffset, 'm')
+			const endTime = startTime.add(1, 'day')
 
-		let startTime = dateTime.set('hour', 12).set('minute', 0).set('second', 0).set('millisecond', 0)
-		if (dateTime.hour() < 12) startTime = startTime.subtract(1, 'day')
-		const endTime = startTime.add(1, 'day')
+			const horizons = await observer(code, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1 })
+			const positions = makeBodyPositionFromHorizons(horizons!)
+			const map = ephemeris[code] ?? (ephemeris[code] = new Map())
+			positions.forEach((e) => map.set(e[0], e[1]))
+			position = map.get(minutes)!
+		}
 
-		const computedEphemeris = await observer(code, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES)
-		const positions = makeBodyPositionFromEphemeris(computedEphemeris!)
-		if (!ephemeris.has(code)) ephemeris.set(code, new Map())
-		const map = ephemeris.get(code)!
-		positions.forEach((e) => map.set(e[0], e[1]))
-		return map.get(time)!
+		const time = timeFor(req.utcTime, location)
+		position.pierSide = expectedPierSide(position.rightAscension, position.declination, localSiderealTime(time, location, true))
+
+		return position
 	}
 
 	// Generates a chart for a celestial body (planets, minor planets or satellites) based on its ephemeris data
 	function computeChart(code: string, dateTime: DateTime, stepSizeInMinutes: number, type: ChartOfBody['type']) {
-		const positions = ephemeris.get(code)!
+		const positions = ephemeris[code]!
 
 		let startTime = dateTime.set('hour', 12).set('minute', 0).set('second', 0).set('millisecond', 0)
 		if (dateTime.hour() < 12) startTime = startTime.subtract(1, 'day')
-		const time = timeWithoutSeconds(startTime)
+		const minutes = timeWithoutSeconds(startTime)
 		const chart: number[] = []
 
-		chart.push(positions.get(time)![type])
+		chart.push(positions.get(minutes)![type])
 
 		for (let i = stepSizeInMinutes; i <= 1440 - stepSizeInMinutes; i += stepSizeInMinutes) {
-			chart.push(positions.get(time + i * 60)![type])
+			chart.push(positions.get(minutes + i * 60)![type])
 		}
 
-		chart.push(positions.get(time + 1440 * 60)![type])
+		chart.push(positions.get(minutes + 1440 * 60)![type])
 
 		return chart
 	}
@@ -213,7 +297,6 @@ export const AtlasMolecule = molecule(() => {
 	const app = new Elysia({ prefix: '/atlas' })
 
 	// '/sun/image'
-	// '/earth/seasons'
 	// '/moon/phases'
 	// '/twilight'
 	// '/minorplanets'
@@ -228,6 +311,10 @@ export const AtlasMolecule = molecule(() => {
 
 	app.post('/sun/chart', ({ body }) => {
 		return chartOfSun(body as never)
+	})
+
+	app.post('/sun/seasons', ({ body }) => {
+		return seasons(body as never)
 	})
 
 	app.post('/moon/position', ({ body }) => {
@@ -262,7 +349,7 @@ export const AtlasMolecule = molecule(() => {
 		imageOfSun,
 		positionOfSun,
 		chartOfSun,
-		earthSeasons,
+		seasons,
 		positionOfMoon,
 		chartOfMoon,
 		moonPhases,
@@ -281,23 +368,15 @@ export const AtlasMolecule = molecule(() => {
 	} as const
 })
 
-function makeBodyPositionFromEphemeris(ephemeris: CsvRow[]): readonly [number, BodyPosition][] {
-	ephemeris.splice(0, 1)
+function makeBodyPositionFromHorizons(ephemeris: CsvRow[]): readonly [number, BodyPosition][] {
+	const startTime = timeWithoutSeconds(dateFrom(`${ephemeris[0][0]}Z`, true))
 
-	return ephemeris.map((e) => {
+	return ephemeris.map((e, i) => {
 		const lightTime = parseFloat(e[11]) || 0
-		let distance = lightTime * (SPEED_OF_LIGHT * 0.06) // km
-		let distanceUnit = 'km'
-
-		if (distance <= 0) {
-			distance = 0
-		} else if (distance >= AU_KM) {
-			distance /= AU_KM
-			distanceUnit = 'AU'
-		}
+		const distance = lightTime * ((SPEED_OF_LIGHT * 0.06) / AU_KM) // AU
 
 		return [
-			timeWithoutSeconds(dateFrom(`${e[0]}Z`)),
+			startTime + i * 60,
 			{
 				rightAscensionJ2000: parseAngle(e[3]),
 				declinationJ2000: parseAngle(e[4]),
@@ -308,7 +387,6 @@ function makeBodyPositionFromEphemeris(ephemeris: CsvRow[]): readonly [number, B
 				magnitude: parseFloat(e[9]),
 				constellation: e[15].toUpperCase(),
 				distance,
-				distanceUnit,
 				illuminated: parseFloat(e[12]),
 				elongation: parseAngle(e[13]),
 				leading: e[14] === '/L',
@@ -320,6 +398,12 @@ function makeBodyPositionFromEphemeris(ephemeris: CsvRow[]): readonly [number, B
 
 function timeWithoutSeconds(dateTime: DateTime | number) {
 	const seconds = typeof dateTime === 'number' ? Math.trunc(dateTime) : dateTime.unix()
-	const remaining = Math.trunc(seconds % 60)
+	const remaining = seconds % 60
+	return seconds - remaining
+}
+
+function timeWithoutHourMinuteAndSecond(dateTime: DateTime | number) {
+	const seconds = typeof dateTime === 'number' ? Math.trunc(dateTime) : dateTime.unix()
+	const remaining = seconds % DAYSEC
 	return seconds - remaining
 }

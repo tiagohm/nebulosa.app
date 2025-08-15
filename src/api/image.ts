@@ -1,8 +1,7 @@
 import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import fs from 'fs/promises'
-import { readFits } from 'nebulosa/src/fits'
-import { declination, rightAscension } from 'nebulosa/src/fits.util'
+import { declinationKeyword, readFits, rightAscensionKeyword } from 'nebulosa/src/fits'
 import { adf, debayer, horizontalFlip, type Image, type ImageFormat, invert, readImageFromFits, scnr, stf, verticalFlip, type WriteImageToFormatOptions, writeImageToFormat } from 'nebulosa/src/image'
 import { fileHandleSource } from 'nebulosa/src/io'
 import os from 'os'
@@ -70,8 +69,8 @@ export const ImageMolecule = molecule(() => {
 							metadata: image.metadata,
 							transformation: req.transformation,
 							headers: image.header,
-							rightAscension: rightAscension(image.header),
-							declination: declination(image.header),
+							rightAscension: rightAscensionKeyword(image.header),
+							declination: declinationKeyword(image.header),
 						}
 
 						return info

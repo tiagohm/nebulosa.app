@@ -71,7 +71,8 @@
 				"useAwait": "error",
 				"noEmptyInterface": "off",
 				"noConsole": "off",
-				"noArrayIndexKey": "off"
+				"noArrayIndexKey": "off",
+				"useIterableCallbackReturn": "off"
 			},
 			"complexity": {
 				"noForEach": "off",

@@ -1,19 +1,18 @@
-import { getDefaultInjector, molecule } from 'bunshi'
 import Elysia from 'elysia'
 import fs, { mkdir } from 'fs/promises'
 import { dateNow } from 'nebulosa/src/datetime'
 import type { CfaPattern } from 'nebulosa/src/image'
 import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, IndiClient, OneNumber, PropertyState, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import { join } from 'path'
-import { BusMolecule } from '../shared/bus'
+import bus from '../shared/bus'
 import { type Camera, type CameraAdded, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_TASK_EVENT, type FrameType, type Mount } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
-import { ConnectionMolecule } from './connection'
-import { GuideOutputMolecule } from './guideoutput'
+import type { ConnectionManager } from './connection'
+import type { GuideOutputManager } from './guideoutput'
 import { addProperty, ask, DeviceInterfaceType, enableBlob, handleConnection, isInterfaceType } from './indi'
-import { WebSocketMessageMolecule } from './message'
-import { MountMolecule } from './mount'
-import { ThermometerMolecule } from './thermometer'
+import type { WebSocketMessageManager } from './message'
+import type { MountManager } from './mount'
+import type { ThermometerManager } from './thermometer'
 
 const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
 
@@ -85,24 +84,27 @@ export function snoop(client: IndiClient, camera: Camera, mount?: Mount) {
 	client.sendText({ device: camera.name, name: 'ACTIVE_DEVICES', elements: { ACTIVE_TELESCOPE: mount?.name ?? '', ACTIVE_ROTATOR: '', ACTIVE_FOCUSER: '', ACTIVE_FILTER: '' } })
 }
 
-const injector = getDefaultInjector()
+// Manager for handling camera-related operations
+export class CameraManager {
+	private readonly cameras = new Map<string, Camera>()
+	private readonly tasks = new Map<string, CameraCaptureTask>()
 
-export const CameraMolecule = molecule((m) => {
-	const bus = m(BusMolecule)
-	const wsm = m(WebSocketMessageMolecule)
-	const guideOutput = m(GuideOutputMolecule)
-	const thermometer = m(ThermometerMolecule)
-
-	const cameras = new Map<string, Camera>()
-
-	bus.subscribe('indi:close', (client: IndiClient) => {
-		// Remove all cameras associated with the client
-		cameras.forEach((device) => remove(device))
-	})
+	constructor(
+		readonly wsm: WebSocketMessageManager,
+		readonly connection: ConnectionManager,
+		readonly guideOutput: GuideOutputManager,
+		readonly thermometer: ThermometerManager,
+		readonly mount: MountManager,
+	) {
+		bus.subscribe('indi:close', (client: IndiClient) => {
+			// Remove all cameras associated with the client
+			this.cameras.forEach((device) => this.remove(device))
+		})
+	}
 
 	// Handles incoming switch vector messages.
-	function switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
-		const device = cameras.get(message.device)
+	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
+		const device = this.cameras.get(message.device)
 
 		if (!device) return
 
@@ -112,11 +114,11 @@ export const CameraMolecule = molecule((m) => {
 		switch (message.name) {
 			case 'CONNECTION':
 				if (handleConnection(client, device, message)) {
-					sendUpdate(device, 'connected', message.state)
+					this.update(device, 'connected', message.state)
 
 					if (!device.connected) {
-						guideOutput.remove(device)
-						thermometer.remove(device)
+						this.guideOutput.remove(device)
+						this.thermometer.remove(device)
 					}
 				}
 
@@ -125,7 +127,7 @@ export const CameraMolecule = molecule((m) => {
 				if (tag[0] === 'd') {
 					if (!device.hasCoolerControl) {
 						device.hasCoolerControl = true
-						sendUpdate(device, 'hasCoolerControl', message.state)
+						this.update(device, 'hasCoolerControl', message.state)
 					}
 				}
 
@@ -133,7 +135,7 @@ export const CameraMolecule = molecule((m) => {
 
 				if (cooler !== device.cooler) {
 					device.cooler = cooler
-					sendUpdate(device, 'cooler', message.state)
+					this.update(device, 'cooler', message.state)
 				}
 
 				return
@@ -141,7 +143,7 @@ export const CameraMolecule = molecule((m) => {
 			case 'CCD_CAPTURE_FORMAT':
 				if (tag[0] === 'd') {
 					device.frameFormats = Object.keys(message.elements)
-					sendUpdate(device, 'frameFormats', message.state)
+					this.update(device, 'frameFormats', message.state)
 				}
 
 				return
@@ -151,7 +153,7 @@ export const CameraMolecule = molecule((m) => {
 
 					if (device.canAbort !== canAbort) {
 						device.canAbort = canAbort
-						sendUpdate(device, 'canAbort', message.state)
+						this.update(device, 'canAbort', message.state)
 					}
 				}
 
@@ -160,8 +162,8 @@ export const CameraMolecule = molecule((m) => {
 	}
 
 	// Handles incoming number vector messages.
-	function numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
-		const device = cameras.get(message.device)
+	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
+		const device = this.cameras.get(message.device)
 
 		if (!device) return
 
@@ -176,7 +178,7 @@ export const CameraMolecule = molecule((m) => {
 				if (device.pixelSize.x !== x || device.pixelSize.y !== y) {
 					device.pixelSize.x = x
 					device.pixelSize.y = y
-					sendUpdate(device, 'pixelSize', message.state)
+					this.update(device, 'pixelSize', message.state)
 				}
 
 				return
@@ -203,7 +205,7 @@ export const CameraMolecule = molecule((m) => {
 				}
 
 				if (update) {
-					sendUpdate(device, 'exposure', message.state)
+					this.update(device, 'exposure', message.state)
 				}
 
 				return
@@ -213,7 +215,7 @@ export const CameraMolecule = molecule((m) => {
 
 				if (device.coolerPower !== coolerPower) {
 					device.coolerPower = coolerPower
-					sendUpdate(device, 'coolerPower', message.state)
+					this.update(device, 'coolerPower', message.state)
 				}
 
 				return
@@ -222,20 +224,20 @@ export const CameraMolecule = molecule((m) => {
 				if (tag[0] === 'd') {
 					if (!device.hasCooler) {
 						device.hasCooler = true
-						sendUpdate(device, 'hasCooler', message.state)
+						this.update(device, 'hasCooler', message.state)
 					}
 
 					const canSetTemperature = (message as DefNumberVector).permission !== 'ro'
 
 					if (device.canSetTemperature !== canSetTemperature) {
 						device.canSetTemperature = canSetTemperature
-						sendUpdate(device, 'canSetTemperature', message.state)
+						this.update(device, 'canSetTemperature', message.state)
 					}
 
 					if (!device.hasThermometer) {
 						device.hasThermometer = true
-						sendUpdate(device, 'hasThermometer', message.state)
-						thermometer.add(device)
+						this.update(device, 'hasThermometer', message.state)
+						this.thermometer.add(device)
 					}
 				}
 
@@ -253,7 +255,7 @@ export const CameraMolecule = molecule((m) => {
 
 					if (device.canSubFrame !== canSubFrame) {
 						device.canSubFrame = canSubFrame
-						sendUpdate(device, 'canSubFrame', message.state)
+						this.update(device, 'canSubFrame', message.state)
 					}
 
 					device.frame.minX = (x as DefNumber).min
@@ -277,7 +279,7 @@ export const CameraMolecule = molecule((m) => {
 				}
 
 				if (update) {
-					sendUpdate(device, 'frame', message.state)
+					this.update(device, 'frame', message.state)
 				}
 
 				return
@@ -291,7 +293,7 @@ export const CameraMolecule = molecule((m) => {
 
 					if (device.canBin !== canBin) {
 						device.canBin = canBin
-						sendUpdate(device, 'canBin', message.state)
+						this.update(device, 'canBin', message.state)
 					}
 
 					device.bin.maxX = (binX as DefNumber).max
@@ -301,7 +303,7 @@ export const CameraMolecule = molecule((m) => {
 				device.bin.x = binX.value
 				device.bin.y = binY.value
 
-				sendUpdate(device, 'bin', message.state)
+				this.update(device, 'bin', message.state)
 
 				return
 			}
@@ -310,13 +312,13 @@ export const CameraMolecule = molecule((m) => {
 				const gain = message.elements.Gain
 
 				if (gain && handleGain(device.gain, gain, tag)) {
-					sendUpdate(device, 'gain', message.state)
+					this.update(device, 'gain', message.state)
 				}
 
 				const offset = message.elements.Offset
 
 				if (offset && handleOffset(device.offset, offset, tag)) {
-					sendUpdate(device, 'offset', message.state)
+					this.update(device, 'offset', message.state)
 				}
 
 				return
@@ -326,7 +328,7 @@ export const CameraMolecule = molecule((m) => {
 				const gain = message.elements.GAIN
 
 				if (gain && handleGain(device.gain, gain, tag)) {
-					sendUpdate(device, 'gain', message.state)
+					this.update(device, 'gain', message.state)
 				}
 
 				return
@@ -335,7 +337,7 @@ export const CameraMolecule = molecule((m) => {
 				const offset = message.elements.OFFSET
 
 				if (offset && handleOffset(device.offset, offset, tag)) {
-					sendUpdate(device, 'offset', message.state)
+					this.update(device, 'offset', message.state)
 				}
 
 				return
@@ -345,8 +347,8 @@ export const CameraMolecule = molecule((m) => {
 				if (tag[0] === 'd') {
 					if (!device.canPulseGuide) {
 						device.canPulseGuide = true
-						sendUpdate(device, 'canPulseGuide', message.state)
-						guideOutput.add(device)
+						this.update(device, 'canPulseGuide', message.state)
+						this.guideOutput.add(device)
 					}
 				}
 
@@ -355,7 +357,7 @@ export const CameraMolecule = molecule((m) => {
 	}
 
 	// Handles incoming text vector messages.
-	function textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
+	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		if (message.name === 'DRIVER_INFO') {
 			const type = +message.elements.DRIVER_INTERFACE!.value
 
@@ -363,20 +365,20 @@ export const CameraMolecule = molecule((m) => {
 				const executable = message.elements.DRIVER_EXEC!.value
 				const version = message.elements.DRIVER_VERSION!.value
 
-				if (!cameras.has(message.device)) {
+				if (!this.cameras.has(message.device)) {
 					const camera: Camera = { ...structuredClone(DEFAULT_CAMERA), id: message.device, name: message.device, driver: { executable, version } }
-					add(camera)
+					this.add(camera)
 					addProperty(camera, message, tag)
 					ask(client, camera)
 				}
-			} else if (cameras.has(message.device)) {
-				remove(cameras.get(message.device)!)
+			} else if (this.cameras.has(message.device)) {
+				this.remove(this.cameras.get(message.device)!)
 			}
 
 			return
 		}
 
-		const device = cameras.get(message.device)
+		const device = this.cameras.get(message.device)
 
 		if (!device) return
 
@@ -388,15 +390,15 @@ export const CameraMolecule = molecule((m) => {
 				device.cfa.offsetX = +message.elements.CFA_OFFSET_X!.value
 				device.cfa.offsetY = +message.elements.CFA_OFFSET_Y!.value
 				device.cfa.type = message.elements.CFA_TYPE!.value as CfaPattern
-				sendUpdate(device, 'cfa', message.state)
+				this.update(device, 'cfa', message.state)
 
 				return
 		}
 	}
 
 	// Handles incoming blob vector messages.
-	function blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
-		const device = cameras.get(message.device)
+	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
+		const device = this.cameras.get(message.device)
 
 		if (!device) return
 
@@ -406,7 +408,7 @@ export const CameraMolecule = molecule((m) => {
 					const value = message.elements.CCD1?.value
 
 					if (value) {
-						tasks.forEach((task) => task.blobReceived(device, value))
+						this.tasks.forEach((task) => task.blobReceived(device, value))
 					} else {
 						console.warn(`received empty BLOB for device ${device.name}`)
 					}
@@ -417,106 +419,94 @@ export const CameraMolecule = molecule((m) => {
 	}
 
 	// Sends an update for a camera device
-	function sendUpdate(device: Camera, property: keyof Camera, state?: PropertyState) {
+	update(device: Camera, property: keyof Camera, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
-		wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
+		this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
 		bus.emit('camera:update', value)
-		tasks.forEach((task) => task.cameraUpdated(device, property, state))
+		this.tasks.forEach((task) => task.cameraUpdated(device, property, state))
 	}
 
 	// Adds a camera device
-	function add(device: Camera) {
-		cameras.set(device.name, device)
-		wsm.send<CameraAdded>({ type: 'camera:add', device })
+	add(device: Camera) {
+		this.cameras.set(device.name, device)
+		this.wsm.send<CameraAdded>({ type: 'camera:add', device })
 		bus.emit('camera:add', device)
 		console.info('camera added:', device.name)
 	}
 
 	// Removes a camera device
-	function remove(device: Camera) {
-		if (cameras.has(device.name)) {
-			cameras.delete(device.name)
+	remove(device: Camera) {
+		if (this.cameras.has(device.name)) {
+			this.cameras.delete(device.name)
 
 			// TODO: Call it on deleteProperty
-			guideOutput.remove(device)
-			thermometer.remove(device)
+			this.guideOutput.remove(device)
+			this.thermometer.remove(device)
 
-			wsm.send<CameraRemoved>({ type: 'camera:remove', device })
+			this.wsm.send<CameraRemoved>({ type: 'camera:remove', device })
 			bus.emit('camera:remove', device)
 			console.info('camera removed:', device.name)
 		}
 	}
 
 	// Handles the camera capture task event
-	function handleCameraCaptureTaskEvent(event: CameraCaptureTaskEvent) {
-		wsm.send(event)
+	handleCameraCaptureTaskEvent(event: CameraCaptureTaskEvent) {
+		this.wsm.send(event)
 
 		// Remove the task after it finished
 		if (event.state === 'IDLE') {
-			tasks.delete(event.device)
+			this.tasks.delete(event.device)
 		}
 	}
 
 	// Lists all camera devices
-	function list() {
-		return Array.from(cameras.values())
+	list() {
+		return Array.from(this.cameras.values())
 	}
 
 	// Gets a camera device by its id
-	function get(id: string) {
-		return cameras.get(id)
+	get(id: string) {
+		return this.cameras.get(id)
 	}
 
-	// The endpoints for managing cameras.
-	const app = new Elysia({ prefix: '/cameras' })
-	const tasks = new Map<string, CameraCaptureTask>()
-
-	app.get('', () => {
-		return list()
-	})
-
-	app.get('/:id', ({ params }) => {
-		return get(decodeURIComponent(params.id))
-	})
-
-	app.post('/:id/cooler', ({ params, body }) => {
-		const camera = get(decodeURIComponent(params.id))!
-		const connection = injector.get(ConnectionMolecule)
-		cooler(connection.get(), camera, body as never)
-	})
-
-	app.post('/:id/temperature', ({ params, body }) => {
-		const camera = get(decodeURIComponent(params.id))!
-		const connection = injector.get(ConnectionMolecule)
-		temperature(connection.get(), camera, body as never)
-	})
-
-	app.post('/:id/start', ({ params, body }) => {
-		const camera = get(decodeURIComponent(params.id))!
-
+	startCameraCaptureTask(device: Camera, req: CameraCaptureStart) {
 		// Stop any existing task for this camera and remove its handler
-		if (tasks.has(camera.name)) {
-			const task = tasks.get(camera.name)!
+		if (this.tasks.has(device.name)) {
+			const task = this.tasks.get(device.name)!
 			task.stop()
 		}
 
 		// Start a new task for the camera
-		const connection = injector.get(ConnectionMolecule)
-		const mount = injector.get(MountMolecule)
-		const request = body as CameraCaptureStart
-		const client = connection.get()
-		const task = new CameraCaptureTask(camera, request, client, handleCameraCaptureTaskEvent)
-		tasks.set(camera.name, task)
-		snoop(client, camera, request.mount ? mount.get(request.mount) : undefined)
+		const client = this.connection.get()
+		const task = new CameraCaptureTask(device, req, client, this.handleCameraCaptureTaskEvent.bind(this))
+		this.tasks.set(device.name, task)
+		const mount = req.mount ? this.mount.get(req.mount) : undefined
+		snoop(client, device, mount)
 		task.start()
-	})
+	}
 
-	app.post('/:id/stop', ({ params }) => {
-		tasks.get(decodeURIComponent(params.id))?.stop()
-	})
+	stopCameraCaptureTask(device: Camera) {
+		this.tasks.get(device.name)?.stop()
+	}
+}
 
-	return { switchVector, numberVector, textVector, blobVector, add, remove, list, get, app } as const
-})
+// Endpoints for handling camera-related requests.
+export function camera(camera: CameraManager) {
+	function cameraFromParams(params: { id: string }) {
+		return camera.get(decodeURIComponent(params.id))!
+	}
+
+	const app = new Elysia({ prefix: '/cameras' })
+		// Endpoints!
+		.get('', () => camera.list())
+		.get('/:id', ({ params }) => cameraFromParams(params))
+		.post('/:id/cooler', ({ params, body }) => cooler(camera.connection.get(), cameraFromParams(params), body as never))
+		.post('/:id/temperature', ({ params, body }) => temperature(camera.connection.get(), cameraFromParams(params), body as never))
+		.post('/:id/start', ({ params, body }) => camera.startCameraCaptureTask(cameraFromParams(params), body as never))
+		.post('/:id/stop', ({ params }) => camera.stopCameraCaptureTask(cameraFromParams(params)))
+
+	return app
+}
 
 // Task that capture one or more frames from camera
 export class CameraCaptureTask {

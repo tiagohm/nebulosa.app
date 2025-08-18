@@ -1,4 +1,3 @@
-import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import { deg, parseAngle } from 'nebulosa/src/angle'
 import { astapPlateSolve } from 'nebulosa/src/astap'
@@ -7,18 +6,18 @@ import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { PlateSolveStart, PlateSolveStop } from '../shared/types'
 import { badRequest, internalServerError } from './exceptions'
 
-// Molecule for handling plate solving
-export const PlateSolverMolecule = molecule(() => {
-	const tasks = new Map<string, AbortController>()
+// Manager for handling plate solving operations
+export class PlateSolverManager {
+	private readonly tasks = new Map<string, AbortController>()
 
 	// Starts a plate solving task based on the request parameters
-	async function start(req: PlateSolveStart): Promise<PlateSolution> {
+	async start(req: PlateSolveStart): Promise<PlateSolution> {
 		const ra = parseAngle(req.rightAscension, { isHour: true })
 		const dec = parseAngle(req.declination)
 		const radius = req.blind || !req.radius ? 0 : deg(req.radius)
 
 		const aborter = new AbortController()
-		tasks.set(req.id, aborter)
+		this.tasks.set(req.id, aborter)
 
 		let solver: Promise<PlateSolution | undefined> | undefined
 
@@ -51,7 +50,7 @@ export const PlateSolverMolecule = molecule(() => {
 			} catch {
 				throw internalServerError('Failed to plate solve image')
 			} finally {
-				tasks.delete(req.id)
+				this.tasks.delete(req.id)
 			}
 		}
 
@@ -59,20 +58,17 @@ export const PlateSolverMolecule = molecule(() => {
 	}
 
 	// Stops a plate solving task by its id
-	function stop(req: PlateSolveStop) {
-		tasks.get(req.id)?.abort()
+	stop(req: PlateSolveStop) {
+		this.tasks.get(req.id)?.abort()
 	}
+}
 
-	// The endpoints for plate solving
+// Endpoints for handling plate solving requests
+export function plateSolver(solver: PlateSolverManager) {
 	const app = new Elysia({ prefix: '/plateSolver' })
+		// Endpoints!
+		.post('/start', ({ body }) => solver.start(body as never))
+		.post('/stop', ({ body }) => solver.stop(body as never))
 
-	app.post('/start', ({ body }) => {
-		return start(body as never)
-	})
-
-	app.post('/stop', ({ body }) => {
-		return stop(body as never)
-	})
-
-	return { start, stop, app } as const
-})
+	return app
+}

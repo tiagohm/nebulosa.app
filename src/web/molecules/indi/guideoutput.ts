@@ -1,5 +1,5 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import { BusMolecule, unsubscribe } from 'src/shared/bus'
+import bus, { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_GUIDE_OUTPUT, type GuideOutput, type GuideOutputUpdated, type GuidePulse } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
@@ -48,7 +48,6 @@ const guideOutputStateMap = new Map<string, GuideOutputState>()
 // Molecule that manages the guide output device
 export const GuideOutputMolecule = molecule((m, s) => {
 	const scope = s(GuideOutputScope)
-	const bus = m(BusMolecule)
 	const equipment = m(EquipmentMolecule)
 
 	const state =

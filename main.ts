@@ -1,26 +1,25 @@
 import { cors } from '@elysiajs/cors'
 import { cron } from '@elysiajs/cron'
-import { getDefaultInjector } from 'bunshi'
 import Elysia from 'elysia'
 import fs from 'fs'
 import os from 'os'
 import { join } from 'path'
-import { CameraMolecule } from 'src/api/camera'
-import { ConnectionMolecule } from 'src/api/connection'
+import { AtlasManager, atlas } from 'src/api/atlas'
+import { CameraManager, camera } from 'src/api/camera'
+import { ConnectionManager, connection } from 'src/api/connection'
 import { ApiError } from 'src/api/exceptions'
-import { GuideOutputMolecule } from 'src/api/guideoutput'
-import { IndiMolecule } from 'src/api/indi'
-import { WebSocketMessageMolecule } from 'src/api/message'
-import { MountMolecule } from 'src/api/mount'
-import { ThermometerMolecule } from 'src/api/thermometer'
+import { GuideOutputManager, guideOutput } from 'src/api/guideoutput'
+import { IndiManager, indi } from 'src/api/indi'
+import { WebSocketMessageManager } from 'src/api/message'
+import { MountManager, mount } from 'src/api/mount'
+import { ThermometerManager, thermometer } from 'src/api/thermometer'
 import { parseArgs } from 'util'
-import { AtlasMolecule } from './src/api/atlas'
-import { ConfirmationMolecule } from './src/api/confirmation'
-import { FileSystemMolecule } from './src/api/filesystem'
-import { FramingMolecule } from './src/api/framing'
-import { ImageMolecule } from './src/api/image'
-import { PlateSolverMolecule } from './src/api/platesolver'
-import { StarDetectionMolecule } from './src/api/stardetection'
+import { ConfirmationManager, confirmation } from './src/api/confirmation'
+import { FileSystemManager, fileSystem } from './src/api/filesystem'
+import { FramingManager, framing } from './src/api/framing'
+import { ImageManager, image } from './src/api/image'
+import { PlateSolverManager, plateSolver } from './src/api/platesolver'
+import { StarDetectionManager, starDetection } from './src/api/stardetection'
 import { X_IMAGE_INFO_HEADER } from './src/shared/types'
 import homeHtml from './src/web/pages/home/index.html'
 
@@ -35,7 +34,7 @@ const args = parseArgs({
 })
 
 const hostname = args.values.host || '0.0.0.0'
-const port = parseInt(args.values.port || '1234')
+const port = +(args.values.port || '1234')
 
 // Initialize environment variables
 if (process.platform === 'linux') {
@@ -46,37 +45,33 @@ if (process.platform === 'linux') {
 
 Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
 Bun.env.framingDir = join(Bun.env.appDir, 'framing')
-Bun.env.spksDir = join(Bun.env.appDir, 'spks')
 
 // Create application sub-directories if it doesn't exist
 fs.mkdirSync(Bun.env.capturesDir, { recursive: true })
 fs.mkdirSync(Bun.env.framingDir, { recursive: true })
-fs.mkdirSync(Bun.env.spksDir, { recursive: true })
 
-// Molecules
+// Managers
 
-const injector = getDefaultInjector()
-
-const wsm = injector.get(WebSocketMessageMolecule)
-const connection = injector.get(ConnectionMolecule)
-const camera = injector.get(CameraMolecule)
-const mount = injector.get(MountMolecule)
-const guideOutput = injector.get(GuideOutputMolecule)
-const thermometer = injector.get(ThermometerMolecule)
-const indi = injector.get(IndiMolecule)
-const confirmation = injector.get(ConfirmationMolecule)
-const framing = injector.get(FramingMolecule)
-const fileSystem = injector.get(FileSystemMolecule)
-const starDetection = injector.get(StarDetectionMolecule)
-const plateSolver = injector.get(PlateSolverMolecule)
-const atlas = injector.get(AtlasMolecule)
-const image = injector.get(ImageMolecule)
+const wsm = new WebSocketMessageManager()
+const connectionManager = new ConnectionManager()
+const guideOutputManager = new GuideOutputManager(wsm)
+const thermometerManager = new ThermometerManager(wsm)
+const mountManager = new MountManager(wsm, guideOutputManager)
+const cameraManager = new CameraManager(wsm, connectionManager, guideOutputManager, thermometerManager, mountManager)
+const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager)
+const confirmationManager = new ConfirmationManager(wsm)
+const framingManager = new FramingManager()
+const fileSystemManager = new FileSystemManager()
+const starDetectionManager = new StarDetectionManager()
+const plateSolverManager = new PlateSolverManager()
+const atlasManager = new AtlasManager()
+const imageManager = new ImageManager()
 
 // App
 
 const app = new Elysia({
 	serve: {
-		// @ts-ignore
+		// @ts-expect-error
 		routes: {
 			'/*': homeHtml,
 		},
@@ -87,62 +82,62 @@ const app = new Elysia({
 	},
 })
 
-// Cross-Origin Resource Sharing (CORS)
+	// Cross-Origin Resource Sharing (CORS)
 
-app.use(
-	cors({
-		exposeHeaders: [X_IMAGE_INFO_HEADER],
-	}),
-)
+	.use(
+		cors({
+			exposeHeaders: [X_IMAGE_INFO_HEADER],
+		}),
+	)
 
-// Cron
+	// Cron
 
-app.use(
-	cron({
-		name: 'heartbeat',
-		pattern: '0 */15 * * * *',
-		run() {
-			console.info('Heartbeat')
-		},
-	}),
-)
+	.use(
+		cron({
+			name: 'heartbeat',
+			pattern: '0 */15 * * * *',
+			run() {
+				console.info('Heartbeat')
+			},
+		}),
+	)
 
-// Error Handling
+	// Error Handling
 
-app.onError(({ error }) => {
-	console.error(error)
+	.onError(({ error }) => {
+		console.error(error)
 
-	if (error instanceof ApiError) {
-		return Response.json(error.message, { status: error.status })
-	}
-})
+		if (error instanceof ApiError) {
+			return Response.json(error.message, { status: error.status })
+		}
+	})
 
-// Endpoints
+	// Endpoints
 
-app.use(connection.app)
-app.use(confirmation.app)
-app.use(indi.app)
-app.use(camera.app)
-app.use(mount.app)
-app.use(thermometer.app)
-app.use(guideOutput.app)
-app.use(atlas.app)
-app.use(image.app)
-app.use(framing.app)
-app.use(starDetection.app)
-app.use(plateSolver.app)
-app.use(fileSystem.app)
+	.use(connection(connectionManager, indiManager))
+	.use(confirmation(confirmationManager))
+	.use(indi(indiManager, connectionManager))
+	.use(camera(cameraManager))
+	.use(mount(mountManager, connectionManager))
+	.use(thermometer(thermometerManager))
+	.use(guideOutput(guideOutputManager, connectionManager))
+	.use(atlas(atlasManager))
+	.use(image(imageManager))
+	.use(framing(framingManager))
+	.use(starDetection(starDetectionManager))
+	.use(plateSolver(plateSolverManager))
+	.use(fileSystem(fileSystemManager))
 
-// WebSocket
+	// WebSocket
 
-app.ws('/ws', {
-	open: (socket) => wsm.open(socket.raw),
-	// message: (socket, message) => wsm.message(socket.raw, message),
-	close: (socket, code, reason) => wsm.close(socket.raw, code, reason),
-})
+	.ws('/ws', {
+		open: (socket) => wsm.open(socket.raw),
+		// message: (socket, message) => wsm.message(socket.raw, message),
+		close: (socket, code, reason) => wsm.close(socket.raw, code, reason),
+	})
 
-// Start!
+	// Start!
 
-app.listen({ hostname, port })
+	.listen({ hostname, port })
 
 console.info(`server is started at: http://${app.server!.hostname}:${app.server!.port}`)

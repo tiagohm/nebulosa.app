@@ -1,4 +1,3 @@
-import { getDefaultInjector, molecule } from 'bunshi'
 import Elysia from 'elysia'
 import { type Angle, deg, formatHMS, hour, parseAngle, toDeg, toHour } from 'nebulosa/src/angle'
 import { altaz } from 'nebulosa/src/astrometry'
@@ -10,12 +9,12 @@ import type { DefNumberVector, DefSwitch, DefSwitchVector, DefTextVector, IndiCl
 import { type GeographicPosition, geodeticLocation, localSiderealTime } from 'nebulosa/src/location'
 import { timeNow } from 'nebulosa/src/time'
 import { earth } from 'nebulosa/src/vsop87e'
-import { BusMolecule } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, expectedPierSide, type GeographicCoordinate, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoved, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
-import { ConnectionMolecule } from './connection'
-import { GuideOutputMolecule } from './guideoutput'
+import type { ConnectionManager } from './connection'
+import type { GuideOutputManager } from './guideoutput'
 import { addProperty, ask, DeviceInterfaceType, handleConnection, isInterfaceType } from './indi'
-import { WebSocketMessageMolecule } from './message'
+import type { WebSocketMessageManager } from './message'
 
 export function tracking(client: IndiClient, mount: Mount, enable: boolean) {
 	client.sendSwitch({ device: mount.name, name: 'TELESCOPE_TRACK_STATE', elements: { [enable ? 'TRACK_ON' : 'TRACK_OFF']: true } })
@@ -51,7 +50,7 @@ export function geographicCoordinate(client: IndiClient, mount: Mount, { latitud
 	client.sendNumber({ device: mount.name, name: 'GEOGRAPHIC_COORD', elements: { LAT: latitude, LONG: longitude, ELEV: elevation } })
 }
 
-export function sync(client: IndiClient, mount: Mount, rightAscension: Angle, declination: Angle) {
+export function syncTo(client: IndiClient, mount: Mount, rightAscension: Angle, declination: Angle) {
 	if (mount.canSync) {
 		client.sendSwitch({ device: mount.name, name: 'ON_COORD_SET', elements: { SYNC: true } })
 		equatorialCoordinate(client, mount, rightAscension, declination)
@@ -98,24 +97,24 @@ export function moveEast(client: IndiClient, mount: Mount, enable: boolean) {
 	else client.sendSwitch({ device: mount.name, name: 'TELESCOPE_MOTION_WE', elements: { MOTION_EAST: false } })
 }
 
-const injector = getDefaultInjector()
+// Manager for handling mount-related operations
+export class MountManager {
+	private readonly mounts = new Map<string, Mount>()
+	private readonly geographicPositions = new Map<Mount, GeographicPosition>()
 
-export const MountMolecule = molecule((m) => {
-	const bus = m(BusMolecule)
-	const wsm = m(WebSocketMessageMolecule)
-	const guideOutput = m(GuideOutputMolecule)
-
-	const mounts = new Map<string, Mount>()
-	const geographicPositions = new Map<Mount, GeographicPosition>()
-
-	bus.subscribe('indi:close', (client: IndiClient) => {
-		// Remove all mounts associated with the client
-		mounts.forEach((device) => remove(device))
-	})
+	constructor(
+		readonly wsm: WebSocketMessageManager,
+		readonly guideOutput: GuideOutputManager,
+	) {
+		bus.subscribe('indi:close', (client: IndiClient) => {
+			// Remove all mounts associated with the client
+			this.mounts.forEach((device) => this.remove(device))
+		})
+	}
 
 	// Handles incoming switch vector messages.
-	function switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
-		const device = mounts.get(message.device)
+	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
+		const device = this.mounts.get(message.device)
 
 		if (!device) return
 
@@ -125,7 +124,7 @@ export const MountMolecule = molecule((m) => {
 		switch (message.name) {
 			case 'CONNECTION':
 				if (handleConnection(client, device, message)) {
-					sendUpdate(device, 'connected', message.state)
+					this.update(device, 'connected', message.state)
 				}
 
 				return
@@ -140,7 +139,7 @@ export const MountMolecule = molecule((m) => {
 
 					if (rates.length) {
 						device.slewRates = rates
-						sendUpdate(device, 'slewRates', message.state)
+						this.update(device, 'slewRates', message.state)
 					}
 				}
 
@@ -150,7 +149,7 @@ export const MountMolecule = molecule((m) => {
 					if (element.value) {
 						if (device.slewRate !== element.name) {
 							device.slewRate = element.name
-							sendUpdate(device, 'slewRate', message.state)
+							this.update(device, 'slewRate', message.state)
 						}
 
 						break
@@ -169,7 +168,7 @@ export const MountMolecule = molecule((m) => {
 
 					if (modes.length) {
 						device.trackModes = modes
-						sendUpdate(device, 'trackModes', message.state)
+						this.update(device, 'trackModes', message.state)
 					}
 				}
 
@@ -181,7 +180,7 @@ export const MountMolecule = molecule((m) => {
 
 						if (device.trackMode !== trackMode) {
 							device.trackMode = trackMode
-							sendUpdate(device, 'trackMode', message.state)
+							this.update(device, 'trackMode', message.state)
 						}
 
 						break
@@ -194,7 +193,7 @@ export const MountMolecule = molecule((m) => {
 
 				if (device.tracking !== tracking) {
 					device.tracking = tracking
-					sendUpdate(device, 'tracking', message.state)
+					this.update(device, 'tracking', message.state)
 				}
 
 				return
@@ -204,7 +203,7 @@ export const MountMolecule = molecule((m) => {
 
 				if (device.pierSide !== pierSide) {
 					device.pierSide = pierSide
-					sendUpdate(device, 'pierSide', message.state)
+					this.update(device, 'pierSide', message.state)
 				}
 
 				return
@@ -215,7 +214,7 @@ export const MountMolecule = molecule((m) => {
 
 					if (device.canPark !== canPark) {
 						device.canPark = canPark
-						sendUpdate(device, 'canPark', message.state)
+						this.update(device, 'canPark', message.state)
 					}
 				}
 
@@ -224,7 +223,7 @@ export const MountMolecule = molecule((m) => {
 
 					if (device.parking !== parking) {
 						device.parking = parking
-						sendUpdate(device, 'parking', message.state)
+						this.update(device, 'parking', message.state)
 					}
 				}
 
@@ -232,7 +231,7 @@ export const MountMolecule = molecule((m) => {
 
 				if (device.parked !== parked) {
 					device.parked = parked
-					sendUpdate(device, 'parked', message.state)
+					this.update(device, 'parked', message.state)
 				}
 
 				return
@@ -240,14 +239,14 @@ export const MountMolecule = molecule((m) => {
 			case 'TELESCOPE_ABORT_MOTION':
 				if (!device.canAbort) {
 					device.canAbort = true
-					sendUpdate(device, 'canAbort', message.state)
+					this.update(device, 'canAbort', message.state)
 				}
 
 				return
 			case 'TELESCOPE_HOME':
 				if (!device.canHome) {
 					device.canHome = true
-					sendUpdate(device, 'canHome', message.state)
+					this.update(device, 'canHome', message.state)
 				}
 
 				return
@@ -257,14 +256,14 @@ export const MountMolecule = molecule((m) => {
 
 					if (device.canSync !== canSync) {
 						device.canSync = canSync
-						sendUpdate(device, 'canSync', message.state)
+						this.update(device, 'canSync', message.state)
 					}
 
 					const canGoTo = message.elements.TRACK?.value === true
 
 					if (device.canGoTo !== canGoTo) {
 						device.canGoTo = canGoTo
-						sendUpdate(device, 'canGoTo', message.state)
+						this.update(device, 'canGoTo', message.state)
 					}
 				}
 
@@ -273,8 +272,8 @@ export const MountMolecule = molecule((m) => {
 	}
 
 	// Handles incoming number vector messages.
-	function numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
-		const device = mounts.get(message.device)
+	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
+		const device = this.mounts.get(message.device)
 
 		if (!device) return
 
@@ -287,7 +286,7 @@ export const MountMolecule = molecule((m) => {
 
 				if (device.slewing !== slewing) {
 					device.slewing = slewing
-					sendUpdate(device, 'slewing', message.state)
+					this.update(device, 'slewing', message.state)
 				}
 
 				const rightAscension = hour(message.elements.RA!.value)
@@ -305,7 +304,7 @@ export const MountMolecule = molecule((m) => {
 				}
 
 				if (updated) {
-					sendUpdate(device, 'equatorialCoordinate', message.state)
+					this.update(device, 'equatorialCoordinate', message.state)
 				}
 
 				return
@@ -332,8 +331,8 @@ export const MountMolecule = molecule((m) => {
 				}
 
 				if (updated) {
-					geographicPositions.set(device, geodeticLocation(deg(longitude), deg(latitude), meter(elevation)))
-					sendUpdate(device, 'geographicCoordinate', message.state)
+					this.geographicPositions.set(device, geodeticLocation(deg(longitude), deg(latitude), meter(elevation)))
+					this.update(device, 'geographicCoordinate', message.state)
 				}
 
 				return
@@ -343,8 +342,8 @@ export const MountMolecule = molecule((m) => {
 				if (tag[0] === 'd') {
 					if (!device.canPulseGuide) {
 						device.canPulseGuide = true
-						sendUpdate(device, 'canPulseGuide', message.state)
-						guideOutput.add(device)
+						this.update(device, 'canPulseGuide', message.state)
+						this.guideOutput.add(device)
 					}
 				}
 
@@ -353,7 +352,7 @@ export const MountMolecule = molecule((m) => {
 	}
 
 	// Handles incoming text vector messages.
-	function textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
+	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		if (message.name === 'DRIVER_INFO') {
 			const type = +message.elements.DRIVER_INTERFACE!.value
 
@@ -361,20 +360,20 @@ export const MountMolecule = molecule((m) => {
 				const executable = message.elements.DRIVER_EXEC!.value
 				const version = message.elements.DRIVER_VERSION!.value
 
-				if (!mounts.has(message.device)) {
+				if (!this.mounts.has(message.device)) {
 					const mount: Mount = { ...structuredClone(DEFAULT_MOUNT), id: message.device, name: message.device, driver: { executable, version } }
-					add(mount)
+					this.add(mount)
 					addProperty(mount, message, tag)
 					ask(client, mount)
 				}
-			} else if (mounts.has(message.device)) {
-				remove(mounts.get(message.device)!)
+			} else if (this.mounts.has(message.device)) {
+				this.remove(this.mounts.get(message.device)!)
 			}
 
 			return
 		}
 
-		const device = mounts.get(message.device)
+		const device = this.mounts.get(message.device)
 
 		if (!device) return
 
@@ -386,113 +385,49 @@ export const MountMolecule = molecule((m) => {
 	}
 
 	// Sends an update for a mount device
-	function sendUpdate(device: Mount, property: keyof Mount, state?: PropertyState) {
+	update(device: Mount, property: keyof Mount, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
-		wsm.send<MountUpdated>({ type: 'mount:update', device: value, property, state })
+		this.wsm.send<MountUpdated>({ type: 'mount:update', device: value, property, state })
 		bus.emit('mount:update', value)
 	}
 
 	// Adds a mount device
-	function add(device: Mount) {
-		mounts.set(device.name, device)
-		wsm.send<MountAdded>({ type: 'mount:add', device })
+	add(device: Mount) {
+		this.mounts.set(device.name, device)
+		this.wsm.send<MountAdded>({ type: 'mount:add', device })
 		bus.emit('mount:add', device)
 		console.info('mount added:', device.name)
 	}
 
 	// Removes a mount device
-	function remove(device: Mount) {
-		if (mounts.has(device.name)) {
-			mounts.delete(device.name)
+	remove(device: Mount) {
+		if (this.mounts.has(device.name)) {
+			this.mounts.delete(device.name)
 
 			// TODO: Call it on deleteProperty
-			guideOutput.remove(device)
+			this.guideOutput.remove(device)
 
-			wsm.send<MountRemoved>({ type: 'mount:remove', device })
+			this.wsm.send<MountRemoved>({ type: 'mount:remove', device })
 			bus.emit('mount:remove', device)
 			console.info('mount removed:', device.name)
 		}
 	}
 
 	// Lists all mount devices
-	function list() {
-		return Array.from(mounts.values())
+	list() {
+		return Array.from(this.mounts.values())
 	}
 
 	// Gets a mount device by its id
-	function get(id: string) {
-		return mounts.get(id)
+	get(id: string) {
+		return this.mounts.get(id)
 	}
 
-	function deviceAndConnection(deviceId: string) {
-		const connection = injector.get(ConnectionMolecule)
-		return [get(decodeURIComponent(deviceId))!, connection.get()] as const
-	}
-
-	// The endpoints for managing mounts.
-	const app = new Elysia({ prefix: '/mounts' })
-
-	app.get('', () => {
-		return list()
-	})
-
-	app.get('/:id', ({ params }) => {
-		return get(decodeURIComponent(params.id))
-	})
-
-	app.post('/:id/goto', ({ params, body }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		const { rightAscension, declination } = body as EquatorialCoordinate<string | Angle>
-		goTo(connection, device, parseAngle(rightAscension, { isHour: true })!, parseAngle(declination)!)
-	})
-
-	app.post('/:id/slew', ({ params, body }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		const { rightAscension, declination } = body as EquatorialCoordinate<string | Angle>
-		slewTo(connection, device, parseAngle(rightAscension, { isHour: true })!, parseAngle(declination)!)
-	})
-
-	app.post('/:id/sync', ({ params, body }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		const { rightAscension, declination } = body as EquatorialCoordinate<string | Angle>
-		sync(connection, device, parseAngle(rightAscension, { isHour: true })!, parseAngle(declination)!)
-	})
-
-	app.post('/:id/park', ({ params }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		park(connection, device)
-	})
-
-	app.post('/:id/unpark', ({ params }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		unpark(connection, device)
-	})
-
-	app.post('/:id/home', ({ params }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		home(connection, device)
-	})
-
-	app.post('/:id/tracking', ({ params, body }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		tracking(connection, device, body as never)
-	})
-
-	app.post('/:id/trackmode', ({ params, body }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		trackMode(connection, device, body as never)
-	})
-
-	app.post('/:id/slewrate', ({ params, body }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		slewRate(connection, device, body as never)
-	})
-
-	app.get('/:id/position', ({ params }) => {
-		const device = get(decodeURIComponent(params.id))!
+	// Computes the coordinate position of a mount device
+	coordinatePosition(device: Mount) {
 		const { rightAscension, declination } = device.equatorialCoordinate
 
-		const location = geographicPositions.get(device)
+		const location = this.geographicPositions.get(device)
 		if (!location) return { ...DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, rightAscension, declination }
 
 		const now = timeNow()
@@ -516,37 +451,44 @@ export const MountMolecule = molecule((m) => {
 			meridianAt: '00:00 (-12:00)',
 			pierSide: expectedPierSide(rightAscension, declination, lst),
 		} satisfies MountEquatorialCoordinatePosition
-	})
+	}
 
-	app.post('/:id/movenorth', ({ params, body }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		moveNorth(connection, device, body as never)
-	})
+	moveTo(client: IndiClient, mount: Mount, mode: 'goto' | 'slew' | 'sync', req: EquatorialCoordinate<string | number>) {
+		const rightAscension = parseAngle(req.rightAscension, { isHour: true })!
+		const declination = parseAngle(req.declination)!
 
-	app.post('/:id/movesouth', ({ params, body }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		moveSouth(connection, device, body as never)
-	})
+		if (mode === 'goto') goTo(client, mount, rightAscension, declination)
+		else if (mode === 'slew') slewTo(client, mount, rightAscension, declination)
+		else if (mode === 'sync') syncTo(client, mount, rightAscension, declination)
+	}
+}
 
-	app.post('/:id/moveeast', ({ params, body }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		moveEast(connection, device, body as never)
-	})
+// Endpoints for handling mount-related requests
+export function mount(mount: MountManager, connection: ConnectionManager) {
+	function mountFromParams(params: { id: string }) {
+		return mount.get(decodeURIComponent(params.id))!
+	}
 
-	app.post('/:id/movewest', ({ params, body }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		moveWest(connection, device, body as never)
-	})
+	const app = new Elysia({ prefix: '/mounts' })
+		// Endpoints!
+		.get('', () => mount.list())
+		.get('/:id', ({ params }) => mountFromParams(params))
+		.post('/:id/goto', ({ params, body }) => mount.moveTo(connection.get(), mountFromParams(params), 'goto', body as never))
+		.post('/:id/slew', ({ params, body }) => mount.moveTo(connection.get(), mountFromParams(params), 'slew', body as never))
+		.post('/:id/sync', ({ params, body }) => mount.moveTo(connection.get(), mountFromParams(params), 'sync', body as never))
+		.post('/:id/park', ({ params }) => park(connection.get(), mountFromParams(params)))
+		.post('/:id/unpark', ({ params }) => unpark(connection.get(), mountFromParams(params)))
+		.post('/:id/home', ({ params }) => home(connection.get(), mountFromParams(params)))
+		.post('/:id/tracking', ({ params, body }) => tracking(connection.get(), mountFromParams(params), body as never))
+		.post('/:id/trackmode', ({ params, body }) => trackMode(connection.get(), mountFromParams(params), body as never))
+		.post('/:id/slewrate', ({ params, body }) => slewRate(connection.get(), mountFromParams(params), body as never))
+		.get('/:id/position', ({ params }) => mount.coordinatePosition(mountFromParams(params)))
+		.post('/:id/movenorth', ({ params, body }) => moveNorth(connection.get(), mountFromParams(params), body as never))
+		.post('/:id/movesouth', ({ params, body }) => moveSouth(connection.get(), mountFromParams(params), body as never))
+		.post('/:id/moveeast', ({ params, body }) => moveEast(connection.get(), mountFromParams(params), body as never))
+		.post('/:id/movewest', ({ params, body }) => moveWest(connection.get(), mountFromParams(params), body as never))
+		.post('/:id/location', ({ params, body }) => geographicCoordinate(connection.get(), mountFromParams(params), body as never))
+		.post('/:id/stop', ({ params }) => stopMotion(connection.get(), mountFromParams(params)))
 
-	app.post('/:id/location', ({ params, body }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		geographicCoordinate(connection, device, body as never)
-	})
-
-	app.post('/:id/stop', ({ params }) => {
-		const [device, connection] = deviceAndConnection(params.id)
-		stopMotion(connection, device)
-	})
-
-	return { switchVector, numberVector, textVector, add, remove, list, get, app }
-})
+	return app
+}

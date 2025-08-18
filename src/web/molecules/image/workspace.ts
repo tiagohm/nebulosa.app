@@ -1,5 +1,5 @@
 import { molecule } from 'bunshi'
-import { BusMolecule } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import type { Atom, Camera } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { simpleLocalStorage } from '@/shared/storage'
@@ -17,8 +17,6 @@ const KEY_INVALID_CHAR_REGEX = /[\W]+/g
 
 // Molecule that manages all the images
 export const ImageWorkspaceMolecule = molecule((m) => {
-	const bus = m(BusMolecule)
-
 	const viewers = new Map<string, Atom<typeof ImageViewerMolecule>>()
 
 	const state = proxy<ImageWorkspaceState>({

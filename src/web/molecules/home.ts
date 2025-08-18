@@ -1,5 +1,5 @@
 import { molecule, onMount } from 'bunshi'
-import { BusMolecule } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import { proxy } from 'valtio'
 
 export interface HomeState {
@@ -10,8 +10,6 @@ export interface HomeState {
 
 // Molecule that manages the home
 export const HomeMolecule = molecule((m) => {
-	const bus = m(BusMolecule)
-
 	const state = proxy<HomeState>({
 		menu: {
 			show: false,

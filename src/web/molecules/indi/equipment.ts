@@ -1,5 +1,5 @@
 import { molecule, onMount } from 'bunshi'
-import { BusMolecule, unsubscribe } from 'src/shared/bus'
+import bus, { unsubscribe } from 'src/shared/bus'
 import type { Camera, CameraUpdated, Device, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 
@@ -29,8 +29,6 @@ export interface EquipmentState {
 
 // Molecule that manages all the connected devices
 export const EquipmentMolecule = molecule((m) => {
-	const bus = m(BusMolecule)
-
 	const state = proxy<EquipmentState>({
 		devices: {
 			camera: [],

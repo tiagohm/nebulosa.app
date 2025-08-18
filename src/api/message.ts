@@ -1,4 +1,3 @@
-import { molecule } from 'bunshi'
 import type { WebSocketMessage } from '../shared/types'
 
 // Interface for sending messages over WebSocket
@@ -6,38 +5,36 @@ export interface Messager {
 	readonly sendText: (data: string) => void
 }
 
-// Molecule for managing WebSocket messages
-export const WebSocketMessageMolecule = molecule(() => {
-	const sockets = new Set<Messager>()
+// Manager for managing WebSocket messages
+export class WebSocketMessageManager {
+	private readonly sockets = new Set<Messager>()
 
 	// Opens a WebSocket connection
-	function open(socket: Messager) {
-		if (!sockets.has(socket)) {
-			sockets.add(socket)
+	open(socket: Messager) {
+		if (!this.sockets.has(socket)) {
+			this.sockets.add(socket)
 			console.info('WebSocket connected')
 		}
 	}
 
 	// Handles incoming WebSocket messages
-	function message(socket: Messager, message: string | Buffer) {
+	message(socket: Messager, message: string | Buffer) {
 		//
 	}
 
 	// Closes a WebSocket connection
-	function close(socket: Messager, code: number, reason: string) {
-		if (sockets.has(socket)) {
+	close(socket: Messager, code: number, reason: string) {
+		if (this.sockets.has(socket)) {
 			console.info('WebSocket closed: ', code, reason)
-			sockets.delete(socket)
+			this.sockets.delete(socket)
 		}
 	}
 
 	// Sends a message to all connected WebSocket clients
-	function send<T extends WebSocketMessage>(message: Readonly<T>) {
-		if (sockets.size) {
+	send<T extends WebSocketMessage>(message: Readonly<T>) {
+		if (this.sockets.size) {
 			const data = JSON.stringify(message)
-			sockets.forEach((socket) => socket.sendText(data))
+			this.sockets.forEach((socket) => socket.sendText(data))
 		}
 	}
-
-	return { open, message, close, send } as const
-})
+}

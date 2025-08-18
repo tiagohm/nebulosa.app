@@ -1,12 +1,9 @@
-import { getDefaultInjector, molecule } from 'bunshi'
 import Elysia from 'elysia'
 import type { DefNumberVector, IndiClient, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
-import { BusMolecule } from '../shared/bus'
+import bus from '../shared/bus'
 import type { CameraUpdated, GuideOutput, GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from '../shared/types'
-import { ConnectionMolecule } from './connection'
-import { WebSocketMessageMolecule } from './message'
-
-const injector = getDefaultInjector()
+import type { ConnectionManager } from './connection'
+import type { WebSocketMessageManager } from './message'
 
 // Pulses the guide output towards the north direction for the given duration
 export function pulseNorth(client: IndiClient, device: GuideOutput, duration: number) {
@@ -36,21 +33,20 @@ export function pulseEast(client: IndiClient, device: GuideOutput, duration: num
 	}
 }
 
-// Molecule for managing guide output devices
-export const GuideOutputMolecule = molecule((m) => {
-	const bus = m(BusMolecule)
-	const wsm = m(WebSocketMessageMolecule)
+// Manager for handling guide output-related operations
+export class GuideOutputManager {
+	private readonly guideOutputs = new Map<string, GuideOutput>()
 
-	const guideOutputs = new Map<string, GuideOutput>()
-
-	bus.subscribe('indi:close', (client: IndiClient) => {
-		// Remove all guide outputs associated with the client
-		guideOutputs.forEach((device) => remove(device))
-	})
+	constructor(readonly wsm: WebSocketMessageManager) {
+		bus.subscribe('indi:close', (client: IndiClient) => {
+			// Remove all guide outputs associated with the client
+			this.guideOutputs.forEach((device) => this.remove(device))
+		})
+	}
 
 	// Handles incoming number vector messages.
-	function numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
-		const device = guideOutputs.get(message.device)
+	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
+		const device = this.guideOutputs.get(message.device)
 
 		if (!device) return
 
@@ -62,7 +58,7 @@ export const GuideOutputMolecule = molecule((m) => {
 
 					if (pulseGuiding !== device.pulseGuiding) {
 						device.pulseGuiding = pulseGuiding
-						sendUpdate(device, 'pulseGuiding', message.state)
+						this.sendUpdate(device, 'pulseGuiding', message.state)
 					}
 				}
 
@@ -71,69 +67,66 @@ export const GuideOutputMolecule = molecule((m) => {
 	}
 
 	// Sends an update for a guide output device
-	function sendUpdate(device: GuideOutput, property: keyof GuideOutput, state?: PropertyState) {
+	sendUpdate(device: GuideOutput, property: keyof GuideOutput, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
-		if (device.type === 'CAMERA') wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
-		wsm.send<GuideOutputUpdated>({ type: 'guideOutput:update', device: value, property, state })
+		if (device.type === 'CAMERA') this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
+		this.wsm.send<GuideOutputUpdated>({ type: 'guideOutput:update', device: value, property, state })
 		bus.emit('guideOutput:update', value)
 	}
 
 	// Adds a guide output device
-	function add(device: GuideOutput) {
-		guideOutputs.set(device.name, device)
+	add(device: GuideOutput) {
+		this.guideOutputs.set(device.name, device)
 
-		wsm.send<GuideOutputAdded>({ type: 'guideOutput:add', device })
+		this.wsm.send<GuideOutputAdded>({ type: 'guideOutput:add', device })
 		bus.emit('guideOutput:add', device)
 		console.info('guide output added:', device.name)
 	}
 
 	// Removes a guide output device
-	function remove(device: GuideOutput) {
-		if (guideOutputs.has(device.name)) {
-			guideOutputs.delete(device.name)
+	remove(device: GuideOutput) {
+		if (this.guideOutputs.has(device.name)) {
+			this.guideOutputs.delete(device.name)
 
 			device.canPulseGuide = false
-			sendUpdate(device, 'canPulseGuide')
+			this.sendUpdate(device, 'canPulseGuide')
 
-			wsm.send<GuideOutputRemoved>({ type: 'guideOutput:remove', device })
+			this.wsm.send<GuideOutputRemoved>({ type: 'guideOutput:remove', device })
 			bus.emit('guideOutput:remove', device)
 			console.info('guide output removed:', device.name)
 		}
 	}
 
 	// Lists all guide output devices
-	function list() {
-		return Array.from(guideOutputs.values())
+	list() {
+		return Array.from(this.guideOutputs.values())
 	}
 
 	// Gets a guide output device by its id
-	function get(id: string) {
-		return guideOutputs.get(id)
+	get(id: string) {
+		return this.guideOutputs.get(id)
 	}
 
 	// Pulses the guide output towards the specified direction for the given duration
-	function pulse(client: IndiClient, device: GuideOutput, req: GuidePulse) {
+	pulse(client: IndiClient, device: GuideOutput, req: GuidePulse) {
 		if (req.direction === 'NORTH') pulseNorth(client, device, req.duration)
 		else if (req.direction === 'SOUTH') pulseSouth(client, device, req.duration)
 		else if (req.direction === 'WEST') pulseWest(client, device, req.duration)
 		else if (req.direction === 'EAST') pulseEast(client, device, req.duration)
 	}
+}
 
-	// The endpoints for managing guide outputs
+// Endpoints for managing guide outputs-related requests
+export function guideOutput(guideOutput: GuideOutputManager, connection: ConnectionManager) {
+	function guideOutputFromParams(params: { id: string }) {
+		return guideOutput.get(decodeURIComponent(params.id))!
+	}
+
 	const app = new Elysia({ prefix: '/guideoutputs' })
+		// Endpoints!
+		.get('', () => guideOutput.list())
+		.get('/:id', ({ params }) => guideOutputFromParams(params))
+		.post('/:id/pulse', ({ params, body }) => guideOutput.pulse(connection.get(), guideOutputFromParams(params), body as GuidePulse))
 
-	app.get('', () => {
-		return list()
-	})
-
-	app.get('/:id', ({ params }) => {
-		return get(decodeURIComponent(params.id))
-	})
-
-	app.post('/:id/pulse', ({ params, body }) => {
-		const connection = injector.get(ConnectionMolecule)
-		return pulse(connection.get(), get(decodeURIComponent(params.id))!, body as GuidePulse)
-	})
-
-	return { numberVector, add, remove, list, get, pulse, app } as const
-})
+	return app
+}

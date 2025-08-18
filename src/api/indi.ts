@@ -1,14 +1,13 @@
-import { getDefaultInjector, molecule } from 'bunshi'
 import { Elysia } from 'elysia'
 // biome-ignore format: too many
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, IndiClient, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
-import { BusMolecule } from '../shared/bus'
+import bus from '../shared/bus'
 import type { Device, DeviceProperty } from '../shared/types'
-import { CameraMolecule } from './camera'
-import { ConnectionMolecule } from './connection'
-import { GuideOutputMolecule } from './guideoutput'
-import { MountMolecule } from './mount'
-import { ThermometerMolecule } from './thermometer'
+import type { CameraManager } from './camera'
+import type { ConnectionManager } from './connection'
+import type { GuideOutputManager } from './guideoutput'
+import type { MountManager } from './mount'
+import type { ThermometerManager } from './thermometer'
 
 export enum DeviceInterfaceType {
 	TELESCOPE = 0x0001, // Telescope interface, must subclass INDI::Telescope.
@@ -67,78 +66,66 @@ export function disconnect(client: IndiClient, device: Device) {
 	}
 }
 
-const injector = getDefaultInjector()
-
-// Molecule that handles the INDI devices.
-export const IndiMolecule = molecule((m) => {
-	const bus = m(BusMolecule)
-	const camera = m(CameraMolecule)
-	const guideOutput = m(GuideOutputMolecule)
-	const thermometer = m(ThermometerMolecule)
-	const mount = m(MountMolecule)
+// Manager that handles the INDI devices.
+export class IndiManager {
+	constructor(
+		readonly camera: CameraManager,
+		readonly guideOutput: GuideOutputManager,
+		readonly thermometer: ThermometerManager,
+		readonly mount: MountManager,
+	) {}
 
 	// Handles the connection close event
-	function close(client: IndiClient, server: boolean) {
+	close(client: IndiClient, server: boolean) {
 		bus.emit('indi:close', client)
 	}
 
 	// Handles incoming switch vector messages.
-	function switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
-		camera.switchVector(client, message, tag)
-		mount.switchVector(client, message, tag)
+	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
+		this.camera.switchVector(client, message, tag)
+		this.mount.switchVector(client, message, tag)
 	}
 
 	// Handles incoming number vector messages.
-	function numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
-		camera.numberVector(client, message, tag)
-		mount.numberVector(client, message, tag)
-		guideOutput.numberVector(client, message, tag)
-		thermometer.numberVector(client, message, tag)
+	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
+		this.camera.numberVector(client, message, tag)
+		this.mount.numberVector(client, message, tag)
+		this.guideOutput.numberVector(client, message, tag)
+		this.thermometer.numberVector(client, message, tag)
 	}
 
 	// Handles incoming text vector messages.
-	function textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
-		camera.textVector(client, message, tag)
-		mount.textVector(client, message, tag)
+	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
+		this.camera.textVector(client, message, tag)
+		this.mount.textVector(client, message, tag)
 	}
 
 	// Handles incoming blob vector messages.
-	function blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
-		camera.blobVector(client, message, tag)
+	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
+		this.camera.blobVector(client, message, tag)
 	}
 
 	// Gets a device by its id.
-	function get(id: string): Device | undefined {
-		return camera.get(id) || mount.get(id) || guideOutput.get(id) || thermometer.get(id)
+	get(id: string): Device | undefined {
+		return this.camera.get(id) || this.mount.get(id) || this.guideOutput.get(id) || this.thermometer.get(id)
+	}
+}
+
+// Endpoints for managing INDI devices
+export function indi(indi: IndiManager, connection: ConnectionManager) {
+	function deviceFromParams(params: { id: string }) {
+		return indi.get(decodeURIComponent(params.id))!
 	}
 
-	// The endpoints for managing INDI devices.
 	const app = new Elysia({ prefix: '/indi' })
+		// Endpoints!
+		.get('/:id', ({ params }) => deviceFromParams(params))
+		.post('/:id/connect', ({ params }) => connect(connection.get(), deviceFromParams(params)))
+		.post('/:id/disconnect', ({ params }) => disconnect(connection.get(), deviceFromParams(params)))
+		.get('/:id/properties', ({ params }) => deviceFromParams(params).properties)
 
-	app.get('/:id', ({ params }) => {
-		return get(decodeURIComponent(params.id))
-	})
-
-	app.post('/:id/connect', ({ params }) => {
-		const connection = injector.get(ConnectionMolecule)
-		const device = get(decodeURIComponent(params.id))!
-		const client = connection.get()
-		connect(client, device)
-	})
-
-	app.post('/:id/disconnect', ({ params }) => {
-		const connection = injector.get(ConnectionMolecule)
-		const device = get(decodeURIComponent(params.id))!
-		const client = connection.get()
-		disconnect(client, device)
-	})
-
-	app.get('/:id/properties', ({ params }) => {
-		return get(decodeURIComponent(params.id))!.properties
-	})
-
-	return { switchVector, numberVector, textVector, blobVector, close, app } as const
-})
+	return app
+}
 
 // Adds or updates a device's property.
 export function addProperty(device: Device, message: DefVector | SetVector, tag: string) {

@@ -1,9 +1,7 @@
 import { expect, test } from 'bun:test'
-import { getDefaultInjector } from 'bunshi'
-import { ConfirmationMolecule } from 'src/api/confirmation'
+import { ConfirmationManager } from 'src/api/confirmation'
 
-const injector = getDefaultInjector()
-const confirmation = injector.get(ConfirmationMolecule)
+const confirmation = new ConfirmationManager()
 
 test('confirm', async () => {
 	for (let i = 0; i < 2; i++) {

@@ -26,7 +26,7 @@ export const ImageSettings = memo(() => {
 					<span className='text-xs font-normal text-gray-400 max-w-full'>{info.originalPath}</span>
 				</div>
 			}
-			maxWidth='199px'
+			maxWidth='200px'
 			name={`settings-${settings.scope.image.key}`}
 			onClose={() => viewer.closeModal('settings')}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>

@@ -1,11 +1,9 @@
 import { molecule } from 'bunshi'
-import { BusMolecule } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import type { DeviceMessageEvent } from 'src/shared/types'
 
 // Molecule that manages WebSocket connection for receiving messages
 export const WebSocketMolecule = molecule((m) => {
-	const bus = m(BusMolecule)
-
 	const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 	const ws = new WebSocket(`${uri}/ws`)
 

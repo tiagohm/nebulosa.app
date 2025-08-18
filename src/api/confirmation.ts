@@ -1,48 +1,47 @@
-import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import type { Confirm, Confirmation } from '../shared/types'
-import { WebSocketMessageMolecule } from './message'
+import type { WebSocketMessageManager } from './message'
 
 export type ConfirmationResolver = (value?: boolean | PromiseLike<boolean>) => void
 
-// Molecule that handles confirmation messages.
+// Manager that handles confirmation messages.
 // It listens for confirmation requests and resolves them based on user input.
-export const ConfirmationMolecule = molecule((m) => {
-	const wsm = m(WebSocketMessageMolecule)
+export class ConfirmationManager {
+	private readonly confirmations = new Map<string, ConfirmationResolver>()
 
-	const confirmations = new Map<string, ConfirmationResolver>()
+	constructor(readonly wsm?: WebSocketMessageManager) {}
 
 	// Confirms a confirmation request.
-	function confirm(req: Confirm) {
-		confirmations.get(req.key)?.(req.accepted)
+	confirm(req: Confirm) {
+		this.confirmations.get(req.key)?.(req.accepted)
 	}
 
 	// Asks for confirmation and returns a promise that resolves with the user's response or a timeout occurs.
-	function ask(message: Omit<Confirmation, 'type'>, timeout: number = 30000) {
+	ask(message: Omit<Confirmation, 'type'>, timeout: number = 30000) {
 		const { promise, resolve } = Promise.withResolvers<boolean>()
 
 		const timer = setTimeout(() => {
-			confirmations.delete(message.key)
+			this.confirmations.delete(message.key)
 			resolve(false)
 		}, timeout)
 
-		confirmations.set(message.key, (value) => {
+		this.confirmations.set(message.key, (value) => {
 			clearTimeout(timer)
-			confirmations.delete(message.key)
+			this.confirmations.delete(message.key)
 			resolve(value)
 		})
 
-		wsm.send<Confirmation>({ ...message, type: 'confirmation' })
+		this.wsm?.send<Confirmation>({ ...message, type: 'confirmation' })
 
 		return promise
 	}
+}
 
-	// The endpoint for handling confirmation requests
+// Endpoints for handling confirmation requests
+export function confirmation(confirmation: ConfirmationManager) {
 	const app = new Elysia({ prefix: '/confirmation' })
+		// Endpoints!
+		.post('', ({ body }) => confirmation.confirm(body as never))
 
-	app.post('', ({ body }) => {
-		confirm(body as never)
-	})
-
-	return { ask, confirm, app }
-})
+	return app
+}

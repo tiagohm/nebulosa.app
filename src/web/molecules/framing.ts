@@ -1,6 +1,6 @@
 import { molecule, onMount } from 'bunshi'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
-import { BusMolecule } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
@@ -20,7 +20,6 @@ export interface FramingState {
 
 // Molecule that manages the Framing modal
 export const FramingMolecule = molecule((m) => {
-	const bus = m(BusMolecule)
 	const home = m(HomeMolecule)
 	const workspace = m(ImageWorkspaceMolecule)
 

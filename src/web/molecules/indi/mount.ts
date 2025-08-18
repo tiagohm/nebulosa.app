@@ -1,5 +1,5 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import { BusMolecule, unsubscribe } from 'src/shared/bus'
+import bus, { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, type Framing, type GeographicCoordinate, type Mount, type MountEquatorialCoordinatePosition, type MountUpdated, type TargetCoordinateType, type TrackMode } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
@@ -43,7 +43,6 @@ const mountStateMap = new Map<string, MountState>()
 // Molecule that manages the mount device
 export const MountMolecule = molecule((m, s) => {
 	const scope = s(MountScope)
-	const bus = m(BusMolecule)
 	const equipment = m(EquipmentMolecule)
 
 	const state =

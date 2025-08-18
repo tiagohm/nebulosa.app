@@ -1,5 +1,4 @@
 import { Glob } from 'bun'
-import { molecule } from 'bunshi'
 import Elysia from 'elysia'
 import fs from 'fs/promises'
 import os from 'os'
@@ -13,13 +12,13 @@ export const FileEntryComparator = (a: FileEntry, b: FileEntry) => {
 	else return 1
 }
 
-// Molecule for handing file system operations
-export const FileSystemMolecule = molecule(() => {
+// Manager for handling file system operations
+export class FileSystemManager {
 	// Lists directories and files in a specified path
 	// If no path is specified, it defaults to the user's home directory
 	// It can filter results based on a glob pattern and whether to include only directories
 	// Returns a structured response containing the path, directory tree, and entries
-	async function list(req?: ListDirectory): Promise<FileSystem> {
+	async list(req?: ListDirectory): Promise<FileSystem> {
 		const path = (await findDirectory(req?.path)) || os.homedir()
 		const tree = makeDirectoryTree(path)
 		const glob = req?.filter ? new Glob(req.filter) : undefined
@@ -46,25 +45,22 @@ export const FileSystemMolecule = molecule(() => {
 	}
 
 	// Creates a new directory at the specified path with the given name
-	async function create(req: CreateDirectory) {
+	async create(req: CreateDirectory) {
 		const path = join(req.path, req.name.trim())
 		await fs.mkdir(path, req)
 		return { path }
 	}
+}
 
-	// The endpoints for file system operations
+// Endpoints for handling file system requests
+export function fileSystem(fileSystem: FileSystemManager) {
 	const app = new Elysia({ prefix: '/fileSystem' })
+		// Endpoints!
+		.post('/list', ({ body }) => fileSystem.list(body as never))
+		.post('/create', ({ body }) => fileSystem.create(body as never))
 
-	app.post('/list', ({ body }) => {
-		return list(body as never)
-	})
-
-	app.post('/create', ({ body }) => {
-		return create(body as never)
-	})
-
-	return { list, create, app } as const
-})
+	return app
+}
 
 // Finds the first directory in the path hierarchy
 // If the path is undefined or does not exist, it returns undefined

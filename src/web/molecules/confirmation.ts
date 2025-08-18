@@ -1,5 +1,5 @@
 import { molecule, onMount } from 'bunshi'
-import { BusMolecule } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import type { Confirmation } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
@@ -12,8 +12,6 @@ export interface ConfirmationState {
 
 // Molecule that manages confirmation dialog
 export const ConfirmationMolecule = molecule((m) => {
-	const bus = m(BusMolecule)
-
 	const state = proxy<ConfirmationState>({
 		showModal: false,
 		key: '',

@@ -1,14 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { getDefaultInjector } from 'bunshi'
 import { deg, formatALT, formatAZ, parseAngle } from 'nebulosa/src/angle'
 import { dateUnix } from 'nebulosa/src/datetime'
 import { lightYear, toKilometer } from 'nebulosa/src/distance'
 import { StellariumObjectType } from 'nebulosa/src/stellarium'
-import { AtlasMolecule } from 'src/api/atlas'
+import { AtlasManager } from 'src/api/atlas'
 import { type ChartOfBody, DEFAULT_SKY_OBJECT_SEARCH, type PositionOfBody } from 'src/shared/types'
 
-const injector = getDefaultInjector()
-const atlas = injector.get(AtlasMolecule)
+const atlas = new AtlasManager()
 
 const DEFAULT_POSITION_OF_BODY: PositionOfBody = {
 	utcTime: 1753628400000, // Sun Jul 27 2025 12:00:00 GMT-0300

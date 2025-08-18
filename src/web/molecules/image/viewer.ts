@@ -1,7 +1,7 @@
 import { createScope, molecule, onMount } from 'bunshi'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
-import { BusMolecule, unsubscribe } from 'src/shared/bus'
+import bus, { unsubscribe } from 'src/shared/bus'
 import { type CameraCaptureTaskEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -87,7 +87,6 @@ export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { ke
 // It handles loading, transformations, star detection, and other image-related functionalities
 export const ImageViewerMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
-	const bus = m(BusMolecule)
 
 	const workspace = m(ImageWorkspaceMolecule)
 	const { key, path, camera } = scope.image

@@ -1,5 +1,5 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import { BusMolecule, unsubscribe } from 'src/shared/bus'
+import bus, { unsubscribe } from 'src/shared/bus'
 import { type Camera, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_TASK_EVENT, type Mount } from 'src/shared/types'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
@@ -32,7 +32,6 @@ const cameraStateMap = new Map<string, CameraState>()
 // Molecule that manages the camera device
 export const CameraMolecule = molecule((m, s) => {
 	const scope = s(CameraScope)
-	const bus = m(BusMolecule)
 	const equipment = m(EquipmentMolecule)
 	const workspace = m(ImageWorkspaceMolecule)
 

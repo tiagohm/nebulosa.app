@@ -1,5 +1,5 @@
 import { molecule, onMount } from 'bunshi'
-import { BusMolecule } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import type { ConnectionStatus } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { deepClone } from 'valtio/utils'
@@ -24,8 +24,6 @@ export const ConnectionComparator = (a: Connection, b: Connection) => {
 
 // Molecule that manages connections
 export const ConnectionMolecule = molecule((m) => {
-	const bus = m(BusMolecule)
-
 	const connections = simpleLocalStorage.get('connections', () => [structuredClone(DEFAULT_CONNECTION)])
 	connections.sort(ConnectionComparator)
 

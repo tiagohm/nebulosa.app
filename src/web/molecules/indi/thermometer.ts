@@ -1,5 +1,5 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import { BusMolecule } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import { DEFAULT_THERMOMETER, type Thermometer, type ThermometerUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
@@ -21,7 +21,6 @@ const thermometerStateMap = new Map<string, ThermometerState>()
 // Molecule that manages the thermometer device
 export const ThermometerMolecule = molecule((m, s) => {
 	const scope = s(ThermometerScope)
-	const bus = m(BusMolecule)
 	const equipment = m(EquipmentMolecule)
 
 	const state =

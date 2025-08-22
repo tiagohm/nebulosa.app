@@ -1,16 +1,16 @@
-import { Select, type SelectProps } from '@heroui/react'
+import { Listbox, type ListboxProps } from '@heroui/react'
 import { useDebounce } from '@uidotdev/usehooks'
 import { useMemo, useState } from 'react'
 import { SearchInput } from './SearchInput'
 
-export interface FilterableSelectProps<T extends object> extends Omit<SelectProps<T>, 'listboxProps' | 'items'> {
+export interface FilterableListboxProps<T extends object> extends Omit<ListboxProps<T>, 'topContent' | 'items'> {
 	readonly items: readonly Readonly<T>[]
 	readonly showFilter?: boolean
 	readonly filter: (item: T, search: string) => boolean
 	readonly filterPlaceholder?: string
 }
 
-export function FilterableSelect<T extends object>({ showFilter = true, items, filter, filterPlaceholder = 'Search', ...props }: FilterableSelectProps<T>) {
+export function FilterableListbox<T extends object>({ showFilter = true, items, filter, filterPlaceholder = 'Search', ...props }: FilterableListboxProps<T>) {
 	const [search, setSearch] = useState('')
 	const debouncedSearch = useDebounce(search, 300)
 
@@ -19,13 +19,5 @@ export function FilterableSelect<T extends object>({ showFilter = true, items, f
 		return items.length && debouncedSearch ? items.filter((item) => filter(item, text)) : items
 	}, [debouncedSearch, items])
 
-	return (
-		<Select
-			{...props}
-			items={filtered}
-			listboxProps={{
-				topContent: showFilter && <SearchInput className='w-full' onValueChange={(value) => setSearch(value)} placeholder={filterPlaceholder} value={search} />,
-			}}
-		/>
-	)
+	return <Listbox {...props} items={filtered} topContent={showFilter && <SearchInput className='w-full' onValueChange={(value) => setSearch(value)} placeholder={filterPlaceholder} value={search} />} />
 }

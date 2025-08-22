@@ -246,10 +246,22 @@ export type DeviceType = 'CAMERA' | 'MOUNT' | 'WHEEL' | 'FOCUSER' | 'ROTATOR' | 
 
 export type GuideDirection = 'NORTH' | 'SOUTH' | 'WEST' | 'EAST'
 
-export interface IndiSpawn {
+export interface IndiServerStart {
 	port?: number
 	drivers: string[]
 	verbose?: number
+	repeat?: number
+}
+
+export interface IndiServerStarted extends WebSocketMessage {
+	readonly type: 'indi:server:start'
+	readonly pid: number
+}
+
+export interface IndiServerStopped extends WebSocketMessage {
+	readonly type: 'indi:server:stop'
+	readonly pid: number
+	readonly code: number
 }
 
 export interface DeviceAdded<T extends string, D extends Device> extends WebSocketMessage {
@@ -594,7 +606,7 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	frameFormat: '',
 	gain: 0,
 	offset: 0,
-	autoSave: true,
+	autoSave: false,
 	autoSubFolderMode: 'OFF',
 }
 
@@ -895,6 +907,13 @@ export const DEFAULT_BODY_POSITION: BodyPosition = {
 	altitude: 0,
 	names: [],
 	pierSide: 'NEITHER',
+}
+
+export const DEFAULT_INDI_SERVER_START: Required<IndiServerStart> = {
+	port: 7624,
+	repeat: 1,
+	verbose: 0,
+	drivers: [],
 }
 
 export function isCamera(device: Device): device is Camera {

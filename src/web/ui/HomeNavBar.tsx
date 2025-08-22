@@ -2,6 +2,7 @@ import { Navbar, NavbarBrand, NavbarContent } from '@heroui/react'
 import { ConnectionBox } from './ConnectionBox'
 import { HomeMenu } from './HomeMenu'
 import { ImagePickerButton } from './ImagePickerButton'
+import { IndiServerButton } from './IndiServerButton'
 
 export function HomeNavBar() {
 	return (
@@ -13,6 +14,9 @@ export function HomeNavBar() {
 				<div className='flex flex-row justify-start items-center gap-2'>
 					<HomeMenu />
 					<ImagePickerButton />
+				</div>
+				<div className='flex flex-1 flex-row justify-end gap-2'>
+					<IndiServerButton />
 				</div>
 			</NavbarContent>
 		</Navbar>

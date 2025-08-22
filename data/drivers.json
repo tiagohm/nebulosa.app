@@ -1,0 +1,718 @@
+[
+  {
+    "name": "AAF2",
+    "driver": "indi_aaf2_focus"
+  },
+  {
+    "name": "AAG Solo CloudWatcher",
+    "driver": "indi_aagsolo_weather"
+  },
+  {
+    "name": "ActiveFocuser",
+    "driver": "indi_activefocuser_focus"
+  },
+  {
+    "name": "Alluna TCS2",
+    "driver": "indi_alluna_tcs2"
+  },
+  {
+    "name": "Alpaca Dome",
+    "driver": "indi_alpaca_dome"
+  },
+  {
+    "name": "ALTO",
+    "driver": "indi_alto"
+  },
+  {
+    "name": "Arduino ST4",
+    "driver": "indi_arduinost4"
+  },
+  {
+    "name": "Astro-Electronic FS-2",
+    "driver": "indi_lx200fs2"
+  },
+  {
+    "name": "AstroLink 4 mini II",
+    "driver": "indi_astrolink4mini2"
+  },
+  {
+    "name": "Astromechanics FOC",
+    "driver": "indi_astromechfoc"
+  },
+  {
+    "name": "Astromechanics LPM",
+    "driver": "indi_astromech_lpm"
+  },
+  {
+    "name": "Astrometry",
+    "driver": "indi_astrometry"
+  },
+  {
+    "name": "AstroPhysics GTOCP2",
+    "driver": "indi_lx200ap_legacy"
+  },
+  {
+    "name": "AstroPhysics V2",
+    "driver": "indi_lx200ap_v2"
+  },
+  {
+    "name": "AstroTrac",
+    "driver": "indi_astrotrac_telescope"
+  },
+  {
+    "name": "Baader Dome",
+    "driver": "indi_baader_dome"
+  },
+  {
+    "name": "Baader SteelDrive",
+    "driver": "indi_steeldrive_focus"
+  },
+  {
+    "name": "Baader SteelDriveII",
+    "driver": "indi_steeldrive2_focus"
+  },
+  {
+    "name": "Camelot Rotator",
+    "driver": "indi_camelot_rotator"
+  },
+  {
+    "name": "CCD Simulator",
+    "driver": "indi_simulator_ccd"
+  },
+  {
+    "name": "Celestron GPS",
+    "driver": "indi_celestron_gps"
+  },
+  {
+    "name": "Celestron SCT",
+    "driver": "indi_celestron_sct_focus"
+  },
+  {
+    "name": "CheapoDC",
+    "driver": "indi_cheapodc"
+  },
+  {
+    "name": "CRUX TitanTCS",
+    "driver": "indi_crux_mount"
+  },
+  {
+    "name": "DDW Dome",
+    "driver": "indi_ddw_dome"
+  },
+  {
+    "name": "DeepSkyDad AF1",
+    "driver": "indi_deepskydad_af1_focus"
+  },
+  {
+    "name": "DeepSkyDad AF2",
+    "driver": "indi_deepskydad_af2_focus"
+  },
+  {
+    "name": "DeepSkyDad AF3",
+    "driver": "indi_deepskydad_af3_focus"
+  },
+  {
+    "name": "DeepSkyDad FP",
+    "driver": "indi_deepskydad_fp"
+  },
+  {
+    "name": "DeepSkyDad FR1",
+    "driver": "indi_deepskydad_fr1"
+  },
+  {
+    "name": "Digital Setting Circle",
+    "driver": "indi_dsc_telescope"
+  },
+  {
+    "name": "Dome  Scripting Gateway",
+    "driver": "indi_script_dome"
+  },
+  {
+    "name": "Dome Simulator",
+    "driver": "indi_simulator_dome"
+  },
+  {
+    "name": "DomePro2",
+    "driver": "indi_domepro2_dome"
+  },
+  {
+    "name": "DragonLAIR",
+    "driver": "indi_dragonlair_dome"
+  },
+  {
+    "name": "DragonLIGHT",
+    "driver": "indi_dragon_light"
+  },
+  {
+    "name": "Dust Cover Simulator",
+    "driver": "indi_simulator_dustcover"
+  },
+  {
+    "name": "EQ500X",
+    "driver": "indi_eq500x_telescope"
+  },
+  {
+    "name": "Esatto",
+    "driver": "indi_esatto_focus"
+  },
+  {
+    "name": "Esatto Arco",
+    "driver": "indi_esattoarco_focus"
+  },
+  {
+    "name": "FCUSB",
+    "driver": "indi_fcusb_focus"
+  },
+  {
+    "name": "Filter Simulator",
+    "driver": "indi_simulator_wheel"
+  },
+  {
+    "name": "Flip Flat",
+    "driver": "indi_flipflat"
+  },
+  {
+    "name": "Focuser Simulator",
+    "driver": "indi_simulator_focus"
+  },
+  {
+    "name": "FocusLynx",
+    "driver": "indi_lynx_focus"
+  },
+  {
+    "name": "Gemini Flatpanel",
+    "driver": "indi_gemini_flatpanel"
+  },
+  {
+    "name": "Gemini Focusing Rotator",
+    "driver": "indi_gemini_focus"
+  },
+  {
+    "name": "GIOTTO",
+    "driver": "indi_giotto"
+  },
+  {
+    "name": "GotoNova",
+    "driver": "indi_lx200gotonova"
+  },
+  {
+    "name": "GPS Simulator",
+    "driver": "indi_simulator_gps"
+  },
+  {
+    "name": "GPUSB",
+    "driver": "indi_gpusb"
+  },
+  {
+    "name": "Guide Simulator",
+    "driver": "indi_simulator_guide"
+  },
+  {
+    "name": "HitecAstro DC",
+    "driver": "indi_hitecastrodc_focus"
+  },
+  {
+    "name": "iEAFFocus",
+    "driver": "indi_ieaf_focus"
+  },
+  {
+    "name": "iEQ",
+    "driver": "indi_ieqlegacy_telescope"
+  },
+  {
+    "name": "Imager Agent",
+    "driver": "indi_imager_agent"
+  },
+  {
+    "name": "Integra85",
+    "driver": "indi_integra_focus"
+  },
+  {
+    "name": "iOptron HC8406",
+    "driver": "indi_ioptronHC8406"
+  },
+  {
+    "name": "ioptron Wheel",
+    "driver": "indi_ioptron_wheel"
+  },
+  {
+    "name": "iOptronV3",
+    "driver": "indi_ioptronv3_telescope"
+  },
+  {
+    "name": "IPX800v4",
+    "driver": "indi_ipx800v4"
+  },
+  {
+    "name": "Joystick",
+    "driver": "indi_joystick"
+  },
+  {
+    "name": "Lacerta MFOC",
+    "driver": "indi_lacerta_mfoc_focus"
+  },
+  {
+    "name": "Lacerta MFOC FMC",
+    "driver": "indi_lacerta_mfoc_fmc_focus"
+  },
+  {
+    "name": "Lakeside",
+    "driver": "indi_lakeside_focus"
+  },
+  {
+    "name": "Light Panel Simulator",
+    "driver": "indi_simulator_lightpanel"
+  },
+  {
+    "name": "Losmandy Gemini",
+    "driver": "indi_lx200gemini"
+  },
+  {
+    "name": "LX200 10micron",
+    "driver": "indi_lx200_10micron"
+  },
+  {
+    "name": "LX200 16",
+    "driver": "indi_lx200_16"
+  },
+  {
+    "name": "LX200 Autostar",
+    "driver": "indi_lx200autostar"
+  },
+  {
+    "name": "LX200 Basic",
+    "driver": "indi_lx200basic"
+  },
+  {
+    "name": "LX200 Classic",
+    "driver": "indi_lx200classic"
+  },
+  {
+    "name": "LX200 GPS",
+    "driver": "indi_lx200gps"
+  },
+  {
+    "name": "LX200 OnStep",
+    "driver": "indi_lx200_OnStep"
+  },
+  {
+    "name": "LX200 OpenAstroTech",
+    "driver": "indi_lx200_OpenAstroTech"
+  },
+  {
+    "name": "LX200 TeenAstro",
+    "driver": "indi_lx200_TeenAstro"
+  },
+  {
+    "name": "Manual Filter",
+    "driver": "indi_manual_wheel"
+  },
+  {
+    "name": "MBox",
+    "driver": "indi_mbox_weather"
+  },
+  {
+    "name": "Microtouch",
+    "driver": "indi_microtouch_focus"
+  },
+  {
+    "name": "MoonLite",
+    "driver": "indi_moonlite_focus"
+  },
+  {
+    "name": "MoonLite DRO",
+    "driver": "indi_moonlitedro_focus"
+  },
+  {
+    "name": "MyDCP4ESP32",
+    "driver": "indi_mydcp4esp32"
+  },
+  {
+    "name": "myDewControllerPro",
+    "driver": "indi_myDewControllerPro"
+  },
+  {
+    "name": "MyFocuserPro2",
+    "driver": "indi_myfocuserpro2_focus"
+  },
+  {
+    "name": "NexDome Beaver",
+    "driver": "indi_nexdome_beaver"
+  },
+  {
+    "name": "NFocus",
+    "driver": "indi_nfocus"
+  },
+  {
+    "name": "NightCrawler",
+    "driver": "indi_nightcrawler_focus"
+  },
+  {
+    "name": "OnFocus",
+    "driver": "indi_onfocus_focus"
+  },
+  {
+    "name": "OpenWeatherMap",
+    "driver": "indi_openweathermap_weather"
+  },
+  {
+    "name": "Optec IFW",
+    "driver": "indi_optec_wheel"
+  },
+  {
+    "name": "Optec TCF-S",
+    "driver": "indi_tcfs_focus"
+  },
+  {
+    "name": "Paramount",
+    "driver": "indi_paramount_telescope"
+  },
+  {
+    "name": "Pegasus DMFC",
+    "driver": "indi_dmfc_focus"
+  },
+  {
+    "name": "Pegasus Falcon",
+    "driver": "indi_falcon_rotator"
+  },
+  {
+    "name": "Pegasus FalconV2",
+    "driver": "indi_falconv2_rotator"
+  },
+  {
+    "name": "Pegasus FlatMaster",
+    "driver": "indi_pegasus_flatmaster"
+  },
+  {
+    "name": "Pegasus FocusCube",
+    "driver": "indi_pegasus_focuscube"
+  },
+  {
+    "name": "Pegasus FocusCube3",
+    "driver": "indi_pegasus_focuscube3"
+  },
+  {
+    "name": "Pegasus INDIGO",
+    "driver": "indi_pegasusindigo_wheel"
+  },
+  {
+    "name": "Pegasus MMC-7000AH",
+    "driver": "indi_pegasus_prodigyMF"
+  },
+  {
+    "name": "Pegasus NYX-101",
+    "driver": "indi_lx200_pegasus_nyx101"
+  },
+  {
+    "name": "Pegasus PPB",
+    "driver": "indi_pegasus_ppb"
+  },
+  {
+    "name": "Pegasus PPBA",
+    "driver": "indi_pegasus_ppba"
+  },
+  {
+    "name": "Pegasus SPB",
+    "driver": "indi_pegasus_spb"
+  },
+  {
+    "name": "Pegasus UCH",
+    "driver": "indi_pegasus_uch"
+  },
+  {
+    "name": "Pegasus UPB",
+    "driver": "indi_pegasus_upb"
+  },
+  {
+    "name": "PerfectStar",
+    "driver": "indi_perfectstar_focus"
+  },
+  {
+    "name": "Pinefeat EF Lens Controller",
+    "driver": "indi_pinefeat_cef_focus"
+  },
+  {
+    "name": "Planewave",
+    "driver": "indi_planewave_telescope"
+  },
+  {
+    "name": "PlaneWave Delta-T",
+    "driver": "indi_planewave_deltat"
+  },
+  {
+    "name": "PlaneWave EFA",
+    "driver": "indi_efa_focus"
+  },
+  {
+    "name": "PMC8",
+    "driver": "indi_pmc8_telescope"
+  },
+  {
+    "name": "Pulsar2",
+    "driver": "indi_lx200pulsar2"
+  },
+  {
+    "name": "Pyxis",
+    "driver": "indi_pyxis_rotator"
+  },
+  {
+    "name": "QHYCFW1",
+    "driver": "indi_qhycfw1_wheel"
+  },
+  {
+    "name": "QHYCFW2",
+    "driver": "indi_qhycfw2_wheel"
+  },
+  {
+    "name": "QHYCFW3",
+    "driver": "indi_qhycfw3_wheel"
+  },
+  {
+    "name": "Quantum Wheel",
+    "driver": "indi_quantum_wheel"
+  },
+  {
+    "name": "Rainbow",
+    "driver": "indi_rainbow_telescope"
+  },
+  {
+    "name": "Rainbow Astro RSF",
+    "driver": "indi_rainbowrsf_focus"
+  },
+  {
+    "name": "RBF Excalibur",
+    "driver": "indi_Excalibur"
+  },
+  {
+    "name": "RBFocus",
+    "driver": "indi_rbfocus_focus"
+  },
+  {
+    "name": "Rigel Dome",
+    "driver": "indi_rigel_dome"
+  },
+  {
+    "name": "Rigelsys nFrame",
+    "driver": "indi_nstep_rotator"
+  },
+  {
+    "name": "Rigelsys NStep",
+    "driver": "indi_nstep_focus"
+  },
+  {
+    "name": "RoboFocus",
+    "driver": "indi_robo_focus"
+  },
+  {
+    "name": "RollOff Simulator",
+    "driver": "indi_rolloff_dome"
+  },
+  {
+    "name": "Rotator Simulator",
+    "driver": "indi_simulator_rotator"
+  },
+  {
+    "name": "ScopeDome Dome",
+    "driver": "indi_scopedome_dome"
+  },
+  {
+    "name": "Sesto Senso",
+    "driver": "indi_sestosenso_focus"
+  },
+  {
+    "name": "Sesto Senso 2",
+    "driver": "indi_sestosenso2_focus"
+  },
+  {
+    "name": "Shelyak Usis",
+    "driver": "shelyak_usis"
+  },
+  {
+    "name": "SI EFS",
+    "driver": "indi_siefs_focus"
+  },
+  {
+    "name": "Simulator IO",
+    "driver": "indi_simulator_io"
+  },
+  {
+    "name": "SkyCommander",
+    "driver": "indi_skycommander_telescope"
+  },
+  {
+    "name": "SkySafari",
+    "driver": "indi_skysafari"
+  },
+  {
+    "name": "SkySensor2000PC",
+    "driver": "indi_lx200ss2000pc"
+  },
+  {
+    "name": "Skywatcher Alt-Az",
+    "driver": "indi_skywatcherAltAzMount"
+  },
+  {
+    "name": "SmartFocus",
+    "driver": "indi_smartfocus_focus"
+  },
+  {
+    "name": "SnapCap",
+    "driver": "indi_snapcap"
+  },
+  {
+    "name": "Spectrograph Simulator",
+    "driver": "indi_simulator_spectrograph"
+  },
+  {
+    "name": "SQM",
+    "driver": "indi_sqm_weather"
+  },
+  {
+    "name": "STAR2000",
+    "driver": "indi_star2000"
+  },
+  {
+    "name": "SynScan",
+    "driver": "indi_synscan_telescope"
+  },
+  {
+    "name": "SynScan Legacy",
+    "driver": "indi_synscanlegacy_telescope"
+  },
+  {
+    "name": "TeenAstroFocuser",
+    "driver": "indi_teenastro_focus"
+  },
+  {
+    "name": "Telescope  Scripting Gateway",
+    "driver": "indi_script_telescope"
+  },
+  {
+    "name": "Telescope Simulator",
+    "driver": "indi_simulator_telescope"
+  },
+  {
+    "name": "Temma",
+    "driver": "indi_temma_telescope"
+  },
+  {
+    "name": "Terrans PowerBoxGo V2",
+    "driver": "indi_terrans_powerboxgo_v2"
+  },
+  {
+    "name": "Terrans PowerBoxPro V2",
+    "driver": "indi_terrans_powerboxpro_v2"
+  },
+  {
+    "name": "TruTech Wheel",
+    "driver": "indi_trutech_wheel"
+  },
+  {
+    "name": "Universal ROR",
+    "driver": "indi_universalror_dome"
+  },
+  {
+    "name": "Uranus Meteo Sensor",
+    "driver": "indi_uranus_weather"
+  },
+  {
+    "name": "USB_Dewpoint",
+    "driver": "indi_usbdewpoint"
+  },
+  {
+    "name": "USBFocusV3",
+    "driver": "indi_usbfocusv3_focus"
+  },
+  {
+    "name": "V4L2 CCD",
+    "driver": "indi_v4l2_ccd"
+  },
+  {
+    "name": "Vantage",
+    "driver": "indi_vantage_weather"
+  },
+  {
+    "name": "Wanderer Cover V3",
+    "driver": "indi_wanderer_cover"
+  },
+  {
+    "name": "Wanderer Dew Terminator",
+    "driver": "indi_wanderer_dew_terminator"
+  },
+  {
+    "name": "Wanderer Eclipse",
+    "driver": "indi_wanderer_eclipse"
+  },
+  {
+    "name": "Wanderer Rotator Lite",
+    "driver": "indi_wanderer_lite_rotator"
+  },
+  {
+    "name": "Wanderer Rotator Lite V2",
+    "driver": "indi_wanderer_rotator_lite_v2"
+  },
+  {
+    "name": "Wanderer Rotator Mini",
+    "driver": "indi_wanderer_rotator_mini"
+  },
+  {
+    "name": "WandererBox Plus V3",
+    "driver": "indi_wandererbox_plus_v3"
+  },
+  {
+    "name": "WandererBox Pro V3",
+    "driver": "indi_wandererbox_pro_v3"
+  },
+  {
+    "name": "WandererCover V4 Pro-EC",
+    "driver": "indi_wanderercover_v4_pro_ec"
+  },
+  {
+    "name": "WandererCover V4-EC",
+    "driver": "indi_wanderercover_v4_ec"
+  },
+  {
+    "name": "WatchDog",
+    "driver": "indi_watchdog"
+  },
+  {
+    "name": "Waveshare Relay",
+    "driver": "indi_wavesharemodbus_relay"
+  },
+  {
+    "name": "Weather Meta",
+    "driver": "indi_meta_weather"
+  },
+  {
+    "name": "Weather Safety Alpaca",
+    "driver": "indi_weather_safety_alpaca"
+  },
+  {
+    "name": "Weather Safety Proxy",
+    "driver": "indi_weather_safety_proxy"
+  },
+  {
+    "name": "Weather Simulator",
+    "driver": "indi_simulator_weather"
+  },
+  {
+    "name": "Weather Watcher",
+    "driver": "indi_watcher_weather"
+  },
+  {
+    "name": "WeatherFlow Tempest",
+    "driver": "indi_weatherflow_weather"
+  },
+  {
+    "name": "XAGYL Wheel",
+    "driver": "indi_xagyl_wheel"
+  },
+  {
+    "name": "ZEQ25",
+    "driver": "indi_lx200zeq25"
+  },
+  {
+    "name": "ZWO AM5",
+    "driver": "indi_lx200am5"
+  }
+]

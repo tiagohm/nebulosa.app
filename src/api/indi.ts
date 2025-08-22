@@ -2,10 +2,11 @@ import { Elysia } from 'elysia'
 // biome-ignore format: too many
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, IndiClient, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
-import type { Device, DeviceProperty } from '../shared/types'
+import type { Device, DeviceProperty, IndiServerStart, IndiServerStarted, IndiServerStopped } from '../shared/types'
 import type { CameraManager } from './camera'
 import type { ConnectionManager } from './connection'
 import type { GuideOutputManager } from './guideoutput'
+import type { WebSocketMessageManager } from './message'
 import type { MountManager } from './mount'
 import type { ThermometerManager } from './thermometer'
 
@@ -68,11 +69,14 @@ export function disconnect(client: IndiClient, device: Device) {
 
 // Manager that handles the INDI devices.
 export class IndiManager {
+	private process?: Bun.Subprocess
+
 	constructor(
 		readonly camera: CameraManager,
 		readonly guideOutput: GuideOutputManager,
 		readonly thermometer: ThermometerManager,
 		readonly mount: MountManager,
+		readonly wsm: WebSocketMessageManager,
 	) {}
 
 	// Handles the connection close event
@@ -109,6 +113,33 @@ export class IndiManager {
 	get(id: string): Device | undefined {
 		return this.camera.get(id) || this.mount.get(id) || this.guideOutput.get(id) || this.thermometer.get(id)
 	}
+
+	// Starts the INDI server.
+	serverStart(req: IndiServerStart) {
+		this.serverStop()
+
+		if (process.platform !== 'linux') return
+
+		const cmd = ['indiserver', '-p', req.port?.toFixed(0) || '7624', '-r', req.repeat?.toFixed(0) || '1', req.verbose ? `-${'v'.repeat(req.verbose)}` : '', ...req.drivers].filter((e) => !!e)
+		const p = Bun.spawn({ cmd })
+
+		p.exited.then((code) => {
+			bus.emit('indi:server:stop', { pid: p.pid, code })
+			this.wsm.send<IndiServerStopped>({ type: 'indi:server:stop', pid: p.pid, code })
+		})
+
+		bus.emit('indi:server:start', p.pid)
+		this.wsm.send<IndiServerStarted>({ type: 'indi:server:start', pid: p.pid })
+		this.process = p
+	}
+
+	// Stops the INDI server.
+	serverStop() {
+		if (this.process && !this.process.killed) {
+			this.process.kill()
+			this.process = undefined
+		}
+	}
 }
 
 // Endpoints for managing INDI devices
@@ -123,6 +154,8 @@ export function indi(indi: IndiManager, connection: ConnectionManager) {
 		.post('/:id/connect', ({ params }) => connect(connection.get(), deviceFromParams(params)))
 		.post('/:id/disconnect', ({ params }) => disconnect(connection.get(), deviceFromParams(params)))
 		.get('/:id/properties', ({ params }) => deviceFromParams(params).properties)
+		.post('/server/start', ({ body }) => indi.serverStart(body as never))
+		.post('/server/stop', ({ body }) => indi.serverStop())
 
 	return app
 }

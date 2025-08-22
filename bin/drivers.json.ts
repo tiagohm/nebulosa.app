@@ -1,8 +1,11 @@
 // <driver name="LX200 Basic">indi_lx200basic</driver>
 const DRIVER_REGEX = /<driver name="([^"]+)">([^<]+)<\/driver>/g
 
-const response = await fetch('https://raw.githubusercontent.com/indilib/indi/refs/heads/master/drivers.xml')
-const text = await response.text()
+let response = await fetch('https://raw.githubusercontent.com/indilib/indi/refs/heads/master/drivers.xml')
+let text = await response.text()
+
+response = await fetch('https://raw.githubusercontent.com/KDE/kstars/refs/heads/master/kstars/data/indidrivers.xml')
+text += await response.text()
 
 const drivers = Array.from(text.matchAll(DRIVER_REGEX)).map(([, name, driver]) => ({ name, driver }))
 const duplicated = new Set<string>()

@@ -4,12 +4,28 @@
     "driver": "indi_aaf2_focus"
   },
   {
+    "name": "AAG Cloud Watcher NG",
+    "driver": "indi_aagcloudwatcher_ng"
+  },
+  {
     "name": "AAG Solo CloudWatcher",
     "driver": "indi_aagsolo_weather"
   },
   {
     "name": "ActiveFocuser",
     "driver": "indi_activefocuser_focus"
+  },
+  {
+    "name": "Agogee CFW",
+    "driver": "indi_apogee_wheel"
+  },
+  {
+    "name": "AHP GT Mount",
+    "driver": "indi_ahpgt_telescope"
+  },
+  {
+    "name": "AHP XC Correlator",
+    "driver": "indi_ahp_xc"
   },
   {
     "name": "Alluna TCS2",
@@ -20,16 +36,36 @@
     "driver": "indi_alpaca_dome"
   },
   {
+    "name": "Altair",
+    "driver": "indi_altair_ccd"
+  },
+  {
     "name": "ALTO",
     "driver": "indi_alto"
+  },
+  {
+    "name": "Apogee CCD",
+    "driver": "indi_apogee_ccd"
+  },
+  {
+    "name": "Arduino Simple Switcher",
+    "driver": "indi_duino"
   },
   {
     "name": "Arduino ST4",
     "driver": "indi_arduinost4"
   },
   {
+    "name": "Armadillo focuser",
+    "driver": "indi_armadillo_focus"
+  },
+  {
     "name": "Astro-Electronic FS-2",
     "driver": "indi_lx200fs2"
+  },
+  {
+    "name": "AstroLink 4",
+    "driver": "indi_astrolink4"
   },
   {
     "name": "AstroLink 4 mini II",
@@ -56,8 +92,32 @@
     "driver": "indi_lx200ap_v2"
   },
   {
+    "name": "Astroshop",
+    "driver": "indi_omegonprocam_ccd"
+  },
+  {
     "name": "AstroTrac",
     "driver": "indi_astrotrac_telescope"
+  },
+  {
+    "name": "Atik",
+    "driver": "indi_atik_ccd"
+  },
+  {
+    "name": "AvalonUD Aux",
+    "driver": "indi_avalonud_aux"
+  },
+  {
+    "name": "AvalonUD Focuser",
+    "driver": "indi_avalonud_focuser"
+  },
+  {
+    "name": "AvalonUD Telescope",
+    "driver": "indi_avalonud_telescope"
+  },
+  {
+    "name": "AZ-GTi",
+    "driver": "indi_azgti_telescope"
   },
   {
     "name": "Baader Dome",
@@ -72,12 +132,40 @@
     "driver": "indi_steeldrive2_focus"
   },
   {
+    "name": "Beaver Dome",
+    "driver": "indi_beaver_dome"
+  },
+  {
+    "name": "Bee Focuser",
+    "driver": "indi_beefocus"
+  },
+  {
+    "name": "Bresser",
+    "driver": "indi_bressercam_ccd"
+  },
+  {
+    "name": "BRESSER Messier Exos-2 EQ GoTo",
+    "driver": "indi_bresserexos2"
+  },
+  {
+    "name": "Cam90 CCD",
+    "driver": "indi_cam90_ccd"
+  },
+  {
     "name": "Camelot Rotator",
     "driver": "indi_camelot_rotator"
   },
   {
+    "name": "Canon DSLR",
+    "driver": "indi_canon_ccd"
+  },
+  {
     "name": "CCD Simulator",
     "driver": "indi_simulator_ccd"
+  },
+  {
+    "name": "Celestron AUX",
+    "driver": "indi_celestron_aux"
   },
   {
     "name": "Celestron GPS",
@@ -136,6 +224,14 @@
     "driver": "indi_domepro2_dome"
   },
   {
+    "name": "DragonFly Controller",
+    "driver": "indi_dragonfly"
+  },
+  {
+    "name": "DragonFly Dome",
+    "driver": "indi_dragonfly_dome"
+  },
+  {
     "name": "DragonLAIR",
     "driver": "indi_dragonlair_dome"
   },
@@ -144,12 +240,28 @@
     "driver": "indi_dragon_light"
   },
   {
+    "name": "DreamFocuser",
+    "driver": "indi_dreamfocuser_focus"
+  },
+  {
+    "name": "DSI",
+    "driver": "indi_dsi_ccd"
+  },
+  {
+    "name": "Duino Power Box",
+    "driver": "indi_duino_powerbox"
+  },
+  {
     "name": "Dust Cover Simulator",
     "driver": "indi_simulator_dustcover"
   },
   {
     "name": "EQ500X",
     "driver": "indi_eq500x_telescope"
+  },
+  {
+    "name": "EQMod Mount",
+    "driver": "indi_eqmod_telescope"
   },
   {
     "name": "Esatto",
@@ -168,6 +280,26 @@
     "driver": "indi_simulator_wheel"
   },
   {
+    "name": "FireFly MV",
+    "driver": "indi_ffmv_ccd"
+  },
+  {
+    "name": "FLI CCD",
+    "driver": "indi_fli_ccd"
+  },
+  {
+    "name": "FLI CFW",
+    "driver": "indi_fli_wheel"
+  },
+  {
+    "name": "FLI Kepler",
+    "driver": "indi_kepler_ccd"
+  },
+  {
+    "name": "FLI PDF",
+    "driver": "indi_fli_focus"
+  },
+  {
     "name": "Flip Flat",
     "driver": "indi_flipflat"
   },
@@ -180,12 +312,20 @@
     "driver": "indi_lynx_focus"
   },
   {
+    "name": "Fuji DSLR",
+    "driver": "indi_fuji_ccd"
+  },
+  {
     "name": "Gemini Flatpanel",
     "driver": "indi_gemini_flatpanel"
   },
   {
     "name": "Gemini Focusing Rotator",
     "driver": "indi_gemini_focus"
+  },
+  {
+    "name": "Generic CCD",
+    "driver": "indi_generic_ccd"
   },
   {
     "name": "GIOTTO",
@@ -196,8 +336,24 @@
     "driver": "indi_lx200gotonova"
   },
   {
+    "name": "GPhoto CCD",
+    "driver": "indi_gphoto_ccd"
+  },
+  {
+    "name": "GPIO",
+    "driver": "indi_gpio"
+  },
+  {
+    "name": "GPS NMEA",
+    "driver": "indi_gpsnmea"
+  },
+  {
     "name": "GPS Simulator",
     "driver": "indi_simulator_gps"
+  },
+  {
+    "name": "GPSD",
+    "driver": "indi_gpsd"
   },
   {
     "name": "GPUSB",
@@ -222,6 +378,14 @@
   {
     "name": "Imager Agent",
     "driver": "indi_imager_agent"
+  },
+  {
+    "name": "INDI Webcam",
+    "driver": "indi_webcam_ccd"
+  },
+  {
+    "name": "iNova PLX",
+    "driver": "indi_inovaplx_ccd"
   },
   {
     "name": "Integra85",
@@ -260,8 +424,16 @@
     "driver": "indi_lakeside_focus"
   },
   {
+    "name": "LibCamera",
+    "driver": "indi_libcamera_ccd"
+  },
+  {
     "name": "Light Panel Simulator",
     "driver": "indi_simulator_lightpanel"
+  },
+  {
+    "name": "LIME-SDR Receiver",
+    "driver": "indi_limesdr_receiver"
   },
   {
     "name": "Losmandy Gemini",
@@ -274,6 +446,10 @@
   {
     "name": "LX200 16",
     "driver": "indi_lx200_16"
+  },
+  {
+    "name": "LX200 AOK",
+    "driver": "indi_lx200aok"
   },
   {
     "name": "LX200 Autostar",
@@ -300,16 +476,44 @@
     "driver": "indi_lx200_OpenAstroTech"
   },
   {
+    "name": "LX200 StarGo",
+    "driver": "indi_lx200stargo"
+  },
+  {
     "name": "LX200 TeenAstro",
     "driver": "indi_lx200_TeenAstro"
+  },
+  {
+    "name": "MALLINCAM",
+    "driver": "indi_mallincam_ccd"
   },
   {
     "name": "Manual Filter",
     "driver": "indi_manual_wheel"
   },
   {
+    "name": "MaxDome II",
+    "driver": "indi_maxdomeii"
+  },
+  {
     "name": "MBox",
     "driver": "indi_mbox_weather"
+  },
+  {
+    "name": "Meade",
+    "driver": "indi_meadecam_ccd"
+  },
+  {
+    "name": "MGen Autoguider",
+    "driver": "indi_mgenautoguider"
+  },
+  {
+    "name": "MI CCD",
+    "driver": "indi_mi_ccd_usb"
+  },
+  {
+    "name": "MI SFW",
+    "driver": "indi_mi_sfw_usb"
   },
   {
     "name": "Microtouch",
@@ -336,6 +540,10 @@
     "driver": "indi_myfocuserpro2_focus"
   },
   {
+    "name": "NexDome",
+    "driver": "indi_nexdome"
+  },
+  {
     "name": "NexDome Beaver",
     "driver": "indi_nexdome_beaver"
   },
@@ -346,6 +554,34 @@
   {
     "name": "NightCrawler",
     "driver": "indi_nightcrawler_focus"
+  },
+  {
+    "name": "Nightscape CCD",
+    "driver": "indi_nightscape_ccd"
+  },
+  {
+    "name": "Nikon DSLR",
+    "driver": "indi_nikon_ccd"
+  },
+  {
+    "name": "Nn",
+    "driver": "indi_nncam_ccd"
+  },
+  {
+    "name": "Oasis Filter Wheel",
+    "driver": "indi_oasis_filter_wheel"
+  },
+  {
+    "name": "Oasis Focuser",
+    "driver": "indi_oasis_focuser"
+  },
+  {
+    "name": "OCS",
+    "driver": "indi_ocs"
+  },
+  {
+    "name": "OGMAVision",
+    "driver": "indi_ogmacam_ccd"
   },
   {
     "name": "OnFocus",
@@ -362,6 +598,14 @@
   {
     "name": "Optec TCF-S",
     "driver": "indi_tcfs_focus"
+  },
+  {
+    "name": "Orion",
+    "driver": "indi_starshootg_ccd"
+  },
+  {
+    "name": "Orion SSG3",
+    "driver": "indi_orion_ssg3_ccd"
   },
   {
     "name": "Paramount",
@@ -424,6 +668,10 @@
     "driver": "indi_pegasus_upb"
   },
   {
+    "name": "Pentax DSLR",
+    "driver": "indi_pentax_ccd"
+  },
+  {
     "name": "PerfectStar",
     "driver": "indi_perfectstar_focus"
   },
@@ -444,6 +692,22 @@
     "driver": "indi_efa_focus"
   },
   {
+    "name": "Platypus focuser",
+    "driver": "indi_platypus_focus"
+  },
+  {
+    "name": "PlayerOne Camera",
+    "driver": "indi_playerone_single_ccd"
+  },
+  {
+    "name": "PlayerOne CCD",
+    "driver": "indi_playerone_ccd"
+  },
+  {
+    "name": "PlayerOne EFW",
+    "driver": "indi_playerone_wheel"
+  },
+  {
     "name": "PMC8",
     "driver": "indi_pmc8_telescope"
   },
@@ -456,6 +720,14 @@
     "driver": "indi_pyxis_rotator"
   },
   {
+    "name": "QFocuser",
+    "driver": "indi_qhy_focuser"
+  },
+  {
+    "name": "QHY CCD",
+    "driver": "indi_qhy_ccd"
+  },
+  {
     "name": "QHYCFW1",
     "driver": "indi_qhycfw1_wheel"
   },
@@ -466,6 +738,10 @@
   {
     "name": "QHYCFW3",
     "driver": "indi_qhycfw3_wheel"
+  },
+  {
+    "name": "QSI CCD",
+    "driver": "indi_qsi_ccd"
   },
   {
     "name": "Quantum Wheel",
@@ -504,6 +780,10 @@
     "driver": "indi_robo_focus"
   },
   {
+    "name": "RollOff ino",
+    "driver": "indi_rolloffino"
+  },
+  {
     "name": "RollOff Simulator",
     "driver": "indi_rolloff_dome"
   },
@@ -512,8 +792,24 @@
     "driver": "indi_simulator_rotator"
   },
   {
+    "name": "RTKLIB Precise Positioning",
+    "driver": "indi_rtklib"
+  },
+  {
+    "name": "RTL-SDR",
+    "driver": "indi_rtlsdr"
+  },
+  {
+    "name": "SBIG CCD",
+    "driver": "indi_sbig_ccd"
+  },
+  {
     "name": "ScopeDome Dome",
     "driver": "indi_scopedome_dome"
+  },
+  {
+    "name": "Seletek Rotator",
+    "driver": "indi_seletek_rotator"
   },
   {
     "name": "Sesto Senso",
@@ -522,6 +818,14 @@
   {
     "name": "Sesto Senso 2",
     "driver": "indi_sestosenso2_focus"
+  },
+  {
+    "name": "Shelyak eShel",
+    "driver": "indi_shelyakeshel_spectrograph"
+  },
+  {
+    "name": "Shelyak SPOX",
+    "driver": "indi_shelyakspox_spectrograph"
   },
   {
     "name": "Shelyak Usis",
@@ -560,6 +864,10 @@
     "driver": "indi_snapcap"
   },
   {
+    "name": "Sony DSLR",
+    "driver": "indi_sony_ccd"
+  },
+  {
     "name": "Spectrograph Simulator",
     "driver": "indi_simulator_spectrograph"
   },
@@ -568,8 +876,48 @@
     "driver": "indi_sqm_weather"
   },
   {
+    "name": "Star Adventurer 2i",
+    "driver": "indi_staradventurer2i_telescope"
+  },
+  {
+    "name": "Star Adventurer GTi",
+    "driver": "indi_staradventurergti_telescope"
+  },
+  {
     "name": "STAR2000",
     "driver": "indi_star2000"
+  },
+  {
+    "name": "Starbook",
+    "driver": "indi_starbook_telescope"
+  },
+  {
+    "name": "Starbook Ten",
+    "driver": "indi_starbook_ten"
+  },
+  {
+    "name": "Starfish CCD",
+    "driver": "indi_fishcamp_ccd"
+  },
+  {
+    "name": "SVBONY CCD",
+    "driver": "indi_svbony_ccd"
+  },
+  {
+    "name": "SVBONY2",
+    "driver": "indi_svbonycam_ccd"
+  },
+  {
+    "name": "SX AO",
+    "driver": "indi_sx_ao"
+  },
+  {
+    "name": "SX CCD",
+    "driver": "indi_sx_ccd"
+  },
+  {
+    "name": "SX Wheel",
+    "driver": "indi_sx_wheel"
   },
   {
     "name": "SynScan",
@@ -578,6 +926,10 @@
   {
     "name": "SynScan Legacy",
     "driver": "indi_synscanlegacy_telescope"
+  },
+  {
+    "name": "Talon6",
+    "driver": "indi_talon6"
   },
   {
     "name": "TeenAstroFocuser",
@@ -592,6 +944,10 @@
     "driver": "indi_simulator_telescope"
   },
   {
+    "name": "Teleskop",
+    "driver": "indi_tscam_ccd"
+  },
+  {
     "name": "Temma",
     "driver": "indi_temma_telescope"
   },
@@ -602,6 +958,14 @@
   {
     "name": "Terrans PowerBoxPro V2",
     "driver": "indi_terrans_powerboxpro_v2"
+  },
+  {
+    "name": "TicFocuser-ng",
+    "driver": "indi_ticfocuser-ng"
+  },
+  {
+    "name": "Touptek",
+    "driver": "indi_toupcam_ccd"
   },
   {
     "name": "TruTech Wheel",
@@ -684,6 +1048,10 @@
     "driver": "indi_meta_weather"
   },
   {
+    "name": "Weather Radio",
+    "driver": "indi_weatherradio"
+  },
+  {
     "name": "Weather Safety Alpaca",
     "driver": "indi_weather_safety_alpaca"
   },
@@ -704,6 +1072,10 @@
     "driver": "indi_weatherflow_weather"
   },
   {
+    "name": "WeewxJSON",
+    "driver": "indi_weewx_json"
+  },
+  {
     "name": "XAGYL Wheel",
     "driver": "indi_xagyl_wheel"
   },
@@ -714,5 +1086,25 @@
   {
     "name": "ZWO AM5",
     "driver": "indi_lx200am5"
+  },
+  {
+    "name": "ZWO CAA",
+    "driver": "indi_asi_rotator"
+  },
+  {
+    "name": "ZWO CCD",
+    "driver": "indi_asi_ccd"
+  },
+  {
+    "name": "ZWO EAF",
+    "driver": "indi_asi_focuser"
+  },
+  {
+    "name": "ZWO EFW",
+    "driver": "indi_asi_wheel"
+  },
+  {
+    "name": "ZWO ST4",
+    "driver": "indi_asi_st4"
   }
 ]

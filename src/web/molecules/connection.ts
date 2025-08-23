@@ -52,6 +52,7 @@ export const ConnectionMolecule = molecule((m) => {
 				Api.GuideOutputs.list().then((guideOutputs) => guideOutputs?.forEach((guideOutput) => bus.emit('guideOutput:add', guideOutput)))
 				Api.Covers.list().then((covers) => covers?.forEach((cover) => bus.emit('cover:add', cover)))
 				Api.FlatPanels.list().then((flatPanels) => flatPanels?.forEach((flatPanel) => bus.emit('flatPanel:add', flatPanel)))
+				Api.DewHeaters.list().then((dewHeaters) => dewHeaters?.forEach((dewHeater) => bus.emit('dewHeater:add', dewHeater)))
 
 				break
 			}

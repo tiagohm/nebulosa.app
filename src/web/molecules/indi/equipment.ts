@@ -1,6 +1,6 @@
 import { molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
-import type { Camera, CameraUpdated, Cover, CoverUpdated, Device, FlatPanel, FlatPanelUpdated, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated } from 'src/shared/types'
+import type { Camera, CameraUpdated, Cover, CoverUpdated, Device, DewHeater, DewHeaterUpdated, FlatPanel, FlatPanelUpdated, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 
 export type EquipmentDeviceType = keyof EquipmentState['devices']
@@ -23,7 +23,7 @@ export interface EquipmentState {
 		readonly flatPanel: EquipmentDevice<FlatPanel>[]
 		readonly cover: EquipmentDevice<Cover>[]
 		readonly thermometer: EquipmentDevice<Thermometer>[]
-		readonly dewHeater: EquipmentDevice<Device>[]
+		readonly dewHeater: EquipmentDevice<DewHeater>[]
 	}
 }
 
@@ -66,6 +66,9 @@ export const EquipmentMolecule = molecule((m) => {
 		unsubscribers.push(bus.subscribe<FlatPanel>('flatPanel:add', (event) => add('flatPanel', event)))
 		unsubscribers.push(bus.subscribe<FlatPanel>('flatPanel:remove', (event) => remove('flatPanel', event)))
 		unsubscribers.push(bus.subscribe<FlatPanelUpdated>('flatPanel:update', (event) => update('flatPanel', event.device.name, event.property, event.device[event.property]!)))
+		unsubscribers.push(bus.subscribe<DewHeater>('dewHeater:add', (event) => add('dewHeater', event)))
+		unsubscribers.push(bus.subscribe<DewHeater>('dewHeater:remove', (event) => remove('dewHeater', event)))
+		unsubscribers.push(bus.subscribe<DewHeaterUpdated>('dewHeater:update', (event) => update('dewHeater', event.device.name, event.property, event.device[event.property]!)))
 
 		return () => {
 			unsubscribe(unsubscribers)

@@ -62,7 +62,12 @@ export class GuideOutputManager {
 
 	update(device: GuideOutput, property: keyof GuideOutput, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
-		if (device.type === 'CAMERA') this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
+
+		if (device.type === 'CAMERA') {
+			this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
+			bus.emit('camera:update', value)
+		}
+
 		this.wsm.send<GuideOutputUpdated>({ type: 'guideOutput:update', device: value, property, state })
 		bus.emit('guideOutput:update', value)
 	}
@@ -76,11 +81,11 @@ export class GuideOutputManager {
 	}
 
 	remove(device: GuideOutput) {
-		if (this.guideOutputs.has(device.name)) {
-			this.guideOutputs.delete(device.name)
-
+		if (this.guideOutputs.has(device.name) && device.canPulseGuide) {
 			device.canPulseGuide = false
 			this.update(device, 'canPulseGuide')
+
+			this.guideOutputs.delete(device.name)
 
 			this.wsm.send<GuideOutputRemoved>({ type: 'guideOutput:remove', device })
 			bus.emit('guideOutput:remove', device)

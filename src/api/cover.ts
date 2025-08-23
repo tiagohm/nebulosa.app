@@ -1,8 +1,9 @@
 import Elysia from 'elysia'
-import type { DefSwitchVector, DefTextVector, IndiClient, PropertyState, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
+import type { DefNumberVector, DefSwitchVector, DefTextVector, IndiClient, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
 import { type Cover, type CoverAdded, type CoverRemoved, type CoverUpdated, DEFAULT_COVER } from '../shared/types'
 import type { ConnectionManager } from './connection'
+import type { DewHeaterManager } from './dewheater'
 import { addProperty, ask, connectionFor, DeviceInterfaceType, isInterfaceType } from './indi'
 import type { WebSocketMessageManager } from './message'
 
@@ -21,7 +22,10 @@ export function park(client: IndiClient, device: Cover) {
 export class CoverManager {
 	private readonly covers = new Map<string, Cover>()
 
-	constructor(readonly wsm: WebSocketMessageManager) {
+	constructor(
+		readonly wsm: WebSocketMessageManager,
+		readonly dewHeater: DewHeaterManager,
+	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove all covers associated with the client
 			this.covers.forEach((device) => this.remove(device))
@@ -39,6 +43,10 @@ export class CoverManager {
 			case 'CONNECTION':
 				if (connectionFor(client, device, message)) {
 					this.update(device, 'connected', message.state)
+
+					if (!device.connected) {
+						this.dewHeater.remove(device)
+					}
 				}
 
 				return
@@ -71,6 +79,35 @@ export class CoverManager {
 		}
 	}
 
+	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
+		const device = this.covers.get(message.device)
+
+		if (!device) return
+
+		addProperty(device, message, tag)
+
+		switch (message.name) {
+			// WandererCover V4 EC
+			case 'Heater':
+				if (tag[0] === 'd') {
+					if (!device.hasDewHeater) {
+						device.hasDewHeater = true
+						this.update(device, 'hasDewHeater', message.state)
+
+						const { min, max, value } = (message as DefNumberVector).elements.Heater
+						device.pwm.min = min
+						device.pwm.max = max
+						device.pwm.value = value
+						this.update(device, 'pwm', message.state)
+
+						this.dewHeater.add(device)
+					}
+				}
+
+				return
+		}
+	}
+
 	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		if (message.name === 'DRIVER_INFO') {
 			const type = +message.elements.DRIVER_INTERFACE!.value
@@ -91,6 +128,12 @@ export class CoverManager {
 
 			return
 		}
+
+		const device = this.covers.get(message.device)
+
+		if (!device) return
+
+		addProperty(device, message, tag)
 	}
 
 	update(device: Cover, property: keyof Cover, state?: PropertyState) {
@@ -110,6 +153,9 @@ export class CoverManager {
 	remove(device: Cover) {
 		if (this.covers.has(device.name)) {
 			this.covers.delete(device.name)
+
+			// TODO: Call it on deleteProperty
+			this.dewHeater.remove(device)
 
 			this.wsm.send<CoverRemoved>({ type: 'cover:remove', device })
 			bus.emit('cover:remove', device)

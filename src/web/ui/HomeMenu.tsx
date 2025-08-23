@@ -107,7 +107,7 @@ export const HomeMenu = memo(() => {
 							</Button>
 						</Tooltip>
 						<Tooltip content='Dew Heater' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => equipment.select('dewHeater')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled={devices.dewHeater.length === 0} isIconOnly onPointerUp={() => equipment.select('dewHeater')} size='lg' variant='light'>
 								<img className='w-9' src={heaterIcon} />
 							</Button>
 						</Tooltip>

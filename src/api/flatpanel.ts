@@ -17,17 +17,17 @@ export function enable(client: IndiClient, device: FlatPanel, enabled: boolean) 
 }
 
 export class FlatPanelManager {
-	private readonly flatpanels = new Map<string, FlatPanel>()
+	private readonly flatPanels = new Map<string, FlatPanel>()
 
 	constructor(readonly wsm: WebSocketMessageManager) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove all flat panels associated with the client
-			this.flatpanels.forEach((device) => this.remove(device))
+			this.flatPanels.forEach((device) => this.remove(device))
 		})
 	}
 
 	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
-		const device = this.flatpanels.get(message.device)
+		const device = this.flatPanels.get(message.device)
 
 		if (!device) return
 
@@ -54,7 +54,7 @@ export class FlatPanelManager {
 	}
 
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
-		const device = this.flatpanels.get(message.device)
+		const device = this.flatPanels.get(message.device)
 
 		if (!device) return
 
@@ -95,18 +95,24 @@ export class FlatPanelManager {
 				const executable = message.elements.DRIVER_EXEC!.value
 				const version = message.elements.DRIVER_VERSION!.value
 
-				if (!this.flatpanels.has(message.device)) {
+				if (!this.flatPanels.has(message.device)) {
 					const panel: FlatPanel = { ...structuredClone(DEFAULT_FLAT_PANEL), id: message.device, name: message.device, driver: { executable, version } }
 					this.add(panel)
 					addProperty(panel, message, tag)
 					ask(client, panel)
 				}
-			} else if (this.flatpanels.has(message.device)) {
-				this.remove(this.flatpanels.get(message.device)!)
+			} else if (this.flatPanels.has(message.device)) {
+				this.remove(this.flatPanels.get(message.device)!)
 			}
 
 			return
 		}
+
+		const device = this.flatPanels.get(message.device)
+
+		if (!device) return
+
+		addProperty(device, message, tag)
 	}
 
 	update(device: FlatPanel, property: keyof FlatPanel, state?: PropertyState) {
@@ -116,29 +122,29 @@ export class FlatPanelManager {
 	}
 
 	add(device: FlatPanel) {
-		this.flatpanels.set(device.name, device)
+		this.flatPanels.set(device.name, device)
 
 		this.wsm.send<FlatPanelAdded>({ type: 'flatPanel:add', device })
 		bus.emit('flatPanel:add', device)
-		console.info('flatPanel added:', device.name)
+		console.info('flat panel added:', device.name)
 	}
 
 	remove(device: FlatPanel) {
-		if (this.flatpanels.has(device.name)) {
-			this.flatpanels.delete(device.name)
+		if (this.flatPanels.has(device.name)) {
+			this.flatPanels.delete(device.name)
 
 			this.wsm.send<FlatPanelRemoved>({ type: 'flatPanel:remove', device })
 			bus.emit('flatPanel:remove', device)
-			console.info('flatPanel removed:', device.name)
+			console.info('flat panel removed:', device.name)
 		}
 	}
 
 	list() {
-		return Array.from(this.flatpanels.values())
+		return Array.from(this.flatPanels.values())
 	}
 
 	get(id: string) {
-		return this.flatpanels.get(id)
+		return this.flatPanels.get(id)
 	}
 
 	intensity(client: IndiClient, device: FlatPanel, value: number) {

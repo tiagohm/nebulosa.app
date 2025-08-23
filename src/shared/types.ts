@@ -334,7 +334,15 @@ export type FlatPanelRemoved = DeviceRemoved<'flatPanel', FlatPanel>
 
 export type FlatPanelMessageEvent = FlatPanelAdded | FlatPanelUpdated | FlatPanelRemoved
 
-export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent | CoverMessageEvent | FlatPanelMessageEvent
+export type DewHeaterAdded = DeviceAdded<'dewHeater', DewHeater>
+
+export type DewHeaterUpdated = DeviceUpdated<'dewHeater', DewHeater>
+
+export type DewHeaterRemoved = DeviceRemoved<'dewHeater', DewHeater>
+
+export type DewHeaterMessageEvent = DewHeaterAdded | DewHeaterUpdated | DewHeaterRemoved
+
+export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent | CoverMessageEvent | FlatPanelMessageEvent | DewHeaterMessageEvent
 
 export interface DriverInfo {
 	executable: string
@@ -553,7 +561,7 @@ export function expectedPierSide(rightAscension: Angle, declination: Angle, lst:
 
 // Cover
 
-export interface Cover extends Device, Parkable {
+export interface Cover extends Device, Parkable, DewHeater {
 	readonly type: 'COVER'
 }
 
@@ -562,7 +570,19 @@ export interface Cover extends Device, Parkable {
 export interface FlatPanel extends Device {
 	readonly type: 'FLAT_PANEL'
 	enabled: boolean
-	intensity: {
+	readonly intensity: {
+		value: number
+		min: number
+		max: number
+	}
+}
+
+// DEW_HEATER
+
+export interface DewHeater extends Device {
+	readonly type: 'DEW_HEATER' | 'CAMERA' | 'COVER'
+	hasDewHeater: boolean
+	readonly pwm: {
 		value: number
 		min: number
 		max: number
@@ -874,6 +894,12 @@ export const DEFAULT_COVER: Cover = {
 	canPark: false,
 	parking: false,
 	parked: false,
+	hasDewHeater: false,
+	pwm: {
+		value: 0,
+		min: 0,
+		max: 100,
+	},
 	type: 'COVER',
 	id: '',
 	name: '',
@@ -893,6 +919,24 @@ export const DEFAULT_FLAT_PANEL: FlatPanel = {
 		max: 100,
 	},
 	type: 'FLAT_PANEL',
+	id: '',
+	name: '',
+	connected: false,
+	driver: {
+		executable: '',
+		version: '',
+	},
+	properties: {},
+}
+
+export const DEFAULT_DEW_HEATER: DewHeater = {
+	hasDewHeater: false,
+	pwm: {
+		value: 0,
+		min: 0,
+		max: 100,
+	},
+	type: 'DEW_HEATER',
 	id: '',
 	name: '',
 	connected: false,

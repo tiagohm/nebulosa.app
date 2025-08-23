@@ -6,6 +6,7 @@ import type { Device, DeviceProperty, IndiServerStart, IndiServerStarted, IndiSe
 import type { CameraManager } from './camera'
 import type { ConnectionManager } from './connection'
 import type { CoverManager } from './cover'
+import type { DewHeaterManager } from './dewheater'
 import type { FlatPanelManager } from './flatpanel'
 import type { GuideOutputManager } from './guideoutput'
 import type { WebSocketMessageManager } from './message'
@@ -73,6 +74,7 @@ export class IndiManager {
 		readonly mount: MountManager,
 		readonly cover: CoverManager,
 		readonly flatPanel: FlatPanelManager,
+		readonly dewHeater: DewHeaterManager,
 		readonly wsm: WebSocketMessageManager,
 	) {}
 
@@ -84,22 +86,30 @@ export class IndiManager {
 		this.camera.switchVector(client, message, tag)
 		this.mount.switchVector(client, message, tag)
 		this.cover.switchVector(client, message, tag)
+		// this.guideOutput.switchVector(client, message, tag)
+		// this.thermometer.switchVector(client, message, tag)
 		this.flatPanel.switchVector(client, message, tag)
+		// this.dewHeater.switchVector(client, message, tag)
 	}
 
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
 		this.camera.numberVector(client, message, tag)
 		this.mount.numberVector(client, message, tag)
+		this.cover.numberVector(client, message, tag)
 		this.guideOutput.numberVector(client, message, tag)
 		this.thermometer.numberVector(client, message, tag)
 		this.flatPanel.numberVector(client, message, tag)
+		this.dewHeater.numberVector(client, message, tag)
 	}
 
 	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		this.camera.textVector(client, message, tag)
 		this.mount.textVector(client, message, tag)
 		this.cover.textVector(client, message, tag)
+		// this.guideOutput.textVector(client, message, tag)
+		// this.thermometer.textVector(client, message, tag)
 		this.flatPanel.textVector(client, message, tag)
+		// this.dewHeater.textVector(client, message, tag)
 	}
 
 	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
@@ -107,7 +117,7 @@ export class IndiManager {
 	}
 
 	get(id: string): Device | undefined {
-		return this.camera.get(id) || this.mount.get(id) || this.cover.get(id) || this.flatPanel.get(id) || this.guideOutput.get(id) || this.thermometer.get(id)
+		return this.camera.get(id) || this.mount.get(id) || this.cover.get(id) || this.flatPanel.get(id) || this.guideOutput.get(id) || this.thermometer.get(id) || this.dewHeater.get(id)
 	}
 
 	serverStart(req: IndiServerStart) {

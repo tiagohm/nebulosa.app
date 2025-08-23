@@ -376,9 +376,6 @@ export class MountManager {
 		if (!device) return
 
 		addProperty(device, message, tag)
-
-		switch (message.name) {
-		}
 	}
 
 	update(device: Mount, property: keyof Mount, state?: PropertyState) {

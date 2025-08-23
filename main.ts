@@ -8,6 +8,7 @@ import { AtlasManager, atlas } from 'src/api/atlas'
 import { CameraManager, camera } from 'src/api/camera'
 import { ConnectionManager, connection } from 'src/api/connection'
 import { CoverManager, cover } from 'src/api/cover'
+import { DewHeaterManager, dewHeater } from 'src/api/dewheater'
 import { ApiError } from 'src/api/exceptions'
 import { FlatPanelManager, flatPanel } from 'src/api/flatpanel'
 import { GuideOutputManager, guideOutput } from 'src/api/guideoutput'
@@ -60,9 +61,10 @@ const guideOutputManager = new GuideOutputManager(wsm)
 const thermometerManager = new ThermometerManager(wsm)
 const mountManager = new MountManager(wsm, guideOutputManager)
 const cameraManager = new CameraManager(wsm, connectionManager, guideOutputManager, thermometerManager, mountManager)
-const coverManager = new CoverManager(wsm)
+const dewHeaterManager = new DewHeaterManager(wsm)
+const coverManager = new CoverManager(wsm, dewHeaterManager)
 const flatPanelManager = new FlatPanelManager(wsm)
-const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager, coverManager, flatPanelManager, wsm)
+const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager, coverManager, flatPanelManager, dewHeaterManager, wsm)
 const confirmationManager = new ConfirmationManager(wsm)
 const framingManager = new FramingManager()
 const fileSystemManager = new FileSystemManager()
@@ -127,6 +129,7 @@ const app = new Elysia({
 	.use(guideOutput(guideOutputManager, connectionManager))
 	.use(cover(coverManager, connectionManager))
 	.use(flatPanel(flatPanelManager, connectionManager))
+	.use(dewHeater(dewHeaterManager, connectionManager))
 	.use(atlas(atlasManager))
 	.use(image(imageManager))
 	.use(framing(framingManager))

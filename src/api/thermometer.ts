@@ -36,7 +36,12 @@ export class ThermometerManager {
 
 	private update(device: Thermometer, property: keyof Thermometer, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
-		if (device.type === 'CAMERA') this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
+
+		if (device.type === 'CAMERA') {
+			this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
+			bus.emit('camera:update', value)
+		}
+
 		this.wsm.send<ThermometerUpdated>({ type: 'thermometer:update', device: value, property, state })
 		bus.emit('thermometer:update', value)
 	}
@@ -49,11 +54,11 @@ export class ThermometerManager {
 	}
 
 	remove(device: Thermometer) {
-		if (this.thermometers.has(device.name)) {
-			this.thermometers.delete(device.name)
-
+		if (this.thermometers.has(device.name) && device.hasThermometer) {
 			device.hasThermometer = false
 			this.update(device, 'hasThermometer')
+
+			this.thermometers.delete(device.name)
 
 			this.wsm.send<ThermometerRemoved>({ type: 'thermometer:remove', device })
 			bus.emit('thermometer:remove', device)

@@ -4,7 +4,7 @@ import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, EquatorialCoordinate, FileSystem, FlatPanel, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
 import { type SkyObjectSearchResult, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 import wretch, { type WretchError } from 'wretch'
 
@@ -241,6 +241,20 @@ export namespace Api {
 
 		export function intensity(flatPanel: FlatPanel, value: number) {
 			return res(`/flatpanels/${flatPanel.name}/intensity`, 'post', value)
+		}
+	}
+
+	export namespace DewHeaters {
+		export function list() {
+			return json<DewHeater[]>('/dewheaters', 'get')
+		}
+
+		export function get(name: string) {
+			return json<DewHeater>(`/dewheaters/${name}`, 'get')
+		}
+
+		export function pwm(dewHeater: DewHeater, value: number) {
+			return res(`/dewheaters/${dewHeater.name}/pwm`, 'post', value)
 		}
 	}
 

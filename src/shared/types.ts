@@ -326,7 +326,15 @@ export type CoverRemoved = DeviceRemoved<'cover', Cover>
 
 export type CoverMessageEvent = CoverAdded | CoverUpdated | CoverRemoved
 
-export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent | CoverMessageEvent
+export type FlatPanelAdded = DeviceAdded<'flatPanel', FlatPanel>
+
+export type FlatPanelUpdated = DeviceUpdated<'flatPanel', FlatPanel>
+
+export type FlatPanelRemoved = DeviceRemoved<'flatPanel', FlatPanel>
+
+export type FlatPanelMessageEvent = FlatPanelAdded | FlatPanelUpdated | FlatPanelRemoved
+
+export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent | CoverMessageEvent | FlatPanelMessageEvent
 
 export interface DriverInfo {
 	executable: string
@@ -547,6 +555,18 @@ export function expectedPierSide(rightAscension: Angle, declination: Angle, lst:
 
 export interface Cover extends Device, Parkable {
 	readonly type: 'COVER'
+}
+
+// Flat Panel
+
+export interface FlatPanel extends Device {
+	readonly type: 'FLAT_PANEL'
+	enabled: boolean
+	intensity: {
+		value: number
+		min: number
+		max: number
+	}
 }
 
 // Message
@@ -855,6 +875,24 @@ export const DEFAULT_COVER: Cover = {
 	parking: false,
 	parked: false,
 	type: 'COVER',
+	id: '',
+	name: '',
+	connected: false,
+	driver: {
+		executable: '',
+		version: '',
+	},
+	properties: {},
+}
+
+export const DEFAULT_FLAT_PANEL: FlatPanel = {
+	enabled: false,
+	intensity: {
+		value: 0,
+		min: 0,
+		max: 100,
+	},
+	type: 'FLAT_PANEL',
 	id: '',
 	name: '',
 	connected: false,

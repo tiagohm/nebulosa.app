@@ -25,6 +25,8 @@ export const WebSocketMolecule = molecule((m) => {
 			case 'thermometer:remove':
 			case 'cover:add':
 			case 'cover:remove':
+			case 'flatPanel:add':
+			case 'flatPanel:remove':
 				bus.emit(data.type, data.device)
 				break
 			default:

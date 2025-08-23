@@ -1,6 +1,6 @@
 import { molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
-import type { Camera, CameraUpdated, Cover, CoverUpdated, Device, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated } from 'src/shared/types'
+import type { Camera, CameraUpdated, Cover, CoverUpdated, Device, FlatPanel, FlatPanelUpdated, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 
 export type EquipmentDeviceType = keyof EquipmentState['devices']
@@ -20,7 +20,7 @@ export interface EquipmentState {
 		readonly gps: EquipmentDevice<Device>[]
 		readonly dome: EquipmentDevice<Device>[]
 		readonly guideOutput: EquipmentDevice<GuideOutput>[]
-		readonly lightBox: EquipmentDevice<Device>[]
+		readonly flatPanel: EquipmentDevice<FlatPanel>[]
 		readonly cover: EquipmentDevice<Cover>[]
 		readonly thermometer: EquipmentDevice<Thermometer>[]
 		readonly dewHeater: EquipmentDevice<Device>[]
@@ -38,7 +38,7 @@ export const EquipmentMolecule = molecule((m) => {
 			gps: [],
 			dome: [],
 			guideOutput: [],
-			lightBox: [],
+			flatPanel: [],
 			cover: [],
 			thermometer: [],
 			dewHeater: [],
@@ -63,6 +63,9 @@ export const EquipmentMolecule = molecule((m) => {
 		unsubscribers.push(bus.subscribe<Cover>('cover:add', (event) => add('cover', event)))
 		unsubscribers.push(bus.subscribe<Cover>('cover:remove', (event) => remove('cover', event)))
 		unsubscribers.push(bus.subscribe<CoverUpdated>('cover:update', (event) => update('cover', event.device.name, event.property, event.device[event.property]!)))
+		unsubscribers.push(bus.subscribe<FlatPanel>('flatPanel:add', (event) => add('flatPanel', event)))
+		unsubscribers.push(bus.subscribe<FlatPanel>('flatPanel:remove', (event) => remove('flatPanel', event)))
+		unsubscribers.push(bus.subscribe<FlatPanelUpdated>('flatPanel:update', (event) => update('flatPanel', event.device.name, event.property, event.device[event.property]!)))
 
 		return () => {
 			unsubscribe(unsubscribers)

@@ -9,6 +9,7 @@ import calculatorIcon from '@/assets/calculator.webp'
 import cameraIcon from '@/assets/camera.webp'
 import coverIcon from '@/assets/cover.webp'
 import filterWheelIcon from '@/assets/filter-wheel.webp'
+import flatPanelIcon from '@/assets/flat-panel.webp'
 import flatWizardIcon from '@/assets/flat-wizard.webp'
 import focuserIcon from '@/assets/focuser.webp'
 import framingIcon from '@/assets/framing.webp'
@@ -16,7 +17,6 @@ import guideOutputIcon from '@/assets/guide-output.webp'
 import guiderIcon from '@/assets/guider.webp'
 import heaterIcon from '@/assets/heater.webp'
 import indiIcon from '@/assets/indi.webp'
-import lightBoxIcon from '@/assets/light-box.webp'
 import mountIcon from '@/assets/mount.webp'
 import rotatorIcon from '@/assets/rotator.webp'
 import sequencerIcon from '@/assets/sequencer.webp'
@@ -91,9 +91,9 @@ export const HomeMenu = memo(() => {
 								<img className='w-9' src={rotatorIcon} />
 							</Button>
 						</Tooltip>
-						<Tooltip content='Light Box' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => equipment.select('lightBox')} size='lg' variant='light'>
-								<img className='w-9' src={lightBoxIcon} />
+						<Tooltip content='Flat Panel' placement='bottom' showArrow>
+							<Button color='secondary' isDisabled={devices.flatPanel.length === 0} isIconOnly onPointerUp={() => equipment.select('flatPanel')} size='lg' variant='light'>
+								<img className='w-9' src={flatPanelIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Cover' placement='bottom' showArrow>
@@ -173,7 +173,7 @@ export const HomeMenu = memo(() => {
 						</Tooltip>
 						{selected !== undefined && (
 							<div className='col-span-full my-2 flex flex-col items-center justify-center gap-2 flex-wrap'>
-								<span className='font-bold text-sm mt-2 uppercase'>{formattedDeviceName(selected)}</span>
+								<span className='font-bold text-sm mt-2 uppercase'>{deviceName(selected)}</span>
 								{devices[selected].map((device) => (
 									<Chip className='min-w-full cursor-pointer' color={device.connected ? 'success' : 'danger'} endContent={<Icons.Cog />} key={device.name} onClose={() => equipment.show(selected, device)} onPointerUp={() => equipment.show(selected, device)} variant='flat'>
 										{device.name}
@@ -192,10 +192,9 @@ export const HomeMenu = memo(() => {
 	)
 })
 
-function formattedDeviceName(type: EquipmentDeviceType) {
+function deviceName(type: EquipmentDeviceType) {
 	if (type === 'guideOutput') return 'Guide Output'
-	else if (type === 'lightBox') return 'Light Box'
-	else if (type === 'cover') return 'Cover'
+	else if (type === 'flatPanel') return 'Flat Panel'
 	else if (type === 'dewHeater') return 'Dew Heater'
 	else if (type === 'wheel') return 'Filter Wheel'
 	else return type

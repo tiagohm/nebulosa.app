@@ -9,6 +9,7 @@ import { CameraManager, camera } from 'src/api/camera'
 import { ConnectionManager, connection } from 'src/api/connection'
 import { CoverManager, cover } from 'src/api/cover'
 import { ApiError } from 'src/api/exceptions'
+import { FlatPanelManager, flatPanel } from 'src/api/flatpanel'
 import { GuideOutputManager, guideOutput } from 'src/api/guideoutput'
 import { IndiManager, indi } from 'src/api/indi'
 import { WebSocketMessageManager } from 'src/api/message'
@@ -60,7 +61,8 @@ const thermometerManager = new ThermometerManager(wsm)
 const mountManager = new MountManager(wsm, guideOutputManager)
 const cameraManager = new CameraManager(wsm, connectionManager, guideOutputManager, thermometerManager, mountManager)
 const coverManager = new CoverManager(wsm)
-const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager, coverManager, wsm)
+const flatPanelManager = new FlatPanelManager(wsm)
+const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager, coverManager, flatPanelManager, wsm)
 const confirmationManager = new ConfirmationManager(wsm)
 const framingManager = new FramingManager()
 const fileSystemManager = new FileSystemManager()
@@ -124,6 +126,7 @@ const app = new Elysia({
 	.use(thermometer(thermometerManager))
 	.use(guideOutput(guideOutputManager, connectionManager))
 	.use(cover(coverManager, connectionManager))
+	.use(flatPanel(flatPanelManager, connectionManager))
 	.use(atlas(atlasManager))
 	.use(image(imageManager))
 	.use(framing(framingManager))

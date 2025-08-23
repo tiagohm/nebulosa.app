@@ -5,6 +5,7 @@ import { ConfirmationMolecule } from '@/molecules/confirmation'
 import { CameraScope } from '@/molecules/indi/camera'
 import { CoverScope } from '@/molecules/indi/cover'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
+import { FlatPanelScope } from '@/molecules/indi/flatpanel'
 import { GuideOutputScope } from '@/molecules/indi/guideoutput'
 import { MountScope } from '@/molecules/indi/mount'
 import { ThermometerScope } from '@/molecules/indi/thermometer'
@@ -12,6 +13,7 @@ import { WebSocketMolecule } from '@/molecules/ws'
 import { Camera } from './Camera'
 import { Confirmation } from './Confirmation'
 import { Cover } from './Cover'
+import { FlatPanel } from './FlatPanel'
 import { GuideOutput } from './GuideOutput'
 import { HomeNavBar } from './HomeNavBar'
 import { ImageWorkspace } from './ImageWorkspace'
@@ -33,6 +35,7 @@ export const Home = memo(() => {
 			<ThermometerList />
 			<GuideOutputList />
 			<CoverList />
+			<FlatPanelList />
 			{showConfirmation && <Confirmation />}
 		</div>
 	)
@@ -103,6 +106,20 @@ export const CoverList = memo(() => {
 			cover.show && (
 				<ScopeProvider key={cover.name} scope={CoverScope} value={{ cover: cover as never }}>
 					<Cover />
+				</ScopeProvider>
+			),
+	)
+})
+
+export const FlatPanelList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { flatPanel } = useSnapshot(equipment.state.devices)
+
+	return flatPanel.map(
+		(flatPanel) =>
+			flatPanel.show && (
+				<ScopeProvider key={flatPanel.name} scope={FlatPanelScope} value={{ flatPanel: flatPanel as never }}>
+					<FlatPanel />
 				</ScopeProvider>
 			),
 	)

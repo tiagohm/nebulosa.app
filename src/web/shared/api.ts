@@ -4,7 +4,7 @@ import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, EquatorialCoordinate, FileSystem, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, EquatorialCoordinate, FileSystem, FlatPanel, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
 import { type SkyObjectSearchResult, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 import wretch, { type WretchError } from 'wretch'
 
@@ -219,6 +219,28 @@ export namespace Api {
 
 		export function unpark(cover: Cover) {
 			return res(`/covers/${cover.name}/unpark`, 'post')
+		}
+	}
+
+	export namespace FlatPanels {
+		export function list() {
+			return json<FlatPanel[]>('/flatpanels', 'get')
+		}
+
+		export function get(name: string) {
+			return json<FlatPanel>(`/flatpanels/${name}`, 'get')
+		}
+
+		export function enable(flatPanel: FlatPanel) {
+			return res(`/flatpanels/${flatPanel.name}/enable`, 'post')
+		}
+
+		export function disable(flatPanel: FlatPanel) {
+			return res(`/flatpanels/${flatPanel.name}/disable`, 'post')
+		}
+
+		export function intensity(flatPanel: FlatPanel, value: number) {
+			return res(`/flatpanels/${flatPanel.name}/intensity`, 'post', value)
 		}
 	}
 

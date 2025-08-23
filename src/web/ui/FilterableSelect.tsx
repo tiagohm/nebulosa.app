@@ -12,7 +12,7 @@ export interface FilterableSelectProps<T extends object> extends Omit<SelectProp
 
 export function FilterableSelect<T extends object>({ showFilter = true, items, filter, filterPlaceholder = 'Search', ...props }: FilterableSelectProps<T>) {
 	const [search, setSearch] = useState('')
-	const debouncedSearch = useDebounce(search, 300)
+	const debouncedSearch = useDebounce(search, 500)
 
 	const filtered = useMemo(() => {
 		const text = debouncedSearch.toLowerCase().trim()

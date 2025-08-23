@@ -12,7 +12,7 @@ import { DewHeaterManager, dewHeater } from 'src/api/dewheater'
 import { ApiError } from 'src/api/exceptions'
 import { FlatPanelManager, flatPanel } from 'src/api/flatpanel'
 import { GuideOutputManager, guideOutput } from 'src/api/guideoutput'
-import { IndiManager, indi } from 'src/api/indi'
+import { IndiDevicePropertyManager, IndiManager, IndiServerManager, indi } from 'src/api/indi'
 import { WebSocketMessageManager } from 'src/api/message'
 import { MountManager, mount } from 'src/api/mount'
 import { ThermometerManager, thermometer } from 'src/api/thermometer'
@@ -59,12 +59,14 @@ const wsm = new WebSocketMessageManager()
 const connectionManager = new ConnectionManager()
 const guideOutputManager = new GuideOutputManager(wsm)
 const thermometerManager = new ThermometerManager(wsm)
-const mountManager = new MountManager(wsm, guideOutputManager)
-const cameraManager = new CameraManager(wsm, connectionManager, guideOutputManager, thermometerManager, mountManager)
-const dewHeaterManager = new DewHeaterManager(wsm)
-const coverManager = new CoverManager(wsm, dewHeaterManager)
-const flatPanelManager = new FlatPanelManager(wsm)
+const indiDevicePropertyManager = new IndiDevicePropertyManager(wsm)
+const mountManager = new MountManager(wsm, guideOutputManager, indiDevicePropertyManager)
+const cameraManager = new CameraManager(wsm, connectionManager, guideOutputManager, thermometerManager, indiDevicePropertyManager, mountManager)
+const dewHeaterManager = new DewHeaterManager(wsm, indiDevicePropertyManager)
+const coverManager = new CoverManager(wsm, dewHeaterManager, indiDevicePropertyManager)
+const flatPanelManager = new FlatPanelManager(wsm, indiDevicePropertyManager)
 const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager, coverManager, flatPanelManager, dewHeaterManager, wsm)
+const indiServerManager = new IndiServerManager(wsm)
 const confirmationManager = new ConfirmationManager(wsm)
 const framingManager = new FramingManager()
 const fileSystemManager = new FileSystemManager()
@@ -122,7 +124,7 @@ const app = new Elysia({
 
 	.use(connection(connectionManager, indiManager))
 	.use(confirmation(confirmationManager))
-	.use(indi(indiManager, connectionManager))
+	.use(indi(indiManager, indiServerManager, indiDevicePropertyManager, connectionManager))
 	.use(camera(cameraManager))
 	.use(mount(mountManager, connectionManager))
 	.use(thermometer(thermometerManager))

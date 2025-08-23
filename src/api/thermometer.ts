@@ -17,20 +17,19 @@ export class ThermometerManager {
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
 		const device = this.thermometers.get(message.device)
 
-		if (!device) return
+		if (!device || !device.hasThermometer) return
 
 		switch (message.name) {
-			case 'CCD_TEMPERATURE':
-				if (device.hasThermometer) {
-					const temperature = message.elements.CCD_TEMPERATURE_VALUE!.value
+			case 'CCD_TEMPERATURE': {
+				const temperature = message.elements.CCD_TEMPERATURE_VALUE!.value
 
-					if (temperature !== device.temperature) {
-						device.temperature = temperature
-						this.update(device, 'temperature', message.state)
-					}
+				if (temperature !== device.temperature) {
+					device.temperature = temperature
+					this.update(device, 'temperature', message.state)
 				}
 
 				return
+			}
 		}
 	}
 

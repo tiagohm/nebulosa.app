@@ -269,6 +269,13 @@ export interface IndiServerStopped extends WebSocketMessage {
 	readonly code: number
 }
 
+export interface IndiPropertyUpdated extends WebSocketMessage {
+	readonly type: 'indi:property:update'
+	readonly device: string
+	readonly name: string
+	readonly property: DeviceProperty
+}
+
 export interface DeviceAdded<T extends string, D extends Device> extends WebSocketMessage {
 	readonly type: `${T}:add`
 	readonly device: D
@@ -344,13 +351,15 @@ export type DewHeaterMessageEvent = DewHeaterAdded | DewHeaterUpdated | DewHeate
 
 export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent | CoverMessageEvent | FlatPanelMessageEvent | DewHeaterMessageEvent
 
+export type DeviceProperty = DefVector & {
+	type: Uppercase<VectorType>
+}
+
+export type DeviceProperties = Record<string, DeviceProperty | undefined>
+
 export interface DriverInfo {
 	executable: string
 	version: string
-}
-
-export type DeviceProperty = DefVector & {
-	type: VectorType
 }
 
 export interface Device {
@@ -359,7 +368,7 @@ export interface Device {
 	name: string
 	connected: boolean
 	driver: DriverInfo
-	properties: Record<string, DeviceProperty | undefined>
+	// properties: DeviceProperties
 }
 
 // Thermometer
@@ -501,9 +510,9 @@ export interface CameraCaptureTaskEvent extends WebSocketMessage {
 
 // GPS
 
-export interface Gps extends Device {
+export interface GPS extends Device {
 	readonly type: 'GPS' | 'MOUNT'
-	hasGps: boolean
+	hasGPS: boolean
 	readonly geographicCoordinate: GeographicCoordinate
 }
 
@@ -528,7 +537,7 @@ export interface SlewRate {
 	label: string
 }
 
-export interface Mount extends GuideOutput, Gps, Parkable {
+export interface Mount extends GuideOutput, GPS, Parkable {
 	readonly type: 'MOUNT'
 	slewing: boolean
 	tracking: boolean
@@ -806,7 +815,7 @@ export const DEFAULT_CAMERA: Camera = {
 	},
 	hasThermometer: false,
 	temperature: 0,
-	properties: {},
+	// properties: {},
 }
 
 export const DEFAULT_MOUNT: Mount = {
@@ -838,8 +847,8 @@ export const DEFAULT_MOUNT: Mount = {
 		executable: '',
 		version: '',
 	},
-	properties: {},
-	hasGps: false,
+	// properties: {},
+	hasGPS: false,
 	geographicCoordinate: {
 		latitude: 0,
 		longitude: 0,
@@ -873,7 +882,7 @@ export const DEFAULT_THERMOMETER: Thermometer = {
 		executable: '',
 		version: '',
 	},
-	properties: {},
+	// properties: {},
 }
 
 export const DEFAULT_GUIDE_OUTPUT: GuideOutput = {
@@ -887,7 +896,7 @@ export const DEFAULT_GUIDE_OUTPUT: GuideOutput = {
 		executable: '',
 		version: '',
 	},
-	properties: {},
+	// properties: {},
 }
 
 export const DEFAULT_COVER: Cover = {
@@ -908,7 +917,7 @@ export const DEFAULT_COVER: Cover = {
 		executable: '',
 		version: '',
 	},
-	properties: {},
+	// properties: {},
 }
 
 export const DEFAULT_FLAT_PANEL: FlatPanel = {
@@ -926,7 +935,7 @@ export const DEFAULT_FLAT_PANEL: FlatPanel = {
 		executable: '',
 		version: '',
 	},
-	properties: {},
+	// properties: {},
 }
 
 export const DEFAULT_DEW_HEATER: DewHeater = {
@@ -944,7 +953,7 @@ export const DEFAULT_DEW_HEATER: DewHeater = {
 		executable: '',
 		version: '',
 	},
-	properties: {},
+	// properties: {},
 }
 
 export const DEFAULT_IMAGE_STRETCH: ImageStretch = {
@@ -1041,6 +1050,10 @@ export function isCamera(device: Device): device is Camera {
 	return device.type === 'CAMERA'
 }
 
+export function isMount(device: Device): device is Mount {
+	return device.type === 'MOUNT'
+}
+
 export function isThermometer(device: Device): device is Thermometer {
 	return 'hasThermometer' in device && device.hasThermometer !== undefined
 }
@@ -1049,6 +1062,10 @@ export function isGuideOutput(device: Device): device is GuideOutput {
 	return 'canPulseGuide' in device && device.canPulseGuide !== undefined
 }
 
-export function isGPS(device: Device): device is Gps {
+export function isDewHeater(device: Device): device is DewHeater {
+	return 'hasDewHeater' in device && device.hasDewHeater !== undefined
+}
+
+export function isGPS(device: Device): device is GPS {
 	return 'hasGPS' in device && device.hasGPS !== undefined
 }

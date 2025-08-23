@@ -1,8 +1,9 @@
 import { Elysia } from 'elysia'
-// biome-ignore format: too many
-import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, IndiClient, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
+// biome-ignore format: too long!
+import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, IndiClient, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
-import type { Device, DeviceProperty, IndiServerStart, IndiServerStarted, IndiServerStatus, IndiServerStopped } from '../shared/types'
+// biome-ignore format: too long!
+import type { Device, DeviceProperties, DeviceProperty, IndiPropertyUpdated, IndiServerStart, IndiServerStarted, IndiServerStatus, IndiServerStopped } from '../shared/types'
 import type { CameraManager } from './camera'
 import type { ConnectionManager } from './connection'
 import type { CoverManager } from './cover'
@@ -65,8 +66,6 @@ export function disconnect(client: IndiClient, device: Device) {
 }
 
 export class IndiManager {
-	private process?: Bun.Subprocess
-
 	constructor(
 		readonly camera: CameraManager,
 		readonly guideOutput: GuideOutputManager,
@@ -86,9 +85,9 @@ export class IndiManager {
 		this.camera.switchVector(client, message, tag)
 		this.mount.switchVector(client, message, tag)
 		this.cover.switchVector(client, message, tag)
+		this.flatPanel.switchVector(client, message, tag)
 		// this.guideOutput.switchVector(client, message, tag)
 		// this.thermometer.switchVector(client, message, tag)
-		this.flatPanel.switchVector(client, message, tag)
 		// this.dewHeater.switchVector(client, message, tag)
 	}
 
@@ -96,9 +95,9 @@ export class IndiManager {
 		this.camera.numberVector(client, message, tag)
 		this.mount.numberVector(client, message, tag)
 		this.cover.numberVector(client, message, tag)
+		this.flatPanel.numberVector(client, message, tag)
 		this.guideOutput.numberVector(client, message, tag)
 		this.thermometer.numberVector(client, message, tag)
-		this.flatPanel.numberVector(client, message, tag)
 		this.dewHeater.numberVector(client, message, tag)
 	}
 
@@ -106,9 +105,9 @@ export class IndiManager {
 		this.camera.textVector(client, message, tag)
 		this.mount.textVector(client, message, tag)
 		this.cover.textVector(client, message, tag)
+		this.flatPanel.textVector(client, message, tag)
 		// this.guideOutput.textVector(client, message, tag)
 		// this.thermometer.textVector(client, message, tag)
-		this.flatPanel.textVector(client, message, tag)
 		// this.dewHeater.textVector(client, message, tag)
 	}
 
@@ -119,9 +118,86 @@ export class IndiManager {
 	get(id: string): Device | undefined {
 		return this.camera.get(id) || this.mount.get(id) || this.cover.get(id) || this.flatPanel.get(id) || this.guideOutput.get(id) || this.thermometer.get(id) || this.dewHeater.get(id)
 	}
+}
 
-	serverStart(req: IndiServerStart) {
-		this.serverStop()
+export class IndiDevicePropertyManager {
+	private readonly properties = new Map<string, DeviceProperties>()
+	private readonly listeners = new Set<string>()
+
+	constructor(readonly wsm: WebSocketMessageManager) {}
+
+	listen(name: string) {
+		this.listeners.add(name)
+	}
+
+	unlisten(name: string) {
+		this.listeners.delete(name)
+	}
+
+	send(device: Device, name: string, property: DeviceProperty) {
+		if (this.listeners.has(device.name)) {
+			this.wsm.send<IndiPropertyUpdated>({ type: 'indi:property:update', device: device.name, name, property })
+		}
+	}
+
+	get(device: Device) {
+		return this.properties.get(device.name)
+	}
+
+	add(device: Device, message: DefVector | SetVector, tag: string, send: boolean = true) {
+		let properties = this.properties.get(device.name)
+
+		if (!properties) {
+			properties = {}
+			this.properties.set(device.name, properties)
+		}
+
+		if (tag[0] === 'd') {
+			const property = message as DeviceProperty
+			property.type = tag.includes('Switch') ? 'SWITCH' : tag.includes('Number') ? 'NUMBER' : tag.includes('Text') ? 'TEXT' : tag.includes('BLOB') ? 'BLOB' : 'LIGHT'
+			properties[message.name] = property
+			if (send) this.send(device, message.name, property)
+			return true
+		} else {
+			let updated = false
+			const property = properties[message.name]
+
+			if (property) {
+				if (message.state && message.state !== property.state) {
+					property.state = message.state
+					updated = true
+				}
+
+				for (const key in message.elements) {
+					const element = property.elements[key]
+
+					if (element) {
+						const value = message.elements[key]!.value
+
+						if (value !== element.value) {
+							element.value = value
+							updated = true
+						}
+					}
+				}
+
+				if (updated && send) {
+					this.send(device, message.name, property)
+				}
+			}
+
+			return updated
+		}
+	}
+}
+
+export class IndiServerManager {
+	private process?: Bun.Subprocess
+
+	constructor(readonly wsm: WebSocketMessageManager) {}
+
+	start(req: IndiServerStart) {
+		this.stop()
 
 		if (process.platform !== 'linux') return
 
@@ -138,14 +214,14 @@ export class IndiManager {
 		this.process = p
 	}
 
-	serverStop() {
+	stop() {
 		if (this.process && !this.process.killed) {
 			this.process.kill()
 			this.process = undefined
 		}
 	}
 
-	serverStatus(): IndiServerStatus {
+	status(): IndiServerStatus {
 		return {
 			enabled: process.platform === 'linux',
 			running: !!this.process && !this.process.killed,
@@ -153,7 +229,7 @@ export class IndiManager {
 	}
 }
 
-export function indi(indi: IndiManager, connection: ConnectionManager) {
+export function indi(indi: IndiManager, server: IndiServerManager, property: IndiDevicePropertyManager, connection: ConnectionManager) {
 	function deviceFromParams(params: { id: string }) {
 		return indi.get(decodeURIComponent(params.id))!
 	}
@@ -163,33 +239,18 @@ export function indi(indi: IndiManager, connection: ConnectionManager) {
 		.get('/:id', ({ params }) => deviceFromParams(params))
 		.post('/:id/connect', ({ params }) => connect(connection.get(), deviceFromParams(params)))
 		.post('/:id/disconnect', ({ params }) => disconnect(connection.get(), deviceFromParams(params)))
-		.get('/:id/properties', ({ params }) => deviceFromParams(params).properties)
-		.post('/server/start', ({ body }) => indi.serverStart(body as never))
-		.post('/server/stop', () => indi.serverStop())
-		.get('/server/status', () => indi.serverStatus())
+		.get('/:id/properties', ({ params }) => property.get(deviceFromParams(params)))
+		.post('/:id/listen', ({ params }) => property.listen(decodeURIComponent(params.id)))
+		.post('/:id/unlisten', ({ params }) => property.unlisten(decodeURIComponent(params.id)))
+		.post('/server/start', ({ body }) => server.start(body as never))
+		.post('/server/stop', () => server.stop())
+		.get('/server/status', () => server.status())
 
 	return app
 }
 
-export function addProperty(device: Device, message: DefVector | SetVector, tag: string) {
-	if (tag[0] === 'd') {
-		const property = message as DeviceProperty
-		property.type = tag.includes('Switch') ? 'Switch' : tag.includes('Number') ? 'Number' : tag.includes('Text') ? 'Text' : tag.includes('BLOB') ? 'BLOB' : 'Light'
-		device.properties[message.name] = property
-	} else {
-		const vector = device.properties[message.name]
-
-		if (vector) {
-			if (message.state) vector.state = message.state
-
-			for (const key in message.elements) {
-				if (key in vector.elements) {
-					const value = message.elements[key]!.value
-					vector.elements[key]!.value = value
-				}
-			}
-		}
-	}
+export function delProperty(device: Device, message: DelProperty) {
+	// TODO!
 }
 
 export function connectionFor(client: IndiClient, device: Device, message: DefSwitchVector | SetSwitchVector) {

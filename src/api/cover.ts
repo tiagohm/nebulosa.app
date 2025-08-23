@@ -4,7 +4,7 @@ import bus from '../shared/bus'
 import { type Cover, type CoverAdded, type CoverRemoved, type CoverUpdated, DEFAULT_COVER } from '../shared/types'
 import type { ConnectionManager } from './connection'
 import type { DewHeaterManager } from './dewheater'
-import { addProperty, ask, connectionFor, DeviceInterfaceType, isInterfaceType } from './indi'
+import { ask, connectionFor, DeviceInterfaceType, type IndiDevicePropertyManager, isInterfaceType } from './indi'
 import type { WebSocketMessageManager } from './message'
 
 export function unpark(client: IndiClient, device: Cover) {
@@ -25,6 +25,7 @@ export class CoverManager {
 	constructor(
 		readonly wsm: WebSocketMessageManager,
 		readonly dewHeater: DewHeaterManager,
+		readonly properties: IndiDevicePropertyManager,
 	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove all covers associated with the client
@@ -37,7 +38,7 @@ export class CoverManager {
 
 		if (!device) return
 
-		addProperty(device, message, tag)
+		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			case 'CONNECTION':
@@ -84,7 +85,7 @@ export class CoverManager {
 
 		if (!device) return
 
-		addProperty(device, message, tag)
+		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			// WandererCover V4 EC
@@ -119,7 +120,7 @@ export class CoverManager {
 				if (!this.covers.has(message.device)) {
 					const cover: Cover = { ...structuredClone(DEFAULT_COVER), id: message.device, name: message.device, driver: { executable, version } }
 					this.add(cover)
-					addProperty(cover, message, tag)
+					this.properties.add(cover, message, tag, false)
 					ask(client, cover)
 				}
 			} else if (this.covers.has(message.device)) {
@@ -133,7 +134,7 @@ export class CoverManager {
 
 		if (!device) return
 
-		addProperty(device, message, tag)
+		this.properties.add(device, message, tag)
 	}
 
 	update(device: Cover, property: keyof Cover, state?: PropertyState) {

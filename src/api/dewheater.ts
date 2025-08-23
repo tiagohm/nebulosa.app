@@ -1,12 +1,13 @@
 import Elysia from 'elysia'
 import type { DefNumberVector, IndiClient, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
-import type { CoverUpdated, DewHeater, DewHeaterAdded, DewHeaterRemoved, DewHeaterUpdated } from '../shared/types'
+import type { CoverUpdated, DeviceProperties, DewHeater, DewHeaterAdded, DewHeaterRemoved, DewHeaterUpdated } from '../shared/types'
 import type { ConnectionManager } from './connection'
+import type { IndiDevicePropertyManager } from './indi'
 import type { WebSocketMessageManager } from './message'
 
-export function pwm(client: IndiClient, device: DewHeater, value: number) {
-	if (device.properties.Heater) {
+export function pwm(client: IndiClient, device: DewHeater, value: number, properties: DeviceProperties) {
+	if (properties.Heater) {
 		client.sendNumber({ device: device.name, name: 'Heater', elements: { Heater: value } })
 	}
 }
@@ -14,7 +15,10 @@ export function pwm(client: IndiClient, device: DewHeater, value: number) {
 export class DewHeaterManager {
 	private readonly dewHeaters = new Map<string, DewHeater>()
 
-	constructor(readonly wsm: WebSocketMessageManager) {
+	constructor(
+		readonly wsm: WebSocketMessageManager,
+		readonly properties: IndiDevicePropertyManager,
+	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove all dew heaters associated with the client
 			this.dewHeaters.forEach((device) => this.remove(device))
@@ -24,7 +28,7 @@ export class DewHeaterManager {
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
 		const device = this.dewHeaters.get(message.device)
 
-		if (!device) return
+		if (!device || !device.hasDewHeater) return
 
 		switch (message.name) {
 			// WandererCover V4 EC
@@ -83,7 +87,7 @@ export class DewHeaterManager {
 	}
 
 	pwm(client: IndiClient, device: DewHeater, value: number) {
-		pwm(client, device, value)
+		pwm(client, device, value, this.properties.get(device)!)
 	}
 }
 

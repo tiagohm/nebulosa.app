@@ -5,11 +5,11 @@ import type { CfaPattern } from 'nebulosa/src/image'
 import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, IndiClient, OneNumber, PropertyState, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import { join } from 'path'
 import bus from '../shared/bus'
-import { type Camera, type CameraAdded, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_TASK_EVENT, type FrameType, type Mount } from '../shared/types'
+import { type Camera, type CameraAdded, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_TASK_EVENT, type DeviceProperties, type FrameType, type Mount } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import type { ConnectionManager } from './connection'
 import type { GuideOutputManager } from './guideoutput'
-import { addProperty, ask, connectionFor, DeviceInterfaceType, enableBlob, isInterfaceType } from './indi'
+import { ask, connectionFor, DeviceInterfaceType, enableBlob, type IndiDevicePropertyManager, isInterfaceType } from './indi'
 import type { WebSocketMessageManager } from './message'
 import type { MountManager } from './mount'
 import type { ThermometerManager } from './thermometer'
@@ -50,22 +50,18 @@ export function bin(client: IndiClient, camera: Camera, x: number, y: number) {
 	}
 }
 
-export function gain(client: IndiClient, camera: Camera, value: number) {
-	const properties = camera.properties
-
-	if (properties?.CCD_CONTROLS?.elements.Gain) {
+export function gain(client: IndiClient, camera: Camera, value: number, properties: DeviceProperties) {
+	if (properties.CCD_CONTROLS?.elements.Gain) {
 		client.sendNumber({ device: camera.name, name: 'CCD_CONTROLS', elements: { Gain: value } })
-	} else if (properties?.CCD_GAIN?.elements?.GAIN) {
+	} else if (properties.CCD_GAIN?.elements?.GAIN) {
 		client.sendNumber({ device: camera.name, name: 'CCD_GAIN', elements: { GAIN: value } })
 	}
 }
 
-export function offset(client: IndiClient, camera: Camera, value: number) {
-	const properties = camera.properties
-
-	if (properties?.CCD_CONTROLS?.elements.Offset) {
+export function offset(client: IndiClient, camera: Camera, value: number, properties: DeviceProperties) {
+	if (properties.CCD_CONTROLS?.elements.Offset) {
 		client.sendNumber({ device: camera.name, name: 'CCD_CONTROLS', elements: { Offset: value } })
-	} else if (properties?.CCD_OFFSET?.elements?.OFFSET) {
+	} else if (properties.CCD_OFFSET?.elements?.OFFSET) {
 		client.sendNumber({ device: camera.name, name: 'CCD_OFFSET', elements: { OFFSET: value } })
 	}
 }
@@ -93,6 +89,7 @@ export class CameraManager {
 		readonly connection: ConnectionManager,
 		readonly guideOutput: GuideOutputManager,
 		readonly thermometer: ThermometerManager,
+		readonly properties: IndiDevicePropertyManager,
 		readonly mount: MountManager,
 	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
@@ -106,7 +103,7 @@ export class CameraManager {
 
 		if (!device) return
 
-		addProperty(device, message, tag)
+		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			case 'CONNECTION':
@@ -163,7 +160,7 @@ export class CameraManager {
 
 		if (!device) return
 
-		addProperty(device, message, tag)
+		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			case 'CCD_INFO': {
@@ -362,7 +359,7 @@ export class CameraManager {
 				if (!this.cameras.has(message.device)) {
 					const camera: Camera = { ...structuredClone(DEFAULT_CAMERA), id: message.device, name: message.device, driver: { executable, version } }
 					this.add(camera)
-					addProperty(camera, message, tag)
+					this.properties.add(camera, message, tag, false)
 					ask(client, camera)
 				}
 			} else if (this.cameras.has(message.device)) {
@@ -376,7 +373,7 @@ export class CameraManager {
 
 		if (!device) return
 
-		addProperty(device, message, tag)
+		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			case 'CCD_CFA':
@@ -464,7 +461,7 @@ export class CameraManager {
 
 		// Start a new task for the camera
 		const client = this.connection.get()
-		const task = new CameraCaptureTask(device, req, client, this.handleCameraCaptureTaskEvent.bind(this))
+		const task = new CameraCaptureTask(device, req, client, this.properties, this.handleCameraCaptureTaskEvent.bind(this))
 		this.tasks.set(device.name, task)
 		const mount = req.mount ? this.mount.get(req.mount) : undefined
 		snoop(client, device, mount)
@@ -504,6 +501,7 @@ export class CameraCaptureTask {
 		private readonly camera: Camera,
 		private readonly request: CameraCaptureStart,
 		private readonly client: IndiClient,
+		private readonly properties: IndiDevicePropertyManager,
 		private readonly handleCameraCaptureTaskEvent: (event: CameraCaptureTaskEvent) => void,
 	) {
 		this.event.loop = request.exposureMode === 'LOOP'
@@ -635,8 +633,8 @@ export class CameraCaptureTask {
 			frameType(this.client, this.camera, this.request.frameType)
 			if (this.request.frameFormat) frameFormat(this.client, this.camera, this.request.frameFormat)
 			bin(this.client, this.camera, this.request.binX, this.request.binY)
-			gain(this.client, this.camera, this.request.gain)
-			offset(this.client, this.camera, this.request.offset)
+			gain(this.client, this.camera, this.request.gain, this.properties.get(this.camera)!)
+			offset(this.client, this.camera, this.request.offset, this.properties.get(this.camera)!)
 			startExposure(this.client, this.camera, exposureTimeInSeconds(this.request.exposureTime, this.request.exposureTimeUnit))
 		}
 	}

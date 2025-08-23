@@ -1,7 +1,7 @@
 import Elysia from 'elysia'
 import type { DefNumberVector, IndiClient, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
-import type { CameraUpdated, GuideOutput, GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from '../shared/types'
+import type { CameraUpdated, GuideOutput, GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse, MountUpdated } from '../shared/types'
 import type { ConnectionManager } from './connection'
 import type { WebSocketMessageManager } from './message'
 
@@ -42,21 +42,20 @@ export class GuideOutputManager {
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
 		const device = this.guideOutputs.get(message.device)
 
-		if (!device) return
+		if (!device || !device.canPulseGuide) return
 
 		switch (message.name) {
 			case 'TELESCOPE_TIMED_GUIDE_NS':
-			case 'TELESCOPE_TIMED_GUIDE_WE':
-				if (device.canPulseGuide) {
-					const pulseGuiding = message.state === 'Busy'
+			case 'TELESCOPE_TIMED_GUIDE_WE': {
+				const pulseGuiding = message.state === 'Busy'
 
-					if (pulseGuiding !== device.pulseGuiding) {
-						device.pulseGuiding = pulseGuiding
-						this.update(device, 'pulseGuiding', message.state)
-					}
+				if (pulseGuiding !== device.pulseGuiding) {
+					device.pulseGuiding = pulseGuiding
+					this.update(device, 'pulseGuiding', message.state)
 				}
 
 				return
+			}
 		}
 	}
 
@@ -66,6 +65,9 @@ export class GuideOutputManager {
 		if (device.type === 'CAMERA') {
 			this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
 			bus.emit('camera:update', value)
+		} else if (device.type === 'MOUNT') {
+			this.wsm.send<MountUpdated>({ type: 'mount:update', device: value, property, state })
+			bus.emit('mount:update', value)
 		}
 
 		this.wsm.send<GuideOutputUpdated>({ type: 'guideOutput:update', device: value, property, state })

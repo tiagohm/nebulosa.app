@@ -6,7 +6,6 @@ import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
-// Molecule that manages star detection
 export const StarDetectionMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
@@ -19,12 +18,10 @@ export const StarDetectionMolecule = molecule((m, s) => {
 		return () => unsubscribe()
 	})
 
-	// Toggles the visibility of detected stars
 	function toggle(enabled?: boolean) {
 		starDetection.show = enabled ?? !starDetection.show
 	}
 
-	// Detects stars in the image
 	async function detect() {
 		try {
 			starDetection.loading = true
@@ -68,7 +65,6 @@ export const StarDetectionMolecule = molecule((m, s) => {
 		}
 	}
 
-	// Selects a detected star and draws it on a canvas
 	function select(star: DetectedStar) {
 		starDetection.selected = star
 

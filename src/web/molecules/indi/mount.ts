@@ -40,7 +40,6 @@ export const MountScope = createScope<MountScopeValue>({ mount: DEFAULT_MOUNT })
 
 const mountStateMap = new Map<string, MountState>()
 
-// Molecule that manages the mount device
 export const MountMolecule = molecule((m, s) => {
 	const scope = s(MountScope)
 	const equipment = m(EquipmentMolecule)
@@ -60,7 +59,6 @@ export const MountMolecule = molecule((m, s) => {
 
 	mountStateMap.set(scope.mount.name, state)
 
-	// Fetches the mount
 	Api.Mounts.get(scope.mount.name).then((mount) => {
 		if (!mount) return
 		Object.assign(state.mount, mount)
@@ -96,8 +94,7 @@ export const MountMolecule = molecule((m, s) => {
 		}
 	})
 
-	// Connects or disconnects the mount based on its current state
-	async function connectOrDisconnect() {
+	async function connect() {
 		state.connecting = true
 
 		if (state.mount.connected) {
@@ -199,10 +196,9 @@ export const MountMolecule = molecule((m, s) => {
 		state.location.showModal = force ?? !state.location.showModal
 	}
 
-	// Closes the mount modal
 	function close() {
 		equipment.close('mount', scope.mount)
 	}
 
-	return { state, scope, connectOrDisconnect, updateTargetCoordinate, handleTargetCoordinateAction, toggleLocationModal, park, unpark, togglePark, home, tracking, trackMode, slewRate, moveTo, location, stop, close } as const
+	return { state, scope, connect, updateTargetCoordinate, handleTargetCoordinateAction, toggleLocationModal, park, unpark, togglePark, home, tracking, trackMode, slewRate, moveTo, location, stop, close } as const
 })

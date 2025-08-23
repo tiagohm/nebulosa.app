@@ -87,8 +87,6 @@ export const DEFAULT_OPTIONS: PanZoomOptions = {
 	silent: false,
 }
 
-// Provides a way to pan and zoom an HTML element within its parent container.
-// It allows for pinch-to-zoom, mouse wheel zooming, and panning with mouse drag.
 export class PanZoom {
 	private readonly options = structuredClone(DEFAULT_OPTIONS)
 

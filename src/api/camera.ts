@@ -9,7 +9,7 @@ import { type Camera, type CameraAdded, type CameraCaptureStart, type CameraCapt
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import type { ConnectionManager } from './connection'
 import type { GuideOutputManager } from './guideoutput'
-import { addProperty, ask, DeviceInterfaceType, enableBlob, handleConnection, isInterfaceType } from './indi'
+import { addProperty, ask, connectionFor, DeviceInterfaceType, enableBlob, isInterfaceType } from './indi'
 import type { WebSocketMessageManager } from './message'
 import type { MountManager } from './mount'
 import type { ThermometerManager } from './thermometer'
@@ -84,7 +84,6 @@ export function snoop(client: IndiClient, camera: Camera, mount?: Mount) {
 	client.sendText({ device: camera.name, name: 'ACTIVE_DEVICES', elements: { ACTIVE_TELESCOPE: mount?.name ?? '', ACTIVE_ROTATOR: '', ACTIVE_FOCUSER: '', ACTIVE_FILTER: '' } })
 }
 
-// Manager for handling camera-related operations
 export class CameraManager {
 	private readonly cameras = new Map<string, Camera>()
 	private readonly tasks = new Map<string, CameraCaptureTask>()
@@ -102,18 +101,16 @@ export class CameraManager {
 		})
 	}
 
-	// Handles incoming switch vector messages.
 	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
 		const device = this.cameras.get(message.device)
 
 		if (!device) return
 
-		// Add the property to the device
 		addProperty(device, message, tag)
 
 		switch (message.name) {
 			case 'CONNECTION':
-				if (handleConnection(client, device, message)) {
+				if (connectionFor(client, device, message)) {
 					this.update(device, 'connected', message.state)
 
 					if (!device.connected) {
@@ -161,13 +158,11 @@ export class CameraManager {
 		}
 	}
 
-	// Handles incoming number vector messages.
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
 		const device = this.cameras.get(message.device)
 
 		if (!device) return
 
-		// Add the property to the device
 		addProperty(device, message, tag)
 
 		switch (message.name) {
@@ -311,13 +306,13 @@ export class CameraManager {
 			case 'CCD_CONTROLS': {
 				const gain = message.elements.Gain
 
-				if (gain && handleGain(device.gain, gain, tag)) {
+				if (gain && gainFor(device.gain, gain, tag)) {
 					this.update(device, 'gain', message.state)
 				}
 
 				const offset = message.elements.Offset
 
-				if (offset && handleOffset(device.offset, offset, tag)) {
+				if (offset && offsetFor(device.offset, offset, tag)) {
 					this.update(device, 'offset', message.state)
 				}
 
@@ -327,7 +322,7 @@ export class CameraManager {
 			case 'CCD_GAIN': {
 				const gain = message.elements.GAIN
 
-				if (gain && handleGain(device.gain, gain, tag)) {
+				if (gain && gainFor(device.gain, gain, tag)) {
 					this.update(device, 'gain', message.state)
 				}
 
@@ -336,7 +331,7 @@ export class CameraManager {
 			case 'CCD_OFFSET': {
 				const offset = message.elements.OFFSET
 
-				if (offset && handleOffset(device.offset, offset, tag)) {
+				if (offset && offsetFor(device.offset, offset, tag)) {
 					this.update(device, 'offset', message.state)
 				}
 
@@ -356,7 +351,6 @@ export class CameraManager {
 		}
 	}
 
-	// Handles incoming text vector messages.
 	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		if (message.name === 'DRIVER_INFO') {
 			const type = +message.elements.DRIVER_INTERFACE!.value
@@ -382,7 +376,6 @@ export class CameraManager {
 
 		if (!device) return
 
-		// Add the property to the device
 		addProperty(device, message, tag)
 
 		switch (message.name) {
@@ -396,7 +389,6 @@ export class CameraManager {
 		}
 	}
 
-	// Handles incoming blob vector messages.
 	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
 		const device = this.cameras.get(message.device)
 
@@ -418,7 +410,6 @@ export class CameraManager {
 		}
 	}
 
-	// Sends an update for a camera device
 	update(device: Camera, property: keyof Camera, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
 		this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
@@ -426,7 +417,6 @@ export class CameraManager {
 		this.tasks.forEach((task) => task.cameraUpdated(device, property, state))
 	}
 
-	// Adds a camera device
 	add(device: Camera) {
 		this.cameras.set(device.name, device)
 		this.wsm.send<CameraAdded>({ type: 'camera:add', device })
@@ -434,7 +424,6 @@ export class CameraManager {
 		console.info('camera added:', device.name)
 	}
 
-	// Removes a camera device
 	remove(device: Camera) {
 		if (this.cameras.has(device.name)) {
 			this.cameras.delete(device.name)
@@ -449,7 +438,6 @@ export class CameraManager {
 		}
 	}
 
-	// Handles the camera capture task event
 	handleCameraCaptureTaskEvent(event: CameraCaptureTaskEvent) {
 		this.wsm.send(event)
 
@@ -459,12 +447,10 @@ export class CameraManager {
 		}
 	}
 
-	// Lists all camera devices
 	list() {
 		return Array.from(this.cameras.values())
 	}
 
-	// Gets a camera device by its id
 	get(id: string) {
 		return this.cameras.get(id)
 	}
@@ -490,7 +476,6 @@ export class CameraManager {
 	}
 }
 
-// Endpoints for handling camera-related requests.
 export function camera(camera: CameraManager) {
 	function cameraFromParams(params: { id: string }) {
 		return camera.get(decodeURIComponent(params.id))!
@@ -508,7 +493,6 @@ export function camera(camera: CameraManager) {
 	return app
 }
 
-// Task that capture one or more frames from camera
 export class CameraCaptureTask {
 	readonly event = structuredClone(DEFAULT_CAMERA_CAPTURE_TASK_EVENT)
 
@@ -624,7 +608,7 @@ export class CameraCaptureTask {
 
 	async blobReceived(device: Camera, data: string) {
 		if (this.camera.name === device.name) {
-			const savePath = await savePathFor(this.request)
+			const savePath = await makePathFor(this.request)
 			const name = this.request.autoSave ? dateNow().format('YYYYMMDD.HHmmssSSS') : device.name
 			const path = join(savePath, `${name}.fit`)
 			await Bun.write(path, Buffer.from(data, 'base64'))
@@ -636,7 +620,6 @@ export class CameraCaptureTask {
 		}
 	}
 
-	// Starts the camera exposure
 	start() {
 		if (this.event.remainingCount > 0) {
 			this.event.state = 'EXPOSURE_STARTED'
@@ -658,7 +641,6 @@ export class CameraCaptureTask {
 		}
 	}
 
-	// Stops the camera exposure
 	stop() {
 		if (this.stopped) return
 		this.stopped = true
@@ -666,7 +648,6 @@ export class CameraCaptureTask {
 	}
 }
 
-// Waits for a specified time and call a callback with the remaining time
 async function waitFor(us: number, stop: { readonly isStopped: boolean }, callback: (remaining: number) => void) {
 	let remaining = us
 
@@ -685,8 +666,7 @@ async function waitFor(us: number, stop: { readonly isStopped: boolean }, callba
 	}
 }
 
-// Handles the gain property of a camera
-function handleGain(gain: Camera['gain'], element: DefNumber | OneNumber, tag: string) {
+function gainFor(gain: Camera['gain'], element: DefNumber | OneNumber, tag: string) {
 	let update = false
 
 	if (tag[0] === 'd') {
@@ -703,8 +683,7 @@ function handleGain(gain: Camera['gain'], element: DefNumber | OneNumber, tag: s
 	return update
 }
 
-// Handles the offset property of a camera
-function handleOffset(offset: Camera['offset'], element: DefNumber | OneNumber, tag: string) {
+function offsetFor(offset: Camera['offset'], element: DefNumber | OneNumber, tag: string) {
 	let update = false
 
 	if (tag[0] === 'd') {
@@ -721,7 +700,7 @@ function handleOffset(offset: Camera['offset'], element: DefNumber | OneNumber, 
 	return update
 }
 
-async function savePathFor(req: CameraCaptureStart) {
+async function makePathFor(req: CameraCaptureStart) {
 	if (req.autoSave) {
 		const savePath = req.savePath && (await fs.exists(req.savePath)) ? req.savePath : Bun.env.capturesDir
 

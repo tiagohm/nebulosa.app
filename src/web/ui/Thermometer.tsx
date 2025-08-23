@@ -14,7 +14,7 @@ export const Thermometer = memo(() => {
 		<Modal
 			header={
 				<div className='flex flex-row items-center justify-between'>
-					<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={thermometer.connectOrDisconnect} />
+					<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={thermometer.connect} />
 					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
 						<span className='leading-5'>Thermometer</span>
 						<span className='text-xs font-normal text-gray-400 max-w-full'>{thermometer.scope.thermometer.name}</span>

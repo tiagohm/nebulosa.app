@@ -13,7 +13,7 @@ import bus from 'src/shared/bus'
 import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, expectedPierSide, type GeographicCoordinate, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoved, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
 import type { ConnectionManager } from './connection'
 import type { GuideOutputManager } from './guideoutput'
-import { addProperty, ask, DeviceInterfaceType, handleConnection, isInterfaceType } from './indi'
+import { addProperty, ask, connectionFor, DeviceInterfaceType, isInterfaceType } from './indi'
 import type { WebSocketMessageManager } from './message'
 
 export function tracking(client: IndiClient, mount: Mount, enable: boolean) {
@@ -97,7 +97,6 @@ export function moveEast(client: IndiClient, mount: Mount, enable: boolean) {
 	else client.sendSwitch({ device: mount.name, name: 'TELESCOPE_MOTION_WE', elements: { MOTION_EAST: false } })
 }
 
-// Manager for handling mount-related operations
 export class MountManager {
 	private readonly mounts = new Map<string, Mount>()
 	private readonly geographicPositions = new Map<Mount, GeographicPosition>()
@@ -112,18 +111,16 @@ export class MountManager {
 		})
 	}
 
-	// Handles incoming switch vector messages.
 	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
 		const device = this.mounts.get(message.device)
 
 		if (!device) return
 
-		// Add the property to the device
 		addProperty(device, message, tag)
 
 		switch (message.name) {
 			case 'CONNECTION':
-				if (handleConnection(client, device, message)) {
+				if (connectionFor(client, device, message)) {
 					this.update(device, 'connected', message.state)
 				}
 
@@ -271,13 +268,11 @@ export class MountManager {
 		}
 	}
 
-	// Handles incoming number vector messages.
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
 		const device = this.mounts.get(message.device)
 
 		if (!device) return
 
-		// Add the property to the device
 		addProperty(device, message, tag)
 
 		switch (message.name) {
@@ -351,7 +346,6 @@ export class MountManager {
 		}
 	}
 
-	// Handles incoming text vector messages.
 	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		if (message.name === 'DRIVER_INFO') {
 			const type = +message.elements.DRIVER_INTERFACE!.value
@@ -377,21 +371,18 @@ export class MountManager {
 
 		if (!device) return
 
-		// Add the property to the device
 		addProperty(device, message, tag)
 
 		switch (message.name) {
 		}
 	}
 
-	// Sends an update for a mount device
 	update(device: Mount, property: keyof Mount, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
 		this.wsm.send<MountUpdated>({ type: 'mount:update', device: value, property, state })
 		bus.emit('mount:update', value)
 	}
 
-	// Adds a mount device
 	add(device: Mount) {
 		this.mounts.set(device.name, device)
 		this.wsm.send<MountAdded>({ type: 'mount:add', device })
@@ -399,7 +390,6 @@ export class MountManager {
 		console.info('mount added:', device.name)
 	}
 
-	// Removes a mount device
 	remove(device: Mount) {
 		if (this.mounts.has(device.name)) {
 			this.mounts.delete(device.name)
@@ -413,17 +403,14 @@ export class MountManager {
 		}
 	}
 
-	// Lists all mount devices
 	list() {
 		return Array.from(this.mounts.values())
 	}
 
-	// Gets a mount device by its id
 	get(id: string) {
 		return this.mounts.get(id)
 	}
 
-	// Computes the coordinate position of a mount device
 	coordinatePosition(device: Mount) {
 		const { rightAscension, declination } = device.equatorialCoordinate
 
@@ -463,7 +450,6 @@ export class MountManager {
 	}
 }
 
-// Endpoints for handling mount-related requests
 export function mount(mount: MountManager, connection: ConnectionManager) {
 	function mountFromParams(params: { id: string }) {
 		return mount.get(decodeURIComponent(params.id))!

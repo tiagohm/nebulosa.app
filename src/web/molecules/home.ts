@@ -8,7 +8,6 @@ export interface HomeState {
 	}
 }
 
-// Molecule that manages the home
 export const HomeMolecule = molecule((m) => {
 	const state = proxy<HomeState>({
 		menu: {
@@ -22,7 +21,6 @@ export const HomeMolecule = molecule((m) => {
 		return () => unsubscriber()
 	})
 
-	// Toggles the home menu
 	function toggleMenu(force?: boolean) {
 		state.menu.show = force !== undefined ? force : !state.menu.show
 	}

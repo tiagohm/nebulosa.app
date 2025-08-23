@@ -9,7 +9,6 @@ const useGesture = createUseGesture([dragAction])
 
 const modalTransformMap = new Map<string, { x: number; y: number }>()
 
-// A hook for managing a modal with draggable functionality.
 export function useModal(name: string, onClose?: VoidFunction) {
 	const zIndex = useMolecule(ZIndexMolecule)
 	const modalRef = useRef<HTMLElement>(null)

@@ -4,7 +4,6 @@ import bus from '../shared/bus'
 import type { CameraUpdated, Thermometer, ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from '../shared/types'
 import type { WebSocketMessageManager } from './message'
 
-// Manager for handling thermometer-related operations
 export class ThermometerManager {
 	private readonly thermometers = new Map<string, Thermometer>()
 
@@ -35,7 +34,6 @@ export class ThermometerManager {
 		}
 	}
 
-	// Sends an update for a thermometer device
 	private update(device: Thermometer, property: keyof Thermometer, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
 		if (device.type === 'CAMERA') this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
@@ -43,7 +41,6 @@ export class ThermometerManager {
 		bus.emit('thermometer:update', value)
 	}
 
-	// Adds a thermometer device
 	add(device: Thermometer) {
 		this.thermometers.set(device.name, device)
 		this.wsm.send<ThermometerAdded>({ type: 'thermometer:add', device })
@@ -51,7 +48,6 @@ export class ThermometerManager {
 		console.info('thermometer added:', device.name)
 	}
 
-	// Removes a thermometer device
 	remove(device: Thermometer) {
 		if (this.thermometers.has(device.name)) {
 			this.thermometers.delete(device.name)
@@ -65,18 +61,15 @@ export class ThermometerManager {
 		}
 	}
 
-	// Lists all thermometer devices
 	list() {
 		return Array.from(this.thermometers.values())
 	}
 
-	// Gets a thermometer device by its id
 	get(id: string) {
 		return this.thermometers.get(id)
 	}
 }
 
-// Endpoints for handling thermometer-related requests
 export function thermometer(thermometer: ThermometerManager) {
 	function thermometerFromParams(params: { id: string }) {
 		return thermometer.get(decodeURIComponent(params.id))!

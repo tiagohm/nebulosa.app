@@ -253,6 +253,11 @@ export interface IndiServerStart {
 	repeat?: number
 }
 
+export interface IndiServerStatus {
+	readonly enabled: boolean
+	readonly running: boolean
+}
+
 export interface IndiServerStarted extends WebSocketMessage {
 	readonly type: 'indi:server:start'
 	readonly pid: number

@@ -83,8 +83,6 @@ const imageCache = new Map<string, CachedImage>()
 
 export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { key: '', path: '', position: 0, source: 'file' } })
 
-// Molecule that manages the image viewer
-// It handles loading, transformations, star detection, and other image-related functionalities
 export const ImageViewerMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 
@@ -196,7 +194,6 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		}
 	})
 
-	// Resets the stretch transformation to default values
 	function resetStretch() {
 		state.transformation.stretch.auto = false
 		state.transformation.stretch.midtone = 32768
@@ -205,7 +202,6 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		return load(true)
 	}
 
-	// Toggles the auto-stretch transformation
 	function toggleAutoStretch() {
 		if (state.transformation.stretch.auto) {
 			return resetStretch()
@@ -215,51 +211,42 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		}
 	}
 
-	// Toggles the debayer transformation
 	function toggleDebayer() {
 		state.transformation.debayer = !state.transformation.debayer
 		return load(true)
 	}
 
-	// Toggles the horizontal mirror transformation
 	function toggleHorizontalMirror() {
 		state.transformation.horizontalMirror = !state.transformation.horizontalMirror
 		return load(true)
 	}
 
-	// Toggles the vertical mirror transformation
 	function toggleVerticalMirror() {
 		state.transformation.verticalMirror = !state.transformation.verticalMirror
 		return load(true)
 	}
 
-	// Toggles the invert transformation
 	function toggleInvert() {
 		state.transformation.invert = !state.transformation.invert
 		return load(true)
 	}
 
-	// Toggles the crosshair visibility
 	function toggleCrosshair() {
 		state.crosshair = !state.crosshair
 	}
 
-	// Shows a modal
 	function showModal(key: 'starDetection' | 'scnr' | 'stretch' | 'fitsHeader' | 'plateSolver' | 'adjustment' | 'filter' | 'settings') {
 		state[key].showModal = true
 	}
 
-	// Closes a modal
 	function closeModal(key: 'starDetection' | 'scnr' | 'stretch' | 'fitsHeader' | 'plateSolver' | 'adjustment' | 'filter' | 'settings') {
 		state[key].showModal = false
 	}
 
-	// Removes the image from the workspace
 	function remove() {
 		workspace.remove(scope.image)
 	}
 
-	// Loads the current image
 	async function load(force: boolean = false, path?: string) {
 		if (loading) return
 
@@ -285,7 +272,6 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		loading = false
 	}
 
-	// Opens the current image and saves it into cache
 	async function open(path?: string) {
 		try {
 			loading = true
@@ -355,20 +341,17 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		}
 	}
 
-	// Applies the current settings to the image
 	function apply() {
 		if (!target) return
 		target.classList.toggle('pixelated', state.settings.pixelated)
 	}
 
-	// Selects the image and brings it to the front
 	function select() {
 		if (!target) return
 		workspace.state.selected = scope.image
 		bringToFront(target)
 	}
 
-	// Attaches the image to the viewer
 	function attach(node: HTMLImageElement | null) {
 		if (node) {
 			target = node
@@ -377,8 +360,6 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		}
 	}
 
-	// Detaches the image from the workspace
-	// It destroys the PanZoom instance and removes the image from cache
 	function detach() {
 		if (loading) return
 
@@ -397,7 +378,6 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	return { state, scope, resetStretch, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, attach, load, open, remove, detach, select, showModal, closeModal, apply }
 })
 
-// Adjusts the z-index of elements after one is removed
 function adjustZIndexAfterBeRemoved() {
 	const wrappers = document.querySelectorAll('.workspace .wrapper') ?? []
 
@@ -408,7 +388,7 @@ function adjustZIndexAfterBeRemoved() {
 	const elements = new Array<HTMLElement>(wrappers.length)
 
 	for (const div of wrappers) {
-		const zIndex = parseInt((div as HTMLElement).style.zIndex)
+		const zIndex = +(div as HTMLElement).style.zIndex
 		elements[zIndex] = div as HTMLElement
 	}
 
@@ -418,7 +398,6 @@ function adjustZIndexAfterBeRemoved() {
 	}
 }
 
-// Brings the selected image to front
 function bringToFront(e: HTMLElement) {
 	const selected = e.closest('.wrapper') as HTMLElement
 	const wrappers = selected.closest('.workspace')?.querySelectorAll('.wrapper') ?? []
@@ -427,7 +406,7 @@ function bringToFront(e: HTMLElement) {
 	if (wrappers.length === 1) return
 
 	// Selected element z-index
-	const zIndex = parseInt((selected as HTMLElement).style.zIndex)
+	const zIndex = +(selected as HTMLElement).style.zIndex
 	const max = wrappers.length - 1
 
 	// It is already at the top
@@ -437,7 +416,7 @@ function bringToFront(e: HTMLElement) {
 	const elements = new Array<HTMLElement>(wrappers.length)
 
 	for (const div of wrappers) {
-		const zIndex = parseInt((div as HTMLElement).style.zIndex)
+		const zIndex = +(div as HTMLElement).style.zIndex
 		elements[zIndex] = div as HTMLElement
 	}
 

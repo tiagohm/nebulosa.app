@@ -1,4 +1,5 @@
-// <driver name="LX200 Basic">indi_lx200basic</driver>
+import { write } from 'bun'
+
 const DRIVER_REGEX = /<driver name="([^"]+)">([^<]+)<\/driver>/g
 
 let response = await fetch('https://raw.githubusercontent.com/indilib/indi/refs/heads/master/drivers.xml')
@@ -22,4 +23,4 @@ for (const { name, driver } of drivers) {
 
 res.sort((a, b) => a.name.localeCompare(b.name))
 
-await Bun.write('data/drivers.json', JSON.stringify(res, null, 2))
+await write('data/drivers.json', JSON.stringify(res, null, 2))

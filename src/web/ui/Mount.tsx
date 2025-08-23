@@ -26,7 +26,7 @@ export const Mount = memo(() => {
 			<Modal
 				header={
 					<div className='flex flex-row items-center justify-between'>
-						<ConnectButton isConnected={connected} isDisabled={moving} isLoading={connecting} onPointerUp={mount.connectOrDisconnect} />
+						<ConnectButton isConnected={connected} isDisabled={moving} isLoading={connecting} onPointerUp={mount.connect} />
 						<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
 							<span className='leading-5'>Mount</span>
 							<span className='text-xs font-normal text-gray-400 max-w-full'>{mount.scope.mount.name}</span>

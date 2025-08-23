@@ -45,7 +45,6 @@ export const GuideOutputScope = createScope<GuideOutputScopeValue>({ guideOutput
 
 const guideOutputStateMap = new Map<string, GuideOutputState>()
 
-// Molecule that manages the guide output device
 export const GuideOutputMolecule = molecule((m, s) => {
 	const scope = s(GuideOutputScope)
 	const equipment = m(EquipmentMolecule)
@@ -60,7 +59,6 @@ export const GuideOutputMolecule = molecule((m, s) => {
 
 	guideOutputStateMap.set(scope.guideOutput.name, state)
 
-	// Fetches the guide output
 	Api.GuideOutputs.get(scope.guideOutput.name).then((guideOutput) => {
 		if (!guideOutput) return
 		Object.assign(state.guideOutput, guideOutput)
@@ -89,8 +87,7 @@ export const GuideOutputMolecule = molecule((m, s) => {
 		state.request[direction].duration = value
 	}
 
-	// Connects or disconnects the mount based on its current state
-	async function connectOrDisconnect() {
+	async function connect() {
 		state.connecting = true
 
 		if (state.guideOutput.connected) {
@@ -129,10 +126,9 @@ export const GuideOutputMolecule = molecule((m, s) => {
 		// Api.GuideOutputs.stop(scope.guideOutput)
 	}
 
-	// Closes the guide output modal
 	function close() {
 		equipment.close('guideOutput', scope.guideOutput)
 	}
 
-	return { state, scope, update, connectOrDisconnect, pulse, stop, close } as const
+	return { state, scope, update, connect, pulse, stop, close } as const
 })

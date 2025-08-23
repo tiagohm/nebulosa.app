@@ -26,9 +26,6 @@ export interface FilePickerScopeValue {
 
 export const FilePickerScope = createScope<FilePickerScopeValue>({})
 
-// Molecule that manages the file picker
-// It allows users to navigate through directories, filter files, and select files or directories
-// It also supports creating new directories and managing the file system
 export const FilePickerMolecule = molecule((m, s) => {
 	const scope = s(FilePickerScope)
 

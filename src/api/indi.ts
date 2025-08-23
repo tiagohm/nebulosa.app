@@ -2,7 +2,7 @@ import { Elysia } from 'elysia'
 // biome-ignore format: too many
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, IndiClient, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
-import type { Device, DeviceProperty, IndiServerStart, IndiServerStarted, IndiServerStopped } from '../shared/types'
+import type { Device, DeviceProperty, IndiServerStart, IndiServerStarted, IndiServerStatus, IndiServerStopped } from '../shared/types'
 import type { CameraManager } from './camera'
 import type { ConnectionManager } from './connection'
 import type { GuideOutputManager } from './guideoutput'
@@ -33,41 +33,34 @@ export enum DeviceInterfaceType {
 	SENSOR_INTERFACE = SPECTROGRAPH | DETECTOR | CORRELATOR,
 }
 
-// Checks if a value contains a specific interface type.
 export function isInterfaceType(value: number, type: DeviceInterfaceType) {
 	return (value & type) !== 0
 }
 
-// Asks the IndiClient for properties of a specific device.
 export function ask(client: IndiClient, device: Device) {
 	client.getProperties({ device: device.name })
 }
 
-// Enables the blob transfer for a specific device.
 export function enableBlob(client: IndiClient, device: Device) {
 	client.enableBlob({ device: device.name, value: 'Also' })
 }
 
-// Disables the blob transfer for a specific device.
 export function disableBlob(client: IndiClient, device: Device) {
 	client.enableBlob({ device: device.name, value: 'Never' })
 }
 
-// Connects to a specific device.
 export function connect(client: IndiClient, device: Device) {
 	if (!device.connected) {
 		client.sendSwitch({ device: device.name, name: 'CONNECTION', elements: { CONNECT: true } })
 	}
 }
 
-// Disconnects from a specific device.
 export function disconnect(client: IndiClient, device: Device) {
 	if (device.connected) {
 		client.sendSwitch({ device: device.name, name: 'CONNECTION', elements: { DISCONNECT: true } })
 	}
 }
 
-// Manager that handles the INDI devices.
 export class IndiManager {
 	private process?: Bun.Subprocess
 
@@ -79,18 +72,15 @@ export class IndiManager {
 		readonly wsm: WebSocketMessageManager,
 	) {}
 
-	// Handles the connection close event
 	close(client: IndiClient, server: boolean) {
 		bus.emit('indi:close', client)
 	}
 
-	// Handles incoming switch vector messages.
 	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
 		this.camera.switchVector(client, message, tag)
 		this.mount.switchVector(client, message, tag)
 	}
 
-	// Handles incoming number vector messages.
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
 		this.camera.numberVector(client, message, tag)
 		this.mount.numberVector(client, message, tag)
@@ -98,23 +88,19 @@ export class IndiManager {
 		this.thermometer.numberVector(client, message, tag)
 	}
 
-	// Handles incoming text vector messages.
 	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		this.camera.textVector(client, message, tag)
 		this.mount.textVector(client, message, tag)
 	}
 
-	// Handles incoming blob vector messages.
 	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
 		this.camera.blobVector(client, message, tag)
 	}
 
-	// Gets a device by its id.
 	get(id: string): Device | undefined {
 		return this.camera.get(id) || this.mount.get(id) || this.guideOutput.get(id) || this.thermometer.get(id)
 	}
 
-	// Starts the INDI server.
 	serverStart(req: IndiServerStart) {
 		this.serverStop()
 
@@ -133,16 +119,21 @@ export class IndiManager {
 		this.process = p
 	}
 
-	// Stops the INDI server.
 	serverStop() {
 		if (this.process && !this.process.killed) {
 			this.process.kill()
 			this.process = undefined
 		}
 	}
+
+	serverStatus(): IndiServerStatus {
+		return {
+			enabled: process.platform === 'linux',
+			running: !!this.process && !this.process.killed,
+		}
+	}
 }
 
-// Endpoints for managing INDI devices
 export function indi(indi: IndiManager, connection: ConnectionManager) {
 	function deviceFromParams(params: { id: string }) {
 		return indi.get(decodeURIComponent(params.id))!
@@ -155,12 +146,12 @@ export function indi(indi: IndiManager, connection: ConnectionManager) {
 		.post('/:id/disconnect', ({ params }) => disconnect(connection.get(), deviceFromParams(params)))
 		.get('/:id/properties', ({ params }) => deviceFromParams(params).properties)
 		.post('/server/start', ({ body }) => indi.serverStart(body as never))
-		.post('/server/stop', ({ body }) => indi.serverStop())
+		.post('/server/stop', () => indi.serverStop())
+		.get('/server/status', () => indi.serverStatus())
 
 	return app
 }
 
-// Adds or updates a device's property.
 export function addProperty(device: Device, message: DefVector | SetVector, tag: string) {
 	if (tag[0] === 'd') {
 		const property = message as DeviceProperty
@@ -182,8 +173,7 @@ export function addProperty(device: Device, message: DefVector | SetVector, tag:
 	}
 }
 
-// Handles the connection state of a device based on the received message.
-export function handleConnection(client: IndiClient, device: Device, message: DefSwitchVector | SetSwitchVector) {
+export function connectionFor(client: IndiClient, device: Device, message: DefSwitchVector | SetSwitchVector) {
 	const connected = message.elements.CONNECT?.value === true
 
 	if (connected !== device.connected) {

@@ -4,19 +4,15 @@ import type { WebSocketMessageManager } from './message'
 
 export type ConfirmationResolver = (value?: boolean | PromiseLike<boolean>) => void
 
-// Manager that handles confirmation messages.
-// It listens for confirmation requests and resolves them based on user input.
 export class ConfirmationManager {
 	private readonly confirmations = new Map<string, ConfirmationResolver>()
 
 	constructor(readonly wsm?: WebSocketMessageManager) {}
 
-	// Confirms a confirmation request.
 	confirm(req: Confirm) {
 		this.confirmations.get(req.key)?.(req.accepted)
 	}
 
-	// Asks for confirmation and returns a promise that resolves with the user's response or a timeout occurs.
 	ask(message: Omit<Confirmation, 'type'>, timeout: number = 30000) {
 		const { promise, resolve } = Promise.withResolvers<boolean>()
 
@@ -37,7 +33,6 @@ export class ConfirmationManager {
 	}
 }
 
-// Endpoints for handling confirmation requests
 export function confirmation(confirmation: ConfirmationManager) {
 	const app = new Elysia({ prefix: '/confirmation' })
 		// Endpoints!

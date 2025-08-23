@@ -20,8 +20,7 @@ export interface DsoState {
 
 let skyAtlasDeepSkyObjectState: DsoState | undefined
 
-// Molecule that manages the Sky Atlas DSOs
-export const SkyAtlasDeepSkyObjectMolecule = molecule(() => {
+export const DeepSkyObjectMolecule = molecule(() => {
 	const request = simpleLocalStorage.get<SkyObjectSearch>('skyAtlas.dsos.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
 
 	request.page = 1
@@ -51,13 +50,11 @@ export const SkyAtlasDeepSkyObjectMolecule = molecule(() => {
 	if (state.request.visible) tick()
 	else void search()
 
-	// Updates the request state and triggers a search if necessary
 	function update<K extends keyof SkyObjectSearch>(key: K, value: SkyObjectSearch[K]) {
 		state.request[key] = value
 		if (key === 'page' || key === 'sort') void search(false)
 	}
 
-	// Searches for DSOs based on the current request
 	async function search(resetPage: boolean = true) {
 		try {
 			state.loading = true
@@ -72,7 +69,6 @@ export const SkyAtlasDeepSkyObjectMolecule = molecule(() => {
 		}
 	}
 
-	// Selects a DSO by its id and updates the position
 	async function select(id: number, force: boolean = false) {
 		const selected = state.result.find((dso) => dso.id === id)
 
@@ -90,7 +86,6 @@ export const SkyAtlasDeepSkyObjectMolecule = molecule(() => {
 		}
 	}
 
-	// Handles the periodic updates
 	function tick() {
 		if (state.request.visible) {
 			void search(false)
@@ -106,10 +101,9 @@ export const SkyAtlasDeepSkyObjectMolecule = molecule(() => {
 
 let skyAtlasState: SkyAtlasState | undefined
 
-// Molecule that manages the Sky Atlas
 export const SkyAtlasMolecule = molecule((m) => {
 	const home = m(HomeMolecule)
-	const dsos = m(SkyAtlasDeepSkyObjectMolecule)
+	const dsos = m(DeepSkyObjectMolecule)
 
 	const state =
 		skyAtlasState ??
@@ -120,13 +114,11 @@ export const SkyAtlasMolecule = molecule((m) => {
 
 	skyAtlasState = state
 
-	// Shows the modal
 	function show() {
 		home.toggleMenu(false)
 		state.showModal = true
 	}
 
-	// Closes the modal
 	function close() {
 		state.showModal = false
 	}

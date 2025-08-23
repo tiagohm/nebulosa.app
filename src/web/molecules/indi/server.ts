@@ -6,16 +6,17 @@ import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 
 export interface IndiServerState {
+	enabled: boolean
 	running: boolean
 	showModal: boolean
 	request: IndiServerStart
 }
 
-// Molecule that manages the INDI server
 export const IndiServerMolecule = molecule(() => {
 	const request = simpleLocalStorage.get('indi.server', DEFAULT_INDI_SERVER_START)
 
 	const state = proxy<IndiServerState>({
+		enabled: true,
 		running: false,
 		showModal: false,
 		request,
@@ -35,6 +36,11 @@ export const IndiServerMolecule = molecule(() => {
 		unsubscribers[2] = subscribe(state.request, () => simpleLocalStorage.set('indi.server', state.request))
 
 		return () => unsubscribe(unsubscribers)
+	})
+
+	Api.Indi.Server.status().then((status) => {
+		state.running = status?.running ?? false
+		state.enabled = status?.enabled ?? false
 	})
 
 	function update<K extends keyof IndiServerStart>(key: K, value: IndiServerStart[K]) {

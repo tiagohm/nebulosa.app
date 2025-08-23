@@ -18,7 +18,6 @@ export const ThermometerScope = createScope<ThermometerScopeValue>({ thermometer
 
 const thermometerStateMap = new Map<string, ThermometerState>()
 
-// Molecule that manages the thermometer device
 export const ThermometerMolecule = molecule((m, s) => {
 	const scope = s(ThermometerScope)
 	const equipment = m(EquipmentMolecule)
@@ -32,7 +31,6 @@ export const ThermometerMolecule = molecule((m, s) => {
 
 	thermometerStateMap.set(scope.thermometer.name, state)
 
-	// Fetches the thermometer
 	Api.Thermometers.get(scope.thermometer.name).then((thermometer) => {
 		if (!thermometer) return
 		Object.assign(state.thermometer, thermometer)
@@ -53,8 +51,7 @@ export const ThermometerMolecule = molecule((m, s) => {
 		}
 	})
 
-	// Connects or disconnects the mount based on its current state
-	async function connectOrDisconnect() {
+	async function connect() {
 		state.connecting = true
 
 		if (state.thermometer.connected) {
@@ -64,10 +61,9 @@ export const ThermometerMolecule = molecule((m, s) => {
 		}
 	}
 
-	// Closes the thermometer modal
 	function close() {
 		equipment.close('thermometer', scope.thermometer)
 	}
 
-	return { state, scope, connectOrDisconnect, close } as const
+	return { state, scope, connect, close } as const
 })

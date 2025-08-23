@@ -2,12 +2,10 @@ import { molecule } from 'bunshi'
 import { DEFAULT_IMAGE_SCNR, type ImageTransformation } from 'src/shared/types'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
-// Molecule that apply SCNR (Subtractive Color Noise Reduction) to the image
 export const ImageScnrMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
 
-	// Updates the SCNR transformation for a specific key
 	function update<K extends keyof ImageTransformation['scnr']>(key: K, value: ImageTransformation['scnr'][K]) {
 		viewer.state.transformation.scnr[key] = value
 	}
@@ -19,7 +17,6 @@ export const ImageScnrMolecule = molecule((m, s) => {
 		return apply()
 	}
 
-	// Applies the SCNR transformation to the image
 	function apply() {
 		return viewer.load(true)
 	}

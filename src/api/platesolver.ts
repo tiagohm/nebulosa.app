@@ -6,11 +6,9 @@ import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { PlateSolveStart, PlateSolveStop } from '../shared/types'
 import { badRequest, internalServerError } from './exceptions'
 
-// Manager for handling plate solving operations
 export class PlateSolverManager {
 	private readonly tasks = new Map<string, AbortController>()
 
-	// Starts a plate solving task based on the request parameters
 	async start(req: PlateSolveStart): Promise<PlateSolution> {
 		const ra = parseAngle(req.rightAscension, { isHour: true })
 		const dec = parseAngle(req.declination)
@@ -57,13 +55,11 @@ export class PlateSolverManager {
 		throw badRequest('Invalid plate solving request type')
 	}
 
-	// Stops a plate solving task by its id
 	stop(req: PlateSolveStop) {
 		this.tasks.get(req.id)?.abort()
 	}
 }
 
-// Endpoints for handling plate solving requests
 export function plateSolver(solver: PlateSolverManager) {
 	const app = new Elysia({ prefix: '/plateSolver' })
 		// Endpoints!

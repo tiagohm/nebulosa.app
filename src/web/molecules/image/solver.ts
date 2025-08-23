@@ -9,7 +9,6 @@ import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
-// Molecule that manages the plate solver
 export const ImageSolverMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
@@ -33,12 +32,10 @@ export const ImageSolverMolecule = molecule((m, s) => {
 		return () => unsubscribe()
 	})
 
-	// Updates a specific property of the plate solver request
 	function update<K extends keyof PlateSolveStart>(key: K, value: PlateSolveStart[K]) {
 		viewer.state.plateSolver.request[key] = value
 	}
 
-	// Solves the plate using the current request
 	async function start() {
 		try {
 			plateSolver.loading = true
@@ -54,7 +51,6 @@ export const ImageSolverMolecule = molecule((m, s) => {
 		}
 	}
 
-	// Stops the plate solving process
 	function stop() {
 		return Api.PlateSolver.stop({ id: scope.image.key })
 	}

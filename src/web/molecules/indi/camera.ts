@@ -29,7 +29,6 @@ export const CameraScope = createScope<CameraScopeValue>({ camera: DEFAULT_CAMER
 
 const cameraStateMap = new Map<string, CameraState>()
 
-// Molecule that manages the camera device
 export const CameraMolecule = molecule((m, s) => {
 	const scope = s(CameraScope)
 	const equipment = m(EquipmentMolecule)
@@ -53,7 +52,6 @@ export const CameraMolecule = molecule((m, s) => {
 
 	cameraStateMap.set(scope.camera.name, state)
 
-	// Fetches the camera
 	Api.Cameras.get(scope.camera.name).then((camera) => {
 		if (!camera) return
 		Object.assign(state.camera, camera)
@@ -130,13 +128,11 @@ export const CameraMolecule = molecule((m, s) => {
 		}
 	}
 
-	// Updates the camera state with the given key and value
 	function update<K extends keyof CameraState['request']>(key: K, value: CameraState['request'][K]) {
 		state.request[key] = value
 	}
 
-	// Connects or disconnects the camera based on its current state
-	async function connectOrDisconnect() {
+	async function connect() {
 		state.connecting = true
 
 		if (state.camera.connected) {
@@ -175,5 +171,5 @@ export const CameraMolecule = molecule((m, s) => {
 		return equipment.close('camera', scope.camera)
 	}
 
-	return { scope, state, connectOrDisconnect, update, cooler, temperature, fullscreen, start, stop, close } as const
+	return { scope, state, connect, update, cooler, temperature, fullscreen, start, stop, close } as const
 })

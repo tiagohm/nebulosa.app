@@ -5,6 +5,7 @@ import type { DeepReadonly } from 'utility-types'
 import { Icons } from './Icon'
 
 export interface DeviceDropdownProps<T extends Device = Device> {
+	readonly isDisabled?: boolean
 	readonly items: readonly (DeepReadonly<T> | undefined)[]
 	readonly value?: DeepReadonly<T>
 	readonly onValueChange?: (value?: T) => void
@@ -12,13 +13,13 @@ export interface DeviceDropdownProps<T extends Device = Device> {
 	readonly allowNone?: boolean
 }
 
-export function DeviceDropdown<T extends Device = Device>({ items, value, onValueChange, allowNone = true, icon: Icon }: DeviceDropdownProps<T>) {
+export function DeviceDropdown<T extends Device = Device>({ isDisabled, items, value, onValueChange, allowNone = true, icon: Icon }: DeviceDropdownProps<T>) {
 	const menu = useMemo(() => (allowNone ? [undefined, ...items] : items), [items, allowNone])
 
 	return (
 		<Dropdown showArrow>
 			<DropdownTrigger>
-				<Button className='rounded-full' color={value === undefined ? 'secondary' : value.connected ? 'success' : 'danger'} isIconOnly size='sm' variant='light'>
+				<Button className='rounded-full' color={value === undefined ? 'secondary' : value.connected ? 'success' : 'danger'} isDisabled={isDisabled} isIconOnly size='sm' variant='light'>
 					<Icon />
 				</Button>
 			</DropdownTrigger>

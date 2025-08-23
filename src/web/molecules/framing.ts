@@ -18,7 +18,6 @@ export interface FramingState {
 	readonly images: Image[]
 }
 
-// Molecule that manages the Framing modal
 export const FramingMolecule = molecule((m) => {
 	const home = m(HomeMolecule)
 	const workspace = m(ImageWorkspaceMolecule)
@@ -57,12 +56,10 @@ export const FramingMolecule = molecule((m) => {
 
 	Api.Framing.hipsSurveys().then((hipsSurveys) => (state.hipsSurveys = hipsSurveys ?? []))
 
-	// Updates the framing state
 	function update<K extends keyof FramingState['request']>(key: K, value: FramingState['request'][K]) {
 		state.request[key] = value
 	}
 
-	// Loads the framing image and opens it in the workspace
 	async function load() {
 		try {
 			state.loading = true
@@ -80,13 +77,11 @@ export const FramingMolecule = molecule((m) => {
 		}
 	}
 
-	// Shows the modal
 	function show() {
 		home.toggleMenu(false)
 		state.showModal = true
 	}
 
-	// Closes the modal
 	function close() {
 		state.showModal = false
 	}

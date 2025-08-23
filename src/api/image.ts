@@ -40,9 +40,7 @@ const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOption
 	png: PNG_OPTIONS,
 }
 
-// Manager for opening and transforming astronomical images
 export class ImageManager {
-	// Opens an image file, reads its FITS/XISF data, and applies transformations
 	async open(req: OpenImage) {
 		if (req.path) {
 			const handle = await fs.open(req.path)
@@ -148,7 +146,6 @@ export class ImageManager {
 	statistics() {}
 }
 
-// Endpoint for handling image-related operations
 export function image(image: ImageManager) {
 	const app = new Elysia({ prefix: '/image' })
 		// Endpoints!

@@ -39,7 +39,6 @@ export interface CalculatorState {
 	}
 }
 
-// Molecule that handles the calculator functionality
 export const CalculatorMolecule = molecule((m) => {
 	const home = m(HomeMolecule)
 

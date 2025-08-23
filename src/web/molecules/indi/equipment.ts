@@ -27,7 +27,6 @@ export interface EquipmentState {
 	}
 }
 
-// Molecule that manages all the connected devices
 export const EquipmentMolecule = molecule((m) => {
 	const state = proxy<EquipmentState>({
 		devices: {
@@ -67,31 +66,26 @@ export const EquipmentMolecule = molecule((m) => {
 		}
 	})
 
-	// Gets a device of a specific type by its name
 	function get<T extends Device = Device>(type: EquipmentDeviceType, name: string) {
 		return state.devices[type].find((e) => e.name === name) as T | undefined
 	}
 
-	// Lists all devices of a specific type
 	function list<T extends Device = Device>(type: EquipmentDeviceType) {
 		return state.devices[type] as T[]
 	}
 
-	// Registers a new device of a specific type
 	function add<T extends EquipmentDeviceType>(type: T, device: EquipmentState['devices'][T][number]) {
 		const devices = state.devices[type]
 		const index = devices.findIndex((e) => e.name === device.name)
 		index < 0 && devices.push(device as never)
 	}
 
-	// Updates a specific property of a device
 	function update<T extends EquipmentDeviceType, P extends keyof EquipmentState['devices'][T][number]>(type: T, name: string, property: P, value: EquipmentState['devices'][T][number][P]) {
 		const device = state.devices[type].find((e) => e.name === name)
 		if (!device) return console.warn('device not found:', name)
 		;(device as Record<keyof EquipmentState['devices'][T][number], unknown>)[property] = value
 	}
 
-	// Unregisters a device of a specific type
 	function remove<T extends EquipmentDeviceType>(type: T, device: EquipmentState['devices'][T][number]) {
 		const devices = state.devices[type]
 		const index = devices.findIndex((e) => e.name === device.name)
@@ -105,7 +99,6 @@ export const EquipmentMolecule = molecule((m) => {
 		}
 	}
 
-	// Shows or hides the devices list
 	function select(type: EquipmentDeviceType) {
 		if (state.selected === type) {
 			state.selected = undefined
@@ -114,13 +107,11 @@ export const EquipmentMolecule = molecule((m) => {
 		}
 	}
 
-	// Shows the modal for a specific device type
 	function show(type: EquipmentDeviceType, device: Device) {
 		state.devices[type].find((e) => e.name === device.name)!.show = true
 		bus.emit('homeMenu:toggle', false)
 	}
 
-	// Closes the modal for a specific device type
 	function close(type: EquipmentDeviceType, device: Device) {
 		state.devices[type].find((e) => e.name === device.name)!.show = false
 	}

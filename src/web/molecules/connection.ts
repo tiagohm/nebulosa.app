@@ -17,12 +17,10 @@ export interface ConnectionState {
 	connected?: ConnectionStatus
 }
 
-// Compares two connections based on their connectedAt timestamp
 export const ConnectionComparator = (a: Connection, b: Connection) => {
 	return (b.connectedAt ?? 0) - (a.connectedAt ?? 0)
 }
 
-// Molecule that manages connections
 export const ConnectionMolecule = molecule((m) => {
 	const connections = simpleLocalStorage.get('connections', () => [structuredClone(DEFAULT_CONNECTION)])
 	connections.sort(ConnectionComparator)
@@ -64,52 +62,43 @@ export const ConnectionMolecule = molecule((m) => {
 		return () => unsubscribe()
 	})
 
-	// Shows the modal for creating a new connection
 	function create() {
 		state.mode = 'create'
 		state.edited = deepClone(DEFAULT_CONNECTION)
 		state.showModal = true
 	}
 
-	// Shows the modal for editing an existing connection
 	function edit(connection: Connection) {
 		state.mode = 'edit'
 		state.edited = deepClone(connection)
 		state.showModal = true
 	}
 
-	// Adds a new connection to the list
 	function add(connection: Connection) {
 		state.connections.push(connection)
 	}
 
-	// Duplicates an existing connection
-	// If the connection is the default one, it generates a new id
 	function duplicate(connection: Connection) {
 		const duplicated = deepClone(connection)
 		if (duplicated.id === DEFAULT_CONNECTION.id) duplicated.id = Date.now().toFixed(0)
 		add(duplicated)
 	}
 
-	// Updates a specific property of the edited connection
 	function update<K extends keyof Connection>(name: K, value: Connection[K]) {
 		if (state.edited) {
 			state.edited[name] = value
 		}
 	}
 
-	// Selects a connection
 	function select(connection: Connection) {
 		state.selected = connection
 	}
 
-	// Selects a connection by its id
 	function selectWith(id: string) {
 		const selected = state.connections.find((c) => c.id === id)
 		selected && select(selected)
 	}
 
-	// Saves the edited connection
 	function save() {
 		const { edited } = state
 
@@ -140,8 +129,6 @@ export const ConnectionMolecule = molecule((m) => {
 		}
 	}
 
-	// Removes a connection only if it exists in the list
-	// Returns true if the connection was removed, false otherwise
 	function removeOnly(connection: Connection) {
 		const { connections } = state
 		const index = connections.findIndex((e) => e.id === connection.id)
@@ -150,7 +137,6 @@ export const ConnectionMolecule = molecule((m) => {
 		return true
 	}
 
-	// Removes a connection
 	function remove(connection: Connection) {
 		if (!removeOnly(connection)) return
 
@@ -164,8 +150,6 @@ export const ConnectionMolecule = molecule((m) => {
 		}
 	}
 
-	// Connects to the selected connection
-	// If already connected, it disconnects
 	async function connect() {
 		if (state.connected) {
 			void Api.Connections.disconnect(state.connected.id)

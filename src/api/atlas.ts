@@ -23,7 +23,6 @@ const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
 const GEOGRAPHIC_POSITIONS: GeographicPosition[] = []
 const TIME_MAP = new Map<number, Time>()
 
-// Returns a geographic position given longitude, latitude and elevation
 function geographicPositionFor(position: Pick<PositionOfBody, 'latitude' | 'longitude' | 'elevation'>) {
 	const latitude = deg(position.latitude)
 	const longitude = deg(position.longitude)
@@ -32,7 +31,6 @@ function geographicPositionFor(position: Pick<PositionOfBody, 'latitude' | 'long
 	return GEOGRAPHIC_POSITIONS[GEOGRAPHIC_POSITIONS.length - 1]
 }
 
-// Returns a time for a given UTC time and location
 function timeFor(utcTime: number, location?: GeographicPosition) {
 	const seconds = Math.trunc(utcTime / 1000)
 	const time = TIME_MAP.get(seconds) ?? timeUnix(seconds)
@@ -46,24 +44,20 @@ function timeFor(utcTime: number, location?: GeographicPosition) {
 	return time
 }
 
-// Manager for handling astronomical events and ephemeris
 export class AtlasManager {
 	private readonly ephemeris: Record<string, Map<number, BodyPosition>> = {}
 	private readonly stars = new Map<number, Star>()
 
 	imageOfSun() {}
 
-	// Computes the position of the Sun based on its ephemeris data
 	positionOfSun(req: PositionOfBody) {
 		return this.computeFromHorizonsPositionAt('10', req, deg(req.longitude), deg(req.latitude), meter(req.elevation))
 	}
 
-	// Generates a chart for the Sun based on its ephemeris data
 	chartOfSun(req: ChartOfBody) {
 		return this.computeChart('10', dateFrom(req.utcTime, true), 1, req.type || 'altitude')
 	}
 
-	// Computes the seasons for a given date
 	seasons(req: PositionOfBody): SolarSeasons {
 		const date = dateFrom(req.utcTime, true)
 		const spring = toUnix(season(date.year(), 'SPRING')) // Autumn in southern hemisphere
@@ -73,12 +67,10 @@ export class AtlasManager {
 		return { spring, summer, autumn, winter }
 	}
 
-	// Computes the position of the Moon based on its ephemeris data
 	positionOfMoon(req: PositionOfBody) {
 		return this.computeFromHorizonsPositionAt('301', req, deg(req.longitude), deg(req.latitude), meter(req.elevation))
 	}
 
-	// Generates a chart for the Moon based on its ephemeris data
 	chartOfMoon(req: ChartOfBody) {
 		return this.computeChart('301', dateFrom(req.utcTime, true), 1, req.type || 'altitude')
 	}
@@ -87,12 +79,10 @@ export class AtlasManager {
 
 	twilight() {}
 
-	// Computes the position of a planet based on its ephemeris data
 	positionOfPlanet(code: string, req: PositionOfBody) {
 		return this.computeFromHorizonsPositionAt(code, req, deg(req.longitude), deg(req.latitude), meter(req.elevation))
 	}
 
-	// Generates a chart for a planet based on its ephemeris data
 	chartOfPlanet(code: string, req: ChartOfBody) {
 		return this.computeChart(code, dateFrom(req.utcTime, true), 1, req.type || 'altitude')
 	}
@@ -101,7 +91,6 @@ export class AtlasManager {
 
 	closeApproachesForMinorPlanets() {}
 
-	// Searches for sky objects based on the provided request parameters
 	searchSkyObject(req: SkyObjectSearch) {
 		const limit = 5
 		const offset = Math.max(0, (req.page ?? 0) - 1) * limit
@@ -145,7 +134,6 @@ export class AtlasManager {
 		return nebulosa.query(q).all() as SkyObjectSearchResult[]
 	}
 
-	// Computes the position of a sky object based on its id
 	positionOfSkyObject(req: PositionOfBody, id: string | number | SkyObjectResult): BodyPosition {
 		const dso = typeof id === 'object' ? id : (nebulosa.query(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get() as SkyObjectResult)
 		const names = nebulosa.query(`SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ${id}`).all() as { name: string }[]
@@ -188,7 +176,6 @@ export class AtlasManager {
 		}
 	}
 
-	// Generates a chart for a sky object based on its id
 	chartOfSkyObject(req: ChartOfBody, id: string) {
 		const data = new Array<number>(1441)
 		const date = timeWithoutHourMinuteAndSecond(req.utcTime / 1000 + req.utcOffset * 60)
@@ -243,7 +230,6 @@ export class AtlasManager {
 
 	chartOfSatellite(req: ChartOfBody) {}
 
-	// Computes the position of a celestial body (planets, minor planets or satellites) from NASA JPL Horizons
 	async computeFromHorizonsPositionAt(code: string, req: PositionOfBody, longitude: Angle, latitude: Angle, elevation: Distance) {
 		const minutes = timeWithoutSeconds(req.utcTime / 1000)
 		const location = geographicPositionFor(req)
@@ -273,7 +259,6 @@ export class AtlasManager {
 		return position
 	}
 
-	// Generates a chart for a celestial body (planets, minor planets or satellites) based on its ephemeris data
 	computeChart(code: string, dateTime: DateTime, stepSizeInMinutes: number, type: ChartOfBody['type']) {
 		const positions = this.ephemeris[code]!
 
@@ -294,7 +279,6 @@ export class AtlasManager {
 	}
 }
 
-// Endpoints for astronomical atlas requests
 export function atlas(atlas: AtlasManager) {
 	const app = new Elysia({ prefix: '/atlas' })
 		// Endpoints!

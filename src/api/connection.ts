@@ -4,7 +4,6 @@ import bus from '../shared/bus'
 import type { Connect, ConnectionStatus } from '../shared/types'
 import { badRequest, internalServerError, noActiveConnection } from './exceptions'
 
-// Manager that handles connections to INDI servers
 export class ConnectionManager {
 	private readonly clients = new Map<string, IndiClient>()
 
@@ -15,7 +14,6 @@ export class ConnectionManager {
 		})
 	}
 
-	// Returns the first client if no id is provided, or the client with the specified id
 	get(id?: string) {
 		let client: IndiClient | undefined
 		if (!id) client = this.clients.values().next().value
@@ -25,8 +23,6 @@ export class ConnectionManager {
 		else return client
 	}
 
-	// Connects to an INDI server based on the provided request
-	// If a client with the same port and host/IP already exists, returns its status
 	async connect(req: Connect, indi: IndiClientHandler): Promise<ConnectionStatus | undefined> {
 		for (const [, client] of this.clients) {
 			if (client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) {
@@ -53,7 +49,6 @@ export class ConnectionManager {
 		throw badRequest('Invalid connection request')
 	}
 
-	// Disconnects the client with the specified id or the client instance
 	disconnect(id: string | IndiClient) {
 		if (typeof id === 'string') {
 			const client = this.clients.get(id)
@@ -75,7 +70,6 @@ export class ConnectionManager {
 		}
 	}
 
-	// Returns the status of a client based on its id or the client instance
 	status(key: string | IndiClient): ConnectionStatus | undefined {
 		if (typeof key === 'string') {
 			const client = this.clients.get(key)
@@ -94,13 +88,11 @@ export class ConnectionManager {
 		return undefined
 	}
 
-	// Lists all active connections
 	list() {
 		return Array.from(this.clients.values()).map((e) => this.status(e)!)
 	}
 }
 
-// Endpoints for managing connections
 export function connection(connection: ConnectionManager, indi: IndiClientHandler) {
 	const app = new Elysia({ prefix: '/connections' })
 		// Endpoints!

@@ -5,35 +5,37 @@ import os from 'os'
 import { basename, dirname, join } from 'path'
 import type { CreateDirectory, DirectoryEntry, FileEntry, FileSystem, ListDirectory } from '../shared/types'
 
-// Comparator for sorting file entries
 export const FileEntryComparator = (a: FileEntry, b: FileEntry) => {
-	if (a.directory === b.directory) return a.path.localeCompare(b.path)
+	// Sort directories before files, then sort by name
+	if (a.directory === b.directory) return a.name.localeCompare(b.name)
 	else if (a.directory) return -1
 	else return 1
 }
 
-// Manager for handling file system operations
 export class FileSystemManager {
-	// Lists directories and files in a specified path
-	// If no path is specified, it defaults to the user's home directory
-	// It can filter results based on a glob pattern and whether to include only directories
-	// Returns a structured response containing the path, directory tree, and entries
 	async list(req?: ListDirectory): Promise<FileSystem> {
+		// Find the directory path from request or use the home directory
 		const path = (await findDirectory(req?.path)) || os.homedir()
+		// Make the directory tree from current path
 		const tree = makeDirectoryTree(path)
+		// Prepare the glob to filter
 		const glob = req?.filter ? new Glob(req.filter) : undefined
 		const entries: FileEntry[] = []
 
+		// Read the directory entries
 		for (const entry of await fs.readdir(path, { withFileTypes: true })) {
 			const { name, parentPath } = entry
 			const path = join(parentPath, name)
-			const directory = entry.isDirectory()
+			const isDirectory = entry.isDirectory()
 
-			if (directory || entry.isFile()) {
-				if (!req?.directoryOnly || directory) {
-					if (!glob || directory || glob.match(name)) {
+			// Include only files and directories
+			if (isDirectory || entry.isFile()) {
+				// Include only directories if it is a directory-only request
+				if (!req?.directoryOnly || isDirectory) {
+					// Include only files that match the glob pattern (if present)
+					if (!glob || isDirectory || glob.match(name)) {
 						const { size, atimeMs: updatedAt } = await fs.stat(path)
-						entries.push({ name, path, directory, size, updatedAt })
+						entries.push({ name, path, directory: isDirectory, size, updatedAt })
 					}
 				}
 			}
@@ -44,7 +46,6 @@ export class FileSystemManager {
 		return { path, tree, entries }
 	}
 
-	// Creates a new directory at the specified path with the given name
 	async create(req: CreateDirectory) {
 		const path = join(req.path, req.name.trim())
 		await fs.mkdir(path, req)
@@ -52,7 +53,6 @@ export class FileSystemManager {
 	}
 }
 
-// Endpoints for handling file system requests
 export function fileSystem(fileSystem: FileSystemManager) {
 	const app = new Elysia({ prefix: '/fileSystem' })
 		// Endpoints!
@@ -62,13 +62,12 @@ export function fileSystem(fileSystem: FileSystemManager) {
 	return app
 }
 
-// Finds the first directory in the path hierarchy
-// If the path is undefined or does not exist, it returns undefined
-// If the path is not a directory, it recursively checks the parent directory
-// Returns the first valid directory found in the hierarchy
 export async function findDirectory(path?: string) {
+	// If no path is provided, return
 	if (!path) return undefined
+	// If the path does not exist, go up until a directory is found
 	else if (!(await fs.exists(path))) return findDirectory(dirname(path))
+	// If the path exists, return if it is a directory, otherwise go up
 	else {
 		const stats = await fs.stat(path)
 		if (!stats.isDirectory()) return findDirectory(dirname(path))
@@ -76,15 +75,13 @@ export async function findDirectory(path?: string) {
 	}
 }
 
-// Constructs a directory tree from a given path
-// It recursively builds the tree by traversing up the directory structure
-// Each node in the tree represents a directory with its name and path
-// Returns an array of directory entries representing the tree structure
 function makeDirectoryTree(path: string): DirectoryEntry[] {
 	const name = basename(path)
 
+	// Return the root directory
 	if (!name) return [{ name, path }]
 
+	// Create the parent directory entry
 	const parent = dirname(path)
 	const tree = makeDirectoryTree(parent)
 

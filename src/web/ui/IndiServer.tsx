@@ -10,8 +10,8 @@ import { Modal } from './Modal'
 
 export const IndiServer = memo(() => {
 	const indi = useMolecule(IndiServerMolecule)
-	const { running } = useSnapshot(indi.state)
-	const { port, repeat, drivers } = useSnapshot(indi.state.request, { sync: true })
+	const { enabled, running } = useSnapshot(indi.state)
+	const { port, repeat, verbose, drivers } = useSnapshot(indi.state.request, { sync: true })
 
 	return (
 		<Modal
@@ -26,12 +26,13 @@ export const IndiServer = memo(() => {
 				</>
 			}
 			header='INDI Server'
-			maxWidth='270px'
+			maxWidth='280px'
 			name='indi-server'
 			onClose={() => indi.close()}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<NumberInput className='col-span-8' label='Port' maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} size='sm' value={port} />
+				<NumberInput className='col-span-4' label='Port' maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} size='sm' value={port} />
 				<NumberInput className='col-span-4' label='Repeat' maxValue={10} minValue={1} onValueChange={(value) => indi.update('repeat', value)} size='sm' value={repeat} />
+				<NumberInput className='col-span-4' label='Verbose' maxValue={3} minValue={0} onValueChange={(value) => indi.update('verbose', value)} size='sm' value={verbose} />
 				<FilterableListbox
 					className='col-span-full'
 					classNames={{ list: 'max-h-[200px] overflow-scroll' }}

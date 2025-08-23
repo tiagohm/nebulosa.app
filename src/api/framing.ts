@@ -6,9 +6,7 @@ import { join } from 'path/posix'
 import hipsSurveys from '../../data/hips-surveys.json' with { type: 'json' }
 import type { Framing } from '../shared/types'
 
-// Manager for handling framing operations
 export class FramingManager {
-	// Retrieves a FITS file from a HIPS survey based on the provided parameters
 	async frame(req: Framing) {
 		const rightAscension = parseAngle(req.rightAscension, { isHour: true }) ?? 0
 		const declination = parseAngle(req.declination) ?? 0
@@ -21,7 +19,6 @@ export class FramingManager {
 	}
 }
 
-// Endpoints for handling framing requests
 export function framing(framing: FramingManager) {
 	const app = new Elysia({ prefix: '/framing' })
 		// Endpoints!

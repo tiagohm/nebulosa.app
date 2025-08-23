@@ -8,29 +8,26 @@ import type { ImageViewerMolecule } from './viewer'
 
 export interface ImageWorkspaceState {
 	readonly images: Image[]
-	lastPath: string
+	initialPath: string
 	showModal: boolean
 	selected?: Image
 }
 
 const KEY_INVALID_CHAR_REGEX = /[\W]+/g
 
-// Molecule that manages all the images
 export const ImageWorkspaceMolecule = molecule((m) => {
 	const viewers = new Map<string, Atom<typeof ImageViewerMolecule>>()
 
 	const state = proxy<ImageWorkspaceState>({
 		images: [],
 		showModal: false,
-		lastPath: simpleLocalStorage.get('image.path', ''),
+		initialPath: simpleLocalStorage.get('image.path', ''),
 	})
 
 	function link(image: Image, viewer: Atom<typeof ImageViewerMolecule>) {
 		viewers.set(image.key, viewer)
 	}
 
-	// Add an image to the workspace from a given path
-	// It generates a unique key for the image and adds it to the state
 	function add(path: string, key: string | undefined | null, source: Image['source'] | Camera) {
 		const camera = typeof source === 'object' ? source : undefined
 		source = typeof source === 'string' ? source : 'camera'
@@ -46,23 +43,21 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 			state.images[index].path = path
 			image = state.images[index]
 			viewers.get(image.key)?.load(true, path)
-			console.info('image updated', image, index)
+			bus.emit('image:updated', image)
 		} else {
 			image = { path, key, position, source, camera }
 			state.images.push(image)
-			console.info('image added', image)
 			bus.emit('image:add', image)
 		}
 
 		if (source === 'file') {
-			state.lastPath = path
+			state.initialPath = path
 			simpleLocalStorage.set('image.path', path)
 		}
 
 		return image
 	}
 
-	// Removes an image from the workspace
 	function remove(image: Image) {
 		const index = state.images.findIndex((e) => e.key === image.key)
 

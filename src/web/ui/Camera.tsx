@@ -31,6 +31,9 @@ export const Camera = memo(() => {
 		<Modal
 			footer={
 				<>
+					<div className='flex flex-1 flex-row items-center gap-1'>
+						<MountDropdown isDisabled={!connected || capturing} onValueChange={(value) => (camera.state.equipment.mount = value)} value={mount} />
+					</div>
 					<Button color='danger' isDisabled={!connected || !canAbort || !capturing} onPointerUp={camera.stop} startContent={<Icons.Stop />} variant='flat'>
 						Stop
 					</Button>
@@ -41,7 +44,7 @@ export const Camera = memo(() => {
 			}
 			header={
 				<div className='flex flex-row items-center justify-between'>
-					<ConnectButton isConnected={connected} isDisabled={capturing} isLoading={connecting} onPointerUp={camera.connectOrDisconnect} />
+					<ConnectButton isConnected={connected} isDisabled={capturing} isLoading={connecting} onPointerUp={camera.connect} />
 					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
 						<span className='leading-5'>Camera</span>
 						<span className='text-xs font-normal text-gray-400 max-w-full'>{camera.scope.camera.name}</span>
@@ -54,9 +57,6 @@ export const Camera = memo(() => {
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row items-center justify-between mb-2'>
 					<ExposureTimeProgress progress={progress} />
-					<div className='flex flex-row items-center gap-1' style={{ visibility: capturing ? 'hidden' : 'visible' }}>
-						<MountDropdown onValueChange={(value) => (camera.state.equipment.mount = value)} value={mount} />
-					</div>
 				</div>
 				<div className='col-span-full flex flex-row items-center gap-1'>
 					<AutoSaveButton onValueChange={(value) => camera.update('autoSave', value)} value={request.autoSave} />

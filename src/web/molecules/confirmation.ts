@@ -5,14 +5,14 @@ import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 
 export interface ConfirmationState {
-	showModal: boolean
+	show: boolean
 	key: string
 	message: string
 }
 
 export const ConfirmationMolecule = molecule((m) => {
 	const state = proxy<ConfirmationState>({
-		showModal: false,
+		show: false,
 		key: '',
 		message: '',
 	})
@@ -26,11 +26,11 @@ export const ConfirmationMolecule = molecule((m) => {
 	function show(confirmation: Confirmation) {
 		state.key = confirmation.key
 		state.message = confirmation.message
-		state.showModal = true
+		state.show = true
 	}
 
 	function close() {
-		state.showModal = false
+		state.show = false
 	}
 
 	function accept() {

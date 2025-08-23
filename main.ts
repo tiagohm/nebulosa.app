@@ -7,6 +7,7 @@ import { join } from 'path'
 import { AtlasManager, atlas } from 'src/api/atlas'
 import { CameraManager, camera } from 'src/api/camera'
 import { ConnectionManager, connection } from 'src/api/connection'
+import { CoverManager, cover } from 'src/api/cover'
 import { ApiError } from 'src/api/exceptions'
 import { GuideOutputManager, guideOutput } from 'src/api/guideoutput'
 import { IndiManager, indi } from 'src/api/indi'
@@ -58,7 +59,8 @@ const guideOutputManager = new GuideOutputManager(wsm)
 const thermometerManager = new ThermometerManager(wsm)
 const mountManager = new MountManager(wsm, guideOutputManager)
 const cameraManager = new CameraManager(wsm, connectionManager, guideOutputManager, thermometerManager, mountManager)
-const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager, wsm)
+const coverManager = new CoverManager(wsm)
+const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager, coverManager, wsm)
 const confirmationManager = new ConfirmationManager(wsm)
 const framingManager = new FramingManager()
 const fileSystemManager = new FileSystemManager()
@@ -121,6 +123,7 @@ const app = new Elysia({
 	.use(mount(mountManager, connectionManager))
 	.use(thermometer(thermometerManager))
 	.use(guideOutput(guideOutputManager, connectionManager))
+	.use(cover(coverManager, connectionManager))
 	.use(atlas(atlasManager))
 	.use(image(imageManager))
 	.use(framing(framingManager))

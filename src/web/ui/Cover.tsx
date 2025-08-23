@@ -1,0 +1,43 @@
+import { Button, Chip, Tooltip } from '@heroui/react'
+import { useMolecule } from 'bunshi/react'
+import { memo } from 'react'
+import { useSnapshot } from 'valtio'
+import { CoverMolecule } from '@/molecules/indi/cover'
+import { ConnectButton } from './ConnectButton'
+import { Icons } from './Icon'
+import { Modal } from './Modal'
+
+export const Cover = memo(() => {
+	const cover = useMolecule(CoverMolecule)
+	const { connecting } = useSnapshot(cover.state)
+	const { connected, parking, parked, canPark } = useSnapshot(cover.state.cover)
+
+	return (
+		<Modal
+			header={
+				<div className='flex flex-row items-center justify-between'>
+					<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={cover.connect} />
+					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
+						<span className='leading-5'>Cover</span>
+						<span className='text-xs font-normal text-gray-400 max-w-full'>{cover.scope.cover.name}</span>
+					</div>
+				</div>
+			}
+			maxWidth='230px'
+			name={`cover-${cover.scope.cover.name}`}
+			onClose={cover.close}>
+			<div className='col-span-full flex flex-row items-center justify-between'>
+				<Chip color='primary' size='sm'>
+					{!connected ? 'idle' : parking ? 'moving' : parked ? 'closed' : 'open'}
+				</Chip>
+			</div>
+			<div className='mt-5 col-span-full flex flex-row items-center justify-center gap-3'>
+				<Tooltip content={parked ? 'Open' : 'Close'} placement='bottom'>
+					<Button color={parked ? 'success' : 'danger'} isDisabled={!connected || !canPark || parking} isIconOnly onPointerUp={parked ? cover.unpark : cover.park} size='lg' variant='flat'>
+						{parked ? <Icons.Lock /> : <Icons.LockOpen />}
+					</Button>
+				</Tooltip>
+			</div>
+		</Modal>
+	)
+})

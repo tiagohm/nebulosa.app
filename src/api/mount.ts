@@ -122,6 +122,10 @@ export class MountManager {
 			case 'CONNECTION':
 				if (connectionFor(client, device, message)) {
 					this.update(device, 'connected', message.state)
+
+					if (!device.connected) {
+						this.guideOutput.remove(device)
+					}
 				}
 
 				return

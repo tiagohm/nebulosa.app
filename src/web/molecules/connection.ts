@@ -50,6 +50,7 @@ export const ConnectionMolecule = molecule((m) => {
 				Api.Mounts.list().then((mounts) => mounts?.forEach((mount) => bus.emit('mount:add', mount)))
 				Api.Thermometers.list().then((thermometers) => thermometers?.forEach((thermometer) => bus.emit('thermometer:add', thermometer)))
 				Api.GuideOutputs.list().then((guideOutputs) => guideOutputs?.forEach((guideOutput) => bus.emit('guideOutput:add', guideOutput)))
+				Api.Covers.list().then((covers) => covers?.forEach((cover) => bus.emit('cover:add', cover)))
 
 				break
 			}

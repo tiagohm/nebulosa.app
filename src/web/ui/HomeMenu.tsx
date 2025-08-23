@@ -7,7 +7,7 @@ import alignmentIcon from '@/assets/alignment.webp'
 import autoFocusIcon from '@/assets/auto-focus.webp'
 import calculatorIcon from '@/assets/calculator.webp'
 import cameraIcon from '@/assets/camera.webp'
-import dustCapIcon from '@/assets/dust-cap.webp'
+import coverIcon from '@/assets/cover.webp'
 import filterWheelIcon from '@/assets/filter-wheel.webp'
 import flatWizardIcon from '@/assets/flat-wizard.webp'
 import focuserIcon from '@/assets/focuser.webp'
@@ -96,9 +96,9 @@ export const HomeMenu = memo(() => {
 								<img className='w-9' src={lightBoxIcon} />
 							</Button>
 						</Tooltip>
-						<Tooltip content='Dust Cap' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => equipment.select('dustCap')} size='lg' variant='light'>
-								<img className='w-9' src={dustCapIcon} />
+						<Tooltip content='Cover' placement='bottom' showArrow>
+							<Button color='secondary' isDisabled={devices.cover.length === 0} isIconOnly onPointerUp={() => equipment.select('cover')} size='lg' variant='light'>
+								<img className='w-9' src={coverIcon} />
 							</Button>
 						</Tooltip>
 						<Tooltip content='Guide Output' placement='bottom' showArrow>
@@ -195,7 +195,7 @@ export const HomeMenu = memo(() => {
 function formattedDeviceName(type: EquipmentDeviceType) {
 	if (type === 'guideOutput') return 'Guide Output'
 	else if (type === 'lightBox') return 'Light Box'
-	else if (type === 'dustCap') return 'Dust Cap'
+	else if (type === 'cover') return 'Cover'
 	else if (type === 'dewHeater') return 'Dew Heater'
 	else if (type === 'wheel') return 'Filter Wheel'
 	else return type

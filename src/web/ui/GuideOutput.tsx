@@ -25,7 +25,7 @@ export const GuideOutput = memo(() => {
 				</div>
 			}
 			maxWidth='340px'
-			name='guide-output'
+			name={`guide-output-${guideOutput.scope.guideOutput.name}`}
 			onClose={guideOutput.close}>
 			<div className='mt-0 grid grid-cols-6 gap-1'>
 				<NumberInput className='col-start-3 col-span-2' isDisabled={pulseGuiding} label='North (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('north', value)} size='sm' value={north.duration} />

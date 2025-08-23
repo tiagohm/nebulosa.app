@@ -5,6 +5,7 @@ import bus from '../shared/bus'
 import type { Device, DeviceProperty, IndiServerStart, IndiServerStarted, IndiServerStatus, IndiServerStopped } from '../shared/types'
 import type { CameraManager } from './camera'
 import type { ConnectionManager } from './connection'
+import type { CoverManager } from './cover'
 import type { GuideOutputManager } from './guideoutput'
 import type { WebSocketMessageManager } from './message'
 import type { MountManager } from './mount'
@@ -69,6 +70,7 @@ export class IndiManager {
 		readonly guideOutput: GuideOutputManager,
 		readonly thermometer: ThermometerManager,
 		readonly mount: MountManager,
+		readonly cover: CoverManager,
 		readonly wsm: WebSocketMessageManager,
 	) {}
 
@@ -79,6 +81,7 @@ export class IndiManager {
 	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
 		this.camera.switchVector(client, message, tag)
 		this.mount.switchVector(client, message, tag)
+		this.cover.switchVector(client, message, tag)
 	}
 
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
@@ -91,6 +94,7 @@ export class IndiManager {
 	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		this.camera.textVector(client, message, tag)
 		this.mount.textVector(client, message, tag)
+		this.cover.textVector(client, message, tag)
 	}
 
 	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
@@ -98,7 +102,7 @@ export class IndiManager {
 	}
 
 	get(id: string): Device | undefined {
-		return this.camera.get(id) || this.mount.get(id) || this.guideOutput.get(id) || this.thermometer.get(id)
+		return this.camera.get(id) || this.mount.get(id) || this.cover.get(id) || this.guideOutput.get(id) || this.thermometer.get(id)
 	}
 
 	serverStart(req: IndiServerStart) {

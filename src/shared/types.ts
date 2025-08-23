@@ -242,7 +242,7 @@ export interface ImageInfo extends Partial<EquatorialCoordinate> {
 
 // INDI
 
-export type DeviceType = 'CAMERA' | 'MOUNT' | 'WHEEL' | 'FOCUSER' | 'ROTATOR' | 'GPS' | 'DOME' | 'GUIDE_OUTPUT' | 'LIGHT_BOX' | 'DUST_CAP' | 'THERMOMETER' | 'DEW_HEATER'
+export type DeviceType = 'CAMERA' | 'MOUNT' | 'WHEEL' | 'FOCUSER' | 'ROTATOR' | 'GPS' | 'DOME' | 'GUIDE_OUTPUT' | 'FLAT_PANEL' | 'COVER' | 'THERMOMETER' | 'DEW_HEATER'
 
 export type GuideDirection = 'NORTH' | 'SOUTH' | 'WEST' | 'EAST'
 
@@ -318,7 +318,15 @@ export type ThermometerRemoved = DeviceRemoved<'thermometer', Thermometer>
 
 export type ThermometerMessageEvent = ThermometerAdded | ThermometerUpdated | ThermometerRemoved
 
-export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent
+export type CoverAdded = DeviceAdded<'cover', Cover>
+
+export type CoverUpdated = DeviceUpdated<'cover', Cover>
+
+export type CoverRemoved = DeviceRemoved<'cover', Cover>
+
+export type CoverMessageEvent = CoverAdded | CoverUpdated | CoverRemoved
+
+export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent | CoverMessageEvent
 
 export interface DriverInfo {
 	executable: string
@@ -341,6 +349,7 @@ export interface Device {
 // Thermometer
 
 export interface Thermometer extends Device {
+	readonly type: 'THERMOMETER' | 'CAMERA' | 'FOCUSER'
 	hasThermometer: boolean
 	temperature: number
 }
@@ -348,6 +357,7 @@ export interface Thermometer extends Device {
 // Guide Output
 
 export interface GuideOutput extends Device {
+	readonly type: 'GUIDE_OUTPUT' | 'MOUNT' | 'CAMERA'
 	canPulseGuide: boolean
 	pulseGuiding: boolean
 }
@@ -370,6 +380,7 @@ export type AutoSubFolderMode = 'OFF' | 'NOON' | 'MIDNIGHT'
 export type CameraCaptureState = 'IDLE' | 'EXPOSURE_STARTED' | 'EXPOSING' | 'WAITING' | 'SETTLING' | 'DITHERING' | 'PAUSING' | 'PAUSED' | 'EXPOSURE_FINISHED'
 
 export interface Camera extends GuideOutput, Thermometer {
+	readonly type: 'CAMERA'
 	hasCoolerControl: boolean
 	coolerPower: number
 	cooler: boolean
@@ -475,6 +486,7 @@ export interface CameraCaptureTaskEvent extends WebSocketMessage {
 // GPS
 
 export interface Gps extends Device {
+	readonly type: 'GPS' | 'MOUNT'
 	hasGps: boolean
 	readonly geographicCoordinate: GeographicCoordinate
 }
@@ -501,6 +513,7 @@ export interface SlewRate {
 }
 
 export interface Mount extends GuideOutput, Gps, Parkable {
+	readonly type: 'MOUNT'
 	slewing: boolean
 	tracking: boolean
 	canAbort: boolean
@@ -528,6 +541,12 @@ export interface MountEquatorialCoordinatePosition extends Readonly<EquatorialCo
 export function expectedPierSide(rightAscension: Angle, declination: Angle, lst: Angle): PierSide {
 	if (Math.abs(declination) === Math.PI / 2) return 'NEITHER'
 	return (toHour(rightAscension - lst) + 24) % 24 < 12 ? 'WEST' : 'EAST'
+}
+
+// Cover
+
+export interface Cover extends Device, Parkable {
+	readonly type: 'COVER'
 }
 
 // Message
@@ -821,6 +840,21 @@ export const DEFAULT_GUIDE_OUTPUT: GuideOutput = {
 	canPulseGuide: false,
 	pulseGuiding: false,
 	type: 'GUIDE_OUTPUT',
+	id: '',
+	name: '',
+	connected: false,
+	driver: {
+		executable: '',
+		version: '',
+	},
+	properties: {},
+}
+
+export const DEFAULT_COVER: Cover = {
+	canPark: false,
+	parking: false,
+	parked: false,
+	type: 'COVER',
 	id: '',
 	name: '',
 	connected: false,

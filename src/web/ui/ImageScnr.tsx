@@ -32,7 +32,7 @@ export const ImageScnr = memo(() => {
 			}
 			maxWidth='295px'
 			name={`scnr-${scnr.scope.image.key}`}
-			onClose={() => viewer.closeModal('scnr')}>
+			onClose={() => viewer.close('scnr')}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<ButtonGroup className='col-span-full'>
 					<Button color='secondary' onPointerUp={() => scnr.update('channel', undefined)} variant={channel === undefined ? 'flat' : 'light'}>

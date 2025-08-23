@@ -19,7 +19,7 @@ export const FITSHeader = memo(() => {
 			}
 			maxWidth='300px'
 			name={`fits-header-${viewer.scope.image.key}`}
-			onClose={() => viewer.closeModal('fitsHeader')}>
+			onClose={() => viewer.close('fitsHeader')}>
 			<div className='mt-0 px-1 py-2'>
 				<Listbox
 					isVirtualized

@@ -34,6 +34,7 @@
 		"react-dom": "19.1.1",
 		"react-leaflet": "5.0.0",
 		"tailwindcss": "4.1.12",
+		"utility-types": "3.11.0",
 		"valtio": "2.1.7",
 		"wretch": "2.11.0"
 	},

@@ -42,7 +42,7 @@ export const ImageStretch = memo(() => {
 			}
 			maxWidth='289px'
 			name={`stretch-${stretch.scope.image.key}`}
-			onClose={() => viewer.closeModal('stretch')}>
+			onClose={() => viewer.close('stretch')}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<NumberInput className='col-span-6' label='Shadow' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('shadow', value)} size='sm' value={shadow} />
 				<NumberInput className='col-span-6' label='Highlight' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('highlight', value)} size='sm' value={highlight} />

@@ -35,7 +35,7 @@ export const PlateSolver = memo(() => {
 			}
 			maxWidth='363px'
 			name={`plate-solver-${solver.scope.image.key}`}
-			onClose={() => viewer.closeModal('plateSolver')}>
+			onClose={() => viewer.close('plateSolver')}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<PlateSolverSelect className='col-span-8' onValueChange={(value) => solver.update('type', value)} value={request.type} />
 				<Checkbox className='col-span-3 col-end-13' isSelected={request.blind} onValueChange={(value) => solver.update('blind', value)}>

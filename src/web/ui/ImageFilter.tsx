@@ -32,7 +32,7 @@ export const ImageFilter = memo(() => {
 			}
 			maxWidth='199px'
 			name={`filter-${filter.scope.image.key}`}
-			onClose={() => viewer.closeModal('filter')}>
+			onClose={() => viewer.close('filter')}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Checkbox className='col-span-full' isSelected={enabled} onValueChange={(value) => filter.update('enabled', value)}>
 					Enabled

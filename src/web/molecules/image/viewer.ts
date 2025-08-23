@@ -3,6 +3,7 @@ import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import bus, { unsubscribe } from 'src/shared/bus'
 import { type CameraCaptureTaskEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
+import type { PickByValue } from 'utility-types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -235,11 +236,11 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		state.crosshair = !state.crosshair
 	}
 
-	function showModal(key: 'starDetection' | 'scnr' | 'stretch' | 'fitsHeader' | 'plateSolver' | 'adjustment' | 'filter' | 'settings') {
+	function show(key: keyof PickByValue<typeof state, { showModal: boolean }>) {
 		state[key].showModal = true
 	}
 
-	function closeModal(key: 'starDetection' | 'scnr' | 'stretch' | 'fitsHeader' | 'plateSolver' | 'adjustment' | 'filter' | 'settings') {
+	function close(key: keyof PickByValue<typeof state, { showModal: boolean }>) {
 		state[key].showModal = false
 	}
 
@@ -375,14 +376,14 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		workspace.state.selected = undefined
 	}
 
-	return { state, scope, resetStretch, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, attach, load, open, remove, detach, select, showModal, closeModal, apply }
+	return { state, scope, resetStretch, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, attach, load, open, remove, detach, select, show, close, apply }
 })
 
 function adjustZIndexAfterBeRemoved() {
 	const wrappers = document.querySelectorAll('.workspace .wrapper') ?? []
 
 	// There is nothing to do
-	if (wrappers.length <= 0) return
+	if (wrappers.length === 0) return
 
 	// Get the z-index for each element that is not the target
 	const elements = new Array<HTMLElement>(wrappers.length)

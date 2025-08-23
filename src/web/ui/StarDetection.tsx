@@ -3,9 +3,9 @@ import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { StarDetectionMolecule } from '@/molecules/image/stardetection'
+import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { StarDetectionSelect } from './StarDetectionSelect'
-import { Icons } from './Icon'
 
 export const StarDetection = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
@@ -29,7 +29,7 @@ export const StarDetection = memo(() => {
 			}
 			maxWidth='310px'
 			name={`star-detection-${starDetection.scope.image.key}`}
-			onClose={() => viewer.closeModal('starDetection')}>
+			onClose={() => viewer.close('starDetection')}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<StarDetectionSelect className='col-span-4' onValueChange={(value) => (starDetection.state.request.type = value)} value={request.type} />
 				<NumberInput className='col-span-4' label='Min SNR' maxValue={500} minValue={0} onValueChange={(value) => (starDetection.state.request.minSNR = value)} size='sm' value={request.minSNR} />

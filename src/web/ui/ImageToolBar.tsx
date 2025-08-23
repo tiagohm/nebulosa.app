@@ -19,12 +19,12 @@ export const ImageToolBar = memo(() => {
 					</Button>
 				</Tooltip>
 				<Tooltip content='Plate Solver' placement='top'>
-					<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('plateSolver')} variant='flat'>
+					<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('plateSolver')} variant='flat'>
 						<Icons.Sigma />
 					</Button>
 				</Tooltip>
 				<Tooltip content='Stretch' placement='top'>
-					<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('stretch')} variant='flat'>
+					<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('stretch')} variant='flat'>
 						<Icons.Tune />
 					</Button>
 				</Tooltip>
@@ -50,18 +50,18 @@ export const ImageToolBar = memo(() => {
 						<div className='flex flex-row items-center justify-center gap-2 p-2'>
 							{!info.mono && (
 								<Tooltip content='SCNR' placement='top'>
-									<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('scnr')} variant='flat'>
+									<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('scnr')} variant='flat'>
 										<Icons.Swatch />
 									</Button>
 								</Tooltip>
 							)}
 							<Tooltip content='Adjustment' placement='top'>
-								<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('adjustment')} variant='flat'>
+								<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('adjustment')} variant='flat'>
 									<Icons.ImageEdit />
 								</Button>
 							</Tooltip>
 							<Tooltip content='Filter' placement='top'>
-								<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('filter')} variant='flat'>
+								<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('filter')} variant='flat'>
 									<Icons.Brush />
 								</Button>
 							</Tooltip>
@@ -103,7 +103,7 @@ export const ImageToolBar = memo(() => {
 							</Tooltip>
 							<div className='flex flex-col gap-2 justify-center'>
 								<Tooltip content='Star Detection' placement='top'>
-									<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('starDetection')} variant='flat'>
+									<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('starDetection')} variant='flat'>
 										<Icons.Stars />
 									</Button>
 								</Tooltip>
@@ -128,7 +128,7 @@ export const ImageToolBar = memo(() => {
 					</Button>
 				</Tooltip>
 				<Tooltip content='FITS Header' placement='top'>
-					<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('fitsHeader')} variant='flat'>
+					<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('fitsHeader')} variant='flat'>
 						<Icons.Text />
 					</Button>
 				</Tooltip>
@@ -138,7 +138,7 @@ export const ImageToolBar = memo(() => {
 					</Button>
 				</Tooltip>
 				<Tooltip content='Settings' placement='top'>
-					<Button color='secondary' isIconOnly onPointerUp={() => viewer.showModal('settings')} variant='flat'>
+					<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('settings')} variant='flat'>
 						<Icons.Cog />
 					</Button>
 				</Tooltip>

@@ -1,8 +1,11 @@
 import { molecule } from 'bunshi'
 import bus from 'src/shared/bus'
-import type { DeviceMessageEvent } from 'src/shared/types'
+import type { DeviceMessageEvent, Notification } from 'src/shared/types'
+import { NotificationMolecule } from './notification'
 
 export const WebSocketMolecule = molecule((m) => {
+	const notification = m(NotificationMolecule)
+
 	const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 	const ws = new WebSocket(`${uri}/ws`)
 
@@ -12,7 +15,7 @@ export const WebSocketMolecule = molecule((m) => {
 	ws.addEventListener('message', (message) => {
 		if (!bus.hasSubscribers()) return
 
-		const data = JSON.parse(message.data) as DeviceMessageEvent
+		const data = JSON.parse(message.data) as DeviceMessageEvent | Notification
 
 		switch (data.type) {
 			case 'camera:add':
@@ -30,6 +33,9 @@ export const WebSocketMolecule = molecule((m) => {
 			case 'dewHeater:add':
 			case 'dewHeater:remove':
 				bus.emit(data.type, data.device)
+				break
+			case 'notification':
+				notification.send(data)
 				break
 			default:
 				bus.emit(data.type, data)

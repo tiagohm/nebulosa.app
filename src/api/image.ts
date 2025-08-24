@@ -10,7 +10,7 @@ import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import type { ImageInfo, ImageTransformation, OpenImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
-import { badRequest, internalServerError, notFound } from './exceptions'
+import type { NotificationManager } from './notification'
 
 const JPEG_OPTIONS: JpegOptions = {
 	quality: 70, // Lower quality for faster processing
@@ -41,6 +41,8 @@ const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOption
 }
 
 export class ImageManager {
+	constructor(readonly notification: NotificationManager) {}
+
 	async open(req: OpenImage) {
 		if (req.path) {
 			const handle = await fs.open(req.path)
@@ -72,17 +74,17 @@ export class ImageManager {
 
 						return info
 					} else {
-						throw internalServerError('Failed to generate image')
+						this.notification.send({ body: 'Failed to generate image', severity: 'error' })
 					}
 				} else {
-					throw internalServerError('Failed to read image from file')
+					this.notification.send({ body: 'Failed to read image from file', severity: 'error' })
 				}
 			} else {
-				throw notFound('No image file found')
+				this.notification.send({ body: 'No image file found', severity: 'error' })
 			}
 		}
 
-		throw badRequest('Image path is required')
+		return undefined
 	}
 
 	transformImageAndSave(image: Image, path: string, format: ImageFormat, transformation: ImageTransformation) {
@@ -151,6 +153,7 @@ export function image(image: ImageManager) {
 		// Endpoints!
 		.post('/open', async ({ body }) => {
 			const info = await image.open(body as never)
+			if (!info) return undefined
 			const headers: HeadersInit = { [X_IMAGE_INFO_HEADER]: encodeURIComponent(JSON.stringify(info)) }
 			return new Response(Bun.file(info.path), { headers })
 		})

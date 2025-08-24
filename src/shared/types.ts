@@ -609,7 +609,7 @@ export interface WebSocketMessage {
 export type Severity = 'info' | 'success' | 'warn' | 'error'
 
 export interface Notification extends WebSocketMessage {
-	readonly type: 'NOTIFICATION'
+	readonly type: 'notification'
 	target?: string
 	severity?: Severity
 	title?: string

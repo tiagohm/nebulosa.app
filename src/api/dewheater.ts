@@ -100,7 +100,7 @@ export function dewHeater(dewHeater: DewHeaterManager, connection: ConnectionMan
 		// Endpoints!
 		.get('', () => dewHeater.list())
 		.get('/:id', ({ params }) => dewHeaterFromParams(params))
-		.post('/:id/pwm', ({ params, body }) => dewHeater.pwm(connection.get(), dewHeaterFromParams(params), (body as never) || 0))
+		.post('/:id/pwm', ({ params, body }) => dewHeater.pwm(connection.get(), dewHeaterFromParams(params), body as never))
 
 	return app
 }

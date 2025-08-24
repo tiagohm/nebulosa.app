@@ -1,4 +1,3 @@
-import { addToast } from '@heroui/react'
 import type { Angle } from 'nebulosa/src/angle'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
@@ -6,10 +5,13 @@ import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
 import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
 import { type SkyObjectSearchResult, X_IMAGE_INFO_HEADER } from 'src/shared/types'
-import wretch, { type WretchError } from 'wretch'
 
 const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
-const w = wretch(uri, { cache: 'no-cache' })
+
+const DEFAULT_HEADERS: HeadersInit = {
+	'Content-Type': 'application/json',
+	Accept: 'application/json',
+}
 
 export namespace Api {
 	export namespace FileSystem {
@@ -296,19 +298,17 @@ export namespace Api {
 }
 
 function req(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {
-	return w.url(path)[method](method === 'get' || method === 'delete' ? undefined : (body as never))
+	const options: RequestInit = { method, cache: 'no-cache', headers: DEFAULT_HEADERS, body: body === undefined ? undefined : JSON.stringify(body) }
+	return fetch(`${uri}${path}`, options)
 }
 
-function json<T>(path: string, method: 'get' | 'post' | 'put', body?: unknown) {
-	return req(path, method, body).json<T>().catch(handleErrorAndShowToast)
+async function json<T>(path: string, method: 'get' | 'post' | 'put', body?: unknown) {
+	const response = await req(path, method, body)
+	if (!response.ok) return undefined
+	const text = await response.text()
+	return text ? (JSON.parse(text) as T) : undefined
 }
 
 function res(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {
-	return req(path, method, body).res().catch(handleErrorAndShowToast)
-}
-
-function handleErrorAndShowToast(e: WretchError) {
-	const description = e.json || e.message || 'Unknown error'
-	addToast({ title: 'ERROR', description, color: 'danger' })
-	return undefined
+	return req(path, method, body)
 }

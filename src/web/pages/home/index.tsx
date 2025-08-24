@@ -11,12 +11,12 @@ function start() {
 			<HeroUIProvider disableAnimation disableRipple>
 				<ToastProvider
 					maxVisibleToasts={1}
-					placement='top-center'
+					placement='bottom-center'
 					toastProps={{
 						radius: 'sm',
 						color: 'secondary',
 						variant: 'solid',
-						timeout: 3000,
+						timeout: 2000,
 						hideCloseButton: true,
 					}}
 				/>

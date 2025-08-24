@@ -2,12 +2,12 @@ import Elysia from 'elysia'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
 import type { Connect, ConnectionStatus } from '../shared/types'
-import { badRequest, internalServerError, noActiveConnection } from './exceptions'
+import type { NotificationManager } from './notification'
 
 export class ConnectionManager {
 	private readonly clients = new Map<string, IndiClient>()
 
-	constructor() {
+	constructor(readonly notification: NotificationManager) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove the client from the active connections
 			this.disconnect(client)
@@ -18,9 +18,8 @@ export class ConnectionManager {
 		let client: IndiClient | undefined
 		if (!id) client = this.clients.values().next().value
 		else client = this.clients.get(id)
-
-		if (!client) throw noActiveConnection()
-		else return client
+		if (!client) this.notification.send({ body: 'No active connection!', severity: 'error' })
+		return client!
 	}
 
 	async connect(req: Connect, indi: IndiClientHandler): Promise<ConnectionStatus | undefined> {
@@ -42,11 +41,11 @@ export class ConnectionManager {
 					return this.status(client)
 				}
 			} catch (e) {
-				throw internalServerError('Failed to connect to INDI server')
+				this.notification.send({ body: 'Failed to connect to INDI server', severity: 'error' })
 			}
 		}
 
-		throw badRequest('Invalid connection request')
+		return undefined
 	}
 
 	disconnect(id: string | IndiClient) {

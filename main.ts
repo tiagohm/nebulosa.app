@@ -9,12 +9,12 @@ import { CameraManager, camera } from 'src/api/camera'
 import { ConnectionManager, connection } from 'src/api/connection'
 import { CoverManager, cover } from 'src/api/cover'
 import { DewHeaterManager, dewHeater } from 'src/api/dewheater'
-import { ApiError } from 'src/api/exceptions'
 import { FlatPanelManager, flatPanel } from 'src/api/flatpanel'
 import { GuideOutputManager, guideOutput } from 'src/api/guideoutput'
 import { IndiDevicePropertyManager, IndiManager, IndiServerManager, indi } from 'src/api/indi'
 import { WebSocketMessageManager } from 'src/api/message'
 import { MountManager, mount } from 'src/api/mount'
+import { NotificationManager } from 'src/api/notification'
 import { ThermometerManager, thermometer } from 'src/api/thermometer'
 import { parseArgs } from 'util'
 import { ConfirmationManager, confirmation } from './src/api/confirmation'
@@ -56,7 +56,8 @@ fs.mkdirSync(Bun.env.framingDir, { recursive: true })
 // Managers
 
 const wsm = new WebSocketMessageManager()
-const connectionManager = new ConnectionManager()
+const notificationManager = new NotificationManager(wsm)
+const connectionManager = new ConnectionManager(notificationManager)
 const guideOutputManager = new GuideOutputManager(wsm)
 const thermometerManager = new ThermometerManager(wsm)
 const indiDevicePropertyManager = new IndiDevicePropertyManager(wsm)
@@ -71,9 +72,9 @@ const confirmationManager = new ConfirmationManager(wsm)
 const framingManager = new FramingManager()
 const fileSystemManager = new FileSystemManager()
 const starDetectionManager = new StarDetectionManager()
-const plateSolverManager = new PlateSolverManager()
+const plateSolverManager = new PlateSolverManager(notificationManager)
 const atlasManager = new AtlasManager()
-const imageManager = new ImageManager()
+const imageManager = new ImageManager(notificationManager)
 
 // App
 
@@ -109,16 +110,6 @@ const app = new Elysia({
 			},
 		}),
 	)
-
-	// Error Handling
-
-	.onError(({ error }) => {
-		console.error(error)
-
-		if (error instanceof ApiError) {
-			return Response.json(error.message, { status: error.status })
-		}
-	})
 
 	// Endpoints
 

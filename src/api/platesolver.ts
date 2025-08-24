@@ -4,12 +4,14 @@ import { astapPlateSolve } from 'nebulosa/src/astap'
 import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebulosa/src/astrometrynet'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { PlateSolveStart, PlateSolveStop } from '../shared/types'
-import { badRequest, internalServerError } from './exceptions'
+import type { NotificationManager } from './notification'
 
 export class PlateSolverManager {
 	private readonly tasks = new Map<string, AbortController>()
 
-	async start(req: PlateSolveStart): Promise<PlateSolution> {
+	constructor(readonly notification: NotificationManager) {}
+
+	async start(req: PlateSolveStart): Promise<PlateSolution | undefined> {
 		const ra = parseAngle(req.rightAscension, { isHour: true })
 		const dec = parseAngle(req.declination)
 		const radius = req.blind || !req.radius ? 0 : deg(req.radius)
@@ -46,13 +48,13 @@ export class PlateSolverManager {
 					return solution
 				}
 			} catch {
-				throw internalServerError('Failed to plate solve image')
+				this.notification.send({ body: 'Failed to plate solve image', severity: 'error' })
 			} finally {
 				this.tasks.delete(req.id)
 			}
 		}
 
-		throw badRequest('Invalid plate solving request type')
+		return undefined
 	}
 
 	stop(req: PlateSolveStop) {

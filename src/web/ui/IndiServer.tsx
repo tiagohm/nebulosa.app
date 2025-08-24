@@ -1,4 +1,4 @@
-import { Button, ListboxItem, NumberInput } from '@heroui/react'
+import { Badge, Button, Checkbox, ListboxItem, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -10,7 +10,7 @@ import { Modal } from './Modal'
 
 export const IndiServer = memo(() => {
 	const indi = useMolecule(IndiServerMolecule)
-	const { enabled, running } = useSnapshot(indi.state)
+	const { running, showAll, drivers: availableDrivers } = useSnapshot(indi.state)
 	const { port, repeat, verbose, drivers } = useSnapshot(indi.state.request, { sync: true })
 
 	return (
@@ -20,9 +20,11 @@ export const IndiServer = memo(() => {
 					<Button color='danger' isDisabled={!running} onPointerUp={indi.stop} startContent={<Icons.Stop />} variant='flat'>
 						Stop
 					</Button>
-					<Button color='success' isDisabled={running || drivers.length === 0} onPointerUp={indi.start} startContent={<Icons.Play />} variant='flat'>
-						Start
-					</Button>
+					<Badge color='success' content={drivers.length} showOutline={false}>
+						<Button color='success' isDisabled={running || drivers.length === 0} onPointerUp={indi.start} startContent={<Icons.Play />} variant='flat'>
+							Start
+						</Button>
+					</Badge>
 				</>
 			}
 			header='INDI Server'
@@ -33,11 +35,14 @@ export const IndiServer = memo(() => {
 				<NumberInput className='col-span-4' label='Port' maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} size='sm' value={port} />
 				<NumberInput className='col-span-4' label='Repeat' maxValue={10} minValue={1} onValueChange={(value) => indi.update('repeat', value)} size='sm' value={repeat} />
 				<NumberInput className='col-span-4' label='Verbose' maxValue={3} minValue={0} onValueChange={(value) => indi.update('verbose', value)} size='sm' value={verbose} />
+				<Checkbox className='col-span-full' isSelected={showAll} onValueChange={(value) => (indi.state.showAll = value)}>
+					Show all drivers
+				</Checkbox>
 				<FilterableListbox
 					className='col-span-full'
 					classNames={{ list: 'max-h-[200px] overflow-scroll' }}
 					filter={(item, search) => item.name.toLowerCase().includes(search) || item.driver.includes(search)}
-					items={DRIVERS}
+					items={showAll || availableDrivers.length === 0 ? DRIVERS : DRIVERS.filter((e) => availableDrivers.includes(e.driver))}
 					onSelectionChange={(value) => indi.update('drivers', [...(value as Set<string>)])}
 					selectedKeys={new Set(drivers)}
 					selectionMode='multiple'

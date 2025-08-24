@@ -8,7 +8,7 @@ import { IndiServer } from './IndiServer'
 
 export const IndiServerButton = memo(() => {
 	const indi = useMolecule(IndiServerMolecule)
-	const { enabled, running, showModal } = useSnapshot(indi.state)
+	const { enabled, running, show } = useSnapshot(indi.state)
 
 	return (
 		<>
@@ -17,7 +17,7 @@ export const IndiServerButton = memo(() => {
 					{running ? <Icons.Server /> : <Icons.ServerOff />}
 				</Button>
 			</Tooltip>
-			{showModal && <IndiServer />}
+			{show && <IndiServer />}
 		</>
 	)
 })

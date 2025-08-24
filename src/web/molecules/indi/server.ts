@@ -8,7 +8,9 @@ import { simpleLocalStorage } from '@/shared/storage'
 export interface IndiServerState {
 	enabled: boolean
 	running: boolean
-	showModal: boolean
+	drivers: string[]
+	showAll: boolean
+	show: boolean
 	request: IndiServerStart
 }
 
@@ -18,7 +20,9 @@ export const IndiServerMolecule = molecule(() => {
 	const state = proxy<IndiServerState>({
 		enabled: true,
 		running: false,
-		showModal: false,
+		drivers: [],
+		showAll: false,
+		show: false,
 		request,
 	})
 
@@ -39,8 +43,7 @@ export const IndiServerMolecule = molecule(() => {
 	})
 
 	Api.Indi.Server.status().then((status) => {
-		state.running = status?.running ?? false
-		state.enabled = status?.enabled ?? false
+		status && Object.assign(state, status)
 	})
 
 	function update<K extends keyof IndiServerStart>(key: K, value: IndiServerStart[K]) {
@@ -56,11 +59,11 @@ export const IndiServerMolecule = molecule(() => {
 	}
 
 	function show() {
-		state.showModal = true
+		state.show = true
 	}
 
 	function close() {
-		state.showModal = false
+		state.show = false
 	}
 
 	return { state, update, start, stop, show, close }

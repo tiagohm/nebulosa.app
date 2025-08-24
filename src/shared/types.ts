@@ -256,6 +256,7 @@ export interface IndiServerStart {
 export interface IndiServerStatus {
 	readonly enabled: boolean
 	readonly running: boolean
+	readonly drivers: string[]
 }
 
 export interface IndiServerStarted extends WebSocketMessage {

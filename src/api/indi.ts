@@ -221,11 +221,12 @@ export class IndiServerManager {
 		}
 	}
 
-	status(): IndiServerStatus {
-		return {
-			enabled: process.platform === 'linux',
-			running: !!this.process && !this.process.killed,
-		}
+	async status() {
+		const enabled = process.platform === 'linux' && (await Bun.$`ps aux | grep "indiserver" | grep -v grep | grep -Ec -e "indiserver"`.nothrow().quiet()).text().trim() === '0'
+		const running = enabled && !!this.process && !this.process.killed
+		// biome-ignore format: don't break lines!
+		const drivers = enabled ? (await Bun.$`locate /usr/bin/indi_`.nothrow().quiet()).text().split('\n').map((e) => e.substring(9)).filter((e) => !!e) : []
+		return { enabled, running, drivers } as IndiServerStatus
 	}
 }
 

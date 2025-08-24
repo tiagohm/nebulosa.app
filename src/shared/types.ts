@@ -5,7 +5,7 @@ import type { Constellation } from 'nebulosa/src/constellation'
 import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
-import type { DefVector, PropertyState, VectorType } from 'nebulosa/src/indi'
+import type { DefNumber, DefVector, PropertyState, VectorType } from 'nebulosa/src/indi'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
 import type { Velocity } from 'nebulosa/src/velocity'
@@ -310,6 +310,14 @@ export type MountRemoved = DeviceRemoved<'mount', Mount>
 
 export type MountMessageEvent = MountAdded | MountUpdated | MountRemoved
 
+export type FocuserAdded = DeviceAdded<'focuser', Focuser>
+
+export type FocuserUpdated = DeviceUpdated<'focuser', Focuser>
+
+export type FocuserRemoved = DeviceRemoved<'focuser', Focuser>
+
+export type FocuserMessageEvent = FocuserAdded | FocuserUpdated | FocuserRemoved
+
 export type GuideOutputAdded = DeviceAdded<'guideOutput', GuideOutput>
 
 export type GuideOutputUpdated = DeviceUpdated<'guideOutput', GuideOutput>
@@ -350,7 +358,7 @@ export type DewHeaterRemoved = DeviceRemoved<'dewHeater', DewHeater>
 
 export type DewHeaterMessageEvent = DewHeaterAdded | DewHeaterUpdated | DewHeaterRemoved
 
-export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent | CoverMessageEvent | FlatPanelMessageEvent | DewHeaterMessageEvent
+export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | FocuserMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent | CoverMessageEvent | FlatPanelMessageEvent | DewHeaterMessageEvent
 
 export type DeviceProperty = DefVector & {
 	type: Uppercase<VectorType>
@@ -414,12 +422,12 @@ export interface Camera extends GuideOutput, Thermometer {
 	dewHeater: boolean
 	frameFormats: string[]
 	canAbort: boolean
-	cfa: {
+	readonly cfa: {
 		offsetX: number
 		offsetY: number
 		type: CfaPattern
 	}
-	exposure: {
+	readonly exposure: {
 		time: number
 		min: number
 		max: number
@@ -428,7 +436,7 @@ export interface Camera extends GuideOutput, Thermometer {
 	hasCooler: boolean
 	canSetTemperature: boolean
 	canSubFrame: boolean
-	frame: {
+	readonly frame: {
 		x: number
 		minX: number
 		maxX: number
@@ -443,23 +451,15 @@ export interface Camera extends GuideOutput, Thermometer {
 		maxHeight: number
 	}
 	canBin: boolean
-	bin: {
+	readonly bin: {
 		maxX: number
 		maxY: number
 		x: number
 		y: number
 	}
-	gain: {
-		value: number
-		min: number
-		max: number
-	}
-	offset: {
-		value: number
-		min: number
-		max: number
-	}
-	pixelSize: {
+	readonly gain: Pick<DefNumber, 'min' | 'max' | 'value'>
+	readonly offset: Pick<DefNumber, 'min' | 'max' | 'value'>
+	readonly pixelSize: {
 		x: number
 		y: number
 	}
@@ -569,6 +569,21 @@ export function expectedPierSide(rightAscension: Angle, declination: Angle, lst:
 	return (toHour(rightAscension - lst) + 24) % 24 < 12 ? 'WEST' : 'EAST'
 }
 
+// Focuser
+
+export interface Focuser extends Device, Thermometer {
+	readonly type: 'FOCUSER'
+	moving: boolean
+	readonly position: Pick<DefNumber, 'min' | 'max' | 'value'>
+	canAbsoluteMove: boolean
+	canRelativeMove: boolean
+	canAbort: boolean
+	canReverse: boolean
+	reversed: boolean
+	canSync: boolean
+	hasBacklash: boolean
+}
+
 // Cover
 
 export interface Cover extends Device, Parkable, DewHeater {
@@ -580,11 +595,7 @@ export interface Cover extends Device, Parkable, DewHeater {
 export interface FlatPanel extends Device {
 	readonly type: 'FLAT_PANEL'
 	enabled: boolean
-	readonly intensity: {
-		value: number
-		min: number
-		max: number
-	}
+	readonly intensity: Pick<DefNumber, 'min' | 'max' | 'value'>
 }
 
 // DEW_HEATER
@@ -592,11 +603,7 @@ export interface FlatPanel extends Device {
 export interface DewHeater extends Device {
 	readonly type: 'DEW_HEATER' | 'CAMERA' | 'COVER'
 	hasDewHeater: boolean
-	readonly pwm: {
-		value: number
-		min: number
-		max: number
-	}
+	readonly pwm: Pick<DefNumber, 'min' | 'max' | 'value'>
 }
 
 // Message
@@ -870,6 +877,33 @@ export const DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION: MountEquatorialCoordi
 	constellation: 'AND',
 	meridianAt: '00:00 (00:00)',
 	pierSide: 'NEITHER',
+}
+
+export const DEFAULT_FOCUSER: Focuser = {
+	type: 'FOCUSER',
+	id: '',
+	name: '',
+	connected: false,
+	driver: {
+		executable: '',
+		version: '',
+	},
+	// properties: {},
+	moving: false,
+	position: {
+		value: 0,
+		min: 0,
+		max: 100,
+	},
+	canAbsoluteMove: false,
+	canRelativeMove: false,
+	canAbort: false,
+	canReverse: false,
+	reversed: false,
+	canSync: false,
+	hasBacklash: false,
+	hasThermometer: false,
+	temperature: 0,
 }
 
 export const DEFAULT_THERMOMETER: Thermometer = {

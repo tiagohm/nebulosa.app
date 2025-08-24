@@ -6,7 +6,7 @@ import { simpleLocalStorage } from '@/shared/storage'
 import { HomeMolecule } from './home'
 
 export interface SkyAtlasState {
-	showModal: boolean
+	show: boolean
 	tab: 'sun' | 'moon' | 'planets' | 'minor-planets' | 'dsos' | 'satellites'
 }
 
@@ -108,7 +108,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 	const state =
 		skyAtlasState ??
 		proxy<SkyAtlasState>({
-			showModal: false,
+			show: false,
 			tab: 'sun',
 		})
 
@@ -116,11 +116,11 @@ export const SkyAtlasMolecule = molecule((m) => {
 
 	function show() {
 		home.toggleMenu(false)
-		state.showModal = true
+		state.show = true
 	}
 
 	function close() {
-		state.showModal = false
+		state.show = false
 	}
 
 	return { state, dsos, show, close }

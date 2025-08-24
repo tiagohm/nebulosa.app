@@ -1,7 +1,7 @@
 import Elysia from 'elysia'
 import type { DefNumberVector, IndiClient, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
-import type { CameraUpdated, Thermometer, ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from '../shared/types'
+import type { CameraUpdated, FocuserUpdated, Thermometer, ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from '../shared/types'
 import type { WebSocketMessageManager } from './message'
 
 export class ThermometerManager {
@@ -19,17 +19,22 @@ export class ThermometerManager {
 
 		if (!device || !device.hasThermometer) return
 
+		let temperature = device.temperature
+
 		switch (message.name) {
-			case 'CCD_TEMPERATURE': {
-				const temperature = message.elements.CCD_TEMPERATURE_VALUE!.value
-
-				if (temperature !== device.temperature) {
-					device.temperature = temperature
-					this.update(device, 'temperature', message.state)
-				}
-
+			case 'CCD_TEMPERATURE':
+				temperature = message.elements.CCD_TEMPERATURE_VALUE!.value
+				break
+			case 'FOCUS_TEMPERATURE':
+				temperature = message.elements.TEMPERATURE!.value
+				break
+			default:
 				return
-			}
+		}
+
+		if (temperature !== device.temperature) {
+			device.temperature = temperature
+			this.update(device, 'temperature', message.state)
 		}
 	}
 
@@ -39,6 +44,11 @@ export class ThermometerManager {
 		if (device.type === 'CAMERA') {
 			this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
 			bus.emit('camera:update', value)
+		}
+
+		if (device.type === 'FOCUSER') {
+			this.wsm.send<FocuserUpdated>({ type: 'focuser:update', device: value, property, state })
+			bus.emit('focuser:update', value)
 		}
 
 		this.wsm.send<ThermometerUpdated>({ type: 'thermometer:update', device: value, property, state })

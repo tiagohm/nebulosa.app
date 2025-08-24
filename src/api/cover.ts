@@ -90,19 +90,17 @@ export class CoverManager {
 		switch (message.name) {
 			// WandererCover V4 EC
 			case 'Heater':
-				if (tag[0] === 'd') {
-					if (!device.hasDewHeater) {
-						device.hasDewHeater = true
-						this.update(device, 'hasDewHeater', message.state)
+				if (tag[0] === 'd' && !device.hasDewHeater) {
+					device.hasDewHeater = true
+					this.update(device, 'hasDewHeater', message.state)
 
-						const { min, max, value } = (message as DefNumberVector).elements.Heater
-						device.pwm.min = min
-						device.pwm.max = max
-						device.pwm.value = value
-						this.update(device, 'pwm', message.state)
+					const { min, max, value } = (message as DefNumberVector).elements.Heater
+					device.pwm.min = min
+					device.pwm.max = max
+					device.pwm.value = value
+					this.update(device, 'pwm', message.state)
 
-						this.dewHeater.add(device)
-					}
+					this.dewHeater.add(device)
 				}
 
 				return
@@ -171,14 +169,6 @@ export class CoverManager {
 	get(id: string) {
 		return this.covers.get(id)
 	}
-
-	park(client: IndiClient, device: Cover) {
-		park(client, device)
-	}
-
-	unpark(client: IndiClient, device: Cover) {
-		unpark(client, device)
-	}
 }
 
 export function cover(cover: CoverManager, connection: ConnectionManager) {
@@ -190,8 +180,8 @@ export function cover(cover: CoverManager, connection: ConnectionManager) {
 		// Endpoints!
 		.get('', () => cover.list())
 		.get('/:id', ({ params }) => coverFromParams(params))
-		.post('/:id/park', ({ params }) => cover.park(connection.get(), coverFromParams(params)))
-		.post('/:id/unpark', ({ params }) => cover.unpark(connection.get(), coverFromParams(params)))
+		.post('/:id/park', ({ params }) => park(connection.get(), coverFromParams(params)))
+		.post('/:id/unpark', ({ params }) => unpark(connection.get(), coverFromParams(params)))
 
 	return app
 }

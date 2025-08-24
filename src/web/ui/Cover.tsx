@@ -26,17 +26,19 @@ export const Cover = memo(() => {
 			maxWidth='230px'
 			name={`cover-${cover.scope.cover.name}`}
 			onClose={cover.close}>
-			<div className='col-span-full flex flex-row items-center justify-between'>
-				<Chip color='primary' size='sm'>
-					{!connected ? 'idle' : parking ? 'moving' : parked ? 'closed' : 'open'}
-				</Chip>
-			</div>
-			<div className='mt-5 col-span-full flex flex-row items-center justify-center gap-3'>
-				<Tooltip content={parked ? 'Open' : 'Close'} placement='bottom'>
-					<Button color={parked ? 'success' : 'danger'} isDisabled={!connected || !canPark || parking} isIconOnly onPointerUp={parked ? cover.unpark : cover.park} size='lg' variant='flat'>
-						{parked ? <Icons.Lock /> : <Icons.LockOpen />}
-					</Button>
-				</Tooltip>
+			<div className='mt-0 grid grid-cols-12 gap-2'>
+				<div className='col-span-full flex flex-row items-center justify-between'>
+					<Chip color='primary' size='sm'>
+						{!connected ? 'idle' : parking ? 'moving' : parked ? 'closed' : 'open'}
+					</Chip>
+				</div>
+				<div className='col-span-full flex flex-row items-center justify-center'>
+					<Tooltip content={parked ? 'Open' : 'Close'} placement='bottom'>
+						<Button color={parked ? 'success' : 'danger'} isDisabled={!connected || !canPark || parking} isIconOnly onPointerUp={parked ? cover.unpark : cover.park} size='lg' variant='flat'>
+							{parked ? <Icons.Lock /> : <Icons.LockOpen />}
+						</Button>
+					</Tooltip>
+				</div>
 			</div>
 		</Modal>
 	)

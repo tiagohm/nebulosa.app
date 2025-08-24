@@ -12,8 +12,12 @@ export function intensity(client: IndiClient, device: FlatPanel, value: number) 
 	}
 }
 
-export function enable(client: IndiClient, device: FlatPanel, enabled: boolean) {
-	client.sendSwitch({ device: device.name, name: 'FLAT_LIGHT_CONTROL', elements: { [enabled ? 'FLAT_LIGHT_ON' : 'FLAT_LIGHT_OFF']: true } })
+export function enable(client: IndiClient, device: FlatPanel) {
+	client.sendSwitch({ device: device.name, name: 'FLAT_LIGHT_CONTROL', elements: { FLAT_LIGHT_ON: true } })
+}
+
+export function disable(client: IndiClient, device: FlatPanel) {
+	client.sendSwitch({ device: device.name, name: 'FLAT_LIGHT_CONTROL', elements: { FLAT_LIGHT_OFF: true } })
 }
 
 export class FlatPanelManager {
@@ -149,18 +153,6 @@ export class FlatPanelManager {
 	get(id: string) {
 		return this.flatPanels.get(id)
 	}
-
-	intensity(client: IndiClient, device: FlatPanel, value: number) {
-		intensity(client, device, value)
-	}
-
-	enable(client: IndiClient, device: FlatPanel) {
-		enable(client, device, true)
-	}
-
-	disable(client: IndiClient, device: FlatPanel) {
-		enable(client, device, false)
-	}
 }
 
 export function flatPanel(flatPanel: FlatPanelManager, connection: ConnectionManager) {
@@ -172,9 +164,9 @@ export function flatPanel(flatPanel: FlatPanelManager, connection: ConnectionMan
 		// Endpoints!
 		.get('', () => flatPanel.list())
 		.get('/:id', ({ params }) => flatPanelFromParams(params))
-		.post('/:id/enable', ({ params }) => flatPanel.enable(connection.get(), flatPanelFromParams(params)))
-		.post('/:id/disable', ({ params }) => flatPanel.disable(connection.get(), flatPanelFromParams(params)))
-		.post('/:id/intensity', ({ params, body }) => flatPanel.intensity(connection.get(), flatPanelFromParams(params), body as never))
+		.post('/:id/enable', ({ params }) => enable(connection.get(), flatPanelFromParams(params)))
+		.post('/:id/disable', ({ params }) => disable(connection.get(), flatPanelFromParams(params)))
+		.post('/:id/intensity', ({ params, body }) => intensity(connection.get(), flatPanelFromParams(params), body as never))
 
 	return app
 }

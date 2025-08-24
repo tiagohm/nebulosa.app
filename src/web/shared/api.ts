@@ -3,7 +3,7 @@ import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
 import { type SkyObjectSearchResult, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -179,6 +179,40 @@ export namespace Api {
 
 		export function position(mount: Mount) {
 			return json<MountEquatorialCoordinatePosition>(`/mounts/${mount.name}/position`, 'get')
+		}
+	}
+
+	export namespace Focusers {
+		export function list() {
+			return json<Focuser[]>('/focusers', 'get')
+		}
+
+		export function get(name: string) {
+			return json<Focuser>(`/focusers/${name}`, 'get')
+		}
+
+		export function sync(focuser: Focuser, value: number) {
+			return res(`/focusers/${focuser.name}/sync`, 'post', value)
+		}
+
+		export function moveTo(focuser: Focuser, value: number) {
+			return res(`/focusers/${focuser.name}/moveto`, 'post', value)
+		}
+
+		export function moveIn(focuser: Focuser, value: number) {
+			return res(`/focusers/${focuser.name}/movein`, 'post', value)
+		}
+
+		export function moveOut(focuser: Focuser, value: number) {
+			return res(`/focusers/${focuser.name}/moveout`, 'post', value)
+		}
+
+		export function reverse(focuser: Focuser, enabled: boolean) {
+			return res(`/focusers/${focuser.name}/reverse`, 'post', enabled)
+		}
+
+		export function stop(focuser: Focuser) {
+			return res(`/focusers/${focuser.name}/stop`, 'post')
 		}
 	}
 

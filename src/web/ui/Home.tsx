@@ -7,6 +7,7 @@ import { CoverScope } from '@/molecules/indi/cover'
 import { DewHeaterScope } from '@/molecules/indi/dewheater'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { FlatPanelScope } from '@/molecules/indi/flatpanel'
+import { FocuserScope } from '@/molecules/indi/focuser'
 import { GuideOutputScope } from '@/molecules/indi/guideoutput'
 import { MountScope } from '@/molecules/indi/mount'
 import { ThermometerScope } from '@/molecules/indi/thermometer'
@@ -16,6 +17,7 @@ import { Confirmation } from './Confirmation'
 import { Cover } from './Cover'
 import { DewHeater } from './DewHeater'
 import { FlatPanel } from './FlatPanel'
+import { Focuser } from './Focuser'
 import { GuideOutput } from './GuideOutput'
 import { HomeNavBar } from './HomeNavBar'
 import { ImageWorkspace } from './ImageWorkspace'
@@ -34,6 +36,7 @@ export const Home = memo(() => {
 			<ImageWorkspace />
 			<CameraList />
 			<MountList />
+			<FocuserList />
 			<ThermometerList />
 			<GuideOutputList />
 			<CoverList />
@@ -67,6 +70,20 @@ export const MountList = memo(() => {
 			mount.show && (
 				<ScopeProvider key={mount.name} scope={MountScope} value={{ mount: mount as never }}>
 					<Mount />
+				</ScopeProvider>
+			),
+	)
+})
+
+export const FocuserList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { focuser } = useSnapshot(equipment.state.devices)
+
+	return focuser.map(
+		(focuser) =>
+			focuser.show && (
+				<ScopeProvider key={focuser.name} scope={FocuserScope} value={{ focuser: focuser as never }}>
+					<Focuser />
 				</ScopeProvider>
 			),
 	)

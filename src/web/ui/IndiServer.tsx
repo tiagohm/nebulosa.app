@@ -30,7 +30,7 @@ export const IndiServer = memo(() => {
 			header='INDI Server'
 			maxWidth='280px'
 			name='indi-server'
-			onClose={() => indi.close()}>
+			onClose={indi.close}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<NumberInput className='col-span-4' label='Port' maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} size='sm' value={port} />
 				<NumberInput className='col-span-4' label='Repeat' maxValue={10} minValue={1} onValueChange={(value) => indi.update('repeat', value)} size='sm' value={repeat} />

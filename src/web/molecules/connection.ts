@@ -48,6 +48,7 @@ export const ConnectionMolecule = molecule((m) => {
 
 				Api.Cameras.list().then((cameras) => cameras?.forEach((camera) => bus.emit('camera:add', camera)))
 				Api.Mounts.list().then((mounts) => mounts?.forEach((mount) => bus.emit('mount:add', mount)))
+				Api.Focusers.list().then((focusers) => focusers?.forEach((focuser) => bus.emit('focuser:add', focuser)))
 				Api.Thermometers.list().then((thermometers) => thermometers?.forEach((thermometer) => bus.emit('thermometer:add', thermometer)))
 				Api.GuideOutputs.list().then((guideOutputs) => guideOutputs?.forEach((guideOutput) => bus.emit('guideOutput:add', guideOutput)))
 				Api.Covers.list().then((covers) => covers?.forEach((cover) => bus.emit('cover:add', cover)))

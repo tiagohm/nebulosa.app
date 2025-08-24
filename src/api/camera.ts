@@ -118,11 +118,9 @@ export class CameraManager {
 
 				return
 			case 'CCD_COOLER': {
-				if (tag[0] === 'd') {
-					if (!device.hasCoolerControl) {
-						device.hasCoolerControl = true
-						this.update(device, 'hasCoolerControl', message.state)
-					}
+				if (tag[0] === 'd' && !device.hasCoolerControl) {
+					device.hasCoolerControl = true
+					this.update(device, 'hasCoolerControl', message.state)
 				}
 
 				const cooler = message.elements.COOLER_ON?.value === true
@@ -336,12 +334,10 @@ export class CameraManager {
 			}
 			case 'TELESCOPE_TIMED_GUIDE_NS':
 			case 'TELESCOPE_TIMED_GUIDE_WE':
-				if (tag[0] === 'd') {
-					if (!device.canPulseGuide) {
-						device.canPulseGuide = true
-						this.update(device, 'canPulseGuide', message.state)
-						this.guideOutput.add(device)
-					}
+				if (tag[0] === 'd' && !device.canPulseGuide) {
+					device.canPulseGuide = true
+					this.update(device, 'canPulseGuide', message.state)
+					this.guideOutput.add(device)
 				}
 
 				return

@@ -9,6 +9,7 @@ import type { ConnectionManager } from './connection'
 import type { CoverManager } from './cover'
 import type { DewHeaterManager } from './dewheater'
 import type { FlatPanelManager } from './flatpanel'
+import type { FocuserManager } from './focuser'
 import type { GuideOutputManager } from './guideoutput'
 import type { WebSocketMessageManager } from './message'
 import type { MountManager } from './mount'
@@ -71,6 +72,7 @@ export class IndiManager {
 		readonly guideOutput: GuideOutputManager,
 		readonly thermometer: ThermometerManager,
 		readonly mount: MountManager,
+		readonly focuser: FocuserManager,
 		readonly cover: CoverManager,
 		readonly flatPanel: FlatPanelManager,
 		readonly dewHeater: DewHeaterManager,
@@ -84,6 +86,7 @@ export class IndiManager {
 	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
 		this.camera.switchVector(client, message, tag)
 		this.mount.switchVector(client, message, tag)
+		this.focuser.switchVector(client, message, tag)
 		this.cover.switchVector(client, message, tag)
 		this.flatPanel.switchVector(client, message, tag)
 		// this.guideOutput.switchVector(client, message, tag)
@@ -94,6 +97,7 @@ export class IndiManager {
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
 		this.camera.numberVector(client, message, tag)
 		this.mount.numberVector(client, message, tag)
+		this.focuser.numberVector(client, message, tag)
 		this.cover.numberVector(client, message, tag)
 		this.flatPanel.numberVector(client, message, tag)
 		this.guideOutput.numberVector(client, message, tag)
@@ -104,6 +108,7 @@ export class IndiManager {
 	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
 		this.camera.textVector(client, message, tag)
 		this.mount.textVector(client, message, tag)
+		this.focuser.textVector(client, message, tag)
 		this.cover.textVector(client, message, tag)
 		this.flatPanel.textVector(client, message, tag)
 		// this.guideOutput.textVector(client, message, tag)
@@ -116,7 +121,7 @@ export class IndiManager {
 	}
 
 	get(id: string): Device | undefined {
-		return this.camera.get(id) || this.mount.get(id) || this.cover.get(id) || this.flatPanel.get(id) || this.guideOutput.get(id) || this.thermometer.get(id) || this.dewHeater.get(id)
+		return this.camera.get(id) || this.mount.get(id) || this.focuser.get(id) || this.cover.get(id) || this.flatPanel.get(id) || this.guideOutput.get(id) || this.thermometer.get(id) || this.dewHeater.get(id)
 	}
 }
 
@@ -241,8 +246,8 @@ export function indi(indi: IndiManager, server: IndiServerManager, property: Ind
 		.post('/:id/connect', ({ params }) => connect(connection.get(), deviceFromParams(params)))
 		.post('/:id/disconnect', ({ params }) => disconnect(connection.get(), deviceFromParams(params)))
 		.get('/:id/properties', ({ params }) => property.get(deviceFromParams(params)))
-		.post('/:id/listen', ({ params }) => property.listen(decodeURIComponent(params.id)))
-		.post('/:id/unlisten', ({ params }) => property.unlisten(decodeURIComponent(params.id)))
+		.post('/:id/properties/listen', ({ params }) => property.listen(decodeURIComponent(params.id)))
+		.post('/:id/properties/unlisten', ({ params }) => property.unlisten(decodeURIComponent(params.id)))
 		.post('/server/start', ({ body }) => server.start(body as never))
 		.post('/server/stop', () => server.stop())
 		.get('/server/status', () => server.status())

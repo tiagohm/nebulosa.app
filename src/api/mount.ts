@@ -27,10 +27,12 @@ export function park(client: IndiClient, mount: Mount) {
 }
 
 export function unpark(client: IndiClient, mount: Mount) {
-	client.sendSwitch({ device: mount.name, name: 'TELESCOPE_PARK', elements: { UNPARK: true } })
+	if (mount.canPark) {
+		client.sendSwitch({ device: mount.name, name: 'TELESCOPE_PARK', elements: { UNPARK: true } })
+	}
 }
 
-export function stopMotion(client: IndiClient, mount: Mount) {
+export function stop(client: IndiClient, mount: Mount) {
 	if (mount.canAbort) {
 		client.sendSwitch({ device: mount.name, name: 'TELESCOPE_ABORT_MOTION', elements: { ABORT: true } })
 	}
@@ -339,12 +341,10 @@ export class MountManager {
 			}
 			case 'TELESCOPE_TIMED_GUIDE_NS':
 			case 'TELESCOPE_TIMED_GUIDE_WE':
-				if (tag[0] === 'd') {
-					if (!device.canPulseGuide) {
-						device.canPulseGuide = true
-						this.update(device, 'canPulseGuide', message.state)
-						this.guideOutput.add(device)
-					}
+				if (tag[0] === 'd' && !device.canPulseGuide) {
+					device.canPulseGuide = true
+					this.update(device, 'canPulseGuide', message.state)
+					this.guideOutput.add(device)
 				}
 
 				return
@@ -476,7 +476,7 @@ export function mount(mount: MountManager, connection: ConnectionManager) {
 		.post('/:id/moveeast', ({ params, body }) => moveEast(connection.get(), mountFromParams(params), body as never))
 		.post('/:id/movewest', ({ params, body }) => moveWest(connection.get(), mountFromParams(params), body as never))
 		.post('/:id/location', ({ params, body }) => geographicCoordinate(connection.get(), mountFromParams(params), body as never))
-		.post('/:id/stop', ({ params }) => stopMotion(connection.get(), mountFromParams(params)))
+		.post('/:id/stop', ({ params }) => stop(connection.get(), mountFromParams(params)))
 
 	return app
 }

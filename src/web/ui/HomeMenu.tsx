@@ -45,16 +45,16 @@ export const HomeMenu = memo(() => {
 	const { selected, devices } = useSnapshot(equipment.state)
 
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
-	const { showModal: showSkyAtlasModal } = useSnapshot(skyAtlas.state)
+	const { show: showSkyAtlas } = useSnapshot(skyAtlas.state)
 
 	const framing = useMolecule(FramingMolecule)
-	const { showModal: showFramingModal } = useSnapshot(framing.state)
+	const { show: showFraming } = useSnapshot(framing.state)
 
 	const calculator = useMolecule(CalculatorMolecule)
-	const { showModal: showCalculator } = useSnapshot(calculator.state)
+	const { show: showCalculator } = useSnapshot(calculator.state)
 
 	const about = useMolecule(AboutMolecule)
-	const { showModal: showAboutModal } = useSnapshot(about.state)
+	const { show: showAbout } = useSnapshot(about.state)
 
 	return (
 		<>
@@ -82,7 +82,7 @@ export const HomeMenu = memo(() => {
 							</Button>
 						</Tooltip>
 						<Tooltip content='Focuser' placement='bottom' showArrow>
-							<Button color='secondary' isDisabled isIconOnly onPointerUp={() => equipment.select('focuser')} size='lg' variant='light'>
+							<Button color='secondary' isDisabled={devices.focuser.length === 0} isIconOnly onPointerUp={() => equipment.select('focuser')} size='lg' variant='light'>
 								<img className='w-9' src={focuserIcon} />
 							</Button>
 						</Tooltip>
@@ -184,9 +184,9 @@ export const HomeMenu = memo(() => {
 					</div>
 				</PopoverContent>
 			</Popover>
-			{showSkyAtlasModal && <SkyAtlas />}
-			{showFramingModal && <Framing />}
-			{showAboutModal && <About />}
+			{showSkyAtlas && <SkyAtlas />}
+			{showFraming && <Framing />}
+			{showAbout && <About />}
 			{showCalculator && <Calculator />}
 		</>
 	)

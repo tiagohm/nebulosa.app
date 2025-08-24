@@ -10,7 +10,7 @@ import { HomeMolecule } from './home'
 import { ImageWorkspaceMolecule } from './image/workspace'
 
 export interface FramingState {
-	showModal: boolean
+	show: boolean
 	readonly request: Framing
 	hipsSurveys: HipsSurvey[]
 	loading: boolean
@@ -25,7 +25,7 @@ export const FramingMolecule = molecule((m) => {
 	const request = simpleLocalStorage.get('framing', () => structuredClone(DEFAULT_FRAMING))
 
 	const state = proxy<FramingState>({
-		showModal: false,
+		show: false,
 		request,
 		hipsSurveys: [],
 		loading: false,
@@ -40,7 +40,7 @@ export const FramingMolecule = molecule((m) => {
 
 		subscribers[1] = bus.subscribe<Partial<Framing>>('framing:load', (request) => {
 			Object.assign(state.request, request)
-			state.showModal = true
+			state.show = true
 			void load()
 		})
 
@@ -79,11 +79,11 @@ export const FramingMolecule = molecule((m) => {
 
 	function show() {
 		home.toggleMenu(false)
-		state.showModal = true
+		state.show = true
 	}
 
 	function close() {
-		state.showModal = false
+		state.show = false
 	}
 
 	return { state, update, load, show, close } as const

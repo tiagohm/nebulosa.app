@@ -10,6 +10,7 @@ import { ConnectionManager, connection } from 'src/api/connection'
 import { CoverManager, cover } from 'src/api/cover'
 import { DewHeaterManager, dewHeater } from 'src/api/dewheater'
 import { FlatPanelManager, flatPanel } from 'src/api/flatpanel'
+import { FocuserManager, focuser } from 'src/api/focuser'
 import { GuideOutputManager, guideOutput } from 'src/api/guideoutput'
 import { IndiDevicePropertyManager, IndiManager, IndiServerManager, indi } from 'src/api/indi'
 import { WebSocketMessageManager } from 'src/api/message'
@@ -57,16 +58,17 @@ fs.mkdirSync(Bun.env.framingDir, { recursive: true })
 
 const wsm = new WebSocketMessageManager()
 const notificationManager = new NotificationManager(wsm)
+const indiDevicePropertyManager = new IndiDevicePropertyManager(wsm)
 const connectionManager = new ConnectionManager(notificationManager)
 const guideOutputManager = new GuideOutputManager(wsm)
 const thermometerManager = new ThermometerManager(wsm)
-const indiDevicePropertyManager = new IndiDevicePropertyManager(wsm)
+const focuserManager = new FocuserManager(wsm, thermometerManager, indiDevicePropertyManager)
 const mountManager = new MountManager(wsm, guideOutputManager, indiDevicePropertyManager)
 const cameraManager = new CameraManager(wsm, connectionManager, guideOutputManager, thermometerManager, indiDevicePropertyManager, mountManager)
 const dewHeaterManager = new DewHeaterManager(wsm, indiDevicePropertyManager)
 const coverManager = new CoverManager(wsm, dewHeaterManager, indiDevicePropertyManager)
 const flatPanelManager = new FlatPanelManager(wsm, indiDevicePropertyManager)
-const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager, coverManager, flatPanelManager, dewHeaterManager, wsm)
+const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, coverManager, flatPanelManager, dewHeaterManager, wsm)
 const indiServerManager = new IndiServerManager(wsm)
 const confirmationManager = new ConfirmationManager(wsm)
 const framingManager = new FramingManager()
@@ -118,6 +120,7 @@ const app = new Elysia({
 	.use(indi(indiManager, indiServerManager, indiDevicePropertyManager, connectionManager))
 	.use(camera(cameraManager))
 	.use(mount(mountManager, connectionManager))
+	.use(focuser(focuserManager, connectionManager))
 	.use(thermometer(thermometerManager))
 	.use(guideOutput(guideOutputManager, connectionManager))
 	.use(cover(coverManager, connectionManager))

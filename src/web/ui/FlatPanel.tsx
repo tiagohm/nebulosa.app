@@ -24,7 +24,7 @@ export const FlatPanel = memo(() => {
 				<div className='flex flex-row items-center justify-between'>
 					<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={flatPanel.connect} />
 					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
-						<span className='leading-5'>FlatPanel</span>
+						<span className='leading-5'>Flat Panel</span>
 						<span className='text-xs font-normal text-gray-400 max-w-full'>{flatPanel.scope.flatPanel.name}</span>
 					</div>
 				</div>
@@ -32,9 +32,11 @@ export const FlatPanel = memo(() => {
 			maxWidth='280px'
 			name={`flat-panel-${flatPanel.scope.flatPanel.name}`}
 			onClose={flatPanel.close}>
-			<div className='mt-2 col-span-full flex flex-col items-center justify-center gap-5'>
-				<Switch isDisabled={!connected} isSelected={enabled} onValueChange={(enabled) => (enabled ? flatPanel.enable() : flatPanel.disable())} />
-				<div className='w-full flex flex-col justify-center items-center gap-1'>
+			<div className='mt-0 grid grid-cols-12 gap-2'>
+				<div className='col-span-full flex flex-row items-center justify-center'>
+					<Switch isDisabled={!connected} isSelected={enabled} onValueChange={(enabled) => (enabled ? flatPanel.enable() : flatPanel.disable())} />
+				</div>
+				<div className='col-span-full flex flex-col justify-center items-center gap-1'>
 					<Slider endContent={intensity.max} isDisabled={!connected || !enabled} maxValue={intensity.max} minValue={intensity.min} onChange={(value) => setIntensityValue(value as never)} size='lg' startContent={intensity.min} value={intensityValue} />
 					<span className='text-lg font-bold'>{intensityValue}</span>
 				</div>

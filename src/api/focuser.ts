@@ -69,7 +69,11 @@ export class FocuserManager {
 		switch (message.name) {
 			case 'CONNECTION':
 				if (connectionFor(client, device, message)) {
-					this.update(device, 'connected', message.state)
+					if (this.thermometer.has(device)) {
+						this.thermometer.update(device, 'connected', message.state)
+					} else {
+						this.update(device, 'connected', message.state)
+					}
 
 					if (!device.connected) {
 						this.thermometer.remove(device)
@@ -214,6 +218,10 @@ export class FocuserManager {
 		this.wsm.send<FocuserAdded>({ type: 'focuser:add', device })
 		bus.emit('focuser:add', device)
 		console.info('focuser added:', device.name)
+	}
+
+	has(device: Focuser) {
+		return this.focusers.has(device.name)
 	}
 
 	remove(device: Focuser) {

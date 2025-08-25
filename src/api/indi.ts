@@ -227,7 +227,7 @@ export class IndiServerManager {
 	}
 
 	async status() {
-		const enabled = process.platform === 'linux' && (await Bun.$`ps aux | grep "indiserver" | grep -v grep | grep -Ec -e "indiserver"`.nothrow().quiet()).text().trim() === '0'
+		const enabled = process.platform === 'linux' && (!!this.process || (await Bun.$`ps aux | grep "indiserver" | grep -v grep | grep -Ec -e "indiserver"`.nothrow().quiet()).text().trim() === '0')
 		const running = enabled && !!this.process && !this.process.killed
 		// biome-ignore format: don't break lines!
 		const drivers = enabled ? (await Bun.$`locate /usr/bin/indi_`.nothrow().quiet()).text().split('\n').map((e) => e.substring(9)).filter((e) => !!e) : []

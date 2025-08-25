@@ -65,6 +65,10 @@ export class DewHeaterManager {
 		console.info('dew heater added:', device.name)
 	}
 
+	has(device: DewHeater) {
+		return this.dewHeaters.has(device.name)
+	}
+
 	remove(device: DewHeater) {
 		if (this.dewHeaters.has(device.name) && device.hasDewHeater) {
 			device.hasDewHeater = false

@@ -49,7 +49,7 @@ export const Home = memo(() => {
 
 export const CameraList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const { camera } = useSnapshot(equipment.state.devices)
+	const camera = useSnapshot(equipment.state.camera)
 
 	return camera.map(
 		(camera) =>
@@ -63,7 +63,7 @@ export const CameraList = memo(() => {
 
 export const MountList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const { mount } = useSnapshot(equipment.state.devices)
+	const mount = useSnapshot(equipment.state.mount)
 
 	return mount.map(
 		(mount) =>
@@ -77,7 +77,7 @@ export const MountList = memo(() => {
 
 export const FocuserList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const { focuser } = useSnapshot(equipment.state.devices)
+	const focuser = useSnapshot(equipment.state.focuser)
 
 	return focuser.map(
 		(focuser) =>
@@ -91,7 +91,7 @@ export const FocuserList = memo(() => {
 
 export const GuideOutputList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const { guideOutput } = useSnapshot(equipment.state.devices)
+	const guideOutput = useSnapshot(equipment.state.guideOutput)
 
 	return guideOutput.map(
 		(guideOutput) =>
@@ -105,7 +105,7 @@ export const GuideOutputList = memo(() => {
 
 export const ThermometerList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const { thermometer } = useSnapshot(equipment.state.devices)
+	const thermometer = useSnapshot(equipment.state.thermometer)
 
 	return thermometer.map(
 		(thermometer) =>
@@ -119,7 +119,7 @@ export const ThermometerList = memo(() => {
 
 export const CoverList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const { cover } = useSnapshot(equipment.state.devices)
+	const cover = useSnapshot(equipment.state.cover)
 
 	return cover.map(
 		(cover) =>
@@ -133,7 +133,7 @@ export const CoverList = memo(() => {
 
 export const FlatPanelList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const { flatPanel } = useSnapshot(equipment.state.devices)
+	const flatPanel = useSnapshot(equipment.state.flatPanel)
 
 	return flatPanel.map(
 		(flatPanel) =>
@@ -147,7 +147,7 @@ export const FlatPanelList = memo(() => {
 
 export const DewHeaterList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const { dewHeater } = useSnapshot(equipment.state.devices)
+	const dewHeater = useSnapshot(equipment.state.dewHeater)
 
 	return dewHeater.map(
 		(dewHeater) =>

@@ -124,7 +124,11 @@ export class MountManager {
 		switch (message.name) {
 			case 'CONNECTION':
 				if (connectionFor(client, device, message)) {
-					this.update(device, 'connected', message.state)
+					if (this.guideOutput.has(device)) {
+						this.guideOutput.update(device, 'connected', message.state)
+					} else {
+						this.update(device, 'connected', message.state)
+					}
 
 					if (!device.connected) {
 						this.guideOutput.remove(device)
@@ -390,6 +394,10 @@ export class MountManager {
 		this.wsm.send<MountAdded>({ type: 'mount:add', device })
 		bus.emit('mount:add', device)
 		console.info('mount added:', device.name)
+	}
+
+	has(device: Mount) {
+		return this.mounts.has(device.name)
 	}
 
 	remove(device: Mount) {

@@ -38,15 +38,13 @@ export class ThermometerManager {
 		}
 	}
 
-	private update(device: Thermometer, property: keyof Thermometer, state?: PropertyState) {
+	update(device: Thermometer, property: keyof Thermometer, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
 
 		if (device.type === 'CAMERA') {
 			this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
 			bus.emit('camera:update', value)
-		}
-
-		if (device.type === 'FOCUSER') {
+		} else if (device.type === 'FOCUSER') {
 			this.wsm.send<FocuserUpdated>({ type: 'focuser:update', device: value, property, state })
 			bus.emit('focuser:update', value)
 		}
@@ -60,6 +58,10 @@ export class ThermometerManager {
 		this.wsm.send<ThermometerAdded>({ type: 'thermometer:add', device })
 		bus.emit('thermometer:add', device)
 		console.info('thermometer added:', device.name)
+	}
+
+	has(device: Thermometer) {
+		return this.thermometers.has(device.name)
 	}
 
 	remove(device: Thermometer) {

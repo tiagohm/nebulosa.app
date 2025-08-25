@@ -136,6 +136,10 @@ export class FlatPanelManager {
 		console.info('flat panel added:', device.name)
 	}
 
+	has(device: FlatPanel) {
+		return this.flatPanels.has(device.name)
+	}
+
 	remove(device: FlatPanel) {
 		if (this.flatPanels.has(device.name)) {
 			this.flatPanels.delete(device.name)

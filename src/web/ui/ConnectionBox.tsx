@@ -98,7 +98,7 @@ export const ConnectionBox = memo(() => {
 				</Select>
 				<ConnectButton isConnected={!!connected} isLoading={loading} onPointerUp={connection.connect} />
 			</div>
-			{showModal && <ConnectionEdit />}
+			{showModal && !connected && <ConnectionEdit />}
 		</>
 	)
 })

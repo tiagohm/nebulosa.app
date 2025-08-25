@@ -28,7 +28,7 @@
 		"bun-plugin-tailwind": "0.0.15",
 		"bunshi": "2.1.5",
 		"date-fns": "4.1.0",
-		"elysia": "1.3.18",
+		"elysia": "1.3.20",
 		"nebulosa": "github:tiagohm/nebulosa.ts",
 		"react": "19.1.1",
 		"react-dom": "19.1.1",

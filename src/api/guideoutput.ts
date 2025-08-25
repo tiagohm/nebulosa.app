@@ -82,6 +82,10 @@ export class GuideOutputManager {
 		console.info('guide output added:', device.name)
 	}
 
+	has(device: GuideOutput) {
+		return this.guideOutputs.has(device.name)
+	}
+
 	remove(device: GuideOutput) {
 		if (this.guideOutputs.has(device.name) && device.canPulseGuide) {
 			device.canPulseGuide = false

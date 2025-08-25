@@ -108,7 +108,12 @@ export class CameraManager {
 		switch (message.name) {
 			case 'CONNECTION':
 				if (connectionFor(client, device, message)) {
-					this.update(device, 'connected', message.state)
+					if (this.guideOutput.has(device) || this.thermometer.has(device)) {
+						this.guideOutput.update(device, 'connected', message.state)
+						this.thermometer.update(device, 'connected', message.state)
+					} else {
+						this.update(device, 'connected', message.state)
+					}
 
 					if (!device.connected) {
 						this.guideOutput.remove(device)
@@ -415,6 +420,10 @@ export class CameraManager {
 		this.wsm.send<CameraAdded>({ type: 'camera:add', device })
 		bus.emit('camera:add', device)
 		console.info('camera added:', device.name)
+	}
+
+	has(device: Camera) {
+		return this.cameras.has(device.name)
 	}
 
 	remove(device: Camera) {

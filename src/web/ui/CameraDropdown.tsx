@@ -8,7 +8,7 @@ import { Icons } from './Icon'
 
 export const CameraDropdown = memo(({ value, onValueChange }: Omit<DeviceDropdownProps<Camera>, 'items' | 'icon'>) => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const cameras = useSnapshot(equipment.state.devices.camera)
+	const cameras = useSnapshot(equipment.state.camera)
 
 	return <DeviceDropdown icon={Icons.Camera} items={cameras} onValueChange={onValueChange} value={value} />
 })

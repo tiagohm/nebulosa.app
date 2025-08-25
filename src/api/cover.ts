@@ -43,7 +43,11 @@ export class CoverManager {
 		switch (message.name) {
 			case 'CONNECTION':
 				if (connectionFor(client, device, message)) {
-					this.update(device, 'connected', message.state)
+					if (this.dewHeater.has(device)) {
+						this.dewHeater.update(device, 'connected', message.state)
+					} else {
+						this.update(device, 'connected', message.state)
+					}
 
 					if (!device.connected) {
 						this.dewHeater.remove(device)
@@ -147,6 +151,10 @@ export class CoverManager {
 		this.wsm.send<CoverAdded>({ type: 'cover:add', device })
 		bus.emit('cover:add', device)
 		console.info('cover added:', device.name)
+	}
+
+	has(device: Cover) {
+		return this.covers.has(device.name)
 	}
 
 	remove(device: Cover) {

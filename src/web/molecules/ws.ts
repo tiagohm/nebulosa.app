@@ -1,6 +1,6 @@
 import { molecule } from 'bunshi'
 import bus from 'src/shared/bus'
-import type { DeviceMessageEvent, Notification } from 'src/shared/types'
+import type { CameraCaptureTaskEvent, Confirmation, ConnectionEvent, DeviceMessageEvent, IndiDevicePropertyEvent, IndiServerEvent, Notification } from 'src/shared/types'
 import { NotificationMolecule } from './notification'
 
 export const WebSocketMolecule = molecule((m) => {
@@ -15,7 +15,7 @@ export const WebSocketMolecule = molecule((m) => {
 	ws.addEventListener('message', (message) => {
 		if (!bus.hasSubscribers()) return
 
-		const data = JSON.parse(message.data) as DeviceMessageEvent | Notification
+		const data = JSON.parse(message.data) as DeviceMessageEvent | ConnectionEvent | IndiDevicePropertyEvent | IndiServerEvent | Confirmation | CameraCaptureTaskEvent | Notification
 
 		switch (data.type) {
 			case 'camera:add':

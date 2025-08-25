@@ -1,9 +1,10 @@
 import type { Angle } from 'nebulosa/src/angle'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
+import type { NewVector } from 'nebulosa/src/indi'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DeviceProperties, DeviceProperty, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
 import { type SkyObjectSearchResult, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -59,12 +60,28 @@ export namespace Api {
 	}
 
 	export namespace Indi {
+		export function devices() {
+			return json<string[]>('/indi/devices', 'get')
+		}
+
 		export function connect(device: Device) {
 			return res(`/indi/${device.name}/connect`, 'post')
 		}
 
 		export function disconnect(device: Device) {
 			return res(`/indi/${device.name}/disconnect`, 'post')
+		}
+
+		export namespace Properties {
+			export function list(device: Device | string) {
+				const name = typeof device === 'string' ? device : device.name
+				return json<DeviceProperties>(`/indi/${name}/properties`, 'get')
+			}
+
+			export function send(device: Device | string, type: DeviceProperty['type'], message: NewVector) {
+				const name = typeof device === 'string' ? device : device.name
+				return json<DeviceProperties>(`/indi/${name}/properties/send?type=${type}`, 'post', message)
+			}
 		}
 
 		export namespace Server {

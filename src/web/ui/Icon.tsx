@@ -725,4 +725,12 @@ export namespace Icons {
 			</svg>
 		)
 	}
+
+	export const Send = ({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
+		return (
+			<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' {...props}>
+				<path d='M2,21L23,12L2,3V10L17,12L2,14V21Z' />
+			</svg>
+		)
+	}
 }

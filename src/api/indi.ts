@@ -1,9 +1,9 @@
 import { Elysia } from 'elysia'
 // biome-ignore format: too long!
-import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, IndiClient, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
+import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, IndiClient, IndiClientHandler, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
 // biome-ignore format: too long!
-import type { Device, DeviceProperties, DeviceProperty, IndiPropertyUpdated, IndiServerStart, IndiServerStarted, IndiServerStatus, IndiServerStopped } from '../shared/types'
+import type { Device, DeviceProperties, DeviceProperty, IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from '../shared/types'
 import type { CameraManager } from './camera'
 import type { ConnectionManager } from './connection'
 import type { CoverManager } from './cover'
@@ -66,7 +66,7 @@ export function disconnect(client: IndiClient, device: Device) {
 	}
 }
 
-export class IndiManager {
+export class IndiManager implements IndiClientHandler {
 	constructor(
 		readonly camera: CameraManager,
 		readonly guideOutput: GuideOutputManager,
@@ -76,6 +76,7 @@ export class IndiManager {
 		readonly cover: CoverManager,
 		readonly flatPanel: FlatPanelManager,
 		readonly dewHeater: DewHeaterManager,
+		readonly properties: IndiDevicePropertyManager,
 		readonly wsm: WebSocketMessageManager,
 	) {}
 
@@ -120,6 +121,18 @@ export class IndiManager {
 		this.camera.blobVector(client, message, tag)
 	}
 
+	delProperty(client: IndiClient, message: DelProperty) {
+		this.camera.delProperty(client, message)
+		this.mount.delProperty(client, message)
+		this.focuser.delProperty(client, message)
+		this.cover.delProperty(client, message)
+		this.flatPanel.delProperty(client, message)
+		// this.guideOutput.delProperty(client, message)
+		// this.thermometer.delProperty(client, message)
+		// this.dewHeater.delProperty(client, message)
+		this.properties.remove(message)
+	}
+
 	get(id: string): Device | undefined {
 		return this.camera.get(id) || this.mount.get(id) || this.focuser.get(id) || this.cover.get(id) || this.flatPanel.get(id) || this.guideOutput.get(id) || this.thermometer.get(id) || this.dewHeater.get(id)
 	}
@@ -127,29 +140,44 @@ export class IndiManager {
 
 export class IndiDevicePropertyManager {
 	private readonly properties = new Map<string, DeviceProperties>()
-	private readonly listeners = new Set<string>()
+	private readonly listeners = new Map<string, number>()
 
 	constructor(readonly wsm: WebSocketMessageManager) {}
 
 	listen(name: string) {
-		this.listeners.add(name)
+		const count = this.listeners.get(name) ?? 0
+		this.listeners.set(name, count + 1)
 	}
 
 	unlisten(name: string) {
-		this.listeners.delete(name)
+		const count = this.listeners.get(name)
+
+		if (count !== undefined) {
+			if (count === 1) {
+				this.listeners.delete(name)
+			} else {
+				this.listeners.set(name, count - 1)
+			}
+		}
 	}
 
-	send(device: Device, name: string, property: DeviceProperty) {
-		if (this.listeners.has(device.name)) {
-			this.wsm.send<IndiPropertyUpdated>({ type: 'indi:property:update', device: device.name, name, property })
-		}
+	private notify(device: Device | string, name: string, property: DeviceProperty, type: 'update' | 'remove') {
+		device = typeof device === 'string' ? device : device.name
+
+		// if (this.listeners.get(device)) {
+		this.wsm.send<IndiDevicePropertyEvent>({ type: `indi:property:${type}`, device, name, property })
+		// }
+	}
+
+	devices() {
+		return Array.from(this.properties.keys())
 	}
 
 	get(device: Device) {
 		return this.properties.get(device.name)
 	}
 
-	add(device: Device, message: DefVector | SetVector, tag: string, send: boolean = true) {
+	add(device: Device, message: DefVector | SetVector, tag: string, notify: boolean = true) {
 		let properties = this.properties.get(device.name)
 
 		if (!properties) {
@@ -161,7 +189,7 @@ export class IndiDevicePropertyManager {
 			const property = message as DeviceProperty
 			property.type = tag.includes('Switch') ? 'SWITCH' : tag.includes('Number') ? 'NUMBER' : tag.includes('Text') ? 'TEXT' : tag.includes('BLOB') ? 'BLOB' : 'LIGHT'
 			properties[message.name] = property
-			if (send) this.send(device, message.name, property)
+			if (notify) this.notify(device, message.name, property, 'update')
 			return true
 		} else {
 			let updated = false
@@ -186,12 +214,45 @@ export class IndiDevicePropertyManager {
 					}
 				}
 
-				if (updated && send) {
-					this.send(device, message.name, property)
+				if (updated && notify) {
+					this.notify(device, message.name, property, 'update')
 				}
 			}
 
 			return updated
+		}
+	}
+
+	remove(message: DelProperty) {
+		const properties = this.properties.get(message.device)
+
+		if (!properties) return false
+
+		const { device, name } = message
+
+		if (name) {
+			const property = properties[name]
+
+			if (property) {
+				delete properties[name]
+				if (Object.keys(properties).length === 0) this.properties.delete(device)
+				this.notify(device, name, property, 'remove')
+				return true
+			}
+		} else {
+			// TODO: Remove all properties from device
+		}
+
+		return false
+	}
+
+	send(client: IndiClient, type: DeviceProperty['type'], message: NewVector) {
+		if (type === 'SWITCH') {
+			client.sendSwitch(message as never)
+		} else if (type === 'NUMBER') {
+			client.sendNumber(message as never)
+		} else if (type === 'TEXT') {
+			client.sendText(message as never)
 		}
 	}
 }
@@ -211,11 +272,11 @@ export class IndiServerManager {
 
 		p.exited.then((code) => {
 			bus.emit('indi:server:stop', { pid: p.pid, code })
-			this.wsm.send<IndiServerStopped>({ type: 'indi:server:stop', pid: p.pid, code })
+			this.wsm.send<IndiServerEvent>({ type: 'indi:server:stop', pid: p.pid, code })
 		})
 
 		bus.emit('indi:server:start', p.pid)
-		this.wsm.send<IndiServerStarted>({ type: 'indi:server:start', pid: p.pid })
+		this.wsm.send<IndiServerEvent>({ type: 'indi:server:start', pid: p.pid })
 		this.process = p
 	}
 
@@ -242,12 +303,13 @@ export function indi(indi: IndiManager, server: IndiServerManager, property: Ind
 
 	const app = new Elysia({ prefix: '/indi' })
 		// Endpoints!
-		.get('/:id', ({ params }) => deviceFromParams(params))
+		.get('/devices', () => property.devices())
 		.post('/:id/connect', ({ params }) => connect(connection.get(), deviceFromParams(params)))
 		.post('/:id/disconnect', ({ params }) => disconnect(connection.get(), deviceFromParams(params)))
 		.get('/:id/properties', ({ params }) => property.get(deviceFromParams(params)))
 		.post('/:id/properties/listen', ({ params }) => property.listen(decodeURIComponent(params.id)))
 		.post('/:id/properties/unlisten', ({ params }) => property.unlisten(decodeURIComponent(params.id)))
+		.post('/:id/properties/send', ({ query, body }) => property.send(connection.get(), query.type as never, body as never))
 		.post('/server/start', ({ body }) => server.start(body as never))
 		.post('/server/stop', () => server.stop())
 		.get('/server/status', () => server.status())

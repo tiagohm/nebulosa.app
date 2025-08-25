@@ -1,5 +1,5 @@
 import Elysia from 'elysia'
-import type { DefNumberVector, IndiClient, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
+import type { DefNumberVector, DelProperty, IndiClient, IndiClientHandler, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
 import type { CameraUpdated, GuideOutput, GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse, MountUpdated } from '../shared/types'
 import type { ConnectionManager } from './connection'
@@ -29,7 +29,7 @@ export function pulseEast(client: IndiClient, device: GuideOutput, duration: num
 	}
 }
 
-export class GuideOutputManager {
+export class GuideOutputManager implements IndiClientHandler {
 	private readonly guideOutputs = new Map<string, GuideOutput>()
 
 	constructor(readonly wsm: WebSocketMessageManager) {
@@ -56,6 +56,13 @@ export class GuideOutputManager {
 
 				return
 			}
+		}
+	}
+
+	delProperty(client: IndiClient, message: DelProperty) {
+		if (!message.name) {
+			const device = this.guideOutputs.get(message.device)
+			device && this.remove(device)
 		}
 	}
 

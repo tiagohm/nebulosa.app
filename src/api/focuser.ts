@@ -1,5 +1,5 @@
 import Elysia from 'elysia'
-import type { DefNumberVector, DefSwitchVector, DefTextVector, IndiClient, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
+import type { DefNumberVector, DefSwitchVector, DefTextVector, DelProperty, IndiClient, IndiClientHandler, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import bus from 'src/shared/bus'
 import { DEFAULT_FOCUSER, type Focuser, type FocuserAdded, type FocuserRemoved, type FocuserUpdated } from 'src/shared/types'
 import type { ConnectionManager } from './connection'
@@ -45,7 +45,7 @@ export function reverse(client: IndiClient, focuser: Focuser, enabled: boolean) 
 	}
 }
 
-export class FocuserManager {
+export class FocuserManager implements IndiClientHandler {
 	private readonly focusers = new Map<string, Focuser>()
 
 	constructor(
@@ -205,6 +205,13 @@ export class FocuserManager {
 		if (!device) return
 
 		this.properties.add(device, message, tag)
+	}
+
+	delProperty(client: IndiClient, message: DelProperty) {
+		if (!message.name) {
+			const device = this.focusers.get(message.device)
+			device && this.remove(device)
+		}
 	}
 
 	update(device: Focuser, property: keyof Focuser, state?: PropertyState) {

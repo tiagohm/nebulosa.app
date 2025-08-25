@@ -1,10 +1,10 @@
 import Elysia from 'elysia'
-import type { DefNumberVector, IndiClient, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
+import type { DefNumberVector, DelProperty, IndiClient, IndiClientHandler, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
 import type { CameraUpdated, FocuserUpdated, Thermometer, ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from '../shared/types'
 import type { WebSocketMessageManager } from './message'
 
-export class ThermometerManager {
+export class ThermometerManager implements IndiClientHandler {
 	private readonly thermometers = new Map<string, Thermometer>()
 
 	constructor(readonly wsm: WebSocketMessageManager) {
@@ -35,6 +35,13 @@ export class ThermometerManager {
 		if (temperature !== device.temperature) {
 			device.temperature = temperature
 			this.update(device, 'temperature', message.state)
+		}
+	}
+
+	delProperty(client: IndiClient, message: DelProperty) {
+		if (!message.name) {
+			const device = this.thermometers.get(message.device)
+			device && this.remove(device)
 		}
 	}
 

@@ -1,7 +1,7 @@
 import { molecule, onMount } from 'bunshi'
+import bus from 'src/shared/bus'
 import { proxy, subscribe } from 'valtio'
 import { simpleLocalStorage } from '@/shared/storage'
-import { HomeMolecule } from './home'
 
 export interface CalculatorState {
 	show: boolean
@@ -40,8 +40,6 @@ export interface CalculatorState {
 }
 
 export const CalculatorMolecule = molecule((m) => {
-	const home = m(HomeMolecule)
-
 	const state = proxy<CalculatorState>({
 		show: false,
 		focalLength: simpleLocalStorage.get<CalculatorState['focalLength']>('calculator.focalLength', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
@@ -68,7 +66,7 @@ export const CalculatorMolecule = molecule((m) => {
 	})
 
 	function show() {
-		home.toggleMenu(false)
+		bus.emit('homeMenu:toggle', false)
 		state.show = true
 	}
 

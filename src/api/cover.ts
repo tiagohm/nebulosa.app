@@ -1,5 +1,5 @@
 import Elysia from 'elysia'
-import type { DefNumberVector, DefSwitchVector, DefTextVector, IndiClient, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
+import type { DefNumberVector, DefSwitchVector, DefTextVector, DelProperty, IndiClient, IndiClientHandler, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
 import { type Cover, type CoverAdded, type CoverRemoved, type CoverUpdated, DEFAULT_COVER } from '../shared/types'
 import type { ConnectionManager } from './connection'
@@ -19,7 +19,7 @@ export function park(client: IndiClient, device: Cover) {
 	}
 }
 
-export class CoverManager {
+export class CoverManager implements IndiClientHandler {
 	private readonly covers = new Map<string, Cover>()
 
 	constructor(
@@ -137,6 +137,13 @@ export class CoverManager {
 		if (!device) return
 
 		this.properties.add(device, message, tag)
+	}
+
+	delProperty(client: IndiClient, message: DelProperty) {
+		if (!message.name) {
+			const device = this.covers.get(message.device)
+			device && this.remove(device)
+		}
 	}
 
 	update(device: Cover, property: keyof Cover, state?: PropertyState) {

@@ -1,5 +1,5 @@
 import Elysia from 'elysia'
-import type { DefNumberVector, IndiClient, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
+import type { DefNumberVector, DelProperty, IndiClient, IndiClientHandler, PropertyState, SetNumberVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
 import type { CoverUpdated, DeviceProperties, DewHeater, DewHeaterAdded, DewHeaterRemoved, DewHeaterUpdated } from '../shared/types'
 import type { ConnectionManager } from './connection'
@@ -12,7 +12,7 @@ export function pwm(client: IndiClient, device: DewHeater, value: number, proper
 	}
 }
 
-export class DewHeaterManager {
+export class DewHeaterManager implements IndiClientHandler {
 	private readonly dewHeaters = new Map<string, DewHeater>()
 
 	constructor(
@@ -42,6 +42,13 @@ export class DewHeaterManager {
 
 				return
 			}
+		}
+	}
+
+	delProperty(client: IndiClient, message: DelProperty) {
+		if (!message.name) {
+			const device = this.dewHeaters.get(message.device)
+			device && this.remove(device)
 		}
 	}
 

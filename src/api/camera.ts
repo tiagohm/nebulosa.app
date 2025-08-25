@@ -2,7 +2,7 @@ import Elysia from 'elysia'
 import fs, { mkdir } from 'fs/promises'
 import { dateNow } from 'nebulosa/src/datetime'
 import type { CfaPattern } from 'nebulosa/src/image'
-import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, IndiClient, OneNumber, PropertyState, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
+import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, DelProperty, IndiClient, IndiClientHandler, OneNumber, PropertyState, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import { join } from 'path'
 import bus from '../shared/bus'
 import { type Camera, type CameraAdded, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_TASK_EVENT, type DeviceProperties, type FrameType, type Mount } from '../shared/types'
@@ -80,7 +80,7 @@ export function snoop(client: IndiClient, camera: Camera, mount?: Mount) {
 	client.sendText({ device: camera.name, name: 'ACTIVE_DEVICES', elements: { ACTIVE_TELESCOPE: mount?.name ?? '', ACTIVE_ROTATOR: '', ACTIVE_FOCUSER: '', ACTIVE_FILTER: '' } })
 }
 
-export class CameraManager {
+export class CameraManager implements IndiClientHandler {
 	private readonly cameras = new Map<string, Camera>()
 	private readonly tasks = new Map<string, CameraCaptureTask>()
 
@@ -405,6 +405,13 @@ export class CameraManager {
 				}
 
 				return
+		}
+	}
+
+	delProperty(client: IndiClient, message: DelProperty) {
+		if (!message.name) {
+			const device = this.cameras.get(message.device)
+			device && this.remove(device)
 		}
 	}
 

@@ -5,7 +5,7 @@ import { constellation } from 'nebulosa/src/constellation'
 import { meter } from 'nebulosa/src/distance'
 import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { precessFk5ToJ2000 } from 'nebulosa/src/fk5'
-import type { DefNumberVector, DefSwitch, DefSwitchVector, DefTextVector, IndiClient, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
+import type { DefNumberVector, DefSwitch, DefSwitchVector, DefTextVector, DelProperty, IndiClient, IndiClientHandler, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import { type GeographicPosition, geodeticLocation, localSiderealTime } from 'nebulosa/src/location'
 import { timeNow } from 'nebulosa/src/time'
 import { earth } from 'nebulosa/src/vsop87e'
@@ -99,7 +99,7 @@ export function moveEast(client: IndiClient, mount: Mount, enable: boolean) {
 	else client.sendSwitch({ device: mount.name, name: 'TELESCOPE_MOTION_WE', elements: { MOTION_EAST: false } })
 }
 
-export class MountManager {
+export class MountManager implements IndiClientHandler {
 	private readonly mounts = new Map<string, Mount>()
 	private readonly geographicPositions = new Map<Mount, GeographicPosition>()
 
@@ -381,6 +381,13 @@ export class MountManager {
 		if (!device) return
 
 		this.properties.add(device, message, tag)
+	}
+
+	delProperty(client: IndiClient, message: DelProperty) {
+		if (!message.name) {
+			const device = this.mounts.get(message.device)
+			device && this.remove(device)
+		}
 	}
 
 	update(device: Mount, property: keyof Mount, state?: PropertyState) {

@@ -1,9 +1,9 @@
 import { molecule, onMount } from 'bunshi'
+import bus from 'src/shared/bus'
 import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_SKY_OBJECT_SEARCH, type SkyObjectSearch, type SkyObjectSearchResult } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
-import { HomeMolecule } from './home'
 
 export interface SkyAtlasState {
 	show: boolean
@@ -102,7 +102,6 @@ export const DeepSkyObjectMolecule = molecule(() => {
 let skyAtlasState: SkyAtlasState | undefined
 
 export const SkyAtlasMolecule = molecule((m) => {
-	const home = m(HomeMolecule)
 	const dsos = m(DeepSkyObjectMolecule)
 
 	const state =
@@ -115,7 +114,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 	skyAtlasState = state
 
 	function show() {
-		home.toggleMenu(false)
+		bus.emit('homeMenu:toggle', false)
 		state.show = true
 	}
 

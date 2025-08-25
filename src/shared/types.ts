@@ -5,7 +5,7 @@ import type { Constellation } from 'nebulosa/src/constellation'
 import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
-import type { DefNumber, DefVector, PropertyState, VectorType } from 'nebulosa/src/indi'
+import type { DefBlobVector, DefLightVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, PropertyState } from 'nebulosa/src/indi'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
 import type { Velocity } from 'nebulosa/src/velocity'
@@ -127,6 +127,11 @@ export interface Connect {
 export interface ConnectionStatus extends Connect {
 	id: string
 	ip?: string
+}
+
+export interface ConnectionEvent extends WebSocketMessage {
+	readonly type: 'connection:open' | 'connection:close'
+	readonly status: ConnectionStatus
 }
 
 // File System
@@ -259,19 +264,14 @@ export interface IndiServerStatus {
 	readonly drivers: string[]
 }
 
-export interface IndiServerStarted extends WebSocketMessage {
-	readonly type: 'indi:server:start'
+export interface IndiServerEvent extends WebSocketMessage {
+	readonly type: 'indi:server:start' | 'indi:server:stop'
 	readonly pid: number
+	readonly code?: number
 }
 
-export interface IndiServerStopped extends WebSocketMessage {
-	readonly type: 'indi:server:stop'
-	readonly pid: number
-	readonly code: number
-}
-
-export interface IndiPropertyUpdated extends WebSocketMessage {
-	readonly type: 'indi:property:update'
+export interface IndiDevicePropertyEvent extends WebSocketMessage {
+	readonly type: 'indi:property:update' | 'indi:property:remove'
 	readonly device: string
 	readonly name: string
 	readonly property: DeviceProperty
@@ -360,11 +360,9 @@ export type DewHeaterMessageEvent = DewHeaterAdded | DewHeaterUpdated | DewHeate
 
 export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | FocuserMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent | CoverMessageEvent | FlatPanelMessageEvent | DewHeaterMessageEvent
 
-export type DeviceProperty = DefVector & {
-	type: Uppercase<VectorType>
-}
+export type DeviceProperty = (DefTextVector & { type: 'TEXT' }) | (DefNumberVector & { type: 'NUMBER' }) | (DefSwitchVector & { type: 'SWITCH' }) | (DefLightVector & { type: 'LIGHT' }) | (DefBlobVector & { type: 'BLOB' })
 
-export type DeviceProperties = Record<string, DeviceProperty | undefined>
+export type DeviceProperties = Record<string, DeviceProperty>
 
 export interface DriverInfo {
 	executable: string

@@ -1,5 +1,5 @@
 import Elysia from 'elysia'
-import type { DefNumberVector, DefSwitchVector, DefTextVector, IndiClient, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
+import type { DefNumberVector, DefSwitchVector, DefTextVector, DelProperty, IndiClient, IndiClientHandler, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
 import { DEFAULT_FLAT_PANEL, type FlatPanel, type FlatPanelAdded, type FlatPanelRemoved, type FlatPanelUpdated } from '../shared/types'
 import type { ConnectionManager } from './connection'
@@ -20,7 +20,7 @@ export function disable(client: IndiClient, device: FlatPanel) {
 	client.sendSwitch({ device: device.name, name: 'FLAT_LIGHT_CONTROL', elements: { FLAT_LIGHT_OFF: true } })
 }
 
-export class FlatPanelManager {
+export class FlatPanelManager implements IndiClientHandler {
 	private readonly flatPanels = new Map<string, FlatPanel>()
 
 	constructor(
@@ -120,6 +120,13 @@ export class FlatPanelManager {
 		if (!device) return
 
 		this.properties.add(device, message, tag)
+	}
+
+	delProperty(client: IndiClient, message: DelProperty) {
+		if (!message.name) {
+			const device = this.flatPanels.get(message.device)
+			device && this.remove(device)
+		}
 	}
 
 	update(device: FlatPanel, property: keyof FlatPanel, state?: PropertyState) {

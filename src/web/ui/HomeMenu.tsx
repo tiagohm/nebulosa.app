@@ -28,11 +28,13 @@ import { CalculatorMolecule } from '@/molecules/calculator'
 import { FramingMolecule } from '@/molecules/framing'
 import { HomeMolecule } from '@/molecules/home'
 import { type EquipmentDeviceType, EquipmentMolecule } from '@/molecules/indi/equipment'
+import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { About } from './About'
 import { Calculator } from './Calculator'
 import { Framing } from './Framing'
 import { Icons } from './Icon'
+import { IndiPanelControl } from './IndiPanelControl'
 import { SkyAtlas } from './SkyAtlas'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
@@ -43,6 +45,9 @@ export const HomeMenu = memo(() => {
 
 	const framing = useMolecule(FramingMolecule)
 	const { show: showFraming } = useSnapshot(framing.state)
+
+	const ipc = useMolecule(IndiPanelControlMolecule)
+	const { show: showIndiPanelControl } = useSnapshot(ipc.state)
 
 	const calculator = useMolecule(CalculatorMolecule)
 	const { show: showCalculator } = useSnapshot(calculator.state)
@@ -55,6 +60,7 @@ export const HomeMenu = memo(() => {
 			<HomeMenuPopover />
 			{showSkyAtlas && <SkyAtlas />}
 			{showFraming && <Framing />}
+			{showIndiPanelControl && <IndiPanelControl />}
 			{showAbout && <About />}
 			{showCalculator && <Calculator />}
 		</>
@@ -69,6 +75,7 @@ export const HomeMenuPopover = memo(() => {
 	const { selected, camera, mount, focuser, cover, flatPanel, guideOutput, thermometer, dewHeater } = useSnapshot(equipment.state)
 
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
+	const ipc = useMolecule(IndiPanelControlMolecule)
 	const framing = useMolecule(FramingMolecule)
 	const calculator = useMolecule(CalculatorMolecule)
 	const about = useMolecule(AboutMolecule)
@@ -168,7 +175,7 @@ export const HomeMenuPopover = memo(() => {
 						</Button>
 					</Tooltip>
 					<Tooltip content='INDI' placement='bottom' showArrow>
-						<Button color='secondary' isDisabled={camera.length === 0} isIconOnly size='lg' variant='light'>
+						<Button color='secondary' isDisabled={!camera.length && !mount.length && !focuser.length && !cover.length && !flatPanel.length && !guideOutput.length && !thermometer.length && !dewHeater.length} isIconOnly onPointerUp={ipc.show} size='lg' variant='light'>
 							<img className='w-9' src={indiIcon} />
 						</Button>
 					</Tooltip>

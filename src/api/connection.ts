@@ -1,13 +1,17 @@
 import Elysia from 'elysia'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
-import type { Connect, ConnectionStatus } from '../shared/types'
+import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
+import type { WebSocketMessageManager } from './message'
 import type { NotificationManager } from './notification'
 
 export class ConnectionManager {
 	private readonly clients = new Map<string, IndiClient>()
 
-	constructor(readonly notification: NotificationManager) {
+	constructor(
+		readonly wsm: WebSocketMessageManager,
+		readonly notification: NotificationManager,
+	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove the client from the active connections
 			this.disconnect(client)
@@ -37,8 +41,13 @@ export class ConnectionManager {
 				if (await client.connect(req.host, req.port)) {
 					const id = Bun.MD5.hash(`${client.remoteIp}:${client.remotePort}:INDI`, 'hex')
 					this.clients.set(id, client)
+
 					console.info('new connection to INDI server', client.remoteIp, client.remotePort)
-					return this.status(client)
+
+					const status = this.status(client)!
+					bus.emit('connection:open', status)
+					this.wsm.send<ConnectionEvent>({ type: 'connection:open', status })
+					return status
 				}
 			} catch (e) {
 				this.notification.send({ body: 'Failed to connect to INDI server', severity: 'error' })
@@ -53,16 +62,29 @@ export class ConnectionManager {
 			const client = this.clients.get(id)
 
 			if (client) {
+				const status = this.status(client)!
+
 				client.close()
 				this.clients.delete(id)
+
+				bus.emit('connection:close', status)
+				this.wsm.send<ConnectionEvent>({ type: 'connection:close', status })
+
 				console.info('disconnected from INDI server', client.remoteIp, client.remotePort)
 			}
 		} else {
 			for (const [key, client] of this.clients) {
 				if (client === id) {
+					const status = this.status(client)!
+
 					client.close()
 					this.clients.delete(key)
+
+					bus.emit('connection:close', status)
+					this.wsm.send<ConnectionEvent>({ type: 'connection:close', status })
+
 					console.info('disconnected from INDI server', client.remoteIp, client.remotePort)
+
 					break
 				}
 			}

@@ -49,7 +49,7 @@ const Property = memo(({ property, onSend }: PropertyProps) => {
 
 	const handleValueChange = useCallback((element: DefElement, value: unknown) => {
 		if (property.type === 'SWITCH') {
-			onSend(property, { device: property.device, name: property.name, elements: { [element.name]: true } })
+			onSend(property, { device: property.device, name: property.name, elements: { [element.name]: value as boolean } })
 		} else {
 			elements.current[element.name] = value as never
 		}
@@ -155,8 +155,16 @@ interface SwitchElementProps {
 }
 
 function SwitchElement({ label, value, rule, isReadonly, onValueChange }: SwitchElementProps) {
+	const handleValueChange = useCallback(() => {
+		if (rule === 'AnyOfMany') {
+			onValueChange(!value)
+		} else {
+			onValueChange(true)
+		}
+	}, [onValueChange])
+
 	return (
-		<Button color={rule === 'AtMostOne' ? 'default' : value ? 'success' : 'danger'} isDisabled={isReadonly} onPointerUp={() => onValueChange(true)} variant='flat'>
+		<Button color={rule === 'AtMostOne' ? 'default' : value ? 'success' : 'danger'} isDisabled={isReadonly} onPointerUp={handleValueChange} variant='flat'>
 			{label}
 		</Button>
 	)

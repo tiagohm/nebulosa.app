@@ -89,7 +89,6 @@ export class CameraManager implements IndiClientHandler {
 		readonly connection: ConnectionManager,
 		readonly guideOutput: GuideOutputManager,
 		readonly thermometer: ThermometerManager,
-		readonly properties: IndiDevicePropertyManager,
 		readonly mount: MountManager,
 	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
@@ -102,8 +101,6 @@ export class CameraManager implements IndiClientHandler {
 		const device = this.cameras.get(message.device)
 
 		if (!device) return
-
-		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			case 'CONNECTION':
@@ -162,8 +159,6 @@ export class CameraManager implements IndiClientHandler {
 		const device = this.cameras.get(message.device)
 
 		if (!device) return
-
-		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			case 'CCD_INFO': {
@@ -360,7 +355,6 @@ export class CameraManager implements IndiClientHandler {
 				if (!this.cameras.has(message.device)) {
 					const camera: Camera = { ...structuredClone(DEFAULT_CAMERA), id: message.device, name: message.device, driver: { executable, version } }
 					this.add(camera)
-					this.properties.add(camera, message, tag, false)
 					ask(client, camera)
 				}
 			} else if (this.cameras.has(message.device)) {
@@ -373,8 +367,6 @@ export class CameraManager implements IndiClientHandler {
 		const device = this.cameras.get(message.device)
 
 		if (!device) return
-
-		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			case 'CCD_CFA':
@@ -464,7 +456,7 @@ export class CameraManager implements IndiClientHandler {
 		return this.cameras.get(id)
 	}
 
-	startCameraCaptureTask(device: Camera, req: CameraCaptureStart) {
+	startCameraCaptureTask(device: Camera, req: CameraCaptureStart, property: IndiDevicePropertyManager) {
 		// Stop any existing task for this camera and remove its handler
 		if (this.tasks.has(device.name)) {
 			const task = this.tasks.get(device.name)!
@@ -473,7 +465,7 @@ export class CameraManager implements IndiClientHandler {
 
 		// Start a new task for the camera
 		const client = this.connection.get()
-		const task = new CameraCaptureTask(device, req, client, this.properties, this.handleCameraCaptureTaskEvent.bind(this))
+		const task = new CameraCaptureTask(device, req, client, property, this.handleCameraCaptureTaskEvent.bind(this))
 		this.tasks.set(device.name, task)
 		const mount = req.mount ? this.mount.get(req.mount) : undefined
 		snoop(client, device, mount)
@@ -485,7 +477,7 @@ export class CameraManager implements IndiClientHandler {
 	}
 }
 
-export function camera(camera: CameraManager) {
+export function camera(camera: CameraManager, property: IndiDevicePropertyManager) {
 	function cameraFromParams(params: { id: string }) {
 		return camera.get(decodeURIComponent(params.id))!
 	}
@@ -496,7 +488,7 @@ export function camera(camera: CameraManager) {
 		.get('/:id', ({ params }) => cameraFromParams(params))
 		.post('/:id/cooler', ({ params, body }) => cooler(camera.connection.get(), cameraFromParams(params), body as never))
 		.post('/:id/temperature', ({ params, body }) => temperature(camera.connection.get(), cameraFromParams(params), body as never))
-		.post('/:id/start', ({ params, body }) => camera.startCameraCaptureTask(cameraFromParams(params), body as never))
+		.post('/:id/start', ({ params, body }) => camera.startCameraCaptureTask(cameraFromParams(params), body as never, property))
 		.post('/:id/stop', ({ params }) => camera.stopCameraCaptureTask(cameraFromParams(params)))
 
 	return app

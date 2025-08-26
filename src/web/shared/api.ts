@@ -73,14 +73,16 @@ export namespace Api {
 		}
 
 		export namespace Properties {
-			export function list(device: Device | string) {
-				const name = typeof device === 'string' ? device : device.name
-				return json<DeviceProperties>(`/indi/${name}/properties`, 'get')
+			export function list(device: string) {
+				return json<DeviceProperties>(`/indi/${device}/properties`, 'get')
 			}
 
-			export function send(device: Device | string, type: DeviceProperty['type'], message: NewVector) {
-				const name = typeof device === 'string' ? device : device.name
-				return json<DeviceProperties>(`/indi/${name}/properties/send?type=${type}`, 'post', message)
+			export function send(device: string, type: DeviceProperty['type'], message: NewVector) {
+				return json<DeviceProperties>(`/indi/${device}/properties/send?type=${type}`, 'post', message)
+			}
+
+			export function ping(device: string) {
+				return res(`/indi/${device}/properties/ping`, 'post')
 			}
 		}
 

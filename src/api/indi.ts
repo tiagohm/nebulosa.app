@@ -93,6 +93,7 @@ export class IndiManager implements IndiClientHandler {
 		// this.guideOutput.switchVector(client, message, tag)
 		// this.thermometer.switchVector(client, message, tag)
 		// this.dewHeater.switchVector(client, message, tag)
+		this.properties.add(message, tag)
 	}
 
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
@@ -104,6 +105,7 @@ export class IndiManager implements IndiClientHandler {
 		this.guideOutput.numberVector(client, message, tag)
 		this.thermometer.numberVector(client, message, tag)
 		this.dewHeater.numberVector(client, message, tag)
+		this.properties.add(message, tag)
 	}
 
 	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
@@ -115,6 +117,7 @@ export class IndiManager implements IndiClientHandler {
 		// this.guideOutput.textVector(client, message, tag)
 		// this.thermometer.textVector(client, message, tag)
 		// this.dewHeater.textVector(client, message, tag)
+		this.properties.add(message, tag)
 	}
 
 	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
@@ -142,31 +145,26 @@ export class IndiDevicePropertyManager {
 	private readonly properties = new Map<string, DeviceProperties>()
 	private readonly listeners = new Map<string, number>()
 
-	constructor(readonly wsm: WebSocketMessageManager) {}
+	constructor(readonly wsm: WebSocketMessageManager) {
+		setInterval(() => {
+			const now = Date.now()
 
-	listen(name: string) {
-		const count = this.listeners.get(name) ?? 0
-		this.listeners.set(name, count + 1)
-	}
-
-	unlisten(name: string) {
-		const count = this.listeners.get(name)
-
-		if (count !== undefined) {
-			if (count === 1) {
-				this.listeners.delete(name)
-			} else {
-				this.listeners.set(name, count - 1)
+			for (const [name, ping] of this.listeners) {
+				if (now - ping > 10000) {
+					this.listeners.delete(name)
+				}
 			}
-		}
+		}, 5000)
 	}
 
-	private notify(device: Device | string, name: string, property: DeviceProperty, type: 'update' | 'remove') {
-		device = typeof device === 'string' ? device : device.name
+	ping(name: string) {
+		this.listeners.set(name, Date.now())
+	}
 
-		// if (this.listeners.get(device)) {
-		this.wsm.send<IndiDevicePropertyEvent>({ type: `indi:property:${type}`, device, name, property })
-		// }
+	private notify(device: string, name: string, property: DeviceProperty, type: 'update' | 'remove') {
+		if (this.listeners.has(device)) {
+			this.wsm.send<IndiDevicePropertyEvent>({ type: `indi:property:${type}`, device, name, property })
+		}
 	}
 
 	devices() {
@@ -177,19 +175,20 @@ export class IndiDevicePropertyManager {
 		return this.properties.get(device.name)
 	}
 
-	add(device: Device, message: DefVector | SetVector, tag: string, notify: boolean = true) {
-		let properties = this.properties.get(device.name)
+	add(message: DefVector | SetVector, tag: string) {
+		const { device } = message
+		let properties = this.properties.get(device)
 
 		if (!properties) {
 			properties = {}
-			this.properties.set(device.name, properties)
+			this.properties.set(device, properties)
 		}
 
 		if (tag[0] === 'd') {
 			const property = message as DeviceProperty
 			property.type = tag.includes('Switch') ? 'SWITCH' : tag.includes('Number') ? 'NUMBER' : tag.includes('Text') ? 'TEXT' : tag.includes('BLOB') ? 'BLOB' : 'LIGHT'
 			properties[message.name] = property
-			if (notify) this.notify(device, message.name, property, 'update')
+			this.notify(device, message.name, property, 'update')
 			return true
 		} else {
 			let updated = false
@@ -214,7 +213,7 @@ export class IndiDevicePropertyManager {
 					}
 				}
 
-				if (updated && notify) {
+				if (updated) {
 					this.notify(device, message.name, property, 'update')
 				}
 			}
@@ -247,13 +246,9 @@ export class IndiDevicePropertyManager {
 	}
 
 	send(client: IndiClient, type: DeviceProperty['type'], message: NewVector) {
-		if (type === 'SWITCH') {
-			client.sendSwitch(message as never)
-		} else if (type === 'NUMBER') {
-			client.sendNumber(message as never)
-		} else if (type === 'TEXT') {
-			client.sendText(message as never)
-		}
+		if (type === 'SWITCH') client.sendSwitch(message as never)
+		else if (type === 'NUMBER') client.sendNumber(message as never)
+		else if (type === 'TEXT') client.sendText(message as never)
 	}
 }
 
@@ -307,8 +302,7 @@ export function indi(indi: IndiManager, server: IndiServerManager, property: Ind
 		.post('/:id/connect', ({ params }) => connect(connection.get(), deviceFromParams(params)))
 		.post('/:id/disconnect', ({ params }) => disconnect(connection.get(), deviceFromParams(params)))
 		.get('/:id/properties', ({ params }) => property.get(deviceFromParams(params)))
-		.post('/:id/properties/listen', ({ params }) => property.listen(decodeURIComponent(params.id)))
-		.post('/:id/properties/unlisten', ({ params }) => property.unlisten(decodeURIComponent(params.id)))
+		.post('/:id/properties/ping', ({ params }) => property.ping(decodeURIComponent(params.id)))
 		.post('/:id/properties/send', ({ query, body }) => property.send(connection.get(), query.type as never, body as never))
 		.post('/server/start', ({ body }) => server.start(body as never))
 		.post('/server/stop', () => server.stop())

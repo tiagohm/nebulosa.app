@@ -58,27 +58,27 @@ export const IndiPanelControlMolecule = molecule((m) => {
 			}
 		})
 
+		const timer = setInterval(() => ping(), 5000)
+
+		void retrieveDevices()
+
 		return () => {
 			unsubscribe(unsubscribers)
+			clearInterval(timer)
 		}
 	})
-
-	void retrieveDevices()
 
 	async function retrieveDevices() {
 		const devices = await Api.Indi.devices()
 		state.devices = devices?.sort() ?? []
-
-		if (devices?.length) {
-			state.device = devices[0]
-			await retrieveProperties()
-		}
+		state.device = state.devices[0] || ''
+		ping()
 	}
 
-	async function retrieveProperties() {
-		if (state.device) {
+	async function retrieveProperties(device: string = state.device) {
+		if (device) {
 			state.properties = {}
-			const properties = await Api.Indi.Properties.list(state.device)
+			const properties = await Api.Indi.Properties.list(device)
 			properties && addProperties(properties)
 
 			state.groups = Object.keys(state.properties).sort()
@@ -123,18 +123,25 @@ export const IndiPanelControlMolecule = molecule((m) => {
 		}
 	}
 
-	function sendProperty(property: DeviceProperty, message: NewVector) {
+	function send(property: DeviceProperty, message: NewVector) {
 		return Api.Indi.Properties.send(state.device, property.type, message)
+	}
+
+	function ping(device: string = state.device) {
+		if (device && state.show) {
+			void Api.Indi.Properties.ping(device)
+		}
 	}
 
 	function show() {
 		bus.emit('homeMenu:toggle', false)
 		state.show = true
+		ping()
 	}
 
 	function close() {
 		state.show = false
 	}
 
-	return { state, sendProperty, show, close }
+	return { state, retrieveProperties, ping, send, show, close }
 })

@@ -3,7 +3,7 @@ import type { DefNumberVector, DefSwitchVector, DefTextVector, DelProperty, Indi
 import bus from '../shared/bus'
 import { DEFAULT_FLAT_PANEL, type FlatPanel, type FlatPanelAdded, type FlatPanelRemoved, type FlatPanelUpdated } from '../shared/types'
 import type { ConnectionManager } from './connection'
-import { ask, connectionFor, DeviceInterfaceType, type IndiDevicePropertyManager, isInterfaceType } from './indi'
+import { ask, connectionFor, DeviceInterfaceType, isInterfaceType } from './indi'
 import type { WebSocketMessageManager } from './message'
 
 export function intensity(client: IndiClient, device: FlatPanel, value: number) {
@@ -23,10 +23,7 @@ export function disable(client: IndiClient, device: FlatPanel) {
 export class FlatPanelManager implements IndiClientHandler {
 	private readonly flatPanels = new Map<string, FlatPanel>()
 
-	constructor(
-		readonly wsm: WebSocketMessageManager,
-		readonly properties: IndiDevicePropertyManager,
-	) {
+	constructor(readonly wsm: WebSocketMessageManager) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove all flat panels associated with the client
 			this.flatPanels.forEach((device) => this.remove(device))
@@ -37,8 +34,6 @@ export class FlatPanelManager implements IndiClientHandler {
 		const device = this.flatPanels.get(message.device)
 
 		if (!device) return
-
-		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			case 'CONNECTION':
@@ -64,8 +59,6 @@ export class FlatPanelManager implements IndiClientHandler {
 		const device = this.flatPanels.get(message.device)
 
 		if (!device) return
-
-		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			case 'FLAT_LIGHT_INTENSITY': {
@@ -105,7 +98,6 @@ export class FlatPanelManager implements IndiClientHandler {
 				if (!this.flatPanels.has(message.device)) {
 					const panel: FlatPanel = { ...structuredClone(DEFAULT_FLAT_PANEL), id: message.device, name: message.device, driver: { executable, version } }
 					this.add(panel)
-					this.properties.add(panel, message, tag, false)
 					ask(client, panel)
 				}
 			} else if (this.flatPanels.has(message.device)) {
@@ -118,8 +110,6 @@ export class FlatPanelManager implements IndiClientHandler {
 		const device = this.flatPanels.get(message.device)
 
 		if (!device) return
-
-		this.properties.add(device, message, tag)
 	}
 
 	delProperty(client: IndiClient, message: DelProperty) {

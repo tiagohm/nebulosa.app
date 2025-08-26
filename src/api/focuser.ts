@@ -3,7 +3,7 @@ import type { DefNumberVector, DefSwitchVector, DefTextVector, DelProperty, Indi
 import bus from 'src/shared/bus'
 import { DEFAULT_FOCUSER, type Focuser, type FocuserAdded, type FocuserRemoved, type FocuserUpdated } from 'src/shared/types'
 import type { ConnectionManager } from './connection'
-import { ask, connectionFor, DeviceInterfaceType, type IndiDevicePropertyManager, isInterfaceType } from './indi'
+import { ask, connectionFor, DeviceInterfaceType, isInterfaceType } from './indi'
 import type { WebSocketMessageManager } from './message'
 import type { ThermometerManager } from './thermometer'
 
@@ -51,7 +51,6 @@ export class FocuserManager implements IndiClientHandler {
 	constructor(
 		readonly wsm: WebSocketMessageManager,
 		readonly thermometer: ThermometerManager,
-		readonly properties: IndiDevicePropertyManager,
 	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove all focusers associated with the client
@@ -63,8 +62,6 @@ export class FocuserManager implements IndiClientHandler {
 		const device = this.focusers.get(message.device)
 
 		if (!device) return
-
-		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			case 'CONNECTION':
@@ -110,8 +107,6 @@ export class FocuserManager implements IndiClientHandler {
 		const device = this.focusers.get(message.device)
 
 		if (!device) return
-
-		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			case 'FOCUS_TEMPERATURE':
@@ -190,7 +185,6 @@ export class FocuserManager implements IndiClientHandler {
 				if (!this.focusers.has(message.device)) {
 					const focuser: Focuser = { ...structuredClone(DEFAULT_FOCUSER), id: message.device, name: message.device, driver: { executable, version } }
 					this.add(focuser)
-					this.properties.add(focuser, message, tag, false)
 					ask(client, focuser)
 				}
 			} else if (this.focusers.has(message.device)) {
@@ -203,8 +197,6 @@ export class FocuserManager implements IndiClientHandler {
 		const device = this.focusers.get(message.device)
 
 		if (!device) return
-
-		this.properties.add(device, message, tag)
 	}
 
 	delProperty(client: IndiClient, message: DelProperty) {

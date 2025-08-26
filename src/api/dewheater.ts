@@ -15,10 +15,7 @@ export function pwm(client: IndiClient, device: DewHeater, value: number, proper
 export class DewHeaterManager implements IndiClientHandler {
 	private readonly dewHeaters = new Map<string, DewHeater>()
 
-	constructor(
-		readonly wsm: WebSocketMessageManager,
-		readonly properties: IndiDevicePropertyManager,
-	) {
+	constructor(readonly wsm: WebSocketMessageManager) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove all dew heaters associated with the client
 			this.dewHeaters.forEach((device) => this.remove(device))
@@ -97,12 +94,12 @@ export class DewHeaterManager implements IndiClientHandler {
 		return this.dewHeaters.get(id)
 	}
 
-	pwm(client: IndiClient, device: DewHeater, value: number) {
-		pwm(client, device, value, this.properties.get(device)!)
+	pwm(client: IndiClient, device: DewHeater, value: number, property: IndiDevicePropertyManager) {
+		pwm(client, device, value, property.get(device)!)
 	}
 }
 
-export function dewHeater(dewHeater: DewHeaterManager, connection: ConnectionManager) {
+export function dewHeater(dewHeater: DewHeaterManager, connection: ConnectionManager, property: IndiDevicePropertyManager) {
 	function dewHeaterFromParams(params: { id: string }) {
 		return dewHeater.get(decodeURIComponent(params.id))!
 	}
@@ -111,7 +108,7 @@ export function dewHeater(dewHeater: DewHeaterManager, connection: ConnectionMan
 		// Endpoints!
 		.get('', () => dewHeater.list())
 		.get('/:id', ({ params }) => dewHeaterFromParams(params))
-		.post('/:id/pwm', ({ params, body }) => dewHeater.pwm(connection.get(), dewHeaterFromParams(params), body as never))
+		.post('/:id/pwm', ({ params, body }) => dewHeater.pwm(connection.get(), dewHeaterFromParams(params), body as never, property))
 
 	return app
 }

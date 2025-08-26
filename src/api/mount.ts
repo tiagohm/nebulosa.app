@@ -13,7 +13,7 @@ import bus from 'src/shared/bus'
 import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, expectedPierSide, type GeographicCoordinate, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoved, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
 import type { ConnectionManager } from './connection'
 import type { GuideOutputManager } from './guideoutput'
-import { ask, connectionFor, DeviceInterfaceType, type IndiDevicePropertyManager, isInterfaceType } from './indi'
+import { ask, connectionFor, DeviceInterfaceType, isInterfaceType } from './indi'
 import type { WebSocketMessageManager } from './message'
 
 export function tracking(client: IndiClient, mount: Mount, enable: boolean) {
@@ -106,7 +106,6 @@ export class MountManager implements IndiClientHandler {
 	constructor(
 		readonly wsm: WebSocketMessageManager,
 		readonly guideOutput: GuideOutputManager,
-		readonly properties: IndiDevicePropertyManager,
 	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove all mounts associated with the client
@@ -118,8 +117,6 @@ export class MountManager implements IndiClientHandler {
 		const device = this.mounts.get(message.device)
 
 		if (!device) return
-
-		this.properties.add(device, message, tag)
 
 		switch (message.name) {
 			case 'CONNECTION':
@@ -284,8 +281,6 @@ export class MountManager implements IndiClientHandler {
 
 		if (!device) return
 
-		this.properties.add(device, message, tag)
-
 		switch (message.name) {
 			case 'EQUATORIAL_EOD_COORD': {
 				const slewing = message.state === 'Busy'
@@ -366,7 +361,6 @@ export class MountManager implements IndiClientHandler {
 				if (!this.mounts.has(message.device)) {
 					const mount: Mount = { ...structuredClone(DEFAULT_MOUNT), id: message.device, name: message.device, driver: { executable, version } }
 					this.add(mount)
-					this.properties.add(mount, message, tag, false)
 					ask(client, mount)
 				}
 			} else if (this.mounts.has(message.device)) {
@@ -379,8 +373,6 @@ export class MountManager implements IndiClientHandler {
 		const device = this.mounts.get(message.device)
 
 		if (!device) return
-
-		this.properties.add(device, message, tag)
 	}
 
 	delProperty(client: IndiClient, message: DelProperty) {

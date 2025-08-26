@@ -46,8 +46,8 @@ export const HomeMenu = memo(() => {
 	const framing = useMolecule(FramingMolecule)
 	const { show: showFraming } = useSnapshot(framing.state)
 
-	const ipc = useMolecule(IndiPanelControlMolecule)
-	const { show: showIndiPanelControl } = useSnapshot(ipc.state)
+	const indi = useMolecule(IndiPanelControlMolecule)
+	const { show: showIndiPanelControl } = useSnapshot(indi.state)
 
 	const calculator = useMolecule(CalculatorMolecule)
 	const { show: showCalculator } = useSnapshot(calculator.state)
@@ -75,7 +75,7 @@ export const HomeMenuPopover = memo(() => {
 	const { selected, camera, mount, focuser, cover, flatPanel, guideOutput, thermometer, dewHeater } = useSnapshot(equipment.state)
 
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
-	const ipc = useMolecule(IndiPanelControlMolecule)
+	const indi = useMolecule(IndiPanelControlMolecule)
 	const framing = useMolecule(FramingMolecule)
 	const calculator = useMolecule(CalculatorMolecule)
 	const about = useMolecule(AboutMolecule)
@@ -175,7 +175,7 @@ export const HomeMenuPopover = memo(() => {
 						</Button>
 					</Tooltip>
 					<Tooltip content='INDI' placement='bottom' showArrow>
-						<Button color='secondary' isDisabled={!camera.length && !mount.length && !focuser.length && !cover.length && !flatPanel.length && !guideOutput.length && !thermometer.length && !dewHeater.length} isIconOnly onPointerUp={ipc.show} size='lg' variant='light'>
+						<Button color='secondary' isDisabled={!camera.length && !mount.length && !focuser.length && !cover.length && !flatPanel.length && !guideOutput.length && !thermometer.length && !dewHeater.length} isIconOnly onPointerUp={indi.show} size='lg' variant='light'>
 							<img className='w-9' src={indiIcon} />
 						</Button>
 					</Tooltip>

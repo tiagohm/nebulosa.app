@@ -11,15 +11,15 @@ export const ImageStretchMolecule = molecule((m, s) => {
 	}
 
 	function auto() {
-		viewer.state.transformation.stretch.auto = true
-		return apply()
+		return apply(true)
 	}
 
 	function reset() {
 		return viewer.resetStretch()
 	}
 
-	function apply() {
+	function apply(auto: boolean = false) {
+		viewer.state.transformation.stretch.auto = auto
 		return viewer.load(true)
 	}
 

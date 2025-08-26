@@ -3,7 +3,7 @@ import { memo } from 'react'
 import bus from 'src/shared/bus'
 import indiIcon from '@/assets/indi.webp'
 
-export interface IndiPanelControlButtonProps extends Omit<ButtonProps, 'onPointerUp' | 'isIconOnly'> {
+export interface IndiPanelControlButtonProps extends Omit<ButtonProps, 'onPointerUp' | 'isIconOnly' | 'children'> {
 	readonly device?: string
 }
 

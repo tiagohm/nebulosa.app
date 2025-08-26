@@ -29,7 +29,7 @@ export const ImageStretch = memo(() => {
 					<Button color='danger' onPointerUp={stretch.reset} startContent={<Icons.Restore />} variant='flat'>
 						Reset
 					</Button>
-					<Button color='success' onPointerUp={stretch.apply} startContent={<Icons.Check />} variant='flat'>
+					<Button color='success' onPointerUp={() => stretch.apply()} startContent={<Icons.Check />} variant='flat'>
 						Stretch
 					</Button>
 				</>
@@ -49,7 +49,7 @@ export const ImageStretch = memo(() => {
 				<Slider className='col-span-full' maxValue={65536} minValue={0} onChange={handleShadowHighlightChange} step={8} value={[shadow, highlight]} />
 				<NumberInput className='col-span-full' label='Midtone' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('midtone', value)} size='sm' value={midtone} />
 				<Slider className='col-span-full' maxValue={65536} minValue={0} onChange={(value) => stretch.update('midtone', value as number)} step={8} value={midtone} />
-				<NumberInput className='col-span-full' label='Mean Background' maxValue={1} minValue={0} onValueChange={(value) => stretch.update('meanBackground', value)} size='sm' step={0.01} value={meanBackground} />
+				<NumberInput className='col-span-full' label='Mean Background (Auto Stretch)' maxValue={1} minValue={0} onValueChange={(value) => stretch.update('meanBackground', value)} size='sm' step={0.01} value={meanBackground} />
 			</div>
 		</Modal>
 	)

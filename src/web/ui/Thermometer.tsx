@@ -3,6 +3,7 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ThermometerMolecule } from '@/molecules/indi/thermometer'
 import { ConnectButton } from './ConnectButton'
+import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
 export const Thermometer = memo(() => {
@@ -14,14 +15,17 @@ export const Thermometer = memo(() => {
 		<Modal
 			header={
 				<div className='flex flex-row items-center justify-between'>
-					<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={thermometer.connect} />
+					<div className='flex flex-row items-center gap-1'>
+						<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={thermometer.connect} />
+						<IndiPanelControlButton device={thermometer.scope.thermometer.name} />
+					</div>
 					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
 						<span className='leading-5'>Thermometer</span>
 						<span className='text-xs font-normal text-gray-400 max-w-full'>{thermometer.scope.thermometer.name}</span>
 					</div>
 				</div>
 			}
-			maxWidth='230px'
+			maxWidth='260px'
 			name={`thermometer-${thermometer.scope.thermometer.name}`}
 			onClose={thermometer.close}>
 			<div className='mt-0 text-center font-bold text-5xl'>

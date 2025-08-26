@@ -16,7 +16,6 @@ import framingIcon from '@/assets/framing.webp'
 import guideOutputIcon from '@/assets/guide-output.webp'
 import guiderIcon from '@/assets/guider.webp'
 import heaterIcon from '@/assets/heater.webp'
-import indiIcon from '@/assets/indi.webp'
 import mountIcon from '@/assets/mount.webp'
 import rotatorIcon from '@/assets/rotator.webp'
 import sequencerIcon from '@/assets/sequencer.webp'
@@ -35,6 +34,7 @@ import { Calculator } from './Calculator'
 import { Framing } from './Framing'
 import { Icons } from './Icon'
 import { IndiPanelControl } from './IndiPanelControl'
+import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { SkyAtlas } from './SkyAtlas'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
@@ -174,11 +174,7 @@ export const HomeMenuPopover = memo(() => {
 							<img className='w-9' src={sequencerIcon} />
 						</Button>
 					</Tooltip>
-					<Tooltip content='INDI' placement='bottom' showArrow>
-						<Button color='secondary' isDisabled={!camera.length && !mount.length && !focuser.length && !cover.length && !flatPanel.length && !guideOutput.length && !thermometer.length && !dewHeater.length} isIconOnly onPointerUp={indi.show} size='lg' variant='light'>
-							<img className='w-9' src={indiIcon} />
-						</Button>
-					</Tooltip>
+					<IndiPanelControlButton isDisabled={!camera.length && !mount.length && !focuser.length && !cover.length && !flatPanel.length && !guideOutput.length && !thermometer.length && !dewHeater.length} size='lg' />
 					<Tooltip content='Calculator' placement='bottom' showArrow>
 						<Button color='secondary' isIconOnly onPointerUp={calculator.show} size='lg' variant='light'>
 							<img className='w-9' src={calculatorIcon} />

@@ -13,6 +13,7 @@ import { ExposureTimeProgress } from './ExposureTimeProgress'
 import { FilePickerInput } from './FilePickerInput'
 import { FrameTypeSelect } from './FrameTypeSelect'
 import { Icons } from './Icon'
+import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 import { MountDropdown } from './MountDropdown'
 
@@ -44,7 +45,10 @@ export const Camera = memo(() => {
 			}
 			header={
 				<div className='flex flex-row items-center justify-between'>
-					<ConnectButton isConnected={connected} isDisabled={capturing} isLoading={connecting} onPointerUp={camera.connect} />
+					<div className='flex flex-row items-center gap-1'>
+						<ConnectButton isConnected={connected} isDisabled={capturing} isLoading={connecting} onPointerUp={camera.connect} />
+						<IndiPanelControlButton device={camera.scope.camera.name} />
+					</div>
 					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
 						<span className='leading-5'>Camera</span>
 						<span className='text-xs font-normal text-gray-400 max-w-full'>{camera.scope.camera.name}</span>

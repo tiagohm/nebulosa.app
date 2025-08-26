@@ -5,6 +5,7 @@ import { memo, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { FlatPanelMolecule } from '@/molecules/indi/flatpanel'
 import { ConnectButton } from './ConnectButton'
+import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
 export const FlatPanel = memo(() => {
@@ -22,14 +23,17 @@ export const FlatPanel = memo(() => {
 		<Modal
 			header={
 				<div className='flex flex-row items-center justify-between'>
-					<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={flatPanel.connect} />
+					<div className='flex flex-row items-center gap-1'>
+						<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={flatPanel.connect} />
+						<IndiPanelControlButton device={flatPanel.scope.flatPanel.name} />
+					</div>
 					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
 						<span className='leading-5'>Flat Panel</span>
 						<span className='text-xs font-normal text-gray-400 max-w-full'>{flatPanel.scope.flatPanel.name}</span>
 					</div>
 				</div>
 			}
-			maxWidth='280px'
+			maxWidth='260px'
 			name={`flat-panel-${flatPanel.scope.flatPanel.name}`}
 			onClose={flatPanel.close}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>

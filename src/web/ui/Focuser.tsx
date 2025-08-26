@@ -5,6 +5,7 @@ import { useSnapshot } from 'valtio'
 import { FocuserMolecule } from '@/molecules/indi/focuser'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
+import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
 export const Focuser = memo(() => {
@@ -17,14 +18,17 @@ export const Focuser = memo(() => {
 		<Modal
 			header={
 				<div className='flex flex-row items-center justify-between'>
-					<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={focuser.connect} />
+					<div className='flex flex-row items-center gap-1'>
+						<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={focuser.connect} />
+						<IndiPanelControlButton device={focuser.scope.focuser.name} />
+					</div>
 					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
 						<span className='leading-5'>Focuser</span>
 						<span className='text-xs font-normal text-gray-400 max-w-full'>{focuser.scope.focuser.name}</span>
 					</div>
 				</div>
 			}
-			maxWidth='250px'
+			maxWidth='260px'
 			name={`focuser-${focuser.scope.focuser.name}`}
 			onClose={focuser.close}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>

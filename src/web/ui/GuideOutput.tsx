@@ -4,6 +4,7 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { GuideOutputMolecule } from '@/molecules/indi/guideoutput'
 import { ConnectButton } from './ConnectButton'
+import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 import { Nudge } from './Nudge'
 
@@ -17,7 +18,10 @@ export const GuideOutput = memo(() => {
 		<Modal
 			header={
 				<div className='flex flex-row items-center justify-between'>
-					<ConnectButton isConnected={connected} isDisabled={pulseGuiding} isLoading={connecting} onPointerUp={guideOutput.connect} />
+					<div className='flex flex-row items-center gap-1'>
+						<ConnectButton isConnected={connected} isDisabled={pulseGuiding} isLoading={connecting} onPointerUp={guideOutput.connect} />
+						<IndiPanelControlButton device={guideOutput.scope.guideOutput.name} />
+					</div>
 					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
 						<span className='leading-5'>Guide Output</span>
 						<span className='text-xs font-normal text-gray-400 max-w-full'>{guideOutput.scope.guideOutput.name}</span>

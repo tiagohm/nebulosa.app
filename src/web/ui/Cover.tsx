@@ -5,6 +5,7 @@ import { useSnapshot } from 'valtio'
 import { CoverMolecule } from '@/molecules/indi/cover'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
+import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
 export const Cover = memo(() => {
@@ -16,14 +17,17 @@ export const Cover = memo(() => {
 		<Modal
 			header={
 				<div className='flex flex-row items-center justify-between'>
-					<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={cover.connect} />
+					<div className='flex flex-row items-center gap-1'>
+						<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={cover.connect} />
+						<IndiPanelControlButton device={cover.scope.cover.name} />
+					</div>
 					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
 						<span className='leading-5'>Cover</span>
 						<span className='text-xs font-normal text-gray-400 max-w-full'>{cover.scope.cover.name}</span>
 					</div>
 				</div>
 			}
-			maxWidth='230px'
+			maxWidth='260px'
 			name={`cover-${cover.scope.cover.name}`}
 			onClose={cover.close}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>

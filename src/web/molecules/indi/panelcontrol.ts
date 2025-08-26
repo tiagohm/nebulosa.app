@@ -28,7 +28,7 @@ export const IndiPanelControlMolecule = molecule((m) => {
 	})
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(4)
+		const unsubscribers = new Array<VoidFunction>(5)
 
 		unsubscribers[0] = bus.subscribe<ConnectionStatus>('connection:open', (status) => {
 			if (connection.state.connected?.id === status.id) {
@@ -56,6 +56,11 @@ export const IndiPanelControlMolecule = molecule((m) => {
 			if (state.device === event.device) {
 				removeProperty(event.property)
 			}
+		})
+
+		unsubscribers[4] = bus.subscribe<string | undefined>('indiPanelControl:show', (device) => {
+			if (device) state.device = device
+			show()
 		})
 
 		const timer = setInterval(() => ping(), 5000)

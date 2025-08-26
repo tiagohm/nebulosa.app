@@ -5,6 +5,7 @@ import { memo, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { DewHeaterMolecule } from '@/molecules/indi/dewheater'
 import { ConnectButton } from './ConnectButton'
+import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
 export const DewHeater = memo(() => {
@@ -22,14 +23,17 @@ export const DewHeater = memo(() => {
 		<Modal
 			header={
 				<div className='flex flex-row items-center justify-between'>
-					<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={dewHeater.connect} />
+					<div className='flex flex-row items-center gap-1'>
+						<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={dewHeater.connect} />
+						<IndiPanelControlButton device={dewHeater.scope.dewHeater.name} />
+					</div>
 					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
 						<span className='leading-5'>Dew Heater</span>
 						<span className='text-xs font-normal text-gray-400 max-w-full'>{dewHeater.scope.dewHeater.name}</span>
 					</div>
 				</div>
 			}
-			maxWidth='280px'
+			maxWidth='260px'
 			name={`dew-heater-${dewHeater.scope.dewHeater.name}`}
 			onClose={dewHeater.close}>
 			<div className='mt-0 col-span-full flex flex-col items-center justify-center'>

@@ -1,10 +1,11 @@
 import { Navbar, NavbarBrand, NavbarContent } from '@heroui/react'
+import { memo } from 'react'
 import { ConnectionBox } from './ConnectionBox'
 import { HomeMenu } from './HomeMenu'
 import { ImagePickerButton } from './ImagePickerButton'
 import { IndiServerButton } from './IndiServerButton'
 
-export function HomeNavBar() {
+export const HomeNavBar = memo(() => {
 	return (
 		<Navbar className='bg-neutral-900 shadow' isBlurred={false}>
 			<NavbarBrand className='flex-auto'>
@@ -21,4 +22,4 @@ export function HomeNavBar() {
 			</NavbarContent>
 		</Navbar>
 	)
-}
+})

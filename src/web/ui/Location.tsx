@@ -1,6 +1,6 @@
 import { Button, NumberInput } from '@heroui/react'
 import type { LatLngTuple } from 'leaflet'
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import type { GeographicCoordinate } from 'src/shared/types'
 import { Icons } from './Icon'
 import { MapViewer } from './MapViewer'
@@ -16,20 +16,20 @@ export interface LocationProps {
 export function Location({ name, initialPosition, onPositionChange, onClose }: LocationProps) {
 	const [position, setPosition] = useState<LatLngTuple>([initialPosition.latitude, initialPosition.longitude, initialPosition.elevation])
 
-	const handlePositionChoose = useCallback(() => {
+	function handlePositionChoose() {
 		onPositionChange?.({ latitude: position[0], longitude: position[1], elevation: position[2] ?? initialPosition.elevation })
 		onClose?.()
-	}, [onPositionChange, onClose])
+	}
 
-	const handlePositionChange = useCallback((newPosition: LatLngTuple) => {
+	function handlePositionChange(newPosition: LatLngTuple) {
 		setPosition((prev) => [newPosition[0], newPosition[1], prev[2]])
-	}, [])
+	}
 
-	const updatePosition = useCallback((type: keyof GeographicCoordinate, value: number) => {
+	function updatePosition(type: keyof GeographicCoordinate, value: number) {
 		if (type === 'latitude') setPosition((prev) => [value, prev[1], prev[2]])
 		else if (type === 'longitude') setPosition((prev) => [prev[0], value, prev[2]])
 		else if (type === 'elevation') setPosition((prev) => [prev[0], prev[1], value])
-	}, [])
+	}
 
 	return (
 		<Modal

@@ -1,7 +1,7 @@
 import { Button, Input, NumberInput, SelectItem, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { DefElement, DefTextVector, NewVector, SwitchRule } from 'nebulosa/src/indi'
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import type { DeviceProperty } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
@@ -51,17 +51,17 @@ const Property = memo(({ property, onSend }: PropertyProps) => {
 	const elements = useRef<NewVector['elements']>({})
 	const isReadonly = (property as DefTextVector).permission === 'ro'
 
-	const handleValueChange = useCallback((element: DefElement, value: unknown) => {
+	function handleValueChange(element: DefElement, value: unknown) {
 		if (property.type === 'SWITCH') {
 			onSend(property, { device: property.device, name: property.name, elements: { [element.name]: value as boolean } })
 		} else {
 			elements.current[element.name] = value as never
 		}
-	}, [])
+	}
 
-	const handleSend = useCallback(() => {
+	function handlePointerUp() {
 		onSend(property, { device: property.device, name: property.name, elements: elements.current as never })
-	}, [onSend])
+	}
 
 	return (
 		<div className='flex flex-col gap-2'>
@@ -75,7 +75,7 @@ const Property = memo(({ property, onSend }: PropertyProps) => {
 				</div>
 				{!isReadonly && property.type !== 'SWITCH' && (
 					<Tooltip content='Send' placement='left'>
-						<Button color='primary' isIconOnly onPointerUp={handleSend} variant='light'>
+						<Button color='primary' isIconOnly onPointerUp={handlePointerUp} variant='light'>
 							<Icons.Send />
 						</Button>
 					</Tooltip>
@@ -106,13 +106,10 @@ interface TextElementProps {
 function TextElement({ label, value, isReadonly, onValueChange }: TextElementProps) {
 	const [text, setText] = useState(value)
 
-	const handleValueChange = useCallback(
-		(value: string) => {
-			setText(value)
-			onValueChange(value)
-		},
-		[onValueChange],
-	)
+	function handleValueChange(value: string) {
+		setText(value)
+		onValueChange(value)
+	}
 
 	return (
 		<div className='grid grid-cols-12 gap-1'>
@@ -134,13 +131,10 @@ interface NumberElementProps {
 function NumberElement({ label, value, isReadonly, min, max, onValueChange }: NumberElementProps) {
 	const [number, setNumber] = useState(value)
 
-	const handleValueChange = useCallback(
-		(value: number) => {
-			setNumber(value)
-			onValueChange(value)
-		},
-		[onValueChange],
-	)
+	function handleValueChange(value: number) {
+		setNumber(value)
+		onValueChange(value)
+	}
 
 	return (
 		<div className='grid grid-cols-12 gap-1'>
@@ -159,13 +153,13 @@ interface SwitchElementProps {
 }
 
 function SwitchElement({ label, value, rule, isReadonly, onValueChange }: SwitchElementProps) {
-	const handleValueChange = useCallback(() => {
+	function handleValueChange() {
 		if (rule === 'AnyOfMany') {
 			onValueChange(!value)
 		} else {
 			onValueChange(true)
 		}
-	}, [onValueChange])
+	}
 
 	return (
 		<Button color={rule === 'AtMostOne' ? 'default' : value ? 'success' : 'danger'} isDisabled={isReadonly} onPointerUp={handleValueChange} variant='flat'>

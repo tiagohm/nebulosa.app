@@ -7,14 +7,14 @@ export interface IndiPanelControlButtonProps extends Omit<ButtonProps, 'onPointe
 	readonly device?: string
 }
 
-export const IndiPanelControlButton = memo(({ device, color = 'secondary', size = 'md', variant = 'light' }: IndiPanelControlButtonProps) => {
+export const IndiPanelControlButton = memo(({ device, color = 'secondary', size = 'md', variant = 'light', ...props }: IndiPanelControlButtonProps) => {
 	function handlePointerUp() {
 		bus.emit('indiPanelControl:show', device)
 	}
 
 	return (
 		<Tooltip content='INDI' placement='bottom' showArrow>
-			<Button color={color} isIconOnly onPointerUp={handlePointerUp} size={size} variant={variant}>
+			<Button {...props} color={color} isIconOnly onPointerUp={handlePointerUp} size={size} variant={variant}>
 				<img className={`${size === 'md' ? 'w-6' : 'w-9'}`} src={indiIcon} />
 			</Button>
 		</Tooltip>

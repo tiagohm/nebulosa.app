@@ -1,5 +1,5 @@
 import { Button, type ButtonProps } from '@heroui/react'
-import { useCallback, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { type Icon, Icons } from './Icon'
 
 export type NudgeDirection = 'upLeft' | 'up' | 'upRight' | 'left' | 'right' | 'downLeft' | 'down' | 'downRight'
@@ -45,25 +45,19 @@ export interface NudgeButtonProps extends Omit<ButtonProps, 'isIconOnly' | 'size
 export function NudgeButton({ icon: Icon, onPointer, ...props }: NudgeButtonProps) {
 	const entered = useRef(false)
 
-	const handlePointerDown = useCallback(
-		(e: React.PointerEvent<HTMLButtonElement>) => {
-			if (!entered.current) {
-				entered.current = true
-				onPointer(true, e)
-			}
-		},
-		[onPointer],
-	)
+	function handlePointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+		if (!entered.current) {
+			entered.current = true
+			onPointer(true, e)
+		}
+	}
 
-	const handlePointerUp = useCallback(
-		(e: React.PointerEvent<HTMLButtonElement>) => {
-			if (entered.current) {
-				entered.current = false
-				onPointer(false, e)
-			}
-		},
-		[onPointer],
-	)
+	function handlePointerUp(e: React.PointerEvent<HTMLButtonElement>) {
+		if (entered.current) {
+			entered.current = false
+			onPointer(false, e)
+		}
+	}
 
 	return (
 		<Button {...props} isIconOnly onPointerCancel={handlePointerUp} onPointerDown={handlePointerDown} onPointerLeave={handlePointerUp} onPointerOut={handlePointerUp} onPointerUp={handlePointerUp} size='md' variant='light'>

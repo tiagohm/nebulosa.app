@@ -3,6 +3,7 @@ import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageScnrMolecule } from '@/molecules/image/scnr'
+import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 
@@ -55,7 +56,7 @@ export const ImageScnr = memo(() => {
 					<SelectItem key='MAXIMUM_NEUTRAL'>Maximum Neutral</SelectItem>
 					<SelectItem key='MINIMUM_NEUTRAL'>Minimum Neutral</SelectItem>
 				</Select>
-				<NumberInput className='col-span-4' isDisabled={channel === undefined || method.endsWith('MASK')} label='Amount' maxValue={1} minValue={0} onValueChange={(value) => scnr.update('amount', value)} size='sm' step={0.1} value={amount} />
+				<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={channel === undefined || method.endsWith('MASK')} label='Amount' maxValue={1} minValue={0} onValueChange={(value) => scnr.update('amount', value)} size='sm' step={0.1} value={amount} />
 			</div>
 		</Modal>
 	)

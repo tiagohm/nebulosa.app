@@ -28,15 +28,9 @@ export const IndiPanelControlMolecule = molecule((m) => {
 	})
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(5)
+		const unsubscribers = new Array<VoidFunction>(4)
 
-		unsubscribers[0] = bus.subscribe<ConnectionStatus>('connection:open', (status) => {
-			if (connection.state.connected?.id === status.id) {
-				void retrieveDevices()
-			}
-		})
-
-		unsubscribers[1] = bus.subscribe<ConnectionStatus>('connection:close', (status) => {
+		unsubscribers[0] = bus.subscribe<ConnectionStatus>('connection:close', (status) => {
 			if (connection.state.connected?.id === status.id) {
 				state.devices = []
 				state.device = ''
@@ -46,20 +40,20 @@ export const IndiPanelControlMolecule = molecule((m) => {
 			}
 		})
 
-		unsubscribers[2] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:update', (event) => {
+		unsubscribers[1] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:update', (event) => {
 			if (state.device === event.device) {
 				addProperty(event.property)
 			}
 		})
 
-		unsubscribers[3] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:remove', (event) => {
+		unsubscribers[2] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:remove', (event) => {
 			if (state.device === event.device) {
 				removeProperty(event.property)
 			}
 		})
 
-		unsubscribers[4] = bus.subscribe<string | undefined>('indiPanelControl:show', (device) => {
-			if (device) state.device = device
+		unsubscribers[3] = bus.subscribe<string | undefined>('indiPanelControl:show', async (device) => {
+			await retrieveDevices(device)
 			show()
 		})
 
@@ -73,10 +67,10 @@ export const IndiPanelControlMolecule = molecule((m) => {
 		}
 	})
 
-	async function retrieveDevices() {
+	async function retrieveDevices(device: string = state.device) {
 		const devices = await Api.Indi.devices()
 		state.devices = devices?.sort() ?? []
-		state.device = state.devices[0] || ''
+		state.device = device || state.devices[0] || ''
 		ping()
 	}
 

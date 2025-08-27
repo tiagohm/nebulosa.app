@@ -3,6 +3,7 @@ import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiServerMolecule } from '@/molecules/indi/server'
+import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import DRIVERS from '../../../data/drivers.json' with { type: 'json' }
 import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
@@ -32,9 +33,9 @@ export const IndiServer = memo(() => {
 			name='indi-server'
 			onClose={indi.close}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<NumberInput className='col-span-4' label='Port' maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} size='sm' value={port} />
-				<NumberInput className='col-span-4' label='Repeat' maxValue={10} minValue={1} onValueChange={(value) => indi.update('repeat', value)} size='sm' value={repeat} />
-				<NumberInput className='col-span-4' label='Verbose' maxValue={3} minValue={0} onValueChange={(value) => indi.update('verbose', value)} size='sm' value={verbose} />
+				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} size='sm' value={port} />
+				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Repeat' maxValue={10} minValue={1} onValueChange={(value) => indi.update('repeat', value)} size='sm' value={repeat} />
+				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Verbose' maxValue={3} minValue={0} onValueChange={(value) => indi.update('verbose', value)} size='sm' value={verbose} />
 				<Checkbox className='col-span-full' isSelected={showAll} onValueChange={(value) => (indi.state.showAll = value)}>
 					Show all drivers
 				</Checkbox>

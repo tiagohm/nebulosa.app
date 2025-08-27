@@ -3,6 +3,7 @@ import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { StarDetectionMolecule } from '@/molecules/image/stardetection'
+import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { StarDetectionSelect } from './StarDetectionSelect'
@@ -32,8 +33,8 @@ export const StarDetection = memo(() => {
 			onClose={() => viewer.close('starDetection')}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<StarDetectionSelect className='col-span-4' onValueChange={(value) => (starDetection.state.request.type = value)} value={request.type} />
-				<NumberInput className='col-span-4' label='Min SNR' maxValue={500} minValue={0} onValueChange={(value) => (starDetection.state.request.minSNR = value)} size='sm' value={request.minSNR} />
-				<NumberInput className='col-span-4' label='Max Stars' maxValue={2000} minValue={0} onValueChange={(value) => (starDetection.state.request.maxStars = value)} size='sm' value={request.maxStars} />
+				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Min SNR' maxValue={500} minValue={0} onValueChange={(value) => (starDetection.state.request.minSNR = value)} size='sm' value={request.minSNR} />
+				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Max Stars' maxValue={2000} minValue={0} onValueChange={(value) => (starDetection.state.request.maxStars = value)} size='sm' value={request.maxStars} />
 				<div className='col-span-full mt-1'>
 					<span className='text-sm font-bold'>COMPUTED</span>
 				</div>

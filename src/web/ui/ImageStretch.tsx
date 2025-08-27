@@ -3,6 +3,7 @@ import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
+import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 
@@ -44,12 +45,12 @@ export const ImageStretch = memo(() => {
 			name={`stretch-${stretch.scope.image.key}`}
 			onClose={() => viewer.close('stretch')}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<NumberInput className='col-span-6' label='Shadow' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('shadow', value)} size='sm' value={shadow} />
-				<NumberInput className='col-span-6' label='Highlight' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('highlight', value)} size='sm' value={highlight} />
+				<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} label='Shadow' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('shadow', value)} size='sm' value={shadow} />
+				<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} label='Highlight' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('highlight', value)} size='sm' value={highlight} />
 				<Slider className='col-span-full' maxValue={65536} minValue={0} onChange={handleShadowHighlightChange} step={8} value={[shadow, highlight]} />
-				<NumberInput className='col-span-full' label='Midtone' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('midtone', value)} size='sm' value={midtone} />
+				<NumberInput className='col-span-full' formatOptions={INTEGER_NUMBER_FORMAT} label='Midtone' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('midtone', value)} size='sm' value={midtone} />
 				<Slider className='col-span-full' maxValue={65536} minValue={0} onChange={(value) => stretch.update('midtone', value as number)} step={8} value={midtone} />
-				<NumberInput className='col-span-full' label='Mean Background (Auto Stretch)' maxValue={1} minValue={0} onValueChange={(value) => stretch.update('meanBackground', value)} size='sm' step={0.01} value={meanBackground} />
+				<NumberInput className='col-span-full' formatOptions={DECIMAL_NUMBER_FORMAT} label='Mean Background (Auto Stretch)' maxValue={1} minValue={0} onValueChange={(value) => stretch.update('meanBackground', value)} size='sm' step={0.01} value={meanBackground} />
 			</div>
 		</Modal>
 	)

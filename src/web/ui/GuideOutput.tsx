@@ -3,6 +3,7 @@ import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { GuideOutputMolecule } from '@/molecules/indi/guideoutput'
+import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConnectButton } from './ConnectButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
@@ -32,11 +33,25 @@ export const GuideOutput = memo(() => {
 			name={`guide-output-${guideOutput.scope.guideOutput.name}`}
 			onClose={guideOutput.close}>
 			<div className='mt-0 grid grid-cols-6 gap-1'>
-				<NumberInput className='col-start-3 col-span-2' isDisabled={pulseGuiding} label='North (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('north', value)} size='sm' value={north.duration} />
-				<NumberInput className='row-start-3 col-span-2' isDisabled={pulseGuiding} label='West (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('west', value)} size='sm' value={west.duration} />
-				<Nudge className='col-start-3 row-start-2 col-span-2 row-span-3' isCancelDisabled={!pulseGuiding} isDisabled={pulseGuiding} onCancel={guideOutput.stop} onNudge={guideOutput.pulse} />
-				<NumberInput className='row-start-3 col-span-2' isDisabled={pulseGuiding} label='East (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('east', value)} size='sm' value={east.duration} />
-				<NumberInput className='col-start-3 row-start-5 col-span-2' isDisabled={pulseGuiding} label='South (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('south', value)} size='sm' value={south.duration} />
+				<NumberInput className='col-start-3 col-span-2' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={pulseGuiding} label='North (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('north', value)} size='sm' value={north.duration} />
+				<NumberInput className='row-start-3 col-span-2' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={pulseGuiding} label='West (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('west', value)} size='sm' value={west.duration} />
+				<Nudge
+					className='col-start-3 row-start-2 col-span-2 row-span-3'
+					isCancelDisabled={!pulseGuiding}
+					isDisabled={pulseGuiding}
+					isDownDisabled={!south.duration}
+					isDownLeftDisabled={!south.duration || !west.duration}
+					isDownRightDisabled={!south.duration || !east.duration}
+					isLeftDisabled={!west.duration}
+					isRightDisabled={!east.duration}
+					isUpDisabled={!north.duration}
+					isUpLeftDisabled={!north.duration || !west.duration}
+					isUpRightDisabled={!north.duration || !east.duration}
+					onCancel={guideOutput.stop}
+					onNudge={guideOutput.pulse}
+				/>
+				<NumberInput className='row-start-3 col-span-2' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={pulseGuiding} label='East (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('east', value)} size='sm' value={east.duration} />
+				<NumberInput className='col-start-3 row-start-5 col-span-2' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={pulseGuiding} label='South (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('south', value)} size='sm' value={south.duration} />
 			</div>
 		</Modal>
 	)

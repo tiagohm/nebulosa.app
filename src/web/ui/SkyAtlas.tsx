@@ -7,6 +7,7 @@ import { memo } from 'react'
 import type { BodyPosition, SkyObjectSearchResult } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
+import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConstellationSelect } from './ConstellationSelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
@@ -75,7 +76,7 @@ export const SkyAtlas = memo(() => {
 								<Button color='secondary' isDisabled={page <= 1 || loading} isIconOnly onPointerUp={() => skyAtlas.dsos.update('page', page - 1)} variant='flat'>
 									<Icons.ChevronLeft />
 								</Button>
-								<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} hideStepper={true} isDisabled={!dsosResult.length || loading} isWheelDisabled minValue={1} onValueChange={(value) => skyAtlas.dsos.update('page', value)} size='sm' step={1} value={page} />
+								<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={!dsosResult.length || loading} isWheelDisabled minValue={1} onValueChange={(value) => skyAtlas.dsos.update('page', value)} size='sm' value={page} />
 								<Button color='secondary' isDisabled={!dsosResult.length || loading} isIconOnly onPointerUp={() => skyAtlas.dsos.update('page', page + 1)} variant='flat'>
 									<Icons.ChevronRight />
 								</Button>
@@ -119,11 +120,11 @@ export const DeepSkyObjectFilter = memo(() => {
 			/>
 			<Input className='col-span-4 sm:col-span-3' isDisabled={radius <= 0 || loading} label='RA' onValueChange={(value) => skyAtlas.dsos.update('rightAscension', value)} size='sm' value={rightAscension} />
 			<Input className='col-span-4 sm:col-span-3' isDisabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => skyAtlas.dsos.update('declination', value)} size='sm' value={declination} />
-			<NumberInput className='col-span-4 sm:col-span-2' label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => skyAtlas.dsos.update('radius', value)} size='sm' step={0.1} value={radius} />
+			<NumberInput className='col-span-4 sm:col-span-2' formatOptions={DECIMAL_NUMBER_FORMAT} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => skyAtlas.dsos.update('radius', value)} size='sm' step={0.1} value={radius} />
 			<Checkbox className='col-span-5 sm:col-span-4' isSelected={visible} onValueChange={(value) => skyAtlas.dsos.update('visible', value)}>
 				Show only visible
 			</Checkbox>
-			<NumberInput className='col-span-5 sm:col-span-3' isDisabled={!visible || loading} label='Visible above (°)' maxValue={89} minValue={0} onValueChange={(value) => skyAtlas.dsos.update('visibleAbove', value)} size='sm' value={visibleAbove} />
+			<NumberInput className='col-span-5 sm:col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!visible || loading} label='Visible above (°)' maxValue={89} minValue={0} onValueChange={(value) => skyAtlas.dsos.update('visibleAbove', value)} size='sm' value={visibleAbove} />
 			<div className='col-span-2 sm:col-span-5 flex flex-row items-center justify-center'>
 				<Button color='primary' isDisabled={loading} isIconOnly onPointerUp={() => skyAtlas.dsos.search()} variant='flat'>
 					<Icons.Search />

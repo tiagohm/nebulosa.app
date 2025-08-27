@@ -4,6 +4,7 @@ import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/ang
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageSolverMolecule } from '@/molecules/image/solver'
+import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { PlateSolverSelect } from './PlateSolverSelect'
@@ -43,9 +44,9 @@ export const PlateSolver = memo(() => {
 				</Checkbox>
 				<Input className='col-span-4' isDisabled={request.blind} label='RA' onValueChange={(value) => solver.update('rightAscension', value)} size='sm' value={request.rightAscension} />
 				<Input className='col-span-4' isDisabled={request.blind} label='DEC' onValueChange={(value) => solver.update('declination', value)} size='sm' value={request.declination} />
-				<NumberInput className='col-span-4' isDisabled={request.blind} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => solver.update('radius', value)} size='sm' step={0.1} value={request.radius ?? 4} />
-				<NumberInput className='col-span-6' label='Focal Length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} size='sm' value={request.focalLength} />
-				<NumberInput className='col-span-6' label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} size='sm' step={0.01} value={request.pixelSize} />
+				<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={request.blind} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => solver.update('radius', value)} size='sm' step={0.1} value={request.radius ?? 4} />
+				<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} label='Focal Length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} size='sm' value={request.focalLength} />
+				<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} size='sm' step={0.01} value={request.pixelSize} />
 				<div className='col-span-full font-bold text-sm my-1'>SOLUTION</div>
 				<Input className='col-span-4' isReadOnly label='RA' size='sm' value={formatRA(solution?.rightAscension ?? 0)} />
 				<Input className='col-span-4' isReadOnly label='DEC' size='sm' value={formatDEC(solution?.declination ?? 0)} />

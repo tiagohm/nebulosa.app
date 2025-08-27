@@ -49,6 +49,7 @@ export function equatorialCoordinate(client: IndiClient, mount: Mount, rightAsce
 }
 
 export function geographicCoordinate(client: IndiClient, mount: Mount, { latitude, longitude, elevation }: GeographicCoordinate) {
+	longitude = longitude < 0 ? longitude + 360 : longitude
 	client.sendNumber({ device: mount.name, name: 'GEOGRAPHIC_COORD', elements: { LAT: latitude, LONG: longitude, ELEV: elevation } })
 }
 
@@ -317,7 +318,7 @@ export class MountManager implements IndiClientHandler {
 				let updated = false
 
 				if (device.geographicCoordinate.longitude !== longitude) {
-					device.geographicCoordinate.longitude = longitude
+					device.geographicCoordinate.longitude = longitude >= 180 ? longitude - 360 : longitude
 					updated = true
 				}
 

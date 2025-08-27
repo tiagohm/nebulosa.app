@@ -2,6 +2,7 @@ import { NumberInput, type NumberInputProps } from '@heroui/react'
 import { useMemo } from 'react'
 import type { ExposureTimeUnit } from 'src/shared/types'
 import { exposureTimeIn } from 'src/shared/util'
+import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { ExposureTimeUnitDropdown } from './ExposureTimeUnitDropdown'
 
 export interface ExposureTimeInputProps extends Omit<NumberInputProps, 'size' | 'minValue' | 'maxValue' | 'endContent' | 'value' | 'onValueChange'> {
@@ -35,7 +36,7 @@ export function ExposureTimeInput({ className, value, onValueChange, unit, onUni
 
 	return (
 		<div className={`flex flex-row gap-1 items-center ${className}`}>
-			<NumberInput {...props} endContent={<ExposureTimeUnitDropdown color='secondary' onValueChange={handleUnitChange} value={unit} />} label='Exposure Time' maxValue={max} minValue={min} onValueChange={handleValueChange} size='sm' value={value} />
+			<NumberInput formatOptions={DECIMAL_NUMBER_FORMAT} {...props} endContent={<ExposureTimeUnitDropdown color='secondary' onValueChange={handleUnitChange} value={unit} />} label='Exposure Time' maxValue={max} minValue={min} onValueChange={handleValueChange} size='sm' value={value} />
 		</div>
 	)
 }

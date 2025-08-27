@@ -5,6 +5,7 @@ import { memo, useEffect, useRef, useState } from 'react'
 import type { DeviceProperty } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
+import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { EnumSelect } from './EnumSelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
@@ -138,8 +139,8 @@ function NumberElement({ label, value, isReadonly, min, max, onValueChange }: Nu
 
 	return (
 		<div className='grid grid-cols-12 gap-1'>
-			<NumberInput className={isReadonly ? 'col-span-full' : 'col-span-6'} hideStepper isDisabled label={label} maxValue={max} minValue={min} size='sm' value={value} />
-			{!isReadonly && <NumberInput className='col-span-6' label={label} onValueChange={handleValueChange} size='sm' value={number} />}
+			<Input className={isReadonly ? 'col-span-full' : 'col-span-6'} isDisabled label={label} size='sm' value={value.toString()} />
+			{!isReadonly && <NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} label={label} maxValue={max} minValue={min} onValueChange={handleValueChange} size='sm' value={number} />}
 		</div>
 	)
 }

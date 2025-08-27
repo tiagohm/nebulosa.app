@@ -1,8 +1,9 @@
-import { Button, Checkbox, Chip, NumberInput, Tooltip } from '@heroui/react'
+import { Button, Checkbox, Chip, Input, NumberInput, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FocuserMolecule } from '@/molecules/indi/focuser'
+import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
@@ -38,7 +39,7 @@ export const Focuser = memo(() => {
 					</Chip>
 				</div>
 				<div className='col-span-9 flex flex-row items-center justify-end gap-2'>
-					<NumberInput className='flex-1' hideStepper isReadOnly label={`Position (max: ${position.max})`} size='sm' value={position.value} />
+					<Input className='flex-1' isReadOnly label={`Position (max: ${position.max})`} size='sm' value={position.value.toFixed(0)} />
 					<Tooltip content='Stop' placement='bottom'>
 						<Button color='danger' isDisabled={!canAbort || !moving} isIconOnly onPointerUp={focuser.stop} size='sm' variant='light'>
 							<Icons.Stop />
@@ -51,7 +52,7 @@ export const Focuser = memo(() => {
 							<Icons.ArrowLeft />
 						</Button>
 					</Tooltip>
-					<NumberInput className='flex-1' label='Relative' maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} size='sm' value={relative} />
+					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} label='Relative' maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} size='sm' value={relative} />
 					<Tooltip content='Move Out' placement='bottom'>
 						<Button color='secondary' isDisabled={!canRelativeMove || moving} isIconOnly onPointerUp={focuser.moveOut} size='sm' variant='light'>
 							<Icons.ArrowRight />
@@ -64,7 +65,7 @@ export const Focuser = memo(() => {
 							<Icons.Sync />
 						</Button>
 					</Tooltip>
-					<NumberInput className='flex-1' label='Absolute' maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} size='sm' value={absolute} />
+					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} label='Absolute' maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} size='sm' value={absolute} />
 					<Tooltip content='Move To' placement='bottom'>
 						<Button color='success' isDisabled={!canAbsoluteMove || moving} isIconOnly onPointerUp={focuser.moveTo} size='sm' variant='light'>
 							<Icons.Check />

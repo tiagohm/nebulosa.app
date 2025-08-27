@@ -192,6 +192,10 @@ export namespace Api {
 			return res(`/mounts/${mount.name}/location`, 'post', coordinate)
 		}
 
+		export function time(mount: Mount, time: Mount['time']) {
+			return res(`/mounts/${mount.name}/time`, 'post', time)
+		}
+
 		export function stop(mount: Mount) {
 			return res(`/mounts/${mount.name}/stop`, 'post')
 		}

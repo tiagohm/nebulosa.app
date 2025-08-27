@@ -24,8 +24,12 @@ export interface MountState {
 	readonly targetCoordinate: MountTargetCoordinate
 	readonly currentCoordinate: MountEquatorialCoordinatePosition
 	readonly location: {
-		showModal: boolean
+		show: boolean
 		coordinate: Mount['geographicCoordinate']
+	}
+	readonly time: {
+		show: boolean
+		time: Mount['time']
 	}
 }
 
@@ -52,8 +56,12 @@ export const MountMolecule = molecule((m, s) => {
 			targetCoordinate: simpleLocalStorage.get<MountState['targetCoordinate']>(`mount.${scope.mount.name}.targetCoordinate`, () => structuredClone(DEFAULT_TARGET_COORDINATE)),
 			currentCoordinate: DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION,
 			location: {
-				showModal: false,
+				show: false,
 				coordinate: scope.mount.geographicCoordinate,
+			},
+			time: {
+				show: false,
+				time: scope.mount.time,
 			},
 		})
 
@@ -184,21 +192,28 @@ export const MountMolecule = molecule((m, s) => {
 	}
 
 	function location(coordinate: GeographicCoordinate) {
-		console.info(coordinate)
 		return Api.Mounts.location(scope.mount, coordinate)
+	}
+
+	function time(time: Mount['time']) {
+		return Api.Mounts.time(scope.mount, time)
 	}
 
 	function stop() {
 		return Api.Mounts.stop(scope.mount)
 	}
 
-	function toggleLocationModal(force?: boolean) {
-		state.location.showModal = force ?? !state.location.showModal
+	function toggleLocation(force?: boolean) {
+		state.location.show = force ?? !state.location.show
+	}
+
+	function toggleTime(force?: boolean) {
+		state.time.show = force ?? !state.time.show
 	}
 
 	function close() {
 		equipment.close('mount', scope.mount)
 	}
 
-	return { state, scope, connect, updateTargetCoordinate, handleTargetCoordinateAction, toggleLocationModal, park, unpark, togglePark, home, tracking, trackMode, slewRate, moveTo, location, stop, close } as const
+	return { state, scope, connect, updateTargetCoordinate, handleTargetCoordinateAction, toggleLocation, toggleTime, park, unpark, togglePark, home, tracking, trackMode, slewRate, moveTo, location, time, stop, close } as const
 })

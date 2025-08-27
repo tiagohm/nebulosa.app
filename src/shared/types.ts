@@ -513,6 +513,10 @@ export interface GPS extends Device {
 	readonly type: 'GPS' | 'MOUNT'
 	hasGPS: boolean
 	readonly geographicCoordinate: GeographicCoordinate
+	readonly time: {
+		utc: number
+		offset: number // minutes
+	}
 }
 
 // Mount
@@ -859,6 +863,10 @@ export const DEFAULT_MOUNT: Mount = {
 		latitude: 0,
 		longitude: 0,
 		elevation: 0,
+	},
+	time: {
+		utc: 0,
+		offset: 0,
 	},
 	parking: false,
 	parked: false,

@@ -10,6 +10,7 @@ import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Location } from './Location'
 import { Modal } from './Modal'
+import { MountRemoteControl } from './MountRemoteControl'
 import { Nudge } from './Nudge'
 import { SlewRateSelect } from './SlewRateSelect'
 import { TargetCoordinateTypeButtonGroup } from './TargetCoordinateTypeButtonGroup'
@@ -19,7 +20,7 @@ import { TrackModeSelect } from './TrackModeSelect'
 export const Mount = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	// biome-ignore format: don't break lines!
-	const { connecting, currentCoordinate, location: { show: showLocation }, time: { show: showTime }, } = useSnapshot(mount.state)
+	const { connecting, currentCoordinate, location: { show: showLocation }, time: { show: showTime }, remoteControl: { show: showRemoteControl } } = useSnapshot(mount.state)
 	const { connected, parking, parked, slewing, tracking, canPark, canHome, canAbort, trackModes, trackMode, slewRates, slewRate, equatorialCoordinate, geographicCoordinate, time } = useSnapshot(mount.state.mount)
 	const targetCoordinate = useSnapshot(mount.state.targetCoordinate, { sync: true })
 	const moving = useMemo(() => slewing || parking, [slewing, parking])
@@ -48,13 +49,18 @@ export const Mount = memo(() => {
 							{parking ? 'parking' : parked ? 'parked' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
 						</Chip>
 						<div className='flex flex-row items-center gap-2'>
+							<Tooltip content='Remote Control'>
+								<Button color='secondary' isDisabled={!connected} isIconOnly onPointerUp={mount.showRemoteControl} size='sm' variant='light'>
+									<Icons.RemoteControl />
+								</Button>
+							</Tooltip>
 							<Tooltip content='Location'>
-								<Button color='danger' isDisabled={!connected || moving} isIconOnly onPointerUp={() => mount.toggleLocation()} size='sm' variant='light'>
+								<Button color='danger' isDisabled={!connected || moving} isIconOnly onPointerUp={mount.showLocation} size='sm' variant='light'>
 									<Icons.MapMarker />
 								</Button>
 							</Tooltip>
 							<Tooltip content='Time'>
-								<Button color='primary' isDisabled={!connected || moving} isIconOnly onPointerUp={() => mount.toggleTime()} size='sm' variant='light'>
+								<Button color='primary' isDisabled={!connected || moving} isIconOnly onPointerUp={mount.showTime} size='sm' variant='light'>
 									<Icons.Clock />
 								</Button>
 							</Tooltip>
@@ -141,8 +147,9 @@ export const Mount = memo(() => {
 					<SlewRateSelect className='col-span-3' isDisabled={!connected || moving || parked} onValueChange={(value) => mount.slewRate(value)} rates={slewRates} value={slewRate ?? ''} />
 				</div>
 			</Modal>
-			{showLocation && <Location coordinate={geographicCoordinate} name={`location-mount-${mount.scope.mount.name}`} onClose={() => mount.toggleLocation(false)} onCoordinateChange={mount.location} />}
-			{showTime && <Time name={`time-mount-${mount.scope.mount.name}`} onClose={() => mount.toggleTime(false)} onTimeChange={mount.time} time={time} />}
+			{showLocation && <Location coordinate={geographicCoordinate} name={`location-mount-${mount.scope.mount.name}`} onClose={mount.closeLocation} onCoordinateChange={mount.location} />}
+			{showTime && <Time name={`time-mount-${mount.scope.mount.name}`} onClose={mount.closeTime} onTimeChange={mount.time} time={time} />}
+			{showRemoteControl && <MountRemoteControl />}
 		</>
 	)
 })

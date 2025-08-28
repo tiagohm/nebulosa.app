@@ -529,6 +529,8 @@ export type TrackMode = 'SIDEREAL' | 'SOLAR' | 'LUNAR' | 'KING' | 'CUSTOM'
 
 export type TargetCoordinateType = 'J2000' | 'JNOW' | 'ALTAZ'
 
+export type MountRemoteControlProtocol = 'LX200' | 'STELLARIUM'
+
 export interface Parkable {
 	canPark: boolean
 	parking: boolean
@@ -547,6 +549,7 @@ export interface Mount extends GuideOutput, GPS, Parkable {
 	canAbort: boolean
 	canSync: boolean
 	canGoTo: boolean
+	canSlew: boolean
 	canHome: boolean
 	slewRates: SlewRate[]
 	slewRate?: SlewRate['name']
@@ -565,6 +568,14 @@ export interface MountEquatorialCoordinatePosition extends Readonly<EquatorialCo
 	readonly meridianAt: string
 	readonly pierSide: PierSide
 }
+
+export interface MountRemoteControlStart {
+	readonly protocol: MountRemoteControlProtocol
+	readonly host: string
+	readonly port: number
+}
+
+export type MountRemoteControlStatus = Record<MountRemoteControlProtocol, Omit<MountRemoteControlStart, 'protocol'> | false>
 
 export function expectedPierSide(rightAscension: Angle, declination: Angle, lst: Angle): PierSide {
 	if (Math.abs(declination) === Math.PI / 2) return 'NEITHER'
@@ -834,6 +845,7 @@ export const DEFAULT_MOUNT: Mount = {
 	canAbort: false,
 	canSync: false,
 	canGoTo: false,
+	canSlew: false,
 	canHome: false,
 	canPark: false,
 	slewRates: [],

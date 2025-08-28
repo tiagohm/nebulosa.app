@@ -2,16 +2,19 @@ import Elysia from 'elysia'
 import { type Angle, deg, formatHMS, hour, parseAngle, toDeg, toHour } from 'nebulosa/src/angle'
 import { altaz } from 'nebulosa/src/astrometry'
 import { constellation } from 'nebulosa/src/constellation'
-import { dateFrom } from 'nebulosa/src/datetime'
+import { type DateTime, dateFrom, dateNow } from 'nebulosa/src/datetime'
 import { meter } from 'nebulosa/src/distance'
 import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
-import { precessFk5ToJ2000 } from 'nebulosa/src/fk5'
+import { fk5, precessFk5FromJ2000, precessFk5ToJ2000 } from 'nebulosa/src/fk5'
 import type { DefNumberVector, DefSwitch, DefSwitchVector, DefTextVector, DelProperty, IndiClient, IndiClientHandler, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import { type GeographicPosition, geodeticLocation, localSiderealTime } from 'nebulosa/src/location'
+import { type Lx200ProtocolHandler, Lx200ProtocolServer, type MoveDirection } from 'nebulosa/src/lx200'
+import { type StellariumProtocolHandler, StellariumProtocolServer } from 'nebulosa/src/stellarium'
 import { timeNow } from 'nebulosa/src/time'
 import { earth } from 'nebulosa/src/vsop87e'
 import bus from 'src/shared/bus'
-import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, expectedPierSide, type GeographicCoordinate, type GPS, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoved, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
+// biome-ignore format: too long!
+import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, expectedPierSide, type GeographicCoordinate, type GPS, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
 import type { ConnectionManager } from './connection'
 import type { GuideOutputManager } from './guideoutput'
 import { ask, connectionFor, DeviceInterfaceType, isInterfaceType } from './indi'
@@ -75,8 +78,10 @@ export function goTo(client: IndiClient, mount: Mount, rightAscension: Angle, de
 }
 
 export function slewTo(client: IndiClient, mount: Mount, rightAscension: Angle, declination: Angle) {
-	client.sendSwitch({ device: mount.name, name: 'ON_COORD_SET', elements: { SLEW: true } })
-	equatorialCoordinate(client, mount, rightAscension, declination)
+	if (mount.canSlew) {
+		client.sendSwitch({ device: mount.name, name: 'ON_COORD_SET', elements: { SLEW: true } })
+		equatorialCoordinate(client, mount, rightAscension, declination)
+	}
 }
 
 export function trackMode(client: IndiClient, mount: Mount, mode: TrackMode) {
@@ -265,18 +270,25 @@ export class MountManager implements IndiClientHandler {
 				return
 			case 'ON_COORD_SET':
 				if (tag[0] === 'd') {
-					const canSync = message.elements.SYNC?.value === true
+					const canSync = 'SYNC' in message.elements
 
 					if (device.canSync !== canSync) {
 						device.canSync = canSync
 						this.update(device, 'canSync', message.state)
 					}
 
-					const canGoTo = message.elements.TRACK?.value === true
+					const canGoTo = 'TRACK' in message.elements
 
 					if (device.canGoTo !== canGoTo) {
 						device.canGoTo = canGoTo
 						this.update(device, 'canGoTo', message.state)
+					}
+
+					const canSlew = 'SLEW' in message.elements
+
+					if (device.canSlew !== canSlew) {
+						device.canSlew = canSlew
+						this.update(device, 'canSlew', message.state)
 					}
 				}
 
@@ -449,13 +461,13 @@ export class MountManager implements IndiClientHandler {
 		const location = this.geographicPositions.get(device)
 		if (!location) return { ...DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, rightAscension, declination }
 
-		const now = timeNow()
+		const now = timeNow(true)
 		now.location = location
 
 		const ebpv = earth(now)
 		const fk5 = eraS2c(rightAscension, declination)
-		const [rightAscensionJ2000, declinationJ2000] = eraC2s(...precessFk5ToJ2000(fk5, now))
 		const [azimuth, altitude] = altaz(fk5, now, ebpv)!
+		const [rightAscensionJ2000, declinationJ2000] = eraC2s(...precessFk5ToJ2000(fk5, now))
 		const lst = localSiderealTime(now)
 
 		return {
@@ -482,7 +494,156 @@ export class MountManager implements IndiClientHandler {
 	}
 }
 
-export function mount(mount: MountManager, connection: ConnectionManager) {
+export class MountRemoteControlManager implements StellariumProtocolHandler, Lx200ProtocolHandler {
+	private readonly stellarium = new Map<Mount, StellariumProtocolServer>()
+	private readonly lx200 = new Map<Mount, Lx200ProtocolServer>()
+	private readonly equatorialCoordinateJ2000 = new Map<Mount, readonly [Angle, Angle]>()
+
+	constructor(readonly connection: ConnectionManager) {}
+
+	start(mount: Mount, req: MountRemoteControlStart) {
+		if (req.protocol === 'STELLARIUM') {
+			if (!this.stellarium.has(mount)) {
+				const server = new StellariumProtocolServer(req.host, req.port, { handler: this })
+
+				if (server.start()) {
+					this.stellarium.set(mount, server)
+				}
+			}
+		} else if (req.protocol === 'LX200') {
+			if (!this.lx200.has(mount)) {
+				const server = new Lx200ProtocolServer(req.host, req.port, { handler: this, name: 'Nebulosa', version: '0.2.0' })
+
+				if (server.start()) {
+					this.lx200.set(mount, server)
+				}
+			}
+		}
+	}
+
+	stop(mount: Mount, protocol: MountRemoteControlProtocol) {
+		if (protocol === 'STELLARIUM') {
+			const server = this.stellarium.get(mount)
+
+			if (server) {
+				server.stop()
+				this.stellarium.delete(mount)
+			}
+		} else if (protocol === 'LX200') {
+			const server = this.lx200.get(mount)
+
+			if (server) {
+				server.stop()
+				this.lx200.delete(mount)
+			}
+		}
+	}
+
+	status(mount: Mount): MountRemoteControlStatus {
+		const a = this.lx200.get(mount)
+		const b = this.stellarium.get(mount)
+		return { LX200: !!a && { host: a.host, port: a.port }, STELLARIUM: !!b && { host: b.host, port: b.port } }
+	}
+
+	// STELLARIUM & LX200
+
+	connect(server: Lx200ProtocolServer | StellariumProtocolServer) {}
+
+	goto(server: Lx200ProtocolServer | StellariumProtocolServer, rightAscension: Angle, declination: Angle) {
+		;[rightAscension, declination] = eraC2s(...precessFk5FromJ2000(fk5(rightAscension, declination), timeNow(true)))
+		goTo(this.connection.get(), this.mount(server)!, rightAscension, declination)
+	}
+
+	sync(server: Lx200ProtocolServer, rightAscension: Angle, declination: Angle) {
+		;[rightAscension, declination] = eraC2s(...precessFk5FromJ2000(fk5(rightAscension, declination), timeNow(true)))
+		return syncTo(this.connection.get(), this.mount(server)!, rightAscension, declination)
+	}
+
+	disconnect(server: Lx200ProtocolServer | StellariumProtocolServer) {
+		const mount = this.mount(server)!
+
+		if (server instanceof Lx200ProtocolServer) {
+			this.lx200.delete(mount)
+		} else if (server instanceof StellariumProtocolServer) {
+			this.stellarium.delete(mount)
+		}
+	}
+
+	// LX200
+
+	// is RA called first?
+	rightAscension(server: Lx200ProtocolServer) {
+		const mount = this.mount(server)!
+		const { rightAscension, declination } = mount.equatorialCoordinate
+		const coordinate = eraC2s(...precessFk5ToJ2000(fk5(rightAscension, declination), timeNow(true)))
+		this.equatorialCoordinateJ2000.set(mount, coordinate)
+		return coordinate[0]
+	}
+
+	declination(server: Lx200ProtocolServer) {
+		const mount = this.mount(server)!
+		return this.equatorialCoordinateJ2000.get(mount)?.[1] ?? 0
+	}
+
+	longitude(server: Lx200ProtocolServer, longitude?: Angle) {
+		const mount = this.mount(server)!
+		if (longitude) geographicCoordinate(this.connection.get(), mount, { ...mount.geographicCoordinate, longitude })
+		return deg(mount.geographicCoordinate.longitude)
+	}
+
+	latitude(server: Lx200ProtocolServer, latitude?: Angle) {
+		const mount = this.mount(server)!
+		if (latitude) geographicCoordinate(this.connection.get(), mount, { ...mount.geographicCoordinate, latitude })
+		return deg(mount.geographicCoordinate.latitude)
+	}
+
+	dateTime(server: Lx200ProtocolServer, date?: DateTime) {
+		// const mount = this.mount(server)!
+		// if (date) mount.dateTime = date
+		if (date) console.info(date)
+		return dateNow()
+	}
+
+	tracking(server: Lx200ProtocolServer) {
+		return this.mount(server)!.tracking
+	}
+
+	parked(server: Lx200ProtocolServer) {
+		return this.mount(server)!.parked
+	}
+
+	slewing(server: Lx200ProtocolServer) {
+		return this.mount(server)!.slewing
+	}
+
+	slewRate(server: Lx200ProtocolServer, rate: 'CENTER' | 'GUIDE' | 'FIND' | 'MAX') {
+		const rates = this.mount(server)!.slewRates
+
+		if (rates.length) {
+			const index = rates.length === 1 ? 0 : rate === 'GUIDE' ? 0 : rate === 'MAX' ? rates.length - 1 : rate === 'CENTER' ? 1 : Math.max(1, rates.length - 2)
+			slewRate(this.connection.get(), this.mount(server)!, rates[Math.max(index, 0)])
+		}
+	}
+
+	move(server: Lx200ProtocolServer, direction: MoveDirection, enabled: boolean) {
+		if (direction === 'NORTH') moveNorth(this.connection.get(), this.mount(server)!, enabled)
+		else if (direction === 'SOUTH') moveSouth(this.connection.get(), this.mount(server)!, enabled)
+		else if (direction === 'EAST') moveEast(this.connection.get(), this.mount(server)!, enabled)
+		else if (direction === 'WEST') moveWest(this.connection.get(), this.mount(server)!, enabled)
+	}
+
+	abort(server: Lx200ProtocolServer) {
+		stop(this.connection.get(), this.mount(server)!)
+	}
+
+	private mount(server: Lx200ProtocolServer | StellariumProtocolServer) {
+		for (const [m, s] of this.lx200) if (s === server) return m
+		for (const [m, s] of this.stellarium) if (s === server) return m
+		return undefined
+	}
+}
+
+export function mount(mount: MountManager, remoteControl: MountRemoteControlManager, connection: ConnectionManager) {
 	function mountFromParams(params: { id: string }) {
 		return mount.get(decodeURIComponent(params.id))!
 	}
@@ -508,6 +669,9 @@ export function mount(mount: MountManager, connection: ConnectionManager) {
 		.post('/:id/location', ({ params, body }) => geographicCoordinate(connection.get(), mountFromParams(params), body as never))
 		.post('/:id/time', ({ params, body }) => time(connection.get(), mountFromParams(params), body as never))
 		.post('/:id/stop', ({ params }) => stop(connection.get(), mountFromParams(params)))
+		.post('/:id/remotecontrol/start', ({ params, body }) => remoteControl.start(mountFromParams(params), body as never))
+		.post('/:id/remotecontrol/stop', ({ params, body }) => remoteControl.stop(mountFromParams(params), body as never))
+		.get('/:id/remotecontrol', ({ params }) => remoteControl.status(mountFromParams(params)))
 
 	return app
 }

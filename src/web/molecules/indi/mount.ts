@@ -1,7 +1,9 @@
 import { createScope, molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
-import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, type Framing, type GeographicCoordinate, type Mount, type MountEquatorialCoordinatePosition, type MountUpdated, type TargetCoordinateType, type TrackMode } from 'src/shared/types'
+// biome-ignore format: too long!
+import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, type Framing, type GeographicCoordinate, type Mount, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated, type TargetCoordinateType, type TrackMode } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 import type { NudgeDirection } from '@/ui/Nudge'
@@ -30,6 +32,15 @@ export interface MountState {
 	readonly time: {
 		show: boolean
 		time: Mount['time']
+	}
+	readonly remoteControl: {
+		show: boolean
+		readonly status: MountRemoteControlStatus
+		readonly request: {
+			protocol: MountRemoteControlProtocol
+			host: string
+			port: number
+		}
 	}
 }
 
@@ -63,6 +74,18 @@ export const MountMolecule = molecule((m, s) => {
 				show: false,
 				time: scope.mount.time,
 			},
+			remoteControl: {
+				show: false,
+				status: {
+					LX200: false,
+					STELLARIUM: false,
+				},
+				request: {
+					protocol: 'LX200',
+					host: '0.0.0.0',
+					port: 10001,
+				},
+			},
 		})
 
 	mountStateMap.set(scope.mount.name, state)
@@ -78,7 +101,7 @@ export const MountMolecule = molecule((m, s) => {
 	})
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(2)
+		const unsubscribers = new Array<VoidFunction>(3)
 
 		unsubscribers[0] = bus.subscribe<MountUpdated>('mount:update', (event) => {
 			if (event.device.name === state.mount.name) {
@@ -89,6 +112,10 @@ export const MountMolecule = molecule((m, s) => {
 		})
 
 		unsubscribers[1] = subscribe(state.targetCoordinate, () => simpleLocalStorage.set(`mount.${scope.mount.name}.targetCoordinate`, state.targetCoordinate))
+
+		unsubscribers[2] = subscribeKey(state.remoteControl, 'show', (show) => {
+			if (show) void updateRemoteControlStatus()
+		})
 
 		const updateCurrentCoordinateTimer = setInterval(() => {
 			if (state.mount.connected && !state.mount.parked) {
@@ -112,14 +139,32 @@ export const MountMolecule = molecule((m, s) => {
 		}
 	}
 
+	function updateRemoteControl<K extends keyof MountState['remoteControl']['request']>(key: K, value: MountState['remoteControl']['request'][K]) {
+		state.remoteControl.request[key] = value
+	}
+
+	async function updateRemoteControlStatus() {
+		const status = await Api.Mounts.RemoteControl.status(scope.mount)
+		Object.assign(state.remoteControl.status, status)
+	}
+
+	async function startRemoteControl() {
+		await Api.Mounts.RemoteControl.start(scope.mount, state.remoteControl.request)
+		return updateRemoteControlStatus()
+	}
+
+	async function stopRemoteControl() {
+		await Api.Mounts.RemoteControl.stop(scope.mount, state.remoteControl.request.protocol)
+		return updateRemoteControlStatus()
+	}
+
 	function updateTargetCoordinate<K extends keyof MountState['targetCoordinate']>(key: K, value: MountState['targetCoordinate'][K]) {
 		state.targetCoordinate[key] = value
 	}
 
 	async function updateCurrentCoordinate() {
 		const position = await Api.Mounts.position(scope.mount)
-		if (!position) return
-		Object.assign(state.currentCoordinate, position)
+		position && Object.assign(state.currentCoordinate, position)
 	}
 
 	function handleTargetCoordinateAction() {
@@ -203,17 +248,60 @@ export const MountMolecule = molecule((m, s) => {
 		return Api.Mounts.stop(scope.mount)
 	}
 
-	function toggleLocation(force?: boolean) {
-		state.location.show = force ?? !state.location.show
+	function showLocation() {
+		state.location.show = true
 	}
 
-	function toggleTime(force?: boolean) {
-		state.time.show = force ?? !state.time.show
+	function closeLocation() {
+		state.location.show = false
+	}
+
+	function showTime() {
+		state.time.show = true
+	}
+
+	function closeTime() {
+		state.time.show = false
+	}
+
+	function showRemoteControl() {
+		state.remoteControl.show = true
+	}
+
+	function closeRemoteControl() {
+		state.remoteControl.show = false
 	}
 
 	function close() {
 		equipment.close('mount', scope.mount)
 	}
 
-	return { state, scope, connect, updateTargetCoordinate, handleTargetCoordinateAction, toggleLocation, toggleTime, park, unpark, togglePark, home, tracking, trackMode, slewRate, moveTo, location, time, stop, close } as const
+	return {
+		state,
+		scope,
+		connect,
+		updateRemoteControl,
+		startRemoteControl,
+		stopRemoteControl,
+		updateTargetCoordinate,
+		handleTargetCoordinateAction,
+		showLocation,
+		closeLocation,
+		showTime,
+		closeTime,
+		showRemoteControl,
+		closeRemoteControl,
+		park,
+		unpark,
+		togglePark,
+		home,
+		tracking,
+		trackMode,
+		slewRate,
+		moveTo,
+		location,
+		time,
+		stop,
+		close,
+	} as const
 })

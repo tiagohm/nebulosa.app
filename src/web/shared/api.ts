@@ -4,7 +4,7 @@ import type { NewVector } from 'nebulosa/src/indi'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DeviceProperties, DeviceProperty, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DeviceProperties, DeviceProperty, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
 import { type SkyObjectSearchResult, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -202,6 +202,20 @@ export namespace Api {
 
 		export function position(mount: Mount) {
 			return json<MountEquatorialCoordinatePosition>(`/mounts/${mount.name}/position`, 'get')
+		}
+
+		export namespace RemoteControl {
+			export function start(mount: Mount, req: MountRemoteControlStart) {
+				return res(`/mounts/${mount.name}/remotecontrol/start`, 'post', req)
+			}
+
+			export function stop(mount: Mount, protocol: MountRemoteControlProtocol) {
+				return res(`/mounts/${mount.name}/remotecontrol/stop`, 'post', protocol)
+			}
+
+			export function status(mount: Mount) {
+				return json<MountRemoteControlStatus>(`/mounts/${mount.name}/remotecontrol`, 'get')
+			}
 		}
 	}
 

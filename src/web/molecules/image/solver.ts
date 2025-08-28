@@ -3,7 +3,7 @@ import { molecule, onMount } from 'bunshi'
 import { arcsec, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { numericKeyword } from 'nebulosa/src/fits'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
-import type { PlateSolveStart } from 'src/shared/types'
+import type { ImageInfo, PlateSolveStart } from 'src/shared/types'
 import { subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
@@ -15,22 +15,24 @@ export const ImageSolverMolecule = molecule((m, s) => {
 	const plateSolver = viewer.state.plateSolver
 
 	onMount(() => {
-		const { info } = viewer.state
+		updateRequestFromImageInfo(viewer.state.info)
 
+		const unsubscribe = subscribe(plateSolver.request, () => simpleLocalStorage.set('image.plateSolver', plateSolver.request))
+
+		return () => unsubscribe()
+	})
+
+	function updateRequestFromImageInfo(info: ImageInfo) {
 		// Update plate solver request with FITS header information
-		plateSolver.request.rightAscension = formatRA(info.rightAscension ?? 0)
-		plateSolver.request.declination = formatDEC(info.declination ?? 0)
+		if (info.rightAscension) plateSolver.request.rightAscension = formatRA(info.rightAscension)
+		if (info.declination) plateSolver.request.declination = formatDEC(info.declination)
 		plateSolver.request.blind = info.rightAscension !== undefined && info.declination !== undefined
 
 		if (info.headers) {
 			plateSolver.request.focalLength = numericKeyword(info.headers, 'FOCALLEN', plateSolver.request.focalLength)
 			plateSolver.request.pixelSize = numericKeyword(info.headers, 'XPIXSZ', plateSolver.request.pixelSize)
 		}
-
-		const unsubscribe = subscribe(plateSolver.request, () => simpleLocalStorage.set('image.plateSolver', plateSolver.request))
-
-		return () => unsubscribe()
-	})
+	}
 
 	function update<K extends keyof PlateSolveStart>(key: K, value: PlateSolveStart[K]) {
 		viewer.state.plateSolver.request[key] = value

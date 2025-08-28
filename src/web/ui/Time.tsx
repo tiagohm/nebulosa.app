@@ -35,7 +35,7 @@ export function Time({ name, time, onTimeChange, onClose }: TimeProps) {
 		<Modal
 			footer={
 				<Button color='success' onPointerUp={handleTimeChoose} startContent={<Icons.Check />} variant='flat'>
-					Choose
+					Apply
 				</Button>
 			}
 			header='Time'

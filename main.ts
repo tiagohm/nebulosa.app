@@ -14,7 +14,7 @@ import { FocuserManager, focuser } from 'src/api/focuser'
 import { GuideOutputManager, guideOutput } from 'src/api/guideoutput'
 import { IndiDevicePropertyManager, IndiManager, IndiServerManager, indi } from 'src/api/indi'
 import { WebSocketMessageManager } from 'src/api/message'
-import { MountManager, mount } from 'src/api/mount'
+import { MountManager, MountRemoteControlManager, mount } from 'src/api/mount'
 import { NotificationManager } from 'src/api/notification'
 import { ThermometerManager, thermometer } from 'src/api/thermometer'
 import { parseArgs } from 'util'
@@ -64,6 +64,7 @@ const guideOutputManager = new GuideOutputManager(wsm)
 const thermometerManager = new ThermometerManager(wsm)
 const focuserManager = new FocuserManager(wsm, thermometerManager)
 const mountManager = new MountManager(wsm, guideOutputManager)
+const mountRemoteControlManager = new MountRemoteControlManager(connectionManager)
 const cameraManager = new CameraManager(wsm, connectionManager, guideOutputManager, thermometerManager, mountManager)
 const dewHeaterManager = new DewHeaterManager(wsm)
 const coverManager = new CoverManager(wsm, dewHeaterManager)
@@ -113,13 +114,18 @@ const app = new Elysia({
 		}),
 	)
 
+	.onError((req) => {
+		console.error(req.error)
+		return undefined
+	})
+
 	// Endpoints
 
 	.use(connection(connectionManager, indiManager))
 	.use(confirmation(confirmationManager))
 	.use(indi(indiManager, indiServerManager, indiDevicePropertyManager, connectionManager))
 	.use(camera(cameraManager, indiDevicePropertyManager))
-	.use(mount(mountManager, connectionManager))
+	.use(mount(mountManager, mountRemoteControlManager, connectionManager))
 	.use(focuser(focuserManager, connectionManager))
 	.use(thermometer(thermometerManager))
 	.use(guideOutput(guideOutputManager, connectionManager))

@@ -25,7 +25,7 @@ export interface EquipmentState {
 	readonly dewHeater: EquipmentDevice<DewHeater>[]
 }
 
-export const EquipmentMolecule = molecule((m) => {
+export const EquipmentMolecule = molecule(() => {
 	const state = proxy<EquipmentState>({
 		selected: undefined,
 		camera: [],
@@ -121,9 +121,15 @@ export const EquipmentMolecule = molecule((m) => {
 		bus.emit('homeMenu:toggle', false)
 	}
 
+	function showIndi(device: Device, e?: React.PointerEvent) {
+		e?.stopPropagation()
+		bus.emit('homeMenu:toggle', false)
+		bus.emit('indiPanelControl:show', device)
+	}
+
 	function close(type: EquipmentDeviceType, device: Device) {
 		state[type].find((e) => e.name === device.name)!.show = false
 	}
 
-	return { state, get, list, add, update, remove, select, show, close } as const
+	return { state, get, list, add, update, remove, select, show, showIndi, close } as const
 })

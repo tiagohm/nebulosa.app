@@ -1,7 +1,7 @@
 import { molecule, onMount } from 'bunshi'
 import type { NewVector } from 'nebulosa/src/indi'
 import bus, { unsubscribe } from 'src/shared/bus'
-import type { ConnectionStatus, DeviceProperties, DeviceProperty, IndiDevicePropertyEvent } from 'src/shared/types'
+import type { ConnectionStatus, Device, DeviceProperties, DeviceProperty, IndiDevicePropertyEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { ConnectionMolecule } from '../connection'
@@ -28,7 +28,7 @@ export const IndiPanelControlMolecule = molecule((m) => {
 	})
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(4)
+		const unsubscribers = new Array<VoidFunction>(3)
 
 		unsubscribers[0] = bus.subscribe<ConnectionStatus>('connection:close', (status) => {
 			if (connection.state.connected?.id === status.id) {
@@ -52,11 +52,6 @@ export const IndiPanelControlMolecule = molecule((m) => {
 			}
 		})
 
-		unsubscribers[3] = bus.subscribe<string | undefined>('indiPanelControl:show', async (device) => {
-			await retrieveDevices(device)
-			show()
-		})
-
 		const timer = setInterval(() => ping(), 5000)
 
 		void retrieveDevices()
@@ -67,10 +62,10 @@ export const IndiPanelControlMolecule = molecule((m) => {
 		}
 	})
 
-	async function retrieveDevices(device: string = state.device) {
+	async function retrieveDevices(device: Device | string = state.device) {
 		const devices = await Api.Indi.devices()
 		state.devices = devices?.sort() ?? []
-		state.device = device || state.devices[0] || ''
+		state.device = (typeof device === 'string' ? device : device?.name) || state.devices[0] || ''
 		ping()
 	}
 
@@ -132,7 +127,13 @@ export const IndiPanelControlMolecule = molecule((m) => {
 		}
 	}
 
-	function show() {
+	async function show(device?: Device | string) {
+		if (!state.show) {
+			await retrieveDevices(device)
+		} else if (device) {
+			state.device = typeof device === 'string' ? device : device.name
+		}
+
 		bus.emit('homeMenu:toggle', false)
 		state.show = true
 		ping()

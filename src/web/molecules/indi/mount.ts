@@ -1,7 +1,7 @@
 import { createScope, molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
-import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, type Framing, type GeographicCoordinate, type Mount, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated, type TargetCoordinateType, type TrackMode } from 'src/shared/types'
+import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type Framing, type GeographicCoordinate, type Mount, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountTargetCoordinate, type MountUpdated, type TrackMode } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -9,22 +9,20 @@ import { simpleLocalStorage } from '@/shared/storage'
 import type { NudgeDirection } from '@/ui/Nudge'
 import { EquipmentMolecule } from './equipment'
 
-export type TargetCoordinateAction = 'goto' | 'slew' | 'sync' | 'frame'
+export type TargetCoordinateAction = 'GOTO' | 'SLEW' | 'SYNC' | 'FRAME'
 
 export interface MountScopeValue {
 	readonly mount: Mount
 }
 
-export interface MountTargetCoordinate extends EquatorialCoordinate<string> {
-	type: TargetCoordinateType
-	action: TargetCoordinateAction
-}
-
 export interface MountState {
 	readonly mount: Mount
 	connecting: boolean
-	readonly targetCoordinate: MountTargetCoordinate
-	readonly currentCoordinate: MountEquatorialCoordinatePosition
+	readonly targetCoordinate: {
+		readonly coordinate: MountTargetCoordinate & { action: TargetCoordinateAction }
+		readonly position: MountEquatorialCoordinatePosition
+	}
+	readonly currentPosition: MountEquatorialCoordinatePosition
 	readonly location: {
 		show: boolean
 		coordinate: Mount['geographicCoordinate']
@@ -44,11 +42,11 @@ export interface MountState {
 	}
 }
 
-const DEFAULT_TARGET_COORDINATE: MountState['targetCoordinate'] = {
+const DEFAULT_TARGET_COORDINATE: MountState['targetCoordinate']['coordinate'] = {
 	type: 'J2000',
 	rightAscension: '00 00 00',
 	declination: '+00 00 00',
-	action: 'goto',
+	action: 'GOTO',
 }
 
 export const MountScope = createScope<MountScopeValue>({ mount: DEFAULT_MOUNT })
@@ -64,8 +62,11 @@ export const MountMolecule = molecule((m, s) => {
 		proxy<MountState>({
 			mount: equipment.get('mount', scope.mount.name)!,
 			connecting: false,
-			targetCoordinate: simpleLocalStorage.get<MountState['targetCoordinate']>(`mount.${scope.mount.name}.targetCoordinate`, () => structuredClone(DEFAULT_TARGET_COORDINATE)),
-			currentCoordinate: DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION,
+			targetCoordinate: {
+				coordinate: simpleLocalStorage.get(`mount.${scope.mount.name}.targetCoordinate`, () => structuredClone(DEFAULT_TARGET_COORDINATE)),
+				position: structuredClone(DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION),
+			},
+			currentPosition: structuredClone(DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION),
 			location: {
 				show: false,
 				coordinate: scope.mount.geographicCoordinate,
@@ -95,8 +96,9 @@ export const MountMolecule = molecule((m, s) => {
 		Object.assign(state.mount, mount)
 		state.connecting = false
 
-		if (mount.connected && !mount.parked) {
-			void updateCurrentCoordinate()
+		if (mount.connected) {
+			void updateCurrentCoordinatePosition()
+			void updateTargetCoordinatePosition()
 		}
 	})
 
@@ -107,19 +109,25 @@ export const MountMolecule = molecule((m, s) => {
 			if (event.device.name === state.mount.name) {
 				if (event.property === 'connected') {
 					state.connecting = false
+
+					if (event.device.connected) {
+						void updateCurrentCoordinatePosition()
+						void updateTargetCoordinatePosition()
+					}
 				}
 			}
 		})
 
-		unsubscribers[1] = subscribe(state.targetCoordinate, () => simpleLocalStorage.set(`mount.${scope.mount.name}.targetCoordinate`, state.targetCoordinate))
+		unsubscribers[1] = subscribe(state.targetCoordinate, () => simpleLocalStorage.set(`mount.${scope.mount.name}.targetCoordinate`, state.targetCoordinate.coordinate))
 
 		unsubscribers[2] = subscribeKey(state.remoteControl, 'show', (show) => {
 			if (show) void updateRemoteControlStatus()
 		})
 
 		const updateCurrentCoordinateTimer = setInterval(() => {
-			if (state.mount.connected && !state.mount.parked) {
-				void updateCurrentCoordinate()
+			if (state.mount.connected) {
+				void updateCurrentCoordinatePosition()
+				void updateTargetCoordinatePosition()
 			}
 		}, 5000)
 
@@ -158,28 +166,33 @@ export const MountMolecule = molecule((m, s) => {
 		return updateRemoteControlStatus()
 	}
 
-	function updateTargetCoordinate<K extends keyof MountState['targetCoordinate']>(key: K, value: MountState['targetCoordinate'][K]) {
-		state.targetCoordinate[key] = value
+	function updateTargetCoordinate<K extends keyof MountState['targetCoordinate']['coordinate']>(key: K, value: MountState['targetCoordinate']['coordinate'][K]) {
+		state.targetCoordinate.coordinate[key] = value
 	}
 
-	async function updateCurrentCoordinate() {
-		const position = await Api.Mounts.position(scope.mount)
-		position && Object.assign(state.currentCoordinate, position)
+	async function updateCurrentCoordinatePosition() {
+		const position = await Api.Mounts.currentPosition(scope.mount)
+		position && Object.assign(state.currentPosition, position)
+	}
+
+	async function updateTargetCoordinatePosition() {
+		const position = await Api.Mounts.targetPosition(scope.mount, state.targetCoordinate.coordinate)
+		position && Object.assign(state.targetCoordinate.position, position)
 	}
 
 	function handleTargetCoordinateAction() {
-		switch (state.targetCoordinate.action) {
-			case 'goto':
-				return Api.Mounts.goTo(scope.mount, state.targetCoordinate)
-			case 'slew':
-				return Api.Mounts.slew(scope.mount, state.targetCoordinate)
-			case 'sync':
-				return Api.Mounts.sync(scope.mount, state.targetCoordinate)
-			case 'frame': {
+		switch (state.targetCoordinate.coordinate.action) {
+			case 'GOTO':
+				return Api.Mounts.goTo(scope.mount, state.targetCoordinate.coordinate)
+			case 'SLEW':
+				return Api.Mounts.slew(scope.mount, state.targetCoordinate.coordinate)
+			case 'SYNC':
+				return Api.Mounts.sync(scope.mount, state.targetCoordinate.coordinate)
+			case 'FRAME': {
 				const request: Partial<Framing> = {
 					// TODO: Use computed target coordinates RA/DEC
-					rightAscension: state.targetCoordinate.rightAscension,
-					declination: state.targetCoordinate.declination,
+					rightAscension: state.targetCoordinate.coordinate.rightAscension,
+					declination: state.targetCoordinate.coordinate.declination,
 				}
 
 				bus.emit('framing:load', request)

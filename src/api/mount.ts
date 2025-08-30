@@ -1,20 +1,21 @@
 import Elysia from 'elysia'
 import { type Angle, deg, formatHMS, hour, parseAngle, toDeg, toHour } from 'nebulosa/src/angle'
 import { altaz } from 'nebulosa/src/astrometry'
+import { ONE_PARSEC } from 'nebulosa/src/constants'
 import { constellation } from 'nebulosa/src/constellation'
 import { type DateTime, dateFrom, dateNow } from 'nebulosa/src/datetime'
 import { meter } from 'nebulosa/src/distance'
-import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
+import { eraC2s, eraS2p } from 'nebulosa/src/erfa'
 import { fk5, precessFk5FromJ2000, precessFk5ToJ2000 } from 'nebulosa/src/fk5'
 import type { DefNumberVector, DefSwitch, DefSwitchVector, DefTextVector, DelProperty, IndiClient, IndiClientHandler, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
 import { type GeographicPosition, geodeticLocation, localSiderealTime } from 'nebulosa/src/location'
 import { type Lx200ProtocolHandler, Lx200ProtocolServer, type MoveDirection } from 'nebulosa/src/lx200'
 import { type StellariumProtocolHandler, StellariumProtocolServer } from 'nebulosa/src/stellarium'
 import { timeNow } from 'nebulosa/src/time'
-import { earth } from 'nebulosa/src/vsop87e'
 import bus from 'src/shared/bus'
 // biome-ignore format: too long!
-import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, expectedPierSide, type GeographicCoordinate, type GPS, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
+import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, expectedPierSide, type GeographicCoordinate, type GPS, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountTargetCoordinate, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
+import cache from './cache'
 import type { ConnectionManager } from './connection'
 import type { GuideOutputManager } from './guideoutput'
 import { ask, connectionFor, DeviceInterfaceType, isInterfaceType } from './indi'
@@ -455,20 +456,42 @@ export class MountManager implements IndiClientHandler {
 		return this.mounts.get(id)
 	}
 
-	coordinatePosition(device: Mount) {
-		const { rightAscension, declination } = device.equatorialCoordinate
+	currentCoordinatePosition(device: Mount) {
+		return this.targetCoordinatePosition(device)
+	}
 
+	targetCoordinatePosition(device: Mount, target: EquatorialCoordinate | MountTargetCoordinate<string | Angle> = device.equatorialCoordinate) {
 		const location = this.geographicPositions.get(device)
-		if (!location) return { ...DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, rightAscension, declination }
 
-		const now = timeNow(true)
-		now.location = location
+		if (!location) return { ...DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, rightAscension: 0, declination: 0 }
 
-		const ebpv = earth(now)
-		const fk5 = eraS2c(rightAscension, declination)
-		const [azimuth, altitude] = altaz(fk5, now, ebpv)!
-		const [rightAscensionJ2000, declinationJ2000] = eraC2s(...precessFk5ToJ2000(fk5, now))
+		let rightAscension = 0
+		let declination = 0
+		let rightAscensionJ2000 = 0
+		let declinationJ2000 = 0
+		let azimuth = 0
+		let altitude = 0
+
+		const type = 'type' in target ? target.type : 'JNOW'
+		const now = cache.time('now', location)
+		const ebpv = cache.earth(now)
 		const lst = localSiderealTime(now)
+
+		if (type === 'JNOW') {
+			rightAscension = typeof target.rightAscension === 'number' ? target.rightAscension : parseAngle(target.rightAscension, { isHour: true })!
+			declination = typeof target.declination === 'number' ? target.declination : parseAngle(target.declination)!
+
+			const fk5 = precessFk5ToJ2000(eraS2p(rightAscension, declination, ONE_PARSEC * 1000), now)
+			;[rightAscensionJ2000, declinationJ2000] = eraC2s(...fk5)
+			;[azimuth, altitude] = altaz(fk5, now, ebpv)!
+		} else if (type === 'J2000') {
+			rightAscensionJ2000 = typeof target.rightAscension === 'number' ? target.rightAscension : parseAngle(target.rightAscension, { isHour: true })!
+			declinationJ2000 = typeof target.declination === 'number' ? target.declination : parseAngle(target.declination)!
+
+			const fk5 = eraS2p(rightAscensionJ2000, declinationJ2000, ONE_PARSEC * 1000)
+			;[azimuth, altitude] = altaz(fk5, now, ebpv)!
+			;[rightAscension, declination] = eraC2s(...precessFk5FromJ2000(fk5, now))
+		}
 
 		return {
 			rightAscension,
@@ -479,9 +502,9 @@ export class MountManager implements IndiClientHandler {
 			altitude,
 			constellation: constellation(rightAscension, declination, now),
 			lst: formatHMS(lst),
-			meridianAt: '00:00 (-12:00)',
+			meridianAt: '00:00',
 			pierSide: expectedPierSide(rightAscension, declination, lst),
-		} satisfies MountEquatorialCoordinatePosition
+		} as MountEquatorialCoordinatePosition
 	}
 
 	moveTo(client: IndiClient, mount: Mount, mode: 'goto' | 'slew' | 'sync', req: EquatorialCoordinate<string | number>) {
@@ -661,7 +684,8 @@ export function mount(mount: MountManager, remoteControl: MountRemoteControlMana
 		.post('/:id/tracking', ({ params, body }) => tracking(connection.get(), mountFromParams(params), body as never))
 		.post('/:id/trackmode', ({ params, body }) => trackMode(connection.get(), mountFromParams(params), body as never))
 		.post('/:id/slewrate', ({ params, body }) => slewRate(connection.get(), mountFromParams(params), body as never))
-		.get('/:id/position', ({ params }) => mount.coordinatePosition(mountFromParams(params)))
+		.post('/:id/position/current', ({ params }) => mount.currentCoordinatePosition(mountFromParams(params)))
+		.post('/:id/position/target', ({ params, body }) => mount.targetCoordinatePosition(mountFromParams(params), body as never))
 		.post('/:id/movenorth', ({ params, body }) => moveNorth(connection.get(), mountFromParams(params), body as never))
 		.post('/:id/movesouth', ({ params, body }) => moveSouth(connection.get(), mountFromParams(params), body as never))
 		.post('/:id/moveeast', ({ params, body }) => moveEast(connection.get(), mountFromParams(params), body as never))

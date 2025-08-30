@@ -1,15 +1,16 @@
 import Elysia from 'elysia'
 import fs from 'fs/promises'
-import { declinationKeyword, readFits, rightAscensionKeyword } from 'nebulosa/src/fits'
+import { declinationKeyword, type Fits, readFits, rightAscensionKeyword } from 'nebulosa/src/fits'
 import { adf, debayer, horizontalFlip, type Image, type ImageFormat, invert, readImageFromFits, scnr, stf, verticalFlip, type WriteImageToFormatOptions, writeImageToFormat } from 'nebulosa/src/image'
-import { fileHandleSource } from 'nebulosa/src/io'
+import { bufferSource, fileHandleSource } from 'nebulosa/src/io'
 import os from 'os'
 import { join } from 'path'
 import type { JpegOptions, PngOptions, WebpOptions } from 'sharp'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import type { ImageInfo, ImageTransformation, OpenImage } from '../shared/types'
-import { X_IMAGE_INFO_HEADER } from '../shared/types'
+import { X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER } from '../shared/types'
+import type { ImageCacheManager } from './camera'
 import type { NotificationManager } from './notification'
 
 const JPEG_OPTIONS: JpegOptions = {
@@ -41,50 +42,79 @@ const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOption
 }
 
 export class ImageManager {
-	constructor(readonly notification: NotificationManager) {}
+	constructor(
+		readonly notification: NotificationManager,
+		readonly bucket: ImageCacheManager,
+	) {}
 
 	async open(req: OpenImage) {
-		if (req.path) {
-			const handle = await fs.open(req.path)
-			await using source = fileHandleSource(handle)
-			const fits = await readFits(source)
+		if (!req.path) return undefined
 
-			if (fits) {
-				const image = await readImageFromFits(fits)
+		if (req.path?.startsWith(':')) {
+			const parts = req.path.split(':')
+			const key = Buffer.from(parts[1], 'hex').toString('utf-8')
+			const buffer = this.bucket.get(key)
 
-				if (image) {
-					const id = Bun.MD5.hash(req.path, 'hex')
-					const format = req.transformation.format
-					const path = join(os.tmpdir(), `${id}.${format}`)
-					const output = await this.transformImageAndSave(image, path, format, req.transformation)
+			if (buffer) {
+				const source = bufferSource(buffer)
+				const fits = await readFits(source)
 
-					if (output) {
-						const info: ImageInfo = {
-							path,
-							originalPath: req.path,
-							width: output.width,
-							height: output.height,
-							mono: output.channels === 1,
-							metadata: image.metadata,
-							transformation: req.transformation,
-							headers: image.header,
-							rightAscension: rightAscensionKeyword(image.header),
-							declination: declinationKeyword(image.header),
-						}
-
-						return info
-					} else {
-						this.notification.send({ body: 'Failed to generate image', severity: 'error' })
-					}
-				} else {
-					this.notification.send({ body: 'Failed to read image from file', severity: 'error' })
+				if (fits) {
+					const path = Buffer.from(parts[2], 'hex').toString('utf-8')
+					return await this.readAndTransformImageFromFits(fits, req.transformation, path)
 				}
+
+				return undefined
 			} else {
-				this.notification.send({ body: 'No image file found', severity: 'error' })
+				req.path = Buffer.from(parts[2], 'hex').toString('utf-8')
 			}
 		}
 
+		const handle = await fs.open(req.path)
+		await using source = fileHandleSource(handle)
+		const fits = await readFits(source)
+
+		if (fits) {
+			return await this.readAndTransformImageFromFits(fits, req.transformation, req.path)
+		}
+
 		return undefined
+	}
+
+	async readAndTransformImageFromFits(fits: Fits, transformation: ImageTransformation, originalPath: string) {
+		if (fits) {
+			const image = await readImageFromFits(fits)
+
+			if (image) {
+				const id = Bun.randomUUIDv7()
+				const { format } = transformation
+				const path = join(process.platform === 'linux' ? '/dev/shm' : os.tmpdir(), `${id}.${format}`)
+				const output = await this.transformImageAndSave(image, path, format, transformation)
+
+				if (output) {
+					const info: ImageInfo = {
+						path,
+						originalPath,
+						width: output.width,
+						height: output.height,
+						mono: output.channels === 1,
+						metadata: image.metadata,
+						transformation,
+						headers: image.header,
+						rightAscension: rightAscensionKeyword(image.header),
+						declination: declinationKeyword(image.header),
+					}
+
+					return info
+				} else {
+					this.notification.send({ body: 'Failed to generate image', severity: 'error' })
+				}
+			} else {
+				this.notification.send({ body: 'Failed to read image from FITS', severity: 'error' })
+			}
+		} else {
+			this.notification.send({ body: 'No image FITS found', severity: 'error' })
+		}
 	}
 
 	transformImageAndSave(image: Image, path: string, format: ImageFormat, transformation: ImageTransformation) {
@@ -151,11 +181,15 @@ export class ImageManager {
 export function image(image: ImageManager) {
 	const app = new Elysia({ prefix: '/image' })
 		// Endpoints!
-		.post('/open', async ({ body }) => {
+		.post('/open', async ({ body, set }) => {
 			const info = await image.open(body as never)
+
 			if (!info) return undefined
-			const headers: HeadersInit = { [X_IMAGE_INFO_HEADER]: encodeURIComponent(JSON.stringify(info)) }
-			return new Response(Bun.file(info.path), { headers })
+
+			set.headers[X_IMAGE_INFO_HEADER] = encodeURIComponent(JSON.stringify(info))
+			set.headers[X_IMAGE_PATH_HEADER] = encodeURIComponent(info.path)
+
+			return Bun.file(info.path)
 		})
 		.post('/analyze', () => image.analyze())
 		.post('/annotate', () => image.annotate())

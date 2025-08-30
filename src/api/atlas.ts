@@ -5,7 +5,6 @@ import { AU_KM, DAYSEC, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import type { CartesianCoordinate } from 'nebulosa/src/coordinate'
 import type { CsvRow } from 'nebulosa/src/csv'
-import { type DateTime, dateFrom } from 'nebulosa/src/datetime'
 import { type Distance, meter } from 'nebulosa/src/distance'
 import { eraC2s } from 'nebulosa/src/erfa'
 import { fk5, precessFk5FromJ2000 } from 'nebulosa/src/fk5'
@@ -13,15 +12,16 @@ import { observer, type Quantity } from 'nebulosa/src/horizons'
 import { type GeographicPosition, geodeticLocation, localSiderealTime } from 'nebulosa/src/location'
 import { bcrs, type Star, star } from 'nebulosa/src/star'
 import { season } from 'nebulosa/src/sun'
-import { type Time, timeUnix, toUnix } from 'nebulosa/src/time'
+import { type Temporal, temporalAdd, temporalFromDate, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
+import { toUnix } from 'nebulosa/src/time'
 import { earth } from 'nebulosa/src/vsop87e'
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import { type BodyPosition, type ChartOfBody, expectedPierSide, type PositionOfBody, type SkyObjectResult, type SkyObjectSearch, type SkyObjectSearchResult, type SolarSeasons } from '../shared/types'
+import type { CacheManager } from './cache'
 
 const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
 
 const GEOGRAPHIC_POSITIONS: GeographicPosition[] = []
-const TIME_MAP = new Map<number, Time>()
 
 function geographicPositionFor(position: Pick<PositionOfBody, 'latitude' | 'longitude' | 'elevation'>) {
 	const latitude = deg(position.latitude)
@@ -31,22 +31,11 @@ function geographicPositionFor(position: Pick<PositionOfBody, 'latitude' | 'long
 	return GEOGRAPHIC_POSITIONS[GEOGRAPHIC_POSITIONS.length - 1]
 }
 
-function timeFor(utcTime: number, location?: GeographicPosition) {
-	const seconds = Math.trunc(utcTime / 1000)
-	const time = TIME_MAP.get(seconds) ?? timeUnix(seconds)
-	TIME_MAP.set(seconds, time)
-
-	if (location && time.location !== location) {
-		time.location = location
-		time.tdbMinusTt = undefined
-	}
-
-	return time
-}
-
 export class AtlasManager {
 	private readonly ephemeris: Record<string, Map<number, BodyPosition>> = {}
 	private readonly stars = new Map<number, Star>()
+
+	constructor(readonly cache: CacheManager) {}
 
 	imageOfSun() {}
 
@@ -55,15 +44,15 @@ export class AtlasManager {
 	}
 
 	chartOfSun(req: ChartOfBody) {
-		return this.computeChart('10', dateFrom(req.utcTime, true), 1, req.type || 'altitude')
+		return this.computeChart('10', req.utcTime, 1, req.type || 'altitude')
 	}
 
 	seasons(req: PositionOfBody): SolarSeasons {
-		const date = dateFrom(req.utcTime, true)
-		const spring = toUnix(season(date.year(), 'SPRING')) // Autumn in southern hemisphere
-		const summer = toUnix(season(date.year(), 'SUMMER')) // Winter in southern hemisphere
-		const autumn = toUnix(season(date.year(), 'AUTUMN')) // Spring in southern hemisphere
-		const winter = toUnix(season(date.year(), 'WINTER')) // Summer in southern hemisphere
+		const [year] = temporalToDate(req.utcTime)
+		const spring = toUnix(season(year, 'SPRING')) // Autumn in southern hemisphere
+		const summer = toUnix(season(year, 'SUMMER')) // Winter in southern hemisphere
+		const autumn = toUnix(season(year, 'AUTUMN')) // Spring in southern hemisphere
+		const winter = toUnix(season(year, 'WINTER')) // Summer in southern hemisphere
 		return { spring, summer, autumn, winter }
 	}
 
@@ -72,7 +61,7 @@ export class AtlasManager {
 	}
 
 	chartOfMoon(req: ChartOfBody) {
-		return this.computeChart('301', dateFrom(req.utcTime, true), 1, req.type || 'altitude')
+		return this.computeChart('301', req.utcTime, 1, req.type || 'altitude')
 	}
 
 	moonPhases() {}
@@ -84,7 +73,7 @@ export class AtlasManager {
 	}
 
 	chartOfPlanet(code: string, req: ChartOfBody) {
-		return this.computeChart(code, dateFrom(req.utcTime, true), 1, req.type || 'altitude')
+		return this.computeChart(code, req.utcTime, 1, req.type || 'altitude')
 	}
 
 	searchMinorPlanet() {}
@@ -119,7 +108,7 @@ export class AtlasManager {
 
 		if (req.visible && req.visibleAbove >= 0) {
 			const location = geographicPositionFor(req)
-			const time = timeFor(req.utcTime, location)
+			const time = this.cache.time(req.utcTime / 1000, location)
 			const lst = localSiderealTime(time, location, true)
 
 			where.push(`(asin(sin(d.declination) * ${Math.sin(location.latitude)} + cos(d.declination) * ${Math.cos(location.latitude)} * cos(${lst} - d.rightAscension)) >= ${deg(req.visibleAbove)})`)
@@ -139,7 +128,7 @@ export class AtlasManager {
 		const names = nebulosa.query(`SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ${id}`).all() as { name: string }[]
 
 		const location = geographicPositionFor(req)
-		const time = timeFor(req.utcTime, location)
+		const time = this.cache.time(req.utcTime / 1000, location)
 
 		let icrs: CartesianCoordinate
 
@@ -177,16 +166,16 @@ export class AtlasManager {
 	}
 
 	chartOfSkyObject(req: ChartOfBody, id: string) {
-		const data = new Array<number>(1441)
-		const date = timeWithoutHourMinuteAndSecond(req.utcTime / 1000 + req.utcOffset * 60)
+		const date = Math.trunc(temporalStartOfDay(req.utcTime + req.utcOffset * 60000) / 1000)
 		const offset = date % DAYSEC >= 43200 ? 0 : DAYSEC // If the time is after noon, we want the next (julian) day
 		const startTime = date + offset - req.utcOffset * 60 - 43200 // Start at noon UTC
 
 		const dso = nebulosa.query(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get() as SkyObjectResult
 		const location = geographicPositionFor(req)
 		const type = req.type || 'altitude'
+		const data = new Array<number>(1441)
 
-		let utcTime = startTime * 1000
+		let utcTime = startTime
 
 		// Generate chart data for each minute
 		for (let i = 0; i < data.length; i++) {
@@ -195,7 +184,7 @@ export class AtlasManager {
 				continue
 			}
 
-			const time = timeFor(utcTime, location)
+			const time = this.cache.time(utcTime, location)
 
 			let icrs: CartesianCoordinate
 
@@ -218,7 +207,7 @@ export class AtlasManager {
 				data[i] = type === 'declination' ? declination : rightAscension
 			}
 
-			utcTime += 60000
+			utcTime += 60
 		}
 
 		return data
@@ -231,40 +220,42 @@ export class AtlasManager {
 	chartOfSatellite(req: ChartOfBody) {}
 
 	async computeFromHorizonsPositionAt(code: string, req: PositionOfBody, longitude: Angle, latitude: Angle, elevation: Distance) {
-		const minutes = timeWithoutSeconds(req.utcTime / 1000)
+		const key = Math.trunc(temporalSet(req.utcTime, 0, 's') / 1000)
 		const location = geographicPositionFor(req)
 
-		let position = this.ephemeris[code]?.get(minutes)
+		let position = this.ephemeris[code]?.get(key)
 
 		if (!position) {
-			const dateTime = dateFrom(req.utcTime, true)
-			// Check if passed the (local) noon
-			let startTime = dateTime.set('minute', 0).set('second', 0).set('millisecond', 0).add(req.utcOffset, 'm')
+			const hour = temporalGet(temporalAdd(req.utcTime, req.utcOffset, 'm'), 'h')
+
+			let startTime = temporalStartOfDay(req.utcTime)
 			// if not passed noon, go to the previous day
-			if (startTime.hour() < 12) startTime = startTime.subtract(1, 'day')
+			if (hour < 12) startTime = temporalSubtract(startTime, 1, 'd')
 			// set to UTC noon + local offset
-			startTime = startTime.set('hour', 12).subtract(req.utcOffset, 'm')
-			const endTime = startTime.add(1, 'day')
+			startTime = temporalAdd(startTime, 720 - req.utcOffset, 'm')
+			// set end time to noon of the next day
+			const endTime = temporalAdd(startTime, 1, 'd')
 
 			const horizons = await observer(code, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1 })
 			const positions = makeBodyPositionFromHorizons(horizons!)
 			const map = this.ephemeris[code] ?? (this.ephemeris[code] = new Map())
 			positions.forEach((e) => map.set(e[0], e[1]))
-			position = map.get(minutes)!
+			position = map.get(key)!
 		}
 
-		const time = timeFor(req.utcTime, location)
+		const time = this.cache.time(req.utcTime / 1000, location)
 		position.pierSide = expectedPierSide(position.rightAscension, position.declination, localSiderealTime(time, location, true))
 
 		return position
 	}
 
-	computeChart(code: string, dateTime: DateTime, stepSizeInMinutes: number, type: ChartOfBody['type']) {
+	computeChart(code: string, dateTime: Temporal, stepSizeInMinutes: number, type: ChartOfBody['type']) {
 		const positions = this.ephemeris[code]!
 
-		let startTime = dateTime.set('hour', 12).set('minute', 0).set('second', 0).set('millisecond', 0)
-		if (dateTime.hour() < 12) startTime = startTime.subtract(1, 'day')
-		const minutes = timeWithoutSeconds(startTime)
+		const hour = temporalGet(dateTime, 'h')
+		let startTime = temporalAdd(temporalStartOfDay(dateTime), 12, 'h')
+		if (hour < 12) startTime = temporalSubtract(startTime, 1, 'd')
+		const minutes = temporalSet(startTime, 0, 's')
 		const chart: number[] = []
 
 		chart.push(positions.get(minutes)![type])
@@ -305,7 +296,7 @@ export function atlas(atlas: AtlasManager) {
 }
 
 function makeBodyPositionFromHorizons(ephemeris: CsvRow[]): readonly [number, BodyPosition][] {
-	const startTime = timeWithoutSeconds(dateFrom(`${ephemeris[0][0]}Z`, true))
+	const startTime = Math.trunc(parseHorizonsDate(ephemeris[0][0]) / 1000)
 
 	return ephemeris.map((e, i) => {
 		const lightTime = parseFloat(e[11]) || 0
@@ -332,14 +323,11 @@ function makeBodyPositionFromHorizons(ephemeris: CsvRow[]): readonly [number, Bo
 	})
 }
 
-function timeWithoutSeconds(dateTime: DateTime | number) {
-	const seconds = typeof dateTime === 'number' ? Math.trunc(dateTime) : dateTime.unix()
-	const remaining = seconds % 60
-	return seconds - remaining
-}
+const ENGLISH_MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-function timeWithoutHourMinuteAndSecond(dateTime: DateTime | number) {
-	const seconds = typeof dateTime === 'number' ? Math.trunc(dateTime) : dateTime.unix()
-	const remaining = seconds % DAYSEC
-	return seconds - remaining
+function parseHorizonsDate(text: string) {
+	const [date, time] = text.split(' ')
+	const [year, month, day] = date.split('-')
+	const [hour, minute] = time.split(':')
+	return temporalFromDate(+year, ENGLISH_MONTH_NAMES.indexOf(month) + 1, +day, +hour, +minute, 0)
 }

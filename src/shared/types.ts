@@ -569,6 +569,10 @@ export interface MountEquatorialCoordinatePosition extends Readonly<EquatorialCo
 	readonly pierSide: PierSide
 }
 
+export interface MountTargetCoordinate<T = string> extends EquatorialCoordinate<T> {
+	type: TargetCoordinateType
+}
+
 export interface MountRemoteControlStart {
 	readonly protocol: MountRemoteControlProtocol
 	readonly host: string
@@ -682,6 +686,7 @@ export interface Point {
 }
 
 export const X_IMAGE_INFO_HEADER = 'X-Image-Info'
+export const X_IMAGE_PATH_HEADER = 'X-Image-Path'
 
 export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	exposureTime: 0,
@@ -893,7 +898,7 @@ export const DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION: MountEquatorialCoordi
 	altitude: 0,
 	lst: '00:00',
 	constellation: 'AND',
-	meridianAt: '00:00 (00:00)',
+	meridianAt: '00:00',
 	pierSide: 'NEITHER',
 }
 

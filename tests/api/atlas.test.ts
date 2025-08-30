@@ -1,12 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { deg, formatALT, formatAZ, parseAngle } from 'nebulosa/src/angle'
-import { dateUnix } from 'nebulosa/src/datetime'
 import { lightYear, toKilometer } from 'nebulosa/src/distance'
 import { StellariumObjectType } from 'nebulosa/src/stellarium'
+import { formatTemporal } from 'nebulosa/src/temporal'
 import { AtlasManager } from 'src/api/atlas'
+import cache from 'src/api/cache'
 import { type ChartOfBody, DEFAULT_SKY_OBJECT_SEARCH, type PositionOfBody } from 'src/shared/types'
 
-const atlas = new AtlasManager()
+const atlas = new AtlasManager(cache)
 
 const DEFAULT_POSITION_OF_BODY: PositionOfBody = {
 	utcTime: 1753628400000, // Sun Jul 27 2025 12:00:00 GMT-0300
@@ -25,10 +26,10 @@ test('seasons', () => {
 	const { spring, summer, autumn, winter } = atlas.seasons(DEFAULT_POSITION_OF_BODY)
 
 	// https://aa.usno.navy.mil/calculated/seasons?year=2025&tz=0.00&tz_sign=-1&tz_label=false&dst=false&submit=Get+Data
-	expect(dateUnix(spring).format('MM-DD HH:mm')).toBe('03-20 09:02')
-	expect(dateUnix(summer).format('MM-DD HH:mm')).toBe('06-21 02:43')
-	expect(dateUnix(autumn).format('MM-DD HH:mm')).toBe('09-22 18:20')
-	expect(dateUnix(winter).format('MM-DD HH:mm')).toBe('12-21 15:04')
+	expect(formatTemporal(spring * 1000).substring(0, 16)).toBe('2025-03-20 09:02')
+	expect(formatTemporal(summer * 1000).substring(0, 16)).toBe('2025-06-21 02:43')
+	expect(formatTemporal(autumn * 1000).substring(0, 16)).toBe('2025-09-22 18:20')
+	expect(formatTemporal(winter * 1000).substring(0, 16)).toBe('2025-12-21 15:04')
 })
 
 describe('search sky object', () => {

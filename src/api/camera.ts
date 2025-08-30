@@ -9,7 +9,7 @@ import { type Camera, type CameraAdded, type CameraCaptureStart, type CameraCapt
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import type { ConnectionManager } from './connection'
 import type { GuideOutputManager } from './guideoutput'
-import { ask, connectionFor, DeviceInterfaceType, enableBlob, type IndiDevicePropertyManager, isInterfaceType } from './indi'
+import { ask, connectionFor, DeviceInterfaceType, disableBlob, enableBlob, type IndiDevicePropertyManager, isInterfaceType } from './indi'
 import type { WebSocketMessageManager } from './message'
 import type { MountManager } from './mount'
 import type { ThermometerManager } from './thermometer'
@@ -90,6 +90,7 @@ export class CameraManager implements IndiClientHandler {
 		readonly guideOutput: GuideOutputManager,
 		readonly thermometer: ThermometerManager,
 		readonly mount: MountManager,
+		readonly cache: ImageCacheManager,
 	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove all cameras associated with the client
@@ -456,7 +457,7 @@ export class CameraManager implements IndiClientHandler {
 		return this.cameras.get(id)
 	}
 
-	startCameraCaptureTask(device: Camera, req: CameraCaptureStart, property: IndiDevicePropertyManager) {
+	startCameraCapture(device: Camera, req: CameraCaptureStart, property: IndiDevicePropertyManager) {
 		// Stop any existing task for this camera and remove its handler
 		if (this.tasks.has(device.name)) {
 			const task = this.tasks.get(device.name)!
@@ -465,14 +466,14 @@ export class CameraManager implements IndiClientHandler {
 
 		// Start a new task for the camera
 		const client = this.connection.get()
-		const task = new CameraCaptureTask(device, req, client, property, this.handleCameraCaptureTaskEvent.bind(this))
+		const task = new CameraCaptureTask(device, req, client, property, this.cache, this.handleCameraCaptureTaskEvent.bind(this))
 		this.tasks.set(device.name, task)
 		const mount = req.mount ? this.mount.get(req.mount) : undefined
 		snoop(client, device, mount)
 		task.start()
 	}
 
-	stopCameraCaptureTask(device: Camera) {
+	stopCameraCapture(device: Camera) {
 		this.tasks.get(device.name)?.stop()
 	}
 }
@@ -488,10 +489,35 @@ export function camera(camera: CameraManager, property: IndiDevicePropertyManage
 		.get('/:id', ({ params }) => cameraFromParams(params))
 		.post('/:id/cooler', ({ params, body }) => cooler(camera.connection.get(), cameraFromParams(params), body as never))
 		.post('/:id/temperature', ({ params, body }) => temperature(camera.connection.get(), cameraFromParams(params), body as never))
-		.post('/:id/start', ({ params, body }) => camera.startCameraCaptureTask(cameraFromParams(params), body as never, property))
-		.post('/:id/stop', ({ params }) => camera.stopCameraCaptureTask(cameraFromParams(params)))
+		.post('/:id/start', ({ params, body }) => camera.startCameraCapture(cameraFromParams(params), body as never, property))
+		.post('/:id/stop', ({ params }) => camera.stopCameraCapture(cameraFromParams(params)))
 
 	return app
+}
+
+export class ImageCacheManager {
+	private readonly images = new Map<string, Buffer>()
+	private readonly accessTime = new Map<string, number>()
+
+	add(key: string, data: Buffer) {
+		this.images.set(key, data)
+	}
+
+	get(key: string) {
+		const image = this.images.get(key)
+		if (image) this.accessTime.set(key, Date.now())
+		return image
+	}
+
+	remove(key: string) {
+		this.images.delete(key)
+		this.accessTime.delete(key)
+	}
+
+	clear() {
+		this.images.clear()
+		this.accessTime.clear()
+	}
 }
 
 export class CameraCaptureTask {
@@ -506,6 +532,7 @@ export class CameraCaptureTask {
 		private readonly request: CameraCaptureStart,
 		private readonly client: IndiClient,
 		private readonly properties: IndiDevicePropertyManager,
+		private readonly cache: ImageCacheManager,
 		private readonly handleCameraCaptureTaskEvent: (event: CameraCaptureTaskEvent) => void,
 	) {
 		this.event.loop = request.exposureMode === 'LOOP'
@@ -604,19 +631,24 @@ export class CameraCaptureTask {
 				this.event.remainingCount = 0
 				this.event.elapsedCount = 0
 				this.handleCameraCaptureTaskEvent(this.event)
+				disableBlob(this.client, this.camera)
 			}
 		}
 	}
 
 	async blobReceived(device: Camera, data: string) {
 		if (this.camera.name === device.name) {
-			const savePath = await makePathFor(this.request)
 			const name = this.request.autoSave ? dateNow().format('YYYYMMDD.HHmmssSSS') : device.name
-			const path = join(savePath, `${name}.fit`)
-			await Bun.write(path, Buffer.from(data, 'base64'))
-			console.info('saved frame to', path)
+			const path = join(await makePathFor(this.request), `${name}.fit`)
+			const bytes = Buffer.from(data, 'base64')
 
-			this.event.savedPath = path
+			if (this.request.autoSave) {
+				void Bun.write(path, bytes) // Don't wait for writing to file
+			}
+
+			this.cache.add(device.name, bytes)
+
+			this.event.savedPath = `:${Buffer.from(device.name).toString('hex')}:${Buffer.from(path).toString('hex')}`
 			this.handleCameraCaptureTaskEvent(this.event)
 			this.event.savedPath = undefined
 		}

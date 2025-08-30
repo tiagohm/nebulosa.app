@@ -4,7 +4,7 @@ import type { NewVector } from 'nebulosa/src/indi'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DeviceProperties, DeviceProperty, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DeviceProperties, DeviceProperty, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
 import { type SkyObjectSearchResult, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -200,8 +200,12 @@ export namespace Api {
 			return res(`/mounts/${mount.name}/stop`, 'post')
 		}
 
-		export function position(mount: Mount) {
-			return json<MountEquatorialCoordinatePosition>(`/mounts/${mount.name}/position`, 'get')
+		export function currentPosition(mount: Mount) {
+			return json<MountEquatorialCoordinatePosition>(`/mounts/${mount.name}/position/current`, 'post')
+		}
+
+		export function targetPosition(mount: Mount, target: MountTargetCoordinate) {
+			return json<MountEquatorialCoordinatePosition>(`/mounts/${mount.name}/position/target`, 'post', target)
 		}
 
 		export namespace RemoteControl {

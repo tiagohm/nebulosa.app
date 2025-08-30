@@ -17,10 +17,10 @@ export const MountRemoteControl = memo(() => {
 		<Modal header='Remote Control' maxWidth='240px' name={`mount-remote-control-${mount.scope.mount.name}`} onClose={mount.closeRemoteControl}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<MountRemoteControlProtocolSelect className='col-span-full' onValueChange={(value) => mount.updateRemoteControl('protocol', value)} value={protocol} />
-				<Input className='col-span-7' label='Host' onValueChange={(value) => mount.updateRemoteControl('host', value)} size='sm' value={host} />
-				<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => mount.updateRemoteControl('port', value)} size='sm' value={port} />
+				<Input className='col-span-7' isDisabled={!!status[protocol]} label='Host' onValueChange={(value) => mount.updateRemoteControl('host', value)} size='sm' value={status[protocol] ? status[protocol].host : host} />
+				<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!!status[protocol]} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => mount.updateRemoteControl('port', value)} size='sm' value={status[protocol] ? status[protocol].port : port} />
 				<div className='col-span-full justify-center flex items-center'>
-					<Button color='primary' isDisabled={!host || status[protocol] !== false} onPointerUp={mount.startRemoteControl} variant='light'>
+					<Button color='primary' isDisabled={!host || !!status[protocol]} onPointerUp={mount.startRemoteControl} variant='light'>
 						<Icons.Connect /> Connect
 					</Button>
 					<Button color='danger' isDisabled={!status[protocol]} onPointerUp={mount.stopRemoteControl} variant='light'>

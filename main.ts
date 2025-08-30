@@ -1,11 +1,12 @@
 import { cors } from '@elysiajs/cors'
 import { cron } from '@elysiajs/cron'
 import Elysia from 'elysia'
-import fs from 'fs'
+import fs from 'fs/promises'
 import os from 'os'
 import { join } from 'path'
 import { AtlasManager, atlas } from 'src/api/atlas'
-import { CameraManager, camera } from 'src/api/camera'
+import { CacheManager } from 'src/api/cache'
+import { CameraManager, camera, ImageCacheManager } from 'src/api/camera'
 import { ConnectionManager, connection } from 'src/api/connection'
 import { CoverManager, cover } from 'src/api/cover'
 import { DewHeaterManager, dewHeater } from 'src/api/dewheater'
@@ -24,7 +25,7 @@ import { FramingManager, framing } from './src/api/framing'
 import { ImageManager, image } from './src/api/image'
 import { PlateSolverManager, plateSolver } from './src/api/platesolver'
 import { StarDetectionManager, starDetection } from './src/api/stardetection'
-import { X_IMAGE_INFO_HEADER } from './src/shared/types'
+import { X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER } from './src/shared/types'
 import homeHtml from './src/web/pages/home/index.html'
 
 const args = parseArgs({
@@ -51,11 +52,14 @@ Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
 Bun.env.framingDir = join(Bun.env.appDir, 'framing')
 
 // Create application sub-directories if it doesn't exist
-fs.mkdirSync(Bun.env.capturesDir, { recursive: true })
-fs.mkdirSync(Bun.env.framingDir, { recursive: true })
+await fs.mkdir(Bun.env.capturesDir, { recursive: true })
+await fs.mkdir(Bun.env.framingDir, { recursive: true })
+
+const imageCacheManager = new ImageCacheManager()
 
 // Managers
 
+const cacheManager = new CacheManager()
 const wsm = new WebSocketMessageManager()
 const notificationManager = new NotificationManager(wsm)
 const indiDevicePropertyManager = new IndiDevicePropertyManager(wsm)
@@ -65,7 +69,7 @@ const thermometerManager = new ThermometerManager(wsm)
 const focuserManager = new FocuserManager(wsm, thermometerManager)
 const mountManager = new MountManager(wsm, guideOutputManager)
 const mountRemoteControlManager = new MountRemoteControlManager(connectionManager)
-const cameraManager = new CameraManager(wsm, connectionManager, guideOutputManager, thermometerManager, mountManager)
+const cameraManager = new CameraManager(wsm, connectionManager, guideOutputManager, thermometerManager, mountManager, imageCacheManager)
 const dewHeaterManager = new DewHeaterManager(wsm)
 const coverManager = new CoverManager(wsm, dewHeaterManager)
 const flatPanelManager = new FlatPanelManager(wsm)
@@ -76,8 +80,8 @@ const framingManager = new FramingManager()
 const fileSystemManager = new FileSystemManager()
 const starDetectionManager = new StarDetectionManager()
 const plateSolverManager = new PlateSolverManager(notificationManager)
-const atlasManager = new AtlasManager()
-const imageManager = new ImageManager(notificationManager)
+const atlasManager = new AtlasManager(cacheManager)
+const imageManager = new ImageManager(notificationManager, imageCacheManager)
 
 // App
 
@@ -98,7 +102,7 @@ const app = new Elysia({
 
 	.use(
 		cors({
-			exposeHeaders: [X_IMAGE_INFO_HEADER],
+			exposeHeaders: [X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER],
 		}),
 	)
 
@@ -106,17 +110,26 @@ const app = new Elysia({
 
 	.use(
 		cron({
-			name: 'heartbeat',
+			name: 'every-15-minutes',
 			pattern: '0 */15 * * * *',
-			run() {
-				console.info('Heartbeat')
-			},
+			run: () => {},
 		}),
 	)
+
+	// Error Handling
 
 	.onError((req) => {
 		console.error(req.error)
 		return undefined
+	})
+
+	// After Response
+
+	.onAfterResponse((res) => {
+		if (res.path === '/image/open') {
+			const path = decodeURIComponent(res.set.headers[X_IMAGE_PATH_HEADER] as never)
+			fs.unlink(path).catch(console.error)
+		}
 	})
 
 	// Endpoints

@@ -3,7 +3,6 @@ import { type Angle, deg, formatHMS, hour, parseAngle, toDeg, toHour } from 'neb
 import { altaz } from 'nebulosa/src/astrometry'
 import { ONE_PARSEC } from 'nebulosa/src/constants'
 import { constellation } from 'nebulosa/src/constellation'
-import { type DateTime, dateFrom, dateNow } from 'nebulosa/src/datetime'
 import { meter } from 'nebulosa/src/distance'
 import { eraC2s, eraS2p } from 'nebulosa/src/erfa'
 import { fk5, precessFk5FromJ2000, precessFk5ToJ2000 } from 'nebulosa/src/fk5'
@@ -11,6 +10,7 @@ import type { DefNumberVector, DefSwitch, DefSwitchVector, DefTextVector, DelPro
 import { type GeographicPosition, geodeticLocation, localSiderealTime } from 'nebulosa/src/location'
 import { type Lx200ProtocolHandler, Lx200ProtocolServer, type MoveDirection } from 'nebulosa/src/lx200'
 import { type StellariumProtocolHandler, StellariumProtocolServer } from 'nebulosa/src/stellarium'
+import { formatTemporal, parseTemporal, temporalUnix } from 'nebulosa/src/temporal'
 import { timeNow } from 'nebulosa/src/time'
 import bus from 'src/shared/bus'
 // biome-ignore format: too long!
@@ -59,7 +59,7 @@ export function geographicCoordinate(client: IndiClient, mount: Mount, { latitud
 }
 
 export function time(client: IndiClient, mount: Mount, time: GPS['time']) {
-	const UTC = dateFrom(time.utc, true).format('YYYY-MM-DD[T]HH:mm:ss')
+	const UTC = formatTemporal(time.utc, 'YYYY-MM-DDTHH:mm:ss')
 	const OFFSET = (time.offset / 60).toString()
 	client.sendText({ device: mount.name, name: 'TIME_UTC', elements: { UTC, OFFSET } })
 }
@@ -397,8 +397,8 @@ export class MountManager implements IndiClientHandler {
 
 		switch (message.name) {
 			case 'TIME_UTC': {
-				const utc = parseTimeUTC(message.elements.UTC!.value.replace('/', '-'))
-				const offset = parseTimeOffset(message.elements.OFFSET!.value)
+				const utc = parseTemporal(message.elements.UTC!.value, 'YYYY-MM-DDTHH:mm:ss')
+				const offset = parseUTCOffset(message.elements.OFFSET!.value)
 
 				if (device.time.utc !== utc || device.time.offset !== offset) {
 					device.time.utc = utc
@@ -620,11 +620,9 @@ export class MountRemoteControlManager implements StellariumProtocolHandler, Lx2
 		return deg(mount.geographicCoordinate.latitude)
 	}
 
-	dateTime(server: Lx200ProtocolServer, date?: DateTime) {
-		// const mount = this.mount(server)!
-		// if (date) mount.dateTime = date
-		if (date) console.info(date)
-		return dateNow()
+	dateTime(server: Lx200ProtocolServer) {
+		const date = new Date()
+		return [temporalUnix(date.getDate()), date.getTimezoneOffset()] as const
 	}
 
 	tracking(server: Lx200ProtocolServer) {
@@ -700,11 +698,7 @@ export function mount(mount: MountManager, remoteControl: MountRemoteControlMana
 	return app
 }
 
-function parseTimeUTC(text: string) {
-	return dateFrom(text, true).unix() * 1000 // ms
-}
-
-function parseTimeOffset(text: string) {
+function parseUTCOffset(text: string) {
 	const parts = text.split(':')
 
 	if (parts.length === 1) return +parts[0] * 60

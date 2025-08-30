@@ -1,8 +1,8 @@
 import Elysia from 'elysia'
 import fs, { mkdir } from 'fs/promises'
-import { dateNow } from 'nebulosa/src/datetime'
 import type { CfaPattern } from 'nebulosa/src/image'
 import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, DelProperty, IndiClient, IndiClientHandler, OneNumber, PropertyState, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
+import { formatTemporal, temporalGet, temporalSubtract } from 'nebulosa/src/temporal'
 import { join } from 'path'
 import bus from '../shared/bus'
 import { type Camera, type CameraAdded, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_TASK_EVENT, type DeviceProperties, type FrameType, type Mount } from '../shared/types'
@@ -638,7 +638,7 @@ export class CameraCaptureTask {
 
 	async blobReceived(device: Camera, data: string) {
 		if (this.camera.name === device.name) {
-			const name = this.request.autoSave ? dateNow().format('YYYYMMDD.HHmmssSSS') : device.name
+			const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : device.name
 			const path = join(await makePathFor(this.request), `${name}.fit`)
 			const bytes = Buffer.from(data, 'base64')
 
@@ -740,8 +740,9 @@ async function makePathFor(req: CameraCaptureStart) {
 
 		if (req.autoSubFolderMode === 'OFF') return savePath
 
-		const date = dateNow()
-		const directory = req.autoSubFolderMode === 'MIDNIGHT' || date.hour() < 12 ? date.format('YYYY-MM-DD') : date.subtract(12, 'h').format('YYYY-MM-dd')
+		const now = Date.now()
+		const hour = temporalGet(now, 'h')
+		const directory = req.autoSubFolderMode === 'MIDNIGHT' || hour < 12 ? formatTemporal(now, 'YYYY-MM-DD') : formatTemporal(temporalSubtract(now, 12, 'h'), 'YYYY-MM-DD')
 		const path = join(savePath, directory)
 		await mkdir(path, { recursive: true })
 		return path

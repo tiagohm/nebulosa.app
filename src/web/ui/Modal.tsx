@@ -25,7 +25,7 @@ export function Modal({ name, onClose, header, footer, children, maxWidth }: Mod
 						<Icons.Close className='w-4 h-4' />
 					</Button>
 				</CardHeader>
-				<CardBody className='overflow-visible'>{children}</CardBody>
+				<CardBody className='overflow-visible px-3 py-1'>{children}</CardBody>
 				<CardFooter {...modal.moveProps} className='flex flex-row items-center justify-end gap-2'>
 					{footer}
 				</CardFooter>

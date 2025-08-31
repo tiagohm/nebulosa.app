@@ -1,24 +1,27 @@
 import { molecule, onMount } from 'bunshi'
 import bus from 'src/shared/bus'
-import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_SKY_OBJECT_SEARCH, type SkyObjectSearch, type SkyObjectSearchResult } from 'src/shared/types'
+import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_SKY_OBJECT_SEARCH, type LocationAndTime, type SkyObjectSearch, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 
 export interface SkyAtlasState {
 	show: boolean
-	tab: 'sun' | 'moon' | 'planets' | 'minor-planets' | 'dsos' | 'satellites'
+	tab: 'sun' | 'moon' | 'planets' | 'asteroids' | 'dsos' | 'satellites'
+	twilight?: Twilight
+	readonly request: LocationAndTime
 }
 
-export interface DsoState {
+export interface DeepSkyObjectState {
 	loading: boolean
 	readonly request: SkyObjectSearch
-	result: SkyObjectSearchResult[]
-	selected?: SkyObjectSearchResult
+	result: SkyObjectSearchItem[]
+	selected?: SkyObjectSearchItem
 	readonly position: BodyPosition
+	chart: number[]
 }
 
-let skyAtlasDeepSkyObjectState: DsoState | undefined
+let skyAtlasDeepSkyObjectState: DeepSkyObjectState | undefined
 
 export const DeepSkyObjectMolecule = molecule(() => {
 	const request = simpleLocalStorage.get<SkyObjectSearch>('skyAtlas.dsos.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
@@ -27,11 +30,12 @@ export const DeepSkyObjectMolecule = molecule(() => {
 
 	const state =
 		skyAtlasDeepSkyObjectState ??
-		proxy<DsoState>({
+		proxy<DeepSkyObjectState>({
 			loading: false,
 			request,
 			result: [],
 			position: structuredClone(DEFAULT_BODY_POSITION),
+			chart: [],
 		})
 
 	skyAtlasDeepSkyObjectState = state
@@ -55,13 +59,15 @@ export const DeepSkyObjectMolecule = molecule(() => {
 		if (key === 'page' || key === 'sort') void search(false)
 	}
 
-	async function search(resetPage: boolean = true) {
+	async function search(reset: boolean = true) {
 		try {
 			state.loading = true
-			request.utcTime = Date.now()
-			request.longitude = -45
-			request.latitude = -22
-			if (resetPage) state.request.page = 1
+			request.time.utc = Date.now()
+			request.location.longitude = -45
+			request.location.latitude = -22
+
+			if (reset) state.request.page = 1
+
 			const result = await Api.SkyAtlas.skyObjectSearch(state.request)
 			state.result = result ?? []
 		} finally {
@@ -75,22 +81,25 @@ export const DeepSkyObjectMolecule = molecule(() => {
 		if (selected && (force || state.selected?.id !== selected.id)) {
 			state.selected = selected
 
-			request.utcTime = Date.now()
-			request.longitude = -45
-			request.latitude = -22
-			const position = await Api.SkyAtlas.skyObjectPosition(state.request, id)
+			request.time.utc = Date.now()
+			request.location.longitude = -45
+			request.location.latitude = -22
 
-			if (position) {
-				Object.assign(state.position, position)
-			}
+			const position = await Api.SkyAtlas.skyObjectPosition(state.request, id)
+			if (position) Object.assign(state.position, position)
+
+			const chart = await Api.SkyAtlas.skyObjectChart(state.request, id)
+			if (chart) state.chart = chart
 		}
 	}
 
 	function tick() {
+		// Refresh visible objects above horizon
 		if (state.request.visible) {
 			void search(false)
 		}
 
+		// Refresh selected object
 		if (state.selected) {
 			void select(state.selected.id, true)
 		}
@@ -101,17 +110,33 @@ export const DeepSkyObjectMolecule = molecule(() => {
 
 let skyAtlasState: SkyAtlasState | undefined
 
-export const SkyAtlasMolecule = molecule((m) => {
-	const dsos = m(DeepSkyObjectMolecule)
-
+export const SkyAtlasMolecule = molecule(() => {
 	const state =
 		skyAtlasState ??
 		proxy<SkyAtlasState>({
 			show: false,
 			tab: 'sun',
+			twilight: undefined,
+			request: {
+				location: {
+					longitude: 0,
+					latitude: 0,
+					elevation: 0,
+				},
+				time: {
+					utc: Date.now(),
+					offset: 0,
+				},
+			},
 		})
 
 	skyAtlasState = state
+
+	void twilight()
+
+	async function twilight() {
+		state.twilight = await Api.SkyAtlas.twilight(state.request)
+	}
 
 	function show() {
 		bus.emit('homeMenu:toggle', false)
@@ -122,5 +147,5 @@ export const SkyAtlasMolecule = molecule((m) => {
 		state.show = false
 	}
 
-	return { state, dsos, show, close }
+	return { state, show, close }
 })

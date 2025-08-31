@@ -1,13 +1,17 @@
+import { deg } from 'nebulosa/src/angle'
 import type { PositionAndVelocity } from 'nebulosa/src/astrometry'
-import type { GeographicPosition } from 'nebulosa/src/location'
+import { meter } from 'nebulosa/src/distance'
+import { type GeographicPosition, geodeticLocation } from 'nebulosa/src/location'
 import { type Time, timeUnix } from 'nebulosa/src/time'
 import { earth } from 'nebulosa/src/vsop87e'
+import type { GeographicCoordinate } from 'src/shared/types'
 
 export type TimeGranularity = 's' | 'm' | 'h' | 'd'
 
 export class CacheManager {
 	private readonly earthCache = new Map<number, PositionAndVelocity>()
 	private readonly timeCache = new Map<number, Time>()
+	private readonly geographicCoordinates: GeographicPosition[] = []
 
 	earth(time: Time): PositionAndVelocity {
 		const jd = Math.trunc(time.day + time.fraction)
@@ -16,7 +20,7 @@ export class CacheManager {
 	}
 
 	time(utc: number | 'now', location?: GeographicPosition, granularity: TimeGranularity = 's') {
-		utc = timeWithGranularity(utc === 'now' ? Date.now() / 1000 : utc, granularity)
+		utc = timeWithGranularity(utc === 'now' ? Date.now() : utc, granularity)
 		// @ts-expect-error
 		const time = this.timeCache.getOrInsertComputed(utc, () => timeUnix(utc, undefined, true)) as Time
 
@@ -27,10 +31,23 @@ export class CacheManager {
 
 		return time
 	}
+
+	geographicCoordinate(coordinate: GeographicCoordinate) {
+		const latitude = deg(coordinate.latitude)
+		const longitude = deg(coordinate.longitude)
+		const elevation = meter(coordinate.elevation)
+
+		let location = this.geographicCoordinates.find((e) => e.latitude === latitude && e.longitude === longitude && e.elevation === elevation)
+		if (location) return location
+
+		location = geodeticLocation(longitude, latitude, elevation)
+		this.geographicCoordinates.push(location)
+		return location
+	}
 }
 
 function timeWithGranularity(utc: number, granularity: TimeGranularity = 's') {
-	const seconds = Math.trunc(utc)
+	const seconds = Math.trunc(utc / 1000)
 
 	if (granularity === 's') return seconds
 	else if (granularity === 'm') return seconds - (seconds % 60)

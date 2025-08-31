@@ -8,6 +8,7 @@ import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebul
 import type { DefBlobVector, DefLightVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, PropertyState } from 'nebulosa/src/indi'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
+import type { Temporal } from 'nebulosa/src/temporal'
 import type { Velocity } from 'nebulosa/src/velocity'
 import type { Required } from 'utility-types'
 
@@ -34,18 +35,38 @@ export interface GeographicCoordinate {
 	elevation: number // m
 }
 
+export interface UTCTime {
+	utc: number // milliseconds since epoch
+	offset: number // minutes
+}
+
+export interface LocationAndTime {
+	readonly location: GeographicCoordinate
+	readonly time: UTCTime
+}
+
 // Atlas
 
-export interface PositionOfBody extends Readonly<GeographicCoordinate> {
-	readonly utcTime: number // milliseconds since epoch
-	readonly utcOffset: number // minutes
-}
+export type TwilightType = 'civil' | 'nautical' | 'astronomical'
+
+export type TwilightTime = readonly [Temporal, number]
+
+export interface PositionOfBody extends LocationAndTime {}
 
 export interface ChartOfBody extends PositionOfBody {
-	readonly type: 'rightAscension' | 'declination' | 'azimuth' | 'altitude' | 'magnitude'
+	readonly type?: 'rightAscension' | 'declination' | 'azimuth' | 'altitude' | 'magnitude'
 }
 
-export interface SkyObjectSearch extends GeographicCoordinate {
+export interface Twilight {
+	start: TwilightTime
+	readonly dawn: Record<TwilightType, TwilightTime>
+	readonly dusk: Record<TwilightType, TwilightTime>
+	day: TwilightTime
+	night: TwilightTime
+	end: TwilightTime
+}
+
+export interface SkyObjectSearch extends LocationAndTime {
 	readonly name: string
 	readonly nameType: number
 	readonly constellations: number[]
@@ -57,14 +78,12 @@ export interface SkyObjectSearch extends GeographicCoordinate {
 	readonly radius: number // deg
 	readonly visible: boolean
 	readonly visibleAbove: number // deg
-	utcTime: number // milliseconds since epoch
-	utcOffset: number // minutes
 	page: number
 	readonly limit: number
 	readonly sort: SortDescriptor
 }
 
-export interface SkyObjectSearchResult {
+export interface SkyObjectSearchItem {
 	readonly id: number
 	readonly magnitude: number
 	readonly type: StellariumObjectType
@@ -72,7 +91,7 @@ export interface SkyObjectSearchResult {
 	readonly name: string
 }
 
-export interface SkyObjectResult extends EquatorialCoordinate {
+export interface SkyObject extends EquatorialCoordinate {
 	readonly id: number
 	readonly type: StellariumObjectType
 	readonly magnitude: number
@@ -513,10 +532,7 @@ export interface GPS extends Device {
 	readonly type: 'GPS' | 'MOUNT'
 	hasGPS: boolean
 	readonly geographicCoordinate: GeographicCoordinate
-	readonly time: {
-		utc: number
-		offset: number // minutes
-	}
+	readonly time: UTCTime
 }
 
 // Mount
@@ -1067,11 +1083,15 @@ export const DEFAULT_SKY_OBJECT_SEARCH: SkyObjectSearch = {
 	radius: 0,
 	visible: false,
 	visibleAbove: 0,
-	latitude: 0,
-	longitude: 0,
-	elevation: 0,
-	utcTime: 0,
-	utcOffset: 0,
+	location: {
+		latitude: 0,
+		longitude: 0,
+		elevation: 0,
+	},
+	time: {
+		utc: 0,
+		offset: 0,
+	},
 	page: 1,
 	limit: 5,
 	sort: {
@@ -1095,6 +1115,31 @@ export const DEFAULT_BODY_POSITION: BodyPosition = {
 	altitude: 0,
 	names: [],
 	pierSide: 'NEITHER',
+}
+
+export const EMPTY_TWILIGHT: Twilight = {
+	start: [0, 0],
+	dawn: {
+		civil: [0, 0],
+		nautical: [0, 0],
+		astronomical: [0, 0],
+	},
+	dusk: {
+		civil: [0, 0],
+		nautical: [0, 0],
+		astronomical: [0, 0],
+	},
+	day: [0, 0],
+	night: [0, 0],
+	end: [0, 0],
+}
+
+export const DEFAULT_SKY_OBJECT_SEARCH_ITEM: SkyObjectSearchItem = {
+	id: 0,
+	type: 0,
+	constellation: 0,
+	magnitude: 0,
+	name: '',
 }
 
 export const DEFAULT_INDI_SERVER_START: Required<IndiServerStart> = {

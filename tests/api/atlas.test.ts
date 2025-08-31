@@ -5,25 +5,35 @@ import { StellariumObjectType } from 'nebulosa/src/stellarium'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { AtlasManager } from 'src/api/atlas'
 import cache from 'src/api/cache'
-import { type ChartOfBody, DEFAULT_SKY_OBJECT_SEARCH, type PositionOfBody } from 'src/shared/types'
+import { type ChartOfBody, DEFAULT_SKY_OBJECT_SEARCH, type PositionOfBody, type SkyObjectSearch } from 'src/shared/types'
 
 const atlas = new AtlasManager(cache)
 
-const DEFAULT_POSITION_OF_BODY: PositionOfBody = {
-	utcTime: 1753628400000, // Sun Jul 27 2025 12:00:00 GMT-0300
-	utcOffset: -180,
-	latitude: -22,
-	longitude: -45,
-	elevation: 890,
+const POSITION_OF_BODY: PositionOfBody = {
+	time: {
+		utc: 1753628400000, // Sun Jul 27 2025 12:00:00 GMT-0300
+		offset: -180,
+	},
+	location: {
+		latitude: -22,
+		longitude: -45,
+		elevation: 890,
+	},
 }
 
-const DEFAULT_CHART_OF_BODY: ChartOfBody = {
-	...DEFAULT_POSITION_OF_BODY,
+const CHART_OF_BODY: ChartOfBody = {
+	...POSITION_OF_BODY,
 	type: 'altitude',
 }
 
+const SKY_OBJECT_SEARCH: SkyObjectSearch = {
+	...DEFAULT_SKY_OBJECT_SEARCH,
+	time: POSITION_OF_BODY.time,
+	location: POSITION_OF_BODY.location,
+}
+
 test('seasons', () => {
-	const { spring, summer, autumn, winter } = atlas.seasons(DEFAULT_POSITION_OF_BODY)
+	const { spring, summer, autumn, winter } = atlas.seasons(POSITION_OF_BODY)
 
 	// https://aa.usno.navy.mil/calculated/seasons?year=2025&tz=0.00&tz_sign=-1&tz_label=false&dst=false&submit=Get+Data
 	expect(formatTemporal(spring * 1000).substring(0, 16)).toBe('2025-03-20 09:02')
@@ -34,7 +44,7 @@ test('seasons', () => {
 
 describe('search sky object', () => {
 	test('no filter', () => {
-		const result = atlas.searchSkyObject({ ...DEFAULT_SKY_OBJECT_SEARCH, limit: 10 })
+		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 10 })
 
 		expect(result).toHaveLength(5)
 		expect(result[0].id).toBe(32263)
@@ -45,7 +55,7 @@ describe('search sky object', () => {
 	})
 
 	test('constellation', () => {
-		const result = atlas.searchSkyObject({ ...DEFAULT_SKY_OBJECT_SEARCH, limit: 5, constellations: [0] })
+		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, constellations: [0] })
 
 		expect(result).toHaveLength(5)
 		expect(result[0].id).toBe(676)
@@ -56,7 +66,7 @@ describe('search sky object', () => {
 	})
 
 	test('magnitude min', () => {
-		const result = atlas.searchSkyObject({ ...DEFAULT_SKY_OBJECT_SEARCH, limit: 5, magnitudeMin: 0 })
+		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, magnitudeMin: 0 })
 
 		expect(result).toHaveLength(5)
 		expect(result[0].id).toBe(90979)
@@ -67,7 +77,7 @@ describe('search sky object', () => {
 	})
 
 	test('magnitude max', () => {
-		const result = atlas.searchSkyObject({ ...DEFAULT_SKY_OBJECT_SEARCH, limit: 5, magnitudeMax: -1.44 })
+		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, magnitudeMax: -1.44 })
 
 		expect(result).toHaveLength(1)
 		expect(result[0].id).toBe(32263)
@@ -78,7 +88,7 @@ describe('search sky object', () => {
 	})
 
 	test('types', () => {
-		const result = atlas.searchSkyObject({ ...DEFAULT_SKY_OBJECT_SEARCH, limit: 5, types: [StellariumObjectType.DARK_NEBULA] })
+		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, types: [StellariumObjectType.DARK_NEBULA] })
 
 		expect(result).toHaveLength(5)
 		expect(result[0].id).toBe(1010829)
@@ -89,7 +99,7 @@ describe('search sky object', () => {
 	})
 
 	test('name type only', () => {
-		const result = atlas.searchSkyObject({ ...DEFAULT_SKY_OBJECT_SEARCH, limit: 5, nameType: 1 })
+		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, nameType: 1 })
 
 		expect(result).toHaveLength(5)
 		expect(result[0].id).toBe(1003144)
@@ -100,7 +110,7 @@ describe('search sky object', () => {
 	})
 
 	test('name and name type', () => {
-		const result = atlas.searchSkyObject({ ...DEFAULT_SKY_OBJECT_SEARCH, limit: 5, nameType: 1, name: '=5139' })
+		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, nameType: 1, name: '=5139' })
 
 		expect(result).toHaveLength(1)
 		expect(result[0].id).toBe(1004779)
@@ -111,7 +121,7 @@ describe('search sky object', () => {
 	})
 
 	test('region', () => {
-		const result = atlas.searchSkyObject({ ...DEFAULT_SKY_OBJECT_SEARCH, limit: 5, rightAscension: '06 45 08.9173', declination: '-16 42 58', radius: 1 })
+		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, rightAscension: '06 45 08.9173', declination: '-16 42 58', radius: 1 })
 
 		expect(result).toHaveLength(4)
 		expect(result[0].id).toBe(32263)
@@ -123,7 +133,7 @@ describe('search sky object', () => {
 
 	test('visible', () => {
 		// Sat Jul 26 2025 16:50:00 GMT-0300, Sirius is above the horizon
-		let result = atlas.searchSkyObject({ ...DEFAULT_SKY_OBJECT_SEARCH, limit: 5, visible: true, latitude: -22, longitude: -45, utcTime: 1753559400000 })
+		let result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, visible: true, time: { ...POSITION_OF_BODY.time, utc: 1753559400000 } })
 
 		expect(result).toHaveLength(5)
 		expect(result[0].id).toBe(32263)
@@ -133,7 +143,7 @@ describe('search sky object', () => {
 		expect(result[0].name).toBe('0:Sirius')
 
 		// Sat Jul 26 2025 17:00:00 GMT-0300, Sirius is below the horizon, Canopus is above the horizon
-		result = atlas.searchSkyObject({ ...DEFAULT_SKY_OBJECT_SEARCH, limit: 5, visible: true, latitude: -22, longitude: -45, utcTime: 1753560000000 })
+		result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, visible: true, time: { ...POSITION_OF_BODY.time, utc: 1753560000000 } })
 
 		expect(result).toHaveLength(5)
 		expect(result[0].id).toBe(30365)
@@ -143,7 +153,7 @@ describe('search sky object', () => {
 		expect(result[0].name).toBe('0:Canopus')
 
 		// Sat Jul 26 2025 19:00:00 GMT-0300, Canopus is below the horizon, Arcturus is above the horizon
-		result = atlas.searchSkyObject({ ...DEFAULT_SKY_OBJECT_SEARCH, limit: 5, visible: true, latitude: -22, longitude: -45, utcTime: 1753567200000 })
+		result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, visible: true, time: { ...POSITION_OF_BODY.time, utc: 1753567200000 } })
 
 		expect(result).toHaveLength(5)
 		expect(result[0].id).toBe(69451)
@@ -156,7 +166,7 @@ describe('search sky object', () => {
 
 describe('position of sun', () => {
 	test('after noon', async () => {
-		const position = await atlas.positionOfSun(DEFAULT_POSITION_OF_BODY)
+		const position = await atlas.positionOfSun(POSITION_OF_BODY)
 
 		expect(position.rightAscension).toBeCloseTo(parseAngle('08 28 44.08', { isHour: true })!, 6)
 		expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('08 27 17.12', { isHour: true })!, 6)
@@ -171,7 +181,7 @@ describe('position of sun', () => {
 	})
 
 	test('before noon', async () => {
-		const position = await atlas.positionOfSun({ ...DEFAULT_POSITION_OF_BODY, utcTime: 1753624800000 })
+		const position = await atlas.positionOfSun({ ...POSITION_OF_BODY, time: { ...POSITION_OF_BODY.time, utc: 1753624800000 } })
 
 		expect(position.rightAscension).toBeCloseTo(parseAngle('08 28 32.97', { isHour: true })!, 6)
 		expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('08 27 07.43', { isHour: true })!, 6)
@@ -186,8 +196,34 @@ describe('position of sun', () => {
 	})
 })
 
+test('twilight', async () => {
+	const twilight = await atlas.twilight(POSITION_OF_BODY)
+
+	expect(formatTemporal(twilight.start[0])).toBe('2025-07-27 12:00:00.000')
+	expect(formatTemporal(twilight.dusk.civil[0])).toBe('2025-07-27 17:37:00.000')
+	expect(formatTemporal(twilight.dusk.nautical[0])).toBe('2025-07-27 18:04:00.000')
+	expect(formatTemporal(twilight.dusk.astronomical[0])).toBe('2025-07-27 18:31:00.000')
+	expect(formatTemporal(twilight.night[0])).toBe('2025-07-27 18:58:00.000')
+	expect(formatTemporal(twilight.dawn.astronomical[0])).toBe('2025-07-28 05:14:00.000')
+	expect(formatTemporal(twilight.dawn.nautical[0])).toBe('2025-07-28 05:40:00.000')
+	expect(formatTemporal(twilight.dawn.civil[0])).toBe('2025-07-28 06:07:00.000')
+	expect(formatTemporal(twilight.day[0])).toBe('2025-07-28 06:35:00.000')
+	expect(formatTemporal(twilight.end[0])).toBe('2025-07-28 12:00:00.000')
+
+	expect(twilight.start[1]).toBe(0)
+	expect(twilight.dusk.civil[1]).toBe(337)
+	expect(twilight.dusk.nautical[1]).toBe(364)
+	expect(twilight.dusk.astronomical[1]).toBe(391)
+	expect(twilight.night[1]).toBe(418)
+	expect(twilight.dawn.astronomical[1]).toBe(1034)
+	expect(twilight.dawn.nautical[1]).toBe(1060)
+	expect(twilight.dawn.civil[1]).toBe(1087)
+	expect(twilight.day[1]).toBe(1115)
+	expect(twilight.end[1]).toBe(1441)
+})
+
 test('position of moon', async () => {
-	const position = await atlas.positionOfMoon(DEFAULT_POSITION_OF_BODY)
+	const position = await atlas.positionOfMoon(POSITION_OF_BODY)
 
 	expect(position.rightAscension).toBeCloseTo(parseAngle('10 48 30.64', { isHour: true })!, 6)
 	expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('10 47 14.33', { isHour: true })!, 6)
@@ -202,7 +238,7 @@ test('position of moon', async () => {
 })
 
 test('position of jupiter', async () => {
-	const position = await atlas.positionOfPlanet('599', DEFAULT_POSITION_OF_BODY)
+	const position = await atlas.positionOfPlanet('599', POSITION_OF_BODY)
 
 	expect(position.rightAscension).toBeCloseTo(parseAngle('06 46 51.69', { isHour: true })!, 6)
 	expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('06 45 17.28', { isHour: true })!, 6)
@@ -217,7 +253,7 @@ test('position of jupiter', async () => {
 })
 
 test('position of sky object', () => {
-	const position = atlas.positionOfSkyObject(DEFAULT_POSITION_OF_BODY, '32263')
+	const position = atlas.positionOfSkyObject(POSITION_OF_BODY, '32263')
 
 	expect(position.rightAscension).toBeCloseTo(parseAngle('06 46 16.56', { isHour: true })!, 6)
 	expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('06 45 08.93', { isHour: true })!, 6)
@@ -236,20 +272,20 @@ test('position of sky object', () => {
 
 describe('chart of sky object', () => {
 	test('altitude', () => {
-		const chart = atlas.chartOfSkyObject(DEFAULT_CHART_OF_BODY, '32263')
+		const chart = atlas.chartOfSkyObject(CHART_OF_BODY, '32263')
 
 		expect(chart).toHaveLength(1441)
 		expect(formatALT(chart[0])).toBe('+66 48 39.29')
-		expect(formatALT(chart[720])).toBe('-44 21 24.86')
-		expect(formatALT(chart[1440])).toBe('+65 54 26.77')
+		expect(formatALT(chart[720])).toBe('-44 21 24.74')
+		expect(formatALT(chart[1440])).toBe('+65 54 26.76')
 	}, 5000)
 
 	test('azimuth', () => {
-		const chart = atlas.chartOfSkyObject({ ...DEFAULT_CHART_OF_BODY, type: 'azimuth' }, '32263')
+		const chart = atlas.chartOfSkyObject({ ...CHART_OF_BODY, type: 'azimuth' }, '32263')
 
 		expect(chart).toHaveLength(1441)
 		expect(formatAZ(chart[0])).toBe('278 50 39.10')
-		expect(formatAZ(chart[720])).toBe('146 14 54.21')
-		expect(formatAZ(chart[1440])).toBe('278 09 59.29')
+		expect(formatAZ(chart[720])).toBe('146 14 54.19')
+		expect(formatAZ(chart[1440])).toBe('278 09 59.22')
 	}, 5000)
 })

@@ -1,12 +1,14 @@
 import { Button, Checkbox, Input, NumberInput, Popover, PopoverContent, PopoverTrigger, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
+import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST, CONSTELLATIONS } from 'nebulosa/src/constellation'
 import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/distance'
-import { memo } from 'react'
-import type { BodyPosition, SkyObjectSearchResult } from 'src/shared/types'
+import { memo, useDeferredValue, useMemo, useState } from 'react'
+import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
+import { type BodyPosition, DEFAULT_SKY_OBJECT_SEARCH_ITEM, EMPTY_TWILIGHT, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { SkyAtlasMolecule } from '@/molecules/skyatlas'
+import { DeepSkyObjectMolecule, SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConstellationSelect } from './ConstellationSelect'
 import { Icons } from './Icon'
@@ -15,10 +17,8 @@ import { SKY_OBJECT_NAME_TYPES, SkyObjectNameTypeDropdown } from './SkyObjectNam
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 
 export const SkyAtlas = memo(() => {
-	const skyAtlas = useMolecule(SkyAtlasMolecule)
-	const { tab } = useSnapshot(skyAtlas.state)
-	const { page, sort } = useSnapshot(skyAtlas.dsos.state.request, { sync: true })
-	const { loading, result: dsosResult, selected, position } = useSnapshot(skyAtlas.dsos.state)
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { tab } = useSnapshot(atlas.state)
 
 	return (
 		<Modal
@@ -37,56 +37,17 @@ export const SkyAtlas = memo(() => {
 					)}
 				</div>
 			}
-			maxWidth='490px'
+			maxWidth='470px'
 			name='sky-atlas'
-			onClose={skyAtlas.close}>
+			onClose={atlas.close}>
 			<div className='mt-0 flex flex-col gap-2'>
-				<Tabs classNames={{ base: 'absolute top-[-42px] right-[88px] z-10', panel: 'pt-0' }} onSelectionChange={(value) => (skyAtlas.state.tab = value as never)} selectedKey={tab}>
+				<Tabs classNames={{ base: 'absolute top-[-42px] right-[88px] z-10', panel: 'pt-0' }} onSelectionChange={(value) => (atlas.state.tab = value as never)} selectedKey={tab}>
 					<Tab key='sun' title={<Icons.Sun />}></Tab>
 					<Tab key='moon' title={<Icons.Moon />}></Tab>
 					<Tab key='planets' title={<Icons.Planet />}></Tab>
-					<Tab key='minor-planets' title={<Icons.Meteor />}></Tab>
+					<Tab key='asteroids' title={<Icons.Meteor />}></Tab>
 					<Tab key='dsos' title={<Icons.Galaxy />}>
-						<div className='grid grid-cols-12 gap-2 items-center'>
-							<Table className='mt-3 col-span-full' onRowAction={(key) => skyAtlas.dsos.select(+(key as never))} onSortChange={(value) => skyAtlas.dsos.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
-								<TableHeader>
-									<TableColumn key='name'>Name</TableColumn>
-									<TableColumn allowsSorting className='text-center' key='magnitude'>
-										Mag.
-									</TableColumn>
-									<TableColumn allowsSorting className='text-center' key='type'>
-										Type
-									</TableColumn>
-									<TableColumn allowsSorting className='text-center' key='constellation'>
-										Const.
-									</TableColumn>
-								</TableHeader>
-								<TableBody items={dsosResult}>
-									{(item) => (
-										<TableRow key={item.id}>
-											<TableCell className='whitespace-nowrap max-w-50 overflow-hidden'>{formatSkyObjectName(item)}</TableCell>
-											<TableCell className='text-center'>{item.magnitude}</TableCell>
-											<TableCell className='text-center whitespace-nowrap max-w-40 overflow-hidden'>{formatSkyObjectType(item.type)}</TableCell>
-											<TableCell className='text-center'>{CONSTELLATION_LIST[item.constellation]}</TableCell>
-										</TableRow>
-									)}
-								</TableBody>
-							</Table>
-							<div className='col-span-full flex flex-row items-center justify-center gap-3'>
-								<Button color='secondary' isDisabled={page <= 1 || loading} isIconOnly onPointerUp={() => skyAtlas.dsos.update('page', page - 1)} variant='flat'>
-									<Icons.ChevronLeft />
-								</Button>
-								<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={!dsosResult.length || loading} isWheelDisabled minValue={1} onValueChange={(value) => skyAtlas.dsos.update('page', value)} size='sm' value={page} />
-								<Button color='secondary' isDisabled={!dsosResult.length || loading} isIconOnly onPointerUp={() => skyAtlas.dsos.update('page', page + 1)} variant='flat'>
-									<Icons.ChevronRight />
-								</Button>
-							</div>
-							{selected && (
-								<div className='col-span-full'>
-									<PositionOfBody item={selected} position={position} />
-								</div>
-							)}
-						</div>
+						<DeepSkyObjectTab />
 					</Tab>
 					<Tab key='satellites' title={<Icons.Satellite />}></Tab>
 				</Tabs>
@@ -95,16 +56,101 @@ export const SkyAtlas = memo(() => {
 	)
 })
 
+export const DeepSkyObjectTab = memo(() => {
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { twilight } = useSnapshot(atlas.state)
+
+	const dso = useMolecule(DeepSkyObjectMolecule)
+	const { page, sort } = useSnapshot(dso.state.request, { sync: true })
+	const { loading, result, selected, position, chart } = useSnapshot(dso.state)
+
+	return (
+		<div className='grid grid-cols-12 gap-2 items-center'>
+			<Table className='mt-3 col-span-full' onRowAction={(key) => dso.select(+(key as never))} onSortChange={(value) => dso.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
+				<TableHeader>
+					<TableColumn key='name'>Name</TableColumn>
+					<TableColumn allowsSorting className='text-center' key='magnitude'>
+						Mag.
+					</TableColumn>
+					<TableColumn allowsSorting className='text-center' key='type'>
+						Type
+					</TableColumn>
+					<TableColumn allowsSorting className='text-center' key='constellation'>
+						Const.
+					</TableColumn>
+				</TableHeader>
+				<TableBody items={result}>
+					{(item) => (
+						<TableRow key={item.id}>
+							<TableCell className='whitespace-nowrap max-w-50 overflow-hidden'>{formatSkyObjectName(item)}</TableCell>
+							<TableCell className='text-center'>{item.magnitude}</TableCell>
+							<TableCell className='text-center whitespace-nowrap max-w-40 overflow-hidden'>{formatSkyObjectType(item.type)}</TableCell>
+							<TableCell className='text-center'>{CONSTELLATION_LIST[item.constellation]}</TableCell>
+						</TableRow>
+					)}
+				</TableBody>
+			</Table>
+			<div className='col-span-full flex flex-row items-center justify-center gap-3'>
+				<Button color='secondary' isDisabled={page <= 1 || loading} isIconOnly onPointerUp={() => dso.update('page', page - 1)} variant='flat'>
+					<Icons.ChevronLeft />
+				</Button>
+				<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={!result.length || loading} isWheelDisabled minValue={1} onValueChange={(value) => dso.update('page', value)} size='sm' value={page} />
+				<Button color='secondary' isDisabled={!result.length || loading} isIconOnly onPointerUp={() => dso.update('page', page + 1)} variant='flat'>
+					<Icons.ChevronRight />
+				</Button>
+			</div>
+			<div className='col-span-full'>
+				<EphemerisAndChart chart={chart} item={selected} position={position} twilight={twilight} />
+			</div>
+		</div>
+	)
+})
+
+export interface EphemerisAndChartProps {
+	readonly item?: SkyObjectSearchItem
+	readonly position: BodyPosition
+	readonly chart: readonly number[]
+	readonly twilight?: Twilight
+}
+
+export const EphemerisAndChart = memo(({ item, position, chart, twilight }: EphemerisAndChartProps) => {
+	const [showChart, setShowChart] = useState(false)
+
+	const deferredChart = useDeferredValue(chart, [])
+	const data = useMemo(() => makeEphemerisChart(deferredChart, twilight), [deferredChart, twilight])
+	const deferredData = useDeferredValue(data, [])
+
+	return (
+		<div className='h-[140px] col-span-full relative flex flex-col justify-start items-center gap-1'>
+			<div className='w-full absolute left-0 top-[-42px] pointer-events-none flex flex-row gap-2 text-start text-sm font-bold'>
+				<Button className='rounded-full pointer-events-auto' color='primary' isIconOnly onPointerUp={() => setShowChart(false)} variant={showChart ? 'light' : 'flat'}>
+					<Icons.Info />
+				</Button>
+				<Button className='rounded-full pointer-events-auto' color='primary' isIconOnly onPointerUp={() => setShowChart(true)} variant={showChart ? 'flat' : 'light'}>
+					<Icons.Chart />
+				</Button>
+			</div>
+			<div className='w-full text-center text-sm font-bold'>{position.names?.map((e) => formatSkyObjectName({ name: e, constellation: item?.constellation ?? 0 })).join(', ')}</div>
+			<span className='w-full absolute top-[24px] left-0' style={{ visibility: showChart ? 'hidden' : 'visible' }}>
+				<EphemerisPosition item={item ?? DEFAULT_SKY_OBJECT_SEARCH_ITEM} position={position} />
+			</span>
+			<span className='w-full absolute top-[24px] left-0' style={{ visibility: showChart ? 'visible' : 'hidden' }}>
+				<EphemerisChart data={deferredData} />
+			</span>
+		</div>
+	)
+})
+
 export const DeepSkyObjectFilter = memo(() => {
-	const skyAtlas = useMolecule(SkyAtlasMolecule)
-	const { name, nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, rightAscension, declination, radius } = useSnapshot(skyAtlas.dsos.state.request, { sync: true })
-	const { loading } = useSnapshot(skyAtlas.dsos.state)
+	const dso = useMolecule(DeepSkyObjectMolecule)
+	const { name, nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, rightAscension, declination, radius } = useSnapshot(dso.state.request, { sync: true })
+	const { loading } = useSnapshot(dso.state)
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center p-2'>
-			<Input className='col-span-full' onValueChange={(value) => skyAtlas.dsos.update('name', value)} placeholder='Search' startContent={<SkyObjectNameTypeDropdown color='secondary' onValueChange={(value) => skyAtlas.dsos.update('nameType', value)} value={nameType} />} value={name} />
-			<ConstellationSelect className='col-span-6' onValueChange={(value) => skyAtlas.dsos.update('constellations', value)} value={constellations} />
-			<StellariumObjectTypeSelect className='col-span-6' onValueChange={(value) => skyAtlas.dsos.update('types', value)} value={types} />
+			<Input className='col-span-full' onValueChange={(value) => dso.update('name', value)} placeholder='Search' startContent={<SkyObjectNameTypeDropdown color='secondary' onValueChange={(value) => dso.update('nameType', value)} value={nameType} />} value={name} />
+			<ConstellationSelect className='col-span-6' onValueChange={(value) => dso.update('constellations', value)} value={constellations} />
+			<StellariumObjectTypeSelect className='col-span-6' onValueChange={(value) => dso.update('types', value)} value={types} />
 			<Slider
 				className='col-span-full sm:col-span-4'
 				getValue={(value) => `min: ${(value as number[])[0].toFixed(1)} max: ${(value as number[])[1].toFixed(1)}`}
@@ -112,21 +158,21 @@ export const DeepSkyObjectFilter = memo(() => {
 				maxValue={30}
 				minValue={-30}
 				onChange={(value) => {
-					skyAtlas.dsos.update('magnitudeMin', (value as number[])[0])
-					skyAtlas.dsos.update('magnitudeMax', (value as number[])[1])
+					dso.update('magnitudeMin', (value as number[])[0])
+					dso.update('magnitudeMax', (value as number[])[1])
 				}}
 				step={0.1}
 				value={[magnitudeMin, magnitudeMax]}
 			/>
-			<Input className='col-span-4 sm:col-span-3' isDisabled={radius <= 0 || loading} label='RA' onValueChange={(value) => skyAtlas.dsos.update('rightAscension', value)} size='sm' value={rightAscension} />
-			<Input className='col-span-4 sm:col-span-3' isDisabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => skyAtlas.dsos.update('declination', value)} size='sm' value={declination} />
-			<NumberInput className='col-span-4 sm:col-span-2' formatOptions={DECIMAL_NUMBER_FORMAT} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => skyAtlas.dsos.update('radius', value)} size='sm' step={0.1} value={radius} />
-			<Checkbox className='col-span-5 sm:col-span-4' isSelected={visible} onValueChange={(value) => skyAtlas.dsos.update('visible', value)}>
+			<Input className='col-span-4 sm:col-span-3' isDisabled={radius <= 0 || loading} label='RA' onValueChange={(value) => dso.update('rightAscension', value)} size='sm' value={rightAscension} />
+			<Input className='col-span-4 sm:col-span-3' isDisabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => dso.update('declination', value)} size='sm' value={declination} />
+			<NumberInput className='col-span-4 sm:col-span-2' formatOptions={DECIMAL_NUMBER_FORMAT} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} size='sm' step={0.1} value={radius} />
+			<Checkbox className='col-span-5 sm:col-span-4' isSelected={visible} onValueChange={(value) => dso.update('visible', value)}>
 				Show only visible
 			</Checkbox>
-			<NumberInput className='col-span-5 sm:col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!visible || loading} label='Visible above (°)' maxValue={89} minValue={0} onValueChange={(value) => skyAtlas.dsos.update('visibleAbove', value)} size='sm' value={visibleAbove} />
+			<NumberInput className='col-span-5 sm:col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!visible || loading} label='Visible above (°)' maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} size='sm' value={visibleAbove} />
 			<div className='col-span-2 sm:col-span-5 flex flex-row items-center justify-center'>
-				<Button color='primary' isDisabled={loading} isIconOnly onPointerUp={() => skyAtlas.dsos.search()} variant='flat'>
+				<Button color='primary' isDisabled={loading} isIconOnly onPointerUp={() => dso.search()} variant='flat'>
 					<Icons.Search />
 				</Button>
 			</div>
@@ -134,15 +180,14 @@ export const DeepSkyObjectFilter = memo(() => {
 	)
 })
 
-export interface PositionOfBodyProps {
+export interface EphemerisPositionProps {
 	readonly position: BodyPosition
-	readonly item?: SkyObjectSearchResult
+	readonly item: SkyObjectSearchItem
 }
 
-export function PositionOfBody({ position, item }: PositionOfBodyProps) {
+export const EphemerisPosition = memo(({ position, item: { constellation } }: EphemerisPositionProps) => {
 	return (
 		<div className='w-full grid grid-cols-12 gap-2 p-0'>
-			<div className='col-span-full text-center text-sm font-bold'>{position.names?.map((e) => formatSkyObjectName({ name: e, constellation: item!.constellation })).join(', ')}</div>
 			<Input className='col-span-3 sm:col-span-3' isReadOnly label='RA' size='sm' value={formatRA(position.rightAscension)} />
 			<Input className='col-span-3 sm:col-span-3' isReadOnly label='DEC' size='sm' value={formatDEC(position.declination)} />
 			<Input className='col-span-3 sm:col-span-3' isReadOnly label='RA (J2000)' size='sm' value={formatRA(position.rightAscensionJ2000)} />
@@ -157,9 +202,75 @@ export function PositionOfBody({ position, item }: PositionOfBodyProps) {
 			<Input className='col-span-3 sm:col-span-2' isReadOnly label='Pier Side' size='sm' value={position.pierSide} />
 		</div>
 	)
+})
+
+export interface EphemerisChartData {
+	readonly name: string | number
+	readonly value: number | null
+	readonly civilDawn: number | null
+	readonly nauticalDawn: number | null
+	readonly astronomicalDawn: number | null
+	readonly civilDusk: number | null
+	readonly nauticalDusk: number | null
+	readonly astronomicalDusk: number | null
+	readonly dayFirst: number | null
+	readonly dayLast: number | null
+	readonly night: number | null
 }
 
-function formatSkyObjectName(item: Pick<SkyObjectSearchResult, 'name' | 'constellation'>) {
+export interface EphemerisChartProps {
+	readonly data: EphemerisChartData[]
+}
+
+export const EphemerisChart = memo(({ data }: EphemerisChartProps) => {
+	function tickFormatter(value: unknown, i: number) {
+		return `${((i + 12) % 24).toFixed(0).padStart(2, '0')}`
+	}
+
+	return (
+		<ComposedChart data={data} height={150} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} width={450}>
+			<XAxis dataKey='name' domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={tickFormatter} tickMargin={6} />
+			<YAxis domain={[0, 90]} width={25} />
+			<Area activeDot={false} connectNulls dataKey='dayFirst' dot={false} fill='#FFF176' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
+			<Area activeDot={false} connectNulls dataKey='civilDusk' dot={false} fill='#7986CB' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
+			<Area activeDot={false} connectNulls dataKey='nauticalDusk' dot={false} fill='#3F51B5' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
+			<Area activeDot={false} connectNulls dataKey='astronomicalDusk' dot={false} fill='#303F9F' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
+			<Area activeDot={false} connectNulls dataKey='night' dot={false} fill='#1A237E' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
+			<Area activeDot={false} connectNulls dataKey='astronomicalDawn' dot={false} fill='#303F9F' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
+			<Area activeDot={false} connectNulls dataKey='nauticalDawn' dot={false} fill='#3F51B5' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
+			<Area activeDot={false} connectNulls dataKey='civilDawn' dot={false} fill='#7986CB' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
+			<Area activeDot={false} connectNulls dataKey='dayLast' dot={false} fill='#FFF176' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
+			<CartesianGrid stroke='#FFFFFF10' strokeDasharray='3 3' />
+			<ChartTooltip />
+			<Line dataKey='value' dot={false} isAnimationActive={false} stroke='#F44336' strokeWidth={2} type='monotone' />
+		</ComposedChart>
+	)
+})
+
+function makeEphemerisChart(data: readonly number[], twilight: Twilight = EMPTY_TWILIGHT): EphemerisChartData[] {
+	const chart = new Array<EphemerisChartData>(1441)
+
+	// Combine data and twilight into a single array of objects
+	for (let i = 0; i <= 1440; i++) {
+		chart[i] = {
+			name: i,
+			value: data[i] >= 0 ? Math.max(0, data[i] * RAD2DEG) : null,
+			dayFirst: i === 0 || i === twilight.dusk.civil[1] - 1 ? 90 : null,
+			civilDusk: i === twilight.dusk.civil[1] || i === twilight.dusk.nautical[1] - 1 ? 90 : null,
+			nauticalDusk: i === twilight.dusk.nautical[1] || i === twilight.dusk.astronomical[1] - 1 ? 90 : null,
+			astronomicalDusk: i === twilight.dusk.astronomical[1] || i === twilight.night[1] - 1 ? 90 : null,
+			night: i === twilight.night[1] || i === twilight.dawn.astronomical[1] - 1 ? 90 : null,
+			astronomicalDawn: i === twilight.dawn.astronomical[1] || i === twilight.dawn.nautical[1] - 1 ? 90 : null,
+			nauticalDawn: i === twilight.dawn.nautical[1] || i === twilight.dawn.civil[1] - 1 ? 90 : null,
+			civilDawn: i === twilight.dawn.civil[1] || i === twilight.day[1] - 1 ? 90 : null,
+			dayLast: i === twilight.day[1] || i === 1440 ? 90 : null,
+		}
+	}
+
+	return chart
+}
+
+function formatSkyObjectName(item: Pick<SkyObjectSearchItem, 'name' | 'constellation'>) {
 	const [type, name] = item.name.split(':')
 	const typeId = +type
 
@@ -238,7 +349,7 @@ function formatSkyObjectName(item: Pick<SkyObjectSearchResult, 'name' | 'constel
 	return `${SKY_OBJECT_NAME_TYPES[typeId + 1]} ${name}`
 }
 
-function formatSkyObjectType(type: SkyObjectSearchResult['type']) {
+function formatSkyObjectType(type: SkyObjectSearchItem['type']) {
 	if (type === 1) return 'Galaxy'
 	if (type === 2) return 'Active Galaxy'
 	if (type === 3) return 'Radio Galaxy'

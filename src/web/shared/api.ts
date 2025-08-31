@@ -4,8 +4,8 @@ import type { NewVector } from 'nebulosa/src/indi'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DeviceProperties, DeviceProperty, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode } from 'src/shared/types'
-import { type SkyObjectSearchResult, X_IMAGE_INFO_HEADER } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DeviceProperties, DeviceProperty, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode, Twilight } from 'src/shared/types'
+import { type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
@@ -336,12 +336,20 @@ export namespace Api {
 	}
 
 	export namespace SkyAtlas {
+		export function twilight(req: PositionOfBody) {
+			return json<Twilight>('/atlas/sun/twilight', 'post', req)
+		}
+
 		export function skyObjectSearch(req: SkyObjectSearch) {
-			return json<SkyObjectSearchResult[]>('/atlas/skyobjects/search', 'post', req)
+			return json<SkyObjectSearchItem[]>('/atlas/skyobjects/search', 'post', req)
 		}
 
 		export function skyObjectPosition(req: PositionOfBody, id: string | number) {
 			return json<BodyPosition>(`/atlas/skyobjects/${id}/position`, 'post', req)
+		}
+
+		export function skyObjectChart(req: ChartOfBody, id: string | number) {
+			return json<number[]>(`/atlas/skyobjects/${id}/chart`, 'post', req)
 		}
 	}
 

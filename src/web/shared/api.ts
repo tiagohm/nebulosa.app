@@ -7,7 +7,7 @@ import type { DetectedStar } from 'nebulosa/src/stardetector'
 import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DeviceProperties, DeviceProperty, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, StarDetection, Thermometer, TrackMode, Twilight } from 'src/shared/types'
 import { type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
-const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
+export const URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
 const DEFAULT_HEADERS: HeadersInit = {
 	'Content-Type': 'application/json',
@@ -336,19 +336,27 @@ export namespace Api {
 	}
 
 	export namespace SkyAtlas {
+		export function positionOfSun(req: PositionOfBody) {
+			return json<BodyPosition>('/atlas/sun/position', 'post', req)
+		}
+
+		export function chartOfSun(req: PositionOfBody) {
+			return json<number[]>('/atlas/sun/chart', 'post', req)
+		}
+
 		export function twilight(req: PositionOfBody) {
 			return json<Twilight>('/atlas/sun/twilight', 'post', req)
 		}
 
-		export function skyObjectSearch(req: SkyObjectSearch) {
+		export function searchSkyObject(req: SkyObjectSearch) {
 			return json<SkyObjectSearchItem[]>('/atlas/skyobjects/search', 'post', req)
 		}
 
-		export function skyObjectPosition(req: PositionOfBody, id: string | number) {
+		export function positionOfSkyObject(req: PositionOfBody, id: string | number) {
 			return json<BodyPosition>(`/atlas/skyobjects/${id}/position`, 'post', req)
 		}
 
-		export function skyObjectChart(req: ChartOfBody, id: string | number) {
+		export function chartOfSkyObject(req: ChartOfBody, id: string | number) {
 			return json<number[]>(`/atlas/skyobjects/${id}/chart`, 'post', req)
 		}
 	}
@@ -382,7 +390,7 @@ export namespace Api {
 
 function req(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {
 	const options: RequestInit = { method, cache: 'no-cache', headers: DEFAULT_HEADERS, body: body === undefined ? undefined : JSON.stringify(body) }
-	return fetch(`${uri}${path}`, options)
+	return fetch(`${URL}${path}`, options)
 }
 
 async function json<T>(path: string, method: 'get' | 'post' | 'put', body?: unknown) {

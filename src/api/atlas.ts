@@ -14,8 +14,9 @@ import { bcrs, type Star, star } from 'nebulosa/src/star'
 import { season } from 'nebulosa/src/sun'
 import { parseTemporal, type Temporal, temporalAdd, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
 import { toUnix } from 'nebulosa/src/time'
+import sharp from 'sharp'
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
-import { type BodyPosition, type ChartOfBody, expectedPierSide, type PositionOfBody, type SkyObject, type SkyObjectSearch, type SkyObjectSearchItem, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
+import { type BodyPosition, type ChartOfBody, expectedPierSide, type PositionOfBody, type SkyObject, type SkyObjectSearch, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
 import type { CacheManager } from './cache'
 
 const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
@@ -24,13 +25,28 @@ const NAUTICAL_ALTITUDE = -6 * DEG2RAD
 const ASTRONOMICAL_ALTITUDE = -12 * DEG2RAD
 const NIGHT_ALTITUDE = -18 * DEG2RAD
 
+// The "b" parameter to make background color from 0 to 24 (#181818)
+const SOLAR_IMAGE_CONTRAST = 0.8125 // (128 - 24) / 128
+
 export class AtlasManager {
 	private readonly ephemeris: Record<string, Map<number, BodyPosition>> = {}
 	private readonly stars = new Map<number, Star>()
 
 	constructor(readonly cache: CacheManager) {}
 
-	imageOfSun() {}
+	imageOfSun(source: SolarImageSource) {
+		return Bun.file(`/dev/shm/sun-${source}.jpg`)
+	}
+
+	async refreshImageOfSun() {
+		for (const [source, url] of Object.entries(SOLAR_IMAGE_SOURCE_URLS)) {
+			const response = await fetch(url)
+			const bytes = await response.arrayBuffer()
+			await sharp(bytes)
+				.linear(SOLAR_IMAGE_CONTRAST, -(128 * SOLAR_IMAGE_CONTRAST) + 128)
+				.toFile(`/dev/shm/sun-${source}.jpg`)
+		}
+	}
 
 	positionOfSun(req: PositionOfBody) {
 		return this.computeFromHorizonsPositionAt('10', req, deg(req.location.longitude), deg(req.location.latitude), meter(req.location.elevation))
@@ -295,16 +311,16 @@ export class AtlasManager {
 		const positions = this.ephemeris[code]!
 
 		const [startTime] = this.computeStartAndEndTime(time, false)
-		const minutes = temporalSet(startTime, 0, 's')
+		const seconds = temporalSet(startTime, 0, 's') / 1000
 		const chart: number[] = []
 
-		chart.push(positions.get(minutes)![type])
+		chart.push(positions.get(seconds)![type])
 
 		for (let i = stepSizeInMinutes; i <= 1440 - stepSizeInMinutes; i += stepSizeInMinutes) {
-			chart.push(positions.get(minutes + i * 60)![type])
+			chart.push(positions.get(seconds + i * 60)![type])
 		}
 
-		chart.push(positions.get(minutes + 1440 * 60)![type])
+		chart.push(positions.get(seconds + 1440 * 60)![type])
 
 		return chart
 	}
@@ -328,13 +344,13 @@ export class AtlasManager {
 export function atlas(atlas: AtlasManager) {
 	const app = new Elysia({ prefix: '/atlas' })
 		// Endpoints!
-		// '/sun/image'
 		// '/moon/phases'
 		// '/minorplanets'
 		// '/minorplanets/closeapproaches'
 		// '/satellites'
 		// '/satellites/:id/position'
 		// '/satellites/:id/chart'
+		.get('/sun/image', ({ query }) => atlas.imageOfSun(query.source as never))
 		.post('/sun/position', ({ body }) => atlas.positionOfSun(body as never))
 		.post('/sun/chart', ({ body }) => atlas.chartOfSun(body as never))
 		.post('/sun/seasons', ({ body }) => atlas.seasons(body as never))

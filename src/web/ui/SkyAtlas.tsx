@@ -2,19 +2,20 @@ import { Button, Checkbox, Input, NumberInput, Popover, PopoverContent, PopoverT
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { RAD2DEG } from 'nebulosa/src/constants'
-import { CONSTELLATION_LIST, CONSTELLATIONS } from 'nebulosa/src/constellation'
+import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa/src/constellation'
 import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/distance'
 import { memo, useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
-import { type BodyPosition, DEFAULT_SKY_OBJECT_SEARCH_ITEM, EMPTY_TWILIGHT, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
+import { type BodyPosition, EMPTY_TWILIGHT, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { DeepSkyObjectMolecule, SkyAtlasMolecule } from '@/molecules/skyatlas'
+import { GalaxyMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConstellationSelect } from './ConstellationSelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { SKY_OBJECT_NAME_TYPES, SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
+import { Sun } from './Sun'
 
 export const SkyAtlas = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
@@ -25,14 +26,14 @@ export const SkyAtlas = memo(() => {
 			header={
 				<div className='flex flex-row items-center justify-between'>
 					<span>Sky Atlas</span>
-					{tab === 'dsos' && (
+					{tab === 'galaxies' && (
 						<Popover className='max-w-160' placement='bottom' showArrow={true}>
 							<PopoverTrigger>
 								<Button color='secondary' isIconOnly variant='flat'>
 									<Icons.Filter />
 								</Button>
 							</PopoverTrigger>
-							<PopoverContent>{tab === 'dsos' && <DeepSkyObjectFilter />}</PopoverContent>
+							<PopoverContent>{tab === 'galaxies' && <GalaxyFilter />}</PopoverContent>
 						</Popover>
 					)}
 				</div>
@@ -42,12 +43,14 @@ export const SkyAtlas = memo(() => {
 			onClose={atlas.close}>
 			<div className='mt-0 flex flex-col gap-2'>
 				<Tabs classNames={{ base: 'absolute top-[-42px] right-[88px] z-10', panel: 'pt-0' }} onSelectionChange={(value) => (atlas.state.tab = value as never)} selectedKey={tab}>
-					<Tab key='sun' title={<Icons.Sun />}></Tab>
+					<Tab key='sun' title={<Icons.Sun />}>
+						<SunTab />
+					</Tab>
 					<Tab key='moon' title={<Icons.Moon />}></Tab>
 					<Tab key='planets' title={<Icons.Planet />}></Tab>
 					<Tab key='asteroids' title={<Icons.Meteor />}></Tab>
-					<Tab key='dsos' title={<Icons.Galaxy />}>
-						<DeepSkyObjectTab />
+					<Tab key='galaxies' title={<Icons.Galaxy />}>
+						<GalaxyTab />
 					</Tab>
 					<Tab key='satellites' title={<Icons.Satellite />}></Tab>
 				</Tabs>
@@ -56,17 +59,36 @@ export const SkyAtlas = memo(() => {
 	)
 })
 
-export const DeepSkyObjectTab = memo(() => {
+export const SunTab = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { twilight } = useSnapshot(atlas.state)
 
-	const dso = useMolecule(DeepSkyObjectMolecule)
-	const { page, sort } = useSnapshot(dso.state.request, { sync: true })
-	const { loading, result, selected, position, chart } = useSnapshot(dso.state)
+	const sun = useMolecule(SunMolecule)
+	const { source, position, chart } = useSnapshot(sun.state)
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<Table className='mt-3 col-span-full' onRowAction={(key) => dso.select(+(key as never))} onSortChange={(value) => dso.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
+			<div className='col-span-full flex justify-center items-center'>
+				<Sun onSourceChange={(source) => (sun.state.source = source)} source={source} />
+			</div>
+			<div className='col-span-full'>
+				<EphemerisAndChart chart={chart} name='Sun' position={position} twilight={twilight} />
+			</div>
+		</div>
+	)
+})
+
+export const GalaxyTab = memo(() => {
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { twilight } = useSnapshot(atlas.state)
+
+	const galaxy = useMolecule(GalaxyMolecule)
+	const { page, sort } = useSnapshot(galaxy.state.request, { sync: true })
+	const { loading, result, position, chart } = useSnapshot(galaxy.state)
+
+	return (
+		<div className='grid grid-cols-12 gap-2 items-center'>
+			<Table className='mt-3 col-span-full' onRowAction={(key) => galaxy.select(+(key as never))} onSortChange={(value) => galaxy.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
 				<TableHeader>
 					<TableColumn key='name'>Name</TableColumn>
 					<TableColumn allowsSorting className='text-center' key='magnitude'>
@@ -82,38 +104,38 @@ export const DeepSkyObjectTab = memo(() => {
 				<TableBody items={result}>
 					{(item) => (
 						<TableRow key={item.id}>
-							<TableCell className='whitespace-nowrap max-w-50 overflow-hidden'>{formatSkyObjectName(item)}</TableCell>
+							<TableCell className='whitespace-nowrap max-w-50 overflow-hidden'>{skyObjectName(item.name, item.constellation)}</TableCell>
 							<TableCell className='text-center'>{item.magnitude}</TableCell>
-							<TableCell className='text-center whitespace-nowrap max-w-40 overflow-hidden'>{formatSkyObjectType(item.type)}</TableCell>
+							<TableCell className='text-center whitespace-nowrap max-w-40 overflow-hidden'>{skyObjectType(item.type)}</TableCell>
 							<TableCell className='text-center'>{CONSTELLATION_LIST[item.constellation]}</TableCell>
 						</TableRow>
 					)}
 				</TableBody>
 			</Table>
 			<div className='col-span-full flex flex-row items-center justify-center gap-3'>
-				<Button color='secondary' isDisabled={page <= 1 || loading} isIconOnly onPointerUp={() => dso.update('page', page - 1)} variant='flat'>
+				<Button color='secondary' isDisabled={page <= 1 || loading} isIconOnly onPointerUp={() => galaxy.update('page', page - 1)} variant='flat'>
 					<Icons.ChevronLeft />
 				</Button>
-				<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={!result.length || loading} isWheelDisabled minValue={1} onValueChange={(value) => dso.update('page', value)} size='sm' value={page} />
-				<Button color='secondary' isDisabled={!result.length || loading} isIconOnly onPointerUp={() => dso.update('page', page + 1)} variant='flat'>
+				<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={!result.length || loading} isWheelDisabled minValue={1} onValueChange={(value) => galaxy.update('page', value)} size='sm' value={page} />
+				<Button color='secondary' isDisabled={!result.length || loading} isIconOnly onPointerUp={() => galaxy.update('page', page + 1)} variant='flat'>
 					<Icons.ChevronRight />
 				</Button>
 			</div>
 			<div className='col-span-full'>
-				<EphemerisAndChart chart={chart} item={selected} position={position} twilight={twilight} />
+				<EphemerisAndChart chart={chart} position={position} twilight={twilight} />
 			</div>
 		</div>
 	)
 })
 
 export interface EphemerisAndChartProps {
-	readonly item?: SkyObjectSearchItem
+	readonly name?: string
 	readonly position: BodyPosition
 	readonly chart: readonly number[]
 	readonly twilight?: Twilight
 }
 
-export const EphemerisAndChart = memo(({ item, position, chart, twilight }: EphemerisAndChartProps) => {
+export const EphemerisAndChart = memo(({ name, position, chart, twilight }: EphemerisAndChartProps) => {
 	const [showChart, setShowChart] = useState(false)
 
 	const deferredChart = useDeferredValue(chart, [])
@@ -121,28 +143,28 @@ export const EphemerisAndChart = memo(({ item, position, chart, twilight }: Ephe
 	const deferredData = useDeferredValue(data, [])
 
 	return (
-		<div className='h-[140px] col-span-full relative flex flex-col justify-start items-center gap-1'>
-			<div className='w-full absolute left-0 top-[-42px] pointer-events-none flex flex-row gap-2 text-start text-sm font-bold'>
+		<div className='h-[150px] col-span-full relative flex flex-col justify-start items-center gap-1'>
+			<div className='w-full pointer-events-none flex flex-row gap-2 text-start text-sm font-bold'>
 				<Button className='rounded-full pointer-events-auto' color='primary' isIconOnly onPointerUp={() => setShowChart(false)} variant={showChart ? 'light' : 'flat'}>
 					<Icons.Info />
 				</Button>
 				<Button className='rounded-full pointer-events-auto' color='primary' isIconOnly onPointerUp={() => setShowChart(true)} variant={showChart ? 'flat' : 'light'}>
 					<Icons.Chart />
 				</Button>
+				<div className='flex-1 justify-center items-center flex text-sm font-bold'>{position.names?.map((e) => skyObjectName(e, position.constellation)).join(', ') || name}</div>
 			</div>
-			<div className='w-full text-center text-sm font-bold'>{position.names?.map((e) => formatSkyObjectName({ name: e, constellation: item?.constellation ?? 0 })).join(', ')}</div>
-			<span className='w-full absolute top-[24px] left-0' style={{ visibility: showChart ? 'hidden' : 'visible' }}>
-				<EphemerisPosition item={item ?? DEFAULT_SKY_OBJECT_SEARCH_ITEM} position={position} />
+			<span className='w-full absolute top-[42px] left-0' style={{ visibility: showChart ? 'hidden' : 'visible' }}>
+				<EphemerisPosition position={position} />
 			</span>
-			<span className='w-full absolute top-[24px] left-0' style={{ visibility: showChart ? 'visible' : 'hidden' }}>
+			<span className='w-full absolute top-[42px] left-0' style={{ visibility: showChart ? 'visible' : 'hidden' }}>
 				<EphemerisChart data={deferredData} />
 			</span>
 		</div>
 	)
 })
 
-export const DeepSkyObjectFilter = memo(() => {
-	const dso = useMolecule(DeepSkyObjectMolecule)
+export const GalaxyFilter = memo(() => {
+	const dso = useMolecule(GalaxyMolecule)
 	const { name, nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, rightAscension, declination, radius } = useSnapshot(dso.state.request, { sync: true })
 	const { loading } = useSnapshot(dso.state)
 
@@ -182,10 +204,9 @@ export const DeepSkyObjectFilter = memo(() => {
 
 export interface EphemerisPositionProps {
 	readonly position: BodyPosition
-	readonly item: SkyObjectSearchItem
 }
 
-export const EphemerisPosition = memo(({ position, item: { constellation } }: EphemerisPositionProps) => {
+export const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => {
 	return (
 		<div className='w-full grid grid-cols-12 gap-2 p-0'>
 			<Input className='col-span-3 sm:col-span-3' isReadOnly label='RA' size='sm' value={formatRA(position.rightAscension)} />
@@ -228,7 +249,7 @@ export const EphemerisChart = memo(({ data }: EphemerisChartProps) => {
 	}
 
 	return (
-		<ComposedChart data={data} height={150} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} width={450}>
+		<ComposedChart data={data} height={150} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} width={438}>
 			<XAxis dataKey='name' domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={tickFormatter} tickMargin={6} />
 			<YAxis domain={[0, 90]} width={25} />
 			<Area activeDot={false} connectNulls dataKey='dayFirst' dot={false} fill='#FFF176' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
@@ -270,12 +291,12 @@ function makeEphemerisChart(data: readonly number[], twilight: Twilight = EMPTY_
 	return chart
 }
 
-function formatSkyObjectName(item: Pick<SkyObjectSearchItem, 'name' | 'constellation'>) {
-	const [type, name] = item.name.split(':')
+function skyObjectName(id: string, constellation: Constellation | number) {
+	const [type, name] = id.split(':')
 	const typeId = +type
 
 	if (typeId === 0) return name
-	if (typeId === 3 || typeId === 4) return `${name} ${CONSTELLATIONS[CONSTELLATION_LIST[item.constellation]].iau}`
+	if (typeId === 3 || typeId === 4) return `${name} ${CONSTELLATIONS[typeof constellation === 'number' ? CONSTELLATION_LIST[constellation] : constellation].iau}`
 	if (typeId === 8) return `M ${name}`
 	if (typeId === 9) return `C ${name}`
 	if (typeId === 10) return `B ${name}`
@@ -349,7 +370,7 @@ function formatSkyObjectName(item: Pick<SkyObjectSearchItem, 'name' | 'constella
 	return `${SKY_OBJECT_NAME_TYPES[typeId + 1]} ${name}`
 }
 
-function formatSkyObjectType(type: SkyObjectSearchItem['type']) {
+function skyObjectType(type: SkyObjectSearchItem['type']) {
 	if (type === 1) return 'Galaxy'
 	if (type === 2) return 'Active Galaxy'
 	if (type === 3) return 'Radio Galaxy'
@@ -391,7 +412,7 @@ function formatSkyObjectType(type: SkyObjectSearchItem['type']) {
 
 function formatDistance(distance: Distance) {
 	if (distance >= 63241.077084266280268653583182) return `${toLightYear(distance).toFixed(0)} ly`
-	if (distance >= 1) return `${distance.toFixed(2)} au`
+	if (distance >= 1) return `${distance.toFixed(2)} AU`
 	if (distance <= 0) return '-'
 	return `${(toKilometer(distance)).toFixed(0)} km`
 }

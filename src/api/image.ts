@@ -156,6 +156,7 @@ export class ImageManager {
 		const options: WriteImageToFormatOptions = {
 			format: IMAGE_FORMAT_OPTIONS[format],
 			brightness: adjustment.enabled ? adjustment.brightness : undefined,
+			contrast: adjustment.enabled ? adjustment.contrast : undefined,
 			normalize: adjustment.enabled ? adjustment.normalize : undefined,
 			gamma: adjustment.enabled ? adjustment.gamma : undefined,
 			saturation: adjustment.enabled ? adjustment.saturation : undefined,

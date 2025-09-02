@@ -12,6 +12,7 @@ export const ImageAdjustmentMolecule = molecule((m, s) => {
 
 	function reset() {
 		viewer.state.transformation.adjustment.brightness = 1
+		viewer.state.transformation.adjustment.contrast = 1
 		viewer.state.transformation.adjustment.gamma = 1
 		viewer.state.transformation.adjustment.saturation = 1
 		viewer.state.transformation.adjustment.normalize = false

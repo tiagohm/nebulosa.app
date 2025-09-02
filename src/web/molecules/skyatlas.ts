@@ -1,18 +1,30 @@
 import { molecule, onMount } from 'bunshi'
 import bus from 'src/shared/bus'
-import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_SKY_OBJECT_SEARCH, type LocationAndTime, type SkyObjectSearch, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
+import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SKY_OBJECT_SEARCH, type LocationAndTime, type PositionOfBody, type SkyObjectSearch, type SkyObjectSearchItem, type SolarImageSource, type Twilight } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 
 export interface SkyAtlasState {
 	show: boolean
-	tab: 'sun' | 'moon' | 'planets' | 'asteroids' | 'dsos' | 'satellites'
+	tab: 'sun' | 'moon' | 'planets' | 'asteroids' | 'galaxies' | 'satellites'
 	twilight?: Twilight
 	readonly request: LocationAndTime
 }
 
-export interface DeepSkyObjectState {
+export interface SunState {
+	readonly request: PositionOfBody
+	source: SolarImageSource
+	readonly position: BodyPosition
+	chart: number[]
+}
+
+export interface MoonState {
+	readonly position: BodyPosition
+	readonly chart: number[]
+}
+
+export interface GalaxyState {
 	loading: boolean
 	readonly request: SkyObjectSearch
 	result: SkyObjectSearchItem[]
@@ -21,16 +33,72 @@ export interface DeepSkyObjectState {
 	chart: number[]
 }
 
-let skyAtlasDeepSkyObjectState: DeepSkyObjectState | undefined
+let skyAtlasState: SkyAtlasState | undefined
+let sunState: SunState | undefined
+let galaxyState: GalaxyState | undefined
 
-export const DeepSkyObjectMolecule = molecule(() => {
-	const request = simpleLocalStorage.get<SkyObjectSearch>('skyAtlas.dsos.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
+export const SunMolecule = molecule(() => {
+	const request = structuredClone(DEFAULT_POSITION_OF_BODY)
+
+	const state =
+		sunState ??
+		proxy<SunState>({
+			request,
+			position: structuredClone(DEFAULT_BODY_POSITION),
+			chart: [],
+			source: 'HMI_INTENSITYGRAM_FLATTENED',
+		})
+
+	sunState = state
+
+	onMount(() => {
+		const timer = setInterval(tick, 60000)
+
+		return () => {
+			clearInterval(timer)
+		}
+	})
+
+	let chartUpdateRequested = true
+
+	void tick()
+
+	async function tick() {
+		updateTime()
+
+		await updatePosition()
+		await updateChart()
+	}
+
+	function updateTime(time: number = Date.now()) {
+		request.time.utc = time
+		// TODO: verificar se a data passou ou não do meio-dia e chamar updateChart/updatePosition
+	}
+
+	async function updatePosition() {
+		const position = await Api.SkyAtlas.positionOfSun(state.request)
+		if (position) Object.assign(state.position, position)
+	}
+
+	async function updateChart() {
+		if (chartUpdateRequested) {
+			const chart = await Api.SkyAtlas.chartOfSun(state.request)
+			if (chart) state.chart = chart
+			chartUpdateRequested = false
+		}
+	}
+
+	return { state }
+})
+
+export const GalaxyMolecule = molecule(() => {
+	const request = simpleLocalStorage.get<SkyObjectSearch>('skyAtlas.galaxy.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
 
 	request.page = 1
 
 	const state =
-		skyAtlasDeepSkyObjectState ??
-		proxy<DeepSkyObjectState>({
+		galaxyState ??
+		proxy<GalaxyState>({
 			loading: false,
 			request,
 			result: [],
@@ -38,10 +106,12 @@ export const DeepSkyObjectMolecule = molecule(() => {
 			chart: [],
 		})
 
-	skyAtlasDeepSkyObjectState = state
+	galaxyState = state
+
+	let chartUpdateRequested = true
 
 	onMount(() => {
-		const unsubscriber = subscribe(state.request, () => simpleLocalStorage.set('skyAtlas.dsos.request', state.request))
+		const unsubscriber = subscribe(state.request, () => simpleLocalStorage.set('skyAtlas.galaxy.request', state.request))
 
 		const timer = setInterval(tick, 60000)
 
@@ -56,19 +126,23 @@ export const DeepSkyObjectMolecule = molecule(() => {
 
 	function update<K extends keyof SkyObjectSearch>(key: K, value: SkyObjectSearch[K]) {
 		state.request[key] = value
+
+		// Search again if page or sort has been changed
 		if (key === 'page' || key === 'sort') void search(false)
 	}
 
 	async function search(reset: boolean = true) {
 		try {
 			state.loading = true
-			request.time.utc = Date.now()
+
+			// TODO: Call update time and location on SkyAtlasMolecule
+			updateTime()
 			request.location.longitude = -45
 			request.location.latitude = -22
 
 			if (reset) state.request.page = 1
 
-			const result = await Api.SkyAtlas.skyObjectSearch(state.request)
+			const result = await Api.SkyAtlas.searchSkyObject(state.request)
 			state.result = result ?? []
 		} finally {
 			state.loading = false
@@ -78,18 +152,36 @@ export const DeepSkyObjectMolecule = molecule(() => {
 	async function select(id: number, force: boolean = false) {
 		const selected = state.result.find((dso) => dso.id === id)
 
+		// Fetches object's position and chart if a new one was selected
 		if (selected && (force || state.selected?.id !== selected.id)) {
 			state.selected = selected
 
-			request.time.utc = Date.now()
+			// TODO: Call update time and location on SkyAtlasMolecule
+			updateTime()
 			request.location.longitude = -45
 			request.location.latitude = -22
 
-			const position = await Api.SkyAtlas.skyObjectPosition(state.request, id)
-			if (position) Object.assign(state.position, position)
+			await updatePosition()
+			await updateChart()
+		}
+	}
 
-			const chart = await Api.SkyAtlas.skyObjectChart(state.request, id)
+	function updateTime(time: number = Date.now()) {
+		request.time.utc = time
+	}
+
+	async function updatePosition() {
+		const id = state.selected!.id
+		const position = await Api.SkyAtlas.positionOfSkyObject(state.request, id)
+		if (position) Object.assign(state.position, position)
+	}
+
+	async function updateChart() {
+		if (chartUpdateRequested) {
+			const id = state.selected!.id
+			const chart = await Api.SkyAtlas.chartOfSkyObject(state.request, id)
 			if (chart) state.chart = chart
+			chartUpdateRequested = false
 		}
 	}
 
@@ -105,10 +197,8 @@ export const DeepSkyObjectMolecule = molecule(() => {
 		}
 	}
 
-	return { state, update, search, select }
+	return { state, update, search, select, tick }
 })
-
-let skyAtlasState: SkyAtlasState | undefined
 
 export const SkyAtlasMolecule = molecule(() => {
 	const state =

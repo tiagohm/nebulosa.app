@@ -10,7 +10,7 @@ import { Modal } from './Modal'
 export const ImageAdjustment = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
 	const { viewer } = adjustment
-	const { enabled, brightness, gamma, normalize, saturation } = useSnapshot(adjustment.state)
+	const { enabled, brightness, contrast, gamma, normalize, saturation } = useSnapshot(adjustment.state)
 	const { info } = useSnapshot(viewer.state)
 
 	return (
@@ -42,6 +42,7 @@ export const ImageAdjustment = memo(() => {
 					Normalize
 				</Checkbox>
 				<NumberInput className='col-span-full' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!enabled} label='Brightness' maxValue={10} minValue={0} onValueChange={(value) => adjustment.update('brightness', value)} size='sm' step={0.01} value={brightness} />
+				<NumberInput className='col-span-full' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!enabled} label='Contrast' maxValue={10} minValue={0} onValueChange={(value) => adjustment.update('contrast', value)} size='sm' step={0.01} value={contrast} />
 				<NumberInput className='col-span-full' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!enabled} label='Gamma' maxValue={3} minValue={1} onValueChange={(value) => adjustment.update('gamma', value)} size='sm' step={0.01} value={gamma} />
 				<NumberInput className='col-span-full' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!enabled} label='Saturation' maxValue={10} minValue={0} onValueChange={(value) => adjustment.update('saturation', value)} size='sm' step={0.01} value={saturation} />
 			</div>

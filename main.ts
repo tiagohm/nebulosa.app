@@ -83,6 +83,8 @@ const plateSolverManager = new PlateSolverManager(notificationManager)
 const atlasManager = new AtlasManager(cacheManager)
 const imageManager = new ImageManager(notificationManager, imageCacheManager)
 
+void atlasManager.refreshImageOfSun()
+
 // App
 
 const app = new Elysia({
@@ -112,7 +114,9 @@ const app = new Elysia({
 		cron({
 			name: 'every-15-minutes',
 			pattern: '0 */15 * * * *',
-			run: () => {},
+			run: () => {
+				void atlasManager.refreshImageOfSun()
+			},
 		}),
 	)
 

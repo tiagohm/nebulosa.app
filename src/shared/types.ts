@@ -51,6 +51,29 @@ export type TwilightType = 'civil' | 'nautical' | 'astronomical'
 
 export type TwilightTime = readonly [Temporal, number]
 
+export const SOLAR_IMAGE_SOURCES = ['AIA_193', 'AIA_304', 'AIA_171', 'AIA_211', 'AIA_131', 'AIA_335', 'AIA_094', 'AIA_1600', 'AIA_1700', 'AIA_171_HMIB', 'HMI_MAGNETOGRAM', 'HMI_COLORIZED_MAGNETOGRAM', 'HMI_INTENSITYGRAM', 'HMI_INTENSITYGRAM_COLORED', 'HMI_INTENSITYGRAM_FLATTENED', 'HMI_DOPPLERGRAM'] as const
+
+export const SOLAR_IMAGE_SOURCE_URLS: Record<SolarImageSource, string> = {
+	AIA_193: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_0193.jpg',
+	AIA_304: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_0304.jpg',
+	AIA_171: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_0171.jpg',
+	AIA_211: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_0211.jpg',
+	AIA_131: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_0131.jpg',
+	AIA_335: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_0335.jpg',
+	AIA_094: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_0094.jpg',
+	AIA_1600: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_1600.jpg',
+	AIA_1700: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_1700.jpg',
+	AIA_171_HMIB: 'https://sdo.gsfc.nasa.gov/assets/img/latest/f_HMImag_171_256.jpg',
+	HMI_MAGNETOGRAM: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_HMIB.jpg',
+	HMI_COLORIZED_MAGNETOGRAM: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_HMIBC.jpg',
+	HMI_INTENSITYGRAM_COLORED: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_HMIIC.jpg',
+	HMI_INTENSITYGRAM_FLATTENED: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_HMIIF.jpg',
+	HMI_INTENSITYGRAM: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_HMII.jpg',
+	HMI_DOPPLERGRAM: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_HMID.jpg',
+}
+
+export type SolarImageSource = (typeof SOLAR_IMAGE_SOURCES)[number]
+
 export interface PositionOfBody extends LocationAndTime {}
 
 export interface ChartOfBody extends PositionOfBody {
@@ -218,6 +241,7 @@ export interface ImageAdjustment {
 	enabled: boolean
 	normalize: boolean
 	brightness: number
+	contrast: number
 	gamma: number
 	saturation: number
 }
@@ -1048,6 +1072,7 @@ export const DEFAULT_IMAGE_ADJUSTMENT: ImageAdjustment = {
 	enabled: false,
 	normalize: false,
 	brightness: 1,
+	contrast: 1,
 	gamma: 1,
 	saturation: 1,
 }
@@ -1071,6 +1096,18 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	filter: DEFAULT_IMAGE_FILTER,
 }
 
+export const DEFAULT_POSITION_OF_BODY: PositionOfBody = {
+	location: {
+		latitude: 0,
+		longitude: 0,
+		elevation: 0,
+	},
+	time: {
+		utc: 0,
+		offset: 0,
+	},
+}
+
 export const DEFAULT_SKY_OBJECT_SEARCH: SkyObjectSearch = {
 	name: '',
 	nameType: -1,
@@ -1083,15 +1120,7 @@ export const DEFAULT_SKY_OBJECT_SEARCH: SkyObjectSearch = {
 	radius: 0,
 	visible: false,
 	visibleAbove: 0,
-	location: {
-		latitude: 0,
-		longitude: 0,
-		elevation: 0,
-	},
-	time: {
-		utc: 0,
-		offset: 0,
-	},
+	...DEFAULT_POSITION_OF_BODY,
 	page: 1,
 	limit: 5,
 	sort: {

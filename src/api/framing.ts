@@ -22,7 +22,7 @@ export class FramingManager {
 export function framing(framing: FramingManager) {
 	const app = new Elysia({ prefix: '/framing' })
 		// Endpoints!
-		.get('/hipsSurveys', hipsSurveys)
+		.get('/hips-surveys', hipsSurveys)
 		.post('', ({ body }) => framing.frame(body as never))
 
 	return app

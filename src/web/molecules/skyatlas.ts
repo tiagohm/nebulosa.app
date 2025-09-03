@@ -108,7 +108,7 @@ export const GalaxyMolecule = molecule(() => {
 
 	galaxyState = state
 
-	let chartUpdateRequested = true
+	let chartShouldBeUpdated = true
 
 	onMount(() => {
 		const unsubscriber = subscribe(state.request, () => simpleLocalStorage.set('skyAtlas.galaxy.request', state.request))
@@ -162,7 +162,7 @@ export const GalaxyMolecule = molecule(() => {
 			request.location.latitude = -22
 
 			await updatePosition()
-			await updateChart()
+			await updateChart(true)
 		}
 	}
 
@@ -176,12 +176,12 @@ export const GalaxyMolecule = molecule(() => {
 		if (position) Object.assign(state.position, position)
 	}
 
-	async function updateChart() {
-		if (chartUpdateRequested) {
+	async function updateChart(force: boolean = false) {
+		if (force || chartShouldBeUpdated) {
 			const id = state.selected!.id
 			const chart = await Api.SkyAtlas.chartOfSkyObject(state.request, id)
 			if (chart) state.chart = chart
-			chartUpdateRequested = false
+			chartShouldBeUpdated = false
 		}
 	}
 

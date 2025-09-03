@@ -84,13 +84,13 @@ export class CameraManager implements IndiClientHandler {
 	private readonly cameras = new Map<string, Camera>()
 	private readonly tasks = new Map<string, CameraCaptureTask>()
 
+	readonly cache = new Map<string, Buffer>()
+
 	constructor(
 		readonly wsm: WebSocketMessageManager,
-		readonly connection: ConnectionManager,
 		readonly guideOutput: GuideOutputManager,
 		readonly thermometer: ThermometerManager,
 		readonly mount: MountManager,
-		readonly cache: ImageCacheManager,
 	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove all cameras associated with the client
@@ -391,7 +391,7 @@ export class CameraManager implements IndiClientHandler {
 					const value = message.elements.CCD1?.value
 
 					if (value) {
-						this.tasks.forEach((task) => task.blobReceived(device, value))
+						this.tasks.forEach((task) => task.blobReceived(device, value, this.cache))
 					} else {
 						console.warn(`received empty BLOB for device ${device.name}`)
 					}
@@ -457,7 +457,7 @@ export class CameraManager implements IndiClientHandler {
 		return this.cameras.get(id)
 	}
 
-	startCameraCapture(device: Camera, req: CameraCaptureStart, property: IndiDevicePropertyManager) {
+	startCameraCapture(device: Camera, req: CameraCaptureStart, client: IndiClient, property: IndiDevicePropertyManager) {
 		// Stop any existing task for this camera and remove its handler
 		if (this.tasks.has(device.name)) {
 			const task = this.tasks.get(device.name)!
@@ -465,8 +465,7 @@ export class CameraManager implements IndiClientHandler {
 		}
 
 		// Start a new task for the camera
-		const client = this.connection.get()
-		const task = new CameraCaptureTask(device, req, client, property, this.cache, this.handleCameraCaptureTaskEvent.bind(this))
+		const task = new CameraCaptureTask(device, req, client, property, this.handleCameraCaptureTaskEvent.bind(this))
 		this.tasks.set(device.name, task)
 		const mount = req.mount ? this.mount.get(req.mount) : undefined
 		snoop(client, device, mount)
@@ -478,7 +477,7 @@ export class CameraManager implements IndiClientHandler {
 	}
 }
 
-export function camera(camera: CameraManager, property: IndiDevicePropertyManager) {
+export function camera(camera: CameraManager, connection: ConnectionManager, property: IndiDevicePropertyManager) {
 	function cameraFromParams(params: { id: string }) {
 		return camera.get(decodeURIComponent(params.id))!
 	}
@@ -487,37 +486,12 @@ export function camera(camera: CameraManager, property: IndiDevicePropertyManage
 		// Endpoints!
 		.get('', () => camera.list())
 		.get('/:id', ({ params }) => cameraFromParams(params))
-		.post('/:id/cooler', ({ params, body }) => cooler(camera.connection.get(), cameraFromParams(params), body as never))
-		.post('/:id/temperature', ({ params, body }) => temperature(camera.connection.get(), cameraFromParams(params), body as never))
-		.post('/:id/start', ({ params, body }) => camera.startCameraCapture(cameraFromParams(params), body as never, property))
+		.post('/:id/cooler', ({ params, body }) => cooler(connection.get(), cameraFromParams(params), body as never))
+		.post('/:id/temperature', ({ params, body }) => temperature(connection.get(), cameraFromParams(params), body as never))
+		.post('/:id/start', ({ params, body }) => camera.startCameraCapture(cameraFromParams(params), body as never, connection.get(), property))
 		.post('/:id/stop', ({ params }) => camera.stopCameraCapture(cameraFromParams(params)))
 
 	return app
-}
-
-export class ImageCacheManager {
-	private readonly images = new Map<string, Buffer>()
-	private readonly accessTime = new Map<string, number>()
-
-	add(key: string, data: Buffer) {
-		this.images.set(key, data)
-	}
-
-	get(key: string) {
-		const image = this.images.get(key)
-		if (image) this.accessTime.set(key, Date.now())
-		return image
-	}
-
-	remove(key: string) {
-		this.images.delete(key)
-		this.accessTime.delete(key)
-	}
-
-	clear() {
-		this.images.clear()
-		this.accessTime.clear()
-	}
 }
 
 export class CameraCaptureTask {
@@ -532,7 +506,6 @@ export class CameraCaptureTask {
 		private readonly request: CameraCaptureStart,
 		private readonly client: IndiClient,
 		private readonly properties: IndiDevicePropertyManager,
-		private readonly cache: ImageCacheManager,
 		private readonly handleCameraCaptureTaskEvent: (event: CameraCaptureTaskEvent) => void,
 	) {
 		this.event.loop = request.exposureMode === 'LOOP'
@@ -549,10 +522,6 @@ export class CameraCaptureTask {
 		this.event.totalProgress.remainingTime = this.totalExposureProgress[0]
 	}
 
-	get isStopped() {
-		return this.stopped
-	}
-
 	cameraUpdated(device: Camera, property: keyof Camera, state?: PropertyState) {
 		if (this.camera.name === device.name) {
 			if (property === 'exposure') {
@@ -566,13 +535,13 @@ export class CameraCaptureTask {
 
 					if (!this.event.loop) {
 						this.event.totalProgress.remainingTime = this.totalExposureProgress[0] - elapsedTime
-						this.event.totalProgress.progress = (1 - this.event.totalProgress.remainingTime / this.event.totalExposureTime) * 100
+						this.event.totalProgress.progress = Math.max(0, (1 - this.event.totalProgress.remainingTime / this.event.totalExposureTime) * 100)
 					}
 
 					this.event.totalProgress.elapsedTime = this.totalExposureProgress[1] + elapsedTime
 					this.event.frameProgress.remainingTime = remainingTime
 					this.event.frameProgress.elapsedTime = elapsedTime
-					this.event.frameProgress.progress = (1 - remainingTime / this.event.frameExposureTime) * 100
+					this.event.frameProgress.progress = Math.max(0, (1 - remainingTime / this.event.frameExposureTime) * 100)
 					return this.handleCameraCaptureTaskEvent(this.event)
 				} else if (state === 'Ok') {
 					this.event.state = 'EXPOSURE_FINISHED'
@@ -584,37 +553,47 @@ export class CameraCaptureTask {
 					this.totalExposureProgress[0] -= this.event.frameExposureTime
 					this.totalExposureProgress[1] += this.event.frameExposureTime
 
+					// If there are more frames to capture, start the next exposure
 					if (!this.stopped && this.event.remainingCount > 0) {
-						// If there are more frames to capture, start the next exposure
+						// Check if we need to wait before the next exposure
 						if (this.waitingTime >= MINIMUM_WAITING_TIME) {
 							this.event.state = 'WAITING'
 
-							waitFor(this.waitingTime, this, (remainingTime) => {
+							// Wait for the specified waiting time and send progress event
+							waitFor(this.waitingTime, (remainingTime) => {
+								if (this.stopped) return false
+
 								const elapsedTime = this.waitingTime - remainingTime
 
 								if (!this.event.loop) {
 									this.event.totalProgress.remainingTime = this.totalExposureProgress[0] - elapsedTime
+									this.event.totalProgress.progress = Math.max(0, (1 - this.event.totalProgress.remainingTime / this.event.totalExposureTime) * 100)
 								}
 
 								this.event.totalProgress.elapsedTime = this.totalExposureProgress[1] + elapsedTime
-								this.event.totalProgress.progress = (1 - this.event.totalProgress.remainingTime / this.event.totalExposureTime) * 100
 								this.event.frameProgress.remainingTime = remainingTime
 								this.event.frameProgress.elapsedTime = this.waitingTime - remainingTime
-								this.event.frameProgress.progress = (1 - remainingTime / this.waitingTime) * 100
+								this.event.frameProgress.progress = Math.max(0, (1 - remainingTime / this.waitingTime) * 100)
 								this.handleCameraCaptureTaskEvent(this.event)
+
+								return true
 							})
-								.then(() => {
-									if (!this.stopped && remainingTime === 0) {
+								.then((stopped) => {
+									if (!stopped && remainingTime === 0) {
+										// Update total exposure progress
 										this.totalExposureProgress[0] -= this.waitingTime
 										this.totalExposureProgress[1] += this.waitingTime
 
+										// Start the next exposure
 										return this.start()
 									}
 								})
 								.catch(console.error)
 
+							// Do nothing if it wasn't stopped
 							if (!this.stopped) return
 						} else {
+							// Start the next exposure
 							return this.start()
 						}
 					}
@@ -636,7 +615,7 @@ export class CameraCaptureTask {
 		}
 	}
 
-	async blobReceived(device: Camera, data: string) {
+	async blobReceived(device: Camera, data: string, cache: Map<string, Buffer>) {
 		if (this.camera.name === device.name) {
 			const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : device.name
 			const path = join(await makePathFor(this.request), `${name}.fit`)
@@ -646,7 +625,7 @@ export class CameraCaptureTask {
 				void Bun.write(path, bytes) // Don't wait for writing to file
 			}
 
-			this.cache.add(device.name, bytes)
+			cache.set(device.name, bytes)
 
 			this.event.savedPath = `:${Buffer.from(device.name).toString('hex')}:${Buffer.from(path).toString('hex')}`
 			this.handleCameraCaptureTaskEvent(this.event)
@@ -682,22 +661,26 @@ export class CameraCaptureTask {
 	}
 }
 
-async function waitFor(us: number, stop: { readonly isStopped: boolean }, callback: (remaining: number) => void) {
+async function waitFor(us: number, callback: (remaining: number) => boolean) {
 	let remaining = us
 
 	if (remaining >= MINIMUM_WAITING_TIME) {
-		while (!stop.isStopped && remaining >= 0) {
+		while (true) {
 			if (remaining <= 0) {
 				return callback(0)
-			} else {
-				callback(remaining)
+			} else if (!callback(remaining)) {
+				return false
 			}
 
+			// Sleep for 1 second
 			await Bun.sleep(1000)
 
-			remaining -= 1000000 // 1s
+			// Subtract 1 second from remaining time
+			remaining -= 1000000
 		}
 	}
+
+	return true
 }
 
 function gainFor(gain: Camera['gain'], element: DefNumber | OneNumber, tag: string) {

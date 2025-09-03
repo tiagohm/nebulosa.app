@@ -363,23 +363,23 @@ export namespace Api {
 
 	export namespace PlateSolver {
 		export function start(req: PlateSolveStart) {
-			return json<PlateSolution>('/plateSolver/start', 'post', req)
+			return json<PlateSolution>('/platesolver/start', 'post', req)
 		}
 
 		export function stop(req: PlateSolveStop) {
-			return res('/plateSolver/stop', 'post', req)
+			return res('/platesolver/stop', 'post', req)
 		}
 	}
 
 	export namespace StarDetection {
 		export function detect(req: StarDetection) {
-			return json<DetectedStar[]>('/starDetection', 'post', req)
+			return json<DetectedStar[]>('/stardetection', 'post', req)
 		}
 	}
 
 	export namespace Framing {
 		export function hipsSurveys() {
-			return json<HipsSurvey[]>('/framing/hipsSurveys', 'get')
+			return json<HipsSurvey[]>('/framing/hips-surveys', 'get')
 		}
 
 		export function frame(req: Framing) {

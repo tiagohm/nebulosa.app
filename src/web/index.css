@@ -10,7 +10,7 @@
 	--heroui-content1: 0 0% 9.4%;
 }
 
-*:focus {
+svg:focus {
 	outline: none;
 }
 

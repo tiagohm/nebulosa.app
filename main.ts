@@ -6,7 +6,7 @@ import os from 'os'
 import { join } from 'path'
 import { AtlasManager, atlas } from 'src/api/atlas'
 import { CacheManager } from 'src/api/cache'
-import { CameraManager, camera, ImageCacheManager } from 'src/api/camera'
+import { CameraManager, camera } from 'src/api/camera'
 import { ConnectionManager, connection } from 'src/api/connection'
 import { CoverManager, cover } from 'src/api/cover'
 import { DewHeaterManager, dewHeater } from 'src/api/dewheater'
@@ -55,8 +55,6 @@ Bun.env.framingDir = join(Bun.env.appDir, 'framing')
 await fs.mkdir(Bun.env.capturesDir, { recursive: true })
 await fs.mkdir(Bun.env.framingDir, { recursive: true })
 
-const imageCacheManager = new ImageCacheManager()
-
 // Managers
 
 const cacheManager = new CacheManager()
@@ -69,7 +67,7 @@ const thermometerManager = new ThermometerManager(wsm)
 const focuserManager = new FocuserManager(wsm, thermometerManager)
 const mountManager = new MountManager(wsm, guideOutputManager)
 const mountRemoteControlManager = new MountRemoteControlManager(connectionManager)
-const cameraManager = new CameraManager(wsm, connectionManager, guideOutputManager, thermometerManager, mountManager, imageCacheManager)
+const cameraManager = new CameraManager(wsm, guideOutputManager, thermometerManager, mountManager)
 const dewHeaterManager = new DewHeaterManager(wsm)
 const coverManager = new CoverManager(wsm, dewHeaterManager)
 const flatPanelManager = new FlatPanelManager(wsm)
@@ -81,7 +79,7 @@ const fileSystemManager = new FileSystemManager()
 const starDetectionManager = new StarDetectionManager()
 const plateSolverManager = new PlateSolverManager(notificationManager)
 const atlasManager = new AtlasManager(cacheManager)
-const imageManager = new ImageManager(notificationManager, imageCacheManager)
+const imageManager = new ImageManager(notificationManager)
 
 void atlasManager.refreshImageOfSun()
 
@@ -141,7 +139,7 @@ const app = new Elysia({
 	.use(connection(connectionManager, indiManager))
 	.use(confirmation(confirmationManager))
 	.use(indi(indiManager, indiServerManager, indiDevicePropertyManager, connectionManager))
-	.use(camera(cameraManager, indiDevicePropertyManager))
+	.use(camera(cameraManager, connectionManager, indiDevicePropertyManager))
 	.use(mount(mountManager, mountRemoteControlManager, connectionManager))
 	.use(focuser(focuserManager, connectionManager))
 	.use(thermometer(thermometerManager))
@@ -150,7 +148,7 @@ const app = new Elysia({
 	.use(flatPanel(flatPanelManager, connectionManager))
 	.use(dewHeater(dewHeaterManager, connectionManager, indiDevicePropertyManager))
 	.use(atlas(atlasManager))
-	.use(image(imageManager))
+	.use(image(imageManager, cameraManager.cache))
 	.use(framing(framingManager))
 	.use(starDetection(starDetectionManager))
 	.use(plateSolver(plateSolverManager))

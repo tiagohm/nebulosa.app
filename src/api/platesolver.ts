@@ -46,8 +46,11 @@ export class PlateSolverManager {
 
 				if (solution) {
 					return solution
+				} else {
+					this.notification.send({ body: 'No solution found', severity: 'warn' })
 				}
-			} catch {
+			} catch(e) {
+				console.error(e)
 				this.notification.send({ body: 'Failed to plate solve image', severity: 'error' })
 			} finally {
 				this.tasks.delete(req.id)
@@ -63,7 +66,7 @@ export class PlateSolverManager {
 }
 
 export function plateSolver(solver: PlateSolverManager) {
-	const app = new Elysia({ prefix: '/plateSolver' })
+	const app = new Elysia({ prefix: '/platesolver' })
 		// Endpoints!
 		.post('/start', ({ body }) => solver.start(body as never))
 		.post('/stop', ({ body }) => solver.stop(body as never))

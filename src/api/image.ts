@@ -10,7 +10,6 @@ import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import type { ImageInfo, ImageTransformation, OpenImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER } from '../shared/types'
-import type { ImageCacheManager } from './camera'
 import type { NotificationManager } from './notification'
 
 const JPEG_OPTIONS: JpegOptions = {
@@ -42,18 +41,15 @@ const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOption
 }
 
 export class ImageManager {
-	constructor(
-		readonly notification: NotificationManager,
-		readonly bucket: ImageCacheManager,
-	) {}
+	constructor(readonly notification: NotificationManager) {}
 
-	async open(req: OpenImage) {
+	async open(req: OpenImage, cache: Map<string, Buffer>) {
 		if (!req.path) return undefined
 
 		if (req.path?.startsWith(':')) {
 			const parts = req.path.split(':')
 			const key = Buffer.from(parts[1], 'hex').toString('utf-8')
-			const buffer = this.bucket.get(key)
+			const buffer = cache.get(key)
 
 			if (buffer) {
 				const source = bufferSource(buffer)
@@ -179,11 +175,11 @@ export class ImageManager {
 	statistics() {}
 }
 
-export function image(image: ImageManager) {
+export function image(image: ImageManager, cache: Map<string, Buffer>) {
 	const app = new Elysia({ prefix: '/image' })
 		// Endpoints!
 		.post('/open', async ({ body, set }) => {
-			const info = await image.open(body as never)
+			const info = await image.open(body as never, cache)
 
 			if (!info) return undefined
 

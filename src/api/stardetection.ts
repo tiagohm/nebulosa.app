@@ -13,7 +13,7 @@ export class StarDetectionManager {
 }
 
 export function starDetection(detection: StarDetectionManager) {
-	const app = new Elysia({ prefix: '/starDetection' })
+	const app = new Elysia({ prefix: '/stardetection' })
 		// Endpoints!
 		.post('', ({ body }) => detection.detect(body as never))
 

@@ -2,8 +2,8 @@ import { molecule, onMount } from 'bunshi'
 import { arcsec, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { numericKeyword } from 'nebulosa/src/fits'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
-import { unsubscribe } from 'src/shared/bus'
-import type { ImageInfo, PlateSolveStart } from 'src/shared/types'
+import bus, { unsubscribe } from 'src/shared/bus'
+import type { Framing, ImageInfo, Mount, PlateSolveStart } from 'src/shared/types'
 import { subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -68,9 +68,38 @@ export const ImageSolverMolecule = molecule((m, s) => {
 		return Api.PlateSolver.stop({ id: scope.image.key })
 	}
 
+	async function goTo(mount?: Mount) {
+		if (!mount || !solver.solution) return
+		const { rightAscension, declination } = solver.solution
+		await Api.Mounts.goTo(mount, { type: 'J2000', rightAscension, declination })
+	}
+
+	async function slewTo(mount?: Mount) {
+		if (!mount || !solver.solution) return
+		const { rightAscension, declination } = solver.solution
+		await Api.Mounts.slewTo(mount, { type: 'J2000', rightAscension, declination })
+	}
+
+	async function syncTo(mount?: Mount) {
+		if (!mount || !solver.solution) return
+		const { rightAscension, declination } = solver.solution
+		await Api.Mounts.syncTo(mount, { type: 'J2000', rightAscension, declination })
+	}
+
+	function frame() {
+		if (!solver.solution) return
+
+		const request: Partial<Framing> = {
+			rightAscension: formatRA(solver.solution.rightAscension),
+			declination: formatDEC(solver.solution.declination),
+		}
+
+		bus.emit('framing:load', request)
+	}
+
 	function hide() {
 		viewer.hide('plateSolver')
 	}
 
-	return { state: solver, viewer, scope, update, start, stop, hide } as const
+	return { state: solver, viewer, scope, update, start, stop, goTo, slewTo, syncTo, frame, hide } as const
 })

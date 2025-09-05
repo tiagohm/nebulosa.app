@@ -1,7 +1,7 @@
 import { Button, Chip, DropdownItem, Input, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
-import { memo, useMemo } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { MountMolecule, type TargetCoordinateAction } from '@/molecules/indi/mount'
 import { ConnectButton } from './ConnectButton'
@@ -20,10 +20,9 @@ import { TrackModeSelect } from './TrackModeSelect'
 export const Mount = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	// biome-ignore format: don't break lines!
-	const { connecting, currentPosition, location: { show: showLocation }, time: { show: showTime }, remoteControl: { show: showRemoteControl }, targetCoordinate: { position: targetPosition } } = useSnapshot(mount.state)
-	const { connected, parking, parked, slewing, tracking, canPark, canHome, canAbort, trackModes, trackMode, slewRates, slewRate, equatorialCoordinate, geographicCoordinate, time } = useSnapshot(mount.state.mount)
-	const targetCoordinate = useSnapshot(mount.state.targetCoordinate.coordinate, { sync: true })
-	const moving = useMemo(() => slewing || parking, [slewing, parking])
+	const { connecting, location: { show: showLocation }, time: { show: showTime }, remoteControl: { show: showRemoteControl } } = useSnapshot(mount.state)
+	const { connected, parking, parked, slewing, tracking, canPark, canHome, canAbort, trackModes, trackMode, slewRates, slewRate, geographicCoordinate, time } = useSnapshot(mount.state.mount)
+	const moving = slewing || parking
 
 	return (
 		<>
@@ -66,67 +65,12 @@ export const Mount = memo(() => {
 							</Tooltip>
 						</div>
 					</div>
-					<Input className='col-span-3' isReadOnly label='RA (J2000)' size='sm' value={formatRA(currentPosition.rightAscensionJ2000)} />
-					<Input className='col-span-3' isReadOnly label='DEC (J2000)' size='sm' value={formatDEC(currentPosition.declinationJ2000)} />
-					<Input className='col-span-3' isReadOnly label='RA' size='sm' value={formatRA(equatorialCoordinate.rightAscension)} />
-					<Input className='col-span-3' isReadOnly label='DEC' size='sm' value={formatDEC(equatorialCoordinate.declination)} />
-					<Input className='col-span-3' isReadOnly label='Azimuth' size='sm' value={formatAZ(currentPosition.azimuth)} />
-					<Input className='col-span-3' isReadOnly label='Altitude' size='sm' value={formatALT(currentPosition.altitude)} />
-					<Input className='col-span-3' isReadOnly label='Constellation' size='sm' value={currentPosition.constellation} />
-					<Input className='col-span-3' isReadOnly label='LST' size='sm' value={currentPosition.lst.substring(0, 5)} />
-					<Input className='col-span-3' isReadOnly label='Meridian at' size='sm' value={currentPosition.meridianAt} />
-					<Input className='col-span-3' isReadOnly label='Pier' size='sm' value={currentPosition.pierSide} />
-					<div className='col-span-5'></div>
-					<div className='col-span-8 flex flex-col gap-1 justify-between'>
-						<TargetCoordinateTypeButtonGroup buttonProps={{ className: 'flex-1' }} className='w-full' isDisabled={!connected || moving} onValueChange={(value) => mount.updateTargetCoordinate('type', value)} value={targetCoordinate.type} />
-						<div className='flex flex-row gap-2 items-center justify-between text-sm'>
-							<div className='w-full flex flex-row items-center justify-between'>
-								<span className='font-bold'>AZ:</span>
-								<span>{formatAZ(targetPosition.azimuth)}</span>
-							</div>
-							<div className='w-full flex flex-row items-center justify-between'>
-								<span className='font-bold'>ALT:</span>
-								<span>{formatALT(targetPosition.altitude)}</span>
-							</div>
-						</div>
+					<div className='col-span-full'>
+						<CurrentPosition />
 					</div>
-					<div className='col-span-4 text-sm'>
-						<div className='flex flex-row items-center justify-between'>
-							<span className='font-bold'>CONST:</span>
-							<span>{targetPosition.constellation}</span>
-						</div>
-						<div className='flex flex-row items-center justify-between'>
-							<span className='font-bold'>MERIDIAN AT:</span>
-							<span>{targetPosition.meridianAt}</span>
-						</div>
-						<div className='flex flex-row items-center justify-between'>
-							<span className='font-bold'>PIER:</span>
-							<span>{targetPosition.pierSide}</span>
-						</div>
+					<div className='col-span-full'>
+						<TargetCoordinateAndPosition isDisabled={!connected || moving} />
 					</div>
-					<Input className='col-span-4' isDisabled={!connected || moving} label='RA' onValueChange={(value) => mount.updateTargetCoordinate('rightAscension', value)} size='sm' value={targetCoordinate.rightAscension} />
-					<Input className='col-span-4' isDisabled={!connected || moving} label='DEC' onValueChange={(value) => mount.updateTargetCoordinate('declination', value)} size='sm' value={targetCoordinate.declination} />
-					<DropdownButton
-						buttonProps={{ className: 'w-full h-full', color: 'primary', isDisabled: !connected || moving || parked, onPointerUp: mount.handleTargetCoordinateAction }}
-						className='col-span-4'
-						dropdownButtonProps={{ className: 'h-full', isDisabled: !connected || moving }}
-						label={<TargetCoordinateDropdownButtonLabel action={targetCoordinate.action} />}
-						onValueChange={(value) => mount.updateTargetCoordinate('action', value)}
-						size='sm'
-						value={targetCoordinate.action}>
-						<DropdownItem key='GOTO' startContent={<Icons.Telescope />}>
-							Go To
-						</DropdownItem>
-						<DropdownItem key='SLEW' startContent={<Icons.Telescope />}>
-							Slew
-						</DropdownItem>
-						<DropdownItem key='SYNC' startContent={<Icons.Sync />}>
-							Sync
-						</DropdownItem>
-						<DropdownItem key='FRAME' startContent={<Icons.Image />}>
-							Frame
-						</DropdownItem>
-					</DropdownButton>
 					<Nudge className='col-span-5 row-span-2' isCancelDisabled={!canAbort || parked || !moving} isDisabled={!connected || parked} isNudgeDisabled={moving} onCancel={mount.stop} onNudge={mount.moveTo} />
 					<Switch className='col-span-4 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || moving || parked} isSelected={tracking} onValueChange={(value) => mount.tracking(value)}>
 						Tracking
@@ -154,11 +98,125 @@ export const Mount = memo(() => {
 	)
 })
 
-export interface TargetCoordinateDropdownButtonLabelProps {
+const CurrentPosition = memo(() => {
+	const mount = useMolecule(MountMolecule)
+	const { rightAscension, declination, rightAscensionJ2000, declinationJ2000, azimuth, altitude, constellation, lst, meridianAt, pierSide } = useSnapshot(mount.state.currentPosition)
+
+	return (
+		<div className='w-full grid grid-cols-12 gap-2'>
+			<Input className='col-span-3' isReadOnly label='RA (J2000)' size='sm' value={formatRA(rightAscensionJ2000)} />
+			<Input className='col-span-3' isReadOnly label='DEC (J2000)' size='sm' value={formatDEC(declinationJ2000)} />
+			<Input className='col-span-3' isReadOnly label='RA' size='sm' value={formatRA(rightAscension)} />
+			<Input className='col-span-3' isReadOnly label='DEC' size='sm' value={formatDEC(declination)} />
+			<Input className='col-span-3' isReadOnly label='Azimuth' size='sm' value={formatAZ(azimuth)} />
+			<Input className='col-span-3' isReadOnly label='Altitude' size='sm' value={formatALT(altitude)} />
+			<Input className='col-span-3' isReadOnly label='Constellation' size='sm' value={constellation} />
+			<Input className='col-span-3' isReadOnly label='LST' size='sm' value={lst.substring(0, 5)} />
+			<Input className='col-span-3' isReadOnly label='Meridian at' size='sm' value={meridianAt} />
+			<Input className='col-span-3' isReadOnly label='Pier' size='sm' value={pierSide} />
+			<div className='col-span-5'></div>
+		</div>
+	)
+})
+
+interface TargetCoordinateAndPositionProps {
+	readonly isDisabled?: boolean
+}
+
+const TargetCoordinateAndPosition = memo(({ isDisabled }: TargetCoordinateAndPositionProps) => {
+	const mount = useMolecule(MountMolecule)
+	const coordinate = useSnapshot(mount.state.targetCoordinate.coordinate, { sync: true })
+	const position = useSnapshot(mount.state.targetCoordinate.position)
+
+	return (
+		<div className='w-full grid grid-cols-12 gap-2'>
+			<div className='col-span-8 flex flex-col gap-0 justify-center'>
+				<TargetCoordinateTypeButtonGroup buttonProps={{ className: 'flex-1' }} className='w-full' isDisabled={isDisabled} onValueChange={(value) => mount.updateTargetCoordinate('type', value)} value={coordinate.type} />
+				{coordinate.type !== 'J2000' && (
+					<div className='flex flex-row gap-2 items-center justify-between text-sm'>
+						<div className='w-full flex flex-row items-center justify-between'>
+							<span className='font-bold'>RA:</span>
+							<span>{formatRA(position.rightAscensionJ2000)}</span>
+						</div>
+						<div className='w-full flex flex-row items-center justify-between'>
+							<span className='font-bold'>DEC:</span>
+							<span>{formatDEC(position.declinationJ2000)}</span>
+						</div>
+					</div>
+				)}
+				{coordinate.type !== 'JNOW' && (
+					<div className='flex flex-row gap-2 items-center justify-between text-sm'>
+						<div className='w-full flex flex-row items-center justify-between'>
+							<span className='font-bold'>RA:</span>
+							<span>{formatRA(position.rightAscension)}</span>
+						</div>
+						<div className='w-full flex flex-row items-center justify-between'>
+							<span className='font-bold'>DEC:</span>
+							<span>{formatDEC(position.declination)}</span>
+						</div>
+					</div>
+				)}
+				{coordinate.type !== 'ALTAZ' && (
+					<div className='flex flex-row gap-2 items-center justify-between text-sm'>
+						<div className='w-full flex flex-row items-center justify-between'>
+							<span className='font-bold'>AZ:</span>
+							<span>{formatAZ(position.azimuth)}</span>
+						</div>
+						<div className='w-full flex flex-row items-center justify-between'>
+							<span className='font-bold'>ALT:</span>
+							<span>{formatALT(position.altitude)}</span>
+						</div>
+					</div>
+				)}
+			</div>
+			<div className='col-span-4 text-sm flex flex-col justify-end gap-0'>
+				<div className='flex flex-row items-center justify-between'>
+					<span className='font-bold'>CONST:</span>
+					<span>{position.constellation}</span>
+				</div>
+				<div className='flex flex-row items-center justify-between'>
+					<span className='font-bold'>MERIDIAN AT:</span>
+					<span>{position.meridianAt}</span>
+				</div>
+				<div className='flex flex-row items-center justify-between'>
+					<span className='font-bold'>PIER:</span>
+					<span>{position.pierSide}</span>
+				</div>
+			</div>
+			{coordinate.type !== 'ALTAZ' && <Input className='col-span-4' isDisabled={isDisabled} label='RA' onValueChange={(value) => mount.updateTargetCoordinate('rightAscension', value)} size='sm' value={coordinate.rightAscension} />}
+			{coordinate.type !== 'ALTAZ' && <Input className='col-span-4' isDisabled={isDisabled} label='DEC' onValueChange={(value) => mount.updateTargetCoordinate('declination', value)} size='sm' value={coordinate.declination} />}
+			{coordinate.type === 'ALTAZ' && <Input className='col-span-4' isDisabled={isDisabled} label='AZ' onValueChange={(value) => mount.updateTargetCoordinate('azimuth', value)} size='sm' value={coordinate.azimuth} />}
+			{coordinate.type === 'ALTAZ' && <Input className='col-span-4' isDisabled={isDisabled} label='ALT' onValueChange={(value) => mount.updateTargetCoordinate('altitude', value)} size='sm' value={coordinate.altitude} />}
+			<DropdownButton
+				buttonProps={{ className: 'w-full h-full', color: 'primary', isDisabled: isDisabled, onPointerUp: mount.handleTargetCoordinateAction }}
+				className='col-span-4'
+				dropdownButtonProps={{ className: 'h-full', isDisabled: isDisabled }}
+				label={<TargetCoordinateDropdownButtonLabel action={coordinate.action} />}
+				onValueChange={(value) => mount.updateTargetCoordinate('action', value)}
+				size='sm'
+				value={coordinate.action}>
+				<DropdownItem key='GOTO' startContent={<Icons.Telescope />}>
+					Go To
+				</DropdownItem>
+				<DropdownItem key='SLEW' startContent={<Icons.Telescope />}>
+					Slew
+				</DropdownItem>
+				<DropdownItem key='SYNC' startContent={<Icons.Sync />}>
+					Sync
+				</DropdownItem>
+				<DropdownItem key='FRAME' startContent={<Icons.Image />}>
+					Frame
+				</DropdownItem>
+			</DropdownButton>
+		</div>
+	)
+})
+
+interface TargetCoordinateDropdownButtonLabelProps {
 	readonly action: TargetCoordinateAction
 }
 
-export function TargetCoordinateDropdownButtonLabel({ action }: TargetCoordinateDropdownButtonLabelProps) {
+function TargetCoordinateDropdownButtonLabel({ action }: TargetCoordinateDropdownButtonLabelProps) {
 	return (
 		<div className='flex items-center gap-1 text-medium'>
 			{action === 'SYNC' ? <Icons.Sync /> : action === 'FRAME' ? <Icons.Image /> : <Icons.Telescope />}

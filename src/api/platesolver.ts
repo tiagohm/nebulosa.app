@@ -49,7 +49,7 @@ export class PlateSolverManager {
 				} else {
 					this.notification.send({ body: 'No solution found', severity: 'warn' })
 				}
-			} catch(e) {
+			} catch (e) {
 				console.error(e)
 				this.notification.send({ body: 'Failed to plate solve image', severity: 'error' })
 			} finally {

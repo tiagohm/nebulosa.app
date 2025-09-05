@@ -39,7 +39,7 @@
 		"valtio": "2.1.7"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.2.2",
+		"@biomejs/biome": "2.2.3",
 		"@types/bun": "1.2.21",
 		"@types/leaflet": "1.9.20",
 		"@types/react": "19.1.12",

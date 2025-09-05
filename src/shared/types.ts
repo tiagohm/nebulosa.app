@@ -609,9 +609,7 @@ export interface MountEquatorialCoordinatePosition extends Readonly<EquatorialCo
 	readonly pierSide: PierSide
 }
 
-export interface MountTargetCoordinate<T = string> extends EquatorialCoordinate<T> {
-	type: TargetCoordinateType
-}
+export type MountTargetCoordinate<T = string> = (EquatorialCoordinate<T> & { type: 'J2000' | 'JNOW' }) | (HorizontalCoordinate<T> & { type: 'ALTAZ' })
 
 export interface MountRemoteControlStart {
 	readonly protocol: MountRemoteControlProtocol

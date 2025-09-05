@@ -43,16 +43,16 @@ export const PlateSolver = memo(() => {
 				<Input className='col-span-4' isReadOnly label='Size (arcmin)' size='sm' value={`${toArcmin(solution?.width ?? 0).toFixed(2)} x ${toArcmin(solution?.height ?? 0).toFixed(2)}`} />
 				<Input className='col-span-4' isReadOnly label='Radius (°)' size='sm' value={toDeg(solution?.radius ?? 0).toFixed(4)} />
 				<div className='col-span-full flex items-center justify-center gap-2'>
-					<MountDropdown allowEmpty={false} isDisabled={!solution}>
+					<MountDropdown allowEmpty={false} isDisabled={!solution} onValueChange={solver.syncTo}>
 						{(value, color, isDisabled) => <TextButton color='primary' isDisabled={isDisabled} label='Sync' startContent={<Icons.Sync />} />}
 					</MountDropdown>
-					<MountDropdown allowEmpty={false} isDisabled={!solution}>
+					<MountDropdown allowEmpty={false} isDisabled={!solution} onValueChange={solver.goTo}>
 						{(value, color, isDisabled) => <TextButton color='success' isDisabled={isDisabled} label='Go To' startContent={<Icons.Telescope />} />}
 					</MountDropdown>
-					<MountDropdown allowEmpty={false} isDisabled={!solution}>
+					<MountDropdown allowEmpty={false} isDisabled={!solution} onValueChange={solver.slewTo}>
 						{(value, color, isDisabled) => <TextButton color='success' isDisabled={isDisabled} label='Slew' startContent={<Icons.Telescope />} />}
 					</MountDropdown>
-					<TextButton color='secondary' isDisabled={!solution} label='Frame' startContent={<Icons.Image />} />
+					<TextButton color='secondary' isDisabled={!solution} label='Frame' onPointerUp={solver.frame} startContent={<Icons.Image />} />
 				</div>
 			</div>
 		</Modal>

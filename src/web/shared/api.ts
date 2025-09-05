@@ -4,7 +4,7 @@ import type { NewVector } from 'nebulosa/src/indi'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DeviceProperties, DeviceProperty, DewHeater, EquatorialCoordinate, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, SolarSeasons, StarDetection, Thermometer, TrackMode, Twilight } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DeviceProperties, DeviceProperty, DewHeater, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, SolarSeasons, StarDetection, Thermometer, TrackMode, Twilight } from 'src/shared/types'
 import { type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -136,15 +136,15 @@ export namespace Api {
 			return json<Mount>(`/mounts/${name}`, 'get')
 		}
 
-		export function goTo(mount: Mount, coordinate: EquatorialCoordinate<string | Angle>) {
+		export function goTo(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
 			return res(`/mounts/${mount.name}/goto`, 'post', coordinate)
 		}
 
-		export function slew(mount: Mount, coordinate: EquatorialCoordinate<string | Angle>) {
+		export function slewTo(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
 			return res(`/mounts/${mount.name}/slew`, 'post', coordinate)
 		}
 
-		export function sync(mount: Mount, coordinate: EquatorialCoordinate<string | Angle>) {
+		export function syncTo(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
 			return res(`/mounts/${mount.name}/sync`, 'post', coordinate)
 		}
 

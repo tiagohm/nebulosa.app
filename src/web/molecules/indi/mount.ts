@@ -1,7 +1,8 @@
 import { createScope, molecule, onMount } from 'bunshi'
+import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
-import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type Framing, type GeographicCoordinate, type Mount, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountTargetCoordinate, type MountUpdated, type TrackMode } from 'src/shared/types'
+import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, type Framing, type GeographicCoordinate, type HorizontalCoordinate, type Mount, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated, type TargetCoordinateType, type TrackMode } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -19,7 +20,7 @@ export interface MountState {
 	readonly mount: Mount
 	connecting: boolean
 	readonly targetCoordinate: {
-		readonly coordinate: MountTargetCoordinate & { action: TargetCoordinateAction }
+		readonly coordinate: EquatorialCoordinate<string> & HorizontalCoordinate<string> & { type: TargetCoordinateType; action: TargetCoordinateAction }
 		readonly position: MountEquatorialCoordinatePosition
 	}
 	readonly currentPosition: MountEquatorialCoordinatePosition
@@ -46,6 +47,8 @@ const DEFAULT_TARGET_COORDINATE: MountState['targetCoordinate']['coordinate'] = 
 	type: 'J2000',
 	rightAscension: '00 00 00',
 	declination: '+00 00 00',
+	azimuth: '000 00 00',
+	altitude: '+00 00 00',
 	action: 'GOTO',
 }
 
@@ -114,6 +117,8 @@ export const MountMolecule = molecule((m, s) => {
 						void updateCurrentCoordinatePosition()
 						void updateTargetCoordinatePosition()
 					}
+				} else if (event.property === 'equatorialCoordinate') {
+					Object.assign(state.currentPosition, event.device.equatorialCoordinate)
 				}
 			}
 		})
@@ -168,6 +173,7 @@ export const MountMolecule = molecule((m, s) => {
 
 	function updateTargetCoordinate<K extends keyof MountState['targetCoordinate']['coordinate']>(key: K, value: MountState['targetCoordinate']['coordinate'][K]) {
 		state.targetCoordinate.coordinate[key] = value
+		if (key === 'type') void updateTargetCoordinatePosition()
 	}
 
 	async function updateCurrentCoordinatePosition() {
@@ -185,14 +191,13 @@ export const MountMolecule = molecule((m, s) => {
 			case 'GOTO':
 				return Api.Mounts.goTo(scope.mount, state.targetCoordinate.coordinate)
 			case 'SLEW':
-				return Api.Mounts.slew(scope.mount, state.targetCoordinate.coordinate)
+				return Api.Mounts.slewTo(scope.mount, state.targetCoordinate.coordinate)
 			case 'SYNC':
-				return Api.Mounts.sync(scope.mount, state.targetCoordinate.coordinate)
+				return Api.Mounts.syncTo(scope.mount, state.targetCoordinate.coordinate)
 			case 'FRAME': {
 				const request: Partial<Framing> = {
-					// TODO: Use computed target coordinates RA/DEC
-					rightAscension: state.targetCoordinate.coordinate.rightAscension,
-					declination: state.targetCoordinate.coordinate.declination,
+					rightAscension: formatRA(state.targetCoordinate.position.rightAscensionJ2000),
+					declination: formatDEC(state.targetCoordinate.position.declinationJ2000),
 				}
 
 				bus.emit('framing:load', request)

@@ -472,25 +472,26 @@ export class MountManager implements IndiClientHandler {
 		let azimuth = 0
 		let altitude = 0
 
-		const type = 'type' in target ? target.type : 'JNOW'
 		const now = cache.time('now', location)
 		const ebpv = cache.earth(now)
 		const lst = localSiderealTime(now)
 
-		if (type === 'JNOW') {
+		if (!('type' in target) || target.type === 'JNOW') {
 			rightAscension = typeof target.rightAscension === 'number' ? target.rightAscension : parseAngle(target.rightAscension, { isHour: true })!
 			declination = typeof target.declination === 'number' ? target.declination : parseAngle(target.declination)!
 
 			const fk5 = precessFk5ToJ2000(eraS2p(rightAscension, declination, ONE_PARSEC * 1000), now)
 			;[rightAscensionJ2000, declinationJ2000] = eraC2s(...fk5)
 			;[azimuth, altitude] = altaz(fk5, now, ebpv)!
-		} else if (type === 'J2000') {
+		} else if (target.type === 'J2000') {
 			rightAscensionJ2000 = typeof target.rightAscension === 'number' ? target.rightAscension : parseAngle(target.rightAscension, { isHour: true })!
 			declinationJ2000 = typeof target.declination === 'number' ? target.declination : parseAngle(target.declination)!
 
 			const fk5 = eraS2p(rightAscensionJ2000, declinationJ2000, ONE_PARSEC * 1000)
 			;[azimuth, altitude] = altaz(fk5, now, ebpv)!
 			;[rightAscension, declination] = eraC2s(...precessFk5FromJ2000(fk5, now))
+		} else if (target.type === 'ALTAZ') {
+			// TODO: ALT/AZ to RA/DEC JNOW
 		}
 
 		return {
@@ -507,9 +508,24 @@ export class MountManager implements IndiClientHandler {
 		} as MountEquatorialCoordinatePosition
 	}
 
-	moveTo(client: IndiClient, mount: Mount, mode: 'goto' | 'slew' | 'sync', req: EquatorialCoordinate<string | number>) {
-		const rightAscension = parseAngle(req.rightAscension, { isHour: true })!
-		const declination = parseAngle(req.declination)!
+	moveTo(client: IndiClient, mount: Mount, mode: 'goto' | 'slew' | 'sync', req: MountTargetCoordinate<string | Angle>) {
+		let rightAscension = 0
+		let declination = 0
+
+		if (!('type' in req) || req.type === 'JNOW') {
+			rightAscension = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, { isHour: true })!
+			declination = typeof req.declination === 'number' ? req.declination : parseAngle(req.declination)!
+		} else if (req.type === 'J2000') {
+			const rightAscensionJ2000 = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, { isHour: true })!
+			const declinationJ2000 = typeof req.declination === 'number' ? req.declination : parseAngle(req.declination)!
+
+			const now = cache.time('now')
+			const fk5 = eraS2p(rightAscensionJ2000, declinationJ2000, ONE_PARSEC * 1000)
+			;[rightAscension, declination] = eraC2s(...precessFk5FromJ2000(fk5, now))
+		} else if (req.type === 'ALTAZ') {
+			// TODO: ALT/AZ to RA/DEC JNOW
+			return
+		}
 
 		if (mode === 'goto') goTo(client, mount, rightAscension, declination)
 		else if (mode === 'slew') slewTo(client, mount, rightAscension, declination)

@@ -1,4 +1,4 @@
-import { Button, Input, NumberInput } from '@heroui/react'
+import { Input, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -7,30 +7,17 @@ import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { StarDetectionSelect } from './StarDetectionSelect'
+import { TextButton } from './TextButton'
 
 export const StarDetection = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
-	const { viewer } = starDetection
 	const { loading, stars, computed, selected } = useSnapshot(starDetection.state)
 	const request = useSnapshot(starDetection.state.request, { sync: true })
-	const { info } = useSnapshot(viewer.state)
+
+	const Footer = <TextButton color='success' isLoading={loading} label='Detect' onPointerUp={starDetection.detect} startContent={<Icons.Check />} />
 
 	return (
-		<Modal
-			footer={
-				<Button color='success' isLoading={loading} onPointerUp={starDetection.detect} startContent={<Icons.Check />} variant='flat'>
-					Detect
-				</Button>
-			}
-			header={
-				<div className='w-full flex flex-col justify-center gap-0'>
-					<span>Star Detection</span>
-					<span className='text-xs font-normal text-gray-400 max-w-full'>{info.originalPath}</span>
-				</div>
-			}
-			maxWidth='310px'
-			name={`star-detection-${starDetection.scope.image.key}`}
-			onClose={() => viewer.close('starDetection')}>
+		<Modal footer={Footer} header='Star Detection' maxWidth='310px' name={`star-detection-${starDetection.scope.image.key}`} onHide={starDetection.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<StarDetectionSelect className='col-span-4' onValueChange={(value) => (starDetection.state.request.type = value)} value={request.type} />
 				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Min SNR' maxValue={500} minValue={0} onValueChange={(value) => (starDetection.state.request.minSNR = value)} size='sm' value={request.minSNR} />

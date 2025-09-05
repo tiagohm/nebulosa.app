@@ -47,16 +47,16 @@ export const ImageViewer = memo(() => {
 			<Interactable onGesture={handleGesture} onTap={viewer.select} zIndex={image.position}>
 				<img className='image select-none touch-none pointer-events-none max-w-none shadow-[0_0_80px_black]' draggable={false} id={image.key} onContextMenu={(e) => e.preventDefault()} ref={ref} />
 				{crosshair && <Crosshair />}
-				{starDetection.show && <DetectedStars />}
+				{starDetection.visible && <DetectedStars />}
 			</Interactable>
-			{stretch.showModal && <ImageStretch />}
-			{plateSolver.showModal && <PlateSolver />}
-			{scnr.showModal && <ImageScnr />}
-			{adjustment.showModal && <ImageAdjustment />}
-			{filter.showModal && <ImageFilter />}
-			{starDetection.showModal && <StarDetection />}
-			{fitsHeader.showModal && <FITSHeader />}
-			{settings.showModal && <ImageSettings />}
+			{stretch.show && <ImageStretch />}
+			{plateSolver.show && <PlateSolver />}
+			{scnr.show && <ImageScnr />}
+			{adjustment.show && <ImageAdjustment />}
+			{filter.show && <ImageFilter />}
+			{starDetection.show && <StarDetection />}
+			{fitsHeader.show && <FITSHeader />}
+			{settings.show && <ImageSettings />}
 		</>
 	)
 })

@@ -13,7 +13,7 @@ import { localSiderealTime } from 'nebulosa/src/location'
 import { bcrs, type Star, star } from 'nebulosa/src/star'
 import { season } from 'nebulosa/src/sun'
 import { parseTemporal, type Temporal, temporalAdd, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
-import { toUnix } from 'nebulosa/src/time'
+import { toUnixMillis } from 'nebulosa/src/time'
 import sharp from 'sharp'
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import { type BodyPosition, type ChartOfBody, expectedPierSide, type PositionOfBody, type SkyObject, type SkyObjectSearch, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
@@ -58,10 +58,10 @@ export class AtlasManager {
 
 	seasons(req: PositionOfBody): SolarSeasons {
 		const [year] = temporalToDate(req.time.utc)
-		const spring = toUnix(season(year, 'SPRING')) // Autumn in southern hemisphere
-		const summer = toUnix(season(year, 'SUMMER')) // Winter in southern hemisphere
-		const autumn = toUnix(season(year, 'AUTUMN')) // Spring in southern hemisphere
-		const winter = toUnix(season(year, 'WINTER')) // Summer in southern hemisphere
+		const spring = toUnixMillis(season(year, 'SPRING')) // Autumn in southern hemisphere
+		const summer = toUnixMillis(season(year, 'SUMMER')) // Winter in southern hemisphere
+		const autumn = toUnixMillis(season(year, 'AUTUMN')) // Spring in southern hemisphere
+		const winter = toUnixMillis(season(year, 'WINTER')) // Summer in southern hemisphere
 		return { spring, summer, autumn, winter }
 	}
 

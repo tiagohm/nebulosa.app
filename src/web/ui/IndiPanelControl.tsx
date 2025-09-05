@@ -9,6 +9,7 @@ import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { EnumSelect } from './EnumSelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
+import { TextButton } from './TextButton'
 
 export const IndiPanelControl = memo(() => {
 	const control = useMolecule(IndiPanelControlMolecule)
@@ -19,7 +20,7 @@ export const IndiPanelControl = memo(() => {
 	}, [device])
 
 	return (
-		<Modal header='INDI Panel Control' maxWidth='400px' name='indi-panel-control' onClose={control.close}>
+		<Modal header='INDI Panel Control' maxWidth='400px' name='indi-panel-control' onHide={control.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<EnumSelect className='col-span-6' label='Device' onValueChange={(value) => (control.state.device = value)} value={device}>
 					{devices.map((e) => (
@@ -162,9 +163,5 @@ function SwitchElement({ label, value, rule, isReadonly, onValueChange }: Switch
 		}
 	}
 
-	return (
-		<Button color={rule === 'AtMostOne' ? 'default' : value ? 'success' : 'danger'} isDisabled={isReadonly} onPointerUp={handleValueChange} variant='flat'>
-			{label}
-		</Button>
-	)
+	return <TextButton color={rule === 'AtMostOne' ? 'default' : value ? 'success' : 'danger'} isDisabled={isReadonly} label={label!} onPointerUp={handleValueChange} />
 }

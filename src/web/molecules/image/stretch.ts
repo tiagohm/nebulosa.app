@@ -5,9 +5,10 @@ import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 export const ImageStretchMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
+	const { stretch } = viewer.state.transformation
 
 	function update<K extends keyof ImageTransformation['stretch']>(key: K, value: ImageTransformation['stretch'][K]) {
-		viewer.state.transformation.stretch[key] = value
+		stretch[key] = value
 	}
 
 	function auto() {
@@ -19,9 +20,13 @@ export const ImageStretchMolecule = molecule((m, s) => {
 	}
 
 	function apply(auto: boolean = false) {
-		viewer.state.transformation.stretch.auto = auto
+		stretch.auto = auto
 		return viewer.load(true)
 	}
 
-	return { state: viewer.state.transformation.stretch, scope, viewer, update, auto, reset, apply }
+	function hide() {
+		viewer.hide('stretch')
+	}
+
+	return { state: stretch, scope, viewer, update, auto, reset, apply, hide } as const
 })

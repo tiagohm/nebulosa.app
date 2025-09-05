@@ -65,9 +65,9 @@ export const DewHeaterMolecule = molecule((m, s) => {
 		return Api.DewHeaters.pwm(scope.dewHeater, value)
 	}
 
-	function close() {
-		equipment.close('dewHeater', scope.dewHeater)
+	function hide() {
+		equipment.hide('dewHeater', scope.dewHeater)
 	}
 
-	return { state, scope, connect, pwm, close } as const
+	return { state, scope, connect, pwm, hide } as const
 })

@@ -10,7 +10,9 @@ export interface AutoSaveButtonProps extends Omit<ButtonProps, 'isIconOnly' | 'o
 export function AutoSaveButton({ value, onValueChange, ...props }: AutoSaveButtonProps) {
 	const [enabled, setEnabled] = useState(value)
 
-	useEffect(() => onValueChange(enabled), [enabled, onValueChange])
+	useEffect(() => {
+		onValueChange(enabled)
+	}, [enabled, onValueChange])
 
 	return (
 		<Tooltip content={`Auto save: ${enabled ? 'ON' : 'OFF'}`} placement='bottom' showArrow>

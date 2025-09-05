@@ -101,9 +101,9 @@ export const FocuserMolecule = molecule((m, s) => {
 		return Api.Focusers.reverse(state.focuser, enabled)
 	}
 
-	function close() {
-		equipment.close('focuser', scope.focuser)
+	function hide() {
+		equipment.hide('focuser', scope.focuser)
 	}
 
-	return { state, scope, update, connect, moveTo, moveIn, moveOut, sync, reverse, stop, close } as const
+	return { state, scope, update, connect, moveTo, moveIn, moveOut, sync, reverse, stop, hide } as const
 })

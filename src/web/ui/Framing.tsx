@@ -1,4 +1,4 @@
-import { Button, Checkbox, Chip, Input, NumberInput } from '@heroui/react'
+import { Checkbox, Chip, Input, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import { memo, useMemo } from 'react'
@@ -9,6 +9,7 @@ import { HipsSurveySelect } from './HipsSurveySelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { PoweredBy } from './PoweredBy'
+import { TextButton } from './TextButton'
 
 export const Framing = memo(() => {
 	const framing = useMolecule(FramingMolecule)
@@ -27,9 +28,7 @@ export const Framing = memo(() => {
 					<div className='flex-1 flex items-center'>
 						<Chip color='primary'>{fov}</Chip>
 					</div>
-					<Button color='success' isLoading={loading} onPointerUp={framing.load} startContent={<Icons.Download />} variant='flat'>
-						Load
-					</Button>
+					<TextButton color='success' isLoading={loading} label='Load' onPointerUp={framing.load} startContent={<Icons.Download />} />
 				</>
 			}
 			header={
@@ -40,7 +39,7 @@ export const Framing = memo(() => {
 			}
 			maxWidth='300px'
 			name='framing'
-			onClose={framing.close}>
+			onHide={framing.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Input className='col-span-6' isDisabled={loading} label='RA (J2000)' onValueChange={(value) => framing.update('rightAscension', value)} size='sm' value={rightAscension} />
 				<Input className='col-span-6' isDisabled={loading} label='DEC (J2000)' onValueChange={(value) => framing.update('declination', value)} size='sm' value={declination} />

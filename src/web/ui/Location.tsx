@@ -1,4 +1,4 @@
-import { Button, NumberInput } from '@heroui/react'
+import { NumberInput } from '@heroui/react'
 import type { LatLngTuple } from 'leaflet'
 import { useState } from 'react'
 import type { GeographicCoordinate } from 'src/shared/types'
@@ -6,6 +6,7 @@ import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants
 import { Icons } from './Icon'
 import { MapViewer } from './MapViewer'
 import { Modal } from './Modal'
+import { TextButton } from './TextButton'
 
 export interface LocationProps {
 	readonly name: string
@@ -32,17 +33,10 @@ export function Location({ name, coordinate: { latitude, longitude, elevation },
 		else if (type === 'elevation') setPosition((prev) => [prev[0], prev[1], value])
 	}
 
+	const Footer = <TextButton color='success' label='Choose' onPointerUp={handlePositionChoose} startContent={<Icons.Check />} />
+
 	return (
-		<Modal
-			footer={
-				<Button color='success' onPointerUp={handlePositionChoose} startContent={<Icons.Check />} variant='flat'>
-					Choose
-				</Button>
-			}
-			header='Location'
-			maxWidth='330px'
-			name={name}
-			onClose={onClose}>
+		<Modal footer={Footer} header='Location' maxWidth='330px' name={name} onHide={onClose}>
 			<div className='mt-0 flex flex-col gap-2'>
 				<div className='grid grid-cols-3 gap-2'>
 					<NumberInput className='col-span-1' formatOptions={DECIMAL_NUMBER_FORMAT} label='Latitude (°)' maxValue={90} minValue={-90} onValueChange={(value) => updatePosition('latitude', value)} size='sm' step={0.001} value={position[0]} />

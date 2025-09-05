@@ -1,10 +1,11 @@
-import { addToast } from '@heroui/react'
 import { molecule, onMount } from 'bunshi'
 import { arcsec, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { numericKeyword } from 'nebulosa/src/fits'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
+import { unsubscribe } from 'src/shared/bus'
 import type { ImageInfo, PlateSolveStart } from 'src/shared/types'
 import { subscribe } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
@@ -12,44 +13,54 @@ import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 export const ImageSolverMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
-	const plateSolver = viewer.state.plateSolver
+	const solver = viewer.state.plateSolver
 
 	onMount(() => {
+		const unsubscribers = new Array<VoidFunction>(2)
+
+		unsubscribers[0] = subscribe(solver.request, () => {
+			simpleLocalStorage.set('image.plateSolver', solver.request)
+		})
+
+		unsubscribers[1] = subscribeKey(solver, 'show', (show) => {
+			if (show) {
+				updateRequestFromImageInfo(viewer.state.info)
+			}
+		})
+
 		updateRequestFromImageInfo(viewer.state.info)
 
-		const unsubscribe = subscribe(plateSolver.request, () => simpleLocalStorage.set('image.plateSolver', plateSolver.request))
-
-		return () => unsubscribe()
+		return () => {
+			unsubscribe(unsubscribers)
+		}
 	})
 
 	function updateRequestFromImageInfo(info: ImageInfo) {
 		// Update plate solver request with FITS header information
-		if (info.rightAscension) plateSolver.request.rightAscension = formatRA(info.rightAscension)
-		if (info.declination) plateSolver.request.declination = formatDEC(info.declination)
-		plateSolver.request.blind = info.rightAscension !== undefined && info.declination !== undefined
+		if (info.rightAscension) solver.request.rightAscension = formatRA(info.rightAscension)
+		if (info.declination) solver.request.declination = formatDEC(info.declination)
+		solver.request.blind = info.rightAscension === undefined || info.declination === undefined
 
 		if (info.headers) {
-			plateSolver.request.focalLength = numericKeyword(info.headers, 'FOCALLEN', plateSolver.request.focalLength)
-			plateSolver.request.pixelSize = numericKeyword(info.headers, 'XPIXSZ', plateSolver.request.pixelSize)
+			solver.request.focalLength = numericKeyword(info.headers, 'FOCALLEN', solver.request.focalLength)
+			solver.request.pixelSize = numericKeyword(info.headers, 'XPIXSZ', solver.request.pixelSize)
 		}
 	}
 
 	function update<K extends keyof PlateSolveStart>(key: K, value: PlateSolveStart[K]) {
-		viewer.state.plateSolver.request[key] = value
+		solver.request[key] = value
 	}
 
 	async function start() {
 		try {
-			plateSolver.loading = true
+			solver.loading = true
 
-			const request = viewer.state.plateSolver.request
+			const request = solver.request
 			request.fov = arcsec(angularSizeOfPixel(request.focalLength, request.pixelSize) * viewer.state.info.height)
 
-			viewer.state.plateSolver.solution = await Api.PlateSolver.start(request)
-		} catch (e) {
-			addToast({ description: (e as Error).message, color: 'danger', title: 'ERROR' })
+			solver.solution = await Api.PlateSolver.start(request)
 		} finally {
-			plateSolver.loading = false
+			solver.loading = false
 		}
 	}
 
@@ -57,5 +68,9 @@ export const ImageSolverMolecule = molecule((m, s) => {
 		return Api.PlateSolver.stop({ id: scope.image.key })
 	}
 
-	return { state: viewer.state.plateSolver, viewer, scope, update, start, stop }
+	function hide() {
+		viewer.hide('plateSolver')
+	}
+
+	return { state: solver, viewer, scope, update, start, stop, hide } as const
 })

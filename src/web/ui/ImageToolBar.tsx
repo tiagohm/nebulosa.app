@@ -107,7 +107,7 @@ export const ImageToolBar = memo(() => {
 										<Icons.Stars />
 									</Button>
 								</Tooltip>
-								{starDetection.stars.length > 0 && <Switch isSelected={starDetection.show} onValueChange={(value) => (viewer.state.starDetection.show = value)} size='sm' />}
+								{starDetection.stars.length > 0 && <Switch isSelected={starDetection.visible} onValueChange={(value) => (viewer.state.starDetection.visible = value)} size='sm' />}
 							</div>
 							<Tooltip content='ROI' placement='top'>
 								<Button color='secondary' isIconOnly variant='flat'>

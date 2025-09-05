@@ -1,4 +1,4 @@
-import { Button, ButtonGroup, NumberInput, Select, SelectItem } from '@heroui/react'
+import { ButtonGroup, NumberInput, Select, SelectItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -6,48 +6,27 @@ import { ImageScnrMolecule } from '@/molecules/image/scnr'
 import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
+import { TextButton } from './TextButton'
 
 export const ImageScnr = memo(() => {
 	const scnr = useMolecule(ImageScnrMolecule)
-	const { viewer } = scnr
 	const { method, amount, channel } = useSnapshot(scnr.state)
-	const { info } = useSnapshot(viewer.state)
+
+	const Footer = (
+		<>
+			<TextButton color='danger' label='Reset' onPointerUp={scnr.reset} startContent={<Icons.Restore />} />
+			<TextButton color='success' label='Apply' onPointerUp={scnr.apply} startContent={<Icons.Check />} />
+		</>
+	)
 
 	return (
-		<Modal
-			footer={
-				<>
-					<Button color='danger' onPointerUp={scnr.reset} startContent={<Icons.Restore />} variant='flat'>
-						Reset
-					</Button>
-					<Button color='success' onPointerUp={scnr.apply} startContent={<Icons.Check />} variant='flat'>
-						Apply
-					</Button>
-				</>
-			}
-			header={
-				<div className='w-full flex flex-col justify-center gap-0'>
-					<span>SCNR</span>
-					<span className='text-xs font-normal text-gray-400 max-w-full'>{info.originalPath}</span>
-				</div>
-			}
-			maxWidth='295px'
-			name={`scnr-${scnr.scope.image.key}`}
-			onClose={() => viewer.close('scnr')}>
+		<Modal footer={Footer} header='SCNR' maxWidth='295px' name={`scnr-${scnr.scope.image.key}`} onHide={scnr.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<ButtonGroup className='col-span-full'>
-					<Button color='secondary' onPointerUp={() => scnr.update('channel', undefined)} variant={channel === undefined ? 'flat' : 'light'}>
-						NONE
-					</Button>
-					<Button color='danger' onPointerUp={() => scnr.update('channel', 'RED')} variant={channel === 'RED' ? 'flat' : 'light'}>
-						RED
-					</Button>
-					<Button color='success' onPointerUp={() => scnr.update('channel', 'GREEN')} variant={channel === 'GREEN' ? 'flat' : 'light'}>
-						GREEN
-					</Button>
-					<Button color='primary' onPointerUp={() => scnr.update('channel', 'BLUE')} variant={channel === 'BLUE' ? 'flat' : 'light'}>
-						BLUE
-					</Button>
+					<TextButton color='secondary' label='NONE' onPointerUp={() => scnr.update('channel', undefined)} variant={channel === undefined ? 'flat' : 'light'} />
+					<TextButton color='danger' label='RED' onPointerUp={() => scnr.update('channel', 'RED')} variant={channel === 'RED' ? 'flat' : 'light'} />
+					<TextButton color='success' label='GREEN' onPointerUp={() => scnr.update('channel', 'GREEN')} variant={channel === 'GREEN' ? 'flat' : 'light'} />
+					<TextButton color='primary' label='BLUE' onPointerUp={() => scnr.update('channel', 'BLUE')} variant={channel === 'BLUE' ? 'flat' : 'light'} />
 				</ButtonGroup>
 				<Select className='col-span-8' disallowEmptySelection isDisabled={channel === undefined} label='Method' onSelectionChange={(value) => scnr.update('method', (value as Set<string>).values().next().value as never)} selectedKeys={new Set([method])} size='sm'>
 					<SelectItem key='MAXIMUM_MASK'>Maximum Mask</SelectItem>

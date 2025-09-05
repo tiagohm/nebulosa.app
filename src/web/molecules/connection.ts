@@ -174,9 +174,9 @@ export const ConnectionMolecule = molecule((m) => {
 		}
 	}
 
-	function close() {
+	function hide() {
 		state.showModal = false
 	}
 
-	return { state, create, edit, update, select, selectWith, save, connect, duplicate, remove, close } as const
+	return { state, create, edit, update, select, selectWith, save, connect, duplicate, remove, hide } as const
 })

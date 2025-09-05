@@ -31,7 +31,7 @@ export const Focuser = memo(() => {
 			}
 			maxWidth='260px'
 			name={`focuser-${focuser.scope.focuser.name}`}
-			onClose={focuser.close}>
+			onHide={focuser.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-3 flex flex-row items-center justify-start'>
 					<Chip color='primary' size='sm'>

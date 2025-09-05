@@ -73,9 +73,9 @@ export const FlatPanelMolecule = molecule((m, s) => {
 		return Api.FlatPanels.intensity(scope.flatPanel, value)
 	}
 
-	function close() {
-		equipment.close('flatPanel', scope.flatPanel)
+	function hide() {
+		equipment.hide('flatPanel', scope.flatPanel)
 	}
 
-	return { state, scope, connect, enable, disable, intensity, close } as const
+	return { state, scope, connect, enable, disable, intensity, hide } as const
 })

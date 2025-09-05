@@ -17,6 +17,7 @@ import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 import { MountDropdown } from './MountDropdown'
+import { TextButton } from './TextButton'
 
 export const Camera = memo(() => {
 	const camera = useMolecule(CameraMolecule)
@@ -36,12 +37,8 @@ export const Camera = memo(() => {
 					<div className='flex flex-1 flex-row items-center gap-1'>
 						<MountDropdown isDisabled={!connected || capturing} onValueChange={(value) => (camera.state.equipment.mount = value)} value={mount} />
 					</div>
-					<Button color='danger' isDisabled={!connected || !canAbort || !capturing} onPointerUp={camera.stop} startContent={<Icons.Stop />} variant='flat'>
-						Stop
-					</Button>
-					<Button color='success' isDisabled={!connected} isLoading={capturing} onPointerUp={camera.start} startContent={<Icons.Play />} variant='flat'>
-						Start
-					</Button>
+					<TextButton color='danger' isDisabled={!connected || !canAbort || !capturing} label='Stop' onPointerUp={camera.stop} startContent={<Icons.Stop />} />
+					<TextButton color='success' isDisabled={!connected} isLoading={capturing} label='Start' onPointerUp={camera.start} startContent={<Icons.Play />} />
 				</>
 			}
 			header={
@@ -58,7 +55,7 @@ export const Camera = memo(() => {
 			}
 			maxWidth='380px'
 			name={`camera-${camera.scope.camera.name}`}
-			onClose={camera.close}>
+			onHide={camera.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row items-center justify-between mb-2'>
 					<ExposureTimeProgress progress={progress} />

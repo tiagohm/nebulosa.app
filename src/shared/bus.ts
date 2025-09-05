@@ -54,7 +54,7 @@ export class EventBus {
 	}
 }
 
-export function unsubscribe(subscribers?: (VoidFunction | undefined)[]) {
+export function unsubscribe(subscribers?: readonly (VoidFunction | undefined)[]) {
 	subscribers?.forEach((e) => e?.())
 }
 

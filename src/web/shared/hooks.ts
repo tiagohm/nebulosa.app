@@ -9,7 +9,7 @@ const useGesture = createUseGesture([dragAction])
 
 const modalTransformMap = new Map<string, { x: number; y: number }>()
 
-export function useModal(name: string, onClose?: VoidFunction) {
+export function useModal(name: string, onHide?: VoidFunction) {
 	const zIndex = useMolecule(ZIndexMolecule)
 	const modalRef = useRef<HTMLElement>(null)
 	const xy = useRef(modalTransformMap.get(name) ?? simpleLocalStorage.get(`modal-${name}`, () => ({ x: 0, y: 0 })))
@@ -77,9 +77,9 @@ export function useModal(name: string, onClose?: VoidFunction) {
 		}
 	}, [])
 
-	const close = useCallback(() => {
+	const hide = useCallback(() => {
 		zIndex.remove(name)
-		onClose?.()
+		onHide?.()
 	}, [])
 
 	useEffect(() => {
@@ -88,5 +88,5 @@ export function useModal(name: string, onClose?: VoidFunction) {
 
 	const moveProps = { ...bind(), style: { cursor: 'move' } }
 
-	return { ref, close, moveProps }
+	return { ref, hide, moveProps }
 }

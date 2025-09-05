@@ -1,5 +1,6 @@
-import { Button, type ButtonProps, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
+import { type ButtonProps, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
 import type { SolarImageSource } from 'src/shared/types'
+import { TextButton } from './TextButton'
 
 export interface SolarImageSourceDropdownProps extends Omit<ButtonProps, 'isIconOnly' | 'value'> {
 	readonly value: SolarImageSource
@@ -29,9 +30,7 @@ export function SolarImageSourceDropdown({ value, onValueChange, size = 'sm', va
 	return (
 		<Dropdown showArrow>
 			<DropdownTrigger>
-				<Button {...props} size={size} variant={variant}>
-					{DROPDOWN_ITEM_LABEL[value]}
-				</Button>
+				<TextButton label={DROPDOWN_ITEM_LABEL[value]} {...props} size={size} variant={variant} />
 			</DropdownTrigger>
 			<DropdownMenu className='max-h-60 overflow-auto no-scrollbar' onAction={(key) => onValueChange(key as SolarImageSource)} selectedKeys={new Set([value])} selectionMode='single'>
 				{Object.entries(DROPDOWN_ITEM_LABEL).map(([key, label]) => (

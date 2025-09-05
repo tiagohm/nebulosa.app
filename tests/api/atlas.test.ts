@@ -36,10 +36,10 @@ test('seasons', () => {
 	const { spring, summer, autumn, winter } = atlas.seasons(POSITION_OF_BODY)
 
 	// https://aa.usno.navy.mil/calculated/seasons?year=2025&tz=0.00&tz_sign=-1&tz_label=false&dst=false&submit=Get+Data
-	expect(formatTemporal(spring * 1000).substring(0, 16)).toBe('2025-03-20 09:02')
-	expect(formatTemporal(summer * 1000).substring(0, 16)).toBe('2025-06-21 02:43')
-	expect(formatTemporal(autumn * 1000).substring(0, 16)).toBe('2025-09-22 18:20')
-	expect(formatTemporal(winter * 1000).substring(0, 16)).toBe('2025-12-21 15:04')
+	expect(formatTemporal(spring).substring(0, 16)).toBe('2025-03-20 09:02')
+	expect(formatTemporal(summer).substring(0, 16)).toBe('2025-06-21 02:43')
+	expect(formatTemporal(autumn).substring(0, 16)).toBe('2025-09-22 18:20')
+	expect(formatTemporal(winter).substring(0, 16)).toBe('2025-12-21 15:04')
 })
 
 describe('search sky object', () => {

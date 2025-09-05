@@ -42,7 +42,7 @@ export const Mount = memo(() => {
 				}
 				maxWidth='400px'
 				name={`mount-${mount.scope.mount.name}`}
-				onClose={mount.close}>
+				onHide={mount.hide}>
 				<div className='mt-0 grid grid-cols-12 gap-2'>
 					<div className='col-span-full flex flex-row items-center justify-between'>
 						<Chip color='primary' size='sm'>
@@ -147,8 +147,8 @@ export const Mount = memo(() => {
 					<SlewRateSelect className='col-span-3' isDisabled={!connected || moving || parked} onValueChange={(value) => mount.slewRate(value)} rates={slewRates} value={slewRate ?? ''} />
 				</div>
 			</Modal>
-			{showLocation && <Location coordinate={geographicCoordinate} name={`location-mount-${mount.scope.mount.name}`} onClose={mount.closeLocation} onCoordinateChange={mount.location} />}
-			{showTime && <Time name={`time-mount-${mount.scope.mount.name}`} onClose={mount.closeTime} onTimeChange={mount.time} time={time} />}
+			{showLocation && <Location coordinate={geographicCoordinate} name={`location-mount-${mount.scope.mount.name}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}
+			{showTime && <Time name={`time-mount-${mount.scope.mount.name}`} onClose={mount.hideTime} onTimeChange={mount.time} time={time} />}
 			{showRemoteControl && <MountRemoteControl />}
 		</>
 	)

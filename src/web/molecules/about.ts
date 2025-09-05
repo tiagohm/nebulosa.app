@@ -6,19 +6,19 @@ export interface AboutState {
 	show: boolean
 }
 
-export const AboutMolecule = molecule((m) => {
-	const state = proxy<AboutState>({
-		show: false,
-	})
+const state = proxy<AboutState>({
+	show: false,
+})
 
+export const AboutMolecule = molecule(() => {
 	function show() {
 		bus.emit('homeMenu:toggle', false)
 		state.show = true
 	}
 
-	function close() {
+	function hide() {
 		state.show = false
 	}
 
-	return { state, show, close } as const
+	return { state, show, hide } as const
 })

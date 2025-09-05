@@ -126,9 +126,9 @@ export const GuideOutputMolecule = molecule((m, s) => {
 		// Api.GuideOutputs.stop(scope.guideOutput)
 	}
 
-	function close() {
-		equipment.close('guideOutput', scope.guideOutput)
+	function hide() {
+		equipment.hide('guideOutput', scope.guideOutput)
 	}
 
-	return { state, scope, update, connect, pulse, stop, close } as const
+	return { state, scope, update, connect, pulse, stop, hide } as const
 })

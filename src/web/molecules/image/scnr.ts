@@ -5,15 +5,16 @@ import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 export const ImageScnrMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
+	const { scnr } = viewer.state.transformation
 
 	function update<K extends keyof ImageTransformation['scnr']>(key: K, value: ImageTransformation['scnr'][K]) {
-		viewer.state.transformation.scnr[key] = value
+		scnr[key] = value
 	}
 
 	function reset() {
-		viewer.state.transformation.scnr.method = DEFAULT_IMAGE_SCNR.method
-		viewer.state.transformation.scnr.amount = DEFAULT_IMAGE_SCNR.amount
-		viewer.state.transformation.scnr.channel = DEFAULT_IMAGE_SCNR.channel
+		scnr.method = DEFAULT_IMAGE_SCNR.method
+		scnr.amount = DEFAULT_IMAGE_SCNR.amount
+		scnr.channel = DEFAULT_IMAGE_SCNR.channel
 		return apply()
 	}
 
@@ -21,5 +22,9 @@ export const ImageScnrMolecule = molecule((m, s) => {
 		return viewer.load(true)
 	}
 
-	return { state: viewer.state.transformation.scnr, scope, viewer, update, reset, apply }
+	function hide() {
+		viewer.hide('scnr')
+	}
+
+	return { state: scnr, scope, viewer, update, reset, apply, hide } as const
 })

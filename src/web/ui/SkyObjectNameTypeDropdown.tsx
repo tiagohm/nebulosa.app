@@ -1,4 +1,5 @@
-import { Button, type ButtonProps, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
+import { type ButtonProps, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
+import { TextButton } from './TextButton'
 
 export const SKY_OBJECT_NAME_TYPES = [
 	'ALL',
@@ -105,9 +106,7 @@ export function SkyObjectNameTypeDropdown({ value, onValueChange, size = 'sm', v
 	return (
 		<Dropdown showArrow>
 			<DropdownTrigger>
-				<Button {...props} size={size} variant={variant}>
-					{SKY_OBJECT_NAME_TYPES[value + 1]}
-				</Button>
+				<TextButton {...props} label={SKY_OBJECT_NAME_TYPES[value + 1]} size={size} variant={variant} />
 			</DropdownTrigger>
 			<DropdownMenu className='max-h-60 overflow-auto no-scrollbar' onAction={(key) => onValueChange(+key)} selectedKeys={new Set([`${value}`])} selectionMode='single'>
 				{SKY_OBJECT_NAME_TYPES.map((name, i) => (

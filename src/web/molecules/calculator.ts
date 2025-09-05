@@ -1,76 +1,69 @@
 import { molecule, onMount } from 'bunshi'
-import bus from 'src/shared/bus'
+import bus, { unsubscribe } from 'src/shared/bus'
 import { proxy, subscribe } from 'valtio'
 import { simpleLocalStorage } from '@/shared/storage'
 
-export interface CalculatorState {
-	show: boolean
-	readonly focalLength: {
-		aperture: number
-		focalRatio: number
-		focalLength: number
-	}
-	readonly focalRatio: {
-		focalLength: number
-		aperture: number
-		focalRatio: number
-	}
-	readonly dawes: {
-		aperture: number
-		resolution: number
-	}
-	readonly rayleigh: {
-		aperture: number
-		resolution: number
-	}
-	readonly limitingMagnitude: {
-		aperture: number
-		magnitude: number
-	}
-	readonly lightGraspRatio: {
-		smallerAperture: number
-		largerAperture: number
-		ratio: number
-	}
-	readonly ccdResolution: {
-		pixelSize: number
-		focalLength: number
-		resolution: number
-	}
+export interface FocalLengthRatio {
+	aperture: number
+	focalRatio: number
+	focalLength: number
 }
 
-export const CalculatorMolecule = molecule((m) => {
-	const state = proxy<CalculatorState>({
-		show: false,
-		focalLength: simpleLocalStorage.get<CalculatorState['focalLength']>('calculator.focalLength', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
-		focalRatio: simpleLocalStorage.get<CalculatorState['focalRatio']>('calculator.focalRatio', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
-		dawes: simpleLocalStorage.get<CalculatorState['dawes']>('calculator.dawes', () => ({ aperture: 152, resolution: 0.763 })),
-		rayleigh: simpleLocalStorage.get<CalculatorState['rayleigh']>('calculator.rayleigh', () => ({ aperture: 152, resolution: 0.908 })),
-		limitingMagnitude: simpleLocalStorage.get<CalculatorState['limitingMagnitude']>('calculator.limitingMagnitude', () => ({ aperture: 152, magnitude: 13.609 })),
-		lightGraspRatio: simpleLocalStorage.get<CalculatorState['lightGraspRatio']>('calculator.lightGraspRatio', () => ({ smallerAperture: 7, largerAperture: 152, ratio: 471.51 })),
-		ccdResolution: simpleLocalStorage.get<CalculatorState['ccdResolution']>('calculator.ccdResolution', () => ({ pixelSize: 4.63, focalLength: 1368, resolution: 0.698 })),
-	})
+export interface ResolutionLimit {
+	aperture: number
+	resolution: number
+}
 
-	onMount(() => {
-		const unsubscriber = subscribe(state, () => {
-			simpleLocalStorage.set('calculator.focalLength', state.focalLength)
-			simpleLocalStorage.set('calculator.focalRatio', state.focalRatio)
-			simpleLocalStorage.set('calculator.dawes', state.dawes)
-			simpleLocalStorage.set('calculator.rayleigh', state.rayleigh)
-			simpleLocalStorage.set('calculator.limitingMagnitude', state.limitingMagnitude)
-			simpleLocalStorage.set('calculator.lightGraspRatio', state.lightGraspRatio)
-			simpleLocalStorage.set('calculator.ccdResolution', state.ccdResolution)
-		})
+export interface LimitingMagnitude {
+	aperture: number
+	magnitude: number
+}
 
-		return () => unsubscriber()
-	})
+export interface LightGraspRatio {
+	smallerAperture: number
+	largerAperture: number
+	ratio: number
+}
 
+export interface CcdResolution {
+	pixelSize: number
+	focalLength: number
+	resolution: number
+}
+
+export interface CalculatorState {
+	show: boolean
+	readonly focalLength: FocalLengthRatio
+	readonly focalRatio: FocalLengthRatio
+	readonly dawesLimit: ResolutionLimit
+	readonly rayleighLimit: ResolutionLimit
+	readonly limitingMagnitude: LimitingMagnitude
+	readonly lightGraspRatio: LightGraspRatio
+	readonly ccdResolution: CcdResolution
+}
+
+const state = proxy<CalculatorState>({
+	show: false,
+	focalLength: simpleLocalStorage.get<FocalLengthRatio>('calculator.focalLength', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
+	focalRatio: simpleLocalStorage.get<FocalLengthRatio>('calculator.focalRatio', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
+	dawesLimit: simpleLocalStorage.get<ResolutionLimit>('calculator.dawesLimit', () => ({ aperture: 152, resolution: 0.763 })),
+	rayleighLimit: simpleLocalStorage.get<ResolutionLimit>('calculator.rayleighLimit', () => ({ aperture: 152, resolution: 0.908 })),
+	limitingMagnitude: simpleLocalStorage.get<LimitingMagnitude>('calculator.limitingMagnitude', () => ({ aperture: 152, magnitude: 13.609 })),
+	lightGraspRatio: simpleLocalStorage.get<LightGraspRatio>('calculator.lightGraspRatio', () => ({ smallerAperture: 7, largerAperture: 152, ratio: 471.51 })),
+	ccdResolution: simpleLocalStorage.get<CcdResolution>('calculator.ccdResolution', () => ({ pixelSize: 4.63, focalLength: 1368, resolution: 0.698 })),
+})
+
+function subscribeTo(property: keyof Omit<CalculatorState, 'show'>) {
+	return subscribe(state[property], () => simpleLocalStorage.set(`calculator.${property}`, state[property]))
+}
+
+export const CalculatorMolecule = molecule(() => {
 	function show() {
 		bus.emit('homeMenu:toggle', false)
 		state.show = true
 	}
 
-	function close() {
+	function hide() {
 		state.show = false
 	}
 
@@ -79,12 +72,20 @@ export const CalculatorMolecule = molecule((m) => {
 
 		if (property === 'focalLength') state.focalLength.focalLength = state.focalLength.aperture * state.focalLength.focalRatio
 		else if (property === 'focalRatio') state.focalRatio.focalRatio = state.focalRatio.focalLength / state.focalRatio.aperture
-		else if (property === 'dawes') state.dawes.resolution = 116 / state.dawes.aperture
-		else if (property === 'rayleigh') state.rayleigh.resolution = 138 / state.rayleigh.aperture
+		else if (property === 'dawesLimit') state.dawesLimit.resolution = 116 / state.dawesLimit.aperture
+		else if (property === 'rayleighLimit') state.rayleighLimit.resolution = 138 / state.rayleighLimit.aperture
 		else if (property === 'limitingMagnitude') state.limitingMagnitude.magnitude = 2.7 + 5 * Math.log10(state.limitingMagnitude.aperture)
 		else if (property === 'lightGraspRatio') state.lightGraspRatio.ratio = (state.lightGraspRatio.largerAperture / state.lightGraspRatio.smallerAperture) ** 2
 		else if (property === 'ccdResolution') state.ccdResolution.resolution = (state.ccdResolution.pixelSize / state.ccdResolution.focalLength) * 206.265
 	}
 
-	return { state, show, close, update } as const
+	onMount(() => {
+		const unsubscribers = (Object.keys(state) as Array<keyof CalculatorState>).filter((e) => e !== 'show').map(subscribeTo)
+
+		return () => {
+			unsubscribe(unsubscribers)
+		}
+	})
+
+	return { state, show, hide, update } as const
 })

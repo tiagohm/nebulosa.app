@@ -10,16 +10,20 @@ export const StarDetectionMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
 	const key = scope.image.key
-	const starDetection = viewer.state.starDetection
+	const { starDetection } = viewer.state
 
 	onMount(() => {
-		const unsubscribe = subscribe(starDetection.request, () => simpleLocalStorage.set('image.starDetection', starDetection.request))
+		const unsubscribe = subscribe(starDetection.request, () => {
+			simpleLocalStorage.set('image.starDetection', starDetection.request)
+		})
 
-		return () => unsubscribe()
+		return () => {
+			unsubscribe()
+		}
 	})
 
 	function toggle(enabled?: boolean) {
-		starDetection.show = enabled ?? !starDetection.show
+		starDetection.visible = enabled ?? !starDetection.visible
 	}
 
 	async function detect() {
@@ -32,10 +36,10 @@ export const StarDetectionMolecule = molecule((m, s) => {
 
 			if (stars.length === 0) {
 				addToast({ description: 'No stars detected', color: 'warning', title: 'WARN' })
-			} else {
-				starDetection.stars = stars
-				starDetection.show = stars.length > 0
 			}
+
+			starDetection.stars = stars
+			starDetection.visible = stars.length > 0
 
 			let hfd = 0
 			let snr = 0
@@ -58,8 +62,6 @@ export const StarDetectionMolecule = molecule((m, s) => {
 			}
 
 			starDetection.computed = { hfd, snr, fluxMin, fluxMax }
-		} catch (e) {
-			addToast({ description: (e as Error).message, color: 'danger', title: 'ERROR' })
 		} finally {
 			starDetection.loading = false
 		}
@@ -69,11 +71,17 @@ export const StarDetectionMolecule = molecule((m, s) => {
 		starDetection.selected = star
 
 		const canvas = document.getElementById(`${key}-selected-star`) as HTMLCanvasElement | null
+
 		if (!canvas) return
+
 		const ctx = canvas.getContext('2d')
 		const image = document.getElementById(key) as HTMLImageElement
 		ctx?.drawImage(image, star.x - 8.5, star.y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
 	}
 
-	return { state: starDetection, viewer, scope, toggle, detect, select }
+	function hide() {
+		viewer.hide('starDetection')
+	}
+
+	return { state: starDetection, viewer, scope, toggle, detect, select, hide } as const
 })

@@ -11,7 +11,7 @@ function start() {
 			<HeroUIProvider disableAnimation disableRipple>
 				<ToastProvider
 					maxVisibleToasts={1}
-					placement='bottom-center'
+					placement='top-right'
 					toastProps={{
 						radius: 'sm',
 						color: 'secondary',

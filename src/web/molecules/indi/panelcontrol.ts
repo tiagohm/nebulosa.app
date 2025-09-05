@@ -139,9 +139,9 @@ export const IndiPanelControlMolecule = molecule((m) => {
 		ping()
 	}
 
-	function close() {
+	function hide() {
 		state.show = false
 	}
 
-	return { state, retrieveProperties, ping, send, show, close }
+	return { state, retrieveProperties, ping, send, show, hide }
 })

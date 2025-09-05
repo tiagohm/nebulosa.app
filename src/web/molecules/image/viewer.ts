@@ -23,8 +23,8 @@ export interface ImageState {
 	info: ImageInfo
 	scale: number
 	readonly starDetection: {
-		showModal: boolean
 		show: boolean
+		visible: boolean
 		loading: boolean
 		stars: DetectedStar[]
 		selected?: DetectedStar
@@ -37,25 +37,25 @@ export interface ImageState {
 		}
 	}
 	readonly plateSolver: {
-		showModal: boolean
+		show: boolean
 		loading: boolean
 		request: PlateSolveStart
 		solution?: PlateSolution
 	}
 	readonly scnr: {
-		showModal: boolean
+		show: boolean
 	}
 	readonly stretch: {
-		showModal: boolean
+		show: boolean
 	}
 	readonly adjustment: {
-		showModal: boolean
+		show: boolean
 	}
 	readonly filter: {
-		showModal: boolean
+		show: boolean
 	}
 	readonly fitsHeader: {
-		showModal: boolean
+		show: boolean
 	}
 	readonly roi: {
 		show: boolean
@@ -66,7 +66,7 @@ export interface ImageState {
 		rotation: number
 	}
 	readonly settings: {
-		showModal: boolean
+		show: boolean
 		pixelated: boolean
 	}
 }
@@ -76,7 +76,7 @@ export interface ImageViewerScopeValue {
 }
 
 export const DEFAULT_IMAGE_SETTINGS: ImageState['settings'] = {
-	showModal: false,
+	show: false,
 	pixelated: true,
 }
 
@@ -100,7 +100,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	starDetectionRequest.path = path
 	plateSolverRequest.id = key
 	plateSolverRequest.path = path
-	settings.showModal = false
+	settings.show = false
 
 	const state =
 		imageCache.get(key)?.state ??
@@ -128,8 +128,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 				headers: {},
 			},
 			starDetection: {
-				showModal: false,
 				show: false,
+				visible: false,
 				loading: false,
 				stars: [],
 				request: starDetectionRequest,
@@ -141,24 +141,24 @@ export const ImageViewerMolecule = molecule((m, s) => {
 				},
 			},
 			plateSolver: {
-				showModal: false,
+				show: false,
 				loading: false,
 				request: plateSolverRequest,
 			},
 			scnr: {
-				showModal: false,
+				show: false,
 			},
 			stretch: {
-				showModal: false,
+				show: false,
 			},
 			adjustment: {
-				showModal: false,
+				show: false,
 			},
 			filter: {
-				showModal: false,
+				show: false,
 			},
 			fitsHeader: {
-				showModal: false,
+				show: false,
 			},
 			roi: {
 				show: false,
@@ -236,12 +236,12 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		state.crosshair = !state.crosshair
 	}
 
-	function show(key: keyof PickByValue<typeof state, { showModal: boolean }>) {
-		state[key].showModal = true
+	function show(key: keyof PickByValue<typeof state, { show: boolean }>) {
+		state[key].show = true
 	}
 
-	function close(key: keyof PickByValue<typeof state, { showModal: boolean }>) {
-		state[key].showModal = false
+	function hide(key: keyof PickByValue<typeof state, { show: boolean }>) {
+		state[key].show = false
 	}
 
 	function remove() {
@@ -376,7 +376,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		workspace.state.selected = undefined
 	}
 
-	return { state, scope, resetStretch, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, attach, load, open, remove, detach, select, show, close, apply }
+	return { state, scope, resetStretch, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, attach, load, open, remove, detach, select, show, hide, apply }
 })
 
 function adjustZIndexAfterBeRemoved() {

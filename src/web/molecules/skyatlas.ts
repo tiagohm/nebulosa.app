@@ -1,7 +1,8 @@
 import { molecule, onMount } from 'bunshi'
 import bus from 'src/shared/bus'
-import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SKY_OBJECT_SEARCH, type LocationAndTime, type PositionOfBody, type SkyObjectSearch, type SkyObjectSearchItem, type SolarImageSource, type Twilight } from 'src/shared/types'
+import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SKY_OBJECT_SEARCH, type LocationAndTime, type PositionOfBody, type SkyObjectSearch, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 
@@ -17,6 +18,7 @@ export interface SunState {
 	source: SolarImageSource
 	readonly position: BodyPosition
 	chart: number[]
+	readonly seasons: SolarSeasons
 }
 
 export interface MoonState {
@@ -46,12 +48,24 @@ export const SunMolecule = molecule(() => {
 			request,
 			position: structuredClone(DEFAULT_BODY_POSITION),
 			chart: [],
-			source: 'HMI_INTENSITYGRAM_FLATTENED',
+			source: simpleLocalStorage.get<SolarImageSource>('skyatlas.sun.source', () => 'HMI_INTENSITYGRAM_FLATTENED'),
+			seasons: {
+				spring: 0,
+				summer: 0,
+				autumn: 0,
+				winter: 0,
+			},
 		})
 
 	sunState = state
 
 	onMount(() => {
+		const unsubscribers = new Array<() => void>(1)
+
+		unsubscribers[0] = subscribeKey(state, 'source', () => {
+			simpleLocalStorage.set('skyatlas.sun.source', state.source)
+		})
+
 		const timer = setInterval(tick, 60000)
 
 		return () => {
@@ -60,19 +74,21 @@ export const SunMolecule = molecule(() => {
 	})
 
 	let chartUpdateRequested = true
+	let seasonsUpdateRequested = true
 
 	void tick()
 
 	async function tick() {
 		updateTime()
 
+		void updateSeasons()
 		await updatePosition()
 		await updateChart()
 	}
 
 	function updateTime(time: number = Date.now()) {
 		request.time.utc = time
-		// TODO: verificar se a data passou ou não do meio-dia e chamar updateChart/updatePosition
+		// TODO: verificar se a data passou ou não do meio-dia/mes/ano e atualizar chart/positions/seasons
 	}
 
 	async function updatePosition() {
@@ -88,11 +104,19 @@ export const SunMolecule = molecule(() => {
 		}
 	}
 
+	async function updateSeasons() {
+		if (seasonsUpdateRequested) {
+			const seasons = await Api.SkyAtlas.seasons(state.request)
+			if (seasons) Object.assign(state.seasons, seasons)
+			seasonsUpdateRequested = false
+		}
+	}
+
 	return { state }
 })
 
 export const GalaxyMolecule = molecule(() => {
-	const request = simpleLocalStorage.get<SkyObjectSearch>('skyAtlas.galaxy.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
+	const request = simpleLocalStorage.get<SkyObjectSearch>('skyatlas.galaxy.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
 
 	request.page = 1
 
@@ -111,7 +135,9 @@ export const GalaxyMolecule = molecule(() => {
 	let chartShouldBeUpdated = true
 
 	onMount(() => {
-		const unsubscriber = subscribe(state.request, () => simpleLocalStorage.set('skyAtlas.galaxy.request', state.request))
+		const unsubscriber = subscribe(state.request, () => {
+			simpleLocalStorage.set('skyatlas.galaxy.request', state.request)
+		})
 
 		const timer = setInterval(tick, 60000)
 
@@ -233,9 +259,9 @@ export const SkyAtlasMolecule = molecule(() => {
 		state.show = true
 	}
 
-	function close() {
+	function hide() {
 		state.show = false
 	}
 
-	return { state, show, close }
+	return { state, show, hide }
 })

@@ -82,9 +82,9 @@ export const FramingMolecule = molecule((m) => {
 		state.show = true
 	}
 
-	function close() {
+	function hide() {
 		state.show = false
 	}
 
-	return { state, update, load, show, close } as const
+	return { state, update, load, show, hide } as const
 })

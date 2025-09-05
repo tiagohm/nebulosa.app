@@ -29,7 +29,7 @@ export const Cover = memo(() => {
 			}
 			maxWidth='260px'
 			name={`cover-${cover.scope.cover.name}`}
-			onClose={cover.close}>
+			onHide={cover.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row items-center justify-between'>
 					<Chip color='primary' size='sm'>

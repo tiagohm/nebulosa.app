@@ -167,9 +167,9 @@ export const CameraMolecule = molecule((m, s) => {
 		return Api.Cameras.stop(state.camera)
 	}
 
-	function close() {
-		return equipment.close('camera', scope.camera)
+	function hide() {
+		return equipment.hide('camera', scope.camera)
 	}
 
-	return { scope, state, connect, update, cooler, temperature, fullscreen, start, stop, close } as const
+	return { scope, state, connect, update, cooler, temperature, fullscreen, start, stop, hide } as const
 })

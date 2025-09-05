@@ -265,7 +265,7 @@ export const MountMolecule = molecule((m, s) => {
 		state.location.show = true
 	}
 
-	function closeLocation() {
+	function hideLocation() {
 		state.location.show = false
 	}
 
@@ -273,7 +273,7 @@ export const MountMolecule = molecule((m, s) => {
 		state.time.show = true
 	}
 
-	function closeTime() {
+	function hideTime() {
 		state.time.show = false
 	}
 
@@ -281,12 +281,12 @@ export const MountMolecule = molecule((m, s) => {
 		state.remoteControl.show = true
 	}
 
-	function closeRemoteControl() {
+	function hideRemoteControl() {
 		state.remoteControl.show = false
 	}
 
-	function close() {
-		equipment.close('mount', scope.mount)
+	function hide() {
+		equipment.hide('mount', scope.mount)
 	}
 
 	return {
@@ -299,11 +299,11 @@ export const MountMolecule = molecule((m, s) => {
 		updateTargetCoordinate,
 		handleTargetCoordinateAction,
 		showLocation,
-		closeLocation,
+		hideLocation,
 		showTime,
-		closeTime,
+		hideTime,
 		showRemoteControl,
-		closeRemoteControl,
+		hideRemoteControl,
 		park,
 		unpark,
 		togglePark,
@@ -315,6 +315,6 @@ export const MountMolecule = molecule((m, s) => {
 		location,
 		time,
 		stop,
-		close,
+		hide,
 	} as const
 })

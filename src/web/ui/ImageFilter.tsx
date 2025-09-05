@@ -1,38 +1,25 @@
-import { Button, Checkbox } from '@heroui/react'
+import { Checkbox } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageFilterMolecule } from '@/molecules/image/filter'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
+import { TextButton } from './TextButton'
 
 export const ImageFilter = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
-	const { viewer } = filter
 	const { enabled, blur, median, sharpen } = useSnapshot(filter.state)
-	const { info } = useSnapshot(viewer.state)
+
+	const Footer = (
+		<>
+			<TextButton color='danger' isDisabled={!enabled} label='Reset' onPointerUp={filter.reset} startContent={<Icons.Restore />} />
+			<TextButton color='success' label='Apply' onPointerUp={filter.apply} startContent={<Icons.Check />} />
+		</>
+	)
 
 	return (
-		<Modal
-			footer={
-				<>
-					<Button color='danger' isDisabled={!enabled} onPointerUp={filter.reset} startContent={<Icons.Restore />} variant='flat'>
-						Reset
-					</Button>
-					<Button color='success' onPointerUp={filter.apply} startContent={<Icons.Check />} variant='flat'>
-						Apply
-					</Button>
-				</>
-			}
-			header={
-				<div className='w-full flex flex-col justify-center gap-0'>
-					<span>Filter</span>
-					<span className='text-xs font-normal text-gray-400 max-w-full'>{info.originalPath}</span>
-				</div>
-			}
-			maxWidth='199px'
-			name={`filter-${filter.scope.image.key}`}
-			onClose={() => viewer.close('filter')}>
+		<Modal footer={Footer} header='Filter' maxWidth='200px' name={`filter-${filter.scope.image.key}`} onHide={filter.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Checkbox className='col-span-full' isSelected={enabled} onValueChange={(value) => filter.update('enabled', value)}>
 					Enabled

@@ -10,26 +10,20 @@ export interface ConfirmationState {
 	message: string
 }
 
-export const ConfirmationMolecule = molecule((m) => {
-	const state = proxy<ConfirmationState>({
-		show: false,
-		key: '',
-		message: '',
-	})
+const state = proxy<ConfirmationState>({
+	show: false,
+	key: '',
+	message: '',
+})
 
-	onMount(() => {
-		const unsubscriber = bus.subscribe('confirmation', show)
-
-		return () => unsubscriber()
-	})
-
+export const ConfirmationMolecule = molecule(() => {
 	function show(confirmation: Confirmation) {
 		state.key = confirmation.key
 		state.message = confirmation.message
 		state.show = true
 	}
 
-	function close() {
+	function hide() {
 		state.show = false
 	}
 
@@ -41,5 +35,13 @@ export const ConfirmationMolecule = molecule((m) => {
 		return Api.Confirmation.confirm({ key: state.key, accepted: false })
 	}
 
-	return { state, show, close, accept, reject } as const
+	onMount(() => {
+		const unsubscriber = bus.subscribe<Confirmation>('confirmation', show)
+
+		return () => {
+			unsubscriber()
+		}
+	})
+
+	return { state, show, hide, accept, reject } as const
 })

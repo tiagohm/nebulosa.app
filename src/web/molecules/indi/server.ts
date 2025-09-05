@@ -62,9 +62,9 @@ export const IndiServerMolecule = molecule(() => {
 		state.show = true
 	}
 
-	function close() {
+	function hide() {
 		state.show = false
 	}
 
-	return { state, update, start, stop, show, close }
+	return { state, update, start, stop, show, hide }
 })

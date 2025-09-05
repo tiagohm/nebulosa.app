@@ -69,9 +69,9 @@ export const CoverMolecule = molecule((m, s) => {
 		return Api.Covers.unpark(scope.cover)
 	}
 
-	function close() {
-		equipment.close('cover', scope.cover)
+	function hide() {
+		equipment.hide('cover', scope.cover)
 	}
 
-	return { state, scope, connect, park, unpark, close } as const
+	return { state, scope, connect, park, unpark, hide } as const
 })

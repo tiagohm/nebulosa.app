@@ -61,9 +61,9 @@ export const ThermometerMolecule = molecule((m, s) => {
 		}
 	}
 
-	function close() {
-		equipment.close('thermometer', scope.thermometer)
+	function hide() {
+		equipment.hide('thermometer', scope.thermometer)
 	}
 
-	return { state, scope, connect, close } as const
+	return { state, scope, connect, hide } as const
 })

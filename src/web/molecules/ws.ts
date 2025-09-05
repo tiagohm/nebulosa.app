@@ -45,5 +45,5 @@ export const WebSocketMolecule = molecule((m) => {
 		}
 	})
 
-	return { ws }
+	return { ws } as const
 })

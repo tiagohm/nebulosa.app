@@ -127,9 +127,9 @@ export const EquipmentMolecule = molecule(() => {
 		bus.emit('indiPanelControl:show', device)
 	}
 
-	function close(type: EquipmentDeviceType, device: Device) {
+	function hide(type: EquipmentDeviceType, device: Device) {
 		state[type].find((e) => e.name === device.name)!.show = false
 	}
 
-	return { state, get, list, add, update, remove, select, show, showIndi, close } as const
+	return { state, get, list, add, update, remove, select, show, showIndi, hide } as const
 })

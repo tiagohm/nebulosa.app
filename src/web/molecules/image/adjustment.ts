@@ -5,17 +5,18 @@ import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 export const ImageAdjustmentMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
+	const { adjustment } = viewer.state.transformation
 
 	function update<K extends keyof ImageTransformation['adjustment']>(key: K, value: ImageTransformation['adjustment'][K]) {
-		viewer.state.transformation.adjustment[key] = value
+		adjustment[key] = value
 	}
 
 	function reset() {
-		viewer.state.transformation.adjustment.brightness = 1
-		viewer.state.transformation.adjustment.contrast = 1
-		viewer.state.transformation.adjustment.gamma = 1
-		viewer.state.transformation.adjustment.saturation = 1
-		viewer.state.transformation.adjustment.normalize = false
+		adjustment.brightness = 1
+		adjustment.contrast = 1
+		adjustment.gamma = 1
+		adjustment.saturation = 1
+		adjustment.normalize = false
 		return apply()
 	}
 
@@ -23,5 +24,9 @@ export const ImageAdjustmentMolecule = molecule((m, s) => {
 		return viewer.load(true)
 	}
 
-	return { state: viewer.state.transformation.adjustment, scope, viewer, update, reset, apply }
+	function hide() {
+		viewer.hide('adjustment')
+	}
+
+	return { state: adjustment, scope, viewer, update, reset, apply, hide } as const
 })

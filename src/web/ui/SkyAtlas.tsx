@@ -4,6 +4,7 @@ import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa/src/constellation'
 import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/distance'
+import { formatTemporal } from 'nebulosa/src/temporal'
 import { memo, useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import { type BodyPosition, EMPTY_TWILIGHT, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
@@ -40,7 +41,7 @@ export const SkyAtlas = memo(() => {
 			}
 			maxWidth='470px'
 			name='sky-atlas'
-			onClose={atlas.close}>
+			onHide={atlas.hide}>
 			<div className='mt-0 flex flex-col gap-2'>
 				<Tabs classNames={{ base: 'absolute top-[-42px] right-[88px] z-10', panel: 'pt-0' }} onSelectionChange={(value) => (atlas.state.tab = value as never)} selectedKey={tab}>
 					<Tab key='sun' title={<Icons.Sun />}>
@@ -68,12 +69,46 @@ export const SunTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='col-span-full flex justify-center items-center'>
+			<div className='relative col-span-full flex justify-center items-center'>
 				<Sun onSourceChange={(source) => (sun.state.source = source)} source={source} />
+				<div className='absolute top-auto right-0 p-0 text-xs'>
+					<Seasons />
+				</div>
 			</div>
 			<div className='col-span-full'>
 				<EphemerisAndChart chart={chart} name='Sun' position={position} twilight={twilight} />
 			</div>
+		</div>
+	)
+})
+
+export const Seasons = memo(() => {
+	const sun = useMolecule(SunMolecule)
+	const { summer, spring, autumn, winter } = useSnapshot(sun.state.seasons)
+	const isSouthern = sun.state.request.location.latitude < 0
+
+	return (
+		<div className='flex flex-col gap-0'>
+			<span className='font-bold flex items-center gap-1'>
+				{isSouthern ? <Icons.Flower /> : <Icons.Leaf />}
+				{isSouthern ? 'SPRING' : 'AUTUMN/FALL'}
+			</span>
+			<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(isSouthern ? autumn : spring, 'MM-DD HH:mm')}</span>
+			<span className='font-bold flex items-center gap-1'>
+				{isSouthern ? <Icons.Sun /> : <Icons.SnowFlake />}
+				{isSouthern ? 'SUMMER' : 'WINTER'}
+			</span>
+			<span className='ps-6 mt-[-4px]'>{formatTemporal(isSouthern ? winter : summer, 'MM-DD HH:mm')}</span>
+			<span className='font-bold flex items-center gap-1'>
+				{isSouthern ? <Icons.Leaf /> : <Icons.Flower />}
+				{isSouthern ? 'AUTUMN/FALL' : 'SPRING'}
+			</span>
+			<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(isSouthern ? spring : autumn, 'MM-DD HH:mm')}</span>
+			<span className='font-bold flex items-center gap-1'>
+				{isSouthern ? <Icons.SnowFlake /> : <Icons.Sun />}
+				{isSouthern ? 'WINTER' : 'SUMMER'}
+			</span>
+			<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(isSouthern ? summer : winter, 'MM-DD HH:mm')}</span>
 		</div>
 	)
 })

@@ -35,7 +35,7 @@ export const FlatPanel = memo(() => {
 			}
 			maxWidth='260px'
 			name={`flat-panel-${flatPanel.scope.flatPanel.name}`}
-			onClose={flatPanel.close}>
+			onHide={flatPanel.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row items-center justify-center'>
 					<Switch isDisabled={!connected} isSelected={enabled} onValueChange={(enabled) => (enabled ? flatPanel.enable() : flatPanel.disable())} />

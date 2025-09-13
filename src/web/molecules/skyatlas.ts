@@ -5,6 +5,7 @@ import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
+import { deg } from 'nebulosa/src/angle'
 
 export interface SkyAtlasState {
 	show: boolean
@@ -163,8 +164,8 @@ export const GalaxyMolecule = molecule(() => {
 
 			// TODO: Call update time and location on SkyAtlasMolecule
 			updateTime()
-			request.location.longitude = -45
-			request.location.latitude = -22
+			request.location.longitude = deg(-45)
+			request.location.latitude = deg(-22)
 
 			if (reset) state.request.page = 1
 
@@ -184,8 +185,8 @@ export const GalaxyMolecule = molecule(() => {
 
 			// TODO: Call update time and location on SkyAtlasMolecule
 			updateTime()
-			request.location.longitude = -45
-			request.location.latitude = -22
+			request.location.longitude = deg(-45)
+			request.location.latitude = deg(-22)
 
 			await updatePosition()
 			await updateChart(true)

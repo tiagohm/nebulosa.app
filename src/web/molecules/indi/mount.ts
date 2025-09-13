@@ -173,7 +173,7 @@ export const MountMolecule = molecule((m, s) => {
 
 	function updateTargetCoordinate<K extends keyof MountState['targetCoordinate']['coordinate']>(key: K, value: MountState['targetCoordinate']['coordinate'][K]) {
 		state.targetCoordinate.coordinate[key] = value
-		if (key === 'type') void updateTargetCoordinatePosition()
+		return updateTargetCoordinatePosition()
 	}
 
 	async function updateCurrentCoordinatePosition() {

@@ -1,6 +1,4 @@
-import { deg } from 'nebulosa/src/angle'
 import type { PositionAndVelocity } from 'nebulosa/src/astrometry'
-import { meter } from 'nebulosa/src/distance'
 import { type GeographicPosition, geodeticLocation } from 'nebulosa/src/location'
 import { type Time, timeUnix } from 'nebulosa/src/time'
 import { earth } from 'nebulosa/src/vsop87e'
@@ -33,15 +31,15 @@ export class CacheManager {
 	}
 
 	geographicCoordinate(coordinate: GeographicCoordinate) {
-		const latitude = deg(coordinate.latitude)
-		const longitude = deg(coordinate.longitude)
-		const elevation = meter(coordinate.elevation)
+		const { latitude, longitude, elevation } = coordinate
 
 		let location = this.geographicCoordinates.find((e) => e.latitude === latitude && e.longitude === longitude && e.elevation === elevation)
-		if (location) return location
 
-		location = geodeticLocation(longitude, latitude, elevation)
-		this.geographicCoordinates.push(location)
+		if (!location) {
+			location = geodeticLocation(longitude, latitude, elevation)
+			this.geographicCoordinates.push(location)
+		}
+
 		return location
 	}
 }

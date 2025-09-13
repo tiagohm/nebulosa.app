@@ -1,16 +1,15 @@
 import Elysia from 'elysia'
 import { type Angle, deg, parseAngle } from 'nebulosa/src/angle'
-import { altaz } from 'nebulosa/src/astrometry'
-import { AU_KM, DEG2RAD, ONE_PARSEC, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
+import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astrometry'
+import { AU_KM, DEG2RAD, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
-import type { CartesianCoordinate } from 'nebulosa/src/coordinate'
 import type { CsvRow } from 'nebulosa/src/csv'
-import { type Distance, meter } from 'nebulosa/src/distance'
-import { eraC2s, eraS2p } from 'nebulosa/src/erfa'
+import type { Distance } from 'nebulosa/src/distance'
+import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { precessFk5FromJ2000 } from 'nebulosa/src/fk5'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
 import { localSiderealTime } from 'nebulosa/src/location'
-import { bcrs, type Star, star } from 'nebulosa/src/star'
+import { observeStar } from 'nebulosa/src/star'
 import { season } from 'nebulosa/src/sun'
 import { parseTemporal, type Temporal, temporalAdd, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
 import { toUnixMillis } from 'nebulosa/src/time'
@@ -30,7 +29,6 @@ const SOLAR_IMAGE_CONTRAST = 0.8125 // (128 - 24) / 128
 
 export class AtlasManager {
 	private readonly ephemeris: Record<string, Map<number, BodyPosition>> = {}
-	private readonly stars = new Map<number, Star>()
 
 	constructor(readonly cache: CacheManager) {}
 
@@ -49,11 +47,11 @@ export class AtlasManager {
 	}
 
 	positionOfSun(req: PositionOfBody) {
-		return this.computeFromHorizonsPositionAt('10', req, deg(req.location.longitude), deg(req.location.latitude), meter(req.location.elevation))
+		return this.computeFromHorizonsPositionAt('10', req, req.location.longitude, req.location.latitude, req.location.elevation)
 	}
 
 	chartOfSun(req: ChartOfBody) {
-		return this.computeChart('10', req.time, 1, req.type || 'altitude')
+		return this.computeChart('10', req.time, 1)
 	}
 
 	seasons(req: PositionOfBody): SolarSeasons {
@@ -66,11 +64,11 @@ export class AtlasManager {
 	}
 
 	positionOfMoon(req: PositionOfBody) {
-		return this.computeFromHorizonsPositionAt('301', req, deg(req.location.longitude), deg(req.location.latitude), meter(req.location.elevation))
+		return this.computeFromHorizonsPositionAt('301', req, req.location.longitude, req.location.latitude, req.location.elevation)
 	}
 
 	chartOfMoon(req: ChartOfBody) {
-		return this.computeChart('301', req.time, 1, req.type || 'altitude')
+		return this.computeChart('301', req.time, 1)
 	}
 
 	moonPhases() {}
@@ -139,11 +137,11 @@ export class AtlasManager {
 	}
 
 	positionOfPlanet(code: string, req: PositionOfBody) {
-		return this.computeFromHorizonsPositionAt(code, req, deg(req.location.longitude), deg(req.location.latitude), meter(req.location.elevation))
+		return this.computeFromHorizonsPositionAt(code, req, req.location.longitude, req.location.latitude, req.location.elevation)
 	}
 
 	chartOfPlanet(code: string, req: ChartOfBody) {
-		return this.computeChart(code, req.time, 1, req.type || 'altitude')
+		return this.computeChart(code, req.time, 1)
 	}
 
 	searchMinorPlanet() {}
@@ -200,22 +198,21 @@ export class AtlasManager {
 		const location = this.cache.geographicCoordinate(req.location)
 		const time = this.cache.time(req.time.utc, location)
 
-		let icrs: CartesianCoordinate
+		let azimuth = 0
+		let altitude = 0
+		let rightAscension = 0
+		let declination = 0
 
 		if (dso.pmRa && dso.pmDec) {
-			const px = dso.distance > 0 ? 1 / dso.distance : 0
-			const s = this.stars.get(dso.id) ?? star(dso.rightAscension, dso.declination, dso.pmRa, dso.pmDec, px, dso.rv)
-			this.stars.set(dso.id, s)
-			icrs = bcrs(s, time)[0]
+			const ebpv = this.cache.earth(time)
+			const parallax = dso.distance > 0 ? 1 / dso.distance : 0
+			const ob = observeStar({ ...dso, parallax }, time, ebpv)
+			;({ azimuth, altitude, rightAscension, declination } = ob)
 		} else {
-			icrs = eraS2p(dso.rightAscension, dso.declination, ONE_PARSEC * 1000)
+			const cirs = precessFk5FromJ2000(eraS2c(dso.rightAscension, dso.declination), time)
+			;({ azimuth, altitude } = cirsToObserved(cirs, time))
+			;[rightAscension, declination] = eraC2s(...cirs)
 		}
-
-		const ebpv = this.cache.earth(time)
-		const [azimuth, altitude] = altaz(icrs, time, ebpv)!
-
-		icrs = precessFk5FromJ2000(icrs, time)
-		const [rightAscension, declination] = eraC2s(...icrs)
 
 		return {
 			magnitude: dso.magnitude,
@@ -240,37 +237,19 @@ export class AtlasManager {
 
 		const dso = nebulosa.query(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get() as SkyObject
 		const location = this.cache.geographicCoordinate(req.location)
-		const type = req.type || 'altitude'
 		const data = new Array<number>(1441)
 
 		// Generate chart data for each minute
 		for (let i = 0; i < data.length; i++) {
-			if (type === 'magnitude') {
-				data[i] = dso.magnitude
-				continue
-			}
-
 			const time = this.cache.time(startTime, location)
 
-			let icrs: CartesianCoordinate
+			const ebpv = this.cache.earth(time)
 
 			if (dso.pmRa && dso.pmDec) {
-				const px = dso.distance > 0 ? 1 / dso.distance : 0
-				const s = this.stars.get(dso.id) ?? star(dso.rightAscension, dso.declination, dso.pmRa, dso.pmDec, px, dso.rv)
-				this.stars.set(dso.id, s)
-				icrs = bcrs(s, time)[0]
+				const parallax = dso.distance > 0 ? 1 / dso.distance : 0
+				data[i] = observeStar({ ...dso, parallax }, time, ebpv).altitude
 			} else {
-				icrs = eraS2p(dso.rightAscension, dso.declination, ONE_PARSEC * 1000)
-			}
-
-			if (type === 'azimuth' || type === 'altitude') {
-				const ebpv = this.cache.earth(time)
-				const [azimuth, altitude] = altaz(icrs, time, ebpv)!
-				data[i] = type === 'altitude' ? altitude : azimuth
-			} else {
-				icrs = precessFk5FromJ2000(icrs, time)
-				const [rightAscension, declination] = eraC2s(...icrs)
-				data[i] = type === 'declination' ? declination : rightAscension
+				data[i] = icrsToObserved([dso.rightAscension, dso.declination], time, ebpv).altitude
 			}
 
 			startTime += 60000
@@ -307,20 +286,20 @@ export class AtlasManager {
 		return position
 	}
 
-	computeChart(code: string, time: UTCTime, stepSizeInMinutes: number, type: ChartOfBody['type'] = 'altitude') {
+	computeChart(code: string, time: UTCTime, stepSizeInMinutes: number) {
 		const positions = this.ephemeris[code]!
 
 		const [startTime] = this.computeStartAndEndTime(time, false)
 		const seconds = temporalSet(startTime, 0, 's') / 1000
 		const chart: number[] = []
 
-		chart.push(positions.get(seconds)![type])
+		chart.push(positions.get(seconds)!.altitude)
 
 		for (let i = stepSizeInMinutes; i <= 1440 - stepSizeInMinutes; i += stepSizeInMinutes) {
-			chart.push(positions.get(seconds + i * 60)![type])
+			chart.push(positions.get(seconds + i * 60)!.altitude)
 		}
 
-		chart.push(positions.get(seconds + 1440 * 60)![type])
+		chart.push(positions.get(seconds + 1440 * 60)!.altitude)
 
 		return chart
 	}

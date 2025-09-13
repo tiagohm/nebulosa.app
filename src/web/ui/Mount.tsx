@@ -136,6 +136,7 @@ const TargetCoordinateAndPosition = memo(({ isDisabled }: TargetCoordinateAndPos
 					<div className='flex flex-row gap-2 items-center justify-between text-sm'>
 						<div className='w-full flex flex-row items-center justify-between'>
 							<span className='font-bold'>RA:</span>
+							{coordinate.type === 'ALTAZ' && <span className='font-bold text-xs'>(J2000)</span>}
 							<span>{formatRA(position.rightAscensionJ2000)}</span>
 						</div>
 						<div className='w-full flex flex-row items-center justify-between'>

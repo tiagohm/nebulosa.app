@@ -1,5 +1,7 @@
 import { NumberInput } from '@heroui/react'
 import type { LatLngTuple } from 'leaflet'
+import { deg, toDeg } from 'nebulosa/src/angle'
+import { meter, toMeter } from 'nebulosa/src/distance'
 import { useState } from 'react'
 import type { GeographicCoordinate } from 'src/shared/types'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
@@ -16,10 +18,10 @@ export interface LocationProps {
 }
 
 export function Location({ name, coordinate: { latitude, longitude, elevation }, onCoordinateChange: onPositionChange, onClose }: LocationProps) {
-	const [position, setPosition] = useState<LatLngTuple>([latitude, longitude, elevation])
+	const [position, setPosition] = useState<LatLngTuple>([toDeg(latitude), toDeg(longitude), toMeter(elevation)])
 
 	function handlePositionChoose() {
-		onPositionChange?.({ latitude: position[0], longitude: position[1], elevation: position[2] ?? elevation })
+		onPositionChange?.({ latitude: deg(position[0]), longitude: deg(position[1]), elevation: meter(position[2] ?? 0) })
 		onClose?.()
 	}
 

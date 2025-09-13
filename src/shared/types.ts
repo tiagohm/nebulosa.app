@@ -30,9 +30,9 @@ export interface HorizontalCoordinate<T = Angle> {
 }
 
 export interface GeographicCoordinate {
-	latitude: number // deg
-	longitude: number // deg
-	elevation: number // m
+	latitude: Angle
+	longitude: Angle
+	elevation: Distance
 }
 
 export interface UTCTime {
@@ -76,9 +76,7 @@ export type SolarImageSource = (typeof SOLAR_IMAGE_SOURCES)[number]
 
 export interface PositionOfBody extends LocationAndTime {}
 
-export interface ChartOfBody extends PositionOfBody {
-	readonly type?: 'rightAscension' | 'declination' | 'azimuth' | 'altitude' | 'magnitude'
-}
+export interface ChartOfBody extends PositionOfBody {}
 
 export interface Twilight {
 	start: TwilightTime

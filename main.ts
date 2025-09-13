@@ -65,7 +65,7 @@ const connectionManager = new ConnectionManager(wsm, notificationManager)
 const guideOutputManager = new GuideOutputManager(wsm)
 const thermometerManager = new ThermometerManager(wsm)
 const focuserManager = new FocuserManager(wsm, thermometerManager)
-const mountManager = new MountManager(wsm, guideOutputManager)
+const mountManager = new MountManager(wsm, guideOutputManager, cacheManager)
 const mountRemoteControlManager = new MountRemoteControlManager(connectionManager)
 const cameraManager = new CameraManager(wsm, guideOutputManager, thermometerManager, mountManager)
 const dewHeaterManager = new DewHeaterManager(wsm)
@@ -125,11 +125,21 @@ const app = new Elysia({
 		return undefined
 	})
 
+	// Before Response
+
+	.onAfterHandle(({ set }) => {
+		set.headers['cache-control'] = 'no-cache, no-store, must-revalidate'
+		set.headers.pragma = 'no-cache'
+		set.headers.expires = '0'
+	})
+
 	// After Response
 
 	.onAfterResponse((res) => {
+		const headers = res.set.headers
+
 		if (res.path === '/image/open') {
-			const path = decodeURIComponent(res.set.headers[X_IMAGE_PATH_HEADER] as never)
+			const path = decodeURIComponent(headers[X_IMAGE_PATH_HEADER] as never)
 			fs.unlink(path).catch(console.error)
 		}
 	})

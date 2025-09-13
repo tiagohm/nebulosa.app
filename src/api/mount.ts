@@ -1,21 +1,21 @@
 import Elysia from 'elysia'
 import { type Angle, deg, formatHMS, hour, parseAngle, toDeg, toHour } from 'nebulosa/src/angle'
-import { altaz } from 'nebulosa/src/astrometry'
-import { ONE_PARSEC } from 'nebulosa/src/constants'
+import { cirsToObserved, observedToCirs } from 'nebulosa/src/astrometry'
+import { PI, TAU } from 'nebulosa/src/constants'
 import { constellation } from 'nebulosa/src/constellation'
-import { meter } from 'nebulosa/src/distance'
-import { eraC2s, eraS2p } from 'nebulosa/src/erfa'
+import { meter, toMeter } from 'nebulosa/src/distance'
+import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { fk5, precessFk5FromJ2000, precessFk5ToJ2000 } from 'nebulosa/src/fk5'
 import type { DefNumberVector, DefSwitch, DefSwitchVector, DefTextVector, DelProperty, IndiClient, IndiClientHandler, PropertyState, SetNumberVector, SetSwitchVector, SetTextVector } from 'nebulosa/src/indi'
-import { type GeographicPosition, geodeticLocation, localSiderealTime } from 'nebulosa/src/location'
+import { type GeographicPosition, localSiderealTime } from 'nebulosa/src/location'
 import { type Lx200ProtocolHandler, Lx200ProtocolServer, type MoveDirection } from 'nebulosa/src/lx200'
 import { type StellariumProtocolHandler, StellariumProtocolServer } from 'nebulosa/src/stellarium'
 import { formatTemporal, parseTemporal, temporalUnix } from 'nebulosa/src/temporal'
 import { timeNow } from 'nebulosa/src/time'
 import bus from 'src/shared/bus'
 // biome-ignore format: too long!
-import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, expectedPierSide, type GeographicCoordinate, type GPS, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountTargetCoordinate, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
-import cache from './cache'
+import { DEFAULT_MOUNT, type EquatorialCoordinate, expectedPierSide, type GeographicCoordinate, type GPS, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountTargetCoordinate, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
+import type { CacheManager } from './cache'
 import type { ConnectionManager } from './connection'
 import type { GuideOutputManager } from './guideoutput'
 import { ask, connectionFor, DeviceInterfaceType, isInterfaceType } from './indi'
@@ -54,8 +54,8 @@ export function equatorialCoordinate(client: IndiClient, mount: Mount, rightAsce
 }
 
 export function geographicCoordinate(client: IndiClient, mount: Mount, { latitude, longitude, elevation }: GeographicCoordinate) {
-	longitude = longitude < 0 ? longitude + 360 : longitude
-	client.sendNumber({ device: mount.name, name: 'GEOGRAPHIC_COORD', elements: { LAT: latitude, LONG: longitude, ELEV: elevation } })
+	longitude = longitude < 0 ? longitude + TAU : longitude
+	client.sendNumber({ device: mount.name, name: 'GEOGRAPHIC_COORD', elements: { LAT: toDeg(latitude), LONG: toDeg(longitude), ELEV: toMeter(elevation) } })
 }
 
 export function time(client: IndiClient, mount: Mount, time: GPS['time']) {
@@ -115,11 +115,11 @@ export function moveEast(client: IndiClient, mount: Mount, enable: boolean) {
 
 export class MountManager implements IndiClientHandler {
 	private readonly mounts = new Map<string, Mount>()
-	private readonly geographicPositions = new Map<Mount, GeographicPosition>()
 
 	constructor(
 		readonly wsm: WebSocketMessageManager,
 		readonly guideOutput: GuideOutputManager,
+		readonly cache: CacheManager,
 	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove all mounts associated with the client
@@ -332,13 +332,13 @@ export class MountManager implements IndiClientHandler {
 				return
 			}
 			case 'GEOGRAPHIC_COORD': {
-				const longitude = message.elements.LONG!.value
-				const latitude = message.elements.LAT!.value
-				const elevation = message.elements.ELEV!.value
+				const longitude = deg(message.elements.LONG!.value)
+				const latitude = deg(message.elements.LAT!.value)
+				const elevation = meter(message.elements.ELEV!.value)
 				let updated = false
 
 				if (device.geographicCoordinate.longitude !== longitude) {
-					device.geographicCoordinate.longitude = longitude >= 180 ? longitude - 360 : longitude
+					device.geographicCoordinate.longitude = longitude >= PI ? longitude - TAU : longitude
 					updated = true
 				}
 
@@ -353,7 +353,6 @@ export class MountManager implements IndiClientHandler {
 				}
 
 				if (updated) {
-					this.geographicPositions.set(device, geodeticLocation(deg(longitude), deg(latitude), meter(elevation)))
 					this.update(device, 'geographicCoordinate', message.state)
 				}
 
@@ -461,9 +460,7 @@ export class MountManager implements IndiClientHandler {
 	}
 
 	targetCoordinatePosition(device: Mount, target: EquatorialCoordinate | MountTargetCoordinate<string | Angle> = device.equatorialCoordinate) {
-		const location = this.geographicPositions.get(device)
-
-		if (!location) return { ...DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, rightAscension: 0, declination: 0 }
+		const location: GeographicPosition = { ...device.geographicCoordinate, ellipsoid: 3 }
 
 		let rightAscension = 0
 		let declination = 0
@@ -472,26 +469,32 @@ export class MountManager implements IndiClientHandler {
 		let azimuth = 0
 		let altitude = 0
 
-		const now = cache.time('now', location)
-		const ebpv = cache.earth(now)
-		const lst = localSiderealTime(now)
+		const time = this.cache.time('now', location)
+		const lst = localSiderealTime(time)
 
+		// JNOW equatorial coordinate
 		if (!('type' in target) || target.type === 'JNOW') {
 			rightAscension = typeof target.rightAscension === 'number' ? target.rightAscension : parseAngle(target.rightAscension, { isHour: true })!
 			declination = typeof target.declination === 'number' ? target.declination : parseAngle(target.declination)!
 
-			const fk5 = precessFk5ToJ2000(eraS2p(rightAscension, declination, ONE_PARSEC * 1000), now)
-			;[rightAscensionJ2000, declinationJ2000] = eraC2s(...fk5)
-			;[azimuth, altitude] = altaz(fk5, now, ebpv)!
-		} else if (target.type === 'J2000') {
+			;({ azimuth, altitude } = cirsToObserved([rightAscension, declination], time))
+			;[rightAscensionJ2000, declinationJ2000] = eraC2s(...precessFk5ToJ2000(eraS2c(rightAscension, declination), time))
+		}
+		// J2000 equatorial coordinate
+		else if (target.type === 'J2000') {
 			rightAscensionJ2000 = typeof target.rightAscension === 'number' ? target.rightAscension : parseAngle(target.rightAscension, { isHour: true })!
 			declinationJ2000 = typeof target.declination === 'number' ? target.declination : parseAngle(target.declination)!
 
-			const fk5 = eraS2p(rightAscensionJ2000, declinationJ2000, ONE_PARSEC * 1000)
-			;[azimuth, altitude] = altaz(fk5, now, ebpv)!
-			;[rightAscension, declination] = eraC2s(...precessFk5FromJ2000(fk5, now))
-		} else if (target.type === 'ALTAZ') {
-			// TODO: ALT/AZ to RA/DEC JNOW
+			;[rightAscension, declination] = eraC2s(...precessFk5FromJ2000(eraS2c(rightAscensionJ2000, declinationJ2000), time))
+			;({ azimuth, altitude } = cirsToObserved([rightAscension, declination], time))
+		}
+		// Local horizontal coordinate
+		else if (target.type === 'ALTAZ') {
+			azimuth = typeof target.azimuth === 'number' ? target.azimuth : parseAngle(target.azimuth)!
+			altitude = typeof target.altitude === 'number' ? target.altitude : parseAngle(target.altitude)!
+
+			;[rightAscension, declination] = observedToCirs(azimuth, altitude, time)
+			;[rightAscensionJ2000, declinationJ2000] = eraC2s(...precessFk5ToJ2000(eraS2c(rightAscension, declination), time))
 		}
 
 		return {
@@ -501,7 +504,7 @@ export class MountManager implements IndiClientHandler {
 			declinationJ2000,
 			azimuth,
 			altitude,
-			constellation: constellation(rightAscension, declination, now),
+			constellation: constellation(rightAscension, declination, time),
 			lst: formatHMS(lst),
 			meridianAt: '00:00',
 			pierSide: expectedPierSide(rightAscension, declination, lst),
@@ -519,12 +522,15 @@ export class MountManager implements IndiClientHandler {
 			const rightAscensionJ2000 = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, { isHour: true })!
 			const declinationJ2000 = typeof req.declination === 'number' ? req.declination : parseAngle(req.declination)!
 
-			const now = cache.time('now')
-			const fk5 = eraS2p(rightAscensionJ2000, declinationJ2000, ONE_PARSEC * 1000)
-			;[rightAscension, declination] = eraC2s(...precessFk5FromJ2000(fk5, now))
+			const time = this.cache.time('now')
+			const fk5 = eraS2c(rightAscensionJ2000, declinationJ2000)
+			;[rightAscension, declination] = eraC2s(...precessFk5FromJ2000(fk5, time))
 		} else if (req.type === 'ALTAZ') {
-			// TODO: ALT/AZ to RA/DEC JNOW
-			return
+			const azimuth = typeof req.azimuth === 'number' ? req.azimuth : parseAngle(req.azimuth)!
+			const altitude = typeof req.altitude === 'number' ? req.altitude : parseAngle(req.altitude)!
+
+			const time = this.cache.time('now')
+			;[rightAscension, declination] = observedToCirs(azimuth, altitude, time)
 		}
 
 		if (mode === 'goto') goTo(client, mount, rightAscension, declination)

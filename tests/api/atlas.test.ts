@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { deg, formatALT, formatAZ, parseAngle } from 'nebulosa/src/angle'
-import { lightYear, toKilometer } from 'nebulosa/src/distance'
+import { deg, formatALT, formatRA, parseAngle } from 'nebulosa/src/angle'
+import { lightYear, meter, toKilometer } from 'nebulosa/src/distance'
 import { StellariumObjectType } from 'nebulosa/src/stellarium'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { AtlasManager } from 'src/api/atlas'
 import cache from 'src/api/cache'
-import { type ChartOfBody, DEFAULT_SKY_OBJECT_SEARCH, type PositionOfBody, type SkyObjectSearch } from 'src/shared/types'
+import { DEFAULT_SKY_OBJECT_SEARCH, type PositionOfBody, type SkyObjectSearch } from 'src/shared/types'
 
 const atlas = new AtlasManager(cache)
 
@@ -15,15 +15,10 @@ const POSITION_OF_BODY: PositionOfBody = {
 		offset: -180,
 	},
 	location: {
-		latitude: -22,
-		longitude: -45,
-		elevation: 890,
+		latitude: deg(-22),
+		longitude: deg(-45),
+		elevation: meter(890),
 	},
-}
-
-const CHART_OF_BODY: ChartOfBody = {
-	...POSITION_OF_BODY,
-	type: 'altitude',
 }
 
 const SKY_OBJECT_SEARCH: SkyObjectSearch = {
@@ -270,22 +265,11 @@ test('position of sky object', () => {
 	expect(position.leading).toBe(false)
 })
 
-describe('chart of sky object', () => {
-	test('altitude', () => {
-		const chart = atlas.chartOfSkyObject(CHART_OF_BODY, '32263')
+test('chart of sky object', () => {
+	const chart = atlas.chartOfSkyObject(POSITION_OF_BODY, '32263')
 
-		expect(chart).toHaveLength(1441)
-		expect(formatALT(chart[0])).toBe('+66 48 39.29')
-		expect(formatALT(chart[720])).toBe('-44 21 24.74')
-		expect(formatALT(chart[1440])).toBe('+65 54 26.76')
-	}, 5000)
-
-	test('azimuth', () => {
-		const chart = atlas.chartOfSkyObject({ ...CHART_OF_BODY, type: 'azimuth' }, '32263')
-
-		expect(chart).toHaveLength(1441)
-		expect(formatAZ(chart[0])).toBe('278 50 39.10')
-		expect(formatAZ(chart[720])).toBe('146 14 54.19')
-		expect(formatAZ(chart[1440])).toBe('278 09 59.22')
-	}, 5000)
+	expect(chart).toHaveLength(1441)
+	expect(formatALT(chart[0])).toBe('+66 48 39.29')
+	expect(formatALT(chart[720])).toBe('-44 21 24.74')
+	expect(formatALT(chart[1440])).toBe('+65 54 26.76')
 })

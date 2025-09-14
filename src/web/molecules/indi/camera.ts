@@ -1,6 +1,6 @@
 import { createScope, molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
-import { type Camera, type CameraCaptureStart, type CameraCaptureTaskEvent, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_TASK_EVENT, type Mount } from 'src/shared/types'
+import { type Camera, type CameraCaptured, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURED, type Mount } from 'src/shared/types'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
@@ -15,7 +15,7 @@ export interface CameraScopeValue {
 export interface CameraState {
 	readonly camera: Camera
 	readonly request: CameraCaptureStart
-	readonly progress: CameraCaptureTaskEvent
+	readonly progress: CameraCaptured
 	connecting: boolean
 	capturing: boolean
 	targetTemperature: number
@@ -41,7 +41,7 @@ export const CameraMolecule = molecule((m, s) => {
 		proxy<CameraState>({
 			camera: equipment.get('camera', scope.camera.name)!,
 			request: cameraCaptureStartRequest,
-			progress: structuredClone(DEFAULT_CAMERA_CAPTURE_TASK_EVENT),
+			progress: structuredClone(DEFAULT_CAMERA_CAPTURED),
 			connecting: false,
 			capturing: false,
 			targetTemperature: scope.camera.temperature,
@@ -81,7 +81,7 @@ export const CameraMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[2] = bus.subscribe<CameraCaptureTaskEvent>('camera:capture', (event) => {
+		unsubscribers[2] = bus.subscribe<CameraCaptured>('camera:capture', (event) => {
 			if (event.device === state.camera.name) {
 				if (event.savedPath && !state.image) {
 					const image = workspace.add(event.savedPath, event.device, scope.camera)

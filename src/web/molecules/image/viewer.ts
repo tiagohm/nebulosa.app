@@ -2,7 +2,7 @@ import { createScope, molecule, onMount } from 'bunshi'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import bus, { unsubscribe } from 'src/shared/bus'
-import { type CameraCaptureTaskEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
+import { type CameraCaptured, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
 import type { PickByValue } from 'utility-types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -183,7 +183,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		unsubscribers[1] = subscribe(state.transformation, () => simpleLocalStorage.set('image.transformation', state.transformation))
 
 		if (camera) {
-			unsubscribers[2] = bus.subscribe<CameraCaptureTaskEvent>('camera:capture', (event) => {
+			unsubscribers[2] = bus.subscribe<CameraCaptured>('camera:capture', (event) => {
 				if (event.device === camera.name && event.savedPath) {
 					void load(true, event.savedPath)
 				}

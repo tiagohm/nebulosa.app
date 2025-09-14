@@ -139,16 +139,13 @@ export class CoverManager implements IndiClientHandler {
 	}
 
 	update(device: Cover, property: keyof Cover, state?: PropertyState) {
-		const value = { name: device.name, [property]: device[property] }
-		this.wsm.send<CoverUpdated>({ type: 'cover:update', device: value, property, state })
-		bus.emit('cover:update', value)
+		this.wsm.send<CoverUpdated>('cover:update', { device: { name: device.name, [property]: device[property] }, property, state })
 	}
 
 	add(device: Cover) {
 		this.covers.set(device.name, device)
 
-		this.wsm.send<CoverAdded>({ type: 'cover:add', device })
-		bus.emit('cover:add', device)
+		this.wsm.send<CoverAdded>('cover:add', { device })
 		console.info('cover added:', device.name)
 	}
 
@@ -163,8 +160,7 @@ export class CoverManager implements IndiClientHandler {
 			// TODO: Call it on deleteProperty
 			this.dewHeater.remove(device)
 
-			this.wsm.send<CoverRemoved>({ type: 'cover:remove', device })
-			bus.emit('cover:remove', device)
+			this.wsm.send<CoverRemoved>('cover:remove', { device })
 			console.info('cover removed:', device.name)
 		}
 	}

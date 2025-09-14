@@ -120,16 +120,13 @@ export class FlatPanelManager implements IndiClientHandler {
 	}
 
 	update(device: FlatPanel, property: keyof FlatPanel, state?: PropertyState) {
-		const value = { name: device.name, [property]: device[property] }
-		this.wsm.send<FlatPanelUpdated>({ type: 'flatPanel:update', device: value, property, state })
-		bus.emit('flatPanel:update', value)
+		this.wsm.send<FlatPanelUpdated>('flatPanel:update', { device: { name: device.name, [property]: device[property] }, property, state })
 	}
 
 	add(device: FlatPanel) {
 		this.flatPanels.set(device.name, device)
 
-		this.wsm.send<FlatPanelAdded>({ type: 'flatPanel:add', device })
-		bus.emit('flatPanel:add', device)
+		this.wsm.send<FlatPanelAdded>('flatPanel:add', { device })
 		console.info('flat panel added:', device.name)
 	}
 
@@ -141,8 +138,7 @@ export class FlatPanelManager implements IndiClientHandler {
 		if (this.flatPanels.has(device.name)) {
 			this.flatPanels.delete(device.name)
 
-			this.wsm.send<FlatPanelRemoved>({ type: 'flatPanel:remove', device })
-			bus.emit('flatPanel:remove', device)
+			this.wsm.send<FlatPanelRemoved>('flatPanel:remove', { device })
 			console.info('flat panel removed:', device.name)
 		}
 	}

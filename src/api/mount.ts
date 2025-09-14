@@ -419,14 +419,12 @@ export class MountManager implements IndiClientHandler {
 
 	update(device: Mount, property: keyof Mount, state?: PropertyState) {
 		const value = { name: device.name, [property]: device[property] }
-		this.wsm.send<MountUpdated>({ type: 'mount:update', device: value, property, state })
-		bus.emit('mount:update', value)
+		this.wsm.send<MountUpdated>('mount:update', { device: value, property, state })
 	}
 
 	add(device: Mount) {
 		this.mounts.set(device.name, device)
-		this.wsm.send<MountAdded>({ type: 'mount:add', device })
-		bus.emit('mount:add', device)
+		this.wsm.send<MountAdded>('mount:add', { device })
 		console.info('mount added:', device.name)
 	}
 
@@ -441,8 +439,7 @@ export class MountManager implements IndiClientHandler {
 			// TODO: Call it on deleteProperty
 			this.guideOutput.remove(device)
 
-			this.wsm.send<MountRemoved>({ type: 'mount:remove', device })
-			bus.emit('mount:remove', device)
+			this.wsm.send<MountRemoved>('mount:remove', { device })
 			console.info('mount removed:', device.name)
 		}
 	}

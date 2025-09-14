@@ -46,24 +46,16 @@ export class ThermometerManager implements IndiClientHandler {
 	}
 
 	update(device: Thermometer, property: keyof Thermometer, state?: PropertyState) {
-		const value = { name: device.name, [property]: device[property] }
+		const event = { device: { name: device.name, [property]: device[property] }, property, state }
 
-		if (device.type === 'CAMERA') {
-			this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
-			bus.emit('camera:update', value)
-		} else if (device.type === 'FOCUSER') {
-			this.wsm.send<FocuserUpdated>({ type: 'focuser:update', device: value, property, state })
-			bus.emit('focuser:update', value)
-		}
-
-		this.wsm.send<ThermometerUpdated>({ type: 'thermometer:update', device: value, property, state })
-		bus.emit('thermometer:update', value)
+		if (device.type === 'CAMERA') this.wsm.send<CameraUpdated>('camera:update', event)
+		else if (device.type === 'FOCUSER') this.wsm.send<FocuserUpdated>('focuser:update', event)
+		this.wsm.send<ThermometerUpdated>('thermometer:update', event)
 	}
 
 	add(device: Thermometer) {
 		this.thermometers.set(device.name, device)
-		this.wsm.send<ThermometerAdded>({ type: 'thermometer:add', device })
-		bus.emit('thermometer:add', device)
+		this.wsm.send<ThermometerAdded>('thermometer:add', { device })
 		console.info('thermometer added:', device.name)
 	}
 
@@ -78,8 +70,7 @@ export class ThermometerManager implements IndiClientHandler {
 
 			this.thermometers.delete(device.name)
 
-			this.wsm.send<ThermometerRemoved>({ type: 'thermometer:remove', device })
-			bus.emit('thermometer:remove', device)
+			this.wsm.send<ThermometerRemoved>('thermometer:remove', { device })
 			console.info('thermometer removed:', device.name)
 		}
 	}

@@ -27,7 +27,7 @@ export class ConfirmationManager {
 			resolve(value)
 		})
 
-		this.wsm?.send<Confirmation>({ ...message, type: 'confirmation' })
+		this.wsm?.send<Confirmation>('confirmation', message)
 
 		return promise
 	}

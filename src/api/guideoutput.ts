@@ -67,25 +67,17 @@ export class GuideOutputManager implements IndiClientHandler {
 	}
 
 	update(device: GuideOutput, property: keyof GuideOutput, state?: PropertyState) {
-		const value = { name: device.name, [property]: device[property] }
+		const event = { device: { name: device.name, [property]: device[property] }, property, state }
 
-		if (device.type === 'CAMERA') {
-			this.wsm.send<CameraUpdated>({ type: 'camera:update', device: value, property, state })
-			bus.emit('camera:update', value)
-		} else if (device.type === 'MOUNT') {
-			this.wsm.send<MountUpdated>({ type: 'mount:update', device: value, property, state })
-			bus.emit('mount:update', value)
-		}
-
-		this.wsm.send<GuideOutputUpdated>({ type: 'guideOutput:update', device: value, property, state })
-		bus.emit('guideOutput:update', value)
+		if (device.type === 'CAMERA') this.wsm.send<CameraUpdated>('camera:update', event)
+		else if (device.type === 'MOUNT') this.wsm.send<MountUpdated>('mount:update', event)
+		this.wsm.send<GuideOutputUpdated>('guideOutput:update', event)
 	}
 
 	add(device: GuideOutput) {
 		this.guideOutputs.set(device.name, device)
 
-		this.wsm.send<GuideOutputAdded>({ type: 'guideOutput:add', device })
-		bus.emit('guideOutput:add', device)
+		this.wsm.send<GuideOutputAdded>('guideOutput:add', { device })
 		console.info('guide output added:', device.name)
 	}
 
@@ -100,8 +92,7 @@ export class GuideOutputManager implements IndiClientHandler {
 
 			this.guideOutputs.delete(device.name)
 
-			this.wsm.send<GuideOutputRemoved>({ type: 'guideOutput:remove', device })
-			bus.emit('guideOutput:remove', device)
+			this.wsm.send<GuideOutputRemoved>('guideOutput:remove', { device })
 			console.info('guide output removed:', device.name)
 		}
 	}

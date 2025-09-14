@@ -163,7 +163,7 @@ export class IndiDevicePropertyManager {
 
 	private notify(device: string, name: string, property: DeviceProperty, type: 'update' | 'remove') {
 		if (this.listeners.has(device)) {
-			this.wsm.send<IndiDevicePropertyEvent>({ type: `indi:property:${type}`, device, name, property })
+			this.wsm.send<IndiDevicePropertyEvent>(`indi:property:${type}`, { device, name, property })
 		}
 	}
 
@@ -265,13 +265,9 @@ export class IndiServerManager {
 		const cmd = ['indiserver', '-p', req.port?.toFixed(0) || '7624', '-r', req.repeat?.toFixed(0) || '1', req.verbose ? `-${'v'.repeat(req.verbose)}` : '', ...req.drivers].filter((e) => !!e)
 		const p = Bun.spawn({ cmd })
 
-		p.exited.then((code) => {
-			bus.emit('indi:server:stop', { pid: p.pid, code })
-			this.wsm.send<IndiServerEvent>({ type: 'indi:server:stop', pid: p.pid, code })
-		})
+		p.exited.then((code) => this.wsm.send<IndiServerEvent>('indi:server:stop', { pid: p.pid, code }))
 
-		bus.emit('indi:server:start', p.pid)
-		this.wsm.send<IndiServerEvent>({ type: 'indi:server:start', pid: p.pid })
+		this.wsm.send<IndiServerEvent>('indi:server:start', { pid: p.pid })
 		this.process = p
 	}
 

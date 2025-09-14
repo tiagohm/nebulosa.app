@@ -56,13 +56,15 @@ export class ImageManager {
 				const fits = await readFits(source)
 
 				if (fits) {
-					const path = Buffer.from(parts[2], 'hex').toString('utf-8')
+					const path = parts.length >= 3 ? Buffer.from(parts[2], 'hex').toString('utf-8') : key
 					return await this.readAndTransformImageFromFits(fits, req.transformation, path)
 				}
 
 				return undefined
-			} else {
+			} else if (parts.length >= 3) {
 				req.path = Buffer.from(parts[2], 'hex').toString('utf-8')
+			} else {
+				return undefined
 			}
 		}
 
@@ -192,8 +194,8 @@ export function image(image: ImageManager, cache: Map<string, Buffer>) {
 		.post('/annotate', () => image.annotate())
 		.post('/coordinateInterpolation', () => image.coordinateInterpolation())
 		.post('/statistics', () => image.statistics())
-		.get('/fovCameras', fovCameras)
-		.get('/fovTelescopes', fovTelescopes)
+		.get('/fovCameras', () => fovCameras)
+		.get('/fovTelescopes', () => fovTelescopes)
 
 	return app
 }

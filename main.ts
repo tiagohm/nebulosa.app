@@ -140,7 +140,7 @@ const app = new Elysia({
 
 		if (res.path === '/image/open') {
 			const path = decodeURIComponent(headers[X_IMAGE_PATH_HEADER] as never)
-			fs.unlink(path).catch(console.error)
+			path && fs.unlink(path).catch(console.error)
 		}
 	})
 

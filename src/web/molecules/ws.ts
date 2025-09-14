@@ -1,6 +1,6 @@
 import { molecule } from 'bunshi'
 import bus from 'src/shared/bus'
-import type { CameraCaptureTaskEvent, Confirmation, ConnectionEvent, DeviceMessageEvent, IndiDevicePropertyEvent, IndiServerEvent, Notification } from 'src/shared/types'
+import type { DeviceAdded } from 'src/shared/types'
 import { NotificationMolecule } from './notification'
 
 export const WebSocketMolecule = molecule((m) => {
@@ -15,9 +15,19 @@ export const WebSocketMolecule = molecule((m) => {
 	ws.addEventListener('message', (message) => {
 		if (!bus.hasSubscribers()) return
 
-		const data = JSON.parse(message.data) as DeviceMessageEvent | ConnectionEvent | IndiDevicePropertyEvent | IndiServerEvent | Confirmation | CameraCaptureTaskEvent | Notification
+		const content = message.data as string
+		const index = content.indexOf('@')
 
-		switch (data.type) {
+		if (index === -1) {
+			console.warn('invalid web socket message:', message.data)
+			return
+		}
+
+		const key = content.slice(0, index)
+		const text = content.slice(index + 1)
+		const data = JSON.parse(text)
+
+		switch (key) {
 			case 'camera:add':
 			case 'camera:remove':
 			case 'mount:add':
@@ -34,13 +44,13 @@ export const WebSocketMolecule = molecule((m) => {
 			case 'flatPanel:remove':
 			case 'dewHeater:add':
 			case 'dewHeater:remove':
-				bus.emit(data.type, data.device)
+				bus.emit(key, (data as DeviceAdded).device)
 				break
 			case 'notification':
 				notification.send(data)
 				break
 			default:
-				bus.emit(data.type, data)
+				bus.emit(key, data)
 				break
 		}
 	})

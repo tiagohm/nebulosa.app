@@ -148,8 +148,7 @@ export interface Confirm {
 	readonly accepted: boolean
 }
 
-export interface Confirmation extends WebSocketMessage {
-	readonly type: 'confirmation'
+export interface Confirmation {
 	key: string
 	message: string
 }
@@ -169,8 +168,7 @@ export interface ConnectionStatus extends Connect {
 	ip?: string
 }
 
-export interface ConnectionEvent extends WebSocketMessage {
-	readonly type: 'connection:open' | 'connection:close'
+export interface ConnectionEvent {
 	readonly status: ConnectionStatus
 }
 
@@ -305,97 +303,92 @@ export interface IndiServerStatus {
 	readonly drivers: string[]
 }
 
-export interface IndiServerEvent extends WebSocketMessage {
-	readonly type: 'indi:server:start' | 'indi:server:stop'
+export interface IndiServerEvent {
 	readonly pid: number
 	readonly code?: number
 }
 
-export interface IndiDevicePropertyEvent extends WebSocketMessage {
-	readonly type: 'indi:property:update' | 'indi:property:remove'
+export interface IndiDevicePropertyEvent {
 	readonly device: string
 	readonly name: string
 	readonly property: DeviceProperty
 }
 
-export interface DeviceAdded<T extends string, D extends Device> extends WebSocketMessage {
-	readonly type: `${T}:add`
+export interface DeviceAdded<D extends Device = Device> {
 	readonly device: D
 }
 
-export interface DeviceUpdated<T extends string, D extends Device> extends WebSocketMessage {
-	readonly type: `${T}:update`
+export interface DeviceUpdated<D extends Device = Device> {
 	readonly device: Required<Partial<D>, 'name'>
 	readonly property: keyof D
 	readonly state?: PropertyState
 }
 
-export interface DeviceRemoved<T extends string, D extends Device> extends WebSocketMessage {
-	readonly type: `${T}:remove`
+export interface DeviceRemoved<D extends Device = Device> {
 	readonly device: D
 }
 
-export type CameraAdded = DeviceAdded<'camera', Camera>
+export type CameraAdded = DeviceAdded<Camera>
 
-export type CameraUpdated = DeviceUpdated<'camera', Camera>
+export type CameraUpdated = DeviceUpdated<Camera>
 
-export type CameraRemoved = DeviceRemoved<'camera', Camera>
+export type CameraRemoved = DeviceRemoved<Camera>
 
 export type CameraMessageEvent = CameraAdded | CameraUpdated | CameraRemoved
 
-export type MountAdded = DeviceAdded<'mount', Mount>
+export type MountAdded = DeviceAdded<Mount>
 
-export type MountUpdated = DeviceUpdated<'mount', Mount>
+export type MountUpdated = DeviceUpdated<Mount>
 
-export type MountRemoved = DeviceRemoved<'mount', Mount>
+export type MountRemoved = DeviceRemoved<Mount>
 
 export type MountMessageEvent = MountAdded | MountUpdated | MountRemoved
 
-export type FocuserAdded = DeviceAdded<'focuser', Focuser>
+export type FocuserAdded = DeviceAdded<Focuser>
 
-export type FocuserUpdated = DeviceUpdated<'focuser', Focuser>
+export type FocuserUpdated = DeviceUpdated<Focuser>
 
-export type FocuserRemoved = DeviceRemoved<'focuser', Focuser>
+export type FocuserRemoved = DeviceRemoved<Focuser>
 
 export type FocuserMessageEvent = FocuserAdded | FocuserUpdated | FocuserRemoved
 
-export type GuideOutputAdded = DeviceAdded<'guideOutput', GuideOutput>
+export type GuideOutputAdded = DeviceAdded<GuideOutput>
 
-export type GuideOutputUpdated = DeviceUpdated<'guideOutput', GuideOutput>
+export type GuideOutputUpdated = DeviceUpdated<GuideOutput>
 
-export type GuideOutputRemoved = DeviceRemoved<'guideOutput', GuideOutput>
+export type GuideOutputRemoved = DeviceRemoved<GuideOutput>
 
 export type GuideOutputMessageEvent = GuideOutputAdded | GuideOutputUpdated | GuideOutputRemoved
 
-export type ThermometerAdded = DeviceAdded<'thermometer', Thermometer>
+export type ThermometerAdded = DeviceAdded<Thermometer>
 
-export type ThermometerUpdated = DeviceUpdated<'thermometer', Thermometer>
+export type ThermometerUpdated = DeviceUpdated<Thermometer>
 
-export type ThermometerRemoved = DeviceRemoved<'thermometer', Thermometer>
+export type ThermometerRemoved = DeviceRemoved<Thermometer>
 
 export type ThermometerMessageEvent = ThermometerAdded | ThermometerUpdated | ThermometerRemoved
 
-export type CoverAdded = DeviceAdded<'cover', Cover>
+export type CoverAdded = DeviceAdded<Cover>
 
-export type CoverUpdated = DeviceUpdated<'cover', Cover>
+export type CoverUpdated = DeviceUpdated<Cover>
 
-export type CoverRemoved = DeviceRemoved<'cover', Cover>
+export type CoverRemoved = DeviceRemoved<Cover>
 
 export type CoverMessageEvent = CoverAdded | CoverUpdated | CoverRemoved
 
-export type FlatPanelAdded = DeviceAdded<'flatPanel', FlatPanel>
+export type FlatPanelAdded = DeviceAdded<FlatPanel>
 
-export type FlatPanelUpdated = DeviceUpdated<'flatPanel', FlatPanel>
+export type FlatPanelUpdated = DeviceUpdated<FlatPanel>
 
-export type FlatPanelRemoved = DeviceRemoved<'flatPanel', FlatPanel>
+export type FlatPanelRemoved = DeviceRemoved<FlatPanel>
 
 export type FlatPanelMessageEvent = FlatPanelAdded | FlatPanelUpdated | FlatPanelRemoved
 
-export type DewHeaterAdded = DeviceAdded<'dewHeater', DewHeater>
+export type DewHeaterAdded = DeviceAdded<DewHeater>
 
-export type DewHeaterUpdated = DeviceUpdated<'dewHeater', DewHeater>
+export type DewHeaterUpdated = DeviceUpdated<DewHeater>
 
-export type DewHeaterRemoved = DeviceRemoved<'dewHeater', DewHeater>
+export type DewHeaterRemoved = DeviceRemoved<DewHeater>
 
 export type DewHeaterMessageEvent = DewHeaterAdded | DewHeaterUpdated | DewHeaterRemoved
 
@@ -533,8 +526,7 @@ export interface CameraCaptureProgress {
 	progress: number
 }
 
-export interface CameraCaptureTaskEvent extends WebSocketMessage {
-	readonly type: 'camera:capture'
+export interface CameraCaptured {
 	device: string
 	count: number
 	loop: boolean
@@ -659,18 +651,11 @@ export interface DewHeater extends Device {
 	readonly pwm: Pick<DefNumber, 'min' | 'max' | 'value'>
 }
 
-// Message
-
-export interface WebSocketMessage {
-	readonly type: string
-}
-
 // Notification
 
 export type Severity = 'info' | 'success' | 'warn' | 'error'
 
-export interface Notification extends WebSocketMessage {
-	readonly type: 'notification'
+export interface Notification {
 	target?: string
 	severity?: Severity
 	title?: string
@@ -697,7 +682,7 @@ export interface PlateSolveStart extends Omit<PlateSolveOptions, 'ra' | 'dec' | 
 }
 
 export interface PlateSolveStop {
-	id: string
+	readonly id: string
 }
 
 // Star Detection
@@ -712,6 +697,18 @@ export interface StarDetection {
 	minSNR: number
 	maxStars: number
 	slot: number
+}
+
+// Tppa
+
+export interface TppaStart {
+	readonly id: string
+	readonly solver: Omit<PlateSolveStart, 'id' | 'path' | 'blind'>
+	readonly capture: CameraCaptureStart
+}
+
+export interface TppaStop {
+	readonly id: string
 }
 
 // Misc
@@ -745,8 +742,7 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	autoSubFolderMode: 'OFF',
 }
 
-export const DEFAULT_CAMERA_CAPTURE_TASK_EVENT: CameraCaptureTaskEvent = {
-	type: 'camera:capture',
+export const DEFAULT_CAMERA_CAPTURED: CameraCaptured = {
 	device: '',
 	state: 'IDLE',
 	count: 0,

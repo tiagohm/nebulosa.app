@@ -1,4 +1,4 @@
-import type { WebSocketMessage } from '../shared/types'
+import bus from 'src/shared/bus'
 
 export interface Messager {
 	readonly sendText: (data: string) => void
@@ -10,7 +10,7 @@ export class WebSocketMessageManager {
 	open(socket: Messager) {
 		if (!this.sockets.has(socket)) {
 			this.sockets.add(socket)
-			console.info('WebSocket connected')
+			console.info('web socket connected')
 		}
 	}
 
@@ -20,14 +20,16 @@ export class WebSocketMessageManager {
 
 	close(socket: Messager, code: number, reason: string) {
 		if (this.sockets.has(socket)) {
-			console.info('WebSocket closed: ', code, reason)
+			console.info('web socket closed: ', code, reason)
 			this.sockets.delete(socket)
 		}
 	}
 
-	send<T extends WebSocketMessage>(message: Readonly<T>) {
+	send<T = unknown>(type: string, message: T) {
+		bus.emit(type, message)
+
 		if (this.sockets.size) {
-			const data = JSON.stringify(message)
+			const data = `${type}@${JSON.stringify(message)}`
 			this.sockets.forEach((socket) => socket.sendText(data))
 		}
 	}

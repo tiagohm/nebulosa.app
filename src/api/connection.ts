@@ -45,8 +45,7 @@ export class ConnectionManager {
 					console.info('new connection to INDI server', client.remoteIp, client.remotePort)
 
 					const status = this.status(client)!
-					bus.emit('connection:open', status)
-					this.wsm.send<ConnectionEvent>({ type: 'connection:open', status })
+					this.wsm.send<ConnectionEvent>('connection:open', { status })
 					return status
 				}
 			} catch (e) {
@@ -67,8 +66,7 @@ export class ConnectionManager {
 				client.close()
 				this.clients.delete(id)
 
-				bus.emit('connection:close', status)
-				this.wsm.send<ConnectionEvent>({ type: 'connection:close', status })
+				this.wsm.send<ConnectionEvent>('connection:close', { status })
 
 				console.info('disconnected from INDI server', client.remoteIp, client.remotePort)
 			}
@@ -80,8 +78,7 @@ export class ConnectionManager {
 					client.close()
 					this.clients.delete(key)
 
-					bus.emit('connection:close', status)
-					this.wsm.send<ConnectionEvent>({ type: 'connection:close', status })
+					this.wsm.send<ConnectionEvent>('connection:close', { status })
 
 					console.info('disconnected from INDI server', client.remoteIp, client.remotePort)
 

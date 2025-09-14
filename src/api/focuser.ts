@@ -207,15 +207,12 @@ export class FocuserManager implements IndiClientHandler {
 	}
 
 	update(device: Focuser, property: keyof Focuser, state?: PropertyState) {
-		const value = { name: device.name, [property]: device[property] }
-		this.wsm.send<FocuserUpdated>({ type: 'focuser:update', device: value, property, state })
-		bus.emit('focuser:update', value)
+		this.wsm.send<FocuserUpdated>('focuser:update', { device: { name: device.name, [property]: device[property] }, property, state })
 	}
 
 	add(device: Focuser) {
 		this.focusers.set(device.name, device)
-		this.wsm.send<FocuserAdded>({ type: 'focuser:add', device })
-		bus.emit('focuser:add', device)
+		this.wsm.send<FocuserAdded>('focuser:add', { device })
 		console.info('focuser added:', device.name)
 	}
 
@@ -230,8 +227,7 @@ export class FocuserManager implements IndiClientHandler {
 			// TODO: Call it on deleteProperty
 			this.thermometer.remove(device)
 
-			this.wsm.send<FocuserRemoved>({ type: 'focuser:remove', device })
-			bus.emit('focuser:remove', device)
+			this.wsm.send<FocuserRemoved>('focuser:remove', { device })
 			console.info('focuser removed:', device.name)
 		}
 	}

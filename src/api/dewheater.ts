@@ -50,22 +50,16 @@ export class DewHeaterManager implements IndiClientHandler {
 	}
 
 	update(device: DewHeater, property: keyof DewHeater, state?: PropertyState) {
-		const value = { name: device.name, [property]: device[property] }
+		const event = { device: { name: device.name, [property]: device[property] }, property, state }
 
-		if (device.type === 'COVER') {
-			this.wsm.send<CoverUpdated>({ type: 'cover:update', device: value, property, state })
-			bus.emit('cover:update', value)
-		}
-
-		this.wsm.send<DewHeaterUpdated>({ type: 'dewHeater:update', device: value, property, state })
-		bus.emit('dewHeater:update', value)
+		if (device.type === 'COVER') this.wsm.send<CoverUpdated>('cover:update', event)
+		this.wsm.send<DewHeaterUpdated>('dewHeater:update', event)
 	}
 
 	add(device: DewHeater) {
 		this.dewHeaters.set(device.name, device)
 
-		this.wsm.send<DewHeaterAdded>({ type: 'dewHeater:add', device })
-		bus.emit('dewHeater:add', device)
+		this.wsm.send<DewHeaterAdded>('dewHeater:add', { device })
 		console.info('dew heater added:', device.name)
 	}
 
@@ -80,8 +74,7 @@ export class DewHeaterManager implements IndiClientHandler {
 
 			this.dewHeaters.delete(device.name)
 
-			this.wsm.send<DewHeaterRemoved>({ type: 'dewHeater:remove', device })
-			bus.emit('dewHeater:remove', device)
+			this.wsm.send<DewHeaterRemoved>('dewHeater:remove', { device })
 			console.info('dew heater removed:', device.name)
 		}
 	}

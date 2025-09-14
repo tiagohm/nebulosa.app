@@ -1,16 +1,15 @@
-import { Button, type ButtonProps, Tooltip } from '@heroui/react'
+import { Tooltip } from '@heroui/react'
 import { Icons } from './Icon'
+import { IconButton, type IconButtonProps } from './IconButton'
 
-export interface ConnectButtonProps extends Omit<ButtonProps, 'isIconOnly' | 'color' | 'variant'> {
+export interface ConnectButtonProps extends Omit<IconButtonProps, 'icon' | 'color'> {
 	readonly isConnected: boolean
 }
 
-export function ConnectButton({ isConnected, isDisabled = false, ...props }: ConnectButtonProps) {
+export function ConnectButton({ isConnected, size = 'md', isDisabled = false, ...props }: ConnectButtonProps) {
 	return (
 		<Tooltip content={isConnected ? 'Disconnect' : 'Connect'} placement='bottom' showArrow>
-			<Button {...props} color={isConnected ? 'danger' : 'primary'} isDisabled={isDisabled} isIconOnly variant='light'>
-				{isConnected ? <Icons.Close /> : <Icons.Connect />}
-			</Button>
+			<IconButton {...props} color={isConnected ? 'danger' : 'primary'} icon={isConnected ? Icons.Close : Icons.Connect} isDisabled={isDisabled} size={size} />
 		</Tooltip>
 	)
 }

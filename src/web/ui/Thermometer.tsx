@@ -8,8 +8,7 @@ import { Modal } from './Modal'
 
 export const Thermometer = memo(() => {
 	const thermometer = useMolecule(ThermometerMolecule)
-	const { connecting } = useSnapshot(thermometer.state)
-	const { connected, temperature } = useSnapshot(thermometer.state.thermometer)
+	const { connecting, connected, temperature } = useSnapshot(thermometer.state.thermometer)
 
 	return (
 		<Modal

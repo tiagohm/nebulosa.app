@@ -1,101 +1,108 @@
 import { molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
-import type { Camera, CameraUpdated, Cover, CoverUpdated, Device, DewHeater, DewHeaterUpdated, FlatPanel, FlatPanelUpdated, Focuser, FocuserUpdated, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated } from 'src/shared/types'
+import type { Camera, CameraUpdated, Cover, CoverUpdated, Device, DeviceType, DewHeater, DewHeaterUpdated, FlatPanel, FlatPanelUpdated, Focuser, FocuserUpdated, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
-
-export type EquipmentDeviceType = Exclude<keyof EquipmentState, 'selected'>
+import { Api } from '@/shared/api'
 
 export type EquipmentDevice<T extends Device> = T & {
 	show?: boolean
+	connecting?: boolean
 }
 
 export interface EquipmentState {
-	selected?: EquipmentDeviceType
-	readonly camera: EquipmentDevice<Camera>[]
-	readonly mount: EquipmentDevice<Mount>[]
-	readonly wheel: EquipmentDevice<Device>[]
-	readonly focuser: EquipmentDevice<Focuser>[]
-	readonly rotator: EquipmentDevice<Device>[]
-	readonly gps: EquipmentDevice<Device>[]
-	readonly dome: EquipmentDevice<Device>[]
-	readonly guideOutput: EquipmentDevice<GuideOutput>[]
-	readonly flatPanel: EquipmentDevice<FlatPanel>[]
-	readonly cover: EquipmentDevice<Cover>[]
-	readonly thermometer: EquipmentDevice<Thermometer>[]
-	readonly dewHeater: EquipmentDevice<DewHeater>[]
+	selected?: DeviceType
+	readonly CAMERA: EquipmentDevice<Camera>[]
+	readonly MOUNT: EquipmentDevice<Mount>[]
+	readonly WHEEL: EquipmentDevice<Device>[]
+	readonly FOCUSER: EquipmentDevice<Focuser>[]
+	readonly ROTATOR: EquipmentDevice<Device>[]
+	readonly GPS: EquipmentDevice<Device>[]
+	readonly DOME: EquipmentDevice<Device>[]
+	readonly GUIDE_OUTPUT: EquipmentDevice<GuideOutput>[]
+	readonly FLAT_PANEL: EquipmentDevice<FlatPanel>[]
+	readonly COVER: EquipmentDevice<Cover>[]
+	readonly THERMOMETER: EquipmentDevice<Thermometer>[]
+	readonly DEW_HEATER: EquipmentDevice<DewHeater>[]
 }
 
+let equipmentState: EquipmentState | undefined
+
 export const EquipmentMolecule = molecule(() => {
-	const state = proxy<EquipmentState>({
-		selected: undefined,
-		camera: [],
-		mount: [],
-		wheel: [],
-		focuser: [],
-		rotator: [],
-		gps: [],
-		dome: [],
-		guideOutput: [],
-		flatPanel: [],
-		cover: [],
-		thermometer: [],
-		dewHeater: [],
-	})
+	const state =
+		equipmentState ??
+		proxy<EquipmentState>({
+			selected: undefined,
+			CAMERA: [],
+			MOUNT: [],
+			WHEEL: [],
+			FOCUSER: [],
+			ROTATOR: [],
+			GPS: [],
+			DOME: [],
+			GUIDE_OUTPUT: [],
+			FLAT_PANEL: [],
+			COVER: [],
+			THERMOMETER: [],
+			DEW_HEATER: [],
+		})
+
+	equipmentState = state
 
 	onMount(() => {
 		const unsubscribers: VoidFunction[] = []
 
-		unsubscribers.push(bus.subscribe<Camera>('camera:add', (event) => add('camera', event)))
-		unsubscribers.push(bus.subscribe<Camera>('camera:remove', (event) => remove('camera', event)))
-		unsubscribers.push(bus.subscribe<CameraUpdated>('camera:update', ({ device, property }) => update('camera', device.name, property, device[property]!)))
-		unsubscribers.push(bus.subscribe<Mount>('mount:add', (event) => add('mount', event)))
-		unsubscribers.push(bus.subscribe<Mount>('mount:remove', (event) => remove('mount', event)))
-		unsubscribers.push(bus.subscribe<MountUpdated>('mount:update', ({ device, property }) => update('mount', device.name, property, device[property]!)))
-		unsubscribers.push(bus.subscribe<GuideOutput>('guideOutput:add', (event) => add('guideOutput', event)))
-		unsubscribers.push(bus.subscribe<GuideOutput>('guideOutput:remove', (event) => remove('guideOutput', event)))
-		unsubscribers.push(bus.subscribe<GuideOutputUpdated>('guideOutput:update', ({ device, property }) => update('guideOutput', device.name, property, device[property]!)))
-		unsubscribers.push(bus.subscribe<Thermometer>('thermometer:add', (event) => add('thermometer', event)))
-		unsubscribers.push(bus.subscribe<Thermometer>('thermometer:remove', (event) => remove('thermometer', event)))
-		unsubscribers.push(bus.subscribe<ThermometerUpdated>('thermometer:update', ({ device, property }) => update('thermometer', device.name, property, device[property]!)))
-		unsubscribers.push(bus.subscribe<Cover>('cover:add', (event) => add('cover', event)))
-		unsubscribers.push(bus.subscribe<Cover>('cover:remove', (event) => remove('cover', event)))
-		unsubscribers.push(bus.subscribe<CoverUpdated>('cover:update', ({ device, property }) => update('cover', device.name, property, device[property]!)))
-		unsubscribers.push(bus.subscribe<FlatPanel>('flatPanel:add', (event) => add('flatPanel', event)))
-		unsubscribers.push(bus.subscribe<FlatPanel>('flatPanel:remove', (event) => remove('flatPanel', event)))
-		unsubscribers.push(bus.subscribe<FlatPanelUpdated>('flatPanel:update', ({ device, property }) => update('flatPanel', device.name, property, device[property]!)))
-		unsubscribers.push(bus.subscribe<DewHeater>('dewHeater:add', (event) => add('dewHeater', event)))
-		unsubscribers.push(bus.subscribe<DewHeater>('dewHeater:remove', (event) => remove('dewHeater', event)))
-		unsubscribers.push(bus.subscribe<DewHeaterUpdated>('dewHeater:update', ({ device, property }) => update('dewHeater', device.name, property, device[property]!)))
-		unsubscribers.push(bus.subscribe<Focuser>('focuser:add', (event) => add('focuser', event)))
-		unsubscribers.push(bus.subscribe<Focuser>('focuser:remove', (event) => remove('focuser', event)))
-		unsubscribers.push(bus.subscribe<FocuserUpdated>('focuser:update', ({ device, property }) => update('focuser', device.name, property, device[property]!)))
+		unsubscribers.push(bus.subscribe<Camera>('camera:add', (event) => add('CAMERA', event)))
+		unsubscribers.push(bus.subscribe<Camera>('camera:remove', (event) => remove('CAMERA', event)))
+		unsubscribers.push(bus.subscribe<CameraUpdated>('camera:update', ({ device, property }) => update('CAMERA', device.name, property, device[property]!)))
+		unsubscribers.push(bus.subscribe<Mount>('mount:add', (event) => add('MOUNT', event)))
+		unsubscribers.push(bus.subscribe<Mount>('mount:remove', (event) => remove('MOUNT', event)))
+		unsubscribers.push(bus.subscribe<MountUpdated>('mount:update', ({ device, property }) => update('MOUNT', device.name, property, device[property]!)))
+		unsubscribers.push(bus.subscribe<GuideOutput>('guideOutput:add', (event) => add('GUIDE_OUTPUT', event)))
+		unsubscribers.push(bus.subscribe<GuideOutput>('guideOutput:remove', (event) => remove('GUIDE_OUTPUT', event)))
+		unsubscribers.push(bus.subscribe<GuideOutputUpdated>('guideOutput:update', ({ device, property }) => update('GUIDE_OUTPUT', device.name, property, device[property]!)))
+		unsubscribers.push(bus.subscribe<Thermometer>('thermometer:add', (event) => add('THERMOMETER', event)))
+		unsubscribers.push(bus.subscribe<Thermometer>('thermometer:remove', (event) => remove('THERMOMETER', event)))
+		unsubscribers.push(bus.subscribe<ThermometerUpdated>('thermometer:update', ({ device, property }) => update('THERMOMETER', device.name, property, device[property]!)))
+		unsubscribers.push(bus.subscribe<Cover>('cover:add', (event) => add('COVER', event)))
+		unsubscribers.push(bus.subscribe<Cover>('cover:remove', (event) => remove('COVER', event)))
+		unsubscribers.push(bus.subscribe<CoverUpdated>('cover:update', ({ device, property }) => update('COVER', device.name, property, device[property]!)))
+		unsubscribers.push(bus.subscribe<FlatPanel>('flatPanel:add', (event) => add('FLAT_PANEL', event)))
+		unsubscribers.push(bus.subscribe<FlatPanel>('flatPanel:remove', (event) => remove('FLAT_PANEL', event)))
+		unsubscribers.push(bus.subscribe<FlatPanelUpdated>('flatPanel:update', ({ device, property }) => update('FLAT_PANEL', device.name, property, device[property]!)))
+		unsubscribers.push(bus.subscribe<DewHeater>('dewHeater:add', (event) => add('DEW_HEATER', event)))
+		unsubscribers.push(bus.subscribe<DewHeater>('dewHeater:remove', (event) => remove('DEW_HEATER', event)))
+		unsubscribers.push(bus.subscribe<DewHeaterUpdated>('dewHeater:update', ({ device, property }) => update('DEW_HEATER', device.name, property, device[property]!)))
+		unsubscribers.push(bus.subscribe<Focuser>('focuser:add', (event) => add('FOCUSER', event)))
+		unsubscribers.push(bus.subscribe<Focuser>('focuser:remove', (event) => remove('FOCUSER', event)))
+		unsubscribers.push(bus.subscribe<FocuserUpdated>('focuser:update', ({ device, property }) => update('FOCUSER', device.name, property, device[property]!)))
 
 		return () => {
 			unsubscribe(unsubscribers)
 		}
 	})
 
-	function get<T extends Device = Device>(type: EquipmentDeviceType, name: string) {
-		return state[type].find((e) => e.name === name) as T | undefined
+	function get<T extends Device = Device>(type: DeviceType, name: string) {
+		return state[type].find((e) => e.name === name) as EquipmentDevice<T> | undefined
 	}
 
-	function list<T extends Device = Device>(type: EquipmentDeviceType) {
-		return state[type] as T[]
+	function list<T extends Device = Device>(type: DeviceType) {
+		return state[type] as EquipmentDevice<T>[]
 	}
 
-	function add<T extends EquipmentDeviceType>(type: T, device: EquipmentState[T][number]) {
+	function add<T extends DeviceType>(type: T, device: EquipmentState[T][number]) {
 		const devices = state[type]
 		const index = devices.findIndex((e) => e.name === device.name)
 		index < 0 && devices.push(device as never)
 	}
 
-	function update<T extends EquipmentDeviceType, P extends keyof EquipmentState[T][number]>(type: T, name: string, property: P, value: EquipmentState[T][number][P]) {
+	function update<T extends DeviceType, P extends keyof EquipmentState[T][number]>(type: T, name: string, property: P, value: EquipmentState[T][number][P]) {
 		const device = state[type].find((e) => e.name === name)
 		if (!device) return console.warn('device not found:', name)
 		;(device as Record<keyof EquipmentState[T][number], unknown>)[property] = value
+		if (property === 'connected') device.connecting = false
 	}
 
-	function remove<T extends EquipmentDeviceType>(type: T, device: EquipmentState[T][number]) {
+	function remove<T extends DeviceType>(type: T, device: EquipmentState[T][number]) {
 		const devices = state[type]
 		const index = devices.findIndex((e) => e.name === device.name)
 
@@ -108,7 +115,7 @@ export const EquipmentMolecule = molecule(() => {
 		}
 	}
 
-	function select(type: EquipmentDeviceType) {
+	function select(type: DeviceType) {
 		if (state.selected === type) {
 			state.selected = undefined
 		} else {
@@ -116,7 +123,16 @@ export const EquipmentMolecule = molecule(() => {
 		}
 	}
 
-	function show(type: EquipmentDeviceType, device: Device) {
+	function connect(device: Device) {
+		if (device.connected) {
+			return Api.Indi.disconnect(device)
+		} else {
+			get(device.type, device.name)!.connecting = true
+			return Api.Indi.connect(device)
+		}
+	}
+
+	function show(type: DeviceType, device: Device) {
 		state[type].find((e) => e.name === device.name)!.show = true
 		bus.emit('homeMenu:toggle', false)
 	}
@@ -127,9 +143,9 @@ export const EquipmentMolecule = molecule(() => {
 		bus.emit('indiPanelControl:show', device)
 	}
 
-	function hide(type: EquipmentDeviceType, device: Device) {
+	function hide(type: DeviceType, device: Device) {
 		state[type].find((e) => e.name === device.name)!.show = false
 	}
 
-	return { state, get, list, add, update, remove, select, show, showIndi, hide } as const
+	return { state, get, list, add, update, remove, select, connect, show, showIndi, hide } as const
 })

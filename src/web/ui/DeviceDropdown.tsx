@@ -3,8 +3,8 @@ import { useMemo } from 'react'
 import type { Device } from 'src/shared/types'
 import type { DeepReadonly } from 'utility-types'
 import { Api } from '@/shared/api'
+import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 
 export interface DeviceDropdownProps<T extends Device = Device> {
 	readonly isDisabled?: boolean
@@ -30,7 +30,7 @@ export function DeviceDropdown<T extends Device = Device>({ isDisabled, items, v
 			<DropdownTrigger>{DropdownTriggerContent}</DropdownTrigger>
 			<DropdownMenu>
 				{menu.map((item) => (
-					<DropdownItem endContent={value?.name === item?.name ? <DeviceDropdownEndContent device={item!} /> : undefined} key={item?.name || 'none'} onPointerUp={() => onValueChange(item as never)} startContent={<Icons.Circle color={!item ? '#9353D3' : item.connected ? '#17C964' : '#F31260'} size={12} />}>
+					<DropdownItem endContent={<DeviceDropdownEndContent device={item} isSelected={value?.name === item?.name} />} key={item?.name || 'none'} onPointerUp={() => onValueChange(item as never)} startContent={<Icons.Circle color={!item ? '#9353D3' : item.connected ? '#17C964' : '#F31260'} size={12} />}>
 						{item?.name || 'None'}
 					</DropdownItem>
 				))}
@@ -40,19 +40,21 @@ export function DeviceDropdown<T extends Device = Device>({ isDisabled, items, v
 }
 
 export interface DeviceDropdownEndContentProps {
-	readonly device: Device
+	readonly device?: Device
+	readonly isSelected?: boolean
 }
 
-export function DeviceDropdownEndContent({ device }: DeviceDropdownEndContentProps) {
+export function DeviceDropdownEndContent({ device, isSelected }: DeviceDropdownEndContentProps) {
 	function handlePointerUp(event: React.PointerEvent) {
 		event.stopPropagation()
-		return device.connected ? Api.Indi.disconnect(device) : Api.Indi.connect(device)
+
+		return device!.connected ? Api.Indi.disconnect(device!) : Api.Indi.connect(device!)
 	}
 
 	return (
 		<div className='flex flex-row items-center gap-2'>
-			<IconButton color={device.connected ? 'danger' : 'primary'} icon={device.connected ? Icons.Close : Icons.Connect} iconSize={12} onPointerUp={handlePointerUp} variant='light' />
-			<Icons.Check color='#17C964' size={12} />
+			{device && <ConnectButton iconSize={12} isConnected={device.connected} onPointerUp={handlePointerUp} size='sm' />}
+			{isSelected && <Icons.Check className='me-2' color='#17C964' size={12} />}
 		</div>
 	)
 }

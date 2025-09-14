@@ -10,8 +10,7 @@ import { Modal } from './Modal'
 
 export const DewHeater = memo(() => {
 	const dewHeater = useMolecule(DewHeaterMolecule)
-	const { connecting } = useSnapshot(dewHeater.state)
-	const { connected, pwm } = useSnapshot(dewHeater.state.dewHeater)
+	const { connecting, connected, pwm } = useSnapshot(dewHeater.state.dewHeater)
 	const [pwmValue, setPwmValue] = useState(pwm.value)
 	const debouncedPwm = useDebounce(pwmValue, 500)
 

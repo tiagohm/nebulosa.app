@@ -1,19 +1,18 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import bus, { unsubscribe } from 'src/shared/bus'
-import { DEFAULT_GUIDE_OUTPUT, type GuideOutput, type GuideOutputUpdated, type GuidePulse } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/bus'
+import { DEFAULT_GUIDE_OUTPUT, type GuideOutput, type GuidePulse } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 import type { NudgeDirection } from '@/ui/Nudge'
-import { EquipmentMolecule } from './equipment'
+import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface GuideOutputScopeValue {
 	readonly guideOutput: GuideOutput
 }
 
 export interface GuideOutputState {
-	readonly guideOutput: GuideOutput
-	connecting: boolean
+	readonly guideOutput: EquipmentDevice<GuideOutput>
 	readonly request: {
 		readonly north: GuidePulse
 		readonly south: GuidePulse
@@ -52,31 +51,18 @@ export const GuideOutputMolecule = molecule((m, s) => {
 	const state =
 		guideOutputStateMap.get(scope.guideOutput.name) ??
 		proxy<GuideOutputState>({
-			guideOutput: equipment.get('guideOutput', scope.guideOutput.name)!,
-			connecting: false,
+			guideOutput: equipment.get('GUIDE_OUTPUT', scope.guideOutput.name)!,
 			request: simpleLocalStorage.get(`guideOutput.${scope.guideOutput.name}.request`, () => structuredClone(DEFAULT_GUIDE_OUTPUT_REQUEST)),
 		})
 
 	guideOutputStateMap.set(scope.guideOutput.name, state)
 
-	Api.GuideOutputs.get(scope.guideOutput.name).then((guideOutput) => {
-		if (!guideOutput) return
-		Object.assign(state.guideOutput, guideOutput)
-		state.connecting = false
-	})
-
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(2)
+		const unsubscribers = new Array<VoidFunction>(1)
 
-		unsubscribers[0] = bus.subscribe<GuideOutputUpdated>('guideOutput:update', (event) => {
-			if (event.device.name === state.guideOutput.name) {
-				if (event.property === 'connected') {
-					state.connecting = false
-				}
-			}
+		unsubscribers[0] = subscribe(state.request, () => {
+			simpleLocalStorage.set(`guideOutput.${scope.guideOutput.name}.request`, state.request)
 		})
-
-		unsubscribers[1] = subscribe(state.request, () => simpleLocalStorage.set(`guideOutput.${scope.guideOutput.name}.request`, state.request))
 
 		return () => {
 			unsubscribe(unsubscribers)
@@ -87,14 +73,8 @@ export const GuideOutputMolecule = molecule((m, s) => {
 		state.request[direction].duration = value
 	}
 
-	async function connect() {
-		state.connecting = true
-
-		if (state.guideOutput.connected) {
-			await Api.Indi.disconnect(state.guideOutput)
-		} else {
-			await Api.Indi.connect(state.guideOutput)
-		}
+	function connect() {
+		return equipment.connect(state.guideOutput)
 	}
 
 	function pulse(direction: NudgeDirection, down: boolean) {
@@ -127,7 +107,7 @@ export const GuideOutputMolecule = molecule((m, s) => {
 	}
 
 	function hide() {
-		equipment.hide('guideOutput', scope.guideOutput)
+		equipment.hide('GUIDE_OUTPUT', scope.guideOutput)
 	}
 
 	return { state, scope, update, connect, pulse, stop, hide } as const

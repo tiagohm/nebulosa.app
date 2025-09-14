@@ -20,8 +20,8 @@ import { TrackModeSelect } from './TrackModeSelect'
 export const Mount = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	// biome-ignore format: don't break lines!
-	const { connecting, location: { show: showLocation }, time: { show: showTime }, remoteControl: { show: showRemoteControl } } = useSnapshot(mount.state)
-	const { connected, parking, parked, slewing, tracking, canPark, canHome, canAbort, trackModes, trackMode, slewRates, slewRate, geographicCoordinate, time } = useSnapshot(mount.state.mount)
+	const { location: { show: showLocation }, time: { show: showTime }, remoteControl: { show: showRemoteControl } } = useSnapshot(mount.state)
+	const { connecting, connected, parking, parked, slewing, tracking, canPark, canHome, canAbort, trackModes, trackMode, slewRates, slewRate, geographicCoordinate, time } = useSnapshot(mount.state.mount)
 	const moving = slewing || parking
 
 	return (

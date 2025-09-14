@@ -13,10 +13,10 @@ export interface ThermometerDropdownProps extends Omit<DeviceDropdownProps<Therm
 
 export const ThermometerDropdown = memo(({ value, onValueChange, children, ...props }: ThermometerDropdownProps) => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const thermometers = useSnapshot(equipment.state.thermometer)
+	const thermometers = useSnapshot(equipment.state.THERMOMETER)
 
 	function handleValueChange(value?: Thermometer) {
-		onValueChange?.(equipment.state.thermometer.find((e) => e.id === value?.id))
+		onValueChange?.(equipment.state.THERMOMETER.find((e) => e.id === value?.id))
 	}
 
 	return (

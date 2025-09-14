@@ -15,17 +15,23 @@ export interface IndiPanelControlState {
 	properties: Record<string, DeviceProperties>
 }
 
+let indiPanelControlState: IndiPanelControlState | undefined
+
 export const IndiPanelControlMolecule = molecule((m) => {
 	const connection = m(ConnectionMolecule)
 
-	const state = proxy<IndiPanelControlState>({
-		show: false,
-		devices: [],
-		device: '',
-		groups: [],
-		group: '',
-		properties: {},
-	})
+	const state =
+		indiPanelControlState ??
+		proxy<IndiPanelControlState>({
+			show: false,
+			devices: [],
+			device: '',
+			groups: [],
+			group: '',
+			properties: {},
+		})
+
+	indiPanelControlState = state
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(3)

@@ -16,10 +16,10 @@ export interface CameraDropdownProps extends Omit<DeviceDropdownProps<Camera>, '
 
 export const CameraDropdown = memo(({ showLabel = true, showLabelOnEmpty = true, value, onValueChange, children, buttonProps, ...props }: CameraDropdownProps) => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const cameras = useSnapshot(equipment.state.camera)
+	const cameras = useSnapshot(equipment.state.CAMERA)
 
 	function handleValueChange(value?: Camera) {
-		onValueChange?.(equipment.state.camera.find((e) => e.id === value?.id))
+		onValueChange?.(equipment.state.CAMERA.find((e) => e.id === value?.id))
 	}
 
 	return (

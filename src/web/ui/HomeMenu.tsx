@@ -1,6 +1,7 @@
 import { Button, Chip, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
+import type { DeviceType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
 import alignmentIcon from '@/assets/alignment.webp'
@@ -26,7 +27,7 @@ import { AboutMolecule } from '@/molecules/about'
 import { CalculatorMolecule } from '@/molecules/calculator'
 import { FramingMolecule } from '@/molecules/framing'
 import { HomeMolecule } from '@/molecules/home'
-import { type EquipmentDeviceType, EquipmentMolecule } from '@/molecules/indi/equipment'
+import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { TppaMolecule } from '@/molecules/tppa'
@@ -93,7 +94,7 @@ export const HomeMenuPopover = memo(() => {
 
 export const HomeMenuPopoverContent = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const { selected, camera, mount, focuser, cover, flatPanel, guideOutput, thermometer, dewHeater } = useSnapshot(equipment.state)
+	const { selected, CAMERA, MOUNT, FOCUSER, COVER, FLAT_PANEL, GUIDE_OUTPUT, THERMOMETER, DEW_HEATER } = useSnapshot(equipment.state)
 
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
 	const framing = useMolecule(FramingMolecule)
@@ -104,52 +105,52 @@ export const HomeMenuPopoverContent = memo(() => {
 	return (
 		<div className='grid grid-cols-6 gap-2 p-4'>
 			<Tooltip content='Camera' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={camera.length === 0} isIconOnly onPointerUp={() => equipment.select('camera')} size='lg' variant='light'>
+				<Button color='secondary' isDisabled={CAMERA.length === 0} isIconOnly onPointerUp={() => equipment.select('CAMERA')} size='lg' variant='light'>
 					<img className='w-9' src={cameraIcon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Mount' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={mount.length === 0} isIconOnly onPointerUp={() => equipment.select('mount')} size='lg' variant='light'>
+				<Button color='secondary' isDisabled={MOUNT.length === 0} isIconOnly onPointerUp={() => equipment.select('MOUNT')} size='lg' variant='light'>
 					<img className='w-9' src={mountIcon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Filter Wheel' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled isIconOnly onPointerUp={() => equipment.select('wheel')} size='lg' variant='light'>
+				<Button color='secondary' isDisabled isIconOnly onPointerUp={() => equipment.select('WHEEL')} size='lg' variant='light'>
 					<img className='w-9' src={filterWheelIcon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Focuser' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={focuser.length === 0} isIconOnly onPointerUp={() => equipment.select('focuser')} size='lg' variant='light'>
+				<Button color='secondary' isDisabled={FOCUSER.length === 0} isIconOnly onPointerUp={() => equipment.select('FOCUSER')} size='lg' variant='light'>
 					<img className='w-9' src={focuserIcon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Rotator' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled isIconOnly onPointerUp={() => equipment.select('rotator')} size='lg' variant='light'>
+				<Button color='secondary' isDisabled isIconOnly onPointerUp={() => equipment.select('ROTATOR')} size='lg' variant='light'>
 					<img className='w-9' src={rotatorIcon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Flat Panel' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={flatPanel.length === 0} isIconOnly onPointerUp={() => equipment.select('flatPanel')} size='lg' variant='light'>
+				<Button color='secondary' isDisabled={FLAT_PANEL.length === 0} isIconOnly onPointerUp={() => equipment.select('FLAT_PANEL')} size='lg' variant='light'>
 					<img className='w-9' src={flatPanelIcon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Cover' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={cover.length === 0} isIconOnly onPointerUp={() => equipment.select('cover')} size='lg' variant='light'>
+				<Button color='secondary' isDisabled={COVER.length === 0} isIconOnly onPointerUp={() => equipment.select('COVER')} size='lg' variant='light'>
 					<img className='w-9' src={coverIcon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Guide Output' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={guideOutput.length === 0} isIconOnly onPointerUp={() => equipment.select('guideOutput')} size='lg' variant='light'>
+				<Button color='secondary' isDisabled={GUIDE_OUTPUT.length === 0} isIconOnly onPointerUp={() => equipment.select('GUIDE_OUTPUT')} size='lg' variant='light'>
 					<img className='w-9' src={guideOutputIcon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Dew Heater' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={dewHeater.length === 0} isIconOnly onPointerUp={() => equipment.select('dewHeater')} size='lg' variant='light'>
+				<Button color='secondary' isDisabled={DEW_HEATER.length === 0} isIconOnly onPointerUp={() => equipment.select('DEW_HEATER')} size='lg' variant='light'>
 					<img className='w-9' src={heaterIcon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Thermometer' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={thermometer.length === 0} isIconOnly onPointerUp={() => equipment.select('thermometer')} size='lg' variant='light'>
+				<Button color='secondary' isDisabled={THERMOMETER.length === 0} isIconOnly onPointerUp={() => equipment.select('THERMOMETER')} size='lg' variant='light'>
 					<img className='w-9' src={thermometerIcon} />
 				</Button>
 			</Tooltip>
@@ -169,26 +170,26 @@ export const HomeMenuPopoverContent = memo(() => {
 				</Button>
 			</Tooltip>
 			<Tooltip content='TPPA' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={camera.length === 0 || mount.length === 0} isIconOnly onPointerUp={tppa.show} size='lg' variant='light'>
+				<Button color='secondary' isDisabled={CAMERA.length === 0 || MOUNT.length === 0} isIconOnly onPointerUp={tppa.show} size='lg' variant='light'>
 					<img className='w-9' src={alignmentIcon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Auto Focus' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={camera.length === 0} isIconOnly size='lg' variant='light'>
+				<Button color='secondary' isDisabled={CAMERA.length === 0} isIconOnly size='lg' variant='light'>
 					<img className='w-9' src={autoFocusIcon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Flat Wizard' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={camera.length === 0} isIconOnly size='lg' variant='light'>
+				<Button color='secondary' isDisabled={CAMERA.length === 0} isIconOnly size='lg' variant='light'>
 					<img className='w-9' src={flatWizardIcon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Sequencer' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={camera.length === 0} isIconOnly size='lg' variant='light'>
+				<Button color='secondary' isDisabled={CAMERA.length === 0} isIconOnly size='lg' variant='light'>
 					<img className='w-9' src={sequencerIcon} />
 				</Button>
 			</Tooltip>
-			<IndiPanelControlButton isDisabled={!camera.length && !mount.length && !focuser.length && !cover.length && !flatPanel.length && !guideOutput.length && !thermometer.length && !dewHeater.length} size='lg' />
+			<IndiPanelControlButton isDisabled={!CAMERA.length && !MOUNT.length && !FOCUSER.length && !COVER.length && !FLAT_PANEL.length && !GUIDE_OUTPUT.length && !THERMOMETER.length && !DEW_HEATER.length} size='lg' />
 			<Tooltip content='Calculator' placement='bottom' showArrow>
 				<Button color='secondary' isIconOnly onPointerUp={calculator.show} size='lg' variant='light'>
 					<img className='w-9' src={calculatorIcon} />
@@ -218,10 +219,10 @@ export const HomeMenuPopoverContent = memo(() => {
 	)
 })
 
-function deviceName(type: EquipmentDeviceType) {
-	if (type === 'guideOutput') return 'Guide Output'
-	else if (type === 'flatPanel') return 'Flat Panel'
-	else if (type === 'dewHeater') return 'Dew Heater'
-	else if (type === 'wheel') return 'Filter Wheel'
+function deviceName(type: DeviceType) {
+	if (type === 'GUIDE_OUTPUT') return 'Guide Output'
+	else if (type === 'FLAT_PANEL') return 'Flat Panel'
+	else if (type === 'DEW_HEATER') return 'Dew Heater'
+	else if (type === 'WHEEL') return 'Filter Wheel'
 	else return type
 }

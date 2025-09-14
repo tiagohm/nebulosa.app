@@ -10,8 +10,7 @@ import { Modal } from './Modal'
 
 export const FlatPanel = memo(() => {
 	const flatPanel = useMolecule(FlatPanelMolecule)
-	const { connecting } = useSnapshot(flatPanel.state)
-	const { connected, intensity, enabled } = useSnapshot(flatPanel.state.flatPanel)
+	const { connecting, connected, intensity, enabled } = useSnapshot(flatPanel.state.flatPanel)
 	const [intensityValue, setIntensityValue] = useState(intensity.value)
 	const debouncedIntensity = useDebounce(intensityValue, 500)
 

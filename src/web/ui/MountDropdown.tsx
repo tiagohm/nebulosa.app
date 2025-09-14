@@ -16,10 +16,10 @@ export interface MountDropdownProps extends Omit<DeviceDropdownProps<Mount>, 'it
 
 export const MountDropdown = memo(({ showLabel = true, showLabelOnEmpty = true, value, onValueChange, children, buttonProps, ...props }: MountDropdownProps) => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const mounts = useSnapshot(equipment.state.mount)
+	const mounts = useSnapshot(equipment.state.MOUNT)
 
 	function handleValueChange(value?: Mount) {
-		onValueChange?.(equipment.state.mount.find((e) => e.id === value?.id))
+		onValueChange?.(equipment.state.MOUNT.find((e) => e.id === value?.id))
 	}
 
 	return (

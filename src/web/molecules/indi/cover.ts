@@ -1,17 +1,15 @@
-import { createScope, molecule, onMount } from 'bunshi'
-import bus from 'src/shared/bus'
-import { type Cover, type CoverUpdated, DEFAULT_COVER } from 'src/shared/types'
+import { createScope, molecule } from 'bunshi'
+import { type Cover, DEFAULT_COVER } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
-import { EquipmentMolecule } from './equipment'
+import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface CoverScopeValue {
 	readonly cover: Cover
 }
 
 export interface CoverState {
-	readonly cover: Cover
-	connecting: boolean
+	readonly cover: EquipmentDevice<Cover>
 }
 
 export const CoverScope = createScope<CoverScopeValue>({ cover: DEFAULT_COVER })
@@ -25,40 +23,13 @@ export const CoverMolecule = molecule((m, s) => {
 	const state =
 		coverStateMap.get(scope.cover.name) ??
 		proxy<CoverState>({
-			cover: equipment.get('cover', scope.cover.name)!,
-			connecting: false,
+			cover: equipment.get('COVER', scope.cover.name)!,
 		})
 
 	coverStateMap.set(scope.cover.name, state)
 
-	Api.Covers.get(scope.cover.name).then((cover) => {
-		if (!cover) return
-		Object.assign(state.cover, cover)
-		state.connecting = false
-	})
-
-	onMount(() => {
-		const unsubscriber = bus.subscribe<CoverUpdated>('cover:update', (event) => {
-			if (event.device.name === state.cover.name) {
-				if (event.property === 'connected') {
-					state.connecting = false
-				}
-			}
-		})
-
-		return () => {
-			unsubscriber()
-		}
-	})
-
-	async function connect() {
-		state.connecting = true
-
-		if (state.cover.connected) {
-			await Api.Indi.disconnect(state.cover)
-		} else {
-			await Api.Indi.connect(state.cover)
-		}
+	function connect() {
+		return equipment.connect(state.cover)
 	}
 
 	function park() {
@@ -70,7 +41,7 @@ export const CoverMolecule = molecule((m, s) => {
 	}
 
 	function hide() {
-		equipment.hide('cover', scope.cover)
+		equipment.hide('COVER', scope.cover)
 	}
 
 	return { state, scope, connect, park, unpark, hide } as const

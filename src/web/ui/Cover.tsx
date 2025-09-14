@@ -10,8 +10,7 @@ import { Modal } from './Modal'
 
 export const Cover = memo(() => {
 	const cover = useMolecule(CoverMolecule)
-	const { connecting } = useSnapshot(cover.state)
-	const { connected, parking, parked, canPark } = useSnapshot(cover.state.cover)
+	const { connecting, connected, parking, parked, canPark } = useSnapshot(cover.state.cover)
 
 	return (
 		<Modal

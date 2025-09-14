@@ -5,14 +5,14 @@ import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
-import { EquipmentMolecule } from './indi/equipment'
+import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
 export interface TppaState {
 	show: boolean
 	running: boolean
 	readonly request: TppaStart
-	camera?: Camera
-	mount?: Mount
+	camera?: EquipmentDevice<Camera>
+	mount?: EquipmentDevice<Mount>
 	event: TppaEvent
 }
 
@@ -62,8 +62,8 @@ export const TppaMolecule = molecule((m) => {
 		unsubscribers[4] = subscribeKey(state, 'show', (show) => {
 			if (!show) return
 
-			state.camera = equipment.get('camera', simpleLocalStorage.get('tppa.camera', ''))
-			state.mount = equipment.get('mount', simpleLocalStorage.get('tppa.mount', ''))
+			state.camera = equipment.get('CAMERA', simpleLocalStorage.get('tppa.camera', ''))
+			state.mount = equipment.get('MOUNT', simpleLocalStorage.get('tppa.mount', ''))
 		})
 
 		return () => {

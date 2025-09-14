@@ -1,17 +1,14 @@
-import { createScope, molecule, onMount } from 'bunshi'
-import bus from 'src/shared/bus'
-import { DEFAULT_THERMOMETER, type Thermometer, type ThermometerUpdated } from 'src/shared/types'
+import { createScope, molecule } from 'bunshi'
+import { DEFAULT_THERMOMETER, type Thermometer } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { Api } from '@/shared/api'
-import { EquipmentMolecule } from './equipment'
+import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface ThermometerScopeValue {
 	readonly thermometer: Thermometer
 }
 
 export interface ThermometerState {
-	readonly thermometer: Thermometer
-	connecting: boolean
+	readonly thermometer: EquipmentDevice<Thermometer>
 }
 
 export const ThermometerScope = createScope<ThermometerScopeValue>({ thermometer: DEFAULT_THERMOMETER })
@@ -25,44 +22,17 @@ export const ThermometerMolecule = molecule((m, s) => {
 	const state =
 		thermometerStateMap.get(scope.thermometer.name) ??
 		proxy<ThermometerState>({
-			thermometer: equipment.get('thermometer', scope.thermometer.name)!,
-			connecting: false,
+			thermometer: equipment.get('THERMOMETER', scope.thermometer.name)!,
 		})
 
 	thermometerStateMap.set(scope.thermometer.name, state)
 
-	Api.Thermometers.get(scope.thermometer.name).then((thermometer) => {
-		if (!thermometer) return
-		Object.assign(state.thermometer, thermometer)
-		state.connecting = false
-	})
-
-	onMount(() => {
-		const unsubscriber = bus.subscribe<ThermometerUpdated>('thermometer:update', (event) => {
-			if (event.device.name === state.thermometer.name) {
-				if (event.property === 'connected') {
-					state.connecting = false
-				}
-			}
-		})
-
-		return () => {
-			unsubscriber()
-		}
-	})
-
-	async function connect() {
-		state.connecting = true
-
-		if (state.thermometer.connected) {
-			await Api.Indi.disconnect(state.thermometer)
-		} else {
-			await Api.Indi.connect(state.thermometer)
-		}
+	function connect() {
+		return equipment.connect(state.thermometer)
 	}
 
 	function hide() {
-		equipment.hide('thermometer', scope.thermometer)
+		equipment.hide('THERMOMETER', scope.thermometer)
 	}
 
 	return { state, scope, connect, hide } as const

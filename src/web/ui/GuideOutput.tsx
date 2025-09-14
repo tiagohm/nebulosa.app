@@ -11,8 +11,7 @@ import { Nudge } from './Nudge'
 
 export const GuideOutput = memo(() => {
 	const guideOutput = useMolecule(GuideOutputMolecule)
-	const { connecting } = useSnapshot(guideOutput.state)
-	const { connected, pulseGuiding } = useSnapshot(guideOutput.state.guideOutput)
+	const { connecting, connected, pulseGuiding } = useSnapshot(guideOutput.state.guideOutput)
 	const { north, south, west, east } = useSnapshot(guideOutput.state.request, { sync: true })
 
 	return (

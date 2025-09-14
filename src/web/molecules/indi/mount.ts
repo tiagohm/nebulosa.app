@@ -8,7 +8,7 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 import type { NudgeDirection } from '@/ui/Nudge'
-import { EquipmentMolecule } from './equipment'
+import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export type TargetCoordinateAction = 'GOTO' | 'SLEW' | 'SYNC' | 'FRAME'
 
@@ -17,8 +17,7 @@ export interface MountScopeValue {
 }
 
 export interface MountState {
-	readonly mount: Mount
-	connecting: boolean
+	readonly mount: EquipmentDevice<Mount>
 	readonly targetCoordinate: {
 		readonly coordinate: EquatorialCoordinate<string> & HorizontalCoordinate<string> & { type: TargetCoordinateType; action: TargetCoordinateAction }
 		readonly position: MountEquatorialCoordinatePosition
@@ -63,8 +62,7 @@ export const MountMolecule = molecule((m, s) => {
 	const state =
 		mountStateMap.get(scope.mount.name) ??
 		proxy<MountState>({
-			mount: equipment.get('mount', scope.mount.name)!,
-			connecting: false,
+			mount: equipment.get('MOUNT', scope.mount.name)!,
 			targetCoordinate: {
 				coordinate: simpleLocalStorage.get(`mount.${scope.mount.name}.targetCoordinate`, () => structuredClone(DEFAULT_TARGET_COORDINATE)),
 				position: structuredClone(DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION),
@@ -94,25 +92,12 @@ export const MountMolecule = molecule((m, s) => {
 
 	mountStateMap.set(scope.mount.name, state)
 
-	Api.Mounts.get(scope.mount.name).then((mount) => {
-		if (!mount) return
-		Object.assign(state.mount, mount)
-		state.connecting = false
-
-		if (mount.connected) {
-			void updateCurrentCoordinatePosition()
-			void updateTargetCoordinatePosition()
-		}
-	})
-
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(3)
 
 		unsubscribers[0] = bus.subscribe<MountUpdated>('mount:update', (event) => {
 			if (event.device.name === state.mount.name) {
 				if (event.property === 'connected') {
-					state.connecting = false
-
 					if (event.device.connected) {
 						void updateCurrentCoordinatePosition()
 						void updateTargetCoordinatePosition()
@@ -136,20 +121,17 @@ export const MountMolecule = molecule((m, s) => {
 			}
 		}, 5000)
 
+		void updateCurrentCoordinatePosition()
+		void updateTargetCoordinatePosition()
+
 		return () => {
 			unsubscribe(unsubscribers)
 			clearInterval(updateCurrentCoordinateTimer)
 		}
 	})
 
-	async function connect() {
-		state.connecting = true
-
-		if (state.mount.connected) {
-			await Api.Indi.disconnect(state.mount)
-		} else {
-			await Api.Indi.connect(state.mount)
-		}
+	function connect() {
+		return equipment.connect(state.mount)
 	}
 
 	function updateRemoteControl<K extends keyof MountState['remoteControl']['request']>(key: K, value: MountState['remoteControl']['request'][K]) {
@@ -291,7 +273,7 @@ export const MountMolecule = molecule((m, s) => {
 	}
 
 	function hide() {
-		equipment.hide('mount', scope.mount)
+		equipment.hide('MOUNT', scope.mount)
 	}
 
 	return {

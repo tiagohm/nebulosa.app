@@ -11,8 +11,7 @@ import { Modal } from './Modal'
 
 export const Focuser = memo(() => {
 	const focuser = useMolecule(FocuserMolecule)
-	const { connecting } = useSnapshot(focuser.state)
-	const { connected, moving, position, canAbort, canSync, canAbsoluteMove, canRelativeMove, canReverse, reversed } = useSnapshot(focuser.state.focuser)
+	const { connecting, connected, moving, position, canAbort, canSync, canAbsoluteMove, canRelativeMove, canReverse, reversed } = useSnapshot(focuser.state.focuser)
 	const { relative, absolute } = useSnapshot(focuser.state.request, { sync: true })
 
 	return (

@@ -1,18 +1,17 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import bus, { unsubscribe } from 'src/shared/bus'
-import { DEFAULT_FOCUSER, type Focuser, type FocuserUpdated } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/bus'
+import { DEFAULT_FOCUSER, type Focuser } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
-import { EquipmentMolecule } from './equipment'
+import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface FocuserScopeValue {
 	readonly focuser: Focuser
 }
 
 export interface FocuserState {
-	readonly focuser: Focuser
-	connecting: boolean
+	readonly focuser: EquipmentDevice<Focuser>
 	readonly request: {
 		readonly relative: number
 		readonly absolute: number
@@ -32,31 +31,18 @@ export const FocuserMolecule = molecule((m, s) => {
 	const state =
 		focuserStateMap.get(scope.focuser.name) ??
 		proxy<FocuserState>({
-			focuser: equipment.get('focuser', scope.focuser.name)!,
-			connecting: false,
+			focuser: equipment.get('FOCUSER', scope.focuser.name)!,
 			request,
 		})
 
 	focuserStateMap.set(scope.focuser.name, state)
 
-	Api.Focusers.get(scope.focuser.name).then((focuser) => {
-		if (!focuser) return
-		Object.assign(state.focuser, focuser)
-		state.connecting = false
-	})
-
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(2)
+		const unsubscribers = new Array<VoidFunction>(1)
 
-		unsubscribers[0] = bus.subscribe<FocuserUpdated>('focuser:update', (event) => {
-			if (event.device.name === state.focuser.name) {
-				if (event.property === 'connected') {
-					state.connecting = false
-				}
-			}
+		unsubscribers[0] = subscribe(state.request, () => {
+			simpleLocalStorage.set(`focuser.${scope.focuser.name}.request`, state.request)
 		})
-
-		unsubscribers[1] = subscribe(state.request, () => simpleLocalStorage.set(`focuser.${scope.focuser.name}.request`, state.request))
 
 		return () => {
 			unsubscribe(unsubscribers)
@@ -67,14 +53,8 @@ export const FocuserMolecule = molecule((m, s) => {
 		state.request[key] = value
 	}
 
-	async function connect() {
-		state.connecting = true
-
-		if (state.focuser.connected) {
-			await Api.Indi.disconnect(state.focuser)
-		} else {
-			await Api.Indi.connect(state.focuser)
-		}
+	function connect() {
+		return equipment.connect(state.focuser)
 	}
 
 	function moveTo() {
@@ -102,7 +82,7 @@ export const FocuserMolecule = molecule((m, s) => {
 	}
 
 	function hide() {
-		equipment.hide('focuser', scope.focuser)
+		equipment.hide('FOCUSER', scope.focuser)
 	}
 
 	return { state, scope, update, connect, moveTo, moveIn, moveOut, sync, reverse, stop, hide } as const

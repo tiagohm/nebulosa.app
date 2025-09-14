@@ -13,10 +13,10 @@ export interface FocuserDropdownProps extends Omit<DeviceDropdownProps<Focuser>,
 
 export const FocuserDropdown = memo(({ value, onValueChange, children, ...props }: FocuserDropdownProps) => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const focusers = useSnapshot(equipment.state.focuser)
+	const focusers = useSnapshot(equipment.state.FOCUSER)
 
 	function handleValueChange(value?: Focuser) {
-		onValueChange?.(equipment.state.focuser.find((e) => e.id === value?.id))
+		onValueChange?.(equipment.state.FOCUSER.find((e) => e.id === value?.id))
 	}
 
 	return (

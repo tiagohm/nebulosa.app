@@ -6,22 +6,21 @@ import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
 import { ImageWorkspaceMolecule } from '../image/workspace'
-import { EquipmentMolecule } from './equipment'
+import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface CameraScopeValue {
 	readonly camera: Camera
 }
 
 export interface CameraState {
-	readonly camera: Camera
+	readonly camera: EquipmentDevice<Camera>
 	readonly request: CameraCaptureStart
 	readonly progress: CameraCaptureEvent
-	connecting: boolean
 	capturing: boolean
 	targetTemperature: number
 	image?: Image
 	readonly equipment: {
-		mount?: Mount
+		mount?: EquipmentDevice<Mount>
 	}
 }
 
@@ -39,35 +38,24 @@ export const CameraMolecule = molecule((m, s) => {
 	const state =
 		cameraStateMap.get(scope.camera.name) ??
 		proxy<CameraState>({
-			camera: equipment.get('camera', scope.camera.name)!,
+			camera: equipment.get('CAMERA', scope.camera.name)!,
 			request: cameraCaptureStartRequest,
 			progress: structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT),
-			connecting: false,
 			capturing: false,
 			targetTemperature: scope.camera.temperature,
 			equipment: {
-				mount: equipment.get('mount', cameraCaptureStartRequest.mount ?? ''),
+				mount: equipment.get('MOUNT', cameraCaptureStartRequest.mount ?? ''),
 			},
 		})
 
 	cameraStateMap.set(scope.camera.name, state)
-
-	Api.Cameras.get(scope.camera.name).then((camera) => {
-		if (!camera) return
-		Object.assign(state.camera, camera)
-		state.connecting = false
-		updateRequestFrame(camera.frame)
-		updateFrameFormat(camera.frameFormats)
-	})
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(5)
 
 		unsubscribers[0] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
 			if (event.device.name === state.camera.name) {
-				if (event.property === 'connected') {
-					state.connecting = false
-				} else if (event.property === 'frame') {
+				if (event.property === 'frame') {
 					updateRequestFrame(event.device.frame!)
 				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
 					updateFrameFormat(event.device.frameFormats)
@@ -104,6 +92,9 @@ export const CameraMolecule = molecule((m, s) => {
 
 		unsubscribers[4] = subscribe(state.request, () => simpleLocalStorage.set(`camera.${scope.camera.name}.request`, state.request))
 
+		updateRequestFrame(state.camera.frame)
+		updateFrameFormat(state.camera.frameFormats)
+
 		return () => {
 			unsubscribe(unsubscribers)
 		}
@@ -132,14 +123,8 @@ export const CameraMolecule = molecule((m, s) => {
 		state.request[key] = value
 	}
 
-	async function connect() {
-		state.connecting = true
-
-		if (state.camera.connected) {
-			await Api.Indi.disconnect(state.camera)
-		} else {
-			await Api.Indi.connect(state.camera)
-		}
+	function connect() {
+		return equipment.connect(state.camera)
 	}
 
 	function cooler(enabled: boolean) {
@@ -168,7 +153,7 @@ export const CameraMolecule = molecule((m, s) => {
 	}
 
 	function hide() {
-		return equipment.hide('camera', scope.camera)
+		return equipment.hide('CAMERA', scope.camera)
 	}
 
 	return { scope, state, connect, update, cooler, temperature, fullscreen, start, stop, hide } as const

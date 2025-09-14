@@ -12,8 +12,8 @@ export class PlateSolverManager {
 	constructor(readonly notification: NotificationManager) {}
 
 	async start(req: PlateSolveStart): Promise<PlateSolution | undefined> {
-		const ra = parseAngle(req.rightAscension, { isHour: true })
-		const dec = parseAngle(req.declination)
+		const rightAscension = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, { isHour: true })
+		const declination = typeof req.declination === 'number' ? req.declination : parseAngle(req.declination)
 		const radius = req.blind || !req.radius ? 0 : deg(req.radius)
 
 		const aborter = new AbortController()
@@ -22,15 +22,15 @@ export class PlateSolverManager {
 		let solver: Promise<PlateSolution | undefined> | undefined
 
 		if (req.type === 'ASTAP') {
-			solver = astapPlateSolve(req.path, { ...req, ra, dec, radius }, aborter.signal)
+			solver = astapPlateSolve(req.path, { ...req, rightAscension, declination, radius }, aborter.signal)
 		} else if (req.type === 'ASTROMETRY_NET') {
-			solver = localAstrometryNetPlateSolve(req.path, { ...req, ra, dec, radius }, aborter.signal)
+			solver = localAstrometryNetPlateSolve(req.path, { ...req, rightAscension, declination, radius }, aborter.signal)
 		} else if (req.type === 'NOVA_ASTROMETRY_NET') {
 			solver = novaAstrometryNetPlateSolve(
 				req.path,
 				{
-					ra,
-					dec,
+					rightAscension,
+					declination,
 					radius,
 					scaleType: req.fov <= 0 ? 'ul' : 'ev',
 					scaleEstimated: req.fov <= 0 ? undefined : req.fov,

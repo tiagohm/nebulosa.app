@@ -29,6 +29,7 @@ import { HomeMolecule } from '@/molecules/home'
 import { type EquipmentDeviceType, EquipmentMolecule } from '@/molecules/indi/equipment'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
+import { TppaMolecule } from '@/molecules/tppa'
 import { About } from './About'
 import { Calculator } from './Calculator'
 import { Framing } from './Framing'
@@ -36,6 +37,7 @@ import { Icons } from './Icon'
 import { IndiPanelControl } from './IndiPanelControl'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { SkyAtlas } from './SkyAtlas'
+import { Tppa } from './Tppa'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
 
@@ -45,6 +47,9 @@ export const HomeMenu = memo(() => {
 
 	const framing = useMolecule(FramingMolecule)
 	const { show: showFraming } = useSnapshot(framing.state)
+
+	const tppa = useMolecule(TppaMolecule)
+	const { show: showTPPA } = useSnapshot(tppa.state)
 
 	const indi = useMolecule(IndiPanelControlMolecule)
 	const { show: showIndiPanelControl } = useSnapshot(indi.state)
@@ -60,6 +65,7 @@ export const HomeMenu = memo(() => {
 			<HomeMenuPopover />
 			{showSkyAtlas && <SkyAtlas />}
 			{showFraming && <Framing />}
+			{showTPPA && <Tppa />}
 			{showIndiPanelControl && <IndiPanelControl />}
 			{showAbout && <About />}
 			{showCalculator && <Calculator />}
@@ -91,6 +97,7 @@ export const HomeMenuPopoverContent = memo(() => {
 
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
 	const framing = useMolecule(FramingMolecule)
+	const tppa = useMolecule(TppaMolecule)
 	const calculator = useMolecule(CalculatorMolecule)
 	const about = useMolecule(AboutMolecule)
 
@@ -161,8 +168,8 @@ export const HomeMenuPopoverContent = memo(() => {
 					<img className='w-9' src={framingIcon} />
 				</Button>
 			</Tooltip>
-			<Tooltip content='Aligment' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={camera.length === 0} isIconOnly size='lg' variant='light'>
+			<Tooltip content='TPPA' placement='bottom' showArrow>
+				<Button color='secondary' isDisabled={camera.length === 0 || mount.length === 0} isIconOnly onPointerUp={tppa.show} size='lg' variant='light'>
 					<img className='w-9' src={alignmentIcon} />
 				</Button>
 			</Tooltip>

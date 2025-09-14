@@ -30,8 +30,8 @@ export const PlateSolver = memo(() => {
 				<Checkbox className='col-span-3 col-end-13' isSelected={blind} onValueChange={(value) => solver.update('blind', value)}>
 					Blind
 				</Checkbox>
-				<Input className='col-span-4' isDisabled={blind} label='RA' onValueChange={(value) => solver.update('rightAscension', value)} size='sm' value={rightAscension} />
-				<Input className='col-span-4' isDisabled={blind} label='DEC' onValueChange={(value) => solver.update('declination', value)} size='sm' value={declination} />
+				<Input className='col-span-4' isDisabled={blind} label='RA' onValueChange={(value) => solver.update('rightAscension', value)} size='sm' value={rightAscension.toString()} />
+				<Input className='col-span-4' isDisabled={blind} label='DEC' onValueChange={(value) => solver.update('declination', value)} size='sm' value={declination.toString()} />
 				<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={blind} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => solver.update('radius', value)} size='sm' step={0.1} value={radius ?? 4} />
 				<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} label='Focal Length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} size='sm' value={focalLength} />
 				<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} size='sm' step={0.01} value={pixelSize} />

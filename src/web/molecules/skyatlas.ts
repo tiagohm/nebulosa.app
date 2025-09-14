@@ -1,11 +1,11 @@
 import { molecule, onMount } from 'bunshi'
+import { deg } from 'nebulosa/src/angle'
 import bus from 'src/shared/bus'
 import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SKY_OBJECT_SEARCH, type LocationAndTime, type PositionOfBody, type SkyObjectSearch, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
-import { deg } from 'nebulosa/src/angle'
 
 export interface SkyAtlasState {
 	show: boolean
@@ -23,8 +23,9 @@ export interface SunState {
 }
 
 export interface MoonState {
+	readonly request: PositionOfBody
 	readonly position: BodyPosition
-	readonly chart: number[]
+	chart: number[]
 }
 
 export interface GalaxyState {
@@ -38,6 +39,7 @@ export interface GalaxyState {
 
 let skyAtlasState: SkyAtlasState | undefined
 let sunState: SunState | undefined
+let moonState: MoonState | undefined
 let galaxyState: GalaxyState | undefined
 
 export const SunMolecule = molecule(() => {
@@ -80,6 +82,10 @@ export const SunMolecule = molecule(() => {
 	void tick()
 
 	async function tick() {
+		// TODO: Somente se a aba estiver visivel.
+		// O SkyAtlasMolecule poderia emitir um evento quando a aba for alterada
+		// quando isso acontecer, atualizar somente se passou de 1 minuto desde a última atualização
+		// ou se a data mudou (meio-dia, meio-mês, meio-ano)
 		updateTime()
 
 		void updateSeasons()
@@ -110,6 +116,59 @@ export const SunMolecule = molecule(() => {
 			const seasons = await Api.SkyAtlas.seasons(state.request)
 			if (seasons) Object.assign(state.seasons, seasons)
 			seasonsUpdateRequested = false
+		}
+	}
+
+	return { state }
+})
+
+export const MoonMolecule = molecule(() => {
+	const request = structuredClone(DEFAULT_POSITION_OF_BODY)
+
+	const state =
+		moonState ??
+		proxy<MoonState>({
+			request,
+			position: structuredClone(DEFAULT_BODY_POSITION),
+			chart: [],
+		})
+
+	moonState = state
+
+	onMount(() => {
+		const timer = setInterval(tick, 60000)
+
+		return () => {
+			clearInterval(timer)
+		}
+	})
+
+	let chartUpdateRequested = true
+
+	void tick()
+
+	async function tick() {
+		updateTime()
+
+		await updatePosition()
+		await updateChart()
+	}
+
+	function updateTime(time: number = Date.now()) {
+		request.time.utc = time
+		// TODO: verificar se a data passou ou não do meio-dia/mes/ano e atualizar chart/positions/seasons
+	}
+
+	async function updatePosition() {
+		const position = await Api.SkyAtlas.positionOfMoon(state.request)
+		if (position) Object.assign(state.position, position)
+	}
+
+	async function updateChart() {
+		if (chartUpdateRequested) {
+			const chart = await Api.SkyAtlas.chartOfMoon(state.request)
+			if (chart) state.chart = chart
+			chartUpdateRequested = false
 		}
 	}
 

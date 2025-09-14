@@ -15,8 +15,12 @@ export const ThermometerDropdown = memo(({ value, onValueChange, children, ...pr
 	const equipment = useMolecule(EquipmentMolecule)
 	const thermometers = useSnapshot(equipment.state.thermometer)
 
+	function handleValueChange(value?: Thermometer) {
+		onValueChange?.(equipment.state.thermometer.find((e) => e.id === value?.id))
+	}
+
 	return (
-		<DeviceDropdown {...props} items={thermometers} onValueChange={onValueChange} value={value}>
+		<DeviceDropdown {...props} items={thermometers} onValueChange={handleValueChange} value={value}>
 			{(value, color, isDisabled) =>
 				children?.(value, color, isDisabled) ?? (
 					<Button className='rounded-full' color={color} isDisabled={isDisabled} isIconOnly size='sm' variant='light'>

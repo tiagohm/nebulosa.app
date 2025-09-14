@@ -4,10 +4,10 @@ import type { NewVector } from 'nebulosa/src/indi'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DeviceProperties, DeviceProperty, DewHeater, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, SolarSeasons, StarDetection, Thermometer, TrackMode, Twilight } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, Device, DeviceProperties, DeviceProperty, DewHeater, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, SolarSeasons, StarDetection, Thermometer, TppaStart, TppaStop, TrackMode, Twilight } from 'src/shared/types'
 import { type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
-export const URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
+export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
 const DEFAULT_HEADERS: HeadersInit = {
 	'Content-Type': 'application/json',
@@ -352,6 +352,14 @@ export namespace Api {
 			return json<Twilight>('/atlas/sun/twilight', 'post', req)
 		}
 
+		export function positionOfMoon(req: PositionOfBody) {
+			return json<BodyPosition>('/atlas/moon/position', 'post', req)
+		}
+
+		export function chartOfMoon(req: PositionOfBody) {
+			return json<number[]>('/atlas/moon/chart', 'post', req)
+		}
+
 		export function searchSkyObject(req: SkyObjectSearch) {
 			return json<SkyObjectSearchItem[]>('/atlas/skyobjects/search', 'post', req)
 		}
@@ -390,11 +398,21 @@ export namespace Api {
 			return json<{ path: string }>('/framing', 'post', req)
 		}
 	}
+
+	export namespace TPPA {
+		export function start(camera: Camera, mount: Mount, req: TppaStart) {
+			return res(`/tppa/${camera.name}/${mount.name}/start`, 'post', req)
+		}
+
+		export function stop(req: TppaStop) {
+			return res('/tppa/stop', 'post', req)
+		}
+	}
 }
 
 function req(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {
 	const options: RequestInit = { method, cache: 'no-cache', headers: DEFAULT_HEADERS, body: body === undefined ? undefined : JSON.stringify(body) }
-	return fetch(`${URL}${path}`, options)
+	return fetch(`${API_URL}${path}`, options)
 }
 
 async function json<T>(path: string, method: 'get' | 'post' | 'put', body?: unknown) {

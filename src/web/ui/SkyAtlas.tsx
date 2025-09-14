@@ -9,11 +9,12 @@ import { memo, useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import { type BodyPosition, EMPTY_TWILIGHT, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { GalaxyMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
+import { GalaxyMolecule, MoonMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConstellationSelect } from './ConstellationSelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
+import { Moon } from './Moon'
 import { SKY_OBJECT_NAME_TYPES, SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 import { Sun } from './Sun'
@@ -47,7 +48,9 @@ export const SkyAtlas = memo(() => {
 					<Tab key='sun' title={<Icons.Sun />}>
 						<SunTab />
 					</Tab>
-					<Tab key='moon' title={<Icons.Moon />}></Tab>
+					<Tab key='moon' title={<Icons.Moon />}>
+						<MoonTab />
+					</Tab>
 					<Tab key='planets' title={<Icons.Planet />}></Tab>
 					<Tab key='asteroids' title={<Icons.Meteor />}></Tab>
 					<Tab key='galaxies' title={<Icons.Galaxy />}>
@@ -109,6 +112,25 @@ export const Seasons = memo(() => {
 				{isSouthern ? 'WINTER' : 'SUMMER'}
 			</span>
 			<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(isSouthern ? summer : winter, 'MM-DD HH:mm')}</span>
+		</div>
+	)
+})
+
+export const MoonTab = memo(() => {
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { twilight } = useSnapshot(atlas.state)
+
+	const moon = useMolecule(MoonMolecule)
+	const { position, chart } = useSnapshot(moon.state)
+
+	return (
+		<div className='grid grid-cols-12 gap-2 items-center'>
+			<div className='relative col-span-full flex justify-center items-center'>
+				<Moon />
+			</div>
+			<div className='col-span-full'>
+				<EphemerisAndChart chart={chart} name='Moon' position={position} twilight={twilight} />
+			</div>
 		</div>
 	)
 })

@@ -6,7 +6,6 @@ import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
-import { HomeMolecule } from './home'
 import { ImageWorkspaceMolecule } from './image/workspace'
 
 export interface FramingState {
@@ -19,7 +18,6 @@ export interface FramingState {
 }
 
 export const FramingMolecule = molecule((m) => {
-	const home = m(HomeMolecule)
 	const workspace = m(ImageWorkspaceMolecule)
 
 	const request = simpleLocalStorage.get('framing', () => structuredClone(DEFAULT_FRAMING))
@@ -78,7 +76,7 @@ export const FramingMolecule = molecule((m) => {
 	}
 
 	function show() {
-		home.toggleMenu(false)
+		bus.emit('homeMenu:toggle', false)
 		state.show = true
 	}
 

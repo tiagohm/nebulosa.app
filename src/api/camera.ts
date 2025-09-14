@@ -5,7 +5,7 @@ import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTex
 import { formatTemporal, temporalGet, temporalSubtract } from 'nebulosa/src/temporal'
 import { join } from 'path'
 import bus from '../shared/bus'
-import { type Camera, type CameraAdded, type CameraCaptured, type CameraCaptureStart, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURED, type DeviceProperties, type FrameType, type Mount } from '../shared/types'
+import { type Camera, type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_EVENT, type DeviceProperties, type FrameType, type Mount } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import type { ConnectionManager } from './connection'
 import type { GuideOutputManager } from './guideoutput'
@@ -436,7 +436,7 @@ export class CameraManager implements IndiClientHandler {
 		}
 	}
 
-	handleCameraCaptured(event: CameraCaptured) {
+	handleCameraCaptureEvent(event: CameraCaptureEvent) {
 		this.wsm.send('camera:capture', event)
 
 		// Remove the task after it finished
@@ -461,7 +461,7 @@ export class CameraManager implements IndiClientHandler {
 		}
 
 		// Start a new task for the camera
-		const task = new CameraCaptureTask(device, req, client, property, this.handleCameraCaptured.bind(this))
+		const task = new CameraCaptureTask(device, req, client, property, this.handleCameraCaptureEvent.bind(this))
 		this.tasks.set(device.name, task)
 		const mount = req.mount ? this.mount.get(req.mount) : undefined
 		snoop(client, device, mount)
@@ -491,7 +491,7 @@ export function camera(camera: CameraManager, connection: ConnectionManager, pro
 }
 
 export class CameraCaptureTask {
-	readonly event = structuredClone(DEFAULT_CAMERA_CAPTURED)
+	readonly event = structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT)
 
 	private readonly waitingTime: number
 	private readonly totalExposureProgress = [0, 0] // remaining, elapsed
@@ -502,7 +502,7 @@ export class CameraCaptureTask {
 		private readonly request: CameraCaptureStart,
 		private readonly client: IndiClient,
 		private readonly properties: IndiDevicePropertyManager,
-		private readonly handleCameraCaptured: (event: CameraCaptured) => void,
+		private readonly handleCameraCaptureEvent: (event: CameraCaptureEvent) => void,
 	) {
 		this.event.loop = request.exposureMode === 'LOOP'
 		this.event.device = camera.name
@@ -537,13 +537,13 @@ export class CameraCaptureTask {
 				this.event.frameProgress.remainingTime = remainingTime
 				this.event.frameProgress.elapsedTime = elapsedTime
 				this.event.frameProgress.progress = Math.max(0, (1 - remainingTime / this.event.frameExposureTime) * 100)
-				return this.handleCameraCaptured(this.event)
+				return this.handleCameraCaptureEvent(this.event)
 			} else if (state === 'Ok') {
 				this.event.state = 'EXPOSURE_FINISHED'
 				this.event.frameProgress.remainingTime = 0
 				this.event.frameProgress.elapsedTime = this.event.frameExposureTime
 				this.event.frameProgress.progress = 100
-				this.handleCameraCaptured(this.event)
+				this.handleCameraCaptureEvent(this.event)
 
 				this.totalExposureProgress[0] -= this.event.frameExposureTime
 				this.totalExposureProgress[1] += this.event.frameExposureTime
@@ -569,7 +569,7 @@ export class CameraCaptureTask {
 							this.event.frameProgress.remainingTime = remainingTime
 							this.event.frameProgress.elapsedTime = this.waitingTime - remainingTime
 							this.event.frameProgress.progress = Math.max(0, (1 - remainingTime / this.waitingTime) * 100)
-							this.handleCameraCaptured(this.event)
+							this.handleCameraCaptureEvent(this.event)
 
 							return true
 						})
@@ -604,7 +604,7 @@ export class CameraCaptureTask {
 			this.event.frameProgress.progress = 0
 			this.event.remainingCount = 0
 			this.event.elapsedCount = 0
-			this.handleCameraCaptured(this.event)
+			this.handleCameraCaptureEvent(this.event)
 			disableBlob(this.client, this.camera)
 		}
 	}
@@ -624,7 +624,7 @@ export class CameraCaptureTask {
 
 			cache.set(device.name, bytes)
 
-			this.handleCameraCaptured(this.event)
+			this.handleCameraCaptureEvent(this.event)
 			this.event.savedPath = undefined
 		}
 	}
@@ -637,7 +637,7 @@ export class CameraCaptureTask {
 			this.event.frameProgress.remainingTime = this.event.frameExposureTime
 			this.event.frameProgress.elapsedTime = 0
 			this.event.frameProgress.progress = 0
-			this.handleCameraCaptured(this.event)
+			this.handleCameraCaptureEvent(this.event)
 
 			enableBlob(this.client, this.camera)
 			frame(this.client, this.camera, this.request.x, this.request.y, this.request.width, this.request.height)

@@ -1,4 +1,3 @@
-import { Button } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import type { Mount } from 'src/shared/types'
@@ -6,24 +5,26 @@ import { useSnapshot } from 'valtio'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { DeviceDropdown, type DeviceDropdownProps } from '@/ui/DeviceDropdown'
 import { Icons } from './Icon'
+import { IconButton, type IconButtonProps } from './IconButton'
 
 export interface MountDropdownProps extends Omit<DeviceDropdownProps<Mount>, 'items' | 'icon' | 'children'> {
 	readonly children?: DeviceDropdownProps<Mount>['children']
+	readonly buttonProps?: Omit<IconButtonProps, 'icon' | 'label' | 'isDisabled' | 'color'>
+	readonly showLabel?: boolean
+	readonly showLabelOnEmpty?: boolean
 }
 
-export const MountDropdown = memo(({ value, onValueChange, children, ...props }: MountDropdownProps) => {
+export const MountDropdown = memo(({ showLabel = true, showLabelOnEmpty = true, value, onValueChange, children, buttonProps, ...props }: MountDropdownProps) => {
 	const equipment = useMolecule(EquipmentMolecule)
 	const mounts = useSnapshot(equipment.state.mount)
 
+	function handleValueChange(value?: Mount) {
+		onValueChange?.(equipment.state.mount.find((e) => e.id === value?.id))
+	}
+
 	return (
-		<DeviceDropdown {...props} items={mounts} onValueChange={onValueChange} value={value}>
-			{(value, color, isDisabled) =>
-				children?.(value, color, isDisabled) ?? (
-					<Button className='rounded-full' color={color} isDisabled={isDisabled} isIconOnly size='sm' variant='light'>
-						<Icons.Telescope />
-					</Button>
-				)
-			}
+		<DeviceDropdown {...props} items={mounts} onValueChange={handleValueChange} value={value}>
+			{(value, color, isDisabled) => children?.(value, color, isDisabled) ?? <IconButton color={color} icon={Icons.Telescope} isDisabled={isDisabled} label={showLabel ? (value?.name ?? (showLabelOnEmpty ? 'None' : undefined)) : undefined} {...buttonProps} />}
 		</DeviceDropdown>
 	)
 })

@@ -15,8 +15,12 @@ export const FocuserDropdown = memo(({ value, onValueChange, children, ...props 
 	const equipment = useMolecule(EquipmentMolecule)
 	const focusers = useSnapshot(equipment.state.focuser)
 
+	function handleValueChange(value?: Focuser) {
+		onValueChange?.(equipment.state.focuser.find((e) => e.id === value?.id))
+	}
+
 	return (
-		<DeviceDropdown {...props} items={focusers} onValueChange={onValueChange} value={value}>
+		<DeviceDropdown {...props} items={focusers} onValueChange={handleValueChange} value={value}>
 			{(value, color, isDisabled) =>
 				children?.(value, color, isDisabled) ?? (
 					<Button className='rounded-full' color={color} isDisabled={isDisabled} isIconOnly size='sm' variant='light'>

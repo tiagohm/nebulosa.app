@@ -1,6 +1,7 @@
 import type { SortDescriptor } from '@heroui/react'
 import type { MoleculeOrInterface } from 'bunshi'
 import { type Angle, toHour } from 'nebulosa/src/angle'
+import { DEFAULT_REFRACTION_PARAMETERS, type RefractionParameters } from 'nebulosa/src/astrometry'
 import type { Constellation } from 'nebulosa/src/constellation'
 import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
@@ -520,13 +521,13 @@ export interface CameraCaptureStart {
 	mount?: string
 }
 
-export interface CameraCaptureProgress {
+export interface CameraCaptureTime {
 	remainingTime: number
 	elapsedTime: number
 	progress: number
 }
 
-export interface CameraCaptured {
+export interface CameraCaptureEvent {
 	device: string
 	count: number
 	loop: boolean
@@ -535,8 +536,8 @@ export interface CameraCaptured {
 	state: CameraCaptureState
 	totalExposureTime: number
 	frameExposureTime: number
-	totalProgress: CameraCaptureProgress
-	frameProgress: CameraCaptureProgress
+	totalProgress: CameraCaptureTime
+	frameProgress: CameraCaptureTime
 	savedPath?: string
 }
 
@@ -666,7 +667,7 @@ export interface Notification {
 
 export type PlateSolverType = 'ASTAP' | 'PIXINSIGHT' | 'ASTROMETRY_NET' | 'NOVA_ASTROMETRY_NET' | 'SIRIL'
 
-export interface PlateSolveStart extends Omit<PlateSolveOptions, 'ra' | 'dec' | 'radius'>, EquatorialCoordinate<string> {
+export interface PlateSolveStart extends Omit<PlateSolveOptions, 'rightAscension' | 'declination' | 'radius'>, EquatorialCoordinate<string | Angle> {
 	id: string
 	type: PlateSolverType
 	executable: string
@@ -701,14 +702,33 @@ export interface StarDetection {
 
 // Tppa
 
+export type TppaState = 'IDLE' | 'MOVING' | 'CAPTURING' | 'SOLVING' | 'ALIGNING'
+
 export interface TppaStart {
-	readonly id: string
+	id: string
+	readonly direction: 'EAST' | 'WEST'
+	readonly moveDuration: number // seconds
+	readonly settleDuration: number // seconds
 	readonly solver: Omit<PlateSolveStart, 'id' | 'path' | 'blind'>
 	readonly capture: CameraCaptureStart
+	readonly refraction: RefractionParameters
+	readonly stopTrackingWhenDone: boolean
 }
 
 export interface TppaStop {
 	readonly id: string
+}
+
+export interface TppaEvent {
+	id: string
+	step: number
+	state: TppaState
+	attempts: number
+	solved: boolean
+	readonly solver: EquatorialCoordinate
+	aligned: boolean
+	readonly error: HorizontalCoordinate
+	failed: boolean
 }
 
 // Misc
@@ -742,7 +762,7 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	autoSubFolderMode: 'OFF',
 }
 
-export const DEFAULT_CAMERA_CAPTURED: CameraCaptured = {
+export const DEFAULT_CAMERA_CAPTURE_EVENT: CameraCaptureEvent = {
 	device: '',
 	state: 'IDLE',
 	count: 0,
@@ -1168,6 +1188,35 @@ export const DEFAULT_INDI_SERVER_START: Required<IndiServerStart> = {
 	repeat: 1,
 	verbose: 0,
 	drivers: [],
+}
+
+export const DEFAULT_TPPA_START: TppaStart = {
+	id: '',
+	direction: 'EAST',
+	moveDuration: 5,
+	settleDuration: 2,
+	solver: DEFAULT_PLATE_SOLVE_START,
+	capture: DEFAULT_CAMERA_CAPTURE_START,
+	refraction: DEFAULT_REFRACTION_PARAMETERS,
+	stopTrackingWhenDone: true,
+}
+
+export const DEFAULT_TPPA_EVENT: TppaEvent = {
+	id: '',
+	step: 0,
+	state: 'IDLE',
+	attempts: 0,
+	solved: false,
+	aligned: false,
+	failed: false,
+	solver: {
+		rightAscension: 0,
+		declination: 0,
+	},
+	error: {
+		azimuth: 0,
+		altitude: 0,
+	},
 }
 
 export function isCamera(device: Device): device is Camera {

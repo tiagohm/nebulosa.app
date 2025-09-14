@@ -18,6 +18,7 @@ import { WebSocketMessageManager } from 'src/api/message'
 import { MountManager, MountRemoteControlManager, mount } from 'src/api/mount'
 import { NotificationManager } from 'src/api/notification'
 import { ThermometerManager, thermometer } from 'src/api/thermometer'
+import { TppaManager, tppa } from 'src/api/tppa'
 import { parseArgs } from 'util'
 import { ConfirmationManager, confirmation } from './src/api/confirmation'
 import { FileSystemManager, fileSystem } from './src/api/filesystem'
@@ -80,6 +81,7 @@ const starDetectionManager = new StarDetectionManager()
 const plateSolverManager = new PlateSolverManager(notificationManager)
 const atlasManager = new AtlasManager(cacheManager)
 const imageManager = new ImageManager(notificationManager)
+const tppaManager = new TppaManager(wsm, cameraManager, mountManager, plateSolverManager, indiDevicePropertyManager, cacheManager)
 
 void atlasManager.refreshImageOfSun()
 
@@ -127,10 +129,14 @@ const app = new Elysia({
 
 	// Before Response
 
-	.onAfterHandle(({ set }) => {
-		set.headers['cache-control'] = 'no-cache, no-store, must-revalidate'
-		set.headers.pragma = 'no-cache'
-		set.headers.expires = '0'
+	.onAfterHandle(({ path, set }) => {
+		if (path === '/atlas/sun/image') {
+			set.headers['cache-control'] = 'public, max-age=900' // 15 minutes
+		} else {
+			set.headers['cache-control'] = 'no-cache, no-store, must-revalidate'
+			set.headers.pragma = 'no-cache'
+			set.headers.expires = '0'
+		}
 	})
 
 	// After Response
@@ -163,6 +169,7 @@ const app = new Elysia({
 	.use(starDetection(starDetectionManager))
 	.use(plateSolver(plateSolverManager))
 	.use(fileSystem(fileSystemManager))
+	.use(tppa(tppaManager, connectionManager, cameraManager.cache))
 
 	// WebSocket
 

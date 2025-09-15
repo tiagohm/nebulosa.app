@@ -70,7 +70,7 @@ export const Mount = memo(() => {
 						<TargetCoordinateAndPosition isDisabled={!connected || moving} />
 					</div>
 					<Nudge className='col-span-5 row-span-2' isCancelDisabled={!canAbort || parked || !moving} isDisabled={!connected || parked} isNudgeDisabled={moving} onCancel={mount.stop} onNudge={mount.moveTo} />
-					<Switch className='col-span-4 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || moving || parked} isSelected={tracking} onValueChange={(value) => mount.tracking(value)}>
+					<Switch className='col-span-4 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || moving || parked} isSelected={tracking} onValueChange={mount.tracking}>
 						Tracking
 					</Switch>
 					<div className='col-span-3 flex flex-row items-center justify-center gap-2'>
@@ -85,8 +85,8 @@ export const Mount = memo(() => {
 							</Button>
 						</Tooltip>
 					</div>
-					<TrackModeSelect className='col-span-4' isDisabled={!connected || moving || parked} modes={trackModes} onValueChange={(value) => mount.trackMode(value)} value={trackMode} />
-					<SlewRateSelect className='col-span-3' isDisabled={!connected || moving || parked} onValueChange={(value) => mount.slewRate(value)} rates={slewRates} value={slewRate ?? ''} />
+					<TrackModeSelect className='col-span-4' isDisabled={!connected || moving || parked} modes={trackModes} onValueChange={mount.trackMode} value={trackMode} />
+					<SlewRateSelect className='col-span-3' isDisabled={!connected || moving || parked} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
 				</div>
 			</Modal>
 			{showLocation && <Location coordinate={geographicCoordinate} name={`location-mount-${mount.scope.mount.name}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}

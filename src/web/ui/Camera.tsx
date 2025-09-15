@@ -65,7 +65,7 @@ export const Camera = memo(() => {
 					<AutoSubFolderModeButton isDisabled={!request.autoSave} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={request.autoSubFolderMode} />
 					<FilePickerInput isDisabled={!request.autoSave} mode='directory' name={`camera-${camera.scope.camera.name}`} onValueChange={updateSavePath} value={request.savePath} />
 				</div>
-				<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || capturing || !hasCooler} isSelected={cooler} onValueChange={(value) => camera.cooler(value)} size='sm'>
+				<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || capturing || !hasCooler} isSelected={cooler} onValueChange={camera.cooler} size='sm'>
 					Cooler ({(coolerPower * 100).toFixed(1)}%)
 				</Switch>
 				<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={true || !connected || capturing} size='sm'>

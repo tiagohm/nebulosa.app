@@ -24,7 +24,7 @@ export function FilterableSelect<T extends object>({ showFilter = true, items, f
 			{...props}
 			items={filtered}
 			listboxProps={{
-				topContent: showFilter && <SearchInput className='w-full' onValueChange={(value) => setSearch(value)} placeholder={filterPlaceholder} value={search} />,
+				topContent: showFilter && <SearchInput className='w-full' onValueChange={setSearch} placeholder={filterPlaceholder} value={search} />,
 			}}
 		/>
 	)

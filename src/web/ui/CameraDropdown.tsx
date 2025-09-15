@@ -14,7 +14,7 @@ export interface CameraDropdownProps extends Omit<DeviceDropdownProps<Camera>, '
 	readonly showLabelOnEmpty?: boolean
 }
 
-export const CameraDropdown = memo(({ showLabel = true, showLabelOnEmpty = true, value, onValueChange, children, buttonProps, ...props }: CameraDropdownProps) => {
+export const CameraDropdown = memo(({ showLabel = true, showLabelOnEmpty = showLabel, value, onValueChange, children, buttonProps, ...props }: CameraDropdownProps) => {
 	const equipment = useMolecule(EquipmentMolecule)
 	const cameras = useSnapshot(equipment.state.CAMERA)
 
@@ -24,7 +24,7 @@ export const CameraDropdown = memo(({ showLabel = true, showLabelOnEmpty = true,
 
 	return (
 		<DeviceDropdown {...props} items={cameras} onValueChange={handleValueChange} value={value}>
-			{(value, color, isDisabled) => children?.(value, color, isDisabled) ?? <IconButton color={color} icon={Icons.Camera} isDisabled={isDisabled} label={showLabel ? (value?.name ?? (showLabelOnEmpty ? 'None' : undefined)) : undefined} {...buttonProps} />}
+			{(value, color, isDisabled) => children?.(value, color, isDisabled) ?? <IconButton color={color} icon={Icons.Camera} isDisabled={isDisabled} label={showLabel ? (value?.name ?? (showLabelOnEmpty ? 'None' : undefined)) : showLabelOnEmpty && !value ? 'None' : undefined} {...buttonProps} />}
 		</DeviceDropdown>
 	)
 })

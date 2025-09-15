@@ -35,7 +35,7 @@ export const FlatPanel = memo(() => {
 		<Modal header={Header} maxWidth='260px' name={`flat-panel-${flatPanel.scope.flatPanel.name}`} onHide={flatPanel.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row items-center justify-center'>
-					<Switch isDisabled={!connected} isSelected={enabled} onValueChange={(enabled) => (enabled ? flatPanel.enable() : flatPanel.disable())} />
+					<Switch isDisabled={!connected} isSelected={enabled} onValueChange={flatPanel.toggle} />
 				</div>
 				<div className='col-span-full flex flex-col justify-center items-center gap-1'>
 					<Slider endContent={intensity.max} isDisabled={!connected || !enabled} maxValue={intensity.max} minValue={intensity.min} onChange={(value) => setIntensityValue(value as never)} size='lg' startContent={intensity.min} value={intensityValue} />

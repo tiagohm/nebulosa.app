@@ -1,10 +1,13 @@
 import { type ButtonProps, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
+import { useMolecule } from 'bunshi/react'
 import { useMemo } from 'react'
 import type { Device } from 'src/shared/types'
 import type { DeepReadonly } from 'utility-types'
+import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { Api } from '@/shared/api'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 
 export interface DeviceDropdownProps<T extends Device = Device> {
 	readonly isDisabled?: boolean
@@ -45,15 +48,24 @@ export interface DeviceDropdownEndContentProps {
 }
 
 export function DeviceDropdownEndContent({ device, isSelected }: DeviceDropdownEndContentProps) {
-	function handlePointerUp(event: React.PointerEvent) {
+	const equipment = useMolecule(EquipmentMolecule)
+
+	function handleConnectButtonPointerUp(event: React.PointerEvent) {
 		event.stopPropagation()
 
 		return device!.connected ? Api.Indi.disconnect(device!) : Api.Indi.connect(device!)
 	}
 
+	function handleOpenInNewPointerUp(event: React.PointerEvent) {
+		event.stopPropagation()
+
+		equipment.show(device!.type, device!)
+	}
+
 	return (
 		<div className='flex flex-row items-center gap-2'>
-			{device && <ConnectButton iconSize={12} isConnected={device.connected} onPointerUp={handlePointerUp} size='sm' />}
+			{device && <IconButton color='secondary' icon={Icons.OpenInNew} iconSize={12} onPointerUp={handleOpenInNewPointerUp} size='sm' />}
+			{device && <ConnectButton iconSize={12} isConnected={device.connected} onPointerUp={handleConnectButtonPointerUp} size='sm' />}
 			{isSelected && <Icons.Check className='me-2' color='#17C964' size={12} />}
 		</div>
 	)

@@ -1,4 +1,4 @@
-import { Chip, NumberInput } from '@heroui/react'
+import { Checkbox, Chip, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import { memo } from 'react'
@@ -18,7 +18,7 @@ import { TppaDirectionSelect } from './TppaDirectionSelect'
 export const Tppa = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
 	const { running, camera, mount, event } = useSnapshot(tppa.state)
-	const { direction, moveDuration, settleDuration } = useSnapshot(tppa.state.request, { sync: true })
+	const { direction, moveDuration, stopTrackingWhenDone } = useSnapshot(tppa.state.request, { sync: true })
 	const { type, radius, focalLength, pixelSize } = useSnapshot(tppa.state.request.solver, { sync: true })
 
 	const Footer = (
@@ -32,7 +32,7 @@ export const Tppa = memo(() => {
 		<Modal footer={Footer} header='Three-Point Polar Alignment' maxWidth='363px' name='tppa' onHide={tppa.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row justify-center items-center gap-2'>
-					<CameraDropdown buttonProps={{ endContent: <CameraDropdownEndContent /> }} isDisabled={running} onValueChange={(value) => (tppa.state.camera = value)} showLabelOnEmpty value={camera} />
+					<CameraDropdown buttonProps={{ endContent: <CameraDropdownEndContent /> }} isDisabled={running} onValueChange={(value) => (tppa.state.camera = value)} value={camera} />
 					<MountDropdown isDisabled={running} onValueChange={(value) => (tppa.state.mount = value)} value={mount} />
 				</div>
 				<div className='mt-2 col-span-full flex flex-row items-center justify-between'>
@@ -54,6 +54,9 @@ export const Tppa = memo(() => {
 				<PlateSolverSelect className='col-span-5' endContent={<PlateSolveStartPopover focalLength={focalLength} onValueChange={tppa.updateSolver} pixelSize={pixelSize} radius={radius} />} isDisabled={running} onValueChange={(value) => tppa.updateSolver('type', value)} value={type} />
 				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Move by (s)' maxValue={60} minValue={1} onValueChange={(value) => tppa.update('moveDuration', value)} size='sm' value={moveDuration} />
 				<TppaDirectionSelect className='col-span-3' isDisabled={running} onValueChange={(value) => tppa.update('direction', value)} value={direction} />
+				<Checkbox className='col-span-full' isDisabled={running} isSelected={stopTrackingWhenDone} onValueChange={(value) => tppa.update('stopTrackingWhenDone', value)}>
+					Stop tracking when done
+				</Checkbox>
 				<div className='col-span-6 flex flex-col items-center gap-0 mt-3'>
 					<span className='font-bold'>Azimuth</span>
 					<span className='text-3xl'>{formatDEC(event.error.azimuth)}</span>

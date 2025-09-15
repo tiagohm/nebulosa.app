@@ -713,6 +713,7 @@ export interface TppaStart {
 	readonly capture: CameraCaptureStart
 	readonly refraction: RefractionParameters
 	readonly stopTrackingWhenDone: boolean
+	readonly compensateRefraction: boolean
 }
 
 export interface TppaStop {
@@ -1199,6 +1200,7 @@ export const DEFAULT_TPPA_START: TppaStart = {
 	capture: DEFAULT_CAMERA_CAPTURE_START,
 	refraction: DEFAULT_REFRACTION_PARAMETERS,
 	stopTrackingWhenDone: true,
+	compensateRefraction: true,
 }
 
 export const DEFAULT_TPPA_EVENT: TppaEvent = {

@@ -27,7 +27,7 @@ export const SkyAtlas = memo(() => {
 		<div className='flex flex-row items-center justify-between'>
 			<span>Sky Atlas</span>
 			{tab === 'galaxies' && (
-				<Popover className='max-w-160' placement='bottom' showArrow={true}>
+				<Popover className='max-w-160' placement='bottom' showArrow>
 					<PopoverTrigger>
 						<Button color='secondary' isIconOnly variant='flat'>
 							<Icons.Filter />

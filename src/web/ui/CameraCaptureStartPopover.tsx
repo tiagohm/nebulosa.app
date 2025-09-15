@@ -20,12 +20,13 @@ export interface CameraCaptureStartPopoverProps extends Pick<CameraCaptureStart,
 
 export function CameraCaptureStartPopover({ maxExposure, minExposure, exposureTime, exposureTimeUnit, binX, binY, maxBin, gain, maxGain, offset, maxOffset, frameFormat, frameFormats, onValueChange, ...props }: CameraCaptureStartPopoverProps) {
 	return (
-		<Popover className='max-w-110' placement='bottom' showArrow={true}>
+		<Popover className='max-w-110' placement='bottom' showArrow>
 			<PopoverTrigger>
 				<IconButton {...props} icon={Icons.Cog} />
 			</PopoverTrigger>
 			<PopoverContent>
 				<div className='grid grid-cols-12 gap-2 p-4'>
+					<p className='col-span-full font-bold'>CAMERA CAPTURE OPTIONS</p>
 					<ExposureTimeInput
 						className='col-span-6'
 						maxValue={maxExposure}

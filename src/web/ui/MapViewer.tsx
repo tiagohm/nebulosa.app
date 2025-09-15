@@ -55,5 +55,5 @@ export function DraggableMarker({ position, onPositionChange }: DraggableMarkerP
 		map.flyTo(position, map.getZoom())
 	}, [position])
 
-	return <Marker draggable={true} eventHandlers={{ dragend: handleDragEnd }} icon={MapPinIcon} position={position} ref={marker} />
+	return <Marker draggable eventHandlers={{ dragend: handleDragEnd }} icon={MapPinIcon} position={position} ref={marker} />
 }

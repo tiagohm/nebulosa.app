@@ -75,7 +75,7 @@ export class TppaTask {
 		this.capture.width = camera.frame.maxWidth
 		this.capture.height = camera.frame.maxHeight
 
-		this.polarAlignment = new ThreePointPolarAlignment(request.refraction)
+		this.polarAlignment = new ThreePointPolarAlignment(request.compensateRefraction && request.refraction)
 
 		this.event.id = this.request.id
 

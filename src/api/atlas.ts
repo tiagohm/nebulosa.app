@@ -38,11 +38,16 @@ export class AtlasManager {
 
 	async refreshImageOfSun() {
 		for (const [source, url] of Object.entries(SOLAR_IMAGE_SOURCE_URLS)) {
-			const response = await fetch(url)
-			const bytes = await response.arrayBuffer()
-			await sharp(bytes)
-				.linear(SOLAR_IMAGE_CONTRAST, -(128 * SOLAR_IMAGE_CONTRAST) + 128)
-				.toFile(`/dev/shm/sun-${source}.jpg`)
+			try {
+				const response = await fetch(url)
+				const bytes = await response.arrayBuffer()
+				await sharp(bytes)
+					.linear(SOLAR_IMAGE_CONTRAST, -(128 * SOLAR_IMAGE_CONTRAST) + 128)
+					.toFile(`/dev/shm/sun-${source}.jpg`)
+			} catch (e) {
+				console.error(e)
+				break
+			}
 		}
 	}
 

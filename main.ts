@@ -9,6 +9,7 @@ import { CacheManager } from 'src/api/cache'
 import { CameraManager, camera } from 'src/api/camera'
 import { ConnectionManager, connection } from 'src/api/connection'
 import { CoverManager, cover } from 'src/api/cover'
+import { DarvManager, darv } from 'src/api/darv'
 import { DewHeaterManager, dewHeater } from 'src/api/dewheater'
 import { FlatPanelManager, flatPanel } from 'src/api/flatpanel'
 import { FocuserManager, focuser } from 'src/api/focuser'
@@ -82,6 +83,7 @@ const plateSolverManager = new PlateSolverManager(notificationManager)
 const atlasManager = new AtlasManager(cacheManager)
 const imageManager = new ImageManager(notificationManager)
 const tppaManager = new TppaManager(wsm, cameraManager, mountManager, plateSolverManager, indiDevicePropertyManager, cacheManager)
+const darvManager = new DarvManager(wsm, cameraManager, mountManager, indiDevicePropertyManager)
 
 void atlasManager.refreshImageOfSun()
 
@@ -170,6 +172,7 @@ const app = new Elysia({
 	.use(plateSolver(plateSolverManager))
 	.use(fileSystem(fileSystemManager))
 	.use(tppa(tppaManager, connectionManager, cameraManager.cache))
+	.use(darv(darvManager, connectionManager))
 
 	// WebSocket
 

@@ -48,7 +48,7 @@ export interface LocationAndTime {
 
 // Atlas
 
-export type TwilightType = 'civil' | 'nautical' | 'astronomical'
+export type TwilightType = 'CIVIL' | 'NAUTICAL' | 'ASTRONOMICAL'
 
 export type TwilightTime = readonly [Temporal, number]
 
@@ -81,8 +81,8 @@ export interface ChartOfBody extends PositionOfBody {}
 
 export interface Twilight {
 	start: TwilightTime
-	readonly dawn: Record<TwilightType, TwilightTime>
-	readonly dusk: Record<TwilightType, TwilightTime>
+	readonly dawn: Record<Lowercase<TwilightType>, TwilightTime>
+	readonly dusk: Record<Lowercase<TwilightType>, TwilightTime>
 	day: TwilightTime
 	night: TwilightTime
 	end: TwilightTime
@@ -732,6 +732,29 @@ export interface TppaEvent {
 	failed: boolean
 }
 
+// Darv
+
+export type Hemisphere = 'NORTHERN' | 'SOUTHERN'
+
+export type DarvState = 'IDLE' | 'WAITING' | 'FORWARDING' | 'BACKWARDING'
+
+export interface DarvStart {
+	id: string
+	readonly hemisphere: Hemisphere
+	readonly initialPause: number // seconds
+	readonly duration: number // seconds
+	readonly capture: CameraCaptureStart
+}
+
+export interface DarvStop {
+	readonly id: string
+}
+
+export interface DarvEvent {
+	id: string
+	state: DarvState
+}
+
 // Misc
 
 export interface Point {
@@ -1219,6 +1242,19 @@ export const DEFAULT_TPPA_EVENT: TppaEvent = {
 		azimuth: 0,
 		altitude: 0,
 	},
+}
+
+export const DEFAULT_DARV_START: DarvStart = {
+	id: '',
+	hemisphere: 'NORTHERN',
+	initialPause: 5,
+	duration: 30,
+	capture: DEFAULT_CAMERA_CAPTURE_START,
+}
+
+export const DEFAULT_DARV_EVENT: DarvEvent = {
+	id: '',
+	state: 'IDLE',
 }
 
 export function isCamera(device: Device): device is Camera {

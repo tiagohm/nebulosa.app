@@ -25,6 +25,7 @@ import skyAtlasIcon from '@/assets/sky-atlas.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
 import { AboutMolecule } from '@/molecules/about'
 import { CalculatorMolecule } from '@/molecules/calculator'
+import { DarvMolecule } from '@/molecules/darv'
 import { FramingMolecule } from '@/molecules/framing'
 import { HomeMolecule } from '@/molecules/home'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
@@ -33,6 +34,7 @@ import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { TppaMolecule } from '@/molecules/tppa'
 import { About } from './About'
 import { Calculator } from './Calculator'
+import { Darv } from './Darv'
 import { Framing } from './Framing'
 import { Icons } from './Icon'
 import { IndiPanelControl } from './IndiPanelControl'
@@ -52,6 +54,9 @@ export const HomeMenu = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
 	const { show: showTPPA } = useSnapshot(tppa.state)
 
+	const darv = useMolecule(DarvMolecule)
+	const { show: showDARV } = useSnapshot(darv.state)
+
 	const indi = useMolecule(IndiPanelControlMolecule)
 	const { show: showIndiPanelControl } = useSnapshot(indi.state)
 
@@ -67,6 +72,7 @@ export const HomeMenu = memo(() => {
 			{showSkyAtlas && <SkyAtlas />}
 			{showFraming && <Framing />}
 			{showTPPA && <Tppa />}
+			{showDARV && <Darv />}
 			{showIndiPanelControl && <IndiPanelControl />}
 			{showAbout && <About />}
 			{showCalculator && <Calculator />}
@@ -99,6 +105,7 @@ export const HomeMenuPopoverContent = memo(() => {
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
 	const framing = useMolecule(FramingMolecule)
 	const tppa = useMolecule(TppaMolecule)
+	const darv = useMolecule(DarvMolecule)
 	const calculator = useMolecule(CalculatorMolecule)
 	const about = useMolecule(AboutMolecule)
 
@@ -171,6 +178,11 @@ export const HomeMenuPopoverContent = memo(() => {
 			</Tooltip>
 			<Tooltip content='TPPA' placement='bottom' showArrow>
 				<Button color='secondary' isDisabled={CAMERA.length === 0 || MOUNT.length === 0} isIconOnly onPointerUp={tppa.show} size='lg' variant='light'>
+					<img className='w-9' src={alignmentIcon} />
+				</Button>
+			</Tooltip>
+			<Tooltip content='DARV' placement='bottom' showArrow>
+				<Button color='secondary' isDisabled={CAMERA.length === 0 || MOUNT.length === 0} isIconOnly onPointerUp={darv.show} size='lg' variant='light'>
 					<img className='w-9' src={alignmentIcon} />
 				</Button>
 			</Tooltip>

@@ -52,7 +52,7 @@ export class TppaTask {
 	private readonly capture: CameraCaptureStart
 	private readonly polarAlignment: ThreePointPolarAlignment
 	private readonly event = structuredClone(DEFAULT_TPPA_EVENT)
-	private readonly handleTppaEvent: (event: TppaEvent) => void
+	private readonly handleTppaEvent: () => void
 
 	constructor(
 		private readonly tppa: TppaManager,
@@ -63,7 +63,7 @@ export class TppaTask {
 		private readonly cache: Map<string, Buffer>,
 		handleTppaEvent: (event: TppaEvent) => void,
 	) {
-		this.capture = this.request.capture
+		this.capture = request.capture
 		this.capture.autoSave = false
 		this.capture.count = 1
 		this.capture.delay = 0
@@ -77,12 +77,12 @@ export class TppaTask {
 
 		this.polarAlignment = new ThreePointPolarAlignment(request.compensateRefraction && request.refraction)
 
-		this.event.id = this.request.id
+		this.event.id = request.id
 
-		this.handleTppaEvent = (event) => {
-			handleTppaEvent(event)
+		this.handleTppaEvent = () => {
+			handleTppaEvent(this.event)
 
-			if (event.state === 'IDLE') {
+			if (this.event.state === 'IDLE') {
 				this.stopTrackingWhenDone()
 			}
 		}
@@ -91,7 +91,7 @@ export class TppaTask {
 	async cameraCaptured(event: CameraCaptureEvent) {
 		if (event.savedPath) {
 			this.event.state = 'SOLVING'
-			this.handleTppaEvent(this.event)
+			this.handleTppaEvent()
 
 			// Retrieve image from cache
 			const parts = event.savedPath!.split(':')
@@ -112,7 +112,7 @@ export class TppaTask {
 				this.event.solver.rightAscension = solution.rightAscension
 				this.event.solver.declination = solution.declination
 				this.event.state = 'ALIGNING'
-				this.handleTppaEvent(this.event)
+				this.handleTppaEvent()
 
 				// Compute polar alignment
 				const location = this.tppa.cache.geographicCoordinate(this.mount.geographicCoordinate)
@@ -129,20 +129,20 @@ export class TppaTask {
 					// Failed to align!
 					this.event.state = 'IDLE'
 					this.event.failed = true
-					this.handleTppaEvent(this.event)
+					this.handleTppaEvent()
 					return
 				}
 
-				this.handleTppaEvent(this.event)
+				this.handleTppaEvent()
 			} else if (++this.event.attempts < 3) {
 				this.event.solved = false
-				this.handleTppaEvent(this.event)
+				this.handleTppaEvent()
 			} else {
 				// Failed to solve after 3 attempts
 				this.event.state = 'IDLE'
 				this.event.solved = false
 				this.event.failed = true
-				this.handleTppaEvent(this.event)
+				this.handleTppaEvent()
 				return
 			}
 
@@ -152,7 +152,7 @@ export class TppaTask {
 				// Move telescope
 				if (this.event.step < 3) {
 					this.event.state = 'MOVING'
-					this.handleTppaEvent(this.event)
+					this.handleTppaEvent()
 
 					this.move(true)
 					await Bun.sleep(Math.max(1, this.request.moveDuration) * 1000)
@@ -165,7 +165,7 @@ export class TppaTask {
 
 			// Capture next image
 			this.event.state = 'CAPTURING'
-			this.handleTppaEvent(this.event)
+			this.handleTppaEvent()
 			this.tppa.camera.startCameraCapture(this.camera, this.capture, this.client, this.tppa.property)
 		}
 	}
@@ -176,7 +176,7 @@ export class TppaTask {
 
 		// First image
 		this.event.state = 'CAPTURING'
-		this.handleTppaEvent(this.event)
+		this.handleTppaEvent()
 		this.tppa.camera.startCameraCapture(this.camera, this.capture, this.client, this.tppa.property)
 	}
 
@@ -187,7 +187,7 @@ export class TppaTask {
 
 		if (this.event.state !== 'IDLE') {
 			this.event.state = 'IDLE'
-			this.handleTppaEvent(this.event)
+			this.handleTppaEvent()
 		}
 	}
 

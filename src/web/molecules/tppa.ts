@@ -5,6 +5,7 @@ import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
+import { updateFrameFormat } from './indi/camera'
 import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
 export interface TppaState {
@@ -39,7 +40,7 @@ export const TppaMolecule = molecule((m) => {
 	tppaState = state
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(5)
+		const unsubscribers = new Array<VoidFunction>(6)
 
 		unsubscribers[0] = subscribe(state.request, () => {
 			simpleLocalStorage.set('tppa.request', state.request)
@@ -55,6 +56,7 @@ export const TppaMolecule = molecule((m) => {
 
 		unsubscribers[3] = bus.subscribe<TppaEvent>('tppa', (event) => {
 			if (request.id === event.id) {
+				state.running = event.state !== 'IDLE'
 				Object.assign(state.event, event)
 			}
 		})
@@ -64,6 +66,16 @@ export const TppaMolecule = molecule((m) => {
 
 			state.camera = equipment.get('CAMERA', simpleLocalStorage.get('tppa.camera', ''))
 			state.mount = equipment.get('MOUNT', simpleLocalStorage.get('tppa.mount', ''))
+
+			if (state.camera) {
+				updateFrameFormat(state.request.capture, state.camera.frameFormats)
+			}
+		})
+
+		unsubscribers[5] = subscribeKey(state, 'camera', (camera) => {
+			if (camera) {
+				updateFrameFormat(state.request.capture, camera.frameFormats)
+			}
 		})
 
 		return () => {

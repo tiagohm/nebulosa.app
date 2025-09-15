@@ -23,26 +23,24 @@ export const SkyAtlas = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { tab } = useSnapshot(atlas.state)
 
+	const Header = (
+		<div className='flex flex-row items-center justify-between'>
+			<span>Sky Atlas</span>
+			{tab === 'galaxies' && (
+				<Popover className='max-w-160' placement='bottom' showArrow={true}>
+					<PopoverTrigger>
+						<Button color='secondary' isIconOnly variant='flat'>
+							<Icons.Filter />
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent>{tab === 'galaxies' && <GalaxyFilter />}</PopoverContent>
+				</Popover>
+			)}
+		</div>
+	)
+
 	return (
-		<Modal
-			header={
-				<div className='flex flex-row items-center justify-between'>
-					<span>Sky Atlas</span>
-					{tab === 'galaxies' && (
-						<Popover className='max-w-160' placement='bottom' showArrow={true}>
-							<PopoverTrigger>
-								<Button color='secondary' isIconOnly variant='flat'>
-									<Icons.Filter />
-								</Button>
-							</PopoverTrigger>
-							<PopoverContent>{tab === 'galaxies' && <GalaxyFilter />}</PopoverContent>
-						</Popover>
-					)}
-				</div>
-			}
-			maxWidth='470px'
-			name='sky-atlas'
-			onHide={atlas.hide}>
+		<Modal header={Header} maxWidth='470px' name='sky-atlas' onHide={atlas.hide}>
 			<div className='mt-0 flex flex-col gap-2'>
 				<Tabs classNames={{ base: 'absolute top-[-42px] right-[88px] z-10', panel: 'pt-0' }} onSelectionChange={(value) => (atlas.state.tab = value as never)} selectedKey={tab}>
 					<Tab key='sun' title={<Icons.Sun />}>

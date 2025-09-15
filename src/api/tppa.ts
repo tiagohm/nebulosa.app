@@ -70,6 +70,10 @@ export class TppaTask {
 		this.capture.frameType = 'LIGHT'
 		this.capture.exposureMode = 'SINGLE'
 		this.capture.mount = mount?.name
+		this.capture.x = 0
+		this.capture.y = 0
+		this.capture.width = camera.frame.maxWidth
+		this.capture.height = camera.frame.maxHeight
 
 		this.polarAlignment = new ThreePointPolarAlignment(request.refraction)
 
@@ -85,7 +89,7 @@ export class TppaTask {
 	}
 
 	async cameraCaptured(event: CameraCaptureEvent) {
-		if (event.state === 'EXPOSURE_FINISHED') {
+		if (event.savedPath) {
 			this.event.state = 'SOLVING'
 			this.handleTppaEvent(this.event)
 

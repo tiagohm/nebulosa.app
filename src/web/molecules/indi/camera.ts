@@ -51,14 +51,14 @@ export const CameraMolecule = molecule((m, s) => {
 	cameraStateMap.set(scope.camera.name, state)
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(5)
+		const unsubscribers = new Array<VoidFunction>(6)
 
 		unsubscribers[0] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
 			if (event.device.name === state.camera.name) {
 				if (event.property === 'frame') {
-					updateRequestFrame(event.device.frame!)
+					updateRequestFrame(state.request, event.device.frame!)
 				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
-					updateFrameFormat(event.device.frameFormats)
+					updateFrameFormat(state.request, event.device.frameFormats)
 				}
 			}
 		})
@@ -71,53 +71,37 @@ export const CameraMolecule = molecule((m, s) => {
 
 		unsubscribers[2] = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
 			if (event.device === state.camera.name) {
-				if (event.savedPath && !state.image) {
-					const image = workspace.add(event.savedPath, event.device, scope.camera)
-					state.image = ref(image)
-				} else {
-					Object.assign(state.progress, event)
-				}
+				Object.assign(state.progress, event)
 
 				if (event.state === 'IDLE') {
 					state.capturing = false
+				} else {
+					state.capturing = true
 				}
 			}
 		})
 
-		unsubscribers[3] = bus.subscribe<Image>('image:remove', (image) => {
+		unsubscribers[3] = bus.subscribe<Image>('image:add', (image) => {
+			if (image.camera === state.camera && !state.image) {
+				state.image = ref(image)
+			}
+		})
+
+		unsubscribers[4] = bus.subscribe<Image>('image:remove', (image) => {
 			if (image.key === state.image?.key) {
 				state.image = undefined
 			}
 		})
 
-		unsubscribers[4] = subscribe(state.request, () => simpleLocalStorage.set(`camera.${scope.camera.name}.request`, state.request))
+		unsubscribers[5] = subscribe(state.request, () => simpleLocalStorage.set(`camera.${scope.camera.name}.request`, state.request))
 
-		updateRequestFrame(state.camera.frame)
-		updateFrameFormat(state.camera.frameFormats)
+		updateRequestFrame(state.request, state.camera.frame)
+		updateFrameFormat(state.request, state.camera.frameFormats)
 
 		return () => {
 			unsubscribe(unsubscribers)
 		}
 	})
-
-	function updateRequestFrame(frame: Camera['frame']) {
-		state.request.x = Math.max(frame.minX, Math.min(state.request.x, frame.maxX))
-		state.request.y = Math.max(frame.minY, Math.min(state.request.y, frame.maxY))
-
-		if (!state.request.width) state.request.width = frame.maxWidth
-		else state.request.width = Math.min(state.request.width, frame.maxWidth)
-
-		if (!state.request.height) state.request.height = frame.maxHeight
-		else state.request.height = Math.min(state.request.height, frame.maxHeight)
-	}
-
-	function updateFrameFormat(frameFormats?: string[]) {
-		if (!frameFormats?.length) return
-
-		if (!state.request.frameFormat || !frameFormats.includes(state.request.frameFormat)) {
-			state.request.frameFormat = frameFormats[0]
-		}
-	}
 
 	function update<K extends keyof CameraState['request']>(key: K, value: CameraState['request'][K]) {
 		state.request[key] = value
@@ -158,3 +142,22 @@ export const CameraMolecule = molecule((m, s) => {
 
 	return { scope, state, connect, update, cooler, temperature, fullscreen, start, stop, hide } as const
 })
+
+export function updateRequestFrame(request: CameraCaptureStart, frame: Camera['frame']) {
+	request.x = Math.max(frame.minX, Math.min(request.x, frame.maxX))
+	request.y = Math.max(frame.minY, Math.min(request.y, frame.maxY))
+
+	if (!request.width) request.width = frame.maxWidth
+	else request.width = Math.min(request.width, frame.maxWidth)
+
+	if (!request.height) request.height = frame.maxHeight
+	else request.height = Math.min(request.height, frame.maxHeight)
+}
+
+export function updateFrameFormat(request: CameraCaptureStart, frameFormats?: string[]) {
+	if (!frameFormats?.length) return
+
+	if (!request.frameFormat || !frameFormats.includes(request.frameFormat)) {
+		request.frameFormat = frameFormats[0]
+	}
+}

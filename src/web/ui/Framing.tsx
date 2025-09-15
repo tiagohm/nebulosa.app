@@ -21,25 +21,24 @@ export const Framing = memo(() => {
 		return `${((size * width) / 3600).toFixed(2)}° x ${((size * height) / 3600).toFixed(2)}°`
 	}, [focalLength, pixelSize, width, height])
 
+	const Header = (
+		<div className='flex flex-row items-center gap-2'>
+			<span>Framing</span>
+			<PoweredBy href='https://alasky.cds.unistra.fr/hips-image-services/hips2fits' label='hips2Fits' />
+		</div>
+	)
+
+	const Footer = (
+		<>
+			<div className='flex-1 flex items-center'>
+				<Chip color='primary'>{fov}</Chip>
+			</div>
+			<TextButton color='success' isLoading={loading} label='Load' onPointerUp={framing.load} startContent={<Icons.Download />} />
+		</>
+	)
+
 	return (
-		<Modal
-			footer={
-				<>
-					<div className='flex-1 flex items-center'>
-						<Chip color='primary'>{fov}</Chip>
-					</div>
-					<TextButton color='success' isLoading={loading} label='Load' onPointerUp={framing.load} startContent={<Icons.Download />} />
-				</>
-			}
-			header={
-				<div className='flex flex-row items-center gap-2'>
-					<span>Framing</span>
-					<PoweredBy href='https://alasky.cds.unistra.fr/hips-image-services/hips2fits' label='hips2Fits' />
-				</div>
-			}
-			maxWidth='300px'
-			name='framing'
-			onHide={framing.hide}>
+		<Modal footer={Footer} header={Header} maxWidth='300px' name='framing' onHide={framing.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Input className='col-span-6' isDisabled={loading} label='RA (J2000)' onValueChange={(value) => framing.update('rightAscension', value)} size='sm' value={rightAscension} />
 				<Input className='col-span-6' isDisabled={loading} label='DEC (J2000)' onValueChange={(value) => framing.update('declination', value)} size='sm' value={declination} />

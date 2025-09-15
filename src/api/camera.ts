@@ -640,7 +640,7 @@ export class CameraCaptureTask {
 			this.handleCameraCaptureEvent(this.event)
 
 			enableBlob(this.client, this.camera)
-			frame(this.client, this.camera, this.request.x, this.request.y, this.request.width, this.request.height)
+			this.request.width && this.request.height && frame(this.client, this.camera, this.request.x, this.request.y, this.request.width, this.request.height)
 			frameType(this.client, this.camera, this.request.frameType)
 			if (this.request.frameFormat) frameFormat(this.client, this.camera, this.request.frameFormat)
 			bin(this.client, this.camera, this.request.binX, this.request.binY)

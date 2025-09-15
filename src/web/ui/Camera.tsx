@@ -1,4 +1,4 @@
-import { Button, Checkbox, NumberInput, SelectItem, Switch, Tooltip } from '@heroui/react'
+import { Checkbox, NumberInput, SelectItem, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo, useCallback } from 'react'
 import { useSnapshot } from 'valtio'
@@ -14,6 +14,7 @@ import { ExposureTimeProgress } from './ExposureTimeProgress'
 import { FilePickerInput } from './FilePickerInput'
 import { FrameTypeSelect } from './FrameTypeSelect'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 import { MountDropdown } from './MountDropdown'
@@ -30,32 +31,31 @@ export const Camera = memo(() => {
 		camera.update('savePath', value)
 	}, [])
 
+	const Footer = (
+		<>
+			<div className='flex flex-1 flex-row items-center gap-1'>
+				<MountDropdown isDisabled={!connected || capturing} onValueChange={(value) => (camera.state.equipment.mount = value)} showLabel={false} value={mount} />
+			</div>
+			<TextButton color='danger' isDisabled={!connected || !canAbort || !capturing} label='Stop' onPointerUp={camera.stop} startContent={<Icons.Stop />} />
+			<TextButton color='success' isDisabled={!connected} isLoading={capturing} label='Start' onPointerUp={camera.start} startContent={<Icons.Play />} />
+		</>
+	)
+
+	const Header = (
+		<div className='flex flex-row items-center justify-between'>
+			<div className='flex flex-row items-center gap-1'>
+				<ConnectButton isConnected={connected} isDisabled={capturing} isLoading={connecting} onPointerUp={camera.connect} />
+				<IndiPanelControlButton device={camera.scope.camera.name} />
+			</div>
+			<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
+				<span className='leading-5'>Camera</span>
+				<span className='text-xs font-normal text-gray-400 max-w-full'>{camera.scope.camera.name}</span>
+			</div>
+		</div>
+	)
+
 	return (
-		<Modal
-			footer={
-				<>
-					<div className='flex flex-1 flex-row items-center gap-1'>
-						<MountDropdown isDisabled={!connected || capturing} onValueChange={(value) => (camera.state.equipment.mount = value)} value={mount} />
-					</div>
-					<TextButton color='danger' isDisabled={!connected || !canAbort || !capturing} label='Stop' onPointerUp={camera.stop} startContent={<Icons.Stop />} />
-					<TextButton color='success' isDisabled={!connected} isLoading={capturing} label='Start' onPointerUp={camera.start} startContent={<Icons.Play />} />
-				</>
-			}
-			header={
-				<div className='flex flex-row items-center justify-between'>
-					<div className='flex flex-row items-center gap-1'>
-						<ConnectButton isConnected={connected} isDisabled={capturing} isLoading={connecting} onPointerUp={camera.connect} />
-						<IndiPanelControlButton device={camera.scope.camera.name} />
-					</div>
-					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
-						<span className='leading-5'>Camera</span>
-						<span className='text-xs font-normal text-gray-400 max-w-full'>{camera.scope.camera.name}</span>
-					</div>
-				</div>
-			}
-			maxWidth='380px'
-			name={`camera-${camera.scope.camera.name}`}
-			onHide={camera.hide}>
+		<Modal footer={Footer} header={Header} maxWidth='380px' name={`camera-${camera.scope.camera.name}`} onHide={camera.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row items-center justify-between mb-2'>
 					<ExposureTimeProgress progress={progress} />
@@ -75,9 +75,7 @@ export const Camera = memo(() => {
 					<NumberInput
 						endContent={
 							<Tooltip content='Apply' placement='bottom'>
-								<Button color='success' isIconOnly onPointerUp={() => camera.temperature(targetTemperature)} size='sm' variant='light'>
-									<Icons.Check />
-								</Button>
+								<IconButton color='success' icon={Icons.Check} onPointerUp={() => camera.temperature(targetTemperature)} />
 							</Tooltip>
 						}
 						isDisabled={!connected || !canSetTemperature || capturing}
@@ -109,9 +107,7 @@ export const Camera = memo(() => {
 						Subframe
 					</Checkbox>
 					<Tooltip content='Fullscreen' placement='bottom'>
-						<Button color='secondary' isDisabled={!connected || !request.subframe || capturing} isIconOnly onPointerUp={camera.fullscreen} variant='light'>
-							<Icons.Fullscreen />
-						</Button>
+						<IconButton color='secondary' icon={Icons.Fullscreen} isDisabled={!connected || !request.subframe || capturing} onPointerUp={camera.fullscreen} />
 					</Tooltip>
 				</div>
 				<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || request.exposureMode === 'SINGLE' || capturing} label='Delay (s)' minValue={0} onValueChange={(value) => camera.update('delay', value)} size='sm' value={request.delay} />

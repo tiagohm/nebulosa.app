@@ -14,23 +14,21 @@ export const Focuser = memo(() => {
 	const { connecting, connected, moving, position, canAbort, canSync, canAbsoluteMove, canRelativeMove, canReverse, reversed } = useSnapshot(focuser.state.focuser)
 	const { relative, absolute } = useSnapshot(focuser.state.request, { sync: true })
 
+	const Header = (
+		<div className='flex flex-row items-center justify-between'>
+			<div className='flex flex-row items-center gap-1'>
+				<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={focuser.connect} />
+				<IndiPanelControlButton device={focuser.scope.focuser.name} />
+			</div>
+			<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
+				<span className='leading-5'>Focuser</span>
+				<span className='text-xs font-normal text-gray-400 max-w-full'>{focuser.scope.focuser.name}</span>
+			</div>
+		</div>
+	)
+
 	return (
-		<Modal
-			header={
-				<div className='flex flex-row items-center justify-between'>
-					<div className='flex flex-row items-center gap-1'>
-						<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={focuser.connect} />
-						<IndiPanelControlButton device={focuser.scope.focuser.name} />
-					</div>
-					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
-						<span className='leading-5'>Focuser</span>
-						<span className='text-xs font-normal text-gray-400 max-w-full'>{focuser.scope.focuser.name}</span>
-					</div>
-				</div>
-			}
-			maxWidth='260px'
-			name={`focuser-${focuser.scope.focuser.name}`}
-			onHide={focuser.hide}>
+		<Modal header={Header} maxWidth='260px' name={`focuser-${focuser.scope.focuser.name}`} onHide={focuser.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-3 flex flex-row items-center justify-start'>
 					<Chip color='primary' size='sm'>

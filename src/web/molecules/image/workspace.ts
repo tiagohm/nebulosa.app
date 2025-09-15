@@ -1,9 +1,10 @@
-import { molecule } from 'bunshi'
+import { molecule, onMount } from 'bunshi'
 import bus from 'src/shared/bus'
-import type { Atom, Camera } from 'src/shared/types'
+import type { Atom, Camera, CameraCaptureEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { simpleLocalStorage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
+import { EquipmentMolecule } from '../indi/equipment'
 import type { ImageViewerMolecule } from './viewer'
 
 export interface ImageWorkspaceState {
@@ -16,12 +17,23 @@ export interface ImageWorkspaceState {
 const KEY_INVALID_CHAR_REGEX = /[\W]+/g
 
 export const ImageWorkspaceMolecule = molecule((m) => {
+	const equipment = m(EquipmentMolecule)
+
 	const viewers = new Map<string, Atom<typeof ImageViewerMolecule>>()
 
 	const state = proxy<ImageWorkspaceState>({
 		images: [],
 		showModal: false,
 		initialPath: simpleLocalStorage.get('image.path', ''),
+	})
+
+	onMount(() => {
+		const unsubscriber = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
+			if (event.savedPath) {
+				const camera = equipment.get('CAMERA', event.device) as Camera
+				const image = add(event.savedPath, event.device, camera)
+			}
+		})
 	})
 
 	function link(image: Image, viewer: Atom<typeof ImageViewerMolecule>) {

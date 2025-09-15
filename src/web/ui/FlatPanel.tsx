@@ -18,23 +18,21 @@ export const FlatPanel = memo(() => {
 		flatPanel.intensity(debouncedIntensity)
 	}, [debouncedIntensity])
 
+	const Header = (
+		<div className='flex flex-row items-center justify-between'>
+			<div className='flex flex-row items-center gap-1'>
+				<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={flatPanel.connect} />
+				<IndiPanelControlButton device={flatPanel.scope.flatPanel.name} />
+			</div>
+			<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
+				<span className='leading-5'>Flat Panel</span>
+				<span className='text-xs font-normal text-gray-400 max-w-full'>{flatPanel.scope.flatPanel.name}</span>
+			</div>
+		</div>
+	)
+
 	return (
-		<Modal
-			header={
-				<div className='flex flex-row items-center justify-between'>
-					<div className='flex flex-row items-center gap-1'>
-						<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={flatPanel.connect} />
-						<IndiPanelControlButton device={flatPanel.scope.flatPanel.name} />
-					</div>
-					<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
-						<span className='leading-5'>Flat Panel</span>
-						<span className='text-xs font-normal text-gray-400 max-w-full'>{flatPanel.scope.flatPanel.name}</span>
-					</div>
-				</div>
-			}
-			maxWidth='260px'
-			name={`flat-panel-${flatPanel.scope.flatPanel.name}`}
-			onHide={flatPanel.hide}>
+		<Modal header={Header} maxWidth='260px' name={`flat-panel-${flatPanel.scope.flatPanel.name}`} onHide={flatPanel.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row items-center justify-center'>
 					<Switch isDisabled={!connected} isSelected={enabled} onValueChange={(enabled) => (enabled ? flatPanel.enable() : flatPanel.disable())} />

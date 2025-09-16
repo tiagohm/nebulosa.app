@@ -611,19 +611,16 @@ export class CameraCaptureTask {
 
 	async blobReceived(device: Camera, data: string, cache: Map<string, Buffer>) {
 		if (this.camera.name === device.name) {
-			const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : device.name
 			const bytes = Buffer.from(data, 'base64')
 
-			if (this.request.autoSave) {
-				const path = join(await makePathFor(this.request), `${name}.fit`)
-				void Bun.write(path, bytes) // Don't wait for writing to file
-				this.event.savedPath = `:${Buffer.from(device.name).toString('hex')}:${Buffer.from(path).toString('hex')}`
-			} else {
-				this.event.savedPath = `:${Buffer.from(device.name).toString('hex')}`
-			}
-
+			// Save image
+			const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : device.name
+			const path = join(await makePathFor(this.request), `${name}.fit`)
+			void Bun.write(path, bytes) // Don't wait for writing to file
 			cache.set(device.name, bytes)
 
+			// Send event
+			this.event.savedPath = encodeSavedPath(device.name, path)
 			this.handleCameraCaptureEvent(this.event)
 			this.event.savedPath = undefined
 		}
@@ -655,6 +652,17 @@ export class CameraCaptureTask {
 		this.stopped = true
 		stopExposure(this.client, this.camera)
 	}
+}
+
+export function encodeSavedPath(...parts: string[]) {
+	parts.forEach((e, i) => e.length && (parts[i] = Buffer.from(e).toString('hex')))
+	return `:${parts.join(':')}`
+}
+
+export function decodeSavedPath(encoded: string) {
+	const parts = encoded.split(':')
+	parts.forEach((e, i) => e.length && (parts[i] = Buffer.from(e, 'hex').toString('utf-8')))
+	return parts
 }
 
 async function waitFor(us: number, callback: (remaining: number) => boolean) {

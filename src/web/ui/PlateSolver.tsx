@@ -9,12 +9,13 @@ import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { MountDropdown } from './MountDropdown'
 import { PlateSolverSelect } from './PlateSolverSelect'
+import { PlateSolveStartPopover } from './PlateSolveStartPopover'
 import { TextButton } from './TextButton'
 
 export const PlateSolver = memo(() => {
 	const solver = useMolecule(ImageSolverMolecule)
 	const { loading, solution } = useSnapshot(solver.state)
-	const { blind, type, rightAscension, declination, radius, focalLength, pixelSize } = useSnapshot(solver.state.request, { sync: true })
+	const { blind, type, rightAscension, declination, radius, focalLength, pixelSize, downsample, timeout } = useSnapshot(solver.state.request, { sync: true })
 
 	const Footer = (
 		<>
@@ -26,7 +27,7 @@ export const PlateSolver = memo(() => {
 	return (
 		<Modal footer={Footer} header='Plate Solver' maxWidth='363px' name={`plate-solver-${solver.scope.image.key}`} onHide={solver.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<PlateSolverSelect className='col-span-8' onValueChange={(value) => solver.update('type', value)} value={type} />
+				<PlateSolverSelect className='col-span-8' endContent={<PlateSolveStartPopover downsample={downsample} focalLength={0} onValueChange={solver.update} pixelSize={0} radius={0} showAdvancedOnly timeout={timeout} />} onValueChange={(value) => solver.update('type', value)} value={type} />
 				<Checkbox className='col-span-3 col-end-13' isSelected={blind} onValueChange={(value) => solver.update('blind', value)}>
 					Blind
 				</Checkbox>

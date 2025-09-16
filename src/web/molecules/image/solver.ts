@@ -1,5 +1,5 @@
 import { molecule, onMount } from 'bunshi'
-import { arcsec, formatDEC, formatRA } from 'nebulosa/src/angle'
+import { arcsec, formatDEC, formatRA, toDeg } from 'nebulosa/src/angle'
 import { numericKeyword } from 'nebulosa/src/fits'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import bus, { unsubscribe } from 'src/shared/bus'
@@ -92,6 +92,11 @@ export const ImageSolverMolecule = molecule((m, s) => {
 		const request: Partial<Framing> = {
 			rightAscension: formatRA(solver.solution.rightAscension),
 			declination: formatDEC(solver.solution.declination),
+			focalLength: solver.request.focalLength,
+			pixelSize: solver.request.pixelSize,
+			width: solver.solution.widthInPixels,
+			height: solver.solution.heightInPixels,
+			rotation: toDeg(solver.solution.orientation),
 		}
 
 		bus.emit('framing:load', request)

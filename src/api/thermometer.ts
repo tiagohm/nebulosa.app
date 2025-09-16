@@ -32,7 +32,7 @@ export class ThermometerManager implements IndiClientHandler {
 				return
 		}
 
-		if (temperature !== device.temperature) {
+		if (Math.trunc(temperature) !== Math.trunc(device.temperature)) {
 			device.temperature = temperature
 			this.update(device, 'temperature', message.state)
 		}

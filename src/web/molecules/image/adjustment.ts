@@ -24,9 +24,13 @@ export const ImageAdjustmentMolecule = molecule((m, s) => {
 		return viewer.load(true)
 	}
 
+	function show() {
+		viewer.show('adjustment')
+	}
+
 	function hide() {
 		viewer.hide('adjustment')
 	}
 
-	return { state: adjustment, scope, viewer, update, reset, apply, hide } as const
+	return { state: adjustment, scope, viewer, update, reset, apply, show, hide } as const
 })

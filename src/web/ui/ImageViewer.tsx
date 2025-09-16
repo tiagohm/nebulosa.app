@@ -22,7 +22,7 @@ export const ImageViewer = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { image } = viewer.scope
 	const workspace = useMolecule(ImageWorkspaceMolecule)
-	const { crosshair, starDetection, stretch, plateSolver, fitsHeader, scnr, adjustment, filter, settings } = useSnapshot(viewer.state)
+	const { crosshair, starDetection, stretch, solver, fitsHeader, scnr, adjustment, filter, settings } = useSnapshot(viewer.state)
 	const { selected } = useSnapshot(workspace.state)
 
 	useEffect(() => {
@@ -50,7 +50,7 @@ export const ImageViewer = memo(() => {
 				{starDetection.visible && <DetectedStars />}
 			</Interactable>
 			{stretch.show && <ImageStretch />}
-			{plateSolver.show && <PlateSolver />}
+			{solver.show && <PlateSolver />}
 			{scnr.show && <ImageScnr />}
 			{adjustment.show && <ImageAdjustment />}
 			{filter.show && <ImageFilter />}

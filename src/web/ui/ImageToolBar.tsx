@@ -2,6 +2,12 @@ import { Button, Popover, PopoverContent, PopoverTrigger, Switch, Tooltip } from
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
+import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
+import { ImageFilterMolecule } from '@/molecules/image/filter'
+import { ImageScnrMolecule } from '@/molecules/image/scnr'
+import { ImageSettingsMolecule } from '@/molecules/image/settings'
+import { ImageSolverMolecule } from '@/molecules/image/solver'
+import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
 import { Icons } from './Icon'
 import { ToggleButton } from './ToggleButton'
@@ -9,6 +15,13 @@ import { ToggleButton } from './ToggleButton'
 export const ImageToolBar = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { transformation, crosshair, info, starDetection } = useSnapshot(viewer.state)
+
+	const solver = useMolecule(ImageSolverMolecule)
+	const stretch = useMolecule(ImageStretchMolecule)
+	const scnr = useMolecule(ImageScnrMolecule)
+	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const filter = useMolecule(ImageFilterMolecule)
+	const settings = useMolecule(ImageSettingsMolecule)
 
 	return (
 		<div className='w-full fixed bottom-0 mb-1 p-1 z-[99999]'>
@@ -19,12 +32,12 @@ export const ImageToolBar = memo(() => {
 					</Button>
 				</Tooltip>
 				<Tooltip content='Plate Solver' placement='top'>
-					<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('plateSolver')} variant='flat'>
+					<Button color='secondary' isIconOnly onPointerUp={solver.show} variant='flat'>
 						<Icons.Sigma />
 					</Button>
 				</Tooltip>
 				<Tooltip content='Stretch' placement='top'>
-					<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('stretch')} variant='flat'>
+					<Button color='secondary' isIconOnly onPointerUp={stretch.show} variant='flat'>
 						<Icons.Tune />
 					</Button>
 				</Tooltip>
@@ -50,18 +63,18 @@ export const ImageToolBar = memo(() => {
 						<div className='flex flex-row items-center justify-center gap-2 p-2'>
 							{!info.mono && (
 								<Tooltip content='SCNR' placement='top'>
-									<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('scnr')} variant='flat'>
+									<Button color='secondary' isIconOnly onPointerUp={scnr.show} variant='flat'>
 										<Icons.Swatch />
 									</Button>
 								</Tooltip>
 							)}
 							<Tooltip content='Adjustment' placement='top'>
-								<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('adjustment')} variant='flat'>
+								<Button color='secondary' isIconOnly onPointerUp={adjustment.show} variant='flat'>
 									<Icons.ImageEdit />
 								</Button>
 							</Tooltip>
 							<Tooltip content='Filter' placement='top'>
-								<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('filter')} variant='flat'>
+								<Button color='secondary' isIconOnly onPointerUp={filter.show} variant='flat'>
 									<Icons.Brush />
 								</Button>
 							</Tooltip>
@@ -138,7 +151,7 @@ export const ImageToolBar = memo(() => {
 					</Button>
 				</Tooltip>
 				<Tooltip content='Settings' placement='top'>
-					<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('settings')} variant='flat'>
+					<Button color='secondary' isIconOnly onPointerUp={settings.show} variant='flat'>
 						<Icons.Cog />
 					</Button>
 				</Tooltip>

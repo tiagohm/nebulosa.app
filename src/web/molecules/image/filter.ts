@@ -22,9 +22,13 @@ export const ImageFilterMolecule = molecule((m, s) => {
 		return viewer.load(true)
 	}
 
+	function show() {
+		viewer.show('filter')
+	}
+
 	function hide() {
 		viewer.hide('filter')
 	}
 
-	return { state: filter, scope, viewer, update, reset, apply, hide } as const
+	return { state: filter, scope, viewer, update, reset, apply, show, hide } as const
 })

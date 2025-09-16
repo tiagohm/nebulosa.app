@@ -24,9 +24,13 @@ export const ImageStretchMolecule = molecule((m, s) => {
 		return viewer.load(true)
 	}
 
+	function show() {
+		viewer.show('stretch')
+	}
+
 	function hide() {
 		viewer.hide('stretch')
 	}
 
-	return { state: stretch, scope, viewer, update, auto, reset, apply, hide } as const
+	return { state: stretch, scope, viewer, update, auto, reset, apply, show, hide } as const
 })

@@ -11,7 +11,7 @@ import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 export const ImageSolverMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
-	const solver = viewer.state.plateSolver
+	const { solver } = viewer.state
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(1)
@@ -80,9 +80,13 @@ export const ImageSolverMolecule = molecule((m, s) => {
 		bus.emit('framing:load', request)
 	}
 
-	function hide() {
-		viewer.hide('plateSolver')
+	function show() {
+		viewer.show('solver')
 	}
 
-	return { state: solver, viewer, scope, update, start, stop, goTo, slewTo, syncTo, frame, hide } as const
+	function hide() {
+		viewer.hide('solver')
+	}
+
+	return { state: solver, viewer, scope, update, start, stop, goTo, slewTo, syncTo, frame, show, hide } as const
 })

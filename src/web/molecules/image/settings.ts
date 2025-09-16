@@ -37,9 +37,13 @@ export const ImageSettingsMolecule = molecule((m, s) => {
 		if (reload) void viewer.load(true)
 	}
 
+	function show() {
+		viewer.show('settings')
+	}
+
 	function hide() {
 		viewer.hide('settings')
 	}
 
-	return { state: settings, scope, viewer, update, updateFormat, reset, hide } as const
+	return { state: settings, scope, viewer, update, updateFormat, reset, show, hide } as const
 })

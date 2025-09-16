@@ -6,7 +6,7 @@ import type { DetectedStar } from 'nebulosa/src/stardetector'
 import bus, { unsubscribe } from 'src/shared/bus'
 import { type CameraCaptureEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
 import type { PickByValue } from 'utility-types'
-import { proxy, subscribe } from 'valtio'
+import { proxy, ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { simpleLocalStorage } from '@/shared/storage'
@@ -38,7 +38,7 @@ export interface ImageState {
 			fluxMax: number
 		}
 	}
-	readonly plateSolver: {
+	readonly solver: {
 		show: boolean
 		loading: boolean
 		request: PlateSolveStart
@@ -142,7 +142,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 					fluxMax: 0,
 				},
 			},
-			plateSolver: {
+			solver: {
 				show: false,
 				loading: false,
 				request: plateSolverRequest,
@@ -331,11 +331,11 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	}
 
 	function updateSolverFromImageInfo(info: ImageInfo) {
-		const { plateSolver } = state
-		const { request } = plateSolver
+		const { solver } = state
+		const { request } = solver
 
 		// Update plate solver solution
-		plateSolver.solution = info.solution
+		solver.solution = info.solution && ref(info.solution)
 
 		// Update plate solver request with FITS header information
 		request.rightAscension = formatRA(info.rightAscension ?? 0)

@@ -22,9 +22,13 @@ export const ImageScnrMolecule = molecule((m, s) => {
 		return viewer.load(true)
 	}
 
+	function show() {
+		viewer.show('scnr')
+	}
+
 	function hide() {
 		viewer.hide('scnr')
 	}
 
-	return { state: scnr, scope, viewer, update, reset, apply, hide } as const
+	return { state: scnr, scope, viewer, update, reset, apply, show, hide } as const
 })

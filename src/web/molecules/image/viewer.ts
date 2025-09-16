@@ -1,4 +1,6 @@
 import { createScope, molecule, onMount } from 'bunshi'
+import { formatDEC, formatRA } from 'nebulosa/src/angle'
+import { numericKeyword } from 'nebulosa/src/fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import bus, { unsubscribe } from 'src/shared/bus'
@@ -289,7 +291,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 			// Update the state
 			state.info = image.info
-			updateTransformationFromInfo(image.info)
+			updateFromImageInfo(image.info)
 
 			// Add the image to cache
 			const cached = imageCache.get(key)
@@ -315,15 +317,35 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		}
 	}
 
+	function updateFromImageInfo(info: ImageInfo) {
+		updateTransformationFromInfo(info)
+		updateSolverFromImageInfo(info)
+	}
+
 	function updateTransformationFromInfo(info: ImageInfo) {
 		// Update stretch transformation
 		state.transformation.stretch.auto = info.transformation.stretch.auto
 		state.transformation.stretch.shadow = info.transformation.stretch.shadow
 		state.transformation.stretch.highlight = info.transformation.stretch.highlight
 		state.transformation.stretch.midtone = info.transformation.stretch.midtone
+	}
+
+	function updateSolverFromImageInfo(info: ImageInfo) {
+		const { plateSolver } = state
+		const { request } = plateSolver
 
 		// Update plate solver solution
-		state.plateSolver.solution = info.solution
+		plateSolver.solution = info.solution
+
+		// Update plate solver request with FITS header information
+		request.rightAscension = formatRA(info.rightAscension ?? 0)
+		request.declination = formatDEC(info.declination ?? 0)
+		request.blind = info.rightAscension === undefined || info.declination === undefined
+
+		if (info.headers) {
+			request.focalLength = numericKeyword(info.headers, 'FOCALLEN', request.focalLength)
+			request.pixelSize = numericKeyword(info.headers, 'XPIXSZ', request.pixelSize)
+		}
 	}
 
 	function afterLoad() {

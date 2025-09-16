@@ -96,8 +96,8 @@ export class ImageManager {
 						metadata: image.metadata,
 						transformation,
 						headers: image.header,
-						rightAscension: rightAscensionKeyword(image.header),
-						declination: declinationKeyword(image.header),
+						rightAscension: rightAscensionKeyword(image.header, undefined),
+						declination: declinationKeyword(image.header, undefined),
 					}
 
 					return info

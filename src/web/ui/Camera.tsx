@@ -34,7 +34,7 @@ export const Camera = memo(() => {
 	const Footer = (
 		<>
 			<div className='flex flex-1 flex-row items-center gap-1'>
-				<MountDropdown isDisabled={!connected || capturing} onValueChange={(value) => (camera.state.equipment.mount = value)} showLabel={false} value={mount} />
+				<MountDropdown isDisabled={!connected || capturing} onValueChange={(value) => (camera.state.equipment.mount = value)} showLabel={false} tooltipContent='Mount' value={mount} />
 			</div>
 			<TextButton color='danger' isDisabled={!connected || !canAbort || !capturing} label='Stop' onPointerUp={camera.stop} startContent={<Icons.Stop />} />
 			<TextButton color='success' isDisabled={!connected} isLoading={capturing} label='Start' onPointerUp={camera.start} startContent={<Icons.Play />} />

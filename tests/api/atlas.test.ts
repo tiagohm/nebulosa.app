@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { deg, formatALT, formatRA, parseAngle } from 'nebulosa/src/angle'
+import { deg, formatALT, parseAngle } from 'nebulosa/src/angle'
 import { lightYear, meter, toKilometer } from 'nebulosa/src/distance'
 import { StellariumObjectType } from 'nebulosa/src/stellarium'
 import { formatTemporal } from 'nebulosa/src/temporal'
@@ -230,6 +230,44 @@ test('position of moon', async () => {
 	expect(position.magnitude).toBe(-7.176)
 	expect(position.constellation).toBe('LEO')
 	expect(position.names).toBeUndefined()
+})
+
+describe('moon phases', () => {
+	const req = structuredClone(POSITION_OF_BODY)
+
+	test('black moon', () => {
+		req.time.utc = 1734706800000 // Fri Dec 20 2024 15:00:00 GMT+0000
+		const phases = atlas.moonPhases(req)
+
+		expect(phases).toHaveLength(5)
+		expect(phases[0][0]).toBe(0)
+		expect(formatTemporal(phases[0][1]).substring(0, 16)).toEqual('2024-12-01 06:21')
+		expect(phases[1][0]).toBe(1)
+		expect(formatTemporal(phases[1][1]).substring(0, 16)).toEqual('2024-12-08 15:26')
+		expect(phases[2][0]).toBe(2)
+		expect(formatTemporal(phases[2][1]).substring(0, 16)).toEqual('2024-12-15 09:01')
+		expect(phases[3][0]).toBe(3)
+		expect(formatTemporal(phases[3][1]).substring(0, 16)).toEqual('2024-12-22 22:18')
+		expect(phases[4][0]).toBe(0)
+		expect(formatTemporal(phases[4][1]).substring(0, 16)).toEqual('2024-12-30 22:26')
+	})
+
+	test('blue moon', () => {
+		req.time.utc = 1779289200000 // Wed May 20 2026 15:00:00 GMT+0000
+		const phases = atlas.moonPhases(req)
+
+		expect(phases).toHaveLength(5)
+		expect(phases[0][0]).toBe(2)
+		expect(formatTemporal(phases[0][1]).substring(0, 16)).toEqual('2026-05-01 17:23')
+		expect(phases[1][0]).toBe(3)
+		expect(formatTemporal(phases[1][1]).substring(0, 16)).toEqual('2026-05-09 21:10')
+		expect(phases[2][0]).toBe(0)
+		expect(formatTemporal(phases[2][1]).substring(0, 16)).toEqual('2026-05-16 20:01')
+		expect(phases[3][0]).toBe(1)
+		expect(formatTemporal(phases[3][1]).substring(0, 16)).toEqual('2026-05-23 11:11')
+		expect(phases[4][0]).toBe(2)
+		expect(formatTemporal(phases[4][1]).substring(0, 16)).toEqual('2026-05-31 08:45')
+	})
 })
 
 test('position of jupiter', async () => {

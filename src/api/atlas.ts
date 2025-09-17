@@ -1,7 +1,7 @@
 import Elysia from 'elysia'
 import { type Angle, deg, parseAngle } from 'nebulosa/src/angle'
 import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astrometry'
-import { AU_KM, DEG2RAD, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
+import { AU_KM, DAYSEC, DEG2RAD, MOON_SYNODIC_DAYS, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import type { CsvRow } from 'nebulosa/src/csv'
 import type { Distance } from 'nebulosa/src/distance'
@@ -9,13 +9,14 @@ import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { precessFk5FromJ2000 } from 'nebulosa/src/fk5'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
 import { localSiderealTime } from 'nebulosa/src/location'
+import { nearestLunarPhase } from 'nebulosa/src/moon'
 import { observeStar } from 'nebulosa/src/star'
 import { season } from 'nebulosa/src/sun'
-import { parseTemporal, type Temporal, temporalAdd, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
-import { toUnixMillis } from 'nebulosa/src/time'
+import { daysInMonth, parseTemporal, type Temporal, temporalAdd, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
+import { timeUnix, timeYMDHMS, toUnixMillis } from 'nebulosa/src/time'
 import sharp from 'sharp'
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
-import { type BodyPosition, type ChartOfBody, expectedPierSide, type PositionOfBody, type SkyObject, type SkyObjectSearch, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
+import { type BodyPosition, type ChartOfBody, expectedPierSide, type LunarPhaseTime, type PositionOfBody, type SkyObject, type SkyObjectSearch, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
 import type { CacheManager } from './cache'
 
 const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
@@ -32,8 +33,10 @@ export class AtlasManager {
 
 	constructor(readonly cache: CacheManager) {}
 
-	imageOfSun(source: SolarImageSource) {
-		return Bun.file(`/dev/shm/sun-${source}.jpg`)
+	async imageOfSun(source: SolarImageSource) {
+		const file = Bun.file(`/dev/shm/sun-${source}.jpg`)
+		if (!(await file.exists())) await this.refreshImageOfSun()
+		return file
 	}
 
 	async refreshImageOfSun() {
@@ -76,7 +79,28 @@ export class AtlasManager {
 		return this.computeChart('301', req.time, 1)
 	}
 
-	moonPhases() {}
+	moonPhases(req: PositionOfBody) {
+		const date = temporalToDate(req.time.utc)
+		const startTime = timeYMDHMS(date[0], date[1], 1, 0, 0, 0)
+		const endTime = toUnixMillis(startTime) + daysInMonth(date[0], date[1]) * (DAYSEC * 1000)
+
+		const phases: LunarPhaseTime[] = []
+
+		for (let i = 0; i < 4; i++) {
+			const time = toUnixMillis(nearestLunarPhase(startTime, i, true))
+			phases.push([i, time])
+		}
+
+		phases.sort((a, b) => a[1] - b[1])
+
+		if (phases[3][1] + (MOON_SYNODIC_DAYS / 4) * DAYSEC * 1000 < endTime) {
+			const phase = (phases[3][0] + 1) % 4
+			const time = toUnixMillis(nearestLunarPhase(timeUnix(endTime / 1000), phase, false))
+			phases.push([phase, time])
+		}
+
+		return phases
+	}
 
 	async twilight(req: PositionOfBody) {
 		await this.positionOfSun(req)
@@ -341,6 +365,7 @@ export function atlas(atlas: AtlasManager) {
 		.post('/sun/twilight', ({ body }) => atlas.twilight(body as never))
 		.post('/moon/position', ({ body }) => atlas.positionOfMoon(body as never))
 		.post('/moon/chart', ({ body }) => atlas.chartOfMoon(body as never))
+		.post('/moon/phases', ({ body }) => atlas.moonPhases(body as never))
 		.post('/planets/:code/position', ({ params, body }) => atlas.positionOfPlanet(params.code, body as never))
 		.post('/planets/:code/chart', ({ params, body }) => atlas.chartOfPlanet(params.code, body as never))
 		.post('/skyobjects/search', ({ body }) => atlas.searchSkyObject(body as never))

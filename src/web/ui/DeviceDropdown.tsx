@@ -1,4 +1,4 @@
-import { type ButtonProps, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
+import { type ButtonProps, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip, type TooltipProps } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { useMemo } from 'react'
 import type { Device } from 'src/shared/types'
@@ -16,9 +16,11 @@ export interface DeviceDropdownProps<T extends Device = Device> {
 	readonly onValueChange: (value?: T) => void
 	readonly children: (value: DeepReadonly<T> | undefined, color: ButtonProps['color'], isDisabled: boolean | undefined) => React.ReactNode
 	readonly allowEmpty?: boolean
+	readonly tooltipContent?: React.ReactNode
+	readonly tooltipPlacement?: TooltipProps['placement']
 }
 
-export function DeviceDropdown<T extends Device = Device>({ isDisabled, items, value, onValueChange, allowEmpty = true, children }: DeviceDropdownProps<T>) {
+export function DeviceDropdown<T extends Device = Device>({ isDisabled, items, value, onValueChange, allowEmpty = true, tooltipContent, tooltipPlacement = 'bottom', children }: DeviceDropdownProps<T>) {
 	const menu = useMemo(() => {
 		return allowEmpty ? [undefined, ...items] : items
 	}, [items, allowEmpty])
@@ -30,7 +32,11 @@ export function DeviceDropdown<T extends Device = Device>({ isDisabled, items, v
 
 	return (
 		<Dropdown isDisabled={isDisabled || menu.length === 0} showArrow>
-			<DropdownTrigger>{DropdownTriggerContent}</DropdownTrigger>
+			<Tooltip content={tooltipContent} isDisabled={!tooltipContent} placement={tooltipPlacement}>
+				<div className='max-w-fit'>
+					<DropdownTrigger>{DropdownTriggerContent}</DropdownTrigger>
+				</div>
+			</Tooltip>
 			<DropdownMenu>
 				{menu.map((item) => (
 					<DropdownItem endContent={<DeviceDropdownEndContent device={item} isSelected={value?.name === item?.name} />} key={item?.name || 'none'} onPointerUp={() => onValueChange(item as never)} startContent={<Icons.Circle color={!item ? '#9353D3' : item.connected ? '#17C964' : '#F31260'} size={12} />}>

@@ -1,4 +1,4 @@
-import { Button, Checkbox, Input, NumberInput, Popover, PopoverContent, PopoverTrigger, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
+import { Button, Checkbox, Input, NumberInput, Popover, PopoverContent, PopoverTrigger, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { RAD2DEG } from 'nebulosa/src/constants'
@@ -13,8 +13,10 @@ import { GalaxyMolecule, MoonMolecule, SkyAtlasMolecule, SunMolecule } from '@/m
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConstellationSelect } from './ConstellationSelect'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 import { Moon } from './Moon'
+import { MountDropdown } from './MountDropdown'
 import { SKY_OBJECT_NAME_TYPES, SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 import { Sun } from './Sun'
@@ -26,14 +28,14 @@ export const SkyAtlas = memo(() => {
 	const Header = (
 		<div className='flex flex-row items-center justify-between'>
 			<span>Sky Atlas</span>
-			{tab === 'galaxies' && (
+			{tab === 'galaxy' && (
 				<Popover className='max-w-160' placement='bottom' showArrow>
 					<PopoverTrigger>
 						<Button color='secondary' isIconOnly variant='flat'>
 							<Icons.Filter />
 						</Button>
 					</PopoverTrigger>
-					<PopoverContent>{tab === 'galaxies' && <GalaxyFilter />}</PopoverContent>
+					<PopoverContent>{tab === 'galaxy' && <GalaxyFilter />}</PopoverContent>
 				</Popover>
 			)}
 		</div>
@@ -49,12 +51,12 @@ export const SkyAtlas = memo(() => {
 					<Tab key='moon' title={<Icons.Moon />}>
 						<MoonTab />
 					</Tab>
-					<Tab key='planets' title={<Icons.Planet />}></Tab>
-					<Tab key='asteroids' title={<Icons.Meteor />}></Tab>
-					<Tab key='galaxies' title={<Icons.Galaxy />}>
+					<Tab key='planet' title={<Icons.Planet />}></Tab>
+					<Tab key='asteroid' title={<Icons.Meteor />}></Tab>
+					<Tab key='galaxy' title={<Icons.Galaxy />}>
 						<GalaxyTab />
 					</Tab>
-					<Tab key='satellites' title={<Icons.Satellite />}></Tab>
+					<Tab key='satellite' title={<Icons.Satellite />}></Tab>
 				</Tabs>
 			</div>
 		</Modal>
@@ -125,10 +127,32 @@ export const MoonTab = memo(() => {
 		<div className='grid grid-cols-12 gap-2 items-center'>
 			<div className='relative col-span-full flex justify-center items-center'>
 				<Moon />
+				<div className='absolute top-auto right-0 p-0 text-xs'>
+					<MoonPhases />
+				</div>
 			</div>
 			<div className='col-span-full'>
 				<EphemerisAndChart chart={chart} name='Moon' position={position} twilight={twilight} />
 			</div>
+		</div>
+	)
+})
+
+export const MoonPhases = memo(() => {
+	const moon = useMolecule(MoonMolecule)
+	const { phases } = useSnapshot(moon.state)
+
+	return (
+		<div className='flex flex-col gap-0'>
+			{phases.map(([phase, time]) => (
+				<>
+					<span className='font-bold flex items-center gap-1'>
+						{phase === 0 ? <Icons.MoonNew /> : phase === 1 ? <Icons.MoonFirstQuarter /> : phase === 2 ? <Icons.MoonFull /> : <Icons.MoonLastQuarter />}
+						{phase === 0 ? 'NEW MOON' : phase === 1 ? 'FIRST QUARTER' : phase === 2 ? 'FULL MOON' : 'LAST QUARTER'}
+					</span>
+					<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(time, 'DD HH:mm')}</span>
+				</>
+			))}
 		</div>
 	)
 })
@@ -262,6 +286,8 @@ export interface EphemerisPositionProps {
 }
 
 export const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => {
+	const atlas = useMolecule(SkyAtlasMolecule)
+
 	return (
 		<div className='w-full grid grid-cols-12 gap-2 p-0'>
 			<Input className='col-span-3 sm:col-span-3' isReadOnly label='RA' size='sm' value={formatRA(position.rightAscension)} />
@@ -276,6 +302,20 @@ export const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => 
 			<Input className='col-span-3 sm:col-span-2' isReadOnly label='Illuminated' size='sm' value={`${position.illuminated.toFixed(2)} %`} />
 			<Input className='col-span-3 sm:col-span-2' isReadOnly label='Elongation' size='sm' value={`${position.elongation.toFixed(2)} °`} />
 			<Input className='col-span-3 sm:col-span-2' isReadOnly label='Pier Side' size='sm' value={position.pierSide} />
+			<div className='col-span-6 flex items-center justify-center gap-2'>
+				<MountDropdown allowEmpty={false} onValueChange={atlas.syncTo} tooltipContent='Sync'>
+					{(value, color, isDisabled) => <IconButton color='primary' icon={Icons.Sync} isDisabled={isDisabled} size='md' variant='flat' />}
+				</MountDropdown>
+				<MountDropdown allowEmpty={false} onValueChange={atlas.goTo} tooltipContent='Go To'>
+					{(value, color, isDisabled) => <IconButton color='success' icon={Icons.Telescope} isDisabled={isDisabled} size='md' variant='flat' />}
+				</MountDropdown>
+				<MountDropdown allowEmpty={false} onValueChange={atlas.slewTo} tooltipContent='Slew'>
+					{(value, color, isDisabled) => <IconButton color='success' icon={Icons.Telescope} isDisabled={isDisabled} size='md' variant='flat' />}
+				</MountDropdown>
+				<Tooltip content='Frame' placement='bottom'>
+					<IconButton color='secondary' icon={Icons.Image} onPointerUp={atlas.frame} size='md' variant='flat' />
+				</Tooltip>
+			</div>
 		</div>
 	)
 })

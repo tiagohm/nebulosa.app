@@ -32,8 +32,8 @@ export const Tppa = memo(() => {
 		<Modal footer={Footer} header='Three-Point Polar Alignment' maxWidth='400px' name='tppa' onHide={tppa.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row justify-center items-center gap-2'>
-					<CameraDropdown buttonProps={{ endContent: <CameraDropdownEndContent /> }} isDisabled={running} onValueChange={(value) => (tppa.state.camera = value)} value={camera} />
-					<MountDropdown isDisabled={running} onValueChange={(value) => (tppa.state.mount = value)} value={mount} />
+					<CameraDropdown buttonProps={{ endContent: <CameraDropdownEndContent /> }} isDisabled={running} onValueChange={(value) => (tppa.state.camera = value)} tooltipContent='Camera' value={camera} />
+					<MountDropdown isDisabled={running} onValueChange={(value) => (tppa.state.mount = value)} tooltipContent='Mount' value={mount} />
 				</div>
 				<div className='mt-2 col-span-full flex flex-row items-center justify-between'>
 					<Chip color='primary' size='sm'>

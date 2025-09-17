@@ -7,6 +7,7 @@ import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
 import type { DefBlobVector, DefLightVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, PropertyState } from 'nebulosa/src/indi'
+import type { LunarPhase } from 'nebulosa/src/moon'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
 import type { Temporal } from 'nebulosa/src/temporal'
@@ -141,6 +142,8 @@ export interface SolarSeasons {
 	readonly autumn: number
 	readonly winter: number
 }
+
+export type LunarPhaseTime = readonly [LunarPhase, number]
 
 // Confirmation
 

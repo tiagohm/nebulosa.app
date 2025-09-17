@@ -1,7 +1,8 @@
 import { molecule, onMount } from 'bunshi'
-import { deg } from 'nebulosa/src/angle'
+import { deg, formatDEC, formatRA } from 'nebulosa/src/angle'
 import bus from 'src/shared/bus'
-import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SKY_OBJECT_SEARCH, type LocationAndTime, type PositionOfBody, type SkyObjectSearch, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
+// biome-ignore format: too long!
+import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SKY_OBJECT_SEARCH, type Framing, type LocationAndTime, type LunarPhaseTime, type Mount, type PositionOfBody, type SkyObjectSearch, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -9,9 +10,15 @@ import { storage } from '@/shared/storage'
 
 export interface SkyAtlasState {
 	show: boolean
-	tab: 'sun' | 'moon' | 'planets' | 'asteroids' | 'galaxies' | 'satellites'
+	tab: 'sun' | 'moon' | 'planet' | 'asteroid' | 'galaxy' | 'satellite'
 	twilight?: Twilight
 	readonly request: LocationAndTime
+	readonly sun: SunState
+	readonly moon: MoonState
+	readonly planet: PlanetState
+	readonly asteroid: AsteroidState
+	readonly galaxy: GalaxyState
+	readonly satellite: SatelliteState
 }
 
 export interface SunState {
@@ -26,6 +33,17 @@ export interface MoonState {
 	readonly request: PositionOfBody
 	readonly position: BodyPosition
 	chart: number[]
+	phases: readonly LunarPhaseTime[]
+}
+
+export interface PlanetState {
+	readonly position: BodyPosition
+	chart: number[]
+}
+
+export interface AsteroidState {
+	readonly position: BodyPosition
+	chart: number[]
 }
 
 export interface GalaxyState {
@@ -33,6 +51,11 @@ export interface GalaxyState {
 	readonly request: SkyObjectSearch
 	result: SkyObjectSearchItem[]
 	selected?: SkyObjectSearchItem
+	readonly position: BodyPosition
+	chart: number[]
+}
+
+export interface SatelliteState {
 	readonly position: BodyPosition
 	chart: number[]
 }
@@ -76,8 +99,8 @@ export const SunMolecule = molecule(() => {
 		}
 	})
 
-	let chartUpdateRequested = true
-	let seasonsUpdateRequested = true
+	let chartUpdated = true
+	let seasonsUpdated = true
 
 	void tick()
 
@@ -104,18 +127,18 @@ export const SunMolecule = molecule(() => {
 	}
 
 	async function updateChart() {
-		if (chartUpdateRequested) {
+		if (chartUpdated) {
 			const chart = await Api.SkyAtlas.chartOfSun(state.request)
 			if (chart) state.chart = chart
-			chartUpdateRequested = false
+			chartUpdated = false
 		}
 	}
 
 	async function updateSeasons() {
-		if (seasonsUpdateRequested) {
+		if (seasonsUpdated) {
 			const seasons = await Api.SkyAtlas.seasons(state.request)
 			if (seasons) Object.assign(state.seasons, seasons)
-			seasonsUpdateRequested = false
+			seasonsUpdated = false
 		}
 	}
 
@@ -131,6 +154,7 @@ export const MoonMolecule = molecule(() => {
 			request,
 			position: structuredClone(DEFAULT_BODY_POSITION),
 			chart: [],
+			phases: [],
 		})
 
 	moonState = state
@@ -143,12 +167,14 @@ export const MoonMolecule = molecule(() => {
 		}
 	})
 
-	let chartUpdateRequested = true
+	let chartUpdated = true
+	let phasesUpdated = true
 
 	void tick()
 
 	async function tick() {
 		updateTime()
+		void updatePhases()
 
 		await updatePosition()
 		await updateChart()
@@ -165,10 +191,18 @@ export const MoonMolecule = molecule(() => {
 	}
 
 	async function updateChart() {
-		if (chartUpdateRequested) {
+		if (chartUpdated) {
 			const chart = await Api.SkyAtlas.chartOfMoon(state.request)
 			if (chart) state.chart = chart
-			chartUpdateRequested = false
+			chartUpdated = false
+		}
+	}
+
+	async function updatePhases() {
+		if (phasesUpdated) {
+			const phases = await Api.SkyAtlas.moonPhases(state.request)
+			if (phases) state.phases = phases
+			phasesUpdated = false
 		}
 	}
 
@@ -286,7 +320,11 @@ export const GalaxyMolecule = molecule(() => {
 	return { state, update, search, select, tick }
 })
 
-export const SkyAtlasMolecule = molecule(() => {
+export const SkyAtlasMolecule = molecule((m) => {
+	const sun = m(SunMolecule)
+	const moon = m(MoonMolecule)
+	const galaxy = m(GalaxyMolecule)
+
 	const state =
 		skyAtlasState ??
 		proxy<SkyAtlasState>({
@@ -304,6 +342,12 @@ export const SkyAtlasMolecule = molecule(() => {
 					offset: 0,
 				},
 			},
+			sun: sun.state,
+			moon: moon.state,
+			planet: moon.state,
+			asteroid: moon.state,
+			galaxy: galaxy.state,
+			satellite: galaxy.state,
 		})
 
 	skyAtlasState = state
@@ -312,6 +356,35 @@ export const SkyAtlasMolecule = molecule(() => {
 
 	async function twilight() {
 		state.twilight = await Api.SkyAtlas.twilight(state.request)
+	}
+
+	function syncTo(mount?: Mount) {
+		if (!mount) return undefined
+		const position = state[state.tab].position
+		return Api.Mounts.syncTo(mount, { type: 'JNOW', ...position })
+	}
+
+	function goTo(mount?: Mount) {
+		if (!mount) return undefined
+		const position = state[state.tab].position
+		return Api.Mounts.goTo(mount, { type: 'JNOW', ...position })
+	}
+
+	function slewTo(mount?: Mount) {
+		if (!mount) return undefined
+		const position = state[state.tab].position
+		return Api.Mounts.slewTo(mount, { type: 'JNOW', ...position })
+	}
+
+	function frame() {
+		const position = state[state.tab].position
+
+		const request: Partial<Framing> = {
+			rightAscension: formatRA(position.rightAscension),
+			declination: formatDEC(position.declination),
+		}
+
+		bus.emit('framing:load', request)
 	}
 
 	function show() {
@@ -323,5 +396,5 @@ export const SkyAtlasMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, show, hide }
+	return { state, syncTo, goTo, slewTo, frame, show, hide }
 })

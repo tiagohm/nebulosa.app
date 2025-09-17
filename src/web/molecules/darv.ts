@@ -4,7 +4,7 @@ import { type Camera, type DarvEvent, type DarvStart, DEFAULT_DARV_EVENT, DEFAUL
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 import { updateFrameFormat } from './indi/camera'
 import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
@@ -22,7 +22,7 @@ let darvState: DarvState | undefined
 export const DarvMolecule = molecule((m) => {
 	const equipment = m(EquipmentMolecule)
 
-	const request = simpleLocalStorage.get('darv.request', () => structuredClone(DEFAULT_DARV_START))
+	const request = storage.get('darv.request', () => structuredClone(DEFAULT_DARV_START))
 
 	request.id = Date.now().toFixed(0)
 
@@ -43,15 +43,15 @@ export const DarvMolecule = molecule((m) => {
 		const unsubscribers = new Array<VoidFunction>(6)
 
 		unsubscribers[0] = subscribe(state.request, () => {
-			simpleLocalStorage.set('darv.request', state.request)
+			storage.set('darv.request', state.request)
 		})
 
 		unsubscribers[1] = subscribeKey(state, 'camera', (camera) => {
-			simpleLocalStorage.set('darv.camera', camera?.name ?? undefined)
+			storage.set('darv.camera', camera?.name ?? undefined)
 		})
 
 		unsubscribers[2] = subscribeKey(state, 'mount', (mount) => {
-			simpleLocalStorage.set('darv.mount', mount?.name ?? undefined)
+			storage.set('darv.mount', mount?.name ?? undefined)
 		})
 
 		unsubscribers[3] = bus.subscribe<DarvEvent>('darv', (event) => {
@@ -64,8 +64,8 @@ export const DarvMolecule = molecule((m) => {
 		unsubscribers[4] = subscribeKey(state, 'show', (show) => {
 			if (!show) return
 
-			state.camera = equipment.get('CAMERA', simpleLocalStorage.get('darv.camera', ''))
-			state.mount = equipment.get('MOUNT', simpleLocalStorage.get('darv.mount', ''))
+			state.camera = equipment.get('CAMERA', storage.get('darv.camera', ''))
+			state.mount = equipment.get('MOUNT', storage.get('darv.mount', ''))
 
 			if (state.camera) {
 				updateFrameFormat(state.request.capture, state.camera.frameFormats)

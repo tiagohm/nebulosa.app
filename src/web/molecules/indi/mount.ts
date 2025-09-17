@@ -6,7 +6,7 @@ import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type Equat
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 import type { NudgeDirection } from '@/ui/Nudge'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
@@ -64,7 +64,7 @@ export const MountMolecule = molecule((m, s) => {
 		proxy<MountState>({
 			mount: equipment.get('MOUNT', scope.mount.name)!,
 			targetCoordinate: {
-				coordinate: simpleLocalStorage.get(`mount.${scope.mount.name}.targetCoordinate`, () => structuredClone(DEFAULT_TARGET_COORDINATE)),
+				coordinate: storage.get(`mount.${scope.mount.name}.targetCoordinate`, () => structuredClone(DEFAULT_TARGET_COORDINATE)),
 				position: structuredClone(DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION),
 			},
 			currentPosition: structuredClone(DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION),
@@ -108,7 +108,7 @@ export const MountMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[1] = subscribe(state.targetCoordinate, () => simpleLocalStorage.set(`mount.${scope.mount.name}.targetCoordinate`, state.targetCoordinate.coordinate))
+		unsubscribers[1] = subscribe(state.targetCoordinate, () => storage.set(`mount.${scope.mount.name}.targetCoordinate`, state.targetCoordinate.coordinate))
 
 		unsubscribers[2] = subscribeKey(state.remoteControl, 'show', (show) => {
 			if (show) void updateRemoteControlStatus()

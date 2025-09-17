@@ -9,7 +9,7 @@ import type { PickByValue } from 'utility-types'
 import { proxy, ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
 import { ImageWorkspaceMolecule } from './workspace'
 
@@ -94,22 +94,22 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 	let target = document.getElementById(key) as HTMLImageElement | null
 
-	const transformation = simpleLocalStorage.get('image.transformation', () => structuredClone(DEFAULT_IMAGE_TRANSFORMATION))
-	const starDetectionRequest = simpleLocalStorage.get('image.starDetection', () => structuredClone(DEFAULT_STAR_DETECTION))
-	const plateSolverRequest = simpleLocalStorage.get('image.plateSolver', () => structuredClone(DEFAULT_PLATE_SOLVE_START))
-	const settings = simpleLocalStorage.get<ImageState['settings']>('image.settings', () => structuredClone(DEFAULT_IMAGE_SETTINGS))
+	const transformation = storage.get('image.transformation', () => structuredClone(DEFAULT_IMAGE_TRANSFORMATION))
+	const starDetectionRequest = storage.get('image.starDetection', () => structuredClone(DEFAULT_STAR_DETECTION))
+	const solverRequest = storage.get(`image.solver.${camera?.name || 'default'}`, () => structuredClone(DEFAULT_PLATE_SOLVE_START))
+	const settings = storage.get<ImageState['settings']>('image.settings', () => structuredClone(DEFAULT_IMAGE_SETTINGS))
 
 	starDetectionRequest.path = path
-	plateSolverRequest.id = key
-	plateSolverRequest.path = path
+	solverRequest.id = key
+	solverRequest.path = path
 	settings.show = false
 
 	const state =
 		imageCache.get(key)?.state ??
 		proxy<ImageState>({
 			transformation,
-			crosshair: simpleLocalStorage.get('image.crosshair', false),
-			rotation: simpleLocalStorage.get('image.rotation', 0),
+			crosshair: storage.get('image.crosshair', false),
+			rotation: storage.get('image.rotation', 0),
 			scale: 1,
 			info: {
 				path: '',
@@ -145,7 +145,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			solver: {
 				show: false,
 				loading: false,
-				request: plateSolverRequest,
+				request: solverRequest,
 			},
 			scnr: {
 				show: false,
@@ -181,8 +181,8 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction | undefined>(3)
 
-		unsubscribers[0] = subscribeKey(state, 'crosshair', (e) => simpleLocalStorage.set('image.crosshair', e))
-		unsubscribers[1] = subscribe(state.transformation, () => simpleLocalStorage.set('image.transformation', state.transformation))
+		unsubscribers[0] = subscribeKey(state, 'crosshair', (e) => storage.set('image.crosshair', e))
+		unsubscribers[1] = subscribe(state.transformation, () => storage.set('image.transformation', state.transformation))
 
 		if (camera) {
 			unsubscribers[2] = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {

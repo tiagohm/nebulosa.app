@@ -19,7 +19,7 @@ export const Tppa = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
 	const { running, camera, mount, event } = useSnapshot(tppa.state)
 	const { direction, moveDuration, stopTrackingWhenDone, compensateRefraction } = useSnapshot(tppa.state.request, { sync: true })
-	const { type, radius, focalLength, pixelSize, downsample, timeout } = useSnapshot(tppa.state.request.solver, { sync: true })
+	const { type } = useSnapshot(tppa.state.request.solver)
 
 	const Footer = (
 		<>
@@ -51,13 +51,7 @@ export const Tppa = memo(() => {
 						</Chip>
 					</div>
 				</div>
-				<PlateSolverSelect
-					className='col-span-6'
-					endContent={<PlateSolveStartPopover downsample={downsample} focalLength={focalLength} onValueChange={tppa.updateSolver} pixelSize={pixelSize} radius={radius} timeout={timeout} />}
-					isDisabled={running}
-					onValueChange={(value) => tppa.updateSolver('type', value)}
-					value={type}
-				/>
+				<PlateSolverSelect className='col-span-6' endContent={<PlateSolverSelectEndContent />} isDisabled={running} onValueChange={(value) => tppa.updateSolver('type', value)} value={type} />
 				<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Move for (s)' maxValue={60} minValue={1} onValueChange={(value) => tppa.update('moveDuration', value)} size='sm' value={moveDuration} />
 				<TppaDirectionSelect className='col-span-3' isDisabled={running} onValueChange={(value) => tppa.update('direction', value)} value={direction} />
 				<Checkbox className='col-span-6' isDisabled={running} isSelected={stopTrackingWhenDone} onValueChange={(value) => tppa.update('stopTrackingWhenDone', value)}>
@@ -106,4 +100,11 @@ const CameraDropdownEndContent = memo(() => {
 			/>
 		)
 	)
+})
+
+const PlateSolverSelectEndContent = memo(() => {
+	const tppa = useMolecule(TppaMolecule)
+	const { type, radius, focalLength, pixelSize } = useSnapshot(tppa.state.request.solver, { sync: true })
+
+	return <PlateSolveStartPopover focalLength={focalLength} onValueChange={tppa.updateSolver} pixelSize={pixelSize} radius={radius} type={type} />
 })

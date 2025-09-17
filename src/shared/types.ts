@@ -665,7 +665,7 @@ export interface Notification {
 
 // Plate Solver
 
-export type PlateSolverType = 'ASTAP' | 'PIXINSIGHT' | 'ASTROMETRY_NET' | 'NOVA_ASTROMETRY_NET' | 'SIRIL'
+export type PlateSolverType = 'ASTAP' | 'ASTROMETRY_NET' | 'NOVA_ASTROMETRY_NET'
 
 export interface PlateSolveStart extends Omit<PlateSolveOptions, 'rightAscension' | 'declination' | 'radius'>, EquatorialCoordinate<string | Angle> {
 	id: string

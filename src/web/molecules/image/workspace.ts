@@ -2,7 +2,7 @@ import { molecule, onMount } from 'bunshi'
 import bus from 'src/shared/bus'
 import type { Atom, Camera, CameraCaptureEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
 import { EquipmentMolecule } from '../indi/equipment'
 import type { ImageViewerMolecule } from './viewer'
@@ -24,7 +24,7 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 	const state = proxy<ImageWorkspaceState>({
 		images: [],
 		showModal: false,
-		initialPath: simpleLocalStorage.get('image.path', ''),
+		initialPath: storage.get('image.path', ''),
 	})
 
 	onMount(() => {
@@ -64,7 +64,7 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 
 		if (source === 'file') {
 			state.initialPath = path
-			simpleLocalStorage.set('image.path', path)
+			storage.set('image.path', path)
 		}
 
 		return image

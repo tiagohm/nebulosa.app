@@ -1,7 +1,7 @@
 import { molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
 import { proxy, subscribe } from 'valtio'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 
 export interface FocalLengthRatio {
 	aperture: number
@@ -44,17 +44,17 @@ export interface CalculatorState {
 
 const state = proxy<CalculatorState>({
 	show: false,
-	focalLength: simpleLocalStorage.get<FocalLengthRatio>('calculator.focalLength', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
-	focalRatio: simpleLocalStorage.get<FocalLengthRatio>('calculator.focalRatio', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
-	dawesLimit: simpleLocalStorage.get<ResolutionLimit>('calculator.dawesLimit', () => ({ aperture: 152, resolution: 0.763 })),
-	rayleighLimit: simpleLocalStorage.get<ResolutionLimit>('calculator.rayleighLimit', () => ({ aperture: 152, resolution: 0.908 })),
-	limitingMagnitude: simpleLocalStorage.get<LimitingMagnitude>('calculator.limitingMagnitude', () => ({ aperture: 152, magnitude: 13.609 })),
-	lightGraspRatio: simpleLocalStorage.get<LightGraspRatio>('calculator.lightGraspRatio', () => ({ smallerAperture: 7, largerAperture: 152, ratio: 471.51 })),
-	ccdResolution: simpleLocalStorage.get<CcdResolution>('calculator.ccdResolution', () => ({ pixelSize: 4.63, focalLength: 1368, resolution: 0.698 })),
+	focalLength: storage.get<FocalLengthRatio>('calculator.focalLength', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
+	focalRatio: storage.get<FocalLengthRatio>('calculator.focalRatio', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
+	dawesLimit: storage.get<ResolutionLimit>('calculator.dawesLimit', () => ({ aperture: 152, resolution: 0.763 })),
+	rayleighLimit: storage.get<ResolutionLimit>('calculator.rayleighLimit', () => ({ aperture: 152, resolution: 0.908 })),
+	limitingMagnitude: storage.get<LimitingMagnitude>('calculator.limitingMagnitude', () => ({ aperture: 152, magnitude: 13.609 })),
+	lightGraspRatio: storage.get<LightGraspRatio>('calculator.lightGraspRatio', () => ({ smallerAperture: 7, largerAperture: 152, ratio: 471.51 })),
+	ccdResolution: storage.get<CcdResolution>('calculator.ccdResolution', () => ({ pixelSize: 4.63, focalLength: 1368, resolution: 0.698 })),
 })
 
 function subscribeTo(property: keyof Omit<CalculatorState, 'show'>) {
-	return subscribe(state[property], () => simpleLocalStorage.set(`calculator.${property}`, state[property]))
+	return subscribe(state[property], () => storage.set(`calculator.${property}`, state[property]))
 }
 
 export const CalculatorMolecule = molecule(() => {

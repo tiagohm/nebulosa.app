@@ -3,7 +3,7 @@ import bus, { unsubscribe } from 'src/shared/bus'
 import { type Camera, type CameraCaptureEvent, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START, type Mount } from 'src/shared/types'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
 import { ImageWorkspaceMolecule } from '../image/workspace'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
@@ -33,7 +33,7 @@ export const CameraMolecule = molecule((m, s) => {
 	const equipment = m(EquipmentMolecule)
 	const workspace = m(ImageWorkspaceMolecule)
 
-	const cameraCaptureStartRequest = simpleLocalStorage.get<CameraCaptureStart>(`camera.${scope.camera.name}.request`, () => structuredClone(DEFAULT_CAMERA_CAPTURE_START))
+	const cameraCaptureStartRequest = storage.get<CameraCaptureStart>(`camera.${scope.camera.name}.request`, () => structuredClone(DEFAULT_CAMERA_CAPTURE_START))
 
 	const state =
 		cameraStateMap.get(scope.camera.name) ??
@@ -93,7 +93,7 @@ export const CameraMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[5] = subscribe(state.request, () => simpleLocalStorage.set(`camera.${scope.camera.name}.request`, state.request))
+		unsubscribers[5] = subscribe(state.request, () => storage.set(`camera.${scope.camera.name}.request`, state.request))
 
 		updateRequestFrame(state.request, state.camera.frame)
 		updateFrameFormat(state.request, state.camera.frameFormats)

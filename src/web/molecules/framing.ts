@@ -4,7 +4,7 @@ import bus from 'src/shared/bus'
 import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
 import { ImageWorkspaceMolecule } from './image/workspace'
 
@@ -20,7 +20,7 @@ export interface FramingState {
 export const FramingMolecule = molecule((m) => {
 	const workspace = m(ImageWorkspaceMolecule)
 
-	const request = simpleLocalStorage.get('framing', () => structuredClone(DEFAULT_FRAMING))
+	const request = storage.get('framing', () => structuredClone(DEFAULT_FRAMING))
 
 	const state = proxy<FramingState>({
 		show: false,
@@ -34,7 +34,7 @@ export const FramingMolecule = molecule((m) => {
 	onMount(() => {
 		const subscribers = new Array<VoidFunction>(3)
 
-		subscribers[0] = subscribe(state.request, () => simpleLocalStorage.set('framing', state.request))
+		subscribers[0] = subscribe(state.request, () => storage.set('framing', state.request))
 
 		subscribers[1] = bus.subscribe<Partial<Framing>>('framing:load', (request) => {
 			Object.assign(state.request, request)

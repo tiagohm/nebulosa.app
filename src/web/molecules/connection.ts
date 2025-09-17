@@ -4,7 +4,7 @@ import type { ConnectionStatus } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { deepClone } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 import { type Connection, DEFAULT_CONNECTION } from '@/shared/types'
 
 export interface ConnectionState {
@@ -22,7 +22,7 @@ export const ConnectionComparator = (a: Connection, b: Connection) => {
 }
 
 export const ConnectionMolecule = molecule((m) => {
-	const connections = simpleLocalStorage.get('connections', () => [structuredClone(DEFAULT_CONNECTION)])
+	const connections = storage.get('connections', () => [structuredClone(DEFAULT_CONNECTION)])
 	connections.sort(ConnectionComparator)
 
 	const state = proxy<ConnectionState>({
@@ -64,7 +64,7 @@ export const ConnectionMolecule = molecule((m) => {
 		const unsubscribers = new Array<VoidFunction>(2)
 
 		unsubscribers[0] = subscribe(state.connections, () => {
-			simpleLocalStorage.set('connections', state.connections)
+			storage.set('connections', state.connections)
 		})
 
 		unsubscribers[1] = bus.subscribe<ConnectionStatus>('connection:close', (status) => {

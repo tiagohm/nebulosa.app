@@ -1,7 +1,7 @@
 import { molecule, onMount } from 'bunshi'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation } from 'src/shared/types'
 import { subscribe } from 'valtio'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 import { type ImageState, ImageViewerMolecule, ImageViewerScope } from './viewer'
 
 export const ImageSettingsMolecule = molecule((m, s) => {
@@ -11,7 +11,7 @@ export const ImageSettingsMolecule = molecule((m, s) => {
 
 	onMount(() => {
 		const unsubscribe = subscribe(settings, () => {
-			simpleLocalStorage.set('image.settings', settings)
+			storage.set('image.settings', settings)
 		})
 
 		return () => {

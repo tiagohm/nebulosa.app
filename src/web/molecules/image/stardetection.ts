@@ -3,7 +3,7 @@ import { molecule, onMount } from 'bunshi'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import { subscribe } from 'valtio'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
 export const StarDetectionMolecule = molecule((m, s) => {
@@ -14,7 +14,7 @@ export const StarDetectionMolecule = molecule((m, s) => {
 
 	onMount(() => {
 		const unsubscribe = subscribe(starDetection.request, () => {
-			simpleLocalStorage.set('image.starDetection', starDetection.request)
+			storage.set('image.starDetection', starDetection.request)
 		})
 
 		return () => {

@@ -4,7 +4,7 @@ import { type Camera, DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type Mount, type T
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 import { updateFrameFormat } from './indi/camera'
 import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
@@ -22,7 +22,7 @@ let tppaState: TppaState | undefined
 export const TppaMolecule = molecule((m) => {
 	const equipment = m(EquipmentMolecule)
 
-	const request = simpleLocalStorage.get('tppa.request', () => structuredClone(DEFAULT_TPPA_START))
+	const request = storage.get('tppa.request', () => structuredClone(DEFAULT_TPPA_START))
 
 	request.id = Date.now().toFixed(0)
 
@@ -43,15 +43,15 @@ export const TppaMolecule = molecule((m) => {
 		const unsubscribers = new Array<VoidFunction>(6)
 
 		unsubscribers[0] = subscribe(state.request, () => {
-			simpleLocalStorage.set('tppa.request', state.request)
+			storage.set('tppa.request', state.request)
 		})
 
 		unsubscribers[1] = subscribeKey(state, 'camera', (camera) => {
-			simpleLocalStorage.set('tppa.camera', camera?.name ?? undefined)
+			storage.set('tppa.camera', camera?.name ?? undefined)
 		})
 
 		unsubscribers[2] = subscribeKey(state, 'mount', (mount) => {
-			simpleLocalStorage.set('tppa.mount', mount?.name ?? undefined)
+			storage.set('tppa.mount', mount?.name ?? undefined)
 		})
 
 		unsubscribers[3] = bus.subscribe<TppaEvent>('tppa', (event) => {
@@ -64,8 +64,8 @@ export const TppaMolecule = molecule((m) => {
 		unsubscribers[4] = subscribeKey(state, 'show', (show) => {
 			if (!show) return
 
-			state.camera = equipment.get('CAMERA', simpleLocalStorage.get('tppa.camera', ''))
-			state.mount = equipment.get('MOUNT', simpleLocalStorage.get('tppa.mount', ''))
+			state.camera = equipment.get('CAMERA', storage.get('tppa.camera', ''))
+			state.mount = equipment.get('MOUNT', storage.get('tppa.mount', ''))
 
 			if (state.camera) {
 				updateFrameFormat(state.request.capture, state.camera.frameFormats)

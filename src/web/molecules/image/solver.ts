@@ -5,19 +5,21 @@ import bus, { unsubscribe } from 'src/shared/bus'
 import type { Framing, Mount, PlateSolveStart } from 'src/shared/types'
 import { subscribe } from 'valtio'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
+import { SettingsMolecule } from '../settings'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
 export const ImageSolverMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
+	const settings = m(SettingsMolecule)
 	const { solver } = viewer.state
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(1)
 
 		unsubscribers[0] = subscribe(solver.request, () => {
-			simpleLocalStorage.set('image.plateSolver', solver.request)
+			storage.set(`image.solver.${viewer.scope.image.camera?.name || 'default'}`, solver.request)
 		})
 
 		return () => {
@@ -33,7 +35,7 @@ export const ImageSolverMolecule = molecule((m, s) => {
 		try {
 			solver.loading = true
 
-			const request = solver.request
+			const request = { ...solver.request, ...settings.state.solver[solver.request.type] } // Merge solver-specific settings
 			request.fov = arcsec(angularSizeOfPixel(request.focalLength, request.pixelSize) * viewer.state.info.height)
 
 			solver.solution = await Api.PlateSolver.start(request)

@@ -3,7 +3,7 @@ import { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_GUIDE_OUTPUT, type GuideOutput, type GuidePulse } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 import type { NudgeDirection } from '@/ui/Nudge'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
@@ -52,7 +52,7 @@ export const GuideOutputMolecule = molecule((m, s) => {
 		guideOutputStateMap.get(scope.guideOutput.name) ??
 		proxy<GuideOutputState>({
 			guideOutput: equipment.get('GUIDE_OUTPUT', scope.guideOutput.name)!,
-			request: simpleLocalStorage.get(`guideOutput.${scope.guideOutput.name}.request`, () => structuredClone(DEFAULT_GUIDE_OUTPUT_REQUEST)),
+			request: storage.get(`guideOutput.${scope.guideOutput.name}.request`, () => structuredClone(DEFAULT_GUIDE_OUTPUT_REQUEST)),
 		})
 
 	guideOutputStateMap.set(scope.guideOutput.name, state)
@@ -61,7 +61,7 @@ export const GuideOutputMolecule = molecule((m, s) => {
 		const unsubscribers = new Array<VoidFunction>(1)
 
 		unsubscribers[0] = subscribe(state.request, () => {
-			simpleLocalStorage.set(`guideOutput.${scope.guideOutput.name}.request`, state.request)
+			storage.set(`guideOutput.${scope.guideOutput.name}.request`, state.request)
 		})
 
 		return () => {

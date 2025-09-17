@@ -3,7 +3,7 @@ import { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_FOCUSER, type Focuser } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface FocuserScopeValue {
@@ -26,7 +26,7 @@ export const FocuserMolecule = molecule((m, s) => {
 	const scope = s(FocuserScope)
 	const equipment = m(EquipmentMolecule)
 
-	const request = simpleLocalStorage.get<FocuserState['request']>(`focuser.${scope.focuser.name}.request`, () => ({ absolute: 0, relative: 100 }))
+	const request = storage.get<FocuserState['request']>(`focuser.${scope.focuser.name}.request`, () => ({ absolute: 0, relative: 100 }))
 
 	const state =
 		focuserStateMap.get(scope.focuser.name) ??
@@ -41,7 +41,7 @@ export const FocuserMolecule = molecule((m, s) => {
 		const unsubscribers = new Array<VoidFunction>(1)
 
 		unsubscribers[0] = subscribe(state.request, () => {
-			simpleLocalStorage.set(`focuser.${scope.focuser.name}.request`, state.request)
+			storage.set(`focuser.${scope.focuser.name}.request`, state.request)
 		})
 
 		return () => {

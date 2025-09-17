@@ -3,7 +3,7 @@ import bus, { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_INDI_SERVER_START, type IndiServerStart } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 
 export interface IndiServerState {
 	enabled: boolean
@@ -15,7 +15,7 @@ export interface IndiServerState {
 }
 
 export const IndiServerMolecule = molecule(() => {
-	const request = simpleLocalStorage.get('indi.server', DEFAULT_INDI_SERVER_START)
+	const request = storage.get('indi.server', DEFAULT_INDI_SERVER_START)
 
 	const state = proxy<IndiServerState>({
 		enabled: true,
@@ -37,7 +37,7 @@ export const IndiServerMolecule = molecule(() => {
 			state.running = false
 		})
 
-		unsubscribers[2] = subscribe(state.request, () => simpleLocalStorage.set('indi.server', state.request))
+		unsubscribers[2] = subscribe(state.request, () => storage.set('indi.server', state.request))
 
 		return () => unsubscribe(unsubscribers)
 	})

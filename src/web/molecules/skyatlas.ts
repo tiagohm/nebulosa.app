@@ -5,7 +5,7 @@ import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEF
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { simpleLocalStorage } from '@/shared/storage'
+import { storage } from '@/shared/storage'
 
 export interface SkyAtlasState {
 	show: boolean
@@ -51,7 +51,7 @@ export const SunMolecule = molecule(() => {
 			request,
 			position: structuredClone(DEFAULT_BODY_POSITION),
 			chart: [],
-			source: simpleLocalStorage.get<SolarImageSource>('skyatlas.sun.source', () => 'HMI_INTENSITYGRAM_FLATTENED'),
+			source: storage.get<SolarImageSource>('skyatlas.sun.source', () => 'HMI_INTENSITYGRAM_FLATTENED'),
 			seasons: {
 				spring: 0,
 				summer: 0,
@@ -66,7 +66,7 @@ export const SunMolecule = molecule(() => {
 		const unsubscribers = new Array<() => void>(1)
 
 		unsubscribers[0] = subscribeKey(state, 'source', () => {
-			simpleLocalStorage.set('skyatlas.sun.source', state.source)
+			storage.set('skyatlas.sun.source', state.source)
 		})
 
 		const timer = setInterval(tick, 60000)
@@ -176,7 +176,7 @@ export const MoonMolecule = molecule(() => {
 })
 
 export const GalaxyMolecule = molecule(() => {
-	const request = simpleLocalStorage.get<SkyObjectSearch>('skyatlas.galaxy.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
+	const request = storage.get<SkyObjectSearch>('skyatlas.galaxy.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
 
 	request.page = 1
 
@@ -196,7 +196,7 @@ export const GalaxyMolecule = molecule(() => {
 
 	onMount(() => {
 		const unsubscriber = subscribe(state.request, () => {
-			simpleLocalStorage.set('skyatlas.galaxy.request', state.request)
+			storage.set('skyatlas.galaxy.request', state.request)
 		})
 
 		const timer = setInterval(tick, 60000)

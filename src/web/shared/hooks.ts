@@ -2,7 +2,7 @@ import { createUseGesture, dragAction } from '@use-gesture/react'
 import { useMolecule } from 'bunshi/react'
 import { useCallback, useEffect, useRef } from 'react'
 import { ZIndexMolecule } from '@/molecules/zindex'
-import { simpleLocalStorage } from './storage'
+import { storage } from './storage'
 
 // Better tree shaking with createUseGesture
 const useGesture = createUseGesture([dragAction])
@@ -12,7 +12,7 @@ const modalTransformMap = new Map<string, { x: number; y: number }>()
 export function useModal(name: string, onHide?: VoidFunction) {
 	const zIndex = useMolecule(ZIndexMolecule)
 	const modalRef = useRef<HTMLElement>(null)
-	const xy = useRef(modalTransformMap.get(name) ?? simpleLocalStorage.get(`modal-${name}`, () => ({ x: 0, y: 0 })))
+	const xy = useRef(modalTransformMap.get(name) ?? storage.get(`modal-${name}`, () => ({ x: 0, y: 0 })))
 	const boundary = useRef({ minLeft: 0, minTop: 0, maxLeft: 0, maxTop: 0 })
 
 	// Initialize the position of the modal if it doesn't exist in the map
@@ -53,7 +53,7 @@ export function useModal(name: string, onHide?: VoidFunction) {
 				document.body.style.userSelect = ''
 
 				// Save the modal position to local storage
-				simpleLocalStorage.set(`modal-${name}`, xy.current)
+				storage.set(`modal-${name}`, xy.current)
 			},
 		},
 		{

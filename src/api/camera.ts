@@ -620,7 +620,7 @@ export class CameraCaptureTask {
 			cache.set(device.name, bytes)
 
 			// Send event
-			this.event.savedPath = encodeSavedPath(device.name, path)
+			this.event.savedPath = encodePath(path, device.name)
 			this.handleCameraCaptureEvent(this.event)
 			this.event.savedPath = undefined
 		}
@@ -654,13 +654,15 @@ export class CameraCaptureTask {
 	}
 }
 
-export function encodeSavedPath(...parts: string[]) {
+export function encodePath(...parts: string[]) {
 	parts.forEach((e, i) => e.length && (parts[i] = Buffer.from(e).toString('hex')))
 	return `:${parts.join(':')}`
 }
 
-export function decodeSavedPath(encoded: string) {
-	const parts = encoded.split(':')
+export function decodePath(encoded: string) {
+	if (encoded[0] !== ':') return [encoded]
+
+	const parts = encoded.substring(1).split(':')
 	parts.forEach((e, i) => e.length && (parts[i] = Buffer.from(e, 'hex').toString('utf-8')))
 	return parts
 }

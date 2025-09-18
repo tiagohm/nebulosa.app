@@ -4,6 +4,7 @@ import { astapPlateSolve } from 'nebulosa/src/astap'
 import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebulosa/src/astrometrynet'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { PlateSolveStart, PlateSolveStop } from '../shared/types'
+import { decodePath } from './camera'
 import type { NotificationManager } from './notification'
 
 export class PlateSolverManager {
@@ -12,6 +13,7 @@ export class PlateSolverManager {
 	constructor(readonly notification: NotificationManager) {}
 
 	async start(req: PlateSolveStart): Promise<PlateSolution | undefined> {
+		const [path] = decodePath(req.path)
 		const rightAscension = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, { isHour: true })
 		const declination = typeof req.declination === 'number' ? req.declination : parseAngle(req.declination)
 		const radius = req.blind || !req.radius ? 0 : deg(req.radius)
@@ -22,12 +24,12 @@ export class PlateSolverManager {
 		let solver: Promise<PlateSolution | undefined> | undefined
 
 		if (req.type === 'ASTAP') {
-			solver = astapPlateSolve(req.path, { ...req, rightAscension, declination, radius }, aborter.signal)
+			solver = astapPlateSolve(path, { ...req, rightAscension, declination, radius }, aborter.signal)
 		} else if (req.type === 'ASTROMETRY_NET') {
-			solver = localAstrometryNetPlateSolve(req.path, { ...req, rightAscension, declination, radius }, aborter.signal)
+			solver = localAstrometryNetPlateSolve(path, { ...req, rightAscension, declination, radius }, aborter.signal)
 		} else if (req.type === 'NOVA_ASTROMETRY_NET') {
 			solver = novaAstrometryNetPlateSolve(
-				req.path,
+				path,
 				{
 					rightAscension,
 					declination,

@@ -10,7 +10,7 @@ import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import type { ImageInfo, ImageTransformation, OpenImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER } from '../shared/types'
-import { decodeSavedPath } from './camera'
+import { decodePath } from './camera'
 import type { NotificationManager } from './notification'
 
 const JPEG_OPTIONS: JpegOptions = {
@@ -48,7 +48,7 @@ export class ImageManager {
 		if (!req.path) return undefined
 
 		if (req.path?.startsWith(':')) {
-			const [, key, path] = decodeSavedPath(req.path)
+			const [path, key] = decodePath(req.path)
 			const buffer = cache.get(key)
 
 			if (buffer) {

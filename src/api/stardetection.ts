@@ -1,11 +1,14 @@
 import Elysia from 'elysia'
 import { astapDetectStars } from 'nebulosa/src/astap'
 import type { StarDetection } from '../shared/types'
+import { decodePath } from './camera'
 
 export class StarDetectionManager {
 	async detect(req: StarDetection) {
+		const [path] = decodePath(req.path)
+
 		if (req.type === 'ASTAP') {
-			return await astapDetectStars(req.path, req)
+			return await astapDetectStars(path, req)
 		}
 
 		return []

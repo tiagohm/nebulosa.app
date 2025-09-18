@@ -29,7 +29,7 @@ export const SkyAtlas = memo(() => {
 		<div className='flex flex-row items-center justify-between'>
 			<span>Sky Atlas</span>
 			{tab === 'galaxy' && (
-				<Popover className='max-w-160' placement='bottom' showArrow>
+				<Popover className='max-w-140' placement='bottom' showArrow>
 					<PopoverTrigger>
 						<Button color='secondary' isIconOnly variant='flat'>
 							<Icons.Filter />
@@ -322,8 +322,11 @@ export const GalaxyFilter = memo(() => {
 			<Input className='col-span-full' onValueChange={(value) => dso.update('name', value)} placeholder='Search' startContent={<SkyObjectNameTypeDropdown color='secondary' onValueChange={(value) => dso.update('nameType', value)} value={nameType} />} value={name} />
 			<ConstellationSelect className='col-span-6' onValueChange={(value) => dso.update('constellations', value)} value={constellations} />
 			<StellariumObjectTypeSelect className='col-span-6' onValueChange={(value) => dso.update('types', value)} value={types} />
+			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='RA' onValueChange={(value) => dso.update('rightAscension', value)} size='sm' value={rightAscension} />
+			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => dso.update('declination', value)} size='sm' value={declination} />
+			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} size='sm' step={0.1} value={radius} />
 			<Slider
-				className='col-span-full sm:col-span-4'
+				className='col-span-5'
 				getValue={(value) => `min: ${(value as number[])[0].toFixed(1)} max: ${(value as number[])[1].toFixed(1)}`}
 				label='Magnitude'
 				maxValue={30}
@@ -335,17 +338,12 @@ export const GalaxyFilter = memo(() => {
 				step={0.1}
 				value={[magnitudeMin, magnitudeMax]}
 			/>
-			<Input className='col-span-4 sm:col-span-3' isDisabled={radius <= 0 || loading} label='RA' onValueChange={(value) => dso.update('rightAscension', value)} size='sm' value={rightAscension} />
-			<Input className='col-span-4 sm:col-span-3' isDisabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => dso.update('declination', value)} size='sm' value={declination} />
-			<NumberInput className='col-span-4 sm:col-span-2' formatOptions={DECIMAL_NUMBER_FORMAT} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} size='sm' step={0.1} value={radius} />
-			<Checkbox className='col-span-5 sm:col-span-4' isSelected={visible} onValueChange={(value) => dso.update('visible', value)}>
-				Show only visible
+			<Checkbox className='col-span-4 w-full max-w-none flex justify-center' isSelected={visible} onValueChange={(value) => dso.update('visible', value)}>
+				Show visible
 			</Checkbox>
-			<NumberInput className='col-span-5 sm:col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!visible || loading} label='Visible above (°)' maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} size='sm' value={visibleAbove} />
-			<div className='col-span-2 sm:col-span-5 flex flex-row items-center justify-center'>
-				<Button color='primary' isDisabled={loading} isIconOnly onPointerUp={() => dso.search()} variant='flat'>
-					<Icons.Search />
-				</Button>
+			<NumberInput className='col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!visible || loading} label='Above (°)' maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} size='sm' value={visibleAbove} />
+			<div className='col-span-full flex flex-row items-center justify-center'>
+				<IconButton color='primary' icon={Icons.Search} isDisabled={loading} isIconOnly onPointerUp={() => dso.search()} variant='flat' />
 			</div>
 		</div>
 	)
@@ -374,16 +372,16 @@ export const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => 
 			<Input className='col-span-2' isReadOnly label='Pier' size='sm' value={position.pierSide} />
 			<div className='col-span-6 flex items-center justify-center gap-2'>
 				<MountDropdown allowEmpty={false} onValueChange={atlas.syncTo} tooltipContent='Sync'>
-					{(value, color, isDisabled) => <IconButton color='primary' icon={Icons.Sync} isDisabled={isDisabled} size='md' variant='flat' />}
+					{(value, color, isDisabled) => <IconButton color='primary' icon={Icons.Sync} isDisabled={isDisabled} variant='flat' />}
 				</MountDropdown>
 				<MountDropdown allowEmpty={false} onValueChange={atlas.goTo} tooltipContent='Go To'>
-					{(value, color, isDisabled) => <IconButton color='success' icon={Icons.Telescope} isDisabled={isDisabled} size='md' variant='flat' />}
+					{(value, color, isDisabled) => <IconButton color='success' icon={Icons.Telescope} isDisabled={isDisabled} variant='flat' />}
 				</MountDropdown>
 				<MountDropdown allowEmpty={false} onValueChange={atlas.slewTo} tooltipContent='Slew'>
-					{(value, color, isDisabled) => <IconButton color='success' icon={Icons.Telescope} isDisabled={isDisabled} size='md' variant='flat' />}
+					{(value, color, isDisabled) => <IconButton color='success' icon={Icons.Telescope} isDisabled={isDisabled} variant='flat' />}
 				</MountDropdown>
 				<Tooltip content='Frame' placement='bottom'>
-					<IconButton color='secondary' icon={Icons.Image} onPointerUp={atlas.frame} size='md' variant='flat' />
+					<IconButton color='secondary' icon={Icons.Image} onPointerUp={atlas.frame} variant='flat' />
 				</Tooltip>
 			</div>
 		</div>

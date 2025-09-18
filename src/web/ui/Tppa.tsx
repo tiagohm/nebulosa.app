@@ -90,6 +90,7 @@ const CameraDropdownEndContent = memo(() => {
 				frameFormats={camera.frameFormats}
 				gain={gain}
 				isDisabled={!camera.connected}
+				isRounded
 				maxBin={camera.bin.maxX}
 				maxExposure={camera.exposure.max}
 				maxGain={camera.gain.max}

@@ -70,8 +70,8 @@ export function DeviceDropdownEndContent({ device, isSelected }: DeviceDropdownE
 
 	return (
 		<div className='flex flex-row items-center gap-2'>
-			{device && <IconButton color='secondary' icon={Icons.OpenInNew} iconSize={12} onPointerUp={handleOpenInNewPointerUp} size='sm' />}
-			{device && <ConnectButton iconSize={12} isConnected={device.connected} onPointerUp={handleConnectButtonPointerUp} size='sm' />}
+			{device && <IconButton color='secondary' icon={Icons.OpenInNew} iconSize={12} isRounded onPointerUp={handleOpenInNewPointerUp} size='sm' />}
+			{device && <ConnectButton iconSize={12} isConnected={device.connected} isRounded onPointerUp={handleConnectButtonPointerUp} size='sm' />}
 			{isSelected && <Icons.Check className='me-2' color='#17C964' size={12} />}
 		</div>
 	)

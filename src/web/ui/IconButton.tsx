@@ -1,4 +1,5 @@
 import { Button, type ButtonProps } from '@heroui/react'
+import { clsx } from 'clsx'
 import type { Icon } from './Icon'
 
 export interface IconButtonProps extends Omit<ButtonProps, 'children'> {
@@ -8,9 +9,9 @@ export interface IconButtonProps extends Omit<ButtonProps, 'children'> {
 	readonly isRounded?: boolean
 }
 
-export function IconButton({ icon: Icon, className, label, isIconOnly = true, size = 'md', variant = 'light', iconSize, isRounded: rounded, ...props }: IconButtonProps) {
+export function IconButton({ icon: Icon, className, label, isIconOnly = true, size = 'md', variant = 'light', iconSize, isRounded, ...props }: IconButtonProps) {
 	return (
-		<Button className={`${rounded ? 'rounded-full' : ''} inline-flex flex-row items-center gap-1 ${className}`} {...props} isIconOnly={!label && isIconOnly} size={size} variant={variant}>
+		<Button className={clsx('inline-flex flex-row items-center gap-1', isRounded && 'rounded-full', className)} {...props} isIconOnly={!label && isIconOnly} size={size} variant={variant}>
 			<Icon size={iconSize} />
 			{label && <span>{label}</span>}
 		</Button>

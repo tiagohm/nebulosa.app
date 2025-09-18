@@ -1,4 +1,5 @@
 import { Chip } from '@heroui/react'
+import { clsx } from 'clsx'
 import { useState } from 'react'
 import type { CameraCaptureEvent, CameraCaptureState } from 'src/shared/types'
 import { Icons } from './Icon'
@@ -11,7 +12,7 @@ export function ExposureTimeProgress({ progress, className = '', ...props }: Exp
 	const [showRemainingTime, setShowRemainingTime] = useState(true)
 
 	return (
-		<div {...props} className={`flex flex-row items-center gap-2 ${className}`}>
+		<div {...props} className={clsx('flex flex-row items-center gap-2', className)}>
 			<Chip className='lowercase' color='success' size='sm'>
 				{status(progress.state)}
 			</Chip>

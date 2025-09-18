@@ -15,7 +15,7 @@ export const IndiPanelControlButton = memo(({ device, color = 'secondary', size 
 	return (
 		<Tooltip content='INDI' placement='bottom' showArrow>
 			<Button {...props} color={color} isIconOnly onPointerUp={() => indi.show(device)} size={size} variant={variant}>
-				<img className={`${size === 'md' ? 'w-6' : 'w-9'}`} src={indiIcon} />
+				<img className={size === 'md' ? 'w-6' : 'w-9'} src={indiIcon} />
 			</Button>
 		</Tooltip>
 	)

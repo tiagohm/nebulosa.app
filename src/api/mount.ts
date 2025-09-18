@@ -1,5 +1,5 @@
 import Elysia from 'elysia'
-import { type Angle, deg, formatHMS, hour, parseAngle, toDeg, toHour } from 'nebulosa/src/angle'
+import { type Angle, deg, formatHMS, hour, normalizeAngle, parseAngle, toDeg, toHour } from 'nebulosa/src/angle'
 import { cirsToObserved, observedToCirs } from 'nebulosa/src/astrometry'
 import { PI, TAU } from 'nebulosa/src/constants'
 import { constellation } from 'nebulosa/src/constellation'
@@ -50,7 +50,7 @@ export function home(client: IndiClient, mount: Mount) {
 }
 
 export function equatorialCoordinate(client: IndiClient, mount: Mount, rightAscension: Angle, declination: Angle) {
-	client.sendNumber({ device: mount.name, name: 'EQUATORIAL_EOD_COORD', elements: { RA: toHour(rightAscension), DEC: toDeg(declination) } })
+	client.sendNumber({ device: mount.name, name: 'EQUATORIAL_EOD_COORD', elements: { RA: toHour(normalizeAngle(rightAscension)), DEC: toDeg(declination) } })
 }
 
 export function geographicCoordinate(client: IndiClient, mount: Mount, { latitude, longitude, elevation }: GeographicCoordinate) {

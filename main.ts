@@ -97,7 +97,7 @@ const app = new Elysia({
 		},
 		development: process.env.NODE_ENV !== 'production' && {
 			hmr: true,
-			console: true,
+			console: false,
 		},
 	},
 })
@@ -133,7 +133,7 @@ const app = new Elysia({
 
 	.onAfterHandle(({ path, set }) => {
 		if (path === '/atlas/sun/image') {
-			set.headers['cache-control'] = 'public, max-age=900' // 15 minutes
+			set.headers['cache-control'] = 'public, max-age=900, immutable' // 15 minutes
 		} else {
 			set.headers['cache-control'] = 'no-cache, no-store, must-revalidate'
 			set.headers.pragma = 'no-cache'

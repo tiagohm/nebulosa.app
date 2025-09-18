@@ -1,4 +1,4 @@
-import { Button, Checkbox, Input, NumberInput, Popover, PopoverContent, PopoverTrigger, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
+import { Button, Checkbox, Input, Listbox, ListboxItem, NumberInput, Popover, PopoverContent, PopoverTrigger, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { RAD2DEG } from 'nebulosa/src/constants'
@@ -9,7 +9,7 @@ import { memo, useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import { type BodyPosition, EMPTY_TWILIGHT, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { GalaxyMolecule, MoonMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
+import { GalaxyMolecule, MoonMolecule, PlanetMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConstellationSelect } from './ConstellationSelect'
 import { Icons } from './Icon'
@@ -51,7 +51,9 @@ export const SkyAtlas = memo(() => {
 					<Tab key='moon' title={<Icons.Moon />}>
 						<MoonTab />
 					</Tab>
-					<Tab key='planet' title={<Icons.Planet />}></Tab>
+					<Tab key='planet' title={<Icons.Planet />}>
+						<PlanetTab />
+					</Tab>
 					<Tab key='asteroid' title={<Icons.Meteor />}></Tab>
 					<Tab key='galaxy' title={<Icons.Galaxy />}>
 						<GalaxyTab />
@@ -157,6 +159,74 @@ export const MoonPhases = memo(() => {
 	)
 })
 
+const PLANETS = [
+	{ name: 'Mercury', type: 'PLANET', code: '199' },
+	{ name: 'Venus', type: 'PLANET', code: '299' },
+	{ name: 'Mars', type: 'PLANET', code: '499' },
+	{ name: 'Jupiter', type: 'PLANET', code: '599' },
+	{ name: 'Saturn', type: 'PLANET', code: '699' },
+	{ name: 'Uranus', type: 'PLANET', code: '799' },
+	{ name: 'Neptune', type: 'PLANET', code: '899' },
+	{ name: 'Pluto', type: 'DWARF_PLANET', code: '999' },
+	{ name: 'Phobos', type: 'MOON_OF_MARS', code: '401' },
+	{ name: 'Deimos', type: 'MOON_OF_MARS', code: '402' },
+	{ name: 'Io', type: 'MOON_OF_JUPITER', code: '501' },
+	{ name: 'Europa', type: 'MOON_OF_JUPITER', code: '402' },
+	{ name: 'Ganymede', type: 'MOON_OF_JUPITER', code: '403' },
+	{ name: 'Callisto', type: 'MOON_OF_JUPITER', code: '504' },
+	{ name: 'Mimas', type: 'MOON_OF_SATURN', code: '601' },
+	{ name: 'Enceladus', type: 'MOON_OF_SATURN', code: '602' },
+	{ name: 'Tethys', type: 'MOON_OF_SATURN', code: '603' },
+	{ name: 'Dione', type: 'MOON_OF_SATURN', code: '604' },
+	{ name: 'Rhea', type: 'MOON_OF_SATURN', code: '605' },
+	{ name: 'Titan', type: 'MOON_OF_SATURN', code: '606' },
+	{ name: 'Hyperion', type: 'MOON_OF_SATURN', code: '607' },
+	{ name: 'Iapetus', type: 'MOON_OF_SATURN', code: '608' },
+	{ name: 'Ariel', type: 'MOON_OF_URANUS', code: '701' },
+	{ name: 'Umbriel', type: 'MOON_OF_URANUS', code: '702' },
+	{ name: 'Titania', type: 'MOON_OF_URANUS', code: '703' },
+	{ name: 'Oberon', type: 'MOON_OF_URANUS', code: '704' },
+	{ name: 'Miranda', type: 'MOON_OF_URANUS', code: '705' },
+	{ name: 'Triton', type: 'MOON_OF_NEPTUNE', code: '801' },
+	{ name: 'Charon', type: 'MOON_OF_PLUTO', code: '901' },
+	{ name: '1 Ceres', type: 'DWARF_PLANET', code: '1;' },
+	{ name: '90377 Sedna', type: 'DWARF_PLANET', code: '90377;' },
+	{ name: '136199 Eris', type: 'DWARF_PLANET', code: '136199;' },
+	{ name: '2 Pallas', type: 'ASTEROID', code: '2;' },
+	{ name: '3 Juno', type: 'ASTEROID', code: '3;' },
+	{ name: '4 Vesta', type: 'ASTEROID', code: '4;' },
+] as const
+
+export const PlanetTab = memo(() => {
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { twilight } = useSnapshot(atlas.state)
+
+	const planet = useMolecule(PlanetMolecule)
+	const { code, position, chart } = useSnapshot(planet.state)
+
+	return (
+		<div className='grid grid-cols-12 gap-2 items-center'>
+			<Listbox
+				className='col-span-full'
+				isVirtualized
+				onAction={(key) => planet.select(key as never)}
+				virtualization={{
+					maxListboxHeight: 200,
+					itemHeight: 38,
+				}}>
+				{PLANETS.map((planet) => (
+					<ListboxItem description={planet.type} key={planet.code}>
+						{planet.name}
+					</ListboxItem>
+				))}
+			</Listbox>
+			<div className='col-span-full'>
+				<EphemerisAndChart chart={chart} name={PLANETS.find((e) => e.code === code)?.name} position={position} twilight={twilight} />
+			</div>
+		</div>
+	)
+})
+
 export const GalaxyTab = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { twilight } = useSnapshot(atlas.state)
@@ -230,7 +300,7 @@ export const EphemerisAndChart = memo(({ name, position, chart, twilight }: Ephe
 				<Button className='rounded-full pointer-events-auto' color='primary' isIconOnly onPointerUp={() => setShowChart(true)} variant={showChart ? 'flat' : 'light'}>
 					<Icons.Chart />
 				</Button>
-				<div className='flex-1 justify-center items-center flex text-sm font-bold'>{position.names?.map((e) => skyObjectName(e, position.constellation)).join(', ') || name}</div>
+				<div className='flex-1 justify-center items-center flex text-sm font-bold'>{name || position.names?.map((e) => skyObjectName(e, position.constellation)).join(', ')}</div>
 			</div>
 			<span className='w-full absolute top-[42px] left-0' style={{ visibility: showChart ? 'hidden' : 'visible' }}>
 				<EphemerisPosition position={position} />
@@ -290,18 +360,18 @@ export const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => 
 
 	return (
 		<div className='w-full grid grid-cols-12 gap-2 p-0'>
-			<Input className='col-span-3 sm:col-span-3' isReadOnly label='RA' size='sm' value={formatRA(position.rightAscension)} />
-			<Input className='col-span-3 sm:col-span-3' isReadOnly label='DEC' size='sm' value={formatDEC(position.declination)} />
-			<Input className='col-span-3 sm:col-span-3' isReadOnly label='RA (J2000)' size='sm' value={formatRA(position.rightAscensionJ2000)} />
-			<Input className='col-span-3 sm:col-span-3' isReadOnly label='DEC (J2000)' size='sm' value={formatDEC(position.declinationJ2000)} />
-			<Input className='col-span-4 sm:col-span-3' isReadOnly label='AZ' size='sm' value={formatAZ(position.azimuth)} />
-			<Input className='col-span-4 sm:col-span-3' isReadOnly label='ALT' size='sm' value={formatALT(position.altitude)} />
-			<Input className='col-span-2 sm:col-span-2' isReadOnly label='Mag.' size='sm' value={position.magnitude.toFixed(2)} />
-			<Input className='col-span-2 sm:col-span-2' isReadOnly label='Const.' size='sm' value={position.constellation} />
-			<Input className='col-span-3 sm:col-span-2' isReadOnly label='Distance' size='sm' value={formatDistance(position.distance)} />
-			<Input className='col-span-3 sm:col-span-2' isReadOnly label='Illuminated' size='sm' value={`${position.illuminated.toFixed(2)} %`} />
-			<Input className='col-span-3 sm:col-span-2' isReadOnly label='Elongation' size='sm' value={`${position.elongation.toFixed(2)} °`} />
-			<Input className='col-span-3 sm:col-span-2' isReadOnly label='Pier Side' size='sm' value={position.pierSide} />
+			<Input className='col-span-3' isReadOnly label='RA' size='sm' value={formatRA(position.rightAscension)} />
+			<Input className='col-span-3' isReadOnly label='DEC' size='sm' value={formatDEC(position.declination)} />
+			<Input className='col-span-3' isReadOnly label='RA (J2000)' size='sm' value={formatRA(position.rightAscensionJ2000)} />
+			<Input className='col-span-3' isReadOnly label='DEC (J2000)' size='sm' value={formatDEC(position.declinationJ2000)} />
+			<Input className='col-span-3' isReadOnly label='AZ' size='sm' value={formatAZ(position.azimuth)} />
+			<Input className='col-span-3' isReadOnly label='ALT' size='sm' value={formatALT(position.altitude)} />
+			<Input className='col-span-2' isReadOnly label='Mag.' size='sm' value={position.magnitude.toFixed(2)} />
+			<Input className='col-span-2' isReadOnly label='Const.' size='sm' value={position.constellation} />
+			<Input className='col-span-2' isReadOnly label='Dist.' size='sm' value={formatDistance(position.distance)} />
+			<Input className='col-span-2' isReadOnly label='Illum.' size='sm' value={`${position.illuminated.toFixed(1)} %`} />
+			<Input className='col-span-2' isReadOnly label='Elong.' size='sm' value={`${position.elongation.toFixed(1)} °`} />
+			<Input className='col-span-2' isReadOnly label='Pier' size='sm' value={position.pierSide} />
 			<div className='col-span-6 flex items-center justify-center gap-2'>
 				<MountDropdown allowEmpty={false} onValueChange={atlas.syncTo} tooltipContent='Sync'>
 					{(value, color, isDisabled) => <IconButton color='primary' icon={Icons.Sync} isDisabled={isDisabled} size='md' variant='flat' />}

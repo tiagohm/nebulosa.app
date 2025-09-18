@@ -38,6 +38,8 @@ export interface MoonState {
 }
 
 export interface PlanetState {
+	readonly request: PositionOfBody
+	code?: string
 	readonly position: BodyPosition
 	chart: number[]
 }
@@ -98,15 +100,14 @@ export const SunMolecule = molecule(() => {
 		}
 	})
 
-	let prevTime = 0
 	let chartUpdate = true
 	let seasonsUpdate = true
 
 	async function tick(time: Temporal) {
 		// Updates only if passed more than 1 minute since last update
-		if (prevTime && time - prevTime < 60000) return
+		if (time - request.time.utc < 60000) return
 
-		prevTime = time
+		request.time.utc = time
 
 		// TODO: Atualizar somente se passou de 1 minuto desde a última atualização
 		// ou se a data mudou (meio-dia, meio-mês, meio-ano)
@@ -153,15 +154,12 @@ export const MoonMolecule = molecule(() => {
 
 	moonState = state
 
-	let prevTime = 0
 	let chartUpdate = true
 	let phasesUpdate = true
 
 	async function tick(time: Temporal) {
 		// Updates only if passed more than 1 minute since last update
-		if (prevTime && time - prevTime < 60000) return
-
-		prevTime = time
+		if (time - request.time.utc < 60000) return
 
 		request.time.utc = time
 
@@ -193,6 +191,56 @@ export const MoonMolecule = molecule(() => {
 	return { state, tick } as const
 })
 
+export const PlanetMolecule = molecule(() => {
+	const request = structuredClone(DEFAULT_POSITION_OF_BODY)
+
+	const state = proxy<PlanetState>({
+		request,
+		position: structuredClone(DEFAULT_BODY_POSITION),
+		chart: [],
+	})
+
+	let chartUpdate = true
+
+	async function tick(time: Temporal) {
+		// Updates only if passed more than 1 minute since last update
+		if (time - request.time.utc < 60000) return
+
+		request.time.utc = time
+
+		await updatePosition()
+		await updateChart()
+	}
+
+	async function updatePosition() {
+		if (!state.code) return
+		const position = await Api.SkyAtlas.positionOfPlanet(state.request, state.code)
+		if (position) Object.assign(state.position, position)
+	}
+
+	async function updateChart(force: boolean = false) {
+		if ((!chartUpdate && !force) || !state.code) return
+		const chart = await Api.SkyAtlas.chartOfPlanet(state.request, state.code)
+		if (chart) state.chart = chart
+		chartUpdate = false
+	}
+
+	async function select(code: string, force: boolean = true) {
+		// Fetches object's position and chart if a new one was selected
+		if (code && (force || state.code !== code)) {
+			state.code = code
+
+			request.location.longitude = deg(-45)
+			request.location.latitude = deg(-22)
+
+			await updatePosition()
+			await updateChart(true)
+		}
+	}
+
+	return { state, tick, select } as const
+})
+
 export const GalaxyMolecule = molecule(() => {
 	const request = storage.get<SkyObjectSearch>('skyatlas.galaxy.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
 
@@ -210,7 +258,6 @@ export const GalaxyMolecule = molecule(() => {
 
 	galaxyState = state
 
-	let prevTime = 0
 	let chartUpdate = true
 
 	onMount(() => {
@@ -279,9 +326,7 @@ export const GalaxyMolecule = molecule(() => {
 
 	async function tick(time: Temporal) {
 		// Updates only if passed more than 1 minute since last update
-		if (prevTime && time - prevTime < 60000) return
-
-		prevTime = time
+		if (time - request.time.utc < 60000) return
 
 		request.time.utc = time
 
@@ -303,6 +348,7 @@ export const GalaxyMolecule = molecule(() => {
 export const SkyAtlasMolecule = molecule((m) => {
 	const sun = m(SunMolecule)
 	const moon = m(MoonMolecule)
+	const planet = m(PlanetMolecule)
 	const galaxy = m(GalaxyMolecule)
 
 	const state =
@@ -364,9 +410,10 @@ export const SkyAtlasMolecule = molecule((m) => {
 
 		await twilight()
 
-		state.tab === 'sun' && sun.tick(time)
-		state.tab === 'moon' && moon.tick(time)
-		state.tab === 'galaxy' && galaxy.tick(time)
+		if (state.tab === 'sun') sun.tick(time)
+		else if (state.tab === 'moon') moon.tick(time)
+		else if (state.tab === 'planet') planet.tick(time)
+		else if (state.tab === 'galaxy') galaxy.tick(time)
 	}
 
 	async function twilight() {

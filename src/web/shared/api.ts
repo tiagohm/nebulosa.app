@@ -364,6 +364,14 @@ export namespace Api {
 			return json<LunarPhaseTime[]>('/atlas/moon/phases', 'post', req)
 		}
 
+		export function positionOfPlanet(req: PositionOfBody, code: string) {
+			return json<BodyPosition>(`/atlas/planets/${code}/position`, 'post', req)
+		}
+
+		export function chartOfPlanet(req: PositionOfBody, code: string) {
+			return json<number[]>(`/atlas/planets/${code}/chart`, 'post', req)
+		}
+
 		export function searchSkyObject(req: SkyObjectSearch) {
 			return json<SkyObjectSearchItem[]>('/atlas/skyobjects/search', 'post', req)
 		}

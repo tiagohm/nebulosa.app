@@ -171,7 +171,7 @@ const app = new Elysia({
 	.use(starDetection(starDetectionManager))
 	.use(plateSolver(plateSolverManager))
 	.use(fileSystem(fileSystemManager))
-	.use(tppa(tppaManager, connectionManager, cameraManager.cache))
+	.use(tppa(tppaManager, connectionManager))
 	.use(darv(darvManager, connectionManager))
 
 	// WebSocket

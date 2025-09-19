@@ -37,8 +37,8 @@ export class TppaManager {
 		}
 	}
 
-	start(request: TppaStart, client: IndiClient, camera: Camera, mount: Mount, cache: Map<string, Buffer>) {
-		const task = new TppaTask(this, client, camera, mount, request, cache, this.handleTppaEvent.bind(this))
+	start(request: TppaStart, client: IndiClient, camera: Camera, mount: Mount) {
+		const task = new TppaTask(this, client, camera, mount, request, this.handleTppaEvent.bind(this))
 		this.tasks.set(request.id, task)
 		task.start()
 	}
@@ -53,6 +53,7 @@ export class TppaTask {
 	private readonly polarAlignment: ThreePointPolarAlignment
 	private readonly event = structuredClone(DEFAULT_TPPA_EVENT)
 	private readonly handleTppaEvent: () => void
+	private stopped = false
 
 	constructor(
 		private readonly tppa: TppaManager,
@@ -60,7 +61,6 @@ export class TppaTask {
 		readonly camera: Camera,
 		readonly mount: Mount,
 		private readonly request: TppaStart,
-		private readonly cache: Map<string, Buffer>,
 		handleTppaEvent: (event: TppaEvent) => void,
 	) {
 		this.capture = request.capture
@@ -82,14 +82,14 @@ export class TppaTask {
 		this.handleTppaEvent = () => {
 			handleTppaEvent(this.event)
 
-			if (this.event.state === 'IDLE') {
+			if (!this.stopped && this.event.state === 'IDLE') {
 				this.stopTrackingWhenDone()
 			}
 		}
 	}
 
 	async cameraCaptured(event: CameraCaptureEvent) {
-		if (event.savedPath) {
+		if (event.savedPath && !this.stopped) {
 			this.event.state = 'SOLVING'
 			this.handleTppaEvent()
 
@@ -98,6 +98,8 @@ export class TppaTask {
 
 			// Solve image
 			const solution = await this.tppa.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: deg(8), path, id: this.request.id, blind: false })
+
+			if (this.stopped) return
 
 			if (solution) {
 				this.event.attempts = 0
@@ -114,7 +116,9 @@ export class TppaTask {
 
 				this.event.aligned = result !== false
 
-				if (result) {
+				if (this.stopped) {
+					return
+				} else if (result) {
 					this.event.attempts = 0
 					this.event.error.azimuth = result.azimuthError
 					this.event.error.altitude = result.altitudeError
@@ -139,7 +143,7 @@ export class TppaTask {
 				return
 			}
 
-			if (this.event.solved) {
+			if (!this.stopped && this.event.solved) {
 				this.event.step++
 
 				// Move telescope
@@ -148,26 +152,29 @@ export class TppaTask {
 					this.handleTppaEvent()
 
 					this.move(true)
-					await Bun.sleep(Math.max(1, this.request.moveDuration) * 1000)
+					await this.waitFor(Math.max(1, this.request.moveDuration) * 1000)
 					this.move(false)
 
-					// Wait for settle
-					this.event.state = 'SETTLING'
+					if (!this.stopped) {
+						// Wait for settle
+						this.event.state = 'SETTLING'
+						this.handleTppaEvent()
+						await this.waitFor(2500)
+					}
+				} else if (this.request.delayBeforeCapture) {
+					// Wait before next capture
+					this.event.state = 'WAITING'
 					this.handleTppaEvent()
-					await Bun.sleep(2500)
+					await this.waitFor(this.request.delayBeforeCapture * 1000)
 				}
 			}
 
-			// Wait between captures
-			if (this.request.delayBeforeCapture && this.event.step >= 3 && this.event.solved) {
-				this.event.state = 'WAITING'
-				await Bun.sleep(this.request.delayBeforeCapture * 1000)
-			}
-
 			// Capture next image
-			this.event.state = 'CAPTURING'
-			this.handleTppaEvent()
-			this.tppa.camera.startCameraCapture(this.camera, this.capture, this.client, this.tppa.property)
+			if (!this.stopped) {
+				this.event.state = 'CAPTURING'
+				this.handleTppaEvent()
+				this.tppa.camera.startCameraCapture(this.camera, this.capture, this.client, this.tppa.property)
+			}
 		}
 	}
 
@@ -182,6 +189,8 @@ export class TppaTask {
 	}
 
 	stop() {
+		this.stopped = true
+
 		this.move(false)
 		this.tppa.solver.stop(this.request)
 		this.tppa.camera.stopCameraCapture(this.camera)
@@ -202,12 +211,22 @@ export class TppaTask {
 			tracking(this.client, this.mount, false)
 		}
 	}
+
+	private async waitFor(ms: number) {
+		while (ms > 0 && !this.stopped) {
+			// Sleep for 1 second
+			await Bun.sleep(Math.max(1, Math.min(999, ms)))
+
+			// Subtract 1 second from remaining time
+			ms -= 1000
+		}
+	}
 }
 
-export function tppa(tppa: TppaManager, connection: ConnectionManager, cache: Map<string, Buffer>) {
+export function tppa(tppa: TppaManager, connection: ConnectionManager) {
 	const app = new Elysia({ prefix: '/tppa' })
 		// Endpoints!
-		.post('/:camera/:mount/start', ({ params, body }) => tppa.start(body as never, connection.get(), tppa.camera.get(params.camera)!, tppa.mount.get(params.mount)!, cache))
+		.post('/:camera/:mount/start', ({ params, body }) => tppa.start(body as never, connection.get(), tppa.camera.get(params.camera)!, tppa.mount.get(params.mount)!))
 		.post('/stop', ({ body }) => tppa.stop(body as never))
 
 	return app

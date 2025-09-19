@@ -115,6 +115,28 @@ describe('search sky object', () => {
 		expect(result[0].name).toBe('1:5139')
 	})
 
+	test('name contains', () => {
+		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, name: '%5139%' })
+
+		expect(result).toHaveLength(5)
+		expect(result[0].id).toBe(1004779)
+		expect(result[0].magnitude).toBe(5.33)
+		expect(result[0].type).toBe(StellariumObjectType.GLOBULAR_STAR_CLUSTER)
+		expect(result[0].constellation).toBe(17)
+		expect(result[0].name).toBe('0:Ome Cen Cluster')
+	})
+
+	test('name', () => {
+		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, name: 'Sirius' })
+
+		expect(result).toHaveLength(1)
+		expect(result[0].id).toBe(32263)
+		expect(result[0].magnitude).toBe(-1.44)
+		expect(result[0].type).toBe(StellariumObjectType.STAR)
+		expect(result[0].constellation).toBe(9)
+		expect(result[0].name).toBe('0:Sirius')
+	})
+
 	test('region', () => {
 		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, rightAscension: '06 45 08.9173', declination: '-16 42 58', radius: 1 })
 

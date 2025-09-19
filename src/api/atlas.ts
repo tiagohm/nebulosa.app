@@ -198,7 +198,7 @@ export class AtlasManager {
 		if (name)
 			if (name.startsWith('=')) joinWhere.push(`n.name = '${name.substring(1).trim()}'`)
 			else if (name.includes('%')) joinWhere.push(`n.name LIKE '${name}'`)
-			else joinWhere.push(`n.name = '%${name}%'`)
+			else joinWhere.push(`n.name LIKE '%${name}%'`)
 
 		if (req.radius > 0 && req.rightAscension && req.declination) {
 			const rightAscension = parseAngle(req.rightAscension, { isHour: true })!

@@ -8,7 +8,7 @@ import { join } from 'path'
 import type { JpegOptions, PngOptions, WebpOptions } from 'sharp'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
-import type { ImageInfo, ImageTransformation, OpenImage } from '../shared/types'
+import type { CloseImage, ImageInfo, ImageTransformation, OpenImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER } from '../shared/types'
 import { decodePath } from './camera'
 import type { NotificationManager } from './notification'
@@ -42,14 +42,17 @@ const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOption
 }
 
 export class ImageManager {
-	constructor(readonly notification: NotificationManager) {}
+	constructor(
+		readonly notification: NotificationManager,
+		readonly cache: Map<string, Buffer>,
+	) {}
 
-	async open(req: OpenImage, cache: Map<string, Buffer>) {
+	async open(req: OpenImage) {
 		if (!req.path) return undefined
 
 		if (req.path?.startsWith(':')) {
 			const [path, key] = decodePath(req.path)
-			const buffer = cache.get(key)
+			const buffer = this.cache.get(key)
 
 			if (buffer) {
 				const source = bufferSource(buffer)
@@ -172,13 +175,17 @@ export class ImageManager {
 	coordinateInterpolation() {}
 
 	statistics() {}
+
+	close(req: CloseImage) {
+		this.cache.delete(req.id)
+	}
 }
 
-export function image(image: ImageManager, cache: Map<string, Buffer>) {
+export function image(image: ImageManager) {
 	const app = new Elysia({ prefix: '/image' })
 		// Endpoints!
 		.post('/open', async ({ body, set }) => {
-			const info = await image.open(body as never, cache)
+			const info = await image.open(body as never)
 
 			if (!info) return undefined
 
@@ -187,6 +194,7 @@ export function image(image: ImageManager, cache: Map<string, Buffer>) {
 
 			return Bun.file(info.path)
 		})
+		.post('/close', ({ body }) => image.close(body as never))
 		.post('/analyze', () => image.analyze())
 		.post('/annotate', () => image.annotate())
 		.post('/coordinateInterpolation', () => image.coordinateInterpolation())

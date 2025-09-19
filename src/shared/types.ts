@@ -268,12 +268,12 @@ export interface ImageTransformation {
 
 export interface OpenImage {
 	path?: string
-	camera?: string
-	transformation: ImageTransformation
+	readonly camera?: string
+	readonly transformation: ImageTransformation
 }
 
 export interface CloseImage {
-	id: string
+	readonly id: string
 }
 
 export interface ImageInfo extends Partial<EquatorialCoordinate> {

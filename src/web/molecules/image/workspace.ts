@@ -2,6 +2,7 @@ import { molecule, onMount } from 'bunshi'
 import bus from 'src/shared/bus'
 import type { Atom, Camera, CameraCaptureEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
+import { Api } from '@/shared/api'
 import { storage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
 import { EquipmentMolecule } from '../indi/equipment'
@@ -77,6 +78,10 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 			state.images.splice(index, 1)
 			viewers.delete(image.key)
 			bus.emit('image:remove', image)
+
+			if (image.camera?.name) {
+				void Api.Image.close({ id: image.camera.name })
+			}
 		}
 	}
 

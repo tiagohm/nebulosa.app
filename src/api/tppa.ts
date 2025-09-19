@@ -5,7 +5,7 @@ import type { IndiClient } from 'nebulosa/src/indi'
 import bus from 'src/shared/bus'
 import { type Camera, type CameraCaptureEvent, type CameraCaptureStart, DEFAULT_TPPA_EVENT, type Mount, type TppaEvent, type TppaStart, type TppaStop } from 'src/shared/types'
 import type { CacheManager } from './cache'
-import type { CameraManager } from './camera'
+import { type CameraManager, decodePath } from './camera'
 import type { ConnectionManager } from './connection'
 import type { IndiDevicePropertyManager } from './indi'
 import type { WebSocketMessageManager } from './message'
@@ -94,17 +94,10 @@ export class TppaTask {
 			this.handleTppaEvent()
 
 			// Retrieve image from cache
-			const parts = event.savedPath!.split(':')
-			const key = Buffer.from(parts[1], 'hex').toString('utf-8')
-			const buffer = this.cache.get(key)!
-
-			// Save image to temporary file
-			// TODO: Save on tmp directory on Windows and MacOS
-			const file = Bun.file(`/dev/shm/tppa.${event.device}.fit`)
-			await Bun.write(file, buffer)
+			const [path] = decodePath(event.savedPath)
 
 			// Solve image
-			const solution = await this.tppa.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: deg(8), path: file.name!, id: this.request.id, blind: false })
+			const solution = await this.tppa.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: deg(8), path, id: this.request.id, blind: false })
 
 			if (solution) {
 				this.event.attempts = 0

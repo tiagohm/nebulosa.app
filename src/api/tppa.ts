@@ -127,11 +127,11 @@ export class TppaTask {
 				}
 
 				this.handleTppaEvent()
-			} else if (++this.event.attempts < 3) {
+			} else if (++this.event.attempts < this.request.maxAttempts) {
 				this.event.solved = false
 				this.handleTppaEvent()
 			} else {
-				// Failed to solve after 3 attempts
+				// Failed to solve after reaching max attempts
 				this.event.state = 'IDLE'
 				this.event.solved = false
 				this.event.failed = true
@@ -152,8 +152,16 @@ export class TppaTask {
 					this.move(false)
 
 					// Wait for settle
-					await Bun.sleep(Math.max(1, this.request.settleDuration) * 1000)
+					this.event.state = 'SETTLING'
+					this.handleTppaEvent()
+					await Bun.sleep(2500)
 				}
+			}
+
+			// Wait between captures
+			if (this.request.delayBeforeCapture && this.event.step >= 3 && this.event.solved) {
+				this.event.state = 'WAITING'
+				await Bun.sleep(this.request.delayBeforeCapture * 1000)
 			}
 
 			// Capture next image

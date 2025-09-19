@@ -705,13 +705,14 @@ export interface StarDetection {
 
 // Tppa
 
-export type TppaState = 'IDLE' | 'MOVING' | 'CAPTURING' | 'SOLVING' | 'ALIGNING'
+export type TppaState = 'IDLE' | 'WAITING' | 'MOVING' | 'CAPTURING' | 'SOLVING' | 'ALIGNING' | 'SETTLING'
 
 export interface TppaStart {
 	id: string
 	readonly direction: 'EAST' | 'WEST'
 	readonly moveDuration: number // seconds
-	readonly settleDuration: number // seconds
+	readonly delayBeforeCapture: number // seconds
+	readonly maxAttempts: number
 	readonly solver: Omit<PlateSolveStart, 'id' | 'path' | 'blind'>
 	readonly capture: CameraCaptureStart
 	readonly refraction: RefractionParameters
@@ -1221,7 +1222,8 @@ export const DEFAULT_TPPA_START: TppaStart = {
 	id: '',
 	direction: 'EAST',
 	moveDuration: 5,
-	settleDuration: 2,
+	delayBeforeCapture: 5,
+	maxAttempts: 15,
 	solver: DEFAULT_PLATE_SOLVE_START,
 	capture: DEFAULT_CAMERA_CAPTURE_START,
 	refraction: DEFAULT_REFRACTION_PARAMETERS,

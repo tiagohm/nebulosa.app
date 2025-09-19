@@ -18,7 +18,7 @@ import { TppaDirectionSelect } from './TppaDirectionSelect'
 export const Tppa = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
 	const { running, camera, mount, event } = useSnapshot(tppa.state)
-	const { direction, moveDuration, stopTrackingWhenDone, compensateRefraction } = useSnapshot(tppa.state.request, { sync: true })
+	const { direction, moveDuration, stopTrackingWhenDone, compensateRefraction, maxAttempts, delayBeforeCapture } = useSnapshot(tppa.state.request, { sync: true })
 	const { type } = useSnapshot(tppa.state.request.solver)
 
 	const Footer = (
@@ -37,7 +37,7 @@ export const Tppa = memo(() => {
 				</div>
 				<div className='mt-2 col-span-full flex flex-row items-center justify-between'>
 					<Chip color='primary' size='sm'>
-						{event.state === 'IDLE' ? 'idle' : event.state === 'MOVING' ? 'moving' : event.state === 'CAPTURING' ? 'capturing' : event.state === 'SOLVING' ? 'solving' : 'aligning'}
+						{event.state === 'IDLE' ? 'idle' : event.state === 'MOVING' ? 'moving' : event.state === 'CAPTURING' ? 'capturing' : event.state === 'SOLVING' ? 'solving' : event.state === 'WAITING' ? 'waiting' : event.state === 'SETTLING' ? 'settling' : 'aligning'}
 					</Chip>
 					<div className='flex flex-row items-center gap-1'>
 						<Chip color='warning' size='sm'>
@@ -54,6 +54,8 @@ export const Tppa = memo(() => {
 				<PlateSolverSelect className='col-span-6' endContent={<PlateSolverSelectEndContent />} isDisabled={running} onValueChange={(value) => tppa.updateSolver('type', value)} value={type} />
 				<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Move for (s)' maxValue={60} minValue={1} onValueChange={(value) => tppa.update('moveDuration', value)} size='sm' value={moveDuration} />
 				<TppaDirectionSelect className='col-span-3' isDisabled={running} onValueChange={(value) => tppa.update('direction', value)} value={direction} />
+				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Max attempts' maxValue={30} minValue={3} onValueChange={(value) => tppa.update('maxAttempts', value)} size='sm' value={maxAttempts} />
+				<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Delay before capture (s)' maxValue={120} minValue={0} onValueChange={(value) => tppa.update('delayBeforeCapture', value)} size='sm' value={delayBeforeCapture} />
 				<Checkbox className='col-span-6' isDisabled={running} isSelected={stopTrackingWhenDone} onValueChange={(value) => tppa.update('stopTrackingWhenDone', value)}>
 					Stop tracking when done
 				</Checkbox>

@@ -291,12 +291,13 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 			// Update the state
 			state.info = image.info
-			updateFromImageInfo(image.info)
+			updateFromImageInfo(image.info, !path)
 
 			// Add the image to cache
 			const cached = imageCache.get(key)
 
 			if (cached) {
+				console.info('image revoked', key, cached.url)
 				URL.revokeObjectURL(cached.url)
 
 				cached.url = url
@@ -317,9 +318,9 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		}
 	}
 
-	function updateFromImageInfo(info: ImageInfo) {
+	function updateFromImageInfo(info: ImageInfo, newImage: boolean) {
 		updateTransformationFromInfo(info)
-		updateSolverFromImageInfo(info)
+		updateSolverFromImageInfo(info, newImage)
 	}
 
 	function updateTransformationFromInfo(info: ImageInfo) {
@@ -330,12 +331,12 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		state.transformation.stretch.midtone = info.transformation.stretch.midtone
 	}
 
-	function updateSolverFromImageInfo(info: ImageInfo) {
+	function updateSolverFromImageInfo(info: ImageInfo, newImage: boolean) {
 		const { solver } = state
 		const { request } = solver
 
 		// Update plate solver solution
-		solver.solution = info.solution && ref(info.solution)
+		if (newImage) solver.solution = info.solution && ref(info.solution)
 
 		// Update plate solver request with FITS header information
 		request.rightAscension = formatRA(info.rightAscension ?? 0)
@@ -389,9 +390,12 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		const cached = imageCache.get(key)
 
 		if (cached) {
-			console.info('image detached', key)
+			console.info('image revoked', key, cached.url)
+			URL.revokeObjectURL(cached.url)
 			imageCache.delete(key)
 		}
+
+		console.info('image detached', key)
 
 		adjustZIndexAfterBeRemoved()
 

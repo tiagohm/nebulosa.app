@@ -54,11 +54,15 @@ export const ImageToolBar = memo(() => {
 					</Tooltip>
 				)}
 				<Popover placement='bottom' showArrow>
-					<PopoverTrigger>
-						<Button color='success' isIconOnly variant='flat'>
-							<Icons.Palette />
-						</Button>
-					</PopoverTrigger>
+					<Tooltip content='Transformation'>
+						<div className='max-w-fit'>
+							<PopoverTrigger>
+								<Button color='success' isIconOnly variant='flat'>
+									<Icons.Palette />
+								</Button>
+							</PopoverTrigger>
+						</div>
+					</Tooltip>
 					<PopoverContent>
 						<div className='flex flex-row items-center justify-center gap-2 p-2'>
 							{!info.mono && (
@@ -97,11 +101,15 @@ export const ImageToolBar = memo(() => {
 					</PopoverContent>
 				</Popover>
 				<Popover placement='bottom' showArrow>
-					<PopoverTrigger>
-						<Button color='success' isIconOnly variant='flat'>
-							<Icons.BringToFront />
-						</Button>
-					</PopoverTrigger>
+					<Tooltip content='Overlay'>
+						<div className='max-w-fit'>
+							<PopoverTrigger>
+								<Button color='success' isIconOnly variant='flat'>
+									<Icons.BringToFront />
+								</Button>
+							</PopoverTrigger>
+						</div>
+					</Tooltip>
 					<PopoverContent>
 						<div className='flex flex-row justify-center items-start gap-2 p-2'>
 							<Tooltip content='Crosshair' placement='top'>

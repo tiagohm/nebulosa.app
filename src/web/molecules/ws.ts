@@ -34,6 +34,8 @@ export const WebSocketMolecule = molecule((m) => {
 			case 'mount:remove':
 			case 'focuser:add':
 			case 'focuser:remove':
+			case 'wheel:add':
+			case 'wheel:remove':
 			case 'guideOutput:add':
 			case 'guideOutput:remove':
 			case 'thermometer:add':

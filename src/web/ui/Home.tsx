@@ -11,6 +11,7 @@ import { FocuserScope } from '@/molecules/indi/focuser'
 import { GuideOutputScope } from '@/molecules/indi/guideoutput'
 import { MountScope } from '@/molecules/indi/mount'
 import { ThermometerScope } from '@/molecules/indi/thermometer'
+import { WheelScope } from '@/molecules/indi/wheel'
 import { WebSocketMolecule } from '@/molecules/ws'
 import { Camera } from './Camera'
 import { Confirmation } from './Confirmation'
@@ -23,6 +24,7 @@ import { HomeNavBar } from './HomeNavBar'
 import { ImageWorkspace } from './ImageWorkspace'
 import { Mount } from './Mount'
 import { Thermometer } from './Thermometer'
+import { Wheel } from './Wheel'
 
 export const Home = memo(() => {
 	const webSocket = useMolecule(WebSocketMolecule)
@@ -37,6 +39,7 @@ export const Home = memo(() => {
 			<CameraList />
 			<MountList />
 			<FocuserList />
+			<WheelList />
 			<ThermometerList />
 			<GuideOutputList />
 			<CoverList />
@@ -84,6 +87,20 @@ export const FocuserList = memo(() => {
 			focuser.show && (
 				<ScopeProvider key={focuser.name} scope={FocuserScope} value={{ focuser: focuser as never }}>
 					<Focuser />
+				</ScopeProvider>
+			),
+	)
+})
+
+export const WheelList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const wheel = useSnapshot(equipment.state.WHEEL)
+
+	return wheel.map(
+		(wheel) =>
+			wheel.show && (
+				<ScopeProvider key={wheel.name} scope={WheelScope} value={{ wheel: wheel as never }}>
+					<Wheel />
 				</ScopeProvider>
 			),
 	)

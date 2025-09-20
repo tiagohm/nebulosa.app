@@ -100,7 +100,7 @@ export const HomeMenuPopover = memo(() => {
 
 export const HomeMenuPopoverContent = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const { selected, CAMERA, MOUNT, FOCUSER, COVER, FLAT_PANEL, GUIDE_OUTPUT, THERMOMETER, DEW_HEATER } = useSnapshot(equipment.state)
+	const { selected, CAMERA, MOUNT, FOCUSER, WHEEL, COVER, FLAT_PANEL, GUIDE_OUTPUT, THERMOMETER, DEW_HEATER } = useSnapshot(equipment.state)
 
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
 	const framing = useMolecule(FramingMolecule)
@@ -122,7 +122,7 @@ export const HomeMenuPopoverContent = memo(() => {
 				</Button>
 			</Tooltip>
 			<Tooltip content='Filter Wheel' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled isIconOnly onPointerUp={() => equipment.select('WHEEL')} size='lg' variant='light'>
+				<Button color='secondary' isDisabled={WHEEL.length === 0} isIconOnly onPointerUp={() => equipment.select('WHEEL')} size='lg' variant='light'>
 					<img className='w-9' src={filterWheelIcon} />
 				</Button>
 			</Tooltip>

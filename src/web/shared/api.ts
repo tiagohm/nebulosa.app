@@ -4,7 +4,7 @@ import type { NewVector } from 'nebulosa/src/indi'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, CloseImage, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, DarvStart, DarvStop, Device, DeviceProperties, DeviceProperty, DewHeater, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LunarPhaseTime, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, SolarSeasons, StarDetection, Thermometer, TppaStart, TppaStop, TrackMode, Twilight } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, CloseImage, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, DarvStart, DarvStop, Device, DeviceProperties, DeviceProperty, DewHeater, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LunarPhaseTime, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, SolarSeasons, StarDetection, Thermometer, TppaStart, TppaStop, TrackMode, Twilight, Wheel } from 'src/shared/types'
 import { type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -258,6 +258,24 @@ export namespace Api {
 
 		export function stop(focuser: Focuser) {
 			return res(`/focusers/${focuser.name}/stop`, 'post')
+		}
+	}
+
+	export namespace Wheels {
+		export function list() {
+			return json<Wheel[]>('/wheels', 'get')
+		}
+
+		export function get(name: string) {
+			return json<Wheel>(`/wheels/${name}`, 'get')
+		}
+
+		export function moveTo(wheel: Wheel, position: number) {
+			return res(`/wheels/${wheel.name}/moveto`, 'post', position)
+		}
+
+		export function slots(wheel: Wheel, names: string[]) {
+			return res(`/wheels/${wheel.name}/slots`, 'post', names)
 		}
 	}
 

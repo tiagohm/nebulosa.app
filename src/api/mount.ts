@@ -375,10 +375,10 @@ export class MountManager implements IndiClientHandler {
 			const type = +message.elements.DRIVER_INTERFACE!.value
 
 			if (isInterfaceType(type, DeviceInterfaceType.TELESCOPE)) {
-				const executable = message.elements.DRIVER_EXEC!.value
-				const version = message.elements.DRIVER_VERSION!.value
-
 				if (!this.mounts.has(message.device)) {
+					const executable = message.elements.DRIVER_EXEC!.value
+					const version = message.elements.DRIVER_VERSION!.value
+
 					const mount: Mount = { ...structuredClone(DEFAULT_MOUNT), id: message.device, name: message.device, driver: { executable, version } }
 					this.add(mount)
 					ask(client, mount)

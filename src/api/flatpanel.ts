@@ -92,10 +92,10 @@ export class FlatPanelManager implements IndiClientHandler {
 			const type = +message.elements.DRIVER_INTERFACE!.value
 
 			if (isInterfaceType(type, DeviceInterfaceType.LIGHTBOX)) {
-				const executable = message.elements.DRIVER_EXEC!.value
-				const version = message.elements.DRIVER_VERSION!.value
-
 				if (!this.flatPanels.has(message.device)) {
+					const executable = message.elements.DRIVER_EXEC!.value
+					const version = message.elements.DRIVER_VERSION!.value
+
 					const panel: FlatPanel = { ...structuredClone(DEFAULT_FLAT_PANEL), id: message.device, name: message.device, driver: { executable, version } }
 					this.add(panel)
 					ask(client, panel)

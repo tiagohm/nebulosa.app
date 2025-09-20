@@ -350,10 +350,10 @@ export class CameraManager implements IndiClientHandler {
 			const type = +message.elements.DRIVER_INTERFACE!.value
 
 			if (isInterfaceType(type, DeviceInterfaceType.CCD)) {
-				const executable = message.elements.DRIVER_EXEC!.value
-				const version = message.elements.DRIVER_VERSION!.value
-
 				if (!this.cameras.has(message.device)) {
+					const executable = message.elements.DRIVER_EXEC!.value
+					const version = message.elements.DRIVER_VERSION!.value
+
 					const camera: Camera = { ...structuredClone(DEFAULT_CAMERA), id: message.device, name: message.device, driver: { executable, version } }
 					this.add(camera)
 					ask(client, camera)

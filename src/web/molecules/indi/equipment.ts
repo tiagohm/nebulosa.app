@@ -1,6 +1,6 @@
 import { molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
-import type { Camera, CameraUpdated, Cover, CoverUpdated, Device, DeviceType, DewHeater, DewHeaterUpdated, FlatPanel, FlatPanelUpdated, Focuser, FocuserUpdated, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated } from 'src/shared/types'
+import type { Camera, CameraUpdated, Cover, CoverUpdated, Device, DeviceType, DewHeater, DewHeaterUpdated, FlatPanel, FlatPanelUpdated, Focuser, FocuserUpdated, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated, Wheel, WheelUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 
@@ -13,7 +13,7 @@ export interface EquipmentState {
 	selected?: DeviceType
 	readonly CAMERA: EquipmentDevice<Camera>[]
 	readonly MOUNT: EquipmentDevice<Mount>[]
-	readonly WHEEL: EquipmentDevice<Device>[]
+	readonly WHEEL: EquipmentDevice<Wheel>[]
 	readonly FOCUSER: EquipmentDevice<Focuser>[]
 	readonly ROTATOR: EquipmentDevice<Device>[]
 	readonly GPS: EquipmentDevice<Device>[]
@@ -75,14 +75,17 @@ export const EquipmentMolecule = molecule(() => {
 		unsubscribers.push(bus.subscribe<Focuser>('focuser:add', (event) => add('FOCUSER', event)))
 		unsubscribers.push(bus.subscribe<Focuser>('focuser:remove', (event) => remove('FOCUSER', event)))
 		unsubscribers.push(bus.subscribe<FocuserUpdated>('focuser:update', ({ device, property }) => update('FOCUSER', device.name, property, device[property]!)))
+		unsubscribers.push(bus.subscribe<Wheel>('wheel:add', (event) => add('WHEEL', event)))
+		unsubscribers.push(bus.subscribe<Wheel>('wheel:remove', (event) => remove('WHEEL', event)))
+		unsubscribers.push(bus.subscribe<WheelUpdated>('wheel:update', ({ device, property }) => update('WHEEL', device.name, property, device[property]!)))
 
 		return () => {
 			unsubscribe(unsubscribers)
 		}
 	})
 
-	function get<T extends Device = Device>(type: DeviceType, name: string) {
-		return state[type].find((e) => e.name === name) as EquipmentDevice<T> | undefined
+	function get<T extends DeviceType, D extends EquipmentState[T][number]>(type: T, name: string) {
+		return state[type].find((e) => e.name === name) as D | undefined
 	}
 
 	function list<T extends Device = Device>(type: DeviceType) {

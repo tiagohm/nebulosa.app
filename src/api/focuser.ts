@@ -179,10 +179,10 @@ export class FocuserManager implements IndiClientHandler {
 			const type = +message.elements.DRIVER_INTERFACE!.value
 
 			if (isInterfaceType(type, DeviceInterfaceType.FOCUSER)) {
-				const executable = message.elements.DRIVER_EXEC!.value
-				const version = message.elements.DRIVER_VERSION!.value
-
 				if (!this.focusers.has(message.device)) {
+					const executable = message.elements.DRIVER_EXEC!.value
+					const version = message.elements.DRIVER_VERSION!.value
+
 					const focuser: Focuser = { ...structuredClone(DEFAULT_FOCUSER), id: message.device, name: message.device, driver: { executable, version } }
 					this.add(focuser)
 					ask(client, focuser)

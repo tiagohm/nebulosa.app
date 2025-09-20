@@ -354,6 +354,12 @@ export type FocuserUpdated = DeviceUpdated<Focuser>
 
 export type FocuserRemoved = DeviceRemoved<Focuser>
 
+export type WheelAdded = DeviceAdded<Wheel>
+
+export type WheelUpdated = DeviceUpdated<Wheel>
+
+export type WheelRemoved = DeviceRemoved<Wheel>
+
 export type FocuserMessageEvent = FocuserAdded | FocuserUpdated | FocuserRemoved
 
 export type GuideOutputAdded = DeviceAdded<GuideOutput>
@@ -631,6 +637,15 @@ export interface Focuser extends Device, Thermometer {
 	reversed: boolean
 	canSync: boolean
 	hasBacklash: boolean
+}
+
+// Wheel
+
+export interface Wheel extends Device {
+	readonly type: 'WHEEL'
+	moving: boolean
+	slots: string[]
+	position: number
 }
 
 // Cover
@@ -1007,6 +1022,21 @@ export const DEFAULT_FOCUSER: Focuser = {
 	hasBacklash: false,
 	hasThermometer: false,
 	temperature: 0,
+}
+
+export const DEFAULT_WHEEL: Wheel = {
+	type: 'WHEEL',
+	id: '',
+	name: '',
+	connected: false,
+	driver: {
+		executable: '',
+		version: '',
+	},
+	// properties: {},
+	moving: false,
+	slots: [],
+	position: 0,
 }
 
 export const DEFAULT_THERMOMETER: Thermometer = {

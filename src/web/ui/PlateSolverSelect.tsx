@@ -6,7 +6,7 @@ export interface PlateSolverSelectProps extends Omit<EnumSelectProps<PlateSolver
 
 export function PlateSolverSelect({ label = 'Solver', ...props }: PlateSolverSelectProps) {
 	return (
-		<EnumSelect {...props} classNames={{ innerWrapper: '!pt-0', endContent: 'mb-0', value: 'pt-2' }} label={label}>
+		<EnumSelect {...props} label={label}>
 			<SelectItem key='ASTAP'>Astap</SelectItem>
 			<SelectItem key='ASTROMETRY_NET'>Astrometry.net (offline)</SelectItem>
 			<SelectItem key='NOVA_ASTROMETRY_NET'>Nova Astrometry.net</SelectItem>

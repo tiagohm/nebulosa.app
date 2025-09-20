@@ -14,6 +14,7 @@ import type { GuideOutputManager } from './guideoutput'
 import type { WebSocketMessageManager } from './message'
 import type { MountManager } from './mount'
 import type { ThermometerManager } from './thermometer'
+import type { WheelManager } from './wheel'
 
 export enum DeviceInterfaceType {
 	TELESCOPE = 0x0001, // Telescope interface, must subclass INDI::Telescope.
@@ -73,6 +74,7 @@ export class IndiManager implements IndiClientHandler {
 		readonly thermometer: ThermometerManager,
 		readonly mount: MountManager,
 		readonly focuser: FocuserManager,
+		readonly wheel: WheelManager,
 		readonly cover: CoverManager,
 		readonly flatPanel: FlatPanelManager,
 		readonly dewHeater: DewHeaterManager,
@@ -88,6 +90,7 @@ export class IndiManager implements IndiClientHandler {
 		this.camera.switchVector(client, message, tag)
 		this.mount.switchVector(client, message, tag)
 		this.focuser.switchVector(client, message, tag)
+		this.wheel.switchVector(client, message, tag)
 		this.cover.switchVector(client, message, tag)
 		this.flatPanel.switchVector(client, message, tag)
 		// this.guideOutput.switchVector(client, message, tag)
@@ -100,6 +103,7 @@ export class IndiManager implements IndiClientHandler {
 		this.camera.numberVector(client, message, tag)
 		this.mount.numberVector(client, message, tag)
 		this.focuser.numberVector(client, message, tag)
+		this.wheel.numberVector(client, message, tag)
 		this.cover.numberVector(client, message, tag)
 		this.flatPanel.numberVector(client, message, tag)
 		this.guideOutput.numberVector(client, message, tag)
@@ -112,6 +116,7 @@ export class IndiManager implements IndiClientHandler {
 		this.camera.textVector(client, message, tag)
 		this.mount.textVector(client, message, tag)
 		this.focuser.textVector(client, message, tag)
+		this.wheel.textVector(client, message, tag)
 		this.cover.textVector(client, message, tag)
 		this.flatPanel.textVector(client, message, tag)
 		// this.guideOutput.textVector(client, message, tag)
@@ -128,6 +133,7 @@ export class IndiManager implements IndiClientHandler {
 		this.camera.delProperty(client, message)
 		this.mount.delProperty(client, message)
 		this.focuser.delProperty(client, message)
+		this.wheel.delProperty(client, message)
 		this.cover.delProperty(client, message)
 		this.flatPanel.delProperty(client, message)
 		// this.guideOutput.delProperty(client, message)
@@ -137,7 +143,7 @@ export class IndiManager implements IndiClientHandler {
 	}
 
 	get(id: string): Device | undefined {
-		return this.camera.get(id) || this.mount.get(id) || this.focuser.get(id) || this.cover.get(id) || this.flatPanel.get(id) || this.guideOutput.get(id) || this.thermometer.get(id) || this.dewHeater.get(id)
+		return this.camera.get(id) || this.mount.get(id) || this.focuser.get(id) || this.wheel.get(id) || this.cover.get(id) || this.flatPanel.get(id) || this.guideOutput.get(id) || this.thermometer.get(id) || this.dewHeater.get(id)
 	}
 }
 

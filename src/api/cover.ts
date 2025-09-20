@@ -111,10 +111,10 @@ export class CoverManager implements IndiClientHandler {
 			const type = +message.elements.DRIVER_INTERFACE!.value
 
 			if (isInterfaceType(type, DeviceInterfaceType.DUSTCAP)) {
-				const executable = message.elements.DRIVER_EXEC!.value
-				const version = message.elements.DRIVER_VERSION!.value
-
 				if (!this.covers.has(message.device)) {
+					const executable = message.elements.DRIVER_EXEC!.value
+					const version = message.elements.DRIVER_VERSION!.value
+
 					const cover: Cover = { ...structuredClone(DEFAULT_COVER), id: message.device, name: message.device, driver: { executable, version } }
 					this.add(cover)
 					ask(client, cover)

@@ -20,6 +20,7 @@ import { MountManager, MountRemoteControlManager, mount } from 'src/api/mount'
 import { NotificationManager } from 'src/api/notification'
 import { ThermometerManager, thermometer } from 'src/api/thermometer'
 import { TppaManager, tppa } from 'src/api/tppa'
+import { WheelManager, wheel } from 'src/api/wheel'
 import { parseArgs } from 'util'
 import { ConfirmationManager, confirmation } from './src/api/confirmation'
 import { FileSystemManager, fileSystem } from './src/api/filesystem'
@@ -67,13 +68,14 @@ const connectionManager = new ConnectionManager(wsm, notificationManager)
 const guideOutputManager = new GuideOutputManager(wsm)
 const thermometerManager = new ThermometerManager(wsm)
 const focuserManager = new FocuserManager(wsm, thermometerManager)
+const wheelManager = new WheelManager(wsm)
 const mountManager = new MountManager(wsm, guideOutputManager, cacheManager)
 const mountRemoteControlManager = new MountRemoteControlManager(connectionManager)
 const cameraManager = new CameraManager(wsm, guideOutputManager, thermometerManager, mountManager)
 const dewHeaterManager = new DewHeaterManager(wsm)
 const coverManager = new CoverManager(wsm, dewHeaterManager)
 const flatPanelManager = new FlatPanelManager(wsm)
-const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, coverManager, flatPanelManager, dewHeaterManager, indiDevicePropertyManager, wsm)
+const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, indiDevicePropertyManager, wsm)
 const indiServerManager = new IndiServerManager(wsm)
 const confirmationManager = new ConfirmationManager(wsm)
 const framingManager = new FramingManager()
@@ -160,6 +162,7 @@ const app = new Elysia({
 	.use(camera(cameraManager, connectionManager, indiDevicePropertyManager))
 	.use(mount(mountManager, mountRemoteControlManager, connectionManager))
 	.use(focuser(focuserManager, connectionManager))
+	.use(wheel(wheelManager, connectionManager))
 	.use(thermometer(thermometerManager))
 	.use(guideOutput(guideOutputManager, connectionManager))
 	.use(cover(coverManager, connectionManager))

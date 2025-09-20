@@ -92,7 +92,7 @@ export interface Twilight {
 export interface SkyObjectSearch extends LocationAndTime {
 	readonly name: string
 	readonly nameType: number
-	readonly constellations: number[]
+	readonly constellations: Constellation[]
 	readonly types: StellariumObjectType[]
 	readonly magnitudeMin: number
 	readonly magnitudeMax: number

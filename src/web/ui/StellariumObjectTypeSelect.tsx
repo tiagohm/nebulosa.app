@@ -39,17 +39,24 @@ const TYPES: readonly [StellariumObjectType, string, string][] = [
 	[36, 'Region of the Sky', 'RS'],
 ]
 
-export function StellariumObjectTypeSelect({ label = 'Type', ...props }: Omit<EnumMultipleSelectProps<StellariumObjectType>, 'children'>) {
+export interface StellariumObjectTypeSelectProps extends Omit<EnumMultipleSelectProps, 'children' | 'value' | 'onValueChange'> {
+	readonly value: readonly StellariumObjectType[]
+	readonly onValueChange: (value: StellariumObjectType[]) => void
+}
+
+export function StellariumObjectTypeSelect({ label = 'Type', value, onValueChange, ...props }: StellariumObjectTypeSelectProps) {
 	return (
 		<EnumMultipleSelect
 			{...props}
 			classNames={{ trigger: '!min-h-[48.75px]' }}
 			isClearable
 			label={label}
+			onValueChange={(value) => onValueChange(value.map((e) => +e))}
 			placeholder='All'
 			renderValue={(items) => {
 				return <div className='mt-2 flex flex-nowrap gap-2'>{items.map((item) => TYPES.find((e) => e[0] === +(item.key as never))![2]).join(', ')}</div>
-			}}>
+			}}
+			value={value.map((e) => e.toFixed(0))}>
 			{TYPES.map(([key, name]) => (
 				<SelectItem key={key}>{name}</SelectItem>
 			))}

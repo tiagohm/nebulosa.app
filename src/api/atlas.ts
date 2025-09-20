@@ -188,7 +188,7 @@ export class AtlasManager {
 		const joinWhere = ['n.dsoId = d.id']
 
 		if (req.types.length) where.push(`d.type IN (${req.types.join(',')})`)
-		if (req.constellations.length) where.push(`d.constellation IN (${req.constellations.join(',')})`)
+		if (req.constellations.length) where.push(`d.constellation IN (${req.constellations.map((e) => CONSTELLATION_LIST.indexOf(e)).join(',')})`)
 		if (req.nameType >= 0) joinWhere.push(`n.type = ${req.nameType}`)
 		if (req.magnitudeMin > -30) where.push(`d.magnitude >= ${req.magnitudeMin}`)
 		if (req.magnitudeMax < 30) where.push(`d.magnitude <= ${req.magnitudeMax}`)

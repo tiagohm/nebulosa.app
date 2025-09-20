@@ -50,7 +50,7 @@ describe('search sky object', () => {
 	})
 
 	test('constellation', () => {
-		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, constellations: [0] })
+		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, constellations: ['AND'] })
 
 		expect(result).toHaveLength(5)
 		expect(result[0].id).toBe(676)

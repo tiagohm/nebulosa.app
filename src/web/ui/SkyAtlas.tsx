@@ -76,6 +76,9 @@ export const SunTab = memo(() => {
 		<div className='grid grid-cols-12 gap-2 items-center'>
 			<div className='relative col-span-full flex justify-center items-center'>
 				<Sun onSourceChange={(source) => (sun.state.source = source)} source={source} />
+				<div className='absolute top-auto left-0 p-0 text-xs'>
+					<SolarEclipses />
+				</div>
 				<div className='absolute top-auto right-0 p-0 text-xs'>
 					<Seasons />
 				</div>
@@ -83,6 +86,25 @@ export const SunTab = memo(() => {
 			<div className='col-span-full'>
 				<EphemerisAndChart chart={chart} name='Sun' position={position} twilight={twilight} />
 			</div>
+		</div>
+	)
+})
+
+export const SolarEclipses = memo(() => {
+	const sun = useMolecule(SunMolecule)
+	const { eclipses } = useSnapshot(sun.state)
+
+	return (
+		<div className='flex flex-col gap-0'>
+			{eclipses.map((eclipse) => (
+				<>
+					<span className='font-bold flex items-center gap-1'>
+						<Icons.Sun />
+						{eclipse.type}
+					</span>
+					<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(eclipse.time, 'YYYY-MM-DD HH:mm')}</span>
+				</>
+			))}
 		</div>
 	)
 })
@@ -129,6 +151,9 @@ export const MoonTab = memo(() => {
 		<div className='grid grid-cols-12 gap-2 items-center'>
 			<div className='relative col-span-full flex justify-center items-center'>
 				<Moon />
+				<div className='absolute top-auto left-0 p-0 text-xs'>
+					<LunarEclipses />
+				</div>
 				<div className='absolute top-auto right-0 p-0 text-xs'>
 					<MoonPhases />
 				</div>
@@ -153,6 +178,25 @@ export const MoonPhases = memo(() => {
 						{phase === 0 ? 'NEW MOON' : phase === 1 ? 'FIRST QUARTER' : phase === 2 ? 'FULL MOON' : 'LAST QUARTER'}
 					</span>
 					<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(time, 'DD HH:mm')}</span>
+				</>
+			))}
+		</div>
+	)
+})
+
+export const LunarEclipses = memo(() => {
+	const moon = useMolecule(MoonMolecule)
+	const { eclipses } = useSnapshot(moon.state)
+
+	return (
+		<div className='flex flex-col gap-0'>
+			{eclipses.map((eclipse) => (
+				<>
+					<span className='font-bold flex items-center gap-1'>
+						<Icons.Moon />
+						{eclipse.type}
+					</span>
+					<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(eclipse.startTime, 'YYYY-MM-DD HH:mm')}</span>
 				</>
 			))}
 		</div>

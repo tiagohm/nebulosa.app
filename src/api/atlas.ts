@@ -9,14 +9,15 @@ import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { precessFk5FromJ2000 } from 'nebulosa/src/fk5'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
 import { localSiderealTime } from 'nebulosa/src/location'
-import { nearestLunarPhase } from 'nebulosa/src/moon'
+import { nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/moon'
 import { observeStar } from 'nebulosa/src/star'
-import { season } from 'nebulosa/src/sun'
-import { daysInMonth, parseTemporal, type Temporal, temporalAdd, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
+import { nearestSolarEclipse, season } from 'nebulosa/src/sun'
+import { daysInMonth, parseTemporal, type Temporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
 import { timeUnix, timeYMDHMS, toUnixMillis } from 'nebulosa/src/time'
 import sharp from 'sharp'
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
-import { type BodyPosition, type ChartOfBody, expectedPierSide, type LunarPhaseTime, type PositionOfBody, type SkyObject, type SkyObjectSearch, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
+// biome-ignore format: too long!
+import { type BodyPosition, type ChartOfBody, expectedPierSide, type FindLunarEclipse, type FindSolarEclipse, type LunarPhaseTime, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type SkyObject, type SkyObjectSearch, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
 import type { CacheManager } from './cache'
 
 const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
@@ -73,37 +74,6 @@ export class AtlasManager {
 		const autumn = toUnixMillis(season(year, 'AUTUMN')) // Spring in southern hemisphere
 		const winter = toUnixMillis(season(year, 'WINTER')) // Summer in southern hemisphere
 		return { spring, summer, autumn, winter }
-	}
-
-	positionOfMoon(req: PositionOfBody) {
-		return this.computeFromHorizonsPositionAt('301', req, req.location.longitude, req.location.latitude, req.location.elevation)
-	}
-
-	chartOfMoon(req: ChartOfBody) {
-		return this.computeChart('301', req.time, 1)
-	}
-
-	moonPhases(req: PositionOfBody) {
-		const date = temporalToDate(req.time.utc)
-		const startTime = timeYMDHMS(date[0], date[1], 1, 0, 0, 0)
-		const endTime = toUnixMillis(startTime) + daysInMonth(date[0], date[1]) * (DAYSEC * 1000)
-
-		const phases: LunarPhaseTime[] = []
-
-		for (let i = 0; i < 4; i++) {
-			const time = toUnixMillis(nearestLunarPhase(startTime, i, true))
-			phases.push([i, time])
-		}
-
-		phases.sort((a, b) => a[1] - b[1])
-
-		if (phases[3][1] + (MOON_SYNODIC_DAYS / 4) * DAYSEC * 1000 < endTime) {
-			const phase = (phases[3][0] + 1) % 4
-			const time = toUnixMillis(nearestLunarPhase(timeUnix(endTime / 1000), phase, false))
-			phases.push([phase, time])
-		}
-
-		return phases
 	}
 
 	async twilight(req: PositionOfBody) {
@@ -167,6 +137,66 @@ export class AtlasManager {
 		}
 
 		return twilight
+	}
+
+	solarEclipses(req: FindSolarEclipse) {
+		const location = this.cache.geographicCoordinate(req.location)
+		let time = this.cache.time(req.time.utc, location)
+		const eclipses: NextSolarEclipse[] = []
+
+		while (req.count-- > 0) {
+			const { maximalTime, ...eclipse } = nearestSolarEclipse(time, true)
+			;(eclipse as NextSolarEclipse).time = temporalFromTime(maximalTime)
+			eclipses.push(eclipse as never)
+			time = maximalTime
+		}
+
+		return eclipses
+	}
+
+	positionOfMoon(req: PositionOfBody) {
+		return this.computeFromHorizonsPositionAt('301', req, req.location.longitude, req.location.latitude, req.location.elevation)
+	}
+
+	chartOfMoon(req: ChartOfBody) {
+		return this.computeChart('301', req.time, 1)
+	}
+
+	moonPhases(req: PositionOfBody) {
+		const date = temporalToDate(req.time.utc)
+		const startTime = timeYMDHMS(date[0], date[1], 1, 0, 0, 0)
+		const endTime = toUnixMillis(startTime) + daysInMonth(date[0], date[1]) * (DAYSEC * 1000)
+
+		const phases: LunarPhaseTime[] = []
+
+		for (let i = 0; i < 4; i++) {
+			const time = toUnixMillis(nearestLunarPhase(startTime, i, true))
+			phases.push([i, time])
+		}
+
+		phases.sort((a, b) => a[1] - b[1])
+
+		if (phases[3][1] + (MOON_SYNODIC_DAYS / 4) * DAYSEC * 1000 < endTime) {
+			const phase = (phases[3][0] + 1) % 4
+			const time = toUnixMillis(nearestLunarPhase(timeUnix(endTime / 1000), phase, false))
+			phases.push([phase, time])
+		}
+
+		return phases
+	}
+
+	moonEclipses(req: FindLunarEclipse) {
+		const location = this.cache.geographicCoordinate(req.location)
+		let time = this.cache.time(req.time.utc, location)
+		const eclipses: NextLunarEclipse[] = []
+
+		while (req.count-- > 0) {
+			const { type, firstContactPenumbraTime, lastContactPenumbraTime, maximalTime } = nearestLunarEclipse(time, true)
+			time = maximalTime
+			eclipses.push({ type, startTime: temporalFromTime(firstContactPenumbraTime), endTime: temporalFromTime(lastContactPenumbraTime), time: temporalFromTime(maximalTime) })
+		}
+
+		return eclipses
 	}
 
 	positionOfPlanet(code: string, req: PositionOfBody) {
@@ -367,9 +397,11 @@ export function atlas(atlas: AtlasManager) {
 		.post('/sun/chart', ({ body }) => atlas.chartOfSun(body as never))
 		.post('/sun/seasons', ({ body }) => atlas.seasons(body as never))
 		.post('/sun/twilight', ({ body }) => atlas.twilight(body as never))
+		.post('/sun/eclipses', ({ body }) => atlas.solarEclipses(body as never))
 		.post('/moon/position', ({ body }) => atlas.positionOfMoon(body as never))
 		.post('/moon/chart', ({ body }) => atlas.chartOfMoon(body as never))
 		.post('/moon/phases', ({ body }) => atlas.moonPhases(body as never))
+		.post('/moon/eclipses', ({ body }) => atlas.moonEclipses(body as never))
 		.post('/planets/:code/position', ({ params, body }) => atlas.positionOfPlanet(params.code, body as never))
 		.post('/planets/:code/chart', ({ params, body }) => atlas.chartOfPlanet(params.code, body as never))
 		.post('/skyobjects/search', ({ body }) => atlas.searchSkyObject(body as never))

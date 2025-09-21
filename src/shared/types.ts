@@ -7,9 +7,10 @@ import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
 import type { DefBlobVector, DefLightVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, PropertyState } from 'nebulosa/src/indi'
-import type { LunarPhase } from 'nebulosa/src/moon'
+import type { LunarEclipse, LunarPhase } from 'nebulosa/src/moon'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
+import type { SolarEclipse } from 'nebulosa/src/sun'
 import type { Temporal } from 'nebulosa/src/temporal'
 import type { Velocity } from 'nebulosa/src/velocity'
 import type { Required } from 'utility-types'
@@ -87,6 +88,24 @@ export interface Twilight {
 	day: TwilightTime
 	night: TwilightTime
 	end: TwilightTime
+}
+
+export interface FindSolarEclipse extends LocationAndTime {
+	count: number
+}
+
+export interface NextSolarEclipse extends Omit<SolarEclipse, 'maximalTime'> {
+	time: Temporal
+}
+
+export interface FindLunarEclipse extends LocationAndTime {
+	count: number
+}
+
+export interface NextLunarEclipse extends Pick<LunarEclipse, 'type'> {
+	startTime: Temporal
+	endTime: Temporal
+	time: Temporal
 }
 
 export interface SkyObjectSearch extends LocationAndTime {

@@ -4,7 +4,7 @@ import type { NewVector } from 'nebulosa/src/indi'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, CloseImage, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, DarvStart, DarvStop, Device, DeviceProperties, DeviceProperty, DewHeater, FileSystem, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LunarPhaseTime, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, SolarSeasons, StarDetection, Thermometer, TppaStart, TppaStop, TrackMode, Twilight, Wheel } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, CloseImage, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, DarvStart, DarvStop, Device, DeviceProperties, DeviceProperty, DewHeater, FileSystem, FindLunarEclipse, FindSolarEclipse, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LunarPhaseTime, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, NextLunarEclipse, NextSolarEclipse, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, SolarSeasons, StarDetection, Thermometer, TppaStart, TppaStop, TrackMode, Twilight, Wheel } from 'src/shared/types'
 import { type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -374,6 +374,10 @@ export namespace Api {
 			return json<Twilight>('/atlas/sun/twilight', 'post', req)
 		}
 
+		export function solarEclipses(req: FindSolarEclipse) {
+			return json<NextSolarEclipse[]>('/atlas/sun/eclipses', 'post', req)
+		}
+
 		export function positionOfMoon(req: PositionOfBody) {
 			return json<BodyPosition>('/atlas/moon/position', 'post', req)
 		}
@@ -384,6 +388,10 @@ export namespace Api {
 
 		export function moonPhases(req: PositionOfBody) {
 			return json<LunarPhaseTime[]>('/atlas/moon/phases', 'post', req)
+		}
+
+		export function moonEclipses(req: FindLunarEclipse) {
+			return json<NextLunarEclipse[]>('/atlas/moon/eclipses', 'post', req)
 		}
 
 		export function positionOfPlanet(req: PositionOfBody, code: string) {

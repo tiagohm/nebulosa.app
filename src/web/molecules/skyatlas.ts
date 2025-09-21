@@ -3,7 +3,7 @@ import { deg, formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { Temporal } from 'nebulosa/src/temporal'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
-import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SKY_OBJECT_SEARCH, type Framing, type LocationAndTime, type LunarPhaseTime, type Mount, type PositionOfBody, type SkyObjectSearch, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
+import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SKY_OBJECT_SEARCH, type Framing, type LocationAndTime, type LunarPhaseTime, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type SkyObjectSearch, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -28,6 +28,7 @@ export interface SunState {
 	readonly position: BodyPosition
 	chart: number[]
 	readonly seasons: SolarSeasons
+	eclipses: NextSolarEclipse[]
 }
 
 export interface MoonState {
@@ -35,6 +36,7 @@ export interface MoonState {
 	readonly position: BodyPosition
 	chart: number[]
 	phases: readonly LunarPhaseTime[]
+	eclipses: NextLunarEclipse[]
 }
 
 export interface PlanetState {
@@ -77,6 +79,7 @@ export const SunMolecule = molecule(() => {
 			request,
 			position: structuredClone(DEFAULT_BODY_POSITION),
 			chart: [],
+			eclipses: [],
 			source: storage.get<SolarImageSource>('skyatlas.sun.source', () => 'HMI_INTENSITYGRAM_FLATTENED'),
 			seasons: {
 				spring: 0,
@@ -102,6 +105,7 @@ export const SunMolecule = molecule(() => {
 
 	let chartUpdate = true
 	let seasonsUpdate = true
+	let eclipsesUpdate = true
 
 	async function tick(time: Temporal) {
 		// Updates only if passed more than 1 minute since last update
@@ -114,6 +118,8 @@ export const SunMolecule = molecule(() => {
 		request.time.utc = time
 
 		void updateSeasons()
+		void updateEclipses()
+
 		await updatePosition()
 		await updateChart()
 	}
@@ -137,6 +143,14 @@ export const SunMolecule = molecule(() => {
 		seasonsUpdate = false
 	}
 
+	async function updateEclipses() {
+		if (!eclipsesUpdate) return
+		const request = { ...state.request, count: 1 }
+		const eclipses = await Api.SkyAtlas.solarEclipses(request)
+		if (eclipses) state.eclipses = eclipses
+		eclipsesUpdate = false
+	}
+
 	return { state, tick } as const
 })
 
@@ -150,12 +164,14 @@ export const MoonMolecule = molecule(() => {
 			position: structuredClone(DEFAULT_BODY_POSITION),
 			chart: [],
 			phases: [],
+			eclipses: [],
 		})
 
 	moonState = state
 
 	let chartUpdate = true
 	let phasesUpdate = true
+	let eclipsesUpdate = true
 
 	async function tick(time: Temporal) {
 		// Updates only if passed more than 1 minute since last update
@@ -164,6 +180,7 @@ export const MoonMolecule = molecule(() => {
 		request.time.utc = time
 
 		void updatePhases()
+		void updateEclipses()
 
 		await updatePosition()
 		await updateChart()
@@ -186,6 +203,14 @@ export const MoonMolecule = molecule(() => {
 		const phases = await Api.SkyAtlas.moonPhases(state.request)
 		if (phases) state.phases = phases
 		phasesUpdate = false
+	}
+
+	async function updateEclipses() {
+		if (!eclipsesUpdate) return
+		const request = { ...state.request, count: 1 }
+		const eclipses = await Api.SkyAtlas.moonEclipses(request)
+		if (eclipses) state.eclipses = eclipses
+		eclipsesUpdate = false
 	}
 
 	return { state, tick } as const

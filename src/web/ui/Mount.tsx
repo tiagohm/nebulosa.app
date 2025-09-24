@@ -197,9 +197,6 @@ const TargetCoordinateAndPosition = memo(({ isDisabled }: TargetCoordinateAndPos
 				<DropdownItem key='GOTO' startContent={<Icons.Telescope />}>
 					Go To
 				</DropdownItem>
-				<DropdownItem key='SLEW' startContent={<Icons.Telescope />}>
-					Slew
-				</DropdownItem>
 				<DropdownItem key='SYNC' startContent={<Icons.Sync />}>
 					Sync
 				</DropdownItem>
@@ -219,7 +216,7 @@ function TargetCoordinateDropdownButtonLabel({ action }: TargetCoordinateDropdow
 	return (
 		<div className='flex items-center gap-1 text-medium'>
 			{action === 'SYNC' ? <Icons.Sync /> : action === 'FRAME' ? <Icons.Image /> : <Icons.Telescope />}
-			{action === 'SYNC' ? 'Sync' : action === 'FRAME' ? 'Frame' : action === 'SLEW' ? 'Slew' : 'Go To'}
+			{action === 'SYNC' ? 'Sync' : action === 'FRAME' ? 'Frame' : 'Go To'}
 		</div>
 	)
 }

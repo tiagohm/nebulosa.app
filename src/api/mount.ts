@@ -78,9 +78,9 @@ export function goTo(client: IndiClient, mount: Mount, rightAscension: Angle, de
 	}
 }
 
-export function slewTo(client: IndiClient, mount: Mount, rightAscension: Angle, declination: Angle) {
-	if (mount.canSlew) {
-		client.sendSwitch({ device: mount.name, name: 'ON_COORD_SET', elements: { SLEW: true } })
+export function flipTo(client: IndiClient, mount: Mount, rightAscension: Angle, declination: Angle) {
+	if (mount.canFlip) {
+		client.sendSwitch({ device: mount.name, name: 'ON_COORD_SET', elements: { FLIP: true } })
 		equatorialCoordinate(client, mount, rightAscension, declination)
 	}
 }
@@ -278,18 +278,18 @@ export class MountManager implements IndiClientHandler {
 						this.update(device, 'canSync', message.state)
 					}
 
-					const canGoTo = 'TRACK' in message.elements
+					const canGoTo = 'SLEW' in message.elements
 
 					if (device.canGoTo !== canGoTo) {
 						device.canGoTo = canGoTo
 						this.update(device, 'canGoTo', message.state)
 					}
 
-					const canSlew = 'SLEW' in message.elements
+					const canFlip = 'FLIP' in message.elements
 
-					if (device.canSlew !== canSlew) {
-						device.canSlew = canSlew
-						this.update(device, 'canSlew', message.state)
+					if (device.canFlip !== canFlip) {
+						device.canFlip = canFlip
+						this.update(device, 'canFlip', message.state)
 					}
 				}
 
@@ -508,7 +508,7 @@ export class MountManager implements IndiClientHandler {
 		} as MountEquatorialCoordinatePosition
 	}
 
-	moveTo(client: IndiClient, mount: Mount, mode: 'goto' | 'slew' | 'sync', req: MountTargetCoordinate<string | Angle>) {
+	moveTo(client: IndiClient, mount: Mount, mode: 'goto' | 'flip' | 'sync', req: MountTargetCoordinate<string | Angle>) {
 		let rightAscension = 0
 		let declination = 0
 
@@ -531,7 +531,7 @@ export class MountManager implements IndiClientHandler {
 		}
 
 		if (mode === 'goto') goTo(client, mount, rightAscension, declination)
-		else if (mode === 'slew') slewTo(client, mount, rightAscension, declination)
+		else if (mode === 'flip') flipTo(client, mount, rightAscension, declination)
 		else if (mode === 'sync') syncTo(client, mount, rightAscension, declination)
 	}
 }
@@ -693,7 +693,7 @@ export function mount(mount: MountManager, remoteControl: MountRemoteControlMana
 		.get('', () => mount.list())
 		.get('/:id', ({ params }) => mountFromParams(params))
 		.post('/:id/goto', ({ params, body }) => mount.moveTo(connection.get(), mountFromParams(params), 'goto', body as never))
-		.post('/:id/slew', ({ params, body }) => mount.moveTo(connection.get(), mountFromParams(params), 'slew', body as never))
+		.post('/:id/flip', ({ params, body }) => mount.moveTo(connection.get(), mountFromParams(params), 'flip', body as never))
 		.post('/:id/sync', ({ params, body }) => mount.moveTo(connection.get(), mountFromParams(params), 'sync', body as never))
 		.post('/:id/park', ({ params }) => park(connection.get(), mountFromParams(params)))
 		.post('/:id/unpark', ({ params }) => unpark(connection.get(), mountFromParams(params)))

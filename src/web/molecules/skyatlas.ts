@@ -3,7 +3,7 @@ import { deg, formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { Temporal } from 'nebulosa/src/temporal'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
-import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SKY_OBJECT_SEARCH, type Framing, type LocationAndTime, type LunarPhaseTime, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type SkyObjectSearch, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
+import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SATELLITE, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type Framing, type LocationAndTime, type LunarPhaseTime, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -53,7 +53,7 @@ export interface AsteroidState {
 
 export interface GalaxyState {
 	loading: boolean
-	readonly request: SkyObjectSearch
+	readonly request: SearchSkyObject
 	result: SkyObjectSearchItem[]
 	selected?: SkyObjectSearchItem
 	readonly position: BodyPosition
@@ -61,6 +61,13 @@ export interface GalaxyState {
 }
 
 export interface SatelliteState {
+	loading: boolean
+	readonly request: {
+		readonly search: SearchSatellite
+		readonly position: PositionOfBody & Satellite
+	}
+	page: number
+	result: Satellite[]
 	readonly position: BodyPosition
 	chart: number[]
 }
@@ -69,6 +76,7 @@ let skyAtlasState: SkyAtlasState | undefined
 let sunState: SunState | undefined
 let moonState: MoonState | undefined
 let galaxyState: GalaxyState | undefined
+let satelliteState: SatelliteState | undefined
 
 export const SunMolecule = molecule(() => {
 	const request = structuredClone(DEFAULT_POSITION_OF_BODY)
@@ -267,7 +275,7 @@ export const PlanetMolecule = molecule(() => {
 })
 
 export const GalaxyMolecule = molecule(() => {
-	const request = storage.get<SkyObjectSearch>('skyatlas.galaxy.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
+	const request = storage.get<SearchSkyObject>('skyatlas.galaxy.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
 
 	request.page = 1
 
@@ -297,7 +305,7 @@ export const GalaxyMolecule = molecule(() => {
 		}
 	})
 
-	function update<K extends keyof SkyObjectSearch>(key: K, value: SkyObjectSearch[K]) {
+	function update<K extends keyof SearchSkyObject>(key: K, value: SearchSkyObject[K]) {
 		state.request[key] = value
 
 		// Search again if page or sort has been changed
@@ -318,6 +326,16 @@ export const GalaxyMolecule = molecule(() => {
 		} finally {
 			state.loading = false
 		}
+	}
+
+	function next() {
+		if (state.result.length === 0) return
+		update('page', state.request.page + 1)
+	}
+
+	function prev() {
+		if (state.request.page <= 1) return
+		update('page', state.request.page - 1)
 	}
 
 	async function select(id: number, force: boolean = true) {
@@ -367,7 +385,121 @@ export const GalaxyMolecule = molecule(() => {
 		}
 	}
 
-	return { state, update, search, select, tick } as const
+	return { state, update, search, next, prev, select, tick } as const
+})
+
+const DEFAULT_SATELLITE_STATE_REQUEST: SatelliteState['request'] = {
+	search: { ...DEFAULT_SEARCH_SATELLITE },
+	position: {
+		...DEFAULT_POSITION_OF_BODY,
+		...DEFAULT_SATELLITE,
+	},
+}
+
+export const SatelliteMolecule = molecule(() => {
+	const s = storage.get('skyatlas.satellite.search', () => structuredClone(DEFAULT_SATELLITE_STATE_REQUEST.search))
+
+	const request = structuredClone(DEFAULT_SATELLITE_STATE_REQUEST.position)
+
+	s.lastId = 0
+
+	const state =
+		satelliteState ??
+		proxy<SatelliteState>({
+			loading: false,
+			request: { search: s, position: request },
+			result: [],
+			position: structuredClone(DEFAULT_BODY_POSITION),
+			chart: [],
+			page: 1,
+		})
+
+	satelliteState = state
+
+	let chartUpdate = true
+	const pages: number[] = [0]
+
+	onMount(() => {
+		const unsubscriber = subscribe(state.request.search, () => {
+			storage.set('skyatlas.satellite.search', state.request.search)
+		})
+
+		void search()
+
+		return () => {
+			unsubscriber()
+		}
+	})
+
+	function update<K extends keyof SearchSatellite>(key: K, value: SearchSatellite[K]) {
+		state.request.search[key] = value
+
+		// Search again if lastId has been changed
+		if (key === 'lastId') void search(false)
+	}
+
+	async function search(reset: boolean = true) {
+		try {
+			state.loading = true
+
+			if (reset) state.request.search.lastId = 0
+
+			const result = await Api.SkyAtlas.searchSatellite(state.request.search)
+			state.result = result ?? []
+		} finally {
+			state.loading = false
+		}
+	}
+
+	async function select(id: number, force: boolean = true) {
+		const selected = state.result.find((dso) => dso.id === id)
+
+		// Fetches object's position and chart if a new one was selected
+		if (selected && (force || state.request.position.id !== selected.id)) {
+			Object.assign(state.request.position, selected)
+
+			await updatePosition()
+			await updateChart(true)
+		}
+	}
+
+	function next() {
+		if (state.result.length === 0) return
+		pages[state.page++] = state.result[0].id - 1
+		update('lastId', state.result[state.result.length - 1].id)
+	}
+
+	function prev() {
+		if (state.page <= 1) return
+		update('lastId', pages[--state.page])
+	}
+
+	async function updatePosition() {
+		const position = await Api.SkyAtlas.positionOfSatellite(state.request.position)
+		if (position) Object.assign(state.position, position)
+	}
+
+	async function updateChart(force: boolean = false) {
+		if (!force && !chartUpdate) return
+		const chart = await Api.SkyAtlas.chartOfSatellite(state.request.position)
+		if (chart) state.chart = chart
+		chartUpdate = false
+	}
+
+	async function tick(time: Temporal) {
+		// Updates only if passed more than 1 minute since last update
+		if (time - request.time.utc < 60000) return
+
+		request.time.utc = time
+
+		// Refresh selected object
+		if (request.id) {
+			await updatePosition()
+			await updateChart(false)
+		}
+	}
+
+	return { state, update, search, next, prev, select, tick } as const
 })
 
 export const SkyAtlasMolecule = molecule((m) => {
@@ -375,6 +507,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 	const moon = m(MoonMolecule)
 	const planet = m(PlanetMolecule)
 	const galaxy = m(GalaxyMolecule)
+	const satellite = m(SatelliteMolecule)
 
 	const state =
 		skyAtlasState ??
@@ -398,7 +531,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 			planet: moon.state,
 			asteroid: moon.state,
 			galaxy: galaxy.state,
-			satellite: galaxy.state,
+			satellite: satellite.state,
 		})
 
 	skyAtlasState = state
@@ -439,6 +572,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 		else if (state.tab === 'moon') moon.tick(time)
 		else if (state.tab === 'planet') planet.tick(time)
 		else if (state.tab === 'galaxy') galaxy.tick(time)
+		else if (state.tab === 'satellite') satellite.tick(time)
 	}
 
 	async function twilight() {
@@ -457,12 +591,6 @@ export const SkyAtlasMolecule = molecule((m) => {
 		if (!mount) return undefined
 		const position = state[state.tab].position
 		return Api.Mounts.goTo(mount, { type: 'JNOW', ...position })
-	}
-
-	function slewTo(mount?: Mount) {
-		if (!mount) return undefined
-		const position = state[state.tab].position
-		return Api.Mounts.slewTo(mount, { type: 'JNOW', ...position })
 	}
 
 	function frame() {
@@ -485,5 +613,5 @@ export const SkyAtlasMolecule = molecule((m) => {
 		state.show = false
 	}
 
-	return { state, syncTo, goTo, slewTo, frame, show, hide }
+	return { state, syncTo, goTo, frame, show, hide }
 })

@@ -5,6 +5,7 @@ import { DEFAULT_REFRACTION_PARAMETERS, type RefractionParameters } from 'nebulo
 import type { Constellation } from 'nebulosa/src/constellation'
 import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
+import type { ObserverWithTLE } from 'nebulosa/src/horizons'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
 import type { DefBlobVector, DefLightVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, PropertyState } from 'nebulosa/src/indi'
 import type { LunarEclipse, LunarPhase } from 'nebulosa/src/moon'
@@ -75,6 +76,65 @@ export const SOLAR_IMAGE_SOURCE_URLS: Record<SolarImageSource, string> = {
 	HMI_DOPPLERGRAM: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_HMID.jpg',
 }
 
+export const SATELLITE_GROUP_TYPES = {
+	LAST_30_DAYS: { description: "Last 30 Days' Launches", type: 'last-30-days' },
+	STATIONS: { description: 'Space Stations', type: 'stations' },
+	VISUAL: { description: '100 (or so) Brightest', type: 'visual' },
+	ACTIVE: { description: 'Active Satellites', type: 'active' },
+	ANALYST: { description: 'Analyst Satellites', type: 'analyst' },
+	COSMOS_1408_DEBRIS: { description: 'Russian ASAT Test Debris (COSMOS 1408)', type: 'cosmos-1408-debris' },
+	FENGYUN_1C_DEBRIS: { description: 'Chinese ASAT Test Debris (FENGYUN 1C)', type: 'fengyun-1c-debris' },
+	IRIDIUM_33_DEBRIS: { description: 'IRIDIUM 33 Debris', type: 'iridium-33-debris' },
+	COSMOS_2251_DEBRIS: { description: 'COSMOS 2251 Debris', type: 'cosmos-2251-debris' },
+	WEATHER: { description: 'Weather', type: 'weather' },
+	NOAA: { description: 'NOAA', type: 'noaa' },
+	GOES: { description: 'GOES', type: 'goes' },
+	RESOURCE: { description: 'Earth Resources', type: 'resource' },
+	SARSAT: { description: 'Search & Rescue (SARSAT)', type: 'sarsat' },
+	DMC: { description: 'Disaster Monitoring', type: 'dmc' },
+	TDRSS: { description: 'Tracking and Data Relay Satellite System (TDRSS)', type: 'tdrss' },
+	ARGOS: { description: 'ARGOS Data Collection System', type: 'argos' },
+	PLANET: { description: 'Planet', type: 'planet' },
+	SPIRE: { description: 'Spire', type: 'spire' },
+	GEO: { description: 'Active Geosynchronous', type: 'geo' },
+	// GPZ: { description: 'GEO Protected Zone', type: 'gpz' }, // SPECIAL
+	// GPZ_PLUS: { description: 'GEO Protected Zone Plus', type: 'gpz-plus' }, // SPECIAL
+	INTELSAT: { description: 'Intelsat', type: 'intelsat' },
+	SES: { description: 'SES', type: 'ses' },
+	EUTELSAT: { description: 'Eutelsat', type: 'eutelsat' },
+	TELESAT: { description: 'Telesat', type: 'telesat' },
+	STARLINK: { description: 'Starlink', type: 'starlink' },
+	ONEWEB: { description: 'OneWeb', type: 'oneweb' },
+	QIANFAN: { description: 'Qianfan', type: 'qianfan' },
+	HULIANWANG: { description: 'Hulianwang Digui', type: 'hulianwang' },
+	KUIPER: { description: 'Kuiper', type: 'kuiper' },
+	IRIDIUM_NEXT: { description: 'Iridium NEXT', type: 'iridium-NEXT' },
+	ORBCOMM: { description: 'Orbcomm', type: 'orbcomm' },
+	GLOBALSTAR: { description: 'Globalstar', type: 'globalstar' },
+	AMATEUR: { description: 'Amateur Radio', type: 'amateur' },
+	SATNOGS: { description: 'SatNOGS', type: 'satnogs' },
+	X_COMM: { description: 'Experimental Comm', type: 'x-comm' },
+	OTHER_COMM: { description: 'Other Comm', type: 'other-comm' },
+	GNSS: { description: 'GNSS', type: 'gnss' },
+	GPS_OPS: { description: 'GPS Operational', type: 'gps-ops' },
+	GLO_OPS: { description: 'GLONASS Operational', type: 'glo-ops' },
+	GALILEO: { description: 'Galileo', type: 'galileo' },
+	BEIDOU: { description: 'Beidou', type: 'beidou' },
+	SBAS: { description: 'Satellite-Based Augmentation System (WAAS/EGNOS/MSAS)', type: 'sbas' },
+	NNSS: { description: 'Navy Navigation Satellite System (NNSS)', type: 'nnss' },
+	MUSSON: { description: 'Russian LEO Navigation', type: 'musson' },
+	SCIENCE: { description: 'Space & Earth Science', type: 'science' },
+	GEODETIC: { description: 'Geodetic', type: 'geodetic' },
+	ENGINEERING: { description: 'Engineering', type: 'engineering' },
+	EDUCATION: { description: 'Education', type: 'education' },
+	MILITARY: { description: 'Miscellaneous Military', type: 'military' },
+	RADAR: { description: 'Radar Calibration', type: 'radar' },
+	CUBESAT: { description: 'CubeSats', type: 'cubesat' },
+	OTHER: { description: 'Other Satellites', type: 'other' },
+} as const
+
+export type SatelliteGroupType = keyof typeof SATELLITE_GROUP_TYPES
+
 export type SolarImageSource = (typeof SOLAR_IMAGE_SOURCES)[number]
 
 export interface PositionOfBody extends LocationAndTime {}
@@ -90,7 +150,7 @@ export interface Twilight {
 	end: TwilightTime
 }
 
-export interface FindSolarEclipse extends LocationAndTime {
+export interface FindNextSolarEclipse extends LocationAndTime {
 	count: number
 }
 
@@ -98,7 +158,7 @@ export interface NextSolarEclipse extends Omit<SolarEclipse, 'maximalTime'> {
 	time: Temporal
 }
 
-export interface FindLunarEclipse extends LocationAndTime {
+export interface FindNextLunarEclipse extends LocationAndTime {
 	count: number
 }
 
@@ -108,7 +168,7 @@ export interface NextLunarEclipse extends Pick<LunarEclipse, 'type'> {
 	time: Temporal
 }
 
-export interface SkyObjectSearch extends LocationAndTime {
+export interface SearchSkyObject extends LocationAndTime {
 	readonly name: string
 	readonly nameType: number
 	readonly constellations: Constellation[]
@@ -145,7 +205,7 @@ export interface SkyObject extends EquatorialCoordinate {
 }
 
 export interface BodyPosition extends Readonly<EquatorialCoordinate>, Readonly<EquatorialCoordinateJ2000>, Readonly<HorizontalCoordinate> {
-	readonly magnitude: number
+	readonly magnitude?: number
 	readonly constellation: Constellation
 	readonly distance: Distance
 	readonly illuminated: number
@@ -163,6 +223,20 @@ export interface SolarSeasons {
 }
 
 export type LunarPhaseTime = readonly [LunarPhase, number]
+
+export interface Satellite {
+	readonly id: number
+	readonly name: string
+	readonly groups: SatelliteGroupType[]
+	readonly tle: ObserverWithTLE
+}
+
+export interface SearchSatellite {
+	readonly text: string
+	readonly groups: SatelliteGroupType[]
+	lastId: number
+	readonly limit?: number
+}
 
 // Confirmation
 
@@ -608,7 +682,7 @@ export interface Mount extends GuideOutput, GPS, Parkable {
 	canAbort: boolean
 	canSync: boolean
 	canGoTo: boolean
-	canSlew: boolean
+	canFlip: boolean
 	canHome: boolean
 	slewRates: SlewRate[]
 	slewRate?: SlewRate['name']
@@ -964,7 +1038,7 @@ export const DEFAULT_MOUNT: Mount = {
 	canAbort: false,
 	canSync: false,
 	canGoTo: false,
-	canSlew: false,
+	canFlip: false,
 	canHome: false,
 	canPark: false,
 	slewRates: [],
@@ -1197,7 +1271,7 @@ export const DEFAULT_POSITION_OF_BODY: PositionOfBody = {
 	},
 }
 
-export const DEFAULT_SKY_OBJECT_SEARCH: SkyObjectSearch = {
+export const DEFAULT_SKY_OBJECT_SEARCH: SearchSkyObject = {
 	name: '',
 	nameType: -1,
 	constellations: [],
@@ -1258,6 +1332,24 @@ export const DEFAULT_SKY_OBJECT_SEARCH_ITEM: SkyObjectSearchItem = {
 	constellation: 0,
 	magnitude: 0,
 	name: '',
+}
+
+export const DEFAULT_SEARCH_SATELLITE: SearchSatellite = {
+	text: '',
+	groups: ['AMATEUR', 'BEIDOU', 'GALILEO', 'GLO_OPS', 'GNSS', 'GPS_OPS', 'ONEWEB', 'SCIENCE', 'STARLINK', 'STATIONS', 'VISUAL'],
+	lastId: 0,
+	limit: 5,
+}
+
+export const DEFAULT_SATELLITE: Satellite = {
+	id: 0,
+	name: '',
+	groups: [],
+	tle: {
+		line1: '',
+		line2: '',
+		line3: '',
+	},
 }
 
 export const DEFAULT_INDI_SERVER_START: Required<IndiServerStart> = {

@@ -9,7 +9,7 @@ import { memo, useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import { type BodyPosition, EMPTY_TWILIGHT, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { GalaxyMolecule, MoonMolecule, PlanetMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
+import { GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConstellationSelect } from './ConstellationSelect'
 import { Icons } from './Icon'
@@ -17,6 +17,7 @@ import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 import { Moon } from './Moon'
 import { MountDropdown } from './MountDropdown'
+import { SatelliteGroupTypeSelect } from './SatelliteGroupTypeSelect'
 import { SKY_OBJECT_NAME_TYPES, SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 import { Sun } from './Sun'
@@ -28,14 +29,17 @@ export const SkyAtlas = memo(() => {
 	const Header = (
 		<div className='flex flex-row items-center justify-between'>
 			<span>Sky Atlas</span>
-			{tab === 'galaxy' && (
+			{(tab === 'galaxy' || tab === 'satellite') && (
 				<Popover className='max-w-140' placement='bottom' showArrow>
 					<PopoverTrigger>
 						<Button color='secondary' isIconOnly variant='flat'>
 							<Icons.Filter />
 						</Button>
 					</PopoverTrigger>
-					<PopoverContent>{tab === 'galaxy' && <GalaxyFilter />}</PopoverContent>
+					<PopoverContent>
+						{tab === 'galaxy' && <GalaxyFilter />}
+						{tab === 'satellite' && <SatelliteFilter />}
+					</PopoverContent>
 				</Popover>
 			)}
 		</div>
@@ -58,7 +62,9 @@ export const SkyAtlas = memo(() => {
 					<Tab key='galaxy' title={<Icons.Galaxy />}>
 						<GalaxyTab />
 					</Tab>
-					<Tab key='satellite' title={<Icons.Satellite />}></Tab>
+					<Tab key='satellite' title={<Icons.Satellite />}>
+						<SatelliteTab />
+					</Tab>
 				</Tabs>
 			</div>
 		</Modal>
@@ -306,16 +312,64 @@ export const GalaxyTab = memo(() => {
 				</TableBody>
 			</Table>
 			<div className='col-span-full flex flex-row items-center justify-center gap-3'>
-				<Button color='secondary' isDisabled={page <= 1 || loading} isIconOnly onPointerUp={() => galaxy.update('page', page - 1)} variant='flat'>
+				<Button color='secondary' isDisabled={page <= 1 || loading} isIconOnly onPointerUp={galaxy.prev} variant='flat'>
 					<Icons.ChevronLeft />
 				</Button>
 				<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={!result.length || loading} isWheelDisabled minValue={1} onValueChange={(value) => galaxy.update('page', value)} size='sm' value={page} />
-				<Button color='secondary' isDisabled={!result.length || loading} isIconOnly onPointerUp={() => galaxy.update('page', page + 1)} variant='flat'>
+				<Button color='secondary' isDisabled={!result.length || loading} isIconOnly onPointerUp={galaxy.next} variant='flat'>
 					<Icons.ChevronRight />
 				</Button>
 			</div>
 			<div className='col-span-full'>
 				<EphemerisAndChart chart={chart} position={position} twilight={twilight} />
+			</div>
+		</div>
+	)
+})
+
+export const SatelliteTab = memo(() => {
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { twilight } = useSnapshot(atlas.state)
+
+	const satellite = useMolecule(SatelliteMolecule)
+	// biome-ignore format: don't break lines
+	const { loading, result, position, chart, page, request: { position: { name } } } = useSnapshot(satellite.state)
+
+	return (
+		<div className='grid grid-cols-12 gap-2 items-center'>
+			<Table className='mt-3 col-span-full' onRowAction={(key) => satellite.select(+(key as never))} removeWrapper selectionMode='single'>
+				<TableHeader>
+					<TableColumn className='text-center' key='id'>
+						ID
+					</TableColumn>
+					<TableColumn className='text-center' key='name'>
+						Name
+					</TableColumn>
+					<TableColumn className='text-center' key='group'>
+						Group
+					</TableColumn>
+				</TableHeader>
+				<TableBody items={result}>
+					{(item) => (
+						<TableRow key={item.id}>
+							<TableCell className='whitespace-nowrap max-w-50 overflow-hidden'>{item.id}</TableCell>
+							<TableCell className='text-center'>{item.name}</TableCell>
+							<TableCell className='text-center whitespace-nowrap max-w-40 overflow-hidden'>{item.groups.join(', ')}</TableCell>
+						</TableRow>
+					)}
+				</TableBody>
+			</Table>
+			<div className='col-span-full flex flex-row items-center justify-center gap-3'>
+				<Button color='secondary' isDisabled={page <= 1 || loading} isIconOnly onPointerUp={satellite.prev} variant='flat'>
+					<Icons.ChevronLeft />
+				</Button>
+				<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={!result.length || loading} isReadOnly minValue={1} size='sm' value={page} />
+				<Button color='secondary' isDisabled={!result.length || loading} isIconOnly onPointerUp={satellite.next} variant='flat'>
+					<Icons.ChevronRight />
+				</Button>
+			</div>
+			<div className='col-span-full'>
+				<EphemerisAndChart chart={chart} name={name} position={position} twilight={twilight} />
 			</div>
 		</div>
 	)
@@ -393,6 +447,22 @@ export const GalaxyFilter = memo(() => {
 	)
 })
 
+export const SatelliteFilter = memo(() => {
+	const satellite = useMolecule(SatelliteMolecule)
+	const { text, groups } = useSnapshot(satellite.state.request.search, { sync: true })
+	const { loading } = useSnapshot(satellite.state)
+
+	return (
+		<div className='grid grid-cols-12 gap-2 items-center p-2'>
+			<Input className='col-span-6' label='Search' onValueChange={(value) => satellite.update('text', value)} value={text} />
+			<SatelliteGroupTypeSelect className='col-span-6' onValueChange={(value) => satellite.update('groups', value)} value={groups} />
+			<div className='col-span-full flex flex-row items-center justify-center'>
+				<IconButton color='primary' icon={Icons.Search} isDisabled={loading} isIconOnly onPointerUp={() => satellite.search()} variant='flat' />
+			</div>
+		</div>
+	)
+})
+
 export interface EphemerisPositionProps {
 	readonly position: BodyPosition
 }
@@ -408,7 +478,7 @@ export const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => 
 			<Input className='col-span-3' isReadOnly label='DEC (J2000)' size='sm' value={formatDEC(position.declinationJ2000)} />
 			<Input className='col-span-3' isReadOnly label='AZ' size='sm' value={formatAZ(position.azimuth)} />
 			<Input className='col-span-3' isReadOnly label='ALT' size='sm' value={formatALT(position.altitude)} />
-			<Input className='col-span-2' isReadOnly label='Mag.' size='sm' value={position.magnitude.toFixed(2)} />
+			<Input className='col-span-2' isReadOnly label='Mag.' size='sm' value={position.magnitude?.toFixed(2) ?? '-'} />
 			<Input className='col-span-2' isReadOnly label='Const.' size='sm' value={position.constellation} />
 			<Input className='col-span-2' isReadOnly label='Dist.' size='sm' value={formatDistance(position.distance)} />
 			<Input className='col-span-2' isReadOnly label='Illum.' size='sm' value={`${position.illuminated.toFixed(1)} %`} />
@@ -419,9 +489,6 @@ export const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => 
 					{(value, color, isDisabled) => <IconButton color='primary' icon={Icons.Sync} isDisabled={isDisabled} variant='flat' />}
 				</MountDropdown>
 				<MountDropdown allowEmpty={false} onValueChange={atlas.goTo} tooltipContent='Go To'>
-					{(value, color, isDisabled) => <IconButton color='success' icon={Icons.Telescope} isDisabled={isDisabled} variant='flat' />}
-				</MountDropdown>
-				<MountDropdown allowEmpty={false} onValueChange={atlas.slewTo} tooltipContent='Slew'>
 					{(value, color, isDisabled) => <IconButton color='success' icon={Icons.Telescope} isDisabled={isDisabled} variant='flat' />}
 				</MountDropdown>
 				<Tooltip content='Frame' placement='bottom'>

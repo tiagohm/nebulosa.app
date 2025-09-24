@@ -1,5 +1,5 @@
 import { Button, type ButtonProps, Tooltip } from '@heroui/react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Icons } from './Icon'
 
 export interface AutoSaveButtonProps extends Omit<ButtonProps, 'isIconOnly' | 'onPointerUp' | 'variant' | 'size' | 'value' | 'onValueChange'> {
@@ -10,13 +10,15 @@ export interface AutoSaveButtonProps extends Omit<ButtonProps, 'isIconOnly' | 'o
 export function AutoSaveButton({ value, onValueChange, ...props }: AutoSaveButtonProps) {
 	const [enabled, setEnabled] = useState(value)
 
-	useEffect(() => {
-		onValueChange(enabled)
-	}, [enabled, onValueChange])
+	function handleOnPointerUp() {
+		const next = !enabled
+		setEnabled(next)
+		onValueChange(next)
+	}
 
 	return (
 		<Tooltip content={`Auto save: ${enabled ? 'ON' : 'OFF'}`} placement='bottom' showArrow>
-			<Button {...props} isIconOnly onPointerUp={() => setEnabled(!enabled)} size='sm' variant='light'>
+			<Button {...props} isIconOnly onPointerUp={handleOnPointerUp} size='sm' variant='light'>
 				{enabled ? <Icons.Save color='#9353d3' size={14} /> : <Icons.SaveOff color='#9E9E9E' size={14} />}
 			</Button>
 		</Tooltip>

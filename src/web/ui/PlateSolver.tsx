@@ -50,9 +50,6 @@ export const PlateSolver = memo(() => {
 					<MountDropdown allowEmpty={false} isDisabled={!solution} onValueChange={solver.goTo}>
 						{(value, color, isDisabled) => <TextButton color='success' isDisabled={isDisabled} label='Go To' startContent={<Icons.Telescope />} />}
 					</MountDropdown>
-					<MountDropdown allowEmpty={false} isDisabled={!solution} onValueChange={solver.slewTo}>
-						{(value, color, isDisabled) => <TextButton color='success' isDisabled={isDisabled} label='Slew' startContent={<Icons.Telescope />} />}
-					</MountDropdown>
 					<TextButton color='secondary' isDisabled={!solution} label='Frame' onPointerUp={solver.frame} startContent={<Icons.Image />} />
 				</div>
 			</div>

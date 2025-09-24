@@ -31,6 +31,8 @@ import { StarDetectionManager, starDetection } from './src/api/stardetection'
 import { X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER } from './src/shared/types'
 import homeHtml from './src/web/pages/home/index.html'
 
+const CREATE_RECURSIVE_DIRECTORY = { recursive: true } as const
+
 const args = parseArgs({
 	args: Bun.argv,
 	options: {
@@ -53,10 +55,11 @@ if (process.platform === 'linux') {
 
 Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
 Bun.env.framingDir = join(Bun.env.appDir, 'framing')
+Bun.env.satellitesDir = join(Bun.env.appDir, 'satellites')
 
-// Create application sub-directories if it doesn't exist
-await fs.mkdir(Bun.env.capturesDir, { recursive: true })
-await fs.mkdir(Bun.env.framingDir, { recursive: true })
+await fs.mkdir(Bun.env.capturesDir, CREATE_RECURSIVE_DIRECTORY)
+await fs.mkdir(Bun.env.framingDir, CREATE_RECURSIVE_DIRECTORY)
+await fs.mkdir(Bun.env.satellitesDir, CREATE_RECURSIVE_DIRECTORY)
 
 // Managers
 
@@ -88,6 +91,7 @@ const tppaManager = new TppaManager(wsm, cameraManager, mountManager, plateSolve
 const darvManager = new DarvManager(wsm, cameraManager, mountManager, indiDevicePropertyManager)
 
 void atlasManager.refreshImageOfSun()
+void atlasManager.refreshSatellites()
 
 // App
 

@@ -5,7 +5,7 @@ import { StellariumObjectType } from 'nebulosa/src/stellarium'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { AtlasManager } from 'src/api/atlas'
 import cache from 'src/api/cache'
-import { DEFAULT_SKY_OBJECT_SEARCH, type PositionOfBody, type SkyObjectSearch } from 'src/shared/types'
+import { DEFAULT_SKY_OBJECT_SEARCH, type PositionOfBody, type SearchSkyObject } from 'src/shared/types'
 
 const atlas = new AtlasManager(cache)
 
@@ -21,7 +21,7 @@ const POSITION_OF_BODY: PositionOfBody = {
 	},
 }
 
-const SKY_OBJECT_SEARCH: SkyObjectSearch = {
+const SKY_OBJECT_SEARCH: SearchSkyObject = {
 	...DEFAULT_SKY_OBJECT_SEARCH,
 	time: POSITION_OF_BODY.time,
 	location: POSITION_OF_BODY.location,

@@ -573,8 +573,8 @@ export class CameraCaptureTask {
 
 							return true
 						})
-							.then((stopped) => {
-								if (!stopped && remainingTime === 0) {
+							.then((ok) => {
+								if (ok) {
 									// Update total exposure progress
 									this.totalExposureProgress[0] -= this.waitingTime
 									this.totalExposureProgress[1] += this.waitingTime

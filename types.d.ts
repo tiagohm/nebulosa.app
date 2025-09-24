@@ -3,7 +3,7 @@ declare module 'bun' {
 		appDir: string
 		capturesDir: string
 		framingDir: string
-		spksDir: string
+		satellitesDir: string
 	}
 }
 

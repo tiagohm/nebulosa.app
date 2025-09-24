@@ -4,7 +4,7 @@ import type { NewVector } from 'nebulosa/src/indi'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, CloseImage, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, DarvStart, DarvStop, Device, DeviceProperties, DeviceProperty, DewHeater, FileSystem, FindLunarEclipse, FindSolarEclipse, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LunarPhaseTime, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, NextLunarEclipse, NextSolarEclipse, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, SkyObjectSearch, SlewRate, SolarSeasons, StarDetection, Thermometer, TppaStart, TppaStop, TrackMode, Twilight, Wheel } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, CloseImage, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, DarvStart, DarvStop, Device, DeviceProperties, DeviceProperty, DewHeater, FileSystem, FindNextLunarEclipse, FindNextSolarEclipse, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LunarPhaseTime, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, NextLunarEclipse, NextSolarEclipse, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, Satellite, SearchSatellite, SearchSkyObject, SlewRate, SolarSeasons, StarDetection, Thermometer, TppaStart, TppaStop, TrackMode, Twilight, Wheel } from 'src/shared/types'
 import { type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -142,10 +142,6 @@ export namespace Api {
 
 		export function goTo(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
 			return res(`/mounts/${mount.name}/goto`, 'post', coordinate)
-		}
-
-		export function slewTo(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
-			return res(`/mounts/${mount.name}/slew`, 'post', coordinate)
 		}
 
 		export function syncTo(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
@@ -374,7 +370,7 @@ export namespace Api {
 			return json<Twilight>('/atlas/sun/twilight', 'post', req)
 		}
 
-		export function solarEclipses(req: FindSolarEclipse) {
+		export function solarEclipses(req: FindNextSolarEclipse) {
 			return json<NextSolarEclipse[]>('/atlas/sun/eclipses', 'post', req)
 		}
 
@@ -390,7 +386,7 @@ export namespace Api {
 			return json<LunarPhaseTime[]>('/atlas/moon/phases', 'post', req)
 		}
 
-		export function moonEclipses(req: FindLunarEclipse) {
+		export function moonEclipses(req: FindNextLunarEclipse) {
 			return json<NextLunarEclipse[]>('/atlas/moon/eclipses', 'post', req)
 		}
 
@@ -402,7 +398,7 @@ export namespace Api {
 			return json<number[]>(`/atlas/planets/${code}/chart`, 'post', req)
 		}
 
-		export function searchSkyObject(req: SkyObjectSearch) {
+		export function searchSkyObject(req: SearchSkyObject) {
 			return json<SkyObjectSearchItem[]>('/atlas/skyobjects/search', 'post', req)
 		}
 
@@ -412,6 +408,18 @@ export namespace Api {
 
 		export function chartOfSkyObject(req: ChartOfBody, id: string | number) {
 			return json<number[]>(`/atlas/skyobjects/${id}/chart`, 'post', req)
+		}
+
+		export function searchSatellite(req: SearchSatellite) {
+			return json<Satellite[]>('/atlas/satellites/search', 'post', req)
+		}
+
+		export function positionOfSatellite(req: PositionOfBody & Satellite) {
+			return json<BodyPosition>('/atlas/satellites/position', 'post', req)
+		}
+
+		export function chartOfSatellite(req: PositionOfBody & Satellite) {
+			return json<number[]>('/atlas/satellites/chart', 'post', req)
 		}
 	}
 

@@ -10,7 +10,7 @@ import { storage } from '@/shared/storage'
 import type { NudgeDirection } from '@/ui/Nudge'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
-export type TargetCoordinateAction = 'GOTO' | 'SLEW' | 'SYNC' | 'FRAME'
+export type TargetCoordinateAction = 'GOTO' | 'SYNC' | 'FRAME'
 
 export interface MountScopeValue {
 	readonly mount: Mount
@@ -172,8 +172,6 @@ export const MountMolecule = molecule((m, s) => {
 		switch (state.targetCoordinate.coordinate.action) {
 			case 'GOTO':
 				return Api.Mounts.goTo(scope.mount, state.targetCoordinate.coordinate)
-			case 'SLEW':
-				return Api.Mounts.slewTo(scope.mount, state.targetCoordinate.coordinate)
 			case 'SYNC':
 				return Api.Mounts.syncTo(scope.mount, state.targetCoordinate.coordinate)
 			case 'FRAME': {

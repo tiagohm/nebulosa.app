@@ -291,7 +291,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 			// Update the state
 			state.info = image.info
-			updateFromImageInfo(image.info, !path)
+			updateFromImageInfo(image.info, !!path)
 
 			// Add the image to cache
 			const cached = imageCache.get(key)
@@ -332,20 +332,21 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	}
 
 	function updateSolverFromImageInfo(info: ImageInfo, newImage: boolean) {
-		const { solver } = state
-		const { request } = solver
+		if (newImage) {
+			const { request } = state.solver
 
-		// Update plate solver solution
-		if (newImage) solver.solution = info.solution && ref(info.solution)
+			// Update current solution
+			state.solver.solution = info.solution && ref(info.solution)
 
-		// Update plate solver request with FITS header information
-		request.rightAscension = formatRA(info.rightAscension ?? 0)
-		request.declination = formatDEC(info.declination ?? 0)
-		request.blind = info.rightAscension === undefined || info.declination === undefined
+			// Update plate solver request with FITS header information
+			request.rightAscension = formatRA(info.rightAscension ?? 0)
+			request.declination = formatDEC(info.declination ?? 0)
+			request.blind = info.rightAscension === undefined || info.declination === undefined
 
-		if (info.headers) {
-			request.focalLength = numericKeyword(info.headers, 'FOCALLEN', request.focalLength)
-			request.pixelSize = numericKeyword(info.headers, 'XPIXSZ', request.pixelSize)
+			if (info.headers) {
+				request.focalLength = numericKeyword(info.headers, 'FOCALLEN', request.focalLength)
+				request.pixelSize = numericKeyword(info.headers, 'XPIXSZ', request.pixelSize)
+			}
 		}
 	}
 

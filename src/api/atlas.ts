@@ -533,7 +533,7 @@ function makeBodyPositionFromHorizons(ephemeris: CsvRow[]): readonly [number, Bo
 				declination: parseAngle(e[6]),
 				azimuth: parseAngle(e[7]),
 				altitude: parseAngle(e[8]),
-				magnitude: e[9] === 'n.a.' ? undefined : parseFloat(e[9]),
+				magnitude: e[9] === 'n.a.' ? null : parseFloat(e[9]),
 				constellation: e[15].toUpperCase(),
 				distance,
 				illuminated: parseFloat(e[12]),

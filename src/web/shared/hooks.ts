@@ -9,6 +9,10 @@ const useGesture = createUseGesture([dragAction])
 
 const modalTransformMap = new Map<string, { x: number; y: number }>()
 
+function canDrag(target: EventTarget | null) {
+	return target instanceof HTMLElement && target.closest('.modal') !== null
+}
+
 export function useModal(name: string, onHide?: VoidFunction) {
 	const zIndex = useMolecule(ZIndexMolecule)
 	const modalRef = useRef<HTMLElement>(null)
@@ -20,8 +24,8 @@ export function useModal(name: string, onHide?: VoidFunction) {
 
 	const bind = useGesture(
 		{
-			onDragStart: () => {
-				if (!modalRef.current) return
+			onDragStart: (event) => {
+				if (!modalRef.current || !canDrag(event.target)) return
 
 				zIndex.increment(name, true)
 
@@ -40,8 +44,8 @@ export function useModal(name: string, onHide?: VoidFunction) {
 				// Disable text selection while dragging
 				document.body.style.userSelect = 'none'
 			},
-			onDrag: ({ offset, cancel }) => {
-				if (!modalRef.current) return cancel()
+			onDrag: ({ event, offset, cancel }) => {
+				if (!modalRef.current || !canDrag(event.target)) return cancel()
 
 				xy.current.x = Math.min(Math.max(offset[0], boundary.current.minLeft), boundary.current.maxLeft)
 				xy.current.y = Math.min(Math.max(offset[1], boundary.current.minTop), boundary.current.maxTop)

@@ -46,7 +46,7 @@ export const SkyAtlas = memo(() => {
 	)
 
 	return (
-		<Modal header={Header} maxWidth='470px' name='sky-atlas' onHide={atlas.hide}>
+		<Modal header={Header} maxWidth='450px' name='sky-atlas' onHide={atlas.hide}>
 			<div className='mt-0 flex flex-col gap-2'>
 				<Tabs classNames={{ base: 'absolute top-[-42px] right-[88px] z-10', panel: 'pt-0' }} onSelectionChange={(value) => (atlas.state.tab = value as never)} selectedKey={tab}>
 					<Tab key='sun' title={<Icons.Sun />}>
@@ -480,11 +480,11 @@ export const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => 
 			<Input className='col-span-3' isReadOnly label='ALT' size='sm' value={formatALT(position.altitude)} />
 			<Input className='col-span-2' isReadOnly label='Mag.' size='sm' value={position.magnitude?.toFixed(2) ?? '-'} />
 			<Input className='col-span-2' isReadOnly label='Const.' size='sm' value={position.constellation} />
-			<Input className='col-span-2' isReadOnly label='Dist.' size='sm' value={formatDistance(position.distance)} />
 			<Input className='col-span-2' isReadOnly label='Illum.' size='sm' value={`${position.illuminated.toFixed(1)} %`} />
+			<Input className='col-span-3' isReadOnly label='Dist.' size='sm' value={formatDistance(position.distance)} />
 			<Input className='col-span-2' isReadOnly label='Elong.' size='sm' value={`${position.elongation.toFixed(1)} °`} />
-			<Input className='col-span-2' isReadOnly label='Pier' size='sm' value={position.pierSide} />
-			<div className='col-span-6 flex items-center justify-center gap-2'>
+			<Input className='col-span-2' isReadOnly label='Pier' size='sm' value={position.pierSide === 'NEITHER' ? 'N' : position.pierSide} />
+			<div className='col-span-5 flex items-center justify-center gap-2'>
 				<MountDropdown allowEmpty={false} onValueChange={atlas.syncTo} tooltipContent='Sync'>
 					{(value, color, isDisabled) => <IconButton color='primary' icon={Icons.Sync} isDisabled={isDisabled} variant='flat' />}
 				</MountDropdown>
@@ -687,6 +687,6 @@ function skyObjectType(type: SkyObjectSearchItem['type']) {
 function formatDistance(distance: Distance) {
 	if (distance >= 63241.077084266280268653583182) return `${toLightYear(distance).toFixed(0)} ly`
 	if (distance >= 1) return `${distance.toFixed(2)} AU`
-	if (distance <= 0) return '-'
+	if (distance <= 0) return '0'
 	return `${(toKilometer(distance)).toFixed(0)} km`
 }

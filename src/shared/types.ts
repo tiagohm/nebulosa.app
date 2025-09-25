@@ -205,7 +205,7 @@ export interface SkyObject extends EquatorialCoordinate {
 }
 
 export interface BodyPosition extends Readonly<EquatorialCoordinate>, Readonly<EquatorialCoordinateJ2000>, Readonly<HorizontalCoordinate> {
-	readonly magnitude?: number
+	readonly magnitude: number | null
 	readonly constellation: Constellation
 	readonly distance: Distance
 	readonly illuminated: number

@@ -6,7 +6,7 @@ export interface EnumSelectProps<T extends string = string> extends Omit<SelectP
 }
 
 // Fix large height
-const WITH_END_CONTENT_CLASS_NAMES = { innerWrapper: '!pt-0', endContent: 'mb-0', value: 'pt-2' } as const
+const WITH_END_CONTENT_CLASS_NAMES: SelectProps['classNames'] = { innerWrapper: '!pt-0', endContent: 'mb-0', value: 'pt-2', label: 'mb-[2px]' }
 
 export function EnumSelect<T extends string = string>({ value, onValueChange, classNames, ...props }: EnumSelectProps<T>) {
 	return <Select {...props} classNames={{ ...WITH_END_CONTENT_CLASS_NAMES, ...classNames }} disallowEmptySelection onSelectionChange={(value) => onValueChange((value as Set<T>).values().next().value as never)} selectedKeys={new Set([value])} selectionMode='single' size='sm' />

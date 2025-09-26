@@ -37,7 +37,7 @@
 		"recharts": "3.2.1",
 		"tailwindcss": "4.1.13",
 		"utility-types": "3.11.0",
-		"valtio": "2.1.7"
+		"valtio": "2.1.8"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "latest",

@@ -4,6 +4,7 @@ import { ConnectionBox } from './ConnectionBox'
 import { HomeMenu } from './HomeMenu'
 import { ImagePickerButton } from './ImagePickerButton'
 import { IndiServerButton } from './IndiServerButton'
+import { WakeLockScreenButton } from './WakeLockScreenButton'
 
 export const HomeNavBar = memo(() => {
 	return (
@@ -18,6 +19,7 @@ export const HomeNavBar = memo(() => {
 				</div>
 				<div className='flex flex-1 flex-row justify-end gap-2'>
 					<IndiServerButton />
+					<WakeLockScreenButton />
 				</div>
 			</NavbarContent>
 		</Navbar>

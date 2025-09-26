@@ -75,7 +75,7 @@ export const CameraMolecule = molecule((m, s) => {
 
 				if (event.state === 'IDLE') {
 					state.capturing = false
-				} else {
+				} else if (event.state === 'EXPOSURE_STARTED') {
 					state.capturing = true
 				}
 			}

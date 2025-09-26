@@ -81,7 +81,7 @@ export const ConnectionMolecule = molecule((m) => {
 
 	function create() {
 		state.mode = 'create'
-		state.edited = deepClone(DEFAULT_CONNECTION)
+		state.edited = structuredClone(DEFAULT_CONNECTION)
 		state.showModal = true
 	}
 

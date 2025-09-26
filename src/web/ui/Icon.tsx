@@ -821,4 +821,20 @@ export namespace Icons {
 			</svg>
 		)
 	}
+
+	export const Monitor = ({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
+		return (
+			<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' {...props}>
+				<path d='M21,16H3V4H21M21,2H3C1.89,2 1,2.89 1,4V16A2,2 0 0,0 3,18H10V20H8V22H16V20H14V18H21A2,2 0 0,0 23,16V4C23,2.89 22.1,2 21,2Z' />
+			</svg>
+		)
+	}
+
+	export const MonitorLock = ({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
+		return (
+			<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' {...props}>
+				<path d='M20.5,13A2.5,2.5 0 0,1 23,15.5V16A1,1 0 0,1 24,17V21A1,1 0 0,1 23,22H18A1,1 0 0,1 17,21V17A1,1 0 0,1 18,16V15.5A2.5,2.5 0 0,1 20.5,13M20.5,14A1.5,1.5 0 0,0 19,15.5V16H22V15.5A1.5,1.5 0 0,0 20.5,14M20,4H2V16H15V18H13V20H15V22H7V20H9V18H2C0.89,18 0,17.1 0,16V4C0,2.89 0.89,2 2,2H20A2,2 0 0,1 22,4V11.53C21.41,11.19 20.73,11 20,11V4Z' />
+			</svg>
+		)
+	}
 }

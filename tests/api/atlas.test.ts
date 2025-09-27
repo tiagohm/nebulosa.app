@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { deg, formatALT, parseAngle } from 'nebulosa/src/angle'
+import { deg, formatALT, PARSE_HOUR_ANGLE, parseAngle } from 'nebulosa/src/angle'
 import { lightYear, meter, toKilometer } from 'nebulosa/src/distance'
 import { StellariumObjectType } from 'nebulosa/src/stellarium'
 import { formatTemporal } from 'nebulosa/src/temporal'
@@ -185,8 +185,8 @@ describe('position of sun', () => {
 	test('after noon', async () => {
 		const position = await atlas.positionOfSun(POSITION_OF_BODY)
 
-		expect(position.rightAscension).toBeCloseTo(parseAngle('08 28 44.08', { isHour: true })!, 6)
-		expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('08 27 17.12', { isHour: true })!, 6)
+		expect(position.rightAscension).toBeCloseTo(parseAngle('08 28 44.08', PARSE_HOUR_ANGLE)!, 6)
+		expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('08 27 17.12', PARSE_HOUR_ANGLE)!, 6)
 		expect(position.declination).toBeCloseTo(parseAngle('19 02 29.5')!, 6)
 		expect(position.declinationJ2000).toBeCloseTo(parseAngle('19 08 20.0')!, 6)
 		expect(position.azimuth).toBeCloseTo(deg(2.356722), 6)
@@ -200,8 +200,8 @@ describe('position of sun', () => {
 	test('before noon', async () => {
 		const position = await atlas.positionOfSun({ ...POSITION_OF_BODY, time: { ...POSITION_OF_BODY.time, utc: 1753624800000 } })
 
-		expect(position.rightAscension).toBeCloseTo(parseAngle('08 28 32.97', { isHour: true })!, 6)
-		expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('08 27 07.43', { isHour: true })!, 6)
+		expect(position.rightAscension).toBeCloseTo(parseAngle('08 28 32.97', PARSE_HOUR_ANGLE)!, 6)
+		expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('08 27 07.43', PARSE_HOUR_ANGLE)!, 6)
 		expect(position.declination).toBeCloseTo(parseAngle('19 03 02.2')!, 6)
 		expect(position.declinationJ2000).toBeCloseTo(parseAngle('19 08 54.1')!, 6)
 		expect(position.azimuth).toBeCloseTo(deg(22.854746), 6)
@@ -242,8 +242,8 @@ test('twilight', async () => {
 test('position of moon', async () => {
 	const position = await atlas.positionOfMoon(POSITION_OF_BODY)
 
-	expect(position.rightAscension).toBeCloseTo(parseAngle('10 48 30.64', { isHour: true })!, 6)
-	expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('10 47 14.33', { isHour: true })!, 6)
+	expect(position.rightAscension).toBeCloseTo(parseAngle('10 48 30.64', PARSE_HOUR_ANGLE)!, 6)
+	expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('10 47 14.33', PARSE_HOUR_ANGLE)!, 6)
 	expect(position.declination).toBeCloseTo(parseAngle('09 07 43.3')!, 6)
 	expect(position.declinationJ2000).toBeCloseTo(parseAngle('09 16 26.8')!, 6)
 	expect(position.azimuth).toBeCloseTo(deg(52.956912), 6)
@@ -295,8 +295,8 @@ describe('moon phases', () => {
 test('position of jupiter', async () => {
 	const position = await atlas.positionOfPlanet('599', POSITION_OF_BODY)
 
-	expect(position.rightAscension).toBeCloseTo(parseAngle('06 46 51.69', { isHour: true })!, 6)
-	expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('06 45 17.28', { isHour: true })!, 6)
+	expect(position.rightAscension).toBeCloseTo(parseAngle('06 46 51.69', PARSE_HOUR_ANGLE)!, 6)
+	expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('06 45 17.28', PARSE_HOUR_ANGLE)!, 6)
 	expect(position.declination).toBeCloseTo(parseAngle('22 53 45.8')!, 6)
 	expect(position.declinationJ2000).toBeCloseTo(parseAngle('22 56 22.8')!, 6)
 	expect(position.azimuth).toBeCloseTo(deg(331.17762), 6)
@@ -310,8 +310,8 @@ test('position of jupiter', async () => {
 test('position of sky object', () => {
 	const position = atlas.positionOfSkyObject(POSITION_OF_BODY, '32263')
 
-	expect(position.rightAscension).toBeCloseTo(parseAngle('06 46 16.56', { isHour: true })!, 6)
-	expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('06 45 08.93', { isHour: true })!, 6)
+	expect(position.rightAscension).toBeCloseTo(parseAngle('06 46 16.56', PARSE_HOUR_ANGLE)!, 6)
+	expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('06 45 08.93', PARSE_HOUR_ANGLE)!, 6)
 	expect(position.declination).toBeCloseTo(parseAngle('-16 45 10.81')!, 6)
 	expect(position.declinationJ2000).toBeCloseTo(parseAngle('-16 42 58.01')!, 6)
 	expect(position.altitude).toBeCloseTo(parseAngle('66 48 39.29')!, 6)

@@ -1,5 +1,5 @@
 import Elysia from 'elysia'
-import { arcsec, deg, parseAngle } from 'nebulosa/src/angle'
+import { arcsec, deg, PARSE_HOUR_ANGLE, parseAngle } from 'nebulosa/src/angle'
 import { hips2Fits } from 'nebulosa/src/hips2fits'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import { join } from 'path/posix'
@@ -8,7 +8,7 @@ import type { Framing } from '../shared/types'
 
 export class FramingManager {
 	async frame(req: Framing) {
-		const rightAscension = parseAngle(req.rightAscension, { isHour: true }) ?? 0
+		const rightAscension = parseAngle(req.rightAscension, PARSE_HOUR_ANGLE) ?? 0
 		const declination = parseAngle(req.declination) ?? 0
 		req.fov = req.focalLength && req.pixelSize ? arcsec(angularSizeOfPixel(req.focalLength, req.pixelSize)) * Math.max(req.width, req.height) : deg(req.fov || 1)
 		req.rotation = deg(req.rotation)

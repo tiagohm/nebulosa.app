@@ -1,5 +1,5 @@
 import Elysia from 'elysia'
-import { type Angle, deg, formatHMS, hour, normalizeAngle, parseAngle, toDeg, toHour } from 'nebulosa/src/angle'
+import { type Angle, deg, formatHMS, hour, normalizeAngle, PARSE_HOUR_ANGLE, parseAngle, toDeg, toHour } from 'nebulosa/src/angle'
 import { cirsToObserved, observedToCirs } from 'nebulosa/src/astrometry'
 import { PI, TAU } from 'nebulosa/src/constants'
 import { constellation } from 'nebulosa/src/constellation'
@@ -471,7 +471,7 @@ export class MountManager implements IndiClientHandler {
 
 		// JNOW equatorial coordinate
 		if (!('type' in target) || target.type === 'JNOW') {
-			rightAscension = typeof target.rightAscension === 'number' ? target.rightAscension : parseAngle(target.rightAscension, { isHour: true })!
+			rightAscension = typeof target.rightAscension === 'number' ? target.rightAscension : parseAngle(target.rightAscension, PARSE_HOUR_ANGLE)!
 			declination = typeof target.declination === 'number' ? target.declination : parseAngle(target.declination)!
 
 			;({ azimuth, altitude } = cirsToObserved([rightAscension, declination], time))
@@ -479,7 +479,7 @@ export class MountManager implements IndiClientHandler {
 		}
 		// J2000 equatorial coordinate
 		else if (target.type === 'J2000') {
-			rightAscensionJ2000 = typeof target.rightAscension === 'number' ? target.rightAscension : parseAngle(target.rightAscension, { isHour: true })!
+			rightAscensionJ2000 = typeof target.rightAscension === 'number' ? target.rightAscension : parseAngle(target.rightAscension, PARSE_HOUR_ANGLE)!
 			declinationJ2000 = typeof target.declination === 'number' ? target.declination : parseAngle(target.declination)!
 
 			;[rightAscension, declination] = eraC2s(...precessFk5FromJ2000(eraS2c(rightAscensionJ2000, declinationJ2000), time))
@@ -513,10 +513,10 @@ export class MountManager implements IndiClientHandler {
 		let declination = 0
 
 		if (!('type' in req) || req.type === 'JNOW') {
-			rightAscension = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, { isHour: true })!
+			rightAscension = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, PARSE_HOUR_ANGLE)!
 			declination = typeof req.declination === 'number' ? req.declination : parseAngle(req.declination)!
 		} else if (req.type === 'J2000') {
-			const rightAscensionJ2000 = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, { isHour: true })!
+			const rightAscensionJ2000 = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, PARSE_HOUR_ANGLE)!
 			const declinationJ2000 = typeof req.declination === 'number' ? req.declination : parseAngle(req.declination)!
 
 			const time = this.cache.time('now')

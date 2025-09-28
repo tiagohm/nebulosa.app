@@ -22,6 +22,27 @@ export function useModal(name: string, onHide?: VoidFunction) {
 	// Initialize the position of the modal if it doesn't exist in the map
 	modalTransformMap.set(name, xy.current)
 
+	function computeBoundary() {
+		if (!modalRef.current) return
+
+		const { x, y } = xy.current
+		const { left, top, width, height } = modalRef.current.getBoundingClientRect()
+		const { clientWidth, clientHeight } = document.documentElement
+
+		// Calculate the boundaries for the modal based on its position and size
+		const remainingWidth = modalRef.current.clientWidth - 128
+		const remainingHeight = modalRef.current.clientHeight - 128
+		boundary.current.minLeft = -left + x - remainingWidth
+		boundary.current.minTop = -top + y - remainingHeight
+		boundary.current.maxLeft = clientWidth - left - width + x + remainingWidth
+		boundary.current.maxTop = clientHeight - top - height + y + remainingHeight
+	}
+
+	function fitToBoundary() {
+		xy.current.x = Math.min(Math.max(xy.current.x, boundary.current.minLeft), boundary.current.maxLeft)
+		xy.current.y = Math.min(Math.max(xy.current.y, boundary.current.minTop), boundary.current.maxTop)
+	}
+
 	const bind = useGesture(
 		{
 			onDragStart: (event) => {
@@ -29,17 +50,7 @@ export function useModal(name: string, onHide?: VoidFunction) {
 
 				zIndex.increment(name, true)
 
-				const { x, y } = xy.current
-				const { left, top, width, height } = modalRef.current.getBoundingClientRect()
-				const { clientWidth, clientHeight } = document.documentElement
-
-				// Calculate the boundaries for the modal based on its position and size
-				const remainingWidth = modalRef.current.clientWidth - 64
-				const remainingHeight = modalRef.current.clientHeight - 64
-				boundary.current.minLeft = -left + x - remainingWidth
-				boundary.current.minTop = -top + y - remainingHeight
-				boundary.current.maxLeft = clientWidth - left - width + x + remainingWidth
-				boundary.current.maxTop = clientHeight - top - height + y + remainingHeight
+				computeBoundary()
 
 				// Disable text selection while dragging
 				document.body.style.userSelect = 'none'
@@ -92,7 +103,7 @@ export function useModal(name: string, onHide?: VoidFunction) {
 
 	const moveProps = { ...bind(), style: { cursor: 'move' } }
 
-	return { ref, hide, moveProps }
+	return { ref, hide, moveProps, computeBoundary, fitToBoundary }
 }
 
 // Hook to manage the Wake Lock API

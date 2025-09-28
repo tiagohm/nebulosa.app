@@ -82,7 +82,7 @@ export class AtlasManager {
 	async twilight(req: PositionOfBody) {
 		await this.positionOfSun(req)
 
-		const [startTime, endTime] = this.computeStartAndEndTime(req.time, true)
+		const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 		const offset = req.time.offset * 60000
 		const sun = this.ephemeris['10']!
 
@@ -106,7 +106,7 @@ export class AtlasManager {
 		let step = 0
 
 		for (let time = startTime, i = 0; time <= endTime; time += 60000, i++) {
-			const position = sun.get(time / 1000)
+			const position = sun.get(Math.trunc(time / 1000))
 
 			if (position) {
 				const { altitude } = position
@@ -299,7 +299,7 @@ export class AtlasManager {
 	}
 
 	chartOfSkyObject(req: ChartOfBody, id: string) {
-		let [startTime] = this.computeStartAndEndTime(req.time, true)
+		let [startTime] = this.computeStartAndEndTime(req.time)
 
 		const dso = nebulosa.query(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get() as SkyObject
 		const location = this.cache.geographicCoordinate(req.location)
@@ -438,7 +438,7 @@ export class AtlasManager {
 		let position = this.ephemeris[id]?.get(key)
 
 		if (!position) {
-			const [startTime, endTime] = this.computeStartAndEndTime(req.time, true)
+			const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 			const code = typeof input === 'string' ? input : input.tle
 			const { longitude, latitude, elevation } = req.location
 			const horizons = await observer(code, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1 })
@@ -459,7 +459,7 @@ export class AtlasManager {
 	computeChart(code: string, time: UTCTime, stepSizeInMinutes: number) {
 		const positions = this.ephemeris[code]!
 
-		const [startTime] = this.computeStartAndEndTime(time, false)
+		const [startTime] = this.computeStartAndEndTime(time)
 		const seconds = temporalSet(startTime, 0, 's') / 1000
 		const chart: number[] = []
 
@@ -474,15 +474,16 @@ export class AtlasManager {
 		return chart
 	}
 
-	computeStartAndEndTime(time: UTCTime, local: boolean): readonly [Temporal, Temporal] {
+	computeStartAndEndTime(time: UTCTime): readonly [Temporal, Temporal] {
 		const { utc, offset } = time
-		const hour = temporalGet(temporalAdd(utc, offset, 'm'), 'h')
+		const local = temporalAdd(utc, offset, 'm')
+		const hour = temporalGet(local, 'h')
 
-		let startTime = temporalStartOfDay(utc)
+		let startTime = temporalStartOfDay(local)
 		// if not passed noon, go to the previous day
 		if (hour < 12) startTime = temporalSubtract(startTime, 1, 'd')
 		// set to UTC noon + local offset (if enabled)
-		startTime = temporalAdd(startTime, 720 - (local ? offset : 0), 'm')
+		startTime = temporalAdd(startTime, 720 - offset, 'm')
 		// set end time to noon of the next day
 		const endTime = temporalAdd(startTime, 1, 'd')
 

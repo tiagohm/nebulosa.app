@@ -621,6 +621,8 @@ export interface CameraCaptureStart {
 	savePath?: string
 	autoSubFolderMode: AutoSubFolderMode
 	mount?: string
+	wheel?: string
+	focuser?: string
 }
 
 export interface CameraCaptureTime {

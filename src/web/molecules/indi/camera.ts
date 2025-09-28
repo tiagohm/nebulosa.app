@@ -1,11 +1,10 @@
 import { createScope, molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
-import { type Camera, type CameraCaptureEvent, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START, type Mount } from 'src/shared/types'
+import { type Camera, type CameraCaptureEvent, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START, type Focuser, type Mount, type Wheel } from 'src/shared/types'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { storage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
-import { ImageWorkspaceMolecule } from '../image/workspace'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface CameraScopeValue {
@@ -13,6 +12,7 @@ export interface CameraScopeValue {
 }
 
 export interface CameraState {
+	minimized: boolean
 	readonly camera: EquipmentDevice<Camera>
 	readonly request: CameraCaptureStart
 	readonly progress: CameraCaptureEvent
@@ -21,6 +21,8 @@ export interface CameraState {
 	image?: Image
 	readonly equipment: {
 		mount?: EquipmentDevice<Mount>
+		wheel?: EquipmentDevice<Wheel>
+		focuser?: EquipmentDevice<Focuser>
 	}
 }
 
@@ -31,13 +33,13 @@ const cameraStateMap = new Map<string, CameraState>()
 export const CameraMolecule = molecule((m, s) => {
 	const scope = s(CameraScope)
 	const equipment = m(EquipmentMolecule)
-	const workspace = m(ImageWorkspaceMolecule)
 
 	const cameraCaptureStartRequest = storage.get<CameraCaptureStart>(`camera.${scope.camera.name}.request`, () => structuredClone(DEFAULT_CAMERA_CAPTURE_START))
 
 	const state =
 		cameraStateMap.get(scope.camera.name) ??
 		proxy<CameraState>({
+			minimized: false,
 			camera: equipment.get('CAMERA', scope.camera.name)!,
 			request: cameraCaptureStartRequest,
 			progress: structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT),
@@ -45,13 +47,15 @@ export const CameraMolecule = molecule((m, s) => {
 			targetTemperature: scope.camera.temperature,
 			equipment: {
 				mount: equipment.get('MOUNT', cameraCaptureStartRequest.mount ?? ''),
+				wheel: equipment.get('WHEEL', cameraCaptureStartRequest.wheel ?? ''),
+				focuser: equipment.get('FOCUSER', cameraCaptureStartRequest.focuser ?? ''),
 			},
 		})
 
 	cameraStateMap.set(scope.camera.name, state)
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(6)
+		const unsubscribers = new Array<VoidFunction>(7)
 
 		unsubscribers[0] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
 			if (event.device.name === state.camera.name) {
@@ -93,7 +97,15 @@ export const CameraMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[5] = subscribe(state.request, () => storage.set(`camera.${scope.camera.name}.request`, state.request))
+		unsubscribers[5] = subscribe(state.request, () => {
+			storage.set(`camera.${scope.camera.name}.request`, state.request)
+		})
+
+		unsubscribers[6] = subscribe(state.equipment, () => {
+			state.request.mount = state.equipment.mount?.name
+			state.request.wheel = state.equipment.wheel?.name
+			state.request.focuser = state.equipment.focuser?.name
+		})
 
 		updateRequestFrame(state.request, state.camera.frame)
 		updateFrameFormat(state.request, state.camera.frameFormats)
@@ -128,7 +140,6 @@ export const CameraMolecule = molecule((m, s) => {
 
 	function start() {
 		state.capturing = true
-		state.request.mount = state.equipment.mount?.name
 		return Api.Cameras.start(state.camera, state.request)
 	}
 
@@ -140,7 +151,11 @@ export const CameraMolecule = molecule((m, s) => {
 		return equipment.hide('CAMERA', scope.camera)
 	}
 
-	return { scope, state, connect, update, cooler, temperature, fullscreen, start, stop, hide } as const
+	function minimize() {
+		state.minimized = !state.minimized
+	}
+
+	return { scope, state, connect, update, cooler, temperature, fullscreen, start, stop, hide, minimize } as const
 })
 
 export function updateRequestFrame(request: CameraCaptureStart, frame: Camera['frame']) {

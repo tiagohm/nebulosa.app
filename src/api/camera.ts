@@ -5,14 +5,16 @@ import type { DefBlobVector, DefNumber, DefNumberVector, DefSwitchVector, DefTex
 import { formatTemporal, temporalGet, temporalSubtract } from 'nebulosa/src/temporal'
 import { join } from 'path'
 import bus from '../shared/bus'
-import { type Camera, type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_EVENT, type DeviceProperties, type FrameType, type Mount } from '../shared/types'
+import { type Camera, type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_EVENT, type DeviceProperties, type Focuser, type FrameType, type Mount, type Wheel } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import type { ConnectionManager } from './connection'
+import type { FocuserManager } from './focuser'
 import type { GuideOutputManager } from './guideoutput'
 import { ask, connectionFor, DeviceInterfaceType, disableBlob, enableBlob, type IndiDevicePropertyManager, isInterfaceType } from './indi'
 import type { WebSocketMessageManager } from './message'
 import type { MountManager } from './mount'
 import type { ThermometerManager } from './thermometer'
+import type { WheelManager } from './wheel'
 
 const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
 
@@ -76,8 +78,8 @@ export function stopExposure(client: IndiClient, camera: Camera) {
 	client.sendSwitch({ device: camera.name, name: 'CCD_ABORT_EXPOSURE', elements: { ABORT: true } })
 }
 
-export function snoop(client: IndiClient, camera: Camera, mount?: Mount) {
-	client.sendText({ device: camera.name, name: 'ACTIVE_DEVICES', elements: { ACTIVE_TELESCOPE: mount?.name ?? '', ACTIVE_ROTATOR: '', ACTIVE_FOCUSER: '', ACTIVE_FILTER: '' } })
+export function snoop(client: IndiClient, camera: Camera, mount?: Mount, wheel?: Wheel, focuser?: Focuser) {
+	client.sendText({ device: camera.name, name: 'ACTIVE_DEVICES', elements: { ACTIVE_TELESCOPE: mount?.name ?? '', ACTIVE_ROTATOR: '', ACTIVE_FOCUSER: focuser?.name ?? '', ACTIVE_FILTER: wheel?.name ?? '' } })
 }
 
 export class CameraManager implements IndiClientHandler {
@@ -91,6 +93,8 @@ export class CameraManager implements IndiClientHandler {
 		readonly guideOutput: GuideOutputManager,
 		readonly thermometer: ThermometerManager,
 		readonly mount: MountManager,
+		readonly wheel: WheelManager,
+		readonly focuser: FocuserManager,
 	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove all cameras associated with the client
@@ -464,7 +468,9 @@ export class CameraManager implements IndiClientHandler {
 		const task = new CameraCaptureTask(device, req, client, property, this.handleCameraCaptureEvent.bind(this))
 		this.tasks.set(device.name, task)
 		const mount = req.mount ? this.mount.get(req.mount) : undefined
-		snoop(client, device, mount)
+		const wheel = req.wheel ? this.wheel.get(req.wheel) : undefined
+		const focuser = req.focuser ? this.focuser.get(req.focuser) : undefined
+		snoop(client, device, mount, wheel, focuser)
 		task.start()
 	}
 

@@ -1,9 +1,9 @@
 import { molecule, onMount } from 'bunshi'
 import { deg, formatDEC, formatRA } from 'nebulosa/src/angle'
-import type { Temporal } from 'nebulosa/src/temporal'
+import { meter } from 'nebulosa/src/distance'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
-import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SATELLITE, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type Framing, type LocationAndTime, type LunarPhaseTime, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
+import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SATELLITE, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type Framing, type GeographicCoordinate, type LocationAndTime, type LunarPhaseTime, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -115,21 +115,27 @@ export const SunMolecule = molecule(() => {
 	let seasonsUpdate = true
 	let eclipsesUpdate = true
 
-	async function tick(time: Temporal) {
+	async function tick(time: UTCTime, location: GeographicCoordinate) {
+		let changed = false
+
+		if (isLocationChanged(location, request.location)) {
+			Object.assign(request.location, location)
+			changed = true
+		}
+
 		// Updates only if passed more than 1 minute since last update
-		if (time - request.time.utc < 60000) return
+		if (time.utc - request.time.utc >= 60000 || time.offset !== request.time.offset) {
+			Object.assign(request.time, time)
+			changed = true
+		}
 
-		request.time.utc = time
+		if (changed) {
+			void updateSeasons()
+			void updateEclipses()
 
-		// TODO: Atualizar somente se passou de 1 minuto desde a última atualização
-		// ou se a data mudou (meio-dia, meio-mês, meio-ano)
-		request.time.utc = time
-
-		void updateSeasons()
-		void updateEclipses()
-
-		await updatePosition()
-		await updateChart()
+			await updatePosition()
+			await updateChart()
+		}
 	}
 
 	async function updatePosition() {
@@ -181,17 +187,27 @@ export const MoonMolecule = molecule(() => {
 	let phasesUpdate = true
 	let eclipsesUpdate = true
 
-	async function tick(time: Temporal) {
+	async function tick(time: UTCTime, location: GeographicCoordinate) {
+		let changed = false
+
+		if (isLocationChanged(location, request.location)) {
+			Object.assign(request.location, location)
+			changed = true
+		}
+
 		// Updates only if passed more than 1 minute since last update
-		if (time - request.time.utc < 60000) return
+		if (time.utc - request.time.utc >= 60000 || time.offset !== request.time.offset) {
+			Object.assign(request.time, time)
+			changed = true
+		}
 
-		request.time.utc = time
+		if (changed) {
+			void updatePhases()
+			void updateEclipses()
 
-		void updatePhases()
-		void updateEclipses()
-
-		await updatePosition()
-		await updateChart()
+			await updatePosition()
+			await updateChart()
+		}
 	}
 
 	async function updatePosition() {
@@ -235,14 +251,24 @@ export const PlanetMolecule = molecule(() => {
 
 	let chartUpdate = true
 
-	async function tick(time: Temporal) {
+	async function tick(time: UTCTime, location: GeographicCoordinate) {
+		let changed = false
+
+		if (isLocationChanged(location, request.location)) {
+			Object.assign(request.location, location)
+			changed = true
+		}
+
 		// Updates only if passed more than 1 minute since last update
-		if (time - request.time.utc < 60000) return
+		if (time.utc - request.time.utc >= 60000 || time.offset !== request.time.offset) {
+			Object.assign(request.time, time)
+			changed = true
+		}
 
-		request.time.utc = time
-
-		await updatePosition()
-		await updateChart()
+		if (changed) {
+			await updatePosition()
+			await updateChart()
+		}
 	}
 
 	async function updatePosition() {
@@ -262,9 +288,6 @@ export const PlanetMolecule = molecule(() => {
 		// Fetches object's position and chart if a new one was selected
 		if (code && (force || state.code !== code)) {
 			state.code = code
-
-			request.location.longitude = deg(-45)
-			request.location.latitude = deg(-22)
 
 			await updatePosition()
 			await updateChart(true)
@@ -316,9 +339,6 @@ export const GalaxyMolecule = molecule(() => {
 		try {
 			state.loading = true
 
-			request.location.longitude = deg(-45)
-			request.location.latitude = deg(-22)
-
 			if (reset) state.request.page = 1
 
 			const result = await Api.SkyAtlas.searchSkyObject(state.request)
@@ -345,9 +365,6 @@ export const GalaxyMolecule = molecule(() => {
 		if (selected && (force || state.selected?.id !== selected.id)) {
 			state.selected = selected
 
-			request.location.longitude = deg(-45)
-			request.location.latitude = deg(-22)
-
 			await updatePosition()
 			await updateChart(true)
 		}
@@ -367,11 +384,21 @@ export const GalaxyMolecule = molecule(() => {
 		chartUpdate = false
 	}
 
-	async function tick(time: Temporal) {
-		// Updates only if passed more than 1 minute since last update
-		if (time - request.time.utc < 60000) return
+	async function tick(time: UTCTime, location: GeographicCoordinate) {
+		let changed = false
 
-		request.time.utc = time
+		if (isLocationChanged(location, request.location)) {
+			Object.assign(request.location, location)
+			changed = true
+		}
+
+		// Updates only if passed more than 1 minute since last update
+		if (time.utc - request.time.utc >= 60000 || time.offset !== request.time.offset) {
+			Object.assign(request.time, time)
+			changed = true
+		}
+
+		if (!changed) return
 
 		// Refresh visible objects above horizon
 		if (state.request.visible) {
@@ -486,14 +513,22 @@ export const SatelliteMolecule = molecule(() => {
 		chartUpdate = false
 	}
 
-	async function tick(time: Temporal) {
-		// Updates only if passed more than 1 minute since last update
-		if (time - request.time.utc < 60000) return
+	async function tick(time: UTCTime, location: GeographicCoordinate) {
+		let changed = false
 
-		request.time.utc = time
+		if (isLocationChanged(location, request.location)) {
+			Object.assign(request.location, location)
+			changed = true
+		}
+
+		// Updates only if passed more than 1 minute since last update
+		if (time.utc - request.time.utc >= 60000 || time.offset !== request.time.offset) {
+			Object.assign(request.time, time)
+			changed = true
+		}
 
 		// Refresh selected object
-		if (request.id) {
+		if (changed && request.id) {
 			await updatePosition()
 			await updateChart(false)
 		}
@@ -517,13 +552,13 @@ export const SkyAtlasMolecule = molecule((m) => {
 			twilight: undefined,
 			request: {
 				location: {
-					longitude: 0,
-					latitude: 0,
-					elevation: 0,
+					longitude: deg(-45),
+					latitude: deg(-22),
+					elevation: meter(890),
 				},
 				time: {
 					utc: Date.now(),
-					offset: 0,
+					offset: -180,
 				},
 			},
 			sun: sun.state,
@@ -564,15 +599,18 @@ export const SkyAtlasMolecule = molecule((m) => {
 	async function tick() {
 		if (!state.show) return
 
-		const time = Date.now()
+		const { time, location } = state.request
+
+		time.utc = Date.now()
+		time.offset = -180 // TODO
 
 		await twilight()
 
-		if (state.tab === 'sun') sun.tick(time)
-		else if (state.tab === 'moon') moon.tick(time)
-		else if (state.tab === 'planet') planet.tick(time)
-		else if (state.tab === 'galaxy') galaxy.tick(time)
-		else if (state.tab === 'satellite') satellite.tick(time)
+		if (state.tab === 'sun') sun.tick(time, location)
+		else if (state.tab === 'moon') moon.tick(time, location)
+		else if (state.tab === 'planet') planet.tick(time, location)
+		else if (state.tab === 'galaxy') galaxy.tick(time, location)
+		else if (state.tab === 'satellite') satellite.tick(time, location)
 	}
 
 	async function twilight() {
@@ -615,3 +653,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 
 	return { state, syncTo, goTo, frame, show, hide }
 })
+
+function isLocationChanged(a: GeographicCoordinate, b: GeographicCoordinate) {
+	return a.latitude !== b.latitude || a.longitude !== b.longitude || a.elevation !== b.elevation
+}

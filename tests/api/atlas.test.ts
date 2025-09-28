@@ -333,3 +333,35 @@ test('chart of sky object', () => {
 	expect(formatALT(chart[720])).toBe('-44 21 24.74')
 	expect(formatALT(chart[1440])).toBe('+65 54 26.76')
 })
+
+describe('compute start and end time', () => {
+	test('after noon', () => {
+		const [startTime, endTime] = atlas.computeStartAndEndTime({
+			utc: 1759071660000, // Sun Sep 28 2025 12:01:00 GMT-0300
+			offset: -180,
+		})
+
+		expect(formatTemporal(startTime)).toBe('2025-09-28 15:00:00.000')
+		expect(formatTemporal(endTime)).toBe('2025-09-29 15:00:00.000')
+	})
+
+	test('after 21h', () => {
+		const [startTime, endTime] = atlas.computeStartAndEndTime({
+			utc: 1759104060000, // Sun Sep 28 2025 21:01:00 GMT-0300
+			offset: -180,
+		})
+
+		expect(formatTemporal(startTime)).toBe('2025-09-28 15:00:00.000')
+		expect(formatTemporal(endTime)).toBe('2025-09-29 15:00:00.000')
+	})
+
+	test('before noon', () => {
+		const [startTime, endTime] = atlas.computeStartAndEndTime({
+			utc: 1759157940000, // Sun Sep 29 2025 11:59:00 GMT-0300
+			offset: -180,
+		})
+
+		expect(formatTemporal(startTime)).toBe('2025-09-28 15:00:00.000')
+		expect(formatTemporal(endTime)).toBe('2025-09-29 15:00:00.000')
+	})
+})

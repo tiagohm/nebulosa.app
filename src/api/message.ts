@@ -40,7 +40,7 @@ export class WebSocketMessageManager {
 			} else {
 				this.sockets.forEach((socket) => socket.sendText(data))
 
-				if (!type.endsWith(':add') && !type.endsWith(':remove')) {
+				if (!type.endsWith(':add') && !type.endsWith(':remove') && type !== 'notification' && type !== 'confirmation') {
 					this.events.set(type, message)
 				}
 			}

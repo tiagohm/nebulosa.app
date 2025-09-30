@@ -229,6 +229,7 @@ export interface Satellite {
 	readonly name: string
 	readonly groups: SatelliteGroupType[]
 	readonly tle: ObserverWithTLE
+	readonly outOfDate: boolean
 }
 
 export interface SearchSatellite {
@@ -1352,6 +1353,7 @@ export const DEFAULT_SATELLITE: Satellite = {
 		line2: '',
 		line3: '',
 	},
+	outOfDate: false,
 }
 
 export const DEFAULT_INDI_SERVER_START: Required<IndiServerStart> = {

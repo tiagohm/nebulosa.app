@@ -254,12 +254,12 @@ export class AtlasManager {
 
 		const q = `SELECT DISTINCT d.id, d.magnitude, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ${req.nameType >= 0 ? `AND n.type = ${req.nameType}` : 'ORDER BY n.type'} LIMIT 1) as name FROM dsos d ${joinWhere.length > 1 ? `JOIN names n ON ${joinWhere.join(' AND ')}` : ''} WHERE ${where.join(' AND ')} ORDER BY d.${req.sort.column} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
 
-		return nebulosa.query(q).all() as SkyObjectSearchItem[]
+		return nebulosa.query<SkyObjectSearchItem, []>(q).all()
 	}
 
 	positionOfSkyObject(req: PositionOfBody, id: string | number | SkyObject): BodyPosition {
-		const dso = typeof id === 'object' ? id : (nebulosa.query(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get() as SkyObject)
-		const names = nebulosa.query(`SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ${id}`).all() as { name: string }[]
+		const dso = typeof id === 'object' ? id : nebulosa.query<SkyObject, []>(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get()!
+		const names = nebulosa.query<{ name: string }, []>(`SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ${id}`).all()
 
 		const location = this.cache.geographicCoordinate(req.location)
 		const time = this.cache.time(req.time.utc, location)
@@ -301,7 +301,7 @@ export class AtlasManager {
 	chartOfSkyObject(req: ChartOfBody, id: string) {
 		let [startTime] = this.computeStartAndEndTime(req.time)
 
-		const dso = nebulosa.query(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get() as SkyObject
+		const dso = nebulosa.query<SkyObject, []>(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get()!
 		const location = this.cache.geographicCoordinate(req.location)
 		const data = new Array<number>(1441)
 
@@ -325,28 +325,36 @@ export class AtlasManager {
 	}
 
 	async refreshSatellites() {
+		console.info('loading satellites...')
+
 		const groups = new Set(Object.keys(SATELLITE_GROUP_TYPES) as SatelliteGroupType[])
 		const now = Date.now()
 		const satellites = new Map<number, Satellite>()
 
 		async function download(group: SatelliteGroupType) {
+			console.info(`downloading satellite TLE for group ${group}...`)
+
 			try {
+				const signal = AbortSignal.timeout(5000)
 				const type = SATELLITE_GROUP_TYPES[group].type
-				const response = await fetch(SATELLITE_TLE_URL + type)
+				const response = await fetch(SATELLITE_TLE_URL + type, { signal })
 
 				if (response.ok) {
 					const text = await response.text()
 					const path = join(Bun.env.satellitesDir, `${now}.${group}.tle`)
 					await Bun.write(path, text)
 					groups.delete(group)
-					readTLE(text, group)
+					readTLE(text, group, false)
+					return true
 				}
 			} catch (e) {
-				console.error(e)
+				console.error(`failed to download satellite TLE for group ${group}`)
 			}
+
+			return false
 		}
 
-		const readTLE = (text: string, group: SatelliteGroupType) => {
+		const readTLE = (text: string, group: SatelliteGroupType, outOfDate: boolean) => {
 			const lines = text.split('\n')
 
 			for (let i = 0; i < lines.length - 2; i += 3) {
@@ -361,7 +369,7 @@ export class AtlasManager {
 						if (!satellite.groups.includes(group)) satellite.groups.push(group)
 					} else {
 						const name = lines[i].trim()
-						satellites.set(id, { id, name, tle: { line1: name, line2: a, line3: b }, groups: [group] })
+						satellites.set(id, { id, name, tle: { line1: name, line2: a, line3: b }, groups: [group], outOfDate })
 					}
 				}
 			}
@@ -374,16 +382,22 @@ export class AtlasManager {
 		for await (const file of new Bun.Glob('*.tle').scan({ cwd: Bun.env.satellitesDir })) {
 			const date = +file.substring(0, 13)
 			const group = file.substring(14, file.length - 4) as SatelliteGroupType
+			const outOfDate = now - date > 86400 * 1000 * 2
 
-			if (now - date > 86400 * 1000 * 2) {
+			if (outOfDate) {
+				const path = join(Bun.env.satellitesDir, file)
+				await Bun.file(path).delete()
+
 				if (groups.has(group)) {
-					await download(group)
+					if (await download(group)) continue
 				}
-			} else {
+			}
+
+			if (groups.has(group)) {
 				const path = join(Bun.env.satellitesDir, `${date}.${group}.tle`)
 				const text = await Bun.file(path).text()
 				groups.delete(group)
-				readTLE(text, group)
+				readTLE(text, group, outOfDate)
 			}
 		}
 

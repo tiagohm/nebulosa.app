@@ -525,7 +525,7 @@ export const EphemerisChart = memo(({ data }: EphemerisChartProps) => {
 	}
 
 	return (
-		<ComposedChart data={data} height={150} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} width={438}>
+		<ComposedChart data={data} height={150} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} width={412}>
 			<XAxis dataKey='name' domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={tickFormatter} tickMargin={6} />
 			<YAxis domain={[0, 90]} width={25} />
 			<Area activeDot={false} connectNulls dataKey='dayFirst' dot={false} fill='#FFF176' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />

@@ -10,7 +10,7 @@ const useGesture = createUseGesture([dragAction])
 const modalTransformMap = new Map<string, { x: number; y: number }>()
 
 function canDrag(target: EventTarget | null) {
-	return target instanceof HTMLElement && target.closest('.modal') !== null
+	return target instanceof HTMLElement && (target.closest('.modal') !== null || target.closest('#root'))
 }
 
 export function useModal(name: string, onHide?: VoidFunction) {

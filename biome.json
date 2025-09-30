@@ -84,7 +84,8 @@
 				"noSvgWithoutTitle": "off"
 			},
 			"nursery": {
-				"noFloatingPromises": "error"
+				"noFloatingPromises": "error",
+				"noImportCycles": "error"
 			}
 		}
 	},

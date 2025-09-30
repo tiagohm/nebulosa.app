@@ -563,7 +563,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 			},
 			sun: sun.state,
 			moon: moon.state,
-			planet: moon.state,
+			planet: planet.state,
 			asteroid: moon.state,
 			galaxy: galaxy.state,
 			satellite: satellite.state,

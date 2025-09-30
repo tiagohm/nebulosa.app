@@ -1,4 +1,4 @@
-import { Button, Checkbox, Input, Listbox, ListboxItem, NumberInput, Popover, PopoverContent, PopoverTrigger, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
+import { Button, Checkbox, Chip, Input, Listbox, ListboxItem, NumberInput, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { RAD2DEG } from 'nebulosa/src/constants'
@@ -256,19 +256,12 @@ export const PlanetTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<Listbox
-				className='col-span-full'
-				isVirtualized
-				onAction={(key) => planet.select(key as never)}
-				virtualization={{
-					maxListboxHeight: 200,
-					itemHeight: 38,
-				}}>
-				{PLANETS.map((planet) => (
+			<Listbox className='col-span-full' classNames={{ base: 'w-full', list: 'max-h-[200px] overflow-scroll' }} items={PLANETS} onAction={(key) => planet.select(key as never)} selectionMode='none'>
+				{(planet) => (
 					<ListboxItem description={planet.type} key={planet.code}>
 						{planet.name}
 					</ListboxItem>
-				))}
+				)}
 			</Listbox>
 			<div className='col-span-full'>
 				<EphemerisAndChart chart={chart} name={PLANETS.find((e) => e.code === code)?.name} position={position} twilight={twilight} />
@@ -388,17 +381,26 @@ export const EphemerisAndChart = memo(({ name, position, chart, twilight }: Ephe
 	const deferredChart = useDeferredValue(chart, [])
 	const data = useMemo(() => makeEphemerisChart(deferredChart, twilight), [deferredChart, twilight])
 	const deferredData = useDeferredValue(data, [])
+	const names = useMemo(() => (name ? [name] : position.names?.map((e) => skyObjectName(e, position.constellation))), [position.constellation, position.names])
 
 	return (
 		<div className='h-[150px] col-span-full relative flex flex-col justify-start items-center gap-1'>
-			<div className='w-full pointer-events-none flex flex-row gap-2 text-start text-sm font-bold'>
-				<Button className='rounded-full pointer-events-auto' color='primary' isIconOnly onPointerUp={() => setShowChart(false)} variant={showChart ? 'light' : 'flat'}>
+			<div className='w-full flex flex-row gap-2 text-start text-sm font-bold'>
+				<Button className='rounded-full' color='primary' isIconOnly onPointerUp={() => setShowChart(false)} variant={showChart ? 'light' : 'flat'}>
 					<Icons.Info />
 				</Button>
-				<Button className='rounded-full pointer-events-auto' color='primary' isIconOnly onPointerUp={() => setShowChart(true)} variant={showChart ? 'flat' : 'light'}>
+				<Button className='rounded-full' color='primary' isIconOnly onPointerUp={() => setShowChart(true)} variant={showChart ? 'flat' : 'light'}>
 					<Icons.Chart />
 				</Button>
-				<div className='flex-1 justify-center items-center flex text-sm font-bold'>{name || position.names?.map((e) => skyObjectName(e, position.constellation)).join(', ')}</div>
+				<div className='flex-1 justify-center items-center flex text-sm font-bold overflow-hidden'>
+					<ScrollShadow className='w-full flex gap-1' hideScrollBar orientation='horizontal'>
+						{names?.map((name) => (
+							<Chip color='primary' key={name} size='sm'>
+								{name}
+							</Chip>
+						))}
+					</ScrollShadow>
+				</div>
 			</div>
 			<span className='w-full absolute top-[42px] left-0' style={{ visibility: showChart ? 'hidden' : 'visible' }}>
 				<EphemerisPosition position={position} />
@@ -492,7 +494,7 @@ export const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => 
 					{(value, color, isDisabled) => <IconButton color='success' icon={Icons.Telescope} isDisabled={isDisabled} variant='flat' />}
 				</MountDropdown>
 				<Tooltip content='Frame' placement='bottom'>
-					<IconButton color='secondary' icon={Icons.Image} onPointerUp={atlas.frame} variant='flat' />
+					<IconButton color='secondary' icon={Icons.Image} isDisabled={position.pierSide === 'NEITHER'} onPointerUp={atlas.frame} variant='flat' />
 				</Tooltip>
 			</div>
 		</div>

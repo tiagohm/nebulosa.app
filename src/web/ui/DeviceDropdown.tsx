@@ -32,7 +32,7 @@ export function DeviceDropdown<T extends Device = Device>({ isDisabled, items, v
 
 	return (
 		<Dropdown isDisabled={isDisabled || menu.length === 0} showArrow>
-			<Tooltip content={tooltipContent} isDisabled={!tooltipContent} placement={tooltipPlacement}>
+			<Tooltip content={tooltipContent} isDisabled={!tooltipContent || isDisabled || menu.length === 0} placement={tooltipPlacement}>
 				<div className='max-w-fit'>
 					<DropdownTrigger>{DropdownTriggerContent}</DropdownTrigger>
 				</div>

@@ -179,6 +179,17 @@ export interface MinorPlanetParameter {
 	readonly value: string
 }
 
+export interface FindCloseApproaches {
+	days: number
+	distance: number // in LD (Lunar Distance)
+}
+
+export interface CloseApproach {
+	readonly name: string
+	readonly distance: number // in LD (Lunar Distance)
+	readonly date: Temporal
+}
+
 export interface MinorPlanet {
 	readonly name: string
 	readonly id: string

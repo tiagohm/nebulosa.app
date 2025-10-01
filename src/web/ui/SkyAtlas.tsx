@@ -45,8 +45,17 @@ export const SkyAtlas = memo(() => {
 		</div>
 	)
 
+	const Footer =
+		tab !== 'galaxy' ? (
+			<div className='mt-2 w-full text-center text-xs'>
+				<a href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' rel='noopener' target='_blank'>
+					NASA/JPL Horizons API
+				</a>
+			</div>
+		) : null
+
 	return (
-		<Modal header={Header} maxWidth='450px' name='sky-atlas' onHide={atlas.hide}>
+		<Modal footer={Footer} header={Header} maxWidth='450px' name='sky-atlas' onHide={atlas.hide}>
 			<div className='mt-0 flex flex-col gap-2'>
 				<Tabs classNames={{ base: 'absolute top-[-42px] right-[88px] z-10', panel: 'pt-0' }} onSelectionChange={(value) => (atlas.state.tab = value as never)} selectedKey={tab}>
 					<Tab key='sun' title={<Icons.Sun />}>
@@ -277,8 +286,7 @@ export const AsteroidTab = memo(() => {
 	const { twilight } = useSnapshot(atlas.state)
 
 	const asteroid = useMolecule(AsteroidMolecule)
-	const { loading, selected, position, chart } = useSnapshot(asteroid.state)
-	const { text: searchText } = useSnapshot(asteroid.state.search, { sync: true })
+	const { tab, selected, position, chart } = useSnapshot(asteroid.state)
 
 	const tags = useMemo(() => {
 		const tags: EphemerisAndChartTag[] = []
@@ -295,29 +303,89 @@ export const AsteroidTab = memo(() => {
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
 			<div className='col-span-full flex flex-col gap-2'>
-				<Tabs className='w-full' classNames={{ panel: 'pt-0' }}>
+				<Tabs className='w-full' classNames={{ panel: 'pt-0' }} onSelectionChange={(value) => (asteroid.state.tab = value as never)} selectedKey={tab}>
 					<Tab key='search' title='Search'>
-						<div className='w-full flex flex-col gap-2'>
-							<div className='w-full flex flex-row items-center justify-center gap-2'>
-								<Input className='w-full' isDisabled={loading} label='Search' onValueChange={(value) => asteroid.update('text', value)} placeholder='Enter the IAU number, designation, name or SPK ID' size='sm' value={searchText} />
-								<IconButton color='primary' icon={Icons.Search} isDisabled={loading || !searchText} isIconOnly onPointerUp={asteroid.search} variant='light' />
-							</div>
-							<Listbox className='w-full' classNames={{ base: 'w-full', list: 'max-h-[156px] overflow-scroll' }} items={selected?.parameters ?? []} selectionMode='none'>
-								{(parameter) => (
-									<ListboxItem description={parameter.description} key={parameter.name}>
-										<span className='flex items-center justify-between'>
-											<span>{parameter.name}</span>
-											<span>{parameter.value}</span>
-										</span>
-									</ListboxItem>
-								)}
-							</Listbox>
-						</div>
+						<AsteroidSearchTab />
+					</Tab>
+					<Tab key='closeApproaches' title='Close Approaches'>
+						<AsteroidCloseApproachesTab />
 					</Tab>
 				</Tabs>
 			</div>
 			<div className='col-span-full'>
 				<EphemerisAndChart chart={chart} name={selected?.name} position={position} tags={tags} twilight={twilight} />
+			</div>
+		</div>
+	)
+})
+
+export const AsteroidSearchTab = memo(() => {
+	const asteroid = useMolecule(AsteroidMolecule)
+	const { loading, selected, list } = useSnapshot(asteroid.state)
+	const { text } = useSnapshot(asteroid.state.search, { sync: true })
+
+	return (
+		<div className='w-full flex flex-col gap-2'>
+			<div className='w-full flex flex-row items-center justify-center gap-2'>
+				<Input className='flex-1' isDisabled={loading} label='Search' onValueChange={(value) => asteroid.update('text', value)} placeholder='Enter the IAU number, designation, name or SPK ID' size='sm' value={text} />
+				<IconButton color='primary' icon={Icons.Search} isDisabled={loading || !text} onPointerUp={asteroid.search} variant='light' />
+			</div>
+			{list ? (
+				<Listbox className='w-full' classNames={{ base: 'w-full', list: 'max-h-[156px] overflow-scroll' }} items={list} onAction={asteroid.select} selectionMode='single'>
+					{(item) => (
+						<ListboxItem description={item.pdes} key={item.pdes}>
+							{item.name}
+						</ListboxItem>
+					)}
+				</Listbox>
+			) : (
+				<Listbox className='w-full' classNames={{ base: 'w-full', list: 'max-h-[156px] overflow-scroll' }} items={selected?.parameters ?? []} selectionMode='none'>
+					{(parameter) => (
+						<ListboxItem description={parameter.description} key={parameter.name}>
+							<span className='flex items-center justify-between'>
+								<span>{parameter.name}</span>
+								<span>{parameter.value}</span>
+							</span>
+						</ListboxItem>
+					)}
+				</Listbox>
+			)}
+			<div className='w-full text-center text-xs'>
+				<a href='https://ssd-api.jpl.nasa.gov/doc/sbdb.html' rel='noopener' target='_blank'>
+					NASA/JPL Small-Body Database (SBDB) API
+				</a>
+			</div>
+		</div>
+	)
+})
+
+export const AsteroidCloseApproachesTab = memo(() => {
+	const asteroid = useMolecule(AsteroidMolecule)
+	const { loading } = useSnapshot(asteroid.state)
+	const { days, distance } = useSnapshot(asteroid.state.closeApproaches.request, { sync: true })
+	const { result } = useSnapshot(asteroid.state.closeApproaches)
+
+	return (
+		<div className='w-full flex flex-col gap-2'>
+			<div className='w-full flex flex-row items-center justify-center gap-2'>
+				<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={loading} label='Days' maxValue={30} minValue={1} onValueChange={(value) => asteroid.update('days', value)} size='sm' value={days} />
+				<NumberInput className='flex-1' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Distance (LD)' maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.update('distance', value)} size='sm' step={0.1} value={distance} />
+				<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={asteroid.closeApproaches} variant='light' />
+			</div>
+			<Listbox className='w-full' classNames={{ base: 'w-full', list: 'max-h-[156px] overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
+				{(item) => (
+					<ListboxItem description={`${item.distance.toFixed(3)} LD`} key={item.name}>
+						<span className='flex items-center justify-between'>
+							<span>{item.name}</span>
+							<span>{formatTemporal(item.date, 'YYYY-MM-DD HH:mm')}</span>
+						</span>
+					</ListboxItem>
+				)}
+			</Listbox>
+			<div className='w-full text-center text-xs'>
+				<a href='https://ssd-api.jpl.nasa.gov/doc/cad.html' rel='noopener' target='_blank'>
+					NASA/JPL SBDB Close Approach Data API
+				</a>
 			</div>
 		</div>
 	)
@@ -459,7 +527,7 @@ export const EphemerisAndChart = memo(({ name, position, chart, twilight, tags }
 	const deferredData = useDeferredValue(data, [])
 
 	return (
-		<div className='h-[150px] col-span-full relative flex flex-col justify-start items-center gap-1'>
+		<div className='h-[160px] col-span-full relative flex flex-col justify-start items-center gap-1'>
 			<div className='w-full flex flex-row gap-2 text-start text-sm font-bold'>
 				<Button className='rounded-full' color='primary' isIconOnly onPointerUp={() => setShowChart(false)} variant={showChart ? 'light' : 'flat'}>
 					<Icons.Info />

@@ -1,9 +1,10 @@
 import { molecule, onMount } from 'bunshi'
 import { deg, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { meter } from 'nebulosa/src/distance'
+import type React from 'react'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
-import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SATELLITE, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type Framing, type GeographicCoordinate, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from 'src/shared/types'
+import { type BodyPosition, type CloseApproach, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SATELLITE, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type FindCloseApproaches, type Framing, type GeographicCoordinate, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -47,13 +48,14 @@ export interface PlanetState {
 }
 
 export interface AsteroidState {
+	tab: 'search' | 'closeapproaches'
 	loading: boolean
 	readonly search: {
 		text: string
 	}
 	readonly closeApproaches: {
-		days: number
-		distance: number
+		readonly request: FindCloseApproaches
+		result: CloseApproach[]
 	}
 	selected?: Exclude<MinorPlanet, 'list'>
 	list?: MinorPlanet['list']
@@ -315,13 +317,14 @@ export const AsteroidMolecule = molecule(() => {
 	const state =
 		asteroidState ??
 		proxy<AsteroidState>({
+			tab: 'search',
 			loading: false,
 			search: {
 				text: '',
 			},
 			closeApproaches: {
-				days: 7,
-				distance: 10,
+				request: storage.get<FindCloseApproaches>('skyatlas.asteroid.closeapproaches.request', () => ({ days: 7, distance: 10 })),
+				result: [],
 			},
 			request,
 			position: structuredClone(DEFAULT_BODY_POSITION),
@@ -333,17 +336,18 @@ export const AsteroidMolecule = molecule(() => {
 	let chartUpdate = true
 
 	onMount(() => {
-		// const unsubscriber = subscribe(state.request, () => {
-		// 	storage.set('skyatlas.galaxy.request', state.request)
-		// })
+		const unsubscriber = subscribe(state.closeApproaches.request, () => {
+			storage.set('skyatlas.asteroid.closeapproaches.request', state.closeApproaches.request)
+		})
 
 		return () => {
-			// unsubscriber()
+			unsubscriber()
 		}
 	})
 
-	function update(key: 'text', value: string) {
-		if (key === 'text') state.search.text = value
+	function update(key: 'text' | keyof FindCloseApproaches, value: unknown) {
+		if (key === 'text') state.search.text = value as never
+		else state.closeApproaches.request[key] = value as never
 	}
 
 	async function search() {
@@ -368,6 +372,26 @@ export const AsteroidMolecule = molecule(() => {
 		}
 	}
 
+	async function closeApproaches() {
+		try {
+			state.loading = true
+
+			const result = await Api.SkyAtlas.findCloseApproaches(state.closeApproaches.request)
+
+			if (!result) return
+
+			state.closeApproaches.result = result
+		} finally {
+			state.loading = false
+		}
+	}
+
+	function select(pdes: React.Key) {
+		state.search.text = `${pdes}`
+		state.tab = 'search'
+		return search()
+	}
+
 	async function updatePosition() {
 		const code = `DES=${state.selected!.id};`
 		const position = await Api.SkyAtlas.positionOfPlanet(state.request, code)
@@ -376,8 +400,8 @@ export const AsteroidMolecule = molecule(() => {
 
 	async function updateChart(force: boolean = false) {
 		if (!force && !chartUpdate) return
-		const id = state.selected!.id
-		const chart = await Api.SkyAtlas.chartOfSkyObject(state.request, id)
+		const code = `DES=${state.selected!.id};`
+		const chart = await Api.SkyAtlas.chartOfPlanet(state.request, code)
 		if (chart) state.chart = chart
 		chartUpdate = false
 	}
@@ -403,7 +427,7 @@ export const AsteroidMolecule = molecule(() => {
 		}
 	}
 
-	return { state, update, search, tick } as const
+	return { state, update, search, closeApproaches, select, tick } as const
 })
 
 export const GalaxyMolecule = molecule(() => {

@@ -9,16 +9,16 @@ import { precessFk5FromJ2000 } from 'nebulosa/src/fk5'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
 import { localSiderealTime } from 'nebulosa/src/location'
 import { nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/moon'
-import { search } from 'nebulosa/src/sbd'
+import { closeApproaches, search } from 'nebulosa/src/sbd'
 import { observeStar } from 'nebulosa/src/star'
 import { nearestSolarEclipse, season } from 'nebulosa/src/sun'
 import { daysInMonth, parseTemporal, type Temporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
-import { timeUnix, timeYMDHMS, toUnixMillis } from 'nebulosa/src/time'
+import { Timescale, time, timeUnix, timeYMDHMS, toUnixMillis } from 'nebulosa/src/time'
 import { join } from 'path'
 import sharp from 'sharp'
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // biome-ignore format: too long!
-import { type BodyPosition, type ChartOfBody, DEFAULT_MINOR_PLANET, expectedPierSide, type FindNextLunarEclipse, type FindNextSolarEclipse, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
+import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, expectedPierSide, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
 import type { CacheManager } from './cache'
 import type { NotificationManager } from './notification'
 
@@ -240,7 +240,18 @@ export class AtlasManager {
 		}
 	}
 
-	closeApproachesForMinorPlanets() {}
+	async findCloseApproaches(req: FindCloseApproaches) {
+		const result = await closeApproaches('now', `${req.days}d`, req.distance)
+
+		const ai = result.fields.indexOf('des')
+		const bi = result.fields.indexOf('dist')
+		const ci = result.fields.indexOf('jd')
+
+		return result.data.map((e) => {
+			const jd = time(+e[ci], 0, Timescale.TDB, false)
+			return { name: e[ai], distance: +e[bi] * (AU_KM / 384399), date: temporalFromTime(jd) } as CloseApproach
+		})
+	}
 
 	searchSkyObject(req: SearchSkyObject) {
 		const limit = 5
@@ -536,7 +547,6 @@ export class AtlasManager {
 export function atlas(atlas: AtlasManager) {
 	const app = new Elysia({ prefix: '/atlas' })
 		// Endpoints!
-		// '/minorplanets/closeapproaches'
 		.get('/sun/image', ({ query }) => atlas.imageOfSun(query.source as never))
 		.post('/sun/position', ({ body }) => atlas.positionOfSun(body as never))
 		.post('/sun/chart', ({ body }) => atlas.chartOfSun(body as never))
@@ -548,6 +558,7 @@ export function atlas(atlas: AtlasManager) {
 		.post('/moon/phases', ({ body }) => atlas.moonPhases(body as never))
 		.post('/moon/eclipses', ({ body }) => atlas.moonEclipses(body as never))
 		.post('/minorplanets/search', ({ body }) => atlas.searchMinorPlanet(body as never))
+		.post('/minorplanets/closeapproaches', ({ body }) => atlas.findCloseApproaches(body as never))
 		.post('/planets/:code/position', ({ params, body }) => atlas.positionOfPlanet(params.code, body as never))
 		.post('/planets/:code/chart', ({ params, body }) => atlas.chartOfPlanet(params.code, body as never))
 		.post('/skyobjects/search', ({ body }) => atlas.searchSkyObject(body as never))

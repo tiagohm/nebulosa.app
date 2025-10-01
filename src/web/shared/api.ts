@@ -4,7 +4,7 @@ import type { NewVector } from 'nebulosa/src/indi'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, CloseImage, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, DarvStart, DarvStop, Device, DeviceProperties, DeviceProperty, DewHeater, FileSystem, FindNextLunarEclipse, FindNextSolarEclipse, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LunarPhaseTime, MinorPlanet, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, NextLunarEclipse, NextSolarEclipse, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, Satellite, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SlewRate, SolarSeasons, StarDetection, Thermometer, TppaStart, TppaStop, TrackMode, Twilight, Wheel } from 'src/shared/types'
+import type { BodyPosition, Camera, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, DarvStart, DarvStop, Device, DeviceProperties, DeviceProperty, DewHeater, FileSystem, FindCloseApproaches, FindNextLunarEclipse, FindNextSolarEclipse, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LunarPhaseTime, MinorPlanet, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, NextLunarEclipse, NextSolarEclipse, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, Satellite, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SlewRate, SolarSeasons, StarDetection, Thermometer, TppaStart, TppaStop, TrackMode, Twilight, Wheel } from 'src/shared/types'
 import { type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -400,6 +400,10 @@ export namespace Api {
 
 		export function searchMinorPlanet(req: SearchMinorPlanet) {
 			return json<MinorPlanet>('/atlas/minorplanets/search', 'post', req)
+		}
+
+		export function findCloseApproaches(req: FindCloseApproaches) {
+			return json<CloseApproach[]>('/atlas/minorplanets/closeapproaches', 'post', req)
 		}
 
 		export function searchSkyObject(req: SearchSkyObject) {

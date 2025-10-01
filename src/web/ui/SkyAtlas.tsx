@@ -4,7 +4,7 @@ import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa/src/constellation'
 import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/distance'
-import { formatTemporal } from 'nebulosa/src/temporal'
+import { formatTemporal, type Temporal } from 'nebulosa/src/temporal'
 import { memo, useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import { type BodyPosition, EMPTY_TWILIGHT, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
@@ -12,7 +12,7 @@ import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConstellationSelect } from './ConstellationSelect'
-import { Icons } from './Icon'
+import { type Icon, Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 import { Moon } from './Moon'
@@ -114,13 +114,7 @@ export const SolarEclipses = memo(() => {
 	return (
 		<div className='flex flex-col gap-0'>
 			{eclipses.map((eclipse) => (
-				<>
-					<span className='font-bold flex items-center gap-1'>
-						<Icons.Sun />
-						{eclipse.type}
-					</span>
-					<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(eclipse.time, 'YYYY-MM-DD HH:mm')}</span>
-				</>
+				<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Moon} key={eclipse.time} label={eclipse.type} time={eclipse.time} />
 			))}
 		</div>
 	)
@@ -133,26 +127,10 @@ export const Seasons = memo(() => {
 
 	return (
 		<div className='flex flex-col gap-0'>
-			<span className='font-bold flex items-center gap-1'>
-				{isSouthern ? <Icons.Flower /> : <Icons.Leaf />}
-				{isSouthern ? 'SPRING' : 'AUTUMN/FALL'}
-			</span>
-			<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(isSouthern ? autumn : spring, 'MM-DD HH:mm')}</span>
-			<span className='font-bold flex items-center gap-1'>
-				{isSouthern ? <Icons.Sun /> : <Icons.SnowFlake />}
-				{isSouthern ? 'SUMMER' : 'WINTER'}
-			</span>
-			<span className='ps-6 mt-[-4px]'>{formatTemporal(isSouthern ? winter : summer, 'MM-DD HH:mm')}</span>
-			<span className='font-bold flex items-center gap-1'>
-				{isSouthern ? <Icons.Leaf /> : <Icons.Flower />}
-				{isSouthern ? 'AUTUMN/FALL' : 'SPRING'}
-			</span>
-			<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(isSouthern ? spring : autumn, 'MM-DD HH:mm')}</span>
-			<span className='font-bold flex items-center gap-1'>
-				{isSouthern ? <Icons.SnowFlake /> : <Icons.Sun />}
-				{isSouthern ? 'WINTER' : 'SUMMER'}
-			</span>
-			<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(isSouthern ? summer : winter, 'MM-DD HH:mm')}</span>
+			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Flower} label='SPRING' time={autumn} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Leaf} label='AUTUMN/FALL' time={spring} />}
+			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Sun} label='SUMMER' time={winter} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.SnowFlake} label='WINTER' time={summer} />}
+			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Leaf} label='AUTUMN/FALL' time={spring} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Flower} label='SPRING' time={autumn} />}
+			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.SnowFlake} label='WINTER' time={summer} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Sun} label='SUMMER' time={winter} />}
 		</div>
 	)
 })
@@ -188,15 +166,17 @@ export const MoonPhases = memo(() => {
 
 	return (
 		<div className='flex flex-col gap-0'>
-			{phases.map(([phase, time]) => (
-				<>
-					<span className='font-bold flex items-center gap-1'>
-						{phase === 0 ? <Icons.MoonNew /> : phase === 1 ? <Icons.MoonFirstQuarter /> : phase === 2 ? <Icons.MoonFull /> : <Icons.MoonLastQuarter />}
-						{phase === 0 ? 'NEW MOON' : phase === 1 ? 'FIRST QUARTER' : phase === 2 ? 'FULL MOON' : 'LAST QUARTER'}
-					</span>
-					<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(time, 'DD HH:mm')}</span>
-				</>
-			))}
+			{phases.map(([phase, time]) =>
+				phase === 0 ? (
+					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonNew} key={phase} label='NEW MOON' time={time} />
+				) : phase === 1 ? (
+					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFirstQuarter} key={phase} label='FIRST QUARTER' time={time} />
+				) : phase === 2 ? (
+					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFull} key={phase} label='FULL MOON' time={time} />
+				) : (
+					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonLastQuarter} key={phase} label='LAST QUARTER' time={time} />
+				),
+			)}
 		</div>
 	)
 })
@@ -208,13 +188,7 @@ export const LunarEclipses = memo(() => {
 	return (
 		<div className='flex flex-col gap-0'>
 			{eclipses.map((eclipse) => (
-				<>
-					<span className='font-bold flex items-center gap-1'>
-						<Icons.Moon />
-						{eclipse.type}
-					</span>
-					<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(eclipse.startTime, 'YYYY-MM-DD HH:mm')}</span>
-				</>
+				<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Moon} key={eclipse.startTime} label={eclipse.type} time={eclipse.startTime} />
 			))}
 		</div>
 	)
@@ -327,7 +301,7 @@ export const AsteroidSearchTab = memo(() => {
 	return (
 		<div className='w-full flex flex-col gap-2'>
 			<div className='w-full flex flex-row items-center justify-center gap-2'>
-				<Input className='flex-1' isDisabled={loading} label='Search' onValueChange={(value) => asteroid.update('text', value)} placeholder='Enter the IAU number, designation, name or SPK ID' size='sm' value={text} />
+				<Input className='flex-1' isDisabled={loading} label='Search' onValueChange={asteroid.updateSearch} placeholder='Enter the IAU number, designation, name or SPK ID' size='sm' value={text} />
 				<IconButton color='primary' icon={Icons.Search} isDisabled={loading || !text} onPointerUp={asteroid.search} variant='light' />
 			</div>
 			{list ? (
@@ -368,8 +342,8 @@ export const AsteroidCloseApproachesTab = memo(() => {
 	return (
 		<div className='w-full flex flex-col gap-2'>
 			<div className='w-full flex flex-row items-center justify-center gap-2'>
-				<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={loading} label='Days' maxValue={30} minValue={1} onValueChange={(value) => asteroid.update('days', value)} size='sm' value={days} />
-				<NumberInput className='flex-1' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Distance (LD)' maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.update('distance', value)} size='sm' step={0.1} value={distance} />
+				<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={loading} label='Days' maxValue={30} minValue={1} onValueChange={(value) => asteroid.updateCloseApproaches('days', value)} size='sm' value={days} />
+				<NumberInput className='flex-1' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Distance (LD)' maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} size='sm' step={0.1} value={distance} />
 				<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={asteroid.closeApproaches} variant='light' />
 			</div>
 			<Listbox className='w-full' classNames={{ base: 'w-full', list: 'max-h-[156px] overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
@@ -485,6 +459,25 @@ export const SatelliteTab = memo(() => {
 			<div className='col-span-full'>
 				<EphemerisAndChart chart={chart} name={name} position={position} twilight={twilight} />
 			</div>
+		</div>
+	)
+})
+
+export interface AstronomicalEventProps {
+	readonly icon: Icon
+	readonly label: string
+	readonly time: Temporal
+	readonly format: string
+}
+
+export const AstronomicalEvent = memo(({ icon: Icon, label, time, format }: AstronomicalEventProps) => {
+	return (
+		<div className='flex flex-col gap-0'>
+			<span className='font-bold flex items-center gap-1'>
+				<Icon />
+				{label}
+			</span>
+			<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(time, format)}</span>
 		</div>
 	)
 })

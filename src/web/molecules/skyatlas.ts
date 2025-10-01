@@ -345,9 +345,12 @@ export const AsteroidMolecule = molecule(() => {
 		}
 	})
 
-	function update(key: 'text' | keyof FindCloseApproaches, value: unknown) {
-		if (key === 'text') state.search.text = value as never
-		else state.closeApproaches.request[key] = value as never
+	function updateSearch(value: string) {
+		state.search.text = value
+	}
+
+	function updateCloseApproaches<K extends keyof FindCloseApproaches>(key: K, value: FindCloseApproaches[K]) {
+		state.closeApproaches.request[key] = value
 	}
 
 	async function search() {
@@ -427,7 +430,7 @@ export const AsteroidMolecule = molecule(() => {
 		}
 	}
 
-	return { state, update, search, closeApproaches, select, tick } as const
+	return { state, updateSearch, updateCloseApproaches, search, closeApproaches, select, tick } as const
 })
 
 export const GalaxyMolecule = molecule(() => {

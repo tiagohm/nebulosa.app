@@ -32,6 +32,10 @@
     "driver": "indi_alluna_tcs2"
   },
   {
+    "name": "Alpaca Camera",
+    "driver": "indi_alpaca_ccd"
+  },
+  {
     "name": "Alpaca Dome",
     "driver": "indi_alpaca_dome"
   },
@@ -378,6 +382,10 @@
   {
     "name": "Imager Agent",
     "driver": "indi_imager_agent"
+  },
+  {
+    "name": "INDI Alpaca Server",
+    "driver": "indi_alpaca_server"
   },
   {
     "name": "INDI Webcam",
@@ -974,6 +982,10 @@
   {
     "name": "Universal ROR",
     "driver": "indi_universalror_dome"
+  },
+  {
+    "name": "UPS",
+    "driver": "indi_ups_safety"
   },
   {
     "name": "Uranus Meteo Sensor",

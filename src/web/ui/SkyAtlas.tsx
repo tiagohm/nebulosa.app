@@ -1,4 +1,4 @@
-import { Button, Checkbox, Chip, Input, Listbox, ListboxItem, NumberInput, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
+import { Button, Checkbox, Chip, type ChipProps, Input, Listbox, ListboxItem, NumberInput, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { RAD2DEG } from 'nebulosa/src/constants'
@@ -9,7 +9,7 @@ import { memo, useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import { type BodyPosition, EMPTY_TWILIGHT, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
+import { AsteroidMolecule, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConstellationSelect } from './ConstellationSelect'
 import { Icons } from './Icon'
@@ -58,7 +58,9 @@ export const SkyAtlas = memo(() => {
 					<Tab key='planet' title={<Icons.Planet />}>
 						<PlanetTab />
 					</Tab>
-					<Tab key='asteroid' title={<Icons.Meteor />}></Tab>
+					<Tab key='asteroid' title={<Icons.Meteor />}>
+						<AsteroidTab />
+					</Tab>
 					<Tab key='galaxy' title={<Icons.Galaxy />}>
 						<GalaxyTab />
 					</Tab>
@@ -270,6 +272,57 @@ export const PlanetTab = memo(() => {
 	)
 })
 
+export const AsteroidTab = memo(() => {
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { twilight } = useSnapshot(atlas.state)
+
+	const asteroid = useMolecule(AsteroidMolecule)
+	const { loading, selected, position, chart } = useSnapshot(asteroid.state)
+	const { text: searchText } = useSnapshot(asteroid.state.search, { sync: true })
+
+	const tags = useMemo(() => {
+		const tags: EphemerisAndChartTag[] = []
+
+		if (selected) {
+			if (selected.orbitType) tags.push({ label: selected.orbitType, color: 'success' })
+			if (selected.neo) tags.push({ label: 'NEO', color: 'warning' })
+			if (selected.pha) tags.push({ label: 'PHA', color: 'danger' })
+		}
+
+		return tags
+	}, [selected])
+
+	return (
+		<div className='grid grid-cols-12 gap-2 items-center'>
+			<div className='col-span-full flex flex-col gap-2'>
+				<Tabs className='w-full' classNames={{ panel: 'pt-0' }}>
+					<Tab key='search' title='Search'>
+						<div className='w-full flex flex-col gap-2'>
+							<div className='w-full flex flex-row items-center justify-center gap-2'>
+								<Input className='w-full' isDisabled={loading} label='Search' onValueChange={(value) => asteroid.update('text', value)} placeholder='Enter the IAU number, designation, name or SPK ID' size='sm' value={searchText} />
+								<IconButton color='primary' icon={Icons.Search} isDisabled={loading || !searchText} isIconOnly onPointerUp={asteroid.search} variant='light' />
+							</div>
+							<Listbox className='w-full' classNames={{ base: 'w-full', list: 'max-h-[156px] overflow-scroll' }} items={selected?.parameters ?? []} selectionMode='none'>
+								{(parameter) => (
+									<ListboxItem description={parameter.description} key={parameter.name}>
+										<span className='flex items-center justify-between'>
+											<span>{parameter.name}</span>
+											<span>{parameter.value}</span>
+										</span>
+									</ListboxItem>
+								)}
+							</Listbox>
+						</div>
+					</Tab>
+				</Tabs>
+			</div>
+			<div className='col-span-full'>
+				<EphemerisAndChart chart={chart} name={selected?.name} position={position} tags={tags} twilight={twilight} />
+			</div>
+		</div>
+	)
+})
+
 export const GalaxyTab = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { twilight } = useSnapshot(atlas.state)
@@ -368,20 +421,42 @@ export const SatelliteTab = memo(() => {
 	)
 })
 
+export interface EphemerisAndChartTag {
+	readonly label: string
+	readonly color: ChipProps['color']
+}
+
 export interface EphemerisAndChartProps {
 	readonly name?: string
 	readonly position: BodyPosition
 	readonly chart: readonly number[]
 	readonly twilight?: Twilight
+	readonly tags?: EphemerisAndChartTag[]
 }
 
-export const EphemerisAndChart = memo(({ name, position, chart, twilight }: EphemerisAndChartProps) => {
+function makeTags(name: string | undefined, position: BodyPosition, extra?: EphemerisAndChartTag[]): EphemerisAndChartTag[] {
+	const tags: EphemerisAndChartTag[] = []
+
+	if (name) {
+		tags.push({ label: name, color: 'primary' })
+	} else if (position.names?.length) {
+		position.names.forEach((name) => tags.push({ label: skyObjectName(name, position.constellation), color: 'primary' }))
+	}
+
+	if (extra?.length) {
+		tags.push(...extra)
+	}
+
+	return tags
+}
+
+export const EphemerisAndChart = memo(({ name, position, chart, twilight, tags }: EphemerisAndChartProps) => {
 	const [showChart, setShowChart] = useState(false)
 
+	tags = useMemo(() => makeTags(name, position, tags), [name, position.constellation, position.names, tags])
 	const deferredChart = useDeferredValue(chart, [])
 	const data = useMemo(() => makeEphemerisChart(deferredChart, twilight), [deferredChart, twilight])
 	const deferredData = useDeferredValue(data, [])
-	const names = useMemo(() => (name ? [name] : position.names?.map((e) => skyObjectName(e, position.constellation))), [position.constellation, position.names])
 
 	return (
 		<div className='h-[150px] col-span-full relative flex flex-col justify-start items-center gap-1'>
@@ -394,9 +469,9 @@ export const EphemerisAndChart = memo(({ name, position, chart, twilight }: Ephe
 				</Button>
 				<div className='flex-1 justify-center items-center flex text-sm font-bold overflow-hidden'>
 					<ScrollShadow className='w-full flex gap-1' hideScrollBar orientation='horizontal'>
-						{names?.map((name) => (
-							<Chip color='primary' key={name} size='sm'>
-								{name}
+						{tags?.map((tag) => (
+							<Chip color={tag.color} key={tag.label} size='sm'>
+								{tag.label}
 							</Chip>
 						))}
 					</ScrollShadow>

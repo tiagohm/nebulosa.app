@@ -9,6 +9,7 @@ import { precessFk5FromJ2000 } from 'nebulosa/src/fk5'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
 import { localSiderealTime } from 'nebulosa/src/location'
 import { nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/moon'
+import { search } from 'nebulosa/src/sbd'
 import { observeStar } from 'nebulosa/src/star'
 import { nearestSolarEclipse, season } from 'nebulosa/src/sun'
 import { daysInMonth, parseTemporal, type Temporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
@@ -17,8 +18,9 @@ import { join } from 'path'
 import sharp from 'sharp'
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // biome-ignore format: too long!
-import { type BodyPosition, type ChartOfBody, expectedPierSide, type FindNextLunarEclipse, type FindNextSolarEclipse, type LunarPhaseTime, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
+import { type BodyPosition, type ChartOfBody, DEFAULT_MINOR_PLANET, expectedPierSide, type FindNextLunarEclipse, type FindNextSolarEclipse, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
 import type { CacheManager } from './cache'
+import type { NotificationManager } from './notification'
 
 const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
 
@@ -35,7 +37,10 @@ export class AtlasManager {
 	private readonly ephemeris: Record<string, Map<number, BodyPosition>> = {}
 	private satellites: Satellite[] = []
 
-	constructor(readonly cache: CacheManager) {}
+	constructor(
+		readonly cache: CacheManager,
+		readonly notification?: NotificationManager,
+	) {}
 
 	async imageOfSun(source: SolarImageSource) {
 		const file = Bun.file(`/dev/shm/sun-${source}.jpg`)
@@ -210,7 +215,30 @@ export class AtlasManager {
 		return this.computeChart(code, req.time, 1)
 	}
 
-	searchMinorPlanet() {}
+	async searchMinorPlanet(req: SearchMinorPlanet): Promise<MinorPlanet | undefined> {
+		const result = await search(req.text)
+
+		if ('list' in result) {
+			return { ...DEFAULT_MINOR_PLANET, list: result.list }
+		} else if ('message' in result) {
+			this.notification?.send({ body: result.message, severity: 'error' })
+			return undefined
+		} else {
+			const parameters: MinorPlanetParameter[] = []
+
+			for (const e of result.orbit.elements) {
+				parameters.push({ name: e.name, description: e.title, value: `${e.value || ''} ${e.units || ''}`.trim() })
+			}
+
+			for (const e of result.phys_par) {
+				parameters.push({ name: e.name, description: e.title, value: `${e.value || ''} ${e.units || ''}`.trim() })
+			}
+
+			const { fullname: name, spkid: id, kind, pha, neo, orbit_class } = result.object
+
+			return { name, id, kind, pha, neo, orbitType: orbit_class.name, parameters }
+		}
+	}
 
 	closeApproachesForMinorPlanets() {}
 
@@ -508,7 +536,6 @@ export class AtlasManager {
 export function atlas(atlas: AtlasManager) {
 	const app = new Elysia({ prefix: '/atlas' })
 		// Endpoints!
-		// '/minorplanets'
 		// '/minorplanets/closeapproaches'
 		.get('/sun/image', ({ query }) => atlas.imageOfSun(query.source as never))
 		.post('/sun/position', ({ body }) => atlas.positionOfSun(body as never))
@@ -520,6 +547,7 @@ export function atlas(atlas: AtlasManager) {
 		.post('/moon/chart', ({ body }) => atlas.chartOfMoon(body as never))
 		.post('/moon/phases', ({ body }) => atlas.moonPhases(body as never))
 		.post('/moon/eclipses', ({ body }) => atlas.moonEclipses(body as never))
+		.post('/minorplanets/search', ({ body }) => atlas.searchMinorPlanet(body as never))
 		.post('/planets/:code/position', ({ params, body }) => atlas.positionOfPlanet(params.code, body as never))
 		.post('/planets/:code/chart', ({ params, body }) => atlas.chartOfPlanet(params.code, body as never))
 		.post('/skyobjects/search', ({ body }) => atlas.searchSkyObject(body as never))

@@ -10,10 +10,6 @@
 	--heroui-content1: 0 0% 9.4%;
 }
 
-svg:focus {
-	outline: none;
-}
-
 html {
 	@apply m-0 h-screen overflow-hidden p-0 scroll-smooth touch-none;
 }
@@ -23,30 +19,10 @@ body {
 	@apply text-[13px] overscroll-none;
 }
 
-/* Context Menu */
+/* Remove white border around SVG */
 
-div[role="menu"] {
-	@apply bg-content2 min-w-60 overflow-hidden rounded-md p-2 shadow-2xl;
-}
-
-div[role="menuitem"] {
-	@apply cursor-pointer relative flex h-8.5 mb-0.5 select-none items-center gap-2 rounded p-2 leading-none outline-none data-[disabled]:opacity-25 data-[highlighted]:bg-content3/60;
-}
-
-div[role="menuitem"].danger {
-	@apply text-white bg-danger data-[highlighted]:bg-danger-500;
-}
-
-div[role="menuitem"].selected {
-	@apply bg-success data-[highlighted]:bg-success-500;
-}
-
-div[role="menuitem"] .lucide-chevron-right {
-	@apply ml-auto;
-}
-
-div[role="separator"] {
-	@apply m-1.5 h-px bg-content4/30;
+svg:focus {
+	outline: none;
 }
 
 /* Dialog */
@@ -56,7 +32,7 @@ div[data-slot="wrapper"]:has(section[role="dialog"]) {
 }
 
 section[role="dialog"] {
-	@apply pointer-events-auto opacity-98;
+	@apply pointer-events-auto opacity-97;
 }
 
 /* Tooltip */
@@ -82,12 +58,6 @@ div[data-slot="base"] div[data-slot="mainWrapper"] button[data-slot="trigger"] {
 div:has(div[data-slot="base"][data-open="true"][role="dialog"]) {
 	@apply !z-[10000000];
 }
-
-/* Select Label With Chips */
-
-/* label[data-slot="label"]:has(+ div[data-slot="innerWrapper"] span[data-slot="value"] *) {
-	padding-bottom: 4px;
-} */
 
 /* Utilities */
 

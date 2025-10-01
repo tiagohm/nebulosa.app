@@ -292,6 +292,40 @@ describe('moon phases', () => {
 	})
 })
 
+describe('minor planet', () => {
+	test('search', async () => {
+		const result = await atlas.searchMinorPlanet({ text: 'Ceres' })
+
+		expect(result).toBeDefined()
+		expect(result?.list).toBeUndefined()
+
+		if (result) {
+			expect(result.name).toBe('1 Ceres (A801 AA)')
+			expect(result.id).toBe('20000001')
+			expect(result.kind).toBe('an')
+			expect(result.pha).toBeFalse()
+			expect(result.neo).toBeFalse()
+			expect(result.orbitType).toBe('Main-belt Asteroid')
+			expect(result.parameters).toBeDefined()
+			expect(result.parameters).toHaveLength(25)
+		}
+	})
+
+	test('multiple results', async () => {
+		const result = await atlas.searchMinorPlanet({ text: 'PANSTARRS' })
+
+		expect(result).toBeDefined()
+		expect(result?.list).toBeDefined()
+		expect(result!.list!.length).toBeGreaterThanOrEqual(335)
+	})
+
+	test('not found', async () => {
+		const result = await atlas.searchMinorPlanet({ text: 'asdasdasd' })
+
+		expect(result).toBeUndefined()
+	})
+})
+
 test('position of jupiter', async () => {
 	const position = await atlas.positionOfPlanet('599', POSITION_OF_BODY)
 

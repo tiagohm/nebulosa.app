@@ -10,6 +10,7 @@ import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebul
 import type { DefBlobVector, DefLightVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, PropertyState } from 'nebulosa/src/indi'
 import type { LunarEclipse, LunarPhase } from 'nebulosa/src/moon'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
+import type { SmallBodySearchListItem, SmallBodySearchObject } from 'nebulosa/src/sbd'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
 import type { SolarEclipse } from 'nebulosa/src/sun'
 import type { Temporal } from 'nebulosa/src/temporal'
@@ -166,6 +167,27 @@ export interface NextLunarEclipse extends Pick<LunarEclipse, 'type'> {
 	startTime: Temporal
 	endTime: Temporal
 	time: Temporal
+}
+
+export interface SearchMinorPlanet {
+	readonly text: string
+}
+
+export interface MinorPlanetParameter {
+	readonly name: string
+	readonly description: string
+	readonly value: string
+}
+
+export interface MinorPlanet {
+	readonly name: string
+	readonly id: string
+	readonly kind?: SmallBodySearchObject['kind']
+	readonly pha: boolean
+	readonly neo: boolean
+	readonly orbitType: string
+	readonly parameters?: MinorPlanetParameter[]
+	readonly list?: SmallBodySearchListItem[]
 }
 
 export interface SearchSkyObject extends LocationAndTime {
@@ -1327,6 +1349,14 @@ export const EMPTY_TWILIGHT: Twilight = {
 	day: [0, 0],
 	night: [0, 0],
 	end: [0, 0],
+}
+
+export const DEFAULT_MINOR_PLANET: MinorPlanet = {
+	name: '',
+	id: '',
+	pha: false,
+	neo: false,
+	orbitType: '',
 }
 
 export const DEFAULT_SKY_OBJECT_SEARCH_ITEM: SkyObjectSearchItem = {

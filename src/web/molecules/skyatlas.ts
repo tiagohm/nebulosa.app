@@ -3,7 +3,7 @@ import { deg, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { meter } from 'nebulosa/src/distance'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
-import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SATELLITE, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type Framing, type GeographicCoordinate, type LocationAndTime, type LunarPhaseTime, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from 'src/shared/types'
+import { type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SATELLITE, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type Framing, type GeographicCoordinate, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -47,6 +47,17 @@ export interface PlanetState {
 }
 
 export interface AsteroidState {
+	loading: boolean
+	readonly search: {
+		text: string
+	}
+	readonly closeApproaches: {
+		days: number
+		distance: number
+	}
+	selected?: Exclude<MinorPlanet, 'list'>
+	list?: MinorPlanet['list']
+	readonly request: PositionOfBody
 	readonly position: BodyPosition
 	chart: number[]
 }
@@ -75,6 +86,7 @@ export interface SatelliteState {
 let skyAtlasState: SkyAtlasState | undefined
 let sunState: SunState | undefined
 let moonState: MoonState | undefined
+let asteroidState: AsteroidState | undefined
 let galaxyState: GalaxyState | undefined
 let satelliteState: SatelliteState | undefined
 
@@ -295,6 +307,103 @@ export const PlanetMolecule = molecule(() => {
 	}
 
 	return { state, tick, select } as const
+})
+
+export const AsteroidMolecule = molecule(() => {
+	const request = structuredClone(DEFAULT_POSITION_OF_BODY)
+
+	const state =
+		asteroidState ??
+		proxy<AsteroidState>({
+			loading: false,
+			search: {
+				text: '',
+			},
+			closeApproaches: {
+				days: 7,
+				distance: 10,
+			},
+			request,
+			position: structuredClone(DEFAULT_BODY_POSITION),
+			chart: [],
+		})
+
+	asteroidState = state
+
+	let chartUpdate = true
+
+	onMount(() => {
+		// const unsubscriber = subscribe(state.request, () => {
+		// 	storage.set('skyatlas.galaxy.request', state.request)
+		// })
+
+		return () => {
+			// unsubscriber()
+		}
+	})
+
+	function update(key: 'text', value: string) {
+		if (key === 'text') state.search.text = value
+	}
+
+	async function search() {
+		try {
+			state.loading = true
+
+			const result = await Api.SkyAtlas.searchMinorPlanet({ text: state.search.text })
+
+			if (!result) return
+
+			if ('list' in result) {
+				state.list = result.list
+			} else {
+				state.selected = result
+				state.list = undefined
+
+				await updatePosition()
+				await updateChart(true)
+			}
+		} finally {
+			state.loading = false
+		}
+	}
+
+	async function updatePosition() {
+		const code = `DES=${state.selected!.id};`
+		const position = await Api.SkyAtlas.positionOfPlanet(state.request, code)
+		if (position) Object.assign(state.position, position)
+	}
+
+	async function updateChart(force: boolean = false) {
+		if (!force && !chartUpdate) return
+		const id = state.selected!.id
+		const chart = await Api.SkyAtlas.chartOfSkyObject(state.request, id)
+		if (chart) state.chart = chart
+		chartUpdate = false
+	}
+
+	async function tick(time: UTCTime, location: GeographicCoordinate) {
+		let changed = false
+
+		if (isLocationChanged(location, request.location)) {
+			Object.assign(request.location, location)
+			changed = true
+		}
+
+		// Updates only if passed more than 1 minute since last update
+		if (time.utc - request.time.utc >= 60000 || time.offset !== request.time.offset) {
+			Object.assign(request.time, time)
+			changed = true
+		}
+
+		// Refresh selected object
+		if (changed && state.selected) {
+			await updatePosition()
+			await updateChart(false)
+		}
+	}
+
+	return { state, update, search, tick } as const
 })
 
 export const GalaxyMolecule = molecule(() => {
@@ -541,6 +650,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 	const sun = m(SunMolecule)
 	const moon = m(MoonMolecule)
 	const planet = m(PlanetMolecule)
+	const asteroid = m(AsteroidMolecule)
 	const galaxy = m(GalaxyMolecule)
 	const satellite = m(SatelliteMolecule)
 
@@ -564,7 +674,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 			sun: sun.state,
 			moon: moon.state,
 			planet: planet.state,
-			asteroid: moon.state,
+			asteroid: asteroid.state,
 			galaxy: galaxy.state,
 			satellite: satellite.state,
 		})
@@ -609,6 +719,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 		if (state.tab === 'sun') sun.tick(time, location)
 		else if (state.tab === 'moon') moon.tick(time, location)
 		else if (state.tab === 'planet') planet.tick(time, location)
+		else if (state.tab === 'asteroid') asteroid.tick(time, location)
 		else if (state.tab === 'galaxy') galaxy.tick(time, location)
 		else if (state.tab === 'satellite') satellite.tick(time, location)
 	}

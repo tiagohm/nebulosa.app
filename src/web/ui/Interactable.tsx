@@ -1,6 +1,6 @@
 import { createUseGesture, dragAction, pinchAction, wheelAction } from '@use-gesture/react'
 
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { preventDefault } from '@/shared/util'
 
 export type InteractType = 'drag' | 'pinch' | 'wheel'
@@ -29,7 +29,7 @@ export function Interactable({ zIndex, children, onGesture, onTap }: Interactabl
 	// Prevent default gesture events to avoid zooming on iOS devices
 	// This is necessary to ensure that pinch and drag gestures work as expected
 	// without triggering the browser's default zoom behavior.
-	useEffect(() => {
+	useLayoutEffect(() => {
 		document.addEventListener('gesturestart', preventDefault)
 		document.addEventListener('gesturechange', preventDefault)
 		document.addEventListener('gestureend', preventDefault)

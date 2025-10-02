@@ -1,5 +1,5 @@
 import { useMolecule } from 'bunshi/react'
-import { memo, useEffect, useRef } from 'react'
+import { memo, useLayoutEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
 import { ImageWorkspaceMolecule } from '@/molecules/image/workspace'
@@ -25,7 +25,7 @@ export const ImageViewer = memo(() => {
 	const { crosshair, starDetection, stretch, solver, fitsHeader, scnr, adjustment, filter, settings } = useSnapshot(viewer.state)
 	const { selected } = useSnapshot(workspace.state)
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (ref.current) {
 			viewer.attach(ref.current)
 			workspace.link(image, viewer)
@@ -34,7 +34,7 @@ export const ImageViewer = memo(() => {
 		return () => {
 			viewer.detach()
 		}
-	}, [ref.current])
+	}, [])
 
 	function handleGesture({ scale }: InteractTransform) {
 		viewer.state.scale = scale

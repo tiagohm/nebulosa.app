@@ -50,7 +50,7 @@ export const ZIndexMolecule = molecule(() => {
 
 	function apply(element: HTMLElement, key: string) {
 		key = key.replace(NAME_INVALID_CHAR_REGEX, '-')
-		element.style.zIndex = `var(--z-index-${key}) !important`
+		element.style.zIndex = `var(--z-index-${key})`
 	}
 
 	function remove(key: string) {

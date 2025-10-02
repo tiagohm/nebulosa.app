@@ -20,7 +20,7 @@ export const IndiPanelControl = memo(() => {
 	}, [device])
 
 	return (
-		<Modal header='INDI Panel Control' maxWidth='400px' name='indi-panel-control' onHide={control.hide}>
+		<Modal header='INDI Panel Control' id='indi-panel-control' maxWidth='400px' onHide={control.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<EnumSelect className='col-span-6' label='Device' onValueChange={(value) => (control.state.device = value)} value={device}>
 					{devices.map((e) => (

@@ -19,7 +19,7 @@ export const ImageFilter = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='Filter' maxWidth='200px' name={`filter-${filter.scope.image.key}`} onHide={filter.hide}>
+		<Modal footer={Footer} header='Filter' id={`filter-${filter.scope.image.key}`} maxWidth='200px' onHide={filter.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Checkbox className='col-span-full' isSelected={enabled} onValueChange={(value) => filter.update('enabled', value)}>
 					Enabled

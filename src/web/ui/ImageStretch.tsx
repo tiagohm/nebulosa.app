@@ -28,7 +28,7 @@ export const ImageStretch = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='Stretch' maxWidth='289px' name={`stretch-${stretch.scope.image.key}`} onHide={stretch.hide}>
+		<Modal footer={Footer} header='Stretch' id={`stretch-${stretch.scope.image.key}`} maxWidth='289px' onHide={stretch.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} label='Shadow' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('shadow', value)} size='sm' value={shadow} />
 				<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} label='Highlight' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('highlight', value)} size='sm' value={highlight} />

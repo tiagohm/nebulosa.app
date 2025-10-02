@@ -32,7 +32,7 @@ export const FlatPanel = memo(() => {
 	)
 
 	return (
-		<Modal header={Header} maxWidth='260px' name={`flat-panel-${flatPanel.scope.flatPanel.name}`} onHide={flatPanel.hide}>
+		<Modal header={Header} id={`flat-panel-${flatPanel.scope.flatPanel.name}`} maxWidth='260px' onHide={flatPanel.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row items-center justify-center'>
 					<Switch isDisabled={!connected} isSelected={enabled} onValueChange={flatPanel.toggle} />

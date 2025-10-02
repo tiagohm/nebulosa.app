@@ -13,14 +13,14 @@ function canDrag(target: EventTarget | null) {
 	return target instanceof HTMLElement && (target.closest('.modal') !== null || target.closest('#root'))
 }
 
-export function useModal(name: string, onHide?: VoidFunction) {
+export function useModal(id: string, onHide?: VoidFunction) {
 	const zIndex = useMolecule(ZIndexMolecule)
 	const modalRef = useRef<HTMLElement>(null)
-	const xy = useRef(modalTransformMap.get(name) ?? storage.get(`modal-${name}`, () => ({ x: 0, y: 0 })))
+	const xy = useRef(modalTransformMap.get(id) ?? storage.get(`modal-${id}`, () => ({ x: 0, y: 0 })))
 	const boundary = useRef({ minLeft: 0, minTop: 0, maxLeft: 0, maxTop: 0 })
 
 	// Initialize the position of the modal if it doesn't exist in the map
-	modalTransformMap.set(name, xy.current)
+	modalTransformMap.set(id, xy.current)
 
 	function computeBoundary() {
 		if (!modalRef.current) return
@@ -48,7 +48,7 @@ export function useModal(name: string, onHide?: VoidFunction) {
 			onDragStart: (event) => {
 				if (!modalRef.current || !canDrag(event.target)) return
 
-				zIndex.increment(name, true)
+				zIndex.increment(id, true)
 
 				computeBoundary()
 
@@ -68,7 +68,7 @@ export function useModal(name: string, onHide?: VoidFunction) {
 				document.body.style.userSelect = ''
 
 				// Save the modal position to local storage
-				storage.set(`modal-${name}`, xy.current)
+				storage.set(`modal-${id}`, xy.current)
 			},
 		},
 		{
@@ -88,17 +88,17 @@ export function useModal(name: string, onHide?: VoidFunction) {
 			modalRef.current.style.transform = `translate(${xy.current.x}px, ${xy.current.y}px)`
 
 			// Set the z-index of the modal
-			zIndex.apply(modalRef.current, name)
+			zIndex.apply(modalRef.current, id)
 		}
 	}, [])
 
 	const hide = useCallback(() => {
-		zIndex.remove(name)
+		zIndex.remove(id)
 		onHide?.()
 	}, [])
 
 	useEffect(() => {
-		zIndex.increment(name, true)
+		zIndex.increment(id, true)
 	}, [])
 
 	const moveProps = { ...bind(), style: { cursor: 'move' } }

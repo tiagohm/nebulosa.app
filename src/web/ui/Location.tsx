@@ -11,16 +11,16 @@ import { Modal } from './Modal'
 import { TextButton } from './TextButton'
 
 export interface LocationProps {
-	readonly name: string
+	readonly id: string
 	readonly coordinate: GeographicCoordinate
 	readonly onCoordinateChange?: (position: GeographicCoordinate) => void
 	readonly onClose?: () => void
 }
 
-export function Location({ name, coordinate: { latitude, longitude, elevation }, onCoordinateChange: onPositionChange, onClose }: LocationProps) {
+export function Location({ id, coordinate: { latitude, longitude, elevation }, onCoordinateChange: onPositionChange, onClose }: LocationProps) {
 	const [position, setPosition] = useState<LatLngTuple>([toDeg(latitude), toDeg(longitude), toMeter(elevation)])
 
-	function handlePositionChoose() {
+	function handleChoose() {
 		onPositionChange?.({ latitude: deg(position[0]), longitude: deg(position[1]), elevation: meter(position[2] ?? 0) })
 		onClose?.()
 	}
@@ -35,10 +35,10 @@ export function Location({ name, coordinate: { latitude, longitude, elevation },
 		else if (type === 'elevation') setPosition((prev) => [prev[0], prev[1], value])
 	}
 
-	const Footer = <TextButton color='success' label='Choose' onPointerUp={handlePositionChoose} startContent={<Icons.Check />} />
+	const Footer = <TextButton color='success' label='Choose' onPointerUp={handleChoose} startContent={<Icons.Check />} />
 
 	return (
-		<Modal footer={Footer} header='Location' maxWidth='330px' name={name} onHide={onClose}>
+		<Modal footer={Footer} header='Location' id={id} maxWidth='330px' onHide={onClose}>
 			<div className='mt-0 flex flex-col gap-2'>
 				<div className='grid grid-cols-3 gap-2'>
 					<NumberInput className='col-span-1' formatOptions={DECIMAL_NUMBER_FORMAT} label='Latitude (°)' maxValue={90} minValue={-90} onValueChange={(value) => updatePosition('latitude', value)} size='sm' step={0.001} value={position[0]} />

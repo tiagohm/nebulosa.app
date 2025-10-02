@@ -15,7 +15,7 @@ export const ConnectionEdit = memo(() => {
 	const Footer = <TextButton color='success' isDisabled={!edited?.name || !edited?.host || !edited?.port} label='Save' onPointerUp={connection.save} startContent={<Icons.Check />} />
 
 	return (
-		<Modal footer={Footer} header='Connection' maxWidth='240px' name='connection' onHide={connection.hide}>
+		<Modal footer={Footer} header='Connection' id='connection' maxWidth='240px' onHide={connection.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Input className='col-span-full' label='Name' maxLength={64} onValueChange={(value) => connection.update('name', value)} placeholder='Local' size='sm' type='text' value={edited?.name} />
 				<Input className='col-span-7' label='Host' maxLength={128} onValueChange={(value) => connection.update('host', value)} placeholder='localhost' size='sm' type='text' value={edited?.host} />

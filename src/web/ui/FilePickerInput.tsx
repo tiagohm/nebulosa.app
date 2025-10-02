@@ -6,12 +6,12 @@ import { FilePicker } from './FilePicker'
 import { Icons } from './Icon'
 
 export interface FilePickerInputProps extends Omit<FilePickerScopeValue, 'multiple' | 'path'>, Omit<InputProps, 'size' | 'value' | 'onValueChange' | 'onClear' | 'startContent' | 'endContent' | 'isClearable'> {
-	readonly name: string
+	readonly id: string
 	readonly value?: string
 	readonly onValueChange: (value?: string) => void
 }
 
-export const FilePickerInput = memo(({ filter, mode, name, value, onValueChange, isReadOnly = true, ...props }: FilePickerInputProps) => {
+export const FilePickerInput = memo(({ filter, mode, id, value, onValueChange, isReadOnly = true, ...props }: FilePickerInputProps) => {
 	const [show, setShow] = useState(false)
 	const initialPath = useRef(value)
 
@@ -52,7 +52,7 @@ export const FilePickerInput = memo(({ filter, mode, name, value, onValueChange,
 			</div>
 			{show && (
 				<ScopeProvider scope={FilePickerScope} value={{ path: initialPath.current, filter, mode, multiple: false }}>
-					<FilePicker header='Open Path' name={`file-picker-input-${name}`} onChoose={handleChoose} />
+					<FilePicker header='Open Path' id={`file-picker-input-${id}`} onChoose={handleChoose} />
 				</ScopeProvider>
 			)}
 		</>

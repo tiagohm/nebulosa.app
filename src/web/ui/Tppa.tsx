@@ -29,7 +29,7 @@ export const Tppa = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='Three-Point Polar Alignment' maxWidth='400px' name='tppa' onHide={tppa.hide}>
+		<Modal footer={Footer} header='Three-Point Polar Alignment' id='tppa' maxWidth='400px' onHide={tppa.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row justify-center items-center gap-2'>
 					<CameraDropdown buttonProps={{ endContent: <CameraDropdownEndContent /> }} isDisabled={running} onValueChange={(value) => (tppa.state.camera = value)} tooltipContent='Camera' value={camera} />

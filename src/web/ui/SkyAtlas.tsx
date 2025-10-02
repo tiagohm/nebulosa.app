@@ -47,7 +47,7 @@ export const SkyAtlas = memo(() => {
 
 	const Footer =
 		tab !== 'galaxy' ? (
-			<div className='mt-2 w-full text-center text-xs'>
+			<div className='mt-2 w-full text-center text-xs text-neutral-500 hover:text-neutral-300'>
 				<a href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' rel='noopener' target='_blank'>
 					NASA/JPL Horizons API
 				</a>
@@ -55,7 +55,7 @@ export const SkyAtlas = memo(() => {
 		) : null
 
 	return (
-		<Modal footer={Footer} header={Header} maxWidth='450px' name='sky-atlas' onHide={atlas.hide}>
+		<Modal footer={Footer} header={Header} id='sky-atlas' maxWidth='450px' onHide={atlas.hide}>
 			<div className='mt-0 flex flex-col gap-2'>
 				<Tabs classNames={{ base: 'absolute top-[-42px] right-[88px] z-10', panel: 'pt-0' }} onSelectionChange={(value) => (atlas.state.tab = value as never)} selectedKey={tab}>
 					<Tab key='sun' title={<Icons.Sun />}>
@@ -114,7 +114,7 @@ export const SolarEclipses = memo(() => {
 	return (
 		<div className='flex flex-col gap-0'>
 			{eclipses.map((eclipse) => (
-				<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Moon} key={eclipse.time} label={eclipse.type} time={eclipse.time} />
+				<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Sun} key={eclipse.time} label={eclipse.type} time={eclipse.time} />
 			))}
 		</div>
 	)
@@ -324,7 +324,7 @@ export const AsteroidSearchTab = memo(() => {
 					)}
 				</Listbox>
 			)}
-			<div className='w-full text-center text-xs'>
+			<div className='w-full text-center text-xs text-neutral-500 hover:text-neutral-300'>
 				<a href='https://ssd-api.jpl.nasa.gov/doc/sbdb.html' rel='noopener' target='_blank'>
 					NASA/JPL Small-Body Database (SBDB) API
 				</a>
@@ -356,7 +356,7 @@ export const AsteroidCloseApproachesTab = memo(() => {
 					</ListboxItem>
 				)}
 			</Listbox>
-			<div className='w-full text-center text-xs'>
+			<div className='w-full text-center text-xs text-neutral-500 hover:text-neutral-300'>
 				<a href='https://ssd-api.jpl.nasa.gov/doc/cad.html' rel='noopener' target='_blank'>
 					NASA/JPL SBDB Close Approach Data API
 				</a>

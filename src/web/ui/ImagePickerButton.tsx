@@ -30,7 +30,7 @@ export const ImagePickerButton = memo(() => {
 			</Tooltip>
 			{showModal && (
 				<ScopeProvider scope={FilePickerScope} value={{ path: workspace.state.initialPath, filter: '*.{fits,fit,xisf}', multiple: true }}>
-					<FilePicker header='Open Image' name='open-image' onChoose={handleChoose} />
+					<FilePicker header='Open Image' id='open-image' onChoose={handleChoose} />
 				</ScopeProvider>
 			)}
 		</>

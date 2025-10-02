@@ -10,7 +10,7 @@ export const Calculator = memo(() => {
 	const calculator = useMolecule(CalculatorMolecule)
 
 	return (
-		<Modal header='Calculator' maxWidth='440px' name='calculator' onHide={calculator.hide}>
+		<Modal header='Calculator' id='calculator' maxWidth='440px' onHide={calculator.hide}>
 			<div className='mt-0 px-1 py-2'>
 				<Tabs classNames={{ panel: 'w-full' }} isVertical>
 					<Tab key='focalLength' title='Focal Length'>

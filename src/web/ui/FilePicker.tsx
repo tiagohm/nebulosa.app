@@ -9,12 +9,12 @@ import { Modal } from './Modal'
 import { TextButton } from './TextButton'
 
 export interface FilePickerProps {
-	readonly name: string
+	readonly id: string
 	readonly header?: React.ReactNode
 	readonly onChoose: (entries?: string[]) => void
 }
 
-export const FilePicker = memo(({ name, header, onChoose }: FilePickerProps) => {
+export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 	const picker = useMolecule(FilePickerMolecule)
 	const { mode, history, filtered, selected, directoryTree, filter, createDirectory, directoryName } = useSnapshot(picker.state, { sync: true })
 
@@ -32,7 +32,7 @@ export const FilePicker = memo(({ name, header, onChoose }: FilePickerProps) => 
 	)
 
 	return (
-		<Modal footer={Footer} header={header ?? (mode === 'directory' ? 'Open Directory' : 'Open File')} maxWidth='420px' name={name} onHide={onChoose}>
+		<Modal footer={Footer} header={header ?? (mode === 'directory' ? 'Open Directory' : 'Open File')} id={id} maxWidth='420px' onHide={onChoose}>
 			<div className='mt-0 flex flex-col flex-wrap gap-2'>
 				<div className='flex flex-row items-center gap-2'>
 					<Tooltip content='Go Back' showArrow>

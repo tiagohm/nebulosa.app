@@ -17,7 +17,7 @@ export const StarDetection = memo(() => {
 	const Footer = <TextButton color='success' isLoading={loading} label='Detect' onPointerUp={starDetection.detect} startContent={<Icons.Check />} />
 
 	return (
-		<Modal footer={Footer} header='Star Detection' maxWidth='310px' name={`star-detection-${starDetection.scope.image.key}`} onHide={starDetection.hide}>
+		<Modal footer={Footer} header='Star Detection' id={`star-detection-${starDetection.scope.image.key}`} maxWidth='310px' onHide={starDetection.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<StarDetectionSelect className='col-span-4' onValueChange={(value) => (starDetection.state.request.type = value)} value={request.type} />
 				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Min SNR' maxValue={500} minValue={0} onValueChange={(value) => (starDetection.state.request.minSNR = value)} size='sm' value={request.minSNR} />

@@ -5,7 +5,7 @@ import { useModal } from '@/shared/hooks'
 import { Icons } from './Icon'
 
 export interface ModalProps {
-	readonly name: string
+	readonly id: string
 	readonly header?: ReactNode
 	readonly footer?: ReactNode
 	readonly children?: ReactNode
@@ -13,8 +13,8 @@ export interface ModalProps {
 	readonly onHide?: VoidFunction
 }
 
-export function Modal({ name, onHide, header, footer, children, maxWidth }: ModalProps) {
-	const modal = useModal(name, onHide)
+export function Modal({ id, onHide, header, footer, children, maxWidth }: ModalProps) {
+	const modal = useModal(id, onHide)
 
 	return createPortal(
 		<div className='modal max-h-[90vh] w-full fixed left-0 top-0 right-0 bottom-0 m-auto' ref={modal.ref} style={{ maxWidth }}>

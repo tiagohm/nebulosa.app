@@ -64,7 +64,8 @@
 				"noPrecisionLoss": "off",
 				"useExhaustiveDependencies": "off",
 				"noUnusedFunctionParameters": "off",
-				"noUnusedVariables": "off"
+				"noUnusedVariables": "off",
+				"useUniqueElementIds": "off"
 			},
 			"suspicious": {
 				"noAssignInExpressions": "off",

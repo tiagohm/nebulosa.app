@@ -28,7 +28,7 @@ export const GuideOutput = memo(() => {
 	)
 
 	return (
-		<Modal header={Header} maxWidth='340px' name={`guide-output-${guideOutput.scope.guideOutput.name}`} onHide={guideOutput.hide}>
+		<Modal header={Header} id={`guide-output-${guideOutput.scope.guideOutput.name}`} maxWidth='340px' onHide={guideOutput.hide}>
 			<div className='mt-0 grid grid-cols-6 gap-1'>
 				<NumberInput className='col-start-3 col-span-2' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={pulseGuiding} label='North (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('north', value)} size='sm' value={north.duration} />
 				<NumberInput className='row-start-3 col-span-2' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={pulseGuiding} label='West (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('west', value)} size='sm' value={west.duration} />

@@ -38,7 +38,7 @@ export const Framing = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header={Header} maxWidth='300px' name='framing' onHide={framing.hide}>
+		<Modal footer={Footer} header={Header} id='framing' maxWidth='300px' onHide={framing.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Input className='col-span-6' isDisabled={loading} label='RA (J2000)' onValueChange={(value) => framing.update('rightAscension', value)} size='sm' value={rightAscension} />
 				<Input className='col-span-6' isDisabled={loading} label='DEC (J2000)' onValueChange={(value) => framing.update('declination', value)} size='sm' value={declination} />

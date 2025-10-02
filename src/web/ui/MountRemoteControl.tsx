@@ -22,7 +22,7 @@ export const MountRemoteControl = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='Remote Control' maxWidth='240px' name={`mount-remote-control-${mount.scope.mount.name}`} onHide={mount.hideRemoteControl}>
+		<Modal footer={Footer} header='Remote Control' id={`mount-remote-control-${mount.scope.mount.name}`} maxWidth='240px' onHide={mount.hideRemoteControl}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<MountRemoteControlProtocolSelect className='col-span-full' onValueChange={(value) => mount.updateRemoteControl('protocol', value)} value={protocol} />
 				<Input className='col-span-7' isDisabled={!!status[protocol]} label='Host' onValueChange={(value) => mount.updateRemoteControl('host', value)} size='sm' value={status[protocol] ? status[protocol].host : host} />

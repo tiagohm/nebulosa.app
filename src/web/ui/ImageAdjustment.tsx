@@ -20,7 +20,7 @@ export const ImageAdjustment = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='Adjustment' maxWidth='202px' name={`adjustment-${adjustment.scope.image.key}`} onHide={adjustment.hide}>
+		<Modal footer={Footer} header='Adjustment' id={`adjustment-${adjustment.scope.image.key}`} maxWidth='202px' onHide={adjustment.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Checkbox className='col-span-full' isSelected={enabled} onValueChange={(value) => adjustment.update('enabled', value)}>
 					Enabled

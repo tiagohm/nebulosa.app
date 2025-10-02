@@ -20,7 +20,7 @@ export const ImageScnr = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='SCNR' maxWidth='295px' name={`scnr-${scnr.scope.image.key}`} onHide={scnr.hide}>
+		<Modal footer={Footer} header='SCNR' id={`scnr-${scnr.scope.image.key}`} maxWidth='295px' onHide={scnr.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<ButtonGroup className='col-span-full'>
 					<TextButton color='secondary' label='NONE' onPointerUp={() => scnr.update('channel', undefined)} variant={channel === undefined ? 'flat' : 'light'} />

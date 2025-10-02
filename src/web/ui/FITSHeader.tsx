@@ -10,7 +10,7 @@ export const FITSHeader = memo(() => {
 	const { info } = useSnapshot(viewer.state)
 
 	return (
-		<Modal header='FITS Header' maxWidth='300px' name={`fits-header-${viewer.scope.image.key}`} onHide={() => viewer.hide('fitsHeader')}>
+		<Modal header='FITS Header' id={`fits-header-${viewer.scope.image.key}`} maxWidth='300px' onHide={() => viewer.hide('fitsHeader')}>
 			<div className='mt-0 px-1 py-2'>
 				<Listbox
 					isVirtualized

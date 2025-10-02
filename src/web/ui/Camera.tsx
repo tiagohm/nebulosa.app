@@ -57,7 +57,7 @@ export const Camera = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header={Header} maxWidth='380px' name={`camera-${camera.scope.camera.name}`} onHide={camera.hide}>
+		<Modal footer={Footer} header={Header} id={`camera-${camera.scope.camera.name}`} maxWidth='380px' onHide={camera.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row items-center justify-between mb-2'>
 					<ExposureTimeProgress progress={progress} />
@@ -67,7 +67,7 @@ export const Camera = memo(() => {
 						<div className='col-span-full flex flex-row items-center gap-1'>
 							<AutoSaveButton onValueChange={(value) => camera.update('autoSave', value)} value={request.autoSave} />
 							<AutoSubFolderModeButton isDisabled={!request.autoSave} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={request.autoSubFolderMode} />
-							<FilePickerInput isDisabled={!request.autoSave} mode='directory' name={`camera-${camera.scope.camera.name}`} onValueChange={updateSavePath} value={request.savePath} />
+							<FilePickerInput id={`camera-${camera.scope.camera.name}`} isDisabled={!request.autoSave} mode='directory' onValueChange={updateSavePath} value={request.savePath} />
 						</div>
 						<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || capturing || !hasCooler} isSelected={cooler} onValueChange={camera.cooler} size='sm'>
 							Cooler ({(coolerPower * 100).toFixed(1)}%)

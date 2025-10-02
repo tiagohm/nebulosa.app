@@ -560,17 +560,16 @@ const DEFAULT_SATELLITE_STATE_REQUEST: SatelliteState['request'] = {
 }
 
 export const SatelliteMolecule = molecule(() => {
-	const s = storage.get('skyatlas.satellite.search', () => structuredClone(DEFAULT_SATELLITE_STATE_REQUEST.search))
-
+	const searchRequest = storage.get('skyatlas.satellite.search', () => structuredClone(DEFAULT_SATELLITE_STATE_REQUEST.search))
 	const request = structuredClone(DEFAULT_SATELLITE_STATE_REQUEST.position)
 
-	s.lastId = 0
+	searchRequest.lastId = 0
 
 	const state =
 		satelliteState ??
 		proxy<SatelliteState>({
 			loading: false,
-			request: { search: s, position: request },
+			request: { search: searchRequest, position: request },
 			result: [],
 			position: structuredClone(DEFAULT_BODY_POSITION),
 			chart: [],
@@ -596,22 +595,20 @@ export const SatelliteMolecule = molecule(() => {
 
 	function update<K extends keyof SearchSatellite>(key: K, value: SearchSatellite[K]) {
 		state.request.search[key] = value
-
-		// Search again if lastId has been changed
-		if (key === 'lastId') void search(false)
 	}
 
-	async function search(reset: boolean = true) {
+	async function search() {
 		try {
 			state.loading = true
-
-			if (reset) state.request.search.lastId = 0
-
 			const result = await Api.SkyAtlas.searchSatellite(state.request.search)
 			state.result = result ?? []
 		} finally {
 			state.loading = false
 		}
+	}
+
+	function reset() {
+		state.request.search.groups = [...DEFAULT_SEARCH_SATELLITE.groups]
 	}
 
 	async function select(id: number, force: boolean = true) {
@@ -670,7 +667,7 @@ export const SatelliteMolecule = molecule(() => {
 		}
 	}
 
-	return { state, update, search, next, prev, select, tick } as const
+	return { state, update, search, reset, next, prev, select, tick } as const
 })
 
 export const SkyAtlasMolecule = molecule((m) => {

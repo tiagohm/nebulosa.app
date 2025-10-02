@@ -63,7 +63,7 @@ export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 						</Button>
 					</Tooltip>
 				</div>
-				{!createDirectory && <Input label='Filter' onValueChange={picker.filter} size='sm' value={filter} />}
+				{!createDirectory && <Input isClearable label='Filter' onValueChange={picker.filter} size='sm' value={filter} />}
 				{createDirectory && (
 					<div className='flex flex-row items-center gap-2'>
 						<Input label='Name' onValueChange={(value) => (picker.state.directoryName = value)} size='sm' value={directoryName} />

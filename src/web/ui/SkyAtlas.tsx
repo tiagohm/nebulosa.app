@@ -17,7 +17,7 @@ import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 import { Moon } from './Moon'
 import { MountDropdown } from './MountDropdown'
-import { SatelliteGroupTypeSelect } from './SatelliteGroupTypeSelect'
+import { SatelliteGroupTypeChipGroup } from './SatelliteGroupTypeChipGroup'
 import { SKY_OBJECT_NAME_TYPES, SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 import { Sun } from './Sun'
@@ -31,11 +31,13 @@ export const SkyAtlas = memo(() => {
 			<span>Sky Atlas</span>
 			{(tab === 'galaxy' || tab === 'satellite') && (
 				<Popover className='max-w-140' placement='bottom' showArrow>
-					<PopoverTrigger>
-						<Button color='secondary' isIconOnly variant='flat'>
-							<Icons.Filter />
-						</Button>
-					</PopoverTrigger>
+					<Tooltip content='Filter' placement='bottom'>
+						<div className='max-w-fit'>
+							<PopoverTrigger>
+								<IconButton color='secondary' icon={Icons.Filter} variant='flat' />
+							</PopoverTrigger>
+						</div>
+					</Tooltip>
 					<PopoverContent>
 						{tab === 'galaxy' && <GalaxyFilter />}
 						{tab === 'satellite' && <SatelliteFilter />}
@@ -301,7 +303,7 @@ export const AsteroidSearchTab = memo(() => {
 	return (
 		<div className='w-full flex flex-col gap-2'>
 			<div className='w-full flex flex-row items-center justify-center gap-2'>
-				<Input className='flex-1' isDisabled={loading} label='Search' onValueChange={asteroid.updateSearch} placeholder='Enter the IAU number, designation, name or SPK ID' size='sm' value={text} />
+				<Input className='flex-1' isClearable isDisabled={loading} label='Search' onValueChange={asteroid.updateSearch} placeholder='Enter the IAU number, designation, name or SPK ID' size='sm' value={text} />
 				<IconButton color='primary' icon={Icons.Search} isDisabled={loading || !text} onPointerUp={asteroid.search} variant='light' />
 			</div>
 			{list ? (
@@ -555,7 +557,7 @@ export const GalaxyFilter = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center p-2'>
-			<Input className='col-span-full' onValueChange={(value) => dso.update('name', value)} placeholder='Search' startContent={<SkyObjectNameTypeDropdown color='secondary' onValueChange={(value) => dso.update('nameType', value)} value={nameType} />} value={name} />
+			<Input className='col-span-full' isClearable onValueChange={(value) => dso.update('name', value)} placeholder='Search' startContent={<SkyObjectNameTypeDropdown color='secondary' onValueChange={(value) => dso.update('nameType', value)} value={nameType} />} value={name} />
 			<ConstellationSelect className='col-span-6' onValueChange={(value) => dso.update('constellations', value)} value={constellations} />
 			<StellariumObjectTypeSelect className='col-span-6' onValueChange={(value) => dso.update('types', value)} value={types} />
 			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='RA' onValueChange={(value) => dso.update('rightAscension', value)} size='sm' value={rightAscension} />
@@ -579,7 +581,9 @@ export const GalaxyFilter = memo(() => {
 			</Checkbox>
 			<NumberInput className='col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!visible || loading} label='Above (°)' maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} size='sm' value={visibleAbove} />
 			<div className='col-span-full flex flex-row items-center justify-center'>
-				<IconButton color='primary' icon={Icons.Search} isDisabled={loading} isIconOnly onPointerUp={() => dso.search()} variant='flat' />
+				<Tooltip content='Filter' placement='bottom'>
+					<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={() => dso.search()} variant='flat' />
+				</Tooltip>
 			</div>
 		</div>
 	)
@@ -592,10 +596,15 @@ export const SatelliteFilter = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center p-2'>
-			<Input className='col-span-6' label='Search' onValueChange={(value) => satellite.update('text', value)} value={text} />
-			<SatelliteGroupTypeSelect className='col-span-6' onValueChange={(value) => satellite.update('groups', value)} value={groups} />
-			<div className='col-span-full flex flex-row items-center justify-center'>
-				<IconButton color='primary' icon={Icons.Search} isDisabled={loading} isIconOnly onPointerUp={() => satellite.search()} variant='flat' />
+			<Input className='col-span-full' isClearable label='Search' onValueChange={(value) => satellite.update('text', value)} size='sm' value={text} />
+			<SatelliteGroupTypeChipGroup className='col-span-full h-[200px]' onValueChange={(value) => satellite.update('groups', value)} value={groups} />
+			<div className='col-span-full flex flex-row items-center justify-center gap-2'>
+				<Tooltip content='Reset' placement='bottom'>
+					<IconButton color='danger' icon={Icons.Restore} isDisabled={loading} onPointerUp={satellite.reset} variant='flat' />
+				</Tooltip>
+				<Tooltip content='Filter' placement='bottom'>
+					<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={satellite.search} variant='flat' />
+				</Tooltip>
 			</div>
 		</div>
 	)

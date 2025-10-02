@@ -266,10 +266,10 @@ export interface Satellite {
 }
 
 export interface SearchSatellite {
-	readonly text: string
-	readonly groups: SatelliteGroupType[]
+	text: string
+	groups: SatelliteGroupType[]
 	lastId: number
-	readonly limit?: number
+	limit?: number
 }
 
 // Confirmation

@@ -221,7 +221,7 @@ export const HomeMenuPopoverContent = memo(() => {
 					<img className='w-9' src={aboutIcon} />
 				</Button>
 			</Tooltip>
-			{selected !== undefined && (
+			{selected && (
 				<div className='col-span-full my-2 flex flex-col items-center justify-center gap-2 flex-wrap'>
 					<span className='font-bold text-sm mt-2 uppercase'>{deviceName(selected)}</span>
 					{equipment.state[selected].map((device) => (

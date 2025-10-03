@@ -1,6 +1,6 @@
 import { Checkbox, NumberInput, SelectItem, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import { memo, useCallback } from 'react'
+import { Activity, memo, useCallback } from 'react'
 import type { Focuser, Mount, Wheel } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { CameraMolecule } from '@/molecules/indi/camera'
@@ -62,75 +62,73 @@ export const Camera = memo(() => {
 				<div className='col-span-full flex flex-row items-center justify-between mb-2'>
 					<ExposureTimeProgress progress={progress} />
 				</div>
-				{!minimized && (
-					<>
-						<div className='col-span-full flex flex-row items-center gap-1'>
-							<AutoSaveButton onValueChange={(value) => camera.update('autoSave', value)} value={request.autoSave} />
-							<AutoSubFolderModeButton isDisabled={!request.autoSave} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={request.autoSubFolderMode} />
-							<FilePickerInput id={`camera-${camera.scope.camera.name}`} isDisabled={!request.autoSave} mode='directory' onValueChange={updateSavePath} value={request.savePath} />
-						</div>
-						<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || capturing || !hasCooler} isSelected={cooler} onValueChange={camera.cooler} size='sm'>
-							Cooler ({(coolerPower * 100).toFixed(1)}%)
-						</Switch>
-						<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={true || !connected || capturing} size='sm'>
-							Dew Heater
-						</Switch>
-						<div className='col-span-6 flex flex-row items-center gap-1'>
-							<NumberInput
-								endContent={
-									<Tooltip content='Apply' placement='bottom'>
-										<IconButton color='success' icon={Icons.Check} onPointerUp={() => camera.temperature(targetTemperature)} />
-									</Tooltip>
-								}
-								isDisabled={!connected || !canSetTemperature || capturing}
-								label={`Temperature (${temperature.toFixed(1)}°C)`}
-								maxValue={50}
-								minValue={-50}
-								onValueChange={(value) => (camera.state.targetTemperature = value)}
-								size='sm'
-								step={0.1}
-								value={targetTemperature}
-							/>
-						</div>
-						<ExposureTimeInput
-							className='col-span-6'
-							isDisabled={!connected || request.frameType === 'BIAS' || capturing}
-							maxValue={exposure.max}
-							maxValueUnit='SECOND'
-							minValue={exposure.min}
-							minValueUnit='SECOND'
-							onUnitChange={(value) => camera.update('exposureTimeUnit', value)}
-							onValueChange={(value) => camera.update('exposureTime', value)}
-							unit={request.exposureTimeUnit}
-							value={request.exposureTime}
+				<Activity mode={minimized ? 'hidden' : 'visible'}>
+					<div className='col-span-full flex flex-row items-center gap-1'>
+						<AutoSaveButton onValueChange={(value) => camera.update('autoSave', value)} value={request.autoSave} />
+						<AutoSubFolderModeButton isDisabled={!request.autoSave} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={request.autoSubFolderMode} />
+						<FilePickerInput id={`camera-${camera.scope.camera.name}`} isDisabled={!request.autoSave} mode='directory' onValueChange={updateSavePath} value={request.savePath} />
+					</div>
+					<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || capturing || !hasCooler} isSelected={cooler} onValueChange={camera.cooler} size='sm'>
+						Cooler ({(coolerPower * 100).toFixed(1)}%)
+					</Switch>
+					<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={true || !connected || capturing} size='sm'>
+						Dew Heater
+					</Switch>
+					<div className='col-span-6 flex flex-row items-center gap-1'>
+						<NumberInput
+							endContent={
+								<Tooltip content='Apply' placement='bottom'>
+									<IconButton color='success' icon={Icons.Check} onPointerUp={() => camera.temperature(targetTemperature)} />
+								</Tooltip>
+							}
+							isDisabled={!connected || !canSetTemperature || capturing}
+							label={`Temperature (${temperature.toFixed(1)}°C)`}
+							maxValue={50}
+							minValue={-50}
+							onValueChange={(value) => (camera.state.targetTemperature = value)}
+							size='sm'
+							step={0.1}
+							value={targetTemperature}
 						/>
-						<FrameTypeSelect className='col-span-6' isDisabled={!connected || capturing} onValueChange={(value) => camera.update('frameType', value)} value={request.frameType} />
-						<ExposureModeButtonGroup className='col-span-6' color='secondary' isDisabled={!connected || capturing} onValueChange={(value) => camera.update('exposureMode', value)} value={request.exposureMode} />
-						<div className='col-span-6 flex flex-row items-center justify-center gap-2'>
-							<Checkbox className='flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || !canSubFrame || capturing} isSelected={request.subframe} onValueChange={(value) => camera.update('subframe', value)} size='sm'>
-								Subframe
-							</Checkbox>
-							<Tooltip content='Fullscreen' placement='bottom'>
-								<IconButton color='secondary' icon={Icons.Fullscreen} isDisabled={!connected || !request.subframe || capturing} onPointerUp={camera.fullscreen} variant='flat' />
-							</Tooltip>
-						</div>
-						<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || request.exposureMode === 'SINGLE' || capturing} label='Delay (s)' minValue={0} onValueChange={(value) => camera.update('delay', value)} size='sm' value={request.delay} />
-						<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || request.exposureMode !== 'FIXED' || capturing} label='Count' minValue={1} onValueChange={(value) => camera.update('count', value)} size='sm' value={request.count} />
-						<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !request.subframe || capturing} label='X' maxValue={frame.maxX} minValue={frame.minX} onValueChange={(value) => camera.update('x', value)} size='sm' value={request.x} />
-						<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !request.subframe || capturing} label='Y' maxValue={frame.maxY} minValue={frame.minY} onValueChange={(value) => camera.update('y', value)} size='sm' value={request.y} />
-						<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !canBin || capturing} label='Bin X' maxValue={bin.maxX} minValue={1} onValueChange={(value) => camera.update('binX', value)} size='sm' value={request.binX} />
-						<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !canBin || capturing} label='Bin Y' maxValue={bin.maxY} minValue={1} onValueChange={(value) => camera.update('binY', value)} size='sm' value={request.binY} />
-						<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !request.subframe || capturing} label='Width' maxValue={frame.maxWidth} minValue={0} onValueChange={(value) => camera.update('width', value)} size='sm' value={request.width} />
-						<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !request.subframe || capturing} label='Height' maxValue={frame.maxWidth} minValue={0} onValueChange={(value) => camera.update('height', value)} size='sm' value={request.height} />
-						<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || capturing} label='Gain' maxValue={gain.max} minValue={gain.min} onValueChange={(value) => camera.update('gain', value)} size='sm' value={request.gain} />
-						<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || capturing} label='Offset' maxValue={offset.max} minValue={offset.min} onValueChange={(value) => camera.update('offset', value)} size='sm' value={request.offset} />
-						<EnumSelect className='col-span-6' isDisabled={!connected || !frameFormats.length || capturing} label='Format' onValueChange={(value) => camera.update('frameFormat', value)} value={request.frameFormat}>
-							{frameFormats.map((format) => (
-								<SelectItem key={format}>{format}</SelectItem>
-							))}
-						</EnumSelect>
-					</>
-				)}
+					</div>
+					<ExposureTimeInput
+						className='col-span-6'
+						isDisabled={!connected || request.frameType === 'BIAS' || capturing}
+						maxValue={exposure.max}
+						maxValueUnit='SECOND'
+						minValue={exposure.min}
+						minValueUnit='SECOND'
+						onUnitChange={(value) => camera.update('exposureTimeUnit', value)}
+						onValueChange={(value) => camera.update('exposureTime', value)}
+						unit={request.exposureTimeUnit}
+						value={request.exposureTime}
+					/>
+					<FrameTypeSelect className='col-span-6' isDisabled={!connected || capturing} onValueChange={(value) => camera.update('frameType', value)} value={request.frameType} />
+					<ExposureModeButtonGroup className='col-span-6' color='secondary' isDisabled={!connected || capturing} onValueChange={(value) => camera.update('exposureMode', value)} value={request.exposureMode} />
+					<div className='col-span-6 flex flex-row items-center justify-center gap-2'>
+						<Checkbox className='flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || !canSubFrame || capturing} isSelected={request.subframe} onValueChange={(value) => camera.update('subframe', value)} size='sm'>
+							Subframe
+						</Checkbox>
+						<Tooltip content='Fullscreen' placement='bottom'>
+							<IconButton color='secondary' icon={Icons.Fullscreen} isDisabled={!connected || !request.subframe || capturing} onPointerUp={camera.fullscreen} variant='flat' />
+						</Tooltip>
+					</div>
+					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || request.exposureMode === 'SINGLE' || capturing} label='Delay (s)' minValue={0} onValueChange={(value) => camera.update('delay', value)} size='sm' value={request.delay} />
+					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || request.exposureMode !== 'FIXED' || capturing} label='Count' minValue={1} onValueChange={(value) => camera.update('count', value)} size='sm' value={request.count} />
+					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !request.subframe || capturing} label='X' maxValue={frame.maxX} minValue={frame.minX} onValueChange={(value) => camera.update('x', value)} size='sm' value={request.x} />
+					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !request.subframe || capturing} label='Y' maxValue={frame.maxY} minValue={frame.minY} onValueChange={(value) => camera.update('y', value)} size='sm' value={request.y} />
+					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !canBin || capturing} label='Bin X' maxValue={bin.maxX} minValue={1} onValueChange={(value) => camera.update('binX', value)} size='sm' value={request.binX} />
+					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !canBin || capturing} label='Bin Y' maxValue={bin.maxY} minValue={1} onValueChange={(value) => camera.update('binY', value)} size='sm' value={request.binY} />
+					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !request.subframe || capturing} label='Width' maxValue={frame.maxWidth} minValue={0} onValueChange={(value) => camera.update('width', value)} size='sm' value={request.width} />
+					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !request.subframe || capturing} label='Height' maxValue={frame.maxWidth} minValue={0} onValueChange={(value) => camera.update('height', value)} size='sm' value={request.height} />
+					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || capturing} label='Gain' maxValue={gain.max} minValue={gain.min} onValueChange={(value) => camera.update('gain', value)} size='sm' value={request.gain} />
+					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || capturing} label='Offset' maxValue={offset.max} minValue={offset.min} onValueChange={(value) => camera.update('offset', value)} size='sm' value={request.offset} />
+					<EnumSelect className='col-span-6' isDisabled={!connected || !frameFormats.length || capturing} label='Format' onValueChange={(value) => camera.update('frameFormat', value)} value={request.frameFormat}>
+						{frameFormats.map((format) => (
+							<SelectItem key={format}>{format}</SelectItem>
+						))}
+					</EnumSelect>
+				</Activity>
 			</div>
 		</Modal>
 	)

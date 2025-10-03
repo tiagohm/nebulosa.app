@@ -1,10 +1,11 @@
 import { Badge, BreadcrumbItem, Breadcrumbs, Button, Input, Listbox, ListboxItem, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
-import { memo } from 'react'
+import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerMolecule } from '@/molecules/filepicker'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 import { TextButton } from './TextButton'
 
@@ -63,8 +64,10 @@ export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 						</Button>
 					</Tooltip>
 				</div>
-				{!createDirectory && <Input isClearable label='Filter' onValueChange={picker.filter} size='sm' value={filter} />}
-				{createDirectory && (
+				<Activity mode={createDirectory ? 'hidden' : 'visible'}>
+					<Input isClearable label='Filter' onValueChange={picker.filter} size='sm' value={filter} />
+				</Activity>
+				<Activity mode={createDirectory ? 'visible' : 'hidden'}>
 					<div className='flex flex-row items-center gap-2'>
 						<Input label='Name' onValueChange={(value) => (picker.state.directoryName = value)} size='sm' value={directoryName} />
 						<Tooltip content='Create' showArrow>
@@ -73,10 +76,10 @@ export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 							</Button>
 						</Tooltip>
 					</div>
-				)}
+				</Activity>
 				<Listbox
 					isVirtualized
-					onAction={(path) => picker.select(path as string)}
+					onAction={picker.select}
 					selectionMode='none'
 					virtualization={{
 						maxListboxHeight: 200,
@@ -92,11 +95,7 @@ export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 										{!item.directory && <span className='text-xs text-gray-500'>{item.size} B</span>}
 									</div>
 								</div>
-								{mode === 'directory' && (
-									<Button color='secondary' isIconOnly onPointerUp={() => picker.navigateTo(item)} variant='light'>
-										<Icons.FolderOpen />
-									</Button>
-								)}
+								{mode === 'directory' && <IconButton color='secondary' icon={Icons.FolderOpen} onPointerUp={() => picker.navigateTo(item)} />}
 							</div>
 						</ListboxItem>
 					))}

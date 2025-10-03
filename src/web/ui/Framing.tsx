@@ -21,13 +21,6 @@ export const Framing = memo(() => {
 		return `${((size * width) / 3600).toFixed(2)}° x ${((size * height) / 3600).toFixed(2)}°`
 	}, [focalLength, pixelSize, width, height])
 
-	const Header = (
-		<div className='flex flex-row items-center gap-2'>
-			<span>Framing</span>
-			<PoweredBy href='https://alasky.cds.unistra.fr/hips-image-services/hips2fits' label='hips2Fits' />
-		</div>
-	)
-
 	const Footer = (
 		<>
 			<div className='flex-1 flex items-center'>
@@ -38,7 +31,7 @@ export const Framing = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header={Header} id='framing' maxWidth='300px' onHide={framing.hide}>
+		<Modal footer={Footer} header='Framing' id='framing' maxWidth='300px' onHide={framing.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Input className='col-span-6' isDisabled={loading} label='RA (J2000)' onValueChange={(value) => framing.update('rightAscension', value)} size='sm' value={rightAscension} />
 				<Input className='col-span-6' isDisabled={loading} label='DEC (J2000)' onValueChange={(value) => framing.update('declination', value)} size='sm' value={declination} />
@@ -51,6 +44,7 @@ export const Framing = memo(() => {
 				<Checkbox className='col-span-full' isDisabled={loading} isSelected={openNewImage} onValueChange={(value) => (framing.state.openNewImage = value)}>
 					Open in new image
 				</Checkbox>
+				<PoweredBy className='col-span-full mt-2' href='https://alasky.cds.unistra.fr/hips-image-services/hips2fits' label='Made use of hips2fits, a service provided by CDS' />
 			</div>
 		</Modal>
 	)

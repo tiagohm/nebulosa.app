@@ -1,16 +1,17 @@
-import { Chip, type ChipProps } from '@heroui/react'
+import clsx from 'clsx'
+import { memo } from 'react'
 
-export interface PoweredByProps extends Omit<ChipProps, 'children' | 'size'> {
-	readonly label: string
+export interface PoweredByProps extends React.HTMLAttributes<HTMLDivElement> {
 	readonly href: string
+	readonly label?: string
 }
 
-export function PoweredBy({ label, href, ...props }: PoweredByProps) {
+export const PoweredBy = memo(({ href, children, className, label, ...props }: PoweredByProps) => {
 	return (
-		<Chip size='sm' {...props}>
-			<a className='flex flex-row items-center gap-1' href={href} rel='noopener' target='_blank'>
-				{label}
+		<div className={clsx('w-full text-center text-xs text-neutral-500 hover:text-neutral-300', className)} {...props}>
+			<a href={href} rel='noopener' target='_blank'>
+				{children ?? label}
 			</a>
-		</Chip>
+		</div>
 	)
-}
+})

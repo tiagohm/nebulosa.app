@@ -12,12 +12,12 @@ import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConstellationSelect } from './ConstellationSelect'
-import { Credit } from './Credit'
 import { type Icon, Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 import { Moon } from './Moon'
 import { MountDropdown } from './MountDropdown'
+import { PoweredBy } from './PoweredBy'
 import { SatelliteGroupTypeChipGroup } from './SatelliteGroupTypeChipGroup'
 import { SKY_OBJECT_NAME_TYPES, SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
@@ -48,7 +48,7 @@ export const SkyAtlas = memo(() => {
 		</div>
 	)
 
-	const Footer = tab !== 'galaxy' ? <Credit className='mt-2' href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' label='NASA/JPL Horizons API' /> : null
+	const Footer = tab !== 'galaxy' ? <PoweredBy className='mt-2' href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' label='NASA/JPL Horizons API' /> : null
 
 	return (
 		<Modal footer={Footer} header={Header} id='sky-atlas' maxWidth='450px' onHide={atlas.hide}>
@@ -320,7 +320,7 @@ export const AsteroidSearchTab = memo(() => {
 					)}
 				</Listbox>
 			)}
-			<Credit href='https://ssd-api.jpl.nasa.gov/doc/sbdb.html' label='NASA/JPL Small-Body Database (SBDB) API' />
+			<PoweredBy href='https://ssd-api.jpl.nasa.gov/doc/sbdb.html' label='NASA/JPL Small-Body Database (SBDB) API' />
 		</div>
 	)
 })
@@ -348,7 +348,7 @@ export const AsteroidCloseApproachesTab = memo(() => {
 					</ListboxItem>
 				)}
 			</Listbox>
-			<Credit href='https://ssd-api.jpl.nasa.gov/doc/cad.html' label='NASA/JPL SBDB Close Approach Data API' />
+			<PoweredBy href='https://ssd-api.jpl.nasa.gov/doc/cad.html' label='NASA/JPL SBDB Close Approach Data API' />
 		</div>
 	)
 })

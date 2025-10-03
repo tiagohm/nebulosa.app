@@ -17,8 +17,8 @@ export function Modal({ id, onHide, header, footer, children, maxWidth }: ModalP
 	const modal = useModal(id, onHide)
 
 	return createPortal(
-		<div className='modal max-h-[90vh] w-full fixed left-0 top-0 right-0 bottom-0 m-auto' ref={modal.ref} style={{ maxWidth }}>
-			<Card className='p-2'>
+		<div className='modal max-h-[90vh] w-full fixed left-0 top-0 right-0 bottom-0 m-auto pointer-events-none' ref={modal.ref} style={{ maxWidth }}>
+			<Card className='p-2 pointer-events-auto'>
 				<CardHeader {...modal.moveProps} className='w-full flex flex-row items-center justify-between gap-2'>
 					<div className='w-full text-lg font-semibold text-neutral-900 dark:text-neutral-100'>{header}</div>
 					<Button className='rounded-full' color='danger' isIconOnly onPointerUp={modal.hide} variant='flat'>

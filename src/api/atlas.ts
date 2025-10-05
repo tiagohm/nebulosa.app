@@ -302,6 +302,7 @@ export class AtlasManager {
 
 		const location = this.cache.geographicCoordinate(req.location)
 		const time = this.cache.time(req.time.utc, location)
+		const lst = localSiderealTime(time, location, true)
 
 		let azimuth = 0
 		let altitude = 0
@@ -333,7 +334,7 @@ export class AtlasManager {
 			azimuth,
 			altitude,
 			names: names.map((n) => n.name),
-			pierSide: expectedPierSide(rightAscension, declination, localSiderealTime(time, location, true)),
+			pierSide: expectedPierSide(rightAscension, declination, lst),
 		}
 	}
 
@@ -504,7 +505,9 @@ export class AtlasManager {
 
 		const location = this.cache.geographicCoordinate(req.location)
 		const time = this.cache.time(req.time.utc, location)
-		position.pierSide = expectedPierSide(position.rightAscension, position.declination, localSiderealTime(time, location, true))
+		const lst = localSiderealTime(time, location, true)
+
+		position.pierSide = expectedPierSide(position.rightAscension, position.declination, lst)
 
 		return position
 	}

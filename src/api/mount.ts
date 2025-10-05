@@ -1,5 +1,5 @@
 import Elysia from 'elysia'
-import { type Angle, deg, formatHMS, hour, normalizeAngle, PARSE_HOUR_ANGLE, parseAngle, toDeg, toHour } from 'nebulosa/src/angle'
+import { type Angle, deg, hour, normalizeAngle, PARSE_HOUR_ANGLE, parseAngle, toDeg, toHour } from 'nebulosa/src/angle'
 import { cirsToObserved, observedToCirs } from 'nebulosa/src/astrometry'
 import { PI, TAU } from 'nebulosa/src/constants'
 import { constellation } from 'nebulosa/src/constellation'
@@ -14,7 +14,7 @@ import { formatTemporal, parseTemporal, temporalUnix } from 'nebulosa/src/tempor
 import { timeNow } from 'nebulosa/src/time'
 import bus from 'src/shared/bus'
 // biome-ignore format: too long!
-import { DEFAULT_MOUNT, type EquatorialCoordinate, expectedPierSide, type GeographicCoordinate, type GPS, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountTargetCoordinate, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
+import { computeMeridianTime, DEFAULT_MOUNT, type EquatorialCoordinate, expectedPierSide, type GeographicCoordinate, type GPS, type Mount, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountTargetCoordinate, type MountUpdated, type SlewRate, type TrackMode } from 'src/shared/types'
 import type { CacheManager } from './cache'
 import type { ConnectionManager } from './connection'
 import type { GuideOutputManager } from './guideoutput'
@@ -502,8 +502,8 @@ export class MountManager implements IndiClientHandler {
 			azimuth,
 			altitude,
 			constellation: constellation(rightAscension, declination, time),
-			lst: formatHMS(lst),
-			meridianAt: '00:00',
+			lst,
+			meridianIn: computeMeridianTime(rightAscension, lst),
 			pierSide: expectedPierSide(rightAscension, declination, lst),
 		} as MountEquatorialCoordinatePosition
 	}

@@ -1,7 +1,8 @@
 import type { SortDescriptor } from '@heroui/react'
 import type { MoleculeOrInterface } from 'bunshi'
-import { type Angle, toHour } from 'nebulosa/src/angle'
+import { type Angle, normalizeAngle, toHour } from 'nebulosa/src/angle'
 import { DEFAULT_REFRACTION_PARAMETERS, type RefractionParameters } from 'nebulosa/src/astrometry'
+import { DAYSEC, SIDEREAL_DAYSEC } from 'nebulosa/src/constants'
 import type { Constellation } from 'nebulosa/src/constellation'
 import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
@@ -732,9 +733,9 @@ export interface Mount extends GuideOutput, GPS, Parkable {
 }
 
 export interface MountEquatorialCoordinatePosition extends Readonly<EquatorialCoordinate>, Readonly<EquatorialCoordinateJ2000>, Readonly<HorizontalCoordinate> {
-	readonly lst: string
+	readonly lst: Angle
 	readonly constellation: Constellation
-	readonly meridianAt: string
+	readonly meridianIn: Angle
 	readonly pierSide: PierSide
 }
 
@@ -751,6 +752,10 @@ export type MountRemoteControlStatus = Record<MountRemoteControlProtocol, Omit<M
 export function expectedPierSide(rightAscension: Angle, declination: Angle, lst: Angle): PierSide {
 	if (Math.abs(declination) === Math.PI / 2) return 'NEITHER'
 	return (toHour(rightAscension - lst) + 24) % 24 < 12 ? 'WEST' : 'EAST'
+}
+
+export function computeMeridianTime(rightAscension: Angle, lst: Angle) {
+	return normalizeAngle(rightAscension - lst) * (SIDEREAL_DAYSEC / DAYSEC)
 }
 
 // Focuser
@@ -1120,9 +1125,9 @@ export const DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION: MountEquatorialCoordi
 	declinationJ2000: 0,
 	azimuth: 0,
 	altitude: 0,
-	lst: '00:00',
+	lst: 0,
 	constellation: 'AND',
-	meridianAt: '00:00',
+	meridianIn: 0,
 	pierSide: 'NEITHER',
 }
 

@@ -1,6 +1,6 @@
 import { Button, Chip, DropdownItem, Input, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
+import { formatALT, formatAZ, formatDEC, formatHMS, formatRA } from 'nebulosa/src/angle'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { MountMolecule, type TargetCoordinateAction } from '@/molecules/indi/mount'
@@ -39,7 +39,7 @@ export const Mount = memo(() => {
 
 	return (
 		<>
-			<Modal header={Header} id={`mount-${mount.scope.mount.name}`} maxWidth='400px' onHide={mount.hide}>
+			<Modal header={Header} id={`mount-${mount.scope.mount.name}`} maxWidth='410px' onHide={mount.hide}>
 				<div className='mt-0 grid grid-cols-12 gap-2'>
 					<div className='col-span-full flex flex-row items-center justify-between'>
 						<Chip color='primary' size='sm'>
@@ -98,7 +98,7 @@ export const Mount = memo(() => {
 
 const CurrentPosition = memo(() => {
 	const mount = useMolecule(MountMolecule)
-	const { rightAscension, declination, rightAscensionJ2000, declinationJ2000, azimuth, altitude, constellation, lst, meridianAt, pierSide } = useSnapshot(mount.state.currentPosition)
+	const { rightAscension, declination, rightAscensionJ2000, declinationJ2000, azimuth, altitude, constellation, lst, meridianIn, pierSide } = useSnapshot(mount.state.currentPosition)
 
 	return (
 		<div className='w-full grid grid-cols-12 gap-2'>
@@ -109,8 +109,8 @@ const CurrentPosition = memo(() => {
 			<Input className='col-span-3' isReadOnly label='Azimuth' size='sm' value={formatAZ(azimuth)} />
 			<Input className='col-span-3' isReadOnly label='Altitude' size='sm' value={formatALT(altitude)} />
 			<Input className='col-span-3' isReadOnly label='Constellation' size='sm' value={constellation} />
-			<Input className='col-span-3' isReadOnly label='LST' size='sm' value={lst.substring(0, 5)} />
-			<Input className='col-span-3' isReadOnly label='Meridian at' size='sm' value={meridianAt} />
+			<Input className='col-span-3' isReadOnly label='LST' size='sm' value={formatHMS(lst, true)} />
+			<Input className='col-span-3' isReadOnly label='Meridian in' size='sm' value={formatHMS(meridianIn, true)} />
 			<Input className='col-span-3' isReadOnly label='Pier' size='sm' value={pierSide} />
 			<div className='col-span-5'></div>
 		</div>
@@ -128,13 +128,12 @@ const TargetCoordinateAndPosition = memo(({ isDisabled }: TargetCoordinateAndPos
 
 	return (
 		<div className='w-full grid grid-cols-12 gap-2'>
-			<div className='col-span-8 flex flex-col gap-0 justify-center'>
+			<div className='col-span-7 flex flex-col gap-0 justify-center'>
 				<TargetCoordinateTypeButtonGroup buttonProps={{ className: 'flex-1' }} className='w-full' isDisabled={isDisabled} onValueChange={(value) => mount.updateTargetCoordinate('type', value)} value={coordinate.type} />
 				{coordinate.type !== 'J2000' && (
 					<div className='flex flex-row gap-2 items-center justify-between text-sm'>
 						<div className='w-full flex flex-row items-center justify-between'>
 							<span className='font-bold'>RA:</span>
-							{coordinate.type === 'ALTAZ' && <span className='font-bold text-xs'>(J2000)</span>}
 							<span>{formatRA(position.rightAscensionJ2000)}</span>
 						</div>
 						<div className='w-full flex flex-row items-center justify-between'>
@@ -168,14 +167,14 @@ const TargetCoordinateAndPosition = memo(({ isDisabled }: TargetCoordinateAndPos
 					</div>
 				)}
 			</div>
-			<div className='col-span-4 text-sm flex flex-col justify-end gap-0'>
+			<div className='col-span-5 text-sm flex flex-col justify-end gap-0'>
 				<div className='flex flex-row items-center justify-between'>
 					<span className='font-bold'>CONST:</span>
 					<span>{position.constellation}</span>
 				</div>
 				<div className='flex flex-row items-center justify-between'>
-					<span className='font-bold'>MERIDIAN AT:</span>
-					<span>{position.meridianAt}</span>
+					<span className='font-bold'>MERIDIAN IN:</span>
+					<span>{formatHMS(position.meridianIn, true)}</span>
 				</div>
 				<div className='flex flex-row items-center justify-between'>
 					<span className='font-bold'>PIER:</span>

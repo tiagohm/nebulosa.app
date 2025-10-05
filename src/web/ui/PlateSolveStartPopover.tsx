@@ -24,7 +24,7 @@ export function PlateSolveStartPopover({ type, radius, focalLength, pixelSize, o
 			</PopoverTrigger>
 			<PopoverContent>
 				<div className='grid grid-cols-12 gap-2 p-4'>
-					<p className='col-span-full font-bold'>PLATE SOLVE OPTIONS</p>
+					<p className='col-span-full font-bold'>PLATE SOLVE OPTIONS: {type}</p>
 					{type !== 'NOVA_ASTROMETRY_NET' && <Input className='col-span-full' label='Executable' onValueChange={(value) => settings.updateSolver(type, 'executable', value)} size='sm' value={executable} />}
 					{type === 'NOVA_ASTROMETRY_NET' && <Input className='col-span-8' label='API Url' onValueChange={(value) => settings.updateSolver(type, 'apiUrl', value)} placeholder='https://nova.astrometry.net' size='sm' value={apiUrl} />}
 					{type === 'NOVA_ASTROMETRY_NET' && <Input className='col-span-4' label='API Key' onValueChange={(value) => settings.updateSolver(type, 'apiKey', value)} placeholder='XXXXXXXX' size='sm' value={apiKey} />}

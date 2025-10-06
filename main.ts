@@ -38,6 +38,9 @@ const args = parseArgs({
 	options: {
 		host: { type: 'string', short: 'h' },
 		port: { type: 'string', short: 'p' },
+		secure: { type: 'boolean', short: 's' },
+		cert: { type: 'string', short: 'c' },
+		key: { type: 'string', short: 'k' },
 	},
 	strict: true,
 	allowPositionals: true,
@@ -45,6 +48,9 @@ const args = parseArgs({
 
 const hostname = args.values.host || '0.0.0.0'
 const port = +(args.values.port || '1234')
+const cert = args.values.cert || 'cert.pem'
+const key = args.values.key || 'key.pem'
+const secure = (args.values.secure && !!cert && !!key) || undefined
 
 // Initialize environment variables
 if (process.platform === 'linux') {
@@ -104,6 +110,10 @@ const app = new Elysia({
 		development: process.env.NODE_ENV !== 'production' && {
 			hmr: true,
 			console: false,
+		},
+		tls: secure && {
+			cert: Bun.file(cert),
+			key: Bun.file(key),
 		},
 	},
 })

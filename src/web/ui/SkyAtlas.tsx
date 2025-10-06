@@ -338,7 +338,7 @@ export const AsteroidCloseApproachesTab = memo(() => {
 				<NumberInput className='flex-1' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Distance (LD)' maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} size='sm' step={0.1} value={distance} />
 				<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={asteroid.closeApproaches} variant='light' />
 			</div>
-			<Listbox className='w-full' classNames={{ base: 'w-full', list: 'max-h-[156px] overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
+			<Listbox className='w-full' classNames={{ base: 'w-full', list: 'max-h-[117px] overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
 				{(item) => (
 					<ListboxItem description={`${item.distance.toFixed(3)} LD`} key={item.name}>
 						<span className='flex items-center justify-between'>

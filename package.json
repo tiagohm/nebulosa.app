@@ -11,7 +11,7 @@
 		"prod": "NODE_ENV=production bun --production main.ts",
 		"lint": "biome lint --write src/",
 		"format": "biome format --write src/",
-		"compile": "bun build --compile --minify --production main.ts --outfile nebulosa.exe",
+		"compile": "bun run build.ts",
 		"typecheck": "tsc --noEmit"
 	},
 	"author": {

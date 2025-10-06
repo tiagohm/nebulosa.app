@@ -1,6 +1,6 @@
 import { molecule, onMount } from 'bunshi'
 import bus from 'src/shared/bus'
-import { proxy } from 'valtio'
+import { persistProxy } from '@/shared/persist'
 
 export interface HomeState {
 	readonly menu: {
@@ -8,13 +8,13 @@ export interface HomeState {
 	}
 }
 
-export const HomeMolecule = molecule((m) => {
-	const state = proxy<HomeState>({
-		menu: {
-			show: false,
-		},
-	})
+const { state } = persistProxy<HomeState>('home', () => ({
+	menu: {
+		show: false,
+	},
+}))
 
+export const HomeMolecule = molecule((m) => {
 	onMount(() => {
 		const unsubscriber = bus.subscribe<boolean>('homeMenu:toggle', (enabled) => toggleMenu(enabled))
 

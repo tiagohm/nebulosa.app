@@ -1,18 +1,17 @@
-import { Badge, Checkbox, ListboxItem, NumberInput } from '@heroui/react'
+import { Badge, Checkbox, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiServerMolecule } from '@/molecules/indi/server'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
-import DRIVERS from '../../../data/drivers.json' with { type: 'json' }
-import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
+import { IndiDriverListbox } from './IndiDriverListbox'
 import { Modal } from './Modal'
 import { TextButton } from './TextButton'
 
 export const IndiServer = memo(() => {
 	const indi = useMolecule(IndiServerMolecule)
-	const { running, showAll, drivers: availableDrivers } = useSnapshot(indi.state)
+	const { running, showAll } = useSnapshot(indi.state)
 	const { port, repeat, verbose, drivers } = useSnapshot(indi.state.request, { sync: true })
 
 	const Footer = (
@@ -33,21 +32,7 @@ export const IndiServer = memo(() => {
 				<Checkbox className='col-span-full' isSelected={showAll} onValueChange={(value) => (indi.state.showAll = value)}>
 					Show all drivers
 				</Checkbox>
-				<FilterableListbox
-					className='col-span-full'
-					classNames={{ list: 'max-h-[200px] overflow-scroll' }}
-					filter={(item, search) => item.name.toLowerCase().includes(search) || item.driver.includes(search)}
-					items={showAll || availableDrivers.length === 0 ? DRIVERS : DRIVERS.filter((e) => availableDrivers.includes(e.driver))}
-					onSelectionChange={(value) => indi.update('drivers', [...(value as Set<string>)])}
-					selectedKeys={new Set(drivers)}
-					selectionMode='multiple'
-					variant='flat'>
-					{(item) => (
-						<ListboxItem description={item.driver} key={item.driver}>
-							{item.name}
-						</ListboxItem>
-					)}
-				</FilterableListbox>
+				<IndiDriverListbox onSelectedChange={(drivers) => indi.update('drivers', drivers)} selected={drivers} showAll={showAll} />
 			</div>
 		</Modal>
 	)

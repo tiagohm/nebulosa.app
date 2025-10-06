@@ -1,13 +1,22 @@
 import { SelectItem } from '@heroui/react'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
+import { useEffect, useState } from 'react'
+import { Api } from '@/shared/api'
 import { FilterableSelect, type FilterableSelectProps } from './FilterableSelect'
 
-export interface HipsSurveyProps extends Omit<FilterableSelectProps<HipsSurvey>, 'children' | 'filter' | 'disallowEmptySelection' | 'isVirtualized' | 'itemHeight' | 'onSelectionChange' | 'renderValue' | 'selectedKeys' | 'value' | 'onValueChange' | 'selectionMode'> {
+export interface HipsSurveyProps extends Omit<FilterableSelectProps<HipsSurvey>, 'items' | 'children' | 'filter' | 'disallowEmptySelection' | 'isVirtualized' | 'itemHeight' | 'onSelectionChange' | 'renderValue' | 'selectedKeys' | 'value' | 'onValueChange' | 'selectionMode'> {
 	readonly value?: string
 	readonly onValueChange?: (value: string) => void
 }
 
-export function HipsSurveySelect({ items, isDisabled, onValueChange, value, ...props }: HipsSurveyProps) {
+export function HipsSurveySelect({ isDisabled, onValueChange, value, ...props }: HipsSurveyProps) {
+	const [items, setItems] = useState<HipsSurvey[]>(() => [])
+
+	// Fetch the HipsSurvey items and update the state
+	useEffect(() => {
+		Api.Framing.hipsSurveys().then((hipsSurveys) => setItems(hipsSurveys ?? []))
+	}, [])
+
 	return (
 		<FilterableSelect
 			{...props}

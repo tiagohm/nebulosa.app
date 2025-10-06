@@ -1,33 +1,28 @@
 import { molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_INDI_SERVER_START, type IndiServerStart } from 'src/shared/types'
-import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
-import { storage } from '@/shared/storage'
+import { persistProxy } from '@/shared/persist'
 
 export interface IndiServerState {
 	enabled: boolean
 	running: boolean
-	drivers: string[]
 	showAll: boolean
 	show: boolean
 	request: IndiServerStart
 }
 
+const { state } = persistProxy<IndiServerState>('indi.server', {
+	enabled: true,
+	running: false,
+	showAll: false,
+	show: false,
+	request: structuredClone(DEFAULT_INDI_SERVER_START),
+})
+
 export const IndiServerMolecule = molecule(() => {
-	const request = storage.get('indi.server', DEFAULT_INDI_SERVER_START)
-
-	const state = proxy<IndiServerState>({
-		enabled: true,
-		running: false,
-		drivers: [],
-		showAll: false,
-		show: false,
-		request,
-	})
-
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(3)
+		const unsubscribers = new Array<VoidFunction>(2)
 
 		unsubscribers[0] = bus.subscribe('indi:server:start', () => {
 			state.running = true
@@ -37,9 +32,9 @@ export const IndiServerMolecule = molecule(() => {
 			state.running = false
 		})
 
-		unsubscribers[2] = subscribe(state.request, () => storage.set('indi.server', state.request))
-
-		return () => unsubscribe(unsubscribers)
+		return () => {
+			unsubscribe(unsubscribers)
+		}
 	})
 
 	Api.Indi.Server.status().then((status) => {

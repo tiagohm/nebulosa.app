@@ -21,7 +21,7 @@ export const ConnectionComparator = (a: Connection, b: Connection) => {
 	return (b.connectedAt ?? 0) - (a.connectedAt ?? 0)
 }
 
-export const ConnectionMolecule = molecule((m) => {
+export const ConnectionMolecule = molecule(() => {
 	const connections = storage.get('connections', () => [structuredClone(DEFAULT_CONNECTION)])
 	connections.sort(ConnectionComparator)
 

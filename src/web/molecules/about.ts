@@ -1,14 +1,14 @@
 import { molecule } from 'bunshi'
 import bus from 'src/shared/bus'
-import { proxy } from 'valtio'
+import { persistProxy } from '@/shared/persist'
 
 export interface AboutState {
 	show: boolean
 }
 
-const state = proxy<AboutState>({
+const { state } = persistProxy<AboutState>('about', () => ({
 	show: false,
-})
+}))
 
 export const AboutMolecule = molecule(() => {
 	function show() {

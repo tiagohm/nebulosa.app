@@ -432,7 +432,6 @@ export interface IndiServerStart {
 export interface IndiServerStatus {
 	readonly enabled: boolean
 	readonly running: boolean
-	readonly drivers: string[]
 }
 
 export interface IndiServerEvent {

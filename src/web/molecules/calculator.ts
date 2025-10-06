@@ -1,7 +1,6 @@
-import { molecule, onMount } from 'bunshi'
-import bus, { unsubscribe } from 'src/shared/bus'
-import { proxy, subscribe } from 'valtio'
-import { storage } from '@/shared/storage'
+import { molecule } from 'bunshi'
+import bus from 'src/shared/bus'
+import { persistProxy } from '@/shared/persist'
 
 export interface FocalLengthRatio {
 	aperture: number
@@ -42,20 +41,16 @@ export interface CalculatorState {
 	readonly ccdResolution: CcdResolution
 }
 
-const state = proxy<CalculatorState>({
+const { state } = persistProxy<CalculatorState>('calculator', () => ({
 	show: false,
-	focalLength: storage.get<FocalLengthRatio>('calculator.focalLength', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
-	focalRatio: storage.get<FocalLengthRatio>('calculator.focalRatio', () => ({ focalLength: 1368, aperture: 152, focalRatio: 9 })),
-	dawesLimit: storage.get<ResolutionLimit>('calculator.dawesLimit', () => ({ aperture: 152, resolution: 0.763 })),
-	rayleighLimit: storage.get<ResolutionLimit>('calculator.rayleighLimit', () => ({ aperture: 152, resolution: 0.908 })),
-	limitingMagnitude: storage.get<LimitingMagnitude>('calculator.limitingMagnitude', () => ({ aperture: 152, magnitude: 13.609 })),
-	lightGraspRatio: storage.get<LightGraspRatio>('calculator.lightGraspRatio', () => ({ smallerAperture: 7, largerAperture: 152, ratio: 471.51 })),
-	ccdResolution: storage.get<CcdResolution>('calculator.ccdResolution', () => ({ pixelSize: 4.63, focalLength: 1368, resolution: 0.698 })),
-})
-
-function subscribeTo(property: keyof Omit<CalculatorState, 'show'>) {
-	return subscribe(state[property], () => storage.set(`calculator.${property}`, state[property]))
-}
+	focalLength: { focalLength: 1368, aperture: 152, focalRatio: 9 },
+	focalRatio: { focalLength: 1368, aperture: 152, focalRatio: 9 },
+	dawesLimit: { aperture: 152, resolution: 0.763 },
+	rayleighLimit: { aperture: 152, resolution: 0.908 },
+	limitingMagnitude: { aperture: 152, magnitude: 13.609 },
+	lightGraspRatio: { smallerAperture: 7, largerAperture: 152, ratio: 471.51 },
+	ccdResolution: { pixelSize: 4.63, focalLength: 1368, resolution: 0.698 },
+}))
 
 export const CalculatorMolecule = molecule(() => {
 	function show() {
@@ -78,14 +73,6 @@ export const CalculatorMolecule = molecule(() => {
 		else if (property === 'lightGraspRatio') state.lightGraspRatio.ratio = (state.lightGraspRatio.largerAperture / state.lightGraspRatio.smallerAperture) ** 2
 		else if (property === 'ccdResolution') state.ccdResolution.resolution = (state.ccdResolution.pixelSize / state.ccdResolution.focalLength) * 206.265
 	}
-
-	onMount(() => {
-		const unsubscribers = (Object.keys(state) as Array<keyof CalculatorState>).filter((e) => e !== 'show').map(subscribeTo)
-
-		return () => {
-			unsubscribe(unsubscribers)
-		}
-	})
 
 	return { state, show, hide, update } as const
 })

@@ -102,6 +102,10 @@ export namespace Api {
 			export function status() {
 				return json<IndiServerStatus>('/indi/server/status', 'get')
 			}
+
+			export function drivers() {
+				return json<string[]>('/indi/server/drivers', 'get')
+			}
 		}
 	}
 

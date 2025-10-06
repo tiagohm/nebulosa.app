@@ -13,7 +13,7 @@ import { TextButton } from './TextButton'
 
 export const Framing = memo(() => {
 	const framing = useMolecule(FramingMolecule)
-	const { hipsSurveys, loading, openNewImage } = useSnapshot(framing.state)
+	const { loading, openNewImage } = useSnapshot(framing.state)
 	const { rightAscension, declination, width, height, rotation, focalLength, pixelSize, hipsSurvey } = useSnapshot(framing.state.request, { sync: true })
 
 	const fov = useMemo(() => {
@@ -40,11 +40,11 @@ export const Framing = memo(() => {
 				<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Rotation (°)' maxValue={360} minValue={-360} onValueChange={(value) => framing.update('rotation', value)} size='sm' step={0.1} value={rotation} />
 				<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={loading} label='Focal Length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => framing.update('focalLength', value)} size='sm' value={focalLength} />
 				<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => framing.update('pixelSize', value)} size='sm' step={0.01} value={pixelSize} />
-				<HipsSurveySelect className='col-span-full' isDisabled={loading} items={hipsSurveys} onValueChange={(value) => framing.update('hipsSurvey', value)} value={hipsSurvey} />
+				<HipsSurveySelect className='col-span-full' isDisabled={loading} onValueChange={(value) => framing.update('hipsSurvey', value)} value={hipsSurvey} />
 				<Checkbox className='col-span-full' isDisabled={loading} isSelected={openNewImage} onValueChange={(value) => (framing.state.openNewImage = value)}>
 					Open in new image
 				</Checkbox>
-				<PoweredBy className='col-span-full mt-2' href='https://alasky.cds.unistra.fr/hips-image-services/hips2fits' label='Made use of hips2fits, a service provided by CDS' />
+				<PoweredBy className='col-span-full mt-2' href='https://alasky.cds.unistra.fr/hips-image-services/hips2fits' label='Powered by hips2fits, a service provided by CDS' />
 			</div>
 		</Modal>
 	)

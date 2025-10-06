@@ -1,58 +1,49 @@
 import { molecule, onMount } from 'bunshi'
-import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import bus from 'src/shared/bus'
 import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
-import { proxy, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
-import { storage } from '@/shared/storage'
+import { persistProxy } from '@/shared/persist'
 import type { Image } from '@/shared/types'
 import { ImageWorkspaceMolecule } from './image/workspace'
 
 export interface FramingState {
 	show: boolean
 	readonly request: Framing
-	hipsSurveys: HipsSurvey[]
 	loading: boolean
 	openNewImage: boolean
-	readonly images: Image[]
 }
+
+const images: Image[] = []
+
+const { state } = persistProxy<FramingState>('framing', () => ({
+	show: false,
+	request: structuredClone(DEFAULT_FRAMING),
+	loading: false,
+	openNewImage: false,
+	images: [],
+}))
 
 export const FramingMolecule = molecule((m) => {
 	const workspace = m(ImageWorkspaceMolecule)
 
-	const request = storage.get('framing', () => structuredClone(DEFAULT_FRAMING))
-
-	const state = proxy<FramingState>({
-		show: false,
-		request,
-		hipsSurveys: [],
-		loading: false,
-		openNewImage: request.id !== DEFAULT_FRAMING.id,
-		images: [],
-	})
-
 	onMount(() => {
-		const subscribers = new Array<VoidFunction>(3)
+		const subscribers = new Array<VoidFunction>(2)
 
-		subscribers[0] = subscribe(state.request, () => storage.set('framing', state.request))
-
-		subscribers[1] = bus.subscribe<Partial<Framing>>('framing:load', (request) => {
+		subscribers[0] = bus.subscribe<Partial<Framing>>('framing:load', (request) => {
 			Object.assign(state.request, request)
 			state.show = true
 			void load()
 		})
 
-		subscribers[2] = bus.subscribe<Image>('image:remove', (image) => {
-			const index = state.images.findIndex((e) => e.key === image.key)
-			index >= 0 && state.images.splice(index, 1)
+		subscribers[1] = bus.subscribe<Image>('image:remove', (image) => {
+			const index = images.findIndex((e) => e.key === image.key)
+			index >= 0 && images.splice(index, 1)
 		})
 
 		return () => {
 			subscribers.forEach((e) => e())
 		}
 	})
-
-	Api.Framing.hipsSurveys().then((hipsSurveys) => (state.hipsSurveys = hipsSurveys ?? []))
 
 	function update<K extends keyof FramingState['request']>(key: K, value: FramingState['request'][K]) {
 		state.request[key] = value
@@ -61,14 +52,14 @@ export const FramingMolecule = molecule((m) => {
 	async function load() {
 		try {
 			state.loading = true
-			state.request.id = state.openNewImage ? state.images.length : DEFAULT_FRAMING.id
+			state.request.id = state.openNewImage ? images.length : DEFAULT_FRAMING.id
 
 			const frame = await Api.Framing.frame(state.request)
 
 			if (frame) {
 				const image = workspace.add(frame.path, state.request.id.toFixed(0), 'framing')
-				const index = state.images.findIndex((e) => e.key === image.key)
-				index >= 0 ? (state.images[index] = image) : state.images.push(image)
+				const index = images.findIndex((e) => e.key === image.key)
+				index >= 0 ? (images[index] = image) : images.push(image)
 			}
 		} finally {
 			state.loading = false

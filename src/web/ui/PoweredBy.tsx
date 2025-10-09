@@ -8,8 +8,8 @@ export interface PoweredByProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export const PoweredBy = memo(({ href, children, className, label, ...props }: PoweredByProps) => {
 	return (
-		<div className={clsx('w-full text-center text-xs text-neutral-500 hover:text-neutral-300', className)} {...props}>
-			<a href={href} rel='noopener' target='_blank'>
+		<div className={clsx('w-full text-center text-xs', className)} {...props}>
+			<a className='text-neutral-500 hover:text-neutral-300' href={href} rel='noopener' target='_blank'>
 				{children ?? label}
 			</a>
 		</div>

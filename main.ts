@@ -203,4 +203,4 @@ const app = new Elysia({
 
 	.listen({ hostname, port })
 
-console.info(`server is started at: http://${app.server!.hostname}:${app.server!.port}`)
+console.info(`server is started at: http${secure ? 's' : ''}://${app.server!.hostname}:${app.server!.port}`)

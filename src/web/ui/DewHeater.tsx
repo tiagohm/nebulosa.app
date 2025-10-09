@@ -1,7 +1,6 @@
 import { Slider } from '@heroui/react'
-import { useDebounce } from '@uidotdev/usehooks'
 import { useMolecule } from 'bunshi/react'
-import { memo, useEffect, useState } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { DewHeaterMolecule } from '@/molecules/indi/dewheater'
 import { ConnectButton } from './ConnectButton'
@@ -11,12 +10,6 @@ import { Modal } from './Modal'
 export const DewHeater = memo(() => {
 	const dewHeater = useMolecule(DewHeaterMolecule)
 	const { connecting, connected, pwm } = useSnapshot(dewHeater.state.dewHeater)
-	const [pwmValue, setPwmValue] = useState(pwm.value)
-	const debouncedPwm = useDebounce(pwmValue, 500)
-
-	useEffect(() => {
-		dewHeater.pwm(debouncedPwm)
-	}, [debouncedPwm])
 
 	const Header = (
 		<div className='flex flex-row items-center justify-between'>
@@ -31,12 +24,14 @@ export const DewHeater = memo(() => {
 		</div>
 	)
 
+	const color = pwm.value < pwm.max * 0.5 ? 'primary' : pwm.value < pwm.max * 0.9 ? 'warning' : 'danger'
+
 	return (
 		<Modal header={Header} id={`dew-heater-${dewHeater.scope.dewHeater.name}`} maxWidth='260px' onHide={dewHeater.hide}>
 			<div className='mt-0 col-span-full flex flex-col items-center justify-center'>
 				<div className='w-full flex flex-col justify-center items-center gap-1'>
-					<Slider color={pwmValue < pwm.max * 0.5 ? 'primary' : pwmValue < pwm.max * 0.9 ? 'warning' : 'danger'} endContent={pwm.max} isDisabled={!connected} maxValue={pwm.max} minValue={pwm.min} onChange={(value) => setPwmValue(value as never)} size='lg' startContent={pwm.min} value={pwmValue} />
-					<span className='text-lg font-bold'>{pwmValue}</span>
+					<Slider color={color} disableThumbScale endContent={pwm.max} isDisabled={!connected} maxValue={pwm.max} minValue={pwm.min} onChange={dewHeater.update} onChangeEnd={(value) => dewHeater.pwm(value as never)} size='lg' startContent={pwm.min} value={pwm.value} />
+					<span className='text-lg font-bold'>{pwm.value}</span>
 				</div>
 			</div>
 		</Modal>

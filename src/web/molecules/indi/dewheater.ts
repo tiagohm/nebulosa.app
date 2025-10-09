@@ -32,6 +32,10 @@ export const DewHeaterMolecule = molecule((m, s) => {
 		return equipment.connect(state.dewHeater)
 	}
 
+	function update(value: number | number[]) {
+		state.dewHeater.pwm.value = typeof value === 'number' ? value : value[0]
+	}
+
 	function pwm(value: number) {
 		return Api.DewHeaters.pwm(scope.dewHeater, value)
 	}
@@ -40,5 +44,5 @@ export const DewHeaterMolecule = molecule((m, s) => {
 		equipment.hide('DEW_HEATER', scope.dewHeater)
 	}
 
-	return { state, scope, connect, pwm, hide } as const
+	return { state, scope, connect, update, pwm, hide } as const
 })

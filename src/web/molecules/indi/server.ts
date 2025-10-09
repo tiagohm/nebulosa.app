@@ -12,13 +12,13 @@ export interface IndiServerState {
 	request: IndiServerStart
 }
 
-const { state } = persistProxy<IndiServerState>('indi.server', {
+const { state } = persistProxy<IndiServerState>('indi.server', () => ({
 	enabled: true,
 	running: false,
 	showAll: false,
 	show: false,
 	request: structuredClone(DEFAULT_INDI_SERVER_START),
-})
+}))
 
 export const IndiServerMolecule = molecule(() => {
 	onMount(() => {

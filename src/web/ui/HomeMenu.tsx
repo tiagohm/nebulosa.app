@@ -37,6 +37,7 @@ import { Calculator } from './Calculator'
 import { Darv } from './Darv'
 import { Framing } from './Framing'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { IndiPanelControl } from './IndiPanelControl'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { SkyAtlas } from './SkyAtlas'
@@ -89,9 +90,7 @@ export const HomeMenuPopover = memo(() => {
 			<Tooltip content='Menu' placement='bottom'>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
-						<Button color='secondary' isIconOnly variant='light'>
-							<Icons.Menu />
-						</Button>
+						<IconButton color='secondary' icon={Icons.Menu} />
 					</PopoverTrigger>
 				</div>
 			</Tooltip>

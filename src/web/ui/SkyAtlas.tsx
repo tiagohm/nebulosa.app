@@ -1,11 +1,12 @@
-import { Button, Checkbox, Chip, type ChipProps, Input, Listbox, ListboxItem, NumberInput, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
+import { Button, Calendar, Checkbox, Chip, type ChipProps, Input, Listbox, ListboxItem, NumberInput, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
+import { fromAbsolute, type ZonedDateTime } from '@internationalized/date'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa/src/constellation'
 import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/distance'
-import { formatTemporal, type Temporal } from 'nebulosa/src/temporal'
-import { memo, useDeferredValue, useMemo, useState } from 'react'
+import { formatTemporal, type Temporal, temporalGet, temporalStartOfDay } from 'nebulosa/src/temporal'
+import { memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import { type BodyPosition, EMPTY_TWILIGHT, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
@@ -25,30 +26,36 @@ import { Sun } from './Sun'
 
 export const SkyAtlas = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
-	const { tab } = useSnapshot(atlas.state)
+	const {
+		tab,
+		request: { time },
+	} = useSnapshot(atlas.state)
 
-	const Header = (
-		<div className='flex flex-row items-center justify-between'>
-			<span>Sky Atlas</span>
-			{(tab === 'galaxy' || tab === 'satellite') && (
-				<Popover className='max-w-140' placement='bottom' showArrow>
-					<Tooltip content='Filter' placement='bottom'>
-						<div className='max-w-fit'>
-							<PopoverTrigger>
-								<IconButton color='secondary' icon={Icons.Filter} variant='flat' />
-							</PopoverTrigger>
-						</div>
-					</Tooltip>
-					<PopoverContent>
-						{tab === 'galaxy' && <GalaxyFilter />}
-						{tab === 'satellite' && <SatelliteFilter />}
-					</PopoverContent>
-				</Popover>
-			)}
-		</div>
+	const Header = useMemo(
+		() => (
+			<div className='flex flex-row items-center justify-between'>
+				<span>Sky Atlas</span>
+				{(tab === 'galaxy' || tab === 'satellite') && (
+					<Popover className='max-w-140' placement='bottom' showArrow>
+						<Tooltip content='Filter' placement='bottom'>
+							<div className='max-w-fit'>
+								<PopoverTrigger>
+									<IconButton color='secondary' icon={Icons.Filter} variant='flat' />
+								</PopoverTrigger>
+							</div>
+						</Tooltip>
+						<PopoverContent>
+							{tab === 'galaxy' && <GalaxyFilter />}
+							{tab === 'satellite' && <SatelliteFilter />}
+						</PopoverContent>
+					</Popover>
+				)}
+			</div>
+		),
+		[tab],
 	)
 
-	const Footer = tab !== 'galaxy' ? <PoweredBy className='mt-2' href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' label='NASA/JPL Horizons API' /> : null
+	const Footer = tab !== 'galaxy' ? <PoweredBy href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' label='NASA/JPL Horizons API' /> : null
 
 	return (
 		<Modal footer={Footer} header={Header} id='sky-atlas' maxWidth='450px' onHide={atlas.hide}>
@@ -73,6 +80,7 @@ export const SkyAtlas = memo(() => {
 						<SatelliteTab />
 					</Tab>
 				</Tabs>
+				<TimeBar key={`${time.utc}${time.offset}`} />
 			</div>
 		</Modal>
 	)
@@ -451,6 +459,80 @@ export const SatelliteTab = memo(() => {
 	)
 })
 
+function stepIndexFromTime(time: Temporal): number {
+	return (temporalGet(time, 'h') * 60 + temporalGet(time, 'm') + 720) % 1440
+}
+
+const ONE_MINUTE = 60 * 1000
+const NOON = 720 * ONE_MINUTE
+
+export const TimeBar = memo(() => {
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { utc, offset } = useSnapshot(atlas.state.request.time)
+	const { show } = useSnapshot(atlas.state.calendar)
+	const local = utc + offset * ONE_MINUTE
+	const start = temporalStartOfDay(local - NOON) + NOON - offset * ONE_MINUTE // Start at (local) noon in UTC
+	const [step, setStep] = useState(stepIndexFromTime(local))
+
+	function handleOnChangeEnd(index: number | number[]) {
+		index = typeof index === 'number' ? index : index[0]
+		atlas.updateTime(start + index * ONE_MINUTE)
+	}
+
+	const handleOnTimeChange = useCallback((value: Temporal) => {
+		atlas.updateTime(value - offset * ONE_MINUTE)
+	}, [])
+
+	const handleOnOpenChange = useCallback((isOpen: boolean) => {
+		atlas.state.calendar.show = isOpen
+	}, [])
+
+	return (
+		<div className='mt-1 flex flex-row items-center gap-1'>
+			<CalendarPopover isOpen={show} onOpenChange={handleOnOpenChange} onTimeChange={handleOnTimeChange} time={local} />
+			<div className='flex-1 flex flex-col items-center gap-0'>
+				<span className='text-sm'>{formatTemporal(start + (step + offset) * ONE_MINUTE, 'YYYY-MM-DD HH:mm')}</span>
+				<Slider color='primary' disableThumbScale maxValue={1440} minValue={0} onChange={(value) => setStep(value as never)} onChangeEnd={handleOnChangeEnd} size='sm' value={step} />
+			</div>
+			<Tooltip content='Now' placement='bottom'>
+				<IconButton color='danger' icon={Icons.CalendarRefresh} onPointerUp={() => atlas.updateTime(Date.now(), false)} />
+			</Tooltip>
+		</div>
+	)
+})
+
+export interface CalendarPopoverProps {
+	readonly time: Temporal
+	readonly onTimeChange: (time: Temporal) => void
+	readonly isOpen?: boolean
+	readonly onOpenChange?: (isOpen: boolean) => void
+}
+
+export const CalendarPopover = memo(({ time, onTimeChange, isOpen, onOpenChange }: CalendarPopoverProps) => {
+	const date = fromAbsolute(time, 'UTC')
+
+	function handleDateChange(date: ZonedDateTime) {
+		onTimeChange(date.toDate().getTime())
+	}
+
+	return (
+		<Popover className='max-w-110' isOpen={isOpen} onOpenChange={onOpenChange} placement='bottom' showArrow>
+			<Tooltip content='Calendar' placement='bottom'>
+				<div className='max-w-fit'>
+					<PopoverTrigger>
+						<IconButton color='secondary' icon={Icons.CalendarToday} />
+					</PopoverTrigger>
+				</div>
+			</Tooltip>
+			<PopoverContent>
+				<div className='grid grid-cols-12 gap-2 p-4'>
+					<Calendar className='col-span-full' classNames={{ base: 'shadow-none' }} onChange={handleDateChange} showMonthAndYearPickers value={date} />
+				</div>
+			</PopoverContent>
+		</Popover>
+	)
+})
+
 export interface AstronomicalEventProps {
 	readonly icon: Icon
 	readonly label: string
@@ -656,7 +738,7 @@ export const EphemerisChart = memo(({ data }: EphemerisChartProps) => {
 	}
 
 	return (
-		<ComposedChart data={data} height={150} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} width={412}>
+		<ComposedChart data={data} height={140} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} width={412}>
 			<XAxis dataKey='name' domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={tickFormatter} tickMargin={6} />
 			<YAxis domain={[0, 90]} width={25} />
 			<Area activeDot={false} connectNulls dataKey='dayFirst' dot={false} fill='#FFF176' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />

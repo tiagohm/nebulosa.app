@@ -1,6 +1,7 @@
 import { molecule, onMount } from 'bunshi'
 import { deg, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { meter } from 'nebulosa/src/distance'
+import type { Temporal } from 'nebulosa/src/temporal'
 import type React from 'react'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
@@ -21,6 +22,10 @@ export interface SkyAtlasState {
 	readonly asteroid: AsteroidState
 	readonly galaxy: GalaxyState
 	readonly satellite: SatelliteState
+	readonly calendar: {
+		show: boolean
+		manual: boolean
+	}
 }
 
 export interface SunState {
@@ -138,7 +143,7 @@ export const SunMolecule = molecule(() => {
 		}
 
 		// Updates only if passed more than 1 minute since last update
-		if (time.utc - request.time.utc >= 60000 || time.offset !== request.time.offset) {
+		if (Math.abs(time.utc - request.time.utc) >= 60000 || time.offset !== request.time.offset) {
 			Object.assign(request.time, time)
 			changed = true
 		}
@@ -701,6 +706,10 @@ export const SkyAtlasMolecule = molecule((m) => {
 			asteroid: asteroid.state,
 			galaxy: galaxy.state,
 			satellite: satellite.state,
+			calendar: {
+				show: false,
+				manual: false,
+			},
 		})
 
 	skyAtlasState = state
@@ -730,12 +739,19 @@ export const SkyAtlasMolecule = molecule((m) => {
 		}
 	})
 
-	async function tick() {
+	function updateTime(utc: number, manual: boolean = true) {
+		state.calendar.manual = manual
+		void tick(utc)
+	}
+
+	async function tick(utc?: Temporal) {
 		if (!state.show) return
 
 		const { time, location } = state.request
 
-		time.utc = Date.now()
+		if (utc === undefined) utc = state.calendar.manual ? time.utc : Date.now()
+
+		time.utc = utc
 		time.offset = -180 // TODO
 
 		await twilight()
@@ -786,7 +802,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 		state.show = false
 	}
 
-	return { state, syncTo, goTo, frame, show, hide }
+	return { state, updateTime, syncTo, goTo, frame, show, hide }
 })
 
 function isLocationChanged(a: GeographicCoordinate, b: GeographicCoordinate) {

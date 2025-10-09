@@ -32,6 +32,10 @@ export const FlatPanelMolecule = molecule((m, s) => {
 		return equipment.connect(state.flatPanel)
 	}
 
+	function update(value: number | number[]) {
+		state.flatPanel.intensity.value = typeof value === 'number' ? value : value[0]
+	}
+
 	function enable() {
 		return Api.FlatPanels.enable(scope.flatPanel)
 	}
@@ -52,5 +56,5 @@ export const FlatPanelMolecule = molecule((m, s) => {
 		equipment.hide('FLAT_PANEL', scope.flatPanel)
 	}
 
-	return { state, scope, connect, enable, disable, toggle, intensity, hide } as const
+	return { state, scope, connect, update, enable, disable, toggle, intensity, hide } as const
 })

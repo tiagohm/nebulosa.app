@@ -20,7 +20,6 @@ const { state } = persistProxy<FramingState>('framing', () => ({
 	request: structuredClone(DEFAULT_FRAMING),
 	loading: false,
 	openNewImage: false,
-	images: [],
 }))
 
 export const FramingMolecule = molecule((m) => {

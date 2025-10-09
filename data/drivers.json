@@ -41,7 +41,7 @@
   },
   {
     "name": "Altair",
-    "driver": "indi_altair_ccd"
+    "driver": "indi_altaircam_ccd"
   },
   {
     "name": "ALTO",

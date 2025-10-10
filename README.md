@@ -12,12 +12,6 @@ To install dependencies:
 bun i --production
 ```
 
-To start a development server:
-
-```bash
-bun dev
-```
-
 To start a production server:
 
 ```bash

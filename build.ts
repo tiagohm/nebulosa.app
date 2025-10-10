@@ -1,7 +1,6 @@
-import tailwind from 'bun-plugin-tailwind'
+import { build } from 'bun'
 
-await Bun.build({
-	plugins: [tailwind],
+await build({
 	entrypoints: ['./main.ts'],
 	minify: true,
 	target: 'bun',

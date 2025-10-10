@@ -7,11 +7,11 @@
 	"main": "main.ts",
 	"module": "main.ts",
 	"scripts": {
-		"dev": "bun --hot main.ts",
-		"prod": "NODE_ENV=production bun --production main.ts",
+		"tailwind": "tailwindcss -m -i ./src/web/index.css -o dist/index.css",
+		"prod": "bun tailwind && NODE_ENV=production bun --production main.ts",
 		"lint": "biome lint --write src/",
 		"format": "biome format --write src/",
-		"compile": "bun run build.ts",
+		"compile": "bun tailwind && bun run build.ts",
 		"typecheck": "tsc --noEmit"
 	},
 	"author": {
@@ -23,13 +23,13 @@
 		"@elysiajs/cors": "1.4.0",
 		"@elysiajs/cron": "1.4.1",
 		"@heroui/react": "2.8.5",
+		"@tailwindcss/cli": "4",
 		"@uidotdev/usehooks": "2.4.1",
 		"@use-gesture/react": "10.3.1",
-		"bun-plugin-tailwind": "0.0.15",
 		"bunshi": "2.1.5",
 		"clsx": "2.1.1",
 		"date-fns": "4.1.0",
-		"elysia": "1.4.9",
+		"elysia": "1.4.10",
 		"nebulosa": "github:tiagohm/nebulosa.ts",
 		"react": "19.2.0",
 		"react-dom": "19.2.0",
@@ -43,8 +43,8 @@
 		"@biomejs/biome": "latest",
 		"@types/bun": "latest",
 		"@types/leaflet": "1.9.20",
-		"@types/react": "19.2.0",
-		"@types/react-dom": "19.2.0",
+		"@types/react": "19.2.2",
+		"@types/react-dom": "19.2.1",
 		"typescript": "5.9.3"
 	},
 	"trustedDependencies": [

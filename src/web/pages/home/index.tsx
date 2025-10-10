@@ -1,4 +1,3 @@
-import '@/index.css'
 import { HeroUIProvider, ToastProvider } from '@heroui/react'
 import React from 'react'
 import { createRoot } from 'react-dom/client'

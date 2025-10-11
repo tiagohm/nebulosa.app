@@ -1,11 +1,12 @@
 import { Button, Calendar, Checkbox, Chip, type ChipProps, Input, Listbox, ListboxItem, NumberInput, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
 import { fromAbsolute, type ZonedDateTime } from '@internationalized/date'
 import { useMolecule } from 'bunshi/react'
+import { clsx } from 'clsx'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa/src/constellation'
 import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/distance'
-import { formatTemporal, type Temporal, temporalGet, temporalStartOfDay } from 'nebulosa/src/temporal'
+import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/temporal'
 import { memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import { type BodyPosition, EMPTY_TWILIGHT, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
@@ -23,18 +24,20 @@ import { SatelliteGroupTypeChipGroup } from './SatelliteGroupTypeChipGroup'
 import { SKY_OBJECT_NAME_TYPES, SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 import { Sun } from './Sun'
+import { TextButton } from './TextButton'
 
 export const SkyAtlas = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
-	const {
-		tab,
-		request: { time },
-	} = useSnapshot(atlas.state)
+	const { tab } = useSnapshot(atlas.state)
+	const { time } = useSnapshot(atlas.state.request)
 
 	const Header = useMemo(
 		() => (
 			<div className='flex flex-row items-center justify-between'>
 				<span>Sky Atlas</span>
+				<div className='flex-1 flex justify-center items-center'>
+					<TimeBar key={`${time.utc}${time.offset}`} />
+				</div>
 				{(tab === 'galaxy' || tab === 'satellite') && (
 					<Popover className='max-w-140' placement='bottom' showArrow>
 						<Tooltip content='Filter' placement='bottom'>
@@ -55,12 +58,14 @@ export const SkyAtlas = memo(() => {
 		[tab],
 	)
 
-	const Footer = tab !== 'galaxy' ? <PoweredBy href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' label='NASA/JPL Horizons API' /> : null
+	const Footer = useMemo(() => {
+		return tab !== 'galaxy' ? <PoweredBy className='mt-1' href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' label='NASA/JPL Horizons API' /> : <span />
+	}, [tab !== 'galaxy'])
 
 	return (
 		<Modal footer={Footer} header={Header} id='sky-atlas' maxWidth='450px' onHide={atlas.hide}>
 			<div className='mt-0 flex flex-col gap-2'>
-				<Tabs classNames={{ base: 'absolute top-[-42px] right-[88px] z-10', panel: 'pt-0' }} onSelectionChange={(value) => (atlas.state.tab = value as never)} selectedKey={tab}>
+				<Tabs classNames={{ base: 'absolute left-[-2px] top-[8px] z-1', panel: 'w-full pt-0' }} isVertical onSelectionChange={(value) => (atlas.state.tab = value as never)} selectedKey={tab}>
 					<Tab key='sun' title={<Icons.Sun />}>
 						<SunTab />
 					</Tab>
@@ -80,7 +85,6 @@ export const SkyAtlas = memo(() => {
 						<SatelliteTab />
 					</Tab>
 				</Tabs>
-				<TimeBar key={`${time.utc}${time.offset}`} />
 			</div>
 		</Modal>
 	)
@@ -95,7 +99,7 @@ export const SunTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='relative col-span-full flex justify-center items-center'>
+			<div className='ml-11 relative min-h-[200px] max-h-[240px] col-span-full flex justify-center items-center'>
 				<Sun onSourceChange={(source) => (sun.state.source = source)} source={source} />
 				<div className='absolute top-auto left-0 p-0 text-xs'>
 					<SolarEclipses />
@@ -104,9 +108,7 @@ export const SunTab = memo(() => {
 					<Seasons />
 				</div>
 			</div>
-			<div className='col-span-full'>
-				<EphemerisAndChart chart={chart} name='Sun' position={position} twilight={twilight} />
-			</div>
+			<EphemerisAndChart chart={chart} className='col-span-full' name='Sun' position={position} twilight={twilight} />
 		</div>
 	)
 })
@@ -148,7 +150,7 @@ export const MoonTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='relative col-span-full flex justify-center items-center'>
+			<div className='ml-11 relative min-h-[200px] max-h-[240px] col-span-full flex justify-center items-center'>
 				<Moon />
 				<div className='absolute top-auto left-0 p-0 text-xs'>
 					<LunarEclipses />
@@ -157,9 +159,7 @@ export const MoonTab = memo(() => {
 					<MoonPhases />
 				</div>
 			</div>
-			<div className='col-span-full'>
-				<EphemerisAndChart chart={chart} name='Moon' position={position} twilight={twilight} />
-			</div>
+			<EphemerisAndChart chart={chart} className='col-span-full' name='Moon' position={position} twilight={twilight} />
 		</div>
 	)
 })
@@ -245,16 +245,14 @@ export const PlanetTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<Listbox className='col-span-full' classNames={{ base: 'w-full', list: 'max-h-[200px] overflow-scroll' }} items={PLANETS} onAction={(key) => planet.select(key as never)} selectionMode='none'>
+			<Listbox className='pl-10 relative min-h-[200px] max-h-[240px] col-span-full' classNames={{ base: 'w-full', list: 'max-h-[190px] overflow-scroll' }} items={PLANETS} onAction={(key) => planet.select(key as never)} selectionMode='none'>
 				{(planet) => (
 					<ListboxItem description={planet.type} key={planet.code}>
 						{planet.name}
 					</ListboxItem>
 				)}
 			</Listbox>
-			<div className='col-span-full'>
-				<EphemerisAndChart chart={chart} name={PLANETS.find((e) => e.code === code)?.name} position={position} twilight={twilight} />
-			</div>
+			<EphemerisAndChart chart={chart} className='col-span-full' name={PLANETS.find((e) => e.code === code)?.name} position={position} twilight={twilight} />
 		</div>
 	)
 })
@@ -280,8 +278,8 @@ export const AsteroidTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='col-span-full flex flex-col gap-2'>
-				<Tabs className='w-full' classNames={{ panel: 'pt-0' }} onSelectionChange={(value) => (asteroid.state.tab = value as never)} selectedKey={tab}>
+			<div className='pl-10 relative min-h-[200px] max-h-[240px] col-span-full flex flex-col gap-2'>
+				<Tabs className='w-full' classNames={{ panel: 'py-0' }} onSelectionChange={(value) => (asteroid.state.tab = value as never)} selectedKey={tab}>
 					<Tab key='search' title='Search'>
 						<AsteroidSearchTab />
 					</Tab>
@@ -290,9 +288,7 @@ export const AsteroidTab = memo(() => {
 					</Tab>
 				</Tabs>
 			</div>
-			<div className='col-span-full'>
-				<EphemerisAndChart chart={chart} name={selected?.name} position={position} tags={tags} twilight={twilight} />
-			</div>
+			<EphemerisAndChart chart={chart} className='col-span-full' name={selected?.name} position={position} tags={tags} twilight={twilight} />
 		</div>
 	)
 })
@@ -303,13 +299,13 @@ export const AsteroidSearchTab = memo(() => {
 	const { text } = useSnapshot(asteroid.state.search, { sync: true })
 
 	return (
-		<div className='w-full flex flex-col gap-2'>
+		<div className='w-full flex flex-col gap-0'>
 			<div className='w-full flex flex-row items-center justify-center gap-2'>
 				<Input className='flex-1' isClearable isDisabled={loading} label='Search' onValueChange={asteroid.updateSearch} placeholder='Enter the IAU number, designation, name or SPK ID' size='sm' value={text} />
 				<IconButton color='primary' icon={Icons.Search} isDisabled={loading || !text} onPointerUp={asteroid.search} variant='light' />
 			</div>
 			{list ? (
-				<Listbox className='w-full' classNames={{ base: 'w-full', list: 'max-h-[156px] overflow-scroll' }} items={list} onAction={asteroid.select} selectionMode='single'>
+				<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-[117px] overflow-scroll' }} items={list} onAction={asteroid.select} selectionMode='single'>
 					{(item) => (
 						<ListboxItem description={item.pdes} key={item.pdes}>
 							{item.name}
@@ -317,7 +313,7 @@ export const AsteroidSearchTab = memo(() => {
 					)}
 				</Listbox>
 			) : (
-				<Listbox className='w-full' classNames={{ base: 'w-full', list: 'max-h-[156px] overflow-scroll' }} items={selected?.parameters ?? []} selectionMode='none'>
+				<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-[117px] overflow-scroll' }} items={selected?.parameters ?? []} selectionMode='none'>
 					{(parameter) => (
 						<ListboxItem description={parameter.description} key={parameter.name}>
 							<span className='flex items-center justify-between'>
@@ -328,7 +324,7 @@ export const AsteroidSearchTab = memo(() => {
 					)}
 				</Listbox>
 			)}
-			<PoweredBy href='https://ssd-api.jpl.nasa.gov/doc/sbdb.html' label='NASA/JPL Small-Body Database (SBDB) API' />
+			<PoweredBy className='mt-1' href='https://ssd-api.jpl.nasa.gov/doc/sbdb.html' label='NASA/JPL Small-Body Database (SBDB) API' />
 		</div>
 	)
 })
@@ -340,13 +336,13 @@ export const AsteroidCloseApproachesTab = memo(() => {
 	const { result } = useSnapshot(asteroid.state.closeApproaches)
 
 	return (
-		<div className='w-full flex flex-col gap-2'>
+		<div className='w-full flex flex-col gap-0'>
 			<div className='w-full flex flex-row items-center justify-center gap-2'>
 				<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={loading} label='Days' maxValue={30} minValue={1} onValueChange={(value) => asteroid.updateCloseApproaches('days', value)} size='sm' value={days} />
 				<NumberInput className='flex-1' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Distance (LD)' maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} size='sm' step={0.1} value={distance} />
 				<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={asteroid.closeApproaches} variant='light' />
 			</div>
-			<Listbox className='w-full' classNames={{ base: 'w-full', list: 'max-h-[117px] overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
+			<Listbox className='mt-2 w-full' classNames={{ base: 'w-full', list: 'max-h-[117px] overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
 				{(item) => (
 					<ListboxItem description={`${item.distance.toFixed(3)} LD`} key={item.name}>
 						<span className='flex items-center justify-between'>
@@ -366,12 +362,12 @@ export const GalaxyTab = memo(() => {
 	const { twilight } = useSnapshot(atlas.state)
 
 	const galaxy = useMolecule(GalaxyMolecule)
-	const { page, sort } = useSnapshot(galaxy.state.request, { sync: true })
-	const { loading, result, position, chart } = useSnapshot(galaxy.state)
+	const { sort } = useSnapshot(galaxy.state.request, { sync: true })
+	const { result, position, chart } = useSnapshot(galaxy.state)
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<Table className='mt-3 col-span-full' onRowAction={(key) => galaxy.select(+(key as never))} onSortChange={(value) => galaxy.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
+			<Table className='pl-11 relative min-h-[200px] max-h-[240px] col-span-full' onRowAction={(key) => galaxy.select(+(key as never))} onSortChange={(value) => galaxy.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
 				<TableHeader>
 					<TableColumn key='name'>Name</TableColumn>
 					<TableColumn allowsSorting className='text-center' key='magnitude'>
@@ -395,20 +391,18 @@ export const GalaxyTab = memo(() => {
 					)}
 				</TableBody>
 			</Table>
-			<div className='col-span-full flex flex-row items-center justify-center gap-3'>
-				<Button color='secondary' isDisabled={page <= 1 || loading} isIconOnly onPointerUp={galaxy.prev} variant='flat'>
-					<Icons.ChevronLeft />
-				</Button>
-				<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={!result.length || loading} isWheelDisabled minValue={1} onValueChange={(value) => galaxy.update('page', value)} size='sm' value={page} />
-				<Button color='secondary' isDisabled={!result.length || loading} isIconOnly onPointerUp={galaxy.next} variant='flat'>
-					<Icons.ChevronRight />
-				</Button>
-			</div>
-			<div className='col-span-full'>
-				<EphemerisAndChart chart={chart} position={position} twilight={twilight} />
-			</div>
+			<GalaxyPaginator className='col-span-full absolute w-full' />
+			<EphemerisAndChart chart={chart} className='col-span-full' position={position} twilight={twilight} />
 		</div>
 	)
+})
+
+export const GalaxyPaginator = memo((props: React.HTMLAttributes<HTMLDivElement>) => {
+	const galaxy = useMolecule(GalaxyMolecule)
+	const { page } = useSnapshot(galaxy.state.request, { sync: true })
+	const { loading, result } = useSnapshot(galaxy.state)
+
+	return <Paginator {...props} count={result.length} loading={loading} onNext={galaxy.next} onPrev={galaxy.prev} page={page} />
 })
 
 export const SatelliteTab = memo(() => {
@@ -416,12 +410,12 @@ export const SatelliteTab = memo(() => {
 	const { twilight } = useSnapshot(atlas.state)
 
 	const satellite = useMolecule(SatelliteMolecule)
-	// biome-ignore format: don't break lines
-	const { loading, result, position, chart, page, request: { position: { name } } } = useSnapshot(satellite.state)
+	const { result, position, chart } = useSnapshot(satellite.state)
+	const { name } = useSnapshot(satellite.state.request.position)
 
 	return (
-		<div className='grid grid-cols-12 gap-2 items-center'>
-			<Table className='mt-3 col-span-full' onRowAction={(key) => satellite.select(+(key as never))} removeWrapper selectionMode='single'>
+		<div className='grid grid-cols-12 gap-2 items-center relative'>
+			<Table className='pl-11 relative min-h-[200px] max-h-[240px] col-span-full' onRowAction={(key) => satellite.select(+(key as never))} removeWrapper selectionMode='single'>
 				<TableHeader>
 					<TableColumn className='text-center' key='id'>
 						ID
@@ -443,43 +437,48 @@ export const SatelliteTab = memo(() => {
 					)}
 				</TableBody>
 			</Table>
-			<div className='col-span-full flex flex-row items-center justify-center gap-3'>
-				<Button color='secondary' isDisabled={page <= 1 || loading} isIconOnly onPointerUp={satellite.prev} variant='flat'>
-					<Icons.ChevronLeft />
-				</Button>
-				<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={!result.length || loading} isReadOnly minValue={1} size='sm' value={page} />
-				<Button color='secondary' isDisabled={!result.length || loading} isIconOnly onPointerUp={satellite.next} variant='flat'>
-					<Icons.ChevronRight />
-				</Button>
-			</div>
-			<div className='col-span-full'>
-				<EphemerisAndChart chart={chart} name={name} position={position} twilight={twilight} />
-			</div>
+			<SatellitePaginator className='col-span-full absolute w-full' />
+			<EphemerisAndChart chart={chart} className='col-span-full' name={name} position={position} twilight={twilight} />
 		</div>
 	)
 })
 
-function stepIndexFromTime(time: Temporal): number {
-	return (temporalGet(time, 'h') * 60 + temporalGet(time, 'm') + 720) % 1440
+export const SatellitePaginator = memo((props: React.HTMLAttributes<HTMLDivElement>) => {
+	const satellite = useMolecule(SatelliteMolecule)
+	const { loading, result, page } = useSnapshot(satellite.state)
+
+	return <Paginator {...props} count={result.length} isReadonly loading={loading} onNext={satellite.next} onPrev={satellite.prev} page={page} />
+})
+
+export interface PaginatorProps extends React.HTMLAttributes<HTMLDivElement> {
+	readonly page: number
+	readonly count: number
+	readonly loading?: boolean
+	readonly isReadonly?: boolean
+	readonly onPrev: VoidFunction
+	readonly onNext: VoidFunction
+}
+
+export function Paginator({ page, count, onPrev, onNext, loading = false, isReadonly = false, className, ...props }: PaginatorProps) {
+	return (
+		<div {...props} className={clsx('flex flex-row items-center justify-center gap-3', className)}>
+			<IconButton color='secondary' icon={Icons.ChevronLeft} isDisabled={page <= 1 || loading} onPointerUp={onPrev} />
+			<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={loading} isReadOnly={isReadonly} minValue={1} size='sm' value={page} />
+			<IconButton color='secondary' icon={Icons.ChevronRight} isDisabled={count < 4 || loading} onPointerUp={onNext} />
+		</div>
+	)
 }
 
 const ONE_MINUTE = 60 * 1000
-const NOON = 720 * ONE_MINUTE
 
 export const TimeBar = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { utc, offset } = useSnapshot(atlas.state.request.time)
-	const { show } = useSnapshot(atlas.state.calendar)
+	const { show, manual } = useSnapshot(atlas.state.calendar)
+
 	const local = utc + offset * ONE_MINUTE
-	const start = temporalStartOfDay(local - NOON) + NOON - offset * ONE_MINUTE // Start at (local) noon in UTC
-	const [step, setStep] = useState(stepIndexFromTime(local))
 
-	function handleOnChangeEnd(index: number | number[]) {
-		index = typeof index === 'number' ? index : index[0]
-		atlas.updateTime(start + index * ONE_MINUTE)
-	}
-
-	const handleOnTimeChange = useCallback((value: Temporal) => {
+	const handleOnDateChange = useCallback((value: Temporal) => {
 		atlas.updateTime(value - offset * ONE_MINUTE)
 	}, [])
 
@@ -488,45 +487,51 @@ export const TimeBar = memo(() => {
 	}, [])
 
 	return (
-		<div className='mt-1 flex flex-row items-center gap-1'>
-			<CalendarPopover isOpen={show} onOpenChange={handleOnOpenChange} onTimeChange={handleOnTimeChange} time={local} />
-			<div className='flex-1 flex flex-col items-center gap-0'>
-				<span className='text-sm'>{formatTemporal(start + (step + offset) * ONE_MINUTE, 'YYYY-MM-DD HH:mm')}</span>
-				<Slider color='primary' disableThumbScale maxValue={1440} minValue={0} onChange={(value) => setStep(value as never)} onChangeEnd={handleOnChangeEnd} size='sm' value={step} />
-			</div>
+		<div className='mt-1 inline-flex flex-row items-center gap-1'>
+			<CalendarPopover date={local} isOpen={show} onDateChange={handleOnDateChange} onOpenChange={handleOnOpenChange} />
 			<Tooltip content='Now' placement='bottom'>
-				<IconButton color='danger' icon={Icons.CalendarRefresh} onPointerUp={() => atlas.updateTime(Date.now(), false)} />
+				<IconButton color='success' icon={Icons.CalendarRefresh} isDisabled={!manual} onPointerUp={() => atlas.updateTime(Date.now(), false)} />
 			</Tooltip>
 		</div>
 	)
 })
 
 export interface CalendarPopoverProps {
-	readonly time: Temporal
-	readonly onTimeChange: (time: Temporal) => void
+	readonly date: Temporal
+	readonly onDateChange: (date: Temporal) => void
 	readonly isOpen?: boolean
 	readonly onOpenChange?: (isOpen: boolean) => void
 }
 
-export const CalendarPopover = memo(({ time, onTimeChange, isOpen, onOpenChange }: CalendarPopoverProps) => {
-	const date = fromAbsolute(time, 'UTC')
+export const CalendarPopover = memo(({ date, onDateChange, isOpen, onOpenChange }: CalendarPopoverProps) => {
+	const hour = temporalGet(date, 'h')
+	const minute = temporalGet(date, 'm')
 
 	function handleDateChange(date: ZonedDateTime) {
-		onTimeChange(date.toDate().getTime())
+		onDateChange(date.toDate().getTime())
+	}
+
+	function handleOnHourChange(value: number) {
+		onDateChange(temporalSet(date, value, 'h'))
+	}
+
+	function handleOnMinuteChange(value: number) {
+		onDateChange(temporalSet(date, value, 'm'))
 	}
 
 	return (
 		<Popover className='max-w-110' isOpen={isOpen} onOpenChange={onOpenChange} placement='bottom' showArrow>
-			<Tooltip content='Calendar' placement='bottom'>
-				<div className='max-w-fit'>
-					<PopoverTrigger>
-						<IconButton color='secondary' icon={Icons.CalendarToday} />
-					</PopoverTrigger>
-				</div>
-			</Tooltip>
+			<PopoverTrigger>
+				<TextButton color='secondary' label={formatTemporal(date, 'YYYY-MM-DD HH:mm')} startContent={<Icons.CalendarToday />} />
+			</PopoverTrigger>
 			<PopoverContent>
-				<div className='grid grid-cols-12 gap-2 p-4'>
-					<Calendar className='col-span-full' classNames={{ base: 'shadow-none' }} onChange={handleDateChange} showMonthAndYearPickers value={date} />
+				<div className='grid grid-cols-12 gap-2 pb-2'>
+					<Calendar className='col-span-full' classNames={{ base: 'shadow-none' }} onChange={handleDateChange} showMonthAndYearPickers value={fromAbsolute(date, 'UTC')} />
+					<div className='col-span-full flex flex-row items-center justify-center gap-1'>
+						<NumberInput className='max-w-20' formatOptions={INTEGER_NUMBER_FORMAT} maxValue={23} minValue={0} onValueChange={handleOnHourChange} value={hour} variant='bordered' />
+						<span className='text-lg font-bold'>:</span>
+						<NumberInput className='max-w-20' formatOptions={INTEGER_NUMBER_FORMAT} maxValue={59} minValue={0} onValueChange={handleOnMinuteChange} value={minute} variant='bordered' />
+					</div>
 				</div>
 			</PopoverContent>
 		</Popover>
@@ -543,7 +548,7 @@ export interface AstronomicalEventProps {
 export const AstronomicalEvent = memo(({ icon: Icon, label, time, format }: AstronomicalEventProps) => {
 	return (
 		<div className='flex flex-col gap-0'>
-			<span className='font-bold flex items-center gap-1'>
+			<span className='font-bold flex items-start gap-1'>
 				<Icon />
 				{label}
 			</span>
@@ -557,7 +562,7 @@ export interface EphemerisAndChartTag {
 	readonly color: ChipProps['color']
 }
 
-export interface EphemerisAndChartProps {
+export interface EphemerisAndChartProps extends React.HTMLAttributes<HTMLDivElement> {
 	readonly name?: string
 	readonly position: BodyPosition
 	readonly chart: readonly number[]
@@ -581,7 +586,7 @@ function makeTags(name: string | undefined, position: BodyPosition, extra?: Ephe
 	return tags
 }
 
-export const EphemerisAndChart = memo(({ name, position, chart, twilight, tags }: EphemerisAndChartProps) => {
+export const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, className }: EphemerisAndChartProps) => {
 	const [showChart, setShowChart] = useState(false)
 
 	tags = useMemo(() => makeTags(name, position, tags), [name, position.constellation, position.names, tags])
@@ -590,7 +595,7 @@ export const EphemerisAndChart = memo(({ name, position, chart, twilight, tags }
 	const deferredData = useDeferredValue(data, [])
 
 	return (
-		<div className='h-[160px] col-span-full relative flex flex-col justify-start items-center gap-1'>
+		<div className={clsx('h-[160px] col-span-full relative flex flex-col justify-start items-center gap-1', className)}>
 			<div className='w-full flex flex-row gap-2 text-start text-sm font-bold'>
 				<Button className='rounded-full' color='primary' isIconOnly onPointerUp={() => setShowChart(false)} variant={showChart ? 'light' : 'flat'}>
 					<Icons.Info />

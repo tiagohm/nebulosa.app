@@ -22,7 +22,12 @@ export class DarvManager {
 
 		// Remove the task after it finished
 		if (event.state === 'IDLE') {
-			this.tasks.delete(event.id)
+			const task = this.tasks.get(event.id)
+
+			if (task) {
+				task.close()
+				this.tasks.delete(event.id)
+			}
 		}
 	}
 
@@ -109,7 +114,8 @@ export class DarvTask {
 	}
 
 	stop() {
-		this.aborter.abort()
+		this.close()
+
 		this.move(false, false)
 		this.darv.camera.stopCameraCapture(this.camera)
 
@@ -117,6 +123,10 @@ export class DarvTask {
 			this.event.state = 'IDLE'
 			this.handleDarvEvent()
 		}
+	}
+
+	close() {
+		this.aborter.abort()
 	}
 
 	private move(enabled: boolean, reversed: boolean) {

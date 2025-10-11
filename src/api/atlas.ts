@@ -254,8 +254,7 @@ export class AtlasManager {
 	}
 
 	searchSkyObject(req: SearchSkyObject) {
-		const limit = 5
-		const offset = Math.max(0, (req.page ?? 0) - 1) * limit
+		const offset = Math.max(0, (req.page ?? 0) - 1) * req.limit
 		const where = []
 		const joinWhere = ['n.dsoId = d.id']
 
@@ -291,7 +290,7 @@ export class AtlasManager {
 
 		const sortDirection = req.sort.direction === 'ascending' ? 'ASC' : 'DESC'
 
-		const q = `SELECT DISTINCT d.id, d.magnitude, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ${req.nameType >= 0 ? `AND n.type = ${req.nameType}` : 'ORDER BY n.type'} LIMIT 1) as name FROM dsos d ${joinWhere.length > 1 ? `JOIN names n ON ${joinWhere.join(' AND ')}` : ''} WHERE ${where.join(' AND ')} ORDER BY d.${req.sort.column} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
+		const q = `SELECT DISTINCT d.id, d.magnitude, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ${req.nameType >= 0 ? `AND n.type = ${req.nameType}` : 'ORDER BY n.type'} LIMIT 1) as name FROM dsos d ${joinWhere.length > 1 ? `JOIN names n ON ${joinWhere.join(' AND ')}` : ''} WHERE ${where.join(' AND ')} ORDER BY d.${req.sort.column} ${sortDirection} LIMIT ${req.limit} OFFSET ${offset}`
 
 		return nebulosa.query<SkyObjectSearchItem, []>(q).all()
 	}

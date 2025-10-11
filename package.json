@@ -23,7 +23,7 @@
 		"@elysiajs/cors": "1.4.0",
 		"@elysiajs/cron": "1.4.1",
 		"@heroui/react": "2.8.5",
-		"@tailwindcss/cli": "4",
+		"@tailwindcss/cli": "4.1.14",
 		"@uidotdev/usehooks": "2.4.1",
 		"@use-gesture/react": "10.3.1",
 		"bunshi": "2.1.5",
@@ -42,7 +42,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "latest",
 		"@types/bun": "latest",
-		"@types/leaflet": "1.9.20",
+		"@types/leaflet": "1.9.21",
 		"@types/react": "19.2.2",
 		"@types/react-dom": "19.2.1",
 		"typescript": "5.9.3"

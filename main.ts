@@ -103,7 +103,6 @@ void atlasManager.refreshSatellites()
 
 const app = new Elysia({
 	serve: {
-		// @ts-expect-error
 		routes: {
 			'/*': homeHtml,
 		},

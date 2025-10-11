@@ -632,11 +632,13 @@ export const SatelliteMolecule = molecule(() => {
 		if (state.result.length === 0) return
 		pages[state.page++] = state.result[0].id - 1
 		update('lastId', state.result[state.result.length - 1].id)
+		return search()
 	}
 
 	function prev() {
 		if (state.page <= 1) return
 		update('lastId', pages[--state.page])
+		return search()
 	}
 
 	async function updatePosition() {

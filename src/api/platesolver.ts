@@ -55,6 +55,7 @@ export class PlateSolverManager {
 				console.error(e)
 				this.notification.send({ body: 'Failed to plate solve image', severity: 'error' })
 			} finally {
+				aborter.abort()
 				this.tasks.delete(req.id)
 			}
 		}

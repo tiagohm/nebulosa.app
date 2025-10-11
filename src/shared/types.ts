@@ -1325,7 +1325,7 @@ export const DEFAULT_SKY_OBJECT_SEARCH: SearchSkyObject = {
 	visibleAbove: 0,
 	...DEFAULT_POSITION_OF_BODY,
 	page: 1,
-	limit: 5,
+	limit: 4,
 	sort: {
 		column: 'magnitude',
 		direction: 'ascending',
@@ -1386,7 +1386,7 @@ export const DEFAULT_SEARCH_SATELLITE: SearchSatellite = {
 	text: '',
 	groups: ['AMATEUR', 'BEIDOU', 'GALILEO', 'GLO_OPS', 'GNSS', 'GPS_OPS', 'ONEWEB', 'SCIENCE', 'STARLINK', 'STATIONS', 'VISUAL'],
 	lastId: 0,
-	limit: 5,
+	limit: 4,
 }
 
 export const DEFAULT_SATELLITE: Satellite = {

@@ -833,7 +833,7 @@ if (await fs.exists('data/nebulosa.sqlite')) await fs.unlink('data/nebulosa.sqli
 
 const db = new Database('data/nebulosa.sqlite')
 
-db.run('PRAGMA journal_mode = WAL;')
+db.run('PRAGMA journal_size_limit = 67110000;')
 
 db.run('CREATE TABLE IF NOT EXISTS dsos (id INTEGER PRIMARY KEY, type INTEGER, rightAscension REAL, declination REAL, magnitude REAL, pmRa REAL, pmDec REAL, distance INTEGER, rv REAL, constellation INTEGER, spmType TEXT);')
 db.run('CREATE TABLE IF NOT EXISTS names (dsoId INTEGER, type INTEGER, name TEXT COLLATE NOCASE, PRIMARY KEY (dsoId, type, name), FOREIGN KEY (dsoId) REFERENCES dsos(id)) WITHOUT ROWID;')
@@ -928,7 +928,7 @@ function addNameFromTypeAndId(dsoId: number | bigint, type: number, id: string, 
 }
 
 async function readDsosFromStellarium() {
-	console.time('stellarium')
+	db.run('BEGIN TRANSACTION;')
 
 	for await (const entry of readCatalogDat(fileHandleSource(await fs.open('data/catalog.dat')))) {
 		const { type, rightAscension, declination, distance, mB, mV } = entry
@@ -975,11 +975,11 @@ async function readDsosFromStellarium() {
 		}
 	}
 
-	console.timeEnd('stellarium')
+	db.run('COMMIT;')
 }
 
 async function readStarsFromHyg() {
-	console.time('hyg')
+	db.run('BEGIN TRANSACTION;')
 
 	for await (const row of readHygCatalog(fileHandleSource(await fs.open('data/hyg_v42.csv')))) {
 		const { id, rightAscension, declination, magnitude, pmRa, pmDec, distance, rv, constellation, hd, hip, hr, bayer, flamsteed, name, spType } = row
@@ -996,11 +996,13 @@ async function readStarsFromHyg() {
 		}
 	}
 
-	console.timeEnd('hyg')
+	db.run('COMMIT;')
 }
 
 await readStarsFromHyg()
 await readDsosFromStellarium()
+
+db.run('BEGIN TRANSACTION;')
 
 const SIMBAD_STAR_CLUSTER_QUERY = `
 select distinct b.oid, b.ra, b.dec, b.otype, b.pmra, b.pmdec, b.plx_value, b.rvz_radvel, f.V, f.B, f.J, f.H, ids.ids from basic b
@@ -1131,6 +1133,8 @@ for (const item of (await simbadQuery(SIMBAD_STAR_CLUSTER_QUERY))!) {
 
 	addName(dsoId, ADDITIONAL_STAR_CLUSTER_CATALOGS[name], id)
 }
+
+db.run('COMMIT;')
 
 // db.run('CREATE INDEX IF NOT EXISTS idx_dsos_type ON dsos(type);')
 // db.run('CREATE INDEX IF NOT EXISTS idx_dsos_magnitude ON dsos(magnitude);')

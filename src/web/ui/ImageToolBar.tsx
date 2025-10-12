@@ -1,22 +1,30 @@
-import { Button, Popover, PopoverContent, PopoverTrigger, Switch, Tooltip } from '@heroui/react'
+import { Popover, PopoverContent, PopoverTrigger, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
+import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
 import { ImageFilterMolecule } from '@/molecules/image/filter'
 import { ImageScnrMolecule } from '@/molecules/image/scnr'
 import { ImageSettingsMolecule } from '@/molecules/image/settings'
 import { ImageSolverMolecule } from '@/molecules/image/solver'
+import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { ToggleButton } from './ToggleButton'
 
 export const ImageToolBar = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
-	const { transformation, crosshair, info, starDetection } = useSnapshot(viewer.state)
+	const { transformation, crosshair, info } = useSnapshot(viewer.state)
+	const { solution } = useSnapshot(viewer.state.solver)
+	const { stars: detectedStars, visible: isDetectedStarsVisible } = useSnapshot(viewer.state.starDetection)
+	const { stars: annotatedStars, visible: isAnnotatedStarsVisible } = useSnapshot(viewer.state.annotation)
 
 	const solver = useMolecule(ImageSolverMolecule)
+	const detection = useMolecule(StarDetectionMolecule)
+	const annotation = useMolecule(ImageAnnotationMolecule)
 	const stretch = useMolecule(ImageStretchMolecule)
 	const scnr = useMolecule(ImageScnrMolecule)
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
@@ -27,39 +35,27 @@ export const ImageToolBar = memo(() => {
 		<div className='w-full fixed bottom-0 mb-1 p-1 z-[99999]'>
 			<div className='flex flex-row items-center justify-start gap-2 px-2 py-1.5 mx-auto w-fit rounded-xl bg-black max-w-full overflow-scroll no-scrollbar'>
 				<Tooltip content='Save' placement='top'>
-					<Button color='secondary' isIconOnly variant='flat'>
-						<Icons.Save />
-					</Button>
+					<IconButton color='secondary' icon={Icons.Save} variant='flat' />
 				</Tooltip>
 				<Tooltip content='Plate Solver' placement='top'>
-					<Button color='secondary' isIconOnly onPointerUp={solver.show} variant='flat'>
-						<Icons.Sigma />
-					</Button>
+					<IconButton color='secondary' icon={Icons.Sigma} onPointerUp={solver.show} variant='flat' />
 				</Tooltip>
 				<Tooltip content='Stretch' placement='top'>
-					<Button color='secondary' isIconOnly onPointerUp={stretch.show} variant='flat'>
-						<Icons.Tune />
-					</Button>
+					<IconButton color='secondary' icon={Icons.Tune} onPointerUp={stretch.show} variant='flat' />
 				</Tooltip>
 				<Tooltip content='Auto Stretch' placement='top'>
-					<ToggleButton color='primary' isSelected={transformation.stretch.auto} onPointerUp={viewer.toggleAutoStretch}>
-						<Icons.WandSparkles />
-					</ToggleButton>
+					<ToggleButton color='primary' icon={Icons.WandSparkles} isSelected={transformation.stretch.auto} onPointerUp={viewer.toggleAutoStretch} />
 				</Tooltip>
 				{info.metadata.bayer && info.metadata.channels === 1 && (
 					<Tooltip content='Debayer' placement='top'>
-						<ToggleButton color='primary' isSelected={transformation.debayer} onPointerUp={viewer.toggleDebayer}>
-							<Icons.Grid />
-						</ToggleButton>
+						<ToggleButton color='primary' icon={Icons.Grid} isSelected={transformation.debayer} onPointerUp={viewer.toggleDebayer} />
 					</Tooltip>
 				)}
 				<Popover placement='bottom' showArrow>
 					<Tooltip content='Transformation'>
 						<div className='max-w-fit'>
 							<PopoverTrigger>
-								<Button color='success' isIconOnly variant='flat'>
-									<Icons.Palette />
-								</Button>
+								<IconButton color='success' icon={Icons.Palette} variant='flat' />
 							</PopoverTrigger>
 						</div>
 					</Tooltip>
@@ -67,35 +63,23 @@ export const ImageToolBar = memo(() => {
 						<div className='flex flex-row items-center justify-center gap-2 p-2'>
 							{!info.mono && (
 								<Tooltip content='SCNR' placement='top'>
-									<Button color='secondary' isIconOnly onPointerUp={scnr.show} variant='flat'>
-										<Icons.Swatch />
-									</Button>
+									<IconButton color='secondary' icon={Icons.Swatch} isIconOnly onPointerUp={scnr.show} variant='flat' />
 								</Tooltip>
 							)}
 							<Tooltip content='Adjustment' placement='top'>
-								<Button color='secondary' isIconOnly onPointerUp={adjustment.show} variant='flat'>
-									<Icons.ImageEdit />
-								</Button>
+								<IconButton color='secondary' icon={Icons.ImageEdit} onPointerUp={adjustment.show} variant='flat' />
 							</Tooltip>
 							<Tooltip content='Filter' placement='top'>
-								<Button color='secondary' isIconOnly onPointerUp={filter.show} variant='flat'>
-									<Icons.Brush />
-								</Button>
+								<IconButton color='secondary' icon={Icons.Brush} onPointerUp={filter.show} variant='flat' />
 							</Tooltip>
 							<Tooltip content='Horizontal mirror' placement='top'>
-								<ToggleButton color='primary' isSelected={transformation.horizontalMirror} onPointerUp={viewer.toggleHorizontalMirror}>
-									<Icons.FlipHorizontal />
-								</ToggleButton>
+								<ToggleButton color='primary' icon={Icons.FlipHorizontal} isSelected={transformation.horizontalMirror} onPointerUp={viewer.toggleHorizontalMirror} />
 							</Tooltip>
 							<Tooltip content='Vertical Mirror' placement='top'>
-								<ToggleButton color='primary' isSelected={transformation.verticalMirror} onPointerUp={viewer.toggleVerticalMirror}>
-									<Icons.FlipVertical />
-								</ToggleButton>
+								<ToggleButton color='primary' icon={Icons.FlipVertical} isSelected={transformation.verticalMirror} onPointerUp={viewer.toggleVerticalMirror} />
 							</Tooltip>
 							<Tooltip content='Invert' placement='top'>
-								<ToggleButton color='primary' isSelected={transformation.invert} onPointerUp={viewer.toggleInvert}>
-									<Icons.InvertColor />
-								</ToggleButton>
+								<ToggleButton color='primary' icon={Icons.InvertColor} isSelected={transformation.invert} onPointerUp={viewer.toggleInvert} />
 							</Tooltip>
 						</div>
 					</PopoverContent>
@@ -104,69 +88,50 @@ export const ImageToolBar = memo(() => {
 					<Tooltip content='Overlay'>
 						<div className='max-w-fit'>
 							<PopoverTrigger>
-								<Button color='success' isIconOnly variant='flat'>
-									<Icons.BringToFront />
-								</Button>
+								<IconButton color='success' icon={Icons.BringToFront} variant='flat' />
 							</PopoverTrigger>
 						</div>
 					</Tooltip>
 					<PopoverContent>
 						<div className='flex flex-row justify-center items-start gap-2 p-2'>
 							<Tooltip content='Crosshair' placement='top'>
-								<ToggleButton color='primary' isSelected={crosshair} onPointerUp={viewer.toggleCrosshair}>
-									<Icons.Crosshair />
-								</ToggleButton>
-							</Tooltip>
-							<Tooltip content='Annotation' placement='top'>
-								<Button color='secondary' isIconOnly variant='flat'>
-									<Icons.Pen />
-								</Button>
+								<ToggleButton color='primary' icon={Icons.Crosshair} isSelected={crosshair} onPointerUp={viewer.toggleCrosshair} />
 							</Tooltip>
 							<div className='flex flex-col gap-2 justify-center'>
-								<Tooltip content='Star Detection' placement='top'>
-									<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('starDetection')} variant='flat'>
-										<Icons.Stars />
-									</Button>
+								<Tooltip content='Annotation' placement='top'>
+									<IconButton color='secondary' icon={Icons.Pen} isDisabled={!solution} onPointerUp={annotation.show} variant='flat' />
 								</Tooltip>
-								{starDetection.stars.length > 0 && <Switch isSelected={starDetection.visible} onValueChange={(value) => (viewer.state.starDetection.visible = value)} size='sm' />}
+								{annotatedStars.length > 0 && <Switch isSelected={isAnnotatedStarsVisible} onValueChange={annotation.toggle} size='sm' />}
+							</div>
+							<div className='flex flex-col gap-2 justify-center'>
+								<Tooltip content='Star Detection' placement='top'>
+									<IconButton color='secondary' icon={Icons.Stars} onPointerUp={detection.show} variant='flat' />
+								</Tooltip>
+								{detectedStars.length > 0 && <Switch isSelected={isDetectedStarsVisible} onValueChange={detection.toggle} size='sm' />}
 							</div>
 							<Tooltip content='ROI' placement='top'>
-								<Button color='secondary' isIconOnly variant='flat'>
-									<Icons.Box />
-								</Button>
+								<IconButton color='secondary' icon={Icons.Box} variant='flat' />
 							</Tooltip>
 							<Tooltip content='FOV' placement='top'>
-								<Button color='secondary' isIconOnly variant='flat'>
-									<Icons.Fullscreen />
-								</Button>
+								<IconButton color='secondary' icon={Icons.Fullscreen} variant='flat' />
 							</Tooltip>
 						</div>
 					</PopoverContent>
 				</Popover>
 				<Tooltip content='Statistics' placement='top'>
-					<Button color='secondary' isIconOnly variant='flat'>
-						<Icons.Histogram />
-					</Button>
+					<IconButton color='secondary' icon={Icons.Histogram} variant='flat' />
 				</Tooltip>
 				<Tooltip content='FITS Header' placement='top'>
-					<Button color='secondary' isIconOnly onPointerUp={() => viewer.show('fitsHeader')} variant='flat'>
-						<Icons.Text />
-					</Button>
+					<IconButton color='secondary' icon={Icons.Text} onPointerUp={() => viewer.show('fitsHeader')} variant='flat' />
 				</Tooltip>
 				<Tooltip content='Mouse Coordinate' placement='top'>
-					<Button color='secondary' isIconOnly variant='flat'>
-						<Icons.MousePointerClick />
-					</Button>
+					<IconButton color='secondary' icon={Icons.MousePointerClick} variant='flat' />
 				</Tooltip>
 				<Tooltip content='Settings' placement='top'>
-					<Button color='secondary' isIconOnly onPointerUp={settings.show} variant='flat'>
-						<Icons.Cog />
-					</Button>
+					<IconButton color='secondary' icon={Icons.Cog} onPointerUp={settings.show} variant='flat' />
 				</Tooltip>
 				<Tooltip content='Close' placement='top'>
-					<Button className='ms-2' color='danger' isIconOnly onPointerUp={viewer.remove} variant='solid'>
-						<Icons.Close />
-					</Button>
+					<IconButton className='ms-2' color='danger' icon={Icons.Close} onPointerUp={viewer.remove} variant='solid' />
 				</Tooltip>
 			</div>
 		</div>

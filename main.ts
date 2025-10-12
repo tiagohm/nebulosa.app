@@ -92,7 +92,7 @@ const fileSystemManager = new FileSystemManager()
 const starDetectionManager = new StarDetectionManager()
 const plateSolverManager = new PlateSolverManager(notificationManager)
 const atlasManager = new AtlasManager(cacheManager, notificationManager)
-const imageManager = new ImageManager(notificationManager, cameraManager.cache)
+const imageManager = new ImageManager(cameraManager.cache, notificationManager)
 const tppaManager = new TppaManager(wsm, cameraManager, mountManager, plateSolverManager, indiDevicePropertyManager, cacheManager)
 const darvManager = new DarvManager(wsm, cameraManager, mountManager, indiDevicePropertyManager)
 

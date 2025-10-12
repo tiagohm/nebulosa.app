@@ -79,9 +79,13 @@ export const StarDetectionMolecule = molecule((m, s) => {
 		ctx?.drawImage(image, star.x - 8.5, star.y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
 	}
 
+	function show() {
+		viewer.show('starDetection')
+	}
+
 	function hide() {
 		viewer.hide('starDetection')
 	}
 
-	return { state: starDetection, viewer, scope, toggle, detect, select, hide } as const
+	return { state: starDetection, viewer, scope, toggle, detect, select, show, hide } as const
 })

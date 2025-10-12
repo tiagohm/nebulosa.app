@@ -3,10 +3,12 @@ import { memo, useLayoutEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
 import { ImageWorkspaceMolecule } from '@/molecules/image/workspace'
+import { AnnotatedStars } from './AnnotatedStars'
 import { Crosshair } from './Crosshair'
 import { DetectedStars } from './DetectedStars'
 import { FITSHeader } from './FITSHeader'
 import { ImageAdjustment } from './ImageAdjustment'
+import { ImageAnnotation } from './ImageAnnotation'
 import { ImageFilter } from './ImageFilter'
 import { ImageInfo } from './ImageInfo'
 import { ImageScnr } from './ImageScnr'
@@ -22,7 +24,7 @@ export const ImageViewer = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { image } = viewer.scope
 	const workspace = useMolecule(ImageWorkspaceMolecule)
-	const { crosshair, starDetection, stretch, solver, fitsHeader, scnr, adjustment, filter, settings } = useSnapshot(viewer.state)
+	const { crosshair, starDetection, stretch, solver, fitsHeader, scnr, adjustment, filter, settings, annotation } = useSnapshot(viewer.state)
 	const { selected } = useSnapshot(workspace.state)
 
 	useLayoutEffect(() => {
@@ -48,6 +50,7 @@ export const ImageViewer = memo(() => {
 				<img className='image select-none touch-none pointer-events-none max-w-none shadow-[0_0_80px_black]' draggable={false} id={image.key} onContextMenu={(e) => e.preventDefault()} ref={ref} />
 				{crosshair && <Crosshair />}
 				{starDetection.visible && <DetectedStars />}
+				{annotation.visible && <AnnotatedStars />}
 			</Interactable>
 			{stretch.show && <ImageStretch />}
 			{solver.show && <PlateSolver />}
@@ -57,6 +60,7 @@ export const ImageViewer = memo(() => {
 			{starDetection.show && <StarDetection />}
 			{fitsHeader.show && <FITSHeader />}
 			{settings.show && <ImageSettings />}
+			{annotation.show && <ImageAnnotation />}
 		</>
 	)
 })

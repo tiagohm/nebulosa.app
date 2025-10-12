@@ -236,6 +236,12 @@ export interface SkyObject extends EquatorialCoordinate {
 	readonly distance: Distance
 	readonly rv: Velocity
 	readonly constellation: number
+	readonly spmType?: string
+	readonly name?: string
+}
+
+export interface AnnotatedSkyObject extends Required<Omit<SkyObject, 'type' | 'spmType'>>, Point {
+	type: StellariumObjectType | 'MINOR_PLANET'
 }
 
 export interface BodyPosition extends Readonly<EquatorialCoordinate>, Readonly<EquatorialCoordinateJ2000>, Readonly<HorizontalCoordinate> {
@@ -402,6 +408,10 @@ export interface OpenImage {
 
 export interface CloseImage {
 	readonly id: string
+}
+
+export interface AnnotateImage {
+	readonly solution: PlateSolution
 }
 
 export interface ImageInfo extends Partial<EquatorialCoordinate> {

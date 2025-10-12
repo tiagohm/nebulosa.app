@@ -29,7 +29,7 @@
 		"bunshi": "2.1.5",
 		"clsx": "2.1.1",
 		"date-fns": "4.1.0",
-		"elysia": "1.4.10",
+		"elysia": "1.4.11",
 		"nebulosa": "github:tiagohm/nebulosa.ts",
 		"react": "19.2.0",
 		"react-dom": "19.2.0",

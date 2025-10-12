@@ -4,7 +4,7 @@ import { numericKeyword } from 'nebulosa/src/fits'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import bus, { unsubscribe } from 'src/shared/bus'
-import { type CameraCaptureEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
+import { type AnnotatedSkyObject, type CameraCaptureEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
 import type { PickByValue } from 'utility-types'
 import { proxy, ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -55,6 +55,12 @@ export interface ImageState {
 	}
 	readonly filter: {
 		show: boolean
+	}
+	readonly annotation: {
+		show: boolean
+		visible: boolean
+		loading: boolean
+		stars: AnnotatedSkyObject[]
 	}
 	readonly fitsHeader: {
 		show: boolean
@@ -158,6 +164,12 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			},
 			filter: {
 				show: false,
+			},
+			annotation: {
+				show: false,
+				visible: false,
+				loading: false,
+				stars: [],
 			},
 			fitsHeader: {
 				show: false,

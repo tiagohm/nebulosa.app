@@ -1,9 +1,9 @@
-import { Button, type ButtonProps } from '@heroui/react'
+import { IconButton, type IconButtonProps } from './IconButton'
 
-export interface ToggleButtonProps extends Omit<ButtonProps, 'variant' | 'isIconOnly'> {
+export interface ToggleButtonProps extends Omit<IconButtonProps, 'variant'> {
 	readonly isSelected: boolean
 }
 
 export function ToggleButton({ isSelected, ...props }: ToggleButtonProps) {
-	return <Button {...props} isIconOnly variant={isSelected ? 'solid' : 'flat'} />
+	return <IconButton {...props} variant={isSelected ? 'solid' : 'flat'} />
 }

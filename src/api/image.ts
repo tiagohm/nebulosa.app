@@ -1,14 +1,19 @@
 import Elysia from 'elysia'
 import fs from 'fs/promises'
-import { declinationKeyword, type Fits, readFits, rightAscensionKeyword } from 'nebulosa/src/fits'
+import { eraC2s } from 'nebulosa/src/erfa'
+import { declinationKeyword, type Fits, observationDateKeyword, readFits, rightAscensionKeyword } from 'nebulosa/src/fits'
 import { adf, debayer, horizontalFlip, type Image, type ImageFormat, invert, readImageFromFits, scnr, stf, verticalFlip, type WriteImageToFormatOptions, writeImageToFormat } from 'nebulosa/src/image'
 import { bufferSource, fileHandleSource } from 'nebulosa/src/io'
+import { spaceMotion, star } from 'nebulosa/src/star'
+import { timeUnix } from 'nebulosa/src/time'
+import { Wcs } from 'nebulosa/src/wcs'
 import os from 'os'
 import { join } from 'path'
 import type { JpegOptions, PngOptions, WebpOptions } from 'sharp'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
+import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
-import type { CloseImage, ImageInfo, ImageTransformation, OpenImage } from '../shared/types'
+import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageInfo, ImageTransformation, OpenImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER } from '../shared/types'
 import { decodePath } from './camera'
 import type { NotificationManager } from './notification'
@@ -43,8 +48,8 @@ const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOption
 
 export class ImageManager {
 	constructor(
-		readonly notification: NotificationManager,
 		readonly cache: Map<string, Buffer>,
+		readonly notification?: NotificationManager,
 	) {}
 
 	async open(req: OpenImage) {
@@ -105,13 +110,13 @@ export class ImageManager {
 
 					return info
 				} else {
-					this.notification.send({ body: 'Failed to generate image', severity: 'error' })
+					this.notification?.send({ body: 'Failed to generate image', severity: 'error' })
 				}
 			} else {
-				this.notification.send({ body: 'Failed to read image from FITS', severity: 'error' })
+				this.notification?.send({ body: 'Failed to read image from FITS', severity: 'error' })
 			}
 		} else {
-			this.notification.send({ body: 'No image FITS found', severity: 'error' })
+			this.notification?.send({ body: 'No image FITS found', severity: 'error' })
 		}
 	}
 
@@ -170,7 +175,31 @@ export class ImageManager {
 
 	analyze() {}
 
-	annotate() {}
+	annotate(req: AnnotateImage) {
+		using wcs = new Wcs(req.solution)
+
+		const res: AnnotatedSkyObject[] = []
+		const { rightAscension, declination, radius, widthInPixels, heightInPixels } = req.solution
+		const q = `SELECT d.id, d.type, d.rightAscension, d.declination, d.magnitude, d.pmRa, d.pmDec, d.distance, d.rv, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ORDER BY n.type ASC LIMIT 1) as name FROM dsos d WHERE (acos(sin(d.declination) * ${Math.sin(declination)} + cos(d.declination) * ${Math.cos(declination)} * cos(d.rightAscension - ${rightAscension})) <= ${radius}) ORDER BY d.magnitude DESC LIMIT 100`
+
+		const date = observationDateKeyword(req.solution) || Date.now()
+		const utc = timeUnix(date / 1000.0)
+
+		for (const o of nebulosa.query<AnnotatedSkyObject, []>(q)) {
+			const px = o.distance === 0 ? 0 : 1 / o.distance
+			const s = star(o.rightAscension, o.declination, o.pmRa, o.pmDec, px, o.rv)
+			const [rightAscension, declination] = eraC2s(...spaceMotion(s, utc)[0])
+			const [x, y] = wcs.skyToPix(rightAscension, declination)!
+
+			if (x >= 0 && y >= 0 && x < widthInPixels && y < heightInPixels) {
+				o.x = x
+				o.y = y
+				res.push(o)
+			}
+		}
+
+		return res
+	}
 
 	coordinateInterpolation() {}
 
@@ -196,7 +225,7 @@ export function image(image: ImageManager) {
 		})
 		.post('/close', ({ body }) => image.close(body as never))
 		.post('/analyze', () => image.analyze())
-		.post('/annotate', () => image.annotate())
+		.post('/annotate', ({ body }) => image.annotate(body as never))
 		.post('/coordinateInterpolation', () => image.coordinateInterpolation())
 		.post('/statistics', () => image.statistics())
 		.get('/fovCameras', () => fovCameras)

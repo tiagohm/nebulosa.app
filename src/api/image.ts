@@ -1,6 +1,6 @@
 import Elysia from 'elysia'
 import fs from 'fs/promises'
-import { eraC2s } from 'nebulosa/src/erfa'
+import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, type Fits, observationDateKeyword, readFits, rightAscensionKeyword } from 'nebulosa/src/fits'
 import { adf, debayer, horizontalFlip, type Image, type ImageFormat, invert, readImageFromFits, scnr, stf, verticalFlip, type WriteImageToFormatOptions, writeImageToFormat } from 'nebulosa/src/image'
 import { bufferSource, fileHandleSource } from 'nebulosa/src/io'
@@ -186,15 +186,17 @@ export class ImageManager {
 		const utc = timeUnix(date / 1000.0)
 
 		for (const o of nebulosa.query<AnnotatedSkyObject, []>(q)) {
-			const px = o.distance === 0 ? 0 : 1 / o.distance
-			const s = star(o.rightAscension, o.declination, o.pmRa, o.pmDec, px, o.rv)
-			const [rightAscension, declination] = eraC2s(...spaceMotion(s, utc)[0])
-			const [x, y] = wcs.skyToPix(rightAscension, declination)!
+			const sa = star(o.rightAscension, o.declination, o.pmRa, o.pmDec, o.distance === 0 ? 0 : 1 / o.distance, o.rv)
+			const sb = eraPvstar(...spaceMotion(sa, utc))
 
-			if (x >= 0 && y >= 0 && x < widthInPixels && y < heightInPixels) {
-				o.x = x
-				o.y = y
-				res.push(o)
+			if (sb) {
+				const [x, y] = wcs.skyToPix(sb[0], sb[1])!
+
+				if (x >= 0 && y >= 0 && x < widthInPixels && y < heightInPixels) {
+					o.x = x
+					o.y = y
+					res.push(o)
+				}
 			}
 		}
 

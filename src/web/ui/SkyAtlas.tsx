@@ -4,15 +4,15 @@ import { useMolecule } from 'bunshi/react'
 import { clsx } from 'clsx'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { RAD2DEG } from 'nebulosa/src/constants'
-import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa/src/constellation'
-import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/distance'
+import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/temporal'
 import { memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
-import { type BodyPosition, EMPTY_TWILIGHT, type SkyObjectSearchItem, type Twilight } from 'src/shared/types'
+import { type BodyPosition, EMPTY_TWILIGHT, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { formatDistance, formatSkyObjectName, formatSkyObjectType } from '@/shared/util'
 import { ConstellationSelect } from './ConstellationSelect'
 import { type Icon, Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -21,7 +21,7 @@ import { Moon } from './Moon'
 import { MountDropdown } from './MountDropdown'
 import { PoweredBy } from './PoweredBy'
 import { SatelliteGroupTypeChipGroup } from './SatelliteGroupTypeChipGroup'
-import { SKY_OBJECT_NAME_TYPES, SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
+import { SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 import { Sun } from './Sun'
 import { TextButton } from './TextButton'
@@ -133,10 +133,10 @@ export const Seasons = memo(() => {
 
 	return (
 		<div className='flex flex-col gap-0'>
-			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Flower} label='SPRING' time={autumn} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Leaf} label='AUTUMN/FALL' time={spring} />}
-			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Sun} label='SUMMER' time={winter} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.SnowFlake} label='WINTER' time={summer} />}
 			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Leaf} label='AUTUMN/FALL' time={spring} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Flower} label='SPRING' time={autumn} />}
 			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.SnowFlake} label='WINTER' time={summer} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Sun} label='SUMMER' time={winter} />}
+			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Flower} label='SPRING' time={autumn} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Leaf} label='AUTUMN/FALL' time={spring} />}
+			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Sun} label='SUMMER' time={winter} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.SnowFlake} label='WINTER' time={summer} />}
 		</div>
 	)
 })
@@ -342,7 +342,7 @@ export const AsteroidCloseApproachesTab = memo(() => {
 				<NumberInput className='flex-1' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Distance (LD)' maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} size='sm' step={0.1} value={distance} />
 				<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={asteroid.closeApproaches} variant='light' />
 			</div>
-			<Listbox className='mt-2 w-full' classNames={{ base: 'w-full', list: 'max-h-[117px] overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
+			<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-[117px] overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
 				{(item) => (
 					<ListboxItem description={`${item.distance.toFixed(3)} LD`} key={item.name}>
 						<span className='flex items-center justify-between'>
@@ -383,9 +383,9 @@ export const GalaxyTab = memo(() => {
 				<TableBody items={result}>
 					{(item) => (
 						<TableRow key={item.id}>
-							<TableCell className='whitespace-nowrap max-w-50 overflow-hidden'>{skyObjectName(item.name, item.constellation)}</TableCell>
+							<TableCell className='whitespace-nowrap max-w-50 overflow-hidden'>{formatSkyObjectName(item.name, item.constellation)}</TableCell>
 							<TableCell className='text-center'>{item.magnitude}</TableCell>
-							<TableCell className='text-center whitespace-nowrap max-w-40 overflow-hidden'>{skyObjectType(item.type)}</TableCell>
+							<TableCell className='text-center whitespace-nowrap max-w-40 overflow-hidden'>{formatSkyObjectType(item.type)}</TableCell>
 							<TableCell className='text-center'>{CONSTELLATION_LIST[item.constellation]}</TableCell>
 						</TableRow>
 					)}
@@ -576,7 +576,7 @@ function makeTags(name: string | undefined, position: BodyPosition, extra?: Ephe
 	if (name) {
 		tags.push({ label: name, color: 'primary' })
 	} else if (position.names?.length) {
-		position.names.forEach((name) => tags.push({ label: skyObjectName(name, position.constellation), color: 'primary' }))
+		position.names.forEach((name) => tags.push({ label: formatSkyObjectName(name, position.constellation), color: 'primary' }))
 	}
 
 	if (extra?.length) {
@@ -701,10 +701,10 @@ export const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => 
 			<Input className='col-span-2' isReadOnly label='Mag.' size='sm' value={position.magnitude?.toFixed(2) ?? '-'} />
 			<Input className='col-span-2' isReadOnly label='Const.' size='sm' value={position.constellation} />
 			<Input className='col-span-2' isReadOnly label='Illum.' size='sm' value={`${position.illuminated.toFixed(1)} %`} />
-			<Input className='col-span-3' isReadOnly label='Dist.' size='sm' value={formatDistance(position.distance)} />
+			<Input className='col-span-4' isReadOnly label='Dist.' size='sm' value={formatDistance(position.distance)} />
 			<Input className='col-span-2' isReadOnly label='Elong.' size='sm' value={`${position.elongation.toFixed(1)} °`} />
 			<Input className='col-span-2' isReadOnly label='Pier' size='sm' value={position.pierSide === 'NEITHER' ? 'N' : position.pierSide} />
-			<div className='col-span-5 flex items-center justify-center gap-2'>
+			<div className='col-span-4 flex items-center justify-center gap-2'>
 				<MountDropdown allowEmpty={false} onValueChange={atlas.syncTo} tooltipContent='Sync'>
 					{(value, color, isDisabled) => <IconButton color='primary' icon={Icons.Sync} isDisabled={isDisabled} variant='flat' />}
 				</MountDropdown>
@@ -783,130 +783,4 @@ function makeEphemerisChart(data: readonly number[], twilight: Twilight = EMPTY_
 	}
 
 	return chart
-}
-
-function skyObjectName(id: string, constellation: Constellation | number) {
-	const [type, name] = id.split(':')
-	const typeId = +type
-
-	if (typeId === 0) return name
-	if (typeId === 3 || typeId === 4) return `${name} ${CONSTELLATIONS[typeof constellation === 'number' ? CONSTELLATION_LIST[constellation] : constellation].iau}`
-	if (typeId === 8) return `M ${name}`
-	if (typeId === 9) return `C ${name}`
-	if (typeId === 10) return `B ${name}`
-	if (typeId === 11) return `SH 2-${name}`
-	if (typeId === 14) return `Mel ${name}`
-	if (typeId === 15) return `Cr ${name}`
-	if (typeId === 16) return `Arp ${name}`
-	if (typeId === 17) return `Abell ${name}`
-	if (typeId === 19) return `Tr ${name}`
-	if (typeId === 20) return `St ${name}`
-	if (typeId === 21) return `Ru ${name}`
-	if (typeId === 33) return `Bennett ${name}`
-	if (typeId === 34) return `Dunlop ${name}`
-	if (typeId === 35) return `Hershel ${name}`
-	if (typeId === 36) return `Gum ${name}`
-	if (typeId === 37) return `Bochum ${name}`
-	if (typeId === 38) return `Alessi ${name}`
-	if (typeId === 39) return `Alicante ${name}`
-	if (typeId === 40) return `Alter ${name}`
-	if (typeId === 41) return `Antalova ${name}`
-	if (typeId === 42) return `Apriamaswili ${name}`
-	if (typeId === 43) return `Arp ${name}`
-	if (typeId === 44) return `Barhatova ${name}`
-	if (typeId === 45) return `Basel ${name}`
-	if (typeId === 46) return `Berkeley ${name}`
-	if (typeId === 47) return `Bica ${name}`
-	if (typeId === 48) return `Biurakan ${name}`
-	if (typeId === 49) return `Blanco ${name}`
-	if (typeId === 50) return `Chupina ${name}`
-	if (typeId === 51) return `Czernik ${name}`
-	if (typeId === 52) return `Danks ${name}`
-	if (typeId === 53) return `Dias ${name}`
-	if (typeId === 54) return `Djorg ${name}`
-	if (typeId === 55) return `Dolidze-Dzim ${name}`
-	if (typeId === 56) return `Dolidze ${name}`
-	if (typeId === 57) return `Dufay ${name}`
-	if (typeId === 58) return `Feinstein ${name}`
-	if (typeId === 59) return `Ferrero ${name}`
-	if (typeId === 60) return `Graff ${name}`
-	if (typeId === 61) return `Gulliver ${name}`
-	if (typeId === 62) return `Haffner ${name}`
-	if (typeId === 63) return `Harvard ${name}`
-	if (typeId === 64) return `Haute-Provence ${name}`
-	if (typeId === 65) return `Hogg ${name}`
-	if (typeId === 66) return `Iskurzdajan ${name}`
-	if (typeId === 67) return `Johansson ${name}`
-	if (typeId === 68) return `Kharchenko ${name}`
-	if (typeId === 69) return `King ${name}`
-	if (typeId === 70) return `Kron ${name}`
-	if (typeId === 71) return `Lindsay ${name}`
-	if (typeId === 72) return `Loden ${name}`
-	if (typeId === 73) return `Lynga ${name}`
-	if (typeId === 74) return `Mamajek ${name}`
-	if (typeId === 75) return `Moffat ${name}`
-	if (typeId === 76) return `Mrk ${name}`
-	if (typeId === 77) return `Pal ${name}`
-	if (typeId === 78) return `Pismis ${name}`
-	if (typeId === 79) return `Platais ${name}`
-	if (typeId === 80) return `Roslund ${name}`
-	if (typeId === 81) return `Saurer ${name}`
-	if (typeId === 82) return `Sher ${name}`
-	if (typeId === 83) return `Skiff ${name}`
-	if (typeId === 84) return `Stephenson ${name}`
-	if (typeId === 85) return `Terzan ${name}`
-	if (typeId === 86) return `Tombaugh ${name}`
-	if (typeId === 87) return `Turner ${name}`
-	if (typeId === 88) return `Upgren ${name}`
-	if (typeId === 89) return `Waterloo ${name}`
-	if (typeId === 90) return `Westerlund ${name}`
-	if (typeId === 91) return `Zwicky ${name}`
-	return `${SKY_OBJECT_NAME_TYPES[typeId + 1]} ${name}`
-}
-
-function skyObjectType(type: SkyObjectSearchItem['type']) {
-	if (type === 1) return 'Galaxy'
-	if (type === 2) return 'Active Galaxy'
-	if (type === 3) return 'Radio Galaxy'
-	if (type === 4) return 'Interacting Galaxy'
-	if (type === 5) return 'Quasar'
-	if (type === 6) return 'Star Cluster'
-	if (type === 7) return 'Open Star Cluster'
-	if (type === 8) return 'Globular Star Cluster'
-	if (type === 9) return 'Stellar Association'
-	if (type === 10) return 'Star Cloud'
-	if (type === 11) return 'Nebula'
-	if (type === 12) return 'Planetary Nebula'
-	if (type === 13) return 'Dark Nebula'
-	if (type === 14) return 'Reflection Nebula'
-	if (type === 15) return 'Bipolar Nebula'
-	if (type === 16) return 'Emission Nebula'
-	if (type === 17) return 'Cluster Associated With Nebulosity'
-	if (type === 18) return 'HII Region'
-	if (type === 19) return 'Supernova Remnant'
-	if (type === 20) return 'Interstellar Matter'
-	if (type === 21) return 'Emission Object'
-	if (type === 22) return 'Bl Lacertae Object'
-	if (type === 23) return 'Blazar'
-	if (type === 24) return 'Molecular Cloud'
-	if (type === 25) return 'Young Stellar Object'
-	if (type === 26) return 'Possible Quasar'
-	if (type === 27) return 'Possible Planetary Nebula'
-	if (type === 28) return 'Protoplanetary Nebula'
-	if (type === 29) return 'Star'
-	if (type === 30) return 'Symbiotic Star'
-	if (type === 31) return 'Emission Line Star'
-	if (type === 32) return 'Supernova Candidate'
-	if (type === 33) return 'Super Nova Remnant Candidate'
-	if (type === 34) return 'Cluster of Galaxies'
-	if (type === 35) return 'Part of Galaxy'
-	if (type === 36) return 'Region of the Sky'
-	return 'Unknown'
-}
-
-function formatDistance(distance: Distance) {
-	if (distance >= 63241.077084266280268653583182) return `${toLightYear(distance).toFixed(0)} ly`
-	if (distance >= 1) return `${distance.toFixed(2)} AU`
-	if (distance <= 0) return '0'
-	return `${(toKilometer(distance)).toFixed(0)} km`
 }

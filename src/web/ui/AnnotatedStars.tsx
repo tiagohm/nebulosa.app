@@ -2,6 +2,7 @@ import { useMolecule } from 'bunshi/react'
 import { type CSSProperties, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
+import { formatSkyObjectName } from '@/shared/util'
 
 const TEXT_STYLE: CSSProperties = { textAnchor: 'middle', alignmentBaseline: 'before-edge', transform: 'rotate(0deg)' }
 
@@ -16,8 +17,8 @@ export const AnnotatedStars = memo(() => {
 			{stars.map((s) => (
 				<g className='pointer-events-auto cursor-pointer' key={s.id}>
 					<circle cx={s.x - 0.5} cy={s.y - 0.5} fill='transparent' r={4} stroke='#FDD835' strokeWidth={1}></circle>
-					<text className='text-xs font-bold' fill='#00897B' style={TEXT_STYLE} x={s.x} y={s.y + 0.5}>
-						{s.name}
+					<text className='text-xs font-bold' fill='#00897B' style={TEXT_STYLE} x={s.x} y={s.y + 1.5}>
+						{formatSkyObjectName(s.name, s.constellation)}
 					</text>
 				</g>
 			))}

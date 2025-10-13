@@ -1,4 +1,4 @@
-import { Button, Tooltip } from '@heroui/react'
+import { Tooltip } from '@heroui/react'
 import { ScopeProvider, useMolecule } from 'bunshi/react'
 import { memo, useCallback } from 'react'
 import { useSnapshot } from 'valtio'
@@ -6,10 +6,11 @@ import { FilePickerScope } from '@/molecules/filepicker'
 import { ImageWorkspaceMolecule } from '@/molecules/image/workspace'
 import { FilePicker } from './FilePicker'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 
 export const ImagePickerButton = memo(() => {
 	const workspace = useMolecule(ImageWorkspaceMolecule)
-	const { showModal } = useSnapshot(workspace.state)
+	const { showPicker } = useSnapshot(workspace.state)
 
 	const handleChoose = useCallback((paths?: string[]) => {
 		if (paths?.length) {
@@ -18,17 +19,15 @@ export const ImagePickerButton = memo(() => {
 			}
 		}
 
-		workspace.state.showModal = false
+		workspace.hidePicker()
 	}, [])
 
 	return (
 		<>
 			<Tooltip content='Open Image' showArrow>
-				<Button color='secondary' isIconOnly onPointerUp={() => (workspace.state.showModal = true)} variant='light'>
-					<Icons.ImagePlus />
-				</Button>
+				<IconButton color='secondary' icon={Icons.ImagePlus} onPointerUp={workspace.showPicker} variant='light' />
 			</Tooltip>
-			{showModal && (
+			{showPicker && (
 				<ScopeProvider scope={FilePickerScope} value={{ path: workspace.state.initialPath, filter: '*.{fits,fit,xisf}', multiple: true }}>
 					<FilePicker header='Open Image' id='open-image' onChoose={handleChoose} />
 				</ScopeProvider>

@@ -11,7 +11,7 @@ import type { ImageViewerMolecule } from './viewer'
 export interface ImageWorkspaceState {
 	readonly images: Image[]
 	initialPath: string
-	showModal: boolean
+	showPicker: boolean
 	selected?: Image
 }
 
@@ -24,7 +24,7 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 
 	const state = proxy<ImageWorkspaceState>({
 		images: [],
-		showModal: false,
+		showPicker: false,
 		initialPath: storage.get('image.path', ''),
 	})
 
@@ -35,6 +35,10 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 				const image = add(event.savedPath, event.device, camera)
 			}
 		})
+
+		return () => {
+			unsubscriber()
+		}
 	})
 
 	function link(image: Image, viewer: Atom<typeof ImageViewerMolecule>) {
@@ -85,5 +89,13 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 		}
 	}
 
-	return { state, link, add, remove }
+	function showPicker() {
+		state.showPicker = true
+	}
+
+	function hidePicker() {
+		state.showPicker = false
+	}
+
+	return { state, link, add, remove, showPicker, hidePicker } as const
 })

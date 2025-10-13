@@ -2,7 +2,7 @@ import { Glob } from 'bun'
 import Elysia from 'elysia'
 import fs from 'fs/promises'
 import os from 'os'
-import { basename, dirname, join } from 'path'
+import { basename, dirname, join, normalize } from 'path'
 import type { CreateDirectory, DirectoryEntry, FileEntry, FileSystem, ListDirectory } from '../shared/types'
 
 export const FileEntryComparator = (a: FileEntry, b: FileEntry) => {
@@ -51,13 +51,31 @@ export class FileSystemManager {
 		await fs.mkdir(path, req)
 		return { path }
 	}
+
+	async directory(req: string) {
+		const path = await findDirectory(req)
+		return { path }
+	}
+
+	async exists(req: CreateDirectory) {
+		const path = await findDirectory(req.path)
+		return path ? fs.exists(join(path, req.name.trim())) : false
+	}
+
+	join(req: string[]) {
+		const path = join(...req)
+		return { path }
+	}
 }
 
 export function fileSystem(fileSystem: FileSystemManager) {
-	const app = new Elysia({ prefix: '/fileSystem' })
+	const app = new Elysia({ prefix: '/filesystem' })
 		// Endpoints!
 		.post('/list', ({ body }) => fileSystem.list(body as never))
 		.post('/create', ({ body }) => fileSystem.create(body as never))
+		.post('/directory', ({ body }) => fileSystem.directory(body as never))
+		.post('/exists', ({ body }) => fileSystem.exists(body as never))
+		.post('/join', ({ body }) => fileSystem.join(body as never))
 
 	return app
 }
@@ -71,7 +89,7 @@ export async function findDirectory(path?: string) {
 	else {
 		const stats = await fs.stat(path)
 		if (!stats.isDirectory()) return findDirectory(dirname(path))
-		else return path
+		else return normalize(path)
 	}
 }
 

@@ -1,6 +1,6 @@
 import type { Camera, Connect, ConnectionStatus } from 'src/shared/types'
 
-export type FilePickerMode = 'file' | 'directory'
+export type FilePickerMode = 'file' | 'directory' | 'save'
 
 export type ImageSource = 'file' | 'framing' | 'camera'
 

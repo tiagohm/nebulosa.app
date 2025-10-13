@@ -1,9 +1,10 @@
-import { Badge, BreadcrumbItem, Breadcrumbs, Button, Input, Listbox, ListboxItem, Tooltip } from '@heroui/react'
+import { Badge, BreadcrumbItem, Breadcrumbs, Input, Listbox, ListboxItem, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { format } from 'date-fns'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerMolecule } from '@/molecules/filepicker'
+import { Api } from '@/shared/api'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
@@ -17,29 +18,45 @@ export interface FilePickerProps {
 
 export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 	const picker = useMolecule(FilePickerMolecule)
-	const { mode, history, filtered, selected, directoryTree, filter, createDirectory, directoryName } = useSnapshot(picker.state, { sync: true })
+	const { mode, history, filtered, selected, directoryTree, filter, directory, save } = useSnapshot(picker.state, { sync: true })
 
-	function handleChoose() {
-		onChoose(selected.length === 0 ? undefined : (selected as string[]))
+	async function handleOnChoose() {
+		if (mode === 'save') {
+			const directory = await Api.FileSystem.directory(picker.state.path)
+
+			if (directory?.path) {
+				const path = await Api.FileSystem.join([directory.path, save.name])
+
+				if (path) {
+					onChoose([path.path])
+				}
+			}
+		} else {
+			onChoose(selected.length === 0 ? undefined : (selected as string[]))
+		}
 	}
 
 	const Footer = (
 		<>
-			<TextButton color='danger' isDisabled={selected.length === 0} label='Clear' onPointerUp={picker.unselectAll} startContent={<Icons.Trash />} />
-			<Badge color='success' content={selected.length} showOutline={false}>
-				<TextButton color='success' isDisabled={selected.length === 0} label='Choose' onPointerUp={handleChoose} startContent={<Icons.Check />} />
-			</Badge>
+			<Activity mode={mode === 'save' ? 'visible' : 'hidden'}>
+				<Input className='flex-1' color={save.alreadyExists ? 'warning' : 'default'} isClearable label='Name' onValueChange={picker.updateSave} size='sm' value={save.name} />
+				<TextButton color='success' isDisabled={save.name.length === 0} label='Choose' onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
+			</Activity>
+			<Activity mode={mode !== 'save' ? 'visible' : 'hidden'}>
+				<TextButton color='danger' isDisabled={selected.length === 0} label='Clear' onPointerUp={picker.unselectAll} startContent={<Icons.Trash />} />
+				<Badge color='success' content={selected.length} showOutline={false}>
+					<TextButton color='success' isDisabled={selected.length === 0} label='Choose' onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
+				</Badge>
+			</Activity>
 		</>
 	)
 
 	return (
-		<Modal footer={Footer} header={header ?? (mode === 'directory' ? 'Open Directory' : 'Open File')} id={id} maxWidth='420px' onHide={onChoose}>
+		<Modal footer={Footer} header={header ?? (mode === 'save' ? 'Save' : mode === 'directory' ? 'Open Directory' : 'Open File')} id={id} maxWidth='420px' onHide={onChoose}>
 			<div className='mt-0 flex flex-col flex-wrap gap-2'>
 				<div className='flex flex-row items-center gap-2'>
 					<Tooltip content='Go Back' showArrow>
-						<Button color='secondary' isDisabled={history.length === 0} isIconOnly onPointerUp={picker.navigateBack} variant='light'>
-							<Icons.ArrowLeft />
-						</Button>
+						<IconButton color='secondary' icon={Icons.ArrowLeft} isDisabled={history.length === 0} onPointerUp={picker.navigateBack} />
 					</Tooltip>
 					<Breadcrumbs className='flex-1' itemsAfterCollapse={2} itemsBeforeCollapse={1} maxItems={3}>
 						{directoryTree.map((item) => (
@@ -49,31 +66,23 @@ export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 						))}
 					</Breadcrumbs>
 					<Tooltip content='Go To Parent' showArrow>
-						<Button color='secondary' isDisabled={directoryTree.length <= 1} isIconOnly onPointerUp={picker.navigateToParent} variant='light'>
-							<Icons.ArrowUp />
-						</Button>
+						<IconButton color='secondary' icon={Icons.ArrowUp} isDisabled={directoryTree.length <= 1} onPointerUp={picker.navigateToParent} />
 					</Tooltip>
-					<Tooltip content={createDirectory ? 'Filter' : 'New Directory'} showArrow>
-						<Button color='warning' isIconOnly onPointerUp={picker.toggleCreateDirectory} variant='light'>
-							{createDirectory ? <Icons.Filter /> : <Icons.FolderPlus />}
-						</Button>
+					<Tooltip content={directory.create ? 'Filter' : 'New Directory'} showArrow>
+						<IconButton color='warning' icon={directory.create ? Icons.Filter : Icons.FolderPlus} onPointerUp={picker.toggleCreateDirectory} />
 					</Tooltip>
 					<Tooltip content='Refresh' showArrow>
-						<Button color='primary' isIconOnly onPointerUp={picker.list} variant='light'>
-							<Icons.Sync />
-						</Button>
+						<IconButton color='primary' icon={Icons.Sync} onPointerUp={picker.list} />
 					</Tooltip>
 				</div>
-				<Activity mode={createDirectory ? 'hidden' : 'visible'}>
+				<Activity mode={directory.create ? 'hidden' : 'visible'}>
 					<Input isClearable label='Filter' onValueChange={picker.filter} size='sm' value={filter} />
 				</Activity>
-				<Activity mode={createDirectory ? 'visible' : 'hidden'}>
+				<Activity mode={directory.create ? 'visible' : 'hidden'}>
 					<div className='flex flex-row items-center gap-2'>
-						<Input label='Name' onValueChange={(value) => (picker.state.directoryName = value)} size='sm' value={directoryName} />
+						<Input label='Name' onValueChange={(value) => (picker.state.directory.name = value)} size='sm' value={directory.name} />
 						<Tooltip content='Create' showArrow>
-							<Button color='success' isDisabled={directoryName.length === 0} isIconOnly onPointerUp={picker.createDirectory} variant='light'>
-								<Icons.Check />
-							</Button>
+							<IconButton color='success' icon={Icons.Check} isDisabled={directory.name.length === 0} onPointerUp={picker.createDirectory} variant='light' />
 						</Tooltip>
 					</div>
 				</Activity>

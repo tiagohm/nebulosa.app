@@ -17,11 +17,23 @@ const DEFAULT_HEADERS: HeadersInit = {
 export namespace Api {
 	export namespace FileSystem {
 		export function list(req: ListDirectory) {
-			return json<FileSystem>('/fileSystem/list', 'post', req)
+			return json<FileSystem>('/filesystem/list', 'post', req)
 		}
 
 		export function create(req: CreateDirectory) {
-			return json<{ path: string }>('/fileSystem/create', 'post', req)
+			return json<{ path: string }>('/filesystem/create', 'post', req)
+		}
+
+		export function directory(req: string) {
+			return json<{ path?: string }>('/filesystem/directory', 'post', req)
+		}
+
+		export function exists(req: CreateDirectory) {
+			return json<boolean>('/filesystem/exists', 'post', req)
+		}
+
+		export function join(req: string[]) {
+			return json<{ path: string }>('/filesystem/join', 'post', req)
 		}
 	}
 

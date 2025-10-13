@@ -15,7 +15,7 @@ export const FilePickerInput = memo(({ filter, mode, id, value, onValueChange, i
 	const [show, setShow] = useState(false)
 	const initialPath = useRef(value)
 
-	const handleChoose = useCallback(
+	const handleOnChoose = useCallback(
 		(paths?: string[]) => {
 			if (paths?.length) {
 				initialPath.current = paths[0]
@@ -52,7 +52,7 @@ export const FilePickerInput = memo(({ filter, mode, id, value, onValueChange, i
 			</div>
 			{show && (
 				<ScopeProvider scope={FilePickerScope} value={{ path: initialPath.current, filter, mode, multiple: false }}>
-					<FilePicker header='Open Path' id={`file-picker-input-${id}`} onChoose={handleChoose} />
+					<FilePicker header='Choose Path' id={`file-picker-input-${id}`} onChoose={handleOnChoose} />
 				</ScopeProvider>
 			)}
 		</>

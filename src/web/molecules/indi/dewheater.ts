@@ -36,8 +36,8 @@ export const DewHeaterMolecule = molecule((m, s) => {
 		state.dewHeater.pwm.value = typeof value === 'number' ? value : value[0]
 	}
 
-	function pwm(value: number) {
-		return Api.DewHeaters.pwm(scope.dewHeater, value)
+	function pwm(value: number | number[]) {
+		return Api.DewHeaters.pwm(scope.dewHeater, typeof value === 'number' ? value : value[0])
 	}
 
 	function hide() {

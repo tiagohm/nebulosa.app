@@ -11,6 +11,7 @@ import { ImageAdjustment } from './ImageAdjustment'
 import { ImageAnnotation } from './ImageAnnotation'
 import { ImageFilter } from './ImageFilter'
 import { ImageInfo } from './ImageInfo'
+import { ImageSave } from './ImageSave'
 import { ImageScnr } from './ImageScnr'
 import { ImageSettings } from './ImageSettings'
 import { ImageStretch } from './ImageStretch'
@@ -24,7 +25,7 @@ export const ImageViewer = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { image } = viewer.scope
 	const workspace = useMolecule(ImageWorkspaceMolecule)
-	const { crosshair, starDetection, stretch, solver, fitsHeader, scnr, adjustment, filter, settings, annotation } = useSnapshot(viewer.state)
+	const { crosshair, starDetection, stretch, solver, fitsHeader, scnr, adjustment, filter, settings, annotation, save } = useSnapshot(viewer.state)
 	const { selected } = useSnapshot(workspace.state)
 
 	useLayoutEffect(() => {
@@ -61,6 +62,7 @@ export const ImageViewer = memo(() => {
 			{fitsHeader.show && <FITSHeader />}
 			{settings.show && <ImageSettings />}
 			{annotation.show && <ImageAnnotation />}
+			{save.show && <ImageSave />}
 		</>
 	)
 })

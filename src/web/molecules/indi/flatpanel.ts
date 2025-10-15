@@ -45,11 +45,11 @@ export const FlatPanelMolecule = molecule((m, s) => {
 	}
 
 	function toggle(force?: boolean) {
-		return (force === undefined ? !state.flatPanel.enabled : force) ? enable() : disable()
+		return (force ?? !state.flatPanel.enabled) ? enable() : disable()
 	}
 
-	function intensity(value: number) {
-		return Api.FlatPanels.intensity(scope.flatPanel, value)
+	function intensity(value: number | number[]) {
+		return Api.FlatPanels.intensity(scope.flatPanel, typeof value === 'number' ? value : value[0])
 	}
 
 	function hide() {

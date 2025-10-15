@@ -68,7 +68,7 @@ export const FilePickerMolecule = molecule((m, s) => {
 		})
 
 		unsubscribers[1] = subscribeKey(state, 'path', async (path) => {
-			state.save.alreadyExists = path.length > 0 && !!(await Api.FileSystem.exists({ path, name: state.save.name }))
+			state.save.alreadyExists = state.save.name.length > 0 && path.length > 0 && !!(await Api.FileSystem.exists({ path, name: state.save.name }))
 		})
 
 		return () => {
@@ -164,9 +164,21 @@ export const FilePickerMolecule = molecule((m, s) => {
 		state.selected.length = 0
 	}
 
-	function updateSave(name: string) {
+	function updateSaveName(name: string) {
 		state.save.name = name
 	}
 
-	return { state, filter, list, navigateTo, navigateBack, navigateToParent, toggleCreateDirectory, createDirectory, select, unselectAll, updateSave } as const
+	async function save(action: (path: string[]) => void) {
+		const directory = await Api.FileSystem.directory(state.path)
+
+		if (directory?.path) {
+			const path = await Api.FileSystem.join([directory.path, state.save.name])
+
+			if (path) {
+				action([path.path])
+			}
+		}
+	}
+
+	return { state, filter, list, navigateTo, navigateBack, navigateToParent, toggleCreateDirectory, createDirectory, select, unselectAll, updateSaveName, save } as const
 })

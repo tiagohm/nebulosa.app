@@ -5,6 +5,7 @@ import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
 import { ImageFilterMolecule } from '@/molecules/image/filter'
+import { ImageSaveMolecule } from '@/molecules/image/save'
 import { ImageScnrMolecule } from '@/molecules/image/scnr'
 import { ImageSettingsMolecule } from '@/molecules/image/settings'
 import { ImageSolverMolecule } from '@/molecules/image/solver'
@@ -22,6 +23,7 @@ export const ImageToolBar = memo(() => {
 	const { stars: detectedStars, visible: isDetectedStarsVisible } = useSnapshot(viewer.state.starDetection)
 	const { stars: annotatedStars, visible: isAnnotatedStarsVisible } = useSnapshot(viewer.state.annotation)
 
+	const save = useMolecule(ImageSaveMolecule)
 	const solver = useMolecule(ImageSolverMolecule)
 	const detection = useMolecule(StarDetectionMolecule)
 	const annotation = useMolecule(ImageAnnotationMolecule)
@@ -35,7 +37,7 @@ export const ImageToolBar = memo(() => {
 		<div className='w-full fixed bottom-0 mb-1 p-1 z-[99999]'>
 			<div className='flex flex-row items-center justify-start gap-2 px-2 py-1.5 mx-auto w-fit rounded-xl bg-black max-w-full overflow-scroll no-scrollbar'>
 				<Tooltip content='Save' placement='top'>
-					<IconButton color='secondary' icon={Icons.Save} variant='flat' />
+					<IconButton color='secondary' icon={Icons.Save} onPointerUp={save.show} variant='flat' />
 				</Tooltip>
 				<Tooltip content='Plate Solver' placement='top'>
 					<IconButton color='secondary' icon={Icons.Sigma} onPointerUp={solver.show} variant='flat' />
@@ -46,7 +48,7 @@ export const ImageToolBar = memo(() => {
 				<Tooltip content='Auto Stretch' placement='top'>
 					<ToggleButton color='primary' icon={Icons.WandSparkles} isSelected={transformation.stretch.auto} onPointerUp={viewer.toggleAutoStretch} />
 				</Tooltip>
-				{info.metadata.bayer && info.metadata.channels === 1 && (
+				{info?.metadata.bayer && info.metadata.channels === 1 && (
 					<Tooltip content='Debayer' placement='top'>
 						<ToggleButton color='primary' icon={Icons.Grid} isSelected={transformation.debayer} onPointerUp={viewer.toggleDebayer} />
 					</Tooltip>
@@ -61,9 +63,9 @@ export const ImageToolBar = memo(() => {
 					</Tooltip>
 					<PopoverContent>
 						<div className='flex flex-row items-center justify-center gap-2 p-2'>
-							{!info.mono && (
+							{info && !info.mono && (
 								<Tooltip content='SCNR' placement='top'>
-									<IconButton color='secondary' icon={Icons.Swatch} isIconOnly onPointerUp={scnr.show} variant='flat' />
+									<IconButton color='secondary' icon={Icons.Swatch} onPointerUp={scnr.show} variant='flat' />
 								</Tooltip>
 							)}
 							<Tooltip content='Adjustment' placement='top'>

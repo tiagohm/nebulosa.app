@@ -9,6 +9,8 @@ export const FITSHeader = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { info } = useSnapshot(viewer.state)
 
+	if (!info) return null
+
 	return (
 		<Modal header='FITS Header' id={`fits-header-${viewer.scope.image.key}`} maxWidth='300px' onHide={() => viewer.hide('fitsHeader')}>
 			<div className='mt-0 px-1 py-2'>

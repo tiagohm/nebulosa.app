@@ -30,7 +30,7 @@ export const DewHeater = memo(() => {
 		<Modal header={Header} id={`dew-heater-${dewHeater.scope.dewHeater.name}`} maxWidth='260px' onHide={dewHeater.hide}>
 			<div className='mt-0 col-span-full flex flex-col items-center justify-center'>
 				<div className='w-full flex flex-col justify-center items-center gap-1'>
-					<Slider color={color} disableThumbScale endContent={pwm.max} isDisabled={!connected} maxValue={pwm.max} minValue={pwm.min} onChange={dewHeater.update} onChangeEnd={(value) => dewHeater.pwm(value as never)} size='lg' startContent={pwm.min} value={pwm.value} />
+					<Slider color={color} disableThumbScale endContent={pwm.max} isDisabled={!connected} maxValue={pwm.max} minValue={pwm.min} onChange={dewHeater.update} onChangeEnd={dewHeater.pwm} size='lg' startContent={pwm.min} value={pwm.value} />
 					<span className='text-lg font-bold'>{pwm.value}</span>
 				</div>
 			</div>

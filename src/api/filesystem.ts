@@ -1,7 +1,6 @@
 import { Glob } from 'bun'
 import Elysia from 'elysia'
 import fs from 'fs/promises'
-import os from 'os'
 import { basename, dirname, join, normalize } from 'path'
 import type { CreateDirectory, DirectoryEntry, FileEntry, FileSystem, ListDirectory } from '../shared/types'
 
@@ -15,7 +14,7 @@ export const FileEntryComparator = (a: FileEntry, b: FileEntry) => {
 export class FileSystemManager {
 	async list(req?: ListDirectory): Promise<FileSystem> {
 		// Find the directory path from request or use the home directory
-		const path = (await findDirectory(req?.path)) || os.homedir()
+		const path = (await findDirectory(req?.path)) || Bun.env.homeDir
 		// Make the directory tree from current path
 		const tree = makeDirectoryTree(path)
 		// Prepare the glob to filter
@@ -47,18 +46,19 @@ export class FileSystemManager {
 	}
 
 	async create(req: CreateDirectory) {
-		const path = join(req.path, req.name.trim())
+		const parent = (await findDirectory(req.path)) || Bun.env.homeDir
+		const path = join(parent, req.name.trim())
 		await fs.mkdir(path, req)
 		return { path }
 	}
 
 	async directory(req: string) {
-		const path = await findDirectory(req)
+		const path = (await findDirectory(req)) || Bun.env.homeDir
 		return { path }
 	}
 
 	async exists(req: CreateDirectory) {
-		const path = await findDirectory(req.path)
+		const path = (await findDirectory(req.path)) || Bun.env.homeDir
 		return path ? fs.exists(join(path, req.name.trim())) : false
 	}
 

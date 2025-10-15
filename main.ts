@@ -53,9 +53,14 @@ const key = args.values.key || 'key.pem'
 const secure = (args.values.secure && !!cert && !!key) || undefined
 
 // Initialize environment variables
+Bun.env.homeDir = os.homedir()
+
 if (process.platform === 'linux') {
-	Bun.env.appDir = join(os.homedir(), '.nebulosa')
+	Bun.env.tmpDir = '/dev/shm'
+	Bun.env.appDir = join(Bun.env.homeDir, '.nebulosa')
 } else if (process.platform === 'win32') {
+	process.exit(1) // TODO: Windows is not fully supported yet
+	Bun.env.tmpDir = os.tmpdir()
 	Bun.env.appDir = '' // TODO: https://stackoverflow.com/a/64807054
 }
 

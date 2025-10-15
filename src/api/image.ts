@@ -2,18 +2,17 @@ import Elysia from 'elysia'
 import fs from 'fs/promises'
 import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, type Fits, observationDateKeyword, readFits, rightAscensionKeyword } from 'nebulosa/src/fits'
-import { adf, debayer, horizontalFlip, type Image, type ImageFormat, invert, readImageFromFits, scnr, stf, verticalFlip, type WriteImageToFormatOptions, writeImageToFormat } from 'nebulosa/src/image'
-import { bufferSource, fileHandleSource } from 'nebulosa/src/io'
+import { adf, debayer, horizontalFlip, type Image, type ImageFormat, invert, readImageFromFits, scnr, stf, verticalFlip, type WriteImageToFormatOptions, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
+import { bufferSource, fileHandleSink, fileHandleSource } from 'nebulosa/src/io'
 import { spaceMotion, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
 import { Wcs } from 'nebulosa/src/wcs'
-import os from 'os'
 import { join } from 'path'
 import type { JpegOptions, PngOptions, WebpOptions } from 'sharp'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
-import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageInfo, ImageTransformation, OpenImage } from '../shared/types'
+import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageInfo, ImageTransformation, OpenImage, SaveImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER } from '../shared/types'
 import { decodePath } from './camera'
 import type { NotificationManager } from './notification'
@@ -52,10 +51,10 @@ export class ImageManager {
 		readonly notification?: NotificationManager,
 	) {}
 
-	async open(req: OpenImage) {
+	async open(req: OpenImage, savePath?: string) {
 		if (!req.path) return undefined
 
-		if (req.path?.startsWith(':')) {
+		if (req.path.startsWith(':')) {
 			const [path, key] = decodePath(req.path)
 			const buffer = this.cache.get(key)
 
@@ -64,7 +63,7 @@ export class ImageManager {
 				const fits = await readFits(source)
 
 				if (fits) {
-					return await this.readAndTransformImageFromFits(fits, req.transformation, path)
+					return await this.readAndTransformImageFromFits(fits, req.transformation, path, savePath)
 				}
 
 				return undefined
@@ -78,26 +77,26 @@ export class ImageManager {
 		const fits = await readFits(source)
 
 		if (fits) {
-			return await this.readAndTransformImageFromFits(fits, req.transformation, req.path)
+			return await this.readAndTransformImageFromFits(fits, req.transformation, req.path, savePath)
 		}
 
 		return undefined
 	}
 
-	async readAndTransformImageFromFits(fits: Fits, transformation: ImageTransformation, originalPath: string) {
+	async readAndTransformImageFromFits(fits: Fits, transformation: ImageTransformation, realPath: string, savePath?: string) {
 		if (fits) {
 			const image = await readImageFromFits(fits)
 
 			if (image) {
 				const id = Bun.randomUUIDv7()
 				const { format } = transformation
-				const path = join(process.platform === 'linux' ? '/dev/shm' : os.tmpdir(), `${id}.${format}`)
+				const path = savePath ?? join(Bun.env.tmpDir, `${id}.${format}`)
 				const output = await this.transformImageAndSave(image, path, format, transformation)
 
 				if (output) {
 					const info: ImageInfo = {
 						path,
-						originalPath,
+						realPath,
 						width: output.width,
 						height: output.height,
 						mono: output.channels === 1,
@@ -109,6 +108,8 @@ export class ImageManager {
 					}
 
 					return info
+				} else if (savePath) {
+					return undefined
 				} else {
 					this.notification?.send({ body: 'Failed to generate image', severity: 'error' })
 				}
@@ -120,60 +121,74 @@ export class ImageManager {
 		}
 	}
 
-	transformImageAndSave(image: Image, path: string, format: ImageFormat, transformation: ImageTransformation) {
-		if (transformation.debayer) {
+	async transformImageAndSave(image: Image, path: string, format: ImageFormat, transformation: ImageTransformation) {
+		if (transformation.enabled && transformation.debayer) {
 			image = debayer(image) ?? image
 		}
 
-		if (transformation.horizontalMirror) {
+		if (transformation.enabled && transformation.horizontalMirror) {
 			image = horizontalFlip(image)
 		}
-		if (transformation.verticalMirror) {
+		if (transformation.enabled && transformation.verticalMirror) {
 			image = verticalFlip(image)
 		}
 
-		if (transformation.scnr.channel) {
+		if (transformation.enabled && transformation.scnr.channel) {
 			const { channel, amount, method } = transformation.scnr
 			image = scnr(image, channel, amount, method)
 		}
 
-		if (transformation.stretch.auto) {
-			const [midtone, shadow, highlight] = adf(image, undefined, transformation.stretch.meanBackground)
+		if (transformation.enabled) {
+			if (transformation.stretch.auto) {
+				const [midtone, shadow, highlight] = adf(image, undefined, transformation.stretch.meanBackground)
 
-			image = stf(image, midtone, shadow, highlight)
+				image = stf(image, midtone, shadow, highlight)
 
-			transformation.stretch.midtone = Math.trunc(midtone * 65536)
-			transformation.stretch.shadow = Math.trunc(shadow * 65536)
-			transformation.stretch.highlight = Math.trunc(highlight * 65536)
-		} else {
-			const { midtone, shadow, highlight } = transformation.stretch
-			image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536)
+				transformation.stretch.midtone = Math.trunc(midtone * 65536)
+				transformation.stretch.shadow = Math.trunc(shadow * 65536)
+				transformation.stretch.highlight = Math.trunc(highlight * 65536)
+			} else {
+				const { midtone, shadow, highlight } = transformation.stretch
+				image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536)
+			}
 		}
 
-		if (transformation.invert) {
+		if (transformation.enabled && transformation.invert) {
 			image = invert(image)
+		}
+
+		// TODO: handle XISF format
+		if (format === 'fits' || format === 'xisf') {
+			const handle = await fs.open(path, 'w')
+			await using sink = fileHandleSink(handle)
+			await writeImageToFits(image, sink)
+			return undefined
 		}
 
 		const { adjustment, filter } = transformation
 
+		const hasAdjustment = transformation.enabled && adjustment.enabled
+		const hasFilter = transformation.enabled && filter.enabled
+
 		const options: WriteImageToFormatOptions = {
 			format: IMAGE_FORMAT_OPTIONS[format],
-			brightness: adjustment.enabled ? adjustment.brightness : undefined,
-			contrast: adjustment.enabled ? adjustment.contrast : undefined,
-			normalize: adjustment.enabled ? adjustment.normalize : undefined,
-			gamma: adjustment.enabled ? adjustment.gamma : undefined,
-			saturation: adjustment.enabled ? adjustment.saturation : undefined,
-			sharpen: filter.enabled && filter.sharpen,
-			blur: filter.enabled && filter.blur,
-			median: filter.enabled && filter.median,
+			brightness: hasAdjustment ? adjustment.brightness : undefined,
+			contrast: hasAdjustment ? adjustment.contrast : undefined,
+			normalize: hasAdjustment ? adjustment.normalize : undefined,
+			gamma: hasAdjustment ? adjustment.gamma : undefined,
+			saturation: hasAdjustment ? adjustment.saturation : undefined,
+			sharpen: hasFilter && filter.sharpen,
+			blur: hasFilter && filter.blur,
+			median: hasFilter && filter.median,
 		}
 
-		return writeImageToFormat(image, path, format as never, options) // TODO: Handle FITS and XISF
+		return writeImageToFormat(image, path, format, options)
 	}
 
-	save() {}
-
-	analyze() {}
+	save(req: SaveImage) {
+		req.transformation.enabled = req.transformed
+		return this.open(req, req.savePath)
+	}
 
 	annotate(req: AnnotateImage) {
 		using wcs = new Wcs(req.solution)
@@ -226,7 +241,7 @@ export function image(image: ImageManager) {
 			return Bun.file(info.path)
 		})
 		.post('/close', ({ body }) => image.close(body as never))
-		.post('/analyze', () => image.analyze())
+		.post('/save', ({ body }) => image.save(body as never))
 		.post('/annotate', ({ body }) => image.annotate(body as never))
 		.post('/coordinateInterpolation', () => image.coordinateInterpolation())
 		.post('/statistics', () => image.statistics())

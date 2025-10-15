@@ -1,54 +1,54 @@
-import { Button, Input, type InputProps } from '@heroui/react'
+import { Button, Input, type InputProps, Tooltip } from '@heroui/react'
 import { ScopeProvider } from 'bunshi/react'
-import { memo, useCallback, useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { FilePickerScope, type FilePickerScopeValue } from '@/molecules/filepicker'
 import { FilePicker } from './FilePicker'
 import { Icons } from './Icon'
 
-export interface FilePickerInputProps extends Omit<FilePickerScopeValue, 'multiple' | 'path'>, Omit<InputProps, 'size' | 'value' | 'onValueChange' | 'onClear' | 'startContent' | 'endContent' | 'isClearable'> {
+export interface FilePickerInputProps extends Omit<FilePickerScopeValue, 'multiple' | 'path'>, Omit<InputProps, 'value' | 'onValueChange' | 'onClear' | 'startContent' | 'endContent' | 'isClearable' | 'label'> {
 	readonly id: string
 	readonly value?: string
 	readonly onValueChange: (value?: string) => void
 }
 
-export const FilePickerInput = memo(({ filter, mode, id, value, onValueChange, isReadOnly = true, ...props }: FilePickerInputProps) => {
+export const FilePickerInput = memo(({ filter, mode, id, value, onValueChange, isReadOnly = true, size = 'sm', ...props }: FilePickerInputProps) => {
 	const [show, setShow] = useState(false)
 	const initialPath = useRef(value)
 
-	const handleOnChoose = useCallback(
-		(paths?: string[]) => {
-			if (paths?.length) {
-				initialPath.current = paths[0]
-				onValueChange(paths[0])
-			}
+	function handleOnChoose(paths?: string[]) {
+		if (paths?.length) {
+			initialPath.current = paths[0]
+			onValueChange(paths[0])
+		}
 
-			setShow(false)
-		},
-		[onValueChange],
+		setShow(false)
+	}
+
+	function handleValueChange(path: string) {
+		if (!show) {
+			initialPath.current = path
+			onValueChange(path)
+		}
+	}
+
+	const StartContent = (
+		<Tooltip content='Browse' placement='bottom'>
+			<Button isIconOnly size='sm' variant='light'>
+				<Icons.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} size={12} />
+			</Button>
+		</Tooltip>
 	)
+
+	const EndContent = value ? (
+		<Button isIconOnly size='sm' variant='light'>
+			<Icons.CloseCircle className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} size={12} />
+		</Button>
+	) : null
 
 	return (
 		<>
-			<div className='flex flex-row items-center gap-1 w-full flex-1'>
-				<Input
-					{...props}
-					endContent={
-						value ? (
-							<Button isIconOnly size='sm' variant='light'>
-								<Icons.CloseCircle className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} size={12} />
-							</Button>
-						) : null
-					}
-					isClearable={false}
-					isReadOnly={isReadOnly}
-					size='sm'
-					startContent={
-						<Button isIconOnly size='sm' variant='light'>
-							<Icons.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} size={12} />
-						</Button>
-					}
-					value={value}
-				/>
+			<div className='col-span-full flex flex-row items-center gap-1 w-full flex-1'>
+				<Input {...props} endContent={EndContent} isClearable={false} isReadOnly={isReadOnly} onValueChange={handleValueChange} size={size} startContent={StartContent} value={value} />
 			</div>
 			{show && (
 				<ScopeProvider scope={FilePickerScope} value={{ path: initialPath.current, filter, mode, multiple: false }}>

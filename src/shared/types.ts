@@ -388,6 +388,7 @@ export interface ImageFilter {
 }
 
 export interface ImageTransformation {
+	enabled: boolean
 	calibrationGroup?: string
 	debayer: boolean
 	stretch: ImageStretch
@@ -401,7 +402,7 @@ export interface ImageTransformation {
 }
 
 export interface OpenImage {
-	path?: string
+	path: string
 	readonly camera?: string
 	readonly transformation: ImageTransformation
 }
@@ -410,13 +411,18 @@ export interface CloseImage {
 	readonly id: string
 }
 
+export interface SaveImage extends OpenImage {
+	readonly savePath: string
+	readonly transformed: boolean
+}
+
 export interface AnnotateImage {
 	readonly solution: PlateSolution
 }
 
 export interface ImageInfo extends Partial<EquatorialCoordinate> {
 	path: string
-	originalPath: string
+	realPath: string
 	width: number
 	height: number
 	mono: boolean
@@ -1298,6 +1304,7 @@ export const DEFAULT_IMAGE_FILTER: ImageFilter = {
 }
 
 export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
+	enabled: true,
 	debayer: true,
 	stretch: DEFAULT_IMAGE_STRETCH,
 	horizontalMirror: false,

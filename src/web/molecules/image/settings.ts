@@ -1,23 +1,11 @@
-import { molecule, onMount } from 'bunshi'
+import { molecule } from 'bunshi'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation } from 'src/shared/types'
-import { subscribe } from 'valtio'
-import { storage } from '@/shared/storage'
 import { type ImageState, ImageViewerMolecule, ImageViewerScope } from './viewer'
 
 export const ImageSettingsMolecule = molecule((m, s) => {
 	const scope = s(ImageViewerScope)
 	const viewer = m(ImageViewerMolecule)
 	const { settings, transformation } = viewer.state
-
-	onMount(() => {
-		const unsubscribe = subscribe(settings, () => {
-			storage.set('image.settings', settings)
-		})
-
-		return () => {
-			unsubscribe()
-		}
-	})
 
 	function update<K extends keyof ImageState['settings']>(key: K, value: ImageState['settings'][K]) {
 		settings[key] = value

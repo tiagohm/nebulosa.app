@@ -4,7 +4,6 @@ import { format } from 'date-fns'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerMolecule } from '@/molecules/filepicker'
-import { Api } from '@/shared/api'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
@@ -20,17 +19,9 @@ export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 	const picker = useMolecule(FilePickerMolecule)
 	const { mode, history, filtered, selected, directoryTree, filter, directory, save } = useSnapshot(picker.state, { sync: true })
 
-	async function handleOnChoose() {
+	function handleOnChoose() {
 		if (mode === 'save') {
-			const directory = await Api.FileSystem.directory(picker.state.path)
-
-			if (directory?.path) {
-				const path = await Api.FileSystem.join([directory.path, save.name])
-
-				if (path) {
-					onChoose([path.path])
-				}
-			}
+			void picker.save(onChoose)
 		} else {
 			onChoose(selected.length === 0 ? undefined : (selected as string[]))
 		}
@@ -39,7 +30,7 @@ export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 	const Footer = (
 		<>
 			<Activity mode={mode === 'save' ? 'visible' : 'hidden'}>
-				<Input className='flex-1' color={save.alreadyExists ? 'warning' : 'default'} isClearable label='Name' onValueChange={picker.updateSave} size='sm' value={save.name} />
+				<Input className='flex-1' color={save.alreadyExists ? 'warning' : 'default'} isClearable label='Name' onValueChange={picker.updateSaveName} size='sm' value={save.name} />
 				<TextButton color='success' isDisabled={save.name.length === 0} label='Choose' onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
 			</Activity>
 			<Activity mode={mode !== 'save' ? 'visible' : 'hidden'}>

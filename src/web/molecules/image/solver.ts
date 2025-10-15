@@ -1,11 +1,9 @@
-import { molecule, onMount } from 'bunshi'
+import { molecule } from 'bunshi'
 import { arcsec, formatDEC, formatRA, toDeg } from 'nebulosa/src/angle'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
-import bus, { unsubscribe } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import type { Framing, Mount, PlateSolveStart } from 'src/shared/types'
-import { subscribe } from 'valtio'
 import { Api } from '@/shared/api'
-import { storage } from '@/shared/storage'
 import { SettingsMolecule } from '../settings'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
@@ -14,18 +12,6 @@ export const ImageSolverMolecule = molecule((m, s) => {
 	const viewer = m(ImageViewerMolecule)
 	const settings = m(SettingsMolecule)
 	const { solver } = viewer.state
-
-	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(1)
-
-		unsubscribers[0] = subscribe(solver.request, () => {
-			storage.set(`image.solver.${viewer.scope.image.camera?.name || 'default'}`, solver.request)
-		})
-
-		return () => {
-			unsubscribe(unsubscribers)
-		}
-	})
 
 	function update<K extends keyof PlateSolveStart>(key: K, value: PlateSolveStart[K]) {
 		solver.request[key] = value
@@ -36,7 +22,7 @@ export const ImageSolverMolecule = molecule((m, s) => {
 			solver.loading = true
 
 			const request = { ...solver.request, ...settings.state.solver[solver.request.type] } // Merge solver-specific settings
-			request.fov = arcsec(angularSizeOfPixel(request.focalLength, request.pixelSize) * viewer.state.info.height)
+			request.fov = arcsec(angularSizeOfPixel(request.focalLength, request.pixelSize) * viewer.state.info!.height)
 
 			solver.solution = await Api.PlateSolver.start(request)
 		} finally {

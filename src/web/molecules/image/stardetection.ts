@@ -1,9 +1,7 @@
 import { addToast } from '@heroui/react'
-import { molecule, onMount } from 'bunshi'
+import { molecule } from 'bunshi'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
-import { subscribe } from 'valtio'
 import { Api } from '@/shared/api'
-import { storage } from '@/shared/storage'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
 export const StarDetectionMolecule = molecule((m, s) => {
@@ -11,16 +9,6 @@ export const StarDetectionMolecule = molecule((m, s) => {
 	const viewer = m(ImageViewerMolecule)
 	const key = scope.image.key
 	const { starDetection } = viewer.state
-
-	onMount(() => {
-		const unsubscribe = subscribe(starDetection.request, () => {
-			storage.set('image.starDetection', starDetection.request)
-		})
-
-		return () => {
-			unsubscribe()
-		}
-	})
 
 	function toggle(enabled?: boolean) {
 		starDetection.visible = enabled ?? !starDetection.visible

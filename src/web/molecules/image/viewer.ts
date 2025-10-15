@@ -1,13 +1,13 @@
 import { createScope, molecule, onMount } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import { numericKeyword } from 'nebulosa/src/fits'
+import type { ImageFormat } from 'nebulosa/src/image'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import bus, { unsubscribe } from 'src/shared/bus'
 import { type AnnotatedSkyObject, type CameraCaptureEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
 import type { PickByValue } from 'utility-types'
 import { proxy, ref, subscribe } from 'valtio'
-import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { storage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
@@ -22,7 +22,7 @@ export interface ImageState {
 	readonly transformation: ImageTransformation
 	crosshair: boolean
 	rotation: number
-	info: ImageInfo
+	info?: ImageInfo
 	scale: number
 	readonly starDetection: {
 		show: boolean
@@ -73,6 +73,13 @@ export interface ImageState {
 		height: number
 		rotation: number
 	}
+	readonly save: {
+		show: boolean
+		loading: boolean
+		path: string
+		format: ImageFormat
+		transformed: boolean
+	}
 	readonly settings: {
 		show: boolean
 		pixelated: boolean
@@ -88,6 +95,71 @@ export const DEFAULT_IMAGE_SETTINGS: ImageState['settings'] = {
 	pixelated: true,
 }
 
+const DEFAULT_IMAGE_STATE: ImageState = {
+	transformation: DEFAULT_IMAGE_TRANSFORMATION,
+	crosshair: false,
+	rotation: 0,
+	scale: 1,
+	starDetection: {
+		show: false,
+		visible: false,
+		loading: false,
+		stars: [],
+		request: DEFAULT_STAR_DETECTION,
+		computed: {
+			hfd: 0,
+			snr: 0,
+			fluxMin: 0,
+			fluxMax: 0,
+		},
+	},
+	solver: {
+		show: false,
+		loading: false,
+		request: DEFAULT_PLATE_SOLVE_START,
+	},
+	scnr: {
+		show: false,
+	},
+	stretch: {
+		show: false,
+	},
+	adjustment: {
+		show: false,
+	},
+	filter: {
+		show: false,
+	},
+	annotation: {
+		show: false,
+		visible: false,
+		loading: false,
+		stars: [],
+	},
+	fitsHeader: {
+		show: false,
+	},
+	roi: {
+		show: false,
+		x: 0,
+		y: 0,
+		width: 0,
+		height: 0,
+		rotation: 0,
+	},
+	save: {
+		show: false,
+		loading: false,
+		path: '',
+		format: 'fits',
+		transformed: false,
+	},
+	settings: {
+		show: false,
+		pixelated: true,
+	},
+}
+
 const imageCache = new Map<string, CachedImage>()
 
 export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { key: '', path: '', position: 0, source: 'file' } })
@@ -100,89 +172,45 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 	let target = document.getElementById(key) as HTMLImageElement | null
 
-	const transformation = storage.get('image.transformation', () => structuredClone(DEFAULT_IMAGE_TRANSFORMATION))
-	const starDetectionRequest = storage.get('image.starDetection', () => structuredClone(DEFAULT_STAR_DETECTION))
-	const solverRequest = storage.get(`image.solver.${camera?.name || 'default'}`, () => structuredClone(DEFAULT_PLATE_SOLVE_START))
-	const settings = storage.get<ImageState['settings']>('image.settings', () => structuredClone(DEFAULT_IMAGE_SETTINGS))
+	const storageKey = camera?.name || 'default'
+	const cachedImageState = imageCache.get(key)?.state
+	const transformationState = cachedImageState?.transformation ?? storage.get(`image.transformation.${storageKey}`, () => storage.get('image.transformation.default', () => structuredClone(DEFAULT_IMAGE_STATE.transformation)))
+	const starDetectionState = cachedImageState?.starDetection.request ?? storage.get(`image.stardetection.${storageKey}.request`, () => storage.get('image.stardetection.default.request', () => structuredClone(DEFAULT_IMAGE_STATE.starDetection.request)))
+	const plateSolverState = cachedImageState?.solver.request ?? storage.get(`image.solver.${storageKey}.request`, () => storage.get('image.solver.default.request', () => structuredClone(DEFAULT_IMAGE_STATE.solver.request)))
+	const settingsState = cachedImageState?.settings ?? storage.get(`image.settings.${storageKey}`, () => storage.get('image.settings.default', () => structuredClone(DEFAULT_IMAGE_STATE.settings)))
+	const saveState = cachedImageState?.save ?? storage.get(`image.save.${storageKey}`, () => storage.get('image.save.default', () => structuredClone(DEFAULT_IMAGE_STATE.save)))
 
-	starDetectionRequest.path = path
-	solverRequest.id = key
-	solverRequest.path = path
-	settings.show = false
+	starDetectionState.path = path
+	plateSolverState.id = key
+	plateSolverState.path = path
+	settingsState.show = false
+	saveState.show = false
 
 	const state =
-		imageCache.get(key)?.state ??
+		cachedImageState ??
 		proxy<ImageState>({
-			transformation,
+			transformation: transformationState,
 			crosshair: storage.get('image.crosshair', false),
 			rotation: storage.get('image.rotation', 0),
 			scale: 1,
-			info: {
-				path: '',
-				originalPath: '',
-				width: 0,
-				height: 0,
-				mono: false,
-				metadata: {
-					width: 0,
-					height: 0,
-					channels: 1,
-					strideInPixels: 0,
-					pixelCount: 0,
-					pixelSizeInBytes: 0,
-					bitpix: 8,
-				},
-				transformation,
-				headers: {},
-			},
+			info: undefined,
 			starDetection: {
-				show: false,
-				visible: false,
-				loading: false,
-				stars: [],
-				request: starDetectionRequest,
-				computed: {
-					hfd: 0,
-					snr: 0,
-					fluxMin: 0,
-					fluxMax: 0,
-				},
+				...structuredClone(DEFAULT_IMAGE_STATE.starDetection),
+				request: starDetectionState,
 			},
 			solver: {
-				show: false,
-				loading: false,
-				request: solverRequest,
+				...structuredClone(DEFAULT_IMAGE_STATE.solver),
+				request: plateSolverState,
 			},
-			scnr: {
-				show: false,
-			},
-			stretch: {
-				show: false,
-			},
-			adjustment: {
-				show: false,
-			},
-			filter: {
-				show: false,
-			},
-			annotation: {
-				show: false,
-				visible: false,
-				loading: false,
-				stars: [],
-			},
-			fitsHeader: {
-				show: false,
-			},
-			roi: {
-				show: false,
-				x: 0,
-				y: 0,
-				width: 0,
-				height: 0,
-				rotation: 0,
-			},
-			settings,
+			scnr: structuredClone(DEFAULT_IMAGE_STATE.scnr),
+			stretch: structuredClone(DEFAULT_IMAGE_STATE.stretch),
+			adjustment: structuredClone(DEFAULT_IMAGE_STATE.adjustment),
+			filter: structuredClone(DEFAULT_IMAGE_STATE.filter),
+			annotation: structuredClone(DEFAULT_IMAGE_STATE.annotation),
+			fitsHeader: structuredClone(DEFAULT_IMAGE_STATE.fitsHeader),
+			roi: structuredClone(DEFAULT_IMAGE_STATE.roi),
+			save: saveState,
+			settings: settingsState,
 		})
 
 	// Save the state in the cache
@@ -191,18 +219,35 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	let loading = false
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction | undefined>(3)
-
-		unsubscribers[0] = subscribeKey(state, 'crosshair', (e) => storage.set('image.crosshair', e))
-		unsubscribers[1] = subscribe(state.transformation, () => storage.set('image.transformation', state.transformation))
+		const unsubscribers = new Array<VoidFunction | undefined>(6)
 
 		if (camera) {
-			unsubscribers[2] = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
+			unsubscribers[0] = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
 				if (event.device === camera.name && event.savedPath) {
 					void load(true, event.savedPath)
 				}
 			})
 		}
+
+		unsubscribers[1] = subscribe(state.transformation, () => {
+			storage.set(`image.transformation.${storageKey}`, state.transformation)
+		})
+
+		unsubscribers[2] = subscribe(state.starDetection.request, () => {
+			storage.set(`image.stardetection.${storageKey}.request`, state.starDetection.request)
+		})
+
+		unsubscribers[3] = subscribe(state.solver.request, () => {
+			storage.set(`image.solver.${storageKey}.request`, state.solver.request)
+		})
+
+		unsubscribers[4] = subscribe(state.settings, () => {
+			storage.set(`image.settings.${storageKey}`, state.settings)
+		})
+
+		unsubscribers[5] = subscribe(state.save, () => {
+			storage.set(`image.save.${storageKey}`, state.save)
+		})
 
 		return () => {
 			unsubscribe(unsubscribers)
@@ -302,7 +347,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			const url = URL.createObjectURL(image.blob)
 
 			// Update the state
-			state.info = image.info
+			state.info = ref(image.info)
 			updateFromImageInfo(image.info, !!path)
 
 			// Add the image to cache

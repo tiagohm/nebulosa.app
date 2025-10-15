@@ -1,5 +1,7 @@
 declare module 'bun' {
 	interface Env {
+		homeDir: string
+		tmpDir: string
 		appDir: string
 		capturesDir: string
 		framingDir: string

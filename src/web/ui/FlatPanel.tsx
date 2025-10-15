@@ -31,7 +31,7 @@ export const FlatPanel = memo(() => {
 					<Switch isDisabled={!connected} isSelected={enabled} onValueChange={flatPanel.toggle} />
 				</div>
 				<div className='col-span-full flex flex-col justify-center items-center gap-1'>
-					<Slider disableThumbScale endContent={intensity.max} isDisabled={!connected || !enabled} maxValue={intensity.max} minValue={intensity.min} onChange={flatPanel.update} onChangeEnd={(value) => flatPanel.intensity(value as never)} size='lg' startContent={intensity.min} value={intensity.value} />
+					<Slider disableThumbScale endContent={intensity.max} isDisabled={!connected || !enabled} maxValue={intensity.max} minValue={intensity.min} onChange={flatPanel.update} onChangeEnd={flatPanel.intensity} size='lg' startContent={intensity.min} value={intensity.value} />
 					<span className='text-lg font-bold'>{intensity.value}</span>
 				</div>
 			</div>

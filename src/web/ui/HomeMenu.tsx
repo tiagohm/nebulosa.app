@@ -87,7 +87,7 @@ export const HomeMenuPopover = memo(() => {
 
 	return (
 		<Popover isOpen={show} onOpenChange={home.toggleMenu} placement='bottom' showArrow>
-			<Tooltip content='Menu' placement='bottom'>
+			<Tooltip content='Menu' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
 						<IconButton color='secondary' icon={Icons.Menu} />

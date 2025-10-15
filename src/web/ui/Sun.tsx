@@ -18,10 +18,10 @@ export const Sun = memo(({ source, onSourceChange }: SunProps) => {
 	}
 
 	return (
-		<span className='relative'>
+		<span className='relative min-w-20'>
 			<SolarImageSourceDropdown className='absolute left-1 right-1 top-1' onValueChange={onSourceChange} value={source} />
 			<img className='pt-8 select-none max-w-54 w-full h-auto' draggable={false} onError={handleOnError} src={`${API_URL}/atlas/sun/image?source=${source}`} />
-			<PoweredBy className='absolute bottom-[-4px]' href='https://sdo.gsfc.nasa.gov/data/' label='NASA/SDO' />
+			<PoweredBy className='absolute' href='https://sdo.gsfc.nasa.gov/data/' label='NASA/SDO' />
 		</span>
 	)
 })

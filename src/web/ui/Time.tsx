@@ -50,7 +50,7 @@ interface NowButtonProps extends Omit<ButtonProps, 'isIconOnly' | 'variant'> {}
 
 function NowButton({ color = 'secondary', size = 'sm', ...props }: NowButtonProps) {
 	return (
-		<Tooltip content='Now' placement='bottom'>
+		<Tooltip content='Now' placement='bottom' showArrow>
 			<Button color={color} isIconOnly size={size} variant='light' {...props}>
 				<Icons.CalendarToday />
 			</Button>

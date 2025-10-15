@@ -77,7 +77,7 @@ export const Camera = memo(() => {
 					<div className='col-span-6 flex flex-row items-center gap-1'>
 						<NumberInput
 							endContent={
-								<Tooltip content='Apply' placement='bottom'>
+								<Tooltip content='Apply' placement='bottom' showArrow>
 									<IconButton color='success' icon={Icons.Check} onPointerUp={() => camera.temperature(targetTemperature)} />
 								</Tooltip>
 							}
@@ -109,7 +109,7 @@ export const Camera = memo(() => {
 						<Checkbox className='flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || !canSubFrame || capturing} isSelected={request.subframe} onValueChange={(value) => camera.update('subframe', value)} size='sm'>
 							Subframe
 						</Checkbox>
-						<Tooltip content='Fullscreen' placement='bottom'>
+						<Tooltip content='Fullscreen' placement='bottom' showArrow>
 							<IconButton color='secondary' icon={Icons.Fullscreen} isDisabled={!connected || !request.subframe || capturing} onPointerUp={camera.fullscreen} variant='flat' />
 						</Tooltip>
 					</div>

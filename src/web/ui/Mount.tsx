@@ -46,17 +46,17 @@ export const Mount = memo(() => {
 							{parking ? 'parking' : parked ? 'parked' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
 						</Chip>
 						<div className='flex flex-row items-center gap-2'>
-							<Tooltip content='Remote Control'>
+							<Tooltip content='Remote Control' showArrow>
 								<Button color='secondary' isDisabled={!connected} isIconOnly onPointerUp={mount.showRemoteControl} size='sm' variant='light'>
 									<Icons.RemoteControl />
 								</Button>
 							</Tooltip>
-							<Tooltip content='Location'>
+							<Tooltip content='Location' showArrow>
 								<Button color='danger' isDisabled={!connected || moving} isIconOnly onPointerUp={mount.showLocation} size='sm' variant='light'>
 									<Icons.MapMarker />
 								</Button>
 							</Tooltip>
-							<Tooltip content='Time'>
+							<Tooltip content='Time' showArrow>
 								<Button color='primary' isDisabled={!connected || moving} isIconOnly onPointerUp={mount.showTime} size='sm' variant='light'>
 									<Icons.Clock />
 								</Button>
@@ -74,12 +74,12 @@ export const Mount = memo(() => {
 						Tracking
 					</Switch>
 					<div className='col-span-3 flex flex-row items-center justify-center gap-2'>
-						<Tooltip content={parked ? 'Unpark' : 'Park'}>
+						<Tooltip content={parked ? 'Unpark' : 'Park'} showArrow>
 							<Button color={parked ? 'success' : 'danger'} isDisabled={!connected || !canPark || moving} isIconOnly onPointerUp={mount.togglePark} variant='flat'>
 								{parked ? <Icons.Play /> : <Icons.Stop />}
 							</Button>
 						</Tooltip>
-						<Tooltip content='Home'>
+						<Tooltip content='Home' showArrow>
 							<Button color='primary' isDisabled={!connected || !canHome || moving || parked} isIconOnly onPointerUp={mount.home} variant='flat'>
 								<Icons.Home />
 							</Button>

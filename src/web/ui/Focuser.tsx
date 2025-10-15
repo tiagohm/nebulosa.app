@@ -37,33 +37,33 @@ export const Focuser = memo(() => {
 				</div>
 				<div className='col-span-9 flex flex-row items-center justify-end gap-2'>
 					<Input className='flex-1' isReadOnly label={`Position (max: ${position.max})`} size='sm' value={position.value.toFixed(0)} />
-					<Tooltip content='Stop' placement='bottom'>
+					<Tooltip content='Stop' placement='bottom' showArrow>
 						<Button color='danger' isDisabled={!canAbort || !moving} isIconOnly onPointerUp={focuser.stop} size='sm' variant='light'>
 							<Icons.Stop />
 						</Button>
 					</Tooltip>
 				</div>
 				<div className='col-span-full flex flex-row items-center justify-between gap-2'>
-					<Tooltip content='Move In' placement='bottom'>
+					<Tooltip content='Move In' placement='bottom' showArrow>
 						<Button color='secondary' isDisabled={!canRelativeMove || moving} isIconOnly onPointerUp={focuser.moveIn} size='sm' variant='light'>
 							<Icons.ArrowLeft />
 						</Button>
 					</Tooltip>
 					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} label='Relative' maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} size='sm' value={relative} />
-					<Tooltip content='Move Out' placement='bottom'>
+					<Tooltip content='Move Out' placement='bottom' showArrow>
 						<Button color='secondary' isDisabled={!canRelativeMove || moving} isIconOnly onPointerUp={focuser.moveOut} size='sm' variant='light'>
 							<Icons.ArrowRight />
 						</Button>
 					</Tooltip>
 				</div>
 				<div className='col-span-full flex flex-row items-center justify-between gap-2'>
-					<Tooltip content='Sync' placement='bottom'>
+					<Tooltip content='Sync' placement='bottom' showArrow>
 						<Button color='primary' isDisabled={!canSync || moving} isIconOnly onPointerUp={focuser.sync} size='sm' variant='light'>
 							<Icons.Sync />
 						</Button>
 					</Tooltip>
 					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} label='Absolute' maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} size='sm' value={absolute} />
-					<Tooltip content='Move To' placement='bottom'>
+					<Tooltip content='Move To' placement='bottom' showArrow>
 						<Button color='success' isDisabled={!canAbsoluteMove || moving} isIconOnly onPointerUp={focuser.moveTo} size='sm' variant='light'>
 							<Icons.Check />
 						</Button>

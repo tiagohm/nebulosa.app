@@ -76,7 +76,7 @@ const Property = memo(({ property, onSend }: PropertyProps) => {
 					</div>
 				</div>
 				{!isReadonly && property.type !== 'SWITCH' && (
-					<Tooltip content='Send' placement='left'>
+					<Tooltip content='Send' placement='left' showArrow>
 						<Button color='primary' isIconOnly onPointerUp={handlePointerUp} variant='light'>
 							<Icons.Send />
 						</Button>

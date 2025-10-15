@@ -13,7 +13,7 @@ export const WakeLockScreenButton = memo((props: WakeLockScreenButtonProps) => {
 	if (!isWakeLockSupported()) return null
 
 	return (
-		<Tooltip content='Wake Lock' placement='bottom'>
+		<Tooltip content='Wake Lock' placement='bottom' showArrow>
 			<IconButton {...props} color={active ? 'success' : 'primary'} icon={active ? Icons.Monitor : Icons.MonitorLock} onPointerUp={active ? release : request} />
 		</Tooltip>
 	)

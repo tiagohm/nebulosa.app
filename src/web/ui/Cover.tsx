@@ -34,7 +34,7 @@ export const Cover = memo(() => {
 					</Chip>
 				</div>
 				<div className='col-span-full flex flex-row items-center justify-center'>
-					<Tooltip content={parked ? 'Open' : 'Close'} placement='bottom'>
+					<Tooltip content={parked ? 'Open' : 'Close'} placement='bottom' showArrow>
 						<Button color={parked ? 'success' : 'danger'} isDisabled={!connected || !canPark || parking} isIconOnly onPointerUp={parked ? cover.unpark : cover.park} size='lg' variant='flat'>
 							{parked ? <Icons.Lock /> : <Icons.LockOpen />}
 						</Button>

@@ -1,11 +1,10 @@
 import { molecule, onMount } from 'bunshi'
-import { deg, formatDEC, formatRA } from 'nebulosa/src/angle'
-import { meter } from 'nebulosa/src/distance'
+import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { Temporal } from 'nebulosa/src/temporal'
 import type React from 'react'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
-import { type BodyPosition, type CloseApproach, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SATELLITE, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type FindCloseApproaches, type Framing, type GeographicCoordinate, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from 'src/shared/types'
+import { type BodyPosition, type CloseApproach, DEFAULT_BODY_POSITION, DEFAULT_GEOGRAPHIC_COORDINATE, DEFAULT_POSITION_OF_BODY, DEFAULT_SATELLITE, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type FindCloseApproaches, type Framing, type GeographicCoordinate, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from 'src/shared/types'
 import { proxy, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -25,6 +24,9 @@ export interface SkyAtlasState {
 	readonly calendar: {
 		show: boolean
 		manual: boolean
+	}
+	readonly location: {
+		show: boolean
 	}
 }
 
@@ -692,14 +694,10 @@ export const SkyAtlasMolecule = molecule((m) => {
 			tab: 'sun',
 			twilight: undefined,
 			request: {
-				location: {
-					longitude: deg(-45),
-					latitude: deg(-22),
-					elevation: meter(890),
-				},
+				location: storage.get('atlas.location', () => structuredClone(DEFAULT_GEOGRAPHIC_COORDINATE)),
 				time: {
 					utc: Date.now(),
-					offset: -180,
+					offset: storage.get('atlas.time.offset', () => 0),
 				},
 			},
 			sun: sun.state,
@@ -712,6 +710,9 @@ export const SkyAtlasMolecule = molecule((m) => {
 				show: false,
 				manual: false,
 			},
+			location: {
+				show: false,
+			},
 		})
 
 	skyAtlasState = state
@@ -719,7 +720,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 	let twilightUpdate = true
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(2)
+		const unsubscribers = new Array<VoidFunction>(4)
 
 		unsubscribers[0] = subscribeKey(state, 'show', (show) => {
 			if (!show) return
@@ -729,6 +730,14 @@ export const SkyAtlasMolecule = molecule((m) => {
 
 		unsubscribers[1] = subscribeKey(state, 'tab', () => {
 			void tick()
+		})
+
+		unsubscribers[2] = subscribe(state.request.location, () => {
+			storage.set('atlas.location', state.request.location)
+		})
+
+		unsubscribers[3] = subscribeKey(state.request.time, 'offset', (offset) => {
+			storage.set('atlas.time.offset', offset)
 		})
 
 		void twilight()
@@ -741,9 +750,15 @@ export const SkyAtlasMolecule = molecule((m) => {
 		}
 	})
 
-	function updateTime(utc: number, manual: boolean = true) {
+	function updateTime(utc: number, offset: number, manual: boolean = true) {
+		state.request.time.offset = offset
 		state.calendar.manual = manual
 		void tick(utc)
+	}
+
+	function updateLocation(location: GeographicCoordinate) {
+		Object.assign(state.request.location, location)
+		void tick()
 	}
 
 	async function tick(utc?: Temporal) {
@@ -754,7 +769,6 @@ export const SkyAtlasMolecule = molecule((m) => {
 		if (utc === undefined) utc = state.calendar.manual ? time.utc : Date.now()
 
 		time.utc = utc
-		time.offset = -180 // TODO
 
 		await twilight()
 
@@ -795,6 +809,14 @@ export const SkyAtlasMolecule = molecule((m) => {
 		bus.emit('framing:load', request)
 	}
 
+	function showLocation() {
+		state.location.show = true
+	}
+
+	function hideLocation() {
+		state.location.show = false
+	}
+
 	function show() {
 		bus.emit('homeMenu:toggle', false)
 		state.show = true
@@ -804,7 +826,7 @@ export const SkyAtlasMolecule = molecule((m) => {
 		state.show = false
 	}
 
-	return { state, updateTime, syncTo, goTo, frame, show, hide }
+	return { state, updateTime, updateLocation, syncTo, goTo, frame, showLocation, hideLocation, show, hide }
 })
 
 function isLocationChanged(a: GeographicCoordinate, b: GeographicCoordinate) {

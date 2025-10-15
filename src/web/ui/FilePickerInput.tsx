@@ -32,7 +32,7 @@ export const FilePickerInput = memo(({ filter, mode, id, value, onValueChange, i
 	}
 
 	const StartContent = (
-		<Tooltip content='Browse' placement='bottom'>
+		<Tooltip content='Browse' placement='bottom' showArrow>
 			<Button isIconOnly size='sm' variant='light'>
 				<Icons.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} size={12} />
 			</Button>

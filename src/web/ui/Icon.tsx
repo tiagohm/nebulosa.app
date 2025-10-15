@@ -750,10 +750,18 @@ export namespace Icons {
 		)
 	}
 
-	export const CalendarRefresh = ({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
+	export const TimerPause = ({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
 		return (
 			<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' {...props}>
-				<path d='M19 3H18V1H16V3H8V1H6V3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H14C13.4 20.5 12.9 19.8 12.5 19H5V8H19V10.6C19.7 10.7 20.4 10.9 21 11.3V5C21 3.9 20.1 3 19 3M18 12.5C19.1 12.5 20.1 12.9 20.8 13.7L22 12.5V16.5H18L19.8 14.7C19.3 14.3 18.7 14 18 14C16.6 14 15.5 15.1 15.5 16.5S16.6 19 18 19C18.8 19 19.5 18.6 20 18H21.7C21.1 19.5 19.7 20.5 18 20.5C15.8 20.5 14 18.7 14 16.5S15.8 12.5 18 12.5Z' />
+				<path d='M16.5 16.5H18.38V21.5H16.5V16.5M19.63 16.5V21.5H21.5V16.5H19.63M15 1H9V3H15V1M21 13.35C20.36 13.13 19.7 13 19 13C15.69 13 13 15.69 13 19C13 20.03 13.26 21 13.71 21.83C13.16 21.94 12.59 22 12 22C7.03 22 3 17.97 3 13S7.03 4 12 4C14.12 4 16.07 4.74 17.62 6L19.04 4.56C19.55 5 20 5.46 20.45 5.97L19.03 7.39C20.26 8.93 21 10.88 21 13C21 13.12 21 13.23 21 13.35M13 7H11V14H13V7Z' />
+			</svg>
+		)
+	}
+
+	export const TimerPlay = ({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
+		return (
+			<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' {...props}>
+				<path d='M15 3H9V1H15V3M13 19C13 20.03 13.26 21 13.71 21.83C13.16 21.94 12.59 22 12 22C7.03 22 3 17.97 3 13S7.03 4 12 4C14.12 4 16.07 4.74 17.62 6L19.04 4.56C19.55 5 20 5.46 20.45 5.97L19.03 7.39C20.26 8.93 21 10.88 21 13C21 13.12 21 13.23 21 13.35C20.36 13.13 19.7 13 19 13C15.69 13 13 15.69 13 19M13 7H11V14H13V7M17 16V22L22 19L17 16Z' />
 			</svg>
 		)
 	}

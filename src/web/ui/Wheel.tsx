@@ -80,7 +80,7 @@ export function SlotPopover({ name, onNameChange, ...props }: SlotPopoverProps) 
 					<p className='col-span-full font-bold'>SLOT OPTIONS: {name}</p>
 					<Input className='col-span-10' label='Name' onValueChange={setEditName} size='sm' value={editName} />
 					<div className='col-span-2 flex flex-row justify-center items-center'>
-						<Tooltip content='Apply' placement='bottom'>
+						<Tooltip content='Apply' placement='bottom' showArrow>
 							<IconButton color='success' icon={Icons.Check} isDisabled={!editName?.length} onPointerUp={() => onNameChange(editName)} />
 						</Tooltip>
 					</div>

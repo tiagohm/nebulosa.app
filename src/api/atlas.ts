@@ -7,7 +7,7 @@ import type { CsvRow } from 'nebulosa/src/csv'
 import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { precessFk5FromJ2000 } from 'nebulosa/src/fk5'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
-import { localSiderealTime } from 'nebulosa/src/location'
+import { type GeographicPosition, localSiderealTime } from 'nebulosa/src/location'
 import { nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/moon'
 import { closeApproaches, search } from 'nebulosa/src/sbd'
 import { observeStar } from 'nebulosa/src/star'
@@ -34,7 +34,7 @@ const SOLAR_IMAGE_CONTRAST = 0.8125 // (128 - 24) / 128
 const SATELLITE_TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?FORMAT=tle&GROUP='
 
 export class AtlasManager {
-	private readonly ephemeris: Record<string, Map<number, BodyPosition>> = {}
+	private readonly ephemeris: Record<string, Map<number, BodyPosition>> & { location?: GeographicPosition } = {}
 	private satellites: Satellite[] = []
 
 	constructor(
@@ -485,24 +485,25 @@ export class AtlasManager {
 
 	async computeFromHorizonsPositionAt(input: string | Pick<Satellite, 'id' | 'tle'>, req: PositionOfBody) {
 		const key = Math.trunc(temporalSet(req.time.utc, 0, 's') / 1000)
-
 		const id = typeof input === 'string' ? input : input.id.toFixed(0)
+		const location = this.cache.geographicCoordinate(req.location)
 
 		let position = this.ephemeris[id]?.get(key)
 
-		if (!position) {
+		if (!position || location !== this.ephemeris.location) {
 			const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 			const code = typeof input === 'string' ? input : input.tle
 			const { longitude, latitude, elevation } = req.location
+			console.info(`fetching ephemeris for ${code} at time [${startTime} - ${endTime}] and location [${latitude}, ${longitude}, ${elevation}]`)
 			const horizons = await observer(code, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1 })
 			const positions = makeBodyPositionFromHorizons(horizons!)
 			const map = this.ephemeris[id] ?? new Map()
 			positions.forEach((e) => map.set(e[0], e[1]))
 			this.ephemeris[id] = map
+			this.ephemeris.location = location
 			position = map.get(key)!
 		}
 
-		const location = this.cache.geographicCoordinate(req.location)
 		const time = this.cache.time(req.time.utc, location)
 		const lst = localSiderealTime(time, location, true)
 

@@ -1316,16 +1316,20 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	filter: DEFAULT_IMAGE_FILTER,
 }
 
+export const DEFAULT_GEOGRAPHIC_COORDINATE: GeographicCoordinate = {
+	latitude: 0,
+	longitude: 0,
+	elevation: 0,
+}
+
+export const DEFAULT_TIME: UTCTime = {
+	utc: 0,
+	offset: 0,
+}
+
 export const DEFAULT_POSITION_OF_BODY: PositionOfBody = {
-	location: {
-		latitude: 0,
-		longitude: 0,
-		elevation: 0,
-	},
-	time: {
-		utc: 0,
-		offset: 0,
-	},
+	location: DEFAULT_GEOGRAPHIC_COORDINATE,
+	time: DEFAULT_TIME,
 }
 
 export const DEFAULT_SKY_OBJECT_SEARCH: SearchSkyObject = {

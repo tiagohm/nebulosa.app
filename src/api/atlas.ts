@@ -7,6 +7,8 @@ import type { CsvRow } from 'nebulosa/src/csv'
 import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { precessFk5FromJ2000 } from 'nebulosa/src/fk5'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
+import { iersb } from 'nebulosa/src/iers'
+import { readableStreamSource } from 'nebulosa/src/io'
 import { type GeographicPosition, localSiderealTime } from 'nebulosa/src/location'
 import { nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/moon'
 import { closeApproaches, search } from 'nebulosa/src/sbd'
@@ -32,6 +34,8 @@ const NIGHT_ALTITUDE = -18 * DEG2RAD
 const SOLAR_IMAGE_CONTRAST = 0.8125 // (128 - 24) / 128
 
 const SATELLITE_TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?FORMAT=tle&GROUP='
+
+const IERSB_URL = 'https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now'
 
 export class AtlasManager {
 	private readonly ephemeris: Record<string, Map<number, BodyPosition>> & { location?: GeographicPosition } = {}
@@ -544,6 +548,33 @@ export class AtlasManager {
 		const endTime = temporalAdd(startTime, 1, 'd')
 
 		return [startTime, endTime]
+	}
+
+	async refreshEarthOrientationData() {
+		const path = join(Bun.env.appDir, 'eopc04.txt')
+		const file = Bun.file(path)
+
+		if (!(await file.exists()) || Date.now() - (await file.stat()).mtimeMs > DAYSEC * 1000) {
+			try {
+				console.info('downloading IERS B...')
+				const signal = AbortSignal.timeout(5000)
+				const response = await fetch(IERSB_URL, { signal })
+
+				if (response.ok) {
+					const data = await response.blob()
+					iersb.load(readableStreamSource(data.stream()))
+					await Bun.write(path, data)
+					console.info('IERS B loaded')
+				} else {
+					console.error('failed to download IERS B')
+				}
+			} catch (e) {
+				console.error('failed to download IERS B')
+			}
+		} else {
+			iersb.load(readableStreamSource(file.stream()))
+			console.info('IERS B loaded from cache')
+		}
 	}
 }
 

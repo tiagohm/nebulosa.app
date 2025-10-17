@@ -103,6 +103,7 @@ const darvManager = new DarvManager(wsm, cameraManager, mountManager, indiDevice
 
 void atlasManager.refreshImageOfSun()
 void atlasManager.refreshSatellites()
+void atlasManager.refreshEarthOrientationData()
 
 // App
 
@@ -138,6 +139,16 @@ const app = new Elysia({
 			pattern: '0 */15 * * * *',
 			run: () => {
 				void atlasManager.refreshImageOfSun()
+			},
+		}),
+	)
+	.use(
+		cron({
+			name: 'every-day',
+			pattern: '0 0 0 * * *',
+			run: () => {
+				void atlasManager.refreshSatellites()
+				void atlasManager.refreshEarthOrientationData()
 			},
 		}),
 	)

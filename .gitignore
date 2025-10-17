@@ -7,3 +7,4 @@ dist
 *.tsbuildinfo
 *.exe
 *.pem
+*.out

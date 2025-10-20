@@ -23,7 +23,7 @@
 		"@elysiajs/cors": "1.4.0",
 		"@elysiajs/cron": "1.4.1",
 		"@heroui/react": "2.8.5",
-		"@tailwindcss/cli": "4.1.14",
+		"@tailwindcss/cli": "4.1.15",
 		"@uidotdev/usehooks": "2.4.1",
 		"@use-gesture/react": "10.3.1",
 		"bunshi": "2.1.5",
@@ -35,7 +35,7 @@
 		"react-dom": "19.2.0",
 		"react-leaflet": "5.0.0",
 		"recharts": "3.3.0",
-		"tailwindcss": "4.1.14",
+		"tailwindcss": "4.1.15",
 		"utility-types": "3.11.0",
 		"valtio": "2.1.8"
 	},
@@ -50,7 +50,6 @@
 	"trustedDependencies": [
 		"@biomejs/biome",
 		"@heroui/shared-utils",
-		"@tailwindcss/oxide",
 		"esbuild",
 		"nebulosa",
 		"sharp"

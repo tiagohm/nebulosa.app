@@ -137,14 +137,15 @@ const SolarEclipses = memo(() => {
 const Seasons = memo(() => {
 	const sun = useMolecule(SunMolecule)
 	const { summer, spring, autumn, winter } = useSnapshot(sun.state.seasons)
-	const isSouthern = sun.state.request.location.latitude < 0
+	const { latitude } = useSnapshot(sun.state.request.location)
+	const isSouthern = latitude < 0
 
 	return (
 		<div className='flex flex-col gap-0'>
-			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Leaf} label='AUTUMN/FALL' time={spring} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Flower} label='SPRING' time={autumn} />}
-			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.SnowFlake} label='WINTER' time={summer} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Sun} label='SUMMER' time={winter} />}
-			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Flower} label='SPRING' time={autumn} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Leaf} label='AUTUMN/FALL' time={spring} />}
-			{isSouthern ? <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.Sun} label='SUMMER' time={winter} /> : <AstronomicalEvent format='MM-DD HH:mm' icon={Icons.SnowFlake} label='WINTER' time={summer} />}
+			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.Leaf : Icons.Flower} label={isSouthern ? 'AUTUMN/FALL' : 'SPRING'} time={spring} />
+			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.SnowFlake : Icons.Sun} label={isSouthern ? 'WINTER' : 'SUMMER'} time={summer} />
+			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.Flower : Icons.Leaf} label={isSouthern ? 'SPRING' : 'AUTUMN/FALL'} time={autumn} />
+			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.Sun : Icons.SnowFlake} label={isSouthern ? 'SUMMER' : 'WINTER'} time={winter} />
 		</div>
 	)
 })
@@ -491,7 +492,7 @@ const TimeBar = memo(() => {
 	}, [])
 
 	const handleOnOffsetChange = useCallback((value: number) => {
-		atlas.updateTime(utc, value)
+		atlas.updateTime(utc, value, manual)
 	}, [])
 
 	const handleOnOpenChange = useCallback((isOpen: boolean) => {

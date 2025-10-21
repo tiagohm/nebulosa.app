@@ -500,7 +500,7 @@ const TimeBar = memo(() => {
 	}, [])
 
 	return (
-		<div className='mt-1 inline-flex flex-row items-center gap-1'>
+		<div className='inline-flex flex-row items-center gap-1'>
 			<CalendarPopover date={local} isOpen={show} offset={offset} onDateChange={handleOnDateChange} onOffsetChange={handleOnOffsetChange} onOpenChange={handleOnOpenChange} />
 			<Tooltip content={manual ? 'Play' : 'Pause'} placement='bottom' showArrow>
 				{manual ? <IconButton color='warning' icon={Icons.TimerPlay} onPointerUp={() => atlas.updateTime(Date.now(), offset, false)} variant='flat' /> : <IconButton color='success' icon={Icons.TimerPause} onPointerUp={() => (atlas.state.calendar.manual = true)} variant='flat' />}

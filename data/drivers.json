@@ -144,6 +144,10 @@
     "driver": "indi_beefocus"
   },
   {
+    "name": "BNO08X IMU",
+    "driver": "indi_bno08x_imu"
+  },
+  {
     "name": "Bresser",
     "driver": "indi_bressercam_ccd"
   },
@@ -594,6 +598,10 @@
   {
     "name": "OnFocus",
     "driver": "indi_onfocus_focus"
+  },
+  {
+    "name": "OpenOGMA",
+    "driver": "indi_openogma"
   },
   {
     "name": "OpenWeatherMap",

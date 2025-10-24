@@ -30,6 +30,11 @@
 			"quoteStyle": "single"
 		}
 	},
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	},
 	"json": {
 		"formatter": {
 			"enabled": true,
@@ -58,7 +63,8 @@
 				"useAsConstAssertion": "error",
 				"useDefaultParameterLast": "error",
 				"useSingleVarDeclarator": "error",
-				"noUnusedTemplateLiteral": "error"
+				"noUnusedTemplateLiteral": "error",
+				"useReactFunctionComponents": "error"
 			},
 			"correctness": {
 				"noPrecisionLoss": "off",
@@ -73,7 +79,8 @@
 				"noEmptyInterface": "off",
 				"noConsole": "off",
 				"noArrayIndexKey": "off",
-				"useIterableCallbackReturn": "off"
+				"useIterableCallbackReturn": "off",
+				"noNonNullAssertedOptionalChain": "error"
 			},
 			"complexity": {
 				"noForEach": "off",

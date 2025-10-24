@@ -36,7 +36,7 @@ export const ConnectionMolecule = molecule(() => {
 	})
 
 	// Connect to an existing connection
-	Api.Connections.list().then((connections) => {
+	void Api.Connections.list().then((connections) => {
 		if (!connections) return
 
 		for (const connection of connections) {
@@ -46,15 +46,15 @@ export const ConnectionMolecule = molecule(() => {
 				state.selected = state.connections[index]
 				state.connected = connection
 
-				Api.Cameras.list().then((cameras) => cameras?.forEach((camera) => bus.emit('camera:add', camera)))
-				Api.Mounts.list().then((mounts) => mounts?.forEach((mount) => bus.emit('mount:add', mount)))
-				Api.Focusers.list().then((focusers) => focusers?.forEach((focuser) => bus.emit('focuser:add', focuser)))
-				Api.Wheels.list().then((wheels) => wheels?.forEach((wheel) => bus.emit('wheel:add', wheel)))
-				Api.Thermometers.list().then((thermometers) => thermometers?.forEach((thermometer) => bus.emit('thermometer:add', thermometer)))
-				Api.GuideOutputs.list().then((guideOutputs) => guideOutputs?.forEach((guideOutput) => bus.emit('guideOutput:add', guideOutput)))
-				Api.Covers.list().then((covers) => covers?.forEach((cover) => bus.emit('cover:add', cover)))
-				Api.FlatPanels.list().then((flatPanels) => flatPanels?.forEach((flatPanel) => bus.emit('flatPanel:add', flatPanel)))
-				Api.DewHeaters.list().then((dewHeaters) => dewHeaters?.forEach((dewHeater) => bus.emit('dewHeater:add', dewHeater)))
+				void Api.Cameras.list().then((cameras) => cameras?.forEach((camera) => bus.emit('camera:add', camera)))
+				void Api.Mounts.list().then((mounts) => mounts?.forEach((mount) => bus.emit('mount:add', mount)))
+				void Api.Focusers.list().then((focusers) => focusers?.forEach((focuser) => bus.emit('focuser:add', focuser)))
+				void Api.Wheels.list().then((wheels) => wheels?.forEach((wheel) => bus.emit('wheel:add', wheel)))
+				void Api.Thermometers.list().then((thermometers) => thermometers?.forEach((thermometer) => bus.emit('thermometer:add', thermometer)))
+				void Api.GuideOutputs.list().then((guideOutputs) => guideOutputs?.forEach((guideOutput) => bus.emit('guideOutput:add', guideOutput)))
+				void Api.Covers.list().then((covers) => covers?.forEach((cover) => bus.emit('cover:add', cover)))
+				void Api.FlatPanels.list().then((flatPanels) => flatPanels?.forEach((flatPanel) => bus.emit('flatPanel:add', flatPanel)))
+				void Api.DewHeaters.list().then((dewHeaters) => dewHeaters?.forEach((dewHeater) => bus.emit('dewHeater:add', dewHeater)))
 
 				break
 			}

@@ -14,7 +14,7 @@ export function HipsSurveySelect({ isDisabled, onValueChange, value, ...props }:
 
 	// Fetch the HipsSurvey items and update the state
 	useEffect(() => {
-		Api.Framing.hipsSurveys().then((hipsSurveys) => setItems(hipsSurveys ?? []))
+		void Api.Framing.hipsSurveys().then((hipsSurveys) => setItems(hipsSurveys ?? []))
 	}, [])
 
 	return (

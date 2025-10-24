@@ -37,7 +37,7 @@ export const IndiServerMolecule = molecule(() => {
 		}
 	})
 
-	Api.Indi.Server.status().then((status) => {
+	void Api.Indi.Server.status().then((status) => {
 		status && Object.assign(state, status)
 	})
 

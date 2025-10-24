@@ -14,7 +14,7 @@ export const IndiDriverListbox = memo(({ showAll, selected, onSelectedChange }: 
 	const [drivers, setDrivers] = useState<string[]>([])
 
 	useEffect(() => {
-		Api.Indi.Server.drivers().then((drivers) => setDrivers(drivers ?? []))
+		void Api.Indi.Server.drivers().then((drivers) => setDrivers(drivers ?? []))
 	}, [])
 
 	return (

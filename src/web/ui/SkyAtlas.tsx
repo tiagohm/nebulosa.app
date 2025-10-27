@@ -13,6 +13,7 @@ import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { formatDistance, formatSkyObjectName, formatSkyObjectType } from '@/shared/util'
+import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
 import { ConstellationSelect } from './ConstellationSelect'
 import { type Icon, Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -180,11 +181,11 @@ const MoonPhases = memo(() => {
 	return (
 		<div className='flex flex-col gap-0'>
 			{phases.map(([phase, time]) =>
-				phase === 0 ? (
+				phase === 'NEW' ? (
 					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonNew} key={phase} label='NEW MOON' time={time} />
-				) : phase === 1 ? (
+				) : phase === 'FIRST_QUARTER' ? (
 					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFirstQuarter} key={phase} label='FIRST QUARTER' time={time} />
-				) : phase === 2 ? (
+				) : phase === 'FULL' ? (
 					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFull} key={phase} label='FULL MOON' time={time} />
 				) : (
 					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonLastQuarter} key={phase} label='LAST QUARTER' time={time} />
@@ -208,41 +209,26 @@ const LunarEclipses = memo(() => {
 })
 
 const PLANETS = [
-	{ name: 'Mercury', type: 'PLANET', code: '199' },
-	{ name: 'Venus', type: 'PLANET', code: '299' },
-	{ name: 'Mars', type: 'PLANET', code: '499' },
-	{ name: 'Jupiter', type: 'PLANET', code: '599' },
-	{ name: 'Saturn', type: 'PLANET', code: '699' },
-	{ name: 'Uranus', type: 'PLANET', code: '799' },
-	{ name: 'Neptune', type: 'PLANET', code: '899' },
-	{ name: 'Pluto', type: 'DWARF_PLANET', code: '999' },
-	{ name: 'Phobos', type: 'MOON_OF_MARS', code: '401' },
-	{ name: 'Deimos', type: 'MOON_OF_MARS', code: '402' },
-	{ name: 'Io', type: 'MOON_OF_JUPITER', code: '501' },
-	{ name: 'Europa', type: 'MOON_OF_JUPITER', code: '402' },
-	{ name: 'Ganymede', type: 'MOON_OF_JUPITER', code: '403' },
-	{ name: 'Callisto', type: 'MOON_OF_JUPITER', code: '504' },
-	{ name: 'Mimas', type: 'MOON_OF_SATURN', code: '601' },
-	{ name: 'Enceladus', type: 'MOON_OF_SATURN', code: '602' },
-	{ name: 'Tethys', type: 'MOON_OF_SATURN', code: '603' },
-	{ name: 'Dione', type: 'MOON_OF_SATURN', code: '604' },
-	{ name: 'Rhea', type: 'MOON_OF_SATURN', code: '605' },
-	{ name: 'Titan', type: 'MOON_OF_SATURN', code: '606' },
-	{ name: 'Hyperion', type: 'MOON_OF_SATURN', code: '607' },
-	{ name: 'Iapetus', type: 'MOON_OF_SATURN', code: '608' },
-	{ name: 'Ariel', type: 'MOON_OF_URANUS', code: '701' },
-	{ name: 'Umbriel', type: 'MOON_OF_URANUS', code: '702' },
-	{ name: 'Titania', type: 'MOON_OF_URANUS', code: '703' },
-	{ name: 'Oberon', type: 'MOON_OF_URANUS', code: '704' },
-	{ name: 'Miranda', type: 'MOON_OF_URANUS', code: '705' },
-	{ name: 'Triton', type: 'MOON_OF_NEPTUNE', code: '801' },
-	{ name: 'Charon', type: 'MOON_OF_PLUTO', code: '901' },
-	{ name: '1 Ceres', type: 'DWARF_PLANET', code: '1;' },
-	{ name: '90377 Sedna', type: 'DWARF_PLANET', code: '90377;' },
-	{ name: '136199 Eris', type: 'DWARF_PLANET', code: '136199;' },
-	{ name: '2 Pallas', type: 'ASTEROID', code: '2;' },
-	{ name: '3 Juno', type: 'ASTEROID', code: '3;' },
-	{ name: '4 Vesta', type: 'ASTEROID', code: '4;' },
+	{ name: 'Mercury', code: '199', type: 'PLANET', solution: 'DE441' },
+	{ name: 'Venus', code: '299', type: 'PLANET', solution: 'DE441' },
+	{ name: 'Mars', code: '499', type: 'PLANET', solution: 'DE441' },
+	{ name: 'Jupiter', code: '599', type: 'PLANET', solution: 'DE441' },
+	{ name: 'Saturn', code: '699', type: 'PLANET', solution: 'DE441' },
+	{ name: 'Uranus', code: '799', type: 'PLANET', solution: 'DE441' },
+	{ name: 'Neptune', code: '899', type: 'PLANET', solution: 'DE441' },
+	{ name: 'Pluto', code: '999', type: 'DWARF_PLANET', solution: 'DE441' },
+	{ name: '1 Ceres (A801 AA)', code: '1;', type: 'DWARF_PLANET', solution: 'JPL#48' },
+	{ name: '90377 Sedna (2003 VB12)', code: '90377;', type: 'DWARF_PLANET', solution: 'JPL#44' },
+	{ name: '136199 Eris (2003 UB313)', code: '136199;', type: 'DWARF_PLANET', solution: 'JPL#96' },
+	{ name: '2 Pallas (A802 FA)', code: '2;', type: 'ASTEROID', solution: 'JPL#69' },
+	{ name: '3 Juno (A804 RA)', code: '3;', type: 'ASTEROID', solution: 'JPL#143' },
+	{ name: '4 Vesta (A807 FA)', code: '4;', type: 'ASTEROID', solution: 'JPL#36' },
+	...planetarySatelliteEphemeris.mars,
+	...planetarySatelliteEphemeris.jupiter,
+	...planetarySatelliteEphemeris.saturn,
+	...planetarySatelliteEphemeris.uranus,
+	...planetarySatelliteEphemeris.neptune,
+	...planetarySatelliteEphemeris.pluto,
 ] as const
 
 const PlanetTab = memo(() => {
@@ -257,7 +243,10 @@ const PlanetTab = memo(() => {
 			<Listbox className='pl-10 relative min-h-[200px] max-h-[240px] col-span-full' classNames={{ base: 'w-full', list: 'max-h-[190px] overflow-scroll' }} items={PLANETS} onAction={(key) => planet.select(key as never)} selectionMode='none'>
 				{(planet) => (
 					<ListboxItem description={planet.type} key={planet.code}>
-						{planet.name}
+						<span className='flex flex-row items-center justify-between'>
+							<span>{planet.name}</span>
+							<span className='text-xs'>{planet.solution}</span>
+						</span>
 					</ListboxItem>
 				)}
 			</Listbox>
@@ -314,7 +303,7 @@ const AsteroidSearchTab = memo(() => {
 				<IconButton color='primary' icon={Icons.Search} isDisabled={loading || !text} onPointerUp={asteroid.search} variant='light' />
 			</div>
 			{list ? (
-				<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-[117px] overflow-scroll' }} items={list} onAction={asteroid.select} selectionMode='single'>
+				<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-36 overflow-scroll' }} items={list} onAction={asteroid.select} selectionMode='single'>
 					{(item) => (
 						<ListboxItem description={item.pdes} key={item.pdes}>
 							{item.name}
@@ -322,7 +311,7 @@ const AsteroidSearchTab = memo(() => {
 					)}
 				</Listbox>
 			) : (
-				<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-[117px] overflow-scroll' }} items={selected?.parameters ?? []} selectionMode='none'>
+				<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-36 overflow-scroll' }} items={selected?.parameters ?? []} selectionMode='none'>
 					{(parameter) => (
 						<ListboxItem description={parameter.description} key={parameter.name}>
 							<span className='flex items-center justify-between'>
@@ -351,7 +340,7 @@ const AsteroidCloseApproachesTab = memo(() => {
 				<NumberInput className='flex-1' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Distance (LD)' maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} size='sm' step={0.1} value={distance} />
 				<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={asteroid.closeApproaches} variant='light' />
 			</div>
-			<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-[117px] overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
+			<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-36 overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
 				{(item) => (
 					<ListboxItem description={`${item.distance.toFixed(3)} LD`} key={item.name}>
 						<span className='flex items-center justify-between'>

@@ -48,7 +48,7 @@ export function StellariumObjectTypeSelect({ label = 'Type', value, onValueChang
 	return (
 		<EnumMultipleSelect
 			{...props}
-			classNames={{ trigger: '!min-h-[48.75px]' }}
+			classNames={{ trigger: 'min-h-[48.75px]!' }}
 			isClearable
 			label={label}
 			onValueChange={(value) => onValueChange(value.map((e) => +e))}

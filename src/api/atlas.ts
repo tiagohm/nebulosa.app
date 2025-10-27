@@ -15,7 +15,7 @@ import { closeApproaches, search } from 'nebulosa/src/sbd'
 import { observeStar } from 'nebulosa/src/star'
 import { nearestSolarEclipse, season } from 'nebulosa/src/sun'
 import { daysInMonth, parseTemporal, type Temporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
-import { Timescale, time, timeUnix, timeYMDHMS, toUnixMillis } from 'nebulosa/src/time'
+import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS } from 'nebulosa/src/time'
 import { join } from 'path'
 import sharp from 'sharp'
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
@@ -81,10 +81,10 @@ export class AtlasManager {
 
 	seasons(req: PositionOfBody): SolarSeasons {
 		const [year] = temporalToDate(req.time.utc)
-		const spring = toUnixMillis(season(year, 'SPRING')) // Autumn in southern hemisphere
-		const summer = toUnixMillis(season(year, 'SUMMER')) // Winter in southern hemisphere
-		const autumn = toUnixMillis(season(year, 'AUTUMN')) // Spring in southern hemisphere
-		const winter = toUnixMillis(season(year, 'WINTER')) // Summer in southern hemisphere
+		const spring = timeToUnixMillis(season(year, 'SPRING')) // Autumn in southern hemisphere
+		const summer = timeToUnixMillis(season(year, 'SUMMER')) // Winter in southern hemisphere
+		const autumn = timeToUnixMillis(season(year, 'AUTUMN')) // Spring in southern hemisphere
+		const winter = timeToUnixMillis(season(year, 'WINTER')) // Summer in southern hemisphere
 		return { spring, summer, autumn, winter }
 	}
 
@@ -177,20 +177,20 @@ export class AtlasManager {
 	moonPhases(req: PositionOfBody) {
 		const date = temporalToDate(req.time.utc)
 		const startTime = timeYMDHMS(date[0], date[1], 1, 0, 0, 0)
-		const endTime = toUnixMillis(startTime) + daysInMonth(date[0], date[1]) * (DAYSEC * 1000)
+		const endTime = timeToUnixMillis(startTime) + daysInMonth(date[0], date[1]) * (DAYSEC * 1000)
 
 		const phases: LunarPhaseTime[] = []
 
-		for (let i = 0; i < 4; i++) {
-			const time = toUnixMillis(nearestLunarPhase(startTime, i, true))
-			phases.push([i, time])
-		}
+		phases.push(['NEW', timeToUnixMillis(nearestLunarPhase(startTime, 'NEW', true))])
+		phases.push(['FIRST_QUARTER', timeToUnixMillis(nearestLunarPhase(startTime, 'FIRST_QUARTER', true))])
+		phases.push(['FULL', timeToUnixMillis(nearestLunarPhase(startTime, 'FULL', true))])
+		phases.push(['LAST_QUARTER', timeToUnixMillis(nearestLunarPhase(startTime, 'LAST_QUARTER', true))])
 
 		phases.sort((a, b) => a[1] - b[1])
 
 		if (phases[3][1] + (MOON_SYNODIC_DAYS / 4) * DAYSEC * 1000 < endTime) {
-			const phase = (phases[3][0] + 1) % 4
-			const time = toUnixMillis(nearestLunarPhase(timeUnix(endTime / 1000), phase, false))
+			const phase = phases[3][0] === 'NEW' ? 'FIRST_QUARTER' : phases[3][0] === 'FIRST_QUARTER' ? 'FULL' : phases[3][0] === 'FULL' ? 'LAST_QUARTER' : 'NEW'
+			const time = timeToUnixMillis(nearestLunarPhase(timeUnix(endTime / 1000), phase, false))
 			phases.push([phase, time])
 		}
 

@@ -420,6 +420,16 @@ export interface AnnotateImage {
 	readonly solution: PlateSolution
 }
 
+export interface ImageCoordinateInterpolation {
+	readonly ma: number[]
+	readonly md: number[]
+	readonly x0: number
+	readonly y0: number
+	readonly x1: number
+	readonly y1: number
+	readonly delta: number
+}
+
 export interface ImageInfo extends Partial<EquatorialCoordinate> {
 	path: string
 	realPath: string

@@ -4,6 +4,7 @@ import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, type Fits, observationDateKeyword, readFits, rightAscensionKeyword } from 'nebulosa/src/fits'
 import { adf, debayer, horizontalFlip, type Image, type ImageFormat, invert, readImageFromFits, scnr, stf, verticalFlip, type WriteImageToFormatOptions, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
 import { bufferSource, fileHandleSink, fileHandleSource } from 'nebulosa/src/io'
+import type { PlateSolution } from 'nebulosa/src/platesolver'
 import { spaceMotion, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
 import { Wcs } from 'nebulosa/src/wcs'
@@ -12,7 +13,7 @@ import type { JpegOptions, PngOptions, WebpOptions } from 'sharp'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
-import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageInfo, ImageTransformation, OpenImage, SaveImage } from '../shared/types'
+import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageCoordinateInterpolation, ImageInfo, ImageTransformation, OpenImage, SaveImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER } from '../shared/types'
 import { decodePath } from './camera'
 import type { NotificationManager } from './notification'
@@ -218,7 +219,28 @@ export class ImageManager {
 		return res
 	}
 
-	coordinateInterpolation() {}
+	coordinateInterpolation(solution: PlateSolution): ImageCoordinateInterpolation {
+		using wcs = new Wcs(solution)
+		const { widthInPixels, heightInPixels } = solution
+
+		const delta = 24
+		const width = widthInPixels + (widthInPixels % delta === 0 ? 0 : delta - (widthInPixels % delta))
+		const height = heightInPixels + (heightInPixels % delta === 0 ? 0 : delta - (heightInPixels % delta))
+
+		const md = new Array<number>((width / 24 + 1) * (height / 24 + 1))
+		const ma = new Array<number>(md.length)
+		var n = 0
+
+		for (let y = 0; y <= height; y += delta) {
+			for (let x = 0; x <= width; x += delta, n++) {
+				const [rightAscension, declination] = wcs.pixToSky(x, y)!
+				ma[n] = rightAscension
+				md[n] = declination
+			}
+		}
+
+		return { ma, md, x0: 0, y0: 0, x1: width, y1: height, delta }
+	}
 
 	statistics() {}
 
@@ -243,7 +265,7 @@ export function image(image: ImageManager) {
 		.post('/close', ({ body }) => image.close(body as never))
 		.post('/save', ({ body }) => image.save(body as never))
 		.post('/annotate', ({ body }) => image.annotate(body as never))
-		.post('/coordinateInterpolation', () => image.coordinateInterpolation())
+		.post('/coordinateinterpolation', ({ body }) => image.coordinateInterpolation(body as never))
 		.post('/statistics', () => image.statistics())
 		.get('/fovCameras', () => fovCameras)
 		.get('/fovTelescopes', () => fovTelescopes)

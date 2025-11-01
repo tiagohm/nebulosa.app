@@ -5,7 +5,7 @@ import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
 import type { AnnotatedSkyObject, AnnotateImage, BodyPosition, Camera, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, Confirm, Connect, ConnectionStatus, Cover, CreateDirectory, DarvStart, DarvStop, Device, DeviceProperties, DeviceProperty, DewHeater, FileSystem, FindCloseApproaches, FindNextLunarEclipse, FindNextSolarEclipse, FlatPanel, Focuser, Framing, GeographicCoordinate, GuideOutput, GuidePulse, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LunarPhaseTime, MinorPlanet, Mount, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, NextLunarEclipse, NextSolarEclipse, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SlewRate, SolarSeasons, StarDetection, Thermometer, TppaStart, TppaStop, TrackMode, Twilight, Wheel } from 'src/shared/types'
-import { type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
+import { type ImageCoordinateInterpolation, type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
@@ -80,6 +80,10 @@ export namespace Api {
 
 		export function annotate(req: AnnotateImage) {
 			return json<AnnotatedSkyObject[]>('/image/annotate', 'post', req)
+		}
+
+		export function coordinateInterpolation(req: PlateSolution) {
+			return json<ImageCoordinateInterpolation>('/image/coordinateinterpolation', 'post', req)
 		}
 	}
 

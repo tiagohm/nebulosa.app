@@ -5,10 +5,12 @@ import type { ImageFormat } from 'nebulosa/src/image'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import bus, { unsubscribe } from 'src/shared/bus'
-import { type AnnotatedSkyObject, type CameraCaptureEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
+import { type AnnotatedSkyObject, type CameraCaptureEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type EquatorialCoordinate, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
 import type { PickByValue } from 'utility-types'
 import { proxy, ref, subscribe } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
+import { CoordinateInterpolator } from '@/shared/coordinate-interpolation'
 import { storage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
 import { ImageWorkspaceMolecule } from './workspace'
@@ -16,11 +18,18 @@ import { ImageWorkspaceMolecule } from './workspace'
 export interface CachedImage {
 	url: string
 	state: ImageState
+	mouseCoordinateOnMoveHandler?: (event: MouseEvent) => void
+	mouseCoordinateOnPointerUpHandler?: (event: MouseEvent) => void
 }
 
 export interface ImageState {
 	readonly transformation: ImageTransformation
 	crosshair: boolean
+	readonly mouseCoordinate: {
+		visible: boolean
+		interpolator?: CoordinateInterpolator
+		coordinate: EquatorialCoordinate
+	}
 	rotation: number
 	info?: ImageInfo
 	scale: number
@@ -98,6 +107,13 @@ export const DEFAULT_IMAGE_SETTINGS: ImageState['settings'] = {
 const DEFAULT_IMAGE_STATE: ImageState = {
 	transformation: DEFAULT_IMAGE_TRANSFORMATION,
 	crosshair: false,
+	mouseCoordinate: {
+		visible: false,
+		coordinate: {
+			rightAscension: 0,
+			declination: 0,
+		},
+	},
 	rotation: 0,
 	scale: 1,
 	starDetection: {
@@ -192,6 +208,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			transformation: transformationState,
 			crosshair: storage.get('image.crosshair', false),
 			rotation: storage.get('image.rotation', 0),
+			mouseCoordinate: structuredClone(DEFAULT_IMAGE_STATE.mouseCoordinate),
 			scale: 1,
 			info: undefined,
 			starDetection: {
@@ -219,7 +236,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 	let loading = false
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction | undefined>(6)
+		const unsubscribers = new Array<VoidFunction | undefined>(7)
 
 		if (camera) {
 			unsubscribers[0] = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
@@ -249,10 +266,52 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			storage.set(`image.save.${storageKey}`, state.save)
 		})
 
+		unsubscribers[6] = subscribeKey(state.mouseCoordinate, 'visible', async (enabled) => {
+			if (enabled && !state.mouseCoordinate.interpolator && state.solver.solution) {
+				const coordinateInterpolation = await Api.Image.coordinateInterpolation(state.solver.solution)
+
+				if (coordinateInterpolation) {
+					const { ma, md, x0, y0, x1, y1, delta } = coordinateInterpolation
+					state.mouseCoordinate.interpolator = ref(new CoordinateInterpolator(ma, md, x0, y0, x1, y1, delta))
+				} else {
+					return
+				}
+			}
+
+			const cached = imageCache.get(key)
+			const parent = target?.parentElement
+
+			if (cached && parent) {
+				cached.mouseCoordinateOnPointerUpHandler && parent.removeEventListener('pointerup', cached.mouseCoordinateOnPointerUpHandler)
+				cached.mouseCoordinateOnMoveHandler && parent.removeEventListener('mousemove', cached.mouseCoordinateOnMoveHandler)
+
+				cached.mouseCoordinateOnPointerUpHandler = undefined
+				cached.mouseCoordinateOnMoveHandler = undefined
+
+				if (enabled && state.mouseCoordinate.interpolator) {
+					cached.mouseCoordinateOnPointerUpHandler = (event) => showInterpolatedCoordinate(event.offsetX, event.offsetY)
+					cached.mouseCoordinateOnMoveHandler = (event) => showInterpolatedCoordinate(event.offsetX, event.offsetY)
+
+					parent.addEventListener('pointerup', cached.mouseCoordinateOnPointerUpHandler)
+					parent.addEventListener('mousemove', cached.mouseCoordinateOnMoveHandler)
+				}
+			}
+		})
+
 		return () => {
 			unsubscribe(unsubscribers)
 		}
 	})
+
+	function showInterpolatedCoordinate(x: number, y: number) {
+		const { interpolator } = state.mouseCoordinate
+
+		if (interpolator) {
+			const [rightAscension, declination] = interpolator.interpolate(x, y)
+			state.mouseCoordinate.coordinate.rightAscension = rightAscension
+			state.mouseCoordinate.coordinate.declination = declination
+		}
+	}
 
 	function resetStretch() {
 		state.transformation.stretch.auto = false
@@ -293,6 +352,10 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 	function toggleCrosshair() {
 		state.crosshair = !state.crosshair
+	}
+
+	function toggleMouseCoordinate() {
+		state.mouseCoordinate.visible = !state.mouseCoordinate.visible
 	}
 
 	function show(key: keyof PickByValue<typeof state, { show: boolean }>) {
@@ -460,7 +523,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		workspace.state.selected = undefined
 	}
 
-	return { state, scope, resetStretch, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, attach, load, open, remove, detach, select, show, hide, apply }
+	return { state, scope, resetStretch, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, toggleMouseCoordinate, attach, load, open, remove, detach, select, show, hide, apply }
 })
 
 function adjustZIndexAfterBeRemoved() {

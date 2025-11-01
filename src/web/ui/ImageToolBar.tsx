@@ -22,6 +22,7 @@ export const ImageToolBar = memo(() => {
 	const { solution } = useSnapshot(viewer.state.solver)
 	const { stars: detectedStars, visible: isDetectedStarsVisible } = useSnapshot(viewer.state.starDetection)
 	const { stars: annotatedStars, visible: isAnnotatedStarsVisible } = useSnapshot(viewer.state.annotation)
+	const { visible: isMouseCoordinateVisible } = useSnapshot(viewer.state.mouseCoordinate)
 
 	const save = useMolecule(ImageSaveMolecule)
 	const solver = useMolecule(ImageSolverMolecule)
@@ -34,7 +35,7 @@ export const ImageToolBar = memo(() => {
 	const settings = useMolecule(ImageSettingsMolecule)
 
 	return (
-		<div className='w-full fixed bottom-0 mb-1 p-1 z-[99999]'>
+		<div className='w-full fixed bottom-0 mb-1 p-1 z-99999'>
 			<div className='flex flex-row items-center justify-start gap-2 px-2 py-1.5 mx-auto w-fit rounded-xl bg-black max-w-full overflow-scroll no-scrollbar'>
 				<Tooltip content='Save' placement='top' showArrow>
 					<IconButton color='secondary' icon={Icons.Save} onPointerUp={save.show} variant='flat' />
@@ -127,7 +128,7 @@ export const ImageToolBar = memo(() => {
 					<IconButton color='secondary' icon={Icons.Text} onPointerUp={() => viewer.show('fitsHeader')} variant='flat' />
 				</Tooltip>
 				<Tooltip content='Mouse Coordinate' placement='top' showArrow>
-					<IconButton color='secondary' icon={Icons.MousePointerClick} variant='flat' />
+					<ToggleButton color='primary' icon={Icons.MousePointerClick} isDisabled={!solution} isSelected={isMouseCoordinateVisible} onPointerUp={viewer.toggleMouseCoordinate} />
 				</Tooltip>
 				<Tooltip content='Settings' placement='top' showArrow>
 					<IconButton color='secondary' icon={Icons.Cog} onPointerUp={settings.show} variant='flat' />

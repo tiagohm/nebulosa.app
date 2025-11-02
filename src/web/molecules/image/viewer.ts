@@ -13,6 +13,7 @@ import { Api } from '@/shared/api'
 import { CoordinateInterpolator } from '@/shared/coordinate-interpolation'
 import { storage } from '@/shared/storage'
 import type { Image } from '@/shared/types'
+import { isMouseDeviceSupported } from '@/shared/util'
 import { ImageWorkspaceMolecule } from './workspace'
 
 export interface CachedImage {
@@ -189,6 +190,8 @@ const DEFAULT_IMAGE_STATE: ImageState = {
 	},
 }
 
+const isMousePresent = isMouseDeviceSupported()
+
 const imageCache = new Map<string, CachedImage>()
 
 export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { key: '', path: '', position: 0, source: 'file' } })
@@ -311,14 +314,14 @@ export const ImageViewerMolecule = molecule((m, s) => {
 						coordinate.selected.show = false
 						return
 					}
-				} else {
+				} else if (isMousePresent) {
 					coordinate.selected.show = true
 				}
 			}
 
 			const [rightAscension, declination] = interpolator.interpolate(x, y)
 
-			if (clicked) {
+			if (clicked && isMousePresent) {
 				coordinate.selected.rightAscension = rightAscension
 				coordinate.selected.declination = declination
 				coordinate.selected.x = x
@@ -330,7 +333,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			coordinate.hover.x = x
 			coordinate.hover.y = y
 
-			if (coordinate.selected.show) {
+			if (isMousePresent && coordinate.selected.show) {
 				const { rightAscension: a1, declination: d1 } = coordinate.hover
 				const { rightAscension: a2, declination: d2 } = coordinate.selected
 				coordinate.selected.distance = Math.acos(Math.sin(d1) * Math.sin(d2) + Math.cos(d1) * Math.cos(d2) * Math.cos(a1 - a2))

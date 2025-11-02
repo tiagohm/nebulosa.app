@@ -19,6 +19,11 @@ export function isWakeLockSupported() {
 	return 'wakeLock' in navigator
 }
 
+// Checks if device like a mouse or a similar accurate pointing device is present.
+export function isMouseDeviceSupported() {
+	return matchMedia('(pointer:fine)').matches
+}
+
 // Formats the name of a sky object based on its catalog ID and constellation
 export function formatSkyObjectName(id: string, constellation: Constellation | number) {
 	const index = id.indexOf(':')

@@ -1,11 +1,11 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import { formatDEC, formatRA } from 'nebulosa/src/angle'
+import { type Angle, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { numericKeyword } from 'nebulosa/src/fits'
 import type { ImageFormat } from 'nebulosa/src/image'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import bus, { unsubscribe } from 'src/shared/bus'
-import { type AnnotatedSkyObject, type CameraCaptureEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type EquatorialCoordinate, type ImageInfo, type ImageTransformation, type PlateSolveStart, type StarDetection } from 'src/shared/types'
+import { type AnnotatedSkyObject, type CameraCaptureEvent, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type EquatorialCoordinate, type ImageInfo, type ImageTransformation, type PlateSolveStart, type Point, type StarDetection } from 'src/shared/types'
 import type { PickByValue } from 'utility-types'
 import { proxy, ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -18,8 +18,6 @@ import { ImageWorkspaceMolecule } from './workspace'
 export interface CachedImage {
 	url: string
 	state: ImageState
-	mouseCoordinateOnMoveHandler?: (event: MouseEvent) => void
-	mouseCoordinateOnPointerUpHandler?: (event: MouseEvent) => void
 }
 
 export interface ImageState {
@@ -28,7 +26,10 @@ export interface ImageState {
 	readonly mouseCoordinate: {
 		visible: boolean
 		interpolator?: CoordinateInterpolator
-		coordinate: EquatorialCoordinate
+		readonly coordinate: {
+			hover: EquatorialCoordinate & Point
+			selected: EquatorialCoordinate & Point & { show: boolean; distance: Angle }
+		}
 	}
 	rotation: number
 	info?: ImageInfo
@@ -110,8 +111,20 @@ const DEFAULT_IMAGE_STATE: ImageState = {
 	mouseCoordinate: {
 		visible: false,
 		coordinate: {
-			rightAscension: 0,
-			declination: 0,
+			hover: {
+				rightAscension: 0,
+				declination: 0,
+				x: 0,
+				y: 0,
+			},
+			selected: {
+				show: false,
+				rightAscension: 0,
+				declination: 0,
+				x: 0,
+				y: 0,
+				distance: 0,
+			},
 		},
 	},
 	rotation: 0,
@@ -277,25 +290,6 @@ export const ImageViewerMolecule = molecule((m, s) => {
 					return
 				}
 			}
-
-			const cached = imageCache.get(key)
-			const parent = target?.parentElement
-
-			if (cached && parent) {
-				cached.mouseCoordinateOnPointerUpHandler && parent.removeEventListener('pointerup', cached.mouseCoordinateOnPointerUpHandler)
-				cached.mouseCoordinateOnMoveHandler && parent.removeEventListener('mousemove', cached.mouseCoordinateOnMoveHandler)
-
-				cached.mouseCoordinateOnPointerUpHandler = undefined
-				cached.mouseCoordinateOnMoveHandler = undefined
-
-				if (enabled && state.mouseCoordinate.interpolator) {
-					cached.mouseCoordinateOnPointerUpHandler = (event) => showInterpolatedCoordinate(event.offsetX, event.offsetY)
-					cached.mouseCoordinateOnMoveHandler = (event) => showInterpolatedCoordinate(event.offsetX, event.offsetY)
-
-					parent.addEventListener('pointerup', cached.mouseCoordinateOnPointerUpHandler)
-					parent.addEventListener('mousemove', cached.mouseCoordinateOnMoveHandler)
-				}
-			}
 		})
 
 		return () => {
@@ -303,13 +297,44 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		}
 	})
 
-	function showInterpolatedCoordinate(x: number, y: number) {
-		const { interpolator } = state.mouseCoordinate
+	function handleInterpolatedCoordinate(x: number, y: number, clicked: boolean = false) {
+		const { interpolator, coordinate } = state.mouseCoordinate
 
 		if (interpolator) {
+			// Is pointer up event?
+			if (clicked) {
+				if (coordinate.selected.show) {
+					const d = Math.hypot(x - coordinate.selected.x, y - coordinate.selected.y)
+
+					// Unselect if inside selected coordinate radius
+					if (d <= 8) {
+						coordinate.selected.show = false
+						return
+					}
+				} else {
+					coordinate.selected.show = true
+				}
+			}
+
 			const [rightAscension, declination] = interpolator.interpolate(x, y)
-			state.mouseCoordinate.coordinate.rightAscension = rightAscension
-			state.mouseCoordinate.coordinate.declination = declination
+
+			if (clicked) {
+				coordinate.selected.rightAscension = rightAscension
+				coordinate.selected.declination = declination
+				coordinate.selected.x = x
+				coordinate.selected.y = y
+			}
+
+			coordinate.hover.rightAscension = rightAscension
+			coordinate.hover.declination = declination
+			coordinate.hover.x = x
+			coordinate.hover.y = y
+
+			if (coordinate.selected.show) {
+				const { rightAscension: a1, declination: d1 } = coordinate.hover
+				const { rightAscension: a2, declination: d2 } = coordinate.selected
+				coordinate.selected.distance = Math.acos(Math.sin(d1) * Math.sin(d2) + Math.cos(d1) * Math.cos(d2) * Math.cos(a1 - a2))
+			}
 		}
 	}
 
@@ -417,8 +442,10 @@ export const ImageViewerMolecule = molecule((m, s) => {
 			const cached = imageCache.get(key)
 
 			if (cached) {
-				console.info('image revoked', key, cached.url)
-				URL.revokeObjectURL(cached.url)
+				if (cached.url) {
+					console.info('image revoked', key, cached.url)
+					URL.revokeObjectURL(cached.url)
+				}
 
 				cached.url = url
 			} else {
@@ -523,7 +550,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		workspace.state.selected = undefined
 	}
 
-	return { state, scope, resetStretch, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, toggleMouseCoordinate, attach, load, open, remove, detach, select, show, hide, apply }
+	return { state, scope, handleInterpolatedCoordinate, resetStretch, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, toggleMouseCoordinate, attach, load, open, remove, detach, select, show, hide, apply }
 })
 
 function adjustZIndexAfterBeRemoved() {

@@ -35,8 +35,8 @@ export const ImageToolBar = memo(() => {
 	const settings = useMolecule(ImageSettingsMolecule)
 
 	return (
-		<div className='w-full fixed bottom-0 mb-1 p-1 z-99999'>
-			<div className='flex flex-row items-center justify-start gap-2 px-2 py-1.5 mx-auto w-fit rounded-xl bg-black max-w-full overflow-scroll no-scrollbar'>
+		<div className='pointer-events-none w-full fixed bottom-0 mb-1 p-1 z-99999'>
+			<div className='pointer-events-auto flex flex-row items-center justify-start gap-2 px-2 py-1.5 mx-auto w-fit rounded-xl bg-black max-w-full overflow-scroll no-scrollbar'>
 				<Tooltip content='Save' placement='top' showArrow>
 					<IconButton color='secondary' icon={Icons.Save} onPointerUp={save.show} variant='flat' />
 				</Tooltip>
@@ -127,9 +127,11 @@ export const ImageToolBar = memo(() => {
 				<Tooltip content='FITS Header' placement='top' showArrow>
 					<IconButton color='secondary' icon={Icons.Text} onPointerUp={() => viewer.show('fitsHeader')} variant='flat' />
 				</Tooltip>
-				<Tooltip content='Mouse Coordinate' placement='top' showArrow>
-					<ToggleButton color='primary' icon={Icons.MousePointerClick} isDisabled={!solution} isSelected={isMouseCoordinateVisible} onPointerUp={viewer.toggleMouseCoordinate} />
-				</Tooltip>
+				{solution && (
+					<Tooltip content='Mouse Coordinate' placement='top' showArrow>
+						<ToggleButton color='primary' icon={Icons.MousePointerClick} isSelected={isMouseCoordinateVisible} onPointerUp={viewer.toggleMouseCoordinate} />
+					</Tooltip>
+				)}
 				<Tooltip content='Settings' placement='top' showArrow>
 					<IconButton color='secondary' icon={Icons.Cog} onPointerUp={settings.show} variant='flat' />
 				</Tooltip>

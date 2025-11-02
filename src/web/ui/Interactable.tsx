@@ -1,4 +1,4 @@
-import { createUseGesture, dragAction, pinchAction, wheelAction } from '@use-gesture/react'
+import { createUseGesture, dragAction, type GestureHandlers, pinchAction, wheelAction } from '@use-gesture/react'
 
 import { useLayoutEffect, useRef } from 'react'
 import { preventDefault } from '@/shared/util'
@@ -12,7 +12,7 @@ export interface InteractTransform {
 	angle: number
 }
 
-export interface InteractableProps {
+export interface InteractableProps extends Omit<GestureHandlers, 'onDragStart' | 'onDrag' | 'onDragEnd' | 'onPinch' | 'onWheel'> {
 	readonly zIndex: number
 	readonly onGesture?: (transform: Readonly<InteractTransform>, type: InteractType, event: Event) => void
 	readonly onTap?: (tx: number, ty: number, x: number, y: number, event: React.PointerEvent<HTMLDivElement>) => void
@@ -22,7 +22,7 @@ export interface InteractableProps {
 // Better tree shaking with createUseGesture
 const useGesture = createUseGesture([dragAction, pinchAction, wheelAction])
 
-export function Interactable({ zIndex, children, onGesture, onTap }: InteractableProps) {
+export function Interactable({ zIndex, children, onGesture, onTap, ...handlers }: InteractableProps) {
 	const ref = useRef<HTMLDivElement>(null)
 	const transformation = useRef<InteractTransform>({ x: 0, y: 0, scale: 1, angle: 0 })
 
@@ -62,6 +62,7 @@ export function Interactable({ zIndex, children, onGesture, onTap }: Interactabl
 
 	useGesture(
 		{
+			...handlers,
 			onDragStart: () => {
 				// Disable text selection during drag
 				document.body.style.userSelect = 'none'

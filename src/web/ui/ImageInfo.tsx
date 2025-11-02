@@ -1,6 +1,7 @@
 import { useMolecule } from 'bunshi/react'
-import { formatDEC, formatRA } from 'nebulosa/src/angle'
+import { formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { memo } from 'react'
+import type { EquatorialCoordinate, Point } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
 import { Icons } from './Icon'
@@ -9,7 +10,7 @@ export const ImageInfo = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { info, scale } = useSnapshot(viewer.state)
 	const { visible: isMouseCoordinateVisible, interpolator } = useSnapshot(viewer.state.mouseCoordinate)
-	const { rightAscension, declination } = useSnapshot(viewer.state.mouseCoordinate.coordinate)
+	const { hover, selected } = useSnapshot(viewer.state.mouseCoordinate.coordinate)
 
 	if (!info) return null
 
@@ -23,11 +24,33 @@ export const ImageInfo = memo(() => {
 					{scale.toFixed(2)}
 				</div>
 				{isMouseCoordinateVisible && interpolator && (
-					<div>
-						RA: {formatRA(rightAscension)} DEC: {formatDEC(declination)}
-					</div>
+					<>
+						<Coordinate declination={hover.declination} rightAscension={hover.rightAscension} x={hover.x} y={hover.y} />
+						{selected.show && (
+							<span className='flex flex-row items-center gap-1'>
+								<Coordinate declination={selected.declination} rightAscension={selected.rightAscension} selected x={selected.x} y={selected.y} />
+								<b className='ms-1'>D:</b> {formatAZ(selected.distance)}
+							</span>
+						)}
+					</>
 				)}
 			</div>
+		</div>
+	)
+})
+
+interface CoordinateProps extends Readonly<EquatorialCoordinate>, Readonly<Point> {
+	readonly selected?: boolean
+}
+
+const Coordinate = memo(({ selected = false, x, y, rightAscension, declination }: CoordinateProps) => {
+	return (
+		<div className='inline-flex flex-row items-center gap-1'>
+			{selected ? <Icons.Pin size={12} /> : <Icons.Cursor size={12} />}
+			<b>X:</b> {x.toFixed(0)}
+			<b className='ms-1'>Y:</b> {y.toFixed(0)}
+			<b className='ms-1'>RA:</b> {formatRA(rightAscension)}
+			<b className='ms-1'>DEC:</b> {formatDEC(declination)}
 		</div>
 	)
 })

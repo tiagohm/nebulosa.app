@@ -47,7 +47,7 @@ export class AtlasManager {
 	) {}
 
 	async imageOfSun(source: SolarImageSource) {
-		const file = Bun.file(`/dev/shm/sun-${source}.jpg`)
+		const file = Bun.file(`${Bun.env.tmpDir}/sun-${source}.jpg`)
 		if (!(await file.exists())) await this.refreshImageOfSun(source)
 		return file
 	}
@@ -63,7 +63,7 @@ export class AtlasManager {
 				const bytes = await response.arrayBuffer()
 				await sharp(bytes)
 					.linear(SOLAR_IMAGE_CONTRAST, -(128 * SOLAR_IMAGE_CONTRAST) + 128)
-					.toFile(`/dev/shm/sun-${s}.jpg`)
+					.toFile(`${Bun.env.tmpDir}/sun-${s}.jpg`)
 			} catch (e) {
 				console.error(e)
 				break

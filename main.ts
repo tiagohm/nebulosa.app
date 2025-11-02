@@ -58,15 +58,17 @@ Bun.env.homeDir = os.homedir()
 if (process.platform === 'linux') {
 	Bun.env.tmpDir = '/dev/shm'
 	Bun.env.appDir = join(Bun.env.homeDir, '.nebulosa')
+	Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
+	Bun.env.framingDir = join(Bun.env.appDir, 'framing')
+	Bun.env.satellitesDir = join(Bun.env.appDir, 'satellites')
 } else if (process.platform === 'win32') {
-	process.exit(1) // TODO: Windows is not fully supported yet
 	Bun.env.tmpDir = os.tmpdir()
-	Bun.env.appDir = '' // TODO: https://stackoverflow.com/a/64807054
+	const documentsDir = join(Bun.env.homeDir, 'Documents', 'Nebulosa')
+	Bun.env.appDir = join(Bun.env.homeDir, 'AppData', 'Local', 'Nebulosa')
+	Bun.env.capturesDir = join(documentsDir, 'Captures')
+	Bun.env.framingDir = join(Bun.env.appDir, 'Framing')
+	Bun.env.satellitesDir = join(Bun.env.appDir, 'Satellites')
 }
-
-Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
-Bun.env.framingDir = join(Bun.env.appDir, 'framing')
-Bun.env.satellitesDir = join(Bun.env.appDir, 'satellites')
 
 await fs.mkdir(Bun.env.capturesDir, CREATE_RECURSIVE_DIRECTORY)
 await fs.mkdir(Bun.env.framingDir, CREATE_RECURSIVE_DIRECTORY)

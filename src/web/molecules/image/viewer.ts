@@ -283,7 +283,7 @@ export const ImageViewerMolecule = molecule((m, s) => {
 		})
 
 		unsubscribers[6] = subscribeKey(state.mouseCoordinate, 'visible', async (enabled) => {
-			if (enabled && !state.mouseCoordinate.interpolator && state.solver.solution) {
+			if (enabled && !state.mouseCoordinate.interpolator && state.solver.solution?.scale) {
 				const coordinateInterpolation = await Api.Image.coordinateInterpolation(state.solver.solution)
 
 				if (coordinateInterpolation) {

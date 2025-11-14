@@ -16,11 +16,10 @@ export interface ImageWorkspaceState {
 }
 
 const KEY_INVALID_CHAR_REGEX = /[\W]+/g
+const VIEWERS = new Map<string, Atom<typeof ImageViewerMolecule>>()
 
 export const ImageWorkspaceMolecule = molecule((m) => {
 	const equipment = m(EquipmentMolecule)
-
-	const viewers = new Map<string, Atom<typeof ImageViewerMolecule>>()
 
 	const state = proxy<ImageWorkspaceState>({
 		images: [],
@@ -42,7 +41,7 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 	})
 
 	function link(image: Image, viewer: Atom<typeof ImageViewerMolecule>) {
-		viewers.set(image.key, viewer)
+		VIEWERS.set(image.key, viewer)
 	}
 
 	function add(path: string, key: string | undefined | null, source: Image['source'] | Camera) {
@@ -59,7 +58,7 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 		if (index >= 0) {
 			state.images[index].path = path
 			image = state.images[index]
-			viewers.get(image.key)?.load(true, path)
+			VIEWERS.get(image.key)?.load(true, path)
 			bus.emit('image:update', image)
 		} else {
 			image = { path, key, position, source, camera }
@@ -80,7 +79,7 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 
 		if (index >= 0) {
 			state.images.splice(index, 1)
-			viewers.delete(image.key)
+			VIEWERS.delete(image.key)
 			bus.emit('image:remove', image)
 
 			if (image.camera?.name) {

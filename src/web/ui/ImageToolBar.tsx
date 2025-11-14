@@ -127,7 +127,7 @@ export const ImageToolBar = memo(() => {
 				<Tooltip content='FITS Header' placement='top' showArrow>
 					<IconButton color='secondary' icon={Icons.Text} onPointerUp={() => viewer.show('fitsHeader')} variant='flat' />
 				</Tooltip>
-				{solution && (
+				{solution?.scale && (
 					<Tooltip content='Mouse Coordinate' placement='top' showArrow>
 						<ToggleButton color='primary' icon={Icons.MousePointerClick} isSelected={isMouseCoordinateVisible} onPointerUp={viewer.toggleMouseCoordinate} />
 					</Tooltip>

@@ -41,6 +41,7 @@ const args = parseArgs({
 		secure: { type: 'boolean', short: 's' },
 		cert: { type: 'string', short: 'c' },
 		key: { type: 'string', short: 'k' },
+		open: { type: 'boolean', short: 'o' },
 	},
 	strict: true,
 	allowPositionals: true,
@@ -51,6 +52,7 @@ const port = +(args.values.port || '1234')
 const cert = args.values.cert || 'cert.pem'
 const key = args.values.key || 'key.pem'
 const secure = (args.values.secure && !!cert && !!key) || undefined
+const open = !!args.values.open
 
 // Initialize environment variables
 Bun.env.homeDir = os.homedir()
@@ -220,4 +222,17 @@ const app = new Elysia({
 
 	.listen({ hostname, port })
 
-console.info(`server is started at: http${secure ? 's' : ''}://${app.server!.hostname}:${app.server!.port}`)
+const schema = `http${secure ? 's' : ''}`
+const url = `${schema}://${app.server!.hostname}:${app.server!.port}`
+
+console.info(`server is started at: ${url}`)
+
+if (open) {
+	if (process.platform === 'win32') {
+		Bun.spawn(['start', url])
+	} else if (process.platform === 'darwin') {
+		Bun.spawn(['open', url])
+	} else {
+		Bun.spawn(['xdg-open', url])
+	}
+}

@@ -1,7 +1,9 @@
 import { cors } from '@elysiajs/cors'
 import { cron } from '@elysiajs/cron'
 import Elysia from 'elysia'
+import type { MakeDirectoryOptions } from 'fs'
 import fs from 'fs/promises'
+import { default as openDefaultApp } from 'open'
 import os from 'os'
 import { join } from 'path'
 import { AtlasManager, atlas } from 'src/api/atlas'
@@ -31,7 +33,9 @@ import { StarDetectionManager, starDetection } from './src/api/stardetection'
 import { X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER } from './src/shared/types'
 import homeHtml from './src/web/pages/home/index.html'
 
-const CREATE_RECURSIVE_DIRECTORY = { recursive: true } as const
+const CREATE_RECURSIVE_DIRECTORY: MakeDirectoryOptions = { recursive: true }
+
+// Arguments
 
 const args = parseArgs({
 	args: Bun.argv,
@@ -42,39 +46,63 @@ const args = parseArgs({
 		cert: { type: 'string', short: 'c' },
 		key: { type: 'string', short: 'k' },
 		open: { type: 'boolean', short: 'o' },
+		dir: { type: 'string', short: 'd' },
 	},
 	strict: true,
 	allowPositionals: true,
 })
 
-const hostname = args.values.host || '0.0.0.0'
-const port = +(args.values.port || '1234')
-const cert = args.values.cert || 'cert.pem'
-const key = args.values.key || 'key.pem'
-const secure = (args.values.secure && !!cert && !!key) || undefined
-const open = !!args.values.open
+const hostname = args.values.host || Bun.env.host || 'localhost'
+const port = +(args.values.port || Bun.env.port || '1234')
+const cert = args.values.cert || Bun.env.cert || 'cert.pem'
+const key = args.values.key || Bun.env.key || 'key.pem'
+const secure = ((args.values.secure || Bun.env.secure === 'true') && !!cert && !!key) || undefined
+const open = !!args.values.open || Bun.env.open === 'true'
+const appDir = args.values.dir || Bun.env.appDir
 
-// Initialize environment variables
-Bun.env.homeDir = os.homedir()
+// Initialize the environment variables
+
+function checkDirAccess(...paths: string[]) {
+	const path = join(...paths)
+
+	try {
+		fs.access(path, fs.constants.R_OK | fs.constants.W_OK)
+	} catch {
+		console.error('unable to access directory at', Bun.env.homeDir)
+		process.exit(0)
+	}
+
+	return path
+}
+
+if (appDir) {
+	checkDirAccess(appDir)
+} else {
+	Bun.env.homeDir = checkDirAccess(os.homedir())
+}
 
 if (process.platform === 'linux') {
-	Bun.env.tmpDir = '/dev/shm'
-	Bun.env.appDir = join(Bun.env.homeDir, '.nebulosa')
+	Bun.env.tmpDir = checkDirAccess('/dev/shm')
+	Bun.env.appDir = appDir || join(Bun.env.homeDir, '.nebulosa')
 	Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
 	Bun.env.framingDir = join(Bun.env.appDir, 'framing')
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'satellites')
 } else if (process.platform === 'win32') {
-	Bun.env.tmpDir = os.tmpdir()
-	const documentsDir = join(Bun.env.homeDir, 'Documents', 'Nebulosa')
-	Bun.env.appDir = join(Bun.env.homeDir, 'AppData', 'Local', 'Nebulosa')
+	Bun.env.tmpDir = checkDirAccess(os.tmpdir())
+	const documentsDir = appDir || join(checkDirAccess(Bun.env.homeDir, 'Documents'), 'Nebulosa')
+	Bun.env.appDir = appDir || join(checkDirAccess(Bun.env.homeDir, 'AppData', 'Local'), 'Nebulosa')
 	Bun.env.capturesDir = join(documentsDir, 'Captures')
 	Bun.env.framingDir = join(Bun.env.appDir, 'Framing')
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'Satellites')
 }
 
+await fs.mkdir(Bun.env.appDir, CREATE_RECURSIVE_DIRECTORY)
 await fs.mkdir(Bun.env.capturesDir, CREATE_RECURSIVE_DIRECTORY)
 await fs.mkdir(Bun.env.framingDir, CREATE_RECURSIVE_DIRECTORY)
 await fs.mkdir(Bun.env.satellitesDir, CREATE_RECURSIVE_DIRECTORY)
+
+console.info('app directory is located at', Bun.env.appDir)
+console.info('captures directory is located at', Bun.env.capturesDir)
 
 // Managers
 
@@ -228,11 +256,5 @@ const url = `${schema}://${app.server!.hostname}:${app.server!.port}`
 console.info(`server is started at: ${url}`)
 
 if (open) {
-	if (process.platform === 'win32') {
-		Bun.spawn(['start', url])
-	} else if (process.platform === 'darwin') {
-		Bun.spawn(['open', url])
-	} else {
-		Bun.spawn(['xdg-open', url])
-	}
+	void openDefaultApp(url)
 }

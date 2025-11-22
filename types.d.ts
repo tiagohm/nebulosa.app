@@ -6,6 +6,12 @@ declare module 'bun' {
 		capturesDir: string
 		framingDir: string
 		satellitesDir: string
+		host?: string
+		port?: `${number}`
+		cert?: string
+		key?: string
+		secure?: 'true'
+		open?: 'true'
 	}
 }
 

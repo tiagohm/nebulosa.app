@@ -7,6 +7,8 @@ await build({
 	target: 'bun',
 	compile: {
 		outfile: process.platform === 'win32' ? 'nebulosa.exe' : 'nebulosa.out',
+		autoloadBunfig: false,
+		autoloadDotenv: true,
 		windows: {
 			title: 'Nebulosa',
 			description: 'The complete integrated solution for all of your astronomical imaging needs.',

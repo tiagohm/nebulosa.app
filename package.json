@@ -20,6 +20,7 @@
 	},
 	"license": "MIT",
 	"dependencies": {
+		"@eelkevdbos/elysia-basic-auth": "2.0.1",
 		"@elysiajs/cors": "1.4.0",
 		"@elysiajs/cron": "1.4.1",
 		"@heroui/react": "2.8.5",

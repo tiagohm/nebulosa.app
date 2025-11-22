@@ -1,3 +1,4 @@
+import { basicAuth } from '@eelkevdbos/elysia-basic-auth'
 import { cors } from '@elysiajs/cors'
 import { cron } from '@elysiajs/cron'
 import Elysia from 'elysia'
@@ -47,6 +48,8 @@ const args = parseArgs({
 		key: { type: 'string', short: 'k' },
 		open: { type: 'boolean', short: 'o' },
 		dir: { type: 'string', short: 'd' },
+		username: { type: 'string', short: 'u' },
+		password: { type: 'string' },
 	},
 	strict: true,
 	allowPositionals: true,
@@ -59,6 +62,8 @@ const key = args.values.key || Bun.env.key || 'key.pem'
 const secure = ((args.values.secure || Bun.env.secure === 'true') && !!cert && !!key) || undefined
 const open = !!args.values.open || Bun.env.open === 'true'
 const appDir = args.values.dir || Bun.env.appDir
+const username = args.values.username || Bun.env.username || ''
+const password = args.values.password || Bun.env.password || ''
 
 // Initialize the environment variables
 
@@ -245,6 +250,10 @@ const app = new Elysia({
 		message: (socket, message) => wsm.message(socket.raw, message),
 		close: (socket, code, reason) => wsm.close(socket.raw, code, reason),
 	})
+
+	// Basic Auth
+
+	.use(basicAuth({ enabled: username.length >= 5 && password.length >= 8, realm: 'Nebulosa', credentials: [{ username, password }] }))
 
 	// Start!
 

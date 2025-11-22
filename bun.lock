@@ -5,6 +5,7 @@
     "": {
       "name": "@tiagohm/nebulosa-app",
       "dependencies": {
+        "@eelkevdbos/elysia-basic-auth": "2.0.1",
         "@elysiajs/cors": "1.4.0",
         "@elysiajs/cron": "1.4.1",
         "@heroui/react": "2.8.5",
@@ -63,6 +64,8 @@
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.3.7", "", { "os": "win32", "cpu": "x64" }, "sha512-pulzUshqv9Ed//MiE8MOUeeEkbkSHVDVY5Cz5wVAnH1DUqliCQG3j6s1POaITTFqFfo7AVIx2sWdKpx/GS+Nqw=="],
 
     "@borewit/text-codec": ["@borewit/text-codec@0.1.1", "", {}, "sha512-5L/uBxmjaCIX5h8Z+uu+kA9BQLkc/Wl06UGR5ajNRxu+/XjonB5i8JpgFMrPj3LXTCPA0pv8yxUvbUi+QthGGA=="],
+
+    "@eelkevdbos/elysia-basic-auth": ["@eelkevdbos/elysia-basic-auth@2.0.1", "", { "peerDependencies": { "elysia": "^1.0.15", "typescript": "^5.0.0" } }, "sha512-k2XOnq+0wg3RhLRhweADtiM9xLGNERV1iToMDJAT6naJfCviufRwlCDgOUiHaQDRR82u4F6c7XAtTFAMBVIATw=="],
 
     "@elysiajs/cors": ["@elysiajs/cors@1.4.0", "", { "peerDependencies": { "elysia": ">= 1.4.0" } }, "sha512-pb0SCzBfFbFSYA/U40HHO7R+YrcXBJXOWgL20eSViK33ol1e20ru2/KUaZYo5IMUn63yaTJI/bQERuQ+77ND8g=="],
 

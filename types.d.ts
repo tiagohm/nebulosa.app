@@ -12,6 +12,8 @@ declare module 'bun' {
 		key?: string
 		secure?: 'true'
 		open?: 'true'
+		username?: string
+		password?: string
 	}
 }
 

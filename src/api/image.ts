@@ -2,7 +2,9 @@ import Elysia from 'elysia'
 import fs from 'fs/promises'
 import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, type Fits, observationDateKeyword, readFits, rightAscensionKeyword } from 'nebulosa/src/fits'
-import { adf, debayer, horizontalFlip, type Image, type ImageFormat, invert, readImageFromFits, scnr, stf, verticalFlip, type WriteImageToFormatOptions, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
+import { type Image, type ImageFormat, readImageFromFits, type WriteImageToFormatOptions, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
+import { adf } from 'nebulosa/src/image.computation'
+import { debayer, horizontalFlip, invert, scnr, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import { bufferSource, fileHandleSink, fileHandleSource } from 'nebulosa/src/io'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import { spaceMotion, star } from 'nebulosa/src/star'
@@ -267,8 +269,8 @@ export function image(image: ImageManager) {
 		.post('/annotate', ({ body }) => image.annotate(body as never))
 		.post('/coordinateinterpolation', ({ body }) => image.coordinateInterpolation(body as never))
 		.post('/statistics', () => image.statistics())
-		.get('/fovCameras', () => fovCameras)
-		.get('/fovTelescopes', () => fovTelescopes)
+		.get('/fovcameras', () => fovCameras)
+		.get('/fovtelescopes', () => fovTelescopes)
 
 	return app
 }

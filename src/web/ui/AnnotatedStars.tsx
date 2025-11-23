@@ -4,7 +4,7 @@ import { useSnapshot } from 'valtio'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
 import { formatSkyObjectName } from '@/shared/util'
 
-const TEXT_STYLE: CSSProperties = { textAnchor: 'middle', alignmentBaseline: 'before-edge', transform: 'rotate(0deg)' }
+const TEXT_STYLE: CSSProperties = { textAnchor: 'middle', alignmentBaseline: 'text-before-edge', transform: 'rotate(0deg)' }
 
 export const AnnotatedStars = memo(() => {
 	const annotation = useMolecule(ImageAnnotationMolecule)

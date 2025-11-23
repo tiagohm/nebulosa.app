@@ -52,7 +52,6 @@
 	"trustedDependencies": [
 		"@biomejs/biome",
 		"@heroui/shared-utils",
-		"esbuild",
 		"nebulosa",
 		"sharp"
 	]

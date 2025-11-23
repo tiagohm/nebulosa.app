@@ -3,7 +3,7 @@ import { type CSSProperties, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 
-const TEXT_STYLE: CSSProperties = { textAnchor: 'middle', alignmentBaseline: 'before-edge', transform: 'rotate(0deg)' }
+const TEXT_STYLE: CSSProperties = { textAnchor: 'middle', alignmentBaseline: 'text-before-edge', transform: 'rotate(0deg)' }
 
 export const DetectedStars = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)

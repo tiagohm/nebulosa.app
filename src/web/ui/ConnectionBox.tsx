@@ -1,6 +1,6 @@
 import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, SelectItem, type SharedSelection, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import { format } from 'date-fns'
+import { formatTemporal } from 'nebulosa/src/temporal'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
@@ -68,7 +68,7 @@ export const ConnectionBox = memo(() => {
 											<Icons.Laptop size={12} />
 											{item.host}:{item.port}
 											<Icons.Clock size={12} />
-											{item.connectedAt ? format(item.connectedAt, 'yyyy-MM-dd HH:mm:ss') : 'never'}
+											{item.connectedAt ? formatTemporal(item.connectedAt, 'YYYY-MM-DD HH:mm:ss') : 'never'}
 										</span>
 									</div>
 								</div>

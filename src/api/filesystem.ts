@@ -33,7 +33,7 @@ export class FileSystemManager {
 				if (!req?.directoryOnly || isDirectory) {
 					// Include only files that match the glob pattern (if present)
 					if (!glob || isDirectory || glob.match(name)) {
-						const { size, atimeMs: updatedAt } = await fs.stat(path)
+						const { size, mtimeMs: updatedAt } = await fs.stat(path)
 						entries.push({ name, path, directory: isDirectory, size, updatedAt })
 					}
 				}

@@ -1,6 +1,6 @@
 import { Badge, BreadcrumbItem, Breadcrumbs, Input, Listbox, ListboxItem, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import { format } from 'date-fns'
+import { formatTemporal } from 'nebulosa/src/temporal'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerMolecule } from '@/molecules/filepicker'
@@ -91,7 +91,7 @@ export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 								<div className='w-full flex flex-col justify-center gap-0'>
 									<span className='break-all whitespace-nowrap w-0'>{item.name}</span>
 									<div className='w-full flex flex-row items-center justify-between gap-1'>
-										<span className='text-xs text-gray-500'>{format(item.updatedAt, 'yyyy-MM-dd HH:mm:ss')}</span>
+										<span className='text-xs text-gray-500'>{formatTemporal(item.updatedAt, 'YYYY-MM-DD HH:mm:ss')}</span>
 										{!item.directory && <span className='text-xs text-gray-500'>{item.size} B</span>}
 									</div>
 								</div>

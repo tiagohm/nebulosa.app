@@ -1,8 +1,9 @@
 import { molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_INDI_SERVER_START, type IndiServerStart } from 'src/shared/types'
+import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
-import { persistProxy } from '@/shared/persist'
+import { populateProxy, subscribeProxy } from '@/shared/proxy'
 
 export interface IndiServerState {
 	enabled: boolean
@@ -12,13 +13,19 @@ export interface IndiServerState {
 	request: IndiServerStart
 }
 
-const { state } = persistProxy<IndiServerState>('indi.server', () => ({
+const DEFAULT_INDI_SERVER_STATE: IndiServerState = {
 	enabled: true,
 	running: false,
 	showAll: false,
 	show: false,
-	request: structuredClone(DEFAULT_INDI_SERVER_START),
-}))
+	request: DEFAULT_INDI_SERVER_START,
+}
+
+const PROPERTIES = ['show', 'showAll', 'request'] as const
+
+const state = proxy(structuredClone(DEFAULT_INDI_SERVER_STATE))
+populateProxy(state, 'indi.server', PROPERTIES)
+subscribeProxy(state, 'indi.server', PROPERTIES)
 
 export const IndiServerMolecule = molecule(() => {
 	onMount(() => {

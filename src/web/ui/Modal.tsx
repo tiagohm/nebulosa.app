@@ -1,7 +1,7 @@
 import { Button, Card, CardBody, CardFooter, CardHeader } from '@heroui/react'
 import type { CSSProperties, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useModal } from '@/shared/hooks'
+import { useModal } from '@/hooks/modal'
 import { Icons } from './Icon'
 
 export interface ModalProps {

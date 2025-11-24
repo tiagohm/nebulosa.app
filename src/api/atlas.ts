@@ -76,7 +76,7 @@ export class AtlasManager {
 	}
 
 	chartOfSun(req: ChartOfBody) {
-		return this.computeChart('10', req.time, 1)
+		return this.computeChart('10', req.time)
 	}
 
 	seasons(req: PositionOfBody): SolarSeasons {
@@ -171,7 +171,7 @@ export class AtlasManager {
 	}
 
 	chartOfMoon(req: ChartOfBody) {
-		return this.computeChart('301', req.time, 1)
+		return this.computeChart('301', req.time)
 	}
 
 	moonPhases(req: PositionOfBody) {
@@ -216,7 +216,7 @@ export class AtlasManager {
 	}
 
 	chartOfPlanet(code: string, req: ChartOfBody) {
-		return this.computeChart(code, req.time, 1)
+		return this.computeChart(code, req.time)
 	}
 
 	async searchMinorPlanet(req: SearchMinorPlanet): Promise<MinorPlanet | undefined> {
@@ -475,16 +475,14 @@ export class AtlasManager {
 		return this.satellites.filter(filter)
 	}
 
-	positionOfSatellite(req: PositionOfBody, id: number | Satellite) {
-		const satellite = typeof id === 'number' ? this.satellites.find((e) => e.id === id) : id
+	positionOfSatellite(id: number, req: PositionOfBody) {
+		const satellite = this.satellites.find((e) => e.id === id)
 		if (!satellite) throw new Error(`satellite not found: ${id}`)
 		return this.computeFromHorizonsPositionAt(satellite, req)
 	}
 
-	chartOfSatellite(req: ChartOfBody, id: number | Satellite) {
-		const satellite = typeof id === 'number' ? this.satellites.find((e) => e.id === id) : id
-		if (!satellite) throw new Error(`satellite not found: ${id}`)
-		return this.computeChart(satellite.id.toFixed(0), req.time, 1)
+	chartOfSatellite(id: number, req: ChartOfBody) {
+		return this.computeChart(id.toFixed(0), req.time)
 	}
 
 	async computeFromHorizonsPositionAt(input: string | Pick<Satellite, 'id' | 'tle'>, req: PositionOfBody) {
@@ -516,20 +514,18 @@ export class AtlasManager {
 		return position
 	}
 
-	computeChart(code: string, time: UTCTime, stepSizeInMinutes: number) {
-		const positions = this.ephemeris[code]!
+	computeChart(code: string, time: UTCTime) {
+		const positions = this.ephemeris[code]
+
+		if (!positions) throw new Error(`object not found: ${code}`)
 
 		const [startTime] = this.computeStartAndEndTime(time)
-		const seconds = temporalSet(startTime, 0, 's') / 1000
-		const chart: number[] = []
+		const seconds = Math.trunc(temporalSet(startTime, 0, 's') / 1000)
+		const chart = new Array<number>(1441)
 
-		chart.push(positions.get(seconds)!.altitude)
-
-		for (let i = stepSizeInMinutes; i <= 1440 - stepSizeInMinutes; i += stepSizeInMinutes) {
-			chart.push(positions.get(seconds + i * 60)!.altitude)
+		for (let i = 0; i <= 1440; i++) {
+			chart[i] = positions.get(seconds + i * 60)!.altitude
 		}
-
-		chart.push(positions.get(seconds + 1440 * 60)!.altitude)
 
 		return chart
 	}
@@ -599,8 +595,8 @@ export function atlas(atlas: AtlasManager) {
 		.post('/skyobjects/:id/position', ({ params, body }) => atlas.positionOfSkyObject(body as never, params.id))
 		.post('/skyobjects/:id/chart', ({ params, body }) => atlas.chartOfSkyObject(body as never, params.id))
 		.post('/satellites/search', ({ body }) => atlas.searchSatellites(body as never))
-		.post('/satellites/position', ({ body }) => atlas.positionOfSatellite(body as never, body as never))
-		.post('/satellites/chart', ({ body }) => atlas.chartOfSatellite(body as never, body as never))
+		.post('/satellites/:id/position', ({ params, body }) => atlas.positionOfSatellite(+params.id, body as never))
+		.post('/satellites/:id/chart', ({ params, body }) => atlas.chartOfSatellite(+params.id, body as never))
 
 	return app
 }

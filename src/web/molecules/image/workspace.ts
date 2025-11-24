@@ -3,7 +3,7 @@ import bus from 'src/shared/bus'
 import type { Atom, Camera, CameraCaptureEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
-import { storage } from '@/shared/storage'
+import { populateProxy, subscribeProxy } from '@/shared/proxy'
 import type { Image } from '@/shared/types'
 import { EquipmentMolecule } from '../indi/equipment'
 import type { ImageViewerMolecule } from './viewer'
@@ -15,23 +15,29 @@ export interface ImageWorkspaceState {
 	selected?: Image
 }
 
+const DEFAULT_IMAGE_WORKSPACE_STATE: ImageWorkspaceState = {
+	images: [],
+	showPicker: false,
+	initialPath: '',
+}
+
 const KEY_INVALID_CHAR_REGEX = /[\W]+/g
-const VIEWERS = new Map<string, Atom<typeof ImageViewerMolecule>>()
+const PROPERTIES = ['showPicker', 'initialPath'] as const
+
+const state = proxy(structuredClone(DEFAULT_IMAGE_WORKSPACE_STATE))
+populateProxy(state, 'workspace', PROPERTIES)
+subscribeProxy(state, 'workspace', PROPERTIES)
+
+const viewers = new Map<string, Atom<typeof ImageViewerMolecule>>()
 
 export const ImageWorkspaceMolecule = molecule((m) => {
 	const equipment = m(EquipmentMolecule)
-
-	const state = proxy<ImageWorkspaceState>({
-		images: [],
-		showPicker: false,
-		initialPath: storage.get('image.path', ''),
-	})
 
 	onMount(() => {
 		const unsubscriber = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
 			if (event.savedPath) {
 				const camera = equipment.get('CAMERA', event.device) as Camera
-				const image = add(event.savedPath, event.device, camera)
+				add(event.savedPath, event.device, camera)
 			}
 		})
 
@@ -41,7 +47,7 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 	})
 
 	function link(image: Image, viewer: Atom<typeof ImageViewerMolecule>) {
-		VIEWERS.set(image.key, viewer)
+		viewers.set(image.key, viewer)
 	}
 
 	function add(path: string, key: string | undefined | null, source: Image['source'] | Camera) {
@@ -58,7 +64,7 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 		if (index >= 0) {
 			state.images[index].path = path
 			image = state.images[index]
-			VIEWERS.get(image.key)?.load(true, path)
+			viewers.get(image.key)?.load(true, path)
 			bus.emit('image:update', image)
 		} else {
 			image = { path, key, position, source, camera }
@@ -68,7 +74,6 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 
 		if (source === 'file') {
 			state.initialPath = path
-			storage.set('image.path', path)
 		}
 
 		return image
@@ -79,7 +84,7 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 
 		if (index >= 0) {
 			state.images.splice(index, 1)
-			VIEWERS.delete(image.key)
+			viewers.delete(image.key)
 			bus.emit('image:remove', image)
 
 			if (image.camera?.name) {

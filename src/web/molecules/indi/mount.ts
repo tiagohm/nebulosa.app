@@ -3,10 +3,10 @@ import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
 import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, type Framing, type GeographicCoordinate, type HorizontalCoordinate, type Mount, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated, type TargetCoordinateType, type TrackMode } from 'src/shared/types'
-import { proxy, subscribe } from 'valtio'
+import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { storage } from '@/shared/storage'
+import { initProxy } from '@/shared/proxy'
 import type { NudgeDirection } from '@/ui/Nudge'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
@@ -53,18 +53,18 @@ const DEFAULT_TARGET_COORDINATE: MountState['targetCoordinate']['coordinate'] = 
 
 export const MountScope = createScope<MountScopeValue>({ mount: DEFAULT_MOUNT })
 
-const mountStateMap = new Map<string, MountState>()
+const stateMap = new Map<string, MountState>()
 
 export const MountMolecule = molecule((m, s) => {
 	const scope = s(MountScope)
 	const equipment = m(EquipmentMolecule)
 
 	const state =
-		mountStateMap.get(scope.mount.name) ??
+		stateMap.get(scope.mount.name) ??
 		proxy<MountState>({
 			mount: equipment.get('MOUNT', scope.mount.name)!,
 			targetCoordinate: {
-				coordinate: storage.get(`mount.${scope.mount.name}.targetCoordinate`, () => structuredClone(DEFAULT_TARGET_COORDINATE)),
+				coordinate: structuredClone(DEFAULT_TARGET_COORDINATE),
 				position: structuredClone(DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION),
 			},
 			currentPosition: structuredClone(DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION),
@@ -90,7 +90,7 @@ export const MountMolecule = molecule((m, s) => {
 			},
 		})
 
-	mountStateMap.set(scope.mount.name, state)
+	stateMap.set(scope.mount.name, state)
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(3)
@@ -108,7 +108,7 @@ export const MountMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[1] = subscribe(state.targetCoordinate, () => storage.set(`mount.${scope.mount.name}.targetCoordinate`, state.targetCoordinate.coordinate))
+		unsubscribers[1] = initProxy(state.targetCoordinate, `mount.${scope.mount.name}.targetcoordinate`, ['coordinate'])
 
 		unsubscribers[2] = subscribeKey(state.remoteControl, 'show', (show) => {
 			if (show) void updateRemoteControlStatus()

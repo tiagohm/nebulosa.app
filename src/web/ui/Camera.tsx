@@ -1,20 +1,18 @@
-import { Checkbox, NumberInput, SelectItem, Switch, Tooltip } from '@heroui/react'
+import { Checkbox, NumberInput, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo, useCallback } from 'react'
-import type { Focuser, Mount, Wheel } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { CameraMolecule } from '@/molecules/indi/camera'
-import type { EquipmentDevice } from '@/molecules/indi/equipment'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { AutoSaveButton } from './AutoSaveButton'
 import { AutoSubFolderModeButton } from './AutoSubFolderButton'
 import { ConnectButton } from './ConnectButton'
-import { EnumSelect } from './EnumSelect'
 import { ExposureModeButtonGroup } from './ExposureModeButtonGroup'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { ExposureTimeProgress } from './ExposureTimeProgress'
 import { FilePickerInput } from './FilePickerInput'
 import { FocuserDropdown } from './FocuserDropdown'
+import { FrameFormatSelect } from './FrameFormatSelect'
 import { FrameTypeSelect } from './FrameTypeSelect'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -123,11 +121,7 @@ export const Camera = memo(() => {
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !request.subframe || capturing} label='Height' maxValue={frame.maxWidth} minValue={0} onValueChange={(value) => camera.update('height', value)} size='sm' value={request.height} />
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || capturing} label='Gain' maxValue={gain.max} minValue={gain.min} onValueChange={(value) => camera.update('gain', value)} size='sm' value={request.gain} />
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || capturing} label='Offset' maxValue={offset.max} minValue={offset.min} onValueChange={(value) => camera.update('offset', value)} size='sm' value={request.offset} />
-					<EnumSelect className='col-span-6' isDisabled={!connected || !frameFormats.length || capturing} label='Format' onValueChange={(value) => camera.update('frameFormat', value)} value={request.frameFormat}>
-						{frameFormats.map((format) => (
-							<SelectItem key={format}>{format}</SelectItem>
-						))}
-					</EnumSelect>
+					<FrameFormatSelect className='col-span-6' isDisabled={!connected || !frameFormats.length || capturing} items={frameFormats} onValueChange={(value) => camera.update('frameFormat', value)} value={request.frameFormat} />
 				</Activity>
 			</div>
 		</Modal>
@@ -142,23 +136,11 @@ const CameraEquipment = memo(({ isDisabled }: CameraEquipmentProps) => {
 	const camera = useMolecule(CameraMolecule)
 	const { mount, wheel, focuser } = useSnapshot(camera.state.equipment)
 
-	const handleMountChange = useCallback((value?: EquipmentDevice<Mount>) => {
-		camera.state.equipment.mount = value
-	}, [])
-
-	const handleWheelChange = useCallback((value?: EquipmentDevice<Wheel>) => {
-		camera.state.equipment.wheel = value
-	}, [])
-
-	const handleFocuserChange = useCallback((value?: EquipmentDevice<Focuser>) => {
-		camera.state.equipment.focuser = value
-	}, [])
-
 	return (
 		<div className='flex flex-1 flex-row items-center gap-1'>
-			<MountDropdown isDisabled={isDisabled} onValueChange={handleMountChange} showLabel={false} tooltipContent={`MOUNT: ${mount?.name ?? 'None'}`} value={mount} />
-			<WheelDropdown isDisabled={isDisabled} onValueChange={handleWheelChange} showLabel={false} tooltipContent={`WHEEL: ${wheel?.name ?? 'None'}`} value={wheel} />
-			<FocuserDropdown isDisabled={isDisabled} onValueChange={handleFocuserChange} showLabel={false} tooltipContent={`FOCUSER: ${focuser?.name ?? 'None'}`} value={focuser} />
+			<MountDropdown isDisabled={isDisabled} onValueChange={camera.updateMount} showLabel={false} tooltipContent={`MOUNT: ${mount?.name ?? 'None'}`} value={mount} />
+			<WheelDropdown isDisabled={isDisabled} onValueChange={camera.updateWheel} showLabel={false} tooltipContent={`WHEEL: ${wheel?.name ?? 'None'}`} value={wheel} />
+			<FocuserDropdown isDisabled={isDisabled} onValueChange={camera.updateFocuser} showLabel={false} tooltipContent={`FOCUSER: ${focuser?.name ?? 'None'}`} value={focuser} />
 		</div>
 	)
 })

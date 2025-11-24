@@ -409,7 +409,7 @@ const SatelliteTab = memo(() => {
 
 	const satellite = useMolecule(SatelliteMolecule)
 	const { result, position, chart } = useSnapshot(satellite.state)
-	const { name } = useSnapshot(satellite.state.request.position)
+	const { selected } = useSnapshot(satellite.state)
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center relative'>
@@ -436,7 +436,7 @@ const SatelliteTab = memo(() => {
 				</TableBody>
 			</Table>
 			<SatellitePaginator className='col-span-full absolute w-full' />
-			<EphemerisAndChart chart={chart} className='col-span-full' name={name} position={position} twilight={twilight} />
+			<EphemerisAndChart chart={chart} className='col-span-full' name={selected?.name} position={position} twilight={twilight} />
 		</div>
 	)
 })
@@ -675,7 +675,7 @@ const GalaxyFilter = memo(() => {
 
 const SatelliteFilter = memo(() => {
 	const satellite = useMolecule(SatelliteMolecule)
-	const { text, groups } = useSnapshot(satellite.state.request.search, { sync: true })
+	const { text, groups } = useSnapshot(satellite.state.request, { sync: true })
 	const { loading } = useSnapshot(satellite.state)
 
 	return (

@@ -1,8 +1,8 @@
 import { createUseGesture, dragAction } from '@use-gesture/react'
 import { useMolecule } from 'bunshi/react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { ZIndexMolecule } from '@/molecules/zindex'
-import { storage } from './storage'
+import { storageGet, storageSet } from '@/shared/storage'
 
 // Better tree shaking with createUseGesture
 const useGesture = createUseGesture([dragAction])
@@ -16,7 +16,7 @@ function canDrag(target: EventTarget | null) {
 export function useModal(id: string, onHide?: VoidFunction) {
 	const zIndex = useMolecule(ZIndexMolecule)
 	const modalRef = useRef<HTMLElement>(null)
-	const xy = useRef(modalTransformMap.get(id) ?? storage.get(`modal-${id}`, () => ({ x: 0, y: 0 })))
+	const xy = useRef(modalTransformMap.get(id) ?? storageGet(`modal-${id}`, () => ({ x: 0, y: 0 })))
 	const boundary = useRef({ minLeft: 0, minTop: 0, maxLeft: 0, maxTop: 0 })
 
 	// Initialize the position of the modal if it doesn't exist in the map
@@ -68,7 +68,7 @@ export function useModal(id: string, onHide?: VoidFunction) {
 				document.body.style.userSelect = ''
 
 				// Save the modal position to local storage
-				storage.set(`modal-${id}`, xy.current)
+				storageSet(`modal-${id}`, xy.current)
 			},
 		},
 		{
@@ -104,51 +104,4 @@ export function useModal(id: string, onHide?: VoidFunction) {
 	const moveProps = { ...bind(), style: { cursor: 'move' } }
 
 	return { ref, hide, moveProps, computeBoundary, fitToBoundary }
-}
-
-// Hook to manage the Wake Lock API
-export function useWakeLock() {
-	const [active, setActive] = useState(false)
-	const wakeLock = useRef<WakeLockSentinel | null>(null)
-
-	const request = async () => {
-		try {
-			wakeLock.current = await navigator.wakeLock.request('screen')
-			setActive(true)
-
-			wakeLock.current.addEventListener('release', () => {
-				setActive(false)
-				wakeLock.current = null
-			})
-		} catch (e) {
-			console.error('wake Lock request failed:', e)
-			setActive(false)
-		}
-	}
-
-	const release = () => {
-		if (wakeLock.current) {
-			wakeLock.current.release()
-			wakeLock.current = null
-			setActive(false)
-		}
-	}
-
-	// Reacquire wake lock if the app regains visibility
-	useEffect(() => {
-		const handleVisibilityChange = () => {
-			if (wakeLock.current && document.visibilityState === 'visible') {
-				void request()
-			}
-		}
-
-		document.addEventListener('visibilitychange', handleVisibilityChange)
-
-		return () => {
-			document.removeEventListener('visibilitychange', handleVisibilityChange)
-			release()
-		}
-	}, [])
-
-	return { active, request, release }
 }

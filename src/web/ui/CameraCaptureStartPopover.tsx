@@ -1,8 +1,8 @@
-import { NumberInput, Popover, PopoverContent, PopoverTrigger, SelectItem } from '@heroui/react'
+import { NumberInput, Popover, PopoverContent, PopoverTrigger } from '@heroui/react'
 import type { CameraCaptureStart } from 'src/shared/types'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
-import { EnumSelect } from './EnumSelect'
 import { ExposureTimeInput } from './ExposureTimeInput'
+import { FrameFormatSelect } from './FrameFormatSelect'
 import { Icons } from './Icon'
 import { IconButton, type IconButtonProps } from './IconButton'
 
@@ -38,11 +38,7 @@ export function CameraCaptureStartPopover({ maxExposure, minExposure, exposureTi
 						unit={exposureTimeUnit}
 						value={exposureTime}
 					/>
-					<EnumSelect className='col-span-6' isDisabled={!frameFormats.length} label='Format' onValueChange={(value) => onValueChange?.('frameFormat', value)} value={frameFormat}>
-						{frameFormats.map((format) => (
-							<SelectItem key={format}>{format}</SelectItem>
-						))}
-					</EnumSelect>
+					<FrameFormatSelect className='col-span-6' isDisabled={!frameFormats.length} items={frameFormats} onValueChange={(value) => onValueChange?.('frameFormat', value)} value={frameFormat} />
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Bin X' maxValue={maxBin} minValue={1} onValueChange={(value) => onValueChange?.('binX', value)} size='sm' value={binX} />
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Bin Y' maxValue={maxBin} minValue={1} onValueChange={(value) => onValueChange?.('binY', value)} size='sm' value={binY} />
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Gain' maxValue={maxGain} minValue={0} onValueChange={(value) => onValueChange?.('gain', value)} size='sm' value={gain} />

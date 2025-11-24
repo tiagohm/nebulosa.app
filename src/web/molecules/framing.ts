@@ -1,8 +1,9 @@
 import { molecule, onMount } from 'bunshi'
-import bus from 'src/shared/bus'
+import bus, { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
+import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
-import { persistProxy } from '@/shared/persist'
+import { populateProxy, subscribeProxy } from '@/shared/proxy'
 import type { Image } from '@/shared/types'
 import { ImageWorkspaceMolecule } from './image/workspace'
 
@@ -11,36 +12,42 @@ export interface FramingState {
 	readonly request: Framing
 	loading: boolean
 	openNewImage: boolean
+	images: Image[]
 }
 
-const images: Image[] = []
-
-const { state } = persistProxy<FramingState>('framing', () => ({
+const DEFAULT_FRAMING_STATE: FramingState = {
 	show: false,
 	request: structuredClone(DEFAULT_FRAMING),
 	loading: false,
 	openNewImage: false,
-}))
+	images: [],
+}
+
+const SAVED_PROPERTIES = ['show', 'request', 'openNewImage'] as const
+
+const state = proxy(structuredClone(DEFAULT_FRAMING_STATE))
+populateProxy(state, 'framing', SAVED_PROPERTIES)
+subscribeProxy(state, 'framing', SAVED_PROPERTIES)
 
 export const FramingMolecule = molecule((m) => {
 	const workspace = m(ImageWorkspaceMolecule)
 
 	onMount(() => {
-		const subscribers = new Array<VoidFunction>(2)
+		const unsubscribers = new Array<VoidFunction>(2)
 
-		subscribers[0] = bus.subscribe<Partial<Framing>>('framing:load', (request) => {
+		unsubscribers[0] = bus.subscribe<Partial<Framing>>('framing:load', (request) => {
 			Object.assign(state.request, request)
 			state.show = true
 			void load()
 		})
 
-		subscribers[1] = bus.subscribe<Image>('image:remove', (image) => {
-			const index = images.findIndex((e) => e.key === image.key)
-			index >= 0 && images.splice(index, 1)
+		unsubscribers[1] = bus.subscribe<Image>('image:remove', (image) => {
+			const index = state.images.findIndex((e) => e.key === image.key)
+			index >= 0 && state.images.splice(index, 1)
 		})
 
 		return () => {
-			subscribers.forEach((e) => e())
+			unsubscribe(unsubscribers)
 		}
 	})
 
@@ -51,14 +58,14 @@ export const FramingMolecule = molecule((m) => {
 	async function load() {
 		try {
 			state.loading = true
-			state.request.id = state.openNewImage ? images.length : DEFAULT_FRAMING.id
+			state.request.id = state.openNewImage ? state.images.length : DEFAULT_FRAMING.id
 
 			const frame = await Api.Framing.frame(state.request)
 
 			if (frame) {
 				const image = workspace.add(frame.path, state.request.id.toFixed(0), 'framing')
-				const index = images.findIndex((e) => e.key === image.key)
-				index >= 0 ? (images[index] = image) : images.push(image)
+				const index = state.images.findIndex((e) => e.key === image.key)
+				index >= 0 ? (state.images[index] = image) : state.images.push(image)
 			}
 		} finally {
 			state.loading = false

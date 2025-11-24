@@ -1,43 +1,51 @@
 import { molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
 import type { ConnectionStatus } from 'src/shared/types'
-import { proxy, subscribe } from 'valtio'
+import { proxy } from 'valtio'
 import { deepClone } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { storage } from '@/shared/storage'
+import { populateProxy, subscribeProxy } from '@/shared/proxy'
 import { type Connection, DEFAULT_CONNECTION } from '@/shared/types'
 
 export interface ConnectionState {
-	showModal: boolean
-	mode: 'create' | 'edit'
+	show: boolean
 	readonly connections: Connection[]
+	mode: 'create' | 'edit'
 	loading: boolean
-	selected: Connection
+	selected?: Connection
 	edited?: Connection
 	connected?: ConnectionStatus
 }
+
+const DEFAULT_CONNECTION_STATE: ConnectionState = {
+	show: false,
+	connections: [],
+	mode: 'create',
+	loading: false,
+}
+
+const PROPERTIES = ['show', 'connections'] as const
 
 export const ConnectionComparator = (a: Connection, b: Connection) => {
 	return (b.connectedAt ?? 0) - (a.connectedAt ?? 0)
 }
 
-export const ConnectionMolecule = molecule(() => {
-	const connections = storage.get('connections', () => [structuredClone(DEFAULT_CONNECTION)])
-	connections.sort(ConnectionComparator)
+const state = proxy<ConnectionState>(structuredClone(DEFAULT_CONNECTION_STATE))
+populateProxy(state, 'connection', PROPERTIES)
+state.connections.sort(ConnectionComparator)
+subscribeProxy(state, 'connection', PROPERTIES)
 
-	const state = proxy<ConnectionState>({
-		showModal: false,
-		mode: 'create',
-		edited: undefined,
-		connected: undefined,
-		connections,
-		loading: false,
-		selected: connections[0],
-	})
+export const ConnectionMolecule = molecule(() => {
+	if (state.connections.length === 0) {
+		state.connections.push(structuredClone(DEFAULT_CONNECTION))
+	}
+	if (!state.selected) {
+		state.selected = state.connections[0]
+	}
 
 	// Connect to an existing connection
 	void Api.Connections.list().then((connections) => {
-		if (!connections) return
+		if (!connections?.length) return
 
 		for (const connection of connections) {
 			const index = state.connections.findIndex((c) => c.id === connection.id || (c.port === connection.port && (c.host === connection.host || c.host === connection.ip) && c.type === connection.type))
@@ -64,9 +72,7 @@ export const ConnectionMolecule = molecule(() => {
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(2)
 
-		unsubscribers[0] = subscribe(state.connections, () => {
-			storage.set('connections', state.connections)
-		})
+		unsubscribers[0] = subscribeProxy(state, 'connection', PROPERTIES)
 
 		unsubscribers[1] = bus.subscribe<ConnectionStatus>('connection:close', (status) => {
 			if (state.connected?.id === status.id) {
@@ -82,13 +88,13 @@ export const ConnectionMolecule = molecule(() => {
 	function create() {
 		state.mode = 'create'
 		state.edited = structuredClone(DEFAULT_CONNECTION)
-		state.showModal = true
+		state.show = true
 	}
 
 	function edit(connection: Connection) {
 		state.mode = 'edit'
 		state.edited = deepClone(connection)
-		state.showModal = true
+		state.show = true
 	}
 
 	function add(connection: Connection) {
@@ -107,13 +113,16 @@ export const ConnectionMolecule = molecule(() => {
 		}
 	}
 
-	function select(connection: Connection) {
-		state.selected = connection
-	}
-
-	function selectWith(id: string) {
-		const selected = state.connections.find((c) => c.id === id)
-		selected && select(selected)
+	function select(connection: Connection | string) {
+		if (typeof connection === 'string') {
+			const selected = state.connections.find((e) => e.id === connection)
+			if (selected) state.selected = selected
+			else console.warn('unknown connection', connection)
+		} else if (state.connections.includes(connection)) {
+			state.selected = connection
+		} else {
+			select(connection.id)
+		}
 	}
 
 	function save() {
@@ -142,7 +151,7 @@ export const ConnectionMolecule = molecule(() => {
 				}
 			}
 
-			state.showModal = false
+			state.show = false
 		}
 	}
 
@@ -162,7 +171,7 @@ export const ConnectionMolecule = molecule(() => {
 		if (connections.length === 0) {
 			connections.push(structuredClone(DEFAULT_CONNECTION))
 			state.selected = connections[0]
-		} else if (state.selected.id === connection.id) {
+		} else if (state.selected?.id === connection.id) {
 			state.selected = connections[0]
 		}
 	}
@@ -171,7 +180,7 @@ export const ConnectionMolecule = molecule(() => {
 		if (state.connected) {
 			void Api.Connections.disconnect(state.connected.id)
 			state.connected = undefined
-		} else {
+		} else if (state.selected) {
 			try {
 				state.loading = true
 
@@ -188,8 +197,8 @@ export const ConnectionMolecule = molecule(() => {
 	}
 
 	function hide() {
-		state.showModal = false
+		state.show = false
 	}
 
-	return { state, create, edit, update, select, selectWith, save, connect, duplicate, remove, hide } as const
+	return { state, create, edit, update, select, save, connect, duplicate, remove, hide } as const
 })

@@ -3,7 +3,7 @@ import bus, { unsubscribe } from 'src/shared/bus'
 import { type Camera, type CameraCaptureEvent, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START, type Focuser, type Mount, type Wheel } from 'src/shared/types'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
-import { storage } from '@/shared/storage'
+import { initProxy } from '@/shared/proxy'
 import type { Image } from '@/shared/types'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
@@ -28,31 +28,25 @@ export interface CameraState {
 
 export const CameraScope = createScope<CameraScopeValue>({ camera: DEFAULT_CAMERA })
 
-const cameraStateMap = new Map<string, CameraState>()
+const stateMap = new Map<string, CameraState>()
 
 export const CameraMolecule = molecule((m, s) => {
 	const scope = s(CameraScope)
 	const equipment = m(EquipmentMolecule)
 
-	const cameraCaptureStartRequest = storage.get<CameraCaptureStart>(`camera.${scope.camera.name}.request`, () => structuredClone(DEFAULT_CAMERA_CAPTURE_START))
-
 	const state =
-		cameraStateMap.get(scope.camera.name) ??
+		stateMap.get(scope.camera.name) ??
 		proxy<CameraState>({
 			minimized: false,
 			camera: equipment.get('CAMERA', scope.camera.name)!,
-			request: cameraCaptureStartRequest,
+			request: structuredClone(DEFAULT_CAMERA_CAPTURE_START),
 			progress: structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT),
 			capturing: false,
 			targetTemperature: scope.camera.temperature,
-			equipment: {
-				mount: equipment.get('MOUNT', cameraCaptureStartRequest.mount ?? ''),
-				wheel: equipment.get('WHEEL', cameraCaptureStartRequest.wheel ?? ''),
-				focuser: equipment.get('FOCUSER', cameraCaptureStartRequest.focuser ?? ''),
-			},
+			equipment: {},
 		})
 
-	cameraStateMap.set(scope.camera.name, state)
+	stateMap.set(scope.camera.name, state)
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(7)
@@ -69,7 +63,7 @@ export const CameraMolecule = molecule((m, s) => {
 
 		unsubscribers[1] = bus.subscribe<Camera>('camera:remove', (camera) => {
 			if (camera.name === state.camera.name) {
-				cameraStateMap.delete(camera.name)
+				stateMap.delete(camera.name)
 			}
 		})
 
@@ -97,9 +91,11 @@ export const CameraMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[5] = subscribe(state.request, () => {
-			storage.set(`camera.${scope.camera.name}.request`, state.request)
-		})
+		unsubscribers[5] = initProxy(state, `camera.${scope.camera.name}`, ['request'])
+
+		state.equipment.mount = equipment.get('MOUNT', state.request.mount ?? '')
+		state.equipment.wheel = equipment.get('WHEEL', state.request.wheel ?? '')
+		state.equipment.focuser = equipment.get('FOCUSER', state.request.focuser ?? '')
 
 		unsubscribers[6] = subscribe(state.equipment, () => {
 			state.request.mount = state.equipment.mount?.name
@@ -138,6 +134,18 @@ export const CameraMolecule = molecule((m, s) => {
 		state.request.height = state.camera.frame.maxHeight
 	}
 
+	function updateMount(mount?: EquipmentDevice<Mount>) {
+		state.equipment.mount = mount
+	}
+
+	function updateWheel(wheel?: EquipmentDevice<Wheel>) {
+		state.equipment.wheel = wheel
+	}
+
+	function updateFocuser(focuser?: EquipmentDevice<Focuser>) {
+		state.equipment.focuser = focuser
+	}
+
 	function start() {
 		state.capturing = true
 		return Api.Cameras.start(state.camera, state.request)
@@ -155,7 +163,7 @@ export const CameraMolecule = molecule((m, s) => {
 		state.minimized = !state.minimized
 	}
 
-	return { scope, state, connect, update, cooler, temperature, fullscreen, start, stop, hide, minimize } as const
+	return { scope, state, connect, update, cooler, temperature, fullscreen, updateMount, updateWheel, updateFocuser, start, stop, hide, minimize } as const
 })
 
 export function updateRequestFrame(request: CameraCaptureStart, frame: Camera['frame']) {

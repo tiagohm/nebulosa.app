@@ -4,11 +4,11 @@ import type { Temporal } from 'nebulosa/src/temporal'
 import type React from 'react'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
-import { type BodyPosition, type CloseApproach, DEFAULT_BODY_POSITION, DEFAULT_GEOGRAPHIC_COORDINATE, DEFAULT_POSITION_OF_BODY, DEFAULT_SATELLITE, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type FindCloseApproaches, type Framing, type GeographicCoordinate, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from 'src/shared/types'
-import { proxy, subscribe } from 'valtio'
+import { type BodyPosition, type CloseApproach, DEFAULT_BODY_POSITION, DEFAULT_GEOGRAPHIC_COORDINATE, DEFAULT_POSITION_OF_BODY, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type FindCloseApproaches, type Framing, type GeographicCoordinate, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from 'src/shared/types'
+import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { storage } from '@/shared/storage'
+import { initProxy } from '@/shared/proxy'
 
 export interface SkyAtlasState {
 	show: boolean
@@ -82,55 +82,27 @@ export interface GalaxyState {
 
 export interface SatelliteState {
 	loading: boolean
-	readonly request: {
-		readonly search: SearchSatellite
-		readonly position: PositionOfBody & Satellite
-	}
+	readonly request: SearchSatellite & PositionOfBody
+	selected?: Satellite
 	page: number
 	result: Satellite[]
 	readonly position: BodyPosition
 	chart: number[]
 }
 
-let skyAtlasState: SkyAtlasState | undefined
-let sunState: SunState | undefined
-let moonState: MoonState | undefined
-let asteroidState: AsteroidState | undefined
-let galaxyState: GalaxyState | undefined
-let satelliteState: SatelliteState | undefined
+const sunState = proxy<SunState>({
+	request: structuredClone(DEFAULT_POSITION_OF_BODY),
+	position: structuredClone(DEFAULT_BODY_POSITION),
+	chart: [],
+	eclipses: [],
+	source: 'HMI_INTENSITYGRAM_FLATTENED',
+	seasons: { spring: 0, summer: 0, autumn: 0, winter: 0 },
+})
+
+initProxy(sunState, 'skyatlas.sun', ['request', 'source'])
 
 export const SunMolecule = molecule(() => {
-	const request = structuredClone(DEFAULT_POSITION_OF_BODY)
-
-	const state =
-		sunState ??
-		proxy<SunState>({
-			request,
-			position: structuredClone(DEFAULT_BODY_POSITION),
-			chart: [],
-			eclipses: [],
-			source: storage.get<SolarImageSource>('skyatlas.sun.source', () => 'HMI_INTENSITYGRAM_FLATTENED'),
-			seasons: {
-				spring: 0,
-				summer: 0,
-				autumn: 0,
-				winter: 0,
-			},
-		})
-
-	sunState = state
-
-	onMount(() => {
-		const unsubscribers = new Array<() => void>(1)
-
-		unsubscribers[0] = subscribeKey(state, 'source', () => {
-			storage.set('skyatlas.sun.source', state.source)
-		})
-
-		return () => {
-			unsubscribe(unsubscribers)
-		}
-	})
+	const state = sunState
 
 	let chartUpdate = true
 	let seasonsUpdate = true
@@ -139,14 +111,14 @@ export const SunMolecule = molecule(() => {
 	async function tick(time: UTCTime, location: GeographicCoordinate) {
 		let changed = false
 
-		if (isLocationChanged(location, request.location)) {
-			Object.assign(request.location, location)
+		if (isLocationChanged(location, state.request.location)) {
+			Object.assign(state.request.location, location)
 			changed = true
 		}
 
 		// Updates only if passed more than 1 minute since last update
-		if (Math.abs(time.utc - request.time.utc) >= 60000 || time.offset !== request.time.offset) {
-			Object.assign(request.time, time)
+		if (isTimeChanged(time, state.request.time)) {
+			Object.assign(state.request.time, time)
 			changed = true
 		}
 
@@ -155,7 +127,7 @@ export const SunMolecule = molecule(() => {
 			void updateEclipses()
 
 			await updatePosition()
-			await updateChart()
+			await updateChart(false)
 		}
 	}
 
@@ -164,8 +136,8 @@ export const SunMolecule = molecule(() => {
 		if (position) Object.assign(state.position, position)
 	}
 
-	async function updateChart() {
-		if (!chartUpdate) return
+	async function updateChart(force: boolean = false) {
+		if (!chartUpdate && !force) return
 		const chart = await Api.SkyAtlas.chartOfSun(state.request)
 		if (chart) state.chart = chart
 		chartUpdate = false
@@ -189,20 +161,18 @@ export const SunMolecule = molecule(() => {
 	return { state, tick } as const
 })
 
+const moonState = proxy<MoonState>({
+	request: structuredClone(DEFAULT_POSITION_OF_BODY),
+	position: structuredClone(DEFAULT_BODY_POSITION),
+	chart: [],
+	phases: [],
+	eclipses: [],
+})
+
+initProxy(moonState, 'skyatlas.moon', ['request'])
+
 export const MoonMolecule = molecule(() => {
-	const request = structuredClone(DEFAULT_POSITION_OF_BODY)
-
-	const state =
-		moonState ??
-		proxy<MoonState>({
-			request,
-			position: structuredClone(DEFAULT_BODY_POSITION),
-			chart: [],
-			phases: [],
-			eclipses: [],
-		})
-
-	moonState = state
+	const state = moonState
 
 	let chartUpdate = true
 	let phasesUpdate = true
@@ -211,14 +181,14 @@ export const MoonMolecule = molecule(() => {
 	async function tick(time: UTCTime, location: GeographicCoordinate) {
 		let changed = false
 
-		if (isLocationChanged(location, request.location)) {
-			Object.assign(request.location, location)
+		if (isLocationChanged(location, state.request.location)) {
+			Object.assign(state.request.location, location)
 			changed = true
 		}
 
 		// Updates only if passed more than 1 minute since last update
-		if (time.utc - request.time.utc >= 60000 || time.offset !== request.time.offset) {
-			Object.assign(request.time, time)
+		if (isTimeChanged(time, state.request.time)) {
+			Object.assign(state.request.time, time)
 			changed = true
 		}
 
@@ -227,7 +197,7 @@ export const MoonMolecule = molecule(() => {
 			void updateEclipses()
 
 			await updatePosition()
-			await updateChart()
+			await updateChart(false)
 		}
 	}
 
@@ -236,8 +206,8 @@ export const MoonMolecule = molecule(() => {
 		if (position) Object.assign(state.position, position)
 	}
 
-	async function updateChart() {
-		if (!chartUpdate) return
+	async function updateChart(force: boolean = false) {
+		if (!chartUpdate && !force) return
 		const chart = await Api.SkyAtlas.chartOfMoon(state.request)
 		if (chart) state.chart = chart
 		chartUpdate = false
@@ -261,34 +231,36 @@ export const MoonMolecule = molecule(() => {
 	return { state, tick } as const
 })
 
-export const PlanetMolecule = molecule(() => {
-	const request = structuredClone(DEFAULT_POSITION_OF_BODY)
+const planetState = proxy<PlanetState>({
+	request: structuredClone(DEFAULT_POSITION_OF_BODY),
+	position: structuredClone(DEFAULT_BODY_POSITION),
+	chart: [],
+})
 
-	const state = proxy<PlanetState>({
-		request,
-		position: structuredClone(DEFAULT_BODY_POSITION),
-		chart: [],
-	})
+initProxy(planetState, 'skyatlas.planet', ['request'])
+
+export const PlanetMolecule = molecule(() => {
+	const state = planetState
 
 	let chartUpdate = true
 
 	async function tick(time: UTCTime, location: GeographicCoordinate) {
 		let changed = false
 
-		if (isLocationChanged(location, request.location)) {
-			Object.assign(request.location, location)
+		if (isLocationChanged(location, state.request.location)) {
+			Object.assign(state.request.location, location)
 			changed = true
 		}
 
 		// Updates only if passed more than 1 minute since last update
-		if (time.utc - request.time.utc >= 60000 || time.offset !== request.time.offset) {
-			Object.assign(request.time, time)
+		if (isTimeChanged(time, state.request.time)) {
+			Object.assign(state.request.time, time)
 			changed = true
 		}
 
 		if (changed) {
 			await updatePosition()
-			await updateChart()
+			await updateChart(false)
 		}
 	}
 
@@ -299,7 +271,8 @@ export const PlanetMolecule = molecule(() => {
 	}
 
 	async function updateChart(force: boolean = false) {
-		if ((!chartUpdate && !force) || !state.code) return
+		if (!state.code) return
+		if (!chartUpdate && !force) return
 		const chart = await Api.SkyAtlas.chartOfPlanet(state.request, state.code)
 		if (chart) state.chart = chart
 		chartUpdate = false
@@ -318,39 +291,28 @@ export const PlanetMolecule = molecule(() => {
 	return { state, tick, select } as const
 })
 
+const asteroidState = proxy<AsteroidState>({
+	tab: 'search',
+	loading: false,
+	search: {
+		text: '',
+	},
+	closeApproaches: {
+		request: { days: 7, distance: 10 },
+		result: [],
+	},
+	request: structuredClone(DEFAULT_POSITION_OF_BODY),
+	position: structuredClone(DEFAULT_BODY_POSITION),
+	chart: [],
+})
+
+initProxy(asteroidState, 'skyatlas.asteroid', ['tab', 'request'])
+initProxy(asteroidState, 'skyatlas.asteroid.closeapproaches', ['request'])
+
 export const AsteroidMolecule = molecule(() => {
-	const request = structuredClone(DEFAULT_POSITION_OF_BODY)
-
-	const state =
-		asteroidState ??
-		proxy<AsteroidState>({
-			tab: 'search',
-			loading: false,
-			search: {
-				text: '',
-			},
-			closeApproaches: {
-				request: storage.get<FindCloseApproaches>('skyatlas.asteroid.closeapproaches.request', () => ({ days: 7, distance: 10 })),
-				result: [],
-			},
-			request,
-			position: structuredClone(DEFAULT_BODY_POSITION),
-			chart: [],
-		})
-
-	asteroidState = state
+	const state = asteroidState
 
 	let chartUpdate = true
-
-	onMount(() => {
-		const unsubscriber = subscribe(state.closeApproaches.request, () => {
-			storage.set('skyatlas.asteroid.closeapproaches.request', state.closeApproaches.request)
-		})
-
-		return () => {
-			unsubscriber()
-		}
-	})
 
 	function updateSearch(value: string) {
 		state.search.text = value
@@ -387,10 +349,7 @@ export const AsteroidMolecule = molecule(() => {
 			state.loading = true
 
 			const result = await Api.SkyAtlas.findCloseApproaches(state.closeApproaches.request)
-
-			if (!result) return
-
-			state.closeApproaches.result = result
+			state.closeApproaches.result = result ?? []
 		} finally {
 			state.loading = false
 		}
@@ -409,7 +368,7 @@ export const AsteroidMolecule = molecule(() => {
 	}
 
 	async function updateChart(force: boolean = false) {
-		if (!force && !chartUpdate) return
+		if (!chartUpdate && !force) return
 		const code = `DES=${state.selected!.id};`
 		const chart = await Api.SkyAtlas.chartOfPlanet(state.request, code)
 		if (chart) state.chart = chart
@@ -419,14 +378,14 @@ export const AsteroidMolecule = molecule(() => {
 	async function tick(time: UTCTime, location: GeographicCoordinate) {
 		let changed = false
 
-		if (isLocationChanged(location, request.location)) {
-			Object.assign(request.location, location)
+		if (isLocationChanged(location, state.request.location)) {
+			Object.assign(state.request.location, location)
 			changed = true
 		}
 
 		// Updates only if passed more than 1 minute since last update
-		if (time.utc - request.time.utc >= 60000 || time.offset !== request.time.offset) {
-			Object.assign(request.time, time)
+		if (isTimeChanged(time, state.request.time)) {
+			Object.assign(state.request.time, time)
 			changed = true
 		}
 
@@ -440,35 +399,23 @@ export const AsteroidMolecule = molecule(() => {
 	return { state, updateSearch, updateCloseApproaches, search, closeApproaches, select, tick } as const
 })
 
+const galaxyState = proxy<GalaxyState>({
+	loading: false,
+	request: structuredClone(DEFAULT_SKY_OBJECT_SEARCH),
+	result: [],
+	position: structuredClone(DEFAULT_BODY_POSITION),
+	chart: [],
+})
+
+initProxy(galaxyState, 'skyatlas.galaxy', ['request'])
+
 export const GalaxyMolecule = molecule(() => {
-	const request = storage.get<SearchSkyObject>('skyatlas.galaxy.request', () => structuredClone(DEFAULT_SKY_OBJECT_SEARCH))
-
-	request.page = 1
-
-	const state =
-		galaxyState ??
-		proxy<GalaxyState>({
-			loading: false,
-			request,
-			result: [],
-			position: structuredClone(DEFAULT_BODY_POSITION),
-			chart: [],
-		})
-
-	galaxyState = state
+	const state = galaxyState
 
 	let chartUpdate = true
 
 	onMount(() => {
-		const unsubscriber = subscribe(state.request, () => {
-			storage.set('skyatlas.galaxy.request', state.request)
-		})
-
 		void search()
-
-		return () => {
-			unsubscriber()
-		}
 	})
 
 	function update<K extends keyof SearchSkyObject>(key: K, value: SearchSkyObject[K]) {
@@ -520,7 +467,7 @@ export const GalaxyMolecule = molecule(() => {
 	}
 
 	async function updateChart(force: boolean = false) {
-		if (!force && !chartUpdate) return
+		if (!chartUpdate && !force) return
 		const id = state.selected!.id
 		const chart = await Api.SkyAtlas.chartOfSkyObject(state.request, id)
 		if (chart) state.chart = chart
@@ -530,14 +477,14 @@ export const GalaxyMolecule = molecule(() => {
 	async function tick(time: UTCTime, location: GeographicCoordinate) {
 		let changed = false
 
-		if (isLocationChanged(location, request.location)) {
-			Object.assign(request.location, location)
+		if (isLocationChanged(location, state.request.location)) {
+			Object.assign(state.request.location, location)
 			changed = true
 		}
 
 		// Updates only if passed more than 1 minute since last update
-		if (time.utc - request.time.utc >= 60000 || time.offset !== request.time.offset) {
-			Object.assign(request.time, time)
+		if (isTimeChanged(time, state.request.time)) {
+			Object.assign(state.request.time, time)
 			changed = true
 		}
 
@@ -558,56 +505,39 @@ export const GalaxyMolecule = molecule(() => {
 	return { state, update, search, next, prev, select, tick } as const
 })
 
-const DEFAULT_SATELLITE_STATE_REQUEST: SatelliteState['request'] = {
-	search: { ...DEFAULT_SEARCH_SATELLITE },
-	position: {
+const satelliteState = proxy<SatelliteState>({
+	loading: false,
+	request: {
+		...DEFAULT_SEARCH_SATELLITE,
 		...DEFAULT_POSITION_OF_BODY,
-		...DEFAULT_SATELLITE,
 	},
-}
+	result: [],
+	position: DEFAULT_BODY_POSITION,
+	chart: [],
+	page: 1,
+})
+
+initProxy(satelliteState, 'skyatlas.satellite', ['request'])
+satelliteState.request.lastId = 0
 
 export const SatelliteMolecule = molecule(() => {
-	const searchRequest = storage.get('skyatlas.satellite.search', () => structuredClone(DEFAULT_SATELLITE_STATE_REQUEST.search))
-	const request = structuredClone(DEFAULT_SATELLITE_STATE_REQUEST.position)
-
-	searchRequest.lastId = 0
-
-	const state =
-		satelliteState ??
-		proxy<SatelliteState>({
-			loading: false,
-			request: { search: searchRequest, position: request },
-			result: [],
-			position: structuredClone(DEFAULT_BODY_POSITION),
-			chart: [],
-			page: 1,
-		})
-
-	satelliteState = state
+	const state = satelliteState
 
 	let chartUpdate = true
 	const pages: number[] = [0]
 
 	onMount(() => {
-		const unsubscriber = subscribe(state.request.search, () => {
-			storage.set('skyatlas.satellite.search', state.request.search)
-		})
-
 		void search()
-
-		return () => {
-			unsubscriber()
-		}
 	})
 
-	function update<K extends keyof SearchSatellite>(key: K, value: SearchSatellite[K]) {
-		state.request.search[key] = value
+	function update<K extends keyof SatelliteState['request']>(key: K, value: SatelliteState['request'][K]) {
+		state.request[key] = value
 	}
 
 	async function search() {
 		try {
 			state.loading = true
-			const result = await Api.SkyAtlas.searchSatellite(state.request.search)
+			const result = await Api.SkyAtlas.searchSatellite(state.request)
 			state.result = result ?? []
 		} finally {
 			state.loading = false
@@ -615,15 +545,15 @@ export const SatelliteMolecule = molecule(() => {
 	}
 
 	function reset() {
-		state.request.search.groups = [...DEFAULT_SEARCH_SATELLITE.groups]
+		state.request.groups = [...DEFAULT_SEARCH_SATELLITE.groups]
 	}
 
 	async function select(id: number, force: boolean = true) {
 		const selected = state.result.find((dso) => dso.id === id)
 
 		// Fetches object's position and chart if a new one was selected
-		if (selected && (force || state.request.position.id !== selected.id)) {
-			Object.assign(state.request.position, selected)
+		if (selected && (force || state.selected?.id !== selected.id)) {
+			state.selected = selected
 
 			await updatePosition()
 			await updateChart(true)
@@ -644,13 +574,15 @@ export const SatelliteMolecule = molecule(() => {
 	}
 
 	async function updatePosition() {
-		const position = await Api.SkyAtlas.positionOfSatellite(state.request.position)
+		if (!state.selected) return
+		const position = await Api.SkyAtlas.positionOfSatellite(state.request, state.selected.id)
 		if (position) Object.assign(state.position, position)
 	}
 
 	async function updateChart(force: boolean = false) {
-		if (!force && !chartUpdate) return
-		const chart = await Api.SkyAtlas.chartOfSatellite(state.request.position)
+		if (!state.selected) return
+		if (!chartUpdate && !force) return
+		const chart = await Api.SkyAtlas.chartOfSatellite(state.request, state.selected.id)
 		if (chart) state.chart = chart
 		chartUpdate = false
 	}
@@ -658,19 +590,19 @@ export const SatelliteMolecule = molecule(() => {
 	async function tick(time: UTCTime, location: GeographicCoordinate) {
 		let changed = false
 
-		if (isLocationChanged(location, request.location)) {
-			Object.assign(request.location, location)
+		if (isLocationChanged(location, state.request.location)) {
+			Object.assign(state.request.location, location)
 			changed = true
 		}
 
 		// Updates only if passed more than 1 minute since last update
-		if (time.utc - request.time.utc >= 60000 || time.offset !== request.time.offset) {
-			Object.assign(request.time, time)
+		if (isTimeChanged(time, state.request.time)) {
+			Object.assign(state.request.time, time)
 			changed = true
 		}
 
 		// Refresh selected object
-		if (changed && request.id) {
+		if (changed && state.selected?.id) {
 			await updatePosition()
 			await updateChart(false)
 		}
@@ -678,6 +610,34 @@ export const SatelliteMolecule = molecule(() => {
 
 	return { state, update, search, reset, next, prev, select, tick } as const
 })
+
+const state = proxy<SkyAtlasState>({
+	show: false,
+	tab: 'sun',
+	twilight: undefined,
+	request: {
+		location: structuredClone(DEFAULT_GEOGRAPHIC_COORDINATE),
+		time: {
+			utc: Date.now(),
+			offset: 0,
+		},
+	},
+	calendar: {
+		show: false,
+		manual: false,
+	},
+	location: {
+		show: false,
+	},
+	sun: sunState,
+	moon: moonState,
+	planet: planetState,
+	asteroid: asteroidState,
+	galaxy: galaxyState,
+	satellite: satelliteState,
+})
+
+initProxy(state, 'skyatlas', ['show', 'tab', 'request'])
 
 export const SkyAtlasMolecule = molecule((m) => {
 	const sun = m(SunMolecule)
@@ -687,40 +647,10 @@ export const SkyAtlasMolecule = molecule((m) => {
 	const galaxy = m(GalaxyMolecule)
 	const satellite = m(SatelliteMolecule)
 
-	const state =
-		skyAtlasState ??
-		proxy<SkyAtlasState>({
-			show: false,
-			tab: 'sun',
-			twilight: undefined,
-			request: {
-				location: storage.get('atlas.location', () => structuredClone(DEFAULT_GEOGRAPHIC_COORDINATE)),
-				time: {
-					utc: Date.now(),
-					offset: storage.get('atlas.time.offset', () => 0),
-				},
-			},
-			sun: sun.state,
-			moon: moon.state,
-			planet: planet.state,
-			asteroid: asteroid.state,
-			galaxy: galaxy.state,
-			satellite: satellite.state,
-			calendar: {
-				show: false,
-				manual: false,
-			},
-			location: {
-				show: false,
-			},
-		})
-
-	skyAtlasState = state
-
 	let twilightUpdate = true
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(4)
+		const unsubscribers = new Array<VoidFunction>(2)
 
 		unsubscribers[0] = subscribeKey(state, 'show', (show) => {
 			if (!show) return
@@ -732,15 +662,9 @@ export const SkyAtlasMolecule = molecule((m) => {
 			void tick()
 		})
 
-		unsubscribers[2] = subscribe(state.request.location, () => {
-			storage.set('atlas.location', state.request.location)
-		})
-
-		unsubscribers[3] = subscribeKey(state.request.time, 'offset', (offset) => {
-			storage.set('atlas.time.offset', offset)
-		})
-
-		void twilight()
+		if (state.show) {
+			void tick()
+		}
 
 		const timer = setInterval(tick, 60000)
 
@@ -831,4 +755,8 @@ export const SkyAtlasMolecule = molecule((m) => {
 
 function isLocationChanged(a: GeographicCoordinate, b: GeographicCoordinate) {
 	return a.latitude !== b.latitude || a.longitude !== b.longitude || a.elevation !== b.elevation
+}
+
+function isTimeChanged(a: UTCTime, b: UTCTime) {
+	return Math.abs(a.utc - b.utc) >= 60000 || a.offset !== b.offset
 }

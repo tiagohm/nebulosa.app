@@ -450,12 +450,12 @@ export namespace Api {
 			return json<Satellite[]>('/atlas/satellites/search', 'post', req)
 		}
 
-		export function positionOfSatellite(req: PositionOfBody & Satellite) {
-			return json<BodyPosition>('/atlas/satellites/position', 'post', req)
+		export function positionOfSatellite(req: PositionOfBody, id: string | number) {
+			return json<BodyPosition>(`/atlas/satellites/${id}/position`, 'post', req)
 		}
 
-		export function chartOfSatellite(req: PositionOfBody & Satellite) {
-			return json<number[]>('/atlas/satellites/chart', 'post', req)
+		export function chartOfSatellite(req: PositionOfBody, id: string | number) {
+			return json<number[]>(`/atlas/satellites/${id}/chart`, 'post', req)
 		}
 	}
 

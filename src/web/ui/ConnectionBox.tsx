@@ -10,12 +10,12 @@ import { Icons } from './Icon'
 
 export const ConnectionBox = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
-	const { connections, loading, selected, connected, showModal } = useSnapshot(connection.state)
+	const { connections, loading, selected, connected, show } = useSnapshot(connection.state)
 
-	function connectionChanged(keys: SharedSelection) {
+	function handleSelectionChange(keys: SharedSelection) {
 		if (keys instanceof Set) {
 			const id = keys.values().next().value
-			typeof id === 'string' && connection.selectWith(id)
+			typeof id === 'string' && connection.select(id)
 		}
 	}
 
@@ -32,7 +32,7 @@ export const ConnectionBox = memo(() => {
 					disallowEmptySelection
 					isDisabled={loading || !!connected}
 					items={connections}
-					onSelectionChange={connectionChanged}
+					onSelectionChange={handleSelectionChange}
 					renderValue={(selected) => {
 						return selected.map((item) => (
 							<div className='p-1 flex items-center justify-between gap-0' key={item.data?.id}>
@@ -50,7 +50,7 @@ export const ConnectionBox = memo(() => {
 							</div>
 						))
 					}}
-					selectedKeys={new Set([selected.id])}
+					selectedKeys={new Set([selected?.id ?? ''])}
 					selectionMode='single'
 					size='lg'>
 					{(item) => (
@@ -96,9 +96,9 @@ export const ConnectionBox = memo(() => {
 						</SelectItem>
 					)}
 				</Select>
-				<ConnectButton isConnected={!!connected} isLoading={loading} onPointerUp={connection.connect} />
+				<ConnectButton isConnected={!!connected} isDisabled={!selected} isLoading={loading} onPointerUp={connection.connect} />
 			</div>
-			{showModal && !connected && <ConnectionEdit />}
+			{show && !connected && <ConnectionEdit />}
 		</>
 	)
 })

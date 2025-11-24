@@ -1,9 +1,8 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_FOCUSER, type Focuser } from 'src/shared/types'
-import { proxy, subscribe } from 'valtio'
+import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
-import { storage } from '@/shared/storage'
+import { initProxy } from '@/shared/proxy'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface FocuserScopeValue {
@@ -20,32 +19,26 @@ export interface FocuserState {
 
 export const FocuserScope = createScope<FocuserScopeValue>({ focuser: DEFAULT_FOCUSER })
 
-const focuserStateMap = new Map<string, FocuserState>()
+const stateMap = new Map<string, FocuserState>()
 
 export const FocuserMolecule = molecule((m, s) => {
 	const scope = s(FocuserScope)
 	const equipment = m(EquipmentMolecule)
 
-	const request = storage.get<FocuserState['request']>(`focuser.${scope.focuser.name}.request`, () => ({ absolute: 0, relative: 100 }))
-
 	const state =
-		focuserStateMap.get(scope.focuser.name) ??
+		stateMap.get(scope.focuser.name) ??
 		proxy<FocuserState>({
 			focuser: equipment.get('FOCUSER', scope.focuser.name)!,
-			request,
+			request: { absolute: 0, relative: 100 },
 		})
 
-	focuserStateMap.set(scope.focuser.name, state)
+	stateMap.set(scope.focuser.name, state)
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(1)
-
-		unsubscribers[0] = subscribe(state.request, () => {
-			storage.set(`focuser.${scope.focuser.name}.request`, state.request)
-		})
+		const unsubscriber = initProxy(state, `focuser.${scope.focuser.name}`, ['request'])
 
 		return () => {
-			unsubscribe(unsubscribers)
+			unsubscriber()
 		}
 	})
 

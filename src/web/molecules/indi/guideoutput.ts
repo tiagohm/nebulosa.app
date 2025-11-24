@@ -1,9 +1,8 @@
 import { createScope, molecule, onMount } from 'bunshi'
-import { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_GUIDE_OUTPUT, type GuideOutput, type GuidePulse } from 'src/shared/types'
-import { proxy, subscribe } from 'valtio'
+import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
-import { storage } from '@/shared/storage'
+import { initProxy } from '@/shared/proxy'
 import type { NudgeDirection } from '@/ui/Nudge'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
@@ -22,50 +21,34 @@ export interface GuideOutputState {
 }
 
 const DEFAULT_GUIDE_OUTPUT_REQUEST: GuideOutputState['request'] = {
-	north: {
-		direction: 'NORTH',
-		duration: 0,
-	},
-	south: {
-		direction: 'SOUTH',
-		duration: 0,
-	},
-	west: {
-		direction: 'WEST',
-		duration: 0,
-	},
-	east: {
-		direction: 'EAST',
-		duration: 0,
-	},
+	north: { direction: 'NORTH', duration: 0 },
+	south: { direction: 'SOUTH', duration: 0 },
+	west: { direction: 'WEST', duration: 0 },
+	east: { direction: 'EAST', duration: 0 },
 }
 
 export const GuideOutputScope = createScope<GuideOutputScopeValue>({ guideOutput: DEFAULT_GUIDE_OUTPUT })
 
-const guideOutputStateMap = new Map<string, GuideOutputState>()
+const stateMap = new Map<string, GuideOutputState>()
 
 export const GuideOutputMolecule = molecule((m, s) => {
 	const scope = s(GuideOutputScope)
 	const equipment = m(EquipmentMolecule)
 
 	const state =
-		guideOutputStateMap.get(scope.guideOutput.name) ??
+		stateMap.get(scope.guideOutput.name) ??
 		proxy<GuideOutputState>({
 			guideOutput: equipment.get('GUIDE_OUTPUT', scope.guideOutput.name)!,
-			request: storage.get(`guideOutput.${scope.guideOutput.name}.request`, () => structuredClone(DEFAULT_GUIDE_OUTPUT_REQUEST)),
+			request: structuredClone(DEFAULT_GUIDE_OUTPUT_REQUEST),
 		})
 
-	guideOutputStateMap.set(scope.guideOutput.name, state)
+	stateMap.set(scope.guideOutput.name, state)
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(1)
-
-		unsubscribers[0] = subscribe(state.request, () => {
-			storage.set(`guideOutput.${scope.guideOutput.name}.request`, state.request)
-		})
+		const unsubscriber = initProxy(state, `guideoutput.${scope.guideOutput.name}`, ['request'])
 
 		return () => {
-			unsubscribe(unsubscribers)
+			unsubscriber()
 		}
 	})
 

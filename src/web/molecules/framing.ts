@@ -3,7 +3,7 @@ import bus, { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
-import { populateProxy, subscribeProxy } from '@/shared/proxy'
+import { initProxy } from '@/shared/proxy'
 import type { Image } from '@/shared/types'
 import { ImageWorkspaceMolecule } from './image/workspace'
 
@@ -15,19 +15,15 @@ export interface FramingState {
 	images: Image[]
 }
 
-const DEFAULT_FRAMING_STATE: FramingState = {
+const state = proxy<FramingState>({
 	show: false,
 	request: structuredClone(DEFAULT_FRAMING),
 	loading: false,
 	openNewImage: false,
 	images: [],
-}
+})
 
-const SAVED_PROPERTIES = ['show', 'request', 'openNewImage'] as const
-
-const state = proxy(structuredClone(DEFAULT_FRAMING_STATE))
-populateProxy(state, 'framing', SAVED_PROPERTIES)
-subscribeProxy(state, 'framing', SAVED_PROPERTIES)
+initProxy(state, 'framing', ['p:show', 'o:request', 'p:openNewImage'])
 
 export const FramingMolecule = molecule((m) => {
 	const workspace = m(ImageWorkspaceMolecule)

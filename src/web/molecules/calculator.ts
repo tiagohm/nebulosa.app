@@ -1,7 +1,7 @@
 import { molecule } from 'bunshi'
 import bus from 'src/shared/bus'
 import { proxy } from 'valtio'
-import { populateProxy, subscribeProxy } from '@/shared/proxy'
+import { initProxy } from '@/shared/proxy'
 
 export interface FocalLengthRatio {
 	aperture: number
@@ -42,7 +42,7 @@ export interface CalculatorState {
 	readonly ccdResolution: CcdResolution
 }
 
-const DEFAULT_CALCULATOR_STATE: CalculatorState = {
+const state = proxy<CalculatorState>({
 	show: false,
 	focalLength: { focalLength: 1368, aperture: 152, focalRatio: 9 },
 	focalRatio: { focalLength: 1368, aperture: 152, focalRatio: 9 },
@@ -51,13 +51,9 @@ const DEFAULT_CALCULATOR_STATE: CalculatorState = {
 	limitingMagnitude: { aperture: 152, magnitude: 13.609 },
 	lightGraspRatio: { smallerAperture: 7, largerAperture: 152, ratio: 471.51 },
 	ccdResolution: { pixelSize: 4.63, focalLength: 1368, resolution: 0.698 },
-}
+})
 
-const PROPERTIES = ['show', 'focalLength', 'focalRatio', 'dawesLimit', 'rayleighLimit', 'limitingMagnitude', 'lightGraspRatio', 'ccdResolution'] as const
-
-const state = proxy(structuredClone(DEFAULT_CALCULATOR_STATE))
-populateProxy(state, 'calculator', PROPERTIES)
-subscribeProxy(state, 'calculator', PROPERTIES)
+initProxy(state, 'calculator', ['p:show', 'o:focalLength', 'o:focalRatio', 'o:dawesLimit', 'o:rayleighLimit', 'o:limitingMagnitude', 'o:lightGraspRatio', 'o:ccdResolution'])
 
 export const CalculatorMolecule = molecule(() => {
 	function show() {

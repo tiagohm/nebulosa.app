@@ -250,16 +250,16 @@ export const ImageViewerMolecule = molecule((m, s) => {
 
 		const imageKey = camera?.name || 'default'
 
-		unsubscribers[1] = initProxy(state, `image.${imageKey}`, ['transformation', 'crosshair', 'rotation'])
-		unsubscribers[2] = initProxy(state.starDetection, `image.${imageKey}.stardetection`, ['show', 'request'])
-		unsubscribers[3] = initProxy(state.solver, `image.${imageKey}.solver`, ['show', 'request'])
-		unsubscribers[4] = initProxy(state.settings, `image.${imageKey}.settings`, ['show', 'pixelated'])
-		unsubscribers[5] = initProxy(state.save, `image.${imageKey}.save`, ['show', 'format', 'path', 'transformed'])
-		unsubscribers[6] = initProxy(state.scnr, `image.${imageKey}.scnr`, ['show'])
-		unsubscribers[7] = initProxy(state.adjustment, `image.${imageKey}.adjustment`, ['show'])
-		unsubscribers[8] = initProxy(state.filter, `image.${imageKey}.filter`, ['show'])
-		unsubscribers[9] = initProxy(state.stretch, `image.${imageKey}.stretch`, ['show'])
-		unsubscribers[10] = initProxy(state.fitsHeader, `image.${imageKey}.fitsheader`, ['show'])
+		unsubscribers[1] = initProxy(state, `image.${imageKey}`, ['o:transformation', 'p:crosshair', 'p:rotation'])
+		unsubscribers[2] = initProxy(state.starDetection, `image.${imageKey}.stardetection`, ['p:show', 'o:request'])
+		unsubscribers[3] = initProxy(state.solver, `image.${imageKey}.solver`, ['p:show', 'o:request'])
+		unsubscribers[4] = initProxy(state.settings, `image.${imageKey}.settings`, ['p:show', 'p:pixelated'])
+		unsubscribers[5] = initProxy(state.save, `image.${imageKey}.save`, ['p:show', 'p:format', 'p:path', 'p:transformed'])
+		unsubscribers[6] = initProxy(state.scnr, `image.${imageKey}.scnr`, ['p:show'])
+		unsubscribers[7] = initProxy(state.adjustment, `image.${imageKey}.adjustment`, ['p:show'])
+		unsubscribers[8] = initProxy(state.filter, `image.${imageKey}.filter`, ['p:show'])
+		unsubscribers[9] = initProxy(state.stretch, `image.${imageKey}.stretch`, ['p:show'])
+		unsubscribers[10] = initProxy(state.fitsHeader, `image.${imageKey}.fitsheader`, ['p:show'])
 
 		state.starDetection.request.path = path
 		state.solver.request.id = key

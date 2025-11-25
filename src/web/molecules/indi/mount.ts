@@ -108,7 +108,7 @@ export const MountMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[1] = initProxy(state.targetCoordinate, `mount.${scope.mount.name}.targetcoordinate`, ['coordinate'])
+		unsubscribers[1] = initProxy(state.targetCoordinate, `mount.${scope.mount.name}.targetcoordinate`, ['o:coordinate'])
 
 		unsubscribers[2] = subscribeKey(state.remoteControl, 'show', (show) => {
 			if (show) void updateRemoteControlStatus()

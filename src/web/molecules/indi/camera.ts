@@ -91,7 +91,7 @@ export const CameraMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[5] = initProxy(state, `camera.${scope.camera.name}`, ['request'])
+		unsubscribers[5] = initProxy(state, `camera.${scope.camera.name}`, ['o:request'])
 
 		state.equipment.mount = equipment.get('MOUNT', state.request.mount ?? '')
 		state.equipment.wheel = equipment.get('WHEEL', state.request.wheel ?? '')

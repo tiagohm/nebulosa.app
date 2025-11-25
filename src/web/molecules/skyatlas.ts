@@ -99,7 +99,7 @@ const sunState = proxy<SunState>({
 	seasons: { spring: 0, summer: 0, autumn: 0, winter: 0 },
 })
 
-initProxy(sunState, 'skyatlas.sun', ['request', 'source'])
+initProxy(sunState, 'skyatlas.sun', ['o:request', 'p:source'])
 
 export const SunMolecule = molecule(() => {
 	const state = sunState
@@ -169,7 +169,7 @@ const moonState = proxy<MoonState>({
 	eclipses: [],
 })
 
-initProxy(moonState, 'skyatlas.moon', ['request'])
+initProxy(moonState, 'skyatlas.moon', ['o:request'])
 
 export const MoonMolecule = molecule(() => {
 	const state = moonState
@@ -237,7 +237,7 @@ const planetState = proxy<PlanetState>({
 	chart: [],
 })
 
-initProxy(planetState, 'skyatlas.planet', ['request'])
+initProxy(planetState, 'skyatlas.planet', ['o:request'])
 
 export const PlanetMolecule = molecule(() => {
 	const state = planetState
@@ -306,8 +306,8 @@ const asteroidState = proxy<AsteroidState>({
 	chart: [],
 })
 
-initProxy(asteroidState, 'skyatlas.asteroid', ['tab', 'request'])
-initProxy(asteroidState, 'skyatlas.asteroid.closeapproaches', ['request'])
+initProxy(asteroidState, 'skyatlas.asteroid', ['p:tab', 'o:request'])
+initProxy(asteroidState, 'skyatlas.asteroid.closeapproaches', ['o:request'])
 
 export const AsteroidMolecule = molecule(() => {
 	const state = asteroidState
@@ -407,7 +407,7 @@ const galaxyState = proxy<GalaxyState>({
 	chart: [],
 })
 
-initProxy(galaxyState, 'skyatlas.galaxy', ['request'])
+initProxy(galaxyState, 'skyatlas.galaxy', ['o:request'])
 
 export const GalaxyMolecule = molecule(() => {
 	const state = galaxyState
@@ -517,7 +517,7 @@ const satelliteState = proxy<SatelliteState>({
 	page: 1,
 })
 
-initProxy(satelliteState, 'skyatlas.satellite', ['request'])
+initProxy(satelliteState, 'skyatlas.satellite', ['o:request'])
 satelliteState.request.lastId = 0
 
 export const SatelliteMolecule = molecule(() => {
@@ -618,7 +618,7 @@ const state = proxy<SkyAtlasState>({
 	request: {
 		location: structuredClone(DEFAULT_GEOGRAPHIC_COORDINATE),
 		time: {
-			utc: Date.now(),
+			utc: 0,
 			offset: 0,
 		},
 	},
@@ -637,7 +637,9 @@ const state = proxy<SkyAtlasState>({
 	satellite: satelliteState,
 })
 
-initProxy(state, 'skyatlas', ['show', 'tab', 'request'])
+initProxy(state, 'skyatlas', ['p:show', 'p:tab'])
+initProxy(state.request, 'skyatlas', ['o:location'])
+initProxy(state.request.time, 'skyatlas.time', ['p:offset'])
 
 export const SkyAtlasMolecule = molecule((m) => {
 	const sun = m(SunMolecule)

@@ -10,7 +10,7 @@ import { IconButton } from './IconButton'
 
 export const ImagePickerButton = memo(() => {
 	const workspace = useMolecule(ImageWorkspaceMolecule)
-	const { showPicker } = useSnapshot(workspace.state)
+	const { show } = useSnapshot(workspace.state.picker)
 
 	const handleChoose = useCallback((paths?: string[]) => {
 		if (paths?.length) {
@@ -27,8 +27,8 @@ export const ImagePickerButton = memo(() => {
 			<Tooltip content='Open Image' showArrow>
 				<IconButton color='secondary' icon={Icons.ImagePlus} onPointerUp={workspace.showPicker} variant='light' />
 			</Tooltip>
-			{showPicker && (
-				<ScopeProvider scope={FilePickerScope} value={{ path: workspace.state.initialPath, filter: '*.{fits,fit,xisf}', multiple: true }}>
+			{show && (
+				<ScopeProvider scope={FilePickerScope} value={{ path: workspace.state.picker.path, filter: '*.{fits,fit,xisf}', multiple: true }}>
 					<FilePicker header='Open Image' id='open-image' onChoose={handleChoose} />
 				</ScopeProvider>
 			)}

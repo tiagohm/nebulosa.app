@@ -528,7 +528,7 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOp
 			<Tooltip content='Time' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
-						<TextButton color='secondary' label={formatTemporal(date, 'YYYY-MM-DD HH:mm')} startContent={<Icons.CalendarToday />} />
+						<TextButton color='secondary' label={formatTemporal(date, 'YYYY-MM-DD HH:mm', 0)} startContent={<Icons.CalendarToday />} />
 					</PopoverTrigger>
 				</div>
 			</Tooltip>

@@ -4,7 +4,7 @@ import { type Camera, type DarvEvent, type DarvStart, DEFAULT_DARV_EVENT, DEFAUL
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { populateProxy, subscribeProxy } from '@/shared/proxy'
+import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
 import { updateFrameFormat } from './indi/camera'
 import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
@@ -18,20 +18,14 @@ export interface DarvState {
 	event: DarvEvent
 }
 
-const DEFAULT_DARV_STATE: DarvState = {
-	request: DEFAULT_DARV_START,
+const state = proxy<DarvState>({
+	request: structuredClone(DEFAULT_DARV_START),
 	show: false,
 	running: false,
-	camera: undefined,
-	mount: undefined,
-	event: DEFAULT_DARV_EVENT,
-}
+	event: structuredClone(DEFAULT_DARV_EVENT),
+})
 
-const PROPERTIES = ['request', 'show'] as const
-
-const state = proxy(structuredClone(DEFAULT_DARV_STATE))
-populateProxy(state, 'darv', PROPERTIES)
-subscribeProxy(state, 'darv', PROPERTIES)
+initProxy(state, 'darv', ['o:request', 'p:show'])
 
 export const DarvMolecule = molecule((m) => {
 	const equipment = m(EquipmentMolecule)
@@ -60,18 +54,26 @@ export const DarvMolecule = molecule((m) => {
 		unsubscribers[3] = subscribeKey(state, 'show', (show) => {
 			if (!show) return
 
-			state.camera = equipment.get('CAMERA', storageGet('darv.camera', ''))
-			state.mount = equipment.get('MOUNT', storageGet('darv.mount', ''))
-
-			if (state.camera) {
-				updateFrameFormat(state.request.capture, state.camera.frameFormats)
-			}
+			load()
 		})
+
+		if (state.show) {
+			load()
+		}
 
 		return () => {
 			unsubscribe(unsubscribers)
 		}
 	})
+
+	function load() {
+		state.camera = equipment.get('CAMERA', storageGet('darv.camera', ''))
+		state.mount = equipment.get('MOUNT', storageGet('darv.mount', ''))
+
+		if (state.camera) {
+			updateFrameFormat(state.request.capture, state.camera.frameFormats)
+		}
+	}
 
 	function update<K extends keyof DarvStart>(key: K, value: DarvStart[K]) {
 		state.request[key] = value

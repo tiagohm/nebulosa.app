@@ -1,21 +1,17 @@
 import { molecule } from 'bunshi'
 import bus from 'src/shared/bus'
 import { proxy } from 'valtio'
-import { populateProxy, subscribeProxy } from '@/shared/proxy'
+import { initProxy } from '@/shared/proxy'
 
 export interface AboutState {
 	show: boolean
 }
 
-const DEFAULT_ABOUT_STATE: AboutState = {
+const state = proxy<AboutState>({
 	show: false,
-}
+})
 
-const PROPERTIES = ['show'] as const
-
-const state = proxy(structuredClone(DEFAULT_ABOUT_STATE))
-populateProxy(state, 'about', PROPERTIES)
-subscribeProxy(state, 'about', PROPERTIES)
+initProxy(state, 'about', ['p:show'])
 
 export const AboutMolecule = molecule(() => {
 	function show() {

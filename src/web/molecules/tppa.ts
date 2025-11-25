@@ -4,7 +4,7 @@ import { type Camera, DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type Mount, type T
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { populateProxy, subscribeProxy } from '@/shared/proxy'
+import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
 import { updateFrameFormat } from './indi/camera'
 import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
@@ -18,20 +18,14 @@ export interface TppaState {
 	event: TppaEvent
 }
 
-const DEFAULT_TPPA_STATE: TppaState = {
-	request: DEFAULT_TPPA_START,
+const state = proxy<TppaState>({
+	request: structuredClone(DEFAULT_TPPA_START),
 	show: false,
 	running: false,
-	camera: undefined,
-	mount: undefined,
-	event: DEFAULT_TPPA_EVENT,
-}
+	event: structuredClone(DEFAULT_TPPA_EVENT),
+})
 
-const PROPERTIES = ['request', 'show'] as const
-
-const state = proxy(structuredClone(DEFAULT_TPPA_STATE))
-populateProxy(state, 'tppa', PROPERTIES)
-subscribeProxy(state, 'tppa', PROPERTIES)
+initProxy(state, 'tppa', ['o:request', 'p:show'])
 
 export const TppaMolecule = molecule((m) => {
 	const equipment = m(EquipmentMolecule)
@@ -60,18 +54,26 @@ export const TppaMolecule = molecule((m) => {
 		unsubscribers[3] = subscribeKey(state, 'show', (show) => {
 			if (!show) return
 
-			state.camera = equipment.get('CAMERA', storageGet('tppa.camera', ''))
-			state.mount = equipment.get('MOUNT', storageGet('tppa.mount', ''))
-
-			if (state.camera) {
-				updateFrameFormat(state.request.capture, state.camera.frameFormats)
-			}
+			load()
 		})
+
+		if (state.show) {
+			load()
+		}
 
 		return () => {
 			unsubscribe(unsubscribers)
 		}
 	})
+
+	function load() {
+		state.camera = equipment.get('CAMERA', storageGet('tppa.camera', ''))
+		state.mount = equipment.get('MOUNT', storageGet('tppa.mount', ''))
+
+		if (state.camera) {
+			updateFrameFormat(state.request.capture, state.camera.frameFormats)
+		}
+	}
 
 	function update<K extends keyof TppaStart>(key: K, value: TppaStart[K]) {
 		state.request[key] = value

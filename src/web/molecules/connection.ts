@@ -4,7 +4,7 @@ import type { ConnectionStatus } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { deepClone } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { populateProxy, subscribeProxy } from '@/shared/proxy'
+import { initProxy } from '@/shared/proxy'
 import { type Connection, DEFAULT_CONNECTION } from '@/shared/types'
 
 export interface ConnectionState {
@@ -17,23 +17,19 @@ export interface ConnectionState {
 	connected?: ConnectionStatus
 }
 
-const DEFAULT_CONNECTION_STATE: ConnectionState = {
-	show: false,
-	connections: [],
-	mode: 'create',
-	loading: false,
-}
-
-const PROPERTIES = ['show', 'connections'] as const
-
 export const ConnectionComparator = (a: Connection, b: Connection) => {
 	return (b.connectedAt ?? 0) - (a.connectedAt ?? 0)
 }
 
-const state = proxy<ConnectionState>(structuredClone(DEFAULT_CONNECTION_STATE))
-populateProxy(state, 'connection', PROPERTIES)
+const state = proxy<ConnectionState>({
+	show: false,
+	connections: [],
+	mode: 'create',
+	loading: false,
+})
+
+initProxy(state, 'connection', ['p:show', 'o:connections'])
 state.connections.sort(ConnectionComparator)
-subscribeProxy(state, 'connection', PROPERTIES)
 
 export const ConnectionMolecule = molecule(() => {
 	if (state.connections.length === 0) {
@@ -70,11 +66,9 @@ export const ConnectionMolecule = molecule(() => {
 	})
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(2)
+		const unsubscribers = new Array<VoidFunction>(1)
 
-		unsubscribers[0] = subscribeProxy(state, 'connection', PROPERTIES)
-
-		unsubscribers[1] = bus.subscribe<ConnectionStatus>('connection:close', (status) => {
+		unsubscribers[0] = bus.subscribe<ConnectionStatus>('connection:close', (status) => {
 			if (state.connected?.id === status.id) {
 				state.connected = undefined
 			}

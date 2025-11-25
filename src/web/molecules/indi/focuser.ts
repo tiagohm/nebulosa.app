@@ -35,7 +35,7 @@ export const FocuserMolecule = molecule((m, s) => {
 	stateMap.set(scope.focuser.name, state)
 
 	onMount(() => {
-		const unsubscriber = initProxy(state, `focuser.${scope.focuser.name}`, ['request'])
+		const unsubscriber = initProxy(state, `focuser.${scope.focuser.name}`, ['o:request'])
 
 		return () => {
 			unsubscriber()

@@ -45,7 +45,7 @@ export const GuideOutputMolecule = molecule((m, s) => {
 	stateMap.set(scope.guideOutput.name, state)
 
 	onMount(() => {
-		const unsubscriber = initProxy(state, `guideoutput.${scope.guideOutput.name}`, ['request'])
+		const unsubscriber = initProxy(state, `guideoutput.${scope.guideOutput.name}`, ['o:request'])
 
 		return () => {
 			unsubscriber()

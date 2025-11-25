@@ -3,30 +3,31 @@ import bus from 'src/shared/bus'
 import type { Atom, Camera, CameraCaptureEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
-import { populateProxy, subscribeProxy } from '@/shared/proxy'
+import { initProxy } from '@/shared/proxy'
 import type { Image } from '@/shared/types'
 import { EquipmentMolecule } from '../indi/equipment'
 import type { ImageViewerMolecule } from './viewer'
 
 export interface ImageWorkspaceState {
 	readonly images: Image[]
-	initialPath: string
-	showPicker: boolean
 	selected?: Image
-}
-
-const DEFAULT_IMAGE_WORKSPACE_STATE: ImageWorkspaceState = {
-	images: [],
-	showPicker: false,
-	initialPath: '',
+	readonly picker: {
+		show: boolean
+		path: string
+	}
 }
 
 const KEY_INVALID_CHAR_REGEX = /[\W]+/g
-const PROPERTIES = ['showPicker', 'initialPath'] as const
 
-const state = proxy(structuredClone(DEFAULT_IMAGE_WORKSPACE_STATE))
-populateProxy(state, 'workspace', PROPERTIES)
-subscribeProxy(state, 'workspace', PROPERTIES)
+const state = proxy<ImageWorkspaceState>({
+	images: [],
+	picker: {
+		show: false,
+		path: '',
+	},
+})
+
+initProxy(state.picker, 'workspace.picker', ['p:show', 'p:path'])
 
 const viewers = new Map<string, Atom<typeof ImageViewerMolecule>>()
 
@@ -73,7 +74,7 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 		}
 
 		if (source === 'file') {
-			state.initialPath = path
+			state.picker.path = path
 		}
 
 		return image
@@ -94,11 +95,11 @@ export const ImageWorkspaceMolecule = molecule((m) => {
 	}
 
 	function showPicker() {
-		state.showPicker = true
+		state.picker.show = true
 	}
 
 	function hidePicker() {
-		state.showPicker = false
+		state.picker.show = false
 	}
 
 	return { state, link, add, remove, showPicker, hidePicker } as const

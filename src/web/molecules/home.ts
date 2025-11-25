@@ -1,7 +1,7 @@
 import { molecule, onMount } from 'bunshi'
 import bus from 'src/shared/bus'
 import { proxy } from 'valtio'
-import { populateProxy, subscribeProxy } from '@/shared/proxy'
+import { initProxy } from '@/shared/proxy'
 
 export interface HomeState {
 	readonly menu: {
@@ -9,17 +9,13 @@ export interface HomeState {
 	}
 }
 
-const DEFAULT_HOME_STATE: HomeState = {
+const state = proxy<HomeState>({
 	menu: {
 		show: false,
 	},
-}
+})
 
-const MENU_PROPERTIES = ['show'] as const
-
-const state = proxy(structuredClone(DEFAULT_HOME_STATE))
-populateProxy(state.menu, 'home.menu', MENU_PROPERTIES)
-subscribeProxy(state.menu, 'home.menu', MENU_PROPERTIES)
+initProxy(state.menu, 'home.menu', ['p:show'])
 
 export const HomeMolecule = molecule((m) => {
 	onMount(() => {

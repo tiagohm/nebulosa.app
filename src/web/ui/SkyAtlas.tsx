@@ -22,6 +22,7 @@ import { Modal } from './Modal'
 import { Moon } from './Moon'
 import { MountDropdown } from './MountDropdown'
 import { PoweredBy } from './PoweredBy'
+import { SatelliteCategoryChipGroup } from './SatelliteCategoryChipGroup'
 import { SatelliteGroupTypeChipGroup } from './SatelliteGroupTypeChipGroup'
 import { SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
@@ -675,13 +676,16 @@ const GalaxyFilter = memo(() => {
 
 const SatelliteFilter = memo(() => {
 	const satellite = useMolecule(SatelliteMolecule)
-	const { text, groups } = useSnapshot(satellite.state.request, { sync: true })
+	const { text, groups, category } = useSnapshot(satellite.state.request, { sync: true })
 	const { loading } = useSnapshot(satellite.state)
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center p-2'>
 			<Input className='col-span-full' isClearable label='Search' onValueChange={(value) => satellite.update('text', value)} size='sm' value={text} />
-			<SatelliteGroupTypeChipGroup className='col-span-full h-[200px]' onValueChange={(value) => satellite.update('groups', value)} value={groups} />
+			<p className='col-span-full font-bold'>CATEGORY</p>
+			<SatelliteCategoryChipGroup className='col-span-full' onValueChange={(value) => satellite.update('category', value)} value={category} />
+			<p className='col-span-full font-bold'>GROUP</p>
+			<SatelliteGroupTypeChipGroup category={category} className='col-span-full h-[200px]' onValueChange={(value) => satellite.update('groups', value)} value={groups} />
 			<div className='col-span-full flex flex-row items-center justify-center gap-2'>
 				<Tooltip content='Reset' placement='bottom' showArrow>
 					<IconButton color='danger' icon={Icons.Restore} isDisabled={loading} onPointerUp={satellite.reset} variant='flat' />

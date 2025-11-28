@@ -317,6 +317,7 @@ export class AtlasManager {
 			const parallax = dso.distance > 0 ? 1 / dso.distance : 0
 			const ob = observeStar({ ...dso, parallax }, time, ebpv)
 			;({ azimuth, altitude, rightAscension, declination } = ob)
+			// rightAscension -= ob.equationOfOrigins // RA CIO -> RA equinox
 		} else {
 			const cirs = precessFk5FromJ2000(eraS2c(dso.rightAscension, dso.declination), time)
 			;({ azimuth, altitude } = cirsToObserved(cirs, time))
@@ -456,18 +457,16 @@ export class AtlasManager {
 	}
 
 	searchSatellites(req: SearchSatellite) {
-		const { lastId, text, groups, limit = 5 } = req
+		const { lastId, text, category, limit = 4 } = req
 		const search = text.trim().toUpperCase()
+		const groups = category.length === 0 ? [] : req.groups.filter((e) => category.includes(SATELLITE_GROUP_TYPES[e].category))
 		const noSearch = search.length === 0
-		const noGroups = groups.length === 0
-
-		if (noSearch && noGroups && lastId === 0) return this.satellites.slice(0, limit)
 
 		let count = 0
 
 		function filter(e: Satellite) {
 			if (count >= limit) return false
-			const found = e.id > lastId && (noSearch || e.name.includes(search)) && (noGroups || e.groups.some((e) => groups.includes(e)))
+			const found = e.id > lastId && (noSearch || e.name.includes(search)) && groups.length && e.groups.some((e) => groups.includes(e))
 			if (found) count++
 			return found
 		}
@@ -562,10 +561,10 @@ export class AtlasManager {
 					await Bun.write(path, data)
 					console.info('IERS B loaded')
 				} else {
-					console.error('failed to download IERS B')
+					console.error('failed to download IERS B', await response.text())
 				}
 			} catch (e) {
-				console.error('failed to download IERS B')
+				console.error('failed to download IERS B', e)
 			}
 		} else {
 			iersb.load(readableStreamSource(file.stream()))

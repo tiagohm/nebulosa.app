@@ -201,7 +201,7 @@ export class ImageManager {
 		const q = `SELECT d.id, d.type, d.rightAscension, d.declination, d.magnitude, d.pmRa, d.pmDec, d.distance, d.rv, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ORDER BY n.type ASC LIMIT 1) as name FROM dsos d WHERE (acos(sin(d.declination) * ${Math.sin(declination)} + cos(d.declination) * ${Math.cos(declination)} * cos(d.rightAscension - ${rightAscension})) <= ${radius}) ORDER BY d.magnitude DESC LIMIT 100`
 
 		const date = observationDateKeyword(req.solution) || Date.now()
-		const utc = timeUnix(date / 1000.0)
+		const utc = timeUnix(date / 1000)
 
 		for (const o of nebulosa.query<AnnotatedSkyObject, []>(q)) {
 			const sa = star(o.rightAscension, o.declination, o.pmRa, o.pmDec, o.distance === 0 ? 0 : 1 / o.distance, o.rv)

@@ -12,7 +12,7 @@
 		"lint": "biome lint --write src/",
 		"format": "biome format --write src/",
 		"compile": "bun tailwind && bun run build.ts",
-		"typecheck": "tsc --noEmit"
+		"tsc": "tsc --noEmit"
 	},
 	"author": {
 		"name": "Tiago Melo",
@@ -35,16 +35,16 @@
 		"react": "19.2.0",
 		"react-dom": "19.2.0",
 		"react-leaflet": "5.0.0",
-		"recharts": "3.5.0",
+		"recharts": "3.5.1",
 		"tailwindcss": "4.1.17",
 		"utility-types": "3.11.0",
 		"valtio": "2.2.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.3.7",
+		"@biomejs/biome": "2.3.8",
 		"@types/bun": "1.3.3",
 		"@types/leaflet": "1.9.21",
-		"@types/react": "19.2.6",
+		"@types/react": "19.2.7",
 		"@types/react-dom": "19.2.3",
 		"typescript": "5.9.3"
 	},
@@ -53,8 +53,5 @@
 		"@heroui/shared-utils",
 		"nebulosa",
 		"sharp"
-	],
-	"overrides": {
-		"eslint-plugin-react-perf": "npm:dry-uninstall@0.3.0"
-	}
+	]
 }

@@ -79,63 +79,73 @@ export const SOLAR_IMAGE_SOURCE_URLS: Record<SolarImageSource, string> = {
 }
 
 export const SATELLITE_GROUP_TYPES = {
-	LAST_30_DAYS: { description: "Last 30 Days' Launches", type: 'last-30-days' },
-	STATIONS: { description: 'Space Stations', type: 'stations' },
-	VISUAL: { description: '100 (or so) Brightest', type: 'visual' },
-	ACTIVE: { description: 'Active Satellites', type: 'active' },
-	ANALYST: { description: 'Analyst Satellites', type: 'analyst' },
-	COSMOS_1408_DEBRIS: { description: 'Russian ASAT Test Debris (COSMOS 1408)', type: 'cosmos-1408-debris' },
-	FENGYUN_1C_DEBRIS: { description: 'Chinese ASAT Test Debris (FENGYUN 1C)', type: 'fengyun-1c-debris' },
-	IRIDIUM_33_DEBRIS: { description: 'IRIDIUM 33 Debris', type: 'iridium-33-debris' },
-	COSMOS_2251_DEBRIS: { description: 'COSMOS 2251 Debris', type: 'cosmos-2251-debris' },
-	WEATHER: { description: 'Weather', type: 'weather' },
-	NOAA: { description: 'NOAA', type: 'noaa' },
-	GOES: { description: 'GOES', type: 'goes' },
-	RESOURCE: { description: 'Earth Resources', type: 'resource' },
-	SARSAT: { description: 'Search & Rescue (SARSAT)', type: 'sarsat' },
-	DMC: { description: 'Disaster Monitoring', type: 'dmc' },
-	TDRSS: { description: 'Tracking and Data Relay Satellite System (TDRSS)', type: 'tdrss' },
-	ARGOS: { description: 'ARGOS Data Collection System', type: 'argos' },
-	PLANET: { description: 'Planet', type: 'planet' },
-	SPIRE: { description: 'Spire', type: 'spire' },
-	GEO: { description: 'Active Geosynchronous', type: 'geo' },
-	// GPZ: { description: 'GEO Protected Zone', type: 'gpz' }, // SPECIAL
-	// GPZ_PLUS: { description: 'GEO Protected Zone Plus', type: 'gpz-plus' }, // SPECIAL
-	INTELSAT: { description: 'Intelsat', type: 'intelsat' },
-	SES: { description: 'SES', type: 'ses' },
-	EUTELSAT: { description: 'Eutelsat', type: 'eutelsat' },
-	TELESAT: { description: 'Telesat', type: 'telesat' },
-	STARLINK: { description: 'Starlink', type: 'starlink' },
-	ONEWEB: { description: 'OneWeb', type: 'oneweb' },
-	QIANFAN: { description: 'Qianfan', type: 'qianfan' },
-	HULIANWANG: { description: 'Hulianwang Digui', type: 'hulianwang' },
-	KUIPER: { description: 'Kuiper', type: 'kuiper' },
-	IRIDIUM_NEXT: { description: 'Iridium NEXT', type: 'iridium-NEXT' },
-	ORBCOMM: { description: 'Orbcomm', type: 'orbcomm' },
-	GLOBALSTAR: { description: 'Globalstar', type: 'globalstar' },
-	AMATEUR: { description: 'Amateur Radio', type: 'amateur' },
-	SATNOGS: { description: 'SatNOGS', type: 'satnogs' },
-	X_COMM: { description: 'Experimental Comm', type: 'x-comm' },
-	OTHER_COMM: { description: 'Other Comm', type: 'other-comm' },
-	GNSS: { description: 'GNSS', type: 'gnss' },
-	GPS_OPS: { description: 'GPS Operational', type: 'gps-ops' },
-	GLO_OPS: { description: 'GLONASS Operational', type: 'glo-ops' },
-	GALILEO: { description: 'Galileo', type: 'galileo' },
-	BEIDOU: { description: 'Beidou', type: 'beidou' },
-	SBAS: { description: 'Satellite-Based Augmentation System (WAAS/EGNOS/MSAS)', type: 'sbas' },
-	NNSS: { description: 'Navy Navigation Satellite System (NNSS)', type: 'nnss' },
-	MUSSON: { description: 'Russian LEO Navigation', type: 'musson' },
-	SCIENCE: { description: 'Space & Earth Science', type: 'science' },
-	GEODETIC: { description: 'Geodetic', type: 'geodetic' },
-	ENGINEERING: { description: 'Engineering', type: 'engineering' },
-	EDUCATION: { description: 'Education', type: 'education' },
-	MILITARY: { description: 'Miscellaneous Military', type: 'military' },
-	RADAR: { description: 'Radar Calibration', type: 'radar' },
-	CUBESAT: { description: 'CubeSats', type: 'cubesat' },
-	OTHER: { description: 'Other Satellites', type: 'other' },
+	// Special-Interest Satellites
+	LAST_30_DAYS: { description: "Last 30 Days' Launches", type: 'last-30-days', category: 'SPECIAL' },
+	STATIONS: { description: 'Space Stations', type: 'stations', category: 'SPECIAL' },
+	VISUAL: { description: '100 (or so) Brightest', type: 'visual', category: 'SPECIAL' },
+	ACTIVE: { description: 'Active Satellites', type: 'active', category: 'SPECIAL' },
+	ANALYST: { description: 'Analyst Satellites', type: 'analyst', category: 'SPECIAL' },
+	COSMOS_1408_DEBRIS: { description: 'Russian ASAT Test Debris (COSMOS 1408)', type: 'cosmos-1408-debris', category: 'SPECIAL' },
+	FENGYUN_1C_DEBRIS: { description: 'Chinese ASAT Test Debris (FENGYUN 1C)', type: 'fengyun-1c-debris', category: 'SPECIAL' },
+	IRIDIUM_33_DEBRIS: { description: 'IRIDIUM 33 Debris', type: 'iridium-33-debris', category: 'SPECIAL' },
+	COSMOS_2251_DEBRIS: { description: 'COSMOS 2251 Debris', type: 'cosmos-2251-debris', category: 'SPECIAL' },
+	// Weather & Earth Resources Satellites
+	WEATHER: { description: 'Weather', type: 'weather', category: 'WEATHER' },
+	NOAA: { description: 'NOAA', type: 'noaa', category: 'WEATHER' },
+	GOES: { description: 'GOES', type: 'goes', category: 'WEATHER' },
+	RESOURCE: { description: 'Earth Resources', type: 'resource', category: 'WEATHER' },
+	SARSAT: { description: 'Search & Rescue (SARSAT)', type: 'sarsat', category: 'WEATHER' },
+	DMC: { description: 'Disaster Monitoring', type: 'dmc', category: 'WEATHER' },
+	TDRSS: { description: 'Tracking and Data Relay Satellite System (TDRSS)', type: 'tdrss', category: 'WEATHER' },
+	ARGOS: { description: 'ARGOS Data Collection System', type: 'argos', category: 'WEATHER' },
+	PLANET: { description: 'Planet', type: 'planet', category: 'WEATHER' },
+	SPIRE: { description: 'Spire', type: 'spire', category: 'WEATHER' },
+	// Communications Satellites
+	GEO: { description: 'Active Geosynchronous', type: 'geo', category: 'COMMUNICATION' },
+	// GPZ: { description: 'GEO Protected Zone', type: 'gpz', category: 'COMMUNICATION' }, // SPECIAL
+	// GPZ_PLUS: { description: 'GEO Protected Zone Plus', type: 'gpz-plus', category: 'COMMUNICATION' }, // SPECIAL
+	INTELSAT: { description: 'Intelsat', type: 'intelsat', category: 'COMMUNICATION' },
+	SES: { description: 'SES', type: 'ses', category: 'COMMUNICATION' },
+	EUTELSAT: { description: 'Eutelsat', type: 'eutelsat', category: 'COMMUNICATION' },
+	TELESAT: { description: 'Telesat', type: 'telesat', category: 'COMMUNICATION' },
+	STARLINK: { description: 'Starlink', type: 'starlink', category: 'COMMUNICATION' },
+	ONEWEB: { description: 'OneWeb', type: 'oneweb', category: 'COMMUNICATION' },
+	QIANFAN: { description: 'Qianfan', type: 'qianfan', category: 'COMMUNICATION' },
+	HULIANWANG: { description: 'Hulianwang Digui', type: 'hulianwang', category: 'COMMUNICATION' },
+	KUIPER: { description: 'Kuiper', type: 'kuiper', category: 'COMMUNICATION' },
+	IRIDIUM_NEXT: { description: 'Iridium NEXT', type: 'iridium-NEXT', category: 'COMMUNICATION' },
+	ORBCOMM: { description: 'Orbcomm', type: 'orbcomm', category: 'COMMUNICATION' },
+	GLOBALSTAR: { description: 'Globalstar', type: 'globalstar', category: 'COMMUNICATION' },
+	AMATEUR: { description: 'Amateur Radio', type: 'amateur', category: 'COMMUNICATION' },
+	SATNOGS: { description: 'SatNOGS', type: 'satnogs', category: 'COMMUNICATION' },
+	X_COMM: { description: 'Experimental Comm', type: 'x-comm', category: 'COMMUNICATION' },
+	OTHER_COMM: { description: 'Other Comm', type: 'other-comm', category: 'COMMUNICATION' },
+	// Navigation Satellites
+	GNSS: { description: 'GNSS', type: 'gnss', category: 'NAVIGATION' },
+	GPS: { description: 'GPS Operational', type: 'gps-ops', category: 'NAVIGATION' },
+	GLONASS: { description: 'GLONASS Operational', type: 'glo-ops', category: 'NAVIGATION' },
+	GALILEO: { description: 'Galileo', type: 'galileo', category: 'NAVIGATION' },
+	BEIDOU: { description: 'Beidou', type: 'beidou', category: 'NAVIGATION' },
+	SBAS: { description: 'Satellite-Based Augmentation System (WAAS/EGNOS/MSAS)', type: 'sbas', category: 'NAVIGATION' },
+	NNSS: { description: 'Navy Navigation Satellite System (NNSS)', type: 'nnss', category: 'NAVIGATION' },
+	MUSSON: { description: 'Russian LEO Navigation', type: 'musson', category: 'NAVIGATION' },
+	// Scientific Satellites
+	SCIENCE: { description: 'Space & Earth Science', type: 'science', category: 'SCIENTIFIC' },
+	GEODETIC: { description: 'Geodetic', type: 'geodetic', category: 'SCIENTIFIC' },
+	ENGINEERING: { description: 'Engineering', type: 'engineering', category: 'SCIENTIFIC' },
+	EDUCATION: { description: 'Education', type: 'education', category: 'SCIENTIFIC' },
+	// Miscellaneous Satellites
+	MILITARY: { description: 'Miscellaneous Military', type: 'military', category: 'MISCELLANEOUS' },
+	RADAR: { description: 'Radar Calibration', type: 'radar', category: 'MISCELLANEOUS' },
+	CUBESAT: { description: 'CubeSats', type: 'cubesat', category: 'MISCELLANEOUS' },
+	OTHER: { description: 'Other Satellites', type: 'other', category: 'MISCELLANEOUS' },
 } as const
 
 export type SatelliteGroupType = keyof typeof SATELLITE_GROUP_TYPES
+
+export type SatelliteType = (typeof SATELLITE_GROUP_TYPES)[SatelliteGroupType]['type']
+
+export type SatelliteCategory = (typeof SATELLITE_GROUP_TYPES)[SatelliteGroupType]['category']
 
 export type SolarImageSource = (typeof SOLAR_IMAGE_SOURCES)[number]
 
@@ -277,6 +287,7 @@ export interface SearchSatellite {
 	groups: SatelliteGroupType[]
 	lastId: number
 	limit?: number
+	category: SatelliteCategory[]
 }
 
 // Confirmation
@@ -1415,7 +1426,8 @@ export const DEFAULT_SKY_OBJECT_SEARCH_ITEM: SkyObjectSearchItem = {
 
 export const DEFAULT_SEARCH_SATELLITE: SearchSatellite = {
 	text: '',
-	groups: ['AMATEUR', 'BEIDOU', 'GALILEO', 'GLO_OPS', 'GNSS', 'GPS_OPS', 'ONEWEB', 'SCIENCE', 'STARLINK', 'STATIONS', 'VISUAL'],
+	groups: ['AMATEUR', 'BEIDOU', 'GALILEO', 'GLONASS', 'GNSS', 'GPS', 'ONEWEB', 'SCIENCE', 'STARLINK', 'STATIONS', 'VISUAL'],
+	category: ['SPECIAL', 'WEATHER', 'COMMUNICATION', 'NAVIGATION', 'SCIENTIFIC'],
 	lastId: 0,
 	limit: 4,
 }

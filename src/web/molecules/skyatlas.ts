@@ -545,6 +545,7 @@ export const SatelliteMolecule = molecule(() => {
 	}
 
 	function reset() {
+		state.request.category = [...DEFAULT_SEARCH_SATELLITE.category]
 		state.request.groups = [...DEFAULT_SEARCH_SATELLITE.groups]
 	}
 

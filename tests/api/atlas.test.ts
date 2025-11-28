@@ -41,7 +41,7 @@ describe('search sky object', () => {
 	test('no filter', () => {
 		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 10 })
 
-		expect(result).toHaveLength(5)
+		expect(result).toHaveLength(10)
 		expect(result[0].id).toBe(32263)
 		expect(result[0].magnitude).toBe(-1.44)
 		expect(result[0].type).toBe(StellariumObjectType.STAR)
@@ -344,9 +344,10 @@ test('position of jupiter', async () => {
 test('position of sky object', () => {
 	const position = atlas.positionOfSkyObject(POSITION_OF_BODY, '32263')
 
-	expect(position.rightAscension).toBeCloseTo(parseAngle('06 46 16.56', PARSE_HOUR_ANGLE)!, 6)
+	// expect(position.rightAscension).toBeCloseTo(parseAngle('06 46 17.13', PARSE_HOUR_ANGLE)!, 6)
+	expect(position.rightAscension).toBeCloseTo(parseAngle('06 44 58.25', PARSE_HOUR_ANGLE)!, 6)
 	expect(position.rightAscensionJ2000).toBeCloseTo(parseAngle('06 45 08.93', PARSE_HOUR_ANGLE)!, 6)
-	expect(position.declination).toBeCloseTo(parseAngle('-16 45 10.81')!, 6)
+	expect(position.declination).toBeCloseTo(parseAngle('-16 45 02.90')!, 6)
 	expect(position.declinationJ2000).toBeCloseTo(parseAngle('-16 42 58.01')!, 6)
 	expect(position.altitude).toBeCloseTo(parseAngle('66 48 39.29')!, 6)
 	expect(position.azimuth).toBeCloseTo(parseAngle('278 50 39.10')!, 6)

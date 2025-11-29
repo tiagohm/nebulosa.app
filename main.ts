@@ -109,6 +109,15 @@ await fs.mkdir(Bun.env.satellitesDir, CREATE_RECURSIVE_DIRECTORY)
 console.info('app directory is located at', Bun.env.appDir)
 console.info('captures directory is located at', Bun.env.capturesDir)
 
+// DNS caching
+
+process.env.BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS = '86400'
+
+Bun.dns.prefetch('celestrak.org')
+Bun.dns.prefetch('ssd.jpl.nasa.gov')
+Bun.dns.prefetch('sdo.gsfc.nasa.gov')
+Bun.dns.prefetch('hpiers.obspm.fr')
+
 // Managers
 
 const cacheManager = new CacheManager()

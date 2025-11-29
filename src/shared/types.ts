@@ -952,7 +952,6 @@ export interface Point {
 }
 
 export const X_IMAGE_INFO_HEADER = 'X-Image-Info'
-export const X_IMAGE_PATH_HEADER = 'X-Image-Path'
 
 export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	exposureTime: 0,

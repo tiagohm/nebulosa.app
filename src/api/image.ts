@@ -16,7 +16,7 @@ import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageCoordinateInterpolation, ImageInfo, ImageTransformation, OpenImage, SaveImage } from '../shared/types'
-import { X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER } from '../shared/types'
+import { X_IMAGE_INFO_HEADER } from '../shared/types'
 import { decodePath } from './camera'
 import type { NotificationManager } from './notification'
 
@@ -53,6 +53,8 @@ export class ImageManager {
 		readonly cache: Map<string, Buffer>,
 		readonly notification?: NotificationManager,
 	) {}
+
+	private readonly images = new Map<string, number>()
 
 	async open(req: OpenImage, savePath?: string) {
 		if (!req.path) return undefined
@@ -109,6 +111,8 @@ export class ImageManager {
 						rightAscension: rightAscensionKeyword(image.header, undefined),
 						declination: declinationKeyword(image.header, undefined),
 					}
+
+					this.images.set(info.path, Date.now())
 
 					return info
 				} else if (savePath) {
@@ -249,6 +253,17 @@ export class ImageManager {
 	close(req: CloseImage) {
 		this.cache.delete(req.id)
 	}
+
+	async cleanUp() {
+		const now = Date.now()
+
+		for (const [path, timestamp] of this.images) {
+			if (now - timestamp >= 60000) {
+				await fs.unlink(path)
+				this.images.delete(path)
+			}
+		}
+	}
 }
 
 export function image(image: ImageManager) {
@@ -260,7 +275,6 @@ export function image(image: ImageManager) {
 			if (!info) return undefined
 
 			set.headers[X_IMAGE_INFO_HEADER] = encodeURIComponent(JSON.stringify(info))
-			set.headers[X_IMAGE_PATH_HEADER] = encodeURIComponent(info.path)
 
 			return Bun.file(info.path)
 		})

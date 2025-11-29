@@ -1,5 +1,5 @@
 import { build } from 'bun'
-import { version } from 'package.json'
+import { author, description, version } from 'package.json'
 
 await build({
 	entrypoints: ['./main.ts'],
@@ -11,8 +11,8 @@ await build({
 		autoloadDotenv: true,
 		windows: {
 			title: 'Nebulosa',
-			description: 'The complete integrated solution for all of your astronomical imaging needs.',
-			publisher: 'Tiago Melo',
+			description,
+			publisher: author.name,
 			icon: 'src/web/assets/nebulosa.ico',
 			copyright: '© 2025 Tiago Melo',
 			hideConsole: false,

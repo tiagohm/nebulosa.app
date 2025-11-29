@@ -31,7 +31,7 @@ import { FramingManager, framing } from './src/api/framing'
 import { ImageManager, image } from './src/api/image'
 import { PlateSolverManager, plateSolver } from './src/api/platesolver'
 import { StarDetectionManager, starDetection } from './src/api/stardetection'
-import { X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER } from './src/shared/types'
+import { X_IMAGE_INFO_HEADER } from './src/shared/types'
 import homeHtml from './src/web/pages/home/index.html'
 
 const CREATE_RECURSIVE_DIRECTORY: MakeDirectoryOptions = { recursive: true }
@@ -164,12 +164,21 @@ const app = new Elysia({
 
 	.use(
 		cors({
-			exposeHeaders: [X_IMAGE_INFO_HEADER, X_IMAGE_PATH_HEADER],
+			exposeHeaders: [X_IMAGE_INFO_HEADER],
 		}),
 	)
 
 	// Cron
 
+	.use(
+		cron({
+			name: 'every-minute',
+			pattern: '0 */1 * * * *',
+			run: () => {
+				void imageManager.cleanUp()
+			},
+		}),
+	)
 	.use(
 		cron({
 			name: 'every-15-minutes',
@@ -206,17 +215,6 @@ const app = new Elysia({
 			set.headers['cache-control'] = 'no-cache, no-store, must-revalidate'
 			set.headers.pragma = 'no-cache'
 			set.headers.expires = '0'
-		}
-	})
-
-	// After Response
-
-	.onAfterResponse((res) => {
-		const headers = res.set.headers
-
-		if (res.path === '/image/open') {
-			const path = decodeURIComponent(headers[X_IMAGE_PATH_HEADER] as never)
-			path && fs.unlink(path).catch(console.error)
 		}
 	})
 

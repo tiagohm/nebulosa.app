@@ -829,7 +829,23 @@ const GUM_CATALOG: [string, number, string][] = [
 	['83', M, '16'],
 ]
 
-if (await fs.exists('data/nebulosa.sqlite')) await fs.unlink('data/nebulosa.sqlite')
+const GITHUB_FILES: Readonly<Record<string, string>> = {
+	'hyg_v42.csv': 'https://github.com/tiagohm/nebulosa.data/raw/refs/heads/main/hyg_v42.csv',
+	'catalog.dat': 'https://github.com/tiagohm/nebulosa.data/raw/refs/heads/main/catalog.dat',
+	'names.dat': 'https://github.com/tiagohm/nebulosa.data/raw/refs/heads/main/names.dat',
+}
+
+for (const [name, url] of Object.entries(GITHUB_FILES)) {
+	const file = Bun.file(`data/${name}`)
+
+	if (!(await file.exists())) {
+		Bun.write(file, await (await fetch(url)).blob())
+	}
+}
+
+if (await fs.exists('data/nebulosa.sqlite')) {
+	await fs.unlink('data/nebulosa.sqlite')
+}
 
 const db = new Database('data/nebulosa.sqlite')
 

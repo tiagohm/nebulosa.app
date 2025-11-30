@@ -1,5 +1,6 @@
 catalog.dat
 names.dat
 hyg_v*.csv
+nebulosa.sqlite
 *-shm
 *-wal

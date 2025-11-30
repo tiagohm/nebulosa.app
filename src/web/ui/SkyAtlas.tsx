@@ -248,7 +248,7 @@ const PlanetTab = memo(() => {
 		if (noSearch && all) return PLANETS
 
 		const text = search.name.trim().toUpperCase()
-		return PLANETS.filter((e) => (noSearch || e.name.toUpperCase().includes(text) || e.code.includes(text) || e.solution.includes(text)) && (all || e.type === search.type))
+		return PLANETS.filter((e) => (all || e.type === search.type) && (noSearch || e.name.toUpperCase().includes(text) || e.code.includes(text) || e.solution.includes(text)))
 	}, [search.name, search.type])
 
 	return (

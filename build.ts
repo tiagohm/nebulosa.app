@@ -4,6 +4,7 @@ import { author, description, version } from 'package.json'
 await build({
 	entrypoints: ['./main.ts'],
 	minify: true,
+	sourcemap: false,
 	target: 'bun',
 	compile: {
 		outfile: process.platform === 'win32' ? 'nebulosa.exe' : 'nebulosa.out',
@@ -13,8 +14,8 @@ await build({
 			title: 'Nebulosa',
 			description,
 			publisher: author.name,
-			icon: 'src/web/assets/nebulosa.ico',
-			copyright: '© 2025 Tiago Melo',
+			icon: 'src/web/assets/nebulosa.ico', // https://redketchup.io/icon-converter
+			copyright: `© ${new Date().getUTCFullYear()} ${author.name}`,
 			hideConsole: false,
 			version,
 		},

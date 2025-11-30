@@ -4,7 +4,7 @@ import type { Temporal } from 'nebulosa/src/temporal'
 import type React from 'react'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
-import { type BodyPosition, type CloseApproach, DEFAULT_BODY_POSITION, DEFAULT_GEOGRAPHIC_COORDINATE, DEFAULT_POSITION_OF_BODY, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type FindCloseApproaches, type Framing, type GeographicCoordinate, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from 'src/shared/types'
+import { type BodyPosition, type CloseApproach, DEFAULT_BODY_POSITION, DEFAULT_GEOGRAPHIC_COORDINATE, DEFAULT_POSITION_OF_BODY, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type FindCloseApproaches, type Framing, type GeographicCoordinate, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type Mount, type NextLunarEclipse, type NextSolarEclipse, type PlanetType, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -48,6 +48,10 @@ export interface MoonState {
 }
 
 export interface PlanetState {
+	readonly search: {
+		name: string
+		type: PlanetType | 'ALL'
+	}
 	readonly request: PositionOfBody
 	code?: string
 	readonly position: BodyPosition
@@ -232,12 +236,16 @@ export const MoonMolecule = molecule(() => {
 })
 
 const planetState = proxy<PlanetState>({
+	search: {
+		name: '',
+		type: 'ALL',
+	},
 	request: structuredClone(DEFAULT_POSITION_OF_BODY),
 	position: structuredClone(DEFAULT_BODY_POSITION),
 	chart: [],
 })
 
-initProxy(planetState, 'skyatlas.planet', ['o:request'])
+initProxy(planetState, 'skyatlas.planet', ['o:search', 'o:request'])
 
 export const PlanetMolecule = molecule(() => {
 	const state = planetState
@@ -264,6 +272,10 @@ export const PlanetMolecule = molecule(() => {
 		}
 	}
 
+	function update<K extends keyof PlanetState['search']>(key: K, value: PlanetState['search'][K]) {
+		state.search[key] = value
+	}
+
 	async function updatePosition() {
 		if (!state.code) return
 		const position = await Api.SkyAtlas.positionOfPlanet(state.request, state.code)
@@ -288,7 +300,7 @@ export const PlanetMolecule = molecule(() => {
 		}
 	}
 
-	return { state, tick, select } as const
+	return { state, tick, update, select } as const
 })
 
 const asteroidState = proxy<AsteroidState>({

@@ -149,6 +149,25 @@ export type SatelliteCategory = (typeof SATELLITE_GROUP_TYPES)[SatelliteGroupTyp
 
 export type SolarImageSource = (typeof SOLAR_IMAGE_SOURCES)[number]
 
+export type PlanetType =
+	| 'PLANET'
+	| 'DWARF_PLANET'
+	| 'ASTEROID'
+	| 'COMET'
+	| 'MARTIAN_SATELLITE'
+	| 'MARTIAN_SATELLITE'
+	| 'JOVIAN_REGULAR_SATELLITE'
+	| 'JOVIAN_IRREGULAR_SATELLITE'
+	| 'SATURNIAN_REGULAR_SATELLITE'
+	| 'SATURNIAN_INNER_SATELLITE'
+	| 'SATURNIAN_IRREGULAR_SATELLITE'
+	| 'URANIAN_REGULAR_SATELLITE'
+	| 'URANIAN_INNER_SATELLITE'
+	| 'URANIAN_IRREGULAR_SATELLITE'
+	| 'NEPTUNIAN_SATELLITE'
+	| 'NEPTUNIAN_IRREGULAR_SATELLITE'
+	| 'PLUTO_SATELLITE'
+
 export interface PositionOfBody extends LocationAndTime {}
 
 export interface ChartOfBody extends PositionOfBody {}

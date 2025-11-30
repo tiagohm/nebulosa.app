@@ -21,6 +21,7 @@ import { Location } from './Location'
 import { Modal } from './Modal'
 import { Moon } from './Moon'
 import { MountDropdown } from './MountDropdown'
+import { PlanetTypeSelect } from './PlanetTypeSelect'
 import { PoweredBy } from './PoweredBy'
 import { SatelliteCategoryChipGroup } from './SatelliteCategoryChipGroup'
 import { SatelliteGroupTypeChipGroup } from './SatelliteGroupTypeChipGroup'
@@ -81,7 +82,7 @@ const Header = memo(() => {
 					<IconButton color='primary' icon={Icons.MapMarker} onPointerUp={atlas.showLocation} variant='flat' />
 				</Tooltip>
 			</div>
-			{(tab === 'galaxy' || tab === 'satellite') && (
+			{(tab === 'planet' || tab === 'galaxy' || tab === 'satellite') && (
 				<Popover className='max-w-140' placement='bottom' showArrow>
 					<Tooltip content='Filter' placement='bottom' showArrow>
 						<div className='max-w-fit'>
@@ -91,6 +92,7 @@ const Header = memo(() => {
 						</div>
 					</Tooltip>
 					<PopoverContent>
+						{tab === 'planet' && <PlanetFilter />}
 						{tab === 'galaxy' && <GalaxyFilter />}
 						{tab === 'satellite' && <SatelliteFilter />}
 					</PopoverContent>
@@ -237,11 +239,21 @@ const PlanetTab = memo(() => {
 	const { twilight } = useSnapshot(atlas.state)
 
 	const planet = useMolecule(PlanetMolecule)
-	const { code, position, chart } = useSnapshot(planet.state)
+	const { code, position, chart, search } = useSnapshot(planet.state)
+
+	const items = useMemo(() => {
+		const noSearch = !search.name.trim()
+		const all = search.type === 'ALL'
+
+		if (noSearch && all) return PLANETS
+
+		const text = search.name.trim().toUpperCase()
+		return PLANETS.filter((e) => (noSearch || e.name.toUpperCase().includes(text) || e.code.includes(text) || e.solution.includes(text)) && (all || e.type === search.type))
+	}, [search.name, search.type])
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<Listbox className='pl-10 relative min-h-[200px] max-h-[240px] col-span-full' classNames={{ base: 'w-full', list: 'max-h-[190px] overflow-scroll' }} items={PLANETS} onAction={(key) => planet.select(key as never)} selectionMode='none'>
+			<Listbox className='pl-10 relative min-h-[200px] max-h-[240px] col-span-full' classNames={{ base: 'w-full', list: 'max-h-[190px] overflow-scroll' }} items={items} onAction={(key) => planet.select(key as never)} selectionMode='none'>
 				{(planet) => (
 					<ListboxItem description={planet.type} key={planet.code}>
 						<span className='flex flex-row items-center justify-between'>
@@ -631,6 +643,18 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 			<span className='w-full absolute top-[42px] left-0' style={{ visibility: showChart ? 'visible' : 'hidden' }}>
 				<EphemerisChart data={deferredData} />
 			</span>
+		</div>
+	)
+})
+
+const PlanetFilter = memo(() => {
+	const planet = useMolecule(PlanetMolecule)
+	const { name, type } = useSnapshot(planet.state.search, { sync: true })
+
+	return (
+		<div className='min-w-77 grid grid-cols-12 gap-2 items-center p-2'>
+			<Input className='col-span-full' isClearable onValueChange={(value) => planet.update('name', value)} placeholder='Search' value={name} />
+			<PlanetTypeSelect className='col-span-full' onValueChange={(value) => planet.update('type', value)} value={type} />
 		</div>
 	)
 })

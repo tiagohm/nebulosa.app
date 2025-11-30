@@ -1,0 +1,65 @@
+name: Compile
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Dependencies
+        run: bun i --production
+
+      - name: Build
+        run: bun run bin/nebulosa.sqlite.ts
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: nebulosa.sqlite
+          path: data/nebulosa.sqlite
+          retention-days: 1
+
+  compile:
+    name: Compile
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ ubuntu-24.04, windows-2025, ubuntu-24.04-arm ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Dependencies
+        run: bun i --production
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: nebulosa.sqlite
+          path: data
+
+      - name: Compile
+        run: bun compile
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: nebulosa-${{ matrix.os }}
+          path: |
+            nebulosa.exe
+            nebulosa.out
+          retention-days: 1

@@ -29,6 +29,7 @@ jobs:
           retention-days: 1
 
   compile:
+    needs: build
     name: Compile
     runs-on: ${{ matrix.os }}
 
@@ -47,7 +48,7 @@ jobs:
         run: bun i --production
 
       - name: Download Artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: nebulosa.sqlite
           path: data

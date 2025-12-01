@@ -14,7 +14,7 @@ await build({
 			title: 'Nebulosa',
 			description,
 			publisher: author.name,
-			icon: 'src/web/assets/nebulosa.ico', // https://redketchup.io/icon-converter
+			icon: 'src/web/assets/nebulosa.ico', // Generated using GIMP (256x256, 32 bpp, 8-bit alpha, no palette, compressed PNG)
 			copyright: `© ${new Date().getUTCFullYear()} ${author.name}`,
 			hideConsole: false,
 			version,

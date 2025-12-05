@@ -14,9 +14,9 @@ export const ImageSaveMolecule = molecule((m, s) => {
 	async function save() {
 		try {
 			state.loading = true
-			const path = scope.image.path.split('#')[0]
+
 			const transformation = { ...viewer.state.transformation, format: state.format }
-			await Api.Image.save({ path, transformation, savePath: state.path, transformed: state.transformed })
+			await Api.Image.save({ path: viewer.realPath(), transformation, savePath: state.path, transformed: state.transformed })
 		} finally {
 			state.loading = false
 		}

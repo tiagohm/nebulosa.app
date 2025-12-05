@@ -2,8 +2,8 @@ import Elysia from 'elysia'
 import fs from 'fs/promises'
 import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, type Fits, observationDateKeyword, readFits, rightAscensionKeyword } from 'nebulosa/src/fits'
-import { type Image, type ImageFormat, readImageFromFits, type WriteImageToFormatOptions, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
-import { adf } from 'nebulosa/src/image.computation'
+import { type Image, type ImageFormat, isImage, readImageFromFits, type WriteImageToFormatOptions, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
+import { adf, histogram } from 'nebulosa/src/image.computation'
 import { debayer, horizontalFlip, invert, scnr, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import { bufferSource, fileHandleSink, fileHandleSource } from 'nebulosa/src/io'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
@@ -15,7 +15,7 @@ import type { JpegOptions, PngOptions, WebpOptions } from 'sharp'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
-import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageCoordinateInterpolation, ImageInfo, ImageTransformation, OpenImage, SaveImage } from '../shared/types'
+import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageCoordinateInterpolation, ImageHistogram, ImageInfo, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
 import { decodePath } from './camera'
 import type { NotificationManager } from './notification'
@@ -67,11 +67,7 @@ export class ImageManager {
 				const source = bufferSource(buffer)
 				const fits = await readFits(source)
 
-				if (fits) {
-					return await this.readAndTransformImageFromFits(fits, req.transformation, path, savePath)
-				}
-
-				return undefined
+				return fits && (await this.readAndTransformImageFromFits(fits, req.transformation, path, savePath))
 			} else {
 				req.path = path
 			}
@@ -81,11 +77,7 @@ export class ImageManager {
 		await using source = fileHandleSource(handle)
 		const fits = await readFits(source)
 
-		if (fits) {
-			return await this.readAndTransformImageFromFits(fits, req.transformation, req.path, savePath)
-		}
-
-		return undefined
+		return fits && (await this.readAndTransformImageFromFits(fits, req.transformation, req.path, savePath))
 	}
 
 	async readAndTransformImageFromFits(fits: Fits, transformation: ImageTransformation, realPath: string, savePath?: string) {
@@ -96,9 +88,11 @@ export class ImageManager {
 				const id = Bun.randomUUIDv7()
 				const { format } = transformation
 				const path = savePath ?? join(Bun.env.tmpDir, `${id}.${format}`)
-				const output = await this.transformImageAndSave(image, path, format, transformation)
+				const output = await this.transformImageAndSave(image, path, transformation)
 
-				if (output) {
+				if (isImage(output)) {
+					return output
+				} else if (output) {
 					const info: ImageInfo = {
 						path,
 						realPath,
@@ -112,7 +106,7 @@ export class ImageManager {
 						declination: declinationKeyword(image.header, undefined),
 					}
 
-					this.images.set(info.path, Date.now())
+					this.images.set(path, Date.now())
 
 					return info
 				} else if (savePath) {
@@ -128,7 +122,7 @@ export class ImageManager {
 		}
 	}
 
-	async transformImageAndSave(image: Image, path: string, format: ImageFormat, transformation: ImageTransformation) {
+	async transformImageAndSave(image: Image, path: string, transformation: ImageTransformation, format: ImageFormat = transformation.format) {
 		if (transformation.enabled && transformation.debayer) {
 			image = debayer(image) ?? image
 		}
@@ -164,6 +158,10 @@ export class ImageManager {
 			image = invert(image)
 		}
 
+		if (!path) {
+			return image
+		}
+
 		// TODO: handle XISF format
 		if (format === 'fits' || format === 'xisf') {
 			const handle = await fs.open(path, 'w')
@@ -194,7 +192,7 @@ export class ImageManager {
 
 	save(req: SaveImage) {
 		req.transformation.enabled = req.transformed
-		return this.open(req, req.savePath)
+		return !!req.savePath && this.open(req, req.savePath)
 	}
 
 	annotate(req: AnnotateImage) {
@@ -248,7 +246,29 @@ export class ImageManager {
 		return { ma, md, x0: 0, y0: 0, x1: width, y1: height, delta }
 	}
 
-	statistics() {}
+	async statistics(req: StatisticImage) {
+		req.transformation.enabled = req.transformed
+		const image = await this.open(req, '')
+
+		if (isImage(image)) {
+			const stats = new Array<ImageHistogram>(image.metadata.channels)
+			const isMono = stats.length === 1
+			const bits = new Int32Array(1 << Math.max(8, Math.min(req.bits ?? 16, 20)))
+
+			for (let i = 0; i < stats.length; i++) {
+				const channel = isMono ? 'GRAY' : i === 0 ? 'RED' : i === 1 ? 'GREEN' : 'BLUE'
+				const hist = histogram(image, channel, undefined, req.area, bits)
+				const { standardDeviation, variance, count, mean, median, maximum, minimum } = hist
+				stats[i] = { standardDeviation, variance, count, mean, median, maximum, minimum, data: Array.from(bits) }
+			}
+
+			return stats
+		} else {
+			console.warn('invalid state. expected image, but got', image)
+		}
+
+		return []
+	}
 
 	close(req: CloseImage) {
 		this.cache.delete(req.id)
@@ -272,7 +292,7 @@ export function image(image: ImageManager) {
 		.post('/open', async ({ body, set }) => {
 			const info = await image.open(body as never)
 
-			if (!info) return undefined
+			if (!info || isImage(info)) return undefined
 
 			set.headers[X_IMAGE_INFO_HEADER] = encodeURIComponent(JSON.stringify(info))
 
@@ -282,7 +302,7 @@ export function image(image: ImageManager) {
 		.post('/save', ({ body }) => image.save(body as never))
 		.post('/annotate', ({ body }) => image.annotate(body as never))
 		.post('/coordinateinterpolation', ({ body }) => image.coordinateInterpolation(body as never))
-		.post('/statistics', () => image.statistics())
+		.post('/statistics', ({ body }) => image.statistics(body as never))
 		.get('/fovcameras', () => fovCameras)
 		.get('/fovtelescopes', () => fovTelescopes)
 

@@ -15,6 +15,7 @@ import { ImageInfo } from './ImageInfo'
 import { ImageSave } from './ImageSave'
 import { ImageScnr } from './ImageScnr'
 import { ImageSettings } from './ImageSettings'
+import { ImageStatistics } from './ImageStatistics'
 import { ImageStretch } from './ImageStretch'
 import { ImageToolBar } from './ImageToolBar'
 import { Interactable, type InteractableProps } from './Interactable'
@@ -26,7 +27,7 @@ export const ImageViewer = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { image } = viewer.scope
 	const workspace = useMolecule(ImageWorkspaceMolecule)
-	const { crosshair, starDetection, stretch, solver, fitsHeader, scnr, adjustment, filter, settings, annotation, save, mouseCoordinate } = useSnapshot(viewer.state)
+	const { crosshair, starDetection, stretch, solver, fitsHeader, scnr, adjustment, filter, settings, annotation, save, mouseCoordinate, statistics } = useSnapshot(viewer.state)
 	const { selected } = useSnapshot(workspace.state)
 
 	useLayoutEffect(() => {
@@ -75,6 +76,7 @@ export const ImageViewer = memo(() => {
 			{settings.show && <ImageSettings />}
 			{annotation.show && <ImageAnnotation />}
 			{save.show && <ImageSave />}
+			{statistics.show && <ImageStatistics />}
 		</>
 	)
 })

@@ -21,7 +21,7 @@ export const ImageSolverMolecule = molecule((m, s) => {
 		try {
 			solver.loading = true
 
-			const request = { ...solver.request, ...settings.state.solver[solver.request.type] } // Merge solver-specific settings
+			const request: PlateSolveStart = { ...solver.request, ...settings.state.solver[solver.request.type], path: viewer.realPath(), id: scope.image.key }
 			request.fov = arcsec(angularSizeOfPixel(request.focalLength, request.pixelSize) * viewer.state.info!.height)
 
 			solver.solution = await Api.PlateSolver.start(request)

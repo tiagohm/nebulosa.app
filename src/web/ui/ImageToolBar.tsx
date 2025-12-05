@@ -10,6 +10,7 @@ import { ImageScnrMolecule } from '@/molecules/image/scnr'
 import { ImageSettingsMolecule } from '@/molecules/image/settings'
 import { ImageSolverMolecule } from '@/molecules/image/solver'
 import { StarDetectionMolecule } from '@/molecules/image/stardetection'
+import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
 import { Icons } from './Icon'
@@ -33,6 +34,7 @@ export const ImageToolBar = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
 	const filter = useMolecule(ImageFilterMolecule)
 	const settings = useMolecule(ImageSettingsMolecule)
+	const statistics = useMolecule(ImageStatisticsMolecule)
 
 	return (
 		<div className='pointer-events-none w-full fixed bottom-0 mb-1 p-1 z-99999'>
@@ -122,7 +124,7 @@ export const ImageToolBar = memo(() => {
 					</PopoverContent>
 				</Popover>
 				<Tooltip content='Statistics' placement='top' showArrow>
-					<IconButton color='secondary' icon={Icons.Histogram} variant='flat' />
+					<IconButton color='secondary' icon={Icons.Histogram} onPointerUp={statistics.show} variant='flat' />
 				</Tooltip>
 				<Tooltip content='FITS Header' placement='top' showArrow>
 					<IconButton color='secondary' icon={Icons.Text} onPointerUp={() => viewer.show('fitsHeader')} variant='flat' />

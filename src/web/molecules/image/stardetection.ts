@@ -18,7 +18,8 @@ export const StarDetectionMolecule = molecule((m, s) => {
 		try {
 			starDetection.loading = true
 
-			const stars = await Api.StarDetection.detect(starDetection.request)
+			const request = { ...starDetection.request, path: viewer.realPath() }
+			const stars = await Api.StarDetection.detect(request)
 
 			if (!stars) return
 

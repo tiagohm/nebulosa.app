@@ -6,6 +6,7 @@ import { DAYSEC, SIDEREAL_DAYSEC } from 'nebulosa/src/constants'
 import type { Constellation } from 'nebulosa/src/constellation'
 import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
+import type { Rect } from 'nebulosa/src/geometry'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
 import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
 import type { DefBlobVector, DefLightVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, PropertyState } from 'nebulosa/src/indi'
@@ -435,6 +436,7 @@ export interface OpenImage {
 	path: string
 	readonly camera?: string
 	readonly transformation: ImageTransformation
+	readonly statistics?: Pick<StatisticImage, 'bits' | 'area' | 'transformed'>
 }
 
 export interface CloseImage {
@@ -448,6 +450,23 @@ export interface SaveImage extends OpenImage {
 
 export interface AnnotateImage {
 	readonly solution: PlateSolution
+}
+
+export interface StatisticImage extends Omit<OpenImage, 'statistics'> {
+	readonly area?: Rect
+	readonly bits: number
+	readonly transformed: boolean
+}
+
+export interface ImageHistogram {
+	readonly standardDeviation: number
+	readonly variance: number
+	readonly count: readonly [number, number]
+	readonly mean: number
+	readonly median: number
+	readonly maximum: readonly [number, number]
+	readonly minimum: readonly [number, number]
+	readonly data: readonly number[]
 }
 
 export interface ImageCoordinateInterpolation {

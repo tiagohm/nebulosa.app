@@ -11,7 +11,7 @@
 		"prod": "bun tailwind && NODE_ENV=production bun --production main.ts",
 		"lint": "biome lint --write src/",
 		"format": "biome format --write src/",
-		"compile": "bun tailwind && bun run build.ts",
+		"compile": "bun tailwind && NODE_ENV=production bun run build.ts",
 		"tsc": "tsc --noEmit"
 	},
 	"author": {
@@ -29,7 +29,7 @@
 		"@use-gesture/react": "10.3.1",
 		"bunshi": "2.2.0",
 		"clsx": "2.1.1",
-		"elysia": "1.4.17",
+		"elysia": "1.4.18",
 		"nebulosa": "github:tiagohm/nebulosa.ts",
 		"open": "11.0.0",
 		"react": "19.2.1",

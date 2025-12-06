@@ -1,9 +1,18 @@
 import { molecule, onMount } from 'bunshi'
 import bus from 'src/shared/bus'
 import type { DeviceAdded } from 'src/shared/types'
+import { proxy } from 'valtio'
 import { NotificationMolecule } from './notification'
 
 let ws: WebSocket | undefined
+
+export interface WebSocketState {
+	connected: boolean
+}
+
+const state = proxy<WebSocketState>({
+	connected: true,
+})
 
 export const WebSocketMolecule = molecule((m) => {
 	const notification = m(NotificationMolecule)
@@ -19,10 +28,18 @@ export const WebSocketMolecule = molecule((m) => {
 
 		ws.addEventListener('open', () => {
 			send('RESEND')
+			state.connected = true
+			document.documentElement.style.setProperty('--ws-disconnected-grayscale', '0%')
+			document.documentElement.style.setProperty('--ws-disconnected-display', 'none')
+			bus.emit('ws:open', null)
 			console.info('web socket open')
 		})
 
 		ws.addEventListener('close', (e) => {
+			state.connected = false
+			document.documentElement.style.setProperty('--ws-disconnected-grayscale', '100%')
+			document.documentElement.style.setProperty('--ws-disconnected-display', 'flex')
+			bus.emit('ws:close', null)
 			console.info('web socket close', e)
 		})
 
@@ -96,5 +113,5 @@ export const WebSocketMolecule = molecule((m) => {
 		}
 	})
 
-	return { send, close } as const
+	return { state, send, close } as const
 })

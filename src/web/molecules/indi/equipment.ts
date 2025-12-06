@@ -3,6 +3,7 @@ import bus, { unsubscribe } from 'src/shared/bus'
 import type { Camera, CameraUpdated, Cover, CoverUpdated, Device, DeviceType, DewHeater, DewHeaterUpdated, FlatPanel, FlatPanelUpdated, Focuser, FocuserUpdated, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated, Wheel, WheelUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
+import { initProxy } from '@/shared/proxy'
 
 export type EquipmentDevice<T extends Device> = T & {
 	show?: boolean
@@ -25,29 +26,25 @@ export interface EquipmentState {
 	readonly DEW_HEATER: EquipmentDevice<DewHeater>[]
 }
 
-let equipmentState: EquipmentState | undefined
+const state = proxy<EquipmentState>({
+	selected: undefined,
+	CAMERA: [],
+	MOUNT: [],
+	WHEEL: [],
+	FOCUSER: [],
+	ROTATOR: [],
+	GPS: [],
+	DOME: [],
+	GUIDE_OUTPUT: [],
+	FLAT_PANEL: [],
+	COVER: [],
+	THERMOMETER: [],
+	DEW_HEATER: [],
+})
+
+initProxy(state, 'equipment', ['p:selected'])
 
 export const EquipmentMolecule = molecule(() => {
-	const state =
-		equipmentState ??
-		proxy<EquipmentState>({
-			selected: undefined,
-			CAMERA: [],
-			MOUNT: [],
-			WHEEL: [],
-			FOCUSER: [],
-			ROTATOR: [],
-			GPS: [],
-			DOME: [],
-			GUIDE_OUTPUT: [],
-			FLAT_PANEL: [],
-			COVER: [],
-			THERMOMETER: [],
-			DEW_HEATER: [],
-		})
-
-	equipmentState = state
-
 	onMount(() => {
 		const unsubscribers: VoidFunction[] = []
 
@@ -78,6 +75,20 @@ export const EquipmentMolecule = molecule(() => {
 		unsubscribers.push(bus.subscribe<Wheel>('wheel:add', (event) => add('WHEEL', event)))
 		unsubscribers.push(bus.subscribe<Wheel>('wheel:remove', (event) => remove('WHEEL', event)))
 		unsubscribers.push(bus.subscribe<WheelUpdated>('wheel:update', ({ device, property }) => update('WHEEL', device.name, property, device[property]!)))
+
+		unsubscribers.push(
+			bus.subscribe('ws:close', () => {
+				state.CAMERA.forEach((device) => remove('CAMERA', device))
+				state.MOUNT.forEach((device) => remove('MOUNT', device))
+				state.GUIDE_OUTPUT.forEach((device) => remove('GUIDE_OUTPUT', device))
+				state.THERMOMETER.forEach((device) => remove('THERMOMETER', device))
+				state.COVER.forEach((device) => remove('COVER', device))
+				state.FLAT_PANEL.forEach((device) => remove('FLAT_PANEL', device))
+				state.DEW_HEATER.forEach((device) => remove('DEW_HEATER', device))
+				state.FOCUSER.forEach((device) => remove('FOCUSER', device))
+				state.WHEEL.forEach((device) => remove('WHEEL', device))
+			}),
+		)
 
 		return () => {
 			unsubscribe(unsubscribers)

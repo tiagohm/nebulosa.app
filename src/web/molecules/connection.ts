@@ -66,12 +66,16 @@ export const ConnectionMolecule = molecule(() => {
 	})
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(1)
+		const unsubscribers = new Array<VoidFunction>(2)
 
 		unsubscribers[0] = bus.subscribe<ConnectionStatus>('connection:close', (status) => {
 			if (state.connected?.id === status.id) {
 				state.connected = undefined
 			}
+		})
+
+		unsubscribers[1] = bus.subscribe('ws:close', () => {
+			state.connected = undefined
 		})
 
 		return () => {

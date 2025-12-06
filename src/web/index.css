@@ -17,6 +17,7 @@ html {
 html,
 body {
 	@apply text-[13px] overscroll-none;
+	filter: grayscale(var(--ws-disconnected-grayscale, 0%));
 }
 
 /* Remove white border around SVG */
@@ -38,13 +39,13 @@ section[role="dialog"] {
 /* Tooltip */
 
 div[role="tooltip"] {
-	@apply pointer-events-none !z-[10000001];
+	@apply pointer-events-none z-10000001!;
 }
 
 /* Select Popover */
 
 div[data-slot="popover"] {
-	@apply !min-w-fit;
+	@apply min-w-fit!;
 }
 
 /* Select Trigger */
@@ -56,7 +57,7 @@ div[data-slot="base"] div[data-slot="mainWrapper"] button[data-slot="trigger"] {
 /** Popover Menu */
 
 div:has(div[data-slot="base"][data-open="true"][role="dialog"]) {
-	@apply !z-[10000000];
+	@apply z-10000000!;
 }
 
 /* Utilities */

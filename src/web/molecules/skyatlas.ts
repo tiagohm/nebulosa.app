@@ -1,6 +1,6 @@
 import { molecule, onMount } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
-import type { Temporal } from 'nebulosa/src/temporal'
+import { type Temporal, temporalAdd, temporalGet, temporalStartOfDay, temporalSubtract } from 'nebulosa/src/temporal'
 import type React from 'react'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
@@ -104,18 +104,21 @@ const sunState = proxy<SunState>({
 })
 
 initProxy(sunState, 'skyatlas.sun', ['o:request', 'p:source'])
+sunState.request.time.utc = 0
 
 export const SunMolecule = molecule(() => {
 	const state = sunState
 
 	let chartUpdate = true
 	let seasonsUpdate = true
+	let seasonsYear = 0
 	let eclipsesUpdate = true
 
-	async function tick(time: UTCTime, location: GeographicCoordinate) {
+	async function tick(time: UTCTime, location: GeographicCoordinate, twilightWasUpdated: boolean) {
 		let changed = false
 
 		if (isLocationChanged(location, state.request.location)) {
+			chartUpdate = true
 			Object.assign(state.request.location, location)
 			changed = true
 		}
@@ -124,6 +127,16 @@ export const SunMolecule = molecule(() => {
 		if (isTimeChanged(time, state.request.time)) {
 			Object.assign(state.request.time, time)
 			changed = true
+
+			if (!seasonsUpdate) {
+				const local = temporalAdd(time.utc, time.offset, 'm')
+				const year = temporalGet(local, 'y')
+
+				if (seasonsYear !== year) {
+					seasonsUpdate = true
+					seasonsYear = year
+				}
+			}
 		}
 
 		if (changed) {
@@ -131,7 +144,7 @@ export const SunMolecule = molecule(() => {
 			void updateEclipses()
 
 			await updatePosition()
-			await updateChart(false)
+			await updateChart(twilightWasUpdated)
 		}
 	}
 
@@ -142,24 +155,27 @@ export const SunMolecule = molecule(() => {
 
 	async function updateChart(force: boolean = false) {
 		if (!chartUpdate && !force) return
+		chartUpdate = false
 		const chart = await Api.SkyAtlas.chartOfSun(state.request)
 		if (chart) state.chart = chart
-		chartUpdate = false
+		else chartUpdate = true
 	}
 
 	async function updateSeasons() {
 		if (!seasonsUpdate) return
+		seasonsUpdate = false
 		const seasons = await Api.SkyAtlas.seasons(state.request)
 		if (seasons) Object.assign(state.seasons, seasons)
-		seasonsUpdate = false
+		else seasonsUpdate = true
 	}
 
 	async function updateEclipses() {
 		if (!eclipsesUpdate) return
+		eclipsesUpdate = false
 		const request = { ...state.request, count: 1 }
 		const eclipses = await Api.SkyAtlas.solarEclipses(request)
 		if (eclipses) state.eclipses = eclipses
-		eclipsesUpdate = false
+		else eclipsesUpdate = true
 	}
 
 	return { state, tick } as const
@@ -174,18 +190,21 @@ const moonState = proxy<MoonState>({
 })
 
 initProxy(moonState, 'skyatlas.moon', ['o:request'])
+moonState.request.time.utc = 0
 
 export const MoonMolecule = molecule(() => {
 	const state = moonState
 
 	let chartUpdate = true
 	let phasesUpdate = true
+	let phasesMonth = 0
 	let eclipsesUpdate = true
 
-	async function tick(time: UTCTime, location: GeographicCoordinate) {
+	async function tick(time: UTCTime, location: GeographicCoordinate, twilightWasUpdated: boolean) {
 		let changed = false
 
 		if (isLocationChanged(location, state.request.location)) {
+			chartUpdate = true
 			Object.assign(state.request.location, location)
 			changed = true
 		}
@@ -194,6 +213,16 @@ export const MoonMolecule = molecule(() => {
 		if (isTimeChanged(time, state.request.time)) {
 			Object.assign(state.request.time, time)
 			changed = true
+
+			if (!phasesUpdate) {
+				const local = temporalAdd(time.utc, time.offset, 'm')
+				const month = temporalGet(local, 'mo')
+
+				if (phasesMonth !== month) {
+					phasesUpdate = true
+					phasesMonth = month
+				}
+			}
 		}
 
 		if (changed) {
@@ -201,7 +230,7 @@ export const MoonMolecule = molecule(() => {
 			void updateEclipses()
 
 			await updatePosition()
-			await updateChart(false)
+			await updateChart(twilightWasUpdated)
 		}
 	}
 
@@ -212,24 +241,27 @@ export const MoonMolecule = molecule(() => {
 
 	async function updateChart(force: boolean = false) {
 		if (!chartUpdate && !force) return
+		chartUpdate = false
 		const chart = await Api.SkyAtlas.chartOfMoon(state.request)
 		if (chart) state.chart = chart
-		chartUpdate = false
+		else chartUpdate = true
 	}
 
 	async function updatePhases() {
 		if (!phasesUpdate) return
+		phasesUpdate = false
 		const phases = await Api.SkyAtlas.moonPhases(state.request)
 		if (phases) state.phases = phases
-		phasesUpdate = false
+		else phasesUpdate = true
 	}
 
 	async function updateEclipses() {
 		if (!eclipsesUpdate) return
 		const request = { ...state.request, count: 1 }
+		eclipsesUpdate = false
 		const eclipses = await Api.SkyAtlas.moonEclipses(request)
 		if (eclipses) state.eclipses = eclipses
-		eclipsesUpdate = false
+		else eclipsesUpdate = true
 	}
 
 	return { state, tick } as const
@@ -246,16 +278,18 @@ const planetState = proxy<PlanetState>({
 })
 
 initProxy(planetState, 'skyatlas.planet', ['o:search', 'o:request'])
+planetState.request.time.utc = 0
 
 export const PlanetMolecule = molecule(() => {
 	const state = planetState
 
 	let chartUpdate = true
 
-	async function tick(time: UTCTime, location: GeographicCoordinate) {
+	async function tick(time: UTCTime, location: GeographicCoordinate, twilightWasUpdated: boolean) {
 		let changed = false
 
 		if (isLocationChanged(location, state.request.location)) {
+			chartUpdate = true
 			Object.assign(state.request.location, location)
 			changed = true
 		}
@@ -268,7 +302,7 @@ export const PlanetMolecule = molecule(() => {
 
 		if (changed) {
 			await updatePosition()
-			await updateChart(false)
+			await updateChart(twilightWasUpdated)
 		}
 	}
 
@@ -285,9 +319,10 @@ export const PlanetMolecule = molecule(() => {
 	async function updateChart(force: boolean = false) {
 		if (!state.code) return
 		if (!chartUpdate && !force) return
+		chartUpdate = false
 		const chart = await Api.SkyAtlas.chartOfPlanet(state.request, state.code)
 		if (chart) state.chart = chart
-		chartUpdate = false
+		else chartUpdate = true
 	}
 
 	async function select(code: string, force: boolean = true) {
@@ -320,6 +355,7 @@ const asteroidState = proxy<AsteroidState>({
 
 initProxy(asteroidState, 'skyatlas.asteroid', ['p:tab', 'o:request'])
 initProxy(asteroidState, 'skyatlas.asteroid.closeapproaches', ['o:request'])
+asteroidState.request.time.utc = 0
 
 export const AsteroidMolecule = molecule(() => {
 	const state = asteroidState
@@ -381,16 +417,18 @@ export const AsteroidMolecule = molecule(() => {
 
 	async function updateChart(force: boolean = false) {
 		if (!chartUpdate && !force) return
+		chartUpdate = false
 		const code = `DES=${state.selected!.id};`
 		const chart = await Api.SkyAtlas.chartOfPlanet(state.request, code)
 		if (chart) state.chart = chart
-		chartUpdate = false
+		else chartUpdate = true
 	}
 
-	async function tick(time: UTCTime, location: GeographicCoordinate) {
+	async function tick(time: UTCTime, location: GeographicCoordinate, twilightWasUpdated: boolean) {
 		let changed = false
 
 		if (isLocationChanged(location, state.request.location)) {
+			chartUpdate = true
 			Object.assign(state.request.location, location)
 			changed = true
 		}
@@ -404,7 +442,7 @@ export const AsteroidMolecule = molecule(() => {
 		// Refresh selected object
 		if (changed && state.selected) {
 			await updatePosition()
-			await updateChart(false)
+			await updateChart(twilightWasUpdated)
 		}
 	}
 
@@ -420,6 +458,7 @@ const galaxyState = proxy<GalaxyState>({
 })
 
 initProxy(galaxyState, 'skyatlas.galaxy', ['o:request'])
+galaxyState.request.time.utc = 0
 
 export const GalaxyMolecule = molecule(() => {
 	const state = galaxyState
@@ -480,16 +519,18 @@ export const GalaxyMolecule = molecule(() => {
 
 	async function updateChart(force: boolean = false) {
 		if (!chartUpdate && !force) return
+		chartUpdate = false
 		const id = state.selected!.id
 		const chart = await Api.SkyAtlas.chartOfSkyObject(state.request, id)
 		if (chart) state.chart = chart
-		chartUpdate = false
+		else chartUpdate = true
 	}
 
-	async function tick(time: UTCTime, location: GeographicCoordinate) {
+	async function tick(time: UTCTime, location: GeographicCoordinate, twilightWasUpdated: boolean) {
 		let changed = false
 
 		if (isLocationChanged(location, state.request.location)) {
+			chartUpdate = true
 			Object.assign(state.request.location, location)
 			changed = true
 		}
@@ -510,7 +551,7 @@ export const GalaxyMolecule = molecule(() => {
 		// Refresh selected object
 		if (state.selected) {
 			await updatePosition()
-			await updateChart(false)
+			await updateChart(twilightWasUpdated)
 		}
 	}
 
@@ -531,6 +572,7 @@ const satelliteState = proxy<SatelliteState>({
 
 initProxy(satelliteState, 'skyatlas.satellite', ['o:request'])
 satelliteState.request.lastId = 0
+satelliteState.request.time.utc = 0
 
 export const SatelliteMolecule = molecule(() => {
 	const state = satelliteState
@@ -595,15 +637,17 @@ export const SatelliteMolecule = molecule(() => {
 	async function updateChart(force: boolean = false) {
 		if (!state.selected) return
 		if (!chartUpdate && !force) return
+		chartUpdate = false
 		const chart = await Api.SkyAtlas.chartOfSatellite(state.request, state.selected.id)
 		if (chart) state.chart = chart
-		chartUpdate = false
+		else chartUpdate = true
 	}
 
-	async function tick(time: UTCTime, location: GeographicCoordinate) {
+	async function tick(time: UTCTime, location: GeographicCoordinate, twilightWasUpdated: boolean) {
 		let changed = false
 
 		if (isLocationChanged(location, state.request.location)) {
+			chartUpdate = true
 			Object.assign(state.request.location, location)
 			changed = true
 		}
@@ -617,7 +661,7 @@ export const SatelliteMolecule = molecule(() => {
 		// Refresh selected object
 		if (changed && state.selected?.id) {
 			await updatePosition()
-			await updateChart(false)
+			await updateChart(twilightWasUpdated)
 		}
 	}
 
@@ -662,7 +706,9 @@ export const SkyAtlasMolecule = molecule((m) => {
 	const galaxy = m(GalaxyMolecule)
 	const satellite = m(SatelliteMolecule)
 
+	let updating = false
 	let twilightUpdate = true
+	let twilightStartTime = 0
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(2)
@@ -696,33 +742,50 @@ export const SkyAtlasMolecule = molecule((m) => {
 	}
 
 	function updateLocation(location: GeographicCoordinate) {
+		twilightUpdate = state.request.location.longitude !== location.longitude
 		Object.assign(state.request.location, location)
 		void tick()
 	}
 
 	async function tick(utc?: Temporal) {
-		if (!state.show) return
+		if (!state.show || updating) return
+
+		updating = true
 
 		const { time, location } = state.request
 
 		if (utc === undefined) utc = state.calendar.manual ? time.utc : Date.now()
 
+		if (!twilightUpdate) {
+			const b = computeStartTime(utc, time.offset)
+
+			if (twilightStartTime !== b) {
+				twilightUpdate = true
+				twilightStartTime = b
+			}
+		}
+
 		time.utc = utc
+		const twilightWasUpdated = twilightUpdate
 
 		await twilight()
 
-		if (state.tab === 'sun') sun.tick(time, location)
-		else if (state.tab === 'moon') moon.tick(time, location)
-		else if (state.tab === 'planet') planet.tick(time, location)
-		else if (state.tab === 'asteroid') asteroid.tick(time, location)
-		else if (state.tab === 'galaxy') galaxy.tick(time, location)
-		else if (state.tab === 'satellite') satellite.tick(time, location)
+		if (state.tab === 'sun') sun.tick(time, location, twilightWasUpdated)
+		else if (state.tab === 'moon') moon.tick(time, location, twilightWasUpdated)
+		else if (state.tab === 'planet') planet.tick(time, location, twilightWasUpdated)
+		else if (state.tab === 'asteroid') asteroid.tick(time, location, twilightWasUpdated)
+		else if (state.tab === 'galaxy') galaxy.tick(time, location, twilightWasUpdated)
+		else if (state.tab === 'satellite') satellite.tick(time, location, twilightWasUpdated)
+
+		updating = false
 	}
 
 	async function twilight() {
 		if (!twilightUpdate) return
-		state.twilight = await Api.SkyAtlas.twilight(state.request)
 		twilightUpdate = false
+		const twilight = await Api.SkyAtlas.twilight(state.request)
+		if (twilight) state.twilight = twilight
+		else twilightUpdate = true
 	}
 
 	function syncTo(mount?: Mount) {
@@ -774,4 +837,15 @@ function isLocationChanged(a: GeographicCoordinate, b: GeographicCoordinate) {
 
 function isTimeChanged(a: UTCTime, b: UTCTime) {
 	return Math.abs(a.utc - b.utc) >= 60000 || a.offset !== b.offset
+}
+
+function computeStartTime(utc: number, offset: number) {
+	const local = temporalAdd(utc, offset, 'm')
+	const hour = temporalGet(local, 'h')
+
+	let startTime = temporalStartOfDay(local)
+	// if not passed noon, go to the previous day
+	if (hour < 12) startTime = temporalSubtract(startTime, 1, 'd')
+	// set to UTC noon + local offset (if enabled)
+	return temporalAdd(startTime, 720 - offset, 'm')
 }

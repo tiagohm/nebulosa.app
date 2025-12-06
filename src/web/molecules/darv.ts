@@ -1,4 +1,4 @@
-import { molecule, onMount } from 'bunshi'
+import { molecule, onMount, use } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
 import { type Camera, type DarvEvent, type DarvStart, DEFAULT_DARV_EVENT, DEFAULT_DARV_START, type Mount } from 'src/shared/types'
 import { proxy } from 'valtio'
@@ -27,8 +27,8 @@ const state = proxy<DarvState>({
 
 initProxy(state, 'darv', ['o:request', 'p:show'])
 
-export const DarvMolecule = molecule((m) => {
-	const equipment = m(EquipmentMolecule)
+export const DarvMolecule = molecule(() => {
+	const equipment = use(EquipmentMolecule)
 
 	onMount(() => {
 		state.request.id = Date.now().toFixed(0)

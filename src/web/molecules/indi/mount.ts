@@ -1,4 +1,4 @@
-import { createScope, molecule, onMount } from 'bunshi'
+import { createScope, molecule, onMount, use } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
@@ -55,14 +55,16 @@ export const MountScope = createScope<MountScopeValue>({ mount: DEFAULT_MOUNT })
 
 const stateMap = new Map<string, MountState>()
 
-export const MountMolecule = molecule((m, s) => {
-	const scope = s(MountScope)
-	const equipment = m(EquipmentMolecule)
+export const MountMolecule = molecule(() => {
+	const scope = use(MountScope)
+	const equipment = use(EquipmentMolecule)
+
+	const mount = equipment.get('MOUNT', scope.mount.name)!
 
 	const state =
-		stateMap.get(scope.mount.name) ??
+		stateMap.get(mount.name) ??
 		proxy<MountState>({
-			mount: equipment.get('MOUNT', scope.mount.name)!,
+			mount,
 			targetCoordinate: {
 				coordinate: structuredClone(DEFAULT_TARGET_COORDINATE),
 				position: structuredClone(DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION),
@@ -70,11 +72,11 @@ export const MountMolecule = molecule((m, s) => {
 			currentPosition: structuredClone(DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION),
 			location: {
 				show: false,
-				coordinate: scope.mount.geographicCoordinate,
+				coordinate: mount.geographicCoordinate,
 			},
 			time: {
 				show: false,
-				time: scope.mount.time,
+				time: mount.time,
 			},
 			remoteControl: {
 				show: false,
@@ -90,13 +92,13 @@ export const MountMolecule = molecule((m, s) => {
 			},
 		})
 
-	stateMap.set(scope.mount.name, state)
+	stateMap.set(mount.name, state)
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(3)
 
 		unsubscribers[0] = bus.subscribe<MountUpdated>('mount:update', (event) => {
-			if (event.device.name === state.mount.name) {
+			if (event.device.name === mount.name) {
 				if (event.property === 'connected') {
 					if (event.device.connected) {
 						void updateCurrentCoordinatePosition()
@@ -108,14 +110,14 @@ export const MountMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[1] = initProxy(state.targetCoordinate, `mount.${scope.mount.name}.targetcoordinate`, ['o:coordinate'])
+		unsubscribers[1] = initProxy(state.targetCoordinate, `mount.${mount.name}.targetcoordinate`, ['o:coordinate'])
 
 		unsubscribers[2] = subscribeKey(state.remoteControl, 'show', (show) => {
 			if (show) void updateRemoteControlStatus()
 		})
 
 		const updateCurrentCoordinateTimer = setInterval(() => {
-			if (state.mount.connected) {
+			if (mount.connected) {
 				void updateCurrentCoordinatePosition()
 				void updateTargetCoordinatePosition()
 			}
@@ -131,7 +133,7 @@ export const MountMolecule = molecule((m, s) => {
 	})
 
 	function connect() {
-		return equipment.connect(state.mount)
+		return equipment.connect(mount)
 	}
 
 	function updateRemoteControl<K extends keyof MountState['remoteControl']['request']>(key: K, value: MountState['remoteControl']['request'][K]) {
@@ -139,17 +141,17 @@ export const MountMolecule = molecule((m, s) => {
 	}
 
 	async function updateRemoteControlStatus() {
-		const status = await Api.Mounts.RemoteControl.status(scope.mount)
+		const status = await Api.Mounts.RemoteControl.status(mount)
 		Object.assign(state.remoteControl.status, status)
 	}
 
 	async function startRemoteControl() {
-		await Api.Mounts.RemoteControl.start(scope.mount, state.remoteControl.request)
+		await Api.Mounts.RemoteControl.start(mount, state.remoteControl.request)
 		return updateRemoteControlStatus()
 	}
 
 	async function stopRemoteControl() {
-		await Api.Mounts.RemoteControl.stop(scope.mount, state.remoteControl.request.protocol)
+		await Api.Mounts.RemoteControl.stop(mount, state.remoteControl.request.protocol)
 		return updateRemoteControlStatus()
 	}
 
@@ -159,21 +161,21 @@ export const MountMolecule = molecule((m, s) => {
 	}
 
 	async function updateCurrentCoordinatePosition() {
-		const position = await Api.Mounts.currentPosition(scope.mount)
+		const position = await Api.Mounts.currentPosition(mount)
 		position && Object.assign(state.currentPosition, position)
 	}
 
 	async function updateTargetCoordinatePosition() {
-		const position = await Api.Mounts.targetPosition(scope.mount, state.targetCoordinate.coordinate)
+		const position = await Api.Mounts.targetPosition(mount, state.targetCoordinate.coordinate)
 		position && Object.assign(state.targetCoordinate.position, position)
 	}
 
 	function handleTargetCoordinateAction() {
 		switch (state.targetCoordinate.coordinate.action) {
 			case 'GOTO':
-				return Api.Mounts.goTo(scope.mount, state.targetCoordinate.coordinate)
+				return Api.Mounts.goTo(mount, state.targetCoordinate.coordinate)
 			case 'SYNC':
-				return Api.Mounts.syncTo(scope.mount, state.targetCoordinate.coordinate)
+				return Api.Mounts.syncTo(mount, state.targetCoordinate.coordinate)
 			case 'FRAME': {
 				const request: Partial<Framing> = {
 					rightAscension: formatRA(state.targetCoordinate.position.rightAscensionJ2000),
@@ -186,64 +188,64 @@ export const MountMolecule = molecule((m, s) => {
 	}
 
 	function park() {
-		return Api.Mounts.park(scope.mount)
+		return Api.Mounts.park(mount)
 	}
 
 	function unpark() {
-		return Api.Mounts.unpark(scope.mount)
+		return Api.Mounts.unpark(mount)
 	}
 
 	function togglePark() {
-		return scope.mount.parked ? unpark() : park()
+		return mount.parked ? unpark() : park()
 	}
 
 	function home() {
-		return Api.Mounts.home(scope.mount)
+		return Api.Mounts.home(mount)
 	}
 
 	function tracking(enabled: boolean) {
-		return Api.Mounts.tracking(scope.mount, enabled)
+		return Api.Mounts.tracking(mount, enabled)
 	}
 
 	function trackMode(mode: TrackMode) {
-		return Api.Mounts.trackMode(scope.mount, mode)
+		return Api.Mounts.trackMode(mount, mode)
 	}
 
 	function slewRate(rate: string) {
-		return Api.Mounts.slewRate(scope.mount, rate)
+		return Api.Mounts.slewRate(mount, rate)
 	}
 
 	function moveTo(direction: NudgeDirection, down: boolean) {
 		switch (direction) {
 			case 'upLeft':
-				return Promise.all([Api.Mounts.moveNorth(scope.mount, down), Api.Mounts.moveWest(scope.mount, down)])
+				return Promise.all([Api.Mounts.moveNorth(mount, down), Api.Mounts.moveWest(mount, down)])
 			case 'upRight':
-				return Promise.all([Api.Mounts.moveNorth(scope.mount, down), Api.Mounts.moveEast(scope.mount, down)])
+				return Promise.all([Api.Mounts.moveNorth(mount, down), Api.Mounts.moveEast(mount, down)])
 			case 'downLeft':
-				return Promise.all([Api.Mounts.moveSouth(scope.mount, down), Api.Mounts.moveWest(scope.mount, down)])
+				return Promise.all([Api.Mounts.moveSouth(mount, down), Api.Mounts.moveWest(mount, down)])
 			case 'downRight':
-				return Promise.all([Api.Mounts.moveSouth(scope.mount, down), Api.Mounts.moveEast(scope.mount, down)])
+				return Promise.all([Api.Mounts.moveSouth(mount, down), Api.Mounts.moveEast(mount, down)])
 			case 'up':
-				return Api.Mounts.moveNorth(scope.mount, down)
+				return Api.Mounts.moveNorth(mount, down)
 			case 'down':
-				return Api.Mounts.moveSouth(scope.mount, down)
+				return Api.Mounts.moveSouth(mount, down)
 			case 'left':
-				return Api.Mounts.moveWest(scope.mount, down)
+				return Api.Mounts.moveWest(mount, down)
 			case 'right':
-				return Api.Mounts.moveEast(scope.mount, down)
+				return Api.Mounts.moveEast(mount, down)
 		}
 	}
 
 	function location(coordinate: GeographicCoordinate) {
-		return Api.Mounts.location(scope.mount, coordinate)
+		return Api.Mounts.location(mount, coordinate)
 	}
 
 	function time(time: Mount['time']) {
-		return Api.Mounts.time(scope.mount, time)
+		return Api.Mounts.time(mount, time)
 	}
 
 	function stop() {
-		return Api.Mounts.stop(scope.mount)
+		return Api.Mounts.stop(mount)
 	}
 
 	function showLocation() {
@@ -271,7 +273,7 @@ export const MountMolecule = molecule((m, s) => {
 	}
 
 	function hide() {
-		equipment.hide('MOUNT', scope.mount)
+		equipment.hide('MOUNT', mount)
 	}
 
 	return {

@@ -1,4 +1,4 @@
-import { molecule, onMount } from 'bunshi'
+import { molecule, onMount, use } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
 import { proxy } from 'valtio'
@@ -25,8 +25,8 @@ const state = proxy<FramingState>({
 
 initProxy(state, 'framing', ['p:show', 'o:request', 'p:openNewImage'])
 
-export const FramingMolecule = molecule((m) => {
-	const workspace = m(ImageWorkspaceMolecule)
+export const FramingMolecule = molecule(() => {
+	const workspace = use(ImageWorkspaceMolecule)
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(2)

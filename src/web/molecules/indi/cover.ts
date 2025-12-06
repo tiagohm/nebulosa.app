@@ -1,4 +1,4 @@
-import { createScope, molecule } from 'bunshi'
+import { createScope, molecule, use } from 'bunshi'
 import { type Cover, DEFAULT_COVER } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
@@ -14,34 +14,36 @@ export interface CoverState {
 
 export const CoverScope = createScope<CoverScopeValue>({ cover: DEFAULT_COVER })
 
-const coverStateMap = new Map<string, CoverState>()
+const stateMap = new Map<string, CoverState>()
 
-export const CoverMolecule = molecule((m, s) => {
-	const scope = s(CoverScope)
-	const equipment = m(EquipmentMolecule)
+export const CoverMolecule = molecule(() => {
+	const scope = use(CoverScope)
+	const equipment = use(EquipmentMolecule)
+
+	const cover = equipment.get('COVER', scope.cover.name)!
 
 	const state =
-		coverStateMap.get(scope.cover.name) ??
+		stateMap.get(cover.name) ??
 		proxy<CoverState>({
-			cover: equipment.get('COVER', scope.cover.name)!,
+			cover,
 		})
 
-	coverStateMap.set(scope.cover.name, state)
+	stateMap.set(cover.name, state)
 
 	function connect() {
-		return equipment.connect(state.cover)
+		return equipment.connect(cover)
 	}
 
 	function park() {
-		return Api.Covers.park(scope.cover)
+		return Api.Covers.park(cover)
 	}
 
 	function unpark() {
-		return Api.Covers.unpark(scope.cover)
+		return Api.Covers.unpark(cover)
 	}
 
 	function hide() {
-		equipment.hide('COVER', scope.cover)
+		equipment.hide('COVER', cover)
 	}
 
 	return { state, scope, connect, park, unpark, hide } as const

@@ -1,10 +1,10 @@
-import { molecule } from 'bunshi'
+import { molecule, use } from 'bunshi'
 import type { ImageTransformation } from 'src/shared/types'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
-export const ImageStretchMolecule = molecule((m, s) => {
-	const scope = s(ImageViewerScope)
-	const viewer = m(ImageViewerMolecule)
+export const ImageStretchMolecule = molecule(() => {
+	const scope = use(ImageViewerScope)
+	const viewer = use(ImageViewerMolecule)
 	const { stretch } = viewer.state.transformation
 
 	function update<K extends keyof ImageTransformation['stretch']>(key: K, value: ImageTransformation['stretch'][K]) {

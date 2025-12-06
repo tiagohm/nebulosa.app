@@ -1,4 +1,4 @@
-import { createScope, molecule, onMount } from 'bunshi'
+import { createScope, molecule, onMount, use } from 'bunshi'
 import { type Angle, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { numericKeyword } from 'nebulosa/src/fits'
 import type { ImageFormat } from 'nebulosa/src/image'
@@ -211,10 +211,9 @@ const stateMap = new Map<string, CachedImage>()
 
 export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { key: '', path: '', position: 0, source: 'file' } })
 
-export const ImageViewerMolecule = molecule((m, s) => {
-	const scope = s(ImageViewerScope)
-
-	const workspace = m(ImageWorkspaceMolecule)
+export const ImageViewerMolecule = molecule(() => {
+	const scope = use(ImageViewerScope)
+	const workspace = use(ImageWorkspaceMolecule)
 	const { key, camera } = scope.image
 
 	let target = document.getElementById(key) as HTMLImageElement | null

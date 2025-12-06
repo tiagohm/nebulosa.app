@@ -1,4 +1,4 @@
-import { molecule } from 'bunshi'
+import { molecule, use } from 'bunshi'
 import { arcsec, formatDEC, formatRA, toDeg } from 'nebulosa/src/angle'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import bus from 'src/shared/bus'
@@ -7,10 +7,10 @@ import { Api } from '@/shared/api'
 import { SettingsMolecule } from '../settings'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
-export const ImageSolverMolecule = molecule((m, s) => {
-	const scope = s(ImageViewerScope)
-	const viewer = m(ImageViewerMolecule)
-	const settings = m(SettingsMolecule)
+export const ImageSolverMolecule = molecule(() => {
+	const scope = use(ImageViewerScope)
+	const viewer = use(ImageViewerMolecule)
+	const settings = use(SettingsMolecule)
 	const { solver } = viewer.state
 
 	function update<K extends keyof PlateSolveStart>(key: K, value: PlateSolveStart[K]) {

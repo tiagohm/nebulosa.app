@@ -1,4 +1,4 @@
-import { createScope, molecule } from 'bunshi'
+import { createScope, molecule, use } from 'bunshi'
 import { DEFAULT_FLAT_PANEL, type FlatPanel } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
@@ -14,46 +14,48 @@ export interface FlatPanelState {
 
 export const FlatPanelScope = createScope<FlatPanelScopeValue>({ flatPanel: DEFAULT_FLAT_PANEL })
 
-const flatPanelStateMap = new Map<string, FlatPanelState>()
+const stateMap = new Map<string, FlatPanelState>()
 
-export const FlatPanelMolecule = molecule((m, s) => {
-	const scope = s(FlatPanelScope)
-	const equipment = m(EquipmentMolecule)
+export const FlatPanelMolecule = molecule(() => {
+	const scope = use(FlatPanelScope)
+	const equipment = use(EquipmentMolecule)
+
+	const flatPanel = equipment.get('FLAT_PANEL', scope.flatPanel.name)!
 
 	const state =
-		flatPanelStateMap.get(scope.flatPanel.name) ??
+		stateMap.get(flatPanel.name) ??
 		proxy<FlatPanelState>({
-			flatPanel: equipment.get('FLAT_PANEL', scope.flatPanel.name)!,
+			flatPanel,
 		})
 
-	flatPanelStateMap.set(scope.flatPanel.name, state)
+	stateMap.set(flatPanel.name, state)
 
 	function connect() {
-		return equipment.connect(state.flatPanel)
+		return equipment.connect(flatPanel)
 	}
 
 	function update(value: number | number[]) {
-		state.flatPanel.intensity.value = typeof value === 'number' ? value : value[0]
+		flatPanel.intensity.value = typeof value === 'number' ? value : value[0]
 	}
 
 	function enable() {
-		return Api.FlatPanels.enable(scope.flatPanel)
+		return Api.FlatPanels.enable(flatPanel)
 	}
 
 	function disable() {
-		return Api.FlatPanels.disable(scope.flatPanel)
+		return Api.FlatPanels.disable(flatPanel)
 	}
 
 	function toggle(force?: boolean) {
-		return (force ?? !state.flatPanel.enabled) ? enable() : disable()
+		return (force ?? !flatPanel.enabled) ? enable() : disable()
 	}
 
 	function intensity(value: number | number[]) {
-		return Api.FlatPanels.intensity(scope.flatPanel, typeof value === 'number' ? value : value[0])
+		return Api.FlatPanels.intensity(flatPanel, typeof value === 'number' ? value : value[0])
 	}
 
 	function hide() {
-		equipment.hide('FLAT_PANEL', scope.flatPanel)
+		equipment.hide('FLAT_PANEL', flatPanel)
 	}
 
 	return { state, scope, connect, update, enable, disable, toggle, intensity, hide } as const

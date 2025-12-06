@@ -1,4 +1,4 @@
-import { createScope, molecule } from 'bunshi'
+import { createScope, molecule, use } from 'bunshi'
 import { DEFAULT_DEW_HEATER, type DewHeater } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
@@ -14,34 +14,36 @@ export interface DewHeaterState {
 
 export const DewHeaterScope = createScope<DewHeaterScopeValue>({ dewHeater: DEFAULT_DEW_HEATER })
 
-const dewHeaterStateMap = new Map<string, DewHeaterState>()
+const stateMap = new Map<string, DewHeaterState>()
 
-export const DewHeaterMolecule = molecule((m, s) => {
-	const scope = s(DewHeaterScope)
-	const equipment = m(EquipmentMolecule)
+export const DewHeaterMolecule = molecule(() => {
+	const scope = use(DewHeaterScope)
+	const equipment = use(EquipmentMolecule)
+
+	const dewHeater = equipment.get('DEW_HEATER', scope.dewHeater.name)!
 
 	const state =
-		dewHeaterStateMap.get(scope.dewHeater.name) ??
+		stateMap.get(dewHeater.name) ??
 		proxy<DewHeaterState>({
-			dewHeater: equipment.get('DEW_HEATER', scope.dewHeater.name)!,
+			dewHeater,
 		})
 
-	dewHeaterStateMap.set(scope.dewHeater.name, state)
+	stateMap.set(dewHeater.name, state)
 
 	function connect() {
-		return equipment.connect(state.dewHeater)
+		return equipment.connect(dewHeater)
 	}
 
 	function update(value: number | number[]) {
-		state.dewHeater.pwm.value = typeof value === 'number' ? value : value[0]
+		dewHeater.pwm.value = typeof value === 'number' ? value : value[0]
 	}
 
 	function pwm(value: number | number[]) {
-		return Api.DewHeaters.pwm(scope.dewHeater, typeof value === 'number' ? value : value[0])
+		return Api.DewHeaters.pwm(dewHeater, typeof value === 'number' ? value : value[0])
 	}
 
 	function hide() {
-		equipment.hide('DEW_HEATER', scope.dewHeater)
+		equipment.hide('DEW_HEATER', dewHeater)
 	}
 
 	return { state, scope, connect, update, pwm, hide } as const

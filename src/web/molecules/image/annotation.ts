@@ -1,10 +1,10 @@
-import { molecule } from 'bunshi'
+import { molecule, use } from 'bunshi'
 import { Api } from '@/shared/api'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
-export const ImageAnnotationMolecule = molecule((m, s) => {
-	const scope = s(ImageViewerScope)
-	const viewer = m(ImageViewerMolecule)
+export const ImageAnnotationMolecule = molecule(() => {
+	const scope = use(ImageViewerScope)
+	const viewer = use(ImageViewerMolecule)
 	const { annotation } = viewer.state
 
 	function toggle(enabled?: boolean) {

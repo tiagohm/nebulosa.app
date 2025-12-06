@@ -1,4 +1,4 @@
-import { createScope, molecule, onMount } from 'bunshi'
+import { createScope, molecule, onMount, use } from 'bunshi'
 import { unsubscribe } from 'src/shared/bus'
 import type { DirectoryEntry, FileEntry } from 'src/shared/types'
 import { proxy } from 'valtio'
@@ -34,8 +34,8 @@ export interface FilePickerScopeValue {
 
 export const FilePickerScope = createScope<FilePickerScopeValue>({})
 
-export const FilePickerMolecule = molecule((m, s) => {
-	const scope = s(FilePickerScope)
+export const FilePickerMolecule = molecule(() => {
+	const scope = use(FilePickerScope)
 
 	const multiple = !!scope.multiple && scope.mode !== 'save'
 

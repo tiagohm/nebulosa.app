@@ -1,4 +1,4 @@
-import { createScope, molecule, onMount } from 'bunshi'
+import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_GUIDE_OUTPUT, type GuideOutput, type GuidePulse } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
@@ -31,21 +31,23 @@ export const GuideOutputScope = createScope<GuideOutputScopeValue>({ guideOutput
 
 const stateMap = new Map<string, GuideOutputState>()
 
-export const GuideOutputMolecule = molecule((m, s) => {
-	const scope = s(GuideOutputScope)
-	const equipment = m(EquipmentMolecule)
+export const GuideOutputMolecule = molecule(() => {
+	const scope = use(GuideOutputScope)
+	const equipment = use(EquipmentMolecule)
+
+	const guideOutput = equipment.get('GUIDE_OUTPUT', scope.guideOutput.name)!
 
 	const state =
-		stateMap.get(scope.guideOutput.name) ??
+		stateMap.get(guideOutput.name) ??
 		proxy<GuideOutputState>({
-			guideOutput: equipment.get('GUIDE_OUTPUT', scope.guideOutput.name)!,
+			guideOutput,
 			request: structuredClone(DEFAULT_GUIDE_OUTPUT_REQUEST),
 		})
 
-	stateMap.set(scope.guideOutput.name, state)
+	stateMap.set(guideOutput.name, state)
 
 	onMount(() => {
-		const unsubscriber = initProxy(state, `guideoutput.${scope.guideOutput.name}`, ['o:request'])
+		const unsubscriber = initProxy(state, `guideoutput.${guideOutput.name}`, ['o:request'])
 
 		return () => {
 			unsubscriber()
@@ -57,7 +59,7 @@ export const GuideOutputMolecule = molecule((m, s) => {
 	}
 
 	function connect() {
-		return equipment.connect(state.guideOutput)
+		return equipment.connect(guideOutput)
 	}
 
 	function pulse(direction: NudgeDirection, down: boolean) {
@@ -66,31 +68,31 @@ export const GuideOutputMolecule = molecule((m, s) => {
 
 			switch (direction) {
 				case 'upLeft':
-					return Promise.all([Api.GuideOutputs.pulse(scope.guideOutput, north), Api.GuideOutputs.pulse(scope.guideOutput, west)])
+					return Promise.all([Api.GuideOutputs.pulse(guideOutput, north), Api.GuideOutputs.pulse(guideOutput, west)])
 				case 'upRight':
-					return Promise.all([Api.GuideOutputs.pulse(scope.guideOutput, north), Api.GuideOutputs.pulse(scope.guideOutput, east)])
+					return Promise.all([Api.GuideOutputs.pulse(guideOutput, north), Api.GuideOutputs.pulse(guideOutput, east)])
 				case 'downLeft':
-					return Promise.all([Api.GuideOutputs.pulse(scope.guideOutput, south), Api.GuideOutputs.pulse(scope.guideOutput, west)])
+					return Promise.all([Api.GuideOutputs.pulse(guideOutput, south), Api.GuideOutputs.pulse(guideOutput, west)])
 				case 'downRight':
-					return Promise.all([Api.GuideOutputs.pulse(scope.guideOutput, south), Api.GuideOutputs.pulse(scope.guideOutput, east)])
+					return Promise.all([Api.GuideOutputs.pulse(guideOutput, south), Api.GuideOutputs.pulse(guideOutput, east)])
 				case 'up':
-					return Api.GuideOutputs.pulse(scope.guideOutput, north)
+					return Api.GuideOutputs.pulse(guideOutput, north)
 				case 'down':
-					return Api.GuideOutputs.pulse(scope.guideOutput, south)
+					return Api.GuideOutputs.pulse(guideOutput, south)
 				case 'left':
-					return Api.GuideOutputs.pulse(scope.guideOutput, west)
+					return Api.GuideOutputs.pulse(guideOutput, west)
 				case 'right':
-					return Api.GuideOutputs.pulse(scope.guideOutput, east)
+					return Api.GuideOutputs.pulse(guideOutput, east)
 			}
 		}
 	}
 
 	function stop() {
-		// Api.GuideOutputs.stop(scope.guideOutput)
+		// Api.GuideOutputs.stop(guideOutput)
 	}
 
 	function hide() {
-		equipment.hide('GUIDE_OUTPUT', scope.guideOutput)
+		equipment.hide('GUIDE_OUTPUT', guideOutput)
 	}
 
 	return { state, scope, update, connect, pulse, stop, hide } as const

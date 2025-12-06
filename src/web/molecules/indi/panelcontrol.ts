@@ -1,4 +1,4 @@
-import { molecule, onMount } from 'bunshi'
+import { molecule, onMount, use } from 'bunshi'
 import type { NewVector } from 'nebulosa/src/indi'
 import bus, { unsubscribe } from 'src/shared/bus'
 import type { ConnectionStatus, Device, DeviceProperties, DeviceProperty, IndiDevicePropertyEvent } from 'src/shared/types'
@@ -15,23 +15,17 @@ export interface IndiPanelControlState {
 	properties: Record<string, DeviceProperties>
 }
 
-let indiPanelControlState: IndiPanelControlState | undefined
+const state = proxy<IndiPanelControlState>({
+	show: false,
+	devices: [],
+	device: '',
+	groups: [],
+	group: '',
+	properties: {},
+})
 
-export const IndiPanelControlMolecule = molecule((m) => {
-	const connection = m(ConnectionMolecule)
-
-	const state =
-		indiPanelControlState ??
-		proxy<IndiPanelControlState>({
-			show: false,
-			devices: [],
-			device: '',
-			groups: [],
-			group: '',
-			properties: {},
-		})
-
-	indiPanelControlState = state
+export const IndiPanelControlMolecule = molecule(() => {
+	const connection = use(ConnectionMolecule)
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(3)

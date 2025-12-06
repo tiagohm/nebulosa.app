@@ -1,10 +1,10 @@
-import { molecule } from 'bunshi'
+import { molecule, use } from 'bunshi'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation } from 'src/shared/types'
 import { type ImageState, ImageViewerMolecule, ImageViewerScope } from './viewer'
 
-export const ImageSettingsMolecule = molecule((m, s) => {
-	const scope = s(ImageViewerScope)
-	const viewer = m(ImageViewerMolecule)
+export const ImageSettingsMolecule = molecule(() => {
+	const scope = use(ImageViewerScope)
+	const viewer = use(ImageViewerMolecule)
 	const { settings, transformation } = viewer.state
 
 	function update<K extends keyof ImageState['settings']>(key: K, value: ImageState['settings'][K]) {

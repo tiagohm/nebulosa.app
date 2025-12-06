@@ -17,13 +17,15 @@ const state = proxy<HomeState>({
 
 initProxy(state.menu, 'home.menu', ['p:show'])
 
-export const HomeMolecule = molecule((m) => {
+export const HomeMolecule = molecule(() => {
 	onMount(() => {
 		const unsubscriber = bus.subscribe<boolean>('homeMenu:toggle', (enabled) => {
 			toggleMenu(enabled)
 		})
 
-		return () => unsubscriber()
+		return () => {
+			unsubscriber()
+		}
 	})
 
 	function toggleMenu(force?: boolean) {

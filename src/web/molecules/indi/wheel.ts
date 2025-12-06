@@ -1,4 +1,4 @@
-import { createScope, molecule, onMount } from 'bunshi'
+import { createScope, molecule, onMount, use } from 'bunshi'
 import { unsubscribe } from 'src/shared/bus'
 import { DEFAULT_WHEEL, type Wheel } from 'src/shared/types'
 import { proxy } from 'valtio'
@@ -20,16 +20,16 @@ export interface WheelState {
 
 export const WheelScope = createScope<WheelScopeValue>({ wheel: DEFAULT_WHEEL })
 
-const wheelStateMap = new Map<string, WheelState>()
+const stateMap = new Map<string, WheelState>()
 
-export const WheelMolecule = molecule((m, s) => {
-	const scope = s(WheelScope)
-	const equipment = m(EquipmentMolecule)
+export const WheelMolecule = molecule(() => {
+	const scope = use(WheelScope)
+	const equipment = use(EquipmentMolecule)
 
 	const wheel = equipment.get('WHEEL', scope.wheel.name)!
 
 	const state =
-		wheelStateMap.get(scope.wheel.name) ??
+		stateMap.get(wheel.name) ??
 		proxy<WheelState>({
 			wheel,
 			selected: {
@@ -38,7 +38,7 @@ export const WheelMolecule = molecule((m, s) => {
 			},
 		})
 
-	wheelStateMap.set(scope.wheel.name, state)
+	stateMap.set(wheel.name, state)
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(1)
@@ -74,7 +74,7 @@ export const WheelMolecule = molecule((m, s) => {
 	}
 
 	function hide() {
-		equipment.hide('WHEEL', scope.wheel)
+		equipment.hide('WHEEL', wheel)
 	}
 
 	return { state, scope, update, connect, moveTo, slots, hide } as const

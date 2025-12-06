@@ -1,4 +1,4 @@
-import { molecule, onMount } from 'bunshi'
+import { molecule, onMount, use } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
 import { type Camera, DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type Mount, type TppaEvent, type TppaStart } from 'src/shared/types'
 import { proxy } from 'valtio'
@@ -27,8 +27,8 @@ const state = proxy<TppaState>({
 
 initProxy(state, 'tppa', ['o:request', 'p:show'])
 
-export const TppaMolecule = molecule((m) => {
-	const equipment = m(EquipmentMolecule)
+export const TppaMolecule = molecule(() => {
+	const equipment = use(EquipmentMolecule)
 
 	onMount(() => {
 		state.request.id = Date.now().toFixed(0)

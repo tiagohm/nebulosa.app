@@ -1,4 +1,4 @@
-import { createScope, molecule, onMount } from 'bunshi'
+import { createScope, molecule, onMount, use } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
 import { type Camera, type CameraCaptureEvent, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START, type Focuser, type Mount, type Wheel } from 'src/shared/types'
 import { proxy, ref, subscribe } from 'valtio'
@@ -30,29 +30,31 @@ export const CameraScope = createScope<CameraScopeValue>({ camera: DEFAULT_CAMER
 
 const stateMap = new Map<string, CameraState>()
 
-export const CameraMolecule = molecule((m, s) => {
-	const scope = s(CameraScope)
-	const equipment = m(EquipmentMolecule)
+export const CameraMolecule = molecule(() => {
+	const scope = use(CameraScope)
+	const equipment = use(EquipmentMolecule)
+
+	const camera = equipment.get('CAMERA', scope.camera.name)!
 
 	const state =
-		stateMap.get(scope.camera.name) ??
+		stateMap.get(camera.name) ??
 		proxy<CameraState>({
 			minimized: false,
-			camera: equipment.get('CAMERA', scope.camera.name)!,
+			camera,
 			request: structuredClone(DEFAULT_CAMERA_CAPTURE_START),
 			progress: structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT),
 			capturing: false,
-			targetTemperature: scope.camera.temperature,
+			targetTemperature: camera.temperature,
 			equipment: {},
 		})
 
-	stateMap.set(scope.camera.name, state)
+	stateMap.set(camera.name, state)
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(7)
 
 		unsubscribers[0] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
-			if (event.device.name === state.camera.name) {
+			if (event.device.name === camera.name) {
 				if (event.property === 'frame') {
 					updateRequestFrame(state.request, event.device.frame!)
 				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
@@ -61,14 +63,14 @@ export const CameraMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[1] = bus.subscribe<Camera>('camera:remove', (camera) => {
-			if (camera.name === state.camera.name) {
-				stateMap.delete(camera.name)
+		unsubscribers[1] = bus.subscribe<Camera>('camera:remove', (event) => {
+			if (event.name === camera.name) {
+				stateMap.delete(event.name)
 			}
 		})
 
 		unsubscribers[2] = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
-			if (event.device === state.camera.name) {
+			if (event.device === camera.name) {
 				Object.assign(state.progress, event)
 
 				if (event.state === 'IDLE') {
@@ -80,7 +82,7 @@ export const CameraMolecule = molecule((m, s) => {
 		})
 
 		unsubscribers[3] = bus.subscribe<Image>('image:add', (image) => {
-			if (image.camera === state.camera && !state.image) {
+			if (image.camera === camera && !state.image) {
 				state.image = ref(image)
 			}
 		})
@@ -91,7 +93,7 @@ export const CameraMolecule = molecule((m, s) => {
 			}
 		})
 
-		unsubscribers[5] = initProxy(state, `camera.${scope.camera.name}`, ['o:request'])
+		unsubscribers[5] = initProxy(state, `camera.${camera.name}`, ['o:request', 'p:minimized', 'p:targetTemperature'])
 
 		state.equipment.mount = equipment.get('MOUNT', state.request.mount ?? '')
 		state.equipment.wheel = equipment.get('WHEEL', state.request.wheel ?? '')
@@ -103,8 +105,8 @@ export const CameraMolecule = molecule((m, s) => {
 			state.request.focuser = state.equipment.focuser?.name
 		})
 
-		updateRequestFrame(state.request, state.camera.frame)
-		updateFrameFormat(state.request, state.camera.frameFormats)
+		updateRequestFrame(state.request, camera.frame)
+		updateFrameFormat(state.request, camera.frameFormats)
 
 		return () => {
 			unsubscribe(unsubscribers)
@@ -116,22 +118,22 @@ export const CameraMolecule = molecule((m, s) => {
 	}
 
 	function connect() {
-		return equipment.connect(state.camera)
+		return equipment.connect(camera)
 	}
 
 	function cooler(enabled: boolean) {
-		return Api.Cameras.cooler(state.camera, enabled)
+		return Api.Cameras.cooler(camera, enabled)
 	}
 
 	function temperature(value: number) {
-		return Api.Cameras.temperature(state.camera, value)
+		return Api.Cameras.temperature(camera, value)
 	}
 
 	function fullscreen() {
-		state.request.x = state.camera.frame.minX
-		state.request.y = state.camera.frame.minY
-		state.request.width = state.camera.frame.maxWidth
-		state.request.height = state.camera.frame.maxHeight
+		state.request.x = camera.frame.minX
+		state.request.y = camera.frame.minY
+		state.request.width = camera.frame.maxWidth
+		state.request.height = camera.frame.maxHeight
 	}
 
 	function updateMount(mount?: EquipmentDevice<Mount>) {
@@ -148,15 +150,15 @@ export const CameraMolecule = molecule((m, s) => {
 
 	function start() {
 		state.capturing = true
-		return Api.Cameras.start(state.camera, state.request)
+		return Api.Cameras.start(camera, state.request)
 	}
 
 	function stop() {
-		return Api.Cameras.stop(state.camera)
+		return Api.Cameras.stop(camera)
 	}
 
 	function hide() {
-		return equipment.hide('CAMERA', scope.camera)
+		return equipment.hide('CAMERA', camera)
 	}
 
 	function minimize() {

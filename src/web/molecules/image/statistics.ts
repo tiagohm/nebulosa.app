@@ -1,13 +1,13 @@
-import { molecule, onMount } from 'bunshi'
+import { molecule, onMount, use } from 'bunshi'
 import { unsubscribe } from 'src/shared/bus'
 import { ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { type ImageState, ImageViewerMolecule, ImageViewerScope } from './viewer'
 
-export const ImageStatisticsMolecule = molecule((m, s) => {
-	const scope = s(ImageViewerScope)
-	const viewer = m(ImageViewerMolecule)
+export const ImageStatisticsMolecule = molecule(() => {
+	const scope = use(ImageViewerScope)
+	const viewer = use(ImageViewerMolecule)
 	const { statistics, transformation } = viewer.state
 
 	onMount(() => {

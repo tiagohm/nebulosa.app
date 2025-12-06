@@ -1,4 +1,4 @@
-import { molecule, onMount } from 'bunshi'
+import { molecule, onMount, use } from 'bunshi'
 import bus from 'src/shared/bus'
 import type { Atom, Camera, CameraCaptureEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
@@ -31,8 +31,8 @@ initProxy(state.picker, 'workspace.picker', ['p:show', 'p:path'])
 
 const viewers = new Map<string, Atom<typeof ImageViewerMolecule>>()
 
-export const ImageWorkspaceMolecule = molecule((m) => {
-	const equipment = m(EquipmentMolecule)
+export const ImageWorkspaceMolecule = molecule(() => {
+	const equipment = use(EquipmentMolecule)
 
 	onMount(() => {
 		const unsubscriber = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {

@@ -1,4 +1,4 @@
-import { createScope, molecule, onMount } from 'bunshi'
+import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_FOCUSER, type Focuser } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
@@ -21,21 +21,23 @@ export const FocuserScope = createScope<FocuserScopeValue>({ focuser: DEFAULT_FO
 
 const stateMap = new Map<string, FocuserState>()
 
-export const FocuserMolecule = molecule((m, s) => {
-	const scope = s(FocuserScope)
-	const equipment = m(EquipmentMolecule)
+export const FocuserMolecule = molecule(() => {
+	const scope = use(FocuserScope)
+	const equipment = use(EquipmentMolecule)
+
+	const focuser = equipment.get('FOCUSER', scope.focuser.name)!
 
 	const state =
-		stateMap.get(scope.focuser.name) ??
+		stateMap.get(focuser.name) ??
 		proxy<FocuserState>({
-			focuser: equipment.get('FOCUSER', scope.focuser.name)!,
+			focuser,
 			request: { absolute: 0, relative: 100 },
 		})
 
-	stateMap.set(scope.focuser.name, state)
+	stateMap.set(focuser.name, state)
 
 	onMount(() => {
-		const unsubscriber = initProxy(state, `focuser.${scope.focuser.name}`, ['o:request'])
+		const unsubscriber = initProxy(state, `focuser.${focuser.name}`, ['o:request'])
 
 		return () => {
 			unsubscriber()
@@ -47,35 +49,35 @@ export const FocuserMolecule = molecule((m, s) => {
 	}
 
 	function connect() {
-		return equipment.connect(state.focuser)
+		return equipment.connect(focuser)
 	}
 
 	function moveTo() {
-		return Api.Focusers.moveTo(state.focuser, state.request.absolute)
+		return Api.Focusers.moveTo(focuser, state.request.absolute)
 	}
 
 	function moveIn() {
-		return Api.Focusers.moveIn(state.focuser, state.request.relative)
+		return Api.Focusers.moveIn(focuser, state.request.relative)
 	}
 
 	function moveOut() {
-		return Api.Focusers.moveOut(state.focuser, state.request.relative)
+		return Api.Focusers.moveOut(focuser, state.request.relative)
 	}
 
 	function sync() {
-		return Api.Focusers.sync(state.focuser, state.request.absolute)
+		return Api.Focusers.sync(focuser, state.request.absolute)
 	}
 
 	function stop() {
-		return Api.Focusers.stop(state.focuser)
+		return Api.Focusers.stop(focuser)
 	}
 
 	function reverse(enabled: boolean) {
-		return Api.Focusers.reverse(state.focuser, enabled)
+		return Api.Focusers.reverse(focuser, enabled)
 	}
 
 	function hide() {
-		equipment.hide('FOCUSER', scope.focuser)
+		equipment.hide('FOCUSER', focuser)
 	}
 
 	return { state, scope, update, connect, moveTo, moveIn, moveOut, sync, reverse, stop, hide } as const

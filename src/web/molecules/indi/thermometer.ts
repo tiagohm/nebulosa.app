@@ -1,4 +1,4 @@
-import { createScope, molecule } from 'bunshi'
+import { createScope, molecule, use } from 'bunshi'
 import { DEFAULT_THERMOMETER, type Thermometer } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
@@ -13,26 +13,28 @@ export interface ThermometerState {
 
 export const ThermometerScope = createScope<ThermometerScopeValue>({ thermometer: DEFAULT_THERMOMETER })
 
-const thermometerStateMap = new Map<string, ThermometerState>()
+const stateMap = new Map<string, ThermometerState>()
 
-export const ThermometerMolecule = molecule((m, s) => {
-	const scope = s(ThermometerScope)
-	const equipment = m(EquipmentMolecule)
+export const ThermometerMolecule = molecule(() => {
+	const scope = use(ThermometerScope)
+	const equipment = use(EquipmentMolecule)
+
+	const thermometer = equipment.get('THERMOMETER', scope.thermometer.name)!
 
 	const state =
-		thermometerStateMap.get(scope.thermometer.name) ??
+		stateMap.get(thermometer.name) ??
 		proxy<ThermometerState>({
-			thermometer: equipment.get('THERMOMETER', scope.thermometer.name)!,
+			thermometer,
 		})
 
-	thermometerStateMap.set(scope.thermometer.name, state)
+	stateMap.set(thermometer.name, state)
 
 	function connect() {
-		return equipment.connect(state.thermometer)
+		return equipment.connect(thermometer)
 	}
 
 	function hide() {
-		equipment.hide('THERMOMETER', scope.thermometer)
+		equipment.hide('THERMOMETER', thermometer)
 	}
 
 	return { state, scope, connect, hide } as const

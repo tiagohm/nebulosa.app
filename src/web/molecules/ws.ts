@@ -1,4 +1,4 @@
-import { molecule, onMount } from 'bunshi'
+import { molecule, onMount, use } from 'bunshi'
 import bus from 'src/shared/bus'
 import type { DeviceAdded } from 'src/shared/types'
 import { proxy } from 'valtio'
@@ -14,8 +14,8 @@ const state = proxy<WebSocketState>({
 	connected: true,
 })
 
-export const WebSocketMolecule = molecule((m) => {
-	const notification = m(NotificationMolecule)
+export const WebSocketMolecule = molecule(() => {
+	const notification = use(NotificationMolecule)
 
 	const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 

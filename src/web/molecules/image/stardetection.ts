@@ -1,12 +1,12 @@
 import { addToast } from '@heroui/react'
-import { molecule } from 'bunshi'
+import { molecule, use } from 'bunshi'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import { Api } from '@/shared/api'
 import { ImageViewerMolecule, ImageViewerScope } from './viewer'
 
-export const StarDetectionMolecule = molecule((m, s) => {
-	const scope = s(ImageViewerScope)
-	const viewer = m(ImageViewerMolecule)
+export const StarDetectionMolecule = molecule(() => {
+	const scope = use(ImageViewerScope)
+	const viewer = use(ImageViewerMolecule)
 	const key = scope.image.key
 	const { starDetection } = viewer.state
 

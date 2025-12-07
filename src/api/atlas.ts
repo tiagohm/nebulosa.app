@@ -3,7 +3,7 @@ import { deg, PARSE_HOUR_ANGLE, parseAngle } from 'nebulosa/src/angle'
 import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astrometry'
 import { AU_KM, DAYSEC, DEG2RAD, MOON_SYNODIC_DAYS, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
-import type { CsvRow } from 'nebulosa/src/csv'
+import { type CsvRow, readCsv } from 'nebulosa/src/csv'
 import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { precessFk5FromJ2000 } from 'nebulosa/src/fk5'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
@@ -16,8 +16,10 @@ import { observeStar } from 'nebulosa/src/star'
 import { nearestSolarEclipse, season } from 'nebulosa/src/sun'
 import { daysInMonth, parseTemporal, type Temporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
 import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS } from 'nebulosa/src/time'
+import { binarySearchWithComparator } from 'nebulosa/src/util'
 import { join } from 'path'
 import sharp from 'sharp'
+import besselianElementsOfSolarEclipses from '../../data/besselian-elements-of-solar-eclipses.csv' with { type: 'text' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // biome-ignore format: too long!
 import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, expectedPierSide, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
@@ -153,7 +155,7 @@ export class AtlasManager {
 
 	solarEclipses(req: FindNextSolarEclipse) {
 		const location = this.cache.geographicCoordinate(req.location)
-		let time = this.cache.time(req.time.utc, location)
+		let time = this.cache.time(temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm')), location)
 		const eclipses: NextSolarEclipse[] = []
 
 		while (req.count-- > 0) {
@@ -161,6 +163,46 @@ export class AtlasManager {
 			;(eclipse as NextSolarEclipse).time = temporalFromTime(maximalTime)
 			eclipses.push(eclipse as never)
 			time = maximalTime
+		}
+
+		return eclipses
+	}
+
+	private readonly solarEclipsesList: NextSolarEclipse[] = []
+
+	// https://eclipse.gsfc.nasa.gov/SEcat5/beselm.html
+	// https://eclipse.gsfc.nasa.gov/eclipse_besselian_from_mysqldump2.csv
+	solarEclipsesFromNasa(req: FindNextSolarEclipse) {
+		const eclipses = new Array<NextSolarEclipse>(req.count)
+
+		if (this.solarEclipsesList.length === 0) {
+			const csv = readCsv(besselianElementsOfSolarEclipses)
+
+			for (const row of csv) {
+				const [year, month, day, hms, , , type] = row
+
+				if (year[0] === '-') continue
+
+				const time = parseTemporal(`${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${hms}`, 'YYYY-MM-DD HH:mm:ss')
+
+				const eclipse: NextSolarEclipse = {
+					time,
+					lunation: +row[4],
+					magnitude: +row[8],
+					gamma: +row[7],
+					u: 0,
+					type: type === 'T' ? 'TOTAL' : type === 'P' ? 'PARTIAL' : type === 'A' ? 'ANNULAR' : 'HYBRID',
+				}
+
+				this.solarEclipsesList.push(eclipse)
+			}
+		}
+
+		const time = temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm'))
+		const index = binarySearchWithComparator(this.solarEclipsesList, (item) => item.time - time, { positive: true })
+
+		for (let i = 0, k = index; i < req.count; i++, k++) {
+			eclipses[i] = this.solarEclipsesList[k]
 		}
 
 		return eclipses
@@ -581,7 +623,7 @@ export function atlas(atlas: AtlasManager) {
 		.post('/sun/chart', ({ body }) => atlas.chartOfSun(body as never))
 		.post('/sun/seasons', ({ body }) => atlas.seasons(body as never))
 		.post('/sun/twilight', ({ body }) => atlas.twilight(body as never))
-		.post('/sun/eclipses', ({ body }) => atlas.solarEclipses(body as never))
+		.post('/sun/eclipses', ({ body }) => atlas.solarEclipsesFromNasa(body as never))
 		.post('/moon/position', ({ body }) => atlas.positionOfMoon(body as never))
 		.post('/moon/chart', ({ body }) => atlas.chartOfMoon(body as never))
 		.post('/moon/phases', ({ body }) => atlas.moonPhases(body as never))

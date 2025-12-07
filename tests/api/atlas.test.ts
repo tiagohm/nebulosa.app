@@ -5,7 +5,7 @@ import { StellariumObjectType } from 'nebulosa/src/stellarium'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { AtlasManager } from 'src/api/atlas'
 import cache from 'src/api/cache'
-import { DEFAULT_SKY_OBJECT_SEARCH, type PositionOfBody, type SearchSkyObject } from 'src/shared/types'
+import { DEFAULT_SKY_OBJECT_SEARCH, type FindNextSolarEclipse, type PositionOfBody, type SearchSkyObject } from 'src/shared/types'
 
 const atlas = new AtlasManager(cache)
 
@@ -35,6 +35,36 @@ test('seasons', () => {
 	expect(formatTemporal(summer).substring(0, 16)).toBe('2025-06-21 02:43')
 	expect(formatTemporal(autumn).substring(0, 16)).toBe('2025-09-22 18:20')
 	expect(formatTemporal(winter).substring(0, 16)).toBe('2025-12-21 15:04')
+})
+
+test('solar eclipses', () => {
+	const request: FindNextSolarEclipse = { count: 1, ...POSITION_OF_BODY }
+	let eclipses = atlas.solarEclipses({ ...request, time: { ...request.time, utc: 1771377240000 } }) // Tue Feb 17 2026 22:14:00 GMT-0300 (Horário Padrão de Brasília)
+
+	expect(eclipses).toHaveLength(1)
+	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-02-17 12:12')
+	expect(eclipses[0].type).toBe('ANNULAR')
+
+	eclipses = atlas.solarEclipses({ ...request, time: { ...request.time, utc: 1771384440000 } }) // Wed Feb 18 2026 00:14:00 GMT-0300 (Horário Padrão de Brasília)
+
+	expect(eclipses).toHaveLength(1)
+	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-08-12 17:46')
+	expect(eclipses[0].type).toBe('TOTAL')
+})
+
+test('solar eclipses from nasa', () => {
+	const request: FindNextSolarEclipse = { count: 1, ...POSITION_OF_BODY }
+	let eclipses = atlas.solarEclipsesFromNasa({ ...request, time: { ...request.time, utc: 1771377240000 } }) // Tue Feb 17 2026 22:14:00 GMT-0300 (Horário Padrão de Brasília)
+
+	expect(eclipses).toHaveLength(1)
+	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-02-17 12:13')
+	expect(eclipses[0].type).toBe('ANNULAR')
+
+	eclipses = atlas.solarEclipsesFromNasa({ ...request, time: { ...request.time, utc: 1771384440000 } }) // Wed Feb 18 2026 00:14:00 GMT-0300 (Horário Padrão de Brasília)
+
+	expect(eclipses).toHaveLength(1)
+	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-08-12 17:47')
+	expect(eclipses[0].type).toBe('TOTAL')
 })
 
 describe('search sky object', () => {

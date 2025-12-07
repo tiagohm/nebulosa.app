@@ -128,11 +128,12 @@ const SunTab = memo(() => {
 const SolarEclipses = memo(() => {
 	const sun = useMolecule(SunMolecule)
 	const { eclipses } = useSnapshot(sun.state)
+	const { offset } = useSnapshot(sun.state.request.time)
 
 	return (
 		<div className='flex flex-col gap-0'>
 			{eclipses.map((eclipse) => (
-				<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Sun} key={eclipse.time} label={eclipse.type} time={eclipse.time} />
+				<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Sun} key={eclipse.time} label={eclipse.type} offset={offset} time={eclipse.time} />
 			))}
 		</div>
 	)
@@ -140,16 +141,17 @@ const SolarEclipses = memo(() => {
 
 const Seasons = memo(() => {
 	const sun = useMolecule(SunMolecule)
+	const { offset } = useSnapshot(sun.state.request.time)
 	const { summer, spring, autumn, winter } = useSnapshot(sun.state.seasons)
 	const { latitude } = useSnapshot(sun.state.request.location)
 	const isSouthern = latitude < 0
 
 	return (
 		<div className='flex flex-col gap-0'>
-			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.Leaf : Icons.Flower} label={isSouthern ? 'AUTUMN/FALL' : 'SPRING'} time={spring} />
-			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.SnowFlake : Icons.Sun} label={isSouthern ? 'WINTER' : 'SUMMER'} time={summer} />
-			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.Flower : Icons.Leaf} label={isSouthern ? 'SPRING' : 'AUTUMN/FALL'} time={autumn} />
-			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.Sun : Icons.SnowFlake} label={isSouthern ? 'SUMMER' : 'WINTER'} time={winter} />
+			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.Leaf : Icons.Flower} label={isSouthern ? 'AUTUMN/FALL' : 'SPRING'} offset={offset} time={spring} />
+			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.SnowFlake : Icons.Sun} label={isSouthern ? 'WINTER' : 'SUMMER'} offset={offset} time={summer} />
+			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.Flower : Icons.Leaf} label={isSouthern ? 'SPRING' : 'AUTUMN/FALL'} offset={offset} time={autumn} />
+			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.Sun : Icons.SnowFlake} label={isSouthern ? 'SUMMER' : 'WINTER'} offset={offset} time={winter} />
 		</div>
 	)
 })
@@ -180,18 +182,19 @@ const MoonTab = memo(() => {
 const MoonPhases = memo(() => {
 	const moon = useMolecule(MoonMolecule)
 	const { phases } = useSnapshot(moon.state)
+	const { offset } = useSnapshot(moon.state.request.time)
 
 	return (
 		<div className='flex flex-col gap-0'>
 			{phases.map(([phase, time]) =>
 				phase === 'NEW' ? (
-					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonNew} key={phase} label='NEW MOON' time={time} />
+					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonNew} key={phase} label='NEW MOON' offset={offset} time={time} />
 				) : phase === 'FIRST_QUARTER' ? (
-					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFirstQuarter} key={phase} label='FIRST QUARTER' time={time} />
+					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFirstQuarter} key={phase} label='FIRST QUARTER' offset={offset} time={time} />
 				) : phase === 'FULL' ? (
-					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFull} key={phase} label='FULL MOON' time={time} />
+					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFull} key={phase} label='FULL MOON' offset={offset} time={time} />
 				) : (
-					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonLastQuarter} key={phase} label='LAST QUARTER' time={time} />
+					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonLastQuarter} key={phase} label='LAST QUARTER' offset={offset} time={time} />
 				),
 			)}
 		</div>
@@ -201,11 +204,12 @@ const MoonPhases = memo(() => {
 const LunarEclipses = memo(() => {
 	const moon = useMolecule(MoonMolecule)
 	const { eclipses } = useSnapshot(moon.state)
+	const { offset } = useSnapshot(moon.state.request.time)
 
 	return (
 		<div className='flex flex-col gap-0'>
 			{eclipses.map((eclipse) => (
-				<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Moon} key={eclipse.startTime} label={eclipse.type} time={eclipse.startTime} />
+				<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Moon} key={eclipse.startTime} label={eclipse.type} offset={offset} time={eclipse.startTime} />
 			))}
 		</div>
 	)
@@ -345,6 +349,7 @@ const AsteroidCloseApproachesTab = memo(() => {
 	const { loading } = useSnapshot(asteroid.state)
 	const { days, distance } = useSnapshot(asteroid.state.closeApproaches.request, { sync: true })
 	const { result } = useSnapshot(asteroid.state.closeApproaches)
+	const { offset } = useSnapshot(asteroid.state.request.time)
 
 	return (
 		<div className='w-full flex flex-col gap-0'>
@@ -358,7 +363,7 @@ const AsteroidCloseApproachesTab = memo(() => {
 					<ListboxItem description={`${item.distance.toFixed(3)} LD`} key={item.name}>
 						<span className='flex items-center justify-between'>
 							<span>{item.name}</span>
-							<span>{formatTemporal(item.date, 'YYYY-MM-DD HH:mm')}</span>
+							<span>{formatTemporal(item.date, 'YYYY-MM-DD HH:mm', offset)}</span>
 						</span>
 					</ListboxItem>
 				)}
@@ -566,17 +571,18 @@ interface AstronomicalEventProps {
 	readonly icon: Icon
 	readonly label: string
 	readonly time: Temporal
+	readonly offset?: number
 	readonly format: string
 }
 
-const AstronomicalEvent = memo(({ icon: Icon, label, time, format }: AstronomicalEventProps) => {
+const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format }: AstronomicalEventProps) => {
 	return (
 		<div className='flex flex-col gap-0'>
 			<span className='font-bold flex items-start gap-1'>
 				<Icon />
 				{label}
 			</span>
-			<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(time, format)}</span>
+			<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(time, format, offset)}</span>
 		</div>
 	)
 })

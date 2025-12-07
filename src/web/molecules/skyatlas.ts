@@ -114,7 +114,7 @@ export const SunMolecule = molecule(() => {
 	let seasonsYear = 0
 	let eclipsesUpdate = true
 
-	async function tick(time: UTCTime, location: GeographicCoordinate, dayHasChanged: boolean) {
+	async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
 		let changed = false
 
 		if (isLocationChanged(location, state.request.location)) {
@@ -128,7 +128,9 @@ export const SunMolecule = molecule(() => {
 			Object.assign(state.request.time, time)
 			changed = true
 
-			if (!seasonsUpdate) {
+			eclipsesUpdate = dateHasChanged
+
+			if (!seasonsUpdate && dateHasChanged) {
 				const local = temporalAdd(time.utc, time.offset, 'm')
 				const year = temporalGet(local, 'y')
 
@@ -144,7 +146,7 @@ export const SunMolecule = molecule(() => {
 			void updateEclipses()
 
 			await updatePosition()
-			await updateChart(dayHasChanged)
+			await updateChart(dateHasChanged)
 		}
 	}
 
@@ -200,7 +202,7 @@ export const MoonMolecule = molecule(() => {
 	let phasesMonth = 0
 	let eclipsesUpdate = true
 
-	async function tick(time: UTCTime, location: GeographicCoordinate, dayHasChanged: boolean) {
+	async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
 		let changed = false
 
 		if (isLocationChanged(location, state.request.location)) {
@@ -214,7 +216,9 @@ export const MoonMolecule = molecule(() => {
 			Object.assign(state.request.time, time)
 			changed = true
 
-			if (!phasesUpdate) {
+			eclipsesUpdate = dateHasChanged
+
+			if (!phasesUpdate && dateHasChanged) {
 				const local = temporalAdd(time.utc, time.offset, 'm')
 				const month = temporalGet(local, 'mo')
 
@@ -230,7 +234,7 @@ export const MoonMolecule = molecule(() => {
 			void updateEclipses()
 
 			await updatePosition()
-			await updateChart(dayHasChanged)
+			await updateChart(dateHasChanged)
 		}
 	}
 
@@ -285,7 +289,7 @@ export const PlanetMolecule = molecule(() => {
 
 	let chartUpdate = true
 
-	async function tick(time: UTCTime, location: GeographicCoordinate, dayHasChanged: boolean) {
+	async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
 		let changed = false
 
 		if (isLocationChanged(location, state.request.location)) {
@@ -302,7 +306,7 @@ export const PlanetMolecule = molecule(() => {
 
 		if (changed) {
 			await updatePosition()
-			await updateChart(dayHasChanged)
+			await updateChart(dateHasChanged)
 		}
 	}
 
@@ -424,7 +428,7 @@ export const AsteroidMolecule = molecule(() => {
 		else chartUpdate = true
 	}
 
-	async function tick(time: UTCTime, location: GeographicCoordinate, dayHasChanged: boolean) {
+	async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
 		let changed = false
 
 		if (isLocationChanged(location, state.request.location)) {
@@ -442,7 +446,7 @@ export const AsteroidMolecule = molecule(() => {
 		// Refresh selected object
 		if (changed && state.selected) {
 			await updatePosition()
-			await updateChart(dayHasChanged)
+			await updateChart(dateHasChanged)
 		}
 	}
 
@@ -526,7 +530,7 @@ export const GalaxyMolecule = molecule(() => {
 		else chartUpdate = true
 	}
 
-	async function tick(time: UTCTime, location: GeographicCoordinate, dayHasChanged: boolean) {
+	async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
 		let changed = false
 
 		if (isLocationChanged(location, state.request.location)) {
@@ -551,7 +555,7 @@ export const GalaxyMolecule = molecule(() => {
 		// Refresh selected object
 		if (state.selected) {
 			await updatePosition()
-			await updateChart(dayHasChanged)
+			await updateChart(dateHasChanged)
 		}
 	}
 
@@ -643,7 +647,7 @@ export const SatelliteMolecule = molecule(() => {
 		else chartUpdate = true
 	}
 
-	async function tick(time: UTCTime, location: GeographicCoordinate, dayHasChanged: boolean) {
+	async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
 		let changed = false
 
 		if (isLocationChanged(location, state.request.location)) {
@@ -661,7 +665,7 @@ export const SatelliteMolecule = molecule(() => {
 		// Refresh selected object
 		if (changed && state.selected?.id) {
 			await updatePosition()
-			await updateChart(dayHasChanged)
+			await updateChart(dateHasChanged)
 		}
 	}
 
@@ -766,16 +770,16 @@ export const SkyAtlasMolecule = molecule(() => {
 		}
 
 		time.utc = utc
-		const dayHasChanged = twilightUpdate
+		const dateHasChanged = twilightUpdate
 
 		await twilight()
 
-		if (state.tab === 'sun') sun.tick(time, location, dayHasChanged)
-		else if (state.tab === 'moon') moon.tick(time, location, dayHasChanged)
-		else if (state.tab === 'planet') planet.tick(time, location, dayHasChanged)
-		else if (state.tab === 'asteroid') asteroid.tick(time, location, dayHasChanged)
-		else if (state.tab === 'galaxy') galaxy.tick(time, location, dayHasChanged)
-		else if (state.tab === 'satellite') satellite.tick(time, location, dayHasChanged)
+		if (state.tab === 'sun') sun.tick(time, location, dateHasChanged)
+		else if (state.tab === 'moon') moon.tick(time, location, dateHasChanged)
+		else if (state.tab === 'planet') planet.tick(time, location, dateHasChanged)
+		else if (state.tab === 'asteroid') asteroid.tick(time, location, dateHasChanged)
+		else if (state.tab === 'galaxy') galaxy.tick(time, location, dateHasChanged)
+		else if (state.tab === 'satellite') satellite.tick(time, location, dateHasChanged)
 
 		updating = false
 	}

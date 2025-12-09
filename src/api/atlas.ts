@@ -19,7 +19,7 @@ import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS } from 'nebulos
 import { binarySearchWithComparator } from 'nebulosa/src/util'
 import { join } from 'path'
 import sharp from 'sharp'
-import besselianElementsOfSolarEclipses from '../../data/besselian-elements-of-solar-eclipses.csv' with { type: 'text' }
+import besselianElementsOfSolarEclipsesCsv from '../../data/besselian-elements-of-solar-eclipses.csv' with { type: 'file' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // biome-ignore format: too long!
 import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, expectedPierSide, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type UTCTime } from '../shared/types'
@@ -153,7 +153,7 @@ export class AtlasManager {
 		return twilight
 	}
 
-	solarEclipses(req: FindNextSolarEclipse) {
+	solarEclipsesFromMeeus(req: FindNextSolarEclipse) {
 		const location = this.cache.geographicCoordinate(req.location)
 		let time = this.cache.time(temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm')), location)
 		const eclipses: NextSolarEclipse[] = []
@@ -168,15 +168,15 @@ export class AtlasManager {
 		return eclipses
 	}
 
-	private readonly solarEclipsesList: NextSolarEclipse[] = []
+	private readonly solarEclipses: NextSolarEclipse[] = []
 
 	// https://eclipse.gsfc.nasa.gov/SEcat5/beselm.html
 	// https://eclipse.gsfc.nasa.gov/eclipse_besselian_from_mysqldump2.csv
-	solarEclipsesFromNasa(req: FindNextSolarEclipse) {
+	async solarEclipsesFromNasa(req: FindNextSolarEclipse) {
 		const eclipses = new Array<NextSolarEclipse>(req.count)
 
-		if (this.solarEclipsesList.length === 0) {
-			const csv = readCsv(besselianElementsOfSolarEclipses)
+		if (this.solarEclipses.length === 0) {
+			const csv = readCsv(await Bun.file(besselianElementsOfSolarEclipsesCsv).text())
 
 			for (const row of csv) {
 				const [year, month, day, hms, , , type] = row
@@ -194,15 +194,15 @@ export class AtlasManager {
 					type: type === 'T' ? 'TOTAL' : type === 'P' ? 'PARTIAL' : type === 'A' ? 'ANNULAR' : 'HYBRID',
 				}
 
-				this.solarEclipsesList.push(eclipse)
+				this.solarEclipses.push(eclipse)
 			}
 		}
 
 		const time = temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm'))
-		const index = binarySearchWithComparator(this.solarEclipsesList, (item) => item.time - time, { positive: true })
+		const index = binarySearchWithComparator(this.solarEclipses, (item) => item.time - time, { positive: true })
 
 		for (let i = 0, k = index; i < req.count; i++, k++) {
-			eclipses[i] = this.solarEclipsesList[k]
+			eclipses[i] = this.solarEclipses[k]
 		}
 
 		return eclipses

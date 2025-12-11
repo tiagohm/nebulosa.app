@@ -125,6 +125,7 @@ export const SunMolecule = molecule(() => {
 
 		// Updates only if passed more than 1 minute since last update
 		if (isTimeChanged(time, state.request.time)) {
+			chartUpdate ||= time.offset !== state.request.time.offset
 			Object.assign(state.request.time, time)
 			changed = true
 
@@ -213,6 +214,7 @@ export const MoonMolecule = molecule(() => {
 
 		// Updates only if passed more than 1 minute since last update
 		if (isTimeChanged(time, state.request.time)) {
+			chartUpdate ||= time.offset !== state.request.time.offset
 			Object.assign(state.request.time, time)
 			changed = true
 
@@ -300,6 +302,7 @@ export const PlanetMolecule = molecule(() => {
 
 		// Updates only if passed more than 1 minute since last update
 		if (isTimeChanged(time, state.request.time)) {
+			chartUpdate ||= time.offset !== state.request.time.offset
 			Object.assign(state.request.time, time)
 			changed = true
 		}
@@ -439,6 +442,7 @@ export const AsteroidMolecule = molecule(() => {
 
 		// Updates only if passed more than 1 minute since last update
 		if (isTimeChanged(time, state.request.time)) {
+			chartUpdate ||= time.offset !== state.request.time.offset
 			Object.assign(state.request.time, time)
 			changed = true
 		}
@@ -541,6 +545,7 @@ export const GalaxyMolecule = molecule(() => {
 
 		// Updates only if passed more than 1 minute since last update
 		if (isTimeChanged(time, state.request.time)) {
+			chartUpdate ||= time.offset !== state.request.time.offset
 			Object.assign(state.request.time, time)
 			changed = true
 		}
@@ -658,6 +663,7 @@ export const SatelliteMolecule = molecule(() => {
 
 		// Updates only if passed more than 1 minute since last update
 		if (isTimeChanged(time, state.request.time)) {
+			chartUpdate ||= time.offset !== state.request.time.offset
 			Object.assign(state.request.time, time)
 			changed = true
 		}

@@ -4,7 +4,7 @@ export interface Messager {
 	readonly sendText: (data: string) => void
 }
 
-export class WebSocketMessageManager {
+export class WebSocketMessageHandler {
 	private readonly sockets = new Set<Messager>()
 	private readonly events = new Map<string, unknown>()
 

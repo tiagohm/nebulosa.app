@@ -1,8 +1,7 @@
 import type { PositionAndVelocity } from 'nebulosa/src/astrometry'
-import { type GeographicPosition, geodeticLocation } from 'nebulosa/src/location'
+import { type GeographicCoordinate, type GeographicPosition, geodeticLocation } from 'nebulosa/src/location'
 import { type Time, timeUnix } from 'nebulosa/src/time'
 import { earth } from 'nebulosa/src/vsop87e'
-import type { GeographicCoordinate } from 'src/shared/types'
 
 export type TimeGranularity = 's' | 'm' | 'h' | 'd'
 

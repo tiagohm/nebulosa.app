@@ -1,7 +1,7 @@
 import { Button, Chip, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
+import type { DeviceType } from 'nebulosa/src/indi.device'
 import { memo } from 'react'
-import type { DeviceType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
 import alignmentIcon from '@/assets/alignment.webp'

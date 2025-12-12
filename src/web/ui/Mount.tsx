@@ -13,7 +13,7 @@ import { Modal } from './Modal'
 import { MountRemoteControl } from './MountRemoteControl'
 import { Nudge } from './Nudge'
 import { SlewRateSelect } from './SlewRateSelect'
-import { TargetCoordinateTypeButtonGroup } from './TargetCoordinateTypeButtonGroup'
+import { MountTargetCoordinateTypeButtonGroup } from './MountTargetCoordinateTypeButtonGroup'
 import { Time } from './Time'
 import { TrackModeSelect } from './TrackModeSelect'
 
@@ -129,7 +129,7 @@ const TargetCoordinateAndPosition = memo(({ isDisabled }: TargetCoordinateAndPos
 	return (
 		<div className='w-full grid grid-cols-12 gap-2'>
 			<div className='col-span-7 flex flex-col gap-0 justify-center'>
-				<TargetCoordinateTypeButtonGroup buttonProps={{ className: 'flex-1' }} className='w-full' isDisabled={isDisabled} onValueChange={(value) => mount.updateTargetCoordinate('type', value)} value={coordinate.type} />
+				<MountTargetCoordinateTypeButtonGroup buttonProps={{ className: 'flex-1' }} className='w-full' isDisabled={isDisabled} onValueChange={(value) => mount.updateTargetCoordinate('type', value)} value={coordinate.type} />
 				{coordinate.type !== 'J2000' && (
 					<div className='flex flex-row gap-2 items-center justify-between text-sm'>
 						<div className='w-full flex flex-row items-center justify-between'>

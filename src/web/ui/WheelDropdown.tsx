@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
+import type { Wheel } from 'nebulosa/src/indi.device'
 import { memo } from 'react'
-import type { Wheel } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { DeviceDropdown, type DeviceDropdownProps } from '@/ui/DeviceDropdown'
@@ -19,7 +19,7 @@ export const WheelDropdown = memo(({ showLabel = true, showLabelOnEmpty = true, 
 	const wheels = useSnapshot(equipment.state.WHEEL)
 
 	function handleValueChange(value?: Wheel) {
-		onValueChange?.(equipment.state.WHEEL.find((e) => e.id === value?.id))
+		onValueChange?.(equipment.state.WHEEL.find((e) => e.name === value?.name))
 	}
 
 	return (

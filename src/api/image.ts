@@ -18,7 +18,7 @@ import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageCoordinateInterpolation, ImageHistogram, ImageInfo, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
 import { decodePath } from './camera'
-import type { NotificationManager } from './notification'
+import type { NotificationHandler } from './notification'
 
 const JPEG_OPTIONS: JpegOptions = {
 	quality: 70, // Lower quality for faster processing
@@ -48,10 +48,10 @@ const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOption
 	png: PNG_OPTIONS,
 }
 
-export class ImageManager {
+export class ImageHandler {
 	constructor(
 		readonly cache: Map<string, Buffer>,
-		readonly notification?: NotificationManager,
+		readonly notification?: NotificationHandler,
 	) {}
 
 	private readonly images = new Map<string, number>()
@@ -286,7 +286,7 @@ export class ImageManager {
 	}
 }
 
-export function image(image: ImageManager) {
+export function image(image: ImageHandler) {
 	const app = new Elysia({ prefix: '/image' })
 		// Endpoints!
 		.post('/open', async ({ body, set }) => {

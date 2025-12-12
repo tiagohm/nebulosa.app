@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
-import { ConfirmationManager } from 'src/api/confirmation'
+import { ConfirmationHandler } from 'src/api/confirmation'
 
-const confirmation = new ConfirmationManager()
+const confirmation = new ConfirmationHandler()
 
 test('confirm', async () => {
 	for (let i = 0; i < 2; i++) {

@@ -1,5 +1,5 @@
 import { createScope, molecule, use } from 'bunshi'
-import { DEFAULT_THERMOMETER, type Thermometer } from 'src/shared/types'
+import { DEFAULT_THERMOMETER, type Thermometer } from 'nebulosa/src/indi.device'
 import { proxy } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 

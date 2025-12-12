@@ -4,12 +4,16 @@ import { type Angle, normalizeAngle, toHour } from 'nebulosa/src/angle'
 import { DEFAULT_REFRACTION_PARAMETERS, type RefractionParameters } from 'nebulosa/src/astrometry'
 import { DAYSEC, SIDEREAL_DAYSEC } from 'nebulosa/src/constants'
 import type { Constellation } from 'nebulosa/src/constellation'
+import type { EquatorialCoordinate, EquatorialCoordinateJ2000, HorizontalCoordinate } from 'nebulosa/src/coordinate'
 import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { Rect } from 'nebulosa/src/geometry'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
-import type { CfaPattern, ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
-import type { DefBlobVector, DefLightVector, DefNumber, DefNumberVector, DefSwitchVector, DefTextVector, PropertyState } from 'nebulosa/src/indi'
+import type { ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
+import type { PropertyState } from 'nebulosa/src/indi'
+// biome-ignore format: too long!
+import type { Camera, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
+import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { LunarEclipse, LunarPhase } from 'nebulosa/src/moon'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { SmallBodySearchListItem, SmallBodySearchObject } from 'nebulosa/src/sbd'
@@ -20,32 +24,6 @@ import type { Velocity } from 'nebulosa/src/velocity'
 import type { Required } from 'utility-types'
 
 export type Atom<T> = T extends MoleculeOrInterface<infer X> ? X : never
-
-export interface EquatorialCoordinate<T = Angle> {
-	rightAscension: T
-	declination: T
-}
-
-export interface EquatorialCoordinateJ2000<T = Angle> {
-	rightAscensionJ2000: T
-	declinationJ2000: T
-}
-
-export interface HorizontalCoordinate<T = Angle> {
-	azimuth: T
-	altitude: T
-}
-
-export interface GeographicCoordinate {
-	latitude: Angle
-	longitude: Angle
-	elevation: Distance
-}
-
-export interface UTCTime {
-	utc: number // milliseconds since epoch
-	offset: number // minutes
-}
 
 export interface LocationAndTime {
 	readonly location: GeographicCoordinate
@@ -493,10 +471,6 @@ export interface ImageInfo extends Partial<EquatorialCoordinate> {
 
 // INDI
 
-export type DeviceType = 'CAMERA' | 'MOUNT' | 'WHEEL' | 'FOCUSER' | 'ROTATOR' | 'GPS' | 'DOME' | 'GUIDE_OUTPUT' | 'FLAT_PANEL' | 'COVER' | 'THERMOMETER' | 'DEW_HEATER'
-
-export type GuideDirection = 'NORTH' | 'SOUTH' | 'WEST' | 'EAST'
-
 export interface IndiServerStart {
 	port?: number
 	drivers: string[]
@@ -606,48 +580,12 @@ export type DewHeaterMessageEvent = DewHeaterAdded | DewHeaterUpdated | DewHeate
 
 export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | FocuserMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent | CoverMessageEvent | FlatPanelMessageEvent | DewHeaterMessageEvent
 
-export type DeviceProperty = (DefTextVector & { type: 'TEXT' }) | (DefNumberVector & { type: 'NUMBER' }) | (DefSwitchVector & { type: 'SWITCH' }) | (DefLightVector & { type: 'LIGHT' }) | (DefBlobVector & { type: 'BLOB' })
-
-export type DeviceProperties = Record<string, DeviceProperty>
-
-export interface DriverInfo {
-	executable: string
-	version: string
-}
-
-export interface Device {
-	type: DeviceType
-	id: string
-	name: string
-	connected: boolean
-	driver: DriverInfo
-	// properties: DeviceProperties
-}
-
-// Thermometer
-
-export interface Thermometer extends Device {
-	readonly type: 'THERMOMETER' | 'CAMERA' | 'FOCUSER'
-	hasThermometer: boolean
-	temperature: number
-}
-
-// Guide Output
-
-export interface GuideOutput extends Device {
-	readonly type: 'GUIDE_OUTPUT' | 'MOUNT' | 'CAMERA'
-	canPulseGuide: boolean
-	pulseGuiding: boolean
-}
-
 export interface GuidePulse {
 	direction: GuideDirection
 	duration: number
 }
 
 // Camera
-
-export type FrameType = 'LIGHT' | 'DARK' | 'FLAT' | 'BIAS'
 
 export type ExposureTimeUnit = 'MINUTE' | 'SECOND' | 'MILLISECOND' | 'MICROSECOND'
 
@@ -656,58 +594,6 @@ export type ExposureMode = 'SINGLE' | 'FIXED' | 'LOOP'
 export type AutoSubFolderMode = 'OFF' | 'NOON' | 'MIDNIGHT'
 
 export type CameraCaptureState = 'IDLE' | 'EXPOSURE_STARTED' | 'EXPOSING' | 'WAITING' | 'SETTLING' | 'DITHERING' | 'PAUSING' | 'PAUSED' | 'EXPOSURE_FINISHED'
-
-export interface Camera extends GuideOutput, Thermometer {
-	readonly type: 'CAMERA'
-	hasCoolerControl: boolean
-	coolerPower: number
-	cooler: boolean
-	hasDewHeater: boolean
-	dewHeater: boolean
-	frameFormats: string[]
-	canAbort: boolean
-	readonly cfa: {
-		offsetX: number
-		offsetY: number
-		type: CfaPattern
-	}
-	readonly exposure: {
-		time: number
-		min: number
-		max: number
-		state: PropertyState
-	}
-	hasCooler: boolean
-	canSetTemperature: boolean
-	canSubFrame: boolean
-	readonly frame: {
-		x: number
-		minX: number
-		maxX: number
-		y: number
-		minY: number
-		maxY: number
-		width: number
-		minWidth: number
-		maxWidth: number
-		height: number
-		minHeight: number
-		maxHeight: number
-	}
-	canBin: boolean
-	readonly bin: {
-		maxX: number
-		maxY: number
-		x: number
-		y: number
-	}
-	readonly gain: Pick<DefNumber, 'min' | 'max' | 'value'>
-	readonly offset: Pick<DefNumber, 'min' | 'max' | 'value'>
-	readonly pixelSize: {
-		x: number
-		y: number
-	}
-}
 
 export interface CameraCaptureStart {
 	exposureTime: number
@@ -754,57 +640,9 @@ export interface CameraCaptureEvent {
 	savedPath?: string
 }
 
-// GPS
-
-export interface GPS extends Device {
-	readonly type: 'GPS' | 'MOUNT'
-	hasGPS: boolean
-	readonly geographicCoordinate: GeographicCoordinate
-	readonly time: UTCTime
-}
-
 // Mount
 
-export type PierSide = 'EAST' | 'WEST' | 'NEITHER'
-
-export type MountType = 'ALTAZ' | 'EQ_FORK' | 'EQ_GEM'
-
-export type TrackMode = 'SIDEREAL' | 'SOLAR' | 'LUNAR' | 'KING' | 'CUSTOM'
-
-export type TargetCoordinateType = 'J2000' | 'JNOW' | 'ALTAZ'
-
 export type MountRemoteControlProtocol = 'LX200' | 'STELLARIUM'
-
-export interface Parkable {
-	canPark: boolean
-	parking: boolean
-	parked: boolean
-}
-
-export interface SlewRate {
-	name: string
-	label: string
-}
-
-export interface Mount extends GuideOutput, GPS, Parkable {
-	readonly type: 'MOUNT'
-	slewing: boolean
-	tracking: boolean
-	canAbort: boolean
-	canSync: boolean
-	canGoTo: boolean
-	canFlip: boolean
-	canHome: boolean
-	slewRates: SlewRate[]
-	slewRate?: SlewRate['name']
-	mountType: MountType
-	trackModes: TrackMode[]
-	trackMode: TrackMode
-	pierSide: PierSide
-	guideRateWE: number
-	guideRateNS: number
-	readonly equatorialCoordinate: EquatorialCoordinate
-}
 
 export interface MountEquatorialCoordinatePosition extends Readonly<EquatorialCoordinate>, Readonly<EquatorialCoordinateJ2000>, Readonly<HorizontalCoordinate> {
 	readonly lst: Angle
@@ -830,52 +668,6 @@ export function expectedPierSide(rightAscension: Angle, declination: Angle, lst:
 
 export function computeMeridianTime(rightAscension: Angle, lst: Angle) {
 	return normalizeAngle(rightAscension - lst) * (SIDEREAL_DAYSEC / DAYSEC)
-}
-
-// Focuser
-
-export interface Focuser extends Device, Thermometer {
-	readonly type: 'FOCUSER'
-	moving: boolean
-	readonly position: Pick<DefNumber, 'min' | 'max' | 'value'>
-	canAbsoluteMove: boolean
-	canRelativeMove: boolean
-	canAbort: boolean
-	canReverse: boolean
-	reversed: boolean
-	canSync: boolean
-	hasBacklash: boolean
-}
-
-// Wheel
-
-export interface Wheel extends Device {
-	readonly type: 'WHEEL'
-	moving: boolean
-	slots: string[]
-	position: number
-}
-
-// Cover
-
-export interface Cover extends Device, Parkable, DewHeater {
-	readonly type: 'COVER'
-}
-
-// Flat Panel
-
-export interface FlatPanel extends Device {
-	readonly type: 'FLAT_PANEL'
-	enabled: boolean
-	readonly intensity: Pick<DefNumber, 'min' | 'max' | 'value'>
-}
-
-// DEW_HEATER
-
-export interface DewHeater extends Device {
-	readonly type: 'DEW_HEATER' | 'CAMERA' | 'COVER'
-	hasDewHeater: boolean
-	readonly pwm: Pick<DefNumber, 'min' | 'max' | 'value'>
 }
 
 // Notification
@@ -1074,123 +866,6 @@ export const DEFAULT_STAR_DETECTION: StarDetection = {
 	slot: 0,
 }
 
-export const DEFAULT_CAMERA: Camera = {
-	hasCoolerControl: false,
-	coolerPower: 0,
-	cooler: false,
-	hasDewHeater: false,
-	dewHeater: false,
-	frameFormats: [],
-	canAbort: false,
-	cfa: {
-		offsetX: 0,
-		offsetY: 0,
-		type: 'RGGB',
-	},
-	exposure: {
-		time: 0,
-		min: 0,
-		max: 0,
-		state: 'Idle',
-	},
-	hasCooler: false,
-	canSetTemperature: false,
-	canSubFrame: false,
-	frame: {
-		x: 0,
-		minX: 0,
-		maxX: 0,
-		y: 0,
-		minY: 0,
-		maxY: 0,
-		width: 0,
-		minWidth: 0,
-		maxWidth: 0,
-		height: 0,
-		minHeight: 0,
-		maxHeight: 0,
-	},
-	canBin: false,
-	bin: {
-		maxX: 0,
-		maxY: 0,
-		x: 0,
-		y: 0,
-	},
-	gain: {
-		value: 0,
-		min: 0,
-		max: 0,
-	},
-	offset: {
-		value: 0,
-		min: 0,
-		max: 0,
-	},
-	pixelSize: {
-		x: 0,
-		y: 0,
-	},
-	canPulseGuide: false,
-	pulseGuiding: false,
-	type: 'CAMERA',
-	id: '',
-	name: '',
-	connected: false,
-	driver: {
-		executable: '',
-		version: '',
-	},
-	hasThermometer: false,
-	temperature: 0,
-	// properties: {},
-}
-
-export const DEFAULT_MOUNT: Mount = {
-	slewing: false,
-	tracking: false,
-	canAbort: false,
-	canSync: false,
-	canGoTo: false,
-	canFlip: false,
-	canHome: false,
-	canPark: false,
-	slewRates: [],
-	mountType: 'EQ_GEM',
-	trackModes: [],
-	trackMode: 'SIDEREAL',
-	pierSide: 'NEITHER',
-	guideRateWE: 0,
-	guideRateNS: 0,
-	equatorialCoordinate: {
-		rightAscension: 0,
-		declination: 0,
-	},
-	canPulseGuide: false,
-	pulseGuiding: false,
-	type: 'MOUNT',
-	id: '',
-	name: '',
-	connected: false,
-	driver: {
-		executable: '',
-		version: '',
-	},
-	// properties: {},
-	hasGPS: false,
-	geographicCoordinate: {
-		latitude: 0,
-		longitude: 0,
-		elevation: 0,
-	},
-	time: {
-		utc: 0,
-		offset: 0,
-	},
-	parking: false,
-	parked: false,
-}
-
 export const DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION: MountEquatorialCoordinatePosition = {
 	rightAscension: 0,
 	declination: 0,
@@ -1202,133 +877,6 @@ export const DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION: MountEquatorialCoordi
 	constellation: 'AND',
 	meridianIn: 0,
 	pierSide: 'NEITHER',
-}
-
-export const DEFAULT_FOCUSER: Focuser = {
-	type: 'FOCUSER',
-	id: '',
-	name: '',
-	connected: false,
-	driver: {
-		executable: '',
-		version: '',
-	},
-	// properties: {},
-	moving: false,
-	position: {
-		value: 0,
-		min: 0,
-		max: 100,
-	},
-	canAbsoluteMove: false,
-	canRelativeMove: false,
-	canAbort: false,
-	canReverse: false,
-	reversed: false,
-	canSync: false,
-	hasBacklash: false,
-	hasThermometer: false,
-	temperature: 0,
-}
-
-export const DEFAULT_WHEEL: Wheel = {
-	type: 'WHEEL',
-	id: '',
-	name: '',
-	connected: false,
-	driver: {
-		executable: '',
-		version: '',
-	},
-	// properties: {},
-	moving: false,
-	slots: [],
-	position: 0,
-}
-
-export const DEFAULT_THERMOMETER: Thermometer = {
-	hasThermometer: true,
-	temperature: 0,
-	type: 'THERMOMETER',
-	id: '',
-	name: '',
-	connected: false,
-	driver: {
-		executable: '',
-		version: '',
-	},
-	// properties: {},
-}
-
-export const DEFAULT_GUIDE_OUTPUT: GuideOutput = {
-	canPulseGuide: false,
-	pulseGuiding: false,
-	type: 'GUIDE_OUTPUT',
-	id: '',
-	name: '',
-	connected: false,
-	driver: {
-		executable: '',
-		version: '',
-	},
-	// properties: {},
-}
-
-export const DEFAULT_COVER: Cover = {
-	canPark: false,
-	parking: false,
-	parked: false,
-	hasDewHeater: false,
-	pwm: {
-		value: 0,
-		min: 0,
-		max: 100,
-	},
-	type: 'COVER',
-	id: '',
-	name: '',
-	connected: false,
-	driver: {
-		executable: '',
-		version: '',
-	},
-	// properties: {},
-}
-
-export const DEFAULT_FLAT_PANEL: FlatPanel = {
-	enabled: false,
-	intensity: {
-		value: 0,
-		min: 0,
-		max: 100,
-	},
-	type: 'FLAT_PANEL',
-	id: '',
-	name: '',
-	connected: false,
-	driver: {
-		executable: '',
-		version: '',
-	},
-	// properties: {},
-}
-
-export const DEFAULT_DEW_HEATER: DewHeater = {
-	hasDewHeater: false,
-	pwm: {
-		value: 0,
-		min: 0,
-		max: 100,
-	},
-	type: 'DEW_HEATER',
-	id: '',
-	name: '',
-	connected: false,
-	driver: {
-		executable: '',
-		version: '',
-	},
-	// properties: {},
 }
 
 export const DEFAULT_IMAGE_STRETCH: ImageStretch = {
@@ -1530,28 +1078,4 @@ export const DEFAULT_DARV_START: DarvStart = {
 export const DEFAULT_DARV_EVENT: DarvEvent = {
 	id: '',
 	state: 'IDLE',
-}
-
-export function isCamera(device: Device): device is Camera {
-	return device.type === 'CAMERA'
-}
-
-export function isMount(device: Device): device is Mount {
-	return device.type === 'MOUNT'
-}
-
-export function isThermometer(device: Device): device is Thermometer {
-	return 'hasThermometer' in device && device.hasThermometer !== undefined
-}
-
-export function isGuideOutput(device: Device): device is GuideOutput {
-	return 'canPulseGuide' in device && device.canPulseGuide !== undefined
-}
-
-export function isDewHeater(device: Device): device is DewHeater {
-	return 'hasDewHeater' in device && device.hasDewHeater !== undefined
-}
-
-export function isGPS(device: Device): device is GPS {
-	return 'hasGPS' in device && device.hasGPS !== undefined
 }

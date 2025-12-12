@@ -1,13 +1,13 @@
 import Elysia from 'elysia'
 import type { Confirm, Confirmation } from '../shared/types'
-import type { WebSocketMessageManager } from './message'
+import type { WebSocketMessageHandler } from './message'
 
 export type ConfirmationResolver = (value?: boolean | PromiseLike<boolean>) => void
 
-export class ConfirmationManager {
+export class ConfirmationHandler {
 	private readonly confirmations = new Map<string, ConfirmationResolver>()
 
-	constructor(readonly wsm?: WebSocketMessageManager) {}
+	constructor(readonly wsm?: WebSocketMessageHandler) {}
 
 	confirm(req: Confirm) {
 		this.confirmations.get(req.key)?.(req.accepted)
@@ -33,7 +33,7 @@ export class ConfirmationManager {
 	}
 }
 
-export function confirmation(confirmation: ConfirmationManager) {
+export function confirmation(confirmation: ConfirmationHandler) {
 	const app = new Elysia({ prefix: '/confirmation' })
 		// Endpoints!
 		.post('', ({ body }) => confirmation.confirm(body as never))

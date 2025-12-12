@@ -1,20 +1,12 @@
 import { Elysia } from 'elysia'
 // biome-ignore format: too long!
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, IndiClient, IndiClientHandler, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
+import type { Device, DeviceProperty } from 'nebulosa/src/indi.device'
+import type { CameraManager, CoverManager, DevicePropertyHandler, DevicePropertyManager, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import bus from '../shared/bus'
-// biome-ignore format: too long!
-import type { Device, DeviceProperties, DeviceProperty, IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from '../shared/types'
-import type { CameraManager } from './camera'
-import type { ConnectionManager } from './connection'
-import type { CoverManager } from './cover'
-import type { DewHeaterManager } from './dewheater'
-import type { FlatPanelManager } from './flatpanel'
-import type { FocuserManager } from './focuser'
-import type { GuideOutputManager } from './guideoutput'
-import type { WebSocketMessageManager } from './message'
-import type { MountManager } from './mount'
-import type { ThermometerManager } from './thermometer'
-import type { WheelManager } from './wheel'
+import type { IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from '../shared/types'
+import type { ConnectionHandler } from './connection'
+import type { WebSocketMessageHandler } from './message'
 
 export enum DeviceInterfaceType {
 	TELESCOPE = 0x0001, // Telescope interface, must subclass INDI::Telescope.
@@ -67,7 +59,7 @@ export function disconnect(client: IndiClient, device: Device) {
 	}
 }
 
-export class IndiManager implements IndiClientHandler {
+export class IndiHandler implements IndiClientHandler {
 	constructor(
 		readonly camera: CameraManager,
 		readonly guideOutput: GuideOutputManager,
@@ -78,12 +70,16 @@ export class IndiManager implements IndiClientHandler {
 		readonly cover: CoverManager,
 		readonly flatPanel: FlatPanelManager,
 		readonly dewHeater: DewHeaterManager,
-		readonly properties: IndiDevicePropertyManager,
-		readonly wsm: WebSocketMessageManager,
+		readonly properties: DevicePropertyManager,
+		readonly wsm: WebSocketMessageHandler,
 	) {}
 
 	close(client: IndiClient, server: boolean) {
 		bus.emit('indi:close', client)
+	}
+
+	vector(client: IndiClient, message: DefVector | SetVector, tag: string) {
+		this.properties.vector(client, message, tag)
 	}
 
 	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
@@ -93,10 +89,9 @@ export class IndiManager implements IndiClientHandler {
 		this.wheel.switchVector(client, message, tag)
 		this.cover.switchVector(client, message, tag)
 		this.flatPanel.switchVector(client, message, tag)
-		// this.guideOutput.switchVector(client, message, tag)
-		// this.thermometer.switchVector(client, message, tag)
-		// this.dewHeater.switchVector(client, message, tag)
-		this.properties.add(message, tag)
+		this.guideOutput.switchVector(client, message, tag)
+		this.thermometer.switchVector(client, message, tag)
+		this.dewHeater.switchVector(client, message, tag)
 	}
 
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
@@ -104,12 +99,11 @@ export class IndiManager implements IndiClientHandler {
 		this.mount.numberVector(client, message, tag)
 		this.focuser.numberVector(client, message, tag)
 		this.wheel.numberVector(client, message, tag)
-		this.cover.numberVector(client, message, tag)
+		// this.cover.numberVector(client, message, tag)
 		this.flatPanel.numberVector(client, message, tag)
 		this.guideOutput.numberVector(client, message, tag)
 		this.thermometer.numberVector(client, message, tag)
 		this.dewHeater.numberVector(client, message, tag)
-		this.properties.add(message, tag)
 	}
 
 	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
@@ -122,7 +116,6 @@ export class IndiManager implements IndiClientHandler {
 		// this.guideOutput.textVector(client, message, tag)
 		// this.thermometer.textVector(client, message, tag)
 		// this.dewHeater.textVector(client, message, tag)
-		this.properties.add(message, tag)
 	}
 
 	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
@@ -136,10 +129,10 @@ export class IndiManager implements IndiClientHandler {
 		this.wheel.delProperty(client, message)
 		this.cover.delProperty(client, message)
 		this.flatPanel.delProperty(client, message)
-		// this.guideOutput.delProperty(client, message)
-		// this.thermometer.delProperty(client, message)
-		// this.dewHeater.delProperty(client, message)
-		this.properties.remove(message)
+		this.guideOutput.delProperty(client, message)
+		this.thermometer.delProperty(client, message)
+		this.dewHeater.delProperty(client, message)
+		this.properties.delProperty(client, message)
 	}
 
 	get(id: string): Device | undefined {
@@ -147,11 +140,15 @@ export class IndiManager implements IndiClientHandler {
 	}
 }
 
-export class IndiDevicePropertyManager {
-	private readonly properties = new Map<string, DeviceProperties>()
+export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 	private readonly listeners = new Map<string, number>()
 
-	constructor(readonly wsm: WebSocketMessageManager) {
+	constructor(
+		readonly wsm: WebSocketMessageHandler,
+		readonly properties: DevicePropertyManager,
+	) {
+		properties.addHandler(this)
+
 		setInterval(() => {
 			const now = Date.now()
 
@@ -163,92 +160,34 @@ export class IndiDevicePropertyManager {
 		}, 5000)
 	}
 
+	devices() {
+		return this.properties.names()
+	}
+
+	get(name: string) {
+		return this.properties.get(name)
+	}
+
 	ping(name: string) {
 		this.listeners.set(name, Date.now())
 	}
 
-	private notify(device: string, name: string, property: DeviceProperty, type: 'update' | 'remove') {
+	private notify(device: string, property: DeviceProperty, type: 'update' | 'remove') {
 		if (this.listeners.has(device)) {
-			this.wsm.send<IndiDevicePropertyEvent>(`indi:property:${type}`, { device, name, property })
+			this.wsm.send<IndiDevicePropertyEvent>(`indi:property:${type}`, { device, name: property.name, property })
 		}
 	}
 
-	devices() {
-		return Array.from(this.properties.keys())
+	added(device: string, property: DeviceProperty) {
+		this.notify(device, property, 'update')
 	}
 
-	get(device: Device) {
-		return this.properties.get(device.name)
+	updated(device: string, property: DeviceProperty) {
+		this.notify(device, property, 'update')
 	}
 
-	add(message: DefVector | SetVector, tag: string) {
-		const { device } = message
-		let properties = this.properties.get(device)
-
-		if (!properties) {
-			properties = {}
-			this.properties.set(device, properties)
-		}
-
-		if (tag[0] === 'd') {
-			const property = message as DeviceProperty
-			property.type = tag.includes('Switch') ? 'SWITCH' : tag.includes('Number') ? 'NUMBER' : tag.includes('Text') ? 'TEXT' : tag.includes('BLOB') ? 'BLOB' : 'LIGHT'
-			properties[message.name] = property
-			this.notify(device, message.name, property, 'update')
-			return true
-		} else {
-			let updated = false
-			const property = properties[message.name]
-
-			if (property) {
-				if (message.state && message.state !== property.state) {
-					property.state = message.state
-					updated = true
-				}
-
-				for (const key in message.elements) {
-					const element = property.elements[key]
-
-					if (element) {
-						const value = message.elements[key]!.value
-
-						if (value !== element.value) {
-							element.value = value
-							updated = true
-						}
-					}
-				}
-
-				if (updated) {
-					this.notify(device, message.name, property, 'update')
-				}
-			}
-
-			return updated
-		}
-	}
-
-	remove(message: DelProperty) {
-		const properties = this.properties.get(message.device)
-
-		if (!properties) return false
-
-		const { device, name } = message
-
-		if (name) {
-			const property = properties[name]
-
-			if (property) {
-				delete properties[name]
-				if (Object.keys(properties).length === 0) this.properties.delete(device)
-				this.notify(device, name, property, 'remove')
-				return true
-			}
-		} else {
-			// TODO: Remove all properties from device
-		}
-
-		return false
+	removed(device: string, property: DeviceProperty) {
+		this.notify(device, property, 'remove')
 	}
 
 	send(client: IndiClient, type: DeviceProperty['type'], message: NewVector) {
@@ -258,10 +197,10 @@ export class IndiDevicePropertyManager {
 	}
 }
 
-export class IndiServerManager {
+export class IndiServerHandler {
 	private process?: Bun.Subprocess
 
-	constructor(readonly wsm: WebSocketMessageManager) {}
+	constructor(readonly wsm: WebSocketMessageHandler) {}
 
 	start(req: IndiServerStart) {
 		this.stop()
@@ -299,7 +238,7 @@ export class IndiServerManager {
 	}
 }
 
-export function indi(indi: IndiManager, server: IndiServerManager, property: IndiDevicePropertyManager, connection: ConnectionManager) {
+export function indi(indi: IndiHandler, server: IndiServerHandler, property: IndiDevicePropertyHandler, connection: ConnectionHandler) {
 	function deviceFromParams(params: { id: string }) {
 		return indi.get(decodeURIComponent(params.id))!
 	}
@@ -309,7 +248,7 @@ export function indi(indi: IndiManager, server: IndiServerManager, property: Ind
 		.get('/devices', () => property.devices())
 		.post('/:id/connect', ({ params }) => connect(connection.get(), deviceFromParams(params)))
 		.post('/:id/disconnect', ({ params }) => disconnect(connection.get(), deviceFromParams(params)))
-		.get('/:id/properties', ({ params }) => property.get(deviceFromParams(params)))
+		.get('/:id/properties', ({ params }) => property.get(decodeURIComponent(params.id)))
 		.post('/:id/properties/ping', ({ params }) => property.ping(decodeURIComponent(params.id)))
 		.post('/:id/properties/send', ({ query, body }) => property.send(connection.get(), query.type as never, body as never))
 		.post('/server/start', ({ body }) => server.start(body as never))

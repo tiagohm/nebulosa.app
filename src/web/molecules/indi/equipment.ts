@@ -1,6 +1,7 @@
 import { molecule, onMount } from 'bunshi'
+import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Thermometer, Wheel } from 'nebulosa/src/indi.device'
 import bus, { unsubscribe } from 'src/shared/bus'
-import type { Camera, CameraUpdated, Cover, CoverUpdated, Device, DeviceType, DewHeater, DewHeaterUpdated, FlatPanel, FlatPanelUpdated, Focuser, FocuserUpdated, GuideOutput, GuideOutputUpdated, Mount, MountUpdated, Thermometer, ThermometerUpdated, Wheel, WheelUpdated } from 'src/shared/types'
+import type { CameraUpdated, CoverUpdated, DewHeaterUpdated, FlatPanelUpdated, FocuserUpdated, GuideOutputUpdated, MountUpdated, ThermometerUpdated, WheelUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'

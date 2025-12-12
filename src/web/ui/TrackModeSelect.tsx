@@ -1,5 +1,5 @@
 import { SelectItem } from '@heroui/react'
-import type { TrackMode } from 'src/shared/types'
+import type { TrackMode } from 'nebulosa/src/indi.device'
 import { EnumSelect, type EnumSelectProps } from './EnumSelect'
 
 export interface TrackModeSelectProps extends Omit<EnumSelectProps<TrackMode>, 'children'> {

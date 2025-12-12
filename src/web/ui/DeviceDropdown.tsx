@@ -1,7 +1,7 @@
 import { type ButtonProps, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip, type TooltipProps } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
+import type { Device } from 'nebulosa/src/indi.device'
 import { useMemo } from 'react'
-import type { Device } from 'src/shared/types'
 import type { DeepReadonly } from 'utility-types'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { Api } from '@/shared/api'

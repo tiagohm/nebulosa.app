@@ -1,8 +1,11 @@
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
+import type { EquatorialCoordinate, HorizontalCoordinate } from 'nebulosa/src/coordinate'
+import { DEFAULT_MOUNT, type Mount, type MountTargetCoordinateType, type TrackMode } from 'nebulosa/src/indi.device'
+import type { GeographicCoordinate } from 'nebulosa/src/location'
 import bus, { unsubscribe } from 'src/shared/bus'
 // biome-ignore format: too long!
-import { DEFAULT_MOUNT, DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type EquatorialCoordinate, type Framing, type GeographicCoordinate, type HorizontalCoordinate, type Mount, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated, type TargetCoordinateType, type TrackMode } from 'src/shared/types'
+import { DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type Framing, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -19,7 +22,7 @@ export interface MountScopeValue {
 export interface MountState {
 	readonly mount: EquipmentDevice<Mount>
 	readonly targetCoordinate: {
-		readonly coordinate: EquatorialCoordinate<string> & HorizontalCoordinate<string> & { type: TargetCoordinateType; action: TargetCoordinateAction }
+		readonly coordinate: EquatorialCoordinate<string> & HorizontalCoordinate<string> & { type: MountTargetCoordinateType; action: TargetCoordinateAction }
 		readonly position: MountEquatorialCoordinatePosition
 	}
 	readonly currentPosition: MountEquatorialCoordinatePosition

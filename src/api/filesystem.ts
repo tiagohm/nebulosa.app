@@ -11,7 +11,7 @@ export const FileEntryComparator = (a: FileEntry, b: FileEntry) => {
 	else return 1
 }
 
-export class FileSystemManager {
+export class FileSystemHandler {
 	async list(req?: ListDirectory): Promise<FileSystem> {
 		// Find the directory path from request or use the home directory
 		const path = (await findDirectory(req?.path)) || Bun.env.homeDir
@@ -68,7 +68,7 @@ export class FileSystemManager {
 	}
 }
 
-export function fileSystem(fileSystem: FileSystemManager) {
+export function fileSystem(fileSystem: FileSystemHandler) {
 	const app = new Elysia({ prefix: '/filesystem' })
 		// Endpoints!
 		.post('/list', ({ body }) => fileSystem.list(body as never))

@@ -2,15 +2,15 @@ import Elysia from 'elysia'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
-import type { WebSocketMessageManager } from './message'
-import type { NotificationManager } from './notification'
+import type { WebSocketMessageHandler } from './message'
+import type { NotificationHandler } from './notification'
 
-export class ConnectionManager {
+export class ConnectionHandler {
 	private readonly clients = new Map<string, IndiClient>()
 
 	constructor(
-		readonly wsm: WebSocketMessageManager,
-		readonly notification: NotificationManager,
+		readonly wsm: WebSocketMessageHandler,
+		readonly notification: NotificationHandler,
 	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove the client from the active connections
@@ -111,7 +111,7 @@ export class ConnectionManager {
 	}
 }
 
-export function connection(connection: ConnectionManager, indi: IndiClientHandler) {
+export function connection(connection: ConnectionHandler, indi: IndiClientHandler) {
 	const app = new Elysia({ prefix: '/connections' })
 		// Endpoints!
 		.get('', () => connection.list())

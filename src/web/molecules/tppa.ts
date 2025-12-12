@@ -1,6 +1,7 @@
 import { molecule, onMount, use } from 'bunshi'
+import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import bus, { unsubscribe } from 'src/shared/bus'
-import { type Camera, DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type Mount, type TppaEvent, type TppaStart } from 'src/shared/types'
+import { DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type TppaEvent, type TppaStart } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'

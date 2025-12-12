@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
+import type { Mount } from 'nebulosa/src/indi.device'
 import { memo } from 'react'
-import type { Mount } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { DeviceDropdown, type DeviceDropdownProps } from '@/ui/DeviceDropdown'
@@ -19,7 +19,7 @@ export const MountDropdown = memo(({ showLabel = true, showLabelOnEmpty = true, 
 	const mounts = useSnapshot(equipment.state.MOUNT)
 
 	function handleValueChange(value?: Mount) {
-		onValueChange?.(equipment.state.MOUNT.find((e) => e.id === value?.id))
+		onValueChange?.(equipment.state.MOUNT.find((e) => e.name === value?.name))
 	}
 
 	return (

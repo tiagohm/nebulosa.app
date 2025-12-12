@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
+import type { Focuser } from 'nebulosa/src/indi.device'
 import { memo } from 'react'
-import type { Focuser } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { DeviceDropdown, type DeviceDropdownProps } from '@/ui/DeviceDropdown'
@@ -19,7 +19,7 @@ export const FocuserDropdown = memo(({ showLabel = true, showLabelOnEmpty = true
 	const focusers = useSnapshot(equipment.state.FOCUSER)
 
 	function handleValueChange(value?: Focuser) {
-		onValueChange?.(equipment.state.FOCUSER.find((e) => e.id === value?.id))
+		onValueChange?.(equipment.state.FOCUSER.find((e) => e.name === value?.name))
 	}
 
 	return (

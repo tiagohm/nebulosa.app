@@ -1,15 +1,15 @@
 import { ButtonGroup, type ButtonGroupProps } from '@heroui/react'
-import type { TargetCoordinateType } from 'src/shared/types'
+import type { MountTargetCoordinateType } from 'nebulosa/src/indi.device'
 import { TextButton, type TextButtonProps } from './TextButton'
 
-export interface TargetCoordinateTypeButtonGroupProps extends ButtonGroupProps, Pick<TextButtonProps, 'color'> {
+export interface MountTargetCoordinateTypeButtonGroupProps extends ButtonGroupProps, Pick<TextButtonProps, 'color'> {
 	readonly variant?: Exclude<TextButtonProps['variant'], 'solid'>
-	readonly value: TargetCoordinateType
+	readonly value: MountTargetCoordinateType
 	readonly buttonProps?: Omit<TextButtonProps, 'onPointerUp' | 'size' | 'variant' | 'color' | 'label'>
-	readonly onValueChange: (type: TargetCoordinateType) => void
+	readonly onValueChange: (type: MountTargetCoordinateType) => void
 }
 
-export function TargetCoordinateTypeButtonGroup({ value, onValueChange, color = 'primary', variant = 'light', buttonProps, ...props }: TargetCoordinateTypeButtonGroupProps) {
+export function MountTargetCoordinateTypeButtonGroup({ value, onValueChange, color = 'primary', variant = 'light', buttonProps, ...props }: MountTargetCoordinateTypeButtonGroupProps) {
 	return (
 		<ButtonGroup {...props}>
 			<TextButton {...buttonProps} color={color} label='J2000' onPointerUp={() => onValueChange('J2000')} size='sm' variant={value === 'J2000' ? 'solid' : variant} />

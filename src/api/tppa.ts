@@ -2,25 +2,24 @@ import Elysia from 'elysia'
 import { ThreePointPolarAlignment } from 'nebulosa/src/alignment'
 import { deg } from 'nebulosa/src/angle'
 import type { IndiClient } from 'nebulosa/src/indi'
+import type { Camera, Mount } from 'nebulosa/src/indi.device'
+import type { MountManager } from 'nebulosa/src/indi.manager'
 import bus from 'src/shared/bus'
-import { type Camera, type CameraCaptureEvent, type CameraCaptureStart, DEFAULT_TPPA_EVENT, type Mount, type TppaEvent, type TppaStart, type TppaStop } from 'src/shared/types'
+import { type CameraCaptureEvent, type CameraCaptureStart, DEFAULT_TPPA_EVENT, type TppaEvent, type TppaStart, type TppaStop } from 'src/shared/types'
 import type { CacheManager } from './cache'
-import { type CameraManager, decodePath } from './camera'
-import type { ConnectionManager } from './connection'
-import type { IndiDevicePropertyManager } from './indi'
-import type { WebSocketMessageManager } from './message'
-import { type MountManager, moveEast, moveWest, tracking } from './mount'
-import type { PlateSolverManager } from './platesolver'
+import { type CameraHandler, decodePath } from './camera'
+import type { ConnectionHandler } from './connection'
+import type { WebSocketMessageHandler } from './message'
+import type { PlateSolverHandler } from './platesolver'
 
-export class TppaManager {
+export class TppaHandler {
 	private readonly tasks = new Map<string, TppaTask>()
 
 	constructor(
-		readonly wsm: WebSocketMessageManager,
-		readonly camera: CameraManager,
+		readonly wsm: WebSocketMessageHandler,
+		readonly camera: CameraHandler,
 		readonly mount: MountManager,
-		readonly solver: PlateSolverManager,
-		readonly property: IndiDevicePropertyManager,
+		readonly solver: PlateSolverHandler,
 		readonly cache: CacheManager,
 	) {
 		bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
@@ -56,7 +55,7 @@ export class TppaTask {
 	private stopped = false
 
 	constructor(
-		private readonly tppa: TppaManager,
+		private readonly tppa: TppaHandler,
 		private readonly client: IndiClient,
 		readonly camera: Camera,
 		readonly mount: Mount,
@@ -173,19 +172,19 @@ export class TppaTask {
 			if (!this.stopped) {
 				this.event.state = 'CAPTURING'
 				this.handleTppaEvent()
-				this.tppa.camera.startCameraCapture(this.camera, this.capture, this.client, this.tppa.property)
+				this.tppa.camera.startCameraCapture(this.client, this.camera, this.request.capture)
 			}
 		}
 	}
 
 	start() {
 		// Enable mount tracking
-		tracking(this.client, this.mount, true)
+		this.tppa.mount.tracking(this.client, this.mount, true)
 
 		// First image
 		this.event.state = 'CAPTURING'
 		this.handleTppaEvent()
-		this.tppa.camera.startCameraCapture(this.camera, this.capture, this.client, this.tppa.property)
+		this.tppa.camera.startCameraCapture(this.client, this.camera, this.request.capture)
 	}
 
 	stop() {
@@ -193,7 +192,7 @@ export class TppaTask {
 
 		this.move(false)
 		this.tppa.solver.stop(this.request)
-		this.tppa.camera.stopCameraCapture(this.camera)
+		this.tppa.camera.stopCameraCapture(this.client, this.camera)
 
 		if (this.event.state !== 'IDLE') {
 			this.event.state = 'IDLE'
@@ -202,13 +201,13 @@ export class TppaTask {
 	}
 
 	private move(enabled: boolean) {
-		if (this.request.direction === 'EAST') moveEast(this.client, this.mount, enabled)
-		else moveWest(this.client, this.mount, enabled)
+		if (this.request.direction === 'EAST') this.tppa.mount.moveEast(this.client, this.mount, enabled)
+		else this.tppa.mount.moveWest(this.client, this.mount, enabled)
 	}
 
 	private stopTrackingWhenDone() {
-		if (this.request.stopTrackingWhenDone) {
-			tracking(this.client, this.mount, false)
+		if (this.request.stopTrackingWhenDone && this.mount.tracking) {
+			this.tppa.mount.tracking(this.client, this.mount, false)
 		}
 	}
 
@@ -223,10 +222,10 @@ export class TppaTask {
 	}
 }
 
-export function tppa(tppa: TppaManager, connection: ConnectionManager) {
+export function tppa(tppa: TppaHandler, connection: ConnectionHandler) {
 	const app = new Elysia({ prefix: '/tppa' })
 		// Endpoints!
-		.post('/:camera/:mount/start', ({ params, body }) => tppa.start(body as never, connection.get(), tppa.camera.get(params.camera)!, tppa.mount.get(params.mount)!))
+		.post('/:camera/:mount/start', ({ params, body }) => tppa.start(body as never, connection.get(), tppa.camera.camera.get(params.camera)!, tppa.mount.get(params.mount)!))
 		.post('/stop', ({ body }) => tppa.stop(body as never))
 
 	return app

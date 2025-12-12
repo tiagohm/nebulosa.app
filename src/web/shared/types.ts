@@ -1,4 +1,5 @@
-import type { Camera, Connect, ConnectionStatus } from 'src/shared/types'
+import type { Camera } from 'nebulosa/src/indi.device'
+import type { Connect, ConnectionStatus } from 'src/shared/types'
 
 export type FilePickerMode = 'file' | 'directory' | 'save'
 

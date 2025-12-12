@@ -1,7 +1,7 @@
 import { Button, type ButtonProps, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
+import type { Device } from 'nebulosa/src/indi.device'
 import { memo } from 'react'
-import type { Device } from 'src/shared/types'
 import indiIcon from '@/assets/indi.webp'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 

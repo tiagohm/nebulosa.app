@@ -1,6 +1,7 @@
 import { molecule, onMount, use } from 'bunshi'
+import type { Camera } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
-import type { Atom, Camera, CameraCaptureEvent } from 'src/shared/types'
+import type { Atom, CameraCaptureEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -37,8 +38,8 @@ export const ImageWorkspaceMolecule = molecule(() => {
 	onMount(() => {
 		const unsubscriber = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
 			if (event.savedPath) {
-				const camera = equipment.get('CAMERA', event.device) as Camera
-				add(event.savedPath, event.device, camera)
+				const camera = equipment.get('CAMERA', event.device)
+				add(event.savedPath, event.device, camera!)
 			}
 		})
 

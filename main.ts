@@ -4,33 +4,35 @@ import { cron } from '@elysiajs/cron'
 import Elysia from 'elysia'
 import type { MakeDirectoryOptions } from 'fs'
 import fs from 'fs/promises'
+import type { DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
+import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import { default as openDefaultApp } from 'open'
 import os from 'os'
 import { join } from 'path'
-import { AtlasManager, atlas } from 'src/api/atlas'
+import { AtlasHandler, atlas } from 'src/api/atlas'
 import { CacheManager } from 'src/api/cache'
-import { CameraManager, camera } from 'src/api/camera'
-import { ConnectionManager, connection } from 'src/api/connection'
-import { CoverManager, cover } from 'src/api/cover'
-import { DarvManager, darv } from 'src/api/darv'
-import { DewHeaterManager, dewHeater } from 'src/api/dewheater'
-import { FlatPanelManager, flatPanel } from 'src/api/flatpanel'
-import { FocuserManager, focuser } from 'src/api/focuser'
-import { GuideOutputManager, guideOutput } from 'src/api/guideoutput'
-import { IndiDevicePropertyManager, IndiManager, IndiServerManager, indi } from 'src/api/indi'
-import { WebSocketMessageManager } from 'src/api/message'
-import { MountManager, MountRemoteControlManager, mount } from 'src/api/mount'
-import { NotificationManager } from 'src/api/notification'
-import { ThermometerManager, thermometer } from 'src/api/thermometer'
-import { TppaManager, tppa } from 'src/api/tppa'
-import { WheelManager, wheel } from 'src/api/wheel'
+import { CameraHandler, camera } from 'src/api/camera'
+import { ConnectionHandler, connection } from 'src/api/connection'
+import { CoverHandler, cover } from 'src/api/cover'
+import { DarvHandler, darv } from 'src/api/darv'
+import { DewHeaterHandler, dewHeater } from 'src/api/dewheater'
+import { FlatPanelHandler, flatPanel } from 'src/api/flatpanel'
+import { FocuserHandler, focuser } from 'src/api/focuser'
+import { GuideOutputHandler, guideOutput } from 'src/api/guideoutput'
+import { IndiDevicePropertyHandler, IndiHandler, IndiServerHandler, indi } from 'src/api/indi'
+import { WebSocketMessageHandler } from 'src/api/message'
+import { MountHandler, MountRemoteControlHandler, mount } from 'src/api/mount'
+import { NotificationHandler } from 'src/api/notification'
+import { ThermometerHandler, thermometer } from 'src/api/thermometer'
+import { TppaHandler, tppa } from 'src/api/tppa'
+import { WheelHandler, wheel } from 'src/api/wheel'
 import { parseArgs } from 'util'
-import { ConfirmationManager, confirmation } from './src/api/confirmation'
-import { FileSystemManager, fileSystem } from './src/api/filesystem'
-import { FramingManager, framing } from './src/api/framing'
-import { ImageManager, image } from './src/api/image'
-import { PlateSolverManager, plateSolver } from './src/api/platesolver'
-import { StarDetectionManager, starDetection } from './src/api/stardetection'
+import { ConfirmationHandler, confirmation } from './src/api/confirmation'
+import { FileSystemHandler, fileSystem } from './src/api/filesystem'
+import { FramingHandler, framing } from './src/api/framing'
+import { ImageHandler, image } from './src/api/image'
+import { PlateSolverHandler, plateSolver } from './src/api/platesolver'
+import { StarDetectionHandler, starDetection } from './src/api/stardetection'
 import { X_IMAGE_INFO_HEADER } from './src/shared/types'
 import homeHtml from './src/web/pages/home/index.html'
 
@@ -118,38 +120,89 @@ Bun.dns.prefetch('ssd.jpl.nasa.gov')
 Bun.dns.prefetch('sdo.gsfc.nasa.gov')
 Bun.dns.prefetch('hpiers.obspm.fr')
 
-// Managers
+// Handlers & INDI Devices
+
+const wsm = new WebSocketMessageHandler()
+const notificationHandler = new NotificationHandler(wsm)
+const connectionHandler = new ConnectionHandler(wsm, notificationHandler)
+
+const cameraManager = new CameraManager()
+const focuserManager = new FocuserManager()
+const wheelManager = new WheelManager()
+const mountManager = new MountManager()
+const coverManager = new CoverManager()
+const flatPanelManager = new FlatPanelManager()
+
+const guideOutputProvider: DeviceProvider<GuideOutput> = {
+	get: (name: string) => {
+		return cameraManager.get(name) ?? mountManager.get(name)
+	},
+}
+
+const thermometerProvider: DeviceProvider<Thermometer> = {
+	get: (name: string) => {
+		return cameraManager.get(name) ?? focuserManager.get(name)
+	},
+}
+
+const dewHeaterProvider: DeviceProvider<DewHeater> = {
+	get: (name: string) => {
+		return coverManager.get(name)
+	},
+}
+
+const guideOutputManager = new GuideOutputManager(guideOutputProvider)
+const thermometerManager = new ThermometerManager(thermometerProvider)
+const dewHeaterManager = new DewHeaterManager(dewHeaterProvider)
+
+const cameraHandler = new CameraHandler(wsm, cameraManager, guideOutputManager, thermometerManager, mountManager, wheelManager, focuserManager)
+cameraManager.addHandler(cameraHandler)
+
+const mountHandler = new MountHandler(wsm)
+mountManager.addHandler(mountHandler)
+const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, connectionHandler)
+
+const focuserHandler = new FocuserHandler(wsm)
+focuserManager.addHandler(focuserHandler)
+
+const wheelHandler = new WheelHandler(wsm)
+wheelManager.addHandler(wheelHandler)
+
+const flatPanelHandler = new FlatPanelHandler(wsm)
+flatPanelManager.addHandler(flatPanelHandler)
+
+const coverHandler = new CoverHandler(wsm)
+coverManager.addHandler(coverHandler)
+
+const guideOutputHandler = new GuideOutputHandler(wsm)
+guideOutputManager.addHandler(guideOutputHandler)
+
+const thermometerHandler = new ThermometerHandler(wsm)
+thermometerManager.addHandler(thermometerHandler)
+
+const dewHeaterHandler = new DewHeaterHandler(wsm)
+dewHeaterManager.addHandler(dewHeaterHandler)
 
 const cacheManager = new CacheManager()
-const wsm = new WebSocketMessageManager()
-const notificationManager = new NotificationManager(wsm)
-const indiDevicePropertyManager = new IndiDevicePropertyManager(wsm)
-const connectionManager = new ConnectionManager(wsm, notificationManager)
-const guideOutputManager = new GuideOutputManager(wsm)
-const thermometerManager = new ThermometerManager(wsm)
-const focuserManager = new FocuserManager(wsm, thermometerManager)
-const wheelManager = new WheelManager(wsm)
-const mountManager = new MountManager(wsm, guideOutputManager, cacheManager)
-const mountRemoteControlManager = new MountRemoteControlManager(connectionManager)
-const cameraManager = new CameraManager(wsm, guideOutputManager, thermometerManager, mountManager, wheelManager, focuserManager)
-const dewHeaterManager = new DewHeaterManager(wsm)
-const coverManager = new CoverManager(wsm, dewHeaterManager)
-const flatPanelManager = new FlatPanelManager(wsm)
-const indiManager = new IndiManager(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, indiDevicePropertyManager, wsm)
-const indiServerManager = new IndiServerManager(wsm)
-const confirmationManager = new ConfirmationManager(wsm)
-const framingManager = new FramingManager()
-const fileSystemManager = new FileSystemManager()
-const starDetectionManager = new StarDetectionManager()
-const plateSolverManager = new PlateSolverManager(notificationManager)
-const atlasManager = new AtlasManager(cacheManager, notificationManager)
-const imageManager = new ImageManager(cameraManager.cache, notificationManager)
-const tppaManager = new TppaManager(wsm, cameraManager, mountManager, plateSolverManager, indiDevicePropertyManager, cacheManager)
-const darvManager = new DarvManager(wsm, cameraManager, mountManager, indiDevicePropertyManager)
 
-void atlasManager.refreshImageOfSun()
-void atlasManager.refreshSatellites()
-void atlasManager.refreshEarthOrientationData()
+const devicePropertyManager = new DevicePropertyManager()
+const indiDevicePropertyHandler = new IndiDevicePropertyHandler(wsm, devicePropertyManager)
+
+const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, devicePropertyManager, wsm)
+const indiServerHandler = new IndiServerHandler(wsm)
+const confirmationHandler = new ConfirmationHandler(wsm)
+const framingHandler = new FramingHandler()
+const fileSystemHandler = new FileSystemHandler()
+const starDetectionHandler = new StarDetectionHandler()
+const plateSolverHandler = new PlateSolverHandler(notificationHandler)
+const atlasHandler = new AtlasHandler(cacheManager, notificationHandler)
+const imageHandler = new ImageHandler(cameraHandler.cache, notificationHandler)
+const tppaHandler = new TppaHandler(wsm, cameraHandler, mountManager, plateSolverHandler, cacheManager)
+const darvHandler = new DarvHandler(wsm, cameraHandler, mountManager)
+
+void atlasHandler.refreshImageOfSun()
+void atlasHandler.refreshSatellites()
+void atlasHandler.refreshEarthOrientationData()
 
 // App
 
@@ -184,7 +237,7 @@ const app = new Elysia({
 			name: 'every-minute',
 			pattern: '0 */1 * * * *',
 			run: () => {
-				void imageManager.cleanUp()
+				void imageHandler.cleanUp()
 			},
 		}),
 	)
@@ -193,7 +246,7 @@ const app = new Elysia({
 			name: 'every-15-minutes',
 			pattern: '0 */15 * * * *',
 			run: () => {
-				void atlasManager.refreshImageOfSun()
+				void atlasHandler.refreshImageOfSun()
 			},
 		}),
 	)
@@ -202,8 +255,8 @@ const app = new Elysia({
 			name: 'every-day',
 			pattern: '0 0 0 * * *',
 			run: () => {
-				void atlasManager.refreshSatellites()
-				void atlasManager.refreshEarthOrientationData()
+				void atlasHandler.refreshSatellites()
+				void atlasHandler.refreshEarthOrientationData()
 			},
 		}),
 	)
@@ -229,26 +282,26 @@ const app = new Elysia({
 
 	// Endpoints
 
-	.use(connection(connectionManager, indiManager))
-	.use(confirmation(confirmationManager))
-	.use(indi(indiManager, indiServerManager, indiDevicePropertyManager, connectionManager))
-	.use(camera(cameraManager, connectionManager, indiDevicePropertyManager))
-	.use(mount(mountManager, mountRemoteControlManager, connectionManager))
-	.use(focuser(focuserManager, connectionManager))
-	.use(wheel(wheelManager, connectionManager))
+	.use(connection(connectionHandler, indiHandler))
+	.use(confirmation(confirmationHandler))
+	.use(indi(indiHandler, indiServerHandler, indiDevicePropertyHandler, connectionHandler))
+	.use(camera(cameraManager, cameraHandler, connectionHandler))
+	.use(mount(mountManager, mountRemoteControlHandler, connectionHandler))
+	.use(focuser(focuserManager, connectionHandler))
+	.use(wheel(wheelManager, connectionHandler))
 	.use(thermometer(thermometerManager))
-	.use(guideOutput(guideOutputManager, connectionManager))
-	.use(cover(coverManager, connectionManager))
-	.use(flatPanel(flatPanelManager, connectionManager))
-	.use(dewHeater(dewHeaterManager, connectionManager, indiDevicePropertyManager))
-	.use(atlas(atlasManager))
-	.use(image(imageManager))
-	.use(framing(framingManager))
-	.use(starDetection(starDetectionManager))
-	.use(plateSolver(plateSolverManager))
-	.use(fileSystem(fileSystemManager))
-	.use(tppa(tppaManager, connectionManager))
-	.use(darv(darvManager, connectionManager))
+	.use(guideOutput(guideOutputManager, connectionHandler))
+	.use(cover(coverManager, connectionHandler))
+	.use(flatPanel(flatPanelManager, connectionHandler))
+	.use(dewHeater(dewHeaterManager, connectionHandler))
+	.use(atlas(atlasHandler))
+	.use(image(imageHandler))
+	.use(framing(framingHandler))
+	.use(starDetection(starDetectionHandler))
+	.use(plateSolver(plateSolverHandler))
+	.use(fileSystem(fileSystemHandler))
+	.use(tppa(tppaHandler, connectionHandler))
+	.use(darv(darvHandler, connectionHandler))
 
 	// WebSocket
 

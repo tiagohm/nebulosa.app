@@ -1,7 +1,7 @@
 import { Button } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
+import type { Thermometer } from 'nebulosa/src/indi.device'
 import { memo } from 'react'
-import type { Thermometer } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { DeviceDropdown, type DeviceDropdownProps } from '@/ui/DeviceDropdown'
@@ -16,7 +16,7 @@ export const ThermometerDropdown = memo(({ value, onValueChange, children, ...pr
 	const thermometers = useSnapshot(equipment.state.THERMOMETER)
 
 	function handleValueChange(value?: Thermometer) {
-		onValueChange?.(equipment.state.THERMOMETER.find((e) => e.id === value?.id))
+		onValueChange?.(equipment.state.THERMOMETER.find((e) => e.name === value?.name))
 	}
 
 	return (

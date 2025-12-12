@@ -176,6 +176,10 @@
     "driver": "indi_celestron_aux"
   },
   {
+    "name": "Celestron Dew Power",
+    "driver": "indi_celestron_dewpower"
+  },
+  {
     "name": "Celestron GPS",
     "driver": "indi_celestron_gps"
   },
@@ -376,6 +380,10 @@
     "driver": "indi_hitecastrodc_focus"
   },
   {
+    "name": "HiTech Weather",
+    "driver": "indi_hitech_weather"
+  },
+  {
     "name": "iEAFFocus",
     "driver": "indi_ieaf_focus"
   },
@@ -402,6 +410,10 @@
   {
     "name": "Integra85",
     "driver": "indi_integra_focus"
+  },
+  {
+    "name": "iOptron Focusing Rotator",
+    "driver": "indi_iafscaa_focus"
   },
   {
     "name": "iOptron HC8406",
@@ -578,6 +590,10 @@
   {
     "name": "Nn",
     "driver": "indi_nncam_ccd"
+  },
+  {
+    "name": "NUTMonitor",
+    "driver": "indi_nut"
   },
   {
     "name": "Oasis Filter Wheel",
@@ -814,6 +830,10 @@
   {
     "name": "RTL-SDR",
     "driver": "indi_rtlsdr"
+  },
+  {
+    "name": "Safety Monitor",
+    "driver": "indi_safetymonitor"
   },
   {
     "name": "SBIG CCD",

@@ -1,5 +1,5 @@
 import { createScope, molecule, use } from 'bunshi'
-import { DEFAULT_DEW_HEATER, type DewHeater } from 'src/shared/types'
+import { DEFAULT_DEW_HEATER, type DewHeater } from 'nebulosa/src/indi.device'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'

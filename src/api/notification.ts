@@ -1,8 +1,8 @@
 import type { Notification } from '../shared/types'
-import type { WebSocketMessageManager } from './message'
+import type { WebSocketMessageHandler } from './message'
 
-export class NotificationManager {
-	constructor(readonly wsm: WebSocketMessageManager) {}
+export class NotificationHandler {
+	constructor(readonly wsm: WebSocketMessageHandler) {}
 
 	send(message: Notification) {
 		this.wsm.send('notification', message)

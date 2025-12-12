@@ -3,11 +3,11 @@ import { deg, formatALT, PARSE_HOUR_ANGLE, parseAngle } from 'nebulosa/src/angle
 import { lightYear, meter, toKilometer } from 'nebulosa/src/distance'
 import { StellariumObjectType } from 'nebulosa/src/stellarium'
 import { formatTemporal } from 'nebulosa/src/temporal'
-import { AtlasManager } from 'src/api/atlas'
+import { AtlasHandler } from 'src/api/atlas'
 import cache from 'src/api/cache'
 import { DEFAULT_SKY_OBJECT_SEARCH, type FindNextSolarEclipse, type PositionOfBody, type SearchSkyObject } from 'src/shared/types'
 
-const atlas = new AtlasManager(cache)
+const atlas = new AtlasHandler(cache)
 
 const POSITION_OF_BODY: PositionOfBody = {
 	time: {

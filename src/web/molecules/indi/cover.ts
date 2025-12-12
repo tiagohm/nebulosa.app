@@ -1,5 +1,5 @@
 import { createScope, molecule, use } from 'bunshi'
-import { type Cover, DEFAULT_COVER } from 'src/shared/types'
+import { type Cover, DEFAULT_COVER } from 'nebulosa/src/indi.device'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'

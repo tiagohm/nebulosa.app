@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
+import type { Camera } from 'nebulosa/src/indi.device'
 import { memo } from 'react'
-import type { Camera } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { DeviceDropdown, type DeviceDropdownProps } from '@/ui/DeviceDropdown'
@@ -19,7 +19,7 @@ export const CameraDropdown = memo(({ showLabel = true, showLabelOnEmpty = showL
 	const cameras = useSnapshot(equipment.state.CAMERA)
 
 	function handleValueChange(value?: Camera) {
-		onValueChange?.(equipment.state.CAMERA.find((e) => e.id === value?.id))
+		onValueChange?.(equipment.state.CAMERA.find((e) => e.name === value?.name))
 	}
 
 	return (

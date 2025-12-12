@@ -1,5 +1,6 @@
 import { createScope, molecule, onMount, use } from 'bunshi'
-import { DEFAULT_GUIDE_OUTPUT, type GuideOutput, type GuidePulse } from 'src/shared/types'
+import { DEFAULT_GUIDE_OUTPUT, type GuideOutput } from 'nebulosa/src/indi.device'
+import type { GuidePulse } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'

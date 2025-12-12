@@ -1,5 +1,5 @@
 import { createScope, molecule, onMount, use } from 'bunshi'
-import { DEFAULT_FOCUSER, type Focuser } from 'src/shared/types'
+import { DEFAULT_FOCUSER, type Focuser } from 'nebulosa/src/indi.device'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'

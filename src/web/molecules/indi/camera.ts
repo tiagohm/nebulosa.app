@@ -1,6 +1,7 @@
 import { createScope, molecule, onMount, use } from 'bunshi'
+import { type Camera, DEFAULT_CAMERA, type Focuser, type Mount, type Wheel } from 'nebulosa/src/indi.device'
 import bus, { unsubscribe } from 'src/shared/bus'
-import { type Camera, type CameraCaptureEvent, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA, DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START, type Focuser, type Mount, type Wheel } from 'src/shared/types'
+import { type CameraCaptureEvent, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START } from 'src/shared/types'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'

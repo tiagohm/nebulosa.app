@@ -5,12 +5,12 @@ import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebul
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { PlateSolveStart, PlateSolveStop } from '../shared/types'
 import { decodePath } from './camera'
-import type { NotificationManager } from './notification'
+import type { NotificationHandler } from './notification'
 
-export class PlateSolverManager {
+export class PlateSolverHandler {
 	private readonly tasks = new Map<string, AbortController>()
 
-	constructor(readonly notification: NotificationManager) {}
+	constructor(readonly notification: NotificationHandler) {}
 
 	async start(req: PlateSolveStart): Promise<PlateSolution | undefined> {
 		const [path] = decodePath(req.path)
@@ -68,7 +68,7 @@ export class PlateSolverManager {
 	}
 }
 
-export function plateSolver(solver: PlateSolverManager) {
+export function plateSolver(solver: PlateSolverHandler) {
 	const app = new Elysia({ prefix: '/platesolver' })
 		// Endpoints!
 		.post('/start', ({ body }) => solver.start(body as never))

@@ -1,5 +1,5 @@
 import { SelectItem } from '@heroui/react'
-import type { SlewRate } from 'src/shared/types'
+import type { SlewRate } from 'nebulosa/src/indi.device'
 import { EnumSelect, type EnumSelectProps } from './EnumSelect'
 
 export interface SlewRateSelectProps extends Omit<EnumSelectProps, 'children'> {

@@ -1,6 +1,7 @@
 import { molecule, onMount, use } from 'bunshi'
+import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import bus, { unsubscribe } from 'src/shared/bus'
-import { type Camera, type DarvEvent, type DarvStart, DEFAULT_DARV_EVENT, DEFAULT_DARV_START, type Mount } from 'src/shared/types'
+import { type DarvEvent, type DarvStart, DEFAULT_DARV_EVENT, DEFAULT_DARV_START } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'

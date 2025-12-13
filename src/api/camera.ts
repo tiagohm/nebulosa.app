@@ -232,16 +232,16 @@ export class CameraCaptureTask {
 
 	async blobReceived(client: IndiClient, camera: Camera, data: string) {
 		if (this.camera.name === camera.name) {
-			const bytes = Buffer.from(data, 'base64')
+			const buffer = Buffer.from(data, 'base64')
 
 			// Save image
 			const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : camera.name
 			const path = join(await makePathFor(this.request), `${name}.fit`)
-			void Bun.write(path, bytes) // Don't wait for writing to file
-			this.processor.save(camera, bytes, path)
+			void Bun.write(path, buffer) // Don't wait for writing to file
+			this.processor.save(buffer, path)
 
 			// Send event
-			this.event.savedPath = `:${Buffer.from(camera.name).toString('hex')}`
+			this.event.savedPath = path
 			this.handleCameraCaptureEvent(client, camera, this.event)
 			this.event.savedPath = undefined
 		}

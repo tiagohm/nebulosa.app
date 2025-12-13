@@ -9,7 +9,6 @@ import bus from 'src/shared/bus'
 import { type CameraCaptureEvent, type CameraCaptureStart, DEFAULT_TPPA_EVENT, type TppaEvent, type TppaStart, type TppaStop } from 'src/shared/types'
 import type { CameraHandler } from './camera'
 import type { ConnectionHandler } from './connection'
-import type { ImageProcessor } from './image'
 import type { WebSocketMessageHandler } from './message'
 import type { PlateSolverHandler } from './platesolver'
 
@@ -21,7 +20,6 @@ export class TppaHandler {
 		readonly camera: CameraHandler,
 		readonly mount: MountManager,
 		readonly solver: PlateSolverHandler,
-		readonly processor: ImageProcessor,
 	) {
 		bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
 			this.tasks.forEach((task) => task.camera.name === event.device && task.cameraCaptured(event))
@@ -93,11 +91,8 @@ export class TppaTask {
 			this.event.state = 'SOLVING'
 			this.handleTppaEvent()
 
-			// Retrieve image from cache
-			const [path] = this.tppa.processor.extractIdFromCameraOrPath(event.savedPath)
-
 			// Solve image
-			const solution = await this.tppa.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: deg(8), path, id: this.request.id, blind: false })
+			const solution = await this.tppa.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: deg(8), path: event.savedPath, id: this.request.id, blind: false })
 
 			if (this.stopped) return
 

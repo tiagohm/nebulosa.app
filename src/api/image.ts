@@ -1,12 +1,11 @@
 import Elysia from 'elysia'
 import fs from 'fs/promises'
 import { eraPvstar } from 'nebulosa/src/erfa'
-import { declinationKeyword, type Fits, observationDateKeyword, readFits, rightAscensionKeyword } from 'nebulosa/src/fits'
-import { type Image, type ImageFormat, isImage, readImageFromFits, type WriteImageToFormatOptions, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
+import { declinationKeyword, type Fits, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
+import { type Image, type ImageFormat, isImage, readImageFromBuffer, readImageFromFits, readImageFromPath, type WriteImageToFormatOptions, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
 import { adf, histogram } from 'nebulosa/src/image.computation'
 import { debayer, horizontalFlip, invert, scnr, stf, verticalFlip } from 'nebulosa/src/image.transformation'
-import type { Camera } from 'nebulosa/src/indi.device'
-import { bufferSource, fileHandleSink, fileHandleSource } from 'nebulosa/src/io'
+import { fileHandleSink } from 'nebulosa/src/io'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import { spaceMotion, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
@@ -48,13 +47,13 @@ const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOption
 	png: PNG_OPTIONS,
 }
 
-export interface SavedImageItem {
-	readonly bytes?: Buffer
+export interface BufferedImageItem {
+	readonly buffer?: Buffer
 	readonly path: string
 }
 
 export interface TransformedImageItem {
-	readonly saved: SavedImageItem
+	readonly buffered: BufferedImageItem
 	readonly image: Image
 	readonly transformation: ImageTransformation
 }
@@ -69,86 +68,64 @@ export interface ExportedImageItem {
 export interface ImageProcessorItem<T> {
 	readonly date: number
 	readonly item: T
+	discarded?: boolean
+}
+
+interface ImageProcessorMap {
+	readonly buffered: BufferedImageItem
+	readonly transformed: TransformedImageItem
+	readonly exported: ExportedImageItem
 }
 
 export class ImageProcessor {
-	private readonly saved = new Map<string, ImageProcessorItem<SavedImageItem>>()
+	private readonly buffered = new Map<string, ImageProcessorItem<BufferedImageItem>>()
 	private readonly transformed = new Map<string, ImageProcessorItem<TransformedImageItem>>()
 	private readonly exported = new Map<string, ImageProcessorItem<ExportedImageItem>>()
 
-	save(camera: Camera, bytes: Buffer, path: string) {
-		const item: SavedImageItem = { bytes, path }
-		this.saved.set(camera.name, { date: Date.now(), item })
+	get<T extends keyof ImageProcessorMap>(type: T, key: string): ImageProcessorMap[T] | undefined {
+		const item = this[type].get(key)
+		if (item && !item.discarded) return item.item as never
+		return undefined
+	}
+
+	save(bytes: Buffer, path: string) {
+		const item: BufferedImageItem = { buffer: bytes, path }
+		this.buffered.set(path, { date: Date.now(), item })
+		for (const [key, value] of this.transformed.entries()) if (key.startsWith(path)) value.discarded = true
+		for (const [key, value] of this.exported.entries()) if (key.startsWith(path)) value.discarded = true
+		console.info('buffered image at', path)
 		return item
 	}
 
-	private async open(bytes?: Buffer) {
-		if (!bytes) return undefined
-		const source = bufferSource(bytes)
-		const fits = await readFits(source) // TODO: support XISF
-		return await readImageFromFits(fits)
-	}
-
-	extractIdFromCameraOrPath(id: Camera | string) {
-		return typeof id !== 'string' ? id.name : id.startsWith(':') ? Buffer.from(id.substring(1), 'hex').toString('utf-8') : id
-	}
-
-	transform(id: Camera | string, transformation: ImageTransformation) {
-		return typeof id !== 'string' || id.startsWith(':') ? this.transformFromCamera(id, transformation) : this.transformFromPath(id, transformation)
-	}
-
-	private async transformFromPath(path: string, transformation: ImageTransformation) {
+	async transform(path: string, transformation: ImageTransformation) {
 		const hash = this.computeTransformHash(path, transformation)
-		let item = this.transformed.get(hash)?.item
+		let item = this.get('transformed', hash)
 
 		if (item) {
+			this.transformed.set(hash, { date: Date.now(), item })
 			console.info('reusing transformed image', path)
 			return item
 		}
 
-		const handle = await fs.open(path)
-		await using source = fileHandleSource(handle)
-		const fits = await readFits(source)
-		let image = await readImageFromFits(fits)
+		const buffered = this.get('buffered', path)
+
+		let image: Image | undefined
+
+		if (buffered?.buffer) {
+			image = await readImageFromBuffer(buffered?.buffer)
+		} else {
+			image = await readImageFromPath(path)
+		}
 
 		if (!image) {
 			console.warn('failed to open image at', path)
 			return undefined
 		}
 
-		item = { saved: { path }, image, transformation }
 		image = this.applyTransformation(image, transformation)
+		item = { buffered: buffered ?? { path }, image, transformation }
 		this.transformed.set(hash, { date: Date.now(), item })
-		return item
-	}
-
-	private async transformFromCamera(camera: Camera | string, transformation: ImageTransformation) {
-		const hash = this.computeTransformHash(camera, transformation)
-		let item = this.transformed.get(hash)?.item
-
-		if (item) {
-			console.info('reusing transformed image', camera)
-			return item
-		}
-
-		const id = this.extractIdFromCameraOrPath(camera)
-		const saved = this.saved.get(id)?.item
-
-		if (!saved?.bytes) {
-			console.warn('failed to load saved image at', id)
-			return undefined
-		}
-
-		let image = await this.open(saved.bytes)
-
-		if (!image) {
-			console.warn('failed to open image at', saved.path)
-			return undefined
-		}
-
-		item = { saved, image, transformation }
-		image = this.applyTransformation(image, transformation)
-		this.transformed.set(hash, { date: Date.now(), item })
+		console.info('transformed image at', path)
 		return item
 	}
 
@@ -182,37 +159,45 @@ export class ImageProcessor {
 		return image
 	}
 
-	async export(id: Camera | string, transformation: ImageTransformation, saveAt?: string) {
-		const hash = this.computeExportHash(id, transformation)
+	async export(path: string, transformation: ImageTransformation, saveAt?: string) {
+		const { format } = transformation
 
-		let item = this.exported.get(hash)?.item
+		// Invalid parameters
+		if ((format === 'fits' || format === 'xisf') && !saveAt) {
+			console.warn('unable to export to fits/xisf without save path')
+			return undefined
+		}
+
+		// Retrieve the exported image
+		const hash = this.computeExportHash(path, transformation)
+		let item = this.get('exported', hash)
 
 		if (item) {
-			console.info('reusing exported image', id)
+			// Refresh the exported image's date
+			this.exported.set(hash, { date: Date.now(), item })
+			console.info('reusing exported image at', path)
 			return item
 		}
 
-		const transformed = await this.transform(id, transformation)
+		// Retrieve the transformed image
+		const transformed = await this.transform(path, transformation)
 
 		if (!transformed) {
-			console.warn('failed to load transformed image at', id)
+			console.warn('failed to load transformed image at', path)
 			return undefined
 		}
 
-		const { image, saved } = transformed
-		const { format } = transformation
+		const { image, buffered } = transformed
 
+		// Just save it to file
 		if (format === 'fits' || format === 'xisf') {
-			if (saveAt) {
-				const handle = await fs.open(saveAt, 'w')
-				await using sink = fileHandleSink(handle)
-				await writeImageToFits(image, sink)
-				return { transformed, path: saveAt }
-			}
-
-			return undefined
+			const handle = await fs.open(saveAt!, 'w')
+			await using sink = fileHandleSink(handle)
+			await writeImageToFits(image, sink)
+			return { transformed, path: saveAt! } as ExportedImageItem
 		}
 
+		// Export it
 		saveAt ||= join(Bun.env.tmpDir, `${Bun.randomUUIDv7()}.${format}`)
 
 		const options: WriteImageToFormatOptions = {
@@ -224,7 +209,7 @@ export class ImageProcessor {
 		if (output) {
 			const info: ImageInfo = {
 				path: saveAt,
-				realPath: saved.path,
+				realPath: buffered.path,
 				width: output.width,
 				height: output.height,
 				mono: output.channels === 1,
@@ -237,6 +222,7 @@ export class ImageProcessor {
 
 			item = { output, info, transformed, path: saveAt }
 			output && this.exported.set(hash, { date: Date.now(), item })
+			console.info('exported image at', path, 'to', saveAt)
 			return item
 		} else {
 			console.warn('failed to export image at', saveAt)
@@ -263,14 +249,14 @@ export class ImageProcessor {
 		return Bun.MD5.hash(`${channel}:${amount}:${method}`, 'hex')
 	}
 
-	private computeTransformHash(id: Camera | string, transformation: ImageTransformation) {
+	private computeTransformHash(path: string, transformation: ImageTransformation) {
 		const hash = this.computeImageTransformationHash(transformation)
-		return Bun.MD5.hash(`${this.extractIdFromCameraOrPath(id)}:${hash}`, 'hex')
+		return `${path}:${Bun.MD5.hash(`${hash}`, 'hex')}`
 	}
 
-	private computeExportHash(id: Camera | string, transformation: ImageTransformation) {
+	private computeExportHash(path: string, transformation: ImageTransformation) {
 		const hash = this.computeImageTransformationHash(transformation)
-		return Bun.MD5.hash(`${this.extractIdFromCameraOrPath(id)}:${transformation.format}:${hash}`, 'hex')
+		return `${path}:${Bun.MD5.hash(`${transformation.format}:${hash}`, 'hex')}`
 	}
 
 	async cleanUp() {
@@ -303,13 +289,14 @@ export class ImageProcessor {
 			}
 		}
 
-		for (const [key, value] of this.saved) {
-			if (now - value.date >= 60000 || transformed.some((e) => e.saved === value.item)) {
-				this.exported.delete(key)
-				console.info('deleted buffered image at', value.item.path)
-				deleted = true
-			}
-		}
+		// This does't require deleting the buffered image, as there is only one for each device.
+		// for (const [key, value] of this.buffered) {
+		// 	if (now - value.date >= 60000 || transformed.some((e) => e.buffered === value.item)) {
+		// 		this.buffered.delete(key)
+		// 		console.info('deleted buffered image at', value.item.path)
+		// 		deleted = true
+		// 	}
+		// }
 
 		if (deleted) {
 			Bun.gc()

@@ -30,7 +30,7 @@ export function targetCoordinatePosition(device: Mount, target: EquatorialCoordi
 
 	const time = timeNow(true)
 	time.location = location
-	const lst = localSiderealTime(time)
+	const lst = localSiderealTime(time, location, true)
 
 	// JNOW equatorial coordinate
 	if (!('type' in target) || target.type === 'JNOW') {

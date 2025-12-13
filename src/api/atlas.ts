@@ -1,9 +1,10 @@
 import Elysia from 'elysia'
-import { deg, PARSE_HOUR_ANGLE, parseAngle } from 'nebulosa/src/angle'
+import { deg, PARSE_HOUR_ANGLE, parseAngle, toDeg } from 'nebulosa/src/angle'
 import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astrometry'
 import { AU_KM, DAYSEC, DEG2RAD, MOON_SYNODIC_DAYS, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import { type CsvRow, readCsv } from 'nebulosa/src/csv'
+import { toMeter } from 'nebulosa/src/distance'
 import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { precessFk5FromJ2000 } from 'nebulosa/src/fk5'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
@@ -15,7 +16,7 @@ import { nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/moon'
 import { closeApproaches, search } from 'nebulosa/src/sbd'
 import { observeStar } from 'nebulosa/src/star'
 import { nearestSolarEclipse, season } from 'nebulosa/src/sun'
-import { daysInMonth, parseTemporal, type Temporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
+import { daysInMonth, formatTemporal, parseTemporal, type Temporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
 import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS } from 'nebulosa/src/time'
 import { binarySearchWithComparator } from 'nebulosa/src/util'
 import { join } from 'path'
@@ -42,6 +43,7 @@ const IERSB_URL = 'https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now'
 
 export class AtlasHandler {
 	private readonly ephemeris: Record<string, Map<number, BodyPosition>> & { location?: GeographicPosition } = {}
+	private readonly horizonsObserverTasks = new Map<string, Promise<CsvRow[]>>()
 	private satellites: Satellite[] = []
 
 	constructor(
@@ -518,30 +520,40 @@ export class AtlasHandler {
 	}
 
 	positionOfSatellite(id: number, req: PositionOfBody) {
-		const satellite = this.satellites.find((e) => e.id === id)
-		if (!satellite) throw new Error(`satellite not found: ${id}`)
-		return this.computeFromHorizonsPositionAt(satellite, req)
+		const index = binarySearchWithComparator(this.satellites, (e) => e.id - id)
+		if (index < 0) throw new Error(`satellite not found: ${id}`)
+		return this.computeFromHorizonsPositionAt(this.satellites[index], req)
 	}
 
 	chartOfSatellite(id: number, req: ChartOfBody) {
-		return this.computeChart(id.toFixed(0), req.time)
+		return this.computeChart(`TLE:${id}`, req.time)
 	}
 
 	async computeFromHorizonsPositionAt(input: string | Pick<Satellite, 'id' | 'tle'>, req: PositionOfBody) {
 		const key = Math.trunc(temporalSet(req.time.utc, 0, 's') / 1000)
-		const id = typeof input === 'string' ? input : input.id.toFixed(0)
+		const id = typeof input === 'string' ? input : `TLE:${input.id}`
 		const location = this.cache.geographicCoordinate(req.location)
+		const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 
-		let position = this.ephemeris[id]?.get(key)
+		const ephemeris = this.ephemeris[id]
+		let position = ephemeris?.get(key)
 
-		if (!position || location !== this.ephemeris.location) {
-			const [startTime, endTime] = this.computeStartAndEndTime(req.time)
+		if (!ephemeris || !position || !ephemeris.has(Math.trunc(startTime / 1000)) || !ephemeris.has(Math.trunc(endTime / 1000)) || location !== this.ephemeris.location) {
 			const code = typeof input === 'string' ? input : input.tle
-			const { longitude, latitude, elevation } = req.location
-			console.info(`fetching ephemeris for ${code} at time [${startTime} - ${endTime}] and location [${latitude}, ${longitude}, ${elevation}]`)
-			const horizons = await observer(code, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1 })
-			const positions = makeBodyPositionFromHorizons(horizons!)
-			const map = this.ephemeris[id] ?? new Map()
+			const { longitude, latitude, elevation } = location
+
+			let horizonsObserveTask = this.horizonsObserverTasks.get(id)
+
+			if (!horizonsObserveTask) {
+				console.info(`fetching ephemeris for ${code} at time [${formatTemporal(startTime, undefined, 0)} - ${formatTemporal(endTime, undefined, 0)}] and location [${toDeg(latitude)}, ${toDeg(longitude)}, ${toMeter(elevation).toFixed(0)}]`)
+				horizonsObserveTask = observer(code, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1 })
+				this.horizonsObserverTasks.set(id, horizonsObserveTask)
+				horizonsObserveTask.then(() => this.horizonsObserverTasks.delete(id))
+			}
+
+			const horizons = await horizonsObserveTask
+			const positions = makeBodyPositionFromHorizons(horizons)
+			const map = ephemeris ?? new Map()
 			positions.forEach((e) => map.set(e[0], e[1]))
 			this.ephemeris[id] = map
 			this.ephemeris.location = location
@@ -561,8 +573,10 @@ export class AtlasHandler {
 
 		if (!positions) throw new Error(`object not found: ${code}`)
 
-		const [startTime] = this.computeStartAndEndTime(time)
-		const seconds = Math.trunc(temporalSet(startTime, 0, 's') / 1000)
+		const [startTime, endTime] = this.computeStartAndEndTime(time)
+		console.info(`generating chart for ${code} at time [${formatTemporal(startTime, undefined, 0)} - ${formatTemporal(endTime, undefined, 0)}]`)
+
+		const seconds = Math.trunc(startTime / 1000) // start/end time will never have min/sec, so is safe to just divide by 1000
 		const chart = new Array<number>(1441)
 
 		for (let i = 0; i <= 1440; i++) {

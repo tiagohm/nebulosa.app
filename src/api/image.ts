@@ -68,38 +68,40 @@ export interface ExportedImageItem {
 export interface ImageProcessorItem<T> {
 	readonly date: number
 	readonly item: T
-	discarded?: boolean
-}
-
-interface ImageProcessorMap {
-	readonly buffered: BufferedImageItem
-	readonly transformed: TransformedImageItem
-	readonly exported: ExportedImageItem
 }
 
 export class ImageProcessor {
 	private readonly buffered = new Map<string, ImageProcessorItem<BufferedImageItem>>()
 	private readonly transformed = new Map<string, ImageProcessorItem<TransformedImageItem>>()
 	private readonly exported = new Map<string, ImageProcessorItem<ExportedImageItem>>()
-
-	get<T extends keyof ImageProcessorMap>(type: T, key: string): ImageProcessorMap[T] | undefined {
-		const item = this[type].get(key)
-		if (item && !item.discarded) return item.item as never
-		return undefined
-	}
+	private readonly discarded = new Set<string>()
 
 	save(bytes: Buffer, path: string) {
 		const item: BufferedImageItem = { buffer: bytes, path }
 		this.buffered.set(path, { date: Date.now(), item })
-		for (const [key, value] of this.transformed.entries()) if (key.startsWith(path)) value.discarded = true
-		for (const [key, value] of this.exported.entries()) if (key.startsWith(path)) value.discarded = true
+
+		for (const [key, value] of this.transformed.entries()) {
+			if (key.startsWith(path)) {
+				this.transformed.delete(key)
+				console.info('deleted transformed image at', value.item.buffered.path)
+			}
+		}
+
+		for (const [key, value] of this.exported.entries()) {
+			if (key.startsWith(path)) {
+				this.discarded.add(value.item.path)
+				this.exported.delete(key)
+			}
+		}
+
 		console.info('buffered image at', path)
+
 		return item
 	}
 
 	async transform(path: string, transformation: ImageTransformation) {
 		const hash = this.computeTransformHash(path, transformation)
-		let item = this.get('transformed', hash)
+		let item = this.transformed.get(hash)?.item
 
 		if (item) {
 			this.transformed.set(hash, { date: Date.now(), item })
@@ -107,7 +109,7 @@ export class ImageProcessor {
 			return item
 		}
 
-		const buffered = this.get('buffered', path)
+		const buffered = this.buffered.get(path)?.item
 
 		let image: Image | undefined
 
@@ -170,7 +172,7 @@ export class ImageProcessor {
 
 		// Retrieve the exported image
 		const hash = this.computeExportHash(path, transformation)
-		let item = this.get('exported', hash)
+		let item = this.exported.get(hash)?.item
 
 		if (item) {
 			// Refresh the exported image's date
@@ -261,9 +263,7 @@ export class ImageProcessor {
 
 	async cleanUp() {
 		const now = Date.now()
-		const exported: ExportedImageItem[] = []
-		const transformed: TransformedImageItem[] = []
-		let deleted = false
+		let deleted = this.discarded.size > 0
 
 		async function unlink(path: string) {
 			if (path && (await fs.exists(path))) {
@@ -273,37 +273,29 @@ export class ImageProcessor {
 		}
 
 		for (const [key, value] of this.exported) {
-			if (value.discarded || now - value.date >= 60000) {
+			if (now - value.date >= 60000) {
 				this.exported.delete(key)
-				exported.push(value.item)
-				console.info('deleted exported image at', value.item.path)
+				this.discarded.add(value.item.path)
 				deleted = true
 			}
 		}
 
 		for (const [key, value] of this.transformed) {
-			if (value.discarded || now - value.date >= 60000 || exported.some((e) => e.transformed === value.item)) {
+			if (now - value.date >= 60000) {
 				this.transformed.delete(key)
-				transformed.push(value.item)
+				console.info('deleted transformed image at', value.item.buffered.path)
 				deleted = true
 			}
 		}
 
-		// Deleting the buffered image is not required, as there is only one for each device.
-		// for (const [key, value] of this.buffered) {
-		// 	if (value.discarded || now - value.date >= 60000 || transformed.some((e) => e.buffered === value.item)) {
-		// 		this.buffered.delete(key)
-		// 		console.info('deleted buffered image at', value.item.path)
-		// 		deleted = true
-		// 	}
-		// }
-
 		if (deleted) {
 			Bun.gc()
 
-			for (const { path } of exported) {
+			for (const path of this.discarded) {
 				await unlink(path)
 			}
+
+			this.discarded.clear()
 		}
 	}
 }

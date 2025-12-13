@@ -251,12 +251,12 @@ export class ImageProcessor {
 
 	private computeTransformHash(path: string, transformation: ImageTransformation) {
 		const hash = this.computeImageTransformationHash(transformation)
-		return `${path}:${Bun.MD5.hash(`${hash}`, 'hex')}`
+		return `${path}:${hash}`
 	}
 
 	private computeExportHash(path: string, transformation: ImageTransformation) {
 		const hash = this.computeImageTransformationHash(transformation)
-		return `${path}:${Bun.MD5.hash(`${transformation.format}:${hash}`, 'hex')}`
+		return `${path}:${transformation.format}:${hash}`
 	}
 
 	async cleanUp() {
@@ -273,7 +273,7 @@ export class ImageProcessor {
 		}
 
 		for (const [key, value] of this.exported) {
-			if (now - value.date >= 60000) {
+			if (value.discarded || now - value.date >= 60000) {
 				this.exported.delete(key)
 				exported.push(value.item)
 				console.info('deleted exported image at', value.item.path)
@@ -282,16 +282,16 @@ export class ImageProcessor {
 		}
 
 		for (const [key, value] of this.transformed) {
-			if (now - value.date >= 60000 || exported.some((e) => e.transformed === value.item)) {
+			if (value.discarded || now - value.date >= 60000 || exported.some((e) => e.transformed === value.item)) {
 				this.transformed.delete(key)
 				transformed.push(value.item)
 				deleted = true
 			}
 		}
 
-		// This does't require deleting the buffered image, as there is only one for each device.
+		// Deleting the buffered image is not required, as there is only one for each device.
 		// for (const [key, value] of this.buffered) {
-		// 	if (now - value.date >= 60000 || transformed.some((e) => e.buffered === value.item)) {
+		// 	if (value.discarded || now - value.date >= 60000 || transformed.some((e) => e.buffered === value.item)) {
 		// 		this.buffered.delete(key)
 		// 		console.info('deleted buffered image at', value.item.path)
 		// 		deleted = true

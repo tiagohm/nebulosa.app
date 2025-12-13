@@ -1,7 +1,7 @@
 import { Elysia } from 'elysia'
 // biome-ignore format: too long!
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, IndiClient, IndiClientHandler, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
-import type { Device, DeviceProperty } from 'nebulosa/src/indi.device'
+import type { Device, DeviceProperty, DevicePropertyType } from 'nebulosa/src/indi.device'
 import type { CameraManager, CoverManager, DevicePropertyHandler, DevicePropertyManager, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import bus from '../shared/bus'
 import type { IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from '../shared/types'
@@ -146,30 +146,20 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly properties: DevicePropertyManager,
-	) {
-		properties.addHandler(this)
-
-		setInterval(() => {
-			const now = Date.now()
-
-			for (const [name, ping] of this.listeners) {
-				if (now - ping > 10000) {
-					this.listeners.delete(name)
-				}
-			}
-		}, 5000)
-	}
-
-	devices() {
-		return this.properties.names()
-	}
-
-	get(name: string) {
-		return this.properties.get(name)
-	}
+	) {}
 
 	ping(name: string) {
 		this.listeners.set(name, Date.now())
+	}
+
+	cleanUp() {
+		const now = Date.now()
+
+		for (const [name, ping] of this.listeners) {
+			if (now - ping >= 10000) {
+				this.listeners.delete(name)
+			}
+		}
 	}
 
 	private notify(device: string, property: DeviceProperty, type: 'update' | 'remove') {
@@ -188,12 +178,6 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 
 	removed(device: string, property: DeviceProperty) {
 		this.notify(device, property, 'remove')
-	}
-
-	send(client: IndiClient, type: DeviceProperty['type'], message: NewVector) {
-		if (type === 'SWITCH') client.sendSwitch(message as never)
-		else if (type === 'NUMBER') client.sendNumber(message as never)
-		else if (type === 'TEXT') client.sendText(message as never)
 	}
 }
 
@@ -230,10 +214,12 @@ export class IndiServerHandler {
 	}
 
 	async drivers() {
-		return (await Bun.$`locate /usr/bin/indi_`.nothrow().quiet())
+		if (process.platform !== 'linux') return []
+
+		return (await Bun.$`ls /usr/bin/indi_* -1`.nothrow().quiet())
 			.text()
 			.split('\n')
-			.map((e) => e.substring(9))
+			.map((e) => e.substring(9).trim())
 			.filter((e) => !!e)
 	}
 }
@@ -243,14 +229,20 @@ export function indi(indi: IndiHandler, server: IndiServerHandler, property: Ind
 		return indi.get(decodeURIComponent(params.id))!
 	}
 
+	function send(client: IndiClient, type: DevicePropertyType, message: NewVector) {
+		if (type === 'SWITCH') client.sendSwitch(message as never)
+		else if (type === 'NUMBER') client.sendNumber(message as never)
+		else if (type === 'TEXT') client.sendText(message as never)
+	}
+
 	const app = new Elysia({ prefix: '/indi' })
 		// Endpoints!
-		.get('/devices', () => property.devices())
+		.get('/devices', () => property.properties.names())
 		.post('/:id/connect', ({ params }) => connect(connection.get(), deviceFromParams(params)))
 		.post('/:id/disconnect', ({ params }) => disconnect(connection.get(), deviceFromParams(params)))
-		.get('/:id/properties', ({ params }) => property.get(decodeURIComponent(params.id)))
+		.get('/:id/properties', ({ params }) => property.properties.get(decodeURIComponent(params.id)))
 		.post('/:id/properties/ping', ({ params }) => property.ping(decodeURIComponent(params.id)))
-		.post('/:id/properties/send', ({ query, body }) => property.send(connection.get(), query.type as never, body as never))
+		.post('/:id/properties/send', ({ query, body }) => send(connection.get(), query.type as never, body as never))
 		.post('/server/start', ({ body }) => server.start(body as never))
 		.post('/server/stop', () => server.stop())
 		.get('/server/status', () => server.status())

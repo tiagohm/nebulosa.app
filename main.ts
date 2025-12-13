@@ -61,7 +61,7 @@ const hostname = args.values.host || Bun.env.host || 'localhost'
 const port = +(args.values.port || Bun.env.port || '1234')
 const cert = args.values.cert || Bun.env.cert || 'cert.pem'
 const key = args.values.key || Bun.env.key || 'key.pem'
-const secure = ((args.values.secure || Bun.env.secure === 'true') && !!cert && !!key) || undefined
+const secure = args.values.secure || Bun.env.secure === 'true' || undefined
 const open = !!args.values.open || Bun.env.open === 'true'
 const appDir = args.values.dir || Bun.env.appDir
 const username = args.values.username || Bun.env.username || ''
@@ -183,10 +183,11 @@ thermometerManager.addHandler(thermometerHandler)
 const dewHeaterHandler = new DewHeaterHandler(wsm)
 dewHeaterManager.addHandler(dewHeaterHandler)
 
-const cacheManager = new CacheManager()
-
 const devicePropertyManager = new DevicePropertyManager()
 const indiDevicePropertyHandler = new IndiDevicePropertyHandler(wsm, devicePropertyManager)
+devicePropertyManager.addHandler(indiDevicePropertyHandler)
+
+const cacheManager = new CacheManager()
 
 const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, devicePropertyManager, wsm)
 const indiServerHandler = new IndiServerHandler(wsm)
@@ -238,6 +239,7 @@ const app = new Elysia({
 			pattern: '0 */1 * * * *',
 			run: () => {
 				void imageHandler.cleanUp()
+				indiDevicePropertyHandler.cleanUp()
 			},
 		}),
 	)

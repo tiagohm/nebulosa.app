@@ -275,10 +275,3 @@ export function mount(mount: MountManager, remoteControl: MountRemoteControlHand
 
 	return app
 }
-
-function parseUTCOffset(text: string) {
-	const parts = text.split(':')
-
-	if (parts.length === 1) return +parts[0] * 60
-	else return +parts[0] * 60 + +parts[1]
-}

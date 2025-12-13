@@ -4,11 +4,12 @@ import { deg } from 'nebulosa/src/angle'
 import type { IndiClient } from 'nebulosa/src/indi'
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import type { MountManager } from 'nebulosa/src/indi.manager'
+import { timeNow } from 'nebulosa/src/time'
 import bus from 'src/shared/bus'
 import { type CameraCaptureEvent, type CameraCaptureStart, DEFAULT_TPPA_EVENT, type TppaEvent, type TppaStart, type TppaStop } from 'src/shared/types'
-import type { CacheManager } from './cache'
-import { type CameraHandler, decodePath } from './camera'
+import type { CameraHandler } from './camera'
 import type { ConnectionHandler } from './connection'
+import type { ImageProcessor } from './image'
 import type { WebSocketMessageHandler } from './message'
 import type { PlateSolverHandler } from './platesolver'
 
@@ -20,7 +21,7 @@ export class TppaHandler {
 		readonly camera: CameraHandler,
 		readonly mount: MountManager,
 		readonly solver: PlateSolverHandler,
-		readonly cache: CacheManager,
+		readonly processor: ImageProcessor,
 	) {
 		bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
 			this.tasks.forEach((task) => task.camera.name === event.device && task.cameraCaptured(event))
@@ -93,7 +94,7 @@ export class TppaTask {
 			this.handleTppaEvent()
 
 			// Retrieve image from cache
-			const [path] = decodePath(event.savedPath)
+			const [path] = this.tppa.processor.extractIdFromCameraOrPath(event.savedPath)
 
 			// Solve image
 			const solution = await this.tppa.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: deg(8), path, id: this.request.id, blind: false })
@@ -109,8 +110,8 @@ export class TppaTask {
 				this.handleTppaEvent()
 
 				// Compute polar alignment
-				const location = this.tppa.cache.geographicCoordinate(this.mount.geographicCoordinate)
-				const time = this.tppa.cache.time('now', location)
+				const time = timeNow(true)
+				time.location = { ...this.mount.geographicCoordinate, ellipsoid: 3 }
 				const result = this.polarAlignment.add(solution.rightAscension, solution.declination, time, true)
 
 				this.event.aligned = result !== false

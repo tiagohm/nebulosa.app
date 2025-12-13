@@ -417,12 +417,8 @@ export interface OpenImage {
 	readonly statistics?: Pick<StatisticImage, 'bits' | 'area' | 'transformed'>
 }
 
-export interface CloseImage {
-	readonly id: string
-}
-
 export interface SaveImage extends OpenImage {
-	readonly savePath: string
+	readonly saveAt: string
 	readonly transformed: boolean
 }
 

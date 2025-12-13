@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test'
-import { ImageHandler } from 'src/api/image'
+import { ImageHandler, ImageProcessor } from 'src/api/image'
 
-const image = new ImageHandler(new Map())
+const processor = new ImageProcessor()
+const image = new ImageHandler(processor)
 
 test('annotate', () => {
 	const solution = {

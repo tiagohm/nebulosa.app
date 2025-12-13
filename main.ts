@@ -30,7 +30,7 @@ import { parseArgs } from 'util'
 import { ConfirmationHandler, confirmation } from './src/api/confirmation'
 import { FileSystemHandler, fileSystem } from './src/api/filesystem'
 import { FramingHandler, framing } from './src/api/framing'
-import { ImageHandler, image } from './src/api/image'
+import { ImageHandler, ImageProcessor, image } from './src/api/image'
 import { PlateSolverHandler, plateSolver } from './src/api/platesolver'
 import { StarDetectionHandler, starDetection } from './src/api/stardetection'
 import { X_IMAGE_INFO_HEADER } from './src/shared/types'
@@ -155,7 +155,9 @@ const guideOutputManager = new GuideOutputManager(guideOutputProvider)
 const thermometerManager = new ThermometerManager(thermometerProvider)
 const dewHeaterManager = new DewHeaterManager(dewHeaterProvider)
 
-const cameraHandler = new CameraHandler(wsm, cameraManager, guideOutputManager, thermometerManager, mountManager, wheelManager, focuserManager)
+const imageProcessor = new ImageProcessor()
+
+const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, guideOutputManager, thermometerManager, mountManager, wheelManager, focuserManager)
 cameraManager.addHandler(cameraHandler)
 
 const mountHandler = new MountHandler(wsm)
@@ -194,11 +196,11 @@ const indiServerHandler = new IndiServerHandler(wsm)
 const confirmationHandler = new ConfirmationHandler(wsm)
 const framingHandler = new FramingHandler()
 const fileSystemHandler = new FileSystemHandler()
-const starDetectionHandler = new StarDetectionHandler()
-const plateSolverHandler = new PlateSolverHandler(notificationHandler)
+const starDetectionHandler = new StarDetectionHandler(imageProcessor)
+const plateSolverHandler = new PlateSolverHandler(notificationHandler, imageProcessor)
 const atlasHandler = new AtlasHandler(cacheManager, notificationHandler)
-const imageHandler = new ImageHandler(cameraHandler.cache, notificationHandler)
-const tppaHandler = new TppaHandler(wsm, cameraHandler, mountManager, plateSolverHandler, cacheManager)
+const imageHandler = new ImageHandler(imageProcessor, notificationHandler)
+const tppaHandler = new TppaHandler(wsm, cameraHandler, mountManager, plateSolverHandler, imageProcessor)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountManager)
 
 void atlasHandler.refreshImageOfSun()
@@ -238,7 +240,7 @@ const app = new Elysia({
 			name: 'every-minute',
 			pattern: '0 */1 * * * *',
 			run: () => {
-				void imageHandler.cleanUp()
+				void imageProcessor.cleanUp()
 				indiDevicePropertyHandler.cleanUp()
 			},
 		}),

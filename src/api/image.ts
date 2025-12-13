@@ -5,19 +5,19 @@ import { declinationKeyword, type Fits, observationDateKeyword, readFits, rightA
 import { type Image, type ImageFormat, isImage, readImageFromFits, type WriteImageToFormatOptions, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
 import { adf, histogram } from 'nebulosa/src/image.computation'
 import { debayer, horizontalFlip, invert, scnr, stf, verticalFlip } from 'nebulosa/src/image.transformation'
+import type { Camera } from 'nebulosa/src/indi.device'
 import { bufferSource, fileHandleSink, fileHandleSource } from 'nebulosa/src/io'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import { spaceMotion, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
 import { Wcs } from 'nebulosa/src/wcs'
 import { join } from 'path'
-import type { JpegOptions, PngOptions, WebpOptions } from 'sharp'
+import type { JpegOptions, OutputInfo, PngOptions, WebpOptions } from 'sharp'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
-import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageCoordinateInterpolation, ImageHistogram, ImageInfo, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
+import type { AnnotatedSkyObject, AnnotateImage, ImageCoordinateInterpolation, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
-import { decodePath } from './camera'
 import type { NotificationHandler } from './notification'
 
 const JPEG_OPTIONS: JpegOptions = {
@@ -48,36 +48,289 @@ const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOption
 	png: PNG_OPTIONS,
 }
 
-export class ImageHandler {
-	constructor(
-		readonly cache: Map<string, Buffer>,
-		readonly notification?: NotificationHandler,
-	) {}
+export interface SavedImageItem {
+	readonly bytes?: Buffer
+	readonly path: string
+}
 
-	private readonly images = new Map<string, number>()
+export interface TransformedImageItem {
+	readonly saved: SavedImageItem
+	readonly image: Image
+	readonly transformation: ImageTransformation
+}
 
-	async open(req: OpenImage, savePath?: string) {
-		if (!req.path) return undefined
+export interface ExportedImageItem {
+	readonly transformed: TransformedImageItem
+	readonly output?: OutputInfo
+	readonly info?: ImageInfo
+	readonly path: string
+}
 
-		if (req.path.startsWith(':')) {
-			const [path, key] = decodePath(req.path)
-			const buffer = this.cache.get(key)
+export interface ImageProcessorItem<T> {
+	readonly date: number
+	readonly item: T
+}
 
-			if (buffer) {
-				const source = bufferSource(buffer)
-				const fits = await readFits(source)
+export class ImageProcessor {
+	private readonly saved = new Map<string, ImageProcessorItem<SavedImageItem>>()
+	private readonly transformed = new Map<string, ImageProcessorItem<TransformedImageItem>>()
+	private readonly exported = new Map<string, ImageProcessorItem<ExportedImageItem>>()
 
-				return fits && (await this.readAndTransformImageFromFits(fits, req.transformation, path, savePath))
-			} else {
-				req.path = path
+	save(camera: Camera, bytes: Buffer, path: string) {
+		const item: SavedImageItem = { bytes, path }
+		this.saved.set(camera.name, { date: Date.now(), item })
+		return item
+	}
+
+	private async open(bytes?: Buffer) {
+		if (!bytes) return undefined
+		const source = bufferSource(bytes)
+		const fits = await readFits(source) // TODO: support XISF
+		return await readImageFromFits(fits)
+	}
+
+	extractIdFromCameraOrPath(id: Camera | string) {
+		return typeof id !== 'string' ? id.name : id.startsWith(':') ? Buffer.from(id.substring(1), 'hex').toString('utf-8') : id
+	}
+
+	transform(id: Camera | string, transformation: ImageTransformation) {
+		return typeof id !== 'string' || id.startsWith(':') ? this.transformFromCamera(id, transformation) : this.transformFromPath(id, transformation)
+	}
+
+	private async transformFromPath(path: string, transformation: ImageTransformation) {
+		const hash = this.computeTransformHash(path, transformation)
+		let item = this.transformed.get(hash)?.item
+
+		if (item) {
+			console.info('reusing transformed image', path)
+			return item
+		}
+
+		const handle = await fs.open(path)
+		await using source = fileHandleSource(handle)
+		const fits = await readFits(source)
+		let image = await readImageFromFits(fits)
+
+		if (!image) {
+			console.warn('failed to open image at', path)
+			return undefined
+		}
+
+		item = { saved: { path }, image, transformation }
+		image = this.applyTransformation(image, transformation)
+		this.transformed.set(hash, { date: Date.now(), item })
+		return item
+	}
+
+	private async transformFromCamera(camera: Camera | string, transformation: ImageTransformation) {
+		const hash = this.computeTransformHash(camera, transformation)
+		let item = this.transformed.get(hash)?.item
+
+		if (item) {
+			console.info('reusing transformed image', camera)
+			return item
+		}
+
+		const id = this.extractIdFromCameraOrPath(camera)
+		const saved = this.saved.get(id)?.item
+
+		if (!saved?.bytes) {
+			console.warn('failed to load saved image at', id)
+			return undefined
+		}
+
+		let image = await this.open(saved.bytes)
+
+		if (!image) {
+			console.warn('failed to open image at', saved.path)
+			return undefined
+		}
+
+		item = { saved, image, transformation }
+		image = this.applyTransformation(image, transformation)
+		this.transformed.set(hash, { date: Date.now(), item })
+		return item
+	}
+
+	private applyTransformation(image: Image, transformation: ImageTransformation) {
+		if (!transformation.enabled) return image
+
+		if (transformation.debayer) image = debayer(image) ?? image
+		if (transformation.horizontalMirror) image = horizontalFlip(image)
+		if (transformation.verticalMirror) image = verticalFlip(image)
+
+		if (transformation.scnr.channel) {
+			const { channel, amount, method } = transformation.scnr
+			image = scnr(image, channel, amount, method)
+		}
+
+		if (transformation.stretch.auto) {
+			const [midtone, shadow, highlight] = adf(image, undefined, transformation.stretch.meanBackground)
+
+			image = stf(image, midtone, shadow, highlight)
+
+			transformation.stretch.midtone = Math.trunc(midtone * 65536)
+			transformation.stretch.shadow = Math.trunc(shadow * 65536)
+			transformation.stretch.highlight = Math.trunc(highlight * 65536)
+		} else {
+			const { midtone, shadow, highlight } = transformation.stretch
+			image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536)
+		}
+
+		if (transformation.invert) image = invert(image)
+
+		return image
+	}
+
+	async export(id: Camera | string, transformation: ImageTransformation, saveAt?: string) {
+		const hash = this.computeExportHash(id, transformation)
+
+		let item = this.exported.get(hash)?.item
+
+		if (item) {
+			console.info('reusing exported image', id)
+			return item
+		}
+
+		const transformed = await this.transform(id, transformation)
+
+		if (!transformed) {
+			console.warn('failed to load transformed image at', id)
+			return undefined
+		}
+
+		const { image, saved } = transformed
+		const { format } = transformation
+
+		if (format === 'fits' || format === 'xisf') {
+			if (saveAt) {
+				const handle = await fs.open(saveAt, 'w')
+				await using sink = fileHandleSink(handle)
+				await writeImageToFits(image, sink)
+				return { transformed, path: saveAt }
+			}
+
+			return undefined
+		}
+
+		saveAt ||= join(Bun.env.tmpDir, `${Bun.randomUUIDv7()}.${format}`)
+
+		const options: WriteImageToFormatOptions = {
+			format: IMAGE_FORMAT_OPTIONS[format],
+		}
+
+		const output = await writeImageToFormat(image, saveAt, format, options)
+
+		if (output) {
+			const info: ImageInfo = {
+				path: saveAt,
+				realPath: saved.path,
+				width: output.width,
+				height: output.height,
+				mono: output.channels === 1,
+				metadata: image.metadata,
+				transformation,
+				headers: image.header,
+				rightAscension: rightAscensionKeyword(image.header, undefined),
+				declination: declinationKeyword(image.header, undefined),
+			}
+
+			item = { output, info, transformed, path: saveAt }
+			output && this.exported.set(hash, { date: Date.now(), item })
+			return item
+		} else {
+			console.warn('failed to export image at', saveAt)
+		}
+
+		return undefined
+	}
+
+	// TODO: compute hash for adjustment and filter when implement it
+	private computeImageTransformationHash(transformation: ImageTransformation) {
+		const { enabled, calibrationGroup = '', debayer, horizontalMirror, verticalMirror, invert, adjustment, filter } = transformation
+		const stretch = this.computeImageStretchHash(transformation.stretch)
+		const scnr = this.computeImageScnrHash(transformation.scnr)
+		return Bun.MD5.hash(`${enabled}:${calibrationGroup}:${debayer}:${stretch}:${horizontalMirror}:${verticalMirror}:${invert}:${scnr}`, 'hex')
+	}
+
+	private computeImageStretchHash(stretch: ImageStretch) {
+		const { auto, shadow, midtone, highlight, meanBackground } = stretch
+		return Bun.MD5.hash(auto ? `T:${meanBackground}` : `F:${shadow}:${midtone}:${highlight}`, 'hex')
+	}
+
+	private computeImageScnrHash(scnr: ImageScnr) {
+		const { channel = 'GREEN', amount, method } = scnr
+		return Bun.MD5.hash(`${channel}:${amount}:${method}`, 'hex')
+	}
+
+	private computeTransformHash(id: Camera | string, transformation: ImageTransformation) {
+		const hash = this.computeImageTransformationHash(transformation)
+		return Bun.MD5.hash(`${this.extractIdFromCameraOrPath(id)}:${hash}`, 'hex')
+	}
+
+	private computeExportHash(id: Camera | string, transformation: ImageTransformation) {
+		const hash = this.computeImageTransformationHash(transformation)
+		return Bun.MD5.hash(`${this.extractIdFromCameraOrPath(id)}:${transformation.format}:${hash}`, 'hex')
+	}
+
+	async cleanUp() {
+		const now = Date.now()
+		const exported: ExportedImageItem[] = []
+		const transformed: TransformedImageItem[] = []
+		let deleted = false
+
+		async function unlink(path: string) {
+			if (path && (await fs.exists(path))) {
+				await fs.unlink(path)
+				console.info('unlinked image at', path)
 			}
 		}
 
-		const handle = await fs.open(req.path)
-		await using source = fileHandleSource(handle)
-		const fits = await readFits(source)
+		for (const [key, value] of this.exported) {
+			if (now - value.date >= 60000) {
+				this.exported.delete(key)
+				exported.push(value.item)
+				console.info('deleted exported image at', value.item.path)
+				deleted = true
+			}
+		}
 
-		return fits && (await this.readAndTransformImageFromFits(fits, req.transformation, req.path, savePath))
+		for (const [key, value] of this.transformed) {
+			if (now - value.date >= 60000 || exported.some((e) => e.transformed === value.item)) {
+				this.transformed.delete(key)
+				transformed.push(value.item)
+				deleted = true
+			}
+		}
+
+		for (const [key, value] of this.saved) {
+			if (now - value.date >= 60000 || transformed.some((e) => e.saved === value.item)) {
+				this.exported.delete(key)
+				console.info('deleted buffered image at', value.item.path)
+				deleted = true
+			}
+		}
+
+		if (deleted) {
+			Bun.gc()
+
+			for (const { path } of exported) {
+				await unlink(path)
+			}
+		}
+	}
+}
+
+export class ImageHandler {
+	constructor(
+		readonly processor: ImageProcessor,
+		readonly notification?: NotificationHandler,
+	) {}
+
+	async open(req: OpenImage) {
+		if (!req.path) return undefined
+		const item = await this.processor.export(req.path, req.transformation)
+		return item?.info
 	}
 
 	async readAndTransformImageFromFits(fits: Fits, transformation: ImageTransformation, realPath: string, savePath?: string) {
@@ -105,8 +358,6 @@ export class ImageHandler {
 						rightAscension: rightAscensionKeyword(image.header, undefined),
 						declination: declinationKeyword(image.header, undefined),
 					}
-
-					this.images.set(path, Date.now())
 
 					return info
 				} else if (savePath) {
@@ -190,9 +441,10 @@ export class ImageHandler {
 		return writeImageToFormat(image, path, format, options)
 	}
 
-	save(req: SaveImage) {
+	async save(req: SaveImage) {
+		if (!req.saveAt) return
 		req.transformation.enabled = req.transformed
-		return !!req.savePath && this.open(req, req.savePath)
+		await this.processor.export(req.path, req.transformation, req.saveAt)
 	}
 
 	annotate(req: AnnotateImage) {
@@ -248,16 +500,16 @@ export class ImageHandler {
 
 	async statistics(req: StatisticImage) {
 		req.transformation.enabled = req.transformed
-		const image = await this.open(req, '')
+		const image = await this.processor.transform(req.path, req.transformation)
 
-		if (isImage(image)) {
-			const stats = new Array<ImageHistogram>(image.metadata.channels)
+		if (image?.image) {
+			const stats = new Array<ImageHistogram>(image.image.metadata.channels)
 			const isMono = stats.length === 1
 			const bits = new Int32Array(1 << Math.max(8, Math.min(req.bits ?? 16, 20)))
 
 			for (let i = 0; i < stats.length; i++) {
 				const channel = isMono ? 'GRAY' : i === 0 ? 'RED' : i === 1 ? 'GREEN' : 'BLUE'
-				const hist = histogram(image, channel, undefined, req.area, bits)
+				const hist = histogram(image.image, channel, undefined, req.area, bits)
 				const { standardDeviation, variance, count, mean, median, maximum, minimum } = hist
 				stats[i] = { standardDeviation, variance, count, mean, median, maximum, minimum, data: Array.from(bits) }
 			}
@@ -269,21 +521,6 @@ export class ImageHandler {
 
 		return []
 	}
-
-	close(req: CloseImage) {
-		this.cache.delete(req.id)
-	}
-
-	async cleanUp() {
-		const now = Date.now()
-
-		for (const [path, timestamp] of this.images) {
-			if (now - timestamp >= 60000) {
-				await fs.unlink(path)
-				this.images.delete(path)
-			}
-		}
-	}
 }
 
 export function image(image: ImageHandler) {
@@ -292,13 +529,12 @@ export function image(image: ImageHandler) {
 		.post('/open', async ({ body, set }) => {
 			const info = await image.open(body as never)
 
-			if (!info || isImage(info)) return undefined
+			if (!info) return undefined
 
 			set.headers[X_IMAGE_INFO_HEADER] = encodeURIComponent(JSON.stringify(info))
 
 			return Bun.file(info.path)
 		})
-		.post('/close', ({ body }) => image.close(body as never))
 		.post('/save', ({ body }) => image.save(body as never))
 		.post('/annotate', ({ body }) => image.annotate(body as never))
 		.post('/coordinateinterpolation', ({ body }) => image.coordinateInterpolation(body as never))

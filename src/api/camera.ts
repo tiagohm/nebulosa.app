@@ -8,6 +8,7 @@ import { join } from 'path'
 import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import type { ConnectionHandler } from './connection'
+import type { ImageProcessor } from './image'
 import type { WebSocketMessageHandler } from './message'
 
 const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
@@ -15,10 +16,9 @@ const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
 export class CameraHandler implements DeviceHandler<Camera> {
 	private readonly tasks = new Map<string, CameraCaptureTask>()
 
-	readonly cache = new Map<string, Buffer>()
-
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
+		readonly processor: ImageProcessor,
 		readonly camera: CameraManager,
 		readonly guideOutput: GuideOutputManager,
 		readonly thermometer: ThermometerManager,
@@ -43,7 +43,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	blobReceived(client: IndiClient, device: Camera, data: string) {
-		this.tasks.forEach((task) => task.blobReceived(client, device, data, this.cache))
+		this.tasks.forEach((task) => task.blobReceived(client, device, data))
 	}
 
 	handleCameraCaptureEvent(client: IndiClient, camera: Camera, event: CameraCaptureEvent) {
@@ -79,7 +79,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		}
 
 		// Start a new task for the camera
-		const task = new CameraCaptureTask(camera, req, this.startExposure.bind(this), this.stopExposure.bind(this), this.handleCameraCaptureEvent.bind(this))
+		const task = new CameraCaptureTask(camera, req, this.processor, this.startExposure.bind(this), this.stopExposure.bind(this), this.handleCameraCaptureEvent.bind(this))
 
 		this.tasks.set(camera.name, task)
 		const mount = req.mount ? this.mount.get(req.mount) : undefined
@@ -121,6 +121,7 @@ export class CameraCaptureTask {
 	constructor(
 		readonly camera: Camera,
 		private readonly request: CameraCaptureStart,
+		private readonly processor: ImageProcessor,
 		private readonly startExposure: (client: IndiClient, camera: Camera, request: CameraCaptureStart) => void,
 		private readonly stopExposure: (client: IndiClient, camera: Camera) => void,
 		private readonly handleCameraCaptureEvent: (client: IndiClient, camera: Camera, event: CameraCaptureEvent) => void,
@@ -229,7 +230,7 @@ export class CameraCaptureTask {
 		}
 	}
 
-	async blobReceived(client: IndiClient, camera: Camera, data: string, cache: Map<string, Buffer>) {
+	async blobReceived(client: IndiClient, camera: Camera, data: string) {
 		if (this.camera.name === camera.name) {
 			const bytes = Buffer.from(data, 'base64')
 
@@ -237,10 +238,10 @@ export class CameraCaptureTask {
 			const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : camera.name
 			const path = join(await makePathFor(this.request), `${name}.fit`)
 			void Bun.write(path, bytes) // Don't wait for writing to file
-			cache.set(camera.name, bytes)
+			this.processor.save(camera, bytes, path)
 
 			// Send event
-			this.event.savedPath = encodePath(path, camera.name)
+			this.event.savedPath = `:${Buffer.from(camera.name).toString('hex')}`
 			this.handleCameraCaptureEvent(client, camera, this.event)
 			this.event.savedPath = undefined
 		}
@@ -264,19 +265,6 @@ export class CameraCaptureTask {
 		this.stopped = true
 		this.stopExposure(client, this.camera)
 	}
-}
-
-export function encodePath(...parts: string[]) {
-	parts.forEach((e, i) => e.length && (parts[i] = Buffer.from(e).toString('hex')))
-	return `:${parts.join(':')}`
-}
-
-export function decodePath(encoded: string) {
-	if (encoded[0] !== ':') return [encoded]
-
-	const parts = encoded.substring(1).split(':')
-	parts.forEach((e, i) => e.length && (parts[i] = Buffer.from(e, 'hex').toString('utf-8')))
-	return parts
 }
 
 async function waitFor(us: number, callback: (remaining: number) => boolean) {

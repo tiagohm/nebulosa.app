@@ -7,7 +7,7 @@ import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/temporal'
 import { memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
-import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
+import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
 import { type BodyPosition, EMPTY_TWILIGHT, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
@@ -782,26 +782,45 @@ interface EphemerisChartProps {
 	readonly data: EphemerisChartData[]
 }
 
-const EphemerisChart = memo(({ data }: EphemerisChartProps) => {
-	function tickFormatter(value: unknown, i: number) {
-		return `${((i + 12) % 24).toFixed(0).padStart(2, '0')}`
-	}
+function chartTooltipContent({ active, payload }: TooltipContentProps<number, string>) {
+	if (!active || !payload?.length) return null
+	const item = payload[0]?.payload as EphemerisChartData
+	const time = (+item.name + 720) % 1440
+	const hour = (time / 1440) * 24
+	const minute = (hour - Math.trunc(hour)) * 60
 
 	return (
-		<ComposedChart data={data} height={140} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} width={412}>
-			<XAxis dataKey='name' domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={tickFormatter} tickMargin={6} />
+		<div className='px-1.5 py-0.5 inline-flex flex-col font-normal text-small shadow-small bg-default-100 rounded-small'>
+			<span className='text-white font-bold'>
+				{hour.toFixed(0).padStart(2, '0')}:{minute.toFixed(0).padStart(2, '0')}
+			</span>
+			<span className='text-foreground-600'>{item.value?.toFixed(3)}°</span>
+		</div>
+	)
+}
+
+function chartTickFormatter(value: unknown, i: number) {
+	return `${((i + 12) % 24).toFixed(0).padStart(2, '0')}`
+}
+
+const DEFAULT_AREA_PROPS: Partial<AreaProps> = { dot: false, connectNulls: true, activeDot: false, fillOpacity: 0.3, isAnimationActive: false, stroke: 'transparent', type: 'monotone' }
+
+const EphemerisChart = memo(({ data }: EphemerisChartProps) => {
+	return (
+		<ComposedChart data={data} height={140} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive>
+			<XAxis dataKey='name' domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={chartTickFormatter} tickMargin={6} />
 			<YAxis domain={[0, 90]} width={25} />
-			<Area activeDot={false} connectNulls dataKey='dayFirst' dot={false} fill='#FFF176' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
-			<Area activeDot={false} connectNulls dataKey='civilDusk' dot={false} fill='#7986CB' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
-			<Area activeDot={false} connectNulls dataKey='nauticalDusk' dot={false} fill='#3F51B5' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
-			<Area activeDot={false} connectNulls dataKey='astronomicalDusk' dot={false} fill='#303F9F' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
-			<Area activeDot={false} connectNulls dataKey='night' dot={false} fill='#1A237E' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
-			<Area activeDot={false} connectNulls dataKey='astronomicalDawn' dot={false} fill='#303F9F' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
-			<Area activeDot={false} connectNulls dataKey='nauticalDawn' dot={false} fill='#3F51B5' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
-			<Area activeDot={false} connectNulls dataKey='civilDawn' dot={false} fill='#7986CB' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
-			<Area activeDot={false} connectNulls dataKey='dayLast' dot={false} fill='#FFF176' fillOpacity={0.3} isAnimationActive={false} stroke='transparent' type='monotone' />
+			<Area dataKey='dayFirst' fill='#FFF176' {...DEFAULT_AREA_PROPS} />
+			<Area dataKey='civilDusk' fill='#7986CB' {...DEFAULT_AREA_PROPS} />
+			<Area dataKey='nauticalDusk' fill='#3F51B5' {...DEFAULT_AREA_PROPS} />
+			<Area dataKey='astronomicalDusk' fill='#303F9F' {...DEFAULT_AREA_PROPS} />
+			<Area dataKey='night' fill='#1A237E' {...DEFAULT_AREA_PROPS} />
+			<Area dataKey='astronomicalDawn' fill='#303F9F' {...DEFAULT_AREA_PROPS} />
+			<Area dataKey='nauticalDawn' fill='#3F51B5' {...DEFAULT_AREA_PROPS} />
+			<Area dataKey='civilDawn' fill='#7986CB' {...DEFAULT_AREA_PROPS} />
+			<Area dataKey='dayLast' fill='#FFF176' {...DEFAULT_AREA_PROPS} />
 			<CartesianGrid stroke='#FFFFFF10' strokeDasharray='3 3' />
-			<ChartTooltip />
+			<ChartTooltip content={chartTooltipContent} />
 			<Line dataKey='value' dot={false} isAnimationActive={false} stroke='#F44336' strokeWidth={2} type='monotone' />
 		</ComposedChart>
 	)

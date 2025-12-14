@@ -538,23 +538,23 @@ export class AtlasHandler {
 		const ephemeris = this.ephemeris[id]
 		let position = ephemeris?.get(key)
 
-		if (!ephemeris || !position || !ephemeris.has(Math.trunc(startTime / 1000)) || !ephemeris.has(Math.trunc(endTime / 1000)) || location !== this.ephemeris.location) {
+		if (!ephemeris || !position || location !== this.ephemeris.location || !ephemeris.has(Math.trunc(startTime / 1000)) || !ephemeris.has(Math.trunc(endTime / 1000))) {
 			const code = typeof input === 'string' ? input : input.tle
 			const { longitude, latitude, elevation } = location
 
-			let horizonsObserveTask = this.horizonsObserverTasks.get(id)
+			const taskId = `${id}${startTime}${endTime}${location.longitude}${location.latitude}${location.elevation}`
+			let horizonsObserverTask = this.horizonsObserverTasks.get(taskId)
 
-			if (!horizonsObserveTask) {
+			if (!horizonsObserverTask) {
 				console.info(`fetching ephemeris for ${code} at time [${formatTemporal(startTime, undefined, 0)} - ${formatTemporal(endTime, undefined, 0)}] and location [${toDeg(latitude)}, ${toDeg(longitude)}, ${toMeter(elevation).toFixed(0)}]`)
-				horizonsObserveTask = observer(code, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1 })
-				this.horizonsObserverTasks.set(id, horizonsObserveTask)
-				horizonsObserveTask.then(() => this.horizonsObserverTasks.delete(id))
+				horizonsObserverTask = observer(code, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1 })
+				this.horizonsObserverTasks.set(taskId, horizonsObserverTask)
+				const onCompleted = () => this.horizonsObserverTasks.delete(taskId)
+				horizonsObserverTask.then(onCompleted, onCompleted)
 			}
 
-			const horizons = await horizonsObserveTask
-			const positions = makeBodyPositionFromHorizons(horizons)
 			const map = ephemeris ?? new Map()
-			positions.forEach((e) => map.set(e[0], e[1]))
+			makeBodyPositionFromHorizons(await horizonsObserverTask, map)
 			this.ephemeris[id] = map
 			this.ephemeris.location = location
 			position = map.get(key)!
@@ -576,7 +576,7 @@ export class AtlasHandler {
 		const [startTime, endTime] = this.computeStartAndEndTime(time)
 		console.info(`generating chart for ${code} at time [${formatTemporal(startTime, undefined, 0)} - ${formatTemporal(endTime, undefined, 0)}]`)
 
-		const seconds = Math.trunc(startTime / 1000) // start/end time will never have min/sec, so is safe to just divide by 1000
+		const seconds = Math.trunc(startTime / 1000)
 		const chart = new Array<number>(1441)
 
 		for (let i = 0; i <= 1440; i++) {
@@ -657,30 +657,30 @@ export function atlas(atlas: AtlasHandler) {
 	return app
 }
 
-function makeBodyPositionFromHorizons(ephemeris: CsvRow[]): readonly [number, BodyPosition][] {
+function makeBodyPositionFromHorizons(ephemeris: CsvRow[], output: Map<number, BodyPosition>) {
 	const seconds = Math.trunc(parseTemporal(ephemeris[0][0], 'YYYY-MMM-DD HH:mm') / 1000)
 
-	return ephemeris.map((e, i) => {
+	for (let i = 0; i < ephemeris.length; i++) {
+		const e = ephemeris[i]
 		const lightTime = parseFloat(e[11]) || 0
 		const distance = lightTime * ((SPEED_OF_LIGHT * 0.06) / AU_KM) // AU
 
-		return [
-			seconds + i * 60,
-			{
-				rightAscensionJ2000: parseAngle(e[3]),
-				declinationJ2000: parseAngle(e[4]),
-				rightAscension: parseAngle(e[5]),
-				declination: parseAngle(e[6]),
-				azimuth: parseAngle(e[7]),
-				altitude: parseAngle(e[8]),
-				magnitude: e[9] === 'n.a.' ? null : parseFloat(e[9]),
-				constellation: e[15].toUpperCase(),
-				distance,
-				illuminated: parseFloat(e[12]),
-				elongation: parseAngle(e[13]),
-				leading: e[14] === '/L',
-				pierSide: 'NEITHER',
-			} as BodyPosition,
-		]
-	})
+		const position = {
+			rightAscensionJ2000: parseAngle(e[3]),
+			declinationJ2000: parseAngle(e[4]),
+			rightAscension: parseAngle(e[5]),
+			declination: parseAngle(e[6]),
+			azimuth: parseAngle(e[7]),
+			altitude: parseAngle(e[8]),
+			magnitude: e[9] === 'n.a.' ? null : parseFloat(e[9]),
+			constellation: e[15].toUpperCase(),
+			distance,
+			illuminated: parseFloat(e[12]),
+			elongation: parseAngle(e[13]),
+			leading: e[14] === '/L',
+			pierSide: 'NEITHER',
+		} as BodyPosition
+
+		output.set(seconds + i * 60, position)
+	}
 }

@@ -1,22 +1,21 @@
 import { molecule, use } from 'bunshi'
 import type { ImageTransformation } from 'src/shared/types'
-import { ImageViewerMolecule, ImageViewerScope } from './viewer'
+import { ImageViewerMolecule } from './viewer'
 
 export const ImageAdjustmentMolecule = molecule(() => {
-	const scope = use(ImageViewerScope)
 	const viewer = use(ImageViewerMolecule)
-	const { adjustment } = viewer.state.transformation
+	const state = viewer.state.transformation.adjustment
 
 	function update<K extends keyof ImageTransformation['adjustment']>(key: K, value: ImageTransformation['adjustment'][K]) {
-		adjustment[key] = value
+		state[key] = value
 	}
 
 	function reset() {
-		adjustment.brightness = 1
-		adjustment.contrast = 1
-		adjustment.gamma = 1
-		adjustment.saturation = 1
-		adjustment.normalize = false
+		state.brightness = 1
+		state.contrast = 1
+		state.gamma = 1
+		state.saturation = 1
+		state.normalize = false
 		return apply()
 	}
 
@@ -32,5 +31,5 @@ export const ImageAdjustmentMolecule = molecule(() => {
 		viewer.hide('adjustment')
 	}
 
-	return { state: adjustment, scope, viewer, update, reset, apply, show, hide } as const
+	return { state, scope: viewer.scope, viewer, update, reset, apply, show, hide } as const
 })

@@ -6,58 +6,57 @@ import bus from 'src/shared/bus'
 import type { Framing, PlateSolveStart } from 'src/shared/types'
 import { Api } from '@/shared/api'
 import { SettingsMolecule } from '../settings'
-import { ImageViewerMolecule, ImageViewerScope } from './viewer'
+import { ImageViewerMolecule } from './viewer'
 
 export const ImageSolverMolecule = molecule(() => {
-	const scope = use(ImageViewerScope)
 	const viewer = use(ImageViewerMolecule)
 	const settings = use(SettingsMolecule)
-	const { solver } = viewer.state
+	const state = viewer.state.solver
 
 	function update<K extends keyof PlateSolveStart>(key: K, value: PlateSolveStart[K]) {
-		solver.request[key] = value
+		state.request[key] = value
 	}
 
 	async function start() {
 		try {
-			solver.loading = true
+			state.loading = true
 
-			const request: PlateSolveStart = { ...solver.request, ...settings.state.solver[solver.request.type], path: viewer.realPath(), id: scope.image.key }
+			const request: PlateSolveStart = { ...state.request, ...settings.state.solver[state.request.type], path: viewer.realPath(), id: viewer.scope.image.key }
 			request.fov = arcsec(angularSizeOfPixel(request.focalLength, request.pixelSize) * viewer.state.info!.height)
 
-			solver.solution = await Api.PlateSolver.start(request)
+			state.solution = await Api.PlateSolver.start(request)
 		} finally {
-			solver.loading = false
+			state.loading = false
 		}
 	}
 
 	function stop() {
-		return Api.PlateSolver.stop({ id: scope.image.key })
+		return Api.PlateSolver.stop({ id: viewer.scope.image.key })
 	}
 
 	async function goTo(mount?: Mount) {
-		if (!mount || !solver.solution) return
-		const { rightAscension, declination } = solver.solution
+		if (!mount || !state.solution) return
+		const { rightAscension, declination } = state.solution
 		await Api.Mounts.goTo(mount, { type: 'J2000', rightAscension, declination })
 	}
 
 	async function syncTo(mount?: Mount) {
-		if (!mount || !solver.solution) return
-		const { rightAscension, declination } = solver.solution
+		if (!mount || !state.solution) return
+		const { rightAscension, declination } = state.solution
 		await Api.Mounts.syncTo(mount, { type: 'J2000', rightAscension, declination })
 	}
 
 	function frame() {
-		if (!solver.solution) return
+		if (!state.solution) return
 
 		const request: Partial<Framing> = {
-			rightAscension: formatRA(solver.solution.rightAscension),
-			declination: formatDEC(solver.solution.declination),
-			focalLength: solver.request.focalLength,
-			pixelSize: solver.request.pixelSize,
-			width: solver.solution.widthInPixels,
-			height: solver.solution.heightInPixels,
-			rotation: toDeg(solver.solution.orientation),
+			rightAscension: formatRA(state.solution.rightAscension),
+			declination: formatDEC(state.solution.declination),
+			focalLength: state.request.focalLength,
+			pixelSize: state.request.pixelSize,
+			width: state.solution.widthInPixels,
+			height: state.solution.heightInPixels,
+			rotation: toDeg(state.solution.orientation),
 		}
 
 		bus.emit('framing:load', request)
@@ -71,5 +70,5 @@ export const ImageSolverMolecule = molecule(() => {
 		viewer.hide('solver')
 	}
 
-	return { state: solver, viewer, scope, update, start, stop, goTo, syncTo, frame, show, hide } as const
+	return { state, viewer, scope: viewer.scope, update, start, stop, goTo, syncTo, frame, show, hide } as const
 })

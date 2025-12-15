@@ -1,20 +1,19 @@
 import { molecule, use } from 'bunshi'
 import type { ImageTransformation } from 'src/shared/types'
-import { ImageViewerMolecule, ImageViewerScope } from './viewer'
+import { ImageViewerMolecule } from './viewer'
 
 export const ImageFilterMolecule = molecule(() => {
-	const scope = use(ImageViewerScope)
 	const viewer = use(ImageViewerMolecule)
-	const { filter } = viewer.state.transformation
+	const state = viewer.state.transformation.filter
 
 	function update<K extends keyof ImageTransformation['filter']>(key: K, value: ImageTransformation['filter'][K]) {
-		filter[key] = value
+		state[key] = value
 	}
 
 	function reset() {
-		filter.sharpen = false
-		filter.blur = false
-		filter.median = false
+		state.sharpen = false
+		state.blur = false
+		state.median = false
 		return apply()
 	}
 
@@ -30,5 +29,5 @@ export const ImageFilterMolecule = molecule(() => {
 		viewer.hide('filter')
 	}
 
-	return { state: filter, scope, viewer, update, reset, apply, show, hide } as const
+	return { state, scope: viewer.scope, viewer, update, reset, apply, show, hide } as const
 })

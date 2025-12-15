@@ -1,18 +1,18 @@
 import { molecule, use } from 'bunshi'
-import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation } from 'src/shared/types'
-import { type ImageState, ImageViewerMolecule, ImageViewerScope } from './viewer'
+import type { ImageFormat } from 'nebulosa/src/image'
+import { DEFAULT_IMAGE_TRANSFORMATION } from 'src/shared/types'
+import { type ImageState, ImageViewerMolecule } from './viewer'
 
 export const ImageSettingsMolecule = molecule(() => {
-	const scope = use(ImageViewerScope)
 	const viewer = use(ImageViewerMolecule)
-	const { settings, transformation } = viewer.state
+	const { settings: state, transformation } = viewer.state
 
 	function update<K extends keyof ImageState['settings']>(key: K, value: ImageState['settings'][K]) {
-		settings[key] = value
+		state[key] = value
 		viewer.apply()
 	}
 
-	function updateFormat(format: ImageTransformation['format']) {
+	function updateFormat(format: ImageFormat) {
 		transformation.format = format
 		return viewer.load(true)
 	}
@@ -20,7 +20,7 @@ export const ImageSettingsMolecule = molecule(() => {
 	function reset() {
 		const reload = transformation.format !== DEFAULT_IMAGE_TRANSFORMATION.format
 		transformation.format = DEFAULT_IMAGE_TRANSFORMATION.format
-		settings.pixelated = true
+		state.pixelated = true
 		viewer.apply()
 		if (reload) void viewer.load(true)
 	}
@@ -33,5 +33,5 @@ export const ImageSettingsMolecule = molecule(() => {
 		viewer.hide('settings')
 	}
 
-	return { state: settings, scope, viewer, update, updateFormat, reset, show, hide } as const
+	return { state, scope: viewer.scope, viewer, update, updateFormat, reset, show, hide } as const
 })

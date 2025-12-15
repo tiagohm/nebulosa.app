@@ -333,23 +333,6 @@ export const ImageViewerMolecule = molecule(() => {
 		}
 	}
 
-	function resetStretch() {
-		state.transformation.stretch.auto = false
-		state.transformation.stretch.midtone = 32768
-		state.transformation.stretch.shadow = 0
-		state.transformation.stretch.highlight = 65536
-		return load(true)
-	}
-
-	function toggleAutoStretch() {
-		if (state.transformation.stretch.auto) {
-			return resetStretch()
-		} else {
-			state.transformation.stretch.auto = true
-			return load(true)
-		}
-	}
-
 	function toggleDebayer() {
 		state.transformation.debayer = !state.transformation.debayer
 		return load(true)
@@ -544,7 +527,7 @@ export const ImageViewerMolecule = molecule(() => {
 		workspace.state.selected = undefined
 	}
 
-	return { state, scope, realPath, handleInterpolatedCoordinate, resetStretch, toggleAutoStretch, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, toggleMouseCoordinate, attach, load, open, remove, detach, select, show, hide, apply }
+	return { state, scope, realPath, handleInterpolatedCoordinate, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, toggleMouseCoordinate, attach, load, open, remove, detach, select, show, hide, apply }
 })
 
 function adjustZIndexAfterBeRemoved() {

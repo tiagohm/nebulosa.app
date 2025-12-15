@@ -150,7 +150,7 @@ export class PanZoom {
 
 	zoom(scale: number, zoomOptions?: Partial<PanZoomZoomOptions>, originalEvent?: PanZoomOriginalEvent) {
 		const result = this.constrainScale(scale, zoomOptions)
-		const opts = result.opts
+		const { opts } = result
 
 		if (!opts.force && opts.disableZoom) {
 			return
@@ -177,7 +177,7 @@ export class PanZoom {
 			// The difference between the point after the scale and the point before the scale
 			// plus the current translation after the scale
 			// neutralized to no scale (as the transform scale will apply to the translation)
-			const focal = opts.focal
+			const { focal } = opts
 			toX = (focal.x / scale - focal.x / this.scale + this.x * focalScale) / scale
 			toY = (focal.y / scale - focal.y / this.scale + this.y * focalScale) / scale
 		}
@@ -213,7 +213,7 @@ export class PanZoom {
 		// Normalize to deltaX in case shift modifier is used on Mac
 		const delta = event.deltaY === 0 && event.deltaX ? event.deltaX : event.deltaY
 		const wheel = delta < 0 ? 1 : -1
-		const scale = this.constrainScale(this.scale * Math.exp((wheel * opts.step) / 3), opts).scale
+		const { scale } = this.constrainScale(this.scale * Math.exp((wheel * opts.step) / 3), opts)
 
 		this.zoomToPoint(scale, event, opts, event)
 	}
@@ -305,8 +305,7 @@ export class PanZoom {
 			return result
 		}
 
-		let minScale = this.options.minScale
-		let maxScale = this.options.maxScale
+		let { minScale, maxScale } = this.options
 
 		if (opts.contain) {
 			const elementRect = this.element.getBoundingClientRect()

@@ -1,9 +1,8 @@
 import { molecule, use } from 'bunshi'
 import { DEFAULT_IMAGE_SCNR, type ImageTransformation } from 'src/shared/types'
-import { ImageViewerMolecule, ImageViewerScope } from './viewer'
+import { ImageViewerMolecule } from './viewer'
 
 export const ImageScnrMolecule = molecule(() => {
-	const scope = use(ImageViewerScope)
 	const viewer = use(ImageViewerMolecule)
 	const state = viewer.state.transformation.scnr
 
@@ -30,5 +29,5 @@ export const ImageScnrMolecule = molecule(() => {
 		viewer.hide('scnr')
 	}
 
-	return { state, scope, viewer, update, reset, apply, show, hide } as const
+	return { state, scope: viewer.scope, viewer, update, reset, apply, show, hide } as const
 })

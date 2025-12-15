@@ -3,29 +3,28 @@ import { unsubscribe } from 'src/shared/bus'
 import { ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { type ImageState, ImageViewerMolecule, ImageViewerScope } from './viewer'
+import { type ImageState, ImageViewerMolecule } from './viewer'
 
 export const ImageStatisticsMolecule = molecule(() => {
-	const scope = use(ImageViewerScope)
 	const viewer = use(ImageViewerMolecule)
-	const { statistics, transformation } = viewer.state
+	const state = viewer.state.statistics
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(3)
 
 		unsubscribers[0] = subscribeKey(viewer.state, 'info', (info) => {
-			if (info && statistics.show) {
+			if (info && state.show) {
 				void compute()
 			}
 		})
 
-		unsubscribers[1] = subscribeKey(statistics, 'show', (show) => {
-			if (show && statistics.histogram.length === 0) {
+		unsubscribers[1] = subscribeKey(state, 'show', (show) => {
+			if (show && state.histogram.length === 0) {
 				void compute()
 			}
 		})
 
-		unsubscribers[2] = subscribe(statistics.request, () => {
+		unsubscribers[2] = subscribe(state.request, () => {
 			void compute()
 		})
 
@@ -35,13 +34,12 @@ export const ImageStatisticsMolecule = molecule(() => {
 	})
 
 	function update<K extends keyof ImageState['statistics']['request']>(key: K, value: ImageState['statistics']['request'][K]) {
-		statistics.request[key] = value
+		state.request[key] = value
 	}
 
 	async function compute() {
-		const { request } = statistics
-		const histogram = await Api.Image.statistics({ path: viewer.realPath(), transformation, camera: scope.image.camera?.name, ...request })
-		if (histogram) statistics.histogram = ref(histogram)
+		const histogram = await Api.Image.statistics({ path: viewer.realPath(), transformation: viewer.state.transformation, camera: viewer.scope.image.camera?.name, ...state.request })
+		if (histogram) state.histogram = ref(histogram)
 	}
 
 	function show() {
@@ -52,5 +50,5 @@ export const ImageStatisticsMolecule = molecule(() => {
 		viewer.hide('statistics')
 	}
 
-	return { state: statistics, scope, viewer, update, compute, show, hide } as const
+	return { state, scope: viewer.scope, viewer, update, compute, show, hide } as const
 })

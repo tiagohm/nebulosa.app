@@ -524,7 +524,7 @@ export const GalaxyMolecule = molecule(() => {
 	}
 
 	async function updatePosition() {
-		const id = state.selected!.id
+		const { id } = state.selected!
 		const position = await Api.SkyAtlas.positionOfSkyObject(state.request, id)
 		if (position) Object.assign(state.position, position)
 	}
@@ -532,7 +532,7 @@ export const GalaxyMolecule = molecule(() => {
 	async function updateChart(force: boolean = false) {
 		if (!chartUpdate && !force) return
 		chartUpdate = false
-		const id = state.selected!.id
+		const { id } = state.selected!
 		const chart = await Api.SkyAtlas.chartOfSkyObject(state.request, id)
 		if (chart) state.chart = chart
 		else chartUpdate = true
@@ -804,18 +804,18 @@ export const SkyAtlasMolecule = molecule(() => {
 
 	function syncTo(mount?: Mount) {
 		if (!mount) return undefined
-		const position = state[state.tab].position
+		const { position } = state[state.tab]
 		return Api.Mounts.syncTo(mount, { type: 'JNOW', ...position })
 	}
 
 	function goTo(mount?: Mount) {
 		if (!mount) return undefined
-		const position = state[state.tab].position
+		const { position } = state[state.tab]
 		return Api.Mounts.goTo(mount, { type: 'JNOW', ...position })
 	}
 
 	function frame() {
-		const position = state[state.tab].position
+		const { position } = state[state.tab]
 
 		const request: Partial<Framing> = {
 			rightAscension: formatRA(position.rightAscensionJ2000),

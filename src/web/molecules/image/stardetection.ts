@@ -2,23 +2,22 @@ import { addToast } from '@heroui/react'
 import { molecule, use } from 'bunshi'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 import { Api } from '@/shared/api'
-import { ImageViewerMolecule, ImageViewerScope } from './viewer'
+import { ImageViewerMolecule } from './viewer'
 
 export const StarDetectionMolecule = molecule(() => {
-	const scope = use(ImageViewerScope)
 	const viewer = use(ImageViewerMolecule)
-	const key = scope.image.key
-	const { starDetection } = viewer.state
+	const { key } = viewer.scope.image
+	const state = viewer.state.starDetection
 
 	function toggle(enabled?: boolean) {
-		starDetection.visible = enabled ?? !starDetection.visible
+		state.visible = enabled ?? !state.visible
 	}
 
 	async function detect() {
 		try {
-			starDetection.loading = true
+			state.loading = true
 
-			const request = { ...starDetection.request, path: viewer.realPath() }
+			const request = { ...state.request, path: viewer.realPath() }
 			const stars = await Api.StarDetection.detect(request)
 
 			if (!stars) return
@@ -27,8 +26,8 @@ export const StarDetectionMolecule = molecule(() => {
 				addToast({ description: 'No stars detected', color: 'warning', title: 'WARN' })
 			}
 
-			starDetection.stars = stars
-			starDetection.visible = stars.length > 0
+			state.stars = stars
+			state.visible = stars.length > 0
 
 			let hfd = 0
 			let snr = 0
@@ -50,14 +49,14 @@ export const StarDetectionMolecule = molecule(() => {
 				fluxMax = 0
 			}
 
-			starDetection.computed = { hfd, snr, fluxMin, fluxMax }
+			state.computed = { hfd, snr, fluxMin, fluxMax }
 		} finally {
-			starDetection.loading = false
+			state.loading = false
 		}
 	}
 
 	function select(star: DetectedStar) {
-		starDetection.selected = star
+		state.selected = star
 
 		const canvas = document.getElementById(`${key}-selected-star`) as HTMLCanvasElement | null
 
@@ -76,5 +75,5 @@ export const StarDetectionMolecule = molecule(() => {
 		viewer.hide('starDetection')
 	}
 
-	return { state: starDetection, viewer, scope, toggle, detect, select, show, hide } as const
+	return { state, viewer, scope: viewer.scope, toggle, detect, select, show, hide } as const
 })

@@ -88,12 +88,16 @@
 				"useDateNow": "error"
 			},
 			"a11y": {
+				"recommended": false,
 				"useAltText": "off",
 				"noSvgWithoutTitle": "off"
 			},
 			"nursery": {
+				"recommended": true,
 				"noFloatingPromises": "error",
-				"noImportCycles": "error"
+				"noImportCycles": "error",
+				"useAwaitThenable": "off",
+				"useDestructuring": "off"
 			}
 		}
 	},

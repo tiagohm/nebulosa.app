@@ -1,14 +1,13 @@
 import { molecule, use } from 'bunshi'
 import { Api } from '@/shared/api'
-import { ImageViewerMolecule, ImageViewerScope } from './viewer'
+import { ImageViewerMolecule } from './viewer'
 
 export const ImageAnnotationMolecule = molecule(() => {
-	const scope = use(ImageViewerScope)
 	const viewer = use(ImageViewerMolecule)
-	const { annotation } = viewer.state
+	const state = viewer.state.annotation
 
 	function toggle(enabled?: boolean) {
-		annotation.visible = enabled ?? !annotation.visible
+		state.visible = enabled ?? !state.visible
 	}
 
 	async function annotate() {
@@ -17,15 +16,15 @@ export const ImageAnnotationMolecule = molecule(() => {
 		if (!solution) return
 
 		try {
-			annotation.loading = true
+			state.loading = true
 			const stars = await Api.Image.annotate({ solution })
 
 			if (!stars) return
 
-			annotation.stars = stars
-			annotation.visible = stars.length > 0
+			state.stars = stars
+			state.visible = stars.length > 0
 		} finally {
-			annotation.loading = false
+			state.loading = false
 		}
 	}
 
@@ -37,5 +36,5 @@ export const ImageAnnotationMolecule = molecule(() => {
 		viewer.hide('annotation')
 	}
 
-	return { state: annotation, scope, viewer, toggle, annotate, show, hide } as const
+	return { state, scope: viewer.scope, viewer, toggle, annotate, show, hide } as const
 })

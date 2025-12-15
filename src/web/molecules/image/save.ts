@@ -1,9 +1,8 @@
 import { molecule, use } from 'bunshi'
 import { Api } from '@/shared/api'
-import { type ImageState, ImageViewerMolecule, ImageViewerScope } from './viewer'
+import { type ImageState, ImageViewerMolecule } from './viewer'
 
 export const ImageSaveMolecule = molecule(() => {
-	const scope = use(ImageViewerScope)
 	const viewer = use(ImageViewerMolecule)
 	const state = viewer.state.save
 
@@ -30,5 +29,5 @@ export const ImageSaveMolecule = molecule(() => {
 		viewer.hide('save')
 	}
 
-	return { state, scope, viewer, update, save, show, hide } as const
+	return { state, scope: viewer.scope, viewer, update, save, show, hide } as const
 })

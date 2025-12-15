@@ -425,7 +425,7 @@ export class AtlasHandler {
 
 			try {
 				const signal = AbortSignal.timeout(5000)
-				const type = SATELLITE_GROUP_TYPES[group].type
+				const { type } = SATELLITE_GROUP_TYPES[group]
 				const response = await fetch(SATELLITE_TLE_URL + type, { signal })
 
 				if (response.ok) {

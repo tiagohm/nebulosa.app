@@ -6,11 +6,11 @@ import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/temporal'
-import { memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
+import { Activity, memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
 import { type BodyPosition, EMPTY_TWILIGHT, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { AsteroidMolecule, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, SunMolecule } from '@/molecules/skyatlas'
+import { AsteroidMolecule, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, type SkyAtlasTab, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { formatDistance, formatSkyObjectName, formatSkyObjectType } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
@@ -41,26 +41,24 @@ export const SkyAtlas = memo(() => {
 		<>
 			<Modal footer={Footer} header={<Header />} id='sky-atlas' maxWidth='450px' onHide={atlas.hide}>
 				<div className='mt-0 flex flex-col gap-2'>
-					<Tabs classNames={{ base: 'absolute left-[-2px] top-[8px] z-1', panel: 'w-full pt-0' }} isVertical onSelectionChange={(value) => (atlas.state.tab = value as never)} selectedKey={tab}>
-						<Tab key='sun' title={<Icons.Sun />}>
-							<SunTab />
-						</Tab>
-						<Tab key='moon' title={<Icons.Moon />}>
-							<MoonTab />
-						</Tab>
-						<Tab key='planet' title={<Icons.Planet />}>
-							<PlanetTab />
-						</Tab>
-						<Tab key='asteroid' title={<Icons.Meteor />}>
-							<AsteroidTab />
-						</Tab>
-						<Tab key='galaxy' title={<Icons.Galaxy />}>
-							<GalaxyTab />
-						</Tab>
-						<Tab key='satellite' title={<Icons.Satellite />}>
-							<SatelliteTab />
-						</Tab>
-					</Tabs>
+					<Activity mode={tab === 'sun' ? 'visible' : 'hidden'}>
+						<SunTab />
+					</Activity>
+					<Activity mode={tab === 'moon' ? 'visible' : 'hidden'}>
+						<MoonTab />
+					</Activity>
+					<Activity mode={tab === 'planet' ? 'visible' : 'hidden'}>
+						<PlanetTab />
+					</Activity>
+					<Activity mode={tab === 'asteroid' ? 'visible' : 'hidden'}>
+						<AsteroidTab />
+					</Activity>
+					<Activity mode={tab === 'galaxy' ? 'visible' : 'hidden'}>
+						<GalaxyTab />
+					</Activity>
+					<Activity mode={tab === 'satellite' ? 'visible' : 'hidden'}>
+						<SatelliteTab />
+					</Activity>
 				</div>
 			</Modal>
 			{location.show && <Location coordinate={request.location} id='location-atlas' onClose={atlas.hideLocation} onCoordinateChange={atlas.updateLocation} />}
@@ -75,7 +73,10 @@ const Header = memo(() => {
 
 	return (
 		<div className='flex flex-row items-center justify-between'>
-			<span>Sky Atlas</span>
+			<div className='flex justify-center items-center gap-2'>
+				<span>Sky Atlas</span>
+				<TabPopover />
+			</div>
 			<div className='flex-1 flex justify-center items-center gap-2'>
 				<TimeBar key={`${time.utc}${time.offset}`} />
 				<Tooltip content='Location' placement='bottom' showArrow>
@@ -92,12 +93,81 @@ const Header = memo(() => {
 						</div>
 					</Tooltip>
 					<PopoverContent>
-						{tab === 'planet' && <PlanetFilter />}
-						{tab === 'galaxy' && <GalaxyFilter />}
-						{tab === 'satellite' && <SatelliteFilter />}
+						<Activity mode={tab === 'planet' ? 'visible' : 'hidden'}>
+							<PlanetFilter />
+						</Activity>
+						<Activity mode={tab === 'galaxy' ? 'visible' : 'hidden'}>
+							<GalaxyFilter />
+						</Activity>
+						<Activity mode={tab === 'satellite' ? 'visible' : 'hidden'}>
+							<SatelliteFilter />
+						</Activity>
 					</PopoverContent>
 				</Popover>
 			)}
+		</div>
+	)
+})
+
+const TAB_ICONS = {
+	sun: Icons.Sun,
+	moon: Icons.Moon,
+	planet: Icons.Planet,
+	asteroid: Icons.Meteor,
+	galaxy: Icons.Galaxy,
+	satellite: Icons.Satellite,
+} as const
+
+const TABS = Object.keys(TAB_ICONS) as SkyAtlasTab[]
+
+const TabPopover = memo(() => {
+	const [isOpen, setOpen] = useState(false)
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { tab } = useSnapshot(atlas.state)
+
+	const handleOnTabSelect = useCallback((tab: SkyAtlasTab) => {
+		atlas.state.tab = tab
+	}, [])
+
+	const handleOnWheel = useCallback(
+		(event: React.WheelEvent) => {
+			if (event.deltaY === 0) return
+			const index = event.deltaY < 0 ? (TABS.indexOf(tab) + 1) % TABS.length : (TABS.indexOf(tab) + TABS.length - 1) % TABS.length
+			handleOnTabSelect(TABS[index])
+		},
+		[tab],
+	)
+
+	return (
+		<Popover isOpen={isOpen} onOpenChange={setOpen} placement='bottom' showArrow>
+			<Tooltip className='capitalize' content={tab} placement='bottom' showArrow>
+				<div className='max-w-fit'>
+					<PopoverTrigger>
+						<IconButton color='default' icon={TAB_ICONS[tab]} onWheel={handleOnWheel} />
+					</PopoverTrigger>
+				</div>
+			</Tooltip>
+			<PopoverContent>
+				<TabPopoverContent onTabSelect={handleOnTabSelect} />
+			</PopoverContent>
+		</Popover>
+	)
+})
+
+interface TabPopoverContentProps {
+	readonly onTabSelect: (tab: SkyAtlasTab) => void
+}
+
+const TabPopoverContent = memo(({ onTabSelect }: TabPopoverContentProps) => {
+	return (
+		<div className='inline-flex flex-row gap-2'>
+			{Object.entries(TAB_ICONS).map(([key, icon]) => {
+				return (
+					<Tooltip className='capitalize' content={key} key={key} placement='bottom' showArrow>
+						<IconButton icon={icon} onPointerUp={() => onTabSelect(key as never)} />
+					</Tooltip>
+				)
+			})}
 		</div>
 	)
 })
@@ -111,7 +181,7 @@ const SunTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='ml-11 relative min-h-[200px] max-h-[240px] col-span-full flex justify-center items-center'>
+			<div className='relative min-h-[200px] max-h-[240px] col-span-full flex justify-center items-center'>
 				<Sun onSourceChange={(source) => (sun.state.source = source)} source={source} />
 				<div className='absolute top-auto left-0 p-0 text-xs'>
 					<SolarEclipses />
@@ -165,7 +235,7 @@ const MoonTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='ml-11 relative min-h-[200px] max-h-[240px] col-span-full flex justify-center items-center'>
+			<div className='relative min-h-[200px] max-h-[240px] col-span-full flex justify-center items-center'>
 				<Moon />
 				<div className='absolute top-auto left-0 p-0 text-xs'>
 					<LunarEclipses />
@@ -257,7 +327,7 @@ const PlanetTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<Listbox className='pl-10 relative min-h-[200px] max-h-[240px] col-span-full' classNames={{ base: 'w-full', list: 'max-h-[190px] overflow-scroll' }} items={items} onAction={(key) => planet.select(key as never)} selectionMode='none'>
+			<Listbox className='relative min-h-[200px] max-h-[240px] col-span-full' classNames={{ base: 'w-full', list: 'max-h-[190px] overflow-scroll' }} items={items} onAction={(key) => planet.select(key as never)} selectionMode='none'>
 				{(planet) => (
 					<ListboxItem description={planet.type} key={planet.code}>
 						<span className='flex flex-row items-center justify-between'>
@@ -293,7 +363,7 @@ const AsteroidTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='pl-10 relative min-h-[200px] max-h-[240px] col-span-full flex flex-col gap-2'>
+			<div className='relative min-h-[200px] max-h-[240px] col-span-full flex flex-col gap-2'>
 				<Tabs className='w-full' classNames={{ panel: 'py-0' }} onSelectionChange={(value) => (asteroid.state.tab = value as never)} selectedKey={tab}>
 					<Tab key='search' title='Search'>
 						<AsteroidSearchTab />
@@ -383,7 +453,7 @@ const GalaxyTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<Table className='pl-11 relative min-h-[200px] max-h-[240px] col-span-full' onRowAction={(key) => galaxy.select(+(key as never))} onSortChange={(value) => galaxy.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
+			<Table className='relative min-h-[200px] max-h-[240px] col-span-full' onRowAction={(key) => galaxy.select(+(key as never))} onSortChange={(value) => galaxy.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
 				<TableHeader>
 					<TableColumn key='name'>Name</TableColumn>
 					<TableColumn allowsSorting className='text-center' key='magnitude'>
@@ -431,7 +501,7 @@ const SatelliteTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center relative'>
-			<Table className='pl-11 relative min-h-[200px] max-h-[240px] col-span-full' onRowAction={(key) => satellite.select(+(key as never))} removeWrapper selectionMode='single'>
+			<Table className='relative min-h-[200px] max-h-[240px] col-span-full' onRowAction={(key) => satellite.select(+(key as never))} removeWrapper selectionMode='single'>
 				<TableHeader>
 					<TableColumn className='text-center' key='id'>
 						ID

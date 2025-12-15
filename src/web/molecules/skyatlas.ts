@@ -12,9 +12,11 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 
+export type SkyAtlasTab = 'sun' | 'moon' | 'planet' | 'asteroid' | 'galaxy' | 'satellite'
+
 export interface SkyAtlasState {
 	show: boolean
-	tab: 'sun' | 'moon' | 'planet' | 'asteroid' | 'galaxy' | 'satellite'
+	tab: SkyAtlasTab
 	twilight?: Twilight
 	readonly request: LocationAndTime
 	readonly sun: SunState

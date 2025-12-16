@@ -6,7 +6,7 @@ import { type Image, type ImageFormat, isImage, readImageFromBuffer, readImageFr
 import { adf, histogram } from 'nebulosa/src/image.computation'
 import { debayer, horizontalFlip, invert, scnr, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import { fileHandleSink } from 'nebulosa/src/io'
-import type { PlateSolution } from 'nebulosa/src/platesolver'
+import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/platesolver'
 import { spaceMotion, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
 import { Wcs } from 'nebulosa/src/wcs'
@@ -220,6 +220,7 @@ export class ImageProcessor {
 				headers: image.header,
 				rightAscension: rightAscensionKeyword(image.header, undefined),
 				declination: declinationKeyword(image.header, undefined),
+				solution: plateSolutionFrom(image.header),
 			}
 
 			item = { output, info, transformed, path: saveAt }

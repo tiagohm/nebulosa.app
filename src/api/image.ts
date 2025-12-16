@@ -1,4 +1,5 @@
 import Elysia from 'elysia'
+import { existsSync, unlinkSync } from 'fs'
 import fs from 'fs/promises'
 import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, type Fits, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
@@ -15,7 +16,7 @@ import type { JpegOptions, OutputInfo, PngOptions, WebpOptions } from 'sharp'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
-import type { AnnotatedSkyObject, AnnotateImage, ImageCoordinateInterpolation, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
+import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageCoordinateInterpolation, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
 import type { NotificationHandler } from './notification'
 
@@ -75,8 +76,9 @@ export class ImageProcessor {
 	private readonly transformed = new Map<string, ImageProcessorItem<TransformedImageItem>>()
 	private readonly exported = new Map<string, ImageProcessorItem<ExportedImageItem>>()
 	private readonly discarded = new Set<string>()
+	private readonly discardOnExit = new Set<string>()
 
-	save(bytes: Buffer, path: string) {
+	save(bytes: Buffer, path: string, removeOnExit: boolean = false) {
 		const item: BufferedImageItem = { buffer: bytes, path }
 		this.buffered.set(path, { date: Date.now(), item })
 
@@ -92,6 +94,10 @@ export class ImageProcessor {
 				this.discarded.add(value.item.path)
 				this.exported.delete(key)
 			}
+		}
+
+		if (removeOnExit) {
+			this.discardOnExit.add(path)
 		}
 
 		console.info('buffered image at', path)
@@ -262,19 +268,12 @@ export class ImageProcessor {
 		return `${path}:${transformation.format}:${hash}`
 	}
 
-	async cleanUp() {
+	async clear(path?: string) {
 		const now = Date.now()
 		let deleted = this.discarded.size > 0
 
-		async function unlink(path: string) {
-			if (path && (await fs.exists(path))) {
-				await fs.unlink(path)
-				console.info('unlinked image at', path)
-			}
-		}
-
 		for (const [key, value] of this.exported) {
-			if (now - value.date >= 60000) {
+			if (key === path || value.item.path === path || value.item.transformed.buffered.path === path || now - value.date >= 60000) {
 				this.exported.delete(key)
 				this.discarded.add(value.item.path)
 				deleted = true
@@ -282,11 +281,25 @@ export class ImageProcessor {
 		}
 
 		for (const [key, value] of this.transformed) {
-			if (now - value.date >= 60000) {
+			if (key === path || value.item.buffered.path === path || now - value.date >= 60000) {
 				this.transformed.delete(key)
 				console.info('deleted transformed image at', value.item.buffered.path)
 				deleted = true
 			}
+		}
+
+		if (path && this.discardOnExit.has(path)) {
+			for (const [key, value] of this.buffered) {
+				if (key === path || value.item.path === path) {
+					this.buffered.delete(key)
+					this.discarded.add(value.item.path)
+					console.info('deleted buffered image at', value.item.path)
+					deleted = true
+				}
+			}
+
+			this.discarded.add(path)
+			this.discardOnExit.delete(path)
 		}
 
 		if (deleted) {
@@ -297,6 +310,22 @@ export class ImageProcessor {
 			}
 
 			this.discarded.clear()
+		}
+	}
+
+	clearOnExit() {
+		console.info('clear on exit')
+
+		function unlink(path?: string) {
+			path && existsSync(path) && unlinkSync(path)
+		}
+
+		for (const value of this.exported.values()) {
+			unlink(value.item.path)
+		}
+
+		for (const path of this.discardOnExit) {
+			unlink(path)
 		}
 	}
 }
@@ -311,6 +340,10 @@ export class ImageHandler {
 		if (!req.path) return undefined
 		const item = await this.processor.export(req.path, req.transformation)
 		return item?.info
+	}
+
+	close(req: CloseImage) {
+		return this.processor.clear(req.id)
 	}
 
 	async readAndTransformImageFromFits(fits: Fits, transformation: ImageTransformation, realPath: string, savePath?: string) {
@@ -515,6 +548,7 @@ export function image(image: ImageHandler) {
 
 			return Bun.file(info.path)
 		})
+		.post('/close', ({ body }) => image.close(body as never))
 		.post('/save', ({ body }) => image.save(body as never))
 		.post('/annotate', ({ body }) => image.annotate(body as never))
 		.post('/coordinateinterpolation', ({ body }) => image.coordinateInterpolation(body as never))
@@ -523,4 +557,11 @@ export function image(image: ImageHandler) {
 		.get('/fovtelescopes', () => fovTelescopes)
 
 	return app
+}
+
+async function unlink(path: string) {
+	if (path && (await fs.exists(path))) {
+		await fs.unlink(path)
+		console.info('unlinked image at', path)
+	}
 }

@@ -13,6 +13,7 @@ export interface FramingState {
 	loading: boolean
 	openNewImage: boolean
 	images: Image[]
+	count: number
 }
 
 const state = proxy<FramingState>({
@@ -21,9 +22,12 @@ const state = proxy<FramingState>({
 	loading: false,
 	openNewImage: false,
 	images: [],
+	count: 0,
 })
 
 initProxy(state, 'framing', ['p:show', 'o:request', 'p:openNewImage'])
+
+const ID = Date.now()
 
 export const FramingMolecule = molecule(() => {
 	const workspace = use(ImageWorkspaceMolecule)
@@ -54,12 +58,12 @@ export const FramingMolecule = molecule(() => {
 	async function load() {
 		try {
 			state.loading = true
-			state.request.id = state.openNewImage ? state.images.length : DEFAULT_FRAMING.id
+			state.request.id = `${ID}.${state.openNewImage ? state.count++ : DEFAULT_FRAMING.id}`
 
 			const frame = await Api.Framing.frame(state.request)
 
 			if (frame) {
-				const image = workspace.add(frame.path, state.request.id.toFixed(0), 'framing')
+				const image = workspace.add(frame.path, state.request.id, 'framing')
 				const index = state.images.findIndex((e) => e.key === image.key)
 				index >= 0 ? (state.images[index] = image) : state.images.push(image)
 			}

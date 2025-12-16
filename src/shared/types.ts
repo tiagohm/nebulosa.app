@@ -353,7 +353,7 @@ export interface FileSystem {
 // Framing
 
 export interface Framing extends EquatorialCoordinate<string> {
-	id: number
+	id: string
 	hipsSurvey: string
 	width: number
 	height: number
@@ -414,6 +414,10 @@ export interface OpenImage {
 	readonly camera?: string
 	readonly transformation: ImageTransformation
 	readonly statistics?: Pick<StatisticImage, 'bits' | 'area' | 'transformed'>
+}
+
+export interface CloseImage {
+	readonly id: string
 }
 
 export interface SaveImage extends OpenImage {
@@ -840,7 +844,7 @@ export const DEFAULT_PLATE_SOLVE_START: PlateSolveStart = {
 }
 
 export const DEFAULT_FRAMING: Framing = {
-	id: 0,
+	id: '0',
 	hipsSurvey: 'CDS/P/DSS2/color',
 	rightAscension: '00 00 00.00',
 	declination: '+00 00 00.00',

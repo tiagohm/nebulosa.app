@@ -539,7 +539,6 @@ export class AtlasHandler {
 		const q = `SELECT DISTINCT s.id, s.name, s.name as line1, s.line2, s.line3 FROM satellites s ${joinWhere.length > 1 ? `JOIN satelliteGroups sg ON ${joinWhere.join(' AND ')}` : ''} ${where.join(' AND ')} ORDER BY s.${sort.column ?? 'name'} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
 		const satellites = SATELLITES.query<Satellite, []>(q).all()
 		satellites.forEach((s) => (s.groups = SATELLITES.query<never, []>(`SELECT sg.name FROM satelliteGroups sg WHERE sg.satelliteId = ${s.id}`).values().flat() as never))
-		console.info(satellites)
 		return satellites
 	}
 

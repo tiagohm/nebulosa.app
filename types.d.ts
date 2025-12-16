@@ -4,7 +4,6 @@ declare module 'bun' {
 		tmpDir: string
 		appDir: string
 		capturesDir: string
-		framingDir: string
 		satellitesDir: string
 		host?: string
 		port?: `${number}`

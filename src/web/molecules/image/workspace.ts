@@ -3,6 +3,7 @@ import type { Camera } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { Atom, CameraCaptureEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
+import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import type { Image } from '@/shared/types'
 import { EquipmentMolecule } from '../indi/equipment'
@@ -86,6 +87,10 @@ export const ImageWorkspaceMolecule = molecule(() => {
 			state.images.splice(index, 1)
 			viewers.delete(image.key)
 			bus.emit('image:remove', image)
+
+			if (!image.camera) {
+				void Api.Image.close({ id: image.path })
+			}
 		}
 	}
 

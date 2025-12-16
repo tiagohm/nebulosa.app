@@ -152,7 +152,7 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 		this.listeners.set(name, Date.now())
 	}
 
-	cleanUp() {
+	clear() {
 		const now = Date.now()
 
 		for (const [name, ping] of this.listeners) {

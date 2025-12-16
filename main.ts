@@ -2,6 +2,7 @@ import { basicAuth } from '@eelkevdbos/elysia-basic-auth'
 import { cors } from '@elysiajs/cors'
 import { cron } from '@elysiajs/cron'
 import Elysia from 'elysia'
+import exitHook from 'exit-hook'
 import type { MakeDirectoryOptions } from 'fs'
 import fs from 'fs/promises'
 import type { DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
@@ -92,20 +93,17 @@ if (process.platform === 'linux') {
 	Bun.env.tmpDir = checkDirAccess('/dev/shm')
 	Bun.env.appDir = appDir || join(Bun.env.homeDir, '.nebulosa')
 	Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
-	Bun.env.framingDir = join(Bun.env.appDir, 'framing')
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'satellites')
 } else if (process.platform === 'win32') {
 	Bun.env.tmpDir = checkDirAccess(os.tmpdir())
 	const documentsDir = appDir || join(checkDirAccess(Bun.env.homeDir, 'Documents'), 'Nebulosa')
 	Bun.env.appDir = appDir || join(checkDirAccess(Bun.env.homeDir, 'AppData', 'Local'), 'Nebulosa')
 	Bun.env.capturesDir = join(documentsDir, 'Captures')
-	Bun.env.framingDir = join(Bun.env.appDir, 'Framing')
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'Satellites')
 }
 
 await fs.mkdir(Bun.env.appDir, CREATE_RECURSIVE_DIRECTORY)
 await fs.mkdir(Bun.env.capturesDir, CREATE_RECURSIVE_DIRECTORY)
-await fs.mkdir(Bun.env.framingDir, CREATE_RECURSIVE_DIRECTORY)
 await fs.mkdir(Bun.env.satellitesDir, CREATE_RECURSIVE_DIRECTORY)
 
 console.info('app directory is located at', Bun.env.appDir)
@@ -207,6 +205,12 @@ void atlasHandler.refreshImageOfSun()
 void atlasHandler.refreshSatellites()
 void atlasHandler.refreshEarthOrientationData()
 
+// On Exit
+
+exitHook(() => {
+	imageProcessor.clearOnExit()
+})
+
 // App
 
 const app = new Elysia({
@@ -240,8 +244,8 @@ const app = new Elysia({
 			name: 'every-minute',
 			pattern: '0 */1 * * * *',
 			run: () => {
-				void imageProcessor.cleanUp()
-				indiDevicePropertyHandler.cleanUp()
+				void imageProcessor.clear()
+				indiDevicePropertyHandler.clear()
 			},
 		}),
 	)

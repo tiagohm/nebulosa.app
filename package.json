@@ -30,6 +30,7 @@
 		"bunshi": "2.2.0",
 		"clsx": "2.1.1",
 		"elysia": "1.4.19",
+		"exit-hook": "5.0.1",
 		"nebulosa": "github:tiagohm/nebulosa.ts",
 		"open": "11.0.0",
 		"react": "19.2.3",

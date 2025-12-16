@@ -212,7 +212,7 @@ void atlasHandler.refreshEarthOrientationData()
 const app = new Elysia({
 	serve: {
 		routes: {
-			'/*': homeHtml,
+			'/': homeHtml,
 		},
 		development: process.env.NODE_ENV !== 'production' && {
 			hmr: true,

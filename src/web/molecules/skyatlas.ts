@@ -584,7 +584,6 @@ const satelliteState = proxy<SatelliteState>({
 })
 
 initProxy(satelliteState, 'skyatlas.satellite', ['o:request'])
-satelliteState.request.lastId = 0
 satelliteState.request.time.utc = 0
 
 export const SatelliteMolecule = molecule(() => {
@@ -599,11 +598,17 @@ export const SatelliteMolecule = molecule(() => {
 
 	function update<K extends keyof SatelliteState['request']>(key: K, value: SatelliteState['request'][K]) {
 		state.request[key] = value
+
+		// Search again if page or sort has been changed
+		if (key === 'page' || key === 'sort') void search(false)
 	}
 
-	async function search() {
+	async function search(reset: boolean = true) {
 		try {
 			state.loading = true
+
+			if (reset) state.request.page = 1
+
 			const result = await Api.SkyAtlas.searchSatellite(state.request)
 			state.result = result ?? []
 		} finally {
@@ -611,7 +616,7 @@ export const SatelliteMolecule = molecule(() => {
 		}
 	}
 
-	function reset() {
+	function resetFilter() {
 		state.request.category = [...DEFAULT_SEARCH_SATELLITE.category]
 		state.request.groups = [...DEFAULT_SEARCH_SATELLITE.groups]
 	}
@@ -630,15 +635,12 @@ export const SatelliteMolecule = molecule(() => {
 
 	function next() {
 		if (state.result.length === 0) return
-		pages[state.page++] = state.result[0].id - 1
-		update('lastId', state.result[state.result.length - 1].id)
-		return search()
+		update('page', state.request.page + 1)
 	}
 
 	function prev() {
-		if (state.page <= 1) return
-		update('lastId', pages[--state.page])
-		return search()
+		if (state.request.page <= 1) return
+		update('page', state.request.page - 1)
 	}
 
 	async function updatePosition() {
@@ -679,7 +681,7 @@ export const SatelliteMolecule = molecule(() => {
 		}
 	}
 
-	return { state, update, search, reset, next, prev, select, tick } as const
+	return { state, update, search, resetFilter, next, prev, select, tick } as const
 })
 
 const state = proxy<SkyAtlasState>({

@@ -1,3 +1,4 @@
+import { Database } from 'bun:sqlite'
 import Elysia from 'elysia'
 import { deg, PARSE_HOUR_ANGLE, parseAngle, toDeg } from 'nebulosa/src/angle'
 import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astrometry'
@@ -41,10 +42,23 @@ const SATELLITE_TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?FORMAT=tl
 
 const IERSB_URL = 'https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now'
 
+const SATELLITES = new Database(':memory:')
+
+SATELLITES.run('PRAGMA journal_mode = OFF;')
+SATELLITES.run('PRAGMA synchronous = OFF;')
+SATELLITES.run('PRAGMA temp_store = MEMORY;')
+SATELLITES.run('PRAGMA locking_mode = EXCLUSIVE;')
+SATELLITES.run('PRAGMA cache_size = -262144;')
+SATELLITES.run('PRAGMA mmap_size = 0;')
+SATELLITES.run('PRAGMA automatic_index = ON;')
+SATELLITES.run('PRAGMA optimize;')
+SATELLITES.run('PRAGMA foreign_keys = OFF;')
+SATELLITES.run('CREATE TABLE satellites (id INTEGER PRIMARY KEY, name TEXT, line2 TEXT, line3 TEXT);') // line1 omitted because it's same as name
+SATELLITES.run('CREATE TABLE satelliteGroups (satelliteId INTEGER, name TEXT);')
+
 export class AtlasHandler {
 	private readonly ephemeris: Record<string, Map<number, BodyPosition>> & { location?: GeographicPosition } = {}
 	private readonly horizonsObserverTasks = new Map<string, Promise<CsvRow[]>>()
-	private satellites: Satellite[] = []
 
 	constructor(
 		readonly cache: CacheManager,
@@ -303,7 +317,8 @@ export class AtlasHandler {
 	}
 
 	searchSkyObject(req: SearchSkyObject) {
-		const offset = Math.max(0, (req.page ?? 0) - 1) * req.limit
+		const { page = 1, limit = 4 } = req
+		const offset = Math.max(0, page - 1) * limit
 		const where = []
 		const joinWhere = ['n.dsoId = d.id']
 
@@ -338,8 +353,7 @@ export class AtlasHandler {
 		if (!where.length) where.push('1 = 1')
 
 		const sortDirection = req.sort.direction === 'ascending' ? 'ASC' : 'DESC'
-
-		const q = `SELECT DISTINCT d.id, d.magnitude, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ${req.nameType >= 0 ? `AND n.type = ${req.nameType}` : 'ORDER BY n.type'} LIMIT 1) as name FROM dsos d ${joinWhere.length > 1 ? `JOIN names n ON ${joinWhere.join(' AND ')}` : ''} WHERE ${where.join(' AND ')} ORDER BY d.${req.sort.column} ${sortDirection} LIMIT ${req.limit} OFFSET ${offset}`
+		const q = `SELECT DISTINCT d.id, d.magnitude, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ${req.nameType >= 0 ? `AND n.type = ${req.nameType}` : 'ORDER BY n.type'} LIMIT 1) as name FROM dsos d ${joinWhere.length > 1 ? `JOIN names n ON ${joinWhere.join(' AND ')}` : ''} WHERE ${where.join(' AND ')} ORDER BY d.${req.sort.column} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
 
 		return nebulosa.query<SkyObjectSearchItem, []>(q).all()
 	}
@@ -418,7 +432,7 @@ export class AtlasHandler {
 
 		const groups = new Set(Object.keys(SATELLITE_GROUP_TYPES) as SatelliteGroupType[])
 		const now = Date.now()
-		const satellites = new Map<number, Satellite>()
+		const satellites = new Set<number>()
 
 		async function download(group: SatelliteGroupType) {
 			console.info(`downloading satellite TLE for group ${group}...`)
@@ -433,7 +447,7 @@ export class AtlasHandler {
 					const path = join(Bun.env.satellitesDir, `${now}.${group}.tle`)
 					await Bun.write(path, text)
 					groups.delete(group)
-					readTLE(text, group, false)
+					readTLE(text, group)
 					return true
 				}
 			} catch (e) {
@@ -443,7 +457,7 @@ export class AtlasHandler {
 			return false
 		}
 
-		const readTLE = (text: string, group: SatelliteGroupType, outOfDate: boolean) => {
+		const readTLE = (text: string, group: SatelliteGroupType) => {
 			const lines = text.split('\n')
 
 			for (let i = 0; i < lines.length - 2; i += 3) {
@@ -452,19 +466,21 @@ export class AtlasHandler {
 
 				if (a && b) {
 					const id = +a.substring(2, 7)
-					const satellite = satellites.get(id)
+					const satellite = satellites.has(id)
 
-					if (satellite) {
-						if (!satellite.groups.includes(group)) satellite.groups.push(group)
-					} else {
+					if (!satellite) {
 						const name = lines[i].trim()
-						satellites.set(id, { id, name, tle: { line1: name, line2: a, line3: b }, groups: [group], outOfDate })
+						SATELLITES.run('INSERT INTO satellites VALUES (?, ?, ?, ?)', [id, name, a, b])
+						satellites.add(id)
 					}
+
+					SATELLITES.run('INSERT INTO satelliteGroups VALUES (?, ?)', [id, group])
 				}
 			}
 		}
 
-		this.satellites.length = 0
+		SATELLITES.run('DELETE FROM satelliteGroups;')
+		SATELLITES.run('DELETE FROM satellites;')
 
 		// Update TLE files if older than 2 days
 
@@ -486,50 +502,58 @@ export class AtlasHandler {
 				const path = join(Bun.env.satellitesDir, `${date}.${group}.tle`)
 				const text = await Bun.file(path).text()
 				groups.delete(group)
-				readTLE(text, group, outOfDate)
+				readTLE(text, group)
 			}
 		}
 
 		// Create TLE files for missing groups
 
+		SATELLITES.run('BEGIN;')
+
 		for (const group of groups) {
 			await download(group)
 		}
 
-		console.info(`loaded ${satellites.size} satellites`)
+		SATELLITES.run('COMMIT;')
 
-		this.satellites = Array.from(satellites.values()).sort((a, b) => a.id - b.id)
+		console.info(`loaded ${satellites.size} satellites`)
 	}
 
 	searchSatellites(req: SearchSatellite) {
-		const { lastId, text, category, limit = 4 } = req
-		const search = text.trim().toUpperCase()
-		const groups = category.length === 0 ? [] : req.groups.filter((e) => category.includes(SATELLITE_GROUP_TYPES[e].category))
-		const noSearch = search.length === 0
+		const { text, category, page = 1, limit = 4, sort } = req
+		const offset = Math.max(0, page - 1) * limit
+		const name = text.trim().toUpperCase()
+		const searchGroups = category.length === 0 ? req.groups : req.groups.filter((e) => category.includes(SATELLITE_GROUP_TYPES[e].category))
 
-		let count = 0
+		const where = ['WHERE 1=1']
+		const joinWhere = ['sg.satelliteId = s.id']
 
-		function filter(e: Satellite) {
-			if (count >= limit) return false
-			const found = e.id > lastId && (noSearch || e.name.includes(search)) && groups.length && e.groups.some((e) => groups.includes(e))
-			if (found) count++
-			return found
-		}
+		if (name)
+			if (name.startsWith('=')) where.push(`s.name = '${name.substring(1).trim()}'`)
+			else if (name.includes('%')) where.push(`s.name LIKE '${name}'`)
+			else where.push(`s.name LIKE '%${name}%'`)
 
-		return this.satellites.filter(filter)
+		if (searchGroups.length) joinWhere.push(`sg.name IN (${searchGroups.map((e) => `'${e}'`).join(',')})`)
+
+		const sortDirection = req.sort.direction === 'ascending' ? 'ASC' : 'DESC'
+		const q = `SELECT DISTINCT s.id, s.name, s.name as line1, s.line2, s.line3 FROM satellites s ${joinWhere.length > 1 ? `JOIN satelliteGroups sg ON ${joinWhere.join(' AND ')}` : ''} ${where.join(' AND ')} ORDER BY s.${sort.column ?? 'name'} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
+		const satellites = SATELLITES.query<Satellite, []>(q).all()
+		satellites.forEach((s) => (s.groups = SATELLITES.query<never, []>(`SELECT sg.name FROM satelliteGroups sg WHERE sg.satelliteId = ${s.id}`).values().flat() as never))
+		console.info(satellites)
+		return satellites
 	}
 
 	positionOfSatellite(id: number, req: PositionOfBody) {
-		const index = binarySearchWithComparator(this.satellites, (e) => e.id - id)
-		if (index < 0) throw new Error(`satellite not found: ${id}`)
-		return this.computeFromHorizonsPositionAt(this.satellites[index], req)
+		const satellite = SATELLITES.query<Satellite, []>(`SELECT s.id, s.name as line1, s.line2, s.line3 FROM satellites s WHERE s.id = ${id}`).get()
+		if (!satellite) throw new Error(`satellite not found: ${id}`)
+		return this.computeFromHorizonsPositionAt(satellite, req)
 	}
 
 	chartOfSatellite(id: number, req: ChartOfBody) {
 		return this.computeChart(`TLE:${id}`, req.time)
 	}
 
-	async computeFromHorizonsPositionAt(input: string | Pick<Satellite, 'id' | 'tle'>, req: PositionOfBody) {
+	async computeFromHorizonsPositionAt(input: string | Omit<Satellite, 'name' | 'groups'>, req: PositionOfBody) {
 		const key = Math.trunc(temporalSet(req.time.utc, 0, 's') / 1000)
 		const id = typeof input === 'string' ? input : `TLE:${input.id}`
 		const location = this.cache.geographicCoordinate(req.location)
@@ -539,15 +563,14 @@ export class AtlasHandler {
 		let position = ephemeris?.get(key)
 
 		if (!ephemeris || !position || location !== this.ephemeris.location || !ephemeris.has(Math.trunc(startTime / 1000)) || !ephemeris.has(Math.trunc(endTime / 1000))) {
-			const code = typeof input === 'string' ? input : input.tle
 			const { longitude, latitude, elevation } = location
 
 			const taskId = `${id}${startTime}${endTime}${location.longitude}${location.latitude}${location.elevation}`
 			let horizonsObserverTask = this.horizonsObserverTasks.get(taskId)
 
 			if (!horizonsObserverTask) {
-				console.info(`fetching ephemeris for ${code} at time [${formatTemporal(startTime, undefined, 0)} - ${formatTemporal(endTime, undefined, 0)}] and location [${toDeg(latitude)}, ${toDeg(longitude)}, ${toMeter(elevation).toFixed(0)}]`)
-				horizonsObserverTask = observer(code, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1 })
+				console.info(`fetching ephemeris for ${input} at time [${formatTemporal(startTime, undefined, 0)} - ${formatTemporal(endTime, undefined, 0)}] and location [${toDeg(latitude)}, ${toDeg(longitude)}, ${toMeter(elevation).toFixed(0)}]`)
+				horizonsObserverTask = observer(input, 'coord', [longitude, latitude, elevation], startTime, endTime, HORIZONS_QUANTITIES, { stepSize: 1 })
 				this.horizonsObserverTasks.set(taskId, horizonsObserverTask)
 				const onCompleted = () => this.horizonsObserverTasks.delete(taskId)
 				horizonsObserverTask.then(onCompleted, onCompleted)

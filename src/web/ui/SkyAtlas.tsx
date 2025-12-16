@@ -496,17 +496,18 @@ const SatelliteTab = memo(() => {
 	const { twilight } = useSnapshot(atlas.state)
 
 	const satellite = useMolecule(SatelliteMolecule)
+	const { sort } = useSnapshot(satellite.state.request, { sync: true })
 	const { result, position, chart } = useSnapshot(satellite.state)
 	const { selected } = useSnapshot(satellite.state)
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center relative'>
-			<Table className='relative min-h-[200px] max-h-[240px] col-span-full' onRowAction={(key) => satellite.select(+(key as never))} removeWrapper selectionMode='single'>
+			<Table className='relative min-h-[200px] max-h-[240px] col-span-full' onRowAction={(key) => satellite.select(+(key as never))} onSortChange={(value) => satellite.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
 				<TableHeader>
-					<TableColumn className='text-center' key='id'>
+					<TableColumn allowsSorting className='text-center' key='id'>
 						ID
 					</TableColumn>
-					<TableColumn className='text-center' key='name'>
+					<TableColumn allowsSorting className='text-center' key='name'>
 						Name
 					</TableColumn>
 					<TableColumn className='text-center' key='group'>
@@ -531,9 +532,10 @@ const SatelliteTab = memo(() => {
 
 const SatellitePaginator = memo((props: React.HTMLAttributes<HTMLDivElement>) => {
 	const satellite = useMolecule(SatelliteMolecule)
-	const { loading, result, page } = useSnapshot(satellite.state)
+	const { page } = useSnapshot(satellite.state.request, { sync: true })
+	const { loading, result } = useSnapshot(satellite.state)
 
-	return <Paginator {...props} count={result.length} isReadonly loading={loading} onNext={satellite.next} onPrev={satellite.prev} page={page} />
+	return <Paginator {...props} count={result.length} loading={loading} onNext={satellite.next} onPrev={satellite.prev} page={page} />
 })
 
 interface PaginatorProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -549,7 +551,7 @@ function Paginator({ page, count, onPrev, onNext, loading = false, isReadonly = 
 	return (
 		<div {...props} className={clsx('flex flex-row items-center justify-center gap-3', className)}>
 			<IconButton color='secondary' icon={Icons.ChevronLeft} isDisabled={page <= 1 || loading} onPointerUp={onPrev} />
-			<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={loading} isReadOnly={isReadonly} minValue={1} size='sm' value={page} />
+			<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={loading || (page <= 1 && count < 4)} isReadOnly={isReadonly} minValue={1} size='sm' value={page} />
 			<IconButton color='secondary' icon={Icons.ChevronRight} isDisabled={count < 4 || loading} onPointerUp={onNext} />
 		</div>
 	)
@@ -788,10 +790,10 @@ const SatelliteFilter = memo(() => {
 			<SatelliteGroupTypeChipGroup category={category} className='col-span-full h-[200px]' onValueChange={(value) => satellite.update('groups', value)} value={groups} />
 			<div className='col-span-full flex flex-row items-center justify-center gap-2'>
 				<Tooltip content='Reset' placement='bottom' showArrow>
-					<IconButton color='danger' icon={Icons.Restore} isDisabled={loading} onPointerUp={satellite.reset} variant='flat' />
+					<IconButton color='danger' icon={Icons.Restore} isDisabled={loading} onPointerUp={satellite.resetFilter} variant='flat' />
 				</Tooltip>
 				<Tooltip content='Filter' placement='bottom' showArrow>
-					<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={satellite.search} variant='flat' />
+					<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={() => satellite.search()} variant='flat' />
 				</Tooltip>
 			</div>
 		</div>

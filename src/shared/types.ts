@@ -272,20 +272,19 @@ export interface SolarSeasons {
 
 export type LunarPhaseTime = readonly [LunarPhase, number]
 
-export interface Satellite {
+export interface Satellite extends ObserverWithTLE {
 	readonly id: number
 	readonly name: string
-	readonly groups: SatelliteGroupType[]
-	readonly tle: ObserverWithTLE
-	readonly outOfDate: boolean
+	groups: SatelliteGroupType[]
 }
 
 export interface SearchSatellite {
-	text: string
+	readonly text: string
 	groups: SatelliteGroupType[]
-	lastId: number
-	limit?: number
+	page: number
+	readonly limit?: number
 	category: SatelliteCategory[]
+	readonly sort: SortDescriptor
 }
 
 // Confirmation
@@ -1009,20 +1008,21 @@ export const DEFAULT_SEARCH_SATELLITE: SearchSatellite = {
 	text: '',
 	groups: ['AMATEUR', 'BEIDOU', 'GALILEO', 'GLONASS', 'GNSS', 'GPS', 'ONEWEB', 'SCIENCE', 'STARLINK', 'STATIONS', 'VISUAL'],
 	category: ['SPECIAL', 'WEATHER', 'COMMUNICATION', 'NAVIGATION', 'SCIENTIFIC'],
-	lastId: 0,
+	page: 1,
 	limit: 4,
+	sort: {
+		column: 'name',
+		direction: 'ascending',
+	},
 }
 
 export const DEFAULT_SATELLITE: Satellite = {
 	id: 0,
 	name: '',
 	groups: [],
-	tle: {
-		line1: '',
-		line2: '',
-		line3: '',
-	},
-	outOfDate: false,
+	line1: '',
+	line2: '',
+	line3: '',
 }
 
 export const DEFAULT_INDI_SERVER_START: Required<IndiServerStart> = {

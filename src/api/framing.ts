@@ -5,16 +5,21 @@ import { angularSizeOfPixel } from 'nebulosa/src/util'
 import { join } from 'path/posix'
 import hipsSurveys from '../../data/hips-surveys.json' with { type: 'json' }
 import type { Framing } from '../shared/types'
+import type { ImageProcessor } from './image'
 
 export class FramingHandler {
+	constructor(readonly processor: ImageProcessor) {}
+
 	async frame(req: Framing) {
 		const rightAscension = parseAngle(req.rightAscension, PARSE_HOUR_ANGLE) ?? 0
 		const declination = parseAngle(req.declination) ?? 0
 		req.fov = req.focalLength && req.pixelSize ? arcsec(angularSizeOfPixel(req.focalLength, req.pixelSize)) * Math.max(req.width, req.height) : deg(req.fov || 1)
 		req.rotation = deg(req.rotation)
 		const fits = await hips2Fits(req.hipsSurvey, rightAscension, declination, req)
+		const data = Buffer.from(await fits.arrayBuffer())
 		const path = join(Bun.env.framingDir, `${req.id}.fit`)
-		await Bun.write(path, fits)
+		this.processor.save(data, path)
+		void Bun.write(path, fits) // Don't wait for writing to file
 		return { path }
 	}
 }

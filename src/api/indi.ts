@@ -76,6 +76,16 @@ export class IndiHandler implements IndiClientHandler {
 
 	close(client: IndiClient, server: boolean) {
 		bus.emit('indi:close', client)
+
+		this.camera.close(client, server)
+		this.mount.close(client, server)
+		this.focuser.close(client, server)
+		this.wheel.close(client, server)
+		this.cover.close(client, server)
+		this.flatPanel.close(client, server)
+		this.guideOutput.close(client, server)
+		this.thermometer.close(client, server)
+		this.dewHeater.close(client, server)
 	}
 
 	vector(client: IndiClient, message: DefVector | SetVector, tag: string) {

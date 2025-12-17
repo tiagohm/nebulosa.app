@@ -1,6 +1,6 @@
 import { molecule, onMount } from 'bunshi'
 import bus, { unsubscribe } from 'src/shared/bus'
-import type { ConnectionStatus } from 'src/shared/types'
+import type { ConnectionEvent, ConnectionStatus } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { deepClone } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -68,7 +68,7 @@ export const ConnectionMolecule = molecule(() => {
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(2)
 
-		unsubscribers[0] = bus.subscribe<ConnectionStatus>('connection:close', (status) => {
+		unsubscribers[0] = bus.subscribe<ConnectionEvent>('connection:close', ({ status }) => {
 			if (state.connected?.id === status.id) {
 				state.connected = undefined
 			}

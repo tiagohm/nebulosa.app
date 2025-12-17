@@ -67,7 +67,7 @@ export const ImageViewer = memo(() => {
 			{selected?.key === image.key && <ImageInfo />}
 			<Interactable onGesture={handleGesture} onMouseMove={handleMouseMove} onPointerUp={handlePointerUp} onTap={viewer.select} ref={interactableRef} zIndex={image.position}>
 				<img className='image select-none touch-none pointer-events-none max-w-none shadow-[0_0_80px_black]' draggable={false} id={image.key} onLoad={viewer.handleOnLoad} ref={imgRef} />
-				<InteractableChildren />
+				<InteractableOverlay />
 			</Interactable>
 			{stretch.show && <ImageStretch />}
 			{solver.show && <PlateSolver />}
@@ -84,7 +84,7 @@ export const ImageViewer = memo(() => {
 	)
 })
 
-const InteractableChildren = memo(() => {
+const InteractableOverlay = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { crosshair, starDetection, annotation, mouseCoordinate } = useSnapshot(viewer.state)
 

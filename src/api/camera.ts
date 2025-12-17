@@ -94,19 +94,19 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 }
 
-export function camera(camera: CameraManager, capturer: CameraHandler, connection: ConnectionHandler) {
+export function camera(camera: CameraHandler, connection: ConnectionHandler) {
 	function cameraFromParams(params: { id: string }) {
-		return camera.get(decodeURIComponent(params.id))!
+		return camera.camera.get(decodeURIComponent(params.id))!
 	}
 
 	const app = new Elysia({ prefix: '/cameras' })
 		// Endpoints!
-		.get('', () => camera.list())
+		.get('', () => camera.camera.list())
 		.get('/:id', ({ params }) => cameraFromParams(params))
-		.post('/:id/cooler', ({ params, body }) => camera.cooler(connection.get(), cameraFromParams(params), body as never))
-		.post('/:id/temperature', ({ params, body }) => camera.temperature(connection.get(), cameraFromParams(params), body as never))
-		.post('/:id/start', ({ params, body }) => capturer.startCameraCapture(connection.get(), cameraFromParams(params), body as never))
-		.post('/:id/stop', ({ params }) => capturer.stopCameraCapture(connection.get(), cameraFromParams(params)))
+		.post('/:id/cooler', ({ params, body }) => camera.camera.cooler(connection.get(), cameraFromParams(params), body as never))
+		.post('/:id/temperature', ({ params, body }) => camera.camera.temperature(connection.get(), cameraFromParams(params), body as never))
+		.post('/:id/start', ({ params, body }) => camera.startCameraCapture(connection.get(), cameraFromParams(params), body as never))
+		.post('/:id/stop', ({ params }) => camera.stopCameraCapture(connection.get(), cameraFromParams(params)))
 
 	return app
 }

@@ -293,7 +293,7 @@ const app = new Elysia({
 	.use(connection(connectionHandler, indiHandler))
 	.use(confirmation(confirmationHandler))
 	.use(indi(indiHandler, indiServerHandler, indiDevicePropertyHandler, connectionHandler))
-	.use(camera(cameraManager, cameraHandler, connectionHandler))
+	.use(camera(cameraHandler, connectionHandler))
 	.use(mount(mountManager, mountRemoteControlHandler, connectionHandler))
 	.use(focuser(focuserManager, connectionHandler))
 	.use(wheel(wheelManager, connectionHandler))

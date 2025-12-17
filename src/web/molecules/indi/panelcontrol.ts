@@ -2,7 +2,7 @@ import { molecule, onMount, use } from 'bunshi'
 import type { NewVector } from 'nebulosa/src/indi'
 import type { Device, DeviceProperties, DeviceProperty } from 'nebulosa/src/indi.device'
 import bus, { unsubscribe } from 'src/shared/bus'
-import type { ConnectionStatus, IndiDevicePropertyEvent } from 'src/shared/types'
+import type { ConnectionEvent, IndiDevicePropertyEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { ConnectionMolecule } from '../connection'
@@ -31,7 +31,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(3)
 
-		unsubscribers[0] = bus.subscribe<ConnectionStatus>('connection:close', (status) => {
+		unsubscribers[0] = bus.subscribe<ConnectionEvent>('connection:close', ({ status }) => {
 			if (connection.state.connected?.id === status.id) {
 				state.devices = []
 				state.device = ''

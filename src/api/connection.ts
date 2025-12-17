@@ -63,8 +63,8 @@ export class ConnectionHandler {
 			if (client) {
 				const status = this.status(client)!
 
-				client.close()
 				this.clients.delete(id)
+				client.close()
 
 				this.wsm.send<ConnectionEvent>('connection:close', { status })
 
@@ -75,8 +75,8 @@ export class ConnectionHandler {
 				if (client === id) {
 					const status = this.status(client)!
 
-					client.close()
 					this.clients.delete(key)
+					client.close()
 
 					this.wsm.send<ConnectionEvent>('connection:close', { status })
 

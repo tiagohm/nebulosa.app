@@ -6,6 +6,7 @@ await build({
 	minify: true,
 	sourcemap: false,
 	target: 'bun',
+	env: 'APP_*',
 	compile: {
 		outfile: process.platform === 'win32' ? 'nebulosa.exe' : 'nebulosa.out',
 		autoloadBunfig: false,

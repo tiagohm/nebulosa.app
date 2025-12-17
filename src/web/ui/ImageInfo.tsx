@@ -9,7 +9,7 @@ import { Icons } from './Icon'
 
 export const ImageInfo = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
-	const { info, scale } = useSnapshot(viewer.state)
+	const { info, scale, angle } = useSnapshot(viewer.state)
 	const { visible: isMouseCoordinateVisible, interpolator } = useSnapshot(viewer.state.mouseCoordinate)
 	const { hover, selected } = useSnapshot(viewer.state.mouseCoordinate.coordinate)
 
@@ -23,6 +23,8 @@ export const ImageInfo = memo(() => {
 					{info.width}x{info.height}
 					<Icons.ZoomIn size={14} />
 					{scale.toFixed(2)}
+					<Icons.Restore size={14} />
+					{angle.toFixed(1)}°
 				</div>
 				{isMouseCoordinateVisible && interpolator && (
 					<>

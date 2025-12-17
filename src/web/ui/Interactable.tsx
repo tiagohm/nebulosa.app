@@ -1,9 +1,8 @@
 import { createUseGesture, dragAction, type GestureHandlers, pinchAction, wheelAction } from '@use-gesture/react'
-
-import { useLayoutEffect, useRef } from 'react'
+import { memo, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 import { preventDefault } from '@/shared/util'
 
-export type InteractType = 'drag' | 'pinch' | 'wheel'
+export type InteractType = 'drag' | 'pinch' | 'wheel' | 'none'
 
 export interface InteractTransform {
 	x: number
@@ -12,19 +11,60 @@ export interface InteractTransform {
 	angle: number
 }
 
+export interface InteractableMethods {
+	readonly resetZoom: () => void
+	readonly resetRotation: () => void
+	readonly center: () => void
+	readonly rotateTo: (angle: number) => void
+}
+
 export interface InteractableProps extends Omit<GestureHandlers, 'onDragStart' | 'onDrag' | 'onDragEnd' | 'onPinch' | 'onWheel'> {
 	readonly zIndex: number
-	readonly onGesture?: (transform: Readonly<InteractTransform>, type: InteractType, event: Event) => void
+	readonly onGesture?: (transform: Readonly<InteractTransform>, type: InteractType, event?: Event) => void
 	readonly onTap?: (tx: number, ty: number, x: number, y: number, event: React.PointerEvent<HTMLDivElement>) => void
-	readonly children: React.ReactNode[]
+	readonly ref?: React.Ref<InteractableMethods>
+	readonly children: React.ReactNode
 }
 
 // Better tree shaking with createUseGesture
 const useGesture = createUseGesture([dragAction, pinchAction, wheelAction])
 
-export function Interactable({ zIndex, children, onGesture, onTap, ...handlers }: InteractableProps) {
-	const ref = useRef<HTMLDivElement>(null)
+export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...handlers }: InteractableProps) => {
+	const wrapperRef = useRef<HTMLDivElement>(null)
 	const transformation = useRef<InteractTransform>({ x: 0, y: 0, scale: 1, angle: 0 })
+
+	useImperativeHandle(ref, () => {
+		return {
+			resetZoom: () => {
+				transformation.current.scale = 1
+				transform('none')
+			},
+			resetRotation: () => {
+				transformation.current.angle = 0
+				transform('none')
+			},
+			rotateTo: (angle) => {
+				transformation.current.angle = angle
+				transform('none')
+			},
+			center: () => {
+				const parent = wrapperRef.current?.parentElement
+
+				if (parent) {
+					const { clientWidth: ix, clientHeight: iy } = wrapperRef.current!
+
+					if (ix > 0 && iy > 0) {
+						const { clientWidth: px, clientHeight: py } = parent
+						const { scale } = transformation.current
+
+						transformation.current.x = ((px - ix) / 2) * scale
+						transformation.current.y = ((py - iy) / 2) * scale
+						transform('none')
+					}
+				}
+			},
+		}
+	}, [])
 
 	// Prevent default gesture events to avoid zooming on iOS devices
 	// This is necessary to ensure that pinch and drag gestures work as expected
@@ -41,10 +81,10 @@ export function Interactable({ zIndex, children, onGesture, onTap, ...handlers }
 		}
 	}, [])
 
-	function transform(type: InteractType, event: Event) {
-		if (ref.current) {
+	function transform(type: InteractType, event?: Event) {
+		if (wrapperRef.current) {
 			const { x, y, scale, angle } = transformation.current
-			ref.current.style.transform = `translate(${x}px, ${y}px) scale(${scale}) rotate(${angle}deg)`
+			wrapperRef.current.style.transform = `translate(${x}px, ${y}px) scale(${scale}) rotate(${angle}deg)`
 			onGesture?.(transformation.current, type, event)
 		}
 	}
@@ -64,16 +104,52 @@ export function Interactable({ zIndex, children, onGesture, onTap, ...handlers }
 		{
 			...handlers,
 			onDragStart: () => {
-				// Disable text selection during drag
+				// Disable text selection during drag event
 				document.body.style.userSelect = 'none'
 			},
-			onDrag: ({ event, pinching, cancel, offset, tap }) => {
+			onDrag: ({ event, pinching, cancel, delta, movement, offset, tap, memo }) => {
 				if (pinching || tap) return cancel()
 
-				transformation.current.x = offset[0]
-				transformation.current.y = offset[1]
+				const { scale } = transformation.current
+
+				if (memo === undefined) {
+					const offset = 32 / scale
+
+					const { clientWidth, clientHeight } = wrapperRef.current!
+					const { offsetX, offsetY } = event as PointerEvent
+
+					const isEdge =
+						(offsetX >= 0 && offsetX < offset && offsetY >= 0 && offsetY < offset) || // Top-Left
+						(offsetX <= clientWidth && offsetX > clientWidth - offset && offsetY >= 0 && offsetY < offset) || // Top-Right
+						(offsetX >= 0 && offsetX < offset && offsetY <= clientHeight && offsetY > clientHeight - offset) || // Bottom-Left
+						(offsetX <= clientWidth && offsetX > clientWidth - offset && offsetY <= clientHeight && offsetY > clientHeight - offset) // Bottom-Right
+
+					if (isEdge) {
+						memo = [offsetX, offsetY, true, transformation.current.angle]
+					}
+				}
+
+				if (memo !== undefined && memo[2] === true) {
+					const [x, y] = memo
+					const { clientWidth, clientHeight } = wrapperRef.current!
+					const cx = clientWidth / 2
+					const cy = clientHeight / 2
+					const v0x = x - cx
+					const v0y = y - cy
+					const v1x = x + movement[0] / scale - cx
+					const v1y = y + movement[1] / scale - cy
+					const cross = v0x * v1y - v0y * v1x
+					const dot = v0x * v1x + v0y * v1y
+					const angle = Math.atan2(cross, dot)
+					transformation.current.angle = Math.trunc((memo[3] + angle * (180 / Math.PI)) * 10) / 10 // multiple of 0.1x
+				} else {
+					transformation.current.x = offset[0]
+					transformation.current.y = offset[1]
+				}
 
 				transform('drag', event)
+
+				return memo
 			},
 			onDragEnd: () => {
 				// Re-enable text selection after dragging
@@ -81,7 +157,7 @@ export function Interactable({ zIndex, children, onGesture, onTap, ...handlers }
 			},
 			onPinch: ({ event, origin: [ox, oy], first, offset: [s, a], memo }) => {
 				if (first) {
-					const rect = ref.current!.getBoundingClientRect()
+					const rect = wrapperRef.current!.getBoundingClientRect()
 					const tx = ox - (rect.x + rect.width / 2)
 					const ty = oy - (rect.y + rect.height / 2)
 					memo = [transformation.current.x, transformation.current.y, tx, ty, s] // Store initial position and scale
@@ -103,7 +179,17 @@ export function Interactable({ zIndex, children, onGesture, onTap, ...handlers }
 				return memo
 			},
 			onWheel: ({ event, delta }) => {
-				const rect = ref.current!.getBoundingClientRect()
+				if (event.ctrlKey) return
+
+				if (event.shiftKey && delta[1]) {
+					const { angle } = transformation.current
+					const increment = event.altKey ? 0.1 : 1
+					transformation.current.angle = delta[1] < 0 ? (angle + increment) % 360 : (angle + 360 - increment) % 360
+					transform('wheel', event)
+					return
+				}
+
+				const rect = wrapperRef.current!.getBoundingClientRect()
 				const ox = event.clientX
 				const oy = event.clientY
 
@@ -127,7 +213,7 @@ export function Interactable({ zIndex, children, onGesture, onTap, ...handlers }
 			},
 		},
 		{
-			target: ref,
+			target: wrapperRef,
 			drag: {
 				from: () => [transformation.current.x, transformation.current.y],
 				pointer: { mouse: true }, // Enable mouse dragging
@@ -139,8 +225,8 @@ export function Interactable({ zIndex, children, onGesture, onTap, ...handlers }
 	)
 
 	return (
-		<div className='inline-block absolute wrapper cursor-crosshair active:cursor-grabbing' onPointerUp={handleTap} ref={ref} style={{ zIndex }}>
+		<div className='inline-block absolute wrapper cursor-crosshair active:cursor-grabbing' onPointerUp={handleTap} ref={wrapperRef} style={{ zIndex }}>
 			{children}
 		</div>
 	)
-}
+})

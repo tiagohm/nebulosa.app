@@ -15,6 +15,7 @@ import { CoordinateInterpolator } from '@/shared/coordinate-interpolation'
 import { initProxy } from '@/shared/proxy'
 import type { Image } from '@/shared/types'
 import { isMouseDeviceSupported } from '@/shared/util'
+import type { InteractableMethods } from '@/ui/Interactable'
 import { ImageWorkspaceMolecule } from './workspace'
 
 export interface CachedImage {
@@ -33,7 +34,7 @@ export interface ImageState {
 			selected: EquatorialCoordinate & Point & { show: boolean; distance: Angle }
 		}
 	}
-	rotation: number
+	angle: number
 	info?: ImageInfo
 	scale: number
 	readonly starDetection: {
@@ -135,7 +136,7 @@ const DEFAULT_IMAGE_STATE: ImageState = {
 			},
 		},
 	},
-	rotation: 0,
+	angle: 0,
 	scale: 1,
 	starDetection: {
 		show: false,
@@ -217,14 +218,16 @@ export const ImageViewerMolecule = molecule(() => {
 	const workspace = use(ImageWorkspaceMolecule)
 	const { key, camera } = scope.image
 
-	let target = document.getElementById(key) as HTMLImageElement | null
+	let target = document.getElementById(key) as HTMLImageElement | null | undefined
+	let interactable: InteractableMethods | undefined
+	let first = false
 
 	const state =
 		stateMap.get(key)?.state ??
 		proxy<ImageState>({
 			transformation: structuredClone(DEFAULT_IMAGE_STATE.transformation),
 			crosshair: false,
-			rotation: 0,
+			angle: 0,
 			mouseCoordinate: structuredClone(DEFAULT_IMAGE_STATE.mouseCoordinate),
 			scale: 1,
 			info: undefined,
@@ -258,7 +261,7 @@ export const ImageViewerMolecule = molecule(() => {
 
 		const imageKey = camera?.name || 'default'
 
-		unsubscribers[0] = initProxy(state, `image.${imageKey}`, ['o:transformation', 'p:crosshair', 'p:rotation'])
+		unsubscribers[0] = initProxy(state, `image.${imageKey}`, ['o:transformation', 'p:crosshair', 'p:angle'])
 		unsubscribers[1] = initProxy(state.starDetection, `image.${imageKey}.stardetection`, ['p:show', 'o:request'])
 		unsubscribers[2] = initProxy(state.solver, `image.${imageKey}.solver`, ['p:show', 'o:request'])
 		unsubscribers[3] = initProxy(state.settings, `image.${imageKey}.settings`, ['p:show', 'p:pixelated'])
@@ -431,8 +434,6 @@ export const ImageViewerMolecule = molecule(() => {
 
 			if (target) {
 				target.src = url
-				afterLoad()
-				bus.emit('image:load', scope.image)
 				console.info('image loaded', key, url, image.info)
 			} else {
 				console.warn('image not mounted yet', key)
@@ -474,9 +475,17 @@ export const ImageViewerMolecule = molecule(() => {
 		}
 	}
 
-	function afterLoad() {
-		apply()
-		resetStarDetection()
+	function handleOnLoad() {
+		if (!first) {
+			first = true
+
+			apply()
+			resetStarDetection()
+
+			bus.emit('image:load', scope.image)
+
+			interactable?.center()
+		}
 	}
 
 	function resetStarDetection() {
@@ -490,6 +499,14 @@ export const ImageViewerMolecule = molecule(() => {
 		}
 	}
 
+	function rotateTo(angle: number) {
+		interactable?.rotateTo(angle)
+	}
+
+	function resetRotation() {
+		interactable?.resetRotation()
+	}
+
 	function apply() {
 		if (!target) return
 		target.classList.toggle('pixelated', state.settings.pixelated)
@@ -501,12 +518,16 @@ export const ImageViewerMolecule = molecule(() => {
 		bringToFront(target)
 	}
 
-	function attach(node: HTMLImageElement | null) {
+	function attachImage(node: HTMLImageElement | null) {
 		if (node) {
 			target = node
 			void load(false)
 			select()
 		}
+	}
+
+	function attachInteractable(i: InteractableMethods) {
+		interactable = i
 	}
 
 	function detach() {
@@ -525,9 +546,11 @@ export const ImageViewerMolecule = molecule(() => {
 		adjustZIndexAfterBeRemoved()
 
 		workspace.state.selected = undefined
+		target = undefined
+		interactable = undefined
 	}
 
-	return { state, scope, realPath, handleInterpolatedCoordinate, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, toggleMouseCoordinate, attach, load, open, remove, detach, select, show, hide, apply }
+	return { state, scope, realPath, handleInterpolatedCoordinate, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, toggleMouseCoordinate, attachImage, attachInteractable, load, open, handleOnLoad, rotateTo, resetRotation, remove, detach, select, show, hide, apply } as const
 })
 
 function adjustZIndexAfterBeRemoved() {

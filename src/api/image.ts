@@ -2,8 +2,8 @@ import Elysia from 'elysia'
 import { existsSync, unlinkSync } from 'fs'
 import fs from 'fs/promises'
 import { eraPvstar } from 'nebulosa/src/erfa'
-import { declinationKeyword, type Fits, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
-import { type Image, type ImageFormat, isImage, readImageFromBuffer, readImageFromFits, readImageFromPath, type WriteImageToFormatOptions, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
+import { declinationKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
+import { type Image, type ImageFormat, readImageFromBuffer, readImageFromPath, type WriteImageToFormatOptions, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
 import { adf, histogram } from 'nebulosa/src/image.computation'
 import { debayer, horizontalFlip, invert, scnr, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import { fileHandleSink } from 'nebulosa/src/io'
@@ -344,114 +344,6 @@ export class ImageHandler {
 
 	close(req: CloseImage) {
 		return this.processor.clear(req.id)
-	}
-
-	async readAndTransformImageFromFits(fits: Fits, transformation: ImageTransformation, realPath: string, savePath?: string) {
-		if (fits) {
-			const image = await readImageFromFits(fits)
-
-			if (image) {
-				const id = Bun.randomUUIDv7()
-				const { format } = transformation
-				const path = savePath ?? join(Bun.env.tmpDir, `${id}.${format}`)
-				const output = await this.transformImageAndSave(image, path, transformation)
-
-				if (isImage(output)) {
-					return output
-				} else if (output) {
-					const info: ImageInfo = {
-						path,
-						realPath,
-						width: output.width,
-						height: output.height,
-						mono: output.channels === 1,
-						metadata: image.metadata,
-						transformation,
-						headers: image.header,
-						rightAscension: rightAscensionKeyword(image.header, undefined),
-						declination: declinationKeyword(image.header, undefined),
-					}
-
-					return info
-				} else if (savePath) {
-					return undefined
-				} else {
-					this.notification?.send({ body: 'Failed to generate image', severity: 'error' })
-				}
-			} else {
-				this.notification?.send({ body: 'Failed to read image from FITS', severity: 'error' })
-			}
-		} else {
-			this.notification?.send({ body: 'No image FITS found', severity: 'error' })
-		}
-	}
-
-	async transformImageAndSave(image: Image, path: string, transformation: ImageTransformation, format: ImageFormat = transformation.format) {
-		if (transformation.enabled && transformation.debayer) {
-			image = debayer(image) ?? image
-		}
-
-		if (transformation.enabled && transformation.horizontalMirror) {
-			image = horizontalFlip(image)
-		}
-		if (transformation.enabled && transformation.verticalMirror) {
-			image = verticalFlip(image)
-		}
-
-		if (transformation.enabled && transformation.scnr.channel) {
-			const { channel, amount, method } = transformation.scnr
-			image = scnr(image, channel, amount, method)
-		}
-
-		if (transformation.enabled) {
-			if (transformation.stretch.auto) {
-				const [midtone, shadow, highlight] = adf(image, undefined, transformation.stretch.meanBackground)
-
-				image = stf(image, midtone, shadow, highlight)
-
-				transformation.stretch.midtone = Math.trunc(midtone * 65536)
-				transformation.stretch.shadow = Math.trunc(shadow * 65536)
-				transformation.stretch.highlight = Math.trunc(highlight * 65536)
-			} else {
-				const { midtone, shadow, highlight } = transformation.stretch
-				image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536)
-			}
-		}
-
-		if (transformation.enabled && transformation.invert) {
-			image = invert(image)
-		}
-
-		if (!path) {
-			return image
-		}
-
-		// TODO: handle XISF format
-		if (format === 'fits' || format === 'xisf') {
-			const handle = await fs.open(path, 'w')
-			await using sink = fileHandleSink(handle)
-			await writeImageToFits(image, sink)
-			return undefined
-		}
-
-		const { adjustment, filter } = transformation
-
-		const hasAdjustment = transformation.enabled && adjustment.enabled
-		const hasFilter = transformation.enabled && filter.enabled
-
-		const options: WriteImageToFormatOptions = {
-			format: IMAGE_FORMAT_OPTIONS[format],
-			brightness: hasAdjustment ? adjustment.brightness : undefined,
-			contrast: hasAdjustment ? adjustment.contrast : undefined,
-			normalize: hasAdjustment ? adjustment.normalize : undefined,
-			gamma: hasAdjustment ? adjustment.gamma : undefined,
-			saturation: hasAdjustment ? adjustment.saturation : undefined,
-			sharpen: hasFilter && filter.sharpen,
-			blur: hasFilter && filter.blur,
-			median: hasFilter && filter.median,
-		}
-
-		return writeImageToFormat(image, path, format, options)
 	}
 
 	async save(req: SaveImage) {

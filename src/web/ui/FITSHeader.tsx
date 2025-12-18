@@ -2,17 +2,17 @@ import { Listbox, ListboxItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerMolecule } from '@/molecules/image/viewer'
+import { ImageHeaderMolecule } from '@/molecules/image/header'
 import { Modal } from './Modal'
 
 export const FITSHeader = memo(() => {
-	const viewer = useMolecule(ImageViewerMolecule)
-	const { info } = useSnapshot(viewer.state)
+	const header = useMolecule(ImageHeaderMolecule)
+	const { info } = useSnapshot(header.viewer.state)
 
 	if (!info) return null
 
 	return (
-		<Modal header='FITS Header' id={`fits-header-${viewer.scope.image.key}`} maxWidth='300px' onHide={() => viewer.hide('fitsHeader')}>
+		<Modal header='FITS Header' id={`fits-header-${header.scope.image.key}`} maxWidth='300px' onHide={header.hide}>
 			<div className='mt-0 px-1 py-2'>
 				<Listbox
 					isVirtualized

@@ -1,5 +1,6 @@
 import type { Camera } from 'nebulosa/src/indi.device'
-import type { Connect, ConnectionStatus } from 'src/shared/types'
+import type { PlateSolution } from 'nebulosa/src/platesolver'
+import type { Connect, ConnectionStatus, ImageInfo } from 'src/shared/types'
 
 export type FilePickerMode = 'file' | 'directory' | 'save'
 
@@ -18,6 +19,17 @@ export interface Image {
 	readonly path: string
 	readonly source: ImageSource
 	readonly camera?: Camera
+}
+
+export interface ImageLoaded {
+	readonly image: Image
+	readonly info: ImageInfo
+	readonly newImage: boolean
+}
+
+export interface ImageSolved {
+	readonly image: Image
+	readonly solution: PlateSolution
 }
 
 export const DEFAULT_CONNECTION: Connection = {

@@ -1,30 +1,61 @@
 import { molecule, onMount, use } from 'bunshi'
-import { unsubscribe } from 'src/shared/bus'
-import { ref, subscribe } from 'valtio'
+import bus, { unsubscribe } from 'src/shared/bus'
+import type { ImageHistogram, StatisticImage } from 'src/shared/types'
+import { proxy, ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { type ImageState, ImageViewerMolecule } from './viewer'
+import { initProxy } from '@/shared/proxy'
+import type { ImageLoaded } from '@/shared/types'
+import { ImageViewerMolecule } from './viewer'
+
+export interface ImageStatisticsState {
+	show: boolean
+	selected: number
+	readonly request: Pick<StatisticImage, 'bits' | 'area' | 'transformed'>
+	histogram: readonly ImageHistogram[]
+}
+
+const stateMap = new Map<string, ImageStatisticsState>()
 
 export const ImageStatisticsMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const state = viewer.state.statistics
+	const { key, camera } = viewer.scope.image
+
+	const state =
+		stateMap.get(key) ??
+		proxy<ImageStatisticsState>({
+			show: false,
+			selected: 0,
+			request: {
+				bits: 16,
+				transformed: true,
+			},
+			histogram: [],
+		})
+
+	stateMap.set(key, state)
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(3)
+		const unsubscribers = new Array<VoidFunction>(4)
 
-		unsubscribers[0] = subscribeKey(viewer.state, 'info', (info) => {
-			if (info && state.show) {
+		const storageKey = camera?.name || 'default'
+		unsubscribers[0] = initProxy(state, `image.${storageKey}.statistics`, ['p:show', 'o:request'])
+
+		unsubscribers[1] = bus.subscribe<ImageLoaded>('image:load', () => {
+			if (state.show) {
 				void compute()
+			} else if (state.histogram.length) {
+				state.histogram = []
 			}
 		})
 
-		unsubscribers[1] = subscribeKey(state, 'show', (show) => {
+		unsubscribers[2] = subscribeKey(state, 'show', (show) => {
 			if (show && state.histogram.length === 0) {
 				void compute()
 			}
 		})
 
-		unsubscribers[2] = subscribe(state.request, () => {
+		unsubscribers[3] = subscribe(state.request, () => {
 			void compute()
 		})
 
@@ -33,21 +64,21 @@ export const ImageStatisticsMolecule = molecule(() => {
 		}
 	})
 
-	function update<K extends keyof ImageState['statistics']['request']>(key: K, value: ImageState['statistics']['request'][K]) {
+	function update<K extends keyof ImageStatisticsState['request']>(key: K, value: ImageStatisticsState['request'][K]) {
 		state.request[key] = value
 	}
 
 	async function compute() {
-		const histogram = await Api.Image.statistics({ path: viewer.realPath(), transformation: viewer.state.transformation, camera: viewer.scope.image.camera?.name, ...state.request })
+		const histogram = await Api.Image.statistics({ path: viewer.path, transformation: viewer.state.transformation, camera: viewer.scope.image.camera?.name, ...state.request })
 		if (histogram) state.histogram = ref(histogram)
 	}
 
 	function show() {
-		viewer.show('statistics')
+		state.show = true
 	}
 
 	function hide() {
-		viewer.hide('statistics')
+		state.show = false
 	}
 
 	return { state, scope: viewer.scope, viewer, update, compute, show, hide } as const

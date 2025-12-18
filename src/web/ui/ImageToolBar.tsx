@@ -5,6 +5,8 @@ import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
 import { ImageFilterMolecule } from '@/molecules/image/filter'
+import { ImageHeaderMolecule } from '@/molecules/image/header'
+import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
 import { ImageSaveMolecule } from '@/molecules/image/save'
 import { ImageScnrMolecule } from '@/molecules/image/scnr'
 import { ImageSettingsMolecule } from '@/molecules/image/settings'
@@ -21,14 +23,17 @@ import { ToggleButton } from './ToggleButton'
 export const ImageToolBar = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { transformation, info } = useSnapshot(viewer.state)
-	const { solution } = useSnapshot(viewer.state.solver)
-	const { visible: isMouseCoordinateVisible } = useSnapshot(viewer.state.mouseCoordinate)
 
 	const save = useMolecule(ImageSaveMolecule)
 	const solver = useMolecule(ImageSolverMolecule)
 	const stretch = useMolecule(ImageStretchMolecule)
 	const settings = useMolecule(ImageSettingsMolecule)
 	const statistics = useMolecule(ImageStatisticsMolecule)
+	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
+	const header = useMolecule(ImageHeaderMolecule)
+
+	const { solution } = useSnapshot(solver.state)
+	const { visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
 
 	return (
 		<div className='pointer-events-none w-full fixed bottom-0 mb-1 p-1 z-99999'>
@@ -57,11 +62,11 @@ export const ImageToolBar = memo(() => {
 					<IconButton color='secondary' icon={Icons.Histogram} onPointerUp={statistics.show} variant='flat' />
 				</Tooltip>
 				<Tooltip content='FITS Header' placement='top' showArrow>
-					<IconButton color='secondary' icon={Icons.Text} onPointerUp={() => viewer.show('fitsHeader')} variant='flat' />
+					<IconButton color='secondary' icon={Icons.Text} onPointerUp={header.show} variant='flat' />
 				</Tooltip>
 				{solution?.scale && (
 					<Tooltip content='Mouse Coordinate' placement='top' showArrow>
-						<ToggleButton color='primary' icon={Icons.MousePointerClick} isSelected={isMouseCoordinateVisible} onPointerUp={viewer.toggleMouseCoordinate} />
+						<ToggleButton color='primary' icon={Icons.MousePointerClick} isSelected={isMouseCoordinateVisible} onPointerUp={mouseCoordinate.toggle} />
 					</Tooltip>
 				)}
 				<Tooltip content='Settings' placement='top' showArrow>
@@ -102,12 +107,13 @@ const RotatePopover = memo(() => {
 
 const OverlayPopover = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
-	const detection = useMolecule(StarDetectionMolecule)
+	const starDetection = useMolecule(StarDetectionMolecule)
+	const solver = useMolecule(ImageSolverMolecule)
 	const annotation = useMolecule(ImageAnnotationMolecule)
 	const { crosshair } = useSnapshot(viewer.state)
-	const { stars: detectedStars, visible: isDetectedStarsVisible } = useSnapshot(viewer.state.starDetection)
-	const { stars: annotatedStars, visible: isAnnotatedStarsVisible } = useSnapshot(viewer.state.annotation)
-	const { solution } = useSnapshot(viewer.state.solver)
+	const { stars: detectedStars, visible: isDetectedStarsVisible } = useSnapshot(starDetection.state)
+	const { stars: annotatedStars, visible: isAnnotatedStarsVisible } = useSnapshot(annotation.state)
+	const { solution } = useSnapshot(solver.state)
 
 	return (
 		<Popover placement='bottom' showArrow>
@@ -131,9 +137,9 @@ const OverlayPopover = memo(() => {
 					</div>
 					<div className='flex flex-col gap-2 justify-center'>
 						<Tooltip content='Star Detection' placement='top' showArrow>
-							<IconButton color='secondary' icon={Icons.Stars} onPointerUp={detection.show} variant='flat' />
+							<IconButton color='secondary' icon={Icons.Stars} onPointerUp={starDetection.show} variant='flat' />
 						</Tooltip>
-						{detectedStars.length > 0 && <Switch isSelected={isDetectedStarsVisible} onValueChange={detection.toggle} size='sm' />}
+						{detectedStars.length > 0 && <Switch isSelected={isDetectedStarsVisible} onValueChange={starDetection.toggle} size='sm' />}
 					</div>
 					<Tooltip content='ROI' placement='top' showArrow>
 						<IconButton color='secondary' icon={Icons.Box} variant='flat' />

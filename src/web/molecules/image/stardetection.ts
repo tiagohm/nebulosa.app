@@ -1,13 +1,69 @@
 import { addToast } from '@heroui/react'
-import { molecule, use } from 'bunshi'
+import { molecule, onMount, use } from 'bunshi'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
+import bus, { unsubscribe } from 'src/shared/bus'
+import { DEFAULT_STAR_DETECTION, type StarDetection } from 'src/shared/types'
+import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
+import { initProxy } from '@/shared/proxy'
+import type { ImageLoaded } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
+
+export interface StartDetectionState {
+	show: boolean
+	visible: boolean
+	loading: boolean
+	stars: readonly DetectedStar[]
+	selected?: DetectedStar
+	request: StarDetection
+	computed: {
+		hfd: number
+		snr: number
+		fluxMin: number
+		fluxMax: number
+	}
+}
+
+const stateMap = new Map<string, StartDetectionState>()
 
 export const StarDetectionMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const { key } = viewer.scope.image
-	const state = viewer.state.starDetection
+	const { key, camera } = viewer.scope.image
+
+	const state =
+		stateMap.get(key) ??
+		proxy<StartDetectionState>({
+			show: false,
+			visible: false,
+			loading: false,
+			stars: [],
+			request: structuredClone(DEFAULT_STAR_DETECTION),
+			computed: {
+				hfd: 0,
+				snr: 0,
+				fluxMin: 0,
+				fluxMax: 0,
+			},
+		})
+
+	stateMap.set(key, state)
+
+	onMount(() => {
+		const unsubscribers = new Array<VoidFunction>(2)
+
+		unsubscribers[0] = bus.subscribe<ImageLoaded>('image:load', ({ image, newImage }) => {
+			if (newImage && image.key === key) {
+				reset()
+			}
+		})
+
+		const storageKey = camera?.name || 'default'
+		unsubscribers[1] = initProxy(state, `image.${storageKey}.stardetection`, ['p:show', 'o:request'])
+
+		return () => {
+			unsubscribe(unsubscribers)
+		}
+	})
 
 	function toggle(enabled?: boolean) {
 		state.visible = enabled ?? !state.visible
@@ -17,7 +73,7 @@ export const StarDetectionMolecule = molecule(() => {
 		try {
 			state.loading = true
 
-			const request = { ...state.request, path: viewer.realPath() }
+			const request = { ...state.request, path: viewer.path }
 			const stars = await Api.StarDetection.detect(request)
 
 			if (!stars) return
@@ -67,13 +123,24 @@ export const StarDetectionMolecule = molecule(() => {
 		ctx?.drawImage(image, star.x - 8.5, star.y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
 	}
 
+	function reset() {
+		if (state.stars.length) {
+			state.stars = []
+			state.selected = undefined
+			state.computed.hfd = 0
+			state.computed.snr = 0
+			state.computed.fluxMin = 0
+			state.computed.fluxMax = 0
+		}
+	}
+
 	function show() {
-		viewer.show('starDetection')
+		state.show = true
 	}
 
 	function hide() {
-		viewer.hide('starDetection')
+		state.show = false
 	}
 
-	return { state, viewer, scope: viewer.scope, toggle, detect, select, show, hide } as const
+	return { state, viewer, scope: viewer.scope, toggle, detect, select, reset, show, hide } as const
 })

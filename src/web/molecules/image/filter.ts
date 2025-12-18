@@ -1,19 +1,48 @@
-import { molecule, use } from 'bunshi'
-import type { ImageTransformation } from 'src/shared/types'
+import { molecule, onMount, use } from 'bunshi'
+import type { ImageFilter } from 'src/shared/types'
+import { proxy } from 'valtio'
+import { initProxy } from '@/shared/proxy'
 import { ImageViewerMolecule } from './viewer'
+
+export interface ImageFilterState {
+	show: boolean
+	filter: ImageFilter
+}
+
+const stateMap = new Map<string, ImageFilterState>()
 
 export const ImageFilterMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const state = viewer.state.transformation.filter
+	const { key, camera } = viewer.scope.image
 
-	function update<K extends keyof ImageTransformation['filter']>(key: K, value: ImageTransformation['filter'][K]) {
-		state[key] = value
+	const state =
+		stateMap.get(key) ??
+		proxy<ImageFilterState>({
+			show: false,
+			filter: viewer.state.transformation.filter,
+		})
+
+	stateMap.set(key, state)
+
+	onMount(() => {
+		const storageKey = camera?.name || 'default'
+		const unsubscriber = initProxy(state, `image.${storageKey}.filter`, ['p:show'])
+
+		state.filter = viewer.state.transformation.filter
+
+		return () => {
+			unsubscriber()
+		}
+	})
+
+	function update<K extends keyof ImageFilter>(key: K, value: ImageFilter[K]) {
+		state.filter[key] = value
 	}
 
 	function reset() {
-		state.sharpen = false
-		state.blur = false
-		state.median = false
+		state.filter.sharpen = false
+		state.filter.blur = false
+		state.filter.median = false
 		return apply()
 	}
 
@@ -22,11 +51,11 @@ export const ImageFilterMolecule = molecule(() => {
 	}
 
 	function show() {
-		viewer.show('filter')
+		state.show = true
 	}
 
 	function hide() {
-		viewer.hide('filter')
+		state.show = false
 	}
 
 	return { state, scope: viewer.scope, viewer, update, reset, apply, show, hide } as const

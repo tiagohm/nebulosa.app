@@ -1,20 +1,11 @@
 import { createScope, molecule, onMount, use } from 'bunshi'
-import { type Angle, formatDEC, formatRA } from 'nebulosa/src/angle'
-import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
-import { numericKeyword } from 'nebulosa/src/fits'
-import type { ImageFormat } from 'nebulosa/src/image'
-import type { PlateSolution } from 'nebulosa/src/platesolver'
-import type { DetectedStar } from 'nebulosa/src/stardetector'
 import bus, { unsubscribe } from 'src/shared/bus'
-import { type AnnotatedSkyObject, DEFAULT_IMAGE_TRANSFORMATION, DEFAULT_PLATE_SOLVE_START, DEFAULT_STAR_DETECTION, type ImageHistogram, type ImageInfo, type ImageTransformation, type OpenImage, type PlateSolveStart, type Point, type StarDetection } from 'src/shared/types'
-import type { PickByValue } from 'utility-types'
+import { DEFAULT_IMAGE_TRANSFORMATION, type ImageInfo, type ImageTransformation } from 'src/shared/types'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
-import { CoordinateInterpolator } from '@/shared/coordinate-interpolation'
 import { initProxy } from '@/shared/proxy'
-import type { Image } from '@/shared/types'
-import { isMouseDeviceSupported } from '@/shared/util'
+import type { Image, ImageLoaded } from '@/shared/types'
 import type { InteractableMethods } from '@/ui/Interactable'
 import { ImageWorkspaceMolecule } from './workspace'
 
@@ -26,188 +17,21 @@ export interface CachedImage {
 export interface ImageState {
 	readonly transformation: ImageTransformation
 	crosshair: boolean
-	readonly mouseCoordinate: {
-		visible: boolean
-		interpolator?: CoordinateInterpolator
-		readonly coordinate: {
-			hover: EquatorialCoordinate & Point
-			selected: EquatorialCoordinate & Point & { show: boolean; distance: Angle }
-		}
-	}
 	angle: number
 	info?: ImageInfo
 	scale: number
-	readonly starDetection: {
-		show: boolean
-		visible: boolean
-		loading: boolean
-		stars: readonly DetectedStar[]
-		selected?: DetectedStar
-		request: StarDetection
-		computed: {
-			hfd: number
-			snr: number
-			fluxMin: number
-			fluxMax: number
-		}
-	}
-	readonly solver: {
-		show: boolean
-		loading: boolean
-		request: PlateSolveStart
-		solution?: PlateSolution
-	}
-	readonly scnr: {
-		show: boolean
-	}
-	readonly stretch: {
-		show: boolean
-	}
-	readonly adjustment: {
-		show: boolean
-	}
-	readonly filter: {
-		show: boolean
-	}
-	readonly annotation: {
-		show: boolean
-		visible: boolean
-		loading: boolean
-		stars: readonly AnnotatedSkyObject[]
-	}
-	readonly fitsHeader: {
-		show: boolean
-	}
-	readonly roi: {
-		show: boolean
-		x: number
-		y: number
-		width: number
-		height: number
-		rotation: number
-	}
-	readonly save: {
-		show: boolean
-		loading: boolean
-		path: string
-		format: ImageFormat
-		transformed: boolean
-	}
-	readonly settings: {
-		show: boolean
-		pixelated: boolean
-	}
-	readonly statistics: {
-		show: boolean
-		selected: number
-		readonly request: Exclude<OpenImage['statistics'], undefined>
-		histogram: readonly ImageHistogram[]
-	}
 }
 
 export interface ImageViewerScopeValue {
 	readonly image: Image
 }
 
-export const DEFAULT_IMAGE_SETTINGS: ImageState['settings'] = {
-	show: false,
-	pixelated: true,
-}
-
 const DEFAULT_IMAGE_STATE: ImageState = {
 	transformation: DEFAULT_IMAGE_TRANSFORMATION,
 	crosshair: false,
-	mouseCoordinate: {
-		visible: false,
-		coordinate: {
-			hover: {
-				rightAscension: 0,
-				declination: 0,
-				x: 0,
-				y: 0,
-			},
-			selected: {
-				show: false,
-				rightAscension: 0,
-				declination: 0,
-				x: 0,
-				y: 0,
-				distance: 0,
-			},
-		},
-	},
 	angle: 0,
 	scale: 1,
-	starDetection: {
-		show: false,
-		visible: false,
-		loading: false,
-		stars: [],
-		request: DEFAULT_STAR_DETECTION,
-		computed: {
-			hfd: 0,
-			snr: 0,
-			fluxMin: 0,
-			fluxMax: 0,
-		},
-	},
-	solver: {
-		show: false,
-		loading: false,
-		request: DEFAULT_PLATE_SOLVE_START,
-	},
-	scnr: {
-		show: false,
-	},
-	stretch: {
-		show: false,
-	},
-	adjustment: {
-		show: false,
-	},
-	filter: {
-		show: false,
-	},
-	annotation: {
-		show: false,
-		visible: false,
-		loading: false,
-		stars: [],
-	},
-	fitsHeader: {
-		show: false,
-	},
-	roi: {
-		show: false,
-		x: 0,
-		y: 0,
-		width: 0,
-		height: 0,
-		rotation: 0,
-	},
-	save: {
-		show: false,
-		loading: false,
-		path: '',
-		format: 'fits',
-		transformed: false,
-	},
-	settings: {
-		show: false,
-		pixelated: true,
-	},
-	statistics: {
-		show: false,
-		selected: 0,
-		request: {
-			bits: 16,
-			transformed: true,
-		},
-		histogram: [],
-	},
 }
-
-const isMousePresent = isMouseDeviceSupported()
 
 const stateMap = new Map<string, CachedImage>()
 
@@ -228,27 +52,8 @@ export const ImageViewerMolecule = molecule(() => {
 			transformation: structuredClone(DEFAULT_IMAGE_STATE.transformation),
 			crosshair: false,
 			angle: 0,
-			mouseCoordinate: structuredClone(DEFAULT_IMAGE_STATE.mouseCoordinate),
 			scale: 1,
 			info: undefined,
-			starDetection: {
-				...structuredClone(DEFAULT_IMAGE_STATE.starDetection),
-				request: structuredClone(DEFAULT_IMAGE_STATE.starDetection.request),
-			},
-			solver: {
-				...structuredClone(DEFAULT_IMAGE_STATE.solver),
-				request: structuredClone(DEFAULT_IMAGE_STATE.solver.request),
-			},
-			scnr: structuredClone(DEFAULT_IMAGE_STATE.scnr),
-			stretch: structuredClone(DEFAULT_IMAGE_STATE.stretch),
-			adjustment: structuredClone(DEFAULT_IMAGE_STATE.adjustment),
-			filter: structuredClone(DEFAULT_IMAGE_STATE.filter),
-			annotation: structuredClone(DEFAULT_IMAGE_STATE.annotation),
-			fitsHeader: structuredClone(DEFAULT_IMAGE_STATE.fitsHeader),
-			roi: structuredClone(DEFAULT_IMAGE_STATE.roi),
-			save: structuredClone(DEFAULT_IMAGE_STATE.save),
-			settings: structuredClone(DEFAULT_IMAGE_STATE.settings),
-			statistics: structuredClone(DEFAULT_IMAGE_STATE.statistics),
 		})
 
 	// Save the state in the cache
@@ -257,33 +62,14 @@ export const ImageViewerMolecule = molecule(() => {
 	let loading = false
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction | undefined>(12)
+		const unsubscribers = new Array<VoidFunction>(2)
 
 		const imageKey = camera?.name || 'default'
 
 		unsubscribers[0] = initProxy(state, `image.${imageKey}`, ['o:transformation', 'p:crosshair', 'p:angle'])
-		unsubscribers[1] = initProxy(state.starDetection, `image.${imageKey}.stardetection`, ['p:show', 'o:request'])
-		unsubscribers[2] = initProxy(state.solver, `image.${imageKey}.solver`, ['p:show', 'o:request'])
-		unsubscribers[3] = initProxy(state.settings, `image.${imageKey}.settings`, ['p:show', 'p:pixelated'])
-		unsubscribers[4] = initProxy(state.save, `image.${imageKey}.save`, ['p:show', 'p:format', 'p:path', 'p:transformed'])
-		unsubscribers[5] = initProxy(state.scnr, `image.${imageKey}.scnr`, ['p:show'])
-		unsubscribers[6] = initProxy(state.adjustment, `image.${imageKey}.adjustment`, ['p:show'])
-		unsubscribers[7] = initProxy(state.filter, `image.${imageKey}.filter`, ['p:show'])
-		unsubscribers[8] = initProxy(state.stretch, `image.${imageKey}.stretch`, ['p:show'])
-		unsubscribers[9] = initProxy(state.fitsHeader, `image.${imageKey}.fitsheader`, ['p:show'])
-		unsubscribers[10] = initProxy(state.statistics, `image.${imageKey}.statistics`, ['p:show', 'o:request'])
 
-		unsubscribers[11] = subscribeKey(state.mouseCoordinate, 'visible', async (enabled) => {
-			if (enabled && !state.mouseCoordinate.interpolator && state.solver.solution?.scale) {
-				const coordinateInterpolation = await Api.Image.coordinateInterpolation(state.solver.solution)
-
-				if (coordinateInterpolation) {
-					const { ma, md, x0, y0, x1, y1, delta } = coordinateInterpolation
-					state.mouseCoordinate.interpolator = ref(new CoordinateInterpolator(ma, md, x0, y0, x1, y1, delta))
-				} else {
-					return
-				}
-			}
+		unsubscribers[1] = subscribeKey(state.transformation, 'format', () => {
+			void load(true)
 		})
 
 		return () => {
@@ -293,47 +79,6 @@ export const ImageViewerMolecule = molecule(() => {
 
 	function realPath() {
 		return state.info?.realPath || scope.image.path
-	}
-
-	function handleInterpolatedCoordinate(x: number, y: number, clicked: boolean = false) {
-		const { interpolator, coordinate } = state.mouseCoordinate
-
-		if (interpolator) {
-			// Is pointer up event?
-			if (clicked) {
-				if (coordinate.selected.show) {
-					const d = Math.hypot(x - coordinate.selected.x, y - coordinate.selected.y)
-
-					// Unselect if inside selected coordinate radius
-					if (d <= 8) {
-						coordinate.selected.show = false
-						return
-					}
-				} else if (isMousePresent) {
-					coordinate.selected.show = true
-				}
-			}
-
-			const [rightAscension, declination] = interpolator.interpolate(x, y)
-
-			if (clicked && isMousePresent) {
-				coordinate.selected.rightAscension = rightAscension
-				coordinate.selected.declination = declination
-				coordinate.selected.x = x
-				coordinate.selected.y = y
-			}
-
-			coordinate.hover.rightAscension = rightAscension
-			coordinate.hover.declination = declination
-			coordinate.hover.x = x
-			coordinate.hover.y = y
-
-			if (isMousePresent && coordinate.selected.show) {
-				const { rightAscension: a1, declination: d1 } = coordinate.hover
-				const { rightAscension: a2, declination: d2 } = coordinate.selected
-				coordinate.selected.distance = Math.acos(Math.sin(d1) * Math.sin(d2) + Math.cos(d1) * Math.cos(d2) * Math.cos(a1 - a2))
-			}
-		}
 	}
 
 	function toggleDebayer() {
@@ -360,18 +105,6 @@ export const ImageViewerMolecule = molecule(() => {
 		state.crosshair = !state.crosshair
 	}
 
-	function toggleMouseCoordinate() {
-		state.mouseCoordinate.visible = !state.mouseCoordinate.visible
-	}
-
-	function show(key: keyof PickByValue<typeof state, { show: boolean }>) {
-		state[key].show = true
-	}
-
-	function hide(key: keyof PickByValue<typeof state, { show: boolean }>) {
-		state[key].show = false
-	}
-
 	function remove() {
 		workspace.remove(scope.image)
 	}
@@ -381,7 +114,7 @@ export const ImageViewerMolecule = molecule(() => {
 
 		loading = true
 
-		console.info('loading image', key)
+		console.info('loading image', key, path)
 
 		const cached = stateMap.get(key)
 
@@ -392,7 +125,6 @@ export const ImageViewerMolecule = molecule(() => {
 		// Load the image from cache
 		else if (target) {
 			target.src = cached.url
-			apply()
 			console.info('image loaded from cache', key, cached.url)
 		} else {
 			console.warn('image not mounted yet', key)
@@ -401,14 +133,14 @@ export const ImageViewerMolecule = molecule(() => {
 		loading = false
 	}
 
-	async function open(path: string = realPath()) {
+	async function open(path?: string) {
 		try {
 			loading = true
 
-			console.info('opening image', key)
+			console.info('opening image', key, path)
 
 			// Load the image
-			const image = await Api.Image.open({ path, transformation: state.transformation, camera: camera?.name, statistics: state.statistics.show ? state.statistics.request : undefined })
+			const image = await Api.Image.open({ path: path || realPath(), transformation: state.transformation, camera: camera?.name })
 
 			if (!image) return remove()
 
@@ -416,10 +148,12 @@ export const ImageViewerMolecule = molecule(() => {
 
 			// Update the state
 			state.info = ref(image.info)
-			updateFromImageInfo(image.info, !!path)
+			updateFromImageInfo(image.info)
 
 			// Add the image to cache
 			const cached = stateMap.get(key)
+
+			const newImage = !!path || !cached?.url
 
 			if (cached) {
 				if (cached.url) {
@@ -434,6 +168,9 @@ export const ImageViewerMolecule = molecule(() => {
 
 			if (target) {
 				target.src = url
+
+				bus.emit<ImageLoaded>('image:load', { image: scope.image, info: image.info, newImage })
+
 				console.info('image loaded', key, url, image.info)
 			} else {
 				console.warn('image not mounted yet', key)
@@ -443,9 +180,8 @@ export const ImageViewerMolecule = molecule(() => {
 		}
 	}
 
-	function updateFromImageInfo(info: ImageInfo, newImage: boolean) {
+	function updateFromImageInfo(info: ImageInfo) {
 		updateTransformationFromInfo(info)
-		updateSolverFromImageInfo(info, newImage)
 	}
 
 	function updateTransformationFromInfo(info: ImageInfo) {
@@ -456,46 +192,11 @@ export const ImageViewerMolecule = molecule(() => {
 		state.transformation.stretch.midtone = info.transformation.stretch.midtone
 	}
 
-	function updateSolverFromImageInfo(info: ImageInfo, newImage: boolean) {
-		if (newImage) {
-			const { request } = state.solver
-
-			// Update current solution
-			state.solver.solution = info.solution && ref(info.solution)
-
-			// Update plate solver request with FITS header information
-			request.rightAscension = formatRA(info.rightAscension ?? 0)
-			request.declination = formatDEC(info.declination ?? 0)
-			request.blind = info.rightAscension === undefined || info.declination === undefined
-
-			if (info.headers) {
-				request.focalLength = numericKeyword(info.headers, 'FOCALLEN', request.focalLength)
-				request.pixelSize = numericKeyword(info.headers, 'XPIXSZ', request.pixelSize)
-			}
-		}
-	}
-
 	function handleOnLoad() {
 		if (!first) {
 			first = true
 
-			apply()
-			resetStarDetection()
-
-			bus.emit('image:load', scope.image)
-
 			interactable?.center()
-		}
-	}
-
-	function resetStarDetection() {
-		if (state.starDetection.stars.length) {
-			state.starDetection.stars = []
-			state.starDetection.selected = undefined
-			state.starDetection.computed.hfd = 0
-			state.starDetection.computed.snr = 0
-			state.starDetection.computed.fluxMin = 0
-			state.starDetection.computed.fluxMax = 0
 		}
 	}
 
@@ -505,11 +206,6 @@ export const ImageViewerMolecule = molecule(() => {
 
 	function resetRotation() {
 		interactable?.resetRotation()
-	}
-
-	function apply() {
-		if (!target) return
-		target.classList.toggle('pixelated', state.settings.pixelated)
 	}
 
 	function select() {
@@ -550,7 +246,30 @@ export const ImageViewerMolecule = molecule(() => {
 		interactable = undefined
 	}
 
-	return { state, scope, realPath, handleInterpolatedCoordinate, toggleDebayer, toggleHorizontalMirror, toggleVerticalMirror, toggleInvert, toggleCrosshair, toggleMouseCoordinate, attachImage, attachInteractable, load, open, handleOnLoad, rotateTo, resetRotation, remove, detach, select, show, hide, apply } as const
+	return {
+		state,
+		scope,
+		get path() {
+			return realPath()
+		},
+		get target() {
+			return target
+		},
+		toggleDebayer,
+		toggleHorizontalMirror,
+		toggleVerticalMirror,
+		toggleInvert,
+		toggleCrosshair,
+		attachImage,
+		attachInteractable,
+		load,
+		handleOnLoad,
+		rotateTo,
+		resetRotation,
+		remove,
+		detach,
+		select,
+	} as const
 })
 
 function adjustZIndexAfterBeRemoved() {

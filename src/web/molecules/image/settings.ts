@@ -1,37 +1,60 @@
-import { molecule, use } from 'bunshi'
+import { molecule, onMount, use } from 'bunshi'
 import type { ImageFormat } from 'nebulosa/src/image'
-import { DEFAULT_IMAGE_TRANSFORMATION } from 'src/shared/types'
-import { type ImageState, ImageViewerMolecule } from './viewer'
+import { proxy } from 'valtio'
+import { initProxy } from '@/shared/proxy'
+import { ImageViewerMolecule } from './viewer'
+
+export interface ImageSettingsState {
+	show: boolean
+	pixelated: boolean
+	format: ImageFormat
+}
+
+const stateMap = new Map<string, ImageSettingsState>()
 
 export const ImageSettingsMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const { settings: state, transformation } = viewer.state
+	const { key, camera } = viewer.scope.image
 
-	function update<K extends keyof ImageState['settings']>(key: K, value: ImageState['settings'][K]) {
+	const state =
+		stateMap.get(key) ??
+		proxy<ImageSettingsState>({
+			show: false,
+			pixelated: false,
+			format: viewer.state.transformation.format,
+		})
+
+	stateMap.set(key, state)
+
+	onMount(() => {
+		const storageKey = camera?.name || 'default'
+		const unsubscriber = initProxy(state, `image.${storageKey}.settings`, ['p:show', 'p:pixelated'])
+
+		update('pixelated', state.pixelated)
+
+		return () => {
+			unsubscriber()
+		}
+	})
+
+	function update<K extends keyof ImageSettingsState>(key: K, value: ImageSettingsState[K]) {
 		state[key] = value
-		viewer.apply()
-	}
 
-	function updateFormat(format: ImageFormat) {
-		transformation.format = format
-		return viewer.load(true)
+		if (key === 'format') viewer.state.transformation.format = value as never
+		else if (key === 'pixelated') viewer.target?.classList.toggle('pixelated', value as never)
 	}
 
 	function reset() {
-		const reload = transformation.format !== DEFAULT_IMAGE_TRANSFORMATION.format
-		transformation.format = DEFAULT_IMAGE_TRANSFORMATION.format
 		state.pixelated = true
-		viewer.apply()
-		if (reload) void viewer.load(true)
 	}
 
 	function show() {
-		viewer.show('settings')
+		state.show = true
 	}
 
 	function hide() {
-		viewer.hide('settings')
+		state.show = false
 	}
 
-	return { state, scope: viewer.scope, viewer, update, updateFormat, reset, show, hide } as const
+	return { state, scope: viewer.scope, viewer, update, reset, show, hide } as const
 })

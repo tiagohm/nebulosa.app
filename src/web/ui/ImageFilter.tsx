@@ -9,7 +9,7 @@ import { TextButton } from './TextButton'
 
 export const ImageFilter = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
-	const { enabled, blur, median, sharpen } = useSnapshot(filter.state)
+	const { enabled, blur, median, sharpen } = useSnapshot(filter.state.filter, { sync: true })
 
 	const Footer = (
 		<>

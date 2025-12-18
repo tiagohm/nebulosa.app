@@ -1,6 +1,18 @@
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo, useCallback, useLayoutEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
+import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
+import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
+import { ImageFilterMolecule } from '@/molecules/image/filter'
+import { ImageHeaderMolecule } from '@/molecules/image/header'
+import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
+import { ImageSaveMolecule } from '@/molecules/image/save'
+import { ImageScnrMolecule } from '@/molecules/image/scnr'
+import { ImageSettingsMolecule } from '@/molecules/image/settings'
+import { ImageSolverMolecule } from '@/molecules/image/solver'
+import { StarDetectionMolecule } from '@/molecules/image/stardetection'
+import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
+import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
 import { ImageWorkspaceMolecule } from '@/molecules/image/workspace'
 import { AnnotatedStars } from './AnnotatedStars'
@@ -25,11 +37,47 @@ import { StarDetection } from './StarDetection'
 export const ImageViewer = memo(() => {
 	const imgRef = useRef<HTMLImageElement>(null)
 	const interactableRef = useRef<InteractableMethods>(null)
+
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { image } = viewer.scope
+
 	const workspace = useMolecule(ImageWorkspaceMolecule)
-	const { starDetection, stretch, solver, fitsHeader, scnr, adjustment, filter, settings, annotation, save, mouseCoordinate, statistics } = useSnapshot(viewer.state)
 	const { selected } = useSnapshot(workspace.state)
+
+	const starDetection = useMolecule(StarDetectionMolecule)
+	const { show: showStarDetection } = useSnapshot(starDetection.state)
+
+	const solver = useMolecule(ImageSolverMolecule)
+	const { show: showPlateSolver } = useSnapshot(solver.state)
+
+	const annotation = useMolecule(ImageAnnotationMolecule)
+	const { show: showAnnotation } = useSnapshot(annotation.state)
+
+	const stretch = useMolecule(ImageStretchMolecule)
+	const { show: showStretch } = useSnapshot(stretch.state)
+
+	const scnr = useMolecule(ImageScnrMolecule)
+	const { show: showScnr } = useSnapshot(scnr.state)
+
+	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const { show: showAdjustment } = useSnapshot(adjustment.state)
+
+	const filter = useMolecule(ImageFilterMolecule)
+	const { show: showFilter } = useSnapshot(filter.state)
+
+	const settings = useMolecule(ImageSettingsMolecule)
+	const { show: showSettings } = useSnapshot(settings.state)
+
+	const save = useMolecule(ImageSaveMolecule)
+	const { show: showSave } = useSnapshot(save.state)
+
+	const statistics = useMolecule(ImageStatisticsMolecule)
+	const { show: showStatistics } = useSnapshot(statistics.state)
+
+	const header = useMolecule(ImageHeaderMolecule)
+	const { show: showHeader } = useSnapshot(header.state)
+
+	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
 
 	useLayoutEffect(() => {
 		if (imgRef.current) {
@@ -52,54 +100,87 @@ export const ImageViewer = memo(() => {
 	}, [])
 
 	const handlePointerUp = useCallback<Exclude<InteractableProps['onPointerUp'], undefined>>(({ event, dragging, pinching }) => {
-		if (!mouseCoordinate.visible || dragging || pinching) return
-		viewer.handleInterpolatedCoordinate(event.offsetX, event.offsetY, true)
+		if (!mouseCoordinate.state.visible || dragging || pinching) return
+		mouseCoordinate.handleInterpolatedCoordinate(event.offsetX, event.offsetY, true)
 	}, [])
 
 	const handleMouseMove = useCallback<Exclude<InteractableProps['onMouseMove'], undefined>>(({ event, dragging, pinching }) => {
-		if (!mouseCoordinate.visible || dragging || pinching) return
-		viewer.handleInterpolatedCoordinate(event.offsetX, event.offsetY, false)
+		if (!mouseCoordinate.state.visible || dragging || pinching) return
+		mouseCoordinate.handleInterpolatedCoordinate(event.offsetX, event.offsetY, false)
 	}, [])
 
 	return (
 		<>
-			{selected?.key === image.key && <ImageToolBar />}
-			{selected?.key === image.key && <ImageInfo />}
+			<Activity mode={selected?.key === image.key ? 'visible' : 'hidden'}>
+				<ImageToolBar />
+				<ImageInfo />
+			</Activity>
 			<Interactable onGesture={handleGesture} onMouseMove={handleMouseMove} onPointerUp={handlePointerUp} onTap={viewer.select} ref={interactableRef} zIndex={image.position}>
 				<img className='image select-none touch-none pointer-events-none max-w-none shadow-[0_0_80px_black]' draggable={false} id={image.key} onLoad={viewer.handleOnLoad} ref={imgRef} />
 				<InteractableOverlay />
 			</Interactable>
-			{stretch.show && <ImageStretch />}
-			{solver.show && <PlateSolver />}
-			{scnr.show && <ImageScnr />}
-			{adjustment.show && <ImageAdjustment />}
-			{filter.show && <ImageFilter />}
-			{starDetection.show && <StarDetection />}
-			{fitsHeader.show && <FITSHeader />}
-			{settings.show && <ImageSettings />}
-			{annotation.show && <ImageAnnotation />}
-			{save.show && <ImageSave />}
-			{statistics.show && <ImageStatistics />}
+			<Activity mode={showStretch ? 'visible' : 'hidden'}>
+				<ImageStretch />
+			</Activity>
+			<Activity mode={showPlateSolver ? 'visible' : 'hidden'}>
+				<PlateSolver />
+			</Activity>
+			<Activity mode={showScnr ? 'visible' : 'hidden'}>
+				<ImageScnr />
+			</Activity>
+			<Activity mode={showAdjustment ? 'visible' : 'hidden'}>
+				<ImageAdjustment />
+			</Activity>
+			<Activity mode={showFilter ? 'visible' : 'hidden'}>
+				<ImageFilter />
+			</Activity>
+			<Activity mode={showStarDetection ? 'visible' : 'hidden'}>
+				<StarDetection />
+			</Activity>
+			<Activity mode={showHeader ? 'visible' : 'hidden'}>
+				<FITSHeader />
+			</Activity>
+			<Activity mode={showSettings ? 'visible' : 'hidden'}>
+				<ImageSettings />
+			</Activity>
+			<Activity mode={showAnnotation ? 'visible' : 'hidden'}>
+				<ImageAnnotation />
+			</Activity>
+			<Activity mode={showSave ? 'visible' : 'hidden'}>
+				<ImageSave />
+			</Activity>
+			<Activity mode={showStatistics ? 'visible' : 'hidden'}>
+				<ImageStatistics />
+			</Activity>
 		</>
 	)
 })
 
 const InteractableOverlay = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
-	const { crosshair, starDetection, annotation, mouseCoordinate } = useSnapshot(viewer.state)
+	const { crosshair } = useSnapshot(viewer.state)
+
+	const starDetection = useMolecule(StarDetectionMolecule)
+	const { visible: isStarDetectionVisible } = useSnapshot(starDetection.state)
+
+	const annotation = useMolecule(ImageAnnotationMolecule)
+	const { visible: isAnnotationVisible } = useSnapshot(annotation.state)
+
+	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
+	const { visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
 
 	return (
 		<>
 			<Activity mode={crosshair ? 'visible' : 'hidden'}>
 				<Crosshair />
 			</Activity>
-			<Activity mode={starDetection.visible ? 'visible' : 'hidden'}>
+			<Activity mode={isStarDetectionVisible ? 'visible' : 'hidden'}>
 				<DetectedStars />
 			</Activity>
-			<Activity mode={annotation.visible ? 'visible' : 'hidden'}>
+			<Activity mode={isAnnotationVisible ? 'visible' : 'hidden'}>
 				<AnnotatedStars />
 			</Activity>
-			<Activity mode={mouseCoordinate.visible ? 'visible' : 'hidden'}>
+			<Activity mode={isMouseCoordinateVisible ? 'visible' : 'hidden'}>
 				<CoordinateOnMouse />
 			</Activity>
 		</>

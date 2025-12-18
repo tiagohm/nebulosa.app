@@ -10,7 +10,7 @@ import { TextButton } from './TextButton'
 
 export const ImageAdjustment = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
-	const { enabled, brightness, contrast, gamma, normalize, saturation } = useSnapshot(adjustment.state)
+	const { enabled, brightness, contrast, gamma, normalize, saturation } = useSnapshot(adjustment.state.adjustment, { sync: true })
 
 	const Footer = (
 		<>

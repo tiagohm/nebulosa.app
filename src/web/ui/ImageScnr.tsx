@@ -10,7 +10,7 @@ import { TextButton } from './TextButton'
 
 export const ImageScnr = memo(() => {
 	const scnr = useMolecule(ImageScnrMolecule)
-	const { method, amount, channel } = useSnapshot(scnr.state)
+	const { method, amount, channel } = useSnapshot(scnr.state.scnr, { sync: true })
 
 	const Footer = (
 		<>

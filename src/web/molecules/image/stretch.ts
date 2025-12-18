@@ -1,13 +1,42 @@
-import { molecule, use } from 'bunshi'
-import type { ImageTransformation } from 'src/shared/types'
+import { molecule, onMount, use } from 'bunshi'
+import type { ImageStretch } from 'src/shared/types'
+import { proxy } from 'valtio'
+import { initProxy } from '@/shared/proxy'
 import { ImageViewerMolecule } from './viewer'
+
+export interface ImageStretchState {
+	show: boolean
+	stretch: ImageStretch
+}
+
+const stateMap = new Map<string, ImageStretchState>()
 
 export const ImageStretchMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const state = viewer.state.transformation.stretch
+	const { key, camera } = viewer.scope.image
 
-	function update<K extends keyof ImageTransformation['stretch']>(key: K, value: ImageTransformation['stretch'][K]) {
-		state[key] = value
+	const state =
+		stateMap.get(key) ??
+		proxy<ImageStretchState>({
+			show: false,
+			stretch: viewer.state.transformation.stretch,
+		})
+
+	stateMap.set(key, state)
+
+	onMount(() => {
+		const storageKey = camera?.name || 'default'
+		const unsubscriber = initProxy(state, `image.${storageKey}.stretch`, ['p:show'])
+
+		state.stretch = viewer.state.transformation.stretch
+
+		return () => {
+			unsubscriber()
+		}
+	})
+
+	function update<K extends keyof ImageStretch>(key: K, value: ImageStretch[K]) {
+		state.stretch[key] = value
 	}
 
 	function auto() {
@@ -15,33 +44,33 @@ export const ImageStretchMolecule = molecule(() => {
 	}
 
 	function reset() {
-		state.auto = false
-		state.midtone = 32768
-		state.shadow = 0
-		state.highlight = 65536
+		state.stretch.auto = false
+		state.stretch.midtone = 32768
+		state.stretch.shadow = 0
+		state.stretch.highlight = 65536
 		return viewer.load(true)
 	}
 
 	function toggle() {
-		if (state.auto) {
+		if (state.stretch.auto) {
 			return reset()
 		} else {
-			state.auto = true
+			state.stretch.auto = true
 			return viewer.load(true)
 		}
 	}
 
 	function apply(auto: boolean = false) {
-		state.auto = auto
+		state.stretch.auto = auto
 		return viewer.load(true)
 	}
 
 	function show() {
-		viewer.show('stretch')
+		state.show = true
 	}
 
 	function hide() {
-		viewer.hide('stretch')
+		state.show = false
 	}
 
 	return { state, scope: viewer.scope, viewer, update, auto, reset, toggle, apply, show, hide } as const

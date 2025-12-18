@@ -4,14 +4,16 @@ import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import { memo } from 'react'
 import type { Point } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
+import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
 import { Icons } from './Icon'
 
 export const ImageInfo = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
+	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
 	const { info, scale, angle } = useSnapshot(viewer.state)
-	const { visible: isMouseCoordinateVisible, interpolator } = useSnapshot(viewer.state.mouseCoordinate)
-	const { hover, selected } = useSnapshot(viewer.state.mouseCoordinate.coordinate)
+	const { visible: isMouseCoordinateVisible, interpolator } = useSnapshot(mouseCoordinate.state)
+	const { hover, selected } = useSnapshot(mouseCoordinate.state.coordinate)
 
 	if (!info) return null
 

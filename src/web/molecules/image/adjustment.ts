@@ -1,21 +1,50 @@
-import { molecule, use } from 'bunshi'
-import type { ImageTransformation } from 'src/shared/types'
+import { molecule, onMount, use } from 'bunshi'
+import type { ImageAdjustment } from 'src/shared/types'
+import { proxy } from 'valtio'
+import { initProxy } from '@/shared/proxy'
 import { ImageViewerMolecule } from './viewer'
+
+export interface ImageAdjustmentState {
+	show: boolean
+	adjustment: ImageAdjustment
+}
+
+const stateMap = new Map<string, ImageAdjustmentState>()
 
 export const ImageAdjustmentMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const state = viewer.state.transformation.adjustment
+	const { key, camera } = viewer.scope.image
 
-	function update<K extends keyof ImageTransformation['adjustment']>(key: K, value: ImageTransformation['adjustment'][K]) {
-		state[key] = value
+	const state =
+		stateMap.get(key) ??
+		proxy<ImageAdjustmentState>({
+			show: false,
+			adjustment: viewer.state.transformation.adjustment,
+		})
+
+	stateMap.set(key, state)
+
+	onMount(() => {
+		const storageKey = camera?.name || 'default'
+		const unsubscriber = initProxy(state, `image.${storageKey}.adjustment`, ['p:show'])
+
+		state.adjustment = viewer.state.transformation.adjustment
+
+		return () => {
+			unsubscriber()
+		}
+	})
+
+	function update<K extends keyof ImageAdjustment>(key: K, value: ImageAdjustment[K]) {
+		state.adjustment[key] = value
 	}
 
 	function reset() {
-		state.brightness = 1
-		state.contrast = 1
-		state.gamma = 1
-		state.saturation = 1
-		state.normalize = false
+		state.adjustment.brightness = 1
+		state.adjustment.contrast = 1
+		state.adjustment.gamma = 1
+		state.adjustment.saturation = 1
+		state.adjustment.normalize = false
 		return apply()
 	}
 
@@ -24,11 +53,11 @@ export const ImageAdjustmentMolecule = molecule(() => {
 	}
 
 	function show() {
-		viewer.show('adjustment')
+		state.show = true
 	}
 
 	function hide() {
-		viewer.hide('adjustment')
+		state.show = false
 	}
 
 	return { state, scope: viewer.scope, viewer, update, reset, apply, show, hide } as const

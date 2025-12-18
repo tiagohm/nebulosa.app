@@ -1,19 +1,48 @@
-import { molecule, use } from 'bunshi'
-import { DEFAULT_IMAGE_SCNR, type ImageTransformation } from 'src/shared/types'
+import { molecule, onMount, use } from 'bunshi'
+import { DEFAULT_IMAGE_SCNR, type ImageScnr } from 'src/shared/types'
+import { proxy } from 'valtio'
+import { initProxy } from '@/shared/proxy'
 import { ImageViewerMolecule } from './viewer'
+
+export interface ImageScnrState {
+	show: boolean
+	scnr: ImageScnr
+}
+
+const stateMap = new Map<string, ImageScnrState>()
 
 export const ImageScnrMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const state = viewer.state.transformation.scnr
+	const { key, camera } = viewer.scope.image
 
-	function update<K extends keyof ImageTransformation['scnr']>(key: K, value: ImageTransformation['scnr'][K]) {
-		state[key] = value
+	const state =
+		stateMap.get(key) ??
+		proxy<ImageScnrState>({
+			show: false,
+			scnr: viewer.state.transformation.scnr,
+		})
+
+	stateMap.set(key, state)
+
+	onMount(() => {
+		const storageKey = camera?.name || 'default'
+		const unsubscriber = initProxy(state, `image.${storageKey}.scnr`, ['p:show'])
+
+		state.scnr = viewer.state.transformation.scnr
+
+		return () => {
+			unsubscriber()
+		}
+	})
+
+	function update<K extends keyof ImageScnr>(key: K, value: ImageScnr[K]) {
+		state.scnr[key] = value
 	}
 
 	function reset() {
-		state.method = DEFAULT_IMAGE_SCNR.method
-		state.amount = DEFAULT_IMAGE_SCNR.amount
-		state.channel = DEFAULT_IMAGE_SCNR.channel
+		state.scnr.method = DEFAULT_IMAGE_SCNR.method
+		state.scnr.amount = DEFAULT_IMAGE_SCNR.amount
+		state.scnr.channel = DEFAULT_IMAGE_SCNR.channel
 		return apply()
 	}
 
@@ -22,11 +51,11 @@ export const ImageScnrMolecule = molecule(() => {
 	}
 
 	function show() {
-		viewer.show('scnr')
+		state.show = true
 	}
 
 	function hide() {
-		viewer.hide('scnr')
+		state.show = false
 	}
 
 	return { state, scope: viewer.scope, viewer, update, reset, apply, show, hide } as const

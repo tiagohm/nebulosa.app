@@ -1,14 +1,14 @@
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerMolecule } from '@/molecules/image/viewer'
+import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
 import { isMouseDeviceSupported } from '@/shared/util'
 
 const isMousePresent = isMouseDeviceSupported()
 
 export const CoordinateOnMouse = memo(() => {
-	const viewer = useMolecule(ImageViewerMolecule)
-	const { coordinate } = viewer.state.mouseCoordinate
+	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
+	const { coordinate } = mouseCoordinate.state
 	// @ts-expect-error
 	const { show, x, y } = useSnapshot(isMousePresent ? coordinate.selected : coordinate.hover)
 

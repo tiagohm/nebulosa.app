@@ -30,6 +30,11 @@ export interface LocationAndTime {
 	readonly time: UTCTime
 }
 
+export interface Size {
+	width: number
+	height: number
+}
+
 // Atlas
 
 export type TwilightType = 'CIVIL' | 'NAUTICAL' | 'ASTRONOMICAL'
@@ -352,11 +357,9 @@ export interface FileSystem {
 
 // Framing
 
-export interface Framing extends EquatorialCoordinate<string> {
+export interface Framing extends EquatorialCoordinate<string>, Size {
 	id: string
 	hipsSurvey: string
-	width: number
-	height: number
 	fov?: number // deg
 	focalLength: number // mm
 	pixelSize: number // µm
@@ -413,7 +416,6 @@ export interface OpenImage {
 	path: string
 	readonly camera?: string
 	readonly transformation: ImageTransformation
-	readonly statistics?: Pick<StatisticImage, 'bits' | 'area' | 'transformed'>
 }
 
 export interface CloseImage {
@@ -456,16 +458,33 @@ export interface ImageCoordinateInterpolation {
 	readonly delta: number
 }
 
-export interface ImageInfo extends Partial<EquatorialCoordinate> {
+export interface ImageInfo extends Partial<EquatorialCoordinate>, Size {
 	path: string
 	realPath: string
-	width: number
-	height: number
 	mono: boolean
 	metadata: ImageMetadata
 	transformation: ImageTransformation
 	headers: FitsHeader
 	solution?: PlateSolution
+}
+
+export interface FovItem {
+	visible: boolean
+	focalLength: number // mm
+	aperture: number // mm
+	readonly cameraSize: Size // px
+	readonly pixelSize: Size // μm
+	barlowReducer: number
+	bin: number
+	rotation: number // deg
+	color: string
+}
+
+export interface ComputedFov {
+	focalRatio: number
+	readonly camera: Size // pixels
+	readonly field: Size // arcmin
+	readonly svg: Size // %
 }
 
 // INDI
@@ -594,7 +613,7 @@ export type AutoSubFolderMode = 'OFF' | 'NOON' | 'MIDNIGHT'
 
 export type CameraCaptureState = 'IDLE' | 'EXPOSURE_STARTED' | 'EXPOSING' | 'WAITING' | 'SETTLING' | 'DITHERING' | 'PAUSING' | 'PAUSED' | 'EXPOSURE_FINISHED'
 
-export interface CameraCaptureStart {
+export interface CameraCaptureStart extends Size {
 	exposureTime: number
 	exposureTimeUnit: ExposureTimeUnit
 	frameType: FrameType
@@ -603,8 +622,6 @@ export interface CameraCaptureStart {
 	count: number
 	x: number
 	y: number
-	width: number
-	height: number
 	subframe: boolean
 	binX: number
 	binY: number
@@ -782,6 +799,11 @@ export interface Point {
 
 export const X_IMAGE_INFO_HEADER = 'X-Image-Info'
 
+export const DEFAULT_SIZE: Size = {
+	width: 0,
+	height: 0,
+}
+
 export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	exposureTime: 0,
 	exposureTimeUnit: 'MICROSECOND',
@@ -919,6 +941,25 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	format: 'jpeg',
 	adjustment: DEFAULT_IMAGE_ADJUSTMENT,
 	filter: DEFAULT_IMAGE_FILTER,
+}
+
+export const DEFAULT_FOV_ITEM: FovItem = {
+	visible: false,
+	focalLength: 0,
+	aperture: 0,
+	cameraSize: DEFAULT_SIZE,
+	pixelSize: DEFAULT_SIZE,
+	barlowReducer: 0,
+	bin: 0,
+	rotation: 0,
+	color: '#fff',
+}
+
+export const DEFAULT_COMPUTED_FOV: ComputedFov = {
+	focalRatio: 0,
+	camera: DEFAULT_SIZE,
+	field: DEFAULT_SIZE,
+	svg: DEFAULT_SIZE,
 }
 
 export const DEFAULT_GEOGRAPHIC_COORDINATE: GeographicCoordinate = {

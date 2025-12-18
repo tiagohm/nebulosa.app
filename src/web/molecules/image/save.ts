@@ -1,12 +1,46 @@
-import { molecule, use } from 'bunshi'
+import { molecule, onMount, use } from 'bunshi'
+import type { ImageFormat } from 'nebulosa/src/image'
+import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
-import { type ImageState, ImageViewerMolecule } from './viewer'
+import { initProxy } from '@/shared/proxy'
+import { ImageViewerMolecule } from './viewer'
+
+export interface ImageSaveState {
+	show: boolean
+	loading: boolean
+	path: string
+	format: ImageFormat
+	transformed: boolean
+}
+
+const stateMap = new Map<string, ImageSaveState>()
 
 export const ImageSaveMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const state = viewer.state.save
+	const { key, camera } = viewer.scope.image
 
-	function update<K extends keyof ImageState['save']>(key: K, value: ImageState['save'][K]) {
+	const state =
+		stateMap.get(key) ??
+		proxy<ImageSaveState>({
+			show: false,
+			loading: false,
+			path: '',
+			format: 'fits',
+			transformed: false,
+		})
+
+	stateMap.set(key, state)
+
+	onMount(() => {
+		const storageKey = camera?.name || 'default'
+		const unsubscriber = initProxy(state, `image.${storageKey}.save`, ['p:show', 'p:format', 'p:path', 'p:transformed'])
+
+		return () => {
+			unsubscriber()
+		}
+	})
+
+	function update<K extends keyof ImageSaveState>(key: K, value: ImageSaveState[K]) {
 		state[key] = value
 	}
 
@@ -15,18 +49,18 @@ export const ImageSaveMolecule = molecule(() => {
 			state.loading = true
 
 			const transformation = { ...viewer.state.transformation, format: state.format }
-			await Api.Image.save({ path: viewer.realPath(), transformation, saveAt: state.path, transformed: state.transformed })
+			await Api.Image.save({ path: viewer.path, transformation, saveAt: state.path, transformed: state.transformed })
 		} finally {
 			state.loading = false
 		}
 	}
 
 	function show() {
-		viewer.show('save')
+		state.show = true
 	}
 
 	function hide() {
-		viewer.hide('save')
+		state.show = false
 	}
 
 	return { state, scope: viewer.scope, viewer, update, save, show, hide } as const

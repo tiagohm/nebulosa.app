@@ -11,7 +11,7 @@
 }
 
 html {
-	@apply m-0 h-screen overflow-hidden p-0 scroll-smooth touch-none;
+	@apply m-0 w-dvw h-dvh overflow-hidden p-0 scroll-smooth touch-none;
 }
 
 html,

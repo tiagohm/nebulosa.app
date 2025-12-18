@@ -19,7 +19,7 @@ function start() {
 						hideCloseButton: true,
 					}}
 				/>
-				<main className='w-screen h-screen'>
+				<main className='w-dvw h-dvh'>
 					<Home />
 				</main>
 			</HeroUIProvider>

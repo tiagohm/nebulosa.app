@@ -4,7 +4,7 @@ import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 
-export interface AstrobinPopoverItem {
+export interface AstroBinEquipmentPopoverItem {
 	readonly id: number
 	readonly name: string
 	readonly sensor?: string
@@ -15,23 +15,23 @@ export interface AstrobinPopoverItem {
 	readonly fl?: number
 }
 
-export interface AstrobinPopoverProps {
+export interface AstroBinEquipmentPopoverProps {
 	readonly type: 'camera' | 'telescope'
-	readonly items: readonly AstrobinPopoverItem[]
-	readonly onSelectedChange?: (item: AstrobinPopoverItem) => void
+	readonly items: readonly AstroBinEquipmentPopoverItem[]
+	readonly onSelectedChange?: (item: AstroBinEquipmentPopoverItem) => void
 }
 
-function filter(item: AstrobinPopoverItem, text: string) {
+function filter(item: AstroBinEquipmentPopoverItem, text: string) {
 	const { name, sensor } = item
 	return name.toLowerCase().includes(text) || (!!sensor && sensor.toLowerCase().includes(text))
 }
 
-function description(item: AstrobinPopoverItem) {
+function description(item: AstroBinEquipmentPopoverItem) {
 	const { sensor, w, h, ps, ap, fl } = item
 	return sensor ? `${sensor} ${w}x${h} ${ps}μm` : `AP: ${ap}mm FL: ${fl}mm`
 }
 
-export const AstrobinPopover = memo(({ type, items, onSelectedChange }: AstrobinPopoverProps) => {
+export const AstroBinEquipmentPopover = memo(({ type, items, onSelectedChange }: AstroBinEquipmentPopoverProps) => {
 	const isCamera = type === 'camera'
 	const [open, setOpen] = useState(false)
 

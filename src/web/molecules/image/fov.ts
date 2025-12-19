@@ -6,7 +6,7 @@ import { type ComputedFov, DEFAULT_FOV_ITEM, type FovItem } from 'src/shared/typ
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { initProxy } from '@/shared/proxy'
-import type { ImageSolved } from '@/shared/types'
+import { type ImageSolved, imageStorageKey } from '@/shared/types'
 import { ImageSolverMolecule } from './solver'
 import { ImageViewerMolecule } from './viewer'
 
@@ -22,7 +22,7 @@ const stateMap = new Map<string, ImageFovState>()
 export const ImageFovMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
 	const solver = use(ImageSolverMolecule)
-	const { key, camera } = viewer.scope.image
+	const { key } = viewer.scope.image
 
 	const state =
 		stateMap.get(key) ??
@@ -38,8 +38,7 @@ export const ImageFovMolecule = molecule(() => {
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(3)
 
-		const storageKey = camera?.name || 'default'
-		unsubscribers[0] = initProxy(state, `image.${storageKey}.fov`, ['p:show', 'o:items'])
+		unsubscribers[0] = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.fov`, ['p:show', 'o:items'])
 
 		unsubscribers[1] = subscribeKey(state, 'show', (show) => {
 			show && compute()

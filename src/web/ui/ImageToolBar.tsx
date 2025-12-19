@@ -30,12 +30,7 @@ export const ImageToolBar = memo(() => {
 	const stretch = useMolecule(ImageStretchMolecule)
 	const settings = useMolecule(ImageSettingsMolecule)
 	const statistics = useMolecule(ImageStatisticsMolecule)
-	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
 	const header = useMolecule(ImageHeaderMolecule)
-	const fov = useMolecule(ImageFovMolecule)
-
-	const { solution } = useSnapshot(solver.state)
-	const { visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
 
 	return (
 		<div className='pointer-events-none w-full fixed bottom-0 mb-1 p-1 z-99999'>
@@ -66,14 +61,6 @@ export const ImageToolBar = memo(() => {
 				<Tooltip content='FITS Header' placement='top' showArrow>
 					<IconButton color='secondary' icon={Icons.Text} onPointerUp={header.show} variant='flat' />
 				</Tooltip>
-				<Activity mode={solution?.scale ? 'visible' : 'hidden'}>
-					<Tooltip content='Mouse Coordinate' placement='top' showArrow>
-						<ToggleButton color='primary' icon={Icons.MousePointerClick} isSelected={isMouseCoordinateVisible} onPointerUp={mouseCoordinate.toggle} />
-					</Tooltip>
-					<Tooltip content='FOV' placement='top' showArrow>
-						<IconButton color='secondary' icon={Icons.FocusField} onPointerUp={fov.show} variant='flat' />
-					</Tooltip>
-				</Activity>
 				<Tooltip content='Settings' placement='top' showArrow>
 					<IconButton color='secondary' icon={Icons.Cog} onPointerUp={settings.show} variant='flat' />
 				</Tooltip>
@@ -112,13 +99,21 @@ const RotatePopover = memo(() => {
 
 const OverlayPopover = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
-	const starDetection = useMolecule(StarDetectionMolecule)
-	const solver = useMolecule(ImageSolverMolecule)
-	const annotation = useMolecule(ImageAnnotationMolecule)
 	const { crosshair } = useSnapshot(viewer.state)
+
+	const starDetection = useMolecule(StarDetectionMolecule)
 	const { stars: detectedStars, visible: isDetectedStarsVisible } = useSnapshot(starDetection.state)
+
+	const annotation = useMolecule(ImageAnnotationMolecule)
 	const { stars: annotatedStars, visible: isAnnotatedStarsVisible } = useSnapshot(annotation.state)
+
+	const solver = useMolecule(ImageSolverMolecule)
 	const { solution } = useSnapshot(solver.state)
+
+	const fov = useMolecule(ImageFovMolecule)
+
+	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
+	const { visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
 
 	return (
 		<Popover placement='bottom' showArrow>
@@ -149,9 +144,14 @@ const OverlayPopover = memo(() => {
 					<Tooltip content='ROI' placement='top' showArrow>
 						<IconButton color='secondary' icon={Icons.Box} variant='flat' />
 					</Tooltip>
-					<Tooltip content='FOV' placement='top' showArrow>
-						<IconButton color='secondary' icon={Icons.Fullscreen} variant='flat' />
-					</Tooltip>
+					<Activity mode={solution?.scale ? 'visible' : 'hidden'}>
+						<Tooltip content='FOV' placement='top' showArrow>
+							<IconButton color='secondary' icon={Icons.FocusField} onPointerUp={fov.show} variant='flat' />
+						</Tooltip>
+						<Tooltip content='Mouse Coordinate' placement='top' showArrow>
+							<ToggleButton color='primary' icon={Icons.MousePointerClick} isSelected={isMouseCoordinateVisible} onPointerUp={mouseCoordinate.toggle} />
+						</Tooltip>
+					</Activity>
 				</div>
 			</PopoverContent>
 		</Popover>

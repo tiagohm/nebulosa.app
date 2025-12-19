@@ -12,7 +12,7 @@ import { type BodyPosition, EMPTY_TWILIGHT, type Twilight } from 'src/shared/typ
 import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, type SkyAtlasTab, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
-import { formatDistance, formatSkyObjectName, formatSkyObjectType } from '@/shared/util'
+import { formatDistance, skyObjectName, skyObjectType } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
 import { ConstellationSelect } from './ConstellationSelect'
 import { type Icon, Icons } from './Icon'
@@ -469,9 +469,9 @@ const GalaxyTab = memo(() => {
 				<TableBody items={result}>
 					{(item) => (
 						<TableRow key={item.id}>
-							<TableCell className='whitespace-nowrap max-w-50 overflow-hidden'>{formatSkyObjectName(item.name, item.constellation)}</TableCell>
+							<TableCell className='whitespace-nowrap max-w-50 overflow-hidden'>{skyObjectName(item.name, item.constellation)}</TableCell>
 							<TableCell className='text-center'>{item.magnitude}</TableCell>
-							<TableCell className='text-center whitespace-nowrap max-w-40 overflow-hidden'>{formatSkyObjectType(item.type)}</TableCell>
+							<TableCell className='text-center whitespace-nowrap max-w-40 overflow-hidden'>{skyObjectType(item.type)}</TableCell>
 							<TableCell className='text-center'>{CONSTELLATION_LIST[item.constellation]}</TableCell>
 						</TableRow>
 					)}
@@ -678,7 +678,7 @@ function makeTags(name: string | undefined, position: BodyPosition, extra?: Ephe
 	if (name) {
 		tags.push({ label: name, color: 'primary' })
 	} else if (position.names?.length) {
-		position.names.forEach((name) => tags.push({ label: formatSkyObjectName(name, position.constellation), color: 'primary' }))
+		position.names.forEach((name) => tags.push({ label: skyObjectName(name, position.constellation), color: 'primary' }))
 	}
 
 	if (extra?.length) {

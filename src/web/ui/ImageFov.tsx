@@ -7,7 +7,7 @@ import { ImageFovMolecule } from '@/molecules/image/fov'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import cameras from '../../../data/cameras.json'
 import telescopes from '../../../data/telescopes.json'
-import { AstrobinPopover, type AstrobinPopoverItem } from './AstrobinPopover'
+import { AstroBinEquipmentPopover, type AstroBinEquipmentPopoverItem } from './AstroBinEquipmentPopover'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
@@ -31,7 +31,7 @@ const FovItemEdit = memo(() => {
 
 	const { focalLength, aperture, cameraWidth, cameraHeight, pixelWidth, pixelHeight, barlowReducer, bin, rotation } = items[selected]
 
-	const handleOnCameraSelectedChange = useCallback((item: AstrobinPopoverItem) => {
+	const handleOnCameraSelectedChange = useCallback((item: AstroBinEquipmentPopoverItem) => {
 		const { w = 0, h = 0, ps = 0 } = item
 
 		fov.update('cameraWidth', w)
@@ -40,7 +40,7 @@ const FovItemEdit = memo(() => {
 		fov.update('pixelHeight', ps)
 	}, [])
 
-	const handleOnTelescopeSelectedChange = useCallback((item: AstrobinPopoverItem) => {
+	const handleOnTelescopeSelectedChange = useCallback((item: AstroBinEquipmentPopoverItem) => {
 		const { ap = 0, fl = 0 } = item
 
 		fov.update('aperture', ap)
@@ -50,12 +50,12 @@ const FovItemEdit = memo(() => {
 	return (
 		<>
 			<div className='col-span-2'>
-				<AstrobinPopover items={telescopes} onSelectedChange={handleOnTelescopeSelectedChange} type='telescope' />
+				<AstroBinEquipmentPopover items={telescopes} onSelectedChange={handleOnTelescopeSelectedChange} type='telescope' />
 			</div>
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Focal Length (mm)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('focalLength', value)} size='sm' value={focalLength} />
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Aperture (mm)' maxValue={10000} minValue={10} onValueChange={(value) => fov.update('aperture', value)} size='sm' value={aperture} />
 			<div className='col-span-2'>
-				<AstrobinPopover items={cameras} onSelectedChange={handleOnCameraSelectedChange} type='camera' />
+				<AstroBinEquipmentPopover items={cameras} onSelectedChange={handleOnCameraSelectedChange} type='camera' />
 			</div>
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Width (px)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraWidth', value)} size='sm' value={cameraWidth} />
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Height (px)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraHeight', value)} size='sm' value={cameraHeight} />
@@ -81,20 +81,11 @@ const FovItemList = memo(() => {
 	const { items, selected } = useSnapshot(fov.state)
 
 	return (
-		<Listbox
-			className='col-span-full'
-			classNames={{ list: 'h-[146px] overflow-scroll' }}
-			isVirtualized
-			onAction={(value) => fov.select(+value)}
-			selectionMode='none'
-			virtualization={{
-				maxListboxHeight: 146,
-				itemHeight: 45.5,
-			}}>
+		<Listbox className='col-span-full' classNames={{ list: 'max-h-[146px] overflow-scroll pe-1' }} onAction={(value) => fov.select(+value)} selectionMode='none'>
 			{items.map((item, index) => {
 				return (
 					<ListboxItem className={clsx({ 'bg-green-600/10': index === selected })} key={item.id}>
-						<div className='flex flex-row gap-1 items-center justify-between ps-1.5 border-l-2' style={{ borderColor: item.color }}>
+						<div className='flex flex-row gap-1 items-center justify-between ps-3 border-l-2' style={{ borderColor: item.color }}>
 							<div className='flex flex-col items-center justify-center'>
 								<Checkbox isSelected={item.visible} onValueChange={(selected) => fov.update('visible', selected, item.id)} />
 							</div>

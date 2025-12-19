@@ -2,6 +2,7 @@ import { molecule, onMount, use } from 'bunshi'
 import type { ImageFormat } from 'nebulosa/src/image'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
+import { imageStorageKey } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
 
 export interface ImageSettingsState {
@@ -14,7 +15,7 @@ const stateMap = new Map<string, ImageSettingsState>()
 
 export const ImageSettingsMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const { key, camera } = viewer.scope.image
+	const { key } = viewer.scope.image
 
 	const state =
 		stateMap.get(key) ??
@@ -27,8 +28,7 @@ export const ImageSettingsMolecule = molecule(() => {
 	stateMap.set(key, state)
 
 	onMount(() => {
-		const storageKey = camera?.name || 'default'
-		const unsubscriber = initProxy(state, `image.${storageKey}.settings`, ['p:show', 'p:pixelated'])
+		const unsubscriber = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.settings`, ['p:show', 'p:pixelated'])
 
 		update('pixelated', state.pixelated)
 

@@ -25,7 +25,7 @@ export function isMouseDeviceSupported() {
 }
 
 // Formats the name of a sky object based on its catalog ID and constellation
-export function formatSkyObjectName(id: string, constellation: Constellation | number) {
+export function skyObjectName(id: string, constellation: Constellation | number) {
 	const index = id.indexOf(':')
 
 	if (index === -1) return id
@@ -109,7 +109,7 @@ export function formatSkyObjectName(id: string, constellation: Constellation | n
 }
 
 // Formats the type of a sky object based on its type code
-export function formatSkyObjectType(type: SkyObjectSearchItem['type']) {
+export function skyObjectType(type: SkyObjectSearchItem['type']) {
 	if (type === 1) return 'Galaxy'
 	if (type === 2) return 'Active Galaxy'
 	if (type === 3) return 'Radio Galaxy'

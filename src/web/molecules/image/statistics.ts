@@ -5,7 +5,7 @@ import { proxy, ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
-import type { ImageLoaded } from '@/shared/types'
+import { type ImageLoaded, imageStorageKey } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
 
 export interface ImageStatisticsState {
@@ -19,7 +19,7 @@ const stateMap = new Map<string, ImageStatisticsState>()
 
 export const ImageStatisticsMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const { key, camera } = viewer.scope.image
+	const { key } = viewer.scope.image
 
 	const state =
 		stateMap.get(key) ??
@@ -38,8 +38,7 @@ export const ImageStatisticsMolecule = molecule(() => {
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(4)
 
-		const storageKey = camera?.name || 'default'
-		unsubscribers[0] = initProxy(state, `image.${storageKey}.statistics`, ['p:show', 'o:request'])
+		unsubscribers[0] = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.statistics`, ['p:show', 'o:request'])
 
 		unsubscribers[1] = bus.subscribe<ImageLoaded>('image:load', () => {
 			if (state.show) {

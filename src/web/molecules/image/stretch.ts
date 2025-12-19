@@ -2,6 +2,7 @@ import { molecule, onMount, use } from 'bunshi'
 import type { ImageStretch } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
+import { imageStorageKey } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
 
 export interface ImageStretchState {
@@ -13,7 +14,7 @@ const stateMap = new Map<string, ImageStretchState>()
 
 export const ImageStretchMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const { key, camera } = viewer.scope.image
+	const { key } = viewer.scope.image
 
 	const state =
 		stateMap.get(key) ??
@@ -25,8 +26,7 @@ export const ImageStretchMolecule = molecule(() => {
 	stateMap.set(key, state)
 
 	onMount(() => {
-		const storageKey = camera?.name || 'default'
-		const unsubscriber = initProxy(state, `image.${storageKey}.stretch`, ['p:show'])
+		const unsubscriber = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.stretch`, ['p:show'])
 
 		state.stretch = viewer.state.transformation.stretch
 

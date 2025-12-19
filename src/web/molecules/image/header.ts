@@ -1,6 +1,7 @@
 import { molecule, onMount, use } from 'bunshi'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
+import { imageStorageKey } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
 
 export interface ImageHeaderState {
@@ -11,7 +12,7 @@ const stateMap = new Map<string, ImageHeaderState>()
 
 export const ImageHeaderMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const { key, camera } = viewer.scope.image
+	const { key } = viewer.scope.image
 
 	const state =
 		stateMap.get(key) ??
@@ -22,8 +23,7 @@ export const ImageHeaderMolecule = molecule(() => {
 	stateMap.set(key, state)
 
 	onMount(() => {
-		const storageKey = camera?.name || 'default'
-		const unsubscriber = initProxy(state, `image.${storageKey}.header`, ['p:show'])
+		const unsubscriber = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.header`, ['p:show'])
 
 		return () => {
 			unsubscriber()

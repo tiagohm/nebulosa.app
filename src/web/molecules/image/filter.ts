@@ -2,6 +2,7 @@ import { molecule, onMount, use } from 'bunshi'
 import type { ImageFilter } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
+import { imageStorageKey } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
 
 export interface ImageFilterState {
@@ -13,7 +14,7 @@ const stateMap = new Map<string, ImageFilterState>()
 
 export const ImageFilterMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const { key, camera } = viewer.scope.image
+	const { key } = viewer.scope.image
 
 	const state =
 		stateMap.get(key) ??
@@ -25,8 +26,7 @@ export const ImageFilterMolecule = molecule(() => {
 	stateMap.set(key, state)
 
 	onMount(() => {
-		const storageKey = camera?.name || 'default'
-		const unsubscriber = initProxy(state, `image.${storageKey}.filter`, ['p:show'])
+		const unsubscriber = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.filter`, ['p:show'])
 
 		state.filter = viewer.state.transformation.filter
 

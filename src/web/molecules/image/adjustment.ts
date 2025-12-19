@@ -2,6 +2,7 @@ import { molecule, onMount, use } from 'bunshi'
 import type { ImageAdjustment } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
+import { imageStorageKey } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
 
 export interface ImageAdjustmentState {
@@ -13,7 +14,7 @@ const stateMap = new Map<string, ImageAdjustmentState>()
 
 export const ImageAdjustmentMolecule = molecule(() => {
 	const viewer = use(ImageViewerMolecule)
-	const { key, camera } = viewer.scope.image
+	const { key } = viewer.scope.image
 
 	const state =
 		stateMap.get(key) ??
@@ -25,8 +26,7 @@ export const ImageAdjustmentMolecule = molecule(() => {
 	stateMap.set(key, state)
 
 	onMount(() => {
-		const storageKey = camera?.name || 'default'
-		const unsubscriber = initProxy(state, `image.${storageKey}.adjustment`, ['p:show'])
+		const unsubscriber = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.adjustment`, ['p:show'])
 
 		state.adjustment = viewer.state.transformation.adjustment
 

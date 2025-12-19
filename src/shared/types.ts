@@ -948,7 +948,7 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 
 export const DEFAULT_FOV_ITEM: FovItem = {
 	id: 0,
-	visible: false,
+	visible: true,
 	// William Optics RedCat 51
 	focalLength: 250,
 	aperture: 51,

@@ -16,7 +16,7 @@ export function FilterableListbox<T extends object>({ showFilter = true, items, 
 
 	const filtered = useMemo(() => {
 		const text = debouncedSearch.toLowerCase().trim()
-		return items.length && debouncedSearch ? items.filter((item) => filter(item, text)) : items
+		return items.length && text ? items.filter((item) => filter(item, text)) : items
 	}, [debouncedSearch, items])
 
 	return <Listbox {...props} items={filtered} topContent={showFilter && <SearchInput className='w-full' onValueChange={setSearch} placeholder={filterPlaceholder} value={search} />} />

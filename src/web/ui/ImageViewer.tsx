@@ -4,6 +4,7 @@ import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
 import { ImageFilterMolecule } from '@/molecules/image/filter'
+import { ImageFovMolecule } from '@/molecules/image/fov'
 import { ImageHeaderMolecule } from '@/molecules/image/header'
 import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
 import { ImageSaveMolecule } from '@/molecules/image/save'
@@ -20,9 +21,11 @@ import { CoordinateOnMouse } from './CoordinateOnMouse'
 import { Crosshair } from './Crosshair'
 import { DetectedStars } from './DetectedStars'
 import { FITSHeader } from './FITSHeader'
+import { Fov } from './Fov'
 import { ImageAdjustment } from './ImageAdjustment'
 import { ImageAnnotation } from './ImageAnnotation'
 import { ImageFilter } from './ImageFilter'
+import { ImageFov } from './ImageFov'
 import { ImageInfo } from './ImageInfo'
 import { ImageSave } from './ImageSave'
 import { ImageScnr } from './ImageScnr'
@@ -48,7 +51,7 @@ export const ImageViewer = memo(() => {
 	const { show: showStarDetection } = useSnapshot(starDetection.state)
 
 	const solver = useMolecule(ImageSolverMolecule)
-	const { show: showPlateSolver } = useSnapshot(solver.state)
+	const { show: showPlateSolver, solution } = useSnapshot(solver.state)
 
 	const annotation = useMolecule(ImageAnnotationMolecule)
 	const { show: showAnnotation } = useSnapshot(annotation.state)
@@ -76,6 +79,9 @@ export const ImageViewer = memo(() => {
 
 	const header = useMolecule(ImageHeaderMolecule)
 	const { show: showHeader } = useSnapshot(header.state)
+
+	const fov = useMolecule(ImageFovMolecule)
+	const { show: showFov } = useSnapshot(fov.state)
 
 	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
 
@@ -143,7 +149,7 @@ export const ImageViewer = memo(() => {
 			<Activity mode={showSettings ? 'visible' : 'hidden'}>
 				<ImageSettings />
 			</Activity>
-			<Activity mode={showAnnotation ? 'visible' : 'hidden'}>
+			<Activity mode={showAnnotation && solution ? 'visible' : 'hidden'}>
 				<ImageAnnotation />
 			</Activity>
 			<Activity mode={showSave ? 'visible' : 'hidden'}>
@@ -151,6 +157,9 @@ export const ImageViewer = memo(() => {
 			</Activity>
 			<Activity mode={showStatistics ? 'visible' : 'hidden'}>
 				<ImageStatistics />
+			</Activity>
+			<Activity mode={showFov && solution ? 'visible' : 'hidden'}>
+				<ImageFov />
 			</Activity>
 		</>
 	)
@@ -169,6 +178,9 @@ const InteractableOverlay = memo(() => {
 	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
 	const { visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
 
+	const fov = useMolecule(ImageFovMolecule)
+	const { show: isFovVisible } = useSnapshot(fov.state)
+
 	return (
 		<>
 			<Activity mode={crosshair ? 'visible' : 'hidden'}>
@@ -182,6 +194,9 @@ const InteractableOverlay = memo(() => {
 			</Activity>
 			<Activity mode={isMouseCoordinateVisible ? 'visible' : 'hidden'}>
 				<CoordinateOnMouse />
+			</Activity>
+			<Activity mode={isFovVisible ? 'visible' : 'hidden'}>
+				<Fov />
 			</Activity>
 		</>
 	)

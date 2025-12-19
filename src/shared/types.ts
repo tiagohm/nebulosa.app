@@ -469,11 +469,14 @@ export interface ImageInfo extends Partial<EquatorialCoordinate>, Size {
 }
 
 export interface FovItem {
+	id: number
 	visible: boolean
 	focalLength: number // mm
 	aperture: number // mm
-	readonly cameraSize: Size // px
-	readonly pixelSize: Size // μm
+	readonly cameraWidth: number // px
+	readonly cameraHeight: number // px
+	readonly pixelWidth: number // μm
+	readonly pixelHeight: number // μm
 	barlowReducer: number
 	bin: number
 	rotation: number // deg
@@ -482,9 +485,9 @@ export interface FovItem {
 
 export interface ComputedFov {
 	focalRatio: number
-	readonly camera: Size // pixels
-	readonly field: Size // arcmin
-	readonly svg: Size // %
+	readonly resolution: Size // Camera resolution in arcsec/pixel
+	readonly field: Size // FOV in arcmin
+	readonly svg: Size // SVG dimensions in % of the image
 }
 
 // INDI
@@ -944,20 +947,25 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 }
 
 export const DEFAULT_FOV_ITEM: FovItem = {
+	id: 0,
 	visible: false,
-	focalLength: 0,
-	aperture: 0,
-	cameraSize: DEFAULT_SIZE,
-	pixelSize: DEFAULT_SIZE,
-	barlowReducer: 0,
-	bin: 0,
+	// William Optics RedCat 51
+	focalLength: 250,
+	aperture: 51,
+	// ZWO ASI2600MM
+	cameraWidth: 6248,
+	cameraHeight: 4176,
+	pixelWidth: 3.76,
+	pixelHeight: 3.76,
+	barlowReducer: 1,
+	bin: 1,
 	rotation: 0,
 	color: '#fff',
 }
 
 export const DEFAULT_COMPUTED_FOV: ComputedFov = {
 	focalRatio: 0,
-	camera: DEFAULT_SIZE,
+	resolution: DEFAULT_SIZE,
 	field: DEFAULT_SIZE,
 	svg: DEFAULT_SIZE,
 }

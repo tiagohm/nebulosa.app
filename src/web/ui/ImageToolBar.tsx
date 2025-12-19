@@ -1,10 +1,11 @@
 import { NumberInput, Popover, PopoverContent, PopoverTrigger, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
 import { ImageFilterMolecule } from '@/molecules/image/filter'
+import { ImageFovMolecule } from '@/molecules/image/fov'
 import { ImageHeaderMolecule } from '@/molecules/image/header'
 import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
 import { ImageSaveMolecule } from '@/molecules/image/save'
@@ -31,6 +32,7 @@ export const ImageToolBar = memo(() => {
 	const statistics = useMolecule(ImageStatisticsMolecule)
 	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
 	const header = useMolecule(ImageHeaderMolecule)
+	const fov = useMolecule(ImageFovMolecule)
 
 	const { solution } = useSnapshot(solver.state)
 	const { visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
@@ -64,11 +66,14 @@ export const ImageToolBar = memo(() => {
 				<Tooltip content='FITS Header' placement='top' showArrow>
 					<IconButton color='secondary' icon={Icons.Text} onPointerUp={header.show} variant='flat' />
 				</Tooltip>
-				{solution?.scale && (
+				<Activity mode={solution?.scale ? 'visible' : 'hidden'}>
 					<Tooltip content='Mouse Coordinate' placement='top' showArrow>
 						<ToggleButton color='primary' icon={Icons.MousePointerClick} isSelected={isMouseCoordinateVisible} onPointerUp={mouseCoordinate.toggle} />
 					</Tooltip>
-				)}
+					<Tooltip content='FOV' placement='top' showArrow>
+						<IconButton color='secondary' icon={Icons.FocusField} onPointerUp={fov.show} variant='flat' />
+					</Tooltip>
+				</Activity>
 				<Tooltip content='Settings' placement='top' showArrow>
 					<IconButton color='secondary' icon={Icons.Cog} onPointerUp={settings.show} variant='flat' />
 				</Tooltip>

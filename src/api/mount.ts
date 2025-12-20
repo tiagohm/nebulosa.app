@@ -1,18 +1,20 @@
 import Elysia from 'elysia'
-import { type Angle, deg, PARSE_HOUR_ANGLE, parseAngle } from 'nebulosa/src/angle'
+import { type Angle, normalizePI, PARSE_HOUR_ANGLE, parseAngle } from 'nebulosa/src/angle'
 import { cirsToObserved, observedToCirs } from 'nebulosa/src/astrometry'
 import { constellation } from 'nebulosa/src/constellation'
 import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { fk5, precessFk5FromJ2000, precessFk5ToJ2000 } from 'nebulosa/src/fk5'
+import { precessionMatrixCapitaine } from 'nebulosa/src/frame'
 import type { IndiClient, PropertyState } from 'nebulosa/src/indi'
 import type { Mount } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, MountManager } from 'nebulosa/src/indi.manager'
 import { type GeographicPosition, localSiderealTime } from 'nebulosa/src/location'
 import { type Lx200ProtocolHandler, Lx200ProtocolServer, type MoveDirection } from 'nebulosa/src/lx200'
+import { matMulVec } from 'nebulosa/src/mat3'
 import { type StellariumProtocolHandler, StellariumProtocolServer } from 'nebulosa/src/stellarium'
-import { TIMEZONE } from 'nebulosa/src/temporal'
-import { timeNow } from 'nebulosa/src/time'
+import { TIMEZONE, temporalAdd } from 'nebulosa/src/temporal'
+import { Timescale, timeJulianYear, timeNow } from 'nebulosa/src/time'
 // biome-ignore format: too long!
 import { computeMeridianTime, expectedPierSide, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountTargetCoordinate, type MountUpdated } from 'src/shared/types'
 import type { ConnectionHandler } from './connection'
@@ -71,180 +73,178 @@ export function targetCoordinatePosition(device: Mount, target: EquatorialCoordi
 	} as MountEquatorialCoordinatePosition
 }
 
-export class MountHandler implements DeviceHandler<Mount> {
-	constructor(readonly wsm: WebSocketMessageHandler) {}
-
-	added(client: IndiClient, device: Mount) {
-		this.wsm.send<MountAdded>('mount:add', { device })
-		console.info('mount added:', device.name)
+export function mount(wsm: WebSocketMessageHandler, mount: MountManager, connection: ConnectionHandler) {
+	function mountFromParams(params: { id: string }) {
+		return mount.get(decodeURIComponent(params.id))!
 	}
 
-	updated(client: IndiClient, device: Mount, property: keyof Mount, state?: PropertyState) {
-		this.wsm.send<MountUpdated>('mount:update', { device: { name: device.name, [property]: device[property] }, property, state })
+	const handler: DeviceHandler<Mount> = {
+		added: (client: IndiClient, device: Mount) => {
+			wsm.send<MountAdded>('mount:add', { device })
+			console.info('mount added:', device.name)
+		},
+
+		updated: (client: IndiClient, device: Mount, property: keyof Mount, state?: PropertyState) => {
+			wsm.send<MountUpdated>('mount:update', { device: { name: device.name, [property]: device[property] }, property, state })
+		},
+
+		removed: (client: IndiClient, device: Mount) => {
+			wsm.send<MountRemoved>('mount:remove', { device })
+			console.info('mount removed:', device.name)
+		},
 	}
 
-	removed(client: IndiClient, device: Mount) {
-		this.wsm.send<MountRemoved>('mount:remove', { device })
-		console.info('mount removed:', device.name)
+	mount.addHandler(handler)
+
+	const stellarium = new Map<Mount, StellariumProtocolServer>()
+	const lx200 = new Map<Mount, Lx200ProtocolServer>()
+
+	const J2000 = timeJulianYear(2000, Timescale.UTC)
+
+	// TODO: needs to be updated daily?
+	const now = timeNow(true)
+	const nowToJ2000 = precessionMatrixCapitaine(now, J2000)
+	const j2000ToNow = precessionMatrixCapitaine(J2000, now)
+
+	function precessToJ2000(rightAscension: Angle, declination: Angle): readonly [Angle, Angle] {
+		return eraC2s(...matMulVec(nowToJ2000, fk5(rightAscension, declination)))
 	}
-}
 
-export class MountRemoteControlHandler implements StellariumProtocolHandler, Lx200ProtocolHandler {
-	private readonly stellarium = new Map<Mount, StellariumProtocolServer>()
-	private readonly lx200 = new Map<Mount, Lx200ProtocolServer>()
-	private readonly equatorialCoordinateJ2000 = new Map<Mount, readonly [Angle, Angle]>()
+	function precessToJNow(rightAscension: Angle, declination: Angle): readonly [Angle, Angle] {
+		return eraC2s(...matMulVec(j2000ToNow, fk5(rightAscension, declination)))
+	}
 
-	constructor(
-		readonly mount: MountManager,
-		readonly connection: ConnectionHandler,
-	) {}
+	const disconnectHandler = (server: Lx200ProtocolServer | StellariumProtocolServer) => {
+		const mount = get(server)
 
-	start(mount: Mount, req: MountRemoteControlStart) {
+		if (server instanceof Lx200ProtocolServer) {
+			lx200.delete(mount)
+		} else if (server instanceof StellariumProtocolServer) {
+			stellarium.delete(mount)
+		}
+	}
+
+	const stellariumHandler: StellariumProtocolHandler = {
+		disconnect: disconnectHandler,
+		goto: (server, rightAscension, declination) => {
+			;[rightAscension, declination] = precessToJNow(rightAscension, declination)
+			mount.goTo(connection.get(), get(server), rightAscension, declination)
+		},
+	}
+
+	const lx200Handler: Lx200ProtocolHandler = {
+		disconnect: disconnectHandler,
+		goto: (server, rightAscension, declination) => {
+			;[rightAscension, declination] = precessToJNow(rightAscension, declination)
+			mount.goTo(connection.get(), get(server), rightAscension, declination)
+		},
+		sync: (server: Lx200ProtocolServer, rightAscension: Angle, declination: Angle) => {
+			;[rightAscension, declination] = precessToJNow(rightAscension, declination)
+			return mount.syncTo(connection.get(), get(server), rightAscension, declination)
+		},
+		rightAscension: (server: Lx200ProtocolServer) => {
+			const mount = get(server)
+			const { rightAscension, declination } = mount.equatorialCoordinate
+			return precessToJ2000(rightAscension, declination)[0]
+		},
+		declination: (server: Lx200ProtocolServer) => {
+			const mount = get(server)
+			const { rightAscension, declination } = mount.equatorialCoordinate
+			return precessToJ2000(rightAscension, declination)[1]
+		},
+		longitude: (server: Lx200ProtocolServer, longitude?: Angle) => {
+			const device = get(server)
+			if (longitude !== undefined) mount.geographicCoordinate(connection.get(), device, { ...device.geographicCoordinate, longitude })
+			return normalizePI(device.geographicCoordinate.longitude)
+		},
+		latitude: (server: Lx200ProtocolServer, latitude?: Angle) => {
+			const device = get(server)
+			if (latitude !== undefined) mount.geographicCoordinate(connection.get(), device, { ...device.geographicCoordinate, latitude })
+			return normalizePI(device.geographicCoordinate.latitude)
+		},
+		dateTime: (server: Lx200ProtocolServer) => {
+			return [temporalAdd(Date.now(), TIMEZONE, 'm'), TIMEZONE] as const
+		},
+		tracking: (server: Lx200ProtocolServer) => {
+			return get(server).tracking
+		},
+		parked: (server: Lx200ProtocolServer) => {
+			return get(server).parked
+		},
+		slewing: (server: Lx200ProtocolServer) => {
+			return get(server).slewing
+		},
+		slewRate: (server: Lx200ProtocolServer, rate: 'CENTER' | 'GUIDE' | 'FIND' | 'MAX') => {
+			const rates = get(server).slewRates
+
+			if (rates.length) {
+				const index = rates.length === 1 ? 0 : rate === 'GUIDE' ? 0 : rate === 'MAX' ? rates.length - 1 : rate === 'CENTER' ? 1 : Math.max(1, rates.length - 2)
+				mount.slewRate(connection.get(), get(server), rates[Math.max(index, 0)])
+			}
+		},
+		move: (server: Lx200ProtocolServer, direction: MoveDirection, enabled: boolean) => {
+			if (direction === 'NORTH') mount.moveNorth(connection.get(), get(server), enabled)
+			else if (direction === 'SOUTH') mount.moveSouth(connection.get(), get(server), enabled)
+			else if (direction === 'EAST') mount.moveEast(connection.get(), get(server), enabled)
+			else if (direction === 'WEST') mount.moveWest(connection.get(), get(server), enabled)
+		},
+		abort: (server: Lx200ProtocolServer) => {
+			mount.stop(connection.get(), get(server))
+		},
+	}
+
+	function startRemoteControl(mount: Mount, req: MountRemoteControlStart) {
 		if (req.protocol === 'STELLARIUM') {
-			if (!this.stellarium.has(mount)) {
-				const server = new StellariumProtocolServer(req.host, req.port, { handler: this })
+			if (!stellarium.has(mount)) {
+				const server = new StellariumProtocolServer(req.host, req.port, { handler: stellariumHandler })
 
 				if (server.start()) {
-					this.stellarium.set(mount, server)
+					stellarium.set(mount, server)
 				}
 			}
 		} else if (req.protocol === 'LX200') {
-			if (!this.lx200.has(mount)) {
-				const server = new Lx200ProtocolServer(req.host, req.port, { handler: this, name: 'Nebulosa', version: '0.2.0' })
+			if (!lx200.has(mount)) {
+				const server = new Lx200ProtocolServer(req.host, req.port, { handler: lx200Handler, name: 'Nebulosa', version: '0.2.0' })
 
 				if (server.start()) {
-					this.lx200.set(mount, server)
+					lx200.set(mount, server)
 				}
 			}
 		}
 	}
 
-	stop(mount: Mount, protocol: MountRemoteControlProtocol) {
+	function stopRemoteControl(mount: Mount, protocol: MountRemoteControlProtocol) {
 		if (protocol === 'STELLARIUM') {
-			const server = this.stellarium.get(mount)
+			const server = stellarium.get(mount)
 
 			if (server) {
 				server.stop()
-				this.stellarium.delete(mount)
+				stellarium.delete(mount)
 			}
 		} else if (protocol === 'LX200') {
-			const server = this.lx200.get(mount)
+			const server = lx200.get(mount)
 
 			if (server) {
 				server.stop()
-				this.lx200.delete(mount)
+				lx200.delete(mount)
 			}
 		}
 	}
 
-	status(mount: Mount): MountRemoteControlStatus {
-		const a = this.lx200.get(mount)
-		const b = this.stellarium.get(mount)
+	function remoteControlStatus(mount: Mount): MountRemoteControlStatus {
+		const a = lx200.get(mount)
+		const b = stellarium.get(mount)
 		return { LX200: !!a && { host: a.host, port: a.port }, STELLARIUM: !!b && { host: b.host, port: b.port } }
 	}
 
-	// STELLARIUM & LX200
-
-	connect(server: Lx200ProtocolServer | StellariumProtocolServer) {}
-
-	goto(server: Lx200ProtocolServer | StellariumProtocolServer, rightAscension: Angle, declination: Angle) {
-		;[rightAscension, declination] = eraC2s(...precessFk5FromJ2000(fk5(rightAscension, declination), timeNow(true)))
-		this.mount.goTo(this.connection.get(), this.get(server)!, rightAscension, declination)
-	}
-
-	sync(server: Lx200ProtocolServer, rightAscension: Angle, declination: Angle) {
-		;[rightAscension, declination] = eraC2s(...precessFk5FromJ2000(fk5(rightAscension, declination), timeNow(true)))
-		return this.mount.syncTo(this.connection.get(), this.get(server)!, rightAscension, declination)
-	}
-
-	disconnect(server: Lx200ProtocolServer | StellariumProtocolServer) {
-		const mount = this.get(server)!
-
+	function get(server: Lx200ProtocolServer | StellariumProtocolServer) {
 		if (server instanceof Lx200ProtocolServer) {
-			this.lx200.delete(mount)
-		} else if (server instanceof StellariumProtocolServer) {
-			this.stellarium.delete(mount)
-		}
-	}
-
-	// LX200
-
-	// is RA called first?
-	rightAscension(server: Lx200ProtocolServer) {
-		const mount = this.get(server)!
-		const { rightAscension, declination } = mount.equatorialCoordinate
-		const coordinate = eraC2s(...precessFk5ToJ2000(fk5(rightAscension, declination), timeNow(true)))
-		this.equatorialCoordinateJ2000.set(mount, coordinate)
-		return coordinate[0]
-	}
-
-	declination(server: Lx200ProtocolServer) {
-		const mount = this.get(server)!
-		return this.equatorialCoordinateJ2000.get(mount)?.[1] ?? 0
-	}
-
-	longitude(server: Lx200ProtocolServer, longitude?: Angle) {
-		const mount = this.get(server)!
-		if (longitude) this.mount.geographicCoordinate(this.connection.get(), mount, { ...mount.geographicCoordinate, longitude })
-		return deg(mount.geographicCoordinate.longitude)
-	}
-
-	latitude(server: Lx200ProtocolServer, latitude?: Angle) {
-		const mount = this.get(server)!
-		if (latitude) this.mount.geographicCoordinate(this.connection.get(), mount, { ...mount.geographicCoordinate, latitude })
-		return deg(mount.geographicCoordinate.latitude)
-	}
-
-	dateTime(server: Lx200ProtocolServer) {
-		return [Date.now(), TIMEZONE] as const
-	}
-
-	tracking(server: Lx200ProtocolServer) {
-		return this.get(server)!.tracking
-	}
-
-	parked(server: Lx200ProtocolServer) {
-		return this.get(server)!.parked
-	}
-
-	slewing(server: Lx200ProtocolServer) {
-		return this.get(server)!.slewing
-	}
-
-	slewRate(server: Lx200ProtocolServer, rate: 'CENTER' | 'GUIDE' | 'FIND' | 'MAX') {
-		const rates = this.get(server)!.slewRates
-
-		if (rates.length) {
-			const index = rates.length === 1 ? 0 : rate === 'GUIDE' ? 0 : rate === 'MAX' ? rates.length - 1 : rate === 'CENTER' ? 1 : Math.max(1, rates.length - 2)
-			this.mount.slewRate(this.connection.get(), this.get(server)!, rates[Math.max(index, 0)])
-		}
-	}
-
-	move(server: Lx200ProtocolServer, direction: MoveDirection, enabled: boolean) {
-		if (direction === 'NORTH') this.mount.moveNorth(this.connection.get(), this.get(server)!, enabled)
-		else if (direction === 'SOUTH') this.mount.moveSouth(this.connection.get(), this.get(server)!, enabled)
-		else if (direction === 'EAST') this.mount.moveEast(this.connection.get(), this.get(server)!, enabled)
-		else if (direction === 'WEST') this.mount.moveWest(this.connection.get(), this.get(server)!, enabled)
-	}
-
-	abort(server: Lx200ProtocolServer) {
-		this.mount.stop(this.connection.get(), this.get(server)!)
-	}
-
-	get(server: Lx200ProtocolServer | StellariumProtocolServer) {
-		if (server instanceof Lx200ProtocolServer) {
-			for (const [m, s] of this.lx200) if (s === server) return m
+			for (const [m, s] of lx200) if (s === server) return m
 		} else {
-			for (const [m, s] of this.stellarium) if (s === server) return m
+			for (const [m, s] of stellarium) if (s === server) return m
 		}
 
-		return undefined
-	}
-}
-
-export function mount(mount: MountManager, remoteControl: MountRemoteControlHandler, connection: ConnectionHandler) {
-	function mountFromParams(params: { id: string }) {
-		return mount.get(decodeURIComponent(params.id))!
+		throw new Error('mount not found!')
 	}
 
 	const app = new Elysia({ prefix: '/mounts' })
@@ -269,9 +269,9 @@ export function mount(mount: MountManager, remoteControl: MountRemoteControlHand
 		.post('/:id/location', ({ params, body }) => mount.geographicCoordinate(connection.get(), mountFromParams(params), body as never))
 		.post('/:id/time', ({ params, body }) => mount.time(connection.get(), mountFromParams(params), body as never))
 		.post('/:id/stop', ({ params }) => mount.stop(connection.get(), mountFromParams(params)))
-		.post('/:id/remotecontrol/start', ({ params, body }) => remoteControl.start(mountFromParams(params), body as never))
-		.post('/:id/remotecontrol/stop', ({ params, body }) => remoteControl.stop(mountFromParams(params), body as never))
-		.get('/:id/remotecontrol', ({ params }) => remoteControl.status(mountFromParams(params)))
+		.post('/:id/remotecontrol/start', ({ params, body }) => startRemoteControl(mountFromParams(params), body as never))
+		.post('/:id/remotecontrol/stop', ({ params, body }) => stopRemoteControl(mountFromParams(params), body as never))
+		.get('/:id/remotecontrol', ({ params }) => remoteControlStatus(mountFromParams(params)))
 
 	return app
 }

@@ -1,3 +1,4 @@
+import cron from '@elysiajs/cron'
 import { Elysia } from 'elysia'
 // biome-ignore format: too long!
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, IndiClient, IndiClientHandler, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
@@ -150,80 +151,79 @@ export class IndiHandler implements IndiClientHandler {
 	}
 }
 
-export class IndiDevicePropertyHandler implements DevicePropertyHandler {
-	private readonly listeners = new Map<string, number>()
-
-	constructor(
-		readonly wsm: WebSocketMessageHandler,
-		readonly properties: DevicePropertyManager,
-	) {}
-
-	ping(name: string) {
-		this.listeners.set(name, Date.now())
+export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties: DevicePropertyManager, connection: ConnectionHandler) {
+	function deviceFromParams(params: { id: string }) {
+		return indi.get(decodeURIComponent(params.id))!
 	}
 
-	clear() {
+	const listeners = new Map<string, number>()
+	let subprocess: Bun.Subprocess | undefined
+
+	function ping(name: string) {
+		listeners.set(name, Date.now())
+	}
+
+	function clear() {
 		const now = Date.now()
 
-		for (const [name, ping] of this.listeners) {
+		for (const [name, ping] of listeners) {
 			if (now - ping >= 10000) {
-				this.listeners.delete(name)
+				listeners.delete(name)
+				console.info('unlisten device:', name)
 			}
 		}
 	}
 
-	private notify(device: string, property: DeviceProperty, type: 'update' | 'remove') {
-		if (this.listeners.has(device)) {
-			this.wsm.send<IndiDevicePropertyEvent>(`indi:property:${type}`, { device, name: property.name, property })
+	function notify(device: string, property: DeviceProperty, type: 'update' | 'remove') {
+		if (listeners.has(device)) {
+			wsm.send<IndiDevicePropertyEvent>(`indi:property:${type}`, { device, name: property.name, property })
 		}
 	}
 
-	added(device: string, property: DeviceProperty) {
-		this.notify(device, property, 'update')
+	const handler: DevicePropertyHandler = {
+		added: (device: string, property: DeviceProperty) => {
+			notify(device, property, 'update')
+		},
+
+		updated: (device: string, property: DeviceProperty) => {
+			notify(device, property, 'update')
+		},
+
+		removed: (device: string, property: DeviceProperty) => {
+			notify(device, property, 'remove')
+		},
 	}
 
-	updated(device: string, property: DeviceProperty) {
-		this.notify(device, property, 'update')
-	}
+	properties.addHandler(handler)
 
-	removed(device: string, property: DeviceProperty) {
-		this.notify(device, property, 'remove')
-	}
-}
-
-export class IndiServerHandler {
-	private process?: Bun.Subprocess
-
-	constructor(readonly wsm: WebSocketMessageHandler) {}
-
-	start(req: IndiServerStart) {
-		this.stop()
-
+	function start(req: IndiServerStart) {
 		if (process.platform !== 'linux') return
+
+		stop()
 
 		const cmd = ['indiserver', '-p', req.port?.toFixed(0) || '7624', '-r', req.repeat?.toFixed(0) || '1', req.verbose ? `-${'v'.repeat(req.verbose)}` : '', ...req.drivers].filter((e) => !!e)
 		const p = Bun.spawn({ cmd })
 
-		p.exited.then((code) => this.wsm.send<IndiServerEvent>('indi:server:stop', { pid: p.pid, code }))
+		p.exited.then((code) => wsm.send<IndiServerEvent>('indi:server:stop', { pid: p.pid, code }))
 
-		this.wsm.send<IndiServerEvent>('indi:server:start', { pid: p.pid })
-		this.process = p
+		wsm.send<IndiServerEvent>('indi:server:start', { pid: p.pid })
+		subprocess = p
 	}
 
-	stop() {
-		if (this.process && !this.process.killed) {
-			this.process.kill()
-			this.process = undefined
+	function stop() {
+		if (subprocess && !subprocess.killed) {
+			subprocess.kill()
+			subprocess = undefined
 		}
 	}
 
-	async status() {
-		const enabled = process.platform === 'linux' && (!!this.process || (await Bun.$`ps aux | grep "indiserver" | grep -v grep | grep -Ec -e "indiserver"`.nothrow().quiet()).text().trim() === '0')
-		const running = enabled && !!this.process && !this.process.killed
+	async function status() {
+		const enabled = process.platform === 'linux' && (!!subprocess || (await Bun.$`ps aux | grep "indiserver" | grep -v grep | grep -Ec -e "indiserver"`.nothrow().quiet()).text().trim() === '0')
+		const running = enabled && !!subprocess && !subprocess.killed
 		return { enabled, running } as IndiServerStatus
 	}
 
-	async drivers() {
+	async function drivers() {
 		if (process.platform !== 'linux') return []
 
 		return (await Bun.$`ls /usr/bin/indi_* -1`.nothrow().quiet())
@@ -231,12 +231,6 @@ export class IndiServerHandler {
 			.split('\n')
 			.map((e) => e.substring(9).trim())
 			.filter((e) => !!e)
-	}
-}
-
-export function indi(indi: IndiHandler, server: IndiServerHandler, property: IndiDevicePropertyHandler, connection: ConnectionHandler) {
-	function deviceFromParams(params: { id: string }) {
-		return indi.get(decodeURIComponent(params.id))!
 	}
 
 	function send(client: IndiClient, type: DevicePropertyType, message: NewVector) {
@@ -247,16 +241,17 @@ export function indi(indi: IndiHandler, server: IndiServerHandler, property: Ind
 
 	const app = new Elysia({ prefix: '/indi' })
 		// Endpoints!
-		.get('/devices', () => property.properties.names())
+		.get('/devices', () => properties.names())
 		.post('/:id/connect', ({ params }) => connect(connection.get(), deviceFromParams(params)))
 		.post('/:id/disconnect', ({ params }) => disconnect(connection.get(), deviceFromParams(params)))
-		.get('/:id/properties', ({ params }) => property.properties.get(decodeURIComponent(params.id)))
-		.post('/:id/properties/ping', ({ params }) => property.ping(decodeURIComponent(params.id)))
+		.get('/:id/properties', ({ params }) => properties.get(decodeURIComponent(params.id)))
+		.post('/:id/properties/ping', ({ params }) => ping(decodeURIComponent(params.id)))
 		.post('/:id/properties/send', ({ query, body }) => send(connection.get(), query.type as never, body as never))
-		.post('/server/start', ({ body }) => server.start(body as never))
-		.post('/server/stop', () => server.stop())
-		.get('/server/status', () => server.status())
-		.get('/server/drivers', () => server.drivers())
+		.post('/server/start', ({ body }) => start(body as never))
+		.post('/server/stop', () => stop())
+		.get('/server/status', () => status())
+		.get('/server/drivers', () => drivers())
+		.use(cron({ name: 'ping', pattern: '0 */1 * * * *', run: clear }))
 
 	return app
 }

@@ -14,19 +14,19 @@ import { AtlasHandler, atlas } from 'src/api/atlas'
 import { CacheManager } from 'src/api/cache'
 import { CameraHandler, camera } from 'src/api/camera'
 import { ConnectionHandler, connection } from 'src/api/connection'
-import { CoverHandler, cover } from 'src/api/cover'
+import { cover } from 'src/api/cover'
 import { DarvHandler, darv } from 'src/api/darv'
-import { DewHeaterHandler, dewHeater } from 'src/api/dewheater'
-import { FlatPanelHandler, flatPanel } from 'src/api/flatpanel'
-import { FocuserHandler, focuser } from 'src/api/focuser'
-import { GuideOutputHandler, guideOutput } from 'src/api/guideoutput'
-import { IndiDevicePropertyHandler, IndiHandler, IndiServerHandler, indi } from 'src/api/indi'
+import { dewHeater } from 'src/api/dewheater'
+import { flatPanel } from 'src/api/flatpanel'
+import { focuser } from 'src/api/focuser'
+import { guideOutput } from 'src/api/guideoutput'
+import { IndiHandler, indi } from 'src/api/indi'
 import { WebSocketMessageHandler } from 'src/api/message'
-import { MountHandler, MountRemoteControlHandler, mount } from 'src/api/mount'
+import { mount } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
-import { ThermometerHandler, thermometer } from 'src/api/thermometer'
+import { thermometer } from 'src/api/thermometer'
 import { TppaHandler, tppa } from 'src/api/tppa'
-import { WheelHandler, wheel } from 'src/api/wheel'
+import { wheel } from 'src/api/wheel'
 import { parseArgs } from 'util'
 import { ConfirmationHandler, confirmation } from './src/api/confirmation'
 import { FileSystemHandler, fileSystem } from './src/api/filesystem'
@@ -158,39 +158,11 @@ const imageProcessor = new ImageProcessor()
 const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, guideOutputManager, thermometerManager, mountManager, wheelManager, focuserManager)
 cameraManager.addHandler(cameraHandler)
 
-const mountHandler = new MountHandler(wsm)
-mountManager.addHandler(mountHandler)
-const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, connectionHandler)
-
-const focuserHandler = new FocuserHandler(wsm)
-focuserManager.addHandler(focuserHandler)
-
-const wheelHandler = new WheelHandler(wsm)
-wheelManager.addHandler(wheelHandler)
-
-const flatPanelHandler = new FlatPanelHandler(wsm)
-flatPanelManager.addHandler(flatPanelHandler)
-
-const coverHandler = new CoverHandler(wsm)
-coverManager.addHandler(coverHandler)
-
-const guideOutputHandler = new GuideOutputHandler(wsm)
-guideOutputManager.addHandler(guideOutputHandler)
-
-const thermometerHandler = new ThermometerHandler(wsm)
-thermometerManager.addHandler(thermometerHandler)
-
-const dewHeaterHandler = new DewHeaterHandler(wsm)
-dewHeaterManager.addHandler(dewHeaterHandler)
-
 const devicePropertyManager = new DevicePropertyManager()
-const indiDevicePropertyHandler = new IndiDevicePropertyHandler(wsm, devicePropertyManager)
-devicePropertyManager.addHandler(indiDevicePropertyHandler)
 
 const cacheManager = new CacheManager()
 
 const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, devicePropertyManager, wsm)
-const indiServerHandler = new IndiServerHandler(wsm)
 const confirmationHandler = new ConfirmationHandler(wsm)
 const framingHandler = new FramingHandler(imageProcessor)
 const fileSystemHandler = new FileSystemHandler()
@@ -245,7 +217,6 @@ const app = new Elysia({
 			pattern: '0 */1 * * * *',
 			run: () => {
 				void imageProcessor.clear()
-				indiDevicePropertyHandler.clear()
 			},
 		}),
 	)
@@ -292,16 +263,16 @@ const app = new Elysia({
 
 	.use(connection(connectionHandler, indiHandler))
 	.use(confirmation(confirmationHandler))
-	.use(indi(indiHandler, indiServerHandler, indiDevicePropertyHandler, connectionHandler))
+	.use(indi(wsm, indiHandler, devicePropertyManager, connectionHandler))
 	.use(camera(cameraHandler, connectionHandler))
-	.use(mount(mountManager, mountRemoteControlHandler, connectionHandler))
-	.use(focuser(focuserManager, connectionHandler))
-	.use(wheel(wheelManager, connectionHandler))
-	.use(thermometer(thermometerManager))
-	.use(guideOutput(guideOutputManager, connectionHandler))
-	.use(cover(coverManager, connectionHandler))
-	.use(flatPanel(flatPanelManager, connectionHandler))
-	.use(dewHeater(dewHeaterManager, connectionHandler))
+	.use(mount(wsm, mountManager, connectionHandler))
+	.use(focuser(wsm, focuserManager, connectionHandler))
+	.use(wheel(wsm, wheelManager, connectionHandler))
+	.use(thermometer(wsm, thermometerManager))
+	.use(guideOutput(wsm, guideOutputManager, connectionHandler))
+	.use(cover(wsm, coverManager, connectionHandler))
+	.use(flatPanel(wsm, flatPanelManager, connectionHandler))
+	.use(dewHeater(wsm, dewHeaterManager, connectionHandler))
 	.use(atlas(atlasHandler))
 	.use(image(imageHandler))
 	.use(framing(framingHandler))

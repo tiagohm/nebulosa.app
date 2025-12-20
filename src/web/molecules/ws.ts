@@ -19,6 +19,9 @@ export const WebSocketMolecule = molecule(() => {
 
 	const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
+	let connected = false
+	let disconnected = false
+
 	function create() {
 		if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
 			return
@@ -27,12 +30,17 @@ export const WebSocketMolecule = molecule(() => {
 		ws = new WebSocket(`${uri}/ws`)
 
 		ws.addEventListener('open', () => {
-			send('RESEND')
-			state.connected = true
-			document.documentElement.style.setProperty('--ws-disconnected-grayscale', '0%')
-			document.documentElement.style.setProperty('--ws-disconnected-display', 'none')
-			bus.emit('ws:open', null)
-			console.info('web socket open')
+			if (disconnected) {
+				window.location.reload()
+			} else {
+				send('RESEND')
+				state.connected = true
+				document.documentElement.style.setProperty('--ws-disconnected-grayscale', '0%')
+				document.documentElement.style.setProperty('--ws-disconnected-display', 'none')
+				bus.emit('ws:open', null)
+				console.info('web socket open')
+				connected = true
+			}
 		})
 
 		ws.addEventListener('close', (e) => {
@@ -41,6 +49,7 @@ export const WebSocketMolecule = molecule(() => {
 			document.documentElement.style.setProperty('--ws-disconnected-display', 'flex')
 			bus.emit('ws:close', null)
 			console.info('web socket close', e)
+			disconnected = connected
 		})
 
 		ws.addEventListener('message', (message) => {

@@ -26,7 +26,7 @@ initProxy(state, 'indi.server', ['p:show', 'p:showAll', 'o:request'])
 
 export const IndiServerMolecule = molecule(() => {
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(2)
+		const unsubscribers = new Array<VoidFunction>(3)
 
 		unsubscribers[0] = bus.subscribe('indi:server:start', () => {
 			state.running = true
@@ -36,14 +36,21 @@ export const IndiServerMolecule = molecule(() => {
 			state.running = false
 		})
 
+		unsubscribers[2] = bus.subscribe('ws:close', () => {
+			state.running = false
+		})
+
+		void status()
+
 		return () => {
 			unsubscribe(unsubscribers)
 		}
 	})
 
-	void Api.Indi.Server.status().then((status) => {
+	async function status() {
+		const status = await Api.Indi.Server.status()
 		status && Object.assign(state, status)
-	})
+	}
 
 	function update<K extends keyof IndiServerStart>(key: K, value: IndiServerStart[K]) {
 		state.request[key] = value

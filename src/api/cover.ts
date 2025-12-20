@@ -6,28 +6,28 @@ import type { CoverAdded, CoverRemoved, CoverUpdated } from 'src/shared/types'
 import type { ConnectionHandler } from './connection'
 import type { WebSocketMessageHandler } from './message'
 
-export class CoverHandler implements DeviceHandler<Cover> {
-	constructor(readonly wsm: WebSocketMessageHandler) {}
-
-	added(client: IndiClient, device: Cover) {
-		this.wsm.send<CoverAdded>('cover:add', { device })
-		console.info('cover added:', device.name)
-	}
-
-	updated(client: IndiClient, device: Cover, property: keyof Cover, state?: PropertyState) {
-		this.wsm.send<CoverUpdated>('cover:update', { device: { name: device.name, [property]: device[property] }, property, state })
-	}
-
-	removed(client: IndiClient, device: Cover) {
-		this.wsm.send<CoverRemoved>('cover:remove', { device })
-		console.info('cover removed:', device.name)
-	}
-}
-
-export function cover(cover: CoverManager, connection: ConnectionHandler) {
+export function cover(wsm: WebSocketMessageHandler, cover: CoverManager, connection: ConnectionHandler) {
 	function coverFromParams(params: { id: string }) {
 		return cover.get(decodeURIComponent(params.id))!
 	}
+
+	const handler: DeviceHandler<Cover> = {
+		added: (client: IndiClient, device: Cover) => {
+			wsm.send<CoverAdded>('cover:add', { device })
+			console.info('cover added:', device.name)
+		},
+
+		updated: (client: IndiClient, device: Cover, property: keyof Cover, state?: PropertyState) => {
+			wsm.send<CoverUpdated>('cover:update', { device: { name: device.name, [property]: device[property] }, property, state })
+		},
+
+		removed: (client: IndiClient, device: Cover) => {
+			wsm.send<CoverRemoved>('cover:remove', { device })
+			console.info('cover removed:', device.name)
+		},
+	}
+
+	cover.addHandler(handler)
 
 	const app = new Elysia({ prefix: '/covers' })
 		// Endpoints!

@@ -6,28 +6,28 @@ import type { FlatPanelAdded, FlatPanelRemoved, FlatPanelUpdated } from 'src/sha
 import type { ConnectionHandler } from './connection'
 import type { WebSocketMessageHandler } from './message'
 
-export class FlatPanelHandler implements DeviceHandler<FlatPanel> {
-	constructor(readonly wsm: WebSocketMessageHandler) {}
-
-	added(client: IndiClient, device: FlatPanel) {
-		this.wsm.send<FlatPanelAdded>('flatPanel:add', { device })
-		console.info('flat panel added:', device.name)
-	}
-
-	updated(client: IndiClient, device: FlatPanel, property: keyof FlatPanel, state?: PropertyState) {
-		this.wsm.send<FlatPanelUpdated>('flatPanel:update', { device: { name: device.name, [property]: device[property] }, property, state })
-	}
-
-	removed(client: IndiClient, device: FlatPanel) {
-		this.wsm.send<FlatPanelRemoved>('flatPanel:remove', { device })
-		console.info('flat panel removed:', device.name)
-	}
-}
-
-export function flatPanel(flatPanel: FlatPanelManager, connection: ConnectionHandler) {
+export function flatPanel(wsm: WebSocketMessageHandler, flatPanel: FlatPanelManager, connection: ConnectionHandler) {
 	function flatPanelFromParams(params: { id: string }) {
 		return flatPanel.get(decodeURIComponent(params.id))!
 	}
+
+	const handler: DeviceHandler<FlatPanel> = {
+		added: (client: IndiClient, device: FlatPanel) => {
+			wsm.send<FlatPanelAdded>('flatPanel:add', { device })
+			console.info('flat panel added:', device.name)
+		},
+
+		updated: (client: IndiClient, device: FlatPanel, property: keyof FlatPanel, state?: PropertyState) => {
+			wsm.send<FlatPanelUpdated>('flatPanel:update', { device: { name: device.name, [property]: device[property] }, property, state })
+		},
+
+		removed: (client: IndiClient, device: FlatPanel) => {
+			wsm.send<FlatPanelRemoved>('flatPanel:remove', { device })
+			console.info('flat panel removed:', device.name)
+		},
+	}
+
+	flatPanel.addHandler(handler)
 
 	const app = new Elysia({ prefix: '/flatpanels' })
 		// Endpoints!

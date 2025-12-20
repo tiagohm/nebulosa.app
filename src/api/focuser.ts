@@ -6,28 +6,28 @@ import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from 'src/shared/ty
 import type { ConnectionHandler } from './connection'
 import type { WebSocketMessageHandler } from './message'
 
-export class FocuserHandler implements DeviceHandler<Focuser> {
-	constructor(readonly wsm: WebSocketMessageHandler) {}
-
-	added(client: IndiClient, device: Focuser) {
-		this.wsm.send<FocuserAdded>('focuser:add', { device })
-		console.info('focuser added:', device.name)
-	}
-
-	updated(client: IndiClient, device: Focuser, property: keyof Focuser, state?: PropertyState) {
-		this.wsm.send<FocuserUpdated>('focuser:update', { device: { name: device.name, [property]: device[property] }, property, state })
-	}
-
-	removed(client: IndiClient, device: Focuser) {
-		this.wsm.send<FocuserRemoved>('focuser:remove', { device })
-		console.info('focuser removed:', device.name)
-	}
-}
-
-export function focuser(focuser: FocuserManager, connection: ConnectionHandler) {
+export function focuser(wsm: WebSocketMessageHandler, focuser: FocuserManager, connection: ConnectionHandler) {
 	function focuserFromParams(params: { id: string }) {
 		return focuser.get(decodeURIComponent(params.id))!
 	}
+
+	const handler: DeviceHandler<Focuser> = {
+		added: (client: IndiClient, device: Focuser) => {
+			wsm.send<FocuserAdded>('focuser:add', { device })
+			console.info('focuser added:', device.name)
+		},
+
+		updated: (client: IndiClient, device: Focuser, property: keyof Focuser, state?: PropertyState) => {
+			wsm.send<FocuserUpdated>('focuser:update', { device: { name: device.name, [property]: device[property] }, property, state })
+		},
+
+		removed: (client: IndiClient, device: Focuser) => {
+			wsm.send<FocuserRemoved>('focuser:remove', { device })
+			console.info('focuser removed:', device.name)
+		},
+	}
+
+	focuser.addHandler(handler)
 
 	const app = new Elysia({ prefix: '/focusers' })
 		// Endpoints!

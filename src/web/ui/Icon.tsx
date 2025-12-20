@@ -890,10 +890,46 @@ export namespace Icons {
 		)
 	})
 
+	export const CursorPointer = memo(({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
+		return (
+			<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' {...props}>
+				<path d='M13.75,10.19L14.38,10.32L18.55,12.4C19.25,12.63 19.71,13.32 19.65,14.06V14.19L19.65,14.32L18.75,20.44C18.69,20.87 18.5,21.27 18.15,21.55C17.84,21.85 17.43,22 17,22H10.12C9.63,22 9.18,21.82 8.85,21.47L2.86,15.5L3.76,14.5C4,14.25 4.38,14.11 4.74,14.13H5.03L9,15V4.5A2,2 0 0,1 11,2.5A2,2 0 0,1 13,4.5V10.19H13.75Z' />
+			</svg>
+		)
+	})
+
+	export const HandGrab = memo(({ size = 18, stroke = 2, color = 'currentColor', ...props }: IconProps) => {
+		return (
+			<svg fill='none' height={size} stroke={color} strokeWidth={stroke} viewBox='0 0 24 24' {...props}>
+				<path d='M18 11.5V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v1.4' />
+				<path d='M14 10V8a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2' />
+				<path d='M10 9.9V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v5' />
+				<path d='M6 14a2 2 0 0 0-2-2a2 2 0 0 0-2 2' />
+				<path d='M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-4a8 8 0 0 1-8-8 2 2 0 1 1 4 0' />
+			</svg>
+		)
+	})
+
 	export const FocusField = memo(({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
 		return (
 			<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' {...props}>
 				<path d='M19 19H15V21H19C20.1 21 21 20.1 21 19V15H19M19 3H15V5H19V9H21V5C21 3.9 20.1 3 19 3M5 5H9V3H5C3.9 3 3 3.9 3 5V9H5M5 15H3V19C3 20.1 3.9 21 5 21H9V19H5V15M7 11H9V13H7V11M11 11H13V13H11V11M15 11H17V13H15V11M7 7H9V9H7V7M11 7H13V9H11V7M15 7H17V9H15V7M7 15H9V17H7V15M11 15H13V17H11V15M15 15H17V17H15V15Z' />
+			</svg>
+		)
+	})
+
+	export const RotateLeft = memo(({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
+		return (
+			<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' {...props}>
+				<path d='M13,4.07V1L8.45,5.55L13,10V6.09C15.84,6.57 18,9.03 18,12C18,14.97 15.84,17.43 13,17.91V19.93C16.95,19.44 20,16.08 20,12C20,7.92 16.95,4.56 13,4.07M7.1,18.32C8.26,19.22 9.61,19.76 11,19.93V17.9C10.13,17.75 9.29,17.41 8.54,16.87L7.1,18.32M6.09,13H4.07C4.24,14.39 4.79,15.73 5.69,16.89L7.1,15.47C6.58,14.72 6.23,13.88 6.09,13M7.11,8.53L5.7,7.11C4.8,8.27 4.24,9.61 4.07,11H6.09C6.23,10.13 6.58,9.28 7.11,8.53Z' />
+			</svg>
+		)
+	})
+
+	export const RotateRight = memo(({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
+		return (
+			<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' {...props}>
+				<path d='M16.89,15.5L18.31,16.89C19.21,15.73 19.76,14.39 19.93,13H17.91C17.77,13.87 17.43,14.72 16.89,15.5M13,17.9V19.92C14.39,19.75 15.74,19.21 16.9,18.31L15.46,16.87C14.71,17.41 13.87,17.76 13,17.9M19.93,11C19.76,9.61 19.21,8.27 18.31,7.11L16.89,8.53C17.43,9.28 17.77,10.13 17.91,11M15.55,5.55L11,1V4.07C7.06,4.56 4,7.92 4,12C4,16.08 7.05,19.44 11,19.93V17.91C8.16,17.43 6,14.97 6,12C6,9.03 8.16,6.57 11,6.09V10L15.55,5.55Z' />
 			</svg>
 		)
 	})

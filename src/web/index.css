@@ -20,6 +20,11 @@ body {
 	filter: grayscale(var(--ws-disconnected-grayscale, 0%));
 }
 
+svg {
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
 /* Remove white border around SVG */
 
 svg:focus {

@@ -19,19 +19,13 @@ export interface ImageState {
 	readonly transformation: ImageTransformation
 	crosshair: boolean
 	angle: number
+	rotationHandle: boolean
 	info?: ImageInfo
 	scale: number
 }
 
 export interface ImageViewerScopeValue {
 	readonly image: Image
-}
-
-const DEFAULT_IMAGE_STATE: ImageState = {
-	transformation: DEFAULT_IMAGE_TRANSFORMATION,
-	crosshair: false,
-	angle: 0,
-	scale: 1,
 }
 
 const stateMap = new Map<string, CachedImage>()
@@ -50,8 +44,9 @@ export const ImageViewerMolecule = molecule(() => {
 	const state =
 		stateMap.get(key)?.state ??
 		proxy<ImageState>({
-			transformation: structuredClone(DEFAULT_IMAGE_STATE.transformation),
+			transformation: structuredClone(DEFAULT_IMAGE_TRANSFORMATION),
 			crosshair: false,
+			rotationHandle: false,
 			angle: 0,
 			scale: 1,
 			info: undefined,
@@ -205,8 +200,24 @@ export const ImageViewerMolecule = molecule(() => {
 		interactable?.rotateTo(angle)
 	}
 
-	function resetRotation() {
-		interactable?.resetRotation()
+	function rotateLeft() {
+		interactable && rotateTo(interactable.angle - 90)
+	}
+
+	function rotateRight() {
+		interactable && rotateTo(interactable.angle + 90)
+	}
+
+	function rotateToZero() {
+		rotateTo(0)
+	}
+
+	function startRotation() {
+		interactable?.startRotation()
+	}
+
+	function stopRotation() {
+		interactable?.stopRotation()
 	}
 
 	function select() {
@@ -266,7 +277,11 @@ export const ImageViewerMolecule = molecule(() => {
 		load,
 		handleOnLoad,
 		rotateTo,
-		resetRotation,
+		rotateLeft,
+		rotateRight,
+		rotateToZero,
+		startRotation,
+		stopRotation,
 		remove,
 		detach,
 		select,

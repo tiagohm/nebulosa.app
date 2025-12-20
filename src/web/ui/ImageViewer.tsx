@@ -30,11 +30,12 @@ import { ImageInfo } from './ImageInfo'
 import { ImageSave } from './ImageSave'
 import { ImageScnr } from './ImageScnr'
 import { ImageSettings } from './ImageSettings'
+import { ImageSolver } from './ImageSolver'
 import { ImageStatistics } from './ImageStatistics'
 import { ImageStretch } from './ImageStretch'
 import { ImageToolBar } from './ImageToolBar'
 import { Interactable, type InteractableMethods, type InteractableProps } from './Interactable'
-import { PlateSolver } from './PlateSolver'
+import { RotationHandle } from './RotationHandle'
 import { StarDetection } from './StarDetection'
 
 export const ImageViewer = memo(() => {
@@ -129,7 +130,7 @@ export const ImageViewer = memo(() => {
 				<ImageStretch />
 			</Activity>
 			<Activity mode={showPlateSolver ? 'visible' : 'hidden'}>
-				<PlateSolver />
+				<ImageSolver />
 			</Activity>
 			<Activity mode={showScnr ? 'visible' : 'hidden'}>
 				<ImageScnr />
@@ -167,13 +168,13 @@ export const ImageViewer = memo(() => {
 
 const InteractableOverlay = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
-	const { crosshair } = useSnapshot(viewer.state)
+	const { crosshair, rotationHandle } = useSnapshot(viewer.state)
 
 	const starDetection = useMolecule(StarDetectionMolecule)
-	const { visible: isStarDetectionVisible } = useSnapshot(starDetection.state)
+	const { visible: isDetectedStarsVisible } = useSnapshot(starDetection.state)
 
 	const annotation = useMolecule(ImageAnnotationMolecule)
-	const { visible: isAnnotationVisible } = useSnapshot(annotation.state)
+	const { visible: isAnnotatedStarsVisible } = useSnapshot(annotation.state)
 
 	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
 	const { visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
@@ -186,10 +187,10 @@ const InteractableOverlay = memo(() => {
 			<Activity mode={crosshair ? 'visible' : 'hidden'}>
 				<Crosshair />
 			</Activity>
-			<Activity mode={isStarDetectionVisible ? 'visible' : 'hidden'}>
+			<Activity mode={isDetectedStarsVisible ? 'visible' : 'hidden'}>
 				<DetectedStars />
 			</Activity>
-			<Activity mode={isAnnotationVisible ? 'visible' : 'hidden'}>
+			<Activity mode={isAnnotatedStarsVisible ? 'visible' : 'hidden'}>
 				<AnnotatedStars />
 			</Activity>
 			<Activity mode={isMouseCoordinateVisible ? 'visible' : 'hidden'}>
@@ -197,6 +198,9 @@ const InteractableOverlay = memo(() => {
 			</Activity>
 			<Activity mode={isFovVisible ? 'visible' : 'hidden'}>
 				<Fov />
+			</Activity>
+			<Activity mode={rotationHandle ? 'visible' : 'hidden'}>
+				<RotationHandle />
 			</Activity>
 		</>
 	)

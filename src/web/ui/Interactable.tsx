@@ -12,10 +12,13 @@ export interface InteractTransform {
 }
 
 export interface InteractableMethods {
-	readonly resetZoom: () => void
-	readonly resetRotation: () => void
+	readonly angle: number
+	readonly scale: number
+	readonly zoomTo: (scale: number) => void
 	readonly center: () => void
 	readonly rotateTo: (angle: number) => void
+	readonly startRotation: () => void
+	readonly stopRotation: () => void
 }
 
 export interface InteractableProps extends Omit<GestureHandlers, 'onDragStart' | 'onDrag' | 'onDragEnd' | 'onPinch' | 'onWheel'> {
@@ -29,23 +32,36 @@ export interface InteractableProps extends Omit<GestureHandlers, 'onDragStart' |
 // Better tree shaking with createUseGesture
 const useGesture = createUseGesture([dragAction, pinchAction, wheelAction])
 
+function normalizeAngle(angle: number) {
+	return angle === 0 ? 0 : ((angle % 360) + 360) % 360
+}
+
 export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...handlers }: InteractableProps) => {
 	const wrapperRef = useRef<HTMLDivElement>(null)
 	const transformation = useRef<InteractTransform>({ x: 0, y: 0, scale: 1, angle: 0 })
+	const rotation = useRef(false)
 
 	useImperativeHandle(ref, () => {
 		return {
-			resetZoom: () => {
-				transformation.current.scale = 1
-				transform('none')
+			get angle() {
+				return transformation.current.angle
 			},
-			resetRotation: () => {
-				transformation.current.angle = 0
+			get scale() {
+				return transformation.current.scale
+			},
+			zoomTo: (scale: number) => {
+				transformation.current.scale = scale
 				transform('none')
 			},
 			rotateTo: (angle) => {
-				transformation.current.angle = angle
+				transformation.current.angle = normalizeAngle(angle)
 				transform('none')
+			},
+			startRotation: () => {
+				rotation.current = true
+			},
+			stopRotation: () => {
+				rotation.current = false
 			},
 			center: () => {
 				const parent = wrapperRef.current?.parentElement
@@ -113,18 +129,9 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 				const { scale } = transformation.current
 
 				if (memo === undefined) {
-					const offset = 32 / scale
-
-					const { clientWidth, clientHeight } = wrapperRef.current!
 					const { offsetX, offsetY } = event as PointerEvent
 
-					const isEdge =
-						(offsetX >= 0 && offsetX < offset && offsetY >= 0 && offsetY < offset) || // Top-Left
-						(offsetX <= clientWidth && offsetX > clientWidth - offset && offsetY >= 0 && offsetY < offset) || // Top-Right
-						(offsetX >= 0 && offsetX < offset && offsetY <= clientHeight && offsetY > clientHeight - offset) || // Bottom-Left
-						(offsetX <= clientWidth && offsetX > clientWidth - offset && offsetY <= clientHeight && offsetY > clientHeight - offset) // Bottom-Right
-
-					if (isEdge) {
+					if (rotation.current) {
 						memo = [offsetX, offsetY, true, transformation.current.angle]
 					}
 				}
@@ -141,7 +148,7 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 					const cross = v0x * v1y - v0y * v1x
 					const dot = v0x * v1x + v0y * v1y
 					const angle = Math.atan2(cross, dot)
-					transformation.current.angle = Math.trunc((memo[3] + angle * (180 / Math.PI)) * 10) / 10 // multiple of 0.1x
+					transformation.current.angle = normalizeAngle(Math.trunc((memo[3] + angle * (180 / Math.PI)) * 10) / 10) // multiple of 0.1x
 				} else {
 					transformation.current.x = offset[0]
 					transformation.current.y = offset[1]
@@ -154,6 +161,8 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 			onDragEnd: () => {
 				// Re-enable text selection after dragging
 				document.body.style.userSelect = ''
+
+				rotation.current = false
 			},
 			onPinch: ({ event, origin: [ox, oy], first, offset: [s, a], memo }) => {
 				if (first) {

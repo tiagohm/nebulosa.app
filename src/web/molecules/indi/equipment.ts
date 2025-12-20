@@ -78,20 +78,6 @@ export const EquipmentMolecule = molecule(() => {
 		unsubscribers.push(bus.subscribe<Wheel>('wheel:remove', (event) => remove('WHEEL', event)))
 		unsubscribers.push(bus.subscribe<WheelUpdated>('wheel:update', ({ device, property }) => update('WHEEL', device.name, property, device[property]!)))
 
-		unsubscribers.push(
-			bus.subscribe('ws:close', () => {
-				state.CAMERA.forEach((device) => remove('CAMERA', device))
-				state.MOUNT.forEach((device) => remove('MOUNT', device))
-				state.GUIDE_OUTPUT.forEach((device) => remove('GUIDE_OUTPUT', device))
-				state.THERMOMETER.forEach((device) => remove('THERMOMETER', device))
-				state.COVER.forEach((device) => remove('COVER', device))
-				state.FLAT_PANEL.forEach((device) => remove('FLAT_PANEL', device))
-				state.DEW_HEATER.forEach((device) => remove('DEW_HEATER', device))
-				state.FOCUSER.forEach((device) => remove('FOCUSER', device))
-				state.WHEEL.forEach((device) => remove('WHEEL', device))
-			}),
-		)
-
 		return () => {
 			unsubscribe(unsubscribers)
 		}

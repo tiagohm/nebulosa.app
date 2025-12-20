@@ -12,7 +12,7 @@ import { PlateSolverSelect } from './PlateSolverSelect'
 import { PlateSolveStartPopover } from './PlateSolveStartPopover'
 import { TextButton } from './TextButton'
 
-export const PlateSolver = memo(() => {
+export const ImageSolver = memo(() => {
 	const solver = useMolecule(ImageSolverMolecule)
 	const { loading, solution } = useSnapshot(solver.state)
 	const { blind, type, rightAscension, declination, radius, focalLength, pixelSize } = useSnapshot(solver.state.request, { sync: true })

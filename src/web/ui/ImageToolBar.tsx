@@ -1,4 +1,4 @@
-import { NumberInput, Popover, PopoverContent, PopoverTrigger, Switch, Tooltip } from '@heroui/react'
+import { Popover, PopoverContent, PopoverTrigger, Slider, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -16,7 +16,6 @@ import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
-import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { ToggleButton } from './ToggleButton'
@@ -74,22 +73,32 @@ export const ImageToolBar = memo(() => {
 
 const RotatePopover = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
-	const { angle } = useSnapshot(viewer.state, { sync: true })
+	const { angle, rotationHandle } = useSnapshot(viewer.state, { sync: true })
 
 	return (
 		<Popover placement='bottom' showArrow>
 			<Tooltip content='Rotate' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
-						<IconButton color='success' icon={Icons.Restore} variant='flat' />
+						<IconButton color='success' icon={Icons.RotateRight} variant='flat' />
 					</PopoverTrigger>
 				</div>
 			</Tooltip>
 			<PopoverContent>
-				<div className='max-w-50 flex flex-row items-center justify-center gap-2 p-2'>
-					<NumberInput formatOptions={DECIMAL_NUMBER_FORMAT} maxValue={360} minValue={-360} onValueChange={viewer.rotateTo} step={0.1} value={angle} />
-					<Tooltip content='Reset' placement='bottom'>
-						<IconButton color='danger' icon={Icons.Reload} onPointerUp={viewer.resetRotation} variant='flat' />
+				<div className='min-w-110 flex flex-row items-center justify-center gap-2 p-2'>
+					<Tooltip content='Rotate With Handle' placement='top'>
+						<ToggleButton color='primary' icon={Icons.HandGrab} isSelected={rotationHandle} onPointerUp={() => (viewer.state.rotationHandle = !viewer.state.rotationHandle)} />
+					</Tooltip>
+					<span className='font-bold'>{angle.toFixed(1)}°</span>
+					<Slider className='flex-1' disableThumbScale maxValue={359.9} minValue={0} onChange={(value) => viewer.rotateTo(value as number)} step={0.1} value={angle} />
+					<Tooltip content='Rotate Left' placement='top'>
+						<IconButton color='primary' icon={Icons.RotateLeft} onPointerUp={viewer.rotateLeft} variant='flat' />
+					</Tooltip>
+					<Tooltip content='Rotate Right' placement='top'>
+						<IconButton color='primary' icon={Icons.RotateRight} onPointerUp={viewer.rotateRight} variant='flat' />
+					</Tooltip>
+					<Tooltip content='Reset' placement='top'>
+						<IconButton color='danger' icon={Icons.Restore} onPointerUp={viewer.rotateToZero} variant='flat' />
 					</Tooltip>
 				</div>
 			</PopoverContent>

@@ -1,6 +1,6 @@
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_WHEEL, type Wheel } from 'nebulosa/src/indi.device'
-import { unsubscribe } from 'src/shared/bus'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'

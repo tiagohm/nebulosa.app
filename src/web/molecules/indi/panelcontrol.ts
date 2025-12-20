@@ -1,8 +1,9 @@
 import { molecule, onMount, use } from 'bunshi'
 import type { NewVector } from 'nebulosa/src/indi'
 import type { Device, DeviceProperties, DeviceProperty } from 'nebulosa/src/indi.device'
-import bus, { unsubscribe } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import type { ConnectionEvent, IndiDevicePropertyEvent } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { ConnectionMolecule } from '../connection'
@@ -53,7 +54,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 			}
 		})
 
-		const timer = setInterval(() => ping(), 5000)
+		const timer = setInterval(ping, 5000)
 
 		void retrieveDevices()
 

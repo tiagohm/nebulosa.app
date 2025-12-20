@@ -1,6 +1,7 @@
 import { molecule, onMount, use } from 'bunshi'
-import bus, { unsubscribe } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import type { ImageHistogram, StatisticImage } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'

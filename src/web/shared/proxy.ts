@@ -1,4 +1,4 @@
-import { unsubscribe } from 'src/shared/bus'
+import { unsubscribe } from 'src/shared/util'
 import { subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { storageGet, storageSet } from './storage'

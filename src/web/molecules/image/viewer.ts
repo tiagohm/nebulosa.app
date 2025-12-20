@@ -1,6 +1,7 @@
 import { createScope, molecule, onMount, use } from 'bunshi'
-import bus, { unsubscribe } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageInfo, type ImageTransformation } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'

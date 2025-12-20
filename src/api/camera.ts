@@ -3,7 +3,7 @@ import fs, { mkdir } from 'fs/promises'
 import type { IndiClient, PropertyState } from 'nebulosa/src/indi'
 import type { Camera } from 'nebulosa/src/indi.device'
 import type { CameraManager, DeviceHandler, FocuserManager, GuideOutputManager, MountManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
-import { formatTemporal, temporalGet, temporalSubtract } from 'nebulosa/src/temporal'
+import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } from 'nebulosa/src/temporal'
 import { join } from 'path'
 import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
@@ -295,7 +295,7 @@ async function makePathFor(req: CameraCaptureStart) {
 
 		if (req.autoSubFolderMode === 'OFF') return savePath
 
-		const now = Date.now()
+		const now = temporalAdd(Date.now(), TIMEZONE, 'm')
 		const hour = temporalGet(now, 'h')
 		const directory = req.autoSubFolderMode === 'MIDNIGHT' || hour < 12 ? formatTemporal(now, 'YYYY-MM-DD') : formatTemporal(temporalSubtract(now, 12, 'h'), 'YYYY-MM-DD')
 		const path = join(savePath, directory)

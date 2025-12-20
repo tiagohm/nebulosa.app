@@ -1,6 +1,6 @@
 import { createScope, molecule, onMount, use } from 'bunshi'
-import { unsubscribe } from 'src/shared/bus'
 import type { DirectoryEntry, FileEntry } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'

@@ -1,23 +1,30 @@
 export type BusCallback<T> = (data: T) => void
 
-const bus = new Map<string, Set<BusCallback<never>>>()
-
-// Molecule for managing a simple publish-subscribe bus
+// A simple publish-subscribe bus
 export class EventBus {
+	private readonly bus = new Map<string, Set<BusCallback<never>>>()
+
 	// Checks if there are any subscribers to the bus
 	hasSubscribers() {
-		return bus.size > 0
+		return this.bus.size > 0
 	}
 
 	// Checks if there are subscribers for a specific topic
 	hasSubscribersForTopic(topic: string) {
-		return bus.has(topic)
+		return this.bus.has(topic)
 	}
 
 	// Subscribes to a topic with a callback
 	subscribe<T>(topic: string, callback: BusCallback<T>) {
-		if (!bus.has(topic)) bus.set(topic, new Set())
-		bus.get(topic)!.add(callback)
+		let callbacks = this.bus.get(topic)
+
+		if (!callbacks) {
+			callbacks = new Set()
+			this.bus.set(topic, callbacks)
+		}
+
+		callbacks.add(callback)
+
 		return () => this.unsubscribe(topic, callback)
 	}
 
@@ -33,29 +40,32 @@ export class EventBus {
 
 	// Unsubscribes a callback from a topic
 	unsubscribe<T>(topic: string, callback: BusCallback<T>) {
-		const subscribers = bus.get(topic)
+		const subscribers = this.bus.get(topic)
 
 		if (subscribers) {
 			subscribers.delete(callback)
 
 			if (subscribers.size === 0) {
-				bus.delete(topic)
+				this.bus.delete(topic)
 			}
 		}
 	}
 
 	// Emits data to all subscribers of a topic
 	emit<T>(topic: string, data: T) {
-		if (bus.has(topic)) {
-			for (const callback of bus.get(topic)!) {
+		queueMicrotask(() => this.emitSync(topic, data))
+	}
+
+	// Emits data to all subscribers of a topic synchronously
+	emitSync<T>(topic: string, data: T) {
+		const callbacks = this.bus.get(topic)
+
+		if (callbacks) {
+			for (const callback of callbacks) {
 				callback(data as never)
 			}
 		}
 	}
-}
-
-export function unsubscribe(unsubscribers?: readonly (VoidFunction | undefined)[]) {
-	unsubscribers?.forEach((e) => e?.())
 }
 
 export default new EventBus()

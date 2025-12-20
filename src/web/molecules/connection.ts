@@ -1,6 +1,7 @@
 import { molecule, onMount } from 'bunshi'
-import bus, { unsubscribe } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import type { ConnectionEvent, ConnectionStatus } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { deepClone } from 'valtio/utils'
 import { Api } from '@/shared/api'

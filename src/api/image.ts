@@ -428,11 +428,11 @@ export class ImageHandler {
 	}
 }
 
-export function image(image: ImageHandler) {
+export function image(imageHandler: ImageHandler) {
 	const app = new Elysia({ prefix: '/image' })
 		// Endpoints!
 		.post('/open', async ({ body, set }) => {
-			const info = await image.open(body as never)
+			const info = await imageHandler.open(body as never)
 
 			if (!info) return undefined
 
@@ -440,11 +440,11 @@ export function image(image: ImageHandler) {
 
 			return Bun.file(info.path)
 		})
-		.post('/close', ({ body }) => image.close(body as never))
-		.post('/save', ({ body }) => image.save(body as never))
-		.post('/annotate', ({ body }) => image.annotate(body as never))
-		.post('/coordinateinterpolation', ({ body }) => image.coordinateInterpolation(body as never))
-		.post('/statistics', ({ body }) => image.statistics(body as never))
+		.post('/close', ({ body }) => imageHandler.close(body as never))
+		.post('/save', ({ body }) => imageHandler.save(body as never))
+		.post('/annotate', ({ body }) => imageHandler.annotate(body as never))
+		.post('/coordinateinterpolation', ({ body }) => imageHandler.coordinateInterpolation(body as never))
+		.post('/statistics', ({ body }) => imageHandler.statistics(body as never))
 		.get('/fovcameras', () => fovCameras)
 		.get('/fovtelescopes', () => fovTelescopes)
 

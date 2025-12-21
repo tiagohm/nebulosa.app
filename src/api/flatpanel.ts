@@ -6,9 +6,9 @@ import type { FlatPanelAdded, FlatPanelRemoved, FlatPanelUpdated } from 'src/sha
 import type { ConnectionHandler } from './connection'
 import type { WebSocketMessageHandler } from './message'
 
-export function flatPanel(wsm: WebSocketMessageHandler, flatPanel: FlatPanelManager, connection: ConnectionHandler) {
+export function flatPanel(wsm: WebSocketMessageHandler, flatPanelManager: FlatPanelManager, connectionHandler: ConnectionHandler) {
 	function flatPanelFromParams(params: { id: string }) {
-		return flatPanel.get(decodeURIComponent(params.id))!
+		return flatPanelManager.get(decodeURIComponent(params.id))!
 	}
 
 	const handler: DeviceHandler<FlatPanel> = {
@@ -16,27 +16,25 @@ export function flatPanel(wsm: WebSocketMessageHandler, flatPanel: FlatPanelMana
 			wsm.send<FlatPanelAdded>('flatPanel:add', { device })
 			console.info('flat panel added:', device.name)
 		},
-
 		updated: (client: IndiClient, device: FlatPanel, property: keyof FlatPanel, state?: PropertyState) => {
 			wsm.send<FlatPanelUpdated>('flatPanel:update', { device: { name: device.name, [property]: device[property] }, property, state })
 		},
-
 		removed: (client: IndiClient, device: FlatPanel) => {
 			wsm.send<FlatPanelRemoved>('flatPanel:remove', { device })
 			console.info('flat panel removed:', device.name)
 		},
 	}
 
-	flatPanel.addHandler(handler)
+	flatPanelManager.addHandler(handler)
 
 	const app = new Elysia({ prefix: '/flatpanels' })
 		// Endpoints!
-		.get('', () => flatPanel.list())
+		.get('', () => flatPanelManager.list())
 		.get('/:id', ({ params }) => flatPanelFromParams(params))
-		.post('/:id/enable', ({ params }) => flatPanel.enable(connection.get(), flatPanelFromParams(params)))
-		.post('/:id/disable', ({ params }) => flatPanel.disable(connection.get(), flatPanelFromParams(params)))
-		.post('/:id/toggle', ({ params }) => flatPanel.toggle(connection.get(), flatPanelFromParams(params)))
-		.post('/:id/intensity', ({ params, body }) => flatPanel.intensity(connection.get(), flatPanelFromParams(params), body as never))
+		.post('/:id/enable', ({ params }) => flatPanelManager.enable(connectionHandler.get(), flatPanelFromParams(params)))
+		.post('/:id/disable', ({ params }) => flatPanelManager.disable(connectionHandler.get(), flatPanelFromParams(params)))
+		.post('/:id/toggle', ({ params }) => flatPanelManager.toggle(connectionHandler.get(), flatPanelFromParams(params)))
+		.post('/:id/intensity', ({ params, body }) => flatPanelManager.intensity(connectionHandler.get(), flatPanelFromParams(params), body as never))
 
 	return app
 }

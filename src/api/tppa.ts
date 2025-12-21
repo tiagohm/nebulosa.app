@@ -17,8 +17,8 @@ export class TppaHandler {
 
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
-		readonly camera: CameraHandler,
-		readonly mount: MountManager,
+		readonly cameraHandler: CameraHandler,
+		readonly mountManager: MountManager,
 		readonly solver: PlateSolverHandler,
 	) {
 		bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
@@ -168,19 +168,19 @@ export class TppaTask {
 			if (!this.stopped) {
 				this.event.state = 'CAPTURING'
 				this.handleTppaEvent()
-				this.tppa.camera.startCameraCapture(this.client, this.camera, this.request.capture)
+				this.tppa.cameraHandler.startCapture(this.client, this.camera, this.request.capture)
 			}
 		}
 	}
 
 	start() {
 		// Enable mount tracking
-		this.tppa.mount.tracking(this.client, this.mount, true)
+		this.tppa.mountManager.tracking(this.client, this.mount, true)
 
 		// First image
 		this.event.state = 'CAPTURING'
 		this.handleTppaEvent()
-		this.tppa.camera.startCameraCapture(this.client, this.camera, this.request.capture)
+		this.tppa.cameraHandler.startCapture(this.client, this.camera, this.request.capture)
 	}
 
 	stop() {
@@ -188,7 +188,7 @@ export class TppaTask {
 
 		this.move(false)
 		this.tppa.solver.stop(this.request)
-		this.tppa.camera.stopCameraCapture(this.client, this.camera)
+		this.tppa.cameraHandler.stopCapture(this.client, this.camera)
 
 		if (this.event.state !== 'IDLE') {
 			this.event.state = 'IDLE'
@@ -197,13 +197,13 @@ export class TppaTask {
 	}
 
 	private move(enabled: boolean) {
-		if (this.request.direction === 'EAST') this.tppa.mount.moveEast(this.client, this.mount, enabled)
-		else this.tppa.mount.moveWest(this.client, this.mount, enabled)
+		if (this.request.direction === 'EAST') this.tppa.mountManager.moveEast(this.client, this.mount, enabled)
+		else this.tppa.mountManager.moveWest(this.client, this.mount, enabled)
 	}
 
 	private stopTrackingWhenDone() {
 		if (this.request.stopTrackingWhenDone && this.mount.tracking) {
-			this.tppa.mount.tracking(this.client, this.mount, false)
+			this.tppa.mountManager.tracking(this.client, this.mount, false)
 		}
 	}
 
@@ -218,10 +218,10 @@ export class TppaTask {
 	}
 }
 
-export function tppa(tppa: TppaHandler, connection: ConnectionHandler) {
+export function tppa(tppa: TppaHandler, connectionHandler: ConnectionHandler) {
 	const app = new Elysia({ prefix: '/tppa' })
 		// Endpoints!
-		.post('/:camera/:mount/start', ({ params, body }) => tppa.start(body as never, connection.get(), tppa.camera.camera.get(params.camera)!, tppa.mount.get(params.mount)!))
+		.post('/:camera/:mount/start', ({ params, body }) => tppa.start(body as never, connectionHandler.get(), tppa.cameraHandler.cameraManager.get(params.camera)!, tppa.mountManager.get(params.mount)!))
 		.post('/stop', ({ body }) => tppa.stop(body as never))
 
 	return app

@@ -155,7 +155,7 @@ const dewHeaterManager = new DewHeaterManager(dewHeaterProvider)
 
 const imageProcessor = new ImageProcessor()
 
-const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, guideOutputManager, thermometerManager, mountManager, wheelManager, focuserManager)
+const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager)
 cameraManager.addHandler(cameraHandler)
 
 const devicePropertyManager = new DevicePropertyManager()

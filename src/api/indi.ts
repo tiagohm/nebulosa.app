@@ -62,15 +62,15 @@ export function disconnect(client: IndiClient, device: Device) {
 
 export class IndiHandler implements IndiClientHandler {
 	constructor(
-		readonly camera: CameraManager,
-		readonly guideOutput: GuideOutputManager,
-		readonly thermometer: ThermometerManager,
-		readonly mount: MountManager,
-		readonly focuser: FocuserManager,
-		readonly wheel: WheelManager,
-		readonly cover: CoverManager,
-		readonly flatPanel: FlatPanelManager,
-		readonly dewHeater: DewHeaterManager,
+		readonly cameraManager: CameraManager,
+		readonly guideOutputManager: GuideOutputManager,
+		readonly thermometerManager: ThermometerManager,
+		readonly mountManager: MountManager,
+		readonly focuserManager: FocuserManager,
+		readonly wheelManager: WheelManager,
+		readonly coverManager: CoverManager,
+		readonly flatPanelManager: FlatPanelManager,
+		readonly dewHeaterManager: DewHeaterManager,
 		readonly properties: DevicePropertyManager,
 		readonly wsm: WebSocketMessageHandler,
 	) {}
@@ -78,15 +78,15 @@ export class IndiHandler implements IndiClientHandler {
 	close(client: IndiClient, server: boolean) {
 		bus.emit('indi:close', client)
 
-		this.camera.close(client, server)
-		this.mount.close(client, server)
-		this.focuser.close(client, server)
-		this.wheel.close(client, server)
-		this.cover.close(client, server)
-		this.flatPanel.close(client, server)
-		this.guideOutput.close(client, server)
-		this.thermometer.close(client, server)
-		this.dewHeater.close(client, server)
+		this.cameraManager.close(client, server)
+		this.mountManager.close(client, server)
+		this.focuserManager.close(client, server)
+		this.wheelManager.close(client, server)
+		this.coverManager.close(client, server)
+		this.flatPanelManager.close(client, server)
+		this.guideOutputManager.close(client, server)
+		this.thermometerManager.close(client, server)
+		this.dewHeaterManager.close(client, server)
 	}
 
 	vector(client: IndiClient, message: DefVector | SetVector, tag: string) {
@@ -94,64 +94,64 @@ export class IndiHandler implements IndiClientHandler {
 	}
 
 	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
-		this.camera.switchVector(client, message, tag)
-		this.mount.switchVector(client, message, tag)
-		this.focuser.switchVector(client, message, tag)
-		this.wheel.switchVector(client, message, tag)
-		this.cover.switchVector(client, message, tag)
-		this.flatPanel.switchVector(client, message, tag)
-		this.guideOutput.switchVector(client, message, tag)
-		this.thermometer.switchVector(client, message, tag)
-		this.dewHeater.switchVector(client, message, tag)
+		this.cameraManager.switchVector(client, message, tag)
+		this.mountManager.switchVector(client, message, tag)
+		this.focuserManager.switchVector(client, message, tag)
+		this.wheelManager.switchVector(client, message, tag)
+		this.coverManager.switchVector(client, message, tag)
+		this.flatPanelManager.switchVector(client, message, tag)
+		this.guideOutputManager.switchVector(client, message, tag)
+		this.thermometerManager.switchVector(client, message, tag)
+		this.dewHeaterManager.switchVector(client, message, tag)
 	}
 
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
-		this.camera.numberVector(client, message, tag)
-		this.mount.numberVector(client, message, tag)
-		this.focuser.numberVector(client, message, tag)
-		this.wheel.numberVector(client, message, tag)
+		this.cameraManager.numberVector(client, message, tag)
+		this.mountManager.numberVector(client, message, tag)
+		this.focuserManager.numberVector(client, message, tag)
+		this.wheelManager.numberVector(client, message, tag)
 		// this.cover.numberVector(client, message, tag)
-		this.flatPanel.numberVector(client, message, tag)
-		this.guideOutput.numberVector(client, message, tag)
-		this.thermometer.numberVector(client, message, tag)
-		this.dewHeater.numberVector(client, message, tag)
+		this.flatPanelManager.numberVector(client, message, tag)
+		this.guideOutputManager.numberVector(client, message, tag)
+		this.thermometerManager.numberVector(client, message, tag)
+		this.dewHeaterManager.numberVector(client, message, tag)
 	}
 
 	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
-		this.camera.textVector(client, message, tag)
-		this.mount.textVector(client, message, tag)
-		this.focuser.textVector(client, message, tag)
-		this.wheel.textVector(client, message, tag)
-		this.cover.textVector(client, message, tag)
-		this.flatPanel.textVector(client, message, tag)
+		this.cameraManager.textVector(client, message, tag)
+		this.mountManager.textVector(client, message, tag)
+		this.focuserManager.textVector(client, message, tag)
+		this.wheelManager.textVector(client, message, tag)
+		this.coverManager.textVector(client, message, tag)
+		this.flatPanelManager.textVector(client, message, tag)
 		// this.guideOutput.textVector(client, message, tag)
 		// this.thermometer.textVector(client, message, tag)
 		// this.dewHeater.textVector(client, message, tag)
 	}
 
 	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
-		this.camera.blobVector(client, message, tag)
+		this.cameraManager.blobVector(client, message, tag)
 	}
 
 	delProperty(client: IndiClient, message: DelProperty) {
-		this.camera.delProperty(client, message)
-		this.mount.delProperty(client, message)
-		this.focuser.delProperty(client, message)
-		this.wheel.delProperty(client, message)
-		this.cover.delProperty(client, message)
-		this.flatPanel.delProperty(client, message)
-		this.guideOutput.delProperty(client, message)
-		this.thermometer.delProperty(client, message)
-		this.dewHeater.delProperty(client, message)
+		this.cameraManager.delProperty(client, message)
+		this.mountManager.delProperty(client, message)
+		this.focuserManager.delProperty(client, message)
+		this.wheelManager.delProperty(client, message)
+		this.coverManager.delProperty(client, message)
+		this.flatPanelManager.delProperty(client, message)
+		this.guideOutputManager.delProperty(client, message)
+		this.thermometerManager.delProperty(client, message)
+		this.dewHeaterManager.delProperty(client, message)
 		this.properties.delProperty(client, message)
 	}
 
 	get(id: string): Device | undefined {
-		return this.camera.get(id) || this.mount.get(id) || this.focuser.get(id) || this.wheel.get(id) || this.cover.get(id) || this.flatPanel.get(id) || this.guideOutput.get(id) || this.thermometer.get(id) || this.dewHeater.get(id)
+		return this.cameraManager.get(id) || this.mountManager.get(id) || this.focuserManager.get(id) || this.wheelManager.get(id) || this.coverManager.get(id) || this.flatPanelManager.get(id) || this.guideOutputManager.get(id) || this.thermometerManager.get(id) || this.dewHeaterManager.get(id)
 	}
 }
 
-export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties: DevicePropertyManager, connection: ConnectionHandler) {
+export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties: DevicePropertyManager, connectionHandler: ConnectionHandler) {
 	function deviceFromParams(params: { id: string }) {
 		return indi.get(decodeURIComponent(params.id))!
 	}
@@ -242,11 +242,11 @@ export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties
 	const app = new Elysia({ prefix: '/indi' })
 		// Endpoints!
 		.get('/devices', () => properties.names())
-		.post('/:id/connect', ({ params }) => connect(connection.get(), deviceFromParams(params)))
-		.post('/:id/disconnect', ({ params }) => disconnect(connection.get(), deviceFromParams(params)))
+		.post('/:id/connect', ({ params }) => connect(connectionHandler.get(), deviceFromParams(params)))
+		.post('/:id/disconnect', ({ params }) => disconnect(connectionHandler.get(), deviceFromParams(params)))
 		.get('/:id/properties', ({ params }) => properties.get(decodeURIComponent(params.id)))
 		.post('/:id/properties/ping', ({ params }) => ping(decodeURIComponent(params.id)))
-		.post('/:id/properties/send', ({ query, body }) => send(connection.get(), query.type as never, body as never))
+		.post('/:id/properties/send', ({ query, body }) => send(connectionHandler.get(), query.type as never, body as never))
 		.post('/server/start', ({ body }) => start(body as never))
 		.post('/server/stop', () => stop())
 		.get('/server/status', () => status())

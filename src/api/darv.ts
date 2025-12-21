@@ -12,8 +12,8 @@ export class DarvHandler {
 
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
-		readonly camera: CameraHandler,
-		readonly mount: MountManager,
+		readonly cameraHandler: CameraHandler,
+		readonly mountManager: MountManager,
 	) {}
 
 	handleDarvEvent(event: DarvEvent) {
@@ -78,7 +78,7 @@ export class DarvTask {
 
 	async start() {
 		// Start capture
-		this.darv.camera.startCameraCapture(this.client, this.camera, this.request.capture)
+		this.darv.cameraHandler.startCapture(this.client, this.camera, this.request.capture)
 
 		// Wait for initial pause
 		this.event.state = 'WAITING'
@@ -116,7 +116,7 @@ export class DarvTask {
 		this.close()
 
 		this.move(false, false)
-		this.darv.camera.stopCameraCapture(this.client, this.camera)
+		this.darv.cameraHandler.stopCapture(this.client, this.camera)
 
 		if (this.event.state !== 'IDLE') {
 			this.event.state = 'IDLE'
@@ -131,15 +131,15 @@ export class DarvTask {
 	private move(enabled: boolean, reversed: boolean) {
 		if (enabled) {
 			if ((this.request.hemisphere === 'NORTHERN') !== !reversed) {
-				this.darv.mount.moveWest(this.client, this.mount, false)
-				this.darv.mount.moveEast(this.client, this.mount, true)
+				this.darv.mountManager.moveWest(this.client, this.mount, false)
+				this.darv.mountManager.moveEast(this.client, this.mount, true)
 			} else {
-				this.darv.mount.moveEast(this.client, this.mount, false)
-				this.darv.mount.moveWest(this.client, this.mount, true)
+				this.darv.mountManager.moveEast(this.client, this.mount, false)
+				this.darv.mountManager.moveWest(this.client, this.mount, true)
 			}
 		} else {
-			this.darv.mount.moveEast(this.client, this.mount, false)
-			this.darv.mount.moveWest(this.client, this.mount, false)
+			this.darv.mountManager.moveEast(this.client, this.mount, false)
+			this.darv.mountManager.moveWest(this.client, this.mount, false)
 		}
 	}
 }
@@ -160,10 +160,10 @@ async function waitFor(ms: number, signal: AbortSignal) {
 	}
 }
 
-export function darv(darv: DarvHandler, connection: ConnectionHandler) {
+export function darv(darv: DarvHandler, connectionHandler: ConnectionHandler) {
 	const app = new Elysia({ prefix: '/darv' })
 		// Endpoints!
-		.post('/:camera/:mount/start', ({ params, body }) => darv.start(body as never, connection.get(), darv.camera.camera.get(params.camera)!, darv.mount.get(params.mount)!))
+		.post('/:camera/:mount/start', ({ params, body }) => darv.start(body as never, connectionHandler.get(), darv.cameraHandler.cameraManager.get(params.camera)!, darv.mountManager.get(params.mount)!))
 		.post('/stop', ({ body }) => darv.stop(body as never))
 
 	return app

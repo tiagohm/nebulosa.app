@@ -6,9 +6,9 @@ import type { CameraUpdated, GuideOutputAdded, GuideOutputRemoved, GuideOutputUp
 import type { ConnectionHandler } from './connection'
 import type { WebSocketMessageHandler } from './message'
 
-export function guideOutput(wsm: WebSocketMessageHandler, guideOutput: GuideOutputManager, connection: ConnectionHandler) {
+export function guideOutput(wsm: WebSocketMessageHandler, guideOutputManager: GuideOutputManager, connectionHandler: ConnectionHandler) {
 	function guideOutputFromParams(params: { id: string }) {
-		return guideOutput.get(decodeURIComponent(params.id))!
+		return guideOutputManager.get(decodeURIComponent(params.id))!
 	}
 
 	const handler: DeviceHandler<GuideOutput> = {
@@ -16,7 +16,6 @@ export function guideOutput(wsm: WebSocketMessageHandler, guideOutput: GuideOutp
 			wsm.send<GuideOutputAdded>('guideOutput:add', { device })
 			console.info('guide output added:', device.name)
 		},
-
 		updated: (client: IndiClient, device: GuideOutput, property: keyof GuideOutput, state?: PropertyState) => {
 			const event = { device: { name: device.name, [property]: device[property] }, property, state }
 
@@ -24,20 +23,19 @@ export function guideOutput(wsm: WebSocketMessageHandler, guideOutput: GuideOutp
 			else if (device.type === 'MOUNT') wsm.send<MountUpdated>('mount:update', event)
 			wsm.send<GuideOutputUpdated>('guideOutput:update', event)
 		},
-
 		removed: (client: IndiClient, device: GuideOutput) => {
 			wsm.send<GuideOutputRemoved>('guideOutput:remove', { device })
 			console.info('guide output removed:', device.name)
 		},
 	}
 
-	guideOutput.addHandler(handler)
+	guideOutputManager.addHandler(handler)
 
 	const app = new Elysia({ prefix: '/guideoutputs' })
 		// Endpoints!
-		.get('', () => guideOutput.list())
+		.get('', () => guideOutputManager.list())
 		.get('/:id', ({ params }) => guideOutputFromParams(params))
-		.post('/:id/pulse', ({ params, body }) => guideOutput.pulse(connection.get(), guideOutputFromParams(params), (body as GuidePulse).direction, (body as GuidePulse).duration))
+		.post('/:id/pulse', ({ params, body }) => guideOutputManager.pulse(connectionHandler.get(), guideOutputFromParams(params), (body as GuidePulse).direction, (body as GuidePulse).duration))
 
 	return app
 }

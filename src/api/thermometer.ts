@@ -5,9 +5,9 @@ import type { DeviceHandler, ThermometerManager } from 'nebulosa/src/indi.manage
 import type { CameraUpdated, FocuserUpdated, ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from 'src/shared/types'
 import type { WebSocketMessageHandler } from './message'
 
-export function thermometer(wsm: WebSocketMessageHandler, thermometer: ThermometerManager) {
+export function thermometer(wsm: WebSocketMessageHandler, thermometerManager: ThermometerManager) {
 	function thermometerFromParams(params: { id: string }) {
-		return thermometer.get(decodeURIComponent(params.id))!
+		return thermometerManager.get(decodeURIComponent(params.id))!
 	}
 
 	const handler: DeviceHandler<Thermometer> = {
@@ -15,7 +15,6 @@ export function thermometer(wsm: WebSocketMessageHandler, thermometer: Thermomet
 			wsm.send<ThermometerAdded>('thermometer:add', { device })
 			console.info('thermometer added:', device.name)
 		},
-
 		updated: (client: IndiClient, device: Thermometer, property: keyof Thermometer, state?: PropertyState) => {
 			const event = { device: { name: device.name, [property]: device[property] }, property, state }
 
@@ -23,18 +22,17 @@ export function thermometer(wsm: WebSocketMessageHandler, thermometer: Thermomet
 			else if (device.type === 'FOCUSER') wsm.send<FocuserUpdated>('focuser:update', event)
 			wsm.send<ThermometerUpdated>('thermometer:update', event)
 		},
-
 		removed: (client: IndiClient, device: Thermometer) => {
 			wsm.send<ThermometerRemoved>('thermometer:remove', { device })
 			console.info('thermometer removed:', device.name)
 		},
 	}
 
-	thermometer.addHandler(handler)
+	thermometerManager.addHandler(handler)
 
 	const app = new Elysia({ prefix: '/thermometers' })
 		// Endpoints!
-		.get('', () => thermometer.list())
+		.get('', () => thermometerManager.list())
 		.get('/:id', ({ params }) => thermometerFromParams(params))
 
 	return app

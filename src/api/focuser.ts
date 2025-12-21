@@ -6,7 +6,7 @@ import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from 'src/shared/ty
 import type { ConnectionHandler } from './connection'
 import type { WebSocketMessageHandler } from './message'
 
-export function focuser(wsm: WebSocketMessageHandler, focuser: FocuserManager, connection: ConnectionHandler) {
+export function focuser(wsm: WebSocketMessageHandler, focuser: FocuserManager, connectionHandler: ConnectionHandler) {
 	function focuserFromParams(params: { id: string }) {
 		return focuser.get(decodeURIComponent(params.id))!
 	}
@@ -16,11 +16,9 @@ export function focuser(wsm: WebSocketMessageHandler, focuser: FocuserManager, c
 			wsm.send<FocuserAdded>('focuser:add', { device })
 			console.info('focuser added:', device.name)
 		},
-
 		updated: (client: IndiClient, device: Focuser, property: keyof Focuser, state?: PropertyState) => {
 			wsm.send<FocuserUpdated>('focuser:update', { device: { name: device.name, [property]: device[property] }, property, state })
 		},
-
 		removed: (client: IndiClient, device: Focuser) => {
 			wsm.send<FocuserRemoved>('focuser:remove', { device })
 			console.info('focuser removed:', device.name)
@@ -33,12 +31,12 @@ export function focuser(wsm: WebSocketMessageHandler, focuser: FocuserManager, c
 		// Endpoints!
 		.get('', () => focuser.list())
 		.get('/:id', ({ params }) => focuserFromParams(params))
-		.post('/:id/moveto', ({ params, body }) => focuser.moveTo(connection.get(), focuserFromParams(params), body as never))
-		.post('/:id/movein', ({ params, body }) => focuser.moveIn(connection.get(), focuserFromParams(params), body as never))
-		.post('/:id/moveout', ({ params, body }) => focuser.moveOut(connection.get(), focuserFromParams(params), body as never))
-		.post('/:id/sync', ({ params, body }) => focuser.sync(connection.get(), focuserFromParams(params), body as never))
-		.post('/:id/reverse', ({ params, body }) => focuser.reverse(connection.get(), focuserFromParams(params), body as never))
-		.post('/:id/stop', ({ params }) => focuser.stop(connection.get(), focuserFromParams(params)))
+		.post('/:id/moveto', ({ params, body }) => focuser.moveTo(connectionHandler.get(), focuserFromParams(params), body as never))
+		.post('/:id/movein', ({ params, body }) => focuser.moveIn(connectionHandler.get(), focuserFromParams(params), body as never))
+		.post('/:id/moveout', ({ params, body }) => focuser.moveOut(connectionHandler.get(), focuserFromParams(params), body as never))
+		.post('/:id/sync', ({ params, body }) => focuser.sync(connectionHandler.get(), focuserFromParams(params), body as never))
+		.post('/:id/reverse', ({ params, body }) => focuser.reverse(connectionHandler.get(), focuserFromParams(params), body as never))
+		.post('/:id/stop', ({ params }) => focuser.stop(connectionHandler.get(), focuserFromParams(params)))
 
 	return app
 }

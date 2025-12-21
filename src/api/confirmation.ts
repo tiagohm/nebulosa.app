@@ -33,10 +33,10 @@ export class ConfirmationHandler {
 	}
 }
 
-export function confirmation(confirmation: ConfirmationHandler) {
+export function confirmation(confirmationHandler: ConfirmationHandler) {
 	const app = new Elysia({ prefix: '/confirmation' })
 		// Endpoints!
-		.post('', ({ body }) => confirmation.confirm(body as never))
+		.post('', ({ body }) => confirmationHandler.confirm(body as never))
 
 	return app
 }

@@ -10,7 +10,7 @@ export class ConnectionHandler {
 
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
-		readonly notification: NotificationHandler,
+		readonly notificationHandler: NotificationHandler,
 	) {
 		bus.subscribe('indi:close', (client: IndiClient) => {
 			// Remove the client from the active connections
@@ -22,7 +22,7 @@ export class ConnectionHandler {
 		let client: IndiClient | undefined
 		if (!id) client = this.clients.values().next().value
 		else client = this.clients.get(id)
-		if (!client) this.notification.send({ body: 'No active connection!', severity: 'error' })
+		if (!client) this.notificationHandler.send({ body: 'No active connection!', severity: 'error' })
 		return client!
 	}
 
@@ -49,7 +49,7 @@ export class ConnectionHandler {
 					return status
 				}
 			} catch (e) {
-				this.notification.send({ body: 'Failed to connect to INDI server', severity: 'error' })
+				this.notificationHandler.send({ body: 'Failed to connect to INDI server', severity: 'error' })
 			}
 		}
 
@@ -111,13 +111,13 @@ export class ConnectionHandler {
 	}
 }
 
-export function connection(connection: ConnectionHandler, indi: IndiClientHandler) {
+export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler) {
 	const app = new Elysia({ prefix: '/connections' })
 		// Endpoints!
-		.get('', () => connection.list())
-		.post('', async ({ body }) => await connection.connect(body as never, indi))
-		.get('/:id', ({ params }) => connection.status(params.id))
-		.delete('/:id', ({ params }) => connection.disconnect(params.id))
+		.get('', () => connectionHandler.list())
+		.post('', async ({ body }) => await connectionHandler.connect(body as never, indi))
+		.get('/:id', ({ params }) => connectionHandler.status(params.id))
+		.delete('/:id', ({ params }) => connectionHandler.disconnect(params.id))
 
 	return app
 }

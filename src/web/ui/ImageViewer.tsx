@@ -35,7 +35,6 @@ import { ImageStatistics } from './ImageStatistics'
 import { ImageStretch } from './ImageStretch'
 import { ImageToolBar } from './ImageToolBar'
 import { Interactable, type InteractableMethods, type InteractableProps } from './Interactable'
-import { RotationHandle } from './RotationHandle'
 import { StarDetection } from './StarDetection'
 
 export const ImageViewer = memo(() => {
@@ -168,7 +167,7 @@ export const ImageViewer = memo(() => {
 
 const InteractableOverlay = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
-	const { crosshair, rotationHandle } = useSnapshot(viewer.state)
+	const { crosshair } = useSnapshot(viewer.state)
 
 	const starDetection = useMolecule(StarDetectionMolecule)
 	const { visible: isDetectedStarsVisible } = useSnapshot(starDetection.state)
@@ -198,9 +197,6 @@ const InteractableOverlay = memo(() => {
 			</Activity>
 			<Activity mode={isFovVisible ? 'visible' : 'hidden'}>
 				<Fov />
-			</Activity>
-			<Activity mode={rotationHandle ? 'visible' : 'hidden'}>
-				<RotationHandle />
 			</Activity>
 		</>
 	)

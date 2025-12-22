@@ -45,9 +45,7 @@ export const ImageWorkspaceMolecule = molecule(() => {
 
 		const beforeUnload = () => {
 			state.images.forEach((image) => {
-				if (!image.camera) {
-					void Api.Image.close({ id: image.path })
-				}
+				void Api.Image.close({ path: image.path })
 			})
 		}
 
@@ -99,9 +97,7 @@ export const ImageWorkspaceMolecule = molecule(() => {
 			viewers.delete(image.key)
 			bus.emit('image:remove', image)
 
-			if (!image.camera) {
-				void Api.Image.close({ id: image.path })
-			}
+			void Api.Image.close({ path: image.path })
 		}
 	}
 

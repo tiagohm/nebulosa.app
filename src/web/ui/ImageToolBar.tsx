@@ -73,7 +73,7 @@ export const ImageToolBar = memo(() => {
 
 const RotatePopover = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
-	const { angle, rotationHandle } = useSnapshot(viewer.state, { sync: true })
+	const { angle } = useSnapshot(viewer.state, { sync: true })
 
 	return (
 		<Popover placement='bottom' showArrow>
@@ -86,9 +86,6 @@ const RotatePopover = memo(() => {
 			</Tooltip>
 			<PopoverContent>
 				<div className='min-w-110 flex flex-row items-center justify-center gap-2 p-2'>
-					<Tooltip content='Rotate With Handle' placement='top'>
-						<ToggleButton color='primary' icon={Icons.HandGrab} isSelected={rotationHandle} onPointerUp={() => (viewer.state.rotationHandle = !viewer.state.rotationHandle)} />
-					</Tooltip>
 					<span className='font-bold'>{angle.toFixed(1)}°</span>
 					<Slider className='flex-1' disableThumbScale maxValue={359.9} minValue={0} onChange={(value) => viewer.rotateTo(value as number)} step={0.1} value={angle} />
 					<Tooltip content='Rotate Left' placement='top'>

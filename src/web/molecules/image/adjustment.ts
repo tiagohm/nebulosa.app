@@ -44,7 +44,6 @@ export const ImageAdjustmentMolecule = molecule(() => {
 		state.adjustment.contrast = 1
 		state.adjustment.gamma = 1
 		state.adjustment.saturation = 1
-		state.adjustment.normalize = false
 		return apply()
 	}
 

@@ -1,5 +1,4 @@
 import { Button, type ButtonProps, Tooltip } from '@heroui/react'
-import { useState } from 'react'
 import type { AutoSubFolderMode } from 'src/shared/types'
 import { Icons } from './Icon'
 
@@ -9,18 +8,10 @@ export interface AutoSubFolderModeButtonProps extends Omit<ButtonProps, 'isIconO
 }
 
 export function AutoSubFolderModeButton({ value, onValueChange, ...props }: AutoSubFolderModeButtonProps) {
-	const [mode, setMode] = useState(value)
-
-	function handleOnPointerUp() {
-		const next = mode === 'OFF' ? 'NOON' : mode === 'NOON' ? 'MIDNIGHT' : 'OFF'
-		setMode(next)
-		onValueChange(next)
-	}
-
 	return (
-		<Tooltip content={`Auto sub-folder mode: ${mode}`} placement='bottom' showArrow>
-			<Button {...props} isIconOnly onPointerUp={handleOnPointerUp} size='sm' variant='light'>
-				{mode === 'OFF' ? <Icons.FolderOff color='#9E9E9E' size={14} /> : mode === 'NOON' ? <Icons.Sun color='#FFEB3B' size={14} /> : <Icons.Moon color='#2196F3' size={14} />}
+		<Tooltip content={`Auto sub-folder mode: ${value}`} placement='bottom' showArrow>
+			<Button {...props} isIconOnly onPointerUp={() => onValueChange(value === 'OFF' ? 'NOON' : value === 'NOON' ? 'MIDNIGHT' : 'OFF')} size='sm' variant='light'>
+				{value === 'OFF' ? <Icons.FolderOff color='#9E9E9E' size={14} /> : value === 'NOON' ? <Icons.Sun color='#FFEB3B' size={14} /> : <Icons.Moon color='#2196F3' size={14} />}
 			</Button>
 		</Tooltip>
 	)

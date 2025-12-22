@@ -19,7 +19,6 @@ export interface ImageState {
 	readonly transformation: ImageTransformation
 	crosshair: boolean
 	angle: number
-	rotationHandle: boolean
 	info?: ImageInfo
 	scale: number
 }
@@ -46,7 +45,6 @@ export const ImageViewerMolecule = molecule(() => {
 		proxy<ImageState>({
 			transformation: structuredClone(DEFAULT_IMAGE_TRANSFORMATION),
 			crosshair: false,
-			rotationHandle: false,
 			angle: 0,
 			scale: 1,
 			info: undefined,
@@ -145,6 +143,9 @@ export const ImageViewerMolecule = molecule(() => {
 			if (!image) return remove()
 
 			const url = URL.createObjectURL(image.blob)
+
+			// Close current path
+			state.info?.path && void Api.Image.close({ path: state.info.path })
 
 			// Update the state
 			state.info = ref(image.info)

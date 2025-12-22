@@ -411,13 +411,13 @@ export interface ImageTransformation {
 }
 
 export interface OpenImage {
-	path: string
+	readonly path: string
 	readonly camera?: string
 	readonly transformation: ImageTransformation
 }
 
 export interface CloseImage {
-	readonly id: string
+	readonly path: string
 }
 
 export interface SaveImage extends OpenImage {

@@ -40,9 +40,7 @@ export const ImageFilterMolecule = molecule(() => {
 	}
 
 	function reset() {
-		state.filter.sharpen = false
-		state.filter.blur = false
-		state.filter.median = false
+		state.filter.type = 'sharpen'
 		return apply()
 	}
 

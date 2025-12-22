@@ -39,14 +39,16 @@ export interface ImageProcessorItem<T> {
 	readonly item: T
 }
 
+const DEFAULT_IMAGE_EXPIRES_IN = 60000
+
 export class ImageProcessor {
 	private readonly buffered = new Map<string, ImageProcessorItem<BufferedImageItem>>()
 	private readonly transformed = new Map<string, ImageProcessorItem<TransformedImageItem>>()
 	private readonly exported = new Map<string, ImageProcessorItem<ExportedImageItem>>()
 	private readonly disposed = new Map<string, number>()
 
-	save(bytes: Buffer, path: string, disposable: boolean = false) {
-		const item: BufferedImageItem = { buffer: bytes, path }
+	save(buffer: Buffer, path: string, disposable: boolean = false) {
+		const item: BufferedImageItem = { buffer, path }
 		this.buffered.set(path, { date: Date.now(), item })
 
 		for (const key of this.transformed.keys()) {
@@ -275,14 +277,14 @@ export class ImageProcessor {
 			const now = Date.now()
 
 			for (const [key, value] of this.exported) {
-				if (now - value.date >= 60000) {
+				if (now - value.date >= DEFAULT_IMAGE_EXPIRES_IN) {
 					this.exported.delete(key)
 					deleted = true
 				}
 			}
 
 			for (const [key, value] of this.transformed) {
-				if (now - value.date >= 60000) {
+				if (now - value.date >= DEFAULT_IMAGE_EXPIRES_IN) {
 					this.transformed.delete(key)
 					console.info('deleted transformed image at', value.item.buffered.path)
 					deleted = true
@@ -290,7 +292,7 @@ export class ImageProcessor {
 			}
 
 			for (const [key, value] of this.disposed) {
-				if (now - value >= 3600000) {
+				if (now - value >= DEFAULT_IMAGE_EXPIRES_IN * 60) {
 					this.buffered.delete(key)
 					this.disposed.delete(key)
 					console.info('deleted buffered image at', key)
@@ -321,7 +323,7 @@ export class ImageHandler {
 	}
 
 	close(req: CloseImage) {
-		return this.processor.clear(req.id)
+		return this.processor.clear(req.path)
 	}
 
 	async save(req: SaveImage) {
@@ -427,11 +429,4 @@ export function image(imageHandler: ImageHandler) {
 		.get('/fovtelescopes', () => fovTelescopes)
 
 	return app
-}
-
-async function unlink(path: string) {
-	if (path && (await fs.exists(path))) {
-		await fs.unlink(path)
-		console.info('unlinked image at', path)
-	}
 }

@@ -9,7 +9,7 @@ import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { Rect } from 'nebulosa/src/geometry'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
-import type { ImageChannel, ImageFormat, ImageMetadata, WriteImageToFormatOptions } from 'nebulosa/src/image'
+import type { ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
 import type { PropertyState } from 'nebulosa/src/indi'
 // biome-ignore format: too long!
 import type { Camera, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
@@ -384,10 +384,19 @@ export interface ImageScnr {
 
 export interface ImageAdjustment {
 	enabled: boolean
-	brightness: number
-	contrast: number
-	gamma: number
-	saturation: number
+	brightness: {
+		value: number
+	}
+	contrast: {
+		value: number
+	}
+	gamma: {
+		value: number
+	}
+	saturation: {
+		value: number
+		channel: ImageChannelOrGray
+	}
 }
 
 export interface ImageFilter {
@@ -404,8 +413,9 @@ export interface ImageTransformation {
 	verticalMirror: boolean
 	invert: boolean
 	scnr: ImageScnr
-	format: ImageFormat
-	formatOptions: DeepRequired<WriteImageToFormatOptions>
+	format: {
+		type: ImageFormat
+	} & DeepRequired<WriteImageToFormatOptions>
 	adjustment: ImageAdjustment
 	filter: ImageFilter
 }
@@ -916,10 +926,19 @@ export const DEFAULT_IMAGE_SCNR: ImageScnr = {
 
 export const DEFAULT_IMAGE_ADJUSTMENT: ImageAdjustment = {
 	enabled: false,
-	brightness: 1,
-	contrast: 1,
-	gamma: 1,
-	saturation: 1,
+	brightness: {
+		value: 1,
+	},
+	contrast: {
+		value: 1,
+	},
+	gamma: {
+		value: 1,
+	},
+	saturation: {
+		value: 1,
+		channel: 'BT709',
+	},
 }
 
 export const DEFAULT_IMAGE_FILTER: ImageFilter = {
@@ -935,8 +954,8 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	verticalMirror: false,
 	invert: false,
 	scnr: DEFAULT_IMAGE_SCNR,
-	format: 'jpeg',
-	formatOptions: {
+	format: {
+		type: 'jpeg',
 		jpeg: {
 			quality: 90,
 			chrominanceSubsampling: '4:2:0',

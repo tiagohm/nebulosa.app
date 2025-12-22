@@ -1,5 +1,5 @@
 import { molecule, onMount, use } from 'bunshi'
-import type { ImageFormat } from 'nebulosa/src/image'
+import type { ImageFormat } from 'nebulosa/src/image.types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -48,7 +48,7 @@ export const ImageSaveMolecule = molecule(() => {
 		try {
 			state.loading = true
 
-			const transformation = { ...viewer.state.transformation, format: state.format }
+			const transformation = { ...viewer.state.transformation, format: { ...viewer.state.transformation.format, type: state.format } }
 			await Api.Image.save({ path: viewer.path, transformation, saveAt: state.path, transformed: state.transformed })
 		} finally {
 			state.loading = false

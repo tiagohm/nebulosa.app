@@ -1,5 +1,5 @@
 import { SelectItem } from '@heroui/react'
-import type { ImageFormat } from 'nebulosa/src/image'
+import type { ImageFormat } from 'nebulosa/src/image.types'
 import { EnumSelect, type EnumSelectProps } from './EnumSelect'
 
 export function ImageFormatSelect({ label = 'Format', ...props }: Omit<EnumSelectProps<ImageFormat>, 'children'>) {

@@ -3,7 +3,6 @@ import bus from 'src/shared/bus'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageInfo, type ImageTransformation } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
-import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import type { Image, ImageLoaded } from '@/shared/types'
@@ -56,17 +55,13 @@ export const ImageViewerMolecule = molecule(() => {
 	let loading = false
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(3)
+		const unsubscribers = new Array<VoidFunction>(2)
 
 		const imageKey = camera?.name || 'default'
 
 		unsubscribers[0] = initProxy(state, `image.${imageKey}`, ['o:transformation', 'p:crosshair', 'p:angle'])
 
-		unsubscribers[1] = subscribeKey(state.transformation, 'format', () => {
-			void load(true)
-		})
-
-		unsubscribers[2] = subscribe(state.transformation.formatOptions, () => {
+		unsubscribers[1] = subscribe(state.transformation.format, () => {
 			void load(true)
 		})
 

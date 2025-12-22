@@ -1,5 +1,5 @@
 import { molecule, onMount, use } from 'bunshi'
-import type { ImageAdjustment } from 'src/shared/types'
+import { DEFAULT_IMAGE_ADJUSTMENT, type ImageAdjustment } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
 import { imageStorageKey } from '@/shared/types'
@@ -35,15 +35,15 @@ export const ImageAdjustmentMolecule = molecule(() => {
 		}
 	})
 
-	function update<K extends keyof ImageAdjustment>(key: K, value: ImageAdjustment[K]) {
-		state.adjustment[key] = value
+	function update<T extends keyof Exclude<ImageAdjustment, 'enabled'>, K extends keyof ImageAdjustment[T]>(type: T, key: K, value: ImageAdjustment[T][K]) {
+		state.adjustment[type][key] = value
 	}
 
 	function reset() {
-		state.adjustment.brightness = 1
-		state.adjustment.contrast = 1
-		state.adjustment.gamma = 1
-		state.adjustment.saturation = 1
+		Object.assign(state.adjustment.brightness, DEFAULT_IMAGE_ADJUSTMENT.brightness)
+		Object.assign(state.adjustment.contrast, DEFAULT_IMAGE_ADJUSTMENT.contrast)
+		Object.assign(state.adjustment.gamma, DEFAULT_IMAGE_ADJUSTMENT.gamma)
+		Object.assign(state.adjustment.saturation, DEFAULT_IMAGE_ADJUSTMENT.saturation)
 		return apply()
 	}
 

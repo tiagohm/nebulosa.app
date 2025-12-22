@@ -2,9 +2,10 @@ import Elysia from 'elysia'
 import fs from 'fs/promises'
 import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
-import { type Image, readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
+import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
 import { adf, histogram } from 'nebulosa/src/image.computation'
 import { blur5x5, brightness, contrast, debayer, gamma, horizontalFlip, invert, mean, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
+import type { Image } from 'nebulosa/src/image.types'
 import { fileHandleSink } from 'nebulosa/src/io'
 import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/platesolver'
 import { spaceMotion, star } from 'nebulosa/src/star'
@@ -130,10 +131,10 @@ export class ImageProcessor {
 		}
 
 		if (transformation.adjustment.enabled) {
-			if (transformation.adjustment.brightness !== 1) image = brightness(image, transformation.adjustment.brightness)
-			if (transformation.adjustment.contrast !== 1) image = contrast(image, transformation.adjustment.contrast)
-			if (transformation.adjustment.gamma > 1) image = gamma(image, transformation.adjustment.gamma)
-			if (transformation.adjustment.saturation !== 1) image = saturation(image, transformation.adjustment.saturation)
+			if (transformation.adjustment.brightness.value !== 1) image = brightness(image, transformation.adjustment.brightness.value)
+			if (transformation.adjustment.contrast.value !== 1) image = contrast(image, transformation.adjustment.contrast.value)
+			if (transformation.adjustment.gamma.value > 1) image = gamma(image, transformation.adjustment.gamma.value)
+			if (transformation.adjustment.saturation.value !== 1) image = saturation(image, transformation.adjustment.saturation.value, transformation.adjustment.saturation.channel)
 		}
 
 		if (transformation.filter.enabled) {
@@ -148,7 +149,7 @@ export class ImageProcessor {
 	}
 
 	async export(path: string, transformation: ImageTransformation, saveAt?: string): Promise<ExportedImageItem | undefined> {
-		const { format, formatOptions } = transformation
+		const { format } = transformation
 
 		const hash = this.computeExportHash(path, transformation)
 
@@ -176,7 +177,7 @@ export class ImageProcessor {
 		const { width, height, channels } = image.metadata
 
 		// Just save it to file
-		if (format === 'fits' || format === 'xisf') {
+		if (format.type === 'fits' || format.type === 'xisf') {
 			// Invalid path to save
 			if (!saveAt) {
 				console.error('unable to export to fits/xisf without save path')
@@ -191,7 +192,7 @@ export class ImageProcessor {
 		}
 
 		// Convert to the desired format
-		const output = writeImageToFormat(image, format, formatOptions)
+		const output = writeImageToFormat(image, format.type, format)
 
 		if (output) {
 			if (saveAt) {
@@ -216,10 +217,10 @@ export class ImageProcessor {
 
 			const item = { output, info, transformed }
 			output && this.exported.set(hash, { date: Date.now(), item })
-			console.info('image at', path, 'was exported to format', format)
+			console.info('image at', path, 'was exported to format', format.type)
 			return item
 		} else {
-			console.warn('the image at', path, 'could not be exported to format', format)
+			console.warn('the image at', path, 'could not be exported to format', format.type)
 		}
 
 		return undefined
@@ -251,7 +252,12 @@ export class ImageProcessor {
 
 	private computeImageAdjustmentHash(adjustment: ImageAdjustment) {
 		const { enabled, brightness, contrast, gamma, saturation } = adjustment
-		return enabled ? `T:${brightness}:${contrast}:${gamma}${saturation}` : 'F'
+		return enabled ? `T:${brightness.value}:${contrast.value}:${gamma.value}${this.computeImageAdjustmentSaturationHash(saturation)}` : 'F'
+	}
+
+	private computeImageAdjustmentSaturationHash(saturation: ImageAdjustment['saturation']) {
+		const { value, channel } = saturation
+		return `${value}:${typeof channel === 'string' ? channel : `${channel.red}:${channel.green}:${channel.blue}`}`
 	}
 
 	private computeTransformHash(path: string, transformation: ImageTransformation) {
@@ -262,9 +268,9 @@ export class ImageProcessor {
 	private computeExportHash(path: string, transformation: ImageTransformation) {
 		const hash = this.computeImageTransformationHash(transformation)
 
-		switch (transformation.format) {
+		switch (transformation.format.type) {
 			case 'jpeg':
-				return `${path}:jpeg:${transformation.formatOptions.jpeg.chrominanceSubsampling}:${transformation.formatOptions.jpeg.quality}:${hash}`
+				return `${path}:jpeg:${transformation.format.jpeg.chrominanceSubsampling}:${transformation.format.jpeg.quality}:${hash}`
 			default:
 				return `${path}:${transformation.format}:${hash}`
 		}

@@ -1,5 +1,5 @@
 import { molecule, onMount, use } from 'bunshi'
-import type { ImageFilter } from 'src/shared/types'
+import { DEFAULT_IMAGE_FILTER, type ImageFilter } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
 import { imageStorageKey } from '@/shared/types'
@@ -35,12 +35,18 @@ export const ImageFilterMolecule = molecule(() => {
 		}
 	})
 
-	function update<K extends keyof ImageFilter>(key: K, value: ImageFilter[K]) {
-		state.filter[key] = value
+	function updateType(type: string) {
+		state.filter.type = type as never
+	}
+
+	function update<T extends Exclude<ImageFilter['type'], 'sharpen'>, K extends keyof ImageFilter[T]>(type: T, key: K, value: ImageFilter[T][K]) {
+		state.filter[type][key] = value
 	}
 
 	function reset() {
-		state.filter.type = 'sharpen'
+		Object.assign(state.filter.blur, DEFAULT_IMAGE_FILTER.blur)
+		Object.assign(state.filter.mean, DEFAULT_IMAGE_FILTER.mean)
+		Object.assign(state.filter.gaussianBlur, DEFAULT_IMAGE_FILTER.gaussianBlur)
 		return apply()
 	}
 
@@ -56,5 +62,5 @@ export const ImageFilterMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, scope: viewer.scope, viewer, update, reset, apply, show, hide } as const
+	return { state, scope: viewer.scope, viewer, updateType, update, reset, apply, show, hide } as const
 })

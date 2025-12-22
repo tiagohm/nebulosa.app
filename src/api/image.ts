@@ -4,7 +4,7 @@ import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
 import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
 import { adf, histogram } from 'nebulosa/src/image.computation'
-import { blur5x5, brightness, contrast, debayer, gamma, horizontalFlip, invert, mean, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
+import { blur, blur3x3, blur5x5, blur7x7, brightness, contrast, debayer, gamma, gaussianBlur, horizontalFlip, invert, mean, mean3x3, mean5x5, mean7x7, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import type { Image } from 'nebulosa/src/image.types'
 import { fileHandleSink } from 'nebulosa/src/io'
 import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/platesolver'
@@ -138,9 +138,18 @@ export class ImageProcessor {
 		}
 
 		if (transformation.filter.enabled) {
-			if (transformation.filter.type === 'blur') image = blur5x5(image)
-			else if (transformation.filter.type === 'sharpen') image = sharpen(image)
-			else if (transformation.filter.type === 'mean') image = mean(image)
+			if (transformation.filter.type === 'sharpen') image = sharpen(image)
+			else if (transformation.filter.type === 'blur')
+				if (transformation.filter.blur.size === 3) image = blur3x3(image)
+				else if (transformation.filter.blur.size === 5) image = blur5x5(image)
+				else if (transformation.filter.blur.size === 7) image = blur7x7(image)
+				else image = blur(image, transformation.filter.blur.size)
+			else if (transformation.filter.type === 'mean')
+				if (transformation.filter.mean.size === 3) image = mean3x3(image)
+				else if (transformation.filter.mean.size === 5) image = mean5x5(image)
+				else if (transformation.filter.mean.size === 7) image = mean7x7(image)
+				else image = mean(image, transformation.filter.mean.size)
+			else if (transformation.filter.type === 'gaussianBlur') image = gaussianBlur(image, transformation.filter.gaussianBlur)
 		}
 
 		if (transformation.invert) image = invert(image)
@@ -246,8 +255,20 @@ export class ImageProcessor {
 	}
 
 	private computeImageFilterHash(filter: ImageFilter) {
-		const { enabled, type } = filter
-		return enabled ? `T:${type}` : 'F'
+		const { enabled, type, blur, mean, gaussianBlur } = filter
+
+		if (!enabled) return 'F'
+
+		switch (type) {
+			case 'blur':
+				return `T:${type}:${blur.size}`
+			case 'mean':
+				return `T:${type}:${mean.size}`
+			case 'gaussianBlur':
+				return `T:${type}:${gaussianBlur.size}:${gaussianBlur.sigma}`
+			default:
+				return `T:${type}`
+		}
 	}
 
 	private computeImageAdjustmentHash(adjustment: ImageAdjustment) {

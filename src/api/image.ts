@@ -4,7 +4,7 @@ import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
 import { type Image, readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
 import { adf, histogram } from 'nebulosa/src/image.computation'
-import { debayer, horizontalFlip, invert, scnr, stf, verticalFlip } from 'nebulosa/src/image.transformation'
+import { blur5x5, brightness, contrast, debayer, gamma, horizontalFlip, invert, mean, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import { fileHandleSink } from 'nebulosa/src/io'
 import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/platesolver'
 import { spaceMotion, star } from 'nebulosa/src/star'
@@ -13,7 +13,7 @@ import { Wcs } from 'nebulosa/src/wcs'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
-import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageCoordinateInterpolation, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
+import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCoordinateInterpolation, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
 import type { NotificationHandler } from './notification'
 
@@ -127,6 +127,19 @@ export class ImageProcessor {
 			image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536)
 		}
 
+		if (transformation.adjustment.enabled) {
+			if (transformation.adjustment.brightness !== 1) image = brightness(image, transformation.adjustment.brightness)
+			if (transformation.adjustment.contrast !== 1) image = contrast(image, transformation.adjustment.contrast)
+			if (transformation.adjustment.gamma > 1) image = gamma(image, transformation.adjustment.gamma)
+			if (transformation.adjustment.saturation !== 1) image = saturation(image, transformation.adjustment.saturation)
+		}
+
+		if (transformation.filter.enabled) {
+			if (transformation.filter.type === 'blur') image = blur5x5(image)
+			else if (transformation.filter.type === 'sharpen') image = sharpen(image)
+			else if (transformation.filter.type === 'mean') image = mean(image)
+		}
+
 		if (transformation.invert) image = invert(image)
 
 		return image
@@ -210,22 +223,33 @@ export class ImageProcessor {
 		return undefined
 	}
 
-	// TODO: compute hash for adjustment and filter when implement it
 	private computeImageTransformationHash(transformation: ImageTransformation) {
-		const { enabled, calibrationGroup = '', debayer, horizontalMirror, verticalMirror, invert, adjustment, filter } = transformation
+		const { enabled, calibrationGroup = '', debayer, horizontalMirror, verticalMirror, invert } = transformation
 		const stretch = this.computeImageStretchHash(transformation.stretch)
 		const scnr = this.computeImageScnrHash(transformation.scnr)
-		return Bun.MD5.hash(`${enabled}:${calibrationGroup}:${debayer}:${stretch}:${horizontalMirror}:${verticalMirror}:${invert}:${scnr}`, 'hex')
+		const filter = this.computeImageFilterHash(transformation.filter)
+		const adjustment = this.computeImageAdjustmentHash(transformation.adjustment)
+		return Bun.MD5.hash(`${enabled}:${calibrationGroup}:${debayer}:${stretch}:${scnr}:${filter}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}`, 'hex')
 	}
 
 	private computeImageStretchHash(stretch: ImageStretch) {
 		const { auto, shadow, midtone, highlight, meanBackground } = stretch
-		return Bun.MD5.hash(auto ? `T:${meanBackground}` : `F:${shadow}:${midtone}:${highlight}`, 'hex')
+		return auto ? `T:${meanBackground}` : `F:${shadow}:${midtone}:${highlight}`
 	}
 
 	private computeImageScnrHash(scnr: ImageScnr) {
 		const { channel = 'GREEN', amount, method } = scnr
-		return Bun.MD5.hash(`${channel}:${amount}:${method}`, 'hex')
+		return `${channel}:${amount}:${method}`
+	}
+
+	private computeImageFilterHash(filter: ImageFilter) {
+		const { enabled, type } = filter
+		return enabled ? `T:${type}` : 'F'
+	}
+
+	private computeImageAdjustmentHash(adjustment: ImageAdjustment) {
+		const { enabled, brightness, contrast, gamma, saturation } = adjustment
+		return enabled ? `T:${brightness}:${contrast}:${gamma}${saturation}` : 'F'
 	}
 
 	private computeTransformHash(path: string, transformation: ImageTransformation) {

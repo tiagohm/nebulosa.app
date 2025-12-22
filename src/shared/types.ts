@@ -384,7 +384,6 @@ export interface ImageScnr {
 
 export interface ImageAdjustment {
 	enabled: boolean
-	normalize: boolean
 	brightness: number
 	contrast: number
 	gamma: number
@@ -393,9 +392,7 @@ export interface ImageAdjustment {
 
 export interface ImageFilter {
 	enabled: boolean
-	blur: boolean
-	median: boolean
-	sharpen: boolean
+	type: 'sharpen' | 'mean' | 'blur'
 }
 
 export interface ImageTransformation {
@@ -919,7 +916,6 @@ export const DEFAULT_IMAGE_SCNR: ImageScnr = {
 
 export const DEFAULT_IMAGE_ADJUSTMENT: ImageAdjustment = {
 	enabled: false,
-	normalize: false,
 	brightness: 1,
 	contrast: 1,
 	gamma: 1,
@@ -928,9 +924,7 @@ export const DEFAULT_IMAGE_ADJUSTMENT: ImageAdjustment = {
 
 export const DEFAULT_IMAGE_FILTER: ImageFilter = {
 	enabled: false,
-	blur: false,
-	median: false,
-	sharpen: false,
+	type: 'sharpen',
 }
 
 export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {

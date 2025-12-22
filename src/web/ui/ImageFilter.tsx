@@ -1,4 +1,4 @@
-import { Checkbox } from '@heroui/react'
+import { Checkbox, Radio, RadioGroup } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -9,7 +9,7 @@ import { TextButton } from './TextButton'
 
 export const ImageFilter = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
-	const { enabled, blur, median, sharpen } = useSnapshot(filter.state.filter, { sync: true })
+	const { enabled, type } = useSnapshot(filter.state.filter, { sync: true })
 
 	const Footer = (
 		<>
@@ -24,15 +24,11 @@ export const ImageFilter = memo(() => {
 				<Checkbox className='col-span-full' isSelected={enabled} onValueChange={(value) => filter.update('enabled', value)}>
 					Enabled
 				</Checkbox>
-				<Checkbox className='col-span-full' isDisabled={!enabled} isSelected={sharpen} onValueChange={(value) => filter.update('sharpen', value)}>
-					Sharpen
-				</Checkbox>
-				<Checkbox className='col-span-full' isDisabled={!enabled} isSelected={blur} onValueChange={(value) => filter.update('blur', value)}>
-					Blur
-				</Checkbox>
-				<Checkbox className='col-span-full' isDisabled={!enabled} isSelected={median} onValueChange={(value) => filter.update('median', value)}>
-					Median
-				</Checkbox>
+				<RadioGroup className='col-span-full' isDisabled={!enabled} onValueChange={(value) => filter.update('type', value as never)} value={type}>
+					<Radio value='sharpen'>Sharpen</Radio>
+					<Radio value='mean'>Mean</Radio>
+					<Radio value='blur'>Blur</Radio>
+				</RadioGroup>
 			</div>
 		</Modal>
 	)

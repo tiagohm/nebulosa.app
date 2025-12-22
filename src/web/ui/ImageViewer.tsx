@@ -1,5 +1,5 @@
 import { useMolecule } from 'bunshi/react'
-import { Activity, memo, useCallback, useLayoutEffect, useRef } from 'react'
+import { Activity, memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
@@ -85,6 +85,7 @@ export const ImageViewer = memo(() => {
 
 	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
 
+	// Before layout renderering
 	useLayoutEffect(() => {
 		if (imgRef.current) {
 			viewer.attachImage(imgRef.current)
@@ -97,6 +98,13 @@ export const ImageViewer = memo(() => {
 
 		return () => {
 			viewer.detach()
+		}
+	}, [])
+
+	// After layout rendering and state loading
+	useEffect(() => {
+		if (imgRef.current) {
+			void viewer.load(false)
 		}
 	}, [])
 

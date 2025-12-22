@@ -229,7 +229,6 @@ export const ImageViewerMolecule = molecule(() => {
 	function attachImage(node: HTMLImageElement | null) {
 		if (node) {
 			target = node
-			void load(false)
 			select()
 		}
 	}

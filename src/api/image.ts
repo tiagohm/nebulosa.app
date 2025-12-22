@@ -1,9 +1,8 @@
 import Elysia from 'elysia'
-import { existsSync, unlinkSync } from 'fs'
 import fs from 'fs/promises'
 import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
-import { type Image, type ImageFormat, readImageFromBuffer, readImageFromPath, type WriteImageToFormatOptions, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
+import { type Image, readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
 import { adf, histogram } from 'nebulosa/src/image.computation'
 import { debayer, horizontalFlip, invert, scnr, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import { fileHandleSink } from 'nebulosa/src/io'
@@ -11,42 +10,12 @@ import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/platesolver'
 import { spaceMotion, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
 import { Wcs } from 'nebulosa/src/wcs'
-import { join } from 'path'
-import type { JpegOptions, OutputInfo, PngOptions, WebpOptions } from 'sharp'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageCoordinateInterpolation, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
 import type { NotificationHandler } from './notification'
-
-const JPEG_OPTIONS: JpegOptions = {
-	quality: 70, // Lower quality for faster processing
-	progressive: true, // Enable progressive JPEG for better loading
-	chromaSubsampling: '4:2:0', // Use 4:2:0 chroma subsampling for smaller file size
-}
-
-const PNG_OPTIONS: PngOptions = {
-	effort: 1, // Low effort for faster processing
-	quality: 100, // Maximum quality
-	compressionLevel: 9, // Maximum compression level
-	adaptiveFiltering: false, // Disable adaptive filtering for faster processing
-	progressive: false, // Disable progressive PNG
-}
-
-const WEBP_OPTIONS: WebpOptions = {
-	effort: 0, // Low effort for faster processing
-	quality: 70, // Lower quality for faster processing
-	lossless: false, // Use lossy compression for smaller file size
-	nearLossless: false, // Disable near-lossless compression
-}
-
-const IMAGE_FORMAT_OPTIONS: Partial<Record<ImageFormat, WriteImageToFormatOptions['format']>> = {
-	jpg: JPEG_OPTIONS,
-	jpeg: JPEG_OPTIONS,
-	webp: WEBP_OPTIONS,
-	png: PNG_OPTIONS,
-}
 
 export interface BufferedImageItem {
 	readonly buffer?: Buffer
@@ -61,9 +30,8 @@ export interface TransformedImageItem {
 
 export interface ExportedImageItem {
 	readonly transformed: TransformedImageItem
-	readonly output?: OutputInfo
+	readonly output?: Buffer
 	readonly info?: ImageInfo
-	readonly path: string
 }
 
 export interface ImageProcessorItem<T> {
@@ -75,32 +43,29 @@ export class ImageProcessor {
 	private readonly buffered = new Map<string, ImageProcessorItem<BufferedImageItem>>()
 	private readonly transformed = new Map<string, ImageProcessorItem<TransformedImageItem>>()
 	private readonly exported = new Map<string, ImageProcessorItem<ExportedImageItem>>()
-	private readonly discarded = new Set<string>()
-	private readonly discardOnExit = new Set<string>()
+	private readonly disposed = new Map<string, number>()
 
-	save(bytes: Buffer, path: string, removeOnExit: boolean = false) {
+	save(bytes: Buffer, path: string, disposable: boolean = false) {
 		const item: BufferedImageItem = { buffer: bytes, path }
 		this.buffered.set(path, { date: Date.now(), item })
 
-		for (const [key, value] of this.transformed.entries()) {
+		for (const key of this.transformed.keys()) {
 			if (key.startsWith(path)) {
 				this.transformed.delete(key)
-				console.info('deleted transformed image at', value.item.buffered.path)
 			}
 		}
 
-		for (const [key, value] of this.exported.entries()) {
+		for (const key of this.exported.keys()) {
 			if (key.startsWith(path)) {
-				this.discarded.add(value.item.path)
 				this.exported.delete(key)
 			}
 		}
 
-		if (removeOnExit) {
-			this.discardOnExit.add(path)
+		if (disposable) {
+			this.disposed.set(path, Date.now())
 		}
 
-		console.info('buffered image at', path)
+		console.info('image at', path, 'was buffered')
 
 		return item
 	}
@@ -133,7 +98,7 @@ export class ImageProcessor {
 		image = this.applyTransformation(image, transformation)
 		item = { buffered: buffered ?? { path }, image, transformation }
 		this.transformed.set(hash, { date: Date.now(), item })
-		console.info('transformed image at', path)
+		console.info('image at', path, 'was transformed')
 		return item
 	}
 
@@ -167,24 +132,21 @@ export class ImageProcessor {
 		return image
 	}
 
-	async export(path: string, transformation: ImageTransformation, saveAt?: string) {
-		const { format } = transformation
+	async export(path: string, transformation: ImageTransformation, saveAt?: string): Promise<ExportedImageItem | undefined> {
+		const { format, formatOptions } = transformation
 
-		// Invalid parameters
-		if ((format === 'fits' || format === 'xisf') && !saveAt) {
-			console.warn('unable to export to fits/xisf without save path')
-			return undefined
-		}
+		const hash = this.computeExportHash(path, transformation)
 
 		// Retrieve the exported image
-		const hash = this.computeExportHash(path, transformation)
-		let item = this.exported.get(hash)?.item
+		if (!saveAt) {
+			const item = this.exported.get(hash)?.item
 
-		if (item) {
-			// Refresh the exported image's date
-			this.exported.set(hash, { date: Date.now(), item })
-			console.info('reusing exported image at', path)
-			return item
+			if (item) {
+				// Refresh the exported image's date
+				this.exported.set(hash, { date: Date.now(), item })
+				console.info('reusing exported image at', path)
+				return item
+			}
 		}
 
 		// Retrieve the transformed image
@@ -196,31 +158,39 @@ export class ImageProcessor {
 		}
 
 		const { image, buffered } = transformed
+		const { width, height, channels } = image.metadata
 
 		// Just save it to file
 		if (format === 'fits' || format === 'xisf') {
+			// Invalid path to save
+			if (!saveAt) {
+				console.error('unable to export to fits/xisf without save path')
+				return undefined
+			}
+
 			const handle = await fs.open(saveAt!, 'w')
 			await using sink = fileHandleSink(handle)
 			await writeImageToFits(image, sink)
-			return { transformed, path: saveAt! } as ExportedImageItem
+
+			return { transformed }
 		}
 
-		// Export it
-		saveAt ||= join(Bun.env.tmpDir, `${Bun.randomUUIDv7()}.${format}`)
-
-		const options: WriteImageToFormatOptions = {
-			format: IMAGE_FORMAT_OPTIONS[format],
-		}
-
-		const output = await writeImageToFormat(image, saveAt, format, options)
+		// Convert to the desired format
+		const output = writeImageToFormat(image, format, formatOptions)
 
 		if (output) {
+			if (saveAt) {
+				// Export it
+				await Bun.write(saveAt, output)
+				console.info('saved image at', path, 'to', saveAt)
+				return { transformed }
+			}
+
 			const info: ImageInfo = {
-				path: saveAt,
-				realPath: buffered.path,
-				width: output.width,
-				height: output.height,
-				mono: output.channels === 1,
+				path: buffered.path,
+				width,
+				height,
+				mono: channels === 1,
 				metadata: image.metadata,
 				transformation,
 				headers: image.header,
@@ -229,12 +199,12 @@ export class ImageProcessor {
 				solution: plateSolutionFrom(image.header),
 			}
 
-			item = { output, info, transformed, path: saveAt }
+			const item = { output, info, transformed }
 			output && this.exported.set(hash, { date: Date.now(), item })
-			console.info('exported image at', path, 'to', saveAt)
+			console.info('image at', path, 'was exported to format', format)
 			return item
 		} else {
-			console.warn('failed to export image at', saveAt)
+			console.warn('the image at', path, 'could not be exported to format', format)
 		}
 
 		return undefined
@@ -265,67 +235,53 @@ export class ImageProcessor {
 
 	private computeExportHash(path: string, transformation: ImageTransformation) {
 		const hash = this.computeImageTransformationHash(transformation)
-		return `${path}:${transformation.format}:${hash}`
+
+		switch (transformation.format) {
+			case 'jpeg':
+				return `${path}:jpeg:${transformation.formatOptions.jpeg.chrominanceSubsampling}:${transformation.formatOptions.jpeg.quality}:${hash}`
+			default:
+				return `${path}:${transformation.format}:${hash}`
+		}
 	}
 
-	async clear(path?: string) {
-		const now = Date.now()
-		let deleted = this.discarded.size > 0
+	clear(path?: string) {
+		let deleted = false
 
-		for (const [key, value] of this.exported) {
-			if (key === path || value.item.path === path || value.item.transformed.buffered.path === path || now - value.date >= 60000) {
-				this.exported.delete(key)
-				this.discarded.add(value.item.path)
-				deleted = true
-			}
-		}
+		if (!path) {
+			const now = Date.now()
 
-		for (const [key, value] of this.transformed) {
-			if (key === path || value.item.buffered.path === path || now - value.date >= 60000) {
-				this.transformed.delete(key)
-				console.info('deleted transformed image at', value.item.buffered.path)
-				deleted = true
-			}
-		}
-
-		if (path && this.discardOnExit.has(path)) {
-			for (const [key, value] of this.buffered) {
-				if (key === path || value.item.path === path) {
-					this.buffered.delete(key)
-					this.discarded.add(value.item.path)
-					console.info('deleted buffered image at', value.item.path)
+			for (const [key, value] of this.exported) {
+				if (now - value.date >= 60000) {
+					this.exported.delete(key)
 					deleted = true
 				}
 			}
 
-			this.discarded.add(path)
-			this.discardOnExit.delete(path)
+			for (const [key, value] of this.transformed) {
+				if (now - value.date >= 60000) {
+					this.transformed.delete(key)
+					console.info('deleted transformed image at', value.item.buffered.path)
+					deleted = true
+				}
+			}
+
+			for (const [key, value] of this.disposed) {
+				if (now - value >= 3600000) {
+					this.buffered.delete(key)
+					this.disposed.delete(key)
+					console.info('deleted buffered image at', key)
+					deleted = true
+				}
+			}
+		} else if (this.disposed.has(path)) {
+			this.buffered.delete(path)
+			this.disposed.delete(path)
+			console.info('deleted buffered image at', path)
+			deleted = true
 		}
 
 		if (deleted) {
 			Bun.gc()
-
-			for (const path of this.discarded) {
-				await unlink(path)
-			}
-
-			this.discarded.clear()
-		}
-	}
-
-	clearOnExit() {
-		console.info('clear on exit')
-
-		function unlink(path?: string) {
-			path && existsSync(path) && unlinkSync(path)
-		}
-
-		for (const value of this.exported.values()) {
-			unlink(value.item.path)
-		}
-
-		for (const path of this.discardOnExit) {
-			unlink(path)
 		}
 	}
 }
@@ -336,10 +292,8 @@ export class ImageHandler {
 		readonly notification?: NotificationHandler,
 	) {}
 
-	async open(req: OpenImage) {
-		if (!req.path) return undefined
-		const item = await this.processor.export(req.path, req.transformation)
-		return item?.info
+	open(req: OpenImage) {
+		return this.processor.export(req.path, req.transformation)
 	}
 
 	close(req: CloseImage) {
@@ -432,13 +386,13 @@ export function image(imageHandler: ImageHandler) {
 	const app = new Elysia({ prefix: '/image' })
 		// Endpoints!
 		.post('/open', async ({ body, set }) => {
-			const info = await imageHandler.open(body as never)
+			const item = await imageHandler.open(body as never)
 
-			if (!info) return undefined
+			if (!item?.info || !item?.output) return undefined
 
-			set.headers[X_IMAGE_INFO_HEADER] = encodeURIComponent(JSON.stringify(info))
+			set.headers[X_IMAGE_INFO_HEADER] = encodeURIComponent(JSON.stringify(item.info))
 
-			return Bun.file(info.path)
+			return item.output
 		})
 		.post('/close', ({ body }) => imageHandler.close(body as never))
 		.post('/save', ({ body }) => imageHandler.save(body as never))

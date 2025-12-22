@@ -11,7 +11,6 @@ await build({
 		outfile: process.platform === 'win32' ? 'nebulosa.exe' : 'nebulosa.out',
 		autoloadBunfig: false,
 		autoloadDotenv: true,
-		autoloadPackageJson: true,
 		windows: {
 			title: 'Nebulosa',
 			description,

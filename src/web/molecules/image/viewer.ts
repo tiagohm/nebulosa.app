@@ -2,7 +2,7 @@ import { createScope, molecule, onMount, use } from 'bunshi'
 import bus from 'src/shared/bus'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageInfo, type ImageTransformation } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
-import { proxy, ref } from 'valtio'
+import { proxy, ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -58,7 +58,7 @@ export const ImageViewerMolecule = molecule(() => {
 	let loading = false
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(2)
+		const unsubscribers = new Array<VoidFunction>(3)
 
 		const imageKey = camera?.name || 'default'
 
@@ -68,13 +68,17 @@ export const ImageViewerMolecule = molecule(() => {
 			void load(true)
 		})
 
+		unsubscribers[2] = subscribe(state.transformation.formatOptions, () => {
+			void load(true)
+		})
+
 		return () => {
 			unsubscribe(unsubscribers)
 		}
 	})
 
 	function realPath() {
-		return state.info?.realPath || scope.image.path
+		return state.info?.path || scope.image.path
 	}
 
 	function toggleDebayer() {

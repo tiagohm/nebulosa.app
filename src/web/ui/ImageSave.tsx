@@ -22,8 +22,6 @@ export const ImageSave = memo(() => {
 					<TextButton color='secondary' label='FITS' onPointerUp={() => save.update('format', 'fits')} size='sm' variant={format === 'fits' ? 'flat' : 'light'} />
 					<TextButton color='secondary' label='XISF' onPointerUp={() => save.update('format', 'xisf')} size='sm' variant={format === 'xisf' ? 'flat' : 'light'} />
 					<TextButton color='secondary' label='JPEG' onPointerUp={() => save.update('format', 'jpeg')} size='sm' variant={format === 'jpeg' ? 'flat' : 'light'} />
-					<TextButton color='secondary' label='WEBP' onPointerUp={() => save.update('format', 'webp')} size='sm' variant={format === 'webp' ? 'flat' : 'light'} />
-					<TextButton color='secondary' label='PNG' onPointerUp={() => save.update('format', 'png')} size='sm' variant={format === 'png' ? 'flat' : 'light'} />
 				</ButtonGroup>
 				<Checkbox className='col-span-full' isSelected={transformed} onValueChange={(value) => save.update('transformed', value)}>
 					Apply transformation

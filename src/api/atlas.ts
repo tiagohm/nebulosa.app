@@ -21,7 +21,6 @@ import { daysInMonth, formatTemporal, parseTemporal, type Temporal, temporalAdd,
 import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS } from 'nebulosa/src/time'
 import { binarySearchWithComparator } from 'nebulosa/src/util'
 import { join } from 'path'
-import sharp from 'sharp'
 import besselianElementsOfSolarEclipsesCsv from '../../data/besselian-elements-of-solar-eclipses.csv' with { type: 'file' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // biome-ignore format: too long!
@@ -34,9 +33,6 @@ const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
 const NAUTICAL_ALTITUDE = -6 * DEG2RAD
 const ASTRONOMICAL_ALTITUDE = -12 * DEG2RAD
 const NIGHT_ALTITUDE = -18 * DEG2RAD
-
-// The "b" parameter to make background color from 0 to 24 (#181818)
-const SOLAR_IMAGE_CONTRAST = 0.8125 // (128 - 24) / 128
 
 const SATELLITE_TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?FORMAT=tle&GROUP='
 
@@ -75,16 +71,11 @@ export class AtlasHandler {
 		for (const [s, url] of Object.entries(SOLAR_IMAGE_SOURCE_URLS)) {
 			if (source && s !== source) continue
 
-			// Fetch and process the image
-
 			try {
 				const response = await fetch(url)
-				const bytes = await response.arrayBuffer()
-				await sharp(bytes)
-					.linear(SOLAR_IMAGE_CONTRAST, -(128 * SOLAR_IMAGE_CONTRAST) + 128)
-					.toFile(`${Bun.env.tmpDir}/sun-${s}.jpg`)
+				await Bun.write(`${Bun.env.tmpDir}/sun-${s}.jpg`, await response.blob())
 			} catch (e) {
-				console.error(e)
+				console.error('failed to fetch the sun image', s, e)
 				break
 			}
 		}

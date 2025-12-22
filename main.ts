@@ -2,7 +2,6 @@ import { basicAuth } from '@eelkevdbos/elysia-basic-auth'
 import { cors } from '@elysiajs/cors'
 import { cron } from '@elysiajs/cron'
 import Elysia from 'elysia'
-import exitHook from 'exit-hook'
 import type { MakeDirectoryOptions } from 'fs'
 import fs from 'fs/promises'
 import type { DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
@@ -176,12 +175,6 @@ const darvHandler = new DarvHandler(wsm, cameraHandler, mountManager)
 void atlasHandler.refreshImageOfSun()
 void atlasHandler.refreshSatellites()
 void atlasHandler.refreshEarthOrientationData()
-
-// On Exit
-
-exitHook(() => {
-	imageProcessor.clearOnExit()
-})
 
 // App
 

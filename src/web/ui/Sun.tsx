@@ -10,6 +10,9 @@ export interface SunProps {
 	readonly onSourceChange: (source: SolarImageSource) => void
 }
 
+// NOTE: The contrast filter is used to make the image's background color from 0 to 24 (#181818)
+// The formula of "b" parameter of linear transformation for contrast filter is (128 - color) / 128 => (128 - 24) / 128 = 0.8125
+
 export const Sun = memo(({ source, onSourceChange }: SunProps) => {
 	function handleOnError(event: React.SyntheticEvent<HTMLImageElement, Event>) {
 		const target = event.target as HTMLImageElement
@@ -20,7 +23,7 @@ export const Sun = memo(({ source, onSourceChange }: SunProps) => {
 	return (
 		<span className='relative min-w-20'>
 			<SolarImageSourceDropdown className='absolute left-1 right-1 top-1' onValueChange={onSourceChange} value={source} />
-			<img className='pt-8 select-none max-w-54 w-full h-auto' draggable={false} onError={handleOnError} src={`${API_URL}/atlas/sun/image?source=${source}`} />
+			<img className='pt-8 select-none max-w-54 w-full h-auto contrast-[0.8125]' draggable={false} onError={handleOnError} src={`${API_URL}/atlas/sun/image?source=${source}`} />
 			<PoweredBy className='absolute' href='https://sdo.gsfc.nasa.gov/data/' label='NASA/SDO' />
 		</span>
 	)

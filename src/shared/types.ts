@@ -9,7 +9,7 @@ import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { Rect } from 'nebulosa/src/geometry'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
-import type { ImageChannel, ImageFormat, ImageMetadata } from 'nebulosa/src/image'
+import type { ImageChannel, ImageFormat, ImageMetadata, WriteImageToFormatOptions } from 'nebulosa/src/image'
 import type { PropertyState } from 'nebulosa/src/indi'
 // biome-ignore format: too long!
 import type { Camera, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
@@ -21,7 +21,7 @@ import type { StellariumObjectType } from 'nebulosa/src/stellarium'
 import type { SolarEclipse } from 'nebulosa/src/sun'
 import type { Temporal } from 'nebulosa/src/temporal'
 import type { Velocity } from 'nebulosa/src/velocity'
-import type { Required } from 'utility-types'
+import type { DeepRequired, Required } from 'utility-types'
 
 export type Atom<T> = T extends MoleculeOrInterface<infer X> ? X : never
 
@@ -408,6 +408,7 @@ export interface ImageTransformation {
 	invert: boolean
 	scnr: ImageScnr
 	format: ImageFormat
+	formatOptions: DeepRequired<WriteImageToFormatOptions>
 	adjustment: ImageAdjustment
 	filter: ImageFilter
 }
@@ -460,7 +461,6 @@ export interface ImageCoordinateInterpolation {
 
 export interface ImageInfo extends Partial<EquatorialCoordinate>, Size {
 	path: string
-	realPath: string
 	mono: boolean
 	metadata: ImageMetadata
 	transformation: ImageTransformation
@@ -942,6 +942,12 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	invert: false,
 	scnr: DEFAULT_IMAGE_SCNR,
 	format: 'jpeg',
+	formatOptions: {
+		jpeg: {
+			quality: 90,
+			chrominanceSubsampling: '4:2:0',
+		},
+	},
 	adjustment: DEFAULT_IMAGE_ADJUSTMENT,
 	filter: DEFAULT_IMAGE_FILTER,
 }

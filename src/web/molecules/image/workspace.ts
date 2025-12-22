@@ -43,7 +43,18 @@ export const ImageWorkspaceMolecule = molecule(() => {
 			}
 		})
 
+		const beforeUnload = () => {
+			state.images.forEach((image) => {
+				if (!image.camera) {
+					void Api.Image.close({ id: image.path })
+				}
+			})
+		}
+
+		window.addEventListener('beforeunload', beforeUnload)
+
 		return () => {
+			window.removeEventListener('beforeunload', beforeUnload)
 			unsubscriber()
 		}
 	})

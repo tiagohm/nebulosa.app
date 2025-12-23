@@ -1,8 +1,8 @@
-import { molecule, onMount, use } from 'bunshi'
+import { addToast } from '@heroui/react'
+import { molecule, onMount } from 'bunshi'
 import bus from 'src/shared/bus'
-import type { DeviceAdded } from 'src/shared/types'
+import type { DeviceAdded, Notification } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { NotificationMolecule } from './notification'
 
 let ws: WebSocket | undefined
 
@@ -15,8 +15,6 @@ const state = proxy<WebSocketState>({
 })
 
 export const WebSocketMolecule = molecule(() => {
-	const notification = use(NotificationMolecule)
-
 	const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
 	let connected = false
@@ -89,7 +87,7 @@ export const WebSocketMolecule = molecule(() => {
 					bus.emit(key, (data as DeviceAdded).device)
 					break
 				case 'notification':
-					notification.send(data)
+					addToast(data as Notification)
 					break
 				default:
 					bus.emit(key, data)

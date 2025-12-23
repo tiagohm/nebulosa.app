@@ -47,11 +47,11 @@ export class PlateSolverHandler {
 				if (solution) {
 					return solution
 				} else {
-					this.notification.send({ body: 'No solution found', severity: 'warn' })
+					this.notification.send({ title: 'PLATE SOLVER', description: 'No solution found', color: 'warning' })
 				}
 			} catch (e) {
 				console.error(e)
-				this.notification.send({ body: 'Failed to plate solve image', severity: 'error' })
+				this.notification.send({ title: 'PLATE SOLVER', description: 'Failed to plate solve', color: 'danger' })
 			} finally {
 				aborter.abort()
 				this.tasks.delete(req.id)

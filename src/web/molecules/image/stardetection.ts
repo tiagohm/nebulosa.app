@@ -79,7 +79,7 @@ export const StarDetectionMolecule = molecule(() => {
 			if (!stars) return
 
 			if (stars.length === 0) {
-				addToast({ description: 'No stars detected', color: 'warning', title: 'WARN' })
+				addToast({ title: 'STAR DETECTION', description: 'No stars detected', color: 'warning' })
 			}
 
 			state.stars = stars

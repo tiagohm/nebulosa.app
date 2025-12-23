@@ -1,3 +1,4 @@
+import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { EquatorialCoordinate, HorizontalCoordinate } from 'nebulosa/src/coordinate'
@@ -21,7 +22,7 @@ export interface MountScopeValue {
 }
 
 export interface MountState {
-	readonly mount: EquipmentDevice<Mount>
+	mount: EquipmentDevice<Mount>
 	readonly targetCoordinate: {
 		readonly coordinate: EquatorialCoordinate<string> & HorizontalCoordinate<string> & { type: MountTargetCoordinateType; action: TargetCoordinateAction }
 		readonly position: MountEquatorialCoordinatePosition
@@ -99,6 +100,8 @@ export const MountMolecule = molecule(() => {
 	stateMap.set(mount.name, state)
 
 	onMount(() => {
+		state.mount = equipment.get('MOUNT', state.mount.name)!
+
 		const unsubscribers = new Array<VoidFunction>(3)
 
 		unsubscribers[0] = bus.subscribe<MountUpdated>('mount:update', (event) => {
@@ -107,6 +110,12 @@ export const MountMolecule = molecule(() => {
 					if (event.device.connected) {
 						void updateCurrentCoordinatePosition()
 						void updateTargetCoordinatePosition()
+					} else if (event.state === 'Alert') {
+						addToast({ title: 'MOUNT', description: `Failed to connect to mount ${mount.name}`, color: 'danger' })
+					}
+
+					if (state.mount.connecting) {
+						state.mount.connecting = false
 					}
 				} else if (event.property === 'equatorialCoordinate') {
 					Object.assign(state.currentPosition, event.device.equatorialCoordinate)

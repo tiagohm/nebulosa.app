@@ -22,7 +22,7 @@ export class ConnectionHandler {
 		let client: IndiClient | undefined
 		if (!id) client = this.clients.values().next().value
 		else client = this.clients.get(id)
-		if (!client) this.notificationHandler.send({ body: 'No active connection!', severity: 'error' })
+		if (!client) this.notificationHandler.send({ title: 'CONNECTION', description: 'No active connection!', color: 'danger' })
 		return client!
 	}
 
@@ -49,7 +49,7 @@ export class ConnectionHandler {
 					return status
 				}
 			} catch (e) {
-				this.notificationHandler.send({ body: 'Failed to connect to INDI server', severity: 'error' })
+				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to INDI server', color: 'danger' })
 			}
 		}
 

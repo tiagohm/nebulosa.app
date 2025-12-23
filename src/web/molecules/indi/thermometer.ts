@@ -1,4 +1,4 @@
-import { createScope, molecule, use } from 'bunshi'
+import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_THERMOMETER, type Thermometer } from 'nebulosa/src/indi.device'
 import { proxy } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
@@ -8,7 +8,7 @@ export interface ThermometerScopeValue {
 }
 
 export interface ThermometerState {
-	readonly thermometer: EquipmentDevice<Thermometer>
+	thermometer: EquipmentDevice<Thermometer>
 }
 
 export const ThermometerScope = createScope<ThermometerScopeValue>({ thermometer: DEFAULT_THERMOMETER })
@@ -28,6 +28,10 @@ export const ThermometerMolecule = molecule(() => {
 		})
 
 	stateMap.set(thermometer.name, state)
+
+	onMount(() => {
+		state.thermometer = equipment.get('THERMOMETER', state.thermometer.name)!
+	})
 
 	function connect() {
 		return equipment.connect(thermometer)

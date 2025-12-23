@@ -12,7 +12,7 @@ export interface GuideOutputScopeValue {
 }
 
 export interface GuideOutputState {
-	readonly guideOutput: EquipmentDevice<GuideOutput>
+	guideOutput: EquipmentDevice<GuideOutput>
 	readonly request: {
 		readonly north: GuidePulse
 		readonly south: GuidePulse
@@ -48,6 +48,8 @@ export const GuideOutputMolecule = molecule(() => {
 	stateMap.set(guideOutput.name, state)
 
 	onMount(() => {
+		state.guideOutput = equipment.get('GUIDE_OUTPUT', state.guideOutput.name)!
+
 		const unsubscriber = initProxy(state, `guideoutput.${guideOutput.name}`, ['o:request'])
 
 		return () => {

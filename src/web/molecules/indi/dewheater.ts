@@ -1,4 +1,4 @@
-import { createScope, molecule, use } from 'bunshi'
+import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_DEW_HEATER, type DewHeater } from 'nebulosa/src/indi.device'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
@@ -9,7 +9,7 @@ export interface DewHeaterScopeValue {
 }
 
 export interface DewHeaterState {
-	readonly dewHeater: EquipmentDevice<DewHeater>
+	dewHeater: EquipmentDevice<DewHeater>
 }
 
 export const DewHeaterScope = createScope<DewHeaterScopeValue>({ dewHeater: DEFAULT_DEW_HEATER })
@@ -29,6 +29,10 @@ export const DewHeaterMolecule = molecule(() => {
 		})
 
 	stateMap.set(dewHeater.name, state)
+
+	onMount(() => {
+		state.dewHeater = equipment.get('DEW_HEATER', state.dewHeater.name)!
+	})
 
 	function connect() {
 		return equipment.connect(dewHeater)

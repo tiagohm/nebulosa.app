@@ -10,7 +10,7 @@ export interface FocuserScopeValue {
 }
 
 export interface FocuserState {
-	readonly focuser: EquipmentDevice<Focuser>
+	focuser: EquipmentDevice<Focuser>
 	readonly request: {
 		readonly relative: number
 		readonly absolute: number
@@ -37,6 +37,8 @@ export const FocuserMolecule = molecule(() => {
 	stateMap.set(focuser.name, state)
 
 	onMount(() => {
+		state.focuser = equipment.get('FOCUSER', state.focuser.name)!
+
 		const unsubscriber = initProxy(state, `focuser.${focuser.name}`, ['o:request'])
 
 		return () => {

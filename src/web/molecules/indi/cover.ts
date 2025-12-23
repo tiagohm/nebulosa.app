@@ -1,4 +1,4 @@
-import { createScope, molecule, use } from 'bunshi'
+import { createScope, molecule, onMount, use } from 'bunshi'
 import { type Cover, DEFAULT_COVER } from 'nebulosa/src/indi.device'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
@@ -9,7 +9,7 @@ export interface CoverScopeValue {
 }
 
 export interface CoverState {
-	readonly cover: EquipmentDevice<Cover>
+	cover: EquipmentDevice<Cover>
 }
 
 export const CoverScope = createScope<CoverScopeValue>({ cover: DEFAULT_COVER })
@@ -29,6 +29,10 @@ export const CoverMolecule = molecule(() => {
 		})
 
 	stateMap.set(cover.name, state)
+
+	onMount(() => {
+		state.cover = equipment.get('COVER', state.cover.name)!
+	})
 
 	function connect() {
 		return equipment.connect(cover)

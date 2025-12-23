@@ -275,7 +275,7 @@ export class AtlasHandler {
 		if ('list' in result) {
 			return { ...DEFAULT_MINOR_PLANET, list: result.list }
 		} else if ('message' in result) {
-			this.notification?.send({ body: result.message, severity: 'error' })
+			this.notification?.send({ title: 'SKY ATLAS', description: result.message, color: 'danger' })
 			return undefined
 		} else {
 			const parameters: MinorPlanetParameter[] = []

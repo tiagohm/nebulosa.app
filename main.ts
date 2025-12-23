@@ -236,7 +236,7 @@ const app = new Elysia({
 	// Error Handling
 
 	.onError((req) => {
-		console.error(req.error)
+		console.error('request failed', req.path, req.error)
 		return undefined
 	})
 

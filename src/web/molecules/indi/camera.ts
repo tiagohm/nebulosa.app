@@ -15,7 +15,7 @@ export interface CameraScopeValue {
 
 export interface CameraState {
 	minimized: boolean
-	readonly camera: EquipmentDevice<Camera>
+	camera: EquipmentDevice<Camera>
 	readonly request: CameraCaptureStart
 	readonly progress: CameraCaptureEvent
 	capturing: boolean
@@ -53,6 +53,8 @@ export const CameraMolecule = molecule(() => {
 	stateMap.set(camera.name, state)
 
 	onMount(() => {
+		state.camera = equipment.get('CAMERA', state.camera.name)!
+
 		const unsubscribers = new Array<VoidFunction>(7)
 
 		unsubscribers[0] = bus.subscribe<CameraUpdated>('camera:update', (event) => {

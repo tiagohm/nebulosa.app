@@ -11,7 +11,7 @@ export interface WheelScopeValue {
 }
 
 export interface WheelState {
-	readonly wheel: EquipmentDevice<Wheel>
+	wheel: EquipmentDevice<Wheel>
 	readonly selected: {
 		slot: number
 		name: string
@@ -41,6 +41,8 @@ export const WheelMolecule = molecule(() => {
 	stateMap.set(wheel.name, state)
 
 	onMount(() => {
+		state.wheel = equipment.get('WHEEL', state.wheel.name)!
+
 		const unsubscribers = new Array<VoidFunction>(1)
 
 		unsubscribers[0] = subscribeKey(state.selected, 'slot', (position) => {

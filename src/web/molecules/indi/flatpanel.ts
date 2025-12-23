@@ -1,4 +1,4 @@
-import { createScope, molecule, use } from 'bunshi'
+import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_FLAT_PANEL, type FlatPanel } from 'nebulosa/src/indi.device'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
@@ -9,7 +9,7 @@ export interface FlatPanelScopeValue {
 }
 
 export interface FlatPanelState {
-	readonly flatPanel: EquipmentDevice<FlatPanel>
+	flatPanel: EquipmentDevice<FlatPanel>
 }
 
 export const FlatPanelScope = createScope<FlatPanelScopeValue>({ flatPanel: DEFAULT_FLAT_PANEL })
@@ -29,6 +29,10 @@ export const FlatPanelMolecule = molecule(() => {
 		})
 
 	stateMap.set(flatPanel.name, state)
+
+	onMount(() => {
+		state.flatPanel = equipment.get('FLAT_PANEL', state.flatPanel.name)!
+	})
 
 	function connect() {
 		return equipment.connect(flatPanel)

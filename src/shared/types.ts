@@ -712,9 +712,9 @@ export type Severity = 'info' | 'success' | 'warn' | 'error'
 
 export interface Notification {
 	target?: string
-	severity?: Severity
-	title?: string
-	body: string
+	color: 'success' | 'default' | 'foreground' | 'primary' | 'secondary' | 'warning' | 'danger'
+	title: string
+	description: string
 }
 
 // Plate Solver

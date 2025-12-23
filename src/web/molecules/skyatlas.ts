@@ -15,6 +15,12 @@ import { initProxy } from '@/shared/proxy'
 
 export type SkyAtlasTab = 'sun' | 'moon' | 'planet' | 'asteroid' | 'galaxy' | 'satellite'
 
+export interface BookmarkItem {
+	readonly name: string
+	readonly type: SkyAtlasTab
+	readonly code: string // planet code, asteroid spk id, galaxy id, satellite id
+}
+
 export interface SkyAtlasState {
 	show: boolean
 	tab: SkyAtlasTab
@@ -33,6 +39,7 @@ export interface SkyAtlasState {
 	readonly location: {
 		show: boolean
 	}
+	readonly bookmark: BookmarkItem[]
 }
 
 export interface SunState {
@@ -709,9 +716,10 @@ const state = proxy<SkyAtlasState>({
 	asteroid: asteroidState,
 	galaxy: galaxyState,
 	satellite: satelliteState,
+	bookmark: [],
 })
 
-initProxy(state, 'skyatlas', ['p:show', 'p:tab'])
+initProxy(state, 'skyatlas', ['p:show', 'p:tab', 'o:bookmark'])
 initProxy(state.request, 'skyatlas', ['o:location'])
 initProxy(state.request.time, 'skyatlas.time', ['p:offset'])
 
@@ -828,6 +836,15 @@ export const SkyAtlasMolecule = molecule(() => {
 		bus.emit('framing:load', request)
 	}
 
+	function bookmark(type: SkyAtlasTab, name: string, code: string, favorite: boolean) {
+		if (favorite) {
+			state.bookmark.push({ type, name, code })
+		} else {
+			const index = state.bookmark.findIndex((e) => e.type === type && e.code === code)
+			index >= 0 && state.bookmark.splice(index, 1)
+		}
+	}
+
 	function showLocation() {
 		state.location.show = true
 	}
@@ -845,7 +862,7 @@ export const SkyAtlasMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, updateTime, updateLocation, syncTo, goTo, frame, showLocation, hideLocation, show, hide }
+	return { state, updateTime, updateLocation, syncTo, goTo, frame, bookmark, showLocation, hideLocation, show, hide }
 })
 
 function isLocationChanged(a: GeographicCoordinate, b: GeographicCoordinate) {

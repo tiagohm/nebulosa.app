@@ -1,7 +1,7 @@
 import { IconButton, type IconButtonProps } from './IconButton'
 
 export interface ToggleButtonProps extends Omit<IconButtonProps, 'variant'> {
-	readonly isSelected: boolean
+	readonly isSelected?: boolean
 	readonly offVariant?: IconButtonProps['variant']
 	readonly onVariant?: IconButtonProps['variant']
 }

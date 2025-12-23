@@ -8,9 +8,10 @@ export interface FilterableListboxProps<T extends object> extends Omit<ListboxPr
 	readonly showFilter?: boolean
 	readonly filter: (item: T, search: string) => boolean
 	readonly filterPlaceholder?: string
+	readonly minLengthToSearch?: number
 }
 
-export function FilterableListbox<T extends object>({ showFilter = true, items, filter, filterPlaceholder = 'Search', ...props }: FilterableListboxProps<T>) {
+export function FilterableListbox<T extends object>({ showFilter = true, items, filter, filterPlaceholder = 'Search', minLengthToSearch = 3, ...props }: FilterableListboxProps<T>) {
 	const [search, setSearch] = useState('')
 	const debouncedSearch = useDebounce(search, 500)
 
@@ -19,5 +20,5 @@ export function FilterableListbox<T extends object>({ showFilter = true, items, 
 		return items.length && text ? items.filter((item) => filter(item, text)) : items
 	}, [debouncedSearch, items])
 
-	return <Listbox {...props} items={filtered} topContent={showFilter && <SearchInput className='w-full' onValueChange={setSearch} placeholder={filterPlaceholder} value={search} />} />
+	return <Listbox {...props} items={filtered} topContent={showFilter && <SearchInput className='w-full' minLengthToSearch={minLengthToSearch} onValueChange={setSearch} placeholder={filterPlaceholder} value={search} />} />
 }

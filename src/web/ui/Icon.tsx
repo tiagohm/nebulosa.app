@@ -926,10 +926,26 @@ export namespace Icons {
 		)
 	})
 
-	export const RotateRight = memo(({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
+	export const Bookmark = memo(({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
 		return (
 			<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' {...props}>
-				<path d='M16.89,15.5L18.31,16.89C19.21,15.73 19.76,14.39 19.93,13H17.91C17.77,13.87 17.43,14.72 16.89,15.5M13,17.9V19.92C14.39,19.75 15.74,19.21 16.9,18.31L15.46,16.87C14.71,17.41 13.87,17.76 13,17.9M19.93,11C19.76,9.61 19.21,8.27 18.31,7.11L16.89,8.53C17.43,9.28 17.77,10.13 17.91,11M15.55,5.55L11,1V4.07C7.06,4.56 4,7.92 4,12C4,16.08 7.05,19.44 11,19.93V17.91C8.16,17.43 6,14.97 6,12C6,9.03 8.16,6.57 11,6.09V10L15.55,5.55Z' />
+				<path d='M17,3H7A2,2 0 0,0 5,5V21L12,18L19,21V5C19,3.89 18.1,3 17,3Z' />
+			</svg>
+		)
+	})
+
+	export const BookmarkPlus = memo(({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
+		return (
+			<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' {...props}>
+				<path d='M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,7V9H9V11H11V13H13V11H15V9H13V7H11Z' />
+			</svg>
+		)
+	})
+
+	export const BookmarkRemove = memo(({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => {
+		return (
+			<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' {...props}>
+				<path d='M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M8.17,8.58L10.59,11L8.17,13.41L9.59,14.83L12,12.41L14.41,14.83L15.83,13.41L13.41,11L15.83,8.58L14.41,7.17L12,9.58L9.59,7.17L8.17,8.58Z' />
 			</svg>
 		)
 	})

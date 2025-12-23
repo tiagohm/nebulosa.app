@@ -3,8 +3,5 @@ telemetry = false
 [install]
 exact = true
 
-[install.cache]
-disable = true
-
 [serve.static]
 env = "APP_*"

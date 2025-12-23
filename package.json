@@ -8,6 +8,7 @@
 	"module": "main.ts",
 	"scripts": {
 		"tailwind": "tailwindcss -m -i ./src/web/index.css -o dist/index.css",
+		"dev": "bun tailwind && bun --hot main.ts",
 		"prod": "bun tailwind && NODE_ENV=production bun --production main.ts",
 		"lint": "biome lint --write src/",
 		"format": "biome format --write src/",

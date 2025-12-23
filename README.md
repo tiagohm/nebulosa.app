@@ -12,13 +12,19 @@ To install dependencies:
 bun i --production
 ```
 
-To start a production server:
+To start the development server:
+
+```bash
+bun dev
+```
+
+To start the production server:
 
 ```bash
 bun prod
 ```
 
-To generate a production-ready executable:
+To generate the production-ready executable:
 
 ```bash
 bun compile

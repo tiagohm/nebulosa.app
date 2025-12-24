@@ -1,5 +1,8 @@
+import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_THERMOMETER, type Thermometer } from 'nebulosa/src/indi.device'
+import bus from 'src/shared/bus'
+import type { ThermometerUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
@@ -31,6 +34,22 @@ export const ThermometerMolecule = molecule(() => {
 
 	onMount(() => {
 		state.thermometer = equipment.get('THERMOMETER', state.thermometer.name)!
+
+		const unsubscriber = bus.subscribe<ThermometerUpdated>('thermometer:update', (event) => {
+			if (event.device.name === thermometer.name) {
+				if (event.property === 'connected') {
+					if (!event.device.connected && event.state === 'Alert') {
+						addToast({ title: 'THERMOMETER', description: `Failed to connect to thermometer ${thermometer.name}`, color: 'danger' })
+					}
+
+					state.thermometer.connecting = false
+				}
+			}
+		})
+
+		return () => {
+			unsubscriber()
+		}
 	})
 
 	function connect() {

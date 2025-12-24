@@ -1,6 +1,9 @@
+import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_GUIDE_OUTPUT, type GuideOutput } from 'nebulosa/src/indi.device'
-import type { GuidePulse } from 'src/shared/types'
+import bus from 'src/shared/bus'
+import type { GuideOutputUpdated, GuidePulse } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -50,10 +53,24 @@ export const GuideOutputMolecule = molecule(() => {
 	onMount(() => {
 		state.guideOutput = equipment.get('GUIDE_OUTPUT', state.guideOutput.name)!
 
-		const unsubscriber = initProxy(state, `guideoutput.${guideOutput.name}`, ['o:request'])
+		const unsubscribers = new Array<VoidFunction>(2)
+
+		unsubscribers[0] = bus.subscribe<GuideOutputUpdated>('guideOutput:update', (event) => {
+			if (event.device.name === guideOutput.name) {
+				if (event.property === 'connected') {
+					if (!event.device.connected && event.state === 'Alert') {
+						addToast({ title: 'GUIDE OUTPUT', description: `Failed to connect to guide output ${guideOutput.name}`, color: 'danger' })
+					}
+
+					state.guideOutput.connecting = false
+				}
+			}
+		})
+
+		unsubscribers[1] = initProxy(state, `guideoutput.${guideOutput.name}`, ['o:request'])
 
 		return () => {
-			unsubscriber()
+			unsubscribe(unsubscribers)
 		}
 	})
 

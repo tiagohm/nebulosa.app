@@ -1,3 +1,4 @@
+import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { type Camera, DEFAULT_CAMERA, type Focuser, type Mount, type Wheel } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
@@ -63,6 +64,12 @@ export const CameraMolecule = molecule(() => {
 					updateRequestFrame(state.request, event.device.frame!)
 				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
 					updateFrameFormat(state.request, event.device.frameFormats)
+				} else if (event.property === 'connected') {
+					if (!event.device.connected && event.state === 'Alert') {
+						addToast({ title: 'CAMERA', description: `Failed to connect to camera ${camera.name}`, color: 'danger' })
+					}
+
+					state.camera.connecting = false
 				}
 			}
 		})

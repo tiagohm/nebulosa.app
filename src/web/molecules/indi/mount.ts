@@ -114,9 +114,7 @@ export const MountMolecule = molecule(() => {
 						addToast({ title: 'MOUNT', description: `Failed to connect to mount ${mount.name}`, color: 'danger' })
 					}
 
-					if (state.mount.connecting) {
-						state.mount.connecting = false
-					}
+					state.mount.connecting = false
 				} else if (event.property === 'equatorialCoordinate') {
 					Object.assign(state.currentPosition, event.device.equatorialCoordinate)
 				}

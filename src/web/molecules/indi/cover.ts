@@ -1,5 +1,8 @@
+import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { type Cover, DEFAULT_COVER } from 'nebulosa/src/indi.device'
+import bus from 'src/shared/bus'
+import type { CoverUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
@@ -32,6 +35,22 @@ export const CoverMolecule = molecule(() => {
 
 	onMount(() => {
 		state.cover = equipment.get('COVER', state.cover.name)!
+
+		const unsubscriber = bus.subscribe<CoverUpdated>('cover:update', (event) => {
+			if (event.device.name === cover.name) {
+				if (event.property === 'connected') {
+					if (!event.device.connected && event.state === 'Alert') {
+						addToast({ title: 'COVER', description: `Failed to connect to cover ${cover.name}`, color: 'danger' })
+					}
+
+					state.cover.connecting = false
+				}
+			}
+		})
+
+		return () => {
+			unsubscriber()
+		}
 	})
 
 	function connect() {

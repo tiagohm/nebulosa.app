@@ -1,5 +1,9 @@
+import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_FOCUSER, type Focuser } from 'nebulosa/src/indi.device'
+import bus from 'src/shared/bus'
+import type { FocuserUpdated } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -39,10 +43,24 @@ export const FocuserMolecule = molecule(() => {
 	onMount(() => {
 		state.focuser = equipment.get('FOCUSER', state.focuser.name)!
 
-		const unsubscriber = initProxy(state, `focuser.${focuser.name}`, ['o:request'])
+		const unsubscribers = new Array<VoidFunction>(2)
+
+		unsubscribers[0] = bus.subscribe<FocuserUpdated>('focuser:update', (event) => {
+			if (event.device.name === focuser.name) {
+				if (event.property === 'connected') {
+					if (!event.device.connected && event.state === 'Alert') {
+						addToast({ title: 'FOCUSER', description: `Failed to connect to focuser ${focuser.name}`, color: 'danger' })
+					}
+
+					state.focuser.connecting = false
+				}
+			}
+		})
+
+		unsubscribers[1] = initProxy(state, `focuser.${focuser.name}`, ['o:request'])
 
 		return () => {
-			unsubscriber()
+			unsubscribe(unsubscribers)
 		}
 	})
 

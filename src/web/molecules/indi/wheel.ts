@@ -1,5 +1,8 @@
+import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_WHEEL, type Wheel } from 'nebulosa/src/indi.device'
+import bus from 'src/shared/bus'
+import type { WheelUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -43,9 +46,21 @@ export const WheelMolecule = molecule(() => {
 	onMount(() => {
 		state.wheel = equipment.get('WHEEL', state.wheel.name)!
 
-		const unsubscribers = new Array<VoidFunction>(1)
+		const unsubscribers = new Array<VoidFunction>(2)
 
-		unsubscribers[0] = subscribeKey(state.selected, 'slot', (position) => {
+		unsubscribers[0] = bus.subscribe<WheelUpdated>('wheel:update', (event) => {
+			if (event.device.name === wheel.name) {
+				if (event.property === 'connected') {
+					if (!event.device.connected && event.state === 'Alert') {
+						addToast({ title: 'FILTER WHEEL', description: `Failed to connect to guide output ${wheel.name}`, color: 'danger' })
+					}
+
+					state.wheel.connecting = false
+				}
+			}
+		})
+
+		unsubscribers[1] = subscribeKey(state.selected, 'slot', (position) => {
 			state.selected.name = wheel.slots[position]
 		})
 

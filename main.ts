@@ -2,7 +2,7 @@ import { basicAuth } from '@eelkevdbos/elysia-basic-auth'
 import { cors } from '@elysiajs/cors'
 import { cron } from '@elysiajs/cron'
 import Elysia from 'elysia'
-import type { MakeDirectoryOptions } from 'fs'
+import { existsSync, type MakeDirectoryOptions, rmSync } from 'fs'
 import fs from 'fs/promises'
 import type { DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
 import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
@@ -75,7 +75,7 @@ function checkDirAccess(...paths: string[]) {
 	try {
 		fs.access(path, fs.constants.R_OK | fs.constants.W_OK)
 	} catch {
-		console.error('unable to access directory at', Bun.env.homeDir)
+		console.error('unable to access the app directory at', Bun.env.homeDir)
 		process.exit(0)
 	}
 
@@ -89,24 +89,43 @@ if (appDir) {
 }
 
 if (process.platform === 'linux') {
-	Bun.env.tmpDir = checkDirAccess('/dev/shm')
+	Bun.env.tmpDir = join(checkDirAccess('/dev/shm'), 'Nebulosa')
 	Bun.env.appDir = appDir || join(Bun.env.homeDir, '.nebulosa')
 	Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'satellites')
 } else if (process.platform === 'win32') {
-	Bun.env.tmpDir = checkDirAccess(os.tmpdir())
 	const documentsDir = appDir || join(checkDirAccess(Bun.env.homeDir, 'Documents'), 'Nebulosa')
 	Bun.env.appDir = appDir || join(checkDirAccess(Bun.env.homeDir, 'AppData', 'Local'), 'Nebulosa')
+	Bun.env.tmpDir = join(Bun.env.appDir, 'Temp')
 	Bun.env.capturesDir = join(documentsDir, 'Captures')
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'Satellites')
 }
 
 await fs.mkdir(Bun.env.appDir, CREATE_RECURSIVE_DIRECTORY)
+await fs.mkdir(Bun.env.tmpDir, CREATE_RECURSIVE_DIRECTORY)
 await fs.mkdir(Bun.env.capturesDir, CREATE_RECURSIVE_DIRECTORY)
 await fs.mkdir(Bun.env.satellitesDir, CREATE_RECURSIVE_DIRECTORY)
 
 console.info('app directory is located at', Bun.env.appDir)
 console.info('captures directory is located at', Bun.env.capturesDir)
+console.info('temp directory is located at', Bun.env.tmpDir)
+
+// Running from package.json script has a bug on interrupt signals: https://github.com/oven-sh/bun/issues/11400
+
+function clear(exit: boolean) {
+	if (existsSync(Bun.env.tmpDir)) {
+		console.info('clearing temp directory...')
+		rmSync(Bun.env.tmpDir, { recursive: true })
+	}
+
+	exit && process.exit(0)
+}
+
+process.once('beforeExit', clear.bind(undefined, true))
+process.once('SIGINT', clear.bind(undefined, true))
+process.once('SIGTERM', clear.bind(undefined, true))
+
+clear(false)
 
 // DNS caching
 
@@ -204,15 +223,6 @@ const app = new Elysia({
 
 	// Cron
 
-	.use(
-		cron({
-			name: 'every-minute',
-			pattern: '0 */1 * * * *',
-			run: () => {
-				void imageProcessor.clear()
-			},
-		}),
-	)
 	.use(
 		cron({
 			name: 'every-15-minutes',

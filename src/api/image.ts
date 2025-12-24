@@ -1,3 +1,4 @@
+import cron from '@elysiajs/cron'
 import Elysia from 'elysia'
 import fs from 'fs/promises'
 import { eraPvstar } from 'nebulosa/src/erfa'
@@ -21,6 +22,7 @@ import type { NotificationHandler } from './notification'
 export interface BufferedImageItem {
 	readonly buffer?: Buffer
 	readonly path: string
+	readonly disposable: boolean
 }
 
 export interface TransformedImageItem {
@@ -36,7 +38,7 @@ export interface ExportedImageItem {
 }
 
 export interface ImageProcessorItem<T> {
-	readonly date: number
+	date: number
 	readonly item: T
 }
 
@@ -46,11 +48,14 @@ export class ImageProcessor {
 	private readonly buffered = new Map<string, ImageProcessorItem<BufferedImageItem>>()
 	private readonly transformed = new Map<string, ImageProcessorItem<TransformedImageItem>>()
 	private readonly exported = new Map<string, ImageProcessorItem<ExportedImageItem>>()
-	private readonly disposed = new Map<string, number>()
 
 	save(buffer: Buffer, path: string, disposable: boolean = false) {
-		const item: BufferedImageItem = { buffer, path }
-		this.buffered.set(path, { date: Date.now(), item })
+		const item: BufferedImageItem = { buffer, path, disposable }
+
+		// Avoid double buffering
+		if (process.platform !== 'linux' || !path.startsWith('/dev/shm')) {
+			this.buffered.set(path, { date: Date.now(), item })
+		}
 
 		for (const key of this.transformed.keys()) {
 			if (key.startsWith(path)) {
@@ -64,10 +69,6 @@ export class ImageProcessor {
 			}
 		}
 
-		if (disposable) {
-			this.disposed.set(path, Date.now())
-		}
-
 		console.info('image at', path, 'was buffered')
 
 		return item
@@ -79,7 +80,7 @@ export class ImageProcessor {
 
 		if (item) {
 			this.transformed.set(hash, { date: Date.now(), item })
-			console.info('reusing transformed image', path)
+			console.info('reusing transformed image at', path)
 			return item
 		}
 
@@ -99,7 +100,7 @@ export class ImageProcessor {
 		}
 
 		image = this.applyTransformation(image, transformation)
-		item = { buffered: buffered ?? { path }, image, transformation }
+		item = { buffered: buffered ?? { path, disposable: true }, image, transformation }
 		this.transformed.set(hash, { date: Date.now(), item })
 		console.info('image at', path, 'was transformed')
 		return item
@@ -297,38 +298,52 @@ export class ImageProcessor {
 		}
 	}
 
-	clear(path?: string) {
+	async clear(path?: string) {
 		let deleted = false
+		const buffered = new Set<BufferedImageItem>()
 
-		if (!path) {
-			const now = Date.now()
+		const now = Date.now()
 
-			for (const [key, value] of this.exported) {
-				if (now - value.date >= DEFAULT_IMAGE_EXPIRES_IN) {
-					this.exported.delete(key)
-					deleted = true
-				}
+		async function unlink(path: string) {
+			if (await fs.exists(path)) {
+				console.info('unlinked image at', path)
+				await fs.unlink(path)
 			}
+		}
 
-			for (const [key, value] of this.transformed) {
-				if (now - value.date >= DEFAULT_IMAGE_EXPIRES_IN) {
-					this.transformed.delete(key)
-					console.info('deleted transformed image at', value.item.buffered.path)
-					deleted = true
-				}
+		for (const [key, { date, item }] of this.exported) {
+			if (now - date >= DEFAULT_IMAGE_EXPIRES_IN || item.transformed.buffered.path === path) {
+				this.exported.delete(key)
+				item.transformed.buffered.disposable && buffered.add(item.transformed.buffered)
+				console.info('deleted exported image at', item.transformed.buffered.path)
+				deleted = true
 			}
+		}
 
-			for (const [key, value] of this.disposed) {
-				if (now - value >= DEFAULT_IMAGE_EXPIRES_IN * 60) {
-					this.buffered.delete(key)
-					this.disposed.delete(key)
-					console.info('deleted buffered image at', key)
-					deleted = true
-				}
+		for (const [key, { date, item }] of this.transformed) {
+			if (now - date >= DEFAULT_IMAGE_EXPIRES_IN || item.buffered.path === path) {
+				this.transformed.delete(key)
+				item.buffered.disposable && buffered.add(item.buffered)
+				console.info('deleted transformed image at', item.buffered.path)
+				deleted = true
 			}
-		} else if (this.disposed.has(path)) {
+		}
+
+		for (const [key, { date, item }] of this.buffered) {
+			if (item.disposable && (now - date >= DEFAULT_IMAGE_EXPIRES_IN || item.path === path)) {
+				this.buffered.delete(key)
+				buffered.add(item)
+			}
+		}
+
+		if (path) {
+			const item = this.buffered.get(path)?.item
+			item?.disposable && buffered.add(item)
+		}
+
+		for (const { path } of buffered) {
+			await unlink(path)
 			this.buffered.delete(path)
-			this.disposed.delete(path)
 			console.info('deleted buffered image at', path)
 			deleted = true
 		}
@@ -336,6 +351,13 @@ export class ImageProcessor {
 		if (deleted) {
 			Bun.gc()
 		}
+	}
+
+	ping(path: string) {
+		const now = Date.now()
+		for (const [key, value] of this.buffered) if (key === path) value.date = now
+		for (const [key, value] of this.transformed) if (key.startsWith(path)) value.date = now
+		for (const [key, value] of this.exported) if (key.startsWith(path)) value.date = now
 	}
 }
 
@@ -351,6 +373,10 @@ export class ImageHandler {
 
 	close(req: CloseImage) {
 		return this.processor.clear(req.path)
+	}
+
+	ping(req: CloseImage) {
+		return this.processor.ping(req.path)
 	}
 
 	async save(req: SaveImage) {
@@ -448,12 +474,14 @@ export function image(imageHandler: ImageHandler) {
 			return item.output
 		})
 		.post('/close', ({ body }) => imageHandler.close(body as never))
+		.post('/ping', ({ body }) => imageHandler.ping(body as never))
 		.post('/save', ({ body }) => imageHandler.save(body as never))
 		.post('/annotate', ({ body }) => imageHandler.annotate(body as never))
 		.post('/coordinateinterpolation', ({ body }) => imageHandler.coordinateInterpolation(body as never))
 		.post('/statistics', ({ body }) => imageHandler.statistics(body as never))
 		.get('/fovcameras', () => fovCameras)
 		.get('/fovtelescopes', () => fovTelescopes)
+		.use(cron({ name: 'clear', pattern: '0 */1 * * * *', run: () => imageHandler.processor.clear() }))
 
 	return app
 }

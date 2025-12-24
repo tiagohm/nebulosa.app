@@ -76,6 +76,10 @@ export namespace Api {
 			return res('/image/close', 'post', req)
 		}
 
+		export function ping(req: CloseImage) {
+			return res('/image/ping', 'post', req)
+		}
+
 		export function save(req: SaveImage) {
 			return res('/image/save', 'post', req)
 		}

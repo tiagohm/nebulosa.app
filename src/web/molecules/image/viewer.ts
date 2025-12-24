@@ -65,10 +65,17 @@ export const ImageViewerMolecule = molecule(() => {
 			void load(true)
 		})
 
+		const timer = setInterval(ping, 30000)
+
 		return () => {
 			unsubscribe(unsubscribers)
+			clearInterval(timer)
 		}
 	})
+
+	function ping() {
+		return Api.Image.ping({ path: realPath() })
+	}
 
 	function realPath() {
 		return state.info?.path || scope.image.path

@@ -43,10 +43,10 @@ export const ImageWorkspaceMolecule = molecule(() => {
 			}
 		})
 
-		const beforeUnload = () => {
-			state.images.forEach((image) => {
-				void Api.Image.close({ path: image.path })
-			})
+		const beforeUnload = async () => {
+			for (const image of state.images) {
+				await Api.Image.close({ path: image.path })
+			}
 		}
 
 		window.addEventListener('beforeunload', beforeUnload)

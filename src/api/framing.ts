@@ -16,9 +16,10 @@ export class FramingHandler {
 		req.fov = req.focalLength && req.pixelSize ? arcsec(angularSizeOfPixel(req.focalLength, req.pixelSize)) * Math.max(req.width, req.height) : deg(req.fov || 1)
 		req.rotation = deg(req.rotation)
 		const fits = await hips2Fits(req.hipsSurvey, rightAscension, declination, req)
-		const data = Buffer.from(await fits.arrayBuffer())
+		const buffer = Buffer.from(await fits.arrayBuffer())
 		const path = join(Bun.env.tmpDir, `${req.id}.fit`)
-		this.processor.save(data, path, true)
+		void Bun.write(path, buffer) // Don't wait for writing to file
+		this.processor.save(buffer, path, true)
 		return { path }
 	}
 }

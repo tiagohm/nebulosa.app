@@ -237,9 +237,7 @@ export class CameraCaptureTask {
 			const path = join(await makePathFor(this.request), `${name}.fit`)
 			this.processor.save(buffer, path, this.request.autoSave)
 
-			if (this.request.autoSave) {
-				void Bun.write(path, buffer) // Don't wait for writing to file
-			}
+			void Bun.write(path, buffer) // Don't wait for writing to file
 
 			// Send event
 			this.event.savedPath = path

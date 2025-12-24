@@ -1,13 +1,14 @@
 import cron from '@elysiajs/cron'
 import { Elysia } from 'elysia'
 // biome-ignore format: too long!
-import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, IndiClient, IndiClientHandler, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
+import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, IndiClient, IndiClientHandler, Message, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
 import type { Device, DeviceProperty, DevicePropertyType } from 'nebulosa/src/indi.device'
 import type { CameraManager, CoverManager, DevicePropertyHandler, DevicePropertyManager, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import bus from '../shared/bus'
 import type { IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from '../shared/types'
 import type { ConnectionHandler } from './connection'
 import type { WebSocketMessageHandler } from './message'
+import type { NotificationHandler } from './notification'
 
 export enum DeviceInterfaceType {
 	TELESCOPE = 0x0001, // Telescope interface, must subclass INDI::Telescope.
@@ -60,7 +61,12 @@ export function disconnect(client: IndiClient, device: Device) {
 	}
 }
 
+export type IndiMessageListener = (message: Message) => void
+
 export class IndiHandler implements IndiClientHandler {
+	private readonly messageMap = new Map<string, Message[]>()
+	private readonly messageListeners = new Set<IndiMessageListener>()
+
 	constructor(
 		readonly cameraManager: CameraManager,
 		readonly guideOutputManager: GuideOutputManager,
@@ -74,6 +80,14 @@ export class IndiHandler implements IndiClientHandler {
 		readonly properties: DevicePropertyManager,
 		readonly wsm: WebSocketMessageHandler,
 	) {}
+
+	addMessageListener(listener: IndiMessageListener) {
+		this.messageListeners.add(listener)
+	}
+
+	remoteMessageListener(listener: IndiMessageListener) {
+		this.messageListeners.delete(listener)
+	}
 
 	close(client: IndiClient, server: boolean) {
 		bus.emit('indi:close', client)
@@ -146,12 +160,31 @@ export class IndiHandler implements IndiClientHandler {
 		this.properties.delProperty(client, message)
 	}
 
+	message(client: IndiClient, message: Message) {
+		const device = message.device || 'GLOBAL'
+		const messages = this.messageMap.get(device) ?? []
+
+		if (!messages.length) {
+			this.messageMap.set(device, messages)
+		} else if (messages.length > 100) {
+			messages.shift()
+		}
+
+		messages.push(message)
+
+		this.messageListeners.forEach((e) => e(message))
+	}
+
 	get(id: string): Device | undefined {
 		return this.cameraManager.get(id) || this.mountManager.get(id) || this.focuserManager.get(id) || this.wheelManager.get(id) || this.coverManager.get(id) || this.flatPanelManager.get(id) || this.guideOutputManager.get(id) || this.thermometerManager.get(id) || this.dewHeaterManager.get(id)
 	}
+
+	messages(device?: string) {
+		return this.messageMap.get(device || 'GLOBAL') ?? []
+	}
 }
 
-export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties: DevicePropertyManager, connectionHandler: ConnectionHandler) {
+export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties: DevicePropertyManager, connectionHandler: ConnectionHandler, notificationHandler: NotificationHandler) {
 	function deviceFromParams(params: { id: string }) {
 		return indi.get(decodeURIComponent(params.id))!
 	}
@@ -169,7 +202,7 @@ export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties
 		for (const [name, ping] of listeners) {
 			if (now - ping >= 10000) {
 				listeners.delete(name)
-				console.info('unlisten device:', name)
+				console.info('device', name, 'was unlistened')
 			}
 		}
 	}
@@ -195,6 +228,14 @@ export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties
 	}
 
 	properties.addHandler(handler)
+
+	indi.addMessageListener((message) => {
+		if (!message.device) {
+			notificationHandler.send({ title: 'INFO', description: message.message, color: 'primary' })
+		} else if (listeners.has(message.device)) {
+			wsm.send<Message>('indi:message', message)
+		}
+	})
 
 	function start(req: IndiServerStart) {
 		if (process.platform !== 'linux') return
@@ -251,13 +292,10 @@ export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties
 		.post('/server/stop', () => stop())
 		.get('/server/status', () => status())
 		.get('/server/drivers', () => drivers())
+		.get('/messages', ({ query }) => indi.messages(query.device))
 		.use(cron({ name: 'ping', pattern: '0 */1 * * * *', run: clear }))
 
 	return app
-}
-
-export function delProperty(device: Device, message: DelProperty) {
-	// TODO!
 }
 
 export function connectionFor(client: IndiClient, device: Device, message: DefSwitchVector | SetSwitchVector) {

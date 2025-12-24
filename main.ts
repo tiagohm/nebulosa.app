@@ -256,7 +256,7 @@ const app = new Elysia({
 
 	.use(connection(connectionHandler, indiHandler))
 	.use(confirmation(confirmationHandler))
-	.use(indi(wsm, indiHandler, devicePropertyManager, connectionHandler))
+	.use(indi(wsm, indiHandler, devicePropertyManager, connectionHandler, notificationHandler))
 	.use(camera(cameraHandler, connectionHandler))
 	.use(mount(wsm, mountManager, connectionHandler))
 	.use(focuser(wsm, focuserManager, connectionHandler))

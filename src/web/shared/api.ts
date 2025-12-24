@@ -1,6 +1,6 @@
 import type { Angle } from 'nebulosa/src/angle'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
-import type { NewVector } from 'nebulosa/src/indi'
+import type { Message, NewVector } from 'nebulosa/src/indi'
 import type { Camera, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, SlewRate, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
@@ -104,6 +104,10 @@ export namespace Api {
 
 		export function disconnect(device: Device) {
 			return res(`/indi/${device.name}/disconnect`, 'post')
+		}
+
+		export function messages(device?: string) {
+			return json<Message[]>(`/indi/messages?device=${device ?? ''}`, 'get')
 		}
 
 		export namespace Properties {

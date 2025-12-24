@@ -52,7 +52,7 @@ export const WheelMolecule = molecule(() => {
 			if (event.device.name === wheel.name) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
-						addToast({ title: 'FILTER WHEEL', description: `Failed to connect to guide output ${wheel.name}`, color: 'danger' })
+						addToast({ title: 'FILTER WHEEL', description: `Failed to connect to filter wheel ${wheel.name}`, color: 'danger' })
 					}
 
 					state.wheel.connecting = false

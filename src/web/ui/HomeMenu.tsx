@@ -1,7 +1,7 @@
 import { Button, Chip, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { DeviceType } from 'nebulosa/src/indi.device'
-import { memo } from 'react'
+import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
 import alignmentIcon from '@/assets/alignment.webp'
@@ -70,13 +70,27 @@ export const HomeMenu = memo(() => {
 	return (
 		<>
 			<HomeMenuPopover />
-			{showSkyAtlas && <SkyAtlas />}
-			{showFraming && <Framing />}
-			{showTPPA && <Tppa />}
-			{showDARV && <Darv />}
-			{showIndiPanelControl && <IndiPanelControl />}
-			{showAbout && <About />}
-			{showCalculator && <Calculator />}
+			<Activity mode={showSkyAtlas ? 'visible' : 'hidden'}>
+				<SkyAtlas />
+			</Activity>
+			<Activity mode={showFraming ? 'visible' : 'hidden'}>
+				<Framing />
+			</Activity>
+			<Activity mode={showTPPA ? 'visible' : 'hidden'}>
+				<Tppa />
+			</Activity>
+			<Activity mode={showDARV ? 'visible' : 'hidden'}>
+				<Darv />
+			</Activity>
+			<Activity mode={showIndiPanelControl ? 'visible' : 'hidden'}>
+				<IndiPanelControl />
+			</Activity>
+			<Activity mode={showAbout ? 'visible' : 'hidden'}>
+				<About />
+			</Activity>
+			<Activity mode={showCalculator ? 'visible' : 'hidden'}>
+				<Calculator />
+			</Activity>
 		</>
 	)
 })

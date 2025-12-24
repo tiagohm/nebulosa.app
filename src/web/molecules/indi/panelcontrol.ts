@@ -1,5 +1,5 @@
 import { molecule, onMount, use } from 'bunshi'
-import type { NewVector } from 'nebulosa/src/indi'
+import type { Message, NewVector } from 'nebulosa/src/indi'
 import type { Device, DeviceProperties, DeviceProperty } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { ConnectionEvent, IndiDevicePropertyEvent } from 'src/shared/types'
@@ -15,6 +15,7 @@ export interface IndiPanelControlState {
 	groups: string[]
 	group: string
 	properties: Record<string, DeviceProperties>
+	messages: Message[]
 }
 
 const state = proxy<IndiPanelControlState>({
@@ -24,13 +25,14 @@ const state = proxy<IndiPanelControlState>({
 	groups: [],
 	group: '',
 	properties: {},
+	messages: [],
 })
 
 export const IndiPanelControlMolecule = molecule(() => {
 	const connection = use(ConnectionMolecule)
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(3)
+		const unsubscribers = new Array<VoidFunction>(4)
 
 		unsubscribers[0] = bus.subscribe<ConnectionEvent>('connection:close', ({ status }) => {
 			if (connection.state.connected?.id === status.id) {
@@ -54,6 +56,12 @@ export const IndiPanelControlMolecule = molecule(() => {
 			}
 		})
 
+		unsubscribers[3] = bus.subscribe<Message>('indi:message', (event) => {
+			if (event.device === state.device) {
+				state.messages.unshift(event)
+			}
+		})
+
 		const timer = setInterval(ping, 5000)
 
 		void retrieveDevices()
@@ -70,7 +78,6 @@ export const IndiPanelControlMolecule = molecule(() => {
 		state.device = (typeof device === 'string' ? device : device?.name) || state.devices[0] || ''
 		ping()
 	}
-
 	async function retrieveProperties(device: string = state.device) {
 		if (device) {
 			state.properties = {}
@@ -80,6 +87,15 @@ export const IndiPanelControlMolecule = molecule(() => {
 			state.groups = Object.keys(state.properties).sort()
 			state.group = state.groups[0] || ''
 		}
+	}
+
+	async function retrieveMessages(device: string = state.device) {
+		const messages = await Api.Indi.messages(device)
+		if (messages) state.messages = messages.sort((a, b) => b.timestamp!.localeCompare(a.timestamp!))
+	}
+
+	function clearMessages() {
+		state.messages = []
 	}
 
 	function addProperties(properties: DeviceProperties) {
@@ -145,5 +161,5 @@ export const IndiPanelControlMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, retrieveProperties, ping, send, show, hide }
+	return { state, retrieveDevices, retrieveProperties, retrieveMessages, clearMessages, ping, send, show, hide }
 })

@@ -11,7 +11,7 @@ import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
-import { type ImageLoaded, type ImageSolved, imageStorageKey } from '@/shared/types'
+import type { ImageLoaded, ImageSolved } from '@/shared/types'
 import { SettingsMolecule } from '../settings'
 import { ImageViewerMolecule } from './viewer'
 
@@ -69,7 +69,7 @@ export const ImageSolverMolecule = molecule(() => {
 
 		state.solution = viewer.state.info?.solution && ref(viewer.state.info.solution)
 
-		unsubscribers[2] = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.solver`, ['p:show', 'o:request'])
+		unsubscribers[2] = initProxy(state, `image.${viewer.storageKey}.solver`, ['p:show', 'o:request'])
 
 		return () => {
 			unsubscribe(unsubscribers)

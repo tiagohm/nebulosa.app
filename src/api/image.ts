@@ -4,9 +4,9 @@ import fs from 'fs/promises'
 import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
 import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
-import { adf, histogram } from 'nebulosa/src/image.computation'
+import { adf, histogram, sigmaClip } from 'nebulosa/src/image.computation'
 import { blur, brightness, contrast, debayer, gamma, gaussianBlur, horizontalFlip, invert, mean, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
-import type { Image } from 'nebulosa/src/image.types'
+import type { AdaptiveDisplayFunctionOptions, Image } from 'nebulosa/src/image.types'
 import { fileHandleSink } from 'nebulosa/src/io'
 import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/platesolver'
 import { spaceMotion, star } from 'nebulosa/src/star'
@@ -129,31 +129,39 @@ export class ImageProcessor {
 			image = scnr(image, channel, amount, method)
 		}
 
-		if (transformation.stretch.auto) {
-			const [midtone, shadow, highlight] = adf(image, undefined, transformation.stretch.meanBackground)
+		const { stretch, adjustment, filter } = transformation
 
-			image = stf(image, midtone, shadow, highlight)
+		if (stretch.auto) {
+			const options: Partial<AdaptiveDisplayFunctionOptions> = { meanBackground: stretch.meanBackground, clippingPoint: stretch.clippingPoint, bits: stretch.bits }
 
-			transformation.stretch.midtone = Math.trunc(midtone * 65536)
-			transformation.stretch.shadow = Math.trunc(shadow * 65536)
-			transformation.stretch.highlight = Math.trunc(highlight * 65536)
+			if (stretch.sigmaClip) {
+				options.bits = new Int32Array(1 << stretch.bits) // used by sigmaClip and adf methods
+				options.sigmaClip = sigmaClip(image, stretch)
+			}
+
+			const [midtone, shadow, highlight] = adf(image, options)
+			image = stf(image, midtone, shadow, highlight, { bits: stretch.bits })
+
+			stretch.midtone = Math.trunc(midtone * 65536)
+			stretch.shadow = Math.trunc(shadow * 65536)
+			stretch.highlight = Math.trunc(highlight * 65536)
 		} else {
-			const { midtone, shadow, highlight } = transformation.stretch
-			image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536)
+			const { midtone, shadow, highlight } = stretch
+			image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536, { bits: stretch.bits })
 		}
 
-		if (transformation.adjustment.enabled) {
-			if (transformation.adjustment.brightness.value !== 1) image = brightness(image, transformation.adjustment.brightness.value)
-			if (transformation.adjustment.contrast.value !== 1) image = contrast(image, transformation.adjustment.contrast.value)
-			if (transformation.adjustment.gamma.value > 1) image = gamma(image, transformation.adjustment.gamma.value)
-			if (transformation.adjustment.saturation.value !== 1) image = saturation(image, transformation.adjustment.saturation.value, transformation.adjustment.saturation.channel)
+		if (adjustment.enabled) {
+			if (adjustment.brightness.value !== 1) image = brightness(image, adjustment.brightness.value)
+			if (adjustment.contrast.value !== 1) image = contrast(image, adjustment.contrast.value)
+			if (adjustment.gamma.value > 1) image = gamma(image, adjustment.gamma.value)
+			if (adjustment.saturation.value !== 1) image = saturation(image, adjustment.saturation.value, adjustment.saturation.channel)
 		}
 
-		if (transformation.filter.enabled) {
-			if (transformation.filter.type === 'sharpen') image = sharpen(image)
-			else if (transformation.filter.type === 'blur') image = blur(image, transformation.filter.blur.size)
-			else if (transformation.filter.type === 'mean') image = mean(image, transformation.filter.mean.size)
-			else if (transformation.filter.type === 'gaussianBlur') image = gaussianBlur(image, transformation.filter.gaussianBlur)
+		if (filter.enabled) {
+			if (filter.type === 'sharpen') image = sharpen(image)
+			else if (filter.type === 'blur') image = blur(image, filter.blur.size)
+			else if (filter.type === 'mean') image = mean(image, filter.mean.size)
+			else if (filter.type === 'gaussianBlur') image = gaussianBlur(image, filter.gaussianBlur)
 		}
 
 		if (transformation.invert) image = invert(image)
@@ -250,8 +258,9 @@ export class ImageProcessor {
 	}
 
 	private computeImageStretchHash(stretch: ImageStretch) {
-		const { auto, shadow, midtone, highlight, meanBackground } = stretch
-		return auto ? `T:${meanBackground}` : `F:${shadow}:${midtone}:${highlight}`
+		const { auto, shadow, midtone, highlight, meanBackground, clippingPoint, centerMethod, dispersionMethod, sigmaLower, sigmaUpper, bits } = stretch
+		const sigmaClip = auto && stretch.sigmaClip ? `T:${centerMethod}:${dispersionMethod}:${sigmaLower}:${sigmaUpper}` : 'F'
+		return auto ? `T:${meanBackground}:${clippingPoint}:${sigmaClip}:${bits}` : `F:${shadow}:${midtone}:${highlight}:${sigmaClip}:${bits}`
 	}
 
 	private computeImageScnrHash(scnr: ImageScnr) {

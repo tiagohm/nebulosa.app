@@ -7,7 +7,7 @@ import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { initProxy } from '@/shared/proxy'
-import { type ImageSolved, imageStorageKey } from '@/shared/types'
+import type { ImageSolved } from '@/shared/types'
 import { ImageSolverMolecule } from './solver'
 import { ImageViewerMolecule } from './viewer'
 
@@ -39,7 +39,7 @@ export const ImageFovMolecule = molecule(() => {
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(3)
 
-		unsubscribers[0] = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.fov`, ['p:show', 'o:items'])
+		unsubscribers[0] = initProxy(state, `image.${viewer.storageKey}.fov`, ['p:show', 'o:items'])
 
 		unsubscribers[1] = subscribeKey(state, 'show', (show) => {
 			show && compute()

@@ -940,6 +940,10 @@
     "driver": "indi_svbony_ccd"
   },
   {
+    "name": "SVBONY SV241 Pro",
+    "driver": "indi_svbony_powerbox"
+  },
+  {
     "name": "SVBONY2",
     "driver": "indi_svbonycam_ccd"
   },

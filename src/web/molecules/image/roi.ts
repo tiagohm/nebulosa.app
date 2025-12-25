@@ -2,7 +2,6 @@ import { molecule, onMount, use } from 'bunshi'
 import type { Point, Size } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
-import { imageStorageKey } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
 
 export interface ImageRoiState extends Size, Point {
@@ -30,7 +29,7 @@ export const ImageRoiMolecule = molecule(() => {
 	stateMap.set(key, state)
 
 	onMount(() => {
-		const unsubscriber = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.roi`, ['p:x', 'p:y', 'p:width', 'p:height', 'p:rotation'])
+		const unsubscriber = initProxy(state, `image.${viewer.storageKey}.roi`, ['p:x', 'p:y', 'p:width', 'p:height', 'p:rotation'])
 
 		return () => {
 			unsubscriber()

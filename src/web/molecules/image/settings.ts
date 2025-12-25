@@ -3,7 +3,6 @@ import type { ImageFormat } from 'nebulosa/src/image.types'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
-import { imageStorageKey } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
 
 export interface ImageSettingsState {
@@ -29,7 +28,7 @@ export const ImageSettingsMolecule = molecule(() => {
 	stateMap.set(key, state)
 
 	onMount(() => {
-		const unsubscriber = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.settings`, ['p:show', 'p:pixelated'])
+		const unsubscriber = initProxy(state, `image.${viewer.storageKey}.settings`, ['p:show', 'p:pixelated'])
 
 		state.format = viewer.state.transformation.format
 

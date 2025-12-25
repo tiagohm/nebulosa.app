@@ -7,7 +7,7 @@ import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
-import { type ImageLoaded, imageStorageKey } from '@/shared/types'
+import type { ImageLoaded } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
 
 export interface StartDetectionState {
@@ -58,7 +58,7 @@ export const StarDetectionMolecule = molecule(() => {
 			}
 		})
 
-		unsubscribers[1] = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.stardetection`, ['p:show', 'o:request'])
+		unsubscribers[1] = initProxy(state, `image.${viewer.storageKey}.stardetection`, ['p:show', 'o:request'])
 
 		return () => {
 			unsubscribe(unsubscribers)

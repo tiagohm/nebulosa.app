@@ -280,6 +280,9 @@ export const ImageViewerMolecule = molecule(() => {
 		get target() {
 			return target
 		},
+		get storageKey() {
+			return camera?.name || (scope.image.source === 'framing' ? 'framing' : 'default')
+		},
 		toggleDebayer,
 		toggleHorizontalMirror,
 		toggleVerticalMirror,

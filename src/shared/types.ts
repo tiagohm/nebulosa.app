@@ -9,7 +9,7 @@ import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { Rect } from 'nebulosa/src/geometry'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
-import type { ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
+import type { ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
 import type { PropertyState } from 'nebulosa/src/indi'
 // biome-ignore format: too long!
 import type { Camera, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
@@ -368,12 +368,15 @@ export interface Framing extends EquatorialCoordinate<string>, Size {
 
 // Image
 
-export interface ImageStretch {
+export interface ImageStretch extends Pick<SigmaClipOptions, 'centerMethod' | 'dispersionMethod' | 'sigmaLower' | 'sigmaUpper'> {
 	auto: boolean
 	shadow: number // 0 - 65536
 	highlight: number // 0 - 65536
 	midtone: number // 0 - 65536
 	meanBackground: number
+	clippingPoint: number
+	sigmaClip: boolean
+	bits: number
 }
 
 export interface ImageScnr {
@@ -929,6 +932,13 @@ export const DEFAULT_IMAGE_STRETCH: ImageStretch = {
 	highlight: 65536,
 	midtone: 32768,
 	meanBackground: 0.25,
+	clippingPoint: -2.8,
+	sigmaClip: false,
+	centerMethod: 'mean',
+	dispersionMethod: 'std',
+	sigmaLower: 3,
+	sigmaUpper: 3,
+	bits: 14,
 }
 
 export const DEFAULT_IMAGE_SCNR: ImageScnr = {

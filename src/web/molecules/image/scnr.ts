@@ -2,7 +2,6 @@ import { molecule, onMount, use } from 'bunshi'
 import { DEFAULT_IMAGE_SCNR, type ImageScnr } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
-import { imageStorageKey } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
 
 export interface ImageScnrState {
@@ -26,7 +25,7 @@ export const ImageScnrMolecule = molecule(() => {
 	stateMap.set(key, state)
 
 	onMount(() => {
-		const unsubscriber = initProxy(state, `image.${imageStorageKey(viewer.scope.image)}.scnr`, ['p:show'])
+		const unsubscriber = initProxy(state, `image.${viewer.storageKey}.scnr`, ['p:show'])
 
 		state.scnr = viewer.state.transformation.scnr
 

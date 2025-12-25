@@ -39,7 +39,3 @@ export const DEFAULT_CONNECTION: Connection = {
 	port: 7624,
 	type: 'INDI',
 }
-
-export function imageStorageKey(image: Image) {
-	return image.camera?.name || (image.source === 'framing' ? 'framing' : 'default')
-}

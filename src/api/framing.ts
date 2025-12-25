@@ -19,7 +19,7 @@ export class FramingHandler {
 		const buffer = Buffer.from(await fits.arrayBuffer())
 		const path = join(Bun.env.tmpDir, `${req.id}.fit`)
 		void Bun.write(path, buffer) // Don't wait for writing to file
-		this.processor.save(buffer, path, true)
+		this.processor.save(buffer, path)
 		return { path }
 	}
 }

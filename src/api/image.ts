@@ -5,7 +5,7 @@ import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
 import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
 import { adf, histogram } from 'nebulosa/src/image.computation'
-import { blur, blur3x3, blur5x5, blur7x7, brightness, contrast, debayer, gamma, gaussianBlur, horizontalFlip, invert, mean, mean3x3, mean5x5, mean7x7, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
+import { blur, brightness, contrast, debayer, gamma, gaussianBlur, horizontalFlip, invert, mean, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import type { Image } from 'nebulosa/src/image.types'
 import { fileHandleSink } from 'nebulosa/src/io'
 import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/platesolver'
@@ -22,19 +22,21 @@ import type { NotificationHandler } from './notification'
 export interface BufferedImageItem {
 	readonly buffer?: Buffer
 	readonly path: string
-	readonly disposable: boolean
+	readonly camera?: string
 }
 
 export interface TransformedImageItem {
 	readonly buffered: BufferedImageItem
 	readonly image: Image
 	readonly transformation: ImageTransformation
+	readonly hash: string
 }
 
 export interface ExportedImageItem {
 	readonly transformed: TransformedImageItem
 	readonly output?: Buffer
 	readonly info?: ImageInfo
+	readonly hash: string
 }
 
 export interface ImageProcessorItem<T> {
@@ -49,32 +51,40 @@ export class ImageProcessor {
 	private readonly transformed = new Map<string, ImageProcessorItem<TransformedImageItem>>()
 	private readonly exported = new Map<string, ImageProcessorItem<ExportedImageItem>>()
 
-	save(buffer: Buffer, path: string, disposable: boolean = false) {
-		const item: BufferedImageItem = { buffer, path, disposable }
-
+	save(buffer: Buffer, path: string, camera?: string) {
 		// Avoid double buffering
-		if (process.platform !== 'linux' || !path.startsWith('/dev/shm')) {
+		const canBuffer = process.platform !== 'linux' || !path.startsWith('/dev/shm/')
+
+		if (camera) {
+			// Delete existing image for the camera
+			for (const [key, item] of this.transformed) item.item.buffered.camera === camera && this.transformed.delete(key)
+			for (const [key, item] of this.exported) item.item.transformed.buffered.camera === camera && this.exported.delete(key)
+			for (const [key, item] of this.buffered) item.item.camera === camera && this.buffered.delete(key)
+		} else {
+			// Delete existing image for the (framing) path
+			// Framing images is saved on temp directory and it will be unlinked before the process exit!
+			for (const [key, item] of this.transformed) item.item.buffered.path === path && this.transformed.delete(key)
+			for (const [key, item] of this.exported) item.item.transformed.buffered.path === path && this.exported.delete(key)
+		}
+
+		// Store the buffer
+		let item: BufferedImageItem
+
+		if (canBuffer) {
+			item = { buffer, path, camera }
+			this.buffered.set(path, { date: Date.now(), item })
+		} else {
+			item = { buffer: Buffer.allocUnsafe(0), path, camera }
 			this.buffered.set(path, { date: Date.now(), item })
 		}
 
-		for (const key of this.transformed.keys()) {
-			if (key.startsWith(path)) {
-				this.transformed.delete(key)
-			}
-		}
-
-		for (const key of this.exported.keys()) {
-			if (key.startsWith(path)) {
-				this.exported.delete(key)
-			}
-		}
-
-		console.info('image at', path, 'was buffered')
+		console.info('image at', path, 'was buffered:', item.buffer?.byteLength)
 
 		return item
 	}
 
-	async transform(path: string, transformation: ImageTransformation) {
+	async transform(path: string, transformation: ImageTransformation, camera?: string) {
+		// Compute the hash for the transformation
 		const hash = this.computeTransformHash(path, transformation)
 		let item = this.transformed.get(hash)?.item
 
@@ -84,12 +94,13 @@ export class ImageProcessor {
 			return item
 		}
 
+		// Read from the buffered or directly from the path
 		const buffered = this.buffered.get(path)?.item
 
 		let image: Image | undefined
 
-		if (buffered?.buffer) {
-			image = await readImageFromBuffer(buffered?.buffer)
+		if (buffered?.buffer?.byteLength) {
+			image = await readImageFromBuffer(buffered.buffer)
 		} else {
 			image = await readImageFromPath(path)
 		}
@@ -100,9 +111,9 @@ export class ImageProcessor {
 		}
 
 		image = this.applyTransformation(image, transformation)
-		item = { buffered: buffered ?? { path, disposable: true }, image, transformation }
+		item = { buffered: buffered ?? { path, camera }, image, transformation, hash }
 		this.transformed.set(hash, { date: Date.now(), item })
-		console.info('image at', path, 'was transformed')
+		console.info('image at', path, 'was transformed:', item.image.raw.byteLength)
 		return item
 	}
 
@@ -140,16 +151,8 @@ export class ImageProcessor {
 
 		if (transformation.filter.enabled) {
 			if (transformation.filter.type === 'sharpen') image = sharpen(image)
-			else if (transformation.filter.type === 'blur')
-				if (transformation.filter.blur.size === 3) image = blur3x3(image)
-				else if (transformation.filter.blur.size === 5) image = blur5x5(image)
-				else if (transformation.filter.blur.size === 7) image = blur7x7(image)
-				else image = blur(image, transformation.filter.blur.size)
-			else if (transformation.filter.type === 'mean')
-				if (transformation.filter.mean.size === 3) image = mean3x3(image)
-				else if (transformation.filter.mean.size === 5) image = mean5x5(image)
-				else if (transformation.filter.mean.size === 7) image = mean7x7(image)
-				else image = mean(image, transformation.filter.mean.size)
+			else if (transformation.filter.type === 'blur') image = blur(image, transformation.filter.blur.size)
+			else if (transformation.filter.type === 'mean') image = mean(image, transformation.filter.mean.size)
 			else if (transformation.filter.type === 'gaussianBlur') image = gaussianBlur(image, transformation.filter.gaussianBlur)
 		}
 
@@ -158,7 +161,7 @@ export class ImageProcessor {
 		return image
 	}
 
-	async export(path: string, transformation: ImageTransformation, saveAt?: string): Promise<ExportedImageItem | undefined> {
+	async export(path: string, transformation: ImageTransformation, camera?: string, saveAt?: string): Promise<ExportedImageItem | undefined> {
 		const { format } = transformation
 
 		const hash = this.computeExportHash(path, transformation)
@@ -176,7 +179,7 @@ export class ImageProcessor {
 		}
 
 		// Retrieve the transformed image
-		const transformed = await this.transform(path, transformation)
+		const transformed = await this.transform(path, transformation, camera)
 
 		if (!transformed) {
 			console.warn('failed to load transformed image at', path)
@@ -186,7 +189,6 @@ export class ImageProcessor {
 		const { image, buffered } = transformed
 		const { width, height, channels } = image.metadata
 
-		// Just save it to file
 		if (format.type === 'fits' || format.type === 'xisf') {
 			// Invalid path to save
 			if (!saveAt) {
@@ -194,11 +196,12 @@ export class ImageProcessor {
 				return undefined
 			}
 
+			// Just save it to file
 			const handle = await fs.open(saveAt!, 'w')
 			await using sink = fileHandleSink(handle)
 			await writeImageToFits(image, sink)
 
-			return { transformed }
+			return { transformed, hash }
 		}
 
 		// Convert to the desired format
@@ -209,7 +212,7 @@ export class ImageProcessor {
 				// Export it
 				await Bun.write(saveAt, output)
 				console.info('saved image at', path, 'to', saveAt)
-				return { transformed }
+				return { transformed, hash }
 			}
 
 			const info: ImageInfo = {
@@ -219,15 +222,16 @@ export class ImageProcessor {
 				mono: channels === 1,
 				metadata: image.metadata,
 				transformation,
+				hash,
 				headers: image.header,
 				rightAscension: rightAscensionKeyword(image.header, undefined),
 				declination: declinationKeyword(image.header, undefined),
 				solution: plateSolutionFrom(image.header),
 			}
 
-			const item = { output, info, transformed }
+			const item = { output, info, transformed, hash }
 			output && this.exported.set(hash, { date: Date.now(), item })
-			console.info('image at', path, 'was exported to format', format.type)
+			console.info('image at', path, 'was exported to format', format.type, ':', item.output.byteLength)
 			return item
 		} else {
 			console.warn('the image at', path, 'could not be exported to format', format.type)
@@ -242,7 +246,7 @@ export class ImageProcessor {
 		const scnr = this.computeImageScnrHash(transformation.scnr)
 		const filter = this.computeImageFilterHash(transformation.filter)
 		const adjustment = this.computeImageAdjustmentHash(transformation.adjustment)
-		return Bun.MD5.hash(`${enabled}:${calibrationGroup}:${debayer}:${stretch}:${scnr}:${filter}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}`, 'hex')
+		return `${enabled}:${calibrationGroup}:${debayer}:${stretch}:${scnr}:${filter}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}`
 	}
 
 	private computeImageStretchHash(stretch: ImageStretch) {
@@ -284,7 +288,7 @@ export class ImageProcessor {
 
 	private computeTransformHash(path: string, transformation: ImageTransformation) {
 		const hash = this.computeImageTransformationHash(transformation)
-		return `${path}:${hash}`
+		return Bun.MD5.hash(`${path}:${hash}`, 'hex')
 	}
 
 	private computeExportHash(path: string, transformation: ImageTransformation) {
@@ -292,72 +296,67 @@ export class ImageProcessor {
 
 		switch (transformation.format.type) {
 			case 'jpeg':
-				return `${path}:jpeg:${transformation.format.jpeg.chrominanceSubsampling}:${transformation.format.jpeg.quality}:${hash}`
+				return Bun.MD5.hash(`${path}:jpeg:${transformation.format.jpeg.chrominanceSubsampling}:${transformation.format.jpeg.quality}:${hash}`, 'hex')
 			default:
-				return `${path}:${transformation.format}:${hash}`
+				return Bun.MD5.hash(`${path}:${transformation.format}:${hash}`, 'hex')
 		}
 	}
 
-	async clear(path?: string) {
+	clear() {
 		let deleted = false
-		const buffered = new Set<BufferedImageItem>()
-
 		const now = Date.now()
 
-		async function unlink(path: string) {
-			if (await fs.exists(path)) {
-				console.info('unlinked image at', path)
-				await fs.unlink(path)
-			}
-		}
-
 		for (const [key, { date, item }] of this.exported) {
-			if (now - date >= DEFAULT_IMAGE_EXPIRES_IN || item.transformed.buffered.path === path) {
+			if (now - date >= DEFAULT_IMAGE_EXPIRES_IN) {
 				this.exported.delete(key)
-				item.transformed.buffered.disposable && buffered.add(item.transformed.buffered)
 				console.info('deleted exported image at', item.transformed.buffered.path)
 				deleted = true
 			}
 		}
 
 		for (const [key, { date, item }] of this.transformed) {
-			if (now - date >= DEFAULT_IMAGE_EXPIRES_IN || item.buffered.path === path) {
+			if (now - date >= DEFAULT_IMAGE_EXPIRES_IN) {
 				this.transformed.delete(key)
-				item.buffered.disposable && buffered.add(item.buffered)
 				console.info('deleted transformed image at', item.buffered.path)
 				deleted = true
 			}
 		}
 
 		for (const [key, { date, item }] of this.buffered) {
-			if (item.disposable && (now - date >= DEFAULT_IMAGE_EXPIRES_IN || item.path === path)) {
+			if (now - date >= DEFAULT_IMAGE_EXPIRES_IN) {
 				this.buffered.delete(key)
-				buffered.add(item)
+				console.info('deleted buffered image at', item.path)
+				deleted = true
 			}
 		}
 
-		if (path) {
-			const item = this.buffered.get(path)?.item
-			item?.disposable && buffered.add(item)
-		}
-
-		for (const { path } of buffered) {
-			await unlink(path)
-			this.buffered.delete(path)
-			console.info('deleted buffered image at', path)
-			deleted = true
-		}
-
 		if (deleted) {
-			Bun.gc()
+			Bun.gc(false)
 		}
 	}
 
-	ping(path: string) {
-		const now = Date.now()
-		for (const [key, value] of this.buffered) if (key === path) value.date = now
-		for (const [key, value] of this.transformed) if (key.startsWith(path)) value.date = now
-		for (const [key, value] of this.exported) if (key.startsWith(path)) value.date = now
+	ping(path: string, hash?: string, camera?: string, now?: number) {
+		now ??= Date.now()
+
+		for (const exported of this.exported.values()) {
+			if (exported.item.hash === hash) {
+				exported.date = now
+
+				for (const transformed of this.transformed.values()) {
+					if (transformed.item === exported.item.transformed) {
+						transformed.date = now
+					}
+				}
+			}
+		}
+
+		for (const [key, value] of this.buffered) {
+			if (key === path || value.item.camera === camera) {
+				value.date = now
+			}
+		}
+
+		if (now === 0) this.clear()
 	}
 }
 
@@ -368,21 +367,21 @@ export class ImageHandler {
 	) {}
 
 	open(req: OpenImage) {
-		return this.processor.export(req.path, req.transformation)
+		return this.processor.export(req.path, req.transformation, req.camera)
 	}
 
 	close(req: CloseImage) {
-		return this.processor.clear(req.path)
+		return this.processor.ping(req.path, req.hash, req.camera, 0)
 	}
 
 	ping(req: CloseImage) {
-		return this.processor.ping(req.path)
+		return this.processor.ping(req.path, req.hash, req.camera)
 	}
 
 	async save(req: SaveImage) {
 		if (!req.saveAt) return
 		req.transformation.enabled = req.transformed
-		await this.processor.export(req.path, req.transformation, req.saveAt)
+		await this.processor.export(req.path, req.transformation, undefined, req.saveAt)
 	}
 
 	annotate(req: AnnotateImage) {

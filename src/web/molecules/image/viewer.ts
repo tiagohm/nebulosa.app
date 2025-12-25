@@ -65,16 +65,26 @@ export const ImageViewerMolecule = molecule(() => {
 			void load(true)
 		})
 
+		const beforeUnload = async () => void (await close())
+
+		window.addEventListener('beforeunload', beforeUnload)
+
 		const timer = setInterval(ping, 30000)
 
 		return () => {
+			void close()
+			window.removeEventListener('beforeunload', beforeUnload)
 			unsubscribe(unsubscribers)
 			clearInterval(timer)
 		}
 	})
 
 	function ping() {
-		return Api.Image.ping({ path: realPath() })
+		return Api.Image.ping({ path: realPath(), hash: state.info?.hash, camera: camera?.name })
+	}
+
+	function close() {
+		return Api.Image.close({ path: realPath(), hash: state.info?.hash, camera: camera?.name })
 	}
 
 	function realPath() {
@@ -145,9 +155,6 @@ export const ImageViewerMolecule = molecule(() => {
 			if (!image) return remove()
 
 			const url = URL.createObjectURL(image.blob)
-
-			// Close current path
-			state.info?.path && void Api.Image.close({ path: state.info.path })
 
 			// Update the state
 			state.info = ref(image.info)

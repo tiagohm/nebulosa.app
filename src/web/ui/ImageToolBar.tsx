@@ -46,7 +46,7 @@ export const ImageToolBar = memo(() => {
 				<Tooltip content='Auto Stretch' placement='top' showArrow>
 					<ToggleButton color='primary' icon={Icons.WandSparkles} isSelected={transformation.stretch.auto} onPointerUp={stretch.toggle} />
 				</Tooltip>
-				{info?.metadata.bayer && info.metadata.channels === 1 && (
+				{info?.metadata.bayer && info.metadata.bayer && (
 					<Tooltip content='Debayer' placement='top' showArrow>
 						<ToggleButton color='primary' icon={Icons.Grid} isSelected={transformation.debayer} onPointerUp={viewer.toggleDebayer} />
 					</Tooltip>

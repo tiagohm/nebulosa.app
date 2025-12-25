@@ -438,6 +438,8 @@ export interface OpenImage {
 
 export interface CloseImage {
 	readonly path: string
+	readonly hash?: string
+	readonly camera?: string
 }
 
 export interface SaveImage extends OpenImage {
@@ -477,12 +479,13 @@ export interface ImageCoordinateInterpolation {
 }
 
 export interface ImageInfo extends Partial<EquatorialCoordinate>, Size {
-	path: string
-	mono: boolean
-	metadata: ImageMetadata
-	transformation: ImageTransformation
-	headers: FitsHeader
-	solution?: PlateSolution
+	readonly path: string
+	readonly mono: boolean
+	readonly metadata: ImageMetadata
+	readonly transformation: ImageTransformation
+	readonly headers: FitsHeader
+	readonly solution?: PlateSolution
+	readonly hash: string
 }
 
 export interface FovItem {

@@ -60,9 +60,7 @@ export const ImageMouseCoordinateMolecule = molecule(() => {
 		const unsubscribers = new Array<VoidFunction>(3)
 
 		unsubscribers[0] = subscribeKey(state, 'visible', (visible) => {
-			if (visible) {
-				void compute()
-			}
+			if (visible) void compute()
 		})
 
 		unsubscribers[1] = bus.subscribe<ImageLoaded>('image:load', ({ image, info, newImage }) => {
@@ -74,15 +72,10 @@ export const ImageMouseCoordinateMolecule = molecule(() => {
 
 		unsubscribers[2] = bus.subscribe<ImageSolved>('image:solved', ({ image, solution }) => {
 			if (image.key === key) {
-				void compute(solution, true)
+				if (state.visible) void compute(solution, true)
+				else state.interpolator = undefined
 			}
 		})
-
-		const solution = solver.state.solution ?? viewer.state.info?.solution
-
-		if (solution) {
-			void compute(solution, true)
-		}
 
 		return () => {
 			unsubscribe(unsubscribers)

@@ -7,7 +7,7 @@ import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { SigmaClipCenterMethodSelect } from './SigmaClipCenterMethodSelect'
-import { SigmaClipDispersionMethodSelect } from './SigmaClipDispersionMethod'
+import { SigmaClipDispersionMethodSelect } from './SigmaClipDispersionMethodSelect'
 import { TextButton } from './TextButton'
 
 export const ImageStretch = memo(() => {

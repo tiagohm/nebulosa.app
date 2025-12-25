@@ -1,11 +1,11 @@
-import { ButtonGroup, Checkbox, Input } from '@heroui/react'
+import { Checkbox, Input } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
 import { Histogram } from './Histogram'
+import { ImageChannelButtonGroup } from './ImageChannelButtonGroup'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const ImageStatistics = memo(() => {
 	const statistics = useMolecule(ImageStatisticsMolecule)
@@ -21,15 +21,7 @@ export const ImageStatistics = memo(() => {
 				<Checkbox className='col-span-full' isSelected={transformed} onValueChange={(value) => statistics.update('transformed', value)}>
 					Transformed
 				</Checkbox>
-				{n === 3 && (
-					<div className='col-span-full flex flex-row items-center justify-between'>
-						<ButtonGroup>
-							<TextButton color='danger' label='RED' onPointerUp={() => (statistics.state.selected = 0)} variant={selected === 0 ? 'flat' : 'light'} />
-							<TextButton color='success' label='GREEN' onPointerUp={() => (statistics.state.selected = 1)} variant={selected === 1 ? 'flat' : 'light'} />
-							<TextButton color='primary' label='BLUE' onPointerUp={() => (statistics.state.selected = 2)} variant={selected === 2 ? 'flat' : 'light'} />
-						</ButtonGroup>
-					</div>
-				)}
+				{n === 3 && <ImageChannelButtonGroup className='col-span-full' onValueChange={(value) => (statistics.state.selected = value === 'GREEN' ? 1 : value === 'BLUE' ? 2 : 0)} value={selected === 0 ? 'RED' : selected === 1 ? 'GREEN' : 'BLUE'} />}
 				{hs && (
 					<>
 						<Input className='col-span-6' isReadOnly label='Count: Total | Max' size='sm' value={`${hs.count[0].toFixed(0)} | ${hs.count[1].toFixed(0)}`} />
@@ -41,7 +33,7 @@ export const ImageStatistics = memo(() => {
 					</>
 				)}
 				<div className='col-span-full'>
-					<Histogram histogram={histogram} style={{ width: '275px', height: '150px' }} />
+					<Histogram histogram={histogram} style={{ width: '275px', height: '120px' }} />
 				</div>
 			</div>
 		</Modal>

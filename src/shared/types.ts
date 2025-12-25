@@ -9,7 +9,7 @@ import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { Rect } from 'nebulosa/src/geometry'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
-import type { ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
+import type { ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SCNRProtectionMethod, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
 import type { PropertyState } from 'nebulosa/src/indi'
 // biome-ignore format: too long!
 import type { Camera, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
@@ -382,7 +382,7 @@ export interface ImageStretch extends Pick<SigmaClipOptions, 'centerMethod' | 'd
 export interface ImageScnr {
 	channel?: ImageChannel
 	amount: number
-	method: 'MAXIMUM_MASK' | 'ADDITIVE_MASK' | 'AVERAGE_NEUTRAL' | 'MAXIMUM_NEUTRAL' | 'MINIMUM_NEUTRAL'
+	method: SCNRProtectionMethod
 }
 
 export interface ImageAdjustment {

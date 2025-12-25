@@ -455,7 +455,7 @@ export class ImageHandler {
 
 			for (let i = 0; i < stats.length; i++) {
 				const channel = isMono ? 'GRAY' : i === 0 ? 'RED' : i === 1 ? 'GREEN' : 'BLUE'
-				const hist = histogram(image.image, channel, undefined, req.area, bits)
+				const hist = histogram(image.image, { channel, area: req.area, bits })
 				const { standardDeviation, variance, count, mean, median, maximum, minimum } = hist
 				stats[i] = { standardDeviation, variance, count, mean, median, maximum, minimum, data: Array.from(bits) }
 			}

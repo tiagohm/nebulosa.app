@@ -12,6 +12,7 @@ import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/platesolver'
 import { spaceMotion, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
 import { Wcs } from 'nebulosa/src/wcs'
+import { basename, join } from 'path'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
@@ -248,13 +249,30 @@ export class ImageProcessor {
 		return undefined
 	}
 
+	get(path: string) {
+		return this.buffered.get(path)?.item.buffer
+	}
+
+	// Stores the saved buffer for given path into local file
+	async store(path: string) {
+		const buffer = this.get(path)
+
+		if (buffer) {
+			path = join(Bun.env.tmpDir, basename(path))
+			await Bun.write(path, buffer)
+			return path
+		}
+
+		return undefined
+	}
+
 	private computeImageTransformationHash(transformation: ImageTransformation) {
 		const { enabled, calibrationGroup = '', debayer, horizontalMirror, verticalMirror, invert } = transformation
 		const stretch = this.computeImageStretchHash(transformation.stretch)
 		const scnr = this.computeImageScnrHash(transformation.scnr)
 		const filter = this.computeImageFilterHash(transformation.filter)
 		const adjustment = this.computeImageAdjustmentHash(transformation.adjustment)
-		return `${enabled}:${calibrationGroup}:${debayer}:${stretch}:${scnr}:${filter}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}`
+		return enabled ? `T:${calibrationGroup}:${debayer}:${stretch}:${scnr}:${filter}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}` : 'F'
 	}
 
 	private computeImageStretchHash(stretch: ImageStretch) {
@@ -371,26 +389,26 @@ export class ImageProcessor {
 
 export class ImageHandler {
 	constructor(
-		readonly processor: ImageProcessor,
+		readonly imageProcessor: ImageProcessor,
 		readonly notification?: NotificationHandler,
 	) {}
 
 	open(req: OpenImage) {
-		return this.processor.export(req.path, req.transformation, req.camera)
+		return this.imageProcessor.export(req.path, req.transformation, req.camera)
 	}
 
 	close(req: CloseImage) {
-		return this.processor.ping(req.path, req.hash, req.camera, 0)
+		return this.imageProcessor.ping(req.path, req.hash, req.camera, 0)
 	}
 
 	ping(req: CloseImage) {
-		return this.processor.ping(req.path, req.hash, req.camera)
+		return this.imageProcessor.ping(req.path, req.hash, req.camera)
 	}
 
 	async save(req: SaveImage) {
 		if (!req.saveAt) return
 		req.transformation.enabled = req.transformed
-		await this.processor.export(req.path, req.transformation, undefined, req.saveAt)
+		await this.imageProcessor.export(req.path, req.transformation, undefined, req.saveAt)
 	}
 
 	annotate(req: AnnotateImage) {
@@ -446,7 +464,7 @@ export class ImageHandler {
 
 	async statistics(req: StatisticImage) {
 		req.transformation.enabled = req.transformed
-		const image = await this.processor.transform(req.path, req.transformation)
+		const image = await this.imageProcessor.transform(req.path, req.transformation)
 
 		if (image?.image) {
 			const stats = new Array<ImageHistogram>(image.image.metadata.channels)
@@ -489,7 +507,7 @@ export function image(imageHandler: ImageHandler) {
 		.post('/statistics', ({ body }) => imageHandler.statistics(body as never))
 		.get('/fovcameras', () => fovCameras)
 		.get('/fovtelescopes', () => fovTelescopes)
-		.use(cron({ name: 'clear', pattern: '0 */1 * * * *', run: () => imageHandler.processor.clear() }))
+		.use(cron({ name: 'clear', pattern: '0 */1 * * * *', run: () => imageHandler.imageProcessor.clear() }))
 
 	return app
 }

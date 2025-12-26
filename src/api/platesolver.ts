@@ -4,14 +4,20 @@ import { astapPlateSolve } from 'nebulosa/src/astap'
 import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebulosa/src/astrometrynet'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { PlateSolveStart, PlateSolveStop } from '../shared/types'
+import type { ImageProcessor } from './image'
 import type { NotificationHandler } from './notification'
 
 export class PlateSolverHandler {
 	private readonly tasks = new Map<string, AbortController>()
 
-	constructor(readonly notification: NotificationHandler) {}
+	constructor(
+		readonly notification: NotificationHandler,
+		readonly imageProcessor: ImageProcessor,
+	) {}
 
 	async start(req: PlateSolveStart): Promise<PlateSolution | undefined> {
+		req.path = (await this.imageProcessor.store(req.path)) || req.path
+
 		const rightAscension = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, PARSE_HOUR_ANGLE)
 		const declination = typeof req.declination === 'number' ? req.declination : parseAngle(req.declination)
 		const radius = req.blind || !req.radius ? 0 : deg(req.radius)

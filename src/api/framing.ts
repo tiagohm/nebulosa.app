@@ -8,7 +8,7 @@ import type { Framing } from '../shared/types'
 import type { ImageProcessor } from './image'
 
 export class FramingHandler {
-	constructor(readonly processor: ImageProcessor) {}
+	constructor(readonly imageProcessor: ImageProcessor) {}
 
 	async frame(req: Framing) {
 		const rightAscension = parseAngle(req.rightAscension, PARSE_HOUR_ANGLE) ?? 0
@@ -18,8 +18,8 @@ export class FramingHandler {
 		const fits = await hips2Fits(req.hipsSurvey, rightAscension, declination, req)
 		const buffer = Buffer.from(await fits.arrayBuffer())
 		const path = join(Bun.env.tmpDir, `${req.id}.fit`)
-		void Bun.write(path, buffer) // Don't wait for writing to file
-		this.processor.save(buffer, path)
+		// void Bun.write(path, buffer)
+		this.imageProcessor.save(buffer, path)
 		return { path }
 	}
 }

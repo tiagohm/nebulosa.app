@@ -4,11 +4,14 @@ import bus from 'src/shared/bus'
 import type { DeviceAdded, Notification } from 'src/shared/types'
 import { proxy } from 'valtio'
 
-let ws: WebSocket | undefined
-
 export interface WebSocketState {
 	connected: boolean
 }
+
+let ws: WebSocket | undefined
+
+let connected = false
+let disconnected = false
 
 const state = proxy<WebSocketState>({
 	connected: true,
@@ -16,9 +19,6 @@ const state = proxy<WebSocketState>({
 
 export const WebSocketMolecule = molecule(() => {
 	const uri = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
-
-	let connected = false
-	let disconnected = false
 
 	function create() {
 		if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
@@ -31,23 +31,22 @@ export const WebSocketMolecule = molecule(() => {
 			if (disconnected) {
 				window.location.reload()
 			} else {
-				send('RESEND')
+				connected = true
 				state.connected = true
 				document.documentElement.style.setProperty('--ws-disconnected-grayscale', '0%')
 				document.documentElement.style.setProperty('--ws-disconnected-display', 'none')
 				bus.emit('ws:open', null)
 				console.info('web socket open')
-				connected = true
 			}
 		})
 
 		ws.addEventListener('close', (e) => {
+			disconnected = connected
 			state.connected = false
 			document.documentElement.style.setProperty('--ws-disconnected-grayscale', '100%')
 			document.documentElement.style.setProperty('--ws-disconnected-display', 'flex')
 			bus.emit('ws:close', null)
 			console.info('web socket close', e)
-			disconnected = connected
 		})
 
 		ws.addEventListener('message', (message) => {

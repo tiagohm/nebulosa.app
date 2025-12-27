@@ -30,7 +30,9 @@ export class ConnectionHandler {
 		for (const [, client] of this.clients) {
 			if (client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) {
 				console.info('reusing existing connection to INDI server', client.remoteIp, client.remotePort)
-				return this.status(client)
+				const status = this.status(client)!
+				this.wsm.send<ConnectionEvent>('connection:open', { status, reused: true })
+				return status
 			}
 		}
 
@@ -45,7 +47,7 @@ export class ConnectionHandler {
 					console.info('new connection to INDI server', client.remoteIp, client.remotePort)
 
 					const status = this.status(client)!
-					this.wsm.send<ConnectionEvent>('connection:open', { status })
+					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
 					return status
 				}
 			} catch (e) {

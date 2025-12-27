@@ -34,7 +34,7 @@ export function dewHeater(wsm: WebSocketMessageHandler, dewHeaterManager: DewHea
 		// Endpoints!
 		.get('', () => dewHeaterManager.list())
 		.get('/:id', ({ params }) => dewHeaterFromParams(params))
-		.post('/:id/pwm', ({ params, body }) => dewHeaterManager.pwm(connectionHandler.get(), dewHeaterFromParams(params), body as never))
+		.post('/:id/dutycycle', ({ params, body }) => dewHeaterManager.dutyCycle(connectionHandler.get(), dewHeaterFromParams(params), body as never))
 
 	return app
 }

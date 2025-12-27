@@ -321,6 +321,7 @@ export interface ConnectionStatus extends Connect {
 
 export interface ConnectionEvent {
 	readonly status: ConnectionStatus
+	readonly reused?: boolean
 }
 
 // File System

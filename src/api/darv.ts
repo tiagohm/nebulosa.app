@@ -64,8 +64,8 @@ export class DarvTask {
 		this.capture.mount = mount?.name
 		this.capture.x = 0
 		this.capture.y = 0
-		this.capture.width = camera.frame.maxWidth
-		this.capture.height = camera.frame.maxHeight
+		this.capture.width = camera.frame.width.max
+		this.capture.height = camera.frame.height.max
 		this.capture.exposureTime = Math.trunc(request.duration + request.initialPause)
 		this.capture.exposureTimeUnit = 'SECOND'
 

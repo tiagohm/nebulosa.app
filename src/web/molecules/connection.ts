@@ -50,32 +50,26 @@ export const ConnectionMolecule = molecule(() => {
 			if (index >= 0) {
 				state.selected = state.connections[index]
 				state.connected = connection
-
-				void Api.Cameras.list().then((cameras) => cameras?.forEach((camera) => bus.emit('camera:add', camera)))
-				void Api.Mounts.list().then((mounts) => mounts?.forEach((mount) => bus.emit('mount:add', mount)))
-				void Api.Focusers.list().then((focusers) => focusers?.forEach((focuser) => bus.emit('focuser:add', focuser)))
-				void Api.Wheels.list().then((wheels) => wheels?.forEach((wheel) => bus.emit('wheel:add', wheel)))
-				void Api.Thermometers.list().then((thermometers) => thermometers?.forEach((thermometer) => bus.emit('thermometer:add', thermometer)))
-				void Api.GuideOutputs.list().then((guideOutputs) => guideOutputs?.forEach((guideOutput) => bus.emit('guideOutput:add', guideOutput)))
-				void Api.Covers.list().then((covers) => covers?.forEach((cover) => bus.emit('cover:add', cover)))
-				void Api.FlatPanels.list().then((flatPanels) => flatPanels?.forEach((flatPanel) => bus.emit('flatPanel:add', flatPanel)))
-				void Api.DewHeaters.list().then((dewHeaters) => dewHeaters?.forEach((dewHeater) => bus.emit('dewHeater:add', dewHeater)))
-
+				void list(connection)
 				break
 			}
 		}
 	})
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(2)
+		const unsubscribers = new Array<VoidFunction>(3)
 
-		unsubscribers[0] = bus.subscribe<ConnectionEvent>('connection:close', ({ status }) => {
+		unsubscribers[0] = bus.subscribe<ConnectionEvent>('connection:open', ({ status, reused }) => {
+			reused && void list(status)
+		})
+
+		unsubscribers[1] = bus.subscribe<ConnectionEvent>('connection:close', ({ status }) => {
 			if (state.connected?.id === status.id) {
 				state.connected = undefined
 			}
 		})
 
-		unsubscribers[1] = bus.subscribe('ws:close', () => {
+		unsubscribers[2] = bus.subscribe('ws:close', () => {
 			state.connected = undefined
 		})
 
@@ -83,6 +77,19 @@ export const ConnectionMolecule = molecule(() => {
 			unsubscribe(unsubscribers)
 		}
 	})
+
+	function list(connection: ConnectionStatus) {
+		const a = Api.Cameras.list().then((cameras) => void cameras?.forEach((camera) => bus.emit('camera:add', camera)))
+		const b = Api.Mounts.list().then((mounts) => void mounts?.forEach((mount) => bus.emit('mount:add', mount)))
+		const c = Api.Focusers.list().then((focusers) => void focusers?.forEach((focuser) => bus.emit('focuser:add', focuser)))
+		const d = Api.Wheels.list().then((wheels) => void wheels?.forEach((wheel) => bus.emit('wheel:add', wheel)))
+		const e = Api.Thermometers.list().then((thermometers) => void thermometers?.forEach((thermometer) => bus.emit('thermometer:add', thermometer)))
+		const f = Api.GuideOutputs.list().then((guideOutputs) => void guideOutputs?.forEach((guideOutput) => bus.emit('guideOutput:add', guideOutput)))
+		const g = Api.Covers.list().then((covers) => void covers?.forEach((cover) => bus.emit('cover:add', cover)))
+		const h = Api.FlatPanels.list().then((flatPanels) => void flatPanels?.forEach((flatPanel) => bus.emit('flatPanel:add', flatPanel)))
+		const i = Api.DewHeaters.list().then((dewHeaters) => void dewHeaters?.forEach((dewHeater) => bus.emit('dewHeater:add', dewHeater)))
+		return Promise.all([a, b, c, d, e, f, g, h, i])
+	}
 
 	function create() {
 		state.mode = 'create'

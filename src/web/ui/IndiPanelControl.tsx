@@ -14,7 +14,7 @@ import { TextButton } from './TextButton'
 import { ToggleButton } from './ToggleButton'
 
 function filterMessage(item: Message, text: string) {
-	return item.message.includes(text)
+	return item.message.toLowerCase().includes(text)
 }
 
 export const IndiPanelControl = memo(() => {
@@ -76,7 +76,7 @@ export const IndiPanelControl = memo(() => {
 							itemHeight: 36,
 						}}>
 						{(item) => (
-							<ListboxItem description={item.timestamp} key={item.timestamp}>
+							<ListboxItem description={item.timestamp} key={item.id}>
 								{item.message}
 							</ListboxItem>
 						)}

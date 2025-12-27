@@ -9,7 +9,8 @@ import { Modal } from './Modal'
 
 export const DewHeater = memo(() => {
 	const dewHeater = useMolecule(DewHeaterMolecule)
-	const { connecting, connected, pwm } = useSnapshot(dewHeater.state.dewHeater)
+	const { connecting, connected, dutyCycle } = useSnapshot(dewHeater.state.dewHeater)
+	const { min, max, value } = dutyCycle
 
 	const Header = (
 		<div className='flex flex-row items-center justify-between'>
@@ -24,14 +25,14 @@ export const DewHeater = memo(() => {
 		</div>
 	)
 
-	const color = pwm.value < pwm.max * 0.5 ? 'primary' : pwm.value < pwm.max * 0.9 ? 'warning' : 'danger'
+	const color = value < max * 0.5 ? 'primary' : value < max * 0.9 ? 'warning' : 'danger'
 
 	return (
 		<Modal header={Header} id={`dew-heater-${dewHeater.scope.dewHeater.name}`} maxWidth='260px' onHide={dewHeater.hide}>
 			<div className='mt-0 col-span-full flex flex-col items-center justify-center'>
 				<div className='w-full flex flex-col justify-center items-center gap-1'>
-					<Slider color={color} disableThumbScale endContent={pwm.max} isDisabled={!connected} maxValue={pwm.max} minValue={pwm.min} onChange={dewHeater.update} onChangeEnd={dewHeater.pwm} size='lg' startContent={pwm.min} value={pwm.value} />
-					<span className='text-lg font-bold'>{pwm.value}</span>
+					<Slider color={color} disableThumbScale endContent={max} isDisabled={!connected} maxValue={max} minValue={min} onChange={dewHeater.update} onChangeEnd={dewHeater.dutyCycle} size='lg' startContent={min} value={value} />
+					<span className='text-lg font-bold'>{value}</span>
 				</div>
 			</div>
 		</Modal>

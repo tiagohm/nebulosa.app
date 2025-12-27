@@ -390,8 +390,8 @@ export namespace Api {
 			return json<DewHeater>(`/dewheaters/${name}`, 'get')
 		}
 
-		export function pwm(dewHeater: DewHeater, value: number) {
-			return res(`/dewheaters/${dewHeater.name}/pwm`, 'post', value)
+		export function dutyCycle(dewHeater: DewHeater, value: number) {
+			return res(`/dewheaters/${dewHeater.name}/dutycycle`, 'post', value)
 		}
 	}
 

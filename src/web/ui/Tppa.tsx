@@ -93,7 +93,7 @@ const CameraDropdownEndContent = memo(() => {
 				gain={gain}
 				isDisabled={!camera.connected}
 				isRounded
-				maxBin={camera.bin.maxX}
+				maxBin={camera.bin.x.max}
 				maxExposure={camera.exposure.max}
 				maxGain={camera.gain.max}
 				maxOffset={camera.offset.max}

@@ -1,5 +1,5 @@
 import { molecule, onMount } from 'bunshi'
-import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Thermometer, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Thermometer, Wheel } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { CameraUpdated, CoverUpdated, DewHeaterUpdated, FlatPanelUpdated, FocuserUpdated, GuideOutputUpdated, MountUpdated, ThermometerUpdated, WheelUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
@@ -26,6 +26,7 @@ export interface EquipmentState {
 	readonly COVER: EquipmentDevice<Cover>[]
 	readonly THERMOMETER: EquipmentDevice<Thermometer>[]
 	readonly DEW_HEATER: EquipmentDevice<DewHeater>[]
+	readonly POWER: EquipmentDevice<Power>[]
 }
 
 const state = proxy<EquipmentState>({
@@ -42,6 +43,7 @@ const state = proxy<EquipmentState>({
 	COVER: [],
 	THERMOMETER: [],
 	DEW_HEATER: [],
+	POWER: [],
 })
 
 initProxy(state, 'equipment', ['p:selected'])

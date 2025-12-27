@@ -89,7 +89,7 @@ if (appDir) {
 }
 
 if (process.platform === 'linux') {
-	Bun.env.tmpDir = join(checkDirAccess('/dev/shm'), 'Nebulosa')
+	Bun.env.tmpDir = join(checkDirAccess('/dev/shm'), 'nebulosa')
 	Bun.env.appDir = appDir || join(Bun.env.homeDir, '.nebulosa')
 	Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'satellites')

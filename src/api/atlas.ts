@@ -62,7 +62,7 @@ export class AtlasHandler {
 	) {}
 
 	async imageOfSun(source: SolarImageSource) {
-		const file = Bun.file(`${Bun.env.tmpDir}/sun-${source}.jpg`)
+		const file = Bun.file(`${Bun.env.tmpDir}/${source}.jpg`)
 		if (!(await file.exists())) await this.refreshImageOfSun(source)
 		return file
 	}
@@ -73,7 +73,7 @@ export class AtlasHandler {
 
 			try {
 				const response = await fetch(url)
-				await Bun.write(`${Bun.env.tmpDir}/sun-${s}.jpg`, await response.blob())
+				await Bun.write(`${Bun.env.tmpDir}/${s}.jpg`, await response.blob())
 			} catch (e) {
 				console.error('failed to fetch the sun image', s, e)
 				break

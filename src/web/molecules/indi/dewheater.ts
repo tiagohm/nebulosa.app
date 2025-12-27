@@ -58,16 +58,16 @@ export const DewHeaterMolecule = molecule(() => {
 	}
 
 	function update(value: number | number[]) {
-		dewHeater.pwm.value = typeof value === 'number' ? value : value[0]
+		dewHeater.dutyCycle.value = typeof value === 'number' ? value : value[0]
 	}
 
-	function pwm(value: number | number[]) {
-		return Api.DewHeaters.pwm(dewHeater, typeof value === 'number' ? value : value[0])
+	function dutyCycle(value: number | number[]) {
+		return Api.DewHeaters.dutyCycle(dewHeater, typeof value === 'number' ? value : value[0])
 	}
 
 	function hide() {
 		equipment.hide('DEW_HEATER', dewHeater)
 	}
 
-	return { state, scope, connect, update, pwm, hide } as const
+	return { state, scope, connect, update, dutyCycle, hide } as const
 })

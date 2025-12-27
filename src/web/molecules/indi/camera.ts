@@ -1,9 +1,9 @@
 import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
-import { type Camera, DEFAULT_CAMERA, type Focuser, type Mount, type Wheel } from 'nebulosa/src/indi.device'
+import { type Camera, DEFAULT_CAMERA, type Focuser, type MinMaxValueProperty, type Mount, type Wheel } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START } from 'src/shared/types'
-import { unsubscribe } from 'src/shared/util'
+import { exposureTimeIn, unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -64,6 +64,8 @@ export const CameraMolecule = molecule(() => {
 					updateRequestFrame(state.request, event.device.frame!)
 				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
 					updateFrameFormat(state.request, event.device.frameFormats)
+				} else if (event.property === 'exposure' && !camera.exposuring && event.device.exposure?.max) {
+					updateExposureTime(state.request, event.device.exposure)
 				} else if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
 						addToast({ title: 'CAMERA', description: `Failed to connect to camera ${camera.name}`, color: 'danger' })
@@ -118,6 +120,7 @@ export const CameraMolecule = molecule(() => {
 
 		updateRequestFrame(state.request, camera.frame)
 		updateFrameFormat(state.request, camera.frameFormats)
+		updateExposureTime(state.request, camera.exposure)
 
 		return () => {
 			unsubscribe(unsubscribers)
@@ -141,10 +144,10 @@ export const CameraMolecule = molecule(() => {
 	}
 
 	function fullscreen() {
-		state.request.x = camera.frame.minX
-		state.request.y = camera.frame.minY
-		state.request.width = camera.frame.maxWidth
-		state.request.height = camera.frame.maxHeight
+		state.request.x = camera.frame.x.min
+		state.request.y = camera.frame.y.min
+		state.request.width = camera.frame.width.max
+		state.request.height = camera.frame.height.max
 	}
 
 	function updateMount(mount?: EquipmentDevice<Mount>) {
@@ -180,14 +183,14 @@ export const CameraMolecule = molecule(() => {
 })
 
 export function updateRequestFrame(request: CameraCaptureStart, frame: Camera['frame']) {
-	request.x = Math.max(frame.minX, Math.min(request.x, frame.maxX))
-	request.y = Math.max(frame.minY, Math.min(request.y, frame.maxY))
+	request.x = Math.max(frame.x.min, Math.min(request.x, frame.x.max))
+	request.y = Math.max(frame.y.min, Math.min(request.y, frame.y.max))
 
-	if (!request.width) request.width = frame.maxWidth
-	else request.width = Math.min(request.width, frame.maxWidth)
+	if (!request.width) request.width = frame.width.max
+	else request.width = Math.min(request.width, frame.width.max)
 
-	if (!request.height) request.height = frame.maxHeight
-	else request.height = Math.min(request.height, frame.maxHeight)
+	if (!request.height) request.height = frame.height.max
+	else request.height = Math.min(request.height, frame.height.max)
 }
 
 export function updateFrameFormat(request: CameraCaptureStart, frameFormats?: string[]) {
@@ -196,4 +199,10 @@ export function updateFrameFormat(request: CameraCaptureStart, frameFormats?: st
 	if (!request.frameFormat || !frameFormats.includes(request.frameFormat)) {
 		request.frameFormat = frameFormats[0]
 	}
+}
+
+export function updateExposureTime(request: CameraCaptureStart, exposure: MinMaxValueProperty) {
+	const min = Math.max(1, exposureTimeIn(exposure.min, 'SECOND', request.exposureTimeUnit))
+	const max = exposureTimeIn(exposure.max, 'SECOND', request.exposureTimeUnit)
+	request.exposureTime = Math.max(min, Math.min(request.exposureTime, max))
 }

@@ -5,7 +5,7 @@ import Elysia from 'elysia'
 import { existsSync, type MakeDirectoryOptions, rmSync } from 'fs'
 import fs from 'fs/promises'
 import type { DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
-import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
+import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import { default as openDefaultApp } from 'open'
 import os from 'os'
 import { join } from 'path'
@@ -23,6 +23,7 @@ import { IndiHandler, indi } from 'src/api/indi'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { mount } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
+import { rotator } from 'src/api/rotator'
 import { thermometer } from 'src/api/thermometer'
 import { TppaHandler, tppa } from 'src/api/tppa'
 import { wheel } from 'src/api/wheel'
@@ -148,6 +149,7 @@ const wheelManager = new WheelManager()
 const mountManager = new MountManager()
 const coverManager = new CoverManager()
 const flatPanelManager = new FlatPanelManager()
+const rotatorManager = new RotatorManager()
 
 const guideOutputProvider: DeviceProvider<GuideOutput> = {
 	get: (name: string) => {
@@ -173,7 +175,7 @@ const dewHeaterManager = new DewHeaterManager(dewHeaterProvider)
 
 const imageProcessor = new ImageProcessor()
 
-const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager)
+const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
 cameraManager.addHandler(cameraHandler)
 
 const devicePropertyManager = new DevicePropertyManager()
@@ -275,6 +277,7 @@ const app = new Elysia({
 	.use(guideOutput(wsm, guideOutputManager, connectionHandler))
 	.use(cover(wsm, coverManager, connectionHandler))
 	.use(flatPanel(wsm, flatPanelManager, connectionHandler))
+	.use(rotator(wsm, rotatorManager, connectionHandler))
 	.use(dewHeater(wsm, dewHeaterManager, connectionHandler))
 	.use(atlas(atlasHandler))
 	.use(image(imageHandler))

@@ -1,7 +1,7 @@
 import type { Angle } from 'nebulosa/src/angle'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { Message, NewVector } from 'nebulosa/src/indi'
-import type { Camera, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, SlewRate, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, SlewRate, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
@@ -274,20 +274,20 @@ export namespace Api {
 			return json<Focuser>(`/focusers/${name}`, 'get')
 		}
 
-		export function sync(focuser: Focuser, value: number) {
-			return res(`/focusers/${focuser.name}/sync`, 'post', value)
+		export function sync(focuser: Focuser, position: number) {
+			return res(`/focusers/${focuser.name}/sync`, 'post', position)
 		}
 
-		export function moveTo(focuser: Focuser, value: number) {
-			return res(`/focusers/${focuser.name}/moveto`, 'post', value)
+		export function moveTo(focuser: Focuser, position: number) {
+			return res(`/focusers/${focuser.name}/moveto`, 'post', position)
 		}
 
-		export function moveIn(focuser: Focuser, value: number) {
-			return res(`/focusers/${focuser.name}/movein`, 'post', value)
+		export function moveIn(focuser: Focuser, steps: number) {
+			return res(`/focusers/${focuser.name}/movein`, 'post', steps)
 		}
 
-		export function moveOut(focuser: Focuser, value: number) {
-			return res(`/focusers/${focuser.name}/moveout`, 'post', value)
+		export function moveOut(focuser: Focuser, steps: number) {
+			return res(`/focusers/${focuser.name}/moveout`, 'post', steps)
 		}
 
 		export function reverse(focuser: Focuser, enabled: boolean) {
@@ -378,6 +378,36 @@ export namespace Api {
 
 		export function intensity(flatPanel: FlatPanel, value: number) {
 			return res(`/flatpanels/${flatPanel.name}/intensity`, 'post', value)
+		}
+	}
+
+	export namespace Rotators {
+		export function list() {
+			return json<Rotator[]>('/rotators', 'get')
+		}
+
+		export function get(name: string) {
+			return json<Rotator>(`/rotators/${name}`, 'get')
+		}
+
+		export function sync(rotator: Rotator, angle: number) {
+			return res(`/rotators/${rotator.name}/sync`, 'post', angle)
+		}
+
+		export function moveTo(rotator: Rotator, angle: number) {
+			return res(`/rotators/${rotator.name}/moveto`, 'post', angle)
+		}
+
+		export function reverse(rotator: Rotator, enabled: boolean) {
+			return res(`/rotators/${rotator.name}/reverse`, 'post', enabled)
+		}
+
+		export function home(rotator: Rotator) {
+			return res(`/rotators/${rotator.name}/home`, 'post')
+		}
+
+		export function stop(rotator: Rotator) {
+			return res(`/rotators/${rotator.name}/stop`, 'post')
 		}
 	}
 

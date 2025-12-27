@@ -1,6 +1,6 @@
 import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
-import { type Camera, DEFAULT_CAMERA, type Focuser, type MinMaxValueProperty, type Mount, type Wheel } from 'nebulosa/src/indi.device'
+import { type Camera, DEFAULT_CAMERA, type Focuser, type MinMaxValueProperty, type Mount, type Rotator, type Wheel } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START } from 'src/shared/types'
 import { exposureTimeIn, unsubscribe } from 'src/shared/util'
@@ -26,6 +26,7 @@ export interface CameraState {
 		mount?: EquipmentDevice<Mount>
 		wheel?: EquipmentDevice<Wheel>
 		focuser?: EquipmentDevice<Focuser>
+		rotator?: EquipmentDevice<Rotator>
 	}
 }
 
@@ -111,11 +112,13 @@ export const CameraMolecule = molecule(() => {
 		state.equipment.mount = equipment.get('MOUNT', state.request.mount ?? '')
 		state.equipment.wheel = equipment.get('WHEEL', state.request.wheel ?? '')
 		state.equipment.focuser = equipment.get('FOCUSER', state.request.focuser ?? '')
+		state.equipment.rotator = equipment.get('ROTATOR', state.request.rotator ?? '')
 
 		unsubscribers[6] = subscribe(state.equipment, () => {
 			state.request.mount = state.equipment.mount?.name
 			state.request.wheel = state.equipment.wheel?.name
 			state.request.focuser = state.equipment.focuser?.name
+			state.request.rotator = state.equipment.rotator?.name
 		})
 
 		updateRequestFrame(state.request, camera.frame)
@@ -162,6 +165,10 @@ export const CameraMolecule = molecule(() => {
 		state.equipment.focuser = focuser
 	}
 
+	function updateRotator(rotator?: EquipmentDevice<Rotator>) {
+		state.equipment.rotator = rotator
+	}
+
 	function start() {
 		state.capturing = true
 		return Api.Cameras.start(camera, state.request)
@@ -179,7 +186,7 @@ export const CameraMolecule = molecule(() => {
 		state.minimized = !state.minimized
 	}
 
-	return { scope, state, connect, update, cooler, temperature, fullscreen, updateMount, updateWheel, updateFocuser, start, stop, hide, minimize } as const
+	return { scope, state, connect, update, cooler, temperature, fullscreen, updateMount, updateWheel, updateFocuser, updateRotator, start, stop, hide, minimize } as const
 })
 
 export function updateRequestFrame(request: CameraCaptureStart, frame: Camera['frame']) {

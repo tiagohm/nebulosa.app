@@ -83,6 +83,10 @@ export const WebSocketMolecule = molecule(() => {
 				case 'flatPanel:remove':
 				case 'dewHeater:add':
 				case 'dewHeater:remove':
+				case 'power:add':
+				case 'power:remove':
+				case 'rotator:add':
+				case 'rotator:remove':
 					bus.emit(key, (data as DeviceAdded).device)
 					break
 				case 'notification':

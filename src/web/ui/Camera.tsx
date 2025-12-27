@@ -19,6 +19,7 @@ import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 import { MountDropdown } from './MountDropdown'
+import { RotatorDropdown } from './RotatorDropdown'
 import { TextButton } from './TextButton'
 import { WheelDropdown } from './WheelDropdown'
 
@@ -134,13 +135,14 @@ interface CameraEquipmentProps {
 
 const CameraEquipment = memo(({ isDisabled }: CameraEquipmentProps) => {
 	const camera = useMolecule(CameraMolecule)
-	const { mount, wheel, focuser } = useSnapshot(camera.state.equipment)
+	const { mount, wheel, focuser, rotator } = useSnapshot(camera.state.equipment)
 
 	return (
 		<div className='flex flex-1 flex-row items-center gap-1'>
 			<MountDropdown isDisabled={isDisabled} onValueChange={camera.updateMount} showLabel={false} tooltipContent={`MOUNT: ${mount?.name ?? 'None'}`} value={mount} />
 			<WheelDropdown isDisabled={isDisabled} onValueChange={camera.updateWheel} showLabel={false} tooltipContent={`WHEEL: ${wheel?.name ?? 'None'}`} value={wheel} />
 			<FocuserDropdown isDisabled={isDisabled} onValueChange={camera.updateFocuser} showLabel={false} tooltipContent={`FOCUSER: ${focuser?.name ?? 'None'}`} value={focuser} />
+			<RotatorDropdown isDisabled={isDisabled} onValueChange={camera.updateRotator} showLabel={false} tooltipContent={`ROTATOR: ${rotator?.name ?? 'None'}`} value={rotator} />
 		</div>
 	)
 })

@@ -34,7 +34,7 @@ export function focuser(wsm: WebSocketMessageHandler, focuser: FocuserManager, c
 		.post('/:id/moveto', ({ params, body }) => focuser.moveTo(connectionHandler.get(), focuserFromParams(params), body as never))
 		.post('/:id/movein', ({ params, body }) => focuser.moveIn(connectionHandler.get(), focuserFromParams(params), body as never))
 		.post('/:id/moveout', ({ params, body }) => focuser.moveOut(connectionHandler.get(), focuserFromParams(params), body as never))
-		.post('/:id/sync', ({ params, body }) => focuser.sync(connectionHandler.get(), focuserFromParams(params), body as never))
+		.post('/:id/sync', ({ params, body }) => focuser.syncTo(connectionHandler.get(), focuserFromParams(params), body as never))
 		.post('/:id/reverse', ({ params, body }) => focuser.reverse(connectionHandler.get(), focuserFromParams(params), body as never))
 		.post('/:id/stop', ({ params }) => focuser.stop(connectionHandler.get(), focuserFromParams(params)))
 

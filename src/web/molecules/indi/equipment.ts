@@ -1,11 +1,12 @@
 import { molecule, onMount } from 'bunshi'
-import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Thermometer, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
-import type { CameraUpdated, CoverUpdated, DewHeaterUpdated, FlatPanelUpdated, FocuserUpdated, GuideOutputUpdated, MountUpdated, ThermometerUpdated, WheelUpdated } from 'src/shared/types'
+import type { CameraUpdated, CoverUpdated, DewHeaterUpdated, FlatPanelUpdated, FocuserUpdated, GuideOutputUpdated, MountUpdated, PowerUpdated, RotatorUpdated, ThermometerUpdated, WheelUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
+import { storageGet, storageSet } from '@/shared/storage'
 
 export type EquipmentDevice<T extends Device> = T & {
 	show?: boolean
@@ -18,7 +19,7 @@ export interface EquipmentState {
 	readonly MOUNT: EquipmentDevice<Mount>[]
 	readonly WHEEL: EquipmentDevice<Wheel>[]
 	readonly FOCUSER: EquipmentDevice<Focuser>[]
-	readonly ROTATOR: EquipmentDevice<Device>[]
+	readonly ROTATOR: EquipmentDevice<Rotator>[]
 	readonly GPS: EquipmentDevice<Device>[]
 	readonly DOME: EquipmentDevice<Device>[]
 	readonly GUIDE_OUTPUT: EquipmentDevice<GuideOutput>[]
@@ -79,6 +80,12 @@ export const EquipmentMolecule = molecule(() => {
 		unsubscribers.push(bus.subscribe<Wheel>('wheel:add', (event) => add('WHEEL', event)))
 		unsubscribers.push(bus.subscribe<Wheel>('wheel:remove', (event) => remove('WHEEL', event)))
 		unsubscribers.push(bus.subscribe<WheelUpdated>('wheel:update', ({ device, property }) => update('WHEEL', device.name, property, device[property]!)))
+		unsubscribers.push(bus.subscribe<Rotator>('rotator:add', (event) => add('ROTATOR', event)))
+		unsubscribers.push(bus.subscribe<Rotator>('rotator:remove', (event) => remove('ROTATOR', event)))
+		unsubscribers.push(bus.subscribe<RotatorUpdated>('rotator:update', ({ device, property }) => update('ROTATOR', device.name, property, device[property]!)))
+		unsubscribers.push(bus.subscribe<Power>('power:add', (event) => add('POWER', event)))
+		unsubscribers.push(bus.subscribe<Power>('power:remove', (event) => remove('POWER', event)))
+		unsubscribers.push(bus.subscribe<PowerUpdated>('power:update', ({ device, property }) => update('POWER', device.name, property, device[property]!)))
 
 		return () => {
 			unsubscribe(unsubscribers)
@@ -95,8 +102,11 @@ export const EquipmentMolecule = molecule(() => {
 
 	function add<T extends DeviceType>(type: T, device: EquipmentState[T][number]) {
 		const devices = state[type]
-		const index = devices.findIndex((e) => e.name === device.name)
-		index < 0 && devices.push(device as never)
+
+		if (!devices.some((e) => e.name === device.name)) {
+			devices.push(device as never)
+			device.show = storageGet(`equipment.${device.name}.show`, false)
+		}
 	}
 
 	function update<T extends DeviceType, P extends keyof EquipmentState[T][number]>(type: T, name: string, property: P, value: EquipmentState[T][number][P]) {
@@ -139,6 +149,7 @@ export const EquipmentMolecule = molecule(() => {
 	function show(type: DeviceType, device: Device) {
 		state[type].find((e) => e.name === device.name)!.show = true
 		bus.emit('homeMenu:toggle', false)
+		storageSet(`equipment.${device.name}.show`, true)
 	}
 
 	function showIndi(device: Device, e?: React.PointerEvent) {
@@ -149,6 +160,7 @@ export const EquipmentMolecule = molecule(() => {
 
 	function hide(type: DeviceType, device: Device) {
 		state[type].find((e) => e.name === device.name)!.show = false
+		storageSet(`equipment.${device.name}.show`, false)
 	}
 
 	return { state, get, list, add, update, remove, select, connect, show, showIndi, hide } as const

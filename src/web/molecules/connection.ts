@@ -88,7 +88,8 @@ export const ConnectionMolecule = molecule(() => {
 		const g = Api.Covers.list().then((covers) => void covers?.forEach((cover) => bus.emit('cover:add', cover)))
 		const h = Api.FlatPanels.list().then((flatPanels) => void flatPanels?.forEach((flatPanel) => bus.emit('flatPanel:add', flatPanel)))
 		const i = Api.DewHeaters.list().then((dewHeaters) => void dewHeaters?.forEach((dewHeater) => bus.emit('dewHeater:add', dewHeater)))
-		return Promise.all([a, b, c, d, e, f, g, h, i])
+		const j = Api.Rotators.list().then((rotators) => void rotators?.forEach((rotator) => bus.emit('rotator:add', rotator)))
+		return Promise.all([a, b, c, d, e, f, g, h, i, j])
 	}
 
 	function create() {

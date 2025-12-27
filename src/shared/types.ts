@@ -12,7 +12,7 @@ import type { ObserverWithTLE } from 'nebulosa/src/horizons'
 import type { ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SCNRProtectionMethod, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
 import type { PropertyState } from 'nebulosa/src/indi'
 // biome-ignore format: too long!
-import type { Camera, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Power, Rotator, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { LunarEclipse, LunarPhase } from 'nebulosa/src/moon'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
@@ -615,6 +615,22 @@ export type FlatPanelRemoved = DeviceRemoved<FlatPanel>
 
 export type FlatPanelMessageEvent = FlatPanelAdded | FlatPanelUpdated | FlatPanelRemoved
 
+export type PowerAdded = DeviceAdded<Power>
+
+export type PowerUpdated = DeviceUpdated<Power>
+
+export type PowerRemoved = DeviceRemoved<Power>
+
+export type PowerMessageEvent = PowerAdded | PowerUpdated | PowerRemoved
+
+export type RotatorAdded = DeviceAdded<Rotator>
+
+export type RotatorUpdated = DeviceUpdated<Rotator>
+
+export type RotatorRemoved = DeviceRemoved<Rotator>
+
+export type RotatorMessageEvent = RotatorAdded | RotatorUpdated | RotatorRemoved
+
 export type DewHeaterAdded = DeviceAdded<DewHeater>
 
 export type DewHeaterUpdated = DeviceUpdated<DewHeater>
@@ -623,7 +639,7 @@ export type DewHeaterRemoved = DeviceRemoved<DewHeater>
 
 export type DewHeaterMessageEvent = DewHeaterAdded | DewHeaterUpdated | DewHeaterRemoved
 
-export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | FocuserMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent | CoverMessageEvent | FlatPanelMessageEvent | DewHeaterMessageEvent
+export type DeviceMessageEvent = CameraMessageEvent | MountMessageEvent | FocuserMessageEvent | GuideOutputMessageEvent | ThermometerMessageEvent | CoverMessageEvent | FlatPanelMessageEvent | PowerMessageEvent | RotatorMessageEvent | DewHeaterMessageEvent
 
 export interface GuidePulse {
 	direction: GuideDirection
@@ -661,6 +677,7 @@ export interface CameraCaptureStart extends Size {
 	mount?: string
 	wheel?: string
 	focuser?: string
+	rotator?: string
 }
 
 export interface CameraCaptureTime {

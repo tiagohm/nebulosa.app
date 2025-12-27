@@ -109,10 +109,12 @@ export const CameraMolecule = molecule(() => {
 
 		unsubscribers[5] = initProxy(state, `camera.${camera.name}`, ['o:request', 'p:minimized', 'p:targetTemperature'])
 
-		state.equipment.mount = equipment.get('MOUNT', state.request.mount ?? '')
-		state.equipment.wheel = equipment.get('WHEEL', state.request.wheel ?? '')
-		state.equipment.focuser = equipment.get('FOCUSER', state.request.focuser ?? '')
-		state.equipment.rotator = equipment.get('ROTATOR', state.request.rotator ?? '')
+		const timer = setTimeout(() => {
+			state.equipment.mount = equipment.get('MOUNT', state.request.mount ?? '')
+			state.equipment.wheel = equipment.get('WHEEL', state.request.wheel ?? '')
+			state.equipment.focuser = equipment.get('FOCUSER', state.request.focuser ?? '')
+			state.equipment.rotator = equipment.get('ROTATOR', state.request.rotator ?? '')
+		}, 2000)
 
 		unsubscribers[6] = subscribe(state.equipment, () => {
 			state.request.mount = state.equipment.mount?.name
@@ -127,6 +129,7 @@ export const CameraMolecule = molecule(() => {
 
 		return () => {
 			unsubscribe(unsubscribers)
+			clearTimeout(timer)
 		}
 	})
 
@@ -179,7 +182,7 @@ export const CameraMolecule = molecule(() => {
 	}
 
 	function hide() {
-		return equipment.hide('CAMERA', camera)
+		equipment.hide('CAMERA', camera)
 	}
 
 	function minimize() {

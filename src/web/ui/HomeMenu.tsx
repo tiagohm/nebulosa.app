@@ -25,6 +25,7 @@ import skyAtlasIcon from '@/assets/sky-atlas.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
 import { AboutMolecule } from '@/molecules/about'
 import { CalculatorMolecule } from '@/molecules/calculator'
+import { ConnectionMolecule } from '@/molecules/connection'
 import { DarvMolecule } from '@/molecules/darv'
 import { FramingMolecule } from '@/molecules/framing'
 import { HomeMolecule } from '@/molecules/home'
@@ -46,8 +47,11 @@ import { Tppa } from './Tppa'
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
 
 export const HomeMenu = memo(() => {
-	const skyAtlas = useMolecule(SkyAtlasMolecule)
-	const { show: showSkyAtlas } = useSnapshot(skyAtlas.state)
+	const connection = useMolecule(ConnectionMolecule)
+	const { connected } = useSnapshot(connection.state)
+
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { show: showSkyAtlas } = useSnapshot(atlas.state)
 
 	const framing = useMolecule(FramingMolecule)
 	const { show: showFraming } = useSnapshot(framing.state)
@@ -76,13 +80,13 @@ export const HomeMenu = memo(() => {
 			<Activity mode={showFraming ? 'visible' : 'hidden'}>
 				<Framing />
 			</Activity>
-			<Activity mode={showTPPA ? 'visible' : 'hidden'}>
+			<Activity mode={showTPPA && connected ? 'visible' : 'hidden'}>
 				<Tppa />
 			</Activity>
-			<Activity mode={showDARV ? 'visible' : 'hidden'}>
+			<Activity mode={showDARV && connected ? 'visible' : 'hidden'}>
 				<Darv />
 			</Activity>
-			<Activity mode={showIndiPanelControl ? 'visible' : 'hidden'}>
+			<Activity mode={showIndiPanelControl && connected ? 'visible' : 'hidden'}>
 				<IndiPanelControl />
 			</Activity>
 			<Activity mode={showAbout ? 'visible' : 'hidden'}>
@@ -117,7 +121,7 @@ export const HomeMenuPopover = memo(() => {
 
 export const HomeMenuPopoverContent = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const { selected, CAMERA, MOUNT, FOCUSER, WHEEL, COVER, FLAT_PANEL, GUIDE_OUTPUT, THERMOMETER, DEW_HEATER } = useSnapshot(equipment.state)
+	const { selected, CAMERA, MOUNT, FOCUSER, WHEEL, COVER, FLAT_PANEL, GUIDE_OUTPUT, THERMOMETER, DEW_HEATER, ROTATOR } = useSnapshot(equipment.state)
 
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
 	const framing = useMolecule(FramingMolecule)
@@ -149,7 +153,7 @@ export const HomeMenuPopoverContent = memo(() => {
 				</Button>
 			</Tooltip>
 			<Tooltip content='Rotator' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled isIconOnly onPointerUp={() => equipment.select('ROTATOR')} size='lg' variant='light'>
+				<Button color='secondary' isDisabled={ROTATOR.length === 0} isIconOnly onPointerUp={() => equipment.select('ROTATOR')} size='lg' variant='light'>
 					<img className='w-9' src={rotatorIcon} />
 				</Button>
 			</Tooltip>
@@ -218,7 +222,7 @@ export const HomeMenuPopoverContent = memo(() => {
 					<img className='w-9' src={sequencerIcon} />
 				</Button>
 			</Tooltip>
-			<IndiPanelControlButton isDisabled={!CAMERA.length && !MOUNT.length && !FOCUSER.length && !COVER.length && !FLAT_PANEL.length && !GUIDE_OUTPUT.length && !THERMOMETER.length && !DEW_HEATER.length} size='lg' />
+			<IndiPanelControlButton isDisabled={!CAMERA.length && !MOUNT.length && !FOCUSER.length && !COVER.length && !FLAT_PANEL.length && !GUIDE_OUTPUT.length && !THERMOMETER.length && !DEW_HEATER.length && !ROTATOR.length} size='lg' />
 			<Tooltip content='Calculator' placement='bottom' showArrow>
 				<Button color='secondary' isIconOnly onPointerUp={calculator.show} size='lg' variant='light'>
 					<img className='w-9' src={calculatorIcon} />

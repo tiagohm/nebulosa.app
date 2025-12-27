@@ -3,7 +3,7 @@ import { Elysia } from 'elysia'
 // biome-ignore format: too long!
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, IndiClient, IndiClientHandler, Message, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
 import type { Device, DeviceProperty, DevicePropertyType } from 'nebulosa/src/indi.device'
-import type { CameraManager, CoverManager, DevicePropertyHandler, DevicePropertyManager, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
+import type { CameraManager, CoverManager, DevicePropertyHandler, DevicePropertyManager, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import bus from '../shared/bus'
 import type { IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from '../shared/types'
 import type { ConnectionHandler } from './connection'
@@ -77,6 +77,7 @@ export class IndiHandler implements IndiClientHandler {
 		readonly coverManager: CoverManager,
 		readonly flatPanelManager: FlatPanelManager,
 		readonly dewHeaterManager: DewHeaterManager,
+		readonly rotatorManager: RotatorManager,
 		readonly properties: DevicePropertyManager,
 		readonly wsm: WebSocketMessageHandler,
 	) {}
@@ -101,6 +102,7 @@ export class IndiHandler implements IndiClientHandler {
 		this.guideOutputManager.close(client, server)
 		this.thermometerManager.close(client, server)
 		this.dewHeaterManager.close(client, server)
+		this.rotatorManager.close(client, server)
 	}
 
 	vector(client: IndiClient, message: DefVector | SetVector, tag: string) {
@@ -117,6 +119,7 @@ export class IndiHandler implements IndiClientHandler {
 		this.guideOutputManager.switchVector(client, message, tag)
 		this.thermometerManager.switchVector(client, message, tag)
 		this.dewHeaterManager.switchVector(client, message, tag)
+		this.rotatorManager.switchVector(client, message, tag)
 	}
 
 	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
@@ -129,6 +132,7 @@ export class IndiHandler implements IndiClientHandler {
 		this.guideOutputManager.numberVector(client, message, tag)
 		this.thermometerManager.numberVector(client, message, tag)
 		this.dewHeaterManager.numberVector(client, message, tag)
+		this.rotatorManager.numberVector(client, message, tag)
 	}
 
 	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
@@ -141,6 +145,7 @@ export class IndiHandler implements IndiClientHandler {
 		// this.guideOutput.textVector(client, message, tag)
 		// this.thermometer.textVector(client, message, tag)
 		// this.dewHeater.textVector(client, message, tag)
+		this.rotatorManager.textVector(client, message, tag)
 	}
 
 	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
@@ -157,6 +162,7 @@ export class IndiHandler implements IndiClientHandler {
 		this.guideOutputManager.delProperty(client, message)
 		this.thermometerManager.delProperty(client, message)
 		this.dewHeaterManager.delProperty(client, message)
+		this.rotatorManager.delProperty(client, message)
 		this.properties.delProperty(client, message)
 	}
 
@@ -176,7 +182,18 @@ export class IndiHandler implements IndiClientHandler {
 	}
 
 	get(id: string): Device | undefined {
-		return this.cameraManager.get(id) || this.mountManager.get(id) || this.focuserManager.get(id) || this.wheelManager.get(id) || this.coverManager.get(id) || this.flatPanelManager.get(id) || this.guideOutputManager.get(id) || this.thermometerManager.get(id) || this.dewHeaterManager.get(id)
+		return (
+			this.cameraManager.get(id) ||
+			this.mountManager.get(id) ||
+			this.focuserManager.get(id) ||
+			this.wheelManager.get(id) ||
+			this.coverManager.get(id) ||
+			this.flatPanelManager.get(id) ||
+			this.rotatorManager.get(id) ||
+			this.guideOutputManager.get(id) ||
+			this.thermometerManager.get(id) ||
+			this.dewHeaterManager.get(id)
+		)
 	}
 
 	messages(device?: string) {

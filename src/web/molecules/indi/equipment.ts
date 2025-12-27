@@ -105,7 +105,7 @@ export const EquipmentMolecule = molecule(() => {
 
 		if (!devices.some((e) => e.name === device.name)) {
 			devices.push(device as never)
-			device.show = storageGet(`equipment.${device.name}.show`, false)
+			device.show = storageGet(`equipment.${type}.${device.name}.show`, false)
 		}
 	}
 
@@ -149,7 +149,7 @@ export const EquipmentMolecule = molecule(() => {
 	function show(type: DeviceType, device: Device) {
 		state[type].find((e) => e.name === device.name)!.show = true
 		bus.emit('homeMenu:toggle', false)
-		storageSet(`equipment.${device.name}.show`, true)
+		storageSet(`equipment.${type}.${device.name}.show`, true)
 	}
 
 	function showIndi(device: Device, e?: React.PointerEvent) {
@@ -160,7 +160,7 @@ export const EquipmentMolecule = molecule(() => {
 
 	function hide(type: DeviceType, device: Device) {
 		state[type].find((e) => e.name === device.name)!.show = false
-		storageSet(`equipment.${device.name}.show`, false)
+		storageSet(`equipment.${type}.${device.name}.show`, false)
 	}
 
 	return { state, get, list, add, update, remove, select, connect, show, showIndi, hide } as const

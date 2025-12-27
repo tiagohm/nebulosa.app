@@ -182,7 +182,7 @@ const devicePropertyManager = new DevicePropertyManager()
 
 const cacheManager = new CacheManager()
 
-const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, devicePropertyManager, wsm)
+const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, rotatorManager, devicePropertyManager, wsm)
 const confirmationHandler = new ConfirmationHandler(wsm)
 const framingHandler = new FramingHandler(imageProcessor)
 const fileSystemHandler = new FileSystemHandler()

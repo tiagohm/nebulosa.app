@@ -19,8 +19,7 @@ function filterMessage(item: Message, text: string) {
 
 export const IndiPanelControl = memo(() => {
 	const control = useMolecule(IndiPanelControlMolecule)
-	const { devices, device, groups, group, properties, messages } = useSnapshot(control.state)
-	const [showMessages, setShowMessages] = useState(false)
+	const { tab, devices, device, groups, group, properties, messages } = useSnapshot(control.state)
 
 	useEffect(() => {
 		void control.retrieveProperties()
@@ -31,10 +30,10 @@ export const IndiPanelControl = memo(() => {
 		<div className='flex flex-row justify-start items-center gap-2'>
 			<span className='me-3'>INDI Panel Control</span>
 			<Tooltip content='Properties' placement='bottom' showArrow>
-				<ToggleButton color='secondary' icon={Icons.ViewList} isSelected={!showMessages} onPointerUp={() => setShowMessages(false)} />
+				<ToggleButton color='secondary' icon={Icons.ViewList} isSelected={tab === 'property'} onPointerUp={() => (control.state.tab = 'property')} />
 			</Tooltip>
 			<Tooltip content='Messages' placement='bottom' showArrow>
-				<ToggleButton color='secondary' icon={Icons.Message} isSelected={showMessages} onPointerUp={() => setShowMessages(true)} />
+				<ToggleButton color='secondary' icon={Icons.Message} isSelected={tab === 'message'} onPointerUp={() => (control.state.tab = 'message')} />
 			</Tooltip>
 		</div>
 	)
@@ -42,7 +41,7 @@ export const IndiPanelControl = memo(() => {
 	return (
 		<Modal header={Header} id='indi-panel-control' maxWidth='400px' onHide={control.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<Activity mode={showMessages ? 'hidden' : 'visible'}>
+				<Activity mode={tab === 'property' ? 'visible' : 'hidden'}>
 					<EnumSelect className='col-span-6' label='Device' onValueChange={(value) => (control.state.device = value)} value={device}>
 						{devices.map((e) => (
 							<SelectItem key={e}>{e}</SelectItem>
@@ -61,7 +60,7 @@ export const IndiPanelControl = memo(() => {
 							))}
 					</div>
 				</Activity>
-				<Activity mode={showMessages ? 'visible' : 'hidden'}>
+				<Activity mode={tab === 'message' ? 'visible' : 'hidden'}>
 					<FilterableListbox
 						className='col-span-full'
 						classNames={{ list: 'max-h-[200px] overflow-scroll', base: 'min-w-80' }}

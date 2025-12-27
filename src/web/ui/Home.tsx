@@ -1,5 +1,5 @@
 import { ScopeProvider, useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConfirmationMolecule } from '@/molecules/confirmation'
 import { CameraScope } from '@/molecules/indi/camera'
@@ -10,6 +10,7 @@ import { FlatPanelScope } from '@/molecules/indi/flatpanel'
 import { FocuserScope } from '@/molecules/indi/focuser'
 import { GuideOutputScope } from '@/molecules/indi/guideoutput'
 import { MountScope } from '@/molecules/indi/mount'
+import { RotatorScope } from '@/molecules/indi/rotator'
 import { ThermometerScope } from '@/molecules/indi/thermometer'
 import { WheelScope } from '@/molecules/indi/wheel'
 import { WebSocketMolecule } from '@/molecules/ws'
@@ -23,6 +24,7 @@ import { GuideOutput } from './GuideOutput'
 import { HomeNavBar } from './HomeNavBar'
 import { ImageWorkspace } from './ImageWorkspace'
 import { Mount } from './Mount'
+import { Rotator } from './Rotator'
 import { Thermometer } from './Thermometer'
 import { Wheel } from './Wheel'
 
@@ -45,6 +47,7 @@ export const Home = memo(() => {
 			<CoverList />
 			<FlatPanelList />
 			<DewHeaterList />
+			<RotatorList />
 			{showConfirmation && <Confirmation />}
 		</div>
 	)
@@ -54,124 +57,128 @@ export const CameraList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
 	const camera = useSnapshot(equipment.state.CAMERA)
 
-	return camera.map(
-		(camera) =>
-			camera.show && (
-				<ScopeProvider key={camera.name} scope={CameraScope} value={{ camera: camera as never }}>
-					<Camera />
-				</ScopeProvider>
-			),
-	)
+	return camera.map((camera) => (
+		<Activity key={camera.name} mode={camera.show ? 'visible' : 'hidden'}>
+			<ScopeProvider scope={CameraScope} value={{ camera: camera as never }}>
+				<Camera />
+			</ScopeProvider>
+		</Activity>
+	))
 })
 
 export const MountList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
 	const mount = useSnapshot(equipment.state.MOUNT)
 
-	return mount.map(
-		(mount) =>
-			mount.show && (
-				<ScopeProvider key={mount.name} scope={MountScope} value={{ mount: mount as never }}>
-					<Mount />
-				</ScopeProvider>
-			),
-	)
+	return mount.map((mount) => (
+		<Activity key={mount.name} mode={mount.show ? 'visible' : 'hidden'}>
+			<ScopeProvider key={mount.name} scope={MountScope} value={{ mount: mount as never }}>
+				<Mount />
+			</ScopeProvider>
+		</Activity>
+	))
 })
 
 export const FocuserList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
 	const focuser = useSnapshot(equipment.state.FOCUSER)
 
-	return focuser.map(
-		(focuser) =>
-			focuser.show && (
-				<ScopeProvider key={focuser.name} scope={FocuserScope} value={{ focuser: focuser as never }}>
-					<Focuser />
-				</ScopeProvider>
-			),
-	)
+	return focuser.map((focuser) => (
+		<Activity key={focuser.name} mode={focuser.show ? 'visible' : 'hidden'}>
+			<ScopeProvider key={focuser.name} scope={FocuserScope} value={{ focuser: focuser as never }}>
+				<Focuser />
+			</ScopeProvider>
+		</Activity>
+	))
 })
 
 export const WheelList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
 	const wheel = useSnapshot(equipment.state.WHEEL)
 
-	return wheel.map(
-		(wheel) =>
-			wheel.show && (
-				<ScopeProvider key={wheel.name} scope={WheelScope} value={{ wheel: wheel as never }}>
-					<Wheel />
-				</ScopeProvider>
-			),
-	)
+	return wheel.map((wheel) => (
+		<Activity key={wheel.name} mode={wheel.show ? 'visible' : 'hidden'}>
+			<ScopeProvider scope={WheelScope} value={{ wheel: wheel as never }}>
+				<Wheel />
+			</ScopeProvider>
+		</Activity>
+	))
 })
 
 export const GuideOutputList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
 	const guideOutput = useSnapshot(equipment.state.GUIDE_OUTPUT)
 
-	return guideOutput.map(
-		(guideOutput) =>
-			guideOutput.show && (
-				<ScopeProvider key={guideOutput.name} scope={GuideOutputScope} value={{ guideOutput: guideOutput as never }}>
-					<GuideOutput />
-				</ScopeProvider>
-			),
-	)
+	return guideOutput.map((guideOutput) => (
+		<Activity key={guideOutput.name} mode={guideOutput.show ? 'visible' : 'hidden'}>
+			<ScopeProvider scope={GuideOutputScope} value={{ guideOutput: guideOutput as never }}>
+				<GuideOutput />
+			</ScopeProvider>
+		</Activity>
+	))
 })
 
 export const ThermometerList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
 	const thermometer = useSnapshot(equipment.state.THERMOMETER)
 
-	return thermometer.map(
-		(thermometer) =>
-			thermometer.show && (
-				<ScopeProvider key={thermometer.name} scope={ThermometerScope} value={{ thermometer: thermometer as never }}>
-					<Thermometer />
-				</ScopeProvider>
-			),
-	)
+	return thermometer.map((thermometer) => (
+		<Activity key={thermometer.name} mode={thermometer.show ? 'visible' : 'hidden'}>
+			<ScopeProvider scope={ThermometerScope} value={{ thermometer: thermometer as never }}>
+				<Thermometer />
+			</ScopeProvider>
+		</Activity>
+	))
 })
 
 export const CoverList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
 	const cover = useSnapshot(equipment.state.COVER)
 
-	return cover.map(
-		(cover) =>
-			cover.show && (
-				<ScopeProvider key={cover.name} scope={CoverScope} value={{ cover: cover as never }}>
-					<Cover />
-				</ScopeProvider>
-			),
-	)
+	return cover.map((cover) => (
+		<Activity key={cover.name} mode={cover.show ? 'visible' : 'hidden'}>
+			<ScopeProvider scope={CoverScope} value={{ cover: cover as never }}>
+				<Cover />
+			</ScopeProvider>
+		</Activity>
+	))
 })
 
 export const FlatPanelList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
 	const flatPanel = useSnapshot(equipment.state.FLAT_PANEL)
 
-	return flatPanel.map(
-		(flatPanel) =>
-			flatPanel.show && (
-				<ScopeProvider key={flatPanel.name} scope={FlatPanelScope} value={{ flatPanel: flatPanel as never }}>
-					<FlatPanel />
-				</ScopeProvider>
-			),
-	)
+	return flatPanel.map((flatPanel) => (
+		<Activity key={flatPanel.name} mode={flatPanel.show ? 'visible' : 'hidden'}>
+			<ScopeProvider scope={FlatPanelScope} value={{ flatPanel: flatPanel as never }}>
+				<FlatPanel />
+			</ScopeProvider>
+		</Activity>
+	))
 })
 
 export const DewHeaterList = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
 	const dewHeater = useSnapshot(equipment.state.DEW_HEATER)
 
-	return dewHeater.map(
-		(dewHeater) =>
-			dewHeater.show && (
-				<ScopeProvider key={dewHeater.name} scope={DewHeaterScope} value={{ dewHeater: dewHeater as never }}>
-					<DewHeater />
-				</ScopeProvider>
-			),
-	)
+	return dewHeater.map((dewHeater) => (
+		<Activity key={dewHeater.name} mode={dewHeater.show ? 'visible' : 'hidden'}>
+			<ScopeProvider scope={DewHeaterScope} value={{ dewHeater: dewHeater as never }}>
+				<DewHeater />
+			</ScopeProvider>
+		</Activity>
+	))
+})
+
+export const RotatorList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const rotator = useSnapshot(equipment.state.ROTATOR)
+
+	return rotator.map((rotator) => (
+		<Activity key={rotator.name} mode={rotator.show ? 'visible' : 'hidden'}>
+			<ScopeProvider scope={RotatorScope} value={{ rotator: rotator as never }}>
+				<Rotator />
+			</ScopeProvider>
+		</Activity>
+	))
 })

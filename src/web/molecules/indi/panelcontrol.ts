@@ -5,7 +5,9 @@ import bus from 'src/shared/bus'
 import type { ConnectionEvent, IndiDevicePropertyEvent } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
+import { initProxy } from '@/shared/proxy'
 import { ConnectionMolecule } from '../connection'
 
 export interface IndiPanelControlState {
@@ -16,6 +18,7 @@ export interface IndiPanelControlState {
 	group: string
 	properties: Record<string, DeviceProperties>
 	messages: Message[]
+	tab: 'property' | 'message'
 }
 
 const state = proxy<IndiPanelControlState>({
@@ -26,13 +29,16 @@ const state = proxy<IndiPanelControlState>({
 	group: '',
 	properties: {},
 	messages: [],
+	tab: 'property',
 })
+
+initProxy(state, 'indi', ['p:show', 'p:device', 'p:group', 'p:tab'])
 
 export const IndiPanelControlMolecule = molecule(() => {
 	const connection = use(ConnectionMolecule)
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(4)
+		const unsubscribers = new Array<VoidFunction>(5)
 
 		unsubscribers[0] = bus.subscribe<ConnectionEvent>('connection:close', ({ status }) => {
 			if (connection.state.connected?.id === status.id) {
@@ -62,6 +68,12 @@ export const IndiPanelControlMolecule = molecule(() => {
 			}
 		})
 
+		unsubscribers[4] = subscribeKey(connection.state, 'connected', (event) => {
+			if (event && connection.state.connected?.id === event.id) {
+				void retrieveDevices()
+			}
+		})
+
 		const timer = setInterval(ping, 5000)
 
 		void retrieveDevices()
@@ -75,9 +87,10 @@ export const IndiPanelControlMolecule = molecule(() => {
 	async function retrieveDevices(device: Device | string = state.device) {
 		const devices = await Api.Indi.devices()
 		state.devices = devices?.sort() ?? []
-		state.device = (typeof device === 'string' ? device : device?.name) || state.devices[0] || ''
+		if (!state.device || !state.devices.includes(state.device)) state.device = (typeof device === 'string' ? device : device?.name) || state.devices[0] || ''
 		ping()
 	}
+
 	async function retrieveProperties(device: string = state.device) {
 		if (device) {
 			state.properties = {}
@@ -85,7 +98,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 			properties && addProperties(properties)
 
 			state.groups = Object.keys(state.properties).sort()
-			state.group = state.groups[0] || ''
+			if (!state.group || !state.groups.includes(state.group)) state.group = state.groups[0] || ''
 		}
 	}
 

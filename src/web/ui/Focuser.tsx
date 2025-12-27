@@ -1,4 +1,4 @@
-import { Button, Checkbox, Chip, Input, NumberInput, Tooltip } from '@heroui/react'
+import { Checkbox, Chip, NumberInput, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -6,6 +6,7 @@ import { FocuserMolecule } from '@/molecules/indi/focuser'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
@@ -36,44 +37,32 @@ export const Focuser = memo(() => {
 					</Chip>
 				</div>
 				<div className='col-span-9 flex flex-row items-center justify-end gap-2'>
-					<Input className='flex-1' isReadOnly label={`Position (max: ${position.max})`} size='sm' value={position.value.toFixed(0)} />
+					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isReadOnly label='Position' size='sm' value={position.value} />
 					<Tooltip content='Stop' placement='bottom' showArrow>
-						<Button color='danger' isDisabled={!canAbort || !moving} isIconOnly onPointerUp={focuser.stop} size='sm' variant='light'>
-							<Icons.Stop />
-						</Button>
+						<IconButton color='danger' icon={Icons.Stop} isDisabled={!connected || !canAbort || !moving} onPointerUp={focuser.stop} />
 					</Tooltip>
 				</div>
 				<div className='col-span-full flex flex-row items-center justify-between gap-2'>
 					<Tooltip content='Move In' placement='bottom' showArrow>
-						<Button color='secondary' isDisabled={!canRelativeMove || moving} isIconOnly onPointerUp={focuser.moveIn} size='sm' variant='light'>
-							<Icons.ArrowLeft />
-						</Button>
+						<IconButton color='secondary' icon={Icons.ArrowLeft} isDisabled={!connected || !canRelativeMove || moving || relative === 0} onPointerUp={focuser.moveIn} />
 					</Tooltip>
-					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} label='Relative' maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} size='sm' value={relative} />
+					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected} label='Relative' maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} size='sm' value={relative} />
 					<Tooltip content='Move Out' placement='bottom' showArrow>
-						<Button color='secondary' isDisabled={!canRelativeMove || moving} isIconOnly onPointerUp={focuser.moveOut} size='sm' variant='light'>
-							<Icons.ArrowRight />
-						</Button>
+						<IconButton color='secondary' icon={Icons.ArrowRight} isDisabled={!connected || !canRelativeMove || moving || relative === 0} onPointerUp={focuser.moveOut} />
 					</Tooltip>
 				</div>
 				<div className='col-span-full flex flex-row items-center justify-between gap-2'>
 					<Tooltip content='Sync' placement='bottom' showArrow>
-						<Button color='primary' isDisabled={!canSync || moving} isIconOnly onPointerUp={focuser.sync} size='sm' variant='light'>
-							<Icons.Sync />
-						</Button>
+						<IconButton color='primary' icon={Icons.Sync} isDisabled={!connected || !canSync || moving} onPointerUp={focuser.sync} />
 					</Tooltip>
-					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} label='Absolute' maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} size='sm' value={absolute} />
-					<Tooltip content='Move To' placement='bottom' showArrow>
-						<Button color='success' isDisabled={!canAbsoluteMove || moving} isIconOnly onPointerUp={focuser.moveTo} size='sm' variant='light'>
-							<Icons.Check />
-						</Button>
+					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected} label='Absolute' maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} size='sm' value={absolute} />
+					<Tooltip content='Move' placement='bottom' showArrow>
+						<IconButton color='success' icon={Icons.Check} isDisabled={!connected || !canAbsoluteMove || moving || absolute === position.value} onPointerUp={focuser.moveTo} />
 					</Tooltip>
 				</div>
-				{canReverse && (
-					<Checkbox className='col-span-full mt-1' isSelected={reversed} onValueChange={focuser.reverse}>
-						Reverse mode
-					</Checkbox>
-				)}
+				<Checkbox className='col-span-full mt-1' isDisabled={!connected || !canReverse} isSelected={reversed} onValueChange={focuser.reverse}>
+					Reversed
+				</Checkbox>
 			</div>
 		</Modal>
 	)

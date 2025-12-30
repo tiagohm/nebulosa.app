@@ -4,13 +4,14 @@ import { DEFAULT_ROTATOR, type Rotator } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { RotatorUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import type { DeepReadonly } from 'utility-types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface RotatorScopeValue {
-	readonly rotator: Rotator
+	readonly rotator: DeepReadonly<Omit<Rotator, symbol>>
 }
 
 export interface RotatorState {

@@ -4,6 +4,7 @@ import { type Camera, DEFAULT_CAMERA, type Focuser, type MinMaxValueProperty, ty
 import bus from 'src/shared/bus'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START } from 'src/shared/types'
 import { exposureTimeIn, unsubscribe } from 'src/shared/util'
+import type { DeepReadonly } from 'utility-types'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -11,7 +12,7 @@ import type { Image } from '@/shared/types'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface CameraScopeValue {
-	readonly camera: Camera
+	readonly camera: DeepReadonly<Omit<Camera, symbol>>
 }
 
 export interface CameraState {

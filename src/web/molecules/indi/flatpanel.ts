@@ -3,12 +3,13 @@ import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_FLAT_PANEL, type FlatPanel } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { FlatPanelUpdated } from 'src/shared/types'
+import type { DeepReadonly } from 'utility-types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface FlatPanelScopeValue {
-	readonly flatPanel: FlatPanel
+	readonly flatPanel: DeepReadonly<Omit<FlatPanel, symbol>>
 }
 
 export interface FlatPanelState {

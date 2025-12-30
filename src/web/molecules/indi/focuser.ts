@@ -4,13 +4,14 @@ import { DEFAULT_FOCUSER, type Focuser } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { FocuserUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import type { DeepReadonly } from 'utility-types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface FocuserScopeValue {
-	readonly focuser: Focuser
+	readonly focuser: DeepReadonly<Omit<Focuser, symbol>>
 }
 
 export interface FocuserState {

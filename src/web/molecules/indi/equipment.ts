@@ -15,19 +15,19 @@ export type EquipmentDevice<T extends Device> = T & {
 
 export interface EquipmentState {
 	selected?: DeviceType
-	readonly CAMERA: EquipmentDevice<Camera>[]
-	readonly MOUNT: EquipmentDevice<Mount>[]
-	readonly WHEEL: EquipmentDevice<Wheel>[]
-	readonly FOCUSER: EquipmentDevice<Focuser>[]
-	readonly ROTATOR: EquipmentDevice<Rotator>[]
-	readonly GPS: EquipmentDevice<Device>[]
-	readonly DOME: EquipmentDevice<Device>[]
-	readonly GUIDE_OUTPUT: EquipmentDevice<GuideOutput>[]
-	readonly FLAT_PANEL: EquipmentDevice<FlatPanel>[]
-	readonly COVER: EquipmentDevice<Cover>[]
-	readonly THERMOMETER: EquipmentDevice<Thermometer>[]
-	readonly DEW_HEATER: EquipmentDevice<DewHeater>[]
-	readonly POWER: EquipmentDevice<Power>[]
+	readonly CAMERA: EquipmentDevice<Omit<Camera, symbol>>[]
+	readonly MOUNT: EquipmentDevice<Omit<Mount, symbol>>[]
+	readonly WHEEL: EquipmentDevice<Omit<Wheel, symbol>>[]
+	readonly FOCUSER: EquipmentDevice<Omit<Focuser, symbol>>[]
+	readonly ROTATOR: EquipmentDevice<Omit<Rotator, symbol>>[]
+	readonly GPS: EquipmentDevice<Omit<Device, symbol>>[]
+	readonly DOME: EquipmentDevice<Omit<Device, symbol>>[]
+	readonly GUIDE_OUTPUT: EquipmentDevice<Omit<GuideOutput, symbol>>[]
+	readonly FLAT_PANEL: EquipmentDevice<Omit<FlatPanel, symbol>>[]
+	readonly COVER: EquipmentDevice<Omit<Cover, symbol>>[]
+	readonly THERMOMETER: EquipmentDevice<Omit<Thermometer, symbol>>[]
+	readonly DEW_HEATER: EquipmentDevice<Omit<DewHeater, symbol>>[]
+	readonly POWER: EquipmentDevice<Omit<Power, symbol>>[]
 }
 
 const state = proxy<EquipmentState>({
@@ -109,7 +109,7 @@ export const EquipmentMolecule = molecule(() => {
 		}
 	}
 
-	function update<T extends DeviceType, P extends keyof EquipmentState[T][number]>(type: T, name: string, property: P, value: EquipmentState[T][number][P]) {
+	function update<T extends DeviceType, P extends keyof EquipmentState[T][number] & string>(type: T, name: string, property: P, value: EquipmentState[T][number][P]) {
 		const device = state[type].find((e) => e.name === name)
 		if (!device) return console.warn('device not found:', name)
 		;(device as Record<keyof EquipmentState[T][number], unknown>)[property] = value

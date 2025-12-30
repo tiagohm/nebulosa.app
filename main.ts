@@ -4,6 +4,7 @@ import { cron } from '@elysiajs/cron'
 import Elysia from 'elysia'
 import { existsSync, type MakeDirectoryOptions, rmSync } from 'fs'
 import fs from 'fs/promises'
+import { AlpacaDiscoveryServer, AlpacaServer } from 'nebulosa/src/alpaca.server'
 import type { DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
 import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import { default as openDefaultApp } from 'open'
@@ -53,6 +54,7 @@ const args = parseArgs({
 		dir: { type: 'string', short: 'd' },
 		username: { type: 'string', short: 'u' },
 		password: { type: 'string' },
+		alpaca: { type: 'boolean', short: 'a' },
 	},
 	strict: true,
 	allowPositionals: true,
@@ -197,12 +199,23 @@ void atlasHandler.refreshImageOfSun()
 void atlasHandler.refreshSatellites()
 void atlasHandler.refreshEarthOrientationData()
 
+// Alpaca
+
+let alpacaServer: AlpacaServer | undefined
+let alpacaDiscoveryServer: AlpacaDiscoveryServer | undefined
+
+if (args.values.alpaca) {
+	alpacaServer = new AlpacaServer({ camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager })
+	alpacaDiscoveryServer = new AlpacaDiscoveryServer()
+}
+
 // App
 
 const app = new Elysia({
 	serve: {
 		routes: {
 			'/': homeHtml,
+			...alpacaServer?.routes,
 		},
 		development: process.env.NODE_ENV !== 'production' && {
 			hmr: true,
@@ -268,25 +281,25 @@ const app = new Elysia({
 
 	.use(connection(connectionHandler, indiHandler))
 	.use(confirmation(confirmationHandler))
-	.use(indi(wsm, indiHandler, devicePropertyManager, connectionHandler, notificationHandler))
-	.use(camera(cameraHandler, connectionHandler))
-	.use(mount(wsm, mountManager, connectionHandler))
-	.use(focuser(wsm, focuserManager, connectionHandler))
-	.use(wheel(wsm, wheelManager, connectionHandler))
+	.use(indi(wsm, indiHandler, devicePropertyManager, notificationHandler))
+	.use(camera(cameraHandler))
+	.use(mount(wsm, mountManager))
+	.use(focuser(wsm, focuserManager))
+	.use(wheel(wsm, wheelManager))
 	.use(thermometer(wsm, thermometerManager))
-	.use(guideOutput(wsm, guideOutputManager, connectionHandler))
-	.use(cover(wsm, coverManager, connectionHandler))
-	.use(flatPanel(wsm, flatPanelManager, connectionHandler))
-	.use(rotator(wsm, rotatorManager, connectionHandler))
-	.use(dewHeater(wsm, dewHeaterManager, connectionHandler))
+	.use(guideOutput(wsm, guideOutputManager))
+	.use(cover(wsm, coverManager))
+	.use(flatPanel(wsm, flatPanelManager))
+	.use(rotator(wsm, rotatorManager))
+	.use(dewHeater(wsm, dewHeaterManager))
 	.use(atlas(atlasHandler))
 	.use(image(imageHandler))
 	.use(framing(framingHandler))
 	.use(starDetection(starDetectionHandler))
 	.use(plateSolver(plateSolverHandler))
 	.use(fileSystem(fileSystemHandler))
-	.use(tppa(tppaHandler, connectionHandler))
-	.use(darv(darvHandler, connectionHandler))
+	.use(tppa(tppaHandler))
+	.use(darv(darvHandler))
 
 	// WebSocket
 
@@ -303,6 +316,13 @@ const app = new Elysia({
 	// Start!
 
 	.listen({ hostname, port })
+
+if (alpacaDiscoveryServer) {
+	alpacaDiscoveryServer.addPort(app.server!.port!)
+	alpacaDiscoveryServer.start()
+
+	console.info('alpaca discovery server is started')
+}
 
 const schema = `http${secure ? 's' : ''}`
 const url = `${schema}://${app.server!.hostname}:${app.server!.port}`

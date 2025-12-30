@@ -3,11 +3,12 @@ import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_THERMOMETER, type Thermometer } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { ThermometerUpdated } from 'src/shared/types'
+import type { DeepReadonly } from 'utility-types'
 import { proxy } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface ThermometerScopeValue {
-	readonly thermometer: Thermometer
+	readonly thermometer: DeepReadonly<Omit<Thermometer, symbol>>
 }
 
 export interface ThermometerState {

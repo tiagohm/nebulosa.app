@@ -1,13 +1,12 @@
 import Elysia from 'elysia'
 import fs, { mkdir } from 'fs/promises'
-import type { IndiClient, PropertyState } from 'nebulosa/src/indi'
 import type { Camera } from 'nebulosa/src/indi.device'
 import type { CameraManager, DeviceHandler, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/indi.manager'
+import type { PropertyState } from 'nebulosa/src/indi.types'
 import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } from 'nebulosa/src/temporal'
 import { join } from 'path'
 import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
-import type { ConnectionHandler } from './connection'
 import type { ImageProcessor } from './image'
 import type { WebSocketMessageHandler } from './message'
 
@@ -26,55 +25,57 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		readonly rotatorManager: RotatorManager,
 	) {}
 
-	added(client: IndiClient, device: Camera) {
+	added(device: Camera) {
 		this.wsm.send<CameraAdded>('camera:add', { device })
 		console.info('camera added:', device.name)
 	}
 
-	updated(client: IndiClient, camera: Camera, property: keyof Camera, state?: PropertyState) {
+	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {
 		this.wsm.send<CameraUpdated>('camera:update', { device: { name: camera.name, [property]: camera[property] }, property, state })
-		this.tasks.get(camera.name)?.cameraUpdated(client, camera, property, state)
+		this.tasks.get(camera.name)?.cameraUpdated(camera, property, state)
 	}
 
-	removed(client: IndiClient, camera: Camera) {
+	removed(camera: Camera) {
 		this.wsm.send<CameraRemoved>('camera:remove', { device: camera })
 		console.info('camera removed:', camera.name)
 	}
 
-	blobReceived(client: IndiClient, camera: Camera, data: string) {
-		this.tasks.get(camera.name)?.blobReceived(client, camera, data)
+	blobReceived(camera: Camera, data: string) {
+		this.tasks.get(camera.name)?.blobReceived(camera, data)
 	}
 
-	handleCameraCaptureEvent(client: IndiClient, camera: Camera, event: CameraCaptureEvent) {
+	handleCameraCaptureEvent(camera: Camera, event: CameraCaptureEvent) {
 		this.wsm.send('camera:capture', event)
 
 		// Remove the task after it finished
 		if (event.state === 'IDLE') {
 			this.tasks.delete(camera.name)
-			this.cameraManager.disableBlob(client, camera)
+			this.cameraManager.disableBlob(camera)
 		}
 	}
 
-	private startExposure(client: IndiClient, camera: Camera, request: CameraCaptureStart) {
-		this.cameraManager.enableBlob(client, camera)
-		request.width && request.height && this.cameraManager.frame(client, camera, request.x, request.y, request.width, request.height)
-		this.cameraManager.frameType(client, camera, request.frameType)
-		if (request.frameFormat) this.cameraManager.frameFormat(client, camera, request.frameFormat)
-		this.cameraManager.bin(client, camera, request.binX, request.binY)
-		this.cameraManager.gain(client, camera, request.gain)
-		this.cameraManager.offset(client, camera, request.offset)
-		this.cameraManager.startExposure(client, camera, exposureTimeInSeconds(request.exposureTime, request.exposureTimeUnit))
+	private startExposure(camera: Camera, request: CameraCaptureStart) {
+		this.cameraManager.enableBlob(camera)
+		request.width && request.height && this.cameraManager.frame(camera, request.x, request.y, request.width, request.height)
+		this.cameraManager.frameType(camera, request.frameType)
+		if (request.frameFormat) this.cameraManager.frameFormat(camera, request.frameFormat)
+		this.cameraManager.bin(camera, request.binX, request.binY)
+		this.cameraManager.gain(camera, request.gain)
+		this.cameraManager.offset(camera, request.offset)
+		this.cameraManager.transferFormat(camera, 'FITS')
+		this.cameraManager.compression(camera, false)
+		this.cameraManager.startExposure(camera, exposureTimeInSeconds(request.exposureTime, request.exposureTimeUnit))
 	}
 
-	private stopExposure(client: IndiClient, camera: Camera) {
-		this.cameraManager.stopExposure(client, camera)
+	private stopExposure(camera: Camera) {
+		this.cameraManager.stopExposure(camera)
 	}
 
-	startCapture(client: IndiClient, camera: Camera, req: CameraCaptureStart) {
+	startCapture(camera: Camera, req: CameraCaptureStart) {
 		// Stop any existing task for this camera and remove its handler
 		if (this.tasks.has(camera.name)) {
 			const task = this.tasks.get(camera.name)!
-			task.stop(client)
+			task.stop()
 		}
 
 		// Start a new task for the camera
@@ -85,16 +86,16 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		const wheel = req.wheel ? this.wheelManager.get(req.wheel) : undefined
 		const focuser = req.focuser ? this.focuserManager.get(req.focuser) : undefined
 		const rotator = req.rotator ? this.rotatorManager.get(req.rotator) : undefined
-		this.cameraManager.snoop(client, camera, ...[mount, wheel, focuser, rotator].filter((e) => !!e))
-		task.start(client)
+		this.cameraManager.snoop(camera, ...[mount, wheel, focuser, rotator].filter((e) => !!e))
+		task.start()
 	}
 
-	stopCapture(client: IndiClient, device: Camera) {
-		this.tasks.get(device.name)?.stop(client)
+	stopCapture(device: Camera) {
+		this.tasks.get(device.name)?.stop()
 	}
 }
 
-export function camera(cameraHandler: CameraHandler, connectionHandler: ConnectionHandler) {
+export function camera(cameraHandler: CameraHandler) {
 	function cameraFromParams(params: { id: string }) {
 		return cameraHandler.cameraManager.get(decodeURIComponent(params.id))!
 	}
@@ -103,10 +104,10 @@ export function camera(cameraHandler: CameraHandler, connectionHandler: Connecti
 		// Endpoints!
 		.get('', () => cameraHandler.cameraManager.list())
 		.get('/:id', ({ params }) => cameraFromParams(params))
-		.post('/:id/cooler', ({ params, body }) => cameraHandler.cameraManager.cooler(connectionHandler.get(), cameraFromParams(params), body as never))
-		.post('/:id/temperature', ({ params, body }) => cameraHandler.cameraManager.temperature(connectionHandler.get(), cameraFromParams(params), body as never))
-		.post('/:id/start', ({ params, body }) => cameraHandler.startCapture(connectionHandler.get(), cameraFromParams(params), body as never))
-		.post('/:id/stop', ({ params }) => cameraHandler.stopCapture(connectionHandler.get(), cameraFromParams(params)))
+		.post('/:id/cooler', ({ params, body }) => cameraHandler.cameraManager.cooler(cameraFromParams(params), body as never))
+		.post('/:id/temperature', ({ params, body }) => cameraHandler.cameraManager.temperature(cameraFromParams(params), body as never))
+		.post('/:id/start', ({ params, body }) => cameraHandler.startCapture(cameraFromParams(params), body as never))
+		.post('/:id/stop', ({ params }) => cameraHandler.stopCapture(cameraFromParams(params)))
 
 	return app
 }
@@ -122,9 +123,9 @@ export class CameraCaptureTask {
 		readonly camera: Camera,
 		private readonly request: CameraCaptureStart,
 		private readonly imageProcessor: ImageProcessor,
-		private readonly startExposure: (client: IndiClient, camera: Camera, request: CameraCaptureStart) => void,
-		private readonly stopExposure: (client: IndiClient, camera: Camera) => void,
-		private readonly handleCameraCaptureEvent: (client: IndiClient, camera: Camera, event: CameraCaptureEvent) => void,
+		private readonly startExposure: (camera: Camera, request: CameraCaptureStart) => void,
+		private readonly stopExposure: (camera: Camera) => void,
+		private readonly handleCameraCaptureEvent: (camera: Camera, event: CameraCaptureEvent) => void,
 	) {
 		this.event.loop = request.exposureMode === 'LOOP'
 		this.event.device = camera.name
@@ -140,7 +141,7 @@ export class CameraCaptureTask {
 		this.event.totalProgress.remainingTime = this.totalExposureProgress[0]
 	}
 
-	cameraUpdated(client: IndiClient, camera: Camera, property: keyof Camera, state?: PropertyState) {
+	cameraUpdated(camera: Camera, property: keyof Camera, state?: PropertyState) {
 		if (property === 'exposure') {
 			const { exposure } = camera
 
@@ -159,13 +160,13 @@ export class CameraCaptureTask {
 				this.event.frameProgress.remainingTime = remainingTime
 				this.event.frameProgress.elapsedTime = elapsedTime
 				this.event.frameProgress.progress = Math.max(0, (1 - remainingTime / this.event.frameExposureTime) * 100)
-				return this.handleCameraCaptureEvent(client, camera, this.event)
+				return this.handleCameraCaptureEvent(camera, this.event)
 			} else if (state === 'Ok') {
 				this.event.state = 'EXPOSURE_FINISHED'
 				this.event.frameProgress.remainingTime = 0
 				this.event.frameProgress.elapsedTime = this.event.frameExposureTime
 				this.event.frameProgress.progress = 100
-				this.handleCameraCaptureEvent(client, camera, this.event)
+				this.handleCameraCaptureEvent(camera, this.event)
 
 				this.totalExposureProgress[0] -= this.event.frameExposureTime
 				this.totalExposureProgress[1] += this.event.frameExposureTime
@@ -191,7 +192,7 @@ export class CameraCaptureTask {
 							this.event.frameProgress.remainingTime = remainingTime
 							this.event.frameProgress.elapsedTime = this.waitingTime - remainingTime
 							this.event.frameProgress.progress = Math.max(0, (1 - remainingTime / this.waitingTime) * 100)
-							this.handleCameraCaptureEvent(client, camera, this.event)
+							this.handleCameraCaptureEvent(camera, this.event)
 
 							return true
 						})
@@ -202,7 +203,7 @@ export class CameraCaptureTask {
 									this.totalExposureProgress[1] += this.waitingTime
 
 									// Start the next exposure
-									return this.start(client)
+									return this.start()
 								}
 							})
 							.catch(console.error)
@@ -211,7 +212,7 @@ export class CameraCaptureTask {
 						if (!this.stopped) return
 					} else {
 						// Start the next exposure
-						return this.start(client)
+						return this.start()
 					}
 				}
 			}
@@ -226,11 +227,11 @@ export class CameraCaptureTask {
 			this.event.frameProgress.progress = 0
 			this.event.remainingCount = 0
 			this.event.elapsedCount = 0
-			this.handleCameraCaptureEvent(client, camera, this.event)
+			this.handleCameraCaptureEvent(camera, this.event)
 		}
 	}
 
-	async blobReceived(client: IndiClient, camera: Camera, data: string) {
+	async blobReceived(camera: Camera, data: string) {
 		if (this.camera.name === camera.name) {
 			const buffer = Buffer.from(data, 'base64')
 
@@ -245,12 +246,12 @@ export class CameraCaptureTask {
 
 			// Send event
 			this.event.savedPath = path
-			this.handleCameraCaptureEvent(client, camera, this.event)
+			this.handleCameraCaptureEvent(camera, this.event)
 			this.event.savedPath = undefined
 		}
 	}
 
-	start(client: IndiClient) {
+	start() {
 		if (!this.stopped && this.event.remainingCount > 0) {
 			this.event.state = 'EXPOSURE_STARTED'
 			this.event.elapsedCount++
@@ -258,15 +259,15 @@ export class CameraCaptureTask {
 			this.event.frameProgress.remainingTime = this.event.frameExposureTime
 			this.event.frameProgress.elapsedTime = 0
 			this.event.frameProgress.progress = 0
-			this.handleCameraCaptureEvent(client, this.camera, this.event)
-			this.startExposure(client, this.camera, this.request)
+			this.handleCameraCaptureEvent(this.camera, this.event)
+			this.startExposure(this.camera, this.request)
 		}
 	}
 
-	stop(client: IndiClient) {
+	stop() {
 		if (this.stopped) return
 		this.stopped = true
-		this.stopExposure(client, this.camera)
+		this.stopExposure(this.camera)
 	}
 }
 

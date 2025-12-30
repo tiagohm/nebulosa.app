@@ -1,12 +1,12 @@
 import cron from '@elysiajs/cron'
 import { Elysia } from 'elysia'
-// biome-ignore format: too long!
-import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, IndiClient, IndiClientHandler, Message, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi'
-import type { Device, DeviceProperty, DevicePropertyType } from 'nebulosa/src/indi.device'
+import type { IndiClient, IndiClientHandler } from 'nebulosa/src/indi'
+import { CLIENT, type Device, type DeviceProperty, type DevicePropertyType } from 'nebulosa/src/indi.device'
 import type { CameraManager, CoverManager, DevicePropertyHandler, DevicePropertyManager, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
+// biome-ignore format: too long!
+import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, Message, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi.types'
 import bus from '../shared/bus'
 import type { IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from '../shared/types'
-import type { ConnectionHandler } from './connection'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
 
@@ -37,27 +37,15 @@ export function isInterfaceType(value: number, type: DeviceInterfaceType) {
 	return (value & type) !== 0
 }
 
-export function ask(client: IndiClient, device: Device) {
-	client.getProperties({ device: device.name })
-}
-
-export function enableBlob(client: IndiClient, device: Device) {
-	client.enableBlob({ device: device.name, value: 'Also' })
-}
-
-export function disableBlob(client: IndiClient, device: Device) {
-	client.enableBlob({ device: device.name, value: 'Never' })
-}
-
-export function connect(client: IndiClient, device: Device) {
+export function connect(device: Device) {
 	if (!device.connected) {
-		client.sendSwitch({ device: device.name, name: 'CONNECTION', elements: { CONNECT: true } })
+		device[CLIENT]!.sendSwitch({ device: device.name, name: 'CONNECTION', elements: { CONNECT: true } })
 	}
 }
 
-export function disconnect(client: IndiClient, device: Device) {
+export function disconnect(device: Device) {
 	if (device.connected) {
-		client.sendSwitch({ device: device.name, name: 'CONNECTION', elements: { DISCONNECT: true } })
+		device[CLIENT]!.sendSwitch({ device: device.name, name: 'CONNECTION', elements: { DISCONNECT: true } })
 	}
 }
 
@@ -201,7 +189,7 @@ export class IndiHandler implements IndiClientHandler {
 	}
 }
 
-export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties: DevicePropertyManager, connectionHandler: ConnectionHandler, notificationHandler: NotificationHandler) {
+export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties: DevicePropertyManager, notificationHandler: NotificationHandler) {
 	function deviceFromParams(params: { id: string }) {
 		return indi.get(decodeURIComponent(params.id))!
 	}
@@ -291,20 +279,22 @@ export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties
 			.filter((e) => !!e)
 	}
 
-	function send(client: IndiClient, type: DevicePropertyType, message: NewVector) {
-		if (type === 'SWITCH') client.sendSwitch(message as never)
-		else if (type === 'NUMBER') client.sendNumber(message as never)
-		else if (type === 'TEXT') client.sendText(message as never)
+	function send(type: DevicePropertyType, message: NewVector) {
+		const device = deviceFromParams({ id: message.device })
+
+		if (type === 'SWITCH') device[CLIENT]!.sendSwitch(message as never)
+		else if (type === 'NUMBER') device[CLIENT]!.sendNumber(message as never)
+		else if (type === 'TEXT') device[CLIENT]!.sendText(message as never)
 	}
 
 	const app = new Elysia({ prefix: '/indi' })
 		// Endpoints!
 		.get('/devices', () => properties.names())
-		.post('/:id/connect', ({ params }) => connect(connectionHandler.get(), deviceFromParams(params)))
-		.post('/:id/disconnect', ({ params }) => disconnect(connectionHandler.get(), deviceFromParams(params)))
+		.post('/:id/connect', ({ params }) => connect(deviceFromParams(params)))
+		.post('/:id/disconnect', ({ params }) => disconnect(deviceFromParams(params)))
 		.get('/:id/properties', ({ params }) => properties.get(decodeURIComponent(params.id)))
 		.post('/:id/properties/ping', ({ params }) => ping(decodeURIComponent(params.id)))
-		.post('/:id/properties/send', ({ query, body }) => send(connectionHandler.get(), query.type as never, body as never))
+		.post('/:id/properties/send', ({ query, body }) => send(query.type as never, body as never))
 		.post('/server/start', ({ body }) => start(body as never))
 		.post('/server/stop', () => stop())
 		.get('/server/status', () => status())
@@ -313,16 +303,4 @@ export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties
 		.use(cron({ name: 'ping', pattern: '0 */1 * * * *', run: clear }))
 
 	return app
-}
-
-export function connectionFor(client: IndiClient, device: Device, message: DefSwitchVector | SetSwitchVector) {
-	const connected = message.elements.CONNECT?.value === true
-
-	if (connected !== device.connected) {
-		device.connected = connected
-		if (connected) ask(client, device)
-		return true
-	}
-
-	return false
 }

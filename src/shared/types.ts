@@ -10,9 +10,9 @@ import type { FitsHeader } from 'nebulosa/src/fits'
 import type { Rect } from 'nebulosa/src/geometry'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
 import type { ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SCNRProtectionMethod, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
-import type { PropertyState } from 'nebulosa/src/indi'
 // biome-ignore format: too long!
 import type { Camera, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Power, Rotator, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
+import type { PropertyState } from 'nebulosa/src/indi.types'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { LunarEclipse, LunarPhase } from 'nebulosa/src/moon'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
@@ -545,7 +545,7 @@ export interface DeviceAdded<D extends Device = Device> {
 
 export interface DeviceUpdated<D extends Device = Device> {
 	readonly device: Required<Partial<D>, 'name'>
-	readonly property: keyof D
+	readonly property: keyof D & string
 	readonly state?: PropertyState
 }
 

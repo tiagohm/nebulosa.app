@@ -7,7 +7,7 @@ import { DeviceDropdown, type DeviceDropdownProps } from '@/ui/DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton, type IconButtonProps } from './IconButton'
 
-export interface FocuserDropdownProps extends Omit<DeviceDropdownProps<Focuser>, 'items' | 'icon' | 'children'> {
+export interface FocuserDropdownProps extends Omit<DeviceDropdownProps<Omit<Focuser, symbol>>, 'items' | 'icon' | 'children'> {
 	readonly children?: DeviceDropdownProps<Focuser>['children']
 	readonly buttonProps?: Omit<IconButtonProps, 'icon' | 'label' | 'isDisabled' | 'color'>
 	readonly showLabel?: boolean

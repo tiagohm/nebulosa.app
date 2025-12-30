@@ -59,7 +59,7 @@ export const CameraList = memo(() => {
 
 	return camera.map((camera) => (
 		<Activity key={camera.name} mode={camera.show ? 'visible' : 'hidden'}>
-			<ScopeProvider scope={CameraScope} value={{ camera: camera as never }}>
+			<ScopeProvider scope={CameraScope} value={{ camera }}>
 				<Camera />
 			</ScopeProvider>
 		</Activity>
@@ -72,7 +72,7 @@ export const MountList = memo(() => {
 
 	return mount.map((mount) => (
 		<Activity key={mount.name} mode={mount.show ? 'visible' : 'hidden'}>
-			<ScopeProvider key={mount.name} scope={MountScope} value={{ mount: mount as never }}>
+			<ScopeProvider key={mount.name} scope={MountScope} value={{ mount }}>
 				<Mount />
 			</ScopeProvider>
 		</Activity>
@@ -85,7 +85,7 @@ export const FocuserList = memo(() => {
 
 	return focuser.map((focuser) => (
 		<Activity key={focuser.name} mode={focuser.show ? 'visible' : 'hidden'}>
-			<ScopeProvider key={focuser.name} scope={FocuserScope} value={{ focuser: focuser as never }}>
+			<ScopeProvider key={focuser.name} scope={FocuserScope} value={{ focuser }}>
 				<Focuser />
 			</ScopeProvider>
 		</Activity>
@@ -98,7 +98,7 @@ export const WheelList = memo(() => {
 
 	return wheel.map((wheel) => (
 		<Activity key={wheel.name} mode={wheel.show ? 'visible' : 'hidden'}>
-			<ScopeProvider scope={WheelScope} value={{ wheel: wheel as never }}>
+			<ScopeProvider scope={WheelScope} value={{ wheel }}>
 				<Wheel />
 			</ScopeProvider>
 		</Activity>
@@ -111,7 +111,7 @@ export const GuideOutputList = memo(() => {
 
 	return guideOutput.map((guideOutput) => (
 		<Activity key={guideOutput.name} mode={guideOutput.show ? 'visible' : 'hidden'}>
-			<ScopeProvider scope={GuideOutputScope} value={{ guideOutput: guideOutput as never }}>
+			<ScopeProvider scope={GuideOutputScope} value={{ guideOutput }}>
 				<GuideOutput />
 			</ScopeProvider>
 		</Activity>
@@ -124,7 +124,7 @@ export const ThermometerList = memo(() => {
 
 	return thermometer.map((thermometer) => (
 		<Activity key={thermometer.name} mode={thermometer.show ? 'visible' : 'hidden'}>
-			<ScopeProvider scope={ThermometerScope} value={{ thermometer: thermometer as never }}>
+			<ScopeProvider scope={ThermometerScope} value={{ thermometer }}>
 				<Thermometer />
 			</ScopeProvider>
 		</Activity>
@@ -137,7 +137,7 @@ export const CoverList = memo(() => {
 
 	return cover.map((cover) => (
 		<Activity key={cover.name} mode={cover.show ? 'visible' : 'hidden'}>
-			<ScopeProvider scope={CoverScope} value={{ cover: cover as never }}>
+			<ScopeProvider scope={CoverScope} value={{ cover }}>
 				<Cover />
 			</ScopeProvider>
 		</Activity>
@@ -150,7 +150,7 @@ export const FlatPanelList = memo(() => {
 
 	return flatPanel.map((flatPanel) => (
 		<Activity key={flatPanel.name} mode={flatPanel.show ? 'visible' : 'hidden'}>
-			<ScopeProvider scope={FlatPanelScope} value={{ flatPanel: flatPanel as never }}>
+			<ScopeProvider scope={FlatPanelScope} value={{ flatPanel }}>
 				<FlatPanel />
 			</ScopeProvider>
 		</Activity>
@@ -163,7 +163,7 @@ export const DewHeaterList = memo(() => {
 
 	return dewHeater.map((dewHeater) => (
 		<Activity key={dewHeater.name} mode={dewHeater.show ? 'visible' : 'hidden'}>
-			<ScopeProvider scope={DewHeaterScope} value={{ dewHeater: dewHeater as never }}>
+			<ScopeProvider scope={DewHeaterScope} value={{ dewHeater }}>
 				<DewHeater />
 			</ScopeProvider>
 		</Activity>
@@ -176,7 +176,7 @@ export const RotatorList = memo(() => {
 
 	return rotator.map((rotator) => (
 		<Activity key={rotator.name} mode={rotator.show ? 'visible' : 'hidden'}>
-			<ScopeProvider scope={RotatorScope} value={{ rotator: rotator as never }}>
+			<ScopeProvider scope={RotatorScope} value={{ rotator }}>
 				<Rotator />
 			</ScopeProvider>
 		</Activity>

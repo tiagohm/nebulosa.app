@@ -1,14 +1,12 @@
 import Elysia from 'elysia'
 import { ThreePointPolarAlignment } from 'nebulosa/src/alignment'
 import { deg } from 'nebulosa/src/angle'
-import type { IndiClient } from 'nebulosa/src/indi'
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import type { MountManager } from 'nebulosa/src/indi.manager'
 import { timeNow } from 'nebulosa/src/time'
 import bus from 'src/shared/bus'
 import { type CameraCaptureEvent, type CameraCaptureStart, DEFAULT_TPPA_EVENT, type TppaEvent, type TppaStart, type TppaStop } from 'src/shared/types'
 import type { CameraHandler } from './camera'
-import type { ConnectionHandler } from './connection'
 import type { WebSocketMessageHandler } from './message'
 import type { PlateSolverHandler } from './platesolver'
 
@@ -35,8 +33,8 @@ export class TppaHandler {
 		}
 	}
 
-	start(request: TppaStart, client: IndiClient, camera: Camera, mount: Mount) {
-		const task = new TppaTask(this, client, camera, mount, request, this.handleTppaEvent.bind(this))
+	start(request: TppaStart, camera: Camera, mount: Mount) {
+		const task = new TppaTask(this, camera, mount, request, this.handleTppaEvent.bind(this))
 		this.tasks.set(request.id, task)
 		task.start()
 	}
@@ -55,7 +53,6 @@ export class TppaTask {
 
 	constructor(
 		private readonly tppa: TppaHandler,
-		private readonly client: IndiClient,
 		readonly camera: Camera,
 		readonly mount: Mount,
 		private readonly request: TppaStart,
@@ -168,19 +165,19 @@ export class TppaTask {
 			if (!this.stopped) {
 				this.event.state = 'CAPTURING'
 				this.handleTppaEvent()
-				this.tppa.cameraHandler.startCapture(this.client, this.camera, this.request.capture)
+				this.tppa.cameraHandler.startCapture(this.camera, this.request.capture)
 			}
 		}
 	}
 
 	start() {
 		// Enable mount tracking
-		this.tppa.mountManager.tracking(this.client, this.mount, true)
+		this.tppa.mountManager.tracking(this.mount, true)
 
 		// First image
 		this.event.state = 'CAPTURING'
 		this.handleTppaEvent()
-		this.tppa.cameraHandler.startCapture(this.client, this.camera, this.request.capture)
+		this.tppa.cameraHandler.startCapture(this.camera, this.request.capture)
 	}
 
 	stop() {
@@ -188,7 +185,7 @@ export class TppaTask {
 
 		this.move(false)
 		this.tppa.solver.stop(this.request)
-		this.tppa.cameraHandler.stopCapture(this.client, this.camera)
+		this.tppa.cameraHandler.stopCapture(this.camera)
 
 		if (this.event.state !== 'IDLE') {
 			this.event.state = 'IDLE'
@@ -197,13 +194,13 @@ export class TppaTask {
 	}
 
 	private move(enabled: boolean) {
-		if (this.request.direction === 'EAST') this.tppa.mountManager.moveEast(this.client, this.mount, enabled)
-		else this.tppa.mountManager.moveWest(this.client, this.mount, enabled)
+		if (this.request.direction === 'EAST') this.tppa.mountManager.moveEast(this.mount, enabled)
+		else this.tppa.mountManager.moveWest(this.mount, enabled)
 	}
 
 	private stopTrackingWhenDone() {
 		if (this.request.stopTrackingWhenDone && this.mount.tracking) {
-			this.tppa.mountManager.tracking(this.client, this.mount, false)
+			this.tppa.mountManager.tracking(this.mount, false)
 		}
 	}
 
@@ -218,10 +215,10 @@ export class TppaTask {
 	}
 }
 
-export function tppa(tppa: TppaHandler, connectionHandler: ConnectionHandler) {
+export function tppa(tppa: TppaHandler) {
 	const app = new Elysia({ prefix: '/tppa' })
 		// Endpoints!
-		.post('/:camera/:mount/start', ({ params, body }) => tppa.start(body as never, connectionHandler.get(), tppa.cameraHandler.cameraManager.get(params.camera)!, tppa.mountManager.get(params.mount)!))
+		.post('/:camera/:mount/start', ({ params, body }) => tppa.start(body as never, tppa.cameraHandler.cameraManager.get(params.camera)!, tppa.mountManager.get(params.mount)!))
 		.post('/stop', ({ body }) => tppa.stop(body as never))
 
 	return app

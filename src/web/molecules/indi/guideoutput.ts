@@ -4,6 +4,7 @@ import { DEFAULT_GUIDE_OUTPUT, type GuideOutput } from 'nebulosa/src/indi.device
 import bus from 'src/shared/bus'
 import type { GuideOutputUpdated, GuidePulse } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import type { DeepReadonly } from 'utility-types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -11,7 +12,7 @@ import type { NudgeDirection } from '@/ui/Nudge'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface GuideOutputScopeValue {
-	readonly guideOutput: GuideOutput
+	readonly guideOutput: DeepReadonly<Omit<GuideOutput, symbol>>
 }
 
 export interface GuideOutputState {

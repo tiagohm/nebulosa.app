@@ -8,6 +8,7 @@ import bus from 'src/shared/bus'
 // biome-ignore format: too long!
 import { DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type Framing, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import type { DeepReadonly } from 'utility-types'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -18,7 +19,7 @@ import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 export type TargetCoordinateAction = 'GOTO' | 'SYNC' | 'FRAME'
 
 export interface MountScopeValue {
-	readonly mount: Mount
+	readonly mount: DeepReadonly<Omit<Mount, symbol>>
 }
 
 export interface MountState {

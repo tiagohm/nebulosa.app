@@ -4,13 +4,14 @@ import { DEFAULT_WHEEL, type Wheel } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { WheelUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import type { DeepReadonly } from 'utility-types'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface WheelScopeValue {
-	readonly wheel: Wheel
+	readonly wheel: DeepReadonly<Omit<Wheel, symbol>>
 }
 
 export interface WheelState {

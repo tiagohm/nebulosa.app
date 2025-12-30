@@ -6,9 +6,9 @@ import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { fk5, precessFk5FromJ2000, precessFk5ToJ2000 } from 'nebulosa/src/fk5'
 import { precessionMatrixCapitaine } from 'nebulosa/src/frame'
-import type { IndiClient, PropertyState } from 'nebulosa/src/indi'
 import type { Mount } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, MountManager } from 'nebulosa/src/indi.manager'
+import type { PropertyState } from 'nebulosa/src/indi.types'
 import { type GeographicPosition, localSiderealTime } from 'nebulosa/src/location'
 import { type Lx200ProtocolHandler, Lx200ProtocolServer, type MoveDirection } from 'nebulosa/src/lx200'
 import { matMulVec } from 'nebulosa/src/mat3'
@@ -17,7 +17,6 @@ import { TIMEZONE, temporalAdd } from 'nebulosa/src/temporal'
 import { Timescale, timeJulianYear, timeNow } from 'nebulosa/src/time'
 // biome-ignore format: too long!
 import { computeMeridianTime, expectedPierSide, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountTargetCoordinate, type MountUpdated } from 'src/shared/types'
-import type { ConnectionHandler } from './connection'
 import type { WebSocketMessageHandler } from './message'
 
 export function targetCoordinatePosition(device: Mount, target: EquatorialCoordinate | MountTargetCoordinate<string | Angle> = device.equatorialCoordinate) {
@@ -73,20 +72,20 @@ export function targetCoordinatePosition(device: Mount, target: EquatorialCoordi
 	} as MountEquatorialCoordinatePosition
 }
 
-export function mount(wsm: WebSocketMessageHandler, mountManager: MountManager, connectionHandler: ConnectionHandler) {
+export function mount(wsm: WebSocketMessageHandler, mountManager: MountManager) {
 	function mountFromParams(params: { id: string }) {
 		return mountManager.get(decodeURIComponent(params.id))!
 	}
 
 	const handler: DeviceHandler<Mount> = {
-		added: (client: IndiClient, device: Mount) => {
+		added: (device: Mount) => {
 			wsm.send<MountAdded>('mount:add', { device })
 			console.info('mount added:', device.name)
 		},
-		updated: (client: IndiClient, device: Mount, property: keyof Mount, state?: PropertyState) => {
+		updated: (device: Mount, property: keyof Mount & string, state?: PropertyState) => {
 			wsm.send<MountUpdated>('mount:update', { device: { name: device.name, [property]: device[property] }, property, state })
 		},
-		removed: (client: IndiClient, device: Mount) => {
+		removed: (device: Mount) => {
 			wsm.send<MountRemoved>('mount:remove', { device })
 			console.info('mount removed:', device.name)
 		},
@@ -126,7 +125,7 @@ export function mount(wsm: WebSocketMessageHandler, mountManager: MountManager, 
 		disconnect: disconnectHandler,
 		goto: (server, rightAscension, declination) => {
 			;[rightAscension, declination] = precessToJNow(rightAscension, declination)
-			mountManager.goTo(connectionHandler.get(), get(server), rightAscension, declination)
+			mountManager.goTo(get(server), rightAscension, declination)
 		},
 	}
 
@@ -134,11 +133,11 @@ export function mount(wsm: WebSocketMessageHandler, mountManager: MountManager, 
 		disconnect: disconnectHandler,
 		goto: (server, rightAscension, declination) => {
 			;[rightAscension, declination] = precessToJNow(rightAscension, declination)
-			mountManager.goTo(connectionHandler.get(), get(server), rightAscension, declination)
+			mountManager.goTo(get(server), rightAscension, declination)
 		},
 		sync: (server: Lx200ProtocolServer, rightAscension: Angle, declination: Angle) => {
 			;[rightAscension, declination] = precessToJNow(rightAscension, declination)
-			return mountManager.syncTo(connectionHandler.get(), get(server), rightAscension, declination)
+			return mountManager.syncTo(get(server), rightAscension, declination)
 		},
 		rightAscension: (server: Lx200ProtocolServer) => {
 			const mount = get(server)
@@ -152,12 +151,12 @@ export function mount(wsm: WebSocketMessageHandler, mountManager: MountManager, 
 		},
 		longitude: (server: Lx200ProtocolServer, longitude?: Angle) => {
 			const device = get(server)
-			if (longitude !== undefined) mountManager.geographicCoordinate(connectionHandler.get(), device, { ...device.geographicCoordinate, longitude })
+			if (longitude !== undefined) mountManager.geographicCoordinate(device, { ...device.geographicCoordinate, longitude })
 			return normalizePI(device.geographicCoordinate.longitude)
 		},
 		latitude: (server: Lx200ProtocolServer, latitude?: Angle) => {
 			const device = get(server)
-			if (latitude !== undefined) mountManager.geographicCoordinate(connectionHandler.get(), device, { ...device.geographicCoordinate, latitude })
+			if (latitude !== undefined) mountManager.geographicCoordinate(device, { ...device.geographicCoordinate, latitude })
 			return normalizePI(device.geographicCoordinate.latitude)
 		},
 		dateTime: (server: Lx200ProtocolServer) => {
@@ -177,17 +176,17 @@ export function mount(wsm: WebSocketMessageHandler, mountManager: MountManager, 
 
 			if (rates.length) {
 				const index = rates.length === 1 ? 0 : rate === 'GUIDE' ? 0 : rate === 'MAX' ? rates.length - 1 : rate === 'CENTER' ? 1 : Math.max(1, rates.length - 2)
-				mountManager.slewRate(connectionHandler.get(), get(server), rates[Math.max(index, 0)])
+				mountManager.slewRate(get(server), rates[Math.max(index, 0)])
 			}
 		},
 		move: (server: Lx200ProtocolServer, direction: MoveDirection, enabled: boolean) => {
-			if (direction === 'NORTH') mountManager.moveNorth(connectionHandler.get(), get(server), enabled)
-			else if (direction === 'SOUTH') mountManager.moveSouth(connectionHandler.get(), get(server), enabled)
-			else if (direction === 'EAST') mountManager.moveEast(connectionHandler.get(), get(server), enabled)
-			else if (direction === 'WEST') mountManager.moveWest(connectionHandler.get(), get(server), enabled)
+			if (direction === 'NORTH') mountManager.moveNorth(get(server), enabled)
+			else if (direction === 'SOUTH') mountManager.moveSouth(get(server), enabled)
+			else if (direction === 'EAST') mountManager.moveEast(get(server), enabled)
+			else if (direction === 'WEST') mountManager.moveWest(get(server), enabled)
 		},
 		abort: (server: Lx200ProtocolServer) => {
-			mountManager.stop(connectionHandler.get(), get(server))
+			mountManager.stop(get(server))
 		},
 	}
 
@@ -249,24 +248,24 @@ export function mount(wsm: WebSocketMessageHandler, mountManager: MountManager, 
 		// Endpoints!
 		.get('', () => mountManager.list())
 		.get('/:id', ({ params }) => mountFromParams(params))
-		.post('/:id/goto', ({ params, body }) => mountManager.moveTo(connectionHandler.get(), mountFromParams(params), 'goto', body as never))
-		.post('/:id/flip', ({ params, body }) => mountManager.moveTo(connectionHandler.get(), mountFromParams(params), 'flip', body as never))
-		.post('/:id/sync', ({ params, body }) => mountManager.moveTo(connectionHandler.get(), mountFromParams(params), 'sync', body as never))
-		.post('/:id/park', ({ params }) => mountManager.park(connectionHandler.get(), mountFromParams(params)))
-		.post('/:id/unpark', ({ params }) => mountManager.unpark(connectionHandler.get(), mountFromParams(params)))
-		.post('/:id/home', ({ params }) => mountManager.home(connectionHandler.get(), mountFromParams(params)))
-		.post('/:id/tracking', ({ params, body }) => mountManager.tracking(connectionHandler.get(), mountFromParams(params), body as never))
-		.post('/:id/trackmode', ({ params, body }) => mountManager.trackMode(connectionHandler.get(), mountFromParams(params), body as never))
-		.post('/:id/slewrate', ({ params, body }) => mountManager.slewRate(connectionHandler.get(), mountFromParams(params), body as never))
+		.post('/:id/goto', ({ params, body }) => mountManager.moveTo(mountFromParams(params), 'goto', body as never))
+		.post('/:id/flip', ({ params, body }) => mountManager.moveTo(mountFromParams(params), 'flip', body as never))
+		.post('/:id/sync', ({ params, body }) => mountManager.moveTo(mountFromParams(params), 'sync', body as never))
+		.post('/:id/park', ({ params }) => mountManager.park(mountFromParams(params)))
+		.post('/:id/unpark', ({ params }) => mountManager.unpark(mountFromParams(params)))
+		.post('/:id/home', ({ params }) => mountManager.home(mountFromParams(params)))
+		.post('/:id/tracking', ({ params, body }) => mountManager.tracking(mountFromParams(params), body as never))
+		.post('/:id/trackmode', ({ params, body }) => mountManager.trackMode(mountFromParams(params), body as never))
+		.post('/:id/slewrate', ({ params, body }) => mountManager.slewRate(mountFromParams(params), body as never))
 		.post('/:id/position/current', ({ params }) => targetCoordinatePosition(mountFromParams(params)))
 		.post('/:id/position/target', ({ params, body }) => targetCoordinatePosition(mountFromParams(params), body as never))
-		.post('/:id/movenorth', ({ params, body }) => mountManager.moveNorth(connectionHandler.get(), mountFromParams(params), body as never))
-		.post('/:id/movesouth', ({ params, body }) => mountManager.moveSouth(connectionHandler.get(), mountFromParams(params), body as never))
-		.post('/:id/moveeast', ({ params, body }) => mountManager.moveEast(connectionHandler.get(), mountFromParams(params), body as never))
-		.post('/:id/movewest', ({ params, body }) => mountManager.moveWest(connectionHandler.get(), mountFromParams(params), body as never))
-		.post('/:id/location', ({ params, body }) => mountManager.geographicCoordinate(connectionHandler.get(), mountFromParams(params), body as never))
-		.post('/:id/time', ({ params, body }) => mountManager.time(connectionHandler.get(), mountFromParams(params), body as never))
-		.post('/:id/stop', ({ params }) => mountManager.stop(connectionHandler.get(), mountFromParams(params)))
+		.post('/:id/movenorth', ({ params, body }) => mountManager.moveNorth(mountFromParams(params), body as never))
+		.post('/:id/movesouth', ({ params, body }) => mountManager.moveSouth(mountFromParams(params), body as never))
+		.post('/:id/moveeast', ({ params, body }) => mountManager.moveEast(mountFromParams(params), body as never))
+		.post('/:id/movewest', ({ params, body }) => mountManager.moveWest(mountFromParams(params), body as never))
+		.post('/:id/location', ({ params, body }) => mountManager.geographicCoordinate(mountFromParams(params), body as never))
+		.post('/:id/time', ({ params, body }) => mountManager.time(mountFromParams(params), body as never))
+		.post('/:id/stop', ({ params }) => mountManager.stop(mountFromParams(params)))
 		.post('/:id/remotecontrol/start', ({ params, body }) => startRemoteControl(mountFromParams(params), body as never))
 		.post('/:id/remotecontrol/stop', ({ params, body }) => stopRemoteControl(mountFromParams(params), body as never))
 		.get('/:id/remotecontrol', ({ params }) => remoteControlStatus(mountFromParams(params)))

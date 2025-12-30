@@ -3,12 +3,13 @@ import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_DEW_HEATER, type DewHeater } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { DewHeaterUpdated } from 'src/shared/types'
+import type { DeepReadonly } from 'utility-types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface DewHeaterScopeValue {
-	readonly dewHeater: DewHeater
+	readonly dewHeater: DeepReadonly<Omit<DewHeater, symbol>>
 }
 
 export interface DewHeaterState {

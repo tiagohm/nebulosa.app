@@ -1,25 +1,24 @@
 import Elysia from 'elysia'
-import type { IndiClient, PropertyState } from 'nebulosa/src/indi'
 import type { FlatPanel } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, FlatPanelManager } from 'nebulosa/src/indi.manager'
+import type { PropertyState } from 'nebulosa/src/indi.types'
 import type { FlatPanelAdded, FlatPanelRemoved, FlatPanelUpdated } from 'src/shared/types'
-import type { ConnectionHandler } from './connection'
 import type { WebSocketMessageHandler } from './message'
 
-export function flatPanel(wsm: WebSocketMessageHandler, flatPanelManager: FlatPanelManager, connectionHandler: ConnectionHandler) {
+export function flatPanel(wsm: WebSocketMessageHandler, flatPanelManager: FlatPanelManager) {
 	function flatPanelFromParams(params: { id: string }) {
 		return flatPanelManager.get(decodeURIComponent(params.id))!
 	}
 
 	const handler: DeviceHandler<FlatPanel> = {
-		added: (client: IndiClient, device: FlatPanel) => {
+		added: (device: FlatPanel) => {
 			wsm.send<FlatPanelAdded>('flatPanel:add', { device })
 			console.info('flat panel added:', device.name)
 		},
-		updated: (client: IndiClient, device: FlatPanel, property: keyof FlatPanel, state?: PropertyState) => {
+		updated: (device: FlatPanel, property: keyof FlatPanel & string, state?: PropertyState) => {
 			wsm.send<FlatPanelUpdated>('flatPanel:update', { device: { name: device.name, [property]: device[property] }, property, state })
 		},
-		removed: (client: IndiClient, device: FlatPanel) => {
+		removed: (device: FlatPanel) => {
 			wsm.send<FlatPanelRemoved>('flatPanel:remove', { device })
 			console.info('flat panel removed:', device.name)
 		},
@@ -31,10 +30,10 @@ export function flatPanel(wsm: WebSocketMessageHandler, flatPanelManager: FlatPa
 		// Endpoints!
 		.get('', () => flatPanelManager.list())
 		.get('/:id', ({ params }) => flatPanelFromParams(params))
-		.post('/:id/enable', ({ params }) => flatPanelManager.enable(connectionHandler.get(), flatPanelFromParams(params)))
-		.post('/:id/disable', ({ params }) => flatPanelManager.disable(connectionHandler.get(), flatPanelFromParams(params)))
-		.post('/:id/toggle', ({ params }) => flatPanelManager.toggle(connectionHandler.get(), flatPanelFromParams(params)))
-		.post('/:id/intensity', ({ params, body }) => flatPanelManager.intensity(connectionHandler.get(), flatPanelFromParams(params), body as never))
+		.post('/:id/enable', ({ params }) => flatPanelManager.enable(flatPanelFromParams(params)))
+		.post('/:id/disable', ({ params }) => flatPanelManager.disable(flatPanelFromParams(params)))
+		.post('/:id/toggle', ({ params }) => flatPanelManager.toggle(flatPanelFromParams(params)))
+		.post('/:id/intensity', ({ params, body }) => flatPanelManager.intensity(flatPanelFromParams(params), body as never))
 
 	return app
 }

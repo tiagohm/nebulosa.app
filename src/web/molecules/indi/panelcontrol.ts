@@ -1,6 +1,6 @@
 import { molecule, onMount, use } from 'bunshi'
-import type { Message, NewVector } from 'nebulosa/src/indi'
 import type { Device, DeviceProperties, DeviceProperty } from 'nebulosa/src/indi.device'
+import type { Message, NewVector } from 'nebulosa/src/indi.types'
 import bus from 'src/shared/bus'
 import type { ConnectionEvent, IndiDevicePropertyEvent } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'

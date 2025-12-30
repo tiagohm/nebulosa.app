@@ -1,7 +1,7 @@
 import { Button, Input, ListboxItem, NumberInput, SelectItem, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import type { DefElement, DefTextVector, Message, NewVector, SwitchRule } from 'nebulosa/src/indi'
 import type { DeviceProperty } from 'nebulosa/src/indi.device'
+import type { DefElement, DefTextVector, Message, NewVector, SwitchRule } from 'nebulosa/src/indi.types'
 import { Activity, memo, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'

@@ -65,6 +65,14 @@ div:has(div[data-slot="base"][data-open="true"][role="dialog"]) {
 	@apply z-10000000!;
 }
 
+/* Home Menu */
+
+.home-menu {
+	button:disabled {
+		@apply grayscale
+	}
+}
+
 /* Utilities */
 
 .pixelated {

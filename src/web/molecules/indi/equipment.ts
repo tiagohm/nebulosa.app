@@ -106,6 +106,7 @@ export const EquipmentMolecule = molecule(() => {
 		if (!devices.some((e) => e.name === device.name)) {
 			devices.push(device as never)
 			device.show = storageGet(`equipment.${type}.${device.name}.show`, false)
+			bus.emit('device:add', device)
 		}
 	}
 
@@ -126,6 +127,8 @@ export const EquipmentMolecule = molecule(() => {
 			if (devices.length === 0 && state.selected === type) {
 				state.selected = undefined
 			}
+
+			bus.emit('device:remove', device)
 		}
 	}
 

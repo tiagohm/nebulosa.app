@@ -10,6 +10,7 @@ import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider
 import { default as openDefaultApp } from 'open'
 import os from 'os'
 import { join } from 'path'
+import { alpaca } from 'src/api/alpaca'
 import { AtlasHandler, atlas } from 'src/api/atlas'
 import { CacheManager } from 'src/api/cache'
 import { CameraHandler, camera } from 'src/api/camera'
@@ -300,6 +301,7 @@ const app = new Elysia({
 	.use(fileSystem(fileSystemHandler))
 	.use(tppa(tppaHandler))
 	.use(darv(darvHandler))
+	.use(alpaca(alpacaServer))
 
 	// WebSocket
 

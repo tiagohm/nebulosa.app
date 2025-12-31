@@ -1,3 +1,4 @@
+import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
 import type { Angle } from 'nebulosa/src/angle'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { Camera, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, SlewRate, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
@@ -554,6 +555,12 @@ export namespace Api {
 
 		export function stop(req: DarvStop) {
 			return res('/darv/stop', 'post', req)
+		}
+	}
+
+	export namespace Alpaca {
+		export function list() {
+			return json<AlpacaConfiguredDevice[]>('/alpaca', 'get')
 		}
 	}
 }

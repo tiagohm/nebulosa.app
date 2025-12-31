@@ -5,6 +5,7 @@ import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
 import alignmentIcon from '@/assets/alignment.webp'
+import alpacaIcon from '@/assets/alpaca.webp'
 import autoFocusIcon from '@/assets/auto-focus.webp'
 import calculatorIcon from '@/assets/calculator.webp'
 import cameraIcon from '@/assets/camera.webp'
@@ -24,6 +25,7 @@ import settingsIcon from '@/assets/settings.webp'
 import skyAtlasIcon from '@/assets/sky-atlas.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
 import { AboutMolecule } from '@/molecules/about'
+import { AlpacaMolecule } from '@/molecules/alpaca'
 import { CalculatorMolecule } from '@/molecules/calculator'
 import { ConnectionMolecule } from '@/molecules/connection'
 import { DarvMolecule } from '@/molecules/darv'
@@ -34,6 +36,7 @@ import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { TppaMolecule } from '@/molecules/tppa'
 import { About } from './About'
+import { Alpaca } from './Alpaca'
 import { Calculator } from './Calculator'
 import { Darv } from './Darv'
 import { Framing } from './Framing'
@@ -65,6 +68,9 @@ export const HomeMenu = memo(() => {
 	const indi = useMolecule(IndiPanelControlMolecule)
 	const { show: showIndiPanelControl } = useSnapshot(indi.state)
 
+	const alpaca = useMolecule(AlpacaMolecule)
+	const { show: showAlpaca, configuredDevices: alpacaConfiguredDevices } = useSnapshot(alpaca.state)
+
 	const calculator = useMolecule(CalculatorMolecule)
 	const { show: showCalculator } = useSnapshot(calculator.state)
 
@@ -88,6 +94,9 @@ export const HomeMenu = memo(() => {
 			</Activity>
 			<Activity mode={showIndiPanelControl && connected ? 'visible' : 'hidden'}>
 				<IndiPanelControl />
+			</Activity>
+			<Activity mode={showAlpaca && alpacaConfiguredDevices.length !== 0 ? 'visible' : 'hidden'}>
+				<Alpaca />
 			</Activity>
 			<Activity mode={showAbout ? 'visible' : 'hidden'}>
 				<About />
@@ -127,11 +136,14 @@ export const HomeMenuPopoverContent = memo(() => {
 	const framing = useMolecule(FramingMolecule)
 	const tppa = useMolecule(TppaMolecule)
 	const darv = useMolecule(DarvMolecule)
+	const alpaca = useMolecule(AlpacaMolecule)
 	const calculator = useMolecule(CalculatorMolecule)
 	const about = useMolecule(AboutMolecule)
 
+	const { configuredDevices: alpacaConfiguredDevices } = useSnapshot(alpaca.state)
+
 	return (
-		<div className='grid grid-cols-6 gap-2 p-4'>
+		<div className='home-menu grid grid-cols-6 gap-2 p-4'>
 			<Tooltip content='Camera' placement='bottom' showArrow>
 				<Button color='secondary' isDisabled={CAMERA.length === 0} isIconOnly onPointerUp={() => equipment.select('CAMERA')} size='lg' variant='light'>
 					<img className='w-9' src={cameraIcon} />
@@ -223,6 +235,11 @@ export const HomeMenuPopoverContent = memo(() => {
 				</Button>
 			</Tooltip>
 			<IndiPanelControlButton isDisabled={!CAMERA.length && !MOUNT.length && !FOCUSER.length && !COVER.length && !FLAT_PANEL.length && !GUIDE_OUTPUT.length && !THERMOMETER.length && !DEW_HEATER.length && !ROTATOR.length} size='lg' />
+			<Tooltip content='ASCOM Alpaca' placement='bottom' showArrow>
+				<Button color='secondary' isDisabled={alpacaConfiguredDevices.length === 0} isIconOnly onPointerUp={alpaca.show} size='lg' variant='light'>
+					<img className='w-9' src={alpacaIcon} />
+				</Button>
+			</Tooltip>
 			<Tooltip content='Calculator' placement='bottom' showArrow>
 				<Button color='secondary' isIconOnly onPointerUp={calculator.show} size='lg' variant='light'>
 					<img className='w-9' src={calculatorIcon} />

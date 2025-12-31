@@ -1,4 +1,4 @@
-import { NumberInput } from '@heroui/react'
+import { NumberInput, Tooltip } from '@heroui/react'
 import type { LatLngTuple } from 'leaflet'
 import { deg, toDeg } from 'nebulosa/src/angle'
 import { meter, toMeter } from 'nebulosa/src/distance'
@@ -6,6 +6,7 @@ import type { GeographicCoordinate } from 'nebulosa/src/location'
 import { useState } from 'react'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { MapViewer } from './MapViewer'
 import { Modal } from './Modal'
 import { TextButton } from './TextButton'
@@ -35,10 +36,29 @@ export function Location({ id, coordinate: { latitude, longitude, elevation }, o
 		else if (type === 'elevation') setPosition((prev) => [prev[0], prev[1], value])
 	}
 
+	function findCurrentPosition() {
+		navigator.geolocation.getCurrentPosition(
+			({ coords }) => {
+				setPosition([coords.latitude, coords.longitude, position[2]])
+			},
+			undefined,
+			{ enableHighAccuracy: true, timeout: 15000 },
+		)
+	}
+
+	const Header = (
+		<div className='flex flex-row justify-start items-center gap-2'>
+			<span className='me-3'>Location</span>
+			<Tooltip content='Use my location' placement='bottom' showArrow>
+				<IconButton className='col-span-2' color='secondary' icon={Icons.HomeMapMarker} onPointerUp={findCurrentPosition} />
+			</Tooltip>
+		</div>
+	)
+
 	const Footer = <TextButton color='success' label='Choose' onPointerUp={handleChoose} startContent={<Icons.Check />} />
 
 	return (
-		<Modal footer={Footer} header='Location' id={id} maxWidth='330px' onHide={onClose}>
+		<Modal footer={Footer} header={Header} id={id} maxWidth='330px' onHide={onClose}>
 			<div className='mt-0 flex flex-col gap-2'>
 				<div className='grid grid-cols-3 gap-2'>
 					<NumberInput className='col-span-1' formatOptions={DECIMAL_NUMBER_FORMAT} label='Latitude (°)' maxValue={90} minValue={-90} onValueChange={(value) => updatePosition('latitude', value)} size='sm' step={0.001} value={position[0]} />

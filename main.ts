@@ -5,6 +5,7 @@ import Elysia from 'elysia'
 import { existsSync, type MakeDirectoryOptions, rmSync } from 'fs'
 import fs from 'fs/promises'
 import { AlpacaDiscoveryServer, AlpacaServer } from 'nebulosa/src/alpaca.server'
+import type { AlpacaServerOptions } from 'nebulosa/src/alpaca.types'
 import type { DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
 import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import { default as openDefaultApp } from 'open'
@@ -202,13 +203,9 @@ void atlasHandler.refreshEarthOrientationData()
 
 // Alpaca
 
-let alpacaServer: AlpacaServer | undefined
-let alpacaDiscoveryServer: AlpacaDiscoveryServer | undefined
-
-if (args.values.alpaca) {
-	alpacaServer = new AlpacaServer({ camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager })
-	alpacaDiscoveryServer = new AlpacaDiscoveryServer()
-}
+const alpacaServerOptions: AlpacaServerOptions = { camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager }
+const alpacaServer = new AlpacaServer(alpacaServerOptions)
+const alpacaDiscoveryServer = new AlpacaDiscoveryServer({ ignoreLocalhost: hostname === '0.0.0.0' })
 
 // App
 
@@ -216,7 +213,7 @@ const app = new Elysia({
 	serve: {
 		routes: {
 			'/': homeHtml,
-			...alpacaServer?.routes,
+			...alpacaServer.routes,
 		},
 		development: process.env.NODE_ENV !== 'production' && {
 			hmr: true,
@@ -301,7 +298,7 @@ const app = new Elysia({
 	.use(fileSystem(fileSystemHandler))
 	.use(tppa(tppaHandler))
 	.use(darv(darvHandler))
-	.use(alpaca(alpacaServer))
+	.use(alpaca(wsm, alpacaServer, alpacaDiscoveryServer))
 
 	// WebSocket
 
@@ -319,17 +316,17 @@ const app = new Elysia({
 
 	.listen({ hostname, port })
 
-if (alpacaDiscoveryServer) {
-	alpacaDiscoveryServer.addPort(app.server!.port!)
-	alpacaDiscoveryServer.start()
+alpacaDiscoveryServer.addPort(app.server!.port!)
 
-	console.info('alpaca discovery server is started')
+if (args.values.alpaca) {
+	alpacaServer.listen()
+	await alpacaDiscoveryServer.start()
+	console.info('alpaca discovery server is started at port', alpacaDiscoveryServer.port)
 }
 
-const schema = `http${secure ? 's' : ''}`
-const url = `${schema}://${app.server!.hostname}:${app.server!.port}`
+const url = `http${secure ? 's' : ''}://${app.server!.hostname}:${app.server!.port}`
 
-console.info(`server is started at: ${url}`)
+console.info(`server is started at ${url}`)
 
 if (open) {
 	void openDefaultApp(url)

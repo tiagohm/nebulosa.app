@@ -1,13 +1,10 @@
 // Adapted from https://github.com/timmywil/panzoom
 
+import type { Point } from 'nebulosa/src/geometry'
+
 export type PanZoomEvent = 'panzoomstart' | 'panzoomchange' | 'panzoompan' | 'panzoomzoom' | 'panzoomreset' | 'panzoomend'
 
 export type PanZoomOriginalEvent = PointerEvent | TouchEvent | MouseEvent
-
-export interface Point {
-	x: number
-	y: number
-}
 
 export interface PanZoomTransformation extends Point {
 	scale: number

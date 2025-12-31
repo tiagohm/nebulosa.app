@@ -1,5 +1,5 @@
 import { molecule, onMount, use } from 'bunshi'
-import type { Point, Size } from 'src/shared/types'
+import type { Point, Size } from 'nebulosa/src/geometry'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
 import { ImageViewerMolecule } from './viewer'

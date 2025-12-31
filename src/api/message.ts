@@ -21,11 +21,11 @@ export class WebSocketMessageHandler {
 		}
 	}
 
-	send<T = unknown>(type: string, message: T, socket?: Messager) {
+	send<T extends object>(type: string, message: T | undefined | null, socket?: Messager) {
 		bus.emit(type, message)
 
 		if (this.sockets.size) {
-			const data = `${type}@${JSON.stringify(message)}`
+			const data = `${type}@${message ? JSON.stringify(message) : ''}`
 
 			if (socket) {
 				socket.sendText(data)

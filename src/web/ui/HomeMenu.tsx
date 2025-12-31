@@ -69,7 +69,7 @@ export const HomeMenu = memo(() => {
 	const { show: showIndiPanelControl } = useSnapshot(indi.state)
 
 	const alpaca = useMolecule(AlpacaMolecule)
-	const { show: showAlpaca, configuredDevices: alpacaConfiguredDevices } = useSnapshot(alpaca.state)
+	const { show: showAlpaca } = useSnapshot(alpaca.state)
 
 	const calculator = useMolecule(CalculatorMolecule)
 	const { show: showCalculator } = useSnapshot(calculator.state)
@@ -95,7 +95,7 @@ export const HomeMenu = memo(() => {
 			<Activity mode={showIndiPanelControl && connected ? 'visible' : 'hidden'}>
 				<IndiPanelControl />
 			</Activity>
-			<Activity mode={showAlpaca && alpacaConfiguredDevices.length !== 0 ? 'visible' : 'hidden'}>
+			<Activity mode={showAlpaca && connected ? 'visible' : 'hidden'}>
 				<Alpaca />
 			</Activity>
 			<Activity mode={showAbout ? 'visible' : 'hidden'}>
@@ -140,7 +140,7 @@ export const HomeMenuPopoverContent = memo(() => {
 	const calculator = useMolecule(CalculatorMolecule)
 	const about = useMolecule(AboutMolecule)
 
-	const { configuredDevices: alpacaConfiguredDevices } = useSnapshot(alpaca.state)
+	const isIndiDisabled = !CAMERA.length && !MOUNT.length && !FOCUSER.length && !COVER.length && !FLAT_PANEL.length && !GUIDE_OUTPUT.length && !THERMOMETER.length && !DEW_HEATER.length && !ROTATOR.length
 
 	return (
 		<div className='home-menu grid grid-cols-6 gap-2 p-4'>
@@ -234,9 +234,9 @@ export const HomeMenuPopoverContent = memo(() => {
 					<img className='w-9' src={sequencerIcon} />
 				</Button>
 			</Tooltip>
-			<IndiPanelControlButton isDisabled={!CAMERA.length && !MOUNT.length && !FOCUSER.length && !COVER.length && !FLAT_PANEL.length && !GUIDE_OUTPUT.length && !THERMOMETER.length && !DEW_HEATER.length && !ROTATOR.length} size='lg' />
+			<IndiPanelControlButton isDisabled={isIndiDisabled} size='lg' />
 			<Tooltip content='ASCOM Alpaca' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={alpacaConfiguredDevices.length === 0} isIconOnly onPointerUp={alpaca.show} size='lg' variant='light'>
+				<Button color='secondary' isDisabled={isIndiDisabled} isIconOnly onPointerUp={alpaca.show} size='lg' variant='light'>
 					<img className='w-9' src={alpacaIcon} />
 				</Button>
 			</Tooltip>

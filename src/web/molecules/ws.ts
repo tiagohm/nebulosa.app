@@ -62,7 +62,7 @@ export const WebSocketMolecule = molecule(() => {
 
 			const key = content.slice(0, index)
 			const text = content.slice(index + 1)
-			const data = JSON.parse(text)
+			const data = text !== '' ? JSON.parse(text) : undefined
 
 			switch (key) {
 				case 'camera:add':

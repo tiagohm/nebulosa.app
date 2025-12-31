@@ -1,4 +1,3 @@
-import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
 import type { Angle } from 'nebulosa/src/angle'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { Camera, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, SlewRate, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
@@ -7,7 +6,7 @@ import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/stardetector'
 // biome-ignore format: too long
-import type { AnnotatedSkyObject, AnnotateImage, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, Confirm, Connect, ConnectionStatus, CreateDirectory, DarvStart, DarvStop, FileSystem, FindCloseApproaches, FindNextLunarEclipse, FindNextSolarEclipse, Framing, GuidePulse, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LunarPhaseTime, MinorPlanet, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, NextLunarEclipse, NextSolarEclipse, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SolarSeasons, StarDetection, StatisticImage, TppaStart, TppaStop, Twilight } from 'src/shared/types'
+import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, Confirm, Connect, ConnectionStatus, CreateDirectory, DarvStart, DarvStop, FileSystem, FindCloseApproaches, FindNextLunarEclipse, FindNextSolarEclipse, Framing, GuidePulse, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LunarPhaseTime, MinorPlanet, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountTargetCoordinate, NextLunarEclipse, NextSolarEclipse, OpenImage, PlateSolveStart, PlateSolveStop, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SolarSeasons, StarDetection, StatisticImage, TppaStart, TppaStop, Twilight } from 'src/shared/types'
 import { type ImageCoordinateInterpolation, type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -559,8 +558,16 @@ export namespace Api {
 	}
 
 	export namespace Alpaca {
-		export function list() {
-			return json<AlpacaConfiguredDevice[]>('/alpaca', 'get')
+		export function status() {
+			return json<AlpacaServerStatus>('/alpaca/status', 'get')
+		}
+
+		export function start() {
+			return res('/alpaca/start', 'post')
+		}
+
+		export function stop() {
+			return res('/alpaca/stop', 'post')
 		}
 	}
 }

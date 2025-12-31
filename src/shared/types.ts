@@ -1,12 +1,13 @@
 import type { SortDescriptor } from '@heroui/react'
 import type { MoleculeOrInterface } from 'bunshi'
+import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
 import type { Angle } from 'nebulosa/src/angle'
 import { DEFAULT_REFRACTION_PARAMETERS, type RefractionParameters } from 'nebulosa/src/astrometry'
 import type { Constellation } from 'nebulosa/src/constellation'
 import type { EquatorialCoordinate, EquatorialCoordinateJ2000, HorizontalCoordinate } from 'nebulosa/src/coordinate'
 import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
-import type { Rect } from 'nebulosa/src/geometry'
+import type { Point, Rect, Size } from 'nebulosa/src/geometry'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
 import type { ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SCNRProtectionMethod, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
 // biome-ignore format: too long!
@@ -27,11 +28,6 @@ export type Atom<T> = T extends MoleculeOrInterface<infer X> ? X : never
 export interface LocationAndTime {
 	readonly location: GeographicCoordinate
 	readonly time: UTCTime
-}
-
-export interface Size {
-	width: number
-	height: number
 }
 
 // Atlas
@@ -824,11 +820,12 @@ export interface DarvEvent {
 	state: DarvState
 }
 
-// Misc
+// Alpaca
 
-export interface Point {
-	x: number
-	y: number
+export interface AlpacaServerStatus {
+	readonly running: boolean
+	readonly port: number
+	readonly devices: AlpacaConfiguredDevice[]
 }
 
 export const X_IMAGE_INFO_HEADER = 'X-Image-Info'

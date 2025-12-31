@@ -1,7 +1,7 @@
 import { molecule, onMount } from 'bunshi'
-import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
 import type { Device } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
+import type { AlpacaServerStatus } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
@@ -9,42 +9,62 @@ import { initProxy } from '@/shared/proxy'
 
 export interface AlpacaState {
 	show: boolean
-	configuredDevices: AlpacaConfiguredDevice[]
+	readonly status: AlpacaServerStatus
 }
 
 const state = proxy<AlpacaState>({
 	show: false,
-	configuredDevices: [],
+	status: {
+		running: false,
+		port: 0,
+		devices: [],
+	},
 })
 
 initProxy(state, 'alpaca', ['p:show'])
 
 export const AlpacaMolecule = molecule(() => {
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(2)
+		const unsubscribers = new Array<VoidFunction>(4)
 
 		let timer: NodeJS.Timeout | undefined
 
-		unsubscribers[0] = bus.subscribe<Device>('device:add', (event) => {
+		unsubscribers[0] = bus.subscribe<Device>('device:add', () => {
 			clearTimeout(timer)
-			timer = setTimeout(list, 2000)
+			timer = setTimeout(status, 2000)
 		})
 
-		unsubscribers[1] = bus.subscribe<Device>('device:remove', (event) => {
+		unsubscribers[1] = bus.subscribe<Device>('device:remove', () => {
 			clearTimeout(timer)
-			timer = setTimeout(list, 2000)
+			timer = setTimeout(status, 2000)
 		})
 
-		void list()
+		unsubscribers[2] = bus.subscribe('alpaca:start', () => {
+			void status()
+		})
+
+		unsubscribers[3] = bus.subscribe('alpaca:stop', () => {
+			void status()
+		})
+
+		void status()
 
 		return () => {
 			unsubscribe(unsubscribers)
 		}
 	})
 
-	async function list() {
-		const configuredDevices = await Api.Alpaca.list()
-		if (configuredDevices) state.configuredDevices = configuredDevices
+	async function status() {
+		const status = await Api.Alpaca.status()
+		status && Object.assign(state.status, status)
+	}
+
+	function start() {
+		return Api.Alpaca.start()
+	}
+
+	function stop() {
+		return Api.Alpaca.stop()
 	}
 
 	function show() {
@@ -56,5 +76,5 @@ export const AlpacaMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, show, hide } as const
+	return { state, start, stop, show, hide } as const
 })

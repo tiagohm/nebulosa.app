@@ -1,4 +1,4 @@
-import { Button, Chip, DropdownItem, Input, Switch, Tooltip } from '@heroui/react'
+import { Chip, DropdownItem, Input, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatDEC, formatHMS, formatRA } from 'nebulosa/src/angle'
 import { memo } from 'react'
@@ -7,13 +7,14 @@ import { MountMolecule, type TargetCoordinateAction } from '@/molecules/indi/mou
 import { ConnectButton } from './ConnectButton'
 import { DropdownButton } from './DropdownButton'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Location } from './Location'
 import { Modal } from './Modal'
 import { MountRemoteControl } from './MountRemoteControl'
+import { MountTargetCoordinateTypeButtonGroup } from './MountTargetCoordinateTypeButtonGroup'
 import { Nudge } from './Nudge'
 import { SlewRateSelect } from './SlewRateSelect'
-import { MountTargetCoordinateTypeButtonGroup } from './MountTargetCoordinateTypeButtonGroup'
 import { Time } from './Time'
 import { TrackModeSelect } from './TrackModeSelect'
 
@@ -21,8 +22,8 @@ export const Mount = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	// biome-ignore format: don't break lines!
 	const { location: { show: showLocation }, time: { show: showTime }, remoteControl: { show: showRemoteControl } } = useSnapshot(mount.state)
-	const { connecting, connected, parking, parked, slewing, tracking, canPark, canHome, canAbort, trackModes, trackMode, slewRates, slewRate, geographicCoordinate, time } = useSnapshot(mount.state.mount)
-	const moving = slewing || parking
+	const { connecting, connected, parking, parked, slewing, tracking, homing, canPark, canHome, canFindHome, canAbort, trackModes, trackMode, slewRates, slewRate, geographicCoordinate, time } = useSnapshot(mount.state.mount)
+	const moving = slewing || parking || homing
 
 	const Header = (
 		<div className='flex flex-row items-center justify-between'>
@@ -47,19 +48,13 @@ export const Mount = memo(() => {
 						</Chip>
 						<div className='flex flex-row items-center gap-2'>
 							<Tooltip content='Remote Control' showArrow>
-								<Button color='secondary' isDisabled={!connected} isIconOnly onPointerUp={mount.showRemoteControl} size='sm' variant='light'>
-									<Icons.RemoteControl />
-								</Button>
+								<IconButton color='secondary' icon={Icons.RemoteControl} isDisabled={!connected} onPointerUp={mount.showRemoteControl} />
 							</Tooltip>
 							<Tooltip content='Location' showArrow>
-								<Button color='danger' isDisabled={!connected || moving} isIconOnly onPointerUp={mount.showLocation} size='sm' variant='light'>
-									<Icons.MapMarker />
-								</Button>
+								<IconButton color='danger' icon={Icons.MapMarker} isDisabled={!connected || moving} onPointerUp={mount.showLocation} />
 							</Tooltip>
 							<Tooltip content='Time' showArrow>
-								<Button color='primary' isDisabled={!connected || moving} isIconOnly onPointerUp={mount.showTime} size='sm' variant='light'>
-									<Icons.Clock />
-								</Button>
+								<IconButton color='primary' icon={Icons.Clock} isDisabled={!connected || moving} onPointerUp={mount.showTime} />
 							</Tooltip>
 						</div>
 					</div>
@@ -70,19 +65,18 @@ export const Mount = memo(() => {
 						<TargetCoordinateAndPosition isDisabled={!connected || moving} />
 					</div>
 					<Nudge className='col-span-5 row-span-2' isCancelDisabled={!canAbort || parked || !moving} isDisabled={!connected || parked} isNudgeDisabled={moving} onCancel={mount.stop} onNudge={mount.moveTo} />
-					<Switch className='col-span-4 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || moving || parked} isSelected={tracking} onValueChange={mount.tracking}>
+					<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || moving || parked} isSelected={tracking} onValueChange={mount.tracking}>
 						Tracking
 					</Switch>
-					<div className='col-span-3 flex flex-row items-center justify-center gap-2'>
+					<div className='col-span-4 flex flex-row items-center justify-center gap-2'>
 						<Tooltip content={parked ? 'Unpark' : 'Park'} showArrow>
-							<Button color={parked ? 'success' : 'danger'} isDisabled={!connected || !canPark || moving} isIconOnly onPointerUp={mount.togglePark} variant='flat'>
-								{parked ? <Icons.Play /> : <Icons.Stop />}
-							</Button>
+							<IconButton color={parked ? 'success' : 'danger'} icon={parked ? Icons.Play : Icons.Stop} isDisabled={!connected || !canPark || moving} onPointerUp={mount.togglePark} />
 						</Tooltip>
 						<Tooltip content='Home' showArrow>
-							<Button color='primary' isDisabled={!connected || !canHome || moving || parked} isIconOnly onPointerUp={mount.home} variant='flat'>
-								<Icons.Home />
-							</Button>
+							<IconButton color='primary' icon={Icons.Home} isDisabled={!connected || !canHome || moving || parked} onPointerUp={mount.home} />
+						</Tooltip>
+						<Tooltip content='Find Home' showArrow>
+							<IconButton color='secondary' icon={Icons.HomeSearch} isDisabled={!connected || !canFindHome || moving || parked} onPointerUp={mount.findHome} />
 						</Tooltip>
 					</div>
 					<TrackModeSelect className='col-span-4' isDisabled={!connected || moving || parked} modes={trackModes} onValueChange={mount.trackMode} value={trackMode} />
@@ -188,7 +182,7 @@ const TargetCoordinateAndPosition = memo(({ isDisabled }: TargetCoordinateAndPos
 			<DropdownButton
 				buttonProps={{ className: 'w-full h-full', color: 'primary', isDisabled: isDisabled, onPointerUp: mount.handleTargetCoordinateAction }}
 				className='col-span-4'
-				dropdownButtonProps={{ className: 'h-full', isDisabled: isDisabled }}
+				dropdownButtonProps={{ className: 'h-full', color: 'primary', variant: 'flat', isDisabled: isDisabled }}
 				label={<TargetCoordinateDropdownButtonLabel action={coordinate.action} />}
 				onValueChange={(value) => mount.updateTargetCoordinate('action', value)}
 				size='sm'

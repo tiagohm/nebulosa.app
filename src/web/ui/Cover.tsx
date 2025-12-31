@@ -1,10 +1,11 @@
-import { Button, Chip, Tooltip } from '@heroui/react'
+import { Chip, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { CoverMolecule } from '@/molecules/indi/cover'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
@@ -35,9 +36,7 @@ export const Cover = memo(() => {
 				</div>
 				<div className='col-span-full flex flex-row items-center justify-center'>
 					<Tooltip content={parked ? 'Open' : 'Close'} placement='bottom' showArrow>
-						<Button color={parked ? 'success' : 'danger'} isDisabled={!connected || !canPark || parking} isIconOnly onPointerUp={parked ? cover.unpark : cover.park} size='lg' variant='flat'>
-							{parked ? <Icons.Lock /> : <Icons.LockOpen />}
-						</Button>
+						<IconButton color={parked ? 'success' : 'danger'} icon={parked ? Icons.Lock : Icons.LockOpen} isDisabled={!connected || !canPark || parking} onPointerUp={parked ? cover.unpark : cover.park} size='lg' />
 					</Tooltip>
 				</div>
 			</div>

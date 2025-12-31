@@ -10,7 +10,7 @@ import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { precessFk5FromJ2000 } from 'nebulosa/src/fk5'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
 import { iersb } from 'nebulosa/src/iers'
-import type { UTCTime } from 'nebulosa/src/indi.device'
+import { expectedPierSide, type UTCTime } from 'nebulosa/src/indi.device'
 import { readableStreamSource } from 'nebulosa/src/io'
 import { type GeographicPosition, localSiderealTime } from 'nebulosa/src/location'
 import { nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/moon'
@@ -24,7 +24,7 @@ import { join } from 'path'
 import besselianElementsOfSolarEclipsesCsv from '../../data/besselian-elements-of-solar-eclipses.csv' with { type: 'file' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // biome-ignore format: too long!
-import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, expectedPierSide, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight } from '../shared/types'
+import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight } from '../shared/types'
 import type { CacheManager } from './cache'
 import type { NotificationHandler } from './notification'
 

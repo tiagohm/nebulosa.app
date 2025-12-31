@@ -1,4 +1,4 @@
-import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, SelectItem, type SharedSelection, Tooltip } from '@heroui/react'
+import { Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, SelectItem, type SharedSelection, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { memo } from 'react'
@@ -7,6 +7,7 @@ import { ConnectionMolecule } from '@/molecules/connection'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 
 export const ConnectionBox = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
@@ -23,9 +24,7 @@ export const ConnectionBox = memo(() => {
 		<>
 			<div className='w-full flex flex-row items-center gap-2 max-w-120'>
 				<Tooltip content='New Connection' showArrow>
-					<Button color='success' isDisabled={loading || !!connected} isIconOnly onPointerUp={connection.create} variant='light'>
-						<Icons.Plus />
-					</Button>
+					<IconButton color='success' icon={Icons.Plus} isDisabled={loading || !!connected} onPointerUp={connection.create} />
 				</Tooltip>
 				<Select
 					className='flex-1'
@@ -75,9 +74,7 @@ export const ConnectionBox = memo(() => {
 								<div className='flex justify-center items-center'>
 									<Dropdown showArrow>
 										<DropdownTrigger>
-											<Button isIconOnly size='sm' variant='light'>
-												<Icons.VerticalMenu />
-											</Button>
+											<IconButton icon={Icons.VerticalMenu} size='sm' />
 										</DropdownTrigger>
 										<DropdownMenu disabledKeys={connections.length === 1 ? ['delete'] : []}>
 											<DropdownItem key='edit' onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit size={12} />}>

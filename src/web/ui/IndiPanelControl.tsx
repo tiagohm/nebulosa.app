@@ -1,4 +1,4 @@
-import { Button, Input, ListboxItem, NumberInput, SelectItem, Tooltip } from '@heroui/react'
+import { Input, ListboxItem, NumberInput, SelectItem, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { DeviceProperty } from 'nebulosa/src/indi.device'
 import type { DefElement, DefTextVector, Message, NewVector, SwitchRule } from 'nebulosa/src/indi.types'
@@ -9,6 +9,7 @@ import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { EnumSelect } from './EnumSelect'
 import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 import { TextButton } from './TextButton'
 import { ToggleButton } from './ToggleButton'
@@ -122,9 +123,7 @@ const Property = memo(({ property, onSend }: PropertyProps) => {
 				</div>
 				{!isReadonly && property.type !== 'SWITCH' && (
 					<Tooltip content='Send' placement='left' showArrow>
-						<Button color='primary' isIconOnly onPointerUp={handlePointerUp} variant='light'>
-							<Icons.Send />
-						</Button>
+						<IconButton color='primary' icon={Icons.Send} onPointerUp={handlePointerUp} />
 					</Tooltip>
 				)}
 			</div>

@@ -31,6 +31,7 @@ export function cover(wsm: WebSocketMessageHandler, coverManager: CoverManager) 
 		.get('', () => coverManager.list())
 		.get('/:id', ({ params }) => coverFromParams(params))
 		.post('/:id/park', ({ params }) => coverManager.park(coverFromParams(params)))
+		.post('/:id/stop', ({ params }) => coverManager.stop(coverFromParams(params)))
 		.post('/:id/unpark', ({ params }) => coverManager.unpark(coverFromParams(params)))
 
 	return app

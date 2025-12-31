@@ -1,10 +1,11 @@
-import { Button, type ButtonProps, DateInput, NumberInput, Tooltip } from '@heroui/react'
+import { type ButtonProps, DateInput, NumberInput, Tooltip } from '@heroui/react'
 import { fromAbsolute, now, type ZonedDateTime } from '@internationalized/date'
 import { I18nProvider } from '@react-aria/i18n'
 import type { UTCTime } from 'nebulosa/src/indi.device'
 import { useState } from 'react'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 import { TextButton } from './TextButton'
 
@@ -51,9 +52,7 @@ interface NowButtonProps extends Omit<ButtonProps, 'isIconOnly' | 'variant'> {}
 function NowButton({ color = 'secondary', size = 'sm', ...props }: NowButtonProps) {
 	return (
 		<Tooltip content='Now' placement='bottom' showArrow>
-			<Button color={color} isIconOnly size={size} variant='light' {...props}>
-				<Icons.CalendarToday />
-			</Button>
+			<IconButton {...props} color={color} icon={Icons.CalendarToday} size={size} />
 		</Tooltip>
 	)
 }

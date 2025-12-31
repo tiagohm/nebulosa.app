@@ -6,7 +6,7 @@ import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
 import { fk5, precessFk5FromJ2000, precessFk5ToJ2000 } from 'nebulosa/src/fk5'
 import { precessionMatrixCapitaine } from 'nebulosa/src/frame'
-import type { Mount } from 'nebulosa/src/indi.device'
+import { expectedPierSide, type Mount, meridianTimeIn } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, MountManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import { type GeographicPosition, localSiderealTime } from 'nebulosa/src/location'
@@ -16,7 +16,7 @@ import { type StellariumProtocolHandler, StellariumProtocolServer } from 'nebulo
 import { TIMEZONE, temporalAdd } from 'nebulosa/src/temporal'
 import { Timescale, timeJulianYear, timeNow } from 'nebulosa/src/time'
 // biome-ignore format: too long!
-import { computeMeridianTime, expectedPierSide, type MountAdded, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountTargetCoordinate, type MountUpdated } from 'src/shared/types'
+import type { MountAdded, MountEquatorialCoordinatePosition, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountRemoved, MountTargetCoordinate, MountUpdated } from 'src/shared/types'
 import type { WebSocketMessageHandler } from './message'
 
 export function targetCoordinatePosition(device: Mount, target: EquatorialCoordinate | MountTargetCoordinate<string | Angle> = device.equatorialCoordinate) {
@@ -67,7 +67,7 @@ export function targetCoordinatePosition(device: Mount, target: EquatorialCoordi
 		altitude,
 		constellation: constellation(rightAscension, declination, time),
 		lst,
-		meridianIn: computeMeridianTime(rightAscension, lst),
+		meridianIn: meridianTimeIn(rightAscension, lst),
 		pierSide: expectedPierSide(rightAscension, declination, lst),
 	} as MountEquatorialCoordinatePosition
 }
@@ -254,6 +254,7 @@ export function mount(wsm: WebSocketMessageHandler, mountManager: MountManager) 
 		.post('/:id/park', ({ params }) => mountManager.park(mountFromParams(params)))
 		.post('/:id/unpark', ({ params }) => mountManager.unpark(mountFromParams(params)))
 		.post('/:id/home', ({ params }) => mountManager.home(mountFromParams(params)))
+		.post('/:id/findhome', ({ params }) => mountManager.findHome(mountFromParams(params)))
 		.post('/:id/tracking', ({ params, body }) => mountManager.tracking(mountFromParams(params), body as never))
 		.post('/:id/trackmode', ({ params, body }) => mountManager.trackMode(mountFromParams(params), body as never))
 		.post('/:id/slewrate', ({ params, body }) => mountManager.slewRate(mountFromParams(params), body as never))

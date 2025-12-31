@@ -215,6 +215,10 @@ export const MountMolecule = molecule(() => {
 		return Api.Mounts.home(mount)
 	}
 
+	function findHome() {
+		return Api.Mounts.findHome(mount)
+	}
+
 	function tracking(enabled: boolean) {
 		return Api.Mounts.tracking(mount, enabled)
 	}
@@ -307,6 +311,7 @@ export const MountMolecule = molecule(() => {
 		unpark,
 		togglePark,
 		home,
+		findHome,
 		tracking,
 		trackMode,
 		slewRate,

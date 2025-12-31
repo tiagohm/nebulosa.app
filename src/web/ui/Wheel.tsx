@@ -47,7 +47,7 @@ export const Wheel = memo(() => {
 					<EnumSelect
 						className='flex-1'
 						endContent={<SlotPopover key={slots[selected.slot] ?? 'none'} name={slots[selected.slot]} onNameChange={(name) => wheel.update('name', name)} />}
-						isDisabled={moving || slots.length === 0}
+						isDisabled={!connected || moving || slots.length === 0}
 						label='Slot'
 						onValueChange={(value) => wheel.update('slot', +value)}
 						value={selected.slot.toFixed(0)}>
@@ -55,7 +55,7 @@ export const Wheel = memo(() => {
 							<SelectItem key={index}>{slot}</SelectItem>
 						))}
 					</EnumSelect>
-					<TextButton color='success' isDisabled={selected.slot === position} isLoading={moving} label='Move' onPointerUp={wheel.moveTo} startContent={<Icons.Check />} variant='light' />
+					<TextButton color='success' isDisabled={!connected || selected.slot === position || slots.length === 0} isLoading={moving} label='Move' onPointerUp={wheel.moveTo} startContent={<Icons.Check />} variant='light' />
 				</div>
 			</div>
 		</Modal>

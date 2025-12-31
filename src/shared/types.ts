@@ -1,8 +1,7 @@
 import type { SortDescriptor } from '@heroui/react'
 import type { MoleculeOrInterface } from 'bunshi'
-import { type Angle, normalizeAngle, toHour } from 'nebulosa/src/angle'
+import type { Angle } from 'nebulosa/src/angle'
 import { DEFAULT_REFRACTION_PARAMETERS, type RefractionParameters } from 'nebulosa/src/astrometry'
-import { DAYSEC, SIDEREAL_DAYSEC } from 'nebulosa/src/constants'
 import type { Constellation } from 'nebulosa/src/constellation'
 import type { EquatorialCoordinate, EquatorialCoordinateJ2000, HorizontalCoordinate } from 'nebulosa/src/coordinate'
 import type { Distance } from 'nebulosa/src/distance'
@@ -720,15 +719,6 @@ export interface MountRemoteControlStart {
 }
 
 export type MountRemoteControlStatus = Record<MountRemoteControlProtocol, Omit<MountRemoteControlStart, 'protocol'> | false>
-
-export function expectedPierSide(rightAscension: Angle, declination: Angle, lst: Angle): PierSide {
-	if (Math.abs(declination) === Math.PI / 2) return 'NEITHER'
-	return (toHour(rightAscension - lst) + 24) % 24 < 12 ? 'WEST' : 'EAST'
-}
-
-export function computeMeridianTime(rightAscension: Angle, lst: Angle) {
-	return normalizeAngle(rightAscension - lst) * (SIDEREAL_DAYSEC / DAYSEC)
-}
 
 // Notification
 

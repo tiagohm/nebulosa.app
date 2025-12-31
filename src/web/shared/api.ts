@@ -202,6 +202,10 @@ export namespace Api {
 			return res(`/mounts/${mount.name}/home`, 'post')
 		}
 
+		export function findHome(mount: Mount) {
+			return res(`/mounts/${mount.name}/findhome`, 'post')
+		}
+
 		export function tracking(mount: Mount, enable: boolean) {
 			return res(`/mounts/${mount.name}/tracking`, 'post', enable)
 		}
@@ -352,6 +356,10 @@ export namespace Api {
 
 		export function park(cover: Cover) {
 			return res(`/covers/${cover.name}/park`, 'post')
+		}
+
+		export function stop(cover: Cover) {
+			return res(`/covers/${cover.name}/stop`, 'post')
 		}
 
 		export function unpark(cover: Cover) {

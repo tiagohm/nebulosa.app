@@ -1,8 +1,9 @@
-import { Button, Card, CardBody, CardFooter, CardHeader } from '@heroui/react'
+import { Card, CardBody, CardFooter, CardHeader } from '@heroui/react'
 import type { CSSProperties, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useModal } from '@/hooks/modal'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 
 export interface ModalProps {
 	readonly id: string
@@ -21,9 +22,7 @@ export function Modal({ id, onHide, header, footer, children, maxWidth }: ModalP
 			<Card className='p-2 pointer-events-auto'>
 				<CardHeader {...modal.moveProps} className='w-full flex flex-row items-center justify-between gap-2'>
 					<div className='w-full text-lg font-semibold text-neutral-900 dark:text-neutral-100'>{header}</div>
-					<Button className='rounded-full' color='danger' isIconOnly onPointerUp={modal.hide} variant='flat'>
-						<Icons.Close className='w-4 h-4' />
-					</Button>
+					<IconButton className='rounded-full' color='danger' icon={Icons.Close} onPointerUp={modal.hide} variant='flat' />
 				</CardHeader>
 				<CardBody className='overflow-visible p-2'>{children}</CardBody>
 				<CardFooter {...modal.moveProps} className='flex flex-row items-center justify-end gap-2'>

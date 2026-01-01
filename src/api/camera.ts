@@ -31,8 +31,8 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {
-		this.wsm.send<CameraUpdated>('camera:update', { device: { name: camera.name, [property]: camera[property] }, property, state })
-		this.tasks.get(camera.name)?.cameraUpdated(camera, property, state)
+		this.wsm.send<CameraUpdated>('camera:update', { device: { id: camera.id, name: camera.name, [property]: camera[property] }, property, state })
+		this.tasks.get(camera.id)?.cameraUpdated(camera, property, state)
 	}
 
 	removed(camera: Camera) {
@@ -41,7 +41,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	blobReceived(camera: Camera, data: string) {
-		this.tasks.get(camera.name)?.blobReceived(camera, data)
+		this.tasks.get(camera.id)?.blobReceived(camera, data)
 	}
 
 	handleCameraCaptureEvent(camera: Camera, event: CameraCaptureEvent) {
@@ -49,7 +49,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 
 		// Remove the task after it finished
 		if (event.state === 'IDLE') {
-			this.tasks.delete(camera.name)
+			this.tasks.delete(camera.id)
 			this.cameraManager.disableBlob(camera)
 		}
 	}
@@ -73,15 +73,15 @@ export class CameraHandler implements DeviceHandler<Camera> {
 
 	startCapture(camera: Camera, req: CameraCaptureStart) {
 		// Stop any existing task for this camera and remove its handler
-		if (this.tasks.has(camera.name)) {
-			const task = this.tasks.get(camera.name)!
+		if (this.tasks.has(camera.id)) {
+			const task = this.tasks.get(camera.id)!
 			task.stop()
 		}
 
 		// Start a new task for the camera
 		const task = new CameraCaptureTask(camera, req, this.imageProcessor, this.startExposure.bind(this), this.stopExposure.bind(this), this.handleCameraCaptureEvent.bind(this))
 
-		this.tasks.set(camera.name, task)
+		this.tasks.set(camera.id, task)
 		const client = camera[CLIENT]!
 		const mount = req.mount ? this.mountManager.get(client, req.mount) : undefined
 		const wheel = req.wheel ? this.wheelManager.get(client, req.wheel) : undefined
@@ -92,7 +92,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	stopCapture(device: Camera) {
-		this.tasks.get(device.name)?.stop()
+		this.tasks.get(device.id)?.stop()
 	}
 }
 
@@ -129,7 +129,7 @@ export class CameraCaptureTask {
 		private readonly handleCameraCaptureEvent: (camera: Camera, event: CameraCaptureEvent) => void,
 	) {
 		this.event.loop = request.exposureMode === 'LOOP'
-		this.event.device = camera.name
+		this.event.device = camera.id
 		this.event.count = request.exposureMode === 'SINGLE' ? 1 : request.exposureMode === 'FIXED' ? request.count : Number.MAX_SAFE_INTEGER
 		this.event.remainingCount = this.event.count
 
@@ -233,7 +233,7 @@ export class CameraCaptureTask {
 	}
 
 	async blobReceived(camera: Camera, data: string) {
-		if (this.camera.name === camera.name) {
+		if (this.camera.id === camera.id) {
 			const buffer = Buffer.from(data, 'base64')
 
 			// Save image

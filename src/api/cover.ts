@@ -16,7 +16,7 @@ export function cover(wsm: WebSocketMessageHandler, coverManager: CoverManager) 
 			console.info('cover added:', device.name)
 		},
 		updated: (device: Cover, property: keyof Cover & string, state?: PropertyState) => {
-			wsm.send<CoverUpdated>('cover:update', { device: { name: device.name, [property]: device[property] }, property, state })
+			wsm.send<CoverUpdated>('cover:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 		},
 		removed: (device: Cover) => {
 			wsm.send<CoverRemoved>('cover:remove', { device })

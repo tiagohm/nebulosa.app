@@ -20,7 +20,7 @@ export class TppaHandler {
 		readonly solver: PlateSolverHandler,
 	) {
 		bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
-			this.tasks.forEach((task) => task.camera.name === event.device && task.cameraCaptured(event))
+			this.tasks.forEach((task) => task.camera.id === event.device && task.cameraCaptured(event))
 		})
 	}
 

@@ -85,7 +85,7 @@ export const CameraMolecule = molecule(() => {
 		})
 
 		unsubscribers[2] = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
-			if (event.device === camera.name) {
+			if (event.device === camera.id) {
 				Object.assign(state.progress, event)
 
 				if (event.state === 'IDLE') {

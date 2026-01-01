@@ -16,7 +16,7 @@ export function guideOutput(wsm: WebSocketMessageHandler, guideOutputManager: Gu
 			console.info('guide output added:', device.name)
 		},
 		updated: (device: GuideOutput, property: keyof GuideOutput & string, state?: PropertyState) => {
-			const event = { device: { name: device.name, [property]: device[property] }, property, state }
+			const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state }
 
 			if (device.type === 'CAMERA') wsm.send<CameraUpdated>('camera:update', event)
 			else if (device.type === 'MOUNT') wsm.send<MountUpdated>('mount:update', event)

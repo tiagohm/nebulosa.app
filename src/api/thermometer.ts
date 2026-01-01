@@ -16,7 +16,7 @@ export function thermometer(wsm: WebSocketMessageHandler, thermometerManager: Th
 			console.info('thermometer added:', device.name)
 		},
 		updated: (device: Thermometer, property: keyof Thermometer & string, state?: PropertyState) => {
-			const event = { device: { name: device.name, [property]: device[property] }, property, state }
+			const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state }
 
 			if (device.type === 'CAMERA') wsm.send<CameraUpdated>('camera:update', event)
 			else if (device.type === 'FOCUSER') wsm.send<FocuserUpdated>('focuser:update', event)

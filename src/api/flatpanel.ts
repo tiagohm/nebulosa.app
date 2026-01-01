@@ -16,7 +16,7 @@ export function flatPanel(wsm: WebSocketMessageHandler, flatPanelManager: FlatPa
 			console.info('flat panel added:', device.name)
 		},
 		updated: (device: FlatPanel, property: keyof FlatPanel & string, state?: PropertyState) => {
-			wsm.send<FlatPanelUpdated>('flatPanel:update', { device: { name: device.name, [property]: device[property] }, property, state })
+			wsm.send<FlatPanelUpdated>('flatPanel:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 		},
 		removed: (device: FlatPanel) => {
 			wsm.send<FlatPanelRemoved>('flatPanel:remove', { device })

@@ -83,7 +83,7 @@ export function mount(wsm: WebSocketMessageHandler, mountManager: MountManager) 
 			console.info('mount added:', device.name)
 		},
 		updated: (device: Mount, property: keyof Mount & string, state?: PropertyState) => {
-			wsm.send<MountUpdated>('mount:update', { device: { name: device.name, [property]: device[property] }, property, state })
+			wsm.send<MountUpdated>('mount:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 		},
 		removed: (device: Mount) => {
 			wsm.send<MountRemoved>('mount:remove', { device })

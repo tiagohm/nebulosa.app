@@ -16,7 +16,7 @@ export function wheel(wsm: WebSocketMessageHandler, wheelManager: WheelManager) 
 			console.info('wheel added:', device.name)
 		},
 		updated: (device: Wheel, property: keyof Wheel & string, state?: PropertyState) => {
-			wsm.send<WheelUpdated>('wheel:update', { device: { name: device.name, [property]: device[property] }, property, state })
+			wsm.send<WheelUpdated>('wheel:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 		},
 		removed: (device: Wheel) => {
 			wsm.send<WheelRemoved>('wheel:remove', { device })

@@ -16,7 +16,7 @@ export function dewHeater(wsm: WebSocketMessageHandler, dewHeaterManager: DewHea
 			console.info('dew heater added:', device.name)
 		},
 		updated: (device: DewHeater, property: keyof DewHeater & string, state?: PropertyState) => {
-			const event = { device: { name: device.name, [property]: device[property] }, property, state }
+			const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state }
 
 			if (device.type === 'COVER') wsm.send<CoverUpdated>('cover:update', event)
 			wsm.send<DewHeaterUpdated>('dewHeater:update', event)

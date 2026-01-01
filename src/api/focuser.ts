@@ -16,7 +16,7 @@ export function focuser(wsm: WebSocketMessageHandler, focuserManager: FocuserMan
 			console.info('focuser added:', device.name)
 		},
 		updated: (device: Focuser, property: keyof Focuser & string, state?: PropertyState) => {
-			wsm.send<FocuserUpdated>('focuser:update', { device: { name: device.name, [property]: device[property] }, property, state })
+			wsm.send<FocuserUpdated>('focuser:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 		},
 		removed: (device: Focuser) => {
 			wsm.send<FocuserRemoved>('focuser:remove', { device })

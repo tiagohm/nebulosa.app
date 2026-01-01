@@ -93,7 +93,7 @@ export const EquipmentMolecule = molecule(() => {
 	})
 
 	function get<T extends DeviceType, D extends EquipmentState[T][number]>(type: T, name: string) {
-		return state[type].find((e) => e.name === name) as D | undefined
+		return state[type].find((e) => e.name === name || e.id === name) as D | undefined
 	}
 
 	function list<T extends Device = Device>(type: DeviceType) {

@@ -539,7 +539,7 @@ export interface DeviceAdded<D extends Device = Device> {
 }
 
 export interface DeviceUpdated<D extends Device = Device> {
-	readonly device: Required<Partial<D>, 'name'>
+	readonly device: Required<Partial<D>, 'name' | 'id'>
 	readonly property: keyof D & string
 	readonly state?: PropertyState
 }
@@ -682,7 +682,7 @@ export interface CameraCaptureTime {
 }
 
 export interface CameraCaptureEvent {
-	device: string
+	device: string // id
 	count: number
 	loop: boolean
 	remainingCount: number

@@ -16,7 +16,7 @@ export function rotator(wsm: WebSocketMessageHandler, rotatorManager: RotatorMan
 			console.info('rotator added:', device.name)
 		},
 		updated: (device: Rotator, property: keyof Rotator & string, state?: PropertyState) => {
-			wsm.send<RotatorUpdated>('rotator:update', { device: { name: device.name, [property]: device[property] }, property, state })
+			wsm.send<RotatorUpdated>('rotator:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 		},
 		removed: (device: Rotator) => {
 			wsm.send<RotatorRemoved>('rotator:remove', { device })

@@ -4,7 +4,7 @@ import { EnumSelect, type EnumSelectProps } from './EnumSelect'
 
 export interface ChrominanceSubsamplingSelectProps extends Omit<EnumSelectProps<ChrominanceSubsampling>, 'children'> {}
 
-export function ChrominanceSubsamplingSelect({ label = 'Chrominance Subsampling', ...props }: ChrominanceSubsamplingSelectProps) {
+export function ChrominanceSubsamplingSelect({ label = 'Chroma Subsampling', ...props }: ChrominanceSubsamplingSelectProps) {
 	return (
 		<EnumSelect {...props} label={label}>
 			<SelectItem key='4:4:4'>4:4:4</SelectItem>

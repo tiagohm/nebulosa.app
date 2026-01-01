@@ -212,6 +212,7 @@ const alpacaDiscoveryServer = new AlpacaDiscoveryServer({ ignoreLocalhost: hostn
 
 const app = new Elysia({
 	serve: {
+		reusePort: false,
 		routes: {
 			'/': homeHtml,
 			...alpacaServer.routes,

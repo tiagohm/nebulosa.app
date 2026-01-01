@@ -16,7 +16,7 @@ export const ImageSettings = memo(() => {
 	const Footer = <TextButton color='danger' label='Reset' onPointerUp={settings.reset} startContent={<Icons.Restore />} />
 
 	return (
-		<Modal footer={Footer} header='Settings' id={`settings-${settings.scope.image.key}`} maxWidth='200px' onHide={settings.hide}>
+		<Modal footer={Footer} header='Settings' id={`settings-${settings.scope.image.key}`} maxWidth='260px' onHide={settings.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<ImageFormatSelect className='col-span-full' onValueChange={settings.updateFormatType} value={format.type} />
 				<Activity mode={format.type === 'jpeg' ? 'visible' : 'hidden'}>
@@ -35,9 +35,9 @@ const JpegFormat = memo(() => {
 	const { quality, chrominanceSubsampling } = useSnapshot(settings.state.format.jpeg)
 
 	return (
-		<div className='col-span-full flex flex-col gap-2'>
-			<NumberInput label='Quality' maxValue={100} minValue={0} onValueChange={(value) => settings.updateFormat('jpeg', 'quality', value)} size='sm' value={quality} />
-			<ChrominanceSubsamplingSelect onValueChange={(value) => settings.updateFormat('jpeg', 'chrominanceSubsampling', value)} value={chrominanceSubsampling} />
+		<div className='col-span-full grid grid-cols-subgrid gap-2'>
+			<NumberInput className='col-span-5' label='Quality' maxValue={100} minValue={0} onValueChange={(value) => settings.updateFormat('jpeg', 'quality', value)} size='sm' value={quality} />
+			<ChrominanceSubsamplingSelect className='col-span-7' onValueChange={(value) => settings.updateFormat('jpeg', 'chrominanceSubsampling', value)} value={chrominanceSubsampling} />
 		</div>
 	)
 })

@@ -22,7 +22,7 @@
 	"license": "MIT",
 	"dependencies": {
 		"@eelkevdbos/elysia-basic-auth": "2.0.1",
-		"@elysiajs/cors": "1.4.0",
+		"@elysiajs/cors": "1.4.1",
 		"@elysiajs/cron": "1.4.1",
 		"@heroui/react": "2.8.7",
 		"@tailwindcss/cli": "4.1.18",
@@ -39,7 +39,7 @@
 		"recharts": "3.6.0",
 		"tailwindcss": "4.1.18",
 		"utility-types": "3.11.0",
-		"valtio": "2.2.0"
+		"valtio": "2.3.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.10",

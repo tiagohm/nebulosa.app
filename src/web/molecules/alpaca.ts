@@ -4,6 +4,7 @@ import bus from 'src/shared/bus'
 import type { AlpacaServerStatus } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 
@@ -25,29 +26,28 @@ initProxy(state, 'alpaca', ['p:show'])
 
 export const AlpacaMolecule = molecule(() => {
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(4)
+		const unsubscribers = new Array<VoidFunction>(5)
 
 		let timer: NodeJS.Timeout | undefined
 
-		unsubscribers[0] = bus.subscribe<Device>('device:add', () => {
+		const updateStatus = (delayed: boolean) => {
 			clearTimeout(timer)
-			timer = setTimeout(status, 2000)
-		})
 
-		unsubscribers[1] = bus.subscribe<Device>('device:remove', () => {
-			clearTimeout(timer)
-			timer = setTimeout(status, 2000)
-		})
+			if (state.show) {
+				if (delayed) timer = setTimeout(status, 2000)
+				else void status()
+			}
+		}
 
-		unsubscribers[2] = bus.subscribe('alpaca:start', () => {
+		unsubscribers[0] = bus.subscribe<Device>('device:add', updateStatus.bind(undefined, true))
+		unsubscribers[1] = bus.subscribe<Device>('device:remove', updateStatus.bind(undefined, true))
+		unsubscribers[2] = bus.subscribe('alpaca:start', updateStatus.bind(undefined, false))
+		unsubscribers[3] = bus.subscribe('alpaca:stop', updateStatus.bind(undefined, false))
+		unsubscribers[4] = subscribeKey(state, 'show', updateStatus.bind(undefined, false))
+
+		if (state.show) {
 			void status()
-		})
-
-		unsubscribers[3] = bus.subscribe('alpaca:stop', () => {
-			void status()
-		})
-
-		void status()
+		}
 
 		return () => {
 			unsubscribe(unsubscribers)

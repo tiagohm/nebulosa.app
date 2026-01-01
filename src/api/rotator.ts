@@ -5,9 +5,9 @@ import type { PropertyState } from 'nebulosa/src/indi.types'
 import type { RotatorAdded, RotatorRemoved, RotatorUpdated } from 'src/shared/types'
 import type { WebSocketMessageHandler } from './message'
 
-export function rotator(wsm: WebSocketMessageHandler, rotator: RotatorManager) {
-	function rotatorFromParams(params: { id: string }) {
-		return rotator.get(decodeURIComponent(params.id))!
+export function rotator(wsm: WebSocketMessageHandler, rotatorManager: RotatorManager) {
+	function rotatorFromParams(clientId: string, id: string) {
+		return rotatorManager.get(clientId, decodeURIComponent(id))!
 	}
 
 	const handler: DeviceHandler<Rotator> = {
@@ -24,17 +24,17 @@ export function rotator(wsm: WebSocketMessageHandler, rotator: RotatorManager) {
 		},
 	}
 
-	rotator.addHandler(handler)
+	rotatorManager.addHandler(handler)
 
 	const app = new Elysia({ prefix: '/rotators' })
 		// Endpoints!
-		.get('', () => rotator.list())
-		.get('/:id', ({ params }) => rotatorFromParams(params))
-		.post('/:id/moveto', ({ params, body }) => rotator.moveTo(rotatorFromParams(params), body as never))
-		.post('/:id/sync', ({ params, body }) => rotator.syncTo(rotatorFromParams(params), body as never))
-		.post('/:id/home', ({ params }) => rotator.home(rotatorFromParams(params)))
-		.post('/:id/reverse', ({ params, body }) => rotator.reverse(rotatorFromParams(params), body as never))
-		.post('/:id/stop', ({ params }) => rotator.stop(rotatorFromParams(params)))
+		.get('', ({ query }) => Array.from(rotatorManager.list(query.clientId)))
+		.get('/:id', ({ params, query }) => rotatorFromParams(query.clientId, params.id))
+		.post('/:id/moveto', ({ params, query, body }) => rotatorManager.moveTo(rotatorFromParams(query.clientId, params.id), body as never))
+		.post('/:id/sync', ({ params, query, body }) => rotatorManager.syncTo(rotatorFromParams(query.clientId, params.id), body as never))
+		.post('/:id/home', ({ params, query }) => rotatorManager.home(rotatorFromParams(query.clientId, params.id)))
+		.post('/:id/reverse', ({ params, query, body }) => rotatorManager.reverse(rotatorFromParams(query.clientId, params.id), body as never))
+		.post('/:id/stop', ({ params, query }) => rotatorManager.stop(rotatorFromParams(query.clientId, params.id)))
 
 	return app
 }

@@ -6,8 +6,8 @@ import type { CoverAdded, CoverRemoved, CoverUpdated } from 'src/shared/types'
 import type { WebSocketMessageHandler } from './message'
 
 export function cover(wsm: WebSocketMessageHandler, coverManager: CoverManager) {
-	function coverFromParams(params: { id: string }) {
-		return coverManager.get(decodeURIComponent(params.id))!
+	function coverFromParams(clientId: string, id: string) {
+		return coverManager.get(clientId, decodeURIComponent(id))!
 	}
 
 	const handler: DeviceHandler<Cover> = {
@@ -28,11 +28,11 @@ export function cover(wsm: WebSocketMessageHandler, coverManager: CoverManager) 
 
 	const app = new Elysia({ prefix: '/covers' })
 		// Endpoints!
-		.get('', () => coverManager.list())
-		.get('/:id', ({ params }) => coverFromParams(params))
-		.post('/:id/park', ({ params }) => coverManager.park(coverFromParams(params)))
-		.post('/:id/stop', ({ params }) => coverManager.stop(coverFromParams(params)))
-		.post('/:id/unpark', ({ params }) => coverManager.unpark(coverFromParams(params)))
+		.get('', ({ query }) => Array.from(coverManager.list(query.clientId)))
+		.get('/:id', ({ params, query }) => coverFromParams(query.clientId, params.id))
+		.post('/:id/park', ({ params, query }) => coverManager.park(coverFromParams(query.clientId, params.id)))
+		.post('/:id/stop', ({ params, query }) => coverManager.stop(coverFromParams(query.clientId, params.id)))
+		.post('/:id/unpark', ({ params, query }) => coverManager.unpark(coverFromParams(query.clientId, params.id)))
 
 	return app
 }

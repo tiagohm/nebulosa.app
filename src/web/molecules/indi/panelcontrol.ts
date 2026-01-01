@@ -149,12 +149,12 @@ export const IndiPanelControlMolecule = molecule(() => {
 	}
 
 	function send(property: DeviceProperty, message: NewVector) {
-		return Api.Indi.Properties.send(state.device, property.type, message)
+		return Api.Indi.Properties.send(state.device, property.type, message, connection.state.connected!)
 	}
 
 	function ping(device: string = state.device) {
 		if (device && state.show) {
-			void Api.Indi.Properties.ping(device)
+			void Api.Indi.Properties.ping(device, connection.state.connected!)
 		}
 	}
 

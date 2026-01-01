@@ -158,9 +158,17 @@ async function waitFor(ms: number, signal: AbortSignal) {
 }
 
 export function darv(darv: DarvHandler) {
+	function cameraFromParams(clientId: string, id: string) {
+		return darv.cameraHandler.cameraManager.get(clientId, decodeURIComponent(id))!
+	}
+
+	function mountFromParams(clientId: string, id: string) {
+		return darv.mountManager.get(clientId, decodeURIComponent(id))!
+	}
+
 	const app = new Elysia({ prefix: '/darv' })
 		// Endpoints!
-		.post('/:camera/:mount/start', ({ params, body }) => darv.start(body as never, darv.cameraHandler.cameraManager.get(params.camera)!, darv.mountManager.get(params.mount)!))
+		.post('/:camera/:mount/start', ({ params, query, body }) => darv.start(body as never, cameraFromParams(query.clientId, params.camera), mountFromParams(query.clientId, params.mount)))
 		.post('/stop', ({ body }) => darv.stop(body as never))
 
 	return app

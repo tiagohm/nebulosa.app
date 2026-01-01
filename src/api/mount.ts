@@ -73,8 +73,8 @@ export function targetCoordinatePosition(device: Mount, target: EquatorialCoordi
 }
 
 export function mount(wsm: WebSocketMessageHandler, mountManager: MountManager) {
-	function mountFromParams(params: { id: string }) {
-		return mountManager.get(decodeURIComponent(params.id))!
+	function mountFromParams(clientId: string, id: string) {
+		return mountManager.get(clientId, decodeURIComponent(id))!
 	}
 
 	const handler: DeviceHandler<Mount> = {
@@ -246,30 +246,30 @@ export function mount(wsm: WebSocketMessageHandler, mountManager: MountManager) 
 
 	const app = new Elysia({ prefix: '/mounts' })
 		// Endpoints!
-		.get('', () => mountManager.list())
-		.get('/:id', ({ params }) => mountFromParams(params))
-		.post('/:id/goto', ({ params, body }) => mountManager.moveTo(mountFromParams(params), 'goto', body as never))
-		.post('/:id/flip', ({ params, body }) => mountManager.moveTo(mountFromParams(params), 'flip', body as never))
-		.post('/:id/sync', ({ params, body }) => mountManager.moveTo(mountFromParams(params), 'sync', body as never))
-		.post('/:id/park', ({ params }) => mountManager.park(mountFromParams(params)))
-		.post('/:id/unpark', ({ params }) => mountManager.unpark(mountFromParams(params)))
-		.post('/:id/home', ({ params }) => mountManager.home(mountFromParams(params)))
-		.post('/:id/findhome', ({ params }) => mountManager.findHome(mountFromParams(params)))
-		.post('/:id/tracking', ({ params, body }) => mountManager.tracking(mountFromParams(params), body as never))
-		.post('/:id/trackmode', ({ params, body }) => mountManager.trackMode(mountFromParams(params), body as never))
-		.post('/:id/slewrate', ({ params, body }) => mountManager.slewRate(mountFromParams(params), body as never))
-		.post('/:id/position/current', ({ params }) => targetCoordinatePosition(mountFromParams(params)))
-		.post('/:id/position/target', ({ params, body }) => targetCoordinatePosition(mountFromParams(params), body as never))
-		.post('/:id/movenorth', ({ params, body }) => mountManager.moveNorth(mountFromParams(params), body as never))
-		.post('/:id/movesouth', ({ params, body }) => mountManager.moveSouth(mountFromParams(params), body as never))
-		.post('/:id/moveeast', ({ params, body }) => mountManager.moveEast(mountFromParams(params), body as never))
-		.post('/:id/movewest', ({ params, body }) => mountManager.moveWest(mountFromParams(params), body as never))
-		.post('/:id/location', ({ params, body }) => mountManager.geographicCoordinate(mountFromParams(params), body as never))
-		.post('/:id/time', ({ params, body }) => mountManager.time(mountFromParams(params), body as never))
-		.post('/:id/stop', ({ params }) => mountManager.stop(mountFromParams(params)))
-		.post('/:id/remotecontrol/start', ({ params, body }) => startRemoteControl(mountFromParams(params), body as never))
-		.post('/:id/remotecontrol/stop', ({ params, body }) => stopRemoteControl(mountFromParams(params), body as never))
-		.get('/:id/remotecontrol', ({ params }) => remoteControlStatus(mountFromParams(params)))
+		.get('', ({ query }) => Array.from(mountManager.list(query.clientId)))
+		.get('/:id', ({ params, query }) => mountFromParams(query.clientId, params.id))
+		.post('/:id/goto', ({ params, query, body }) => mountManager.moveTo(mountFromParams(query.clientId, params.id), 'goto', body as never))
+		.post('/:id/flip', ({ params, query, body }) => mountManager.moveTo(mountFromParams(query.clientId, params.id), 'flip', body as never))
+		.post('/:id/sync', ({ params, query, body }) => mountManager.moveTo(mountFromParams(query.clientId, params.id), 'sync', body as never))
+		.post('/:id/park', ({ params, query }) => mountManager.park(mountFromParams(query.clientId, params.id)))
+		.post('/:id/unpark', ({ params, query }) => mountManager.unpark(mountFromParams(query.clientId, params.id)))
+		.post('/:id/home', ({ params, query }) => mountManager.home(mountFromParams(query.clientId, params.id)))
+		.post('/:id/findhome', ({ params, query }) => mountManager.findHome(mountFromParams(query.clientId, params.id)))
+		.post('/:id/tracking', ({ params, query, body }) => mountManager.tracking(mountFromParams(query.clientId, params.id), body as never))
+		.post('/:id/trackmode', ({ params, query, body }) => mountManager.trackMode(mountFromParams(query.clientId, params.id), body as never))
+		.post('/:id/slewrate', ({ params, query, body }) => mountManager.slewRate(mountFromParams(query.clientId, params.id), body as never))
+		.post('/:id/position/current', ({ params, query }) => targetCoordinatePosition(mountFromParams(query.clientId, params.id)))
+		.post('/:id/position/target', ({ params, query, body }) => targetCoordinatePosition(mountFromParams(query.clientId, params.id), body as never))
+		.post('/:id/movenorth', ({ params, query, body }) => mountManager.moveNorth(mountFromParams(query.clientId, params.id), body as never))
+		.post('/:id/movesouth', ({ params, query, body }) => mountManager.moveSouth(mountFromParams(query.clientId, params.id), body as never))
+		.post('/:id/moveeast', ({ params, query, body }) => mountManager.moveEast(mountFromParams(query.clientId, params.id), body as never))
+		.post('/:id/movewest', ({ params, query, body }) => mountManager.moveWest(mountFromParams(query.clientId, params.id), body as never))
+		.post('/:id/location', ({ params, query, body }) => mountManager.geographicCoordinate(mountFromParams(query.clientId, params.id), body as never))
+		.post('/:id/time', ({ params, query, body }) => mountManager.time(mountFromParams(query.clientId, params.id), body as never))
+		.post('/:id/stop', ({ params, query }) => mountManager.stop(mountFromParams(query.clientId, params.id)))
+		.post('/:id/remotecontrol/start', ({ params, query, body }) => startRemoteControl(mountFromParams(query.clientId, params.id), body as never))
+		.post('/:id/remotecontrol/stop', ({ params, query, body }) => stopRemoteControl(mountFromParams(query.clientId, params.id), body as never))
+		.get('/:id/remotecontrol', ({ params, query }) => remoteControlStatus(mountFromParams(query.clientId, params.id)))
 
 	return app
 }

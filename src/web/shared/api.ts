@@ -103,11 +103,11 @@ export namespace Api {
 		}
 
 		export function connect(device: Device) {
-			return res(`/indi/${device.name}/connect`, 'post')
+			return res(`/indi/${device.name}/connect?clientId=${device.client.id}`, 'post')
 		}
 
 		export function disconnect(device: Device) {
-			return res(`/indi/${device.name}/disconnect`, 'post')
+			return res(`/indi/${device.name}/disconnect?clientId=${device.client.id}`, 'post')
 		}
 
 		export function messages(device?: string) {
@@ -119,12 +119,12 @@ export namespace Api {
 				return json<DeviceProperties>(`/indi/${device}/properties`, 'get')
 			}
 
-			export function send(device: string, type: DeviceProperty['type'], message: NewVector) {
-				return json<DeviceProperties>(`/indi/${device}/properties/send?type=${type}`, 'post', message)
+			export function send(device: string, type: DeviceProperty['type'], message: NewVector, connection: ConnectionStatus) {
+				return json<DeviceProperties>(`/indi/${device}/properties/send?type=${type}&clientId=${connection.id}`, 'post', message)
 			}
 
-			export function ping(device: string) {
-				return res(`/indi/${device}/properties/ping`, 'post')
+			export function ping(device: string, connection: ConnectionStatus) {
+				return res(`/indi/${device}/properties/ping?clientId=${connection.id}`, 'post')
 			}
 		}
 
@@ -148,288 +148,288 @@ export namespace Api {
 	}
 
 	export namespace Cameras {
-		export function list() {
-			return json<Camera[]>('/cameras', 'get')
+		export function list(connection: ConnectionStatus) {
+			return json<Camera[]>(`/cameras?clientId=${connection.id}`, 'get')
 		}
 
-		export function get(name: string) {
-			return json<Camera>(`/cameras/${name}`, 'get')
+		export function get(name: string, connection: ConnectionStatus) {
+			return json<Camera>(`/cameras/${name}?clientId=${connection.id}`, 'get')
 		}
 
 		export function cooler(camera: Camera, enabled: boolean) {
-			return res(`/cameras/${camera.name}/cooler`, 'post', enabled)
+			return res(`/cameras/${camera.name}/cooler?clientId=${camera.client.id}`, 'post', enabled)
 		}
 
 		export function temperature(camera: Camera, value: number) {
-			return res(`/cameras/${camera.name}/temperature`, 'post', value)
+			return res(`/cameras/${camera.name}/temperature?clientId=${camera.client.id}`, 'post', value)
 		}
 
 		export function start(camera: Camera, req: CameraCaptureStart) {
-			return res(`/cameras/${camera.name}/start`, 'post', req)
+			return res(`/cameras/${camera.name}/start?clientId=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(camera: Camera) {
-			return res(`/cameras/${camera.name}/stop`, 'post')
+			return res(`/cameras/${camera.name}/stop?clientId=${camera.client.id}`, 'post')
 		}
 	}
 
 	export namespace Mounts {
-		export function list() {
-			return json<Mount[]>('/mounts', 'get')
+		export function list(connection: ConnectionStatus) {
+			return json<Mount[]>(`/mounts?clientId=${connection.id}`, 'get')
 		}
 
-		export function get(name: string) {
-			return json<Mount>(`/mounts/${name}`, 'get')
+		export function get(name: string, connection: ConnectionStatus) {
+			return json<Mount>(`/mounts/${name}?clientId=${connection.id}`, 'get')
 		}
 
 		export function goTo(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
-			return res(`/mounts/${mount.name}/goto`, 'post', coordinate)
+			return res(`/mounts/${mount.name}/goto?clientId=${mount.client.id}`, 'post', coordinate)
 		}
 
 		export function syncTo(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
-			return res(`/mounts/${mount.name}/sync`, 'post', coordinate)
+			return res(`/mounts/${mount.name}/sync?clientId=${mount.client.id}`, 'post', coordinate)
 		}
 
 		export function park(mount: Mount) {
-			return res(`/mounts/${mount.name}/park`, 'post')
+			return res(`/mounts/${mount.name}/park?clientId=${mount.client.id}`, 'post')
 		}
 
 		export function unpark(mount: Mount) {
-			return res(`/mounts/${mount.name}/unpark`, 'post')
+			return res(`/mounts/${mount.name}/unpark?clientId=${mount.client.id}`, 'post')
 		}
 
 		export function home(mount: Mount) {
-			return res(`/mounts/${mount.name}/home`, 'post')
+			return res(`/mounts/${mount.name}/home?clientId=${mount.client.id}`, 'post')
 		}
 
 		export function findHome(mount: Mount) {
-			return res(`/mounts/${mount.name}/findhome`, 'post')
+			return res(`/mounts/${mount.name}/findhome?clientId=${mount.client.id}`, 'post')
 		}
 
 		export function tracking(mount: Mount, enable: boolean) {
-			return res(`/mounts/${mount.name}/tracking`, 'post', enable)
+			return res(`/mounts/${mount.name}/tracking?clientId=${mount.client.id}`, 'post', enable)
 		}
 
 		export function trackMode(mount: Mount, mode: TrackMode) {
-			return res(`/mounts/${mount.name}/trackmode`, 'post', mode)
+			return res(`/mounts/${mount.name}/trackmode?clientId=${mount.client.id}`, 'post', mode)
 		}
 
 		export function slewRate(mount: Mount, rate: SlewRate | string) {
-			return res(`/mounts/${mount.name}/slewrate`, 'post', rate)
+			return res(`/mounts/${mount.name}/slewrate?clientId=${mount.client.id}`, 'post', rate)
 		}
 
 		export function moveNorth(mount: Mount, enable: boolean) {
-			return res(`/mounts/${mount.name}/movenorth`, 'post', enable)
+			return res(`/mounts/${mount.name}/movenorth?clientId=${mount.client.id}`, 'post', enable)
 		}
 
 		export function moveSouth(mount: Mount, enable: boolean) {
-			return res(`/mounts/${mount.name}/movesouth`, 'post', enable)
+			return res(`/mounts/${mount.name}/movesouth?clientId=${mount.client.id}`, 'post', enable)
 		}
 
 		export function moveEast(mount: Mount, enable: boolean) {
-			return res(`/mounts/${mount.name}/moveeast`, 'post', enable)
+			return res(`/mounts/${mount.name}/moveeast?clientId=${mount.client.id}`, 'post', enable)
 		}
 
 		export function moveWest(mount: Mount, enable: boolean) {
-			return res(`/mounts/${mount.name}/movewest`, 'post', enable)
+			return res(`/mounts/${mount.name}/movewest?clientId=${mount.client.id}`, 'post', enable)
 		}
 
 		export function location(mount: Mount, coordinate: GeographicCoordinate) {
-			return res(`/mounts/${mount.name}/location`, 'post', coordinate)
+			return res(`/mounts/${mount.name}/location?clientId=${mount.client.id}`, 'post', coordinate)
 		}
 
 		export function time(mount: Mount, time: Mount['time']) {
-			return res(`/mounts/${mount.name}/time`, 'post', time)
+			return res(`/mounts/${mount.name}/time?clientId=${mount.client.id}`, 'post', time)
 		}
 
 		export function stop(mount: Mount) {
-			return res(`/mounts/${mount.name}/stop`, 'post')
+			return res(`/mounts/${mount.name}/stop?clientId=${mount.client.id}`, 'post')
 		}
 
 		export function currentPosition(mount: Mount) {
-			return json<MountEquatorialCoordinatePosition>(`/mounts/${mount.name}/position/current`, 'post')
+			return json<MountEquatorialCoordinatePosition>(`/mounts/${mount.name}/position/current?clientId=${mount.client.id}`, 'post')
 		}
 
 		export function targetPosition(mount: Mount, target: MountTargetCoordinate) {
-			return json<MountEquatorialCoordinatePosition>(`/mounts/${mount.name}/position/target`, 'post', target)
+			return json<MountEquatorialCoordinatePosition>(`/mounts/${mount.name}/position/target?clientId=${mount.client.id}`, 'post', target)
 		}
 
 		export namespace RemoteControl {
 			export function start(mount: Mount, req: MountRemoteControlStart) {
-				return res(`/mounts/${mount.name}/remotecontrol/start`, 'post', req)
+				return res(`/mounts/${mount.name}/remotecontrol/start?clientId=${mount.client.id}`, 'post', req)
 			}
 
 			export function stop(mount: Mount, protocol: MountRemoteControlProtocol) {
-				return res(`/mounts/${mount.name}/remotecontrol/stop`, 'post', protocol)
+				return res(`/mounts/${mount.name}/remotecontrol/stop?clientId=${mount.client.id}`, 'post', protocol)
 			}
 
 			export function status(mount: Mount) {
-				return json<MountRemoteControlStatus>(`/mounts/${mount.name}/remotecontrol`, 'get')
+				return json<MountRemoteControlStatus>(`/mounts/${mount.name}/remotecontrol?clientId=${mount.client.id}`, 'get')
 			}
 		}
 	}
 
 	export namespace Focusers {
-		export function list() {
-			return json<Focuser[]>('/focusers', 'get')
+		export function list(connection: ConnectionStatus) {
+			return json<Focuser[]>(`/focusers?clientId=${connection.id}`, 'get')
 		}
 
-		export function get(name: string) {
-			return json<Focuser>(`/focusers/${name}`, 'get')
+		export function get(name: string, connection: ConnectionStatus) {
+			return json<Focuser>(`/focusers/${name}?clientId=${connection.id}`, 'get')
 		}
 
 		export function sync(focuser: Focuser, position: number) {
-			return res(`/focusers/${focuser.name}/sync`, 'post', position)
+			return res(`/focusers/${focuser.name}/sync?clientId=${focuser.client.id}`, 'post', position)
 		}
 
 		export function moveTo(focuser: Focuser, position: number) {
-			return res(`/focusers/${focuser.name}/moveto`, 'post', position)
+			return res(`/focusers/${focuser.name}/moveto?clientId=${focuser.client.id}`, 'post', position)
 		}
 
 		export function moveIn(focuser: Focuser, steps: number) {
-			return res(`/focusers/${focuser.name}/movein`, 'post', steps)
+			return res(`/focusers/${focuser.name}/movein?clientId=${focuser.client.id}`, 'post', steps)
 		}
 
 		export function moveOut(focuser: Focuser, steps: number) {
-			return res(`/focusers/${focuser.name}/moveout`, 'post', steps)
+			return res(`/focusers/${focuser.name}/moveout?clientId=${focuser.client.id}`, 'post', steps)
 		}
 
 		export function reverse(focuser: Focuser, enabled: boolean) {
-			return res(`/focusers/${focuser.name}/reverse`, 'post', enabled)
+			return res(`/focusers/${focuser.name}/reverse?clientId=${focuser.client.id}`, 'post', enabled)
 		}
 
 		export function stop(focuser: Focuser) {
-			return res(`/focusers/${focuser.name}/stop`, 'post')
+			return res(`/focusers/${focuser.name}/stop?clientId=${focuser.client.id}`, 'post')
 		}
 	}
 
 	export namespace Wheels {
-		export function list() {
-			return json<Wheel[]>('/wheels', 'get')
+		export function list(connection: ConnectionStatus) {
+			return json<Wheel[]>(`/wheels?clientId=${connection.id}`, 'get')
 		}
 
-		export function get(name: string) {
-			return json<Wheel>(`/wheels/${name}`, 'get')
+		export function get(name: string, connection: ConnectionStatus) {
+			return json<Wheel>(`/wheels/${name}?clientId=${connection.id}`, 'get')
 		}
 
 		export function moveTo(wheel: Wheel, position: number) {
-			return res(`/wheels/${wheel.name}/moveto`, 'post', position)
+			return res(`/wheels/${wheel.name}/moveto?clientId=${wheel.client.id}`, 'post', position)
 		}
 
 		export function slots(wheel: Wheel, names: string[]) {
-			return res(`/wheels/${wheel.name}/slots`, 'post', names)
+			return res(`/wheels/${wheel.name}/slots?clientId=${wheel.client.id}`, 'post', names)
 		}
 	}
 
 	export namespace Thermometers {
-		export function list() {
-			return json<Thermometer[]>('/thermometers', 'get')
+		export function list(connection: ConnectionStatus) {
+			return json<Thermometer[]>(`/thermometers?clientId=${connection.id}`, 'get')
 		}
 
-		export function get(name: string) {
-			return json<Thermometer>(`/thermometers/${name}`, 'get')
+		export function get(name: string, connection: ConnectionStatus) {
+			return json<Thermometer>(`/thermometers/${name}?clientId=${connection.id}`, 'get')
 		}
 	}
 
 	export namespace GuideOutputs {
-		export function list() {
-			return json<GuideOutput[]>('/guideoutputs', 'get')
+		export function list(connection: ConnectionStatus) {
+			return json<GuideOutput[]>(`/guideoutputs?clientId=${connection.id}`, 'get')
 		}
 
-		export function get(name: string) {
-			return json<GuideOutput>(`/guideoutputs/${name}`, 'get')
+		export function get(name: string, connection: ConnectionStatus) {
+			return json<GuideOutput>(`/guideoutputs/${name}?clientId=${connection.id}`, 'get')
 		}
 
 		export function pulse(guideOutput: GuideOutput, req: GuidePulse) {
-			return res(`/guideoutputs/${guideOutput.name}/pulse`, 'post', req)
+			return res(`/guideoutputs/${guideOutput.name}/pulse?clientId=${guideOutput.client.id}`, 'post', req)
 		}
 	}
 
 	export namespace Covers {
-		export function list() {
-			return json<Cover[]>('/covers', 'get')
+		export function list(connection: ConnectionStatus) {
+			return json<Cover[]>(`/covers?clientId=${connection.id}`, 'get')
 		}
 
-		export function get(name: string) {
-			return json<Cover>(`/covers/${name}`, 'get')
+		export function get(name: string, connection: ConnectionStatus) {
+			return json<Cover>(`/covers/${name}?clientId=${connection.id}`, 'get')
 		}
 
 		export function park(cover: Cover) {
-			return res(`/covers/${cover.name}/park`, 'post')
+			return res(`/covers/${cover.name}/park?clientId=${cover.client.id}`, 'post')
 		}
 
 		export function stop(cover: Cover) {
-			return res(`/covers/${cover.name}/stop`, 'post')
+			return res(`/covers/${cover.name}/stop?clientId=${cover.client.id}`, 'post')
 		}
 
 		export function unpark(cover: Cover) {
-			return res(`/covers/${cover.name}/unpark`, 'post')
+			return res(`/covers/${cover.name}/unpark?clientId=${cover.client.id}`, 'post')
 		}
 	}
 
 	export namespace FlatPanels {
-		export function list() {
-			return json<FlatPanel[]>('/flatpanels', 'get')
+		export function list(connection: ConnectionStatus) {
+			return json<FlatPanel[]>(`/flatpanels?clientId=${connection.id}`, 'get')
 		}
 
-		export function get(name: string) {
-			return json<FlatPanel>(`/flatpanels/${name}`, 'get')
+		export function get(name: string, connection: ConnectionStatus) {
+			return json<FlatPanel>(`/flatpanels/${name}?clientId=${connection.id}`, 'get')
 		}
 
 		export function enable(flatPanel: FlatPanel) {
-			return res(`/flatpanels/${flatPanel.name}/enable`, 'post')
+			return res(`/flatpanels/${flatPanel.name}/enable?clientId=${flatPanel.client.id}`, 'post')
 		}
 
 		export function disable(flatPanel: FlatPanel) {
-			return res(`/flatpanels/${flatPanel.name}/disable`, 'post')
+			return res(`/flatpanels/${flatPanel.name}/disable?clientId=${flatPanel.client.id}`, 'post')
 		}
 
 		export function intensity(flatPanel: FlatPanel, value: number) {
-			return res(`/flatpanels/${flatPanel.name}/intensity`, 'post', value)
+			return res(`/flatpanels/${flatPanel.name}/intensity?clientId=${flatPanel.client.id}`, 'post', value)
 		}
 	}
 
 	export namespace Rotators {
-		export function list() {
-			return json<Rotator[]>('/rotators', 'get')
+		export function list(connection: ConnectionStatus) {
+			return json<Rotator[]>(`/rotators?clientId=${connection.id}`, 'get')
 		}
 
-		export function get(name: string) {
-			return json<Rotator>(`/rotators/${name}`, 'get')
+		export function get(name: string, connection: ConnectionStatus) {
+			return json<Rotator>(`/rotators/${name}?clientId=${connection.id}`, 'get')
 		}
 
 		export function sync(rotator: Rotator, angle: number) {
-			return res(`/rotators/${rotator.name}/sync`, 'post', angle)
+			return res(`/rotators/${rotator.name}/sync?clientId=${rotator.client.id}`, 'post', angle)
 		}
 
 		export function moveTo(rotator: Rotator, angle: number) {
-			return res(`/rotators/${rotator.name}/moveto`, 'post', angle)
+			return res(`/rotators/${rotator.name}/moveto?clientId=${rotator.client.id}`, 'post', angle)
 		}
 
 		export function reverse(rotator: Rotator, enabled: boolean) {
-			return res(`/rotators/${rotator.name}/reverse`, 'post', enabled)
+			return res(`/rotators/${rotator.name}/reverse?clientId=${rotator.client.id}`, 'post', enabled)
 		}
 
 		export function home(rotator: Rotator) {
-			return res(`/rotators/${rotator.name}/home`, 'post')
+			return res(`/rotators/${rotator.name}/home?clientId=${rotator.client.id}`, 'post')
 		}
 
 		export function stop(rotator: Rotator) {
-			return res(`/rotators/${rotator.name}/stop`, 'post')
+			return res(`/rotators/${rotator.name}/stop?clientId=${rotator.client.id}`, 'post')
 		}
 	}
 
 	export namespace DewHeaters {
-		export function list() {
-			return json<DewHeater[]>('/dewheaters', 'get')
+		export function list(connection: ConnectionStatus) {
+			return json<DewHeater[]>(`/dewheaters?clientId=${connection.id}`, 'get')
 		}
 
-		export function get(name: string) {
-			return json<DewHeater>(`/dewheaters/${name}`, 'get')
+		export function get(name: string, connection: ConnectionStatus) {
+			return json<DewHeater>(`/dewheaters/${name}?clientId=${connection.id}`, 'get')
 		}
 
 		export function dutyCycle(dewHeater: DewHeater, value: number) {
-			return res(`/dewheaters/${dewHeater.name}/dutycycle`, 'post', value)
+			return res(`/dewheaters/${dewHeater.name}/dutycycle?clientId=${dewHeater.client.id}`, 'post', value)
 		}
 	}
 
@@ -539,7 +539,7 @@ export namespace Api {
 
 	export namespace TPPA {
 		export function start(camera: Camera, mount: Mount, req: TppaStart) {
-			return res(`/tppa/${camera.name}/${mount.name}/start`, 'post', req)
+			return res(`/tppa/${camera.name}/${mount.name}/start?clientId=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(req: TppaStop) {
@@ -549,7 +549,7 @@ export namespace Api {
 
 	export namespace DARV {
 		export function start(camera: Camera, mount: Mount, req: DarvStart) {
-			return res(`/darv/${camera.name}/${mount.name}/start`, 'post', req)
+			return res(`/darv/${camera.name}/${mount.name}/start?clientId=${camera.client.id}`, 'post', req)
 		}
 
 		export function stop(req: DarvStop) {

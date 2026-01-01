@@ -6,8 +6,8 @@ import type { FlatPanelAdded, FlatPanelRemoved, FlatPanelUpdated } from 'src/sha
 import type { WebSocketMessageHandler } from './message'
 
 export function flatPanel(wsm: WebSocketMessageHandler, flatPanelManager: FlatPanelManager) {
-	function flatPanelFromParams(params: { id: string }) {
-		return flatPanelManager.get(decodeURIComponent(params.id))!
+	function flatPanelFromParams(clientId: string, id: string) {
+		return flatPanelManager.get(clientId, decodeURIComponent(id))!
 	}
 
 	const handler: DeviceHandler<FlatPanel> = {
@@ -28,12 +28,12 @@ export function flatPanel(wsm: WebSocketMessageHandler, flatPanelManager: FlatPa
 
 	const app = new Elysia({ prefix: '/flatpanels' })
 		// Endpoints!
-		.get('', () => flatPanelManager.list())
-		.get('/:id', ({ params }) => flatPanelFromParams(params))
-		.post('/:id/enable', ({ params }) => flatPanelManager.enable(flatPanelFromParams(params)))
-		.post('/:id/disable', ({ params }) => flatPanelManager.disable(flatPanelFromParams(params)))
-		.post('/:id/toggle', ({ params }) => flatPanelManager.toggle(flatPanelFromParams(params)))
-		.post('/:id/intensity', ({ params, body }) => flatPanelManager.intensity(flatPanelFromParams(params), body as never))
+		.get('', ({ query }) => Array.from(flatPanelManager.list(query.clientId)))
+		.get('/:id', ({ params, query }) => flatPanelFromParams(query.clientId, params.id))
+		.post('/:id/enable', ({ params, query }) => flatPanelManager.enable(flatPanelFromParams(query.clientId, params.id)))
+		.post('/:id/disable', ({ params, query }) => flatPanelManager.disable(flatPanelFromParams(query.clientId, params.id)))
+		.post('/:id/toggle', ({ params, query }) => flatPanelManager.toggle(flatPanelFromParams(query.clientId, params.id)))
+		.post('/:id/intensity', ({ params, query, body }) => flatPanelManager.intensity(flatPanelFromParams(query.clientId, params.id), body as never))
 
 	return app
 }

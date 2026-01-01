@@ -6,6 +6,7 @@ import { existsSync, type MakeDirectoryOptions, rmSync } from 'fs'
 import fs from 'fs/promises'
 import { AlpacaDiscoveryServer, AlpacaServer } from 'nebulosa/src/alpaca.server'
 import type { AlpacaServerOptions } from 'nebulosa/src/alpaca.types'
+import type { IndiClient } from 'nebulosa/src/indi'
 import type { DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
 import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import { default as openDefaultApp } from 'open'
@@ -156,20 +157,20 @@ const flatPanelManager = new FlatPanelManager()
 const rotatorManager = new RotatorManager()
 
 const guideOutputProvider: DeviceProvider<GuideOutput> = {
-	get: (name: string) => {
-		return cameraManager.get(name) ?? mountManager.get(name)
+	get: (client: IndiClient, name: string) => {
+		return cameraManager.get(client, name) ?? mountManager.get(client, name)
 	},
 }
 
 const thermometerProvider: DeviceProvider<Thermometer> = {
-	get: (name: string) => {
-		return cameraManager.get(name) ?? focuserManager.get(name)
+	get: (client: IndiClient, name: string) => {
+		return cameraManager.get(client, name) ?? focuserManager.get(client, name)
 	},
 }
 
 const dewHeaterProvider: DeviceProvider<DewHeater> = {
-	get: (name: string) => {
-		return coverManager.get(name)
+	get: (client: IndiClient, name: string) => {
+		return coverManager.get(client, name)
 	},
 }
 

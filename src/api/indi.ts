@@ -52,7 +52,7 @@ export function disconnect(device: Device) {
 export type IndiMessageListener = (message: Message) => void
 
 export class IndiHandler implements IndiClientHandler {
-	private readonly messageMap = new Map<string, Message[]>()
+	private readonly messageMap = new Map<IndiClient, Map<string, Message[]>>()
 	private readonly messageListeners = new Set<IndiMessageListener>()
 
 	constructor(
@@ -81,6 +81,8 @@ export class IndiHandler implements IndiClientHandler {
 	close(client: IndiClient, server: boolean) {
 		bus.emit('indi:close', client)
 
+		this.properties.close(client, server)
+		this.messageMap.delete(client)
 		this.cameraManager.close(client, server)
 		this.mountManager.close(client, server)
 		this.focuserManager.close(client, server)
@@ -156,49 +158,61 @@ export class IndiHandler implements IndiClientHandler {
 
 	message(client: IndiClient, message: Message) {
 		const device = message.device || 'GLOBAL'
-		const messages = this.messageMap.get(device) ?? []
 
-		if (!messages.length) {
-			this.messageMap.set(device, messages)
-		} else if (messages.length > 100) {
-			messages.shift()
+		let messages = this.messageMap.get(client)
+
+		if (!messages) {
+			messages = new Map()
+			this.messageMap.set(client, messages)
 		}
 
-		messages.push(message)
+		let list = messages.get(device)
+
+		if (!list?.length) {
+			list = []
+			messages.set(device, list)
+		}
+
+		if (list.length > 100) {
+			list.shift()
+		}
+
+		list.push(message)
 
 		this.messageListeners.forEach((e) => e(message))
 	}
 
-	get(id: string): Device | undefined {
+	get(client: IndiClient | string, id: string): Device | undefined {
 		return (
-			this.cameraManager.get(id) ||
-			this.mountManager.get(id) ||
-			this.focuserManager.get(id) ||
-			this.wheelManager.get(id) ||
-			this.coverManager.get(id) ||
-			this.flatPanelManager.get(id) ||
-			this.rotatorManager.get(id) ||
-			this.guideOutputManager.get(id) ||
-			this.thermometerManager.get(id) ||
-			this.dewHeaterManager.get(id)
+			this.cameraManager.get(client, id) ||
+			this.mountManager.get(client, id) ||
+			this.focuserManager.get(client, id) ||
+			this.wheelManager.get(client, id) ||
+			this.coverManager.get(client, id) ||
+			this.flatPanelManager.get(client, id) ||
+			this.rotatorManager.get(client, id) ||
+			this.guideOutputManager.get(client, id) ||
+			this.thermometerManager.get(client, id) ||
+			this.dewHeaterManager.get(client, id)
 		)
 	}
 
-	messages(device?: string) {
-		return this.messageMap.get(device || 'GLOBAL') ?? []
+	messages(client: IndiClient | string, device?: string) {
+		client = typeof client === 'string' ? this.messageMap.keys().find((e) => e.id === client)! : client
+		return this.messageMap.get(client)?.get(device || 'GLOBAL') ?? []
 	}
 }
 
 export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties: DevicePropertyManager, notificationHandler: NotificationHandler) {
-	function deviceFromParams(params: { id: string }) {
-		return indi.get(decodeURIComponent(params.id))!
+	function deviceFromParams(clientId: string, id: string) {
+		return indi.get(clientId, decodeURIComponent(id))!
 	}
 
 	const listeners = new Map<string, number>()
 	let subprocess: Bun.Subprocess | undefined
 
-	function ping(name: string) {
-		listeners.set(name, Date.now())
+	function ping(clientId: string, name: string) {
+		listeners.set(`${clientId}:${name}`, Date.now())
 	}
 
 	function clear() {
@@ -212,23 +226,23 @@ export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties
 		}
 	}
 
-	function notify(device: string, property: DeviceProperty, type: 'update' | 'remove') {
+	function notify(clientId: string, device: string, property: DeviceProperty, type: 'update' | 'remove') {
 		if (listeners.has(device)) {
 			wsm.send<IndiDevicePropertyEvent>(`indi:property:${type}`, { device, name: property.name, property })
 		}
 	}
 
 	const handler: DevicePropertyHandler = {
-		added: (device: string, property: DeviceProperty) => {
-			notify(device, property, 'update')
+		added: (client: IndiClient, device: string, property: DeviceProperty) => {
+			notify(client.id!, device, property, 'update')
 		},
 
-		updated: (device: string, property: DeviceProperty) => {
-			notify(device, property, 'update')
+		updated: (client: IndiClient, device: string, property: DeviceProperty) => {
+			notify(client.id!, device, property, 'update')
 		},
 
-		removed: (device: string, property: DeviceProperty) => {
-			notify(device, property, 'remove')
+		removed: (client: IndiClient, device: string, property: DeviceProperty) => {
+			notify(client.id!, device, property, 'remove')
 		},
 	}
 
@@ -279,8 +293,8 @@ export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties
 			.filter((e) => !!e)
 	}
 
-	function send(type: DevicePropertyType, message: NewVector) {
-		const device = deviceFromParams({ id: message.device })
+	function send(clientId: string, type: DevicePropertyType, message: NewVector) {
+		const device = deviceFromParams(clientId, message.device)
 
 		if (type === 'SWITCH') device[CLIENT]!.sendSwitch(message as never)
 		else if (type === 'NUMBER') device[CLIENT]!.sendNumber(message as never)
@@ -289,12 +303,12 @@ export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties
 
 	const app = new Elysia({ prefix: '/indi' })
 		// Endpoints!
-		.get('/devices', () => properties.names())
-		.post('/:id/connect', ({ params }) => connect(deviceFromParams(params)))
-		.post('/:id/disconnect', ({ params }) => disconnect(deviceFromParams(params)))
-		.get('/:id/properties', ({ params }) => properties.get(decodeURIComponent(params.id)))
-		.post('/:id/properties/ping', ({ params }) => ping(decodeURIComponent(params.id)))
-		.post('/:id/properties/send', ({ query, body }) => send(query.type as never, body as never))
+		.get('/devices', ({ query }) => properties.names(query.clientId))
+		.post('/:id/connect', ({ params, query }) => connect(deviceFromParams(query.clientId, params.id)))
+		.post('/:id/disconnect', ({ params, query }) => disconnect(deviceFromParams(query.clientId, params.id)))
+		.get('/:id/properties', ({ params, query }) => properties.get(query.clientId, decodeURIComponent(params.id)))
+		.post('/:id/properties/ping', ({ params, query }) => ping(query.clientId, decodeURIComponent(params.id)))
+		.post('/:id/properties/send', ({ query, body }) => send(query.clientId, query.type as never, body as never))
 		.post('/server/start', ({ body }) => start(body as never))
 		.post('/server/stop', () => stop())
 		.get('/server/status', () => status())

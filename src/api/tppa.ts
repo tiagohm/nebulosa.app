@@ -216,9 +216,17 @@ export class TppaTask {
 }
 
 export function tppa(tppa: TppaHandler) {
+	function cameraFromParams(clientId: string, id: string) {
+		return tppa.cameraHandler.cameraManager.get(clientId, decodeURIComponent(id))!
+	}
+
+	function mountFromParams(clientId: string, id: string) {
+		return tppa.mountManager.get(clientId, decodeURIComponent(id))!
+	}
+
 	const app = new Elysia({ prefix: '/tppa' })
 		// Endpoints!
-		.post('/:camera/:mount/start', ({ params, body }) => tppa.start(body as never, tppa.cameraHandler.cameraManager.get(params.camera)!, tppa.mountManager.get(params.mount)!))
+		.post('/:camera/:mount/start', ({ params, query, body }) => tppa.start(body as never, cameraFromParams(query.clientId, params.camera)!, mountFromParams(query.clientId, params.mount)!))
 		.post('/stop', ({ body }) => tppa.stop(body as never))
 
 	return app

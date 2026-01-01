@@ -79,16 +79,16 @@ export const ConnectionMolecule = molecule(() => {
 	})
 
 	function list(connection: ConnectionStatus) {
-		const a = Api.Cameras.list().then((cameras) => void cameras?.forEach((camera) => bus.emit('camera:add', camera)))
-		const b = Api.Mounts.list().then((mounts) => void mounts?.forEach((mount) => bus.emit('mount:add', mount)))
-		const c = Api.Focusers.list().then((focusers) => void focusers?.forEach((focuser) => bus.emit('focuser:add', focuser)))
-		const d = Api.Wheels.list().then((wheels) => void wheels?.forEach((wheel) => bus.emit('wheel:add', wheel)))
-		const e = Api.Thermometers.list().then((thermometers) => void thermometers?.forEach((thermometer) => bus.emit('thermometer:add', thermometer)))
-		const f = Api.GuideOutputs.list().then((guideOutputs) => void guideOutputs?.forEach((guideOutput) => bus.emit('guideOutput:add', guideOutput)))
-		const g = Api.Covers.list().then((covers) => void covers?.forEach((cover) => bus.emit('cover:add', cover)))
-		const h = Api.FlatPanels.list().then((flatPanels) => void flatPanels?.forEach((flatPanel) => bus.emit('flatPanel:add', flatPanel)))
-		const i = Api.DewHeaters.list().then((dewHeaters) => void dewHeaters?.forEach((dewHeater) => bus.emit('dewHeater:add', dewHeater)))
-		const j = Api.Rotators.list().then((rotators) => void rotators?.forEach((rotator) => bus.emit('rotator:add', rotator)))
+		const a = Api.Cameras.list(connection).then((cameras) => void cameras?.forEach((camera) => bus.emit('camera:add', camera)))
+		const b = Api.Mounts.list(connection).then((mounts) => void mounts?.forEach((mount) => bus.emit('mount:add', mount)))
+		const c = Api.Focusers.list(connection).then((focusers) => void focusers?.forEach((focuser) => bus.emit('focuser:add', focuser)))
+		const d = Api.Wheels.list(connection).then((wheels) => void wheels?.forEach((wheel) => bus.emit('wheel:add', wheel)))
+		const e = Api.Thermometers.list(connection).then((thermometers) => void thermometers?.forEach((thermometer) => bus.emit('thermometer:add', thermometer)))
+		const f = Api.GuideOutputs.list(connection).then((guideOutputs) => void guideOutputs?.forEach((guideOutput) => bus.emit('guideOutput:add', guideOutput)))
+		const g = Api.Covers.list(connection).then((covers) => void covers?.forEach((cover) => bus.emit('cover:add', cover)))
+		const h = Api.FlatPanels.list(connection).then((flatPanels) => void flatPanels?.forEach((flatPanel) => bus.emit('flatPanel:add', flatPanel)))
+		const i = Api.DewHeaters.list(connection).then((dewHeaters) => void dewHeaters?.forEach((dewHeater) => bus.emit('dewHeater:add', dewHeater)))
+		const j = Api.Rotators.list(connection).then((rotators) => void rotators?.forEach((rotator) => bus.emit('rotator:add', rotator)))
 		return Promise.all([a, b, c, d, e, f, g, h, i, j])
 	}
 

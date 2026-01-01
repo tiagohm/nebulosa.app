@@ -6,8 +6,8 @@ import type { WheelAdded, WheelRemoved, WheelUpdated } from 'src/shared/types'
 import type { WebSocketMessageHandler } from './message'
 
 export function wheel(wsm: WebSocketMessageHandler, wheelManager: WheelManager) {
-	function wheelFromParams(params: { id: string }) {
-		return wheelManager.get(decodeURIComponent(params.id))!
+	function wheelFromParams(clientId: string, id: string) {
+		return wheelManager.get(clientId, decodeURIComponent(id))!
 	}
 
 	const handler: DeviceHandler<Wheel> = {
@@ -28,10 +28,10 @@ export function wheel(wsm: WebSocketMessageHandler, wheelManager: WheelManager) 
 
 	const app = new Elysia({ prefix: '/wheels' })
 		// Endpoints!
-		.get('', () => wheelManager.list())
-		.get('/:id', ({ params }) => wheelFromParams(params))
-		.post('/:id/moveto', ({ params, body }) => wheelManager.moveTo(wheelFromParams(params), body as never))
-		.post('/:id/slots', ({ params, body }) => wheelManager.slots(wheelFromParams(params), body as never))
+		.get('', ({ query }) => Array.from(wheelManager.list(query.clientId)))
+		.get('/:id', ({ params, query }) => wheelFromParams(query.clientId, params.id))
+		.post('/:id/moveto', ({ params, query, body }) => wheelManager.moveTo(wheelFromParams(query.clientId, params.id), body as never))
+		.post('/:id/slots', ({ params, query, body }) => wheelManager.slots(wheelFromParams(query.clientId, params.id), body as never))
 
 	return app
 }

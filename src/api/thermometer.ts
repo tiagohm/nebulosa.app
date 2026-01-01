@@ -6,8 +6,8 @@ import type { CameraUpdated, FocuserUpdated, ThermometerAdded, ThermometerRemove
 import type { WebSocketMessageHandler } from './message'
 
 export function thermometer(wsm: WebSocketMessageHandler, thermometerManager: ThermometerManager) {
-	function thermometerFromParams(params: { id: string }) {
-		return thermometerManager.get(decodeURIComponent(params.id))!
+	function thermometerFromParams(clientId: string, id: string) {
+		return thermometerManager.get(clientId, decodeURIComponent(id))!
 	}
 
 	const handler: DeviceHandler<Thermometer> = {
@@ -32,8 +32,8 @@ export function thermometer(wsm: WebSocketMessageHandler, thermometerManager: Th
 
 	const app = new Elysia({ prefix: '/thermometers' })
 		// Endpoints!
-		.get('', () => thermometerManager.list())
-		.get('/:id', ({ params }) => thermometerFromParams(params))
+		.get('', ({ query }) => Array.from(thermometerManager.list(query.clientId)))
+		.get('/:id', ({ params, query }) => thermometerFromParams(query.clientId, params.id))
 
 	return app
 }

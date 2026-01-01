@@ -6,8 +6,8 @@ import type { CameraUpdated, GuideOutputAdded, GuideOutputRemoved, GuideOutputUp
 import type { WebSocketMessageHandler } from './message'
 
 export function guideOutput(wsm: WebSocketMessageHandler, guideOutputManager: GuideOutputManager) {
-	function guideOutputFromParams(params: { id: string }) {
-		return guideOutputManager.get(decodeURIComponent(params.id))!
+	function guideOutputFromParams(clientId: string, id: string) {
+		return guideOutputManager.get(clientId, decodeURIComponent(id))!
 	}
 
 	const handler: DeviceHandler<GuideOutput> = {
@@ -32,9 +32,9 @@ export function guideOutput(wsm: WebSocketMessageHandler, guideOutputManager: Gu
 
 	const app = new Elysia({ prefix: '/guideoutputs' })
 		// Endpoints!
-		.get('', () => guideOutputManager.list())
-		.get('/:id', ({ params }) => guideOutputFromParams(params))
-		.post('/:id/pulse', ({ params, body }) => guideOutputManager.pulse(guideOutputFromParams(params), (body as GuidePulse).direction, (body as GuidePulse).duration))
+		.get('', ({ query }) => Array.from(guideOutputManager.list(query.clientId)))
+		.get('/:id', ({ params, query }) => guideOutputFromParams(query.clientId, params.id))
+		.post('/:id/pulse', ({ params, query, body }) => guideOutputManager.pulse(guideOutputFromParams(query.clientId, params.id), (body as GuidePulse).direction, (body as GuidePulse).duration))
 
 	return app
 }

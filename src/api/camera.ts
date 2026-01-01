@@ -1,6 +1,6 @@
 import Elysia from 'elysia'
 import fs, { mkdir } from 'fs/promises'
-import type { Camera } from 'nebulosa/src/indi.device'
+import { type Camera, CLIENT } from 'nebulosa/src/indi.device'
 import type { CameraManager, DeviceHandler, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } from 'nebulosa/src/temporal'
@@ -82,10 +82,11 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		const task = new CameraCaptureTask(camera, req, this.imageProcessor, this.startExposure.bind(this), this.stopExposure.bind(this), this.handleCameraCaptureEvent.bind(this))
 
 		this.tasks.set(camera.name, task)
-		const mount = req.mount ? this.mountManager.get(req.mount) : undefined
-		const wheel = req.wheel ? this.wheelManager.get(req.wheel) : undefined
-		const focuser = req.focuser ? this.focuserManager.get(req.focuser) : undefined
-		const rotator = req.rotator ? this.rotatorManager.get(req.rotator) : undefined
+		const client = camera[CLIENT]!
+		const mount = req.mount ? this.mountManager.get(client, req.mount) : undefined
+		const wheel = req.wheel ? this.wheelManager.get(client, req.wheel) : undefined
+		const focuser = req.focuser ? this.focuserManager.get(client, req.focuser) : undefined
+		const rotator = req.rotator ? this.rotatorManager.get(client, req.rotator) : undefined
 		this.cameraManager.snoop(camera, ...[mount, wheel, focuser, rotator].filter((e) => !!e))
 		task.start()
 	}
@@ -96,18 +97,18 @@ export class CameraHandler implements DeviceHandler<Camera> {
 }
 
 export function camera(cameraHandler: CameraHandler) {
-	function cameraFromParams(params: { id: string }) {
-		return cameraHandler.cameraManager.get(decodeURIComponent(params.id))!
+	function cameraFromParams(clientId: string, id: string) {
+		return cameraHandler.cameraManager.get(clientId, decodeURIComponent(id))!
 	}
 
 	const app = new Elysia({ prefix: '/cameras' })
 		// Endpoints!
-		.get('', () => cameraHandler.cameraManager.list())
-		.get('/:id', ({ params }) => cameraFromParams(params))
-		.post('/:id/cooler', ({ params, body }) => cameraHandler.cameraManager.cooler(cameraFromParams(params), body as never))
-		.post('/:id/temperature', ({ params, body }) => cameraHandler.cameraManager.temperature(cameraFromParams(params), body as never))
-		.post('/:id/start', ({ params, body }) => cameraHandler.startCapture(cameraFromParams(params), body as never))
-		.post('/:id/stop', ({ params }) => cameraHandler.stopCapture(cameraFromParams(params)))
+		.get('', ({ query }) => Array.from(cameraHandler.cameraManager.list(query.clientId)))
+		.get('/:id', ({ params, query }) => cameraFromParams(query.clientId, params.id))
+		.post('/:id/cooler', ({ params, query, body }) => cameraHandler.cameraManager.cooler(cameraFromParams(query.clientId, params.id), body as never))
+		.post('/:id/temperature', ({ params, query, body }) => cameraHandler.cameraManager.temperature(cameraFromParams(query.clientId, params.id), body as never))
+		.post('/:id/start', ({ params, body, query }) => cameraHandler.startCapture(cameraFromParams(query.clientId, params.id), body as never))
+		.post('/:id/stop', ({ params, query }) => cameraHandler.stopCapture(cameraFromParams(query.clientId, params.id)))
 
 	return app
 }

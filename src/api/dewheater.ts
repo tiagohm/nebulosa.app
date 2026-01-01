@@ -6,8 +6,8 @@ import type { CoverUpdated, DewHeaterAdded, DewHeaterRemoved, DewHeaterUpdated }
 import type { WebSocketMessageHandler } from './message'
 
 export function dewHeater(wsm: WebSocketMessageHandler, dewHeaterManager: DewHeaterManager) {
-	function dewHeaterFromParams(params: { id: string }) {
-		return dewHeaterManager.get(decodeURIComponent(params.id))!
+	function dewHeaterFromParams(clientId: string, id: string) {
+		return dewHeaterManager.get(clientId, decodeURIComponent(id))!
 	}
 
 	const handler: DeviceHandler<DewHeater> = {
@@ -31,9 +31,9 @@ export function dewHeater(wsm: WebSocketMessageHandler, dewHeaterManager: DewHea
 
 	const app = new Elysia({ prefix: '/dewheaters' })
 		// Endpoints!
-		.get('', () => dewHeaterManager.list())
-		.get('/:id', ({ params }) => dewHeaterFromParams(params))
-		.post('/:id/dutycycle', ({ params, body }) => dewHeaterManager.dutyCycle(dewHeaterFromParams(params), body as never))
+		.get('', ({ query }) => Array.from(dewHeaterManager.list(query.clientId)))
+		.get('/:id', ({ params, query }) => dewHeaterFromParams(query.clientId, params.id))
+		.post('/:id/dutycycle', ({ params, query, body }) => dewHeaterManager.dutyCycle(dewHeaterFromParams(query.clientId, params.id), body as never))
 
 	return app
 }

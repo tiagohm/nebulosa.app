@@ -27,7 +27,7 @@ export class FramingHandler {
 export function framing(framing: FramingHandler) {
 	const app = new Elysia({ prefix: '/framing' })
 		// Endpoints!
-		.get('/hips-surveys', () => hipsSurveys)
+		.get('/hips-surveys', Response.json(hipsSurveys))
 		.post('', ({ body }) => framing.frame(body as never))
 
 	return app

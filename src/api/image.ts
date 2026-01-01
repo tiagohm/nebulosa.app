@@ -505,8 +505,8 @@ export function image(imageHandler: ImageHandler) {
 		.post('/annotate', ({ body }) => imageHandler.annotate(body as never))
 		.post('/coordinateinterpolation', ({ body }) => imageHandler.coordinateInterpolation(body as never))
 		.post('/statistics', ({ body }) => imageHandler.statistics(body as never))
-		.get('/fovcameras', () => fovCameras)
-		.get('/fovtelescopes', () => fovTelescopes)
+		.get('/fovcameras', Response.json(fovCameras))
+		.get('/fovtelescopes', Response.json(fovTelescopes))
 		.use(cron({ name: 'clear', pattern: '0 */1 * * * *', run: () => imageHandler.imageProcessor.clear() }))
 
 	return app

@@ -51,19 +51,19 @@ export const IndiPanelControlMolecule = molecule(() => {
 		})
 
 		unsubscribers[1] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:update', (event) => {
-			if (state.device === event.device) {
+			if (state.device === event.device && connection.state.connected?.id === event.clientId) {
 				addProperty(event.property)
 			}
 		})
 
 		unsubscribers[2] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:remove', (event) => {
-			if (state.device === event.device) {
+			if (state.device === event.device && connection.state.connected?.id === event.clientId) {
 				removeProperty(event.property)
 			}
 		})
 
-		unsubscribers[3] = bus.subscribe<Message>('indi:message', (event) => {
-			if (event.device === state.device) {
+		unsubscribers[3] = bus.subscribe<Message & { clientId: string }>('indi:message', (event) => {
+			if (event.device === state.device && connection.state.connected?.id === event.clientId) {
 				state.messages.unshift(event)
 			}
 		})
@@ -85,7 +85,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 	})
 
 	async function retrieveDevices(device: Device | string = state.device) {
-		const devices = await Api.Indi.devices()
+		const devices = await Api.Indi.devices(connection.state.connected!)
 		state.devices = devices?.sort() ?? []
 		if (!state.device || !state.devices.includes(state.device)) state.device = (typeof device === 'string' ? device : device?.name) || state.devices[0] || ''
 		ping()
@@ -94,7 +94,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 	async function retrieveProperties(device: string = state.device) {
 		if (device) {
 			state.properties = {}
-			const properties = await Api.Indi.Properties.list(device)
+			const properties = await Api.Indi.Properties.list(device, connection.state.connected!)
 			properties && addProperties(properties)
 
 			state.groups = Object.keys(state.properties).sort()
@@ -103,7 +103,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 	}
 
 	async function retrieveMessages(device: string = state.device) {
-		const messages = await Api.Indi.messages(device)
+		const messages = await Api.Indi.messages(device, connection.state.connected!)
 		if (messages) state.messages = messages.sort((a, b) => b.timestamp!.localeCompare(a.timestamp!))
 	}
 

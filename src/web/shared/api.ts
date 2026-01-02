@@ -98,8 +98,8 @@ export namespace Api {
 	}
 
 	export namespace Indi {
-		export function devices() {
-			return json<string[]>('/indi/devices', 'get')
+		export function devices(connection: ConnectionStatus) {
+			return json<string[]>(`/indi/devices?clientId=${connection.id}`, 'get')
 		}
 
 		export function connect(device: Device) {
@@ -110,13 +110,13 @@ export namespace Api {
 			return res(`/indi/${device.name}/disconnect?clientId=${device.client.id}`, 'post')
 		}
 
-		export function messages(device?: string) {
-			return json<Message[]>(`/indi/messages?device=${device ?? ''}`, 'get')
+		export function messages(device: string | undefined, connection: ConnectionStatus) {
+			return json<Message[]>(`/indi/messages?device=${device ?? ''}&clientId=${connection.id}`, 'get')
 		}
 
 		export namespace Properties {
-			export function list(device: string) {
-				return json<DeviceProperties>(`/indi/${device}/properties`, 'get')
+			export function list(device: string, connection: ConnectionStatus) {
+				return json<DeviceProperties>(`/indi/${device}/properties?clientId=${connection.id}`, 'get')
 			}
 
 			export function send(device: string, type: DeviceProperty['type'], message: NewVector, connection: ConnectionStatus) {

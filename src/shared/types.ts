@@ -529,6 +529,7 @@ export interface IndiServerEvent {
 }
 
 export interface IndiDevicePropertyEvent {
+	readonly clientId: string
 	readonly device: string
 	readonly name: string
 	readonly property: DeviceProperty

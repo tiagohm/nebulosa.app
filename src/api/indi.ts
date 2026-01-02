@@ -49,7 +49,7 @@ export function disconnect(device: Device) {
 	}
 }
 
-export type IndiMessageListener = (message: Message) => void
+export type IndiMessageListener = (client: IndiClient, message: Message) => void
 
 export class IndiHandler implements IndiClientHandler {
 	private readonly messageMap = new Map<IndiClient, Map<string, Message[]>>()
@@ -179,7 +179,7 @@ export class IndiHandler implements IndiClientHandler {
 
 		list.push(message)
 
-		this.messageListeners.forEach((e) => e(message))
+		this.messageListeners.forEach((e) => e(client, message))
 	}
 
 	get(client: IndiClient | string, id: string): Device | undefined {
@@ -227,8 +227,8 @@ export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties
 	}
 
 	function notify(clientId: string, device: string, property: DeviceProperty, type: 'update' | 'remove') {
-		if (listeners.has(device)) {
-			wsm.send<IndiDevicePropertyEvent>(`indi:property:${type}`, { device, name: property.name, property })
+		if (listeners.has(`${clientId}:${device}`)) {
+			wsm.send<IndiDevicePropertyEvent>(`indi:property:${type}`, { clientId, device, name: property.name, property })
 		}
 	}
 
@@ -248,11 +248,11 @@ export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties
 
 	properties.addHandler(handler)
 
-	indi.addMessageListener((message) => {
+	indi.addMessageListener((client, message) => {
 		if (!message.device) {
 			notificationHandler.send({ title: 'INFO', description: message.message, color: 'primary' })
-		} else if (listeners.has(message.device)) {
-			wsm.send<Message>('indi:message', message)
+		} else if (listeners.has(`${client.id}:${message.device}`)) {
+			wsm.send<Message & { clientId: string }>('indi:message', { ...message, clientId: client.id! })
 		}
 	})
 
@@ -313,7 +313,7 @@ export function indi(wsm: WebSocketMessageHandler, indi: IndiHandler, properties
 		.post('/server/stop', () => stop())
 		.get('/server/status', () => status())
 		.get('/server/drivers', () => drivers())
-		.get('/messages', ({ query }) => indi.messages(query.device))
+		.get('/messages', ({ query }) => indi.messages(query.clientId, query.device))
 		.use(cron({ name: 'ping', pattern: '0 */1 * * * *', run: clear }))
 
 	return app

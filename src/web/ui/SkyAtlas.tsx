@@ -986,8 +986,9 @@ interface EphemerisChartProps {
 }
 
 function chartTooltipContent({ active, payload }: TooltipContentProps<number, string>) {
-	if (!active || !payload?.length) return null
-	const item = payload[0]?.payload as EphemerisChartData
+	if (!active || !payload?.length || payload[0].name !== 'value') return null
+
+	const item = payload[0].payload as EphemerisChartData
 	const time = (+item.name + 720) % 1440
 	const hour = (time / 1440) * 24
 	const minute = (hour - Math.trunc(hour)) * 60

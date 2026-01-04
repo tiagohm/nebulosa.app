@@ -562,8 +562,8 @@ export namespace Api {
 			return json<AlpacaServerStatus>('/alpaca/status', 'get')
 		}
 
-		export function start() {
-			return res('/alpaca/start', 'post')
+		export function start(port: number) {
+			return res(`/alpaca/start?port=${port}`, 'post')
 		}
 
 		export function stop() {

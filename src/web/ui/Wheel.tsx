@@ -17,13 +17,13 @@ export const Wheel = memo(() => {
 	const selected = useSnapshot(wheel.state.selected, { sync: true })
 
 	const Header = (
-		<div className='flex flex-row items-center justify-between'>
+		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
 				<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={wheel.connect} />
 				<IndiPanelControlButton device={wheel.scope.wheel.name} />
 			</div>
 			<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
-				<span className='leading-5'>Filter Wheel</span>
+				<span className='font-semibold leading-5'>Filter Wheel</span>
 				<span className='text-xs font-normal text-gray-400 max-w-full'>{wheel.scope.wheel.name}</span>
 			</div>
 		</div>

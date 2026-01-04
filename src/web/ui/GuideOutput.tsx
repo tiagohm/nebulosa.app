@@ -15,13 +15,13 @@ export const GuideOutput = memo(() => {
 	const { north, south, west, east } = useSnapshot(guideOutput.state.request, { sync: true })
 
 	const Header = (
-		<div className='flex flex-row items-center justify-between'>
+		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
 				<ConnectButton isConnected={connected} isDisabled={pulsing} isLoading={connecting} onPointerUp={guideOutput.connect} />
 				<IndiPanelControlButton device={guideOutput.scope.guideOutput.name} />
 			</div>
 			<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
-				<span className='leading-5'>Guide Output</span>
+				<span className='font-semibold leading-5'>Guide Output</span>
 				<span className='text-xs font-normal text-gray-400 max-w-full'>{guideOutput.scope.guideOutput.name}</span>
 			</div>
 		</div>

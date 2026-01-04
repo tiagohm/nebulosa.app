@@ -36,25 +36,8 @@ export const ConnectionMolecule = molecule(() => {
 	if (state.connections.length === 0) {
 		state.connections.push(structuredClone(DEFAULT_CONNECTION))
 	}
-	if (!state.selected) {
-		state.selected = state.connections[0]
-	}
 
-	// Connect to an existing connection
-	void Api.Connections.list().then((connections) => {
-		if (!connections?.length) return
-
-		for (const connection of connections) {
-			const index = state.connections.findIndex((c) => c.id === connection.id || (c.port === connection.port && (c.host === connection.host || c.host === connection.ip) && c.type === connection.type))
-
-			if (index >= 0) {
-				state.selected = state.connections[index]
-				state.connected = connection
-				void list(connection)
-				break
-			}
-		}
-	})
+	state.selected ??= state.connections[0]
 
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(3)

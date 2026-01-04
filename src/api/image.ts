@@ -54,7 +54,7 @@ export class ImageProcessor {
 
 	save(buffer: Buffer, path: string, camera?: string) {
 		// Avoid double buffering
-		const canBuffer = process.platform !== 'linux' || !path.startsWith('/dev/shm/')
+		const canBuffer = !camera || process.platform !== 'linux' || !path.startsWith('/dev/shm/')
 
 		if (camera) {
 			// Delete existing image for the camera

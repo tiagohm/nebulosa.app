@@ -12,13 +12,13 @@ export const FlatPanel = memo(() => {
 	const { connecting, connected, intensity, enabled } = useSnapshot(flatPanel.state.flatPanel)
 
 	const Header = (
-		<div className='flex flex-row items-center justify-between'>
+		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
 				<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={flatPanel.connect} />
 				<IndiPanelControlButton device={flatPanel.scope.flatPanel.name} />
 			</div>
 			<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
-				<span className='leading-5'>Flat Panel</span>
+				<span className='font-semibold leading-5'>Flat Panel</span>
 				<span className='text-xs font-normal text-gray-400 max-w-full'>{flatPanel.scope.flatPanel.name}</span>
 			</div>
 		</div>

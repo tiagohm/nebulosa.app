@@ -10,11 +10,13 @@ import { initProxy } from '@/shared/proxy'
 
 export interface AlpacaState {
 	show: boolean
+	port: number
 	readonly status: AlpacaServerStatus
 }
 
 const state = proxy<AlpacaState>({
 	show: false,
+	port: 32227,
 	status: {
 		running: false,
 		port: 0,
@@ -22,7 +24,7 @@ const state = proxy<AlpacaState>({
 	},
 })
 
-initProxy(state, 'alpaca', ['p:show'])
+initProxy(state, 'alpaca', ['p:show', 'p:port'])
 
 export const AlpacaMolecule = molecule(() => {
 	onMount(() => {
@@ -60,7 +62,7 @@ export const AlpacaMolecule = molecule(() => {
 	}
 
 	function start() {
-		return Api.Alpaca.start()
+		return Api.Alpaca.start(state.port)
 	}
 
 	function stop() {

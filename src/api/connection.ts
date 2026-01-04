@@ -66,11 +66,10 @@ export class ConnectionHandler {
 				const status = this.status(client)!
 
 				this.clients.delete(id)
+				console.info('disconnected from INDI server', client.remoteIp, client.remotePort)
 				client.close()
 
 				this.wsm.send<ConnectionEvent>('connection:close', { status })
-
-				console.info('disconnected from INDI server', client.remoteIp, client.remotePort)
 			}
 		} else {
 			for (const [key, client] of this.clients) {
@@ -78,11 +77,10 @@ export class ConnectionHandler {
 					const status = this.status(client)!
 
 					this.clients.delete(key)
+					console.info('disconnected from INDI server', client.remoteIp, client.remotePort)
 					client.close()
 
 					this.wsm.send<ConnectionEvent>('connection:close', { status })
-
-					console.info('disconnected from INDI server', client.remoteIp, client.remotePort)
 
 					break
 				}

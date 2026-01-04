@@ -16,13 +16,13 @@ export const Rotator = memo(() => {
 	const { angle: value } = useSnapshot(rotator.state, { sync: true })
 
 	const Header = (
-		<div className='flex flex-row items-center justify-between'>
+		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
 				<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={rotator.connect} />
 				<IndiPanelControlButton device={rotator.scope.rotator.name} />
 			</div>
 			<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
-				<span className='leading-5'>Rotator</span>
+				<span className='font-semibold leading-5'>Rotator</span>
 				<span className='text-xs font-normal text-gray-400 max-w-full'>{rotator.scope.rotator.name}</span>
 			</div>
 		</div>

@@ -1,5 +1,6 @@
 // https://cdn.astrobin.com/static/astrobin_apps_platesolving/js/CoordinateInterpolation.1733091e5e90.js
 
+import type { NumberArray } from 'nebulosa/src/math'
 import { BicubicSplineInterpolation } from './bicubic-interpolation'
 
 export class CoordinateInterpolator {
@@ -7,8 +8,8 @@ export class CoordinateInterpolator {
 	private readonly Id: BicubicSplineInterpolation
 
 	constructor(
-		Ma: number[],
-		Md: number[],
+		Ma: NumberArray,
+		Md: NumberArray,
 		private readonly x0: number,
 		private readonly y0: number,
 		x1: number,

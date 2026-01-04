@@ -41,7 +41,7 @@ export function alpaca(wsm: WebSocketMessageHandler, alpacaServer: AlpacaServer,
 	const app = new Elysia({ prefix: '/alpaca' })
 		// Endpoints!
 		.get('/status', () => status())
-		.post('/start', () => start())
+		.post('/start', ({ query }) => start(+query.port || undefined))
 		.post('/stop', () => stop())
 
 	return app

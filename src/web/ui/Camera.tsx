@@ -42,13 +42,13 @@ export const Camera = memo(() => {
 	)
 
 	const Header = (
-		<div className='flex flex-row items-center justify-between'>
+		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
 				<ConnectButton isConnected={connected} isDisabled={capturing} isLoading={connecting} onPointerUp={camera.connect} />
 				<IndiPanelControlButton device={camera.scope.camera.name} />
 			</div>
 			<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
-				<span className='leading-5'>Camera</span>
+				<span className='font-semibold leading-5'>Camera</span>
 				<span className='text-xs font-normal text-gray-400 max-w-full'>{camera.scope.camera.name}</span>
 			</div>
 			<IconButton color='primary' icon={minimized ? Icons.ChevronDown : Icons.ChevronUp} onPointerUp={camera.minimize} variant='flat' />

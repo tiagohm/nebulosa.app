@@ -11,17 +11,20 @@ import { Modal } from './Modal'
 export const About = memo(() => {
 	const about = useMolecule(AboutMolecule)
 
+	const Header = (
+		<div className='w-full ms-10 justify-center text-4xl font-bold flex items-center gap-3'>
+			Nebulosa <Chip>{packageJson.version}</Chip>
+		</div>
+	)
+
 	return (
-		<Modal id='about' maxWidth='450px' onHide={about.hide}>
+		<Modal header={Header} id='about' maxWidth='450px' onHide={about.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full sm:col-span-3 row-span-6 flex flex-col items-center gap-2'>
 					<img className='max-h-35' src={nebulosaLogo} />
 					<a href='https://github.com/tiagohm/nebulosa.app' rel='noreferrer' target='_blank'>
 						<img src='https://img.shields.io/github/stars/tiagohm/nebulosa.app?style=flat&label=GitHub&color=%231a1e23' />
 					</a>
-				</div>
-				<div className='col-span-full sm:col-span-9 justify-center text-4xl font-bold flex items-center gap-3'>
-					Nebulosa <Chip>{packageJson.version}</Chip>
 				</div>
 				<div className='col-span-full sm:col-span-9 text-gray-300 text-center'>The complete integrated solution for all of your astronomical imaging needs.</div>
 				<div className='col-span-full sm:col-span-9 text-xs flex flex-row items-center gap-1 text-gray-500 justify-center'>

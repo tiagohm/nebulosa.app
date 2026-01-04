@@ -26,13 +26,13 @@ export const Mount = memo(() => {
 	const moving = slewing || parking || homing
 
 	const Header = (
-		<div className='flex flex-row items-center justify-between'>
+		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
 				<ConnectButton isConnected={connected} isDisabled={moving} isLoading={connecting} onPointerUp={mount.connect} />
 				<IndiPanelControlButton device={mount.scope.mount.name} />
 			</div>
 			<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
-				<span className='leading-5'>Mount</span>
+				<span className='font-semibold leading-5'>Mount</span>
 				<span className='text-xs font-normal text-gray-400 max-w-full'>{mount.scope.mount.name}</span>
 			</div>
 		</div>

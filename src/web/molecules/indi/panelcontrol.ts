@@ -76,7 +76,9 @@ export const IndiPanelControlMolecule = molecule(() => {
 
 		const timer = setInterval(ping, 5000)
 
-		void retrieveDevices()
+		if (state.show && connection.state.connected) {
+			void retrieveDevices()
+		}
 
 		return () => {
 			unsubscribe(unsubscribers)

@@ -4,13 +4,12 @@ import { deg, PARSE_HOUR_ANGLE, parseAngle, toDeg } from 'nebulosa/src/angle'
 import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astrometry'
 import { AU_KM, DAYSEC, DEG2RAD, MOON_SYNODIC_DAYS, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
+import { equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic } from 'nebulosa/src/coordinate'
 import { type CsvRow, readCsv } from 'nebulosa/src/csv'
 import { toMeter } from 'nebulosa/src/distance'
-import { eraC2s, eraS2c } from 'nebulosa/src/erfa'
-import { precessFk5FromJ2000 } from 'nebulosa/src/fk5'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
 import { iersb } from 'nebulosa/src/iers'
-import { expectedPierSide, type UTCTime } from 'nebulosa/src/indi.device'
+import { expectedPierSide, meridianTimeIn, type UTCTime } from 'nebulosa/src/indi.device'
 import { readableStreamSource } from 'nebulosa/src/io'
 import { type GeographicPosition, localSiderealTime } from 'nebulosa/src/location'
 import { nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/moon'
@@ -21,6 +20,7 @@ import { daysInMonth, formatTemporal, parseTemporal, type Temporal, temporalAdd,
 import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS } from 'nebulosa/src/time'
 import { binarySearchWithComparator } from 'nebulosa/src/util'
 import { join } from 'path'
+import type { Mutable } from 'utility-types'
 import besselianElementsOfSolarEclipsesCsv from '../../data/besselian-elements-of-solar-eclipses.csv' with { type: 'file' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // biome-ignore format: too long!
@@ -128,7 +128,7 @@ export class AtlasHandler {
 			const position = sun.get(Math.trunc(time / 1000))
 
 			if (position) {
-				const { altitude } = position
+				const altitude = position.horizontal[1]
 
 				if (step === 0) {
 					if (altitude >= 0) twilight.dusk.civil = [time + offset, i]
@@ -357,21 +357,24 @@ export class AtlasHandler {
 		const time = this.cache.time(req.time.utc, location)
 		const lst = localSiderealTime(time, location, true)
 
-		let azimuth = 0
-		let altitude = 0
-		let rightAscension = 0
-		let declination = 0
+		const horizontal: Mutable<BodyPosition['horizontal']> = [0, 0]
+		const equatorial: Mutable<BodyPosition['equatorial']> = [0, 0]
+		const equatorialJ2000 = [dso.rightAscension, dso.declination] as const
 
 		if (dso.pmRa && dso.pmDec) {
 			const ebpv = this.cache.earth(time)
 			const parallax = dso.distance > 0 ? 1 / dso.distance : 0
 			const ob = observeStar({ ...dso, parallax }, time, ebpv)
-			;({ azimuth, altitude, rightAscension, declination } = ob)
+			equatorial[0] = ob.rightAscension
+			equatorial[1] = ob.declination
+			horizontal[0] = ob.azimuth
+			horizontal[1] = ob.altitude
 			// rightAscension -= ob.equationOfOrigins // RA CIO -> RA equinox
 		} else {
-			const cirs = precessFk5FromJ2000(eraS2c(dso.rightAscension, dso.declination), time)
-			;({ azimuth, altitude } = cirsToObserved(cirs, time))
-			;[rightAscension, declination] = eraC2s(...cirs)
+			Object.assign(equatorial, equatorialFromJ2000(dso.rightAscension, dso.declination, time))
+			const { azimuth, altitude } = cirsToObserved(equatorial, time)
+			horizontal[0] = azimuth
+			horizontal[1] = altitude
 		}
 
 		return {
@@ -381,14 +384,15 @@ export class AtlasHandler {
 			illuminated: 0,
 			elongation: 0,
 			leading: false,
-			rightAscension,
-			declination,
-			rightAscensionJ2000: dso.rightAscension,
-			declinationJ2000: dso.declination,
-			azimuth,
-			altitude,
+			equatorial,
+			equatorialJ2000,
+			horizontal,
+			ecliptic: equatorialToEcliptic(...equatorial, time),
+			galactic: equatorialToGalatic(...equatorialJ2000),
+			lst,
+			meridianIn: meridianTimeIn(equatorial[0], lst),
+			pierSide: expectedPierSide(...equatorial, lst),
 			names: names.map((n) => n.name),
-			pierSide: expectedPierSide(rightAscension, declination, lst),
 		}
 	}
 
@@ -550,7 +554,7 @@ export class AtlasHandler {
 		const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 
 		const ephemeris = this.ephemeris[id]
-		let position = ephemeris?.get(key)
+		let position: Mutable<BodyPosition> | undefined = ephemeris?.get(key)
 
 		if (!ephemeris || !position || location !== this.ephemeris.location || !ephemeris.has(Math.trunc(startTime / 1000)) || !ephemeris.has(Math.trunc(endTime / 1000))) {
 			const { longitude, latitude, elevation } = location
@@ -576,7 +580,12 @@ export class AtlasHandler {
 		const time = this.cache.time(req.time.utc, location)
 		const lst = localSiderealTime(time, location, true)
 
-		position.pierSide = expectedPierSide(position.rightAscension, position.declination, lst)
+		const [rightAscension, declination] = position.equatorial
+		position.pierSide = expectedPierSide(rightAscension, declination, lst)
+		position.meridianIn = meridianTimeIn(rightAscension, lst)
+		position.lst = lst
+		Object.assign(position.ecliptic, equatorialToEcliptic(rightAscension, declination, time))
+		Object.assign(position.galactic, equatorialToGalatic(position.equatorialJ2000[0], position.equatorialJ2000[1]))
 
 		return position
 	}
@@ -593,7 +602,7 @@ export class AtlasHandler {
 		const chart = new Array<number>(1441)
 
 		for (let i = 0; i <= 1440; i++) {
-			chart[i] = positions.get(seconds + i * 60)!.altitude
+			chart[i] = positions.get(seconds + i * 60)!.horizontal[1]
 		}
 
 		return chart
@@ -679,20 +688,22 @@ function makeBodyPositionFromHorizons(ephemeris: CsvRow[], output: Map<number, B
 		const distance = lightTime * ((SPEED_OF_LIGHT * 0.06) / AU_KM) // AU
 
 		const position = {
-			rightAscensionJ2000: parseAngle(e[3]),
-			declinationJ2000: parseAngle(e[4]),
-			rightAscension: parseAngle(e[5]),
-			declination: parseAngle(e[6]),
-			azimuth: parseAngle(e[7]),
-			altitude: parseAngle(e[8]),
+			equatorial: [parseAngle(e[5])!, parseAngle(e[6])!],
+			equatorialJ2000: [parseAngle(e[3])!, parseAngle(e[4])!],
+			horizontal: [parseAngle(e[7])!, parseAngle(e[8])!],
 			magnitude: e[9] === 'n.a.' ? null : parseFloat(e[9]),
-			constellation: e[15].toUpperCase(),
+			constellation: e[15].toUpperCase() as never,
 			distance,
 			illuminated: parseFloat(e[12]),
-			elongation: parseAngle(e[13]),
+			elongation: parseAngle(e[13])!,
 			leading: e[14] === '/L',
+			// Computed on-demand
+			galactic: [0, 0],
+			ecliptic: [0, 0],
 			pierSide: 'NEITHER',
-		} as BodyPosition
+			lst: 0,
+			meridianIn: 0,
+		} satisfies BodyPosition
 
 		output.set(seconds + i * 60, position)
 	}

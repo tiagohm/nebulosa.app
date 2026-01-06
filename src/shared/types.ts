@@ -4,7 +4,7 @@ import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
 import type { Angle } from 'nebulosa/src/angle'
 import { DEFAULT_REFRACTION_PARAMETERS, type RefractionParameters } from 'nebulosa/src/astrometry'
 import type { Constellation } from 'nebulosa/src/constellation'
-import type { EquatorialCoordinate, EquatorialCoordinateJ2000, HorizontalCoordinate } from 'nebulosa/src/coordinate'
+import type { EquatorialCoordinate, HorizontalCoordinate } from 'nebulosa/src/coordinate'
 import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { Point, Rect, Size } from 'nebulosa/src/geometry'
@@ -252,15 +252,13 @@ export interface AnnotatedSkyObject extends Required<Omit<SkyObject, 'type' | 's
 	type: StellariumObjectType | 'MINOR_PLANET'
 }
 
-export interface BodyPosition extends Readonly<EquatorialCoordinate>, Readonly<EquatorialCoordinateJ2000>, Readonly<HorizontalCoordinate> {
+export interface BodyPosition extends CoordinateInfo {
+	readonly names?: readonly string[]
 	readonly magnitude: number | null
-	readonly constellation: Constellation
 	readonly distance: Distance
 	readonly illuminated: number
 	readonly elongation: number
 	readonly leading: boolean
-	readonly names?: readonly string[]
-	pierSide: PierSide
 }
 
 export interface SolarSeasons {
@@ -700,14 +698,17 @@ export interface CameraCaptureEvent {
 
 export type MountRemoteControlProtocol = 'LX200' | 'STELLARIUM'
 
-export interface MountEquatorialCoordinatePosition extends Readonly<EquatorialCoordinate>, Readonly<EquatorialCoordinateJ2000>, Readonly<HorizontalCoordinate> {
+export interface CoordinateInfo {
+	readonly equatorial: readonly [Angle, Angle]
+	readonly equatorialJ2000: readonly [Angle, Angle]
+	readonly horizontal: readonly [Angle, Angle]
+	readonly ecliptic: readonly [Angle, Angle]
+	readonly galactic: readonly [Angle, Angle]
 	readonly lst: Angle
 	readonly constellation: Constellation
 	readonly meridianIn: Angle
 	readonly pierSide: PierSide
 }
-
-export type MountTargetCoordinate<T = string> = (EquatorialCoordinate<T> & { type: 'J2000' | 'JNOW' }) | (HorizontalCoordinate<T> & { type: 'ALTAZ' })
 
 export interface MountRemoteControlStart {
 	readonly protocol: MountRemoteControlProtocol
@@ -919,13 +920,12 @@ export const DEFAULT_STAR_DETECTION: StarDetection = {
 	slot: 0,
 }
 
-export const DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION: MountEquatorialCoordinatePosition = {
-	rightAscension: 0,
-	declination: 0,
-	rightAscensionJ2000: 0,
-	declinationJ2000: 0,
-	azimuth: 0,
-	altitude: 0,
+export const DEFAULT_COORDINATE_INFO: CoordinateInfo = {
+	equatorial: [0, 0],
+	equatorialJ2000: [0, 0],
+	horizontal: [0, 0],
+	ecliptic: [0, 0],
+	galactic: [0, 0],
 	lst: 0,
 	constellation: 'AND',
 	meridianIn: 0,
@@ -1066,20 +1066,13 @@ export const DEFAULT_SKY_OBJECT_SEARCH: SearchSkyObject = {
 }
 
 export const DEFAULT_BODY_POSITION: BodyPosition = {
+	...DEFAULT_COORDINATE_INFO,
+	names: [],
 	magnitude: 0,
-	constellation: 'AND',
 	distance: 0,
 	illuminated: 0,
 	elongation: 0,
 	leading: false,
-	rightAscension: 0,
-	declination: 0,
-	rightAscensionJ2000: 0,
-	declinationJ2000: 0,
-	azimuth: 0,
-	altitude: 0,
-	names: [],
-	pierSide: 'NEITHER',
 }
 
 export const EMPTY_TWILIGHT: Twilight = {

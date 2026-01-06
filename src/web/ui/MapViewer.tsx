@@ -1,5 +1,4 @@
 import { Icon, type LatLngExpression, type LatLngTuple, type Marker as LeafletMarker } from 'leaflet'
-import type React from 'react'
 import { type CSSProperties, useEffect, useRef } from 'react'
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'

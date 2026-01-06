@@ -2,7 +2,6 @@ import { Calendar, Checkbox, Chip, type ChipProps, Input, Listbox, ListboxItem, 
 import { fromAbsolute, type ZonedDateTime } from '@internationalized/date'
 import { useMolecule } from 'bunshi/react'
 import { clsx } from 'clsx'
-import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/temporal'
@@ -12,8 +11,9 @@ import { type BodyPosition, EMPTY_TWILIGHT, type Twilight } from 'src/shared/typ
 import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, type BookmarkItem, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, type SkyAtlasTab, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
-import { formatDistance, skyObjectName, skyObjectType } from '@/shared/util'
+import { skyObjectName, skyObjectType } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
+import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { ConstellationSelect } from './ConstellationSelect'
 import { FilterableListbox } from './FilterableListBox'
 import { type Icon, Icons } from './Icon'
@@ -940,19 +940,10 @@ const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => {
 
 	return (
 		<div className='w-full grid grid-cols-12 gap-2 p-0'>
-			<Input className='col-span-3' isReadOnly label='RA' size='sm' value={formatRA(position.rightAscension)} />
-			<Input className='col-span-3' isReadOnly label='DEC' size='sm' value={formatDEC(position.declination)} />
-			<Input className='col-span-3' isReadOnly label='RA (J2000)' size='sm' value={formatRA(position.rightAscensionJ2000)} />
-			<Input className='col-span-3' isReadOnly label='DEC (J2000)' size='sm' value={formatDEC(position.declinationJ2000)} />
-			<Input className='col-span-3' isReadOnly label='AZ' size='sm' value={formatAZ(position.azimuth)} />
-			<Input className='col-span-3' isReadOnly label='ALT' size='sm' value={formatALT(position.altitude)} />
-			<Input className='col-span-2' isReadOnly label='Mag.' size='sm' value={position.magnitude?.toFixed(2) ?? '-'} />
-			<Input className='col-span-2' isReadOnly label='Const.' size='sm' value={position.constellation} />
-			<Input className='col-span-2' isReadOnly label='Illum.' size='sm' value={`${position.illuminated.toFixed(1)} %`} />
-			<Input className='col-span-4' isReadOnly label='Distance' size='sm' value={formatDistance(position.distance)} />
-			<Input className='col-span-2' isReadOnly label='Elong.' size='sm' value={`${position.elongation.toFixed(1)} °`} />
-			<Input className='col-span-2' isReadOnly label='Pier' size='sm' value={position.pierSide === 'NEITHER' ? 'N' : position.pierSide} />
-			<div className='col-span-4 flex items-center justify-center gap-2'>
+			<div className='col-span-full'>
+				<BodyCoordinateInfo position={position} />
+			</div>
+			<div className='col-span-full flex items-center justify-center gap-2'>
 				<MountDropdown allowEmpty={false} onValueChange={atlas.syncTo} tooltipContent='Sync'>
 					{(value, color, isDisabled) => <IconButton color='primary' icon={Icons.Sync} isDisabled={isDisabled} variant='flat' />}
 				</MountDropdown>

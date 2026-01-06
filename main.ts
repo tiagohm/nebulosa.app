@@ -283,7 +283,7 @@ const app = new Elysia({
 	.use(confirmation(confirmationHandler))
 	.use(indi(wsm, indiHandler, devicePropertyManager, notificationHandler))
 	.use(camera(cameraHandler))
-	.use(mount(wsm, mountManager))
+	.use(mount(wsm, mountManager, cacheManager))
 	.use(focuser(wsm, focuserManager))
 	.use(wheel(wsm, wheelManager))
 	.use(thermometer(wsm, thermometerManager))

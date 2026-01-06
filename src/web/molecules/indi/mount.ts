@@ -1,12 +1,12 @@
 import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
-import type { EquatorialCoordinate, HorizontalCoordinate } from 'nebulosa/src/coordinate'
+import type { EclipticCoordinate, EquatorialCoordinate, GalacticCoordinate, HorizontalCoordinate } from 'nebulosa/src/coordinate'
 import { DEFAULT_MOUNT, type Mount, type MountTargetCoordinateType, type TrackMode } from 'nebulosa/src/indi.device'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import bus from 'src/shared/bus'
 // biome-ignore format: too long!
-import { DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION, type Framing, type MountEquatorialCoordinatePosition, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated } from 'src/shared/types'
+import { type CoordinateInfo, DEFAULT_COORDINATE_INFO, type Framing, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import type { DeepReadonly } from 'utility-types'
 import { proxy } from 'valtio'
@@ -25,10 +25,10 @@ export interface MountScopeValue {
 export interface MountState {
 	mount: EquipmentDevice<Mount>
 	readonly targetCoordinate: {
-		readonly coordinate: EquatorialCoordinate<string> & HorizontalCoordinate<string> & { type: MountTargetCoordinateType; action: TargetCoordinateAction }
-		readonly position: MountEquatorialCoordinatePosition
+		readonly coordinate: EquatorialCoordinate<string> & HorizontalCoordinate<string> & EclipticCoordinate<string> & GalacticCoordinate<string> & { type: MountTargetCoordinateType; action: TargetCoordinateAction }
+		readonly position: CoordinateInfo
 	}
-	readonly currentPosition: MountEquatorialCoordinatePosition
+	readonly currentPosition: CoordinateInfo
 	readonly location: {
 		show: boolean
 		coordinate: Mount['geographicCoordinate']
@@ -50,6 +50,8 @@ export interface MountState {
 
 const DEFAULT_TARGET_COORDINATE: MountState['targetCoordinate']['coordinate'] = {
 	type: 'J2000',
+	longitude: '000 00 00',
+	latitude: '+00 00 00',
 	rightAscension: '00 00 00',
 	declination: '+00 00 00',
 	azimuth: '000 00 00',
@@ -73,9 +75,9 @@ export const MountMolecule = molecule(() => {
 			mount,
 			targetCoordinate: {
 				coordinate: structuredClone(DEFAULT_TARGET_COORDINATE),
-				position: structuredClone(DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION),
+				position: structuredClone(DEFAULT_COORDINATE_INFO),
 			},
-			currentPosition: structuredClone(DEFAULT_MOUNT_EQUATORIAL_COORDINATE_POSITION),
+			currentPosition: structuredClone(DEFAULT_COORDINATE_INFO),
 			location: {
 				show: false,
 				coordinate: mount.geographicCoordinate,
@@ -190,8 +192,8 @@ export const MountMolecule = molecule(() => {
 				return Api.Mounts.syncTo(mount, state.targetCoordinate.coordinate)
 			case 'FRAME': {
 				const request: Partial<Framing> = {
-					rightAscension: formatRA(state.targetCoordinate.position.rightAscensionJ2000),
-					declination: formatDEC(state.targetCoordinate.position.declinationJ2000),
+					rightAscension: formatRA(state.targetCoordinate.position.equatorialJ2000[0]),
+					declination: formatDEC(state.targetCoordinate.position.equatorialJ2000[1]),
 				}
 
 				bus.emit('framing:load', request)

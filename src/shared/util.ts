@@ -1,4 +1,12 @@
-import type { ExposureTimeUnit } from './types'
+import { type Angle, PARSE_HOUR_ANGLE, parseAngle } from 'nebulosa/src/angle'
+import { cirsToObserved, observedToCirs } from 'nebulosa/src/astrometry'
+import { constellation } from 'nebulosa/src/constellation'
+import { type EquatorialCoordinate, eclipticToEquatorial, equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic, equatorialToJ2000, galacticToEquatorial } from 'nebulosa/src/coordinate'
+import { expectedPierSide, type MountTargetCoordinate, meridianTimeIn } from 'nebulosa/src/indi.device'
+import { localSiderealTime } from 'nebulosa/src/location'
+import type { Time } from 'nebulosa/src/time'
+import type { Mutable } from 'utility-types'
+import type { CoordinateInfo, ExposureTimeUnit } from './types'
 
 // Unsubscribes all provided unsubscribers
 export function unsubscribe(unsubscribers?: readonly (VoidFunction | undefined)[]) {
@@ -42,4 +50,83 @@ export function exposureTimeInMicroseconds(time: number, unit: ExposureTimeUnit)
 // Converts exposure time from one unit to another
 export function exposureTimeIn(time: number, from: ExposureTimeUnit, to: ExposureTimeUnit) {
 	return from === to ? time : time * (exposureTimeUnitFactor(to) / exposureTimeUnitFactor(from))
+}
+
+export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialCoordinate | MountTargetCoordinate<string | Angle>) {
+	const equatorial: Mutable<CoordinateInfo['equatorial']> = [0, 0]
+	const equatorialJ2000: Mutable<CoordinateInfo['equatorialJ2000']> = [0, 0]
+	const horizontal: Mutable<CoordinateInfo['horizontal']> = [0, 0]
+	const ecliptic: Mutable<CoordinateInfo['ecliptic']> = [0, 0]
+	const galactic: Mutable<CoordinateInfo['galactic']> = [0, 0]
+	let observed: ReturnType<typeof cirsToObserved> | undefined
+
+	// JNOW equatorial coordinate
+	if (!('type' in target) || target.type === 'JNOW') {
+		equatorial[0] = parseAngle(target.rightAscension, PARSE_HOUR_ANGLE)!
+		equatorial[1] = parseAngle(target.declination)!
+
+		observed = cirsToObserved(equatorial, time)
+		Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
+		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
+		Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
+	}
+	// J2000 equatorial coordinate
+	else if (target.type === 'J2000') {
+		equatorialJ2000[0] = parseAngle(target.rightAscension, PARSE_HOUR_ANGLE)!
+		equatorialJ2000[1] = parseAngle(target.declination)!
+
+		Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
+		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
+		Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
+		observed = cirsToObserved(equatorial, time)
+	}
+	// Local horizontal coordinate
+	else if (target.type === 'ALTAZ') {
+		horizontal[0] = parseAngle(target.azimuth)!
+		horizontal[1] = parseAngle(target.altitude)!
+
+		Object.assign(equatorial, observedToCirs(...horizontal, time))
+		Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
+		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
+		Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
+	}
+	// Ecliptic (at date) coordinate
+	else if (target.type === 'ECLIPTIC') {
+		ecliptic[0] = parseAngle(target.longitude)!
+		ecliptic[1] = parseAngle(target.latitude)!
+
+		Object.assign(equatorial, eclipticToEquatorial(...ecliptic, time))
+		Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
+		Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
+		observed = cirsToObserved(equatorial, time)
+	}
+	// Galactic coordinate
+	else if (target.type === 'GALACTIC') {
+		galactic[0] = parseAngle(target.longitude)!
+		galactic[1] = parseAngle(target.latitude)!
+
+		Object.assign(equatorialJ2000, galacticToEquatorial(...galactic))
+		Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
+		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
+		observed = cirsToObserved(equatorial, time)
+	}
+
+	if (observed) {
+		horizontal[0] = observed.azimuth
+		horizontal[1] = observed.altitude
+	}
+
+	const lst = localSiderealTime(time, longitude, true)
+
+	return {
+		equatorial,
+		equatorialJ2000,
+		horizontal,
+		ecliptic,
+		galactic,
+		constellation: constellation(...equatorial, time),
+		lst,
+		meridianIn: meridianTimeIn(equatorial[0], lst),
+		pierSide: expectedPierSide(...equatorial, lst),
+	} as CoordinateInfo
 }

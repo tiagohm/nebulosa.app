@@ -3,7 +3,6 @@ import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { Mount, UTCTime } from 'nebulosa/src/indi.device'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import { type Temporal, temporalAdd, temporalGet, temporalStartOfDay, temporalSubtract } from 'nebulosa/src/temporal'
-import type React from 'react'
 import bus from 'src/shared/bus'
 // biome-ignore format: too long!
 import { type BodyPosition, type CloseApproach, DEFAULT_BODY_POSITION, DEFAULT_GEOGRAPHIC_COORDINATE, DEFAULT_POSITION_OF_BODY, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type FindCloseApproaches, type Framing, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type NextLunarEclipse, type NextSolarEclipse, type PlanetType, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
@@ -816,21 +815,24 @@ export const SkyAtlasMolecule = molecule(() => {
 	function syncTo(mount?: Mount) {
 		if (!mount) return undefined
 		const { position } = state[state.tab]
-		return Api.Mounts.syncTo(mount, { type: 'JNOW', ...position })
+		const [rightAscension, declination] = position.equatorial
+		return Api.Mounts.syncTo(mount, { type: 'JNOW', rightAscension, declination })
 	}
 
 	function goTo(mount?: Mount) {
 		if (!mount) return undefined
 		const { position } = state[state.tab]
-		return Api.Mounts.goTo(mount, { type: 'JNOW', ...position })
+		const [rightAscension, declination] = position.equatorial
+		return Api.Mounts.goTo(mount, { type: 'JNOW', rightAscension, declination })
 	}
 
 	function frame() {
 		const { position } = state[state.tab]
+		const [rightAscension, declination] = position.equatorialJ2000
 
 		const request: Partial<Framing> = {
-			rightAscension: formatRA(position.rightAscensionJ2000),
-			declination: formatDEC(position.declinationJ2000),
+			rightAscension: formatRA(rightAscension),
+			declination: formatDEC(declination),
 		}
 
 		bus.emit('framing:load', request)

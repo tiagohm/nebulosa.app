@@ -816,25 +816,20 @@ export const SkyAtlasMolecule = molecule(() => {
 		if (!mount) return undefined
 		const { position } = state[state.tab]
 		const [rightAscension, declination] = position.equatorial
-		return Api.Mounts.syncTo(mount, { type: 'JNOW', rightAscension, declination })
+		return Api.Mounts.syncTo(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
 	}
 
 	function goTo(mount?: Mount) {
 		if (!mount) return undefined
 		const { position } = state[state.tab]
 		const [rightAscension, declination] = position.equatorial
-		return Api.Mounts.goTo(mount, { type: 'JNOW', rightAscension, declination })
+		return Api.Mounts.goTo(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
 	}
 
 	function frame() {
 		const { position } = state[state.tab]
 		const [rightAscension, declination] = position.equatorialJ2000
-
-		const request: Partial<Framing> = {
-			rightAscension: formatRA(rightAscension),
-			declination: formatDEC(declination),
-		}
-
+		const request: Partial<Framing> = { rightAscension: formatRA(rightAscension), declination: formatDEC(declination) }
 		bus.emit('framing:load', request)
 	}
 

@@ -1,6 +1,6 @@
 import { Chip, Input, Listbox, ListboxItem, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import { Activity, memo } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { MountMolecule, type TargetCoordinateAction } from '@/molecules/indi/mount'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
@@ -105,8 +105,10 @@ interface TargetCoordinateAndPositionProps {
 
 const TargetCoordinateAndPosition = memo(({ isDisabled }: TargetCoordinateAndPositionProps) => {
 	const mount = useMolecule(MountMolecule)
-	const { type, action, rightAscension, declination, azimuth, altitude, longitude, latitude } = useSnapshot(mount.state.targetCoordinate.coordinate, { sync: true })
+	const { type, action } = useSnapshot(mount.state.targetCoordinate.coordinate)
+	const coordinate = useSnapshot(mount.state.targetCoordinate.coordinate, { sync: true })
 	const { position } = useSnapshot(mount.state.targetCoordinate)
+	const { x, y } = coordinate[type]!
 
 	return (
 		<div className='w-full grid grid-cols-20 gap-2 items-center'>
@@ -115,18 +117,8 @@ const TargetCoordinateAndPosition = memo(({ isDisabled }: TargetCoordinateAndPos
 			<div className='col-span-full'>
 				<BodyCoordinateInfo hide={['lst', type === 'JNOW' ? 'equatorial' : type === 'J2000' ? 'equatorialJ2000' : type === 'ALTAZ' ? 'horizontal' : type === 'ECLIPTIC' ? 'ecliptic' : 'galactic']} position={position} />
 			</div>
-			<Activity mode={type === 'JNOW' || type === 'J2000' ? 'visible' : 'hidden'}>
-				<Input className='col-span-7' isDisabled={isDisabled} label='RA' onValueChange={(value) => mount.updateTargetCoordinate('rightAscension', value)} size='sm' value={rightAscension} />
-				<Input className='col-span-7' isDisabled={isDisabled} label='DEC' onValueChange={(value) => mount.updateTargetCoordinate('declination', value)} size='sm' value={declination} />
-			</Activity>
-			<Activity mode={type === 'ALTAZ' ? 'visible' : 'hidden'}>
-				<Input className='col-span-7' isDisabled={isDisabled} label='AZ' onValueChange={(value) => mount.updateTargetCoordinate('azimuth', value)} size='sm' value={azimuth} />
-				<Input className='col-span-7' isDisabled={isDisabled} label='ALT' onValueChange={(value) => mount.updateTargetCoordinate('altitude', value)} size='sm' value={altitude} />
-			</Activity>
-			<Activity mode={type === 'ECLIPTIC' || type === 'GALACTIC' ? 'visible' : 'hidden'}>
-				<Input className='col-span-7' isDisabled={isDisabled} label='LON' onValueChange={(value) => mount.updateTargetCoordinate('longitude', value)} size='sm' value={longitude} />
-				<Input className='col-span-7' isDisabled={isDisabled} label='LAT' onValueChange={(value) => mount.updateTargetCoordinate('latitude', value)} size='sm' value={latitude} />
-			</Activity>
+			<Input className='col-span-7' isDisabled={isDisabled} label={type === 'JNOW' || type === 'J2000' ? 'RA' : type === 'ALTAZ' ? 'AZ' : 'LON'} onValueChange={(value) => mount.updateTargetCoordinateByType('x', value)} size='sm' value={x} />
+			<Input className='col-span-7' isDisabled={isDisabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={(value) => mount.updateTargetCoordinateByType('y', value)} size='sm' value={y} />
 			<PopupButton className='col-span-6' color='primary' isDisabled={isDisabled} label={<TargetCoordinatePopupButtonLabel action={action} />} onPointerUp={mount.handleTargetCoordinateAction} size='lg'>
 				<div className='flex flex-col gap-1'>
 					<Listbox classNames={{ base: 'min-w-50' }} onAction={(value) => mount.updateTargetCoordinate('action', value as never)}>

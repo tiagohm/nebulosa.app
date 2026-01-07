@@ -1,8 +1,7 @@
 import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
-import type { EclipticCoordinate, EquatorialCoordinate, GalacticCoordinate, HorizontalCoordinate } from 'nebulosa/src/coordinate'
-import { DEFAULT_MOUNT, type Mount, type MountTargetCoordinateType, type TrackMode } from 'nebulosa/src/indi.device'
+import { DEFAULT_MOUNT, type Mount, type MountTargetCoordinate, type TrackMode } from 'nebulosa/src/indi.device'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import bus from 'src/shared/bus'
 // biome-ignore format: too long!
@@ -14,6 +13,7 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import type { NudgeDirection } from '@/ui/Nudge'
+import { WebSocketMolecule } from '../ws'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export type TargetCoordinateAction = 'GOTO' | 'SYNC' | 'FRAME'
@@ -25,7 +25,7 @@ export interface MountScopeValue {
 export interface MountState {
 	mount: EquipmentDevice<Mount>
 	readonly targetCoordinate: {
-		readonly coordinate: EquatorialCoordinate<string> & HorizontalCoordinate<string> & EclipticCoordinate<string> & GalacticCoordinate<string> & { type: MountTargetCoordinateType; action: TargetCoordinateAction }
+		readonly coordinate: MountTargetCoordinate & { action: TargetCoordinateAction }
 		readonly position: CoordinateInfo
 	}
 	readonly currentPosition: CoordinateInfo
@@ -50,13 +50,12 @@ export interface MountState {
 
 const DEFAULT_TARGET_COORDINATE: MountState['targetCoordinate']['coordinate'] = {
 	type: 'J2000',
-	longitude: '000 00 00',
-	latitude: '+00 00 00',
-	rightAscension: '00 00 00',
-	declination: '+00 00 00',
-	azimuth: '000 00 00',
-	altitude: '+00 00 00',
 	action: 'GOTO',
+	J2000: { x: '00 00 00', y: '+00 00 00' },
+	JNOW: { x: '00 00 00', y: '+00 00 00' },
+	ALTAZ: { x: '000 00 00', y: '+00 00 00' },
+	ECLIPTIC: { x: '000 00 00', y: '+00 00 00' },
+	GALACTIC: { x: '000 00 00', y: '+00 00 00' },
 }
 
 export const MountScope = createScope<MountScopeValue>({ mount: DEFAULT_MOUNT })
@@ -66,6 +65,7 @@ const stateMap = new Map<string, MountState>()
 export const MountMolecule = molecule(() => {
 	const scope = use(MountScope)
 	const equipment = use(EquipmentMolecule)
+	const ws = use(WebSocketMolecule)
 
 	const mount = equipment.get('MOUNT', scope.mount.name)!
 
@@ -130,8 +130,8 @@ export const MountMolecule = molecule(() => {
 			if (show) void updateRemoteControlStatus()
 		})
 
-		const updateCurrentCoordinateTimer = setInterval(() => {
-			if (mount.connected) {
+		const timer = setInterval(() => {
+			if (mount.connected && ws.state.connected) {
 				void updateCurrentCoordinatePosition()
 				void updateTargetCoordinatePosition()
 			}
@@ -142,7 +142,7 @@ export const MountMolecule = molecule(() => {
 
 		return () => {
 			unsubscribe(unsubscribers)
-			clearInterval(updateCurrentCoordinateTimer)
+			clearInterval(timer)
 		}
 	})
 
@@ -169,8 +169,13 @@ export const MountMolecule = molecule(() => {
 		return updateRemoteControlStatus()
 	}
 
-	function updateTargetCoordinate<K extends keyof MountState['targetCoordinate']['coordinate']>(key: K, value: MountState['targetCoordinate']['coordinate'][K]) {
+	function updateTargetCoordinate<K extends 'action' | 'type'>(key: K, value: MountState['targetCoordinate']['coordinate'][K]) {
 		state.targetCoordinate.coordinate[key] = value
+		return updateTargetCoordinatePosition()
+	}
+
+	function updateTargetCoordinateByType(coord: 'x' | 'y', value: string) {
+		state.targetCoordinate.coordinate[state.targetCoordinate.coordinate.type]![coord] = value
 		return updateTargetCoordinatePosition()
 	}
 
@@ -302,6 +307,7 @@ export const MountMolecule = molecule(() => {
 		startRemoteControl,
 		stopRemoteControl,
 		updateTargetCoordinate,
+		updateTargetCoordinateByType,
 		handleTargetCoordinateAction,
 		showLocation,
 		hideLocation,

@@ -74,7 +74,7 @@ const Header = memo(() => {
 	const { time } = useSnapshot(atlas.state.request)
 
 	return (
-		<div className='flex flex-row items-center justify-between'>
+		<div className='flex flex-row items-center justify-between gap-2'>
 			<div className='flex justify-center items-center gap-1'>
 				<TabPopover />
 				<Bookmark />
@@ -825,7 +825,7 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 	const deferredData = useDeferredValue(data, [])
 
 	return (
-		<div className={clsx('h-[160px] col-span-full relative flex flex-col justify-start items-center gap-1', className)}>
+		<div className={clsx('h-[140px] col-span-full relative flex flex-col justify-start items-center gap-1', className)}>
 			<div className='w-full flex flex-row gap-2 text-start text-sm font-bold'>
 				<ToggleButton color='primary' icon={Icons.Info} isSelected={!showChart} onPointerUp={() => setShowChart(false)} />
 				<ToggleButton color='primary' icon={Icons.Chart} isSelected={showChart} onPointerUp={() => setShowChart(true)} />
@@ -1002,7 +1002,7 @@ const DEFAULT_AREA_PROPS: Partial<AreaProps> = { dot: false, connectNulls: true,
 
 const EphemerisChart = memo(({ data }: EphemerisChartProps) => {
 	return (
-		<ComposedChart data={data} height={140} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive>
+		<ComposedChart data={data} height={120} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive>
 			<XAxis dataKey='name' domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={chartTickFormatter} tickMargin={6} />
 			<YAxis domain={[0, 90]} width={25} />
 			<Area dataKey='dayFirst' fill='#FFF176' {...DEFAULT_AREA_PROPS} />

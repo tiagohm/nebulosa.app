@@ -8,13 +8,13 @@ export interface PopupButtonProps extends Omit<TextButtonProps, 'endContent'> {
 	readonly children: React.ReactNode
 }
 
-export function PopupButton({ size, color, children, className, ...props }: PopupButtonProps) {
+export function PopupButton({ size, color, isDisabled, children, className, ...props }: PopupButtonProps) {
 	return (
 		<div className={clsx('inline-flex flex-row gap-0 items-center', className)}>
-			<TextButton {...props} className='flex-1 rounded-l-medium rounded-r-none' color={color} size={size} />
+			<TextButton {...props} className='flex-1 rounded-l-medium rounded-r-none' color={color} isDisabled={isDisabled} size={size} />
 			<Popover placement='bottom' showArrow>
 				<PopoverTrigger>
-					<IconButton className='rounded-l-none rounded-r-medium' color={color} icon={Icons.ChevronDown} size={size} variant='flat' />
+					<IconButton className='rounded-l-none rounded-r-medium' color={color} icon={Icons.ChevronDown} isDisabled={isDisabled} size={size} variant='flat' />
 				</PopoverTrigger>
 				<PopoverContent>{children}</PopoverContent>
 			</Popover>

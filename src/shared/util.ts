@@ -60,10 +60,13 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 	const galactic: Mutable<CoordinateInfo['galactic']> = [0, 0]
 	let observed: ReturnType<typeof cirsToObserved> | undefined
 
+	const x = 'type' in target ? target[target.type]!.x : target.rightAscension
+	const y = 'type' in target ? target[target.type]!.y : target.declination
+
 	// JNOW equatorial coordinate
 	if (!('type' in target) || target.type === 'JNOW') {
-		equatorial[0] = parseAngle(target.rightAscension, PARSE_HOUR_ANGLE)!
-		equatorial[1] = parseAngle(target.declination)!
+		equatorial[0] = parseAngle(x, PARSE_HOUR_ANGLE)!
+		equatorial[1] = parseAngle(y)!
 
 		observed = cirsToObserved(equatorial, time)
 		Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
@@ -72,8 +75,8 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 	}
 	// J2000 equatorial coordinate
 	else if (target.type === 'J2000') {
-		equatorialJ2000[0] = parseAngle(target.rightAscension, PARSE_HOUR_ANGLE)!
-		equatorialJ2000[1] = parseAngle(target.declination)!
+		equatorialJ2000[0] = parseAngle(x, PARSE_HOUR_ANGLE)!
+		equatorialJ2000[1] = parseAngle(y)!
 
 		Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
 		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
@@ -82,8 +85,8 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 	}
 	// Local horizontal coordinate
 	else if (target.type === 'ALTAZ') {
-		horizontal[0] = parseAngle(target.azimuth)!
-		horizontal[1] = parseAngle(target.altitude)!
+		horizontal[0] = parseAngle(x)!
+		horizontal[1] = parseAngle(y)!
 
 		Object.assign(equatorial, observedToCirs(...horizontal, time))
 		Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
@@ -92,8 +95,8 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 	}
 	// Ecliptic (at date) coordinate
 	else if (target.type === 'ECLIPTIC') {
-		ecliptic[0] = parseAngle(target.longitude)!
-		ecliptic[1] = parseAngle(target.latitude)!
+		ecliptic[0] = parseAngle(x)!
+		ecliptic[1] = parseAngle(y)!
 
 		Object.assign(equatorial, eclipticToEquatorial(...ecliptic, time))
 		Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
@@ -102,8 +105,8 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 	}
 	// Galactic coordinate
 	else if (target.type === 'GALACTIC') {
-		galactic[0] = parseAngle(target.longitude)!
-		galactic[1] = parseAngle(target.latitude)!
+		galactic[0] = parseAngle(x)!
+		galactic[1] = parseAngle(y)!
 
 		Object.assign(equatorialJ2000, galacticToEquatorial(...galactic))
 		Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))

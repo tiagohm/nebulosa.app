@@ -1,5 +1,6 @@
 import Elysia from 'elysia'
-import type { AlpacaDiscoveryServer, AlpacaServer } from 'nebulosa/src/alpaca.server'
+import type { AlpacaDiscoveryServer } from 'nebulosa/src/alpaca.discovery'
+import type { AlpacaServer } from 'nebulosa/src/alpaca.server'
 import type { AlpacaServerStatus } from 'src/shared/types'
 import type { WebSocketMessageHandler } from './message'
 

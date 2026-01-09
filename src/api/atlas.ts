@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
 import Elysia from 'elysia'
-import { deg, PARSE_HOUR_ANGLE, parseAngle, toDeg } from 'nebulosa/src/angle'
+import { deg, parseAngle, toDeg } from 'nebulosa/src/angle'
 import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astrometry'
 import { AU_KM, DAYSEC, DEG2RAD, MOON_SYNODIC_DAYS, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
@@ -327,7 +327,7 @@ export class AtlasHandler {
 			else joinWhere.push(`n.name LIKE '%${name}%'`)
 
 		if (req.radius > 0 && req.rightAscension && req.declination) {
-			const rightAscension = parseAngle(req.rightAscension, PARSE_HOUR_ANGLE)!
+			const rightAscension = parseAngle(req.rightAscension, true)!
 			const declination = parseAngle(req.declination)!
 
 			where.push(`(acos(sin(d.declination) * ${Math.sin(declination)} + cos(d.declination) * ${Math.cos(declination)} * cos(d.rightAscension - ${rightAscension})) <= ${deg(req.radius)})`)

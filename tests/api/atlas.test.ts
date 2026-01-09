@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { deg, formatALT, PARSE_HOUR_ANGLE, parseAngle } from 'nebulosa/src/angle'
+import { deg, formatALT, parseAngle } from 'nebulosa/src/angle'
 import { lightYear, meter, toKilometer } from 'nebulosa/src/distance'
 import { StellariumObjectType } from 'nebulosa/src/stellarium'
 import { formatTemporal } from 'nebulosa/src/temporal'
@@ -215,8 +215,8 @@ describe('position of sun', () => {
 	test('after noon', async () => {
 		const position = await atlas.positionOfSun(POSITION_OF_BODY)
 
-		expect(position.equatorial[0]).toBeCloseTo(parseAngle('08 28 44.08', PARSE_HOUR_ANGLE)!, 6)
-		expect(position.equatorialJ2000[0]).toBeCloseTo(parseAngle('08 27 17.12', PARSE_HOUR_ANGLE)!, 6)
+		expect(position.equatorial[0]).toBeCloseTo(parseAngle('08 28 44.08', true)!, 6)
+		expect(position.equatorialJ2000[0]).toBeCloseTo(parseAngle('08 27 17.12', true)!, 6)
 		expect(position.equatorial[1]).toBeCloseTo(parseAngle('19 02 29.5')!, 6)
 		expect(position.equatorialJ2000[1]).toBeCloseTo(parseAngle('19 08 20.0')!, 6)
 		expect(position.horizontal[0]).toBeCloseTo(deg(2.356722), 6)
@@ -230,8 +230,8 @@ describe('position of sun', () => {
 	test('before noon', async () => {
 		const position = await atlas.positionOfSun({ ...POSITION_OF_BODY, time: { ...POSITION_OF_BODY.time, utc: 1753624800000 } })
 
-		expect(position.equatorial[0]).toBeCloseTo(parseAngle('08 28 32.97', PARSE_HOUR_ANGLE)!, 6)
-		expect(position.equatorialJ2000[0]).toBeCloseTo(parseAngle('08 27 07.43', PARSE_HOUR_ANGLE)!, 6)
+		expect(position.equatorial[0]).toBeCloseTo(parseAngle('08 28 32.97', true)!, 6)
+		expect(position.equatorialJ2000[0]).toBeCloseTo(parseAngle('08 27 07.43', true)!, 6)
 		expect(position.equatorial[1]).toBeCloseTo(parseAngle('19 03 02.2')!, 6)
 		expect(position.equatorialJ2000[1]).toBeCloseTo(parseAngle('19 08 54.1')!, 6)
 		expect(position.horizontal[0]).toBeCloseTo(deg(22.854746), 6)
@@ -272,8 +272,8 @@ test('twilight', async () => {
 test('position of moon', async () => {
 	const position = await atlas.positionOfMoon(POSITION_OF_BODY)
 
-	expect(position.equatorial[0]).toBeCloseTo(parseAngle('10 48 30.64', PARSE_HOUR_ANGLE)!, 6)
-	expect(position.equatorialJ2000[0]).toBeCloseTo(parseAngle('10 47 14.33', PARSE_HOUR_ANGLE)!, 6)
+	expect(position.equatorial[0]).toBeCloseTo(parseAngle('10 48 30.64', true)!, 6)
+	expect(position.equatorialJ2000[0]).toBeCloseTo(parseAngle('10 47 14.33', true)!, 6)
 	expect(position.equatorial[1]).toBeCloseTo(parseAngle('09 07 43.3')!, 6)
 	expect(position.equatorialJ2000[1]).toBeCloseTo(parseAngle('09 16 26.8')!, 6)
 	expect(position.horizontal[0]).toBeCloseTo(deg(52.956912), 6)
@@ -359,8 +359,8 @@ describe('minor planet', () => {
 test('position of jupiter', async () => {
 	const position = await atlas.positionOfPlanet('599', POSITION_OF_BODY)
 
-	expect(position.equatorial[0]).toBeCloseTo(parseAngle('06 46 51.69', PARSE_HOUR_ANGLE)!, 6)
-	expect(position.equatorialJ2000[0]).toBeCloseTo(parseAngle('06 45 17.28', PARSE_HOUR_ANGLE)!, 6)
+	expect(position.equatorial[0]).toBeCloseTo(parseAngle('06 46 51.69', true)!, 6)
+	expect(position.equatorialJ2000[0]).toBeCloseTo(parseAngle('06 45 17.28', true)!, 6)
 	expect(position.equatorial[1]).toBeCloseTo(parseAngle('22 53 45.8')!, 6)
 	expect(position.equatorialJ2000[1]).toBeCloseTo(parseAngle('22 56 22.8')!, 6)
 	expect(position.horizontal[0]).toBeCloseTo(deg(331.17762), 6)
@@ -374,9 +374,9 @@ test('position of jupiter', async () => {
 test('position of sky object', () => {
 	const position = atlas.positionOfSkyObject(POSITION_OF_BODY, '32263')
 
-	// expect(position.equatorial[0]).toBeCloseTo(parseAngle('06 46 17.13', PARSE_HOUR_ANGLE)!, 6)
-	expect(position.equatorial[0]).toBeCloseTo(parseAngle('06 44 58.25', PARSE_HOUR_ANGLE)!, 6)
-	expect(position.equatorialJ2000[0]).toBeCloseTo(parseAngle('06 45 08.93', PARSE_HOUR_ANGLE)!, 6)
+	// expect(position.equatorial[0]).toBeCloseTo(parseAngle('06 46 17.13', true)!, 6)
+	expect(position.equatorial[0]).toBeCloseTo(parseAngle('06 44 58.25', true)!, 6)
+	expect(position.equatorialJ2000[0]).toBeCloseTo(parseAngle('06 45 08.93', true)!, 6)
 	expect(position.equatorial[1]).toBeCloseTo(parseAngle('-16 45 02.90')!, 6)
 	expect(position.equatorialJ2000[1]).toBeCloseTo(parseAngle('-16 42 58.01')!, 6)
 	expect(position.horizontal[1]).toBeCloseTo(parseAngle('66 48 39.29')!, 6)

@@ -1,4 +1,4 @@
-import { type Angle, PARSE_HOUR_ANGLE, parseAngle } from 'nebulosa/src/angle'
+import { type Angle, parseAngle } from 'nebulosa/src/angle'
 import { cirsToObserved, observedToCirs } from 'nebulosa/src/astrometry'
 import { constellation } from 'nebulosa/src/constellation'
 import { type EquatorialCoordinate, eclipticToEquatorial, equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic, equatorialToJ2000, galacticToEquatorial } from 'nebulosa/src/coordinate'
@@ -65,7 +65,7 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 
 	// JNOW equatorial coordinate
 	if (!('type' in target) || target.type === 'JNOW') {
-		equatorial[0] = parseAngle(x, PARSE_HOUR_ANGLE)!
+		equatorial[0] = parseAngle(x, true)!
 		equatorial[1] = parseAngle(y)!
 
 		observed = cirsToObserved(equatorial, time)
@@ -75,7 +75,7 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 	}
 	// J2000 equatorial coordinate
 	else if (target.type === 'J2000') {
-		equatorialJ2000[0] = parseAngle(x, PARSE_HOUR_ANGLE)!
+		equatorialJ2000[0] = parseAngle(x, true)!
 		equatorialJ2000[1] = parseAngle(y)!
 
 		Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))

@@ -1,5 +1,5 @@
 import Elysia from 'elysia'
-import { deg, PARSE_HOUR_ANGLE, parseAngle } from 'nebulosa/src/angle'
+import { deg, parseAngle } from 'nebulosa/src/angle'
 import { astapPlateSolve } from 'nebulosa/src/astap'
 import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebulosa/src/astrometrynet'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
@@ -18,7 +18,7 @@ export class PlateSolverHandler {
 	async start(req: PlateSolveStart): Promise<PlateSolution | undefined> {
 		req.path = (await this.imageProcessor.store(req.path)) || req.path
 
-		const rightAscension = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, PARSE_HOUR_ANGLE)
+		const rightAscension = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, true)
 		const declination = typeof req.declination === 'number' ? req.declination : parseAngle(req.declination)
 		const radius = req.blind || !req.radius ? 0 : deg(req.radius)
 

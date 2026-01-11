@@ -5,7 +5,7 @@ import type { AlpacaServerStatus } from 'src/shared/types'
 import type { WebSocketMessageHandler } from './message'
 
 export function alpaca(wsm: WebSocketMessageHandler, alpacaServer: AlpacaServer, alpacaDiscoveryServer: AlpacaDiscoveryServer) {
-	let running = alpacaServer.running
+	let running = alpacaDiscoveryServer.running
 
 	function status(): AlpacaServerStatus {
 		return { running, port: alpacaDiscoveryServer?.port ?? -1, devices: alpacaServer ? Array.from(alpacaServer.list()) : [] }

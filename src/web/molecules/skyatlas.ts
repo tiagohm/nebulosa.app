@@ -142,7 +142,7 @@ export const SunMolecule = molecule(() => {
 
 			eclipsesUpdate = dateHasChanged
 
-			if (!seasonsUpdate && dateHasChanged) {
+			if ((!seasonsUpdate && dateHasChanged) || seasonsYear === 0) {
 				const local = temporalAdd(time.utc, time.offset, 'm')
 				const year = temporalGet(local, 'y')
 
@@ -231,7 +231,7 @@ export const MoonMolecule = molecule(() => {
 
 			eclipsesUpdate = dateHasChanged
 
-			if (!phasesUpdate && dateHasChanged) {
+			if ((!phasesUpdate && dateHasChanged) || phasesMonth === 0) {
 				const local = temporalAdd(time.utc, time.offset, 'm')
 				const month = temporalGet(local, 'mo')
 
@@ -597,7 +597,6 @@ export const SatelliteMolecule = molecule(() => {
 	const state = satelliteState
 
 	let chartUpdate = true
-	const pages: number[] = [0]
 
 	onMount(() => {
 		void search()
@@ -780,7 +779,7 @@ export const SkyAtlasMolecule = molecule(() => {
 
 		utc ??= state.calendar.manual ? time.utc : Date.now()
 
-		if (!twilightUpdate) {
+		if (!twilightUpdate || twilightStartTime === 0) {
 			const b = computeStartTime(utc, time.offset)
 
 			if (twilightStartTime !== b) {

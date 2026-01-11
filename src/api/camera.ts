@@ -5,6 +5,7 @@ import type { CameraManager, DeviceHandler, FocuserManager, MountManager, Rotato
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } from 'nebulosa/src/temporal'
 import { join } from 'path'
+import bus from 'src/shared/bus'
 import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import type { ImageProcessor } from './image'
@@ -14,6 +15,7 @@ const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
 
 export class CameraHandler implements DeviceHandler<Camera> {
 	private readonly tasks = new Map<string, CameraCaptureTask>()
+	private readonly events = new Map<string, CameraCaptureEvent>()
 
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
@@ -44,8 +46,13 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		this.tasks.get(camera.id)?.blobReceived(camera, data)
 	}
 
-	handleCameraCaptureEvent(camera: Camera, event: CameraCaptureEvent) {
+	sendEvent(event: CameraCaptureEvent) {
 		this.wsm.send('camera:capture', event)
+	}
+
+	handleCameraCaptureEvent(camera: Camera, event: CameraCaptureEvent) {
+		this.events.set(camera.id, event)
+		this.sendEvent(event)
 
 		// Remove the task after it finished
 		if (event.state === 'IDLE') {
@@ -94,12 +101,19 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	stopCapture(device: Camera) {
 		this.tasks.get(device.id)?.stop()
 	}
+
+	resendEvent() {
+		this.events.forEach((e) => this.sendEvent(e))
+		this.events.clear()
+	}
 }
 
 export function camera(cameraHandler: CameraHandler) {
 	function cameraFromParams(clientId: string, id: string) {
 		return cameraHandler.cameraManager.get(clientId, decodeURIComponent(id))!
 	}
+
+	bus.subscribe('resend', () => cameraHandler.resendEvent())
 
 	const app = new Elysia({ prefix: '/cameras' })
 		// Endpoints!

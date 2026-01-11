@@ -52,8 +52,8 @@ export const ConnectionMolecule = molecule(() => {
 			}
 		})
 
-		unsubscribers[2] = bus.subscribe('ws:close', () => {
-			state.connected = undefined
+		unsubscribers[2] = bus.subscribe('ws:reopen', () => {
+			state.connected && void list(state.connected)
 		})
 
 		return () => {

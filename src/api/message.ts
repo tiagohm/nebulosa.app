@@ -10,7 +10,14 @@ export class WebSocketMessageHandler {
 	open(socket: Messager) {
 		if (!this.sockets.has(socket)) {
 			this.sockets.add(socket)
+			bus.emit('ws:open', undefined)
 			console.info('web socket connected')
+		}
+	}
+
+	message(socket: Messager, body: unknown) {
+		if (body === 'RESEND') {
+			bus.emit('resend', undefined)
 		}
 	}
 
@@ -18,6 +25,7 @@ export class WebSocketMessageHandler {
 		if (this.sockets.has(socket)) {
 			console.info('web socket closed:', code, reason)
 			this.sockets.delete(socket)
+			bus.emit('ws:close', undefined)
 		}
 	}
 

@@ -1,12 +1,14 @@
 import Elysia from 'elysia'
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import type { MountManager } from 'nebulosa/src/indi.manager'
+import bus from 'src/shared/bus'
 import { type CameraCaptureStart, type DarvEvent, type DarvStart, type DarvStop, DEFAULT_DARV_EVENT } from 'src/shared/types'
 import type { CameraHandler } from './camera'
 import type { WebSocketMessageHandler } from './message'
 
 export class DarvHandler {
 	private readonly tasks = new Map<string, DarvTask>()
+	private readonly events = new Map<string, DarvEvent>()
 
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
@@ -14,8 +16,13 @@ export class DarvHandler {
 		readonly mountManager: MountManager,
 	) {}
 
-	handleDarvEvent(event: DarvEvent) {
+	sendEvent(event: DarvEvent) {
 		this.wsm.send('darv', event)
+	}
+
+	handleDarvEvent(event: DarvEvent) {
+		this.events.set(event.id, event)
+		this.sendEvent(event)
 
 		// Remove the task after it finished
 		if (event.state === 'IDLE') {
@@ -37,11 +44,17 @@ export class DarvHandler {
 	stop(req: DarvStop) {
 		this.tasks.get(req.id)?.stop()
 	}
+
+	resendEvent() {
+		this.events.forEach((e) => this.sendEvent(e))
+		this.events.clear()
+	}
 }
 
 export class DarvTask {
+	readonly event = structuredClone(DEFAULT_DARV_EVENT)
+
 	private readonly capture: CameraCaptureStart
-	private readonly event = structuredClone(DEFAULT_DARV_EVENT)
 	private readonly handleDarvEvent: () => void
 	private readonly aborter = new AbortController()
 
@@ -157,19 +170,21 @@ async function waitFor(ms: number, signal: AbortSignal) {
 	}
 }
 
-export function darv(darv: DarvHandler) {
+export function darv(darvHandler: DarvHandler) {
 	function cameraFromParams(clientId: string, id: string) {
-		return darv.cameraHandler.cameraManager.get(clientId, decodeURIComponent(id))!
+		return darvHandler.cameraHandler.cameraManager.get(clientId, decodeURIComponent(id))!
 	}
 
 	function mountFromParams(clientId: string, id: string) {
-		return darv.mountManager.get(clientId, decodeURIComponent(id))!
+		return darvHandler.mountManager.get(clientId, decodeURIComponent(id))!
 	}
+
+	bus.subscribe('resend', () => darvHandler.resendEvent())
 
 	const app = new Elysia({ prefix: '/darv' })
 		// Endpoints!
-		.post('/:camera/:mount/start', ({ params, query, body }) => darv.start(body as never, cameraFromParams(query.clientId, params.camera), mountFromParams(query.clientId, params.mount)))
-		.post('/stop', ({ body }) => darv.stop(body as never))
+		.post('/:camera/:mount/start', ({ params, query, body }) => darvHandler.start(body as never, cameraFromParams(query.clientId, params.camera), mountFromParams(query.clientId, params.mount)))
+		.post('/stop', ({ body }) => darvHandler.stop(body as never))
 
 	return app
 }

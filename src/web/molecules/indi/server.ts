@@ -36,8 +36,8 @@ export const IndiServerMolecule = molecule(() => {
 			state.running = false
 		})
 
-		unsubscribers[2] = bus.subscribe('ws:close', () => {
-			state.running = false
+		unsubscribers[2] = bus.subscribe('ws:reopen', () => {
+			void status()
 		})
 
 		void status()

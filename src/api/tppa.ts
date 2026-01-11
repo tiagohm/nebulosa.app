@@ -12,6 +12,7 @@ import type { PlateSolverHandler } from './platesolver'
 
 export class TppaHandler {
 	private readonly tasks = new Map<string, TppaTask>()
+	private readonly events = new Map<string, TppaEvent>()
 
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
@@ -24,8 +25,13 @@ export class TppaHandler {
 		})
 	}
 
-	handleTppaEvent(event: TppaEvent) {
+	sendEvent(event: TppaEvent) {
 		this.wsm.send('tppa', event)
+	}
+
+	handleTppaEvent(event: TppaEvent) {
+		this.events.set(event.id, event)
+		this.sendEvent(event)
 
 		// Remove the task after it finished
 		if (event.state === 'IDLE') {
@@ -42,12 +48,18 @@ export class TppaHandler {
 	stop(req: TppaStop) {
 		this.tasks.get(req.id)?.stop()
 	}
+
+	resendEvent() {
+		this.events.forEach((e) => this.sendEvent(e))
+		this.events.clear()
+	}
 }
 
 export class TppaTask {
+	readonly event = structuredClone(DEFAULT_TPPA_EVENT)
+
 	private readonly capture: CameraCaptureStart
 	private readonly polarAlignment: ThreePointPolarAlignment
-	private readonly event = structuredClone(DEFAULT_TPPA_EVENT)
 	private readonly handleTppaEvent: () => void
 	private stopped = false
 
@@ -215,19 +227,21 @@ export class TppaTask {
 	}
 }
 
-export function tppa(tppa: TppaHandler) {
+export function tppa(tppaHandler: TppaHandler) {
 	function cameraFromParams(clientId: string, id: string) {
-		return tppa.cameraHandler.cameraManager.get(clientId, decodeURIComponent(id))!
+		return tppaHandler.cameraHandler.cameraManager.get(clientId, decodeURIComponent(id))!
 	}
 
 	function mountFromParams(clientId: string, id: string) {
-		return tppa.mountManager.get(clientId, decodeURIComponent(id))!
+		return tppaHandler.mountManager.get(clientId, decodeURIComponent(id))!
 	}
+
+	bus.subscribe('resend', () => tppaHandler.resendEvent())
 
 	const app = new Elysia({ prefix: '/tppa' })
 		// Endpoints!
-		.post('/:camera/:mount/start', ({ params, query, body }) => tppa.start(body as never, cameraFromParams(query.clientId, params.camera)!, mountFromParams(query.clientId, params.mount)!))
-		.post('/stop', ({ body }) => tppa.stop(body as never))
+		.post('/:camera/:mount/start', ({ params, query, body }) => tppaHandler.start(body as never, cameraFromParams(query.clientId, params.camera)!, mountFromParams(query.clientId, params.mount)!))
+		.post('/stop', ({ body }) => tppaHandler.stop(body as never))
 
 	return app
 }

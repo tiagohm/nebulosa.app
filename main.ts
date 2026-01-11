@@ -316,7 +316,7 @@ const app = new Elysia({
 
 	.ws('/ws', {
 		open: (socket) => wsm.open(socket.raw),
-		// message: (socket, message) => wsm.message(socket.raw, message),
+		message: (socket, body) => wsm.message(socket.raw, body),
 		close: (socket, code, reason) => wsm.close(socket.raw, code, reason),
 	})
 

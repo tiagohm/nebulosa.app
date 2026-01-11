@@ -29,15 +29,19 @@ export const WebSocketMolecule = molecule(() => {
 
 		ws.addEventListener('open', () => {
 			if (disconnected) {
-				window.location.reload()
+				state.connected = true
+				bus.emit('ws:reopen', null)
+				send('RESEND')
+				console.info('web socket reopen')
 			} else {
 				connected = true
 				state.connected = true
-				document.documentElement.style.setProperty('--ws-disconnected-grayscale', '0%')
-				document.documentElement.style.setProperty('--ws-disconnected-display', 'none')
 				bus.emit('ws:open', null)
 				console.info('web socket open')
 			}
+
+			document.documentElement.style.setProperty('--ws-disconnected-grayscale', '0%')
+			document.documentElement.style.setProperty('--ws-disconnected-display', 'none')
 		})
 
 		ws.addEventListener('close', (e) => {

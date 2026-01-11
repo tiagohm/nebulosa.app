@@ -137,12 +137,12 @@ export function mount(wsm: WebSocketMessageHandler, mountManager: MountManager, 
 
 	function currentPosition(mount: Mount) {
 		if (!mount) return DEFAULT_COORDINATE_INFO
-		return coordinateInfo(cache.time('now', cache.geographicCoordinate(mount.geographicCoordinate)), mount.geographicCoordinate.longitude, mount.equatorialCoordinate)
+		return coordinateInfo(cache.time('now', cache.geographicCoordinate(mount.geographicCoordinate), 'm'), mount.geographicCoordinate.longitude, mount.equatorialCoordinate)
 	}
 
 	function targetPosition(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
 		if (!mount) return DEFAULT_COORDINATE_INFO
-		return coordinateInfo(cache.time('now', cache.geographicCoordinate(mount.geographicCoordinate)), mount.geographicCoordinate.longitude, coordinate)
+		return coordinateInfo(cache.time('now', cache.geographicCoordinate(mount.geographicCoordinate), 'm'), mount.geographicCoordinate.longitude, coordinate)
 	}
 
 	function remoteControlStart(mount: Mount, req: MountRemoteControlStart) {

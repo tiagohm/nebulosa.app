@@ -163,7 +163,7 @@ export class AtlasHandler {
 
 	solarEclipsesFromMeeus(req: FindNextSolarEclipse) {
 		const location = this.cache.geographicCoordinate(req.location)
-		let time = this.cache.time(temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm')), location)
+		let time = this.cache.time(temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm')), location, 'm')
 		const eclipses: NextSolarEclipse[] = []
 
 		while (req.count-- > 0) {
@@ -249,7 +249,7 @@ export class AtlasHandler {
 
 	moonEclipses(req: FindNextLunarEclipse) {
 		const location = this.cache.geographicCoordinate(req.location)
-		let time = this.cache.time(req.time.utc, location)
+		let time = this.cache.time(req.time.utc, location, 'm')
 		const eclipses: NextLunarEclipse[] = []
 
 		while (req.count-- > 0) {
@@ -335,7 +335,7 @@ export class AtlasHandler {
 
 		if (req.visible && req.visibleAbove >= 0) {
 			const location = this.cache.geographicCoordinate(req.location)
-			const time = this.cache.time(req.time.utc, location)
+			const time = this.cache.time(req.time.utc, location, 'm')
 			const lst = localSiderealTime(time, location, true)
 
 			where.push(`(asin(sin(d.declination) * ${Math.sin(location.latitude)} + cos(d.declination) * ${Math.cos(location.latitude)} * cos(${lst} - d.rightAscension)) >= ${deg(req.visibleAbove)})`)
@@ -354,7 +354,7 @@ export class AtlasHandler {
 		const names = nebulosa.query<{ name: string }, []>(`SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ${id}`).all()
 
 		const location = this.cache.geographicCoordinate(req.location)
-		const time = this.cache.time(req.time.utc, location)
+		const time = this.cache.time(req.time.utc, location, 'm')
 		const lst = localSiderealTime(time, location, true)
 
 		const horizontal: Mutable<BodyPosition['horizontal']> = [0, 0]
@@ -405,7 +405,7 @@ export class AtlasHandler {
 
 		// Generate chart data for each minute
 		for (let i = 0; i < data.length; i++) {
-			const time = this.cache.time(startTime, location)
+			const time = this.cache.time(startTime, location, 'm')
 
 			const ebpv = this.cache.earth(time)
 
@@ -577,7 +577,7 @@ export class AtlasHandler {
 			position = map.get(key)!
 		}
 
-		const time = this.cache.time(req.time.utc, location)
+		const time = this.cache.time(req.time.utc, location, 'm')
 		const lst = localSiderealTime(time, location, true)
 
 		const [rightAscension, declination] = position.equatorial

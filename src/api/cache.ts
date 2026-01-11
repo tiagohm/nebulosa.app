@@ -1,5 +1,6 @@
 import type { PositionAndVelocity } from 'nebulosa/src/astrometry'
 import { type GeographicCoordinate, type GeographicPosition, geodeticLocation } from 'nebulosa/src/location'
+import { temporalSubtract } from 'nebulosa/src/temporal'
 import { type Time, timeUnix } from 'nebulosa/src/time'
 import { earth } from 'nebulosa/src/vsop87e'
 
@@ -12,14 +13,24 @@ export class CacheManager {
 
 	earth(time: Time): PositionAndVelocity {
 		const jd = Math.trunc(time.day + time.fraction)
-		// @ts-expect-error
-		return this.earthCache.getOrInsertComputed(jd, () => earth(time))
+		let pv = this.earthCache.get(jd)
+
+		if (pv === undefined) {
+			pv = earth(time)
+			this.earthCache.set(jd, pv)
+		}
+
+		return pv
 	}
 
 	time(utc: number | 'now', location?: GeographicPosition, granularity: TimeGranularity = 's') {
 		utc = timeWithGranularity(utc === 'now' ? Date.now() : utc, granularity)
-		// @ts-expect-error
-		const time = this.timeCache.getOrInsertComputed(utc, () => timeUnix(utc, undefined, true)) as Time
+		let time = this.timeCache.get(utc)
+
+		if (time === undefined) {
+			time = timeUnix(utc, undefined, true)
+			this.timeCache.set(utc, time)
+		}
 
 		if (location && location !== time.location) {
 			time.location = location
@@ -34,12 +45,21 @@ export class CacheManager {
 
 		let location = this.geographicCoordinates.find((e) => e.latitude === latitude && e.longitude === longitude && e.elevation === elevation)
 
-		if (!location) {
+		if (location === undefined) {
 			location = geodeticLocation(longitude, latitude, elevation)
 			this.geographicCoordinates.push(location)
 		}
 
 		return location
+	}
+
+	clear() {
+		const now = timeWithGranularity(temporalSubtract(Date.now(), 1, 'h'), 's')
+
+		this.timeCache
+			.keys()
+			.filter((time) => time < now)
+			.forEach((e) => this.timeCache.delete(e))
 	}
 }
 

@@ -135,7 +135,7 @@ export const MountMolecule = molecule(() => {
 				void updateCurrentCoordinatePosition()
 				void updateTargetCoordinatePosition()
 			}
-		}, 5000)
+		}, 60000)
 
 		void updateCurrentCoordinatePosition()
 		void updateTargetCoordinatePosition()

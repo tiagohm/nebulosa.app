@@ -250,6 +250,15 @@ const app = new Elysia({
 	)
 	.use(
 		cron({
+			name: 'every-hour',
+			pattern: '0 0 * * * *',
+			run: () => {
+				cacheManager.clear()
+			},
+		}),
+	)
+	.use(
+		cron({
 			name: 'every-day',
 			pattern: '0 0 0 * * *',
 			run: () => {

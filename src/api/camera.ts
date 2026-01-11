@@ -1,5 +1,6 @@
 import Elysia from 'elysia'
 import fs, { mkdir } from 'fs/promises'
+import { IndiClient } from 'nebulosa/src/indi.client'
 import { type Camera, CLIENT } from 'nebulosa/src/indi.device'
 import type { CameraManager, DeviceHandler, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
@@ -89,12 +90,16 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		const task = new CameraCaptureTask(camera, req, this.imageProcessor, this.startExposure.bind(this), this.stopExposure.bind(this), this.handleCameraCaptureEvent.bind(this))
 
 		this.tasks.set(camera.id, task)
-		const client = camera[CLIENT]!
-		const mount = req.mount ? this.mountManager.get(client, req.mount) : undefined
-		const wheel = req.wheel ? this.wheelManager.get(client, req.wheel) : undefined
-		const focuser = req.focuser ? this.focuserManager.get(client, req.focuser) : undefined
-		const rotator = req.rotator ? this.rotatorManager.get(client, req.rotator) : undefined
-		this.cameraManager.snoop(camera, ...[mount, wheel, focuser, rotator].filter((e) => !!e))
+		const client = camera[CLIENT]
+
+		if (client instanceof IndiClient) {
+			const mount = req.mount ? this.mountManager.get(client, req.mount) : undefined
+			const wheel = req.wheel ? this.wheelManager.get(client, req.wheel) : undefined
+			const focuser = req.focuser ? this.focuserManager.get(client, req.focuser) : undefined
+			const rotator = req.rotator ? this.rotatorManager.get(client, req.rotator) : undefined
+			this.cameraManager.snoop(camera, ...[mount, wheel, focuser, rotator].filter((e) => !!e))
+		}
+
 		task.start()
 	}
 

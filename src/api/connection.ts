@@ -1,5 +1,5 @@
 import Elysia from 'elysia'
-import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi'
+import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi.client'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
 import type { WebSocketMessageHandler } from './message'

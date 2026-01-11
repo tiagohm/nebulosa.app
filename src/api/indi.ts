@@ -1,6 +1,6 @@
 import cron from '@elysiajs/cron'
 import { Elysia } from 'elysia'
-import type { IndiClient, IndiClientHandler } from 'nebulosa/src/indi'
+import type { IndiClient, IndiClientHandler } from 'nebulosa/src/indi.client'
 import { CLIENT, type Device, type DeviceProperty, type DevicePropertyType } from 'nebulosa/src/indi.device'
 import type { CameraManager, CoverManager, DevicePropertyHandler, DevicePropertyManager, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 // biome-ignore format: too long!

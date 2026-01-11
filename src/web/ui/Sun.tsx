@@ -16,13 +16,12 @@ export interface SunProps {
 export const Sun = memo(({ source, onSourceChange }: SunProps) => {
 	const imgRef = useRef<HTMLImageElement>(null)
 
+	function update() {
+		imgRef.current!.src = `${API_URL}/atlas/sun/image?source=${source}`
+	}
+
 	useEffect(() => {
-		const timer = setInterval(
-			() => {
-				imgRef.current!.src = `${API_URL}/atlas/sun/image?source=${source}`
-			},
-			1000 * 60 * 15,
-		) // 15 min
+		const timer = setInterval(update, 1000 * 60 * 15) // 15 min
 
 		return () => {
 			clearInterval(timer)

@@ -13,6 +13,8 @@ declare module 'bun' {
 		open?: 'true'
 		username?: string
 		password?: string
+		alpaca?: 'true'
+		alpacaPort?: string
 	}
 }
 

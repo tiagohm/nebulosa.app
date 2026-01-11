@@ -16,7 +16,7 @@ export interface AlpacaState {
 
 const state = proxy<AlpacaState>({
 	show: false,
-	port: 32227,
+	port: 2222,
 	status: {
 		running: false,
 		port: 0,

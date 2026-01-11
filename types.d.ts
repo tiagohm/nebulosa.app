@@ -15,6 +15,7 @@ declare module 'bun' {
 		password?: string
 		alpaca?: 'true'
 		alpacaPort?: string
+		alpacaDiscoveryPort?: string
 	}
 }
 

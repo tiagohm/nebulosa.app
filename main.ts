@@ -57,6 +57,7 @@ const args = parseArgs({
 		password: { type: 'string' },
 		alpaca: { type: 'boolean', short: 'a' },
 		alpacaPort: { type: 'string' },
+		alpacaDiscoveryPort: { type: 'string' },
 	},
 	strict: true,
 	allowPositionals: true,
@@ -73,6 +74,7 @@ const username = args.values.username || Bun.env.username || ''
 const password = args.values.password || Bun.env.password || ''
 const hasAlpaca = args.values.alpaca || Bun.env.alpaca === 'true'
 const alpacaPort = +(args.values.alpacaPort || Bun.env.alpacaPort || '') || undefined
+const alpacaDiscoveryPort = +(args.values.alpacaDiscoveryPort || Bun.env.alpacaDiscoveryPort || '') || undefined
 
 // Initialize the environment variables
 
@@ -303,7 +305,7 @@ const app = new Elysia({
 	.use(fileSystem(fileSystemHandler))
 	.use(tppa(tppaHandler))
 	.use(darv(darvHandler))
-	.use(alpaca(wsm, { camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager, alpacaPort }, hasAlpaca))
+	.use(alpaca(wsm, { camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager, alpacaPort, alpacaDiscoveryPort }, hasAlpaca))
 
 	// WebSocket
 

@@ -16,7 +16,7 @@ export function alpaca(wsm: WebSocketMessageHandler, options: AlpacaServerOption
 	let running = false
 
 	function status(): AlpacaServerStatus {
-		return { running, port: alpacaDiscoveryServer?.port ?? -1, devices: alpacaServer ? Array.from(alpacaServer.list()) : [] }
+		return { running, port: alpacaDiscoveryServer?.port ?? -1, devices: alpacaServer ? Array.from(alpacaServer.configuredDevices()) : [] }
 	}
 
 	async function start(port: number) {

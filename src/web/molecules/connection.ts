@@ -52,8 +52,16 @@ export const ConnectionMolecule = molecule(() => {
 			}
 		})
 
-		unsubscribers[2] = bus.subscribe('ws:reopen', () => {
-			state.connected && void list(state.connected)
+		unsubscribers[2] = bus.subscribe('ws:reopen', async () => {
+			if (state.connected) {
+				const status = await Api.Connections.get(state.connected.id)
+
+				if (status) {
+					void list(state.connected)
+				} else {
+					state.connected = undefined
+				}
+			}
 		})
 
 		return () => {

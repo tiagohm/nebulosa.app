@@ -7,7 +7,7 @@ import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { AutoSaveButton } from './AutoSaveButton'
 import { AutoSubFolderModeButton } from './AutoSubFolderButton'
 import { ConnectButton } from './ConnectButton'
-import { DeviceDropdown } from './DeviceDropdown'
+import { FocuserDropdown, MountDropdown, RotatorDropdown, WheelDropdown } from './DeviceDropdown'
 import { ExposureModeButtonGroup } from './ExposureModeButtonGroup'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { ExposureTimeProgress } from './ExposureTimeProgress'
@@ -136,10 +136,10 @@ const CameraEquipment = memo(({ isDisabled }: CameraEquipmentProps) => {
 
 	return (
 		<div className='flex flex-1 flex-row items-center gap-1'>
-			<DeviceDropdown isDisabled={isDisabled} onValueChange={camera.updateMount} showLabel={false} tooltipContent={`MOUNT: ${mount?.name ?? 'None'}`} type='MOUNT' value={mount} />
-			<DeviceDropdown isDisabled={isDisabled} onValueChange={camera.updateWheel} showLabel={false} tooltipContent={`WHEEL: ${wheel?.name ?? 'None'}`} type='WHEEL' value={wheel} />
-			<DeviceDropdown isDisabled={isDisabled} onValueChange={camera.updateFocuser} showLabel={false} tooltipContent={`FOCUSER: ${focuser?.name ?? 'None'}`} type='FOCUSER' value={focuser} />
-			<DeviceDropdown isDisabled={isDisabled} onValueChange={camera.updateRotator} showLabel={false} tooltipContent={`ROTATOR: ${rotator?.name ?? 'None'}`} type='ROTATOR' value={rotator} />
+			<MountDropdown isDisabled={isDisabled} onValueChange={camera.updateMount} tooltipContent={`MOUNT: ${mount?.name ?? 'None'}`} value={mount} />
+			<WheelDropdown isDisabled={isDisabled} onValueChange={camera.updateWheel} tooltipContent={`WHEEL: ${wheel?.name ?? 'None'}`} value={wheel} />
+			<FocuserDropdown isDisabled={isDisabled} onValueChange={camera.updateFocuser} tooltipContent={`FOCUSER: ${focuser?.name ?? 'None'}`} value={focuser} />
+			<RotatorDropdown isDisabled={isDisabled} onValueChange={camera.updateRotator} tooltipContent={`ROTATOR: ${rotator?.name ?? 'None'}`} value={rotator} />
 		</div>
 	)
 })

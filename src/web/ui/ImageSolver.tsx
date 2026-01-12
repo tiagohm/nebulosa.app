@@ -1,12 +1,13 @@
-import { Checkbox, Input, NumberInput } from '@heroui/react'
+import { Checkbox, Input, NumberInput, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/angle'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageSolverMolecule } from '@/molecules/image/solver'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
-import { DeviceDropdown } from './DeviceDropdown'
+import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 import { PlateSolverSelect } from './PlateSolverSelect'
 import { PlateSolveStartPopover } from './PlateSolveStartPopover'
@@ -44,9 +45,11 @@ export const ImageSolver = memo(() => {
 				<Input className='col-span-4' isReadOnly label='Size (arcmin)' size='sm' value={`${toArcmin(solution?.width ?? 0).toFixed(2)} x ${toArcmin(solution?.height ?? 0).toFixed(2)}`} />
 				<Input className='col-span-4' isReadOnly label='Radius (°)' size='sm' value={toDeg(solution?.radius ?? 0).toFixed(4)} />
 				<div className='col-span-full flex items-center justify-center gap-2'>
-					<DeviceDropdown allowNoneSelection={false} color='primary' icon={Icons.Sync} isDisabled={!solution} label='Sync' onValueChange={solver.sync} showLabel type='MOUNT' variant='flat' />
-					<DeviceDropdown allowNoneSelection={false} color='success' isDisabled={!solution} label='Go' onValueChange={solver.goTo} showLabel type='MOUNT' variant='flat' />
-					<TextButton color='secondary' isDisabled={!solution} label='Frame' onPointerUp={solver.frame} startContent={<Icons.Image />} />
+					<MountDropdown color='primary' disallowNoneSelection icon={Icons.Sync} isDisabled={!solution} onValueChange={solver.sync} tooltipContent='Sync' variant='flat' />
+					<MountDropdown color='success' disallowNoneSelection isDisabled={!solution} onValueChange={solver.goTo} tooltipContent='Go' variant='flat' />
+					<Tooltip content='Frame' placement='bottom' showArrow>
+						<IconButton color='secondary' icon={Icons.Image} isDisabled={!solution} onPointerUp={solver.frame} variant='flat' />
+					</Tooltip>
 				</div>
 			</div>
 		</Modal>

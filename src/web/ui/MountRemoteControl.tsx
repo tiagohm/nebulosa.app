@@ -16,8 +16,8 @@ export const MountRemoteControl = memo(() => {
 
 	const Footer = (
 		<>
-			<TextButton color='primary' isDisabled={!host || !!status[protocol]} label='Connect' onPointerUp={mount.startRemoteControl} startContent={<Icons.Connect />} />
 			<TextButton color='danger' isDisabled={!status[protocol]} label='Stop' onPointerUp={mount.stopRemoteControl} startContent={<Icons.Stop />} />
+			<TextButton color='primary' isDisabled={!host || !!status[protocol]} label='Connect' onPointerUp={mount.startRemoteControl} startContent={<Icons.Connect />} />
 		</>
 	)
 

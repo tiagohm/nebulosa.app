@@ -1,6 +1,6 @@
 import { Chip, DropdownItem, Input, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { MountMolecule, type TargetCoordinateAction } from '@/molecules/indi/mount'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
@@ -84,9 +84,13 @@ export const Mount = memo(() => {
 					<SlewRateSelect className='col-span-3' isDisabled={!connected || moving || parked} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
 				</div>
 			</Modal>
-			{showLocation && <Location coordinate={geographicCoordinate} id={`location-mount-${mount.scope.mount.name}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}
-			{showTime && <Time id={`time-mount-${mount.scope.mount.name}`} onClose={mount.hideTime} onTimeChange={mount.time} time={time} />}
-			{showRemoteControl && <MountRemoteControl />}
+			{showLocation && <Location {...geographicCoordinate} id={`location-mount-${mount.scope.mount.name}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}
+			<Activity mode={showTime ? 'visible' : 'hidden'}>
+				<Time id={`time-mount-${mount.scope.mount.name}`} onClose={mount.hideTime} onTimeChange={mount.time} time={time} />
+			</Activity>
+			<Activity mode={showRemoteControl ? 'visible' : 'hidden'}>
+				<MountRemoteControl />
+			</Activity>
 		</>
 	)
 })

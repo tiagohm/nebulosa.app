@@ -2,27 +2,28 @@ import { NumberInput, Tooltip } from '@heroui/react'
 import type { LatLngTuple } from 'leaflet'
 import { deg, toDeg } from 'nebulosa/src/angle'
 import { meter, toMeter } from 'nebulosa/src/distance'
+import type { Mount } from 'nebulosa/src/indi.device'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import { useState } from 'react'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { MapViewer } from './MapViewer'
 import { Modal } from './Modal'
 import { TextButton } from './TextButton'
 
-export interface LocationProps {
+export interface LocationProps extends GeographicCoordinate {
 	readonly id: string
-	readonly coordinate: GeographicCoordinate
 	readonly onCoordinateChange?: (position: GeographicCoordinate) => void
 	readonly onClose?: () => void
 }
 
-export function Location({ id, coordinate: { latitude, longitude, elevation }, onCoordinateChange: onPositionChange, onClose }: LocationProps) {
+export function Location({ id, latitude, longitude, elevation, onCoordinateChange, onClose }: LocationProps) {
 	const [position, setPosition] = useState<LatLngTuple>([toDeg(latitude), toDeg(longitude), toMeter(elevation)])
 
 	function handleChoose() {
-		onPositionChange?.({ latitude: deg(position[0]), longitude: deg(position[1]), elevation: meter(position[2] ?? 0) })
+		onCoordinateChange?.({ latitude: deg(position[0]), longitude: deg(position[1]), elevation: meter(position[2] ?? 0) })
 		onClose?.()
 	}
 
@@ -46,12 +47,19 @@ export function Location({ id, coordinate: { latitude, longitude, elevation }, o
 		)
 	}
 
+	function handleMountChange(mount?: Mount) {
+		if (!mount) return
+		const { longitude, latitude, elevation } = mount.geographicCoordinate
+		mount && setPosition([toDeg(latitude), toDeg(longitude), toMeter(elevation)])
+	}
+
 	const Header = (
 		<div className='flex flex-row justify-start items-center gap-2'>
-			<span className='me-3'>Location</span>
-			<Tooltip content='Use my location' placement='bottom' showArrow>
+			<span className='me-3 font-bold'>Location</span>
+			<Tooltip content='Load from current location' placement='bottom' showArrow>
 				<IconButton className='col-span-2' color='secondary' icon={Icons.HomeMapMarker} onPointerUp={findCurrentPosition} />
 			</Tooltip>
+			<MountDropdown disallowNoneSelection onValueChange={handleMountChange} tooltipContent='Load from mount' />
 		</div>
 	)
 

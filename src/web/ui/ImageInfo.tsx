@@ -7,7 +7,7 @@ import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
-import { DeviceDropdown } from './DeviceDropdown'
+import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 
@@ -74,7 +74,7 @@ const SelectedCoordinateDropdown = memo(() => {
 				<DropdownItem key='POINT_TELESCOPE_HERE'>
 					<span className='flex flex-row items-center gap-1'>
 						<span>Point mount here:</span>
-						<DeviceDropdown allowNoneSelection={false} onValueChange={viewer.pointTelescopeHere} showLabel={false} type='MOUNT' />
+						<MountDropdown disallowNoneSelection onValueChange={viewer.pointTelescopeHere} />
 					</span>
 				</DropdownItem>
 			</DropdownMenu>

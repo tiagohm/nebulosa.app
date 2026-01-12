@@ -1,7 +1,7 @@
 import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip, type TooltipProps } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { Device } from 'nebulosa/src/indi.device'
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import type { DeepReadonly } from 'utility-types'
 import { useSnapshot } from 'valtio'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
@@ -11,38 +11,24 @@ import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
 import { IconButton, type IconButtonProps } from './IconButton'
 
-export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends Pick<IconButtonProps, 'label' | 'color' | 'size' | 'iconSize' | 'variant' | 'endContent'> {
+export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends Pick<IconButtonProps, 'icon' | 'label' | 'color' | 'size' | 'iconSize' | 'variant' | 'endContent'> {
 	readonly type: T
 	readonly value?: DeepReadonly<DeviceTypeMap[T]>
-	readonly onValueChange: (value?: DeviceTypeMap[T]) => void
+	readonly onValueChange?: (value?: DeviceTypeMap[T]) => void
 	readonly isDisabled?: boolean
-	readonly allowNoneSelection?: boolean
+	readonly disallowNoneSelection?: boolean
 	readonly tooltipContent?: React.ReactNode
 	readonly tooltipPlacement?: TooltipProps['placement']
-	readonly icon?: IconButtonProps['icon']
 	readonly label?: string
 	readonly showLabel?: boolean
 	readonly showLabelOnEmpty?: boolean
 }
 
-const DEVICES = {
-	CAMERA: { icon: Icons.Camera, label: 'Camera' },
-	MOUNT: { icon: Icons.Telescope, label: 'Mount' },
-	FOCUSER: { icon: Icons.Focuser, label: 'Focuser' },
-	WHEEL: { icon: Icons.FilterWheel, label: 'Filter Wheel' },
-	ROTATOR: { icon: Icons.RotateRight, label: 'Rotator' },
-	FLAT_PANEL: { icon: Icons.Camera, label: 'Flat Panel' },
-	COVER: { icon: Icons.Camera, label: 'Cover' },
-	THERMOMETER: { icon: Icons.Thermometer, label: 'Thermometer' },
-	GUIDE_OUTPUT: { icon: Icons.Camera, label: 'Guide Output' },
-	DEW_HEATER: { icon: Icons.Camera, label: 'Dew Heater' },
-} as const
-
-export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, isDisabled, allowNoneSelection = true, label, showLabel, showLabelOnEmpty = showLabel, icon, color, tooltipContent, tooltipPlacement = 'bottom', ...props }: DeviceDropdownProps<T>) {
+export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, isDisabled, disallowNoneSelection = false, label, showLabel = false, showLabelOnEmpty = showLabel, icon, color, tooltipContent, tooltipPlacement = 'bottom', ...props }: DeviceDropdownProps<T>) {
 	const equipment = useMolecule(EquipmentMolecule)
 	const state = equipment.state[type]
 	const devices = useSnapshot(state)
-	const items = useMemo(() => (allowNoneSelection ? [undefined, ...devices] : devices), [devices, allowNoneSelection])
+	const items = useMemo(() => (disallowNoneSelection ? devices : [undefined, ...devices]), [devices, disallowNoneSelection])
 
 	function handleOnAction(key: React.Key) {
 		onValueChange?.(key === 'none' ? undefined : (state.find((e) => e.id === key) as never))
@@ -50,23 +36,17 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 
 	return (
 		<Dropdown isDisabled={isDisabled || items.length === 0} showArrow>
-			<Tooltip content={tooltipContent || DEVICES[type].label} isDisabled={isDisabled || items.length === 0} placement={tooltipPlacement} showArrow>
+			<Tooltip content={tooltipContent} isDisabled={isDisabled || items.length === 0} placement={tooltipPlacement} showArrow>
 				<div className='max-w-fit'>
 					<DropdownTrigger onPointerUp={stopPropagation}>
-						<IconButton
-							{...props}
-							color={color ?? (value === undefined ? 'secondary' : value.connected ? 'success' : 'danger')}
-							icon={icon ?? DEVICES[type].icon}
-							isDisabled={isDisabled || items.length === 0}
-							label={showLabel ? (value?.name ?? (showLabelOnEmpty ? label || 'None' : undefined)) : undefined}
-						/>
+						<IconButton {...props} color={color ?? (value === undefined ? 'secondary' : value.connected ? 'success' : 'danger')} icon={icon} isDisabled={isDisabled || items.length === 0} label={showLabel ? (value?.name ?? (showLabelOnEmpty ? label || 'None' : undefined)) : undefined} />
 					</DropdownTrigger>
 				</div>
 			</Tooltip>
 			<DropdownMenu onAction={handleOnAction}>
 				{items.map((item) => (
 					<DropdownItem endContent={<DeviceDropdownEndContent device={item} isSelected={value?.name === item?.name} />} key={item?.id || 'none'} startContent={<Icons.Circle color={!item ? '#9353D3' : item.connected ? '#17C964' : '#F31260'} size={12} />}>
-						{item?.name || label || 'None'}
+						{item?.name || 'None'}
 					</DropdownItem>
 				))}
 			</DropdownMenu>
@@ -74,12 +54,32 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 	)
 }
 
-export interface DeviceDropdownEndContentProps {
+export const CameraDropdown = memo(({ icon = Icons.Camera, tooltipContent = 'Camera', ...props }: Omit<Partial<DeviceDropdownProps<'CAMERA'>>, 'type'>) => {
+	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type='CAMERA' />
+})
+
+export const MountDropdown = memo(({ icon = Icons.Telescope, tooltipContent = 'Mount', ...props }: Omit<Partial<DeviceDropdownProps<'MOUNT'>>, 'type'>) => {
+	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type='MOUNT' />
+})
+
+export const WheelDropdown = memo(({ icon = Icons.FilterWheel, tooltipContent = 'Filter Wheel', ...props }: Omit<Partial<DeviceDropdownProps<'WHEEL'>>, 'type'>) => {
+	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type='WHEEL' />
+})
+
+export const FocuserDropdown = memo(({ icon = Icons.Focuser, tooltipContent = 'Focuser', ...props }: Omit<Partial<DeviceDropdownProps<'FOCUSER'>>, 'type'>) => {
+	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type='FOCUSER' />
+})
+
+export const RotatorDropdown = memo(({ icon = Icons.RotateRight, tooltipContent = 'Rotator', ...props }: Omit<Partial<DeviceDropdownProps<'ROTATOR'>>, 'type'>) => {
+	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type='ROTATOR' />
+})
+
+interface DeviceDropdownEndContentProps {
 	readonly device?: Device
 	readonly isSelected?: boolean
 }
 
-export function DeviceDropdownEndContent({ device, isSelected }: DeviceDropdownEndContentProps) {
+function DeviceDropdownEndContent({ device, isSelected }: DeviceDropdownEndContentProps) {
 	const equipment = useMolecule(EquipmentMolecule)
 
 	function handleConnectPointerUp(event: React.PointerEvent) {

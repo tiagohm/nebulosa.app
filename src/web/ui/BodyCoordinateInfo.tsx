@@ -12,14 +12,14 @@ export interface BodyCoordinateInfoProps {
 export const BodyCoordinateInfo = memo(({ position, hide }: BodyCoordinateInfoProps) => {
 	return (
 		<div className='w-full grid grid-cols-20 gap-2'>
-			<div className='col-span-12 flex flex-col gap-0 justify-center'>
+			<div className='col-span-11 flex flex-col gap-0 justify-center'>
 				<Coordinate isVisible={!hide?.length || !hide.includes('equatorialJ2000')} type='equatorialJ2000' x={position.equatorialJ2000[0]} y={position.equatorialJ2000[1]} />
 				<Coordinate isVisible={!hide?.length || !hide.includes('equatorial')} type='equatorial' x={position.equatorial[0]} y={position.equatorial[1]} />
 				<Coordinate isVisible={!hide?.length || !hide.includes('horizontal')} type='horizontal' x={position.horizontal[0]} y={position.horizontal[1]} />
 				<Coordinate isVisible={!hide?.length || !hide.includes('ecliptic')} type='ecliptic' x={position.ecliptic[0]} y={position.ecliptic[1]} />
 				<Coordinate isVisible={!hide?.length || !hide.includes('galactic')} type='galactic' x={position.galactic[0]} y={position.galactic[1]} />
 			</div>
-			<div className='col-span-8 text-sm flex flex-col justify-end gap-0'>
+			<div className='col-span-9 text-sm flex flex-col justify-end gap-0'>
 				<Extra isVisible={!hide?.length || !hide.includes('constellation')} label='CONST' value={position.constellation} />
 				<Extra isVisible={!hide?.length || !hide.includes('lst')} label='LST' value={formatHMS(position.lst, true)} />
 				<Extra isVisible={!hide?.length || !hide.includes('meridianIn')} label='MERIDIAN IN' value={formatHMS(position.meridianIn, true)} />

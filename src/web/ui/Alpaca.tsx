@@ -10,13 +10,13 @@ import { TextButton } from './TextButton'
 
 export const Alpaca = memo(() => {
 	const alpaca = useMolecule(AlpacaMolecule)
-	const { devices, running, port: runningPort } = useSnapshot(alpaca.state.status)
+	const { devices, running, serverPort } = useSnapshot(alpaca.state.status)
 	const { port } = useSnapshot(alpaca.state, { sync: true })
 
 	const Footer = (
 		<>
 			<div className='flex flex-1 flex-row items-center'>
-				<NumberInput className='max-w-25' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => (alpaca.state.port = value)} size='sm' value={running ? runningPort : port} />
+				<NumberInput className='max-w-25' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => (alpaca.state.port = value)} size='sm' value={running ? serverPort : port} />
 			</div>
 			<TextButton color='danger' isDisabled={!running} label='Stop' onPointerUp={alpaca.stop} startContent={<Icons.Stop />} />
 			<TextButton color='success' isDisabled={running} label='Start' onPointerUp={alpaca.start} startContent={<Icons.Play />} />

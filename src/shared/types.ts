@@ -826,7 +826,8 @@ export interface DarvEvent {
 
 export interface AlpacaServerStatus {
 	readonly running: boolean
-	readonly port: number
+	readonly serverPort: number
+	readonly discoveryPort: number
 	readonly devices: AlpacaConfiguredDevice[]
 }
 
@@ -950,7 +951,7 @@ export const DEFAULT_IMAGE_STRETCH: ImageStretch = {
 export const DEFAULT_IMAGE_SCNR: ImageScnr = {
 	channel: undefined,
 	amount: 0.5,
-	method: 'MAXIMUM_MASK',
+	method: 'AVERAGE_NEUTRAL',
 }
 
 export const DEFAULT_IMAGE_ADJUSTMENT: ImageAdjustment = {

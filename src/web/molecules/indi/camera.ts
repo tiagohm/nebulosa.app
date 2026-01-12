@@ -213,7 +213,9 @@ export function updateFrameFormat(request: CameraCaptureStart, frameFormats?: st
 }
 
 export function updateExposureTime(request: CameraCaptureStart, exposure: MinMaxValueProperty) {
-	const min = Math.max(1, exposureTimeIn(exposure.min, 'SECOND', request.exposureTimeUnit))
-	const max = exposureTimeIn(exposure.max, 'SECOND', request.exposureTimeUnit)
-	request.exposureTime = Math.max(min, Math.min(request.exposureTime, max))
+	if (exposure.max > 0) {
+		const min = Math.max(1, exposureTimeIn(exposure.min, 'SECOND', request.exposureTimeUnit))
+		const max = exposureTimeIn(exposure.max, 'SECOND', request.exposureTimeUnit)
+		request.exposureTime = Math.max(min, Math.min(request.exposureTime, max))
+	}
 }

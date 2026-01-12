@@ -16,7 +16,7 @@ export function alpaca(wsm: WebSocketMessageHandler, options: AlpacaServerOption
 	let running = false
 
 	function status(): AlpacaServerStatus {
-		return { running, port: alpacaDiscoveryServer?.port ?? -1, devices: alpacaServer ? Array.from(alpacaServer.configuredDevices()) : [] }
+		return { running, serverPort: alpacaServer?.port ?? -1, discoveryPort: alpacaDiscoveryServer?.port ?? -1, devices: alpacaServer ? Array.from(alpacaServer.configuredDevices()) : [] }
 	}
 
 	async function start(port: number) {
@@ -48,13 +48,13 @@ export function alpaca(wsm: WebSocketMessageHandler, options: AlpacaServerOption
 
 			alpacaServer?.stop()
 			alpacaServer = undefined
+			console.info('alpaca server is stopped')
 
 			alpacaDiscoveryServer?.stop()
 			alpacaDiscoveryServer = undefined
+			console.info('alpaca discovery server is stopped')
 
 			wsm.send('alpaca:stop', undefined)
-
-			console.info('alpaca discovery server is stopped')
 		}
 	}
 

@@ -19,7 +19,8 @@ const state = proxy<AlpacaState>({
 	port: 2222,
 	status: {
 		running: false,
-		port: 0,
+		serverPort: 0,
+		discoveryPort: 0,
 		devices: [],
 	},
 })

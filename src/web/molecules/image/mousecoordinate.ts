@@ -103,21 +103,6 @@ export const ImageMouseCoordinateMolecule = molecule(() => {
 		const { interpolator, coordinate } = state
 
 		if (interpolator) {
-			// Is pointer up event?
-			if (clicked) {
-				if (coordinate.selected.show) {
-					const d = Math.hypot(x - coordinate.selected.x, y - coordinate.selected.y)
-
-					// Unselect if inside selected coordinate radius
-					if (d <= 8) {
-						coordinate.selected.show = false
-						return
-					}
-				} else if (isMousePresent) {
-					coordinate.selected.show = true
-				}
-			}
-
 			const [rightAscension, declination] = interpolator.interpolate(x, y)
 
 			if (clicked && isMousePresent) {
@@ -125,6 +110,7 @@ export const ImageMouseCoordinateMolecule = molecule(() => {
 				coordinate.selected.declination = declination
 				coordinate.selected.x = x
 				coordinate.selected.y = y
+				coordinate.selected.show = true
 			}
 
 			coordinate.hover.rightAscension = rightAscension

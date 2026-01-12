@@ -196,7 +196,7 @@ export const MountMolecule = molecule(() => {
 			case 'GOTO':
 				return Api.Mounts.goTo(mount, state.targetCoordinate.coordinate)
 			case 'SYNC':
-				return Api.Mounts.syncTo(mount, state.targetCoordinate.coordinate)
+				return Api.Mounts.sync(mount, state.targetCoordinate.coordinate)
 			case 'FRAME': {
 				const request: Partial<Framing> = {
 					rightAscension: formatRA(state.targetCoordinate.position.equatorialJ2000[0]),

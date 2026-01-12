@@ -1,10 +1,11 @@
-import { Chip, Input, Listbox, ListboxItem, Switch, Tooltip } from '@heroui/react'
+import { Chip, DropdownItem, Input, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { MountMolecule, type TargetCoordinateAction } from '@/molecules/indi/mount'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { ConnectButton } from './ConnectButton'
+import { DropdownButton } from './DropdownButton'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
@@ -13,7 +14,6 @@ import { Modal } from './Modal'
 import { MountRemoteControl } from './MountRemoteControl'
 import { MountTargetCoordinateTypeRadioGroup } from './MountTargetCoordinateTypeRadioGroup'
 import { Nudge } from './Nudge'
-import { PopupButton } from './PopupButton'
 import { SlewRateSelect } from './SlewRateSelect'
 import { Time } from './Time'
 import { TrackModeSelect } from './TrackModeSelect'
@@ -118,37 +118,33 @@ const TargetCoordinateAndPosition = memo(({ isDisabled }: TargetCoordinateAndPos
 			</div>
 			<Input className='col-span-7' isDisabled={isDisabled} label={type === 'JNOW' || type === 'J2000' ? 'RA' : type === 'ALTAZ' ? 'AZ' : 'LON'} onValueChange={(value) => mount.updateTargetCoordinateByType('x', value)} size='sm' value={x} />
 			<Input className='col-span-7' isDisabled={isDisabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={(value) => mount.updateTargetCoordinateByType('y', value)} size='sm' value={y} />
-			<PopupButton className='col-span-6' color='primary' isDisabled={isDisabled} label={<TargetCoordinatePopupButtonLabel action={action} />} onPointerUp={mount.handleTargetCoordinateAction} size='lg'>
-				<div className='flex flex-col gap-1'>
-					<Listbox classNames={{ base: 'min-w-50' }} onAction={(value) => mount.updateTargetCoordinate('action', value as never)}>
-						<ListboxItem key='GOTO'>
-							<TargetCoordinatePopupButtonLabel action='GOTO' />
-						</ListboxItem>
-						<ListboxItem key='SYNC'>
-							<TargetCoordinatePopupButtonLabel action='SYNC' />
-						</ListboxItem>
-						<ListboxItem key='FRAME'>
-							<TargetCoordinatePopupButtonLabel action='FRAME' />
-						</ListboxItem>
-					</Listbox>
-				</div>
-			</PopupButton>
+			<DropdownButton className='col-span-6' color='primary' isDisabled={isDisabled} label={<TargetCoordinateDropdownButtonLabel action={action} />} onPointerUp={mount.handleTargetCoordinateAction} size='lg'>
+				<DropdownItem key='GOTO' startContent={<Icons.Telescope size={12} />}>
+					Go
+				</DropdownItem>
+				<DropdownItem key='SYNC' startContent={<Icons.Sync size={12} />}>
+					Sync
+				</DropdownItem>
+				<DropdownItem key='FRAME' startContent={<Icons.Image size={12} />}>
+					Frame
+				</DropdownItem>
+			</DropdownButton>
 		</div>
 	)
 })
 
-const TARGET_COORDINATE_POPUP_BUTTON_ITEMS = {
+const TARGET_COORDINATE_DROPDOWN_BUTTON_ITEMS = {
 	GOTO: [Icons.Telescope, 'Go'],
 	SYNC: [Icons.Sync, 'Sync'],
 	FRAME: [Icons.Image, 'Frame'],
 } as const
 
-interface TargetCoordinatePopupButtonLabelProps {
+interface TargetCoordinateDropdownButtonLabelProps {
 	readonly action: TargetCoordinateAction
 }
 
-const TargetCoordinatePopupButtonLabel = memo(({ action }: TargetCoordinatePopupButtonLabelProps) => {
-	const [Icon, label] = TARGET_COORDINATE_POPUP_BUTTON_ITEMS[action]
+const TargetCoordinateDropdownButtonLabel = memo(({ action }: TargetCoordinateDropdownButtonLabelProps) => {
+	const [Icon, label] = TARGET_COORDINATE_DROPDOWN_BUTTON_ITEMS[action]
 
 	return (
 		<div className='flex items-center gap-2 text-medium'>

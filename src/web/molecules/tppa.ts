@@ -9,14 +9,14 @@ import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
 import { updateFrameFormat } from './indi/camera'
-import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
+import { EquipmentMolecule } from './indi/equipment'
 
 export interface TppaState {
 	show: boolean
 	running: boolean
 	readonly request: TppaStart
-	camera?: EquipmentDevice<Camera>
-	mount?: EquipmentDevice<Mount>
+	camera?: Camera
+	mount?: Mount
 	event: TppaEvent
 }
 

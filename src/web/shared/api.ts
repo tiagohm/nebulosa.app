@@ -186,7 +186,7 @@ export namespace Api {
 			return res(`/mounts/${mount.name}/goto?clientId=${mount.client.id}`, 'post', coordinate)
 		}
 
-		export function syncTo(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
+		export function sync(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
 			return res(`/mounts/${mount.name}/sync?clientId=${mount.client.id}`, 'post', coordinate)
 		}
 

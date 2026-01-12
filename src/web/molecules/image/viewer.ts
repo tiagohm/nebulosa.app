@@ -1,4 +1,5 @@
 import { createScope, molecule, onMount, use } from 'bunshi'
+import type { Mount } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageInfo, type ImageTransformation } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
@@ -240,6 +241,10 @@ export const ImageViewerMolecule = molecule(() => {
 		bringToFront(target)
 	}
 
+	function pointTelescopeHere(mount?: Mount) {
+		//
+	}
+
 	function attachImage(node: HTMLImageElement | null) {
 		if (node) {
 			target = node
@@ -301,6 +306,7 @@ export const ImageViewerMolecule = molecule(() => {
 		remove,
 		detach,
 		select,
+		pointTelescopeHere,
 	} as const
 })
 

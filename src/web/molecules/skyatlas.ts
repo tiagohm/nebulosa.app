@@ -811,11 +811,11 @@ export const SkyAtlasMolecule = molecule(() => {
 		else twilightUpdate = true
 	}
 
-	function syncTo(mount?: Mount) {
+	function sync(mount?: Mount) {
 		if (!mount) return undefined
 		const { position } = state[state.tab]
 		const [rightAscension, declination] = position.equatorial
-		return Api.Mounts.syncTo(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+		return Api.Mounts.sync(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
 	}
 
 	function goTo(mount?: Mount) {
@@ -858,7 +858,7 @@ export const SkyAtlasMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, updateTime, updateLocation, syncTo, goTo, frame, bookmark, showLocation, hideLocation, show, hide }
+	return { state, updateTime, updateLocation, sync, goTo, frame, bookmark, showLocation, hideLocation, show, hide }
 })
 
 function isLocationChanged(a: GeographicCoordinate, b: GeographicCoordinate) {

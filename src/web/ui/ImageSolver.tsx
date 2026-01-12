@@ -5,9 +5,9 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageSolverMolecule } from '@/molecules/image/solver'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { DeviceDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
-import { MountDropdown } from './MountDropdown'
 import { PlateSolverSelect } from './PlateSolverSelect'
 import { PlateSolveStartPopover } from './PlateSolveStartPopover'
 import { TextButton } from './TextButton'
@@ -44,12 +44,8 @@ export const ImageSolver = memo(() => {
 				<Input className='col-span-4' isReadOnly label='Size (arcmin)' size='sm' value={`${toArcmin(solution?.width ?? 0).toFixed(2)} x ${toArcmin(solution?.height ?? 0).toFixed(2)}`} />
 				<Input className='col-span-4' isReadOnly label='Radius (°)' size='sm' value={toDeg(solution?.radius ?? 0).toFixed(4)} />
 				<div className='col-span-full flex items-center justify-center gap-2'>
-					<MountDropdown allowEmpty={false} isDisabled={!solution} onValueChange={solver.syncTo}>
-						{(value, color, isDisabled) => <TextButton color='primary' isDisabled={isDisabled} label='Sync' startContent={<Icons.Sync />} />}
-					</MountDropdown>
-					<MountDropdown allowEmpty={false} isDisabled={!solution} onValueChange={solver.goTo}>
-						{(value, color, isDisabled) => <TextButton color='success' isDisabled={isDisabled} label='Go To' startContent={<Icons.Telescope />} />}
-					</MountDropdown>
+					<DeviceDropdown allowNoneSelection={false} color='primary' icon={Icons.Sync} isDisabled={!solution} label='Sync' onValueChange={solver.sync} showLabel type='MOUNT' variant='flat' />
+					<DeviceDropdown allowNoneSelection={false} color='success' isDisabled={!solution} label='Go' onValueChange={solver.goTo} showLabel type='MOUNT' variant='flat' />
 					<TextButton color='secondary' isDisabled={!solution} label='Frame' onPointerUp={solver.frame} startContent={<Icons.Image />} />
 				</div>
 			</div>

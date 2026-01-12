@@ -5,11 +5,10 @@ import { useSnapshot } from 'valtio'
 import { DarvMolecule } from '@/molecules/darv'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
-import { CameraDropdown } from './CameraDropdown'
+import { DeviceDropdown } from './DeviceDropdown'
 import { HemisphereSelect } from './HemisphereSelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
-import { MountDropdown } from './MountDropdown'
 import { TextButton } from './TextButton'
 
 export const Darv = memo(() => {
@@ -28,8 +27,8 @@ export const Darv = memo(() => {
 		<Modal footer={Footer} header='Drift Alignment by Robert Vice' id='darv' maxWidth='350px' onHide={darv.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row justify-center items-center gap-2'>
-					<CameraDropdown buttonProps={{ endContent: <CameraDropdownEndContent /> }} isDisabled={running} onValueChange={(value) => (darv.state.camera = value)} tooltipContent='Camera' value={camera} />
-					<MountDropdown isDisabled={running} onValueChange={(value) => (darv.state.mount = value)} tooltipContent='Mount' value={mount} />
+					<DeviceDropdown endContent={<CameraDropdownEndContent />} isDisabled={running} onValueChange={(value) => (darv.state.camera = value)} type='CAMERA' value={camera} />
+					<DeviceDropdown isDisabled={running} onValueChange={(value) => (darv.state.mount = value)} type='MOUNT' value={mount} />
 				</div>
 				<div className='mt-2 col-span-full flex flex-row items-center justify-between'>
 					<Chip color='primary' size='sm'>

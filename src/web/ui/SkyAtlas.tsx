@@ -15,13 +15,13 @@ import { skyObjectName, skyObjectType } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { ConstellationSelect } from './ConstellationSelect'
+import { DeviceDropdown } from './DeviceDropdown'
 import { FilterableListbox } from './FilterableListBox'
 import { type Icon, Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Location } from './Location'
 import { Modal } from './Modal'
 import { Moon } from './Moon'
-import { MountDropdown } from './MountDropdown'
 import { PlanetTypeSelect } from './PlanetTypeSelect'
 import { PoweredBy } from './PoweredBy'
 import { SatelliteCategoryChipGroup } from './SatelliteCategoryChipGroup'
@@ -944,12 +944,8 @@ const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => {
 				<BodyCoordinateInfo position={position} />
 			</div>
 			<div className='col-span-full flex items-center justify-center gap-2'>
-				<MountDropdown allowEmpty={false} onValueChange={atlas.syncTo} tooltipContent='Sync'>
-					{(value, color, isDisabled) => <IconButton color='primary' icon={Icons.Sync} isDisabled={isDisabled} variant='flat' />}
-				</MountDropdown>
-				<MountDropdown allowEmpty={false} onValueChange={atlas.goTo} tooltipContent='Go To'>
-					{(value, color, isDisabled) => <IconButton color='success' icon={Icons.Telescope} isDisabled={isDisabled} variant='flat' />}
-				</MountDropdown>
+				<DeviceDropdown allowNoneSelection={false} color='primary' icon={Icons.Sync} isDisabled={position.pierSide === 'NEITHER'} onValueChange={atlas.sync} showLabel={false} tooltipContent='Sync' type='MOUNT' variant='flat' />
+				<DeviceDropdown allowNoneSelection={false} color='success' isDisabled={position.pierSide === 'NEITHER'} onValueChange={atlas.goTo} showLabel={false} tooltipContent='Go' type='MOUNT' variant='flat' />
 				<Tooltip content='Frame' placement='bottom' showArrow>
 					<IconButton color='secondary' icon={Icons.Image} isDisabled={position.pierSide === 'NEITHER'} onPointerUp={atlas.frame} variant='flat' />
 				</Tooltip>

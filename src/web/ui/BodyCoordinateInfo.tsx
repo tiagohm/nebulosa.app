@@ -41,8 +41,8 @@ const Coordinate = memo(({ type, x, y, isVisible = true }: CoordinateProps) => {
 		<Activity mode={isVisible ? 'visible' : 'hidden'}>
 			<div className='grid grid-cols-12 items-center text-sm leading-3'>
 				<span className='col-span-4 font-bold text-xs'>{type === 'equatorial' ? 'RA/DEC' : type === 'equatorialJ2000' ? 'RA/DEC (J2000)' : type === 'horizontal' ? 'AZ/ALT' : type === 'ecliptic' ? 'ECL LON/LAT' : 'GAL LON/LAT'}:</span>
-				<span className='col-span-4 text-end'>{type === 'equatorial' || type === 'equatorialJ2000' ? formatRA(x) : formatAZ(x)}</span>
-				<span className='col-span-4 text-end'>{formatDEC(y)}</span>
+				<span className='col-span-4 text-end'>{type === 'equatorial' || type === 'equatorialJ2000' ? formatRA(x, true) : formatAZ(x, true)}</span>
+				<span className='col-span-4 text-end'>{formatDEC(y, true)}</span>
 			</div>
 		</Activity>
 	)

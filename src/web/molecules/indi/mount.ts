@@ -119,7 +119,9 @@ export const MountMolecule = molecule(() => {
 
 					state.mount.connecting = false
 				} else if (event.property === 'equatorialCoordinate') {
-					Object.assign(state.currentPosition, event.device.equatorialCoordinate)
+					const equatorial = state.currentPosition.equatorial as [number, number]
+					equatorial[0] = event.device.equatorialCoordinate!.rightAscension
+					equatorial[1] = event.device.equatorialCoordinate!.declination
 				}
 			}
 		})

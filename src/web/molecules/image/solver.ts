@@ -100,14 +100,12 @@ export const ImageSolverMolecule = molecule(() => {
 
 	async function goTo(mount?: Mount) {
 		if (!mount || !state.solution) return
-		const { rightAscension, declination } = state.solution
-		await Api.Mounts.goTo(mount, { type: 'J2000', J2000: { x: rightAscension, y: declination } })
+		await Api.Mounts.goTo(mount, { type: 'J2000', J2000: { x: state.solution.rightAscension, y: state.solution.declination } })
 	}
 
 	async function syncTo(mount?: Mount) {
 		if (!mount || !state.solution) return
-		const { rightAscension, declination } = state.solution
-		await Api.Mounts.syncTo(mount, { type: 'J2000', J2000: { x: rightAscension, y: declination } })
+		await Api.Mounts.syncTo(mount, { type: 'J2000', J2000: { x: state.solution.rightAscension, y: state.solution.declination } })
 	}
 
 	function frame() {

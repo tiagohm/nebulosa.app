@@ -843,11 +843,11 @@ for (const [name, url] of Object.entries(GITHUB_FILES)) {
 	}
 }
 
-if (await fs.exists('data/nebulosa.sqlite')) {
-	await fs.unlink('data/nebulosa.sqlite')
-}
+const file = Bun.file('data/nebulosa.sqlite')
 
-const db = new Database('data/nebulosa.sqlite')
+if (await file.exists()) await file.delete()
+
+const db = new Database(file.name)
 
 db.run('PRAGMA journal_size_limit = 67110000;')
 

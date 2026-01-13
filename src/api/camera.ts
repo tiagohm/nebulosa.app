@@ -1,5 +1,5 @@
 import Elysia from 'elysia'
-import fs, { mkdir } from 'fs/promises'
+import { mkdir } from 'fs/promises'
 import { IndiClient } from 'nebulosa/src/indi.client'
 import { type Camera, CLIENT } from 'nebulosa/src/indi.device'
 import type { CameraManager, DeviceHandler, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/indi.manager'
@@ -315,7 +315,7 @@ async function waitFor(us: number, callback: (remaining: number) => boolean) {
 
 async function makePathFor(req: CameraCaptureStart) {
 	if (req.autoSave) {
-		const savePath = req.savePath && (await fs.exists(req.savePath)) ? req.savePath : Bun.env.capturesDir
+		const savePath = req.savePath && (await Bun.file(req.savePath).exists()) ? req.savePath : Bun.env.capturesDir
 
 		if (req.autoSubFolderMode === 'OFF') return savePath
 

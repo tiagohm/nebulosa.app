@@ -59,7 +59,7 @@ export class FileSystemHandler {
 
 	async exists(req: CreateDirectory) {
 		const path = (await findDirectory(req.path)) || Bun.env.homeDir
-		return path ? fs.exists(join(path, req.name.trim())) : false
+		return path ? await Bun.file(join(path, req.name.trim())).exists() : false
 	}
 
 	join(req: string[]) {
@@ -84,7 +84,7 @@ export async function findDirectory(path?: string) {
 	// If no path is provided, return
 	if (!path) return undefined
 	// If the path does not exist, go up until a directory is found
-	else if (!(await fs.exists(path))) return findDirectory(dirname(path))
+	else if (!(await Bun.file(path).exists())) return findDirectory(dirname(path))
 	// If the path exists, return if it is a directory, otherwise go up
 	else {
 		const stats = await fs.stat(path)

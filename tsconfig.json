@@ -2,16 +2,25 @@
 	"compilerOptions": {
 		"target": "ESNext",
 		"module": "Preserve",
+		"moduleDetection": "force",
 		"moduleResolution": "bundler",
 		"jsx": "react-jsx",
-		"allowJs": true,
+		"allowJs": false,
 		"strict": true,
 		"skipLibCheck": true,
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
+		"noPropertyAccessFromIndexSignature": false,
+		"incremental": false,
 		"forceConsistentCasingInFileNames": true,
+		"allowSyntheticDefaultImports": true,
 		"baseUrl": ".",
 		"paths": {
 			"@/*": ["./src/web/*"]
 		}
-	},
-	"exclude": ["dist", "node_modules"]
+	}
 }

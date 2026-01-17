@@ -38,7 +38,7 @@ export const DewHeaterMolecule = molecule(() => {
 		state.dewHeater = equipment.get('DEW_HEATER', state.dewHeater.name)!
 
 		const unsubscriber = bus.subscribe<DewHeaterUpdated>('dewHeater:update', (event) => {
-			if (event.device.name === dewHeater.name) {
+			if (event.device.id === dewHeater.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
 						addToast({ title: 'DEW HEATER', description: `Failed to connect to dew heater ${dewHeater.name}`, color: 'danger' })

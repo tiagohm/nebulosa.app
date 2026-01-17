@@ -65,6 +65,10 @@ export const StarDetectionMolecule = molecule(() => {
 		}
 	})
 
+	function update<K extends keyof StarDetection>(key: K, value: StarDetection[K]) {
+		state.request[key] = value
+	}
+
 	function toggle(enabled?: boolean) {
 		state.visible = enabled ?? !state.visible
 	}
@@ -142,5 +146,5 @@ export const StarDetectionMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, viewer, scope: viewer.scope, toggle, detect, select, reset, show, hide } as const
+	return { state, viewer, scope: viewer.scope, update, toggle, detect, select, reset, show, hide } as const
 })

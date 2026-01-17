@@ -1,37 +1,31 @@
-import { Input, NumberInput } from '@heroui/react'
+import { Input } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { StarDetectionMolecule } from '@/molecules/image/stardetection'
-import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
+import { StarDetectionPopover } from './StarDetectionPopover'
 import { StarDetectionSelect } from './StarDetectionSelect'
 import { TextButton } from './TextButton'
 
 export const StarDetection = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
 	const { loading, stars, computed, selected } = useSnapshot(starDetection.state)
-	const request = useSnapshot(starDetection.state.request, { sync: true })
+	const { type } = useSnapshot(starDetection.state.request, { sync: true })
 
 	const Footer = <TextButton color='success' isLoading={loading} label='Detect' onPointerUp={starDetection.detect} startContent={<Icons.Check />} />
 
 	return (
 		<Modal footer={Footer} header='Star Detection' id={`star-detection-${starDetection.scope.image.key}`} maxWidth='310px' onHide={starDetection.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<StarDetectionSelect className='col-span-4' onValueChange={(value) => (starDetection.state.request.type = value)} value={request.type} />
-				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Min SNR' maxValue={500} minValue={0} onValueChange={(value) => (starDetection.state.request.minSNR = value)} size='sm' value={request.minSNR} />
-				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Max Stars' maxValue={2000} minValue={0} onValueChange={(value) => (starDetection.state.request.maxStars = value)} size='sm' value={request.maxStars} />
-				<div className='col-span-full mt-1'>
-					<span className='text-sm font-bold'>COMPUTED</span>
-				</div>
+				<StarDetectionSelect className='col-span-full' endContent={<StarDetectionEndContent />} onValueChange={(value) => starDetection.update('type', value)} value={type} />
+				<span className='col-span-full mt-1 text-sm font-bold'>COMPUTED</span>
 				<Input className='col-span-3' isReadOnly label='Stars' size='sm' value={stars.length.toFixed(0)} />
 				<Input className='col-span-2' isReadOnly label='HFD' size='sm' value={computed.hfd.toFixed(2)} />
 				<Input className='col-span-2' isReadOnly label='SNR' size='sm' value={computed.snr.toFixed(0)} />
 				<Input className='col-span-5' isReadOnly label='Flux' size='sm' value={`${computed.fluxMin.toFixed(0)} | ${computed.fluxMax.toFixed(0)}`} />
-				<div className='col-span-full mt-1'>
-					<span className='text-sm font-bold'>SELECTED</span>
-				</div>
+				<span className='col-span-full mt-1 text-sm font-bold'>SELECTED</span>
 				<div className='col-span-4 row-span-4 flex justify-center'>
 					<canvas className='pixelated h-27 w-27 rounded-md bg-slate-950' id={`${starDetection.scope.image.key}-selected-star`} />
 				</div>
@@ -42,4 +36,11 @@ export const StarDetection = memo(() => {
 			</div>
 		</Modal>
 	)
+})
+
+const StarDetectionEndContent = memo(() => {
+	const starDetection = useMolecule(StarDetectionMolecule)
+	const value = useSnapshot(starDetection.state.request, { sync: true })
+
+	return <StarDetectionPopover isRounded onValueChange={starDetection.update} size='sm' value={value} variant='light' />
 })

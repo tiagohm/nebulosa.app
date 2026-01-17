@@ -33,11 +33,11 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 	}
 
 	moveIn(focuser: Focuser, steps: number) {
-		this.focuserManager.moveTo(focuser, steps)
+		this.focuserManager.moveIn(focuser, steps)
 	}
 
 	moveOut(focuser: Focuser, steps: number) {
-		this.focuserManager.moveTo(focuser, steps)
+		this.focuserManager.moveOut(focuser, steps)
 	}
 
 	syncTo(focuser: Focuser, position: number) {

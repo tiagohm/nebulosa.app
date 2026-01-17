@@ -1215,6 +1215,7 @@ export const DEFAULT_AUTO_FOCUS_REQUEST: AutoFocusRequest = {
 	fittingMode: 'TREND_PARABOLIC',
 	reversed: false,
 	maxPosition: 0,
+	rmsdThreshold: 0.15,
 }
 
 export const DEFAULT_AUTO_FOCUS_EVENT: AutoFocusEvent = {

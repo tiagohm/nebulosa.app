@@ -38,7 +38,7 @@ export const FlatPanelMolecule = molecule(() => {
 		state.flatPanel = equipment.get('FLAT_PANEL', state.flatPanel.name)!
 
 		const unsubscriber = bus.subscribe<FlatPanelUpdated>('flatPanel:update', (event) => {
-			if (event.device.name === flatPanel.name) {
+			if (event.device.id === flatPanel.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
 						addToast({ title: 'FLAT PANEL', description: `Failed to connect to flat panel ${flatPanel.name}`, color: 'danger' })

@@ -1,14 +1,14 @@
 import { molecule, onMount, use } from 'bunshi'
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
-import { type DarvEvent, type DarvStart, DEFAULT_DARV_EVENT, DEFAULT_DARV_START } from 'src/shared/types'
+import { type CameraUpdated, type DarvEvent, type DarvStart, DEFAULT_DARV_EVENT, DEFAULT_DARV_START } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
-import { updateFrameFormat } from './indi/camera'
+import { updateExposureTime, updateFrameFormat, updateRequestFrame } from './indi/camera'
 import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
 export interface DarvState {
@@ -35,7 +35,7 @@ export const DarvMolecule = molecule(() => {
 	onMount(() => {
 		state.request.id = Date.now().toFixed(0)
 
-		const unsubscribers = new Array<VoidFunction>(4)
+		const unsubscribers = new Array<VoidFunction>(5)
 
 		unsubscribers[0] = subscribeKey(state, 'camera', (camera) => {
 			storageSet('darv.camera', camera?.name ?? undefined)
@@ -46,14 +46,26 @@ export const DarvMolecule = molecule(() => {
 			storageSet('darv.mount', mount?.name ?? undefined)
 		})
 
-		unsubscribers[2] = bus.subscribe<DarvEvent>('darv', (event) => {
+		unsubscribers[2] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
+			if (event.device.id === state.camera?.id) {
+				if (event.property === 'frame') {
+					updateRequestFrame(state.request.capture, event.device.frame!)
+				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
+					updateFrameFormat(state.request.capture, event.device.frameFormats)
+				} else if (event.property === 'exposure' && !state.camera.exposuring && event.device.exposure?.max) {
+					updateExposureTime(state.request.capture, event.device.exposure)
+				}
+			}
+		})
+
+		unsubscribers[3] = bus.subscribe<DarvEvent>('darv', (event) => {
 			if (state.request.id === event.id) {
 				state.running = event.state !== 'IDLE'
 				Object.assign(state.event, event)
 			}
 		})
 
-		unsubscribers[3] = subscribeKey(state, 'show', (show) => {
+		unsubscribers[4] = subscribeKey(state, 'show', (show) => {
 			if (!show) return
 
 			load()
@@ -74,6 +86,8 @@ export const DarvMolecule = molecule(() => {
 
 		if (state.camera) {
 			updateFrameFormat(state.request.capture, state.camera.frameFormats)
+			updateRequestFrame(state.request.capture, state.camera.frame)
+			updateExposureTime(state.request.capture, state.camera.exposure)
 		}
 	}
 

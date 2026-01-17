@@ -1,14 +1,14 @@
 import { molecule, onMount, use } from 'bunshi'
 import type { Camera, Focuser } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
-import { type AutoFocusEvent, type AutoFocusRequest, DEFAULT_AUTO_FOCUS_EVENT, DEFAULT_AUTO_FOCUS_REQUEST } from 'src/shared/types'
+import { type AutoFocusEvent, type AutoFocusRequest, type CameraUpdated, DEFAULT_AUTO_FOCUS_EVENT, DEFAULT_AUTO_FOCUS_REQUEST } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
-import { updateFrameFormat } from './indi/camera'
+import { updateExposureTime, updateFrameFormat, updateRequestFrame } from './indi/camera'
 import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
 export interface AutoFocusState {
@@ -33,7 +33,7 @@ export const AutoFocusMolecule = molecule(() => {
 	const equipment = use(EquipmentMolecule)
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(4)
+		const unsubscribers = new Array<VoidFunction>(5)
 
 		unsubscribers[0] = subscribeKey(state, 'camera', (camera) => {
 			storageSet('autofocus.camera', camera?.name ?? undefined)
@@ -44,7 +44,19 @@ export const AutoFocusMolecule = molecule(() => {
 			storageSet('autofocus.focuser', focuser?.name ?? undefined)
 		})
 
-		unsubscribers[2] = bus.subscribe<AutoFocusEvent>('autofocus', (event) => {
+		unsubscribers[2] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
+			if (event.device.id === state.camera?.id) {
+				if (event.property === 'frame') {
+					updateRequestFrame(state.request.capture, event.device.frame!)
+				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
+					updateFrameFormat(state.request.capture, event.device.frameFormats)
+				} else if (event.property === 'exposure' && !state.camera.exposuring && event.device.exposure?.max) {
+					updateExposureTime(state.request.capture, event.device.exposure)
+				}
+			}
+		})
+
+		unsubscribers[3] = bus.subscribe<AutoFocusEvent>('autofocus', (event) => {
 			if (state.camera?.id === event.camera && state.focuser?.id === event.focuser) {
 				state.running = event.state !== 'IDLE'
 				Object.assign(state.event, event)

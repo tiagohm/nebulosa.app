@@ -57,7 +57,7 @@ export const GuideOutputMolecule = molecule(() => {
 		const unsubscribers = new Array<VoidFunction>(2)
 
 		unsubscribers[0] = bus.subscribe<GuideOutputUpdated>('guideOutput:update', (event) => {
-			if (event.device.name === guideOutput.name) {
+			if (event.device.id === guideOutput.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
 						addToast({ title: 'GUIDE OUTPUT', description: `Failed to connect to guide output ${guideOutput.name}`, color: 'danger' })

@@ -44,7 +44,7 @@ export const RotatorMolecule = molecule(() => {
 		const unsubscribers = new Array<VoidFunction>(2)
 
 		unsubscribers[0] = bus.subscribe<RotatorUpdated>('rotator:update', (event) => {
-			if (event.device.name === rotator.name) {
+			if (event.device.id === rotator.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
 						addToast({ title: 'ROTATOR', description: `Failed to connect to rotator ${rotator.name}`, color: 'danger' })

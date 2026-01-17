@@ -47,7 +47,7 @@ export const FocuserMolecule = molecule(() => {
 		const unsubscribers = new Array<VoidFunction>(2)
 
 		unsubscribers[0] = bus.subscribe<FocuserUpdated>('focuser:update', (event) => {
-			if (event.device.name === focuser.name) {
+			if (event.device.id === focuser.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
 						addToast({ title: 'FOCUSER', description: `Failed to connect to focuser ${focuser.name}`, color: 'danger' })

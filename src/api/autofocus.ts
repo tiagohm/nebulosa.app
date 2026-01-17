@@ -52,7 +52,7 @@ export class AutoFocusHandler {
 export class AutoFocusTask {
 	private readonly autoFocus: AutoFocus
 	private readonly event = structuredClone(DEFAULT_AUTO_FOCUS_EVENT)
-	private readonly handleAutoFocusEvent: (state: AutoFocusState, message?: string) => void
+	private readonly handleAutoFocusEvent: (state: AutoFocusState, message: string) => void
 	private waitForFocuserUnsubscriber?: VoidFunction
 	private stopped = false
 
@@ -82,7 +82,7 @@ export class AutoFocusTask {
 				return this.handleAutoFocusEvent('IDLE', 'Stopped')
 			}
 
-			this.handleAutoFocusEvent('COMPUTING')
+			this.handleAutoFocusEvent('COMPUTING', '')
 
 			// Detect stars
 			const stars = await this.autoFocusHandler.starDetectionHandler.detect({ ...this.request.starDetection, path: event.savedPath })
@@ -98,13 +98,13 @@ export class AutoFocusTask {
 			// Compute the next step given current focuser position and HFD
 			const step = this.autoFocus.add(this.focuser.position.value, hfd)
 
+			// The focuser position to move
+			const position = Math.max(this.focuser.position.min, Math.min(step.absolute ? step.absolute : step.relative ? this.focuser.position.value + step.relative : 0, this.focuser.position.max))
+
 			if (this.stopped) {
 				this.handleAutoFocusEvent('IDLE', 'Stopped')
 			} else if (step.type === 'MOVE') {
 				this.computeChart()
-
-				// The focuser position to move
-				const position = Math.max(this.focuser.position.min, Math.min(step.absolute ? step.absolute : step.relative ? this.focuser.position.value + step.relative : 0, this.focuser.position.max))
 
 				// Wait for focuser reach position
 				this.waitForFocuserUnsubscriber = waitForFocuser(this.focuser, position, (event) => {
@@ -133,7 +133,9 @@ export class AutoFocusTask {
 					this.handleAutoFocusEvent('IDLE', 'Best focus!')
 				})
 			} else {
-				this.handleAutoFocusEvent('IDLE', 'Failed')
+				this.waitForFocuserUnsubscriber = waitForFocuser(this.focuser, position, () => {
+					this.handleAutoFocusEvent('IDLE', 'Failed! Restored to initial focus position')
+				})
 			}
 		}
 	}
@@ -171,7 +173,7 @@ export class AutoFocusTask {
 		this.request.capture.autoSave = false
 		this.request.capture.focuser = this.focuser?.name
 
-		this.handleAutoFocusEvent('CAPTURING')
+		this.handleAutoFocusEvent('CAPTURING', '')
 
 		this.autoFocusHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}

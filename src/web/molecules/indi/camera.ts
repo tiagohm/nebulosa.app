@@ -61,7 +61,7 @@ export const CameraMolecule = molecule(() => {
 		const unsubscribers = new Array<VoidFunction>(7)
 
 		unsubscribers[0] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
-			if (event.device.name === camera.name) {
+			if (event.device.id === camera.id) {
 				if (event.property === 'frame') {
 					updateRequestFrame(state.request, event.device.frame!)
 				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {

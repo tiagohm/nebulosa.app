@@ -108,7 +108,7 @@ export const MountMolecule = molecule(() => {
 		const unsubscribers = new Array<VoidFunction>(3)
 
 		unsubscribers[0] = bus.subscribe<MountUpdated>('mount:update', (event) => {
-			if (event.device.name === mount.name) {
+			if (event.device.id === mount.id) {
 				if (event.property === 'connected') {
 					if (event.device.connected) {
 						void updateCurrentCoordinatePosition()

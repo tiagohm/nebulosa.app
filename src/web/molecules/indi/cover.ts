@@ -38,7 +38,7 @@ export const CoverMolecule = molecule(() => {
 		state.cover = equipment.get('COVER', state.cover.name)!
 
 		const unsubscriber = bus.subscribe<CoverUpdated>('cover:update', (event) => {
-			if (event.device.name === cover.name) {
+			if (event.device.id === cover.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
 						addToast({ title: 'COVER', description: `Failed to connect to cover ${cover.name}`, color: 'danger' })

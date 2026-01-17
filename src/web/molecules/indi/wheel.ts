@@ -50,7 +50,7 @@ export const WheelMolecule = molecule(() => {
 		const unsubscribers = new Array<VoidFunction>(2)
 
 		unsubscribers[0] = bus.subscribe<WheelUpdated>('wheel:update', (event) => {
-			if (event.device.name === wheel.name) {
+			if (event.device.id === wheel.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
 						addToast({ title: 'FILTER WHEEL', description: `Failed to connect to filter wheel ${wheel.name}`, color: 'danger' })

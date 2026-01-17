@@ -37,7 +37,7 @@ export const ThermometerMolecule = molecule(() => {
 		state.thermometer = equipment.get('THERMOMETER', state.thermometer.name)!
 
 		const unsubscriber = bus.subscribe<ThermometerUpdated>('thermometer:update', (event) => {
-			if (event.device.name === thermometer.name) {
+			if (event.device.id === thermometer.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
 						addToast({ title: 'THERMOMETER', description: `Failed to connect to thermometer ${thermometer.name}`, color: 'danger' })

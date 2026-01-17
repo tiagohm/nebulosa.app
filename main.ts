@@ -12,6 +12,7 @@ import os from 'os'
 import { join } from 'path'
 import { alpaca } from 'src/api/alpaca'
 import { AtlasHandler, atlas } from 'src/api/atlas'
+import { AutoFocusHandler, autoFocus } from 'src/api/autofocus'
 import { CacheManager } from 'src/api/cache'
 import { CameraHandler, camera } from 'src/api/camera'
 import { ConnectionHandler, connection } from 'src/api/connection'
@@ -19,7 +20,7 @@ import { cover } from 'src/api/cover'
 import { DarvHandler, darv } from 'src/api/darv'
 import { dewHeater } from 'src/api/dewheater'
 import { flatPanel } from 'src/api/flatpanel'
-import { focuser } from 'src/api/focuser'
+import { FocuserHandler, focuser } from 'src/api/focuser'
 import { guideOutput } from 'src/api/guideoutput'
 import { IndiHandler, indi } from 'src/api/indi'
 import { WebSocketMessageHandler } from 'src/api/message'
@@ -150,6 +151,8 @@ Bun.dns.prefetch('hpiers.obspm.fr')
 const wsm = new WebSocketMessageHandler()
 const notificationHandler = new NotificationHandler(wsm)
 const connectionHandler = new ConnectionHandler(wsm, notificationHandler)
+const imageProcessor = new ImageProcessor()
+const cacheManager = new CacheManager()
 
 const cameraManager = new CameraManager()
 const focuserManager = new FocuserManager()
@@ -181,15 +184,9 @@ const guideOutputManager = new GuideOutputManager(guideOutputProvider)
 const thermometerManager = new ThermometerManager(thermometerProvider)
 const dewHeaterManager = new DewHeaterManager(dewHeaterProvider)
 
-const imageProcessor = new ImageProcessor()
-
 const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
-cameraManager.addHandler(cameraHandler)
-
+const focuserHandler = new FocuserHandler(wsm, focuserManager)
 const devicePropertyManager = new DevicePropertyManager()
-
-const cacheManager = new CacheManager()
-
 const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, rotatorManager, devicePropertyManager, wsm)
 const confirmationHandler = new ConfirmationHandler(wsm)
 const framingHandler = new FramingHandler(imageProcessor)
@@ -200,6 +197,7 @@ const atlasHandler = new AtlasHandler(cacheManager, notificationHandler)
 const imageHandler = new ImageHandler(imageProcessor, notificationHandler)
 const tppaHandler = new TppaHandler(wsm, cameraHandler, mountManager, plateSolverHandler)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountManager)
+const autoFocusHandler = new AutoFocusHandler(wsm, cameraHandler, focuserHandler, starDetectionHandler)
 
 void atlasHandler.refreshImageOfSun()
 void atlasHandler.refreshSatellites()
@@ -289,7 +287,7 @@ const app = new Elysia({
 	.use(indi(wsm, indiHandler, devicePropertyManager, notificationHandler))
 	.use(camera(cameraHandler))
 	.use(mount(wsm, mountManager, cacheManager))
-	.use(focuser(wsm, focuserManager))
+	.use(focuser(focuserHandler))
 	.use(wheel(wsm, wheelManager))
 	.use(thermometer(wsm, thermometerManager))
 	.use(guideOutput(wsm, guideOutputManager))
@@ -305,6 +303,7 @@ const app = new Elysia({
 	.use(fileSystem(fileSystemHandler))
 	.use(tppa(tppaHandler))
 	.use(darv(darvHandler))
+	.use(autoFocus(autoFocusHandler))
 	.use(alpaca(wsm, { camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager, alpacaPort, alpacaDiscoveryPort }, hasAlpaca))
 
 	// WebSocket

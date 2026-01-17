@@ -46,19 +46,13 @@ export const Darv = memo(() => {
 const CameraDropdownEndContent = memo(() => {
 	const darv = useMolecule(DarvMolecule)
 	const { camera } = useSnapshot(darv.state)
-	const { exposureTime, exposureTimeUnit, binX, binY, gain, offset, frameFormat } = useSnapshot(darv.state.request.capture, { sync: true })
+	const { capture } = useSnapshot(darv.state.request, { sync: true })
 
 	return (
 		camera && (
 			<CameraCaptureStartPopover
-				binX={binX}
-				binY={binY}
 				color={camera.connected ? 'success' : 'danger'}
-				exposureTime={exposureTime}
-				exposureTimeUnit={exposureTimeUnit}
-				frameFormat={frameFormat}
 				frameFormats={camera.frameFormats}
-				gain={gain}
 				isDisabled={!camera.connected}
 				isRounded
 				maxBin={camera.bin.x.max}
@@ -66,8 +60,8 @@ const CameraDropdownEndContent = memo(() => {
 				maxGain={camera.gain.max}
 				maxOffset={camera.offset.max}
 				minExposure={camera.exposure.min}
-				offset={offset}
 				onValueChange={darv.updateCapture}
+				value={capture}
 			/>
 		)
 	)

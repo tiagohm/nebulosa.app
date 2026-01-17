@@ -1,5 +1,6 @@
 import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip, type TooltipProps } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
+import clsx from 'clsx'
 import type { Device } from 'nebulosa/src/indi.device'
 import { memo, useMemo } from 'react'
 import type { DeepReadonly } from 'utility-types'
@@ -45,7 +46,7 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 			</Tooltip>
 			<DropdownMenu onAction={handleOnAction}>
 				{items.map((item) => (
-					<DropdownItem endContent={<DeviceDropdownEndContent device={item} isSelected={value?.name === item?.name} />} key={item?.id || 'none'} startContent={<Icons.Circle color={!item ? '#9353D3' : item.connected ? '#17C964' : '#F31260'} size={12} />}>
+					<DropdownItem className={clsx('min-h-11', { 'bg-green-900/30': value?.name === item?.name })} endContent={<DeviceDropdownEndContent device={item} />} key={item?.id || 'none'} startContent={<Icons.Circle color={!item ? '#9353D3' : item.connected ? '#17C964' : '#F31260'} size={12} />}>
 						{item?.name || 'None'}
 					</DropdownItem>
 				))}
@@ -76,10 +77,9 @@ export const RotatorDropdown = memo(({ icon = Icons.RotateRight, tooltipContent 
 
 interface DeviceDropdownEndContentProps {
 	readonly device?: Device
-	readonly isSelected?: boolean
 }
 
-function DeviceDropdownEndContent({ device, isSelected }: DeviceDropdownEndContentProps) {
+function DeviceDropdownEndContent({ device }: DeviceDropdownEndContentProps) {
 	const equipment = useMolecule(EquipmentMolecule)
 
 	function handleConnectPointerUp(event: React.PointerEvent) {
@@ -96,7 +96,6 @@ function DeviceDropdownEndContent({ device, isSelected }: DeviceDropdownEndConte
 		<div className='flex flex-row items-center gap-2'>
 			{device && <IconButton color='secondary' icon={Icons.OpenInNew} iconSize={12} isRounded onPointerUp={handleShowPointerUp} size='sm' />}
 			{device && <ConnectButton iconSize={12} isConnected={device.connected} isRounded onPointerUp={handleConnectPointerUp} size='sm' />}
-			{isSelected && <Icons.Check className='me-2' color='#17C964' size={12} />}
 		</div>
 	)
 }

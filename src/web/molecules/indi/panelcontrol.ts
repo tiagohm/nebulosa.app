@@ -89,7 +89,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 	async function retrieveDevices(device: Device | string = state.device) {
 		const devices = await Api.Indi.devices(connection.state.connected!)
 		state.devices = devices?.sort() ?? []
-		if (!state.device || !state.devices.includes(state.device)) state.device = (typeof device === 'string' ? device : device?.name) || state.devices[0] || ''
+		state.device = (typeof device === 'string' ? device : device?.name) || state.devices[0] || ''
 		ping()
 	}
 

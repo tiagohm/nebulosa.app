@@ -77,19 +77,13 @@ export const Tppa = memo(() => {
 const CameraDropdownEndContent = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
 	const { camera } = useSnapshot(tppa.state)
-	const { exposureTime, exposureTimeUnit, binX, binY, gain, offset, frameFormat } = useSnapshot(tppa.state.request.capture, { sync: true })
+	const { capture } = useSnapshot(tppa.state.request, { sync: true })
 
 	return (
 		camera && (
 			<CameraCaptureStartPopover
-				binX={binX}
-				binY={binY}
 				color={camera.connected ? 'success' : 'danger'}
-				exposureTime={exposureTime}
-				exposureTimeUnit={exposureTimeUnit}
-				frameFormat={frameFormat}
 				frameFormats={camera.frameFormats}
-				gain={gain}
 				isDisabled={!camera.connected}
 				isRounded
 				maxBin={camera.bin.x.max}
@@ -97,8 +91,8 @@ const CameraDropdownEndContent = memo(() => {
 				maxGain={camera.gain.max}
 				maxOffset={camera.offset.max}
 				minExposure={camera.exposure.min}
-				offset={offset}
 				onValueChange={tppa.updateCapture}
+				value={capture}
 			/>
 		)
 	)

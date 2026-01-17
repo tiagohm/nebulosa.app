@@ -3,6 +3,7 @@ import type { MoleculeOrInterface } from 'bunshi'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
 import type { Angle } from 'nebulosa/src/angle'
 import { DEFAULT_REFRACTION_PARAMETERS, type RefractionParameters } from 'nebulosa/src/astrometry'
+import type { AutoFocusOptions } from 'nebulosa/src/autofocus'
 import type { Constellation } from 'nebulosa/src/constellation'
 import type { EquatorialCoordinate, HorizontalCoordinate } from 'nebulosa/src/coordinate'
 import type { Distance } from 'nebulosa/src/distance'
@@ -681,7 +682,7 @@ export interface CameraCaptureTime {
 }
 
 export interface CameraCaptureEvent {
-	device: string // id
+	camera: string // id
 	count: number
 	loop: boolean
 	remainingCount: number
@@ -822,6 +823,31 @@ export interface DarvEvent {
 	state: DarvState
 }
 
+// Auto Focus
+
+export type AutoFocusState = 'IDLE' | 'MOVING' | 'CAPTURING' | 'COMPUTING'
+
+export interface AutoFocusRequest extends AutoFocusOptions {
+	readonly capture: CameraCaptureStart
+	readonly starDetection: StarDetection
+}
+
+export interface AutoFocusEvent {
+	state: AutoFocusState
+	camera: string
+	focuser: string
+	message?: string
+	x: readonly number[]
+	y: readonly number[]
+	left?: readonly Point[]
+	right?: readonly Point[]
+	parabolic?: readonly Point[]
+	hyperbolic?: readonly Point[]
+	minimum?: Point
+	maximum?: Point
+	focusPoint?: Point
+}
+
 // Alpaca
 
 export interface AlpacaServerStatus {
@@ -860,7 +886,7 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 }
 
 export const DEFAULT_CAMERA_CAPTURE_EVENT: CameraCaptureEvent = {
-	device: '',
+	camera: '',
 	state: 'IDLE',
 	count: 0,
 	remainingCount: 0,
@@ -1179,4 +1205,22 @@ export const DEFAULT_DARV_START: DarvStart = {
 export const DEFAULT_DARV_EVENT: DarvEvent = {
 	id: '',
 	state: 'IDLE',
+}
+
+export const DEFAULT_AUTO_FOCUS_REQUEST: AutoFocusRequest = {
+	capture: DEFAULT_CAMERA_CAPTURE_START,
+	starDetection: DEFAULT_STAR_DETECTION,
+	initialOffsetSteps: 5,
+	stepSize: 50,
+	fittingMode: 'TREND_PARABOLIC',
+	reversed: false,
+	maxPosition: 0,
+}
+
+export const DEFAULT_AUTO_FOCUS_EVENT: AutoFocusEvent = {
+	state: 'IDLE',
+	camera: '',
+	focuser: '',
+	x: [],
+	y: [],
 }

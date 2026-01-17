@@ -26,7 +26,9 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		readonly wheelManager: WheelManager,
 		readonly focuserManager: FocuserManager,
 		readonly rotatorManager: RotatorManager,
-	) {}
+	) {
+		cameraManager.addHandler(this)
+	}
 
 	added(device: Camera) {
 		this.wsm.send<CameraAdded>('camera:add', { device })
@@ -51,7 +53,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		this.wsm.send('camera:capture', event)
 	}
 
-	handleCameraCaptureEvent(camera: Camera, event: CameraCaptureEvent) {
+	private handleCameraCaptureEvent({ camera }: CameraCaptureTask, event: CameraCaptureEvent) {
 		this.events.set(camera.id, event)
 		this.sendEvent(event)
 
@@ -62,24 +64,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		}
 	}
 
-	private startExposure(camera: Camera, request: CameraCaptureStart) {
-		this.cameraManager.enableBlob(camera)
-		request.width && request.height && this.cameraManager.frame(camera, request.x, request.y, request.width, request.height)
-		this.cameraManager.frameType(camera, request.frameType)
-		if (request.frameFormat) this.cameraManager.frameFormat(camera, request.frameFormat)
-		this.cameraManager.bin(camera, request.binX, request.binY)
-		this.cameraManager.gain(camera, request.gain)
-		this.cameraManager.offset(camera, request.offset)
-		this.cameraManager.transferFormat(camera, 'FITS')
-		this.cameraManager.compression(camera, false)
-		this.cameraManager.startExposure(camera, exposureTimeInSeconds(request.exposureTime, request.exposureTimeUnit))
-	}
-
-	private stopExposure(camera: Camera) {
-		this.cameraManager.stopExposure(camera)
-	}
-
-	startCapture(camera: Camera, req: CameraCaptureStart) {
+	start(camera: Camera, req: CameraCaptureStart, onCameraCaptureEvent?: (event: CameraCaptureEvent) => void) {
 		// Stop any existing task for this camera and remove its handler
 		if (this.tasks.has(camera.id)) {
 			const task = this.tasks.get(camera.id)!
@@ -87,7 +72,10 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		}
 
 		// Start a new task for the camera
-		const task = new CameraCaptureTask(camera, req, this.imageProcessor, this.startExposure.bind(this), this.stopExposure.bind(this), this.handleCameraCaptureEvent.bind(this))
+		const task = new CameraCaptureTask(this, req, camera, (task, event) => {
+			this.handleCameraCaptureEvent(task, event)
+			onCameraCaptureEvent?.(event)
+		})
 
 		this.tasks.set(camera.id, task)
 		const client = camera[CLIENT]
@@ -97,13 +85,13 @@ export class CameraHandler implements DeviceHandler<Camera> {
 			const wheel = req.wheel ? this.wheelManager.get(client, req.wheel) : undefined
 			const focuser = req.focuser ? this.focuserManager.get(client, req.focuser) : undefined
 			const rotator = req.rotator ? this.rotatorManager.get(client, req.rotator) : undefined
-			this.cameraManager.snoop(camera, ...[mount, wheel, focuser, rotator].filter((e) => !!e))
+			this.cameraManager.snoop(camera, mount, focuser, wheel, rotator)
 		}
 
 		task.start()
 	}
 
-	stopCapture(device: Camera) {
+	stop(device: Camera) {
 		this.tasks.get(device.id)?.stop()
 	}
 
@@ -126,8 +114,8 @@ export function camera(cameraHandler: CameraHandler) {
 		.get('/:id', ({ params, query }) => cameraFromParams(query.clientId, params.id))
 		.post('/:id/cooler', ({ params, query, body }) => cameraHandler.cameraManager.cooler(cameraFromParams(query.clientId, params.id), body as never))
 		.post('/:id/temperature', ({ params, query, body }) => cameraHandler.cameraManager.temperature(cameraFromParams(query.clientId, params.id), body as never))
-		.post('/:id/start', ({ params, body, query }) => cameraHandler.startCapture(cameraFromParams(query.clientId, params.id), body as never))
-		.post('/:id/stop', ({ params, query }) => cameraHandler.stopCapture(cameraFromParams(query.clientId, params.id)))
+		.post('/:id/start', ({ params, body, query }) => cameraHandler.start(cameraFromParams(query.clientId, params.id), body as never))
+		.post('/:id/stop', ({ params, query }) => cameraHandler.stop(cameraFromParams(query.clientId, params.id)))
 
 	return app
 }
@@ -140,15 +128,13 @@ export class CameraCaptureTask {
 	private stopped = false
 
 	constructor(
+		readonly cameraHandler: CameraHandler,
+		readonly request: CameraCaptureStart,
 		readonly camera: Camera,
-		private readonly request: CameraCaptureStart,
-		private readonly imageProcessor: ImageProcessor,
-		private readonly startExposure: (camera: Camera, request: CameraCaptureStart) => void,
-		private readonly stopExposure: (camera: Camera) => void,
-		private readonly handleCameraCaptureEvent: (camera: Camera, event: CameraCaptureEvent) => void,
+		private readonly handleCameraCaptureEvent: (task: CameraCaptureTask, event: CameraCaptureEvent) => void,
 	) {
 		this.event.loop = request.exposureMode === 'LOOP'
-		this.event.device = camera.id
+		this.event.camera = camera.id
 		this.event.count = request.exposureMode === 'SINGLE' ? 1 : request.exposureMode === 'FIXED' ? request.count : Number.MAX_SAFE_INTEGER
 		this.event.remainingCount = this.event.count
 
@@ -180,13 +166,13 @@ export class CameraCaptureTask {
 				this.event.frameProgress.remainingTime = remainingTime
 				this.event.frameProgress.elapsedTime = elapsedTime
 				this.event.frameProgress.progress = Math.max(0, (1 - remainingTime / this.event.frameExposureTime) * 100)
-				return this.handleCameraCaptureEvent(camera, this.event)
+				return this.handleCameraCaptureEvent(this, this.event)
 			} else if (state === 'Ok') {
 				this.event.state = 'EXPOSURE_FINISHED'
 				this.event.frameProgress.remainingTime = 0
 				this.event.frameProgress.elapsedTime = this.event.frameExposureTime
 				this.event.frameProgress.progress = 100
-				this.handleCameraCaptureEvent(camera, this.event)
+				this.handleCameraCaptureEvent(this, this.event)
 
 				this.totalExposureProgress[0] -= this.event.frameExposureTime
 				this.totalExposureProgress[1] += this.event.frameExposureTime
@@ -212,7 +198,7 @@ export class CameraCaptureTask {
 							this.event.frameProgress.remainingTime = remainingTime
 							this.event.frameProgress.elapsedTime = this.waitingTime - remainingTime
 							this.event.frameProgress.progress = Math.max(0, (1 - remainingTime / this.waitingTime) * 100)
-							this.handleCameraCaptureEvent(camera, this.event)
+							this.handleCameraCaptureEvent(this, this.event)
 
 							return true
 						})
@@ -247,7 +233,7 @@ export class CameraCaptureTask {
 			this.event.frameProgress.progress = 0
 			this.event.remainingCount = 0
 			this.event.elapsedCount = 0
-			this.handleCameraCaptureEvent(camera, this.event)
+			this.handleCameraCaptureEvent(this, this.event)
 		}
 	}
 
@@ -258,7 +244,7 @@ export class CameraCaptureTask {
 			// Save image
 			const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : camera.name
 			const path = join(await makePathFor(this.request), `${name}.fit`)
-			this.imageProcessor.save(buffer, path, camera.name)
+			this.cameraHandler.imageProcessor.save(buffer, path, camera.name)
 
 			if (this.request.autoSave) {
 				void Bun.write(path, buffer)
@@ -266,9 +252,27 @@ export class CameraCaptureTask {
 
 			// Send event
 			this.event.savedPath = path
-			this.handleCameraCaptureEvent(camera, this.event)
+			this.handleCameraCaptureEvent(this, this.event)
 			this.event.savedPath = undefined
 		}
+	}
+
+	startExposure(camera: Camera, request: CameraCaptureStart) {
+		const cameraManager = this.cameraHandler.cameraManager
+		cameraManager.enableBlob(camera)
+		request.width && request.height && cameraManager.frame(camera, request.x, request.y, request.width, request.height)
+		cameraManager.frameType(camera, request.frameType)
+		if (request.frameFormat) cameraManager.frameFormat(camera, request.frameFormat)
+		cameraManager.bin(camera, request.binX, request.binY)
+		cameraManager.gain(camera, request.gain)
+		cameraManager.offset(camera, request.offset)
+		cameraManager.transferFormat(camera, 'FITS')
+		cameraManager.compression(camera, false)
+		cameraManager.startExposure(camera, exposureTimeInSeconds(request.exposureTime, request.exposureTimeUnit))
+	}
+
+	stopExposure(camera: Camera) {
+		this.cameraHandler.cameraManager.stopExposure(camera)
 	}
 
 	start() {
@@ -279,7 +283,7 @@ export class CameraCaptureTask {
 			this.event.frameProgress.remainingTime = this.event.frameExposureTime
 			this.event.frameProgress.elapsedTime = 0
 			this.event.frameProgress.progress = 0
-			this.handleCameraCaptureEvent(this.camera, this.event)
+			this.handleCameraCaptureEvent(this, this.event)
 			this.startExposure(this.camera, this.request)
 		}
 	}

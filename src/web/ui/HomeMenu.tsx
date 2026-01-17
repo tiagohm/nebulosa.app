@@ -26,6 +26,7 @@ import skyAtlasIcon from '@/assets/sky-atlas.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
 import { AboutMolecule } from '@/molecules/about'
 import { AlpacaMolecule } from '@/molecules/alpaca'
+import { AutoFocusMolecule } from '@/molecules/autofocus'
 import { CalculatorMolecule } from '@/molecules/calculator'
 import { ConnectionMolecule } from '@/molecules/connection'
 import { DarvMolecule } from '@/molecules/darv'
@@ -37,6 +38,7 @@ import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { TppaMolecule } from '@/molecules/tppa'
 import { About } from './About'
 import { Alpaca } from './Alpaca'
+import { AutoFocus } from './AutoFocus'
 import { Calculator } from './Calculator'
 import { Darv } from './Darv'
 import { Framing } from './Framing'
@@ -65,6 +67,9 @@ export const HomeMenu = memo(() => {
 	const darv = useMolecule(DarvMolecule)
 	const { show: showDARV } = useSnapshot(darv.state)
 
+	const autoFocus = useMolecule(AutoFocusMolecule)
+	const { show: showAutoFocus } = useSnapshot(autoFocus.state)
+
 	const indi = useMolecule(IndiPanelControlMolecule)
 	const { show: showIndiPanelControl } = useSnapshot(indi.state)
 
@@ -91,6 +96,9 @@ export const HomeMenu = memo(() => {
 			</Activity>
 			<Activity mode={showDARV && connected ? 'visible' : 'hidden'}>
 				<Darv />
+			</Activity>
+			<Activity mode={showAutoFocus && connected ? 'visible' : 'hidden'}>
+				<AutoFocus />
 			</Activity>
 			<Activity mode={showIndiPanelControl && connected ? 'visible' : 'hidden'}>
 				<IndiPanelControl />
@@ -136,6 +144,7 @@ export const HomeMenuPopoverContent = memo(() => {
 	const framing = useMolecule(FramingMolecule)
 	const tppa = useMolecule(TppaMolecule)
 	const darv = useMolecule(DarvMolecule)
+	const autoFocus = useMolecule(AutoFocusMolecule)
 	const alpaca = useMolecule(AlpacaMolecule)
 	const calculator = useMolecule(CalculatorMolecule)
 	const about = useMolecule(AboutMolecule)
@@ -220,7 +229,7 @@ export const HomeMenuPopoverContent = memo(() => {
 				</Button>
 			</Tooltip>
 			<Tooltip content='Auto Focus' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={CAMERA.length === 0} isIconOnly size='lg' variant='light'>
+				<Button color='secondary' isDisabled={CAMERA.length === 0 || FOCUSER.length === 0} isIconOnly onPointerUp={autoFocus.show} size='lg' variant='light'>
 					<img className='w-9' src={autoFocusIcon} />
 				</Button>
 			</Tooltip>

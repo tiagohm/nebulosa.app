@@ -640,10 +640,10 @@ export class AtlasHandler {
 					await Bun.write(path, data)
 					console.info('IERS B loaded')
 				} else {
-					console.error('failed to download IERS B', await response.text())
+					console.error('failed to download IERS B:', await response.text())
 				}
 			} catch (e) {
-				console.error('failed to download IERS B', e)
+				console.error('failed to download IERS B:', (e as Error).message)
 			}
 		} else {
 			iersb.load(readableStreamSource(file.stream()))

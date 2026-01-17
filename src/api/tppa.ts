@@ -19,11 +19,7 @@ export class TppaHandler {
 		readonly cameraHandler: CameraHandler,
 		readonly mountManager: MountManager,
 		readonly solver: PlateSolverHandler,
-	) {
-		bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
-			this.tasks.forEach((task) => task.camera.id === event.device && task.cameraCaptured(event))
-		})
-	}
+	) {}
 
 	sendEvent(event: TppaEvent) {
 		this.wsm.send('tppa', event)
@@ -95,7 +91,7 @@ export class TppaTask {
 		}
 	}
 
-	async cameraCaptured(event: CameraCaptureEvent) {
+	private async cameraCaptured(event: CameraCaptureEvent) {
 		if (event.savedPath && !this.stopped) {
 			this.event.state = 'SOLVING'
 			this.handleTppaEvent()
@@ -177,7 +173,7 @@ export class TppaTask {
 			if (!this.stopped) {
 				this.event.state = 'CAPTURING'
 				this.handleTppaEvent()
-				this.tppa.cameraHandler.startCapture(this.camera, this.request.capture)
+				this.tppa.cameraHandler.start(this.camera, this.request.capture)
 			}
 		}
 	}
@@ -189,7 +185,7 @@ export class TppaTask {
 		// First image
 		this.event.state = 'CAPTURING'
 		this.handleTppaEvent()
-		this.tppa.cameraHandler.startCapture(this.camera, this.request.capture)
+		this.tppa.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}
 
 	stop() {
@@ -197,7 +193,7 @@ export class TppaTask {
 
 		this.move(false)
 		this.tppa.solver.stop(this.request)
-		this.tppa.cameraHandler.stopCapture(this.camera)
+		this.tppa.cameraHandler.stop(this.camera)
 
 		if (this.event.state !== 'IDLE') {
 			this.event.state = 'IDLE'

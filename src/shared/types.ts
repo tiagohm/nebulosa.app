@@ -447,7 +447,12 @@ export interface SaveImage extends OpenImage {
 
 export interface AnnotateImage {
 	readonly solution: PlateSolution
+	readonly stars: boolean
+	readonly dsos: boolean
 	readonly useSimbad: boolean
+	readonly minorPlanets: boolean
+	readonly minorPlanetsMagnitudeLimit: number
+	readonly includeMinorPlanetsWithoutMagnitude: boolean
 }
 
 export interface StatisticImage extends Omit<OpenImage, 'statistics'> {

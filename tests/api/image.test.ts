@@ -1,60 +1,75 @@
-import { expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { ImageHandler, ImageProcessor } from 'src/api/image'
+import type { AnnotateImage } from 'src/shared/types'
+
+const EMPTY_ANNOTATE_IMAGE: Omit<AnnotateImage, 'solution'> = {
+	stars: false,
+	dsos: false,
+	useSimbad: false,
+	minorPlanets: false,
+	minorPlanetsMagnitudeLimit: 0,
+	includeMinorPlanetsWithoutMagnitude: false,
+}
 
 const processor = new ImageProcessor()
 const image = new ImageHandler(processor)
 
-test('annotate', () => {
+describe('annotate', () => {
 	const solution = {
+		'DATE-OBS': '2024-07-11T04:00:00.000',
 		SIMPLE: true,
-		BITPIX: 8,
-		NAXIS: 0,
-		'DATE-OBS': '2023-01-15T01:27:05.460',
-		EXPTIME: 30,
-		XPIXSZ: 18.5021,
-		YPIXSZ: 18.5021,
-		XBINNING: 4,
-		YBINNING: 4,
-		OBJECT: 'NGC3372',
-		PIERSIDE: 'WEST',
-		JD: 2459959.56006319,
-		RA: 161.0177548315,
-		DEC: -59.6022705034,
-		TIMESYS: 'UTC',
-		OBJCTRA: '10 44 04.261',
-		OBJCTDEC: '-59 36 08.17',
+		BITPIX: 16,
+		NAXIS: 2,
+		NAXIS1: 1280,
+		NAXIS2: 1024,
+		WCSAXES: 2,
+		CRPIX1: 640,
+		CRPIX2: 512,
+		CDELT1: -0.002282778583712,
+		CDELT2: 0.002282778583712,
 		CUNIT1: 'deg',
-		DATAMIN: 0,
-		DATAMAX: 65535,
+		CUNIT2: 'deg',
 		CTYPE1: 'RA---TAN',
 		CTYPE2: 'DEC--TAN',
-		CRPIX1: 519,
-		CRPIX2: 353.5,
-		CRVAL1: 161.0175796038,
-		CRVAL2: -59.60197838672,
-		CDELT1: 0.0007603558926785,
-		CDELT2: 0.0007598425932409,
-		CROTA1: -110.1432632996,
-		CROTA2: -110.1311030632,
-		CD1_1: -0.0002618427660648,
-		CD1_2: 0.0007138483378074,
-		CD2_1: -0.0007134219535121,
-		CD2_2: -0.000261514593761,
-		NAXIS1: 1037,
-		NAXIS2: 706,
-		orientation: -1.9221503573060528,
-		scale: 0.000013261755048945717,
-		rightAscension: 2.8102869176783765,
-		declination: -1.040250763550762,
-		width: 0.01376173022530515,
-		height: 0.009362799064555677,
-		radius: 0.008322367828889234,
-		parity: 'NORMAL',
-		widthInPixels: 1037,
-		heightInPixels: 706,
+		CRVAL1: 284.84583333333,
+		CRVAL2: -29.661666666667,
+		LONPOLE: 180,
+		LATPOLE: -29.661666666667,
+		RADESYS: 'ICRS',
+		orientation: -Math.PI,
+		scale: 0.000039842002379787396,
+		rightAscension: 4.971497652253623,
+		declination: -0.5176937449623905,
+		width: 0.05099776304612787,
+		height: 0.040798210436902294,
+		radius: 0.03265450126155186,
+		parity: 'FLIPPED',
+		widthInPixels: 1280,
+		heightInPixels: 1024,
 	} as const
 
-	const res = image.annotate({ solution })
+	test('stars & dsos', async () => {
+		const res = await image.annotate({ solution, ...EMPTY_ANNOTATE_IMAGE, stars: true, dsos: true })
 
-	expect(res).toHaveLength(8)
+		expect(res).toHaveLength(8)
+	})
+
+	test('stars', async () => {
+		const res = await image.annotate({ solution, ...EMPTY_ANNOTATE_IMAGE, stars: true })
+
+		expect(res).toHaveLength(1)
+	})
+
+	test('dsos', async () => {
+		const res = await image.annotate({ solution, ...EMPTY_ANNOTATE_IMAGE, dsos: true })
+
+		expect(res).toHaveLength(7)
+	})
+
+	test.skip('minor planets', async () => {
+		const res = await image.annotate({ solution, ...EMPTY_ANNOTATE_IMAGE, minorPlanets: true, minorPlanetsMagnitudeLimit: 10 })
+
+		expect(res).toHaveLength(1)
+		expect(res.filter((e) => e.name.includes('1 Ceres'))).toHaveLength(1)
+	}, 120000)
 })

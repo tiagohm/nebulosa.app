@@ -1,14 +1,16 @@
 import cron from '@elysiajs/cron'
 import Elysia from 'elysia'
 import fs from 'fs/promises'
+import { deg, parseAngle } from 'nebulosa/src/angle'
 import { eraPvstar } from 'nebulosa/src/erfa'
-import { declinationKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
+import { declinationKeyword, numericKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
 import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
 import { adf, histogram, sigmaClip } from 'nebulosa/src/image.computation'
 import { blur, brightness, contrast, debayer, gamma, gaussianBlur, horizontalFlip, invert, mean, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import type { AdaptiveDisplayFunctionOptions, Image } from 'nebulosa/src/image.types'
 import { fileHandleSink } from 'nebulosa/src/io'
 import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/platesolver'
+import { identify } from 'nebulosa/src/sbd'
 import { spaceMotion, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
 import { Wcs } from 'nebulosa/src/wcs'
@@ -411,28 +413,60 @@ export class ImageHandler {
 		await this.imageProcessor.export(req.path, req.transformation, undefined, req.saveAt)
 	}
 
-	annotate(req: AnnotateImage) {
-		using wcs = new Wcs(req.solution)
-
+	async annotate(req: AnnotateImage) {
 		const res: AnnotatedSkyObject[] = []
-		const { rightAscension, declination, radius, widthInPixels, heightInPixels } = req.solution
-		const q = `SELECT d.id, d.type, d.rightAscension, d.declination, d.magnitude, d.pmRa, d.pmDec, d.distance, d.rv, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ORDER BY n.type ASC LIMIT 1) as name FROM dsos d WHERE (acos(sin(d.declination) * ${Math.sin(declination)} + cos(d.declination) * ${Math.cos(declination)} * cos(d.rightAscension - ${rightAscension})) <= ${radius}) ORDER BY d.magnitude DESC LIMIT 100`
 
-		const date = observationDateKeyword(req.solution) || Date.now()
-		const utc = timeUnix(date / 1000)
+		if (!req.stars && !req.dsos && !req.minorPlanets) return res
 
-		for (const o of nebulosa.query<AnnotatedSkyObject, []>(q)) {
-			const sa = star(o.rightAscension, o.declination, o.pmRa, o.pmDec, o.distance === 0 ? 0 : 1 / o.distance, o.rv)
-			const sb = eraPvstar(...spaceMotion(sa, utc))
+		const { solution } = req
+		const { rightAscension, declination, radius, widthInPixels: width, heightInPixels: height } = solution
+		const date = observationDateKeyword(solution) || Date.now()
+		using wcs = new Wcs(solution)
 
-			if (sb) {
-				const [x, y] = wcs.skyToPix(sb[0], sb[1])!
+		if (req.stars || req.dsos) {
+			const filterByType = req.stars && req.dsos ? '1=1' : req.stars ? 'd.type = 29' : 'd.type <> 29'
+			const utc = timeUnix(date / 1000)
+			const q = `SELECT d.id, d.type, d.rightAscension, d.declination, d.magnitude, d.pmRa, d.pmDec, d.distance, d.rv, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ORDER BY n.type ASC LIMIT 1) as name FROM dsos d WHERE ${filterByType} AND (acos(sin(d.declination) * ${Math.sin(declination)} + cos(d.declination) * ${Math.cos(declination)} * cos(d.rightAscension - ${rightAscension})) <= ${radius}) ORDER BY d.magnitude DESC LIMIT 100`
 
-				if (x >= 0 && y >= 0 && x < widthInPixels && y < heightInPixels) {
-					o.x = x
-					o.y = y
-					res.push(o)
+			for (const o of nebulosa.query<AnnotatedSkyObject, []>(q)) {
+				const sa = star(o.rightAscension, o.declination, o.pmRa, o.pmDec, o.distance === 0 ? 0 : 1 / o.distance, o.rv)
+				const sb = eraPvstar(...spaceMotion(sa, utc))
+
+				if (sb) {
+					const [x, y] = wcs.skyToPix(sb[0], sb[1])!
+
+					if (x >= 0 && y >= 0 && x < width && y < height) {
+						o.x = x
+						o.y = y
+						res.push(o)
+					}
 				}
+			}
+		}
+
+		if (req.minorPlanets) {
+			const longitude = numericKeyword(req.solution, 'SITELON', 0)
+			const latitude = numericKeyword(req.solution, 'SITELAT', 0)
+
+			const ident = await identify(date, deg(longitude), deg(latitude), 0, rightAscension, declination, radius, undefined, req.minorPlanetsMagnitudeLimit, req.includeMinorPlanetsWithoutMagnitude)
+
+			if ('n_second_pass' in ident && ident.n_second_pass) {
+				let i = 0
+
+				for (const body of ident.data_second_pass) {
+					const name = body[0]
+					const rightAscension = parseAngle(body[1], true)!
+					const declination = parseAngle(body[2])!
+					const magnitude = +body[6]
+
+					const [x, y] = wcs.skyToPix(rightAscension, declination)!
+
+					if (x >= 0 && y >= 0 && x < width && y < height) {
+						res.push({ type: 'MINOR_PLANET', id: 3000000 + i++, name, x, y, rightAscension, declination, magnitude, pmRa: 0, pmDec: 0, rv: 0, distance: 0, constellation: 0 })
+					}
+				}
+			} else if ('message' in ident) {
+				console.warn('identify error:', ident.message)
 			}
 		}
 

@@ -6,6 +6,7 @@ import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import type { Image } from '@/shared/types'
+import { deleteUndefinedOrNull } from '@/shared/util'
 import { ImageWorkspaceMolecule } from './image/workspace'
 
 export interface FramingState {
@@ -37,7 +38,8 @@ export const FramingMolecule = molecule(() => {
 		const unsubscribers = new Array<VoidFunction>(2)
 
 		unsubscribers[0] = bus.subscribe<Partial<Framing>>('framing:load', (request) => {
-			Object.assign(state.request, request)
+			console.info(deleteUndefinedOrNull(request))
+			Object.assign(state.request, deleteUndefinedOrNull(request))
 			state.show = true
 			void load()
 		})

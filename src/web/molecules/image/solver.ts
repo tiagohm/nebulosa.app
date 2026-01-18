@@ -67,7 +67,7 @@ export const ImageSolverMolecule = molecule(() => {
 			}
 		})
 
-		state.solution = viewer.state.info?.solution && ref(viewer.state.info.solution)
+		state.solution ??= viewer.state.info?.solution && ref(viewer.state.info.solution)
 
 		unsubscribers[2] = initProxy(state, `image.${viewer.storageKey}.solver`, ['p:show', 'o:request'])
 

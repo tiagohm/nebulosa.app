@@ -24,6 +24,17 @@ export function isMouseDeviceSupported() {
 	return matchMedia('(pointer:fine)').matches
 }
 
+// Deletes undefined or null properties
+export function deleteUndefinedOrNull<T extends object>(o: T): T {
+	for (const [key, value] of Object.entries(o)) {
+		if (value === undefined || value === null) {
+			delete (o as Record<string, unknown>)[key]
+		}
+	}
+
+	return o
+}
+
 // Formats the name of a sky object based on its catalog ID and constellation
 export function skyObjectName(id: string, constellation: Constellation | number) {
 	const index = id.indexOf(':')

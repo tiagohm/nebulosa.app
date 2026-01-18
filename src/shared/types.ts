@@ -447,6 +447,7 @@ export interface SaveImage extends OpenImage {
 
 export interface AnnotateImage {
 	readonly solution: PlateSolution
+	readonly useSimbad: boolean
 }
 
 export interface StatisticImage extends Omit<OpenImage, 'statistics'> {

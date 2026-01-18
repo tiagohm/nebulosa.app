@@ -59,7 +59,7 @@ div[data-slot="base"] div[data-slot="mainWrapper"] button[data-slot="trigger"] {
 	@apply min-h-fit;
 }
 
-/** Popover Menu */
+/* Popover Menu */
 
 div:has(div[data-slot="base"][data-open="true"][role="dialog"]) {
 	@apply z-10000000!;

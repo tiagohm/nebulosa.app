@@ -1,7 +1,11 @@
 import { createScope, molecule, onMount, use } from 'bunshi'
+import { formatDEC, formatRA } from 'nebulosa/src/angle'
+import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
+import { numericKeyword } from 'nebulosa/src/fits'
 import type { Mount } from 'nebulosa/src/indi.device'
+import { pmod } from 'nebulosa/src/math'
 import bus from 'src/shared/bus'
-import { DEFAULT_IMAGE_TRANSFORMATION, type ImageInfo, type ImageTransformation } from 'src/shared/types'
+import { DEFAULT_IMAGE_TRANSFORMATION, type Framing, type ImageInfo, type ImageTransformation } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
@@ -18,7 +22,7 @@ export interface CachedImage {
 export interface ImageState {
 	readonly transformation: ImageTransformation
 	crosshair: boolean
-	angle: number
+	angle: number // deg
 	info?: ImageInfo
 	scale: number
 }
@@ -56,24 +60,24 @@ export const ImageViewerMolecule = molecule(() => {
 	let loading = false
 
 	onMount(() => {
+		console.info('mounting', key)
+
 		const unsubscribers = new Array<VoidFunction>(2)
 
-		const imageKey = camera?.name || 'default'
-
-		unsubscribers[0] = initProxy(state, `image.${imageKey}`, ['o:transformation', 'p:crosshair', 'p:angle'])
+		unsubscribers[0] = initProxy(state, `image.${camera?.name || 'default'}`, ['o:transformation', 'p:crosshair', 'p:angle'])
 
 		unsubscribers[1] = subscribe(state.transformation.format, () => {
 			void load(true)
 		})
 
-		const beforeUnload = async () => void (await close())
+		const beforeUnload = () => close()
 
 		window.addEventListener('beforeunload', beforeUnload)
 
 		const timer = setInterval(ping, 30000)
 
 		return () => {
-			void close()
+			console.info('unmounting', key)
 			window.removeEventListener('beforeunload', beforeUnload)
 			unsubscribe(unsubscribers)
 			clearInterval(timer)
@@ -159,7 +163,6 @@ export const ImageViewerMolecule = molecule(() => {
 
 			// Update the state
 			state.info = ref(image.info)
-			updateFromImageInfo(image.info)
 
 			// Add the image to cache
 			const cached = stateMap.get(key)
@@ -189,18 +192,6 @@ export const ImageViewerMolecule = molecule(() => {
 		} finally {
 			loading = false
 		}
-	}
-
-	function updateFromImageInfo(info: ImageInfo) {
-		updateTransformationFromInfo(info)
-	}
-
-	function updateTransformationFromInfo(info: ImageInfo) {
-		// Update stretch transformation
-		state.transformation.stretch.auto = info.transformation.stretch.auto
-		state.transformation.stretch.shadow = info.transformation.stretch.shadow
-		state.transformation.stretch.highlight = info.transformation.stretch.highlight
-		state.transformation.stretch.midtone = info.transformation.stretch.midtone
 	}
 
 	function handleOnLoad() {
@@ -241,8 +232,18 @@ export const ImageViewerMolecule = molecule(() => {
 		bringToFront(target)
 	}
 
-	function pointTelescopeHere(mount?: Mount) {
-		//
+	function pointMountHere(mount: Mount, coordinate: EquatorialCoordinate) {
+		return Api.Mounts.goTo(mount, { type: 'J2000', ...coordinate })
+	}
+
+	function frameAt(coordinate: EquatorialCoordinate) {
+		const focalLength = state.info && numericKeyword<number | undefined>(state.info.headers, 'FOCALLEN', undefined)
+		const pixelSize = state.info && numericKeyword<number | undefined>(state.info.headers, 'XPIXSZ', undefined)
+		const rotation = state.info?.solution ? pmod(state.info.solution.orientation + state.angle, 360) : state.angle
+		const width = state.info ? Math.min(state.info.width, 1280) : 1280
+		const aspectRatio = state.info ? state.info.height / state.info.width : 1
+		const request: Partial<Framing> = { rightAscension: formatRA(coordinate.rightAscension), declination: formatDEC(coordinate.declination), width, height: Math.trunc(width * aspectRatio), rotation, focalLength, pixelSize }
+		bus.emit('framing:load', request)
 	}
 
 	function attachImage(node: HTMLImageElement | null) {
@@ -306,7 +307,8 @@ export const ImageViewerMolecule = molecule(() => {
 		remove,
 		detach,
 		select,
-		pointTelescopeHere,
+		pointMountHere,
+		frameAt,
 	} as const
 })
 

@@ -1,8 +1,9 @@
 import { Glob } from 'bun'
 import Elysia from 'elysia'
-import fs from 'fs/promises'
+import { mkdir, readdir, stat } from 'fs/promises'
 import { basename, dirname, join, normalize } from 'path'
 import type { CreateDirectory, DirectoryEntry, FileEntry, FileSystem, ListDirectory } from '../shared/types'
+import { directoryExists } from './util'
 
 export const FileEntryComparator = (a: FileEntry, b: FileEntry) => {
 	// Sort directories before files, then sort by name
@@ -22,7 +23,7 @@ export class FileSystemHandler {
 		const entries: FileEntry[] = []
 
 		// Read the directory entries
-		for (const entry of await fs.readdir(path, { withFileTypes: true })) {
+		for (const entry of await readdir(path, { withFileTypes: true })) {
 			const { name, parentPath } = entry
 			const path = join(parentPath, name)
 			const isDirectory = entry.isDirectory()
@@ -33,7 +34,7 @@ export class FileSystemHandler {
 				if (!req?.directoryOnly || isDirectory) {
 					// Include only files that match the glob pattern (if present)
 					if (!glob || isDirectory || glob.match(name)) {
-						const { size, mtimeMs: updatedAt } = await fs.stat(path)
+						const { size, mtimeMs: updatedAt } = await stat(path)
 						entries.push({ name, path, directory: isDirectory, size, updatedAt })
 					}
 				}
@@ -48,7 +49,7 @@ export class FileSystemHandler {
 	async create(req: CreateDirectory) {
 		const parent = (await findDirectory(req.path)) || Bun.env.homeDir
 		const path = join(parent, req.name.trim())
-		await fs.mkdir(path, req)
+		await mkdir(path, req)
 		return { path }
 	}
 
@@ -80,15 +81,16 @@ export function fileSystem(fileSystem: FileSystemHandler) {
 	return app
 }
 
-export async function findDirectory(path?: string) {
+export async function findDirectory(path?: string, parent?: string) {
 	// If no path is provided, return
 	if (!path) return undefined
+	else if (path === parent) return path
 	// If the path does not exist, go up until a directory is found
-	else if (!(await Bun.file(path).exists())) return findDirectory(dirname(path))
+	else if (!(await directoryExists(path))) return findDirectory(dirname(path), path)
 	// If the path exists, return if it is a directory, otherwise go up
 	else {
-		const stats = await fs.stat(path)
-		if (!stats.isDirectory()) return findDirectory(dirname(path))
+		const stats = await stat(path)
+		if (!stats.isDirectory()) return findDirectory(dirname(path), path)
 		else return normalize(path)
 	}
 }
@@ -101,9 +103,12 @@ function makeDirectoryTree(path: string): DirectoryEntry[] {
 
 	// Create the parent directory entry
 	const parent = dirname(path)
-	const tree = makeDirectoryTree(parent)
 
-	tree.push({ name, path })
+	if (parent !== path) {
+		const tree = makeDirectoryTree(parent)
+		tree.push({ name, path })
+		return tree
+	}
 
-	return tree
+	return [{ name, path }]
 }

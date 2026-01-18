@@ -11,6 +11,7 @@ import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, typ
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import type { ImageProcessor } from './image'
 import type { WebSocketMessageHandler } from './message'
+import { directoryExists } from './util'
 
 const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
 
@@ -319,7 +320,7 @@ async function waitFor(us: number, callback: (remaining: number) => boolean) {
 
 async function makePathFor(req: CameraCaptureStart) {
 	if (req.autoSave) {
-		const savePath = req.savePath && (await Bun.file(req.savePath).exists()) ? req.savePath : Bun.env.capturesDir
+		const savePath = req.savePath && (await directoryExists(req.savePath)) ? req.savePath : Bun.env.capturesDir
 
 		if (req.autoSubFolderMode === 'OFF') return savePath
 

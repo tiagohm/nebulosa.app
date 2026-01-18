@@ -3,6 +3,7 @@ import { useMolecule } from 'bunshi/react'
 import { formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import type { Point } from 'nebulosa/src/geometry'
+import type { Mount } from 'nebulosa/src/indi.device'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
@@ -37,7 +38,7 @@ export const ImageInfo = memo(() => {
 						<span className='flex flex-row items-center gap-1'>
 							<Coordinate declination={selected.declination} pinned rightAscension={selected.rightAscension} x={selected.x} y={selected.y} />
 							<b className='ms-1'>D:</b> {formatAZ(selected.distance, true)}
-							<SelectedCoordinateDropdown />
+							<SelectedCoordinateDropdown onFrameAt={viewer.frameAt} onPointMountHere={viewer.pointMountHere} />
 						</span>
 					</Activity>
 				</Activity>
@@ -62,21 +63,31 @@ const Coordinate = memo(({ pinned = false, x, y, rightAscension, declination }: 
 	)
 })
 
-const SelectedCoordinateDropdown = memo(() => {
-	const viewer = useMolecule(ImageViewerMolecule)
+export interface SelectedCoordinateDropdownProps {
+	readonly onPointMountHere: (mount: Mount, coordinate: EquatorialCoordinate) => void
+	readonly onFrameAt: (coordinate: EquatorialCoordinate) => void
+}
+
+const SelectedCoordinateDropdown = memo((props: SelectedCoordinateDropdownProps) => {
+	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
+
+	function handleAction(key: React.Key) {
+		if (key === 'FRAME_AT_HERE') props.onFrameAt(mouseCoordinate.state.coordinate.selected!)
+	}
 
 	return (
 		<Dropdown placement='bottom-end'>
 			<DropdownTrigger>
 				<IconButton className='pointer-events-auto' icon={Icons.DotsVertical} size='sm' />
 			</DropdownTrigger>
-			<DropdownMenu>
-				<DropdownItem key='POINT_TELESCOPE_HERE'>
+			<DropdownMenu onAction={handleAction}>
+				<DropdownItem key='POINT_MOUNT_HERE'>
 					<span className='flex flex-row items-center gap-1'>
 						<span>Point mount here:</span>
-						<MountDropdown disallowNoneSelection onValueChange={viewer.pointTelescopeHere} />
+						<MountDropdown disallowNoneSelection onValueChange={(value) => value && props.onPointMountHere(value, mouseCoordinate.state.coordinate.selected!)} />
 					</span>
 				</DropdownItem>
+				<DropdownItem key='FRAME_AT_HERE'>Frame at this coordinate</DropdownItem>
 			</DropdownMenu>
 		</Dropdown>
 	)

@@ -1,7 +1,10 @@
 import { molecule, onMount, use } from 'bunshi'
+import bus from 'src/shared/bus'
 import { DEFAULT_IMAGE_STRETCH, type ImageStretch } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
+import type { ImageLoaded } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
 
 export interface ImageStretchState {
@@ -25,12 +28,23 @@ export const ImageStretchMolecule = molecule(() => {
 	stateMap.set(key, state)
 
 	onMount(() => {
-		const unsubscriber = initProxy(state, `image.${viewer.storageKey}.stretch`, ['p:show'])
+		const unsubscribers = new Array<VoidFunction>(2)
+
+		unsubscribers[0] = initProxy(state, `image.${viewer.storageKey}.stretch`, ['p:show'])
+
+		unsubscribers[1] = bus.subscribe<ImageLoaded>('image:load', ({ image, info }) => {
+			if (image.key === key) {
+				state.stretch.auto = info.transformation.stretch.auto
+				state.stretch.shadow = info.transformation.stretch.shadow
+				state.stretch.highlight = info.transformation.stretch.highlight
+				state.stretch.midtone = info.transformation.stretch.midtone
+			}
+		})
 
 		state.stretch = viewer.state.transformation.stretch
 
 		return () => {
-			unsubscriber()
+			unsubscribe(unsubscribers)
 		}
 	})
 

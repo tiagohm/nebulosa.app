@@ -60,6 +60,7 @@ const CameraDropdownEndContent = memo(() => {
 				maxGain={camera.gain.max}
 				maxOffset={camera.offset.max}
 				minExposure={camera.exposure.min}
+				mode='darv'
 				onValueChange={darv.updateCapture}
 				value={capture}
 			/>

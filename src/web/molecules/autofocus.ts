@@ -8,7 +8,7 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
-import { updateExposureTime, updateFrameFormat, updateRequestFrame } from './indi/camera'
+import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
 import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
 export interface AutoFocusState {
@@ -37,7 +37,7 @@ export const AutoFocusMolecule = molecule(() => {
 
 		unsubscribers[0] = subscribeKey(state, 'camera', (camera) => {
 			storageSet('autofocus.camera', camera?.name ?? undefined)
-			camera && updateFrameFormat(state.request.capture, camera.frameFormats)
+			camera && updateCameraCaptureStartFromCamera(state.request.capture, camera)
 		})
 
 		unsubscribers[1] = subscribeKey(state, 'focuser', (focuser) => {
@@ -45,14 +45,8 @@ export const AutoFocusMolecule = molecule(() => {
 		})
 
 		unsubscribers[2] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
-			if (event.device.id === state.camera?.id) {
-				if (event.property === 'frame') {
-					updateRequestFrame(state.request.capture, event.device.frame!)
-				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
-					updateFrameFormat(state.request.capture, event.device.frameFormats)
-				} else if (event.property === 'exposure' && !state.camera.exposuring && event.device.exposure?.max) {
-					updateExposureTime(state.request.capture, event.device.exposure)
-				}
+			if (event.device.id === state.camera?.id && !state.camera.exposuring) {
+				updateCameraCaptureStartFromCameraUpdated(state.request.capture, event)
 			}
 		})
 
@@ -63,7 +57,7 @@ export const AutoFocusMolecule = molecule(() => {
 			}
 		})
 
-		unsubscribers[3] = subscribeKey(state, 'show', (show) => {
+		unsubscribers[4] = subscribeKey(state, 'show', (show) => {
 			if (!show) return
 
 			load()
@@ -82,9 +76,7 @@ export const AutoFocusMolecule = molecule(() => {
 		state.camera = equipment.get('CAMERA', storageGet('autofocus.camera', ''))
 		state.focuser = equipment.get('FOCUSER', storageGet('autofocus.focuser', ''))
 
-		if (state.camera) {
-			updateFrameFormat(state.request.capture, state.camera.frameFormats)
-		}
+		state.camera && updateCameraCaptureStartFromCamera(state.request.capture, state.camera)
 	}
 
 	function update<K extends keyof AutoFocusStart>(key: K, value: AutoFocusStart[K]) {

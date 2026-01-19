@@ -1,7 +1,7 @@
 import { molecule, onMount, use } from 'bunshi'
-import type { Camera, Mount } from 'nebulosa/src/indi.device'
+import type { Camera } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
-import { type CameraUpdated, type DarvEvent, type DarvStart, DEFAULT_DARV_EVENT, DEFAULT_DARV_START } from 'src/shared/types'
+import { type CameraUpdated, DEFAULT_FLAT_WIZARD_EVENT, DEFAULT_FLAT_WIZARD_START, type FlatWizardEvent, type FlatWizardStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -11,55 +11,48 @@ import { storageGet, storageSet } from '@/shared/storage'
 import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
 import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
-export interface DarvState {
+export interface FlatWizardState {
 	show: boolean
 	running: boolean
-	readonly request: DarvStart
+	readonly request: FlatWizardStart
 	camera?: EquipmentDevice<Camera>
-	mount?: EquipmentDevice<Mount>
-	event: DarvEvent
+	event: FlatWizardEvent
 }
 
-const state = proxy<DarvState>({
-	request: structuredClone(DEFAULT_DARV_START),
+const state = proxy<FlatWizardState>({
+	request: structuredClone(DEFAULT_FLAT_WIZARD_START),
 	show: false,
 	running: false,
-	event: structuredClone(DEFAULT_DARV_EVENT),
+	event: structuredClone(DEFAULT_FLAT_WIZARD_EVENT),
 })
 
-initProxy(state, 'darv', ['o:request', 'p:show'])
+initProxy(state, 'flatwizard', ['o:request', 'p:show'])
 
-export const DarvMolecule = molecule(() => {
+export const FlatWizardMolecule = molecule(() => {
 	const equipment = use(EquipmentMolecule)
 
 	onMount(() => {
-		state.request.id = Date.now().toFixed(0)
-
-		const unsubscribers = new Array<VoidFunction>(5)
+		const unsubscribers = new Array<VoidFunction>(4)
 
 		unsubscribers[0] = subscribeKey(state, 'camera', (camera) => {
-			storageSet('darv.camera', camera?.name ?? undefined)
+			storageSet('flatwizard.camera', camera?.name ?? undefined)
 			camera && updateCameraCaptureStartFromCamera(state.request.capture, camera)
 		})
 
-		unsubscribers[1] = subscribeKey(state, 'mount', (mount) => {
-			storageSet('darv.mount', mount?.name ?? undefined)
-		})
-
-		unsubscribers[2] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
+		unsubscribers[1] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
 			if (event.device.id === state.camera?.id && !state.camera.exposuring) {
 				updateCameraCaptureStartFromCameraUpdated(state.request.capture, event)
 			}
 		})
 
-		unsubscribers[3] = bus.subscribe<DarvEvent>('darv', (event) => {
-			if (state.request.id === event.id) {
+		unsubscribers[2] = bus.subscribe<FlatWizardEvent>('flatwizard', (event) => {
+			if (state.camera?.id === event.camera) {
 				state.running = event.state !== 'IDLE'
 				Object.assign(state.event, event)
 			}
 		})
 
-		unsubscribers[4] = subscribeKey(state, 'show', (show) => {
+		unsubscribers[3] = subscribeKey(state, 'show', (show) => {
 			if (!show) return
 
 			load()
@@ -75,26 +68,25 @@ export const DarvMolecule = molecule(() => {
 	})
 
 	function load() {
-		state.camera = equipment.get('CAMERA', storageGet('darv.camera', ''))
-		state.mount = equipment.get('MOUNT', storageGet('darv.mount', ''))
+		state.camera = equipment.get('CAMERA', storageGet('flatwizard.camera', ''))
 
 		state.camera && updateCameraCaptureStartFromCamera(state.request.capture, state.camera)
 	}
 
-	function update<K extends keyof DarvStart>(key: K, value: DarvStart[K]) {
+	function update<K extends keyof FlatWizardStart>(key: K, value: FlatWizardStart[K]) {
 		state.request[key] = value
 	}
 
-	function updateCapture<K extends keyof DarvStart['capture']>(key: K, value: DarvStart['capture'][K]) {
+	function updateCapture<K extends keyof FlatWizardStart['capture']>(key: K, value: FlatWizardStart['capture'][K]) {
 		state.request.capture[key] = value
 	}
 
 	function start() {
-		return Api.DARV.start(state.camera!, state.mount!, state.request)
+		return Api.FlatWizard.start(state.camera!, state.request)
 	}
 
 	function stop() {
-		return Api.DARV.stop(state.request)
+		return Api.FlatWizard.stop(state.camera!)
 	}
 
 	function show() {

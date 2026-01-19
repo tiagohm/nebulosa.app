@@ -8,7 +8,7 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
-import { updateExposureTime, updateFrameFormat, updateRequestFrame } from './indi/camera'
+import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
 import { EquipmentMolecule } from './indi/equipment'
 
 export interface TppaState {
@@ -39,7 +39,7 @@ export const TppaMolecule = molecule(() => {
 
 		unsubscribers[0] = subscribeKey(state, 'camera', (camera) => {
 			storageSet('tppa.camera', camera?.name ?? undefined)
-			camera && updateFrameFormat(state.request.capture, camera.frameFormats)
+			camera && updateCameraCaptureStartFromCamera(state.request.capture, camera)
 		})
 
 		unsubscribers[1] = subscribeKey(state, 'mount', (mount) => {
@@ -47,14 +47,8 @@ export const TppaMolecule = molecule(() => {
 		})
 
 		unsubscribers[2] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
-			if (event.device.id === state.camera?.id) {
-				if (event.property === 'frame') {
-					updateRequestFrame(state.request.capture, event.device.frame!)
-				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
-					updateFrameFormat(state.request.capture, event.device.frameFormats)
-				} else if (event.property === 'exposure' && !state.camera.exposuring && event.device.exposure?.max) {
-					updateExposureTime(state.request.capture, event.device.exposure)
-				}
+			if (event.device.id === state.camera?.id && !state.camera.exposuring) {
+				updateCameraCaptureStartFromCameraUpdated(state.request.capture, event)
 			}
 		})
 
@@ -84,11 +78,7 @@ export const TppaMolecule = molecule(() => {
 		state.camera = equipment.get('CAMERA', storageGet('tppa.camera', ''))
 		state.mount = equipment.get('MOUNT', storageGet('tppa.mount', ''))
 
-		if (state.camera) {
-			updateFrameFormat(state.request.capture, state.camera.frameFormats)
-			updateRequestFrame(state.request.capture, state.camera.frame)
-			updateExposureTime(state.request.capture, state.camera.exposure)
-		}
+		state.camera && updateCameraCaptureStartFromCamera(state.request.capture, state.camera)
 	}
 
 	function update<K extends keyof TppaStart>(key: K, value: TppaStart[K]) {

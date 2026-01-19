@@ -30,6 +30,7 @@ import { AutoFocusMolecule } from '@/molecules/autofocus'
 import { CalculatorMolecule } from '@/molecules/calculator'
 import { ConnectionMolecule } from '@/molecules/connection'
 import { DarvMolecule } from '@/molecules/darv'
+import { FlatWizardMolecule } from '@/molecules/flatwizard'
 import { FramingMolecule } from '@/molecules/framing'
 import { HomeMolecule } from '@/molecules/home'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
@@ -41,6 +42,7 @@ import { Alpaca } from './Alpaca'
 import { AutoFocus } from './AutoFocus'
 import { Calculator } from './Calculator'
 import { Darv } from './Darv'
+import { FlatWizard } from './FlatWizard'
 import { Framing } from './Framing'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -69,6 +71,9 @@ export const HomeMenu = memo(() => {
 
 	const autoFocus = useMolecule(AutoFocusMolecule)
 	const { show: showAutoFocus } = useSnapshot(autoFocus.state)
+
+	const flatWizard = useMolecule(FlatWizardMolecule)
+	const { show: showFlatWizard } = useSnapshot(flatWizard.state)
 
 	const indi = useMolecule(IndiPanelControlMolecule)
 	const { show: showIndiPanelControl } = useSnapshot(indi.state)
@@ -99,6 +104,9 @@ export const HomeMenu = memo(() => {
 			</Activity>
 			<Activity mode={showAutoFocus && connected ? 'visible' : 'hidden'}>
 				<AutoFocus />
+			</Activity>
+			<Activity mode={showFlatWizard && connected ? 'visible' : 'hidden'}>
+				<FlatWizard />
 			</Activity>
 			<Activity mode={showIndiPanelControl && connected ? 'visible' : 'hidden'}>
 				<IndiPanelControl />
@@ -145,6 +153,7 @@ export const HomeMenuPopoverContent = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
 	const darv = useMolecule(DarvMolecule)
 	const autoFocus = useMolecule(AutoFocusMolecule)
+	const flatWizard = useMolecule(FlatWizardMolecule)
 	const alpaca = useMolecule(AlpacaMolecule)
 	const calculator = useMolecule(CalculatorMolecule)
 	const about = useMolecule(AboutMolecule)
@@ -234,7 +243,7 @@ export const HomeMenuPopoverContent = memo(() => {
 				</Button>
 			</Tooltip>
 			<Tooltip content='Flat Wizard' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled={CAMERA.length === 0} isIconOnly size='lg' variant='light'>
+				<Button color='secondary' isDisabled={CAMERA.length === 0} isIconOnly onPointerUp={flatWizard.show} size='lg' variant='light'>
 					<img className='w-9' src={flatWizardIcon} />
 				</Button>
 			</Tooltip>

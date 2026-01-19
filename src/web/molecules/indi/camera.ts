@@ -62,13 +62,9 @@ export const CameraMolecule = molecule(() => {
 
 		unsubscribers[0] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
 			if (event.device.id === camera.id) {
-				if (event.property === 'frame') {
-					updateRequestFrame(state.request, event.device.frame!)
-				} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
-					updateFrameFormat(state.request, event.device.frameFormats)
-				} else if (event.property === 'exposure' && !camera.exposuring && event.device.exposure?.max) {
-					updateExposureTime(state.request, event.device.exposure)
-				} else if (event.property === 'connected') {
+				updateCameraCaptureStartFromCameraUpdated(state.request, event)
+
+				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
 						addToast({ title: 'CAMERA', description: `Failed to connect to camera ${camera.name}`, color: 'danger' })
 					}
@@ -124,9 +120,7 @@ export const CameraMolecule = molecule(() => {
 			state.request.rotator = state.equipment.rotator?.name
 		})
 
-		updateRequestFrame(state.request, camera.frame)
-		updateFrameFormat(state.request, camera.frameFormats)
-		updateExposureTime(state.request, camera.exposure)
+		updateCameraCaptureStartFromCamera(state.request, camera)
 
 		return () => {
 			unsubscribe(unsubscribers)
@@ -194,14 +188,18 @@ export const CameraMolecule = molecule(() => {
 })
 
 export function updateRequestFrame(request: CameraCaptureStart, frame: Camera['frame']) {
-	request.x = Math.max(frame.x.min, Math.min(request.x, frame.x.max))
-	request.y = Math.max(frame.y.min, Math.min(request.y, frame.y.max))
+	if (frame.x.max) request.x = Math.max(frame.x.min, Math.min(request.x, frame.x.max))
+	if (frame.y.max) request.y = Math.max(frame.y.min, Math.min(request.y, frame.y.max))
 
-	if (!request.width) request.width = frame.width.max
-	else request.width = Math.min(request.width, frame.width.max)
+	if (frame.width.max) {
+		if (!request.width) request.width = frame.width.max
+		else request.width = Math.min(request.width, frame.width.max)
+	}
 
-	if (!request.height) request.height = frame.height.max
-	else request.height = Math.min(request.height, frame.height.max)
+	if (frame.height.max) {
+		if (!request.height) request.height = frame.height.max
+		else request.height = Math.min(request.height, frame.height.max)
+	}
 }
 
 export function updateFrameFormat(request: CameraCaptureStart, frameFormats?: string[]) {
@@ -217,5 +215,23 @@ export function updateExposureTime(request: CameraCaptureStart, exposure: MinMax
 		const min = Math.max(1, exposureTimeIn(exposure.min, 'SECOND', request.exposureTimeUnit))
 		const max = exposureTimeIn(exposure.max, 'SECOND', request.exposureTimeUnit)
 		request.exposureTime = Math.max(min, Math.min(request.exposureTime, max))
+	}
+}
+
+export function updateCameraCaptureStartFromCamera(capture: CameraCaptureStart, camera: Camera) {
+	updateFrameFormat(capture, camera.frameFormats)
+	updateRequestFrame(capture, camera.frame)
+	!camera.exposuring && updateExposureTime(capture, camera.exposure)
+}
+
+export function updateCameraCaptureStartFromCameraUpdated(capture: CameraCaptureStart, event: CameraUpdated) {
+	if (event.state === 'Alert' || event.state === 'Busy') return
+
+	if (event.property === 'frame') {
+		updateRequestFrame(capture, event.device.frame!)
+	} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
+		updateFrameFormat(capture, event.device.frameFormats)
+	} else if (event.property === 'exposure' && event.device.exposure?.max) {
+		updateExposureTime(capture, event.device.exposure)
 	}
 }

@@ -68,6 +68,7 @@ const CameraDropdownEndContent = memo(() => {
 				maxGain={camera.gain.max}
 				maxOffset={camera.offset.max}
 				minExposure={camera.exposure.min}
+				mode='autoFocus'
 				onValueChange={autoFocus.updateCapture}
 				value={capture}
 			/>

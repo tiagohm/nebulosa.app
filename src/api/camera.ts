@@ -245,7 +245,7 @@ export class CameraCaptureTask {
 			// Save image
 			const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : camera.name
 			const path = join(await makePathFor(this.request), `${name}.fit`)
-			this.cameraHandler.imageProcessor.save(buffer, path, camera.name)
+			this.cameraHandler.imageProcessor.save(buffer, path, camera)
 
 			if (this.request.autoSave) {
 				void Bun.write(path, buffer)

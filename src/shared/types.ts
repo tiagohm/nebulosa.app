@@ -833,7 +833,7 @@ export interface DarvEvent {
 
 export type AutoFocusState = 'IDLE' | 'MOVING' | 'CAPTURING' | 'COMPUTING'
 
-export interface AutoFocusRequest extends AutoFocusOptions {
+export interface AutoFocusStart extends AutoFocusOptions {
 	readonly capture: CameraCaptureStart
 	readonly starDetection: StarDetection
 }
@@ -842,6 +842,8 @@ export interface AutoFocusEvent {
 	state: AutoFocusState
 	camera: string
 	focuser: string
+	starCount: number
+	hfd: number
 	message?: string
 	x: readonly number[]
 	y: readonly number[]
@@ -852,6 +854,26 @@ export interface AutoFocusEvent {
 	minimum?: Point
 	maximum?: Point
 	focusPoint?: Point
+}
+
+// Flat Wizard
+
+export type FlatWizardState = 'IDLE' | 'CAPTURING' | 'COMPUTING'
+
+export interface FlatWizardStart {
+	readonly capture: CameraCaptureStart
+	minExposure: number // ms
+	maxExposure: number // ms
+	meanTarget: number // [0..65535]
+	meanTolerance: number // % [0..100]
+	saveAt: string
+}
+
+export interface FlatWizardEvent {
+	state: FlatWizardState
+	camera: string
+	median: number
+	message?: string
 }
 
 // Alpaca
@@ -1213,7 +1235,7 @@ export const DEFAULT_DARV_EVENT: DarvEvent = {
 	state: 'IDLE',
 }
 
-export const DEFAULT_AUTO_FOCUS_REQUEST: AutoFocusRequest = {
+export const DEFAULT_AUTO_FOCUS_START: AutoFocusStart = {
 	capture: DEFAULT_CAMERA_CAPTURE_START,
 	starDetection: DEFAULT_STAR_DETECTION,
 	initialOffsetSteps: 5,
@@ -1228,6 +1250,23 @@ export const DEFAULT_AUTO_FOCUS_EVENT: AutoFocusEvent = {
 	state: 'IDLE',
 	camera: '',
 	focuser: '',
+	starCount: 0,
+	hfd: 0,
 	x: [],
 	y: [],
+}
+
+export const DEFAULT_FLAT_WIZARD_START: FlatWizardStart = {
+	capture: DEFAULT_CAMERA_CAPTURE_START,
+	minExposure: 1,
+	maxExposure: 2000,
+	meanTarget: 32768,
+	meanTolerance: 10,
+	saveAt: '',
+}
+
+export const DEFAULT_FLAT_WIZARD_EVENT: FlatWizardEvent = {
+	state: 'IDLE',
+	camera: '',
+	median: 0,
 }

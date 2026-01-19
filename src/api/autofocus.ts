@@ -4,7 +4,7 @@ import type { Point } from 'nebulosa/src/geometry'
 import type { Camera, Focuser } from 'nebulosa/src/indi.device'
 import type { Regression } from 'nebulosa/src/regression'
 import { medianOf } from 'nebulosa/src/util'
-import { type AutoFocusEvent, type AutoFocusRequest, type AutoFocusState, type CameraCaptureEvent, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
+import { type AutoFocusEvent, type AutoFocusStart, type AutoFocusState, type CameraCaptureEvent, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
 import type { CameraHandler } from './camera'
 import { type FocuserHandler, waitForFocuser } from './focuser'
 import type { WebSocketMessageHandler } from './message'
@@ -34,18 +34,18 @@ export class AutoFocusHandler {
 		}
 	}
 
-	start(camera: Camera, focuser: Focuser, request: AutoFocusRequest) {
-		const key = `${camera.id}:${focuser.id}`
-
+	start(camera: Camera, focuser: Focuser, request: AutoFocusStart) {
+		this.stop(camera, focuser)
+		const id = `${camera.id}:${focuser.id}`
 		const task = new AutoFocusTask(this, request, camera, focuser, this.handleAutoFocusEvent.bind(this))
-		this.tasks.set(key, task)
+		this.tasks.set(id, task)
 		task.start()
 	}
 
 	stop(camera: Camera, focuser: Focuser) {
-		const key = `${camera.id}:${focuser.id}`
-		this.tasks.get(key)?.stop()
-		this.tasks.delete(key)
+		const id = `${camera.id}:${focuser.id}`
+		this.tasks.get(id)?.stop()
+		this.tasks.delete(id)
 	}
 }
 
@@ -58,7 +58,7 @@ export class AutoFocusTask {
 
 	constructor(
 		readonly autoFocusHandler: AutoFocusHandler,
-		readonly request: AutoFocusRequest,
+		readonly request: AutoFocusStart,
 		readonly camera: Camera,
 		readonly focuser: Focuser,
 		handleAutoFocusEvent: (task: AutoFocusTask, event: AutoFocusEvent) => void,
@@ -76,7 +76,7 @@ export class AutoFocusTask {
 		}
 	}
 
-	async cameraCaptured(event: CameraCaptureEvent) {
+	private async cameraCaptured(event: CameraCaptureEvent) {
 		if (event.savedPath && !this.stopped) {
 			if (this.stopped) {
 				return this.handleAutoFocusEvent('IDLE', 'Stopped')
@@ -98,6 +98,9 @@ export class AutoFocusTask {
 			// Compute the next step given current focuser position and HFD
 			const step = this.autoFocus.add(this.focuser.position.value, hfd)
 
+			this.event.starCount = stars.length
+			this.event.hfd = hfd
+
 			// The focuser position to move
 			const position = Math.max(this.focuser.position.min, Math.min(step.absolute ? step.absolute : step.relative ? this.focuser.position.value + step.relative : 0, this.focuser.position.max))
 
@@ -113,7 +116,7 @@ export class AutoFocusTask {
 					} else if (event === 'cancel') {
 						this.handleAutoFocusEvent('IDLE', 'Stopped')
 					} else {
-						this.handleAutoFocusEvent('IDLE', `Failed to move the focuser to position ${position}`)
+						this.handleAutoFocusEvent('IDLE', `Failed to move to position ${position}`)
 					}
 				})
 
@@ -171,7 +174,10 @@ export class AutoFocusTask {
 		this.request.capture.delay = 0
 		this.request.capture.count = 1
 		this.request.capture.autoSave = false
+		this.request.capture.savePath = undefined
 		this.request.capture.focuser = this.focuser?.name
+		this.request.capture.frameType = 'LIGHT'
+		this.request.capture.exposureMode = 'SINGLE'
 
 		this.handleAutoFocusEvent('CAPTURING', '')
 

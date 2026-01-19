@@ -20,6 +20,7 @@ import { cover } from 'src/api/cover'
 import { DarvHandler, darv } from 'src/api/darv'
 import { dewHeater } from 'src/api/dewheater'
 import { flatPanel } from 'src/api/flatpanel'
+import { FlatWizardHandler, flatWizard } from 'src/api/flatwizard'
 import { FocuserHandler, focuser } from 'src/api/focuser'
 import { guideOutput } from 'src/api/guideoutput'
 import { IndiHandler, indi } from 'src/api/indi'
@@ -198,6 +199,7 @@ const imageHandler = new ImageHandler(imageProcessor, notificationHandler)
 const tppaHandler = new TppaHandler(wsm, cameraHandler, mountManager, plateSolverHandler)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountManager)
 const autoFocusHandler = new AutoFocusHandler(wsm, cameraHandler, focuserHandler, starDetectionHandler)
+const flatWizardHandler = new FlatWizardHandler(wsm, cameraHandler)
 
 void atlasHandler.refreshImageOfSun()
 void atlasHandler.refreshSatellites()
@@ -304,6 +306,7 @@ const app = new Elysia({
 	.use(tppa(tppaHandler))
 	.use(darv(darvHandler))
 	.use(autoFocus(autoFocusHandler))
+	.use(flatWizard(flatWizardHandler))
 	.use(alpaca(wsm, { camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager, alpacaPort, alpacaDiscoveryPort }, hasAlpaca))
 
 	// WebSocket

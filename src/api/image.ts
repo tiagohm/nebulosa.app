@@ -8,6 +8,7 @@ import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToF
 import { adf, histogram, sigmaClip } from 'nebulosa/src/image.computation'
 import { blur, brightness, contrast, debayer, gamma, gaussianBlur, horizontalFlip, invert, mean, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import type { AdaptiveDisplayFunctionOptions, Image } from 'nebulosa/src/image.types'
+import type { Camera } from 'nebulosa/src/indi.device'
 import { fileHandleSink } from 'nebulosa/src/io'
 import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/platesolver'
 import { identify } from 'nebulosa/src/sbd'
@@ -31,7 +32,7 @@ export interface BufferedImageItem {
 export interface TransformedImageItem {
 	readonly buffered: BufferedImageItem
 	readonly image: Image
-	readonly transformation: ImageTransformation
+	readonly transformation: ImageTransformation | false
 	readonly hash: string
 }
 
@@ -54,15 +55,15 @@ export class ImageProcessor {
 	private readonly transformed = new Map<string, ImageProcessorItem<TransformedImageItem>>()
 	private readonly exported = new Map<string, ImageProcessorItem<ExportedImageItem>>()
 
-	save(buffer: Buffer, path: string, camera?: string) {
+	save(buffer: Buffer, path: string, camera?: Camera) {
 		// Avoid double buffering
 		const canBuffer = !camera || process.platform !== 'linux' || !path.startsWith('/dev/shm/')
 
 		if (camera) {
 			// Delete existing image for the camera
-			for (const [key, item] of this.transformed) item.item.buffered.camera === camera && this.transformed.delete(key)
-			for (const [key, item] of this.exported) item.item.transformed.buffered.camera === camera && this.exported.delete(key)
-			for (const [key, item] of this.buffered) item.item.camera === camera && this.buffered.delete(key)
+			for (const [key, item] of this.transformed) item.item.buffered.camera === camera.id && this.transformed.delete(key)
+			for (const [key, item] of this.exported) item.item.transformed.buffered.camera === camera.id && this.exported.delete(key)
+			for (const [key, item] of this.buffered) item.item.camera === camera.id && this.buffered.delete(key)
 		} else {
 			// Delete existing image for the (framing) path
 			// Framing images is saved on temp directory and it will be unlinked before the process exit!
@@ -74,10 +75,10 @@ export class ImageProcessor {
 		let item: BufferedImageItem
 
 		if (canBuffer) {
-			item = { buffer, path, camera }
+			item = { buffer, path, camera: camera?.id }
 			this.buffered.set(path, { date: Date.now(), item })
 		} else {
-			item = { buffer: Buffer.allocUnsafe(0), path, camera }
+			item = { buffer: Buffer.allocUnsafe(0), path, camera: camera?.id }
 			this.buffered.set(path, { date: Date.now(), item })
 		}
 
@@ -86,7 +87,7 @@ export class ImageProcessor {
 		return item
 	}
 
-	async transform(path: string, transformation: ImageTransformation, camera?: string) {
+	async transform(path: string, transformation: ImageTransformation | false, camera?: string) {
 		// Compute the hash for the transformation
 		const hash = this.computeTransformHash(path, transformation)
 		let item = this.transformed.get(hash)?.item
@@ -120,8 +121,8 @@ export class ImageProcessor {
 		return item
 	}
 
-	private applyTransformation(image: Image, transformation: ImageTransformation) {
-		if (!transformation.enabled) return image
+	private applyTransformation(image: Image, transformation: ImageTransformation | false) {
+		if (transformation === false || !transformation.enabled) return image
 
 		if (transformation.debayer) image = debayer(image) ?? image
 		if (transformation.horizontalMirror) image = horizontalFlip(image)
@@ -268,13 +269,14 @@ export class ImageProcessor {
 		return undefined
 	}
 
-	private computeImageTransformationHash(transformation: ImageTransformation) {
-		const { enabled, calibrationGroup = '', debayer, horizontalMirror, verticalMirror, invert } = transformation
+	private computeImageTransformationHash(transformation: ImageTransformation | false) {
+		if (transformation === false || !transformation.enabled) return 'F'
+		const { calibrationGroup = '', debayer, horizontalMirror, verticalMirror, invert } = transformation
 		const stretch = this.computeImageStretchHash(transformation.stretch)
 		const scnr = this.computeImageScnrHash(transformation.scnr)
 		const filter = this.computeImageFilterHash(transformation.filter)
 		const adjustment = this.computeImageAdjustmentHash(transformation.adjustment)
-		return enabled ? `T:${calibrationGroup}:${debayer}:${stretch}:${scnr}:${filter}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}` : 'F'
+		return `T:${calibrationGroup}:${debayer}:${stretch}:${scnr}:${filter}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}`
 	}
 
 	private computeImageStretchHash(stretch: ImageStretch) {
@@ -315,7 +317,7 @@ export class ImageProcessor {
 		return `${value}:${typeof channel === 'string' ? channel : `${channel.red}:${channel.green}:${channel.blue}`}`
 	}
 
-	private computeTransformHash(path: string, transformation: ImageTransformation) {
+	private computeTransformHash(path: string, transformation: ImageTransformation | false) {
 		const hash = this.computeImageTransformationHash(transformation)
 		return Bun.MD5.hash(`${path}:${hash}`, 'hex')
 	}

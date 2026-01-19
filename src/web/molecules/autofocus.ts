@@ -1,7 +1,7 @@
 import { molecule, onMount, use } from 'bunshi'
 import type { Camera, Focuser } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
-import { type AutoFocusEvent, type AutoFocusRequest, type CameraUpdated, DEFAULT_AUTO_FOCUS_EVENT, DEFAULT_AUTO_FOCUS_REQUEST } from 'src/shared/types'
+import { type AutoFocusEvent, type AutoFocusStart, type CameraUpdated, DEFAULT_AUTO_FOCUS_EVENT, DEFAULT_AUTO_FOCUS_START } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -14,14 +14,14 @@ import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 export interface AutoFocusState {
 	show: boolean
 	running: boolean
-	readonly request: AutoFocusRequest
+	readonly request: AutoFocusStart
 	camera?: EquipmentDevice<Camera>
 	focuser?: EquipmentDevice<Focuser>
 	event: AutoFocusEvent
 }
 
 const state = proxy<AutoFocusState>({
-	request: structuredClone(DEFAULT_AUTO_FOCUS_REQUEST),
+	request: structuredClone(DEFAULT_AUTO_FOCUS_START),
 	show: false,
 	running: false,
 	event: structuredClone(DEFAULT_AUTO_FOCUS_EVENT),
@@ -87,15 +87,15 @@ export const AutoFocusMolecule = molecule(() => {
 		}
 	}
 
-	function update<K extends keyof AutoFocusRequest>(key: K, value: AutoFocusRequest[K]) {
+	function update<K extends keyof AutoFocusStart>(key: K, value: AutoFocusStart[K]) {
 		state.request[key] = value
 	}
 
-	function updateCapture<K extends keyof AutoFocusRequest['capture']>(key: K, value: AutoFocusRequest['capture'][K]) {
+	function updateCapture<K extends keyof AutoFocusStart['capture']>(key: K, value: AutoFocusStart['capture'][K]) {
 		state.request.capture[key] = value
 	}
 
-	function updateStarDetection<K extends keyof AutoFocusRequest['starDetection']>(key: K, value: AutoFocusRequest['starDetection'][K]) {
+	function updateStarDetection<K extends keyof AutoFocusStart['starDetection']>(key: K, value: AutoFocusStart['starDetection'][K]) {
 		state.request.starDetection[key] = value
 	}
 

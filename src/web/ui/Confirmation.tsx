@@ -18,7 +18,7 @@ export const Confirmation = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='Confirmation' id='confirmation' maxWidth='340px' onHide={confirmation.hide}>
+		<Modal footer={Footer} header='Confirmation' id='confirmation' maxWidth='336px' onHide={confirmation.hide}>
 			<div className='px-1 py-2'>{message}</div>
 		</Modal>
 	)

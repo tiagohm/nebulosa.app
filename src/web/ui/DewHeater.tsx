@@ -28,7 +28,7 @@ export const DewHeater = memo(() => {
 	const color = value < max * 0.5 ? 'primary' : value < max * 0.9 ? 'warning' : 'danger'
 
 	return (
-		<Modal header={Header} id={`dew-heater-${dewHeater.scope.dewHeater.name}`} maxWidth='260px' onHide={dewHeater.hide}>
+		<Modal header={Header} id={`dew-heater-${dewHeater.scope.dewHeater.name}`} maxWidth='256px' onHide={dewHeater.hide}>
 			<div className='mt-0 col-span-full flex flex-col items-center justify-center'>
 				<div className='w-full flex flex-col justify-center items-center gap-1'>
 					<Slider color={color} disableThumbScale endContent={max} isDisabled={!connected} maxValue={max} minValue={min} onChange={dewHeater.update} onChangeEnd={dewHeater.dutyCycle} size='lg' startContent={min} value={value} />

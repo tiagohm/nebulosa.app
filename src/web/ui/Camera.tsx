@@ -53,7 +53,7 @@ export const Camera = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header={Header} id={`camera-${camera.scope.camera.name}`} maxWidth='380px' onHide={camera.hide}>
+		<Modal footer={Footer} header={Header} id={`camera-${camera.scope.camera.name}`} maxWidth='376px' onHide={camera.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row items-center justify-between mb-2'>
 					<ExposureTimeProgress progress={progress} />

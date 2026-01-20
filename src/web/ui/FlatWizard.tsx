@@ -27,7 +27,7 @@ export const FlatWizard = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='Flat Wizard' id='flatwizard' maxWidth='380px' onHide={flatWizard.hide}>
+		<Modal footer={Footer} header='Flat Wizard' id='flatwizard' maxWidth='376px' onHide={flatWizard.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row justify-center items-center gap-2'>
 					<CameraDropdown endContent={<CameraDropdownEndContent />} isDisabled={running} onValueChange={(value) => (flatWizard.state.camera = value)} showLabel value={camera} />

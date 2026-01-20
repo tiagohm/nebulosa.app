@@ -36,7 +36,7 @@ export function Time({ id, time, onTimeChange, onClose }: TimeProps) {
 	const Footer = <TextButton color='success' label='Apply' onPointerUp={handleChoose} startContent={<Icons.Check />} />
 
 	return (
-		<Modal footer={Footer} header='Time' id={id} maxWidth='330px' onHide={onClose}>
+		<Modal footer={Footer} header='Time' id={id} maxWidth='328px' onHide={onClose}>
 			<div className='mt-0 grid grid-cols-3 gap-2'>
 				<I18nProvider locale='sv-SE'>
 					<DateInput className='col-span-2' endContent={<NowButton onPointerUp={handleNow} />} granularity='second' hideTimeZone hourCycle={24} label='UTC' onChange={setDate} size='sm' value={date} />

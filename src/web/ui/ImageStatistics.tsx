@@ -16,7 +16,7 @@ export const ImageStatistics = memo(() => {
 	const hs = histogram[selected]
 
 	return (
-		<Modal header='Statistics' id={`settings-${statistics.scope.image.key}`} maxWidth='300px' onHide={statistics.hide}>
+		<Modal header='Statistics' id={`settings-${statistics.scope.image.key}`} maxWidth='296px' onHide={statistics.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Checkbox className='col-span-full' isSelected={transformed} onValueChange={(value) => statistics.update('transformed', value)}>
 					Transformed

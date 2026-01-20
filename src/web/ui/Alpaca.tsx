@@ -24,7 +24,7 @@ export const Alpaca = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='ASCOM Alpaca' id='alpaca' maxWidth='300px' onHide={alpaca.hide} subHeader={running ? `${devices.length} devices` : undefined}>
+		<Modal footer={Footer} header='ASCOM Alpaca' id='alpaca' maxWidth='296px' onHide={alpaca.hide} subHeader={running ? `${devices.length} devices` : undefined}>
 			<div className='mt-0 grid grid-cols-1 gap-2'>
 				<Listbox classNames={{ list: 'max-h-[120px] overflow-scroll pe-1' }} emptyContent='No devices' items={devices}>
 					{(item) => (

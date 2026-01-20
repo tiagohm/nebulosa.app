@@ -24,7 +24,7 @@ export const Thermometer = memo(() => {
 	)
 
 	return (
-		<Modal header={Header} id={`thermometer-${thermometer.scope.thermometer.name}`} maxWidth='260px' onHide={thermometer.hide}>
+		<Modal header={Header} id={`thermometer-${thermometer.scope.thermometer.name}`} maxWidth='256px' onHide={thermometer.hide}>
 			<div className='mt-0 text-center font-bold text-5xl'>
 				{temperature.toFixed(1)} <small className='font-thin'>°C</small>
 			</div>

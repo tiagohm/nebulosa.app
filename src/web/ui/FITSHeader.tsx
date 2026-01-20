@@ -12,7 +12,7 @@ export const FITSHeader = memo(() => {
 	if (!info) return null
 
 	return (
-		<Modal header='FITS Header' id={`fits-header-${header.scope.image.key}`} maxWidth='300px' onHide={header.hide}>
+		<Modal header='FITS Header' id={`fits-header-${header.scope.image.key}`} maxWidth='296px' onHide={header.hide}>
 			<div className='mt-0 px-1 py-2'>
 				<Listbox
 					isVirtualized

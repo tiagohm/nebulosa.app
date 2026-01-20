@@ -40,7 +40,7 @@ export const Mount = memo(() => {
 
 	return (
 		<>
-			<Modal header={Header} id={`mount-${mount.scope.mount.name}`} maxWidth='410px' onHide={mount.hide}>
+			<Modal header={Header} id={`mount-${mount.scope.mount.name}`} maxWidth='408px' onHide={mount.hide}>
 				<div className='mt-0 grid grid-cols-12 gap-2'>
 					<div className='col-span-full flex flex-row items-center justify-between'>
 						<Chip color='primary' size='sm'>

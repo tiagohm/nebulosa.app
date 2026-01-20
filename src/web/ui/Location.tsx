@@ -66,7 +66,7 @@ export function Location({ id, latitude, longitude, elevation, onCoordinateChang
 	const Footer = <TextButton color='success' label='Choose' onPointerUp={handleChoose} startContent={<Icons.Check />} />
 
 	return (
-		<Modal footer={Footer} header={Header} id={id} maxWidth='330px' onHide={onClose}>
+		<Modal footer={Footer} header={Header} id={id} maxWidth='326px' onHide={onClose}>
 			<div className='mt-0 flex flex-col gap-2'>
 				<div className='grid grid-cols-3 gap-2'>
 					<NumberInput className='col-span-1' formatOptions={DECIMAL_NUMBER_FORMAT} label='Latitude (°)' maxValue={90} minValue={-90} onValueChange={(value) => updatePosition('latitude', value)} size='sm' step={0.001} value={position[0]} />

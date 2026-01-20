@@ -41,7 +41,7 @@ export const SkyAtlas = memo(() => {
 
 	return (
 		<>
-			<Modal footer={Footer} header={<Header />} id='sky-atlas' maxWidth='450px' onHide={atlas.hide}>
+			<Modal footer={Footer} header={<Header />} id='sky-atlas' maxWidth='456px' onHide={atlas.hide}>
 				<div className='mt-0 flex flex-col gap-2'>
 					<Activity mode={tab === 'sun' ? 'visible' : 'hidden'}>
 						<SunTab />

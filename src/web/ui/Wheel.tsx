@@ -30,7 +30,7 @@ export const Wheel = memo(() => {
 	)
 
 	return (
-		<Modal header={Header} id={`wheel-${wheel.scope.wheel.name}`} maxWidth='260px' onHide={wheel.hide}>
+		<Modal header={Header} id={`wheel-${wheel.scope.wheel.name}`} maxWidth='256px' onHide={wheel.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-3 flex flex-row items-center gap-2 justify-start'>
 					<Chip color='primary' size='sm'>

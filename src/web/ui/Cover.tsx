@@ -27,7 +27,7 @@ export const Cover = memo(() => {
 	)
 
 	return (
-		<Modal header={Header} id={`cover-${cover.scope.cover.name}`} maxWidth='260px' onHide={cover.hide}>
+		<Modal header={Header} id={`cover-${cover.scope.cover.name}`} maxWidth='256px' onHide={cover.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row items-center justify-between'>
 					<Chip color='primary' size='sm'>

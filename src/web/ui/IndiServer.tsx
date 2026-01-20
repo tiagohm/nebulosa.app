@@ -24,7 +24,7 @@ export const IndiServer = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='INDI Server' id='indi-server' maxWidth='280px' onHide={indi.hide}>
+		<Modal footer={Footer} header='INDI Server' id='indi-server' maxWidth='276px' onHide={indi.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} size='sm' value={port} />
 				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Repeat' maxValue={10} minValue={1} onValueChange={(value) => indi.update('repeat', value)} size='sm' value={repeat} />

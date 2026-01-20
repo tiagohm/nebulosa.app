@@ -18,7 +18,7 @@ export const About = memo(() => {
 	)
 
 	return (
-		<Modal header={Header} id='about' maxWidth='450px' onHide={about.hide}>
+		<Modal header={Header} id='about' maxWidth='448px' onHide={about.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full sm:col-span-3 row-span-6 flex flex-col items-center gap-2'>
 					<img className='max-h-35' src={nebulosaLogo} />

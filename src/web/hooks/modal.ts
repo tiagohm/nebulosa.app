@@ -13,6 +13,12 @@ function canDrag(target: EventTarget | null) {
 	return target instanceof HTMLElement && (target.closest('.modal') !== null || target.closest('#root')) && !(target instanceof HTMLInputElement)
 }
 
+const GRID_SIZE = 8
+
+function snapToGrid(pos: number) {
+	return pos - (pos % GRID_SIZE)
+}
+
 export function useModal(id: string, onHide?: VoidFunction) {
 	const zIndex = useMolecule(ZIndexMolecule)
 	const modalRef = useRef<HTMLElement>(null)
@@ -58,8 +64,8 @@ export function useModal(id: string, onHide?: VoidFunction) {
 			onDrag: ({ event, offset, cancel }) => {
 				if (!modalRef.current || !canDrag(event.target)) return cancel()
 
-				xy.current.x = Math.min(Math.max(offset[0], boundary.current.minLeft), boundary.current.maxLeft)
-				xy.current.y = Math.min(Math.max(offset[1], boundary.current.minTop), boundary.current.maxTop)
+				xy.current.x = snapToGrid(Math.min(Math.max(offset[0], boundary.current.minLeft), boundary.current.maxLeft))
+				xy.current.y = snapToGrid(Math.min(Math.max(offset[1], boundary.current.minTop), boundary.current.maxTop))
 
 				modalRef.current.style.transform = `translate(${xy.current.x}px, ${xy.current.y}px)`
 			},

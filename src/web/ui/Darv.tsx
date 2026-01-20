@@ -24,7 +24,7 @@ export const Darv = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='Drift Alignment by Robert Vice' id='darv' maxWidth='350px' onHide={darv.hide}>
+		<Modal footer={Footer} header='Drift Alignment by Robert Vice' id='darv' maxWidth='360px' onHide={darv.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-full flex flex-row justify-center items-center gap-2'>
 					<CameraDropdown endContent={<CameraDropdownEndContent />} isDisabled={running} onValueChange={(value) => (darv.state.camera = value)} showLabel value={camera} />

@@ -16,7 +16,7 @@ export const ImageSettings = memo(() => {
 	const Footer = <TextButton color='danger' label='Reset' onPointerUp={settings.reset} startContent={<Icons.Restore />} />
 
 	return (
-		<Modal footer={Footer} header='Settings' id={`settings-${settings.scope.image.key}`} maxWidth='260px' onHide={settings.hide}>
+		<Modal footer={Footer} header='Settings' id={`settings-${settings.scope.image.key}`} maxWidth='256px' onHide={settings.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<ImageFormatSelect className='col-span-full' onValueChange={settings.updateFormatType} value={format.type} />
 				<Activity mode={format.type === 'jpeg' ? 'visible' : 'hidden'}>

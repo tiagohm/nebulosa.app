@@ -44,7 +44,7 @@ export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 	)
 
 	return (
-		<Modal footer={Footer} header={header ?? (mode === 'save' ? 'Save' : mode === 'directory' ? 'Open Directory' : 'Open File')} id={id} maxWidth='420px' onHide={onChoose}>
+		<Modal footer={Footer} header={header ?? (mode === 'save' ? 'Save' : mode === 'directory' ? 'Open Directory' : 'Open File')} id={id} maxWidth='416px' onHide={onChoose}>
 			<div className='mt-0 flex flex-col flex-wrap gap-2'>
 				<div className='flex flex-row items-center gap-2'>
 					<Tooltip content='Go Back' showArrow>

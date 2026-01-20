@@ -29,7 +29,7 @@ export const Focuser = memo(() => {
 	)
 
 	return (
-		<Modal header={Header} id={`focuser-${focuser.scope.focuser.name}`} maxWidth='260px' onHide={focuser.hide}>
+		<Modal header={Header} id={`focuser-${focuser.scope.focuser.name}`} maxWidth='256px' onHide={focuser.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<div className='col-span-3 flex flex-row items-center justify-start'>
 					<Chip color='primary' size='sm'>

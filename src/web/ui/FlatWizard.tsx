@@ -14,7 +14,7 @@ import { TextButton } from './TextButton'
 export const FlatWizard = memo(() => {
 	const flatWizard = useMolecule(FlatWizardMolecule)
 	const { running, camera, event } = useSnapshot(flatWizard.state)
-	const { minExposure, maxExposure, meanTarget, meanTolerance, saveAt } = useSnapshot(flatWizard.state.request, { sync: true })
+	const { minExposure, maxExposure, meanTarget, meanTolerance, saveAt } = useSnapshot(flatWizard.state.request)
 
 	const exposureMinValue = (camera?.exposure.min ?? 0) * 1000
 	const exposureMaxValue = (camera?.exposure.max ?? 0) * 1000
@@ -51,24 +51,7 @@ export const FlatWizard = memo(() => {
 const CameraDropdownEndContent = memo(() => {
 	const flatWizard = useMolecule(FlatWizardMolecule)
 	const { camera } = useSnapshot(flatWizard.state)
-	const { capture } = useSnapshot(flatWizard.state.request, { sync: true })
+	const { capture } = useSnapshot(flatWizard.state.request)
 
-	return (
-		camera && (
-			<CameraCaptureStartPopover
-				color={camera.connected ? 'success' : 'danger'}
-				frameFormats={camera.frameFormats}
-				isDisabled={!camera.connected}
-				isRounded
-				maxBin={camera.bin.x.max}
-				maxExposure={camera.exposure.max}
-				maxGain={camera.gain.max}
-				maxOffset={camera.offset.max}
-				minExposure={camera.exposure.min}
-				mode='flatWizard'
-				onValueChange={flatWizard.updateCapture}
-				value={capture}
-			/>
-		)
-	)
+	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode='flatWizard' onValueChange={flatWizard.updateCapture} value={capture} />
 })

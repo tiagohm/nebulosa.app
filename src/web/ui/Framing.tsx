@@ -14,7 +14,8 @@ import { TextButton } from './TextButton'
 export const Framing = memo(() => {
 	const framing = useMolecule(FramingMolecule)
 	const { loading, openNewImage } = useSnapshot(framing.state)
-	const { rightAscension, declination, width, height, rotation, focalLength, pixelSize, hipsSurvey } = useSnapshot(framing.state.request, { sync: true })
+	const { width, height, rotation, focalLength, pixelSize, hipsSurvey } = useSnapshot(framing.state.request)
+	const { rightAscension, declination } = useSnapshot(framing.state.request, { sync: true })
 
 	const fov = useMemo(() => {
 		const size = angularSizeOfPixel(focalLength, pixelSize)

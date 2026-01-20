@@ -12,7 +12,8 @@ import { TextButton } from './TextButton'
 export const MountRemoteControl = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	const { status } = useSnapshot(mount.state.remoteControl)
-	const { protocol, host, port } = useSnapshot(mount.state.remoteControl.request, { sync: true })
+	const { protocol, port } = useSnapshot(mount.state.remoteControl.request)
+	const { host } = useSnapshot(mount.state.remoteControl.request, { sync: true })
 
 	const Footer = (
 		<>

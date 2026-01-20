@@ -14,7 +14,7 @@ import { TextButton } from './TextButton'
 export const Darv = memo(() => {
 	const darv = useMolecule(DarvMolecule)
 	const { running, camera, mount, event } = useSnapshot(darv.state)
-	const { hemisphere, duration, initialPause } = useSnapshot(darv.state.request, { sync: true })
+	const { hemisphere, duration, initialPause } = useSnapshot(darv.state.request)
 
 	const Footer = (
 		<>
@@ -46,24 +46,7 @@ export const Darv = memo(() => {
 const CameraDropdownEndContent = memo(() => {
 	const darv = useMolecule(DarvMolecule)
 	const { camera } = useSnapshot(darv.state)
-	const { capture } = useSnapshot(darv.state.request, { sync: true })
+	const { capture } = useSnapshot(darv.state.request)
 
-	return (
-		camera && (
-			<CameraCaptureStartPopover
-				color={camera.connected ? 'success' : 'danger'}
-				frameFormats={camera.frameFormats}
-				isDisabled={!camera.connected}
-				isRounded
-				maxBin={camera.bin.x.max}
-				maxExposure={camera.exposure.max}
-				maxGain={camera.gain.max}
-				maxOffset={camera.offset.max}
-				minExposure={camera.exposure.min}
-				mode='darv'
-				onValueChange={darv.updateCapture}
-				value={capture}
-			/>
-		)
-	)
+	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode='darv' onValueChange={darv.updateCapture} value={capture} />
 })

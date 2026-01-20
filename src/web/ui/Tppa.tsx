@@ -17,7 +17,7 @@ import { TppaDirectionSelect } from './TppaDirectionSelect'
 export const Tppa = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
 	const { running, camera, mount, event } = useSnapshot(tppa.state)
-	const { direction, moveDuration, stopTrackingWhenDone, compensateRefraction, maxAttempts, delayBeforeCapture } = useSnapshot(tppa.state.request, { sync: true })
+	const { direction, moveDuration, stopTrackingWhenDone, compensateRefraction, maxAttempts, delayBeforeCapture } = useSnapshot(tppa.state.request)
 	const { type } = useSnapshot(tppa.state.request.solver)
 
 	const Footer = (
@@ -77,31 +77,14 @@ export const Tppa = memo(() => {
 const CameraDropdownEndContent = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
 	const { camera } = useSnapshot(tppa.state)
-	const { capture } = useSnapshot(tppa.state.request, { sync: true })
+	const { capture } = useSnapshot(tppa.state.request)
 
-	return (
-		camera && (
-			<CameraCaptureStartPopover
-				color={camera.connected ? 'success' : 'danger'}
-				frameFormats={camera.frameFormats}
-				isDisabled={!camera.connected}
-				isRounded
-				maxBin={camera.bin.x.max}
-				maxExposure={camera.exposure.max}
-				maxGain={camera.gain.max}
-				maxOffset={camera.offset.max}
-				minExposure={camera.exposure.min}
-				mode='tppa'
-				onValueChange={tppa.updateCapture}
-				value={capture}
-			/>
-		)
-	)
+	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode='tppa' onValueChange={tppa.updateCapture} value={capture} />
 })
 
 const PlateSolverSelectEndContent = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
-	const { type, radius, focalLength, pixelSize } = useSnapshot(tppa.state.request.solver, { sync: true })
+	const { type, radius, focalLength, pixelSize } = useSnapshot(tppa.state.request.solver)
 
 	return <PlateSolveStartPopover focalLength={focalLength} onValueChange={tppa.updateSolver} pixelSize={pixelSize} radius={radius} type={type} />
 })

@@ -12,7 +12,7 @@ import { TextButton } from './TextButton'
 
 export const ImageStretch = memo(() => {
 	const stretch = useMolecule(ImageStretchMolecule)
-	const { auto, shadow, midtone, highlight, meanBackground, clippingPoint, sigmaClip, centerMethod, dispersionMethod, sigmaLower, sigmaUpper, bits } = useSnapshot(stretch.state.stretch, { sync: true })
+	const { auto, shadow, midtone, highlight, meanBackground, clippingPoint, sigmaClip, centerMethod, dispersionMethod, sigmaLower, sigmaUpper, bits } = useSnapshot(stretch.state.stretch)
 
 	function handleShadowHighlightChange(value?: number | number[]) {
 		if (Array.isArray(value)) {

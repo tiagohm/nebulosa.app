@@ -11,7 +11,7 @@ import { TextButton } from './TextButton'
 
 export const ImageAdjustment = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
-	const { enabled } = useSnapshot(adjustment.state.adjustment, { sync: true })
+	const { enabled } = useSnapshot(adjustment.state.adjustment)
 
 	const Footer = (
 		<>
@@ -37,7 +37,7 @@ export const ImageAdjustment = memo(() => {
 
 const Brightness = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
-	const { enabled, brightness } = useSnapshot(adjustment.state.adjustment, { sync: true })
+	const { enabled, brightness } = useSnapshot(adjustment.state.adjustment)
 
 	return (
 		<div className='col-span-full flex flex-col gap-2'>
@@ -48,7 +48,7 @@ const Brightness = memo(() => {
 
 const Contrast = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
-	const { enabled, contrast } = useSnapshot(adjustment.state.adjustment, { sync: true })
+	const { enabled, contrast } = useSnapshot(adjustment.state.adjustment)
 
 	return (
 		<div className='col-span-full flex flex-col gap-2'>
@@ -59,7 +59,7 @@ const Contrast = memo(() => {
 
 const Gamma = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
-	const { enabled, gamma } = useSnapshot(adjustment.state.adjustment, { sync: true })
+	const { enabled, gamma } = useSnapshot(adjustment.state.adjustment)
 
 	return (
 		<div className='col-span-full flex flex-col gap-2'>
@@ -71,7 +71,7 @@ const Gamma = memo(() => {
 const Saturation = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
 	const { info } = useSnapshot(adjustment.viewer.state)
-	const { enabled, saturation } = useSnapshot(adjustment.state.adjustment, { sync: true })
+	const { enabled, saturation } = useSnapshot(adjustment.state.adjustment)
 
 	return (
 		<Activity mode={info?.mono ? 'hidden' : 'visible'}>

@@ -12,7 +12,7 @@ import { TextButton } from './TextButton'
 export const StarDetection = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
 	const { loading, stars, computed, selected } = useSnapshot(starDetection.state)
-	const { type } = useSnapshot(starDetection.state.request, { sync: true })
+	const { type } = useSnapshot(starDetection.state.request)
 
 	const Footer = <TextButton color='success' isLoading={loading} label='Detect' onPointerUp={starDetection.detect} startContent={<Icons.Check />} />
 
@@ -40,7 +40,7 @@ export const StarDetection = memo(() => {
 
 const StarDetectionEndContent = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
-	const value = useSnapshot(starDetection.state.request, { sync: true })
+	const { request } = useSnapshot(starDetection.state)
 
-	return <StarDetectionPopover isRounded onValueChange={starDetection.update} size='sm' value={value} variant='light' />
+	return <StarDetectionPopover isRounded onValueChange={starDetection.update} size='sm' value={request} variant='light' />
 })

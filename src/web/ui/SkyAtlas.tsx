@@ -434,7 +434,7 @@ const AsteroidSearchTab = memo(() => {
 const AsteroidCloseApproachesTab = memo(() => {
 	const asteroid = useMolecule(AsteroidMolecule)
 	const { loading } = useSnapshot(asteroid.state)
-	const { days, distance } = useSnapshot(asteroid.state.closeApproaches.request, { sync: true })
+	const { days, distance } = useSnapshot(asteroid.state.closeApproaches.request)
 	const { result } = useSnapshot(asteroid.state.closeApproaches)
 	const { offset } = useSnapshot(asteroid.state.request.time)
 
@@ -486,7 +486,7 @@ const GalaxyTab = memo(() => {
 
 const GalaxyTable = memo(() => {
 	const galaxy = useMolecule(GalaxyMolecule)
-	const { sort } = useSnapshot(galaxy.state.request, { sync: true })
+	const { sort } = useSnapshot(galaxy.state.request)
 	const { result } = useSnapshot(galaxy.state)
 
 	return (
@@ -519,7 +519,7 @@ const GalaxyTable = memo(() => {
 
 const GalaxyPaginator = memo((props: React.HTMLAttributes<HTMLDivElement>) => {
 	const galaxy = useMolecule(GalaxyMolecule)
-	const { page } = useSnapshot(galaxy.state.request, { sync: true })
+	const { page } = useSnapshot(galaxy.state.request)
 	const { loading, result } = useSnapshot(galaxy.state)
 
 	return <Paginator {...props} count={result.length} loading={loading} onNext={galaxy.next} onPrev={galaxy.prev} page={page} />
@@ -550,7 +550,7 @@ const SatelliteTab = memo(() => {
 
 const SatelliteTable = memo(() => {
 	const satellite = useMolecule(SatelliteMolecule)
-	const { sort } = useSnapshot(satellite.state.request, { sync: true })
+	const { sort } = useSnapshot(satellite.state.request)
 	const { result } = useSnapshot(satellite.state)
 
 	return (
@@ -581,7 +581,7 @@ const SatelliteTable = memo(() => {
 
 const SatellitePaginator = memo((props: React.HTMLAttributes<HTMLDivElement>) => {
 	const satellite = useMolecule(SatelliteMolecule)
-	const { page } = useSnapshot(satellite.state.request, { sync: true })
+	const { page } = useSnapshot(satellite.state.request)
 	const { loading, result } = useSnapshot(satellite.state)
 
 	return <Paginator {...props} count={result.length} loading={loading} onNext={satellite.next} onPrev={satellite.prev} page={page} />
@@ -870,7 +870,8 @@ const PlanetFilter = memo(() => {
 
 const GalaxyFilter = memo(() => {
 	const dso = useMolecule(GalaxyMolecule)
-	const { name, nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, rightAscension, declination, radius } = useSnapshot(dso.state.request, { sync: true })
+	const { nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, radius } = useSnapshot(dso.state.request)
+	const { name, rightAscension, declination } = useSnapshot(dso.state.request, { sync: true })
 	const { loading } = useSnapshot(dso.state)
 
 	return (
@@ -909,7 +910,8 @@ const GalaxyFilter = memo(() => {
 
 const SatelliteFilter = memo(() => {
 	const satellite = useMolecule(SatelliteMolecule)
-	const { text, groups, category } = useSnapshot(satellite.state.request, { sync: true })
+	const { groups, category } = useSnapshot(satellite.state.request)
+	const { text } = useSnapshot(satellite.state.request, { sync: true })
 	const { loading } = useSnapshot(satellite.state)
 
 	return (

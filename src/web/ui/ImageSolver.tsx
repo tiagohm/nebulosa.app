@@ -16,7 +16,8 @@ import { TextButton } from './TextButton'
 export const ImageSolver = memo(() => {
 	const solver = useMolecule(ImageSolverMolecule)
 	const { loading, solution } = useSnapshot(solver.state)
-	const { blind, type, rightAscension, declination, radius, focalLength, pixelSize } = useSnapshot(solver.state.request, { sync: true })
+	const { blind, type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request)
+	const { rightAscension, declination } = useSnapshot(solver.state.request, { sync: true })
 
 	const Footer = (
 		<>
@@ -58,7 +59,7 @@ export const ImageSolver = memo(() => {
 
 const PlateSolverSelectEndContent = memo(() => {
 	const solver = useMolecule(ImageSolverMolecule)
-	const { type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request, { sync: true })
+	const { type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request)
 
 	return <PlateSolveStartPopover focalLength={focalLength} onValueChange={solver.update} pixelSize={pixelSize} radius={radius} type={type} />
 })

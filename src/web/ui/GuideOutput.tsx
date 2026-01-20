@@ -12,7 +12,7 @@ import { Nudge } from './Nudge'
 export const GuideOutput = memo(() => {
 	const guideOutput = useMolecule(GuideOutputMolecule)
 	const { connecting, connected, pulsing } = useSnapshot(guideOutput.state.guideOutput)
-	const { north, south, west, east } = useSnapshot(guideOutput.state.request, { sync: true })
+	const { north, south, west, east } = useSnapshot(guideOutput.state.request)
 
 	const Header = (
 		<div className='w-full flex flex-row items-center justify-between'>

@@ -66,7 +66,7 @@ export function Formula({ description, expression, children }: FormulaProps) {
 
 export const FocalLength = memo(() => {
 	const calculator = useMolecule(CalculatorMolecule)
-	const { aperture, focalRatio, focalLength } = useSnapshot(calculator.state.focalLength, { sync: true })
+	const { aperture, focalRatio, focalLength } = useSnapshot(calculator.state.focalLength)
 
 	return (
 		<Formula description='Calculate the focal length of your telescope' expression='Aperture * Focal Ratio'>
@@ -79,7 +79,7 @@ export const FocalLength = memo(() => {
 
 export const FocalRatio = memo(() => {
 	const calculator = useMolecule(CalculatorMolecule)
-	const { aperture, focalRatio, focalLength } = useSnapshot(calculator.state.focalRatio, { sync: true })
+	const { aperture, focalRatio, focalLength } = useSnapshot(calculator.state.focalRatio)
 
 	return (
 		<Formula description='Calculate the focal ratio of your telescope' expression='Focal Length / Aperture'>
@@ -92,7 +92,7 @@ export const FocalRatio = memo(() => {
 
 export const DawesLimit = memo(() => {
 	const calculator = useMolecule(CalculatorMolecule)
-	const { aperture, resolution } = useSnapshot(calculator.state.dawesLimit, { sync: true })
+	const { aperture, resolution } = useSnapshot(calculator.state.dawesLimit)
 
 	return (
 		<Formula description='Calculate the maximum resolving power of your telescope using the Dawes Limit formula' expression='116 / Aperture'>
@@ -104,7 +104,7 @@ export const DawesLimit = memo(() => {
 
 export const RayleighLimit = memo(() => {
 	const calculator = useMolecule(CalculatorMolecule)
-	const { aperture, resolution } = useSnapshot(calculator.state.rayleighLimit, { sync: true })
+	const { aperture, resolution } = useSnapshot(calculator.state.rayleighLimit)
 
 	return (
 		<Formula description='Calculate the maximum resolving power of your telescope using the Rayleigh Limit formula' expression='138 / Aperture'>
@@ -116,7 +116,7 @@ export const RayleighLimit = memo(() => {
 
 export const LimitingMagnitude = memo(() => {
 	const calculator = useMolecule(CalculatorMolecule)
-	const { aperture, magnitude } = useSnapshot(calculator.state.limitingMagnitude, { sync: true })
+	const { aperture, magnitude } = useSnapshot(calculator.state.limitingMagnitude)
 
 	return (
 		<Formula description='Calculate a telescopes approximate limiting magnitude' expression='2.7 + 5 * Log(Aperture)'>
@@ -128,7 +128,7 @@ export const LimitingMagnitude = memo(() => {
 
 export const LightGraspRatio = memo(() => {
 	const calculator = useMolecule(CalculatorMolecule)
-	const { smallerAperture, largerAperture, ratio } = useSnapshot(calculator.state.lightGraspRatio, { sync: true })
+	const { smallerAperture, largerAperture, ratio } = useSnapshot(calculator.state.lightGraspRatio)
 
 	return (
 		<Formula description='Calculate the light grasp ratio between two telescopes' expression='(Smaller Aperture / Larger Aperture)²'>
@@ -141,7 +141,7 @@ export const LightGraspRatio = memo(() => {
 
 export const CCDResolution = memo(() => {
 	const calculator = useMolecule(CalculatorMolecule)
-	const { pixelSize, focalLength, resolution } = useSnapshot(calculator.state.ccdResolution, { sync: true })
+	const { pixelSize, focalLength, resolution } = useSnapshot(calculator.state.ccdResolution)
 
 	return (
 		<Formula description='Calculate the resoution in arcseconds per pixel of a CCD with a particular telescope' expression='Pixel Size / Focal Length * 206.265'>

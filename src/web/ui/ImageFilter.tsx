@@ -10,7 +10,7 @@ import { TextButton } from './TextButton'
 
 export const ImageFilter = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
-	const { enabled, type } = useSnapshot(filter.state.filter, { sync: true })
+	const { enabled, type } = useSnapshot(filter.state.filter)
 
 	const Footer = (
 		<>
@@ -47,7 +47,7 @@ export const ImageFilter = memo(() => {
 
 const Mean = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
-	const { enabled, type, mean } = useSnapshot(filter.state.filter, { sync: true })
+	const { enabled, type, mean } = useSnapshot(filter.state.filter)
 
 	return (
 		<Activity mode={type === 'mean' ? 'visible' : 'hidden'}>
@@ -60,7 +60,7 @@ const Mean = memo(() => {
 
 const Blur = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
-	const { enabled, type, blur } = useSnapshot(filter.state.filter, { sync: true })
+	const { enabled, type, blur } = useSnapshot(filter.state.filter)
 
 	return (
 		<Activity mode={type === 'blur' ? 'visible' : 'hidden'}>
@@ -73,7 +73,7 @@ const Blur = memo(() => {
 
 const GaussianBlur = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
-	const { enabled, type, gaussianBlur } = useSnapshot(filter.state.filter, { sync: true })
+	const { enabled, type, gaussianBlur } = useSnapshot(filter.state.filter)
 
 	return (
 		<Activity mode={type === 'gaussianBlur' ? 'visible' : 'hidden'}>

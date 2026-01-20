@@ -13,7 +13,7 @@ import { Modal } from './Modal'
 export const Rotator = memo(() => {
 	const rotator = useMolecule(RotatorMolecule)
 	const { connecting, connected, moving, angle, canAbort, canSync, canReverse, reversed } = useSnapshot(rotator.state.rotator)
-	const { angle: value } = useSnapshot(rotator.state, { sync: true })
+	const { angle: value } = useSnapshot(rotator.state)
 
 	const Header = (
 		<div className='w-full flex flex-row items-center justify-between'>

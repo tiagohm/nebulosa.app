@@ -14,7 +14,7 @@ import { TextButton } from './TextButton'
 export const Wheel = memo(() => {
 	const wheel = useMolecule(WheelMolecule)
 	const { connecting, connected, moving, position, slots } = useSnapshot(wheel.state.wheel)
-	const selected = useSnapshot(wheel.state.selected, { sync: true })
+	const { slot } = useSnapshot(wheel.state.selected)
 
 	const Header = (
 		<div className='w-full flex flex-row items-center justify-between'>
@@ -46,16 +46,16 @@ export const Wheel = memo(() => {
 				<div className='col-span-full flex flex-row items-center justify-end gap-2'>
 					<EnumSelect
 						className='flex-1'
-						endContent={<SlotPopover key={slots[selected.slot] ?? 'none'} name={slots[selected.slot]} onNameChange={(name) => wheel.update('name', name)} />}
+						endContent={<SlotPopover key={slots[slot] ?? 'none'} name={slots[slot]} onNameChange={(name) => wheel.update('name', name)} />}
 						isDisabled={!connected || moving || slots.length === 0}
 						label='Slot'
 						onValueChange={(value) => wheel.update('slot', +value)}
-						value={selected.slot.toFixed(0)}>
+						value={slot.toFixed(0)}>
 						{slots.map((slot, index) => (
 							<SelectItem key={index}>{slot}</SelectItem>
 						))}
 					</EnumSelect>
-					<TextButton color='success' isDisabled={!connected || selected.slot === position || slots.length === 0} isLoading={moving} label='Move' onPointerUp={wheel.moveTo} startContent={<Icons.Check />} variant='light' />
+					<TextButton color='success' isDisabled={!connected || slot === position || slots.length === 0} isLoading={moving} label='Move' onPointerUp={wheel.moveTo} startContent={<Icons.Check />} variant='light' />
 				</div>
 			</div>
 		</Modal>

@@ -12,7 +12,7 @@ import { TextButton } from './TextButton'
 export const IndiServer = memo(() => {
 	const indi = useMolecule(IndiServerMolecule)
 	const { running, showAll } = useSnapshot(indi.state)
-	const { port, repeat, verbose, drivers } = useSnapshot(indi.state.request, { sync: true })
+	const { port, repeat, verbose, drivers } = useSnapshot(indi.state.request)
 
 	const Footer = (
 		<>

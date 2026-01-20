@@ -12,7 +12,7 @@ import { TextButton } from './TextButton'
 export const ImageAnnotation = memo(() => {
 	const annotation = useMolecule(ImageAnnotationMolecule)
 	const { loading } = useSnapshot(annotation.state)
-	const { stars, dsos, useSimbad, minorPlanets, minorPlanetsMagnitudeLimit, includeMinorPlanetsWithoutMagnitude } = useSnapshot(annotation.state.request, { sync: true })
+	const { stars, dsos, useSimbad, minorPlanets, minorPlanetsMagnitudeLimit, includeMinorPlanetsWithoutMagnitude } = useSnapshot(annotation.state.request)
 
 	const Footer = (
 		<>

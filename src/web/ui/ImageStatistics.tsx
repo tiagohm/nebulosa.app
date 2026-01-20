@@ -10,7 +10,7 @@ import { Modal } from './Modal'
 export const ImageStatistics = memo(() => {
 	const statistics = useMolecule(ImageStatisticsMolecule)
 	const { histogram, selected } = useSnapshot(statistics.state)
-	const { transformed } = useSnapshot(statistics.state.request, { sync: true })
+	const { transformed } = useSnapshot(statistics.state.request)
 
 	const n = histogram.length
 	const hs = histogram[selected]

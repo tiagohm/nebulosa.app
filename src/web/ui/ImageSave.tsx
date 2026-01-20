@@ -10,7 +10,8 @@ import { TextButton } from './TextButton'
 
 export const ImageSave = memo(() => {
 	const save = useMolecule(ImageSaveMolecule)
-	const { path, loading, format, transformed } = useSnapshot(save.state, { sync: true })
+	const { loading, format, transformed } = useSnapshot(save.state)
+	const { path } = useSnapshot(save.state, { sync: true })
 
 	const Footer = <TextButton color='success' isDisabled={!path} isLoading={loading} label='Save' onPointerUp={save.save} startContent={<Icons.Save />} />
 

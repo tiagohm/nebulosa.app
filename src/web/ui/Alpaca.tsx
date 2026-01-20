@@ -11,7 +11,7 @@ import { TextButton } from './TextButton'
 export const Alpaca = memo(() => {
 	const alpaca = useMolecule(AlpacaMolecule)
 	const { devices, running, serverPort } = useSnapshot(alpaca.state.status)
-	const { port } = useSnapshot(alpaca.state, { sync: true })
+	const { port } = useSnapshot(alpaca.state)
 
 	const Footer = (
 		<>

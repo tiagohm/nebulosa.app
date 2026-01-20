@@ -16,7 +16,7 @@ import { TextButton } from './TextButton'
 export const AutoFocus = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)
 	const { running, camera, focuser, event } = useSnapshot(autoFocus.state)
-	const { starDetection, initialOffsetSteps, stepSize, fittingMode, rmsdThreshold, reversed } = useSnapshot(autoFocus.state.request, { sync: true })
+	const { starDetection, initialOffsetSteps, stepSize, fittingMode, rmsdThreshold, reversed } = useSnapshot(autoFocus.state.request)
 
 	const Footer = (
 		<>
@@ -38,7 +38,7 @@ export const AutoFocus = memo(() => {
 					</Chip>
 					<span className='text-xs'>{event.message}</span>
 				</div>
-				<StarDetectionSelect className='col-span-6' endContent={<StarDetectionEndContent />} onValueChange={(value) => autoFocus.updateStarDetection('type', value)} value={starDetection.type} />
+				<StarDetectionSelect className='col-span-6' endContent={<StarDetectionSelectEndContent />} onValueChange={(value) => autoFocus.updateStarDetection('type', value)} value={starDetection.type} />
 				<AutoFocusFittingModeSelect className='col-span-6' onValueChange={(value) => autoFocus.update('fittingMode', value)} value={fittingMode} />
 				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Offset steps' maxValue={1000} minValue={0} onValueChange={(value) => autoFocus.update('initialOffsetSteps', value)} size='sm' value={initialOffsetSteps} />
 				<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!focuser?.connected} label='Step size' maxValue={focuser?.position.max} minValue={focuser?.position.min} onValueChange={(value) => autoFocus.update('stepSize', value)} size='sm' value={stepSize} />
@@ -54,31 +54,14 @@ export const AutoFocus = memo(() => {
 const CameraDropdownEndContent = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)
 	const { camera } = useSnapshot(autoFocus.state)
-	const { capture } = useSnapshot(autoFocus.state.request, { sync: true })
+	const { capture } = useSnapshot(autoFocus.state.request)
 
-	return (
-		camera && (
-			<CameraCaptureStartPopover
-				color={camera.connected ? 'success' : 'danger'}
-				frameFormats={camera.frameFormats}
-				isDisabled={!camera.connected}
-				isRounded
-				maxBin={camera.bin.x.max}
-				maxExposure={camera.exposure.max}
-				maxGain={camera.gain.max}
-				maxOffset={camera.offset.max}
-				minExposure={camera.exposure.min}
-				mode='autoFocus'
-				onValueChange={autoFocus.updateCapture}
-				value={capture}
-			/>
-		)
-	)
+	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode='autoFocus' onValueChange={autoFocus.updateCapture} value={capture} />
 })
 
-const StarDetectionEndContent = memo(() => {
+const StarDetectionSelectEndContent = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)
-	const starDetection = useSnapshot(autoFocus.state.request.starDetection, { sync: true })
+	const { starDetection } = useSnapshot(autoFocus.state.request)
 
 	return <StarDetectionPopover isRounded onValueChange={autoFocus.updateStarDetection} size='sm' value={starDetection} variant='light' />
 })

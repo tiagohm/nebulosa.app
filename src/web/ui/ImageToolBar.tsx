@@ -73,7 +73,7 @@ export const ImageToolBar = memo(() => {
 
 const RotatePopover = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
-	const { angle } = useSnapshot(viewer.state, { sync: true })
+	const { angle } = useSnapshot(viewer.state)
 
 	return (
 		<Popover placement='bottom' showArrow>

@@ -24,7 +24,7 @@ export const Camera = memo(() => {
 	const camera = useMolecule(CameraMolecule)
 	const { capturing, progress, minimized } = useSnapshot(camera.state)
 	const { connecting, connected, hasCooler, cooler, coolerPower, temperature, canSetTemperature, exposure, canAbort, frame, canSubFrame, canBin, bin, gain, offset, frameFormats } = useSnapshot(camera.state.camera)
-	const { targetTemperature, request } = useSnapshot(camera.state, { sync: true })
+	const { targetTemperature, request } = useSnapshot(camera.state)
 
 	const updateSavePath = useCallback((value?: string) => {
 		camera.update('savePath', value)

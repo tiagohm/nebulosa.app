@@ -11,7 +11,7 @@ import { TextButton } from './TextButton'
 
 export const ImageSettings = memo(() => {
 	const settings = useMolecule(ImageSettingsMolecule)
-	const { pixelated, format } = useSnapshot(settings.state, { sync: true })
+	const { pixelated, format } = useSnapshot(settings.state)
 
 	const Footer = <TextButton color='danger' label='Reset' onPointerUp={settings.reset} startContent={<Icons.Restore />} />
 

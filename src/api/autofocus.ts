@@ -77,7 +77,9 @@ export class AutoFocusTask {
 	}
 
 	private async cameraCaptured(event: CameraCaptureEvent) {
-		if (event.savedPath && !this.stopped) {
+		const { savedPath } = event
+
+		if (savedPath && !this.stopped) {
 			if (this.stopped) {
 				return this.handleAutoFocusEvent('IDLE', 'Stopped')
 			}
@@ -85,7 +87,7 @@ export class AutoFocusTask {
 			this.handleAutoFocusEvent('COMPUTING', '')
 
 			// Detect stars
-			const stars = await this.autoFocusHandler.starDetectionHandler.detect({ ...this.request.starDetection, path: event.savedPath })
+			const stars = await this.autoFocusHandler.starDetectionHandler.detect({ ...this.request.starDetection, path: savedPath })
 
 			if (this.stopped) {
 				return this.handleAutoFocusEvent('IDLE', 'Stopped')

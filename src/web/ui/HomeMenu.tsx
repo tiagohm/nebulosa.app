@@ -277,7 +277,7 @@ export const HomeMenuPopoverContent = memo(() => {
 				<div className='col-span-full my-2 flex flex-col items-center justify-center gap-2 flex-wrap'>
 					<span className='font-bold text-sm mt-2 uppercase'>{deviceName(selected)}</span>
 					{equipment.state[selected].map((device) => (
-						<Chip className='min-w-full cursor-pointer' color={device.connected ? 'success' : 'danger'} key={device.name} onPointerUp={() => equipment.show(selected, device)} variant='flat'>
+						<Chip className='min-w-full cursor-pointer' color={device.connected ? 'success' : 'danger'} key={device.name} onPointerUp={() => equipment.show(device, selected)} variant='flat'>
 							{device.name}
 						</Chip>
 					))}

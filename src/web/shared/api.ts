@@ -563,7 +563,7 @@ export namespace Api {
 		}
 
 		export function stop(camera: Camera, focuser: Focuser) {
-			return res(`/autofocus/${camera.name}/${focuser.name}/stop`, 'post')
+			return res(`/autofocus/${camera.name}/${focuser.name}/stop?clientId=${camera.client.id}`, 'post')
 		}
 	}
 
@@ -573,7 +573,7 @@ export namespace Api {
 		}
 
 		export function stop(camera: Camera) {
-			return res(`/flatwizard/${camera.name}/stop`, 'post')
+			return res(`/flatwizard/${camera.name}/stop?clientId=${camera.client.id}`, 'post')
 		}
 	}
 

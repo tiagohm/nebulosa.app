@@ -74,26 +74,32 @@ export class FlatWizardTask {
 	}
 
 	private async cameraCaptured(event: CameraCaptureEvent) {
-		if (event.savedPath && !this.stopped) {
+		const { savedPath } = event
+
+		if (savedPath && !this.stopped) {
 			if (this.stopped) {
 				return this.handleFlatWizardEvent('IDLE', 'Stopped')
 			}
 
 			this.handleFlatWizardEvent('COMPUTING', '')
 
-			const { image } = (await this.flatWizardHandler.cameraHandler.imageProcessor.transform(event.savedPath, false, this.camera?.name))!
+			const { image } = (await this.flatWizardHandler.cameraHandler.imageProcessor.transform(savedPath, false, this.camera?.name))!
 			const { median } = histogram(image)
 
 			this.event.median = median
 
 			if (median >= this.mean.min && median <= this.mean.max) {
 				const saveAt = join(this.request.saveAt || Bun.env.capturesDir, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS')}.fit`)
-				await this.flatWizardHandler.cameraHandler.imageProcessor.export(event.savedPath, FLAT_WIZARD_IMAGE_TRANSFORMTION, this.camera?.name, saveAt)
-				return this.handleFlatWizardEvent('IDLE', 'Finished')
+				await this.flatWizardHandler.cameraHandler.imageProcessor.export(savedPath, FLAT_WIZARD_IMAGE_TRANSFORMTION, this.camera?.name, saveAt)
+				return this.handleFlatWizardEvent('IDLE', `Saved at ${saveAt}`)
 			} else if (median < this.mean.min) {
 				this.exposure.min = this.request.capture.exposureTime
 			} else {
 				this.exposure.max = this.request.capture.exposureTime
+			}
+
+			if (this.stopped) {
+				return this.handleFlatWizardEvent('IDLE', 'Stopped')
 			}
 
 			const delta = this.exposure.max - this.exposure.min

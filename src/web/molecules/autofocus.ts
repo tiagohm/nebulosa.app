@@ -58,9 +58,7 @@ export const AutoFocusMolecule = molecule(() => {
 		})
 
 		unsubscribers[4] = subscribeKey(state, 'show', (show) => {
-			if (!show) return
-
-			load()
+			show && load()
 		})
 
 		if (state.show) {

@@ -53,9 +53,7 @@ export const FlatWizardMolecule = molecule(() => {
 		})
 
 		unsubscribers[3] = subscribeKey(state, 'show', (show) => {
-			if (!show) return
-
-			load()
+			show && load()
 		})
 
 		if (state.show) {

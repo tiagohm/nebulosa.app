@@ -5,7 +5,7 @@ import type { Device } from 'nebulosa/src/indi.device'
 import { memo, useMemo } from 'react'
 import type { DeepReadonly } from 'utility-types'
 import { useSnapshot } from 'valtio'
-import { EquipmentMolecule } from '@/molecules/indi/equipment'
+import { type EquipmentDevice, EquipmentMolecule } from '@/molecules/indi/equipment'
 import type { DeviceTypeMap } from '@/shared/types'
 import { stopPropagation } from '@/shared/util'
 import { ConnectButton } from './ConnectButton'
@@ -46,7 +46,11 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 			</Tooltip>
 			<DropdownMenu onAction={handleOnAction}>
 				{items.map((item) => (
-					<DropdownItem className={clsx('min-h-11', { 'bg-green-900/30': value?.name === item?.name })} endContent={<DeviceDropdownEndContent device={item} />} key={item?.id || 'none'} startContent={<Icons.Circle color={!item ? '#9353D3' : item.connected ? '#17C964' : '#F31260'} size={12} />}>
+					<DropdownItem
+						className={clsx('min-h-11', { 'bg-green-900/30': value?.name === item?.name })}
+						endContent={<DeviceDropdownEndContent device={item} onConnect={equipment.connect} onShow={equipment.show} />}
+						key={item?.id || 'none'}
+						startContent={<DeviceDropdownStartContent isConnected={item?.connected} />}>
 						{item?.name || 'None'}
 					</DropdownItem>
 				))}
@@ -75,27 +79,31 @@ export const RotatorDropdown = memo(({ icon = Icons.RotateRight, tooltipContent 
 	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type='ROTATOR' />
 })
 
+const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected: boolean | undefined }) => {
+	return <Icons.Circle color={isConnected === undefined ? '#9353D3' : isConnected ? '#17C964' : '#F31260'} size={12} />
+})
+
 interface DeviceDropdownEndContentProps {
-	readonly device?: Device
+	readonly device?: EquipmentDevice<Device>
+	readonly onConnect: (device: Device) => void
+	readonly onShow: (device: Device) => void
 }
 
-function DeviceDropdownEndContent({ device }: DeviceDropdownEndContentProps) {
-	const equipment = useMolecule(EquipmentMolecule)
-
+function DeviceDropdownEndContent({ device, onConnect, onShow }: DeviceDropdownEndContentProps) {
 	function handleConnectPointerUp(event: React.PointerEvent) {
 		event.stopPropagation()
-		equipment.connect(device!)
+		onConnect(device!)
 	}
 
 	function handleShowPointerUp(event: React.PointerEvent) {
 		event.stopPropagation()
-		equipment.show(device!.type, device!)
+		onShow(device!)
 	}
 
 	return (
 		<div className='flex flex-row items-center gap-2'>
 			{device && <IconButton color='secondary' icon={Icons.OpenInNew} iconSize={12} isRounded onPointerUp={handleShowPointerUp} size='sm' />}
-			{device && <ConnectButton iconSize={12} isConnected={device.connected} isRounded onPointerUp={handleConnectPointerUp} size='sm' />}
+			{device && <ConnectButton iconSize={12} isConnected={device.connected} isLoading={device?.connecting} isRounded onPointerUp={handleConnectPointerUp} size='sm' />}
 		</div>
 	)
 }

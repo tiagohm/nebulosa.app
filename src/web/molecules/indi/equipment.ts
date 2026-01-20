@@ -149,7 +149,7 @@ export const EquipmentMolecule = molecule(() => {
 		}
 	}
 
-	function show(type: DeviceType, device: Device) {
+	function show(device: Device, type: DeviceType = device.type) {
 		state[type].find((e) => e.name === device.name)!.show = true
 		bus.emit('homeMenu:toggle', false)
 		storageSet(`equipment.${type}.${device.name}.show`, true)

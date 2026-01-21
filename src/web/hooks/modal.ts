@@ -1,5 +1,6 @@
 import { createUseGesture, dragAction } from '@use-gesture/react'
 import { useMolecule } from 'bunshi/react'
+import type { Point } from 'nebulosa/src/geometry'
 import { useCallback, useEffect, useRef } from 'react'
 import { ZIndexMolecule } from '@/molecules/zindex'
 import { storageGet, storageSet } from '@/shared/storage'
@@ -7,10 +8,10 @@ import { storageGet, storageSet } from '@/shared/storage'
 // Better tree shaking with createUseGesture
 const useGesture = createUseGesture([dragAction])
 
-const modalTransformMap = new Map<string, { x: number; y: number }>()
+const modalTransformMap = new Map<string, Point>()
 
 function canDrag(target: EventTarget | null) {
-	return target instanceof HTMLElement && (target.closest('.modal') !== null || target.closest('#root')) && !(target instanceof HTMLInputElement)
+	return (target instanceof HTMLElement && (target.closest('.modal') !== null || target.closest('#root') !== null) && !(target instanceof HTMLInputElement)) || target instanceof SVGElement
 }
 
 const GRID_SIZE = 8
@@ -45,8 +46,8 @@ export function useModal(id: string, onHide?: VoidFunction) {
 	}
 
 	function fitToBoundary() {
-		xy.current.x = Math.min(Math.max(xy.current.x, boundary.current.minLeft), boundary.current.maxLeft)
-		xy.current.y = Math.min(Math.max(xy.current.y, boundary.current.minTop), boundary.current.maxTop)
+		xy.current.x = Math.min(snapToGrid(Math.max(xy.current.x, boundary.current.minLeft)), boundary.current.maxLeft)
+		xy.current.y = Math.min(snapToGrid(Math.max(xy.current.y, boundary.current.minTop)), boundary.current.maxTop)
 	}
 
 	const bind = useGesture(

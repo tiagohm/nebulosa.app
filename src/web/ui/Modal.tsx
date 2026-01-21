@@ -20,7 +20,7 @@ export function Modal({ id, onHide, header, subHeader, footer, children, maxWidt
 
 	return createPortal(
 		<div className='modal max-h-[90vh] w-full fixed left-0 top-0 right-0 bottom-0 m-auto pointer-events-none' ref={modal.ref} style={{ maxWidth }}>
-			<Card className='p-2 pointer-events-auto'>
+			<Card className='p-2 pointer-events-auto shadow-none outline-8 outline-solid outline-black/5'>
 				<CardHeader {...modal.moveProps} className='w-full flex flex-row items-center justify-between gap-2'>
 					<div className='w-full flex flex-col items-center justify-center'>
 						{typeof header === 'string' ? <div className='ms-10 text-lg leading-3 font-semibold text-neutral-100'>{header}</div> : header}

@@ -48,8 +48,8 @@ export interface FormulaProps {
 
 export function Formula({ description, expression, children }: FormulaProps) {
 	return (
-		<Card className='w-full'>
-			<CardHeader>
+		<Card className='w-full shadow-none'>
+			<CardHeader className='pt-0'>
 				<div className='w-full flex flex-col gap-1 items-center justify-center'>
 					<p className='text-sm text-center'>{description}</p>
 					<Chip className='text-medium' color='primary'>

@@ -26,10 +26,10 @@ export class ConnectionHandler {
 		return client!
 	}
 
-	async connect(req: Connect, indi: IndiClientHandler): Promise<ConnectionStatus | undefined> {
+	async connect(req: Connect & { id?: string }, indi: IndiClientHandler): Promise<ConnectionStatus | undefined> {
 		for (const [, client] of this.clients) {
-			if (client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) {
-				console.info('reusing existing connection to INDI server', client.remoteIp, client.remotePort)
+			if (client.id === req.id || (client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host))) {
+				console.info('reusing existing connection to INDI server:', client.id, client.remoteIp, client.remotePort)
 				const status = this.status(client)!
 				this.wsm.send<ConnectionEvent>('connection:open', { status, reused: true })
 				return status

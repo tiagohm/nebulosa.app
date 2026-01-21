@@ -13,7 +13,7 @@ export interface ConnectionState {
 	readonly connections: Connection[]
 	mode: 'create' | 'edit'
 	loading: boolean
-	selected?: Connection
+	selected?: Connection & { id?: string }
 	edited?: Connection
 	connected?: ConnectionStatus
 }
@@ -54,7 +54,7 @@ export const ConnectionMolecule = molecule(() => {
 
 		unsubscribers[2] = bus.subscribe('ws:reopen', async () => {
 			if (state.connected) {
-				const status = await Api.Connections.get(state.connected.id)
+				const status = await Api.Connection.get(state.connected.id)
 
 				if (status) {
 					void list(state.connected)
@@ -176,17 +176,18 @@ export const ConnectionMolecule = molecule(() => {
 
 	async function connect() {
 		if (state.connected) {
-			void Api.Connections.disconnect(state.connected.id)
+			void Api.Connection.disconnect(state.connected.id)
 			state.connected = undefined
 		} else if (state.selected) {
 			try {
 				state.loading = true
 
-				const status = await Api.Connections.connect(state.selected)
+				const status = await Api.Connection.connect(state.selected)
 
 				if (status) {
 					state.connected = status
 					state.selected.connectedAt = Date.now()
+					state.selected.id = status.id
 				}
 			} finally {
 				state.loading = false

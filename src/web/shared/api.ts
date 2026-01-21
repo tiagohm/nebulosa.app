@@ -39,12 +39,12 @@ export namespace Api {
 		}
 	}
 
-	export namespace Connections {
+	export namespace Connection {
 		export function list() {
 			return json<ConnectionStatus[]>('/connections', 'get')
 		}
 
-		export function connect(req: Connect) {
+		export function connect(req: Connect | ConnectionStatus) {
 			return json<ConnectionStatus>('/connections', 'post', req)
 		}
 

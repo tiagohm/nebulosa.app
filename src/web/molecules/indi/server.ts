@@ -26,7 +26,7 @@ initProxy(state, 'indi.server', ['p:show', 'p:showAll', 'o:request'])
 
 export const IndiServerMolecule = molecule(() => {
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(3)
+		const unsubscribers = new Array<VoidFunction>(2)
 
 		unsubscribers[0] = bus.subscribe('indi:server:start', () => {
 			state.running = true
@@ -34,10 +34,6 @@ export const IndiServerMolecule = molecule(() => {
 
 		unsubscribers[1] = bus.subscribe('indi:server:stop', () => {
 			state.running = false
-		})
-
-		unsubscribers[2] = bus.subscribe('ws:reopen', () => {
-			void status()
 		})
 
 		void status()

@@ -29,7 +29,7 @@ export class ConnectionHandler {
 	async connect(req: Connect & { id?: string }, indi: IndiClientHandler): Promise<ConnectionStatus | undefined> {
 		for (const [, client] of this.clients) {
 			if (client.id === req.id || (client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host))) {
-				console.info('reusing existing connection to INDI server:', client.id, client.remoteIp, client.remotePort)
+				console.info('reusing existing connection to INDI:', client.id, client.remoteIp, client.remotePort)
 				const status = this.status(client)!
 				this.wsm.send<ConnectionEvent>('connection:open', { status, reused: true })
 				return status
@@ -44,7 +44,7 @@ export class ConnectionHandler {
 					const id = Bun.MD5.hash(`${client.remoteIp}:${client.remotePort}:INDI`, 'hex')
 					this.clients.set(id, client)
 
-					console.info('new connection to INDI server', client.remoteIp, client.remotePort)
+					console.info('new connection to INDI:', client.remoteIp, client.remotePort)
 
 					const status = this.status(client)!
 					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
@@ -66,7 +66,7 @@ export class ConnectionHandler {
 				const status = this.status(client)!
 
 				this.clients.delete(id)
-				console.info('disconnected from INDI server', client.remoteIp, client.remotePort)
+				console.info('disconnected from INDI:', client.remoteIp, client.remotePort)
 				client.close()
 
 				this.wsm.send<ConnectionEvent>('connection:close', { status })
@@ -77,7 +77,7 @@ export class ConnectionHandler {
 					const status = this.status(client)!
 
 					this.clients.delete(key)
-					console.info('disconnected from INDI server', client.remoteIp, client.remotePort)
+					console.info('disconnected from INDI:', client.remoteIp, client.remotePort)
 					client.close()
 
 					this.wsm.send<ConnectionEvent>('connection:close', { status })
@@ -107,7 +107,9 @@ export class ConnectionHandler {
 	}
 
 	list() {
-		return Array.from(this.clients.values()).map((e) => this.status(e)!)
+		return Array.from(this.clients.values())
+			.map((e) => this.status(e))
+			.filter((e) => !!e)
 	}
 }
 

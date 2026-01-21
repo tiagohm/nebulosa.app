@@ -32,6 +32,8 @@ const state = proxy<ConnectionState>({
 initProxy(state, 'connection', ['p:show', 'o:connections'])
 state.connections.sort(ConnectionComparator)
 
+const APP_RELOAD_CONNECTION_ID = 'app.reload.connection.id'
+
 export const ConnectionMolecule = molecule(() => {
 	if (state.connections.length === 0) {
 		state.connections.push(structuredClone(DEFAULT_CONNECTION))
@@ -52,17 +54,26 @@ export const ConnectionMolecule = molecule(() => {
 			}
 		})
 
-		unsubscribers[2] = bus.subscribe('ws:reopen', async () => {
-			if (state.connected) {
-				const status = await Api.Connection.get(state.connected.id)
-
-				if (status) {
-					void list(state.connected)
-				} else {
-					state.connected = undefined
-				}
+		unsubscribers[2] = bus.subscribe('ws:close', () => {
+			if (state.connected?.id) {
+				localStorage.setItem(APP_RELOAD_CONNECTION_ID, state.connected.id)
 			}
 		})
+
+		const connectionId = localStorage.getItem(APP_RELOAD_CONNECTION_ID)
+
+		if (connectionId) {
+			void Api.Connection.list().then((connections) => {
+				const connection = connections?.find((e) => e.id === connectionId)
+
+				if (connection) {
+					state.connected = connection
+					void list(connection)
+				}
+			})
+
+			localStorage.removeItem(APP_RELOAD_CONNECTION_ID)
+		}
 
 		return () => {
 			unsubscribe(unsubscribers)

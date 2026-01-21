@@ -1,7 +1,6 @@
 import Elysia from 'elysia'
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import type { MountManager } from 'nebulosa/src/indi.manager'
-import bus from 'src/shared/bus'
 import { type CameraCaptureStart, type DarvEvent, type DarvStart, type DarvStop, DEFAULT_DARV_EVENT } from 'src/shared/types'
 import type { CameraHandler } from './camera'
 import type { WebSocketMessageHandler } from './message'
@@ -43,11 +42,6 @@ export class DarvHandler {
 
 	stop(req: DarvStop) {
 		this.tasks.get(req.id)?.stop()
-	}
-
-	resendEvent() {
-		this.events.forEach((e) => this.sendEvent(e))
-		this.events.clear()
 	}
 }
 
@@ -178,8 +172,6 @@ export function darv(darvHandler: DarvHandler) {
 	function mountFromParams(clientId: string, id: string) {
 		return darvHandler.mountManager.get(clientId, decodeURIComponent(id))!
 	}
-
-	bus.subscribe('resend', () => darvHandler.resendEvent())
 
 	const app = new Elysia({ prefix: '/darv' })
 		// Endpoints!

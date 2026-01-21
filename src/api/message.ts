@@ -16,9 +16,7 @@ export class WebSocketMessageHandler {
 	}
 
 	message(socket: Messager, body: unknown) {
-		if (body === 'RESEND') {
-			bus.emit('resend', undefined)
-		}
+		//
 	}
 
 	close(socket: Messager, code: number, reason: string) {

@@ -4,7 +4,6 @@ import { deg } from 'nebulosa/src/angle'
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import type { MountManager } from 'nebulosa/src/indi.manager'
 import { timeNow } from 'nebulosa/src/time'
-import bus from 'src/shared/bus'
 import { type CameraCaptureEvent, type CameraCaptureStart, DEFAULT_TPPA_EVENT, type TppaEvent, type TppaStart, type TppaStop } from 'src/shared/types'
 import type { CameraHandler } from './camera'
 import type { WebSocketMessageHandler } from './message'
@@ -43,11 +42,6 @@ export class TppaHandler {
 
 	stop(req: TppaStop) {
 		this.tasks.get(req.id)?.stop()
-	}
-
-	resendEvent() {
-		this.events.forEach((e) => this.sendEvent(e))
-		this.events.clear()
 	}
 }
 
@@ -231,8 +225,6 @@ export function tppa(tppaHandler: TppaHandler) {
 	function mountFromParams(clientId: string, id: string) {
 		return tppaHandler.mountManager.get(clientId, decodeURIComponent(id))!
 	}
-
-	bus.subscribe('resend', () => tppaHandler.resendEvent())
 
 	const app = new Elysia({ prefix: '/tppa' })
 		// Endpoints!

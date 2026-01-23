@@ -10,7 +10,7 @@ import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/uti
 import { type Endpoints, query, response } from './http'
 import type { ImageProcessor } from './image'
 import type { WebSocketMessageHandler } from './message'
-import { directoryExists } from './util'
+import { directoryExists, waitFor } from './util'
 
 const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
 
@@ -181,8 +181,10 @@ export class CameraCaptureTask {
 						this.event.state = 'WAITING'
 
 						// Wait for the specified waiting time and send progress event
-						waitFor(this.waitingTime, (remainingTime) => {
+						waitFor(this.waitingTime / 1000, (remainingTime) => {
 							if (this.stopped) return false
+
+							remainingTime *= 1000
 
 							const elapsedTime = this.waitingTime - remainingTime
 
@@ -198,18 +200,20 @@ export class CameraCaptureTask {
 							this.handleCameraCaptureEvent(this, this.event)
 
 							return true
-						})
-							.then((ok) => {
-								if (ok) {
-									// Update total exposure progress
-									this.totalExposureProgress[0] -= this.waitingTime
-									this.totalExposureProgress[1] += this.waitingTime
+						}).then((success) => {
+							if (success) {
+								// Update total exposure progress
+								this.totalExposureProgress[0] -= this.waitingTime
+								this.totalExposureProgress[1] += this.waitingTime
 
-									// Start the next exposure
-									return this.start()
-								}
-							})
-							.catch(console.error)
+								// Start the next exposure
+								return this.start()
+							} else {
+								// Finish
+								this.event.state = 'IDLE'
+								this.handleCameraCaptureEvent(this, this.event)
+							}
+						}, console.error)
 
 						// Do nothing if it wasn't stopped
 						if (!this.stopped) return
@@ -222,14 +226,6 @@ export class CameraCaptureTask {
 
 			// If no more frames or was stopped, finish the task
 			this.event.state = 'IDLE'
-			this.event.totalProgress.remainingTime = 0
-			this.event.totalProgress.elapsedTime = 0
-			this.event.totalProgress.progress = 0
-			this.event.frameProgress.remainingTime = 0
-			this.event.frameProgress.elapsedTime = 0
-			this.event.frameProgress.progress = 0
-			this.event.remainingCount = 0
-			this.event.elapsedCount = 0
 			this.handleCameraCaptureEvent(this, this.event)
 		}
 	}
@@ -255,7 +251,7 @@ export class CameraCaptureTask {
 	}
 
 	startExposure(camera: Camera, request: CameraCaptureStart) {
-		const cameraManager = this.cameraHandler.cameraManager
+		const { cameraManager } = this.cameraHandler
 		cameraManager.enableBlob(camera)
 		request.width && request.height && cameraManager.frame(camera, request.x, request.y, request.width, request.height)
 		cameraManager.frameType(camera, request.frameType)
@@ -290,28 +286,6 @@ export class CameraCaptureTask {
 		this.stopped = true
 		this.stopExposure(this.camera)
 	}
-}
-
-async function waitFor(us: number, callback: (remaining: number) => boolean) {
-	let remaining = us
-
-	if (remaining >= MINIMUM_WAITING_TIME) {
-		while (true) {
-			if (remaining <= 0) {
-				return callback(0)
-			} else if (!callback(remaining)) {
-				return false
-			}
-
-			// Sleep for 1 second
-			await Bun.sleep(1000)
-
-			// Subtract 1 second from remaining time
-			remaining -= 1000000
-		}
-	}
-
-	return true
 }
 
 async function makePathFor(req: CameraCaptureStart) {

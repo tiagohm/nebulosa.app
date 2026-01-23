@@ -8,6 +8,7 @@ import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { MountHandler } from './mount'
 import type { PlateSolverHandler } from './platesolver'
+import { waitFor } from './util'
 
 export class TppaHandler {
 	private readonly tasks = new Map<string, TppaTask>()
@@ -30,7 +31,12 @@ export class TppaHandler {
 
 		// Remove the task after it finished
 		if (event.state === 'IDLE') {
-			this.tasks.delete(event.id)
+			const task = this.tasks.get(event.id)
+
+			if (task) {
+				task.stop()
+				this.tasks.delete(event.id)
+			}
 		}
 	}
 
@@ -146,20 +152,20 @@ export class TppaTask {
 					this.handleTppaEvent()
 
 					this.move(true)
-					await this.waitFor(Math.max(1, this.request.moveDuration) * 1000)
+					await waitFor(Math.max(1, this.request.moveDuration) * 1000, () => !this.stopped)
 					this.move(false)
 
 					if (!this.stopped) {
 						// Wait for settle
 						this.event.state = 'SETTLING'
 						this.handleTppaEvent()
-						await this.waitFor(2500)
+						await waitFor(2500, () => !this.stopped)
 					}
 				} else if (this.request.delayBeforeCapture) {
 					// Wait before next capture
 					this.event.state = 'WAITING'
 					this.handleTppaEvent()
-					await this.waitFor(this.request.delayBeforeCapture * 1000)
+					await waitFor(this.request.delayBeforeCapture * 1000, () => !this.stopped)
 				}
 			}
 
@@ -183,15 +189,17 @@ export class TppaTask {
 	}
 
 	stop() {
-		this.stopped = true
+		if (!this.stopped) {
+			this.stopped = true
 
-		this.move(false)
-		this.tppa.solver.stop(this.request)
-		this.tppa.cameraHandler.stop(this.camera)
+			this.move(false)
+			this.tppa.solver.stop(this.request)
+			this.tppa.cameraHandler.stop(this.camera)
 
-		if (this.event.state !== 'IDLE') {
-			this.event.state = 'IDLE'
-			this.handleTppaEvent()
+			if (this.event.state !== 'IDLE') {
+				this.event.state = 'IDLE'
+				this.handleTppaEvent()
+			}
 		}
 	}
 
@@ -203,16 +211,6 @@ export class TppaTask {
 	private stopTrackingWhenDone() {
 		if (this.request.stopTrackingWhenDone && this.mount.tracking) {
 			this.tppa.mountHandler.mountManager.tracking(this.mount, false)
-		}
-	}
-
-	private async waitFor(ms: number) {
-		while (ms > 0 && !this.stopped) {
-			// Sleep for 1 second
-			await Bun.sleep(Math.max(1, Math.min(999, ms)))
-
-			// Subtract 1 second from remaining time
-			ms -= 1000
 		}
 	}
 }

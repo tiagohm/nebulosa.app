@@ -4,6 +4,7 @@ import type { CameraHandler } from './camera'
 import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { MountHandler } from './mount'
+import { waitFor } from './util'
 
 export class DarvHandler {
 	private readonly tasks = new Map<string, DarvTask>()
@@ -28,7 +29,7 @@ export class DarvHandler {
 			const task = this.tasks.get(event.id)
 
 			if (task) {
-				task.close()
+				task.stop()
 				this.tasks.delete(event.id)
 			}
 		}
@@ -50,7 +51,7 @@ export class DarvTask {
 
 	private readonly capture: CameraCaptureStart
 	private readonly handleDarvEvent: () => void
-	private readonly aborter = new AbortController()
+	private stopped = false
 
 	constructor(
 		private readonly darv: DarvHandler,
@@ -88,25 +89,25 @@ export class DarvTask {
 		this.event.state = 'WAITING'
 		this.handleDarvEvent()
 
-		let ok = await waitFor(this.request.initialPause * 1000, this.aborter.signal)
+		let success = await waitFor(this.request.initialPause * 1000, () => !this.stopped)
 
-		if (ok) {
+		if (success) {
 			// Move the mount forward
 			this.event.state = 'FORWARDING'
 			this.handleDarvEvent()
 
 			this.move(true, false)
 
-			ok = await waitFor(this.request.duration * 500, this.aborter.signal)
+			success = await waitFor(this.request.duration * 500, () => !this.stopped)
 
-			if (ok) {
+			if (success) {
 				// Move the mount backward
 				this.event.state = 'BACKWARDING'
 				this.handleDarvEvent()
 
 				this.move(true, true)
 
-				await waitFor(this.request.duration * 500, this.aborter.signal)
+				await waitFor(this.request.duration * 500, () => !this.stopped)
 			}
 		}
 
@@ -117,19 +118,17 @@ export class DarvTask {
 	}
 
 	stop() {
-		this.close()
+		if (!this.stopped) {
+			this.stopped = true
 
-		this.move(false, false)
-		this.darv.cameraHandler.stop(this.camera)
+			this.move(false, false)
+			this.darv.cameraHandler.stop(this.camera)
 
-		if (this.event.state !== 'IDLE') {
-			this.event.state = 'IDLE'
-			this.handleDarvEvent()
+			if (this.event.state !== 'IDLE') {
+				this.event.state = 'IDLE'
+				this.handleDarvEvent()
+			}
 		}
-	}
-
-	close() {
-		this.aborter.abort()
 	}
 
 	private move(enabled: boolean, reversed: boolean) {
@@ -145,22 +144,6 @@ export class DarvTask {
 			this.darv.mountHandler.mountManager.moveEast(this.mount, false)
 			this.darv.mountHandler.mountManager.moveWest(this.mount, false)
 		}
-	}
-}
-
-async function waitFor(ms: number, signal: AbortSignal) {
-	while (true) {
-		if (ms <= 0) {
-			return true
-		} else if (signal.aborted) {
-			return false
-		}
-
-		// Sleep for 1 second
-		await Bun.sleep(Math.max(1, Math.min(999, ms)))
-
-		// Subtract 1 second from remaining time
-		ms -= 1000
 	}
 }
 

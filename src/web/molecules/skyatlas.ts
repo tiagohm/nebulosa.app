@@ -140,7 +140,7 @@ export const SunMolecule = molecule(() => {
 			Object.assign(state.request.time, time)
 			changed = true
 
-			eclipsesUpdate = dateHasChanged
+			eclipsesUpdate ||= dateHasChanged
 
 			if ((!seasonsUpdate && dateHasChanged) || seasonsYear === 0) {
 				const local = temporalAdd(time.utc, time.offset, 'm')
@@ -229,7 +229,7 @@ export const MoonMolecule = molecule(() => {
 			Object.assign(state.request.time, time)
 			changed = true
 
-			eclipsesUpdate = dateHasChanged
+			eclipsesUpdate ||= dateHasChanged
 
 			if ((!phasesUpdate && dateHasChanged) || phasesMonth === 0) {
 				const local = temporalAdd(time.utc, time.offset, 'm')
@@ -274,8 +274,8 @@ export const MoonMolecule = molecule(() => {
 
 	async function updateEclipses() {
 		if (!eclipsesUpdate) return
-		const request = { ...state.request, count: 1 }
 		eclipsesUpdate = false
+		const request = { ...state.request, count: 1 }
 		const eclipses = await Api.SkyAtlas.moonEclipses(request)
 		if (eclipses) state.eclipses = eclipses
 		else eclipsesUpdate = true

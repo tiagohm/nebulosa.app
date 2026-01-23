@@ -1,10 +1,10 @@
-import Elysia from 'elysia'
 import { arcsec, deg, parseAngle } from 'nebulosa/src/angle'
 import { hips2Fits } from 'nebulosa/src/hips2fits'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import { join } from 'path/posix'
 import hipsSurveys from '../../data/hips-surveys.json' with { type: 'json' }
 import type { Framing } from '../shared/types'
+import { type Endpoints, response } from './http'
 import type { ImageProcessor } from './image'
 
 export class FramingHandler {
@@ -24,11 +24,9 @@ export class FramingHandler {
 	}
 }
 
-export function framing(framing: FramingHandler) {
-	const app = new Elysia({ prefix: '/framing' })
-		// Endpoints!
-		.get('/hips-surveys', Response.json(hipsSurveys))
-		.post('', ({ body }) => framing.frame(body as never))
-
-	return app
+export function framing(framing: FramingHandler): Endpoints {
+	return {
+		'/framing/hips-surveys': { GET: response(hipsSurveys) },
+		'/framing': { POST: async (req) => response(await framing.frame(await req.json())) },
+	}
 }

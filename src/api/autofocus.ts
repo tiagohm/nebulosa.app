@@ -1,4 +1,3 @@
-import Elysia from 'elysia'
 import { AutoFocus } from 'nebulosa/src/autofocus'
 import type { Point } from 'nebulosa/src/geometry'
 import type { Camera, Focuser } from 'nebulosa/src/indi.device'
@@ -7,6 +6,7 @@ import { medianOf } from 'nebulosa/src/util'
 import { type AutoFocusEvent, type AutoFocusStart, type AutoFocusState, type CameraCaptureEvent, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
 import type { CameraHandler } from './camera'
 import { type FocuserHandler, waitForFocuser } from './focuser'
+import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { StarDetectionHandler } from './stardetection'
 
@@ -197,19 +197,19 @@ export class AutoFocusTask {
 	}
 }
 
-export function autoFocus(autoFocusHandler: AutoFocusHandler) {
-	function cameraFromParams(clientId: string, id: string) {
-		return autoFocusHandler.cameraHandler.cameraManager.get(clientId, decodeURIComponent(id))!
+export function autoFocus(autoFocusHandler: AutoFocusHandler): Endpoints {
+	const { cameraHandler, focuserHandler } = autoFocusHandler
+
+	function cameraFromParams(req: Bun.BunRequest<string>) {
+		return cameraHandler.cameraManager.get(query(req).get('client'), req.params.camera)!
 	}
 
-	function focuserFromParams(clientId: string, id: string) {
-		return autoFocusHandler.focuserHandler.focuserManager.get(clientId, decodeURIComponent(id))!
+	function focuserFromParams(req: Bun.BunRequest<string>) {
+		return focuserHandler.focuserManager.get(query(req).get('client'), req.params.focuser)!
 	}
 
-	const app = new Elysia({ prefix: '/autofocus' })
-		// Endpoints
-		.post('/:camera/:focuser/start', ({ params, query, body }) => autoFocusHandler.start(cameraFromParams(query.clientId, params.camera), focuserFromParams(query.clientId, params.focuser), body as never))
-		.post('/:camera/:focuser/stop', ({ params, query }) => autoFocusHandler.stop(cameraFromParams(query.clientId, params.camera), focuserFromParams(query.clientId, params.focuser)))
-
-	return app
+	return {
+		'/autofocus/:camera/:focuser/start': { POST: async (req) => response(autoFocusHandler.start(cameraFromParams(req), focuserFromParams(req), await req.json())) },
+		'/autofocus/:camera/:focuser/stop': { POST: (req) => response(autoFocusHandler.stop(cameraFromParams(req), focuserFromParams(req))) },
+	}
 }

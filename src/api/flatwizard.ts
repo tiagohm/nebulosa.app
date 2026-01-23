@@ -1,10 +1,10 @@
-import Elysia from 'elysia'
 import { histogram } from 'nebulosa/src/image.computation'
 import type { Camera, MinMaxValueProperty } from 'nebulosa/src/indi.device'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { join } from 'path'
 import { type CameraCaptureEvent, DEFAULT_FLAT_WIZARD_EVENT, DEFAULT_IMAGE_TRANSFORMATION, type FlatWizardEvent, type FlatWizardStart, type FlatWizardState, type ImageTransformation } from 'src/shared/types'
 import type { CameraHandler } from './camera'
+import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 
 const FLAT_WIZARD_IMAGE_TRANSFORMTION: ImageTransformation = { ...DEFAULT_IMAGE_TRANSFORMATION, enabled: false, format: { ...DEFAULT_IMAGE_TRANSFORMATION.format, type: 'fits' } }
@@ -137,15 +137,15 @@ export class FlatWizardTask {
 	}
 }
 
-export function flatWizard(flatWizardHandler: FlatWizardHandler) {
-	function cameraFromParams(clientId: string, id: string) {
-		return flatWizardHandler.cameraHandler.cameraManager.get(clientId, decodeURIComponent(id))!
+export function flatWizard(flatWizardHandler: FlatWizardHandler): Endpoints {
+	const { cameraHandler } = flatWizardHandler
+
+	function cameraFromParams(req: Bun.BunRequest<string>) {
+		return cameraHandler.cameraManager.get(query(req).get('client'), req.params.camera)!
 	}
 
-	const app = new Elysia({ prefix: '/flatwizard' })
-		// Endpoints
-		.post('/:camera/start', ({ params, query, body }) => flatWizardHandler.start(cameraFromParams(query.clientId, params.camera), body as never))
-		.post('/:camera/stop', ({ params, query }) => flatWizardHandler.stop(cameraFromParams(query.clientId, params.camera)))
-
-	return app
+	return {
+		'/flatwizard/:camera/start': { POST: async (req) => response(flatWizardHandler.start(cameraFromParams(req), await req.json())) },
+		'/flatwizard/:camera/stop': { POST: (req) => response(flatWizardHandler.stop(cameraFromParams(req))) },
+	}
 }

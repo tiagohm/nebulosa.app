@@ -1,40 +1,56 @@
-import Elysia from 'elysia'
+import type { IndiClient } from 'nebulosa/src/indi.client'
 import type { GuideOutput } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, GuideOutputManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import type { CameraUpdated, GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse, MountUpdated } from '../shared/types'
+import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 
-export function guideOutput(wsm: WebSocketMessageHandler, guideOutputManager: GuideOutputManager) {
-	function guideOutputFromParams(clientId: string, id: string) {
-		return guideOutputManager.get(clientId, decodeURIComponent(id))!
+export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
+	constructor(
+		readonly wsm: WebSocketMessageHandler,
+		readonly guideOutputManager: GuideOutputManager,
+	) {
+		guideOutputManager.addHandler(this)
 	}
 
-	const handler: DeviceHandler<GuideOutput> = {
-		added: (device: GuideOutput) => {
-			wsm.send<GuideOutputAdded>('guideOutput:add', { device })
-			console.info('guide output added:', device.name)
-		},
-		updated: (device: GuideOutput, property: keyof GuideOutput & string, state?: PropertyState) => {
-			const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state }
-
-			if (device.type === 'CAMERA') wsm.send<CameraUpdated>('camera:update', event)
-			else if (device.type === 'MOUNT') wsm.send<MountUpdated>('mount:update', event)
-			wsm.send<GuideOutputUpdated>('guideOutput:update', event)
-		},
-		removed: (device: GuideOutput) => {
-			wsm.send<GuideOutputRemoved>('guideOutput:remove', { device })
-			console.info('guide output removed:', device.name)
-		},
+	added(device: GuideOutput) {
+		this.wsm.send<GuideOutputAdded>('guideOutput:add', { device })
+		console.info('guide output added:', device.name)
 	}
 
-	guideOutputManager.addHandler(handler)
+	updated(device: GuideOutput, property: keyof GuideOutput & string, state?: PropertyState) {
+		const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state }
 
-	const app = new Elysia({ prefix: '/guideoutputs' })
-		// Endpoints!
-		.get('', ({ query }) => Array.from(guideOutputManager.list(query.clientId)))
-		.get('/:id', ({ params, query }) => guideOutputFromParams(query.clientId, params.id))
-		.post('/:id/pulse', ({ params, query, body }) => guideOutputManager.pulse(guideOutputFromParams(query.clientId, params.id), (body as GuidePulse).direction, (body as GuidePulse).duration))
+		if (device.type === 'CAMERA') this.wsm.send<CameraUpdated>('camera:update', event)
+		else if (device.type === 'MOUNT') this.wsm.send<MountUpdated>('mount:update', event)
+		this.wsm.send<GuideOutputUpdated>('guideOutput:update', event)
+	}
 
-	return app
+	removed(device: GuideOutput) {
+		this.wsm.send<GuideOutputRemoved>('guideOutput:remove', { device })
+		console.info('guide output removed:', device.name)
+	}
+
+	list(client?: string | IndiClient) {
+		return Array.from(this.guideOutputManager.list(client))
+	}
+
+	pulse(device: GuideOutput, body: GuidePulse) {
+		return this.guideOutputManager.pulse(device, body.direction, body.duration)
+	}
+}
+
+export function guideOutput(guideOutputHandler: GuideOutputHandler): Endpoints {
+	const { guideOutputManager } = guideOutputHandler
+
+	function guideOutputFromParams(req: Bun.BunRequest<string>) {
+		return guideOutputManager.get(query(req).get('client'), req.params.id)!
+	}
+
+	return {
+		'/guideoutputs': { GET: (req) => response(guideOutputHandler.list(query(req).get('client'))) },
+		'/guideoutputs/:id': { GET: (req) => response(guideOutputFromParams(req)) },
+		'/guideoutputs/:id/pulse': { POST: async (req) => response(guideOutputHandler.pulse(guideOutputFromParams(req), await req.json())) },
+	}
 }

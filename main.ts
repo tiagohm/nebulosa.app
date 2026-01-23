@@ -1,7 +1,4 @@
-import { basicAuth } from '@eelkevdbos/elysia-basic-auth'
-import { cors } from '@elysiajs/cors'
-import { cron } from '@elysiajs/cron'
-import Elysia from 'elysia'
+import { Cron } from 'croner'
 import { existsSync, type MakeDirectoryOptions, rmSync } from 'fs'
 import fs from 'fs/promises'
 import type { IndiClient } from 'nebulosa/src/indi.client'
@@ -10,27 +7,27 @@ import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider
 import { default as openDefaultApp } from 'open'
 import os from 'os'
 import { join } from 'path'
-import { alpaca } from 'src/api/alpaca'
+import { AlpacaHandler, alpaca } from 'src/api/alpaca'
 import { AtlasHandler, atlas } from 'src/api/atlas'
 import { AutoFocusHandler, autoFocus } from 'src/api/autofocus'
 import { CacheManager } from 'src/api/cache'
 import { CameraHandler, camera } from 'src/api/camera'
 import { ConnectionHandler, connection } from 'src/api/connection'
-import { cover } from 'src/api/cover'
+import { CoverHandler, cover } from 'src/api/cover'
 import { DarvHandler, darv } from 'src/api/darv'
-import { dewHeater } from 'src/api/dewheater'
-import { flatPanel } from 'src/api/flatpanel'
+import { DewHeaterHandler, dewHeater } from 'src/api/dewheater'
+import { FlatPanelHandler, flatPanel } from 'src/api/flatpanel'
 import { FlatWizardHandler, flatWizard } from 'src/api/flatwizard'
 import { FocuserHandler, focuser } from 'src/api/focuser'
-import { guideOutput } from 'src/api/guideoutput'
-import { IndiHandler, indi } from 'src/api/indi'
+import { GuideOutputHandler, guideOutput } from 'src/api/guideoutput'
+import { IndiDevicePropertyHandler, IndiHandler, IndiServerHandler, indi } from 'src/api/indi'
 import { WebSocketMessageHandler } from 'src/api/message'
-import { mount } from 'src/api/mount'
+import { MountHandler, MountRemoteControlHandler, mount } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
-import { rotator } from 'src/api/rotator'
-import { thermometer } from 'src/api/thermometer'
+import { RotatorHandler, rotator } from 'src/api/rotator'
+import { ThermometerHandler, thermometer } from 'src/api/thermometer'
 import { TppaHandler, tppa } from 'src/api/tppa'
-import { wheel } from 'src/api/wheel'
+import { WheelHandler, wheel } from 'src/api/wheel'
 import { parseArgs } from 'util'
 import { ConfirmationHandler, confirmation } from './src/api/confirmation'
 import { FileSystemHandler, fileSystem } from './src/api/filesystem'
@@ -38,7 +35,6 @@ import { FramingHandler, framing } from './src/api/framing'
 import { ImageHandler, ImageProcessor, image } from './src/api/image'
 import { PlateSolverHandler, plateSolver } from './src/api/platesolver'
 import { StarDetectionHandler, starDetection } from './src/api/stardetection'
-import { X_IMAGE_INFO_HEADER } from './src/shared/types'
 import homeHtml from './src/web/pages/home/index.html'
 
 const CREATE_RECURSIVE_DIRECTORY: MakeDirectoryOptions = { recursive: true }
@@ -186,9 +182,20 @@ const thermometerManager = new ThermometerManager(thermometerProvider)
 const dewHeaterManager = new DewHeaterManager(dewHeaterProvider)
 
 const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
+const mountHandler = new MountHandler(wsm, mountManager, cacheManager)
+const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager)
 const focuserHandler = new FocuserHandler(wsm, focuserManager)
+const wheelHandler = new WheelHandler(wsm, wheelManager)
+const thermometerHandler = new ThermometerHandler(wsm, thermometerManager)
+const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)
+const coverHandler = new CoverHandler(wsm, coverManager)
+const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager)
+const rotatorHandler = new RotatorHandler(wsm, rotatorManager)
+const dewHeaterHandler = new DewHeaterHandler(wsm, dewHeaterManager)
 const devicePropertyManager = new DevicePropertyManager()
 const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, rotatorManager, devicePropertyManager, wsm)
+const indiDevicePropertyHandler = new IndiDevicePropertyHandler(wsm, notificationHandler, indiHandler, devicePropertyManager)
+const indiServerHandler = new IndiServerHandler(wsm)
 const confirmationHandler = new ConfirmationHandler(wsm)
 const framingHandler = new FramingHandler(imageProcessor)
 const fileSystemHandler = new FileSystemHandler()
@@ -196,136 +203,94 @@ const starDetectionHandler = new StarDetectionHandler(imageProcessor)
 const plateSolverHandler = new PlateSolverHandler(notificationHandler, imageProcessor)
 const atlasHandler = new AtlasHandler(cacheManager, notificationHandler)
 const imageHandler = new ImageHandler(imageProcessor, notificationHandler)
-const tppaHandler = new TppaHandler(wsm, cameraHandler, mountManager, plateSolverHandler)
-const darvHandler = new DarvHandler(wsm, cameraHandler, mountManager)
+const tppaHandler = new TppaHandler(wsm, cameraHandler, mountHandler, plateSolverHandler)
+const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler)
 const autoFocusHandler = new AutoFocusHandler(wsm, cameraHandler, focuserHandler, starDetectionHandler)
 const flatWizardHandler = new FlatWizardHandler(wsm, cameraHandler)
+const alpacaHandler = new AlpacaHandler(wsm, { camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager }, alpacaDiscoveryPort)
 
 void atlasHandler.refreshImageOfSun()
 void atlasHandler.refreshSatellites()
 void atlasHandler.refreshEarthOrientationData()
 
-// App
+// Server
 
-const app = new Elysia({
-	serve: {
-		reusePort: false,
-		routes: {
-			'/': homeHtml,
-		},
-		development: process.env.NODE_ENV !== 'production' && {
-			hmr: true,
-			console: false,
-		},
-		tls: secure && {
-			cert: Bun.file(cert),
-			key: Bun.file(key),
-		},
+const server = Bun.serve({
+	hostname,
+	port,
+	reusePort: false,
+	development: process.env.NODE_ENV !== 'production' && {
+		hmr: true,
+		console: false,
+	},
+	tls: secure && {
+		cert: Bun.file(cert),
+		key: Bun.file(key),
+	},
+	fetch: (req, server) => {
+		if (server.upgrade(req)) {
+			return
+		}
+	},
+	error: (error) => {
+		console.error(error)
+	},
+	routes: {
+		'/': homeHtml,
+		...connection(connectionHandler, indiHandler),
+		...confirmation(confirmationHandler),
+		...indi(indiHandler, indiDevicePropertyHandler, indiServerHandler),
+		...camera(cameraHandler),
+		...mount(mountHandler, mountRemoteControlHandler),
+		...focuser(focuserHandler),
+		...wheel(wheelHandler),
+		...thermometer(thermometerHandler),
+		...guideOutput(guideOutputHandler),
+		...cover(coverHandler),
+		...flatPanel(flatPanelHandler),
+		...rotator(rotatorHandler),
+		...dewHeater(dewHeaterHandler),
+		...atlas(atlasHandler),
+		...image(imageHandler),
+		...framing(framingHandler),
+		...starDetection(starDetectionHandler),
+		...plateSolver(plateSolverHandler),
+		...fileSystem(fileSystemHandler),
+		...tppa(tppaHandler),
+		...darv(darvHandler),
+		...flatWizard(flatWizardHandler),
+		...autoFocus(autoFocusHandler),
+		...alpaca(alpacaHandler, alpacaPort, hasAlpaca),
+	},
+	websocket: {
+		open: (socket) => wsm.open(socket),
+		message: (socket, body) => wsm.message(socket, body),
+		close: (socket, code, reason) => wsm.close(socket, code, reason),
 	},
 })
 
-	// Cross-Origin Resource Sharing (CORS)
+const everyMinute = new Cron('0 */1 * * * *', () => {
+	imageProcessor.clear()
+	indiDevicePropertyHandler.clear()
+})
 
-	.use(
-		cors({
-			exposeHeaders: [X_IMAGE_INFO_HEADER],
-		}),
-	)
+const every15Minutes = new Cron('0 */15 * * * *', () => {
+	void atlasHandler.refreshImageOfSun()
+})
 
-	// Cron
+const everyHour = new Cron('0 0 * * * *', () => {
+	cacheManager.clear()
+})
 
-	.use(
-		cron({
-			name: 'every-15-minutes',
-			pattern: '0 */15 * * * *',
-			run: () => {
-				void atlasHandler.refreshImageOfSun()
-			},
-		}),
-	)
-	.use(
-		cron({
-			name: 'every-hour',
-			pattern: '0 0 * * * *',
-			run: () => {
-				cacheManager.clear()
-			},
-		}),
-	)
-	.use(
-		cron({
-			name: 'every-day',
-			pattern: '0 0 0 * * *',
-			run: () => {
-				void atlasHandler.refreshSatellites()
-				void atlasHandler.refreshEarthOrientationData()
-			},
-		}),
-	)
+const everyDay = new Cron('0 0 0 * * *', () => {
+	void atlasHandler.refreshSatellites()
+	void atlasHandler.refreshEarthOrientationData()
+})
 
-	// Error Handling
+// TODO:
+// 	.use(basicAuth({ enabled: username.length >= 5 && password.length >= 8, realm: 'Nebulosa', credentials: [{ username, password }] }))
 
-	.onError((req) => {
-		console.error('request failed', req.path, req.error)
-		return undefined
-	})
-
-	// Before Response
-
-	.onAfterHandle(({ path, set }) => {
-		if (path === '/atlas/sun/image') {
-			set.headers['cache-control'] = 'public, max-age=900, immutable' // 15 minutes
-		} else {
-			set.headers['cache-control'] = 'no-cache, no-store, must-revalidate'
-			set.headers.pragma = 'no-cache'
-			set.headers.expires = '0'
-		}
-	})
-
-	// Endpoints
-
-	.use(connection(connectionHandler, indiHandler))
-	.use(confirmation(confirmationHandler))
-	.use(indi(wsm, indiHandler, devicePropertyManager, notificationHandler))
-	.use(camera(cameraHandler))
-	.use(mount(wsm, mountManager, cacheManager))
-	.use(focuser(focuserHandler))
-	.use(wheel(wsm, wheelManager))
-	.use(thermometer(wsm, thermometerManager))
-	.use(guideOutput(wsm, guideOutputManager))
-	.use(cover(wsm, coverManager))
-	.use(flatPanel(wsm, flatPanelManager))
-	.use(rotator(wsm, rotatorManager))
-	.use(dewHeater(wsm, dewHeaterManager))
-	.use(atlas(atlasHandler))
-	.use(image(imageHandler))
-	.use(framing(framingHandler))
-	.use(starDetection(starDetectionHandler))
-	.use(plateSolver(plateSolverHandler))
-	.use(fileSystem(fileSystemHandler))
-	.use(tppa(tppaHandler))
-	.use(darv(darvHandler))
-	.use(autoFocus(autoFocusHandler))
-	.use(flatWizard(flatWizardHandler))
-	.use(alpaca(wsm, { camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager, alpacaPort, alpacaDiscoveryPort }, hasAlpaca))
-
-	// WebSocket
-
-	.ws('/ws', {
-		open: (socket) => wsm.open(socket.raw),
-		message: (socket, body) => wsm.message(socket.raw, body),
-		close: (socket, code, reason) => wsm.close(socket.raw, code, reason),
-	})
-
-	// Basic Auth
-
-	.use(basicAuth({ enabled: username.length >= 5 && password.length >= 8, realm: 'Nebulosa', credentials: [{ username, password }] }))
-
-	// Start!
-
-	.listen({ hostname, port })
-
-const url = `http${secure ? 's' : ''}://${app.server!.hostname}:${app.server!.port}`
+const url = `http${secure ? 's' : ''}://${server.hostname}:${server.port}`
 
 console.info(`server is started at ${url}`)
 

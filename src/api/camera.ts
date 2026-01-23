@@ -1,4 +1,3 @@
-import Elysia from 'elysia'
 import { mkdir } from 'fs/promises'
 import { IndiClient } from 'nebulosa/src/indi.client'
 import { type Camera, CLIENT } from 'nebulosa/src/indi.device'
@@ -8,6 +7,7 @@ import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } 
 import { join } from 'path'
 import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
+import { type Endpoints, query, response } from './http'
 import type { ImageProcessor } from './image'
 import type { WebSocketMessageHandler } from './message'
 import { directoryExists } from './util'
@@ -47,6 +47,10 @@ export class CameraHandler implements DeviceHandler<Camera> {
 
 	blobReceived(camera: Camera, data: string) {
 		this.tasks.get(camera.id)?.blobReceived(camera, data)
+	}
+
+	list(client?: string | IndiClient) {
+		return Array.from(this.cameraManager.list(client))
 	}
 
 	sendEvent(event: CameraCaptureEvent) {
@@ -96,21 +100,21 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 }
 
-export function camera(cameraHandler: CameraHandler) {
-	function cameraFromParams(clientId: string, id: string) {
-		return cameraHandler.cameraManager.get(clientId, decodeURIComponent(id))!
+export function camera(cameraHandler: CameraHandler): Endpoints {
+	const { cameraManager } = cameraHandler
+
+	function cameraFromParams(req: Bun.BunRequest<string>) {
+		return cameraManager.get(query(req).get('client'), req.params.id)!
 	}
 
-	const app = new Elysia({ prefix: '/cameras' })
-		// Endpoints!
-		.get('', ({ query }) => Array.from(cameraHandler.cameraManager.list(query.clientId)))
-		.get('/:id', ({ params, query }) => cameraFromParams(query.clientId, params.id))
-		.post('/:id/cooler', ({ params, query, body }) => cameraHandler.cameraManager.cooler(cameraFromParams(query.clientId, params.id), body as never))
-		.post('/:id/temperature', ({ params, query, body }) => cameraHandler.cameraManager.temperature(cameraFromParams(query.clientId, params.id), body as never))
-		.post('/:id/start', ({ params, body, query }) => cameraHandler.start(cameraFromParams(query.clientId, params.id), body as never))
-		.post('/:id/stop', ({ params, query }) => cameraHandler.stop(cameraFromParams(query.clientId, params.id)))
-
-	return app
+	return {
+		'/cameras': { GET: (req) => response(cameraHandler.list(query(req).get('client'))) },
+		'/cameras/:id': { GET: (req) => response(cameraFromParams(req)) },
+		'/cameras/:id/cooler': { POST: async (req) => response(cameraManager.cooler(cameraFromParams(req), await req.json())) },
+		'/cameras/:id/temperature': { POST: async (req) => response(cameraManager.temperature(cameraFromParams(req), await req.json())) },
+		'/cameras/:id/start': { POST: async (req) => response(cameraHandler.start(cameraFromParams(req), await req.json())) },
+		'/cameras/:id/stop': { POST: (req) => response(cameraHandler.stop(cameraFromParams(req))) },
+	}
 }
 
 export class CameraCaptureTask {

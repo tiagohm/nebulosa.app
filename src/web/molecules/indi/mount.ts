@@ -13,7 +13,7 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import type { NudgeDirection } from '@/ui/Nudge'
-import { WebSocketMolecule } from '../ws'
+import { ConnectionMolecule } from '../connection'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export type TargetCoordinateAction = 'GOTO' | 'SYNC' | 'FRAME'
@@ -65,7 +65,7 @@ const stateMap = new Map<string, MountState>()
 export const MountMolecule = molecule(() => {
 	const scope = use(MountScope)
 	const equipment = use(EquipmentMolecule)
-	const ws = use(WebSocketMolecule)
+	const connection = use(ConnectionMolecule)
 
 	const mount = equipment.get('MOUNT', scope.mount.name)!
 
@@ -102,6 +102,8 @@ export const MountMolecule = molecule(() => {
 
 	stateMap.set(mount.name, state)
 
+	let updateCoordinateTime = 0
+
 	onMount(() => {
 		state.mount = equipment.get('MOUNT', state.mount.name)!
 
@@ -111,8 +113,7 @@ export const MountMolecule = molecule(() => {
 			if (event.device.id === mount.id) {
 				if (event.property === 'connected') {
 					if (event.device.connected) {
-						void updateCurrentCoordinatePosition()
-						void updateTargetCoordinatePosition()
+						updateCoordinatePosition()
 					} else if (event.state === 'Alert') {
 						addToast({ title: 'MOUNT', description: `Failed to connect to mount ${mount.name}`, color: 'danger' })
 					}
@@ -122,6 +123,11 @@ export const MountMolecule = molecule(() => {
 					const equatorial = state.currentPosition.equatorial as [number, number]
 					equatorial[0] = event.device.equatorialCoordinate!.rightAscension
 					equatorial[1] = event.device.equatorialCoordinate!.declination
+					void updateCoordinatePosition()
+				} else if (event.property === 'slewing') {
+					if (event.device.slewing === false) {
+						updateCoordinatePosition()
+					}
 				}
 			}
 		})
@@ -133,14 +139,14 @@ export const MountMolecule = molecule(() => {
 		})
 
 		const timer = setInterval(() => {
-			if (mount.connected && ws.state.connected) {
-				void updateCurrentCoordinatePosition()
-				void updateTargetCoordinatePosition()
+			if (mount.connected && connection.state.connected) {
+				updateCoordinatePosition()
 			}
 		}, 60000)
 
-		void updateCurrentCoordinatePosition()
-		void updateTargetCoordinatePosition()
+		if (mount.connected) {
+			updateCoordinatePosition()
+		}
 
 		return () => {
 			unsubscribe(unsubscribers)
@@ -189,6 +195,20 @@ export const MountMolecule = molecule(() => {
 	async function updateTargetCoordinatePosition() {
 		const position = await Api.Mounts.targetPosition(mount, state.targetCoordinate.coordinate)
 		position && Object.assign(state.targetCoordinate.position, position)
+	}
+
+	function updateCoordinatePosition() {
+		const now = Date.now()
+
+		if (now - updateCoordinateTime >= 60000) {
+			updateCoordinateTime = now
+			void updateCurrentCoordinatePosition()
+			void updateTargetCoordinatePosition()
+		}
+	}
+
+	function updateTargetCoordinateAction(action: React.Key) {
+		if (typeof action === 'string') state.targetCoordinate.coordinate.action = action as never
 	}
 
 	function handleTargetCoordinateAction() {
@@ -310,6 +330,7 @@ export const MountMolecule = molecule(() => {
 		stopRemoteControl,
 		updateTargetCoordinate,
 		updateTargetCoordinateByType,
+		updateTargetCoordinateAction,
 		handleTargetCoordinateAction,
 		showLocation,
 		hideLocation,

@@ -1,7 +1,7 @@
-import Elysia from 'elysia'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi.client'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
+import { type Endpoints, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
 
@@ -113,13 +113,9 @@ export class ConnectionHandler {
 	}
 }
 
-export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler) {
-	const app = new Elysia({ prefix: '/connections' })
-		// Endpoints!
-		.get('', () => connectionHandler.list())
-		.post('', async ({ body }) => await connectionHandler.connect(body as never, indi))
-		.get('/:id', ({ params }) => connectionHandler.status(params.id))
-		.delete('/:id', ({ params }) => connectionHandler.disconnect(params.id))
-
-	return app
+export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler): Endpoints {
+	return {
+		'/connections': { GET: () => response(connectionHandler.list()), POST: async (req) => response(await connectionHandler.connect(await req.json(), indi)) },
+		'/connections/:id': { GET: (req) => response(connectionHandler.status(req.params.id)), DELETE: (req) => response(connectionHandler.disconnect(req.params.id)) },
+	}
 }

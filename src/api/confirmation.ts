@@ -1,5 +1,5 @@
-import Elysia from 'elysia'
 import type { Confirm, Confirmation } from '../shared/types'
+import { type Endpoints, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 
 export type ConfirmationResolver = (value?: boolean | PromiseLike<boolean>) => void
@@ -33,10 +33,8 @@ export class ConfirmationHandler {
 	}
 }
 
-export function confirmation(confirmationHandler: ConfirmationHandler) {
-	const app = new Elysia({ prefix: '/confirmation' })
-		// Endpoints!
-		.post('', ({ body }) => confirmationHandler.confirm(body as never))
-
-	return app
+export function confirmation(confirmationHandler: ConfirmationHandler): Endpoints {
+	return {
+		'/confirmation': { POST: async (req) => response(confirmationHandler.confirm(await req.json())) },
+	}
 }

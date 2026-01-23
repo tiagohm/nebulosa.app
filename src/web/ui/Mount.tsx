@@ -40,7 +40,7 @@ export const Mount = memo(() => {
 
 	return (
 		<>
-			<Modal header={Header} id={`mount-${mount.scope.mount.name}`} maxWidth='408px' onHide={mount.hide}>
+			<Modal header={Header} id={`mount-${mount.scope.mount.name}`} maxWidth='400px' onHide={mount.hide}>
 				<div className='mt-0 grid grid-cols-12 gap-2'>
 					<div className='col-span-full flex flex-row items-center justify-between'>
 						<Chip color='primary' size='sm'>
@@ -122,7 +122,7 @@ const TargetCoordinateAndPosition = memo(({ isDisabled }: TargetCoordinateAndPos
 			</div>
 			<Input className='col-span-7' isDisabled={isDisabled} label={type === 'JNOW' || type === 'J2000' ? 'RA' : type === 'ALTAZ' ? 'AZ' : 'LON'} onValueChange={(value) => mount.updateTargetCoordinateByType('x', value)} size='sm' value={x} />
 			<Input className='col-span-7' isDisabled={isDisabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={(value) => mount.updateTargetCoordinateByType('y', value)} size='sm' value={y} />
-			<DropdownButton className='col-span-6' color='primary' isDisabled={isDisabled} label={<TargetCoordinateDropdownButtonLabel action={action} />} onPointerUp={mount.handleTargetCoordinateAction} size='lg'>
+			<DropdownButton className='col-span-6' color='primary' isDisabled={isDisabled} label={<TargetCoordinateDropdownButtonLabel action={action} />} onAction={mount.updateTargetCoordinateAction} onPointerUp={mount.handleTargetCoordinateAction} size='lg'>
 				<DropdownItem key='GOTO' startContent={<Icons.Telescope size={12} />}>
 					Go
 				</DropdownItem>

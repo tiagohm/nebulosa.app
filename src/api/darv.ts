@@ -1,9 +1,9 @@
-import Elysia from 'elysia'
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
-import type { MountManager } from 'nebulosa/src/indi.manager'
 import { type CameraCaptureStart, type DarvEvent, type DarvStart, type DarvStop, DEFAULT_DARV_EVENT } from 'src/shared/types'
 import type { CameraHandler } from './camera'
+import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
+import type { MountHandler } from './mount'
 
 export class DarvHandler {
 	private readonly tasks = new Map<string, DarvTask>()
@@ -12,7 +12,7 @@ export class DarvHandler {
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly cameraHandler: CameraHandler,
-		readonly mountManager: MountManager,
+		readonly mountHandler: MountHandler,
 	) {}
 
 	sendEvent(event: DarvEvent) {
@@ -135,15 +135,15 @@ export class DarvTask {
 	private move(enabled: boolean, reversed: boolean) {
 		if (enabled) {
 			if ((this.request.hemisphere === 'NORTHERN') !== !reversed) {
-				this.darv.mountManager.moveWest(this.mount, false)
-				this.darv.mountManager.moveEast(this.mount, true)
+				this.darv.mountHandler.mountManager.moveWest(this.mount, false)
+				this.darv.mountHandler.mountManager.moveEast(this.mount, true)
 			} else {
-				this.darv.mountManager.moveEast(this.mount, false)
-				this.darv.mountManager.moveWest(this.mount, true)
+				this.darv.mountHandler.mountManager.moveEast(this.mount, false)
+				this.darv.mountHandler.mountManager.moveWest(this.mount, true)
 			}
 		} else {
-			this.darv.mountManager.moveEast(this.mount, false)
-			this.darv.mountManager.moveWest(this.mount, false)
+			this.darv.mountHandler.mountManager.moveEast(this.mount, false)
+			this.darv.mountHandler.mountManager.moveWest(this.mount, false)
 		}
 	}
 }
@@ -164,19 +164,19 @@ async function waitFor(ms: number, signal: AbortSignal) {
 	}
 }
 
-export function darv(darvHandler: DarvHandler) {
-	function cameraFromParams(clientId: string, id: string) {
-		return darvHandler.cameraHandler.cameraManager.get(clientId, decodeURIComponent(id))!
+export function darv(darvHandler: DarvHandler): Endpoints {
+	const { cameraHandler, mountHandler } = darvHandler
+
+	function cameraFromParams(req: Bun.BunRequest<string>) {
+		return cameraHandler.cameraManager.get(query(req).get('client'), req.params.camera)!
 	}
 
-	function mountFromParams(clientId: string, id: string) {
-		return darvHandler.mountManager.get(clientId, decodeURIComponent(id))!
+	function mountFromParams(req: Bun.BunRequest<string>) {
+		return mountHandler.mountManager.get(query(req).get('client'), req.params.mount)!
 	}
 
-	const app = new Elysia({ prefix: '/darv' })
-		// Endpoints!
-		.post('/:camera/:mount/start', ({ params, query, body }) => darvHandler.start(body as never, cameraFromParams(query.clientId, params.camera), mountFromParams(query.clientId, params.mount)))
-		.post('/stop', ({ body }) => darvHandler.stop(body as never))
-
-	return app
+	return {
+		'/darv/:camera/:mount/start': { POST: async (req) => response(darvHandler.start(await req.json(), cameraFromParams(req), mountFromParams(req))) },
+		'/darv/stop': { POST: async (req) => response(darvHandler.stop(await req.json())) },
+	}
 }

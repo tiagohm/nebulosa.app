@@ -1,5 +1,3 @@
-import cron from '@elysiajs/cron'
-import Elysia from 'elysia'
 import fs from 'fs/promises'
 import { deg, parseAngle } from 'nebulosa/src/angle'
 import { eraPvstar } from 'nebulosa/src/erfa'
@@ -21,6 +19,7 @@ import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 's
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCoordinateInterpolation, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
+import { DEFAULT_HEADERS, type Endpoints, INTERNAL_SERVER_ERROR_RESPONSE, response } from './http'
 import type { NotificationHandler } from './notification'
 
 export interface BufferedImageItem {
@@ -523,27 +522,31 @@ export class ImageHandler {
 	}
 }
 
-export function image(imageHandler: ImageHandler) {
-	const app = new Elysia({ prefix: '/image' })
-		// Endpoints!
-		.post('/open', async ({ body, set }) => {
-			const item = await imageHandler.open(body as never)
+export function image(imageHandler: ImageHandler): Endpoints {
+	return {
+		'/image/open': {
+			POST: async (req) => {
+				const item = await imageHandler.open(await req.json())
 
-			if (!item?.info || !item?.output) return undefined
-
-			set.headers[X_IMAGE_INFO_HEADER] = encodeURIComponent(JSON.stringify(item.info))
-
-			return item.output
-		})
-		.post('/close', ({ body }) => imageHandler.close(body as never))
-		.post('/ping', ({ body }) => imageHandler.ping(body as never))
-		.post('/save', ({ body }) => imageHandler.save(body as never))
-		.post('/annotate', ({ body }) => imageHandler.annotate(body as never))
-		.post('/coordinateinterpolation', ({ body }) => imageHandler.coordinateInterpolation(body as never))
-		.post('/statistics', ({ body }) => imageHandler.statistics(body as never))
-		.get('/fovcameras', Response.json(fovCameras))
-		.get('/fovtelescopes', Response.json(fovTelescopes))
-		.use(cron({ name: 'clear', pattern: '0 */1 * * * *', run: () => imageHandler.imageProcessor.clear() }))
-
-	return app
+				if (item?.info && item.output) {
+					return new Response(item.output as Buffer<ArrayBuffer>, {
+						headers: {
+							...DEFAULT_HEADERS,
+							[X_IMAGE_INFO_HEADER]: encodeURIComponent(JSON.stringify(item.info)),
+						},
+					})
+				} else {
+					return INTERNAL_SERVER_ERROR_RESPONSE
+				}
+			},
+		},
+		'/image/close': { POST: async (req) => response(imageHandler.close(await req.json())) },
+		'/image/ping': { POST: async (req) => response(imageHandler.ping(await req.json())) },
+		'/image/save': { POST: async (req) => response(await imageHandler.save(await req.json())) },
+		'/image/annotate': { POST: async (req) => response(await imageHandler.annotate(await req.json())) },
+		'/image/coordinateinterpolation': { POST: async (req) => response(imageHandler.coordinateInterpolation(await req.json())) },
+		'/image/statistics': { POST: async (req) => response(await imageHandler.statistics(await req.json())) },
+		'/image/fovcameras': { GET: response(fovCameras) },
+		'/image/fovtelescopes': { GET: response(fovTelescopes) },
+	}
 }

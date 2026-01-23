@@ -1,9 +1,10 @@
-import Elysia from 'elysia'
+import type { IndiClient } from 'nebulosa/src/indi.client'
 import type { Focuser } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, FocuserManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import bus from 'src/shared/bus'
 import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from 'src/shared/types'
+import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 
 export class FocuserHandler implements DeviceHandler<Focuser> {
@@ -26,6 +27,10 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 	removed(device: Focuser) {
 		this.wsm.send<FocuserRemoved>('focuser:remove', { device })
 		console.info('focuser removed:', device.name)
+	}
+
+	list(client?: string | IndiClient) {
+		return Array.from(this.focuserManager.list(client))
 	}
 
 	moveTo(focuser: Focuser, position: number) {
@@ -53,23 +58,23 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 	}
 }
 
-export function focuser(focuserHandler: FocuserHandler) {
-	function focuserFromParams(clientId: string, id: string) {
-		return focuserHandler.focuserManager.get(clientId, decodeURIComponent(id))!
+export function focuser(focuserHandler: FocuserHandler): Endpoints {
+	const { focuserManager } = focuserHandler
+
+	function focuserFromParams(req: Bun.BunRequest<string>) {
+		return focuserManager.get(query(req).get('client'), req.params.id)!
 	}
 
-	const app = new Elysia({ prefix: '/focusers' })
-		// Endpoints!
-		.get('', ({ query }) => Array.from(focuserHandler.focuserManager.list(query.clientId)))
-		.get('/:id', ({ params, query }) => focuserFromParams(query.clientId, params.id))
-		.post('/:id/moveto', ({ params, query, body }) => focuserHandler.moveTo(focuserFromParams(query.clientId, params.id), body as never))
-		.post('/:id/movein', ({ params, query, body }) => focuserHandler.moveIn(focuserFromParams(query.clientId, params.id), body as never))
-		.post('/:id/moveout', ({ params, query, body }) => focuserHandler.moveOut(focuserFromParams(query.clientId, params.id), body as never))
-		.post('/:id/sync', ({ params, query, body }) => focuserHandler.syncTo(focuserFromParams(query.clientId, params.id), body as never))
-		.post('/:id/reverse', ({ params, query, body }) => focuserHandler.reverse(focuserFromParams(query.clientId, params.id), body as never))
-		.post('/:id/stop', ({ params, query }) => focuserHandler.stop(focuserFromParams(query.clientId, params.id)))
-
-	return app
+	return {
+		'/focusers': { GET: (req) => response(focuserHandler.list(query(req).get('client'))) },
+		'/focusers/:id': { GET: (req) => response(focuserFromParams(req)) },
+		'/focusers/:id/moveto': { POST: async (req) => response(focuserHandler.moveTo(focuserFromParams(req), await req.json())) },
+		'/focusers/:id/movein': { POST: async (req) => response(focuserHandler.moveIn(focuserFromParams(req), await req.json())) },
+		'/focusers/:id/moveout': { POST: async (req) => response(focuserHandler.moveOut(focuserFromParams(req), await req.json())) },
+		'/focusers/:id/sync': { POST: async (req) => response(focuserHandler.syncTo(focuserFromParams(req), await req.json())) },
+		'/focusers/:id/reverse': { POST: async (req) => response(focuserHandler.reverse(focuserFromParams(req), await req.json())) },
+		'/focusers/:id/stop': { POST: (req) => response(focuserHandler.stop(focuserFromParams(req))) },
+	}
 }
 
 export function waitForFocuser(focuser: Focuser, expectedPosition: number, onCompleted: (action: 'reach' | 'timeout' | 'cancel') => void, delay: number = 30000) {

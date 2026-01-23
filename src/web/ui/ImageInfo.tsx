@@ -73,6 +73,7 @@ const SelectedCoordinateDropdown = memo((props: SelectedCoordinateDropdownProps)
 
 	function handleAction(key: React.Key) {
 		if (key === 'FRAME_AT_HERE') props.onFrameAt(mouseCoordinate.state.coordinate.selected!)
+		else if (key === 'UNPIN') mouseCoordinate.state.coordinate.selected.show = false
 	}
 
 	return (
@@ -81,13 +82,18 @@ const SelectedCoordinateDropdown = memo((props: SelectedCoordinateDropdownProps)
 				<IconButton className='pointer-events-auto' icon={Icons.DotsVertical} size='sm' />
 			</DropdownTrigger>
 			<DropdownMenu onAction={handleAction}>
-				<DropdownItem key='POINT_MOUNT_HERE'>
+				<DropdownItem key='POINT_MOUNT_HERE' startContent={<Icons.Telescope size={12} />}>
 					<span className='flex flex-row items-center gap-1'>
 						<span>Point mount here:</span>
 						<MountDropdown disallowNoneSelection onValueChange={(value) => value && props.onPointMountHere(value, mouseCoordinate.state.coordinate.selected!)} />
 					</span>
 				</DropdownItem>
-				<DropdownItem key='FRAME_AT_HERE'>Frame at this coordinate</DropdownItem>
+				<DropdownItem key='FRAME_AT_HERE' startContent={<Icons.Image size={12} />}>
+					Frame at this coordinate
+				</DropdownItem>
+				<DropdownItem className='text-danger' color='danger' key='UNPIN' startContent={<Icons.Trash size={12} />}>
+					Unpin
+				</DropdownItem>
 			</DropdownMenu>
 		</Dropdown>
 	)

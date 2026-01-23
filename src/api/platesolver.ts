@@ -1,9 +1,9 @@
-import Elysia from 'elysia'
 import { deg, parseAngle } from 'nebulosa/src/angle'
 import { astapPlateSolve } from 'nebulosa/src/astap'
 import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebulosa/src/astrometrynet'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { PlateSolveStart, PlateSolveStop } from '../shared/types'
+import { type Endpoints, response } from './http'
 import type { ImageProcessor } from './image'
 import type { NotificationHandler } from './notification'
 
@@ -72,11 +72,9 @@ export class PlateSolverHandler {
 	}
 }
 
-export function plateSolver(solver: PlateSolverHandler) {
-	const app = new Elysia({ prefix: '/platesolver' })
-		// Endpoints!
-		.post('/start', ({ body }) => solver.start(body as never))
-		.post('/stop', ({ body }) => solver.stop(body as never))
-
-	return app
+export function plateSolver(solver: PlateSolverHandler): Endpoints {
+	return {
+		'/platesolver/start': { POST: async (req) => response(await solver.start(await req.json())) },
+		'/platesolver/stop': { POST: async (req) => response(solver.stop(await req.json())) },
+	}
 }

@@ -1,72 +1,73 @@
-import Elysia from 'elysia'
 import { AlpacaDiscoveryServer } from 'nebulosa/src/alpaca.discovery'
 import { AlpacaServer } from 'nebulosa/src/alpaca.server'
 import type { AlpacaServerOptions } from 'nebulosa/src/alpaca.types'
 import type { AlpacaServerStatus } from 'src/shared/types'
+import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 
-export interface AlpacaOptions {
-	alpacaPort?: number
-	alpacaDiscoveryPort?: number
-}
+export class AlpacaHandler {
+	private alpacaServer?: AlpacaServer
+	private alpacaDiscoveryServer?: AlpacaDiscoveryServer
+	private running = false
 
-export function alpaca(wsm: WebSocketMessageHandler, options: AlpacaServerOptions & AlpacaOptions, shouldStart: boolean) {
-	let alpacaServer: AlpacaServer | undefined
-	let alpacaDiscoveryServer: AlpacaDiscoveryServer | undefined
-	let running = false
+	constructor(
+		readonly wsm: WebSocketMessageHandler,
+		readonly options: AlpacaServerOptions,
+		private readonly alpacaDiscoveryPort?: number,
+	) {}
 
-	function status(): AlpacaServerStatus {
-		return { running, serverPort: alpacaServer?.port ?? -1, discoveryPort: alpacaDiscoveryServer?.port ?? -1, devices: alpacaServer ? Array.from(alpacaServer.configuredDevices()) : [] }
+	status(): AlpacaServerStatus {
+		return { running: this.running, serverPort: this.alpacaServer?.port ?? -1, discoveryPort: this.alpacaDiscoveryServer?.port ?? -1, devices: Array.from(this.alpacaServer?.configuredDevices() ?? []) }
 	}
 
-	async function start(port: number) {
-		if (!running && port) {
-			running = true
+	async start(port: number) {
+		if (!this.running && port) {
+			this.running = true
 
 			try {
-				alpacaServer = new AlpacaServer(options)
-				alpacaDiscoveryServer = new AlpacaDiscoveryServer({ ignoreLocalhost: true })
+				this.alpacaServer = new AlpacaServer(this.options)
+				this.alpacaDiscoveryServer = new AlpacaDiscoveryServer({ ignoreLocalhost: true })
 
-				alpacaServer.start(undefined, port)
-				console.info('alpaca server is started at port', alpacaServer.port)
+				this.alpacaServer.start(undefined, port)
+				console.info('alpaca server is started at port', this.alpacaServer.port)
 
-				alpacaDiscoveryServer.addPort(alpacaServer.port)
-				await alpacaDiscoveryServer.start(undefined, options.alpacaDiscoveryPort)
-				console.info('alpaca discovery server is started at port', alpacaDiscoveryServer.port)
+				this.alpacaDiscoveryServer.addPort(this.alpacaServer.port)
+				await this.alpacaDiscoveryServer.start(undefined, this.alpacaDiscoveryPort)
+				console.info('alpaca discovery server is started at port', this.alpacaDiscoveryServer.port)
 
-				wsm.send('alpaca:start', undefined)
+				this.wsm.send('alpaca:start', undefined)
 			} catch (e) {
 				console.error(e)
-				running = false
+				this.running = false
 			}
 		}
 	}
 
-	function stop() {
-		if (running) {
-			running = false
+	stop() {
+		if (this.running) {
+			this.running = false
 
-			alpacaServer?.stop()
-			alpacaServer = undefined
+			this.alpacaServer?.stop()
+			this.alpacaServer = undefined
 			console.info('alpaca server is stopped')
 
-			alpacaDiscoveryServer?.stop()
-			alpacaDiscoveryServer = undefined
+			this.alpacaDiscoveryServer?.stop()
+			this.alpacaDiscoveryServer = undefined
 			console.info('alpaca discovery server is stopped')
 
-			wsm.send('alpaca:stop', undefined)
+			this.wsm.send('alpaca:stop', undefined)
 		}
 	}
+}
 
+export function alpaca(alpacaHandler: AlpacaHandler, alpacaPort: number | undefined, shouldStart: boolean): Endpoints {
 	if (shouldStart) {
-		void start(options.alpacaPort || 2222)
+		void alpacaHandler.start(alpacaPort || 2222)
 	}
 
-	const app = new Elysia({ prefix: '/alpaca' })
-		// Endpoints!
-		.get('/status', () => status())
-		.post('/start', ({ query }) => start(+query.port))
-		.post('/stop', () => stop())
-
-	return app
+	return {
+		'/alpaca/status': { GET: () => response(alpacaHandler.status()) },
+		'/alpaca/start': { POST: async (req) => response(await alpacaHandler.start(+query(req).get('port'))) },
+		'/alpaca/stop': { POST: () => response(alpacaHandler.stop()) },
+	}
 }

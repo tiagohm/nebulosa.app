@@ -57,6 +57,7 @@ export const ConnectionMolecule = molecule(() => {
 		unsubscribers[2] = bus.subscribe('ws:close', () => {
 			if (state.connected?.id) {
 				localStorage.setItem(APP_RELOAD_CONNECTION_ID, state.connected.id)
+				state.connected = undefined
 			}
 		})
 

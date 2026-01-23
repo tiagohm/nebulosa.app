@@ -54,7 +54,7 @@ export function CameraCaptureStartPopover({ mode, camera, color, isDisabled, val
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Bin X' maxValue={camera.bin.x.max} minValue={camera.bin.x.min} onValueChange={(value) => onValueChange('binX', value)} size='sm' value={binX} />
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Bin Y' maxValue={camera.bin.y.max} minValue={camera.bin.y.min} onValueChange={(value) => onValueChange('binY', value)} size='sm' value={binY} />
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Gain' maxValue={camera.gain.max} minValue={camera.gain.min} onValueChange={(value) => onValueChange('gain', value)} size='sm' value={gain} />
-					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Offset' maxValue={camera.offset.max} minValue={camera.offset.max} onValueChange={(value) => onValueChange('offset', value)} size='sm' value={offset} />
+					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Offset' maxValue={camera.offset.max} minValue={camera.offset.min} onValueChange={(value) => onValueChange('offset', value)} size='sm' value={offset} />
 				</div>
 			</PopoverContent>
 		</Popover>

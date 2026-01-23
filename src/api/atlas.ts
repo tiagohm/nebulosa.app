@@ -1,5 +1,4 @@
 import { Database } from 'bun:sqlite'
-import Elysia from 'elysia'
 import { deg, parseAngle, toDeg } from 'nebulosa/src/angle'
 import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astrometry'
 import { AU_KM, DAYSEC, DEG2RAD, MOON_SYNODIC_DAYS, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
@@ -26,6 +25,7 @@ import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 's
 // biome-ignore format: too long!
 import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight } from '../shared/types'
 import type { CacheManager } from './cache'
+import { type Endpoints, query, response } from './http'
 import type { NotificationHandler } from './notification'
 
 const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
@@ -652,31 +652,29 @@ export class AtlasHandler {
 	}
 }
 
-export function atlas(atlas: AtlasHandler) {
-	const app = new Elysia({ prefix: '/atlas' })
-		// Endpoints!
-		.get('/sun/image', ({ query }) => atlas.imageOfSun(query.source as never))
-		.post('/sun/position', ({ body }) => atlas.positionOfSun(body as never))
-		.post('/sun/chart', ({ body }) => atlas.chartOfSun(body as never))
-		.post('/sun/seasons', ({ body }) => atlas.seasons(body as never))
-		.post('/sun/twilight', ({ body }) => atlas.twilight(body as never))
-		.post('/sun/eclipses', ({ body }) => atlas.solarEclipsesFromNasa(body as never))
-		.post('/moon/position', ({ body }) => atlas.positionOfMoon(body as never))
-		.post('/moon/chart', ({ body }) => atlas.chartOfMoon(body as never))
-		.post('/moon/phases', ({ body }) => atlas.moonPhases(body as never))
-		.post('/moon/eclipses', ({ body }) => atlas.moonEclipses(body as never))
-		.post('/minorplanets/search', ({ body }) => atlas.searchMinorPlanet(body as never))
-		.post('/minorplanets/closeapproaches', ({ body }) => atlas.findCloseApproaches(body as never))
-		.post('/planets/:code/position', ({ params, body }) => atlas.positionOfPlanet(params.code, body as never))
-		.post('/planets/:code/chart', ({ params, body }) => atlas.chartOfPlanet(params.code, body as never))
-		.post('/skyobjects/search', ({ body }) => atlas.searchSkyObject(body as never))
-		.post('/skyobjects/:id/position', ({ params, body }) => atlas.positionOfSkyObject(body as never, params.id))
-		.post('/skyobjects/:id/chart', ({ params, body }) => atlas.chartOfSkyObject(body as never, params.id))
-		.post('/satellites/search', ({ body }) => atlas.searchSatellites(body as never))
-		.post('/satellites/:id/position', ({ params, body }) => atlas.positionOfSatellite(+params.id, body as never))
-		.post('/satellites/:id/chart', ({ params, body }) => atlas.chartOfSatellite(+params.id, body as never))
-
-	return app
+export function atlas(atlas: AtlasHandler): Endpoints {
+	return {
+		'/atlas/sun/image': { GET: async (req) => new Response(await atlas.imageOfSun(query(req).get('source') as never)) },
+		'/atlas/sun/position': { POST: async (req) => response(await atlas.positionOfSun(await req.json())) },
+		'/atlas/sun/chart': { POST: async (req) => response(atlas.chartOfSun(await req.json())) },
+		'/atlas/sun/seasons': { POST: async (req) => response(atlas.seasons(await req.json())) },
+		'/atlas/sun/twilight': { POST: async (req) => response(await atlas.twilight(await req.json())) },
+		'/atlas/sun/eclipses': { POST: async (req) => response(await atlas.solarEclipsesFromNasa(await req.json())) },
+		'/atlas/moon/position': { POST: async (req) => response(await atlas.positionOfMoon(await req.json())) },
+		'/atlas/moon/chart': { POST: async (req) => response(atlas.chartOfMoon(await req.json())) },
+		'/atlas/moon/phases': { POST: async (req) => response(atlas.moonPhases(await req.json())) },
+		'/atlas/moon/eclipses': { POST: async (req) => response(atlas.moonEclipses(await req.json())) },
+		'/atlas/minorplanets/search': { POST: async (req) => response(await atlas.searchMinorPlanet(await req.json())) },
+		'/atlas/minorplanets/closeapproaches': { POST: async (req) => response(await atlas.findCloseApproaches(await req.json())) },
+		'/atlas/planets/:code/position': { POST: async (req) => response(await atlas.positionOfPlanet(req.params.code, await req.json())) },
+		'/atlas/planets/:code/chart': { POST: async (req) => response(atlas.chartOfPlanet(req.params.code, await req.json())) },
+		'/atlas/skyobjects/search': { POST: async (req) => response(atlas.searchSkyObject(await req.json())) },
+		'/atlas/skyobjects/:id/position': { POST: async (req) => response(atlas.positionOfSkyObject(await req.json(), req.params.id)) },
+		'/atlas/skyobjects/:id/chart': { POST: async (req) => response(atlas.chartOfSkyObject(await req.json(), req.params.id)) },
+		'/atlas/satellites/search': { POST: async (req) => response(atlas.searchSatellites(await req.json())) },
+		'/atlas/satellites/:id/position': { POST: async (req) => response(await atlas.positionOfSatellite(+req.params.id, await req.json())) },
+		'/atlas/satellites/:id/chart': { POST: async (req) => response(atlas.chartOfSatellite(+req.params.id, await req.json())) },
+	}
 }
 
 function makeBodyPositionFromHorizons(ephemeris: CsvRow[], output: Map<number, BodyPosition>) {

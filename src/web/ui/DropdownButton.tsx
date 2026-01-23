@@ -4,9 +4,9 @@ import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { TextButton, type TextButtonProps } from './TextButton'
 
-export interface DropdownButtonProps extends Omit<TextButtonProps, 'endContent'>, Pick<DropdownMenuProps, 'children'> {}
+export interface DropdownButtonProps extends Omit<TextButtonProps, 'endContent'>, Pick<DropdownMenuProps, 'children' | 'onAction'> {}
 
-export function DropdownButton({ size, color, isDisabled, children, className, ...props }: DropdownButtonProps) {
+export function DropdownButton({ size, color, isDisabled, children, className, onAction, ...props }: DropdownButtonProps) {
 	return (
 		<div className={clsx('inline-flex flex-row gap-0 items-center', className)}>
 			<TextButton {...props} className='flex-1 rounded-l-medium rounded-r-none' color={color} isDisabled={isDisabled} size={size} />
@@ -14,7 +14,7 @@ export function DropdownButton({ size, color, isDisabled, children, className, .
 				<DropdownTrigger>
 					<IconButton className='rounded-l-none rounded-r-medium' color={color} icon={Icons.ChevronDown} isDisabled={isDisabled} size={size} variant='flat' />
 				</DropdownTrigger>
-				<DropdownMenu>{children}</DropdownMenu>
+				<DropdownMenu onAction={onAction}>{children}</DropdownMenu>
 			</Dropdown>
 		</div>
 	)

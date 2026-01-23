@@ -1,11 +1,11 @@
 import { Glob } from 'bun'
-import Elysia from 'elysia'
 import { mkdir, readdir, stat } from 'fs/promises'
 import { basename, dirname, join, normalize } from 'path'
 import type { CreateDirectory, DirectoryEntry, FileEntry, FileSystem, ListDirectory } from '../shared/types'
+import { type Endpoints, response } from './http'
 import { directoryExists } from './util'
 
-export const FileEntryComparator = (a: FileEntry, b: FileEntry) => {
+const FileEntryComparator = (a: FileEntry, b: FileEntry) => {
 	// Sort directories before files, then sort by name
 	if (a.directory === b.directory) return a.name.localeCompare(b.name)
 	else if (a.directory) return -1
@@ -63,22 +63,19 @@ export class FileSystemHandler {
 		return path ? await Bun.file(join(path, req.name.trim())).exists() : false
 	}
 
-	join(req: string[]) {
-		const path = join(...req)
-		return { path }
+	join(req: readonly string[]) {
+		return { path: join(...req) }
 	}
 }
 
-export function fileSystem(fileSystem: FileSystemHandler) {
-	const app = new Elysia({ prefix: '/filesystem' })
-		// Endpoints!
-		.post('/list', ({ body }) => fileSystem.list(body as never))
-		.post('/create', ({ body }) => fileSystem.create(body as never))
-		.post('/directory', ({ body }) => fileSystem.directory(body as never))
-		.post('/exists', ({ body }) => fileSystem.exists(body as never))
-		.post('/join', ({ body }) => fileSystem.join(body as never))
-
-	return app
+export function fileSystem(fileSystem: FileSystemHandler): Endpoints {
+	return {
+		'/filesystem/list': { POST: async (req) => response(await fileSystem.list(await req.json())) },
+		'/filesystem/create': { POST: async (req) => response(await fileSystem.create(await req.json())) },
+		'/filesystem/directory': { POST: async (req) => response(await fileSystem.directory(await req.json())) },
+		'/filesystem/exists': { POST: async (req) => response(await fileSystem.exists(await req.json())) },
+		'/filesystem/join': { POST: async (req) => response(fileSystem.join(await req.json())) },
+	}
 }
 
 export async function findDirectory(path?: string, parent?: string) {
@@ -98,17 +95,17 @@ export async function findDirectory(path?: string, parent?: string) {
 function makeDirectoryTree(path: string): DirectoryEntry[] {
 	const name = basename(path)
 
-	// Return the root directory
-	if (!name) return [{ name, path }]
+	if (name) {
+		// Create the parent directory entry
+		const parent = dirname(path)
 
-	// Create the parent directory entry
-	const parent = dirname(path)
-
-	if (parent !== path) {
-		const tree = makeDirectoryTree(parent)
-		tree.push({ name, path })
-		return tree
+		if (parent !== path) {
+			const tree = makeDirectoryTree(parent)
+			tree.push({ name, path })
+			return tree
+		}
 	}
 
+	// Return the root directory
 	return [{ name, path }]
 }

@@ -442,7 +442,6 @@ export interface CloseImage {
 
 export interface SaveImage extends OpenImage {
 	readonly saveAt: string
-	readonly transformed: boolean
 }
 
 export interface AnnotateImage {

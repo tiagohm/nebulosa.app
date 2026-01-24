@@ -13,7 +13,10 @@ export const ImageSave = memo(() => {
 	const { loading, format, transformed } = useSnapshot(save.state)
 	const { path } = useSnapshot(save.state, { sync: true })
 
-	const Footer = <TextButton color='success' isDisabled={!path} isLoading={loading} label='Save' onPointerUp={save.save} startContent={<Icons.Save />} />
+	const Footer = <>
+		<TextButton color='primary' isLoading={loading} label='Download' onPointerUp={save.download} startContent={<Icons.ArrowDown />} />
+		<TextButton color='success' isDisabled={!path} isLoading={loading} label='Save' onPointerUp={save.save} startContent={<Icons.Save />} />
+	</>
 
 	return (
 		<Modal footer={Footer} header='Save' id={`save-${save.scope.image.key}`} maxWidth='288px' onHide={save.hide}>

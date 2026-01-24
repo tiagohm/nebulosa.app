@@ -1,6 +1,8 @@
 import { molecule, onMount, use } from 'bunshi'
 import type { ImageFormat } from 'nebulosa/src/image.types'
-import { proxy } from 'valtio'
+import { formatTemporal } from 'nebulosa/src/temporal'
+import type { ImageTransformation } from 'src/shared/types'
+import { proxy, snapshot } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { ImageViewerMolecule } from './viewer'
@@ -43,12 +45,43 @@ export const ImageSaveMolecule = molecule(() => {
 		state[key] = value
 	}
 
+	async function download() {
+		try {
+			state.loading = true
+
+			const transformation = structuredClone(snapshot(viewer.state.transformation)) as ImageTransformation
+			transformation.format.type = state.format
+			transformation.enabled = state.transformed
+			const response = await Api.Image.open({ path: viewer.path, transformation })
+
+			if (response) {
+				const url = URL.createObjectURL(response.blob)
+
+				const a = document.createElement('a')
+				a.href = url
+				a.download = `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS')}.${state.format}`
+
+				try {
+					document.body.appendChild(a)
+					a.click()
+				} finally {
+					URL.revokeObjectURL(url)
+					document.body.removeChild(a)
+				}
+			}
+		} finally {
+			state.loading = false
+		}
+	}
+
 	async function save() {
 		try {
 			state.loading = true
 
-			const transformation = { ...viewer.state.transformation, format: { ...viewer.state.transformation.format, type: state.format } }
-			await Api.Image.save({ path: viewer.path, transformation, saveAt: state.path, transformed: state.transformed })
+			const transformation = structuredClone(snapshot(viewer.state.transformation)) as ImageTransformation
+			transformation.format.type = state.format
+			transformation.enabled = state.transformed
+			await Api.Image.save({ path: viewer.path, transformation, saveAt: state.path })
 		} finally {
 			state.loading = false
 		}
@@ -62,5 +95,5 @@ export const ImageSaveMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, scope: viewer.scope, viewer, update, save, show, hide } as const
+	return { state, scope: viewer.scope, viewer, update, download, save, show, hide } as const
 })

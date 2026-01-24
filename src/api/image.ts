@@ -410,7 +410,6 @@ export class ImageHandler {
 
 	async save(req: SaveImage) {
 		if (!req.saveAt) return
-		req.transformation.enabled = req.transformed
 		await this.imageProcessor.export(req.path, req.transformation, undefined, req.saveAt)
 	}
 

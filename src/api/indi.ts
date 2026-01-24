@@ -314,22 +314,14 @@ export function indi(indiHandler: IndiHandler, indiDevicePropertyHandler: IndiDe
 		return indiHandler.get(query(req).client, req.params.id)!
 	}
 
-	function messages(params: URLSearchParams) {
-		return indiHandler.messages(params.client, params.device)
-	}
-
-	function send(params: URLSearchParams, message: NewVector) {
-		indiDevicePropertyHandler.send(params.client, params.type as never, message)
-	}
-
 	return {
 		'/indi/devices': { GET: (req) => response(properties.names(query(req).client)) },
-		'/indi/messages': { GET: (req) => response(messages(query(req))) },
+		'/indi/messages': { GET: (req) => response(indiHandler.messages(query(req).client, req.params.device)) },
 		'/indi/:id/connect': { POST: (req) => response(connect(deviceFromParams(req))) },
 		'/indi/:id/disconnect': { POST: (req) => response(disconnect(deviceFromParams(req))) },
 		'/indi/:id/properties': { GET: (req) => response(properties.get(query(req).client, req.params.id)) },
 		'/indi/:id/properties/ping': { POST: (req) => response(indiDevicePropertyHandler.ping(query(req).client, req.params.id)) },
-		'/indi/:id/properties/send': { POST: async (req) => response(send(query(req), await req.json())) },
+		'/indi/:id/properties/send': { POST: async (req) => response(indiDevicePropertyHandler.send(query(req).client, req.params.type as never, await req.json())) },
 		'/indi/server/start': { POST: async (req) => response(indiServerHandler.start(await req.json())) },
 		'/indi/server/stop': { POST: () => response(indiServerHandler.stop()) },
 		'/indi/server/status': { GET: async () => response(await indiServerHandler.status()) },

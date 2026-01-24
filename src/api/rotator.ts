@@ -37,11 +37,11 @@ export function rotator(rotatorHandler: RotatorHandler): Endpoints {
 	const { rotatorManager } = rotatorHandler
 
 	function rotatorFromParams(req: Bun.BunRequest<string>) {
-		return rotatorManager.get(query(req).get('client'), req.params.id)!
+		return rotatorManager.get(query(req).client, req.params.id)!
 	}
 
 	return {
-		'/rotators': { GET: (req) => response(rotatorHandler.list(query(req).get('client'))) },
+		'/rotators': { GET: (req) => response(rotatorHandler.list(query(req).client)) },
 		'/rotators/:id': { GET: (req) => response(rotatorFromParams(req)) },
 		'/rotators/:id/moveto': { POST: async (req) => response(rotatorManager.moveTo(rotatorFromParams(req), await req.json())) },
 		'/rotators/:id/sync': { POST: async (req) => response(rotatorManager.syncTo(rotatorFromParams(req), await req.json())) },

@@ -45,11 +45,11 @@ export function guideOutput(guideOutputHandler: GuideOutputHandler): Endpoints {
 	const { guideOutputManager } = guideOutputHandler
 
 	function guideOutputFromParams(req: Bun.BunRequest<string>) {
-		return guideOutputManager.get(query(req).get('client'), req.params.id)!
+		return guideOutputManager.get(query(req).client, req.params.id)!
 	}
 
 	return {
-		'/guideoutputs': { GET: (req) => response(guideOutputHandler.list(query(req).get('client'))) },
+		'/guideoutputs': { GET: (req) => response(guideOutputHandler.list(query(req).client)) },
 		'/guideoutputs/:id': { GET: (req) => response(guideOutputFromParams(req)) },
 		'/guideoutputs/:id/pulse': { POST: async (req) => response(guideOutputHandler.pulse(guideOutputFromParams(req), await req.json())) },
 	}

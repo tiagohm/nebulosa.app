@@ -49,11 +49,11 @@ export function cover(coverHandler: CoverHandler): Endpoints {
 	const { coverManager } = coverHandler
 
 	function coverFromParams(req: Bun.BunRequest<string>) {
-		return coverManager.get(query(req).get('client'), req.params.id)!
+		return coverManager.get(query(req).client, req.params.id)!
 	}
 
 	return {
-		'/covers': { GET: (req) => response(coverHandler.list(query(req).get('client'))) },
+		'/covers': { GET: (req) => response(coverHandler.list(query(req).client)) },
 		'/covers/:id': { GET: (req) => response(coverFromParams(req)) },
 		'/covers/:id/park': { POST: (req) => response(coverHandler.park(coverFromParams(req))) },
 		'/covers/:id/stop': { POST: (req) => response(coverHandler.stop(coverFromParams(req))) },

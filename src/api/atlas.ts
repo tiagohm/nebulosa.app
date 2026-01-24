@@ -654,7 +654,7 @@ export class AtlasHandler {
 
 export function atlas(atlas: AtlasHandler): Endpoints {
 	return {
-		'/atlas/sun/image': { GET: async (req) => new Response(await atlas.imageOfSun(query(req).get('source') as never)) },
+		'/atlas/sun/image': { GET: async (req) => new Response(await atlas.imageOfSun(query(req).source as never)) },
 		'/atlas/sun/position': { POST: async (req) => response(await atlas.positionOfSun(await req.json())) },
 		'/atlas/sun/chart': { POST: async (req) => response(atlas.chartOfSun(await req.json())) },
 		'/atlas/sun/seasons': { POST: async (req) => response(atlas.seasons(await req.json())) },

@@ -41,11 +41,11 @@ export function wheel(wheelHandler: WheelHandler): Endpoints {
 	const { wheelManager } = wheelHandler
 
 	function wheelFromParams(req: Bun.BunRequest<string>) {
-		return wheelManager.get(query(req).get('client'), req.params.id)!
+		return wheelManager.get(query(req).client, req.params.id)!
 	}
 
 	return {
-		'/wheels': { GET: (req) => response(wheelHandler.list(query(req).get('client'))) },
+		'/wheels': { GET: (req) => response(wheelHandler.list(query(req).client)) },
 		'/wheels/:id': { GET: (req) => response(wheelFromParams(req)) },
 		'/wheels/:id/moveto': { POST: async (req) => response(wheelHandler.moveTo(wheelFromParams(req), await req.json())) },
 		'/wheels/:id/slots': { POST: async (req) => response(wheelManager.slots(wheelFromParams(req), await req.json())) },

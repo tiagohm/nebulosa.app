@@ -10,7 +10,8 @@ export const NO_RESPONSE = new Response(undefined, { headers: DEFAULT_HEADERS })
 export const INTERNAL_SERVER_ERROR_RESPONSE = new Response('Internal Server Error', { status: 500 })
 
 export function query(req: Bun.BunRequest<string>) {
-	return new URL(req.url).searchParams
+	new URL(req.url).searchParams.forEach((value, key) => (req.params[key] = value))
+	return req.params
 }
 
 export function response<T>(data?: T extends Promise<unknown> ? never : T, headers?: HeadersInit) {

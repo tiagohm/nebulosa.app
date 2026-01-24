@@ -213,11 +213,11 @@ export function mount(mountHandler: MountHandler, mountRemoteControlHandler: Mou
 	const { mountManager } = mountHandler
 
 	function mountFromParams(req: Bun.BunRequest<string>) {
-		return mountManager.get(query(req).get('client'), req.params.id)!
+		return mountManager.get(query(req).client, req.params.id)!
 	}
 
 	return {
-		'/mounts': { GET: (req) => response(mountHandler.list(query(req).get('client'))) },
+		'/mounts': { GET: (req) => response(mountHandler.list(query(req).client)) },
 		'/mounts/:id': { GET: (req) => response(mountFromParams(req)) },
 		'/mounts/:id/goto': { POST: async (req) => response(mountManager.moveTo(mountFromParams(req), 'goto', await req.json())) },
 		'/mounts/:id/flip': { POST: async (req) => response(mountManager.moveTo(mountFromParams(req), 'flip', await req.json())) },

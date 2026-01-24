@@ -67,7 +67,7 @@ export function alpaca(alpacaHandler: AlpacaHandler, alpacaPort: number | undefi
 
 	return {
 		'/alpaca/status': { GET: () => response(alpacaHandler.status()) },
-		'/alpaca/start': { POST: async (req) => response(await alpacaHandler.start(+query(req).get('port'))) },
+		'/alpaca/start': { POST: async (req) => response(await alpacaHandler.start(+query(req).port)) },
 		'/alpaca/stop': { POST: () => response(alpacaHandler.stop()) },
 	}
 }

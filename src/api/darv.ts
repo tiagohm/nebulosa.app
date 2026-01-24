@@ -151,11 +151,11 @@ export function darv(darvHandler: DarvHandler): Endpoints {
 	const { cameraHandler, mountHandler } = darvHandler
 
 	function cameraFromParams(req: Bun.BunRequest<string>) {
-		return cameraHandler.cameraManager.get(query(req).get('client'), req.params.camera)!
+		return cameraHandler.cameraManager.get(query(req).client, req.params.camera)!
 	}
 
 	function mountFromParams(req: Bun.BunRequest<string>) {
-		return mountHandler.mountManager.get(query(req).get('client'), req.params.mount)!
+		return mountHandler.mountManager.get(query(req).client, req.params.mount)!
 	}
 
 	return {

@@ -104,11 +104,11 @@ export function camera(cameraHandler: CameraHandler): Endpoints {
 	const { cameraManager } = cameraHandler
 
 	function cameraFromParams(req: Bun.BunRequest<string>) {
-		return cameraManager.get(query(req).get('client'), req.params.id)!
+		return cameraManager.get(query(req).client, req.params.id)!
 	}
 
 	return {
-		'/cameras': { GET: (req) => response(cameraHandler.list(query(req).get('client'))) },
+		'/cameras': { GET: (req) => response(cameraHandler.list(query(req).client)) },
 		'/cameras/:id': { GET: (req) => response(cameraFromParams(req)) },
 		'/cameras/:id/cooler': { POST: async (req) => response(cameraManager.cooler(cameraFromParams(req), await req.json())) },
 		'/cameras/:id/temperature': { POST: async (req) => response(cameraManager.temperature(cameraFromParams(req), await req.json())) },

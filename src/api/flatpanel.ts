@@ -37,11 +37,11 @@ export function flatPanel(flatPanelHandler: FlatPanelHandler): Endpoints {
 	const { flatPanelManager } = flatPanelHandler
 
 	function flatPanelFromParams(req: Bun.BunRequest<string>) {
-		return flatPanelManager.get(query(req).get('client'), req.params.id)!
+		return flatPanelManager.get(query(req).client, req.params.id)!
 	}
 
 	return {
-		'/flatpanels': { GET: (req) => response(flatPanelHandler.list(query(req).get('client'))) },
+		'/flatpanels': { GET: (req) => response(flatPanelHandler.list(query(req).client)) },
 		'/flatpanels/:id': { GET: (req) => response(flatPanelFromParams(req)) },
 		'/flatpanels/:id/enable': { POST: (req) => response(flatPanelManager.enable(flatPanelFromParams(req))) },
 		'/flatpanels/:id/disable': { POST: (req) => response(flatPanelManager.disable(flatPanelFromParams(req))) },

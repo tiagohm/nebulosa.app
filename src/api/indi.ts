@@ -311,24 +311,24 @@ export function indi(indiHandler: IndiHandler, indiDevicePropertyHandler: IndiDe
 	const { properties } = indiDevicePropertyHandler
 
 	function deviceFromParams(req: Bun.BunRequest<string>) {
-		return indiHandler.get(query(req).get('client'), req.params.id)!
+		return indiHandler.get(query(req).client, req.params.id)!
 	}
 
 	function messages(params: URLSearchParams) {
-		return indiHandler.messages(params.get('client'), params.get('device'))
+		return indiHandler.messages(params.client, params.device)
 	}
 
 	function send(params: URLSearchParams, message: NewVector) {
-		indiDevicePropertyHandler.send(params.get('client'), params.get('type') as never, message)
+		indiDevicePropertyHandler.send(params.client, params.type as never, message)
 	}
 
 	return {
-		'/indi/devices': { GET: (req) => response(properties.names(query(req).get('client'))) },
+		'/indi/devices': { GET: (req) => response(properties.names(query(req).client)) },
 		'/indi/messages': { GET: (req) => response(messages(query(req))) },
 		'/indi/:id/connect': { POST: (req) => response(connect(deviceFromParams(req))) },
 		'/indi/:id/disconnect': { POST: (req) => response(disconnect(deviceFromParams(req))) },
-		'/indi/:id/properties': { GET: (req) => response(properties.get(query(req).get('client'), req.params.id)) },
-		'/indi/:id/properties/ping': { POST: (req) => response(indiDevicePropertyHandler.ping(query(req).get('client'), req.params.id)) },
+		'/indi/:id/properties': { GET: (req) => response(properties.get(query(req).client, req.params.id)) },
+		'/indi/:id/properties/ping': { POST: (req) => response(indiDevicePropertyHandler.ping(query(req).client, req.params.id)) },
 		'/indi/:id/properties/send': { POST: async (req) => response(send(query(req), await req.json())) },
 		'/indi/server/start': { POST: async (req) => response(indiServerHandler.start(await req.json())) },
 		'/indi/server/stop': { POST: () => response(indiServerHandler.stop()) },

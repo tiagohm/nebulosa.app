@@ -40,11 +40,11 @@ export function dewHeater(dewHeaterHandler: DewHeaterHandler): Endpoints {
 	const { dewHeaterManager } = dewHeaterHandler
 
 	function dewHeaterFromParams(req: Bun.BunRequest<string>) {
-		return dewHeaterManager.get(query(req).get('client'), req.params.id)!
+		return dewHeaterManager.get(query(req).client, req.params.id)!
 	}
 
 	return {
-		'/dewheaters': { GET: (req) => response(dewHeaterHandler.list(query(req).get('client'))) },
+		'/dewheaters': { GET: (req) => response(dewHeaterHandler.list(query(req).client)) },
 		'/dewheaters/:id': { GET: (req) => response(dewHeaterFromParams(req)) },
 		'/dewheaters/:id/dutycycle': { POST: async (req) => response(dewHeaterManager.dutyCycle(dewHeaterFromParams(req), await req.json())) },
 	}

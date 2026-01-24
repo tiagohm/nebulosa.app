@@ -141,7 +141,7 @@ export function flatWizard(flatWizardHandler: FlatWizardHandler): Endpoints {
 	const { cameraHandler } = flatWizardHandler
 
 	function cameraFromParams(req: Bun.BunRequest<string>) {
-		return cameraHandler.cameraManager.get(query(req).get('client'), req.params.camera)!
+		return cameraHandler.cameraManager.get(query(req).client, req.params.camera)!
 	}
 
 	return {

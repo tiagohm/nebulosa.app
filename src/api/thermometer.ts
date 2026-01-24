@@ -41,11 +41,11 @@ export function thermometer(thermometerHandler: ThermometerHandler): Endpoints {
 	const { thermometerManager } = thermometerHandler
 
 	function thermometerFromParams(req: Bun.BunRequest<string>) {
-		return thermometerManager.get(query(req).get('client'), req.params.id)!
+		return thermometerManager.get(query(req).client, req.params.id)!
 	}
 
 	return {
-		'/thermometers': { GET: (req) => response(thermometerHandler.list(query(req).get('client'))) },
+		'/thermometers': { GET: (req) => response(thermometerHandler.list(query(req).client)) },
 		'/thermometers/:id': { GET: (req) => response(thermometerFromParams(req)) },
 	}
 }

@@ -19,10 +19,6 @@ declare module 'bun' {
 	}
 }
 
-interface URLSearchParams {
-	get(name: string): string
-}
-
 declare module '*.svg' {
 	const path: `${string}.svg`
 	export = path

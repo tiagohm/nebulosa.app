@@ -62,11 +62,11 @@ export function focuser(focuserHandler: FocuserHandler): Endpoints {
 	const { focuserManager } = focuserHandler
 
 	function focuserFromParams(req: Bun.BunRequest<string>) {
-		return focuserManager.get(query(req).get('client'), req.params.id)!
+		return focuserManager.get(query(req).client, req.params.id)!
 	}
 
 	return {
-		'/focusers': { GET: (req) => response(focuserHandler.list(query(req).get('client'))) },
+		'/focusers': { GET: (req) => response(focuserHandler.list(query(req).client)) },
 		'/focusers/:id': { GET: (req) => response(focuserFromParams(req)) },
 		'/focusers/:id/moveto': { POST: async (req) => response(focuserHandler.moveTo(focuserFromParams(req), await req.json())) },
 		'/focusers/:id/movein': { POST: async (req) => response(focuserHandler.moveIn(focuserFromParams(req), await req.json())) },

@@ -56,12 +56,12 @@ export const ConnectionMolecule = molecule(() => {
 
 		unsubscribers[2] = bus.subscribe('ws:close', () => {
 			if (state.connected?.id) {
-				localStorage.setItem(APP_RELOAD_CONNECTION_ID, state.connected.id)
+				sessionStorage.setItem(APP_RELOAD_CONNECTION_ID, state.connected.id)
 				state.connected = undefined
 			}
 		})
 
-		const connectionId = localStorage.getItem(APP_RELOAD_CONNECTION_ID)
+		const connectionId = sessionStorage.getItem(APP_RELOAD_CONNECTION_ID)
 
 		if (connectionId) {
 			void Api.Connection.list().then((connections) => {
@@ -73,7 +73,7 @@ export const ConnectionMolecule = molecule(() => {
 				}
 			})
 
-			localStorage.removeItem(APP_RELOAD_CONNECTION_ID)
+			sessionStorage.removeItem(APP_RELOAD_CONNECTION_ID)
 		}
 
 		return () => {

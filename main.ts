@@ -1,8 +1,7 @@
 import { Cron } from 'croner'
 import { existsSync, type MakeDirectoryOptions, rmSync } from 'fs'
 import fs from 'fs/promises'
-import type { IndiClient } from 'nebulosa/src/indi.client'
-import type { DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
+import type { Client, DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
 import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import { default as openDefaultApp } from 'open'
 import os from 'os'
@@ -160,19 +159,19 @@ const flatPanelManager = new FlatPanelManager()
 const rotatorManager = new RotatorManager()
 
 const guideOutputProvider: DeviceProvider<GuideOutput> = {
-	get: (client: IndiClient, name: string) => {
+	get: (client: Client, name: string) => {
 		return cameraManager.get(client, name) ?? mountManager.get(client, name)
 	},
 }
 
 const thermometerProvider: DeviceProvider<Thermometer> = {
-	get: (client: IndiClient, name: string) => {
+	get: (client: Client, name: string) => {
 		return cameraManager.get(client, name) ?? focuserManager.get(client, name)
 	},
 }
 
 const dewHeaterProvider: DeviceProvider<DewHeater> = {
-	get: (client: IndiClient, name: string) => {
+	get: (client: Client, name: string) => {
 		return coverManager.get(client, name)
 	},
 }

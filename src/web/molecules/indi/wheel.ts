@@ -17,7 +17,7 @@ export interface WheelScopeValue {
 export interface WheelState {
 	wheel: EquipmentDevice<Wheel>
 	readonly selected: {
-		slot: number
+		position: number
 		name: string
 	}
 }
@@ -37,8 +37,8 @@ export const WheelMolecule = molecule(() => {
 		proxy<WheelState>({
 			wheel,
 			selected: {
-				slot: wheel.position,
-				name: wheel.slots[wheel.position] || '',
+				position: wheel.position,
+				name: wheel.names[wheel.position] || '',
 			},
 		})
 
@@ -61,8 +61,8 @@ export const WheelMolecule = molecule(() => {
 			}
 		})
 
-		unsubscribers[1] = subscribeKey(state.selected, 'slot', (position) => {
-			state.selected.name = wheel.slots[position]
+		unsubscribers[1] = subscribeKey(state.selected, 'position', (position) => {
+			state.selected.name = wheel.names[position]
 		})
 
 		return () => {
@@ -72,11 +72,6 @@ export const WheelMolecule = molecule(() => {
 
 	function update<K extends keyof WheelState['selected']>(key: K, value: WheelState['selected'][K]) {
 		state.selected[key] = value
-
-		if (key === 'name') {
-			wheel.slots[state.selected.slot] = value as never
-			void slots()
-		}
 	}
 
 	function connect() {
@@ -84,16 +79,17 @@ export const WheelMolecule = molecule(() => {
 	}
 
 	function moveTo() {
-		return Api.Wheels.moveTo(wheel, state.selected.slot)
+		return Api.Wheels.moveTo(wheel, state.selected.position)
 	}
 
-	function slots() {
-		return Api.Wheels.slots(wheel, wheel.slots)
+	function apply() {
+		wheel.names[state.selected.position] = state.selected.name
+		return Api.Wheels.names(wheel, wheel.names)
 	}
 
 	function hide() {
 		equipment.hide('WHEEL', wheel)
 	}
 
-	return { state, scope, update, connect, moveTo, slots, hide } as const
+	return { state, scope, update, connect, moveTo, apply, hide } as const
 })

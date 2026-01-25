@@ -48,6 +48,6 @@ export function wheel(wheelHandler: WheelHandler): Endpoints {
 		'/wheels': { GET: (req) => response(wheelHandler.list(query(req).client)) },
 		'/wheels/:id': { GET: (req) => response(wheelFromParams(req)) },
 		'/wheels/:id/moveto': { POST: async (req) => response(wheelHandler.moveTo(wheelFromParams(req), await req.json())) },
-		'/wheels/:id/slots': { POST: async (req) => response(wheelManager.slots(wheelFromParams(req), await req.json())) },
+		'/wheels/:id/names': { POST: async (req) => response(wheelManager.slots(wheelFromParams(req), await req.json())) },
 	}
 }

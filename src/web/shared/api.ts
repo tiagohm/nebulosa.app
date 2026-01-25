@@ -316,8 +316,8 @@ export namespace Api {
 			return res(`/wheels/${wheel.name}/moveto?client=${wheel.client.id}`, 'post', position)
 		}
 
-		export function slots(wheel: Wheel, names: string[]) {
-			return res(`/wheels/${wheel.name}/slots?client=${wheel.client.id}`, 'post', names)
+		export function names(wheel: Wheel, names: string[]) {
+			return res(`/wheels/${wheel.name}/names?client=${wheel.client.id}`, 'post', names)
 		}
 	}
 

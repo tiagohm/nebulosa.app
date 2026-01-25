@@ -1,4 +1,6 @@
+import { AlpacaClient } from 'nebulosa/src/alpaca.client'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi.client'
+import type { Client } from 'nebulosa/src/indi.device'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
 import { type Endpoints, response } from './http'
@@ -6,7 +8,7 @@ import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
 
 export class ConnectionHandler {
-	private readonly clients = new Map<string, IndiClient>()
+	private readonly clients = new Map<string, Client>()
 
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
@@ -19,7 +21,7 @@ export class ConnectionHandler {
 	}
 
 	get(id?: string) {
-		let client: IndiClient | undefined
+		let client: Client | undefined
 		if (!id) client = this.clients.values().next().value
 		else client = this.clients.get(id)
 		if (!client) this.notificationHandler.send({ title: 'CONNECTION', description: 'No active connection!', color: 'danger' })
@@ -28,8 +30,8 @@ export class ConnectionHandler {
 
 	async connect(req: Connect & { id?: string }, indi: IndiClientHandler): Promise<ConnectionStatus | undefined> {
 		for (const [, client] of this.clients) {
-			if (client.id === req.id || (client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host))) {
-				console.info('reusing existing connection to INDI:', client.id, client.remoteIp, client.remotePort)
+			if (client.id === req.id || (client instanceof IndiClient && client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) || (client instanceof AlpacaClient && client.remotePort === req.port && client.remoteHost === req.host)) {
+				console.info('reusing existing connection:', client.id, client.description)
 				const status = this.status(client)!
 				this.wsm.send<ConnectionEvent>('connection:open', { status, reused: true })
 				return status
@@ -41,10 +43,9 @@ export class ConnectionHandler {
 
 			try {
 				if (await client.connect(req.host, req.port)) {
-					const id = Bun.MD5.hash(`${client.remoteIp}:${client.remotePort}:INDI`, 'hex')
-					this.clients.set(id, client)
+					this.clients.set(client.id, client)
 
-					console.info('new connection to INDI:', client.remoteIp, client.remotePort)
+					console.info('new connection to:', client.id, client.description)
 
 					const status = this.status(client)!
 					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
@@ -53,12 +54,28 @@ export class ConnectionHandler {
 			} catch (e) {
 				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to INDI server', color: 'danger' })
 			}
+		} else if (req.type === 'ALPACA') {
+			const client = new AlpacaClient(`http${req.secured ? 's' : ''}://${req.host}:${req.port}`, { handler: indi })
+
+			try {
+				if (await client.start()) {
+					this.clients.set(client.id, client)
+
+					console.info('new connection to:', client.id, client.description)
+
+					const status = this.status(client)!
+					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
+					return status
+				}
+			} catch (e) {
+				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })
+			}
 		}
 
 		return undefined
 	}
 
-	disconnect(id: string | IndiClient) {
+	disconnect(id: string | Client) {
 		if (typeof id === 'string') {
 			const client = this.clients.get(id)
 
@@ -66,8 +83,9 @@ export class ConnectionHandler {
 				const status = this.status(client)!
 
 				this.clients.delete(id)
-				console.info('disconnected from INDI:', client.remoteIp, client.remotePort)
-				client.close()
+				console.info('disconnected from:', client.id, client.description)
+
+				if (client instanceof IndiClient) client.close()
 
 				this.wsm.send<ConnectionEvent>('connection:close', { status })
 			}
@@ -77,8 +95,9 @@ export class ConnectionHandler {
 					const status = this.status(client)!
 
 					this.clients.delete(key)
-					console.info('disconnected from INDI:', client.remoteIp, client.remotePort)
-					client.close()
+					console.info('disconnected from:', client.id, client.description)
+
+					if (client instanceof IndiClient) client.close()
 
 					this.wsm.send<ConnectionEvent>('connection:close', { status })
 
@@ -88,17 +107,14 @@ export class ConnectionHandler {
 		}
 	}
 
-	status(key: string | IndiClient): ConnectionStatus | undefined {
+	status(key: string | Client): ConnectionStatus | undefined {
 		if (typeof key === 'string') {
 			const client = this.clients.get(key)
-
-			if (client) {
-				return { type: 'INDI', id: key, ip: client.remoteIp, host: client.remoteHost!, port: client.remotePort! }
-			}
+			return client && { type: client.type, id: key }
 		} else {
 			for (const [id, client] of this.clients) {
 				if (client === key) {
-					return { type: 'INDI', id, ip: client.remoteIp, host: client.remoteHost!, port: client.remotePort! }
+					return client && { type: client.type, id }
 				}
 			}
 		}

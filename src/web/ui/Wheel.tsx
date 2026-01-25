@@ -1,20 +1,20 @@
 import { Chip, Input, Popover, PopoverContent, PopoverTrigger, SelectItem, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import { memo, useState } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { WheelMolecule } from '@/molecules/indi/wheel'
 import { ConnectButton } from './ConnectButton'
 import { EnumSelect } from './EnumSelect'
 import { Icons } from './Icon'
-import { IconButton, type IconButtonProps } from './IconButton'
+import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 import { TextButton } from './TextButton'
 
 export const Wheel = memo(() => {
 	const wheel = useMolecule(WheelMolecule)
-	const { connecting, connected, moving, position, slots } = useSnapshot(wheel.state.wheel)
-	const { slot } = useSnapshot(wheel.state.selected)
+	const { selected } = useSnapshot(wheel.state)
+	const { connecting, connected, moving, position, names } = useSnapshot(wheel.state.wheel)
 
 	const Header = (
 		<div className='w-full flex flex-row items-center justify-between'>
@@ -40,52 +40,43 @@ export const Wheel = memo(() => {
 						POSITION: {position}
 					</Chip>
 					<Chip color='success' size='sm'>
-						FILTER: {slots[position] ?? 'None'}
+						FILTER: {names[position]}
 					</Chip>
 				</div>
 				<div className='col-span-full flex flex-row items-center justify-end gap-2'>
-					<EnumSelect
-						className='flex-1'
-						endContent={<SlotPopover key={slots[slot] ?? 'none'} name={slots[slot]} onNameChange={(name) => wheel.update('name', name)} />}
-						isDisabled={!connected || moving || slots.length === 0}
-						label='Slot'
-						onValueChange={(value) => wheel.update('slot', +value)}
-						value={slot.toFixed(0)}>
-						{slots.map((slot, index) => (
+					<EnumSelect className='flex-1' endContent={<SlotPopover />} isDisabled={!connected || moving || names.length === 0} label='Slot' onValueChange={(value) => wheel.update('position', +value)} value={selected.position.toFixed(0)}>
+						{names.map((slot, index) => (
 							<SelectItem key={index}>{slot}</SelectItem>
 						))}
 					</EnumSelect>
-					<TextButton color='success' isDisabled={!connected || slot === position || slots.length === 0} isLoading={moving} label='Move' onPointerUp={wheel.moveTo} startContent={<Icons.Check />} variant='light' />
+					<TextButton color='success' isDisabled={!connected || selected.position === position || names.length === 0} isLoading={moving} label='Move' onPointerUp={wheel.moveTo} startContent={<Icons.Check />} variant='light' />
 				</div>
 			</div>
 		</Modal>
 	)
 })
 
-export interface SlotPopoverProps extends Omit<IconButtonProps, 'icon'> {
-	readonly name: string
-	readonly onNameChange: (name: string) => void
-}
-
-export function SlotPopover({ name, onNameChange, ...props }: SlotPopoverProps) {
-	const [editName, setEditName] = useState(name ?? '')
+const SlotPopover = memo(() => {
+	const wheel = useMolecule(WheelMolecule)
+	const { canSetNames } = useSnapshot(wheel.state.wheel)
+	const { name } = useSnapshot(wheel.state.selected, { sync: true })
 
 	return (
 		<Popover className='max-w-80' placement='bottom' showArrow>
 			<PopoverTrigger>
-				<IconButton {...props} icon={Icons.Cog} />
+				<IconButton icon={Icons.Cog} />
 			</PopoverTrigger>
 			<PopoverContent>
 				<div className='grid grid-cols-12 gap-2 p-4'>
-					<p className='col-span-full font-bold'>SLOT OPTIONS: {name}</p>
-					<Input className='col-span-10' label='Name' onValueChange={setEditName} size='sm' value={editName} />
+					<p className='col-span-full font-bold'>SLOT OPTIONS</p>
+					<Input className='col-span-10' isDisabled={!canSetNames} label='Name' onValueChange={(value) => value && wheel.update('name', value)} size='sm' value={name} />
 					<div className='col-span-2 flex flex-row justify-center items-center'>
 						<Tooltip content='Apply' placement='bottom' showArrow>
-							<IconButton color='success' icon={Icons.Check} isDisabled={!editName?.length} onPointerUp={() => onNameChange(editName)} />
+							<IconButton color='success' icon={Icons.Check} isDisabled={!canSetNames || !name.length} onPointerUp={wheel.apply} />
 						</Tooltip>
 					</div>
 				</div>
 			</PopoverContent>
 		</Popover>
 	)
-}
+})

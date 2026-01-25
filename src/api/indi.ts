@@ -1,5 +1,5 @@
-import type { IndiClient, IndiClientHandler } from 'nebulosa/src/indi.client'
-import { CLIENT, type Device, type DeviceProperty, type DevicePropertyType } from 'nebulosa/src/indi.device'
+import type { IndiClientHandler } from 'nebulosa/src/indi.client'
+import { CLIENT, type Client, type Device, type DeviceProperty, type DevicePropertyType } from 'nebulosa/src/indi.device'
 import type { CameraManager, CoverManager, DevicePropertyHandler, DevicePropertyManager, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 // biome-ignore format: too long!
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, Message, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi.types'
@@ -48,10 +48,10 @@ export function disconnect(device: Device) {
 	}
 }
 
-export type IndiMessageListener = (client: IndiClient, message: Message) => void
+export type IndiMessageListener = (client: Client, message: Message) => void
 
 export class IndiHandler implements IndiClientHandler {
-	private readonly messageMap = new Map<IndiClient, Map<string, Message[]>>()
+	private readonly messageMap = new Map<Client, Map<string, Message[]>>()
 	private readonly messageListeners = new Set<IndiMessageListener>()
 
 	constructor(
@@ -77,7 +77,7 @@ export class IndiHandler implements IndiClientHandler {
 		this.messageListeners.delete(listener)
 	}
 
-	close(client: IndiClient, server: boolean) {
+	close(client: Client, server: boolean) {
 		bus.emit('indi:close', client)
 
 		this.properties.close(client, server)
@@ -94,11 +94,11 @@ export class IndiHandler implements IndiClientHandler {
 		this.rotatorManager.close(client, server)
 	}
 
-	vector(client: IndiClient, message: DefVector | SetVector, tag: string) {
+	vector(client: Client, message: DefVector | SetVector, tag: string) {
 		this.properties.vector(client, message, tag)
 	}
 
-	switchVector(client: IndiClient, message: DefSwitchVector | SetSwitchVector, tag: string) {
+	switchVector(client: Client, message: DefSwitchVector | SetSwitchVector, tag: string) {
 		this.cameraManager.switchVector(client, message, tag)
 		this.mountManager.switchVector(client, message, tag)
 		this.focuserManager.switchVector(client, message, tag)
@@ -111,7 +111,7 @@ export class IndiHandler implements IndiClientHandler {
 		this.rotatorManager.switchVector(client, message, tag)
 	}
 
-	numberVector(client: IndiClient, message: DefNumberVector | SetNumberVector, tag: string) {
+	numberVector(client: Client, message: DefNumberVector | SetNumberVector, tag: string) {
 		this.cameraManager.numberVector(client, message, tag)
 		this.mountManager.numberVector(client, message, tag)
 		this.focuserManager.numberVector(client, message, tag)
@@ -124,7 +124,7 @@ export class IndiHandler implements IndiClientHandler {
 		this.rotatorManager.numberVector(client, message, tag)
 	}
 
-	textVector(client: IndiClient, message: DefTextVector | SetTextVector, tag: string) {
+	textVector(client: Client, message: DefTextVector | SetTextVector, tag: string) {
 		this.cameraManager.textVector(client, message, tag)
 		this.mountManager.textVector(client, message, tag)
 		this.focuserManager.textVector(client, message, tag)
@@ -137,11 +137,11 @@ export class IndiHandler implements IndiClientHandler {
 		this.rotatorManager.textVector(client, message, tag)
 	}
 
-	blobVector(client: IndiClient, message: DefBlobVector | SetBlobVector, tag: string) {
+	blobVector(client: Client, message: DefBlobVector | SetBlobVector, tag: string) {
 		this.cameraManager.blobVector(client, message, tag)
 	}
 
-	delProperty(client: IndiClient, message: DelProperty) {
+	delProperty(client: Client, message: DelProperty) {
 		this.cameraManager.delProperty(client, message)
 		this.mountManager.delProperty(client, message)
 		this.focuserManager.delProperty(client, message)
@@ -155,7 +155,7 @@ export class IndiHandler implements IndiClientHandler {
 		this.properties.delProperty(client, message)
 	}
 
-	message(client: IndiClient, message: Message) {
+	message(client: Client, message: Message) {
 		const device = message.device || 'GLOBAL'
 
 		let messages = this.messageMap.get(client)
@@ -181,7 +181,7 @@ export class IndiHandler implements IndiClientHandler {
 		this.messageListeners.forEach((e) => e(client, message))
 	}
 
-	get(client: IndiClient | string, id: string): Device | undefined {
+	get(client: Client | string, id: string): Device | undefined {
 		return (
 			this.cameraManager.get(client, id) ||
 			this.mountManager.get(client, id) ||
@@ -196,7 +196,7 @@ export class IndiHandler implements IndiClientHandler {
 		)
 	}
 
-	messages(client: IndiClient | string, device?: string) {
+	messages(client: Client | string, device?: string) {
 		client = typeof client === 'string' ? this.messageMap.keys().find((e) => e.id === client)! : client
 		return this.messageMap.get(client)?.get(device || 'GLOBAL') ?? []
 	}
@@ -222,15 +222,15 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 		})
 	}
 
-	added(client: IndiClient, device: string, property: DeviceProperty) {
+	added(client: Client, device: string, property: DeviceProperty) {
 		this.notify(client.id!, device, property, 'update')
 	}
 
-	updated(client: IndiClient, device: string, property: DeviceProperty) {
+	updated(client: Client, device: string, property: DeviceProperty) {
 		this.notify(client.id!, device, property, 'update')
 	}
 
-	removed(client: IndiClient, device: string, property: DeviceProperty) {
+	removed(client: Client, device: string, property: DeviceProperty) {
 		this.notify(client.id!, device, property, 'remove')
 	}
 

@@ -12,7 +12,7 @@ import type { Point, Rect, Size } from 'nebulosa/src/geometry'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
 import type { ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SCNRProtectionMethod, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
 // biome-ignore format: too long!
-import type { Camera, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Power, Rotator, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, ClientInfo, ClientType, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Power, Rotator, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { LunarEclipse, LunarPhase } from 'nebulosa/src/moon'
@@ -300,17 +300,13 @@ export interface Confirmation {
 
 // Connection
 
-export type ConnectionType = 'INDI' | 'ALPACA'
+export type ConnectionStatus = ClientInfo
 
 export interface Connect {
 	host: string
 	port: number
-	type: ConnectionType
-}
-
-export interface ConnectionStatus extends Connect {
-	id: string
-	ip?: string
+	type: ClientType
+	secured: boolean
 }
 
 export interface ConnectionEvent {

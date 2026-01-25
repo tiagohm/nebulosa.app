@@ -50,4 +50,5 @@ export const DEFAULT_CONNECTION: Connection = {
 	host: 'localhost',
 	port: 7624,
 	type: 'INDI',
+	secured: false,
 }

@@ -1,7 +1,7 @@
 import { Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, SelectItem, type SharedSelection, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
-import { memo } from 'react'
+import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
 import { stopPropagation } from '@/shared/util'
@@ -96,7 +96,9 @@ export const ConnectionBox = memo(() => {
 				</Select>
 				<ConnectButton isConnected={!!connected} isDisabled={!selected} isLoading={loading} onPointerUp={connection.connect} />
 			</div>
-			{show && !connected && <ConnectionEdit />}
+			<Activity mode={show && !connected ? 'visible' : 'hidden'}>
+				<ConnectionEdit />
+			</Activity>
 		</>
 	)
 })

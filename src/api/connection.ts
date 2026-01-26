@@ -50,6 +50,8 @@ export class ConnectionHandler {
 					const status = this.status(client)!
 					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
 					return status
+				} else {
+					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to INDI server', color: 'danger' })
 				}
 			} catch (e) {
 				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to INDI server', color: 'danger' })
@@ -66,6 +68,8 @@ export class ConnectionHandler {
 					const status = this.status(client)!
 					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
 					return status
+				} else {
+					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })
 				}
 			} catch (e) {
 				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })

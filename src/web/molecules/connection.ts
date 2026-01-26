@@ -1,4 +1,5 @@
 import { molecule, onMount } from 'bunshi'
+import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import bus from 'src/shared/bus'
 import type { ConnectionEvent, ConnectionStatus } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
@@ -11,11 +12,15 @@ import { type Connection, DEFAULT_CONNECTION } from '@/shared/types'
 export interface ConnectionState {
 	show: boolean
 	readonly connections: Connection[]
-	mode: 'create' | 'edit'
+	mode: 'NEW' | 'EDIT'
 	loading: boolean
 	selected?: Connection & { id?: string }
-	edited?: Connection
+	readonly edited: Connection
 	connected?: ConnectionStatus
+	readonly alpaca: {
+		servers: readonly AlpacaDeviceServer[]
+		discovering: boolean
+	}
 }
 
 export const ConnectionComparator = (a: Connection, b: Connection) => {
@@ -25,11 +30,16 @@ export const ConnectionComparator = (a: Connection, b: Connection) => {
 const state = proxy<ConnectionState>({
 	show: false,
 	connections: [],
-	mode: 'create',
+	mode: 'NEW',
+	edited: structuredClone(DEFAULT_CONNECTION),
 	loading: false,
+	alpaca: {
+		servers: [],
+		discovering: false,
+	},
 })
 
-initProxy(state, 'connection', ['p:show', 'o:connections'])
+initProxy(state, 'connection', ['p:show', 'p:mode', 'o:edited', 'o:connections'])
 state.connections.sort(ConnectionComparator)
 
 const APP_RELOAD_CONNECTION_ID = 'app.reload.connection.id'
@@ -96,14 +106,14 @@ export const ConnectionMolecule = molecule(() => {
 	}
 
 	function create() {
-		state.mode = 'create'
-		state.edited = structuredClone(DEFAULT_CONNECTION)
+		state.mode = 'NEW'
+		state.edited.id = DEFAULT_CONNECTION.id
 		state.show = true
 	}
 
 	function edit(connection: Connection) {
-		state.mode = 'edit'
-		state.edited = deepClone(connection)
+		state.mode = 'EDIT'
+		Object.assign(state.edited, connection)
 		state.show = true
 	}
 
@@ -135,13 +145,25 @@ export const ConnectionMolecule = molecule(() => {
 		}
 	}
 
+	async function discovery() {
+		if (state.edited.type === 'ALPACA') {
+			try {
+				state.alpaca.discovering = true
+				const servers = await Api.Alpaca.discovery()
+				state.alpaca.servers = servers ?? []
+			} finally {
+				state.alpaca.discovering = false
+			}
+		}
+	}
+
 	function save() {
-		const { edited } = state
+		const edited = { ...state.edited }
 
 		if (edited) {
 			if (edited.id === DEFAULT_CONNECTION.id) {
 				// If the edited connection is the default one, we remove it first
-				if (state.mode === 'edit') {
+				if (state.mode === 'EDIT') {
 					removeOnly(DEFAULT_CONNECTION)
 				}
 
@@ -158,6 +180,10 @@ export const ConnectionMolecule = molecule(() => {
 
 				if (index >= 0) {
 					state.connections[index] = edited
+
+					if (state.selected?.id === edited.id) {
+						state.selected = edited
+					}
 				}
 			}
 
@@ -211,5 +237,5 @@ export const ConnectionMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, create, edit, update, select, save, connect, duplicate, remove, hide } as const
+	return { state, create, edit, update, discovery, select, save, connect, duplicate, remove, hide } as const
 })

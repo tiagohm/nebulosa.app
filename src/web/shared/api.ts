@@ -1,3 +1,4 @@
+import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import type { Angle } from 'nebulosa/src/angle'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { Camera, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, MountTargetCoordinate, Rotator, SlewRate, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
@@ -588,6 +589,10 @@ export namespace Api {
 
 		export function stop() {
 			return res('/alpaca/stop', 'post')
+		}
+
+		export function discovery() {
+			return json<readonly AlpacaDeviceServer[]>('/alpaca/discovery', 'post')
 		}
 	}
 }

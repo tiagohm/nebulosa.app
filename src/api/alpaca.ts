@@ -1,4 +1,4 @@
-import { AlpacaDiscoveryServer } from 'nebulosa/src/alpaca.discovery'
+import { type AlpacaDeviceServer, AlpacaDiscoveryClient, AlpacaDiscoveryServer } from 'nebulosa/src/alpaca.discovery'
 import { AlpacaServer } from 'nebulosa/src/alpaca.server'
 import type { AlpacaServerOptions } from 'nebulosa/src/alpaca.types'
 import type { AlpacaServerStatus } from 'src/shared/types'
@@ -58,6 +58,13 @@ export class AlpacaHandler {
 			this.wsm.send('alpaca:stop', undefined)
 		}
 	}
+
+	async discovery() {
+		const alpacaDiscoveryClient = new AlpacaDiscoveryClient()
+		const servers: AlpacaDeviceServer[] = []
+		await alpacaDiscoveryClient.discovery((e) => servers.push(e), { timeout: 5000, fetch: true, wait: true })
+		return servers
+	}
 }
 
 export function alpaca(alpacaHandler: AlpacaHandler, alpacaPort: number | undefined, shouldStart: boolean): Endpoints {
@@ -69,5 +76,6 @@ export function alpaca(alpacaHandler: AlpacaHandler, alpacaPort: number | undefi
 		'/alpaca/status': { GET: () => response(alpacaHandler.status()) },
 		'/alpaca/start': { POST: async (req) => response(await alpacaHandler.start(+query(req).port)) },
 		'/alpaca/stop': { POST: () => response(alpacaHandler.stop()) },
+		'/alpaca/discovery': { POST: async () => response(await alpacaHandler.discovery()) },
 	}
 }

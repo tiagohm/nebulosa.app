@@ -46,7 +46,7 @@ export const Focuser = memo(() => {
 					<Tooltip content='Move In' placement='bottom' showArrow>
 						<IconButton color='secondary' icon={Icons.ArrowLeft} isDisabled={!connected || !canRelativeMove || moving || relative === 0} onPointerUp={focuser.moveIn} />
 					</Tooltip>
-					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected} label='Relative' maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} size='sm' value={relative} />
+					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !canRelativeMove || moving} label='Relative' maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} size='sm' value={relative} />
 					<Tooltip content='Move Out' placement='bottom' showArrow>
 						<IconButton color='secondary' icon={Icons.ArrowRight} isDisabled={!connected || !canRelativeMove || moving || relative === 0} onPointerUp={focuser.moveOut} />
 					</Tooltip>
@@ -55,7 +55,7 @@ export const Focuser = memo(() => {
 					<Tooltip content='Sync' placement='bottom' showArrow>
 						<IconButton color='primary' icon={Icons.Sync} isDisabled={!connected || !canSync || moving} onPointerUp={focuser.sync} />
 					</Tooltip>
-					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected} label='Absolute' maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} size='sm' value={absolute} />
+					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !canAbsoluteMove || moving} label='Absolute' maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} size='sm' value={absolute} />
 					<Tooltip content='Move' placement='bottom' showArrow>
 						<IconButton color='success' icon={Icons.Check} isDisabled={!connected || !canAbsoluteMove || moving || absolute === position.value} onPointerUp={focuser.moveTo} />
 					</Tooltip>

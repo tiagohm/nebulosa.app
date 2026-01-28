@@ -322,16 +322,14 @@ export interface ListDirectory {
 	directoryOnly?: boolean
 }
 
-export interface CreateDirectory {
-	path: string
-	name: string
-	recursive?: boolean | undefined
-	mode?: string | number | undefined
-}
-
 export interface DirectoryEntry {
 	name: string
 	path: string
+}
+
+export interface CreateDirectory extends DirectoryEntry {
+	recursive?: boolean | undefined
+	mode?: string | number | undefined
 }
 
 export interface FileEntry extends DirectoryEntry {

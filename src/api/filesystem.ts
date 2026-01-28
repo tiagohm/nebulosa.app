@@ -15,7 +15,7 @@ const FileEntryComparator = (a: FileEntry, b: FileEntry) => {
 export class FileSystemHandler {
 	async list(req?: ListDirectory): Promise<FileSystem> {
 		// Find the directory path from request or use the home directory
-		const path = (await findDirectory(req?.path)) || Bun.env.homeDir
+		const { path } = await this.directory(req?.path)
 		// Make the directory tree from current path
 		const tree = makeDirectoryTree(path)
 		// Prepare the glob to filter
@@ -47,20 +47,21 @@ export class FileSystemHandler {
 	}
 
 	async create(req: CreateDirectory) {
-		const parent = (await findDirectory(req.path)) || Bun.env.homeDir
+		const { path: parent } = await this.directory(req.path)
 		const path = join(parent, req.name.trim())
 		await mkdir(path, req)
 		return { path }
 	}
 
-	async directory(req: string) {
-		const path = (await findDirectory(req)) || Bun.env.homeDir
-		return { path }
+	async directory(req?: string) {
+		return { path: (await findDirectory(req)) || Bun.env.homeDir }
 	}
 
-	async exists(req: CreateDirectory) {
-		const path = (await findDirectory(req.path)) || Bun.env.homeDir
-		return path ? await Bun.file(join(path, req.name.trim())).exists() : false
+	async exists(req: Partial<DirectoryEntry>) {
+		const path = await findDirectory(req.path || Bun.env.homeDir)
+		if (!path) return false
+		if (!req.name) return true
+		return await Bun.file(join(path, req.name)).exists()
 	}
 
 	join(req: readonly string[]) {

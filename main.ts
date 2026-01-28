@@ -23,6 +23,7 @@ import { IndiDevicePropertyHandler, IndiHandler, IndiServerHandler, indi } from 
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler, MountRemoteControlHandler, mount } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
+import { PHD2Handler, phd2 } from 'src/api/phd2'
 import { RotatorHandler, rotator } from 'src/api/rotator'
 import { ThermometerHandler, thermometer } from 'src/api/thermometer'
 import { TppaHandler, tppa } from 'src/api/tppa'
@@ -180,6 +181,7 @@ const guideOutputManager = new GuideOutputManager(guideOutputProvider)
 const thermometerManager = new ThermometerManager(thermometerProvider)
 const dewHeaterManager = new DewHeaterManager(dewHeaterProvider)
 
+const phd2Handler = new PHD2Handler(wsm, notificationHandler)
 const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
 const mountHandler = new MountHandler(wsm, mountManager, cacheManager)
 const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager)
@@ -260,6 +262,7 @@ const server = Bun.serve({
 		...flatWizard(flatWizardHandler),
 		...autoFocus(autoFocusHandler),
 		...alpaca(alpacaHandler, alpacaPort, hasAlpaca),
+		...phd2(phd2Handler),
 	},
 	websocket: {
 		open: (socket) => wsm.open(socket),

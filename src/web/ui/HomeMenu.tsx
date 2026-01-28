@@ -16,9 +16,9 @@ import flatWizardIcon from '@/assets/flat-wizard.webp'
 import focuserIcon from '@/assets/focuser.webp'
 import framingIcon from '@/assets/framing.webp'
 import guideOutputIcon from '@/assets/guide-output.webp'
-import guiderIcon from '@/assets/guider.webp'
 import heaterIcon from '@/assets/heater.webp'
 import mountIcon from '@/assets/mount.webp'
+import phd2Icon from '@/assets/phd2.webp'
 import rotatorIcon from '@/assets/rotator.webp'
 import sequencerIcon from '@/assets/sequencer.webp'
 import settingsIcon from '@/assets/settings.webp'
@@ -35,6 +35,7 @@ import { FramingMolecule } from '@/molecules/framing'
 import { HomeMolecule } from '@/molecules/home'
 import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
+import { PHD2Molecule } from '@/molecules/phd2'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { TppaMolecule } from '@/molecules/tppa'
 import { About } from './About'
@@ -48,6 +49,7 @@ import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { IndiPanelControl } from './IndiPanelControl'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
+import { PHD2 } from './PHD2'
 import { SkyAtlas } from './SkyAtlas'
 import { Tppa } from './Tppa'
 
@@ -74,6 +76,9 @@ export const HomeMenu = memo(() => {
 
 	const flatWizard = useMolecule(FlatWizardMolecule)
 	const { show: showFlatWizard } = useSnapshot(flatWizard.state)
+
+	const phd2 = useMolecule(PHD2Molecule)
+	const { show: showPHD2 } = useSnapshot(phd2.state)
 
 	const indi = useMolecule(IndiPanelControlMolecule)
 	const { show: showIndiPanelControl } = useSnapshot(indi.state)
@@ -107,6 +112,9 @@ export const HomeMenu = memo(() => {
 			</Activity>
 			<Activity mode={showFlatWizard && connected ? 'visible' : 'hidden'}>
 				<FlatWizard />
+			</Activity>
+			<Activity mode={showPHD2 ? 'visible' : 'hidden'}>
+				<PHD2 />
 			</Activity>
 			<Activity mode={showIndiPanelControl && connected ? 'visible' : 'hidden'}>
 				<IndiPanelControl />
@@ -154,6 +162,7 @@ export const HomeMenuPopoverContent = memo(() => {
 	const darv = useMolecule(DarvMolecule)
 	const autoFocus = useMolecule(AutoFocusMolecule)
 	const flatWizard = useMolecule(FlatWizardMolecule)
+	const phd2 = useMolecule(PHD2Molecule)
 	const alpaca = useMolecule(AlpacaMolecule)
 	const calculator = useMolecule(CalculatorMolecule)
 	const about = useMolecule(AboutMolecule)
@@ -212,9 +221,9 @@ export const HomeMenuPopoverContent = memo(() => {
 					<img className='w-9' src={thermometerIcon} />
 				</Button>
 			</Tooltip>
-			<Tooltip content='Guider' placement='bottom' showArrow>
-				<Button color='secondary' isDisabled isIconOnly size='lg' variant='light'>
-					<img className='w-9' src={guiderIcon} />
+			<Tooltip content='PHD2' placement='bottom' showArrow>
+				<Button color='secondary' isIconOnly onPointerUp={phd2.show} size='lg' variant='light'>
+					<img className='w-9' src={phd2Icon} />
 				</Button>
 			</Tooltip>
 			<Tooltip content='Sky Atlas' placement='bottom' showArrow>

@@ -16,6 +16,7 @@ import type { Camera, ClientInfo, ClientType, Cover, Device, DeviceProperty, Dew
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { LunarEclipse, LunarPhase } from 'nebulosa/src/moon'
+import type { Settle } from 'nebulosa/src/phd2'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { SmallBodySearchListItem, SmallBodySearchObject } from 'nebulosa/src/sbd'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
@@ -302,9 +303,12 @@ export interface Confirmation {
 
 export type ConnectionStatus = ClientInfo
 
-export interface Connect {
+export interface HostAndPort {
 	host: string
 	port: number
+}
+
+export interface Connect extends HostAndPort {
 	type: ClientType
 	secured: boolean
 }
@@ -710,10 +714,8 @@ export interface CoordinateInfo {
 	readonly pierSide: PierSide
 }
 
-export interface MountRemoteControlStart {
+export interface MountRemoteControlStart extends Readonly<HostAndPort> {
 	readonly protocol: MountRemoteControlProtocol
-	readonly host: string
-	readonly port: number
 }
 
 export type MountRemoteControlStatus = Record<MountRemoteControlProtocol, Omit<MountRemoteControlStart, 'protocol'> | false>
@@ -876,6 +878,20 @@ export interface AlpacaServerStatus {
 	readonly serverPort: number
 	readonly discoveryPort: number
 	readonly devices: AlpacaConfiguredDevice[]
+}
+
+// PHD2
+
+export interface PHD2Connect extends Readonly<HostAndPort> {}
+
+export interface PHD2Start {
+	readonly settle?: Settle
+}
+
+export interface PHD2Dither {
+	readonly amount: number
+	readonly raOnly: boolean
+	readonly settle?: Settle
 }
 
 export const X_IMAGE_INFO_HEADER = 'X-Image-Info'

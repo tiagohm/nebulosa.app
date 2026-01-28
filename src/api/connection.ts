@@ -90,6 +90,7 @@ export class ConnectionHandler {
 				console.info('disconnected from:', client.id, client.description)
 
 				if (client instanceof IndiClient) client.close()
+				else if (client instanceof AlpacaClient) client.stop()
 
 				this.wsm.send<ConnectionEvent>('connection:close', { status })
 			}
@@ -102,6 +103,7 @@ export class ConnectionHandler {
 					console.info('disconnected from:', client.id, client.description)
 
 					if (client instanceof IndiClient) client.close()
+					else if (client instanceof AlpacaClient) client.stop()
 
 					this.wsm.send<ConnectionEvent>('connection:close', { status })
 

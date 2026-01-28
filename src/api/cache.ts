@@ -24,12 +24,13 @@ export class CacheManager {
 	}
 
 	time(utc: number | 'now', location?: GeographicPosition, granularity: TimeGranularity = 's') {
-		utc = timeWithGranularity(utc === 'now' ? Date.now() : utc, granularity)
-		let time = this.timeCache.get(utc)
+		utc = utc === 'now' ? Date.now() : utc
+		const seconds = timeWithGranularity(utc, granularity)
+		let time = this.timeCache.get(seconds)
 
 		if (time === undefined) {
-			time = timeUnix(utc, undefined, true)
-			this.timeCache.set(utc, time)
+			time = timeUnix(utc / 1000, undefined, true)
+			this.timeCache.set(seconds, time)
 		}
 
 		if (location && location !== time.location) {

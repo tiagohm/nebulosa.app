@@ -19,11 +19,11 @@ import { MountDropdown } from './DeviceDropdown'
 import { FilterableListbox } from './FilterableListBox'
 import { type Icon, Icons } from './Icon'
 import { IconButton } from './IconButton'
+import { Link } from './Link'
 import { Location } from './Location'
 import { Modal } from './Modal'
 import { Moon } from './Moon'
 import { PlanetTypeSelect } from './PlanetTypeSelect'
-import { PoweredBy } from './PoweredBy'
 import { SatelliteCategoryChipGroup } from './SatelliteCategoryChipGroup'
 import { SatelliteGroupTypeChipGroup } from './SatelliteGroupTypeChipGroup'
 import { SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
@@ -37,7 +37,7 @@ export const SkyAtlas = memo(() => {
 	const { tab, location } = useSnapshot(atlas.state)
 	const request = useSnapshot(atlas.state.request)
 
-	const Footer = tab !== 'galaxy' ? <PoweredBy className='mt-1' href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' label='NASA/JPL Horizons API' /> : null
+	const Footer = tab !== 'galaxy' ? <Link className='w-full text-center mt-1 text-xs text-neutral-500 hover:text-neutral-300' href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' label='NASA/JPL Horizons API' /> : null
 
 	return (
 		<>
@@ -426,7 +426,7 @@ const AsteroidSearchTab = memo(() => {
 					)}
 				</Listbox>
 			)}
-			<PoweredBy className='mt-1' href='https://ssd-api.jpl.nasa.gov/doc/sbdb.html' label='NASA/JPL Small-Body Database (SBDB) API' />
+			<Link className='text-center mt-1 text-xs text-neutral-500 hover:text-neutral-300' href='https://ssd-api.jpl.nasa.gov/doc/sbdb.html' label='NASA/JPL Small-Body Database (SBDB) API' />
 		</div>
 	)
 })
@@ -455,7 +455,7 @@ const AsteroidCloseApproachesTab = memo(() => {
 					</ListboxItem>
 				)}
 			</Listbox>
-			<PoweredBy href='https://ssd-api.jpl.nasa.gov/doc/cad.html' label='NASA/JPL SBDB Close Approach Data API' />
+			<Link className='text-center text-xs text-neutral-500 hover:text-neutral-300' href='https://ssd-api.jpl.nasa.gov/doc/cad.html' label='NASA/JPL SBDB Close Approach Data API' />
 		</div>
 	)
 })
@@ -517,7 +517,7 @@ const GalaxyTable = memo(() => {
 	)
 })
 
-const GalaxyPaginator = memo((props: React.HTMLAttributes<HTMLDivElement>) => {
+const GalaxyPaginator = memo((props: React.ComponentProps<'div'>) => {
 	const galaxy = useMolecule(GalaxyMolecule)
 	const { page } = useSnapshot(galaxy.state.request)
 	const { loading, result } = useSnapshot(galaxy.state)
@@ -579,7 +579,7 @@ const SatelliteTable = memo(() => {
 	)
 })
 
-const SatellitePaginator = memo((props: React.HTMLAttributes<HTMLDivElement>) => {
+const SatellitePaginator = memo((props: React.ComponentProps<'div'>) => {
 	const satellite = useMolecule(SatelliteMolecule)
 	const { page } = useSnapshot(satellite.state.request)
 	const { loading, result } = useSnapshot(satellite.state)
@@ -587,7 +587,7 @@ const SatellitePaginator = memo((props: React.HTMLAttributes<HTMLDivElement>) =>
 	return <Paginator {...props} count={result.length} loading={loading} onNext={satellite.next} onPrev={satellite.prev} page={page} />
 })
 
-interface PaginatorProps extends React.HTMLAttributes<HTMLDivElement> {
+interface PaginatorProps extends React.ComponentProps<'div'> {
 	readonly page: number
 	readonly count: number
 	readonly loading?: boolean
@@ -791,7 +791,7 @@ interface EphemerisAndChartTag {
 	readonly color: ChipProps['color']
 }
 
-interface EphemerisAndChartProps extends React.HTMLAttributes<HTMLDivElement> {
+interface EphemerisAndChartProps extends React.ComponentProps<'div'> {
 	readonly name?: string
 	readonly position: BodyPosition
 	readonly chart: readonly number[]

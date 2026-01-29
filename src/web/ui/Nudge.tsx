@@ -4,7 +4,7 @@ import { type Icon, Icons } from './Icon'
 
 export type NudgeDirection = 'upLeft' | 'up' | 'upRight' | 'left' | 'right' | 'downLeft' | 'down' | 'downRight'
 
-export interface NudgeProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface NudgeProps extends React.ComponentProps<'div'> {
 	readonly isDisabled?: boolean
 	readonly isNudgeDisabled?: boolean
 	readonly isUpLeftDisabled?: boolean

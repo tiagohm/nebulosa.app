@@ -4,7 +4,7 @@ import { useState } from 'react'
 import type { CameraCaptureEvent, CameraCaptureState } from 'src/shared/types'
 import { Icons } from './Icon'
 
-export interface ExposureTimeProgressProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface ExposureTimeProgressProps extends React.ComponentProps<'div'> {
 	readonly progress: CameraCaptureEvent
 }
 

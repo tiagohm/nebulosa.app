@@ -9,7 +9,7 @@ import { ImageChannelOrGraySelect } from './ImageChannelOrGraySelect'
 
 export type ImageChannelOrGrayInputMode = 'select' | 'input'
 
-export interface ImageChannelOrGrayInputProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface ImageChannelOrGrayInputProps extends React.ComponentProps<'div'> {
 	readonly value: ImageChannelOrGray
 	readonly onValueChange: (value: ImageChannelOrGray) => void
 	readonly isDisabled?: boolean

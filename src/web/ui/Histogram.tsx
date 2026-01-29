@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef } from 'react'
 import type { ImageHistogram } from 'src/shared/types'
 
-export interface HistogramProps extends React.HTMLAttributes<HTMLCanvasElement> {
+export interface HistogramProps extends React.ComponentProps<'canvas'> {
 	readonly histogram: readonly ImageHistogram[]
 }
 

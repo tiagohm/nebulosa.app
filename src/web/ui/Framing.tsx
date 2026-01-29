@@ -7,8 +7,8 @@ import { FramingMolecule } from '@/molecules/framing'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { HipsSurveySelect } from './HipsSurveySelect'
 import { Icons } from './Icon'
+import { Link } from './Link'
 import { Modal } from './Modal'
-import { PoweredBy } from './PoweredBy'
 import { TextButton } from './TextButton'
 
 export const Framing = memo(() => {
@@ -45,7 +45,7 @@ export const Framing = memo(() => {
 				<Checkbox className='col-span-full' isDisabled={loading} isSelected={openNewImage} onValueChange={(value) => (framing.state.openNewImage = value)}>
 					Open in new image
 				</Checkbox>
-				<PoweredBy className='col-span-full mt-2' href='https://alasky.cds.unistra.fr/hips-image-services/hips2fits' label='Powered by hips2fits, a service provided by CDS' />
+				<Link className='col-span-full text-center mt-2 text-xs text-neutral-500 hover:text-neutral-300' href='https://alasky.cds.unistra.fr/hips-image-services/hips2fits' label='Powered by hips2fits, a service provided by CDS' />
 			</div>
 		</Modal>
 	)

@@ -2,7 +2,7 @@ import { memo, useEffect, useRef } from 'react'
 import { SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource } from 'src/shared/types'
 import sunWebp from '@/assets/sun.webp'
 import { API_URL } from '@/shared/api'
-import { PoweredBy } from './PoweredBy'
+import { Link } from './Link'
 import { SolarImageSourceDropdown } from './SolarImageSourceDropdown'
 
 export interface SunProps {
@@ -35,10 +35,10 @@ export const Sun = memo(({ source, onSourceChange }: SunProps) => {
 	}
 
 	return (
-		<span className='relative min-w-20'>
-			<SolarImageSourceDropdown className='absolute left-1 right-1 top-1' onValueChange={onSourceChange} value={source} />
-			<img className='pt-8 select-none max-w-54 w-full h-auto contrast-[0.8125]' draggable={false} onError={handleOnError} ref={imgRef} src={`${API_URL}/atlas/sun/image?source=${source}`} />
-			<PoweredBy className='absolute' href={SOLAR_IMAGE_SOURCE_URLS[source].replace('256', '1024')} label='NASA/SDO' />
-		</span>
+		<div className='min-w-20 flex flex-col justify-center items-center gap-1'>
+			<SolarImageSourceDropdown className='w-full' onValueChange={onSourceChange} value={source} />
+			<img className='select-none max-w-54 w-full h-auto contrast-[0.8125]' draggable={false} onError={handleOnError} ref={imgRef} src={`${API_URL}/atlas/sun/image?source=${source}`} />
+			<Link className='w-full text-center text-xs text-neutral-500 hover:text-neutral-300' href={SOLAR_IMAGE_SOURCE_URLS[source].replace('256', '1024')} label='NASA/SDO' />
+		</div>
 	)
 })

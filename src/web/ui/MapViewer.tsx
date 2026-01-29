@@ -4,7 +4,7 @@ import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import mapIconSvg from '../assets/map-pin.svg'
 
-export interface MapViewerProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface MapViewerProps extends React.ComponentProps<'div'> {
 	readonly width?: CSSProperties['width']
 	readonly height?: CSSProperties['height']
 	readonly position?: LatLngExpression

@@ -1,5 +1,5 @@
 import { ListboxItem, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
-import { memo, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -32,19 +32,23 @@ function description(item: AstroBinEquipmentPopoverItem) {
 }
 
 export const AstroBinEquipmentPopover = memo(({ type, items, onSelectedChange }: AstroBinEquipmentPopoverProps) => {
-	const isCamera = type === 'camera'
 	const [open, setOpen] = useState(false)
 
-	function handleOnAction(value: React.Key) {
-		const id = typeof value === 'string' ? +value : value
+	const handleOnAction = useCallback(
+		(value: React.Key) => {
+			const id = typeof value === 'string' ? +value : value
 
-		if (onSelectedChange) {
-			const item = items.find((e) => e.id === id)
-			item && onSelectedChange(item)
-		}
+			if (onSelectedChange) {
+				const item = items.find((e) => e.id === id)
+				item && onSelectedChange(item)
+			}
 
-		setOpen(false)
-	}
+			setOpen(false)
+		},
+		[onSelectedChange],
+	)
+
+	const isCamera = type === 'camera'
 
 	return (
 		<Popover isOpen={open} onOpenChange={setOpen} placement='bottom' showArrow>

@@ -132,6 +132,10 @@ export const CameraMolecule = molecule(() => {
 		state.request[key] = value
 	}
 
+	function updateSavePath(path?: string) {
+		return update('savePath', path)
+	}
+
 	function connect() {
 		return equipment.connect(camera)
 	}
@@ -140,8 +144,8 @@ export const CameraMolecule = molecule(() => {
 		return Api.Cameras.cooler(camera, enabled)
 	}
 
-	function temperature(value: number) {
-		return Api.Cameras.temperature(camera, value)
+	function temperature() {
+		return Api.Cameras.temperature(camera, state.targetTemperature)
 	}
 
 	function fullscreen() {
@@ -184,7 +188,24 @@ export const CameraMolecule = molecule(() => {
 		state.minimized = !state.minimized
 	}
 
-	return { scope, state, connect, update, cooler, temperature, fullscreen, updateMount, updateWheel, updateFocuser, updateRotator, start, stop, hide, minimize } as const
+	return {
+		scope,
+		state,
+		connect,
+		update,
+		updateSavePath,
+		cooler,
+		temperature,
+		fullscreen,
+		updateMount,
+		updateWheel,
+		updateFocuser,
+		updateRotator,
+		start,
+		stop,
+		hide,
+		minimize,
+	} as const
 })
 
 export function updateRequestFrame(request: CameraCaptureStart, frame: Camera['frame']) {

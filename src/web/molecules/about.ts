@@ -5,10 +5,12 @@ import { initProxy } from '@/shared/proxy'
 
 export interface AboutState {
 	show: boolean
+	year: number
 }
 
 const state = proxy<AboutState>({
 	show: false,
+	year: new Date().getFullYear(),
 })
 
 initProxy(state, 'about', ['p:show'])

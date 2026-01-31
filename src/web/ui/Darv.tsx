@@ -15,6 +15,7 @@ export const Darv = memo(() => {
 	const darv = useMolecule(DarvMolecule)
 	const { running, camera, mount, event } = useSnapshot(darv.state)
 	const { hemisphere, duration, initialPause } = useSnapshot(darv.state.request)
+	const { state } = event
 
 	const Footer = (
 		<>
@@ -32,7 +33,7 @@ export const Darv = memo(() => {
 				</div>
 				<div className='mt-2 col-span-full flex flex-row items-center justify-between'>
 					<Chip color='primary' size='sm'>
-						{event.state === 'IDLE' ? 'idle' : event.state === 'WAITING' ? 'waiting' : event.state === 'FORWARDING' ? 'forwading' : 'backwarding'}
+						{state === 'IDLE' ? 'idle' : state === 'WAITING' ? 'waiting' : state === 'FORWARDING' ? 'forwading' : 'backwarding'}
 					</Chip>
 				</div>
 				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Initial pause (s)' maxValue={60} minValue={1} onValueChange={(value) => darv.update('initialPause', value)} size='sm' value={initialPause} />

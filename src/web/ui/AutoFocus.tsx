@@ -42,11 +42,12 @@ const Devices = memo(() => {
 const Status = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)
 	const { event } = useSnapshot(autoFocus.state)
+	const { state } = event
 
 	return (
 		<div className='mt-2 col-span-full flex flex-row items-center justify-between'>
 			<Chip color='primary' size='sm'>
-				{event.state === 'IDLE' ? 'idle' : event.state === 'MOVING' ? 'moving' : event.state === 'CAPTURING' ? 'capturing' : 'computing'}
+				{state === 'IDLE' ? 'idle' : state === 'MOVING' ? 'moving' : state === 'CAPTURING' ? 'capturing' : 'computing'}
 			</Chip>
 			<span className='text-xs'>{event.message}</span>
 		</div>

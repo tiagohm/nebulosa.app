@@ -19,6 +19,7 @@ export const Tppa = memo(() => {
 	const { running, camera, mount, event } = useSnapshot(tppa.state)
 	const { direction, moveDuration, stopTrackingWhenDone, compensateRefraction, maxAttempts, delayBeforeCapture } = useSnapshot(tppa.state.request)
 	const { type } = useSnapshot(tppa.state.request.solver)
+	const { state, solved, solver } = event
 
 	const Footer = (
 		<>
@@ -36,17 +37,17 @@ export const Tppa = memo(() => {
 				</div>
 				<div className='mt-2 col-span-full flex flex-row items-center justify-between'>
 					<Chip color='primary' size='sm'>
-						{event.state === 'IDLE' ? 'idle' : event.state === 'MOVING' ? 'moving' : event.state === 'CAPTURING' ? 'capturing' : event.state === 'SOLVING' ? 'solving' : event.state === 'WAITING' ? 'waiting' : event.state === 'SETTLING' ? 'settling' : 'aligning'}
+						{state === 'IDLE' ? 'idle' : state === 'MOVING' ? 'moving' : state === 'CAPTURING' ? 'capturing' : state === 'SOLVING' ? 'solving' : state === 'WAITING' ? 'waiting' : state === 'SETTLING' ? 'settling' : 'aligning'}
 					</Chip>
 					<div className='flex flex-row items-center gap-1'>
 						<Chip color='warning' size='sm'>
 							{event.step}
 						</Chip>
-						<Chip color={event.solved ? 'success' : 'danger'} size='sm'>
-							RA: {formatRA(event.solver.rightAscension)}
+						<Chip color={solved ? 'success' : 'danger'} size='sm'>
+							RA: {formatRA(solver.rightAscension)}
 						</Chip>
-						<Chip color={event.solved ? 'success' : 'danger'} size='sm'>
-							DEC: {formatDEC(event.solver.declination)}
+						<Chip color={solved ? 'success' : 'danger'} size='sm'>
+							DEC: {formatDEC(solver.declination)}
 						</Chip>
 					</div>
 				</div>

@@ -1,4 +1,4 @@
-import { Input, NumberInput } from '@heroui/react'
+import { Chip, Input, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -43,7 +43,7 @@ const Connection = memo(() => {
 const Settle = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
 	const { running } = useSnapshot(phd2.state)
-	const { pixels, time, timeout } = useSnapshot(phd2.state.request.settle)
+	const { pixels, time, timeout } = useSnapshot(phd2.state.connection.dither.settle)
 
 	return (
 		<div className='col-span-full grid grid-cols-subgrid items-center gap-2'>
@@ -55,7 +55,17 @@ const Settle = memo(() => {
 })
 
 const Status = memo(() => {
-	return <div></div>
+	const phd2 = useMolecule(PHD2Molecule)
+	const { event } = useSnapshot(phd2.state)
+	const { state } = event
+
+	return (
+		<div className='mt-2 col-span-full flex flex-row items-center justify-start'>
+			<Chip color='primary' size='sm'>
+				{state === 'IDLE' ? 'idle' : state === 'CALIBRATING' ? 'calibrating' : state === 'GUIDING' ? 'guiding' : state === 'LOOPING' ? 'looping' : state === 'SETTLING' ? 'settling' : 'star lost'}
+			</Chip>
+		</div>
+	)
 })
 
 const Chart = memo(() => {
@@ -68,8 +78,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' isDisabled={!connected || !running} label='Stop' onPointerUp={phd2.stop} startContent={<Icons.Stop />} />
-			<TextButton color='success' isDisabled={!connected || running} label='Start' onPointerUp={phd2.start} startContent={<Icons.Play />} />
+			<TextButton color='danger' isDisabled={!connected || !running} label='Stop' startContent={<Icons.Stop />} />
+			<TextButton color='success' isDisabled={!connected || running} label='Start' startContent={<Icons.Play />} />
 		</>
 	)
 })

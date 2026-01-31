@@ -16,6 +16,7 @@ export const FlatWizard = memo(() => {
 	const { running, camera, event } = useSnapshot(flatWizard.state)
 	const { minExposure, maxExposure, meanTarget, meanTolerance, saveAt } = useSnapshot(flatWizard.state.request)
 
+	const { state } = event
 	const exposureMinValue = (camera?.exposure.min ?? 0) * 1000
 	const exposureMaxValue = (camera?.exposure.max ?? 0) * 1000
 
@@ -34,7 +35,7 @@ export const FlatWizard = memo(() => {
 				</div>
 				<div className='mt-2 col-span-full flex flex-row items-center justify-between'>
 					<Chip color='primary' size='sm'>
-						{event.state === 'IDLE' ? 'idle' : event.state === 'CAPTURING' ? 'capturing' : 'computing'}
+						{state === 'IDLE' ? 'idle' : state === 'CAPTURING' ? 'capturing' : 'computing'}
 					</Chip>
 					<span className='text-xs'>{event.message}</span>
 				</div>

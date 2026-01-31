@@ -16,7 +16,7 @@ import type { Camera, ClientInfo, ClientType, Cover, Device, DeviceProperty, Dew
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { LunarEclipse, LunarPhase } from 'nebulosa/src/moon'
-import type { Settle } from 'nebulosa/src/phd2'
+import { DEFAULT_SETTLE, type PHD2Settle } from 'nebulosa/src/phd2'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { SmallBodySearchListItem, SmallBodySearchObject } from 'nebulosa/src/sbd'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
@@ -882,16 +882,20 @@ export interface AlpacaServerStatus {
 
 // PHD2
 
-export interface PHD2Connect extends Readonly<HostAndPort> {}
+export type PHD2State = 'IDLE' | 'CALIBRATING' | 'SETTLING' | 'GUIDING' | 'LOOPING' | 'STAR_LOST'
 
-export interface PHD2Start {
-	readonly settle?: Settle
+export interface PHD2Connect extends Readonly<HostAndPort> {
+	readonly dither: PHD2Dither
+}
+
+export interface PHD2Event {
+	state: PHD2State
 }
 
 export interface PHD2Dither {
 	readonly amount: number
 	readonly raOnly: boolean
-	readonly settle?: Settle
+	readonly settle: PHD2Settle
 }
 
 export const X_IMAGE_INFO_HEADER = 'X-Image-Info'
@@ -1278,4 +1282,20 @@ export const DEFAULT_FLAT_WIZARD_EVENT: FlatWizardEvent = {
 	state: 'IDLE',
 	camera: '',
 	median: 0,
+}
+
+export const DEFAULT_PHD2_EVENT: PHD2Event = {
+	state: 'IDLE',
+}
+
+export const DEFAULT_PHD2_DITHER: Required<PHD2Dither> = {
+	amount: 5,
+	raOnly: false,
+	settle: DEFAULT_SETTLE,
+}
+
+export const DEFAULT_PHD2_CONNECT: PHD2Connect = {
+	host: 'localhost',
+	port: 4400,
+	dither: DEFAULT_PHD2_DITHER,
 }

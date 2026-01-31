@@ -676,6 +676,7 @@ export interface CameraCaptureStart extends Size {
 	wheel?: string
 	focuser?: string
 	rotator?: string
+	dither: boolean
 }
 
 export interface CameraCaptureTime {
@@ -882,7 +883,7 @@ export interface AlpacaServerStatus {
 
 // PHD2
 
-export type PHD2State = 'IDLE' | 'CALIBRATING' | 'SETTLING' | 'GUIDING' | 'LOOPING' | 'STAR_LOST'
+export type PHD2State = 'IDLE' | 'CALIBRATING' | 'SETTLING' | 'GUIDING' | 'LOOPING' | 'STAR_LOST' | 'PAUSED'
 
 export interface PHD2Connect extends Readonly<HostAndPort> {
 	readonly dither: PHD2Dither
@@ -890,12 +891,31 @@ export interface PHD2Connect extends Readonly<HostAndPort> {
 
 export interface PHD2Event {
 	state: PHD2State
+	rmsRA: number
+	rmsDEC: number
+	starMass: number
+	snr: number
+	hfd: number
+	readonly step: {
+		ra: number | null
+		dec: number | null
+		raCorrection: number | null
+		decCorrection: number | null
+		dx: number | null
+		dy: number | null
+	}
 }
 
 export interface PHD2Dither {
 	readonly amount: number
 	readonly raOnly: boolean
 	readonly settle: PHD2Settle
+}
+
+export interface PHD2Status {
+	connected: boolean
+	running: boolean
+	profile?: string
 }
 
 export const X_IMAGE_INFO_HEADER = 'X-Image-Info'
@@ -924,6 +944,7 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	offset: 0,
 	autoSave: false,
 	autoSubFolderMode: 'OFF',
+	dither: false,
 }
 
 export const DEFAULT_CAMERA_CAPTURE_EVENT: CameraCaptureEvent = {
@@ -1286,6 +1307,19 @@ export const DEFAULT_FLAT_WIZARD_EVENT: FlatWizardEvent = {
 
 export const DEFAULT_PHD2_EVENT: PHD2Event = {
 	state: 'IDLE',
+	rmsRA: 0,
+	rmsDEC: 0,
+	starMass: 0,
+	snr: 0,
+	hfd: 0,
+	step: {
+		ra: null,
+		dec: null,
+		raCorrection: null,
+		decCorrection: null,
+		dx: null,
+		dy: null,
+	},
 }
 
 export const DEFAULT_PHD2_DITHER: Required<PHD2Dither> = {

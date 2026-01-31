@@ -10,6 +10,7 @@ import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/uti
 import { type Endpoints, query, response } from './http'
 import type { ImageProcessor } from './image'
 import type { WebSocketMessageHandler } from './message'
+import type { PHD2Handler } from './phd2'
 import { directoryExists, waitFor } from './util'
 
 const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
@@ -26,6 +27,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		readonly wheelManager: WheelManager,
 		readonly focuserManager: FocuserManager,
 		readonly rotatorManager: RotatorManager,
+		readonly phd2Handler?: PHD2Handler,
 	) {
 		cameraManager.addHandler(this)
 	}
@@ -90,7 +92,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		const rotator = req.rotator ? this.rotatorManager.get(client, req.rotator) : undefined
 		this.cameraManager.snoop(camera, mount, focuser, wheel, rotator)
 
-		task.start()
+		return task.start()
 	}
 
 	stop(device: Camera) {
@@ -110,7 +112,7 @@ export function camera(cameraHandler: CameraHandler): Endpoints {
 		'/cameras/:id': { GET: (req) => response(cameraFromParams(req)) },
 		'/cameras/:id/cooler': { POST: async (req) => response(cameraManager.cooler(cameraFromParams(req), await req.json())) },
 		'/cameras/:id/temperature': { POST: async (req) => response(cameraManager.temperature(cameraFromParams(req), await req.json())) },
-		'/cameras/:id/start': { POST: async (req) => response(cameraHandler.start(cameraFromParams(req), await req.json())) },
+		'/cameras/:id/start': { POST: async (req) => response(await cameraHandler.start(cameraFromParams(req), await req.json())) },
 		'/cameras/:id/stop': { POST: (req) => response(cameraHandler.stop(cameraFromParams(req))) },
 	}
 }
@@ -266,8 +268,14 @@ export class CameraCaptureTask {
 		this.cameraHandler.cameraManager.stopExposure(camera)
 	}
 
-	start() {
+	async start() {
 		if (!this.stopped && this.event.remainingCount > 0) {
+			if (this.request.dither && this.cameraHandler.phd2Handler?.isRunning) {
+				this.event.state = 'DITHERING'
+				this.handleCameraCaptureEvent(this, this.event)
+				await this.cameraHandler.phd2Handler.dither()
+			}
+
 			this.event.state = 'EXPOSURE_STARTED'
 			this.event.elapsedCount++
 			this.event.remainingCount--

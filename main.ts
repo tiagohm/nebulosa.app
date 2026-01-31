@@ -182,7 +182,7 @@ const thermometerManager = new ThermometerManager(thermometerProvider)
 const dewHeaterManager = new DewHeaterManager(dewHeaterProvider)
 
 const phd2Handler = new PHD2Handler(wsm, notificationHandler)
-const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
+const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, phd2Handler)
 const mountHandler = new MountHandler(wsm, mountManager, cacheManager)
 const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager)
 const focuserHandler = new FocuserHandler(wsm, focuserManager)

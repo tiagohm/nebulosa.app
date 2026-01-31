@@ -71,7 +71,8 @@
 				"useExhaustiveDependencies": "off",
 				"noUnusedFunctionParameters": "off",
 				"noUnusedVariables": "off",
-				"useUniqueElementIds": "off"
+				"useUniqueElementIds": "off",
+				"noUnusedPrivateClassMembers": "off"
 			},
 			"suspicious": {
 				"noAssignInExpressions": "off",

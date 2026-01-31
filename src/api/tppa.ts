@@ -1,6 +1,6 @@
-import { ThreePointPolarAlignment } from 'nebulosa/src/alignment'
 import { deg } from 'nebulosa/src/angle'
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
+import { ThreePointPolarAlignment } from 'nebulosa/src/polaralignment'
 import { timeNow } from 'nebulosa/src/time'
 import { type CameraCaptureEvent, type CameraCaptureStart, DEFAULT_TPPA_EVENT, type TppaEvent, type TppaStart, type TppaStop } from 'src/shared/types'
 import type { CameraHandler } from './camera'

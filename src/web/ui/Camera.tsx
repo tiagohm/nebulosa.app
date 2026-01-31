@@ -3,6 +3,7 @@ import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { CameraMolecule } from '@/molecules/indi/camera'
+import { PHD2Molecule } from '@/molecules/phd2'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { AutoSaveButton } from './AutoSaveButton'
 import { AutoSubFolderModeButton } from './AutoSubFolderButton'
@@ -19,6 +20,7 @@ import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 import { TextButton } from './TextButton'
+import { ToggleButton } from './ToggleButton'
 
 export const Camera = memo(() => {
 	const camera = useMolecule(CameraMolecule)
@@ -156,7 +158,10 @@ const Exposure = memo(() => {
 				unit={exposureTimeUnit}
 				value={exposureTime}
 			/>
-			<FrameTypeSelect className='col-span-6' isDisabled={!connected || capturing} onValueChange={(value) => camera.update('frameType', value)} value={frameType} />
+			<FrameTypeSelect className='col-span-4' isDisabled={!connected || capturing} onValueChange={(value) => camera.update('frameType', value)} value={frameType} />
+			<div className='col-span-2 flex flex-row justify-center items-center'>
+				<Dither />
+			</div>
 		</>
 	)
 })
@@ -199,7 +204,7 @@ const Frame = memo(() => {
 	return (
 		<>
 			<div className='col-span-6 flex flex-row items-center justify-center gap-2'>
-				<Checkbox className='flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || !canSubFrame || capturing} isSelected={subframe} onValueChange={(value) => camera.update('subframe', value)} size='sm'>
+				<Checkbox className='flex-col-reverse gap-0.4 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || !canSubFrame || capturing} isSelected={subframe} onValueChange={(value) => camera.update('subframe', value)} size='sm'>
 					Subframe
 				</Checkbox>
 				<Tooltip content='Fullscreen' placement='bottom' showArrow>
@@ -229,6 +234,38 @@ const GainAndFormat = memo(() => {
 	)
 })
 
+const CameraEquipment = memo(() => {
+	const camera = useMolecule(CameraMolecule)
+	const { capturing } = useSnapshot(camera.state)
+	const { connected } = useSnapshot(camera.state.camera)
+	const { mount, wheel, focuser, rotator } = useSnapshot(camera.state.equipment)
+	const isDisabled = !connected || capturing
+
+	return (
+		<>
+			<MountDropdown isDisabled={isDisabled} onValueChange={camera.updateMount} tooltipContent={`MOUNT: ${mount?.name ?? 'None'}`} value={mount} />
+			<WheelDropdown isDisabled={isDisabled} onValueChange={camera.updateWheel} tooltipContent={`WHEEL: ${wheel?.name ?? 'None'}`} value={wheel} />
+			<FocuserDropdown isDisabled={isDisabled} onValueChange={camera.updateFocuser} tooltipContent={`FOCUSER: ${focuser?.name ?? 'None'}`} value={focuser} />
+			<RotatorDropdown isDisabled={isDisabled} onValueChange={camera.updateRotator} tooltipContent={`ROTATOR: ${rotator?.name ?? 'None'}`} value={rotator} />
+		</>
+	)
+})
+
+const Dither = memo(() => {
+	const camera = useMolecule(CameraMolecule)
+	const phd2 = useMolecule(PHD2Molecule)
+	const { capturing } = useSnapshot(camera.state)
+	const { connected } = useSnapshot(camera.state.camera)
+	const { dither } = useSnapshot(camera.state.request)
+	const { running } = useSnapshot(phd2.state)
+
+	return (
+		<Tooltip content='Dither' placement='bottom' showArrow>
+			<ToggleButton color='warning' icon={Icons.Pulse} isDisabled={!connected || capturing || !running} isSelected={dither} offVariant='light' onValueChange={(value) => (camera.state.request.dither = value)} />
+		</Tooltip>
+	)
+})
+
 const Footer = memo(() => {
 	const camera = useMolecule(CameraMolecule)
 	const { capturing } = useSnapshot(camera.state)
@@ -236,25 +273,11 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<CameraEquipment />
+			<div className='flex flex-1 flex-row items-center gap-1'>
+				<CameraEquipment />
+			</div>
 			<TextButton color='danger' isDisabled={!connected || !canAbort || !capturing} label='Stop' onPointerUp={camera.stop} startContent={<Icons.Stop />} />
 			<TextButton color='success' isDisabled={!connected} isLoading={capturing} label='Start' onPointerUp={camera.start} startContent={<Icons.Play />} />
 		</>
-	)
-})
-
-const CameraEquipment = memo(() => {
-	const camera = useMolecule(CameraMolecule)
-	const { capturing } = useSnapshot(camera.state)
-	const { connected } = useSnapshot(camera.state.camera)
-	const { mount, wheel, focuser, rotator } = useSnapshot(camera.state.equipment)
-
-	return (
-		<div className='flex flex-1 flex-row items-center gap-1'>
-			<MountDropdown isDisabled={!connected || capturing} onValueChange={camera.updateMount} tooltipContent={`MOUNT: ${mount?.name ?? 'None'}`} value={mount} />
-			<WheelDropdown isDisabled={!connected || capturing} onValueChange={camera.updateWheel} tooltipContent={`WHEEL: ${wheel?.name ?? 'None'}`} value={wheel} />
-			<FocuserDropdown isDisabled={!connected || capturing} onValueChange={camera.updateFocuser} tooltipContent={`FOCUSER: ${focuser?.name ?? 'None'}`} value={focuser} />
-			<RotatorDropdown isDisabled={!connected || capturing} onValueChange={camera.updateRotator} tooltipContent={`ROTATOR: ${rotator?.name ?? 'None'}`} value={rotator} />
-		</div>
 	)
 })

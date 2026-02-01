@@ -410,9 +410,21 @@ export interface ImageFilter {
 	}
 }
 
+export interface ImageCalibrationFile {
+	enabled: boolean
+	path?: string
+}
+
+export interface ImageCalibration {
+	enabled: boolean
+	readonly dark: ImageCalibrationFile
+	readonly flat: ImageCalibrationFile
+	readonly bias: ImageCalibrationFile
+	readonly darkFlat: ImageCalibrationFile
+}
+
 export interface ImageTransformation {
 	enabled: boolean
-	calibrationGroup?: string
 	debayer: boolean
 	stretch: ImageStretch
 	horizontalMirror: boolean
@@ -424,6 +436,7 @@ export interface ImageTransformation {
 	} & DeepRequired<WriteImageToFormatOptions>
 	adjustment: ImageAdjustment
 	filter: ImageFilter
+	calibration: ImageCalibration
 }
 
 export interface OpenImage {
@@ -1074,6 +1087,22 @@ export const DEFAULT_IMAGE_FILTER: ImageFilter = {
 	},
 }
 
+export const DEFAULT_IMAGE_CALIBRATION: ImageCalibration = {
+	enabled: false,
+	dark: {
+		enabled: false,
+	},
+	flat: {
+		enabled: false,
+	},
+	bias: {
+		enabled: false,
+	},
+	darkFlat: {
+		enabled: false,
+	},
+}
+
 export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	enabled: true,
 	debayer: true,
@@ -1091,6 +1120,7 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	},
 	adjustment: DEFAULT_IMAGE_ADJUSTMENT,
 	filter: DEFAULT_IMAGE_FILTER,
+	calibration: DEFAULT_IMAGE_CALIBRATION,
 }
 
 export const DEFAULT_FOV_ITEM: FovItem = {

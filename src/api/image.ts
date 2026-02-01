@@ -17,7 +17,7 @@ import { basename, join } from 'path'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
-import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCoordinateInterpolation, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
+import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateInterpolation, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
 import { DEFAULT_HEADERS, type Endpoints, INTERNAL_SERVER_ERROR_RESPONSE, response } from './http'
 import type { NotificationHandler } from './notification'
@@ -124,6 +124,7 @@ export class ImageProcessor {
 		if (transformation === false || !transformation.enabled) return image
 
 		if (transformation.debayer) image = debayer(image) ?? image
+		if (transformation.calibration.enabled) image = this.calibrate(image, transformation.calibration)
 		if (transformation.horizontalMirror) image = horizontalFlip(image)
 		if (transformation.verticalMirror) image = verticalFlip(image)
 
@@ -168,6 +169,12 @@ export class ImageProcessor {
 		}
 
 		if (transformation.invert) image = invert(image)
+
+		return image
+	}
+
+	private calibrate(image: Image, calibration: ImageCalibration) {
+		if (!calibration.enabled) return image
 
 		return image
 	}
@@ -270,12 +277,13 @@ export class ImageProcessor {
 
 	private computeImageTransformationHash(transformation: ImageTransformation | false) {
 		if (transformation === false || !transformation.enabled) return 'F'
-		const { calibrationGroup = '', debayer, horizontalMirror, verticalMirror, invert } = transformation
+		const { debayer, horizontalMirror, verticalMirror, invert } = transformation
 		const stretch = this.computeImageStretchHash(transformation.stretch)
 		const scnr = this.computeImageScnrHash(transformation.scnr)
 		const filter = this.computeImageFilterHash(transformation.filter)
 		const adjustment = this.computeImageAdjustmentHash(transformation.adjustment)
-		return `T:${calibrationGroup}:${debayer}:${stretch}:${scnr}:${filter}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}`
+		const calibration = this.computeImageCalibrationHash(transformation.calibration)
+		return `T:${debayer}:${calibration}:${stretch}:${scnr}:${filter}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}`
 	}
 
 	private computeImageStretchHash(stretch: ImageStretch) {
@@ -304,6 +312,11 @@ export class ImageProcessor {
 			default:
 				return `T:${type}`
 		}
+	}
+
+	private computeImageCalibrationHash(adjustment: ImageCalibration) {
+		const { enabled, dark, flat, bias, darkFlat } = adjustment
+		return enabled ? `T:${dark.enabled && dark.path ? dark.path : ''}:${flat.enabled && flat.path ? flat.path : ''}:${bias.enabled && bias.path ? bias.path : ''}:${darkFlat.enabled && darkFlat.path ? darkFlat.path : ''}` : 'F'
 	}
 
 	private computeImageAdjustmentHash(adjustment: ImageAdjustment) {

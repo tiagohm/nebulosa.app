@@ -3,6 +3,7 @@ import { DEFAULT_PHD2_DITHER, DEFAULT_PHD2_EVENT, type PHD2Connect, type PHD2Dit
 import { type Endpoints, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
+import { waitFor } from './util'
 
 export class PHD2Handler {
 	private client?: PHD2Client
@@ -59,7 +60,7 @@ export class PHD2Handler {
 					this.handlePHD2Event('SETTLING')
 					break
 				case 'SettleDone':
-					this.handleSettleDone(true)
+					this.settleDone(true)
 					break
 				case 'GuideStep': {
 					const { RADistanceRaw, DECDistanceRaw, RADuration = 0, RADirection, DECDuration = 0, DECDirection } = event
@@ -150,22 +151,22 @@ export class PHD2Handler {
 		return false
 	}
 
-	async dither(req?: Partial<PHD2Dither>) {
+	async dither(req?: Partial<PHD2Dither>, abort?: AbortSignal) {
 		if (!this.client) return
 
 		if (this.state === 'Guiding') {
 			const settle = req?.settle ?? this.settings.settle
 
-			await this.waitForSettle(settle.timeout)
-			await this.client.dither(req?.amount ?? this.settings.amount, req?.raOnly ?? this.settings.raOnly, settle)
-			await Bun.sleep(settle.time * 1000)
-			await this.waitForSettle(settle.timeout)
+			if (!abort?.aborted) await this.waitForSettle(settle.timeout)
+			if (!abort?.aborted) await this.client.dither(req?.amount ?? this.settings.amount, req?.raOnly ?? this.settings.raOnly, settle)
+			if (!abort?.aborted) await waitFor(settle.time * 1000, () => !abort?.aborted)
+			if (!abort?.aborted) await this.waitForSettle(settle.timeout)
 		}
 	}
 
 	private async waitForSettle(timeout: number) {
 		if (!this.settling) return true
-		setTimeout(this.handleSettleDone.bind(this, false), timeout * 1000)
+		setTimeout(this.settleDone.bind(this, false), timeout * 1000)
 		return await this.settling.promise
 	}
 
@@ -185,7 +186,7 @@ export class PHD2Handler {
 		this.rms.clear()
 	}
 
-	private handleSettleDone(status: boolean) {
+	settleDone(status: boolean) {
 		this.settling?.resolve(status)
 		this.settling = undefined
 	}

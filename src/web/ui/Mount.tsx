@@ -44,7 +44,7 @@ export const Mount = memo(() => {
 				<div className='mt-0 grid grid-cols-12 gap-2'>
 					<div className='col-span-full flex flex-row items-center justify-between'>
 						<Chip color='primary' size='sm'>
-							{parking ? 'parking' : parked ? 'parked' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
+							{parking ? 'parking' : parked ? 'parked' : homing ? 'homing' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
 						</Chip>
 						<div className='flex flex-row items-center gap-2'>
 							<Tooltip content='Remote Control' showArrow>

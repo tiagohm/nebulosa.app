@@ -16,7 +16,7 @@ import type { Camera, ClientInfo, ClientType, Cover, Device, DeviceProperty, Dew
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { LunarEclipse, LunarPhase } from 'nebulosa/src/moon'
-import { DEFAULT_SETTLE, type PHD2Settle } from 'nebulosa/src/phd2'
+import { DEFAULT_PHD2_SETTLE, type PHD2Settle } from 'nebulosa/src/phd2'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { SmallBodySearchListItem, SmallBodySearchObject } from 'nebulosa/src/sbd'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
@@ -409,6 +409,8 @@ export interface ImageFilter {
 		size: number
 	}
 }
+
+export type ImageCalibrationFileType = Exclude<keyof ImageCalibration, 'enabled'>
 
 export interface ImageCalibrationFile {
 	enabled: boolean
@@ -1355,7 +1357,7 @@ export const DEFAULT_PHD2_EVENT: PHD2Event = {
 export const DEFAULT_PHD2_DITHER: Required<PHD2Dither> = {
 	amount: 5,
 	raOnly: false,
-	settle: DEFAULT_SETTLE,
+	settle: DEFAULT_PHD2_SETTLE,
 }
 
 export const DEFAULT_PHD2_CONNECT: PHD2Connect = {

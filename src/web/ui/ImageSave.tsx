@@ -13,15 +13,17 @@ export const ImageSave = memo(() => {
 	const { loading, format, transformed } = useSnapshot(save.state)
 	const { path } = useSnapshot(save.state, { sync: true })
 
-	const Footer = <>
-		<TextButton color='primary' isLoading={loading} label='Download' onPointerUp={save.download} startContent={<Icons.ArrowDown />} />
-		<TextButton color='success' isDisabled={!path} isLoading={loading} label='Save' onPointerUp={save.save} startContent={<Icons.Save />} />
-	</>
+	const Footer = (
+		<>
+			<TextButton color='primary' isLoading={loading} label='Download' onPointerUp={save.download} startContent={<Icons.ArrowDown />} />
+			<TextButton color='success' isDisabled={!path} isLoading={loading} label='Save' onPointerUp={save.save} startContent={<Icons.Save />} />
+		</>
+	)
 
 	return (
-		<Modal footer={Footer} header='Save' id={`save-${save.scope.image.key}`} maxWidth='288px' onHide={save.hide}>
+		<Modal footer={Footer} header='Save' id={`save-${save.viewer.storageKey}`} maxWidth='288px' onHide={save.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<FilePickerInput className='col-span-full' id={`save-${save.scope.image.key}`} isReadOnly={false} mode='save' onValueChange={(value) => value !== undefined && save.update('path', value)} placeholder='Path' size='md' value={path} />
+				<FilePickerInput className='col-span-full' id={`save-${save.viewer.storageKey}`} isReadOnly={false} mode='save' onValueChange={(value) => value !== undefined && save.update('path', value)} placeholder='Path' size='md' value={path} />
 				<ButtonGroup className='col-span-full'>
 					<TextButton color='secondary' label='FITS' onPointerUp={() => save.update('format', 'fits')} size='sm' variant={format === 'fits' ? 'flat' : 'light'} />
 					<TextButton color='secondary' label='XISF' onPointerUp={() => save.update('format', 'xisf')} size='sm' variant={format === 'xisf' ? 'flat' : 'light'} />

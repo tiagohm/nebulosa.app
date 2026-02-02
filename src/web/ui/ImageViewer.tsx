@@ -3,6 +3,7 @@ import { Activity, memo, useCallback, useEffect, useLayoutEffect, useRef } from 
 import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
+import { ImageCalibrationMolecule } from '@/molecules/image/calibration'
 import { ImageFilterMolecule } from '@/molecules/image/filter'
 import { ImageFovMolecule } from '@/molecules/image/fov'
 import { ImageHeaderMolecule } from '@/molecules/image/header'
@@ -24,6 +25,7 @@ import { FITSHeader } from './FITSHeader'
 import { Fov } from './Fov'
 import { ImageAdjustment } from './ImageAdjustment'
 import { ImageAnnotation } from './ImageAnnotation'
+import { ImageCalibration } from './ImageCalibration'
 import { ImageFilter } from './ImageFilter'
 import { ImageFov } from './ImageFov'
 import { ImageInfo } from './ImageInfo'
@@ -67,6 +69,9 @@ export const ImageViewer = memo(() => {
 
 	const filter = useMolecule(ImageFilterMolecule)
 	const { show: showFilter } = useSnapshot(filter.state)
+
+	const calibration = useMolecule(ImageCalibrationMolecule)
+	const { show: showCalibration } = useSnapshot(calibration.state)
 
 	const settings = useMolecule(ImageSettingsMolecule)
 	const { show: showSettings } = useSnapshot(settings.state)
@@ -147,6 +152,9 @@ export const ImageViewer = memo(() => {
 			</Activity>
 			<Activity mode={showFilter ? 'visible' : 'hidden'}>
 				<ImageFilter />
+			</Activity>
+			<Activity mode={showCalibration ? 'visible' : 'hidden'}>
+				<ImageCalibration />
 			</Activity>
 			<Activity mode={showStarDetection ? 'visible' : 'hidden'}>
 				<StarDetection />

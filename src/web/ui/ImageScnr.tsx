@@ -4,10 +4,10 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageScnrMolecule } from '@/molecules/image/scnr'
 import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
-import { SCNRProtectionMethodSelect } from './SCNRProtectionMethodSelect'
 import { Icons } from './Icon'
 import { ImageChannelButtonGroup } from './ImageChannelButtonGroup'
 import { Modal } from './Modal'
+import { SCNRProtectionMethodSelect } from './SCNRProtectionMethodSelect'
 import { TextButton } from './TextButton'
 
 export const ImageScnr = memo(() => {
@@ -22,7 +22,7 @@ export const ImageScnr = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='SCNR' id={`scnr-${scnr.scope.image.key}`} maxWidth='288px' onHide={scnr.hide}>
+		<Modal footer={Footer} header='SCNR' id={`scnr-${scnr.viewer.storageKey}`} maxWidth='288px' onHide={scnr.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<ImageChannelButtonGroup allowNoneSelection className='col-span-full' onValueChange={(value) => scnr.update('channel', value)} value={channel} />
 				<SCNRProtectionMethodSelect className='col-span-8' isDisabled={channel === undefined} onValueChange={(value) => scnr.update('method', value)} value={method} />

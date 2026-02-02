@@ -27,7 +27,7 @@ export const ImageSolver = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='Plate Solver' id={`plate-solver-${solver.scope.image.key}`} maxWidth='360px' onHide={solver.hide}>
+		<Modal footer={Footer} header='Plate Solver' id={`plate-solver-${solver.viewer.storageKey}`} maxWidth='360px' onHide={solver.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<PlateSolverSelect className='col-span-8' endContent={<PlateSolverSelectEndContent />} onValueChange={(value) => solver.update('type', value)} value={type} />
 				<Checkbox className='col-span-3 col-end-13' isSelected={blind} onValueChange={(value) => solver.update('blind', value)}>

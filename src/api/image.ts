@@ -4,7 +4,7 @@ import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, numericKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
 import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
 import { adf, histogram, sigmaClip } from 'nebulosa/src/image.computation'
-import { blur, brightness, contrast, debayer, gamma, gaussianBlur, horizontalFlip, invert, mean, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
+import { blur, brightness, calibrate, contrast, debayer, gamma, gaussianBlur, horizontalFlip, invert, mean, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import type { AdaptiveDisplayFunctionOptions, Image } from 'nebulosa/src/image.types'
 import type { Camera } from 'nebulosa/src/indi.device'
 import { fileHandleSink } from 'nebulosa/src/io'
@@ -113,18 +113,18 @@ export class ImageProcessor {
 			return undefined
 		}
 
-		image = this.applyTransformation(image, transformation)
+		image = await this.applyTransformation(image, transformation)
 		item = { buffered: buffered ?? { path, camera }, image, transformation, hash }
 		this.transformed.set(hash, { date: Date.now(), item })
 		console.info('image at', path, 'was transformed:', item.image.raw.byteLength)
 		return item
 	}
 
-	private applyTransformation(image: Image, transformation: ImageTransformation | false) {
+	private async applyTransformation(image: Image, transformation: ImageTransformation | false) {
 		if (transformation === false || !transformation.enabled) return image
 
 		if (transformation.debayer) image = debayer(image) ?? image
-		if (transformation.calibration.enabled) image = this.calibrate(image, transformation.calibration)
+		if (transformation.calibration.enabled) image = await this.calibrate(image, transformation.calibration)
 		if (transformation.horizontalMirror) image = horizontalFlip(image)
 		if (transformation.verticalMirror) image = verticalFlip(image)
 
@@ -173,10 +173,20 @@ export class ImageProcessor {
 		return image
 	}
 
-	private calibrate(image: Image, calibration: ImageCalibration) {
+	private async calibrate(image: Image, calibration: ImageCalibration) {
 		if (!calibration.enabled) return image
 
-		return image
+		try {
+			const dark = calibration.dark.enabled && calibration.dark.path ? await readImageFromPath(calibration.dark.path) : undefined
+			const flat = calibration.flat.enabled && calibration.flat.path ? await readImageFromPath(calibration.flat.path) : undefined
+			const bias = calibration.bias.enabled && calibration.bias.path ? await readImageFromPath(calibration.bias.path) : undefined
+			const darkFlat = calibration.darkFlat.enabled && calibration.darkFlat.path ? await readImageFromPath(calibration.darkFlat.path) : undefined
+
+			return calibrate(image, dark, flat, bias, darkFlat)
+		} catch (e) {
+			console.error('failed to calibrate', e)
+			return image
+		}
 	}
 
 	async export(path: string, transformation: ImageTransformation, camera?: string, saveAt?: string): Promise<ExportedImageItem | undefined> {

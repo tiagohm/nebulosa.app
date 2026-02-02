@@ -21,7 +21,7 @@ export const ImageAnnotation = memo(() => {
 	)
 
 	return (
-		<Modal footer={Footer} header='Annotation' id={`annotation-${annotation.scope.image.key}`} maxWidth='376px' onHide={annotation.hide}>
+		<Modal footer={Footer} header='Annotation' id={`annotation-${annotation.viewer.storageKey}`} maxWidth='376px' onHide={annotation.hide}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Checkbox className='col-span-6' isSelected={stars} onValueChange={(value) => annotation.update('stars', value)}>
 					Stars

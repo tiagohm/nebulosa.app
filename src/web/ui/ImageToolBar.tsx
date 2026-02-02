@@ -4,6 +4,7 @@ import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
+import { ImageCalibrationMolecule } from '@/molecules/image/calibration'
 import { ImageFilterMolecule } from '@/molecules/image/filter'
 import { ImageFovMolecule } from '@/molecules/image/fov'
 import { ImageHeaderMolecule } from '@/molecules/image/header'
@@ -169,6 +170,7 @@ const TransformationPopover = memo(() => {
 	const scnr = useMolecule(ImageScnrMolecule)
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
 	const filter = useMolecule(ImageFilterMolecule)
+	const calibration = useMolecule(ImageCalibrationMolecule)
 	const { transformation, info } = useSnapshot(viewer.state)
 
 	return (
@@ -182,11 +184,14 @@ const TransformationPopover = memo(() => {
 			</Tooltip>
 			<PopoverContent>
 				<div className='flex flex-row items-center justify-center gap-2 p-2'>
-					{info && !info.mono && (
+					<Tooltip content='Calibration' placement='top' showArrow>
+						<IconButton color='secondary' icon={Icons.Image} onPointerUp={calibration.show} variant='flat' />
+					</Tooltip>
+					<Activity mode={info && !info.mono ? 'visible' : 'hidden'}>
 						<Tooltip content='SCNR' placement='top' showArrow>
 							<IconButton color='secondary' icon={Icons.Swatch} onPointerUp={scnr.show} variant='flat' />
 						</Tooltip>
-					)}
+					</Activity>
 					<Tooltip content='Adjustment' placement='top' showArrow>
 						<IconButton color='secondary' icon={Icons.ImageEdit} onPointerUp={adjustment.show} variant='flat' />
 					</Tooltip>

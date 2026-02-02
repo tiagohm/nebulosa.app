@@ -16,7 +16,7 @@ export const ImageFov = memo(() => {
 	const fov = useMolecule(ImageFovMolecule)
 
 	return (
-		<Modal header='FOV' id={`fov-${fov.scope.image.key}`} maxWidth='336px' onHide={fov.hide}>
+		<Modal header='FOV' id={`fov-${fov.viewer.storageKey}`} maxWidth='336px' onHide={fov.hide}>
 			<div className='mt-0 grid grid-cols-12 items-center gap-2'>
 				<FovItemList />
 				<FovItemEdit />

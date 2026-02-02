@@ -801,7 +801,7 @@
   },
   {
     "name": "Rigelsys nFrame",
-    "driver": "indi_nstep_rotator"
+    "driver": "indi_nframe_rotator"
   },
   {
     "name": "Rigelsys NStep",
@@ -934,6 +934,10 @@
   {
     "name": "Starfish CCD",
     "driver": "indi_fishcamp_ccd"
+  },
+  {
+    "name": "StarTech 7-Ports Managed USB Hub",
+    "driver": "indi_startech_hub"
   },
   {
     "name": "SVBONY CCD",

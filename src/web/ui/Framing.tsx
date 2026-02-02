@@ -45,7 +45,7 @@ export const Framing = memo(() => {
 				<Checkbox className='col-span-full' isDisabled={loading} isSelected={openNewImage} onValueChange={(value) => (framing.state.openNewImage = value)}>
 					Open in new image
 				</Checkbox>
-				<Link className='col-span-full text-center mt-2 text-xs text-neutral-500 hover:text-neutral-300' href='https://alasky.cds.unistra.fr/hips-image-services/hips2fits' label='Powered by hips2fits, a service provided by CDS' />
+				<Link className='col-span-full mt-2' href='https://alasky.cds.unistra.fr/hips-image-services/hips2fits' label='Powered by hips2fits, a service provided by CDS' />
 			</div>
 		</Modal>
 	)

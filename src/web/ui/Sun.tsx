@@ -38,7 +38,7 @@ export const Sun = memo(({ source, onSourceChange }: SunProps) => {
 		<div className='min-w-20 flex flex-col justify-center items-center gap-1'>
 			<SolarImageSourceDropdown className='w-full' onValueChange={onSourceChange} value={source} />
 			<img className='select-none max-w-54 w-full h-auto contrast-[0.8125]' draggable={false} onError={handleOnError} ref={imgRef} src={`${API_URL}/atlas/sun/image?source=${source}`} />
-			<Link className='w-full text-center text-xs text-neutral-500 hover:text-neutral-300' href={SOLAR_IMAGE_SOURCE_URLS[source].replace('256', '1024')} label='NASA/SDO' />
+			<Link href={SOLAR_IMAGE_SOURCE_URLS[source].replace('256', '1024')} label='NASA/SDO' />
 		</div>
 	)
 })

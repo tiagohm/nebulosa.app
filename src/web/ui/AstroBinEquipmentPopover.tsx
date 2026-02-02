@@ -1,8 +1,9 @@
 import { ListboxItem, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
-import { memo, useCallback, useState } from 'react'
+import { memo, useState } from 'react'
 import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
+import { Link } from './Link'
 
 export interface AstroBinEquipmentPopoverItem {
 	readonly id: number
@@ -26,29 +27,30 @@ function filter(item: AstroBinEquipmentPopoverItem, text: string) {
 	return name.toLowerCase().includes(text) || (!!sensor && sensor.toLowerCase().includes(text))
 }
 
-function description(item: AstroBinEquipmentPopoverItem) {
+const EquipmentItem = (item: AstroBinEquipmentPopoverItem) => {
 	const { sensor, w, h, ps, ap, fl } = item
-	return sensor ? `${sensor} ${w}x${h} ${ps}μm` : `AP: ${ap}mm FL: ${fl}mm`
+
+	return (
+		<ListboxItem description={sensor ? `${sensor} ${w}x${h} ${ps}μm` : `AP: ${ap}mm FL: ${fl}mm`} key={item.id}>
+			{item.name}
+		</ListboxItem>
+	)
 }
 
 export const AstroBinEquipmentPopover = memo(({ type, items, onSelectedChange }: AstroBinEquipmentPopoverProps) => {
 	const [open, setOpen] = useState(false)
-
-	const handleOnAction = useCallback(
-		(value: React.Key) => {
-			const id = typeof value === 'string' ? +value : value
-
-			if (onSelectedChange) {
-				const item = items.find((e) => e.id === id)
-				item && onSelectedChange(item)
-			}
-
-			setOpen(false)
-		},
-		[onSelectedChange],
-	)
-
 	const isCamera = type === 'camera'
+
+	function handleAction(value: React.Key) {
+		const id = typeof value === 'string' ? +value : value
+
+		if (onSelectedChange) {
+			const item = items.find((e) => e.id === id)
+			item && onSelectedChange(item)
+		}
+
+		setOpen(false)
+	}
 
 	return (
 		<Popover isOpen={open} onOpenChange={setOpen} placement='bottom' showArrow>
@@ -66,19 +68,16 @@ export const AstroBinEquipmentPopover = memo(({ type, items, onSelectedChange }:
 					filter={filter}
 					isVirtualized
 					items={items}
-					onAction={handleOnAction}
+					onAction={handleAction}
 					selectionMode='none'
 					variant='flat'
 					virtualization={{
 						maxListboxHeight: 200,
 						itemHeight: 36,
 					}}>
-					{(item) => (
-						<ListboxItem description={description(item)} key={item.id}>
-							{item.name}
-						</ListboxItem>
-					)}
+					{EquipmentItem}
 				</FilterableListbox>
+				<Link className='py-2' href='https://www.astrobin.com/api/v2/equipment/' label={`AstroBin's equipment database API`} />
 			</PopoverContent>
 		</Popover>
 	)

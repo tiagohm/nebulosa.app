@@ -37,7 +37,7 @@ export const SkyAtlas = memo(() => {
 	const { tab, location } = useSnapshot(atlas.state)
 	const request = useSnapshot(atlas.state.request)
 
-	const Footer = tab !== 'galaxy' ? <Link className='w-full text-center mt-1 text-xs text-neutral-500 hover:text-neutral-300' href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' label='NASA/JPL Horizons API' /> : null
+	const Footer = tab !== 'galaxy' ? <Link className='mt-1' href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' label='NASA/JPL Horizons API' /> : null
 
 	return (
 		<>
@@ -426,7 +426,7 @@ const AsteroidSearchTab = memo(() => {
 					)}
 				</Listbox>
 			)}
-			<Link className='text-center mt-1 text-xs text-neutral-500 hover:text-neutral-300' href='https://ssd-api.jpl.nasa.gov/doc/sbdb.html' label='NASA/JPL Small-Body Database (SBDB) API' />
+			<Link className='mt-1' href='https://ssd-api.jpl.nasa.gov/doc/sbdb.html' label='NASA/JPL Small-Body Database (SBDB) API' />
 		</div>
 	)
 })
@@ -455,7 +455,7 @@ const AsteroidCloseApproachesTab = memo(() => {
 					</ListboxItem>
 				)}
 			</Listbox>
-			<Link className='text-center text-xs text-neutral-500 hover:text-neutral-300' href='https://ssd-api.jpl.nasa.gov/doc/cad.html' label='NASA/JPL SBDB Close Approach Data API' />
+			<Link href='https://ssd-api.jpl.nasa.gov/doc/cad.html' label='NASA/JPL SBDB Close Approach Data API' />
 		</div>
 	)
 })

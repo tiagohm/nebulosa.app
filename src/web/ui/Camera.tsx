@@ -24,24 +24,32 @@ import { ToggleButton } from './ToggleButton'
 
 export const Camera = memo(() => {
 	const camera = useMolecule(CameraMolecule)
-	const { minimized } = useSnapshot(camera.state)
 
 	return (
 		<Modal footer={<Footer />} header={<Header />} id={`camera-${camera.scope.camera.name}`} maxWidth='360px' onHide={camera.hide}>
-			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<Progress />
-				<Activity mode={minimized ? 'hidden' : 'visible'}>
-					<Path />
-					<Cooler />
-					<Temperature />
-					<Exposure />
-					<ExposureMode />
-					<Bin />
-					<Frame />
-					<GainAndFormat />
-				</Activity>
-			</div>
+			<Body />
 		</Modal>
+	)
+})
+
+const Body = memo(() => {
+	const camera = useMolecule(CameraMolecule)
+	const { minimized } = useSnapshot(camera.state)
+
+	return (
+		<div className='mt-0 grid grid-cols-12 gap-2'>
+			<Progress />
+			<Activity mode={minimized ? 'hidden' : 'visible'}>
+				<Path />
+				<Cooler />
+				<Temperature />
+				<Exposure />
+				<ExposureMode />
+				<Bin />
+				<Frame />
+				<GainAndFormat />
+			</Activity>
+		</div>
 	)
 })
 

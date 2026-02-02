@@ -485,16 +485,17 @@ export class AtlasHandler {
 			const outOfDate = now - date > 86400 * 1000 * 2
 
 			if (outOfDate) {
-				const path = join(Bun.env.satellitesDir, file)
-				await Bun.file(path).delete()
-
 				if (groups.has(group)) {
-					if (await download(group)) continue
+					if (await download(group)) {
+						const path = join(Bun.env.satellitesDir, file)
+						await Bun.file(path).delete()
+						continue
+					}
 				}
 			}
 
 			if (groups.has(group)) {
-				const path = join(Bun.env.satellitesDir, `${date}.${group}.tle`)
+				const path = join(Bun.env.satellitesDir, file)
 				const text = await Bun.file(path).text()
 				groups.delete(group)
 				readTLE(text, group)

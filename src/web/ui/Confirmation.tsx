@@ -8,18 +8,28 @@ import { TextButton } from './TextButton'
 
 export const Confirmation = memo(() => {
 	const confirmation = useMolecule(ConfirmationMolecule)
+
+	return (
+		<Modal footer={<Footer />} header='Confirmation' id='confirmation' maxWidth='336px' onHide={confirmation.hide}>
+			<Body />
+		</Modal>
+	)
+})
+
+const Body = memo(() => {
+	const confirmation = useMolecule(ConfirmationMolecule)
 	const { message } = useSnapshot(confirmation.state)
 
-	const Footer = (
+	return <div className='px-1 py-2'>{message}</div>
+})
+
+const Footer = memo(() => {
+	const confirmation = useMolecule(ConfirmationMolecule)
+
+	return (
 		<>
 			<TextButton color='danger' label='Cancel' onPointerUp={confirmation.reject} startContent={<Icons.Close />} />
 			<TextButton color='success' label='OK' onPointerUp={confirmation.accept} startContent={<Icons.Check />} />
 		</>
-	)
-
-	return (
-		<Modal footer={Footer} header='Confirmation' id='confirmation' maxWidth='336px' onHide={confirmation.hide}>
-			<div className='px-1 py-2'>{message}</div>
-		</Modal>
 	)
 })

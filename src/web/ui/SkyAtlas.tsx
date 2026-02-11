@@ -663,7 +663,7 @@ const Bookmark = memo(() => {
 
 	return (
 		<Popover className='max-w-110' isOpen={open} onOpenChange={setOpen} placement='bottom' showArrow>
-			<Tooltip content='Bookmark' placement='bottom' showArrow>
+			<Tooltip content='Bookmarks' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
 						<IconButton color='warning' icon={Icons.Bookmark} />
@@ -858,7 +858,7 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 					</Tooltip>
 				)}
 			</div>
-			<span className='w-full absolute top-[42px] left-0'>
+			<span className='w-full'>
 				<Activity mode={showChart ? 'hidden' : 'visible'}>
 					<EphemerisPosition position={position} />
 				</Activity>

@@ -265,7 +265,7 @@ export interface BodyPosition extends CoordinateInfo {
 	readonly magnitude: number | null
 	readonly distance: Distance
 	readonly illuminated: number
-	readonly elongation: number
+	readonly elongation: Angle
 	readonly leading: boolean
 }
 

@@ -13,9 +13,12 @@ import { type ImageCoordinateInterpolation, type SkyObjectSearchItem, X_IMAGE_IN
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
+export const CLIENT_ID = Date.now().toFixed(0)
+
 const DEFAULT_HEADERS: HeadersInit = {
 	'Content-Type': 'application/json',
 	Accept: 'application/json',
+	'X-Client-Id': CLIENT_ID,
 }
 
 export namespace Api {

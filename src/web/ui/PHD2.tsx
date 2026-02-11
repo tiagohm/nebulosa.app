@@ -14,7 +14,7 @@ export const PHD2 = memo(() => {
 	const { profile } = useSnapshot(phd2.state)
 
 	return (
-		<Modal footer={<Footer />} header='PHD2' id='phd2' maxWidth='408px' onHide={phd2.hide} subHeader={profile}>
+		<Modal footer={<Footer />} header='PHD2' id='phd2' maxWidth='360px' onHide={phd2.hide} subHeader={profile}>
 			<div className='mt-0 grid grid-cols-12 gap-2'>
 				<Connection />
 				<Settle />
@@ -48,9 +48,9 @@ const Settle = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={connected} label='Settle tolerance (px)' maxValue={25} minValue={1} onValueChange={(value) => phd2.updateSettle('pixels', value)} placeholder='1.5' size='sm' step={0.1} value={pixels} />
-			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={connected} label='Min settle time (s)' maxValue={60} minValue={1} onValueChange={(value) => phd2.updateSettle('time', value)} placeholder='10' size='sm' value={time} />
-			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={connected} label='Settle timeout (s)' maxValue={60} minValue={1} onValueChange={(value) => phd2.updateSettle('timeout', value)} placeholder='30' size='sm' value={timeout} />
+			<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={connected} label='Settle tolerance (px)' maxValue={25} minValue={1} onValueChange={(value) => phd2.updateSettle('pixels', value)} placeholder='1.5' size='sm' step={0.1} value={pixels} />
+			<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={connected} label='Min settle time (s)' maxValue={60} minValue={1} onValueChange={(value) => phd2.updateSettle('time', value)} placeholder='10' size='sm' value={time} />
+			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={connected} label='Settle timeout (s)' maxValue={60} minValue={1} onValueChange={(value) => phd2.updateSettle('timeout', value)} placeholder='30' size='sm' value={timeout} />
 		</>
 	)
 })
@@ -63,7 +63,7 @@ const Dither = memo(() => {
 	return (
 		<>
 			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={connected} label='Dither pixels (px)' maxValue={25} minValue={1} onValueChange={(value) => phd2.updateDither('amount', value)} placeholder='5' size='sm' step={0.1} value={amount} />
-			<Checkbox className='col-span-8' isDisabled={connected} isSelected={raOnly} onValueChange={(value) => phd2.updateDither('raOnly', value)}>
+			<Checkbox className='col-span-3' isDisabled={connected} isSelected={raOnly} onValueChange={(value) => phd2.updateDither('raOnly', value)}>
 				RA only
 			</Checkbox>
 		</>

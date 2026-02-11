@@ -102,7 +102,7 @@ export const WebSocketMolecule = molecule(() => {
 		})
 	}
 
-	function send(data: string | ArrayBufferLike | Blob | ArrayBufferView<ArrayBufferLike>) {
+	function send(data: string | Blob | BufferSource) {
 		ws?.send(data)
 	}
 

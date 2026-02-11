@@ -69,7 +69,7 @@ div:has(div[data-slot="base"][data-open="true"][role="dialog"]) {
 
 .home-menu {
 	button:disabled {
-		@apply grayscale
+		@apply grayscale;
 	}
 }
 

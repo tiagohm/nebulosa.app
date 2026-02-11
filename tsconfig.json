@@ -18,8 +18,8 @@
 		"incremental": false,
 		"forceConsistentCasingInFileNames": true,
 		"allowSyntheticDefaultImports": true,
-		"baseUrl": ".",
 		"paths": {
+			"*": ["./*"],
 			"@/*": ["./src/web/*"]
 		}
 	}

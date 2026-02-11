@@ -49,6 +49,11 @@ declare module '*.sqlite' {
 	export = db
 }
 
+declare module '*.css' {
+	const path: `${string}.css`
+	export = path
+}
+
 declare module '*.module.css' {
 	const classes: { readonly [key: string]: string }
 	export = classes

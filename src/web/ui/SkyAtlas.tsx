@@ -11,7 +11,7 @@ import { type BodyPosition, EMPTY_TWILIGHT, type Twilight } from 'src/shared/typ
 import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, type BookmarkItem, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, type SkyAtlasTab, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
-import { skyObjectName, skyObjectType } from '@/shared/util'
+import { formatDistance, skyObjectName, skyObjectType } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { ConstellationSelect } from './ConstellationSelect'
@@ -241,6 +241,7 @@ const MoonTab = memo(() => {
 				<Moon />
 				<div className='absolute top-auto left-0 p-0 text-xs'>
 					<LunarEclipses />
+					<LunarApsis />
 				</div>
 				<div className='absolute top-auto right-0 p-0 text-xs'>
 					<MoonPhases />
@@ -281,8 +282,21 @@ const LunarEclipses = memo(() => {
 	return (
 		<div className='flex flex-col gap-0'>
 			{eclipses.map((eclipse) => (
-				<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Moon} key={eclipse.startTime} label={eclipse.type} offset={offset} time={eclipse.startTime} />
+				<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Moon} key={eclipse.time} label={eclipse.type} offset={offset} time={eclipse.startTime} />
 			))}
+		</div>
+	)
+})
+
+const LunarApsis = memo(() => {
+	const moon = useMolecule(MoonMolecule)
+	const { apsis } = useSnapshot(moon.state)
+	const { offset } = useSnapshot(moon.state.request.time)
+
+	return (
+		<div className='flex flex-col gap-0'>
+			<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Moon} label={`APOGEE (${formatDistance(apsis[0].distance)})`} offset={offset} time={apsis[0].time} />
+			<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Moon} label={`PERIGEE (${formatDistance(apsis[1].distance)})`} offset={offset} time={apsis[1].time} />
 		</div>
 	)
 })

@@ -11,7 +11,7 @@ import { iersb } from 'nebulosa/src/iers'
 import { expectedPierSide, meridianTimeIn, type UTCTime } from 'nebulosa/src/indi.device'
 import { readableStreamSource } from 'nebulosa/src/io'
 import { type GeographicPosition, localSiderealTime } from 'nebulosa/src/location'
-import { nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/moon'
+import { nearestLunarApsis, nearestLunarEclipse, nearestLunarPhase } from 'nebulosa/src/moon'
 import { closeApproaches, search } from 'nebulosa/src/sbd'
 import { observeStar } from 'nebulosa/src/star'
 import { nearestSolarEclipse, season } from 'nebulosa/src/sun'
@@ -23,7 +23,7 @@ import type { Mutable } from 'utility-types'
 import besselianElementsOfSolarEclipsesCsv from '../../data/besselian-elements-of-solar-eclipses.csv' with { type: 'file' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // biome-ignore format: too long!
-import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight } from '../shared/types'
+import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarApsis, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight } from '../shared/types'
 import type { CacheManager } from './cache'
 import { type Endpoints, query, response } from './http'
 import type { NotificationHandler } from './notification'
@@ -259,6 +259,19 @@ export class AtlasHandler {
 		}
 
 		return eclipses
+	}
+
+	moonApsis(req: LocationAndTime): readonly [NextLunarApsis, NextLunarApsis] {
+		const location = this.cache.geographicCoordinate(req.location)
+		const time = this.cache.time(req.time.utc, location, 'm')
+
+		const apogee = nearestLunarApsis(time, 'APOGEE', true)
+		const perigee = nearestLunarApsis(time, 'PERIGEE', true)
+
+		return [
+			{ time: temporalFromTime(apogee[0]), distance: apogee[1], diameter: apogee[2] },
+			{ time: temporalFromTime(perigee[0]), distance: perigee[1], diameter: perigee[2] },
+		]
 	}
 
 	positionOfPlanet(code: string, req: PositionOfBody) {
@@ -665,6 +678,7 @@ export function atlas(atlas: AtlasHandler): Endpoints {
 		'/atlas/moon/chart': { POST: async (req) => response(atlas.chartOfMoon(await req.json())) },
 		'/atlas/moon/phases': { POST: async (req) => response(atlas.moonPhases(await req.json())) },
 		'/atlas/moon/eclipses': { POST: async (req) => response(atlas.moonEclipses(await req.json())) },
+		'/atlas/moon/apsis': { POST: async (req) => response(atlas.moonApsis(await req.json())) },
 		'/atlas/minorplanets/search': { POST: async (req) => response(await atlas.searchMinorPlanet(await req.json())) },
 		'/atlas/minorplanets/closeapproaches': { POST: async (req) => response(await atlas.findCloseApproaches(await req.json())) },
 		'/atlas/planets/:code/position': { POST: async (req) => response(await atlas.positionOfPlanet(req.params.code, await req.json())) },

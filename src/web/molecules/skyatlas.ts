@@ -5,7 +5,7 @@ import type { GeographicCoordinate } from 'nebulosa/src/location'
 import { type Temporal, temporalAdd, temporalGet, temporalStartOfDay, temporalSubtract } from 'nebulosa/src/temporal'
 import bus from 'src/shared/bus'
 // biome-ignore format: too long!
-import { type BodyPosition, type CloseApproach, DEFAULT_BODY_POSITION, DEFAULT_GEOGRAPHIC_COORDINATE, DEFAULT_POSITION_OF_BODY, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type FindCloseApproaches, type Framing, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type NextLunarEclipse, type NextSolarEclipse, type PlanetType, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
+import { type BodyPosition, type CloseApproach, DEFAULT_BODY_POSITION, DEFAULT_GEOGRAPHIC_COORDINATE, DEFAULT_POSITION_OF_BODY, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type FindCloseApproaches, type Framing, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type NextLunarApsis, type NextLunarEclipse, type NextSolarEclipse, type PlanetType, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -56,6 +56,7 @@ export interface MoonState {
 	chart: number[]
 	phases: readonly LunarPhaseTime[]
 	eclipses: NextLunarEclipse[]
+	apsis: readonly [NextLunarApsis, NextLunarApsis]
 }
 
 export interface PlanetState {
@@ -201,6 +202,10 @@ const moonState = proxy<MoonState>({
 	chart: [],
 	phases: [],
 	eclipses: [],
+	apsis: [
+		{ time: 0, distance: 0, diameter: 0 },
+		{ time: 0, distance: 0, diameter: 0 },
+	],
 })
 
 initProxy(moonState, 'skyatlas.moon', ['o:request'])
@@ -213,6 +218,7 @@ export const MoonMolecule = molecule(() => {
 	let phasesUpdate = true
 	let phasesMonth = 0
 	let eclipsesUpdate = true
+	let apsisUpdate = true
 
 	async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
 		let changed = false
@@ -230,6 +236,7 @@ export const MoonMolecule = molecule(() => {
 			changed = true
 
 			eclipsesUpdate ||= dateHasChanged
+			apsisUpdate ||= dateHasChanged
 
 			if ((!phasesUpdate && dateHasChanged) || phasesMonth === 0) {
 				const local = temporalAdd(time.utc, time.offset, 'm')
@@ -245,6 +252,7 @@ export const MoonMolecule = molecule(() => {
 		if (changed) {
 			void updatePhases()
 			void updateEclipses()
+			void updateApsis()
 
 			await updatePosition()
 			await updateChart(dateHasChanged)
@@ -279,6 +287,15 @@ export const MoonMolecule = molecule(() => {
 		const eclipses = await Api.SkyAtlas.moonEclipses(request)
 		if (eclipses) state.eclipses = eclipses
 		else eclipsesUpdate = true
+	}
+
+	async function updateApsis() {
+		if (!apsisUpdate) return
+		apsisUpdate = false
+		const request = { ...state.request, count: 1 }
+		const apsis = await Api.SkyAtlas.moonApsis(request)
+		if (apsis) state.apsis = apsis
+		else apsisUpdate = true
 	}
 
 	return { state, tick } as const

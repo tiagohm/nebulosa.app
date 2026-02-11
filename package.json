@@ -27,7 +27,7 @@
 		"@use-gesture/react": "10.3.1",
 		"bunshi": "2.2.0",
 		"clsx": "2.1.1",
-		"croner": "9.1.0",
+		"croner": "10.0.1",
 		"nebulosa": "github:tiagohm/nebulosa.ts",
 		"open": "11.0.0",
 		"react": "19.2.4",
@@ -39,10 +39,10 @@
 		"valtio": "2.3.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.3.13",
-		"@types/bun": "1.3.8",
+		"@biomejs/biome": "2.3.14",
+		"@types/bun": "1.3.9",
 		"@types/leaflet": "1.9.21",
-		"@types/react": "19.2.10",
+		"@types/react": "19.2.13",
 		"@types/react-dom": "19.2.3",
 		"typescript": "5.9.3"
 	},

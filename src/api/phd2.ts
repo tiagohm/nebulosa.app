@@ -134,12 +134,13 @@ export class PHD2Handler {
 		if (this.client) return false
 
 		try {
-			this.client = new PHD2Client({ handler: this.handler })
+			const client = new PHD2Client({ handler: this.handler })
 
-			if (await this.client.connect(req.host, req.port)) {
+			if (await client.connect(req.host, req.port)) {
+				this.client = client
 				Object.assign(this.settings, req.dither)
 				this.clear()
-				this.pixelScale = (await this.client.getPixelScale()) || 1
+				this.pixelScale = (await client.getPixelScale()) || 1
 				return true
 			} else {
 				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to PHD2 server', color: 'danger' })

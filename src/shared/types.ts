@@ -180,6 +180,12 @@ export interface NextLunarEclipse extends Pick<LunarEclipse, 'type'> {
 	time: Temporal
 }
 
+export interface NextLunarApsis {
+	readonly time: number
+	readonly distance: Distance
+	readonly diameter: Angle
+}
+
 export interface SearchMinorPlanet {
 	readonly text: string
 }

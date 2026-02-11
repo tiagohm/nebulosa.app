@@ -12,12 +12,8 @@ export interface PHD2State extends PHD2Status {
 	show: boolean
 	readonly connection: PHD2Connect
 	readonly event: PHD2Event
-	readonly history: PHD2Event['step'][]
 	index: number
 }
-
-const MAX_HISTORY_SIZE = 101
-const EMPTY_HISTORY_ITEM: PHD2Event['step'] = { ra: null, dec: null, raCorrection: null, decCorrection: null, dx: null, dy: null }
 
 const state = proxy<PHD2State>({
 	show: false,
@@ -25,7 +21,6 @@ const state = proxy<PHD2State>({
 	running: false,
 	connection: structuredClone(DEFAULT_PHD2_CONNECT),
 	event: structuredClone(DEFAULT_PHD2_EVENT),
-	history: new Array<PHD2Event['step']>(MAX_HISTORY_SIZE).fill(EMPTY_HISTORY_ITEM),
 	index: 0,
 })
 
@@ -41,15 +36,6 @@ export const PHD2Molecule = molecule(() => {
 			Object.assign(state.event, event)
 
 			state.running = state.event.state === 'GUIDING'
-
-			if (event.step && state.running) {
-				if (state.index >= MAX_HISTORY_SIZE) {
-					state.history.shift()
-					state.history.push(event.step)
-				} else {
-					state.history[state.index++] = event.step
-				}
-			}
 		})
 
 		unsubscribers[1] = bus.subscribe('phd2:close', () => {
@@ -106,7 +92,6 @@ export const PHD2Molecule = molecule(() => {
 		state.event.rmsRA = 0
 		state.event.rmsDEC = 0
 		state.index = 0
-		state.history.fill(EMPTY_HISTORY_ITEM)
 		return Api.PHD2.clear()
 	}
 

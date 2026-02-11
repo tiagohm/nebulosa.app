@@ -162,11 +162,11 @@ export function skyObjectType(type: SkyObjectSearchItem['type']) {
 
 // Formats a distance value into a human-readable string with appropriate units
 export function formatDistance(distance: Distance) {
+	if (distance <= 0) return '0'
 	if (distance >= ONE_GIGAPARSEC) return `${(distance / ONE_GIGAPARSEC).toFixed(2)} Gpc`
 	if (distance >= ONE_MEGAPARSEC) return `${(distance / ONE_MEGAPARSEC).toFixed(2)} Mpc`
 	if (distance >= ONE_KILOPARSEC) return `${(distance / ONE_KILOPARSEC).toFixed(2)} kpc`
 	if (distance >= 63241.077084266280268653583182) return `${toLightYear(distance).toFixed(2)} ly`
 	if (distance >= 1) return `${distance.toFixed(3)} AU`
-	if (distance <= 0) return '0'
 	return `${(toKilometer(distance)).toFixed(0)} km`
 }

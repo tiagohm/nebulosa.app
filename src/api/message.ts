@@ -30,7 +30,7 @@ export class WebSocketMessageHandler {
 	send<T extends object>(type: string, message: T | undefined | null, socket?: Messager) {
 		bus.emit(type, message)
 
-		if (this.sockets.size) {
+		if (this.sockets.size > 0) {
 			const data = `${type}@${message ? JSON.stringify(message) : ''}`
 
 			if (socket) {

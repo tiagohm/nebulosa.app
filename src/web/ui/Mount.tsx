@@ -54,7 +54,7 @@ export const Mount = memo(() => {
 								<IconButton color='danger' icon={Icons.MapMarker} isDisabled={!connected || moving} onPointerUp={mount.showLocation} />
 							</Tooltip>
 							<Tooltip content='Time' showArrow>
-								<IconButton color='primary' icon={Icons.Clock} isDisabled={!connected || moving} onPointerUp={mount.showTime} />
+								<IconButton color='primary' icon={Icons.Clock} isDisabled={!connected || moving || time.utc === 0} onPointerUp={mount.showTime} />
 							</Tooltip>
 						</div>
 					</div>
@@ -120,9 +120,9 @@ const TargetCoordinateAndPosition = memo(({ isDisabled }: TargetCoordinateAndPos
 			<div className='col-span-full'>
 				<BodyCoordinateInfo hide={['lst', type === 'JNOW' ? 'equatorial' : type === 'J2000' ? 'equatorialJ2000' : type === 'ALTAZ' ? 'horizontal' : type === 'ECLIPTIC' ? 'ecliptic' : 'galactic']} position={position} />
 			</div>
-			<Input className='col-span-7' isDisabled={isDisabled} label={type === 'JNOW' || type === 'J2000' ? 'RA' : type === 'ALTAZ' ? 'AZ' : 'LON'} onValueChange={(value) => mount.updateTargetCoordinateByType('x', value)} size='sm' value={x} />
-			<Input className='col-span-7' isDisabled={isDisabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={(value) => mount.updateTargetCoordinateByType('y', value)} size='sm' value={y} />
-			<DropdownButton className='col-span-6' color='primary' isDisabled={isDisabled} label={<TargetCoordinateDropdownButtonLabel action={action} />} onAction={mount.updateTargetCoordinateAction} onPointerUp={mount.handleTargetCoordinateAction} size='lg'>
+			<Input className='col-span-6' isDisabled={isDisabled} label={type === 'JNOW' || type === 'J2000' ? 'RA' : type === 'ALTAZ' ? 'AZ' : 'LON'} onValueChange={(value) => mount.updateTargetCoordinateByType('x', value)} size='sm' value={x} />
+			<Input className='col-span-6' isDisabled={isDisabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={(value) => mount.updateTargetCoordinateByType('y', value)} size='sm' value={y} />
+			<DropdownButton className='col-span-8' color='primary' isDisabled={isDisabled} label={<TargetCoordinateDropdownButtonLabel action={action} />} onAction={mount.updateTargetCoordinateAction} onPointerUp={mount.handleTargetCoordinateAction} size='lg'>
 				<DropdownItem key='GOTO' startContent={<Icons.Telescope size={12} />}>
 					Go
 				</DropdownItem>

@@ -83,8 +83,9 @@ export const WheelMolecule = molecule(() => {
 	}
 
 	function apply() {
-		wheel.names[state.selected.position] = state.selected.name
-		return Api.Wheels.names(wheel, wheel.names)
+		const names = [...wheel.name]
+		names[state.selected.position] = state.selected.name
+		return Api.Wheels.names(wheel, names)
 	}
 
 	function hide() {

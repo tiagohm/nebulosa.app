@@ -1,9 +1,9 @@
 import { SelectItem } from '@heroui/react'
-import type { SlewRate } from 'nebulosa/src/indi.device'
+import type { NameAndLabel } from 'nebulosa/src/indi.device'
 import { EnumSelect, type EnumSelectProps } from './EnumSelect'
 
 export interface SlewRateSelectProps extends Omit<EnumSelectProps, 'children'> {
-	readonly rates: readonly Readonly<SlewRate>[]
+	readonly rates: readonly Readonly<NameAndLabel>[]
 }
 
 export function SlewRateSelect({ rates, isDisabled, label = 'Slew Rate', ...props }: SlewRateSelectProps) {

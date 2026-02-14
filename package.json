@@ -21,7 +21,7 @@
 	},
 	"license": "MIT",
 	"dependencies": {
-		"@heroui/react": "2.8.8",
+		"@heroui/react": "2.8.9",
 		"@tailwindcss/cli": "4.1.18",
 		"@uidotdev/usehooks": "2.4.1",
 		"@use-gesture/react": "10.3.1",
@@ -39,10 +39,10 @@
 		"valtio": "2.3.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.3.14",
+		"@biomejs/biome": "2.3.15",
 		"@types/bun": "1.3.9",
 		"@types/leaflet": "1.9.21",
-		"@types/react": "19.2.13",
+		"@types/react": "19.2.14",
 		"@types/react-dom": "19.2.3",
 		"typescript": "beta"
 	},

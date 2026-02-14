@@ -1,7 +1,7 @@
 import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import type { Angle } from 'nebulosa/src/angle'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
-import type { Camera, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, MountTargetCoordinate, Rotator, SlewRate, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, MountTargetCoordinate, NameAndLabel, Rotator, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
 import type { Message, NewVector } from 'nebulosa/src/indi.types'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { PHD2Profile } from 'nebulosa/src/phd2'
@@ -39,14 +39,14 @@ export namespace Api {
 			return json<boolean>('/filesystem/exists', 'post', req)
 		}
 
-		export function join(req: string[]) {
+		export function join(req: readonly string[]) {
 			return json<{ path: string }>('/filesystem/join', 'post', req)
 		}
 	}
 
 	export namespace Connection {
 		export function list() {
-			return json<ConnectionStatus[]>('/connections', 'get')
+			return json<readonly ConnectionStatus[]>('/connections', 'get')
 		}
 
 		export function connect(req: Connect | ConnectionStatus) {
@@ -90,7 +90,7 @@ export namespace Api {
 		}
 
 		export function annotate(req: AnnotateImage) {
-			return json<AnnotatedSkyObject[]>('/image/annotate', 'post', req)
+			return json<readonly AnnotatedSkyObject[]>('/image/annotate', 'post', req)
 		}
 
 		export function coordinateInterpolation(req: PlateSolution) {
@@ -98,7 +98,7 @@ export namespace Api {
 		}
 
 		export function statistics(req: StatisticImage) {
-			return json<ImageHistogram[]>('/image/statistics', 'post', req)
+			return json<readonly ImageHistogram[]>('/image/statistics', 'post', req)
 		}
 	}
 
@@ -147,14 +147,14 @@ export namespace Api {
 			}
 
 			export function drivers() {
-				return json<string[]>('/indi/server/drivers', 'get')
+				return json<readonly string[]>('/indi/server/drivers', 'get')
 			}
 		}
 	}
 
 	export namespace Cameras {
 		export function list(connection: ConnectionStatus) {
-			return json<Camera[]>(`/cameras?client=${connection.id}`, 'get')
+			return json<readonly Camera[]>(`/cameras?client=${connection.id}`, 'get')
 		}
 
 		export function get(name: string, connection: ConnectionStatus) {
@@ -180,7 +180,7 @@ export namespace Api {
 
 	export namespace Mounts {
 		export function list(connection: ConnectionStatus) {
-			return json<Mount[]>(`/mounts?client=${connection.id}`, 'get')
+			return json<readonly Mount[]>(`/mounts?client=${connection.id}`, 'get')
 		}
 
 		export function get(name: string, connection: ConnectionStatus) {
@@ -219,7 +219,7 @@ export namespace Api {
 			return res(`/mounts/${mount.name}/trackmode?client=${mount.client.id}`, 'post', mode)
 		}
 
-		export function slewRate(mount: Mount, rate: SlewRate | string) {
+		export function slewRate(mount: Mount, rate: NameAndLabel | string) {
 			return res(`/mounts/${mount.name}/slewrate?client=${mount.client.id}`, 'post', rate)
 		}
 
@@ -276,7 +276,7 @@ export namespace Api {
 
 	export namespace Focusers {
 		export function list(connection: ConnectionStatus) {
-			return json<Focuser[]>(`/focusers?client=${connection.id}`, 'get')
+			return json<readonly Focuser[]>(`/focusers?client=${connection.id}`, 'get')
 		}
 
 		export function get(name: string, connection: ConnectionStatus) {
@@ -310,7 +310,7 @@ export namespace Api {
 
 	export namespace Wheels {
 		export function list(connection: ConnectionStatus) {
-			return json<Wheel[]>(`/wheels?client=${connection.id}`, 'get')
+			return json<readonly Wheel[]>(`/wheels?client=${connection.id}`, 'get')
 		}
 
 		export function get(name: string, connection: ConnectionStatus) {
@@ -321,14 +321,14 @@ export namespace Api {
 			return res(`/wheels/${wheel.name}/moveto?client=${wheel.client.id}`, 'post', position)
 		}
 
-		export function names(wheel: Wheel, names: string[]) {
+		export function names(wheel: Wheel, names: readonly string[]) {
 			return res(`/wheels/${wheel.name}/names?client=${wheel.client.id}`, 'post', names)
 		}
 	}
 
 	export namespace Thermometers {
 		export function list(connection: ConnectionStatus) {
-			return json<Thermometer[]>(`/thermometers?client=${connection.id}`, 'get')
+			return json<readonly Thermometer[]>(`/thermometers?client=${connection.id}`, 'get')
 		}
 
 		export function get(name: string, connection: ConnectionStatus) {
@@ -338,7 +338,7 @@ export namespace Api {
 
 	export namespace GuideOutputs {
 		export function list(connection: ConnectionStatus) {
-			return json<GuideOutput[]>(`/guideoutputs?client=${connection.id}`, 'get')
+			return json<readonly GuideOutput[]>(`/guideoutputs?client=${connection.id}`, 'get')
 		}
 
 		export function get(name: string, connection: ConnectionStatus) {
@@ -352,7 +352,7 @@ export namespace Api {
 
 	export namespace Covers {
 		export function list(connection: ConnectionStatus) {
-			return json<Cover[]>(`/covers?client=${connection.id}`, 'get')
+			return json<readonly Cover[]>(`/covers?client=${connection.id}`, 'get')
 		}
 
 		export function get(name: string, connection: ConnectionStatus) {
@@ -374,7 +374,7 @@ export namespace Api {
 
 	export namespace FlatPanels {
 		export function list(connection: ConnectionStatus) {
-			return json<FlatPanel[]>(`/flatpanels?client=${connection.id}`, 'get')
+			return json<readonly FlatPanel[]>(`/flatpanels?client=${connection.id}`, 'get')
 		}
 
 		export function get(name: string, connection: ConnectionStatus) {
@@ -396,7 +396,7 @@ export namespace Api {
 
 	export namespace Rotators {
 		export function list(connection: ConnectionStatus) {
-			return json<Rotator[]>(`/rotators?client=${connection.id}`, 'get')
+			return json<readonly Rotator[]>(`/rotators?client=${connection.id}`, 'get')
 		}
 
 		export function get(name: string, connection: ConnectionStatus) {
@@ -426,7 +426,7 @@ export namespace Api {
 
 	export namespace DewHeaters {
 		export function list(connection: ConnectionStatus) {
-			return json<DewHeater[]>(`/dewheaters?client=${connection.id}`, 'get')
+			return json<readonly DewHeater[]>(`/dewheaters?client=${connection.id}`, 'get')
 		}
 
 		export function get(name: string, connection: ConnectionStatus) {
@@ -444,7 +444,7 @@ export namespace Api {
 		}
 
 		export function chartOfSun(req: PositionOfBody) {
-			return json<number[]>('/atlas/sun/chart', 'post', req)
+			return json<readonly number[]>('/atlas/sun/chart', 'post', req)
 		}
 
 		export function seasons(req: PositionOfBody) {
@@ -456,7 +456,7 @@ export namespace Api {
 		}
 
 		export function solarEclipses(req: FindNextSolarEclipse) {
-			return json<NextSolarEclipse[]>('/atlas/sun/eclipses', 'post', req)
+			return json<readonly NextSolarEclipse[]>('/atlas/sun/eclipses', 'post', req)
 		}
 
 		export function positionOfMoon(req: PositionOfBody) {
@@ -464,15 +464,15 @@ export namespace Api {
 		}
 
 		export function chartOfMoon(req: PositionOfBody) {
-			return json<number[]>('/atlas/moon/chart', 'post', req)
+			return json<readonly number[]>('/atlas/moon/chart', 'post', req)
 		}
 
 		export function moonPhases(req: PositionOfBody) {
-			return json<LunarPhaseTime[]>('/atlas/moon/phases', 'post', req)
+			return json<readonly LunarPhaseTime[]>('/atlas/moon/phases', 'post', req)
 		}
 
 		export function moonEclipses(req: FindNextLunarEclipse) {
-			return json<NextLunarEclipse[]>('/atlas/moon/eclipses', 'post', req)
+			return json<readonly NextLunarEclipse[]>('/atlas/moon/eclipses', 'post', req)
 		}
 
 		export function moonApsis(req: LocationAndTime) {
@@ -484,7 +484,7 @@ export namespace Api {
 		}
 
 		export function chartOfPlanet(req: PositionOfBody, code: string) {
-			return json<number[]>(`/atlas/planets/${code}/chart`, 'post', req)
+			return json<readonly number[]>(`/atlas/planets/${code}/chart`, 'post', req)
 		}
 
 		export function searchMinorPlanet(req: SearchMinorPlanet) {
@@ -492,11 +492,11 @@ export namespace Api {
 		}
 
 		export function findCloseApproaches(req: FindCloseApproaches) {
-			return json<CloseApproach[]>('/atlas/minorplanets/closeapproaches', 'post', req)
+			return json<readonly CloseApproach[]>('/atlas/minorplanets/closeapproaches', 'post', req)
 		}
 
 		export function searchSkyObject(req: SearchSkyObject) {
-			return json<SkyObjectSearchItem[]>('/atlas/skyobjects/search', 'post', req)
+			return json<readonly SkyObjectSearchItem[]>('/atlas/skyobjects/search', 'post', req)
 		}
 
 		export function positionOfSkyObject(req: PositionOfBody, id: string | number) {
@@ -504,11 +504,11 @@ export namespace Api {
 		}
 
 		export function chartOfSkyObject(req: ChartOfBody, id: string | number) {
-			return json<number[]>(`/atlas/skyobjects/${id}/chart`, 'post', req)
+			return json<readonly number[]>(`/atlas/skyobjects/${id}/chart`, 'post', req)
 		}
 
 		export function searchSatellite(req: SearchSatellite) {
-			return json<Satellite[]>('/atlas/satellites/search', 'post', req)
+			return json<readonly Satellite[]>('/atlas/satellites/search', 'post', req)
 		}
 
 		export function positionOfSatellite(req: PositionOfBody, id: string | number) {
@@ -516,7 +516,7 @@ export namespace Api {
 		}
 
 		export function chartOfSatellite(req: PositionOfBody, id: string | number) {
-			return json<number[]>(`/atlas/satellites/${id}/chart`, 'post', req)
+			return json<readonly number[]>(`/atlas/satellites/${id}/chart`, 'post', req)
 		}
 	}
 
@@ -532,13 +532,13 @@ export namespace Api {
 
 	export namespace StarDetection {
 		export function detect(req: StarDetection) {
-			return json<DetectedStar[]>('/stardetection', 'post', req)
+			return json<readonly DetectedStar[]>('/stardetection', 'post', req)
 		}
 	}
 
 	export namespace Framing {
 		export function hipsSurveys() {
-			return json<HipsSurvey[]>('/framing/hips-surveys', 'get')
+			return json<readonly HipsSurvey[]>('/framing/hips-surveys', 'get')
 		}
 
 		export function frame(req: Framing) {

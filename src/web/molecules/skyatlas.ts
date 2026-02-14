@@ -45,17 +45,17 @@ export interface SunState {
 	readonly request: PositionOfBody
 	source: SolarImageSource
 	readonly position: BodyPosition
-	chart: number[]
+	chart: readonly number[]
 	readonly seasons: SolarSeasons
-	eclipses: NextSolarEclipse[]
+	eclipses: readonly NextSolarEclipse[]
 }
 
 export interface MoonState {
 	readonly request: PositionOfBody
 	readonly position: BodyPosition
-	chart: number[]
+	chart: readonly number[]
 	phases: readonly LunarPhaseTime[]
-	eclipses: NextLunarEclipse[]
+	eclipses: readonly NextLunarEclipse[]
 	apsis: readonly [NextLunarApsis, NextLunarApsis]
 }
 
@@ -67,7 +67,7 @@ export interface PlanetState {
 	readonly request: PositionOfBody
 	code?: string
 	readonly position: BodyPosition
-	chart: number[]
+	chart: readonly number[]
 }
 
 export interface AsteroidState {
@@ -78,22 +78,22 @@ export interface AsteroidState {
 	}
 	readonly closeApproaches: {
 		readonly request: FindCloseApproaches
-		result: CloseApproach[]
+		result: readonly CloseApproach[]
 	}
 	selected?: Exclude<MinorPlanet, 'list'>
 	list?: MinorPlanet['list']
 	readonly request: PositionOfBody
 	readonly position: BodyPosition
-	chart: number[]
+	chart: readonly number[]
 }
 
 export interface GalaxyState {
 	loading: boolean
 	readonly request: SearchSkyObject
-	result: SkyObjectSearchItem[]
+	result: readonly SkyObjectSearchItem[]
 	selected?: SkyObjectSearchItem
 	readonly position: BodyPosition
-	chart: number[]
+	chart: readonly number[]
 }
 
 export interface SatelliteState {
@@ -101,9 +101,9 @@ export interface SatelliteState {
 	readonly request: SearchSatellite & PositionOfBody
 	selected?: Satellite
 	page: number
-	result: Satellite[]
+	result: readonly Satellite[]
 	readonly position: BodyPosition
-	chart: number[]
+	chart: readonly number[]
 }
 
 const sunState = proxy<SunState>({

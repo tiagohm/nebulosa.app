@@ -10,7 +10,7 @@ export interface HipsSurveyProps extends Omit<FilterableSelectProps<HipsSurvey>,
 }
 
 export function HipsSurveySelect({ isDisabled, onValueChange, value, ...props }: HipsSurveyProps) {
-	const [items, setItems] = useState<HipsSurvey[]>(() => [])
+	const [items, setItems] = useState<readonly HipsSurvey[]>(() => [])
 
 	// Fetch the HipsSurvey items and update the state
 	useEffect(() => {

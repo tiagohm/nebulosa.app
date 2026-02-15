@@ -10,7 +10,7 @@ import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedC
 import { type BodyPosition, EMPTY_TWILIGHT, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, type BookmarkItem, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, type SkyAtlasTab, SunMolecule } from '@/molecules/skyatlas'
-import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { DECIMAL_NUMBER_FORMAT, DEFAULT_POPOVER_PROPS, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { formatDistance, skyObjectName, skyObjectType } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
@@ -86,7 +86,7 @@ const Header = memo(() => {
 				</Tooltip>
 			</div>
 			{(tab === 'planet' || tab === 'galaxy' || tab === 'satellite') && (
-				<Popover className='max-w-140' placement='bottom' shouldCloseOnBlur={false} showArrow>
+				<Popover className='max-w-140' {...DEFAULT_POPOVER_PROPS}>
 					<Tooltip content='Filter' placement='bottom' showArrow>
 						<div className='max-w-fit'>
 							<PopoverTrigger>
@@ -141,7 +141,7 @@ const TabPopover = memo(() => {
 	)
 
 	return (
-		<Popover isOpen={isOpen} onOpenChange={setOpen} placement='bottom' shouldCloseOnBlur={false} showArrow>
+		<Popover isOpen={isOpen} onOpenChange={setOpen} {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip className='capitalize' content={tab} placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
@@ -662,7 +662,7 @@ const Bookmark = memo(() => {
 	}
 
 	return (
-		<Popover className='max-w-110' isOpen={open} onOpenChange={setOpen} placement='bottom' shouldCloseOnBlur={false} showArrow>
+		<Popover className='max-w-110' isOpen={open} onOpenChange={setOpen} {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip content='Bookmarks' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
@@ -755,7 +755,7 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOp
 	}
 
 	return (
-		<Popover className='max-w-110' isOpen={isOpen} onOpenChange={onOpenChange} placement='bottom' shouldCloseOnBlur={false} showArrow>
+		<Popover className='max-w-110' isOpen={isOpen} onOpenChange={onOpenChange} {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip content='Time' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>

@@ -5,12 +5,12 @@ import type { SkyObjectSearchItem } from 'src/shared/types'
 import { SKY_OBJECT_NAME_TYPES } from '@/ui/SkyObjectNameTypeDropdown'
 
 // Stops the propagation of an event to parent elements
-export function stopPropagation(event: Event | React.BaseSyntheticEvent) {
+export function stopPropagation(event: Event | React.BaseSyntheticEvent<Event>) {
 	event.stopPropagation()
 }
 
 // Prevents the default action of an event if it is cancelable
-export function preventDefault(event: Event | React.BaseSyntheticEvent) {
+export function preventDefault(event: Event | React.BaseSyntheticEvent<Event>) {
 	event.cancelable && event.preventDefault()
 }
 

@@ -5,6 +5,8 @@ import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
 import type { Connection } from '@/shared/types'
+import { DEFAULT_POPOVER_PROPS } from '../shared/constants'
+import { stopPropagation } from '../shared/util'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
 import { Icons } from './Icon'
@@ -69,7 +71,7 @@ export const ConnectionBox = memo(() => {
 				<Tooltip content='New Connection' showArrow>
 					<IconButton color='success' icon={Icons.Plus} isDisabled={loading || !!connected} onPointerUp={connection.create} />
 				</Tooltip>
-				<Select className='flex-1' disallowEmptySelection isDisabled={loading || !!connected} items={connections} onSelectionChange={handleSelectionChange} renderValue={SelectedConnectionItems} selectedKeys={new Set([selected?.id ?? ''])} selectionMode='single' size='lg'>
+				<Select className='flex-1' disallowEmptySelection isDisabled={loading || !!connected} items={connections} onSelectionChange={handleSelectionChange} popoverProps={DEFAULT_POPOVER_PROPS} renderValue={SelectedConnectionItems} selectedKeys={new Set([selected?.id ?? ''])} selectionMode='single' size='lg'>
 					{ConnectionItem}
 				</Select>
 				<ConnectButton isConnected={!!connected} isDisabled={!selected} isLoading={loading} onPointerUp={connection.connect} />
@@ -93,7 +95,7 @@ const EditDropdown = memo(({ item }: EditDropdownProps) => {
 		<div className='flex justify-center items-center'>
 			<Dropdown shouldCloseOnBlur={false} showArrow>
 				<DropdownTrigger>
-					<IconButton icon={Icons.VerticalMenu} size='sm' />
+					<IconButton icon={Icons.VerticalMenu} onPointerUp={stopPropagation} size='sm' />
 				</DropdownTrigger>
 				<DropdownMenu disabledKeys={connections.length === 1 ? ['delete'] : []}>
 					<DropdownItem key='edit' onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit size={12} />}>

@@ -3,7 +3,7 @@ import { useMolecule } from 'bunshi/react'
 import type { PlateSolverType, PlateSolveStart } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { SettingsMolecule } from '@/molecules/settings'
-import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { DECIMAL_NUMBER_FORMAT, DEFAULT_POPOVER_PROPS, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 
@@ -18,7 +18,7 @@ export function PlateSolveStartPopover({ type, radius, focalLength, pixelSize, o
 	const { executable, apiUrl, apiKey } = useSnapshot(settings.state.solver[type], { sync: true })
 
 	return (
-		<Popover className='max-w-110' placement='bottom' shouldCloseOnBlur={false} showArrow>
+		<Popover className='max-w-110' {...DEFAULT_POPOVER_PROPS}>
 			<PopoverTrigger>
 				<IconButton icon={Icons.Cog} />
 			</PopoverTrigger>

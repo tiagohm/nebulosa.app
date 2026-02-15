@@ -9,12 +9,12 @@ import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { TextButton } from './TextButton'
 
-export const Alpaca = memo(() => {
+export const AlpacaServer = memo(() => {
 	const alpaca = useMolecule(AlpacaMolecule)
 	const { devices, running } = useSnapshot(alpaca.state.status)
 
 	return (
-		<Modal footer={<Footer />} header='ASCOM Alpaca' id='alpaca' maxWidth='296px' onHide={alpaca.hide} subHeader={running ? `${devices.length} devices` : undefined}>
+		<Modal footer={<Footer />} header='ASCOM Alpaca Server' id='alpaca' maxWidth='296px' onHide={alpaca.hide} subHeader={running ? `${devices.length} devices` : undefined}>
 			<div className='mt-0 grid grid-cols-1 gap-2'>
 				<DeviceList />
 			</div>

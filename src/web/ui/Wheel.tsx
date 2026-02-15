@@ -3,6 +3,7 @@ import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { WheelMolecule } from '@/molecules/indi/wheel'
+import { DEFAULT_POPOVER_PROPS } from '../shared/constants'
 import { ConnectButton } from './ConnectButton'
 import { EnumSelect } from './EnumSelect'
 import { Icons } from './Icon'
@@ -62,7 +63,7 @@ const SlotPopover = memo(() => {
 	const { name } = useSnapshot(wheel.state.selected, { sync: true })
 
 	return (
-		<Popover className='max-w-80' placement='bottom' shouldCloseOnBlur={false} showArrow>
+		<Popover className='max-w-80' {...DEFAULT_POPOVER_PROPS}>
 			<PopoverTrigger>
 				<IconButton icon={Icons.Cog} />
 			</PopoverTrigger>

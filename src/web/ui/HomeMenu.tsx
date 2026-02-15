@@ -38,8 +38,9 @@ import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { TppaMolecule } from '@/molecules/tppa'
+import { DEFAULT_POPOVER_PROPS } from '../shared/constants'
 import { About } from './About'
-import { Alpaca } from './Alpaca'
+import { AlpacaServer } from './AlpacaServer'
 import { AutoFocus } from './AutoFocus'
 import { Calculator } from './Calculator'
 import { Darv } from './Darv'
@@ -120,7 +121,7 @@ export const HomeMenu = memo(() => {
 				<IndiPanelControl />
 			</Activity>
 			<Activity mode={showAlpaca && connected ? 'visible' : 'hidden'}>
-				<Alpaca />
+				<AlpacaServer />
 			</Activity>
 			<Activity mode={showAbout ? 'visible' : 'hidden'}>
 				<About />
@@ -137,7 +138,7 @@ export const HomeMenuPopover = memo(() => {
 	const { show } = useSnapshot(home.state.menu)
 
 	return (
-		<Popover isOpen={show} onOpenChange={home.toggleMenu} placement='bottom' shouldCloseOnBlur={false} showArrow>
+		<Popover isOpen={show} onOpenChange={home.toggleMenu} {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip content='Menu' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
@@ -262,7 +263,7 @@ export const HomeMenuPopoverContent = memo(() => {
 				</Button>
 			</Tooltip>
 			<IndiPanelControlButton isDisabled={isIndiDisabled} size='lg' />
-			<Tooltip content='ASCOM Alpaca' placement='bottom' showArrow>
+			<Tooltip content='ASCOM Alpaca Server' placement='bottom' showArrow>
 				<Button color='secondary' isDisabled={isIndiDisabled} isIconOnly onPointerUp={alpaca.show} size='lg' variant='light'>
 					<img className='w-9' src={alpacaIcon} />
 				</Button>

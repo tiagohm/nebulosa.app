@@ -2,7 +2,7 @@ import { NumberInput, Popover, PopoverContent, PopoverTrigger } from '@heroui/re
 import type { Camera } from 'nebulosa/src/indi.device'
 import type { CameraCaptureStart } from 'src/shared/types'
 import type { DeepReadonly } from 'utility-types'
-import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { DEFAULT_POPOVER_PROPS, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameFormatSelect } from './FrameFormatSelect'
 import { Icons } from './Icon'
@@ -27,7 +27,7 @@ export function CameraCaptureStartPopover({ mode, camera, color, isDisabled, val
 	const exposureTimeDisabled = !canExposureTime(mode)
 
 	return (
-		<Popover className='max-w-110' placement='bottom' shouldCloseOnBlur={false} showArrow>
+		<Popover className='max-w-110' {...DEFAULT_POPOVER_PROPS}>
 			<PopoverTrigger>
 				<IconButton {...props} color={color ?? (camera.connected ? 'success' : 'danger')} icon={Icons.Cog} isDisabled={isDisabled || !camera.connected} />
 			</PopoverTrigger>

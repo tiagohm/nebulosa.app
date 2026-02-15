@@ -1,6 +1,6 @@
 import { Input, NumberInput, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
 import type { StarDetection } from 'src/shared/types'
-import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { DEFAULT_POPOVER_PROPS, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Icons } from './Icon'
 import { IconButton, type IconButtonProps } from './IconButton'
 
@@ -11,7 +11,7 @@ export interface StarDetectionPopoverProps extends Omit<IconButtonProps, 'icon' 
 
 export function StarDetectionPopover({ value: { executable, minSNR, maxStars }, onValueChange, ...props }: StarDetectionPopoverProps) {
 	return (
-		<Popover placement='bottom' shouldCloseOnBlur={false} showArrow>
+		<Popover {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip content='Star Detection' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>

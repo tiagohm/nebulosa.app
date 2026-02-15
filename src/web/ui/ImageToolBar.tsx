@@ -17,6 +17,7 @@ import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
+import { DEFAULT_POPOVER_PROPS } from '../shared/constants'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { ToggleButton } from './ToggleButton'
@@ -77,7 +78,7 @@ const RotatePopover = memo(() => {
 	const { angle } = useSnapshot(viewer.state)
 
 	return (
-		<Popover placement='bottom' shouldCloseOnBlur={false} showArrow>
+		<Popover {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip content='Rotate' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
@@ -123,7 +124,7 @@ const OverlayPopover = memo(() => {
 	const { visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
 
 	return (
-		<Popover placement='bottom' shouldCloseOnBlur={false} showArrow>
+		<Popover {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip content='Overlay' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
@@ -174,7 +175,7 @@ const TransformationPopover = memo(() => {
 	const { transformation, info } = useSnapshot(viewer.state)
 
 	return (
-		<Popover placement='bottom' shouldCloseOnBlur={false} showArrow>
+		<Popover {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip content='Transformation' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>

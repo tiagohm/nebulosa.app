@@ -1,5 +1,6 @@
 import { ListboxItem, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
 import { memo, useState } from 'react'
+import { DEFAULT_POPOVER_PROPS } from '../shared/constants'
 import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -53,7 +54,7 @@ export const AstroBinEquipmentPopover = memo(({ type, items, onSelectedChange }:
 	}
 
 	return (
-		<Popover isOpen={open} onOpenChange={setOpen} placement='bottom' shouldCloseOnBlur={false} showArrow>
+		<Popover isOpen={open} onOpenChange={setOpen} {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip content={isCamera ? 'Cameras' : 'Telescopes'} placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>

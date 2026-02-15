@@ -123,7 +123,7 @@ export class ImageProcessor {
 	private async applyTransformation(image: Image, transformation: ImageTransformation | false) {
 		if (transformation === false || !transformation.enabled) return image
 
-		if (transformation.debayer) image = debayer(image) ?? image
+		if (transformation.debayer) image = debayer(image, !transformation.cfaPattern || transformation.cfaPattern === 'AUTO' ? undefined : transformation.cfaPattern) ?? image
 		if (transformation.calibration.enabled) image = await this.calibrate(image, transformation.calibration)
 		if (transformation.horizontalMirror) image = horizontalFlip(image)
 		if (transformation.verticalMirror) image = verticalFlip(image)
@@ -287,13 +287,13 @@ export class ImageProcessor {
 
 	private computeImageTransformationHash(transformation: ImageTransformation | false) {
 		if (transformation === false || !transformation.enabled) return 'F'
-		const { debayer, horizontalMirror, verticalMirror, invert } = transformation
+		const { debayer, cfaPattern, horizontalMirror, verticalMirror, invert } = transformation
 		const stretch = this.computeImageStretchHash(transformation.stretch)
 		const scnr = this.computeImageScnrHash(transformation.scnr)
 		const filter = this.computeImageFilterHash(transformation.filter)
 		const adjustment = this.computeImageAdjustmentHash(transformation.adjustment)
 		const calibration = this.computeImageCalibrationHash(transformation.calibration)
-		return `T:${debayer}:${calibration}:${stretch}:${scnr}:${filter}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}`
+		return `T:${debayer}:${cfaPattern}:${calibration}:${stretch}:${scnr}:${filter}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}`
 	}
 
 	private computeImageStretchHash(stretch: ImageStretch) {

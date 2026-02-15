@@ -10,7 +10,7 @@ import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { Point, Rect, Size } from 'nebulosa/src/geometry'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
-import type { ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SCNRProtectionMethod, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
+import type { CfaPattern, ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SCNRProtectionMethod, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
 // biome-ignore format: too long!
 import type { Camera, ClientInfo, ClientType, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Power, Rotator, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
 import type { PropertyState } from 'nebulosa/src/indi.types'
@@ -434,6 +434,7 @@ export interface ImageCalibration {
 export interface ImageTransformation {
 	enabled: boolean
 	debayer: boolean
+	cfaPattern: CfaPattern | 'AUTO'
 	stretch: ImageStretch
 	horizontalMirror: boolean
 	verticalMirror: boolean
@@ -1114,6 +1115,7 @@ export const DEFAULT_IMAGE_CALIBRATION: ImageCalibration = {
 export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	enabled: true,
 	debayer: true,
+	cfaPattern: 'AUTO',
 	stretch: DEFAULT_IMAGE_STRETCH,
 	horizontalMirror: false,
 	verticalMirror: false,

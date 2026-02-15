@@ -8,7 +8,7 @@ import { ImageViewerMolecule } from './viewer'
 export interface ImageSettingsState {
 	show: boolean
 	pixelated: boolean
-	format: ImageTransformation['format']
+	transformation: ImageTransformation
 }
 
 const stateMap = new Map<string, ImageSettingsState>()
@@ -22,7 +22,7 @@ export const ImageSettingsMolecule = molecule(() => {
 		proxy<ImageSettingsState>({
 			show: false,
 			pixelated: false,
-			format: viewer.state.transformation.format,
+			transformation: viewer.state.transformation,
 		})
 
 	stateMap.set(key, state)
@@ -30,7 +30,7 @@ export const ImageSettingsMolecule = molecule(() => {
 	onMount(() => {
 		const unsubscriber = initProxy(state, `image.${viewer.storageKey}.settings`, ['p:show', 'p:pixelated'])
 
-		state.format = viewer.state.transformation.format
+		state.transformation = viewer.state.transformation
 
 		update('pixelated', state.pixelated)
 
@@ -45,18 +45,29 @@ export const ImageSettingsMolecule = molecule(() => {
 		if (key === 'pixelated') viewer.target?.classList.toggle('pixelated', value as never)
 	}
 
-	function updateFormatType(value: ImageFormat) {
-		state.format.type = value
+	function updateTransformation<K extends keyof ImageTransformation>(key: K, value: ImageTransformation[K]) {
+		state.transformation[key] = value
 	}
 
-	function updateFormat<F extends 'jpeg', K extends keyof ImageSettingsState['format'][F]>(format: F, key: K, value: ImageSettingsState['format'][F][K]) {
-		state.format[format][key] = value
+	function updateFormatType(value: ImageFormat) {
+		state.transformation.format.type = value
+	}
+
+	function updateFormat<F extends 'jpeg', K extends keyof ImageTransformation['format'][F]>(format: F, key: K, value: ImageTransformation['format'][F][K]) {
+		state.transformation.format[format][key] = value
 	}
 
 	function reset() {
 		state.pixelated = true
-		state.format.type = DEFAULT_IMAGE_TRANSFORMATION.format.type
-		Object.assign(state.format.jpeg, DEFAULT_IMAGE_TRANSFORMATION.format.jpeg)
+		state.transformation.cfaPattern = 'AUTO'
+		state.transformation.format.type = DEFAULT_IMAGE_TRANSFORMATION.format.type
+		Object.assign(state.transformation.format.jpeg, DEFAULT_IMAGE_TRANSFORMATION.format.jpeg)
+		return apply()
+	}
+
+	function apply() {
+		viewer.target?.classList.toggle('pixelated', state.pixelated)
+		return viewer.load(true)
 	}
 
 	function show() {
@@ -67,5 +78,5 @@ export const ImageSettingsMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, scope: viewer.scope, viewer, update, updateFormatType, updateFormat, reset, show, hide } as const
+	return { state, scope: viewer.scope, viewer, update, updateTransformation, updateFormatType, updateFormat, reset, apply, show, hide } as const
 })

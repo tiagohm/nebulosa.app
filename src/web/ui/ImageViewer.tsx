@@ -135,7 +135,7 @@ export const ImageViewer = memo(() => {
 				<ImageInfo />
 			</Activity>
 			<Interactable onGesture={handleGesture} onMouseMove={handleMouseMove} onPointerUp={handlePointerUp} onTap={viewer.select} ref={interactableRef} zIndex={image.position}>
-				<img className='image select-none touch-none pointer-events-none max-w-none shadow-[0_0_80px_black]' draggable={false} id={image.key} onLoad={viewer.handleOnLoad} ref={imgRef} />
+				<img className='image select-none touch-none pointer-events-none max-w-none rounded-sm outline-64 outline-solid outline-black/5' draggable={false} id={image.key} onLoad={viewer.handleOnLoad} ref={imgRef} />
 				<InteractableOverlay />
 			</Interactable>
 			<Activity mode={showStretch ? 'visible' : 'hidden'}>

@@ -11,7 +11,7 @@ export interface StarDetectionPopoverProps extends Omit<IconButtonProps, 'icon' 
 
 export function StarDetectionPopover({ value: { executable, minSNR, maxStars }, onValueChange, ...props }: StarDetectionPopoverProps) {
 	return (
-		<Popover placement='bottom' showArrow>
+		<Popover placement='bottom' shouldCloseOnBlur={false} showArrow>
 			<Tooltip content='Star Detection' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>

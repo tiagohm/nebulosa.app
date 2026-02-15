@@ -62,7 +62,7 @@ const SlotPopover = memo(() => {
 	const { name } = useSnapshot(wheel.state.selected, { sync: true })
 
 	return (
-		<Popover className='max-w-80' placement='bottom' showArrow>
+		<Popover className='max-w-80' placement='bottom' shouldCloseOnBlur={false} showArrow>
 			<PopoverTrigger>
 				<IconButton icon={Icons.Cog} />
 			</PopoverTrigger>

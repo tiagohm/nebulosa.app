@@ -27,7 +27,7 @@ export function CameraCaptureStartPopover({ mode, camera, color, isDisabled, val
 	const exposureTimeDisabled = !canExposureTime(mode)
 
 	return (
-		<Popover className='max-w-110' placement='bottom' showArrow>
+		<Popover className='max-w-110' placement='bottom' shouldCloseOnBlur={false} showArrow>
 			<PopoverTrigger>
 				<IconButton {...props} color={color ?? (camera.connected ? 'success' : 'danger')} icon={Icons.Cog} isDisabled={isDisabled || !camera.connected} />
 			</PopoverTrigger>

@@ -86,7 +86,7 @@ const Header = memo(() => {
 				</Tooltip>
 			</div>
 			{(tab === 'planet' || tab === 'galaxy' || tab === 'satellite') && (
-				<Popover className='max-w-140' placement='bottom' showArrow>
+				<Popover className='max-w-140' placement='bottom' shouldCloseOnBlur={false} showArrow>
 					<Tooltip content='Filter' placement='bottom' showArrow>
 						<div className='max-w-fit'>
 							<PopoverTrigger>
@@ -141,7 +141,7 @@ const TabPopover = memo(() => {
 	)
 
 	return (
-		<Popover isOpen={isOpen} onOpenChange={setOpen} placement='bottom' showArrow>
+		<Popover isOpen={isOpen} onOpenChange={setOpen} placement='bottom' shouldCloseOnBlur={false} showArrow>
 			<Tooltip className='capitalize' content={tab} placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
@@ -662,7 +662,7 @@ const Bookmark = memo(() => {
 	}
 
 	return (
-		<Popover className='max-w-110' isOpen={open} onOpenChange={setOpen} placement='bottom' showArrow>
+		<Popover className='max-w-110' isOpen={open} onOpenChange={setOpen} placement='bottom' shouldCloseOnBlur={false} showArrow>
 			<Tooltip content='Bookmarks' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
@@ -755,7 +755,7 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOp
 	}
 
 	return (
-		<Popover className='max-w-110' isOpen={isOpen} onOpenChange={onOpenChange} placement='bottom' showArrow>
+		<Popover className='max-w-110' isOpen={isOpen} onOpenChange={onOpenChange} placement='bottom' shouldCloseOnBlur={false} showArrow>
 			<Tooltip content='Time' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>

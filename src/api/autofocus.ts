@@ -39,7 +39,7 @@ export class AutoFocusHandler {
 		const id = `${camera.id}:${focuser.id}`
 		const task = new AutoFocusTask(this, request, camera, focuser, this.handleAutoFocusEvent.bind(this))
 		this.tasks.set(id, task)
-		task.start()
+		void task.start()
 	}
 
 	stop(camera: Camera, focuser: Focuser) {
@@ -114,7 +114,7 @@ export class AutoFocusTask {
 				// Wait for focuser reach position
 				this.waitForFocuserUnsubscriber = waitForFocuser(this.focuser, position, (event) => {
 					if (event === 'reach') {
-						this.start()
+						void this.start()
 					} else if (event === 'cancel') {
 						this.handleAutoFocusEvent('IDLE', 'Stopped')
 					} else {
@@ -183,7 +183,7 @@ export class AutoFocusTask {
 
 		this.handleAutoFocusEvent('CAPTURING', '')
 
-		this.autoFocusHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
+		return this.autoFocusHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}
 
 	stop() {

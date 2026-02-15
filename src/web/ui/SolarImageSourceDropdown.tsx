@@ -28,7 +28,7 @@ const DROPDOWN_ITEM_LABEL: Record<SolarImageSource, string> = {
 
 export function SolarImageSourceDropdown({ value, onValueChange, size = 'sm', variant = 'light', ...props }: SolarImageSourceDropdownProps) {
 	return (
-		<Dropdown showArrow>
+		<Dropdown shouldCloseOnBlur={false} showArrow>
 			<DropdownTrigger>
 				<TextButton label={DROPDOWN_ITEM_LABEL[value]} {...props} size={size} variant={variant} />
 			</DropdownTrigger>

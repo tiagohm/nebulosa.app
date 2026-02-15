@@ -7,7 +7,7 @@ export interface PopoverButtonProps extends Omit<IconButtonProps, 'endContent'>,
 
 export function PopoverButton({ tooltipContent, placement = 'bottom', isOpen, onOpenChange, children, ...props }: PopoverButtonProps) {
 	return (
-		<Popover isOpen={isOpen} onOpenChange={onOpenChange} placement={placement} showArrow>
+		<Popover isOpen={isOpen} onOpenChange={onOpenChange} placement={placement} shouldCloseOnBlur={false} showArrow>
 			<Tooltip content={tooltipContent} placement={placement} showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>

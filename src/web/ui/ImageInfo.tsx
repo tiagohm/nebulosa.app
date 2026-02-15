@@ -77,7 +77,7 @@ const SelectedCoordinateDropdown = memo((props: SelectedCoordinateDropdownProps)
 	}
 
 	return (
-		<Dropdown placement='bottom-end'>
+		<Dropdown placement='bottom-end' shouldCloseOnBlur={false} showArrow>
 			<DropdownTrigger>
 				<IconButton className='pointer-events-auto' icon={Icons.DotsVertical} size='sm' />
 			</DropdownTrigger>

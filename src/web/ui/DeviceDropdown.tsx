@@ -7,7 +7,6 @@ import type { DeepReadonly } from 'utility-types'
 import { useSnapshot } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from '@/molecules/indi/equipment'
 import type { DeviceTypeMap } from '@/shared/types'
-import { stopPropagation } from '@/shared/util'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
 import { IconButton, type IconButtonProps } from './IconButton'
@@ -36,10 +35,10 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 	}
 
 	return (
-		<Dropdown isDisabled={isDisabled || items.length === 0} showArrow>
+		<Dropdown isDisabled={isDisabled || items.length === 0} shouldCloseOnBlur={false} showArrow>
 			<Tooltip content={tooltipContent} isDisabled={isDisabled || items.length === 0} placement={tooltipPlacement} showArrow>
 				<div className='max-w-fit'>
-					<DropdownTrigger onPointerUp={stopPropagation}>
+					<DropdownTrigger>
 						<IconButton {...props} color={color ?? (value === undefined ? 'secondary' : value.connected ? 'success' : 'danger')} icon={icon} isDisabled={isDisabled || items.length === 0} label={showLabel ? (value?.name ?? (showLabelOnEmpty ? label || 'None' : undefined)) : undefined} />
 					</DropdownTrigger>
 				</div>

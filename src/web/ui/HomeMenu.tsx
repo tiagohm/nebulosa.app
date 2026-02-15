@@ -137,7 +137,7 @@ export const HomeMenuPopover = memo(() => {
 	const { show } = useSnapshot(home.state.menu)
 
 	return (
-		<Popover isOpen={show} onOpenChange={home.toggleMenu} placement='bottom' showArrow>
+		<Popover isOpen={show} onOpenChange={home.toggleMenu} placement='bottom' shouldCloseOnBlur={false} showArrow>
 			<Tooltip content='Menu' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>

@@ -77,7 +77,7 @@ const RotatePopover = memo(() => {
 	const { angle } = useSnapshot(viewer.state)
 
 	return (
-		<Popover placement='bottom' showArrow>
+		<Popover placement='bottom' shouldCloseOnBlur={false} showArrow>
 			<Tooltip content='Rotate' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
@@ -123,7 +123,7 @@ const OverlayPopover = memo(() => {
 	const { visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
 
 	return (
-		<Popover placement='bottom' showArrow>
+		<Popover placement='bottom' shouldCloseOnBlur={false} showArrow>
 			<Tooltip content='Overlay' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
@@ -174,7 +174,7 @@ const TransformationPopover = memo(() => {
 	const { transformation, info } = useSnapshot(viewer.state)
 
 	return (
-		<Popover placement='bottom' showArrow>
+		<Popover placement='bottom' shouldCloseOnBlur={false} showArrow>
 			<Tooltip content='Transformation' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>

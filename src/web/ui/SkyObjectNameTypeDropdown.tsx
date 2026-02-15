@@ -104,7 +104,7 @@ export interface SkyObjectNameTypeDropdownProps extends Omit<ButtonProps, 'isIco
 
 export function SkyObjectNameTypeDropdown({ value, onValueChange, size = 'sm', variant = 'light', ...props }: SkyObjectNameTypeDropdownProps) {
 	return (
-		<Dropdown showArrow>
+		<Dropdown shouldCloseOnBlur={false} showArrow>
 			<DropdownTrigger>
 				<TextButton {...props} label={SKY_OBJECT_NAME_TYPES[value + 1]} size={size} variant={variant} />
 			</DropdownTrigger>

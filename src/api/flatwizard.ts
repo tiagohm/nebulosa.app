@@ -34,7 +34,7 @@ export class FlatWizardHandler {
 		this.stop(camera)
 		const task = new FlatWizardTask(this, request, camera, this.handleFlatWizardEvent.bind(this))
 		this.tasks.set(camera.id, task)
-		task.start()
+		void task.start()
 	}
 
 	stop(camera: Camera) {
@@ -109,7 +109,7 @@ export class FlatWizardTask {
 				return this.handleFlatWizardEvent('IDLE', 'Unable to find an optimal exposure time')
 			}
 
-			this.start()
+			await this.start()
 		}
 	}
 
@@ -125,7 +125,7 @@ export class FlatWizardTask {
 
 		this.handleFlatWizardEvent('CAPTURING', `Exposure of ${this.request.capture.exposureTime.toFixed(0)} ms`)
 
-		this.flatWizardHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
+		return this.flatWizardHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}
 
 	stop() {

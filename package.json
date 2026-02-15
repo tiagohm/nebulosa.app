@@ -10,8 +10,8 @@
 		"tailwind": "tailwindcss -m -i ./src/web/index.css -o dist/index.css",
 		"dev": "bun tailwind && bun --hot main.ts",
 		"prod": "bun tailwind && NODE_ENV=production bun --production main.ts",
-		"lint": "biome lint --write src/",
-		"format": "biome format --write src/",
+		"lint": "biome lint --write src/ tests/ bin/",
+		"format": "biome format --write src/ tests/ bin/",
 		"compile": "bun tailwind && NODE_ENV=production bun run build.ts",
 		"tsc": "tsc --noEmit"
 	},

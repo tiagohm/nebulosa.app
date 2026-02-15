@@ -53,7 +53,7 @@ export const AstroBinEquipmentPopover = memo(({ type, items, onSelectedChange }:
 	}
 
 	return (
-		<Popover isOpen={open} onOpenChange={setOpen} placement='bottom' showArrow>
+		<Popover isOpen={open} onOpenChange={setOpen} placement='bottom' shouldCloseOnBlur={false} showArrow>
 			<Tooltip content={isCamera ? 'Cameras' : 'Telescopes'} placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>

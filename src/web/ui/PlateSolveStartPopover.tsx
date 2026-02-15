@@ -18,7 +18,7 @@ export function PlateSolveStartPopover({ type, radius, focalLength, pixelSize, o
 	const { executable, apiUrl, apiKey } = useSnapshot(settings.state.solver[type], { sync: true })
 
 	return (
-		<Popover className='max-w-110' placement='bottom' showArrow>
+		<Popover className='max-w-110' placement='bottom' shouldCloseOnBlur={false} showArrow>
 			<PopoverTrigger>
 				<IconButton icon={Icons.Cog} />
 			</PopoverTrigger>

@@ -43,7 +43,7 @@ export class TppaHandler {
 	start(request: TppaStart, camera: Camera, mount: Mount) {
 		const task = new TppaTask(this, camera, mount, request, this.handleTppaEvent.bind(this))
 		this.tasks.set(request.id, task)
-		task.start()
+		void task.start()
 	}
 
 	stop(req: TppaStop) {
@@ -173,7 +173,7 @@ export class TppaTask {
 			if (!this.stopped) {
 				this.event.state = 'CAPTURING'
 				this.handleTppaEvent()
-				this.tppa.cameraHandler.start(this.camera, this.request.capture)
+				await this.tppa.cameraHandler.start(this.camera, this.request.capture)
 			}
 		}
 	}
@@ -185,7 +185,7 @@ export class TppaTask {
 		// First image
 		this.event.state = 'CAPTURING'
 		this.handleTppaEvent()
-		this.tppa.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
+		return this.tppa.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}
 
 	stop() {

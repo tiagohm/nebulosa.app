@@ -48,10 +48,10 @@ export function StellariumObjectTypeSelect({ label = 'Type', value, onValueChang
 	return (
 		<EnumMultipleSelect
 			{...props}
-			classNames={{ trigger: 'min-h-[48.75px]!' }}
+			classNames={{ trigger: 'min-h-15!' }}
 			isClearable
 			label={label}
-			onValueChange={(value) => onValueChange(value.map((e) => +e))}
+			onValueChange={(value) => onValueChange(value.map(Number))}
 			placeholder='All'
 			renderValue={(items) => {
 				return <div className='mt-2 flex flex-nowrap gap-2'>{items.map((item) => TYPES.find((e) => e[0] === +(item.key as never))![2]).join(', ')}</div>

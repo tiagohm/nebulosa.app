@@ -10,7 +10,7 @@ export function DropdownButton({ size, color, isDisabled, children, className, o
 	return (
 		<div className={clsx('inline-flex flex-row gap-0 items-center', className)}>
 			<TextButton {...props} className='flex-1 rounded-l-medium rounded-r-none' color={color} isDisabled={isDisabled} size={size} />
-			<Dropdown placement='bottom' showArrow>
+			<Dropdown placement='bottom' shouldCloseOnBlur={false} showArrow>
 				<DropdownTrigger>
 					<IconButton className='rounded-l-none rounded-r-medium' color={color} icon={Icons.ChevronDown} isDisabled={isDisabled} size={size} variant='flat' />
 				</DropdownTrigger>

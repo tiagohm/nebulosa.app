@@ -12,7 +12,7 @@ const SYMBOLS = ['m', 's', 'ms', 'µs'] as const
 
 export function ExposureTimeUnitDropdown({ value, onValueChange, size = 'sm', variant = 'light', ...props }: ExposureTimeUnitDropdownProps) {
 	return (
-		<Dropdown showArrow>
+		<Dropdown shouldCloseOnBlur={false} showArrow>
 			<DropdownTrigger>
 				<TextButton {...props} label={SYMBOLS[UNITS.indexOf(value)]} size={size} variant={variant} />
 			</DropdownTrigger>

@@ -47,7 +47,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		console.info('camera removed:', camera.name)
 	}
 
-	blobReceived(camera: Camera, data: string) {
+	blobReceived(camera: Camera, data: string | Buffer) {
 		this.tasks.get(camera.id)?.blobReceived(camera, data)
 	}
 
@@ -232,9 +232,9 @@ export class CameraCaptureTask {
 		}
 	}
 
-	async blobReceived(camera: Camera, data: string) {
+	async blobReceived(camera: Camera, data: string | Buffer) {
 		if (this.camera.id === camera.id) {
-			const buffer = Buffer.from(data, 'base64')
+			const buffer = typeof data === 'string' ? Buffer.from(data, 'base64') : data
 
 			// Save image
 			const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : camera.name

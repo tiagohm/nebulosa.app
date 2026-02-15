@@ -1,6 +1,7 @@
 import { AlpacaClient } from 'nebulosa/src/alpaca.client'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi.client'
-import type { Client } from 'nebulosa/src/indi.device'
+import type { Client, Device } from 'nebulosa/src/indi.device'
+import type { DeviceProvider } from 'node_modules/nebulosa/src/indi.manager'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
 import { type Endpoints, response } from './http'
@@ -28,7 +29,7 @@ export class ConnectionHandler {
 		return client!
 	}
 
-	async connect(req: Connect & { id?: string }, indi: IndiClientHandler): Promise<ConnectionStatus | undefined> {
+	async connect(req: Connect & { id?: string }, indi: IndiClientHandler & DeviceProvider<Device>): Promise<ConnectionStatus | undefined> {
 		for (const [, client] of this.clients) {
 			if (client.id === req.id || (client instanceof IndiClient && client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) || (client instanceof AlpacaClient && client.remotePort === req.port && client.remoteHost === req.host)) {
 				console.info('reusing existing connection:', client.id, client.description)
@@ -57,7 +58,7 @@ export class ConnectionHandler {
 				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to INDI server', color: 'danger' })
 			}
 		} else if (req.type === 'ALPACA') {
-			const client = new AlpacaClient(`http${req.secured ? 's' : ''}://${req.host}:${req.port}`, { handler: indi })
+			const client = new AlpacaClient(`http${req.secured ? 's' : ''}://${req.host}:${req.port}`, { handler: indi }, indi)
 
 			try {
 				if (await client.start()) {
@@ -135,7 +136,7 @@ export class ConnectionHandler {
 	}
 }
 
-export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler): Endpoints {
+export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler & DeviceProvider<Device>): Endpoints {
 	return {
 		'/connections': { GET: () => response(connectionHandler.list()), POST: async (req) => response(await connectionHandler.connect(await req.json(), indi)) },
 		'/connections/:id': { GET: (req) => response(connectionHandler.status(req.params.id)), DELETE: (req) => response(connectionHandler.disconnect(req.params.id)) },

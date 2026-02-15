@@ -1,6 +1,6 @@
 import type { IndiClientHandler } from 'nebulosa/src/indi.client'
-import { CLIENT, type Client, type Device, type DeviceProperty, type DevicePropertyType } from 'nebulosa/src/indi.device'
-import type { CameraManager, CoverManager, DevicePropertyHandler, DevicePropertyManager, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
+import { CLIENT, type Client, type Device, type DeviceProperty, type DevicePropertyType, type DeviceType } from 'nebulosa/src/indi.device'
+import type { CameraManager, CoverManager, DevicePropertyHandler, DevicePropertyManager, DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 // biome-ignore format: too long!
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, Message, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi.types'
 import bus from '../shared/bus'
@@ -50,7 +50,7 @@ export function disconnect(device: Device) {
 
 export type IndiMessageListener = (client: Client, message: Message) => void
 
-export class IndiHandler implements IndiClientHandler {
+export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 	private readonly messageMap = new Map<Client, Map<string, Message[]>>()
 	private readonly messageListeners = new Set<IndiMessageListener>()
 
@@ -181,19 +181,33 @@ export class IndiHandler implements IndiClientHandler {
 		this.messageListeners.forEach((e) => e(client, message))
 	}
 
-	get(client: Client | string, id: string): Device | undefined {
-		return (
-			this.cameraManager.get(client, id) ||
-			this.mountManager.get(client, id) ||
-			this.focuserManager.get(client, id) ||
-			this.wheelManager.get(client, id) ||
-			this.coverManager.get(client, id) ||
-			this.flatPanelManager.get(client, id) ||
-			this.rotatorManager.get(client, id) ||
-			this.guideOutputManager.get(client, id) ||
-			this.thermometerManager.get(client, id) ||
-			this.dewHeaterManager.get(client, id)
-		)
+	get(client: Client | string, id: string, type?: DeviceType): Device | undefined {
+		if (!type) {
+			return (
+				this.cameraManager.get(client, id) ||
+				this.mountManager.get(client, id) ||
+				this.focuserManager.get(client, id) ||
+				this.wheelManager.get(client, id) ||
+				this.coverManager.get(client, id) ||
+				this.flatPanelManager.get(client, id) ||
+				this.rotatorManager.get(client, id) ||
+				this.guideOutputManager.get(client, id) ||
+				this.thermometerManager.get(client, id) ||
+				this.dewHeaterManager.get(client, id)
+			)
+		}
+
+		if (type === 'CAMERA') return this.cameraManager.get(client, id)
+		else if (type === 'MOUNT') return this.mountManager.get(client, id)
+		else if (type === 'FOCUSER') return this.focuserManager.get(client, id)
+		else if (type === 'WHEEL') return this.wheelManager.get(client, id)
+		else if (type === 'COVER') return this.coverManager.get(client, id)
+		else if (type === 'FLAT_PANEL') return this.flatPanelManager.get(client, id)
+		else if (type === 'ROTATOR') return this.rotatorManager.get(client, id)
+		else if (type === 'GUIDE_OUTPUT') return this.guideOutputManager.get(client, id)
+		else if (type === 'THERMOMETER') return this.thermometerManager.get(client, id)
+		else if (type === 'DEW_HEATER') return this.dewHeaterManager.get(client, id)
+		else return undefined
 	}
 
 	messages(client: Client | string, device?: string) {

@@ -171,21 +171,24 @@ export class TppaTask {
 
 			// Capture next image
 			if (!this.stopped) {
-				this.event.state = 'CAPTURING'
-				this.handleTppaEvent()
-				await this.tppa.cameraHandler.start(this.camera, this.request.capture)
+				await this.start()
 			}
 		}
 	}
 
-	start() {
-		// Enable mount tracking
-		this.tppa.mountHandler.mountManager.tracking(this.mount, true)
+	async start() {
+		if (this.stopped) return
 
-		// First image
+		// Enable mount tracking
+		if (this.event.count === 0) {
+			this.tppa.mountHandler.mountManager.tracking(this.mount, true)
+		}
+
+		// Start next capture
+		this.event.count++
 		this.event.state = 'CAPTURING'
 		this.handleTppaEvent()
-		return this.tppa.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
+		await this.tppa.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}
 
 	stop() {

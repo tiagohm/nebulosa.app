@@ -822,6 +822,7 @@ export interface TppaEvent {
 	aligned: boolean
 	readonly error: HorizontalCoordinate
 	failed: boolean
+	count: number
 }
 
 // Darv
@@ -1286,6 +1287,7 @@ export const DEFAULT_TPPA_EVENT: TppaEvent = {
 	solved: false,
 	aligned: false,
 	failed: false,
+	count: 0,
 	solver: {
 		rightAscension: 0,
 		declination: 0,

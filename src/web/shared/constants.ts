@@ -1,4 +1,4 @@
-import type { PopoverProps } from '@heroui/react'
+import type { DropdownProps, PopoverProps } from '@heroui/react'
 
 export const DECIMAL_NUMBER_FORMAT: Readonly<Intl.NumberFormatOptions> = {
 	style: 'decimal',
@@ -15,6 +15,12 @@ export const INTEGER_NUMBER_FORMAT: Readonly<Intl.NumberFormatOptions> = {
 }
 
 export const DEFAULT_POPOVER_PROPS: Partial<PopoverProps> = {
+	shouldCloseOnBlur: false,
+	placement: 'bottom',
+	showArrow: true,
+}
+
+export const DEFAULT_DROPDOWN_PROPS: Partial<DropdownProps> = {
 	shouldCloseOnBlur: false,
 	placement: 'bottom',
 	showArrow: true,

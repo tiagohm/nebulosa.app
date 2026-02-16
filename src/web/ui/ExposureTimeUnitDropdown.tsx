@@ -1,5 +1,7 @@
 import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
 import type { ExposureTimeUnit } from 'src/shared/types'
+import { DEFAULT_DROPDOWN_PROPS } from '../shared/constants'
+import { stopPropagation } from '../shared/util'
 import { TextButton, type TextButtonProps } from './TextButton'
 
 export interface ExposureTimeUnitDropdownProps extends Omit<TextButtonProps, 'label' | 'onWheel'> {
@@ -12,9 +14,9 @@ const SYMBOLS = ['m', 's', 'ms', 'µs'] as const
 
 export function ExposureTimeUnitDropdown({ value, onValueChange, size = 'sm', variant = 'light', ...props }: ExposureTimeUnitDropdownProps) {
 	return (
-		<Dropdown shouldCloseOnBlur={false} showArrow>
+		<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
 			<DropdownTrigger>
-				<TextButton {...props} label={SYMBOLS[UNITS.indexOf(value)]} size={size} variant={variant} />
+				<TextButton {...props} label={SYMBOLS[UNITS.indexOf(value)]} onPointerUp={stopPropagation} size={size} variant={variant} />
 			</DropdownTrigger>
 			<DropdownMenu onAction={(key) => onValueChange(key as never)}>
 				<DropdownItem key='MINUTE'>Minutes (m)</DropdownItem>

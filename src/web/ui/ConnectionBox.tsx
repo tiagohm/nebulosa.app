@@ -5,7 +5,7 @@ import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
 import type { Connection } from '@/shared/types'
-import { DEFAULT_POPOVER_PROPS } from '../shared/constants'
+import { DEFAULT_DROPDOWN_PROPS, DEFAULT_POPOVER_PROPS } from '../shared/constants'
 import { stopPropagation } from '../shared/util'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
@@ -93,7 +93,7 @@ const EditDropdown = memo(({ item }: EditDropdownProps) => {
 
 	return (
 		<div className='flex justify-center items-center'>
-			<Dropdown shouldCloseOnBlur={false} showArrow>
+			<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
 				<DropdownTrigger>
 					<IconButton icon={Icons.VerticalMenu} onPointerUp={stopPropagation} size='sm' />
 				</DropdownTrigger>

@@ -68,7 +68,7 @@ const Header = memo(() => {
 				<span className='font-semibold leading-5'>Camera</span>
 				<span className='text-xs font-normal text-gray-400 max-w-full'>{camera.scope.camera.name}</span>
 			</div>
-			<IconButton color='primary' icon={minimized ? Icons.ChevronDown : Icons.ChevronUp} onPointerUp={camera.minimize} variant='flat' />
+			<IconButton color='primary' icon={minimized ? Icons.ChevronDown : Icons.ChevronUp} onPointerUp={camera.minimize} variant='light' />
 		</div>
 	)
 })

@@ -9,14 +9,13 @@ import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 import { TextButton } from './TextButton'
 
-export interface TimeProps {
+export interface TimeProps extends UTCTime {
 	readonly id: string
-	readonly time: UTCTime
 	readonly onTimeChange?: (time: UTCTime) => void
 	readonly onClose?: () => void
 }
 
-export function Time({ id, time, onTimeChange, onClose }: TimeProps) {
+export function Time({ id, onTimeChange, onClose, ...time }: TimeProps) {
 	// https://react-spectrum.adobe.com/internationalized/date/ZonedDateTime.html
 	const [date, setDate] = useState<ZonedDateTime | null>(fromAbsolute(time.utc, 'UTC'))
 	const [offset, setOffset] = useState(time.offset)

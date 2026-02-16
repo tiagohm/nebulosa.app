@@ -85,9 +85,7 @@ export const Mount = memo(() => {
 				</div>
 			</Modal>
 			{showLocation && <Location {...geographicCoordinate} id={`location-mount-${mount.scope.mount.name}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}
-			<Activity mode={showTime ? 'visible' : 'hidden'}>
-				<Time id={`time-mount-${mount.scope.mount.name}`} onClose={mount.hideTime} onTimeChange={mount.time} time={time} />
-			</Activity>
+			{showTime && <Time id={`time-mount-${mount.scope.mount.name}`} onClose={mount.hideTime} onTimeChange={mount.time} {...time} />}
 			<Activity mode={showRemoteControl ? 'visible' : 'hidden'}>
 				<MountRemoteControl />
 			</Activity>

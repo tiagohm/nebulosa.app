@@ -97,7 +97,7 @@ export class PHD2Handler {
 					break
 			}
 
-			console.info('event: %j', event)
+			// console.info('event: %j', event)
 		},
 		command: (client: PHD2Client, command: PHD2Command, success: boolean, result: PHD2Error | unknown) => {
 			console.info(command.method, 'received:', success, JSON.stringify(result))

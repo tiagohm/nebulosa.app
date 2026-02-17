@@ -8,7 +8,7 @@ import { useSnapshot } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from '@/molecules/indi/equipment'
 import type { DeviceTypeMap } from '@/shared/types'
 import { DEFAULT_DROPDOWN_PROPS } from '../shared/constants'
-import { stopPropagation } from '../shared/util'
+import { stopPropagationDesktopOnly } from '../shared/util'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
 import { IconButton, type IconButtonProps } from './IconButton'
@@ -47,7 +47,7 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 							icon={icon}
 							isDisabled={isDisabled || items.length === 0}
 							label={showLabel ? (value?.name ?? (showLabelOnEmpty ? label || 'None' : undefined)) : undefined}
-							onPointerUp={stopPropagation}
+							onPointerUp={stopPropagationDesktopOnly}
 						/>
 					</DropdownTrigger>
 				</div>
@@ -99,12 +99,12 @@ interface DeviceDropdownEndContentProps {
 
 function DeviceDropdownEndContent({ device, onConnect, onShow }: DeviceDropdownEndContentProps) {
 	function handleConnectPointerUp(event: React.PointerEvent) {
-		event.stopPropagation()
+		stopPropagationDesktopOnly(event)
 		onConnect(device!)
 	}
 
 	function handleShowPointerUp(event: React.PointerEvent) {
-		event.stopPropagation()
+		stopPropagationDesktopOnly(event)
 		onShow(device!)
 	}
 

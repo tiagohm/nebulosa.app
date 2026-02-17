@@ -4,9 +4,19 @@ import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/distance'
 import type { SkyObjectSearchItem } from 'src/shared/types'
 import { SKY_OBJECT_NAME_TYPES } from '@/ui/SkyObjectNameTypeDropdown'
 
+export const isMousePresent = isMouseDeviceSupported()
+
 // Stops the propagation of an event to parent elements
 export function stopPropagation(event: Event | React.BaseSyntheticEvent<Event>) {
 	event.stopPropagation()
+}
+
+export function stopPropagationDesktopOnly(event: Event | React.BaseSyntheticEvent<Event>) {
+	if (isMousePresent === true) event.stopPropagation()
+}
+
+export function stopPropagationMobileOnly(event: Event | React.BaseSyntheticEvent<Event>) {
+	if (isMousePresent === false) event.stopPropagation()
 }
 
 // Prevents the default action of an event if it is cancelable

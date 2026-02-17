@@ -81,7 +81,8 @@
 				"noConsole": "off",
 				"noArrayIndexKey": "off",
 				"useIterableCallbackReturn": "off",
-				"noNonNullAssertedOptionalChain": "error"
+				"noNonNullAssertedOptionalChain": "error",
+				"noImportCycles": "error"
 			},
 			"complexity": {
 				"noForEach": "off",
@@ -96,7 +97,6 @@
 			"nursery": {
 				"recommended": true,
 				"noFloatingPromises": "error",
-				"noImportCycles": "error",
 				"useAwaitThenable": "off",
 				"useDestructuring": "off"
 			}

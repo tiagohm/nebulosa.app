@@ -1,6 +1,7 @@
 import { Chip, type ChipProps, ScrollShadow, type ScrollShadowProps } from '@heroui/react'
 import { useMemo } from 'react'
 import { SATELLITE_GROUP_TYPES, type SatelliteCategory, type SatelliteGroupType } from 'src/shared/types'
+import { stopPropagationDesktopOnly } from '../shared/util'
 
 export interface SatelliteGroupTypeChipGroupProps extends Omit<ScrollShadowProps, 'size'> {
 	readonly value: readonly SatelliteGroupType[]
@@ -15,7 +16,7 @@ export function SatelliteGroupTypeChipGroup({ className, value, category, onValu
 	const types = useMemo(() => ENTRIES.filter((e) => category.includes(e[1].category)), [category])
 
 	function onHandlePointerUp(event: React.PointerEvent, type: SatelliteGroupType, remove: boolean) {
-		event.stopPropagation()
+		stopPropagationDesktopOnly(event)
 
 		if (remove) {
 			onValueChange(value.filter((e) => e !== type))

@@ -1,5 +1,6 @@
 import { Chip, type ChipProps, ScrollShadow } from '@heroui/react'
 import type { SatelliteCategory } from 'src/shared/types'
+import { stopPropagationDesktopOnly } from '../shared/util'
 
 export interface SatelliteCategoryChipGroupProps {
 	readonly className?: string
@@ -12,7 +13,7 @@ const ENTRIES = ['SPECIAL', 'WEATHER', 'COMMUNICATION', 'NAVIGATION', 'SCIENTIFI
 
 export function SatelliteCategoryChipGroup({ className, value, onValueChange, size = 'sm' }: SatelliteCategoryChipGroupProps) {
 	function onHandlePointerUp(event: React.PointerEvent, type: SatelliteCategory, remove: boolean) {
-		event.stopPropagation()
+		stopPropagationDesktopOnly(event)
 
 		if (remove) {
 			onValueChange(value.filter((e) => e !== type))

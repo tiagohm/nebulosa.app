@@ -1,11 +1,13 @@
 import { arcsec, deg, parseAngle } from 'nebulosa/src/angle'
-import { hips2Fits } from 'nebulosa/src/hips2fits'
+import { HIPS2FITS_ALTERNATIVE_URL, HIPS2FITS_BASE_URL, hips2Fits } from 'nebulosa/src/hips2fits'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import { join } from 'path/posix'
 import hipsSurveys from '../../data/hips-surveys.json' with { type: 'json' }
 import type { Framing } from '../shared/types'
 import { type Endpoints, response } from './http'
 import type { ImageProcessor } from './image'
+
+const URLS = [HIPS2FITS_ALTERNATIVE_URL, HIPS2FITS_BASE_URL]
 
 export class FramingHandler {
 	constructor(readonly imageProcessor: ImageProcessor) {}
@@ -15,12 +17,21 @@ export class FramingHandler {
 		const declination = parseAngle(req.declination) ?? 0
 		req.fov = req.focalLength && req.pixelSize ? arcsec(angularSizeOfPixel(req.focalLength, req.pixelSize)) * Math.max(req.width, req.height) : deg(req.fov || 1)
 		req.rotation = deg(req.rotation)
-		const fits = await hips2Fits(req.hipsSurvey, rightAscension, declination, req)
-		const buffer = Buffer.from(await fits.arrayBuffer())
-		const path = join(Bun.env.tmpDir, `${req.id}.fit`)
-		// void Bun.write(path, buffer)
-		this.imageProcessor.save(buffer, path)
-		return { path }
+		req.coordSystem = 'icrs'
+		req.format = 'fits'
+
+		for (const baseUrl of URLS) {
+			req.baseUrl = baseUrl
+			const fits = await hips2Fits(req.hipsSurvey, rightAscension, declination, req)
+			if (!fits) continue
+			const buffer = Buffer.from(await fits.arrayBuffer())
+			const path = join(Bun.env.tmpDir, `${req.id}.fit`)
+			// void Bun.write(path, buffer)
+			this.imageProcessor.save(buffer, path)
+			return { path }
+		}
+
+		return undefined
 	}
 }
 

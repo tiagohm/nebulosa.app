@@ -23,6 +23,7 @@ import type { StellariumObjectType } from 'nebulosa/src/stellarium'
 import type { SolarEclipse } from 'nebulosa/src/sun'
 import type { Temporal } from 'nebulosa/src/temporal'
 import type { Velocity } from 'nebulosa/src/velocity'
+import type { Hips2FitsOptions } from 'node_modules/nebulosa/src/hips2fits'
 import type { DeepRequired, Required } from 'utility-types'
 
 export type Atom<T> = T extends MoleculeOrInterface<infer X> ? X : never
@@ -356,7 +357,7 @@ export interface FileSystem {
 
 // Framing
 
-export interface Framing extends EquatorialCoordinate<string>, Size {
+export interface Framing extends EquatorialCoordinate<string>, Size, Omit<Hips2FitsOptions, 'fov' | 'width' | 'height'> {
 	id: string
 	hipsSurvey: string
 	fov?: number // deg

@@ -1,7 +1,7 @@
 import { Dropdown, DropdownMenu, type DropdownMenuProps, DropdownTrigger } from '@heroui/react'
 import clsx from 'clsx'
 import { DEFAULT_DROPDOWN_PROPS } from '../shared/constants'
-import { stopPropagation } from '../shared/util'
+import { stopPropagationDesktopOnly } from '../shared/util'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { TextButton, type TextButtonProps } from './TextButton'
@@ -14,7 +14,7 @@ export function DropdownButton({ size, color, isDisabled, children, className, o
 			<TextButton {...props} className='flex-1 rounded-l-medium rounded-r-none' color={color} isDisabled={isDisabled} size={size} />
 			<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
 				<DropdownTrigger>
-					<IconButton className='rounded-l-none rounded-r-medium' color={color} icon={Icons.ChevronDown} isDisabled={isDisabled} onPointerUp={stopPropagation} size={size} variant='flat' />
+					<IconButton className='rounded-l-none rounded-r-medium' color={color} icon={Icons.ChevronDown} isDisabled={isDisabled} onPointerUp={stopPropagationDesktopOnly} size={size} variant='flat' />
 				</DropdownTrigger>
 				<DropdownMenu onAction={onAction}>{children}</DropdownMenu>
 			</Dropdown>

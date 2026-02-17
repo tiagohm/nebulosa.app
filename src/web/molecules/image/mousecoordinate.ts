@@ -10,7 +10,7 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { CoordinateInterpolator } from '@/shared/coordinate-interpolation'
 import type { ImageLoaded, ImageSolved } from '@/shared/types'
-import { isMouseDeviceSupported } from '@/shared/util'
+import { isMousePresent } from '@/shared/util'
 import { ImageSolverMolecule } from './solver'
 import { ImageViewerMolecule } from './viewer'
 
@@ -22,8 +22,6 @@ export interface ImageMouseCoordinateState {
 		selected: EquatorialCoordinate & Point & { show: boolean; distance: Angle }
 	}
 }
-
-const isMousePresent = isMouseDeviceSupported()
 
 const stateMap = new Map<string, ImageMouseCoordinateState>()
 
@@ -105,7 +103,7 @@ export const ImageMouseCoordinateMolecule = molecule(() => {
 		if (interpolator) {
 			const [rightAscension, declination] = interpolator.interpolate(x, y)
 
-			if (clicked && isMousePresent) {
+			if (clicked) {
 				coordinate.selected.rightAscension = rightAscension
 				coordinate.selected.declination = declination
 				coordinate.selected.x = x

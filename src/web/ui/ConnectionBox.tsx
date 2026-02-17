@@ -6,7 +6,7 @@ import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
 import type { Connection } from '@/shared/types'
 import { DEFAULT_DROPDOWN_PROPS, DEFAULT_POPOVER_PROPS } from '../shared/constants'
-import { stopPropagation } from '../shared/util'
+import { stopPropagationDesktopOnly } from '../shared/util'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
 import { Icons } from './Icon'
@@ -95,7 +95,7 @@ const EditDropdown = memo(({ item }: EditDropdownProps) => {
 		<div className='flex justify-center items-center'>
 			<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
 				<DropdownTrigger>
-					<IconButton icon={Icons.VerticalMenu} onPointerUp={stopPropagation} size='sm' />
+					<IconButton icon={Icons.VerticalMenu} onPointerUp={stopPropagationDesktopOnly} size='sm' />
 				</DropdownTrigger>
 				<DropdownMenu disabledKeys={connections.length === 1 ? ['delete'] : []}>
 					<DropdownItem key='edit' onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit size={12} />}>

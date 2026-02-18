@@ -22,7 +22,7 @@
 	"license": "MIT",
 	"dependencies": {
 		"@heroui/react": "2.8.9",
-		"@tailwindcss/cli": "4.1.18",
+		"@tailwindcss/cli": "4.2.0",
 		"@uidotdev/usehooks": "2.4.1",
 		"@use-gesture/react": "10.3.1",
 		"bunshi": "2.2.0",
@@ -34,7 +34,7 @@
 		"react-dom": "19.2.4",
 		"react-leaflet": "5.0.0",
 		"recharts": "3.7.0",
-		"tailwindcss": "4.1.18",
+		"tailwindcss": "4.2.0",
 		"utility-types": "3.11.0",
 		"valtio": "2.3.0"
 	},

@@ -700,6 +700,10 @@
     "driver": "indi_pegasus_upb"
   },
   {
+    "name": "Pegasus UPB3",
+    "driver": "indi_pegasus_upb3"
+  },
+  {
     "name": "Pentax DSLR",
     "driver": "indi_pentax_ccd"
   },

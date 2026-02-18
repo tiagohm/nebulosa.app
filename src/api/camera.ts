@@ -66,7 +66,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		// Remove the task after it finished
 		if (event.state === 'IDLE') {
 			this.cameraManager.disableBlob(camera)
-			this.tasks.get(camera.id)?.stop()
+			this.tasks.get(camera.id)?.destroy()
 			this.tasks.delete(camera.id)
 		}
 	}
@@ -124,7 +124,6 @@ export class CameraCaptureTask {
 	private readonly waitingTime: number
 	private readonly totalExposureProgress = [0, 0] // remaining, elapsed
 	private readonly aborter = new AbortController()
-	private stopped = false
 
 	constructor(
 		readonly cameraHandler: CameraHandler,
@@ -144,6 +143,10 @@ export class CameraCaptureTask {
 		this.totalExposureProgress[0] = this.event.loop ? 0 : this.event.totalExposureTime
 
 		this.event.totalProgress.remainingTime = this.totalExposureProgress[0]
+	}
+
+	get stopped() {
+		return this.event.stopped
 	}
 
 	cameraUpdated(camera: Camera, property: keyof Camera, state?: PropertyState) {
@@ -224,11 +227,17 @@ export class CameraCaptureTask {
 						return this.start()
 					}
 				}
+			} else if (state === 'Alert') {
+				this.event.state = 'ERROR'
+				this.stop()
+				return this.handleCameraCaptureEvent(this, this.event)
 			}
 
 			// If no more frames or was stopped, finish the task
-			this.event.state = 'IDLE'
-			this.handleCameraCaptureEvent(this, this.event)
+			if (this.event.remainingCount <= 0 || this.stopped) {
+				this.event.state = 'IDLE'
+				this.handleCameraCaptureEvent(this, this.event)
+			}
 		}
 	}
 
@@ -291,8 +300,12 @@ export class CameraCaptureTask {
 
 	stop() {
 		if (this.stopped) return
-		this.stopped = true
+		this.event.stopped = true
 		this.stopExposure(this.camera)
+		this.destroy()
+	}
+
+	destroy() {
 		this.aborter.abort()
 		this.cameraHandler.phd2Handler?.settleDone(false)
 	}

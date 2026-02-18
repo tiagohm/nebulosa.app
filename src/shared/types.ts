@@ -675,7 +675,7 @@ export type ExposureMode = 'SINGLE' | 'FIXED' | 'LOOP'
 
 export type AutoSubFolderMode = 'OFF' | 'NOON' | 'MIDNIGHT'
 
-export type CameraCaptureState = 'IDLE' | 'EXPOSURE_STARTED' | 'EXPOSING' | 'WAITING' | 'SETTLING' | 'DITHERING' | 'PAUSING' | 'PAUSED' | 'EXPOSURE_FINISHED'
+export type CameraCaptureState = 'IDLE' | 'EXPOSURE_STARTED' | 'EXPOSING' | 'WAITING' | 'SETTLING' | 'DITHERING' | 'PAUSING' | 'PAUSED' | 'EXPOSURE_FINISHED' | 'ERROR'
 
 export interface CameraCaptureStart extends Size {
 	exposureTime: number
@@ -720,6 +720,7 @@ export interface CameraCaptureEvent {
 	totalProgress: CameraCaptureTime
 	frameProgress: CameraCaptureTime
 	savedPath?: string
+	stopped: boolean
 }
 
 // Mount
@@ -991,6 +992,7 @@ export const DEFAULT_CAMERA_CAPTURE_EVENT: CameraCaptureEvent = {
 		progress: 0,
 	},
 	savedPath: undefined,
+	stopped: false,
 }
 
 export const DEFAULT_PLATE_SOLVE_START: PlateSolveStart = {

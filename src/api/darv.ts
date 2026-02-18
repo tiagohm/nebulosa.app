@@ -83,7 +83,9 @@ export class DarvTask {
 
 	async start() {
 		// Start capture
-		await this.darv.cameraHandler.start(this.camera, this.request.capture)
+		await this.darv.cameraHandler.start(this.camera, this.request.capture, (event) => {
+			if (event.state === 'IDLE' || event.state === 'ERROR' || event.stopped) this.stop()
+		})
 
 		// Wait for initial pause
 		this.event.state = 'WAITING'
@@ -122,6 +124,7 @@ export class DarvTask {
 			this.stopped = true
 
 			this.move(false, false)
+			this.darv.mountHandler.mountManager.stop(this.mount)
 			this.darv.cameraHandler.stop(this.camera)
 
 			if (this.event.state !== 'IDLE') {

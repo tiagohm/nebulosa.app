@@ -92,7 +92,7 @@ export class TppaTask {
 	}
 
 	private async cameraCaptured(event: CameraCaptureEvent) {
-		if (event.savedPath && !this.stopped) {
+		if (event.savedPath && !this.stopped && !event.stopped) {
 			this.event.state = 'SOLVING'
 			this.handleTppaEvent()
 
@@ -173,6 +173,8 @@ export class TppaTask {
 			if (!this.stopped) {
 				await this.start()
 			}
+		} else if (event.state === 'ERROR' || event.stopped) {
+			this.stop()
 		}
 	}
 
@@ -196,6 +198,7 @@ export class TppaTask {
 			this.stopped = true
 
 			this.move(false)
+			this.tppa.mountHandler.mountManager.stop(this.mount)
 			this.tppa.solver.stop(this.request)
 			this.tppa.cameraHandler.stop(this.camera)
 

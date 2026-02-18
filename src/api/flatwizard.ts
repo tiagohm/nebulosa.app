@@ -26,7 +26,12 @@ export class FlatWizardHandler {
 
 		// Remove the task after it finished
 		if (event.state === 'IDLE') {
-			this.tasks.delete(camera.id)
+			const task = this.tasks.get(camera.id)
+
+			if (task) {
+				task.stop()
+				this.tasks.delete(camera.id)
+			}
 		}
 	}
 
@@ -76,7 +81,7 @@ export class FlatWizardTask {
 	private async cameraCaptured(event: CameraCaptureEvent) {
 		const { savedPath } = event
 
-		if (savedPath && !this.stopped) {
+		if (savedPath && !this.stopped && !event.stopped) {
 			if (this.stopped) {
 				return this.handleFlatWizardEvent('IDLE', 'Stopped')
 			}
@@ -110,6 +115,8 @@ export class FlatWizardTask {
 			}
 
 			await this.start()
+		} else if (event.state === 'ERROR' || event.stopped) {
+			this.stop()
 		}
 	}
 

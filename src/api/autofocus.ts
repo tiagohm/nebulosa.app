@@ -30,7 +30,12 @@ export class AutoFocusHandler {
 		// Remove the task after it finished
 		if (event.state === 'IDLE') {
 			const key = `${camera.id}:${focuser.id}`
-			this.tasks.delete(key)
+			const task = this.tasks.get(key)
+
+			if (task) {
+				task.stop()
+				this.tasks.delete(key)
+			}
 		}
 	}
 
@@ -79,7 +84,7 @@ export class AutoFocusTask {
 	private async cameraCaptured(event: CameraCaptureEvent) {
 		const { savedPath } = event
 
-		if (savedPath && !this.stopped) {
+		if (savedPath && !this.stopped && !event.stopped) {
 			if (this.stopped) {
 				return this.handleAutoFocusEvent('IDLE', 'Stopped')
 			}
@@ -142,6 +147,8 @@ export class AutoFocusTask {
 					this.handleAutoFocusEvent('IDLE', 'Failed! Restored to initial focus position')
 				})
 			}
+		} else if (event.state === 'ERROR' || event.stopped) {
+			this.stop()
 		}
 	}
 

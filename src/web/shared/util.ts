@@ -1,10 +1,16 @@
+import { type ClassValue, clsx } from 'clsx'
 import { ONE_GIGAPARSEC, ONE_KILOPARSEC, ONE_MEGAPARSEC } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa/src/constellation'
 import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/distance'
 import type { SkyObjectSearchItem } from 'src/shared/types'
+import { twMerge } from 'tailwind-merge'
 import { SKY_OBJECT_NAME_TYPES } from '@/ui/SkyObjectNameTypeDropdown'
 
 export const isMousePresent = isMouseDeviceSupported()
+
+export function tw(...inputs: ClassValue[]) {
+	return twMerge(clsx(inputs))
+}
 
 // Stops the propagation of an event to parent elements
 export function stopPropagation(event: Event | React.BaseSyntheticEvent<Event>) {

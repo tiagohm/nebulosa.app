@@ -1,7 +1,6 @@
 import { Calendar, Checkbox, Chip, type ChipProps, Input, Listbox, ListboxItem, NumberInput, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
 import { fromAbsolute, type ZonedDateTime } from '@internationalized/date'
 import { useMolecule } from 'bunshi/react'
-import { clsx } from 'clsx'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/temporal'
@@ -11,7 +10,7 @@ import { type BodyPosition, EMPTY_TWILIGHT, type Twilight } from 'src/shared/typ
 import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, type BookmarkItem, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, type SkyAtlasTab, SunMolecule } from '@/molecules/skyatlas'
 import { DECIMAL_NUMBER_FORMAT, DEFAULT_POPOVER_PROPS, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
-import { formatDistance, skyObjectName, skyObjectType } from '@/shared/util'
+import { formatDistance, skyObjectName, skyObjectType, tw } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { ConstellationSelect } from './ConstellationSelect'
@@ -612,7 +611,7 @@ interface PaginatorProps extends React.ComponentProps<'div'> {
 
 function Paginator({ page, count, onPrev, onNext, loading = false, isReadonly = false, className, ...props }: PaginatorProps) {
 	return (
-		<div {...props} className={clsx('flex flex-row items-center justify-center gap-3', className)}>
+		<div {...props} className={tw('flex flex-row items-center justify-center gap-3', className)}>
 			<IconButton color='secondary' icon={Icons.ChevronLeft} isDisabled={page <= 1 || loading} onPointerUp={onPrev} />
 			<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={loading || (page <= 1 && count < 4)} isReadOnly={isReadonly} minValue={1} size='sm' value={page} />
 			<IconButton color='secondary' icon={Icons.ChevronRight} isDisabled={count < 4 || loading} onPointerUp={onNext} />
@@ -839,7 +838,7 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 	const deferredData = useDeferredValue(data, [])
 
 	return (
-		<div className={clsx('h-[140px] col-span-full relative flex flex-col justify-start items-center gap-1', className)}>
+		<div className={tw('h-[140px] col-span-full relative flex flex-col justify-start items-center gap-1', className)}>
 			<div className='w-full flex flex-row gap-2 text-start text-sm font-bold'>
 				<ToggleButton color='primary' icon={Icons.Info} isSelected={!showChart} onPointerUp={() => setShowChart(false)} />
 				<ToggleButton color='primary' icon={Icons.Chart} isSelected={showChart} onPointerUp={() => setShowChart(true)} />

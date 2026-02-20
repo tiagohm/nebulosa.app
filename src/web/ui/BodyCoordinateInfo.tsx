@@ -1,9 +1,8 @@
-import clsx from 'clsx'
 import { type Angle, formatAZ, formatDEC, formatHMS, formatRA, toDeg } from 'nebulosa/src/angle'
 import type React from 'react'
 import { Activity, memo } from 'react'
 import type { BodyPosition, CoordinateInfo } from 'src/shared/types'
-import { formatDistance } from '@/shared/util'
+import { formatDistance, tw } from '@/shared/util'
 
 export type CoordinateType = 'equatorial' | 'equatorialJ2000' | 'horizontal' | 'ecliptic' | 'galactic'
 
@@ -63,7 +62,7 @@ interface ExtraProps extends React.ComponentProps<'div'> {
 const Extra = memo(({ label, value, className, isVisible = true, ...props }: ExtraProps) => {
 	return (
 		<Activity mode={isVisible ? 'visible' : 'hidden'}>
-			<div {...props} className={clsx(className, 'flex flex-row items-center justify-between text-sm leading-3')}>
+			<div {...props} className={tw(className, 'flex flex-row items-center justify-between text-sm leading-3')}>
 				<span className='font-bold text-xs'>{label}:</span>
 				<span>{value}</span>
 			</div>

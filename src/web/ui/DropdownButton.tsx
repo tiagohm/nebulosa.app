@@ -1,7 +1,6 @@
 import { Dropdown, DropdownMenu, type DropdownMenuProps, DropdownTrigger } from '@heroui/react'
-import clsx from 'clsx'
 import { DEFAULT_DROPDOWN_PROPS } from '../shared/constants'
-import { stopPropagationDesktopOnly } from '../shared/util'
+import { stopPropagationDesktopOnly, tw } from '../shared/util'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { TextButton, type TextButtonProps } from './TextButton'
@@ -10,7 +9,7 @@ export interface DropdownButtonProps extends Omit<TextButtonProps, 'endContent'>
 
 export function DropdownButton({ size, color, isDisabled, children, className, onAction, ...props }: DropdownButtonProps) {
 	return (
-		<div className={clsx('inline-flex flex-row gap-0 items-center', className)}>
+		<div className={tw('inline-flex flex-row gap-0 items-center', className)}>
 			<TextButton {...props} className='flex-1 rounded-l-medium rounded-r-none' color={color} isDisabled={isDisabled} size={size} />
 			<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
 				<DropdownTrigger>

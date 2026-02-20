@@ -1,7 +1,7 @@
 import { NumberInput, SelectItem } from '@heroui/react'
-import clsx from 'clsx'
 import { GRAYSCALES, type Grayscale, type ImageChannelOrGray } from 'nebulosa/src/image.types'
 import { useRef, useState } from 'react'
+import { tw } from '../shared/util'
 import { EnumSelect } from './EnumSelect'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -43,7 +43,7 @@ export function ImageChannelOrGrayInput({ value, onValueChange, className, isDis
 	}
 
 	return (
-		<div {...props} className={clsx('flex flex-col gap-2', className)}>
+		<div {...props} className={tw('flex flex-col gap-2', className)}>
 			<EnumSelect className='w-full' endContent={mode === 'input' ? <IconButton color='danger' icon={Icons.Restore} onPointerUp={handleOnRestorePointerUp} size='sm' /> : null} isDisabled={isDisabled} label='Channel mode' onValueChange={handleOnModeChange} value={mode}>
 				<SelectItem key='select'>Select</SelectItem>
 				<SelectItem key='input'>Input</SelectItem>

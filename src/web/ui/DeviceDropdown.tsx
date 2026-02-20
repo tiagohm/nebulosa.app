@@ -1,6 +1,5 @@
 import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip, type TooltipProps } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import clsx from 'clsx'
 import type { Device } from 'nebulosa/src/indi.device'
 import { memo, useMemo } from 'react'
 import type { DeepReadonly } from 'utility-types'
@@ -8,7 +7,7 @@ import { useSnapshot } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from '@/molecules/indi/equipment'
 import type { DeviceTypeMap } from '@/shared/types'
 import { DEFAULT_DROPDOWN_PROPS } from '../shared/constants'
-import { stopPropagationDesktopOnly } from '../shared/util'
+import { stopPropagationDesktopOnly, tw } from '../shared/util'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
 import { IconButton, type IconButtonProps } from './IconButton'
@@ -55,7 +54,7 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 			<DropdownMenu onAction={handleOnAction}>
 				{items.map((item) => (
 					<DropdownItem
-						className={clsx('min-h-11', { 'bg-green-900/30': value?.name === item?.name })}
+						className={tw('min-h-11', { 'bg-green-900/30': value?.name === item?.name })}
 						endContent={<DeviceDropdownEndContent device={item} onConnect={equipment.connect} onShow={equipment.show} />}
 						key={item?.id || 'none'}
 						startContent={<DeviceDropdownStartContent isConnected={item?.connected} />}>

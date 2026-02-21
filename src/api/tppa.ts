@@ -107,7 +107,6 @@ export class TppaTask {
 				const time = timeNow(true)
 				time.location = { ...this.mount.geographicCoordinate, ellipsoid: 3 }
 				const result = this.polarAlignment.add(solution.rightAscension, solution.declination, time, true)
-				console.info(solution.rightAscension, solution.declination, time.day, time.fraction, result === false ? 0 : result.azimuthError, result === false ? 0 : result.altitudeError)
 
 				this.event.aligned = result !== false
 

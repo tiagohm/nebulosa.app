@@ -82,13 +82,7 @@ export class TppaTask {
 
 		this.event.id = request.id
 
-		this.handleTppaEvent = () => {
-			handleTppaEvent(this.event)
-
-			if (!this.stopped && this.event.state === 'IDLE') {
-				this.stopTrackingWhenDone()
-			}
-		}
+		this.handleTppaEvent = handleTppaEvent.bind(undefined, this.event)
 	}
 
 	private async cameraCaptured(event: CameraCaptureEvent) {
@@ -113,6 +107,7 @@ export class TppaTask {
 				const time = timeNow(true)
 				time.location = { ...this.mount.geographicCoordinate, ellipsoid: 3 }
 				const result = this.polarAlignment.add(solution.rightAscension, solution.declination, time, true)
+				console.info(solution.rightAscension, solution.declination, time.day, time.fraction, result === false ? 0 : result.azimuthError, result === false ? 0 : result.altitudeError)
 
 				this.event.aligned = result !== false
 
@@ -212,12 +207,6 @@ export class TppaTask {
 	private move(enabled: boolean) {
 		if (this.request.direction === 'EAST') this.tppa.mountHandler.mountManager.moveEast(this.mount, enabled)
 		else this.tppa.mountHandler.mountManager.moveWest(this.mount, enabled)
-	}
-
-	private stopTrackingWhenDone() {
-		if (this.request.stopTrackingWhenDone && this.mount.tracking) {
-			this.tppa.mountHandler.mountManager.tracking(this.mount, false)
-		}
 	}
 }
 

@@ -17,7 +17,7 @@ import { TppaDirectionSelect } from './TppaDirectionSelect'
 export const Tppa = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
 	const { running, camera, mount, event } = useSnapshot(tppa.state)
-	const { direction, moveDuration, stopTrackingWhenDone, compensateRefraction, maxAttempts, delayBeforeCapture } = useSnapshot(tppa.state.request)
+	const { direction, moveDuration, compensateRefraction, maxAttempts, delayBeforeCapture } = useSnapshot(tppa.state.request)
 	const { type } = useSnapshot(tppa.state.request.solver)
 	const { state, solved, solver } = event
 
@@ -56,10 +56,7 @@ export const Tppa = memo(() => {
 				<TppaDirectionSelect className='col-span-3' isDisabled={running} onValueChange={(value) => tppa.update('direction', value)} value={direction} />
 				<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Max attempts' maxValue={30} minValue={3} onValueChange={(value) => tppa.update('maxAttempts', value)} size='sm' value={maxAttempts} />
 				<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Delay before capture (s)' maxValue={120} minValue={0} onValueChange={(value) => tppa.update('delayBeforeCapture', value)} size='sm' value={delayBeforeCapture} />
-				<Checkbox className='col-span-6' isDisabled={running} isSelected={stopTrackingWhenDone} onValueChange={(value) => tppa.update('stopTrackingWhenDone', value)}>
-					Stop tracking when done
-				</Checkbox>
-				<Checkbox className='col-span-6' isDisabled={running} isSelected={compensateRefraction} onValueChange={(value) => tppa.update('compensateRefraction', value)}>
+				<Checkbox className='col-span-full' isDisabled={running} isSelected={compensateRefraction} onValueChange={(value) => tppa.update('compensateRefraction', value)}>
 					Compensate refraction
 				</Checkbox>
 				<div className='col-span-6 flex flex-col items-center gap-0 mt-3'>

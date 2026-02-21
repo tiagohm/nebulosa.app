@@ -806,7 +806,6 @@ export interface TppaStart {
 	readonly solver: Omit<PlateSolveStart, 'id' | 'path' | 'blind'>
 	readonly capture: CameraCaptureStart
 	readonly refraction: RefractionParameters
-	readonly stopTrackingWhenDone: boolean
 	readonly compensateRefraction: boolean
 }
 
@@ -1278,7 +1277,6 @@ export const DEFAULT_TPPA_START: TppaStart = {
 	solver: DEFAULT_PLATE_SOLVE_START,
 	capture: DEFAULT_CAMERA_CAPTURE_START,
 	refraction: DEFAULT_REFRACTION_PARAMETERS,
-	stopTrackingWhenDone: true,
 	compensateRefraction: true,
 }
 

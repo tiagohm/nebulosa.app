@@ -13,7 +13,7 @@
 		"lint": "biome lint --write src/ tests/ bin/",
 		"format": "biome format --write src/ tests/ bin/",
 		"compile": "bun tailwind && NODE_ENV=production bun run build.ts",
-		"tsc": "tsc --noEmit"
+		"tsc": "tsgo --noEmit"
 	},
 	"author": {
 		"name": "Tiago Melo",
@@ -45,7 +45,8 @@
 		"@types/leaflet": "1.9.21",
 		"@types/react": "19.2.14",
 		"@types/react-dom": "19.2.3",
-		"typescript": "beta"
+		"typescript": "beta",
+		"@typescript/native-preview": "latest"
 	},
 	"trustedDependencies": [
 		"@biomejs/biome",

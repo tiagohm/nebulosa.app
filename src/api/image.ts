@@ -103,9 +103,9 @@ export class ImageProcessor {
 		let image: Image | undefined
 
 		if (buffered?.buffer?.byteLength) {
-			image = await readImageFromBuffer(buffered.buffer)
+			image = await readImageFromBuffer(buffered.buffer, 32)
 		} else {
-			image = await readImageFromPath(path)
+			image = await readImageFromPath(path, 32)
 		}
 
 		if (!image) {
@@ -177,10 +177,10 @@ export class ImageProcessor {
 		if (!calibration.enabled) return image
 
 		try {
-			const dark = calibration.dark.enabled && calibration.dark.path ? await readImageFromPath(calibration.dark.path) : undefined
-			const flat = calibration.flat.enabled && calibration.flat.path ? await readImageFromPath(calibration.flat.path) : undefined
-			const bias = calibration.bias.enabled && calibration.bias.path ? await readImageFromPath(calibration.bias.path) : undefined
-			const darkFlat = calibration.darkFlat.enabled && calibration.darkFlat.path ? await readImageFromPath(calibration.darkFlat.path) : undefined
+			const dark = calibration.dark.enabled && calibration.dark.path ? await readImageFromPath(calibration.dark.path, 32) : undefined
+			const flat = calibration.flat.enabled && calibration.flat.path ? await readImageFromPath(calibration.flat.path, 32) : undefined
+			const bias = calibration.bias.enabled && calibration.bias.path ? await readImageFromPath(calibration.bias.path, 32) : undefined
+			const darkFlat = calibration.darkFlat.enabled && calibration.darkFlat.path ? await readImageFromPath(calibration.darkFlat.path, 32) : undefined
 
 			return calibrate(image, dark, flat, bias, darkFlat)
 		} catch (e) {

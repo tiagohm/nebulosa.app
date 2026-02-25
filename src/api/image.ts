@@ -2,7 +2,7 @@ import fs from 'fs/promises'
 import { deg, parseAngle } from 'nebulosa/src/angle'
 import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, numericKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits'
-import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat } from 'nebulosa/src/image'
+import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/image'
 import { adf, histogram, sigmaClip } from 'nebulosa/src/image.computation'
 import { blur, brightness, calibrate, contrast, debayer, gamma, gaussianBlur, horizontalFlip, invert, mean, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import type { AdaptiveDisplayFunctionOptions, Image } from 'nebulosa/src/image.types'
@@ -227,7 +227,9 @@ export class ImageProcessor {
 			// Just save it to file
 			const handle = await fs.open(saveAt!, 'w')
 			await using sink = fileHandleSink(handle)
-			await writeImageToFits(image, sink)
+
+			if (format.type === 'fits') await writeImageToFits(image, sink)
+			else await writeImageToXisf(image, sink)
 
 			return { transformed, hash }
 		}

@@ -11,9 +11,19 @@ import { Modal } from './Modal'
 
 export const Cover = memo(() => {
 	const cover = useMolecule(CoverMolecule)
-	const { connecting, connected, parking, parked, canPark } = useSnapshot(cover.state.cover)
 
-	const Header = (
+	return (
+		<Modal header={<Header />} id={`cover-${cover.scope.cover.name}`} maxWidth='256px' onHide={cover.hide}>
+			<Body />
+		</Modal>
+	)
+})
+
+const Header = memo(() => {
+	const cover = useMolecule(CoverMolecule)
+	const { connecting, connected } = useSnapshot(cover.state.cover)
+
+	return (
 		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
 				<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={cover.connect} />
@@ -25,21 +35,39 @@ export const Cover = memo(() => {
 			</div>
 		</div>
 	)
+})
+
+const Body = memo(() => {
+	return (
+		<div className='mt-0 grid grid-cols-12 gap-2'>
+			<Status />
+			<OpenAndClose />
+		</div>
+	)
+})
+
+const Status = memo(() => {
+	const cover = useMolecule(CoverMolecule)
+	const { connected, parking, parked } = useSnapshot(cover.state.cover)
 
 	return (
-		<Modal header={Header} id={`cover-${cover.scope.cover.name}`} maxWidth='256px' onHide={cover.hide}>
-			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<div className='col-span-full flex flex-row items-center justify-between'>
-					<Chip color='primary' size='sm'>
-						{!connected ? 'idle' : parking ? 'moving' : parked ? 'closed' : 'open'}
-					</Chip>
-				</div>
-				<div className='col-span-full flex flex-row items-center justify-center'>
-					<Tooltip content={parked ? 'Open' : 'Close'} placement='bottom' showArrow>
-						<IconButton color={parked ? 'success' : 'danger'} icon={parked ? Icons.Lock : Icons.LockOpen} isDisabled={!connected || !canPark || parking} onPointerUp={parked ? cover.unpark : cover.park} size='lg' />
-					</Tooltip>
-				</div>
-			</div>
-		</Modal>
+		<div className='col-span-full flex flex-row items-center justify-between'>
+			<Chip color='primary' size='sm'>
+				{!connected ? 'idle' : parking ? 'moving' : parked ? 'closed' : 'open'}
+			</Chip>
+		</div>
+	)
+})
+
+const OpenAndClose = memo(() => {
+	const cover = useMolecule(CoverMolecule)
+	const { connected, parking, parked, canPark } = useSnapshot(cover.state.cover)
+
+	return (
+		<div className='col-span-full flex flex-row items-center justify-center'>
+			<Tooltip content={parked ? 'Open' : 'Close'} placement='bottom' showArrow>
+				<IconButton color={parked ? 'success' : 'danger'} icon={parked ? Icons.Lock : Icons.LockOpen} isDisabled={!connected || !canPark || parking} onPointerUp={parked ? cover.unpark : cover.park} size='lg' />
+			</Tooltip>
+		</div>
 	)
 })

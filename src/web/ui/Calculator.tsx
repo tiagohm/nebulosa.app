@@ -11,32 +11,38 @@ export const Calculator = memo(() => {
 
 	return (
 		<Modal header='Calculator' id='calculator' maxWidth='440px' onHide={calculator.hide}>
-			<div className='mt-0 px-1 py-2'>
-				<Tabs classNames={{ panel: 'w-full' }} isVertical>
-					<Tab key='focalLength' title='Focal Length'>
-						<FocalLength />
-					</Tab>
-					<Tab key='focalRatio' title='Focal Ratio'>
-						<FocalRatio />
-					</Tab>
-					<Tab key='dawes' title='Dawes Limit'>
-						<DawesLimit />
-					</Tab>
-					<Tab key='rayleigh' title='Rayleigh Limit'>
-						<RayleighLimit />
-					</Tab>
-					<Tab key='limitingMagnitude' title='Limiting Magnitude'>
-						<LimitingMagnitude />
-					</Tab>
-					<Tab key='lightGraspRatio' title='Light Grasp Ratio'>
-						<LightGraspRatio />
-					</Tab>
-					<Tab key='ccdResolution' title='CCD Resolution'>
-						<CCDResolution />
-					</Tab>
-				</Tabs>
-			</div>
+			<Body />
 		</Modal>
+	)
+})
+
+const Body = memo(() => {
+	return (
+		<div className='mt-0 px-1 py-2'>
+			<Tabs classNames={{ panel: 'w-full' }} isVertical>
+				<Tab key='focalLength' title='Focal Length'>
+					<FocalLength />
+				</Tab>
+				<Tab key='focalRatio' title='Focal Ratio'>
+					<FocalRatio />
+				</Tab>
+				<Tab key='dawes' title='Dawes Limit'>
+					<DawesLimit />
+				</Tab>
+				<Tab key='rayleigh' title='Rayleigh Limit'>
+					<RayleighLimit />
+				</Tab>
+				<Tab key='limitingMagnitude' title='Limiting Magnitude'>
+					<LimitingMagnitude />
+				</Tab>
+				<Tab key='lightGraspRatio' title='Light Grasp Ratio'>
+					<LightGraspRatio />
+				</Tab>
+				<Tab key='ccdResolution' title='CCD Resolution'>
+					<CCDResolution />
+				</Tab>
+			</Tabs>
+		</div>
 	)
 })
 

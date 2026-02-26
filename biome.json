@@ -15,7 +15,7 @@
 		"indentStyle": "tab",
 		"indentWidth": 4,
 		"lineWidth": 320,
-		"lineEnding": "lf"
+		"lineEnding": "auto"
 	},
 	"javascript": {
 		"formatter": {

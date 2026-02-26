@@ -18,12 +18,18 @@ export const AutoFocus = memo(() => {
 
 	return (
 		<Modal footer={<Footer />} header='Auto Focus' id='autofocus' maxWidth='376px' onHide={autoFocus.hide}>
-			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<Devices />
-				<Status />
-				<Inputs />
-			</div>
+			<Body />
 		</Modal>
+	)
+})
+
+const Body = memo(() => {
+	return (
+		<div className='mt-0 grid grid-cols-12 gap-2'>
+			<Devices />
+			<Status />
+			<Inputs />
+		</div>
 	)
 })
 

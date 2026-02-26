@@ -16,9 +16,122 @@ export interface FilePickerProps {
 }
 
 export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
+	return (
+		<Modal footer={<Footer onChoose={onChoose} />} header={<Header header={header} />} id={id} maxWidth='416px' onHide={onChoose}>
+			<Body />
+		</Modal>
+	)
+})
+
+const Header = memo(({ header }: Pick<FilePickerProps, 'header'>) => {
 	const picker = useMolecule(FilePickerMolecule)
-	const { mode, history, filtered, selected, directoryTree, directory } = useSnapshot(picker.state)
-	const { filter, save } = useSnapshot(picker.state, { sync: true })
+	const { mode } = useSnapshot(picker.state)
+
+	return header ?? (mode === 'save' ? 'Save' : mode === 'directory' ? 'Open Directory' : 'Open File')
+})
+
+const Body = memo(() => {
+	return (
+		<div className='mt-0 flex flex-col flex-wrap gap-2'>
+			<Toolbar />
+			<Filter />
+			<CreateDirectory />
+			<Files />
+		</div>
+	)
+})
+
+const Toolbar = memo(() => {
+	const picker = useMolecule(FilePickerMolecule)
+	const { history, directoryTree, directory } = useSnapshot(picker.state)
+
+	return (
+		<div className='flex flex-row items-center gap-2'>
+			<Tooltip content='Go Back' showArrow>
+				<IconButton color='secondary' icon={Icons.ArrowLeft} isDisabled={history.length === 0} onPointerUp={picker.navigateBack} />
+			</Tooltip>
+			<Breadcrumbs className='flex-1' itemsAfterCollapse={2} itemsBeforeCollapse={1} maxItems={3}>
+				{directoryTree.map((item) => (
+					<BreadcrumbItem key={item.name} onPointerUp={() => picker.navigateTo(item)} startContent={item.name ? undefined : <Icons.FolderRoot />}>
+						{item.name}
+					</BreadcrumbItem>
+				))}
+			</Breadcrumbs>
+			<Tooltip content='Go To Parent' showArrow>
+				<IconButton color='secondary' icon={Icons.ArrowUp} isDisabled={directoryTree.length <= 1} onPointerUp={picker.navigateToParent} />
+			</Tooltip>
+			<Tooltip content={directory.create ? 'Filter' : 'New Directory'} showArrow>
+				<IconButton color='warning' icon={directory.create ? Icons.Filter : Icons.FolderPlus} onPointerUp={picker.toggleCreateDirectory} />
+			</Tooltip>
+			<Tooltip content='Refresh' showArrow>
+				<IconButton color='primary' icon={Icons.Sync} onPointerUp={picker.list} />
+			</Tooltip>
+		</div>
+	)
+})
+
+const Filter = memo(() => {
+	const picker = useMolecule(FilePickerMolecule)
+	const { directory, filter } = useSnapshot(picker.state)
+
+	return (
+		<Activity mode={directory.create ? 'hidden' : 'visible'}>
+			<Input isClearable label='Filter' onValueChange={picker.filter} size='sm' value={filter} />
+		</Activity>
+	)
+})
+
+const CreateDirectory = memo(() => {
+	const picker = useMolecule(FilePickerMolecule)
+	const { create, name } = useSnapshot(picker.state.directory, { sync: true })
+
+	return (
+		<Activity mode={create ? 'visible' : 'hidden'}>
+			<div className='flex flex-row items-center gap-2'>
+				<Input label='Name' onValueChange={(value) => (picker.state.directory.name = value)} size='sm' value={name} />
+				<Tooltip content='Create' showArrow>
+					<IconButton color='success' icon={Icons.Check} isDisabled={name.length === 0} onPointerUp={picker.createDirectory} variant='light' />
+				</Tooltip>
+			</div>
+		</Activity>
+	)
+})
+
+const Files = memo(() => {
+	const picker = useMolecule(FilePickerMolecule)
+	const { mode, selected, filtered } = useSnapshot(picker.state)
+
+	return (
+		<Listbox
+			isVirtualized
+			onAction={picker.select}
+			selectionMode='none'
+			virtualization={{
+				maxListboxHeight: 200,
+				itemHeight: 48,
+			}}>
+			{filtered.map((item) => (
+				<ListboxItem endContent={selected.includes(item.path) && <Icons.Check color='green' />} key={item.path} startContent={item.directory ? <Icons.Folder color='orange' /> : <Icons.File color='gray' />}>
+					<div className='flex flex-row items-center justify-between gap-1'>
+						<div className='w-full flex flex-col justify-center gap-0'>
+							<span className='break-all whitespace-nowrap w-0'>{item.name}</span>
+							<div className='w-full flex flex-row items-center justify-between gap-1'>
+								<span className='text-xs text-gray-500'>{formatTemporal(item.updatedAt, 'YYYY-MM-DD HH:mm:ss')}</span>
+								{!item.directory && <span className='text-xs text-gray-500'>{item.size} B</span>}
+							</div>
+						</div>
+						{mode === 'directory' && <IconButton color='secondary' icon={Icons.FolderOpen} onPointerUp={() => picker.navigateTo(item)} />}
+					</div>
+				</ListboxItem>
+			))}
+		</Listbox>
+	)
+})
+
+const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
+	const picker = useMolecule(FilePickerMolecule)
+	const { mode, selected } = useSnapshot(picker.state)
+	const { save } = useSnapshot(picker.state, { sync: true })
 
 	function handleOnChoose() {
 		if (mode === 'save') {
@@ -28,7 +141,7 @@ export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 		}
 	}
 
-	const Footer = (
+	return (
 		<>
 			<Activity mode={mode === 'save' ? 'visible' : 'hidden'}>
 				<Input className='flex-1' color={save.alreadyExists ? 'warning' : 'default'} isClearable label='Name' onValueChange={picker.updateSaveName} size='sm' value={save.name} />
@@ -41,67 +154,5 @@ export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
 				</Badge>
 			</Activity>
 		</>
-	)
-
-	return (
-		<Modal footer={Footer} header={header ?? (mode === 'save' ? 'Save' : mode === 'directory' ? 'Open Directory' : 'Open File')} id={id} maxWidth='416px' onHide={onChoose}>
-			<div className='mt-0 flex flex-col flex-wrap gap-2'>
-				<div className='flex flex-row items-center gap-2'>
-					<Tooltip content='Go Back' showArrow>
-						<IconButton color='secondary' icon={Icons.ArrowLeft} isDisabled={history.length === 0} onPointerUp={picker.navigateBack} />
-					</Tooltip>
-					<Breadcrumbs className='flex-1' itemsAfterCollapse={2} itemsBeforeCollapse={1} maxItems={3}>
-						{directoryTree.map((item) => (
-							<BreadcrumbItem key={item.name} onPointerUp={() => picker.navigateTo(item)} startContent={item.name ? undefined : <Icons.FolderRoot />}>
-								{item.name}
-							</BreadcrumbItem>
-						))}
-					</Breadcrumbs>
-					<Tooltip content='Go To Parent' showArrow>
-						<IconButton color='secondary' icon={Icons.ArrowUp} isDisabled={directoryTree.length <= 1} onPointerUp={picker.navigateToParent} />
-					</Tooltip>
-					<Tooltip content={directory.create ? 'Filter' : 'New Directory'} showArrow>
-						<IconButton color='warning' icon={directory.create ? Icons.Filter : Icons.FolderPlus} onPointerUp={picker.toggleCreateDirectory} />
-					</Tooltip>
-					<Tooltip content='Refresh' showArrow>
-						<IconButton color='primary' icon={Icons.Sync} onPointerUp={picker.list} />
-					</Tooltip>
-				</div>
-				<Activity mode={directory.create ? 'hidden' : 'visible'}>
-					<Input isClearable label='Filter' onValueChange={picker.filter} size='sm' value={filter} />
-				</Activity>
-				<Activity mode={directory.create ? 'visible' : 'hidden'}>
-					<div className='flex flex-row items-center gap-2'>
-						<Input label='Name' onValueChange={(value) => (picker.state.directory.name = value)} size='sm' value={directory.name} />
-						<Tooltip content='Create' showArrow>
-							<IconButton color='success' icon={Icons.Check} isDisabled={directory.name.length === 0} onPointerUp={picker.createDirectory} variant='light' />
-						</Tooltip>
-					</div>
-				</Activity>
-				<Listbox
-					isVirtualized
-					onAction={picker.select}
-					selectionMode='none'
-					virtualization={{
-						maxListboxHeight: 200,
-						itemHeight: 48,
-					}}>
-					{filtered.map((item) => (
-						<ListboxItem endContent={selected.includes(item.path) && <Icons.Check color='green' />} key={item.path} startContent={item.directory ? <Icons.Folder color='orange' /> : <Icons.File color='gray' />}>
-							<div className='flex flex-row items-center justify-between gap-1'>
-								<div className='w-full flex flex-col justify-center gap-0'>
-									<span className='break-all whitespace-nowrap w-0'>{item.name}</span>
-									<div className='w-full flex flex-row items-center justify-between gap-1'>
-										<span className='text-xs text-gray-500'>{formatTemporal(item.updatedAt, 'YYYY-MM-DD HH:mm:ss')}</span>
-										{!item.directory && <span className='text-xs text-gray-500'>{item.size} B</span>}
-									</div>
-								</div>
-								{mode === 'directory' && <IconButton color='secondary' icon={Icons.FolderOpen} onPointerUp={() => picker.navigateTo(item)} />}
-							</div>
-						</ListboxItem>
-					))}
-				</Listbox>
-			</div>
-		</Modal>
 	)
 })

@@ -15,14 +15,20 @@ export const AlpacaServer = memo(() => {
 
 	return (
 		<Modal footer={<Footer />} header='ASCOM Alpaca Server' id='alpaca' maxWidth='296px' onHide={alpaca.hide} subHeader={running ? `${devices.length} devices` : undefined}>
-			<div className='mt-0 grid grid-cols-1 gap-2'>
-				<DeviceList />
-			</div>
+			<Body />
 		</Modal>
 	)
 })
 
-const DeviceListItem = (item: AlpacaConfiguredDevice) => (
+const Body = memo(() => {
+	return (
+		<div className='mt-0 grid grid-cols-1 gap-2'>
+			<DeviceList />
+		</div>
+	)
+})
+
+const DeviceItem = (item: AlpacaConfiguredDevice) => (
 	<ListboxItem description={item.DeviceType} key={item.UniqueID}>
 		{item.DeviceName} (#{item.DeviceNumber})
 	</ListboxItem>
@@ -34,7 +40,7 @@ const DeviceList = memo(() => {
 
 	return (
 		<Listbox classNames={{ list: 'max-h-[120px] overflow-scroll pe-1' }} emptyContent='No devices' items={devices}>
-			{DeviceListItem}
+			{DeviceItem}
 		</Listbox>
 	)
 })

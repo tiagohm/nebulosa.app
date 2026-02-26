@@ -9,10 +9,19 @@ import { Modal } from './Modal'
 
 export const DewHeater = memo(() => {
 	const dewHeater = useMolecule(DewHeaterMolecule)
-	const { connecting, connected, dutyCycle } = useSnapshot(dewHeater.state.dewHeater)
-	const { min, max, value } = dutyCycle
 
-	const Header = (
+	return (
+		<Modal header={<Header />} id={`dew-heater-${dewHeater.scope.dewHeater.name}`} maxWidth='256px' onHide={dewHeater.hide}>
+			<Body />
+		</Modal>
+	)
+})
+
+const Header = memo(() => {
+	const dewHeater = useMolecule(DewHeaterMolecule)
+	const { connecting, connected } = useSnapshot(dewHeater.state.dewHeater)
+
+	return (
 		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
 				<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={dewHeater.connect} />
@@ -24,17 +33,21 @@ export const DewHeater = memo(() => {
 			</div>
 		</div>
 	)
+})
+
+const Body = memo(() => {
+	const dewHeater = useMolecule(DewHeaterMolecule)
+	const { connected, dutyCycle } = useSnapshot(dewHeater.state.dewHeater)
+	const { min, max, value } = dutyCycle
 
 	const color = value < max * 0.5 ? 'primary' : value < max * 0.9 ? 'warning' : 'danger'
 
 	return (
-		<Modal header={Header} id={`dew-heater-${dewHeater.scope.dewHeater.name}`} maxWidth='256px' onHide={dewHeater.hide}>
-			<div className='mt-0 col-span-full flex flex-col items-center justify-center'>
-				<div className='w-full flex flex-col justify-center items-center gap-1'>
-					<Slider color={color} disableThumbScale endContent={max} isDisabled={!connected} maxValue={max} minValue={min} onChange={dewHeater.update} onChangeEnd={dewHeater.dutyCycle} size='lg' startContent={min} value={value} />
-					<span className='text-lg font-bold'>{value}</span>
-				</div>
+		<div className='mt-0 col-span-full flex flex-col items-center justify-center'>
+			<div className='w-full flex flex-col justify-center items-center gap-1'>
+				<Slider color={color} disableThumbScale endContent={max} isDisabled={!connected} maxValue={max} minValue={min} onChange={dewHeater.update} onChangeEnd={dewHeater.dutyCycle} size='lg' startContent={min} value={value} />
+				<span className='text-lg font-bold'>{value}</span>
 			</div>
-		</Modal>
+		</div>
 	)
 })

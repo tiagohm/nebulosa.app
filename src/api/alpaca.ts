@@ -68,9 +68,7 @@ export class AlpacaHandler {
 }
 
 export function alpaca(alpacaHandler: AlpacaHandler, alpacaPort: number | undefined, shouldStart: boolean): Endpoints {
-	if (shouldStart) {
-		void alpacaHandler.start(alpacaPort || 2222)
-	}
+	if (shouldStart) void alpacaHandler.start(alpacaPort || 2222)
 
 	return {
 		'/alpaca/status': { GET: () => response(alpacaHandler.status()) },

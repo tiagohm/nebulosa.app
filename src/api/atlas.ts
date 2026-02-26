@@ -250,12 +250,12 @@ export class AtlasHandler {
 	moonEclipses(req: FindNextLunarEclipse) {
 		const location = this.cache.geographicCoordinate(req.location)
 		let time = this.cache.time(req.time.utc, location, 'm')
-		const eclipses: NextLunarEclipse[] = []
+		const eclipses = new Array<NextLunarEclipse>(req.count)
 
-		while (req.count-- > 0) {
+		for (let i = 0; i < req.count; i++) {
 			const { type, firstContactPenumbraTime, lastContactPenumbraTime, maximalTime } = nearestLunarEclipse(time, true)
 			time = maximalTime
-			eclipses.push({ type, startTime: temporalFromTime(firstContactPenumbraTime), endTime: temporalFromTime(lastContactPenumbraTime), time: temporalFromTime(maximalTime) })
+			eclipses[i] = { type, startTime: temporalFromTime(firstContactPenumbraTime), endTime: temporalFromTime(lastContactPenumbraTime), time: temporalFromTime(maximalTime) }
 		}
 
 		return eclipses

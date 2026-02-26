@@ -4,14 +4,16 @@ import { EnumMultipleSelect, type EnumMultipleSelectProps } from './EnumMultiple
 
 export type ConstellationSelectProps = Omit<EnumMultipleSelectProps<Constellation>, 'children'>
 
+const ConstellationItem = (c: Constellation) => (
+	<SelectItem key={c}>
+		{CONSTELLATIONS[c].name} ({c})
+	</SelectItem>
+)
+
 export function ConstellationSelect({ label = 'Constellation', ...props }: ConstellationSelectProps) {
 	return (
-		<EnumMultipleSelect {...props} classNames={{ trigger: 'min-h-[48.75px]!' }} isClearable label={label} placeholder='All' renderValue={(items) => <div className='mt-2 flex flex-nowrap gap-2'>{items.map((e) => e.key).join(', ')}</div>}>
-			{CONSTELLATION_LIST.map((c) => (
-				<SelectItem key={c}>
-					{CONSTELLATIONS[c].name} ({c})
-				</SelectItem>
-			))}
+		<EnumMultipleSelect {...props} classNames={{ trigger: 'min-h-15!' }} isClearable label={label} placeholder='All' renderValue={(items) => <div className='mt-2 flex flex-nowrap gap-2'>{items.map((e) => e.key).join(', ')}</div>}>
+			{CONSTELLATION_LIST.map(ConstellationItem)}
 		</EnumMultipleSelect>
 	)
 }

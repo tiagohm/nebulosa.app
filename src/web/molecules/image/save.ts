@@ -45,6 +45,10 @@ export const ImageSaveMolecule = molecule(() => {
 		state[key] = value
 	}
 
+	function updatePath(path?: string) {
+		state.path = path ?? ''
+	}
+
 	async function download() {
 		try {
 			state.loading = true
@@ -95,5 +99,15 @@ export const ImageSaveMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, scope: viewer.scope, viewer, update, download, save, show, hide } as const
+	return {
+		state,
+		scope: viewer.scope,
+		viewer,
+		update,
+		updatePath,
+		download,
+		save,
+		show,
+		hide,
+	} as const
 })

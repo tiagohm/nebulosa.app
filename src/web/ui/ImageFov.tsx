@@ -1,6 +1,7 @@
 import { Checkbox, Listbox, ListboxItem, NumberInput, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo, useCallback } from 'react'
+import type { FovItem } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageFovMolecule } from '@/molecules/image/fov'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
@@ -17,66 +18,108 @@ export const ImageFov = memo(() => {
 
 	return (
 		<Modal header='FOV' id={`fov-${fov.viewer.storageKey}`} maxWidth='336px' onHide={fov.hide}>
-			<div className='mt-0 grid grid-cols-12 items-center gap-2'>
-				<FovItemList />
-				<FovItemEdit />
-			</div>
+			<Body />
 		</Modal>
 	)
 })
 
-const FovItemEdit = memo(() => {
+const Body = memo(() => {
+	return (
+		<div className='mt-0 grid grid-cols-12 items-center gap-2'>
+			<List />
+			<Edit />
+		</div>
+	)
+})
+
+const Edit = memo(() => {
+	return (
+		<>
+			<Telescope />
+			<Camera />
+			<OrientationAndOptics />
+			<Actions />
+		</>
+	)
+})
+
+const Telescope = memo(() => {
 	const fov = useMolecule(ImageFovMolecule)
 	const { items, selected } = useSnapshot(fov.state)
+	const { focalLength, aperture } = items[selected]
 
-	const { focalLength, aperture, cameraWidth, cameraHeight, pixelWidth, pixelHeight, barlowReducer, bin, rotation } = items[selected]
-
-	const handleOnCameraSelectedChange = useCallback((item: AstroBinEquipmentPopoverItem) => {
-		const { w = 0, h = 0, ps = 0 } = item
-
-		fov.update('cameraWidth', w)
-		fov.update('cameraHeight', h)
-		fov.update('pixelWidth', ps)
-		fov.update('pixelHeight', ps)
-	}, [])
-
-	const handleOnTelescopeSelectedChange = useCallback((item: AstroBinEquipmentPopoverItem) => {
-		const { ap = 0, fl = 0 } = item
-
-		fov.update('aperture', ap)
-		fov.update('focalLength', fl)
+	const handleOnSelectedChange = useCallback((item: AstroBinEquipmentPopoverItem) => {
+		fov.update('aperture', item.ap ?? 0)
+		fov.update('focalLength', item.fl ?? 0)
 	}, [])
 
 	return (
 		<>
 			<div className='col-span-2'>
-				<AstroBinEquipmentPopover items={telescopes} onSelectedChange={handleOnTelescopeSelectedChange} type='telescope' />
+				<AstroBinEquipmentPopover items={telescopes} onSelectedChange={handleOnSelectedChange} type='telescope' />
 			</div>
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Focal Length (mm)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('focalLength', value)} size='sm' value={focalLength} />
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Aperture (mm)' maxValue={10000} minValue={10} onValueChange={(value) => fov.update('aperture', value)} size='sm' value={aperture} />
+		</>
+	)
+})
+
+const Camera = memo(() => {
+	const fov = useMolecule(ImageFovMolecule)
+	const { items, selected } = useSnapshot(fov.state)
+	const { cameraWidth, cameraHeight, pixelWidth, pixelHeight } = items[selected]
+
+	const handleOnSelectedChange = useCallback((item: AstroBinEquipmentPopoverItem) => {
+		fov.update('cameraWidth', item.w ?? 0)
+		fov.update('cameraHeight', item.h ?? 0)
+		fov.update('pixelWidth', item.ps ?? 0)
+		fov.update('pixelHeight', item.ps ?? 0)
+	}, [])
+
+	return (
+		<>
 			<div className='col-span-2'>
-				<AstroBinEquipmentPopover items={cameras} onSelectedChange={handleOnCameraSelectedChange} type='camera' />
+				<AstroBinEquipmentPopover items={cameras} onSelectedChange={handleOnSelectedChange} type='camera' />
 			</div>
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Width (px)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraWidth', value)} size='sm' value={cameraWidth} />
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Height (px)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraHeight', value)} size='sm' value={cameraHeight} />
 			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} label='Width (µm)' maxValue={100} minValue={1} onValueChange={(value) => fov.update('pixelWidth', value)} size='sm' step={0.01} value={pixelWidth} />
 			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} label='Height (µm)' maxValue={100} minValue={1} onValueChange={(value) => fov.update('pixelHeight', value)} size='sm' step={0.01} value={pixelHeight} />
-			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} label='Rotation (°)' maxValue={360} minValue={-360} onValueChange={(value) => fov.update('rotation', value)} size='sm' step={0.1} value={rotation} />
-			<NumberInput className='col-span-5' formatOptions={DECIMAL_NUMBER_FORMAT} label='Barlow/Reducer' maxValue={10} minValue={0.1} onValueChange={(value) => fov.update('barlowReducer', value)} size='sm' step={0.01} value={barlowReducer} />
-			<NumberInput className='col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} label='Bin' maxValue={8} minValue={1} onValueChange={(value) => fov.update('bin', value)} size='sm' value={bin} />
-			<div className='col-span-4 flex flex-row items-center justify-center gap-2'>
-				<Tooltip content='Add' placement='bottom' showArrow>
-					<IconButton className='col-span-2' color='success' icon={Icons.Plus} onPointerUp={fov.add} />
-				</Tooltip>
-				<Tooltip content='Remove' placement='bottom' showArrow>
-					<IconButton className='col-span-2' color='danger' icon={Icons.Trash} isDisabled={items.length <= 1} onPointerUp={fov.remove} />
-				</Tooltip>
-			</div>
 		</>
 	)
 })
 
-const FovItemList = memo(() => {
+const OrientationAndOptics = memo(() => {
+	const fov = useMolecule(ImageFovMolecule)
+	const { items, selected } = useSnapshot(fov.state)
+	const { barlowReducer, bin, rotation } = items[selected]
+
+	return (
+		<>
+			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} label='Rotation (°)' maxValue={360} minValue={-360} onValueChange={(value) => fov.update('rotation', value)} size='sm' step={0.1} value={rotation} />
+			<NumberInput className='col-span-5' formatOptions={DECIMAL_NUMBER_FORMAT} label='Barlow/Reducer' maxValue={10} minValue={0.1} onValueChange={(value) => fov.update('barlowReducer', value)} size='sm' step={0.01} value={barlowReducer} />
+			<NumberInput className='col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} label='Bin' maxValue={8} minValue={1} onValueChange={(value) => fov.update('bin', value)} size='sm' value={bin} />
+		</>
+	)
+})
+
+const Actions = memo(() => {
+	const fov = useMolecule(ImageFovMolecule)
+	const { items } = useSnapshot(fov.state)
+
+	return (
+		<div className='col-span-4 flex flex-row items-center justify-center gap-2'>
+			<Tooltip content='Add' placement='bottom' showArrow>
+				<IconButton className='col-span-2' color='success' icon={Icons.Plus} onPointerUp={fov.add} />
+			</Tooltip>
+			<Tooltip content='Remove' placement='bottom' showArrow>
+				<IconButton className='col-span-2' color='danger' icon={Icons.Trash} isDisabled={items.length <= 1} onPointerUp={fov.remove} />
+			</Tooltip>
+		</div>
+	)
+})
+
+const List = memo(() => {
 	const fov = useMolecule(ImageFovMolecule)
 	const { items, selected } = useSnapshot(fov.state)
 
@@ -89,33 +132,39 @@ const FovItemList = memo(() => {
 							<div className='flex flex-col items-center justify-center'>
 								<Checkbox isSelected={item.visible} onValueChange={(selected) => fov.update('visible', selected, item.id)} />
 							</div>
-							<div className='flex flex-row flex-wrap gap-1 items-center justify-between'>
-								<span>
-									<strong>FL:</strong> {item.focalLength}mm
-								</span>
-								<span>
-									<strong>AP:</strong> {item.aperture}mm
-								</span>
-								<span>
-									<strong>SZ:</strong> {item.cameraWidth}x{item.cameraHeight} px
-								</span>
-								<span>
-									<strong>PS:</strong> {item.pixelWidth.toFixed(2)}x{item.pixelHeight.toFixed(2)} µm
-								</span>
-								<span>
-									<strong>BIN:</strong> {item.bin}
-								</span>
-								<span>
-									<strong>B/R:</strong> {item.barlowReducer.toFixed(2)}x
-								</span>
-								<span>
-									<strong>ROT:</strong> {item.rotation.toFixed(1)}°
-								</span>
-							</div>
+							<ComputedFovItem {...item} />
 						</div>
 					</ListboxItem>
 				)
 			})}
 		</Listbox>
+	)
+})
+
+const ComputedFovItem = memo((item: FovItem) => {
+	return (
+		<div className='flex flex-row flex-wrap gap-1 items-center justify-between'>
+			<span>
+				<strong>FL:</strong> {item.focalLength}mm
+			</span>
+			<span>
+				<strong>AP:</strong> {item.aperture}mm
+			</span>
+			<span>
+				<strong>SZ:</strong> {item.cameraWidth}x{item.cameraHeight} px
+			</span>
+			<span>
+				<strong>PS:</strong> {item.pixelWidth.toFixed(2)}x{item.pixelHeight.toFixed(2)} µm
+			</span>
+			<span>
+				<strong>BIN:</strong> {item.bin}
+			</span>
+			<span>
+				<strong>B/R:</strong> {item.barlowReducer.toFixed(2)}x
+			</span>
+			<span>
+				<strong>ROT:</strong> {item.rotation.toFixed(1)}°
+			</span>
+		</div>
 	)
 })

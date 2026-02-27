@@ -9,6 +9,7 @@ import type { EquatorialCoordinate, HorizontalCoordinate } from 'nebulosa/src/co
 import type { Distance } from 'nebulosa/src/distance'
 import type { FitsHeader } from 'nebulosa/src/fits'
 import type { Point, Rect, Size } from 'nebulosa/src/geometry'
+import type { Hips2FitsOptions } from 'nebulosa/src/hips2fits'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
 import type { CfaPattern, ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SCNRProtectionMethod, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
 // biome-ignore format: too long!
@@ -23,7 +24,6 @@ import type { StellariumObjectType } from 'nebulosa/src/stellarium'
 import type { SolarEclipse } from 'nebulosa/src/sun'
 import type { Temporal } from 'nebulosa/src/temporal'
 import type { Velocity } from 'nebulosa/src/velocity'
-import type { Hips2FitsOptions } from 'node_modules/nebulosa/src/hips2fits'
 import type { DeepRequired, Required } from 'utility-types'
 
 export type Atom<T> = T extends MoleculeOrInterface<infer X> ? X : never
@@ -368,6 +368,8 @@ export interface Framing extends EquatorialCoordinate<string>, Size, Omit<Hips2F
 
 // Image
 
+export type ImageFilterType = 'sharpen' | 'mean' | 'blur' | 'gaussianBlur'
+
 export interface ImageStretch extends Pick<SigmaClipOptions, 'centerMethod' | 'dispersionMethod' | 'sigmaLower' | 'sigmaUpper'> {
 	auto: boolean
 	shadow: number // 0 - 65536
@@ -404,7 +406,7 @@ export interface ImageAdjustment {
 
 export interface ImageFilter {
 	enabled: boolean
-	type: 'sharpen' | 'mean' | 'blur' | 'gaussianBlur'
+	type: ImageFilterType
 	readonly mean: {
 		size: number
 	}
@@ -886,7 +888,7 @@ export interface FlatWizardStart {
 	maxExposure: number // ms
 	meanTarget: number // [0..65535]
 	meanTolerance: number // % [0..100]
-	saveAt: string
+	path: string
 }
 
 export interface FlatWizardEvent {
@@ -1339,7 +1341,7 @@ export const DEFAULT_FLAT_WIZARD_START: FlatWizardStart = {
 	maxExposure: 2000,
 	meanTarget: 32768,
 	meanTolerance: 10,
-	saveAt: '',
+	path: '',
 }
 
 export const DEFAULT_FLAT_WIZARD_EVENT: FlatWizardEvent = {

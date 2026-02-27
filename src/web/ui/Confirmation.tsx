@@ -9,6 +9,8 @@ import { TextButton } from './TextButton'
 export const Confirmation = memo(() => {
 	const confirmation = useMolecule(ConfirmationMolecule)
 
+	if (!confirmation.state.show) return null
+
 	return (
 		<Modal footer={<Footer />} header='Confirmation' id='confirmation' maxWidth='336px' onHide={confirmation.hide}>
 			<Body />

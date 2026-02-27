@@ -155,7 +155,7 @@ export const HomeMenuPopover = memo(() => {
 
 export const HomeMenuPopoverContent = memo(() => {
 	const equipment = useMolecule(EquipmentMolecule)
-	const { selected, CAMERA, MOUNT, FOCUSER, WHEEL, COVER, FLAT_PANEL, GUIDE_OUTPUT, THERMOMETER, DEW_HEATER, ROTATOR } = useSnapshot(equipment.state)
+	const { CAMERA, MOUNT, FOCUSER, WHEEL, COVER, FLAT_PANEL, GUIDE_OUTPUT, THERMOMETER, DEW_HEATER, ROTATOR } = useSnapshot(equipment.state)
 
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
 	const framing = useMolecule(FramingMolecule)
@@ -283,16 +283,25 @@ export const HomeMenuPopoverContent = memo(() => {
 					<img className='w-9' src={aboutIcon} />
 				</Button>
 			</Tooltip>
-			{selected && (
-				<div className='col-span-full my-2 flex flex-col items-center justify-center gap-2 flex-wrap'>
-					<span className='font-bold text-sm mt-2 uppercase'>{deviceName(selected)}</span>
-					{equipment.state[selected].map((device) => (
-						<Chip className='min-w-full cursor-pointer' color={device.connected ? 'success' : 'danger'} key={device.name} onPointerUp={() => equipment.show(device, selected)} variant='flat'>
-							{device.name}
-						</Chip>
-					))}
-				</div>
-			)}
+			<Devices />
+		</div>
+	)
+})
+
+const Devices = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { selected } = useSnapshot(equipment.state)
+
+	if (!selected) return null
+
+	return (
+		<div className='col-span-full my-2 flex flex-col items-center justify-center gap-2 flex-wrap'>
+			<span className='font-bold text-sm mt-2 uppercase'>{deviceName(selected)}</span>
+			{equipment.state[selected].map((device) => (
+				<Chip className='min-w-full cursor-pointer' color={device.connected ? 'success' : 'danger'} key={device.name} onPointerUp={() => equipment.show(device, selected)} variant='flat'>
+					{device.name}
+				</Chip>
+			))}
 		</div>
 	)
 })

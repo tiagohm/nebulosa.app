@@ -12,10 +12,19 @@ import { Modal } from './Modal'
 
 export const Focuser = memo(() => {
 	const focuser = useMolecule(FocuserMolecule)
-	const { connecting, connected, moving, position, canAbort, canSync, canAbsoluteMove, canRelativeMove, canReverse, reversed } = useSnapshot(focuser.state.focuser)
-	const { relative, absolute } = useSnapshot(focuser.state.request)
 
-	const Header = (
+	return (
+		<Modal header={<Header />} id={`focuser-${focuser.scope.focuser.name}`} maxWidth='256px' onHide={focuser.hide}>
+			<Body />
+		</Modal>
+	)
+})
+
+const Header = memo(() => {
+	const focuser = useMolecule(FocuserMolecule)
+	const { connecting, connected } = useSnapshot(focuser.state.focuser)
+
+	return (
 		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
 				<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={focuser.connect} />
@@ -27,43 +36,96 @@ export const Focuser = memo(() => {
 			</div>
 		</div>
 	)
+})
+
+const Body = memo(() => {
+	return (
+		<div className='mt-0 grid grid-cols-12 gap-2'>
+			<Status />
+			<Position />
+			<RelativePosition />
+			<AbsolutePosition />
+			<Options />
+		</div>
+	)
+})
+
+const Status = memo(() => {
+	const focuser = useMolecule(FocuserMolecule)
+	const { moving } = useSnapshot(focuser.state.focuser)
 
 	return (
-		<Modal header={Header} id={`focuser-${focuser.scope.focuser.name}`} maxWidth='256px' onHide={focuser.hide}>
-			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<div className='col-span-3 flex flex-row items-center justify-start'>
-					<Chip color='primary' size='sm'>
-						{moving ? 'moving' : 'idle'}
-					</Chip>
-				</div>
-				<div className='col-span-9 flex flex-row items-center justify-end gap-2'>
-					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isReadOnly label='Position' size='sm' value={position.value} />
-					<Tooltip content='Stop' placement='bottom' showArrow>
-						<IconButton color='danger' icon={Icons.Stop} isDisabled={!connected || !canAbort || !moving} onPointerUp={focuser.stop} />
-					</Tooltip>
-				</div>
-				<div className='col-span-full flex flex-row items-center justify-between gap-2'>
-					<Tooltip content='Move In' placement='bottom' showArrow>
-						<IconButton color='secondary' icon={Icons.ArrowLeft} isDisabled={!connected || !canRelativeMove || moving || relative === 0} onPointerUp={focuser.moveIn} />
-					</Tooltip>
-					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !canRelativeMove || moving} label='Relative' maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} size='sm' value={relative} />
-					<Tooltip content='Move Out' placement='bottom' showArrow>
-						<IconButton color='secondary' icon={Icons.ArrowRight} isDisabled={!connected || !canRelativeMove || moving || relative === 0} onPointerUp={focuser.moveOut} />
-					</Tooltip>
-				</div>
-				<div className='col-span-full flex flex-row items-center justify-between gap-2'>
-					<Tooltip content='Sync' placement='bottom' showArrow>
-						<IconButton color='primary' icon={Icons.Sync} isDisabled={!connected || !canSync || moving} onPointerUp={focuser.sync} />
-					</Tooltip>
-					<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !canAbsoluteMove || moving} label='Absolute' maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} size='sm' value={absolute} />
-					<Tooltip content='Move' placement='bottom' showArrow>
-						<IconButton color='success' icon={Icons.Check} isDisabled={!connected || !canAbsoluteMove || moving || absolute === position.value} onPointerUp={focuser.moveTo} />
-					</Tooltip>
-				</div>
-				<Checkbox className='col-span-full mt-1' isDisabled={!connected || !canReverse} isSelected={reversed} onValueChange={focuser.reverse}>
-					Reversed
-				</Checkbox>
-			</div>
-		</Modal>
+		<div className='col-span-3 flex flex-row items-center justify-start'>
+			<Chip color='primary' size='sm'>
+				{moving ? 'moving' : 'idle'}
+			</Chip>
+		</div>
+	)
+})
+
+const Position = memo(() => {
+	const focuser = useMolecule(FocuserMolecule)
+	const { connected, moving, position, canAbort } = useSnapshot(focuser.state.focuser)
+
+	return (
+		<div className='col-span-9 flex flex-row items-center justify-end gap-2'>
+			<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isReadOnly label='Position' size='sm' value={position.value} />
+			<Tooltip content='Stop' placement='bottom' showArrow>
+				<IconButton color='danger' icon={Icons.Stop} isDisabled={!connected || !canAbort || !moving} onPointerUp={focuser.stop} />
+			</Tooltip>
+		</div>
+	)
+})
+
+const RelativePosition = memo(() => {
+	const focuser = useMolecule(FocuserMolecule)
+	const { connected, moving, position, canRelativeMove } = useSnapshot(focuser.state.focuser)
+	const { relative } = useSnapshot(focuser.state.request)
+
+	if (!canRelativeMove) return null
+
+	return (
+		<div className='col-span-full flex flex-row items-center justify-between gap-2'>
+			<Tooltip content='Move In' placement='bottom' showArrow>
+				<IconButton color='secondary' icon={Icons.ArrowLeft} isDisabled={!connected || moving || relative === 0} onPointerUp={focuser.moveIn} />
+			</Tooltip>
+			<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || moving} label='Relative' maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} size='sm' value={relative} />
+			<Tooltip content='Move Out' placement='bottom' showArrow>
+				<IconButton color='secondary' icon={Icons.ArrowRight} isDisabled={!connected || moving || relative === 0} onPointerUp={focuser.moveOut} />
+			</Tooltip>
+		</div>
+	)
+})
+
+const AbsolutePosition = memo(() => {
+	const focuser = useMolecule(FocuserMolecule)
+	const { connected, moving, position, canSync, canAbsoluteMove } = useSnapshot(focuser.state.focuser)
+	const { absolute } = useSnapshot(focuser.state.request)
+
+	if (!canAbsoluteMove) return null
+
+	return (
+		<div className='col-span-full flex flex-row items-center justify-between gap-2'>
+			<Tooltip content='Sync' placement='bottom' showArrow>
+				<IconButton color='primary' icon={Icons.Sync} isDisabled={!connected || !canSync || moving} onPointerUp={focuser.sync} />
+			</Tooltip>
+			<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || moving} label='Absolute' maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} size='sm' value={absolute} />
+			<Tooltip content='Move' placement='bottom' showArrow>
+				<IconButton color='success' icon={Icons.Check} isDisabled={!connected || moving || absolute === position.value} onPointerUp={focuser.moveTo} />
+			</Tooltip>
+		</div>
+	)
+})
+
+const Options = memo(() => {
+	const focuser = useMolecule(FocuserMolecule)
+	const { connected, canReverse, reversed } = useSnapshot(focuser.state.focuser)
+
+	return (
+		<div className='col-span-full flex flex-row items-center justify-between gap-2'>
+			<Checkbox className='col-span-full mt-1' isDisabled={!connected || !canReverse} isSelected={reversed} onValueChange={focuser.reverse}>
+				Reversed
+			</Checkbox>
+		</div>
 	)
 })

@@ -19,7 +19,7 @@
 		"forceConsistentCasingInFileNames": true,
 		"allowSyntheticDefaultImports": true,
 		"paths": {
-			"*": ["./*"],
+			"src/*": ["./src/*"],
 			"@/*": ["./src/web/*"]
 		}
 	}

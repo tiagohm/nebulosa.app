@@ -1,7 +1,6 @@
 import { ScopeProvider, useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { ConfirmationMolecule } from '@/molecules/confirmation'
 import { CameraScope } from '@/molecules/indi/camera'
 import { CoverScope } from '@/molecules/indi/cover'
 import { DewHeaterScope } from '@/molecules/indi/dewheater'
@@ -31,9 +30,6 @@ import { Wheel } from './Wheel'
 export const Home = memo(() => {
 	const webSocket = useMolecule(WebSocketMolecule)
 
-	const confirmation = useMolecule(ConfirmationMolecule)
-	const { show: showConfirmation } = useSnapshot(confirmation.state)
-
 	return (
 		<div className='w-full h-full flex flex-col'>
 			<HomeNavBar />
@@ -48,7 +44,7 @@ export const Home = memo(() => {
 			<FlatPanelList />
 			<DewHeaterList />
 			<RotatorList />
-			{showConfirmation && <Confirmation />}
+			<Confirmation />
 		</div>
 	)
 })

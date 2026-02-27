@@ -1,5 +1,5 @@
 import { SelectItem } from '@heroui/react'
-import type { NameAndLabel } from 'node_modules/nebulosa/src/indi.device'
+import type { NameAndLabel } from 'nebulosa/src/indi.device'
 import { EnumSelect, type EnumSelectProps } from './EnumSelect'
 
 export interface FrameFormatSelectProps extends Omit<EnumSelectProps<string>, 'children'> {

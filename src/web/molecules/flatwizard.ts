@@ -79,6 +79,10 @@ export const FlatWizardMolecule = molecule(() => {
 		state.request.capture[key] = value
 	}
 
+	function updatePath(path?: string) {
+		state.request.path = path ?? ''
+	}
+
 	function start() {
 		return Api.FlatWizard.start(state.camera!, state.request)
 	}
@@ -96,5 +100,14 @@ export const FlatWizardMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, update, updateCapture, start, stop, show, hide }
+	return {
+		state,
+		update,
+		updateCapture,
+		updatePath,
+		start,
+		stop,
+		show,
+		hide,
+	} as const
 })

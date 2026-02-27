@@ -11,27 +11,34 @@ import { TextButton } from './TextButton'
 
 export const ImageAdjustment = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
-	const { enabled } = useSnapshot(adjustment.state.adjustment)
-
-	const Footer = (
-		<>
-			<TextButton color='danger' isDisabled={!enabled} label='Reset' onPointerUp={adjustment.reset} startContent={<Icons.Restore />} />
-			<TextButton color='success' label='Adjust' onPointerUp={adjustment.apply} startContent={<Icons.Check />} />
-		</>
-	)
 
 	return (
-		<Modal footer={Footer} header='Adjustment' id={`adjustment-${adjustment.viewer.storageKey}`} maxWidth='256px' onHide={adjustment.hide}>
-			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<Checkbox className='col-span-full' isSelected={enabled} onValueChange={(value) => (adjustment.state.adjustment.enabled = value)}>
-					Enabled
-				</Checkbox>
-				<Brightness />
-				<Contrast />
-				<Gamma />
-				<Saturation />
-			</div>
+		<Modal footer={<Footer />} header='Adjustment' id={`adjustment-${adjustment.viewer.storageKey}`} maxWidth='256px' onHide={adjustment.hide}>
+			<Body />
 		</Modal>
+	)
+})
+
+const Body = memo(() => {
+	return (
+		<div className='mt-0 grid grid-cols-12 gap-2'>
+			<Enabled />
+			<Brightness />
+			<Contrast />
+			<Gamma />
+			<Saturation />
+		</div>
+	)
+})
+
+const Enabled = memo(() => {
+	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const { enabled } = useSnapshot(adjustment.state.adjustment)
+
+	return (
+		<Checkbox className='col-span-full' isSelected={enabled} onValueChange={(value) => (adjustment.state.adjustment.enabled = value)}>
+			Enabled
+		</Checkbox>
 	)
 })
 
@@ -80,5 +87,17 @@ const Saturation = memo(() => {
 				<ImageChannelOrGrayInput isDisabled={!enabled || saturation.value === 1} onValueChange={(value) => adjustment.update('saturation', 'channel', value)} value={saturation.channel} />
 			</div>
 		</Activity>
+	)
+})
+
+const Footer = memo(() => {
+	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const { enabled } = useSnapshot(adjustment.state.adjustment)
+
+	return (
+		<>
+			<TextButton color='danger' isDisabled={!enabled} label='Reset' onPointerUp={adjustment.reset} startContent={<Icons.Restore />} />
+			<TextButton color='success' label='Adjust' onPointerUp={adjustment.apply} startContent={<Icons.Check />} />
+		</>
 	)
 })

@@ -1,5 +1,5 @@
 import { SelectItem } from '@heroui/react'
-import type { CfaPattern } from 'node_modules/nebulosa/src/image.types'
+import type { CfaPattern } from 'nebulosa/src/image.types'
 import { EnumSelect, type EnumSelectProps } from './EnumSelect'
 
 export function CfaPatternSelect({ label = 'CFA Pattern', ...props }: Omit<EnumSelectProps<CfaPattern | 'AUTO'>, 'children'>) {

@@ -1,6 +1,6 @@
 import { Checkbox, Input, Listbox, ListboxItem, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import type { AlpacaDeviceServer } from 'node_modules/nebulosa/src/alpaca.discovery'
+import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import { memo, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'

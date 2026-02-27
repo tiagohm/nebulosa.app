@@ -1,7 +1,7 @@
 import { AlpacaClient } from 'nebulosa/src/alpaca.client'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi.client'
 import type { Client, Device } from 'nebulosa/src/indi.device'
-import type { DeviceProvider } from 'node_modules/nebulosa/src/indi.manager'
+import type { DeviceProvider } from 'nebulosa/src/indi.manager'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
 import { type Endpoints, response } from './http'

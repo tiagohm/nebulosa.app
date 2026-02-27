@@ -1,5 +1,5 @@
 import { build } from 'bun'
-import { author, description, version } from 'package.json'
+import { author, description, version } from './package.json'
 
 await build({
 	entrypoints: ['./main.ts'],

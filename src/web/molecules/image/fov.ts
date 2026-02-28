@@ -4,6 +4,7 @@ import { angularSizeOfPixel } from 'nebulosa/src/util'
 import bus from 'src/shared/bus'
 import { type ComputedFov, DEFAULT_FOV_ITEM, type FovItem } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import type { AstroBinEquipmentPopoverItem } from 'src/web/ui/AstroBinEquipmentPopover'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { initProxy } from '@/shared/proxy'
@@ -66,6 +67,18 @@ export const ImageFovMolecule = molecule(() => {
 		const index = id !== undefined ? state.items.findIndex((e) => e.id === id) : state.selected
 		if (index >= 0) state.items[index][key] = value
 		if (key !== 'visible') compute(id)
+	}
+
+	function selectTelescope(item: AstroBinEquipmentPopoverItem) {
+		update('aperture', item.ap ?? 0)
+		update('focalLength', item.fl ?? 0)
+	}
+
+	function selectCamera(item: AstroBinEquipmentPopoverItem) {
+		update('cameraWidth', item.w ?? 0)
+		update('cameraHeight', item.h ?? 0)
+		update('pixelWidth', item.ps ?? 0)
+		update('pixelHeight', item.ps ?? 0)
 	}
 
 	function select(id: number) {
@@ -135,5 +148,17 @@ export const ImageFovMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, scope: viewer.scope, viewer, update, select, add, remove, show, hide } as const
+	return {
+		state,
+		scope: viewer.scope,
+		viewer,
+		update,
+		selectTelescope,
+		selectCamera,
+		select,
+		add,
+		remove,
+		show,
+		hide,
+	} as const
 })

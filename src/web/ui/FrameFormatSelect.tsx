@@ -6,12 +6,12 @@ export interface FrameFormatSelectProps extends Omit<EnumSelectProps<string>, 'c
 	readonly items: readonly NameAndLabel[]
 }
 
+const FrameFormatItem = (item: NameAndLabel) => <SelectItem key={item.name}>{item.label}</SelectItem>
+
 export function FrameFormatSelect({ label = 'Format', items, ...props }: FrameFormatSelectProps) {
 	return (
 		<EnumSelect label={label} {...props}>
-			{items.map((item) => (
-				<SelectItem key={item.name}>{item.label}</SelectItem>
-			))}
+			{items.map(FrameFormatItem)}
 		</EnumSelect>
 	)
 }

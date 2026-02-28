@@ -38,7 +38,10 @@ export interface SkyAtlasState {
 	readonly location: {
 		show: boolean
 	}
-	readonly bookmark: BookmarkItem[]
+	readonly bookmark: {
+		show: boolean
+		readonly items: BookmarkItem[]
+	}
 }
 
 export interface SunState {
@@ -731,12 +734,17 @@ const state = proxy<SkyAtlasState>({
 	asteroid: asteroidState,
 	galaxy: galaxyState,
 	satellite: satelliteState,
-	bookmark: [],
+	bookmark: {
+		show: false,
+		items: [],
+	},
 })
 
 initProxy(state, 'skyatlas', ['p:show', 'p:tab', 'o:bookmark'])
 initProxy(state.request, 'skyatlas', ['o:location'])
 initProxy(state.request.time, 'skyatlas.time', ['p:offset'])
+
+const TABS = ['sun', 'moon', 'planet', 'asteroid', 'galaxy', 'satellite'] as const
 
 export const SkyAtlasMolecule = molecule(() => {
 	const sun = use(SunMolecule)
@@ -849,13 +857,37 @@ export const SkyAtlasMolecule = molecule(() => {
 		bus.emit('framing:load', request)
 	}
 
-	function bookmark(type: SkyAtlasTab, name: string, code: string, favorite: boolean) {
+	function toggleBookmark(type: SkyAtlasTab, name: string, code: string, favorite: boolean) {
+		const { items } = state.bookmark
+
 		if (favorite) {
-			state.bookmark.push({ type, name, code })
+			items.push({ type, name, code })
 		} else {
-			const index = state.bookmark.findIndex((e) => e.type === type && e.code === code)
-			index >= 0 && state.bookmark.splice(index, 1)
+			const index = items.findIndex((e) => e.type === type && e.code === code)
+			index >= 0 && items.splice(index, 1)
 		}
+	}
+
+	function selectBookmark(key: React.Key) {
+		if (typeof key === 'string') {
+			const { items } = state.bookmark
+			const [type, code] = key.split('-') as unknown as readonly [SkyAtlasTab, string]
+			const item = items.find((e) => e.type === type && e.code === code)
+
+			if (item) {
+				if (type === 'planet') planet.select(code, false)
+				else if (type === 'asteroid') asteroid.select(code)
+				else if (type === 'galaxy') galaxy.select(+code, false)
+				else if (type === 'satellite') satellite.select(+code, false)
+
+				state.tab = type
+				state.bookmark.show = false
+			}
+		}
+	}
+
+	function removeBookmark(item: BookmarkItem) {
+		toggleBookmark(item.type, item.name, item.code, false)
 	}
 
 	function showLocation() {
@@ -864,6 +896,13 @@ export const SkyAtlasMolecule = molecule(() => {
 
 	function hideLocation() {
 		state.location.show = false
+	}
+
+	function handleOnTabWheel(event: React.WheelEvent) {
+		if (event.deltaY === 0) return
+		const { tab } = state
+		const index = event.deltaY < 0 ? (TABS.indexOf(tab) + 1) % TABS.length : (TABS.indexOf(tab) + TABS.length - 1) % TABS.length
+		state.tab = TABS[index]
 	}
 
 	function show() {
@@ -875,7 +914,22 @@ export const SkyAtlasMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, updateTime, updateLocation, sync, goTo, frame, bookmark, showLocation, hideLocation, show, hide }
+	return {
+		state,
+		updateTime,
+		updateLocation,
+		sync,
+		goTo,
+		frame,
+		toggleBookmark,
+		selectBookmark,
+		removeBookmark,
+		showLocation,
+		hideLocation,
+		handleOnTabWheel,
+		show,
+		hide,
+	}
 })
 
 function isLocationChanged(a: GeographicCoordinate, b: GeographicCoordinate) {

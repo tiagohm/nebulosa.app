@@ -3,6 +3,7 @@ import { fromAbsolute, type ZonedDateTime } from '@internationalized/date'
 import { useMolecule } from 'bunshi/react'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
+import type { LunarPhase } from 'nebulosa/src/moon'
 import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/temporal'
 import { Activity, memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
@@ -41,26 +42,7 @@ export const SkyAtlas = memo(() => {
 	return (
 		<>
 			<Modal footer={Footer} header={<Header />} id='sky-atlas' maxWidth='456px' onHide={atlas.hide}>
-				<div className='mt-0 flex flex-col gap-2'>
-					<Activity mode={tab === 'sun' ? 'visible' : 'hidden'}>
-						<SunTab />
-					</Activity>
-					<Activity mode={tab === 'moon' ? 'visible' : 'hidden'}>
-						<MoonTab />
-					</Activity>
-					<Activity mode={tab === 'planet' ? 'visible' : 'hidden'}>
-						<PlanetTab />
-					</Activity>
-					<Activity mode={tab === 'asteroid' ? 'visible' : 'hidden'}>
-						<AsteroidTab />
-					</Activity>
-					<Activity mode={tab === 'galaxy' ? 'visible' : 'hidden'}>
-						<GalaxyTab />
-					</Activity>
-					<Activity mode={tab === 'satellite' ? 'visible' : 'hidden'}>
-						<SatelliteTab />
-					</Activity>
-				</div>
+				<Body />
 			</Modal>
 			{location.show && <Location {...request.location} id='location-atlas' onClose={atlas.hideLocation} onCoordinateChange={atlas.updateLocation} />}
 		</>
@@ -76,7 +58,7 @@ const Header = memo(() => {
 		<div className='flex flex-row items-center justify-between gap-2'>
 			<div className='flex justify-center items-center gap-1'>
 				<TabPopover />
-				<Bookmark />
+				<BookmarkPopover />
 			</div>
 			<div className='flex-1 flex justify-center items-center gap-2'>
 				<TimeBar key={`${time.utc}${time.offset}`} />
@@ -119,56 +101,123 @@ const TAB_ICONS = {
 	satellite: Icons.Satellite,
 } as const
 
-const TABS = Object.keys(TAB_ICONS) as SkyAtlasTab[]
-
 const TabPopover = memo(() => {
 	const [isOpen, setOpen] = useState(false)
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { tab } = useSnapshot(atlas.state)
-
-	const handleOnTabSelect = useCallback((tab: SkyAtlasTab) => {
-		atlas.state.tab = tab
-	}, [])
-
-	const handleOnWheel = useCallback(
-		(event: React.WheelEvent) => {
-			if (event.deltaY === 0) return
-			const index = event.deltaY < 0 ? (TABS.indexOf(tab) + 1) % TABS.length : (TABS.indexOf(tab) + TABS.length - 1) % TABS.length
-			handleOnTabSelect(TABS[index])
-		},
-		[tab],
-	)
 
 	return (
 		<Popover isOpen={isOpen} onOpenChange={setOpen} {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip className='capitalize' content={tab} placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
-						<IconButton color='default' icon={TAB_ICONS[tab]} onWheel={handleOnWheel} />
+						<IconButton color='default' icon={TAB_ICONS[tab]} onWheel={atlas.handleOnTabWheel} />
 					</PopoverTrigger>
 				</div>
 			</Tooltip>
 			<PopoverContent>
-				<TabPopoverContent onTabSelect={handleOnTabSelect} />
+				<TabPopoverContent />
 			</PopoverContent>
 		</Popover>
 	)
 })
 
-interface TabPopoverContentProps {
-	readonly onTabSelect: (tab: SkyAtlasTab) => void
-}
+const TabPopoverContent = memo(() => {
+	const atlas = useMolecule(SkyAtlasMolecule)
 
-const TabPopoverContent = memo(({ onTabSelect }: TabPopoverContentProps) => {
 	return (
 		<div className='inline-flex flex-row gap-2'>
 			{Object.entries(TAB_ICONS).map(([key, icon]) => {
 				return (
 					<Tooltip className='capitalize' content={key} key={key} placement='bottom' showArrow>
-						<IconButton icon={icon} onPointerUp={() => onTabSelect(key as never)} />
+						<IconButton icon={icon} onPointerUp={() => (atlas.state.tab = key as never)} />
 					</Tooltip>
 				)
 			})}
+		</div>
+	)
+})
+
+const BookmarkFilter = (item: BookmarkItem, text: string) => item.name.toLowerCase().includes(text) || item.type.includes(text)
+
+function isBookmarked(bookmark: readonly Readonly<BookmarkItem>[], type: SkyAtlasTab, code: string) {
+	return bookmark.some((e) => e.type === type && e.code === code)
+}
+
+const BookmarkPopover = memo(() => {
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { show } = useSnapshot(atlas.state.bookmark)
+
+	return (
+		<Popover className='max-w-110' isOpen={show} onOpenChange={() => (atlas.state.bookmark.show = true)} {...DEFAULT_POPOVER_PROPS}>
+			<Tooltip content='Bookmarks' placement='bottom' showArrow>
+				<div className='max-w-fit'>
+					<PopoverTrigger>
+						<IconButton color='warning' icon={Icons.Bookmark} />
+					</PopoverTrigger>
+				</div>
+			</Tooltip>
+			<PopoverContent>
+				<BookmarkPopoverContent />
+			</PopoverContent>
+		</Popover>
+	)
+})
+
+const BookmarkPopoverContent = memo(() => {
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { items } = useSnapshot(atlas.state.bookmark)
+
+	return (
+		<div className='w-full'>
+			<FilterableListbox
+				className='col-span-full'
+				classNames={{ list: 'max-h-[200px] overflow-scroll', base: 'min-w-80' }}
+				filter={BookmarkFilter}
+				isVirtualized
+				items={items}
+				minLengthToSearch={1}
+				onAction={atlas.selectBookmark}
+				selectionMode='none'
+				variant='flat'
+				virtualization={{
+					maxListboxHeight: 200,
+					itemHeight: 36,
+				}}>
+				{(item) => (
+					<ListboxItem classNames={{ description: 'uppercase' }} description={item.type} endContent={<IconButton className='rounded-full' color='danger' icon={Icons.Trash} onPointerUp={() => atlas.removeBookmark(item)} size='sm' />} key={`${item.type}-${item.code}`}>
+						{item.name}
+					</ListboxItem>
+				)}
+			</FilterableListbox>
+		</div>
+	)
+})
+
+const Body = memo(() => {
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { tab } = useSnapshot(atlas.state)
+
+	return (
+		<div className='mt-0 flex flex-col gap-2'>
+			<Activity mode={tab === 'sun' ? 'visible' : 'hidden'}>
+				<SunTab />
+			</Activity>
+			<Activity mode={tab === 'moon' ? 'visible' : 'hidden'}>
+				<MoonTab />
+			</Activity>
+			<Activity mode={tab === 'planet' ? 'visible' : 'hidden'}>
+				<PlanetTab />
+			</Activity>
+			<Activity mode={tab === 'asteroid' ? 'visible' : 'hidden'}>
+				<AsteroidTab />
+			</Activity>
+			<Activity mode={tab === 'galaxy' ? 'visible' : 'hidden'}>
+				<GalaxyTab />
+			</Activity>
+			<Activity mode={tab === 'satellite' ? 'visible' : 'hidden'}>
+				<SatelliteTab />
+			</Activity>
 		</div>
 	)
 })
@@ -251,26 +300,19 @@ const MoonTab = memo(() => {
 	)
 })
 
+function mapLunarPhase(phase: LunarPhase, time: number, offset: number) {
+	if (phase === 'NEW') return <AstronomicalEvent format='DD HH:mm' icon={Icons.MoonNew} key={time} label='NEW MOON' offset={offset} time={time} />
+	if (phase === 'FIRST_QUARTER') return <AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFirstQuarter} key={time} label='FIRST QUARTER' offset={offset} time={time} />
+	if (phase === 'FULL') return <AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFull} key={time} label='FULL MOON' offset={offset} time={time} />
+	if (phase === 'LAST_QUARTER') return <AstronomicalEvent format='DD HH:mm' icon={Icons.MoonLastQuarter} key={time} label='LAST QUARTER' offset={offset} time={time} />
+}
+
 const MoonPhases = memo(() => {
 	const moon = useMolecule(MoonMolecule)
 	const { phases } = useSnapshot(moon.state)
 	const { offset } = useSnapshot(moon.state.request.time)
 
-	return (
-		<div className='flex flex-col gap-0'>
-			{phases.map(([phase, time]) =>
-				phase === 'NEW' ? (
-					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonNew} key={phase} label='NEW MOON' offset={offset} time={time} />
-				) : phase === 'FIRST_QUARTER' ? (
-					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFirstQuarter} key={phase} label='FIRST QUARTER' offset={offset} time={time} />
-				) : phase === 'FULL' ? (
-					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFull} key={phase} label='FULL MOON' offset={offset} time={time} />
-				) : (
-					<AstronomicalEvent format='DD HH:mm' icon={Icons.MoonLastQuarter} key={phase} label='LAST QUARTER' offset={offset} time={time} />
-				),
-			)}
-		</div>
-	)
+	return <div className='flex flex-col gap-0'>{phases.map(([phase, time]) => mapLunarPhase(phase, time, offset))}</div>
 })
 
 const LunarEclipses = memo(() => {
@@ -323,6 +365,15 @@ const PLANETS = [
 	...planetarySatelliteEphemeris.pluto,
 ] as const
 
+const PlanetListItem = (planet: (typeof PLANETS)[number]) => (
+	<ListboxItem description={planet.type} key={planet.code}>
+		<span className='flex flex-row items-center justify-between'>
+			<span>{planet.name}</span>
+			<span className='text-xs'>{planet.solution}</span>
+		</span>
+	</ListboxItem>
+)
+
 const PlanetTab = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { twilight, bookmark } = useSnapshot(atlas.state)
@@ -343,7 +394,7 @@ const PlanetTab = memo(() => {
 
 	const handleOnFavoriteChange = useCallback(
 		(favorite: boolean) => {
-			atlas.bookmark('planet', name!, code!, favorite)
+			atlas.toggleBookmark('planet', name!, code!, favorite)
 		},
 		[name, code],
 	)
@@ -351,16 +402,9 @@ const PlanetTab = memo(() => {
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
 			<Listbox className='relative min-h-[200px] max-h-[240px] col-span-full' classNames={{ base: 'w-full', list: 'max-h-[190px] overflow-scroll' }} items={items} onAction={(key) => planet.select(key as never)} selectionMode='none'>
-				{(planet) => (
-					<ListboxItem description={planet.type} key={planet.code}>
-						<span className='flex flex-row items-center justify-between'>
-							<span>{planet.name}</span>
-							<span className='text-xs'>{planet.solution}</span>
-						</span>
-					</ListboxItem>
-				)}
+				{PlanetListItem}
 			</Listbox>
-			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={code ? isBookmarked(bookmark, 'planet', code) : undefined} name={name} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
+			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
 		</div>
 	)
 })
@@ -386,7 +430,7 @@ const AsteroidTab = memo(() => {
 
 	const handleOnFavoriteChange = useCallback(
 		(favorite: boolean) => {
-			atlas.bookmark('asteroid', selected!.name, selected!.id, favorite)
+			atlas.toggleBookmark('asteroid', selected!.name, selected!.id, favorite)
 		},
 		[selected],
 	)
@@ -403,7 +447,7 @@ const AsteroidTab = memo(() => {
 					</Tab>
 				</Tabs>
 			</div>
-			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={selected && isBookmarked(bookmark, 'asteroid', selected.id)} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} position={position} tags={tags} twilight={twilight} />
+			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={selected && isBookmarked(bookmark.items, 'asteroid', selected.id)} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} position={position} tags={tags} twilight={twilight} />
 		</div>
 	)
 })
@@ -483,7 +527,7 @@ const GalaxyTab = memo(() => {
 	const handleOnFavoriteChange = useCallback(
 		(favorite: boolean) => {
 			const name = skyObjectName(position.names![0], position.constellation)
-			atlas.bookmark('galaxy', name, selected!.id.toFixed(0), favorite)
+			atlas.toggleBookmark('galaxy', name, selected!.id.toFixed(0), favorite)
 		},
 		[position, selected],
 	)
@@ -492,7 +536,7 @@ const GalaxyTab = memo(() => {
 		<div className='grid grid-cols-12 gap-2 items-center'>
 			<GalaxyTable />
 			<GalaxyPaginator className='col-span-full absolute w-full' />
-			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={selected && isBookmarked(bookmark, 'galaxy', selected!.id.toFixed(0))} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
+			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={selected && isBookmarked(bookmark.items, 'galaxy', selected!.id.toFixed(0))} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
 		</div>
 	)
 })
@@ -547,7 +591,7 @@ const SatelliteTab = memo(() => {
 
 	const handleOnFavoriteChange = useCallback(
 		(favorite: boolean) => {
-			atlas.bookmark('satellite', selected!.name, selected!.id.toFixed(0), favorite)
+			atlas.toggleBookmark('satellite', selected!.name, selected!.id.toFixed(0), favorite)
 		},
 		[selected],
 	)
@@ -556,7 +600,7 @@ const SatelliteTab = memo(() => {
 		<div className='grid grid-cols-12 gap-2 items-center relative'>
 			<SatelliteTable />
 			<SatellitePaginator className='col-span-full absolute w-full' />
-			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={selected && isBookmarked(bookmark, 'satellite', selected.id.toFixed())} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
+			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={selected && isBookmarked(bookmark.items, 'satellite', selected.id.toFixed())} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
 		</div>
 	)
 })
@@ -618,84 +662,6 @@ function Paginator({ page, count, onPrev, onNext, loading = false, isReadonly = 
 		</div>
 	)
 }
-
-function filterBookmark(item: BookmarkItem, text: string) {
-	return item.name.toLowerCase().includes(text) || item.type.includes(text)
-}
-
-function isBookmarked(bookmark: readonly Readonly<BookmarkItem>[], type: SkyAtlasTab, code: string) {
-	return bookmark.some((e) => e.type === type && e.code === code)
-}
-
-const Bookmark = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { bookmark } = useSnapshot(atlas.state)
-
-	const planet = useMolecule(PlanetMolecule)
-	const asteroid = useMolecule(AsteroidMolecule)
-	const galaxy = useMolecule(GalaxyMolecule)
-	const satellite = useMolecule(SatelliteMolecule)
-
-	const [open, setOpen] = useState(false)
-
-	function handleOnAction(key: React.Key) {
-		if (typeof key === 'string') {
-			const [type, code] = key.split('-') as unknown as readonly [SkyAtlasTab, string]
-			const item = bookmark.find((e) => e.type === type && e.code === code)
-
-			if (item) {
-				if (type === 'planet') planet.select(code, false)
-				else if (type === 'asteroid') asteroid.select(code)
-				else if (type === 'galaxy') galaxy.select(+code, false)
-				else if (type === 'satellite') satellite.select(+code, false)
-
-				atlas.state.tab = type
-
-				setOpen(false)
-			}
-		}
-	}
-
-	function handleOnRemove(item: BookmarkItem) {
-		atlas.bookmark(item.type, item.name, item.code, false)
-	}
-
-	return (
-		<Popover className='max-w-110' isOpen={open} onOpenChange={setOpen} {...DEFAULT_POPOVER_PROPS}>
-			<Tooltip content='Bookmarks' placement='bottom' showArrow>
-				<div className='max-w-fit'>
-					<PopoverTrigger>
-						<IconButton color='warning' icon={Icons.Bookmark} />
-					</PopoverTrigger>
-				</div>
-			</Tooltip>
-			<PopoverContent>
-				<div className='w-full'>
-					<FilterableListbox
-						className='col-span-full'
-						classNames={{ list: 'max-h-[200px] overflow-scroll', base: 'min-w-80' }}
-						filter={filterBookmark}
-						isVirtualized
-						items={bookmark}
-						minLengthToSearch={1}
-						onAction={handleOnAction}
-						selectionMode='none'
-						variant='flat'
-						virtualization={{
-							maxListboxHeight: 200,
-							itemHeight: 36,
-						}}>
-						{(item) => (
-							<ListboxItem classNames={{ description: 'uppercase' }} description={item.type} endContent={<IconButton className='rounded-full' color='danger' icon={Icons.Trash} onPointerUp={() => handleOnRemove(item)} size='sm' />} key={`${item.type}-${item.code}`}>
-								{item.name}
-							</ListboxItem>
-						)}
-					</FilterableListbox>
-				</div>
-			</PopoverContent>
-		</Popover>
-	)
-})
 
 const ONE_MINUTE = 60 * 1000
 

@@ -14,10 +14,19 @@ import { TextButton } from './TextButton'
 
 export const Wheel = memo(() => {
 	const wheel = useMolecule(WheelMolecule)
-	const { selected } = useSnapshot(wheel.state)
-	const { connecting, connected, moving, position, names } = useSnapshot(wheel.state.wheel)
 
-	const Header = (
+	return (
+		<Modal header={<Header />} id={`wheel-${wheel.scope.wheel.name}`} maxWidth='256px' onHide={wheel.hide}>
+			<Body />
+		</Modal>
+	)
+})
+
+const Header = memo(() => {
+	const wheel = useMolecule(WheelMolecule)
+	const { connecting, connected } = useSnapshot(wheel.state.wheel)
+
+	return (
 		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
 				<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={wheel.connect} />
@@ -29,55 +38,80 @@ export const Wheel = memo(() => {
 			</div>
 		</div>
 	)
+})
+
+const SlotItem = (slot: string, index: number) => <SelectItem key={index}>{slot}</SelectItem>
+
+const Body = memo(() => {
+	return (
+		<div className='mt-0 grid grid-cols-12 gap-2'>
+			<Status />
+			<Slot />
+		</div>
+	)
+})
+
+const Status = memo(() => {
+	const wheel = useMolecule(WheelMolecule)
+	const { moving, position, names } = useSnapshot(wheel.state.wheel)
 
 	return (
-		<Modal header={Header} id={`wheel-${wheel.scope.wheel.name}`} maxWidth='256px' onHide={wheel.hide}>
-			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<div className='col-span-3 flex flex-row items-center gap-2 justify-start'>
-					<Chip color='primary' size='sm'>
-						{moving ? 'moving' : 'idle'}
-					</Chip>
-					<Chip color='warning' size='sm'>
-						POSITION: {position}
-					</Chip>
-					<Chip color='success' size='sm'>
-						FILTER: {names[position]}
-					</Chip>
-				</div>
-				<div className='col-span-full flex flex-row items-center justify-end gap-2'>
-					<EnumSelect className='flex-1' endContent={<SlotPopover />} isDisabled={!connected || moving || names.length === 0} label='Slot' onValueChange={(value) => wheel.update('position', +value)} value={selected.position.toFixed(0)}>
-						{names.map((slot, index) => (
-							<SelectItem key={index}>{slot}</SelectItem>
-						))}
-					</EnumSelect>
-					<TextButton color='success' isDisabled={!connected || selected.position === position || names.length === 0} isLoading={moving} label='Move' onPointerUp={wheel.moveTo} startContent={<Icons.Check />} variant='light' />
-				</div>
-			</div>
-		</Modal>
+		<div className='col-span-3 flex flex-row items-center gap-2 justify-start'>
+			<Chip color='primary' size='sm'>
+				{moving ? 'moving' : 'idle'}
+			</Chip>
+			<Chip color='warning' size='sm'>
+				POSITION: {position}
+			</Chip>
+			<Chip color='success' size='sm'>
+				FILTER: {names[position]}
+			</Chip>
+		</div>
+	)
+})
+
+const Slot = memo(() => {
+	const wheel = useMolecule(WheelMolecule)
+	const { selected } = useSnapshot(wheel.state)
+	const { connected, moving, position, names } = useSnapshot(wheel.state.wheel)
+
+	return (
+		<div className='col-span-full flex flex-row items-center justify-end gap-2'>
+			<EnumSelect className='flex-1' endContent={<SlotPopover />} isDisabled={!connected || moving || names.length === 0} label='Slot' onValueChange={(value) => wheel.update('position', +value)} value={selected.position.toFixed(0)}>
+				{names.map(SlotItem)}
+			</EnumSelect>
+			<TextButton color='success' isDisabled={!connected || selected.position === position || names.length === 0} isLoading={moving} label='Move' onPointerUp={wheel.moveTo} startContent={<Icons.Check />} variant='light' />
+		</div>
 	)
 })
 
 const SlotPopover = memo(() => {
-	const wheel = useMolecule(WheelMolecule)
-	const { canSetNames } = useSnapshot(wheel.state.wheel)
-	const { name } = useSnapshot(wheel.state.selected, { sync: true })
-
 	return (
 		<Popover className='max-w-80' {...DEFAULT_POPOVER_PROPS}>
 			<PopoverTrigger>
 				<IconButton icon={Icons.Cog} />
 			</PopoverTrigger>
 			<PopoverContent>
-				<div className='grid grid-cols-12 gap-2 p-4'>
-					<p className='col-span-full font-bold'>SLOT OPTIONS</p>
-					<Input className='col-span-10' isDisabled={!canSetNames} label='Name' onValueChange={(value) => value && wheel.update('name', value)} size='sm' value={name} />
-					<div className='col-span-2 flex flex-row justify-center items-center'>
-						<Tooltip content='Apply' placement='bottom' showArrow>
-							<IconButton color='success' icon={Icons.Check} isDisabled={!canSetNames || !name.length} onPointerUp={wheel.apply} />
-						</Tooltip>
-					</div>
-				</div>
+				<SlotPopoverContent />
 			</PopoverContent>
 		</Popover>
+	)
+})
+
+const SlotPopoverContent = memo(() => {
+	const wheel = useMolecule(WheelMolecule)
+	const { canSetNames } = useSnapshot(wheel.state.wheel)
+	const { name } = useSnapshot(wheel.state.selected, { sync: true })
+
+	return (
+		<div className='grid grid-cols-12 gap-2 p-4'>
+			<p className='col-span-full font-bold'>SLOT OPTIONS</p>
+			<Input className='col-span-10' isDisabled={!canSetNames} label='Name' onValueChange={(value) => value && wheel.update('name', value)} size='sm' value={name} />
+			<div className='col-span-2 flex flex-row justify-center items-center'>
+				<Tooltip content='Apply' placement='bottom' showArrow>
+					<IconButton color='success' icon={Icons.Check} isDisabled={!canSetNames || !name.length} onPointerUp={wheel.apply} />
+				</Tooltip>
+			</div>
+		</div>
 	)
 })

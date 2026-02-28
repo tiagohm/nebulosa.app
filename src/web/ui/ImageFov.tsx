@@ -1,6 +1,6 @@
 import { Checkbox, Listbox, ListboxItem, NumberInput, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import { memo, useCallback } from 'react'
+import { memo } from 'react'
 import type { FovItem } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageFovMolecule } from '@/molecules/image/fov'
@@ -8,7 +8,7 @@ import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants
 import cameras from '../../../data/cameras.json'
 import telescopes from '../../../data/telescopes.json'
 import { tw } from '../shared/util'
-import { AstroBinEquipmentPopover, type AstroBinEquipmentPopoverItem } from './AstroBinEquipmentPopover'
+import { AstroBinEquipmentPopover } from './AstroBinEquipmentPopover'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
@@ -48,15 +48,10 @@ const Telescope = memo(() => {
 	const { items, selected } = useSnapshot(fov.state)
 	const { focalLength, aperture } = items[selected]
 
-	const handleOnSelectedChange = useCallback((item: AstroBinEquipmentPopoverItem) => {
-		fov.update('aperture', item.ap ?? 0)
-		fov.update('focalLength', item.fl ?? 0)
-	}, [])
-
 	return (
 		<>
-			<div className='col-span-2'>
-				<AstroBinEquipmentPopover items={telescopes} onSelectedChange={handleOnSelectedChange} type='telescope' />
+			<div className='col-span-2 items-center'>
+				<AstroBinEquipmentPopover items={telescopes} onSelectedChange={fov.selectTelescope} type='telescope' />
 			</div>
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Focal Length (mm)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('focalLength', value)} size='sm' value={focalLength} />
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Aperture (mm)' maxValue={10000} minValue={10} onValueChange={(value) => fov.update('aperture', value)} size='sm' value={aperture} />
@@ -69,17 +64,10 @@ const Camera = memo(() => {
 	const { items, selected } = useSnapshot(fov.state)
 	const { cameraWidth, cameraHeight, pixelWidth, pixelHeight } = items[selected]
 
-	const handleOnSelectedChange = useCallback((item: AstroBinEquipmentPopoverItem) => {
-		fov.update('cameraWidth', item.w ?? 0)
-		fov.update('cameraHeight', item.h ?? 0)
-		fov.update('pixelWidth', item.ps ?? 0)
-		fov.update('pixelHeight', item.ps ?? 0)
-	}, [])
-
 	return (
 		<>
-			<div className='col-span-2'>
-				<AstroBinEquipmentPopover items={cameras} onSelectedChange={handleOnSelectedChange} type='camera' />
+			<div className='col-span-2 items-center'>
+				<AstroBinEquipmentPopover items={cameras} onSelectedChange={fov.selectCamera} type='camera' />
 			</div>
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Width (px)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraWidth', value)} size='sm' value={cameraWidth} />
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Height (px)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraHeight', value)} size='sm' value={cameraHeight} />

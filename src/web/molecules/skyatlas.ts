@@ -505,7 +505,7 @@ export const GalaxyMolecule = molecule(() => {
 	let chartUpdate = true
 
 	onMount(() => {
-		void search()
+		void search(true)
 	})
 
 	function update<K extends keyof SearchSkyObject>(key: K, value: SearchSkyObject[K]) {
@@ -515,11 +515,11 @@ export const GalaxyMolecule = molecule(() => {
 		if (key === 'page' || key === 'sort') void search(false)
 	}
 
-	async function search(reset: boolean = true) {
+	async function search(reset: boolean | React.PointerEvent) {
 		try {
 			state.loading = true
 
-			if (reset) state.request.page = 1
+			if (reset === true || typeof reset !== 'boolean') state.request.page = 1
 
 			const result = await Api.SkyAtlas.searchSkyObject(state.request)
 			state.result = result ?? []
@@ -619,7 +619,7 @@ export const SatelliteMolecule = molecule(() => {
 	let chartUpdate = true
 
 	onMount(() => {
-		void search()
+		void search(true)
 	})
 
 	function update<K extends keyof SatelliteState['request']>(key: K, value: SatelliteState['request'][K]) {
@@ -629,11 +629,11 @@ export const SatelliteMolecule = molecule(() => {
 		if (key === 'page' || key === 'sort') void search(false)
 	}
 
-	async function search(reset: boolean = true) {
+	async function search(reset: boolean | React.PointerEvent) {
 		try {
 			state.loading = true
 
-			if (reset) state.request.page = 1
+			if (reset === true || typeof reset !== 'boolean') state.request.page = 1
 
 			const result = await Api.SkyAtlas.searchSatellite(state.request)
 			state.result = result ?? []

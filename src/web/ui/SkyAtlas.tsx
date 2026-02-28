@@ -66,28 +66,7 @@ const Header = memo(() => {
 					<IconButton color='primary' icon={Icons.MapMarker} onPointerUp={atlas.showLocation} variant='flat' />
 				</Tooltip>
 			</div>
-			{(tab === 'planet' || tab === 'galaxy' || tab === 'satellite') && (
-				<Popover className='max-w-140' {...DEFAULT_POPOVER_PROPS}>
-					<Tooltip content='Filter' placement='bottom' showArrow>
-						<div className='max-w-fit'>
-							<PopoverTrigger>
-								<IconButton color='secondary' icon={Icons.Filter} variant='flat' />
-							</PopoverTrigger>
-						</div>
-					</Tooltip>
-					<PopoverContent>
-						<Activity mode={tab === 'planet' ? 'visible' : 'hidden'}>
-							<PlanetFilter />
-						</Activity>
-						<Activity mode={tab === 'galaxy' ? 'visible' : 'hidden'}>
-							<GalaxyFilter />
-						</Activity>
-						<Activity mode={tab === 'satellite' ? 'visible' : 'hidden'}>
-							<SatelliteFilter />
-						</Activity>
-					</PopoverContent>
-				</Popover>
-			)}
+			<HeaderFilterPopover />
 		</div>
 	)
 })
@@ -149,7 +128,7 @@ const BookmarkPopover = memo(() => {
 	const { show } = useSnapshot(atlas.state.bookmark)
 
 	return (
-		<Popover className='max-w-110' isOpen={show} onOpenChange={() => (atlas.state.bookmark.show = true)} {...DEFAULT_POPOVER_PROPS}>
+		<Popover className='max-w-110' isOpen={show} onOpenChange={(open) => (atlas.state.bookmark.show = open)} {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip content='Bookmarks' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
@@ -190,6 +169,113 @@ const BookmarkPopoverContent = memo(() => {
 					</ListboxItem>
 				)}
 			</FilterableListbox>
+		</div>
+	)
+})
+
+const HeaderFilterPopover = memo(() => {
+	const atlas = useMolecule(SkyAtlasMolecule)
+	const { tab } = useSnapshot(atlas.state)
+
+	return (
+		<Activity mode={tab === 'planet' || tab === 'galaxy' || tab === 'satellite' ? 'visible' : 'hidden'}>
+			<Popover className='max-w-140' {...DEFAULT_POPOVER_PROPS}>
+				<Tooltip content='Filter' placement='bottom' showArrow>
+					<div className='max-w-fit'>
+						<PopoverTrigger>
+							<IconButton color='secondary' icon={Icons.Filter} variant='flat' />
+						</PopoverTrigger>
+					</div>
+				</Tooltip>
+				<PopoverContent>
+					<Activity mode={tab === 'planet' ? 'visible' : 'hidden'}>
+						<PlanetFilter />
+					</Activity>
+					<Activity mode={tab === 'galaxy' ? 'visible' : 'hidden'}>
+						<GalaxyFilter />
+					</Activity>
+					<Activity mode={tab === 'satellite' ? 'visible' : 'hidden'}>
+						<SatelliteFilter />
+					</Activity>
+				</PopoverContent>
+			</Popover>
+		</Activity>
+	)
+})
+
+const PlanetFilter = memo(() => {
+	const planet = useMolecule(PlanetMolecule)
+	const { name, type } = useSnapshot(planet.state.search, { sync: true })
+
+	return (
+		<div className='min-w-77 grid grid-cols-12 gap-2 items-center p-2'>
+			<Input className='col-span-full' isClearable onValueChange={(value) => planet.update('name', value)} placeholder='Search' value={name} />
+			<PlanetTypeSelect className='col-span-full' onValueChange={(value) => planet.update('type', value)} value={type} />
+		</div>
+	)
+})
+
+const GalaxyFilter = memo(() => {
+	const dso = useMolecule(GalaxyMolecule)
+	const { nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, radius } = useSnapshot(dso.state.request)
+	const { name, rightAscension, declination } = useSnapshot(dso.state.request, { sync: true })
+	const { loading } = useSnapshot(dso.state)
+
+	return (
+		<div className='grid grid-cols-12 gap-2 items-center p-2'>
+			<Input className='col-span-full' isClearable onValueChange={(value) => dso.update('name', value)} placeholder='Search' startContent={<SkyObjectNameTypeDropdown color='secondary' onValueChange={(value) => dso.update('nameType', value)} value={nameType} />} value={name} />
+			<ConstellationSelect className='col-span-6' onValueChange={(value) => dso.update('constellations', value)} value={constellations} />
+			<StellariumObjectTypeSelect className='col-span-6' onValueChange={(value) => dso.update('types', value)} value={types} />
+			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='RA' onValueChange={(value) => dso.update('rightAscension', value)} size='sm' value={rightAscension} />
+			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => dso.update('declination', value)} size='sm' value={declination} />
+			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} size='sm' step={0.1} value={radius} />
+			<Slider
+				className='col-span-5'
+				getValue={(value) => `min: ${(value as number[])[0].toFixed(1)} max: ${(value as number[])[1].toFixed(1)}`}
+				label='Magnitude'
+				maxValue={30}
+				minValue={-30}
+				onChange={(value) => {
+					dso.update('magnitudeMin', (value as number[])[0])
+					dso.update('magnitudeMax', (value as number[])[1])
+				}}
+				step={0.1}
+				value={[magnitudeMin, magnitudeMax]}
+			/>
+			<Checkbox className='col-span-4 w-full max-w-none flex justify-center' isSelected={visible} onValueChange={(value) => dso.update('visible', value)}>
+				Show visible
+			</Checkbox>
+			<NumberInput className='col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!visible || loading} label='Above (°)' maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} size='sm' value={visibleAbove} />
+			<div className='col-span-full flex flex-row items-center justify-center'>
+				<Tooltip content='Filter' placement='bottom' showArrow>
+					<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={dso.search} variant='flat' />
+				</Tooltip>
+			</div>
+		</div>
+	)
+})
+
+const SatelliteFilter = memo(() => {
+	const satellite = useMolecule(SatelliteMolecule)
+	const { groups, category } = useSnapshot(satellite.state.request)
+	const { text } = useSnapshot(satellite.state.request, { sync: true })
+	const { loading } = useSnapshot(satellite.state)
+
+	return (
+		<div className='grid grid-cols-12 gap-2 items-center p-2'>
+			<Input className='col-span-full' isClearable label='Search' onValueChange={(value) => satellite.update('text', value)} size='sm' value={text} />
+			<p className='col-span-full font-bold'>CATEGORY</p>
+			<SatelliteCategoryChipGroup className='col-span-full' onValueChange={(value) => satellite.update('category', value)} value={category} />
+			<p className='col-span-full font-bold'>GROUP</p>
+			<SatelliteGroupTypeChipGroup category={category} className='col-span-full h-[200px]' onValueChange={(value) => satellite.update('groups', value)} value={groups} />
+			<div className='col-span-full flex flex-row items-center justify-center gap-2'>
+				<Tooltip content='Reset' placement='bottom' showArrow>
+					<IconButton color='danger' icon={Icons.Restore} isDisabled={loading} onPointerUp={satellite.resetFilter} variant='flat' />
+				</Tooltip>
+				<Tooltip content='Filter' placement='bottom' showArrow>
+					<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={satellite.search} variant='flat' />
+				</Tooltip>
+			</div>
 		</div>
 	)
 })
@@ -831,83 +917,6 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 					<EphemerisChart data={deferredData} />
 				</Activity>
 			</span>
-		</div>
-	)
-})
-
-const PlanetFilter = memo(() => {
-	const planet = useMolecule(PlanetMolecule)
-	const { name, type } = useSnapshot(planet.state.search, { sync: true })
-
-	return (
-		<div className='min-w-77 grid grid-cols-12 gap-2 items-center p-2'>
-			<Input className='col-span-full' isClearable onValueChange={(value) => planet.update('name', value)} placeholder='Search' value={name} />
-			<PlanetTypeSelect className='col-span-full' onValueChange={(value) => planet.update('type', value)} value={type} />
-		</div>
-	)
-})
-
-const GalaxyFilter = memo(() => {
-	const dso = useMolecule(GalaxyMolecule)
-	const { nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, radius } = useSnapshot(dso.state.request)
-	const { name, rightAscension, declination } = useSnapshot(dso.state.request, { sync: true })
-	const { loading } = useSnapshot(dso.state)
-
-	return (
-		<div className='grid grid-cols-12 gap-2 items-center p-2'>
-			<Input className='col-span-full' isClearable onValueChange={(value) => dso.update('name', value)} placeholder='Search' startContent={<SkyObjectNameTypeDropdown color='secondary' onValueChange={(value) => dso.update('nameType', value)} value={nameType} />} value={name} />
-			<ConstellationSelect className='col-span-6' onValueChange={(value) => dso.update('constellations', value)} value={constellations} />
-			<StellariumObjectTypeSelect className='col-span-6' onValueChange={(value) => dso.update('types', value)} value={types} />
-			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='RA' onValueChange={(value) => dso.update('rightAscension', value)} size='sm' value={rightAscension} />
-			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => dso.update('declination', value)} size='sm' value={declination} />
-			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} size='sm' step={0.1} value={radius} />
-			<Slider
-				className='col-span-5'
-				getValue={(value) => `min: ${(value as number[])[0].toFixed(1)} max: ${(value as number[])[1].toFixed(1)}`}
-				label='Magnitude'
-				maxValue={30}
-				minValue={-30}
-				onChange={(value) => {
-					dso.update('magnitudeMin', (value as number[])[0])
-					dso.update('magnitudeMax', (value as number[])[1])
-				}}
-				step={0.1}
-				value={[magnitudeMin, magnitudeMax]}
-			/>
-			<Checkbox className='col-span-4 w-full max-w-none flex justify-center' isSelected={visible} onValueChange={(value) => dso.update('visible', value)}>
-				Show visible
-			</Checkbox>
-			<NumberInput className='col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!visible || loading} label='Above (°)' maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} size='sm' value={visibleAbove} />
-			<div className='col-span-full flex flex-row items-center justify-center'>
-				<Tooltip content='Filter' placement='bottom' showArrow>
-					<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={() => dso.search()} variant='flat' />
-				</Tooltip>
-			</div>
-		</div>
-	)
-})
-
-const SatelliteFilter = memo(() => {
-	const satellite = useMolecule(SatelliteMolecule)
-	const { groups, category } = useSnapshot(satellite.state.request)
-	const { text } = useSnapshot(satellite.state.request, { sync: true })
-	const { loading } = useSnapshot(satellite.state)
-
-	return (
-		<div className='grid grid-cols-12 gap-2 items-center p-2'>
-			<Input className='col-span-full' isClearable label='Search' onValueChange={(value) => satellite.update('text', value)} size='sm' value={text} />
-			<p className='col-span-full font-bold'>CATEGORY</p>
-			<SatelliteCategoryChipGroup className='col-span-full' onValueChange={(value) => satellite.update('category', value)} value={category} />
-			<p className='col-span-full font-bold'>GROUP</p>
-			<SatelliteGroupTypeChipGroup category={category} className='col-span-full h-[200px]' onValueChange={(value) => satellite.update('groups', value)} value={groups} />
-			<div className='col-span-full flex flex-row items-center justify-center gap-2'>
-				<Tooltip content='Reset' placement='bottom' showArrow>
-					<IconButton color='danger' icon={Icons.Restore} isDisabled={loading} onPointerUp={satellite.resetFilter} variant='flat' />
-				</Tooltip>
-				<Tooltip content='Filter' placement='bottom' showArrow>
-					<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={() => satellite.search()} variant='flat' />
-				</Tooltip>
-			</div>
 		</div>
 	)
 })

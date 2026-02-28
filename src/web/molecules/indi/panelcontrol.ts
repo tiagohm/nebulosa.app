@@ -38,7 +38,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 	const connection = use(ConnectionMolecule)
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(5)
+		const unsubscribers = new Array<VoidFunction>(6)
 
 		unsubscribers[0] = bus.subscribe<ConnectionEvent>('connection:close', ({ status }) => {
 			if (connection.state.connected?.id === status.id) {
@@ -74,6 +74,12 @@ export const IndiPanelControlMolecule = molecule(() => {
 			}
 		})
 
+		unsubscribers[5] = subscribeKey(connection.state, 'show', (show) => {
+			if (show) {
+				void retrieveDevices()
+			}
+		})
+
 		const timer = setInterval(ping, 5000)
 
 		if (state.show && connection.state.connected) {
@@ -89,7 +95,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 	async function retrieveDevices(device: Device | string = state.device) {
 		const devices = await Api.Indi.devices(connection.state.connected!)
 		state.devices = devices?.sort() ?? []
-		state.device = (typeof device === 'string' ? device : device?.name) || state.devices[0] || ''
+		changeDevice((typeof device === 'string' ? device : device.name) || state.devices[0] || '')
 		ping()
 	}
 
@@ -107,6 +113,18 @@ export const IndiPanelControlMolecule = molecule(() => {
 	async function retrieveMessages(device: string = state.device) {
 		const messages = await Api.Indi.messages(device, connection.state.connected!)
 		if (messages) state.messages = messages.sort((a, b) => b.timestamp!.localeCompare(a.timestamp!))
+	}
+
+	function changeDevice(device: string) {
+		if (device) {
+			state.device = state.devices.includes(device) ? device : state.devices[0] || ''
+			void retrieveProperties()
+			void retrieveMessages()
+		}
+	}
+
+	function changeGroup(group: string) {
+		state.group = group
 	}
 
 	function clearMessages() {
@@ -176,5 +194,17 @@ export const IndiPanelControlMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, retrieveDevices, retrieveProperties, retrieveMessages, clearMessages, ping, send, show, hide }
+	return {
+		state,
+		retrieveDevices,
+		retrieveProperties,
+		retrieveMessages,
+		changeDevice,
+		changeGroup,
+		clearMessages,
+		ping,
+		send,
+		show,
+		hide,
+	} as const
 })

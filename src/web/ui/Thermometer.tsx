@@ -8,9 +8,19 @@ import { Modal } from './Modal'
 
 export const Thermometer = memo(() => {
 	const thermometer = useMolecule(ThermometerMolecule)
-	const { connecting, connected, temperature } = useSnapshot(thermometer.state.thermometer)
 
-	const Header = (
+	return (
+		<Modal header={<Header />} id={`thermometer-${thermometer.scope.thermometer.name}`} maxWidth='256px' onHide={thermometer.hide}>
+			<Body />
+		</Modal>
+	)
+})
+
+const Header = memo(() => {
+	const thermometer = useMolecule(ThermometerMolecule)
+	const { connecting, connected } = useSnapshot(thermometer.state.thermometer)
+
+	return (
 		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
 				<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={thermometer.connect} />
@@ -22,12 +32,15 @@ export const Thermometer = memo(() => {
 			</div>
 		</div>
 	)
+})
+
+const Body = memo(() => {
+	const thermometer = useMolecule(ThermometerMolecule)
+	const { temperature } = useSnapshot(thermometer.state.thermometer)
 
 	return (
-		<Modal header={Header} id={`thermometer-${thermometer.scope.thermometer.name}`} maxWidth='256px' onHide={thermometer.hide}>
-			<div className='mt-0 text-center font-bold text-5xl'>
-				{temperature.toFixed(1)} <small className='font-thin'>°C</small>
-			</div>
-		</Modal>
+		<div className='mt-0 text-center font-bold text-5xl'>
+			{temperature.toFixed(1)} <small className='font-thin'>°C</small>
+		</div>
 	)
 })

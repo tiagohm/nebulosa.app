@@ -7,6 +7,7 @@ import bus from 'src/shared/bus'
 // biome-ignore format: too long!
 import { type CoordinateInfo, DEFAULT_COORDINATE_INFO, type Framing, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import type { TargetCoordinateAction } from 'src/web/shared/types'
 import type { DeepReadonly } from 'utility-types'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -15,8 +16,6 @@ import { initProxy } from '@/shared/proxy'
 import type { NudgeDirection } from '@/ui/Nudge'
 import { ConnectionMolecule } from '../connection'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
-
-export type TargetCoordinateAction = 'GOTO' | 'SYNC' | 'FRAME'
 
 export interface MountScopeValue {
 	readonly mount: DeepReadonly<Omit<Mount, symbol>>

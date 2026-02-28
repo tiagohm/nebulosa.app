@@ -1,4 +1,4 @@
-import { SelectItem } from '@heroui/react'
+import { type SelectedItemProps, type SelectedItems, SelectItem } from '@heroui/react'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
 import { EnumMultipleSelect, type EnumMultipleSelectProps } from './EnumMultipleSelect'
 
@@ -44,22 +44,18 @@ export interface StellariumObjectTypeSelectProps extends Omit<EnumMultipleSelect
 	readonly onValueChange: (value: StellariumObjectType[]) => void
 }
 
+const StellariumObjectTypeItem = (item: (typeof TYPES)[number]) => <SelectItem key={item[0]}>{item[1]}</SelectItem>
+
+const StellariumObjectTypeValue = (item: StellariumObjectType) => item.toFixed(0)
+
+const StellariumObjectTypeSelectedItems = (items: SelectedItems<object>) => <div className='mt-2 flex flex-nowrap gap-2'>{items.map(StellariumObjectTypeRenderedItem).join(', ')}</div>
+
+const StellariumObjectTypeRenderedItem = (item: SelectedItemProps<object>) => TYPES.find((e) => e[0] === +(item.key as never))![2]
+
 export function StellariumObjectTypeSelect({ label = 'Type', value, onValueChange, ...props }: StellariumObjectTypeSelectProps) {
 	return (
-		<EnumMultipleSelect
-			{...props}
-			classNames={{ trigger: 'min-h-15!' }}
-			isClearable
-			label={label}
-			onValueChange={(value) => onValueChange(value.map(Number))}
-			placeholder='All'
-			renderValue={(items) => {
-				return <div className='mt-2 flex flex-nowrap gap-2'>{items.map((item) => TYPES.find((e) => e[0] === +(item.key as never))![2]).join(', ')}</div>
-			}}
-			value={value.map((e) => e.toFixed(0))}>
-			{TYPES.map(([key, name]) => (
-				<SelectItem key={key}>{name}</SelectItem>
-			))}
+		<EnumMultipleSelect {...props} classNames={{ trigger: 'min-h-15!' }} isClearable label={label} onValueChange={(value) => onValueChange(value.map(Number))} placeholder='All' renderValue={StellariumObjectTypeSelectedItems} value={value.map(StellariumObjectTypeValue)}>
+			{TYPES.map(StellariumObjectTypeItem)}
 		</EnumMultipleSelect>
 	)
 }

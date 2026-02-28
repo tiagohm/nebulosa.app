@@ -4,7 +4,7 @@ import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa
 import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/distance'
 import type { SkyObjectSearchItem } from 'src/shared/types'
 import { twMerge } from 'tailwind-merge'
-import { SKY_OBJECT_NAME_TYPES } from '@/ui/SkyObjectNameTypeDropdown'
+import { SKY_OBJECT_NAME_TYPES } from './types'
 
 export const isMousePresent = isMouseDeviceSupported()
 

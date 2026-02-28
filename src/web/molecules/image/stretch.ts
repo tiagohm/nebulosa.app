@@ -53,26 +53,29 @@ export const ImageStretchMolecule = molecule(() => {
 	}
 
 	function auto() {
-		return apply(true)
+		state.stretch.auto = true
+		return load()
 	}
 
 	function reset() {
 		Object.assign(state.stretch, DEFAULT_IMAGE_STRETCH)
-		state.stretch.auto = false
-		return viewer.load(true)
+		return apply()
 	}
 
 	function toggle() {
 		if (state.stretch.auto) {
 			return reset()
 		} else {
-			state.stretch.auto = true
-			return viewer.load(true)
+			return auto()
 		}
 	}
 
-	function apply(auto: boolean = false) {
-		state.stretch.auto = auto
+	function apply() {
+		state.stretch.auto = false
+		return load()
+	}
+
+	function load() {
 		return viewer.load(true)
 	}
 
@@ -84,5 +87,16 @@ export const ImageStretchMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, scope: viewer.scope, viewer, update, auto, reset, toggle, apply, show, hide } as const
+	return {
+		state,
+		scope: viewer.scope,
+		viewer,
+		update,
+		auto,
+		reset,
+		toggle,
+		apply,
+		show,
+		hide,
+	} as const
 })

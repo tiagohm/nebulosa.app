@@ -37,8 +37,7 @@ const Body = memo(() => {
 
 const Footer = memo(() => {
 	const save = useMolecule(ImageSaveMolecule)
-	const { loading } = useSnapshot(save.state)
-	const { path } = useSnapshot(save.state)
+	const { loading, path } = useSnapshot(save.state)
 
 	return (
 		<>

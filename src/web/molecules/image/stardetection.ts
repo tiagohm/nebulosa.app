@@ -49,6 +49,8 @@ export const StarDetectionMolecule = molecule(() => {
 
 	stateMap.set(key, state)
 
+	let canvas: HTMLCanvasElement | undefined
+
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(2)
 
@@ -117,14 +119,24 @@ export const StarDetectionMolecule = molecule(() => {
 
 	function select(star: DetectedStar) {
 		state.selected = star
+		draw()
+	}
 
-		const canvas = document.getElementById(`${key}-selected-star`) as HTMLCanvasElement | null
+	function draw() {
+		if (!canvas || !state.selected) return
 
-		if (!canvas) return
+		const { x, y } = state.selected
 
 		const ctx = canvas.getContext('2d')
-		const image = document.getElementById(key) as HTMLImageElement
-		ctx?.drawImage(image, star.x - 8.5, star.y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
+		const image = viewer.target
+		ctx && image && ctx.drawImage(image, x - 8.5, y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
+	}
+
+	function attach(element: HTMLCanvasElement) {
+		if (canvas !== element) {
+			canvas = element
+			draw()
+		}
 	}
 
 	function reset() {
@@ -146,5 +158,17 @@ export const StarDetectionMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, viewer, scope: viewer.scope, update, toggle, detect, select, reset, show, hide } as const
+	return {
+		state,
+		viewer,
+		scope: viewer.scope,
+		update,
+		toggle,
+		detect,
+		select,
+		attach,
+		reset,
+		show,
+		hide,
+	} as const
 })

@@ -6,12 +6,12 @@ export interface SlewRateSelectProps extends Omit<EnumSelectProps, 'children'> {
 	readonly rates: readonly Readonly<NameAndLabel>[]
 }
 
+const SlewRateItem = (rate: NameAndLabel) => <SelectItem key={rate.name}>{rate.label}</SelectItem>
+
 export function SlewRateSelect({ rates, isDisabled, label = 'Slew Rate', ...props }: SlewRateSelectProps) {
 	return (
 		<EnumSelect {...props} isDisabled={isDisabled || !rates.length} label={label}>
-			{rates.map((rate) => (
-				<SelectItem key={rate.name}>{rate.label}</SelectItem>
-			))}
+			{rates.map(SlewRateItem)}
 		</EnumSelect>
 	)
 }

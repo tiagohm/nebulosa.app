@@ -10,6 +10,12 @@ export interface IndiDriverListboxProps {
 	readonly onSelectedChange?: (drivers: string[]) => void
 }
 
+const DriverItem = (item: (typeof DRIVERS)[number]) => (
+	<ListboxItem description={item.driver} key={item.driver}>
+		{item.name}
+	</ListboxItem>
+)
+
 export const IndiDriverListbox = memo(({ showAll, selected, onSelectedChange }: IndiDriverListboxProps) => {
 	const [drivers, setDrivers] = useState<readonly string[]>([])
 
@@ -27,11 +33,7 @@ export const IndiDriverListbox = memo(({ showAll, selected, onSelectedChange }: 
 			selectedKeys={new Set(selected)}
 			selectionMode='multiple'
 			variant='flat'>
-			{(item) => (
-				<ListboxItem description={item.driver} key={item.driver}>
-					{item.name}
-				</ListboxItem>
-			)}
+			{DriverItem}
 		</FilterableListbox>
 	)
 })

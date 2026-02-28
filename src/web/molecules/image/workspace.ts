@@ -89,6 +89,16 @@ export const ImageWorkspaceMolecule = molecule(() => {
 		}
 	}
 
+	function choose(paths?: string[]) {
+		if (paths?.length) {
+			for (const path of paths) {
+				add(path, undefined, 'file')
+			}
+		}
+
+		hidePicker()
+	}
+
 	function showPicker() {
 		state.picker.show = true
 	}
@@ -97,5 +107,13 @@ export const ImageWorkspaceMolecule = molecule(() => {
 		state.picker.show = false
 	}
 
-	return { state, link, add, remove, showPicker, hidePicker } as const
+	return {
+		state,
+		link,
+		add,
+		remove,
+		choose,
+		showPicker,
+		hidePicker,
+	} as const
 })

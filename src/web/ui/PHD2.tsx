@@ -11,17 +11,29 @@ import { Modal } from './Modal'
 
 export const PHD2 = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
-	const { profile } = useSnapshot(phd2.state)
 
 	return (
-		<Modal footer={<Footer />} header='PHD2' id='phd2' maxWidth='360px' onHide={phd2.hide} subHeader={profile}>
-			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<Connection />
-				<Settle />
-				<Dither />
-				<Status />
-			</div>
+		<Modal footer={<Footer />} header='PHD2' id='phd2' maxWidth='360px' onHide={phd2.hide} subHeader={<SubHeader />}>
+			<Body />
 		</Modal>
+	)
+})
+
+const SubHeader = memo(() => {
+	const phd2 = useMolecule(PHD2Molecule)
+	const { profile } = useSnapshot(phd2.state)
+
+	return <span>{profile}</span>
+})
+
+const Body = memo(() => {
+	return (
+		<div className='mt-0 grid grid-cols-12 gap-2'>
+			<Connection />
+			<Settle />
+			<Dither />
+			<Status />
+		</div>
 	)
 })
 

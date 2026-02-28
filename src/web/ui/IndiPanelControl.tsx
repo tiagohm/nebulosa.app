@@ -2,7 +2,7 @@ import { Input, ListboxItem, NumberInput, SelectItem, Tooltip } from '@heroui/re
 import { useMolecule } from 'bunshi/react'
 import type { DeviceProperty } from 'nebulosa/src/indi.device'
 import type { DefElement, DefTextVector, Message, NewVector, SwitchRule } from 'nebulosa/src/indi.types'
-import { Activity, memo, useEffect, useRef, useState } from 'react'
+import { Activity, memo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
@@ -14,20 +14,23 @@ import { Modal } from './Modal'
 import { TextButton } from './TextButton'
 import { ToggleButton } from './ToggleButton'
 
-function filterMessage(item: Message, text: string) {
-	return item.message.toLowerCase().includes(text)
-}
+const MessageFilter = (item: Message, text: string) => item.message.toLowerCase().includes(text)
 
 export const IndiPanelControl = memo(() => {
 	const control = useMolecule(IndiPanelControlMolecule)
-	const { tab, devices, device, groups, group, properties, messages } = useSnapshot(control.state)
 
-	useEffect(() => {
-		void control.retrieveProperties()
-		void control.retrieveMessages()
-	}, [device])
+	return (
+		<Modal header={<Header />} id='indi-panel-control' maxWidth='400px' onHide={control.hide}>
+			<Body />
+		</Modal>
+	)
+})
 
-	const Header = (
+const Header = memo(() => {
+	const control = useMolecule(IndiPanelControlMolecule)
+	const { tab } = useSnapshot(control.state)
+
+	return (
 		<div className='flex flex-row justify-start items-center gap-2'>
 			<span className='me-3'>INDI Panel Control</span>
 			<Tooltip content='Properties' placement='bottom' showArrow>
@@ -38,55 +41,89 @@ export const IndiPanelControl = memo(() => {
 			</Tooltip>
 		</div>
 	)
+})
+
+const Body = memo(() => {
+	const control = useMolecule(IndiPanelControlMolecule)
+	const { tab } = useSnapshot(control.state)
 
 	return (
-		<Modal header={Header} id='indi-panel-control' maxWidth='400px' onHide={control.hide}>
-			<div className='mt-0 grid grid-cols-12 gap-2'>
-				<Activity mode={tab === 'property' ? 'visible' : 'hidden'}>
-					<EnumSelect className='col-span-6' label='Device' onValueChange={(value) => (control.state.device = value)} value={device}>
-						{devices.map((e) => (
-							<SelectItem key={e}>{e}</SelectItem>
-						))}
-					</EnumSelect>
-					<EnumSelect className='col-span-6' label='Group' onValueChange={(value) => (control.state.group = value)} value={group}>
-						{groups.map((e) => (
-							<SelectItem key={e}>{e}</SelectItem>
-						))}
-					</EnumSelect>
-					<div className='col-span-full flex flex-col gap-4 max-h-[300px] overflow-y-auto p-1'>
-						{Object.entries(properties[group] ?? {})
-							.sort((a, b) => a[1].label!.localeCompare(b[1].label!))
-							.map(([name, p]) => (
-								<Property key={name} onSend={control.send} property={p} />
-							))}
-					</div>
-				</Activity>
-				<Activity mode={tab === 'message' ? 'visible' : 'hidden'}>
-					<FilterableListbox
-						className='col-span-full'
-						classNames={{ list: 'max-h-[200px] overflow-scroll', base: 'min-w-80' }}
-						filter={filterMessage}
-						isVirtualized
-						items={messages}
-						minLengthToSearch={1}
-						selectionMode='none'
-						variant='flat'
-						virtualization={{
-							maxListboxHeight: 200,
-							itemHeight: 36,
-						}}>
-						{(item) => (
-							<ListboxItem description={item.timestamp} key={item.id}>
-								{item.message}
-							</ListboxItem>
-						)}
-					</FilterableListbox>
-					<div className='col-span-full flex flex-row justify-center items-center gap-2'>
-						<TextButton color='danger' isDisabled={messages.length === 0} label='Clear' onPointerUp={control.clearMessages} />
-					</div>
-				</Activity>
+		<div className='mt-0 grid grid-cols-12 gap-2'>
+			<Activity mode={tab === 'property' ? 'visible' : 'hidden'}>
+				<DevicesAndGroups />
+				<Properties />
+			</Activity>
+			<Messages />
+		</div>
+	)
+})
+
+const DeviceItem = (device: string) => <SelectItem key={device}>{device}</SelectItem>
+
+const GroupItem = (group: string) => <SelectItem key={group}>{group}</SelectItem>
+
+const DevicesAndGroups = memo(() => {
+	const control = useMolecule(IndiPanelControlMolecule)
+	const { devices, device, groups, group } = useSnapshot(control.state)
+
+	return (
+		<>
+			<EnumSelect className='col-span-6' label='Device' onValueChange={control.changeDevice} value={device}>
+				{devices.map(DeviceItem)}
+			</EnumSelect>
+			<EnumSelect className='col-span-6' label='Group' onValueChange={control.changeGroup} value={group}>
+				{groups.map(GroupItem)}
+			</EnumSelect>
+		</>
+	)
+})
+
+const Properties = memo(() => {
+	const control = useMolecule(IndiPanelControlMolecule)
+	const { group, properties } = useSnapshot(control.state)
+
+	const entries = Object.entries(properties[group] ?? {}).sort((a, b) => a[1].label!.localeCompare(b[1].label!))
+
+	return (
+		<div className='col-span-full flex flex-col gap-4 max-h-[300px] overflow-y-auto p-1'>
+			{entries.map(([name, p]) => (
+				<Property key={name} onSend={control.send} property={p} />
+			))}
+		</div>
+	)
+})
+
+const MessageItem = (item: Message) => (
+	<ListboxItem description={item.timestamp} key={item.id}>
+		{item.message}
+	</ListboxItem>
+)
+
+const Messages = memo(() => {
+	const control = useMolecule(IndiPanelControlMolecule)
+	const { tab, messages } = useSnapshot(control.state)
+
+	return (
+		<Activity mode={tab === 'message' ? 'visible' : 'hidden'}>
+			<FilterableListbox
+				className='col-span-full'
+				classNames={{ list: 'max-h-[200px] overflow-scroll', base: 'min-w-80' }}
+				filter={MessageFilter}
+				isVirtualized
+				items={messages}
+				minLengthToSearch={1}
+				selectionMode='none'
+				variant='flat'
+				virtualization={{
+					maxListboxHeight: 200,
+					itemHeight: 36,
+				}}>
+				{MessageItem}
+			</FilterableListbox>
+			<div className='col-span-full flex flex-row justify-center items-center gap-2'>
+				<TextButton color='danger' isDisabled={messages.length === 0} label='Clear' onPointerUp={control.clearMessages} startContent={<Icons.Broom />} />
 			</div>
-		</Modal>
+		</Activity>
 	)
 })
 

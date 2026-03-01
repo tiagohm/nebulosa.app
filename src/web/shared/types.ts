@@ -150,4 +150,3 @@ export const SKY_OBJECT_NAME_TYPES = [
 	'WESTERLUND',
 	'ZWICKY',
 ] as const
-

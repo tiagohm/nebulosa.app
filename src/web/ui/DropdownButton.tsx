@@ -1,6 +1,6 @@
 import { Dropdown, DropdownMenu, type DropdownMenuProps, DropdownTrigger } from '@heroui/react'
-import { DEFAULT_DROPDOWN_PROPS } from '../shared/constants'
-import { stopPropagationDesktopOnly, tw } from '../shared/util'
+import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
+import { stopPropagationDesktopOnly, tw } from '@/shared/util'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { TextButton, type TextButtonProps } from './TextButton'

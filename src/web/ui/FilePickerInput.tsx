@@ -1,6 +1,6 @@
 import { Button, Input, type InputProps, Tooltip } from '@heroui/react'
 import { ScopeProvider } from 'bunshi/react'
-import { memo, useRef, useState } from 'react'
+import { Activity, useRef, useState } from 'react'
 import { FilePickerScope, type FilePickerScopeValue } from '@/molecules/filepicker'
 import { FilePicker } from './FilePicker'
 import { Icons } from './Icon'
@@ -11,7 +11,7 @@ export interface FilePickerInputProps extends Omit<FilePickerScopeValue, 'multip
 	readonly onValueChange: (value?: string) => void
 }
 
-export const FilePickerInput = memo(({ filter, mode, id, value, onValueChange, isReadOnly = true, size = 'sm', ...props }: FilePickerInputProps) => {
+export function FilePickerInput({ filter, mode, id, value, onValueChange, isReadOnly = true, size = 'sm', ...props }: FilePickerInputProps) {
 	const [show, setShow] = useState(false)
 	const initialPath = useRef(value)
 
@@ -50,11 +50,11 @@ export const FilePickerInput = memo(({ filter, mode, id, value, onValueChange, i
 			<div className='col-span-full flex flex-row items-center gap-1 w-full flex-1'>
 				<Input {...props} endContent={EndContent} isClearable={false} isReadOnly={isReadOnly} onValueChange={handleValueChange} size={size} startContent={StartContent} value={value} />
 			</div>
-			{show && (
+			<Activity mode={show ? 'visible' : 'hidden'}>
 				<ScopeProvider scope={FilePickerScope} value={{ path: initialPath.current, filter, mode, multiple: false }}>
 					<FilePicker header='Choose Path' id={`file-picker-input-${id}`} onChoose={handleOnChoose} />
 				</ScopeProvider>
-			)}
+			</Activity>
 		</>
 	)
-})
+}

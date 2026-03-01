@@ -1,7 +1,7 @@
 import { type ButtonProps, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
-import { DEFAULT_DROPDOWN_PROPS } from '../shared/constants'
-import { SKY_OBJECT_NAME_TYPES } from '../shared/types'
-import { stopPropagationDesktopOnly } from '../shared/util'
+import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
+import { SKY_OBJECT_NAME_TYPES } from '@/shared/types'
+import { stopPropagationDesktopOnly } from '@/shared/util'
 import { TextButton } from './TextButton'
 
 export interface SkyObjectNameTypeDropdownProps extends Omit<ButtonProps, 'isIconOnly' | 'value'> {

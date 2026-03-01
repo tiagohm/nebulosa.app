@@ -1,7 +1,7 @@
 import { Chip } from '@heroui/react'
 import { useState } from 'react'
 import type { CameraCaptureEvent, CameraCaptureState } from 'src/shared/types'
-import { tw } from '../shared/util'
+import { tw } from '@/shared/util'
 import { Icons } from './Icon'
 
 export interface ExposureTimeProgressProps extends React.ComponentProps<'div'> {

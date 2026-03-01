@@ -1,7 +1,7 @@
 import { type ButtonProps, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
 import type { SolarImageSource } from 'src/shared/types'
-import { DEFAULT_DROPDOWN_PROPS } from '../shared/constants'
-import { stopPropagationDesktopOnly } from '../shared/util'
+import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
+import { stopPropagationDesktopOnly } from '@/shared/util'
 import { TextButton } from './TextButton'
 
 export interface SolarImageSourceDropdownProps extends Omit<ButtonProps, 'isIconOnly' | 'value'> {

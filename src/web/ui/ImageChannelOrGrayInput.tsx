@@ -1,7 +1,7 @@
 import { NumberInput, SelectItem } from '@heroui/react'
 import { GRAYSCALES, type Grayscale, type ImageChannelOrGray } from 'nebulosa/src/image.types'
 import { useRef, useState } from 'react'
-import { tw } from '../shared/util'
+import { tw } from '@/shared/util'
 import { EnumSelect } from './EnumSelect'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'

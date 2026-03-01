@@ -1,6 +1,5 @@
 import { DropdownItem } from '@heroui/react'
-import { memo } from 'react'
-import type { TargetCoordinateAction } from '../shared/types'
+import type { TargetCoordinateAction } from '@/shared/types'
 import { DropdownButton, type DropdownButtonProps } from './DropdownButton'
 import { type Icon, Icons } from './Icon'
 
@@ -30,13 +29,13 @@ interface TargetCoordinateDropdownButtonLabelProps {
 	readonly label: string
 }
 
-const TargetCoordinateDropdownButtonLabel = memo(({ icon: Icon, label }: TargetCoordinateDropdownButtonLabelProps) => {
+function TargetCoordinateDropdownButtonLabel({ icon: Icon, label }: TargetCoordinateDropdownButtonLabelProps) {
 	return (
 		<div className='flex items-center gap-2 text-medium'>
 			<Icon /> {label}
 		</div>
 	)
-})
+}
 
 const GoTo = <TargetCoordinateDropdownButtonLabel icon={Icons.Telescope} label='Go' />
 const Sync = <TargetCoordinateDropdownButtonLabel icon={Icons.Sync} label='Sync' />

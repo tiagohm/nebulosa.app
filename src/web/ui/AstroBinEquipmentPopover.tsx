@@ -1,6 +1,6 @@
 import { ListboxItem, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
 import { memo, useState } from 'react'
-import { DEFAULT_POPOVER_PROPS } from '../shared/constants'
+import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
 import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'

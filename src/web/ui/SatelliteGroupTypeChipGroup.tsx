@@ -1,7 +1,7 @@
 import { Chip, type ChipProps, ScrollShadow, type ScrollShadowProps } from '@heroui/react'
 import { useMemo } from 'react'
 import { SATELLITE_GROUP_TYPES, type SatelliteCategory, type SatelliteGroupType } from 'src/shared/types'
-import { stopPropagationDesktopOnly } from '../shared/util'
+import { stopPropagationDesktopOnly } from '@/shared/util'
 
 export interface SatelliteGroupTypeChipGroupProps extends Omit<ScrollShadowProps, 'size'> {
 	readonly value: readonly SatelliteGroupType[]

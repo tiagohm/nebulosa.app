@@ -1,4 +1,4 @@
-import { tw } from '../shared/util'
+import { tw } from '@/shared/util'
 
 export interface LinkProps extends Omit<React.ComponentProps<'a'>, 'rel' | 'target'> {
 	readonly label?: React.ReactNode

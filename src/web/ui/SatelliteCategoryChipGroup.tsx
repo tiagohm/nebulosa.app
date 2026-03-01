@@ -1,6 +1,6 @@
 import { Chip, type ChipProps, ScrollShadow } from '@heroui/react'
 import type { SatelliteCategory } from 'src/shared/types'
-import { stopPropagationDesktopOnly } from '../shared/util'
+import { stopPropagationDesktopOnly } from '@/shared/util'
 
 export interface SatelliteCategoryChipGroupProps {
 	readonly className?: string

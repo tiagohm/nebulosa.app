@@ -1,9 +1,8 @@
 import { NumberInput, type NumberInputProps } from '@heroui/react'
-import { useMemo } from 'react'
 import type { ExposureTimeUnit } from 'src/shared/types'
 import { exposureTimeIn } from 'src/shared/util'
 import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
-import { tw } from '../shared/util'
+import { tw } from '@/shared/util'
 import { ExposureTimeUnitDropdown } from './ExposureTimeUnitDropdown'
 
 export interface ExposureTimeInputProps extends Omit<NumberInputProps, 'size' | 'minValue' | 'maxValue' | 'endContent' | 'value' | 'onValueChange'> {
@@ -19,8 +18,8 @@ export interface ExposureTimeInputProps extends Omit<NumberInputProps, 'size' | 
 }
 
 export function ExposureTimeInput({ className, value, onValueChange, unit, onUnitChange, minValue, minValueUnit, maxValue, maxValueUnit, ...props }: ExposureTimeInputProps) {
-	const min = useMemo(() => Math.max(1, exposureTimeIn(minValue, minValueUnit, unit)), [minValue, minValueUnit, unit])
-	const max = useMemo(() => Math.max(1, exposureTimeIn(maxValue, maxValueUnit, unit)), [maxValue, maxValueUnit, unit])
+	const min = Math.max(1, exposureTimeIn(minValue, minValueUnit, unit))
+	const max = Math.max(1, exposureTimeIn(maxValue, maxValueUnit, unit))
 
 	function handleUnitChange(newUnit: ExposureTimeUnit) {
 		onUnitChange(newUnit)

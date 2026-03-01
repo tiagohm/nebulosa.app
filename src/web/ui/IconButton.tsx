@@ -1,5 +1,5 @@
 import { Button, type ButtonProps } from '@heroui/react'
-import { tw } from '../shared/util'
+import { tw } from '@/shared/util'
 import type { Icon } from './Icon'
 
 export interface IconButtonProps extends Omit<ButtonProps, 'children'> {

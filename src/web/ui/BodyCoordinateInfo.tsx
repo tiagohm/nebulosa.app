@@ -1,6 +1,6 @@
 import { type Angle, formatAZ, formatDEC, formatHMS, formatRA, toDeg } from 'nebulosa/src/angle'
 import type React from 'react'
-import { Activity, memo } from 'react'
+import { Activity } from 'react'
 import type { BodyPosition, CoordinateInfo } from 'src/shared/types'
 import { formatDistance, tw } from '@/shared/util'
 
@@ -11,7 +11,7 @@ export interface BodyCoordinateInfoProps {
 	readonly hide?: readonly (keyof BodyPosition)[]
 }
 
-export const BodyCoordinateInfo = memo(({ position, hide }: BodyCoordinateInfoProps) => {
+export function BodyCoordinateInfo({ position, hide }: BodyCoordinateInfoProps) {
 	return (
 		<div className='w-full grid grid-cols-20 gap-2'>
 			<div className='col-span-12 flex flex-col gap-0 justify-start'>
@@ -32,7 +32,7 @@ export const BodyCoordinateInfo = memo(({ position, hide }: BodyCoordinateInfoPr
 			</div>
 		</div>
 	)
-})
+}
 
 interface CoordinateProps {
 	readonly type: CoordinateType
@@ -41,7 +41,7 @@ interface CoordinateProps {
 	readonly isVisible?: boolean
 }
 
-const Coordinate = memo(({ type, x, y, isVisible = true }: CoordinateProps) => {
+function Coordinate({ type, x, y, isVisible = true }: CoordinateProps) {
 	return (
 		<Activity mode={isVisible ? 'visible' : 'hidden'}>
 			<div className='grid grid-cols-12 items-center text-sm leading-3'>
@@ -51,7 +51,7 @@ const Coordinate = memo(({ type, x, y, isVisible = true }: CoordinateProps) => {
 			</div>
 		</Activity>
 	)
-})
+}
 
 interface ExtraProps extends React.ComponentProps<'div'> {
 	readonly label: string
@@ -59,7 +59,7 @@ interface ExtraProps extends React.ComponentProps<'div'> {
 	readonly isVisible?: boolean
 }
 
-const Extra = memo(({ label, value, className, isVisible = true, ...props }: ExtraProps) => {
+function Extra({ label, value, className, isVisible = true, ...props }: ExtraProps) {
 	return (
 		<Activity mode={isVisible ? 'visible' : 'hidden'}>
 			<div {...props} className={tw(className, 'flex flex-row items-center justify-between text-sm leading-3')}>
@@ -68,4 +68,4 @@ const Extra = memo(({ label, value, className, isVisible = true, ...props }: Ext
 			</div>
 		</Activity>
 	)
-})
+}

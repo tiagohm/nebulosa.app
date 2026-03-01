@@ -1,5 +1,5 @@
 import { Popover, PopoverContent, type PopoverContentProps, type PopoverProps, PopoverTrigger, Tooltip } from '@heroui/react'
-import { DEFAULT_POPOVER_PROPS } from '../shared/constants'
+import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
 import { IconButton, type IconButtonProps } from './IconButton'
 
 export interface PopoverButtonProps extends Omit<IconButtonProps, 'endContent'>, Pick<PopoverProps, 'placement' | 'isOpen' | 'onOpenChange'>, Pick<PopoverContentProps, 'children'> {

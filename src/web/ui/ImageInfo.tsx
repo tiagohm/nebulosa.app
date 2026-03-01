@@ -8,8 +8,8 @@ import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
-import { DEFAULT_DROPDOWN_PROPS } from '../shared/constants'
-import { stopPropagationDesktopOnly } from '../shared/util'
+import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
+import { stopPropagationDesktopOnly } from '@/shared/util'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -53,7 +53,7 @@ interface CoordinateProps extends Readonly<EquatorialCoordinate>, Readonly<Point
 	readonly pinned?: boolean
 }
 
-const Coordinate = memo(({ pinned = false, x, y, rightAscension, declination }: CoordinateProps) => {
+function Coordinate({ pinned = false, x, y, rightAscension, declination }: CoordinateProps) {
 	return (
 		<div className='inline-flex flex-row items-center gap-1'>
 			{pinned ? <Icons.Pin size={12} /> : <Icons.Cursor size={12} />}
@@ -63,7 +63,7 @@ const Coordinate = memo(({ pinned = false, x, y, rightAscension, declination }: 
 			<b className='ms-1'>DEC:</b> {formatDEC(declination, true)}
 		</div>
 	)
-})
+}
 
 export interface SelectedCoordinateDropdownProps {
 	readonly onPointMountHere: (mount: Mount, coordinate: EquatorialCoordinate) => void

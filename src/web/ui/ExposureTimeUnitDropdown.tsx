@@ -1,7 +1,7 @@
 import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
 import type { ExposureTimeUnit } from 'src/shared/types'
-import { DEFAULT_DROPDOWN_PROPS } from '../shared/constants'
-import { stopPropagationDesktopOnly } from '../shared/util'
+import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
+import { stopPropagationDesktopOnly } from '@/shared/util'
 import { TextButton, type TextButtonProps } from './TextButton'
 
 export interface ExposureTimeUnitDropdownProps extends Omit<TextButtonProps, 'label' | 'onWheel'> {

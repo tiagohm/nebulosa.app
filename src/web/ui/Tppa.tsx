@@ -109,17 +109,17 @@ const PlateSolverSelectEndContent = memo(() => {
 
 const Result = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
-	const { azimuth, altitude } = useSnapshot(tppa.state.event.error)
+	const { event } = useSnapshot(tppa.state)
 
 	return (
 		<>
 			<div className='col-span-6 flex flex-col items-center gap-0 mt-3'>
 				<span className='font-bold'>Azimuth</span>
-				<span className='text-3xl'>{formatDEC(azimuth)}</span>
+				<span className='text-3xl'>{formatDEC(event.error.azimuth)}</span>
 			</div>
 			<div className='col-span-6 flex flex-col items-center gap-0 mt-3'>
 				<span className='font-bold'>Altitude</span>
-				<span className='text-3xl'>{formatDEC(altitude)}</span>
+				<span className='text-3xl'>{formatDEC(event.error.altitude)}</span>
 			</div>
 		</>
 	)

@@ -36,12 +36,11 @@ import { ImageSolver } from './ImageSolver'
 import { ImageStatistics } from './ImageStatistics'
 import { ImageStretch } from './ImageStretch'
 import { ImageToolBar } from './ImageToolBar'
-import { Interactable, type InteractableMethods, type InteractableProps } from './Interactable'
+import { Interactable, type InteractableProps } from './Interactable'
 import { StarDetection } from './StarDetection'
 
 export const ImageViewer = memo(() => {
 	const imgRef = useRef<HTMLImageElement>(null)
-	const interactableRef = useRef<InteractableMethods>(null)
 
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { image } = viewer.scope
@@ -97,10 +96,6 @@ export const ImageViewer = memo(() => {
 			workspace.link(image, viewer)
 		}
 
-		if (interactableRef.current) {
-			viewer.attachInteractable(interactableRef.current)
-		}
-
 		return () => {
 			viewer.detach()
 		}
@@ -134,7 +129,7 @@ export const ImageViewer = memo(() => {
 				<ImageToolBar />
 				<ImageInfo />
 			</Activity>
-			<Interactable onGesture={handleGesture} onMouseMove={handleMouseMove} onPointerUp={handlePointerUp} onTap={viewer.select} ref={interactableRef} zIndex={image.position}>
+			<Interactable onGesture={handleGesture} onMouseMove={handleMouseMove} onPointerUp={handlePointerUp} onTap={viewer.select} ref={viewer.attachInteractable} zIndex={image.position}>
 				<img className='image select-none touch-none pointer-events-none max-w-none rounded-sm outline-64 outline-solid outline-black/5' draggable={false} id={image.key} onLoad={viewer.handleOnLoad} ref={imgRef} />
 				<InteractableOverlay />
 			</Interactable>

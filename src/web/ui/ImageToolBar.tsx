@@ -48,11 +48,11 @@ export const ImageToolBar = memo(() => {
 				<Tooltip content='Auto Stretch' placement='top' showArrow>
 					<ToggleButton color='primary' icon={Icons.WandSparkles} isSelected={transformation.stretch.auto} onPointerUp={stretch.toggle} />
 				</Tooltip>
-				{info?.metadata.bayer && info.metadata.bayer && (
+				<Activity mode={info?.metadata.bayer ? 'visible' : 'hidden'}>
 					<Tooltip content='Debayer' placement='top' showArrow>
 						<ToggleButton color='primary' icon={Icons.Grid} isSelected={transformation.debayer} onPointerUp={viewer.toggleDebayer} />
 					</Tooltip>
-				)}
+				</Activity>
 				<RotatePopover />
 				<TransformationPopover />
 				<OverlayPopover />
@@ -74,9 +74,6 @@ export const ImageToolBar = memo(() => {
 })
 
 const RotatePopover = memo(() => {
-	const viewer = useMolecule(ImageViewerMolecule)
-	const { angle } = useSnapshot(viewer.state)
-
 	return (
 		<Popover {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip content='Rotate' showArrow>
@@ -87,25 +84,51 @@ const RotatePopover = memo(() => {
 				</div>
 			</Tooltip>
 			<PopoverContent>
-				<div className='min-w-110 flex flex-row items-center justify-center gap-2 p-2'>
-					<span className='font-bold'>{angle.toFixed(1)}°</span>
-					<Slider className='flex-1' disableThumbScale maxValue={359.9} minValue={0} onChange={(value) => viewer.rotateTo(value as number)} step={0.1} value={angle} />
-					<Tooltip content='Rotate Left' placement='top'>
-						<IconButton color='primary' icon={Icons.RotateLeft} onPointerUp={viewer.rotateLeft} variant='flat' />
-					</Tooltip>
-					<Tooltip content='Rotate Right' placement='top'>
-						<IconButton color='primary' icon={Icons.RotateRight} onPointerUp={viewer.rotateRight} variant='flat' />
-					</Tooltip>
-					<Tooltip content='Reset' placement='top'>
-						<IconButton color='danger' icon={Icons.Restore} onPointerUp={viewer.rotateToZero} variant='flat' />
-					</Tooltip>
-				</div>
+				<RotatePopoverContent />
 			</PopoverContent>
 		</Popover>
 	)
 })
 
+const RotatePopoverContent = memo(() => {
+	const viewer = useMolecule(ImageViewerMolecule)
+	const { angle } = useSnapshot(viewer.state)
+
+	return (
+		<div className='min-w-110 flex flex-row items-center justify-center gap-2 p-2'>
+			<span className='font-bold'>{angle.toFixed(1)}°</span>
+			<Slider className='flex-1' disableThumbScale maxValue={359.9} minValue={0} onChange={(value) => viewer.rotateTo(value as number)} step={0.1} value={angle} />
+			<Tooltip content='Rotate Left' placement='top'>
+				<IconButton color='primary' icon={Icons.RotateLeft} onPointerUp={viewer.rotateLeft} variant='flat' />
+			</Tooltip>
+			<Tooltip content='Rotate Right' placement='top'>
+				<IconButton color='primary' icon={Icons.RotateRight} onPointerUp={viewer.rotateRight} variant='flat' />
+			</Tooltip>
+			<Tooltip content='Reset' placement='top'>
+				<IconButton color='danger' icon={Icons.Restore} onPointerUp={viewer.rotateToZero} variant='flat' />
+			</Tooltip>
+		</div>
+	)
+})
+
 const OverlayPopover = memo(() => {
+	return (
+		<Popover {...DEFAULT_POPOVER_PROPS}>
+			<Tooltip content='Overlay' showArrow>
+				<div className='max-w-fit'>
+					<PopoverTrigger>
+						<IconButton color='success' icon={Icons.BringToFront} variant='flat' />
+					</PopoverTrigger>
+				</div>
+			</Tooltip>
+			<PopoverContent>
+				<OverlayPopoverContent />
+			</PopoverContent>
+		</Popover>
+	)
+})
+
+const OverlayPopoverContent = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { crosshair } = useSnapshot(viewer.state)
 
@@ -124,56 +147,42 @@ const OverlayPopover = memo(() => {
 	const { visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
 
 	return (
-		<Popover {...DEFAULT_POPOVER_PROPS}>
-			<Tooltip content='Overlay' showArrow>
-				<div className='max-w-fit'>
-					<PopoverTrigger>
-						<IconButton color='success' icon={Icons.BringToFront} variant='flat' />
-					</PopoverTrigger>
-				</div>
+		<div className='flex flex-row justify-center items-start gap-2 p-2'>
+			<Tooltip content='Crosshair' placement='top' showArrow>
+				<ToggleButton color='primary' icon={Icons.Crosshair} isSelected={crosshair} onPointerUp={viewer.toggleCrosshair} />
 			</Tooltip>
-			<PopoverContent>
-				<div className='flex flex-row justify-center items-start gap-2 p-2'>
-					<Tooltip content='Crosshair' placement='top' showArrow>
-						<ToggleButton color='primary' icon={Icons.Crosshair} isSelected={crosshair} onPointerUp={viewer.toggleCrosshair} />
-					</Tooltip>
-					<div className='flex flex-col gap-2 justify-center'>
-						<Tooltip content='Annotation' placement='top' showArrow>
-							<IconButton color='secondary' icon={Icons.Pen} isDisabled={!solution} onPointerUp={annotation.show} variant='flat' />
-						</Tooltip>
-						{annotatedStars.length > 0 && <Switch isSelected={isAnnotatedStarsVisible} onValueChange={annotation.toggle} size='sm' />}
-					</div>
-					<div className='flex flex-col gap-2 justify-center'>
-						<Tooltip content='Star Detection' placement='top' showArrow>
-							<IconButton color='secondary' icon={Icons.Stars} onPointerUp={starDetection.show} variant='flat' />
-						</Tooltip>
-						{detectedStars.length > 0 && <Switch isSelected={isDetectedStarsVisible} onValueChange={starDetection.toggle} size='sm' />}
-					</div>
-					<Tooltip content='ROI' placement='top' showArrow>
-						<IconButton color='secondary' icon={Icons.Box} variant='flat' />
-					</Tooltip>
-					<Activity mode={solution?.scale ? 'visible' : 'hidden'}>
-						<Tooltip content='FOV' placement='top' showArrow>
-							<IconButton color='secondary' icon={Icons.FocusField} onPointerUp={fov.show} variant='flat' />
-						</Tooltip>
-						<Tooltip content='Mouse Coordinate' placement='top' showArrow>
-							<ToggleButton color='primary' icon={Icons.MousePointerClick} isSelected={isMouseCoordinateVisible} onPointerUp={mouseCoordinate.toggle} />
-						</Tooltip>
-					</Activity>
-				</div>
-			</PopoverContent>
-		</Popover>
+			<div className='flex flex-col gap-2 justify-center'>
+				<Tooltip content='Annotation' placement='top' showArrow>
+					<IconButton color='secondary' icon={Icons.Pen} isDisabled={!solution} onPointerUp={annotation.show} variant='flat' />
+				</Tooltip>
+				<Activity mode={annotatedStars.length > 0 ? 'visible' : 'hidden'}>
+					<Switch isSelected={isAnnotatedStarsVisible} onValueChange={annotation.toggle} size='sm' />
+				</Activity>
+			</div>
+			<div className='flex flex-col gap-2 justify-center'>
+				<Tooltip content='Star Detection' placement='top' showArrow>
+					<IconButton color='secondary' icon={Icons.Stars} onPointerUp={starDetection.show} variant='flat' />
+				</Tooltip>
+				<Activity mode={detectedStars.length > 0 ? 'visible' : 'hidden'}>
+					<Switch isSelected={isDetectedStarsVisible} onValueChange={starDetection.toggle} size='sm' />
+				</Activity>
+			</div>
+			<Tooltip content='ROI' placement='top' showArrow>
+				<IconButton color='secondary' icon={Icons.Box} variant='flat' />
+			</Tooltip>
+			<Activity mode={solution?.scale ? 'visible' : 'hidden'}>
+				<Tooltip content='FOV' placement='top' showArrow>
+					<IconButton color='secondary' icon={Icons.FocusField} onPointerUp={fov.show} variant='flat' />
+				</Tooltip>
+				<Tooltip content='Mouse Coordinate' placement='top' showArrow>
+					<ToggleButton color='primary' icon={Icons.MousePointerClick} isSelected={isMouseCoordinateVisible} onPointerUp={mouseCoordinate.toggle} />
+				</Tooltip>
+			</Activity>
+		</div>
 	)
 })
 
 const TransformationPopover = memo(() => {
-	const viewer = useMolecule(ImageViewerMolecule)
-	const scnr = useMolecule(ImageScnrMolecule)
-	const adjustment = useMolecule(ImageAdjustmentMolecule)
-	const filter = useMolecule(ImageFilterMolecule)
-	const calibration = useMolecule(ImageCalibrationMolecule)
-	const { transformation, info } = useSnapshot(viewer.state)
-
 	return (
 		<Popover {...DEFAULT_POPOVER_PROPS}>
 			<Tooltip content='Transformation' showArrow>
@@ -184,32 +193,45 @@ const TransformationPopover = memo(() => {
 				</div>
 			</Tooltip>
 			<PopoverContent>
-				<div className='flex flex-row items-center justify-center gap-2 p-2'>
-					<Tooltip content='Calibration' placement='top' showArrow>
-						<IconButton color='secondary' icon={Icons.Image} onPointerUp={calibration.show} variant='flat' />
-					</Tooltip>
-					<Activity mode={info && !info.mono ? 'visible' : 'hidden'}>
-						<Tooltip content='SCNR' placement='top' showArrow>
-							<IconButton color='secondary' icon={Icons.Swatch} onPointerUp={scnr.show} variant='flat' />
-						</Tooltip>
-					</Activity>
-					<Tooltip content='Adjustment' placement='top' showArrow>
-						<IconButton color='secondary' icon={Icons.ImageEdit} onPointerUp={adjustment.show} variant='flat' />
-					</Tooltip>
-					<Tooltip content='Filter' placement='top' showArrow>
-						<IconButton color='secondary' icon={Icons.Brush} onPointerUp={filter.show} variant='flat' />
-					</Tooltip>
-					<Tooltip content='Horizontal mirror' placement='top' showArrow>
-						<ToggleButton color='primary' icon={Icons.FlipHorizontal} isSelected={transformation.horizontalMirror} onPointerUp={viewer.toggleHorizontalMirror} />
-					</Tooltip>
-					<Tooltip content='Vertical Mirror' placement='top' showArrow>
-						<ToggleButton color='primary' icon={Icons.FlipVertical} isSelected={transformation.verticalMirror} onPointerUp={viewer.toggleVerticalMirror} />
-					</Tooltip>
-					<Tooltip content='Invert' placement='top' showArrow>
-						<ToggleButton color='primary' icon={Icons.InvertColor} isSelected={transformation.invert} onPointerUp={viewer.toggleInvert} />
-					</Tooltip>
-				</div>
+				<TransformationPopoverContent />
 			</PopoverContent>
 		</Popover>
+	)
+})
+
+const TransformationPopoverContent = memo(() => {
+	const viewer = useMolecule(ImageViewerMolecule)
+	const scnr = useMolecule(ImageScnrMolecule)
+	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const filter = useMolecule(ImageFilterMolecule)
+	const calibration = useMolecule(ImageCalibrationMolecule)
+	const { transformation, info } = useSnapshot(viewer.state)
+
+	return (
+		<div className='flex flex-row items-center justify-center gap-2 p-2'>
+			<Tooltip content='Calibration' placement='top' showArrow>
+				<IconButton color='secondary' icon={Icons.Image} onPointerUp={calibration.show} variant='flat' />
+			</Tooltip>
+			<Activity mode={info && !info.mono ? 'visible' : 'hidden'}>
+				<Tooltip content='SCNR' placement='top' showArrow>
+					<IconButton color='secondary' icon={Icons.Swatch} onPointerUp={scnr.show} variant='flat' />
+				</Tooltip>
+			</Activity>
+			<Tooltip content='Adjustment' placement='top' showArrow>
+				<IconButton color='secondary' icon={Icons.ImageEdit} onPointerUp={adjustment.show} variant='flat' />
+			</Tooltip>
+			<Tooltip content='Filter' placement='top' showArrow>
+				<IconButton color='secondary' icon={Icons.Brush} onPointerUp={filter.show} variant='flat' />
+			</Tooltip>
+			<Tooltip content='Horizontal mirror' placement='top' showArrow>
+				<ToggleButton color='primary' icon={Icons.FlipHorizontal} isSelected={transformation.horizontalMirror} onPointerUp={viewer.toggleHorizontalMirror} />
+			</Tooltip>
+			<Tooltip content='Vertical Mirror' placement='top' showArrow>
+				<ToggleButton color='primary' icon={Icons.FlipVertical} isSelected={transformation.verticalMirror} onPointerUp={viewer.toggleVerticalMirror} />
+			</Tooltip>
+			<Tooltip content='Invert' placement='top' showArrow>
+				<ToggleButton color='primary' icon={Icons.InvertColor} isSelected={transformation.invert} onPointerUp={viewer.toggleInvert} />
+			</Tooltip>
+		</div>
 	)
 })

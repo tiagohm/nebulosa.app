@@ -50,12 +50,18 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 				return transformation.current.scale
 			},
 			zoomTo: (scale: number) => {
-				transformation.current.scale = scale
-				transform('none')
+				if (scale !== transformation.current.scale) {
+					transformation.current.scale = scale
+					transform('none')
+				}
 			},
 			rotateTo: (angle) => {
-				transformation.current.angle = normalizeAngle(angle)
-				transform('none')
+				angle = normalizeAngle(angle)
+
+				if (angle !== transformation.current.angle) {
+					transformation.current.angle = angle
+					transform('none')
+				}
 			},
 			startRotation: () => {
 				rotation.current = true

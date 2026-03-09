@@ -215,6 +215,8 @@ const PlanetFilter = memo(() => {
 	)
 })
 
+const MagnitudeSliderValue = (value: number | number[]) => `min: ${(value as number[])[0].toFixed(1)} max: ${(value as number[])[1].toFixed(1)}`
+
 const GalaxyFilter = memo(() => {
 	const dso = useMolecule(GalaxyMolecule)
 	const { nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, radius } = useSnapshot(dso.state.request)
@@ -229,19 +231,7 @@ const GalaxyFilter = memo(() => {
 			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='RA' onValueChange={(value) => dso.update('rightAscension', value)} size='sm' value={rightAscension} />
 			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => dso.update('declination', value)} size='sm' value={declination} />
 			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} size='sm' step={0.1} value={radius} />
-			<Slider
-				className='col-span-5'
-				getValue={(value) => `min: ${(value as number[])[0].toFixed(1)} max: ${(value as number[])[1].toFixed(1)}`}
-				label='Magnitude'
-				maxValue={30}
-				minValue={-30}
-				onChange={(value) => {
-					dso.update('magnitudeMin', (value as number[])[0])
-					dso.update('magnitudeMax', (value as number[])[1])
-				}}
-				step={0.1}
-				value={[magnitudeMin, magnitudeMax]}
-			/>
+			<Slider className='col-span-5' getValue={MagnitudeSliderValue} label='Magnitude' maxValue={30} minValue={-30} onChange={dso.updateMagnitude} step={0.1} value={[magnitudeMin, magnitudeMax]} />
 			<Checkbox className='col-span-4 w-full max-w-none flex justify-center' isSelected={visible} onValueChange={(value) => dso.update('visible', value)}>
 				Show visible
 			</Checkbox>
@@ -962,7 +952,7 @@ interface EphemerisChartProps {
 	readonly data: EphemerisChartData[]
 }
 
-function chartTooltipContent({ active, payload }: TooltipContentProps<number, string>) {
+function ChartTooltipContent({ active, payload }: TooltipContentProps) {
 	if (!active || !payload?.length || payload[0].name !== 'value') return null
 
 	const item = payload[0].payload as EphemerisChartData
@@ -980,16 +970,16 @@ function chartTooltipContent({ active, payload }: TooltipContentProps<number, st
 	)
 }
 
-function chartTickFormatter(value: unknown, i: number) {
+function ChartTickFormatter(value: unknown, i: number) {
 	return `${((i + 12) % 24).toFixed(0).padStart(2, '0')}`
 }
 
-const DEFAULT_AREA_PROPS: Partial<AreaProps> = { dot: false, connectNulls: true, activeDot: false, fillOpacity: 0.3, isAnimationActive: false, stroke: 'transparent', type: 'monotone' }
+const DEFAULT_AREA_PROPS: Partial<AreaProps<keyof EphemerisChartData, number>> = { dot: false, connectNulls: true, activeDot: false, fillOpacity: 0.3, isAnimationActive: false, stroke: 'transparent', type: 'monotone' }
 
 const EphemerisChart = memo(({ data }: EphemerisChartProps) => {
 	return (
 		<ComposedChart data={data} height={120} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive>
-			<XAxis dataKey='name' domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={chartTickFormatter} tickMargin={6} />
+			<XAxis dataKey='name' domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={ChartTickFormatter} tickMargin={6} />
 			<YAxis domain={[0, 90]} width={25} />
 			<Area dataKey='dayFirst' fill='#FFF176' {...DEFAULT_AREA_PROPS} />
 			<Area dataKey='civilDusk' fill='#7986CB' {...DEFAULT_AREA_PROPS} />
@@ -1001,7 +991,7 @@ const EphemerisChart = memo(({ data }: EphemerisChartProps) => {
 			<Area dataKey='civilDawn' fill='#7986CB' {...DEFAULT_AREA_PROPS} />
 			<Area dataKey='dayLast' fill='#FFF176' {...DEFAULT_AREA_PROPS} />
 			<CartesianGrid stroke='#FFFFFF10' strokeDasharray='3 3' />
-			<ChartTooltip content={chartTooltipContent} />
+			<ChartTooltip content={ChartTooltipContent} />
 			<Line dataKey='value' dot={false} isAnimationActive={false} stroke='#F44336' strokeWidth={2} type='monotone' />
 		</ComposedChart>
 	)

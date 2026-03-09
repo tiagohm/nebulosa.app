@@ -515,6 +515,16 @@ export const GalaxyMolecule = molecule(() => {
 		if (key === 'page' || key === 'sort') void search(false)
 	}
 
+	function updateMagnitude(value: number | readonly number[]) {
+		if (typeof value === 'number') {
+			update('magnitudeMin', value)
+			update('magnitudeMax', 30)
+		} else {
+			update('magnitudeMin', value[0])
+			update('magnitudeMax', value[1])
+		}
+	}
+
 	async function search(reset: boolean | React.PointerEvent) {
 		try {
 			state.loading = true
@@ -595,7 +605,16 @@ export const GalaxyMolecule = molecule(() => {
 		}
 	}
 
-	return { state, update, search, next, prev, select, tick } as const
+	return {
+		state,
+		update,
+		updateMagnitude,
+		search,
+		next,
+		prev,
+		select,
+		tick,
+	} as const
 })
 
 const satelliteState = proxy<SatelliteState>({

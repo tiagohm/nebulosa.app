@@ -49,7 +49,7 @@ SATELLITES.run('PRAGMA mmap_size = 0;')
 SATELLITES.run('PRAGMA automatic_index = ON;')
 SATELLITES.run('PRAGMA optimize;')
 SATELLITES.run('PRAGMA foreign_keys = OFF;')
-SATELLITES.run('CREATE TABLE satellites (id INTEGER PRIMARY KEY, name TEXT, line2 TEXT, line3 TEXT);') // line1 omitted because it's same as name
+SATELLITES.run('CREATE TABLE satellites (id INTEGER PRIMARY KEY, name TEXT, line1 TEXT, line2 TEXT);')
 SATELLITES.run('CREATE TABLE satelliteGroups (satelliteId INTEGER, name TEXT);')
 
 export class AtlasHandler {
@@ -545,14 +545,14 @@ export class AtlasHandler {
 		if (searchGroups.length) joinWhere.push(`sg.name IN (${searchGroups.map((e) => `'${e}'`).join(',')})`)
 
 		const sortDirection = req.sort.direction === 'ascending' ? 'ASC' : 'DESC'
-		const q = `SELECT DISTINCT s.id, s.name, s.name as line1, s.line2, s.line3 FROM satellites s ${joinWhere.length > 1 ? `JOIN satelliteGroups sg ON ${joinWhere.join(' AND ')}` : ''} ${where.join(' AND ')} ORDER BY s.${sort.column ?? 'name'} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
+		const q = `SELECT DISTINCT s.id, s.name, s.line1, s.line2 FROM satellites s ${joinWhere.length > 1 ? `JOIN satelliteGroups sg ON ${joinWhere.join(' AND ')}` : ''} ${where.join(' AND ')} ORDER BY s.${sort.column ?? 'name'} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
 		const satellites = SATELLITES.query<Satellite, []>(q).all()
 		satellites.forEach((s) => (s.groups = SATELLITES.query<never, []>(`SELECT sg.name FROM satelliteGroups sg WHERE sg.satelliteId = ${s.id}`).values().flat() as never))
 		return satellites
 	}
 
 	positionOfSatellite(id: number, req: PositionOfBody) {
-		const satellite = SATELLITES.query<Satellite, []>(`SELECT s.id, s.name as line1, s.line2, s.line3 FROM satellites s WHERE s.id = ${id}`).get()
+		const satellite = SATELLITES.query<Satellite, []>(`SELECT s.id, s.name, s.line1, s.line2 FROM satellites s WHERE s.id = ${id}`).get()
 		if (!satellite) throw new Error(`satellite not found: ${id}`)
 		return this.computeFromHorizonsPositionAt(satellite, req)
 	}

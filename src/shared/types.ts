@@ -783,10 +783,10 @@ export interface PlateSolveStop {
 
 // Star Detection
 
-export type StarDetectionType = 'ASTAP'
+export type StarDetectionType = 'ASTAP' | 'NEBULOSA'
 
 export interface StarDetection {
-	type: StarDetectionType
+	readonly type: StarDetectionType
 	executable?: string
 	path: string
 	timeout: number
@@ -1260,7 +1260,6 @@ export const DEFAULT_SATELLITE: Satellite = {
 	groups: [],
 	line1: '',
 	line2: '',
-	line3: '',
 }
 
 export const DEFAULT_INDI_SERVER_START: Required<IndiServerStart> = {

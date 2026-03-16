@@ -148,7 +148,7 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 				<TextButton color='success' isDisabled={save.name.length === 0} label='Choose' onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
 			</Activity>
 			<Activity mode={mode !== 'save' ? 'visible' : 'hidden'}>
-				<TextButton color='danger' isDisabled={selected.length === 0} label='Clear' onPointerUp={picker.unselectAll} startContent={<Icons.Trash />} />
+				<TextButton color='danger' isDisabled={selected.length === 0} label='Clear' onPointerUp={picker.unselectAll} startContent={<Icons.Broom />} />
 				<Badge color='success' content={selected.length} showOutline={false}>
 					<TextButton color='success' isDisabled={selected.length === 0} label='Choose' onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
 				</Badge>

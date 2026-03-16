@@ -6,6 +6,7 @@ export function StarDetectionSelect({ label = 'Detector', ...props }: Omit<EnumS
 	return (
 		<EnumSelect {...props} label={label}>
 			<SelectItem key='ASTAP'>Astap</SelectItem>
+			<SelectItem key='NEBULOSA'>Nebulosa</SelectItem>
 		</EnumSelect>
 	)
 }

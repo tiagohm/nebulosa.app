@@ -1,7 +1,16 @@
 import { astapDetectStars } from 'nebulosa/src/astap'
-import type { StarDetection } from '../shared/types'
+import { detectStars } from 'nebulosa/src/stardetector'
+import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation, type StarDetection } from '../shared/types'
 import { type Endpoints, response } from './http'
 import type { ImageProcessor } from './image'
+
+const STAR_DETECTION_IMAGE_TRANSFORMATION: ImageTransformation = {
+	...DEFAULT_IMAGE_TRANSFORMATION,
+	stretch: {
+		...DEFAULT_IMAGE_TRANSFORMATION.stretch,
+		auto: false,
+	},
+}
 
 export class StarDetectionHandler {
 	constructor(readonly imageProcessor: ImageProcessor) {}
@@ -11,6 +20,9 @@ export class StarDetectionHandler {
 
 		if (req.type === 'ASTAP') {
 			return await astapDetectStars(req.path, req)
+		} else if (req.type === 'NEBULOSA') {
+			const image = await this.imageProcessor.transform(req.path, STAR_DETECTION_IMAGE_TRANSFORMATION)
+			if (image) return detectStars(image.image, req)
 		}
 
 		return []

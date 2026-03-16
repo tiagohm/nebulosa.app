@@ -94,7 +94,8 @@ export class FlatWizardTask {
 			this.event.median = median
 
 			if (median >= this.mean.min && median <= this.mean.max) {
-				const path = join(this.request.path || Bun.env.capturesDir, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS')}.fit`)
+				const extension = this.request.capture.transferFormat === 'XISF' ? 'xisf' : 'fit'
+				const path = join(this.request.path || Bun.env.capturesDir, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS')}.${extension}`)
 				await this.flatWizardHandler.cameraHandler.imageProcessor.export(savedPath, FLAT_WIZARD_IMAGE_TRANSFORMTION, this.camera?.name, path)
 				return this.handleFlatWizardEvent('IDLE', `Saved at ${path}`)
 			} else if (median < this.mean.min) {

@@ -1,14 +1,15 @@
-import { NumberInput, Popover, PopoverContent, PopoverTrigger } from '@heroui/react'
+import { Checkbox, NumberInput, Popover, PopoverContent, PopoverTrigger } from '@heroui/react'
 import type { Camera } from 'nebulosa/src/indi.device'
 import type { CameraCaptureStart } from 'src/shared/types'
 import type { DeepReadonly } from 'utility-types'
 import { DEFAULT_POPOVER_PROPS, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameFormatSelect } from './FrameFormatSelect'
 import { Icons } from './Icon'
 import { IconButton, type IconButtonProps } from './IconButton'
 
-export type CameraCaptureStartPopoverKey = 'exposureTime' | 'exposureTimeUnit' | 'binX' | 'binY' | 'gain' | 'offset' | 'frameFormat' | 'x' | 'y' | 'width' | 'height'
+export type CameraCaptureStartPopoverKey = 'exposureTime' | 'exposureTimeUnit' | 'binX' | 'binY' | 'gain' | 'offset' | 'frameFormat' | 'x' | 'y' | 'width' | 'height' | 'transferFormat' | 'compressed'
 
 export type CameraCaptureStartPopoverMode = 'capture' | 'autoFocus' | 'flatWizard' | 'darv' | 'tppa'
 
@@ -23,7 +24,7 @@ function canExposureTime(mode: CameraCaptureStartPopoverMode) {
 	return mode === 'capture' || mode === 'autoFocus' || mode === 'tppa'
 }
 
-export function CameraCaptureStartPopover({ mode, camera, color, isDisabled, value: { exposureTime, exposureTimeUnit, binX, binY, gain, offset, x, y, width, height, frameFormat }, onValueChange, ...props }: CameraCaptureStartPopoverProps) {
+export function CameraCaptureStartPopover({ mode, camera, color, isDisabled, value: { exposureTime, exposureTimeUnit, binX, binY, gain, offset, x, y, width, height, frameFormat, transferFormat, compressed }, onValueChange, ...props }: CameraCaptureStartPopoverProps) {
 	const exposureTimeDisabled = !canExposureTime(mode)
 
 	return (
@@ -55,6 +56,10 @@ export function CameraCaptureStartPopover({ mode, camera, color, isDisabled, val
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Bin Y' maxValue={camera.bin.y.max} minValue={camera.bin.y.min} onValueChange={(value) => onValueChange('binY', value)} size='sm' value={binY} />
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Gain' maxValue={camera.gain.max} minValue={camera.gain.min} onValueChange={(value) => onValueChange('gain', value)} size='sm' value={gain} />
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Offset' maxValue={camera.offset.max} minValue={camera.offset.min} onValueChange={(value) => onValueChange('offset', value)} size='sm' value={offset} />
+					<CameraTransferFormatSelect className='col-span-6' onValueChange={(value) => onValueChange('transferFormat', value)} value={transferFormat} />
+					<Checkbox className='col-span-6' isSelected={compressed} onValueChange={(value) => onValueChange('compressed', value)}>
+						Compressed
+					</Checkbox>
 				</div>
 			</PopoverContent>
 		</Popover>

@@ -3,10 +3,10 @@ import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { CameraMolecule } from '@/molecules/indi/camera'
-import { PHD2Molecule } from '@/molecules/phd2'
-import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { AutoSaveButton } from './AutoSaveButton'
 import { AutoSubFolderModeButton } from './AutoSubFolderButton'
+import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
 import { ConnectButton } from './ConnectButton'
 import { FocuserDropdown, MountDropdown, RotatorDropdown, WheelDropdown } from './DeviceDropdown'
 import { ExposureModeButtonGroup } from './ExposureModeButtonGroup'
@@ -20,7 +20,6 @@ import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 import { TextButton } from './TextButton'
-import { ToggleButton } from './ToggleButton'
 
 export const Camera = memo(() => {
 	const camera = useMolecule(CameraMolecule)
@@ -80,6 +79,7 @@ const Progress = memo(() => {
 	return (
 		<div className='col-span-full flex flex-row items-center justify-between mb-2'>
 			<ExposureTimeProgress progress={progress} />
+			<OptionsButton />
 		</div>
 	)
 })
@@ -93,6 +93,54 @@ const Path = memo(() => {
 			<AutoSaveButton onValueChange={(value) => camera.update('autoSave', value)} value={autoSave} />
 			<AutoSubFolderModeButton isDisabled={!autoSave} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={autoSubFolderMode} />
 			<FilePickerInput id={`camera-${camera.scope.camera.name}`} isDisabled={!autoSave} mode='directory' onValueChange={camera.updateSavePath} value={savePath} />
+		</div>
+	)
+})
+
+const OptionsButton = memo(() => {
+	const camera = useMolecule(CameraMolecule)
+	const { capturing } = useSnapshot(camera.state)
+	const { connected } = useSnapshot(camera.state.camera)
+	const { show } = useSnapshot(camera.state.request)
+
+	return (
+		<>
+			<IconButton icon={Icons.Cog} isDisabled={!connected || capturing} onPointerUp={() => (camera.state.request.show = true)} />
+			<Activity mode={show && connected && !capturing ? 'visible' : 'hidden'}>
+				<OptionsModal />
+			</Activity>
+		</>
+	)
+})
+
+const OptionsModal = memo(() => {
+	const camera = useMolecule(CameraMolecule)
+
+	return (
+		<Modal header='Options' id={`camera-options-${camera.scope.camera.name}`} maxWidth='280px' onHide={() => (camera.state.request.show = false)}>
+			<OptionsBody />
+		</Modal>
+	)
+})
+
+const OptionsBody = memo(() => {
+	const camera = useMolecule(CameraMolecule)
+	const { transferFormat, compressed, dither } = useSnapshot(camera.state.request)
+
+	return (
+		<div className='grid grid-cols-12 items-center gap-2 p-2'>
+			<CameraTransferFormatSelect className='col-span-6' onValueChange={(value) => camera.update('transferFormat', value)} value={transferFormat} />
+			<Checkbox className='col-span-6' isSelected={compressed} onValueChange={(value) => camera.update('compressed', value)}>
+				Compressed
+			</Checkbox>
+			<div className='col-span-full flex flex-row items-center gap-2'>
+				<span className='font-bold text-sm'>DITHER</span>
+				<Switch isSelected={dither.enabled} onValueChange={(value) => camera.updateDither('enabled', value)} size='sm' />
+			</div>
+			<NumberInput className='col-span-8' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!dither.enabled} label='Dither pixels (px)' maxValue={25} minValue={1} onValueChange={(value) => camera.updateDither('amount', value)} placeholder='5' size='sm' step={0.1} value={dither.amount} />
+			<Checkbox className='col-span-4' isDisabled={!dither.enabled} isSelected={dither.raOnly} onValueChange={(value) => camera.updateDither('raOnly', value)}>
+				RA only
+			</Checkbox>
 		</div>
 	)
 })
@@ -124,6 +172,7 @@ const Temperature = memo(() => {
 		<NumberInput
 			className='col-span-6'
 			endContent={<TemperatureNumberInputEndContent />}
+			formatOptions={DECIMAL_NUMBER_FORMAT}
 			isDisabled={!connected || !canSetTemperature || capturing}
 			label={`Temperature (${temperature.toFixed(1)}°C)`}
 			maxValue={50}
@@ -166,10 +215,7 @@ const Exposure = memo(() => {
 				unit={exposureTimeUnit}
 				value={exposureTime}
 			/>
-			<FrameTypeSelect className='col-span-4' isDisabled={!connected || capturing} onValueChange={(value) => camera.update('frameType', value)} value={frameType} />
-			<div className='col-span-2 flex flex-row justify-center items-center'>
-				<Dither />
-			</div>
+			<FrameTypeSelect className='col-span-6' isDisabled={!connected || capturing} onValueChange={(value) => camera.update('frameType', value)} value={frameType} />
 		</>
 	)
 })
@@ -256,21 +302,6 @@ const CameraEquipment = memo(() => {
 			<FocuserDropdown isDisabled={isDisabled} onValueChange={camera.updateFocuser} tooltipContent={`FOCUSER: ${focuser?.name ?? 'None'}`} value={focuser} />
 			<RotatorDropdown isDisabled={isDisabled} onValueChange={camera.updateRotator} tooltipContent={`ROTATOR: ${rotator?.name ?? 'None'}`} value={rotator} />
 		</>
-	)
-})
-
-const Dither = memo(() => {
-	const camera = useMolecule(CameraMolecule)
-	const phd2 = useMolecule(PHD2Molecule)
-	const { capturing } = useSnapshot(camera.state)
-	const { connected } = useSnapshot(camera.state.camera)
-	const { dither } = useSnapshot(camera.state.request)
-	const { running } = useSnapshot(phd2.state)
-
-	return (
-		<Tooltip content='Dither' placement='bottom' showArrow>
-			<ToggleButton color='warning' icon={Icons.Pulse} isDisabled={!connected || capturing || !running} isSelected={dither} offVariant='light' onValueChange={(value) => (camera.state.request.dither = value)} />
-		</Tooltip>
 	)
 })
 

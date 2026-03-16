@@ -247,7 +247,8 @@ export class CameraCaptureTask {
 
 			// Save image
 			const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : camera.name
-			const path = join(await makePathFor(this.request), `${name}.fit`)
+			const extension = this.request.transferFormat === 'XISF' ? 'xisf' : 'fit'
+			const path = join(await makePathFor(this.request), `${name}.${extension}`)
 			this.cameraHandler.imageProcessor.save(buffer, path, camera)
 
 			if (this.request.autoSave) {
@@ -270,8 +271,8 @@ export class CameraCaptureTask {
 		cameraManager.bin(camera, request.binX, request.binY)
 		cameraManager.gain(camera, request.gain)
 		cameraManager.offset(camera, request.offset)
-		cameraManager.transferFormat(camera, 'FITS')
-		cameraManager.compression(camera, false)
+		cameraManager.transferFormat(camera, request.transferFormat)
+		cameraManager.compression(camera, request.compressed)
 		cameraManager.startExposure(camera, exposureTimeInSeconds(request.exposureTime, request.exposureTimeUnit))
 	}
 

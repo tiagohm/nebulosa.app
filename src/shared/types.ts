@@ -13,7 +13,7 @@ import type { Hips2FitsOptions } from 'nebulosa/src/hips2fits'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
 import type { CfaPattern, ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SCNRProtectionMethod, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
 // biome-ignore format: too long!
-import type { Camera, ClientInfo, ClientType, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Power, Rotator, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, CameraTransferFormat, ClientInfo, ClientType, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Power, Rotator, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { LunarEclipse, LunarPhase } from 'nebulosa/src/moon'
@@ -701,7 +701,9 @@ export interface CameraCaptureStart extends Size {
 	wheel?: string
 	focuser?: string
 	rotator?: string
-	dither: boolean
+	dither: PHD2Dither & { enabled: boolean }
+	transferFormat: CameraTransferFormat
+	compressed: boolean
 }
 
 export interface CameraCaptureTime {
@@ -951,6 +953,12 @@ export const DEFAULT_SIZE: Size = {
 	height: 0,
 }
 
+export const DEFAULT_PHD2_DITHER: Required<PHD2Dither> = {
+	amount: 5,
+	raOnly: false,
+	settle: DEFAULT_PHD2_SETTLE,
+}
+
 export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	exposureTime: 0,
 	exposureTimeUnit: 'MICROSECOND',
@@ -970,7 +978,9 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	offset: 0,
 	autoSave: false,
 	autoSubFolderMode: 'OFF',
-	dither: false,
+	dither: { ...DEFAULT_PHD2_DITHER, enabled: false },
+	transferFormat: 'FITS',
+	compressed: false,
 }
 
 export const DEFAULT_CAMERA_CAPTURE_EVENT: CameraCaptureEvent = {
@@ -1364,12 +1374,6 @@ export const DEFAULT_PHD2_EVENT: PHD2Event = {
 		dx: null,
 		dy: null,
 	},
-}
-
-export const DEFAULT_PHD2_DITHER: Required<PHD2Dither> = {
-	amount: 5,
-	raOnly: false,
-	settle: DEFAULT_PHD2_SETTLE,
 }
 
 export const DEFAULT_PHD2_CONNECT: PHD2Connect = {

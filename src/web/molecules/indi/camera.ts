@@ -18,7 +18,7 @@ export interface CameraScopeValue {
 export interface CameraState {
 	minimized: boolean
 	camera: EquipmentDevice<Camera>
-	readonly request: CameraCaptureStart
+	readonly request: CameraCaptureStart & { show: boolean }
 	readonly progress: CameraCaptureEvent
 	capturing: boolean
 	targetTemperature: number
@@ -46,7 +46,7 @@ export const CameraMolecule = molecule(() => {
 		proxy<CameraState>({
 			minimized: false,
 			camera,
-			request: structuredClone(DEFAULT_CAMERA_CAPTURE_START),
+			request: { ...structuredClone(DEFAULT_CAMERA_CAPTURE_START), show: false },
 			progress: structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT),
 			capturing: false,
 			targetTemperature: camera.temperature,
@@ -136,6 +136,10 @@ export const CameraMolecule = molecule(() => {
 		return update('savePath', path)
 	}
 
+	function updateDither<K extends keyof CameraState['request']['dither']>(key: K, value: CameraState['request']['dither'][K]) {
+		state.request.dither[key] = value
+	}
+
 	function connect() {
 		return equipment.connect(camera)
 	}
@@ -194,6 +198,7 @@ export const CameraMolecule = molecule(() => {
 		connect,
 		update,
 		updateSavePath,
+		updateDither,
 		cooler,
 		temperature,
 		fullscreen,

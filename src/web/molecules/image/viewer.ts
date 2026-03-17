@@ -1,7 +1,7 @@
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
-import { numericKeyword } from 'nebulosa/src/fits'
+import { numericKeyword } from 'nebulosa/src/fits.util'
 import type { Mount } from 'nebulosa/src/indi.device'
 import { pmod } from 'nebulosa/src/math'
 import bus from 'src/shared/bus'

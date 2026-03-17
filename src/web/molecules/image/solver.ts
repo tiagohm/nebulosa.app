@@ -1,6 +1,6 @@
 import { molecule, onMount, use } from 'bunshi'
 import { arcsec, formatDEC, formatRA, toDeg } from 'nebulosa/src/angle'
-import { numericKeyword } from 'nebulosa/src/fits'
+import { numericKeyword } from 'nebulosa/src/fits.util'
 import type { Mount } from 'nebulosa/src/indi.device'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import { angularSizeOfPixel } from 'nebulosa/src/util'

@@ -24,8 +24,12 @@ const ConnectionItem = (item: Connection) => (
 						</Chip>
 					</span>
 					<span className='text-default-500 text-tiny flex gap-1 items-center'>
-						<Icons.Laptop size={12} />
-						{item.host}:{item.port}
+						<Activity mode={item.type === 'SIMULATOR' ? 'hidden' : 'visible'}>
+							<Icons.Laptop size={12} />
+							<span>
+								{item.host}:{item.port}
+							</span>
+						</Activity>
 						<Icons.Clock size={12} />
 						{item.connectedAt ? formatTemporal(item.connectedAt, 'YYYY-MM-DD HH:mm:ss') : 'never'}
 					</span>
@@ -40,9 +44,11 @@ const SelectedConnectionItem = (item: SelectedItemProps<Connection>) => (
 	<div className='p-1 flex items-center justify-between gap-0' key={item.data?.id}>
 		<div className='flex flex-col gap-0'>
 			<span className='font-bold'>{item.data?.name}</span>
-			<span className='text-default-500 text-tiny flex gap-1 items-center'>
-				{item.data?.host}:{item.data?.port}
-			</span>
+			<Activity mode={item.data?.type === 'SIMULATOR' ? 'hidden' : 'visible'}>
+				<span className='text-default-500 text-tiny flex gap-1 items-center'>
+					{item.data?.host}:{item.data?.port}
+				</span>
+			</Activity>
 		</div>
 		<div className='hidden sm:flex items-center'>
 			<Chip color='primary' size='sm'>

@@ -50,8 +50,8 @@ const Body = memo(() => {
 	return (
 		<div className='mt-0 grid grid-cols-12 gap-2'>
 			<Activity mode={tab === 'property' ? 'visible' : 'hidden'}>
-				<DevicesAndGroups />
-				<Properties />
+				<DeviceAndGroup />
+				<GroupList />
 			</Activity>
 			<Messages />
 		</div>
@@ -62,7 +62,7 @@ const DeviceItem = (device: string) => <SelectItem key={device}>{device}</Select
 
 const GroupItem = (group: string) => <SelectItem key={group}>{group}</SelectItem>
 
-const DevicesAndGroups = memo(() => {
+const DeviceAndGroup = memo(() => {
 	const control = useMolecule(IndiPanelControlMolecule)
 	const { devices, device, groups, group } = useSnapshot(control.state)
 
@@ -78,18 +78,34 @@ const DevicesAndGroups = memo(() => {
 	)
 })
 
-const Properties = memo(() => {
+const GroupList = memo(() => {
 	const control = useMolecule(IndiPanelControlMolecule)
-	const { group, properties } = useSnapshot(control.state)
-
-	const entries = Object.entries(properties[group] ?? {}).sort((a, b) => a[1].label!.localeCompare(b[1].label!))
+	const { group, groups } = useSnapshot(control.state)
 
 	return (
 		<div className='col-span-full flex flex-col gap-4 max-h-[300px] overflow-y-auto p-1'>
-			{entries.map(([name, p]) => (
-				<Property key={name} onSend={control.send} property={p} />
+			{groups.map((e) => (
+				<Activity key={e} mode={e === group ? 'visible' : 'hidden'}>
+					<PropertyList group={e} />
+				</Activity>
 			))}
 		</div>
+	)
+})
+
+const DevicePropertyComparator = (a: DeviceProperty, b: DeviceProperty) => a.label!.localeCompare(b.label!)
+
+const PropertyList = memo(({ group }: Readonly<{ group: string }>) => {
+	const control = useMolecule(IndiPanelControlMolecule)
+	const properties = useSnapshot(control.state.properties[group])
+	const entries = Object.values(properties ?? {}).sort(DevicePropertyComparator)
+
+	return (
+		<>
+			{entries.map((e) => (
+				<Property key={e.name} onSend={control.send} property={e} />
+			))}
+		</>
 	)
 })
 
@@ -149,7 +165,7 @@ const Property = memo(({ property, onSend }: PropertyProps) => {
 	}
 
 	return (
-		<div className='flex flex-col gap-2'>
+		<div className='flex flex-col gap-2 content'>
 			<div className='flex items-center justify-between gap-1'>
 				<div className='flex items-center justify-start gap-1'>
 					<Icons.Circle color={property.state === 'Idle' ? '#FAFAFA' : property.state === 'Busy' ? '#FFC107' : property.state === 'Ok' ? '#4CAF50' : '#F44336'} />

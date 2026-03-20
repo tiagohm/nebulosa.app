@@ -38,7 +38,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 	const connection = use(ConnectionMolecule)
 
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(6)
+		const unsubscribers = new Array<VoidFunction>(7)
 
 		unsubscribers[0] = bus.subscribe<ConnectionEvent>('connection:close', ({ status }) => {
 			if (connection.state.connected?.id === status.id) {
@@ -50,31 +50,37 @@ export const IndiPanelControlMolecule = molecule(() => {
 			}
 		})
 
-		unsubscribers[1] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:update', (event) => {
+		unsubscribers[1] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:add', (event) => {
 			if (state.device === event.device && connection.state.connected?.id === event.clientId) {
 				addProperty(event.property)
 			}
 		})
 
-		unsubscribers[2] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:remove', (event) => {
+		unsubscribers[2] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:update', (event) => {
+			if (state.device === event.device && connection.state.connected?.id === event.clientId) {
+				updateProperty(event.property)
+			}
+		})
+
+		unsubscribers[3] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:remove', (event) => {
 			if (state.device === event.device && connection.state.connected?.id === event.clientId) {
 				removeProperty(event.property)
 			}
 		})
 
-		unsubscribers[3] = bus.subscribe<Message & { clientId: string }>('indi:message', (event) => {
+		unsubscribers[4] = bus.subscribe<Message & { clientId: string }>('indi:message', (event) => {
 			if (event.device === state.device && connection.state.connected?.id === event.clientId) {
 				state.messages.unshift(event)
 			}
 		})
 
-		unsubscribers[4] = subscribeKey(connection.state, 'connected', (event) => {
+		unsubscribers[5] = subscribeKey(connection.state, 'connected', (event) => {
 			if (event && connection.state.connected?.id === event.id) {
 				void retrieveDevices()
 			}
 		})
 
-		unsubscribers[5] = subscribeKey(connection.state, 'show', (show) => {
+		unsubscribers[6] = subscribeKey(connection.state, 'show', (show) => {
 			if (show) {
 				void retrieveDevices()
 			}
@@ -93,7 +99,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 	})
 
 	async function retrieveDevices(device: Device | string = state.device) {
-		const devices = await Api.Indi.devices(connection.state.connected!)
+		const devices = connection.state.connected?.id ? await Api.Indi.devices(connection.state.connected) : []
 		state.devices = devices?.sort() ?? []
 		changeDevice((typeof device === 'string' ? device : device.name) || state.devices[0] || '')
 		ping()
@@ -133,21 +139,29 @@ export const IndiPanelControlMolecule = molecule(() => {
 
 	function addProperties(properties: DeviceProperties) {
 		for (const key in properties) {
-			addProperty(properties[key]!)
+			addProperty(properties[key])
 		}
 	}
 
 	function addProperty(property: DeviceProperty) {
 		if (property.group) {
-			if (!state.groups.includes(property.group)) {
+			let group = state.properties[property.group]
+
+			if (group === undefined) {
+				group = { [property.name]: property }
 				state.groups.push(property.group)
 				state.groups.sort()
+				state.properties[property.group] = group
+			} else {
+				group[property.name] = property
 			}
+		}
+	}
 
-			const group = state.properties[property.group] ?? {}
-			if (property.name in group) Object.assign(group[property.name], property)
-			else group[property.name] = property
-			state.properties[property.group] = group
+	function updateProperty(property: DeviceProperty) {
+		if (property.group) {
+			const group = state.properties[property.group]
+			Object.assign(group[property.name], property)
 		}
 	}
 

@@ -2,6 +2,7 @@ import { AlpacaClient } from 'nebulosa/src/alpaca.client'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi.client'
 import type { Client, Device } from 'nebulosa/src/indi.device'
 import type { DeviceProvider } from 'nebulosa/src/indi.manager'
+import { CameraSimulator, ClientSimulator, MountSimulator } from 'nebulosa/src/indi.simulator'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
 import { type Endpoints, response } from './http'
@@ -31,7 +32,12 @@ export class ConnectionHandler {
 
 	async connect(req: Connect & { id?: string }, indi: IndiClientHandler & DeviceProvider<Device>): Promise<ConnectionStatus | undefined> {
 		for (const [, client] of this.clients) {
-			if (client.id === req.id || (client instanceof IndiClient && client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) || (client instanceof AlpacaClient && client.remotePort === req.port && client.remoteHost === req.host)) {
+			if (
+				(client.type === 'SIMULATOR' && req.type === client.type) ||
+				client.id === req.id ||
+				(client instanceof IndiClient && client.remotePort === req.port && (client.remoteHost === req.host || client.remoteIp === req.host)) ||
+				(client instanceof AlpacaClient && client.remotePort === req.port && client.remoteHost === req.host)
+			) {
 				console.info('reusing existing connection:', client.id, client.description)
 				const status = this.status(client)!
 				this.wsm.send<ConnectionEvent>('connection:open', { status, reused: true })
@@ -75,6 +81,18 @@ export class ConnectionHandler {
 			} catch (e) {
 				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })
 			}
+		} else {
+			const client = new ClientSimulator(req.id || Date.now().toFixed(0), indi)
+			this.clients.set(client.id, client)
+
+			const mount = new MountSimulator('Mount Simulator', client)
+			const camera = new CameraSimulator('Camera Simulator', client)
+
+			console.info('new connection to:', client.id, client.description)
+
+			const status = this.status(client)!
+			this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
+			return status
 		}
 
 		return undefined
@@ -103,8 +121,7 @@ export class ConnectionHandler {
 					this.clients.delete(key)
 					console.info('disconnected from:', client.id, client.description)
 
-					if (client instanceof IndiClient) client.close()
-					else if (client instanceof AlpacaClient) client.stop()
+					client[Symbol.dispose]()
 
 					this.wsm.send<ConnectionEvent>('connection:close', { status })
 

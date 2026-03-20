@@ -29,8 +29,8 @@ const Body = memo(() => {
 	return (
 		<div className='mt-0 grid grid-cols-12 gap-2 items-center'>
 			<Input className='col-span-full' label='Name' maxLength={64} onValueChange={(value) => connection.update('name', value)} placeholder='Local' size='sm' type='text' value={name} />
-			<Input className='col-span-7' label='Host' maxLength={128} onValueChange={(value) => connection.update('host', value)} placeholder='localhost' size='sm' type='text' value={host} />
-			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => connection.update('port', value)} placeholder={type === 'INDI' ? '7624' : '32323'} size='sm' value={port} />
+			<Input className='col-span-7' isDisabled={type === 'SIMULATOR'} label='Host' maxLength={128} onValueChange={(value) => connection.update('host', value)} placeholder='localhost' size='sm' type='text' value={host} />
+			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={type === 'SIMULATOR'} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => connection.update('port', value)} placeholder={type === 'INDI' ? '7624' : '32323'} size='sm' value={port} />
 			<ClientTypeSelect className='col-span-5' onValueChange={(value) => connection.update('type', value)} value={type} />
 			<Checkbox className='col-span-5' isDisabled={type !== 'ALPACA'} isSelected={secured} onValueChange={(value) => connection.update('secured', value)}>
 				Secured

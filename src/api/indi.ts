@@ -237,7 +237,7 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 	}
 
 	added(client: Client, device: string, property: DeviceProperty) {
-		this.notify(client.id!, device, property, 'update')
+		this.notify(client.id!, device, property, 'add')
 	}
 
 	updated(client: Client, device: string, property: DeviceProperty) {
@@ -263,7 +263,7 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 		}
 	}
 
-	notify(clientId: string, device: string, property: DeviceProperty, type: 'update' | 'remove') {
+	notify(clientId: string, device: string, property: DeviceProperty, type: 'add' | 'update' | 'remove') {
 		if (this.listeners.has(`${clientId}:${device}`)) {
 			this.wsm.send<IndiDevicePropertyEvent>(`indi:property:${type}`, { clientId, device, name: property.name, property })
 		}

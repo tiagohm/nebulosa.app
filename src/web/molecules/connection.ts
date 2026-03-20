@@ -160,35 +160,33 @@ export const ConnectionMolecule = molecule(() => {
 	function save() {
 		const edited = { ...state.edited }
 
-		if (edited) {
-			if (edited.id === DEFAULT_CONNECTION.id) {
-				// If the edited connection is the default one, we remove it first
-				if (state.mode === 'EDIT') {
-					removeOnly(DEFAULT_CONNECTION)
-				}
-
-				// Generate a new id for the edited connection
-				edited.id = Date.now().toFixed(0)
-
-				// Add the edited connection to the list
-				add(edited)
-
-				// Set the edited connection as the selected one
-				state.selected = edited
-			} else {
-				const index = state.connections.findIndex((e) => e.id === edited.id)
-
-				if (index >= 0) {
-					state.connections[index] = edited
-
-					if (state.selected?.id === edited.id) {
-						state.selected = edited
-					}
-				}
+		if (edited.id === DEFAULT_CONNECTION.id) {
+			// If the edited connection is the default one, we remove it first
+			if (state.mode === 'EDIT') {
+				removeOnly(DEFAULT_CONNECTION)
 			}
 
-			state.show = false
+			// Generate a new id for the edited connection
+			edited.id = Date.now().toFixed(0)
+
+			// Add the edited connection to the list
+			add(edited)
+
+			// Set the edited connection as the selected one
+			state.selected = edited
+		} else {
+			const index = state.connections.findIndex((e) => e.id === edited.id)
+
+			if (index >= 0) {
+				state.connections[index] = edited
+
+				if (state.selected?.id === edited.id) {
+					state.selected = edited
+				}
+			}
 		}
+
+		state.show = false
 	}
 
 	function removeOnly(connection: Connection) {

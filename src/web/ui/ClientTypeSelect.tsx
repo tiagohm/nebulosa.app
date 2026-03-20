@@ -7,6 +7,7 @@ export function ClientTypeSelect({ label = 'Type', ...props }: Omit<EnumSelectPr
 		<EnumSelect {...props} label={label}>
 			<SelectItem key='INDI'>INDI</SelectItem>
 			<SelectItem key='ALPACA'>Alpaca</SelectItem>
+			<SelectItem key='SIMULATOR'>Simulator</SelectItem>
 		</EnumSelect>
 	)
 }

@@ -23,7 +23,7 @@ export function StarDetectionPopover({ value: { type, executable, minSNR, maxSta
 				<div className='grid grid-cols-2 items-center gap-2 p-4 max-w-80'>
 					<p className='col-span-full font-bold'>STAR DETECTION OPTIONS</p>
 					<Input className='col-span-full' isDisabled={type === 'NEBULOSA'} label='Executable path' onValueChange={(value) => onValueChange('executable', value)} size='sm' value={executable} />
-					<NumberInput className='col-span-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={type === 'NEBULOSA'} label='Min SNR' maxValue={500} minValue={0} onValueChange={(value) => onValueChange('minSNR', value)} size='sm' value={minSNR} />
+					<NumberInput className='col-span-1' formatOptions={INTEGER_NUMBER_FORMAT} label='Min SNR' maxValue={500} minValue={0} onValueChange={(value) => onValueChange('minSNR', value)} size='sm' value={minSNR} />
 					<NumberInput className='col-span-1' formatOptions={INTEGER_NUMBER_FORMAT} label='Max Stars' maxValue={2000} minValue={0} onValueChange={(value) => onValueChange('maxStars', value)} size='sm' value={maxStars} />
 				</div>
 			</PopoverContent>

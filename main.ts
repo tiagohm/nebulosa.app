@@ -100,28 +100,21 @@ if (process.platform === 'linux') {
 	Bun.env.appDir = appDir || join(Bun.env.homeDir, '.nebulosa')
 	Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'satellites')
-	Bun.env.configDir = join(Bun.env.appDir, 'config')
-	Bun.env.starDatabaseDir = join(Bun.env.appDir, 'starDatabase')
 } else if (process.platform === 'win32') {
 	const documentsDir = appDir || join(checkDirAccess(Bun.env.homeDir, 'Documents'), 'Nebulosa')
 	Bun.env.appDir = appDir || join(checkDirAccess(Bun.env.homeDir, 'AppData', 'Local'), 'Nebulosa')
 	Bun.env.tmpDir = join(Bun.env.appDir, 'Temp')
 	Bun.env.capturesDir = join(documentsDir, 'Captures')
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'Satellites')
-	Bun.env.configDir = join(Bun.env.appDir, 'Config')
-	Bun.env.starDatabaseDir = join(documentsDir, 'Star Database')
 }
 
 await fs.mkdir(Bun.env.appDir, CREATE_RECURSIVE_DIRECTORY)
 await fs.mkdir(Bun.env.tmpDir, CREATE_RECURSIVE_DIRECTORY)
 await fs.mkdir(Bun.env.capturesDir, CREATE_RECURSIVE_DIRECTORY)
 await fs.mkdir(Bun.env.satellitesDir, CREATE_RECURSIVE_DIRECTORY)
-await fs.mkdir(Bun.env.configDir, CREATE_RECURSIVE_DIRECTORY)
-await fs.mkdir(Bun.env.starDatabaseDir, CREATE_RECURSIVE_DIRECTORY)
 
 console.info('app directory is located at', Bun.env.appDir)
 console.info('captures directory is located at', Bun.env.capturesDir)
-console.info('star database directory is located at', Bun.env.starDatabaseDir)
 console.info('temp directory is located at', Bun.env.tmpDir)
 
 // Running from package.json script has a bug on interrupt signals: https://github.com/oven-sh/bun/issues/11400

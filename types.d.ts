@@ -5,8 +5,6 @@ declare module 'bun' {
 		appDir: string
 		capturesDir: string
 		satellitesDir: string
-		configDir: string
-		starDatabaseDir: string
 		host?: string
 		port?: `${number}`
 		cert?: string

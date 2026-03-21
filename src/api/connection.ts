@@ -1,42 +1,59 @@
 import { AlpacaClient } from 'nebulosa/src/alpaca.client'
 import type { Angle } from 'nebulosa/src/angle'
-import { findHnsky290Stars } from 'nebulosa/src/hnsky'
+import { findHnsky290Stars, type Hnsky290Database, type Hnsky290Files } from 'nebulosa/src/hnsky'
 import type { AstronomicalImageStar } from 'nebulosa/src/image.generator'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi.client'
 import type { Client, Device } from 'nebulosa/src/indi.device'
 import type { DeviceProvider, FocuserManager, GuideOutputManager, MountManager, RotatorManager } from 'nebulosa/src/indi.manager'
-import { CameraSimulator, type CatalogProviderStar, ClientSimulator, DustCapSimulator, FilterWheelSimulator, FlatPanelSimulator, FocuserSimulator, MountSimulator, RotatorSimulator } from 'nebulosa/src/indi.simulator'
+import { CameraSimulator, type CatalogSource, type CatalogSourceStar, ClientSimulator, DustCapSimulator, FilterWheelSimulator, FlatPanelSimulator, FocuserSimulator, MountSimulator, RotatorSimulator } from 'nebulosa/src/indi.simulator'
 import { join } from 'path'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
 import { type Endpoints, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
-import { directoryExists } from './util'
 
 function save(name: string, properties: unknown) {
-	const path = join(Bun.env.configDir, `${name}.json`)
+	const path = join(Bun.env.appDir, `${name}.config.json`)
 	return Bun.write(path, JSON.stringify(properties))
 }
 
 async function load(name: string) {
-	const file = Bun.file(join(Bun.env.configDir, `${name}.json`))
+	const file = Bun.file(join(Bun.env.appDir, `${name}.config.json`))
 	if (await file.exists()) return file.json()
 	return []
 }
 
 const DEFAULT_ASTRONOMICAL_IMAGE_STAR: Partial<Readonly<AstronomicalImageStar>> = { hfd: 2.5, snr: 130, flux: 0.55 }
 
-async function hnskyCatalogProvider(rightAscension: Angle, declination: Angle, radius: Angle): Promise<readonly CatalogProviderStar[]> {
-	const directory = join(Bun.env.starDatabaseDir, 'HNSKY')
-	const stars = (await directoryExists(directory)) ? await findHnsky290Stars(directory, 'g16', { rightAscension, declination, radius }) : []
+let HNSKY_290_G14_FILES: Hnsky290Files | undefined
+let HNSKY_290_G16_FILES: Hnsky290Files | undefined
+
+async function loadHnskyDatabase(database: Hnsky290Database) {
+	if (database === 'g14' && HNSKY_290_G14_FILES !== undefined) return true
+	if (database === 'g16' && HNSKY_290_G16_FILES !== undefined) return true
+
+	const file = Bun.file(join(Bun.env.appDir, `HNSKY_${database}.tar`))
+
+	if (await file.exists()) {
+		const archive = new Bun.Archive(await file.arrayBuffer())
+		const files = await archive.files()
+		if (database === 'g14') HNSKY_290_G14_FILES = files
+		else HNSKY_290_G16_FILES = files
+		return true
+	} else {
+		console.warn('HNSKY database not found at', file.name)
+	}
+
+	return false
+}
+
+async function hnskyCatalogSource(files: Hnsky290Files, rightAscension: Angle, declination: Angle, radius: Angle): Promise<readonly CatalogSourceStar[]> {
+	const database = files === HNSKY_290_G14_FILES ? 'g14' : 'g16'
+	const stars = await findHnsky290Stars(files, database, { rightAscension, declination, radius })
 	for (const star of stars) Object.assign(star, DEFAULT_ASTRONOMICAL_IMAGE_STAR)
 	return stars as never
 }
-
-const catalogProviders = {
-	HNSKY: hnskyCatalogProvider,
-} as const
 
 export class ConnectionHandler {
 	private readonly clients = new Map<string, Client>()
@@ -114,8 +131,19 @@ export class ConnectionHandler {
 			const client = new ClientSimulator('client.simulator', indi)
 			this.clients.set(client.id, client)
 
+			const g14 = await loadHnskyDatabase('g14')
+			const g16 = await loadHnskyDatabase('g16')
+
+			const catalogSources: Record<string, CatalogSource | undefined> = {
+				HNSKY_G14: g14 ? (rightAscension, declination, radius) => hnskyCatalogSource(HNSKY_290_G14_FILES!, rightAscension, declination, radius) : undefined,
+				HNSKY_G16: g16 ? (rightAscension, declination, radius) => hnskyCatalogSource(HNSKY_290_G16_FILES!, rightAscension, declination, radius) : undefined,
+			} as const
+
+			console.info(catalogSources)
+
 			const mount = new MountSimulator('Mount Simulator', client, { save, load })
-			const camera = new CameraSimulator('Camera Simulator', client, { save, load, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogProviders })
+			const camera = new CameraSimulator('Camera Simulator', client, { save, load, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogSources })
+			const guideCamera = new CameraSimulator('Guide Camera Simulator', client, { save, load, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogSources })
 			const focuser = new FocuserSimulator('Focuser Simulator', client, { save, load })
 			const filterWheel = new FilterWheelSimulator('Filter Wheel Simulator', client, { save, load })
 			const rotator = new RotatorSimulator('Rotator Simulator', client, { save, load })

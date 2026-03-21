@@ -1,5 +1,8 @@
 import { molecule, onMount, use } from 'bunshi'
+import bus from 'src/shared/bus'
 import type { AnnotatedSkyObject, AnnotateImage } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
+import type { ImageLoaded } from 'src/web/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -41,10 +44,18 @@ export const ImageAnnotationMolecule = molecule(() => {
 	stateMap.set(key, state)
 
 	onMount(() => {
-		const unsubscriber = initProxy(state, `image.${viewer.storageKey}.annotation`, ['p:show', 'o:request'])
+		const unsubscribers = new Array<VoidFunction>(2)
+
+		unsubscribers[0] = bus.subscribe<ImageLoaded>('image:load', ({ image, newImage }) => {
+			if (newImage && image.key === key) {
+				reset()
+			}
+		})
+
+		unsubscribers[1] = initProxy(state, `image.${viewer.storageKey}.annotation`, ['p:show', 'o:request'])
 
 		return () => {
-			unsubscriber()
+			unsubscribe(unsubscribers)
 		}
 	})
 
@@ -74,6 +85,11 @@ export const ImageAnnotationMolecule = molecule(() => {
 		}
 	}
 
+	function reset() {
+		state.stars = []
+		state.visible = false
+	}
+
 	function show() {
 		state.show = true
 	}
@@ -82,5 +98,5 @@ export const ImageAnnotationMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, scope: viewer.scope, viewer, toggle, update, annotate, show, hide } as const
+	return { state, scope: viewer.scope, viewer, toggle, update, annotate, reset, show, hide } as const
 })

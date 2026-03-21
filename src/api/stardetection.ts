@@ -1,5 +1,5 @@
 import { astapDetectStars } from 'nebulosa/src/astap'
-import { detectStars } from 'nebulosa/src/stardetector'
+import { detectStars } from 'nebulosa/src/star.detector'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation, type StarDetection } from '../shared/types'
 import { type Endpoints, response } from './http'
 import type { ImageProcessor } from './image'

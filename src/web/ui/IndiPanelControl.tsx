@@ -45,13 +45,13 @@ const Header = memo(() => {
 
 const Body = memo(() => {
 	const control = useMolecule(IndiPanelControlMolecule)
-	const { tab } = useSnapshot(control.state)
+	const { device, tab } = useSnapshot(control.state)
 
 	return (
 		<div className='mt-0 grid grid-cols-12 gap-2'>
 			<Activity mode={tab === 'property' ? 'visible' : 'hidden'}>
 				<DeviceAndGroup />
-				<GroupList />
+				<GroupList key={device} />
 			</Activity>
 			<Messages />
 		</div>
@@ -80,12 +80,12 @@ const DeviceAndGroup = memo(() => {
 
 const GroupList = memo(() => {
 	const control = useMolecule(IndiPanelControlMolecule)
-	const { group, groups } = useSnapshot(control.state)
+	const { device, group, groups } = useSnapshot(control.state)
 
 	return (
 		<div className='col-span-full flex flex-col gap-4 max-h-[300px] overflow-y-auto p-1'>
 			{groups.map((e) => (
-				<Activity key={e} mode={e === group ? 'visible' : 'hidden'}>
+				<Activity key={`${device}-${e}`} mode={e === group ? 'visible' : 'hidden'}>
 					<PropertyList group={e} />
 				</Activity>
 			))}

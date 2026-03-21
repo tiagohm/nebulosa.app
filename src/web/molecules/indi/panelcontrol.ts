@@ -101,18 +101,28 @@ export const IndiPanelControlMolecule = molecule(() => {
 	async function retrieveDevices(device: Device | string = state.device) {
 		const devices = connection.state.connected?.id ? await Api.Indi.devices(connection.state.connected) : []
 		state.devices = devices?.sort() ?? []
-		changeDevice((typeof device === 'string' ? device : device.name) || state.devices[0] || '')
+		void changeDevice((typeof device === 'string' ? device : device.name) || state.devices[0] || '')
 		ping()
 	}
 
 	async function retrieveProperties(device: string = state.device) {
 		if (device) {
-			state.properties = {}
 			const properties = await Api.Indi.Properties.list(device, connection.state.connected!)
-			properties && addProperties(properties)
 
-			state.groups = Object.keys(state.properties).sort()
-			if (!state.group || !state.groups.includes(state.group)) state.group = state.groups[0] || ''
+			if (properties !== undefined) {
+				const output = {}
+				const groups = addProperties(properties, output)
+				state.groups = Array.from(groups).sort()
+				state.properties = output
+				console.info('retrieved', device)
+			} else {
+				state.groups = []
+				state.properties = {}
+			}
+
+			if (!state.group || !state.groups.includes(state.group)) {
+				state.group = state.groups[0] || ''
+			}
 		}
 	}
 
@@ -121,11 +131,12 @@ export const IndiPanelControlMolecule = molecule(() => {
 		if (messages) state.messages = messages.sort((a, b) => b.timestamp!.localeCompare(a.timestamp!))
 	}
 
-	function changeDevice(device: string) {
+	async function changeDevice(device: string) {
 		if (device) {
-			state.device = state.devices.includes(device) ? device : state.devices[0] || ''
-			void retrieveProperties()
 			void retrieveMessages()
+			device = state.devices.includes(device) ? device : state.devices[0] || ''
+			await retrieveProperties(device)
+			state.device = device
 		}
 	}
 
@@ -137,23 +148,32 @@ export const IndiPanelControlMolecule = molecule(() => {
 		state.messages = []
 	}
 
-	function addProperties(properties: DeviceProperties) {
+	function addProperties(properties: DeviceProperties, out = state.properties) {
+		const groups = new Set<string>()
+
 		for (const key in properties) {
-			addProperty(properties[key])
+			const p = properties[key]
+			addProperty(p, out)
+			p.group && groups.add(p.group)
 		}
+
+		return groups
 	}
 
-	function addProperty(property: DeviceProperty) {
+	function addProperty(property: DeviceProperty, out = state.properties) {
 		if (property.group) {
-			let group = state.properties[property.group]
+			let group = out[property.group]
 
 			if (group === undefined) {
 				group = { [property.name]: property }
-				state.groups.push(property.group)
-				state.groups.sort()
-				state.properties[property.group] = group
+				out[property.group] = group
 			} else {
 				group[property.name] = property
+			}
+
+			if (!state.groups.includes(property.group)) {
+				state.groups.push(property.group)
+				state.groups.sort()
 			}
 		}
 	}
@@ -173,10 +193,16 @@ export const IndiPanelControlMolecule = molecule(() => {
 				delete group[property.name]
 
 				if (Object.keys(group).length === 0) {
-					delete state.properties[property.group]
+					delete group[property.group]
 
-					state.groups = state.groups.filter((e) => e !== property.group)
-					if (state.group === property.group) state.group = state.groups[0] || ''
+					if (Object.keys(group[property.group]).length === 0) {
+						const index = state.groups.indexOf(property.group)
+
+						if (index >= 0) {
+							state.groups.splice(index, 1)
+							if (state.group === property.group) state.group = state.groups[0] || ''
+						}
+					}
 				}
 			}
 		}
@@ -196,7 +222,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 		if (!state.show) {
 			await retrieveDevices(device)
 		} else if (device) {
-			state.device = typeof device === 'string' ? device : device.name
+			await changeDevice(typeof device === 'string' ? device : device.name)
 		}
 
 		bus.emit('homeMenu:toggle', false)

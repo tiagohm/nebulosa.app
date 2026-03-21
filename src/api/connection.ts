@@ -1,13 +1,42 @@
 import { AlpacaClient } from 'nebulosa/src/alpaca.client'
+import type { Angle } from 'nebulosa/src/angle'
+import { findHnsky290Stars } from 'nebulosa/src/hnsky'
+import type { AstronomicalImageStar } from 'nebulosa/src/image.generator'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi.client'
 import type { Client, Device } from 'nebulosa/src/indi.device'
-import type { DeviceProvider } from 'nebulosa/src/indi.manager'
-import { CameraSimulator, ClientSimulator, MountSimulator } from 'nebulosa/src/indi.simulator'
+import type { DeviceProvider, FocuserManager, GuideOutputManager, MountManager, RotatorManager } from 'nebulosa/src/indi.manager'
+import { CameraSimulator, type CatalogProviderStar, ClientSimulator, DustCapSimulator, FilterWheelSimulator, FlatPanelSimulator, FocuserSimulator, MountSimulator, RotatorSimulator } from 'nebulosa/src/indi.simulator'
+import { join } from 'path'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
 import { type Endpoints, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
+import { directoryExists } from './util'
+
+function save(name: string, properties: unknown) {
+	const path = join(Bun.env.configDir, `${name}.json`)
+	return Bun.write(path, JSON.stringify(properties))
+}
+
+async function load(name: string) {
+	const file = Bun.file(join(Bun.env.configDir, `${name}.json`))
+	if (await file.exists()) return file.json()
+	return []
+}
+
+const DEFAULT_ASTRONOMICAL_IMAGE_STAR: Partial<Readonly<AstronomicalImageStar>> = { hfd: 2.5, snr: 130, flux: 0.55 }
+
+async function hnskyCatalogProvider(rightAscension: Angle, declination: Angle, radius: Angle): Promise<readonly CatalogProviderStar[]> {
+	const directory = join(Bun.env.starDatabaseDir, 'HNSKY')
+	const stars = (await directoryExists(directory)) ? await findHnsky290Stars(directory, 'g16', { rightAscension, declination, radius }) : []
+	for (const star of stars) Object.assign(star, DEFAULT_ASTRONOMICAL_IMAGE_STAR)
+	return stars as never
+}
+
+const catalogProviders = {
+	HNSKY: hnskyCatalogProvider,
+} as const
 
 export class ConnectionHandler {
 	private readonly clients = new Map<string, Client>()
@@ -30,7 +59,7 @@ export class ConnectionHandler {
 		return client!
 	}
 
-	async connect(req: Connect & { id?: string }, indi: IndiClientHandler & DeviceProvider<Device>): Promise<ConnectionStatus | undefined> {
+	async connect(req: Connect & { id?: string }, indi: IndiClientHandler & DeviceProvider<Device>, mountManager: MountManager, focuserManager: FocuserManager, rotatorManager: RotatorManager, guideOutputManager: GuideOutputManager): Promise<ConnectionStatus | undefined> {
 		for (const [, client] of this.clients) {
 			if (
 				(client.type === 'SIMULATOR' && req.type === client.type) ||
@@ -82,11 +111,16 @@ export class ConnectionHandler {
 				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })
 			}
 		} else {
-			const client = new ClientSimulator(req.id || Date.now().toFixed(0), indi)
+			const client = new ClientSimulator('client.simulator', indi)
 			this.clients.set(client.id, client)
 
-			const mount = new MountSimulator('Mount Simulator', client)
-			const camera = new CameraSimulator('Camera Simulator', client)
+			const mount = new MountSimulator('Mount Simulator', client, { save, load })
+			const camera = new CameraSimulator('Camera Simulator', client, { save, load, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogProviders })
+			const focuser = new FocuserSimulator('Focuser Simulator', client, { save, load })
+			const filterWheel = new FilterWheelSimulator('Filter Wheel Simulator', client, { save, load })
+			const rotator = new RotatorSimulator('Rotator Simulator', client, { save, load })
+			const flatPanel = new FlatPanelSimulator('Flat Panel Simulator', client, { save, load })
+			const dustCap = new DustCapSimulator('Dust Cap Simulator', client, { save, load })
 
 			console.info('new connection to:', client.id, client.description)
 
@@ -108,8 +142,7 @@ export class ConnectionHandler {
 				this.clients.delete(id)
 				console.info('disconnected from:', client.id, client.description)
 
-				if (client instanceof IndiClient) client.close()
-				else if (client instanceof AlpacaClient) client.stop()
+				client[Symbol.dispose]()
 
 				this.wsm.send<ConnectionEvent>('connection:close', { status })
 			}
@@ -153,9 +186,9 @@ export class ConnectionHandler {
 	}
 }
 
-export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler & DeviceProvider<Device>): Endpoints {
+export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler & DeviceProvider<Device>, mountManager: MountManager, focuserManager: FocuserManager, rotatorManager: RotatorManager, guideOutputManager: GuideOutputManager): Endpoints {
 	return {
-		'/connections': { GET: () => response(connectionHandler.list()), POST: async (req) => response(await connectionHandler.connect(await req.json(), indi)) },
+		'/connections': { GET: () => response(connectionHandler.list()), POST: async (req) => response(await connectionHandler.connect(await req.json(), indi, mountManager, focuserManager, rotatorManager, guideOutputManager)) },
 		'/connections/:id': { GET: (req) => response(connectionHandler.status(req.params.id)), DELETE: (req) => response(connectionHandler.disconnect(req.params.id)) },
 	}
 }

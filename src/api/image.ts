@@ -454,7 +454,7 @@ export class ImageHandler {
 			const q = `SELECT d.id, d.type, d.rightAscension, d.declination, d.magnitude, d.pmRa, d.pmDec, d.distance, d.rv, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ORDER BY n.type ASC LIMIT 1) as name FROM dsos d WHERE ${filterByType} AND (acos(sin(d.declination) * ${Math.sin(declination)} + cos(d.declination) * ${Math.cos(declination)} * cos(d.rightAscension - ${rightAscension})) <= ${radius}) ORDER BY d.magnitude DESC LIMIT 100`
 
 			for (const o of nebulosa.query<AnnotatedSkyObject, []>(q)) {
-				const sa = star(o.rightAscension, o.declination, o.pmRa, o.pmDec, o.distance === 0 ? 0 : 1 / o.distance, o.rv)
+				const sa = star(o.rightAscension, o.declination, o.pmRA, o.pmDEC, o.distance === 0 ? 0 : 1 / o.distance, o.rv)
 				const sb = eraPvstar(...spaceMotion(sa, utc))
 
 				if (sb) {
@@ -487,7 +487,7 @@ export class ImageHandler {
 					const [x, y] = wcs.skyToPix(rightAscension, declination)!
 
 					if (x >= 0 && y >= 0 && x < width && y < height) {
-						res.push({ type: 'MINOR_PLANET', id: 3000000 + i++, name, x, y, rightAscension, declination, magnitude, pmRa: 0, pmDec: 0, rv: 0, distance: 0, constellation: 0 })
+						res.push({ type: 'MINOR_PLANET', id: 3000000 + i++, name, x, y, rightAscension, declination, magnitude, pmRA: 0, pmDEC: 0, rv: 0, distance: 0, constellation: 0 })
 					}
 				}
 			} else if ('message' in ident) {

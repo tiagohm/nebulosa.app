@@ -374,7 +374,7 @@ export class AtlasHandler {
 		const equatorial: Mutable<BodyPosition['equatorial']> = [0, 0]
 		const equatorialJ2000 = [dso.rightAscension, dso.declination] as const
 
-		if (dso.pmRa && dso.pmDec) {
+		if (dso.pmRA && dso.pmDEC) {
 			const ebpv = this.cache.earth(time)
 			const parallax = dso.distance > 0 ? 1 / dso.distance : 0
 			const ob = observeStar({ ...dso, parallax }, time, ebpv)
@@ -422,7 +422,7 @@ export class AtlasHandler {
 
 			const ebpv = this.cache.earth(time)
 
-			if (dso.pmRa && dso.pmDec) {
+			if (dso.pmRA && dso.pmDEC) {
 				const parallax = dso.distance > 0 ? 1 / dso.distance : 0
 				data[i] = observeStar({ ...dso, parallax }, time, ebpv).altitude
 			} else {

@@ -1,11 +1,14 @@
 import { AlpacaClient } from 'nebulosa/src/alpaca.client'
-import type { Angle } from 'nebulosa/src/angle'
+import { type Angle, deg, normalizeAngle, toDeg } from 'nebulosa/src/angle'
+import type { CsvRow } from 'nebulosa/src/csv'
 import { findHnsky290Stars, type Hnsky290Database, type Hnsky290Files } from 'nebulosa/src/hnsky'
 import type { AstronomicalImageStar } from 'nebulosa/src/image.generator'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi.client'
 import type { Client, Device } from 'nebulosa/src/indi.device'
 import type { DeviceProvider, FocuserManager, GuideOutputManager, MountManager, RotatorManager } from 'nebulosa/src/indi.manager'
-import { CameraSimulator, type CatalogSource, type CatalogSourceStar, ClientSimulator, DustCapSimulator, FilterWheelSimulator, FlatPanelSimulator, FocuserSimulator, MountSimulator, RotatorSimulator } from 'nebulosa/src/indi.simulator'
+import { CameraSimulator, type CatalogSource, type CatalogSourceStar, ClientSimulator, type DeviceSimulatorOptions, DustCapSimulator, FilterWheelSimulator, FlatPanelSimulator, FocuserSimulator, MountSimulator, RotatorSimulator } from 'nebulosa/src/indi.simulator'
+import { clamp } from 'nebulosa/src/math'
+import { vizierQuery } from 'nebulosa/src/vizier'
 import { join } from 'path'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
@@ -53,6 +56,68 @@ async function hnskyCatalogSource(files: Hnsky290Files, rightAscension: Angle, d
 	const stars = await findHnsky290Stars(files, database, { rightAscension, declination, radius })
 	for (const star of stars) Object.assign(star, DEFAULT_ASTRONOMICAL_IMAGE_STAR)
 	return stars as never
+}
+
+// Queries VizieR around the active mount and projects the stars onto the sensor.
+async function vizierCatalogSource(centerRightAscension: Angle, centerDeclination: Angle, radius: Angle) {
+	let table: CsvRow[] | undefined
+
+	try {
+		table = await vizierQuery(makeVizierCatalogQuery(centerRightAscension, centerDeclination, radius, 500))
+	} catch (e) {
+		console.error('failed to fetch stars from vizier', e)
+		return []
+	}
+
+	if (!table || table.length === 0) return []
+
+	const stars: CatalogSourceStar[] = []
+	const hfdSpread = 0.5
+	const maxBrightness = 10 ** (-0.4 * -1.46)
+	const invMaxBrightness = 1 / maxBrightness
+
+	try {
+		for (let i = 0; i < table.length; i++) {
+			const row = table[i]
+			const rightAscension = deg(+row[0])
+			const declination = deg(+row[1])
+			const magnitude = +row[2]
+
+			const brightness = 10 ** (-0.4 * magnitude)
+			const colorIndex = clamp(+row[3] || 0.65, -0.25, 1.9)
+			const normalized = clamp(brightness * invMaxBrightness, 0, 1)
+
+			const flux = 0.2 + 0.848 * normalized
+			const hfd = 1.2 + 2.4 * clamp((1 - normalized) * (0.35 + hfdSpread * 0.65), 0, 1)
+			const snr = 12 + normalized * 180
+
+			stars.push({ rightAscension, declination, flux, hfd, snr, colorIndex })
+		}
+	} catch (e) {
+		console.error('failed to generate stars from vizier', e)
+		return []
+	}
+
+	return stars
+}
+
+// Builds the Gaia DR3 cone search used by the VizieR-backed camera catalog.
+function makeVizierCatalogQuery(rightAscension: Angle, declination: Angle, radius: Angle, limit: number) {
+	return `
+		SELECT TOP ${Math.trunc(limit)}
+			RA_ICRS AS ra,
+			DE_ICRS AS dec,
+			Gmag AS mag,
+			"BP-RP" AS ci
+		FROM "I/355/gaiadr3"
+		WHERE Gmag IS NOT NULL
+		    AND Gmag <= 14
+			AND 1 = CONTAINS(
+				POINT('ICRS', RA_ICRS, DE_ICRS),
+				CIRCLE('ICRS', ${toDeg(normalizeAngle(rightAscension))}, ${toDeg(declination)}, ${toDeg(radius)})
+			)
+		ORDER BY Gmag ASC
+	`
 }
 
 export class ConnectionHandler {
@@ -135,20 +200,20 @@ export class ConnectionHandler {
 			const g16 = await loadHnskyDatabase('g16')
 
 			const catalogSources: Record<string, CatalogSource | undefined> = {
+				VIZIER: vizierCatalogSource,
 				HNSKY_G14: g14 ? (rightAscension, declination, radius) => hnskyCatalogSource(HNSKY_290_G14_FILES!, rightAscension, declination, radius) : undefined,
 				HNSKY_G16: g16 ? (rightAscension, declination, radius) => hnskyCatalogSource(HNSKY_290_G16_FILES!, rightAscension, declination, radius) : undefined,
 			} as const
 
-			console.info(catalogSources)
-
-			const mount = new MountSimulator('Mount Simulator', client, { save, load })
-			const camera = new CameraSimulator('Camera Simulator', client, { save, load, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogSources })
-			const guideCamera = new CameraSimulator('Guide Camera Simulator', client, { save, load, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogSources })
-			const focuser = new FocuserSimulator('Focuser Simulator', client, { save, load })
-			const filterWheel = new FilterWheelSimulator('Filter Wheel Simulator', client, { save, load })
-			const rotator = new RotatorSimulator('Rotator Simulator', client, { save, load })
-			const flatPanel = new FlatPanelSimulator('Flat Panel Simulator', client, { save, load })
-			const dustCap = new DustCapSimulator('Dust Cap Simulator', client, { save, load })
+			const options: DeviceSimulatorOptions = { save, load }
+			const mount = new MountSimulator('Mount Simulator', client, options)
+			const camera = new CameraSimulator('Camera Simulator', client, { ...options, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogSources })
+			const guideCamera = new CameraSimulator('Guide Camera Simulator', client, { ...options, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogSources })
+			const focuser = new FocuserSimulator('Focuser Simulator', client, options)
+			const filterWheel = new FilterWheelSimulator('Filter Wheel Simulator', client, options)
+			const rotator = new RotatorSimulator('Rotator Simulator', client, options)
+			const flatPanel = new FlatPanelSimulator('Flat Panel Simulator', client, options)
+			const dustCap = new DustCapSimulator('Dust Cap Simulator', client, options)
 
 			console.info('new connection to:', client.id, client.description)
 

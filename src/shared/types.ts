@@ -20,6 +20,7 @@ import type { LunarEclipse, LunarPhase } from 'nebulosa/src/moon'
 import { DEFAULT_PHD2_SETTLE, type PHD2Settle } from 'nebulosa/src/phd2'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/platesolver'
 import type { SmallBodySearchListItem, SmallBodySearchObject } from 'nebulosa/src/sbd'
+import type { StarCatalogEntry } from 'nebulosa/src/star.catalog'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
 import type { SolarEclipse } from 'nebulosa/src/sun'
 import type { Temporal } from 'nebulosa/src/temporal'
@@ -244,12 +245,9 @@ export interface SkyObjectSearchItem {
 	readonly name: string
 }
 
-export interface SkyObject extends EquatorialCoordinate {
+export interface SkyObject extends Omit<Required<StarCatalogEntry>, 'id' | 'epoch'> {
 	readonly id: number
 	readonly type: StellariumObjectType
-	readonly magnitude: number
-	readonly pmRa: Angle
-	readonly pmDec: Angle
 	readonly distance: Distance
 	readonly rv: Velocity
 	readonly constellation: number

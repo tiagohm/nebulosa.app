@@ -851,7 +851,7 @@ const db = new Database(file.name)
 
 db.run('PRAGMA journal_size_limit = 67110000;')
 
-db.run('CREATE TABLE IF NOT EXISTS dsos (id INTEGER PRIMARY KEY, type INTEGER, rightAscension REAL, declination REAL, magnitude REAL, pmRa REAL, pmDec REAL, distance INTEGER, rv REAL, constellation INTEGER, spmType TEXT);')
+db.run('CREATE TABLE IF NOT EXISTS dsos (id INTEGER PRIMARY KEY, type INTEGER, rightAscension REAL, declination REAL, magnitude REAL, pmRA REAL, pmDEC REAL, distance INTEGER, rv REAL, constellation INTEGER, spmType TEXT);')
 db.run('CREATE TABLE IF NOT EXISTS names (dsoId INTEGER, type INTEGER, name TEXT COLLATE NOCASE, PRIMARY KEY (dsoId, type, name), FOREIGN KEY (dsoId) REFERENCES dsos(id)) WITHOUT ROWID;')
 
 function mapNameWithGreekLetter(name: string) {
@@ -909,13 +909,13 @@ for await (const entry of readNamesDat(fileHandleSource(await fs.open('data/name
 NAMES.get(IC)!.push(['342', 'Hidden Galaxy'])
 NAMES.get(NGC)!.push(['6752', 'Great Peacock Globular'])
 
-function addDso(id: number, type: StellariumObjectType, ra: Angle, dec: Angle, mag: number, pmRa: Angle, pmDec: Angle, distance: Distance, rv: Velocity, spmType?: string | null, cnst?: Constellation) {
+function addDso(id: number | string, type: StellariumObjectType, ra: Angle, dec: Angle, mag: number, pmRA: Angle, pmDEC: Angle, distance: Distance, rv: Velocity, spmType?: string | null, cnst?: Constellation) {
 	spmType = spmType && spmType[0] !== '-' && ((type >= 1 && type <= 4) || (type >= 21 && type <= 23) || type === 29 || type === 34) && Number.isNaN(+spmType[0]) ? spmType : null
-	const data = [id, type, ra, dec, mag.toFixed(2), pmRa, pmDec, Math.abs(distance).toFixed(0), rv, CONSTELLATION_LIST.indexOf(cnst ?? constellation(ra, dec)), spmType]
-	return db.run('INSERT OR IGNORE INTO dsos(id, type, rightAscension, declination, magnitude, pmRa, pmDec, distance, rv, constellation, spmType) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);', data).lastInsertRowid
+	const data = [id, type, ra, dec, mag.toFixed(2), pmRA, pmDEC, Math.abs(distance).toFixed(0), rv, CONSTELLATION_LIST.indexOf(cnst ?? constellation(ra, dec)), spmType]
+	return db.run('INSERT OR IGNORE INTO dsos(id, type, rightAscension, declination, magnitude, pmRA, pmDEC, distance, rv, constellation, spmType) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);', data).lastInsertRowid
 }
 
-function addName(dsoId: number | bigint, type: number, name: string) {
+function addName(dsoId: number | bigint | string, type: number, name: string) {
 	return db.run('INSERT OR IGNORE INTO names(dsoId, type, name) VALUES (?, ?, ?);', [dsoId, type, name]).lastInsertRowid
 }
 
@@ -947,14 +947,14 @@ async function readDsosFromStellarium() {
 	db.run('BEGIN TRANSACTION;')
 
 	for await (const entry of readCatalogDat(fileHandleSource(await fs.open('data/catalog.dat')))) {
-		const { type, rightAscension, declination, distance, mB, mV } = entry
+		const { type, rightAscension, declination, distance, magnitude } = entry
 
 		if (type === StellariumObjectType.UNKNOWN) {
 			console.warn(`skipping unknown object: ${entry.id}`)
 			continue
 		}
 
-		const id = 1000000 + entry.id
+		const id = +entry.id + 1000000
 
 		let add = addNameFromTypeAndId(id, -1, id.toFixed(0))
 
@@ -986,8 +986,8 @@ async function readDsosFromStellarium() {
 		if (entry.ru) add = addNameFromTypeAndId(id, RU, entry.ru.toFixed(0)) || add
 
 		if (add) {
-			const magnitude = mV === 99 ? 99 : type === StellariumObjectType.DARK_NEBULA ? 99 - mV : Math.min(mV, mB)
-			addDso(id, type, rightAscension, declination, magnitude, 0, 0, distance, 0, entry.mType)
+			const mag = magnitude === undefined ? 99 : type === StellariumObjectType.DARK_NEBULA ? 99 - magnitude : magnitude
+			addDso(id, type, rightAscension, declination, mag, 0, 0, distance, 0, entry.mType)
 		}
 	}
 
@@ -998,9 +998,9 @@ async function readStarsFromHyg() {
 	db.run('BEGIN TRANSACTION;')
 
 	for await (const row of readHygCatalog(fileHandleSource(await fs.open('data/hyg_v42.csv')))) {
-		const { id, rightAscension, declination, magnitude, pmRa, pmDec, distance, rv, constellation, hd, hip, hr, bayer, flamsteed, name, spType } = row
+		const { id, rightAscension, declination, magnitude, pmRA, pmDEC, distance, rv, constellation, hd, hip, hr, bayer, flamsteed, name, spType } = row
 
-		if (id > 0 && magnitude <= 7 && (bayer || flamsteed || name)) {
+		if (id !== '0' && magnitude <= 7 && (bayer || flamsteed || name)) {
 			if (name) addName(id, NAME, name)
 			if (bayer) addName(id, BAYER, bayer)
 			if (flamsteed) addName(id, FLAMSTEED, flamsteed.toFixed(0))
@@ -1008,7 +1008,7 @@ async function readStarsFromHyg() {
 			if (hip) addName(id, HIP, hip.toFixed(0))
 			if (hr) addName(id, HR, hr.toFixed(0))
 
-			addDso(id, StellariumObjectType.STAR, rightAscension, declination, magnitude, pmRa, pmDec, distance, rv, spType, constellation)
+			addDso(id, StellariumObjectType.STAR, rightAscension, declination, magnitude, pmRA, pmDEC, distance, rv, spType, constellation)
 		}
 	}
 
@@ -1021,7 +1021,7 @@ await readDsosFromStellarium()
 db.run('BEGIN TRANSACTION;')
 
 const SIMBAD_STAR_CLUSTER_QUERY = `
-select distinct b.oid, b.ra, b.dec, b.otype, b.pmra, b.pmdec, b.plx_value, b.rvz_radvel, f.V, f.B, f.J, f.H, ids.ids from basic b
+select distinct b.oid, b.ra, b.dec, b.otype, b.pmrA, b.pmdEC, b.plx_value, b.rvz_radvel, f.V, f.B, f.J, f.H, ids.ids from basic b
 join ident i on b.oid = i.oidref and i.id like 'Cl %'
 join ids ids on b.oid = ids.oidref
 left join allfluxes f on f.oidref = b.oid
@@ -1127,8 +1127,8 @@ for (const item of (await simbadQuery(SIMBAD_STAR_CLUSTER_QUERY))!) {
 	const ra = deg(+item[1])
 	const dec = deg(+item[2])
 	const otype = item[3]
-	const pmRa = mas(+item[4]) / Math.cos(dec)
-	const pmDec = mas(+item[5])
+	const pmRA = mas(+item[4]) / Math.cos(dec)
+	const pmDEC = mas(+item[5])
 	const plx = mas(+item[6])
 	const distance = plx ? 1 / Math.abs(plx) : 0
 	const rv = kilometerPerSecond(+item[7])
@@ -1143,7 +1143,7 @@ for (const item of (await simbadQuery(SIMBAD_STAR_CLUSTER_QUERY))!) {
 		// Update existing DSO?
 	} else {
 		dsoId = 2000000 + c
-		addDso(dsoId, type, ra, dec, mag, pmRa, pmDec, distance, rv)
+		addDso(dsoId, type, ra, dec, mag, pmRA, pmDEC, distance, rv)
 		c++
 	}
 

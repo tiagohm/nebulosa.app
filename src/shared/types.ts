@@ -729,12 +729,9 @@ export interface CameraCaptureEvent {
 
 export type MountRemoteControlProtocol = 'LX200' | 'STELLARIUM'
 
-export interface CoordinateInfo {
-	readonly equatorial: readonly [Angle, Angle]
-	readonly equatorialJ2000: readonly [Angle, Angle]
-	readonly horizontal: readonly [Angle, Angle]
-	readonly ecliptic: readonly [Angle, Angle]
-	readonly galactic: readonly [Angle, Angle]
+export type CoordinateType = 'equatorial' | 'equatorialJ2000' | 'horizontal' | 'ecliptic' | 'galactic'
+
+export interface CoordinateInfo extends Record<CoordinateType, readonly [Angle, Angle]> {
 	readonly lst: Angle
 	readonly constellation: Constellation
 	readonly meridianIn: Angle

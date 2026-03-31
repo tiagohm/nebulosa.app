@@ -6,8 +6,6 @@ export type FilePickerMode = 'file' | 'directory' | 'save'
 
 export type ImageSource = 'file' | 'framing' | 'camera'
 
-export type TargetCoordinateAction = 'GOTO' | 'SYNC' | 'FRAME'
-
 export interface Connection extends Connect {
 	id: string
 	name: string

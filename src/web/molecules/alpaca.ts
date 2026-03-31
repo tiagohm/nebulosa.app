@@ -33,7 +33,7 @@ export const AlpacaMolecule = molecule(() => {
 
 		let timer: NodeJS.Timeout | undefined
 
-		const updateStatus = (delayed: boolean) => {
+		function updateStatus(delayed: boolean) {
 			clearTimeout(timer)
 
 			if (state.show) {

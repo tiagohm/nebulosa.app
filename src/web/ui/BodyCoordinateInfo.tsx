@@ -1,10 +1,8 @@
 import { type Angle, formatAZ, formatDEC, formatHMS, formatRA, toDeg } from 'nebulosa/src/angle'
 import type React from 'react'
 import { Activity } from 'react'
-import type { BodyPosition, CoordinateInfo } from 'src/shared/types'
+import type { BodyPosition, CoordinateInfo, CoordinateType } from 'src/shared/types'
 import { formatDistance, tw } from '@/shared/util'
-
-export type CoordinateType = 'equatorial' | 'equatorialJ2000' | 'horizontal' | 'ecliptic' | 'galactic'
 
 export interface BodyCoordinateInfoProps {
 	readonly position: CoordinateInfo | BodyPosition

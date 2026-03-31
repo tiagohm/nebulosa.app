@@ -17,6 +17,14 @@ const state = proxy<ConfirmationState>({
 })
 
 export const ConfirmationMolecule = molecule(() => {
+	onMount(() => {
+		const unsubscriber = bus.subscribe<Confirmation>('confirmation', show)
+
+		return () => {
+			unsubscriber()
+		}
+	})
+
 	function show(confirmation: Confirmation) {
 		state.key = confirmation.key
 		state.message = confirmation.message
@@ -27,21 +35,15 @@ export const ConfirmationMolecule = molecule(() => {
 		state.show = false
 	}
 
-	function accept() {
-		return Api.Confirmation.confirm({ key: state.key, accepted: true })
+	async function accept() {
+		await Api.Confirmation.confirm({ key: state.key, accepted: true })
+		hide()
 	}
 
-	function reject() {
-		return Api.Confirmation.confirm({ key: state.key, accepted: false })
+	async function reject() {
+		await Api.Confirmation.confirm({ key: state.key, accepted: false })
+		hide()
 	}
-
-	onMount(() => {
-		const unsubscriber = bus.subscribe<Confirmation>('confirmation', show)
-
-		return () => {
-			unsubscriber()
-		}
-	})
 
 	return { state, show, hide, accept, reject } as const
 })

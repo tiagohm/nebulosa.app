@@ -1,6 +1,5 @@
 import { AlpacaClient } from 'nebulosa/src/alpaca.client'
-import { type Angle, deg, normalizeAngle, toDeg } from 'nebulosa/src/angle'
-import type { CsvRow } from 'nebulosa/src/csv'
+import { type Angle, normalizeAngle, toDeg } from 'nebulosa/src/angle'
 import { findHnsky290Stars, type Hnsky290Database, type Hnsky290Files } from 'nebulosa/src/hnsky'
 import type { AstronomicalImageStar } from 'nebulosa/src/image.generator'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi.client'
@@ -8,8 +7,9 @@ import type { Client, Device } from 'nebulosa/src/indi.device'
 import type { DeviceProvider, FocuserManager, GuideOutputManager, MountManager, RotatorManager } from 'nebulosa/src/indi.manager'
 import { CameraSimulator, type CatalogSource, type CatalogSourceStar, ClientSimulator, type DeviceSimulatorOptions, DustCapSimulator, FilterWheelSimulator, FlatPanelSimulator, FocuserSimulator, MountSimulator, RotatorSimulator } from 'nebulosa/src/indi.simulator'
 import { clamp } from 'nebulosa/src/math'
-import { vizierQuery } from 'nebulosa/src/vizier'
+import { VizierGaiaCatalog, type VizierGaiaCatalogEntry } from 'nebulosa/src/vizier'
 import { join } from 'path'
+import type { Mutable } from 'utility-types'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
 import { type Endpoints, response } from './http'
@@ -60,38 +60,27 @@ async function hnskyCatalogSource(files: Hnsky290Files, rightAscension: Angle, d
 
 // Queries VizieR around the active mount and projects the stars onto the sensor.
 async function vizierCatalogSource(centerRightAscension: Angle, centerDeclination: Angle, radius: Angle) {
-	let table: CsvRow[] | undefined
+	const catalog = new VizierGaiaCatalog()
 
-	try {
-		table = await vizierQuery(makeVizierCatalogQuery(centerRightAscension, centerDeclination, radius, 500))
-	} catch (e) {
-		console.error('failed to fetch stars from vizier', e)
-		return []
-	}
+	const stars = (await catalog.queryCone(centerRightAscension, centerDeclination, radius)) as unknown as Mutable<CatalogSourceStar & VizierGaiaCatalogEntry>[]
 
-	if (!table || table.length === 0) return []
+	if (stars.length === 0) return []
 
-	const stars: CatalogSourceStar[] = []
 	const hfdSpread = 0.5
 	const maxBrightness = 10 ** (-0.4 * -1.46)
 	const invMaxBrightness = 1 / maxBrightness
 
 	try {
-		for (let i = 0; i < table.length; i++) {
-			const row = table[i]
-			const rightAscension = deg(+row[0])
-			const declination = deg(+row[1])
-			const magnitude = +row[2]
+		for (let i = 0; i < stars.length; i++) {
+			const star = stars[i]
 
-			const brightness = 10 ** (-0.4 * magnitude)
-			const colorIndex = clamp(+row[3] || 0.65, -0.25, 1.9)
+			const brightness = 10 ** (-0.4 * star.magnitude)
+			star.colorIndex = clamp(star.colorIndex || 0.65, -0.25, 1.9)
 			const normalized = clamp(brightness * invMaxBrightness, 0, 1)
 
-			const flux = 0.2 + 0.848 * normalized
-			const hfd = 1.2 + 2.4 * clamp((1 - normalized) * (0.35 + hfdSpread * 0.65), 0, 1)
-			const snr = 12 + normalized * 180
-
-			stars.push({ rightAscension, declination, flux, hfd, snr, colorIndex })
+			star.flux = 0.2 + 0.848 * normalized
+			star.hfd = 1.2 + 2.4 * clamp((1 - normalized) * (0.35 + hfdSpread * 0.65), 0, 1)
+			star.snr = 12 + normalized * 180
 		}
 	} catch (e) {
 		console.error('failed to generate stars from vizier', e)

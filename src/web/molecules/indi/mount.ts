@@ -1,13 +1,12 @@
 import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
-import { DEFAULT_MOUNT, type Mount, type MountTargetCoordinate, type TrackMode } from 'nebulosa/src/indi.device'
+import { DEFAULT_MOUNT, type Mount, type MountTargetCoordinate, type MountTargetCoordinateType, type TrackMode } from 'nebulosa/src/indi.device'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import bus from 'src/shared/bus'
 // biome-ignore format: too long!
 import { type CoordinateInfo, DEFAULT_COORDINATE_INFO, type Framing, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
-import type { TargetCoordinateAction } from 'src/web/shared/types'
 import type { DeepReadonly } from 'utility-types'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -24,7 +23,7 @@ export interface MountScopeValue {
 export interface MountState {
 	mount: EquipmentDevice<Mount>
 	readonly targetCoordinate: {
-		readonly coordinate: MountTargetCoordinate & { action: TargetCoordinateAction }
+		readonly coordinate: MountTargetCoordinate
 		readonly position: CoordinateInfo
 	}
 	readonly currentPosition: CoordinateInfo
@@ -49,7 +48,6 @@ export interface MountState {
 
 const DEFAULT_TARGET_COORDINATE: MountState['targetCoordinate']['coordinate'] = {
 	type: 'J2000',
-	action: 'GOTO',
 	J2000: { x: '00 00 00', y: '+00 00 00' },
 	JNOW: { x: '00 00 00', y: '+00 00 00' },
 	ALTAZ: { x: '000 00 00', y: '+00 00 00' },
@@ -176,13 +174,18 @@ export const MountMolecule = molecule(() => {
 		return updateRemoteControlStatus()
 	}
 
-	function updateTargetCoordinate<K extends 'action' | 'type'>(key: K, value: MountState['targetCoordinate']['coordinate'][K]) {
-		state.targetCoordinate.coordinate[key] = value
+	function updateTargetCoordinateType(value: MountTargetCoordinateType) {
+		state.targetCoordinate.coordinate.type = value
 		return updateTargetCoordinatePosition()
 	}
 
-	function updateTargetCoordinateByType(coord: 'x' | 'y', value: string) {
-		state.targetCoordinate.coordinate[state.targetCoordinate.coordinate.type]![coord] = value
+	function updateTargetCoordinateX(value: string) {
+		state.targetCoordinate.coordinate[state.targetCoordinate.coordinate.type]!.x = value
+		return updateTargetCoordinatePosition()
+	}
+
+	function updateTargetCoordinateY(value: string) {
+		state.targetCoordinate.coordinate[state.targetCoordinate.coordinate.type]!.y = value
 		return updateTargetCoordinatePosition()
 	}
 
@@ -206,25 +209,21 @@ export const MountMolecule = molecule(() => {
 		}
 	}
 
-	function updateTargetCoordinateAction(action: React.Key) {
-		if (typeof action === 'string') state.targetCoordinate.coordinate.action = action as never
+	function goTo() {
+		return Api.Mounts.goTo(mount, state.targetCoordinate.coordinate)
 	}
 
-	function handleTargetCoordinateAction() {
-		switch (state.targetCoordinate.coordinate.action) {
-			case 'GOTO':
-				return Api.Mounts.goTo(mount, state.targetCoordinate.coordinate)
-			case 'SYNC':
-				return Api.Mounts.sync(mount, state.targetCoordinate.coordinate)
-			case 'FRAME': {
-				const request: Partial<Framing> = {
-					rightAscension: formatRA(state.targetCoordinate.position.equatorialJ2000[0]),
-					declination: formatDEC(state.targetCoordinate.position.equatorialJ2000[1]),
-				}
+	function sync() {
+		return Api.Mounts.sync(mount, state.targetCoordinate.coordinate)
+	}
 
-				bus.emit('framing:load', request)
-			}
+	function frame() {
+		const request: Partial<Framing> = {
+			rightAscension: formatRA(state.targetCoordinate.position.equatorialJ2000[0]),
+			declination: formatDEC(state.targetCoordinate.position.equatorialJ2000[1]),
 		}
+
+		bus.emit('framing:load', request)
 	}
 
 	function park() {
@@ -327,10 +326,12 @@ export const MountMolecule = molecule(() => {
 		updateRemoteControl,
 		startRemoteControl,
 		stopRemoteControl,
-		updateTargetCoordinate,
-		updateTargetCoordinateByType,
-		updateTargetCoordinateAction,
-		handleTargetCoordinateAction,
+		updateTargetCoordinateType,
+		updateTargetCoordinateX,
+		updateTargetCoordinateY,
+		goTo,
+		sync,
+		frame,
 		showLocation,
 		hideLocation,
 		showTime,

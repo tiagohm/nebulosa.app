@@ -14,6 +14,10 @@ export class ConfirmationHandler {
 	}
 
 	ask(message: Omit<Confirmation, 'type'>, timeout: number = 30000) {
+		if (this.confirmations.has(message.key)) {
+			return Promise.resolve(false)
+		}
+
 		const { promise, resolve } = Promise.withResolvers<boolean>()
 
 		const timer = setTimeout(() => {

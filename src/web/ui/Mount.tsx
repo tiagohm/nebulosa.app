@@ -1,8 +1,11 @@
-import { Chip, Input, Switch, Tooltip } from '@heroui/react'
+import { Chip, Input, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import { Activity, memo } from 'react'
+import { formatALT, formatAZ, formatRA } from 'nebulosa/src/angle'
+import { Activity, memo, useState } from 'react'
+import type { CoordinateType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { MountMolecule } from '@/molecules/indi/mount'
+import { DEFAULT_POPOVER_PROPS } from '../shared/constants'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
@@ -14,7 +17,6 @@ import { MountRemoteControl } from './MountRemoteControl'
 import { MountTargetCoordinateTypeRadioGroup } from './MountTargetCoordinateTypeRadioGroup'
 import { Nudge } from './Nudge'
 import { SlewRateSelect } from './SlewRateSelect'
-import { TargetCoordinateActionDropdownButton } from './TargetCoordinateActionDropdownButton'
 import { Time } from './Time'
 import { TrackModeSelect } from './TrackModeSelect'
 
@@ -162,7 +164,7 @@ const TargetPosition = memo(() => {
 const TargetCoordinateAndPosition = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	const { connected, slewing, parking, homing, parked } = useSnapshot(mount.state.mount)
-	const { type, action } = useSnapshot(mount.state.targetCoordinate.coordinate)
+	const { type } = useSnapshot(mount.state.targetCoordinate.coordinate)
 	const coordinate = useSnapshot(mount.state.targetCoordinate.coordinate, { sync: true })
 	const disabled = !connected || slewing || parking || homing || parked
 	const { x, y } = coordinate[type]!
@@ -171,13 +173,95 @@ const TargetCoordinateAndPosition = memo(() => {
 		<div className='col-span-full'>
 			<div className='w-full grid grid-cols-20 gap-2 items-center'>
 				<span className='col-span-4 text-sm font-bold'>TARGET:</span>
-				<MountTargetCoordinateTypeRadioGroup className='col-span-16' isDisabled={disabled} onValueChange={(value) => mount.updateTargetCoordinate('type', value)} value={type} />
+				<MountTargetCoordinateTypeRadioGroup className='col-span-16' isDisabled={disabled} onValueChange={mount.updateTargetCoordinateType} value={type} />
 				<TargetPosition />
-				<Input className='col-span-6' isDisabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'RA' : type === 'ALTAZ' ? 'AZ' : 'LON'} onValueChange={(value) => mount.updateTargetCoordinateByType('x', value)} size='sm' value={x} />
-				<Input className='col-span-6' isDisabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={(value) => mount.updateTargetCoordinateByType('y', value)} size='sm' value={y} />
-				<TargetCoordinateActionDropdownButton action={action} className='col-span-8' color='primary' isDisabled={disabled} onAction={mount.updateTargetCoordinateAction} onPointerUp={mount.handleTargetCoordinateAction} size='lg' />
+				<Input className='col-span-5' isDisabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'RA' : type === 'ALTAZ' ? 'AZ' : 'LON'} onValueChange={mount.updateTargetCoordinateX} size='sm' value={x} />
+				<Input className='col-span-5' isDisabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={mount.updateTargetCoordinateY} size='sm' value={y} />
+				<div className='col-span-10 flex flex-row items-center justify-center gap-1'>
+					<TargetCoordinatePopupButton />
+					<IconButton color='success' icon={Icons.Telescope} isDisabled={disabled} onPointerUp={mount.goTo} />
+					<IconButton color='primary' icon={Icons.Sync} isDisabled={disabled} onPointerUp={mount.sync} />
+					<IconButton color='secondary' icon={Icons.Image} isDisabled={disabled} onPointerUp={mount.frame} />
+				</div>
 			</div>
 		</div>
+	)
+})
+
+const TargetCoordinatePopupButton = memo(() => {
+	const [open, setOpen] = useState(false)
+
+	return (
+		<Popover isOpen={open} onOpenChange={setOpen} {...DEFAULT_POPOVER_PROPS}>
+			<PopoverTrigger>
+				<IconButton color='default' icon={Icons.DotsVertical} variant='light' />
+			</PopoverTrigger>
+			<PopoverContent>
+				<TargetCoordinatePopupButtonContent />
+			</PopoverContent>
+		</Popover>
+	)
+})
+
+const TargetCoordinatePopupButtonContent = memo(() => {
+	const mount = useMolecule(MountMolecule)
+	const { latitude } = useSnapshot(mount.state.mount.geographicCoordinate)
+
+	function onAction(action: React.Key) {
+		if (typeof action !== 'string') return
+
+		if (action === 'bookmark') {
+		} else if (action.startsWith('copy-')) {
+			const type = action.substring(5) as CoordinateType
+			mount.updateTargetCoordinateType(type === 'ecliptic' ? 'ECLIPTIC' : type === 'galactic' ? 'GALACTIC' : type === 'horizontal' ? 'ALTAZ' : type === 'equatorial' ? 'JNOW' : 'J2000')
+			if (type === 'equatorial' || type === 'equatorialJ2000') mount.updateTargetCoordinateX(formatRA(mount.state.currentPosition[type][0]))
+			else mount.updateTargetCoordinateX(formatAZ(mount.state.currentPosition[type][0]))
+			mount.updateTargetCoordinateY(formatALT(mount.state.currentPosition[type][1]))
+		} else if (action.endsWith('-pole')) {
+			mount.updateTargetCoordinateType('JNOW')
+			mount.updateTargetCoordinateX(formatRA(mount.state.currentPosition.lst))
+			mount.updateTargetCoordinateY(action.startsWith('north') ? '+90 00 00' : '-90 00 00')
+		} else if (action === 'zenith') {
+			mount.updateTargetCoordinateType('JNOW')
+			mount.updateTargetCoordinateX(formatRA(mount.state.currentPosition.lst))
+			mount.updateTargetCoordinateY(formatAZ(latitude))
+		}
+	}
+
+	const disabledKeys: string[] = []
+	if (latitude > 0) disabledKeys.push('south-pole')
+	else if (latitude < 0) disabledKeys.push('north-pole')
+
+	return (
+		<Listbox disabledKeys={disabledKeys} onAction={onAction}>
+			<ListboxItem key='bookmark' startContent={<Icons.Bookmark />}>
+				Bookmark
+			</ListboxItem>
+			<ListboxItem key='copy-equatorialJ2000' startContent={<Icons.Paste />}>
+				Paste current J2000 position
+			</ListboxItem>
+			<ListboxItem key='copy-equatorial' startContent={<Icons.Paste />}>
+				Paste current JNOW position
+			</ListboxItem>
+			<ListboxItem key='copy-horizontal' startContent={<Icons.Paste />}>
+				Paste current Horizontal position
+			</ListboxItem>
+			<ListboxItem key='copy-ecliptic' startContent={<Icons.Paste />}>
+				Paste current Eclíptic position
+			</ListboxItem>
+			<ListboxItem key='copy-galactic' startContent={<Icons.Paste />}>
+				Paste current Galactic position
+			</ListboxItem>
+			<ListboxItem key='zenith' startContent={<Icons.Telescope />}>
+				Zenith
+			</ListboxItem>
+			<ListboxItem key='south-pole' startContent={<Icons.Telescope />}>
+				South Pole
+			</ListboxItem>
+			<ListboxItem key='north-pole' startContent={<Icons.Telescope />}>
+				North Pole
+			</ListboxItem>
+		</Listbox>
 	)
 })
 

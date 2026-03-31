@@ -15,6 +15,7 @@ import { Timescale, timeJulianYear, timeNow } from 'nebulosa/src/time'
 import { DEFAULT_COORDINATE_INFO, type MountAdded, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountUpdated } from 'src/shared/types'
 import { coordinateInfo } from 'src/shared/util'
 import type { CacheManager } from './cache'
+import type { ConfirmationHandler } from './confirmation'
 import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 
@@ -35,6 +36,7 @@ export class MountHandler implements DeviceHandler<Mount> {
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly mountManager: MountManager,
+		readonly confirmation: ConfirmationHandler,
 		readonly cache: CacheManager,
 	) {
 		mountManager.addHandler(this)
@@ -66,6 +68,24 @@ export class MountHandler implements DeviceHandler<Mount> {
 	targetPosition(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
 		if (!mount) return DEFAULT_COORDINATE_INFO
 		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate), 'm'), mount.geographicCoordinate.longitude, coordinate)
+	}
+
+	goTo(mount: Mount, req: MountTargetCoordinate) {
+		void this.confirmation.ask({ key: `mount.${mount.id}.move`, message: `Are you sure you want to slew the mount '${mount.name}'?` }).then((confirmed) => {
+			confirmed && this.mountManager.moveTo(mount, 'goto', req)
+		})
+	}
+
+	flip(mount: Mount, req: MountTargetCoordinate) {
+		void this.confirmation.ask({ key: `mount.${mount.id}.move`, message: `Are you sure you want to flip the mount '${mount.name}'?` }).then((confirmed) => {
+			confirmed && this.mountManager.moveTo(mount, 'flip', req)
+		})
+	}
+
+	sync(mount: Mount, req: MountTargetCoordinate) {
+		void this.confirmation.ask({ key: `mount.${mount.id}.move`, message: `Are you sure you want to sync the mount '${mount.name}'?` }).then((confirmed) => {
+			confirmed && this.mountManager.moveTo(mount, 'sync', req)
+		})
 	}
 }
 
@@ -219,9 +239,9 @@ export function mount(mountHandler: MountHandler, mountRemoteControlHandler: Mou
 	return {
 		'/mounts': { GET: (req) => response(mountHandler.list(query(req).client)) },
 		'/mounts/:id': { GET: (req) => response(mountFromParams(req)) },
-		'/mounts/:id/goto': { POST: async (req) => response(mountManager.moveTo(mountFromParams(req), 'goto', await req.json())) },
-		'/mounts/:id/flip': { POST: async (req) => response(mountManager.moveTo(mountFromParams(req), 'flip', await req.json())) },
-		'/mounts/:id/sync': { POST: async (req) => response(mountManager.moveTo(mountFromParams(req), 'sync', await req.json())) },
+		'/mounts/:id/goto': { POST: async (req) => response(mountHandler.goTo(mountFromParams(req), await req.json())) },
+		'/mounts/:id/flip': { POST: async (req) => response(mountHandler.flip(mountFromParams(req), await req.json())) },
+		'/mounts/:id/sync': { POST: async (req) => response(mountHandler.sync(mountFromParams(req), await req.json())) },
 		'/mounts/:id/park': { POST: (req) => response(mountManager.park(mountFromParams(req))) },
 		'/mounts/:id/unpark': { POST: (req) => response(mountManager.unpark(mountFromParams(req))) },
 		'/mounts/:id/home': { POST: (req) => response(mountManager.home(mountFromParams(req))) },

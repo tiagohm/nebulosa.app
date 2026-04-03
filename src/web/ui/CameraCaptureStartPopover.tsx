@@ -11,7 +11,7 @@ import { IconButton, type IconButtonProps } from './IconButton'
 
 export type CameraCaptureStartPopoverKey = 'exposureTime' | 'exposureTimeUnit' | 'binX' | 'binY' | 'gain' | 'offset' | 'frameFormat' | 'x' | 'y' | 'width' | 'height' | 'transferFormat' | 'compressed'
 
-export type CameraCaptureStartPopoverMode = 'capture' | 'autoFocus' | 'flatWizard' | 'darv' | 'tppa'
+export type CameraCaptureStartPopoverMode = 'capture' | 'autoFocus' | 'flatWizard' | 'darv' | 'tppa' | 'guider'
 
 export interface CameraCaptureStartPopoverProps extends Omit<IconButtonProps, 'icon' | 'value' | 'onValueChange'> {
 	readonly mode: CameraCaptureStartPopoverMode

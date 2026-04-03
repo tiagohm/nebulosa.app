@@ -1,10 +1,12 @@
-import { Checkbox, Chip, Input, NumberInput } from '@heroui/react'
+import { Checkbox, Chip, Input, NumberInput, Radio, RadioGroup } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { ConnectButton } from './ConnectButton'
+import { CameraDropdown, GuideOutputDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
@@ -39,18 +41,49 @@ const Body = memo(() => {
 
 const Connection = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
-	const { connected } = useSnapshot(phd2.state)
-	const { host, port } = useSnapshot(phd2.state.connection)
+	const { connected, camera, guideOutput } = useSnapshot(phd2.state)
+	const { host, port, mode } = useSnapshot(phd2.state.connection)
 
 	return (
 		<>
-			<Input className='col-span-7' isDisabled={connected} label='Host' maxLength={128} onValueChange={(value) => phd2.updateConnection('host', value)} placeholder='localhost' size='sm' type='text' value={host} />
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={connected} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => phd2.updateConnection('port', value)} placeholder='4400' size='sm' value={port} />
+			<div className='col-span-full flex flex-row justify-center items-center'>
+				<RadioGroup onValueChange={(value) => (phd2.state.connection.mode = value as never)} orientation='horizontal' value={mode}>
+					<Radio value='REMOTE'>Remote</Radio>
+					<Radio value='INTERNAL'>Internal</Radio>
+				</RadioGroup>
+			</div>
+			<Activity mode={mode === 'REMOTE' ? 'visible' : 'hidden'}>
+				<Input className='col-span-7' isDisabled={connected} label='Host' maxLength={128} onValueChange={(value) => phd2.updateConnection('host', value)} placeholder='localhost' size='sm' type='text' value={host} />
+				<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={connected} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => phd2.updateConnection('port', value)} placeholder='4400' size='sm' value={port} />
+			</Activity>
+			<Activity mode={mode === 'INTERNAL' ? 'visible' : 'hidden'}>
+				<DeviceChooser />
+			</Activity>
 			<div className='col-span-2 flex flex-row justify-center items-center gap-2'>
-				<ConnectButton isConnected={connected} onPointerUp={phd2.connect} />
+				<ConnectButton isConnected={connected} isDisabled={!camera || !guideOutput} onPointerUp={phd2.connect} />
 			</div>
 		</>
 	)
+})
+
+const DeviceChooser = memo(() => {
+	const phd2 = useMolecule(PHD2Molecule)
+	const { camera, guideOutput, running } = useSnapshot(phd2.state)
+
+	return (
+		<div className='col-span-10 flex flex-row justify-center items-center gap-2'>
+			<CameraDropdown endContent={<CameraDropdownEndContent />} isDisabled={running} onValueChange={(value) => (phd2.state.camera = value)} showLabel value={camera} />
+			<GuideOutputDropdown isDisabled={running} onValueChange={(value) => (phd2.state.guideOutput = value)} showLabel value={guideOutput} />
+		</div>
+	)
+})
+
+const CameraDropdownEndContent = memo(() => {
+	const phd2 = useMolecule(PHD2Molecule)
+	const { camera } = useSnapshot(phd2.state)
+	const { capture } = useSnapshot(phd2.state.connection)
+
+	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode='guider' onValueChange={phd2.updateCapture} value={capture} />
 })
 
 const Settle = memo(() => {

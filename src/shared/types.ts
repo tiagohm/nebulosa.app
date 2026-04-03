@@ -906,11 +906,25 @@ export interface AlpacaServerStatus {
 
 // PHD2
 
+export type PHD2ClientMode = 'INTERNAL' | 'REMOTE'
+
 export type PHD2State = 'IDLE' | 'CALIBRATING' | 'SETTLING' | 'GUIDING' | 'LOOPING' | 'STAR_LOST' | 'PAUSED'
 
-export interface PHD2Connect extends Readonly<HostAndPort> {
+export interface PHD2RemoteConnect extends Readonly<HostAndPort> {
 	readonly dither: PHD2Dither
+	readonly mode: 'REMOTE'
 }
+
+export interface PHD2InternalConnect {
+	readonly dither: PHD2Dither
+	readonly focalLength: number
+	readonly camera: string
+	readonly guideOutput: string
+	readonly capture: Omit<CameraCaptureStart, 'dither'>
+	readonly mode: 'INTERNAL'
+}
+
+export type PHD2Connect = PHD2RemoteConnect | PHD2InternalConnect
 
 export interface PHD2Event {
 	state: PHD2State
@@ -1371,8 +1385,18 @@ export const DEFAULT_PHD2_EVENT: PHD2Event = {
 	},
 }
 
-export const DEFAULT_PHD2_CONNECT: PHD2Connect = {
+export const DEFAULT_PHD2_REMOTE_CONNECT: PHD2RemoteConnect = {
+	mode: 'REMOTE',
 	host: 'localhost',
 	port: 4400,
+	dither: DEFAULT_PHD2_DITHER,
+}
+
+export const DEFAULT_PHD2_INTERNAL_CONNECT: PHD2InternalConnect = {
+	mode: 'INTERNAL',
+	focalLength: 0,
+	camera: '',
+	guideOutput: '',
+	capture: structuredClone(DEFAULT_CAMERA_CAPTURE_START),
 	dither: DEFAULT_PHD2_DITHER,
 }

@@ -1000,7 +1000,7 @@ async function readStarsFromHyg() {
 	for await (const row of readHygCatalog(fileHandleSource(await fs.open('data/hyg_v42.csv')))) {
 		const { id, rightAscension, declination, magnitude, pmRA, pmDEC, distance, rv, constellation, hd, hip, hr, bayer, flamsteed, name, spType } = row
 
-		if (id !== '0' && magnitude <= 7 && (bayer || flamsteed || name)) {
+		if (id !== 0 && magnitude <= 7 && (bayer || flamsteed || name)) {
 			if (name) addName(id, NAME, name)
 			if (bayer) addName(id, BAYER, bayer)
 			if (flamsteed) addName(id, FLAMSTEED, flamsteed.toFixed(0))

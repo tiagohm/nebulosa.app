@@ -1,4 +1,6 @@
-import { type PHD2AppState, PHD2Client, type PHD2ClientHandler, type PHD2Command, type PHD2Error, type PHD2Events, type PHD2JsonRpcEvent } from 'nebulosa/src/phd2'
+import { GuiderClient } from 'nebulosa/src/guider.client'
+import type { CameraManager, GuideOutputManager } from 'nebulosa/src/indi.manager'
+import { type PHD2AppState, PHD2Client, type PHD2Command, type PHD2Error, type PHD2Events } from 'nebulosa/src/phd2'
 import { DEFAULT_PHD2_DITHER, DEFAULT_PHD2_EVENT, type PHD2Connect, type PHD2Dither, type PHD2Event, type PHD2State, type PHD2Status } from 'src/shared/types'
 import { type Endpoints, response } from './http'
 import type { WebSocketMessageHandler } from './message'
@@ -6,7 +8,7 @@ import type { NotificationHandler } from './notification'
 import { waitFor } from './util'
 
 export class PHD2Handler {
-	private client?: PHD2Client
+	private client?: PHD2Client | GuiderClient
 	private state: PHD2AppState = 'Stopped'
 	private pixelScale = 1
 	private settling?: PromiseWithResolvers<boolean>
@@ -20,8 +22,8 @@ export class PHD2Handler {
 		readonly notificationHandler: NotificationHandler,
 	) {}
 
-	private readonly handler: PHD2ClientHandler = {
-		event: (client: PHD2Client, event: Exclude<PHD2Events, PHD2JsonRpcEvent>) => {
+	private readonly handler = {
+		event: (client: PHD2Client | GuiderClient, event: PHD2Events) => {
 			switch (event.Event) {
 				case 'AppState':
 					this.state = event.State
@@ -107,7 +109,7 @@ export class PHD2Handler {
 			this.client = undefined
 			this.clear()
 		},
-	}
+	} as const
 
 	get isConnected() {
 		return !!this.client
@@ -127,25 +129,59 @@ export class PHD2Handler {
 	}
 
 	async profiles() {
+		if (this.client instanceof GuiderClient) return []
 		return (await this.client?.getProfiles()) ?? []
 	}
 
-	async connect(req: PHD2Connect) {
+	async connect(req: PHD2Connect, cameraManager: CameraManager, guideOutputManager: GuideOutputManager) {
 		if (this.client) return false
 
 		try {
-			const client = new PHD2Client({ handler: this.handler })
+			if (req.mode === 'REMOTE') {
+				const client = new PHD2Client({ handler: this.handler })
 
-			if (await client.connect(req.host, req.port)) {
-				this.client = client
-				Object.assign(this.settings, req.dither)
-				this.clear()
-				this.pixelScale = (await client.getPixelScale()) || 1
-				return true
+				if (await client.connect(req.host, req.port)) {
+					this.client = client
+					Object.assign(this.settings, req.dither)
+					this.clear()
+					this.pixelScale = (await client.getPixelScale()) || 1
+					return true
+				}
 			} else {
-				this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to PHD2 server', color: 'danger' })
+				const camera = cameraManager.get('', req.camera)
+				const guideOutput = guideOutputManager.get('', req.guideOutput)
+
+				if (!camera?.connected || !guideOutput?.connected) return false
+
+				const client = new GuiderClient(cameraManager, guideOutputManager, {
+					handler: this.handler,
+				})
+
+				if (client.connect(camera, guideOutput, req)) {
+					this.client = client
+
+					const { capture } = req
+
+					cameraManager.enableBlob(camera)
+					capture.width && capture.height && cameraManager.frame(camera, capture.x, capture.y, capture.width, capture.height)
+					cameraManager.frameType(camera, capture.frameType)
+					if (capture.frameFormat) cameraManager.frameFormat(camera, capture.frameFormat)
+					cameraManager.bin(camera, capture.binX, capture.binY)
+					cameraManager.gain(camera, capture.gain)
+					cameraManager.offset(camera, capture.offset)
+					cameraManager.transferFormat(camera, capture.transferFormat)
+					cameraManager.compression(camera, capture.compressed)
+
+					Object.assign(this.settings, req.dither)
+					this.clear()
+					this.pixelScale = client.getPixelScale() || 1
+					return true
+				}
 			}
+
+			this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to PHD2 server', color: 'danger' })
 		} catch (e) {
+			console.error(e)
 			this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to PHD2 server', color: 'danger' })
 		}
 
@@ -173,13 +209,13 @@ export class PHD2Handler {
 
 	disconnect() {
 		if (this.client) {
-			this.client.close()
+			this.client instanceof PHD2Client && this.client.close()
 			this.client = undefined
 		}
 	}
 
 	async status() {
-		const profile = (await this.client?.getProfile())?.name
+		const profile = this.client instanceof GuiderClient ? undefined : (await this.client?.getProfile())?.name
 		return { connected: this.isConnected, running: this.isRunning, profile } satisfies PHD2Status
 	}
 
@@ -241,10 +277,10 @@ class RMS {
 	}
 }
 
-export function phd2(phd2Handler: PHD2Handler): Endpoints {
+export function phd2(phd2Handler: PHD2Handler, cameraManager: CameraManager, guideOutputManager: GuideOutputManager): Endpoints {
 	return {
 		'/phd2/profiles': { GET: async () => response(await phd2Handler.profiles()) },
-		'/phd2/connect': { POST: async (req) => response(await phd2Handler.connect(await req.json())) },
+		'/phd2/connect': { POST: async (req) => response(await phd2Handler.connect(await req.json(), cameraManager, guideOutputManager)) },
 		'/phd2/dither': { POST: async (req) => response(await phd2Handler.dither(await req.json())) },
 		'/phd2/disconnect': { POST: () => response(phd2Handler.disconnect()) },
 		'/phd2/status': { GET: async () => response(await phd2Handler.status()) },

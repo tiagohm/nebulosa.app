@@ -262,7 +262,7 @@ const server = Bun.serve({
 		...flatWizard(flatWizardHandler),
 		...autoFocus(autoFocusHandler),
 		...alpaca(alpacaHandler, alpacaPort, hasAlpaca),
-		...phd2(phd2Handler),
+		...phd2(phd2Handler, cameraManager, guideOutputManager),
 	},
 	websocket: {
 		open: (socket) => wsm.open(socket),

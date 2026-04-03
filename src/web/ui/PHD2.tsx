@@ -68,12 +68,12 @@ const Connection = memo(() => {
 
 const DeviceChooser = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
-	const { camera, guideOutput, running } = useSnapshot(phd2.state)
+	const { camera, guideOutput, connected } = useSnapshot(phd2.state)
 
 	return (
 		<div className='col-span-10 flex flex-row justify-center items-center gap-2'>
-			<CameraDropdown endContent={<CameraDropdownEndContent />} isDisabled={running} onValueChange={(value) => (phd2.state.camera = value)} showLabel value={camera} />
-			<GuideOutputDropdown isDisabled={running} onValueChange={(value) => (phd2.state.guideOutput = value)} showLabel value={guideOutput} />
+			<CameraDropdown endContent={<CameraDropdownEndContent />} isDisabled={connected} onValueChange={(value) => (phd2.state.camera = value)} showLabel value={camera} />
+			<GuideOutputDropdown isDisabled={connected} onValueChange={(value) => (phd2.state.guideOutput = value)} showLabel value={guideOutput} />
 		</div>
 	)
 })

@@ -17,9 +17,9 @@ import { observeStar } from 'nebulosa/src/star'
 import { nearestSolarEclipse, season } from 'nebulosa/src/sun'
 import { daysInMonth, formatTemporal, parseTemporal, type Temporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
 import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS } from 'nebulosa/src/time'
+import type { Writable } from 'nebulosa/src/types'
 import { binarySearchWithComparator } from 'nebulosa/src/util'
 import { join } from 'path'
-import type { Mutable } from 'utility-types'
 import besselianElementsOfSolarEclipsesCsv from '../../data/besselian-elements-of-solar-eclipses.csv' with { type: 'file' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // biome-ignore format: too long!
@@ -370,8 +370,8 @@ export class AtlasHandler {
 		const time = this.cache.time(req.time.utc, location, 'm')
 		const lst = localSiderealTime(time, location, true)
 
-		const horizontal: Mutable<BodyPosition['horizontal']> = [0, 0]
-		const equatorial: Mutable<BodyPosition['equatorial']> = [0, 0]
+		const horizontal: Writable<BodyPosition['horizontal']> = [0, 0]
+		const equatorial: Writable<BodyPosition['equatorial']> = [0, 0]
 		const equatorialJ2000 = [dso.rightAscension, dso.declination] as const
 
 		if (dso.pmRA && dso.pmDEC) {
@@ -568,7 +568,7 @@ export class AtlasHandler {
 		const [startTime, endTime] = this.computeStartAndEndTime(req.time)
 
 		const ephemeris = this.ephemeris[id]
-		let position: Mutable<BodyPosition> | undefined = ephemeris?.get(key)
+		let position: Writable<BodyPosition> | undefined = ephemeris?.get(key)
 
 		if (!ephemeris || !position || location !== this.ephemeris.location || !ephemeris.has(Math.trunc(startTime / 1000)) || !ephemeris.has(Math.trunc(endTime / 1000))) {
 			const { longitude, latitude, elevation } = location

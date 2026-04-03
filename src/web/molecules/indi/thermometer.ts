@@ -1,9 +1,9 @@
 import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_THERMOMETER, type Thermometer } from 'nebulosa/src/indi.device'
+import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { ThermometerUpdated } from 'src/shared/types'
-import type { DeepReadonly } from 'utility-types'
 import { proxy } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 

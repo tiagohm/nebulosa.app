@@ -7,9 +7,9 @@ import type { Client, Device } from 'nebulosa/src/indi.device'
 import type { DeviceProvider, FocuserManager, GuideOutputManager, MountManager, RotatorManager } from 'nebulosa/src/indi.manager'
 import { CameraSimulator, type CatalogSource, type CatalogSourceStar, ClientSimulator, type DeviceSimulatorOptions, DustCapSimulator, FilterWheelSimulator, FlatPanelSimulator, FocuserSimulator, MountSimulator, RotatorSimulator } from 'nebulosa/src/indi.simulator'
 import { clamp } from 'nebulosa/src/math'
+import type { Writable } from 'nebulosa/src/types'
 import { VizierGaiaCatalog, type VizierGaiaCatalogEntry } from 'nebulosa/src/vizier'
 import { join } from 'path'
-import type { Mutable } from 'utility-types'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
 import { type Endpoints, response } from './http'
@@ -62,7 +62,7 @@ async function hnskyCatalogSource(files: Hnsky290Files, rightAscension: Angle, d
 async function vizierCatalogSource(centerRightAscension: Angle, centerDeclination: Angle, radius: Angle) {
 	const catalog = new VizierGaiaCatalog()
 
-	const stars = (await catalog.queryCone(centerRightAscension, centerDeclination, radius)) as unknown as Mutable<CatalogSourceStar & VizierGaiaCatalogEntry>[]
+	const stars = (await catalog.queryCone(centerRightAscension, centerDeclination, radius)) as unknown as Writable<CatalogSourceStar & VizierGaiaCatalogEntry>[]
 
 	if (stars.length === 0) return []
 

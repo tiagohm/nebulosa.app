@@ -24,8 +24,8 @@ import type { StarCatalogEntry } from 'nebulosa/src/star.catalog'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
 import type { SolarEclipse } from 'nebulosa/src/sun'
 import type { Temporal } from 'nebulosa/src/temporal'
+import type { DeepRequired, RequiredOnly } from 'nebulosa/src/types'
 import type { Velocity } from 'nebulosa/src/velocity'
-import type { DeepRequired, Required } from 'utility-types'
 
 export type Atom<T> = T extends MoleculeOrInterface<infer X> ? X : never
 
@@ -565,7 +565,7 @@ export interface DeviceAdded<D extends Device = Device> {
 }
 
 export interface DeviceUpdated<D extends Device = Device> {
-	readonly device: Required<Partial<D>, 'name' | 'id'>
+	readonly device: RequiredOnly<Partial<D>, 'name' | 'id'>
 	readonly property: keyof D & string
 	readonly state?: PropertyState
 }

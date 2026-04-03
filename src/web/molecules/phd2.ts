@@ -1,6 +1,7 @@
 import { molecule, onMount } from 'bunshi'
 import type { Camera, GuideOutput } from 'nebulosa/src/indi.device'
 import type { PHD2Settle } from 'nebulosa/src/phd2'
+import type { Writable } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import { DEFAULT_PHD2_EVENT, DEFAULT_PHD2_INTERNAL_CONNECT, DEFAULT_PHD2_REMOTE_CONNECT, type PHD2ClientMode, type PHD2Dither, type PHD2Event, type PHD2InternalConnect, type PHD2RemoteConnect, type PHD2Status } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
@@ -12,7 +13,7 @@ import type { EquipmentDevice } from './indi/equipment'
 
 export interface PHD2State extends PHD2Status {
 	show: boolean
-	readonly connection: Omit<PHD2RemoteConnect, 'mode'> & Omit<PHD2InternalConnect, 'mode'> & { mode: PHD2ClientMode }
+	readonly connection: Writable<Omit<PHD2RemoteConnect, 'mode'> & Omit<PHD2InternalConnect, 'mode'> & { mode: PHD2ClientMode }>
 	camera?: EquipmentDevice<Camera>
 	guideOutput?: EquipmentDevice<GuideOutput>
 	readonly event: PHD2Event
@@ -36,7 +37,7 @@ initProxy(state, 'phd2', ['p:show', 'o:connection'])
 
 export const PHD2Molecule = molecule(() => {
 	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(3)
+		const unsubscribers = new Array<VoidFunction>(5)
 
 		unsubscribers[0] = bus.subscribe<PHD2Event>('phd2', (event) => {
 			if (!state.connected) return
@@ -56,6 +57,14 @@ export const PHD2Molecule = molecule(() => {
 			if (show) {
 				void load()
 			}
+		})
+
+		unsubscribers[3] = subscribeKey(state, 'camera', (camera) => {
+			state.connection.camera = camera?.id ?? ''
+		})
+
+		unsubscribers[4] = subscribeKey(state, 'guideOutput', (guideOutput) => {
+			state.connection.guideOutput = guideOutput?.id ?? ''
 		})
 
 		if (state.show) {

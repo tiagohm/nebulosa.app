@@ -5,7 +5,7 @@ import { type EquatorialCoordinate, eclipticToEquatorial, equatorialFromJ2000, e
 import { expectedPierSide, type MountTargetCoordinate, meridianTimeIn } from 'nebulosa/src/indi.device'
 import { localSiderealTime } from 'nebulosa/src/location'
 import type { Time } from 'nebulosa/src/time'
-import type { Mutable } from 'utility-types'
+import type { Writable } from 'nebulosa/src/types'
 import type { CoordinateInfo, ExposureTimeUnit } from './types'
 
 // Unsubscribes all provided unsubscribers
@@ -53,11 +53,11 @@ export function exposureTimeIn(time: number, from: ExposureTimeUnit, to: Exposur
 }
 
 export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialCoordinate | MountTargetCoordinate<string | Angle>) {
-	const equatorial: Mutable<CoordinateInfo['equatorial']> = [0, 0]
-	const equatorialJ2000: Mutable<CoordinateInfo['equatorialJ2000']> = [0, 0]
-	const horizontal: Mutable<CoordinateInfo['horizontal']> = [0, 0]
-	const ecliptic: Mutable<CoordinateInfo['ecliptic']> = [0, 0]
-	const galactic: Mutable<CoordinateInfo['galactic']> = [0, 0]
+	const equatorial: Writable<CoordinateInfo['equatorial']> = [0, 0]
+	const equatorialJ2000: Writable<CoordinateInfo['equatorialJ2000']> = [0, 0]
+	const horizontal: Writable<CoordinateInfo['horizontal']> = [0, 0]
+	const ecliptic: Writable<CoordinateInfo['ecliptic']> = [0, 0]
+	const galactic: Writable<CoordinateInfo['galactic']> = [0, 0]
 	let observed: ReturnType<typeof cirsToObserved> | undefined
 
 	const type = 'type' in target ? target.type : 'JNOW'

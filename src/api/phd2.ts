@@ -148,8 +148,8 @@ export class PHD2Handler {
 					return true
 				}
 			} else {
-				const camera = cameraManager.get('', req.camera)
-				const guideOutput = guideOutputManager.get('', req.guideOutput)
+				const camera = cameraManager.get(undefined, req.camera)
+				const guideOutput = guideOutputManager.get(undefined, req.guideOutput)
 
 				if (!camera?.connected || !guideOutput?.connected) return false
 

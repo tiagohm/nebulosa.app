@@ -160,19 +160,19 @@ const flatPanelManager = new FlatPanelManager()
 const rotatorManager = new RotatorManager()
 
 const guideOutputProvider: DeviceProvider<GuideOutput> = {
-	get: (client: Client, name: string) => {
+	get: (client: Client | string | undefined, name: string) => {
 		return cameraManager.get(client, name) ?? mountManager.get(client, name)
 	},
 }
 
 const thermometerProvider: DeviceProvider<Thermometer> = {
-	get: (client: Client, name: string) => {
+	get: (client: Client | string | undefined, name: string) => {
 		return cameraManager.get(client, name) ?? focuserManager.get(client, name)
 	},
 }
 
 const dewHeaterProvider: DeviceProvider<DewHeater> = {
-	get: (client: Client, name: string) => {
+	get: (client: Client | string | undefined, name: string) => {
 		return coverManager.get(client, name)
 	},
 }

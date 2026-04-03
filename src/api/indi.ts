@@ -181,7 +181,7 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 		this.messageListeners.forEach((e) => e(client, message))
 	}
 
-	get(client: Client | string, id: string, type?: DeviceType): Device | undefined {
+	get(client: Client | string | undefined, id: string, type?: DeviceType): Device | undefined {
 		if (!type) {
 			return (
 				this.cameraManager.get(client, id) ||

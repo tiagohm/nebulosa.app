@@ -1,7 +1,7 @@
 import { Checkbox, NumberInput, Popover, PopoverContent, PopoverTrigger } from '@heroui/react'
 import type { Camera } from 'nebulosa/src/indi.device'
+import type { DeepReadonly } from 'nebulosa/src/types'
 import type { CameraCaptureStart } from 'src/shared/types'
-import type { DeepReadonly } from 'utility-types'
 import { DEFAULT_POPOVER_PROPS, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
 import { ExposureTimeInput } from './ExposureTimeInput'

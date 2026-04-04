@@ -680,7 +680,7 @@
 
     "mri": ["mri@1.2.0", "", {}, "sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA=="],
 
-    "nebulosa": ["nebulosa@github:tiagohm/nebulosa.ts#b9450a9", { "optionalDependencies": { "@typescript/native-preview": "latest" }, "peerDependencies": { "@types/bun": "latest", "fast-xml-parser": "latest", "typescript": "beta" } }, "tiagohm-nebulosa.ts-b9450a9", "sha512-gy4mrt4qUc/QcXWbgATG5p22FBqetmc4lTYvy61mccLlTkRmuZ1UjjUqJJP+4VV9pBIm7U7bGUDtuj7KGSwS/g=="],
+    "nebulosa": ["nebulosa@github:tiagohm/nebulosa.ts#d02555d", { "optionalDependencies": { "@typescript/native-preview": "latest" }, "peerDependencies": { "@types/bun": "latest", "fast-xml-parser": "latest", "typescript": "beta" } }, "tiagohm-nebulosa.ts-d02555d", "sha512-NM13BxvFRJtbPqIUycqL/Huy9Yymisb1nuwjkUFM4v6SX5CLcCtJM1wduNq/W4uBsdQ0jiJs2h9KCuPz9YGjhA=="],
 
     "node-addon-api": ["node-addon-api@7.1.1", "", {}, "sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ=="],
 

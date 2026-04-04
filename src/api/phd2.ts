@@ -2,6 +2,7 @@ import { GuiderClient } from 'nebulosa/src/guider.client'
 import type { CameraManager, GuideOutputManager } from 'nebulosa/src/indi.manager'
 import { type PHD2AppState, PHD2Client, type PHD2Command, type PHD2Error, type PHD2Events } from 'nebulosa/src/phd2'
 import { DEFAULT_PHD2_DITHER, DEFAULT_PHD2_EVENT, type PHD2Connect, type PHD2Dither, type PHD2Event, type PHD2State, type PHD2Status } from 'src/shared/types'
+import { exposureTimeInSeconds } from 'src/shared/util'
 import { type Endpoints, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
@@ -119,6 +120,10 @@ export class PHD2Handler {
 		return this.event.state === 'GUIDING'
 	}
 
+	get isLooping() {
+		return this.event.state === 'LOOPING'
+	}
+
 	sendEvent(event: PHD2Event) {
 		this.wsm.send('phd2', event)
 	}
@@ -162,7 +167,6 @@ export class PHD2Handler {
 
 					const { capture } = req
 
-					cameraManager.enableBlob(camera)
 					capture.width && capture.height && cameraManager.frame(camera, capture.x, capture.y, capture.width, capture.height)
 					cameraManager.frameType(camera, capture.frameType)
 					if (capture.frameFormat) cameraManager.frameFormat(camera, capture.frameFormat)
@@ -171,6 +175,7 @@ export class PHD2Handler {
 					cameraManager.offset(camera, capture.offset)
 					cameraManager.transferFormat(camera, capture.transferFormat)
 					cameraManager.compression(camera, capture.compressed)
+					client.setExposure(exposureTimeInSeconds(capture.exposureTime, capture.exposureTimeUnit))
 
 					Object.assign(this.settings, req.dither)
 					this.clear()
@@ -207,6 +212,26 @@ export class PHD2Handler {
 		return await this.settling.promise
 	}
 
+	loop() {
+		this.client?.loop()
+	}
+
+	findStar() {
+		this.client?.findStar()
+	}
+
+	start() {
+		this.client?.guide(false, this.settings.settle)
+	}
+
+	stop() {
+		this.client?.stopCapture()
+	}
+
+	calibrate() {
+		this.client?.guide(true, this.settings.settle)
+	}
+
 	disconnect() {
 		if (this.client) {
 			this.client instanceof PHD2Client && this.client.close()
@@ -216,7 +241,7 @@ export class PHD2Handler {
 
 	async status() {
 		const profile = this.client instanceof GuiderClient ? undefined : (await this.client?.getProfile())?.name
-		return { connected: this.isConnected, running: this.isRunning, profile } satisfies PHD2Status
+		return { connected: this.isConnected, looping: this.isLooping, running: this.isRunning, profile } satisfies PHD2Status
 	}
 
 	clear() {
@@ -286,5 +311,10 @@ export function phd2(phd2Handler: PHD2Handler, cameraManager: CameraManager, gui
 		'/phd2/status': { GET: async () => response(await phd2Handler.status()) },
 		'/phd2/event': { GET: () => response(phd2Handler.event) },
 		'/phd2/clear': { POST: () => response(phd2Handler.clear()) },
+		'/phd2/start': { POST: () => response(phd2Handler.start()) },
+		'/phd2/stop': { POST: () => response(phd2Handler.stop()) },
+		'/phd2/loop': { POST: () => response(phd2Handler.loop()) },
+		'/phd2/findstar': { POST: () => response(phd2Handler.findStar()) },
+		'/phd2/calibrate': { POST: () => response(phd2Handler.calibrate()) },
 	}
 }

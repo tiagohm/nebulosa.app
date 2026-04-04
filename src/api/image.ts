@@ -4,7 +4,7 @@ import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, numericKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits.util'
 import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/image'
 import { adf, histogram, sigmaClip } from 'nebulosa/src/image.computation'
-import { blur, brightness, calibrate, contrast, debayer, gamma, gaussianBlur, horizontalFlip, invert, mean, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
+import { blur, brightness, calibrate, contrast, debayer, FFTWorkspace, fft, gamma, gaussianBlur, horizontalFlip, invert, mean, saturation, scnr, sharpen, stf, verticalFlip } from 'nebulosa/src/image.transformation'
 import type { AdaptiveDisplayFunctionOptions, Image } from 'nebulosa/src/image.types'
 import type { Camera } from 'nebulosa/src/indi.device'
 import { fileHandleSink } from 'nebulosa/src/io'
@@ -17,7 +17,7 @@ import { basename, join } from 'path'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
-import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateInterpolation, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
+import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateInterpolation, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
 import { DEFAULT_HEADERS, type Endpoints, INTERNAL_SERVER_ERROR_RESPONSE, response } from './http'
 import type { NotificationHandler } from './notification'
@@ -30,7 +30,7 @@ export interface BufferedImageItem {
 
 export interface TransformedImageItem {
 	readonly buffered: BufferedImageItem
-	readonly image: Image
+	readonly image: Image & { fftWorkspace?: FFTWorkspace }
 	readonly transformation: ImageTransformation | false
 	readonly hash: string
 }
@@ -120,7 +120,7 @@ export class ImageProcessor {
 		return item
 	}
 
-	private async applyTransformation(image: Image, transformation: ImageTransformation | false) {
+	private async applyTransformation(image: TransformedImageItem['image'], transformation: ImageTransformation | false) {
 		if (transformation === false || !transformation.enabled) return image
 
 		if (transformation.debayer) image = debayer(image, !transformation.cfaPattern || transformation.cfaPattern === 'AUTO' ? undefined : transformation.cfaPattern) ?? image
@@ -131,6 +131,12 @@ export class ImageProcessor {
 		if (transformation.scnr.channel) {
 			const { channel, amount, method } = transformation.scnr
 			image = scnr(image, channel, amount, method)
+		}
+
+		if (transformation.fft.enabled) {
+			const { type, cutoff, weight } = transformation.fft
+			image.fftWorkspace ??= new FFTWorkspace(image.metadata.width, image.metadata.height)
+			image = fft(image, image.fftWorkspace, type, cutoff, weight)
 		}
 
 		const { stretch, adjustment, filter } = transformation
@@ -293,9 +299,10 @@ export class ImageProcessor {
 		const stretch = this.computeImageStretchHash(transformation.stretch)
 		const scnr = this.computeImageScnrHash(transformation.scnr)
 		const filter = this.computeImageFilterHash(transformation.filter)
+		const fft = this.computeImageFFTHash(transformation.fft)
 		const adjustment = this.computeImageAdjustmentHash(transformation.adjustment)
 		const calibration = this.computeImageCalibrationHash(transformation.calibration)
-		return `T:${debayer}:${cfaPattern}:${calibration}:${stretch}:${scnr}:${filter}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}`
+		return `T:${debayer}:${cfaPattern}:${calibration}:${stretch}:${scnr}:${filter}:${fft}:${adjustment}:${horizontalMirror}:${verticalMirror}:${invert}`
 	}
 
 	private computeImageStretchHash(stretch: ImageStretch) {
@@ -307,6 +314,11 @@ export class ImageProcessor {
 	private computeImageScnrHash(scnr: ImageScnr) {
 		const { channel = 'GREEN', amount, method } = scnr
 		return `${channel}:${amount}:${method}`
+	}
+
+	private computeImageFFTHash(fft: ImageFFT) {
+		const { enabled, type, cutoff, weight } = fft
+		return enabled ? `T:${type}:${cutoff}:${weight}` : 'F'
 	}
 
 	private computeImageFilterHash(filter: ImageFilter) {

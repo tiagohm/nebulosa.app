@@ -23,6 +23,7 @@ export interface PHD2State extends PHD2Status {
 const state = proxy<PHD2State>({
 	show: false,
 	connected: false,
+	looping: false,
 	running: false,
 	connection: {
 		...DEFAULT_PHD2_REMOTE_CONNECT,
@@ -44,11 +45,13 @@ export const PHD2Molecule = molecule(() => {
 
 			Object.assign(state.event, event)
 
+			state.looping = state.event.state === 'LOOPING'
 			state.running = state.event.state === 'GUIDING'
 		})
 
 		unsubscribers[1] = bus.subscribe('phd2:close', () => {
 			state.connected = false
+			state.looping = false
 			state.running = false
 			state.profile = undefined
 		})
@@ -116,6 +119,26 @@ export const PHD2Molecule = molecule(() => {
 		return Api.PHD2.clear()
 	}
 
+	function loop() {
+		return Api.PHD2.loop()
+	}
+
+	function findStar() {
+		return Api.PHD2.findStar()
+	}
+
+	function start() {
+		return Api.PHD2.start()
+	}
+
+	function stop() {
+		return Api.PHD2.stop()
+	}
+
+	function calibrate() {
+		return Api.PHD2.calibrate()
+	}
+
 	function show() {
 		bus.emit('homeMenu:toggle', false)
 		state.show = true
@@ -133,6 +156,11 @@ export const PHD2Molecule = molecule(() => {
 		updateCapture,
 		connect,
 		clear,
+		loop,
+		findStar,
+		start,
+		stop,
+		calibrate,
 		show,
 		hide,
 	} as const

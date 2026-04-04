@@ -11,7 +11,7 @@ import type { FitsHeader } from 'nebulosa/src/fits'
 import type { Point, Rect, Size } from 'nebulosa/src/geometry'
 import type { Hips2FitsOptions } from 'nebulosa/src/hips2fits'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
-import type { CfaPattern, ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SCNRProtectionMethod, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
+import type { CfaPattern, FFTFilterType, ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SCNRProtectionMethod, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
 // biome-ignore format: too long!
 import type { Camera, CameraTransferFormat, ClientInfo, ClientType, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Power, Rotator, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
 import type { PropertyState } from 'nebulosa/src/indi.types'
@@ -366,7 +366,7 @@ export interface Framing extends EquatorialCoordinate<string>, Size, Omit<Hips2F
 
 // Image
 
-export type ImageFilterType = 'sharpen' | 'mean' | 'blur' | 'gaussianBlur'
+export type ImageKernelFilterType = 'sharpen' | 'mean' | 'blur' | 'gaussianBlur'
 
 export interface ImageStretch extends Pick<SigmaClipOptions, 'centerMethod' | 'dispersionMethod' | 'sigmaLower' | 'sigmaUpper'> {
 	auto: boolean
@@ -404,7 +404,7 @@ export interface ImageAdjustment {
 
 export interface ImageFilter {
 	enabled: boolean
-	type: ImageFilterType
+	type: ImageKernelFilterType
 	readonly mean: {
 		size: number
 	}
@@ -432,6 +432,13 @@ export interface ImageCalibration {
 	readonly darkFlat: ImageCalibrationFile
 }
 
+export interface ImageFFT {
+	enabled: boolean
+	readonly type: FFTFilterType
+	readonly cutoff: number
+	readonly weight: number
+}
+
 export interface ImageTransformation {
 	enabled: boolean
 	debayer: boolean
@@ -447,6 +454,7 @@ export interface ImageTransformation {
 	adjustment: ImageAdjustment
 	filter: ImageFilter
 	calibration: ImageCalibration
+	fft: ImageFFT
 }
 
 export interface OpenImage {
@@ -951,6 +959,7 @@ export interface PHD2Dither {
 
 export interface PHD2Status {
 	connected: boolean
+	looping: boolean
 	running: boolean
 	profile?: string
 }
@@ -1136,6 +1145,13 @@ export const DEFAULT_IMAGE_CALIBRATION: ImageCalibration = {
 	},
 }
 
+export const DEFAULT_IMAGE_FFT: ImageFFT = {
+	enabled: false,
+	type: 'lowPass',
+	cutoff: 0.015,
+	weight: 0.5,
+}
+
 export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	enabled: true,
 	debayer: true,
@@ -1155,6 +1171,7 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 	adjustment: DEFAULT_IMAGE_ADJUSTMENT,
 	filter: DEFAULT_IMAGE_FILTER,
 	calibration: DEFAULT_IMAGE_CALIBRATION,
+	fft: DEFAULT_IMAGE_FFT,
 }
 
 export const DEFAULT_FOV_ITEM: FovItem = {

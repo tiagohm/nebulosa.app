@@ -27,7 +27,7 @@ const Body = memo(() => {
 	return (
 		<div className='mt-0 grid grid-cols-12 gap-2'>
 			<FilePickerInput className='col-span-full' id={`save-${save.viewer.storageKey}`} isReadOnly={false} mode='save' onValueChange={save.updatePath} placeholder='Path' size='md' value={path} />
-			<ImageFormatButtonGroup onValueChange={(value) => save.update('format', value)} value={format} />
+			<ImageFormatButtonGroup className='col-span-full' onValueChange={(value) => save.update('format', value)} value={format} />
 			<Checkbox className='col-span-full' isSelected={transformed} onValueChange={(value) => save.update('transformed', value)}>
 				Apply transformation
 			</Checkbox>

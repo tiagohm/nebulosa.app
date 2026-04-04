@@ -628,6 +628,26 @@ export namespace Api {
 		export function event() {
 			return json<PHD2Event>('/phd2/event', 'get')
 		}
+
+		export function start() {
+			return res('/phd2/start', 'post')
+		}
+
+		export function stop() {
+			return res('/phd2/stop', 'post')
+		}
+
+		export function findStar() {
+			return res('/phd2/findstar', 'post')
+		}
+
+		export function loop() {
+			return res('/phd2/loop', 'post')
+		}
+
+		export function calibrate() {
+			return res('/phd2/calibrate', 'post')
+		}
 	}
 }
 

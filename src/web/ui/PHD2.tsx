@@ -34,6 +34,7 @@ const Body = memo(() => {
 			<Connection />
 			<Settle />
 			<Dither />
+			<Buttons />
 			<Status />
 		</div>
 	)
@@ -112,6 +113,20 @@ const Dither = memo(() => {
 				RA only
 			</Checkbox>
 		</>
+	)
+})
+
+const Buttons = memo(() => {
+	const phd2 = useMolecule(PHD2Molecule)
+	const { connected, running, looping } = useSnapshot(phd2.state)
+
+	return (
+		<div className='col-span-full flex flex-row gap-2 items-center justify-center'>
+			<IconButton color='primary' icon={Icons.Reload} isDisabled={!connected || looping || running} onPointerUp={phd2.loop} />
+			<IconButton color='warning' icon={Icons.Star} isDisabled={!connected || !looping} onPointerUp={phd2.findStar} />
+			<IconButton color='success' icon={Icons.Play} isDisabled={!connected || running} onPointerUp={phd2.start} />
+			<IconButton color='danger' icon={Icons.Stop} isDisabled={!connected || (!running && !looping)} onPointerUp={phd2.stop} />
+		</div>
 	)
 })
 

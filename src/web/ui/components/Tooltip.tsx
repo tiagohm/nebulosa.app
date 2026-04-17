@@ -13,7 +13,7 @@ const ARROW_INSET = 12
 const tooltipStyles = tv({
 	slots: {
 		base: 'pointer-events-none fixed left-0 top-0 isolate z-10000001 select-none overflow-visible',
-		content: 'relative z-10 max-w-80 leading-inherit rounded-md bg-neutral-950 px-4 py-2 text-xs font-medium whitespace-pre-wrap text-neutral-100 shadow-lg shadow-black/40',
+		content: 'relative z-10 max-w-80 leading-inherit rounded-lg bg-neutral-950 px-4 py-2 text-xs font-medium whitespace-pre-wrap text-neutral-100 shadow-lg shadow-black/40',
 		arrow: 'absolute z-0 size-2.5 rotate-45 bg-neutral-950 shadow-sm shadow-black/30',
 	},
 })
@@ -298,7 +298,7 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 
 	return (
 		<>
-			<span className='inline-flex' onBlur={handleBlur} onFocus={handleFocus} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
+			<span className='w-fit' onBlur={handleBlur} onFocus={handleFocus} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
 				{children}
 			</span>
 			{visible && tooltipContainer

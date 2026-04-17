@@ -1,7 +1,7 @@
 import { HeroUIProvider, ToastProvider } from '@heroui/react'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import { Home } from '@/ui/Home'
+import { Demo } from 'src/web/ui/Demo'
 
 function start() {
 	const root = createRoot(document.getElementById('root')!)
@@ -20,7 +20,7 @@ function start() {
 					}}
 				/>
 				<main className='w-dvw h-dvh'>
-					<Home />
+					<Demo />
 				</main>
 			</HeroUIProvider>
 		</React.StrictMode>,

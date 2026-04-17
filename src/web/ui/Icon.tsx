@@ -19,7 +19,7 @@ export interface IconProps extends Partial<Omit<React.ComponentPropsWithoutRef<'
 const PathItem = (path: string) => <path d={path} />
 
 export function mdiIcon(...paths: string[]) {
-	return memo(({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => (
+	return memo(({ size = '1.25em', stroke = 1, color = 'currentColor', ...props }: IconProps) => (
 		<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' width={size} {...props}>
 			{paths.map(PathItem)}
 		</svg>
@@ -27,7 +27,7 @@ export function mdiIcon(...paths: string[]) {
 }
 
 export function lucideIcon(...paths: string[]) {
-	return memo(({ size = 18, stroke = 2, color = 'currentColor', ...props }: IconProps) => (
+	return memo(({ size = '1.25em', stroke = 2, color = 'currentColor', ...props }: IconProps) => (
 		<svg fill='none' height={size} stroke={color} strokeWidth={stroke} viewBox='0 0 24 24' width={size} {...props}>
 			{paths.map(PathItem)}
 		</svg>

@@ -36,6 +36,9 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 * Prefer clarity over abstraction.
 * Deliver complete, production-ready code (no TODOs, no placeholders).
 * Do not break existing behavior unless explicitly required.
+* Never add or expand HeroUI usage. Treat HeroUI as legacy code scheduled for removal; build new UI with React, Tailwind CSS, Tailwind Variants, and existing non-HeroUI primitives instead.
+* Do not add accessibility or ARIA work in this project unless explicitly requested. This is a personal project, so accessibility-specific enhancements are out of scope by default.
+* Always add single-line comments to methods, functions, and relevant lines of code.
 
 ## Repo Discovery
 
@@ -168,9 +171,10 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
   - supported variants
   - supported sizes
   - controlled vs uncontrolled behavior
-  - accessibility requirements
+  - whether accessibility/ARIA work is intentionally out of scope
   - whether it accepts `ref`
 * Start from the correct native element. Only add wrappers if necessary for layout, icons, loading indicators, descriptions, validation text, or slot composition.
+* Do not add ARIA attributes, accessibility-only wrappers, or extra accessibility abstractions unless explicitly requested.
 * Use a `tv` definition for the component's base styles and variants. Tailwind Variants is designed for base styles, variants, slots, compound variants, and composition/extension.
 * Use VariantProps<typeof ...> for variant typing. Keep custom props minimal and explicit.
 * `base` should contain only what is always true for the component.
@@ -246,7 +250,7 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 - Follow Biome for both formatting and linting. Do not add Prettier or ESLint.
 - Respect Biome's current guardrails in new code: no import cycles, no floating promises, throw only `Error` values, and prefer `performance.now()` over `Date.now()` for durations.
 - Keep modules focused and ownership clear.
-- Add comments only when intent is not obvious from the code itself.
+- Always add single-line comments to methods, functions, and relevant lines of code.
 - Validate with the smallest relevant check before finishing: `bun run lint`, `bun run tsc`, the narrowest runtime check that exercises the changed path, and `bun run compile` when touching Bun runtime, env, or packaging code.
 - Preserve Bun-first workflows in every change.
 

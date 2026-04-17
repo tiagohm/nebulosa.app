@@ -12,6 +12,21 @@ export function tw(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs))
 }
 
+export function assignRef<T>(ref: React.Ref<T> | undefined, value: T) {
+	if (typeof ref === 'function') {
+		ref(value)
+	} else if (ref) {
+		ref.current = value
+	}
+}
+
+// Clamps a number into the inclusive [min, max] range.
+export function clamp(value: number, min: number, max: number) {
+	if (!(value >= min)) return min // handles NaN value
+	if (value > max) return max
+	return value
+}
+
 // Stops the propagation of an event to parent elements
 export function stopPropagation(event: Event | React.BaseSyntheticEvent<Event>) {
 	event.stopPropagation()

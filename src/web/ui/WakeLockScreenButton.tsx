@@ -1,6 +1,6 @@
 import { Tooltip } from '@heroui/react'
 import { memo } from 'react'
-import { useWakeLock } from '@/hooks/wake-lock'
+import { useWakeLock } from 'src/web/hooks/wakelock'
 import { isWakeLockSupported } from '@/shared/util'
 import { Icons } from './Icon'
 import { IconButton, type IconButtonProps } from './IconButton'

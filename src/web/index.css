@@ -79,6 +79,21 @@ div:has(div[data-slot="base"][data-open="true"][role="dialog"]) {
 	image-rendering: pixelated;
 }
 
+/* Animations */
+
+@keyframes spin {
+	0% {
+		transform: rotate(0deg);
+	}
+	100% {
+		transform: rotate(360deg);
+	}
+}
+
+.spin {
+	animation: spin 0.5s linear infinite;
+}
+
 /* Scrollbar */
 
 .no-scrollbar::-webkit-scrollbar {

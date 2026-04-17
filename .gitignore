@@ -8,3 +8,4 @@ dist
 *.exe
 *.pem
 *.out
+.codex

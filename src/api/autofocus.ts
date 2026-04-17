@@ -168,11 +168,13 @@ export class AutoFocusTask {
 
 	private makeChart(regression?: Regression) {
 		if (!regression || regression.xPoints.length < 3) return undefined
+		const { minimum, maximum } = this.autoFocus
+		if (minimum === undefined || maximum === undefined) return undefined
 
 		const points = new Array<Point>(10)
-		const stepSize = (this.autoFocus.maximum.x - this.autoFocus.minimum.x) / (points.length - 1)
+		const stepSize = (maximum.x - minimum.x) / (points.length - 1)
 
-		for (let i = 0, x = this.autoFocus.minimum.x; i < points.length; i++, x += stepSize) {
+		for (let i = 0, x = minimum.x; i < points.length; i++, x += stepSize) {
 			points[i] = { x, y: regression.predict(x) }
 		}
 

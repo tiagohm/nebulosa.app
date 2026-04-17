@@ -6,6 +6,7 @@ import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ClientTypeSelect } from './ClientTypeSelect'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { PopoverButton } from './PopoverButton'
@@ -46,7 +47,7 @@ const Footer = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
 	const { name, host, port } = useSnapshot(connection.state.edited, { sync: true })
 
-	return <TextButton color='success' isDisabled={!name || !host || !port} label='Save' onPointerUp={connection.save} startContent={<Icons.Check />} />
+	return <Button color='success' disabled={!name || !host || !port} label='Save' onPointerUp={connection.save} startContent={<Icons.Check />} />
 })
 
 const AlpacaDeviceServerItem = (item: AlpacaDeviceServer) => (

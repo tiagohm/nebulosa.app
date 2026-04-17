@@ -6,15 +6,18 @@
 		"strings": "on"
 	},
 	"explorer.excludeGitIgnore": true,
-	"typescript.format.semicolons": "remove",
-	"typescript.preferences.quoteStyle": "single",
-	"typescript.tsdk": "node_modules/typescript/lib",
-	"typescript.experimental.useTsgo": true,
+	"js/ts.format.semicolons": "remove",
+	"js/ts.preferences.quoteStyle": "single",
+	"js/ts.tsdk.path": "node_modules/typescript/lib",
+	"js/ts.experimental.useTsgo": true,
 	"html.format.indentInnerHtml": true,
 	"html.format.wrapAttributes": "force-aligned",
 	"html.format.wrapLineLength": 300,
 	"css.lint.unknownAtRules": "ignore",
 	"json.format.keepLines": true,
+	"tailwindCSS.classAttributes": ["class", "className", "classNames"],
+	"tailwindCSS.rootFontSize": 13,
+	"tailwindCSS.experimental.classRegex": [["tv([^)]*)", "['`]([^'`]*).*?['`]"]],
 	"editor.codeActionsOnSave": {
 		"source.removeUnusedImports": "explicit",
 		"source.action.useSortedAttributes.biome": "explicit",
@@ -43,7 +46,5 @@
 	},
 	"[html]": {
 		"editor.defaultFormatter": "vscode.html-language-features"
-	},
-	"tailwindCSS.classAttributes": ["class", "className", "classNames"],
-	"tailwindCSS.rootFontSize": 13
+	}
 }

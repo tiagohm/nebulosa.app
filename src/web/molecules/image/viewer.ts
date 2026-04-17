@@ -233,7 +233,7 @@ export const ImageViewerMolecule = molecule(() => {
 	}
 
 	function pointMountHere(mount: Mount, coordinate: EquatorialCoordinate) {
-		return Api.Mounts.goTo(mount, { type: 'J2000', ...coordinate })
+		return Api.Mounts.goTo(mount, { type: 'J2000', J2000: { x: coordinate.rightAscension, y: coordinate.declination } })
 	}
 
 	function frameAt(coordinate: EquatorialCoordinate) {

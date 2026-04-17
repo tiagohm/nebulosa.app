@@ -16,21 +16,20 @@ export interface IconProps extends Partial<Omit<React.ComponentPropsWithoutRef<'
 	readonly stroke?: string | number
 }
 
-export function mdiIcon(path: string, ...paths: string[]) {
+const PathItem = (path: string) => <path d={path} />
+
+export function mdiIcon(...paths: string[]) {
 	return memo(({ size = 18, stroke = 1, color = 'currentColor', ...props }: IconProps) => (
 		<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' width={size} {...props}>
-			<path d={path} />
-			{paths[0] && <path d={paths[0]} />}
+			{paths.map(PathItem)}
 		</svg>
 	))
 }
 
-export function lucideIcon(path: string, ...paths: string[]) {
+export function lucideIcon(...paths: string[]) {
 	return memo(({ size = 18, stroke = 2, color = 'currentColor', ...props }: IconProps) => (
 		<svg fill='none' height={size} stroke={color} strokeWidth={stroke} viewBox='0 0 24 24' width={size} {...props}>
-			<path d={path} />
-			{paths[0] && <path d={paths[0]} />}
-			{paths[1] && <path d={paths[1]} />}
+			{paths.map(PathItem)}
 		</svg>
 	))
 }
@@ -106,6 +105,7 @@ export namespace Icons {
 	export const Laptop = mdiIcon('M4,6H20V16H4M20,18A2,2 0 0,0 22,16V6C22,4.89 21.1,4 20,4H4C2.89,4 2,4.89 2,6V16A2,2 0 0,0 4,18H0V20H24V18H20Z')
 	export const Leaf = mdiIcon('M17,8C8,10 5.9,16.17 3.82,21.34L5.71,22L6.66,19.7C7.14,19.87 7.64,20 8,20C19,20 22,3 22,3C21,5 14,5.25 9,6.25C4,7.25 2,11.5 2,13.5C2,15.5 3.75,17.25 3.75,17.25C7,8 17,8 17,8Z')
 	export const Link = mdiIcon('M3.9,12C3.9,10.29 5.29,8.9 7,8.9H11V7H7A5,5 0 0,0 2,12A5,5 0 0,0 7,17H11V15.1H7C5.29,15.1 3.9,13.71 3.9,12M8,13H16V11H8V13M17,7H13V8.9H17C18.71,8.9 20.1,10.29 20.1,12C20.1,13.71 18.71,15.1 17,15.1H13V17H17A5,5 0 0,0 22,12A5,5 0 0,0 17,7Z')
+	export const Loading = mdiIcon('M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z')
 	export const Lock = mdiIcon('M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z')
 	export const LockOpen = mdiIcon('M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6C4.89,22 4,21.1 4,20V10A2,2 0 0,1 6,8H15V6A3,3 0 0,0 12,3A3,3 0 0,0 9,6H7A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,17A2,2 0 0,0 14,15A2,2 0 0,0 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17Z')
 	export const MapMarker = mdiIcon('M12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5M12,2A7,7 0 0,0 5,9C5,14.25 12,22 12,22C12,22 19,14.25 19,9A7,7 0 0,0 12,2Z')

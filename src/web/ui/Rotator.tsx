@@ -1,10 +1,11 @@
-import { Checkbox, Chip, NumberInput, Tooltip } from '@heroui/react'
+import { Chip, NumberInput, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { RotatorMolecule } from '@/molecules/indi/rotator'
 import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { ConnectButton } from './ConnectButton'
+import { Checkbox } from './components/Checkbox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
@@ -98,9 +99,5 @@ const Options = memo(() => {
 	const rotator = useMolecule(RotatorMolecule)
 	const { connected, canReverse, reversed } = useSnapshot(rotator.state.rotator)
 
-	return (
-		<Checkbox className='col-span-full mt-1' isDisabled={!connected || !canReverse} isSelected={reversed} onValueChange={rotator.reverse}>
-			Reversed
-		</Checkbox>
-	)
+	return <Checkbox className='col-span-full mt-1' disabled={!connected || !canReverse} label='Reversed' onValueChange={rotator.reverse} value={reversed} />
 })

@@ -1,4 +1,4 @@
-import { Checkbox, Chip, Input, NumberInput, Radio, RadioGroup } from '@heroui/react'
+import { Chip, Input, NumberInput, Radio, RadioGroup } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -6,6 +6,7 @@ import { PHD2Molecule } from '@/molecules/phd2'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { ConnectButton } from './ConnectButton'
+import { Checkbox } from './components/Checkbox'
 import { CameraDropdown, GuideOutputDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -109,9 +110,7 @@ const Dither = memo(() => {
 	return (
 		<>
 			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={connected} label='Dither pixels (px)' maxValue={25} minValue={1} onValueChange={(value) => phd2.updateDither('amount', value)} placeholder='5' size='sm' step={0.1} value={amount} />
-			<Checkbox className='col-span-3' isDisabled={connected} isSelected={raOnly} onValueChange={(value) => phd2.updateDither('raOnly', value)}>
-				RA only
-			</Checkbox>
+			<Checkbox className='col-span-3' disabled={connected} label='RA only' onValueChange={(value) => phd2.updateDither('raOnly', value)} value={raOnly} />
 		</>
 	)
 })

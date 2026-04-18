@@ -1,10 +1,11 @@
-import { Checkbox, NumberInput, Slider } from '@heroui/react'
+import { NumberInput, Slider } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
+import { Checkbox } from './components/Checkbox'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { SigmaClipCenterMethodSelect } from './SigmaClipCenterMethodSelect'
@@ -72,9 +73,7 @@ const SigmaClip = memo(() => {
 
 	return (
 		<>
-			<Checkbox className='col-span-6' isSelected={sigmaClip} onValueChange={(value) => stretch.update('sigmaClip', value)}>
-				Sigma Clip
-			</Checkbox>
+			<Checkbox className='col-span-6' label='Sigma Clip' onValueChange={(value) => stretch.update('sigmaClip', value)} value={sigmaClip} />
 			<NumberInput className='col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!sigmaClip} label='Lower' maxValue={10} minValue={0.1} onValueChange={(value) => stretch.update('sigmaLower', value)} size='sm' step={0.1} value={sigmaLower} />
 			<NumberInput className='col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!sigmaClip} label='Upper' maxValue={10} minValue={0.1} onValueChange={(value) => stretch.update('sigmaUpper', value)} size='sm' step={0.1} value={sigmaUpper} />
 			<SigmaClipCenterMethodSelect className='col-span-6' isDisabled={!sigmaClip} onValueChange={(value) => stretch.update('centerMethod', value)} value={centerMethod} />

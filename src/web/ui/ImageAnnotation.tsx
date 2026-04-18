@@ -1,10 +1,11 @@
-import { Checkbox, NumberInput } from '@heroui/react'
+import { NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
+import { Checkbox } from './components/Checkbox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
@@ -34,16 +35,10 @@ const StarsAndDsos = memo(() => {
 
 	return (
 		<>
-			<Checkbox className='col-span-6' isSelected={stars} onValueChange={(value) => annotation.update('stars', value)}>
-				Stars
-			</Checkbox>
-			<Checkbox className='col-span-6' isSelected={dsos} onValueChange={(value) => annotation.update('dsos', value)}>
-				DSOs
-			</Checkbox>
+			<Checkbox className='col-span-6' label='Stars' onValueChange={(value) => annotation.update('stars', value)} value={stars} />
+			<Checkbox className='col-span-6' label='DSOs' onValueChange={(value) => annotation.update('dsos', value)} value={dsos} />
 			<div className='col-span-full flex flex-row items-center gap-2'>
-				<Checkbox isDisabled={!stars && !dsos} isSelected={useSimbad} onValueChange={(value) => annotation.update('useSimbad', value)}>
-					SIMBAD Astronomical Database
-				</Checkbox>
+				<Checkbox disabled={!stars && !dsos} label='SIMBAD Astronomical Database' onValueChange={(value) => annotation.update('useSimbad', value)} value={useSimbad} />
 				<SimbadLink />
 			</div>
 		</>
@@ -62,13 +57,9 @@ const MinorPlanets = memo(() => {
 
 	return (
 		<>
-			<Checkbox className='col-span-full' isSelected={minorPlanets} onValueChange={(value) => annotation.update('minorPlanets', value)}>
-				Minor Planets
-			</Checkbox>
+			<Checkbox className='col-span-full' label='Minor Planets' onValueChange={(value) => annotation.update('minorPlanets', value)} value={minorPlanets} />
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!minorPlanets} label='Magnitude Limit' maxValue={30} minValue={1} onValueChange={(value) => annotation.update('minorPlanetsMagnitudeLimit', value)} size='sm' value={minorPlanetsMagnitudeLimit} />
-			<Checkbox className='col-span-7' isDisabled={!minorPlanets || minorPlanetsMagnitudeLimit >= 30} isSelected={includeMinorPlanetsWithoutMagnitude} onValueChange={(value) => annotation.update('includeMinorPlanetsWithoutMagnitude', value)}>
-				Include without magnitude
-			</Checkbox>
+			<Checkbox className='col-span-7' disabled={!minorPlanets || minorPlanetsMagnitudeLimit >= 30} label='Include without magnitude' onValueChange={(value) => annotation.update('includeMinorPlanetsWithoutMagnitude', value)} value={includeMinorPlanetsWithoutMagnitude} />
 		</>
 	)
 })

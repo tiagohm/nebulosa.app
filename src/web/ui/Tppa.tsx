@@ -1,4 +1,4 @@
-import { Checkbox, Chip, NumberInput } from '@heroui/react'
+import { Chip, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import { memo } from 'react'
@@ -7,6 +7,7 @@ import { TppaMolecule } from '@/molecules/tppa'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { Button } from './components/Button'
+import { Checkbox } from './components/Checkbox'
 import { CameraDropdown, MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
@@ -93,9 +94,7 @@ const Inputs = memo(() => {
 			<TppaDirectionSelect className='col-span-3' isDisabled={running} onValueChange={(value) => tppa.update('direction', value)} value={direction} />
 			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Max attempts' maxValue={30} minValue={3} onValueChange={(value) => tppa.update('maxAttempts', value)} size='sm' value={maxAttempts} />
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Delay before capture (s)' maxValue={120} minValue={0} onValueChange={(value) => tppa.update('delayBeforeCapture', value)} size='sm' value={delayBeforeCapture} />
-			<Checkbox className='col-span-full' isDisabled={running} isSelected={compensateRefraction} onValueChange={(value) => tppa.update('compensateRefraction', value)}>
-				Compensate refraction
-			</Checkbox>
+			<Checkbox className='col-span-full' disabled={running} label='Compensate refraction' onValueChange={(value) => tppa.update('compensateRefraction', value)} value={compensateRefraction} />
 		</>
 	)
 })

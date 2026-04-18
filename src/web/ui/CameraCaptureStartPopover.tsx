@@ -1,9 +1,10 @@
-import { Checkbox, NumberInput, Popover, PopoverContent, PopoverTrigger } from '@heroui/react'
+import { NumberInput, Popover, PopoverContent, PopoverTrigger } from '@heroui/react'
 import type { Camera } from 'nebulosa/src/indi.device'
 import type { DeepReadonly } from 'nebulosa/src/types'
 import type { CameraCaptureStart } from 'src/shared/types'
 import { DEFAULT_POPOVER_PROPS, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
+import { Checkbox } from './components/Checkbox'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameFormatSelect } from './FrameFormatSelect'
 import { Icons } from './Icon'
@@ -57,9 +58,7 @@ export function CameraCaptureStartPopover({ mode, camera, color, isDisabled, val
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Gain' maxValue={camera.gain.max} minValue={camera.gain.min} onValueChange={(value) => onValueChange('gain', value)} size='sm' value={gain} />
 					<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Offset' maxValue={camera.offset.max} minValue={camera.offset.min} onValueChange={(value) => onValueChange('offset', value)} size='sm' value={offset} />
 					<CameraTransferFormatSelect className='col-span-6' onValueChange={(value) => onValueChange('transferFormat', value)} value={transferFormat} />
-					<Checkbox className='col-span-6' isSelected={compressed} onValueChange={(value) => onValueChange('compressed', value)}>
-						Compressed
-					</Checkbox>
+					<Checkbox className='col-span-6' label='Compressed' onValueChange={(value) => onValueChange('compressed', value)} value={compressed} />
 				</div>
 			</PopoverContent>
 		</Popover>

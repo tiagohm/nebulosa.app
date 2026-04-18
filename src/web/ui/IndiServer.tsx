@@ -1,10 +1,11 @@
-import { Badge, Checkbox, NumberInput } from '@heroui/react'
+import { Badge, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiServerMolecule } from '@/molecules/indi/server'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
+import { Checkbox } from './components/Checkbox'
 import { Icons } from './Icon'
 import { IndiDriverListbox } from './IndiDriverListbox'
 import { Modal } from './Modal'
@@ -38,9 +39,7 @@ const Inputs = memo(() => {
 			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} size='sm' value={port} />
 			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Repeat' maxValue={10} minValue={1} onValueChange={(value) => indi.update('repeat', value)} size='sm' value={repeat} />
 			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Verbose' maxValue={3} minValue={0} onValueChange={(value) => indi.update('verbose', value)} size='sm' value={verbose} />
-			<Checkbox className='col-span-full' isSelected={showAll} onValueChange={(value) => (indi.state.showAll = value)}>
-				Show all drivers
-			</Checkbox>
+			<Checkbox className='col-span-full' label='Show all drivers' onValueChange={(value) => (indi.state.showAll = value)} value={showAll} />
 		</>
 	)
 })

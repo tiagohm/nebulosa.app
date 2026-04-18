@@ -1,9 +1,9 @@
-import { Checkbox } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageSaveMolecule } from '@/molecules/image/save'
 import { Button } from './components/Button'
+import { Checkbox } from './components/Checkbox'
 import { FilePickerInput } from './FilePickerInput'
 import { Icons } from './Icon'
 import { ImageFormatButtonGroup } from './ImageFormatButtonGroup'
@@ -28,9 +28,7 @@ const Body = memo(() => {
 		<div className='mt-0 grid grid-cols-12 gap-2'>
 			<FilePickerInput className='col-span-full' id={`save-${save.viewer.storageKey}`} isReadOnly={false} mode='save' onValueChange={save.updatePath} placeholder='Path' size='md' value={path} />
 			<ImageFormatButtonGroup className='col-span-full' onValueChange={(value) => save.update('format', value)} value={format} />
-			<Checkbox className='col-span-full' isSelected={transformed} onValueChange={(value) => save.update('transformed', value)}>
-				Apply transformation
-			</Checkbox>
+			<Checkbox className='col-span-full' label='Apply transformation' onValueChange={(value) => save.update('transformed', value)} value={transformed} />
 		</div>
 	)
 })

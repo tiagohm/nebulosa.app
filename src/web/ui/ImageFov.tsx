@@ -1,4 +1,4 @@
-import { Checkbox, Listbox, ListboxItem, NumberInput, Tooltip } from '@heroui/react'
+import { Listbox, ListboxItem, NumberInput, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import type { FovItem } from 'src/shared/types'
@@ -9,6 +9,7 @@ import { tw } from '@/shared/util'
 import cameras from '../../../data/cameras.json'
 import telescopes from '../../../data/telescopes.json'
 import { AstroBinEquipmentPopover } from './AstroBinEquipmentPopover'
+import { Checkbox } from './components/Checkbox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
@@ -118,7 +119,7 @@ const List = memo(() => {
 					<ListboxItem className={tw({ 'bg-green-600/10': index === selected })} key={item.id}>
 						<div className='flex flex-row gap-1 items-center justify-between ps-3 border-l-2' style={{ borderColor: item.color }}>
 							<div className='flex flex-col items-center justify-center'>
-								<Checkbox isSelected={item.visible} onValueChange={(selected) => fov.update('visible', selected, item.id)} />
+								<Checkbox onValueChange={(selected) => fov.update('visible', selected, item.id)} value={item.visible} />
 							</div>
 							<ComputedFovItem {...item} />
 						</div>

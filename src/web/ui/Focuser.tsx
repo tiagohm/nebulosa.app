@@ -1,10 +1,11 @@
-import { Checkbox, Chip, NumberInput, Tooltip } from '@heroui/react'
+import { Chip, NumberInput, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FocuserMolecule } from '@/molecules/indi/focuser'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConnectButton } from './ConnectButton'
+import { Checkbox } from './components/Checkbox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
@@ -123,9 +124,7 @@ const Options = memo(() => {
 
 	return (
 		<div className='col-span-full flex flex-row items-center justify-between gap-2'>
-			<Checkbox className='col-span-full mt-1' isDisabled={!connected || !canReverse} isSelected={reversed} onValueChange={focuser.reverse}>
-				Reversed
-			</Checkbox>
+			<Checkbox className='col-span-full mt-1' disabled={!connected || !canReverse} label='Reversed' onValueChange={focuser.reverse} value={reversed} />
 		</div>
 	)
 })

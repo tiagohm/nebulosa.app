@@ -1,4 +1,4 @@
-import { Checkbox, NumberInput } from '@heroui/react'
+import { NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -6,6 +6,7 @@ import { ImageSettingsMolecule } from '@/molecules/image/settings'
 import { CfaPatternSelect } from './CfaPatternSelect'
 import { ChrominanceSubsamplingSelect } from './ChrominanceSubsamplingSelect'
 import { Button } from './components/Button'
+import { Checkbox } from './components/Checkbox'
 import { Icons } from './Icon'
 import { ImageFormatSelect } from './ImageFormatSelect'
 import { Modal } from './Modal'
@@ -30,9 +31,7 @@ const Body = memo(() => {
 			<Activity mode={transformation.format.type === 'jpeg' ? 'visible' : 'hidden'}>
 				<JpegFormat />
 			</Activity>
-			<Checkbox className='col-span-full' isSelected={pixelated} onValueChange={(value) => settings.update('pixelated', value)}>
-				Pixelated
-			</Checkbox>
+			<Checkbox className='col-span-full' label='Pixelated' onValueChange={(value) => settings.update('pixelated', value)} value={pixelated} />
 			<CfaPatternSelect className='col-span-full' onValueChange={(value) => settings.updateTransformation('cfaPattern', value)} value={transformation.cfaPattern} />
 		</div>
 	)

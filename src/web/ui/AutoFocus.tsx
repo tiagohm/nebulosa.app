@@ -1,4 +1,4 @@
-import { Checkbox, Chip, NumberInput } from '@heroui/react'
+import { Chip, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -7,6 +7,7 @@ import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants
 import { AutoFocusFittingModeSelect } from './AutoFocusFittingModeSelect'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { Button } from './components/Button'
+import { Checkbox } from './components/Checkbox'
 import { CameraDropdown, FocuserDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
@@ -72,9 +73,7 @@ const Inputs = memo(() => {
 			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Offset steps' maxValue={1000} minValue={0} onValueChange={(value) => autoFocus.update('initialOffsetSteps', value)} size='sm' value={initialOffsetSteps} />
 			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!focuser?.connected} label='Step size' maxValue={focuser?.position.max} minValue={focuser?.position.min} onValueChange={(value) => autoFocus.update('stepSize', value)} size='sm' value={stepSize} />
 			<NumberInput className='col-span-5' formatOptions={DECIMAL_NUMBER_FORMAT} label='RMSD threshold' maxValue={1} minValue={0} onValueChange={(value) => autoFocus.update('rmsdThreshold', value)} size='sm' step={0.01} value={rmsdThreshold} />
-			<Checkbox className='col-span-full' isSelected={reversed} onValueChange={(value) => autoFocus.update('reversed', value)}>
-				Reversed
-			</Checkbox>
+			<Checkbox className='col-span-full' label='Reversed' onValueChange={(value) => autoFocus.update('reversed', value)} value={reversed} />
 		</>
 	)
 })

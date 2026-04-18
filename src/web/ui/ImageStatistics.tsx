@@ -1,8 +1,9 @@
-import { Checkbox, Input } from '@heroui/react'
+import { Input } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
+import { Checkbox } from './components/Checkbox'
 import { Histogram } from './Histogram'
 import { ImageChannelButtonGroup } from './ImageChannelButtonGroup'
 import { Modal } from './Modal'
@@ -39,9 +40,7 @@ const Options = memo(() => {
 
 	return (
 		<>
-			<Checkbox className='col-span-full' isSelected={transformed} onValueChange={(value) => statistics.update('transformed', value)}>
-				Transformed
-			</Checkbox>
+			<Checkbox className='col-span-full' label='Transformed' onValueChange={(value) => statistics.update('transformed', value)} value={transformed} />
 			<Activity mode={histogram.length === 3 ? 'visible' : 'hidden'}>
 				<ImageChannelButtonGroup className='col-span-full' onValueChange={(value) => (statistics.state.selected = value === 'GREEN' ? 1 : value === 'BLUE' ? 2 : 0)} value={selected === 0 ? 'RED' : selected === 1 ? 'GREEN' : 'BLUE'} />
 			</Activity>

@@ -1,10 +1,11 @@
-import { Checkbox, NumberInput } from '@heroui/react'
+import { NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
 import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
+import { Checkbox } from './components/Checkbox'
 import { Icons } from './Icon'
 import { ImageChannelOrGrayInput } from './ImageChannelOrGrayInput'
 import { Modal } from './Modal'
@@ -35,11 +36,7 @@ const Enabled = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
 	const { enabled } = useSnapshot(adjustment.state.adjustment)
 
-	return (
-		<Checkbox className='col-span-full' isSelected={enabled} onValueChange={(value) => (adjustment.state.adjustment.enabled = value)}>
-			Enabled
-		</Checkbox>
-	)
+	return <Checkbox className='col-span-full' label='Enabled' onValueChange={(value) => (adjustment.state.adjustment.enabled = value)} value={enabled} />
 })
 
 const Brightness = memo(() => {

@@ -1,4 +1,4 @@
-import { Checkbox, NumberInput, Switch, Tooltip } from '@heroui/react'
+import { NumberInput, Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -9,6 +9,7 @@ import { AutoSubFolderModeButton } from './AutoSubFolderButton'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
 import { ConnectButton } from './ConnectButton'
 import { Button } from './components/Button'
+import { Checkbox } from './components/Checkbox'
 import { FocuserDropdown, MountDropdown, RotatorDropdown, WheelDropdown } from './DeviceDropdown'
 import { ExposureModeButtonGroup } from './ExposureModeButtonGroup'
 import { ExposureTimeInput } from './ExposureTimeInput'
@@ -130,17 +131,13 @@ const OptionsBody = memo(() => {
 	return (
 		<div className='grid grid-cols-12 items-center gap-2 p-2'>
 			<CameraTransferFormatSelect className='col-span-6' onValueChange={(value) => camera.update('transferFormat', value)} value={transferFormat} />
-			<Checkbox className='col-span-6' isSelected={compressed} onValueChange={(value) => camera.update('compressed', value)}>
-				Compressed
-			</Checkbox>
+			<Checkbox className='col-span-6' label='Compressed' onValueChange={(value) => camera.update('compressed', value)} value={compressed} />
 			<div className='col-span-full flex flex-row items-center gap-2'>
 				<span className='font-bold text-sm'>DITHER</span>
 				<Switch isSelected={dither.enabled} onValueChange={(value) => camera.updateDither('enabled', value)} size='sm' />
 			</div>
 			<NumberInput className='col-span-8' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!dither.enabled} label='Dither pixels (px)' maxValue={25} minValue={1} onValueChange={(value) => camera.updateDither('amount', value)} placeholder='5' size='sm' step={0.1} value={dither.amount} />
-			<Checkbox className='col-span-4' isDisabled={!dither.enabled} isSelected={dither.raOnly} onValueChange={(value) => camera.updateDither('raOnly', value)}>
-				RA only
-			</Checkbox>
+			<Checkbox className='col-span-4' disabled={!dither.enabled} label='RA only' onValueChange={(value) => camera.updateDither('raOnly', value)} value={dither.raOnly} />
 		</div>
 	)
 })
@@ -258,9 +255,7 @@ const Frame = memo(() => {
 	return (
 		<>
 			<div className='col-span-6 flex flex-row items-center justify-center gap-2'>
-				<Checkbox className='flex-col-reverse gap-0.4 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || !canSubFrame || capturing} isSelected={subframe} onValueChange={(value) => camera.update('subframe', value)} size='sm'>
-					Subframe
-				</Checkbox>
+				<Checkbox className='flex-col-reverse gap-0.4 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} disabled={!connected || !canSubFrame || capturing} label='Subframe' onValueChange={(value) => camera.update('subframe', value)} value={subframe} />
 				<Tooltip content='Fullscreen' placement='bottom' showArrow>
 					<IconButton color='secondary' icon={Icons.Fullscreen} isDisabled={!connected || !subframe || capturing} onPointerUp={camera.fullscreen} variant='flat' />
 				</Tooltip>

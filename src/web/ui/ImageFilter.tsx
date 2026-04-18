@@ -1,10 +1,11 @@
-import { Checkbox, NumberInput, Tab, Tabs } from '@heroui/react'
+import { NumberInput, Tab, Tabs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageFilterMolecule } from '@/molecules/image/filter'
 import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
+import { Checkbox } from './components/Checkbox'
 import { Icons } from './Icon'
 import { ImageFFTFilterTypeRadioGroup } from './ImageFFTFilterTypeRadioGroup'
 import { ImageKernelFilterTypeRadioGroup } from './ImageKernelFilterTypeRadioGroup'
@@ -41,9 +42,7 @@ const Kernel = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2'>
-			<Checkbox className='col-span-full' isSelected={enabled} onValueChange={(value) => (filter.state.kernel.enabled = value)}>
-				Enabled
-			</Checkbox>
+			<Checkbox className='col-span-full' label='Enabled' onValueChange={(value) => (filter.state.kernel.enabled = value)} value={enabled} />
 			<ImageKernelFilterTypeRadioGroup className='col-span-full' isDisabled={!enabled} onValueChange={filter.updateKernelType} value={type} />
 			<Mean />
 			<Blur />
@@ -98,9 +97,7 @@ const FFT = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2'>
-			<Checkbox className='col-span-full' isSelected={enabled} onValueChange={(value) => (filter.state.fft.enabled = value)}>
-				Enabled
-			</Checkbox>
+			<Checkbox className='col-span-full' label='Enabled' onValueChange={(value) => (filter.state.fft.enabled = value)} value={enabled} />
 			<ImageFFTFilterTypeRadioGroup className='col-span-full' isDisabled={!enabled} onValueChange={filter.updateFFTType} value={type} />
 			<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} label='Cutoff' maxValue={1} minValue={0} onValueChange={(value) => filter.updateFFT('cutoff', value)} size='sm' step={0.001} value={cutoff} />
 			<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} label='Weight' maxValue={1} minValue={0} onValueChange={(value) => filter.updateFFT('weight', value)} size='sm' step={0.001} value={weight} />

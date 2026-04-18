@@ -1,4 +1,4 @@
-import { Checkbox, Chip, Input, NumberInput } from '@heroui/react'
+import { Chip, Input, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import { memo } from 'react'
@@ -6,6 +6,7 @@ import { useSnapshot } from 'valtio'
 import { FramingMolecule } from '@/molecules/framing'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
+import { Checkbox } from './components/Checkbox'
 import { HipsSurveySelect } from './HipsSurveySelect'
 import { Icons } from './Icon'
 import { Link } from './Link'
@@ -38,9 +39,7 @@ const Body = memo(() => {
 			<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={loading} label='Focal Length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => framing.update('focalLength', value)} size='sm' value={focalLength} />
 			<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => framing.update('pixelSize', value)} size='sm' step={0.01} value={pixelSize} />
 			<HipsSurveySelect className='col-span-full' isDisabled={loading} onValueChange={(value) => framing.update('hipsSurvey', value)} value={hipsSurvey} />
-			<Checkbox className='col-span-full' isDisabled={loading} isSelected={openNewImage} onValueChange={(value) => (framing.state.openNewImage = value)}>
-				Open in new image
-			</Checkbox>
+			<Checkbox className='col-span-full' disabled={loading} label='Open in new image' onValueChange={(value) => (framing.state.openNewImage = value)} value={openNewImage} />
 		</div>
 	)
 })

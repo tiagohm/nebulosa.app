@@ -1,4 +1,4 @@
-import { Checkbox, Input, Listbox, ListboxItem, NumberInput } from '@heroui/react'
+import { Input, Listbox, ListboxItem, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import { memo, useState } from 'react'
@@ -7,6 +7,7 @@ import { ConnectionMolecule } from '@/molecules/connection'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from '@/ui/components/Button'
 import { ClientTypeSelect } from './ClientTypeSelect'
+import { Checkbox } from './components/Checkbox'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { PopoverButton } from './PopoverButton'
@@ -32,9 +33,7 @@ const Body = memo(() => {
 			<Input className='col-span-7' isDisabled={type === 'SIMULATOR'} label='Host' maxLength={128} onValueChange={(value) => connection.update('host', value)} placeholder='localhost' size='sm' type='text' value={host} />
 			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={type === 'SIMULATOR'} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => connection.update('port', value)} placeholder={type === 'INDI' ? '7624' : '32323'} size='sm' value={port} />
 			<ClientTypeSelect className='col-span-5' onValueChange={(value) => connection.update('type', value)} value={type} />
-			<Checkbox className='col-span-5' isDisabled={type !== 'ALPACA'} isSelected={secured} onValueChange={(value) => connection.update('secured', value)}>
-				Secured
-			</Checkbox>
+			<Checkbox className='col-span-5' disabled={type !== 'ALPACA'} label='Secured' onValueChange={(value) => connection.update('secured', value)} value={secured} />
 			<div className='col-span-2'>
 				<AlpacaDeviceServerDiscovery />
 			</div>

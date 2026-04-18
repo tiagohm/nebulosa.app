@@ -1,22 +1,20 @@
 @import "tailwindcss";
-@plugin "./hero.ts";
 
-@source "../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}";
-@custom-variant dark (&:is(.dark *));
-
-.dark {
-	--heroui-background: 0 0% 6%;
-	--heroui-line-height-tiny: 0.8rem;
-	--heroui-content1: 0 0% 9.4%;
+@theme {
+	--primary: var(--color-blue-600);
+	--secondary: var(--color-indigo-600);
+	--success: var(--color-green-600);
+	--danger: var(--color-red-600);
+	--warning: var(--color-amber-600);
 }
 
 html {
-	@apply m-0 w-dvw h-dvh overflow-hidden p-0 scroll-smooth touch-none tabular-nums;
+	@apply m-0 w-dvw h-dvh overflow-hidden p-0 scroll-smooth touch-none tabular-nums bg-neutral-950;
 }
 
 html,
 body {
-	@apply text-[13px] overscroll-none;
+	@apply text-[14px] overscroll-none;
 	filter: grayscale(var(--ws-disconnected-grayscale, 0%));
 }
 
@@ -29,48 +27,6 @@ svg {
 
 svg:focus {
 	outline: none;
-}
-
-/* Dialog */
-
-div[data-slot="wrapper"]:has(section[role="dialog"]) {
-	@apply overflow-hidden;
-}
-
-section[role="dialog"] {
-	@apply pointer-events-auto opacity-97;
-}
-
-/* Tooltip */
-
-div[role="tooltip"] {
-	@apply pointer-events-none z-10000001!;
-}
-
-/* Select Popover */
-
-div[data-slot="popover"] {
-	@apply min-w-fit!;
-}
-
-/* Select Trigger */
-
-div[data-slot="base"] div[data-slot="mainWrapper"] button[data-slot="trigger"] {
-	@apply min-h-fit;
-}
-
-/* Popover Menu */
-
-div:has(div[data-slot="base"][data-open="true"][role="dialog"]) {
-	@apply z-10000000!;
-}
-
-/* Home Menu */
-
-.home-menu {
-	button:disabled {
-		@apply grayscale;
-	}
 }
 
 /* Utilities */

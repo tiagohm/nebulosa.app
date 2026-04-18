@@ -17,7 +17,7 @@
 	"json.format.keepLines": true,
 	"tailwindCSS.classAttributes": ["class", "className", "classNames"],
 	"tailwindCSS.rootFontSize": 13,
-	"tailwindCSS.experimental.classRegex": [["tv([^)]*)", "['`]([^'`]*).*?['`]"]],
+	"tailwindCSS.classFunctions": ["tv"],
 	"editor.codeActionsOnSave": {
 		"source.removeUnusedImports": "explicit",
 		"source.action.useSortedAttributes.biome": "explicit",

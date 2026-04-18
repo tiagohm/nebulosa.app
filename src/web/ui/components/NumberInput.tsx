@@ -13,7 +13,7 @@ const numberInputStyles = tv({
 		label: 'pointer-events-none absolute origin-left truncate transition-all duration-150 ease-out',
 		content: 'flex shrink-0 items-center whitespace-nowrap',
 		stepper: 'flex flex-col gap-0',
-		stepButton: 'flex flex-1 items-center justify-center bg-neutral-800/70 text-neutral-300 outline-none transition hover:bg-neutral-700 hover:text-neutral-100 cursor-pointer',
+		stepButton: 'flex flex-1 items-center justify-center bg-neutral-800/70 text-neutral-300 outline-none transition hover:bg-neutral-700  hover:text-neutral-100 active:bg-neutral-600 cursor-pointer',
 		stepIcon: '',
 	},
 	variants: {
@@ -333,7 +333,8 @@ export function NumberInput({
 		const direction = -Math.sign(delta)
 
 		if (direction === 1 || direction === -1) {
-			event.preventDefault()
+			// Unable to preventDefault inside passive event listener invocation
+			// event.preventDefault()
 			stepValue(direction)
 			return
 		}
@@ -345,7 +346,7 @@ export function NumberInput({
 	}
 
 	return (
-		<div className={tw(styles.base(), className, disabled && 'opacity-50', readOnly && !disabled && 'opacity-80', classNames?.base)}>
+		<div className={tw(styles.base(), className, disabled && 'opacity-40', readOnly && !disabled && 'opacity-90', classNames?.base)}>
 			<div className={tw(styles.surface(), disabled ? 'bg-neutral-900/35 text-neutral-500' : readOnly ? 'bg-neutral-900/55 text-neutral-300' : 'bg-neutral-900/70 text-neutral-100 hover:bg-neutral-800 focus-within:bg-neutral-800', classNames?.surface)}>
 				{hasStartContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.startContent)}>{startContent}</div>}
 				<div className={tw(styles.field(), classNames?.field)}>
@@ -360,7 +361,7 @@ export function NumberInput({
 							label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel,
 							hasStartContent && 'pl-0',
 							hasEndContent && 'pr-0',
-							disabled ? 'cursor-not-allowed text-neutral-500 placeholder:text-neutral-600' : readOnly ? 'cursor-default text-neutral-300' : 'text-neutral-100 placeholder:text-neutral-500',
+							disabled ? 'cursor-not-allowed text-neutral-500 placeholder:text-neutral-600' : readOnly ? 'cursor-default text-neutral-200' : 'text-neutral-100 placeholder:text-neutral-500',
 							classNames?.input,
 						)}
 						disabled={disabled}

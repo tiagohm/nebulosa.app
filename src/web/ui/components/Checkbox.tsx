@@ -1,5 +1,5 @@
 import type * as React from 'react'
-import { type ClassValue, tv } from 'tailwind-variants'
+import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
 import { tw } from '@/shared/util'
 import { Icons } from '../Icon'
 
@@ -32,9 +32,17 @@ const checkboxStyles = tv({
 				icon: 'size-5',
 			},
 		},
+		color: {
+			primary: '[--color-variant:var(--primary)]',
+			secondary: '[--color-variant:var(--secondary)]',
+			success: '[--color-variant:var(--success)]',
+			danger: '[--color-variant:var(--danger)]',
+			warning: '[--color-variant:var(--warning)]',
+		},
 	},
 	defaultVariants: {
 		size: 'md',
+		color: 'primary',
 	},
 })
 
@@ -46,22 +54,21 @@ export interface CheckboxClassNames {
 	readonly label?: ClassValue
 }
 
-export type CheckboxSize = keyof typeof checkboxStyles.variants.size
+type CheckboxVariants = VariantProps<typeof checkboxStyles>
 
-export interface CheckboxProps extends Omit<React.ComponentPropsWithRef<'input'>, 'checked' | 'defaultChecked' | 'step' | 'size' | 'type' | 'value'> {
+export interface CheckboxProps extends Omit<React.ComponentPropsWithRef<'input'>, 'checked' | 'defaultChecked' | 'step' | 'size' | 'color' | 'type' | 'value'>, CheckboxVariants {
 	readonly children?: React.ReactNode
 	readonly classNames?: CheckboxClassNames
 	readonly label?: React.ReactNode
 	readonly value?: boolean
 	readonly onValueChange?: (value: boolean) => void
-	readonly size?: CheckboxSize
 }
 
 // Render a controlled checkbox with optional label content.
-export function Checkbox({ autoFocus, children, className, classNames, disabled = false, label, name, onBlur, onChange, onClick, onFocus, onKeyDown, onValueChange, readOnly = false, ref, size = 'md', style, tabIndex, value = false, ...props }: CheckboxProps) {
+export function Checkbox({ autoFocus, children, className, classNames, disabled = false, label, name, onBlur, onChange, onClick, onFocus, onKeyDown, onValueChange, readOnly = false, ref, size, color, style, tabIndex, value = false, ...props }: CheckboxProps) {
 	const checked = value === true
 	const content = label ?? children
-	const styles = checkboxStyles({ size })
+	const styles = checkboxStyles({ size, color })
 
 	// Ignore state changes while disabled or read-only.
 	function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -94,7 +101,7 @@ export function Checkbox({ autoFocus, children, className, classNames, disabled 
 	}
 
 	return (
-		<label className={tw(styles.base(), disabled ? 'cursor-not-allowed opacity-50' : readOnly ? 'cursor-default opacity-80' : 'cursor-pointer', className, classNames?.base)}>
+		<label className={tw(styles.base(), disabled ? 'cursor-not-allowed opacity-40' : readOnly ? 'cursor-default opacity-70' : 'cursor-pointer', className, classNames?.base)}>
 			<input
 				{...props}
 				autoFocus={autoFocus}
@@ -113,7 +120,14 @@ export function Checkbox({ autoFocus, children, className, classNames, disabled 
 				tabIndex={tabIndex}
 				type='checkbox'
 			/>
-			<span className={tw(styles.control(), !disabled && 'peer-focus-visible:ring-0', checked ? 'bg-blue-600 text-white' : 'bg-neutral-900 text-transparent', !disabled && !readOnly && (checked ? 'hover:bg-blue-600/90 active:bg-blue-600/80' : 'hover:bg-neutral-800 active:bg-neutral-700'), classNames?.control)}>
+			<span
+				className={tw(
+					styles.control(),
+					!disabled && 'peer-focus-visible:ring-0',
+					checked ? 'bg-(--color-variant) text-white' : 'bg-neutral-900 text-transparent',
+					!disabled && !readOnly && (checked ? 'hover:bg-(--color-variant)/90 active:bg-(--color-variant)/80' : 'hover:bg-neutral-800 active:bg-neutral-700'),
+					classNames?.control,
+				)}>
 				<Icons.Check className={tw(styles.icon(), checked ? 'scale-100 opacity-100' : 'scale-75 opacity-0', classNames?.icon)} />
 			</span>
 			{content !== undefined && content !== null && <span className={tw(styles.label(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-200', classNames?.label)}>{content}</span>}

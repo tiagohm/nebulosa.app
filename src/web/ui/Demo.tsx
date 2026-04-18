@@ -20,6 +20,8 @@ export function Demo() {
 const HeartIcon = <Icons.Heart />
 const GalaxyIcon = <Icons.Galaxy />
 
+const COLORS = ['primary', 'secondary', 'success', 'danger', 'warning'] as const
+
 const Buttons = memo(() => {
 	const random = mulberry32(0)
 	const elements: React.ReactNode[] = []
@@ -27,7 +29,7 @@ const Buttons = memo(() => {
 
 	for (const variant of ['ghost', 'outline', 'solid', 'flat'] as const) {
 		for (const size of ['sm', 'md', 'lg'] as const) {
-			for (const color of ['primary', 'secondary', 'success', 'danger', 'warning'] as const) {
+			for (const color of COLORS) {
 				const startContent = random() < 0.5 ? HeartIcon : undefined
 				const endContent = random() < 0.5 ? GalaxyIcon : undefined
 				const tooltipContent = random() < 0.2 ? 'This button has a tooltip!' : undefined
@@ -95,13 +97,13 @@ const Checkboxes = memo(() => {
 	const elements: React.ReactNode[] = []
 	let key = 0
 
-	for (let i = 1; i <= 8; i++) {
+	for (const color of COLORS) {
 		for (const size of ['sm', 'md', 'lg'] as const) {
-			const disabled = random() < 0.2
-			const readOnly = random() < 0.1
+			const disabled = random() < 0.3
+			const readOnly = random() < 0.3
 			const label = key.toFixed(0)
 
-			elements.push(<Checkbox disabled={disabled} key={key++} label={label} onValueChange={setValue} readOnly={readOnly} size={size} value={value} />)
+			elements.push(<Checkbox color={color} disabled={disabled} key={key++} label={label} onValueChange={setValue} readOnly={readOnly} size={size} value={value} />)
 		}
 	}
 

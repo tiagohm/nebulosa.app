@@ -62,7 +62,7 @@ const Connection = memo(() => {
 				<DeviceChooser />
 			</Activity>
 			<div className='col-span-2 flex flex-row justify-center items-center gap-2'>
-				<ConnectButton isConnected={connected} isDisabled={!camera || !guideOutput} onPointerUp={phd2.connect} />
+				<ConnectButton disabled={!camera || !guideOutput} isConnected={connected} onPointerUp={phd2.connect} />
 			</div>
 		</>
 	)

@@ -114,7 +114,7 @@ function DeviceDropdownEndContent({ device, onConnect, onShow }: DeviceDropdownE
 	return (
 		<div className='flex flex-row items-center gap-2'>
 			{device && <IconButton color='secondary' icon={Icons.OpenInNew} iconSize={12} isRounded onPointerUp={handleShowPointerUp} size='sm' />}
-			{device && <ConnectButton iconSize={12} isConnected={device.connected} isLoading={device?.connecting} isRounded onPointerUp={handleConnectPointerUp} size='sm' />}
+			{device && <ConnectButton isConnected={device.connected} loading={device?.connecting} onPointerUp={handleConnectPointerUp} size='sm' />}
 		</div>
 	)
 }

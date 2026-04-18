@@ -24,7 +24,7 @@ const Header = memo(() => {
 	return (
 		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
-				<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={flatPanel.connect} />
+				<ConnectButton isConnected={connected} loading={connecting} onPointerUp={flatPanel.connect} />
 				<IndiPanelControlButton device={flatPanel.scope.flatPanel.name} />
 			</div>
 			<div className='flex flex-col flex-1 gap-0 justify-center items-center'>

@@ -80,7 +80,7 @@ export const ConnectionBox = memo(() => {
 				<Select className='flex-1' disallowEmptySelection isDisabled={loading || !!connected} items={connections} onSelectionChange={handleSelectionChange} popoverProps={DEFAULT_POPOVER_PROPS} renderValue={SelectedConnectionItems} selectedKeys={new Set([selected?.id ?? ''])} selectionMode='single' size='lg'>
 					{ConnectionItem}
 				</Select>
-				<ConnectButton isConnected={!!connected} isDisabled={!selected} isLoading={loading} onPointerUp={connection.connect} />
+				<ConnectButton disabled={!selected} isConnected={!!connected} loading={loading} onPointerUp={connection.connect} />
 			</div>
 			<Activity mode={show && !connected ? 'visible' : 'hidden'}>
 				<ConnectionEdit />

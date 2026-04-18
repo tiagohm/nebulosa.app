@@ -72,7 +72,8 @@
 				"noUnusedFunctionParameters": "off",
 				"noUnusedVariables": "off",
 				"useUniqueElementIds": "off",
-				"noUnusedPrivateClassMembers": "off"
+				"noUnusedPrivateClassMembers": "off",
+				"noChildrenProp": "off"
 			},
 			"suspicious": {
 				"noAssignInExpressions": "off",

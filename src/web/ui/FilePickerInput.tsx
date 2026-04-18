@@ -1,7 +1,8 @@
-import { Button, Input, type InputProps, Tooltip } from '@heroui/react'
+import { Input, type InputProps } from '@heroui/react'
 import { ScopeProvider } from 'bunshi/react'
 import { Activity, useRef, useState } from 'react'
 import { FilePickerScope, type FilePickerScopeValue } from '@/molecules/filepicker'
+import { Button } from './components/Button'
 import { FilePicker } from './FilePicker'
 import { Icons } from './Icon'
 
@@ -31,19 +32,8 @@ export function FilePickerInput({ filter, mode, id, value, onValueChange, isRead
 		}
 	}
 
-	const StartContent = (
-		<Tooltip content='Browse' placement='bottom' showArrow>
-			<Button isIconOnly size='sm' variant='light'>
-				<Icons.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} />
-			</Button>
-		</Tooltip>
-	)
-
-	const EndContent = value ? (
-		<Button isIconOnly size='sm' variant='light'>
-			<Icons.CloseCircle className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} />
-		</Button>
-	) : null
+	const StartContent = <Button children={<Icons.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} />} size='sm' tooltipContent='Browse' variant='ghost' />
+	const EndContent = value ? <Button children={<Icons.CloseCircle className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} />} size='sm' variant='ghost' /> : null
 
 	return (
 		<>

@@ -29,7 +29,7 @@ const Header = memo(() => {
 	return (
 		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
-				<ConnectButton isConnected={connected} isLoading={connecting} onPointerUp={wheel.connect} />
+				<ConnectButton isConnected={connected} loading={connecting} onPointerUp={wheel.connect} />
 				<IndiPanelControlButton device={wheel.scope.wheel.name} />
 			</div>
 			<div className='flex flex-col flex-1 gap-0 justify-center items-center'>

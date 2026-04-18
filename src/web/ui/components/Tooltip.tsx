@@ -1,4 +1,4 @@
-import type * as React from 'react'
+import * as React from 'react'
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { type ClassValue, tv } from 'tailwind-variants'
@@ -6,7 +6,7 @@ import { assignRef, clamp, tw } from '@/shared/util'
 
 const VIEWPORT_PADDING = 12
 const DEFAULT_OFFSET = 10
-const DEFAULT_CLOSE_DELAY = 250
+const DEFAULT_CLOSE_DELAY = 0
 const ARROW_SIZE = 8.125
 const ARROW_INSET = 12
 
@@ -296,11 +296,38 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 		scheduleClose()
 	}
 
-	return (
-		<>
+	if (React.isValidElement(children) && children.type !== React.Fragment) {
+		const c = children as React.ReactElement<React.DOMAttributes<HTMLElement>>
+
+		children = React.cloneElement(c, {
+			onBlur: (event) => {
+				handleBlur(event)
+				c.props.onBlur?.(event)
+			},
+			onFocus: (event) => {
+				handleFocus(event)
+				c.props.onFocus?.(event)
+			},
+			onPointerEnter: (event) => {
+				handlePointerEnter(event)
+				c.props.onPointerEnter?.(event)
+			},
+			onPointerLeave: (event) => {
+				handlePointerLeave()
+				c.props.onPointerLeave?.(event)
+			},
+		})
+	} else {
+		children = (
 			<span className='w-fit' onBlur={handleBlur} onFocus={handleFocus} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
 				{children}
 			</span>
+		)
+	}
+
+	return (
+		<>
+			{children}
 			{visible && tooltipContainer
 				? createPortal(
 						<div

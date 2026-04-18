@@ -1,17 +1,11 @@
-import { Button, type ButtonProps, Tooltip } from '@heroui/react'
+import { Button, type ButtonProps } from './components/Button'
 import { Icons } from './Icon'
 
-export interface AutoSaveButtonProps extends Omit<ButtonProps, 'isIconOnly' | 'onPointerUp' | 'variant' | 'size' | 'value' | 'onValueChange'> {
+export interface AutoSaveButtonProps extends Omit<ButtonProps, 'onPointerUp' | 'variant' | 'size' | 'value' | 'onValueChange' | 'children'> {
 	readonly value: boolean
 	readonly onValueChange: (value: boolean) => void
 }
 
 export function AutoSaveButton({ value, onValueChange, ...props }: AutoSaveButtonProps) {
-	return (
-		<Tooltip content={`Auto save: ${value ? 'ON' : 'OFF'}`} placement='bottom' showArrow>
-			<Button {...props} isIconOnly onPointerUp={() => onValueChange(!value)} size='sm' variant='light'>
-				{value ? <Icons.Save color='#9353d3' /> : <Icons.SaveOff color='#9E9E9E' />}
-			</Button>
-		</Tooltip>
-	)
+	return <Button children={value ? <Icons.Save color='#9353d3' /> : <Icons.SaveOff color='#9E9E9E' />} onPointerUp={() => onValueChange(!value)} size='sm' tooltipContent={`Auto save: ${value ? 'ON' : 'OFF'}`} variant='ghost' {...props} />
 }

@@ -61,7 +61,7 @@ const Header = memo(() => {
 	return (
 		<div className='w-full flex flex-row items-center justify-between'>
 			<div className='flex flex-row items-center gap-1'>
-				<ConnectButton isConnected={connected} isDisabled={capturing} isLoading={connecting} onPointerUp={camera.connect} />
+				<ConnectButton disabled={capturing} isConnected={connected} loading={connecting} onPointerUp={camera.connect} />
 				<IndiPanelControlButton device={camera.scope.camera.name} />
 			</div>
 			<div className='flex flex-col flex-1 gap-0 justify-center items-center'>
@@ -92,7 +92,7 @@ const Path = memo(() => {
 	return (
 		<div className='col-span-full flex flex-row items-center gap-1'>
 			<AutoSaveButton onValueChange={(value) => camera.update('autoSave', value)} value={autoSave} />
-			<AutoSubFolderModeButton isDisabled={!autoSave} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={autoSubFolderMode} />
+			<AutoSubFolderModeButton disabled={!autoSave} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={autoSubFolderMode} />
 			<FilePickerInput id={`camera-${camera.scope.camera.name}`} isDisabled={!autoSave} mode='directory' onValueChange={camera.updateSavePath} value={savePath} />
 		</div>
 	)

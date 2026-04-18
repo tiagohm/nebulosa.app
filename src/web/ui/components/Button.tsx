@@ -30,7 +30,7 @@ const buttonStyles = tv({
 		},
 	},
 	defaultVariants: {
-		variant: 'solid',
+		variant: 'flat',
 		size: 'md',
 		color: 'primary',
 	},
@@ -47,16 +47,17 @@ export interface ButtonProps extends Omit<React.ComponentPropsWithRef<'div'>, 'c
 	readonly tooltipContent?: React.ReactNode
 	readonly tooltipDisabled?: boolean
 	readonly tooltipPlacement?: TooltipPlacement
+	readonly hideChildrenOnLoading?: boolean
 }
 
 // Render the shared button surface with variant-aware color styling.
-export function Button({ className, variant, size, color, fullWidth, disabled, label, loading, startContent, endContent, tooltipContent, tooltipDisabled, tooltipPlacement, children, ref, ...props }: ButtonProps) {
+export function Button({ className, variant, size, color, fullWidth, disabled, label, loading, startContent, endContent, tooltipContent, tooltipDisabled, tooltipPlacement, children, hideChildrenOnLoading, ref, ...props }: ButtonProps) {
 	return (
 		<Tooltip content={tooltipContent} disabled={tooltipDisabled} placement={tooltipPlacement}>
 			<div className={buttonStyles({ variant, size, color, fullWidth, className: clsx(className, { 'opacity-40 pointer-events-none': disabled || loading === true }) })} ref={ref} {...props}>
 				{/* Swap the leading content for a spinner while loading. */}
 				{loading === true ? <Icons.Loading className='spin' /> : startContent}
-				{label ?? children}
+				{loading === true && hideChildrenOnLoading === true ? undefined : (label ?? children)}
 				{endContent}
 			</div>
 		</Tooltip>

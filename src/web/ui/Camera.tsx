@@ -8,6 +8,7 @@ import { AutoSaveButton } from './AutoSaveButton'
 import { AutoSubFolderModeButton } from './AutoSubFolderButton'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
 import { ConnectButton } from './ConnectButton'
+import { Button } from './components/Button'
 import { FocuserDropdown, MountDropdown, RotatorDropdown, WheelDropdown } from './DeviceDropdown'
 import { ExposureModeButtonGroup } from './ExposureModeButtonGroup'
 import { ExposureTimeInput } from './ExposureTimeInput'
@@ -19,7 +20,6 @@ import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const Camera = memo(() => {
 	const camera = useMolecule(CameraMolecule)
@@ -315,8 +315,8 @@ const Footer = memo(() => {
 			<div className='flex flex-1 flex-row items-center gap-1'>
 				<CameraEquipment />
 			</div>
-			<TextButton color='danger' isDisabled={!connected || !canAbort || !capturing} label='Stop' onPointerUp={camera.stop} startContent={<Icons.Stop />} />
-			<TextButton color='success' isDisabled={!connected} isLoading={capturing} label='Start' onPointerUp={camera.start} startContent={<Icons.Play />} />
+			<Button color='danger' disabled={!connected || !canAbort || !capturing} label='Stop' onPointerUp={camera.stop} startContent={<Icons.Stop />} />
+			<Button color='success' disabled={!connected} label='Start' loading={capturing} onPointerUp={camera.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

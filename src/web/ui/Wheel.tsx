@@ -5,12 +5,12 @@ import { useSnapshot } from 'valtio'
 import { WheelMolecule } from '@/molecules/indi/wheel'
 import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
 import { ConnectButton } from './ConnectButton'
+import { Button } from './components/Button'
 import { EnumSelect } from './EnumSelect'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const Wheel = memo(() => {
 	const wheel = useMolecule(WheelMolecule)
@@ -80,7 +80,7 @@ const Slot = memo(() => {
 			<EnumSelect className='flex-1' endContent={<SlotPopover />} isDisabled={!connected || moving || names.length === 0} label='Slot' onValueChange={(value) => wheel.update('position', +value)} value={selected.position.toFixed(0)}>
 				{names.map(SlotItem)}
 			</EnumSelect>
-			<TextButton color='success' isDisabled={!connected || selected.position === position || names.length === 0} isLoading={moving} label='Move' onPointerUp={wheel.moveTo} startContent={<Icons.Check />} variant='light' />
+			<Button color='success' disabled={!connected || selected.position === position || names.length === 0} label='Move' loading={moving} onPointerUp={wheel.moveTo} startContent={<Icons.Check />} variant='ghost' />
 		</div>
 	)
 })

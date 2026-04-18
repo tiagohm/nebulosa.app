@@ -3,11 +3,11 @@ import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { StarDetectionMolecule } from '@/molecules/image/stardetection'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { StarDetectionPopover } from './StarDetectionPopover'
 import { StarDetectionSelect } from './StarDetectionSelect'
-import { TextButton } from './TextButton'
 
 export const StarDetection = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
@@ -76,5 +76,5 @@ const Footer = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
 	const { loading } = useSnapshot(starDetection.state)
 
-	return <TextButton color='success' isLoading={loading} label='Detect' onPointerUp={starDetection.detect} startContent={<Icons.Check />} />
+	return <Button color='success' label='Detect' loading={loading} onPointerUp={starDetection.detect} startContent={<Icons.Check />} />
 })

@@ -188,6 +188,21 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 * Do not add an `as` prop to every component automatically. Only support polymorphism when there is a clear product need and the semantics remain valid.
 * Do not use `forwardRef`. Starting in React 19, you can now access `ref` as a prop for function components.
 
+### Reusable Component Styling Guidelines
+
+* Base new reusable component styling on the contracts already established in `src/web/ui/components`, and only add a new visual language when the existing one genuinely does not fit.
+* Define styles with a local `tv()` object named for the component, and use `slots` for multipart primitives like inputs, checkboxes, tooltips, and composed surfaces.
+* Reuse the shared semantic variant names whenever they fit the component: `variant` for presentation (`solid`, `outline`, `ghost`, `flat`), `color` for intent (`primary`, `secondary`, `success`, `danger`, `warning`), and `size` for scale (`sm`, `md`, `lg`).
+* When a reusable component supports semantic color, map it through a local CSS variable such as `[--color-variant:var(--primary)]` and reference that variable in the classes instead of hardcoding separate color palettes in each variant.
+* Keep geometry aligned with the existing primitives: `rounded-lg` as the default surface radius, compact inline-flex or flex layouts, and the same height scale used by `Button`, `TextInput`, and `NumberInput` unless the component has a clear reason to differ.
+* Treat neutral dark surfaces as the default reusable component base. Inputs and other container-like controls should stay in the `bg-neutral-900/70` to `bg-neutral-800` family, while accent colors should be reserved for semantic actions, selection, and emphasis.
+* Expose `className` for single-surface components and a typed `classNames` object for multipart components. Merge overrides through `tw()` or `clsx` plus `tailwind-merge`, not by manually concatenating partial class fragments.
+* Prefer boolean styling flags that already exist in the component layer, such as `fullWidth`, `disabled`, `readOnly`, and `loading`, instead of forcing callers to recreate those states with ad hoc classes.
+* Disabled, read-only, and loading visuals should be handled by the component styles themselves with opacity, pointer-event, text, and background adjustments consistent with the current primitives, not by introducing separate alternate layouts.
+* Keep adornments inside the shared surface with explicit props such as `startContent`, `endContent`, `label`, or slot content instead of requiring wrapper elements around every usage.
+* Preserve the current focus treatment unless the component has a strong reason to differ. Existing reusable primitives generally remove default outlines and rely on the surrounding surface styling rather than adding a new ring system per component.
+* If a new reusable component is action-like, start from the `Button` API and styling vocabulary. If it is field-like, start from `TextInput` or `NumberInput`, including their slot-based surface, neutral palette, and internal content layout.
+
 ## Bunshi Rules
 
 - Name shared orchestrators `FeatureMolecule` to match the existing repository convention.

@@ -3,11 +3,11 @@ import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageSaveMolecule } from '@/molecules/image/save'
+import { Button } from './components/Button'
 import { FilePickerInput } from './FilePickerInput'
 import { Icons } from './Icon'
 import { ImageFormatButtonGroup } from './ImageFormatButtonGroup'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const ImageSave = memo(() => {
 	const save = useMolecule(ImageSaveMolecule)
@@ -41,8 +41,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='primary' isLoading={loading} label='Download' onPointerUp={save.download} startContent={<Icons.ArrowDown />} />
-			<TextButton color='success' isDisabled={!path} isLoading={loading} label='Save' onPointerUp={save.save} startContent={<Icons.Save />} />
+			<Button color='primary' label='Download' loading={loading} onPointerUp={save.download} startContent={<Icons.ArrowDown />} />
+			<Button color='success' disabled={!path} label='Save' loading={loading} onPointerUp={save.save} startContent={<Icons.Save />} />
 		</>
 	)
 })

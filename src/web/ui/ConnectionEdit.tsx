@@ -5,12 +5,11 @@ import { memo, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from '@/ui/components/Button'
 import { ClientTypeSelect } from './ClientTypeSelect'
-import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { PopoverButton } from './PopoverButton'
-import { TextButton } from './TextButton'
 
 export const ConnectionEdit = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
@@ -78,7 +77,7 @@ const AlpacaDeviceServerDiscovery = memo(() => {
 					{AlpacaDeviceServerItem}
 				</Listbox>
 				<div className='col-span-full flex flex-row items-center justify-end'>
-					<TextButton color='primary' isLoading={alpaca.discovering} label='Discovery' onPointerUp={connection.discovery} startContent={<Icons.Reload />} />
+					<Button color='primary' label='Discovery' loading={alpaca.discovering} onPointerUp={connection.discovery} startContent={<Icons.Reload />} />
 				</div>
 			</div>
 		</PopoverButton>

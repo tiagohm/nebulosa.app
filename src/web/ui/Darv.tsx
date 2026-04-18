@@ -5,11 +5,11 @@ import { useSnapshot } from 'valtio'
 import { DarvMolecule } from '@/molecules/darv'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
+import { Button } from './components/Button'
 import { CameraDropdown, MountDropdown } from './DeviceDropdown'
 import { HemisphereSelect } from './HemisphereSelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const Darv = memo(() => {
 	const darv = useMolecule(DarvMolecule)
@@ -84,8 +84,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' isDisabled={!running} label='Stop' onPointerUp={darv.stop} startContent={<Icons.Stop />} />
-			<TextButton color='success' isDisabled={!camera?.connected || !mount?.connected} isLoading={running} label='Start' onPointerUp={darv.start} startContent={<Icons.Play />} />
+			<Button color='danger' disabled={!running} label='Stop' onPointerUp={darv.stop} startContent={<Icons.Stop />} />
+			<Button color='success' disabled={!camera?.connected || !mount?.connected} label='Start' loading={running} onPointerUp={darv.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

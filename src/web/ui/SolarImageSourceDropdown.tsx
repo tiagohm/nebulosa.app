@@ -1,8 +1,8 @@
-import { type ButtonProps, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
+import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
 import type { SolarImageSource } from 'src/shared/types'
 import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
 import { stopPropagationDesktopOnly } from '@/shared/util'
-import { TextButton } from './TextButton'
+import { Button, type ButtonProps } from './components/Button'
 
 export interface SolarImageSourceDropdownProps extends Omit<ButtonProps, 'isIconOnly' | 'value'> {
 	readonly value: SolarImageSource
@@ -28,11 +28,11 @@ const DROPDOWN_ITEM_LABEL: Record<SolarImageSource, string> = {
 	HMI_DOPPLERGRAM: 'HMI Dopplergram',
 }
 
-export function SolarImageSourceDropdown({ value, onValueChange, size = 'sm', variant = 'light', ...props }: SolarImageSourceDropdownProps) {
+export function SolarImageSourceDropdown({ value, onValueChange, size = 'sm', variant = 'ghost', ...props }: SolarImageSourceDropdownProps) {
 	return (
 		<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
 			<DropdownTrigger>
-				<TextButton {...props} label={DROPDOWN_ITEM_LABEL[value]} onPointerUp={stopPropagationDesktopOnly} size={size} variant={variant} />
+				<Button {...props} label={DROPDOWN_ITEM_LABEL[value]} onPointerUp={stopPropagationDesktopOnly} size={size} variant={variant} />
 			</DropdownTrigger>
 			<DropdownMenu className='max-h-60 overflow-auto no-scrollbar' onAction={(key) => onValueChange(key as SolarImageSource)} selectedKeys={new Set([value])} selectionMode='single'>
 				{Object.entries(DROPDOWN_ITEM_LABEL).map(([key, label]) => (

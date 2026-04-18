@@ -5,9 +5,9 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { AlpacaMolecule } from '@/molecules/alpaca'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from '@/ui/components/Button'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const AlpacaServer = memo(() => {
 	const alpaca = useMolecule(AlpacaMolecule)
@@ -53,8 +53,8 @@ const Footer = memo(() => {
 	return (
 		<>
 			<NumberInput className='flex flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => (alpaca.state.port = value)} size='sm' value={port} />
-			<TextButton color='danger' isDisabled={!running} label='Stop' onPointerUp={alpaca.stop} startContent={<Icons.Stop />} />
-			<TextButton color='success' isDisabled={running} label='Start' onPointerUp={alpaca.start} startContent={<Icons.Play />} />
+			<Button color='danger' disabled={!running} label='Stop' onPointerUp={alpaca.stop} startContent={<Icons.Stop />} />
+			<Button color='success' disabled={running} label='Start' onPointerUp={alpaca.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

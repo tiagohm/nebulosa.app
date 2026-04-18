@@ -4,10 +4,10 @@ import { I18nProvider } from '@react-aria/i18n'
 import type { UTCTime } from 'nebulosa/src/indi.device'
 import { useState } from 'react'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export interface TimeProps extends UTCTime {
 	readonly id: string
@@ -32,7 +32,7 @@ export function Time({ id, onTimeChange, onClose, ...time }: TimeProps) {
 		setDate(now('UTC'))
 	}
 
-	const Footer = <TextButton color='success' label='Apply' onPointerUp={handleChoose} startContent={<Icons.Check />} />
+	const Footer = <Button color='success' label='Apply' onPointerUp={handleChoose} startContent={<Icons.Check />} />
 
 	return (
 		<Modal footer={Footer} header='Time' id={id} maxWidth='328px' onHide={onClose}>

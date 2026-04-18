@@ -4,11 +4,11 @@ import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageFilterMolecule } from '@/molecules/image/filter'
 import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { ImageFFTFilterTypeRadioGroup } from './ImageFFTFilterTypeRadioGroup'
 import { ImageKernelFilterTypeRadioGroup } from './ImageKernelFilterTypeRadioGroup'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const ImageFilter = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
@@ -113,8 +113,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' label='Reset' onPointerUp={filter.reset} startContent={<Icons.Restore />} />
-			<TextButton color='success' label='Apply' onPointerUp={filter.apply} startContent={<Icons.Check />} />
+			<Button color='danger' label='Reset' onPointerUp={filter.reset} startContent={<Icons.Restore />} />
+			<Button color='success' label='Apply' onPointerUp={filter.apply} startContent={<Icons.Check />} />
 		</>
 	)
 })

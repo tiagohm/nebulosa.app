@@ -5,11 +5,11 @@ import { useSnapshot } from 'valtio'
 import { FlatWizardMolecule } from '@/molecules/flatwizard'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
+import { Button } from './components/Button'
 import { CameraDropdown } from './DeviceDropdown'
 import { FilePickerInput } from './FilePickerInput'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const FlatWizard = memo(() => {
 	const flatWizard = useMolecule(FlatWizardMolecule)
@@ -82,8 +82,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' isDisabled={!running} label='Stop' onPointerUp={flatWizard.stop} startContent={<Icons.Stop />} />
-			<TextButton color='success' isDisabled={!camera?.connected || !saveAt} isLoading={running} label='Start' onPointerUp={flatWizard.start} startContent={<Icons.Play />} />
+			<Button color='danger' disabled={!running} label='Stop' onPointerUp={flatWizard.stop} startContent={<Icons.Stop />} />
+			<Button color='success' disabled={!camera?.connected || !saveAt} label='Start' loading={running} onPointerUp={flatWizard.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

@@ -4,10 +4,10 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const ImageAnnotation = memo(() => {
 	const annotation = useMolecule(ImageAnnotationMolecule)
@@ -77,5 +77,5 @@ const Footer = memo(() => {
 	const annotation = useMolecule(ImageAnnotationMolecule)
 	const { loading } = useSnapshot(annotation.state)
 
-	return <TextButton color='success' isLoading={loading} label='Annotate' onPointerUp={annotation.annotate} startContent={<Icons.Check />} />
+	return <Button color='success' label='Annotate' loading={loading} onPointerUp={annotation.annotate} startContent={<Icons.Check />} />
 })

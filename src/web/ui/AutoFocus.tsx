@@ -6,12 +6,12 @@ import { AutoFocusMolecule } from '@/molecules/autofocus'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { AutoFocusFittingModeSelect } from './AutoFocusFittingModeSelect'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
+import { Button } from './components/Button'
 import { CameraDropdown, FocuserDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { StarDetectionPopover } from './StarDetectionPopover'
 import { StarDetectionSelect } from './StarDetectionSelect'
-import { TextButton } from './TextButton'
 
 export const AutoFocus = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)
@@ -85,8 +85,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' isDisabled={!running} label='Stop' onPointerUp={autoFocus.stop} startContent={<Icons.Stop />} />
-			<TextButton color='success' isDisabled={!camera?.connected || !focuser?.connected} isLoading={running} label='Start' onPointerUp={autoFocus.start} startContent={<Icons.Play />} />
+			<Button color='danger' disabled={!running} label='Stop' onPointerUp={autoFocus.stop} startContent={<Icons.Stop />} />
+			<Button color='success' disabled={!camera?.connected || !focuser?.connected} label='Start' loading={running} onPointerUp={autoFocus.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

@@ -4,10 +4,10 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { MountMolecule } from '@/molecules/indi/mount'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { MountRemoteControlProtocolSelect } from './MountRemoteControlProtocolSelect'
-import { TextButton } from './TextButton'
 
 export const MountRemoteControl = memo(() => {
 	const mount = useMolecule(MountMolecule)
@@ -42,8 +42,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' isDisabled={!status} label='Stop' onPointerUp={mount.stopRemoteControl} startContent={<Icons.Stop />} />
-			<TextButton color='primary' isDisabled={!host || !!status} label='Connect' onPointerUp={mount.startRemoteControl} startContent={<Icons.Connect />} />
+			<Button color='danger' disabled={!status} label='Stop' onPointerUp={mount.stopRemoteControl} startContent={<Icons.Stop />} />
+			<Button color='primary' disabled={!host || !!status} label='Connect' onPointerUp={mount.startRemoteControl} startContent={<Icons.Connect />} />
 		</>
 	)
 })

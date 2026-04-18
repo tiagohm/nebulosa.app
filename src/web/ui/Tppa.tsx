@@ -6,12 +6,12 @@ import { useSnapshot } from 'valtio'
 import { TppaMolecule } from '@/molecules/tppa'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
+import { Button } from './components/Button'
 import { CameraDropdown, MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { PlateSolverSelect } from './PlateSolverSelect'
 import { PlateSolveStartPopover } from './PlateSolveStartPopover'
-import { TextButton } from './TextButton'
 import { TppaDirectionSelect } from './TppaDirectionSelect'
 
 export const Tppa = memo(() => {
@@ -131,8 +131,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' isDisabled={!running} label='Stop' onPointerUp={tppa.stop} startContent={<Icons.Stop />} />
-			<TextButton color='success' isDisabled={!camera?.connected || !mount?.connected} isLoading={running} label='Start' onPointerUp={tppa.start} startContent={<Icons.Play />} />
+			<Button color='danger' disabled={!running} label='Stop' onPointerUp={tppa.stop} startContent={<Icons.Stop />} />
+			<Button color='success' disabled={!camera?.connected || !mount?.connected} label='Start' loading={running} onPointerUp={tppa.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

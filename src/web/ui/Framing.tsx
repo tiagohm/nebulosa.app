@@ -5,11 +5,11 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FramingMolecule } from '@/molecules/framing'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from './components/Button'
 import { HipsSurveySelect } from './HipsSurveySelect'
 import { Icons } from './Icon'
 import { Link } from './Link'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const Framing = memo(() => {
 	const framing = useMolecule(FramingMolecule)
@@ -58,7 +58,7 @@ const Footer = memo(() => {
 			<div className='flex-1 flex items-center'>
 				<Chip color='primary'>{fov}</Chip>
 			</div>
-			<TextButton color='success' isLoading={loading} label='Load' onPointerUp={framing.load} startContent={<Icons.Download />} />
+			<Button color='success' label='Load' loading={loading} onPointerUp={framing.load} startContent={<Icons.Download />} />
 		</>
 	)
 })

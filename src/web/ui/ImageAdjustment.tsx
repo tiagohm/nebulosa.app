@@ -4,10 +4,10 @@ import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
 import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { ImageChannelOrGrayInput } from './ImageChannelOrGrayInput'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const ImageAdjustment = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)
@@ -96,8 +96,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' isDisabled={!enabled} label='Reset' onPointerUp={adjustment.reset} startContent={<Icons.Restore />} />
-			<TextButton color='success' label='Adjust' onPointerUp={adjustment.apply} startContent={<Icons.Check />} />
+			<Button color='danger' disabled={!enabled} label='Reset' onPointerUp={adjustment.reset} startContent={<Icons.Restore />} />
+			<Button color='success' label='Adjust' onPointerUp={adjustment.apply} startContent={<Icons.Check />} />
 		</>
 	)
 })

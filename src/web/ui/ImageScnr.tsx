@@ -4,11 +4,11 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageScnrMolecule } from '@/molecules/image/scnr'
 import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { ImageChannelButtonGroup } from './ImageChannelButtonGroup'
 import { Modal } from './Modal'
 import { SCNRProtectionMethodSelect } from './SCNRProtectionMethodSelect'
-import { TextButton } from './TextButton'
 
 export const ImageScnr = memo(() => {
 	const scnr = useMolecule(ImageScnrMolecule)
@@ -38,8 +38,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' label='Reset' onPointerUp={scnr.reset} startContent={<Icons.Restore />} />
-			<TextButton color='success' label='Apply' onPointerUp={scnr.apply} startContent={<Icons.Check />} />
+			<Button color='danger' label='Reset' onPointerUp={scnr.reset} startContent={<Icons.Restore />} />
+			<Button color='success' label='Apply' onPointerUp={scnr.apply} startContent={<Icons.Check />} />
 		</>
 	)
 })

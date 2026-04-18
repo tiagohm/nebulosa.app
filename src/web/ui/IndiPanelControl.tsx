@@ -6,12 +6,12 @@ import { Activity, memo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from './components/Button'
 import { EnumSelect } from './EnumSelect'
 import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 import { ToggleButton } from './ToggleButton'
 
 const MessageFilter = (item: Message, text: string) => item.message.toLowerCase().includes(text)
@@ -137,7 +137,7 @@ const Messages = memo(() => {
 				{MessageItem}
 			</FilterableListbox>
 			<div className='col-span-full flex flex-row justify-center items-center gap-2'>
-				<TextButton color='danger' isDisabled={messages.length === 0} label='Clear' onPointerUp={control.clearMessages} startContent={<Icons.Broom />} />
+				<Button color='danger' disabled={messages.length === 0} label='Clear' onPointerUp={control.clearMessages} startContent={<Icons.Broom />} />
 			</div>
 		</Activity>
 	)
@@ -260,5 +260,5 @@ function SwitchElement({ label, value, rule, isReadonly, onValueChange }: Switch
 		}
 	}
 
-	return <TextButton color={rule === 'AtMostOne' ? 'default' : value ? 'success' : 'danger'} isDisabled={isReadonly} label={label!} onPointerUp={handleValueChange} />
+	return <Button color={rule === 'AtMostOne' ? 'secondary' : value ? 'success' : 'danger'} disabled={isReadonly} label={label!} onPointerUp={handleValueChange} />
 }

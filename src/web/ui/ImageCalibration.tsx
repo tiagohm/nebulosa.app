@@ -4,10 +4,10 @@ import { memo } from 'react'
 import type { ImageCalibrationFileType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageCalibrationMolecule } from '@/molecules/image/calibration'
+import { Button } from './components/Button'
 import { FilePickerInput } from './FilePickerInput'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const ImageCalibration = memo(() => {
 	const calibration = useMolecule(ImageCalibrationMolecule)
@@ -55,5 +55,5 @@ const CalibrationFile = memo(({ type }: CalibrationFileProps) => {
 const Footer = memo(() => {
 	const calibration = useMolecule(ImageCalibrationMolecule)
 
-	return <TextButton color='success' label='Apply' onPointerUp={calibration.apply} startContent={<Icons.Check />} />
+	return <Button color='success' label='Apply' onPointerUp={calibration.apply} startContent={<Icons.Check />} />
 })

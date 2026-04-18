@@ -5,10 +5,10 @@ import { useSnapshot } from 'valtio'
 import { ImageSettingsMolecule } from '@/molecules/image/settings'
 import { CfaPatternSelect } from './CfaPatternSelect'
 import { ChrominanceSubsamplingSelect } from './ChrominanceSubsamplingSelect'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { ImageFormatSelect } from './ImageFormatSelect'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const ImageSettings = memo(() => {
 	const settings = useMolecule(ImageSettingsMolecule)
@@ -43,8 +43,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' label='Reset' onPointerUp={settings.reset} startContent={<Icons.Restore />} />
-			<TextButton color='success' label='Apply' onPointerUp={settings.apply} startContent={<Icons.Check />} />
+			<Button color='danger' label='Reset' onPointerUp={settings.reset} startContent={<Icons.Restore />} />
+			<Button color='success' label='Apply' onPointerUp={settings.apply} startContent={<Icons.Check />} />
 		</>
 	)
 })

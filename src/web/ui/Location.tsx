@@ -6,12 +6,12 @@ import type { Mount } from 'nebulosa/src/indi.device'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import { useState } from 'react'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from './components/Button'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { MapViewer } from './MapViewer'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export interface LocationProps extends GeographicCoordinate {
 	readonly id: string
@@ -63,7 +63,7 @@ export function Location({ id, latitude, longitude, elevation, onCoordinateChang
 		</div>
 	)
 
-	const Footer = <TextButton color='success' label='Choose' onPointerUp={handleChoose} startContent={<Icons.Check />} />
+	const Footer = <Button color='success' label='Choose' onPointerUp={handleChoose} startContent={<Icons.Check />} />
 
 	return (
 		<Modal footer={Footer} header={Header} id={id} maxWidth='326px' onHide={onClose}>

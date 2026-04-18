@@ -5,13 +5,13 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageSolverMolecule } from '@/molecules/image/solver'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from './components/Button'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 import { PlateSolverSelect } from './PlateSolverSelect'
 import { PlateSolveStartPopover } from './PlateSolveStartPopover'
-import { TextButton } from './TextButton'
 
 export const ImageSolver = memo(() => {
 	const solver = useMolecule(ImageSolverMolecule)
@@ -89,8 +89,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' isDisabled={!loading} label='Stop' onPointerUp={solver.stop} startContent={<Icons.Stop />} />
-			<TextButton color='success' isLoading={loading} label='Solve' onPointerUp={solver.start} startContent={<Icons.Sigma />} />
+			<Button color='danger' disabled={!loading} label='Stop' onPointerUp={solver.stop} startContent={<Icons.Stop />} />
+			<Button color='success' label='Solve' loading={loading} onPointerUp={solver.start} startContent={<Icons.Sigma />} />
 		</>
 	)
 })

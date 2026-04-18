@@ -4,10 +4,10 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiServerMolecule } from '@/molecules/indi/server'
 import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { IndiDriverListbox } from './IndiDriverListbox'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const IndiServer = memo(() => {
 	const indi = useMolecule(IndiServerMolecule)
@@ -60,9 +60,9 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' isDisabled={!running} label='Stop' onPointerUp={indi.stop} startContent={<Icons.Stop />} />
+			<Button color='danger' disabled={!running} label='Stop' onPointerUp={indi.stop} startContent={<Icons.Stop />} />
 			<Badge color='success' content={drivers.length} showOutline={false}>
-				<TextButton color='success' isDisabled={running || drivers.length === 0} label='Start' onPointerUp={indi.start} startContent={<Icons.Play />} />
+				<Button color='success' disabled={running || drivers.length === 0} label='Start' onPointerUp={indi.start} startContent={<Icons.Play />} />
 			</Badge>
 		</>
 	)

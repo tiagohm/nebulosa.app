@@ -4,11 +4,11 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { SigmaClipCenterMethodSelect } from './SigmaClipCenterMethodSelect'
 import { SigmaClipDispersionMethodSelect } from './SigmaClipDispersionMethodSelect'
-import { TextButton } from './TextButton'
 
 export const ImageStretch = memo(() => {
 	const stretch = useMolecule(ImageStretchMolecule)
@@ -89,9 +89,9 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='primary' label='Auto' onPointerUp={stretch.auto} startContent={<Icons.WandSparkles />} variant={auto ? 'solid' : 'flat'} />
-			<TextButton color='danger' label='Reset' onPointerUp={stretch.reset} startContent={<Icons.Restore />} />
-			<TextButton color='success' label='Stretch' onPointerUp={stretch.apply} startContent={<Icons.Check />} />
+			<Button color='primary' label='Auto' onPointerUp={stretch.auto} startContent={<Icons.WandSparkles />} variant={auto ? 'solid' : 'flat'} />
+			<Button color='danger' label='Reset' onPointerUp={stretch.reset} startContent={<Icons.Restore />} />
+			<Button color='success' label='Stretch' onPointerUp={stretch.apply} startContent={<Icons.Check />} />
 		</>
 	)
 })

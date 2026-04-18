@@ -15,6 +15,7 @@ import { formatDistance, skyObjectName, skyObjectType, tw } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { ConstellationSelect } from './ConstellationSelect'
+import { Button } from './components/Button'
 import { MountDropdown } from './DeviceDropdown'
 import { FilterableListbox } from './FilterableListBox'
 import { type Icon, Icons } from './Icon'
@@ -29,7 +30,6 @@ import { SatelliteGroupTypeChipGroup } from './SatelliteGroupTypeChipGroup'
 import { SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 import { Sun } from './Sun'
-import { TextButton } from './TextButton'
 import { ToggleButton } from './ToggleButton'
 
 export const SkyAtlas = memo(() => {
@@ -800,7 +800,7 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOp
 			<Tooltip content='Time' placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
-						<TextButton color='secondary' label={formatTemporal(date, 'YYYY-MM-DD HH:mm', 0)} startContent={<Icons.CalendarToday />} />
+						<Button color='secondary' label={formatTemporal(date, 'YYYY-MM-DD HH:mm', 0)} startContent={<Icons.CalendarToday />} />
 					</PopoverTrigger>
 				</div>
 			</Tooltip>

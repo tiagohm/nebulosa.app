@@ -1,7 +1,4 @@
-* text=auto
-
-# Ensure shell scripts and other executable text files retain their executable flag
-*.sh eol=lf
+* text=auto eol=lf
 
 # Disable diffing for certain file types
 *.lock -diff

@@ -4,10 +4,10 @@ import { formatTemporal } from 'nebulosa/src/temporal'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerMolecule } from '@/molecules/filepicker'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export interface FilePickerProps {
 	readonly id: string
@@ -145,12 +145,12 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 		<>
 			<Activity mode={mode === 'save' ? 'visible' : 'hidden'}>
 				<Input className='flex-1' color={save.alreadyExists ? 'warning' : 'default'} isClearable label='Name' onValueChange={picker.updateSaveName} size='sm' value={save.name} />
-				<TextButton color='success' isDisabled={save.name.length === 0} label='Choose' onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
+				<Button color='success' disabled={save.name.length === 0} label='Choose' onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
 			</Activity>
 			<Activity mode={mode !== 'save' ? 'visible' : 'hidden'}>
-				<TextButton color='danger' isDisabled={selected.length === 0} label='Clear' onPointerUp={picker.unselectAll} startContent={<Icons.Broom />} />
+				<Button color='danger' disabled={selected.length === 0} label='Clear' onPointerUp={picker.unselectAll} startContent={<Icons.Broom />} />
 				<Badge color='success' content={selected.length} showOutline={false}>
-					<TextButton color='success' isDisabled={selected.length === 0} label='Choose' onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
+					<Button color='success' disabled={selected.length === 0} label='Choose' onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
 				</Badge>
 			</Activity>
 		</>

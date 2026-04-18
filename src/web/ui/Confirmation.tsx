@@ -2,9 +2,9 @@ import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConfirmationMolecule } from '@/molecules/confirmation'
+import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
-import { TextButton } from './TextButton'
 
 export const Confirmation = memo(() => {
 	const confirmation = useMolecule(ConfirmationMolecule)
@@ -31,8 +31,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<TextButton color='danger' label='Cancel' onPointerUp={confirmation.reject} startContent={<Icons.Close />} />
-			<TextButton color='success' label='OK' onPointerUp={confirmation.accept} startContent={<Icons.Check />} />
+			<Button color='danger' label='Cancel' onPointerUp={confirmation.reject} startContent={<Icons.Close />} />
+			<Button color='success' label='OK' onPointerUp={confirmation.accept} startContent={<Icons.Check />} />
 		</>
 	)
 })

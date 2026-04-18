@@ -1,4 +1,3 @@
-import { Cron } from 'croner'
 import { existsSync, type MakeDirectoryOptions, rmSync } from 'fs'
 import fs from 'fs/promises'
 import type { Client, DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
@@ -271,20 +270,20 @@ const server = Bun.serve({
 	},
 })
 
-const everyMinute = new Cron('0 */1 * * * *', () => {
+const everyMinute = Bun.cron('*/1 * * * *', () => {
 	imageProcessor.clear()
 	indiDevicePropertyHandler.clear()
 })
 
-const every15Minutes = new Cron('0 */15 * * * *', () => {
+const every15Minutes = Bun.cron('*/15 * * * *', () => {
 	void atlasHandler.refreshImageOfSun()
 })
 
-const everyHour = new Cron('0 0 * * * *', () => {
+const everyHour = Bun.cron('0 * * * *', () => {
 	cacheManager.clear()
 })
 
-const everyDay = new Cron('0 0 0 * * *', () => {
+const everyDay = Bun.cron('0 0 * * *', () => {
 	void atlasHandler.refreshSatellites()
 	void atlasHandler.refreshEarthOrientationData()
 })

@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { tv } from 'tailwind-variants'
+import { type ClassValue, tv } from 'tailwind-variants'
 import { tw } from '@/shared/util'
 
 const textInputStyles = tv({
@@ -12,6 +12,18 @@ const textInputStyles = tv({
 		content: 'flex shrink-0 items-center whitespace-nowrap',
 	},
 	variants: {
+		size: {
+			md: {
+				input: 'h-10 px-4 text-sm',
+				label: 'left-4 right-4 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-sm peer-focus:text-xs',
+				content: 'px-4 text-sm',
+			},
+			lg: {
+				input: 'h-11 px-5 text-base',
+				label: 'left-5 right-5 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-base peer-focus:text-xs',
+				content: 'px-4 text-base',
+			},
+		},
 		hasLabel: {
 			true: {
 				input: 'placeholder:text-transparent focus:placeholder:text-neutral-500',
@@ -29,50 +41,40 @@ const textInputStyles = tv({
 		},
 	},
 	defaultVariants: {
+		size: 'md',
 		hasLabel: false,
 	},
 })
 
 const textInputSizeStyles = {
 	md: {
-		inputBase: 'h-10 px-4 text-sm',
 		inputWithLabel: 'pt-5 pb-1.5',
 		inputWithoutLabel: 'py-2.5',
-		label: 'left-4 right-4 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-sm peer-focus:text-xs',
-		content: 'px-4 text-sm',
 	},
 	lg: {
-		inputBase: 'h-11 px-5 text-base',
 		inputWithLabel: 'pt-5 pb-1.5',
 		inputWithoutLabel: 'py-2.5',
-		label: 'left-5 right-5 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-base peer-focus:text-xs',
-		content: 'px-4 text-base',
 	},
 } as const
 
 export type TextInputSize = keyof typeof textInputSizeStyles
 
 export interface TextInputClassNames {
-	readonly base?: string
-	readonly surface?: string
-	readonly field?: string
-	readonly input?: string
-	readonly label?: string
-	readonly startContent?: string
-	readonly endContent?: string
+	readonly base?: ClassValue
+	readonly surface?: ClassValue
+	readonly field?: ClassValue
+	readonly input?: ClassValue
+	readonly label?: ClassValue
+	readonly startContent?: ClassValue
+	readonly endContent?: ClassValue
 }
 
-export interface TextInputProps extends Omit<React.ComponentPropsWithRef<'input'>, 'children' | 'className' | 'defaultValue' | 'disabled' | 'maxLength' | 'placeholder' | 'readOnly' | 'size' | 'type' | 'value'> {
-	readonly className?: string
+export interface TextInputProps extends Omit<React.ComponentPropsWithRef<'input'>, 'children' | 'defaultValue' | 'size' | 'type' | 'value'> {
 	readonly classNames?: TextInputClassNames
 	readonly label?: React.ReactNode
-	readonly placeholder?: string
 	readonly value?: string
 	readonly onValueChange?: (value: string) => void
 	readonly onEnter?: () => void
-	readonly readOnly?: boolean
-	readonly disabled?: boolean
-	readonly maxLength?: number
 	readonly fireOnEnter?: boolean
 	readonly fullWidth?: boolean
 	readonly size?: TextInputSize
@@ -118,7 +120,7 @@ export function TextInput({
 	const focusedRef = useRef(false)
 	const composingRef = useRef(false)
 	const lastCommittedValueRef = useRef(value)
-	const styles = textInputStyles({ hasLabel: !!label })
+	const styles = textInputStyles({ size, hasLabel: !!label })
 	const sizeStyles = textInputSizeStyles[size]
 	const displayedPlaceholder = label ? (placeholder ?? ' ') : placeholder
 	const hasStartContent = startContent !== undefined && startContent !== null
@@ -176,7 +178,7 @@ export function TextInput({
 	return (
 		<div className={tw(styles.base({ fullWidth }), className, disabled && 'opacity-50', readOnly && !disabled && 'opacity-80', classNames?.base)}>
 			<div className={tw(styles.surface(), disabled ? 'bg-neutral-900/35 text-neutral-500' : readOnly ? 'bg-neutral-900/55 text-neutral-300' : 'bg-neutral-900/70 text-neutral-100 hover:bg-neutral-800 focus-within:bg-neutral-800', classNames?.surface)}>
-				{hasStartContent && <div className={tw(styles.content(), sizeStyles.content, disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.startContent)}>{startContent}</div>}
+				{hasStartContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.startContent)}>{startContent}</div>}
 				<div className={tw(styles.field(), classNames?.field)}>
 					<input
 						{...props}
@@ -186,7 +188,6 @@ export function TextInput({
 						autoFocus={autoFocus}
 						className={tw(
 							styles.input({ fullWidth }),
-							sizeStyles.inputBase,
 							label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel,
 							hasStartContent && 'pl-0',
 							hasEndContent && 'pr-0',
@@ -214,18 +215,12 @@ export function TextInput({
 					/>
 					{label && (
 						<label
-							className={tw(
-								styles.label(),
-								sizeStyles.label,
-								hasStartContent && 'left-0',
-								disabled ? 'text-neutral-600 peer-placeholder-shown:text-neutral-600 peer-focus:text-neutral-600' : readOnly ? 'text-neutral-400 peer-placeholder-shown:text-neutral-400 peer-focus:text-neutral-300' : undefined,
-								classNames?.label,
-							)}>
+							className={tw(styles.label(), hasStartContent && 'left-0', disabled ? 'text-neutral-600 peer-placeholder-shown:text-neutral-600 peer-focus:text-neutral-600' : readOnly ? 'text-neutral-400 peer-placeholder-shown:text-neutral-400 peer-focus:text-neutral-300' : undefined, classNames?.label)}>
 							{label}
 						</label>
 					)}
 				</div>
-				{hasEndContent && <div className={tw(styles.content(), sizeStyles.content, disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.endContent)}>{endContent}</div>}
+				{hasEndContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.endContent)}>{endContent}</div>}
 			</div>
 		</div>
 	)

@@ -1,6 +1,6 @@
 import type * as React from 'react'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { tv } from 'tailwind-variants'
+import { type ClassValue, tv } from 'tailwind-variants'
 import { assignRef, clamp, tw } from '@/shared/util'
 import { Icons } from '../Icon'
 
@@ -14,8 +14,25 @@ const numberInputStyles = tv({
 		content: 'flex shrink-0 items-center whitespace-nowrap',
 		stepper: 'flex flex-col gap-0',
 		stepButton: 'flex flex-1 items-center justify-center bg-neutral-800/70 text-neutral-300 outline-none transition hover:bg-neutral-700 hover:text-neutral-100 cursor-pointer',
+		stepIcon: '',
 	},
 	variants: {
+		size: {
+			md: {
+				input: 'h-10 px-4 text-sm',
+				label: 'left-4 right-4 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-sm peer-focus:text-xs',
+				content: 'px-4 text-sm',
+				stepper: 'relative inset-auto my-1 mr-1 w-8 self-stretch',
+				stepIcon: 'size-[1.25em]',
+			},
+			lg: {
+				input: 'h-11 px-5 text-base',
+				label: 'left-5 right-5 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-base peer-focus:text-xs',
+				content: 'px-4 text-base',
+				stepper: 'relative inset-auto my-1 mr-1 w-9 self-stretch',
+				stepIcon: 'size-[1.5em]',
+			},
+		},
 		hasLabel: {
 			true: {
 				input: 'placeholder:text-transparent focus:placeholder:text-neutral-500',
@@ -33,55 +50,44 @@ const numberInputStyles = tv({
 		},
 	},
 	defaultVariants: {
+		size: 'md',
 		hasLabel: false,
 	},
 })
 
 const numberInputSizeStyles = {
 	md: {
-		inputBase: 'h-10 px-4 text-sm',
 		inputWithLabel: 'pt-5 pb-1.5',
 		inputWithoutLabel: 'py-2.5',
-		label: 'left-4 right-4 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-sm peer-focus:text-xs',
-		content: 'px-4 text-sm',
-		stepper: 'relative inset-auto my-1 mr-1 w-8 self-stretch',
-		stepIcon: 12,
 	},
 	lg: {
-		inputBase: 'h-11 px-5 text-base',
 		inputWithLabel: 'pt-5 pb-1.5',
 		inputWithoutLabel: 'py-2.5',
-		label: 'left-5 right-5 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-base peer-focus:text-xs',
-		content: 'px-4 text-base',
-		stepper: 'relative inset-auto my-1 mr-1 w-9 self-stretch',
-		stepIcon: 14,
 	},
 } as const
 
 export type NumberInputSize = keyof typeof numberInputSizeStyles
 
 export interface NumberInputClassNames {
-	readonly base?: string
-	readonly surface?: string
-	readonly field?: string
-	readonly input?: string
-	readonly label?: string
-	readonly startContent?: string
-	readonly endContent?: string
-	readonly stepper?: string
-	readonly stepButton?: string
+	readonly base?: ClassValue
+	readonly surface?: ClassValue
+	readonly field?: ClassValue
+	readonly input?: ClassValue
+	readonly label?: ClassValue
+	readonly startContent?: ClassValue
+	readonly endContent?: ClassValue
+	readonly stepper?: ClassValue
+	readonly stepButton?: ClassValue
+	readonly stepIcon?: ClassValue
 }
 
-export interface NumberInputProps extends Omit<React.ComponentPropsWithRef<'input'>, 'children' | 'className' | 'defaultValue' | 'disabled' | 'inputMode' | 'placeholder' | 'readOnly' | 'size' | 'type' | 'value'> {
-	readonly className?: string
+export interface NumberInputProps extends Omit<React.ComponentPropsWithRef<'input'>, 'children' | 'defaultValue' | 'inputMode' | 'placeholder' | 'size' | 'type' | 'value'> {
 	readonly classNames?: NumberInputClassNames
 	readonly label?: React.ReactNode
 	readonly placeholder?: string
 	readonly value?: number
 	readonly onValueChange?: (value: number) => void
 	readonly onEnter?: () => void
-	readonly readOnly?: boolean
-	readonly disabled?: boolean
 	readonly fireOnEnter?: boolean
 	readonly fullWidth?: boolean
 	readonly minValue?: number
@@ -206,7 +212,7 @@ export function NumberInput({
 	const hasStepper = hideStepper !== true && disabled !== true && readOnly !== true
 	const hasStartContent = startContent !== undefined && startContent !== null
 	const hasEndContent = endContent !== undefined && endContent !== null
-	const styles = numberInputStyles({ hasLabel: !!label, fullWidth })
+	const styles = numberInputStyles({ size, hasLabel: !!label, fullWidth })
 	const sizeStyles = numberInputSizeStyles[size]
 	const displayedPlaceholder = label ? (placeholder ?? ' ') : placeholder
 
@@ -341,7 +347,7 @@ export function NumberInput({
 	return (
 		<div className={tw(styles.base(), className, disabled && 'opacity-50', readOnly && !disabled && 'opacity-80', classNames?.base)}>
 			<div className={tw(styles.surface(), disabled ? 'bg-neutral-900/35 text-neutral-500' : readOnly ? 'bg-neutral-900/55 text-neutral-300' : 'bg-neutral-900/70 text-neutral-100 hover:bg-neutral-800 focus-within:bg-neutral-800', classNames?.surface)}>
-				{hasStartContent && <div className={tw(styles.content(), sizeStyles.content, disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.startContent)}>{startContent}</div>}
+				{hasStartContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.startContent)}>{startContent}</div>}
 				<div className={tw(styles.field(), classNames?.field)}>
 					<input
 						{...props}
@@ -351,7 +357,6 @@ export function NumberInput({
 						autoFocus={autoFocus}
 						className={tw(
 							styles.input(),
-							sizeStyles.inputBase,
 							label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel,
 							hasStartContent && 'pl-0',
 							hasEndContent && 'pr-0',
@@ -377,25 +382,19 @@ export function NumberInput({
 					/>
 					{label && (
 						<label
-							className={tw(
-								styles.label(),
-								sizeStyles.label,
-								hasStartContent && 'left-0',
-								disabled ? 'text-neutral-600 peer-placeholder-shown:text-neutral-600 peer-focus:text-neutral-600' : readOnly ? 'text-neutral-400 peer-placeholder-shown:text-neutral-400 peer-focus:text-neutral-300' : undefined,
-								classNames?.label,
-							)}>
+							className={tw(styles.label(), hasStartContent && 'left-0', disabled ? 'text-neutral-600 peer-placeholder-shown:text-neutral-600 peer-focus:text-neutral-600' : readOnly ? 'text-neutral-400 peer-placeholder-shown:text-neutral-400 peer-focus:text-neutral-300' : undefined, classNames?.label)}>
 							{label}
 						</label>
 					)}
 				</div>
-				{hasEndContent && <div className={tw(styles.content(), sizeStyles.content, disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.endContent)}>{endContent}</div>}
+				{hasEndContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.endContent)}>{endContent}</div>}
 				{hasStepper && (
-					<div className={tw(styles.stepper(), sizeStyles.stepper, classNames?.stepper)}>
+					<div className={tw(styles.stepper(), classNames?.stepper)}>
 						<button className={tw(styles.stepButton(), 'rounded-t-md', classNames?.stepButton)} onClick={() => stepValue(1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type='button'>
-							<Icons.ChevronUp size={sizeStyles.stepIcon} />
+							<Icons.ChevronUp className={tw(styles.stepIcon(), classNames?.stepIcon)} />
 						</button>
 						<button className={tw(styles.stepButton(), 'rounded-b-md', classNames?.stepButton)} onClick={() => stepValue(-1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type='button'>
-							<Icons.ChevronDown size={sizeStyles.stepIcon} />
+							<Icons.ChevronDown className={tw(styles.stepIcon(), classNames?.stepIcon)} />
 						</button>
 					</div>
 				)}

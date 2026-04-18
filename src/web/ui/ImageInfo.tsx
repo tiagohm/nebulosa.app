@@ -29,9 +29,9 @@ export const ImageInfo = memo(() => {
 				<span className='text-xs text-neutral-400'>{info.path}</span>
 				<div className='flex flex-row items-center gap-1'>
 					{info.width}x{info.height}
-					<Icons.ZoomIn size={14} />
+					<Icons.ZoomIn />
 					{scale.toFixed(2)}
-					<Icons.Restore size={14} />
+					<Icons.Restore />
 					{angle.toFixed(1)}°
 				</div>
 				<Activity mode={isMouseCoordinateVisible && interpolator ? 'visible' : 'hidden'}>
@@ -56,7 +56,7 @@ interface CoordinateProps extends Readonly<EquatorialCoordinate>, Readonly<Point
 function Coordinate({ pinned = false, x, y, rightAscension, declination }: CoordinateProps) {
 	return (
 		<div className='inline-flex flex-row items-center gap-1'>
-			{pinned ? <Icons.Pin size={12} /> : <Icons.Cursor size={12} />}
+			{pinned ? <Icons.Pin /> : <Icons.Cursor />}
 			<b>X:</b> {x.toFixed(0)}
 			<b className='ms-1'>Y:</b> {y.toFixed(0)}
 			<b className='ms-1'>RA:</b> {formatRA(rightAscension, true)}
@@ -84,16 +84,16 @@ const SelectedCoordinateDropdown = memo((props: SelectedCoordinateDropdownProps)
 				<IconButton className='pointer-events-auto' icon={Icons.DotsVertical} onPointerUp={stopPropagationDesktopOnly} size='sm' />
 			</DropdownTrigger>
 			<DropdownMenu onAction={handleAction}>
-				<DropdownItem key='POINT_MOUNT_HERE' startContent={<Icons.Telescope size={12} />}>
+				<DropdownItem key='POINT_MOUNT_HERE' startContent={<Icons.Telescope />}>
 					<span className='flex flex-row items-center gap-1'>
 						<span>Point mount here:</span>
 						<MountDropdown disallowNoneSelection onValueChange={(value) => value && props.onPointMountHere(value, mouseCoordinate.state.coordinate.selected!)} />
 					</span>
 				</DropdownItem>
-				<DropdownItem key='FRAME_AT_HERE' startContent={<Icons.Image size={12} />}>
+				<DropdownItem key='FRAME_AT_HERE' startContent={<Icons.Image />}>
 					Frame at this coordinate
 				</DropdownItem>
-				<DropdownItem className='text-danger' color='danger' key='UNPIN' startContent={<Icons.Trash size={12} />}>
+				<DropdownItem className='text-danger' color='danger' key='UNPIN' startContent={<Icons.Trash />}>
 					Unpin
 				</DropdownItem>
 			</DropdownMenu>

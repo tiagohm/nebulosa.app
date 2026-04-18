@@ -91,7 +91,7 @@ export const GuideOutputDropdown = memo(({ icon = Icons.Pulse, tooltipContent = 
 })
 
 const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected: boolean | undefined }) => {
-	return <Icons.Circle color={isConnected === undefined ? '#9353D3' : isConnected ? '#17C964' : '#F31260'} size={12} />
+	return <Icons.Circle color={isConnected === undefined ? '#9353D3' : isConnected ? '#17C964' : '#F31260'} />
 })
 
 interface DeviceDropdownEndContentProps {

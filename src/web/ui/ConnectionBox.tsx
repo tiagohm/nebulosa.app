@@ -25,12 +25,12 @@ const ConnectionItem = (item: Connection) => (
 					</span>
 					<span className='text-default-500 text-tiny flex gap-1 items-center'>
 						<Activity mode={item.type === 'SIMULATOR' ? 'hidden' : 'visible'}>
-							<Icons.Laptop size={12} />
+							<Icons.Laptop />
 							<span>
 								{item.host}:{item.port}
 							</span>
 						</Activity>
-						<Icons.Clock size={12} />
+						<Icons.Clock />
 						{item.connectedAt ? formatTemporal(item.connectedAt, 'YYYY-MM-DD HH:mm:ss') : 'never'}
 					</span>
 				</div>
@@ -104,13 +104,13 @@ const EditDropdown = memo(({ item }: EditDropdownProps) => {
 					<IconButton icon={Icons.VerticalMenu} onPointerUp={stopPropagationDesktopOnly} size='sm' />
 				</DropdownTrigger>
 				<DropdownMenu disabledKeys={connections.length === 1 ? ['delete'] : []}>
-					<DropdownItem key='edit' onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit size={12} />}>
+					<DropdownItem key='edit' onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit />}>
 						Edit
 					</DropdownItem>
-					<DropdownItem key='duplicate' onPointerUp={() => connection.duplicate(item)} startContent={<Icons.Copy size={12} />}>
+					<DropdownItem key='duplicate' onPointerUp={() => connection.duplicate(item)} startContent={<Icons.Copy />}>
 						Duplicate
 					</DropdownItem>
-					<DropdownItem className='text-danger' color='danger' key='delete' onPointerUp={() => connection.remove(item)} startContent={<Icons.Trash size={12} />}>
+					<DropdownItem className='text-danger' color='danger' key='delete' onPointerUp={() => connection.remove(item)} startContent={<Icons.Trash />}>
 						Delete
 					</DropdownItem>
 				</DropdownMenu>

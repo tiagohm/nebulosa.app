@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { tw } from '../shared/util'
 
 // https://pictogrammers.com/library/mdi/icon
 
@@ -12,23 +13,22 @@ export type Icon = React.MemoExoticComponent<
 >
 
 export interface IconProps extends Partial<Omit<React.ComponentPropsWithoutRef<'svg'>, 'stroke'>> {
-	readonly size?: string | number
 	readonly stroke?: string | number
 }
 
-const PathItem = (path: string) => <path d={path} />
+const PathItem = (path: string, i: number) => <path d={path} key={i} />
 
 export function mdiIcon(...paths: string[]) {
-	return memo(({ size = '1.25em', stroke = 1, color = 'currentColor', ...props }: IconProps) => (
-		<svg fill={color} height={size} strokeWidth={stroke} viewBox='0 0 24 24' width={size} {...props}>
+	return memo(({ stroke = 1, color = 'currentColor', className, ...props }: IconProps) => (
+		<svg className={tw('size-[1.25em]', className)} fill={color} strokeWidth={stroke} viewBox='0 0 24 24' {...props}>
 			{paths.map(PathItem)}
 		</svg>
 	))
 }
 
 export function lucideIcon(...paths: string[]) {
-	return memo(({ size = '1.25em', stroke = 2, color = 'currentColor', ...props }: IconProps) => (
-		<svg fill='none' height={size} stroke={color} strokeWidth={stroke} viewBox='0 0 24 24' width={size} {...props}>
+	return memo(({ stroke = 2, color = 'currentColor', className, ...props }: IconProps) => (
+		<svg className={tw('size-[1.25em]', className)} fill='none' stroke={color} strokeWidth={stroke} viewBox='0 0 24 24' {...props}>
 			{paths.map(PathItem)}
 		</svg>
 	))

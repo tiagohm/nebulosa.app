@@ -1,7 +1,7 @@
 import type * as React from 'react'
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { tv } from 'tailwind-variants'
+import { type ClassValue, tv } from 'tailwind-variants'
 import { assignRef, clamp, tw } from '@/shared/util'
 
 const VIEWPORT_PADDING = 12
@@ -21,9 +21,9 @@ const tooltipStyles = tv({
 export type TooltipPlacement = 'top' | 'bottom' | 'start' | 'end'
 
 export interface TooltipClassNames {
-	readonly base?: string
-	readonly content?: string
-	readonly arrow?: string
+	readonly base?: ClassValue
+	readonly content?: ClassValue
+	readonly arrow?: ClassValue
 }
 
 export interface TooltipProps extends Omit<React.ComponentPropsWithRef<'div'>, 'children' | 'content'> {

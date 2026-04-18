@@ -33,7 +33,7 @@ export const About = memo(() => {
 				</div>
 				<div className='col-span-full sm:col-span-9 mt-4 p-4 bg-blue-600/10 rounded-2xl text-center'>This software is WIP, comes with absolutely no warranty and the copyright holder is not liable or responsible for anything.</div>
 				<div className='col-span-full sm:col-span-9 px-4 py-2 bg-green-600/10 rounded-2xl flex flex-row flex-nowrap gap-1 justify-center items-center text-sm'>
-					<Icons.Link size={14} />
+					<Icons.Link />
 					Icons from
 					<Link className='w-auto! underline' href='https://www.flaticon.com/' label='Flaticon' />
 					,
@@ -48,7 +48,7 @@ export const About = memo(() => {
 					<Link className='w-auto! text-neutral-100! bg-neutral-700 px-1 rounded' href='https://react.dev/' label='React' />
 					and
 					<Link className='w-auto! text-neutral-100! bg-neutral-700 px-1 rounded' href='https://bun.sh/' label='Bun' />
-					and developed with <Icons.Heart color='red' size={15} /> by
+					and developed with <Icons.Heart color='red' /> by
 					<Link className='w-auto! text-neutral-100! bg-neutral-700 px-1 rounded' href='https://github.com/tiagohm' label='Me' />
 				</div>
 			</div>

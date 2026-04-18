@@ -34,14 +34,14 @@ export function FilePickerInput({ filter, mode, id, value, onValueChange, isRead
 	const StartContent = (
 		<Tooltip content='Browse' placement='bottom' showArrow>
 			<Button isIconOnly size='sm' variant='light'>
-				<Icons.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} size={12} />
+				<Icons.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} />
 			</Button>
 		</Tooltip>
 	)
 
 	const EndContent = value ? (
 		<Button isIconOnly size='sm' variant='light'>
-			<Icons.CloseCircle className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} size={12} />
+			<Icons.CloseCircle className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} />
 		</Button>
 	) : null
 

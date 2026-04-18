@@ -11,7 +11,7 @@ export function AutoSubFolderModeButton({ value, onValueChange, ...props }: Auto
 	return (
 		<Tooltip content={`Auto sub-folder mode: ${value}`} placement='bottom' showArrow>
 			<Button {...props} isIconOnly onPointerUp={() => onValueChange(value === 'OFF' ? 'NOON' : value === 'NOON' ? 'MIDNIGHT' : 'OFF')} size='sm' variant='light'>
-				{value === 'OFF' ? <Icons.FolderOff color='#9E9E9E' size={14} /> : value === 'NOON' ? <Icons.Sun color='#FFEB3B' size={14} /> : <Icons.Moon color='#2196F3' size={14} />}
+				{value === 'OFF' ? <Icons.FolderOff color='#9E9E9E' /> : value === 'NOON' ? <Icons.Sun color='#FFEB3B' /> : <Icons.Moon color='#2196F3' />}
 			</Button>
 		</Tooltip>
 	)

@@ -146,7 +146,8 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 	const focusingRef = useRef(false)
 	const mounted = typeof document !== 'undefined'
 	const tooltipContainer = portalContainer ?? (mounted ? document.body : undefined)
-	const visible = hasTooltipContent(content) && !disabled && isOpen
+	const hasContent = hasTooltipContent(content)
+	const visible = hasContent && !disabled && isOpen
 	const styles = tooltipStyles()
 
 	const hideTooltip = useEffectEvent(() => {
@@ -157,7 +158,7 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 	})
 
 	const scheduleOpen = useEffectEvent((element?: EventTarget | null) => {
-		if (!mounted || disabled || !hasTooltipContent(content)) return
+		if (!mounted || disabled || !hasContent) return
 		if (element instanceof HTMLElement) {
 			triggerElementRef.current = element
 		}
@@ -226,7 +227,7 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 	}, [])
 
 	useEffect(() => {
-		if (disabled || !hasTooltipContent(content)) {
+		if (disabled || !hasContent) {
 			hoveringRef.current = false
 			focusingRef.current = false
 			hideTooltip()
@@ -296,7 +297,7 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 		scheduleClose()
 	}
 
-	if (React.isValidElement(children) && children.type !== React.Fragment) {
+	if (hasContent && React.isValidElement(children) && children.type !== React.Fragment) {
 		const c = children as React.ReactElement<React.DOMAttributes<HTMLElement>>
 
 		children = React.cloneElement(c, {

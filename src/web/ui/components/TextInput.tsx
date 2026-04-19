@@ -176,7 +176,7 @@ export function TextInput({
 	}
 
 	return (
-		<div className={tw(styles.base({ fullWidth }), className, disabled && 'opacity-40', readOnly && !disabled && 'opacity-90', classNames?.base)}>
+		<div className={tw(styles.base({ fullWidth }), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90 pointer-events-none', classNames?.base)}>
 			<div className={tw(styles.surface(), disabled ? 'bg-neutral-900/35 text-neutral-500' : readOnly ? 'bg-neutral-900/55 text-neutral-300' : 'bg-neutral-900/70 text-neutral-100 hover:bg-neutral-800 focus-within:bg-neutral-800', classNames?.surface)}>
 				{hasStartContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.startContent)}>{startContent}</div>}
 				<div className={tw(styles.field(), classNames?.field)}>

@@ -569,7 +569,7 @@ export function Slider<V extends SliderValue>({
 	const thumbValues = isRangeValue(renderedValue) ? renderedValue : [renderedValue]
 
 	return (
-		<div {...props} className={tw(styles.base(), className, disabled && 'opacity-40', readOnly && !disabled && 'opacity-70', classNames?.base)} ref={ref} style={style}>
+		<div {...props} className={tw(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90 pointer-events-none', classNames?.base)} ref={ref} style={style}>
 			{content !== undefined && content !== null && <span className={tw(styles.label(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-200', classNames?.label)}>{content}</span>}
 			<div className={tw(styles.body(), classNames?.body)}>
 				{hasStartContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.startContent)}>{startContent}</div>}

@@ -1,6 +1,7 @@
 import { mulberry32 } from 'nebulosa/src/random'
 import { memo, useState } from 'react'
 import { Button } from './components/Button'
+import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
 import { Radio } from './components/Radio'
@@ -19,6 +20,7 @@ export function Demo() {
 			<Radios />
 			<Switches />
 			<Sliders />
+			<Calendars />
 		</div>
 	)
 }
@@ -175,4 +177,16 @@ const Sliders = memo(() => {
 	}
 
 	return elements
+})
+
+const Calendars = memo(() => {
+	const [value, setValue] = useState(Temporal.Now.plainDateISO())
+
+	return (
+		<>
+			<Calendar onValueChange={setValue} showWeekNumber value={value} />
+			<Calendar color='success' disabled onValueChange={setValue} value={value} />
+			<Calendar onValueChange={setValue} readOnly value={value} />
+		</>
+	)
 })

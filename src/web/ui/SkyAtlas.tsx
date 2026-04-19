@@ -1,5 +1,4 @@
-import { Calendar, Chip, type ChipProps, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
-import { fromAbsolute, type ZonedDateTime } from '@internationalized/date'
+import { Chip, type ChipProps, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
@@ -16,6 +15,7 @@ import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephem
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { ConstellationSelect } from './ConstellationSelect'
 import { Button } from './components/Button'
+import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
 import { Slider } from './components/Slider'
@@ -765,9 +765,9 @@ const TimeBar = memo(() => {
 })
 
 interface CalendarPopoverProps {
-	readonly date: Temporal
+	readonly date: number
 	readonly offset: number
-	readonly onDateChange: (date: Temporal) => void
+	readonly onDateChange: (date: number) => void
 	readonly onOffsetChange: (offset: number) => void
 	readonly isOpen?: boolean
 	readonly onOpenChange?: (isOpen: boolean) => void
@@ -777,8 +777,8 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOp
 	const hour = temporalGet(date, 'h')
 	const minute = temporalGet(date, 'm')
 
-	function handleDateChange(date: ZonedDateTime) {
-		onDateChange(date.toDate().getTime())
+	function handleDateChange(date: Temporal.PlainDate) {
+		onDateChange(date.toZonedDateTime({ plainTime: { hour, minute }, timeZone: 'UTC' }).epochMilliseconds)
 	}
 
 	function handleOnHourChange(value: number) {
@@ -800,7 +800,7 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOp
 			</Tooltip>
 			<PopoverContent>
 				<div className='grid grid-cols-12 gap-2 pb-2 max-w-[256px]'>
-					<Calendar className='col-span-full' classNames={{ base: 'shadow-none' }} onChange={handleDateChange} showMonthAndYearPickers value={fromAbsolute(date, 'UTC')} />
+					<Calendar className='col-span-full' onValueChange={handleDateChange} value={Temporal.Instant.fromEpochMilliseconds(date).toZonedDateTimeISO('GMT').toPlainDate()} />
 					<div className='col-span-6 flex flex-row items-center justify-center gap-1'>
 						<NumberInput className='max-w-20' maxValue={23} minValue={0} onValueChange={handleOnHourChange} value={hour} />
 						<span className='text-lg font-bold'>:</span>
@@ -818,7 +818,7 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOp
 interface AstronomicalEventProps {
 	readonly icon: Icon
 	readonly label: string
-	readonly time: Temporal
+	readonly time: number
 	readonly offset?: number
 	readonly format: string
 }

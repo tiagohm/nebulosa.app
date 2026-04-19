@@ -100,7 +100,7 @@ export function Radio({ autoFocus, children, className, classNames, disabled = f
 	}
 
 	return (
-		<label className={tw(styles.base(), disabled ? 'cursor-not-allowed opacity-40' : readOnly ? 'cursor-default opacity-70' : 'cursor-pointer', className, classNames?.base)}>
+		<label className={tw(styles.base(), disabled ? 'cursor-not-allowed opacity-40' : readOnly ? 'cursor-default opacity-90 pointer-events-none' : 'cursor-pointer', className, classNames?.base)}>
 			<input
 				{...props}
 				autoFocus={autoFocus}

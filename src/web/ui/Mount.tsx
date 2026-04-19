@@ -67,7 +67,7 @@ const Body = memo(() => {
 			<CurrentPosition />
 			<hr className='col-span-full text-neutral-800 border-dotted' />
 			<TargetCoordinateAndPosition />
-			<Nudge className='col-span-5 row-span-2' isCancelDisabled={!canAbort || parked || !moving} isDisabled={!connected || parked} isNudgeDisabled={moving} onCancel={mount.stop} onNudge={mount.moveTo} />
+			<Nudge className='col-span-5 row-span-2' disabled={!connected || parked} isCancelDisabled={!canAbort || parked || !moving} isNudgeDisabled={moving} onCancel={mount.stop} onNudge={mount.moveTo} />
 			<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || moving || parked} isSelected={tracking} onValueChange={mount.tracking}>
 				Tracking
 			</Switch>

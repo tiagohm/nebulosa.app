@@ -1,11 +1,11 @@
-import { Chip, NumberInput, Tooltip } from '@heroui/react'
+import { Chip, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FocuserMolecule } from '@/molecules/indi/focuser'
-import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConnectButton } from './ConnectButton'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
@@ -70,7 +70,7 @@ const Position = memo(() => {
 
 	return (
 		<div className='col-span-9 flex flex-row items-center justify-end gap-2'>
-			<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isReadOnly label='Position' size='sm' value={position.value} />
+			<NumberInput className='flex-1' label='Position' readOnly value={position.value} />
 			<Tooltip content='Stop' placement='bottom' showArrow>
 				<IconButton color='danger' icon={Icons.Stop} isDisabled={!connected || !canAbort || !moving} onPointerUp={focuser.stop} />
 			</Tooltip>
@@ -90,7 +90,7 @@ const RelativePosition = memo(() => {
 			<Tooltip content='Move In' placement='bottom' showArrow>
 				<IconButton color='secondary' icon={Icons.ArrowLeft} isDisabled={!connected || moving || relative === 0} onPointerUp={focuser.moveIn} />
 			</Tooltip>
-			<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || moving} label='Relative' maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} size='sm' value={relative} />
+			<NumberInput className='flex-1' disabled={!connected || moving} label='Relative' maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} value={relative} />
 			<Tooltip content='Move Out' placement='bottom' showArrow>
 				<IconButton color='secondary' icon={Icons.ArrowRight} isDisabled={!connected || moving || relative === 0} onPointerUp={focuser.moveOut} />
 			</Tooltip>
@@ -110,7 +110,7 @@ const AbsolutePosition = memo(() => {
 			<Tooltip content='Sync' placement='bottom' showArrow>
 				<IconButton color='primary' icon={Icons.Sync} isDisabled={!connected || !canSync || moving} onPointerUp={focuser.sync} />
 			</Tooltip>
-			<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || moving} label='Absolute' maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} size='sm' value={absolute} />
+			<NumberInput className='flex-1' disabled={!connected || moving} label='Absolute' maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} value={absolute} />
 			<Tooltip content='Move' placement='bottom' showArrow>
 				<IconButton color='success' icon={Icons.Check} isDisabled={!connected || moving || absolute === position.value} onPointerUp={focuser.moveTo} />
 			</Tooltip>

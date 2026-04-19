@@ -1,11 +1,10 @@
-import { NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
-import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
 import { ImageChannelOrGrayInput } from './ImageChannelOrGrayInput'
 import { Modal } from './Modal'
@@ -45,7 +44,7 @@ const Brightness = memo(() => {
 
 	return (
 		<div className='col-span-full flex flex-col gap-2'>
-			<NumberInput className='col-span-full' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!enabled} label='Brightness' maxValue={10} minValue={0} onValueChange={(value) => adjustment.update('brightness', 'value', value)} size='sm' step={0.01} value={brightness.value} />
+			<NumberInput className='col-span-full' disabled={!enabled} fractionDigits={2} label='Brightness' maxValue={10} minValue={0} onValueChange={(value) => adjustment.update('brightness', 'value', value)} step={0.01} value={brightness.value} />
 		</div>
 	)
 })
@@ -56,7 +55,7 @@ const Contrast = memo(() => {
 
 	return (
 		<div className='col-span-full flex flex-col gap-2'>
-			<NumberInput className='col-span-full' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!enabled} label='Contrast' maxValue={10} minValue={0} onValueChange={(value) => adjustment.update('contrast', 'value', value)} size='sm' step={0.01} value={contrast.value} />
+			<NumberInput className='col-span-full' disabled={!enabled} fractionDigits={2} label='Contrast' maxValue={10} minValue={0} onValueChange={(value) => adjustment.update('contrast', 'value', value)} step={0.01} value={contrast.value} />
 		</div>
 	)
 })
@@ -67,7 +66,7 @@ const Gamma = memo(() => {
 
 	return (
 		<div className='col-span-full flex flex-col gap-2'>
-			<NumberInput className='col-span-full' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!enabled} label='Gamma' maxValue={10} minValue={0} onValueChange={(value) => adjustment.update('gamma', 'value', value)} size='sm' step={0.01} value={gamma.value} />
+			<NumberInput className='col-span-full' disabled={!enabled} fractionDigits={2} label='Gamma' maxValue={10} minValue={0} onValueChange={(value) => adjustment.update('gamma', 'value', value)} step={0.01} value={gamma.value} />
 		</div>
 	)
 })
@@ -80,7 +79,7 @@ const Saturation = memo(() => {
 	return (
 		<Activity mode={info?.mono ? 'hidden' : 'visible'}>
 			<div className='col-span-full flex flex-col gap-2'>
-				<NumberInput className='col-span-full' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!enabled} label='Saturation' maxValue={10} minValue={0} onValueChange={(value) => adjustment.update('saturation', 'value', value)} size='sm' step={0.01} value={saturation.value} />
+				<NumberInput className='col-span-full' disabled={!enabled} fractionDigits={2} label='Saturation' maxValue={10} minValue={0} onValueChange={(value) => adjustment.update('saturation', 'value', value)} step={0.01} value={saturation.value} />
 				<ImageChannelOrGrayInput isDisabled={!enabled || saturation.value === 1} onValueChange={(value) => adjustment.update('saturation', 'channel', value)} value={saturation.channel} />
 			</div>
 		</Activity>

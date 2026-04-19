@@ -1,11 +1,10 @@
-import { NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
-import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
@@ -58,7 +57,7 @@ const MinorPlanets = memo(() => {
 	return (
 		<>
 			<Checkbox className='col-span-full' label='Minor Planets' onValueChange={(value) => annotation.update('minorPlanets', value)} value={minorPlanets} />
-			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!minorPlanets} label='Magnitude Limit' maxValue={30} minValue={1} onValueChange={(value) => annotation.update('minorPlanetsMagnitudeLimit', value)} size='sm' value={minorPlanetsMagnitudeLimit} />
+			<NumberInput className='col-span-5' disabled={!minorPlanets} label='Magnitude Limit' maxValue={30} minValue={1} onValueChange={(value) => annotation.update('minorPlanetsMagnitudeLimit', value)} value={minorPlanetsMagnitudeLimit} />
 			<Checkbox className='col-span-7' disabled={!minorPlanets || minorPlanetsMagnitudeLimit >= 30} label='Include without magnitude' onValueChange={(value) => annotation.update('includeMinorPlanetsWithoutMagnitude', value)} value={includeMinorPlanetsWithoutMagnitude} />
 		</>
 	)

@@ -1,11 +1,11 @@
-import { Chip, NumberInput, Tooltip } from '@heroui/react'
+import { Chip, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { RotatorMolecule } from '@/molecules/indi/rotator'
-import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { ConnectButton } from './ConnectButton'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
@@ -69,7 +69,7 @@ const CurrentAngle = memo(() => {
 
 	return (
 		<div className='col-span-9 flex flex-row items-center justify-end gap-2'>
-			<NumberInput className='flex-1' formatOptions={DECIMAL_NUMBER_FORMAT} hideStepper isReadOnly label='Angle (°)' size='sm' value={angle.value} />
+			<NumberInput className='flex-1' label='Angle (°)' readOnly value={angle.value} />
 			<Tooltip content='Stop' placement='bottom' showArrow>
 				<IconButton color='danger' icon={Icons.Stop} isDisabled={!connected || !canAbort || !moving} onPointerUp={rotator.stop} size='sm' />
 			</Tooltip>
@@ -87,7 +87,7 @@ const TargetAngle = memo(() => {
 			<Tooltip content='Sync' placement='bottom' showArrow>
 				<IconButton color='primary' icon={Icons.Sync} isDisabled={!connected || !canSync || moving} onPointerUp={rotator.sync} />
 			</Tooltip>
-			<NumberInput className='flex-1' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!connected} label='Move (°)' maxValue={angle.max} minValue={angle.min} onValueChange={(value) => rotator.update('angle', value)} size='sm' value={targetAngle} />
+			<NumberInput className='flex-1' disabled={!connected} label='Move (°)' maxValue={angle.max} minValue={angle.min} onValueChange={(value) => rotator.update('angle', value)} value={targetAngle} />
 			<Tooltip content='Move' placement='bottom' showArrow>
 				<IconButton color='success' icon={Icons.Check} isDisabled={!connected || moving || targetAngle === angle.value} onPointerUp={rotator.moveTo} />
 			</Tooltip>

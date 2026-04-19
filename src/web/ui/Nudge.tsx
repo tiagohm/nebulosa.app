@@ -5,7 +5,7 @@ import { type Icon, Icons } from './Icon'
 export type NudgeDirection = 'upLeft' | 'up' | 'upRight' | 'left' | 'right' | 'downLeft' | 'down' | 'downRight'
 
 export interface NudgeProps extends React.ComponentProps<'div'> {
-	readonly isDisabled?: boolean
+	readonly disabled?: boolean
 	readonly isNudgeDisabled?: boolean
 	readonly isUpLeftDisabled?: boolean
 	readonly isUpDisabled?: boolean
@@ -20,7 +20,7 @@ export interface NudgeProps extends React.ComponentProps<'div'> {
 	readonly onCancel?: () => void
 }
 
-export function Nudge({ onNudge, onCancel, isDisabled, isNudgeDisabled, isUpLeftDisabled, isUpDisabled, isUpRightDisabled, isLeftDisabled, isRightDisabled, isDownLeftDisabled, isDownDisabled, isDownRightDisabled, isCancelDisabled, ...props }: NudgeProps) {
+export function Nudge({ onNudge, onCancel, disabled, isNudgeDisabled, isUpLeftDisabled, isUpDisabled, isUpRightDisabled, isLeftDisabled, isRightDisabled, isDownLeftDisabled, isDownDisabled, isDownRightDisabled, isCancelDisabled, ...props }: NudgeProps) {
 	const [direction, setDirection] = useState<NudgeDirection | null>(null)
 
 	function handleNudgePointer(direction: NudgeDirection, down: boolean) {
@@ -31,15 +31,15 @@ export function Nudge({ onNudge, onCancel, isDisabled, isNudgeDisabled, isUpLeft
 	return (
 		<div {...props}>
 			<div className='grid grid-cols-12 gap-2 justify-items-center items-center'>
-				<NudgeButton className='col-span-4' color='secondary' disabled={isDisabled || isUpLeftDisabled || (isNudgeDisabled && direction !== 'upLeft')} icon={Icons.ArrowUpLeft} onPointer={(down) => handleNudgePointer('upLeft', down)} />
-				<NudgeButton className='col-span-4' color='secondary' disabled={isDisabled || isUpDisabled || (isNudgeDisabled && direction !== 'up')} icon={Icons.ArrowUp} onPointer={(down) => handleNudgePointer('up', down)} />
-				<NudgeButton className='col-span-4' color='secondary' disabled={isDisabled || isUpRightDisabled || (isNudgeDisabled && direction !== 'upRight')} icon={Icons.ArrowUpRight} onPointer={(down) => handleNudgePointer('upRight', down)} />
-				<NudgeButton className='col-span-4' color='secondary' disabled={isDisabled || isLeftDisabled || (isNudgeDisabled && direction !== 'left')} icon={Icons.ArrowLeft} onPointer={(down) => handleNudgePointer('left', down)} />
-				<NudgeButton className='col-span-4' color='danger' disabled={isDisabled || isCancelDisabled} icon={Icons.CloseCircle} onPointer={(down) => down && onCancel?.()} />
-				<NudgeButton className='col-span-4' color='secondary' disabled={isDisabled || isRightDisabled || (isNudgeDisabled && direction !== 'right')} icon={Icons.ArrowRight} onPointer={(down) => handleNudgePointer('right', down)} />
-				<NudgeButton className='col-span-4' color='secondary' disabled={isDisabled || isDownLeftDisabled || (isNudgeDisabled && direction !== 'downLeft')} icon={Icons.ArrowDownLeft} onPointer={(down) => handleNudgePointer('downLeft', down)} />
-				<NudgeButton className='col-span-4' color='secondary' disabled={isDisabled || isDownDisabled || (isNudgeDisabled && direction !== 'down')} icon={Icons.ArrowDown} onPointer={(down) => handleNudgePointer('down', down)} />
-				<NudgeButton className='col-span-4' color='secondary' disabled={isDisabled || isDownRightDisabled || (isNudgeDisabled && direction !== 'downRight')} icon={Icons.ArrowDownRight} onPointer={(down) => handleNudgePointer('downRight', down)} />
+				<NudgeButton className='col-span-4' color='secondary' disabled={disabled || isUpLeftDisabled || (isNudgeDisabled && direction !== 'upLeft')} icon={Icons.ArrowUpLeft} onPointer={(down) => handleNudgePointer('upLeft', down)} />
+				<NudgeButton className='col-span-4' color='secondary' disabled={disabled || isUpDisabled || (isNudgeDisabled && direction !== 'up')} icon={Icons.ArrowUp} onPointer={(down) => handleNudgePointer('up', down)} />
+				<NudgeButton className='col-span-4' color='secondary' disabled={disabled || isUpRightDisabled || (isNudgeDisabled && direction !== 'upRight')} icon={Icons.ArrowUpRight} onPointer={(down) => handleNudgePointer('upRight', down)} />
+				<NudgeButton className='col-span-4' color='secondary' disabled={disabled || isLeftDisabled || (isNudgeDisabled && direction !== 'left')} icon={Icons.ArrowLeft} onPointer={(down) => handleNudgePointer('left', down)} />
+				<NudgeButton className='col-span-4' color='danger' disabled={disabled || isCancelDisabled} icon={Icons.CloseCircle} onPointer={(down) => down && onCancel?.()} />
+				<NudgeButton className='col-span-4' color='secondary' disabled={disabled || isRightDisabled || (isNudgeDisabled && direction !== 'right')} icon={Icons.ArrowRight} onPointer={(down) => handleNudgePointer('right', down)} />
+				<NudgeButton className='col-span-4' color='secondary' disabled={disabled || isDownLeftDisabled || (isNudgeDisabled && direction !== 'downLeft')} icon={Icons.ArrowDownLeft} onPointer={(down) => handleNudgePointer('downLeft', down)} />
+				<NudgeButton className='col-span-4' color='secondary' disabled={disabled || isDownDisabled || (isNudgeDisabled && direction !== 'down')} icon={Icons.ArrowDown} onPointer={(down) => handleNudgePointer('down', down)} />
+				<NudgeButton className='col-span-4' color='secondary' disabled={disabled || isDownRightDisabled || (isNudgeDisabled && direction !== 'downRight')} icon={Icons.ArrowDownRight} onPointer={(down) => handleNudgePointer('downRight', down)} />
 			</div>
 		</div>
 	)

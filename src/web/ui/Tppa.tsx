@@ -1,13 +1,13 @@
-import { Chip, NumberInput } from '@heroui/react'
+import { Chip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { TppaMolecule } from '@/molecules/tppa'
-import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { CameraDropdown, MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
@@ -90,10 +90,10 @@ const Inputs = memo(() => {
 	return (
 		<>
 			<PlateSolverSelect className='col-span-6' endContent={<PlateSolverSelectEndContent />} isDisabled={running} onValueChange={(value) => tppa.updateSolver('type', value)} value={type} />
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Move for (s)' maxValue={60} minValue={1} onValueChange={(value) => tppa.update('moveDuration', value)} size='sm' value={moveDuration} />
+			<NumberInput className='col-span-3' disabled={running} label='Move for (s)' maxValue={60} minValue={1} onValueChange={(value) => tppa.update('moveDuration', value)} value={moveDuration} />
 			<TppaDirectionSelect className='col-span-3' isDisabled={running} onValueChange={(value) => tppa.update('direction', value)} value={direction} />
-			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Max attempts' maxValue={30} minValue={3} onValueChange={(value) => tppa.update('maxAttempts', value)} size='sm' value={maxAttempts} />
-			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Delay before capture (s)' maxValue={120} minValue={0} onValueChange={(value) => tppa.update('delayBeforeCapture', value)} size='sm' value={delayBeforeCapture} />
+			<NumberInput className='col-span-4' disabled={running} label='Max attempts' maxValue={30} minValue={3} onValueChange={(value) => tppa.update('maxAttempts', value)} value={maxAttempts} />
+			<NumberInput className='col-span-5' disabled={running} label='Delay before capture (s)' maxValue={120} minValue={0} onValueChange={(value) => tppa.update('delayBeforeCapture', value)} value={delayBeforeCapture} />
 			<Checkbox className='col-span-full' disabled={running} label='Compensate refraction' onValueChange={(value) => tppa.update('compensateRefraction', value)} value={compensateRefraction} />
 		</>
 	)

@@ -1,12 +1,12 @@
-import { Input, NumberInput, Tooltip } from '@heroui/react'
+import { Input, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/angle'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageSolverMolecule } from '@/molecules/image/solver'
-import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -44,9 +44,9 @@ const Inputs = memo(() => {
 			<Checkbox className='col-span-3 col-end-13' label='Blind' onValueChange={(value) => solver.update('blind', value)} value={blind} />
 			<Input className='col-span-4' isDisabled={blind} label='RA' onValueChange={(value) => solver.update('rightAscension', value)} size='sm' value={rightAscension.toString()} />
 			<Input className='col-span-4' isDisabled={blind} label='DEC' onValueChange={(value) => solver.update('declination', value)} size='sm' value={declination.toString()} />
-			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={blind} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => solver.update('radius', value)} size='sm' step={0.1} value={radius ?? 4} />
-			<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} label='Focal Length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} size='sm' value={focalLength} />
-			<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} size='sm' step={0.01} value={pixelSize} />
+			<NumberInput className='col-span-4' disabled={blind} fractionDigits={1} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => solver.update('radius', value)} step={0.1} value={radius ?? 4} />
+			<NumberInput className='col-span-6' label='Focal Length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} value={focalLength} />
+			<NumberInput className='col-span-6' fractionDigits={2} label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} step={0.01} value={pixelSize} />
 		</>
 	)
 })

@@ -1,11 +1,11 @@
-import { Listbox, ListboxItem, NumberInput } from '@heroui/react'
+import { Listbox, ListboxItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { AlpacaMolecule } from '@/molecules/alpaca'
-import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from '@/ui/components/Button'
+import { NumberInput } from '@/ui/components/NumberInput'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 
@@ -52,7 +52,7 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='flex flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => (alpaca.state.port = value)} size='sm' value={port} />
+			<NumberInput className='flex flex-1' disabled={running} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => (alpaca.state.port = value)} value={port} />
 			<Button color='danger' disabled={!running} label='Stop' onPointerUp={alpaca.stop} startContent={<Icons.Stop />} />
 			<Button color='success' disabled={running} label='Start' onPointerUp={alpaca.start} startContent={<Icons.Play />} />
 		</>

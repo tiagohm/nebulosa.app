@@ -1,11 +1,11 @@
-import { NumberInput, Slider } from '@heroui/react'
+import { Slider } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
-import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { SigmaClipCenterMethodSelect } from './SigmaClipCenterMethodSelect'
@@ -43,11 +43,11 @@ const Stretch = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} label='Shadow' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('shadow', value)} size='sm' value={shadow} />
-			<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} label='Highlight' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('highlight', value)} size='sm' value={highlight} />
+			<NumberInput className='col-span-6' label='Shadow' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('shadow', value)} value={shadow} />
+			<NumberInput className='col-span-6' label='Highlight' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('highlight', value)} value={highlight} />
 			<Slider className='col-span-full' disableThumbScale maxValue={65536} minValue={0} onChange={handleShadowHighlightChange} step={8} value={[shadow, highlight]} />
-			<NumberInput className='col-span-9' formatOptions={INTEGER_NUMBER_FORMAT} label='Midtone' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('midtone', value)} size='sm' value={midtone} />
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} label='Bits' maxValue={20} minValue={8} onValueChange={(value) => stretch.update('bits', value)} size='sm' value={bits} />
+			<NumberInput className='col-span-9' label='Midtone' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('midtone', value)} value={midtone} />
+			<NumberInput className='col-span-3' label='Bits' maxValue={20} minValue={8} onValueChange={(value) => stretch.update('bits', value)} value={bits} />
 			<Slider className='col-span-full' disableThumbScale maxValue={65536} minValue={0} onChange={(value) => stretch.update('midtone', value as number)} step={8} value={midtone} />
 		</>
 	)
@@ -61,8 +61,8 @@ const AutoStretch = memo(() => {
 		<>
 			<p className='col-span-full'>AUTO STRETCH</p>
 			<SigmaClip />
-			<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} label='Mean background' maxValue={1} minValue={0} onValueChange={(value) => stretch.update('meanBackground', value)} size='sm' step={0.01} value={meanBackground} />
-			<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} label='Clipping point' maxValue={10} minValue={-10} onValueChange={(value) => stretch.update('clippingPoint', value)} size='sm' step={0.01} value={clippingPoint} />
+			<NumberInput className='col-span-6' fractionDigits={2} label='Mean background' maxValue={1} minValue={0} onValueChange={(value) => stretch.update('meanBackground', value)} step={0.01} value={meanBackground} />
+			<NumberInput className='col-span-6' fractionDigits={2} label='Clipping point' maxValue={10} minValue={-10} onValueChange={(value) => stretch.update('clippingPoint', value)} step={0.01} value={clippingPoint} />
 		</>
 	)
 })
@@ -74,8 +74,8 @@ const SigmaClip = memo(() => {
 	return (
 		<>
 			<Checkbox className='col-span-6' label='Sigma Clip' onValueChange={(value) => stretch.update('sigmaClip', value)} value={sigmaClip} />
-			<NumberInput className='col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!sigmaClip} label='Lower' maxValue={10} minValue={0.1} onValueChange={(value) => stretch.update('sigmaLower', value)} size='sm' step={0.1} value={sigmaLower} />
-			<NumberInput className='col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!sigmaClip} label='Upper' maxValue={10} minValue={0.1} onValueChange={(value) => stretch.update('sigmaUpper', value)} size='sm' step={0.1} value={sigmaUpper} />
+			<NumberInput className='col-span-3' disabled={!sigmaClip} fractionDigits={1} label='Lower' maxValue={10} minValue={0.1} onValueChange={(value) => stretch.update('sigmaLower', value)} step={0.1} value={sigmaLower} />
+			<NumberInput className='col-span-3' disabled={!sigmaClip} fractionDigits={1} label='Upper' maxValue={10} minValue={0.1} onValueChange={(value) => stretch.update('sigmaUpper', value)} step={0.1} value={sigmaUpper} />
 			<SigmaClipCenterMethodSelect className='col-span-6' isDisabled={!sigmaClip} onValueChange={(value) => stretch.update('centerMethod', value)} value={centerMethod} />
 			<SigmaClipDispersionMethodSelect className='col-span-6' isDisabled={!sigmaClip} onValueChange={(value) => stretch.update('dispersionMethod', value)} value={dispersionMethod} />
 		</>

@@ -16,7 +16,7 @@
 	"css.lint.unknownAtRules": "ignore",
 	"json.format.keepLines": true,
 	"tailwindCSS.classAttributes": ["class", "className", "classNames"],
-	"tailwindCSS.rootFontSize": 13,
+	"tailwindCSS.rootFontSize": 12,
 	"tailwindCSS.classFunctions": ["tv"],
 	"editor.codeActionsOnSave": {
 		"source.removeUnusedImports": "explicit",

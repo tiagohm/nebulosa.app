@@ -14,7 +14,7 @@ html {
 
 html,
 body {
-	@apply text-[14px] overscroll-none;
+	@apply text-[12px] overscroll-none;
 	filter: grayscale(var(--ws-disconnected-grayscale, 0%));
 }
 

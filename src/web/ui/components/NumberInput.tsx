@@ -22,14 +22,14 @@ const numberInputStyles = tv({
 				input: 'h-10 px-4 text-sm',
 				label: 'left-4 right-4 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-sm peer-focus:text-xs',
 				content: 'px-4 text-sm',
-				stepper: 'relative inset-auto my-1 mr-1 w-8 self-stretch',
+				stepper: 'relative inset-auto w-6 self-stretch',
 				stepIcon: 'size-[1.25em]',
 			},
 			lg: {
 				input: 'h-11 px-5 text-base',
 				label: 'left-5 right-5 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-base peer-focus:text-xs',
 				content: 'px-4 text-base',
-				stepper: 'relative inset-auto my-1 mr-1 w-9 self-stretch',
+				stepper: 'relative inset-auto w-7 self-stretch',
 				stepIcon: 'size-[1.5em]',
 			},
 		},
@@ -263,7 +263,10 @@ export function NumberInput({
 
 		const baseValue = parseDraftValue(draft, digits) ?? lastCommittedValueRef.current ?? minValue ?? 0
 		const nextValue = clampValue(baseValue + direction * normalizeStepValue(step, digits), minValue, maxValue)
+		setValue(nextValue)
+	})
 
+	const setValue = useEffectEvent((nextValue: number) => {
 		if (nextValue !== lastCommittedValueRef.current) {
 			lastCommittedValueRef.current = nextValue
 			onValueChange?.(nextValue)
@@ -318,9 +321,22 @@ export function NumberInput({
 			return
 		}
 
+		if (event.ctrlKey === true && event.key === 'End' && Number.isFinite(maxValue)) {
+			event.preventDefault()
+			setValue(maxValue!)
+			return
+		}
+
+		if (event.ctrlKey === true && event.key === 'Home' && Number.isFinite(minValue)) {
+			event.preventDefault()
+			setValue(minValue!)
+			return
+		}
+
 		if (fireOnEnter && event.key === 'Enter') {
 			commitValue()
 			onEnter?.()
+			return
 		}
 	}
 
@@ -391,10 +407,10 @@ export function NumberInput({
 				{hasEndContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.endContent)}>{endContent}</div>}
 				{hasStepper && (
 					<div className={tw(styles.stepper(), classNames?.stepper)}>
-						<button className={tw(styles.stepButton(), 'rounded-t-md', classNames?.stepButton)} onClick={() => stepValue(1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type='button'>
+						<button className={tw(styles.stepButton(), 'rounded-tr-md', classNames?.stepButton)} onClick={() => stepValue(1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type='button'>
 							<Icons.ChevronUp className={tw(styles.stepIcon(), classNames?.stepIcon)} />
 						</button>
-						<button className={tw(styles.stepButton(), 'rounded-b-md', classNames?.stepButton)} onClick={() => stepValue(-1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type='button'>
+						<button className={tw(styles.stepButton(), 'rounded-br-md', classNames?.stepButton)} onClick={() => stepValue(-1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type='button'>
 							<Icons.ChevronDown className={tw(styles.stepIcon(), classNames?.stepIcon)} />
 						</button>
 					</div>

@@ -1,11 +1,11 @@
-import { Chip, NumberInput } from '@heroui/react'
+import { Chip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FlatWizardMolecule } from '@/molecules/flatwizard'
-import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { Button } from './components/Button'
+import { NumberInput } from './components/NumberInput'
 import { CameraDropdown } from './DeviceDropdown'
 import { FilePickerInput } from './FilePickerInput'
 import { Icons } from './Icon'
@@ -67,10 +67,10 @@ const Input = memo(() => {
 	return (
 		<>
 			<FilePickerInput className='col-span-full' id='flatwizard' mode='directory' onValueChange={flatWizard.updatePath} value={path} />
-			<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!camera?.connected} label='Min exposure (ms)' maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={(value) => flatWizard.update('minExposure', value)} size='sm' value={minExposure} />
-			<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!camera?.connected} label='Max exposure (ms)' maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={(value) => flatWizard.update('maxExposure', value)} size='sm' value={maxExposure} />
-			<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} label='Mean target' maxValue={65565} minValue={0} onValueChange={(value) => flatWizard.update('meanTarget', value)} size='sm' value={meanTarget} />
-			<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} label='Mean tolerance (%)' maxValue={100} minValue={0} onValueChange={(value) => flatWizard.update('meanTolerance', value)} size='sm' step={0.1} value={meanTolerance} />
+			<NumberInput className='col-span-6' disabled={!camera?.connected} label='Min exposure (ms)' maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={(value) => flatWizard.update('minExposure', value)} value={minExposure} />
+			<NumberInput className='col-span-6' disabled={!camera?.connected} label='Max exposure (ms)' maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={(value) => flatWizard.update('maxExposure', value)} value={maxExposure} />
+			<NumberInput className='col-span-6' label='Mean target' maxValue={65565} minValue={0} onValueChange={(value) => flatWizard.update('meanTarget', value)} value={meanTarget} />
+			<NumberInput className='col-span-6' fractionDigits={1} label='Mean tolerance (%)' maxValue={100} minValue={0} onValueChange={(value) => flatWizard.update('meanTolerance', value)} step={0.1} value={meanTolerance} />
 		</>
 	)
 })

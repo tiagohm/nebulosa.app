@@ -1,11 +1,11 @@
-import { Chip, NumberInput } from '@heroui/react'
+import { Chip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { DarvMolecule } from '@/molecules/darv'
-import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { Button } from './components/Button'
+import { NumberInput } from './components/NumberInput'
 import { CameraDropdown, MountDropdown } from './DeviceDropdown'
 import { HemisphereSelect } from './HemisphereSelect'
 import { Icons } from './Icon'
@@ -63,8 +63,8 @@ const Input = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Initial pause (s)' maxValue={60} minValue={1} onValueChange={(value) => darv.update('initialPause', value)} size='sm' value={initialPause} />
-			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={running} label='Drift for (s)' maxValue={1200} minValue={1} onValueChange={(value) => darv.update('duration', value)} size='sm' value={duration} />
+			<NumberInput className='col-span-4' disabled={running} label='Initial pause (s)' maxValue={60} minValue={1} onValueChange={(value) => darv.update('initialPause', value)} value={initialPause} />
+			<NumberInput className='col-span-4' disabled={running} label='Drift for (s)' maxValue={1200} minValue={1} onValueChange={(value) => darv.update('duration', value)} value={duration} />
 			<HemisphereSelect className='col-span-4' isDisabled={running} onValueChange={(value) => darv.update('hemisphere', value)} value={hemisphere} />
 		</>
 	)

@@ -1,4 +1,3 @@
-import { NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -7,6 +6,7 @@ import { CfaPatternSelect } from './CfaPatternSelect'
 import { ChrominanceSubsamplingSelect } from './ChrominanceSubsamplingSelect'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
 import { ImageFormatSelect } from './ImageFormatSelect'
 import { Modal } from './Modal'
@@ -54,7 +54,7 @@ const JpegFormat = memo(() => {
 
 	return (
 		<div className='col-span-full grid grid-cols-subgrid gap-2'>
-			<NumberInput className='col-span-5' label='Quality' maxValue={100} minValue={0} onValueChange={(value) => settings.updateFormat('jpeg', 'quality', value)} size='sm' value={quality} />
+			<NumberInput className='col-span-5' label='Quality' maxValue={100} minValue={0} onValueChange={(value) => settings.updateFormat('jpeg', 'quality', value)} value={quality} />
 			<ChrominanceSubsamplingSelect className='col-span-7' onValueChange={(value) => settings.updateFormat('jpeg', 'chrominanceSubsampling', value)} value={chrominanceSubsampling} />
 		</div>
 	)

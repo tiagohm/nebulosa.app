@@ -1,10 +1,10 @@
-import { Input, NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { MountMolecule } from '@/molecules/indi/mount'
-import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
+import { NumberInput } from './components/NumberInput'
+import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { MountRemoteControlProtocolSelect } from './MountRemoteControlProtocolSelect'
@@ -28,8 +28,8 @@ const Body = memo(() => {
 	return (
 		<div className='mt-0 grid grid-cols-12 gap-2'>
 			<MountRemoteControlProtocolSelect className='col-span-full' onValueChange={(value) => mount.updateRemoteControl('protocol', value)} value={protocol} />
-			<Input className='col-span-7' isDisabled={!!status} label='Host' onValueChange={(value) => mount.updateRemoteControl('host', value)} size='sm' value={status ? status.host : host} />
-			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!!status} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => mount.updateRemoteControl('port', value)} size='sm' value={status ? status.port : port} />
+			<TextInput className='col-span-7' disabled={!!status} label='Host' onValueChange={(value) => mount.updateRemoteControl('host', value)} value={status ? status.host : host} />
+			<NumberInput className='col-span-5' disabled={!!status} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => mount.updateRemoteControl('port', value)} value={status ? status.port : port} />
 		</div>
 	)
 })

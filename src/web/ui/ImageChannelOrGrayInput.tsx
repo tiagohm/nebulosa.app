@@ -1,7 +1,8 @@
-import { NumberInput, SelectItem } from '@heroui/react'
+import { SelectItem } from '@heroui/react'
 import { GRAYSCALES, type Grayscale, type ImageChannelOrGray } from 'nebulosa/src/image.types'
 import { useRef, useState } from 'react'
 import { tw } from '@/shared/util'
+import { NumberInput } from './components/NumberInput'
 import { EnumSelect } from './EnumSelect'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -53,9 +54,9 @@ export function ImageChannelOrGrayInput({ value, onValueChange, className, isDis
 				<ImageChannelOrGraySelect isDisabled={isDisabled} onValueChange={handleOnSelectValueChange} value={value} />
 			) : (
 				<div className='grid grid-cols-3 gap-2 items-center'>
-					<NumberInput className='col-span-1' isDisabled={isDisabled} label='Red' maxValue={1} minValue={0} onValueChange={(red) => handleOnInputValueChange('red', red)} size='sm' step={0.001} value={value.red} />
-					<NumberInput className='col-span-1' isDisabled={isDisabled} label='Green' maxValue={1} minValue={0} onValueChange={(green) => handleOnInputValueChange('green', green)} size='sm' step={0.001} value={value.green} />
-					<NumberInput className='col-span-1' isDisabled={isDisabled} label='Blue' maxValue={1} minValue={0} onValueChange={(blue) => handleOnInputValueChange('blue', blue)} size='sm' step={0.001} value={value.blue} />
+					<NumberInput className='col-span-1' disabled={isDisabled} fractionDigits={3} label='Red' maxValue={1} minValue={0} onValueChange={(red) => handleOnInputValueChange('red', red)} step={0.001} value={value.red} />
+					<NumberInput className='col-span-1' disabled={isDisabled} fractionDigits={3} label='Green' maxValue={1} minValue={0} onValueChange={(green) => handleOnInputValueChange('green', green)} step={0.001} value={value.green} />
+					<NumberInput className='col-span-1' disabled={isDisabled} fractionDigits={3} label='Blue' maxValue={1} minValue={0} onValueChange={(blue) => handleOnInputValueChange('blue', blue)} step={0.001} value={value.blue} />
 				</div>
 			)}
 		</div>

@@ -1,12 +1,12 @@
-import { Chip, Input, NumberInput } from '@heroui/react'
+import { Chip, Input } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FramingMolecule } from '@/molecules/framing'
-import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { HipsSurveySelect } from './HipsSurveySelect'
 import { Icons } from './Icon'
 import { Link } from './Link'
@@ -33,11 +33,11 @@ const Body = memo(() => {
 		<div className='mt-0 grid grid-cols-12 gap-2'>
 			<Input className='col-span-6' isDisabled={loading} label='RA (J2000)' onValueChange={(value) => framing.update('rightAscension', value)} size='sm' value={rightAscension} />
 			<Input className='col-span-6' isDisabled={loading} label='DEC (J2000)' onValueChange={(value) => framing.update('declination', value)} size='sm' value={declination} />
-			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={loading} label='Width' maxValue={8192} minValue={100} onValueChange={(value) => framing.update('width', value)} size='sm' value={width} />
-			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={loading} label='Height' maxValue={8192} minValue={100} onValueChange={(value) => framing.update('height', value)} size='sm' value={height} />
-			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Rotation (°)' maxValue={360} minValue={-360} onValueChange={(value) => framing.update('rotation', value)} size='sm' step={0.1} value={rotation} />
-			<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={loading} label='Focal Length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => framing.update('focalLength', value)} size='sm' value={focalLength} />
-			<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => framing.update('pixelSize', value)} size='sm' step={0.01} value={pixelSize} />
+			<NumberInput className='col-span-4' disabled={loading} label='Width' maxValue={8192} minValue={100} onValueChange={(value) => framing.update('width', value)} value={width} />
+			<NumberInput className='col-span-4' disabled={loading} label='Height' maxValue={8192} minValue={100} onValueChange={(value) => framing.update('height', value)} value={height} />
+			<NumberInput className='col-span-4' disabled={loading} fractionDigits={2} label='Rotation (°)' maxValue={360} minValue={-360} onValueChange={(value) => framing.update('rotation', value)} step={0.1} value={rotation} />
+			<NumberInput className='col-span-6' disabled={loading} label='Focal Length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => framing.update('focalLength', value)} value={focalLength} />
+			<NumberInput className='col-span-6' disabled={loading} fractionDigits={1} label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => framing.update('pixelSize', value)} step={0.01} value={pixelSize} />
 			<HipsSurveySelect className='col-span-full' isDisabled={loading} onValueChange={(value) => framing.update('hipsSurvey', value)} value={hipsSurvey} />
 			<Checkbox className='col-span-full' disabled={loading} label='Open in new image' onValueChange={(value) => (framing.state.openNewImage = value)} value={openNewImage} />
 		</div>

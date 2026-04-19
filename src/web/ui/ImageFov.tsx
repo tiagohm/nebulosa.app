@@ -1,15 +1,15 @@
-import { Listbox, ListboxItem, NumberInput, Tooltip } from '@heroui/react'
+import { Listbox, ListboxItem, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import type { FovItem } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageFovMolecule } from '@/molecules/image/fov'
-import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { tw } from '@/shared/util'
 import cameras from '../../../data/cameras.json'
 import telescopes from '../../../data/telescopes.json'
 import { AstroBinEquipmentPopover } from './AstroBinEquipmentPopover'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
@@ -54,8 +54,8 @@ const Telescope = memo(() => {
 			<div className='col-span-2 items-center'>
 				<AstroBinEquipmentPopover items={telescopes} onSelectedChange={fov.selectTelescope} type='telescope' />
 			</div>
-			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Focal Length (mm)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('focalLength', value)} size='sm' value={focalLength} />
-			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Aperture (mm)' maxValue={10000} minValue={10} onValueChange={(value) => fov.update('aperture', value)} size='sm' value={aperture} />
+			<NumberInput className='col-span-5' label='Focal Length (mm)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('focalLength', value)} value={focalLength} />
+			<NumberInput className='col-span-5' label='Aperture (mm)' maxValue={10000} minValue={10} onValueChange={(value) => fov.update('aperture', value)} value={aperture} />
 		</>
 	)
 })
@@ -70,10 +70,10 @@ const Camera = memo(() => {
 			<div className='col-span-2 items-center'>
 				<AstroBinEquipmentPopover items={cameras} onSelectedChange={fov.selectCamera} type='camera' />
 			</div>
-			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Width (px)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraWidth', value)} size='sm' value={cameraWidth} />
-			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} label='Height (px)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraHeight', value)} size='sm' value={cameraHeight} />
-			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} label='Width (µm)' maxValue={100} minValue={1} onValueChange={(value) => fov.update('pixelWidth', value)} size='sm' step={0.01} value={pixelWidth} />
-			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} label='Height (µm)' maxValue={100} minValue={1} onValueChange={(value) => fov.update('pixelHeight', value)} size='sm' step={0.01} value={pixelHeight} />
+			<NumberInput className='col-span-5' label='Width (px)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraWidth', value)} value={cameraWidth} />
+			<NumberInput className='col-span-5' label='Height (px)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraHeight', value)} value={cameraHeight} />
+			<NumberInput className='col-span-4' fractionDigits={2} label='Width (µm)' maxValue={100} minValue={1} onValueChange={(value) => fov.update('pixelWidth', value)} step={0.01} value={pixelWidth} />
+			<NumberInput className='col-span-4' fractionDigits={2} label='Height (µm)' maxValue={100} minValue={1} onValueChange={(value) => fov.update('pixelHeight', value)} step={0.01} value={pixelHeight} />
 		</>
 	)
 })
@@ -85,9 +85,9 @@ const OrientationAndOptics = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} label='Rotation (°)' maxValue={360} minValue={-360} onValueChange={(value) => fov.update('rotation', value)} size='sm' step={0.1} value={rotation} />
-			<NumberInput className='col-span-5' formatOptions={DECIMAL_NUMBER_FORMAT} label='Barlow/Reducer' maxValue={10} minValue={0.1} onValueChange={(value) => fov.update('barlowReducer', value)} size='sm' step={0.01} value={barlowReducer} />
-			<NumberInput className='col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} label='Bin' maxValue={8} minValue={1} onValueChange={(value) => fov.update('bin', value)} size='sm' value={bin} />
+			<NumberInput className='col-span-4' fractionDigits={1} label='Rotation (°)' maxValue={360} minValue={-360} onValueChange={(value) => fov.update('rotation', value)} step={0.1} value={rotation} />
+			<NumberInput className='col-span-5' fractionDigits={2} label='Barlow/Reducer' maxValue={10} minValue={0.1} onValueChange={(value) => fov.update('barlowReducer', value)} step={0.01} value={barlowReducer} />
+			<NumberInput className='col-span-3' label='Bin' maxValue={8} minValue={1} onValueChange={(value) => fov.update('bin', value)} value={bin} />
 		</>
 	)
 })

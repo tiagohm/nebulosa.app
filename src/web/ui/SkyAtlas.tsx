@@ -1,4 +1,4 @@
-import { Calendar, Chip, type ChipProps, Input, Listbox, ListboxItem, NumberInput, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
+import { Calendar, Chip, type ChipProps, Input, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
 import { fromAbsolute, type ZonedDateTime } from '@internationalized/date'
 import { useMolecule } from 'bunshi/react'
 import { RAD2DEG } from 'nebulosa/src/constants'
@@ -10,13 +10,14 @@ import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedC
 import { type BodyPosition, EMPTY_TWILIGHT, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, type BookmarkItem, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, type SkyAtlasTab, SunMolecule } from '@/molecules/skyatlas'
-import { DECIMAL_NUMBER_FORMAT, DEFAULT_POPOVER_PROPS, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
+import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
 import { formatDistance, skyObjectName, skyObjectType, tw } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { ConstellationSelect } from './ConstellationSelect'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { MountDropdown } from './DeviceDropdown'
 import { FilterableListbox } from './FilterableListBox'
 import { type Icon, Icons } from './Icon'
@@ -231,10 +232,10 @@ const GalaxyFilter = memo(() => {
 			<StellariumObjectTypeSelect className='col-span-6' onValueChange={(value) => dso.update('types', value)} value={types} />
 			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='RA' onValueChange={(value) => dso.update('rightAscension', value)} size='sm' value={rightAscension} />
 			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => dso.update('declination', value)} size='sm' value={declination} />
-			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} size='sm' step={0.1} value={radius} />
+			<NumberInput className='col-span-4' fractionDigits={1} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} step={0.1} value={radius} />
 			<Slider className='col-span-5' getValue={MagnitudeSliderValue} label='Magnitude' maxValue={30} minValue={-30} onChange={dso.updateMagnitude} step={0.1} value={[magnitudeMin, magnitudeMax]} />
 			<Checkbox className='col-span-4 w-full max-w-none flex justify-center' label='Show visible' onValueChange={(value) => dso.update('visible', value)} value={visible} />
-			<NumberInput className='col-span-3' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!visible || loading} label='Above (°)' maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} size='sm' value={visibleAbove} />
+			<NumberInput className='col-span-3' disabled={!visible || loading} label='Above (°)' maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} value={visibleAbove} />
 			<div className='col-span-full flex flex-row items-center justify-center'>
 				<Tooltip content='Filter' placement='bottom' showArrow>
 					<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={dso.search} variant='flat' />
@@ -573,8 +574,8 @@ const AsteroidCloseApproachesTab = memo(() => {
 	return (
 		<div className='w-full flex flex-col gap-0'>
 			<div className='w-full flex flex-row items-center justify-center gap-2'>
-				<NumberInput className='flex-1' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={loading} label='Days' maxValue={30} minValue={1} onValueChange={(value) => asteroid.updateCloseApproaches('days', value)} size='sm' value={days} />
-				<NumberInput className='flex-1' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={loading} label='Distance (LD)' maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} size='sm' step={0.1} value={distance} />
+				<NumberInput className='flex-1' disabled={loading} label='Days' maxValue={30} minValue={1} onValueChange={(value) => asteroid.updateCloseApproaches('days', value)} value={days} />
+				<NumberInput className='flex-1' disabled={loading} fractionDigits={1} label='Distance (LD)' maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} step={0.1} value={distance} />
 				<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={asteroid.closeApproaches} variant='light' />
 			</div>
 			<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-36 overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
@@ -723,16 +724,16 @@ interface PaginatorProps extends React.ComponentProps<'div'> {
 	readonly page: number
 	readonly count: number
 	readonly loading?: boolean
-	readonly isReadonly?: boolean
+	readonly readOnly?: boolean
 	readonly onPrev: VoidFunction
 	readonly onNext: VoidFunction
 }
 
-function Paginator({ page, count, onPrev, onNext, loading = false, isReadonly = false, className, ...props }: PaginatorProps) {
+function Paginator({ page, count, onPrev, onNext, loading = false, readOnly = false, className, ...props }: PaginatorProps) {
 	return (
 		<div {...props} className={tw('flex flex-row items-center justify-center gap-3', className)}>
 			<IconButton color='secondary' icon={Icons.ChevronLeft} isDisabled={page <= 1 || loading} onPointerUp={onPrev} />
-			<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} formatOptions={INTEGER_NUMBER_FORMAT} hideStepper isDisabled={loading || (page <= 1 && count < 4)} isReadOnly={isReadonly} minValue={1} size='sm' value={page} />
+			<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} disabled={loading || (page <= 1 && count < 4)} minValue={1} readOnly={readOnly} value={page} />
 			<IconButton color='secondary' icon={Icons.ChevronRight} isDisabled={count < 4 || loading} onPointerUp={onNext} />
 		</div>
 	)
@@ -807,12 +808,12 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOp
 				<div className='grid grid-cols-12 gap-2 pb-2 max-w-[256px]'>
 					<Calendar className='col-span-full' classNames={{ base: 'shadow-none' }} onChange={handleDateChange} showMonthAndYearPickers value={fromAbsolute(date, 'UTC')} />
 					<div className='col-span-6 flex flex-row items-center justify-center gap-1'>
-						<NumberInput className='max-w-20' formatOptions={INTEGER_NUMBER_FORMAT} maxValue={23} minValue={0} onValueChange={handleOnHourChange} value={hour} variant='bordered' />
+						<NumberInput className='max-w-20' maxValue={23} minValue={0} onValueChange={handleOnHourChange} value={hour} />
 						<span className='text-lg font-bold'>:</span>
-						<NumberInput className='max-w-20' formatOptions={INTEGER_NUMBER_FORMAT} maxValue={59} minValue={0} onValueChange={handleOnMinuteChange} value={minute} variant='bordered' />
+						<NumberInput className='max-w-20' maxValue={59} minValue={0} onValueChange={handleOnMinuteChange} value={minute} />
 					</div>
 					<div className='col-span-6 flex flex-row items-center justify-center gap-1'>
-						<NumberInput className='w-fit' formatOptions={INTEGER_NUMBER_FORMAT} label='Timezone (min)' maxValue={720} minValue={-720} onValueChange={onOffsetChange} step={30} value={offset} variant='bordered' />
+						<NumberInput className='w-fit' label='Timezone (min)' maxValue={720} minValue={-720} onValueChange={onOffsetChange} step={30} value={offset} />
 					</div>
 				</div>
 			</PopoverContent>

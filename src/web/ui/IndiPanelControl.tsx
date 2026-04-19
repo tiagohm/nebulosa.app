@@ -1,12 +1,12 @@
-import { Input, ListboxItem, NumberInput, SelectItem, Tooltip } from '@heroui/react'
+import { Input, ListboxItem, SelectItem, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { DeviceProperty } from 'nebulosa/src/indi.device'
 import type { DefElement, DefTextVector, Message, NewVector, SwitchRule } from 'nebulosa/src/indi.types'
 import { Activity, memo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
-import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
+import { NumberInput } from './components/NumberInput'
 import { EnumSelect } from './EnumSelect'
 import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
@@ -238,7 +238,7 @@ function NumberElement({ label, value, isReadonly, min, max, onValueChange }: Nu
 	return (
 		<div className='grid grid-cols-12 gap-1'>
 			<Input className={isReadonly ? 'col-span-full' : 'col-span-6'} isDisabled label={label} size='sm' value={value.toString()} />
-			{!isReadonly && <NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} label={label} maxValue={max} minValue={min} onValueChange={handleValueChange} size='sm' value={number} />}
+			{!isReadonly && <NumberInput className='col-span-6' fractionDigits={8} label={label} maxValue={max} minValue={min} onValueChange={handleValueChange} value={number} />}
 		</div>
 	)
 }

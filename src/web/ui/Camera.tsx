@@ -1,15 +1,15 @@
-import { NumberInput, Switch, Tooltip } from '@heroui/react'
+import { Switch, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { CameraMolecule } from '@/molecules/indi/camera'
-import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { AutoSaveButton } from './AutoSaveButton'
 import { AutoSubFolderModeButton } from './AutoSubFolderButton'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
 import { ConnectButton } from './ConnectButton'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { FocuserDropdown, MountDropdown, RotatorDropdown, WheelDropdown } from './DeviceDropdown'
 import { ExposureModeButtonGroup } from './ExposureModeButtonGroup'
 import { ExposureTimeInput } from './ExposureTimeInput'
@@ -136,7 +136,7 @@ const OptionsBody = memo(() => {
 				<span className='font-bold text-sm'>DITHER</span>
 				<Switch isSelected={dither.enabled} onValueChange={(value) => camera.updateDither('enabled', value)} size='sm' />
 			</div>
-			<NumberInput className='col-span-8' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={!dither.enabled} label='Dither pixels (px)' maxValue={25} minValue={1} onValueChange={(value) => camera.updateDither('amount', value)} placeholder='5' size='sm' step={0.1} value={dither.amount} />
+			<NumberInput className='col-span-8' disabled={!dither.enabled} fractionDigits={1} label='Dither pixels (px)' maxValue={25} minValue={1} onValueChange={(value) => camera.updateDither('amount', value)} placeholder='5' step={0.1} value={dither.amount} />
 			<Checkbox className='col-span-4' disabled={!dither.enabled} label='RA only' onValueChange={(value) => camera.updateDither('raOnly', value)} value={dither.raOnly} />
 		</div>
 	)
@@ -168,14 +168,13 @@ const Temperature = memo(() => {
 	return (
 		<NumberInput
 			className='col-span-6'
+			disabled={!connected || !canSetTemperature || capturing}
 			endContent={<TemperatureNumberInputEndContent />}
-			formatOptions={DECIMAL_NUMBER_FORMAT}
-			isDisabled={!connected || !canSetTemperature || capturing}
+			fractionDigits={1}
 			label={`Temperature (${temperature.toFixed(1)}°C)`}
 			maxValue={50}
 			minValue={-50}
 			onValueChange={(value) => (camera.state.targetTemperature = value)}
-			size='sm'
 			step={0.1}
 			value={targetTemperature}
 		/>
@@ -202,7 +201,7 @@ const Exposure = memo(() => {
 		<>
 			<ExposureTimeInput
 				className='col-span-6'
-				isDisabled={!connected || frameType === 'BIAS' || capturing}
+				disabled={!connected || frameType === 'BIAS' || capturing}
 				maxValue={exposure.max}
 				maxValueUnit='SECOND'
 				minValue={exposure.min}
@@ -226,8 +225,8 @@ const ExposureMode = memo(() => {
 	return (
 		<>
 			<ExposureModeButtonGroup className='col-span-6' color='secondary' isDisabled={!connected || capturing} onValueChange={(value) => camera.update('exposureMode', value)} value={exposureMode} />
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || exposureMode === 'SINGLE' || capturing} label='Delay (s)' minValue={0} onValueChange={(value) => camera.update('delay', value)} size='sm' value={delay} />
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || exposureMode !== 'FIXED' || capturing} label='Count' minValue={1} onValueChange={(value) => camera.update('count', value)} size='sm' value={count} />
+			<NumberInput className='col-span-3' disabled={!connected || exposureMode === 'SINGLE' || capturing} label='Delay (s)' minValue={0} onValueChange={(value) => camera.update('delay', value)} value={delay} />
+			<NumberInput className='col-span-3' disabled={!connected || exposureMode !== 'FIXED' || capturing} label='Count' minValue={1} onValueChange={(value) => camera.update('count', value)} value={count} />
 		</>
 	)
 })
@@ -240,8 +239,8 @@ const Bin = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !canBin || capturing} label='Bin X' maxValue={bin.x.max} minValue={1} onValueChange={(value) => camera.update('binX', value)} size='sm' value={binX} />
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !canBin || capturing} label='Bin Y' maxValue={bin.y.max} minValue={1} onValueChange={(value) => camera.update('binY', value)} size='sm' value={binY} />
+			<NumberInput className='col-span-3' disabled={!connected || !canBin || capturing} label='Bin X' maxValue={bin.x.max} minValue={1} onValueChange={(value) => camera.update('binX', value)} value={binX} />
+			<NumberInput className='col-span-3' disabled={!connected || !canBin || capturing} label='Bin Y' maxValue={bin.y.max} minValue={1} onValueChange={(value) => camera.update('binY', value)} value={binY} />
 		</>
 	)
 })
@@ -260,10 +259,10 @@ const Frame = memo(() => {
 					<IconButton color='secondary' icon={Icons.Fullscreen} isDisabled={!connected || !subframe || capturing} onPointerUp={camera.fullscreen} variant='flat' />
 				</Tooltip>
 			</div>
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !subframe || capturing} label='X' maxValue={frame.x.max} minValue={frame.x.min} onValueChange={(value) => camera.update('x', value)} size='sm' value={x} />
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !subframe || capturing} label='Y' maxValue={frame.y.max} minValue={frame.y.min} onValueChange={(value) => camera.update('y', value)} size='sm' value={y} />
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !subframe || capturing} label='Width' maxValue={frame.width.max} minValue={frame.width.min} onValueChange={(value) => camera.update('width', value)} size='sm' value={width} />
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || !subframe || capturing} label='Height' maxValue={frame.height.max} minValue={frame.height.min} onValueChange={(value) => camera.update('height', value)} size='sm' value={height} />
+			<NumberInput className='col-span-3' disabled={!connected || !subframe || capturing} label='X' maxValue={frame.x.max} minValue={frame.x.min} onValueChange={(value) => camera.update('x', value)} value={x} />
+			<NumberInput className='col-span-3' disabled={!connected || !subframe || capturing} label='Y' maxValue={frame.y.max} minValue={frame.y.min} onValueChange={(value) => camera.update('y', value)} value={y} />
+			<NumberInput className='col-span-3' disabled={!connected || !subframe || capturing} label='Width' maxValue={frame.width.max} minValue={frame.width.min} onValueChange={(value) => camera.update('width', value)} value={width} />
+			<NumberInput className='col-span-3' disabled={!connected || !subframe || capturing} label='Height' maxValue={frame.height.max} minValue={frame.height.min} onValueChange={(value) => camera.update('height', value)} value={height} />
 		</>
 	)
 })
@@ -276,8 +275,8 @@ const GainAndFormat = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || capturing} label='Gain' maxValue={gain.max} minValue={gain.min} onValueChange={(value) => camera.update('gain', value)} size='sm' value={request.gain} />
-			<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={!connected || capturing} label='Offset' maxValue={offset.max} minValue={offset.min} onValueChange={(value) => camera.update('offset', value)} size='sm' value={request.offset} />
+			<NumberInput className='col-span-3' disabled={!connected || capturing} label='Gain' maxValue={gain.max} minValue={gain.min} onValueChange={(value) => camera.update('gain', value)} value={request.gain} />
+			<NumberInput className='col-span-3' disabled={!connected || capturing} label='Offset' maxValue={offset.max} minValue={offset.min} onValueChange={(value) => camera.update('offset', value)} value={request.offset} />
 			<FrameFormatSelect className='col-span-6' isDisabled={!connected || !frameFormats.length || capturing} items={frameFormats} onValueChange={(value) => camera.update('frameFormat', value)} value={request.frameFormat} />
 		</>
 	)

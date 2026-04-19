@@ -1,12 +1,12 @@
-import { Chip, Input, NumberInput, Radio, RadioGroup } from '@heroui/react'
+import { Chip, Input, Radio, RadioGroup } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { PHD2Molecule } from '@/molecules/phd2'
-import { DECIMAL_NUMBER_FORMAT, INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { ConnectButton } from './ConnectButton'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { CameraDropdown, GuideOutputDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -56,7 +56,7 @@ const Connection = memo(() => {
 			</div>
 			<Activity mode={mode === 'REMOTE' ? 'visible' : 'hidden'}>
 				<Input className='col-span-7' isDisabled={connected} label='Host' maxLength={128} onValueChange={(value) => phd2.updateConnection('host', value)} placeholder='localhost' size='sm' type='text' value={host} />
-				<NumberInput className='col-span-3' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={connected} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => phd2.updateConnection('port', value)} placeholder='4400' size='sm' value={port} />
+				<NumberInput className='col-span-3' disabled={connected} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => phd2.updateConnection('port', value)} placeholder='4400' value={port} />
 			</Activity>
 			<Activity mode={mode === 'INTERNAL' ? 'visible' : 'hidden'}>
 				<DeviceChooser />
@@ -95,9 +95,9 @@ const Settle = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-6' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={connected} label='Settle tolerance (px)' maxValue={25} minValue={1} onValueChange={(value) => phd2.updateSettle('pixels', value)} placeholder='1.5' size='sm' step={0.1} value={pixels} />
-			<NumberInput className='col-span-6' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={connected} label='Min settle time (s)' maxValue={60} minValue={1} onValueChange={(value) => phd2.updateSettle('time', value)} placeholder='10' size='sm' value={time} />
-			<NumberInput className='col-span-5' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={connected} label='Settle timeout (s)' maxValue={60} minValue={1} onValueChange={(value) => phd2.updateSettle('timeout', value)} placeholder='30' size='sm' value={timeout} />
+			<NumberInput className='col-span-6' disabled={connected} fractionDigits={1} label='Settle tolerance (px)' maxValue={25} minValue={1} onValueChange={(value) => phd2.updateSettle('pixels', value)} placeholder='1.5' step={0.1} value={pixels} />
+			<NumberInput className='col-span-6' disabled={connected} label='Min settle time (s)' maxValue={60} minValue={1} onValueChange={(value) => phd2.updateSettle('time', value)} placeholder='10' value={time} />
+			<NumberInput className='col-span-5' disabled={connected} label='Settle timeout (s)' maxValue={60} minValue={1} onValueChange={(value) => phd2.updateSettle('timeout', value)} placeholder='30' value={timeout} />
 		</>
 	)
 })
@@ -109,7 +109,7 @@ const Dither = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={connected} label='Dither pixels (px)' maxValue={25} minValue={1} onValueChange={(value) => phd2.updateDither('amount', value)} placeholder='5' size='sm' step={0.1} value={amount} />
+			<NumberInput className='col-span-4' disabled={connected} fractionDigits={1} label='Dither pixels (px)' maxValue={25} minValue={1} onValueChange={(value) => phd2.updateDither('amount', value)} placeholder='5' step={0.1} value={amount} />
 			<Checkbox className='col-span-3' disabled={connected} label='RA only' onValueChange={(value) => phd2.updateDither('raOnly', value)} value={raOnly} />
 		</>
 	)

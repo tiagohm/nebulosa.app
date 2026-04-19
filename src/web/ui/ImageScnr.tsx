@@ -1,10 +1,9 @@
-import { NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageScnrMolecule } from '@/molecules/image/scnr'
-import { DECIMAL_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
+import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
 import { ImageChannelButtonGroup } from './ImageChannelButtonGroup'
 import { Modal } from './Modal'
@@ -28,7 +27,7 @@ const Body = memo(() => {
 		<div className='mt-0 grid grid-cols-12 gap-2'>
 			<ImageChannelButtonGroup allowNoneSelection className='col-span-full' onValueChange={(value) => scnr.update('channel', value)} value={channel} />
 			<SCNRProtectionMethodSelect className='col-span-8' isDisabled={channel === undefined} onValueChange={(value) => scnr.update('method', value)} value={method} />
-			<NumberInput className='col-span-4' formatOptions={DECIMAL_NUMBER_FORMAT} isDisabled={channel === undefined || method.endsWith('MASK')} label='Amount' maxValue={1} minValue={0} onValueChange={(value) => scnr.update('amount', value)} size='sm' step={0.1} value={amount} />
+			<NumberInput className='col-span-4' disabled={channel === undefined || method.endsWith('MASK')} fractionDigits={1} label='Amount' maxValue={1} minValue={0} onValueChange={(value) => scnr.update('amount', value)} step={0.1} value={amount} />
 		</div>
 	)
 })

@@ -1,10 +1,9 @@
-import { NumberInput } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { GuideOutputMolecule } from '@/molecules/indi/guideoutput'
-import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { ConnectButton } from './ConnectButton'
+import { NumberInput } from './components/NumberInput'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 import { Nudge } from './Nudge'
@@ -30,12 +29,12 @@ export const GuideOutput = memo(() => {
 	return (
 		<Modal header={Header} id={`guide-output-${guideOutput.scope.guideOutput.name}`} maxWidth='336px' onHide={guideOutput.hide}>
 			<div className='mt-0 grid grid-cols-6 gap-1'>
-				<NumberInput className='col-start-3 col-span-2' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={pulsing} label='North (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('north', value)} size='sm' value={north.duration} />
-				<NumberInput className='row-start-3 col-span-2' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={pulsing} label='West (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('west', value)} size='sm' value={west.duration} />
+				<NumberInput className='col-start-3 col-span-2' disabled={pulsing} label='North (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('north', value)} value={north.duration} />
+				<NumberInput className='row-start-3 col-span-2' disabled={pulsing} label='West (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('west', value)} value={west.duration} />
 				<Nudge
 					className='col-start-3 row-start-2 col-span-2 row-span-3'
+					disabled={pulsing}
 					isCancelDisabled={!pulsing}
-					isDisabled={pulsing}
 					isDownDisabled={!south.duration}
 					isDownLeftDisabled={!south.duration || !west.duration}
 					isDownRightDisabled={!south.duration || !east.duration}
@@ -47,8 +46,8 @@ export const GuideOutput = memo(() => {
 					onCancel={guideOutput.stop}
 					onNudge={guideOutput.pulse}
 				/>
-				<NumberInput className='row-start-3 col-span-2' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={pulsing} label='East (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('east', value)} size='sm' value={east.duration} />
-				<NumberInput className='col-start-3 row-start-5 col-span-2' formatOptions={INTEGER_NUMBER_FORMAT} isDisabled={pulsing} label='South (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('south', value)} size='sm' value={south.duration} />
+				<NumberInput className='row-start-3 col-span-2' disabled={pulsing} label='East (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('east', value)} value={east.duration} />
+				<NumberInput className='col-start-3 row-start-5 col-span-2' disabled={pulsing} label='South (ms)' maxValue={60000} minValue={0} onValueChange={(value) => guideOutput.update('south', value)} value={south.duration} />
 			</div>
 		</Modal>
 	)

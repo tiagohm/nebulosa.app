@@ -1,11 +1,11 @@
-import { Badge, NumberInput } from '@heroui/react'
+import { Badge } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiServerMolecule } from '@/molecules/indi/server'
-import { INTEGER_NUMBER_FORMAT } from '@/shared/constants'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
+import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
 import { IndiDriverListbox } from './IndiDriverListbox'
 import { Modal } from './Modal'
@@ -36,9 +36,9 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} size='sm' value={port} />
-			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Repeat' maxValue={10} minValue={1} onValueChange={(value) => indi.update('repeat', value)} size='sm' value={repeat} />
-			<NumberInput className='col-span-4' formatOptions={INTEGER_NUMBER_FORMAT} label='Verbose' maxValue={3} minValue={0} onValueChange={(value) => indi.update('verbose', value)} size='sm' value={verbose} />
+			<NumberInput className='col-span-4' label='Port' maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} value={port} />
+			<NumberInput className='col-span-4' label='Repeat' maxValue={10} minValue={1} onValueChange={(value) => indi.update('repeat', value)} value={repeat} />
+			<NumberInput className='col-span-4' label='Verbose' maxValue={3} minValue={0} onValueChange={(value) => indi.update('verbose', value)} value={verbose} />
 			<Checkbox className='col-span-full' label='Show all drivers' onValueChange={(value) => (indi.state.showAll = value)} value={showAll} />
 		</>
 	)

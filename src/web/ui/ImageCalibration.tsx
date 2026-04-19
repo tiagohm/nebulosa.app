@@ -45,7 +45,7 @@ const CalibrationFile = memo(({ type }: CalibrationFileProps) => {
 	return (
 		<div className='col-span-full flex flex-row gap-2'>
 			<Checkbox onValueChange={(value) => calibration.update(type, 'enabled', value)} value={enabled} />
-			<FilePickerInput id={`calibration-${calibration.viewer.storageKey}-${type}`} isDisabled={!enabled} onValueChange={(value) => calibration.update(type, 'path', value)} placeholder={type} value={path} />
+			<FilePickerInput disabled={!enabled} id={`calibration-${calibration.viewer.storageKey}-${type}`} onValueChange={(value) => calibration.update(type, 'path', value)} placeholder={type} value={path} />
 		</div>
 	)
 })

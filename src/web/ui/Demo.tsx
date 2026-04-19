@@ -4,6 +4,7 @@ import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
 import { Radio } from './components/Radio'
+import { Slider } from './components/Slider'
 import { Switch } from './components/Switch'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
@@ -17,6 +18,7 @@ export function Demo() {
 			<Checkboxes />
 			<Radios />
 			<Switches />
+			<Sliders />
 		</div>
 	)
 }
@@ -146,6 +148,29 @@ const Switches = memo(() => {
 			const label = key.toFixed(0)
 
 			elements.push(<Switch color={color} disabled={disabled} key={key++} label={label} onValueChange={setValue} readOnly={readOnly} size={size} value={value} />)
+		}
+	}
+
+	return elements
+})
+
+const Sliders = memo(() => {
+	const [value, setValue] = useState(0)
+	const [range, setRange] = useState([0, 100] as const)
+	const random = mulberry32(0)
+	const elements: React.ReactNode[] = []
+	let key = 0
+
+	for (const color of COLORS) {
+		for (const size of ['sm', 'md', 'lg'] as const) {
+			const disabled = random() < 0.3
+			const readOnly = random() < 0.3
+			const label = key.toFixed(0)
+			const step = 1
+			const isRange = random() < 0.5
+
+			if (isRange) elements.push(<Slider color={color} disabled={disabled} key={key++} label={label} onValueChange={setRange} readOnly={readOnly} size={size} step={step} value={range} vertical />)
+			else elements.push(<Slider color={color} disabled={disabled} key={key++} label={label} onValueChange={setValue} readOnly={readOnly} size={size} step={step} value={value} vertical />)
 		}
 	}
 

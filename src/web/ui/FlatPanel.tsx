@@ -1,9 +1,9 @@
-import { Slider } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FlatPanelMolecule } from '@/molecules/indi/flatpanel'
 import { ConnectButton } from './ConnectButton'
+import { Slider } from './components/Slider'
 import { Switch } from './components/Switch'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
@@ -65,7 +65,7 @@ const Intensity = memo(() => {
 
 	return (
 		<div className='col-span-full flex flex-col justify-center items-center gap-1'>
-			<Slider disableThumbScale endContent={intensity.max} isDisabled={!connected || !enabled} maxValue={intensity.max} minValue={intensity.min} onChange={flatPanel.update} onChangeEnd={flatPanel.intensity} size='lg' startContent={intensity.min} value={intensity.value} />
+			<Slider disabled={!connected || !enabled} endContent={intensity.max} maxValue={intensity.max} minValue={intensity.min} onValueChange={flatPanel.update} onValueChangeEnd={flatPanel.intensity} size='lg' startContent={intensity.min} value={intensity.value} />
 			<span className='text-lg font-bold'>{intensity.value}</span>
 		</div>
 	)

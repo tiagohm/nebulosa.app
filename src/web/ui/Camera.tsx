@@ -93,7 +93,7 @@ const Path = memo(() => {
 		<div className='col-span-full flex flex-row items-center gap-1'>
 			<AutoSaveButton onValueChange={(value) => camera.update('autoSave', value)} value={autoSave} />
 			<AutoSubFolderModeButton disabled={!autoSave} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={autoSubFolderMode} />
-			<FilePickerInput id={`camera-${camera.scope.camera.name}`} isDisabled={!autoSave} mode='directory' onValueChange={camera.updateSavePath} value={savePath} />
+			<FilePickerInput disabled={!autoSave} id={`camera-${camera.scope.camera.name}`} mode='directory' onValueChange={camera.updateSavePath} value={savePath} />
 		</div>
 	)
 })

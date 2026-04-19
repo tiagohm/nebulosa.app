@@ -1,9 +1,9 @@
-import { Slider } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { DewHeaterMolecule } from '@/molecules/indi/dewheater'
 import { ConnectButton } from './ConnectButton'
+import { Slider } from './components/Slider'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
@@ -45,7 +45,7 @@ const Body = memo(() => {
 	return (
 		<div className='mt-0 col-span-full flex flex-col items-center justify-center'>
 			<div className='w-full flex flex-col justify-center items-center gap-1'>
-				<Slider color={color} disableThumbScale endContent={max} isDisabled={!connected} maxValue={max} minValue={min} onChange={dewHeater.update} onChangeEnd={dewHeater.dutyCycle} size='lg' startContent={min} value={value} />
+				<Slider color={color} disabled={!connected} endContent={max} maxValue={max} minValue={min} onValueChange={dewHeater.update} onValueChangeEnd={dewHeater.dutyCycle} size='lg' startContent={min} value={value} />
 				<span className='text-lg font-bold'>{value}</span>
 			</div>
 		</div>

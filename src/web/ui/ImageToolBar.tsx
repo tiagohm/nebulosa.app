@@ -1,4 +1,4 @@
-import { Popover, PopoverContent, PopoverTrigger, Slider, Tooltip } from '@heroui/react'
+import { Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -18,6 +18,7 @@ import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
 import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
+import { Slider } from './components/Slider'
 import { Switch } from './components/Switch'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -84,7 +85,7 @@ const RotatePopoverContent = memo(() => {
 	return (
 		<div className='min-w-110 flex flex-row items-center justify-center gap-2 p-2'>
 			<span className='font-bold'>{angle.toFixed(1)}°</span>
-			<Slider className='flex-1' disableThumbScale maxValue={359.9} minValue={0} onChange={(value) => viewer.rotateTo(value as number)} step={0.1} value={angle} />
+			<Slider className='flex-1' maxValue={359.9} minValue={0} onValueChange={viewer.rotateTo} step={0.1} value={angle} />
 			<IconButton color='primary' icon={Icons.RotateLeft} onPointerUp={viewer.rotateLeft} tooltipContent='Rotate Left' tooltipPlacement='top' variant='flat' />
 			<IconButton color='primary' icon={Icons.RotateRight} onPointerUp={viewer.rotateRight} tooltipContent='Rotate Right' tooltipPlacement='top' variant='flat' />
 			<IconButton color='danger' icon={Icons.Restore} onPointerUp={viewer.rotateToZero} tooltipContent='Reset' tooltipPlacement='top' variant='flat' />

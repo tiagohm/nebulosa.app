@@ -1,4 +1,4 @@
-import { Calendar, Chip, type ChipProps, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
+import { Calendar, Chip, type ChipProps, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
 import { fromAbsolute, type ZonedDateTime } from '@internationalized/date'
 import { useMolecule } from 'bunshi/react'
 import { RAD2DEG } from 'nebulosa/src/constants'
@@ -18,6 +18,7 @@ import { ConstellationSelect } from './ConstellationSelect'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
+import { Slider } from './components/Slider'
 import { TextInput } from './components/TextInput'
 import { MountDropdown } from './DeviceDropdown'
 import { FilterableListbox } from './FilterableListBox'
@@ -216,8 +217,6 @@ const PlanetFilter = memo(() => {
 	)
 })
 
-const MagnitudeSliderValue = (value: number | number[]) => `min: ${(value as number[])[0].toFixed(1)} max: ${(value as number[])[1].toFixed(1)}`
-
 const GalaxyFilter = memo(() => {
 	const dso = useMolecule(GalaxyMolecule)
 	const { nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, radius } = useSnapshot(dso.state.request)
@@ -232,7 +231,7 @@ const GalaxyFilter = memo(() => {
 			<TextInput className='col-span-4' disabled={radius <= 0 || loading} label='RA' onValueChange={(value) => dso.update('rightAscension', value)} value={rightAscension} />
 			<TextInput className='col-span-4' disabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => dso.update('declination', value)} value={declination} />
 			<NumberInput className='col-span-4' fractionDigits={1} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} step={0.1} value={radius} />
-			<Slider className='col-span-5' getValue={MagnitudeSliderValue} label='Magnitude' maxValue={30} minValue={-30} onChange={dso.updateMagnitude} step={0.1} value={[magnitudeMin, magnitudeMax]} />
+			<Slider className='col-span-5' endContent={`min: ${magnitudeMin.toFixed(1)} max: ${magnitudeMax.toFixed(1)}`} label='Magnitude' maxValue={30} minValue={-30} onValueChange={dso.updateMagnitude} step={0.1} value={[magnitudeMin, magnitudeMax]} />
 			<Checkbox className='col-span-4 w-full max-w-none flex justify-center' label='Show visible' onValueChange={(value) => dso.update('visible', value)} value={visible} />
 			<NumberInput className='col-span-3' disabled={!visible || loading} label='Above (°)' maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} value={visibleAbove} />
 			<div className='col-span-full flex flex-row items-center justify-center'>

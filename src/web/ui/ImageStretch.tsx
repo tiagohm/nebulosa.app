@@ -1,4 +1,3 @@
-import { Slider } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -6,6 +5,7 @@ import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
+import { Slider } from './components/Slider'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { SigmaClipCenterMethodSelect } from './SigmaClipCenterMethodSelect'
@@ -45,10 +45,10 @@ const Stretch = memo(() => {
 		<>
 			<NumberInput className='col-span-6' label='Shadow' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('shadow', value)} value={shadow} />
 			<NumberInput className='col-span-6' label='Highlight' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('highlight', value)} value={highlight} />
-			<Slider className='col-span-full' disableThumbScale maxValue={65536} minValue={0} onChange={handleShadowHighlightChange} step={8} value={[shadow, highlight]} />
+			<Slider className='col-span-full' maxValue={65536} minValue={0} onValueChange={handleShadowHighlightChange} step={8} value={[shadow, highlight]} />
 			<NumberInput className='col-span-9' label='Midtone' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('midtone', value)} value={midtone} />
 			<NumberInput className='col-span-3' label='Bits' maxValue={20} minValue={8} onValueChange={(value) => stretch.update('bits', value)} value={bits} />
-			<Slider className='col-span-full' disableThumbScale maxValue={65536} minValue={0} onChange={(value) => stretch.update('midtone', value as number)} step={8} value={midtone} />
+			<Slider className='col-span-full' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('midtone', value as number)} step={8} value={midtone} />
 		</>
 	)
 })

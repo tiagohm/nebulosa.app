@@ -4,6 +4,7 @@ import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
 import { Radio } from './components/Radio'
+import { Switch } from './components/Switch'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 
@@ -15,6 +16,7 @@ export function Demo() {
 			<NumberInputs />
 			<Checkboxes />
 			<Radios />
+			<Switches />
 		</div>
 	)
 }
@@ -125,6 +127,25 @@ const Radios = memo(() => {
 			const label = key.toFixed(0)
 
 			elements.push(<Radio color={color} disabled={disabled} key={key++} label={label} onValueChange={setValue} readOnly={readOnly} size={size} value={value} />)
+		}
+	}
+
+	return elements
+})
+
+const Switches = memo(() => {
+	const [value, setValue] = useState(false)
+	const random = mulberry32(0)
+	const elements: React.ReactNode[] = []
+	let key = 0
+
+	for (const color of COLORS) {
+		for (const size of ['sm', 'md', 'lg'] as const) {
+			const disabled = random() < 0.3
+			const readOnly = random() < 0.3
+			const label = key.toFixed(0)
+
+			elements.push(<Switch color={color} disabled={disabled} key={key++} label={label} onValueChange={setValue} readOnly={readOnly} size={size} value={value} />)
 		}
 	}
 

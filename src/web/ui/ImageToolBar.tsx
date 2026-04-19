@@ -1,4 +1,4 @@
-import { Popover, PopoverContent, PopoverTrigger, Slider, Switch, Tooltip } from '@heroui/react'
+import { Popover, PopoverContent, PopoverTrigger, Slider, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -18,6 +18,7 @@ import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
 import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
+import { Switch } from './components/Switch'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { ToggleButton } from './ToggleButton'
@@ -134,13 +135,13 @@ const OverlayPopoverContent = memo(() => {
 			<div className='flex flex-col gap-2 justify-center'>
 				<IconButton color='secondary' disabled={!solution} icon={Icons.Pen} onPointerUp={annotation.show} tooltipContent='Annotation' tooltipPlacement='top' variant='flat' />
 				<Activity mode={annotatedStars.length > 0 ? 'visible' : 'hidden'}>
-					<Switch isSelected={isAnnotatedStarsVisible} onValueChange={annotation.toggle} size='sm' />
+					<Switch onValueChange={annotation.toggle} value={isAnnotatedStarsVisible} />
 				</Activity>
 			</div>
 			<div className='flex flex-col gap-2 justify-center'>
 				<IconButton color='secondary' icon={Icons.Stars} onPointerUp={starDetection.show} tooltipContent='Star Detection' tooltipPlacement='top' variant='flat' />
 				<Activity mode={detectedStars.length > 0 ? 'visible' : 'hidden'}>
-					<Switch isSelected={isDetectedStarsVisible} onValueChange={starDetection.toggle} size='sm' />
+					<Switch onValueChange={starDetection.toggle} value={isDetectedStarsVisible} />
 				</Activity>
 			</div>
 			<IconButton color='secondary' icon={Icons.Box} tooltipContent='ROI' tooltipPlacement='top' variant='flat' />

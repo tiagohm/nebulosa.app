@@ -1,4 +1,3 @@
-import { Switch } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -10,6 +9,7 @@ import { ConnectButton } from './ConnectButton'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
+import { Switch } from './components/Switch'
 import { FocuserDropdown, MountDropdown, RotatorDropdown, WheelDropdown } from './DeviceDropdown'
 import { ExposureModeButtonGroup } from './ExposureModeButtonGroup'
 import { ExposureTimeInput } from './ExposureTimeInput'
@@ -134,7 +134,7 @@ const OptionsBody = memo(() => {
 			<Checkbox className='col-span-6' label='Compressed' onValueChange={(value) => camera.update('compressed', value)} value={compressed} />
 			<div className='col-span-full flex flex-row items-center gap-2'>
 				<span className='font-bold text-sm'>DITHER</span>
-				<Switch isSelected={dither.enabled} onValueChange={(value) => camera.updateDither('enabled', value)} size='sm' />
+				<Switch onValueChange={(value) => camera.updateDither('enabled', value)} value={dither.enabled} />
 			</div>
 			<NumberInput className='col-span-8' disabled={!dither.enabled} fractionDigits={1} label='Dither pixels (px)' maxValue={25} minValue={1} onValueChange={(value) => camera.updateDither('amount', value)} placeholder='5' step={0.1} value={dither.amount} />
 			<Checkbox className='col-span-4' disabled={!dither.enabled} label='RA only' onValueChange={(value) => camera.updateDither('raOnly', value)} value={dither.raOnly} />
@@ -149,12 +149,8 @@ const Cooler = memo(() => {
 
 	return (
 		<>
-			<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || capturing || !hasCooler} isSelected={cooler} onValueChange={camera.cooler} size='sm'>
-				Cooler ({(coolerPower * 100).toFixed(1)}%)
-			</Switch>
-			<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={true || !connected || capturing} size='sm'>
-				Dew Heater
-			</Switch>
+			<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' disabled={!connected || capturing || !hasCooler} onValueChange={camera.cooler} thumbContent={`${(coolerPower * 100).toFixed(1)}%`} value={cooler} />
+			<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' disabled={true || !connected || capturing} />
 		</>
 	)
 })

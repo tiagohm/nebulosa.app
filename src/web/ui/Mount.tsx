@@ -1,4 +1,4 @@
-import { Chip, Input, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger, Switch } from '@heroui/react'
+import { Chip, Input, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatRA } from 'nebulosa/src/angle'
 import { Activity, memo, useState } from 'react'
@@ -8,6 +8,7 @@ import { MountMolecule } from '@/molecules/indi/mount'
 import { DEFAULT_POPOVER_PROPS } from '../shared/constants'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { ConnectButton } from './ConnectButton'
+import { Switch } from './components/Switch'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
@@ -68,9 +69,7 @@ const Body = memo(() => {
 			<hr className='col-span-full text-neutral-800 border-dotted' />
 			<TargetCoordinateAndPosition />
 			<Nudge className='col-span-5 row-span-2' disabled={!connected || parked} isCancelDisabled={!canAbort || parked || !moving} isNudgeDisabled={moving} onCancel={mount.stop} onNudge={mount.moveTo} />
-			<Switch className='col-span-3 flex-col-reverse gap-0.2 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} isDisabled={!connected || moving || parked} isSelected={tracking} onValueChange={mount.tracking}>
-				Tracking
-			</Switch>
+			<Switch disabled={!connected || moving || parked} label='Tracking' onValueChange={mount.tracking} value={tracking} />
 			<ParkAndHome />
 			<TrackModeSelect className='col-span-4' isDisabled={!connected || moving || parked} modes={trackModes} onValueChange={mount.trackMode} value={trackMode} />
 			<SlewRateSelect className='col-span-3' isDisabled={!connected || moving || parked} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
@@ -167,7 +166,7 @@ const TargetCoordinateAndPosition = memo(() => {
 		<div className='col-span-full'>
 			<div className='w-full grid grid-cols-20 gap-2 items-center'>
 				<span className='col-span-4 text-sm font-bold'>TARGET:</span>
-				<MountTargetCoordinateTypeRadioGroup className='col-span-16' isDisabled={disabled} onValueChange={mount.updateTargetCoordinateType} value={type} />
+				<MountTargetCoordinateTypeRadioGroup className='col-span-16' disabled={disabled} onValueChange={mount.updateTargetCoordinateType} value={type} />
 				<TargetPosition />
 				<Input className='col-span-5' isDisabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'RA' : type === 'ALTAZ' ? 'AZ' : 'LON'} onValueChange={mount.updateTargetCoordinateX} size='sm' value={x} />
 				<Input className='col-span-5' isDisabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={mount.updateTargetCoordinateY} size='sm' value={y} />

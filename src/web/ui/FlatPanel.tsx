@@ -1,9 +1,10 @@
-import { Slider, Switch } from '@heroui/react'
+import { Slider } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FlatPanelMolecule } from '@/molecules/indi/flatpanel'
 import { ConnectButton } from './ConnectButton'
+import { Switch } from './components/Switch'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
@@ -53,7 +54,7 @@ const Toggle = memo(() => {
 
 	return (
 		<div className='col-span-full flex flex-row items-center justify-center'>
-			<Switch isDisabled={!connected} isSelected={enabled} onValueChange={flatPanel.toggle} />
+			<Switch disabled={!connected} onValueChange={flatPanel.toggle} value={enabled} />
 		</div>
 	)
 })

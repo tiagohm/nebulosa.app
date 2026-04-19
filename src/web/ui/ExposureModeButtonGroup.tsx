@@ -11,9 +11,9 @@ export interface ExposureModeButtonGroupProps extends Omit<ButtonGroupProps, 'co
 export function ExposureModeButtonGroup({ value, onValueChange, color = 'primary', variant = 'ghost', ...props }: ExposureModeButtonGroupProps) {
 	return (
 		<ButtonGroup {...props}>
-			<Button color={color} label='Single' onPointerUp={() => onValueChange('SINGLE')} size='sm' variant={value === 'SINGLE' ? 'solid' : variant} />
-			<Button color={color} label='Fixed' onPointerUp={() => onValueChange('FIXED')} size='sm' variant={value === 'FIXED' ? 'solid' : variant} />
-			<Button color={color} label='Loop' onPointerUp={() => onValueChange('LOOP')} size='sm' variant={value === 'LOOP' ? 'solid' : variant} />
+			<Button color={color} label='Single' onPointerUp={() => onValueChange('SINGLE')} variant={value === 'SINGLE' ? 'solid' : variant} />
+			<Button color={color} label='Fixed' onPointerUp={() => onValueChange('FIXED')} variant={value === 'FIXED' ? 'solid' : variant} />
+			<Button color={color} label='Loop' onPointerUp={() => onValueChange('LOOP')} variant={value === 'LOOP' ? 'solid' : variant} />
 		</ButtonGroup>
 	)
 }

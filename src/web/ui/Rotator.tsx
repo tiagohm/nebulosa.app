@@ -56,9 +56,7 @@ const Status = memo(() => {
 
 	return (
 		<div className='col-span-3 flex flex-row items-center justify-start'>
-			<Chip color='primary' size='sm'>
-				{moving ? 'moving' : 'idle'}
-			</Chip>
+			<Chip color='primary'>{moving ? 'moving' : 'idle'}</Chip>
 		</div>
 	)
 })
@@ -70,7 +68,7 @@ const CurrentAngle = memo(() => {
 	return (
 		<div className='col-span-9 flex flex-row items-center justify-end gap-2'>
 			<NumberInput className='flex-1' label='Angle (°)' readOnly value={angle.value} />
-			<IconButton color='danger' disabled={!connected || !canAbort || !moving} icon={Icons.Stop} onPointerUp={rotator.stop} size='sm' tooltipContent='Stop' />
+			<IconButton color='danger' disabled={!connected || !canAbort || !moving} icon={Icons.Stop} onPointerUp={rotator.stop} tooltipContent='Stop' />
 		</div>
 	)
 })

@@ -38,7 +38,7 @@ export function Time({ id, onTimeChange, onClose, ...time }: TimeProps) {
 		<Modal footer={Footer} header='Time' id={id} maxWidth='328px' onHide={onClose}>
 			<div className='mt-0 grid grid-cols-3 gap-2'>
 				<I18nProvider locale='sv-SE'>
-					<DateInput className='col-span-2' endContent={<Now onPointerUp={handleNow} />} granularity='second' hideTimeZone hourCycle={24} label='UTC' onChange={setDate} size='sm' value={date} />
+					<DateInput className='col-span-2' endContent={<Now onPointerUp={handleNow} />} granularity='second' hideTimeZone hourCycle={24} label='UTC' onChange={setDate} value={date} />
 				</I18nProvider>
 				<NumberInput className='col-span-1' label='Offset (min)' maxValue={720} minValue={-720} onValueChange={setOffset} step={30} value={offset} />
 			</div>

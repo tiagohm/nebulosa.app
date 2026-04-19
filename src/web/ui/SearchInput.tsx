@@ -1,8 +1,8 @@
-import { Input, type InputProps } from '@heroui/react'
 import { useState } from 'react'
+import { TextInput, type TextInputProps } from './components/TextInput'
 import { Icons } from './Icon'
 
-export interface SearchInputProps extends Omit<InputProps, 'isClearable' | 'startContent'> {
+export interface SearchInputProps extends Omit<TextInputProps, 'startContent'> {
 	minLengthToSearch?: number
 }
 
@@ -17,5 +17,5 @@ export function SearchInput({ placeholder = 'Search', minLengthToSearch = 3, val
 		}
 	}
 
-	return <Input {...props} isClearable onValueChange={handleValueChange} placeholder={placeholder} startContent={<Icons.Search />} value={search} />
+	return <TextInput onValueChange={handleValueChange} placeholder={placeholder} startContent={<Icons.Search />} value={search} {...props} />
 }

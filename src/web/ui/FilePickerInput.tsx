@@ -1,18 +1,18 @@
-import { Input, type InputProps } from '@heroui/react'
 import { ScopeProvider } from 'bunshi/react'
 import { Activity, useRef, useState } from 'react'
 import { FilePickerScope, type FilePickerScopeValue } from '@/molecules/filepicker'
 import { Button } from './components/Button'
+import { TextInput, type TextInputProps } from './components/TextInput'
 import { FilePicker } from './FilePicker'
 import { Icons } from './Icon'
 
-export interface FilePickerInputProps extends Omit<FilePickerScopeValue, 'multiple' | 'path'>, Omit<InputProps, 'value' | 'onValueChange' | 'onClear' | 'startContent' | 'endContent' | 'isClearable' | 'label'> {
+export interface FilePickerInputProps extends Omit<FilePickerScopeValue, 'multiple' | 'path'>, Omit<TextInputProps, 'value' | 'onValueChange' | 'startContent' | 'endContent' | 'label'> {
 	readonly id: string
 	readonly value?: string
 	readonly onValueChange: (value?: string) => void
 }
 
-export function FilePickerInput({ filter, mode, id, value, onValueChange, isReadOnly = true, size = 'sm', ...props }: FilePickerInputProps) {
+export function FilePickerInput({ filter, mode, id, value, onValueChange, readOnly = true, ...props }: FilePickerInputProps) {
 	const [show, setShow] = useState(false)
 	const initialPath = useRef(value)
 
@@ -32,13 +32,13 @@ export function FilePickerInput({ filter, mode, id, value, onValueChange, isRead
 		}
 	}
 
-	const StartContent = <Button children={<Icons.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} />} size='sm' tooltipContent='Browse' variant='ghost' />
-	const EndContent = value ? <Button children={<Icons.CloseCircle className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} />} size='sm' variant='ghost' /> : null
+	const StartContent = <Button children={<Icons.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} />} tooltipContent='Browse' variant='ghost' />
+	const EndContent = value ? <Button children={<Icons.CloseCircle className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} />} variant='ghost' /> : null
 
 	return (
 		<>
 			<div className='col-span-full flex flex-row items-center gap-1 w-full flex-1'>
-				<Input {...props} endContent={EndContent} isClearable={false} isReadOnly={isReadOnly} onValueChange={handleValueChange} size={size} startContent={StartContent} value={value} />
+				<TextInput endContent={EndContent} onValueChange={handleValueChange} readOnly={readOnly} startContent={StartContent} value={value} {...props} />
 			</div>
 			<Activity mode={show ? 'visible' : 'hidden'}>
 				<ScopeProvider scope={FilePickerScope} value={{ path: initialPath.current, filter, mode, multiple: false }}>

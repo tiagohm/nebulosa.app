@@ -1,4 +1,3 @@
-import { Input } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/angle'
 import { memo } from 'react'
@@ -7,6 +6,7 @@ import { ImageSolverMolecule } from '@/molecules/image/solver'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
+import { TextInput } from './components/TextInput'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -42,8 +42,8 @@ const Inputs = memo(() => {
 		<>
 			<PlateSolverSelect className='col-span-8' endContent={<PlateSolverSelectEndContent />} onValueChange={(value) => solver.update('type', value)} value={type} />
 			<Checkbox className='col-span-3 col-end-13' label='Blind' onValueChange={(value) => solver.update('blind', value)} value={blind} />
-			<Input className='col-span-4' isDisabled={blind} label='RA' onValueChange={(value) => solver.update('rightAscension', value)} size='sm' value={rightAscension.toString()} />
-			<Input className='col-span-4' isDisabled={blind} label='DEC' onValueChange={(value) => solver.update('declination', value)} size='sm' value={declination.toString()} />
+			<TextInput className='col-span-4' disabled={blind} label='RA' onValueChange={(value) => solver.update('rightAscension', value)} value={rightAscension.toString()} />
+			<TextInput className='col-span-4' disabled={blind} label='DEC' onValueChange={(value) => solver.update('declination', value)} value={declination.toString()} />
 			<NumberInput className='col-span-4' disabled={blind} fractionDigits={1} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => solver.update('radius', value)} step={0.1} value={radius ?? 4} />
 			<NumberInput className='col-span-6' label='Focal Length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} value={focalLength} />
 			<NumberInput className='col-span-6' fractionDigits={2} label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} step={0.01} value={pixelSize} />
@@ -65,12 +65,12 @@ const Solution = memo(() => {
 	return (
 		<>
 			<div className='col-span-full font-bold text-sm my-1'>SOLUTION</div>
-			<Input className='col-span-4' isReadOnly label='RA (J2000)' size='sm' value={formatRA(solution?.rightAscension ?? 0)} />
-			<Input className='col-span-4' isReadOnly label='DEC (J2000)' size='sm' value={formatDEC(solution?.declination ?? 0)} />
-			<Input className='col-span-4' isReadOnly label='Orientation (°)' size='sm' value={toDeg(solution?.orientation ?? 0).toFixed(4)} />
-			<Input className='col-span-4' isReadOnly label='Scale (arcsec/px)' size='sm' value={toArcsec(solution?.scale ?? 0).toFixed(4)} />
-			<Input className='col-span-4' isReadOnly label='Size (arcmin)' size='sm' value={`${toArcmin(solution?.width ?? 0).toFixed(2)} x ${toArcmin(solution?.height ?? 0).toFixed(2)}`} />
-			<Input className='col-span-4' isReadOnly label='Radius (°)' size='sm' value={toDeg(solution?.radius ?? 0).toFixed(4)} />
+			<TextInput className='col-span-4' label='RA (J2000)' readOnly value={formatRA(solution?.rightAscension ?? 0)} />
+			<TextInput className='col-span-4' label='DEC (J2000)' readOnly value={formatDEC(solution?.declination ?? 0)} />
+			<TextInput className='col-span-4' label='Orientation (°)' readOnly value={toDeg(solution?.orientation ?? 0).toFixed(4)} />
+			<TextInput className='col-span-4' label='Scale (arcsec/px)' readOnly value={toArcsec(solution?.scale ?? 0).toFixed(4)} />
+			<TextInput className='col-span-4' label='Size (arcmin)' readOnly value={`${toArcmin(solution?.width ?? 0).toFixed(2)} x ${toArcmin(solution?.height ?? 0).toFixed(2)}`} />
+			<TextInput className='col-span-4' label='Radius (°)' readOnly value={toDeg(solution?.radius ?? 0).toFixed(4)} />
 			<div className='col-span-full flex items-center justify-center gap-2'>
 				<MountDropdown color='primary' disallowNoneSelection icon={Icons.Sync} isDisabled={!solution} onValueChange={solver.sync} tooltipContent='Sync' variant='flat' />
 				<MountDropdown color='success' disallowNoneSelection isDisabled={!solution} onValueChange={solver.goTo} tooltipContent='Go' variant='flat' />

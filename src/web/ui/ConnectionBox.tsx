@@ -19,9 +19,7 @@ const ConnectionItem = (item: Connection) => (
 				<div className='flex flex-col gap-1 mt-1'>
 					<span className='font-bold flex items-center gap-2'>
 						{item.name}
-						<Chip color='primary' size='sm'>
-							{item.type}
-						</Chip>
+						<Chip color='primary'>{item.type}</Chip>
 					</span>
 					<span className='text-default-500 text-tiny flex gap-1 items-center'>
 						<Activity mode={item.type === 'SIMULATOR' ? 'hidden' : 'visible'}>
@@ -51,9 +49,7 @@ const SelectedConnectionItem = (item: SelectedItemProps<Connection>) => (
 			</Activity>
 		</div>
 		<div className='hidden sm:flex items-center'>
-			<Chip color='primary' size='sm'>
-				{item.data?.type}
-			</Chip>
+			<Chip color='primary'>{item.data?.type}</Chip>
 		</div>
 	</div>
 )
@@ -99,7 +95,7 @@ const EditDropdown = memo(({ item }: EditDropdownProps) => {
 		<div className='flex justify-center items-center'>
 			<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
 				<DropdownTrigger>
-					<IconButton icon={Icons.VerticalMenu} onPointerUp={stopPropagationDesktopOnly} size='sm' />
+					<IconButton icon={Icons.VerticalMenu} onPointerUp={stopPropagationDesktopOnly} />
 				</DropdownTrigger>
 				<DropdownMenu disabledKeys={connections.length === 1 ? ['delete'] : []}>
 					<DropdownItem key='edit' onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit />}>

@@ -1,4 +1,4 @@
-import { Input, ListboxItem, SelectItem, Tooltip } from '@heroui/react'
+import { ListboxItem, SelectItem, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { DeviceProperty } from 'nebulosa/src/indi.device'
 import type { DefElement, DefTextVector, Message, NewVector, SwitchRule } from 'nebulosa/src/indi.types'
@@ -7,6 +7,7 @@ import { useSnapshot } from 'valtio'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { Button } from './components/Button'
 import { NumberInput } from './components/NumberInput'
+import { TextInput } from './components/TextInput'
 import { EnumSelect } from './EnumSelect'
 import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
@@ -208,8 +209,8 @@ function TextElement({ label, value, isReadonly, onValueChange }: TextElementPro
 
 	return (
 		<div className='grid grid-cols-12 gap-1'>
-			<Input className={isReadonly ? 'col-span-full' : 'col-span-6'} isDisabled label={label} size='sm' value={value} />
-			{!isReadonly && <Input className='col-span-6' label={label} onValueChange={handleValueChange} size='sm' value={text} />}
+			<TextInput className={isReadonly ? 'col-span-full' : 'col-span-6'} label={label} readOnly value={value} />
+			{!isReadonly && <TextInput className='col-span-6' label={label} onValueChange={handleValueChange} value={text} />}
 		</div>
 	)
 }
@@ -233,7 +234,7 @@ function NumberElement({ label, value, isReadonly, min, max, onValueChange }: Nu
 
 	return (
 		<div className='grid grid-cols-12 gap-1'>
-			<Input className={isReadonly ? 'col-span-full' : 'col-span-6'} isDisabled label={label} size='sm' value={value.toString()} />
+			<TextInput className={isReadonly ? 'col-span-full' : 'col-span-6'} label={label} readOnly value={value.toString()} />
 			{!isReadonly && <NumberInput className='col-span-6' fractionDigits={8} label={label} maxValue={max} minValue={min} onValueChange={handleValueChange} value={number} />}
 		</div>
 	)

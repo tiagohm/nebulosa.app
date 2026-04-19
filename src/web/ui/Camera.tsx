@@ -180,7 +180,7 @@ const Temperature = memo(() => {
 const TemperatureNumberInputEndContent = memo(() => {
 	const camera = useMolecule(CameraMolecule)
 
-	return <IconButton color='success' icon={Icons.Check} onPointerUp={camera.temperature} size='sm' tooltipContent='Apply' />
+	return <IconButton color='success' icon={Icons.Check} onPointerUp={camera.temperature} tooltipContent='Apply' />
 })
 
 const Exposure = memo(() => {

@@ -1,9 +1,9 @@
-import { Input } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 import { Button } from './components/Button'
+import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { StarDetectionPopover } from './StarDetectionPopover'
@@ -36,7 +36,7 @@ const StarDetectionEndContent = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
 	const { request } = useSnapshot(starDetection.state)
 
-	return <StarDetectionPopover isRounded onValueChange={starDetection.update} size='sm' value={request} variant='ghost' />
+	return <StarDetectionPopover isRounded onValueChange={starDetection.update} value={request} variant='ghost' />
 })
 
 const Computed = memo(() => {
@@ -46,10 +46,10 @@ const Computed = memo(() => {
 	return (
 		<>
 			<span className='col-span-full mt-1 text-sm font-bold'>COMPUTED</span>
-			<Input className='col-span-3' isReadOnly label='Stars' size='sm' value={stars.length.toFixed(0)} />
-			<Input className='col-span-2' isReadOnly label='HFD' size='sm' value={computed.hfd.toFixed(2)} />
-			<Input className='col-span-2' isReadOnly label='SNR' size='sm' value={computed.snr.toFixed(0)} />
-			<Input className='col-span-5' isReadOnly label='Flux' size='sm' value={`${computed.fluxMin.toFixed(0)} | ${computed.fluxMax.toFixed(0)}`} />
+			<TextInput className='col-span-3' label='Stars' readOnly value={stars.length.toFixed(0)} />
+			<TextInput className='col-span-2' label='HFD' readOnly value={computed.hfd.toFixed(2)} />
+			<TextInput className='col-span-2' label='SNR' readOnly value={computed.snr.toFixed(0)} />
+			<TextInput className='col-span-5' label='Flux' readOnly value={`${computed.fluxMin.toFixed(0)} | ${computed.fluxMax.toFixed(0)}`} />
 		</>
 	)
 })
@@ -64,10 +64,10 @@ const Selected = memo(() => {
 			<div className='col-span-4 row-span-4 flex justify-center'>
 				<canvas className='pixelated h-27 w-27 rounded-md bg-slate-950' ref={starDetection.attach} />
 			</div>
-			<Input className='col-span-4' isReadOnly label='X | Y' size='sm' value={`${selected?.x.toFixed(0) ?? '0'} | ${selected?.y.toFixed(0) ?? '0'}`} />
-			<Input className='col-span-4' isReadOnly label='Flux' size='sm' value={selected?.flux.toFixed(0) ?? '0'} />
-			<Input className='col-span-4' isReadOnly label='HFD' size='sm' value={selected?.hfd.toFixed(2) ?? '0'} />
-			<Input className='col-span-4' isReadOnly label='SNR' size='sm' value={selected?.snr.toFixed(0) ?? '0'} />
+			<TextInput className='col-span-4' label='X | Y' readOnly value={`${selected?.x.toFixed(0) ?? '0'} | ${selected?.y.toFixed(0) ?? '0'}`} />
+			<TextInput className='col-span-4' label='Flux' readOnly value={selected?.flux.toFixed(0) ?? '0'} />
+			<TextInput className='col-span-4' label='HFD' readOnly value={selected?.hfd.toFixed(2) ?? '0'} />
+			<TextInput className='col-span-4' label='SNR' readOnly value={selected?.snr.toFixed(0) ?? '0'} />
 		</>
 	)
 })

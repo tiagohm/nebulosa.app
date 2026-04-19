@@ -1,4 +1,4 @@
-import { Chip, Input } from '@heroui/react'
+import { Chip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import { memo } from 'react'
@@ -7,6 +7,7 @@ import { FramingMolecule } from '@/molecules/framing'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
+import { TextInput } from './components/TextInput'
 import { HipsSurveySelect } from './HipsSurveySelect'
 import { Icons } from './Icon'
 import { Link } from './Link'
@@ -31,8 +32,8 @@ const Body = memo(() => {
 
 	return (
 		<div className='mt-0 grid grid-cols-12 gap-2'>
-			<Input className='col-span-6' isDisabled={loading} label='RA (J2000)' onValueChange={(value) => framing.update('rightAscension', value)} size='sm' value={rightAscension} />
-			<Input className='col-span-6' isDisabled={loading} label='DEC (J2000)' onValueChange={(value) => framing.update('declination', value)} size='sm' value={declination} />
+			<TextInput className='col-span-6' disabled={loading} label='RA (J2000)' onValueChange={(value) => framing.update('rightAscension', value)} value={rightAscension} />
+			<TextInput className='col-span-6' disabled={loading} label='DEC (J2000)' onValueChange={(value) => framing.update('declination', value)} value={declination} />
 			<NumberInput className='col-span-4' disabled={loading} label='Width' maxValue={8192} minValue={100} onValueChange={(value) => framing.update('width', value)} value={width} />
 			<NumberInput className='col-span-4' disabled={loading} label='Height' maxValue={8192} minValue={100} onValueChange={(value) => framing.update('height', value)} value={height} />
 			<NumberInput className='col-span-4' disabled={loading} fractionDigits={2} label='Rotation (°)' maxValue={360} minValue={-360} onValueChange={(value) => framing.update('rotation', value)} step={0.1} value={rotation} />

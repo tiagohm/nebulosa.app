@@ -57,9 +57,7 @@ const Status = memo(() => {
 
 	return (
 		<div className='col-span-3 flex flex-row items-center justify-start'>
-			<Chip color='primary' size='sm'>
-				{moving ? 'moving' : 'idle'}
-			</Chip>
+			<Chip color='primary'>{moving ? 'moving' : 'idle'}</Chip>
 		</div>
 	)
 })

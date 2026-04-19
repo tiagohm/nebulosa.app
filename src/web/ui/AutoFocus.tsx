@@ -53,9 +53,7 @@ const Status = memo(() => {
 
 	return (
 		<div className='mt-2 col-span-full flex flex-row items-center justify-between'>
-			<Chip color='primary' size='sm'>
-				{state === 'IDLE' ? 'idle' : state === 'MOVING' ? 'moving' : state === 'CAPTURING' ? 'capturing' : 'computing'}
-			</Chip>
+			<Chip color='primary'>{state === 'IDLE' ? 'idle' : state === 'MOVING' ? 'moving' : state === 'CAPTURING' ? 'capturing' : 'computing'}</Chip>
 			<span className='text-xs'>{event.message}</span>
 		</div>
 	)
@@ -102,5 +100,5 @@ const StarDetectionSelectEndContent = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)
 	const { starDetection } = useSnapshot(autoFocus.state.request)
 
-	return <StarDetectionPopover isRounded onValueChange={autoFocus.updateStarDetection} size='sm' value={starDetection} variant='ghost' />
+	return <StarDetectionPopover isRounded onValueChange={autoFocus.updateStarDetection} value={starDetection} variant='ghost' />
 })

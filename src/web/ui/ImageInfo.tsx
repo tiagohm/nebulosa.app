@@ -81,7 +81,7 @@ const SelectedCoordinateDropdown = memo((props: SelectedCoordinateDropdownProps)
 	return (
 		<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
 			<DropdownTrigger>
-				<IconButton className='pointer-events-auto' icon={Icons.DotsVertical} onPointerUp={stopPropagationDesktopOnly} size='sm' />
+				<IconButton className='pointer-events-auto' icon={Icons.DotsVertical} onPointerUp={stopPropagationDesktopOnly} />
 			</DropdownTrigger>
 			<DropdownMenu onAction={handleAction}>
 				<DropdownItem key='POINT_MOUNT_HERE' startContent={<Icons.Telescope />}>

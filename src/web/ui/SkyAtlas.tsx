@@ -1,4 +1,4 @@
-import { Calendar, Chip, type ChipProps, Input, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
+import { Calendar, Chip, type ChipProps, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Slider, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
 import { fromAbsolute, type ZonedDateTime } from '@internationalized/date'
 import { useMolecule } from 'bunshi/react'
 import { RAD2DEG } from 'nebulosa/src/constants'
@@ -18,6 +18,7 @@ import { ConstellationSelect } from './ConstellationSelect'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
+import { TextInput } from './components/TextInput'
 import { MountDropdown } from './DeviceDropdown'
 import { FilterableListbox } from './FilterableListBox'
 import { type Icon, Icons } from './Icon'
@@ -164,7 +165,7 @@ const BookmarkPopoverContent = memo(() => {
 					itemHeight: 36,
 				}}>
 				{(item) => (
-					<ListboxItem classNames={{ description: 'uppercase' }} description={item.type} endContent={<IconButton className='rounded-full' color='danger' icon={Icons.Trash} onPointerUp={() => atlas.removeBookmark(item)} size='sm' />} key={`${item.type}-${item.code}`}>
+					<ListboxItem classNames={{ description: 'uppercase' }} description={item.type} endContent={<IconButton className='rounded-full' color='danger' icon={Icons.Trash} onPointerUp={() => atlas.removeBookmark(item)} />} key={`${item.type}-${item.code}`}>
 						{item.name}
 					</ListboxItem>
 				)}
@@ -209,7 +210,7 @@ const PlanetFilter = memo(() => {
 
 	return (
 		<div className='min-w-77 grid grid-cols-12 gap-2 items-center p-2'>
-			<Input className='col-span-full' isClearable onValueChange={(value) => planet.update('name', value)} placeholder='Search' value={name} />
+			<TextInput className='col-span-full' onValueChange={(value) => planet.update('name', value)} placeholder='Search' value={name} />
 			<PlanetTypeSelect className='col-span-full' onValueChange={(value) => planet.update('type', value)} value={type} />
 		</div>
 	)
@@ -225,11 +226,11 @@ const GalaxyFilter = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center p-2'>
-			<Input className='col-span-full' isClearable onValueChange={(value) => dso.update('name', value)} placeholder='Search' startContent={<SkyObjectNameTypeDropdown color='secondary' onValueChange={(value) => dso.update('nameType', value)} value={nameType} />} value={name} />
+			<TextInput className='col-span-full' onValueChange={(value) => dso.update('name', value)} placeholder='Search' startContent={<SkyObjectNameTypeDropdown color='secondary' onValueChange={(value) => dso.update('nameType', value)} value={nameType} />} value={name} />
 			<ConstellationSelect className='col-span-6' onValueChange={(value) => dso.update('constellations', value)} value={constellations} />
 			<StellariumObjectTypeSelect className='col-span-6' onValueChange={(value) => dso.update('types', value)} value={types} />
-			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='RA' onValueChange={(value) => dso.update('rightAscension', value)} size='sm' value={rightAscension} />
-			<Input className='col-span-4' isDisabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => dso.update('declination', value)} size='sm' value={declination} />
+			<TextInput className='col-span-4' disabled={radius <= 0 || loading} label='RA' onValueChange={(value) => dso.update('rightAscension', value)} value={rightAscension} />
+			<TextInput className='col-span-4' disabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => dso.update('declination', value)} value={declination} />
 			<NumberInput className='col-span-4' fractionDigits={1} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} step={0.1} value={radius} />
 			<Slider className='col-span-5' getValue={MagnitudeSliderValue} label='Magnitude' maxValue={30} minValue={-30} onChange={dso.updateMagnitude} step={0.1} value={[magnitudeMin, magnitudeMax]} />
 			<Checkbox className='col-span-4 w-full max-w-none flex justify-center' label='Show visible' onValueChange={(value) => dso.update('visible', value)} value={visible} />
@@ -249,7 +250,7 @@ const SatelliteFilter = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center p-2'>
-			<Input className='col-span-full' isClearable label='Search' onValueChange={(value) => satellite.update('text', value)} size='sm' value={text} />
+			<TextInput className='col-span-full' label='Search' onValueChange={(value) => satellite.update('text', value)} value={text} />
 			<p className='col-span-full font-bold'>CATEGORY</p>
 			<SatelliteCategoryChipGroup className='col-span-full' onValueChange={(value) => satellite.update('category', value)} value={category} />
 			<p className='col-span-full font-bold'>GROUP</p>
@@ -528,7 +529,7 @@ const AsteroidSearchTab = memo(() => {
 	return (
 		<div className='w-full flex flex-col gap-0'>
 			<div className='w-full flex flex-row items-center justify-center gap-2'>
-				<Input className='flex-1' isClearable isDisabled={loading} label='Search' onValueChange={asteroid.updateSearch} placeholder='Enter the IAU number, designation, name or SPK ID' size='sm' value={text} />
+				<TextInput className='flex-1' disabled={loading} label='Search' onValueChange={asteroid.updateSearch} placeholder='Enter the IAU number, designation, name or SPK ID' value={text} />
 				<IconButton color='primary' disabled={loading || !text} icon={Icons.Search} onPointerUp={asteroid.search} variant='ghost' />
 			</div>
 			{list ? (
@@ -881,7 +882,7 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 				<div className='flex-1 justify-center items-center flex text-sm font-bold overflow-hidden'>
 					<ScrollShadow className='w-full flex gap-1' hideScrollBar orientation='horizontal'>
 						{tags?.map((tag) => (
-							<Chip color={tag.color} key={tag.label} size='sm'>
+							<Chip color={tag.color} key={tag.label}>
 								{tag.label}
 							</Chip>
 						))}

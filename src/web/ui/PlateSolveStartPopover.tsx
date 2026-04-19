@@ -1,10 +1,11 @@
-import { Input, Popover, PopoverContent, PopoverTrigger } from '@heroui/react'
+import { Popover, PopoverContent, PopoverTrigger } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { PlateSolverType, PlateSolveStart } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { SettingsMolecule } from '@/molecules/settings'
 import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
 import { NumberInput } from './components/NumberInput'
+import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 
@@ -26,9 +27,9 @@ export function PlateSolveStartPopover({ type, radius, focalLength, pixelSize, o
 			<PopoverContent>
 				<div className='grid grid-cols-12 gap-2 p-4'>
 					<p className='col-span-full font-bold'>PLATE SOLVE OPTIONS: {type}</p>
-					{type !== 'NOVA_ASTROMETRY_NET' && <Input className='col-span-full' label='Executable' onValueChange={(value) => settings.updateSolver(type, 'executable', value)} size='sm' value={executable} />}
-					{type === 'NOVA_ASTROMETRY_NET' && <Input className='col-span-8' label='API Url' onValueChange={(value) => settings.updateSolver(type, 'apiUrl', value)} placeholder='https://nova.astrometry.net' size='sm' value={apiUrl} />}
-					{type === 'NOVA_ASTROMETRY_NET' && <Input className='col-span-4' label='API Key' onValueChange={(value) => settings.updateSolver(type, 'apiKey', value)} placeholder='XXXXXXXX' size='sm' value={apiKey} />}
+					{type !== 'NOVA_ASTROMETRY_NET' && <TextInput className='col-span-full' label='Executable' onValueChange={(value) => settings.updateSolver(type, 'executable', value)} value={executable} />}
+					{type === 'NOVA_ASTROMETRY_NET' && <TextInput className='col-span-8' label='API Url' onValueChange={(value) => settings.updateSolver(type, 'apiUrl', value)} placeholder='https://nova.astrometry.net' value={apiUrl} />}
+					{type === 'NOVA_ASTROMETRY_NET' && <TextInput className='col-span-4' label='API Key' onValueChange={(value) => settings.updateSolver(type, 'apiKey', value)} placeholder='XXXXXXXX' value={apiKey} />}
 					<NumberInput className='col-span-3' fractionDigits={1} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => onValueChange('radius', value)} step={0.1} value={radius ?? 4} />
 					<NumberInput className='col-span-5' label='Focal length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => onValueChange('focalLength', value)} value={focalLength} />
 					<NumberInput className='col-span-4' fractionDigits={2} label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => onValueChange('pixelSize', value)} step={0.01} value={pixelSize} />

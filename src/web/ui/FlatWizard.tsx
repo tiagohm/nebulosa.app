@@ -48,9 +48,7 @@ const Status = memo(() => {
 
 	return (
 		<div className='mt-2 col-span-full flex flex-row items-center justify-between'>
-			<Chip color='primary' size='sm'>
-				{state === 'IDLE' ? 'idle' : state === 'CAPTURING' ? 'capturing' : 'computing'}
-			</Chip>
+			<Chip color='primary'>{state === 'IDLE' ? 'idle' : state === 'CAPTURING' ? 'capturing' : 'computing'}</Chip>
 			<span className='text-xs'>{message}</span>
 		</div>
 	)

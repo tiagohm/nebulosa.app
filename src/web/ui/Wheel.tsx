@@ -1,4 +1,4 @@
-import { Chip, Input, Popover, PopoverContent, PopoverTrigger, SelectItem } from '@heroui/react'
+import { Chip, Popover, PopoverContent, PopoverTrigger, SelectItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -6,6 +6,7 @@ import { WheelMolecule } from '@/molecules/indi/wheel'
 import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
 import { ConnectButton } from './ConnectButton'
 import { Button } from './components/Button'
+import { TextInput } from './components/TextInput'
 import { EnumSelect } from './EnumSelect'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -57,15 +58,9 @@ const Status = memo(() => {
 
 	return (
 		<div className='col-span-3 flex flex-row items-center gap-2 justify-start'>
-			<Chip color='primary' size='sm'>
-				{moving ? 'moving' : 'idle'}
-			</Chip>
-			<Chip color='warning' size='sm'>
-				POSITION: {position}
-			</Chip>
-			<Chip color='success' size='sm'>
-				FILTER: {names[position]}
-			</Chip>
+			<Chip color='primary'>{moving ? 'moving' : 'idle'}</Chip>
+			<Chip color='warning'>POSITION: {position}</Chip>
+			<Chip color='success'>FILTER: {names[position]}</Chip>
 		</div>
 	)
 })
@@ -106,7 +101,7 @@ const SlotPopoverContent = memo(() => {
 	return (
 		<div className='grid grid-cols-12 gap-2 p-4'>
 			<p className='col-span-full font-bold'>SLOT OPTIONS</p>
-			<Input className='col-span-10' isDisabled={!canSetNames} label='Name' onValueChange={(value) => value && wheel.update('name', value)} size='sm' value={name} />
+			<TextInput className='col-span-10' disabled={!canSetNames} label='Name' onValueChange={(value) => value && wheel.update('name', value)} value={name} />
 			<div className='col-span-2 flex flex-row justify-center items-center'>
 				<IconButton color='success' disabled={!canSetNames || !name.length} icon={Icons.Check} onPointerUp={wheel.apply} tooltipContent='Apply' />
 			</div>

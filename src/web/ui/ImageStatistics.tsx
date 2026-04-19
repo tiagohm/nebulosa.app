@@ -1,9 +1,9 @@
-import { Input } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
 import { Checkbox } from './components/Checkbox'
+import { TextInput } from './components/TextInput'
 import { Histogram } from './Histogram'
 import { ImageChannelButtonGroup } from './ImageChannelButtonGroup'
 import { Modal } from './Modal'
@@ -57,12 +57,12 @@ const Stats = memo(() => {
 
 	return (
 		<>
-			<Input className='col-span-6' isReadOnly label='Count: Total | Max' size='sm' value={`${hs.count[0].toFixed(0)} | ${hs.count[1].toFixed(0)}`} />
-			<Input className='col-span-6' isReadOnly label='Mean' size='sm' value={hs.mean.toFixed(8)} />
-			<Input className='col-span-6' isReadOnly label='Median' size='sm' value={hs.median.toFixed(8)} />
-			<Input className='col-span-6' isReadOnly label='Variance' size='sm' value={hs.variance.toFixed(8)} />
-			<Input className='col-span-6' isReadOnly label='Std Dev' size='sm' value={hs.standardDeviation.toFixed(8)} />
-			<Input className='col-span-6' isReadOnly label='Min | Max' size='sm' value={`${hs.minimum[0].toFixed(6)} | ${hs.maximum[0].toFixed(6)}`} />
+			<TextInput className='col-span-6' label='Count: Total | Max' readOnly value={`${hs.count[0].toFixed(0)} | ${hs.count[1].toFixed(0)}`} />
+			<TextInput className='col-span-6' label='Mean' readOnly value={hs.mean.toFixed(8)} />
+			<TextInput className='col-span-6' label='Median' readOnly value={hs.median.toFixed(8)} />
+			<TextInput className='col-span-6' label='Variance' readOnly value={hs.variance.toFixed(8)} />
+			<TextInput className='col-span-6' label='Std Dev' readOnly value={hs.standardDeviation.toFixed(8)} />
+			<TextInput className='col-span-6' label='Min | Max' readOnly value={`${hs.minimum[0].toFixed(6)} | ${hs.maximum[0].toFixed(6)}`} />
 		</>
 	)
 })

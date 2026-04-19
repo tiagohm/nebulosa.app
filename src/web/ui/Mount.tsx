@@ -1,4 +1,4 @@
-import { Chip, Input, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger } from '@heroui/react'
+import { Chip, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatRA } from 'nebulosa/src/angle'
 import { Activity, memo, useState } from 'react'
@@ -9,6 +9,7 @@ import { DEFAULT_POPOVER_PROPS } from '../shared/constants'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { ConnectButton } from './ConnectButton'
 import { Switch } from './components/Switch'
+import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
@@ -81,11 +82,7 @@ const Status = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	const { parking, parked, slewing, tracking, homing } = useSnapshot(mount.state.mount)
 
-	return (
-		<Chip color='primary' size='sm'>
-			{parking ? 'parking' : parked ? 'parked' : homing ? 'homing' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
-		</Chip>
-	)
+	return <Chip color='primary'>{parking ? 'parking' : parked ? 'parked' : homing ? 'homing' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}</Chip>
 })
 
 const LocationButton = memo(() => {
@@ -168,8 +165,8 @@ const TargetCoordinateAndPosition = memo(() => {
 				<span className='col-span-4 text-sm font-bold'>TARGET:</span>
 				<MountTargetCoordinateTypeRadioGroup className='col-span-16' disabled={disabled} onValueChange={mount.updateTargetCoordinateType} value={type} />
 				<TargetPosition />
-				<Input className='col-span-5' isDisabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'RA' : type === 'ALTAZ' ? 'AZ' : 'LON'} onValueChange={mount.updateTargetCoordinateX} size='sm' value={x} />
-				<Input className='col-span-5' isDisabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={mount.updateTargetCoordinateY} size='sm' value={y} />
+				<TextInput className='col-span-5' disabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'RA' : type === 'ALTAZ' ? 'AZ' : 'LON'} onValueChange={mount.updateTargetCoordinateX} value={x} />
+				<TextInput className='col-span-5' disabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={mount.updateTargetCoordinateY} value={y} />
 				<div className='col-span-10 flex flex-row items-center justify-center gap-1'>
 					<TargetCoordinatePopupButton />
 					<IconButton color='success' disabled={disabled} icon={Icons.Telescope} onPointerUp={mount.goTo} />

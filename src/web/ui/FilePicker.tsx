@@ -1,10 +1,11 @@
-import { Badge, BreadcrumbItem, Breadcrumbs, Input, Listbox, ListboxItem } from '@heroui/react'
+import { Badge, BreadcrumbItem, Breadcrumbs, Listbox, ListboxItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerMolecule } from '@/molecules/filepicker'
 import { Button } from './components/Button'
+import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
@@ -68,7 +69,7 @@ const Filter = memo(() => {
 
 	return (
 		<Activity mode={directory.create ? 'hidden' : 'visible'}>
-			<Input isClearable label='Filter' onValueChange={picker.filter} size='sm' value={filter} />
+			<TextInput label='Filter' onValueChange={picker.filter} value={filter} />
 		</Activity>
 	)
 })
@@ -80,7 +81,7 @@ const CreateDirectory = memo(() => {
 	return (
 		<Activity mode={create ? 'visible' : 'hidden'}>
 			<div className='flex flex-row items-center gap-2'>
-				<Input label='Name' onValueChange={(value) => (picker.state.directory.name = value)} size='sm' value={name} />
+				<TextInput label='Name' onValueChange={(value) => (picker.state.directory.name = value)} value={name} />
 				<IconButton color='success' disabled={name.length === 0} icon={Icons.Check} onPointerUp={picker.createDirectory} tooltipContent='Create' variant='ghost' />
 			</div>
 		</Activity>
@@ -134,7 +135,7 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 	return (
 		<>
 			<Activity mode={mode === 'save' ? 'visible' : 'hidden'}>
-				<Input className='flex-1' color={save.alreadyExists ? 'warning' : 'default'} isClearable label='Name' onValueChange={picker.updateSaveName} size='sm' value={save.name} />
+				<TextInput className='flex-1' color={save.alreadyExists ? 'warning' : 'default'} label='Name' onValueChange={picker.updateSaveName} value={save.name} />
 				<Button color='success' disabled={save.name.length === 0} label='Choose' onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
 			</Activity>
 			<Activity mode={mode !== 'save' ? 'visible' : 'hidden'}>

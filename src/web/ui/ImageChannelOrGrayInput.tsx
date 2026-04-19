@@ -45,7 +45,7 @@ export function ImageChannelOrGrayInput({ value, onValueChange, className, isDis
 
 	return (
 		<div {...props} className={tw('flex flex-col gap-2', className)}>
-			<EnumSelect className='w-full' endContent={mode === 'input' ? <IconButton color='danger' icon={Icons.Restore} onPointerUp={handleOnRestorePointerUp} size='sm' /> : null} isDisabled={isDisabled} label='Channel mode' onValueChange={handleOnModeChange} value={mode}>
+			<EnumSelect className='w-full' endContent={mode === 'input' ? <IconButton color='danger' icon={Icons.Restore} onPointerUp={handleOnRestorePointerUp} /> : null} isDisabled={isDisabled} label='Channel mode' onValueChange={handleOnModeChange} value={mode}>
 				<SelectItem key='select'>Select</SelectItem>
 				<SelectItem key='input'>Input</SelectItem>
 			</EnumSelect>

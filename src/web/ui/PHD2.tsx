@@ -1,4 +1,4 @@
-import { Chip, Input, Radio, RadioGroup } from '@heroui/react'
+import { Chip, Input } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -11,6 +11,7 @@ import { CameraDropdown, GuideOutputDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
+import { PHD2ClientModeRadioGroup } from './PHD2ClientModeRadioGroup'
 
 export const PHD2 = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
@@ -49,10 +50,7 @@ const Connection = memo(() => {
 	return (
 		<>
 			<div className='col-span-full flex flex-row justify-center items-center'>
-				<RadioGroup onValueChange={(value) => (phd2.state.connection.mode = value as never)} orientation='horizontal' value={mode}>
-					<Radio value='REMOTE'>Remote</Radio>
-					<Radio value='INTERNAL'>Internal</Radio>
-				</RadioGroup>
+				<PHD2ClientModeRadioGroup horizontal onValueChange={(value) => (phd2.state.connection.mode = value)} value={mode} />
 			</div>
 			<Activity mode={mode === 'REMOTE' ? 'visible' : 'hidden'}>
 				<Input className='col-span-7' isDisabled={connected} label='Host' maxLength={128} onValueChange={(value) => phd2.updateConnection('host', value)} placeholder='localhost' size='sm' type='text' value={host} />

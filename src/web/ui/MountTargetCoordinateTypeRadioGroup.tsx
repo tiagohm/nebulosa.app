@@ -1,19 +1,20 @@
-import { Radio, RadioGroup, type RadioGroupProps } from '@heroui/react'
 import type { MountTargetCoordinateType } from 'nebulosa/src/indi.device'
+import { tw } from '../shared/util'
+import { Radio } from './components/Radio'
 
-export interface MountTargetCoordinateTypeRadioGroupProps extends Omit<RadioGroupProps, 'orientation' | 'value' | 'onValueChange' | 'children'> {
+export interface MountTargetCoordinateTypeRadioGroupProps extends React.ComponentProps<'div'> {
 	readonly value: MountTargetCoordinateType
 	readonly onValueChange: (value: MountTargetCoordinateType) => void
 }
 
-export function MountTargetCoordinateTypeRadioGroup({ value, onValueChange, ...props }: MountTargetCoordinateTypeRadioGroupProps) {
+export function MountTargetCoordinateTypeRadioGroup({ value, onValueChange, className, ...props }: MountTargetCoordinateTypeRadioGroupProps) {
 	return (
-		<RadioGroup {...props} onValueChange={(value) => onValueChange(value as never)} orientation='horizontal' value={value}>
-			<Radio value='J2000'>J2000</Radio>
-			<Radio value='JNOW'>JNOW</Radio>
-			<Radio value='ALTAZ'>HOR</Radio>
-			<Radio value='ECLIPTIC'>ECL</Radio>
-			<Radio value='GALACTIC'>GAL</Radio>
-		</RadioGroup>
+		<div className={tw('flex items-start justify-center gap-1 flex-col', className)} {...props}>
+			<Radio label='J2000' onValueChange={(value) => value && onValueChange('J2000')} value={value === 'J2000'} />
+			<Radio label='JNOW' onValueChange={(value) => value && onValueChange('JNOW')} value={value === 'JNOW'} />
+			<Radio label='HOR' onValueChange={(value) => value && onValueChange('ALTAZ')} value={value === 'ALTAZ'} />
+			<Radio label='ECL' onValueChange={(value) => value && onValueChange('ECLIPTIC')} value={value === 'ECLIPTIC'} />
+			<Radio label='GAL' onValueChange={(value) => value && onValueChange('GALACTIC')} value={value === 'GALACTIC'} />
+		</div>
 	)
 }

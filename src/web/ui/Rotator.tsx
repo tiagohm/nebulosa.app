@@ -1,4 +1,4 @@
-import { Chip, Tooltip } from '@heroui/react'
+import { Chip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -70,9 +70,7 @@ const CurrentAngle = memo(() => {
 	return (
 		<div className='col-span-9 flex flex-row items-center justify-end gap-2'>
 			<NumberInput className='flex-1' label='Angle (°)' readOnly value={angle.value} />
-			<Tooltip content='Stop' placement='bottom' showArrow>
-				<IconButton color='danger' icon={Icons.Stop} isDisabled={!connected || !canAbort || !moving} onPointerUp={rotator.stop} size='sm' />
-			</Tooltip>
+			<IconButton color='danger' disabled={!connected || !canAbort || !moving} icon={Icons.Stop} onPointerUp={rotator.stop} size='sm' tooltipContent='Stop' />
 		</div>
 	)
 })
@@ -84,13 +82,9 @@ const TargetAngle = memo(() => {
 
 	return (
 		<div className='col-span-full flex flex-row items-center justify-between gap-2'>
-			<Tooltip content='Sync' placement='bottom' showArrow>
-				<IconButton color='primary' icon={Icons.Sync} isDisabled={!connected || !canSync || moving} onPointerUp={rotator.sync} />
-			</Tooltip>
+			<IconButton color='primary' disabled={!connected || !canSync || moving} icon={Icons.Sync} onPointerUp={rotator.sync} tooltipContent='Sync' />
 			<NumberInput className='flex-1' disabled={!connected} label='Move (°)' maxValue={angle.max} minValue={angle.min} onValueChange={(value) => rotator.update('angle', value)} value={targetAngle} />
-			<Tooltip content='Move' placement='bottom' showArrow>
-				<IconButton color='success' icon={Icons.Check} isDisabled={!connected || moving || targetAngle === angle.value} onPointerUp={rotator.moveTo} />
-			</Tooltip>
+			<IconButton color='success' disabled={!connected || moving || targetAngle === angle.value} icon={Icons.Check} onPointerUp={rotator.moveTo} tooltipContent='Move' />
 		</div>
 	)
 })

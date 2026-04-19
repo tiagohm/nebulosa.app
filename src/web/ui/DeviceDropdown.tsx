@@ -41,12 +41,12 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 				<div className='max-w-fit'>
 					<DropdownTrigger>
 						<IconButton
-							{...props}
 							color={color ?? (value === undefined ? 'secondary' : value.connected ? 'success' : 'danger')}
+							disabled={isDisabled || items.length === 0}
 							icon={icon}
-							isDisabled={isDisabled || items.length === 0}
 							label={showLabel ? (value?.name ?? (showLabelOnEmpty ? label || 'None' : undefined)) : undefined}
 							onPointerUp={stopPropagationDesktopOnly}
+							{...props}
 						/>
 					</DropdownTrigger>
 				</div>

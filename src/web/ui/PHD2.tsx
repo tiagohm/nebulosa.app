@@ -121,10 +121,10 @@ const Buttons = memo(() => {
 
 	return (
 		<div className='col-span-full flex flex-row gap-2 items-center justify-center'>
-			<IconButton color='primary' icon={Icons.Reload} isDisabled={!connected || looping || running} onPointerUp={phd2.loop} />
-			<IconButton color='warning' icon={Icons.Star} isDisabled={!connected || !looping} onPointerUp={phd2.findStar} />
-			<IconButton color='success' icon={Icons.Play} isDisabled={!connected || running} onPointerUp={phd2.start} />
-			<IconButton color='danger' icon={Icons.Stop} isDisabled={!connected || (!running && !looping)} onPointerUp={phd2.stop} />
+			<IconButton color='primary' disabled={!connected || looping || running} icon={Icons.Reload} onPointerUp={phd2.loop} />
+			<IconButton color='warning' disabled={!connected || !looping} icon={Icons.Star} onPointerUp={phd2.findStar} />
+			<IconButton color='success' disabled={!connected || running} icon={Icons.Play} onPointerUp={phd2.start} />
+			<IconButton color='danger' disabled={!connected || (!running && !looping)} icon={Icons.Stop} onPointerUp={phd2.stop} />
 		</div>
 	)
 })

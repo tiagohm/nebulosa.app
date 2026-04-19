@@ -1,4 +1,4 @@
-import { Chip, Tooltip } from '@heroui/react'
+import { Chip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -65,9 +65,7 @@ const OpenAndClose = memo(() => {
 
 	return (
 		<div className='col-span-full flex flex-row items-center justify-center'>
-			<Tooltip content={parked ? 'Open' : 'Close'} placement='bottom' showArrow>
-				<IconButton color={parked ? 'success' : 'danger'} icon={parked ? Icons.Lock : Icons.LockOpen} isDisabled={!connected || !canPark || parking} onPointerUp={parked ? cover.unpark : cover.park} size='lg' />
-			</Tooltip>
+			<IconButton color={parked ? 'success' : 'danger'} disabled={!connected || !canPark || parking} icon={parked ? Icons.Lock : Icons.LockOpen} onPointerUp={parked ? cover.unpark : cover.park} size='lg' tooltipContent={parked ? 'Open' : 'Close'} />
 		</div>
 	)
 })

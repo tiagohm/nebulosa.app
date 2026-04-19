@@ -1,4 +1,4 @@
-import { type ButtonProps, DateInput, Tooltip } from '@heroui/react'
+import { DateInput } from '@heroui/react'
 import { fromAbsolute, now, type ZonedDateTime } from '@internationalized/date'
 import { I18nProvider } from '@react-aria/i18n'
 import type { UTCTime } from 'nebulosa/src/indi.device'
@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { Button } from './components/Button'
 import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
+import { IconButton, type IconButtonProps } from './IconButton'
 import { Modal } from './Modal'
 
 export interface TimeProps extends UTCTime {
@@ -46,12 +46,8 @@ export function Time({ id, onTimeChange, onClose, ...time }: TimeProps) {
 	)
 }
 
-type NowProps = Omit<ButtonProps, 'isIconOnly' | 'variant'>
+type NowProps = Omit<IconButtonProps, 'variant' | 'icon'>
 
 function Now({ color = 'secondary', size = 'sm', ...props }: NowProps) {
-	return (
-		<Tooltip content='Now' placement='bottom' showArrow>
-			<IconButton {...props} color={color} icon={Icons.CalendarToday} size={size} />
-		</Tooltip>
-	)
+	return <IconButton color={color} icon={Icons.CalendarToday} size={size} tooltipContent='Now' {...props} />
 }

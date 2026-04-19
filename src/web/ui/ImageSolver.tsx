@@ -1,4 +1,4 @@
-import { Input, Tooltip } from '@heroui/react'
+import { Input } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/angle'
 import { memo } from 'react'
@@ -74,9 +74,7 @@ const Solution = memo(() => {
 			<div className='col-span-full flex items-center justify-center gap-2'>
 				<MountDropdown color='primary' disallowNoneSelection icon={Icons.Sync} isDisabled={!solution} onValueChange={solver.sync} tooltipContent='Sync' variant='flat' />
 				<MountDropdown color='success' disallowNoneSelection isDisabled={!solution} onValueChange={solver.goTo} tooltipContent='Go' variant='flat' />
-				<Tooltip content='Frame' placement='bottom' showArrow>
-					<IconButton color='secondary' icon={Icons.Image} isDisabled={!solution} onPointerUp={solver.frame} variant='flat' />
-				</Tooltip>
+				<IconButton color='secondary' disabled={!solution} icon={Icons.Image} onPointerUp={solver.frame} tooltipContent='Frame' variant='flat' />
 			</div>
 		</>
 	)

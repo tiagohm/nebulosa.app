@@ -1,4 +1,3 @@
-import { Tooltip } from '@heroui/react'
 import { memo } from 'react'
 import { useWakeLock } from 'src/web/hooks/wakelock'
 import { isWakeLockSupported } from '@/shared/util'
@@ -12,9 +11,5 @@ export const WakeLockScreenButton = memo((props: WakeLockScreenButtonProps) => {
 
 	if (!isWakeLockSupported()) return null
 
-	return (
-		<Tooltip content='Wake Lock' placement='bottom' showArrow>
-			<IconButton {...props} color={active ? 'success' : 'primary'} icon={active ? Icons.Monitor : Icons.MonitorLock} onPointerUp={active ? release : request} />
-		</Tooltip>
-	)
+	return <IconButton color={active ? 'success' : 'primary'} icon={active ? Icons.Monitor : Icons.MonitorLock} onPointerUp={active ? release : request} tooltipContent='Wake Lock' {...props} />
 })

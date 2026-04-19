@@ -26,13 +26,13 @@ function canExposureTime(mode: CameraCaptureStartPopoverMode) {
 	return mode === 'capture' || mode === 'autoFocus' || mode === 'tppa'
 }
 
-export function CameraCaptureStartPopover({ mode, camera, color, isDisabled, value: { exposureTime, exposureTimeUnit, binX, binY, gain, offset, x, y, width, height, frameFormat, transferFormat, compressed }, onValueChange, ...props }: CameraCaptureStartPopoverProps) {
+export function CameraCaptureStartPopover({ mode, camera, color, disabled, value: { exposureTime, exposureTimeUnit, binX, binY, gain, offset, x, y, width, height, frameFormat, transferFormat, compressed }, onValueChange, ...props }: CameraCaptureStartPopoverProps) {
 	const exposureTimeDisabled = !canExposureTime(mode)
 
 	return (
 		<Popover className='max-w-110' {...DEFAULT_POPOVER_PROPS}>
 			<PopoverTrigger>
-				<IconButton {...props} color={color ?? (camera.connected ? 'success' : 'danger')} icon={Icons.Cog} isDisabled={isDisabled || !camera.connected} />
+				<IconButton {...props} color={color ?? (camera.connected ? 'success' : 'danger')} disabled={disabled || !camera.connected} icon={Icons.Cog} />
 			</PopoverTrigger>
 			<PopoverContent>
 				<div className='grid grid-cols-12 items-center gap-2 p-4'>

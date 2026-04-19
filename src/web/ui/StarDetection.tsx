@@ -36,7 +36,7 @@ const StarDetectionEndContent = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
 	const { request } = useSnapshot(starDetection.state)
 
-	return <StarDetectionPopover isRounded onValueChange={starDetection.update} size='sm' value={request} variant='light' />
+	return <StarDetectionPopover isRounded onValueChange={starDetection.update} size='sm' value={request} variant='ghost' />
 })
 
 const Computed = memo(() => {

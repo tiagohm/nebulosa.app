@@ -1,4 +1,4 @@
-import { Chip, Tooltip } from '@heroui/react'
+import { Chip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -71,9 +71,7 @@ const Position = memo(() => {
 	return (
 		<div className='col-span-9 flex flex-row items-center justify-end gap-2'>
 			<NumberInput className='flex-1' label='Position' readOnly value={position.value} />
-			<Tooltip content='Stop' placement='bottom' showArrow>
-				<IconButton color='danger' icon={Icons.Stop} isDisabled={!connected || !canAbort || !moving} onPointerUp={focuser.stop} />
-			</Tooltip>
+			<IconButton color='danger' disabled={!connected || !canAbort || !moving} icon={Icons.Stop} onPointerUp={focuser.stop} tooltipContent='Stop' />
 		</div>
 	)
 })
@@ -87,13 +85,9 @@ const RelativePosition = memo(() => {
 
 	return (
 		<div className='col-span-full flex flex-row items-center justify-between gap-2'>
-			<Tooltip content='Move In' placement='bottom' showArrow>
-				<IconButton color='secondary' icon={Icons.ArrowLeft} isDisabled={!connected || moving || relative === 0} onPointerUp={focuser.moveIn} />
-			</Tooltip>
+			<IconButton color='secondary' disabled={!connected || moving || relative === 0} icon={Icons.ArrowLeft} onPointerUp={focuser.moveIn} tooltipContent='Move In' />
 			<NumberInput className='flex-1' disabled={!connected || moving} label='Relative' maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} value={relative} />
-			<Tooltip content='Move Out' placement='bottom' showArrow>
-				<IconButton color='secondary' icon={Icons.ArrowRight} isDisabled={!connected || moving || relative === 0} onPointerUp={focuser.moveOut} />
-			</Tooltip>
+			<IconButton color='secondary' disabled={!connected || moving || relative === 0} icon={Icons.ArrowRight} onPointerUp={focuser.moveOut} tooltipContent='Move Out' />
 		</div>
 	)
 })
@@ -107,13 +101,9 @@ const AbsolutePosition = memo(() => {
 
 	return (
 		<div className='col-span-full flex flex-row items-center justify-between gap-2'>
-			<Tooltip content='Sync' placement='bottom' showArrow>
-				<IconButton color='primary' icon={Icons.Sync} isDisabled={!connected || !canSync || moving} onPointerUp={focuser.sync} />
-			</Tooltip>
+			<IconButton color='primary' disabled={!connected || !canSync || moving} icon={Icons.Sync} onPointerUp={focuser.sync} tooltipContent='Sync' />
 			<NumberInput className='flex-1' disabled={!connected || moving} label='Absolute' maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} value={absolute} />
-			<Tooltip content='Move' placement='bottom' showArrow>
-				<IconButton color='success' icon={Icons.Check} isDisabled={!connected || moving || absolute === position.value} onPointerUp={focuser.moveTo} />
-			</Tooltip>
+			<IconButton color='success' disabled={!connected || moving || absolute === position.value} icon={Icons.Check} onPointerUp={focuser.moveTo} tooltipContent='Move' />
 		</div>
 	)
 })

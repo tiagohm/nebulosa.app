@@ -1,4 +1,3 @@
-import { Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -13,9 +12,7 @@ export const IndiServerButton = memo(() => {
 
 	return (
 		<>
-			<Tooltip content='INDI Server' placement='bottom' showArrow>
-				<IconButton color={running ? 'success' : 'danger'} icon={running ? Icons.Server : Icons.ServerOff} isDisabled={!enabled} onPointerUp={indi.show} />
-			</Tooltip>
+			<IconButton color={running ? 'success' : 'danger'} disabled={!enabled} icon={running ? Icons.Server : Icons.ServerOff} onPointerUp={indi.show} tooltipContent='INDI Server' />
 			<Activity mode={show ? 'visible' : 'hidden'}>
 				<IndiServer />
 			</Activity>

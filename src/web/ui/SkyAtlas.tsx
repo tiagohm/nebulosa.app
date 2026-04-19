@@ -64,9 +64,7 @@ const Header = memo(() => {
 			</div>
 			<div className='flex-1 flex justify-center items-center gap-2'>
 				<TimeBar key={`${time.utc}${time.offset}`} />
-				<Tooltip content='Location' placement='bottom' showArrow>
-					<IconButton color='primary' icon={Icons.MapMarker} onPointerUp={atlas.showLocation} variant='flat' />
-				</Tooltip>
+				<IconButton color='primary' icon={Icons.MapMarker} onPointerUp={atlas.showLocation} tooltipContent='Location' variant='flat' />
 			</div>
 			<HeaderFilterPopover />
 		</div>
@@ -92,7 +90,7 @@ const TabPopover = memo(() => {
 			<Tooltip className='capitalize' content={tab} placement='bottom' showArrow>
 				<div className='max-w-fit'>
 					<PopoverTrigger>
-						<IconButton color='default' icon={TAB_ICONS[tab]} onWheel={atlas.handleOnTabWheel} />
+						<IconButton color='secondary' icon={TAB_ICONS[tab]} onWheel={atlas.handleOnTabWheel} />
 					</PopoverTrigger>
 				</div>
 			</Tooltip>
@@ -237,9 +235,7 @@ const GalaxyFilter = memo(() => {
 			<Checkbox className='col-span-4 w-full max-w-none flex justify-center' label='Show visible' onValueChange={(value) => dso.update('visible', value)} value={visible} />
 			<NumberInput className='col-span-3' disabled={!visible || loading} label='Above (°)' maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} value={visibleAbove} />
 			<div className='col-span-full flex flex-row items-center justify-center'>
-				<Tooltip content='Filter' placement='bottom' showArrow>
-					<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={dso.search} variant='flat' />
-				</Tooltip>
+				<IconButton color='primary' disabled={loading} icon={Icons.Search} onPointerUp={dso.search} tooltipContent='Filter' variant='flat' />
 			</div>
 		</div>
 	)
@@ -259,12 +255,8 @@ const SatelliteFilter = memo(() => {
 			<p className='col-span-full font-bold'>GROUP</p>
 			<SatelliteGroupTypeChipGroup category={category} className='col-span-full h-[200px]' onValueChange={(value) => satellite.update('groups', value)} value={groups} />
 			<div className='col-span-full flex flex-row items-center justify-center gap-2'>
-				<Tooltip content='Reset' placement='bottom' showArrow>
-					<IconButton color='danger' icon={Icons.Restore} isDisabled={loading} onPointerUp={satellite.resetFilter} variant='flat' />
-				</Tooltip>
-				<Tooltip content='Filter' placement='bottom' showArrow>
-					<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={satellite.search} variant='flat' />
-				</Tooltip>
+				<IconButton color='danger' disabled={loading} icon={Icons.Restore} onPointerUp={satellite.resetFilter} tooltipContent='Reset' variant='flat' />
+				<IconButton color='primary' disabled={loading} icon={Icons.Search} onPointerUp={satellite.search} tooltipContent='Filter' variant='flat' />
 			</div>
 		</div>
 	)
@@ -307,7 +299,7 @@ const SunTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='relative min-h-[200px] max-h-[240px] col-span-full flex justify-center items-center'>
+			<div className='relative min-h-[200px] max-h-80 col-span-full flex justify-center items-center'>
 				<Sun onSourceChange={(source) => (sun.state.source = source)} source={source} />
 				<div className='absolute top-auto left-0 p-0 text-xs'>
 					<SolarEclipses />
@@ -361,7 +353,7 @@ const MoonTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='relative min-h-[200px] max-h-[240px] col-span-full flex justify-center items-center'>
+			<div className='relative min-h-[200px] max-h-80 col-span-full flex justify-center items-center'>
 				<Moon />
 				<div className='absolute top-auto left-0 p-0 text-xs'>
 					<LunarEclipses />
@@ -477,7 +469,7 @@ const PlanetTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<Listbox className='relative min-h-[200px] max-h-[240px] col-span-full' classNames={{ base: 'w-full', list: 'max-h-[190px] overflow-scroll' }} items={items} onAction={(key) => planet.select(key as never)} selectionMode='none'>
+			<Listbox className='relative min-h-[200px] max-h-80 col-span-full' classNames={{ base: 'w-full', list: 'max-h-[190px] overflow-scroll' }} items={items} onAction={(key) => planet.select(key as never)} selectionMode='none'>
 				{PlanetListItem}
 			</Listbox>
 			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
@@ -513,7 +505,7 @@ const AsteroidTab = memo(() => {
 
 	return (
 		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='relative min-h-[200px] max-h-[240px] col-span-full flex flex-col gap-2'>
+			<div className='relative min-h-[200px] max-h-80 col-span-full flex flex-col gap-2'>
 				<Tabs className='w-full' classNames={{ panel: 'py-0' }} onSelectionChange={(value) => (asteroid.state.tab = value as never)} selectedKey={tab}>
 					<Tab key='search' title='Search'>
 						<AsteroidSearchTab />
@@ -537,10 +529,10 @@ const AsteroidSearchTab = memo(() => {
 		<div className='w-full flex flex-col gap-0'>
 			<div className='w-full flex flex-row items-center justify-center gap-2'>
 				<Input className='flex-1' isClearable isDisabled={loading} label='Search' onValueChange={asteroid.updateSearch} placeholder='Enter the IAU number, designation, name or SPK ID' size='sm' value={text} />
-				<IconButton color='primary' icon={Icons.Search} isDisabled={loading || !text} onPointerUp={asteroid.search} variant='light' />
+				<IconButton color='primary' disabled={loading || !text} icon={Icons.Search} onPointerUp={asteroid.search} variant='ghost' />
 			</div>
 			{list ? (
-				<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-36 overflow-scroll' }} items={list} onAction={asteroid.select} selectionMode='single'>
+				<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-30 w-full', list: 'max-h-36 overflow-scroll' }} items={list} onAction={asteroid.select} selectionMode='single'>
 					{(item) => (
 						<ListboxItem description={item.pdes} key={item.pdes}>
 							{item.name}
@@ -548,7 +540,7 @@ const AsteroidSearchTab = memo(() => {
 					)}
 				</Listbox>
 			) : (
-				<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-36 overflow-scroll' }} items={selected?.parameters ?? []} selectionMode='none'>
+				<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-30 w-full', list: 'max-h-36 overflow-scroll' }} items={selected?.parameters ?? []} selectionMode='none'>
 					{(parameter) => (
 						<ListboxItem description={parameter.description} key={parameter.name}>
 							<span className='flex items-center justify-between'>
@@ -576,9 +568,9 @@ const AsteroidCloseApproachesTab = memo(() => {
 			<div className='w-full flex flex-row items-center justify-center gap-2'>
 				<NumberInput className='flex-1' disabled={loading} label='Days' maxValue={30} minValue={1} onValueChange={(value) => asteroid.updateCloseApproaches('days', value)} value={days} />
 				<NumberInput className='flex-1' disabled={loading} fractionDigits={1} label='Distance (LD)' maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} step={0.1} value={distance} />
-				<IconButton color='primary' icon={Icons.Search} isDisabled={loading} onPointerUp={asteroid.closeApproaches} variant='light' />
+				<IconButton color='primary' disabled={loading} icon={Icons.Search} onPointerUp={asteroid.closeApproaches} variant='ghost' />
 			</div>
-			<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-[90px] w-full', list: 'max-h-36 overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
+			<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-30 w-full', list: 'max-h-36 overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
 				{(item) => (
 					<ListboxItem description={`${item.distance.toFixed(3)} LD`} key={item.name}>
 						<span className='flex items-center justify-between'>
@@ -623,7 +615,7 @@ const GalaxyTable = memo(() => {
 	const { result } = useSnapshot(galaxy.state)
 
 	return (
-		<Table className='relative min-h-[200px] max-h-[240px] col-span-full' onRowAction={(key) => galaxy.select(+(key as never))} onSortChange={(value) => galaxy.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
+		<Table className='relative min-h-[200px] max-h-80 col-span-full' onRowAction={(key) => galaxy.select(+(key as never))} onSortChange={(value) => galaxy.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
 			<TableHeader>
 				<TableColumn key='name'>Name</TableColumn>
 				<TableColumn allowsSorting className='text-center' key='magnitude'>
@@ -687,7 +679,7 @@ const SatelliteTable = memo(() => {
 	const { result } = useSnapshot(satellite.state)
 
 	return (
-		<Table className='relative min-h-[200px] max-h-[240px] col-span-full' onRowAction={(key) => satellite.select(+(key as never))} onSortChange={(value) => satellite.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
+		<Table className='relative min-h-[200px] max-h-80 col-span-full' onRowAction={(key) => satellite.select(+(key as never))} onSortChange={(value) => satellite.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
 			<TableHeader>
 				<TableColumn allowsSorting className='text-center' key='id'>
 					ID
@@ -732,9 +724,9 @@ interface PaginatorProps extends React.ComponentProps<'div'> {
 function Paginator({ page, count, onPrev, onNext, loading = false, readOnly = false, className, ...props }: PaginatorProps) {
 	return (
 		<div {...props} className={tw('flex flex-row items-center justify-center gap-3', className)}>
-			<IconButton color='secondary' icon={Icons.ChevronLeft} isDisabled={page <= 1 || loading} onPointerUp={onPrev} />
+			<IconButton color='secondary' disabled={page <= 1 || loading} icon={Icons.ChevronLeft} onPointerUp={onPrev} />
 			<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} disabled={loading || (page <= 1 && count < 4)} minValue={1} readOnly={readOnly} value={page} />
-			<IconButton color='secondary' icon={Icons.ChevronRight} isDisabled={count < 4 || loading} onPointerUp={onNext} />
+			<IconButton color='secondary' disabled={count < 4 || loading} icon={Icons.ChevronRight} onPointerUp={onNext} />
 		</div>
 	)
 }
@@ -763,9 +755,11 @@ const TimeBar = memo(() => {
 	return (
 		<div className='inline-flex flex-row items-center gap-1'>
 			<CalendarPopover date={local} isOpen={show} offset={offset} onDateChange={handleOnDateChange} onOffsetChange={handleOnOffsetChange} onOpenChange={handleOnOpenChange} />
-			<Tooltip content={manual ? 'Play' : 'Pause'} placement='bottom' showArrow>
-				{manual ? <IconButton color='warning' icon={Icons.TimerPlay} onPointerUp={() => atlas.updateTime(Date.now(), offset, false)} variant='flat' /> : <IconButton color='success' icon={Icons.TimerPause} onPointerUp={() => (atlas.state.calendar.manual = true)} variant='flat' />}
-			</Tooltip>
+			{manual ? (
+				<IconButton color='warning' icon={Icons.TimerPlay} onPointerUp={() => atlas.updateTime(Date.now(), offset, false)} tooltipContent='Play' variant='flat' />
+			) : (
+				<IconButton color='success' icon={Icons.TimerPause} onPointerUp={() => (atlas.state.calendar.manual = true)} tooltipContent='Pause' variant='flat' />
+			)}
 		</div>
 	)
 })
@@ -893,11 +887,7 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 						))}
 					</ScrollShadow>
 				</div>
-				{onFavoriteChange && (
-					<Tooltip content={isFavorite ? 'Remove bookmark' : 'Add bookmark'} placement='bottom' showArrow>
-						<IconButton color={isFavorite ? 'danger' : 'warning'} icon={isFavorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} isDisabled={isFavorite === undefined} onPointerUp={() => onFavoriteChange(!isFavorite)} />
-					</Tooltip>
-				)}
+				{onFavoriteChange && <IconButton color={isFavorite ? 'danger' : 'warning'} disabled={isFavorite === undefined} icon={isFavorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onPointerUp={() => onFavoriteChange(!isFavorite)} tooltipContent={isFavorite ? 'Remove bookmark' : 'Add bookmark'} />}
 			</div>
 			<span className='w-full'>
 				<Activity mode={showChart ? 'hidden' : 'visible'}>
@@ -926,9 +916,7 @@ const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => {
 			<div className='col-span-full flex items-center justify-center gap-2'>
 				<MountDropdown color='primary' disallowNoneSelection icon={Icons.Sync} isDisabled={position.pierSide === 'NEITHER'} onValueChange={atlas.sync} tooltipContent='Sync' variant='flat' />
 				<MountDropdown color='success' disallowNoneSelection isDisabled={position.pierSide === 'NEITHER'} onValueChange={atlas.goTo} tooltipContent='Go' variant='flat' />
-				<Tooltip content='Frame' placement='bottom' showArrow>
-					<IconButton color='secondary' icon={Icons.Image} isDisabled={position.pierSide === 'NEITHER'} onPointerUp={atlas.frame} variant='flat' />
-				</Tooltip>
+				<IconButton color='secondary' disabled={position.pierSide === 'NEITHER'} icon={Icons.Image} onPointerUp={atlas.frame} tooltipContent='Frame' variant='flat' />
 			</div>
 		</div>
 	)

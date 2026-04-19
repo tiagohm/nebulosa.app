@@ -1,4 +1,4 @@
-import { Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, type SelectedItemProps, type SelectedItems, SelectItem, type SharedSelection, Tooltip } from '@heroui/react'
+import { Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, type SelectedItemProps, type SelectedItems, SelectItem, type SharedSelection } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { Activity, memo } from 'react'
@@ -74,9 +74,7 @@ export const ConnectionBox = memo(() => {
 	return (
 		<>
 			<div className='w-full flex flex-row items-center gap-2 max-w-120'>
-				<Tooltip content='New Connection' showArrow>
-					<IconButton color='success' icon={Icons.Plus} isDisabled={loading || !!connected} onPointerUp={connection.create} />
-				</Tooltip>
+				<IconButton color='success' disabled={loading || !!connected} icon={Icons.Plus} onPointerUp={connection.create} tooltipContent='New Connection' />
 				<Select className='flex-1' disallowEmptySelection isDisabled={loading || !!connected} items={connections} onSelectionChange={handleSelectionChange} popoverProps={DEFAULT_POPOVER_PROPS} renderValue={SelectedConnectionItems} selectedKeys={new Set([selected?.id ?? ''])} selectionMode='single' size='lg'>
 					{ConnectionItem}
 				</Select>

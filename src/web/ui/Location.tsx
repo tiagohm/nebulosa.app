@@ -1,4 +1,3 @@
-import { Tooltip } from '@heroui/react'
 import type { LatLngTuple } from 'leaflet'
 import { deg, toDeg } from 'nebulosa/src/angle'
 import { meter, toMeter } from 'nebulosa/src/distance'
@@ -56,9 +55,7 @@ export function Location({ id, latitude, longitude, elevation, onCoordinateChang
 	const Header = (
 		<div className='flex flex-row justify-start items-center gap-2'>
 			<span className='me-3 font-bold'>Location</span>
-			<Tooltip content='Load from current location' placement='bottom' showArrow>
-				<IconButton className='col-span-2' color='secondary' icon={Icons.HomeMapMarker} onPointerUp={findCurrentPosition} />
-			</Tooltip>
+			<IconButton className='col-span-2' color='secondary' icon={Icons.HomeMapMarker} onPointerUp={findCurrentPosition} tooltipContent='Load from current location' />
 			<MountDropdown disallowNoneSelection onValueChange={handleMountChange} tooltipContent='Load from mount' />
 		</div>
 	)

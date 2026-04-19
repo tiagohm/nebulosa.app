@@ -1,4 +1,4 @@
-import { Chip, Input, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger, Switch, Tooltip } from '@heroui/react'
+import { Chip, Input, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger, Switch } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatRA } from 'nebulosa/src/angle'
 import { Activity, memo, useState } from 'react'
@@ -96,9 +96,7 @@ const LocationButton = memo(() => {
 
 	return (
 		<>
-			<Tooltip content='Location' showArrow>
-				<IconButton color='danger' icon={Icons.MapMarker} isDisabled={!connected} onPointerUp={mount.showLocation} />
-			</Tooltip>
+			<IconButton color='danger' disabled={!connected} icon={Icons.MapMarker} onPointerUp={mount.showLocation} tooltipContent='Location' />
 			{show && <Location {...geographicCoordinate} id={`location-mount-${mount.scope.mount.name}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}
 		</>
 	)
@@ -111,9 +109,7 @@ const TimeButton = memo(() => {
 
 	return (
 		<>
-			<Tooltip content='Time' showArrow>
-				<IconButton color='primary' icon={Icons.Clock} isDisabled={!connected || time.utc === 0} onPointerUp={mount.showTime} />
-			</Tooltip>
+			<IconButton color='primary' disabled={!connected || time.utc === 0} icon={Icons.Clock} onPointerUp={mount.showTime} tooltipContent='Time' />
 			<Activity mode={show ? 'visible' : 'hidden'}>
 				<Time id={`time-mount-${mount.scope.mount.name}`} onClose={mount.hideTime} onTimeChange={mount.time} {...time} />
 			</Activity>
@@ -128,9 +124,7 @@ const RemoteControlButton = memo(() => {
 
 	return (
 		<>
-			<Tooltip content='Remote Control' showArrow>
-				<IconButton color='secondary' icon={Icons.RemoteControl} isDisabled={!connected} onPointerUp={mount.showRemoteControl} />
-			</Tooltip>
+			<IconButton color='secondary' disabled={!connected} icon={Icons.RemoteControl} onPointerUp={mount.showRemoteControl} tooltipContent='Remote Control' />
 			<Activity mode={show ? 'visible' : 'hidden'}>
 				<MountRemoteControl />
 			</Activity>
@@ -179,9 +173,9 @@ const TargetCoordinateAndPosition = memo(() => {
 				<Input className='col-span-5' isDisabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={mount.updateTargetCoordinateY} size='sm' value={y} />
 				<div className='col-span-10 flex flex-row items-center justify-center gap-1'>
 					<TargetCoordinatePopupButton />
-					<IconButton color='success' icon={Icons.Telescope} isDisabled={disabled} onPointerUp={mount.goTo} />
-					<IconButton color='primary' icon={Icons.Sync} isDisabled={disabled} onPointerUp={mount.sync} />
-					<IconButton color='secondary' icon={Icons.Image} isDisabled={disabled} onPointerUp={mount.frame} />
+					<IconButton color='success' disabled={disabled} icon={Icons.Telescope} onPointerUp={mount.goTo} />
+					<IconButton color='primary' disabled={disabled} icon={Icons.Sync} onPointerUp={mount.sync} />
+					<IconButton color='secondary' disabled={disabled} icon={Icons.Image} onPointerUp={mount.frame} />
 				</div>
 			</div>
 		</div>
@@ -194,7 +188,7 @@ const TargetCoordinatePopupButton = memo(() => {
 	return (
 		<Popover isOpen={open} onOpenChange={setOpen} {...DEFAULT_POPOVER_PROPS}>
 			<PopoverTrigger>
-				<IconButton color='default' icon={Icons.DotsVertical} variant='light' />
+				<IconButton color='secondary' icon={Icons.DotsVertical} variant='ghost' />
 			</PopoverTrigger>
 			<PopoverContent>
 				<TargetCoordinatePopupButtonContent />
@@ -272,15 +266,9 @@ const ParkAndHome = memo(() => {
 
 	return (
 		<div className='col-span-4 flex flex-row items-center justify-center gap-2'>
-			<Tooltip content={parked ? 'Unpark' : 'Park'} showArrow>
-				<IconButton color={parked ? 'success' : 'danger'} icon={parked ? Icons.Play : Icons.Stop} isDisabled={!connected || !canPark || moving} onPointerUp={mount.togglePark} />
-			</Tooltip>
-			<Tooltip content='Home' showArrow>
-				<IconButton color='primary' icon={Icons.Home} isDisabled={!connected || !canHome || moving || parked} onPointerUp={mount.home} />
-			</Tooltip>
-			<Tooltip content='Find Home' showArrow>
-				<IconButton color='secondary' icon={Icons.HomeSearch} isDisabled={!connected || !canFindHome || moving || parked} onPointerUp={mount.findHome} />
-			</Tooltip>
+			<IconButton color={parked ? 'success' : 'danger'} disabled={!connected || !canPark || moving} icon={parked ? Icons.Play : Icons.Stop} onPointerUp={mount.togglePark} tooltipContent={parked ? 'Unpark' : 'Park'} />
+			<IconButton color='primary' disabled={!connected || !canHome || moving || parked} icon={Icons.Home} onPointerUp={mount.home} tooltipContent='Home' />
+			<IconButton color='secondary' disabled={!connected || !canFindHome || moving || parked} icon={Icons.HomeSearch} onPointerUp={mount.findHome} tooltipContent='Find Home' />
 		</div>
 	)
 })

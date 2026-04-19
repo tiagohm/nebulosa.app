@@ -1,4 +1,4 @@
-import { Chip, Input, Popover, PopoverContent, PopoverTrigger, SelectItem, Tooltip } from '@heroui/react'
+import { Chip, Input, Popover, PopoverContent, PopoverTrigger, SelectItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -108,9 +108,7 @@ const SlotPopoverContent = memo(() => {
 			<p className='col-span-full font-bold'>SLOT OPTIONS</p>
 			<Input className='col-span-10' isDisabled={!canSetNames} label='Name' onValueChange={(value) => value && wheel.update('name', value)} size='sm' value={name} />
 			<div className='col-span-2 flex flex-row justify-center items-center'>
-				<Tooltip content='Apply' placement='bottom' showArrow>
-					<IconButton color='success' icon={Icons.Check} isDisabled={!canSetNames || !name.length} onPointerUp={wheel.apply} />
-				</Tooltip>
+				<IconButton color='success' disabled={!canSetNames || !name.length} icon={Icons.Check} onPointerUp={wheel.apply} tooltipContent='Apply' />
 			</div>
 		</div>
 	)

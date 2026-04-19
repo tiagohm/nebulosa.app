@@ -1,4 +1,3 @@
-import { Tooltip } from '@heroui/react'
 import { ScopeProvider, useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -14,9 +13,7 @@ export const ImagePickerButton = memo(() => {
 
 	return (
 		<>
-			<Tooltip content='Open Image' showArrow>
-				<IconButton color='secondary' icon={Icons.ImagePlus} onPointerUp={workspace.showPicker} variant='light' />
-			</Tooltip>
+			<IconButton color='secondary' icon={Icons.ImagePlus} onPointerUp={workspace.showPicker} tooltipContent='Open Image' variant='ghost' />
 			<ScopeProvider scope={FilePickerScope} value={{ path: workspace.state.picker.path, filter: '*.{fits,fit,xisf}', multiple: true }}>
 				<Activity mode={show ? 'visible' : 'hidden'}>
 					<FilePicker header='Open Image' id='open-image' onChoose={workspace.choose} />

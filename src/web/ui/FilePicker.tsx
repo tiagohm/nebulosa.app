@@ -1,4 +1,4 @@
-import { Badge, BreadcrumbItem, Breadcrumbs, Input, Listbox, ListboxItem, Tooltip } from '@heroui/react'
+import { Badge, BreadcrumbItem, Breadcrumbs, Input, Listbox, ListboxItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { Activity, memo } from 'react'
@@ -47,9 +47,7 @@ const Toolbar = memo(() => {
 
 	return (
 		<div className='flex flex-row items-center gap-2'>
-			<Tooltip content='Go Back' showArrow>
-				<IconButton color='secondary' icon={Icons.ArrowLeft} isDisabled={history.length === 0} onPointerUp={picker.navigateBack} />
-			</Tooltip>
+			<IconButton color='secondary' disabled={history.length === 0} icon={Icons.ArrowLeft} onPointerUp={picker.navigateBack} tooltipContent='Go Back' />
 			<Breadcrumbs className='flex-1' itemsAfterCollapse={2} itemsBeforeCollapse={1} maxItems={3}>
 				{directoryTree.map((item) => (
 					<BreadcrumbItem key={item.name} onPointerUp={() => picker.navigateTo(item)} startContent={item.name ? undefined : <Icons.FolderRoot />}>
@@ -57,15 +55,9 @@ const Toolbar = memo(() => {
 					</BreadcrumbItem>
 				))}
 			</Breadcrumbs>
-			<Tooltip content='Go To Parent' showArrow>
-				<IconButton color='secondary' icon={Icons.ArrowUp} isDisabled={directoryTree.length <= 1} onPointerUp={picker.navigateToParent} />
-			</Tooltip>
-			<Tooltip content={directory.create ? 'Filter' : 'New Directory'} showArrow>
-				<IconButton color='warning' icon={directory.create ? Icons.Filter : Icons.FolderPlus} onPointerUp={picker.toggleCreateDirectory} />
-			</Tooltip>
-			<Tooltip content='Refresh' showArrow>
-				<IconButton color='primary' icon={Icons.Sync} onPointerUp={picker.list} />
-			</Tooltip>
+			<IconButton color='secondary' disabled={directoryTree.length <= 1} icon={Icons.ArrowUp} onPointerUp={picker.navigateToParent} tooltipContent='Go To Parent' />
+			<IconButton color='warning' icon={directory.create ? Icons.Filter : Icons.FolderPlus} onPointerUp={picker.toggleCreateDirectory} tooltipContent={directory.create ? 'Filter' : 'New Directory'} />
+			<IconButton color='primary' icon={Icons.Sync} onPointerUp={picker.list} tooltipContent='Refresh' />
 		</div>
 	)
 })
@@ -89,9 +81,7 @@ const CreateDirectory = memo(() => {
 		<Activity mode={create ? 'visible' : 'hidden'}>
 			<div className='flex flex-row items-center gap-2'>
 				<Input label='Name' onValueChange={(value) => (picker.state.directory.name = value)} size='sm' value={name} />
-				<Tooltip content='Create' showArrow>
-					<IconButton color='success' icon={Icons.Check} isDisabled={name.length === 0} onPointerUp={picker.createDirectory} variant='light' />
-				</Tooltip>
+				<IconButton color='success' disabled={name.length === 0} icon={Icons.Check} onPointerUp={picker.createDirectory} tooltipContent='Create' variant='ghost' />
 			</div>
 		</Activity>
 	)

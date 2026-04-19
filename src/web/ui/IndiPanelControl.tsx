@@ -83,7 +83,7 @@ const GroupList = memo(() => {
 	const { device, group, groups } = useSnapshot(control.state)
 
 	return (
-		<div className='col-span-full flex flex-col gap-4 max-h-[300px] overflow-y-auto p-1'>
+		<div className='col-span-full flex flex-col gap-4 max-h-100 overflow-y-auto p-1'>
 			{groups.map((e) => (
 				<Activity key={`${device}-${e}`} mode={e === group ? 'visible' : 'hidden'}>
 					<PropertyList group={e} />
@@ -174,11 +174,7 @@ const Property = memo(({ property, onSend }: PropertyProps) => {
 						<span className='text-[0.6rem] mt-[-4px] text-neutral-400'>{property.name}</span>
 					</div>
 				</div>
-				{!isReadonly && property.type !== 'SWITCH' && (
-					<Tooltip content='Send' placement='left' showArrow>
-						<IconButton color='primary' icon={Icons.Send} onPointerUp={handlePointerUp} />
-					</Tooltip>
-				)}
+				{!isReadonly && property.type !== 'SWITCH' && <IconButton color='primary' icon={Icons.Send} onPointerUp={handlePointerUp} tooltipContent='Send' tooltipPlacement='start' />}
 			</div>
 			<div className='flex flex-col gap-1'>
 				{property.type === 'TEXT' && Object.entries(property.elements).map(([key, element]) => <TextElement isReadonly={isReadonly} key={key} label={element.label} onValueChange={(value) => handleValueChange(element, value)} value={element.value} />)}

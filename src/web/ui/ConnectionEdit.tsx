@@ -69,10 +69,10 @@ const AlpacaDeviceServerDiscovery = memo(() => {
 	}
 
 	return (
-		<PopoverButton color='secondary' icon={Icons.Radar} isDisabled={edited.type !== 'ALPACA'} isOpen={open} onOpenChange={setOpen} tooltipContent='Discovery'>
+		<PopoverButton color='secondary' disabled={edited.type !== 'ALPACA'} icon={Icons.Radar} isOpen={open} onOpenChange={setOpen} tooltipContent='Discovery'>
 			<div className='max-w-100 mt-0 grid grid-cols-12 gap-2 p-4 items-center'>
 				<p className='font-bold text-center col-span-full'>ALPACA DEVICE SERVER DISCOVERY</p>
-				<Listbox className='col-span-full min-w-90' classNames={{ list: 'max-h-[120px] overflow-scroll' }} emptyContent='No servers' items={alpaca.servers} onAction={handleOnAction}>
+				<Listbox className='col-span-full min-w-90' classNames={{ list: 'max-h-40 overflow-scroll' }} emptyContent='No servers' items={alpaca.servers} onAction={handleOnAction}>
 					{AlpacaDeviceServerItem}
 				</Listbox>
 				<div className='col-span-full flex flex-row items-center justify-end'>

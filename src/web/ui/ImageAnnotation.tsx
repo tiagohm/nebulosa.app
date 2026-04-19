@@ -47,7 +47,7 @@ const StarsAndDsos = memo(() => {
 const openSimbad = () => window.open('https://simbad.cds.unistra.fr/simbad/', '_blank', 'noopener')
 
 const SimbadLink = memo(() => {
-	return <IconButton icon={Icons.Link} isRounded onPointerUp={openSimbad} size='sm' variant='light' />
+	return <IconButton icon={Icons.Link} isRounded onPointerUp={openSimbad} size='sm' variant='ghost' />
 })
 
 const MinorPlanets = memo(() => {

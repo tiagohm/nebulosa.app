@@ -1,4 +1,4 @@
-import { Switch, Tooltip } from '@heroui/react'
+import { Switch } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -68,7 +68,7 @@ const Header = memo(() => {
 				<span className='font-semibold leading-5'>Camera</span>
 				<span className='text-xs font-normal text-gray-400 max-w-full'>{camera.scope.camera.name}</span>
 			</div>
-			<IconButton color='primary' icon={minimized ? Icons.ChevronDown : Icons.ChevronUp} onPointerUp={camera.minimize} variant='light' />
+			<IconButton color='primary' icon={minimized ? Icons.ChevronDown : Icons.ChevronUp} onPointerUp={camera.minimize} variant='ghost' />
 		</div>
 	)
 })
@@ -106,7 +106,7 @@ const OptionsButton = memo(() => {
 
 	return (
 		<>
-			<IconButton icon={Icons.Cog} isDisabled={!connected || capturing} onPointerUp={() => (camera.state.request.show = true)} />
+			<IconButton disabled={!connected || capturing} icon={Icons.Cog} onPointerUp={() => (camera.state.request.show = true)} />
 			<Activity mode={show && connected && !capturing ? 'visible' : 'hidden'}>
 				<OptionsModal />
 			</Activity>
@@ -184,11 +184,7 @@ const Temperature = memo(() => {
 const TemperatureNumberInputEndContent = memo(() => {
 	const camera = useMolecule(CameraMolecule)
 
-	return (
-		<Tooltip content='Apply' placement='bottom' showArrow>
-			<IconButton color='success' icon={Icons.Check} onPointerUp={camera.temperature} size='sm' />
-		</Tooltip>
-	)
+	return <IconButton color='success' icon={Icons.Check} onPointerUp={camera.temperature} size='sm' tooltipContent='Apply' />
 })
 
 const Exposure = memo(() => {
@@ -255,9 +251,7 @@ const Frame = memo(() => {
 		<>
 			<div className='col-span-6 flex flex-row items-center justify-center gap-2'>
 				<Checkbox className='flex-col-reverse gap-0.4 justify-center max-w-none' classNames={{ label: 'text-xs ms-0' }} disabled={!connected || !canSubFrame || capturing} label='Subframe' onValueChange={(value) => camera.update('subframe', value)} value={subframe} />
-				<Tooltip content='Fullscreen' placement='bottom' showArrow>
-					<IconButton color='secondary' icon={Icons.Fullscreen} isDisabled={!connected || !subframe || capturing} onPointerUp={camera.fullscreen} variant='flat' />
-				</Tooltip>
+				<IconButton color='secondary' disabled={!connected || !subframe || capturing} icon={Icons.Fullscreen} onPointerUp={camera.fullscreen} tooltipContent='Fullscreen' variant='flat' />
 			</div>
 			<NumberInput className='col-span-3' disabled={!connected || !subframe || capturing} label='X' maxValue={frame.x.max} minValue={frame.x.min} onValueChange={(value) => camera.update('x', value)} value={x} />
 			<NumberInput className='col-span-3' disabled={!connected || !subframe || capturing} label='Y' maxValue={frame.y.max} minValue={frame.y.min} onValueChange={(value) => camera.update('y', value)} value={y} />

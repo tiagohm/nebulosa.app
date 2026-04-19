@@ -1,4 +1,4 @@
-import { Listbox, ListboxItem, Tooltip } from '@heroui/react'
+import { Listbox, ListboxItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import type { FovItem } from 'src/shared/types'
@@ -98,12 +98,8 @@ const Actions = memo(() => {
 
 	return (
 		<div className='col-span-4 flex flex-row items-center justify-center gap-2'>
-			<Tooltip content='Add' placement='bottom' showArrow>
-				<IconButton className='col-span-2' color='success' icon={Icons.Plus} onPointerUp={fov.add} />
-			</Tooltip>
-			<Tooltip content='Remove' placement='bottom' showArrow>
-				<IconButton className='col-span-2' color='danger' icon={Icons.Trash} isDisabled={items.length <= 1} onPointerUp={fov.remove} />
-			</Tooltip>
+			<IconButton className='col-span-2' color='success' icon={Icons.Plus} onPointerUp={fov.add} tooltipContent='Add' />
+			<IconButton className='col-span-2' color='danger' disabled={items.length <= 1} icon={Icons.Trash} onPointerUp={fov.remove} tooltipContent='Remove' />
 		</div>
 	)
 })

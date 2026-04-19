@@ -102,5 +102,5 @@ const StarDetectionSelectEndContent = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)
 	const { starDetection } = useSnapshot(autoFocus.state.request)
 
-	return <StarDetectionPopover isRounded onValueChange={autoFocus.updateStarDetection} size='sm' value={starDetection} variant='light' />
+	return <StarDetectionPopover isRounded onValueChange={autoFocus.updateStarDetection} size='sm' value={starDetection} variant='ghost' />
 })

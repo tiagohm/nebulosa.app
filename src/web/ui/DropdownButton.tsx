@@ -13,7 +13,7 @@ export function DropdownButton({ size, color, disabled, children, className, onA
 			<Button {...props} className='flex-1 rounded-l-medium rounded-r-none' color={color} disabled={disabled} size={size} />
 			<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
 				<DropdownTrigger>
-					<IconButton className='rounded-l-none rounded-r-medium' color={color} icon={Icons.ChevronDown} isDisabled={disabled} onPointerUp={stopPropagationDesktopOnly} size={size} variant='flat' />
+					<IconButton className='rounded-l-none rounded-r-medium' color={color} disabled={disabled} icon={Icons.ChevronDown} onPointerUp={stopPropagationDesktopOnly} size={size} variant='flat' />
 				</DropdownTrigger>
 				<DropdownMenu onAction={onAction}>{children}</DropdownMenu>
 			</Dropdown>

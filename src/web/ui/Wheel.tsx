@@ -1,11 +1,11 @@
-import { Chip, Popover, PopoverContent, PopoverTrigger, SelectItem } from '@heroui/react'
+import { Chip, SelectItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { WheelMolecule } from '@/molecules/indi/wheel'
-import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
 import { ConnectButton } from './ConnectButton'
 import { Button } from './components/Button'
+import { Popover } from './components/Popover'
 import { TextInput } from './components/TextInput'
 import { EnumSelect } from './EnumSelect'
 import { Icons } from './Icon'
@@ -82,13 +82,8 @@ const Slot = memo(() => {
 
 const SlotPopover = memo(() => {
 	return (
-		<Popover className='max-w-80' {...DEFAULT_POPOVER_PROPS}>
-			<PopoverTrigger>
-				<IconButton icon={Icons.Cog} />
-			</PopoverTrigger>
-			<PopoverContent>
-				<SlotPopoverContent />
-			</PopoverContent>
+		<Popover trigger={<IconButton icon={Icons.Cog} />}>
+			<SlotPopoverContent />
 		</Popover>
 	)
 })

@@ -1,6 +1,6 @@
-import { ListboxItem, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
+import { ListboxItem } from '@heroui/react'
 import { memo, useState } from 'react'
-import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
+import { Popover } from './components/Popover'
 import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -54,32 +54,23 @@ export const AstroBinEquipmentPopover = memo(({ type, items, onSelectedChange }:
 	}
 
 	return (
-		<Popover isOpen={open} onOpenChange={setOpen} {...DEFAULT_POPOVER_PROPS}>
-			<Tooltip content={isCamera ? 'Cameras' : 'Telescopes'} placement='bottom' showArrow>
-				<div className='max-w-fit'>
-					<PopoverTrigger>
-						<IconButton color='secondary' icon={isCamera ? Icons.Camera : Icons.Telescope} variant='flat' />
-					</PopoverTrigger>
-				</div>
-			</Tooltip>
-			<PopoverContent>
-				<FilterableListbox
-					className='col-span-full'
-					classNames={{ list: 'max-h-[200px] overflow-scroll', base: 'min-w-80' }}
-					filter={filter}
-					isVirtualized
-					items={items}
-					onAction={handleAction}
-					selectionMode='none'
-					variant='flat'
-					virtualization={{
-						maxListboxHeight: 200,
-						itemHeight: 36,
-					}}>
-					{EquipmentItem}
-				</FilterableListbox>
-				<Link className='py-2' href='https://www.astrobin.com/api/v2/equipment/' label={`AstroBin's equipment database API`} />
-			</PopoverContent>
+		<Popover onOpenChange={setOpen} open={open} trigger={<IconButton color='secondary' icon={isCamera ? Icons.Camera : Icons.Telescope} tooltipContent={isCamera ? 'Cameras' : 'Telescopes'} variant='flat' />}>
+			<FilterableListbox
+				className='col-span-full'
+				classNames={{ list: 'max-h-[200px] overflow-scroll', base: 'min-w-80' }}
+				filter={filter}
+				isVirtualized
+				items={items}
+				onAction={handleAction}
+				selectionMode='none'
+				variant='flat'
+				virtualization={{
+					maxListboxHeight: 200,
+					itemHeight: 36,
+				}}>
+				{EquipmentItem}
+			</FilterableListbox>
+			<Link className='py-2' href='https://www.astrobin.com/api/v2/equipment/' label={`AstroBin's equipment database API`} />
 		</Popover>
 	)
 })

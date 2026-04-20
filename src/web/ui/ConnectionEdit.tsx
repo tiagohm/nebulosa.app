@@ -8,10 +8,11 @@ import { Button } from '@/ui/components/Button'
 import { ClientTypeSelect } from './ClientTypeSelect'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
+import { Popover } from './components/Popover'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
+import { IconButton } from './IconButton'
 import { Modal } from './Modal'
-import { PopoverButton } from './PopoverButton'
 
 export const ConnectionEdit = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
@@ -70,7 +71,7 @@ const AlpacaDeviceServerDiscovery = memo(() => {
 	}
 
 	return (
-		<PopoverButton color='secondary' disabled={edited.type !== 'ALPACA'} icon={Icons.Radar} isOpen={open} onOpenChange={setOpen} tooltipContent='Discovery'>
+		<Popover onOpenChange={setOpen} open={open} trigger={<IconButton color='secondary' disabled={edited.type !== 'ALPACA'} icon={Icons.Radar} tooltipContent='Discovery' />}>
 			<div className='max-w-100 mt-0 grid grid-cols-12 gap-2 p-4 items-center'>
 				<p className='font-bold text-center col-span-full'>ALPACA DEVICE SERVER DISCOVERY</p>
 				<Listbox className='col-span-full min-w-90' classNames={{ list: 'max-h-40 overflow-scroll' }} emptyContent='No servers' items={alpaca.servers} onAction={handleOnAction}>
@@ -80,6 +81,6 @@ const AlpacaDeviceServerDiscovery = memo(() => {
 					<Button color='primary' label='Discovery' loading={alpaca.discovering} onPointerUp={connection.discovery} startContent={<Icons.Reload />} />
 				</div>
 			</div>
-		</PopoverButton>
+		</Popover>
 	)
 })

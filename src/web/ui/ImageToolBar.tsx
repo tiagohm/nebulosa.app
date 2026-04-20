@@ -1,4 +1,3 @@
-import { Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -17,7 +16,7 @@ import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
-import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
+import { Popover } from './components/Popover'
 import { Slider } from './components/Slider'
 import { Switch } from './components/Switch'
 import { Icons } from './Icon'
@@ -41,13 +40,9 @@ export const ImageToolBar = memo(() => {
 				<IconButton color='secondary' icon={Icons.Save} onPointerUp={save.show} tooltipContent='Save' tooltipPlacement='top' variant='flat' />
 				<IconButton color='secondary' icon={Icons.Sigma} onPointerUp={solver.show} tooltipContent='Plate Solver' tooltipPlacement='top' variant='flat' />
 				<IconButton color='secondary' icon={Icons.Tune} onPointerUp={stretch.show} tooltipContent='Stretch' tooltipPlacement='top' variant='flat' />
-				<Tooltip content='Auto Stretch' placement='top' showArrow>
-					<ToggleButton color='primary' icon={Icons.WandSparkles} isSelected={transformation.stretch.auto} onPointerUp={stretch.toggle} />
-				</Tooltip>
+				<ToggleButton color='primary' icon={Icons.WandSparkles} isSelected={transformation.stretch.auto} onPointerUp={stretch.toggle} tooltipContent='Auto Stretch' tooltipPlacement='top' />
 				<Activity mode={info?.metadata.bayer ? 'visible' : 'hidden'}>
-					<Tooltip content='Debayer' placement='top' showArrow>
-						<ToggleButton color='primary' icon={Icons.Grid} isSelected={transformation.debayer} onPointerUp={viewer.toggleDebayer} />
-					</Tooltip>
+					<ToggleButton color='primary' icon={Icons.Grid} isSelected={transformation.debayer} onPointerUp={viewer.toggleDebayer} tooltipContent='Debayer' tooltipPlacement='top' />
 				</Activity>
 				<RotatePopover />
 				<TransformationPopover />
@@ -63,17 +58,8 @@ export const ImageToolBar = memo(() => {
 
 const RotatePopover = memo(() => {
 	return (
-		<Popover {...DEFAULT_POPOVER_PROPS}>
-			<Tooltip content='Rotate' showArrow>
-				<div className='max-w-fit'>
-					<PopoverTrigger>
-						<IconButton color='success' icon={Icons.RotateRight} variant='flat' />
-					</PopoverTrigger>
-				</div>
-			</Tooltip>
-			<PopoverContent>
-				<RotatePopoverContent />
-			</PopoverContent>
+		<Popover trigger={<IconButton color='success' icon={Icons.RotateRight} tooltipContent='Rotate' variant='flat' />}>
+			<RotatePopoverContent />
 		</Popover>
 	)
 })
@@ -95,17 +81,8 @@ const RotatePopoverContent = memo(() => {
 
 const OverlayPopover = memo(() => {
 	return (
-		<Popover {...DEFAULT_POPOVER_PROPS}>
-			<Tooltip content='Overlay' showArrow>
-				<div className='max-w-fit'>
-					<PopoverTrigger>
-						<IconButton color='success' icon={Icons.BringToFront} variant='flat' />
-					</PopoverTrigger>
-				</div>
-			</Tooltip>
-			<PopoverContent>
-				<OverlayPopoverContent />
-			</PopoverContent>
+		<Popover trigger={<IconButton color='success' icon={Icons.BringToFront} tooltipContent='Overlay' tooltipPlacement='top' variant='flat' />}>
+			<OverlayPopoverContent />
 		</Popover>
 	)
 })
@@ -130,9 +107,7 @@ const OverlayPopoverContent = memo(() => {
 
 	return (
 		<div className='flex flex-row justify-center items-start gap-2 p-2'>
-			<Tooltip content='Crosshair' placement='top' showArrow>
-				<ToggleButton color='primary' icon={Icons.Crosshair} isSelected={crosshair} onPointerUp={viewer.toggleCrosshair} />
-			</Tooltip>
+			<ToggleButton color='primary' icon={Icons.Crosshair} isSelected={crosshair} onPointerUp={viewer.toggleCrosshair} tooltipContent='Crosshair' tooltipPlacement='top' />
 			<div className='flex flex-col gap-2 justify-center'>
 				<IconButton color='secondary' disabled={!solution} icon={Icons.Pen} onPointerUp={annotation.show} tooltipContent='Annotation' tooltipPlacement='top' variant='flat' />
 				<Activity mode={annotatedStars.length > 0 ? 'visible' : 'hidden'}>
@@ -148,9 +123,7 @@ const OverlayPopoverContent = memo(() => {
 			<IconButton color='secondary' icon={Icons.Box} tooltipContent='ROI' tooltipPlacement='top' variant='flat' />
 			<Activity mode={solution?.scale ? 'visible' : 'hidden'}>
 				<IconButton color='secondary' icon={Icons.FocusField} onPointerUp={fov.show} tooltipContent='FOV' tooltipPlacement='top' variant='flat' />
-				<Tooltip content='Mouse Coordinate' placement='top' showArrow>
-					<ToggleButton color='primary' icon={Icons.MousePointerClick} isSelected={isMouseCoordinateVisible} onPointerUp={mouseCoordinate.toggle} />
-				</Tooltip>
+				<ToggleButton color='primary' icon={Icons.MousePointerClick} isSelected={isMouseCoordinateVisible} onPointerUp={mouseCoordinate.toggle} tooltipContent='Mouse Coordinate' tooltipPlacement='top' />
 			</Activity>
 		</div>
 	)
@@ -158,17 +131,8 @@ const OverlayPopoverContent = memo(() => {
 
 const TransformationPopover = memo(() => {
 	return (
-		<Popover {...DEFAULT_POPOVER_PROPS}>
-			<Tooltip content='Transformation' showArrow>
-				<div className='max-w-fit'>
-					<PopoverTrigger>
-						<IconButton color='success' icon={Icons.Palette} variant='flat' />
-					</PopoverTrigger>
-				</div>
-			</Tooltip>
-			<PopoverContent>
-				<TransformationPopoverContent />
-			</PopoverContent>
+		<Popover trigger={<IconButton color='success' icon={Icons.Palette} tooltipContent='Transformation' tooltipPlacement='top' variant='flat' />}>
+			<TransformationPopoverContent />
 		</Popover>
 	)
 })
@@ -189,15 +153,9 @@ const TransformationPopoverContent = memo(() => {
 			</Activity>
 			<IconButton color='secondary' icon={Icons.ImageEdit} onPointerUp={adjustment.show} tooltipContent='Adjustment' tooltipPlacement='top' variant='flat' />
 			<IconButton color='secondary' icon={Icons.Brush} onPointerUp={filter.show} tooltipContent='Filter' tooltipPlacement='top' variant='flat' />
-			<Tooltip content='Horizontal mirror' placement='top' showArrow>
-				<ToggleButton color='primary' icon={Icons.FlipHorizontal} isSelected={transformation.horizontalMirror} onPointerUp={viewer.toggleHorizontalMirror} />
-			</Tooltip>
-			<Tooltip content='Vertical Mirror' placement='top' showArrow>
-				<ToggleButton color='primary' icon={Icons.FlipVertical} isSelected={transformation.verticalMirror} onPointerUp={viewer.toggleVerticalMirror} />
-			</Tooltip>
-			<Tooltip content='Invert' placement='top' showArrow>
-				<ToggleButton color='primary' icon={Icons.InvertColor} isSelected={transformation.invert} onPointerUp={viewer.toggleInvert} />
-			</Tooltip>
+			<ToggleButton color='primary' icon={Icons.FlipHorizontal} isSelected={transformation.horizontalMirror} onPointerUp={viewer.toggleHorizontalMirror} tooltipContent='Horizontal mirror' tooltipPlacement='top' />
+			<ToggleButton color='primary' icon={Icons.FlipVertical} isSelected={transformation.verticalMirror} onPointerUp={viewer.toggleVerticalMirror} tooltipContent='Vertical Mirror' tooltipPlacement='top' />
+			<ToggleButton color='primary' icon={Icons.InvertColor} isSelected={transformation.invert} onPointerUp={viewer.toggleInvert} tooltipContent='Invert' tooltipPlacement='top' />
 		</div>
 	)
 })

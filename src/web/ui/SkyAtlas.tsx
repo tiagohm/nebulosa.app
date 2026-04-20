@@ -1,4 +1,4 @@
-import { Chip, type ChipProps, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger, ScrollShadow, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs, Tooltip } from '@heroui/react'
+import { Chip, type ChipProps, Listbox, ListboxItem, ScrollShadow, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
@@ -9,7 +9,6 @@ import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedC
 import { type BodyPosition, EMPTY_TWILIGHT, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, type BookmarkItem, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, type SkyAtlasTab, SunMolecule } from '@/molecules/skyatlas'
-import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
 import { formatDistance, skyObjectName, skyObjectType, tw } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
@@ -18,6 +17,7 @@ import { Button } from './components/Button'
 import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
+import { Popover } from './components/Popover'
 import { Slider } from './components/Slider'
 import { TextInput } from './components/TextInput'
 import { MountDropdown } from './DeviceDropdown'
@@ -88,17 +88,8 @@ const TabPopover = memo(() => {
 	const { tab } = useSnapshot(atlas.state)
 
 	return (
-		<Popover isOpen={isOpen} onOpenChange={setOpen} {...DEFAULT_POPOVER_PROPS}>
-			<Tooltip className='capitalize' content={tab} placement='bottom' showArrow>
-				<div className='max-w-fit'>
-					<PopoverTrigger>
-						<IconButton color='secondary' icon={TAB_ICONS[tab]} onWheel={atlas.handleOnTabWheel} />
-					</PopoverTrigger>
-				</div>
-			</Tooltip>
-			<PopoverContent>
-				<TabPopoverContent />
-			</PopoverContent>
+		<Popover onOpenChange={setOpen} open={isOpen} trigger={<IconButton color='secondary' icon={TAB_ICONS[tab]} onWheel={atlas.handleOnTabWheel} />}>
+			<TabPopoverContent />
 		</Popover>
 	)
 })
@@ -109,11 +100,7 @@ const TabPopoverContent = memo(() => {
 	return (
 		<div className='inline-flex flex-row gap-2'>
 			{Object.entries(TAB_ICONS).map(([key, icon]) => {
-				return (
-					<Tooltip className='capitalize' content={key} key={key} placement='bottom' showArrow>
-						<IconButton icon={icon} onPointerUp={() => (atlas.state.tab = key as never)} />
-					</Tooltip>
-				)
+				return <IconButton icon={icon} key={key} onPointerUp={() => (atlas.state.tab = key as never)} tooltipContent={key} />
 			})}
 		</div>
 	)
@@ -130,17 +117,8 @@ const BookmarkPopover = memo(() => {
 	const { show } = useSnapshot(atlas.state.bookmark)
 
 	return (
-		<Popover className='max-w-110' isOpen={show} onOpenChange={(open) => (atlas.state.bookmark.show = open)} {...DEFAULT_POPOVER_PROPS}>
-			<Tooltip content='Bookmarks' placement='bottom' showArrow>
-				<div className='max-w-fit'>
-					<PopoverTrigger>
-						<IconButton color='warning' icon={Icons.Bookmark} />
-					</PopoverTrigger>
-				</div>
-			</Tooltip>
-			<PopoverContent>
-				<BookmarkPopoverContent />
-			</PopoverContent>
+		<Popover open={show} trigger={<IconButton color='warning' icon={Icons.Bookmark} tooltipContent='Bookmarks' />}>
+			<BookmarkPopoverContent />
 		</Popover>
 	)
 })
@@ -181,25 +159,16 @@ const HeaderFilterPopover = memo(() => {
 
 	return (
 		<Activity mode={tab === 'planet' || tab === 'galaxy' || tab === 'satellite' ? 'visible' : 'hidden'}>
-			<Popover className='max-w-140' {...DEFAULT_POPOVER_PROPS}>
-				<Tooltip content='Filter' placement='bottom' showArrow>
-					<div className='max-w-fit'>
-						<PopoverTrigger>
-							<IconButton color='secondary' icon={Icons.Filter} variant='flat' />
-						</PopoverTrigger>
-					</div>
-				</Tooltip>
-				<PopoverContent>
-					<Activity mode={tab === 'planet' ? 'visible' : 'hidden'}>
-						<PlanetFilter />
-					</Activity>
-					<Activity mode={tab === 'galaxy' ? 'visible' : 'hidden'}>
-						<GalaxyFilter />
-					</Activity>
-					<Activity mode={tab === 'satellite' ? 'visible' : 'hidden'}>
-						<SatelliteFilter />
-					</Activity>
-				</PopoverContent>
+			<Popover trigger={<IconButton color='secondary' icon={Icons.Filter} tooltipContent='Filter' variant='flat' />}>
+				<Activity mode={tab === 'planet' ? 'visible' : 'hidden'}>
+					<PlanetFilter />
+				</Activity>
+				<Activity mode={tab === 'galaxy' ? 'visible' : 'hidden'}>
+					<GalaxyFilter />
+				</Activity>
+				<Activity mode={tab === 'satellite' ? 'visible' : 'hidden'}>
+					<SatelliteFilter />
+				</Activity>
 			</Popover>
 		</Activity>
 	)
@@ -790,23 +759,18 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOp
 	}
 
 	return (
-		<Popover className='max-w-110' isOpen={isOpen} onOpenChange={onOpenChange} {...DEFAULT_POPOVER_PROPS}>
-			<PopoverTrigger>
-				<Button color='secondary' label={formatTemporal(date, 'YYYY-MM-DD HH:mm', 0)} startContent={<Icons.CalendarToday />} tooltipContent='Time' />
-			</PopoverTrigger>
-			<PopoverContent>
-				<div className='grid grid-cols-12 gap-2 pb-2 max-w-[256px]'>
-					<Calendar className='col-span-full' onValueChange={handleDateChange} value={Temporal.Instant.fromEpochMilliseconds(date).toZonedDateTimeISO('GMT').toPlainDate()} />
-					<div className='col-span-6 flex flex-row items-center justify-center gap-1'>
-						<NumberInput className='max-w-20' maxValue={23} minValue={0} onValueChange={handleOnHourChange} value={hour} />
-						<span className='text-lg font-bold'>:</span>
-						<NumberInput className='max-w-20' maxValue={59} minValue={0} onValueChange={handleOnMinuteChange} value={minute} />
-					</div>
-					<div className='col-span-6 flex flex-row items-center justify-center gap-1'>
-						<NumberInput className='w-fit' label='Timezone (min)' maxValue={720} minValue={-720} onValueChange={onOffsetChange} step={30} value={offset} />
-					</div>
+		<Popover onOpenChange={onOpenChange} open={isOpen} trigger={<Button color='secondary' label={formatTemporal(date, 'YYYY-MM-DD HH:mm', 0)} startContent={<Icons.CalendarToday />} tooltipContent='Time' />}>
+			<div className='grid grid-cols-12 gap-2 pb-2 max-w-[256px]'>
+				<Calendar className='col-span-full' onValueChange={handleDateChange} value={Temporal.Instant.fromEpochMilliseconds(date).toZonedDateTimeISO('GMT').toPlainDate()} />
+				<div className='col-span-6 flex flex-row items-center justify-center gap-1'>
+					<NumberInput className='max-w-20' maxValue={23} minValue={0} onValueChange={handleOnHourChange} value={hour} />
+					<span className='text-lg font-bold'>:</span>
+					<NumberInput className='max-w-20' maxValue={59} minValue={0} onValueChange={handleOnMinuteChange} value={minute} />
 				</div>
-			</PopoverContent>
+				<div className='col-span-6 flex flex-row items-center justify-center gap-1'>
+					<NumberInput className='w-fit' label='Timezone (min)' maxValue={720} minValue={-720} onValueChange={onOffsetChange} step={30} value={offset} />
+				</div>
+			</div>
 		</Popover>
 	)
 })

@@ -1,4 +1,4 @@
-import { Chip, Popover, PopoverContent, PopoverTrigger, Tooltip } from '@heroui/react'
+import { Chip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { DeviceType } from 'nebulosa/src/indi.device'
 import { Activity, memo } from 'react'
@@ -38,12 +38,12 @@ import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { TppaMolecule } from '@/molecules/tppa'
-import { DEFAULT_POPOVER_PROPS } from '@/shared/constants'
 import { About } from './About'
 import { AlpacaServer } from './AlpacaServer'
 import { AutoFocus } from './AutoFocus'
 import { Calculator } from './Calculator'
 import { Button } from './components/Button'
+import { Popover } from './components/Popover'
 import { Darv } from './Darv'
 import { FlatWizard } from './FlatWizard'
 import { Framing } from './Framing'
@@ -139,17 +139,8 @@ export const HomeMenuPopover = memo(() => {
 	const { show } = useSnapshot(home.state.menu)
 
 	return (
-		<Popover isOpen={show} onOpenChange={home.toggleMenu} {...DEFAULT_POPOVER_PROPS}>
-			<Tooltip content='Menu' placement='bottom' showArrow>
-				<div className='max-w-fit'>
-					<PopoverTrigger>
-						<IconButton color='secondary' icon={Icons.Menu} />
-					</PopoverTrigger>
-				</div>
-			</Tooltip>
-			<PopoverContent>
-				<HomeMenuPopoverContent />
-			</PopoverContent>
+		<Popover open={show} trigger={<IconButton color='secondary' icon={Icons.Menu} tooltipContent='Menu' />}>
+			<HomeMenuPopoverContent />
 		</Popover>
 	)
 })

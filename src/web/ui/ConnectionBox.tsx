@@ -4,7 +4,7 @@ import { formatTemporal } from 'nebulosa/src/temporal'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
-import { DEFAULT_DROPDOWN_PROPS, DEFAULT_POPOVER_PROPS } from '@/shared/constants'
+import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
 import type { Connection } from '@/shared/types'
 import { stopPropagationDesktopOnly } from '@/shared/util'
 import { ConnectButton } from './ConnectButton'
@@ -71,7 +71,7 @@ export const ConnectionBox = memo(() => {
 		<>
 			<div className='w-full flex flex-row items-center gap-2 max-w-120'>
 				<IconButton color='success' disabled={loading || !!connected} icon={Icons.Plus} onPointerUp={connection.create} tooltipContent='New Connection' />
-				<Select className='flex-1' disallowEmptySelection isDisabled={loading || !!connected} items={connections} onSelectionChange={handleSelectionChange} popoverProps={DEFAULT_POPOVER_PROPS} renderValue={SelectedConnectionItems} selectedKeys={new Set([selected?.id ?? ''])} selectionMode='single' size='lg'>
+				<Select className='flex-1' disallowEmptySelection isDisabled={loading || !!connected} items={connections} onSelectionChange={handleSelectionChange} renderValue={SelectedConnectionItems} selectedKeys={new Set([selected?.id ?? ''])} selectionMode='single' size='lg'>
 					{ConnectionItem}
 				</Select>
 				<ConnectButton disabled={!selected} isConnected={!!connected} loading={loading} onPointerUp={connection.connect} />

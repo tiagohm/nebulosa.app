@@ -1,13 +1,13 @@
-import { Chip, Listbox, ListboxItem, Popover, PopoverContent, PopoverTrigger } from '@heroui/react'
+import { Chip, Listbox, ListboxItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatRA } from 'nebulosa/src/angle'
 import { Activity, memo, useState } from 'react'
 import type { CoordinateType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { MountMolecule } from '@/molecules/indi/mount'
-import { DEFAULT_POPOVER_PROPS } from '../shared/constants'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { ConnectButton } from './ConnectButton'
+import { Popover } from './components/Popover'
 import { Switch } from './components/Switch'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
@@ -182,13 +182,8 @@ const TargetCoordinatePopupButton = memo(() => {
 	const [open, setOpen] = useState(false)
 
 	return (
-		<Popover isOpen={open} onOpenChange={setOpen} {...DEFAULT_POPOVER_PROPS}>
-			<PopoverTrigger>
-				<IconButton color='secondary' icon={Icons.DotsVertical} variant='ghost' />
-			</PopoverTrigger>
-			<PopoverContent>
-				<TargetCoordinatePopupButtonContent />
-			</PopoverContent>
+		<Popover onOpenChange={setOpen} open={open} trigger={<IconButton color='secondary' icon={Icons.DotsVertical} variant='ghost' />}>
+			<TargetCoordinatePopupButtonContent />
 		</Popover>
 	)
 })

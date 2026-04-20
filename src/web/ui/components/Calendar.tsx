@@ -242,7 +242,7 @@ export function Calendar({ className, classNames, color = 'primary', disabled = 
 			</div>
 			<div className={tw(styles.weeks(), classNames?.weeks)}>
 				{weeks.map((week) => (
-					<div className={tw(styles.week(), classNames?.week)} key={week[0].dayOfYear}>
+					<div className={tw(styles.week(), classNames?.week)} key={`${week[0].year}-${week[0].dayOfYear}`}>
 						{showWeekNumber && <div className={tw(styles.weekNumber(), classNames?.weekNumber)}>{weekNumberFor(week) ?? ''}</div>}
 						{week.map((day) => {
 							const selected = isSameDay(selectedValue, day)
@@ -261,7 +261,7 @@ export function Calendar({ className, classNames, color = 'primary', disabled = 
 										classNames?.day,
 									)}
 									disabled={disabled || readOnly || unavailable}
-									key={day.dayOfYear}
+									key={`${day.year}-${day.dayOfYear}`}
 									onClick={() => handleDayClick(day)}
 									type='button'>
 									{day.day}

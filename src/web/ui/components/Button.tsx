@@ -54,7 +54,7 @@ export interface ButtonProps extends Omit<React.ComponentPropsWithRef<'div'>, 'c
 export function Button({ className, variant, size, color, fullWidth, disabled, label, loading, startContent, endContent, tooltipContent, tooltipDisabled, tooltipPlacement, children, hideChildrenOnLoading, ref, ...props }: ButtonProps) {
 	return (
 		<Tooltip content={tooltipContent} disabled={tooltipDisabled} placement={tooltipPlacement}>
-			<div className={buttonStyles({ variant, size, color, fullWidth, className: clsx(className, { 'opacity-40 pointer-events-none': disabled || loading === true }) })} ref={ref} {...props}>
+			<div className={buttonStyles({ variant, size, color, fullWidth, className: clsx(className, { 'opacity-40 pointer-events-none': disabled || loading === true }) })} ref={ref} role='button' tabIndex={0} {...props}>
 				{/* Swap the leading content for a spinner while loading. */}
 				{loading === true ? <Icons.Loading className='spin' /> : startContent}
 				{loading === true && hideChildrenOnLoading === true ? undefined : (label ?? children)}

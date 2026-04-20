@@ -1,5 +1,4 @@
 import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
-import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
 import { SKY_OBJECT_NAME_TYPES } from '@/shared/types'
 import { stopPropagationDesktopOnly } from '@/shared/util'
 import { Button, type ButtonProps } from './components/Button'
@@ -13,7 +12,7 @@ const SkyObjectNameItem = (name: string, i: number) => <DropdownItem key={i - 1}
 
 export function SkyObjectNameTypeDropdown({ value, onValueChange, size = 'sm', variant = 'ghost', ...props }: SkyObjectNameTypeDropdownProps) {
 	return (
-		<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
+		<Dropdown>
 			<DropdownTrigger>
 				<Button {...props} label={SKY_OBJECT_NAME_TYPES[value + 1]} onPointerUp={stopPropagationDesktopOnly} size={size} variant={variant} />
 			</DropdownTrigger>

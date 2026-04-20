@@ -139,7 +139,7 @@ export const HomeMenuPopover = memo(() => {
 	const { show } = useSnapshot(home.state.menu)
 
 	return (
-		<Popover open={show} trigger={<IconButton color='secondary' icon={Icons.Menu} tooltipContent='Menu' />}>
+		<Popover onOpenChange={(value) => (home.state.menu.show = value)} open={show} trigger={<IconButton color='secondary' icon={Icons.Menu} tooltipContent='Menu' />}>
 			<HomeMenuPopoverContent />
 		</Popover>
 	)

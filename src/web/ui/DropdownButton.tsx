@@ -1,5 +1,4 @@
 import { Dropdown, DropdownMenu, type DropdownMenuProps, DropdownTrigger } from '@heroui/react'
-import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
 import { stopPropagationDesktopOnly, tw } from '@/shared/util'
 import { Button, type ButtonProps } from './components/Button'
 import { Icons } from './Icon'
@@ -11,7 +10,7 @@ export function DropdownButton({ size, color, disabled, children, className, onA
 	return (
 		<div className={tw('inline-flex flex-row gap-0 items-center', className)}>
 			<Button {...props} className='flex-1 rounded-l-medium rounded-r-none' color={color} disabled={disabled} size={size} />
-			<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
+			<Dropdown>
 				<DropdownTrigger>
 					<IconButton className='rounded-l-none rounded-r-medium' color={color} disabled={disabled} icon={Icons.ChevronDown} onPointerUp={stopPropagationDesktopOnly} size={size} variant='flat' />
 				</DropdownTrigger>

@@ -5,7 +5,6 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import { memo, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from '@/molecules/indi/equipment'
-import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
 import type { DeviceTypeMap } from '@/shared/types'
 import { stopPropagationDesktopOnly, tw } from '@/shared/util'
 import { ConnectButton } from './ConnectButton'
@@ -36,7 +35,7 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 	}
 
 	return (
-		<Dropdown isDisabled={isDisabled || items.length === 0} {...DEFAULT_DROPDOWN_PROPS}>
+		<Dropdown isDisabled={isDisabled || items.length === 0}>
 			<Tooltip content={tooltipContent} isDisabled={isDisabled || items.length === 0} placement={tooltipPlacement} showArrow>
 				<div className='max-w-fit'>
 					<DropdownTrigger>

@@ -8,7 +8,6 @@ import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
-import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
 import { stopPropagationDesktopOnly } from '@/shared/util'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
@@ -79,7 +78,7 @@ const SelectedCoordinateDropdown = memo((props: SelectedCoordinateDropdownProps)
 	}
 
 	return (
-		<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
+		<Dropdown>
 			<DropdownTrigger>
 				<IconButton className='pointer-events-auto' icon={Icons.DotsVertical} onPointerUp={stopPropagationDesktopOnly} />
 			</DropdownTrigger>

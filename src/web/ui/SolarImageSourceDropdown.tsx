@@ -1,6 +1,5 @@
 import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
 import type { SolarImageSource } from 'src/shared/types'
-import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
 import { stopPropagationDesktopOnly } from '@/shared/util'
 import { Button, type ButtonProps } from './components/Button'
 
@@ -30,7 +29,7 @@ const DROPDOWN_ITEM_LABEL: Record<SolarImageSource, string> = {
 
 export function SolarImageSourceDropdown({ value, onValueChange, size = 'sm', variant = 'ghost', ...props }: SolarImageSourceDropdownProps) {
 	return (
-		<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
+		<Dropdown>
 			<DropdownTrigger>
 				<Button {...props} label={DROPDOWN_ITEM_LABEL[value]} onPointerUp={stopPropagationDesktopOnly} size={size} variant={variant} />
 			</DropdownTrigger>

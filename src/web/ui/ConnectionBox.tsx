@@ -4,7 +4,6 @@ import { formatTemporal } from 'nebulosa/src/temporal'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
-import { DEFAULT_DROPDOWN_PROPS } from '@/shared/constants'
 import type { Connection } from '@/shared/types'
 import { stopPropagationDesktopOnly } from '@/shared/util'
 import { ConnectButton } from './ConnectButton'
@@ -93,7 +92,7 @@ const EditDropdown = memo(({ item }: EditDropdownProps) => {
 
 	return (
 		<div className='flex justify-center items-center'>
-			<Dropdown {...DEFAULT_DROPDOWN_PROPS}>
+			<Dropdown>
 				<DropdownTrigger>
 					<IconButton icon={Icons.VerticalMenu} onPointerUp={stopPropagationDesktopOnly} />
 				</DropdownTrigger>

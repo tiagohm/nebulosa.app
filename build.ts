@@ -1,5 +1,6 @@
 import { build } from 'bun'
 import { author, description, version } from './package.json'
+import bunTailwindPlugin from './tailwind.plugin'
 
 await build({
 	entrypoints: ['./main.ts'],
@@ -7,6 +8,7 @@ await build({
 	sourcemap: false,
 	target: 'bun',
 	env: 'APP_*',
+	plugins: [bunTailwindPlugin],
 	compile: {
 		outfile: process.platform === 'win32' ? 'nebulosa.exe' : 'nebulosa.out',
 		autoloadBunfig: false,

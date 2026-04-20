@@ -791,13 +791,9 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOp
 
 	return (
 		<Popover className='max-w-110' isOpen={isOpen} onOpenChange={onOpenChange} {...DEFAULT_POPOVER_PROPS}>
-			<Tooltip content='Time' placement='bottom' showArrow>
-				<div className='max-w-fit'>
-					<PopoverTrigger>
-						<Button color='secondary' label={formatTemporal(date, 'YYYY-MM-DD HH:mm', 0)} startContent={<Icons.CalendarToday />} />
-					</PopoverTrigger>
-				</div>
-			</Tooltip>
+			<PopoverTrigger>
+				<Button color='secondary' label={formatTemporal(date, 'YYYY-MM-DD HH:mm', 0)} startContent={<Icons.CalendarToday />} tooltipContent='Time' />
+			</PopoverTrigger>
 			<PopoverContent>
 				<div className='grid grid-cols-12 gap-2 pb-2 max-w-[256px]'>
 					<Calendar className='col-span-full' onValueChange={handleDateChange} value={Temporal.Instant.fromEpochMilliseconds(date).toZonedDateTimeISO('GMT').toPlainDate()} />

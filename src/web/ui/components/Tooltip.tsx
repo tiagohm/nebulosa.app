@@ -1,35 +1,19 @@
 import * as React from 'react'
-import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { type ClassValue, tv } from 'tailwind-variants'
-import { assignRef, clamp, tw } from '@/shared/util'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { assignRef } from '@/shared/util'
+import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingClassNames, type FloatingPlacement } from './Floating'
 
-const VIEWPORT_PADDING = 12
-const DEFAULT_OFFSET = 10
 const DEFAULT_CLOSE_DELAY = 0
-const ARROW_SIZE = 8.125
-const ARROW_INSET = 12
 
-const tooltipStyles = tv({
-	slots: {
-		base: 'pointer-events-none fixed left-0 top-0 isolate z-10000001 select-none overflow-visible',
-		content: 'relative z-10 max-w-80 leading-inherit rounded-lg bg-neutral-950 px-4 py-2 text-xs font-medium whitespace-pre-wrap text-neutral-100 shadow-lg shadow-black/40',
-		arrow: 'absolute z-0 size-2.5 rotate-45 bg-neutral-950 shadow-sm shadow-black/30',
-	},
-})
-
-export type TooltipPlacement = 'top' | 'bottom' | 'start' | 'end'
-
-export interface TooltipClassNames {
-	readonly base?: ClassValue
-	readonly content?: ClassValue
-	readonly arrow?: ClassValue
-}
+export type TooltipPlacement = FloatingPlacement
+export type TooltipClassNames = FloatingClassNames
 
 export interface TooltipProps extends Omit<React.ComponentPropsWithRef<'div'>, 'children' | 'content'> {
 	readonly children: React.ReactNode
 	readonly content?: React.ReactNode
 	readonly placement?: TooltipPlacement
+	readonly open?: boolean
+	readonly onOpenChange?: (open: boolean) => void
 	readonly disabled?: boolean
 	readonly autoFlip?: boolean
 	readonly delay?: number
@@ -40,13 +24,7 @@ export interface TooltipProps extends Omit<React.ComponentPropsWithRef<'div'>, '
 	readonly trigger?: 'focus'
 }
 
-type TooltipPosition = {
-	readonly top: number
-	readonly left: number
-	readonly placement: TooltipPlacement
-	readonly arrowStyle: React.CSSProperties
-}
-
+// Clears a pending tooltip timer before the next visibility change.
 function clearTimer(timerRef: React.RefObject<number | null>) {
 	if (timerRef.current !== null) {
 		window.clearTimeout(timerRef.current)
@@ -54,113 +32,45 @@ function clearTimer(timerRef: React.RefObject<number | null>) {
 	}
 }
 
-function arrowOffset(center: number, size: number) {
-	const maxInset = Math.max((size - ARROW_SIZE) / 2, 0)
-	const inset = Math.min(ARROW_INSET, maxInset)
-	return clamp(center - ARROW_SIZE / 2, inset, size - ARROW_SIZE - inset)
-}
-
-function oppositePlacement(placement: TooltipPlacement): TooltipPlacement {
-	if (placement === 'top') return 'bottom'
-	if (placement === 'bottom') return 'top'
-	if (placement === 'start') return 'end'
-	return 'start'
-}
-
-function placementSpace(triggerRect: DOMRect, placement: TooltipPlacement, viewportWidth: number, viewportHeight: number) {
-	if (placement === 'top') return triggerRect.top - VIEWPORT_PADDING
-	if (placement === 'bottom') return viewportHeight - triggerRect.bottom - VIEWPORT_PADDING
-	if (placement === 'start') return triggerRect.left - VIEWPORT_PADDING
-	return viewportWidth - triggerRect.right - VIEWPORT_PADDING
-}
-
-function placementSize(tooltipRect: DOMRect, placement: TooltipPlacement, offset: number) {
-	if (placement === 'top' || placement === 'bottom') return tooltipRect.height + offset
-	return tooltipRect.width + offset
-}
-
-function computeTooltipPosition(triggerRect: DOMRect, tooltipRect: DOMRect, placement: TooltipPlacement, shouldFlip: boolean, offset: number): TooltipPosition {
-	const viewportWidth = window.innerWidth
-	const viewportHeight = window.innerHeight
-	const opposite = oppositePlacement(placement)
-	const preferredSpace = placementSpace(triggerRect, placement, viewportWidth, viewportHeight)
-	const oppositeSpace = placementSpace(triggerRect, opposite, viewportWidth, viewportHeight)
-	const preferredFits = preferredSpace >= placementSize(tooltipRect, placement, offset)
-	const oppositeFits = oppositeSpace >= placementSize(tooltipRect, opposite, offset)
-
-	let actualPlacement = placement
-
-	if (shouldFlip && !preferredFits) {
-		if (oppositeFits || oppositeSpace > preferredSpace) {
-			actualPlacement = opposite
-		}
-	}
-
-	let left = 0
-	let top = 0
-
-	if (actualPlacement === 'top') {
-		left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2
-		top = triggerRect.top - tooltipRect.height - offset
-	} else if (actualPlacement === 'bottom') {
-		left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2
-		top = triggerRect.bottom + offset
-	} else if (actualPlacement === 'start') {
-		left = triggerRect.left - tooltipRect.width - offset
-		top = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2
-	} else {
-		left = triggerRect.right + offset
-		top = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2
-	}
-
-	left = clamp(left, VIEWPORT_PADDING, viewportWidth - tooltipRect.width - VIEWPORT_PADDING)
-	top = clamp(top, VIEWPORT_PADDING, viewportHeight - tooltipRect.height - VIEWPORT_PADDING)
-
-	const centerX = triggerRect.left + triggerRect.width / 2 - left
-	const centerY = triggerRect.top + triggerRect.height / 2 - top
-
-	if (actualPlacement === 'top') return { top, left, placement: actualPlacement, arrowStyle: { left: arrowOffset(centerX, tooltipRect.width), bottom: -ARROW_SIZE / 2 } }
-	if (actualPlacement === 'bottom') return { top, left, placement: actualPlacement, arrowStyle: { left: arrowOffset(centerX, tooltipRect.width), top: -ARROW_SIZE / 2 } }
-	if (actualPlacement === 'start') return { top, left, placement: actualPlacement, arrowStyle: { top: arrowOffset(centerY, tooltipRect.height), right: -ARROW_SIZE / 2 } }
-	return { top, left, placement: actualPlacement, arrowStyle: { top: arrowOffset(centerY, tooltipRect.height), left: -ARROW_SIZE / 2 } }
-}
-
-function hasTooltipContent(content: React.ReactNode) {
-	return content !== undefined && content !== null && content !== false
-}
-
-function samePosition(a: TooltipPosition | null, b: TooltipPosition | null) {
-	if (a === b) return true
-	if (a === null || b === null) return false
-	return a.top === b.top && a.left === b.left && a.placement === b.placement && a.arrowStyle.top === b.arrowStyle.top && a.arrowStyle.right === b.arrowStyle.right && a.arrowStyle.bottom === b.arrowStyle.bottom && a.arrowStyle.left === b.arrowStyle.left
-}
-
-export function Tooltip({ autoFlip = true, children, className, classNames, closeDelay = DEFAULT_CLOSE_DELAY, content, delay = 0, id, disabled = false, offset = DEFAULT_OFFSET, placement = 'bottom', portalContainer, ref, style, trigger, ...props }: TooltipProps) {
-	const [isOpen, setIsOpen] = useState(false)
-	const [position, setPosition] = useState<TooltipPosition | null>(null)
-	const tooltipRef = useRef<HTMLDivElement | null>(null)
-	const triggerElementRef = useRef<HTMLElement | null>(null)
+// Renders the hover and focus driven tooltip wrapper around the shared floating content.
+export function Tooltip({ autoFlip = true, children, className, classNames, closeDelay = DEFAULT_CLOSE_DELAY, content, delay = 0, id, open, onOpenChange, disabled = false, offset = DEFAULT_FLOATING_OFFSET, placement = 'bottom', portalContainer, ref, style, trigger, ...props }: TooltipProps) {
+	const [uncontrolledIsOpen, setUncontrolledIsOpen] = useState(false)
+	const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(null)
 	const showTimerRef = useRef<number | null>(null)
 	const hideTimerRef = useRef<number | null>(null)
 	const hoveringRef = useRef(false)
 	const focusingRef = useRef(false)
 	const mounted = typeof document !== 'undefined'
-	const tooltipContainer = portalContainer ?? (mounted ? document.body : undefined)
-	const hasContent = hasTooltipContent(content)
+	const hasContent = content !== undefined && content !== null && content !== false
+	const isControlled = open !== undefined
+	const isOpen = isControlled ? open : uncontrolledIsOpen
 	const visible = hasContent && !disabled && isOpen
-	const styles = tooltipStyles()
 
+	// Updates the tooltip open state in controlled and uncontrolled modes.
+	const setOpen = useEffectEvent((nextOpen: boolean) => {
+		if (!isControlled) setUncontrolledIsOpen(nextOpen)
+		if (nextOpen === isOpen) return
+		onOpenChange?.(nextOpen)
+	})
+
+	// Keeps the trigger element available for controlled initial-open rendering.
+	function handleTriggerRef(element: HTMLElement | null) {
+		if (element !== null) setTriggerElement(element)
+	}
+
+	// Closes the tooltip immediately and clears any pending timers.
 	const hideTooltip = useEffectEvent(() => {
 		clearTimer(showTimerRef)
 		clearTimer(hideTimerRef)
-		setIsOpen(false)
-		setPosition(null)
+		setOpen(false)
 	})
 
+	// Opens the tooltip after the configured delay when the trigger remains active.
 	const scheduleOpen = useEffectEvent((element?: EventTarget | null) => {
 		if (!mounted || disabled || !hasContent) return
+
 		if (element instanceof HTMLElement) {
-			triggerElementRef.current = element
+			handleTriggerRef(element)
 		}
 
 		clearTimer(hideTimerRef)
@@ -172,18 +82,19 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 		clearTimer(showTimerRef)
 
 		if (delay <= 0) {
-			setIsOpen(true)
+			setOpen(true)
 			return
 		}
 
 		showTimerRef.current = window.setTimeout(() => {
 			showTimerRef.current = null
 			if ((hoveringRef.current || focusingRef.current) && !disabled) {
-				setIsOpen(true)
+				setOpen(true)
 			}
 		}, delay)
 	})
 
+	// Closes the tooltip after the configured delay once the trigger is no longer active.
 	const scheduleClose = useEffectEvent(() => {
 		clearTimer(showTimerRef)
 
@@ -194,31 +105,19 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 		clearTimer(hideTimerRef)
 
 		if (closeDelay <= 0) {
-			setIsOpen(false)
-			setPosition(null)
+			setOpen(false)
 			return
 		}
 
 		hideTimerRef.current = window.setTimeout(() => {
 			hideTimerRef.current = null
 			if (!hoveringRef.current && !focusingRef.current) {
-				setIsOpen(false)
-				setPosition(null)
+				setOpen(false)
 			}
 		}, closeDelay)
 	})
 
-	const updatePosition = useEffectEvent(() => {
-		if (!visible || !triggerElementRef.current || !tooltipRef.current) return
-		if (!triggerElementRef.current.isConnected) {
-			hideTooltip()
-			return
-		}
-
-		const nextPosition = computeTooltipPosition(triggerElementRef.current.getBoundingClientRect(), tooltipRef.current.getBoundingClientRect(), placement, autoFlip, offset)
-		setPosition((currentPosition) => (samePosition(currentPosition, nextPosition) ? currentPosition : nextPosition))
-	})
-
+	// Clears timers when the tooltip wrapper unmounts.
 	useEffect(() => {
 		return () => {
 			clearTimer(showTimerRef)
@@ -226,132 +125,99 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 		}
 	}, [])
 
+	// Forces the tooltip closed when content disappears or the trigger becomes disabled.
 	useEffect(() => {
 		if (disabled || !hasContent) {
 			hoveringRef.current = false
 			focusingRef.current = false
 			hideTooltip()
 		}
-	}, [content, disabled])
+	}, [disabled, hasContent, hideTooltip])
 
-	useEffect(() => {
-		if (!visible) return
-
-		function handleKeyDown(event: KeyboardEvent) {
-			if (event.key === 'Escape') {
-				hoveringRef.current = false
-				focusingRef.current = false
-				hideTooltip()
-			}
+	if (hasContent) {
+		// Tracks hover entry on the trigger element.
+		function handlePointerEnter(event: React.PointerEvent<HTMLElement>) {
+			if (trigger === 'focus' || event.pointerType === 'touch') return
+			hoveringRef.current = true
+			scheduleOpen(event.currentTarget)
 		}
 
-		document.addEventListener('keydown', handleKeyDown)
-
-		return () => {
-			document.removeEventListener('keydown', handleKeyDown)
-		}
-	}, [visible])
-
-	useLayoutEffect(() => {
-		if (!visible) return
-
-		updatePosition()
-
-		const resizeObserver = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => updatePosition())
-		if (triggerElementRef.current) resizeObserver?.observe(triggerElementRef.current)
-		if (tooltipRef.current) resizeObserver?.observe(tooltipRef.current)
-
-		function handleViewportChange() {
-			updatePosition()
+		// Tracks hover exit on the trigger element.
+		function handlePointerLeave() {
+			hoveringRef.current = false
+			scheduleClose()
 		}
 
-		window.addEventListener('resize', handleViewportChange)
-		window.addEventListener('scroll', handleViewportChange, true)
-
-		return () => {
-			resizeObserver?.disconnect()
-			window.removeEventListener('resize', handleViewportChange)
-			window.removeEventListener('scroll', handleViewportChange, true)
+		// Tracks focus entry on the trigger element.
+		function handleFocus(event: React.FocusEvent<HTMLElement>) {
+			focusingRef.current = true
+			scheduleOpen(event.currentTarget)
 		}
-	}, [autoFlip, offset, placement, visible])
 
-	function handlePointerEnter(event: React.PointerEvent<HTMLElement>) {
-		if (trigger === 'focus' || event.pointerType === 'touch') return
-		hoveringRef.current = true
-		scheduleOpen(event.currentTarget)
-	}
+		// Tracks focus exit on the trigger element.
+		function handleBlur(event: React.FocusEvent<HTMLElement>) {
+			if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+			focusingRef.current = false
+			scheduleClose()
+		}
 
-	function handlePointerLeave() {
-		hoveringRef.current = false
-		scheduleClose()
-	}
+		if (React.isValidElement(children) && children.type !== React.Fragment) {
+			const child = children as React.ReactElement<React.DOMAttributes<HTMLElement> & { readonly ref?: React.Ref<HTMLElement> }>
 
-	function handleFocus(event: React.FocusEvent<HTMLElement>) {
-		focusingRef.current = true
-		scheduleOpen(event.currentTarget)
-	}
-
-	function handleBlur(event: React.FocusEvent<HTMLElement>) {
-		if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
-		focusingRef.current = false
-		scheduleClose()
-	}
-
-	if (hasContent && React.isValidElement(children) && children.type !== React.Fragment) {
-		const c = children as React.ReactElement<React.DOMAttributes<HTMLElement>>
-
-		children = React.cloneElement(c, {
-			onBlur: (event) => {
-				handleBlur(event)
-				c.props.onBlur?.(event)
-			},
-			onFocus: (event) => {
-				handleFocus(event)
-				c.props.onFocus?.(event)
-			},
-			onPointerEnter: (event) => {
-				handlePointerEnter(event)
-				c.props.onPointerEnter?.(event)
-			},
-			onPointerLeave: (event) => {
-				handlePointerLeave()
-				c.props.onPointerLeave?.(event)
-			},
-		})
-	} else {
-		children = (
-			<span className='w-fit' onBlur={handleBlur} onFocus={handleFocus} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
-				{children}
-			</span>
-		)
+			children = React.cloneElement(child, {
+				ref: (element: HTMLElement | null) => {
+					handleTriggerRef(element)
+					assignRef(child.props.ref, element)
+				},
+				onBlur: (event) => {
+					handleBlur(event)
+					child.props.onBlur?.(event)
+				},
+				onFocus: (event) => {
+					handleFocus(event)
+					child.props.onFocus?.(event)
+				},
+				onPointerEnter: (event) => {
+					handlePointerEnter(event)
+					child.props.onPointerEnter?.(event)
+				},
+				onPointerLeave: (event) => {
+					handlePointerLeave()
+					child.props.onPointerLeave?.(event)
+				},
+			})
+		} else {
+			children = (
+				<span className='w-fit' onBlur={handleBlur} onFocus={handleFocus} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave} ref={handleTriggerRef}>
+					{children}
+				</span>
+			)
+		}
 	}
 
 	return (
 		<>
 			{children}
-			{visible && tooltipContainer
-				? createPortal(
-						<div
-							{...props}
-							className={tw(styles.base(), className, classNames?.base)}
-							data-placement={position?.placement ?? placement}
-							ref={(node) => {
-								tooltipRef.current = node
-								assignRef(ref, node)
-							}}
-							role='tooltip'
-							style={{
-								...style,
-								left: position?.left ?? 0,
-								top: position?.top ?? 0,
-								visibility: position ? 'visible' : 'hidden',
-							}}>
-							<span aria-hidden className={tw(styles.arrow(), classNames?.arrow)} style={position?.arrowStyle} />
-							<div className={tw(styles.content(), classNames?.content, 'pointer-events-none')}>{content}</div>
-						</div>,
-						tooltipContainer,
-					)
-				: null}
+			{hasContent && (
+				<Floating
+					{...props}
+					autoFlip={autoFlip}
+					className={className}
+					classNames={classNames}
+					closeOnEscape
+					content={content}
+					id={id}
+					offset={offset}
+					onOpenChange={setOpen}
+					open={visible}
+					placement={placement}
+					portalContainer={portalContainer}
+					ref={ref}
+					role='tooltip'
+					style={style}
+					triggerElement={triggerElement}
+				/>
+			)}
 		</>
 	)
 }

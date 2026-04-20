@@ -4,6 +4,7 @@ import { Button } from './components/Button'
 import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
+import { Popover } from './components/Popover'
 import { Radio } from './components/Radio'
 import { Slider } from './components/Slider'
 import { Switch } from './components/Switch'
@@ -40,7 +41,7 @@ const Buttons = memo(() => {
 			for (const color of COLORS) {
 				const startContent = random() < 0.5 ? HeartIcon : undefined
 				const endContent = random() < 0.5 ? GalaxyIcon : undefined
-				const tooltipContent = random() < 0.2 ? 'This button has a tooltip!' : undefined
+				const tooltipContent = random() < 0.4 ? 'This button has a tooltip!' : undefined
 				const toltipPlacementHit = tooltipContent !== undefined ? random() : 0
 				const toltipPlacement = toltipPlacementHit >= 0.75 ? 'start' : toltipPlacementHit >= 0.5 ? 'top' : toltipPlacementHit >= 0.25 ? 'end' : 'bottom'
 				const disabled = random() < 0.1
@@ -181,10 +182,14 @@ const Sliders = memo(() => {
 
 const Calendars = memo(() => {
 	const [value, setValue] = useState(Temporal.Now.plainDateISO())
+	const [open, setOpen] = useState(true)
 
 	return (
 		<>
-			<Calendar onValueChange={setValue} showWeekNumber value={value} />
+			<Popover onOpenChange={setOpen} open={open} placement='end' trigger={<Button label='Calendar' />}>
+				<Calendar onValueChange={setValue} showWeekNumber value={value} />
+			</Popover>
+
 			<Calendar color='success' disabled onValueChange={setValue} value={value} />
 			<Calendar onValueChange={setValue} readOnly value={value} />
 		</>

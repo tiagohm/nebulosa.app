@@ -1,7 +1,7 @@
-import { Chip } from '@heroui/react'
 import { useState } from 'react'
-import type { CameraCaptureEvent, CameraCaptureState } from 'src/shared/types'
+import type { CameraCaptureEvent, CameraCaptureState, CameraCaptureTime } from 'src/shared/types'
 import { tw } from '@/shared/util'
+import { Chip } from './components/Chip'
 import { Icons } from './Icon'
 
 export interface ExposureTimeProgressProps extends React.ComponentProps<'div'> {
@@ -13,25 +13,10 @@ export function ExposureTimeProgress({ progress, className = '', ...props }: Exp
 
 	return (
 		<div {...props} className={tw('flex flex-row items-center gap-2', className)}>
-			<Chip className='lowercase' color='success'>
-				{status(progress.state)}
-			</Chip>
-			<Chip color='warning' startContent={<Icons.Counter />}>
-				{progress.elapsedCount}
-				{!progress.loop && <span> / {progress.count}</span>}
-			</Chip>
-			<Chip color='secondary' onPointerUp={() => setShowRemainingTime(!showRemainingTime)} startContent={<Icons.TimerSand />}>
-				{progress.loop ? (
-					<span>{formatTime(progress.totalProgress.elapsedTime)}</span>
-				) : (
-					<span>
-						{formatTime(showRemainingTime ? progress.totalProgress.remainingTime : progress.totalProgress.elapsedTime)} ({progress.totalProgress.progress.toFixed(2)}%)
-					</span>
-				)}
-			</Chip>
-			<Chip color='primary' onPointerUp={() => setShowRemainingTime(!showRemainingTime)} startContent={<Icons.TimerSand />}>
-				{formatTime(showRemainingTime ? progress.frameProgress.remainingTime : progress.frameProgress.elapsedTime)} ({progress.frameProgress.progress.toFixed(2)}%)
-			</Chip>
+			<Chip className='lowercase' color='success' label={status(progress.state)} />
+			<Chip color='warning' label={`${progress.elapsedCount} ${progress.loop ? '' : ` / ${progress.count}`}`} startContent={<Icons.Counter />} />
+			<Chip color='secondary' label={progress.loop ? formatTime(progress.totalProgress.elapsedTime) : formatProgressTime(progress.totalProgress, showRemainingTime)} onPointerUp={() => setShowRemainingTime(!showRemainingTime)} startContent={<Icons.TimerSand />} />
+			<Chip color='primary' label={formatProgressTime(progress.frameProgress, showRemainingTime)} onPointerUp={() => setShowRemainingTime(!showRemainingTime)} startContent={<Icons.TimerSand />} />
 		</div>
 	)
 }
@@ -46,6 +31,10 @@ function status(state: CameraCaptureState) {
 		default:
 			return state
 	}
+}
+
+function formatProgressTime(time: CameraCaptureTime, showRemainingTime: boolean) {
+	return `${formatTime(showRemainingTime ? time.remainingTime : time.elapsedTime)} (${time.progress.toFixed(2)}%)`
 }
 
 function formatTime(us: number) {

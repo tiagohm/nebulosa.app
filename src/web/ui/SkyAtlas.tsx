@@ -1,4 +1,4 @@
-import { Chip, type ChipProps, Listbox, ListboxItem, ScrollShadow, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
+import { Listbox, ListboxItem, ScrollShadow, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
@@ -16,6 +16,7 @@ import { ConstellationSelect } from './ConstellationSelect'
 import { Button } from './components/Button'
 import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
+import { Chip, type ChipProps } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { Slider } from './components/Slider'
@@ -841,9 +842,7 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 				<div className='flex-1 justify-center items-center flex text-sm font-bold overflow-hidden'>
 					<ScrollShadow className='w-full flex gap-1' hideScrollBar orientation='horizontal'>
 						{tags?.map((tag) => (
-							<Chip color={tag.color} key={tag.label}>
-								{tag.label}
-							</Chip>
+							<Chip color={tag.color} key={tag.label} label={tag.label} />
 						))}
 					</ScrollShadow>
 				</div>

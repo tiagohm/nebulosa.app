@@ -1,8 +1,9 @@
-import { Card, CardBody, CardHeader, Chip, Tab, Tabs } from '@heroui/react'
+import { Card, CardBody, CardHeader, Tab, Tabs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { CalculatorMolecule } from '@/molecules/calculator'
+import { Chip } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
 import { Modal } from './Modal'
 
@@ -58,9 +59,7 @@ function Formula({ description, expression, children }: FormulaProps) {
 			<CardHeader className='pt-0'>
 				<div className='w-full flex flex-col gap-1 items-center justify-center'>
 					<p className='text-sm text-center'>{description}</p>
-					<Chip className='text-medium' color='primary'>
-						{expression}
-					</Chip>
+					<Chip className='text-medium' color='primary' label={expression} />
 				</div>
 			</CardHeader>
 			<CardBody>

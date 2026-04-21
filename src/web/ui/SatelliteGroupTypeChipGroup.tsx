@@ -1,7 +1,8 @@
-import { Chip, type ChipProps, ScrollShadow, type ScrollShadowProps } from '@heroui/react'
+import { ScrollShadow, type ScrollShadowProps } from '@heroui/react'
 import { useMemo } from 'react'
 import { SATELLITE_GROUP_TYPES, type SatelliteCategory, type SatelliteGroupType } from 'src/shared/types'
 import { stopPropagationDesktopOnly } from '@/shared/util'
+import { Chip, type ChipProps } from './components/Chip'
 
 export interface SatelliteGroupTypeChipGroupProps extends Omit<ScrollShadowProps, 'size'> {
 	readonly value: readonly SatelliteGroupType[]
@@ -30,12 +31,7 @@ export function SatelliteGroupTypeChipGroup({ className, value, category, onValu
 			<div className='w-full flex flex-wrap gap-2'>
 				{types.map(([key, item]) => {
 					const selected = value.includes(key as never)
-
-					return (
-						<Chip className='cursor-pointer' color={selected ? 'primary' : 'default'} key={key} onPointerUp={(event) => onHandlePointerUp(event, key as never, selected)} size={size}>
-							{item.description}
-						</Chip>
-					)
+					return <Chip className='cursor-pointer' color={selected ? 'primary' : 'secondary'} key={key} label={item.description} onPointerUp={(event) => onHandlePointerUp(event, key as never, selected)} size={size} />
 				})}
 			</div>
 		</ScrollShadow>

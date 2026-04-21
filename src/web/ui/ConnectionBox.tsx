@@ -1,4 +1,4 @@
-import { Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, type SelectedItemProps, type SelectedItems, SelectItem, type SharedSelection } from '@heroui/react'
+import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, type SelectedItemProps, type SelectedItems, SelectItem, type SharedSelection } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { Activity, memo } from 'react'
@@ -8,6 +8,7 @@ import type { Connection } from '@/shared/types'
 import { stopPropagationDesktopOnly } from '@/shared/util'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
+import { Chip } from './components/Chip'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 
@@ -18,7 +19,7 @@ const ConnectionItem = (item: Connection) => (
 				<div className='flex flex-col gap-1 mt-1'>
 					<span className='font-bold flex items-center gap-2'>
 						{item.name}
-						<Chip color='primary'>{item.type}</Chip>
+						<Chip color='primary' label={item.type} />
 					</span>
 					<span className='text-default-500 text-tiny flex gap-1 items-center'>
 						<Activity mode={item.type === 'SIMULATOR' ? 'hidden' : 'visible'}>

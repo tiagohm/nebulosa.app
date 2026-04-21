@@ -4,6 +4,7 @@ import { toast } from '../shared/toast'
 import { Button } from './components/Button'
 import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
+import { Chip } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { Radio } from './components/Radio'
@@ -16,6 +17,7 @@ export function Demo() {
 	return (
 		<div className='w-full flex flex-row flex-wrap items-center gap-2 p-4'>
 			<Buttons />
+			<Chips />
 			<TextInputs />
 			<NumberInputs />
 			<Checkboxes />
@@ -199,4 +201,25 @@ const Calendars = memo(() => {
 			<Calendar onValueChange={setValue} readOnly value={value} />
 		</>
 	)
+})
+
+const Chips = memo(() => {
+	const random = mulberry32(0)
+	const elements: React.ReactNode[] = []
+	let key = 0
+
+	for (const size of ['sm', 'md', 'lg'] as const) {
+		for (const color of COLORS) {
+			const startContent = random() < 0.5 ? HeartIcon : undefined
+			const endContent = random() < 0.5 ? GalaxyIcon : undefined
+			const disabled = random() < 0.1
+			const readOnly = random() < 0.1
+			const close = random() < 0.3
+			const label = key.toFixed(0)
+
+			elements.push(<Chip color={color} disabled={disabled} endContent={endContent} key={key++} label={label} onClose={close ? () => alert(label) : undefined} readOnly={readOnly} size={size} startContent={startContent} />)
+		}
+	}
+
+	return elements
 })

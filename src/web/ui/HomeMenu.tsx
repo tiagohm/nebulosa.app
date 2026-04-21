@@ -1,4 +1,3 @@
-import { Chip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { DeviceType } from 'nebulosa/src/indi.device'
 import { Activity, memo } from 'react'
@@ -43,6 +42,7 @@ import { AlpacaServer } from './AlpacaServer'
 import { AutoFocus } from './AutoFocus'
 import { Calculator } from './Calculator'
 import { Button } from './components/Button'
+import { Chip } from './components/Chip'
 import { Popover } from './components/Popover'
 import { Darv } from './Darv'
 import { FlatWizard } from './FlatWizard'
@@ -202,9 +202,7 @@ const Devices = memo(() => {
 		<div className='col-span-full my-2 flex flex-col items-center justify-center gap-2 flex-wrap'>
 			<span className='font-bold text-sm mt-2 uppercase'>{deviceName(selected)}</span>
 			{equipment.state[selected].map((device) => (
-				<Chip className='min-w-full cursor-pointer' color={device.connected ? 'success' : 'danger'} key={device.name} onPointerUp={() => equipment.show(device, selected)} variant='flat'>
-					{device.name}
-				</Chip>
+				<Chip className='min-w-full cursor-pointer' color={device.connected ? 'success' : 'danger'} key={device.name} label={device.name} onPointerUp={() => equipment.show(device, selected)} />
 			))}
 		</div>
 	)

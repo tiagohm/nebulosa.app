@@ -1,27 +1,19 @@
 import '@/index.css'
-import { ToastProvider } from '@heroui/react'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
+import { ToastProvider } from 'src/web/ui/components/Toast'
 import { Demo } from 'src/web/ui/Demo'
 
+// Mounts the web app with a shared toast provider.
 function start() {
 	const root = createRoot(document.getElementById('root')!)
 	root.render(
 		<React.StrictMode>
-			<ToastProvider
-				maxVisibleToasts={1}
-				placement='top-right'
-				toastProps={{
-					radius: 'sm',
-					color: 'secondary',
-					variant: 'solid',
-					timeout: 2000,
-					hideCloseButton: true,
-				}}
-			/>
-			<main className='w-dvw h-dvh'>
-				<Demo />
-			</main>
+			<ToastProvider color='secondary' delay={2000} maxVisible={1} placement='top-end' size='sm'>
+				<main className='w-dvw h-dvh'>
+					<Demo />
+				</main>
+			</ToastProvider>
 		</React.StrictMode>,
 	)
 }

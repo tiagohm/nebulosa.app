@@ -1,4 +1,3 @@
-import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_DEW_HEATER, type DewHeater } from 'nebulosa/src/indi.device'
 import type { DeepReadonly } from 'nebulosa/src/types'
@@ -6,6 +5,7 @@ import bus from 'src/shared/bus'
 import type { DewHeaterUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
+import { toast } from '@/shared/toast'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface DewHeaterScopeValue {
@@ -41,7 +41,7 @@ export const DewHeaterMolecule = molecule(() => {
 			if (event.device.id === dewHeater.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
-						addToast({ title: 'DEW HEATER', description: `Failed to connect to dew heater ${dewHeater.name}`, color: 'danger' })
+						toast({ title: 'DEW HEATER', description: `Failed to connect to dew heater ${dewHeater.name}`, color: 'danger' })
 					}
 
 					state.dewHeater.connecting = false

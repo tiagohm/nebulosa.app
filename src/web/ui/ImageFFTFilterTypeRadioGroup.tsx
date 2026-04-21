@@ -8,7 +8,7 @@ export interface ImageFFTFilterTypeRadioGroupProps extends React.ComponentProps<
 	readonly disabled?: boolean
 }
 
-export function ImageFFTFilterTypeRadioGroup({ value, onValueChange,disabled ,className, ...props }: ImageFFTFilterTypeRadioGroupProps) {
+export function ImageFFTFilterTypeRadioGroup({ value, onValueChange, disabled, className, ...props }: ImageFFTFilterTypeRadioGroupProps) {
 	return (
 		<div className={tw('flex items-start justify-center gap-1 flex-col', className)} {...props}>
 			<Radio disabled={disabled} label='Low-Pass' onValueChange={(value) => value && onValueChange('lowPass')} value={value === 'lowPass'} />

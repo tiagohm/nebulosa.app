@@ -1,4 +1,3 @@
-import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_FOCUSER, type Focuser } from 'nebulosa/src/indi.device'
 import type { DeepReadonly } from 'nebulosa/src/types'
@@ -8,6 +7,7 @@ import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
+import { toast } from '@/shared/toast'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface FocuserScopeValue {
@@ -50,7 +50,7 @@ export const FocuserMolecule = molecule(() => {
 			if (event.device.id === focuser.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
-						addToast({ title: 'FOCUSER', description: `Failed to connect to focuser ${focuser.name}`, color: 'danger' })
+						toast({ title: 'FOCUSER', description: `Failed to connect to focuser ${focuser.name}`, color: 'danger' })
 					}
 
 					state.focuser.connecting = false

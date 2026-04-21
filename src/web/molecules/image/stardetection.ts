@@ -1,4 +1,3 @@
-import { addToast } from '@heroui/react'
 import { molecule, onMount, use } from 'bunshi'
 import type { DetectedStar } from 'nebulosa/src/star.detector'
 import bus from 'src/shared/bus'
@@ -7,6 +6,7 @@ import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
+import { toast } from '@/shared/toast'
 import type { ImageLoaded } from '@/shared/types'
 import { ImageViewerMolecule } from './viewer'
 
@@ -85,7 +85,7 @@ export const StarDetectionMolecule = molecule(() => {
 			if (!stars) return
 
 			if (stars.length === 0) {
-				addToast({ title: 'STAR DETECTION', description: 'No stars detected', color: 'warning' })
+				toast({ title: 'STAR DETECTION', description: 'No stars detected', color: 'warning' })
 			}
 
 			state.stars = stars

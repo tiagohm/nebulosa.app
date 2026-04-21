@@ -1,4 +1,3 @@
-import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_WHEEL, type Wheel } from 'nebulosa/src/indi.device'
 import type { DeepReadonly } from 'nebulosa/src/types'
@@ -8,6 +7,7 @@ import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
+import { toast } from '@/shared/toast'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface WheelScopeValue {
@@ -53,7 +53,7 @@ export const WheelMolecule = molecule(() => {
 			if (event.device.id === wheel.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
-						addToast({ title: 'FILTER WHEEL', description: `Failed to connect to filter wheel ${wheel.name}`, color: 'danger' })
+						toast({ title: 'FILTER WHEEL', description: `Failed to connect to filter wheel ${wheel.name}`, color: 'danger' })
 					}
 
 					state.wheel.connecting = false

@@ -1,4 +1,3 @@
-import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { DEFAULT_FLAT_PANEL, type FlatPanel } from 'nebulosa/src/indi.device'
 import type { DeepReadonly } from 'nebulosa/src/types'
@@ -6,6 +5,7 @@ import bus from 'src/shared/bus'
 import type { FlatPanelUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
+import { toast } from '@/shared/toast'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface FlatPanelScopeValue {
@@ -41,7 +41,7 @@ export const FlatPanelMolecule = molecule(() => {
 			if (event.device.id === flatPanel.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
-						addToast({ title: 'FLAT PANEL', description: `Failed to connect to flat panel ${flatPanel.name}`, color: 'danger' })
+						toast({ title: 'FLAT PANEL', description: `Failed to connect to flat panel ${flatPanel.name}`, color: 'danger' })
 					}
 
 					state.flatPanel.connecting = false

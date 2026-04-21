@@ -1,4 +1,3 @@
-import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import { DEFAULT_MOUNT, type Mount, type MountTargetCoordinate, type MountTargetCoordinateType, type TrackMode } from 'nebulosa/src/indi.device'
@@ -12,6 +11,7 @@ import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
+import { toast } from '@/shared/toast'
 import type { NudgeDirection } from '@/ui/Nudge'
 import { ConnectionMolecule } from '../connection'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
@@ -112,7 +112,7 @@ export const MountMolecule = molecule(() => {
 					if (event.device.connected) {
 						updateCoordinatePosition()
 					} else if (event.state === 'Alert') {
-						addToast({ title: 'MOUNT', description: `Failed to connect to mount ${mount.name}`, color: 'danger' })
+						toast({ title: 'MOUNT', description: `Failed to connect to mount ${mount.name}`, color: 'danger' })
 					}
 
 					state.mount.connecting = false

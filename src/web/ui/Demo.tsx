@@ -1,5 +1,6 @@
 import { mulberry32 } from 'nebulosa/src/random'
 import { memo, useState } from 'react'
+import { toast } from '../shared/toast'
 import { Button } from './components/Button'
 import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
@@ -48,7 +49,11 @@ const Buttons = memo(() => {
 				const loading = random() < 0.02
 				const label = key.toFixed(0)
 
-				elements.push(<Button color={color} disabled={disabled} endContent={endContent} key={key++} label={label} loading={loading} size={size} startContent={startContent} tooltipContent={tooltipContent} tooltipPlacement={toltipPlacement} variant={variant} />)
+				function handlePointer() {
+					toast({ title: 'Hello!', onPointerUp: () => alert(label), description: 'KKKK', color, size, startContent, endContent, onClose: (autoDismiss) => !autoDismiss && alert('Hello!') })
+				}
+
+				elements.push(<Button color={color} disabled={disabled} endContent={endContent} key={key++} label={label} loading={loading} onPointerUp={handlePointer} size={size} startContent={startContent} tooltipContent={tooltipContent} tooltipPlacement={toltipPlacement} variant={variant} />)
 			}
 		}
 	}

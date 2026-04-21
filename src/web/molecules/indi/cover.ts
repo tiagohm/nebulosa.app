@@ -1,4 +1,3 @@
-import { addToast } from '@heroui/react'
 import { createScope, molecule, onMount, use } from 'bunshi'
 import { type Cover, DEFAULT_COVER } from 'nebulosa/src/indi.device'
 import type { DeepReadonly } from 'nebulosa/src/types'
@@ -6,6 +5,7 @@ import bus from 'src/shared/bus'
 import type { CoverUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
+import { toast } from '@/shared/toast'
 import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface CoverScopeValue {
@@ -41,7 +41,7 @@ export const CoverMolecule = molecule(() => {
 			if (event.device.id === cover.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
-						addToast({ title: 'COVER', description: `Failed to connect to cover ${cover.name}`, color: 'danger' })
+						toast({ title: 'COVER', description: `Failed to connect to cover ${cover.name}`, color: 'danger' })
 					}
 
 					state.cover.connecting = false

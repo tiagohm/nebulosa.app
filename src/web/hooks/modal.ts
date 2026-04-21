@@ -23,7 +23,7 @@ function snapToGrid(pos: number) {
 export function useModal(id: string, onHide?: VoidFunction) {
 	const zIndex = useMolecule(ZIndexMolecule)
 	const modalRef = useRef<HTMLElement>(null)
-	const xy = useRef(modalTransformMap.get(id) ?? storageGet(`modal-${id}`, () => ({ x: 0, y: 0 })))
+	const xy = useRef(modalTransformMap.get(id) ?? storageGet(`modal-${id}`, () => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 })))
 	const boundary = useRef({ minLeft: 0, minTop: 0, maxLeft: 0, maxTop: 0 })
 
 	// Initialize the position of the modal if it doesn't exist in the map
@@ -68,7 +68,7 @@ export function useModal(id: string, onHide?: VoidFunction) {
 				xy.current.x = snapToGrid(Math.min(Math.max(offset[0], boundary.current.minLeft), boundary.current.maxLeft))
 				xy.current.y = snapToGrid(Math.min(Math.max(offset[1], boundary.current.minTop), boundary.current.maxTop))
 
-				modalRef.current.style.transform = `translate(${xy.current.x}px, ${xy.current.y}px)`
+				modalRef.current.style.transform = `translate(calc(${xy.current.x}px - 50%), calc(${xy.current.y}px - 50%))`
 			},
 			onDragEnd: () => {
 				// Re-enable text selection after dragging
@@ -92,7 +92,7 @@ export function useModal(id: string, onHide?: VoidFunction) {
 			modalRef.current = node
 
 			// Set the initial position of the modal based on the stored values
-			modalRef.current.style.transform = `translate(${xy.current.x}px, ${xy.current.y}px)`
+			modalRef.current.style.transform = `translate(calc(${xy.current.x}px - 50%), calc(${xy.current.y}px - 50%))`
 
 			// Set the z-index of the modal
 			zIndex.apply(modalRef.current, id)

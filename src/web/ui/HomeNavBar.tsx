@@ -1,4 +1,3 @@
-import { Navbar, NavbarBrand, NavbarContent } from '@heroui/react'
 import { memo } from 'react'
 import { ConnectionBox } from './ConnectionBox'
 import { HomeMenu } from './HomeMenu'
@@ -8,20 +7,22 @@ import { WakeLockScreenButton } from './WakeLockScreenButton'
 
 export const HomeNavBar = memo(() => {
 	return (
-		<Navbar className='bg-neutral-900 shadow' isBlurred={false}>
-			<NavbarBrand className='flex-auto'>
-				<ConnectionBox />
-			</NavbarBrand>
-			<NavbarContent className='flex gap-4 flex-1' justify='center'>
-				<div className='flex flex-row justify-start items-center gap-2'>
-					<HomeMenu />
-					<ImagePickerButton />
+		<nav className='sticky top-0 z-1 w-full bg-neutral-950 shadow-none'>
+			<header className='flex h-16 items-center justify-center px-6 gap-6'>
+				<div className='flex items-center justify-center gap-3'>
+					<ConnectionBox />
 				</div>
-				<div className='flex flex-1 flex-row justify-end gap-2'>
-					<IndiServerButton />
-					<WakeLockScreenButton />
-				</div>
-			</NavbarContent>
-		</Navbar>
+				<ul className='flex items-center justify-center gap-4'>
+					<li className='flex flex-row justify-start items-center gap-2'>
+						<HomeMenu />
+						<ImagePickerButton />
+					</li>
+					<li className='flex flex-1 flex-row justify-end gap-2'>
+						<IndiServerButton />
+						<WakeLockScreenButton />
+					</li>
+				</ul>
+			</header>
+		</nav>
 	)
 })

@@ -5,7 +5,7 @@ import { Icons } from '../Icon'
 import { Tooltip, type TooltipPlacement } from './Tooltip'
 
 const buttonStyles = tv({
-	base: ['inline-flex items-center justify-between gap-2 rounded-lg font-normal cursor-pointer', 'focus-visible:outline-none focus-visible:ring-0', 'disabled:pointer-events-none disabled:opacity-50'],
+	base: ['inline-flex items-center justify-center gap-2 rounded-lg font-normal cursor-pointer', 'focus-visible:outline-none focus-visible:ring-0', 'disabled:pointer-events-none disabled:opacity-50'],
 	variants: {
 		variant: {
 			solid: 'bg-(--color-variant) text-white hover:bg-(--color-variant)/90 active:bg-(--color-variant)/85',
@@ -14,9 +14,9 @@ const buttonStyles = tv({
 			flat: 'text-(--color-variant) bg-(--color-variant)/20 hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
 		},
 		size: {
-			sm: 'h-8 px-3 text-sm',
-			md: 'h-10 px-4 text-sm',
-			lg: 'h-11 px-6 text-base',
+			sm: 'h-8 min-w-8 px-2 text-sm',
+			md: 'h-10 min-w-10 px-2 text-sm',
+			lg: 'h-11 min-w-11 px-2 text-base',
 		},
 		color: {
 			primary: '[--color-variant:var(--primary)]',

@@ -21,7 +21,7 @@ const listStyles = tv({
 	},
 })
 
-export type ListChildRenderer = (index: number) => React.ReactNode
+export type ListItemRenderer = (index: number) => React.ReactNode
 
 export interface ListClassNames {
 	readonly base?: ClassValue
@@ -31,7 +31,7 @@ export interface ListClassNames {
 }
 
 export interface ListProps extends Omit<React.ComponentPropsWithRef<'div'>, 'children'> {
-	readonly children?: React.ReactNode | ListChildRenderer
+	readonly children?: React.ReactNode | ListItemRenderer
 	readonly classNames?: ListClassNames
 	readonly emptyContent?: React.ReactNode
 	readonly fullWidth?: boolean
@@ -70,7 +70,7 @@ function virtualRange(itemCount: number, itemHeight: number, overscan: number, s
 }
 
 // Builds the visible item wrappers without copying a window of the full item array.
-function virtualItems(items: readonly React.ReactNode[] | ListChildRenderer, startIndex: number, endIndex: number, itemHeight: number, itemClassName: string) {
+function virtualItems(items: readonly React.ReactNode[] | ListItemRenderer, startIndex: number, endIndex: number, itemHeight: number, itemClassName: string) {
 	const elements = new Array<React.ReactNode>(endIndex - startIndex)
 	const render = items instanceof Function ? items : (i: number) => items[i]
 

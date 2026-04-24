@@ -60,6 +60,7 @@ export interface FloatingProps extends Omit<React.ComponentPropsWithRef<'div'>, 
 	readonly interactive?: boolean
 	readonly closeOnEscape?: boolean
 	readonly closeOnPointerDownOutside?: boolean
+	readonly hideArrow?: boolean
 	readonly onOpenChange?: (open: boolean) => void
 }
 
@@ -156,6 +157,7 @@ export function Floating({
 	open = false,
 	interactive = false,
 	offset = DEFAULT_FLOATING_OFFSET,
+	hideArrow,
 	onOpenChange,
 	placement = 'bottom',
 	portalContainer,
@@ -269,7 +271,7 @@ export function Floating({
 				top: position?.top ?? 0,
 				visibility: position ? 'visible' : 'hidden',
 			}}>
-			<span aria-hidden className={tw(styles.arrow(), classNames?.arrow)} style={position?.arrowStyle} />
+			{hideArrow !== true && <span className={tw(styles.arrow(), classNames?.arrow)} style={position?.arrowStyle} />}
 			<div className={tw(styles.content(), classNames?.content)}>{content}</div>
 		</div>,
 		contentContainer,

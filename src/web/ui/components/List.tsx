@@ -21,6 +21,8 @@ const listStyles = tv({
 	},
 })
 
+export type ListChildRenderer = (index: number) => React.ReactNode
+
 export interface ListClassNames {
 	readonly base?: ClassValue
 	readonly spacer?: ClassValue
@@ -29,13 +31,13 @@ export interface ListClassNames {
 }
 
 export interface ListProps extends Omit<React.ComponentPropsWithRef<'div'>, 'children'> {
-	readonly children?: React.ReactNode
+	readonly children?: React.ReactNode | ListChildRenderer
 	readonly classNames?: ListClassNames
 	readonly emptyContent?: React.ReactNode
 	readonly fullWidth?: boolean
-	readonly height?: React.CSSProperties['height']
 	readonly itemHeight?: number
 	readonly overscan?: number
+	readonly itemCount?: number
 }
 
 // Normalizes row height so virtual range math always has a positive divisor.
@@ -48,11 +50,14 @@ function normalizeOverscan(overscan: number | undefined) {
 	return overscan !== undefined && Number.isFinite(overscan) ? Math.max(0, Math.trunc(overscan)) : DEFAULT_OVERSCAN
 }
 
+// Normalizes item count into a non-negative number.
+function normalizeItemCount(itemCount: number | undefined) {
+	return itemCount !== undefined && Number.isFinite(itemCount) ? Math.max(0, Math.trunc(itemCount)) : 0
+}
+
 // Calculates the inclusive-start and exclusive-end range that should be mounted.
 function virtualRange(itemCount: number, itemHeight: number, overscan: number, scrollTop: number, viewportHeight: number) {
-	if (itemCount <= 0) {
-		return { endIndex: 0, startIndex: 0 }
-	}
+	if (itemCount <= 0) return { endIndex: 0, startIndex: 0 }
 
 	const maxScrollTop = Math.max(0, itemCount * itemHeight - viewportHeight)
 	const clampedScrollTop = clamp(scrollTop, 0, maxScrollTop)
@@ -65,16 +70,17 @@ function virtualRange(itemCount: number, itemHeight: number, overscan: number, s
 }
 
 // Builds the visible item wrappers without copying a window of the full item array.
-function virtualItems(items: readonly React.ReactNode[], startIndex: number, endIndex: number, itemHeight: number, itemClassName: string) {
-	const elements: React.ReactNode[] = []
+function virtualItems(items: readonly React.ReactNode[] | ListChildRenderer, startIndex: number, endIndex: number, itemHeight: number, itemClassName: string) {
+	const elements = new Array<React.ReactNode>(endIndex - startIndex)
+	const render = items instanceof Function ? items : (i: number) => items[i]
 
-	for (let itemIndex = startIndex; itemIndex < endIndex; itemIndex++) {
+	for (let itemIndex = startIndex, p = 0; itemIndex < endIndex; itemIndex++, p++) {
 		const slotIndex = itemIndex - startIndex
 
-		elements.push(
+		elements[p] = (
 			<div className={itemClassName} key={slotIndex} style={{ height: itemHeight, transform: `translateY(${itemIndex * itemHeight}px)` }}>
-				{items[itemIndex]}
-			</div>,
+				{render(itemIndex)}
+			</div>
 		)
 	}
 
@@ -82,8 +88,9 @@ function virtualItems(items: readonly React.ReactNode[], startIndex: number, end
 }
 
 // Renders a fixed-height vertical list with only visible children mounted.
-export function List({ children, className, classNames, emptyContent, fullWidth, height, itemHeight, onScroll, overscan, ref, style, ...props }: ListProps) {
-	const items = useMemo(() => Children.toArray(children), [children])
+export function List({ children, itemCount, className, classNames, emptyContent, fullWidth, itemHeight, onScroll, overscan, ref, ...props }: ListProps) {
+	const items = useMemo(() => (children instanceof Function ? [] : Children.toArray(children)), [children])
+	const length = children instanceof Function ? normalizeItemCount(itemCount) : items.length
 	const normalizedItemHeight = normalizeItemHeight(itemHeight)
 	const normalizedOverscan = normalizeOverscan(overscan)
 	const styles = listStyles({ fullWidth })
@@ -92,11 +99,10 @@ export function List({ children, className, classNames, emptyContent, fullWidth,
 	const animationFrameRef = useRef<number | undefined>(undefined)
 	const [scrollTop, setScrollTop] = useState(0)
 	const [viewportHeight, setViewportHeight] = useState(0)
-	const range = virtualRange(items.length, normalizedItemHeight, normalizedOverscan, scrollTop, viewportHeight)
-	const totalHeight = items.length * normalizedItemHeight
+	const range = virtualRange(length, normalizedItemHeight, normalizedOverscan, scrollTop, viewportHeight)
+	const totalHeight = length * normalizedItemHeight
 	const itemClassName = tw(styles.item(), classNames?.item)
-	const mountedItems = useMemo(() => virtualItems(items, range.startIndex, range.endIndex, normalizedItemHeight, itemClassName), [items, range.startIndex, range.endIndex, normalizedItemHeight, itemClassName])
-	const viewportStyle = height === undefined ? style : { ...style, height }
+	const mountedItems = useMemo(() => virtualItems(children instanceof Function ? children : items, range.startIndex, range.endIndex, normalizedItemHeight, itemClassName), [items, range.startIndex, range.endIndex, normalizedItemHeight, itemClassName])
 
 	// Measures the scroll viewport and keeps the virtual range aligned to resize.
 	useEffect(() => {
@@ -163,8 +169,8 @@ export function List({ children, className, classNames, emptyContent, fullWidth,
 	}
 
 	return (
-		<div {...props} className={tw(styles.base(), className, classNames?.base)} onScroll={handleScroll} ref={handleViewportRef} style={viewportStyle}>
-			{items.length === 0 && emptyContent !== undefined && emptyContent !== null ? (
+		<div {...props} className={tw(styles.base(), className, classNames?.base)} onScroll={handleScroll} ref={handleViewportRef}>
+			{length === 0 && emptyContent !== undefined && emptyContent !== null ? (
 				<div className={tw(styles.empty(), classNames?.empty)}>{emptyContent}</div>
 			) : (
 				<div className={tw(styles.spacer(), classNames?.spacer)} style={{ height: totalHeight }}>

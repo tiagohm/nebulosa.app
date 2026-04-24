@@ -227,15 +227,9 @@ const Chips = memo(() => {
 })
 
 const Lists = memo(() => {
-	const items = new Array(100000)
-
-	for (let i = 0; i < 100000; i++) {
-		items[i] = <span className="flex h-full w-full items-center justify-center">{i}</span>
-	}
-
 	return (
-		<List className="min-w-80" itemHeight={20}>
-			{items}
+		<List className="min-w-80" itemHeight={20} itemCount={100000}>
+			{(i) => <span className="flex h-full w-full items-center justify-center">{i}</span>}
 		</List>
 	)
 })

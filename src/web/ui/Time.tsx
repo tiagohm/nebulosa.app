@@ -32,15 +32,15 @@ export function Time({ id, onTimeChange, onClose, ...time }: TimeProps) {
 		setDate(now('UTC'))
 	}
 
-	const Footer = <Button color='success' label='Apply' onPointerUp={handleChoose} startContent={<Icons.Check />} />
+	const Footer = <Button color="success" label="Apply" onPointerUp={handleChoose} startContent={<Icons.Check />} />
 
 	return (
-		<Modal footer={Footer} header='Time' id={id} maxWidth='328px' onHide={onClose}>
-			<div className='mt-0 grid grid-cols-3 gap-2'>
-				<I18nProvider locale='sv-SE'>
-					<DateInput className='col-span-2' endContent={<Now onPointerUp={handleNow} />} granularity='second' hideTimeZone hourCycle={24} label='UTC' onChange={setDate} value={date} />
+		<Modal footer={Footer} header="Time" id={id} maxWidth="328px" onHide={onClose}>
+			<div className="mt-0 grid grid-cols-3 gap-2">
+				<I18nProvider locale="sv-SE">
+					<DateInput className="col-span-2" endContent={<Now onPointerUp={handleNow} />} granularity="second" hideTimeZone hourCycle={24} label="UTC" onChange={setDate} value={date} />
 				</I18nProvider>
-				<NumberInput className='col-span-1' label='Offset (min)' maxValue={720} minValue={-720} onValueChange={setOffset} step={30} value={offset} />
+				<NumberInput className="col-span-1" label="Offset (min)" maxValue={720} minValue={-720} onValueChange={setOffset} step={30} value={offset} />
 			</div>
 		</Modal>
 	)
@@ -49,5 +49,5 @@ export function Time({ id, onTimeChange, onClose, ...time }: TimeProps) {
 type NowProps = Omit<IconButtonProps, 'variant' | 'icon'>
 
 function Now({ color = 'secondary', size = 'sm', ...props }: NowProps) {
-	return <IconButton color={color} icon={Icons.CalendarToday} size={size} tooltipContent='Now' {...props} />
+	return <IconButton color={color} icon={Icons.CalendarToday} size={size} tooltipContent="Now" {...props} />
 }

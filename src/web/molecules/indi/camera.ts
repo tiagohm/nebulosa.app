@@ -231,7 +231,7 @@ export function updateRequestFrame(request: CameraCaptureStart, frame: Camera['f
 export function updateFrameFormat(request: CameraCaptureStart, frameFormats?: readonly NameAndLabel[]) {
 	if (!frameFormats?.length) return
 
-	if (!request.frameFormat || frameFormats.findIndex((e) => e.name === request.frameFormat) < 0) {
+	if (!request.frameFormat || !frameFormats.some((e) => e.name === request.frameFormat)) {
 		request.frameFormat = frameFormats[0].name
 	}
 }

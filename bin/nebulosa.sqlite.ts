@@ -839,7 +839,7 @@ for (const [name, url] of Object.entries(GITHUB_FILES)) {
 	const file = Bun.file(`data/${name}`)
 
 	if (!(await file.exists())) {
-		Bun.write(file, await (await fetch(url)).blob())
+		await Bun.write(file, await (await fetch(url)).blob())
 	}
 }
 
@@ -855,34 +855,35 @@ db.run('CREATE TABLE IF NOT EXISTS dsos (id INTEGER PRIMARY KEY, type INTEGER, r
 db.run('CREATE TABLE IF NOT EXISTS names (dsoId INTEGER, type INTEGER, name TEXT COLLATE NOCASE, PRIMARY KEY (dsoId, type, name), FOREIGN KEY (dsoId) REFERENCES dsos(id)) WITHOUT ROWID;')
 
 function mapNameWithGreekLetter(name: string) {
-	if (name.startsWith('α')) return `Alp ${name.substring(1).trim()}`
-	if (name.startsWith('β')) return `Bet ${name.substring(1).trim()}`
-	if (name.startsWith('γ')) return `Gam ${name.substring(1).trim()}`
-	if (name.startsWith('δ')) return `Del ${name.substring(1).trim()}`
-	if (name.startsWith('ε')) return `Eps ${name.substring(1).trim()}`
-	if (name.startsWith('ζ')) return `Zet ${name.substring(1).trim()}`
-	if (name.startsWith('η')) return `Eta ${name.substring(1).trim()}`
-	if (name.startsWith('θ')) return `The ${name.substring(1).trim()}`
-	if (name.startsWith('ι')) return `Iot ${name.substring(1).trim()}`
-	if (name.startsWith('κ')) return `Kap ${name.substring(1).trim()}`
-	if (name.startsWith('λ')) return `Lam ${name.substring(1).trim()}`
-	if (name.startsWith('μ')) return `Mu ${name.substring(1).trim()}`
-	if (name.startsWith('ν')) return `Nu ${name.substring(1).trim()}`
-	if (name.startsWith('ξ')) return `Xi ${name.substring(1).trim()}`
-	if (name.startsWith('ο')) return `Omi ${name.substring(1).trim()}`
-	if (name.startsWith('π')) return `Pi ${name.substring(1).trim()}`
-	if (name.startsWith('ρ')) return `Rho ${name.substring(1).trim()}`
-	if (name.startsWith('σ')) return `Sig ${name.substring(1).trim()}`
-	if (name.startsWith('τ')) return `Tau ${name.substring(1).trim()}`
-	if (name.startsWith('υ')) return `Ups ${name.substring(1).trim()}`
-	if (name.startsWith('φ')) return `Phi ${name.substring(1).trim()}`
-	if (name.startsWith('χ')) return `Chi ${name.substring(1).trim()}`
-	if (name.startsWith('ψ')) return `Psi ${name.substring(1).trim()}`
-	if (name.startsWith('ω')) return `Ome ${name.substring(1).trim()}`
+	if (name.startsWith('α')) return `Alp ${name.slice(1).trim()}`
+	if (name.startsWith('β')) return `Bet ${name.slice(1).trim()}`
+	if (name.startsWith('γ')) return `Gam ${name.slice(1).trim()}`
+	if (name.startsWith('δ')) return `Del ${name.slice(1).trim()}`
+	if (name.startsWith('ε')) return `Eps ${name.slice(1).trim()}`
+	if (name.startsWith('ζ')) return `Zet ${name.slice(1).trim()}`
+	if (name.startsWith('η')) return `Eta ${name.slice(1).trim()}`
+	if (name.startsWith('θ')) return `The ${name.slice(1).trim()}`
+	if (name.startsWith('ι')) return `Iot ${name.slice(1).trim()}`
+	if (name.startsWith('κ')) return `Kap ${name.slice(1).trim()}`
+	if (name.startsWith('λ')) return `Lam ${name.slice(1).trim()}`
+	if (name.startsWith('μ')) return `Mu ${name.slice(1).trim()}`
+	if (name.startsWith('ν')) return `Nu ${name.slice(1).trim()}`
+	if (name.startsWith('ξ')) return `Xi ${name.slice(1).trim()}`
+	if (name.startsWith('ο')) return `Omi ${name.slice(1).trim()}`
+	if (name.startsWith('π')) return `Pi ${name.slice(1).trim()}`
+	if (name.startsWith('ρ')) return `Rho ${name.slice(1).trim()}`
+	if (name.startsWith('σ')) return `Sig ${name.slice(1).trim()}`
+	if (name.startsWith('τ')) return `Tau ${name.slice(1).trim()}`
+	if (name.startsWith('υ')) return `Ups ${name.slice(1).trim()}`
+	if (name.startsWith('φ')) return `Phi ${name.slice(1).trim()}`
+	if (name.startsWith('χ')) return `Chi ${name.slice(1).trim()}`
+	if (name.startsWith('ψ')) return `Psi ${name.slice(1).trim()}`
+	if (name.startsWith('ω')) return `Ome ${name.slice(1).trim()}`
 	return name
 }
 
 function mapCatalog(catalog: typeof BENNETT_CATALOG) {
+	// oxlint-disable-next-line unicorn/no-array-reduce
 	return catalog.reduce((map, entry) => {
 		const [name, type, id] = entry
 		const names = map.get(type) ?? []
@@ -921,19 +922,19 @@ function addName(dsoId: number | bigint | string, type: number, name: string) {
 
 function addNameFromTypeAndId(dsoId: number | bigint, type: number, id: string, useIt: boolean = true) {
 	const names = NAMES.get(type)?.filter((entry) => entry[0] === id)
-	names?.forEach((e) => addName(dsoId, NAME, e[1]))
+	if (names) for (const e of names) addName(dsoId, NAME, e[1])
 
 	const ben = BENNETT_CATALOG_MAP.get(type)?.filter((e) => e[0] === id)
-	ben?.forEach((e) => addName(dsoId, BENNETT, e[1]))
+	if (ben) for (const e of ben) addName(dsoId, BENNETT, e[1])
 
 	const dun = DUNLOP_CATALOG_MAP.get(type)?.filter((e) => e[0] === id)
-	dun?.forEach((e) => addName(dsoId, DUNLOP, e[1]))
+	if (dun) for (const e of dun) addName(dsoId, DUNLOP, e[1])
 
 	const her = HERSHEL_CATALOG_MAP.get(type)?.filter((e) => e[0] === id)
-	her?.forEach((e) => addName(dsoId, HERSHEL, e[1]))
+	if (her) for (const e of her) addName(dsoId, HERSHEL, e[1])
 
 	const gum = GUM_CATALOG_MAP.get(type)?.filter((e) => e[0] === id)
-	gum?.forEach((e) => addName(dsoId, GUM, e[1]))
+	if (gum) for (const e of gum) addName(dsoId, GUM, e[1])
 
 	if (type >= 0 && useIt) {
 		addName(dsoId, type, id)
@@ -954,7 +955,7 @@ async function readDsosFromStellarium() {
 			continue
 		}
 
-		const id = +entry.id + 1000000
+		const id = entry.id + 1000000
 
 		let add = addNameFromTypeAndId(id, -1, id.toFixed(0))
 
@@ -1098,7 +1099,7 @@ for (const item of (await simbadQuery(SIMBAD_STAR_CLUSTER_QUERY))!) {
 		.split('|')
 		.map((e) => CL_REGEX.exec(e) ?? NGC_REGEX.exec(e) ?? IC_REGEX.exec(e))
 		.filter((e) => !!e)
-	const cl = identifiers.filter((e) => e[0].startsWith('Cl'))?.[0]
+	const cl = identifiers.find((e) => e[0].startsWith('Cl'))
 
 	if (!cl) {
 		console.warn('invalid star cluster name', item[12])
@@ -1110,8 +1111,8 @@ for (const item of (await simbadQuery(SIMBAD_STAR_CLUSTER_QUERY))!) {
 	if (!(name in ADDITIONAL_STAR_CLUSTER_CATALOGS)) continue
 
 	let dsoId = 0
-	const ngc = identifiers.filter((e) => e[0].startsWith('NGC'))?.[0]
-	const ic = identifiers.filter((e) => e[0].startsWith('IC'))?.[0]
+	const ngc = identifiers.find((e) => e[0].startsWith('NGC'))
+	const ic = identifiers.find((e) => e[0].startsWith('IC'))
 
 	if (ngc && ngc.length > 1) {
 		const row = db.query<{ dsoId: number }, []>(`SELECT n.dsoId FROM names n WHERE n.type = 1 and n.name = '${ngc[1]}'`).get()

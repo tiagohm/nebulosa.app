@@ -12,7 +12,6 @@ import { AsteroidMolecule, type BookmarkItem, GalaxyMolecule, MoonMolecule, Plan
 import { formatDistance, skyObjectName, skyObjectType, tw } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
-import { ConstellationSelect } from './ConstellationSelect'
 import { Button } from './components/Button'
 import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
@@ -21,6 +20,7 @@ import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { Slider } from './components/Slider'
 import { TextInput } from './components/TextInput'
+import { ConstellationSelect } from './ConstellationSelect'
 import { MountDropdown } from './DeviceDropdown'
 import { FilterableListbox } from './FilterableListBox'
 import { type Icon, Icons } from './Icon'
@@ -42,14 +42,14 @@ export const SkyAtlas = memo(() => {
 	const { tab, location } = useSnapshot(atlas.state)
 	const request = useSnapshot(atlas.state.request)
 
-	const Footer = tab !== 'galaxy' ? <Link className='mt-1' href='https://ssd-api.jpl.nasa.gov/doc/horizons.html' label='NASA/JPL Horizons API' /> : null
+	const Footer = tab !== 'galaxy' ? <Link className="mt-1" href="https://ssd-api.jpl.nasa.gov/doc/horizons.html" label="NASA/JPL Horizons API" /> : null
 
 	return (
 		<>
-			<Modal footer={Footer} header={<Header />} id='sky-atlas' maxWidth='456px' onHide={atlas.hide}>
+			<Modal footer={Footer} header={<Header />} id="sky-atlas" maxWidth="456px" onHide={atlas.hide}>
 				<Body />
 			</Modal>
-			{location.show && <Location {...request.location} id='location-atlas' onClose={atlas.hideLocation} onCoordinateChange={atlas.updateLocation} />}
+			{location.show && <Location {...request.location} id="location-atlas" onClose={atlas.hideLocation} onCoordinateChange={atlas.updateLocation} />}
 		</>
 	)
 })
@@ -60,14 +60,14 @@ const Header = memo(() => {
 	const { time } = useSnapshot(atlas.state.request)
 
 	return (
-		<div className='flex flex-row items-center justify-between gap-2'>
-			<div className='flex justify-center items-center gap-1'>
+		<div className="flex flex-row items-center justify-between gap-2">
+			<div className="flex items-center justify-center gap-1">
 				<TabPopover />
 				<BookmarkPopover />
 			</div>
-			<div className='flex-1 flex justify-center items-center gap-2'>
+			<div className="flex flex-1 items-center justify-center gap-2">
 				<TimeBar key={`${time.utc}${time.offset}`} />
-				<IconButton color='primary' icon={Icons.MapMarker} onPointerUp={atlas.showLocation} tooltipContent='Location' variant='flat' />
+				<IconButton color="primary" icon={Icons.MapMarker} onPointerUp={atlas.showLocation} tooltipContent="Location" variant="flat" />
 			</div>
 			<HeaderFilterPopover />
 		</div>
@@ -89,7 +89,7 @@ const TabPopover = memo(() => {
 	const { tab } = useSnapshot(atlas.state)
 
 	return (
-		<Popover onOpenChange={setOpen} open={isOpen} trigger={<IconButton color='secondary' icon={TAB_ICONS[tab]} onWheel={atlas.handleOnTabWheel} />}>
+		<Popover onOpenChange={setOpen} open={isOpen} trigger={<IconButton color="secondary" icon={TAB_ICONS[tab]} onWheel={atlas.handleOnTabWheel} />}>
 			<TabPopoverContent />
 		</Popover>
 	)
@@ -99,7 +99,7 @@ const TabPopoverContent = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
 
 	return (
-		<div className='inline-flex flex-row gap-2'>
+		<div className="inline-flex flex-row gap-2">
 			{Object.entries(TAB_ICONS).map(([key, icon]) => {
 				return <IconButton icon={icon} key={key} onPointerUp={() => (atlas.state.tab = key as never)} tooltipContent={key} />
 			})}
@@ -118,7 +118,7 @@ const BookmarkPopover = memo(() => {
 	const { show } = useSnapshot(atlas.state.bookmark)
 
 	return (
-		<Popover open={show} trigger={<IconButton color='warning' icon={Icons.Bookmark} tooltipContent='Bookmarks' />}>
+		<Popover open={show} trigger={<IconButton color="warning" icon={Icons.Bookmark} tooltipContent="Bookmarks" />}>
 			<BookmarkPopoverContent />
 		</Popover>
 	)
@@ -129,23 +129,23 @@ const BookmarkPopoverContent = memo(() => {
 	const { items } = useSnapshot(atlas.state.bookmark)
 
 	return (
-		<div className='w-full'>
+		<div className="w-full">
 			<FilterableListbox
-				className='col-span-full'
+				className="col-span-full"
 				classNames={{ list: 'max-h-[200px] overflow-scroll', base: 'min-w-80' }}
 				filter={BookmarkFilter}
 				isVirtualized
 				items={items}
 				minLengthToSearch={1}
 				onAction={atlas.selectBookmark}
-				selectionMode='none'
-				variant='flat'
+				selectionMode="none"
+				variant="flat"
 				virtualization={{
 					maxListboxHeight: 200,
 					itemHeight: 36,
 				}}>
 				{(item) => (
-					<ListboxItem classNames={{ description: 'uppercase' }} description={item.type} endContent={<IconButton className='rounded-full' color='danger' icon={Icons.Trash} onPointerUp={() => atlas.removeBookmark(item)} />} key={`${item.type}-${item.code}`}>
+					<ListboxItem classNames={{ description: 'uppercase' }} description={item.type} endContent={<IconButton className="rounded-full" color="danger" icon={Icons.Trash} onPointerUp={() => atlas.removeBookmark(item)} />} key={`${item.type}-${item.code}`}>
 						{item.name}
 					</ListboxItem>
 				)}
@@ -160,7 +160,7 @@ const HeaderFilterPopover = memo(() => {
 
 	return (
 		<Activity mode={tab === 'planet' || tab === 'galaxy' || tab === 'satellite' ? 'visible' : 'hidden'}>
-			<Popover trigger={<IconButton color='secondary' icon={Icons.Filter} tooltipContent='Filter' variant='flat' />}>
+			<Popover trigger={<IconButton color="secondary" icon={Icons.Filter} tooltipContent="Filter" variant="flat" />}>
 				<Activity mode={tab === 'planet' ? 'visible' : 'hidden'}>
 					<PlanetFilter />
 				</Activity>
@@ -180,9 +180,9 @@ const PlanetFilter = memo(() => {
 	const { name, type } = useSnapshot(planet.state.search, { sync: true })
 
 	return (
-		<div className='min-w-77 grid grid-cols-12 gap-2 items-center p-2'>
-			<TextInput className='col-span-full' onValueChange={(value) => planet.update('name', value)} placeholder='Search' value={name} />
-			<PlanetTypeSelect className='col-span-full' onValueChange={(value) => planet.update('type', value)} value={type} />
+		<div className="grid min-w-77 grid-cols-12 items-center gap-2 p-2">
+			<TextInput className="col-span-full" onValueChange={(value) => planet.update('name', value)} placeholder="Search" value={name} />
+			<PlanetTypeSelect className="col-span-full" onValueChange={(value) => planet.update('type', value)} value={type} />
 		</div>
 	)
 })
@@ -194,18 +194,18 @@ const GalaxyFilter = memo(() => {
 	const { loading } = useSnapshot(dso.state)
 
 	return (
-		<div className='grid grid-cols-12 gap-2 items-center p-2'>
-			<TextInput className='col-span-full' onValueChange={(value) => dso.update('name', value)} placeholder='Search' startContent={<SkyObjectNameTypeDropdown color='secondary' onValueChange={(value) => dso.update('nameType', value)} value={nameType} />} value={name} />
-			<ConstellationSelect className='col-span-6' onValueChange={(value) => dso.update('constellations', value)} value={constellations} />
-			<StellariumObjectTypeSelect className='col-span-6' onValueChange={(value) => dso.update('types', value)} value={types} />
-			<TextInput className='col-span-4' disabled={radius <= 0 || loading} label='RA' onValueChange={(value) => dso.update('rightAscension', value)} value={rightAscension} />
-			<TextInput className='col-span-4' disabled={radius <= 0 || loading} label='DEC' onValueChange={(value) => dso.update('declination', value)} value={declination} />
-			<NumberInput className='col-span-4' fractionDigits={1} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} step={0.1} value={radius} />
-			<Slider className='col-span-5' endContent={`min: ${magnitudeMin.toFixed(1)} max: ${magnitudeMax.toFixed(1)}`} label='Magnitude' maxValue={30} minValue={-30} onValueChange={dso.updateMagnitude} step={0.1} value={[magnitudeMin, magnitudeMax]} />
-			<Checkbox className='col-span-4 w-full max-w-none flex justify-center' label='Show visible' onValueChange={(value) => dso.update('visible', value)} value={visible} />
-			<NumberInput className='col-span-3' disabled={!visible || loading} label='Above (°)' maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} value={visibleAbove} />
-			<div className='col-span-full flex flex-row items-center justify-center'>
-				<IconButton color='primary' disabled={loading} icon={Icons.Search} onPointerUp={dso.search} tooltipContent='Filter' variant='flat' />
+		<div className="grid grid-cols-12 items-center gap-2 p-2">
+			<TextInput className="col-span-full" onValueChange={(value) => dso.update('name', value)} placeholder="Search" startContent={<SkyObjectNameTypeDropdown color="secondary" onValueChange={(value) => dso.update('nameType', value)} value={nameType} />} value={name} />
+			<ConstellationSelect className="col-span-6" onValueChange={(value) => dso.update('constellations', value)} value={constellations} />
+			<StellariumObjectTypeSelect className="col-span-6" onValueChange={(value) => dso.update('types', value)} value={types} />
+			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="RA" onValueChange={(value) => dso.update('rightAscension', value)} value={rightAscension} />
+			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="DEC" onValueChange={(value) => dso.update('declination', value)} value={declination} />
+			<NumberInput className="col-span-4" fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} step={0.1} value={radius} />
+			<Slider className="col-span-5" endContent={`min: ${magnitudeMin.toFixed(1)} max: ${magnitudeMax.toFixed(1)}`} label="Magnitude" maxValue={30} minValue={-30} onValueChange={dso.updateMagnitude} step={0.1} value={[magnitudeMin, magnitudeMax]} />
+			<Checkbox className="col-span-4 flex w-full max-w-none justify-center" label="Show visible" onValueChange={(value) => dso.update('visible', value)} value={visible} />
+			<NumberInput className="col-span-3" disabled={!visible || loading} label="Above (°)" maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} value={visibleAbove} />
+			<div className="col-span-full flex flex-row items-center justify-center">
+				<IconButton color="primary" disabled={loading} icon={Icons.Search} onPointerUp={dso.search} tooltipContent="Filter" variant="flat" />
 			</div>
 		</div>
 	)
@@ -218,15 +218,15 @@ const SatelliteFilter = memo(() => {
 	const { loading } = useSnapshot(satellite.state)
 
 	return (
-		<div className='grid grid-cols-12 gap-2 items-center p-2'>
-			<TextInput className='col-span-full' label='Search' onValueChange={(value) => satellite.update('text', value)} value={text} />
-			<p className='col-span-full font-bold'>CATEGORY</p>
-			<SatelliteCategoryChipGroup className='col-span-full' onValueChange={(value) => satellite.update('category', value)} value={category} />
-			<p className='col-span-full font-bold'>GROUP</p>
-			<SatelliteGroupTypeChipGroup category={category} className='col-span-full h-[200px]' onValueChange={(value) => satellite.update('groups', value)} value={groups} />
-			<div className='col-span-full flex flex-row items-center justify-center gap-2'>
-				<IconButton color='danger' disabled={loading} icon={Icons.Restore} onPointerUp={satellite.resetFilter} tooltipContent='Reset' variant='flat' />
-				<IconButton color='primary' disabled={loading} icon={Icons.Search} onPointerUp={satellite.search} tooltipContent='Filter' variant='flat' />
+		<div className="grid grid-cols-12 items-center gap-2 p-2">
+			<TextInput className="col-span-full" label="Search" onValueChange={(value) => satellite.update('text', value)} value={text} />
+			<p className="col-span-full font-bold">CATEGORY</p>
+			<SatelliteCategoryChipGroup className="col-span-full" onValueChange={(value) => satellite.update('category', value)} value={category} />
+			<p className="col-span-full font-bold">GROUP</p>
+			<SatelliteGroupTypeChipGroup category={category} className="col-span-full h-[200px]" onValueChange={(value) => satellite.update('groups', value)} value={groups} />
+			<div className="col-span-full flex flex-row items-center justify-center gap-2">
+				<IconButton color="danger" disabled={loading} icon={Icons.Restore} onPointerUp={satellite.resetFilter} tooltipContent="Reset" variant="flat" />
+				<IconButton color="primary" disabled={loading} icon={Icons.Search} onPointerUp={satellite.search} tooltipContent="Filter" variant="flat" />
 			</div>
 		</div>
 	)
@@ -237,7 +237,7 @@ const Body = memo(() => {
 	const { tab } = useSnapshot(atlas.state)
 
 	return (
-		<div className='mt-0 flex flex-col gap-2'>
+		<div className="mt-0 flex flex-col gap-2">
 			<Activity mode={tab === 'sun' ? 'visible' : 'hidden'}>
 				<SunTab />
 			</Activity>
@@ -268,17 +268,17 @@ const SunTab = memo(() => {
 	const { source, position, chart } = useSnapshot(sun.state)
 
 	return (
-		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='relative min-h-[200px] max-h-80 col-span-full flex justify-center items-center'>
+		<div className="grid grid-cols-12 items-center gap-2">
+			<div className="relative col-span-full flex max-h-80 min-h-[200px] items-center justify-center">
 				<Sun onSourceChange={(source) => (sun.state.source = source)} source={source} />
-				<div className='absolute top-auto left-0 p-0 text-xs'>
+				<div className="absolute top-auto left-0 p-0 text-xs">
 					<SolarEclipses />
 				</div>
-				<div className='absolute top-auto right-0 p-0 text-xs'>
+				<div className="absolute top-auto right-0 p-0 text-xs">
 					<Seasons />
 				</div>
 			</div>
-			<EphemerisAndChart chart={chart} className='col-span-full' name='Sun' position={position} twilight={twilight} />
+			<EphemerisAndChart chart={chart} className="col-span-full" name="Sun" position={position} twilight={twilight} />
 		</div>
 	)
 })
@@ -289,9 +289,9 @@ const SolarEclipses = memo(() => {
 	const { offset } = useSnapshot(sun.state.request.time)
 
 	return (
-		<div className='flex flex-col gap-0'>
+		<div className="flex flex-col gap-0">
 			{eclipses.map((eclipse) => (
-				<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Sun} key={eclipse.time} label={eclipse.type} offset={offset} time={eclipse.time} />
+				<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Sun} key={eclipse.time} label={eclipse.type} offset={offset} time={eclipse.time} />
 			))}
 		</div>
 	)
@@ -305,11 +305,11 @@ const Seasons = memo(() => {
 	const isSouthern = latitude < 0
 
 	return (
-		<div className='flex flex-col gap-0'>
-			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.Leaf : Icons.Flower} label={isSouthern ? 'AUTUMN/FALL' : 'SPRING'} offset={offset} time={spring} />
-			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.SnowFlake : Icons.Sun} label={isSouthern ? 'WINTER' : 'SUMMER'} offset={offset} time={summer} />
-			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.Flower : Icons.Leaf} label={isSouthern ? 'SPRING' : 'AUTUMN/FALL'} offset={offset} time={autumn} />
-			<AstronomicalEvent format='MM-DD HH:mm' icon={isSouthern ? Icons.Sun : Icons.SnowFlake} label={isSouthern ? 'SUMMER' : 'WINTER'} offset={offset} time={winter} />
+		<div className="flex flex-col gap-0">
+			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.Leaf : Icons.Flower} label={isSouthern ? 'AUTUMN/FALL' : 'SPRING'} offset={offset} time={spring} />
+			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.SnowFlake : Icons.Sun} label={isSouthern ? 'WINTER' : 'SUMMER'} offset={offset} time={summer} />
+			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.Flower : Icons.Leaf} label={isSouthern ? 'SPRING' : 'AUTUMN/FALL'} offset={offset} time={autumn} />
+			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.Sun : Icons.SnowFlake} label={isSouthern ? 'SUMMER' : 'WINTER'} offset={offset} time={winter} />
 		</div>
 	)
 })
@@ -322,27 +322,28 @@ const MoonTab = memo(() => {
 	const { position, chart } = useSnapshot(moon.state)
 
 	return (
-		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='relative min-h-[200px] max-h-80 col-span-full flex justify-center items-center'>
+		<div className="grid grid-cols-12 items-center gap-2">
+			<div className="relative col-span-full flex max-h-80 min-h-[200px] items-center justify-center">
 				<Moon />
-				<div className='absolute top-auto left-0 p-0 text-xs'>
+				<div className="absolute top-auto left-0 p-0 text-xs">
 					<LunarEclipses />
 					<LunarApsis />
 				</div>
-				<div className='absolute top-auto right-0 p-0 text-xs'>
+				<div className="absolute top-auto right-0 p-0 text-xs">
 					<MoonPhases />
 				</div>
 			</div>
-			<EphemerisAndChart chart={chart} className='col-span-full' name='Moon' position={position} twilight={twilight} />
+			<EphemerisAndChart chart={chart} className="col-span-full" name="Moon" position={position} twilight={twilight} />
 		</div>
 	)
 })
 
 function mapLunarPhase(phase: LunarPhase, time: number, offset: number) {
-	if (phase === 'NEW') return <AstronomicalEvent format='DD HH:mm' icon={Icons.MoonNew} key={time} label='NEW MOON' offset={offset} time={time} />
-	if (phase === 'FIRST_QUARTER') return <AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFirstQuarter} key={time} label='FIRST QUARTER' offset={offset} time={time} />
-	if (phase === 'FULL') return <AstronomicalEvent format='DD HH:mm' icon={Icons.MoonFull} key={time} label='FULL MOON' offset={offset} time={time} />
-	if (phase === 'LAST_QUARTER') return <AstronomicalEvent format='DD HH:mm' icon={Icons.MoonLastQuarter} key={time} label='LAST QUARTER' offset={offset} time={time} />
+	if (phase === 'NEW') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonNew} key={time} label="NEW MOON" offset={offset} time={time} />
+	if (phase === 'FIRST_QUARTER') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonFirstQuarter} key={time} label="FIRST QUARTER" offset={offset} time={time} />
+	if (phase === 'FULL') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonFull} key={time} label="FULL MOON" offset={offset} time={time} />
+	if (phase === 'LAST_QUARTER') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonLastQuarter} key={time} label="LAST QUARTER" offset={offset} time={time} />
+	return null
 }
 
 const MoonPhases = memo(() => {
@@ -350,7 +351,7 @@ const MoonPhases = memo(() => {
 	const { phases } = useSnapshot(moon.state)
 	const { offset } = useSnapshot(moon.state.request.time)
 
-	return <div className='flex flex-col gap-0'>{phases.map(([phase, time]) => mapLunarPhase(phase, time, offset))}</div>
+	return <div className="flex flex-col gap-0">{phases.map(([phase, time]) => mapLunarPhase(phase, time, offset))}</div>
 })
 
 const LunarEclipses = memo(() => {
@@ -359,9 +360,9 @@ const LunarEclipses = memo(() => {
 	const { offset } = useSnapshot(moon.state.request.time)
 
 	return (
-		<div className='flex flex-col gap-0'>
+		<div className="flex flex-col gap-0">
 			{eclipses.map((eclipse) => (
-				<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Moon} key={eclipse.time} label={eclipse.type} offset={offset} time={eclipse.startTime} />
+				<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} key={eclipse.time} label={eclipse.type} offset={offset} time={eclipse.startTime} />
 			))}
 		</div>
 	)
@@ -373,9 +374,9 @@ const LunarApsis = memo(() => {
 	const { offset } = useSnapshot(moon.state.request.time)
 
 	return (
-		<div className='flex flex-col gap-0'>
-			<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Moon} label={`APOGEE (${formatDistance(apsis[0].distance)})`} offset={offset} time={apsis[0].time} />
-			<AstronomicalEvent format='YYYY-MM-DD HH:mm' icon={Icons.Moon} label={`PERIGEE (${formatDistance(apsis[1].distance)})`} offset={offset} time={apsis[1].time} />
+		<div className="flex flex-col gap-0">
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} label={`APOGEE (${formatDistance(apsis[0].distance)})`} offset={offset} time={apsis[0].time} />
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} label={`PERIGEE (${formatDistance(apsis[1].distance)})`} offset={offset} time={apsis[1].time} />
 		</div>
 	)
 })
@@ -405,9 +406,9 @@ const PLANETS = [
 
 const PlanetListItem = (planet: (typeof PLANETS)[number]) => (
 	<ListboxItem description={planet.type} key={planet.code}>
-		<span className='flex flex-row items-center justify-between'>
+		<span className="flex flex-row items-center justify-between">
 			<span>{planet.name}</span>
-			<span className='text-xs'>{planet.solution}</span>
+			<span className="text-xs">{planet.solution}</span>
 		</span>
 	</ListboxItem>
 )
@@ -438,11 +439,11 @@ const PlanetTab = memo(() => {
 	)
 
 	return (
-		<div className='grid grid-cols-12 gap-2 items-center'>
-			<Listbox className='relative min-h-[200px] max-h-80 col-span-full' classNames={{ base: 'w-full', list: 'max-h-[190px] overflow-scroll' }} items={items} onAction={(key) => planet.select(key as never)} selectionMode='none'>
+		<div className="grid grid-cols-12 items-center gap-2">
+			<Listbox className="relative col-span-full max-h-80 min-h-[200px]" classNames={{ base: 'w-full', list: 'max-h-[190px] overflow-scroll' }} items={items} onAction={(key) => planet.select(key as never)} selectionMode="none">
 				{PlanetListItem}
 			</Listbox>
-			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
+			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
 		</div>
 	)
 })
@@ -474,18 +475,18 @@ const AsteroidTab = memo(() => {
 	)
 
 	return (
-		<div className='grid grid-cols-12 gap-2 items-center'>
-			<div className='relative min-h-[200px] max-h-80 col-span-full flex flex-col gap-2'>
-				<Tabs className='w-full' classNames={{ panel: 'py-0' }} onSelectionChange={(value) => (asteroid.state.tab = value as never)} selectedKey={tab}>
-					<Tab key='search' title='Search'>
+		<div className="grid grid-cols-12 items-center gap-2">
+			<div className="relative col-span-full flex max-h-80 min-h-[200px] flex-col gap-2">
+				<Tabs className="w-full" classNames={{ panel: 'py-0' }} onSelectionChange={(value) => (asteroid.state.tab = value as never)} selectedKey={tab}>
+					<Tab key="search" title="Search">
 						<AsteroidSearchTab />
 					</Tab>
-					<Tab key='closeApproaches' title='Close Approaches'>
+					<Tab key="closeApproaches" title="Close Approaches">
 						<AsteroidCloseApproachesTab />
 					</Tab>
 				</Tabs>
 			</div>
-			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={selected && isBookmarked(bookmark.items, 'asteroid', selected.id)} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} position={position} tags={tags} twilight={twilight} />
+			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'asteroid', selected.id)} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} position={position} tags={tags} twilight={twilight} />
 		</div>
 	)
 })
@@ -496,13 +497,13 @@ const AsteroidSearchTab = memo(() => {
 	const { text } = useSnapshot(asteroid.state.search, { sync: true })
 
 	return (
-		<div className='w-full flex flex-col gap-0'>
-			<div className='w-full flex flex-row items-center justify-center gap-2'>
-				<TextInput className='flex-1' disabled={loading} label='Search' onValueChange={asteroid.updateSearch} placeholder='Enter the IAU number, designation, name or SPK ID' value={text} />
-				<IconButton color='primary' disabled={loading || !text} icon={Icons.Search} onPointerUp={asteroid.search} variant='ghost' />
+		<div className="flex w-full flex-col gap-0">
+			<div className="flex w-full flex-row items-center justify-center gap-2">
+				<TextInput className="flex-1" disabled={loading} label="Search" onValueChange={asteroid.updateSearch} placeholder="Enter the IAU number, designation, name or SPK ID" value={text} />
+				<IconButton color="primary" disabled={loading || !text} icon={Icons.Search} onPointerUp={asteroid.search} variant="ghost" />
 			</div>
 			{list ? (
-				<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-30 w-full', list: 'max-h-36 overflow-scroll' }} items={list} onAction={asteroid.select} selectionMode='single'>
+				<Listbox className="mt-2 w-full" classNames={{ base: 'min-h-30 w-full', list: 'max-h-36 overflow-scroll' }} items={list} onAction={asteroid.select} selectionMode="single">
 					{(item) => (
 						<ListboxItem description={item.pdes} key={item.pdes}>
 							{item.name}
@@ -510,10 +511,10 @@ const AsteroidSearchTab = memo(() => {
 					)}
 				</Listbox>
 			) : (
-				<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-30 w-full', list: 'max-h-36 overflow-scroll' }} items={selected?.parameters ?? []} selectionMode='none'>
+				<Listbox className="mt-2 w-full" classNames={{ base: 'min-h-30 w-full', list: 'max-h-36 overflow-scroll' }} items={selected?.parameters ?? []} selectionMode="none">
 					{(parameter) => (
 						<ListboxItem description={parameter.description} key={parameter.name}>
-							<span className='flex items-center justify-between'>
+							<span className="flex items-center justify-between">
 								<span>{parameter.name}</span>
 								<span>{parameter.value}</span>
 							</span>
@@ -521,7 +522,7 @@ const AsteroidSearchTab = memo(() => {
 					)}
 				</Listbox>
 			)}
-			<Link className='mt-1' href='https://ssd-api.jpl.nasa.gov/doc/sbdb.html' label='NASA/JPL Small-Body Database (SBDB) API' />
+			<Link className="mt-1" href="https://ssd-api.jpl.nasa.gov/doc/sbdb.html" label="NASA/JPL Small-Body Database (SBDB) API" />
 		</div>
 	)
 })
@@ -534,23 +535,23 @@ const AsteroidCloseApproachesTab = memo(() => {
 	const { offset } = useSnapshot(asteroid.state.request.time)
 
 	return (
-		<div className='w-full flex flex-col gap-0'>
-			<div className='w-full flex flex-row items-center justify-center gap-2'>
-				<NumberInput className='flex-1' disabled={loading} label='Days' maxValue={30} minValue={1} onValueChange={(value) => asteroid.updateCloseApproaches('days', value)} value={days} />
-				<NumberInput className='flex-1' disabled={loading} fractionDigits={1} label='Distance (LD)' maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} step={0.1} value={distance} />
-				<IconButton color='primary' disabled={loading} icon={Icons.Search} onPointerUp={asteroid.closeApproaches} variant='ghost' />
+		<div className="flex w-full flex-col gap-0">
+			<div className="flex w-full flex-row items-center justify-center gap-2">
+				<NumberInput className="flex-1" disabled={loading} label="Days" maxValue={30} minValue={1} onValueChange={(value) => asteroid.updateCloseApproaches('days', value)} value={days} />
+				<NumberInput className="flex-1" disabled={loading} fractionDigits={1} label="Distance (LD)" maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} step={0.1} value={distance} />
+				<IconButton color="primary" disabled={loading} icon={Icons.Search} onPointerUp={asteroid.closeApproaches} variant="ghost" />
 			</div>
-			<Listbox className='mt-2 w-full' classNames={{ base: 'min-h-30 w-full', list: 'max-h-36 overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode='single'>
+			<Listbox className="mt-2 w-full" classNames={{ base: 'min-h-30 w-full', list: 'max-h-36 overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode="single">
 				{(item) => (
 					<ListboxItem description={`${item.distance.toFixed(3)} LD`} key={item.name}>
-						<span className='flex items-center justify-between'>
+						<span className="flex items-center justify-between">
 							<span>{item.name}</span>
 							<span>{formatTemporal(item.date, 'YYYY-MM-DD HH:mm', offset)}</span>
 						</span>
 					</ListboxItem>
 				)}
 			</Listbox>
-			<Link href='https://ssd-api.jpl.nasa.gov/doc/cad.html' label='NASA/JPL SBDB Close Approach Data API' />
+			<Link href="https://ssd-api.jpl.nasa.gov/doc/cad.html" label="NASA/JPL SBDB Close Approach Data API" />
 		</div>
 	)
 })
@@ -571,10 +572,10 @@ const GalaxyTab = memo(() => {
 	)
 
 	return (
-		<div className='grid grid-cols-12 gap-2 items-center'>
+		<div className="grid grid-cols-12 items-center gap-2">
 			<GalaxyTable />
-			<GalaxyPaginator className='col-span-full absolute w-full' />
-			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={selected && isBookmarked(bookmark.items, 'galaxy', selected!.id.toFixed(0))} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
+			<GalaxyPaginator className="absolute col-span-full w-full" />
+			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'galaxy', selected.id.toFixed(0))} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
 		</div>
 	)
 })
@@ -585,26 +586,26 @@ const GalaxyTable = memo(() => {
 	const { result } = useSnapshot(galaxy.state)
 
 	return (
-		<Table className='relative min-h-[200px] max-h-80 col-span-full' onRowAction={(key) => galaxy.select(+(key as never))} onSortChange={(value) => galaxy.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
+		<Table className="relative col-span-full max-h-80 min-h-[200px]" onRowAction={(key) => galaxy.select(+(key as never))} onSortChange={(value) => galaxy.update('sort', value)} removeWrapper selectionMode="single" sortDescriptor={sort}>
 			<TableHeader>
-				<TableColumn key='name'>Name</TableColumn>
-				<TableColumn allowsSorting className='text-center' key='magnitude'>
+				<TableColumn key="name">Name</TableColumn>
+				<TableColumn allowsSorting className="text-center" key="magnitude">
 					Mag.
 				</TableColumn>
-				<TableColumn allowsSorting className='text-center' key='type'>
+				<TableColumn allowsSorting className="text-center" key="type">
 					Type
 				</TableColumn>
-				<TableColumn allowsSorting className='text-center' key='constellation'>
+				<TableColumn allowsSorting className="text-center" key="constellation">
 					Const.
 				</TableColumn>
 			</TableHeader>
 			<TableBody items={result}>
 				{(item) => (
 					<TableRow key={item.id}>
-						<TableCell className='whitespace-nowrap max-w-50 overflow-hidden'>{skyObjectName(item.name, item.constellation)}</TableCell>
-						<TableCell className='text-center'>{item.magnitude}</TableCell>
-						<TableCell className='text-center whitespace-nowrap max-w-40 overflow-hidden'>{skyObjectType(item.type)}</TableCell>
-						<TableCell className='text-center'>{CONSTELLATION_LIST[item.constellation]}</TableCell>
+						<TableCell className="max-w-50 overflow-hidden whitespace-nowrap">{skyObjectName(item.name, item.constellation)}</TableCell>
+						<TableCell className="text-center">{item.magnitude}</TableCell>
+						<TableCell className="max-w-40 overflow-hidden text-center whitespace-nowrap">{skyObjectType(item.type)}</TableCell>
+						<TableCell className="text-center">{CONSTELLATION_LIST[item.constellation]}</TableCell>
 					</TableRow>
 				)}
 			</TableBody>
@@ -635,10 +636,10 @@ const SatelliteTab = memo(() => {
 	)
 
 	return (
-		<div className='grid grid-cols-12 gap-2 items-center relative'>
+		<div className="relative grid grid-cols-12 items-center gap-2">
 			<SatelliteTable />
-			<SatellitePaginator className='col-span-full absolute w-full' />
-			<EphemerisAndChart chart={chart} className='col-span-full' isFavorite={selected && isBookmarked(bookmark.items, 'satellite', selected.id.toFixed())} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
+			<SatellitePaginator className="absolute col-span-full w-full" />
+			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'satellite', selected.id.toFixed(0))} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
 		</div>
 	)
 })
@@ -649,24 +650,24 @@ const SatelliteTable = memo(() => {
 	const { result } = useSnapshot(satellite.state)
 
 	return (
-		<Table className='relative min-h-[200px] max-h-80 col-span-full' onRowAction={(key) => satellite.select(+(key as never))} onSortChange={(value) => satellite.update('sort', value)} removeWrapper selectionMode='single' sortDescriptor={sort}>
+		<Table className="relative col-span-full max-h-80 min-h-[200px]" onRowAction={(key) => satellite.select(+(key as never))} onSortChange={(value) => satellite.update('sort', value)} removeWrapper selectionMode="single" sortDescriptor={sort}>
 			<TableHeader>
-				<TableColumn allowsSorting className='text-center' key='id'>
+				<TableColumn allowsSorting className="text-center" key="id">
 					ID
 				</TableColumn>
-				<TableColumn allowsSorting className='text-center' key='name'>
+				<TableColumn allowsSorting className="text-center" key="name">
 					Name
 				</TableColumn>
-				<TableColumn className='text-center' key='group'>
+				<TableColumn className="text-center" key="group">
 					Group
 				</TableColumn>
 			</TableHeader>
 			<TableBody items={result}>
 				{(item) => (
 					<TableRow key={item.id}>
-						<TableCell className='whitespace-nowrap max-w-50 overflow-hidden'>{item.id}</TableCell>
-						<TableCell className='text-center'>{item.name}</TableCell>
-						<TableCell className='text-center whitespace-nowrap max-w-40 overflow-hidden'>{item.groups.join(', ')}</TableCell>
+						<TableCell className="max-w-50 overflow-hidden whitespace-nowrap">{item.id}</TableCell>
+						<TableCell className="text-center">{item.name}</TableCell>
+						<TableCell className="max-w-40 overflow-hidden text-center whitespace-nowrap">{item.groups.join(', ')}</TableCell>
 					</TableRow>
 				)}
 			</TableBody>
@@ -694,9 +695,9 @@ interface PaginatorProps extends React.ComponentProps<'div'> {
 function Paginator({ page, count, onPrev, onNext, loading = false, readOnly = false, className, ...props }: PaginatorProps) {
 	return (
 		<div {...props} className={tw('flex flex-row items-center justify-center gap-3', className)}>
-			<IconButton color='secondary' disabled={page <= 1 || loading} icon={Icons.ChevronLeft} onPointerUp={onPrev} />
-			<NumberInput className='max-w-20' classNames={{ input: 'text-center' }} disabled={loading || (page <= 1 && count < 4)} minValue={1} readOnly={readOnly} value={page} />
-			<IconButton color='secondary' disabled={count < 4 || loading} icon={Icons.ChevronRight} onPointerUp={onNext} />
+			<IconButton color="secondary" disabled={page <= 1 || loading} icon={Icons.ChevronLeft} onPointerUp={onPrev} />
+			<NumberInput className="max-w-20" classNames={{ input: 'text-center' }} disabled={loading || (page <= 1 && count < 4)} minValue={1} readOnly={readOnly} value={page} />
+			<IconButton color="secondary" disabled={count < 4 || loading} icon={Icons.ChevronRight} onPointerUp={onNext} />
 		</div>
 	)
 }
@@ -723,12 +724,12 @@ const TimeBar = memo(() => {
 	}, [])
 
 	return (
-		<div className='inline-flex flex-row items-center gap-1'>
+		<div className="inline-flex flex-row items-center gap-1">
 			<CalendarPopover date={local} isOpen={show} offset={offset} onDateChange={handleOnDateChange} onOffsetChange={handleOnOffsetChange} onOpenChange={handleOnOpenChange} />
 			{manual ? (
-				<IconButton color='warning' icon={Icons.TimerPlay} onPointerUp={() => atlas.updateTime(Date.now(), offset, false)} tooltipContent='Play' variant='flat' />
+				<IconButton color="warning" icon={Icons.TimerPlay} onPointerUp={() => atlas.updateTime(Date.now(), offset, false)} tooltipContent="Play" variant="flat" />
 			) : (
-				<IconButton color='success' icon={Icons.TimerPause} onPointerUp={() => (atlas.state.calendar.manual = true)} tooltipContent='Pause' variant='flat' />
+				<IconButton color="success" icon={Icons.TimerPause} onPointerUp={() => (atlas.state.calendar.manual = true)} tooltipContent="Pause" variant="flat" />
 			)}
 		</div>
 	)
@@ -760,16 +761,16 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOp
 	}
 
 	return (
-		<Popover onOpenChange={onOpenChange} open={isOpen} trigger={<Button color='secondary' label={formatTemporal(date, 'YYYY-MM-DD HH:mm', 0)} startContent={<Icons.CalendarToday />} tooltipContent='Time' />}>
-			<div className='grid grid-cols-12 gap-2 pb-2 max-w-[256px]'>
-				<Calendar className='col-span-full' onValueChange={handleDateChange} value={Temporal.Instant.fromEpochMilliseconds(date).toZonedDateTimeISO('GMT').toPlainDate()} />
-				<div className='col-span-6 flex flex-row items-center justify-center gap-1'>
-					<NumberInput className='max-w-20' maxValue={23} minValue={0} onValueChange={handleOnHourChange} value={hour} />
-					<span className='text-lg font-bold'>:</span>
-					<NumberInput className='max-w-20' maxValue={59} minValue={0} onValueChange={handleOnMinuteChange} value={minute} />
+		<Popover onOpenChange={onOpenChange} open={isOpen} trigger={<Button color="secondary" label={formatTemporal(date, 'YYYY-MM-DD HH:mm', 0)} startContent={<Icons.CalendarToday />} tooltipContent="Time" />}>
+			<div className="grid max-w-[256px] grid-cols-12 gap-2 pb-2">
+				<Calendar className="col-span-full" onValueChange={handleDateChange} value={Temporal.Instant.fromEpochMilliseconds(date).toZonedDateTimeISO('GMT').toPlainDate()} />
+				<div className="col-span-6 flex flex-row items-center justify-center gap-1">
+					<NumberInput className="max-w-20" maxValue={23} minValue={0} onValueChange={handleOnHourChange} value={hour} />
+					<span className="text-lg font-bold">:</span>
+					<NumberInput className="max-w-20" maxValue={59} minValue={0} onValueChange={handleOnMinuteChange} value={minute} />
 				</div>
-				<div className='col-span-6 flex flex-row items-center justify-center gap-1'>
-					<NumberInput className='w-fit' label='Timezone (min)' maxValue={720} minValue={-720} onValueChange={onOffsetChange} step={30} value={offset} />
+				<div className="col-span-6 flex flex-row items-center justify-center gap-1">
+					<NumberInput className="w-fit" label="Timezone (min)" maxValue={720} minValue={-720} onValueChange={onOffsetChange} step={30} value={offset} />
 				</div>
 			</div>
 		</Popover>
@@ -786,12 +787,12 @@ interface AstronomicalEventProps {
 
 const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format }: AstronomicalEventProps) => {
 	return (
-		<div className='flex flex-col gap-0'>
-			<span className='font-bold flex items-start gap-1'>
+		<div className="flex flex-col gap-0">
+			<span className="flex items-start gap-1 font-bold">
 				<Icon />
 				{label}
 			</span>
-			<span className='ps-6 mt-[-4px] mb-1'>{formatTemporal(time, format, offset)}</span>
+			<span className="mt-[-4px] mb-1 ps-6">{formatTemporal(time, format, offset)}</span>
 		</div>
 	)
 })
@@ -817,7 +818,7 @@ function makeTags(name: string | undefined, position: BodyPosition, extra?: Ephe
 	if (name) {
 		tags.push({ label: name, color: 'primary' })
 	} else if (position.names?.length) {
-		position.names.forEach((name) => tags.push({ label: skyObjectName(name, position.constellation), color: 'primary' }))
+		for (const name of position.names) tags.push({ label: skyObjectName(name, position.constellation), color: 'primary' })
 	}
 
 	if (extra?.length) {
@@ -836,11 +837,11 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 
 	return (
 		<div className={tw('h-[140px] col-span-full relative flex flex-col justify-start items-center gap-1', className)}>
-			<div className='w-full flex flex-row gap-2 text-start text-sm font-bold'>
-				<ToggleButton color='primary' icon={Icons.Info} isSelected={!showChart} onPointerUp={() => setShowChart(false)} />
-				<ToggleButton color='primary' icon={Icons.Chart} isSelected={showChart} onPointerUp={() => setShowChart(true)} />
-				<div className='flex-1 justify-center items-center flex text-sm font-bold overflow-hidden'>
-					<ScrollShadow className='w-full flex gap-1' hideScrollBar orientation='horizontal'>
+			<div className="flex w-full flex-row gap-2 text-start text-sm font-bold">
+				<ToggleButton color="primary" icon={Icons.Info} isSelected={!showChart} onPointerUp={() => setShowChart(false)} />
+				<ToggleButton color="primary" icon={Icons.Chart} isSelected={showChart} onPointerUp={() => setShowChart(true)} />
+				<div className="flex flex-1 items-center justify-center overflow-hidden text-sm font-bold">
+					<ScrollShadow className="flex w-full gap-1" hideScrollBar orientation="horizontal">
 						{tags?.map((tag) => (
 							<Chip color={tag.color} key={tag.label} label={tag.label} />
 						))}
@@ -848,7 +849,7 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 				</div>
 				{onFavoriteChange && <IconButton color={isFavorite ? 'danger' : 'warning'} disabled={isFavorite === undefined} icon={isFavorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onPointerUp={() => onFavoriteChange(!isFavorite)} tooltipContent={isFavorite ? 'Remove bookmark' : 'Add bookmark'} />}
 			</div>
-			<span className='w-full'>
+			<span className="w-full">
 				<Activity mode={showChart ? 'hidden' : 'visible'}>
 					<EphemerisPosition position={position} />
 				</Activity>
@@ -868,14 +869,14 @@ const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => {
 	const atlas = useMolecule(SkyAtlasMolecule)
 
 	return (
-		<div className='w-full grid grid-cols-12 gap-2 p-0'>
-			<div className='col-span-full'>
+		<div className="grid w-full grid-cols-12 gap-2 p-0">
+			<div className="col-span-full">
 				<BodyCoordinateInfo position={position} />
 			</div>
-			<div className='col-span-full flex items-center justify-center gap-2'>
-				<MountDropdown color='primary' disallowNoneSelection icon={Icons.Sync} isDisabled={position.pierSide === 'NEITHER'} onValueChange={atlas.sync} tooltipContent='Sync' variant='flat' />
-				<MountDropdown color='success' disallowNoneSelection isDisabled={position.pierSide === 'NEITHER'} onValueChange={atlas.goTo} tooltipContent='Go' variant='flat' />
-				<IconButton color='secondary' disabled={position.pierSide === 'NEITHER'} icon={Icons.Image} onPointerUp={atlas.frame} tooltipContent='Frame' variant='flat' />
+			<div className="col-span-full flex items-center justify-center gap-2">
+				<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} isDisabled={position.pierSide === 'NEITHER'} onValueChange={atlas.sync} tooltipContent="Sync" variant="flat" />
+				<MountDropdown color="success" disallowNoneSelection isDisabled={position.pierSide === 'NEITHER'} onValueChange={atlas.goTo} tooltipContent="Go" variant="flat" />
+				<IconButton color="secondary" disabled={position.pierSide === 'NEITHER'} icon={Icons.Image} onPointerUp={atlas.frame} tooltipContent="Frame" variant="flat" />
 			</div>
 		</div>
 	)
@@ -908,17 +909,17 @@ function ChartTooltipContent({ active, payload }: TooltipContentProps) {
 	const minute = (hour - Math.trunc(hour)) * 60
 
 	return (
-		<div className='px-1.5 py-0.5 inline-flex flex-col font-normal text-small shadow-small bg-default-100 rounded-small'>
-			<span className='text-white font-bold'>
+		<div className="text-small shadow-small bg-default-100 rounded-small inline-flex flex-col px-1.5 py-0.5 font-normal">
+			<span className="font-bold text-white">
 				{hour.toFixed(0).padStart(2, '0')}:{minute.toFixed(0).padStart(2, '0')}
 			</span>
-			<span className='text-foreground-600'>{item.value?.toFixed(3)}°</span>
+			<span className="text-foreground-600">{item.value?.toFixed(3)}°</span>
 		</div>
 	)
 }
 
 function ChartTickFormatter(value: unknown, i: number) {
-	return `${((i + 12) % 24).toFixed(0).padStart(2, '0')}`
+	return ((i + 12) % 24).toFixed(0).padStart(2, '0')
 }
 
 const DEFAULT_AREA_PROPS: Partial<AreaProps<keyof EphemerisChartData, number>> = { dot: false, connectNulls: true, activeDot: false, fillOpacity: 0.3, isAnimationActive: false, stroke: 'transparent', type: 'monotone' }
@@ -926,20 +927,20 @@ const DEFAULT_AREA_PROPS: Partial<AreaProps<keyof EphemerisChartData, number>> =
 const EphemerisChart = memo(({ data }: EphemerisChartProps) => {
 	return (
 		<ComposedChart data={data} height={120} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive>
-			<XAxis dataKey='name' domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={ChartTickFormatter} tickMargin={6} />
+			<XAxis dataKey="name" domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={ChartTickFormatter} tickMargin={6} />
 			<YAxis domain={[0, 90]} width={25} />
-			<Area dataKey='dayFirst' fill='#FFF176' {...DEFAULT_AREA_PROPS} />
-			<Area dataKey='civilDusk' fill='#7986CB' {...DEFAULT_AREA_PROPS} />
-			<Area dataKey='nauticalDusk' fill='#3F51B5' {...DEFAULT_AREA_PROPS} />
-			<Area dataKey='astronomicalDusk' fill='#303F9F' {...DEFAULT_AREA_PROPS} />
-			<Area dataKey='night' fill='#1A237E' {...DEFAULT_AREA_PROPS} />
-			<Area dataKey='astronomicalDawn' fill='#303F9F' {...DEFAULT_AREA_PROPS} />
-			<Area dataKey='nauticalDawn' fill='#3F51B5' {...DEFAULT_AREA_PROPS} />
-			<Area dataKey='civilDawn' fill='#7986CB' {...DEFAULT_AREA_PROPS} />
-			<Area dataKey='dayLast' fill='#FFF176' {...DEFAULT_AREA_PROPS} />
-			<CartesianGrid stroke='#FFFFFF10' strokeDasharray='3 3' />
+			<Area dataKey="dayFirst" fill="#FFF176" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="civilDusk" fill="#7986CB" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="nauticalDusk" fill="#3F51B5" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="astronomicalDusk" fill="#303F9F" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="night" fill="#1A237E" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="astronomicalDawn" fill="#303F9F" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="nauticalDawn" fill="#3F51B5" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="civilDawn" fill="#7986CB" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="dayLast" fill="#FFF176" {...DEFAULT_AREA_PROPS} />
+			<CartesianGrid stroke="#FFFFFF10" strokeDasharray="3 3" />
 			<ChartTooltip content={ChartTooltipContent} />
-			<Line dataKey='value' dot={false} isAnimationActive={false} stroke='#F44336' strokeWidth={2} type='monotone' />
+			<Line dataKey="value" dot={false} isAnimationActive={false} stroke="#F44336" strokeWidth={2} type="monotone" />
 		</ComposedChart>
 	)
 })

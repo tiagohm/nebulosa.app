@@ -1,7 +1,7 @@
+import { dirname } from 'path'
 import { compile, optimize } from '@tailwindcss/node'
 import { Scanner } from '@tailwindcss/oxide'
 import type { BunPlugin } from 'bun'
-import { dirname } from 'path'
 
 // Source: https://github.com/oven-sh/bun/issues/12878#issuecomment-4280279428
 

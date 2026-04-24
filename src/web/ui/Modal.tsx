@@ -18,16 +18,16 @@ export function Modal({ id, onHide, header, subHeader, footer, children, maxWidt
 	const modal = useModal(id, onHide)
 
 	return createPortal(
-		<div {...modal.moveProps} className='modal text-white max-h-[90vh] w-full fixed top-0 left-0 m-auto rounded-xl p-6 bg-neutral-950 shadow-none outline-8 outline-solid outline-black/25' ref={modal.ref} style={{ maxWidth }}>
-			<div className='w-full flex flex-row items-center justify-between gap-2'>
-				<div className='w-full flex flex-col items-center justify-center'>
-					{typeof header === 'string' ? <div className='ms-10 text-lg leading-3 font-semibold text-neutral-100'>{header}</div> : header}
-					{subHeader && <div className='ms-10 text-sm font-normal text-neutral-400'>{subHeader}</div>}
+		<div {...modal.moveProps} className="modal fixed top-0 left-0 m-auto max-h-[90vh] w-full rounded-xl bg-neutral-950 p-6 text-white shadow-none outline-8 outline-black/25 outline-solid" ref={modal.ref} style={{ maxWidth }}>
+			<div className="flex w-full flex-row items-center justify-between gap-2">
+				<div className="flex w-full flex-col items-center justify-center">
+					{typeof header === 'string' ? <div className="ms-10 text-lg leading-3 font-semibold text-neutral-100">{header}</div> : header}
+					{subHeader && <div className="ms-10 text-sm font-normal text-neutral-400">{subHeader}</div>}
 				</div>
-				<Button className='rounded-full' color='danger' label={<Icons.Close />} onPointerUp={modal.hide} variant='flat' />
+				<Button className="rounded-full" color="danger" label={<Icons.Close />} onPointerUp={modal.hide} variant="flat" />
 			</div>
-			<div className='overflow-visible py-4'>{children}</div>
-			<div className='flex flex-row items-center justify-end gap-2'>{footer}</div>
+			<div className="overflow-visible py-4">{children}</div>
+			<div className="flex flex-row items-center justify-end gap-2">{footer}</div>
 		</div>,
 		document.body,
 	)

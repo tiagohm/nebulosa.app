@@ -10,7 +10,7 @@ export const FITSHeader = memo(() => {
 	const header = useMolecule(ImageHeaderMolecule)
 
 	return (
-		<Modal header='FITS Header' id={`fits-header-${header.viewer.storageKey}`} maxWidth='296px' onHide={header.hide}>
+		<Modal header="FITS Header" id={`fits-header-${header.viewer.storageKey}`} maxWidth="296px" onHide={header.hide}>
 			<Body />
 		</Modal>
 	)
@@ -29,10 +29,10 @@ const Body = memo(() => {
 	const entries = useMemo(() => Object.entries(info?.headers ?? {}), [info])
 
 	return (
-		<div className='mt-0 px-1 py-2'>
+		<div className="mt-0 px-1 py-2">
 			<Listbox
 				isVirtualized
-				selectionMode='none'
+				selectionMode="none"
 				virtualization={{
 					maxListboxHeight: 300,
 					itemHeight: 40,

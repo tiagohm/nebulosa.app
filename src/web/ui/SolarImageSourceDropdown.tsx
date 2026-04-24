@@ -33,7 +33,7 @@ export function SolarImageSourceDropdown({ value, onValueChange, size = 'sm', va
 			<DropdownTrigger>
 				<Button {...props} label={DROPDOWN_ITEM_LABEL[value]} onPointerUp={stopPropagationDesktopOnly} size={size} variant={variant} />
 			</DropdownTrigger>
-			<DropdownMenu className='max-h-60 overflow-auto no-scrollbar' onAction={(key) => onValueChange(key as SolarImageSource)} selectedKeys={new Set([value])} selectionMode='single'>
+			<DropdownMenu className="no-scrollbar max-h-60 overflow-auto" onAction={(key) => onValueChange(key as SolarImageSource)} selectedKeys={new Set([value])} selectionMode="single">
 				{Object.entries(DROPDOWN_ITEM_LABEL).map(([key, label]) => (
 					<DropdownItem key={key}>{label}</DropdownItem>
 				))}

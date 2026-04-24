@@ -120,7 +120,7 @@ export function Chip({ children, className, classNames, color, disabled = false,
 			{content !== undefined && content !== null && <span className={tw(styles.label(), classNames?.label)}>{content}</span>}
 			{endContent !== undefined && endContent !== null && <span className={tw(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
 			{onClose !== undefined && (
-				<button className={tw(styles.closeButton(), classNames?.closeButton)} onClick={stopPropagation} onPointerDown={handleClose} onPointerUp={stopPropagation} type='button'>
+				<button className={tw(styles.closeButton(), classNames?.closeButton)} onClick={stopPropagation} onPointerDown={handleClose} onPointerUp={stopPropagation} type="button">
 					<Icons.Close />
 				</button>
 			)}

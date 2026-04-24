@@ -30,31 +30,31 @@ export function CameraCaptureStartPopover({ mode, camera, color, disabled, value
 
 	return (
 		<Popover trigger={<IconButton {...props} color={color ?? (camera.connected ? 'success' : 'danger')} disabled={disabled || !camera.connected} icon={Icons.Cog} />}>
-			<div className='grid grid-cols-12 items-center gap-2 p-4'>
-				<p className='col-span-full font-bold'>CAMERA CAPTURE OPTIONS</p>
+			<div className="grid grid-cols-12 items-center gap-2 p-4">
+				<p className="col-span-full font-bold">CAMERA CAPTURE OPTIONS</p>
 				<ExposureTimeInput
-					className='col-span-6'
+					className="col-span-6"
 					disabled={exposureTimeDisabled}
 					maxValue={camera.exposure.max}
-					maxValueUnit='SECOND'
+					maxValueUnit="SECOND"
 					minValue={exposureTimeDisabled ? 0 : camera.exposure.min}
-					minValueUnit='SECOND'
+					minValueUnit="SECOND"
 					onUnitChange={(value) => onValueChange('exposureTimeUnit', value)}
 					onValueChange={(value) => onValueChange('exposureTime', value)}
 					unit={exposureTimeUnit}
 					value={exposureTimeDisabled ? 0 : exposureTime}
 				/>
-				<FrameFormatSelect className='col-span-6' isDisabled={!camera.frameFormats.length} items={camera.frameFormats} onValueChange={(value) => onValueChange('frameFormat', value)} value={frameFormat} />
-				<NumberInput className='col-span-3' label='X' maxValue={camera.frame.x.max} minValue={camera.frame.x.min} onValueChange={(value) => onValueChange('x', value)} value={x} />
-				<NumberInput className='col-span-3' label='Y' maxValue={camera.frame.y.max} minValue={camera.frame.y.min} onValueChange={(value) => onValueChange('y', value)} value={y} />
-				<NumberInput className='col-span-3' label='Width' maxValue={camera.frame.width.max} minValue={camera.frame.width.min} onValueChange={(value) => onValueChange('width', value)} value={width} />
-				<NumberInput className='col-span-3' label='Height' maxValue={camera.frame.height.max} minValue={camera.frame.height.min} onValueChange={(value) => onValueChange('height', value)} value={height} />
-				<NumberInput className='col-span-3' label='Bin X' maxValue={camera.bin.x.max} minValue={camera.bin.x.min} onValueChange={(value) => onValueChange('binX', value)} value={binX} />
-				<NumberInput className='col-span-3' label='Bin Y' maxValue={camera.bin.y.max} minValue={camera.bin.y.min} onValueChange={(value) => onValueChange('binY', value)} value={binY} />
-				<NumberInput className='col-span-3' label='Gain' maxValue={camera.gain.max} minValue={camera.gain.min} onValueChange={(value) => onValueChange('gain', value)} value={gain} />
-				<NumberInput className='col-span-3' label='Offset' maxValue={camera.offset.max} minValue={camera.offset.min} onValueChange={(value) => onValueChange('offset', value)} value={offset} />
-				<CameraTransferFormatSelect className='col-span-6' onValueChange={(value) => onValueChange('transferFormat', value)} value={transferFormat} />
-				<Checkbox className='col-span-6' label='Compressed' onValueChange={(value) => onValueChange('compressed', value)} value={compressed} />
+				<FrameFormatSelect className="col-span-6" isDisabled={camera.frameFormats.length === 0} items={camera.frameFormats} onValueChange={(value) => onValueChange('frameFormat', value)} value={frameFormat} />
+				<NumberInput className="col-span-3" label="X" maxValue={camera.frame.x.max} minValue={camera.frame.x.min} onValueChange={(value) => onValueChange('x', value)} value={x} />
+				<NumberInput className="col-span-3" label="Y" maxValue={camera.frame.y.max} minValue={camera.frame.y.min} onValueChange={(value) => onValueChange('y', value)} value={y} />
+				<NumberInput className="col-span-3" label="Width" maxValue={camera.frame.width.max} minValue={camera.frame.width.min} onValueChange={(value) => onValueChange('width', value)} value={width} />
+				<NumberInput className="col-span-3" label="Height" maxValue={camera.frame.height.max} minValue={camera.frame.height.min} onValueChange={(value) => onValueChange('height', value)} value={height} />
+				<NumberInput className="col-span-3" label="Bin X" maxValue={camera.bin.x.max} minValue={camera.bin.x.min} onValueChange={(value) => onValueChange('binX', value)} value={binX} />
+				<NumberInput className="col-span-3" label="Bin Y" maxValue={camera.bin.y.max} minValue={camera.bin.y.min} onValueChange={(value) => onValueChange('binY', value)} value={binY} />
+				<NumberInput className="col-span-3" label="Gain" maxValue={camera.gain.max} minValue={camera.gain.min} onValueChange={(value) => onValueChange('gain', value)} value={gain} />
+				<NumberInput className="col-span-3" label="Offset" maxValue={camera.offset.max} minValue={camera.offset.min} onValueChange={(value) => onValueChange('offset', value)} value={offset} />
+				<CameraTransferFormatSelect className="col-span-6" onValueChange={(value) => onValueChange('transferFormat', value)} value={transferFormat} />
+				<Checkbox className="col-span-6" label="Compressed" onValueChange={(value) => onValueChange('compressed', value)} value={compressed} />
 			</div>
 		</Popover>
 	)

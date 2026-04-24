@@ -11,9 +11,9 @@ export const CoordinateOnMouse = memo(() => {
 	if (!show) return null
 
 	return (
-		<svg className='mouse-coordinate pointer-events-none absolute top-0 left-0 h-full w-full select-none' stroke='#2196F3' strokeWidth={1}>
-			<circle cx={x} cy={y} fill='none' r='16' />
-			<circle cx={x} cy={y} fill='none' r='32' />
+		<svg className="mouse-coordinate pointer-events-none absolute top-0 left-0 h-full w-full select-none" stroke="#2196F3" strokeWidth={1}>
+			<circle cx={x} cy={y} fill="none" r="16" />
+			<circle cx={x} cy={y} fill="none" r="32" />
 		</svg>
 	)
 })

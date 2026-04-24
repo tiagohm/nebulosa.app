@@ -1,6 +1,6 @@
 import { GuiderClient } from 'nebulosa/src/guider.client'
 import type { CameraManager, GuideOutputManager } from 'nebulosa/src/indi.manager'
-import { type PHD2AppState, PHD2Client, type PHD2Command, type PHD2Error, type PHD2Events } from 'nebulosa/src/phd2'
+import { type PHD2AppState, PHD2Client, type PHD2Command, type PHD2Events } from 'nebulosa/src/phd2'
 import { DEFAULT_PHD2_DITHER, DEFAULT_PHD2_EVENT, type PHD2Connect, type PHD2Dither, type PHD2Event, type PHD2State, type PHD2Status } from 'src/shared/types'
 import { exposureTimeInSeconds } from 'src/shared/util'
 import { type Endpoints, response } from './http'
@@ -66,7 +66,7 @@ export class PHD2Handler {
 					this.settleDone(true)
 					break
 				case 'GuideStep': {
-					const { RADistanceRaw, DECDistanceRaw, RADuration = 0, RADirection, DECDuration = 0, DECDirection } = event
+					const { RADistanceRaw, DECDistanceRaw, RADuration, RADirection, DECDuration, DECDirection } = event
 					const { rightAscension, declination } = this.rms.addDataPoint(RADistanceRaw, DECDistanceRaw)
 					this.event.starMass = event.StarMass
 					this.event.snr = event.SNR
@@ -102,7 +102,7 @@ export class PHD2Handler {
 
 			// console.info('event: %j', event)
 		},
-		command: (client: PHD2Client, command: PHD2Command, success: boolean, result: PHD2Error | unknown) => {
+		command: (client: PHD2Client, command: PHD2Command, success: boolean, result: unknown) => {
 			console.info(command.method, 'received:', success, JSON.stringify(result))
 		},
 		close: () => {
@@ -213,23 +213,23 @@ export class PHD2Handler {
 	}
 
 	loop() {
-		this.client?.loop()
+		void this.client?.loop()
 	}
 
 	findStar() {
-		this.client?.findStar()
+		void this.client?.findStar()
 	}
 
 	start() {
-		this.client?.guide(false, this.settings.settle)
+		void this.client?.guide(false, this.settings.settle)
 	}
 
 	stop() {
-		this.client?.stopCapture()
+		void this.client?.stopCapture()
 	}
 
 	calibrate() {
-		this.client?.guide(true, this.settings.settle)
+		void this.client?.guide(true, this.settings.settle)
 	}
 
 	disconnect() {

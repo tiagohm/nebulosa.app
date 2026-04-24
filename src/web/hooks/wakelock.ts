@@ -22,7 +22,7 @@ export function useWakeLock() {
 
 	const release = () => {
 		if (wakeLock.current) {
-			wakeLock.current.release()
+			void wakeLock.current.release()
 			wakeLock.current = null
 			setActive(false)
 		}

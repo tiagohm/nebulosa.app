@@ -102,7 +102,7 @@ export const FilePickerMolecule = molecule(() => {
 	}
 
 	function navigateTo(entry: DirectoryEntry) {
-		if (state.history.length === 0 || state.history[state.history.length - 1] !== state.path) {
+		if (state.history.length === 0 || state.history.at(-1) !== state.path) {
 			state.history.push(state.path)
 		}
 
@@ -110,15 +110,15 @@ export const FilePickerMolecule = molecule(() => {
 		return list()
 	}
 
-	function navigateBack() {
+	async function navigateBack() {
 		if (state.history.length === 0) return
 		state.path = state.history.pop()!
-		return list()
+		await list()
 	}
 
 	function navigateToParent() {
 		if (state.directoryTree.length <= 1) return
-		void navigateTo(state.directoryTree[state.directoryTree.length - 2])
+		void navigateTo(state.directoryTree.at(-2)!)
 	}
 
 	function toggleCreateDirectory() {
@@ -137,7 +137,7 @@ export const FilePickerMolecule = molecule(() => {
 		}
 	}
 
-	function select(path: React.Key) {
+	async function select(path: React.Key) {
 		if (typeof path !== 'string') return
 
 		const entry = state.entries.find((e) => e.path === path)
@@ -145,7 +145,8 @@ export const FilePickerMolecule = molecule(() => {
 		if (!entry) return
 
 		if (state.mode !== 'directory' && entry.directory) {
-			return navigateTo(entry)
+			await navigateTo(entry)
+			return
 		}
 
 		const index = state.selected.indexOf(path)
@@ -159,7 +160,7 @@ export const FilePickerMolecule = molecule(() => {
 		}
 	}
 
-	function unselectAll(event?: React.PointerEvent<Element>) {
+	function unselectAll(event?: React.PointerEvent) {
 		event?.stopPropagation()
 		state.selected.length = 0
 	}

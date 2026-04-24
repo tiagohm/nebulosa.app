@@ -1,16 +1,16 @@
 export type Endpoints = Readonly<Bun.Serve.Routes<undefined, string>>
 
-export const DEFAULT_HEADERS: HeadersInit = {
+export const DEFAULT_HEADERS = {
 	'Cache-Control': 'no-cache, no-store, must-revalidate',
 	Pragma: 'no-cache',
 	Expires: '0',
-}
+} as const
 
 export const NO_RESPONSE = new Response(undefined, { headers: DEFAULT_HEADERS })
 export const INTERNAL_SERVER_ERROR_RESPONSE = new Response('Internal Server Error', { status: 500 })
 
-export function query(req: Bun.BunRequest<string>) {
-	new URL(req.url).searchParams.forEach((value, key) => (req.params[key] = value))
+export function query(req: Bun.BunRequest) {
+	for (const [key, value] of new URL(req.url).searchParams) req.params[key] = value
 	return req.params
 }
 

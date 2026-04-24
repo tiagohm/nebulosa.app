@@ -212,16 +212,16 @@ export class TppaTask {
 export function tppa(tppaHandler: TppaHandler): Endpoints {
 	const { cameraHandler, mountHandler } = tppaHandler
 
-	function cameraFromParams(req: Bun.BunRequest<string>) {
+	function cameraFromParams(req: Bun.BunRequest) {
 		return cameraHandler.cameraManager.get(query(req).client, req.params.camera)!
 	}
 
-	function mountFromParams(req: Bun.BunRequest<string>) {
+	function mountFromParams(req: Bun.BunRequest) {
 		return mountHandler.mountManager.get(query(req).client, req.params.mount)!
 	}
 
 	return {
-		'/tppa/:camera/:mount/start': { POST: async (req) => response(tppaHandler.start(await req.json(), cameraFromParams(req)!, mountFromParams(req)!)) },
+		'/tppa/:camera/:mount/start': { POST: async (req) => response(tppaHandler.start(await req.json(), cameraFromParams(req), mountFromParams(req))) },
 		'/tppa/stop': { POST: async (req) => response(tppaHandler.stop(await req.json())) },
 	}
 }

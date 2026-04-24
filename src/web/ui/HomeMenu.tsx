@@ -139,7 +139,7 @@ export const HomeMenuPopover = memo(() => {
 	const { show } = useSnapshot(home.state.menu)
 
 	return (
-		<Popover onOpenChange={(value) => (home.state.menu.show = value)} open={show} trigger={<IconButton color='secondary' icon={Icons.Menu} tooltipContent='Menu' />}>
+		<Popover onOpenChange={(value) => (home.state.menu.show = value)} open={show} trigger={<IconButton color="secondary" icon={Icons.Menu} tooltipContent="Menu" />}>
 			<HomeMenuPopoverContent />
 		</Popover>
 	)
@@ -160,33 +160,33 @@ export const HomeMenuPopoverContent = memo(() => {
 	const calculator = useMolecule(CalculatorMolecule)
 	const about = useMolecule(AboutMolecule)
 
-	const isIndiDisabled = !CAMERA.length && !MOUNT.length && !FOCUSER.length && !COVER.length && !FLAT_PANEL.length && !GUIDE_OUTPUT.length && !THERMOMETER.length && !DEW_HEATER.length && !ROTATOR.length
+	const isIndiDisabled = CAMERA.length === 0 && MOUNT.length === 0 && FOCUSER.length === 0 && COVER.length === 0 && FLAT_PANEL.length === 0 && GUIDE_OUTPUT.length === 0 && THERMOMETER.length === 0 && DEW_HEATER.length === 0 && ROTATOR.length === 0
 
 	return (
-		<div className='home-menu grid grid-cols-6 gap-2 p-4'>
-			<Button children={<img className='w-9' src={cameraIcon} />} color='secondary' disabled={CAMERA.length === 0} onPointerUp={() => equipment.select('CAMERA')} size='md' tooltipContent='Camera' variant='ghost' />
-			<Button children={<img className='w-9' src={mountIcon} />} color='secondary' disabled={MOUNT.length === 0} onPointerUp={() => equipment.select('MOUNT')} size='md' tooltipContent='Mount' variant='ghost' />
-			<Button children={<img className='w-9' src={filterWheelIcon} />} color='secondary' disabled={WHEEL.length === 0} onPointerUp={() => equipment.select('WHEEL')} size='md' tooltipContent='Filter Wheel' variant='ghost' />
-			<Button children={<img className='w-9' src={focuserIcon} />} color='secondary' disabled={FOCUSER.length === 0} onPointerUp={() => equipment.select('FOCUSER')} size='md' tooltipContent='Focuser' variant='ghost' />
-			<Button children={<img className='w-9' src={rotatorIcon} />} color='secondary' disabled={ROTATOR.length === 0} onPointerUp={() => equipment.select('ROTATOR')} size='md' tooltipContent='Rotator' variant='ghost' />
-			<Button children={<img className='w-9' src={flatPanelIcon} />} color='secondary' disabled={FLAT_PANEL.length === 0} onPointerUp={() => equipment.select('FLAT_PANEL')} size='md' tooltipContent='Flat Panel' variant='ghost' />
-			<Button children={<img className='w-9' src={coverIcon} />} color='secondary' disabled={COVER.length === 0} onPointerUp={() => equipment.select('COVER')} size='md' tooltipContent='Cover' variant='ghost' />
-			<Button children={<img className='w-9' src={guideOutputIcon} />} color='secondary' disabled={GUIDE_OUTPUT.length === 0} onPointerUp={() => equipment.select('GUIDE_OUTPUT')} size='md' tooltipContent='Guide Output' variant='ghost' />
-			<Button children={<img className='w-9' src={heaterIcon} />} color='secondary' disabled={DEW_HEATER.length === 0} onPointerUp={() => equipment.select('DEW_HEATER')} size='md' tooltipContent='Dew Heater' variant='ghost' />
-			<Button children={<img className='w-9' src={thermometerIcon} />} color='secondary' disabled={THERMOMETER.length === 0} onPointerUp={() => equipment.select('THERMOMETER')} size='md' tooltipContent='Thermometer' variant='ghost' />
-			<Button children={<img className='w-9' src={phd2Icon} />} color='secondary' onPointerUp={phd2.show} size='md' tooltipContent='PHD2' variant='ghost' />
-			<Button children={<img className='w-9' src={skyAtlasIcon} />} color='secondary' onPointerUp={skyAtlas.show} size='md' tooltipContent='Sky Atlas' variant='ghost' />
-			<Button children={<img className='w-9' src={framingIcon} />} color='secondary' onPointerUp={framing.show} size='md' tooltipContent='Framing' variant='ghost' />
-			<Button children={<img className='w-9' src={alignmentIcon} />} color='secondary' disabled={CAMERA.length === 0 || MOUNT.length === 0} onPointerUp={tppa.show} size='md' tooltipContent='TPPA' variant='ghost' />
-			<Button children={<img className='w-9' src={alignmentIcon} />} color='secondary' disabled={CAMERA.length === 0 || MOUNT.length === 0} onPointerUp={darv.show} size='md' tooltipContent='DARV' variant='ghost' />
-			<Button children={<img className='w-9' src={autoFocusIcon} />} color='secondary' disabled={CAMERA.length === 0 || FOCUSER.length === 0} onPointerUp={autoFocus.show} size='md' tooltipContent='Auto Focus' variant='ghost' />
-			<Button children={<img className='w-9' src={flatWizardIcon} />} color='secondary' disabled={CAMERA.length === 0} onPointerUp={flatWizard.show} size='md' tooltipContent='Flat Wizard' variant='ghost' />
-			<Button children={<img className='w-9' src={sequencerIcon} />} color='secondary' disabled={CAMERA.length === 0} size='md' tooltipContent='Sequencer' variant='ghost' />
-			<IndiPanelControlButton disabled={isIndiDisabled} size='md' />
-			<Button children={<img className='w-9' src={alpacaIcon} />} color='secondary' disabled={isIndiDisabled} onPointerUp={alpaca.show} size='md' tooltipContent='ASCOM Alpaca Server' variant='ghost' />
-			<Button children={<img className='w-9' src={calculatorIcon} />} color='secondary' onPointerUp={calculator.show} size='md' tooltipContent='Calculator' variant='ghost' />
-			<Button children={<img className='w-9' src={settingsIcon} />} color='secondary' size='md' tooltipContent='Settings' variant='ghost' />
-			<Button children={<img className='w-9' src={aboutIcon} />} color='secondary' onPointerUp={about.show} size='md' tooltipContent='About' variant='ghost' />
+		<div className="home-menu grid grid-cols-6 gap-2 p-4">
+			<Button children={<img className="w-9" src={cameraIcon} />} color="secondary" disabled={CAMERA.length === 0} onPointerUp={() => equipment.select('CAMERA')} size="md" tooltipContent="Camera" variant="ghost" />
+			<Button children={<img className="w-9" src={mountIcon} />} color="secondary" disabled={MOUNT.length === 0} onPointerUp={() => equipment.select('MOUNT')} size="md" tooltipContent="Mount" variant="ghost" />
+			<Button children={<img className="w-9" src={filterWheelIcon} />} color="secondary" disabled={WHEEL.length === 0} onPointerUp={() => equipment.select('WHEEL')} size="md" tooltipContent="Filter Wheel" variant="ghost" />
+			<Button children={<img className="w-9" src={focuserIcon} />} color="secondary" disabled={FOCUSER.length === 0} onPointerUp={() => equipment.select('FOCUSER')} size="md" tooltipContent="Focuser" variant="ghost" />
+			<Button children={<img className="w-9" src={rotatorIcon} />} color="secondary" disabled={ROTATOR.length === 0} onPointerUp={() => equipment.select('ROTATOR')} size="md" tooltipContent="Rotator" variant="ghost" />
+			<Button children={<img className="w-9" src={flatPanelIcon} />} color="secondary" disabled={FLAT_PANEL.length === 0} onPointerUp={() => equipment.select('FLAT_PANEL')} size="md" tooltipContent="Flat Panel" variant="ghost" />
+			<Button children={<img className="w-9" src={coverIcon} />} color="secondary" disabled={COVER.length === 0} onPointerUp={() => equipment.select('COVER')} size="md" tooltipContent="Cover" variant="ghost" />
+			<Button children={<img className="w-9" src={guideOutputIcon} />} color="secondary" disabled={GUIDE_OUTPUT.length === 0} onPointerUp={() => equipment.select('GUIDE_OUTPUT')} size="md" tooltipContent="Guide Output" variant="ghost" />
+			<Button children={<img className="w-9" src={heaterIcon} />} color="secondary" disabled={DEW_HEATER.length === 0} onPointerUp={() => equipment.select('DEW_HEATER')} size="md" tooltipContent="Dew Heater" variant="ghost" />
+			<Button children={<img className="w-9" src={thermometerIcon} />} color="secondary" disabled={THERMOMETER.length === 0} onPointerUp={() => equipment.select('THERMOMETER')} size="md" tooltipContent="Thermometer" variant="ghost" />
+			<Button children={<img className="w-9" src={phd2Icon} />} color="secondary" onPointerUp={phd2.show} size="md" tooltipContent="PHD2" variant="ghost" />
+			<Button children={<img className="w-9" src={skyAtlasIcon} />} color="secondary" onPointerUp={skyAtlas.show} size="md" tooltipContent="Sky Atlas" variant="ghost" />
+			<Button children={<img className="w-9" src={framingIcon} />} color="secondary" onPointerUp={framing.show} size="md" tooltipContent="Framing" variant="ghost" />
+			<Button children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={CAMERA.length === 0 || MOUNT.length === 0} onPointerUp={tppa.show} size="md" tooltipContent="TPPA" variant="ghost" />
+			<Button children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={CAMERA.length === 0 || MOUNT.length === 0} onPointerUp={darv.show} size="md" tooltipContent="DARV" variant="ghost" />
+			<Button children={<img className="w-9" src={autoFocusIcon} />} color="secondary" disabled={CAMERA.length === 0 || FOCUSER.length === 0} onPointerUp={autoFocus.show} size="md" tooltipContent="Auto Focus" variant="ghost" />
+			<Button children={<img className="w-9" src={flatWizardIcon} />} color="secondary" disabled={CAMERA.length === 0} onPointerUp={flatWizard.show} size="md" tooltipContent="Flat Wizard" variant="ghost" />
+			<Button children={<img className="w-9" src={sequencerIcon} />} color="secondary" disabled={CAMERA.length === 0} size="md" tooltipContent="Sequencer" variant="ghost" />
+			<IndiPanelControlButton disabled={isIndiDisabled} size="md" />
+			<Button children={<img className="w-9" src={alpacaIcon} />} color="secondary" disabled={isIndiDisabled} onPointerUp={alpaca.show} size="md" tooltipContent="ASCOM Alpaca Server" variant="ghost" />
+			<Button children={<img className="w-9" src={calculatorIcon} />} color="secondary" onPointerUp={calculator.show} size="md" tooltipContent="Calculator" variant="ghost" />
+			<Button children={<img className="w-9" src={settingsIcon} />} color="secondary" size="md" tooltipContent="Settings" variant="ghost" />
+			<Button children={<img className="w-9" src={aboutIcon} />} color="secondary" onPointerUp={about.show} size="md" tooltipContent="About" variant="ghost" />
 			<Devices />
 		</div>
 	)
@@ -199,10 +199,10 @@ const Devices = memo(() => {
 	if (!selected) return null
 
 	return (
-		<div className='col-span-full my-2 flex flex-col items-center justify-center gap-2 flex-wrap'>
-			<span className='font-bold text-sm mt-2 uppercase'>{deviceName(selected)}</span>
+		<div className="col-span-full my-2 flex flex-col flex-wrap items-center justify-center gap-2">
+			<span className="mt-2 text-sm font-bold uppercase">{deviceName(selected)}</span>
 			{equipment.state[selected].map((device) => (
-				<Chip className='min-w-full cursor-pointer' color={device.connected ? 'success' : 'danger'} key={device.name} label={device.name} onPointerUp={() => equipment.show(device, selected)} />
+				<Chip className="min-w-full cursor-pointer" color={device.connected ? 'success' : 'danger'} key={device.name} label={device.name} onPointerUp={() => equipment.show(device, selected)} />
 			))}
 		</div>
 	)

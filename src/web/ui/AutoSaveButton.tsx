@@ -7,5 +7,5 @@ export interface AutoSaveButtonProps extends Omit<ButtonProps, 'onPointerUp' | '
 }
 
 export function AutoSaveButton({ value, onValueChange, ...props }: AutoSaveButtonProps) {
-	return <Button children={value ? <Icons.Save color='#9353d3' /> : <Icons.SaveOff color='#9E9E9E' />} onPointerUp={() => onValueChange(!value)} tooltipContent={`Auto save: ${value ? 'ON' : 'OFF'}`} variant='ghost' {...props} />
+	return <Button children={value ? <Icons.Save color="#9353d3" /> : <Icons.SaveOff color="#9E9E9E" />} onPointerUp={() => onValueChange(!value)} tooltipContent={`Auto save: ${value ? 'ON' : 'OFF'}`} variant="ghost" {...props} />
 }

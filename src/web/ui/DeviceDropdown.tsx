@@ -37,7 +37,7 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 	return (
 		<Dropdown isDisabled={isDisabled || items.length === 0}>
 			<Tooltip content={tooltipContent} isDisabled={isDisabled || items.length === 0} placement={tooltipPlacement} showArrow>
-				<div className='max-w-fit'>
+				<div className="max-w-fit">
 					<DropdownTrigger>
 						<IconButton
 							color={color ?? (value === undefined ? 'secondary' : value.connected ? 'success' : 'danger')}
@@ -66,27 +66,27 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 }
 
 export const CameraDropdown = memo(({ icon = Icons.Camera, tooltipContent = 'Camera', ...props }: Omit<Partial<DeviceDropdownProps<'CAMERA'>>, 'type'>) => {
-	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type='CAMERA' />
+	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type="CAMERA" />
 })
 
 export const MountDropdown = memo(({ icon = Icons.Telescope, tooltipContent = 'Mount', ...props }: Omit<Partial<DeviceDropdownProps<'MOUNT'>>, 'type'>) => {
-	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type='MOUNT' />
+	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type="MOUNT" />
 })
 
 export const WheelDropdown = memo(({ icon = Icons.FilterWheel, tooltipContent = 'Filter Wheel', ...props }: Omit<Partial<DeviceDropdownProps<'WHEEL'>>, 'type'>) => {
-	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type='WHEEL' />
+	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type="WHEEL" />
 })
 
 export const FocuserDropdown = memo(({ icon = Icons.Focuser, tooltipContent = 'Focuser', ...props }: Omit<Partial<DeviceDropdownProps<'FOCUSER'>>, 'type'>) => {
-	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type='FOCUSER' />
+	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type="FOCUSER" />
 })
 
 export const RotatorDropdown = memo(({ icon = Icons.RotateRight, tooltipContent = 'Rotator', ...props }: Omit<Partial<DeviceDropdownProps<'ROTATOR'>>, 'type'>) => {
-	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type='ROTATOR' />
+	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type="ROTATOR" />
 })
 
 export const GuideOutputDropdown = memo(({ icon = Icons.Pulse, tooltipContent = 'Guide Output', ...props }: Omit<Partial<DeviceDropdownProps<'GUIDE_OUTPUT'>>, 'type'>) => {
-	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type='GUIDE_OUTPUT' />
+	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type="GUIDE_OUTPUT" />
 })
 
 const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected: boolean | undefined }) => {
@@ -111,8 +111,8 @@ function DeviceDropdownEndContent({ device, onConnect, onShow }: DeviceDropdownE
 	}
 
 	return (
-		<div className='flex flex-row items-center gap-2'>
-			{device && <IconButton color='secondary' icon={Icons.OpenInNew} iconSize={12} isRounded onPointerUp={handleShowPointerUp} />}
+		<div className="flex flex-row items-center gap-2">
+			{device && <IconButton color="secondary" icon={Icons.OpenInNew} iconSize={12} isRounded onPointerUp={handleShowPointerUp} />}
 			{device && <ConnectButton isConnected={device.connected} loading={device?.connecting} onPointerUp={handleConnectPointerUp} />}
 		</div>
 	)

@@ -29,7 +29,7 @@ export const HomeMolecule = molecule(() => {
 	})
 
 	function toggleMenu(force?: boolean) {
-		state.menu.show = force !== undefined ? force : !state.menu.show
+		state.menu.show = force ?? !state.menu.show
 	}
 
 	return { state, toggleMenu } as const

@@ -52,7 +52,7 @@ export const ImageFovMolecule = molecule(() => {
 			}
 		})
 
-		if (!state.items.length) {
+		if (state.items.length === 0) {
 			add()
 		} else {
 			compute()
@@ -112,7 +112,7 @@ export const ImageFovMolecule = molecule(() => {
 
 		const scale = toArcsec(solution.scale)
 		const index = id !== undefined ? state.items.findIndex((e) => e.id === id) : undefined
-		const a = index !== undefined ? index : 0
+		const a = index ?? 0
 		const n = index !== undefined ? index + 1 : state.items.length
 
 		for (let i = a; i < n; i++) {

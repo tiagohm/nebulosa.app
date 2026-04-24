@@ -18,7 +18,7 @@ export const ImageFov = memo(() => {
 	const fov = useMolecule(ImageFovMolecule)
 
 	return (
-		<Modal header='FOV' id={`fov-${fov.viewer.storageKey}`} maxWidth='336px' onHide={fov.hide}>
+		<Modal header="FOV" id={`fov-${fov.viewer.storageKey}`} maxWidth="336px" onHide={fov.hide}>
 			<Body />
 		</Modal>
 	)
@@ -26,7 +26,7 @@ export const ImageFov = memo(() => {
 
 const Body = memo(() => {
 	return (
-		<div className='mt-0 grid grid-cols-12 items-center gap-2'>
+		<div className="mt-0 grid grid-cols-12 items-center gap-2">
 			<List />
 			<Edit />
 		</div>
@@ -51,11 +51,11 @@ const Telescope = memo(() => {
 
 	return (
 		<>
-			<div className='col-span-2 items-center'>
-				<AstroBinEquipmentPopover items={telescopes} onSelectedChange={fov.selectTelescope} type='telescope' />
+			<div className="col-span-2 items-center">
+				<AstroBinEquipmentPopover items={telescopes} onSelectedChange={fov.selectTelescope} type="telescope" />
 			</div>
-			<NumberInput className='col-span-5' label='Focal Length (mm)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('focalLength', value)} value={focalLength} />
-			<NumberInput className='col-span-5' label='Aperture (mm)' maxValue={10000} minValue={10} onValueChange={(value) => fov.update('aperture', value)} value={aperture} />
+			<NumberInput className="col-span-5" label="Focal Length (mm)" maxValue={100000} minValue={100} onValueChange={(value) => fov.update('focalLength', value)} value={focalLength} />
+			<NumberInput className="col-span-5" label="Aperture (mm)" maxValue={10000} minValue={10} onValueChange={(value) => fov.update('aperture', value)} value={aperture} />
 		</>
 	)
 })
@@ -67,13 +67,13 @@ const Camera = memo(() => {
 
 	return (
 		<>
-			<div className='col-span-2 items-center'>
-				<AstroBinEquipmentPopover items={cameras} onSelectedChange={fov.selectCamera} type='camera' />
+			<div className="col-span-2 items-center">
+				<AstroBinEquipmentPopover items={cameras} onSelectedChange={fov.selectCamera} type="camera" />
 			</div>
-			<NumberInput className='col-span-5' label='Width (px)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraWidth', value)} value={cameraWidth} />
-			<NumberInput className='col-span-5' label='Height (px)' maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraHeight', value)} value={cameraHeight} />
-			<NumberInput className='col-span-4' fractionDigits={2} label='Width (µm)' maxValue={100} minValue={1} onValueChange={(value) => fov.update('pixelWidth', value)} step={0.01} value={pixelWidth} />
-			<NumberInput className='col-span-4' fractionDigits={2} label='Height (µm)' maxValue={100} minValue={1} onValueChange={(value) => fov.update('pixelHeight', value)} step={0.01} value={pixelHeight} />
+			<NumberInput className="col-span-5" label="Width (px)" maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraWidth', value)} value={cameraWidth} />
+			<NumberInput className="col-span-5" label="Height (px)" maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraHeight', value)} value={cameraHeight} />
+			<NumberInput className="col-span-4" fractionDigits={2} label="Width (µm)" maxValue={100} minValue={1} onValueChange={(value) => fov.update('pixelWidth', value)} step={0.01} value={pixelWidth} />
+			<NumberInput className="col-span-4" fractionDigits={2} label="Height (µm)" maxValue={100} minValue={1} onValueChange={(value) => fov.update('pixelHeight', value)} step={0.01} value={pixelHeight} />
 		</>
 	)
 })
@@ -85,9 +85,9 @@ const OrientationAndOptics = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-4' fractionDigits={1} label='Rotation (°)' maxValue={360} minValue={-360} onValueChange={(value) => fov.update('rotation', value)} step={0.1} value={rotation} />
-			<NumberInput className='col-span-5' fractionDigits={2} label='Barlow/Reducer' maxValue={10} minValue={0.1} onValueChange={(value) => fov.update('barlowReducer', value)} step={0.01} value={barlowReducer} />
-			<NumberInput className='col-span-3' label='Bin' maxValue={8} minValue={1} onValueChange={(value) => fov.update('bin', value)} value={bin} />
+			<NumberInput className="col-span-4" fractionDigits={1} label="Rotation (°)" maxValue={360} minValue={-360} onValueChange={(value) => fov.update('rotation', value)} step={0.1} value={rotation} />
+			<NumberInput className="col-span-5" fractionDigits={2} label="Barlow/Reducer" maxValue={10} minValue={0.1} onValueChange={(value) => fov.update('barlowReducer', value)} step={0.01} value={barlowReducer} />
+			<NumberInput className="col-span-3" label="Bin" maxValue={8} minValue={1} onValueChange={(value) => fov.update('bin', value)} value={bin} />
 		</>
 	)
 })
@@ -97,9 +97,9 @@ const Actions = memo(() => {
 	const { items } = useSnapshot(fov.state)
 
 	return (
-		<div className='col-span-4 flex flex-row items-center justify-center gap-2'>
-			<IconButton className='col-span-2' color='success' icon={Icons.Plus} onPointerUp={fov.add} tooltipContent='Add' />
-			<IconButton className='col-span-2' color='danger' disabled={items.length <= 1} icon={Icons.Trash} onPointerUp={fov.remove} tooltipContent='Remove' />
+		<div className="col-span-4 flex flex-row items-center justify-center gap-2">
+			<IconButton className="col-span-2" color="success" icon={Icons.Plus} onPointerUp={fov.add} tooltipContent="Add" />
+			<IconButton className="col-span-2" color="danger" disabled={items.length <= 1} icon={Icons.Trash} onPointerUp={fov.remove} tooltipContent="Remove" />
 		</div>
 	)
 })
@@ -109,12 +109,12 @@ const List = memo(() => {
 	const { items, selected } = useSnapshot(fov.state)
 
 	return (
-		<Listbox className='col-span-full' classNames={{ list: 'max-h-[146px] overflow-scroll pe-1' }} onAction={(value) => fov.select(+value)} selectionMode='none'>
+		<Listbox className="col-span-full" classNames={{ list: 'max-h-[146px] overflow-scroll pe-1' }} onAction={(value) => fov.select(+value)} selectionMode="none">
 			{items.map((item, index) => {
 				return (
 					<ListboxItem className={tw({ 'bg-green-600/10': index === selected })} key={item.id}>
-						<div className='flex flex-row gap-1 items-center justify-between ps-3 border-l-2' style={{ borderColor: item.color }}>
-							<div className='flex flex-col items-center justify-center'>
+						<div className="flex flex-row items-center justify-between gap-1 border-l-2 ps-3" style={{ borderColor: item.color }}>
+							<div className="flex flex-col items-center justify-center">
 								<Checkbox onValueChange={(selected) => fov.update('visible', selected, item.id)} value={item.visible} />
 							</div>
 							<ComputedFovItem {...item} />
@@ -128,7 +128,7 @@ const List = memo(() => {
 
 const ComputedFovItem = memo((item: FovItem) => {
 	return (
-		<div className='flex flex-row flex-wrap gap-1 items-center justify-between'>
+		<div className="flex flex-row flex-wrap items-center justify-between gap-1">
 			<span>
 				<strong>FL:</strong> {item.focalLength}mm
 			</span>

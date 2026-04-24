@@ -79,7 +79,7 @@ export function Popover({ autoFlip, trigger, children, className, classNames, id
 			})
 		} else {
 			trigger = (
-				<span className='w-fit' onPointerDown={handlePointerDown} ref={handleTriggerRef}>
+				<span className="w-fit" onPointerDown={handlePointerDown} ref={handleTriggerRef}>
 					{trigger}
 				</span>
 			)

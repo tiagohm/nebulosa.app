@@ -183,7 +183,7 @@ export const ImageViewerMolecule = molecule(() => {
 			if (target) {
 				target.src = url
 
-				bus.emit<ImageLoaded>('image:load', { image: scope.image, info: image.info, newImage })
+				bus.emit('image:load', { image: scope.image, info: image.info, newImage } satisfies ImageLoaded)
 
 				console.info('image loaded', key, url, image.info)
 			} else {
@@ -237,8 +237,8 @@ export const ImageViewerMolecule = molecule(() => {
 	}
 
 	function frameAt(coordinate: EquatorialCoordinate) {
-		const focalLength = state.info && numericKeyword<number | undefined>(state.info.headers, 'FOCALLEN', undefined)
-		const pixelSize = state.info && numericKeyword<number | undefined>(state.info.headers, 'XPIXSZ', undefined)
+		const focalLength = state.info && numericKeyword(state.info.headers, 'FOCALLEN', undefined)
+		const pixelSize = state.info && numericKeyword(state.info.headers, 'XPIXSZ', undefined)
 		const rotation = state.info?.solution ? pmod(state.info.solution.orientation + state.angle, 360) : state.angle
 		const width = state.info ? Math.min(state.info.width, 1280) : 1280
 		const aspectRatio = state.info ? state.info.height / state.info.width : 1
@@ -333,14 +333,14 @@ function adjustZIndexAfterBeRemoved() {
 }
 
 function bringToFront(e: HTMLElement) {
-	const selected = e.closest('.wrapper') as HTMLElement
+	const selected = e.closest<HTMLElement>('.wrapper')!
 	const wrappers = selected.closest('.workspace')?.querySelectorAll('.wrapper') ?? []
 
 	// Only exist one element and it is already at the top
 	if (wrappers.length === 1) return
 
 	// Selected element z-index
-	const zIndex = +(selected as HTMLElement).style.zIndex
+	const zIndex = +selected.style.zIndex
 	const max = wrappers.length - 1
 
 	// It is already at the top

@@ -210,7 +210,7 @@ export function TextInput({
 						spellCheck={spellCheck}
 						style={style}
 						tabIndex={tabIndex}
-						type='text'
+						type="text"
 						value={draft}
 					/>
 					{label && (

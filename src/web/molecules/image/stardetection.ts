@@ -103,7 +103,7 @@ export const StarDetectionMolecule = molecule(() => {
 				fluxMax = Math.max(fluxMax, star.flux)
 			}
 
-			if (stars.length) {
+			if (stars.length > 0) {
 				hfd /= stars.length
 				snr /= stars.length
 			} else {
@@ -140,7 +140,7 @@ export const StarDetectionMolecule = molecule(() => {
 	}
 
 	function reset() {
-		if (state.stars.length) {
+		if (state.stars.length > 0) {
 			state.stars = []
 			state.selected = undefined
 			state.computed.hfd = 0

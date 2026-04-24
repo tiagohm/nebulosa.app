@@ -15,16 +15,16 @@ export class RotatorHandler implements DeviceHandler<Rotator> {
 	}
 
 	added(device: Rotator) {
-		this.wsm.send<RotatorAdded>('rotator:add', { device })
+		this.wsm.send('rotator:add', { device } satisfies RotatorAdded)
 		console.info('rotator added:', device.name)
 	}
 
 	updated(device: Rotator, property: keyof Rotator & string, state?: PropertyState) {
-		this.wsm.send<RotatorUpdated>('rotator:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		this.wsm.send('rotator:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies RotatorUpdated)
 	}
 
 	removed(device: Rotator) {
-		this.wsm.send<RotatorRemoved>('rotator:remove', { device })
+		this.wsm.send('rotator:remove', { device } satisfies RotatorRemoved)
 		console.info('rotator removed:', device.name)
 	}
 
@@ -36,7 +36,7 @@ export class RotatorHandler implements DeviceHandler<Rotator> {
 export function rotator(rotatorHandler: RotatorHandler): Endpoints {
 	const { rotatorManager } = rotatorHandler
 
-	function rotatorFromParams(req: Bun.BunRequest<string>) {
+	function rotatorFromParams(req: Bun.BunRequest) {
 		return rotatorManager.get(query(req).client, req.params.id)!
 	}
 

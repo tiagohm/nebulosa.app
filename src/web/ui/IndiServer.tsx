@@ -14,7 +14,7 @@ export const IndiServer = memo(() => {
 	const indi = useMolecule(IndiServerMolecule)
 
 	return (
-		<Modal footer={<Footer />} header='INDI Server' id='indi-server' maxWidth='276px' onHide={indi.hide}>
+		<Modal footer={<Footer />} header="INDI Server" id="indi-server" maxWidth="276px" onHide={indi.hide}>
 			<Body />
 		</Modal>
 	)
@@ -22,7 +22,7 @@ export const IndiServer = memo(() => {
 
 const Body = memo(() => {
 	return (
-		<div className='mt-0 grid grid-cols-12 gap-2'>
+		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Inputs />
 			<Drivers />
 		</div>
@@ -36,10 +36,10 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-4' label='Port' maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} value={port} />
-			<NumberInput className='col-span-4' label='Repeat' maxValue={10} minValue={1} onValueChange={(value) => indi.update('repeat', value)} value={repeat} />
-			<NumberInput className='col-span-4' label='Verbose' maxValue={3} minValue={0} onValueChange={(value) => indi.update('verbose', value)} value={verbose} />
-			<Checkbox className='col-span-full' label='Show all drivers' onValueChange={(value) => (indi.state.showAll = value)} value={showAll} />
+			<NumberInput className="col-span-4" label="Port" maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} value={port} />
+			<NumberInput className="col-span-4" label="Repeat" maxValue={10} minValue={1} onValueChange={(value) => indi.update('repeat', value)} value={repeat} />
+			<NumberInput className="col-span-4" label="Verbose" maxValue={3} minValue={0} onValueChange={(value) => indi.update('verbose', value)} value={verbose} />
+			<Checkbox className="col-span-full" label="Show all drivers" onValueChange={(value) => (indi.state.showAll = value)} value={showAll} />
 		</>
 	)
 })
@@ -59,9 +59,9 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color='danger' disabled={!running} label='Stop' onPointerUp={indi.stop} startContent={<Icons.Stop />} />
-			<Badge color='success' content={drivers.length} showOutline={false}>
-				<Button color='success' disabled={running || drivers.length === 0} label='Start' onPointerUp={indi.start} startContent={<Icons.Play />} />
+			<Button color="danger" disabled={!running} label="Stop" onPointerUp={indi.stop} startContent={<Icons.Stop />} />
+			<Badge color="success" content={drivers.length} showOutline={false}>
+				<Button color="success" disabled={running || drivers.length === 0} label="Start" onPointerUp={indi.start} startContent={<Icons.Play />} />
 			</Badge>
 		</>
 	)

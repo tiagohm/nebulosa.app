@@ -11,7 +11,7 @@ export const Calculator = memo(() => {
 	const calculator = useMolecule(CalculatorMolecule)
 
 	return (
-		<Modal header='Calculator' id='calculator' maxWidth='440px' onHide={calculator.hide}>
+		<Modal header="Calculator" id="calculator" maxWidth="440px" onHide={calculator.hide}>
 			<Body />
 		</Modal>
 	)
@@ -19,27 +19,27 @@ export const Calculator = memo(() => {
 
 const Body = memo(() => {
 	return (
-		<div className='mt-0 px-1 py-2'>
+		<div className="mt-0 px-1 py-2">
 			<Tabs classNames={{ panel: 'w-full' }} isVertical>
-				<Tab key='focalLength' title='Focal Length'>
+				<Tab key="focalLength" title="Focal Length">
 					<FocalLength />
 				</Tab>
-				<Tab key='focalRatio' title='Focal Ratio'>
+				<Tab key="focalRatio" title="Focal Ratio">
 					<FocalRatio />
 				</Tab>
-				<Tab key='dawes' title='Dawes Limit'>
+				<Tab key="dawes" title="Dawes Limit">
 					<DawesLimit />
 				</Tab>
-				<Tab key='rayleigh' title='Rayleigh Limit'>
+				<Tab key="rayleigh" title="Rayleigh Limit">
 					<RayleighLimit />
 				</Tab>
-				<Tab key='limitingMagnitude' title='Limiting Magnitude'>
+				<Tab key="limitingMagnitude" title="Limiting Magnitude">
 					<LimitingMagnitude />
 				</Tab>
-				<Tab key='lightGraspRatio' title='Light Grasp Ratio'>
+				<Tab key="lightGraspRatio" title="Light Grasp Ratio">
 					<LightGraspRatio />
 				</Tab>
-				<Tab key='ccdResolution' title='CCD Resolution'>
+				<Tab key="ccdResolution" title="CCD Resolution">
 					<CCDResolution />
 				</Tab>
 			</Tabs>
@@ -55,15 +55,15 @@ interface FormulaProps {
 
 function Formula({ description, expression, children }: FormulaProps) {
 	return (
-		<Card className='w-full shadow-none'>
-			<CardHeader className='pt-0'>
-				<div className='w-full flex flex-col gap-1 items-center justify-center'>
-					<p className='text-sm text-center'>{description}</p>
-					<Chip className='text-medium' color='primary' label={expression} />
+		<Card className="w-full shadow-none">
+			<CardHeader className="pt-0">
+				<div className="flex w-full flex-col items-center justify-center gap-1">
+					<p className="text-center text-sm">{description}</p>
+					<Chip className="text-medium" color="primary" label={expression} />
 				</div>
 			</CardHeader>
 			<CardBody>
-				<div className='flex flex-col gap-2 w-full'>{children}</div>
+				<div className="flex w-full flex-col gap-2">{children}</div>
 			</CardBody>
 		</Card>
 	)
@@ -74,10 +74,10 @@ const FocalLength = memo(() => {
 	const { aperture, focalRatio, focalLength } = useSnapshot(calculator.state.focalLength)
 
 	return (
-		<Formula description='Calculate the focal length of your telescope' expression='Aperture * Focal Ratio'>
-			<NumberInput className='w-full' endContent='mm' label='Aperture' minValue={0} onValueChange={(value) => calculator.update('focalLength', 'aperture', value)} value={aperture} />
-			<NumberInput className='w-full' fractionDigits={2} label='Focal Ratio' minValue={0} onValueChange={(value) => calculator.update('focalLength', 'focalRatio', value)} startContent='F/' value={focalRatio} />
-			<NumberInput className='w-full' endContent='mm' label='Focal Length' readOnly value={focalLength} />
+		<Formula description="Calculate the focal length of your telescope" expression="Aperture * Focal Ratio">
+			<NumberInput className="w-full" endContent="mm" label="Aperture" minValue={0} onValueChange={(value) => calculator.update('focalLength', 'aperture', value)} value={aperture} />
+			<NumberInput className="w-full" fractionDigits={2} label="Focal Ratio" minValue={0} onValueChange={(value) => calculator.update('focalLength', 'focalRatio', value)} startContent="F/" value={focalRatio} />
+			<NumberInput className="w-full" endContent="mm" label="Focal Length" readOnly value={focalLength} />
 		</Formula>
 	)
 })
@@ -87,10 +87,10 @@ const FocalRatio = memo(() => {
 	const { aperture, focalRatio, focalLength } = useSnapshot(calculator.state.focalRatio)
 
 	return (
-		<Formula description='Calculate the focal ratio of your telescope' expression='Focal Length / Aperture'>
-			<NumberInput className='w-full' endContent='mm' label='Focal Length' minValue={0} onValueChange={(value) => calculator.update('focalRatio', 'focalLength', value)} value={focalLength} />
-			<NumberInput className='w-full' endContent='mm' label='Aperture' minValue={0} onValueChange={(value) => calculator.update('focalRatio', 'aperture', value)} value={aperture} />
-			<NumberInput className='w-full' fractionDigits={2} label='Focal Ratio' readOnly startContent='F/' value={focalRatio} />
+		<Formula description="Calculate the focal ratio of your telescope" expression="Focal Length / Aperture">
+			<NumberInput className="w-full" endContent="mm" label="Focal Length" minValue={0} onValueChange={(value) => calculator.update('focalRatio', 'focalLength', value)} value={focalLength} />
+			<NumberInput className="w-full" endContent="mm" label="Aperture" minValue={0} onValueChange={(value) => calculator.update('focalRatio', 'aperture', value)} value={aperture} />
+			<NumberInput className="w-full" fractionDigits={2} label="Focal Ratio" readOnly startContent="F/" value={focalRatio} />
 		</Formula>
 	)
 })
@@ -100,9 +100,9 @@ const DawesLimit = memo(() => {
 	const { aperture, resolution } = useSnapshot(calculator.state.dawesLimit)
 
 	return (
-		<Formula description='Calculate the maximum resolving power of your telescope using the Dawes Limit formula' expression='116 / Aperture'>
-			<NumberInput className='w-full' endContent='mm' label='Aperture' minValue={0} onValueChange={(value) => calculator.update('dawesLimit', 'aperture', value)} value={aperture} />
-			<NumberInput className='w-full' endContent='arcsec' fractionDigits={2} label='Resolution' readOnly value={resolution} />
+		<Formula description="Calculate the maximum resolving power of your telescope using the Dawes Limit formula" expression="116 / Aperture">
+			<NumberInput className="w-full" endContent="mm" label="Aperture" minValue={0} onValueChange={(value) => calculator.update('dawesLimit', 'aperture', value)} value={aperture} />
+			<NumberInput className="w-full" endContent="arcsec" fractionDigits={2} label="Resolution" readOnly value={resolution} />
 		</Formula>
 	)
 })
@@ -112,9 +112,9 @@ const RayleighLimit = memo(() => {
 	const { aperture, resolution } = useSnapshot(calculator.state.rayleighLimit)
 
 	return (
-		<Formula description='Calculate the maximum resolving power of your telescope using the Rayleigh Limit formula' expression='138 / Aperture'>
-			<NumberInput className='w-full' endContent='mm' label='Aperture' minValue={0} onValueChange={(value) => calculator.update('rayleighLimit', 'aperture', value)} value={aperture} />
-			<NumberInput className='w-full' endContent='arcsec' fractionDigits={2} label='Resolution' readOnly value={resolution} />
+		<Formula description="Calculate the maximum resolving power of your telescope using the Rayleigh Limit formula" expression="138 / Aperture">
+			<NumberInput className="w-full" endContent="mm" label="Aperture" minValue={0} onValueChange={(value) => calculator.update('rayleighLimit', 'aperture', value)} value={aperture} />
+			<NumberInput className="w-full" endContent="arcsec" fractionDigits={2} label="Resolution" readOnly value={resolution} />
 		</Formula>
 	)
 })
@@ -124,9 +124,9 @@ const LimitingMagnitude = memo(() => {
 	const { aperture, magnitude } = useSnapshot(calculator.state.limitingMagnitude)
 
 	return (
-		<Formula description='Calculate a telescopes approximate limiting magnitude' expression='2.7 + 5 * Log(Aperture)'>
-			<NumberInput className='w-full' endContent='mm' label='Aperture' minValue={0} onValueChange={(value) => calculator.update('limitingMagnitude', 'aperture', value)} value={aperture} />
-			<NumberInput className='w-full' fractionDigits={2} label='Magnitude' readOnly value={magnitude} />
+		<Formula description="Calculate a telescopes approximate limiting magnitude" expression="2.7 + 5 * Log(Aperture)">
+			<NumberInput className="w-full" endContent="mm" label="Aperture" minValue={0} onValueChange={(value) => calculator.update('limitingMagnitude', 'aperture', value)} value={aperture} />
+			<NumberInput className="w-full" fractionDigits={2} label="Magnitude" readOnly value={magnitude} />
 		</Formula>
 	)
 })
@@ -136,10 +136,10 @@ const LightGraspRatio = memo(() => {
 	const { smallerAperture, largerAperture, ratio } = useSnapshot(calculator.state.lightGraspRatio)
 
 	return (
-		<Formula description='Calculate the light grasp ratio between two telescopes' expression='(Smaller Aperture / Larger Aperture)²'>
-			<NumberInput className='w-full' endContent='mm' label='Smaller Aperture' minValue={0} onValueChange={(value) => calculator.update('lightGraspRatio', 'smallerAperture', value)} value={smallerAperture} />
-			<NumberInput className='w-full' endContent='mm' label='Larger Aperture' minValue={0} onValueChange={(value) => calculator.update('lightGraspRatio', 'largerAperture', value)} value={largerAperture} />
-			<NumberInput className='w-full' fractionDigits={2} label='Ratio' readOnly value={ratio} />
+		<Formula description="Calculate the light grasp ratio between two telescopes" expression="(Smaller Aperture / Larger Aperture)²">
+			<NumberInput className="w-full" endContent="mm" label="Smaller Aperture" minValue={0} onValueChange={(value) => calculator.update('lightGraspRatio', 'smallerAperture', value)} value={smallerAperture} />
+			<NumberInput className="w-full" endContent="mm" label="Larger Aperture" minValue={0} onValueChange={(value) => calculator.update('lightGraspRatio', 'largerAperture', value)} value={largerAperture} />
+			<NumberInput className="w-full" fractionDigits={2} label="Ratio" readOnly value={ratio} />
 		</Formula>
 	)
 })
@@ -149,10 +149,10 @@ const CCDResolution = memo(() => {
 	const { pixelSize, focalLength, resolution } = useSnapshot(calculator.state.ccdResolution)
 
 	return (
-		<Formula description='Calculate the resoution in arcseconds per pixel of a CCD with a particular telescope' expression='Pixel Size / Focal Length * 206.265'>
-			<NumberInput className='w-full' endContent='µm' fractionDigits={2} label='Pixel Size' minValue={0} onValueChange={(value) => calculator.update('ccdResolution', 'pixelSize', value)} step={0.01} value={pixelSize} />
-			<NumberInput className='w-full' endContent='mm' label='Focal Length' minValue={0} onValueChange={(value) => calculator.update('ccdResolution', 'focalLength', value)} value={focalLength} />
-			<NumberInput className='w-full' endContent='arcsec/px' fractionDigits={2} label='Resolution' readOnly value={resolution} />
+		<Formula description="Calculate the resoution in arcseconds per pixel of a CCD with a particular telescope" expression="Pixel Size / Focal Length * 206.265">
+			<NumberInput className="w-full" endContent="µm" fractionDigits={2} label="Pixel Size" minValue={0} onValueChange={(value) => calculator.update('ccdResolution', 'pixelSize', value)} step={0.01} value={pixelSize} />
+			<NumberInput className="w-full" endContent="mm" label="Focal Length" minValue={0} onValueChange={(value) => calculator.update('ccdResolution', 'focalLength', value)} value={focalLength} />
+			<NumberInput className="w-full" endContent="arcsec/px" fractionDigits={2} label="Resolution" readOnly value={resolution} />
 		</Formula>
 	)
 })

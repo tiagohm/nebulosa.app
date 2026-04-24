@@ -1,7 +1,7 @@
 import type { IndiClientHandler } from 'nebulosa/src/indi.client'
 import { CLIENT, type Client, type Device, type DeviceProperty, type DevicePropertyType, type DeviceType } from 'nebulosa/src/indi.device'
 import type { CameraManager, CoverManager, DevicePropertyHandler, DevicePropertyManager, DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
-// biome-ignore format: too long!
+// oxfmt-ignore
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, Message, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi.types'
 import bus from '../shared/bus'
 import type { IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from '../shared/types'
@@ -178,21 +178,21 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 
 		list.push(message)
 
-		this.messageListeners.forEach((e) => e(client, message))
+		for (const listener of this.messageListeners) listener(client, message)
 	}
 
 	get(client: Client | string | undefined, id: string, type?: DeviceType): Device | undefined {
 		if (!type) {
 			return (
-				this.cameraManager.get(client, id) ||
-				this.mountManager.get(client, id) ||
-				this.focuserManager.get(client, id) ||
-				this.wheelManager.get(client, id) ||
-				this.coverManager.get(client, id) ||
-				this.flatPanelManager.get(client, id) ||
-				this.rotatorManager.get(client, id) ||
-				this.guideOutputManager.get(client, id) ||
-				this.thermometerManager.get(client, id) ||
+				this.cameraManager.get(client, id) ??
+				this.mountManager.get(client, id) ??
+				this.focuserManager.get(client, id) ??
+				this.wheelManager.get(client, id) ??
+				this.coverManager.get(client, id) ??
+				this.flatPanelManager.get(client, id) ??
+				this.rotatorManager.get(client, id) ??
+				this.guideOutputManager.get(client, id) ??
+				this.thermometerManager.get(client, id) ??
 				this.dewHeaterManager.get(client, id)
 			)
 		}
@@ -231,21 +231,21 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 			if (!message.device) {
 				notificationHandler.send({ title: 'INFO', description: message.message, color: 'primary' })
 			} else if (this.listeners.has(`${client.id}:${message.device}`)) {
-				wsm.send<Message & { clientId: string }>('indi:message', { ...message, clientId: client.id! })
+				wsm.send('indi:message', { ...message, clientId: client.id } satisfies Message & { clientId: string })
 			}
 		})
 	}
 
 	added(client: Client, device: string, property: DeviceProperty) {
-		this.notify(client.id!, device, property, 'add')
+		this.notify(client.id, device, property, 'add')
 	}
 
 	updated(client: Client, device: string, property: DeviceProperty) {
-		this.notify(client.id!, device, property, 'update')
+		this.notify(client.id, device, property, 'update')
 	}
 
 	removed(client: Client, device: string, property: DeviceProperty) {
-		this.notify(client.id!, device, property, 'remove')
+		this.notify(client.id, device, property, 'remove')
 	}
 
 	ping(clientId: string, name: string) {
@@ -265,7 +265,7 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 
 	notify(clientId: string, device: string, property: DeviceProperty, type: 'add' | 'update' | 'remove') {
 		if (this.listeners.has(`${clientId}:${device}`)) {
-			this.wsm.send<IndiDevicePropertyEvent>(`indi:property:${type}`, { clientId, device, name: property.name, property })
+			this.wsm.send(`indi:property:${type}`, { clientId, device, name: property.name, property } satisfies IndiDevicePropertyEvent)
 		}
 	}
 
@@ -291,9 +291,9 @@ export class IndiServerHandler {
 		const cmd = ['indiserver', '-p', req.port?.toFixed(0) || '7624', '-r', req.repeat?.toFixed(0) || '1', req.verbose ? `-${'v'.repeat(req.verbose)}` : '', ...req.drivers].filter((e) => !!e)
 		const p = Bun.spawn({ cmd })
 
-		p.exited.then((code) => this.wsm.send<IndiServerEvent>('indi:server:stop', { pid: p.pid, code }))
+		void p.exited.then((code) => this.wsm.send('indi:server:stop', { pid: p.pid, code } satisfies IndiServerEvent))
 
-		this.wsm.send<IndiServerEvent>('indi:server:start', { pid: p.pid })
+		this.wsm.send('indi:server:start', { pid: p.pid } satisfies IndiServerEvent)
 		this.subprocess = p
 	}
 
@@ -316,7 +316,7 @@ export class IndiServerHandler {
 		return (await Bun.$`ls /usr/bin/indi_* -1`.nothrow().quiet())
 			.text()
 			.split('\n')
-			.map((e) => e.substring(9).trim())
+			.map((e) => e.slice(9).trim())
 			.filter((e) => !!e)
 	}
 }
@@ -324,7 +324,7 @@ export class IndiServerHandler {
 export function indi(indiHandler: IndiHandler, indiDevicePropertyHandler: IndiDevicePropertyHandler, indiServerHandler: IndiServerHandler): Endpoints {
 	const { properties } = indiDevicePropertyHandler
 
-	function deviceFromParams(req: Bun.BunRequest<string>) {
+	function deviceFromParams(req: Bun.BunRequest) {
 		return indiHandler.get(query(req).client, req.params.id)!
 	}
 

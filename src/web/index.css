@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
 	--primary: var(--color-blue-600);
@@ -9,12 +9,12 @@
 }
 
 html {
-	@apply m-0 w-dvw h-dvh overflow-hidden p-0 scroll-smooth touch-none tabular-nums bg-neutral-950;
+	@apply m-0 h-dvh w-dvw touch-none overflow-hidden scroll-smooth bg-neutral-950 p-0 tabular-nums;
 }
 
 html,
 body {
-	@apply text-[12px] overscroll-none;
+	@apply overscroll-none text-[12px];
 	filter: grayscale(var(--ws-disconnected-grayscale, 0%));
 }
 
@@ -57,11 +57,11 @@ svg:focus {
 }
 
 ::-webkit-scrollbar {
-	@apply w-1.5 h-1.5;
+	@apply h-1.5 w-1.5;
 }
 
 ::-webkit-scrollbar-thumb {
-	@apply bg-clip-content rounded-xl bg-gray-600/50;
+	@apply rounded-xl bg-gray-600/50 bg-clip-content;
 }
 
 ::-webkit-scrollbar-track {

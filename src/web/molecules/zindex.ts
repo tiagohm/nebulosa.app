@@ -6,7 +6,7 @@ const NAME_INVALID_CHAR_REGEX = /[\W]+/g
 
 export const ZIndexMolecule = molecule(() => {
 	function max() {
-		return zIndex.length === 0 ? 1000000 : zIndex[zIndex.length - 1][1]
+		return zIndex.length === 0 ? 1000000 : zIndex.at(-1)![1]
 	}
 
 	function update(key: string, value: number) {

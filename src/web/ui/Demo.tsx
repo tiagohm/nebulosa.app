@@ -15,7 +15,7 @@ import { Icons } from './Icon'
 
 export function Demo() {
 	return (
-		<div className='w-full flex flex-row flex-wrap items-center gap-2 p-4'>
+		<div className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
 			<Buttons />
 			<Chips />
 			<TextInputs />
@@ -193,11 +193,11 @@ const Calendars = memo(() => {
 
 	return (
 		<>
-			<Popover onOpenChange={setOpen} open={open} placement='end' trigger={<Button label='Calendar' />}>
+			<Popover onOpenChange={setOpen} open={open} placement="end" trigger={<Button label="Calendar" />}>
 				<Calendar onValueChange={setValue} showWeekNumber value={value} />
 			</Popover>
 
-			<Calendar color='success' disabled onValueChange={setValue} value={value} />
+			<Calendar color="success" disabled onValueChange={setValue} value={value} />
 			<Calendar onValueChange={setValue} readOnly value={value} />
 		</>
 	)

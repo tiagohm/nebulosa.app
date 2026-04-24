@@ -1,3 +1,4 @@
+import { join } from 'path'
 import { AlpacaClient } from 'nebulosa/src/alpaca.client'
 import { type Angle, normalizeAngle, toDeg } from 'nebulosa/src/angle'
 import { findHnsky290Stars, type Hnsky290Database, type Hnsky290Files } from 'nebulosa/src/hnsky'
@@ -9,7 +10,6 @@ import { CameraSimulator, type CatalogSource, type CatalogSourceStar, ClientSimu
 import { clamp } from 'nebulosa/src/math'
 import type { Writable } from 'nebulosa/src/types'
 import { VizierGaiaCatalog, type VizierGaiaCatalogEntry } from 'nebulosa/src/vizier'
-import { join } from 'path'
 import bus from '../shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
 import { type Endpoints, response } from './http'
@@ -140,7 +140,7 @@ export class ConnectionHandler {
 			) {
 				console.info('reusing existing connection:', client.id, client.description)
 				const status = this.status(client)!
-				this.wsm.send<ConnectionEvent>('connection:open', { status, reused: true })
+				this.wsm.send('connection:open', { status, reused: true } satisfies ConnectionEvent)
 				return status
 			}
 		}
@@ -155,7 +155,7 @@ export class ConnectionHandler {
 					console.info('new connection to:', client.id, client.description)
 
 					const status = this.status(client)!
-					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
+					this.wsm.send('connection:open', { status, reused: false } satisfies ConnectionEvent)
 					return status
 				} else {
 					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to INDI server', color: 'danger' })
@@ -173,7 +173,7 @@ export class ConnectionHandler {
 					console.info('new connection to:', client.id, client.description)
 
 					const status = this.status(client)!
-					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
+					this.wsm.send('connection:open', { status, reused: false } satisfies ConnectionEvent)
 					return status
 				} else {
 					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })
@@ -207,7 +207,7 @@ export class ConnectionHandler {
 			console.info('new connection to:', client.id, client.description)
 
 			const status = this.status(client)!
-			this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
+			this.wsm.send('connection:open', { status, reused: false } satisfies ConnectionEvent)
 			return status
 		}
 
@@ -226,7 +226,7 @@ export class ConnectionHandler {
 
 				client[Symbol.dispose]()
 
-				this.wsm.send<ConnectionEvent>('connection:close', { status })
+				this.wsm.send('connection:close', { status } satisfies ConnectionEvent)
 			}
 		} else {
 			for (const [key, client] of this.clients) {
@@ -238,7 +238,7 @@ export class ConnectionHandler {
 
 					client[Symbol.dispose]()
 
-					this.wsm.send<ConnectionEvent>('connection:close', { status })
+					this.wsm.send('connection:close', { status } satisfies ConnectionEvent)
 
 					break
 				}

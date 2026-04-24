@@ -1,0 +1,16 @@
+{
+	"$schema": "./node_modules/oxfmt/configuration_schema.json",
+	"ignorePatterns": ["*.data.ts", "data/**"],
+	"semi": false,
+	"singleQuote": true,
+	"jsxSingleQuote": false,
+	"useTabs": true,
+	"tabWidth": 4,
+	"endOfLine": "lf",
+	"insertFinalNewline": true,
+	"bracketSameLine": true,
+	"sortImports": {
+		"newlinesBetween": false
+	},
+	"sortTailwindcss": true
+}

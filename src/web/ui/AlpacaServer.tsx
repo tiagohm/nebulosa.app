@@ -14,7 +14,7 @@ export const AlpacaServer = memo(() => {
 	const { devices, running } = useSnapshot(alpaca.state.status)
 
 	return (
-		<Modal footer={<Footer />} header='ASCOM Alpaca Server' id='alpaca' maxWidth='296px' onHide={alpaca.hide} subHeader={running ? `${devices.length} devices` : undefined}>
+		<Modal footer={<Footer />} header="ASCOM Alpaca Server" id="alpaca" maxWidth="296px" onHide={alpaca.hide} subHeader={running ? `${devices.length} devices` : undefined}>
 			<Body />
 		</Modal>
 	)
@@ -22,7 +22,7 @@ export const AlpacaServer = memo(() => {
 
 const Body = memo(() => {
 	return (
-		<div className='mt-0 grid grid-cols-1 gap-2'>
+		<div className="mt-0 grid grid-cols-1 gap-2">
 			<DeviceList />
 		</div>
 	)
@@ -39,7 +39,7 @@ const DeviceList = memo(() => {
 	const { devices } = useSnapshot(alpaca.state.status)
 
 	return (
-		<Listbox classNames={{ list: 'max-h-[120px] overflow-scroll pe-1' }} emptyContent='No devices' items={devices}>
+		<Listbox classNames={{ list: 'max-h-40 overflow-scroll pe-1' }} emptyContent="No devices" items={devices}>
 			{DeviceItem}
 		</Listbox>
 	)
@@ -52,9 +52,9 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='flex flex-1' disabled={running} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => (alpaca.state.port = value)} value={port} />
-			<Button color='danger' disabled={!running} label='Stop' onPointerUp={alpaca.stop} startContent={<Icons.Stop />} />
-			<Button color='success' disabled={running} label='Start' onPointerUp={alpaca.start} startContent={<Icons.Play />} />
+			<NumberInput className="flex flex-1" disabled={running} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => (alpaca.state.port = value)} value={port} />
+			<Button color="danger" disabled={!running} label="Stop" onPointerUp={alpaca.stop} startContent={<Icons.Stop />} />
+			<Button color="success" disabled={running} label="Start" onPointerUp={alpaca.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

@@ -45,18 +45,18 @@ export function ImageChannelOrGrayInput({ value, onValueChange, className, isDis
 
 	return (
 		<div {...props} className={tw('flex flex-col gap-2', className)}>
-			<EnumSelect className='w-full' endContent={mode === 'input' ? <IconButton color='danger' icon={Icons.Restore} onPointerUp={handleOnRestorePointerUp} /> : null} isDisabled={isDisabled} label='Channel mode' onValueChange={handleOnModeChange} value={mode}>
-				<SelectItem key='select'>Select</SelectItem>
-				<SelectItem key='input'>Input</SelectItem>
+			<EnumSelect className="w-full" endContent={mode === 'input' ? <IconButton color="danger" icon={Icons.Restore} onPointerUp={handleOnRestorePointerUp} /> : null} isDisabled={isDisabled} label="Channel mode" onValueChange={handleOnModeChange} value={mode}>
+				<SelectItem key="select">Select</SelectItem>
+				<SelectItem key="input">Input</SelectItem>
 			</EnumSelect>
 
 			{typeof value === 'string' ? (
 				<ImageChannelOrGraySelect isDisabled={isDisabled} onValueChange={handleOnSelectValueChange} value={value} />
 			) : (
-				<div className='grid grid-cols-3 gap-2 items-center'>
-					<NumberInput className='col-span-1' disabled={isDisabled} fractionDigits={3} label='Red' maxValue={1} minValue={0} onValueChange={(red) => handleOnInputValueChange('red', red)} step={0.001} value={value.red} />
-					<NumberInput className='col-span-1' disabled={isDisabled} fractionDigits={3} label='Green' maxValue={1} minValue={0} onValueChange={(green) => handleOnInputValueChange('green', green)} step={0.001} value={value.green} />
-					<NumberInput className='col-span-1' disabled={isDisabled} fractionDigits={3} label='Blue' maxValue={1} minValue={0} onValueChange={(blue) => handleOnInputValueChange('blue', blue)} step={0.001} value={value.blue} />
+				<div className="grid grid-cols-3 items-center gap-2">
+					<NumberInput className="col-span-1" disabled={isDisabled} fractionDigits={3} label="Red" maxValue={1} minValue={0} onValueChange={(red) => handleOnInputValueChange('red', red)} step={0.001} value={value.red} />
+					<NumberInput className="col-span-1" disabled={isDisabled} fractionDigits={3} label="Green" maxValue={1} minValue={0} onValueChange={(green) => handleOnInputValueChange('green', green)} step={0.001} value={value.green} />
+					<NumberInput className="col-span-1" disabled={isDisabled} fractionDigits={3} label="Blue" maxValue={1} minValue={0} onValueChange={(blue) => handleOnInputValueChange('blue', blue)} step={0.001} value={value.blue} />
 				</div>
 			)}
 		</div>

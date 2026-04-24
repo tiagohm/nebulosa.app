@@ -31,7 +31,7 @@ export const Home = memo(() => {
 	const webSocket = useMolecule(WebSocketMolecule)
 
 	return (
-		<div className='w-full h-full flex flex-col'>
+		<div className="flex h-full w-full flex-col">
 			<HomeNavBar />
 			<ImageWorkspace />
 			<CameraList />

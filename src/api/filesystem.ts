@@ -1,6 +1,6 @@
-import { Glob } from 'bun'
 import { mkdir, readdir, stat } from 'fs/promises'
 import { basename, dirname, join, normalize } from 'path'
+import { Glob } from 'bun'
 import type { CreateDirectory, DirectoryEntry, FileEntry, FileSystem, ListDirectory } from '../shared/types'
 import { type Endpoints, response } from './http'
 import { directoryExists } from './util'

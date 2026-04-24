@@ -125,7 +125,7 @@ export function Switch({ autoFocus, children, className, classNames, disabled = 
 				ref={ref}
 				style={style}
 				tabIndex={tabIndex}
-				type='checkbox'
+				type="checkbox"
 			/>
 			<span className={tw(styles.control(), checked ? 'bg-(--color-variant)' : 'bg-neutral-800', !disabled && 'peer-focus-visible:ring-0', !disabled && !readOnly && (checked ? 'hover:bg-(--color-variant)/90 active:bg-(--color-variant)/80' : 'hover:bg-neutral-700 active:bg-neutral-600'), classNames?.control)}>
 				<span className={tw(styles.thumb(), checked ? switchThumbTranslateStyles[size] : 'translate-x-0', checked ? 'text-(--color-variant)' : 'text-neutral-500', classNames?.thumb)}>{thumbContent}</span>

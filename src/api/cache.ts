@@ -56,11 +56,7 @@ export class CacheManager {
 
 	clear() {
 		const now = timeWithGranularity(temporalSubtract(Date.now(), 1, 'h'), 's')
-
-		this.timeCache
-			.keys()
-			.filter((time) => time < now)
-			.forEach((e) => this.timeCache.delete(e))
+		for (const e of this.timeCache.keys().filter((time) => time < now)) this.timeCache.delete(e)
 	}
 }
 

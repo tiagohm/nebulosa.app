@@ -15,20 +15,20 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 	}
 
 	added(device: GuideOutput) {
-		this.wsm.send<GuideOutputAdded>('guideOutput:add', { device })
+		this.wsm.send('guideOutput:add', { device } satisfies GuideOutputAdded)
 		console.info('guide output added:', device.name)
 	}
 
 	updated(device: GuideOutput, property: keyof GuideOutput & string, state?: PropertyState) {
-		const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state }
+		const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies CameraUpdated | MountUpdated | GuideOutputUpdated
 
-		if (device.type === 'CAMERA') this.wsm.send<CameraUpdated>('camera:update', event)
-		else if (device.type === 'MOUNT') this.wsm.send<MountUpdated>('mount:update', event)
-		this.wsm.send<GuideOutputUpdated>('guideOutput:update', event)
+		if (device.type === 'CAMERA') this.wsm.send('camera:update', event)
+		else if (device.type === 'MOUNT') this.wsm.send('mount:update', event)
+		this.wsm.send('guideOutput:update', event)
 	}
 
 	removed(device: GuideOutput) {
-		this.wsm.send<GuideOutputRemoved>('guideOutput:remove', { device })
+		this.wsm.send('guideOutput:remove', { device } satisfies GuideOutputRemoved)
 		console.info('guide output removed:', device.name)
 	}
 
@@ -44,7 +44,7 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 export function guideOutput(guideOutputHandler: GuideOutputHandler): Endpoints {
 	const { guideOutputManager } = guideOutputHandler
 
-	function guideOutputFromParams(req: Bun.BunRequest<string>) {
+	function guideOutputFromParams(req: Bun.BunRequest) {
 		return guideOutputManager.get(query(req).client, req.params.id)!
 	}
 

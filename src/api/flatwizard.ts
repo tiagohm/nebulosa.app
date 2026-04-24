@@ -1,7 +1,7 @@
+import { join } from 'path'
 import { histogram } from 'nebulosa/src/image.computation'
 import type { Camera, MinMaxValueProperty } from 'nebulosa/src/indi.device'
 import { formatTemporal } from 'nebulosa/src/temporal'
-import { join } from 'path'
 import { type CameraCaptureEvent, DEFAULT_FLAT_WIZARD_EVENT, DEFAULT_IMAGE_TRANSFORMATION, type FlatWizardEvent, type FlatWizardStart, type FlatWizardState, type ImageTransformation } from 'src/shared/types'
 import type { CameraHandler } from './camera'
 import { type Endpoints, query, response } from './http'
@@ -148,7 +148,7 @@ export class FlatWizardTask {
 export function flatWizard(flatWizardHandler: FlatWizardHandler): Endpoints {
 	const { cameraHandler } = flatWizardHandler
 
-	function cameraFromParams(req: Bun.BunRequest<string>) {
+	function cameraFromParams(req: Bun.BunRequest) {
 		return cameraHandler.cameraManager.get(query(req).client, req.params.camera)!
 	}
 

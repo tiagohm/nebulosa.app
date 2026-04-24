@@ -15,20 +15,20 @@ export class ThermometerHandler implements DeviceHandler<Thermometer> {
 	}
 
 	added(device: Thermometer) {
-		this.wsm.send<ThermometerAdded>('thermometer:add', { device })
+		this.wsm.send('thermometer:add', { device } satisfies ThermometerAdded)
 		console.info('thermometer added:', device.name)
 	}
 
 	updated(device: Thermometer, property: keyof Thermometer & string, state?: PropertyState) {
-		const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state }
+		const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies CameraUpdated | FocuserUpdated | ThermometerUpdated
 
-		if (device.type === 'CAMERA') this.wsm.send<CameraUpdated>('camera:update', event)
-		else if (device.type === 'FOCUSER') this.wsm.send<FocuserUpdated>('focuser:update', event)
-		this.wsm.send<ThermometerUpdated>('thermometer:update', event)
+		if (device.type === 'CAMERA') this.wsm.send('camera:update', event)
+		else if (device.type === 'FOCUSER') this.wsm.send('focuser:update', event)
+		this.wsm.send('thermometer:update', event)
 	}
 
 	removed(device: Thermometer) {
-		this.wsm.send<ThermometerRemoved>('thermometer:remove', { device })
+		this.wsm.send('thermometer:remove', { device } satisfies ThermometerRemoved)
 		console.info('thermometer removed:', device.name)
 	}
 
@@ -40,7 +40,7 @@ export class ThermometerHandler implements DeviceHandler<Thermometer> {
 export function thermometer(thermometerHandler: ThermometerHandler): Endpoints {
 	const { thermometerManager } = thermometerHandler
 
-	function thermometerFromParams(req: Bun.BunRequest<string>) {
+	function thermometerFromParams(req: Bun.BunRequest) {
 		return thermometerManager.get(query(req).client, req.params.id)!
 	}
 

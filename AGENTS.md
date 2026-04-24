@@ -14,31 +14,31 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 
 ## Project Structure
 
-* `src`: Application source files.
-* `src/api`: Bun runtime handlers, services, and route-facing backend code.
-* `src/web`: Browser entrypoints, UI, molecules, hooks, and web-only helpers.
-* `src/web/pages`: HTML + React entrypoints. Currently only the `home` page exists.
-* `src/web/ui`: Feature and screen-level React components.
-* `src/web/ui/components`: Reusable UI primitives.
-* `src/web/molecules`: Bunshi molecules and shared client orchestration/state.
-* `src/web/shared`: Browser-side helpers for API calls, storage, interpolation, proxying, and related utilities.
-* `src/web/hooks`: React hooks.
-* `src/web/assets`: Images and icons.
-* `src/shared`: Types and utilities shared between runtime and web. Keep it runtime-agnostic where practical.
-* `tests`: Currently API-focused tests.
-* `data`: Data/assets used by `tests`, `api`, and `web`.
-* `bin`: Build-time data generation scripts.
+- `src`: Application source files.
+- `src/api`: Bun runtime handlers, services, and route-facing backend code.
+- `src/web`: Browser entrypoints, UI, molecules, hooks, and web-only helpers.
+- `src/web/pages`: HTML + React entrypoints. Currently only the `home` page exists.
+- `src/web/ui`: Feature and screen-level React components.
+- `src/web/ui/components`: Reusable UI primitives.
+- `src/web/molecules`: Bunshi molecules and shared client orchestration/state.
+- `src/web/shared`: Browser-side helpers for API calls, storage, interpolation, proxying, and related utilities.
+- `src/web/hooks`: React hooks.
+- `src/web/assets`: Images and icons.
+- `src/shared`: Types and utilities shared between runtime and web. Keep it runtime-agnostic where practical.
+- `tests`: Currently API-focused tests.
+- `data`: Data/assets used by `tests`, `api`, and `web`.
+- `bin`: Build-time data generation scripts.
 
 ## General Rules
 
-* Follow existing patterns in the repository. Do not invent new ones.
-* Make minimal, localized changes.
-* Prefer clarity over abstraction.
-* Deliver complete, production-ready code (no TODOs, no placeholders).
-* Do not break existing behavior unless explicitly required.
-* Never add or expand HeroUI usage. Treat HeroUI as legacy code scheduled for removal; build new UI with React, Tailwind CSS, Tailwind Variants, and existing non-HeroUI primitives instead.
-* Do not add accessibility or ARIA work in this project unless explicitly requested. This is a personal project, so accessibility-specific enhancements are out of scope by default.
-* Always add single-line comments to methods, functions, and relevant lines of code.
+- Follow existing patterns in the repository. Do not invent new ones.
+- Make minimal, localized changes.
+- Prefer clarity over abstraction.
+- Deliver complete, production-ready code (no TODOs, no placeholders).
+- Do not break existing behavior unless explicitly required.
+- Never add or expand HeroUI usage. Treat HeroUI as legacy code scheduled for removal; build new UI with React, Tailwind CSS, Tailwind Variants, and existing non-HeroUI primitives instead.
+- Do not add accessibility or ARIA work in this project unless explicitly requested. This is a personal project, so accessibility-specific enhancements are out of scope by default.
+- Always add single-line comments to methods, functions, and relevant lines of code.
 
 ## Repo Discovery
 
@@ -57,9 +57,9 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 - Start development: `bun dev`
 - Start production mode: `bun prod`
 - Build executable: `bun run compile`
-- Lint with fixes: `bun run lint`
-- Format: `bun run format`
-- Type-check: `bun run tsc`
+- Format: `bun run fmt`
+- Lint and Type-check: `bun run lint`
+- Lint with fixes: `bun run lint:fix`
 - If tests are added, prefer `bun test` before introducing another test runner.
 
 ## Architecture Rules
@@ -156,52 +156,52 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 
 ### React Component Authoring Guidelines
 
-* For new shared primitives, prefer hand-written React + Tailwind CSS + Tailwind Variants components instead of introducing another abstraction layer.
-* The goal is to build a small, consistent, accessible, maintainable component system with predictable APIs and minimal styling drift.
-* Write components by hand with clear structure and minimal abstraction. Do not recreate a full UI framework. Only abstract patterns that are already repeated or clearly part of the design system.
-* Write the component in a single file within `src/web/ui/components`.
-* Component props should be predictable across the system. Reuse the same naming conventions everywhere. Avoid one-off prop names when an existing convention already fits.
-* Use Tailwind classes in a controlled way. Do not scatter long class strings across many branches. Centralize styling rules with Tailwind Variants so variants, sizes, and states are easy to inspect and extend. Tailwind Variants supports typed variants, slots, composition, and compound variants, which makes it suitable for building reusable design-system components. It also supports extending existing component definitions.
-* Build small primitives that can be combined. Do not create giant "do everything" components.
-* Prefer primitives and composites to stay generic. Domain-specific components should not be mixed into the base UI layer.
-* Before writing JSX, define:
-  - component purpose
-  - required props
-  - optional props
-  - supported variants
-  - supported sizes
-  - controlled vs uncontrolled behavior
-  - whether accessibility/ARIA work is intentionally out of scope
-  - whether it accepts `ref`
-* Start from the correct native element. Only add wrappers if necessary for layout, icons, loading indicators, descriptions, validation text, or slot composition.
-* Do not add ARIA attributes, accessibility-only wrappers, or extra accessibility abstractions unless explicitly requested.
-* Use a `tv` definition for the component's base styles and variants. Tailwind Variants is designed for base styles, variants, slots, compound variants, and composition/extension.
-* Use VariantProps<typeof ...> for variant typing. Keep custom props minimal and explicit.
-* `base` should contain only what is always true for the component.
-* `variants` should express meaning, not implementation.
-* If one style only applies when two or more variant conditions are combined, use `compoundVariants` instead of putting branching logic in JSX.
-* For components like Card, Tabs, Dialog, or InputGroup, use Tailwind Variants slots so each internal part has a stable styling contract. Tailwind Variants explicitly supports slots for multi-part components.
-* Do not build class names with large nested ternaries in JSX. Prefer `tv`, small boolean branches, helper utilities.
-* Do not hardcode arbitrary values repeatedly unless there is a real one-off need. Prefer shared semantic tokens such as: radius scale, spacing scale, font sizes, color roles, shadow roles, z-index layers.
-* If the component manages value, open state, selected state, or expanded state, decide explicitly whether it supports: controlled mode, uncontrolled mode, or both.
-* Loading buttons, inputs, cards, and menus should not jump in size unless that is deliberate.
-* Do not add an `as` prop to every component automatically. Only support polymorphism when there is a clear product need and the semantics remain valid.
-* Do not use `forwardRef`. Starting in React 19, you can now access `ref` as a prop for function components.
+- For new shared primitives, prefer hand-written React + Tailwind CSS + Tailwind Variants components instead of introducing another abstraction layer.
+- The goal is to build a small, consistent, accessible, maintainable component system with predictable APIs and minimal styling drift.
+- Write components by hand with clear structure and minimal abstraction. Do not recreate a full UI framework. Only abstract patterns that are already repeated or clearly part of the design system.
+- Write the component in a single file within `src/web/ui/components`.
+- Component props should be predictable across the system. Reuse the same naming conventions everywhere. Avoid one-off prop names when an existing convention already fits.
+- Use Tailwind classes in a controlled way. Do not scatter long class strings across many branches. Centralize styling rules with Tailwind Variants so variants, sizes, and states are easy to inspect and extend. Tailwind Variants supports typed variants, slots, composition, and compound variants, which makes it suitable for building reusable design-system components. It also supports extending existing component definitions.
+- Build small primitives that can be combined. Do not create giant "do everything" components.
+- Prefer primitives and composites to stay generic. Domain-specific components should not be mixed into the base UI layer.
+- Before writing JSX, define:
+    - component purpose
+    - required props
+    - optional props
+    - supported variants
+    - supported sizes
+    - controlled vs uncontrolled behavior
+    - whether accessibility/ARIA work is intentionally out of scope
+    - whether it accepts `ref`
+- Start from the correct native element. Only add wrappers if necessary for layout, icons, loading indicators, descriptions, validation text, or slot composition.
+- Do not add ARIA attributes, accessibility-only wrappers, or extra accessibility abstractions unless explicitly requested.
+- Use a `tv` definition for the component's base styles and variants. Tailwind Variants is designed for base styles, variants, slots, compound variants, and composition/extension.
+- Use VariantProps<typeof ...> for variant typing. Keep custom props minimal and explicit.
+- `base` should contain only what is always true for the component.
+- `variants` should express meaning, not implementation.
+- If one style only applies when two or more variant conditions are combined, use `compoundVariants` instead of putting branching logic in JSX.
+- For components like Card, Tabs, Dialog, or InputGroup, use Tailwind Variants slots so each internal part has a stable styling contract. Tailwind Variants explicitly supports slots for multi-part components.
+- Do not build class names with large nested ternaries in JSX. Prefer `tv`, small boolean branches, helper utilities.
+- Do not hardcode arbitrary values repeatedly unless there is a real one-off need. Prefer shared semantic tokens such as: radius scale, spacing scale, font sizes, color roles, shadow roles, z-index layers.
+- If the component manages value, open state, selected state, or expanded state, decide explicitly whether it supports: controlled mode, uncontrolled mode, or both.
+- Loading buttons, inputs, cards, and menus should not jump in size unless that is deliberate.
+- Do not add an `as` prop to every component automatically. Only support polymorphism when there is a clear product need and the semantics remain valid.
+- Do not use `forwardRef`. Starting in React 19, you can now access `ref` as a prop for function components.
 
 ### Reusable Component Styling Guidelines
 
-* Base new reusable component styling on the contracts already established in `src/web/ui/components`, and only add a new visual language when the existing one genuinely does not fit.
-* Define styles with a local `tv()` object named for the component, and use `slots` for multipart primitives like inputs, checkboxes, tooltips, and composed surfaces.
-* Reuse the shared semantic variant names whenever they fit the component: `variant` for presentation (`solid`, `outline`, `ghost`, `flat`), `color` for intent (`primary`, `secondary`, `success`, `danger`, `warning`), and `size` for scale (`sm`, `md`, `lg`).
-* When a reusable component supports semantic color, map it through a local CSS variable such as `[--color-variant:var(--primary)]` and reference that variable in the classes instead of hardcoding separate color palettes in each variant.
-* Keep geometry aligned with the existing primitives: `rounded-lg` as the default surface radius, compact inline-flex or flex layouts, and the same height scale used by `Button`, `TextInput`, and `NumberInput` unless the component has a clear reason to differ.
-* Treat neutral dark surfaces as the default reusable component base. Inputs and other container-like controls should stay in the `bg-neutral-900/70` to `bg-neutral-800` family, while accent colors should be reserved for semantic actions, selection, and emphasis.
-* Expose `className` for single-surface components and a typed `classNames` object for multipart components. Merge overrides through `tw()` or `clsx` plus `tailwind-merge`, not by manually concatenating partial class fragments.
-* Prefer boolean styling flags that already exist in the component layer, such as `fullWidth`, `disabled`, `readOnly`, and `loading`, instead of forcing callers to recreate those states with ad hoc classes.
-* Disabled, read-only, and loading visuals should be handled by the component styles themselves with opacity, pointer-event, text, and background adjustments consistent with the current primitives, not by introducing separate alternate layouts.
-* Keep adornments inside the shared surface with explicit props such as `startContent`, `endContent`, `label`, or slot content instead of requiring wrapper elements around every usage.
-* Preserve the current focus treatment unless the component has a strong reason to differ. Existing reusable primitives generally remove default outlines and rely on the surrounding surface styling rather than adding a new ring system per component.
-* If a new reusable component is action-like, start from the `Button` API and styling vocabulary. If it is field-like, start from `TextInput` or `NumberInput`, including their slot-based surface, neutral palette, and internal content layout.
+- Base new reusable component styling on the contracts already established in `src/web/ui/components`, and only add a new visual language when the existing one genuinely does not fit.
+- Define styles with a local `tv()` object named for the component, and use `slots` for multipart primitives like inputs, checkboxes, tooltips, and composed surfaces.
+- Reuse the shared semantic variant names whenever they fit the component: `variant` for presentation (`solid`, `outline`, `ghost`, `flat`), `color` for intent (`primary`, `secondary`, `success`, `danger`, `warning`), and `size` for scale (`sm`, `md`, `lg`).
+- When a reusable component supports semantic color, map it through a local CSS variable such as `[--color-variant:var(--primary)]` and reference that variable in the classes instead of hardcoding separate color palettes in each variant.
+- Keep geometry aligned with the existing primitives: `rounded-lg` as the default surface radius, compact inline-flex or flex layouts, and the same height scale used by `Button`, `TextInput`, and `NumberInput` unless the component has a clear reason to differ.
+- Treat neutral dark surfaces as the default reusable component base. Inputs and other container-like controls should stay in the `bg-neutral-900/70` to `bg-neutral-800` family, while accent colors should be reserved for semantic actions, selection, and emphasis.
+- Expose `className` for single-surface components and a typed `classNames` object for multipart components. Merge overrides through `tw()` or `clsx` plus `tailwind-merge`, not by manually concatenating partial class fragments.
+- Prefer boolean styling flags that already exist in the component layer, such as `fullWidth`, `disabled`, `readOnly`, and `loading`, instead of forcing callers to recreate those states with ad hoc classes.
+- Disabled, read-only, and loading visuals should be handled by the component styles themselves with opacity, pointer-event, text, and background adjustments consistent with the current primitives, not by introducing separate alternate layouts.
+- Keep adornments inside the shared surface with explicit props such as `startContent`, `endContent`, `label`, or slot content instead of requiring wrapper elements around every usage.
+- Preserve the current focus treatment unless the component has a strong reason to differ. Existing reusable primitives generally remove default outlines and rely on the surrounding surface styling rather than adding a new ring system per component.
+- If a new reusable component is action-like, start from the `Button` API and styling vocabulary. If it is field-like, start from `TextInput` or `NumberInput`, including their slot-based surface, neutral palette, and internal content layout.
 
 ## Bunshi Rules
 
@@ -262,11 +262,11 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 ## Quality Gates
 
 - Keep TypeScript strict. Fix types instead of bypassing them.
-- Follow Biome for both formatting and linting. Do not add Prettier or ESLint.
-- Respect Biome's current guardrails in new code: no import cycles, no floating promises, throw only `Error` values, and prefer `performance.now()` over `Date.now()` for durations.
+- Follow OXC for both formatting and linting. Do not add Prettier or ESLint.
+- Respect OXC's current guardrails in new code: no import cycles, no floating promises, and prefer `performance.now()` over `Date.now()` for durations.
 - Keep modules focused and ownership clear.
 - Always add single-line comments to methods, functions, and relevant lines of code.
-- Validate with the smallest relevant check before finishing: `bun run lint`, `bun run tsc`, the narrowest runtime check that exercises the changed path, and `bun run compile` when touching Bun runtime, env, or packaging code.
+- Validate with the smallest relevant check before finishing: `bun run lint`, the narrowest runtime check that exercises the changed path, and `bun run compile` when touching Bun runtime, env, or packaging code.
 - Preserve Bun-first workflows in every change.
 
 ## Placement Guide
@@ -291,17 +291,17 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 
 Every change must:
 
-* Compile without errors
-* Have correct types
-* Include necessary imports
-* Be consistent with project patterns
-* Be ready for production use
+- Compile without errors
+- Have correct types
+- Include necessary imports
+- Be consistent with project patterns
+- Be ready for production use
 
 ### Before finishing:
 
-* Verify types
-* Verify rendering behavior
-* Verify state usage
-* Verify consistency with existing code
+- Verify types
+- Verify rendering behavior
+- Verify state usage
+- Verify consistency with existing code
 
 Always choose the simplest correct solution.

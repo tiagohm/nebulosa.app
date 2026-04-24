@@ -13,7 +13,7 @@ export const Confirmation = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header='Confirmation' id='confirmation' maxWidth='336px' onHide={confirmation.hide}>
+		<Modal footer={<Footer />} header="Confirmation" id="confirmation" maxWidth="336px" onHide={confirmation.hide}>
 			<Body />
 		</Modal>
 	)
@@ -23,7 +23,7 @@ const Body = memo(() => {
 	const confirmation = useMolecule(ConfirmationMolecule)
 	const { message } = useSnapshot(confirmation.state)
 
-	return <div className='px-1 py-2'>{message}</div>
+	return <div className="px-1 py-2">{message}</div>
 })
 
 const Footer = memo(() => {
@@ -31,8 +31,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color='danger' label='Cancel' onPointerUp={confirmation.reject} startContent={<Icons.Close />} />
-			<Button color='success' label='OK' onPointerUp={confirmation.accept} startContent={<Icons.Check />} />
+			<Button color="danger" label="Cancel" onPointerUp={confirmation.reject} startContent={<Icons.Close />} />
+			<Button color="success" label="OK" onPointerUp={confirmation.accept} startContent={<Icons.Check />} />
 		</>
 	)
 })

@@ -18,7 +18,7 @@ export const AutoFocus = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)
 
 	return (
-		<Modal footer={<Footer />} header='Auto Focus' id='autofocus' maxWidth='376px' onHide={autoFocus.hide}>
+		<Modal footer={<Footer />} header="Auto Focus" id="autofocus" maxWidth="376px" onHide={autoFocus.hide}>
 			<Body />
 		</Modal>
 	)
@@ -26,7 +26,7 @@ export const AutoFocus = memo(() => {
 
 const Body = memo(() => {
 	return (
-		<div className='mt-0 grid grid-cols-12 gap-2'>
+		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Devices />
 			<Status />
 			<Inputs />
@@ -39,7 +39,7 @@ const Devices = memo(() => {
 	const { running, camera, focuser } = useSnapshot(autoFocus.state)
 
 	return (
-		<div className='col-span-full flex flex-row justify-center items-center gap-2'>
+		<div className="col-span-full flex flex-row items-center justify-center gap-2">
 			<CameraDropdown endContent={<CameraDropdownEndContent />} isDisabled={running} onValueChange={(value) => (autoFocus.state.camera = value)} showLabel value={camera} />
 			<FocuserDropdown isDisabled={running} onValueChange={(value) => (autoFocus.state.focuser = value)} showLabel value={focuser} />
 		</div>
@@ -52,9 +52,9 @@ const Status = memo(() => {
 	const { state } = event
 
 	return (
-		<div className='mt-2 col-span-full flex flex-row items-center justify-between'>
-			<Chip color='primary'>{state === 'IDLE' ? 'idle' : state === 'MOVING' ? 'moving' : state === 'CAPTURING' ? 'capturing' : 'computing'}</Chip>
-			<span className='text-xs'>{event.message}</span>
+		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
+			<Chip color="primary">{state === 'IDLE' ? 'idle' : state === 'MOVING' ? 'moving' : state === 'CAPTURING' ? 'capturing' : 'computing'}</Chip>
+			<span className="text-xs">{event.message}</span>
 		</div>
 	)
 })
@@ -66,12 +66,12 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<StarDetectionSelect className='col-span-6' endContent={<StarDetectionSelectEndContent />} onValueChange={(value) => autoFocus.updateStarDetection('type', value)} value={starDetection.type} />
-			<AutoFocusFittingModeSelect className='col-span-6' onValueChange={(value) => autoFocus.update('fittingMode', value)} value={fittingMode} />
-			<NumberInput className='col-span-4' label='Offset steps' maxValue={1000} minValue={0} onValueChange={(value) => autoFocus.update('initialOffsetSteps', value)} value={initialOffsetSteps} />
-			<NumberInput className='col-span-3' disabled={!focuser?.connected} label='Step size' maxValue={focuser?.position.max} minValue={focuser?.position.min} onValueChange={(value) => autoFocus.update('stepSize', value)} value={stepSize} />
-			<NumberInput className='col-span-5' fractionDigits={2} label='RMSD threshold' maxValue={1} minValue={0} onValueChange={(value) => autoFocus.update('rmsdThreshold', value)} step={0.01} value={rmsdThreshold} />
-			<Checkbox className='col-span-full' label='Reversed' onValueChange={(value) => autoFocus.update('reversed', value)} value={reversed} />
+			<StarDetectionSelect className="col-span-6" endContent={<StarDetectionSelectEndContent />} onValueChange={(value) => autoFocus.updateStarDetection('type', value)} value={starDetection.type} />
+			<AutoFocusFittingModeSelect className="col-span-6" onValueChange={(value) => autoFocus.update('fittingMode', value)} value={fittingMode} />
+			<NumberInput className="col-span-4" label="Offset steps" maxValue={1000} minValue={0} onValueChange={(value) => autoFocus.update('initialOffsetSteps', value)} value={initialOffsetSteps} />
+			<NumberInput className="col-span-3" disabled={!focuser?.connected} label="Step size" maxValue={focuser?.position.max} minValue={focuser?.position.min} onValueChange={(value) => autoFocus.update('stepSize', value)} value={stepSize} />
+			<NumberInput className="col-span-5" fractionDigits={2} label="RMSD threshold" maxValue={1} minValue={0} onValueChange={(value) => autoFocus.update('rmsdThreshold', value)} step={0.01} value={rmsdThreshold} />
+			<Checkbox className="col-span-full" label="Reversed" onValueChange={(value) => autoFocus.update('reversed', value)} value={reversed} />
 		</>
 	)
 })
@@ -82,8 +82,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color='danger' disabled={!running} label='Stop' onPointerUp={autoFocus.stop} startContent={<Icons.Stop />} />
-			<Button color='success' disabled={!camera?.connected || !focuser?.connected} label='Start' loading={running} onPointerUp={autoFocus.start} startContent={<Icons.Play />} />
+			<Button color="danger" disabled={!running} label="Stop" onPointerUp={autoFocus.stop} startContent={<Icons.Stop />} />
+			<Button color="success" disabled={!camera?.connected || !focuser?.connected} label="Start" loading={running} onPointerUp={autoFocus.start} startContent={<Icons.Play />} />
 		</>
 	)
 })
@@ -93,12 +93,12 @@ const CameraDropdownEndContent = memo(() => {
 	const { camera } = useSnapshot(autoFocus.state)
 	const { capture } = useSnapshot(autoFocus.state.request)
 
-	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode='autoFocus' onValueChange={autoFocus.updateCapture} value={capture} />
+	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode="autoFocus" onValueChange={autoFocus.updateCapture} value={capture} />
 })
 
 const StarDetectionSelectEndContent = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)
 	const { starDetection } = useSnapshot(autoFocus.state.request)
 
-	return <StarDetectionPopover isRounded onValueChange={autoFocus.updateStarDetection} value={starDetection} variant='ghost' />
+	return <StarDetectionPopover isRounded onValueChange={autoFocus.updateStarDetection} value={starDetection} variant="ghost" />
 })

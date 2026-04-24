@@ -12,7 +12,7 @@ export const IndiServerButton = memo(() => {
 
 	return (
 		<>
-			<IconButton color={running ? 'success' : 'danger'} disabled={!enabled} icon={running ? Icons.Server : Icons.ServerOff} onPointerUp={indi.show} tooltipContent='INDI Server' />
+			<IconButton color={running ? 'success' : 'danger'} disabled={!enabled} icon={running ? Icons.Server : Icons.ServerOff} onPointerUp={indi.show} tooltipContent="INDI Server" />
 			<Activity mode={show ? 'visible' : 'hidden'}>
 				<IndiServer />
 			</Activity>

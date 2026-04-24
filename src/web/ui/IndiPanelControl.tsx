@@ -21,7 +21,7 @@ export const IndiPanelControl = memo(() => {
 	const control = useMolecule(IndiPanelControlMolecule)
 
 	return (
-		<Modal header={<Header />} id='indi-panel-control' maxWidth='400px' onHide={control.hide}>
+		<Modal header={<Header />} id="indi-panel-control" maxWidth="400px" onHide={control.hide}>
 			<Body />
 		</Modal>
 	)
@@ -32,13 +32,13 @@ const Header = memo(() => {
 	const { tab } = useSnapshot(control.state)
 
 	return (
-		<div className='flex flex-row justify-start items-center gap-2'>
-			<span className='me-3'>INDI Panel Control</span>
-			<Tooltip content='Properties' placement='bottom' showArrow>
-				<ToggleButton color='secondary' icon={Icons.ViewList} isSelected={tab === 'property'} onPointerUp={() => (control.state.tab = 'property')} />
+		<div className="flex flex-row items-center justify-start gap-2">
+			<span className="me-3">INDI Panel Control</span>
+			<Tooltip content="Properties" placement="bottom" showArrow>
+				<ToggleButton color="secondary" icon={Icons.ViewList} isSelected={tab === 'property'} onPointerUp={() => (control.state.tab = 'property')} />
 			</Tooltip>
-			<Tooltip content='Messages' placement='bottom' showArrow>
-				<ToggleButton color='secondary' icon={Icons.Message} isSelected={tab === 'message'} onPointerUp={() => (control.state.tab = 'message')} />
+			<Tooltip content="Messages" placement="bottom" showArrow>
+				<ToggleButton color="secondary" icon={Icons.Message} isSelected={tab === 'message'} onPointerUp={() => (control.state.tab = 'message')} />
 			</Tooltip>
 		</div>
 	)
@@ -49,7 +49,7 @@ const Body = memo(() => {
 	const { device, tab } = useSnapshot(control.state)
 
 	return (
-		<div className='mt-0 grid grid-cols-12 gap-2'>
+		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Activity mode={tab === 'property' ? 'visible' : 'hidden'}>
 				<DeviceAndGroup />
 				<GroupList key={device} />
@@ -69,10 +69,10 @@ const DeviceAndGroup = memo(() => {
 
 	return (
 		<>
-			<EnumSelect className='col-span-6' label='Device' onValueChange={control.changeDevice} value={device}>
+			<EnumSelect className="col-span-6" label="Device" onValueChange={control.changeDevice} value={device}>
 				{devices.map(DeviceItem)}
 			</EnumSelect>
-			<EnumSelect className='col-span-6' label='Group' onValueChange={control.changeGroup} value={group}>
+			<EnumSelect className="col-span-6" label="Group" onValueChange={control.changeGroup} value={group}>
 				{groups.map(GroupItem)}
 			</EnumSelect>
 		</>
@@ -84,7 +84,7 @@ const GroupList = memo(() => {
 	const { device, group, groups } = useSnapshot(control.state)
 
 	return (
-		<div className='col-span-full flex flex-col gap-4 max-h-100 overflow-y-auto p-1'>
+		<div className="col-span-full flex max-h-100 flex-col gap-4 overflow-y-auto p-1">
 			{groups.map((e) => (
 				<Activity key={`${device}-${e}`} mode={e === group ? 'visible' : 'hidden'}>
 					<PropertyList group={e} />
@@ -123,22 +123,22 @@ const Messages = memo(() => {
 	return (
 		<Activity mode={tab === 'message' ? 'visible' : 'hidden'}>
 			<FilterableListbox
-				className='col-span-full'
+				className="col-span-full"
 				classNames={{ list: 'max-h-[200px] overflow-scroll', base: 'min-w-80' }}
 				filter={MessageFilter}
 				isVirtualized
 				items={messages}
 				minLengthToSearch={1}
-				selectionMode='none'
-				variant='flat'
+				selectionMode="none"
+				variant="flat"
 				virtualization={{
 					maxListboxHeight: 200,
 					itemHeight: 36,
 				}}>
 				{MessageItem}
 			</FilterableListbox>
-			<div className='col-span-full flex flex-row justify-center items-center gap-2'>
-				<Button color='danger' disabled={messages.length === 0} label='Clear' onPointerUp={control.clearMessages} startContent={<Icons.Broom />} />
+			<div className="col-span-full flex flex-row items-center justify-center gap-2">
+				<Button color="danger" disabled={messages.length === 0} label="Clear" onPointerUp={control.clearMessages} startContent={<Icons.Broom />} />
 			</div>
 		</Activity>
 	)
@@ -166,22 +166,22 @@ const Property = memo(({ property, onSend }: PropertyProps) => {
 	}
 
 	return (
-		<div className='flex flex-col gap-2 content'>
-			<div className='flex items-center justify-between gap-1'>
-				<div className='flex items-center justify-start gap-1'>
+		<div className="content flex flex-col gap-2">
+			<div className="flex items-center justify-between gap-1">
+				<div className="flex items-center justify-start gap-1">
 					<Icons.Circle color={property.state === 'Idle' ? '#FAFAFA' : property.state === 'Busy' ? '#FFC107' : property.state === 'Ok' ? '#4CAF50' : '#F44336'} />
-					<div className='flex flex-col'>
+					<div className="flex flex-col">
 						<span>{property.label}</span>
-						<span className='text-[0.6rem] mt-[-4px] text-neutral-400'>{property.name}</span>
+						<span className="mt-[-4px] text-[0.6rem] text-neutral-400">{property.name}</span>
 					</div>
 				</div>
-				{!isReadonly && property.type !== 'SWITCH' && <IconButton color='primary' icon={Icons.Send} onPointerUp={handlePointerUp} tooltipContent='Send' tooltipPlacement='start' />}
+				{!isReadonly && property.type !== 'SWITCH' && <IconButton color="primary" icon={Icons.Send} onPointerUp={handlePointerUp} tooltipContent="Send" tooltipPlacement="start" />}
 			</div>
-			<div className='flex flex-col gap-1'>
+			<div className="flex flex-col gap-1">
 				{property.type === 'TEXT' && Object.entries(property.elements).map(([key, element]) => <TextElement isReadonly={isReadonly} key={key} label={element.label} onValueChange={(value) => handleValueChange(element, value)} value={element.value} />)}
 				{property.type === 'NUMBER' && Object.entries(property.elements).map(([key, element]) => <NumberElement isReadonly={isReadonly} key={key} label={element.label} max={element.max} min={element.min} onValueChange={(value) => handleValueChange(element, value)} value={element.value} />)}
 				{property.type === 'SWITCH' && (
-					<div className='flex flex-row flex-wrap gap-1 items-center'>
+					<div className="flex flex-row flex-wrap items-center gap-1">
 						{Object.entries(property.elements).map(([key, element]) => (
 							<SwitchElement isReadonly={isReadonly} key={key} label={element.label} onValueChange={(value) => handleValueChange(element, value)} rule={property.rule} value={element.value} />
 						))}
@@ -208,9 +208,9 @@ function TextElement({ label, value, isReadonly, onValueChange }: TextElementPro
 	}
 
 	return (
-		<div className='grid grid-cols-12 gap-1'>
+		<div className="grid grid-cols-12 gap-1">
 			<TextInput className={isReadonly ? 'col-span-full' : 'col-span-6'} label={label} readOnly value={value} />
-			{!isReadonly && <TextInput className='col-span-6' label={label} onValueChange={handleValueChange} value={text} />}
+			{!isReadonly && <TextInput className="col-span-6" label={label} onValueChange={handleValueChange} value={text} />}
 		</div>
 	)
 }
@@ -233,9 +233,9 @@ function NumberElement({ label, value, isReadonly, min, max, onValueChange }: Nu
 	}
 
 	return (
-		<div className='grid grid-cols-12 gap-1'>
+		<div className="grid grid-cols-12 gap-1">
 			<TextInput className={isReadonly ? 'col-span-full' : 'col-span-6'} label={label} readOnly value={value.toString()} />
-			{!isReadonly && <NumberInput className='col-span-6' fractionDigits={8} label={label} maxValue={max} minValue={min} onValueChange={handleValueChange} value={number} />}
+			{!isReadonly && <NumberInput className="col-span-6" fractionDigits={8} label={label} maxValue={max} minValue={min} onValueChange={handleValueChange} value={number} />}
 		</div>
 	)
 }
@@ -257,5 +257,5 @@ function SwitchElement({ label, value, rule, isReadonly, onValueChange }: Switch
 		}
 	}
 
-	return <Button color={rule === 'AtMostOne' ? 'secondary' : value ? 'success' : 'danger'} disabled={isReadonly} label={label!} onPointerUp={handleValueChange} />
+	return <Button color={rule === 'AtMostOne' ? 'secondary' : value ? 'success' : 'danger'} disabled={isReadonly} label={label} onPointerUp={handleValueChange} />
 }

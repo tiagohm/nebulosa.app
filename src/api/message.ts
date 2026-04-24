@@ -27,7 +27,7 @@ export class WebSocketMessageHandler {
 		}
 	}
 
-	send<T extends object>(type: string, message: T | undefined | null, socket?: Messager) {
+	send(type: string, message: object | undefined | null, socket?: Messager) {
 		bus.emit(type, message)
 
 		if (this.sockets.size > 0) {
@@ -36,7 +36,7 @@ export class WebSocketMessageHandler {
 			if (socket) {
 				socket.sendText(data)
 			} else {
-				this.sockets.forEach((socket) => socket.sendText(data))
+				for (const socket of this.sockets) socket.sendText(data)
 			}
 		}
 	}

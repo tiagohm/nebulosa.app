@@ -23,10 +23,10 @@ export const ImageInfo = memo(() => {
 	if (!info) return null
 
 	return (
-		<div className='text-sm top-2 left-2 pointer-events-none select-none absolute p-1 opacity-80 hover:opacity-80 z-999999'>
-			<div className='flex flex-col gap-0'>
-				<span className='text-xs text-neutral-400'>{info.path}</span>
-				<div className='flex flex-row items-center gap-1'>
+		<div className="pointer-events-none absolute top-2 left-2 z-999999 p-1 text-sm opacity-80 select-none hover:opacity-80">
+			<div className="flex flex-col gap-0">
+				<span className="text-xs text-neutral-400">{info.path}</span>
+				<div className="flex flex-row items-center gap-1">
 					{info.width}x{info.height}
 					<Icons.ZoomIn />
 					{scale.toFixed(2)}
@@ -36,9 +36,9 @@ export const ImageInfo = memo(() => {
 				<Activity mode={isMouseCoordinateVisible && interpolator ? 'visible' : 'hidden'}>
 					<Coordinate declination={hover.declination} rightAscension={hover.rightAscension} x={hover.x} y={hover.y} />
 					<Activity mode={selected.show ? 'visible' : 'hidden'}>
-						<span className='flex flex-row items-center gap-1'>
+						<span className="flex flex-row items-center gap-1">
 							<Coordinate declination={selected.declination} pinned rightAscension={selected.rightAscension} x={selected.x} y={selected.y} />
-							<b className='ms-1'>D:</b> {formatAZ(selected.distance, true)}
+							<b className="ms-1">D:</b> {formatAZ(selected.distance, true)}
 							<SelectedCoordinateDropdown onFrameAt={viewer.frameAt} onPointMountHere={viewer.pointMountHere} />
 						</span>
 					</Activity>
@@ -54,12 +54,12 @@ interface CoordinateProps extends Readonly<EquatorialCoordinate>, Readonly<Point
 
 function Coordinate({ pinned = false, x, y, rightAscension, declination }: CoordinateProps) {
 	return (
-		<div className='inline-flex flex-row items-center gap-1'>
+		<div className="inline-flex flex-row items-center gap-1">
 			{pinned ? <Icons.Pin /> : <Icons.Cursor />}
 			<b>X:</b> {x.toFixed(0)}
-			<b className='ms-1'>Y:</b> {y.toFixed(0)}
-			<b className='ms-1'>RA:</b> {formatRA(rightAscension, true)}
-			<b className='ms-1'>DEC:</b> {formatDEC(declination, true)}
+			<b className="ms-1">Y:</b> {y.toFixed(0)}
+			<b className="ms-1">RA:</b> {formatRA(rightAscension, true)}
+			<b className="ms-1">DEC:</b> {formatDEC(declination, true)}
 		</div>
 	)
 }
@@ -73,26 +73,26 @@ const SelectedCoordinateDropdown = memo((props: SelectedCoordinateDropdownProps)
 	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
 
 	function handleAction(key: React.Key) {
-		if (key === 'FRAME_AT_HERE') props.onFrameAt(mouseCoordinate.state.coordinate.selected!)
+		if (key === 'FRAME_AT_HERE') props.onFrameAt(mouseCoordinate.state.coordinate.selected)
 		else if (key === 'UNPIN') mouseCoordinate.state.coordinate.selected.show = false
 	}
 
 	return (
 		<Dropdown>
 			<DropdownTrigger>
-				<IconButton className='pointer-events-auto' icon={Icons.DotsVertical} onPointerUp={stopPropagationDesktopOnly} />
+				<IconButton className="pointer-events-auto" icon={Icons.DotsVertical} onPointerUp={stopPropagationDesktopOnly} />
 			</DropdownTrigger>
 			<DropdownMenu onAction={handleAction}>
-				<DropdownItem key='POINT_MOUNT_HERE' startContent={<Icons.Telescope />}>
-					<span className='flex flex-row items-center gap-1'>
+				<DropdownItem key="POINT_MOUNT_HERE" startContent={<Icons.Telescope />}>
+					<span className="flex flex-row items-center gap-1">
 						<span>Point mount here:</span>
-						<MountDropdown disallowNoneSelection onValueChange={(value) => value && props.onPointMountHere(value, mouseCoordinate.state.coordinate.selected!)} />
+						<MountDropdown disallowNoneSelection onValueChange={(value) => value && props.onPointMountHere(value, mouseCoordinate.state.coordinate.selected)} />
 					</span>
 				</DropdownItem>
-				<DropdownItem key='FRAME_AT_HERE' startContent={<Icons.Image />}>
+				<DropdownItem key="FRAME_AT_HERE" startContent={<Icons.Image />}>
 					Frame at this coordinate
 				</DropdownItem>
-				<DropdownItem className='text-danger' color='danger' key='UNPIN' startContent={<Icons.Trash />}>
+				<DropdownItem className="text-danger" color="danger" key="UNPIN" startContent={<Icons.Trash />}>
 					Unpin
 				</DropdownItem>
 			</DropdownMenu>

@@ -13,7 +13,7 @@ export const ImageCalibration = memo(() => {
 	const calibration = useMolecule(ImageCalibrationMolecule)
 
 	return (
-		<Modal footer={<Footer />} header='Calibration' id={`calibration-${calibration.viewer.storageKey}`} maxWidth='264px' onHide={calibration.hide}>
+		<Modal footer={<Footer />} header="Calibration" id={`calibration-${calibration.viewer.storageKey}`} maxWidth="264px" onHide={calibration.hide}>
 			<Body />
 		</Modal>
 	)
@@ -24,12 +24,12 @@ const Body = memo(() => {
 	const { enabled } = useSnapshot(calibration.state.calibration)
 
 	return (
-		<div className='mt-0 grid grid-cols-12 gap-2'>
-			<Checkbox className='col-span-full' label='Enabled' onValueChange={(value) => (calibration.state.calibration.enabled = value)} value={enabled} />
-			<CalibrationFile type='dark' />
-			<CalibrationFile type='flat' />
-			<CalibrationFile type='bias' />
-			<CalibrationFile type='darkFlat' />
+		<div className="mt-0 grid grid-cols-12 gap-2">
+			<Checkbox className="col-span-full" label="Enabled" onValueChange={(value) => (calibration.state.calibration.enabled = value)} value={enabled} />
+			<CalibrationFile type="dark" />
+			<CalibrationFile type="flat" />
+			<CalibrationFile type="bias" />
+			<CalibrationFile type="darkFlat" />
 		</div>
 	)
 })
@@ -43,7 +43,7 @@ const CalibrationFile = memo(({ type }: CalibrationFileProps) => {
 	const { enabled, path } = useSnapshot(calibration.state.calibration[type])
 
 	return (
-		<div className='col-span-full flex flex-row gap-2'>
+		<div className="col-span-full flex flex-row gap-2">
 			<Checkbox onValueChange={(value) => calibration.update(type, 'enabled', value)} value={enabled} />
 			<FilePickerInput disabled={!enabled} id={`calibration-${calibration.viewer.storageKey}-${type}`} onValueChange={(value) => calibration.update(type, 'path', value)} placeholder={type} value={path} />
 		</div>
@@ -53,5 +53,5 @@ const CalibrationFile = memo(({ type }: CalibrationFileProps) => {
 const Footer = memo(() => {
 	const calibration = useMolecule(ImageCalibrationMolecule)
 
-	return <Button color='success' label='Apply' onPointerUp={calibration.apply} startContent={<Icons.Check />} />
+	return <Button color="success" label="Apply" onPointerUp={calibration.apply} startContent={<Icons.Check />} />
 })

@@ -14,10 +14,20 @@ export interface SunProps {
 // The formula of "b" parameter of linear transformation for contrast filter is (128 - color) / 128 => (128 - 24) / 128 = 0.8125
 
 export const Sun = memo(({ source, onSourceChange }: SunProps) => {
-	const imgRef = useRef<HTMLImageElement>(null)
+	const imgRef = useRef<HTMLImageElement | undefined>(null)
 
 	function update() {
 		imgRef.current!.src = `${API_URL}/atlas/sun/image?source=${source}`
+	}
+
+	function assignRef(ref?: HTMLImageElement | null) {
+		if (ref) {
+			ref.addEventListener('error', handleOnError)
+		} else {
+			imgRef.current?.removeEventListener('error', handleOnError)
+		}
+
+		imgRef.current = ref
 	}
 
 	useEffect(() => {
@@ -28,17 +38,17 @@ export const Sun = memo(({ source, onSourceChange }: SunProps) => {
 		}
 	}, [source])
 
-	function handleOnError(event: React.SyntheticEvent<HTMLImageElement, Event>) {
+	function handleOnError(event: ErrorEvent) {
 		const target = event.target as HTMLImageElement
-		target.onerror = null // Prevents looping
+		target.removeEventListener('error', handleOnError) // Prevents looping
 		target.src = sunWebp
 	}
 
 	return (
-		<div className='min-w-20 flex flex-col justify-center items-center gap-1'>
-			<SolarImageSourceDropdown className='w-full' onValueChange={onSourceChange} value={source} />
-			<img className='select-none max-w-54 w-full h-auto contrast-[0.8125]' draggable={false} onError={handleOnError} ref={imgRef} src={`${API_URL}/atlas/sun/image?source=${source}`} />
-			<Link href={SOLAR_IMAGE_SOURCE_URLS[source].replace('256', '1024')} label='NASA/SDO' />
+		<div className="flex min-w-20 flex-col items-center justify-center gap-1">
+			<SolarImageSourceDropdown className="w-full" onValueChange={onSourceChange} value={source} />
+			<img className="h-auto w-full max-w-54 contrast-[0.8125] select-none" draggable={false} ref={assignRef} src={`${API_URL}/atlas/sun/image?source=${source}`} />
+			<Link href={SOLAR_IMAGE_SOURCE_URLS[source].replace('256', '1024')} label="NASA/SDO" />
 		</div>
 	)
 })

@@ -209,11 +209,11 @@ export class AutoFocusTask {
 export function autoFocus(autoFocusHandler: AutoFocusHandler): Endpoints {
 	const { cameraHandler, focuserHandler } = autoFocusHandler
 
-	function cameraFromParams(req: Bun.BunRequest<string>) {
+	function cameraFromParams(req: Bun.BunRequest) {
 		return cameraHandler.cameraManager.get(query(req).client, req.params.camera)!
 	}
 
-	function focuserFromParams(req: Bun.BunRequest<string>) {
+	function focuserFromParams(req: Bun.BunRequest) {
 		return focuserHandler.focuserManager.get(query(req).client, req.params.focuser)!
 	}
 

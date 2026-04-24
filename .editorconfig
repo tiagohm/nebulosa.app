@@ -7,10 +7,7 @@ tab_width = 4
 indent_size = 4
 indent_style = tab
 insert_final_newline = true
-max_line_length = 999
-trim_trailing_whitespace = true
-
-[*.md]
+max_line_length = 320
 trim_trailing_whitespace = true
 
 [*.yml]

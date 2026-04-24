@@ -15,7 +15,7 @@ export const ImageStretch = memo(() => {
 	const stretch = useMolecule(ImageStretchMolecule)
 
 	return (
-		<Modal footer={<Footer />} header='Stretch' id={`stretch-${stretch.viewer.storageKey}`} maxWidth='296px' onHide={stretch.hide}>
+		<Modal footer={<Footer />} header="Stretch" id={`stretch-${stretch.viewer.storageKey}`} maxWidth="296px" onHide={stretch.hide}>
 			<Body />
 		</Modal>
 	)
@@ -23,7 +23,7 @@ export const ImageStretch = memo(() => {
 
 const Body = memo(() => {
 	return (
-		<div className='mt-0 grid grid-cols-12 gap-2'>
+		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Stretch />
 			<AutoStretch />
 		</div>
@@ -43,12 +43,12 @@ const Stretch = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-6' label='Shadow' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('shadow', value)} value={shadow} />
-			<NumberInput className='col-span-6' label='Highlight' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('highlight', value)} value={highlight} />
-			<Slider className='col-span-full' maxValue={65536} minValue={0} onValueChange={handleShadowHighlightChange} step={8} value={[shadow, highlight]} />
-			<NumberInput className='col-span-9' label='Midtone' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('midtone', value)} value={midtone} />
-			<NumberInput className='col-span-3' label='Bits' maxValue={20} minValue={8} onValueChange={(value) => stretch.update('bits', value)} value={bits} />
-			<Slider className='col-span-full' maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('midtone', value as number)} step={8} value={midtone} />
+			<NumberInput className="col-span-6" label="Shadow" maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('shadow', value)} value={shadow} />
+			<NumberInput className="col-span-6" label="Highlight" maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('highlight', value)} value={highlight} />
+			<Slider className="col-span-full" maxValue={65536} minValue={0} onValueChange={handleShadowHighlightChange} step={8} value={[shadow, highlight]} />
+			<NumberInput className="col-span-9" label="Midtone" maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('midtone', value)} value={midtone} />
+			<NumberInput className="col-span-3" label="Bits" maxValue={20} minValue={8} onValueChange={(value) => stretch.update('bits', value)} value={bits} />
+			<Slider className="col-span-full" maxValue={65536} minValue={0} onValueChange={(value) => stretch.update('midtone', value)} step={8} value={midtone} />
 		</>
 	)
 })
@@ -59,10 +59,10 @@ const AutoStretch = memo(() => {
 
 	return (
 		<>
-			<p className='col-span-full'>AUTO STRETCH</p>
+			<p className="col-span-full">AUTO STRETCH</p>
 			<SigmaClip />
-			<NumberInput className='col-span-6' fractionDigits={2} label='Mean background' maxValue={1} minValue={0} onValueChange={(value) => stretch.update('meanBackground', value)} step={0.01} value={meanBackground} />
-			<NumberInput className='col-span-6' fractionDigits={2} label='Clipping point' maxValue={10} minValue={-10} onValueChange={(value) => stretch.update('clippingPoint', value)} step={0.01} value={clippingPoint} />
+			<NumberInput className="col-span-6" fractionDigits={2} label="Mean background" maxValue={1} minValue={0} onValueChange={(value) => stretch.update('meanBackground', value)} step={0.01} value={meanBackground} />
+			<NumberInput className="col-span-6" fractionDigits={2} label="Clipping point" maxValue={10} minValue={-10} onValueChange={(value) => stretch.update('clippingPoint', value)} step={0.01} value={clippingPoint} />
 		</>
 	)
 })
@@ -73,11 +73,11 @@ const SigmaClip = memo(() => {
 
 	return (
 		<>
-			<Checkbox className='col-span-6' label='Sigma Clip' onValueChange={(value) => stretch.update('sigmaClip', value)} value={sigmaClip} />
-			<NumberInput className='col-span-3' disabled={!sigmaClip} fractionDigits={1} label='Lower' maxValue={10} minValue={0.1} onValueChange={(value) => stretch.update('sigmaLower', value)} step={0.1} value={sigmaLower} />
-			<NumberInput className='col-span-3' disabled={!sigmaClip} fractionDigits={1} label='Upper' maxValue={10} minValue={0.1} onValueChange={(value) => stretch.update('sigmaUpper', value)} step={0.1} value={sigmaUpper} />
-			<SigmaClipCenterMethodSelect className='col-span-6' isDisabled={!sigmaClip} onValueChange={(value) => stretch.update('centerMethod', value)} value={centerMethod} />
-			<SigmaClipDispersionMethodSelect className='col-span-6' isDisabled={!sigmaClip} onValueChange={(value) => stretch.update('dispersionMethod', value)} value={dispersionMethod} />
+			<Checkbox className="col-span-6" label="Sigma Clip" onValueChange={(value) => stretch.update('sigmaClip', value)} value={sigmaClip} />
+			<NumberInput className="col-span-3" disabled={!sigmaClip} fractionDigits={1} label="Lower" maxValue={10} minValue={0.1} onValueChange={(value) => stretch.update('sigmaLower', value)} step={0.1} value={sigmaLower} />
+			<NumberInput className="col-span-3" disabled={!sigmaClip} fractionDigits={1} label="Upper" maxValue={10} minValue={0.1} onValueChange={(value) => stretch.update('sigmaUpper', value)} step={0.1} value={sigmaUpper} />
+			<SigmaClipCenterMethodSelect className="col-span-6" isDisabled={!sigmaClip} onValueChange={(value) => stretch.update('centerMethod', value)} value={centerMethod} />
+			<SigmaClipDispersionMethodSelect className="col-span-6" isDisabled={!sigmaClip} onValueChange={(value) => stretch.update('dispersionMethod', value)} value={dispersionMethod} />
 		</>
 	)
 })
@@ -88,9 +88,9 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color='primary' label='Auto' onPointerUp={stretch.auto} startContent={<Icons.WandSparkles />} variant={auto ? 'solid' : 'flat'} />
-			<Button color='danger' label='Reset' onPointerUp={stretch.reset} startContent={<Icons.Restore />} />
-			<Button color='success' label='Stretch' onPointerUp={stretch.apply} startContent={<Icons.Check />} />
+			<Button color="primary" label="Auto" onPointerUp={stretch.auto} startContent={<Icons.WandSparkles />} variant={auto ? 'solid' : 'flat'} />
+			<Button color="danger" label="Reset" onPointerUp={stretch.reset} startContent={<Icons.Restore />} />
+			<Button color="success" label="Stretch" onPointerUp={stretch.apply} startContent={<Icons.Check />} />
 		</>
 	)
 })

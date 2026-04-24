@@ -4,7 +4,7 @@ import type { Mount, UTCTime } from 'nebulosa/src/indi.device'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import { type Temporal, temporalAdd, temporalGet, temporalStartOfDay, temporalSubtract } from 'nebulosa/src/temporal'
 import bus from 'src/shared/bus'
-// biome-ignore format: too long!
+// oxfmt-ignore
 import { type BodyPosition, type CloseApproach, DEFAULT_BODY_POSITION, DEFAULT_GEOGRAPHIC_COORDINATE, DEFAULT_POSITION_OF_BODY, DEFAULT_SEARCH_SATELLITE, DEFAULT_SKY_OBJECT_SEARCH, type FindCloseApproaches, type Framing, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type NextLunarApsis, type NextLunarEclipse, type NextSolarEclipse, type PlanetType, type PositionOfBody, type Satellite, type SearchSatellite, type SearchSkyObject, type SkyObjectSearchItem, type SolarImageSource, type SolarSeasons, type Twilight } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
@@ -837,12 +837,12 @@ export const SkyAtlasMolecule = molecule(() => {
 
 		await twilight()
 
-		if (state.tab === 'sun') sun.tick(time, location, dateHasChanged)
-		else if (state.tab === 'moon') moon.tick(time, location, dateHasChanged)
-		else if (state.tab === 'planet') planet.tick(time, location, dateHasChanged)
-		else if (state.tab === 'asteroid') asteroid.tick(time, location, dateHasChanged)
-		else if (state.tab === 'galaxy') galaxy.tick(time, location, dateHasChanged)
-		else if (state.tab === 'satellite') satellite.tick(time, location, dateHasChanged)
+		if (state.tab === 'sun') void sun.tick(time, location, dateHasChanged)
+		else if (state.tab === 'moon') void moon.tick(time, location, dateHasChanged)
+		else if (state.tab === 'planet') void planet.tick(time, location, dateHasChanged)
+		else if (state.tab === 'asteroid') void asteroid.tick(time, location, dateHasChanged)
+		else if (state.tab === 'galaxy') void galaxy.tick(time, location, dateHasChanged)
+		else if (state.tab === 'satellite') void satellite.tick(time, location, dateHasChanged)
 
 		updating = false
 	}
@@ -894,10 +894,10 @@ export const SkyAtlasMolecule = molecule(() => {
 			const item = items.find((e) => e.type === type && e.code === code)
 
 			if (item) {
-				if (type === 'planet') planet.select(code, false)
-				else if (type === 'asteroid') asteroid.select(code)
-				else if (type === 'galaxy') galaxy.select(+code, false)
-				else if (type === 'satellite') satellite.select(+code, false)
+				if (type === 'planet') void planet.select(code, false)
+				else if (type === 'asteroid') void asteroid.select(code)
+				else if (type === 'galaxy') void galaxy.select(+code, false)
+				else if (type === 'satellite') void satellite.select(+code, false)
 
 				state.tab = type
 				state.bookmark.show = false

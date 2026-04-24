@@ -10,13 +10,14 @@ import type { CoordinateInfo, ExposureTimeUnit } from './types'
 
 // Unsubscribes all provided unsubscribers
 export function unsubscribe(unsubscribers?: readonly (VoidFunction | undefined)[]) {
-	unsubscribers?.forEach((e) => e?.())
+	if (unsubscribers) for (const e of unsubscribers) e?.()
 }
 
 // Returns a factor to convert exposure time to minutes
 export function exposureTimeUnitFactor(unit: ExposureTimeUnit) {
 	switch (unit) {
 		case 'MINUTE':
+		default:
 			return 1
 		case 'SECOND':
 			return 60

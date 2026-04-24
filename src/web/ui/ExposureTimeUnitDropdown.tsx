@@ -18,10 +18,10 @@ export function ExposureTimeUnitDropdown({ value, onValueChange, size = 'sm', va
 				<Button {...props} label={SYMBOLS[UNITS.indexOf(value)]} onPointerUp={stopPropagationDesktopOnly} size={size} variant={variant} />
 			</DropdownTrigger>
 			<DropdownMenu onAction={(key) => onValueChange(key as never)}>
-				<DropdownItem key='MINUTE'>Minutes (m)</DropdownItem>
-				<DropdownItem key='SECOND'>Seconds (s)</DropdownItem>
-				<DropdownItem key='MILLISECOND'>Milliseconds (ms)</DropdownItem>
-				<DropdownItem key='MICROSECOND'>Microseconds (µs)</DropdownItem>
+				<DropdownItem key="MINUTE">Minutes (m)</DropdownItem>
+				<DropdownItem key="SECOND">Seconds (s)</DropdownItem>
+				<DropdownItem key="MILLISECOND">Milliseconds (ms)</DropdownItem>
+				<DropdownItem key="MICROSECOND">Microseconds (µs)</DropdownItem>
 			</DropdownMenu>
 		</Dropdown>
 	)

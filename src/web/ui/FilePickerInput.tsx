@@ -32,17 +32,17 @@ export function FilePickerInput({ filter, mode, id, value, onValueChange, readOn
 		}
 	}
 
-	const StartContent = <Button children={<Icons.FolderOpen className='cursor-pointer' color='#FF9800' onPointerUp={() => setShow(true)} />} tooltipContent='Browse' variant='ghost' />
-	const EndContent = value ? <Button children={<Icons.CloseCircle className='cursor-pointer' color='#F44336' onPointerUp={() => onValueChange('')} />} variant='ghost' /> : null
+	const StartContent = <Button children={<Icons.FolderOpen className="cursor-pointer" color="#FF9800" onPointerUp={() => setShow(true)} />} tooltipContent="Browse" variant="ghost" />
+	const EndContent = value ? <Button children={<Icons.CloseCircle className="cursor-pointer" color="#F44336" onPointerUp={() => onValueChange('')} />} variant="ghost" /> : null
 
 	return (
 		<>
-			<div className='col-span-full flex flex-row items-center gap-1 w-full flex-1'>
+			<div className="col-span-full flex w-full flex-1 flex-row items-center gap-1">
 				<TextInput endContent={EndContent} onValueChange={handleValueChange} readOnly={readOnly} startContent={StartContent} value={value} {...props} />
 			</div>
 			<Activity mode={show ? 'visible' : 'hidden'}>
 				<ScopeProvider scope={FilePickerScope} value={{ path: initialPath.current, filter, mode, multiple: false }}>
-					<FilePicker header='Choose Path' id={`file-picker-input-${id}`} onChoose={handleOnChoose} />
+					<FilePicker header="Choose Path" id={`file-picker-input-${id}`} onChoose={handleOnChoose} />
 				</ScopeProvider>
 			</Activity>
 		</>

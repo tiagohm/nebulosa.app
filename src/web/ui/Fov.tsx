@@ -8,13 +8,13 @@ export const Fov = memo(() => {
 	const { computed, items } = useSnapshot(fov.state)
 
 	return (
-		<svg className='fov absolute left-0 top-0 pointer-events-none h-full w-full' overflow='visible'>
+		<svg className="fov pointer-events-none absolute top-0 left-0 h-full w-full" overflow="visible">
 			{computed.map(({ focalRatio, svg: { width, height } }, index) => {
 				const { id, visible, color, rotation } = items[index]
 				const x = 50 - width / 2
 				const y = 50 - height / 2
 
-				return <rect fill='none' height={`${height}%`} key={id} stroke={color} strokeWidth='1' style={{ transformOrigin: '50% 50%', transform: `rotate(${rotation}deg)`, display: focalRatio && visible ? 'inline' : 'none' }} width={`${width}%`} x={`${x}%`} y={`${y}%`} />
+				return <rect fill="none" height={`${height}%`} key={id} stroke={color} strokeWidth="1" style={{ transformOrigin: '50% 50%', transform: `rotate(${rotation}deg)`, display: focalRatio && visible ? 'inline' : 'none' }} width={`${width}%`} x={`${x}%`} y={`${y}%`} />
 			})}
 		</svg>
 	)

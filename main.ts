@@ -1,10 +1,11 @@
 import { existsSync, type MakeDirectoryOptions, rmSync } from 'fs'
 import fs from 'fs/promises'
+import os from 'os'
+import { join } from 'path'
+import { parseArgs } from 'util'
 import type { Client, DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
 import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import { default as openDefaultApp } from 'open'
-import os from 'os'
-import { join } from 'path'
 import { AlpacaHandler, alpaca } from 'src/api/alpaca'
 import { AtlasHandler, atlas } from 'src/api/atlas'
 import { AutoFocusHandler, autoFocus } from 'src/api/autofocus'
@@ -27,7 +28,6 @@ import { RotatorHandler, rotator } from 'src/api/rotator'
 import { ThermometerHandler, thermometer } from 'src/api/thermometer'
 import { TppaHandler, tppa } from 'src/api/tppa'
 import { WheelHandler, wheel } from 'src/api/wheel'
-import { parseArgs } from 'util'
 import { ConfirmationHandler, confirmation } from './src/api/confirmation'
 import { FileSystemHandler, fileSystem } from './src/api/filesystem'
 import { FramingHandler, framing } from './src/api/framing'
@@ -75,11 +75,11 @@ const alpacaDiscoveryPort = +(args.values.alpacaDiscoveryPort || Bun.env.alpacaD
 
 // Initialize the environment variables
 
-function checkDirAccess(...paths: string[]) {
+async function checkDirAccess(...paths: string[]) {
 	const path = join(...paths)
 
 	try {
-		fs.access(path, fs.constants.R_OK | fs.constants.W_OK)
+		await fs.access(path, fs.constants.R_OK | fs.constants.W_OK)
 	} catch {
 		console.error('unable to access the app directory at', Bun.env.homeDir)
 		process.exit(0)
@@ -89,19 +89,19 @@ function checkDirAccess(...paths: string[]) {
 }
 
 if (appDir) {
-	checkDirAccess(appDir)
+	await checkDirAccess(appDir)
 } else {
-	Bun.env.homeDir = checkDirAccess(os.homedir())
+	Bun.env.homeDir = await checkDirAccess(os.homedir())
 }
 
 if (process.platform === 'linux') {
-	Bun.env.tmpDir = join(checkDirAccess('/dev/shm'), 'nebulosa')
+	Bun.env.tmpDir = join(await checkDirAccess('/dev/shm'), 'nebulosa')
 	Bun.env.appDir = appDir || join(Bun.env.homeDir, '.nebulosa')
 	Bun.env.capturesDir = join(Bun.env.appDir, 'captures')
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'satellites')
 } else if (process.platform === 'win32') {
-	const documentsDir = appDir || join(checkDirAccess(Bun.env.homeDir, 'Documents'), 'Nebulosa')
-	Bun.env.appDir = appDir || join(checkDirAccess(Bun.env.homeDir, 'AppData', 'Local'), 'Nebulosa')
+	const documentsDir = appDir || join(await checkDirAccess(Bun.env.homeDir, 'Documents'), 'Nebulosa')
+	Bun.env.appDir = appDir || join(await checkDirAccess(Bun.env.homeDir, 'AppData', 'Local'), 'Nebulosa')
 	Bun.env.tmpDir = join(Bun.env.appDir, 'Temp')
 	Bun.env.capturesDir = join(documentsDir, 'Captures')
 	Bun.env.satellitesDir = join(Bun.env.appDir, 'Satellites')
@@ -229,7 +229,6 @@ const server = Bun.serve({
 	},
 	fetch: (req, server) => {
 		if (server.upgrade(req)) {
-			return
 		}
 	},
 	error: (error) => {

@@ -7,7 +7,7 @@ import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { PHD2Profile } from 'nebulosa/src/phd2'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/star.detector'
-// biome-ignore format: too long
+// oxfmt-ignore
 import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DarvStop, DirectoryEntry, FileSystem, FindCloseApproaches, FindNextLunarEclipse, FindNextSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, NextLunarApsis, NextLunarEclipse, NextSolarEclipse, OpenImage, PHD2Connect, PHD2Event, PHD2Status, PlateSolveStart, PlateSolveStop, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SolarSeasons, StarDetection, StatisticImage, TppaStart, TppaStop, Twilight } from 'src/shared/types'
 import { type ImageCoordinateInterpolation, type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 

@@ -52,17 +52,34 @@ export class EventBus {
 	}
 
 	// Emits data to all subscribers of a topic
-	emit<T>(topic: string, data: T) {
+	emit(topic: string, data: unknown) {
 		queueMicrotask(() => this.emitSync(topic, data))
 	}
 
+	emitAll(event: string, devices?: readonly unknown[]) {
+		if (devices !== undefined && devices.length > 0) queueMicrotask(() => this.emitAllSync(event, devices))
+	}
+
 	// Emits data to all subscribers of a topic synchronously
-	emitSync<T>(topic: string, data: T) {
+	emitSync(topic: string, data: unknown) {
 		const callbacks = this.bus.get(topic)
 
 		if (callbacks) {
 			for (const callback of callbacks) {
 				callback(data as never)
+			}
+		}
+	}
+
+	// Emits data to all subscribers of a topic synchronously
+	emitAllSync(topic: string, data: readonly unknown[]) {
+		const callbacks = this.bus.get(topic)
+
+		if (callbacks && data.length > 0) {
+			for (const item of data) {
+				for (const callback of callbacks) {
+					callback(item as never)
+				}
 			}
 		}
 	}

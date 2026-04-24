@@ -5,8 +5,8 @@ export interface MoonProps {}
 
 export const Moon = memo((props: MoonProps) => {
 	return (
-		<span className='relative'>
-			<img className='pt-8 select-none max-w-48 w-full h-auto' draggable={false} src={moonWebp} />
+		<span className="relative">
+			<img className="h-auto w-full max-w-48 pt-8 select-none" draggable={false} src={moonWebp} />
 		</span>
 	)
 })

@@ -20,7 +20,7 @@ const PathItem = (path: string, i: number) => <path d={path} key={i} />
 
 export function mdiIcon(...paths: string[]) {
 	return memo(({ stroke = 1, color = 'currentColor', className, ...props }: IconProps) => (
-		<svg className={tw('size-[1.25em]', className)} fill={color} strokeWidth={stroke} viewBox='0 0 24 24' {...props}>
+		<svg className={tw('size-[1.25em]', className)} fill={color} strokeWidth={stroke} viewBox="0 0 24 24" {...props}>
 			{paths.map(PathItem)}
 		</svg>
 	))
@@ -28,7 +28,7 @@ export function mdiIcon(...paths: string[]) {
 
 export function lucideIcon(...paths: string[]) {
 	return memo(({ stroke = 2, color = 'currentColor', className, ...props }: IconProps) => (
-		<svg className={tw('size-[1.25em]', className)} fill='none' stroke={color} strokeWidth={stroke} viewBox='0 0 24 24' {...props}>
+		<svg className={tw('size-[1.25em]', className)} fill="none" stroke={color} strokeWidth={stroke} viewBox="0 0 24 24" {...props}>
 			{paths.map(PathItem)}
 		</svg>
 	))
@@ -36,7 +36,7 @@ export function lucideIcon(...paths: string[]) {
 
 export const tablerIcon = lucideIcon
 
-// biome-ignore format: don't break string line
+// oxfmt-ignore
 export namespace Icons {
 	export const ArrowDown = mdiIcon('M10,4H14V13L17.5,9.5L19.92,11.92L12,19.84L4.08,11.92L6.5,9.5L10,13V4Z')
 	export const ArrowDownLeft = mdiIcon('M15.5,5.69L18.31,8.5L11.94,14.89H16.89V18.31H5.69V7.11H9.12V12.06L15.5,5.69Z')

@@ -15,16 +15,16 @@ export class CoverHandler implements DeviceHandler<Cover> {
 	}
 
 	added(device: Cover) {
-		this.wsm.send<CoverAdded>('cover:add', { device })
+		this.wsm.send('cover:add', { device } satisfies CoverAdded)
 		console.info('cover added:', device.name)
 	}
 
 	updated(device: Cover, property: keyof Cover & string, state?: PropertyState) {
-		this.wsm.send<CoverUpdated>('cover:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		this.wsm.send('cover:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies CoverUpdated)
 	}
 
 	removed(device: Cover) {
-		this.wsm.send<CoverRemoved>('cover:remove', { device })
+		this.wsm.send('cover:remove', { device } satisfies CoverRemoved)
 		console.info('cover removed:', device.name)
 	}
 
@@ -48,7 +48,7 @@ export class CoverHandler implements DeviceHandler<Cover> {
 export function cover(coverHandler: CoverHandler): Endpoints {
 	const { coverManager } = coverHandler
 
-	function coverFromParams(req: Bun.BunRequest<string>) {
+	function coverFromParams(req: Bun.BunRequest) {
 		return coverManager.get(query(req).client, req.params.id)!
 	}
 

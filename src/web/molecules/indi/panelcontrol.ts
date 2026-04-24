@@ -214,7 +214,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 
 	function ping(device: string = state.device) {
 		if (device && state.show && connection.state.connected) {
-			void Api.Indi.Properties.ping(device, connection.state.connected!)
+			void Api.Indi.Properties.ping(device, connection.state.connected)
 		}
 	}
 

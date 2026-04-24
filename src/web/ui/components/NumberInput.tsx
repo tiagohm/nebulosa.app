@@ -336,7 +336,6 @@ export function NumberInput({
 		if (fireOnEnter && event.key === 'Enter') {
 			commitValue()
 			onEnter?.()
-			return
 		}
 	}
 
@@ -352,7 +351,6 @@ export function NumberInput({
 			// Unable to preventDefault inside passive event listener invocation
 			// event.preventDefault()
 			stepValue(direction)
-			return
 		}
 	}
 
@@ -394,7 +392,7 @@ export function NumberInput({
 						spellCheck={spellCheck}
 						style={style}
 						tabIndex={tabIndex}
-						type='text'
+						type="text"
 						value={draft}
 					/>
 					{label && (
@@ -407,10 +405,10 @@ export function NumberInput({
 				{hasEndContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.endContent)}>{endContent}</div>}
 				{hasStepper && (
 					<div className={tw(styles.stepper(), classNames?.stepper)}>
-						<button className={tw(styles.stepButton(), 'rounded-tr-md', classNames?.stepButton)} onClick={() => stepValue(1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type='button'>
+						<button className={tw(styles.stepButton(), 'rounded-tr-md', classNames?.stepButton)} onClick={() => stepValue(1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type="button">
 							<Icons.ChevronUp className={tw(styles.stepIcon(), classNames?.stepIcon)} />
 						</button>
-						<button className={tw(styles.stepButton(), 'rounded-br-md', classNames?.stepButton)} onClick={() => stepValue(-1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type='button'>
+						<button className={tw(styles.stepButton(), 'rounded-br-md', classNames?.stepButton)} onClick={() => stepValue(-1)} onMouseDown={handleStepMouseDown} tabIndex={-1} type="button">
 							<Icons.ChevronDown className={tw(styles.stepIcon(), classNames?.stepIcon)} />
 						</button>
 					</div>

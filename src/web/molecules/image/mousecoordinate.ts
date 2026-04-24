@@ -87,8 +87,6 @@ export const ImageMouseCoordinateMolecule = molecule(() => {
 			if (coordinateInterpolation) {
 				const { ma, md, x0, y0, x1, y1, delta } = coordinateInterpolation
 				state.interpolator = ref(new CoordinateInterpolator(new Float32Array(ma), new Float32Array(md), x0, y0, x1, y1, delta))
-			} else {
-				return
 			}
 		}
 	}

@@ -5,8 +5,8 @@ import { EnumSelect, type EnumSelectProps } from './EnumSelect'
 export function HemisphereSelect({ label = 'Hemisphere', ...props }: Omit<EnumSelectProps<Hemisphere>, 'children'>) {
 	return (
 		<EnumSelect {...props} label={label}>
-			<SelectItem key='NORTHERN'>Northern</SelectItem>
-			<SelectItem key='SOUTHERN'>Southern</SelectItem>
+			<SelectItem key="NORTHERN">Northern</SelectItem>
+			<SelectItem key="SOUTHERN">Southern</SelectItem>
 		</EnumSelect>
 	)
 }

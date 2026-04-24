@@ -3,11 +3,11 @@ import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
-import { ConnectButton } from './ConnectButton'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
 import { TextInput } from './components/TextInput'
+import { ConnectButton } from './ConnectButton'
 import { CameraDropdown, GuideOutputDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -18,7 +18,7 @@ export const PHD2 = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
 
 	return (
-		<Modal footer={<Footer />} header='PHD2' id='phd2' maxWidth='360px' onHide={phd2.hide} subHeader={<SubHeader />}>
+		<Modal footer={<Footer />} header="PHD2" id="phd2" maxWidth="360px" onHide={phd2.hide} subHeader={<SubHeader />}>
 			<Body />
 		</Modal>
 	)
@@ -33,7 +33,7 @@ const SubHeader = memo(() => {
 
 const Body = memo(() => {
 	return (
-		<div className='mt-0 grid grid-cols-12 gap-2'>
+		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Connection />
 			<Settle />
 			<Dither />
@@ -50,17 +50,17 @@ const Connection = memo(() => {
 
 	return (
 		<>
-			<div className='col-span-full flex flex-row justify-center items-center'>
+			<div className="col-span-full flex flex-row items-center justify-center">
 				<PHD2ClientModeRadioGroup horizontal onValueChange={(value) => (phd2.state.connection.mode = value)} value={mode} />
 			</div>
 			<Activity mode={mode === 'REMOTE' ? 'visible' : 'hidden'}>
-				<TextInput className='col-span-7' disabled={connected} label='Host' maxLength={128} onValueChange={(value) => phd2.updateConnection('host', value)} placeholder='localhost' value={host} />
-				<NumberInput className='col-span-3' disabled={connected} label='Port' maxValue={65535} minValue={80} onValueChange={(value) => phd2.updateConnection('port', value)} placeholder='4400' value={port} />
+				<TextInput className="col-span-7" disabled={connected} label="Host" maxLength={128} onValueChange={(value) => phd2.updateConnection('host', value)} placeholder="localhost" value={host} />
+				<NumberInput className="col-span-3" disabled={connected} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => phd2.updateConnection('port', value)} placeholder="4400" value={port} />
 			</Activity>
 			<Activity mode={mode === 'INTERNAL' ? 'visible' : 'hidden'}>
 				<DeviceChooser />
 			</Activity>
-			<div className='col-span-2 flex flex-row justify-center items-center gap-2'>
+			<div className="col-span-2 flex flex-row items-center justify-center gap-2">
 				<ConnectButton disabled={!camera || !guideOutput} isConnected={connected} onPointerUp={phd2.connect} />
 			</div>
 		</>
@@ -72,7 +72,7 @@ const DeviceChooser = memo(() => {
 	const { camera, guideOutput, connected } = useSnapshot(phd2.state)
 
 	return (
-		<div className='col-span-10 flex flex-row justify-center items-center gap-2'>
+		<div className="col-span-10 flex flex-row items-center justify-center gap-2">
 			<CameraDropdown endContent={<CameraDropdownEndContent />} isDisabled={connected} onValueChange={(value) => (phd2.state.camera = value)} showLabel value={camera} />
 			<GuideOutputDropdown isDisabled={connected} onValueChange={(value) => (phd2.state.guideOutput = value)} showLabel value={guideOutput} />
 		</div>
@@ -84,7 +84,7 @@ const CameraDropdownEndContent = memo(() => {
 	const { camera } = useSnapshot(phd2.state)
 	const { capture } = useSnapshot(phd2.state.connection)
 
-	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode='guider' onValueChange={phd2.updateCapture} value={capture} />
+	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode="guider" onValueChange={phd2.updateCapture} value={capture} />
 })
 
 const Settle = memo(() => {
@@ -94,9 +94,9 @@ const Settle = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-6' disabled={connected} fractionDigits={1} label='Settle tolerance (px)' maxValue={25} minValue={1} onValueChange={(value) => phd2.updateSettle('pixels', value)} placeholder='1.5' step={0.1} value={pixels} />
-			<NumberInput className='col-span-6' disabled={connected} label='Min settle time (s)' maxValue={60} minValue={1} onValueChange={(value) => phd2.updateSettle('time', value)} placeholder='10' value={time} />
-			<NumberInput className='col-span-5' disabled={connected} label='Settle timeout (s)' maxValue={60} minValue={1} onValueChange={(value) => phd2.updateSettle('timeout', value)} placeholder='30' value={timeout} />
+			<NumberInput className="col-span-6" disabled={connected} fractionDigits={1} label="Settle tolerance (px)" maxValue={25} minValue={1} onValueChange={(value) => phd2.updateSettle('pixels', value)} placeholder="1.5" step={0.1} value={pixels} />
+			<NumberInput className="col-span-6" disabled={connected} label="Min settle time (s)" maxValue={60} minValue={1} onValueChange={(value) => phd2.updateSettle('time', value)} placeholder="10" value={time} />
+			<NumberInput className="col-span-5" disabled={connected} label="Settle timeout (s)" maxValue={60} minValue={1} onValueChange={(value) => phd2.updateSettle('timeout', value)} placeholder="30" value={timeout} />
 		</>
 	)
 })
@@ -108,8 +108,8 @@ const Dither = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-4' disabled={connected} fractionDigits={1} label='Dither pixels (px)' maxValue={25} minValue={1} onValueChange={(value) => phd2.updateDither('amount', value)} placeholder='5' step={0.1} value={amount} />
-			<Checkbox className='col-span-3' disabled={connected} label='RA only' onValueChange={(value) => phd2.updateDither('raOnly', value)} value={raOnly} />
+			<NumberInput className="col-span-4" disabled={connected} fractionDigits={1} label="Dither pixels (px)" maxValue={25} minValue={1} onValueChange={(value) => phd2.updateDither('amount', value)} placeholder="5" step={0.1} value={amount} />
+			<Checkbox className="col-span-3" disabled={connected} label="RA only" onValueChange={(value) => phd2.updateDither('raOnly', value)} value={raOnly} />
 		</>
 	)
 })
@@ -119,11 +119,11 @@ const Buttons = memo(() => {
 	const { connected, running, looping } = useSnapshot(phd2.state)
 
 	return (
-		<div className='col-span-full flex flex-row gap-2 items-center justify-center'>
-			<IconButton color='primary' disabled={!connected || looping || running} icon={Icons.Reload} onPointerUp={phd2.loop} />
-			<IconButton color='warning' disabled={!connected || !looping} icon={Icons.Star} onPointerUp={phd2.findStar} />
-			<IconButton color='success' disabled={!connected || running} icon={Icons.Play} onPointerUp={phd2.start} />
-			<IconButton color='danger' disabled={!connected || (!running && !looping)} icon={Icons.Stop} onPointerUp={phd2.stop} />
+		<div className="col-span-full flex flex-row items-center justify-center gap-2">
+			<IconButton color="primary" disabled={!connected || looping || running} icon={Icons.Reload} onPointerUp={phd2.loop} />
+			<IconButton color="warning" disabled={!connected || !looping} icon={Icons.Star} onPointerUp={phd2.findStar} />
+			<IconButton color="success" disabled={!connected || running} icon={Icons.Play} onPointerUp={phd2.start} />
+			<IconButton color="danger" disabled={!connected || (!running && !looping)} icon={Icons.Stop} onPointerUp={phd2.stop} />
 		</div>
 	)
 })
@@ -133,11 +133,11 @@ const Status = memo(() => {
 	const { state, snr, starMass, hfd } = useSnapshot(phd2.state.event)
 
 	return (
-		<div className='mt-2 col-span-full flex flex-row items-center justify-center gap-1'>
-			<Chip color='primary'>{state === 'IDLE' ? 'idle' : state === 'CALIBRATING' ? 'calibrating' : state === 'GUIDING' ? 'guiding' : state === 'LOOPING' ? 'looping' : state === 'SETTLING' ? 'settling' : state === 'PAUSED' ? 'paused' : 'star lost'}</Chip>
-			<Chip color='success'>SNR: {snr.toFixed(0)}</Chip>
-			<Chip color='warning'>HFD: {hfd.toFixed(2)}</Chip>
-			<Chip color='secondary'>Star mass: {starMass.toFixed(0)}</Chip>
+		<div className="col-span-full mt-2 flex flex-row items-center justify-center gap-1">
+			<Chip color="primary">{state === 'IDLE' ? 'idle' : state === 'CALIBRATING' ? 'calibrating' : state === 'GUIDING' ? 'guiding' : state === 'LOOPING' ? 'looping' : state === 'SETTLING' ? 'settling' : state === 'PAUSED' ? 'paused' : 'star lost'}</Chip>
+			<Chip color="success">SNR: {snr.toFixed(0)}</Chip>
+			<Chip color="warning">HFD: {hfd.toFixed(2)}</Chip>
+			<Chip color="secondary">Star mass: {starMass.toFixed(0)}</Chip>
 		</div>
 	)
 })
@@ -147,11 +147,11 @@ const Footer = memo(() => {
 	const { rmsRA, rmsDEC } = useSnapshot(phd2.state.event)
 
 	return (
-		<div className='w-full flex justify-center items-center gap-2'>
+		<div className="flex w-full items-center justify-center gap-2">
 			<span>RA: {rmsRA.toFixed(2)}"</span>
 			<span>DEC: {rmsDEC.toFixed(2)}"</span>
 			<span>Total: {Math.hypot(rmsRA, rmsDEC).toFixed(2)}"</span>
-			<IconButton color='primary' icon={Icons.Broom} onPointerUp={phd2.clear} />
+			<IconButton color="primary" icon={Icons.Broom} onPointerUp={phd2.clear} />
 		</div>
 	)
 })

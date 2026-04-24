@@ -64,7 +64,7 @@ export const ImageWorkspaceMolecule = molecule(() => {
 
 		if (index >= 0) {
 			image = state.images[index]
-			viewers.get(image.key)?.load(true, path)
+			void viewers.get(image.key)?.load(true, path)
 			bus.emit('image:update', image)
 		} else {
 			image = { path, key, position, source, camera }

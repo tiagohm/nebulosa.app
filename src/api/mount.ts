@@ -11,7 +11,7 @@ import { matMulVec, matTranspose } from 'nebulosa/src/mat3'
 import { type StellariumProtocolHandler, StellariumProtocolServer } from 'nebulosa/src/stellarium'
 import { TIMEZONE, temporalAdd } from 'nebulosa/src/temporal'
 import { Timescale, timeJulianYear, timeNow } from 'nebulosa/src/time'
-// biome-ignore format: too long!
+// oxfmt-ignore
 import { DEFAULT_COORDINATE_INFO, type MountAdded, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountUpdated } from 'src/shared/types'
 import { coordinateInfo } from 'src/shared/util'
 import type { CacheManager } from './cache'
@@ -43,16 +43,16 @@ export class MountHandler implements DeviceHandler<Mount> {
 	}
 
 	added(device: Mount) {
-		this.wsm.send<MountAdded>('mount:add', { device })
+		this.wsm.send('mount:add', { device } satisfies MountAdded)
 		console.info('mount added:', device.name)
 	}
 
 	updated(device: Mount, property: keyof Mount & string, state?: PropertyState) {
-		this.wsm.send<MountUpdated>('mount:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		this.wsm.send('mount:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies MountUpdated)
 	}
 
 	removed(device: Mount) {
-		this.wsm.send<MountRemoved>('mount:remove', { device })
+		this.wsm.send('mount:remove', { device } satisfies MountRemoved)
 		console.info('mount removed:', device.name)
 	}
 
@@ -158,7 +158,7 @@ export class MountRemoteControlHandler {
 		slewRate: (server: Lx200ProtocolServer, rate: 'CENTER' | 'GUIDE' | 'FIND' | 'MAX') => {
 			const rates = this.get(server).slewRates
 
-			if (rates.length) {
+			if (rates.length > 0) {
 				const index = rates.length === 1 ? 0 : rate === 'GUIDE' ? 0 : rate === 'MAX' ? rates.length - 1 : rate === 'CENTER' ? 1 : Math.max(1, rates.length - 2)
 				this.mountManager.slewRate(this.get(server), rates[Math.max(index, 0)])
 			}
@@ -232,7 +232,7 @@ export class MountRemoteControlHandler {
 export function mount(mountHandler: MountHandler, mountRemoteControlHandler: MountRemoteControlHandler): Endpoints {
 	const { mountManager } = mountHandler
 
-	function mountFromParams(req: Bun.BunRequest<string>) {
+	function mountFromParams(req: Bun.BunRequest) {
 		return mountManager.get(query(req).client, req.params.id)!
 	}
 

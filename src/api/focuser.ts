@@ -16,16 +16,16 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 	}
 
 	added(device: Focuser) {
-		this.wsm.send<FocuserAdded>('focuser:add', { device })
+		this.wsm.send('focuser:add', { device } satisfies FocuserAdded)
 		console.info('focuser added:', device.name)
 	}
 
 	updated(device: Focuser, property: keyof Focuser & string, state?: PropertyState) {
-		this.wsm.send<FocuserUpdated>('focuser:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		this.wsm.send('focuser:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies FocuserUpdated)
 	}
 
 	removed(device: Focuser) {
-		this.wsm.send<FocuserRemoved>('focuser:remove', { device })
+		this.wsm.send('focuser:remove', { device } satisfies FocuserRemoved)
 		console.info('focuser removed:', device.name)
 	}
 
@@ -61,7 +61,7 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 export function focuser(focuserHandler: FocuserHandler): Endpoints {
 	const { focuserManager } = focuserHandler
 
-	function focuserFromParams(req: Bun.BunRequest<string>) {
+	function focuserFromParams(req: Bun.BunRequest) {
 		return focuserManager.get(query(req).client, req.params.id)!
 	}
 

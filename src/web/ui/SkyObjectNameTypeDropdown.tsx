@@ -16,7 +16,7 @@ export function SkyObjectNameTypeDropdown({ value, onValueChange, size = 'sm', v
 			<DropdownTrigger>
 				<Button {...props} label={SKY_OBJECT_NAME_TYPES[value + 1]} onPointerUp={stopPropagationDesktopOnly} size={size} variant={variant} />
 			</DropdownTrigger>
-			<DropdownMenu className='max-h-60 overflow-auto no-scrollbar' onAction={(key) => onValueChange(+key)} selectedKeys={new Set([`${value}`])} selectionMode='single'>
+			<DropdownMenu className="no-scrollbar max-h-60 overflow-auto" onAction={(key) => onValueChange(+key)} selectedKeys={new Set([`${value}`])} selectionMode="single">
 				{SKY_OBJECT_NAME_TYPES.map(SkyObjectNameItem)}
 			</DropdownMenu>
 		</Dropdown>

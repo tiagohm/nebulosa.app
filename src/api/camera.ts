@@ -1,10 +1,10 @@
 import { mkdir } from 'fs/promises'
+import { join } from 'path'
 import type { IndiClient } from 'nebulosa/src/indi.client'
 import { type Camera, CLIENT } from 'nebulosa/src/indi.device'
 import type { CameraManager, DeviceHandler, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } from 'nebulosa/src/temporal'
-import { join } from 'path'
 import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import { type Endpoints, query, response } from './http'
@@ -33,22 +33,22 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	added(device: Camera) {
-		this.wsm.send<CameraAdded>('camera:add', { device })
+		this.wsm.send('camera:add', { device } satisfies CameraAdded)
 		console.info('camera added:', device.name)
 	}
 
 	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {
-		this.wsm.send<CameraUpdated>('camera:update', { device: { id: camera.id, name: camera.name, [property]: camera[property] }, property, state })
-		this.tasks.get(camera.id)?.cameraUpdated(camera, property, state)
+		this.wsm.send('camera:update', { device: { id: camera.id, name: camera.name, [property]: camera[property] }, property, state } satisfies CameraUpdated)
+		void this.tasks.get(camera.id)?.cameraUpdated(camera, property, state)
 	}
 
 	removed(camera: Camera) {
-		this.wsm.send<CameraRemoved>('camera:remove', { device: camera })
+		this.wsm.send('camera:remove', { device: camera } satisfies CameraRemoved)
 		console.info('camera removed:', camera.name)
 	}
 
 	blobReceived(camera: Camera, data: string | Buffer) {
-		this.tasks.get(camera.id)?.blobReceived(camera, data)
+		void this.tasks.get(camera.id)?.blobReceived(camera, data)
 	}
 
 	list(client?: string | IndiClient) {
@@ -104,7 +104,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 export function camera(cameraHandler: CameraHandler): Endpoints {
 	const { cameraManager } = cameraHandler
 
-	function cameraFromParams(req: Bun.BunRequest<string>) {
+	function cameraFromParams(req: Bun.BunRequest) {
 		return cameraManager.get(query(req).client, req.params.id)!
 	}
 

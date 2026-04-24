@@ -118,7 +118,7 @@ export function Checkbox({ autoFocus, children, className, classNames, disabled 
 				ref={ref}
 				style={style}
 				tabIndex={tabIndex}
-				type='checkbox'
+				type="checkbox"
 			/>
 			<span
 				className={tw(

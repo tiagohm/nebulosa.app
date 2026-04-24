@@ -10,7 +10,7 @@ const SlewRateItem = (rate: NameAndLabel) => <SelectItem key={rate.name}>{rate.l
 
 export function SlewRateSelect({ rates, isDisabled, label = 'Slew Rate', ...props }: SlewRateSelectProps) {
 	return (
-		<EnumSelect {...props} isDisabled={isDisabled || !rates.length} label={label}>
+		<EnumSelect {...props} isDisabled={isDisabled || rates.length === 0} label={label}>
 			{rates.map(SlewRateItem)}
 		</EnumSelect>
 	)

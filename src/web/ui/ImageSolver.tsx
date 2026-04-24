@@ -18,7 +18,7 @@ export const ImageSolver = memo(() => {
 	const solver = useMolecule(ImageSolverMolecule)
 
 	return (
-		<Modal footer={<Footer />} header='Plate Solver' id={`plate-solver-${solver.viewer.storageKey}`} maxWidth='360px' onHide={solver.hide}>
+		<Modal footer={<Footer />} header="Plate Solver" id={`plate-solver-${solver.viewer.storageKey}`} maxWidth="360px" onHide={solver.hide}>
 			<Body />
 		</Modal>
 	)
@@ -26,7 +26,7 @@ export const ImageSolver = memo(() => {
 
 const Body = memo(() => {
 	return (
-		<div className='mt-0 grid grid-cols-12 gap-2'>
+		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Inputs />
 			<Solution />
 		</div>
@@ -40,13 +40,13 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<PlateSolverSelect className='col-span-8' endContent={<PlateSolverSelectEndContent />} onValueChange={(value) => solver.update('type', value)} value={type} />
-			<Checkbox className='col-span-3 col-end-13' label='Blind' onValueChange={(value) => solver.update('blind', value)} value={blind} />
-			<TextInput className='col-span-4' disabled={blind} label='RA' onValueChange={(value) => solver.update('rightAscension', value)} value={rightAscension.toString()} />
-			<TextInput className='col-span-4' disabled={blind} label='DEC' onValueChange={(value) => solver.update('declination', value)} value={declination.toString()} />
-			<NumberInput className='col-span-4' disabled={blind} fractionDigits={1} label='Radius (°)' maxValue={360} minValue={0} onValueChange={(value) => solver.update('radius', value)} step={0.1} value={radius ?? 4} />
-			<NumberInput className='col-span-6' label='Focal Length (mm)' maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} value={focalLength} />
-			<NumberInput className='col-span-6' fractionDigits={2} label='Pixel size (µm)' maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} step={0.01} value={pixelSize} />
+			<PlateSolverSelect className="col-span-8" endContent={<PlateSolverSelectEndContent />} onValueChange={(value) => solver.update('type', value)} value={type} />
+			<Checkbox className="col-span-3 col-end-13" label="Blind" onValueChange={(value) => solver.update('blind', value)} value={blind} />
+			<TextInput className="col-span-4" disabled={blind} label="RA" onValueChange={(value) => solver.update('rightAscension', value)} value={rightAscension.toString()} />
+			<TextInput className="col-span-4" disabled={blind} label="DEC" onValueChange={(value) => solver.update('declination', value)} value={declination.toString()} />
+			<NumberInput className="col-span-4" disabled={blind} fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={(value) => solver.update('radius', value)} step={0.1} value={radius ?? 4} />
+			<NumberInput className="col-span-6" label="Focal Length (mm)" maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} value={focalLength} />
+			<NumberInput className="col-span-6" fractionDigits={2} label="Pixel size (µm)" maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} step={0.01} value={pixelSize} />
 		</>
 	)
 })
@@ -64,17 +64,17 @@ const Solution = memo(() => {
 
 	return (
 		<>
-			<div className='col-span-full font-bold text-sm my-1'>SOLUTION</div>
-			<TextInput className='col-span-4' label='RA (J2000)' readOnly value={formatRA(solution?.rightAscension ?? 0)} />
-			<TextInput className='col-span-4' label='DEC (J2000)' readOnly value={formatDEC(solution?.declination ?? 0)} />
-			<TextInput className='col-span-4' label='Orientation (°)' readOnly value={toDeg(solution?.orientation ?? 0).toFixed(4)} />
-			<TextInput className='col-span-4' label='Scale (arcsec/px)' readOnly value={toArcsec(solution?.scale ?? 0).toFixed(4)} />
-			<TextInput className='col-span-4' label='Size (arcmin)' readOnly value={`${toArcmin(solution?.width ?? 0).toFixed(2)} x ${toArcmin(solution?.height ?? 0).toFixed(2)}`} />
-			<TextInput className='col-span-4' label='Radius (°)' readOnly value={toDeg(solution?.radius ?? 0).toFixed(4)} />
-			<div className='col-span-full flex items-center justify-center gap-2'>
-				<MountDropdown color='primary' disallowNoneSelection icon={Icons.Sync} isDisabled={!solution} onValueChange={solver.sync} tooltipContent='Sync' variant='flat' />
-				<MountDropdown color='success' disallowNoneSelection isDisabled={!solution} onValueChange={solver.goTo} tooltipContent='Go' variant='flat' />
-				<IconButton color='secondary' disabled={!solution} icon={Icons.Image} onPointerUp={solver.frame} tooltipContent='Frame' variant='flat' />
+			<div className="col-span-full my-1 text-sm font-bold">SOLUTION</div>
+			<TextInput className="col-span-4" label="RA (J2000)" readOnly value={formatRA(solution?.rightAscension ?? 0)} />
+			<TextInput className="col-span-4" label="DEC (J2000)" readOnly value={formatDEC(solution?.declination ?? 0)} />
+			<TextInput className="col-span-4" label="Orientation (°)" readOnly value={toDeg(solution?.orientation ?? 0).toFixed(4)} />
+			<TextInput className="col-span-4" label="Scale (arcsec/px)" readOnly value={toArcsec(solution?.scale ?? 0).toFixed(4)} />
+			<TextInput className="col-span-4" label="Size (arcmin)" readOnly value={`${toArcmin(solution?.width ?? 0).toFixed(2)} x ${toArcmin(solution?.height ?? 0).toFixed(2)}`} />
+			<TextInput className="col-span-4" label="Radius (°)" readOnly value={toDeg(solution?.radius ?? 0).toFixed(4)} />
+			<div className="col-span-full flex items-center justify-center gap-2">
+				<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} isDisabled={!solution} onValueChange={solver.sync} tooltipContent="Sync" variant="flat" />
+				<MountDropdown color="success" disallowNoneSelection isDisabled={!solution} onValueChange={solver.goTo} tooltipContent="Go" variant="flat" />
+				<IconButton color="secondary" disabled={!solution} icon={Icons.Image} onPointerUp={solver.frame} tooltipContent="Frame" variant="flat" />
 			</div>
 		</>
 	)
@@ -86,8 +86,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color='danger' disabled={!loading} label='Stop' onPointerUp={solver.stop} startContent={<Icons.Stop />} />
-			<Button color='success' label='Solve' loading={loading} onPointerUp={solver.start} startContent={<Icons.Sigma />} />
+			<Button color="danger" disabled={!loading} label="Stop" onPointerUp={solver.stop} startContent={<Icons.Stop />} />
+			<Button color="success" label="Solve" loading={loading} onPointerUp={solver.start} startContent={<Icons.Sigma />} />
 		</>
 	)
 })

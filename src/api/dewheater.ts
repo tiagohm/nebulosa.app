@@ -15,19 +15,19 @@ export class DewHeaterHandler implements DeviceHandler<DewHeater> {
 	}
 
 	added(device: DewHeater) {
-		this.wsm.send<DewHeaterAdded>('dewHeater:add', { device })
+		this.wsm.send('dewHeater:add', { device } satisfies DewHeaterAdded)
 		console.info('dew heater added:', device.name)
 	}
 
 	updated(device: DewHeater, property: keyof DewHeater & string, state?: PropertyState) {
-		const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state }
+		const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies CoverUpdated | DewHeaterUpdated
 
-		if (device.type === 'COVER') this.wsm.send<CoverUpdated>('cover:update', event)
-		this.wsm.send<DewHeaterUpdated>('dewHeater:update', event)
+		if (device.type === 'COVER') this.wsm.send('cover:update', event)
+		this.wsm.send('dewHeater:update', event)
 	}
 
 	removed(device: DewHeater) {
-		this.wsm.send<DewHeaterRemoved>('dewHeater:remove', { device })
+		this.wsm.send('dewHeater:remove', { device } satisfies DewHeaterRemoved)
 		console.info('dew heater removed:', device.name)
 	}
 
@@ -39,7 +39,7 @@ export class DewHeaterHandler implements DeviceHandler<DewHeater> {
 export function dewHeater(dewHeaterHandler: DewHeaterHandler): Endpoints {
 	const { dewHeaterManager } = dewHeaterHandler
 
-	function dewHeaterFromParams(req: Bun.BunRequest<string>) {
+	function dewHeaterFromParams(req: Bun.BunRequest) {
 		return dewHeaterManager.get(query(req).client, req.params.id)!
 	}
 

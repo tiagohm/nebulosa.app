@@ -66,11 +66,11 @@ export const ImageSaveMolecule = molecule(() => {
 				a.download = `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS')}.${state.format}`
 
 				try {
-					document.body.appendChild(a)
+					document.body.append(a)
 					a.click()
 				} finally {
 					URL.revokeObjectURL(url)
-					document.body.removeChild(a)
+					a.remove()
 				}
 			}
 		} finally {

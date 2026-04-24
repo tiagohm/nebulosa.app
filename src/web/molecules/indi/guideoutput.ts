@@ -106,6 +106,8 @@ export const GuideOutputMolecule = molecule(() => {
 					return Api.GuideOutputs.pulse(guideOutput, east)
 			}
 		}
+
+		return false
 	}
 
 	function stop() {

@@ -63,7 +63,7 @@ export const ImageSolverMolecule = molecule(() => {
 
 		unsubscribers[1] = subscribeKey(state, 'solution', (solution) => {
 			if (solution) {
-				bus.emit<ImageSolved>('image:solved', { image: viewer.scope.image, solution })
+				bus.emit('image:solved', { image: viewer.scope.image, solution } satisfies ImageSolved)
 			}
 		})
 

@@ -1,27 +1,17 @@
 <!doctype html>
-<html dir="ltr"
-	  lang="en">
-
+<html dir="ltr" lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<meta name="viewport"
-			  content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover" />
-		<link rel="icon"
-			  type="image/svg+xml"
-			  href="../../assets/nebulosa.ico" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover" />
+		<link rel="icon" type="image/svg+xml" href="../../assets/nebulosa.ico" />
 		<title>Nebulosa</title>
 	</head>
 
-	<body class="dark text-foreground bg-background relative"
-		  spellcheck="false"
-		  oncontextmenu="return false">
+	<body class="dark text-foreground bg-background relative" spellcheck="false" oncontextmenu="return false">
 		<div id="root"></div>
-		<div class='w-full h-full z-99999999 absolute left-0 top-0 select-none flex justify-center items-center text-[200%]'
-			 style='display: var(--ws-disconnected-display, none)'>Disconnected</div>
+		<div class="absolute top-0 left-0 z-99999999 flex h-full w-full items-center justify-center text-[200%] select-none" style="display: var(--ws-disconnected-display, none)">Disconnected</div>
 		<!-- <script crossOrigin="anonymous"
 				src="https://unpkg.com/react-scan/dist/auto.global.js"></script> -->
-		<script type="module"
-				src="./index.tsx"></script>
+		<script type="module" src="./index.tsx"></script>
 	</body>
-
 </html>

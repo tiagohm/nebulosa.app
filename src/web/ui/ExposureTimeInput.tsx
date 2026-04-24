@@ -35,7 +35,7 @@ export function ExposureTimeInput({ className, value, onValueChange, unit, onUni
 
 	return (
 		<div className={tw('flex flex-row gap-1 items-center', className)}>
-			<NumberInput endContent={<ExposureTimeUnitDropdown color='secondary' onValueChange={handleUnitChange} value={unit} />} label='Exposure Time' maxValue={max} minValue={min} onValueChange={handleValueChange} value={value} {...props} />
+			<NumberInput endContent={<ExposureTimeUnitDropdown color="secondary" onValueChange={handleUnitChange} value={unit} />} label="Exposure Time" maxValue={max} minValue={min} onValueChange={handleValueChange} value={value} {...props} />
 		</div>
 	)
 }

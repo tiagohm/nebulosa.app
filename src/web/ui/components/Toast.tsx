@@ -112,7 +112,7 @@ function ToastItem({ className, color, delay, description, endContent, id, onClo
 			</div>
 			{endContent !== undefined && endContent !== null && <div className={tw(styles.endContent())}>{endContent}</div>}
 			{closeButtonVisible && (
-				<button className={tw(styles.closeButton())} onClick={stopPropagation} onPointerDown={handleClose} onPointerUp={stopPropagation} type='button'>
+				<button className={tw(styles.closeButton())} onClick={stopPropagation} onPointerDown={handleClose} onPointerUp={stopPropagation} type="button">
 					<Icons.Close />
 				</button>
 			)}

@@ -83,7 +83,7 @@ export const WheelMolecule = molecule(() => {
 	}
 
 	function apply() {
-		const names = [...wheel.name]
+		const names = [...wheel.names]
 		names[state.selected.position] = state.selected.name
 		return Api.Wheels.names(wheel, names)
 	}

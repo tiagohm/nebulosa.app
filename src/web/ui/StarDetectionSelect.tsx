@@ -5,8 +5,8 @@ import { EnumSelect, type EnumSelectProps } from './EnumSelect'
 export function StarDetectionSelect({ label = 'Detector', ...props }: Omit<EnumSelectProps<StarDetectionType>, 'children'>) {
 	return (
 		<EnumSelect {...props} label={label}>
-			<SelectItem key='ASTAP'>Astap</SelectItem>
-			<SelectItem key='NEBULOSA'>Nebulosa</SelectItem>
+			<SelectItem key="ASTAP">Astap</SelectItem>
+			<SelectItem key="NEBULOSA">Nebulosa</SelectItem>
 		</EnumSelect>
 	)
 }

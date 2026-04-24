@@ -8,7 +8,7 @@ export interface TrackModeSelectProps extends Omit<EnumSelectProps<TrackMode>, '
 
 export function TrackModeSelect({ modes, isDisabled, label = 'Tracking Mode', ...props }: TrackModeSelectProps) {
 	return (
-		<EnumSelect {...props} isDisabled={isDisabled || !modes.length} label={label}>
+		<EnumSelect {...props} isDisabled={isDisabled || modes.length === 0} label={label}>
 			{modes.map((mode) => (
 				<SelectItem key={mode}>{mode}</SelectItem>
 			))}

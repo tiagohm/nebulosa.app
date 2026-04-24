@@ -7,7 +7,7 @@ export type ProxyProperties<T extends object> = `${'p' | 'o'}:${keyof T & string
 
 export function populateProxy<T extends object>(proxy: T, key: string, properties: readonly ProxyProperties<T>[]) {
 	for (const property of properties) {
-		const name = property.substring(2) as keyof T & string
+		const name = property.slice(2) as keyof T & string
 		const value = storageGet(`${key}.${name}`, undefined)
 
 		if (value !== undefined && value !== null) {
@@ -25,7 +25,7 @@ export function subscribeProxy<T extends object>(proxy: T, key: string, properti
 
 	for (let i = 0; i < properties.length; i++) {
 		const property = properties[i]
-		const name = property.substring(2) as keyof T & string
+		const name = property.slice(2) as keyof T & string
 
 		if (property[0] === 'p') {
 			unsubscribers[i] = subscribeKey(proxy, name, (value) => {

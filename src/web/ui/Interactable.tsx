@@ -240,7 +240,7 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 	)
 
 	return (
-		<div className='inline-block absolute wrapper cursor-crosshair active:cursor-grabbing' onPointerUp={handleTap} ref={wrapperRef} style={{ zIndex }}>
+		<div className="wrapper absolute inline-block cursor-crosshair active:cursor-grabbing" onPointerUp={handleTap} ref={wrapperRef} style={{ zIndex }}>
 			{children}
 		</div>
 	)

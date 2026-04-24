@@ -6,5 +6,5 @@ export const ImageRoi = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { image } = viewer.scope
 
-	return <div className='roi'></div>
+	return <div className="roi"></div>
 })

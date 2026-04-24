@@ -31,7 +31,7 @@ export class ConfirmationHandler {
 			resolve(value)
 		})
 
-		this.wsm?.send<Confirmation>('confirmation', message)
+		this.wsm?.send('confirmation', message)
 
 		return promise
 	}

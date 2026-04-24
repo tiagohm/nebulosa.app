@@ -15,16 +15,16 @@ export class FlatPanelHandler implements DeviceHandler<FlatPanel> {
 	}
 
 	added(device: FlatPanel) {
-		this.wsm.send<FlatPanelAdded>('flatPanel:add', { device })
+		this.wsm.send('flatPanel:add', { device } satisfies FlatPanelAdded)
 		console.info('flat panel added:', device.name)
 	}
 
 	updated(device: FlatPanel, property: keyof FlatPanel & string, state?: PropertyState) {
-		this.wsm.send<FlatPanelUpdated>('flatPanel:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		this.wsm.send('flatPanel:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies FlatPanelUpdated)
 	}
 
 	removed(device: FlatPanel) {
-		this.wsm.send<FlatPanelRemoved>('flatPanel:remove', { device })
+		this.wsm.send('flatPanel:remove', { device } satisfies FlatPanelRemoved)
 		console.info('flat panel removed:', device.name)
 	}
 
@@ -36,7 +36,7 @@ export class FlatPanelHandler implements DeviceHandler<FlatPanel> {
 export function flatPanel(flatPanelHandler: FlatPanelHandler): Endpoints {
 	const { flatPanelManager } = flatPanelHandler
 
-	function flatPanelFromParams(req: Bun.BunRequest<string>) {
+	function flatPanelFromParams(req: Bun.BunRequest) {
 		return flatPanelManager.get(query(req).client, req.params.id)!
 	}
 

@@ -72,8 +72,8 @@ export function skyObjectName(id: string, constellation: Constellation | number)
 
 	if (index === -1) return id
 
-	const catalog = +id.substring(0, index)
-	const name = id.substring(index + 1)
+	const catalog = +id.slice(0, index)
+	const name = id.slice(index + 1)
 
 	if (catalog === 0) return name
 	if (catalog === 3 || catalog === 4) return `${name} ${CONSTELLATIONS[typeof constellation === 'number' ? CONSTELLATION_LIST[constellation] : constellation].iau}`
@@ -199,5 +199,5 @@ export function formatDistance(distance: Distance) {
 	if (distance >= ONE_KILOPARSEC) return `${(distance / ONE_KILOPARSEC).toFixed(2)} kpc`
 	if (distance >= 63241.077084266280268653583182) return `${toLightYear(distance).toFixed(2)} ly`
 	if (distance >= 1) return `${distance.toFixed(3)} AU`
-	return `${(toKilometer(distance)).toFixed(0)} km`
+	return `${toKilometer(distance).toFixed(0)} km`
 }

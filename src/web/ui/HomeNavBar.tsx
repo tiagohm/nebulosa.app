@@ -7,17 +7,17 @@ import { WakeLockScreenButton } from './WakeLockScreenButton'
 
 export const HomeNavBar = memo(() => {
 	return (
-		<nav className='sticky top-0 z-1 w-full bg-neutral-950 shadow-none'>
-			<header className='flex h-16 items-center justify-center px-6 gap-6'>
-				<div className='flex items-center justify-center gap-3'>
+		<nav className="sticky top-0 z-1 w-full bg-neutral-950 shadow-none">
+			<header className="flex h-16 items-center justify-center gap-6 px-6">
+				<div className="flex items-center justify-center gap-3">
 					<ConnectionBox />
 				</div>
-				<ul className='flex items-center justify-center gap-4'>
-					<li className='flex flex-row justify-start items-center gap-2'>
+				<ul className="flex items-center justify-center gap-4">
+					<li className="flex flex-row items-center justify-start gap-2">
 						<HomeMenu />
 						<ImagePickerButton />
 					</li>
-					<li className='flex flex-1 flex-row justify-end gap-2'>
+					<li className="flex flex-1 flex-row justify-end gap-2">
 						<IndiServerButton />
 						<WakeLockScreenButton />
 					</li>

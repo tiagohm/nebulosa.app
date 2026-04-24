@@ -15,16 +15,16 @@ export class WheelHandler implements DeviceHandler<Wheel> {
 	}
 
 	added(device: Wheel) {
-		this.wsm.send<WheelAdded>('wheel:add', { device })
+		this.wsm.send('wheel:add', { device } satisfies WheelAdded)
 		console.info('wheel added:', device.name)
 	}
 
 	updated(device: Wheel, property: keyof Wheel & string, state?: PropertyState) {
-		this.wsm.send<WheelUpdated>('wheel:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		this.wsm.send('wheel:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies WheelUpdated)
 	}
 
 	removed(device: Wheel) {
-		this.wsm.send<WheelRemoved>('wheel:remove', { device })
+		this.wsm.send('wheel:remove', { device } satisfies WheelRemoved)
 		console.info('wheel removed:', device.name)
 	}
 
@@ -40,7 +40,7 @@ export class WheelHandler implements DeviceHandler<Wheel> {
 export function wheel(wheelHandler: WheelHandler): Endpoints {
 	const { wheelManager } = wheelHandler
 
-	function wheelFromParams(req: Bun.BunRequest<string>) {
+	function wheelFromParams(req: Bun.BunRequest) {
 		return wheelManager.get(query(req).client, req.params.id)!
 	}
 

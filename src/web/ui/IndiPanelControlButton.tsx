@@ -11,5 +11,5 @@ export interface IndiPanelControlButtonProps extends Omit<ButtonProps, 'onPointe
 export function IndiPanelControlButton({ device, color = 'secondary', size = 'md', variant = 'ghost', ...props }: IndiPanelControlButtonProps) {
 	const indi = useMolecule(IndiPanelControlMolecule)
 
-	return <Button children={<img className={size === 'md' ? 'w-6' : 'w-9'} src={indiIcon} />} color={color} onPointerUp={() => indi.show(device)} size={size} tooltipContent='INDI' variant={variant} {...props} />
+	return <Button children={<img className={size === 'md' ? 'w-6' : 'w-9'} src={indiIcon} />} color={color} onPointerUp={() => indi.show(device)} size={size} tooltipContent="INDI" variant={variant} {...props} />
 }

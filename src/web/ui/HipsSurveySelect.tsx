@@ -26,11 +26,11 @@ export function HipsSurveySelect({ isDisabled, onValueChange, value, ...props }:
 			isVirtualized
 			itemHeight={42}
 			items={items}
-			onSelectionChange={(value) => value && onValueChange?.((value as Set<string>).values().next().value as string)}
+			onSelectionChange={(value) => value && onValueChange?.((value as Set<string>).values().next().value!)}
 			renderValue={(selected) => selected.map((item) => <HipsSurveySelectItem item={item.data!} key={item.data!.id} />)}
 			selectedKeys={new Set([value ?? ''])}
-			selectionMode='single'
-			size='sm'>
+			selectionMode="single"
+			size="sm">
 			{(item) => (
 				<SelectItem key={item.id}>
 					<HipsSurveySelectItem item={item} />
@@ -42,9 +42,9 @@ export function HipsSurveySelect({ isDisabled, onValueChange, value, ...props }:
 
 export function HipsSurveySelectItem({ item }: { item: HipsSurvey }) {
 	return (
-		<div className='p-1 w-full flex flex-col justify-center gap-0'>
-			<span className='font-bold whitespace-nowrap'>{item.id}</span>
-			<span className='text-default-500 text-xs flex gap-1 items-center'>
+		<div className="flex w-full flex-col justify-center gap-0 p-1">
+			<span className="font-bold whitespace-nowrap">{item.id}</span>
+			<span className="text-default-500 flex items-center gap-1 text-xs">
 				{item.regime} ({(item.skyFraction * 100).toFixed(1)}%)
 			</span>
 		</div>

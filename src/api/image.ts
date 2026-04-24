@@ -1,4 +1,5 @@
 import fs from 'fs/promises'
+import { basename, join } from 'path'
 import { deg, parseAngle } from 'nebulosa/src/angle'
 import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, numericKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits.util'
@@ -13,9 +14,8 @@ import { identify } from 'nebulosa/src/sbd'
 import { spaceMotion, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
 import { Wcs } from 'nebulosa/src/wcs'
-import { basename, join } from 'path'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
-import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
+import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true',type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateInterpolation, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
@@ -231,7 +231,7 @@ export class ImageProcessor {
 			}
 
 			// Just save it to file
-			const handle = await fs.open(saveAt!, 'w')
+			const handle = await fs.open(saveAt, 'w')
 			await using sink = fileHandleSink(handle)
 
 			if (format.type === 'fits') await writeImageToFits(image, sink)
@@ -365,7 +365,7 @@ export class ImageProcessor {
 			case 'jpeg':
 				return Bun.MD5.hash(`${path}:jpeg:${transformation.format.jpeg.chrominanceSubsampling}:${transformation.format.jpeg.quality}:${hash}`, 'hex')
 			default:
-				return Bun.MD5.hash(`${path}:${transformation.format}:${hash}`, 'hex')
+				return Bun.MD5.hash(`${path}:${transformation.format.type}:${hash}`, 'hex')
 		}
 	}
 

@@ -25,14 +25,14 @@ export const IndiDriverListbox = memo(({ showAll, selected, onSelectedChange }: 
 
 	return (
 		<FilterableListbox
-			className='col-span-full'
+			className="col-span-full"
 			classNames={{ list: 'max-h-[200px] overflow-scroll' }}
 			filter={(item, search) => item.name.toLowerCase().includes(search) || item.driver.includes(search)}
 			items={showAll || drivers.length === 0 ? DRIVERS : DRIVERS.filter((e) => drivers.includes(e.driver))}
 			onSelectionChange={(value) => onSelectedChange?.([...(value as Set<string>)])}
 			selectedKeys={new Set(selected)}
-			selectionMode='multiple'
-			variant='flat'>
+			selectionMode="multiple"
+			variant="flat">
 			{DriverItem}
 		</FilterableListbox>
 	)

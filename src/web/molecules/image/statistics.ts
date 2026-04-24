@@ -44,7 +44,7 @@ export const ImageStatisticsMolecule = molecule(() => {
 		unsubscribers[1] = bus.subscribe<ImageLoaded>('image:load', () => {
 			if (state.show) {
 				void compute()
-			} else if (state.histogram.length) {
+			} else if (state.histogram.length > 0) {
 				state.histogram = []
 			}
 		})

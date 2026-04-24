@@ -13,10 +13,10 @@ export const ImagePickerButton = memo(() => {
 
 	return (
 		<>
-			<IconButton color='secondary' icon={Icons.ImagePlus} onPointerUp={workspace.showPicker} tooltipContent='Open Image' variant='ghost' />
+			<IconButton color="secondary" icon={Icons.ImagePlus} onPointerUp={workspace.showPicker} tooltipContent="Open Image" variant="ghost" />
 			<ScopeProvider scope={FilePickerScope} value={{ path: workspace.state.picker.path, filter: '*.{fits,fit,xisf}', multiple: true }}>
 				<Activity mode={show ? 'visible' : 'hidden'}>
-					<FilePicker header='Open Image' id='open-image' onChoose={workspace.choose} />
+					<FilePicker header="Open Image" id="open-image" onChoose={workspace.choose} />
 				</Activity>
 			</ScopeProvider>
 		</>

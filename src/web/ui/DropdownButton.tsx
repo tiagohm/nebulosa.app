@@ -9,10 +9,10 @@ export interface DropdownButtonProps extends Omit<ButtonProps, 'endContent' | 'c
 export function DropdownButton({ size, color, disabled, children, className, onAction, ...props }: DropdownButtonProps) {
 	return (
 		<div className={tw('inline-flex flex-row gap-0 items-center', className)}>
-			<Button {...props} className='flex-1 rounded-l-medium rounded-r-none' color={color} disabled={disabled} size={size} />
+			<Button {...props} className="rounded-l-medium flex-1 rounded-r-none" color={color} disabled={disabled} size={size} />
 			<Dropdown>
 				<DropdownTrigger>
-					<IconButton className='rounded-l-none rounded-r-medium' color={color} disabled={disabled} icon={Icons.ChevronDown} onPointerUp={stopPropagationDesktopOnly} size={size} variant='flat' />
+					<IconButton className="rounded-r-medium rounded-l-none" color={color} disabled={disabled} icon={Icons.ChevronDown} onPointerUp={stopPropagationDesktopOnly} size={size} variant="flat" />
 				</DropdownTrigger>
 				<DropdownMenu onAction={onAction}>{children}</DropdownMenu>
 			</Dropdown>

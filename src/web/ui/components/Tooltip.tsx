@@ -188,7 +188,7 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 			})
 		} else {
 			children = (
-				<span className='w-fit' onBlur={handleBlur} onFocus={handleFocus} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave} ref={handleTriggerRef}>
+				<span className="w-fit" onBlur={handleBlur} onFocus={handleFocus} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave} ref={handleTriggerRef}>
 					{children}
 				</span>
 			)
@@ -213,7 +213,7 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 					placement={placement}
 					portalContainer={portalContainer}
 					ref={ref}
-					role='tooltip'
+					role="tooltip"
 					style={style}
 					triggerElement={triggerElement}
 				/>

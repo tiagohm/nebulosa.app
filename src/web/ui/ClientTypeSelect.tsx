@@ -5,9 +5,9 @@ import { EnumSelect, type EnumSelectProps } from './EnumSelect'
 export function ClientTypeSelect({ label = 'Type', ...props }: Omit<EnumSelectProps<ClientType>, 'children'>) {
 	return (
 		<EnumSelect {...props} label={label}>
-			<SelectItem key='INDI'>INDI</SelectItem>
-			<SelectItem key='ALPACA'>Alpaca</SelectItem>
-			<SelectItem key='SIMULATOR'>Simulator</SelectItem>
+			<SelectItem key="INDI">INDI</SelectItem>
+			<SelectItem key="ALPACA">Alpaca</SelectItem>
+			<SelectItem key="SIMULATOR">Simulator</SelectItem>
 		</EnumSelect>
 	)
 }

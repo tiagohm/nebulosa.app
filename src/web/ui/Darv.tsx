@@ -15,7 +15,7 @@ export const Darv = memo(() => {
 	const darv = useMolecule(DarvMolecule)
 
 	return (
-		<Modal footer={<Footer />} header='Drift Alignment by Robert Vice' id='darv' maxWidth='360px' onHide={darv.hide}>
+		<Modal footer={<Footer />} header="Drift Alignment by Robert Vice" id="darv" maxWidth="360px" onHide={darv.hide}>
 			<Body />
 		</Modal>
 	)
@@ -23,7 +23,7 @@ export const Darv = memo(() => {
 
 const Body = memo(() => {
 	return (
-		<div className='mt-0 grid grid-cols-12 gap-2'>
+		<div className="mt-0 grid grid-cols-12 gap-2">
 			<DeviceChooser />
 			<Status />
 			<Input />
@@ -36,7 +36,7 @@ const DeviceChooser = memo(() => {
 	const { running, camera, mount } = useSnapshot(darv.state)
 
 	return (
-		<div className='col-span-full flex flex-row justify-center items-center gap-2'>
+		<div className="col-span-full flex flex-row items-center justify-center gap-2">
 			<CameraDropdown endContent={<CameraDropdownEndContent />} isDisabled={running} onValueChange={(value) => (darv.state.camera = value)} showLabel value={camera} />
 			<MountDropdown isDisabled={running} onValueChange={(value) => (darv.state.mount = value)} showLabel value={mount} />
 		</div>
@@ -48,8 +48,8 @@ const Status = memo(() => {
 	const { state } = useSnapshot(darv.state.event)
 
 	return (
-		<div className='mt-2 col-span-full flex flex-row items-center justify-between'>
-			<Chip color='primary'>{state === 'IDLE' ? 'idle' : state === 'WAITING' ? 'waiting' : state === 'FORWARDING' ? 'forwading' : 'backwarding'}</Chip>
+		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
+			<Chip color="primary">{state === 'IDLE' ? 'idle' : state === 'WAITING' ? 'waiting' : state === 'FORWARDING' ? 'forwading' : 'backwarding'}</Chip>
 		</div>
 	)
 })
@@ -61,9 +61,9 @@ const Input = memo(() => {
 
 	return (
 		<>
-			<NumberInput className='col-span-4' disabled={running} label='Initial pause (s)' maxValue={60} minValue={1} onValueChange={(value) => darv.update('initialPause', value)} value={initialPause} />
-			<NumberInput className='col-span-4' disabled={running} label='Drift for (s)' maxValue={1200} minValue={1} onValueChange={(value) => darv.update('duration', value)} value={duration} />
-			<HemisphereSelect className='col-span-4' isDisabled={running} onValueChange={(value) => darv.update('hemisphere', value)} value={hemisphere} />
+			<NumberInput className="col-span-4" disabled={running} label="Initial pause (s)" maxValue={60} minValue={1} onValueChange={(value) => darv.update('initialPause', value)} value={initialPause} />
+			<NumberInput className="col-span-4" disabled={running} label="Drift for (s)" maxValue={1200} minValue={1} onValueChange={(value) => darv.update('duration', value)} value={duration} />
+			<HemisphereSelect className="col-span-4" isDisabled={running} onValueChange={(value) => darv.update('hemisphere', value)} value={hemisphere} />
 		</>
 	)
 })
@@ -73,7 +73,7 @@ const CameraDropdownEndContent = memo(() => {
 	const { camera } = useSnapshot(darv.state)
 	const { capture } = useSnapshot(darv.state.request)
 
-	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode='darv' onValueChange={darv.updateCapture} value={capture} />
+	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode="darv" onValueChange={darv.updateCapture} value={capture} />
 })
 
 const Footer = memo(() => {
@@ -82,8 +82,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color='danger' disabled={!running} label='Stop' onPointerUp={darv.stop} startContent={<Icons.Stop />} />
-			<Button color='success' disabled={!camera?.connected || !mount?.connected} label='Start' loading={running} onPointerUp={darv.start} startContent={<Icons.Play />} />
+			<Button color="danger" disabled={!running} label="Stop" onPointerUp={darv.stop} startContent={<Icons.Stop />} />
+			<Button color="success" disabled={!camera?.connected || !mount?.connected} label="Start" loading={running} onPointerUp={darv.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

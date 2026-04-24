@@ -592,7 +592,7 @@ export function Slider<V extends SliderValue>({
 								onPointerDown={(event) => handleThumbPointerDown(event, index)}
 								style={{ ...thumbPositionStyle(thumbRatio, vertical, sizeStyles.thumbRem), zIndex: activeThumbIndex === index ? 2 : 1 }}
 								tabIndex={disabled ? -1 : 0}
-								type='button'>
+								type="button">
 								<span className={tw(styles.thumbContent(), classNames?.thumbContent)}>{thumb}</span>
 							</button>
 						)

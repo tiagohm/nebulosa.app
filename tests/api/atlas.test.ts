@@ -31,10 +31,10 @@ test('seasons', () => {
 	const { spring, summer, autumn, winter } = atlas.seasons(POSITION_OF_BODY)
 
 	// https://aa.usno.navy.mil/calculated/seasons?year=2025&tz=0.00&tz_sign=-1&tz_label=false&dst=false&submit=Get+Data
-	expect(formatTemporal(spring).substring(0, 16)).toBe('2025-03-20 09:02')
-	expect(formatTemporal(summer).substring(0, 16)).toBe('2025-06-21 02:43')
-	expect(formatTemporal(autumn).substring(0, 16)).toBe('2025-09-22 18:20')
-	expect(formatTemporal(winter).substring(0, 16)).toBe('2025-12-21 15:04')
+	expect(formatTemporal(spring).slice(0, 16)).toBe('2025-03-20 09:02')
+	expect(formatTemporal(summer).slice(0, 16)).toBe('2025-06-21 02:43')
+	expect(formatTemporal(autumn).slice(0, 16)).toBe('2025-09-22 18:20')
+	expect(formatTemporal(winter).slice(0, 16)).toBe('2025-12-21 15:04')
 })
 
 test('solar eclipses from meeus', () => {
@@ -293,15 +293,15 @@ describe('moon phases', () => {
 
 		expect(phases).toHaveLength(5)
 		expect(phases[0][0]).toBe('NEW')
-		expect(formatTemporal(phases[0][1]).substring(0, 16)).toEqual('2024-12-01 06:21')
+		expect(formatTemporal(phases[0][1]).slice(0, 16)).toEqual('2024-12-01 06:21')
 		expect(phases[1][0]).toBe('FIRST_QUARTER')
-		expect(formatTemporal(phases[1][1]).substring(0, 16)).toEqual('2024-12-08 15:26')
+		expect(formatTemporal(phases[1][1]).slice(0, 16)).toEqual('2024-12-08 15:26')
 		expect(phases[2][0]).toBe('FULL')
-		expect(formatTemporal(phases[2][1]).substring(0, 16)).toEqual('2024-12-15 09:01')
+		expect(formatTemporal(phases[2][1]).slice(0, 16)).toEqual('2024-12-15 09:01')
 		expect(phases[3][0]).toBe('LAST_QUARTER')
-		expect(formatTemporal(phases[3][1]).substring(0, 16)).toEqual('2024-12-22 22:18')
+		expect(formatTemporal(phases[3][1]).slice(0, 16)).toEqual('2024-12-22 22:18')
 		expect(phases[4][0]).toBe('NEW')
-		expect(formatTemporal(phases[4][1]).substring(0, 16)).toEqual('2024-12-30 22:26')
+		expect(formatTemporal(phases[4][1]).slice(0, 16)).toEqual('2024-12-30 22:26')
 	})
 
 	test('blue moon', () => {
@@ -310,15 +310,15 @@ describe('moon phases', () => {
 
 		expect(phases).toHaveLength(5)
 		expect(phases[0][0]).toBe('FULL')
-		expect(formatTemporal(phases[0][1]).substring(0, 16)).toEqual('2026-05-01 17:23')
+		expect(formatTemporal(phases[0][1]).slice(0, 16)).toEqual('2026-05-01 17:23')
 		expect(phases[1][0]).toBe('LAST_QUARTER')
-		expect(formatTemporal(phases[1][1]).substring(0, 16)).toEqual('2026-05-09 21:10')
+		expect(formatTemporal(phases[1][1]).slice(0, 16)).toEqual('2026-05-09 21:10')
 		expect(phases[2][0]).toBe('NEW')
-		expect(formatTemporal(phases[2][1]).substring(0, 16)).toEqual('2026-05-16 20:01')
+		expect(formatTemporal(phases[2][1]).slice(0, 16)).toEqual('2026-05-16 20:01')
 		expect(phases[3][0]).toBe('FIRST_QUARTER')
-		expect(formatTemporal(phases[3][1]).substring(0, 16)).toEqual('2026-05-23 11:11')
+		expect(formatTemporal(phases[3][1]).slice(0, 16)).toEqual('2026-05-23 11:11')
 		expect(phases[4][0]).toBe('FULL')
-		expect(formatTemporal(phases[4][1]).substring(0, 16)).toEqual('2026-05-31 08:45')
+		expect(formatTemporal(phases[4][1]).slice(0, 16)).toEqual('2026-05-31 08:45')
 	})
 })
 

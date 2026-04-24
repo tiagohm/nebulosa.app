@@ -13,10 +13,10 @@ export function ExposureTimeProgress({ progress, className = '', ...props }: Exp
 
 	return (
 		<div {...props} className={tw('flex flex-row items-center gap-2', className)}>
-			<Chip className='lowercase' color='success' label={status(progress.state)} />
-			<Chip color='warning' label={`${progress.elapsedCount} ${progress.loop ? '' : ` / ${progress.count}`}`} startContent={<Icons.Counter />} />
-			<Chip color='secondary' label={progress.loop ? formatTime(progress.totalProgress.elapsedTime) : formatProgressTime(progress.totalProgress, showRemainingTime)} onPointerUp={() => setShowRemainingTime(!showRemainingTime)} startContent={<Icons.TimerSand />} />
-			<Chip color='primary' label={formatProgressTime(progress.frameProgress, showRemainingTime)} onPointerUp={() => setShowRemainingTime(!showRemainingTime)} startContent={<Icons.TimerSand />} />
+			<Chip className="lowercase" color="success" label={status(progress.state)} />
+			<Chip color="warning" label={`${progress.elapsedCount} ${progress.loop ? '' : ` / ${progress.count}`}`} startContent={<Icons.Counter />} />
+			<Chip color="secondary" label={progress.loop ? formatTime(progress.totalProgress.elapsedTime) : formatProgressTime(progress.totalProgress, showRemainingTime)} onPointerUp={() => setShowRemainingTime(!showRemainingTime)} startContent={<Icons.TimerSand />} />
+			<Chip color="primary" label={formatProgressTime(progress.frameProgress, showRemainingTime)} onPointerUp={() => setShowRemainingTime(!showRemainingTime)} startContent={<Icons.TimerSand />} />
 		</div>
 	)
 }

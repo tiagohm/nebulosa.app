@@ -25,10 +25,10 @@ export function SatelliteCategoryChipGroup({ className, value, onValueChange, si
 
 	return (
 		<ScrollShadow className={className}>
-			<div className='w-full flex flex-wrap gap-2'>
+			<div className="flex w-full flex-wrap gap-2">
 				{ENTRIES.map((item) => {
 					const selected = value.includes(item)
-					return <Chip className='cursor-pointer' color={selected ? 'success' : 'secondary'} key={item} label={item} onPointerUp={(event) => onHandlePointerUp(event, item, selected)} size={size} />
+					return <Chip className="cursor-pointer" color={selected ? 'success' : 'secondary'} key={item} label={item} onPointerUp={(event) => onHandlePointerUp(event, item, selected)} size={size} />
 				})}
 			</div>
 		</ScrollShadow>

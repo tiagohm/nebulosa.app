@@ -48,13 +48,13 @@ const StellariumObjectTypeItem = (item: (typeof TYPES)[number]) => <SelectItem k
 
 const StellariumObjectTypeValue = (item: StellariumObjectType) => item.toFixed(0)
 
-const StellariumObjectTypeSelectedItems = (items: SelectedItems<object>) => <div className='mt-2 flex flex-nowrap gap-2'>{items.map(StellariumObjectTypeRenderedItem).join(', ')}</div>
+const StellariumObjectTypeSelectedItems = (items: SelectedItems) => <div className="mt-2 flex flex-nowrap gap-2">{items.map(StellariumObjectTypeRenderedItem).join(', ')}</div>
 
-const StellariumObjectTypeRenderedItem = (item: SelectedItemProps<object>) => TYPES.find((e) => e[0] === +(item.key as never))![2]
+const StellariumObjectTypeRenderedItem = (item: SelectedItemProps) => TYPES.find((e) => e[0] === +(item.key as never))![2]
 
 export function StellariumObjectTypeSelect({ label = 'Type', value, onValueChange, ...props }: StellariumObjectTypeSelectProps) {
 	return (
-		<EnumMultipleSelect {...props} classNames={{ trigger: 'min-h-15!' }} isClearable label={label} onValueChange={(value) => onValueChange(value.map(Number))} placeholder='All' renderValue={StellariumObjectTypeSelectedItems} value={value.map(StellariumObjectTypeValue)}>
+		<EnumMultipleSelect {...props} classNames={{ trigger: 'min-h-15!' }} isClearable label={label} onValueChange={(value) => onValueChange(value.map(Number))} placeholder="All" renderValue={StellariumObjectTypeSelectedItems} value={value.map(StellariumObjectTypeValue)}>
 			{TYPES.map(StellariumObjectTypeItem)}
 		</EnumMultipleSelect>
 	)

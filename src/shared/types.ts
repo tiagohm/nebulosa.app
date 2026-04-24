@@ -12,7 +12,7 @@ import type { Point, Rect, Size } from 'nebulosa/src/geometry'
 import type { Hips2FitsOptions } from 'nebulosa/src/hips2fits'
 import type { ObserverWithTLE } from 'nebulosa/src/horizons'
 import type { CfaPattern, FFTFilterType, ImageChannel, ImageChannelOrGray, ImageFormat, ImageMetadata, SCNRProtectionMethod, SigmaClipOptions, WriteImageToFormatOptions } from 'nebulosa/src/image.types'
-// biome-ignore format: too long!
+// oxfmt-ignore
 import type { Camera, CameraTransferFormat, ClientInfo, ClientType, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Power, Rotator, Thermometer, UTCTime, Wheel } from 'nebulosa/src/indi.device'
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
@@ -137,7 +137,6 @@ export type PlanetType =
 	| 'DWARF_PLANET'
 	| 'ASTEROID'
 	| 'COMET'
-	| 'MARTIAN_SATELLITE'
 	| 'MARTIAN_SATELLITE'
 	| 'JOVIAN_REGULAR_SATELLITE'
 	| 'JOVIAN_IRREGULAR_SATELLITE'
@@ -287,7 +286,7 @@ export interface SearchSatellite {
 	readonly text: string
 	groups: SatelliteGroupType[]
 	page: number
-	readonly limit?: number
+	readonly limit: number
 	category: SatelliteCategory[]
 	readonly sort: SortDescriptor
 }
@@ -754,11 +753,11 @@ export type MountRemoteControlStatus = Record<MountRemoteControlProtocol, Omit<M
 
 // Notification
 
-export type Severity = 'info' | 'success' | 'warn' | 'error'
+export type Severity = 'info' | 'success' | 'warning' | 'error'
 
 export interface Notification {
 	target?: string
-	color: 'success' | 'default' | 'foreground' | 'primary' | 'secondary' | 'warning' | 'danger'
+	color: 'success' | 'primary' | 'secondary' | 'warning' | 'danger'
 	title: string
 	description: string
 }

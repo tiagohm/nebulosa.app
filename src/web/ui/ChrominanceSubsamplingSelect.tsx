@@ -7,13 +7,13 @@ export interface ChrominanceSubsamplingSelectProps extends Omit<EnumSelectProps<
 export function ChrominanceSubsamplingSelect({ label = 'Chroma Subsampling', ...props }: ChrominanceSubsamplingSelectProps) {
 	return (
 		<EnumSelect {...props} label={label}>
-			<SelectItem key='4:4:4'>4:4:4</SelectItem>
-			<SelectItem key='4:2:2'>4:2:2</SelectItem>
-			<SelectItem key='4:2:0'>4:2:0</SelectItem>
-			<SelectItem key='GRAY'>Gray</SelectItem>
-			<SelectItem key='4:4:0'>4:4:0</SelectItem>
-			<SelectItem key='4:1:1'>4:1:1</SelectItem>
-			<SelectItem key='4:4:1'>4:4:1</SelectItem>
+			<SelectItem key="4:4:4">4:4:4</SelectItem>
+			<SelectItem key="4:2:2">4:2:2</SelectItem>
+			<SelectItem key="4:2:0">4:2:0</SelectItem>
+			<SelectItem key="GRAY">Gray</SelectItem>
+			<SelectItem key="4:4:0">4:4:0</SelectItem>
+			<SelectItem key="4:1:1">4:1:1</SelectItem>
+			<SelectItem key="4:4:1">4:4:1</SelectItem>
 		</EnumSelect>
 	)
 }

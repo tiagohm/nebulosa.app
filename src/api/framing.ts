@@ -1,7 +1,7 @@
+import { join } from 'path/posix'
 import { arcsec, deg, parseAngle } from 'nebulosa/src/angle'
 import { HIPS2FITS_ALTERNATIVE_URL, HIPS2FITS_BASE_URL, hips2Fits } from 'nebulosa/src/hips2fits'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
-import { join } from 'path/posix'
 import hipsSurveys from '../../data/hips-surveys.json' with { type: 'json' }
 import type { Framing } from '../shared/types'
 import { type Endpoints, response } from './http'

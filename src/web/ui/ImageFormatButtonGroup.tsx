@@ -10,9 +10,9 @@ export interface ImageFormatButtonGroupProps extends ButtonGroupProps {
 export function ImageFormatButtonGroup({ value, onValueChange, ...props }: ImageFormatButtonGroupProps) {
 	return (
 		<ButtonGroup {...props}>
-			<Button color='secondary' label='FITS' onPointerUp={() => onValueChange('fits')} variant={value === 'fits' ? 'flat' : 'ghost'} />
-			<Button color='secondary' label='XISF' onPointerUp={() => onValueChange('xisf')} variant={value === 'xisf' ? 'flat' : 'ghost'} />
-			<Button color='secondary' label='JPEG' onPointerUp={() => onValueChange('jpeg')} variant={value === 'jpeg' ? 'flat' : 'ghost'} />
+			<Button color="secondary" label="FITS" onPointerUp={() => onValueChange('fits')} variant={value === 'fits' ? 'flat' : 'ghost'} />
+			<Button color="secondary" label="XISF" onPointerUp={() => onValueChange('xisf')} variant={value === 'xisf' ? 'flat' : 'ghost'} />
+			<Button color="secondary" label="JPEG" onPointerUp={() => onValueChange('jpeg')} variant={value === 'jpeg' ? 'flat' : 'ghost'} />
 		</ButtonGroup>
 	)
 }

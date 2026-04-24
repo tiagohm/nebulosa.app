@@ -4,7 +4,7 @@ import { DEFAULT_MOUNT, type Mount, type MountTargetCoordinate, type MountTarget
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
-// biome-ignore format: too long!
+// oxfmt-ignore
 import { type CoordinateInfo, DEFAULT_COORDINATE_INFO, type Framing, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
@@ -120,7 +120,7 @@ export const MountMolecule = molecule(() => {
 					const equatorial = state.currentPosition.equatorial as [number, number]
 					equatorial[0] = event.device.equatorialCoordinate!.rightAscension
 					equatorial[1] = event.device.equatorialCoordinate!.declination
-					void updateCoordinatePosition()
+					updateCoordinatePosition()
 				} else if (event.property === 'slewing') {
 					if (event.device.slewing === false) {
 						updateCoordinatePosition()
@@ -176,17 +176,14 @@ export const MountMolecule = molecule(() => {
 
 	function updateTargetCoordinateType(value: MountTargetCoordinateType) {
 		state.targetCoordinate.coordinate.type = value
-		return updateTargetCoordinatePosition()
 	}
 
 	function updateTargetCoordinateX(value: string) {
 		state.targetCoordinate.coordinate[state.targetCoordinate.coordinate.type]!.x = value
-		return updateTargetCoordinatePosition()
 	}
 
 	function updateTargetCoordinateY(value: string) {
 		state.targetCoordinate.coordinate[state.targetCoordinate.coordinate.type]!.y = value
-		return updateTargetCoordinatePosition()
 	}
 
 	async function updateCurrentCoordinatePosition() {
@@ -276,6 +273,8 @@ export const MountMolecule = molecule(() => {
 				return Api.Mounts.moveWest(mount, down)
 			case 'right':
 				return Api.Mounts.moveEast(mount, down)
+			default:
+				return undefined
 		}
 	}
 
@@ -329,6 +328,7 @@ export const MountMolecule = molecule(() => {
 		updateTargetCoordinateType,
 		updateTargetCoordinateX,
 		updateTargetCoordinateY,
+		updateCurrentCoordinatePosition,
 		goTo,
 		sync,
 		frame,

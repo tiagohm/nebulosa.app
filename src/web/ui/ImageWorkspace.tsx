@@ -16,5 +16,5 @@ export const ImageWorkspace = memo(() => {
 	const workspace = useMolecule(ImageWorkspaceMolecule)
 	const { images } = useSnapshot(workspace.state)
 
-	return <div className='workspace relative h-full w-full'>{images.map(ImageView)}</div>
+	return <div className="workspace relative h-full w-full">{images.map(ImageView)}</div>
 })

@@ -5,6 +5,7 @@ import { Button } from './components/Button'
 import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'
+import { List } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { Radio } from './components/Radio'
@@ -25,6 +26,7 @@ export function Demo() {
 			<Switches />
 			<Sliders />
 			<Calendars />
+			<Lists />
 		</div>
 	)
 }
@@ -222,4 +224,18 @@ const Chips = memo(() => {
 	}
 
 	return elements
+})
+
+const Lists = memo(() => {
+	const items = new Array(100000)
+
+	for (let i = 0; i < 100000; i++) {
+		items[i] = <span className="flex h-full w-full items-center justify-center">{i}</span>
+	}
+
+	return (
+		<List className="min-w-80" itemHeight={20}>
+			{items}
+		</List>
+	)
 })

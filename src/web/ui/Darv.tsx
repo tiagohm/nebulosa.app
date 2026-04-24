@@ -63,7 +63,7 @@ const Input = memo(() => {
 		<>
 			<NumberInput className="col-span-4" disabled={running} label="Initial pause (s)" maxValue={60} minValue={1} onValueChange={(value) => darv.update('initialPause', value)} value={initialPause} />
 			<NumberInput className="col-span-4" disabled={running} label="Drift for (s)" maxValue={1200} minValue={1} onValueChange={(value) => darv.update('duration', value)} value={duration} />
-			<HemisphereSelect className="col-span-4" isDisabled={running} onValueChange={(value) => darv.update('hemisphere', value)} value={hemisphere} />
+			<HemisphereSelect className="col-span-4" disabled={running} onValueChange={(value) => darv.update('hemisphere', value)} value={hemisphere} />
 		</>
 	)
 })

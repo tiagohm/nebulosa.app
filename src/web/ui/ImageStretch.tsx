@@ -76,8 +76,8 @@ const SigmaClip = memo(() => {
 			<Checkbox className="col-span-6" label="Sigma Clip" onValueChange={(value) => stretch.update('sigmaClip', value)} value={sigmaClip} />
 			<NumberInput className="col-span-3" disabled={!sigmaClip} fractionDigits={1} label="Lower" maxValue={10} minValue={0.1} onValueChange={(value) => stretch.update('sigmaLower', value)} step={0.1} value={sigmaLower} />
 			<NumberInput className="col-span-3" disabled={!sigmaClip} fractionDigits={1} label="Upper" maxValue={10} minValue={0.1} onValueChange={(value) => stretch.update('sigmaUpper', value)} step={0.1} value={sigmaUpper} />
-			<SigmaClipCenterMethodSelect className="col-span-6" isDisabled={!sigmaClip} onValueChange={(value) => stretch.update('centerMethod', value)} value={centerMethod} />
-			<SigmaClipDispersionMethodSelect className="col-span-6" isDisabled={!sigmaClip} onValueChange={(value) => stretch.update('dispersionMethod', value)} value={dispersionMethod} />
+			<SigmaClipCenterMethodSelect className="col-span-6" disabled={!sigmaClip} onValueChange={(value) => stretch.update('centerMethod', value)} value={centerMethod} />
+			<SigmaClipDispersionMethodSelect className="col-span-6" disabled={!sigmaClip} onValueChange={(value) => stretch.update('dispersionMethod', value)} value={dispersionMethod} />
 		</>
 	)
 })

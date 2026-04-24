@@ -1,15 +1,17 @@
-import { SelectItem } from '@heroui/react'
 import type { SCNRProtectionMethod } from 'nebulosa/src/image.types'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export function SCNRProtectionMethodSelect({ label = 'Method', ...props }: Omit<EnumSelectProps<SCNRProtectionMethod>, 'children'>) {
+const ITEMS = ['MAXIMUM_MASK', 'ADDITIVE_MASK', 'AVERAGE_NEUTRAL', 'MAXIMUM_NEUTRAL', 'MINIMUM_NEUTRAL'] as const
+const LABELS = ['Maximum Mask', 'Additive Mask', 'Average Neutral', 'Maximum Neutral', 'Minimum Neutral'] as const
+
+const SCNRProtectionMethodItem: SelectItemRenderer<SCNRProtectionMethod> = (_, i) => <span>{LABELS[i]}</span>
+
+export type SCNRProtectionMethodSelectProps = Omit<SelectProps<SCNRProtectionMethod>, 'children' | 'items'>
+
+export function SCNRProtectionMethodSelect({ label = 'Method', ...props }: SCNRProtectionMethodSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="MAXIMUM_MASK">Maximum Mask</SelectItem>
-			<SelectItem key="ADDITIVE_MASK">Additive Mask</SelectItem>
-			<SelectItem key="AVERAGE_NEUTRAL">Average Neutral</SelectItem>
-			<SelectItem key="MAXIMUM_NEUTRAL">Maximum Neutral</SelectItem>
-			<SelectItem key="MINIMUM_NEUTRAL">Minimum Neutral</SelectItem>
-		</EnumSelect>
+		<Select items={ITEMS} label={label} {...props}>
+			{SCNRProtectionMethodItem}
+		</Select>
 	)
 }

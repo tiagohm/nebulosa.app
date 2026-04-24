@@ -111,16 +111,7 @@ const selectStyles = tv({
 
 type SelectVariants = VariantProps<typeof selectStyles>
 
-export type SelectSize = keyof typeof SELECT_ITEM_HEIGHTS
-
-export interface SelectItemRenderState<T> {
-	readonly index: number
-	readonly item: T
-	readonly selected: boolean
-	readonly placement: 'trigger' | 'list'
-}
-
-export type SelectItemRenderer<T> = (item: T, state: SelectItemRenderState<T>) => React.ReactNode
+export type SelectItemRenderer<T> = (item: T, index: number, selected: boolean, placement: 'trigger' | 'list') => React.ReactNode
 
 export interface SelectClassNames {
 	readonly base?: ClassValue
@@ -180,7 +171,7 @@ function selectedIndexOf<T>(items: readonly T[], value: T | null | undefined, is
 }
 
 // Normalizes panel item height to match the Select size by default.
-function selectItemHeight(size: SelectSize, itemHeight: number | undefined) {
+function selectItemHeight(size: Exclude<SelectVariants['size'], undefined>, itemHeight: number | undefined) {
 	return itemHeight !== undefined && Number.isFinite(itemHeight) && itemHeight > 0 ? itemHeight : SELECT_ITEM_HEIGHTS[size]
 }
 
@@ -230,7 +221,7 @@ export function Select<T>({
 	const hasLabel = label !== undefined && label !== null
 	const optionHeight = selectItemHeight(size, itemHeight)
 	const styles = selectStyles({ fullWidth, hasLabel, open: visible, size, color })
-	const selectedContent = selectedItem !== undefined && selectedItem !== null ? children(selectedItem, { index: selectedIndex, item: selectedItem, placement: 'trigger', selected: true }) : description
+	const selectedContent = selectedItem !== undefined && selectedItem !== null ? children(selectedItem, selectedIndex, true, 'trigger') : description
 	const panelStyle = useMemo(() => ({ '--select-width': `${Math.max(triggerWidth, 0)}px` }) as React.CSSProperties, [triggerWidth])
 
 	// Updates open state in controlled and uncontrolled modes.
@@ -321,7 +312,7 @@ export function Select<T>({
 
 		return (
 			<button className={tw(styles.option(), selected ? 'bg-(--color-variant)/15 text-(--color-variant)' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)} onPointerDown={(event) => selectItem(event, item, index, selected)} type="button">
-				<span className={tw(styles.optionContent(), classNames?.optionContent)}>{children(item, { index, item, placement: 'list', selected })}</span>
+				<span className={tw(styles.optionContent(), classNames?.optionContent)}>{children(item, index, selected, 'list')}</span>
 				<span className={tw(styles.selectedIcon(), selected ? 'opacity-100' : 'opacity-0', classNames?.selectedIcon)}>
 					<Icons.Check />
 				</span>

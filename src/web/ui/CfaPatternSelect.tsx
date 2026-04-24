@@ -1,19 +1,19 @@
-import { SelectItem } from '@heroui/react'
 import type { CfaPattern } from 'nebulosa/src/image.types'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export function CfaPatternSelect({ label = 'CFA Pattern', ...props }: Omit<EnumSelectProps<CfaPattern | 'AUTO'>, 'children'>) {
+type CfaPatternOption = CfaPattern | 'AUTO'
+
+const ITEMS = ['AUTO', 'RGGB', 'BGGR', 'GBRG', 'GRBG', 'GRGB', 'GBGR', 'RGBG', 'BGRG'] as const
+const LABELS = ['Auto', 'RGGB', 'BGGR', 'GBRG', 'GRBG', 'GRGB', 'GBGR', 'RGBG', 'BGRG'] as const
+
+const CfaPatternItem: SelectItemRenderer<CfaPatternOption> = (_, i) => <span>{LABELS[i]}</span>
+
+export type CfaPatternSelectProps = Omit<SelectProps<CfaPatternOption>, 'children' | 'items'>
+
+export function CfaPatternSelect({ label = 'CFA Pattern', ...props }: CfaPatternSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="AUTO">Auto</SelectItem>
-			<SelectItem key="RGGB">RGGB</SelectItem>
-			<SelectItem key="BGGR">BGGR</SelectItem>
-			<SelectItem key="GBRG">GBRG</SelectItem>
-			<SelectItem key="GRBG">GRBG</SelectItem>
-			<SelectItem key="GRGB">GRGB</SelectItem>
-			<SelectItem key="GBGR">GBGR</SelectItem>
-			<SelectItem key="RGBG">RGBG</SelectItem>
-			<SelectItem key="BGRG">BGRG</SelectItem>
-		</EnumSelect>
+		<Select items={ITEMS} label={label} {...props}>
+			{CfaPatternItem}
+		</Select>
 	)
 }

@@ -44,7 +44,7 @@ export function CameraCaptureStartPopover({ mode, camera, color, disabled, value
 					unit={exposureTimeUnit}
 					value={exposureTimeDisabled ? 0 : exposureTime}
 				/>
-				<FrameFormatSelect className="col-span-6" isDisabled={camera.frameFormats.length === 0} items={camera.frameFormats} onValueChange={(value) => onValueChange('frameFormat', value)} value={frameFormat} />
+				<FrameFormatSelect className="col-span-6" disabled={camera.frameFormats.length === 0} items={camera.frameFormats} onValueChange={(value) => onValueChange('frameFormat', value)} value={frameFormat} />
 				<NumberInput className="col-span-3" label="X" maxValue={camera.frame.x.max} minValue={camera.frame.x.min} onValueChange={(value) => onValueChange('x', value)} value={x} />
 				<NumberInput className="col-span-3" label="Y" maxValue={camera.frame.y.max} minValue={camera.frame.y.min} onValueChange={(value) => onValueChange('y', value)} value={y} />
 				<NumberInput className="col-span-3" label="Width" maxValue={camera.frame.width.max} minValue={camera.frame.width.min} onValueChange={(value) => onValueChange('width', value)} value={width} />

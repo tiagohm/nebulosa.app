@@ -73,8 +73,8 @@ const Body = memo(() => {
 			<Nudge className="col-span-5 row-span-2" disabled={!connected || parked} isCancelDisabled={!canAbort || parked || !moving} isNudgeDisabled={moving} onCancel={mount.stop} onNudge={mount.moveTo} />
 			<Switch disabled={!connected || moving || parked} label="Tracking" onValueChange={mount.tracking} value={tracking} />
 			<ParkAndHome />
-			<TrackModeSelect className="col-span-4" isDisabled={!connected || moving || parked} modes={trackModes} onValueChange={mount.trackMode} value={trackMode} />
-			<SlewRateSelect className="col-span-3" isDisabled={!connected || moving || parked} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
+			<TrackModeSelect className="col-span-4" disabled={!connected || moving || parked} modes={trackModes} onValueChange={mount.trackMode} value={trackMode} />
+			<SlewRateSelect className="col-span-3" disabled={!connected || moving || parked} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
 		</div>
 	)
 })

@@ -1,12 +1,17 @@
-import { SelectItem } from '@heroui/react'
 import type { StarDetectionType } from 'src/shared/types'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export function StarDetectionSelect({ label = 'Detector', ...props }: Omit<EnumSelectProps<StarDetectionType>, 'children'>) {
+const ITEMS = ['ASTAP', 'NEBULOSA'] as const
+const LABELS = ['Astap', 'Nebulosa'] as const
+
+const StarDetectionItem: SelectItemRenderer<StarDetectionType> = (_, i) => <span>{LABELS[i]}</span>
+
+export type StarDetectionSelectProps = Omit<SelectProps<StarDetectionType>, 'children' | 'items'>
+
+export function StarDetectionSelect({ label = 'Detector', ...props }: StarDetectionSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="ASTAP">Astap</SelectItem>
-			<SelectItem key="NEBULOSA">Nebulosa</SelectItem>
-		</EnumSelect>
+		<Select items={ITEMS} label={label} {...props}>
+			{StarDetectionItem}
+		</Select>
 	)
 }

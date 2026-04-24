@@ -1,12 +1,17 @@
-import { SelectItem } from '@heroui/react'
 import type { SigmaClipCenterMethod } from 'nebulosa/src/image.types'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export function SigmaClipCenterMethodSelect({ label = 'Center method', ...props }: Omit<EnumSelectProps<SigmaClipCenterMethod>, 'children'>) {
+const ITEMS = ['mean', 'median'] as const
+const LABELS = ['Mean', 'Median'] as const
+
+const SigmaClipCenterMethodItem: SelectItemRenderer<SigmaClipCenterMethod> = (_, i) => <span>{LABELS[i]}</span>
+
+export type SigmaClipCenterMethodSelectProps = Omit<SelectProps<SigmaClipCenterMethod>, 'children' | 'items'>
+
+export function SigmaClipCenterMethodSelect({ label = 'Center method', ...props }: SigmaClipCenterMethodSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="mean">Mean</SelectItem>
-			<SelectItem key="median">Median</SelectItem>
-		</EnumSelect>
+		<Select items={ITEMS} label={label} {...props}>
+			{SigmaClipCenterMethodItem}
+		</Select>
 	)
 }

@@ -1,4 +1,3 @@
-import { SelectItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -6,9 +5,9 @@ import { WheelMolecule } from '@/molecules/indi/wheel'
 import { Button } from './components/Button'
 import { Chip } from './components/Chip'
 import { Popover } from './components/Popover'
+import { Select } from './components/Select'
 import { TextInput } from './components/TextInput'
 import { ConnectButton } from './ConnectButton'
-import { EnumSelect } from './EnumSelect'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
@@ -42,7 +41,7 @@ const Header = memo(() => {
 	)
 })
 
-const SlotItem = (slot: string, index: number) => <SelectItem key={index}>{slot}</SelectItem>
+const SlotItem = (name: string) => <span>{name}</span>
 
 const Body = memo(() => {
 	return (
@@ -73,9 +72,9 @@ const Slot = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-end gap-2">
-			<EnumSelect className="flex-1" endContent={<SlotPopover />} isDisabled={!connected || moving || names.length === 0} label="Slot" onValueChange={(value) => wheel.update('position', +value)} value={selected.position.toFixed(0)}>
-				{names.map(SlotItem)}
-			</EnumSelect>
+			<Select className="flex-1" items={names} endContent={<SlotPopover />} disabled={!connected || moving || names.length === 0} label="Slot" onValueChange={(value) => wheel.update('position', names.indexOf(value))} value={names[selected.position]}>
+				{SlotItem}
+			</Select>
 			<Button color="success" disabled={!connected || selected.position === position || names.length === 0} label="Move" loading={moving} onPointerUp={wheel.moveTo} startContent={<Icons.Check />} variant="ghost" />
 		</div>
 	)

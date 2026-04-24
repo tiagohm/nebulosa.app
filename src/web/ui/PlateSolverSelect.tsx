@@ -1,15 +1,17 @@
-import { SelectItem } from '@heroui/react'
 import type { PlateSolverType } from 'src/shared/types'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export interface PlateSolverSelectProps extends Omit<EnumSelectProps<PlateSolverType>, 'children'> {}
+const ITEMS = ['ASTAP', 'ASTROMETRY_NET', 'NOVA_ASTROMETRY_NET'] as const
+const LABELS = ['Astap', 'Astrometry.net (offline)', 'Nova Astrometry.net'] as const
+
+const PlateSolverItem: SelectItemRenderer<PlateSolverType> = (_, i) => <span>{LABELS[i]}</span>
+
+export type PlateSolverSelectProps = Omit<SelectProps<PlateSolverType>, 'children' | 'items'>
 
 export function PlateSolverSelect({ label = 'Solver', ...props }: PlateSolverSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="ASTAP">Astap</SelectItem>
-			<SelectItem key="ASTROMETRY_NET">Astrometry.net (offline)</SelectItem>
-			<SelectItem key="NOVA_ASTROMETRY_NET">Nova Astrometry.net</SelectItem>
-		</EnumSelect>
+		<Select items={ITEMS} label={label} {...props}>
+			{PlateSolverItem}
+		</Select>
 	)
 }

@@ -1,27 +1,54 @@
-import { SelectItem } from '@heroui/react'
 import type { PlanetType } from 'src/shared/types'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export function PlanetTypeSelect({ label = 'Type', ...props }: Omit<EnumSelectProps<PlanetType | 'ALL'>, 'children'>) {
+const ITEMS = [
+	'ALL',
+	'PLANET',
+	'DWARF_PLANET',
+	'ASTEROID',
+	'COMET',
+	'MARTIAN_SATELLITE',
+	'JOVIAN_REGULAR_SATELLITE',
+	'JOVIAN_IRREGULAR_SATELLITE',
+	'SATURNIAN_REGULAR_SATELLITE',
+	'SATURNIAN_INNER_SATELLITE',
+	'SATURNIAN_IRREGULAR_SATELLITE',
+	'URANIAN_REGULAR_SATELLITE',
+	'URANIAN_INNER_SATELLITE',
+	'URANIAN_IRREGULAR_SATELLITE',
+	'NEPTUNIAN_SATELLITE',
+	'NEPTUNIAN_IRREGULAR_SATELLITE',
+	'PLUTO_SATELLITE',
+] as const
+
+const LABELS = [
+	'All',
+	'Planet',
+	'Dwarf Planet',
+	'Asteroid',
+	'Comet',
+	'Martian Satellite',
+	'Jovian Regular Satellite',
+	'Jovian Irregular Satellite',
+	'Saturnian Regular Satellite',
+	'Saturnian Inner Satellite',
+	'Saturnian Irregular Satellite',
+	'Uranian Regular Satellite',
+	'Uranian Inner Satellite',
+	'Uranian Irregular Satellite',
+	'Neptunian Satellite',
+	'Neptunian Irregular Satellite',
+	'Pluto Satellite',
+] as const
+
+const PlanetTypeItem: SelectItemRenderer<PlanetType | 'ALL'> = (_, i) => <span>{LABELS[i]}</span>
+
+export type PlanetTypeSelectProps = Omit<SelectProps<PlanetType | 'ALL'>, 'children' | 'items'>
+
+export function PlanetTypeSelect({ label = 'Type', ...props }: PlanetTypeSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="ALL">All</SelectItem>
-			<SelectItem key="PLANET">Planet</SelectItem>
-			<SelectItem key="DWARF_PLANET">Dwarf Planet</SelectItem>
-			<SelectItem key="ASTEROID">Asteroid</SelectItem>
-			<SelectItem key="COMET">Comet</SelectItem>
-			<SelectItem key="MARTIAN_SATELLITE">Martian Satellite</SelectItem>
-			<SelectItem key="JOVIAN_REGULAR_SATELLITE">Jovian Regular Satellite</SelectItem>
-			<SelectItem key="JOVIAN_IRREGULAR_SATELLITE">Jovian Irregular Satellite</SelectItem>
-			<SelectItem key="SATURNIAN_REGULAR_SATELLITE">Saturnian Regular Satellite</SelectItem>
-			<SelectItem key="SATURNIAN_INNER_SATELLITE">Saturnian Inner Satellite</SelectItem>
-			<SelectItem key="SATURNIAN_IRREGULAR_SATELLITE">Saturnian Irregular Satellite</SelectItem>
-			<SelectItem key="URANIAN_REGULAR_SATELLITE">Uranian Regular Satellite</SelectItem>
-			<SelectItem key="URANIAN_INNER_SATELLITE">Uranian Inner Satellite</SelectItem>
-			<SelectItem key="URANIAN_IRREGULAR_SATELLITE">Uranian Irregular Satellite</SelectItem>
-			<SelectItem key="NEPTUNIAN_SATELLITE">Neptunian Satellite</SelectItem>
-			<SelectItem key="NEPTUNIAN_IRREGULAR_SATELLITE">Neptunian Irregular Satellite</SelectItem>
-			<SelectItem key="PLUTO_SATELLITE">Pluto Satellite</SelectItem>
-		</EnumSelect>
+		<Select items={ITEMS} label={label} {...props}>
+			{PlanetTypeItem}
+		</Select>
 	)
 }

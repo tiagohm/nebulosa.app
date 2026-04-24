@@ -1,15 +1,17 @@
-import { SelectItem } from '@heroui/react'
 import type { AutoFocusFittingMode } from 'nebulosa/src/autofocus'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export function AutoFocusFittingModeSelect({ label = 'Fitting mode', ...props }: Omit<EnumSelectProps<AutoFocusFittingMode>, 'children'>) {
+const ITEMS = ['TRENDLINES', 'PARABOLIC', 'TREND_PARABOLIC', 'HYPERBOLIC', 'TREND_HYPERBOLIC'] as const
+const LABELS = ['Trendlines', 'Parabolic', 'Trendlines + Parabolic', 'Hyperbolic', 'Trendlines + Hyperbolic'] as const
+
+const AutoFocusFittingModeItem: SelectItemRenderer<AutoFocusFittingMode> = (_, i) => <span>{LABELS[i]}</span>
+
+export type AutoFocusFittingModeSelectProps = Omit<SelectProps<AutoFocusFittingMode>, 'children' | 'items'>
+
+export function AutoFocusFittingModeSelect({ label = 'Fitting mode', ...props }: AutoFocusFittingModeSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="TRENDLINES">Trendline</SelectItem>
-			<SelectItem key="PARABOLIC">Parabolic</SelectItem>
-			<SelectItem key="TREND_PARABOLIC">Trendline + Parabolic</SelectItem>
-			<SelectItem key="HYPERBOLIC">Hyperbolic</SelectItem>
-			<SelectItem key="TREND_HYPERBOLIC">Trendline + Hyperbolic</SelectItem>
-		</EnumSelect>
+		<Select label={label} items={ITEMS} {...props}>
+			{AutoFocusFittingModeItem}
+		</Select>
 	)
 }

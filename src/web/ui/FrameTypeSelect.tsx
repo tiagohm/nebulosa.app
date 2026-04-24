@@ -1,14 +1,17 @@
-import { SelectItem } from '@heroui/react'
 import type { FrameType } from 'nebulosa/src/indi.device'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export function FrameTypeSelect({ label = 'Frame Type', ...props }: Omit<EnumSelectProps<FrameType>, 'children'>) {
+const ITEMS = ['LIGHT', 'DARK', 'FLAT', 'BIAS'] as const
+const LABELS = ['Light', 'Dark', 'Flat', 'Bias'] as const
+
+const FrameTypeItem: SelectItemRenderer<FrameType> = (_, i) => <span>{LABELS[i]}</span>
+
+export type FrameTypeSelectProps = Omit<SelectProps<FrameType>, 'children' | 'items'>
+
+export function FrameTypeSelect({ label = 'Frame Type', ...props }: FrameTypeSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="LIGHT">Light</SelectItem>
-			<SelectItem key="DARK">Dark</SelectItem>
-			<SelectItem key="FLAT">Flat</SelectItem>
-			<SelectItem key="BIAS">Bias</SelectItem>
-		</EnumSelect>
+		<Select items={ITEMS} label={label} {...props}>
+			{FrameTypeItem}
+		</Select>
 	)
 }

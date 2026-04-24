@@ -202,7 +202,7 @@ const Exposure = memo(() => {
 				unit={exposureTimeUnit}
 				value={exposureTime}
 			/>
-			<FrameTypeSelect className="col-span-6" isDisabled={!connected || capturing} onValueChange={(value) => camera.update('frameType', value)} value={frameType} />
+			<FrameTypeSelect className="col-span-6" disabled={!connected || capturing} onValueChange={(value) => camera.update('frameType', value)} value={frameType} />
 		</>
 	)
 })
@@ -266,7 +266,7 @@ const GainAndFormat = memo(() => {
 		<>
 			<NumberInput className="col-span-3" disabled={!connected || capturing} label="Gain" maxValue={gain.max} minValue={gain.min} onValueChange={(value) => camera.update('gain', value)} value={request.gain} />
 			<NumberInput className="col-span-3" disabled={!connected || capturing} label="Offset" maxValue={offset.max} minValue={offset.min} onValueChange={(value) => camera.update('offset', value)} value={request.offset} />
-			<FrameFormatSelect className="col-span-6" isDisabled={!connected || frameFormats.length === 0 || capturing} items={frameFormats} onValueChange={(value) => camera.update('frameFormat', value)} value={request.frameFormat} />
+			<FrameFormatSelect className="col-span-6" disabled={!connected || frameFormats.length === 0 || capturing} items={frameFormats} onValueChange={(value) => camera.update('frameFormat', value)} value={request.frameFormat} />
 		</>
 	)
 })

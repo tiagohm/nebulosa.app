@@ -80,7 +80,7 @@ const Saturation = memo(() => {
 		<Activity mode={info?.mono ? 'hidden' : 'visible'}>
 			<div className="col-span-full flex flex-col gap-2">
 				<NumberInput className="col-span-full" disabled={!enabled} fractionDigits={2} label="Saturation" maxValue={10} minValue={0} onValueChange={(value) => adjustment.update('saturation', 'value', value)} step={0.01} value={saturation.value} />
-				<ImageChannelOrGrayInput isDisabled={!enabled || saturation.value === 1} onValueChange={(value) => adjustment.update('saturation', 'channel', value)} value={saturation.channel} />
+				<ImageChannelOrGrayInput disabled={!enabled || saturation.value === 1} onValueChange={(value) => adjustment.update('saturation', 'channel', value)} value={saturation.channel} />
 			</div>
 		</Activity>
 	)

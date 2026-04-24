@@ -81,9 +81,9 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<PlateSolverSelect className="col-span-6" endContent={<PlateSolverSelectEndContent />} isDisabled={running} onValueChange={(value) => tppa.updateSolver('type', value)} value={type} />
+			<PlateSolverSelect className="col-span-6" disabled={running} endContent={<PlateSolverSelectEndContent />} onValueChange={(value) => tppa.updateSolver('type', value)} value={type} />
 			<NumberInput className="col-span-3" disabled={running} label="Move for (s)" maxValue={60} minValue={1} onValueChange={(value) => tppa.update('moveDuration', value)} value={moveDuration} />
-			<TppaDirectionSelect className="col-span-3" isDisabled={running} onValueChange={(value) => tppa.update('direction', value)} value={direction} />
+			<TppaDirectionSelect className="col-span-3" disabled={running} onValueChange={(value) => tppa.update('direction', value)} value={direction} />
 			<NumberInput className="col-span-4" disabled={running} label="Max attempts" maxValue={30} minValue={3} onValueChange={(value) => tppa.update('maxAttempts', value)} value={maxAttempts} />
 			<NumberInput className="col-span-5" disabled={running} label="Delay before capture (s)" maxValue={120} minValue={0} onValueChange={(value) => tppa.update('delayBeforeCapture', value)} value={delayBeforeCapture} />
 			<Checkbox className="col-span-full" disabled={running} label="Compensate refraction" onValueChange={(value) => tppa.update('compensateRefraction', value)} value={compensateRefraction} />

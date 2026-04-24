@@ -1,12 +1,17 @@
-import { SelectItem } from '@heroui/react'
 import type { SigmaClipDispersionMethod } from 'nebulosa/src/image.types'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export function SigmaClipDispersionMethodSelect({ label = 'Dispersion method', ...props }: Omit<EnumSelectProps<SigmaClipDispersionMethod>, 'children'>) {
+const ITEMS = ['std', 'mad'] as const
+const LABELS = ['Std Dev', 'MAD'] as const
+
+const SigmaClipDispersionMethodItem: SelectItemRenderer<SigmaClipDispersionMethod> = (_, i) => <span>{LABELS[i]}</span>
+
+export type SigmaClipDispersionMethodSelectProps = Omit<SelectProps<SigmaClipDispersionMethod>, 'children' | 'items'>
+
+export function SigmaClipDispersionMethodSelect({ label = 'Dispersion method', ...props }: SigmaClipDispersionMethodSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="std">Std Dev</SelectItem>
-			<SelectItem key="mad">MAD</SelectItem>
-		</EnumSelect>
+		<Select items={ITEMS} label={label} {...props}>
+			{SigmaClipDispersionMethodItem}
+		</Select>
 	)
 }

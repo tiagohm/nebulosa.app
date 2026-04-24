@@ -1,22 +1,26 @@
-import { SelectItem } from '@heroui/react'
 import { GRAYSCALES, type Grayscale, type ImageChannelOrGray } from 'nebulosa/src/image.types'
 import { useRef, useState } from 'react'
 import { tw } from '@/shared/util'
 import { NumberInput } from './components/NumberInput'
-import { EnumSelect } from './EnumSelect'
+import { Select, type SelectItemRenderer } from './components/Select'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { ImageChannelOrGraySelect } from './ImageChannelOrGraySelect'
 
 export type ImageChannelOrGrayInputMode = 'select' | 'input'
 
+const MODE_ITEMS = ['select', 'input'] as const
+const MODE_LABELS = ['Select', 'Input'] as const
+
+const ModeItem: SelectItemRenderer<ImageChannelOrGrayInputMode> = (_, i) => <span>{MODE_LABELS[i]}</span>
+
 export interface ImageChannelOrGrayInputProps extends React.ComponentProps<'div'> {
 	readonly value: ImageChannelOrGray
 	readonly onValueChange: (value: ImageChannelOrGray) => void
-	readonly isDisabled?: boolean
+	readonly disabled?: boolean
 }
 
-export function ImageChannelOrGrayInput({ value, onValueChange, className, isDisabled, ...props }: ImageChannelOrGrayInputProps) {
+export function ImageChannelOrGrayInput({ value, onValueChange, className, disabled, ...props }: ImageChannelOrGrayInputProps) {
 	const [mode, setMode] = useState<ImageChannelOrGrayInputMode>(typeof value === 'string' ? 'select' : 'input')
 	const selectValue = useRef(typeof value === 'string' ? value : 'BT709')
 	const inputValue = useRef(typeof value === 'object' ? value : structuredClone(GRAYSCALES[value]))
@@ -45,18 +49,17 @@ export function ImageChannelOrGrayInput({ value, onValueChange, className, isDis
 
 	return (
 		<div {...props} className={tw('flex flex-col gap-2', className)}>
-			<EnumSelect className="w-full" endContent={mode === 'input' ? <IconButton color="danger" icon={Icons.Restore} onPointerUp={handleOnRestorePointerUp} /> : null} isDisabled={isDisabled} label="Channel mode" onValueChange={handleOnModeChange} value={mode}>
-				<SelectItem key="select">Select</SelectItem>
-				<SelectItem key="input">Input</SelectItem>
-			</EnumSelect>
+			<Select className="w-full" disabled={disabled} endContent={mode === 'input' ? <IconButton color="danger" icon={Icons.Restore} onPointerUp={handleOnRestorePointerUp} /> : null} items={MODE_ITEMS} label="Channel mode" onValueChange={handleOnModeChange} value={mode}>
+				{ModeItem}
+			</Select>
 
 			{typeof value === 'string' ? (
-				<ImageChannelOrGraySelect isDisabled={isDisabled} onValueChange={handleOnSelectValueChange} value={value} />
+				<ImageChannelOrGraySelect disabled={disabled} onValueChange={handleOnSelectValueChange} value={value} />
 			) : (
 				<div className="grid grid-cols-3 items-center gap-2">
-					<NumberInput className="col-span-1" disabled={isDisabled} fractionDigits={3} label="Red" maxValue={1} minValue={0} onValueChange={(red) => handleOnInputValueChange('red', red)} step={0.001} value={value.red} />
-					<NumberInput className="col-span-1" disabled={isDisabled} fractionDigits={3} label="Green" maxValue={1} minValue={0} onValueChange={(green) => handleOnInputValueChange('green', green)} step={0.001} value={value.green} />
-					<NumberInput className="col-span-1" disabled={isDisabled} fractionDigits={3} label="Blue" maxValue={1} minValue={0} onValueChange={(blue) => handleOnInputValueChange('blue', blue)} step={0.001} value={value.blue} />
+					<NumberInput className="col-span-1" disabled={disabled} fractionDigits={3} label="Red" maxValue={1} minValue={0} onValueChange={(red) => handleOnInputValueChange('red', red)} step={0.001} value={value.red} />
+					<NumberInput className="col-span-1" disabled={disabled} fractionDigits={3} label="Green" maxValue={1} minValue={0} onValueChange={(green) => handleOnInputValueChange('green', green)} step={0.001} value={value.green} />
+					<NumberInput className="col-span-1" disabled={disabled} fractionDigits={3} label="Blue" maxValue={1} minValue={0} onValueChange={(blue) => handleOnInputValueChange('blue', blue)} step={0.001} value={value.blue} />
 				</div>
 			)}
 		</div>

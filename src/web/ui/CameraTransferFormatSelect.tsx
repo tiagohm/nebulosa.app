@@ -1,12 +1,17 @@
-import { SelectItem } from '@heroui/react'
 import type { CameraTransferFormat } from 'nebulosa/src/indi.device'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export function CameraTransferFormatSelect({ label = 'Transfer Format', ...props }: Omit<EnumSelectProps<CameraTransferFormat>, 'children'>) {
+const ITEMS = ['FITS', 'XISF'] as const
+const LABELS = ['FITS', 'XISF'] as const
+
+const CameraTransferFormatItem: SelectItemRenderer<CameraTransferFormat> = (_, i) => <span>{LABELS[i]}</span>
+
+export type CameraTransferFormatSelectProps = Omit<SelectProps<CameraTransferFormat>, 'children' | 'items'>
+
+export function CameraTransferFormatSelect({ label = 'Transfer Format', ...props }: CameraTransferFormatSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="FITS">FITS</SelectItem>
-			<SelectItem key="XISF">XISF</SelectItem>
-		</EnumSelect>
+		<Select items={ITEMS} label={label} {...props}>
+			{CameraTransferFormatItem}
+		</Select>
 	)
 }

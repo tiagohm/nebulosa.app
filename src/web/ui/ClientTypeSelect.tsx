@@ -1,13 +1,17 @@
-import { SelectItem } from '@heroui/react'
 import type { ClientType } from 'nebulosa/src/indi.device'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export function ClientTypeSelect({ label = 'Type', ...props }: Omit<EnumSelectProps<ClientType>, 'children'>) {
+const ITEMS = ['INDI', 'ALPACA', 'SIMULATOR'] as const
+const LABELS = ['INDI', 'Alpaca', 'Simulator'] as const
+
+const ClientTypeItem: SelectItemRenderer<ClientType> = (_, i) => <span>{LABELS[i]}</span>
+
+export type ClientTypeSelectProps = Omit<SelectProps<ClientType>, 'children' | 'items'>
+
+export function ClientTypeSelect({ label = 'Type', ...props }: ClientTypeSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="INDI">INDI</SelectItem>
-			<SelectItem key="ALPACA">Alpaca</SelectItem>
-			<SelectItem key="SIMULATOR">Simulator</SelectItem>
-		</EnumSelect>
+		<Select items={ITEMS} label={label} {...props}>
+			{ClientTypeItem}
+		</Select>
 	)
 }

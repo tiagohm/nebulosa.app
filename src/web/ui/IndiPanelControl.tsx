@@ -1,4 +1,4 @@
-import { ListboxItem, SelectItem, Tooltip } from '@heroui/react'
+import { ListboxItem, Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { DeviceProperty } from 'nebulosa/src/indi.device'
 import type { DefElement, DefTextVector, Message, NewVector, SwitchRule } from 'nebulosa/src/indi.types'
@@ -7,8 +7,8 @@ import { useSnapshot } from 'valtio'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { Button } from './components/Button'
 import { NumberInput } from './components/NumberInput'
+import { Select, type SelectItemRenderer } from './components/Select'
 import { TextInput } from './components/TextInput'
-import { EnumSelect } from './EnumSelect'
 import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -59,9 +59,9 @@ const Body = memo(() => {
 	)
 })
 
-const DeviceItem = (device: string) => <SelectItem key={device}>{device}</SelectItem>
+const DeviceItem: SelectItemRenderer<string> = (device) => <span>{device}</span>
 
-const GroupItem = (group: string) => <SelectItem key={group}>{group}</SelectItem>
+const GroupItem: SelectItemRenderer<string> = (group) => <span>{group}</span>
 
 const DeviceAndGroup = memo(() => {
 	const control = useMolecule(IndiPanelControlMolecule)
@@ -69,12 +69,12 @@ const DeviceAndGroup = memo(() => {
 
 	return (
 		<>
-			<EnumSelect className="col-span-6" label="Device" onValueChange={control.changeDevice} value={device}>
-				{devices.map(DeviceItem)}
-			</EnumSelect>
-			<EnumSelect className="col-span-6" label="Group" onValueChange={control.changeGroup} value={group}>
-				{groups.map(GroupItem)}
-			</EnumSelect>
+			<Select className="col-span-6" items={devices} label="Device" onValueChange={control.changeDevice} value={device}>
+				{DeviceItem}
+			</Select>
+			<Select className="col-span-6" items={groups} label="Group" onValueChange={control.changeGroup} value={group}>
+				{GroupItem}
+			</Select>
 		</>
 	)
 })

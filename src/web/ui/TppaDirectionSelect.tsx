@@ -1,12 +1,17 @@
-import { SelectItem } from '@heroui/react'
 import type { TppaStart } from 'src/shared/types'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export function TppaDirectionSelect({ label = 'Direction', ...props }: Omit<EnumSelectProps<TppaStart['direction']>, 'children'>) {
+const ITEMS = ['EAST', 'WEST'] as const
+const LABELS = ['East', 'West'] as const
+
+const TppaDirectionItem: SelectItemRenderer<TppaStart['direction']> = (_, i) => <span>{LABELS[i]}</span>
+
+export type TppaDirectionSelectProps = Omit<SelectProps<TppaStart['direction']>, 'children' | 'items'>
+
+export function TppaDirectionSelect({ label = 'Direction', ...props }: TppaDirectionSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="EAST">East</SelectItem>
-			<SelectItem key="WEST">West</SelectItem>
-		</EnumSelect>
+		<Select items={ITEMS} label={label} {...props}>
+			{TppaDirectionItem}
+		</Select>
 	)
 }

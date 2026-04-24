@@ -1,17 +1,16 @@
-import { SelectItem } from '@heroui/react'
 import type { TrackMode } from 'nebulosa/src/indi.device'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export interface TrackModeSelectProps extends Omit<EnumSelectProps<TrackMode>, 'children'> {
+export interface TrackModeSelectProps extends Omit<SelectProps<TrackMode>, 'children' | 'items'> {
 	readonly modes: readonly TrackMode[]
 }
 
-export function TrackModeSelect({ modes, isDisabled, label = 'Tracking Mode', ...props }: TrackModeSelectProps) {
+const TrackModeItem: SelectItemRenderer<TrackMode> = (mode) => <span>{mode}</span>
+
+export function TrackModeSelect({ disabled, label = 'Tracking Mode', modes, ...props }: TrackModeSelectProps) {
 	return (
-		<EnumSelect {...props} isDisabled={isDisabled || modes.length === 0} label={label}>
-			{modes.map((mode) => (
-				<SelectItem key={mode}>{mode}</SelectItem>
-			))}
-		</EnumSelect>
+		<Select disabled={disabled || modes.length === 0} items={modes} label={label} {...props}>
+			{TrackModeItem}
+		</Select>
 	)
 }

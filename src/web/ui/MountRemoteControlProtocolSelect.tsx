@@ -1,12 +1,17 @@
-import { SelectItem } from '@heroui/react'
 import type { MountRemoteControlProtocol } from 'src/shared/types'
-import { EnumSelect, type EnumSelectProps } from './EnumSelect'
+import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-export function MountRemoteControlProtocolSelect({ label = 'Protocol', ...props }: Omit<EnumSelectProps<MountRemoteControlProtocol>, 'children'>) {
+const ITEMS = ['LX200', 'STELLARIUM'] as const
+const LABELS = ['LX200', 'Stellarium'] as const
+
+const MountRemoteControlProtocolItem: SelectItemRenderer<MountRemoteControlProtocol> = (_, i) => <span>{LABELS[i]}</span>
+
+export type MountRemoteControlProtocolSelectProps = Omit<SelectProps<MountRemoteControlProtocol>, 'children' | 'items'>
+
+export function MountRemoteControlProtocolSelect({ label = 'Protocol', ...props }: MountRemoteControlProtocolSelectProps) {
 	return (
-		<EnumSelect {...props} label={label}>
-			<SelectItem key="LX200">LX200</SelectItem>
-			<SelectItem key="STELLARIUM">Stellarium</SelectItem>
-		</EnumSelect>
+		<Select items={ITEMS} label={label} {...props}>
+			{MountRemoteControlProtocolItem}
+		</Select>
 	)
 }

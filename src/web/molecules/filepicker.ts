@@ -137,26 +137,20 @@ export const FilePickerMolecule = molecule(() => {
 		}
 	}
 
-	async function select(path: React.Key) {
-		if (typeof path !== 'string') return
-
-		const entry = state.entries.find((e) => e.path === path)
-
-		if (!entry) return
-
+	async function select(entry: FileEntry) {
 		if (state.mode !== 'directory' && entry.directory) {
 			await navigateTo(entry)
 			return
 		}
 
-		const index = state.selected.indexOf(path)
+		const index = state.selected.indexOf(entry.path)
 
 		if (index >= 0) {
 			state.selected.splice(index, 1)
 		} else if (multiple || state.selected.length === 0) {
-			state.selected.push(path)
+			state.selected.push(entry.path)
 		} else {
-			state.selected[0] = path
+			state.selected[0] = entry.path
 		}
 	}
 

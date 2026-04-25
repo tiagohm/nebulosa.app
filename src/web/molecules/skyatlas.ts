@@ -441,8 +441,8 @@ export const AsteroidMolecule = molecule(() => {
 		}
 	}
 
-	function select(pdes: React.Key) {
-		state.search.text = `${pdes}`
+	function select(pdes: string) {
+		state.search.text = pdes
 		state.tab = 'search'
 		return search()
 	}
@@ -887,22 +887,14 @@ export const SkyAtlasMolecule = molecule(() => {
 		}
 	}
 
-	function selectBookmark(key: React.Key) {
-		if (typeof key === 'string') {
-			const { items } = state.bookmark
-			const [type, code] = key.split('-') as unknown as readonly [SkyAtlasTab, string]
-			const item = items.find((e) => e.type === type && e.code === code)
+	function selectBookmark({ type, code }: BookmarkItem) {
+		if (type === 'planet') void planet.select(code, false)
+		else if (type === 'asteroid') void asteroid.select(code)
+		else if (type === 'galaxy') void galaxy.select(+code, false)
+		else if (type === 'satellite') void satellite.select(+code, false)
 
-			if (item) {
-				if (type === 'planet') void planet.select(code, false)
-				else if (type === 'asteroid') void asteroid.select(code)
-				else if (type === 'galaxy') void galaxy.select(+code, false)
-				else if (type === 'satellite') void satellite.select(+code, false)
-
-				state.tab = type
-				state.bookmark.show = false
-			}
-		}
+		state.tab = type
+		state.bookmark.show = false
 	}
 
 	function removeBookmark(item: BookmarkItem) {

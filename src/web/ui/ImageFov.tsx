@@ -1,14 +1,13 @@
-import { Listbox, ListboxItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import type { FovItem } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageFovMolecule } from '@/molecules/image/fov'
-import { tw } from '@/shared/util'
 import cameras from '../../../data/cameras.json'
 import telescopes from '../../../data/telescopes.json'
 import { AstroBinEquipmentPopover } from './AstroBinEquipmentPopover'
 import { Checkbox } from './components/Checkbox'
+import { List } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -27,7 +26,7 @@ export const ImageFov = memo(() => {
 const Body = memo(() => {
 	return (
 		<div className="mt-0 grid grid-cols-12 items-center gap-2">
-			<List />
+			<FovList />
 			<Edit />
 		</div>
 	)
@@ -104,25 +103,28 @@ const Actions = memo(() => {
 	)
 })
 
-const List = memo(() => {
+const FovList = memo(() => {
 	const fov = useMolecule(ImageFovMolecule)
 	const { items, selected } = useSnapshot(fov.state)
 
+	function handleOnPointer(event: React.PointerEvent<HTMLElement>) {
+		const index = +event.currentTarget.dataset.index!
+		fov.select(index)
+	}
+
 	return (
-		<Listbox className="col-span-full" classNames={{ list: 'max-h-[146px] overflow-scroll pe-1' }} onAction={(value) => fov.select(+value)} selectionMode="none">
-			{items.map((item, index) => {
+		<List className="col-span-full" itemCount={items.length}>
+			{(i) => {
+				const item = items[i]
+
 				return (
-					<ListboxItem className={tw({ 'bg-green-600/10': index === selected })} key={item.id}>
-						<div className="flex flex-row items-center justify-between gap-1 border-l-2 ps-3" style={{ borderColor: item.color }}>
-							<div className="flex flex-col items-center justify-center">
-								<Checkbox onValueChange={(selected) => fov.update('visible', selected, item.id)} value={item.visible} />
-							</div>
-							<ComputedFovItem {...item} />
-						</div>
-					</ListboxItem>
+					<div data-index={i} onPointerUp={handleOnPointer} className="flex flex-row items-center justify-between gap-1 border-e-2 ps-3" style={{ borderColor: item.color }}>
+						<Checkbox onValueChange={(selected) => fov.update('visible', selected, item.id)} value={item.visible} />
+						<ComputedFovItem {...item} />
+					</div>
 				)
-			})}
-		</Listbox>
+			}}
+		</List>
 	)
 })
 

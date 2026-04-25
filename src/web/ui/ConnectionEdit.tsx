@@ -1,4 +1,3 @@
-import { Listbox, ListboxItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import { memo, useState } from 'react'
@@ -7,6 +6,7 @@ import { ConnectionMolecule } from '@/molecules/connection'
 import { Button } from '@/ui/components/Button'
 import { ClientTypeSelect } from './ClientTypeSelect'
 import { Checkbox } from './components/Checkbox'
+import { List, ListItem } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { TextInput } from './components/TextInput'
@@ -50,33 +50,30 @@ const Footer = memo(() => {
 	return <Button color="success" disabled={!name || !host || !port} label="Save" onPointerUp={connection.save} startContent={<Icons.Check />} />
 })
 
-const AlpacaDeviceServerItem = (item: AlpacaDeviceServer) => (
-	<ListboxItem description={item.devices.map((e) => e.DeviceName).join(' | ')} key={`${item.address}:${item.port}`}>
-		{item.address}:{item.port}
-	</ListboxItem>
-)
+function AlpacaDeviceServerItem(item: AlpacaDeviceServer, index: number, onPointerUp: React.PointerEventHandler) {
+	return <ListItem description={`${item.address}:${item.port}`} label={item.devices.map((e) => e.DeviceName).join(' | ')} data-index={index} onPointerUp={onPointerUp} />
+}
 
 const AlpacaDeviceServerDiscovery = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
 	const { alpaca, edited } = useSnapshot(connection.state)
 	const [open, setOpen] = useState(false)
 
-	function handleOnAction(key: React.Key) {
-		if (typeof key === 'string') {
-			const [host, port] = key.split(':')
-			connection.state.edited.host = host
-			connection.state.edited.port = +port
-			setOpen(false)
-		}
+	function handleOnPointer(event: React.PointerEvent) {
+		const index = +(event.target as HTMLElement).dataset.index!
+		const item = alpaca.servers[index]
+		connection.state.edited.host = item.address
+		connection.state.edited.port = item.port
+		setOpen(false)
 	}
 
 	return (
 		<Popover onOpenChange={setOpen} open={open} trigger={<IconButton color="secondary" disabled={edited.type !== 'ALPACA'} icon={Icons.Radar} tooltipContent="Discovery" />}>
 			<div className="mt-0 grid max-w-100 grid-cols-12 items-center gap-2 p-4">
 				<p className="col-span-full text-center font-bold">ALPACA DEVICE SERVER DISCOVERY</p>
-				<Listbox className="col-span-full min-w-90" classNames={{ list: 'max-h-40 overflow-scroll' }} emptyContent="No servers" items={alpaca.servers} onAction={handleOnAction}>
-					{AlpacaDeviceServerItem}
-				</Listbox>
+				<List className="col-span-full min-w-90" itemCount={alpaca.servers.length} emptyContent="No servers">
+					{(i) => AlpacaDeviceServerItem(alpaca.servers[i], i, handleOnPointer)}
+				</List>
 				<div className="col-span-full flex flex-row items-center justify-end">
 					<Button color="primary" label="Discovery" loading={alpaca.discovering} onPointerUp={connection.discovery} startContent={<Icons.Reload />} />
 				</div>

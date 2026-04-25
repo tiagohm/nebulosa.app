@@ -1,10 +1,12 @@
-import { Badge, BreadcrumbItem, Breadcrumbs, Listbox, ListboxItem } from '@heroui/react'
+import { Badge, BreadcrumbItem, Breadcrumbs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
-import { Activity, memo } from 'react'
+import React, { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerMolecule } from '@/molecules/filepicker'
+import { stopPropagation, tw } from '../shared/util'
 import { Button } from './components/Button'
+import { List } from './components/List'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
@@ -92,18 +94,20 @@ const Files = memo(() => {
 	const picker = useMolecule(FilePickerMolecule)
 	const { mode, selected, filtered } = useSnapshot(picker.state)
 
+	function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
+		stopPropagation(event)
+		const index = +event.currentTarget.dataset.index!
+		return picker.select(filtered[index])
+	}
+
 	return (
-		<Listbox
-			isVirtualized
-			onAction={picker.select}
-			selectionMode="none"
-			virtualization={{
-				maxListboxHeight: 200,
-				itemHeight: 48,
-			}}>
-			{filtered.map((item) => (
-				<ListboxItem endContent={selected.includes(item.path) && <Icons.Check color="green" />} key={item.path} startContent={item.directory ? <Icons.Folder color="orange" /> : <Icons.File color="gray" />}>
-					<div className="flex flex-row items-center justify-between gap-1">
+		<List itemHeight={42} itemCount={filtered.length}>
+			{(i) => {
+				const item = filtered[i]
+
+				return (
+					<div onPointerUp={handlePointerUp} data-index={i} className={tw('flex flex-row items-center justify-between gap-1 p-2 cursor-pointer border-e-2', selected.includes(item.path) ? 'border-green-700' : 'border-transparent')}>
+						{item.directory ? <Icons.Folder color="orange" /> : <Icons.File color="gray" />}
 						<div className="flex w-full flex-col justify-center gap-0">
 							<span className="w-0 break-all whitespace-nowrap">{item.name}</span>
 							<div className="flex w-full flex-row items-center justify-between gap-1">
@@ -113,9 +117,9 @@ const Files = memo(() => {
 						</div>
 						{mode === 'directory' && <IconButton color="secondary" icon={Icons.FolderOpen} onPointerUp={() => picker.navigateTo(item)} />}
 					</div>
-				</ListboxItem>
-			))}
-		</Listbox>
+				)
+			}}
+		</List>
 	)
 })
 

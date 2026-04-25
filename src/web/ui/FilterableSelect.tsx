@@ -1,7 +1,7 @@
 import { Select, type SelectProps } from '@heroui/react'
 import { useDebounce } from '@uidotdev/usehooks'
 import { useMemo, useState } from 'react'
-import { SearchInput } from './SearchInput'
+import { SearchTextInput } from './components/SearchInput'
 
 export interface FilterableSelectProps<T extends object> extends Omit<SelectProps<T>, 'listboxProps' | 'items'> {
 	readonly items: readonly Readonly<T>[]
@@ -24,7 +24,7 @@ export function FilterableSelect<T extends object>({ showFilter = true, items, f
 			{...props}
 			items={filtered}
 			listboxProps={{
-				topContent: showFilter && <SearchInput className="w-full" onValueChange={setSearch} placeholder={filterPlaceholder} value={search} />,
+				topContent: showFilter && <SearchTextInput className="w-full" onValueChange={setSearch} placeholder={filterPlaceholder} value={search} />,
 			}}
 		/>
 	)

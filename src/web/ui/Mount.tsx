@@ -1,4 +1,3 @@
-import { Listbox, ListboxItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatRA } from 'nebulosa/src/angle'
 import { Activity, memo, useState } from 'react'
@@ -7,6 +6,7 @@ import { useSnapshot } from 'valtio'
 import { MountMolecule } from '@/molecules/indi/mount'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { Chip } from './components/Chip'
+import { List, ListItem } from './components/List'
 import { Popover } from './components/Popover'
 import { Switch } from './components/Switch'
 import { TextInput } from './components/TextInput'
@@ -193,8 +193,8 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	const { latitude } = useSnapshot(mount.state.mount.geographicCoordinate)
 
-	function onAction(action: React.Key) {
-		if (typeof action !== 'string') return
+	function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
+		const action = event.currentTarget.dataset.action!
 
 		if (action === 'bookmark') {
 			return
@@ -217,40 +217,18 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 		void mount.updateCurrentCoordinatePosition()
 	}
 
-	const disabledKeys: string[] = []
-	if (latitude > 0) disabledKeys.push('south-pole')
-	else if (latitude < 0) disabledKeys.push('north-pole')
-
 	return (
-		<Listbox disabledKeys={disabledKeys} onAction={onAction}>
-			<ListboxItem key="bookmark" startContent={<Icons.Bookmark />}>
-				Bookmark
-			</ListboxItem>
-			<ListboxItem key="copy-equatorialJ2000" startContent={<Icons.Paste />}>
-				Paste current J2000 position
-			</ListboxItem>
-			<ListboxItem key="copy-equatorial" startContent={<Icons.Paste />}>
-				Paste current JNOW position
-			</ListboxItem>
-			<ListboxItem key="copy-horizontal" startContent={<Icons.Paste />}>
-				Paste current Horizontal position
-			</ListboxItem>
-			<ListboxItem key="copy-ecliptic" startContent={<Icons.Paste />}>
-				Paste current Eclíptic position
-			</ListboxItem>
-			<ListboxItem key="copy-galactic" startContent={<Icons.Paste />}>
-				Paste current Galactic position
-			</ListboxItem>
-			<ListboxItem key="zenith" startContent={<Icons.Telescope />}>
-				Zenith
-			</ListboxItem>
-			<ListboxItem key="south-pole" startContent={<Icons.Telescope />}>
-				South Pole
-			</ListboxItem>
-			<ListboxItem key="north-pole" startContent={<Icons.Telescope />}>
-				North Pole
-			</ListboxItem>
-		</Listbox>
+		<List>
+			<ListItem label="Bookmark" data-action="bookmark" startContent={<Icons.Bookmark />} onPointerUp={handlePointerUp} />
+			<ListItem label="Paste current J2000 position" data-action="copy-equatorialJ2000" startContent={<Icons.Paste />} onPointerUp={handlePointerUp} />
+			<ListItem label="Paste current JNOW position" data-action="copy-equatorial" startContent={<Icons.Paste />} onPointerUp={handlePointerUp} />
+			<ListItem label="Paste current Horizontal position" data-action="copy-horizontal" startContent={<Icons.Paste />} onPointerUp={handlePointerUp} />
+			<ListItem label="Paste current Eclíptic position" data-action="copy-ecliptic" startContent={<Icons.Paste />} onPointerUp={handlePointerUp} />
+			<ListItem label="Paste current Galactic position" data-action="copy-galactic" startContent={<Icons.Paste />} onPointerUp={handlePointerUp} />
+			<ListItem label="Zenith" data-action="zenith" startContent={<Icons.Telescope />} onPointerUp={handlePointerUp} />
+			<ListItem disabled={latitude > 0} label="South Pole" data-action="south-pole" startContent={<Icons.Telescope />} onPointerUp={handlePointerUp} />
+			<ListItem disabled={latitude < 0} label="North Pole" data-action="north-pole" startContent={<Icons.Telescope />} onPointerUp={handlePointerUp} />
+		</List>
 	)
 })
 

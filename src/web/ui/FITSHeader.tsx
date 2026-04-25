@@ -1,9 +1,9 @@
-import { Listbox, ListboxItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { FitsHeaderValue } from 'nebulosa/src/fits'
 import { memo, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageHeaderMolecule } from '@/molecules/image/header'
+import { List, ListItem } from './components/List'
 import { Modal } from './Modal'
 
 export const FITSHeader = memo(() => {
@@ -16,11 +16,9 @@ export const FITSHeader = memo(() => {
 	)
 })
 
-const FitsKeywordItem = ([key, value]: [string, FitsHeaderValue]) => (
-	<ListboxItem description={key} key={key}>
-		{value === true ? 'T' : value === false ? 'F' : value}
-	</ListboxItem>
-)
+function FITSHeaderItem([key, value]: [string, FitsHeaderValue]) {
+	return <ListItem description={value === true ? 'T' : value === false ? 'F' : value} label={key} />
+}
 
 const Body = memo(() => {
 	const header = useMolecule(ImageHeaderMolecule)
@@ -30,15 +28,9 @@ const Body = memo(() => {
 
 	return (
 		<div className="mt-0 px-1 py-2">
-			<Listbox
-				isVirtualized
-				selectionMode="none"
-				virtualization={{
-					maxListboxHeight: 300,
-					itemHeight: 40,
-				}}>
-				{entries.map(FitsKeywordItem)}
-			</Listbox>
+			<List itemHeight={48} itemCount={entries.length}>
+				{(i) => FITSHeaderItem(entries[i])}
+			</List>
 		</div>
 	)
 })

@@ -1,4 +1,4 @@
-import { ListboxItem, Tooltip } from '@heroui/react'
+import { Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { DeviceProperty } from 'nebulosa/src/indi.device'
 import type { DefElement, DefTextVector, Message, NewVector, SwitchRule } from 'nebulosa/src/indi.types'
@@ -6,10 +6,11 @@ import { Activity, memo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { Button } from './components/Button'
+import { FilterableList } from './components/FilterableList'
+import { ListItem } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Select, type SelectItemRenderer } from './components/Select'
 import { TextInput } from './components/TextInput'
-import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Modal } from './Modal'
@@ -110,11 +111,9 @@ const PropertyList = memo(({ group }: Readonly<{ group: string }>) => {
 	)
 })
 
-const MessageItem = (item: Message) => (
-	<ListboxItem description={item.timestamp} key={item.id}>
-		{item.message}
-	</ListboxItem>
-)
+function MessageItem(item: Message) {
+	return <ListItem description={item.timestamp} label={item.message} />
+}
 
 const Messages = memo(() => {
 	const control = useMolecule(IndiPanelControlMolecule)
@@ -122,21 +121,9 @@ const Messages = memo(() => {
 
 	return (
 		<Activity mode={tab === 'message' ? 'visible' : 'hidden'}>
-			<FilterableListbox
-				className="col-span-full"
-				classNames={{ list: 'max-h-[200px] overflow-scroll', base: 'min-w-80' }}
-				filter={MessageFilter}
-				isVirtualized
-				items={messages}
-				minLengthToSearch={1}
-				selectionMode="none"
-				variant="flat"
-				virtualization={{
-					maxListboxHeight: 200,
-					itemHeight: 36,
-				}}>
+			<FilterableList className="col-span-full" filter={MessageFilter} items={messages} minLengthToSearch={1} itemHeight={36}>
 				{MessageItem}
-			</FilterableListbox>
+			</FilterableList>
 			<div className="col-span-full flex flex-row items-center justify-center gap-2">
 				<Button color="danger" disabled={messages.length === 0} label="Clear" onPointerUp={control.clearMessages} startContent={<Icons.Broom />} />
 			</div>

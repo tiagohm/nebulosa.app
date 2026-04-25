@@ -81,8 +81,8 @@ export const ImageFovMolecule = molecule(() => {
 		update('pixelHeight', item.ps ?? 0)
 	}
 
-	function select(id: number) {
-		state.selected = state.items.findIndex((e) => e.id === id)
+	function select(item: FovItem | number) {
+		state.selected = typeof item === 'number' ? item : state.items.indexOf(item)
 	}
 
 	function add() {

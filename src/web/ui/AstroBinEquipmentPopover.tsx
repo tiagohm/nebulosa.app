@@ -1,7 +1,7 @@
-import { ListboxItem } from '@heroui/react'
 import { memo, useState } from 'react'
+import { FilterableList } from './components/FilterableList'
+import { ListItem } from './components/List'
 import { Popover } from './components/Popover'
-import { FilterableListbox } from './FilterableListBox'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Link } from './Link'
@@ -23,27 +23,22 @@ export interface AstroBinEquipmentPopoverProps {
 	readonly onSelectedChange?: (item: AstroBinEquipmentPopoverItem) => void
 }
 
-function filter(item: AstroBinEquipmentPopoverItem, text: string) {
+function EquipmentFilter(item: AstroBinEquipmentPopoverItem, text: string) {
 	const { name, sensor } = item
 	return name.toLowerCase().includes(text) || (!!sensor && sensor.toLowerCase().includes(text))
 }
 
-const EquipmentItem = (item: AstroBinEquipmentPopoverItem) => {
+function EquipmentItem(item: AstroBinEquipmentPopoverItem, onPointerUp: React.PointerEventHandler) {
 	const { sensor, w, h, ps, ap, fl } = item
-
-	return (
-		<ListboxItem description={sensor ? `${sensor} ${w}x${h} ${ps}μm` : `AP: ${ap}mm FL: ${fl}mm`} key={item.id}>
-			{item.name}
-		</ListboxItem>
-	)
+	return <ListItem description={sensor ? `${sensor} ${w}x${h} ${ps}μm` : `AP: ${ap}mm FL: ${fl}mm`} label={item.name} data-id={item.id} onPointerUp={onPointerUp} />
 }
 
 export const AstroBinEquipmentPopover = memo(({ type, items, onSelectedChange }: AstroBinEquipmentPopoverProps) => {
 	const [open, setOpen] = useState(false)
 	const isCamera = type === 'camera'
 
-	function handleAction(value: React.Key) {
-		const id = typeof value === 'string' ? +value : value
+	function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
+		const id = +event.currentTarget.dataset.id!
 
 		if (onSelectedChange) {
 			const item = items.find((e) => e.id === id)
@@ -55,21 +50,9 @@ export const AstroBinEquipmentPopover = memo(({ type, items, onSelectedChange }:
 
 	return (
 		<Popover onOpenChange={setOpen} open={open} trigger={<IconButton color="secondary" icon={isCamera ? Icons.Camera : Icons.Telescope} tooltipContent={isCamera ? 'Cameras' : 'Telescopes'} variant="flat" />}>
-			<FilterableListbox
-				className="col-span-full"
-				classNames={{ list: 'max-h-[200px] overflow-scroll', base: 'min-w-80' }}
-				filter={filter}
-				isVirtualized
-				items={items}
-				onAction={handleAction}
-				selectionMode="none"
-				variant="flat"
-				virtualization={{
-					maxListboxHeight: 200,
-					itemHeight: 36,
-				}}>
-				{EquipmentItem}
-			</FilterableListbox>
+			<FilterableList className="col-span-full" filter={EquipmentFilter} items={items} itemHeight={36}>
+				{(item) => EquipmentItem(item, handlePointerUp)}
+			</FilterableList>
 			<Link className="py-2" href="https://www.astrobin.com/api/v2/equipment/" label={`AstroBin's equipment database API`} />
 		</Popover>
 	)

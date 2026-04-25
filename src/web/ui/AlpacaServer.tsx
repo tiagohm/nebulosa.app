@@ -1,4 +1,3 @@
-import { Listbox, ListboxItem } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
 import { memo } from 'react'
@@ -6,6 +5,7 @@ import { useSnapshot } from 'valtio'
 import { AlpacaMolecule } from '@/molecules/alpaca'
 import { Button } from '@/ui/components/Button'
 import { NumberInput } from '@/ui/components/NumberInput'
+import { List, ListItem } from './components/List'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 
@@ -28,20 +28,18 @@ const Body = memo(() => {
 	)
 })
 
-const DeviceItem = (item: AlpacaConfiguredDevice) => (
-	<ListboxItem description={item.DeviceType} key={item.UniqueID}>
-		{item.DeviceName} (#{item.DeviceNumber})
-	</ListboxItem>
-)
+function DeviceItem(item: AlpacaConfiguredDevice) {
+	return <ListItem description={item.DeviceType} label={`${item.DeviceName} (#${item.DeviceNumber})`} />
+}
 
 const DeviceList = memo(() => {
 	const alpaca = useMolecule(AlpacaMolecule)
 	const { devices } = useSnapshot(alpaca.state.status)
 
 	return (
-		<Listbox classNames={{ list: 'max-h-40 overflow-scroll pe-1' }} emptyContent="No devices" items={devices}>
-			{DeviceItem}
-		</Listbox>
+		<List emptyContent="No devices" itemCount={devices.length}>
+			{(i) => DeviceItem(devices[i])}
+		</List>
 	)
 })
 

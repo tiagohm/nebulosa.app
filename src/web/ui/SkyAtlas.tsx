@@ -1,12 +1,13 @@
-import { Listbox, ListboxItem, ScrollShadow, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
+import { ScrollShadow, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import type { LunarPhase } from 'nebulosa/src/moon'
+import type { SmallBodySearchListItem } from 'nebulosa/src/sbd'
 import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/temporal'
-import { Activity, memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
+import React, { Activity, memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
-import { type BodyPosition, EMPTY_TWILIGHT, type Twilight } from 'src/shared/types'
+import { type BodyPosition, EMPTY_TWILIGHT, type MinorPlanetParameter, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, type BookmarkItem, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, type SkyAtlasTab, SunMolecule } from '@/molecules/skyatlas'
 import { formatDistance, skyObjectName, skyObjectType, tw } from '@/shared/util'
@@ -16,13 +17,14 @@ import { Button } from './components/Button'
 import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
 import { Chip, type ChipProps } from './components/Chip'
+import { FilterableList } from './components/FilterableList'
+import { List, ListItem } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { Slider } from './components/Slider'
 import { TextInput } from './components/TextInput'
 import { ConstellationSelect } from './ConstellationSelect'
 import { MountDropdown } from './DeviceDropdown'
-import { FilterableListbox } from './FilterableListBox'
 import { type Icon, Icons } from './Icon'
 import { IconButton } from './IconButton'
 import { Link } from './Link'
@@ -130,26 +132,17 @@ const BookmarkPopoverContent = memo(() => {
 
 	return (
 		<div className="w-full">
-			<FilterableListbox
-				className="col-span-full"
-				classNames={{ list: 'max-h-[200px] overflow-scroll', base: 'min-w-80' }}
-				filter={BookmarkFilter}
-				isVirtualized
-				items={items}
-				minLengthToSearch={1}
-				onAction={atlas.selectBookmark}
-				selectionMode="none"
-				variant="flat"
-				virtualization={{
-					maxListboxHeight: 200,
-					itemHeight: 36,
-				}}>
+			<FilterableList className="col-span-full" filter={BookmarkFilter} items={items} minLengthToSearch={1}>
 				{(item) => (
-					<ListboxItem classNames={{ description: 'uppercase' }} description={item.type} endContent={<IconButton className="rounded-full" color="danger" icon={Icons.Trash} onPointerUp={() => atlas.removeBookmark(item)} />} key={`${item.type}-${item.code}`}>
-						{item.name}
-					</ListboxItem>
+					<div onPointerUp={() => atlas.selectBookmark(item)} className="flex flex-row items-center justify-between gap-2 p-2">
+						<div className="flex flex-col justify-center gap-0">
+							<span className="text-xs font-bold text-neutral-600 uppercase">{item.type}</span>
+							<span className="overflow-auto whitespace-nowrap">{item.name}</span>
+						</div>
+						<IconButton color="danger" icon={Icons.Trash} onPointerUp={() => atlas.removeBookmark(item)} />
+					</div>
 				)}
-			</FilterableListbox>
+			</FilterableList>
 		</div>
 	)
 })
@@ -404,14 +397,16 @@ const PLANETS = [
 	...planetarySatelliteEphemeris.pluto,
 ] as const
 
-const PlanetListItem = (planet: (typeof PLANETS)[number]) => (
-	<ListboxItem description={planet.type} key={planet.code}>
-		<span className="flex flex-row items-center justify-between">
-			<span>{planet.name}</span>
-			<span className="text-xs">{planet.solution}</span>
-		</span>
-	</ListboxItem>
-)
+function PlanetItem(planet: (typeof PLANETS)[number], onPointerUp: React.PointerEventHandler) {
+	return (
+		<ListItem description={planet.type} data-code={planet.code} onPointerUp={onPointerUp}>
+			<span className="flex flex-row items-center justify-between">
+				<span>{planet.name}</span>
+				<span className="text-xs">{planet.solution}</span>
+			</span>
+		</ListItem>
+	)
+}
 
 const PlanetTab = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
@@ -431,19 +426,19 @@ const PlanetTab = memo(() => {
 		return PLANETS.filter((e) => (all || e.type === search.type) && (noSearch || e.name.toUpperCase().includes(text) || e.code.includes(text) || e.solution.includes(text)))
 	}, [search.name, search.type])
 
-	const handleOnFavoriteChange = useCallback(
-		(favorite: boolean) => {
-			atlas.toggleBookmark('planet', name!, code!, favorite)
-		},
-		[name, code],
-	)
+	function handleFavoriteChange(favorite: boolean) {
+		atlas.toggleBookmark('planet', name!, code!, favorite)
+	}
+
+	function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
+		const code = event.currentTarget.dataset.code!
+		return planet.select(code)
+	}
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2">
-			<Listbox className="relative col-span-full max-h-80 min-h-[200px]" classNames={{ base: 'w-full', list: 'max-h-[190px] overflow-scroll' }} items={items} onAction={(key) => planet.select(key as never)} selectionMode="none">
-				{PlanetListItem}
-			</Listbox>
-			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
+			<List itemCount={items.length}>{(i) => PlanetItem(items[i], handlePointerUp)}</List>
+			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleFavoriteChange} position={position} twilight={twilight} />
 		</div>
 	)
 })
@@ -491,10 +486,30 @@ const AsteroidTab = memo(() => {
 	)
 })
 
+function AsteroidSearchListItem(item: SmallBodySearchListItem, onPointerUp: React.PointerEventHandler) {
+	return <ListItem description={item.pdes} label={item.name} data-pdes={item.pdes} onPointerUp={onPointerUp} />
+}
+
+function AsteroidSearchParameterItem(parameter: MinorPlanetParameter) {
+	return (
+		<ListItem description={parameter.description}>
+			<span className="flex items-center justify-between">
+				<span>{parameter.name}</span>
+				<span>{parameter.value}</span>
+			</span>
+		</ListItem>
+	)
+}
+
 const AsteroidSearchTab = memo(() => {
 	const asteroid = useMolecule(AsteroidMolecule)
 	const { loading, selected, list } = useSnapshot(asteroid.state)
 	const { text } = useSnapshot(asteroid.state.search, { sync: true })
+
+	function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
+		const pdes = event.currentTarget.dataset.pdes!
+		return asteroid.select(pdes)
+	}
 
 	return (
 		<div className="flex w-full flex-col gap-0">
@@ -503,25 +518,14 @@ const AsteroidSearchTab = memo(() => {
 				<IconButton color="primary" disabled={loading || !text} icon={Icons.Search} onPointerUp={asteroid.search} variant="ghost" />
 			</div>
 			{list ? (
-				<Listbox className="mt-2 w-full" classNames={{ base: 'min-h-30 w-full', list: 'max-h-36 overflow-scroll' }} items={list} onAction={asteroid.select} selectionMode="single">
-					{(item) => (
-						<ListboxItem description={item.pdes} key={item.pdes}>
-							{item.name}
-						</ListboxItem>
-					)}
-				</Listbox>
-			) : (
-				<Listbox className="mt-2 w-full" classNames={{ base: 'min-h-30 w-full', list: 'max-h-36 overflow-scroll' }} items={selected?.parameters ?? []} selectionMode="none">
-					{(parameter) => (
-						<ListboxItem description={parameter.description} key={parameter.name}>
-							<span className="flex items-center justify-between">
-								<span>{parameter.name}</span>
-								<span>{parameter.value}</span>
-							</span>
-						</ListboxItem>
-					)}
-				</Listbox>
-			)}
+				<List className="mt-2" fullWidth itemCount={list.length}>
+					{(i) => AsteroidSearchListItem(list[i], handlePointerUp)}
+				</List>
+			) : selected?.parameters ? (
+				<List className="mt-2" fullWidth itemCount={selected.parameters.length}>
+					{(i) => AsteroidSearchParameterItem(selected.parameters![i])}
+				</List>
+			) : null}
 			<Link className="mt-1" href="https://ssd-api.jpl.nasa.gov/doc/sbdb.html" label="NASA/JPL Small-Body Database (SBDB) API" />
 		</div>
 	)
@@ -541,16 +545,20 @@ const AsteroidCloseApproachesTab = memo(() => {
 				<NumberInput className="flex-1" disabled={loading} fractionDigits={1} label="Distance (LD)" maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} step={0.1} value={distance} />
 				<IconButton color="primary" disabled={loading} icon={Icons.Search} onPointerUp={asteroid.closeApproaches} variant="ghost" />
 			</div>
-			<Listbox className="mt-2 w-full" classNames={{ base: 'min-h-30 w-full', list: 'max-h-36 overflow-scroll' }} items={result} onAction={asteroid.select} selectionMode="single">
-				{(item) => (
-					<ListboxItem description={`${item.distance.toFixed(3)} LD`} key={item.name}>
-						<span className="flex items-center justify-between">
-							<span>{item.name}</span>
-							<span>{formatTemporal(item.date, 'YYYY-MM-DD HH:mm', offset)}</span>
-						</span>
-					</ListboxItem>
-				)}
-			</Listbox>
+			<List itemCount={result.length} fullWidth>
+				{(i) => {
+					const item = result[i]
+
+					return (
+						<ListItem description={`${item.distance.toFixed(3)} LD`}>
+							<span className="flex items-center justify-between">
+								<span>{item.name}</span>
+								<span>{formatTemporal(item.date, 'YYYY-MM-DD HH:mm', offset)}</span>
+							</span>
+						</ListItem>
+					)
+				}}
+			</List>
 			<Link href="https://ssd-api.jpl.nasa.gov/doc/cad.html" label="NASA/JPL SBDB Close Approach Data API" />
 		</div>
 	)

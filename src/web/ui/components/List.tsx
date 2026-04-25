@@ -180,3 +180,27 @@ export function List({ children, itemCount, className, classNames, emptyContent,
 		</div>
 	)
 }
+
+export interface ListItemProps extends Omit<React.ComponentProps<'div'>, 'children'> {
+	readonly description?: React.ReactNode
+	readonly label?: React.ReactNode
+	readonly startContent?: React.ReactNode
+	readonly endContent?: React.ReactNode
+	readonly disabled?: boolean
+	readonly children?: React.ReactNode
+}
+
+export function ListItem({ className, description, label, children, startContent, endContent, disabled, ...props }: ListItemProps) {
+	const content = children ?? label
+
+	return (
+		<div className={tw('inline-flex flex-col justify-center gap-0 p-3', className, disabled && 'opacity-70 pointer-events-none')} {...props}>
+			{startContent}
+			<div className="flex flex-col justify-center gap-0 p-3">
+				{description && <span className="text-xs font-bold text-neutral-600 uppercase">{description}</span>}
+				{content && <span className="overflow-auto whitespace-nowrap">{content}</span>}
+			</div>
+			{endContent}
+		</div>
+	)
+}

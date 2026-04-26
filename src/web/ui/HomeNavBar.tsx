@@ -7,7 +7,7 @@ import { WakeLockScreenButton } from './WakeLockScreenButton'
 
 export const HomeNavBar = memo(() => {
 	return (
-		<nav className="sticky top-0 z-1 w-full bg-neutral-950 shadow-none">
+		<nav className="sticky top-0 z-1 w-full bg-neutral-900 shadow-none">
 			<header className="flex h-16 items-center justify-center gap-6 px-6">
 				<div className="flex items-center justify-center gap-3">
 					<ConnectionBox />

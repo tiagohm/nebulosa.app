@@ -800,7 +800,7 @@ const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format }: Ast
 				<Icon />
 				{label}
 			</span>
-			<span className="mt-[-4px] mb-1 ps-6">{formatTemporal(time, format, offset)}</span>
+			<span className="mb-1 ps-5">{formatTemporal(time, format, offset)}</span>
 		</div>
 	)
 })

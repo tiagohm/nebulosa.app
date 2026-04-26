@@ -293,14 +293,14 @@ export function Select<T>({
 	}
 
 	// Selects a visible option and closes the floating panel.
-	function selectItem(event: React.PointerEvent<HTMLButtonElement>, item: T, index: number, selected: boolean) {
+	function selectItem(event: React.PointerEvent, item: T, index: number, selected: boolean) {
 		if (event.pointerType === 'mouse' && event.button !== 0) return
+
 		event.preventDefault()
+
 		if (disabled || readOnly) return
 
-		if (!selected) {
-			onValueChange?.(item, index)
-		}
+		if (!selected) onValueChange?.(item, index)
 
 		setOpen(false)
 	}
@@ -311,12 +311,12 @@ export function Select<T>({
 		const selected = value !== undefined && value !== null && isItemEqual(item, value)
 
 		return (
-			<button className={tw(styles.option(), selected ? 'bg-(--color-variant)/15 text-(--color-variant)' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)} onPointerDown={(event) => selectItem(event, item, index, selected)} type="button">
+			<div className={tw(styles.option(), selected ? 'bg-(--color-variant)/15 text-(--color-variant)' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)} onPointerDown={(event) => selectItem(event, item, index, selected)} role="button">
 				<span className={tw(styles.optionContent(), classNames?.optionContent)}>{children(item, index, selected, 'list')}</span>
 				<span className={tw(styles.selectedIcon(), selected ? 'opacity-100' : 'opacity-0', classNames?.selectedIcon)}>
 					<Icons.Check />
 				</span>
-			</button>
+			</div>
 		)
 	}
 

@@ -9,7 +9,7 @@
 }
 
 html {
-	@apply m-0 h-dvh w-dvw touch-none overflow-hidden scroll-smooth bg-neutral-950 p-0 tabular-nums;
+	@apply m-0 h-dvh w-dvw touch-none overflow-hidden scroll-smooth bg-neutral-900 p-0 tabular-nums;
 }
 
 html,

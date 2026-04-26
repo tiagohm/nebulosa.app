@@ -1,4 +1,4 @@
-import { Card, CardBody, CardHeader, Tab, Tabs } from '@heroui/react'
+import { Tab, Tabs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -55,17 +55,13 @@ interface FormulaProps {
 
 function Formula({ description, expression, children }: FormulaProps) {
 	return (
-		<Card className="w-full shadow-none">
-			<CardHeader className="pt-0">
-				<div className="flex w-full flex-col items-center justify-center gap-1">
-					<p className="text-center text-sm">{description}</p>
-					<Chip className="text-medium" color="primary" label={expression} />
-				</div>
-			</CardHeader>
-			<CardBody>
-				<div className="flex w-full flex-col gap-2">{children}</div>
-			</CardBody>
-		</Card>
+		<div className="flex w-full h-full flex-col justify-between shadow-none gap-2">
+			<div className="flex flex-1 flex-col items-center justify-center gap-1">
+				<p className="text-center text-sm">{description}</p>
+				<Chip className="text-medium" color="primary" label={expression} />
+			</div>
+			<div className="flex flex-1 flex-col items-center justify-center gap-2">{children}</div>
+		</div>
 	)
 }
 

@@ -1,4 +1,4 @@
-import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Select, type SelectedItemProps, type SelectedItems, SelectItem, type SharedSelection } from '@heroui/react'
+import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { Activity, memo } from 'react'
@@ -7,13 +7,32 @@ import { ConnectionMolecule } from '@/molecules/connection'
 import type { Connection } from '@/shared/types'
 import { stopPropagationDesktopOnly } from '@/shared/util'
 import { Chip } from './components/Chip'
+import { Select } from './components/Select'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 
-const ConnectionItem = (item: Connection) => (
-	<SelectItem key={item.id} textValue={item.name}>
+function ConnectionItem(item: Connection, index: number, selected: boolean) {
+	if (selected) {
+		return (
+			<div className="flex items-center justify-between gap-0 p-1" key={item.id}>
+				<div className="flex flex-col gap-0">
+					<span className="font-bold">{item.name}</span>
+					<Activity mode={item.type === 'SIMULATOR' ? 'hidden' : 'visible'}>
+						<span className="text-default-500 text-tiny flex items-center gap-1">
+							{item.host}:{item.port}
+						</span>
+					</Activity>
+				</div>
+				<div className="hidden items-center sm:flex">
+					<Chip color="primary">{item.type}</Chip>
+				</div>
+			</div>
+		)
+	}
+
+	return (
 		<div className="flex items-center justify-between gap-2">
 			<div className="flex flex-1 items-center justify-between gap-1">
 				<div className="mt-1 flex flex-col gap-1">
@@ -35,43 +54,22 @@ const ConnectionItem = (item: Connection) => (
 			</div>
 			<EditDropdown item={item} />
 		</div>
-	</SelectItem>
-)
-
-const SelectedConnectionItem = (item: SelectedItemProps<Connection>) => (
-	<div className="flex items-center justify-between gap-0 p-1" key={item.data?.id}>
-		<div className="flex flex-col gap-0">
-			<span className="font-bold">{item.data?.name}</span>
-			<Activity mode={item.data?.type === 'SIMULATOR' ? 'hidden' : 'visible'}>
-				<span className="text-default-500 text-tiny flex items-center gap-1">
-					{item.data?.host}:{item.data?.port}
-				</span>
-			</Activity>
-		</div>
-		<div className="hidden items-center sm:flex">
-			<Chip color="primary">{item.data?.type}</Chip>
-		</div>
-	</div>
-)
-
-const SelectedConnectionItems = (items: SelectedItems<Connection>) => items.map(SelectedConnectionItem)
+	)
+}
 
 export const ConnectionBox = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
 	const { connections, loading, selected, connected, show } = useSnapshot(connection.state)
 
-	function handleSelectionChange(keys: SharedSelection) {
-		if (keys instanceof Set) {
-			const id = keys.values().next().value
-			typeof id === 'string' && connection.select(id)
-		}
+	function handleValueChange(value: Connection) {
+		connection.select(value)
 	}
 
 	return (
 		<>
 			<div className="flex w-full max-w-120 flex-row items-center gap-2">
 				<IconButton color="success" disabled={loading || !!connected} icon={Icons.Plus} onPointerUp={connection.create} tooltipContent="New Connection" />
-				<Select className="flex-1" disallowEmptySelection isDisabled={loading || !!connected} items={connections} onSelectionChange={handleSelectionChange} renderValue={SelectedConnectionItems} selectedKeys={new Set([selected?.id ?? ''])} selectionMode="single" size="lg">
+				<Select className="flex-1" disabled={loading || !!connected} items={connections} onValueChange={handleValueChange} value={selected} size="lg">
 					{ConnectionItem}
 				</Select>
 				<ConnectButton disabled={!selected} isConnected={!!connected} loading={loading} onPointerUp={connection.connect} />

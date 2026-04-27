@@ -25,29 +25,30 @@ const textInputStyles = tv({
 			},
 		},
 		color: {
+			default: {
+				base: '[--color-variant:var(--color-neutral-500)]',
+			},
 			primary: {
-				label: '[--color-variant:var(--primary)]',
+				base: '[--color-variant:var(--primary)]',
 			},
 			secondary: {
-				label: '[--color-variant:var(--secondary)]',
+				base: '[--color-variant:var(--secondary)]',
 			},
 			success: {
-				label: '[--color-variant:var(--success)]',
+				base: '[--color-variant:var(--success)]',
 			},
 			danger: {
-				label: '[--color-variant:var(--danger)]',
+				base: '[--color-variant:var(--danger)]',
 			},
 			warning: {
-				label: '[--color-variant:var(--warning)]',
+				base: '[--color-variant:var(--warning)]',
 			},
 		},
 		hasLabel: {
 			true: {
-				input: 'placeholder:text-transparent focus:placeholder:text-neutral-500',
-				label: 'text-neutral-400 peer-placeholder-shown:text-neutral-500 peer-focus:text-lighter-(--color-variant)/30',
+				input: 'placeholder:text-transparent focus:placeholder:text-lighter-(--color-variant)/55',
 			},
 			false: {
-				input: 'placeholder:text-neutral-500',
 				label: 'hidden',
 			},
 		},
@@ -60,7 +61,7 @@ const textInputStyles = tv({
 	defaultVariants: {
 		size: 'md',
 		hasLabel: false,
-		color: 'primary',
+		color: 'default',
 	},
 })
 
@@ -98,6 +99,7 @@ export interface TextInputProps extends Omit<React.ComponentPropsWithRef<'input'
 	readonly endContent?: React.ReactNode
 }
 
+// Render a shared text input surface with optional variant-aware coloring.
 export function TextInput({
 	autoCapitalize,
 	autoComplete,
@@ -142,6 +144,29 @@ export function TextInput({
 	const displayedPlaceholder = label ? (placeholder ?? ' ') : placeholder
 	const hasStartContent = startContent !== undefined && startContent !== null
 	const hasEndContent = endContent !== undefined && endContent !== null
+	const hasColorVariant = color !== undefined && color !== null && color !== 'default'
+	const surfaceClassName = disabled
+		? 'bg-neutral-900/35 text-neutral-500'
+		: readOnly
+			? 'bg-neutral-900/55 text-neutral-300'
+			: hasColorVariant
+				? 'bg-(--color-variant)/15 text-lighter-(--color-variant)/85 hover:bg-(--color-variant)/20 focus-within:bg-(--color-variant)/25'
+				: 'bg-neutral-900/70 text-neutral-100 hover:bg-neutral-800 focus-within:bg-neutral-800'
+	const inputClassName = disabled
+		? 'cursor-not-allowed text-neutral-500 placeholder:text-neutral-600'
+		: readOnly
+			? 'cursor-default text-neutral-200 placeholder:text-neutral-500'
+			: hasColorVariant
+				? tw('text-lighter-(--color-variant)/85', !label && 'placeholder:text-lighter-(--color-variant)/45')
+				: tw('text-neutral-100', !label && 'placeholder:text-neutral-500')
+	const contentClassName = disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : hasColorVariant ? 'text-lighter-(--color-variant)/60' : 'text-neutral-400'
+	const labelClassName = disabled
+		? 'text-neutral-600 peer-placeholder-shown:text-neutral-600 peer-focus:text-neutral-600'
+		: readOnly
+			? 'text-neutral-400 peer-placeholder-shown:text-neutral-400 peer-focus:text-neutral-300'
+			: hasColorVariant
+				? 'text-lighter-(--color-variant)/65 peer-placeholder-shown:text-lighter-(--color-variant)/50 peer-focus:text-lighter-(--color-variant)/85'
+				: 'text-neutral-400 peer-placeholder-shown:text-neutral-500 peer-focus:text-lighter-(--color-variant)/30'
 
 	const commitValue = useEffectEvent(() => {
 		if (disabled || readOnly || draft === lastCommittedValueRef.current) return
@@ -157,32 +182,38 @@ export function TextInput({
 		}
 	}, [value])
 
+	// Commit the draft when the field loses focus.
 	function handleBlur(event: React.FocusEvent<HTMLInputElement>) {
 		focusedRef.current = false
 		commitValue()
 		onBlur?.(event)
 	}
 
+	// Keep the local draft aligned with user edits.
 	function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
 		setDraft(event.target.value)
 		onChange?.(event)
 	}
 
+	// Track composition completion before Enter can submit.
 	function handleCompositionEnd(event: React.CompositionEvent<HTMLInputElement>) {
 		composingRef.current = false
 		onCompositionEnd?.(event)
 	}
 
+	// Track composition state to avoid committing partial IME input.
 	function handleCompositionStart(event: React.CompositionEvent<HTMLInputElement>) {
 		composingRef.current = true
 		onCompositionStart?.(event)
 	}
 
+	// Mark the draft as actively edited while the input is focused.
 	function handleFocus(event: React.FocusEvent<HTMLInputElement>) {
 		focusedRef.current = true
 		onFocus?.(event)
 	}
 
+	// Commit and report Enter when requested by the caller.
 	function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
 		onKeyDown?.(event)
 
@@ -194,8 +225,8 @@ export function TextInput({
 
 	return (
 		<div className={tw(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90 pointer-events-none', classNames?.base)}>
-			<div className={tw(styles.surface(), disabled ? 'bg-neutral-900/35 text-neutral-500' : readOnly ? 'bg-neutral-900/55 text-neutral-300' : 'bg-neutral-900/70 text-neutral-100 hover:bg-neutral-800 focus-within:bg-neutral-800', classNames?.surface)}>
-				{hasStartContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.startContent)}>{startContent}</div>}
+			<div className={tw(styles.surface(), surfaceClassName, classNames?.surface)}>
+				{hasStartContent && <div className={tw(styles.content(), contentClassName, classNames?.startContent)}>{startContent}</div>}
 				<div className={tw(styles.field(), classNames?.field)}>
 					<input
 						{...props}
@@ -203,14 +234,7 @@ export function TextInput({
 						autoComplete={autoComplete}
 						autoCorrect={autoCorrect}
 						autoFocus={autoFocus}
-						className={tw(
-							styles.input(),
-							label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel,
-							hasStartContent && 'pl-0',
-							hasEndContent && 'pr-0',
-							disabled ? 'cursor-not-allowed text-neutral-500 placeholder:text-neutral-600' : readOnly ? 'cursor-default text-neutral-200' : 'text-neutral-100 placeholder:text-neutral-500',
-							classNames?.input,
-						)}
+						className={tw(styles.input(), label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel, hasStartContent && 'pl-0', hasEndContent && 'pr-0', inputClassName, classNames?.input)}
 						disabled={disabled}
 						inputMode={inputMode}
 						maxLength={maxLength}
@@ -230,14 +254,9 @@ export function TextInput({
 						type="text"
 						value={draft}
 					/>
-					{label && (
-						<label
-							className={tw(styles.label(), hasStartContent && 'left-0', disabled ? 'text-neutral-600 peer-placeholder-shown:text-neutral-600 peer-focus:text-neutral-600' : readOnly ? 'text-neutral-400 peer-placeholder-shown:text-neutral-400 peer-focus:text-neutral-300' : undefined, classNames?.label)}>
-							{label}
-						</label>
-					)}
+					{label && <label className={tw(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</label>}
 				</div>
-				{hasEndContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.endContent)}>{endContent}</div>}
+				{hasEndContent && <div className={tw(styles.content(), contentClassName, classNames?.endContent)}>{endContent}</div>}
 			</div>
 		</div>
 	)

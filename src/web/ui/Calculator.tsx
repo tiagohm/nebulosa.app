@@ -55,7 +55,7 @@ interface FormulaProps {
 
 function Formula({ description, expression, children }: FormulaProps) {
 	return (
-		<div className="flex w-full h-full flex-col justify-between shadow-none gap-2">
+		<div className="flex h-full w-full flex-col justify-between gap-2 shadow-none">
 			<div className="flex flex-1 flex-col items-center justify-center gap-1">
 				<p className="text-center text-sm">{description}</p>
 				<Chip className="text-medium" color="primary" label={expression} />

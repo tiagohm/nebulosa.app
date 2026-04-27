@@ -19,10 +19,10 @@ const selectStyles = tv({
 		startContent: 'flex shrink-0 items-center whitespace-nowrap',
 		field: 'relative min-w-0 flex-1',
 		value: 'flex h-full w-full min-w-0 items-center overflow-hidden',
-		description: 'min-w-0 truncate text-neutral-500',
-		label: 'pointer-events-none absolute origin-left truncate text-xs leading-none text-neutral-400',
+		description: 'min-w-0 truncate',
+		label: 'pointer-events-none absolute origin-left truncate text-xs leading-none',
 		endContent: 'flex shrink-0 items-center whitespace-nowrap',
-		chevron: 'flex shrink-0 items-center justify-center text-neutral-400 transition',
+		chevron: 'flex shrink-0 items-center justify-center transition',
 		panel: 'w-(--select-width) min-w-48 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg bg-neutral-950 p-0 text-neutral-100 shadow-lg shadow-black/40',
 		panelContent: 'min-w-0',
 		header: 'p-2',
@@ -67,19 +67,28 @@ const selectStyles = tv({
 			},
 		},
 		color: {
+			default: {
+				base: '[--color-variant:var(--color-neutral-500)]',
+				panel: '[--color-variant:var(--color-neutral-500)]',
+			},
 			primary: {
+				base: '[--color-variant:var(--primary)]',
 				panel: '[--color-variant:var(--primary)]',
 			},
 			secondary: {
+				base: '[--color-variant:var(--secondary)]',
 				panel: '[--color-variant:var(--secondary)]',
 			},
 			success: {
+				base: '[--color-variant:var(--success)]',
 				panel: '[--color-variant:var(--success)]',
 			},
 			danger: {
+				base: '[--color-variant:var(--danger)]',
 				panel: '[--color-variant:var(--danger)]',
 			},
 			warning: {
+				base: '[--color-variant:var(--warning)]',
 				panel: '[--color-variant:var(--warning)]',
 			},
 		},
@@ -93,7 +102,7 @@ const selectStyles = tv({
 		},
 		open: {
 			true: {
-				chevron: 'rotate-180 text-neutral-200',
+				chevron: 'rotate-180',
 			},
 		},
 		fullWidth: {
@@ -104,7 +113,7 @@ const selectStyles = tv({
 	},
 	defaultVariants: {
 		size: 'md',
-		color: 'primary',
+		color: 'default',
 		hasLabel: false,
 	},
 })
@@ -223,6 +232,18 @@ export function Select<T>({
 	const styles = selectStyles({ fullWidth, hasLabel, open: visible, size, color })
 	const selectedContent = selectedItem !== undefined && selectedItem !== null ? children(selectedItem, selectedIndex, true, 'trigger') : description
 	const panelStyle = useMemo(() => ({ '--select-width': `${Math.max(triggerWidth, 0)}px` }) as React.CSSProperties, [triggerWidth])
+	const hasColorVariant = color !== undefined && color !== null && color !== 'default'
+	const triggerClassName = disabled
+		? 'bg-neutral-900/35 text-neutral-500'
+		: readOnly
+			? 'bg-neutral-900/55 text-neutral-300'
+			: hasColorVariant
+				? tw('bg-(--color-variant)/15 text-lighter-(--color-variant)/85 hover:bg-(--color-variant)/20', visible && 'bg-(--color-variant)/25')
+				: tw('bg-neutral-900/70 text-neutral-100 hover:bg-neutral-800', visible && 'bg-neutral-800')
+	const contentClassName = disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : hasColorVariant ? 'text-lighter-(--color-variant)/60' : 'text-neutral-400'
+	const descriptionClassName = disabled ? 'text-neutral-600' : readOnly ? 'text-neutral-500' : hasColorVariant ? 'text-lighter-(--color-variant)/45' : 'text-neutral-500'
+	const labelClassName = disabled ? 'text-neutral-600' : readOnly ? 'text-neutral-400' : hasColorVariant ? 'text-lighter-(--color-variant)/65' : 'text-neutral-400'
+	const chevronClassName = disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : hasColorVariant ? (visible ? 'text-lighter-(--color-variant)/85' : 'text-lighter-(--color-variant)/60') : visible ? 'text-neutral-200' : 'text-neutral-400'
 
 	// Updates open state in controlled and uncontrolled modes.
 	const setOpen = useEffectEvent((nextOpen: boolean) => {
@@ -311,7 +332,7 @@ export function Select<T>({
 		const selected = value !== undefined && value !== null && isItemEqual(item, value)
 
 		return (
-			<div className={tw(styles.option(), selected ? 'bg-(--color-variant)/15 text-(--color-variant)' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)} onPointerDown={(event) => selectItem(event, item, index, selected)} role="button">
+			<div className={tw(styles.option(), selected ? 'bg-(--color-variant)/15 text-lighter-(--color-variant)/75' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)} onPointerDown={(event) => selectItem(event, item, index, selected)} role="button">
 				<span className={tw(styles.optionContent(), classNames?.optionContent)}>{children(item, index, selected, 'list')}</span>
 				<span className={tw(styles.selectedIcon(), selected ? 'opacity-100' : 'opacity-0', classNames?.selectedIcon)}>
 					<Icons.Check />
@@ -340,14 +361,16 @@ export function Select<T>({
 				onPointerDown={handlePointerDown}
 				ref={handleTriggerRef}
 				tabIndex={disabled ? undefined : (tabIndex ?? 0)}>
-				<div className={tw(styles.trigger(), disabled ? 'bg-neutral-900/35 text-neutral-500' : readOnly ? 'bg-neutral-900/55 text-neutral-300' : 'bg-neutral-900/70 text-neutral-100 hover:bg-neutral-800', classNames?.trigger)}>
-					{startContent !== undefined && startContent !== null && <div className={tw(styles.startContent(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.startContent)}>{startContent}</div>}
+				<div className={tw(styles.trigger(), triggerClassName, classNames?.trigger)}>
+					{startContent !== undefined && startContent !== null && <div className={tw(styles.startContent(), contentClassName, classNames?.startContent)}>{startContent}</div>}
 					<div className={tw(styles.field(), classNames?.field)}>
-						<div className={tw(styles.value(), startContent !== undefined && startContent !== null && 'pl-0', classNames?.value)}>{selectedItem !== undefined && selectedItem !== null ? selectedContent : <span className={tw(styles.description(), classNames?.description)}>{selectedContent}</span>}</div>
-						{hasLabel && <span className={tw(styles.label(), startContent !== undefined && startContent !== null && 'left-0', disabled ? 'text-neutral-600' : readOnly ? 'text-neutral-400' : undefined, classNames?.label)}>{label}</span>}
+						<div className={tw(styles.value(), startContent !== undefined && startContent !== null && 'pl-0', classNames?.value)}>
+							{selectedItem !== undefined && selectedItem !== null ? selectedContent : <span className={tw(styles.description(), descriptionClassName, classNames?.description)}>{selectedContent}</span>}
+						</div>
+						{hasLabel && <span className={tw(styles.label(), startContent !== undefined && startContent !== null && 'left-0', labelClassName, classNames?.label)}>{label}</span>}
 					</div>
-					{endContent !== undefined && endContent !== null && <div className={tw(styles.endContent(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.endContent)}>{endContent}</div>}
-					<div className={tw(styles.chevron(), disabled ? 'text-neutral-500' : undefined, classNames?.chevron)}>
+					{endContent !== undefined && endContent !== null && <div className={tw(styles.endContent(), contentClassName, classNames?.endContent)}>{endContent}</div>}
+					<div className={tw(styles.chevron(), chevronClassName, classNames?.chevron)}>
 						<Icons.ChevronDown />
 					</div>
 				</div>

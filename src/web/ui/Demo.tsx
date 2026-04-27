@@ -37,7 +37,7 @@ const HeartIcon = <Icons.Heart />
 const GalaxyIcon = <Icons.Galaxy />
 const SearchIcon = <Icons.Search />
 
-const COLORS = ['primary', 'secondary', 'success', 'danger', 'warning'] as const
+const COLORS = ['default', 'primary', 'secondary', 'success', 'danger', 'warning'] as const
 const SIZES = ['sm', 'md', 'lg'] as const
 
 const Buttons = memo(() => {
@@ -58,7 +58,7 @@ const Buttons = memo(() => {
 				const label = key.toFixed(0)
 
 				function handlePointer() {
-					toast({ title: 'Hello!', onPointerUp: () => alert(label), description: 'KKKK', color, size, startContent, endContent, onClose: (autoDismiss) => !autoDismiss && alert('Hello!') })
+					toast({ title: 'Hello!', onPointerUp: () => alert(label), description: 'Description', color, size, startContent, endContent, onClose: (autoDismiss) => !autoDismiss && alert('Hello!') })
 				}
 
 				elements.push(<Button color={color} disabled={disabled} endContent={endContent} key={key++} label={label} loading={loading} onPointerUp={handlePointer} size={size} startContent={startContent} tooltipContent={tooltipContent} tooltipPlacement={toltipPlacement} variant={variant} />)
@@ -75,7 +75,7 @@ const TextInputs = memo(() => {
 	const elements: React.ReactNode[] = []
 	let key = 0
 
-	for (let i = 0; i < 8; i++) {
+	for (const color of COLORS) {
 		for (const size of ['md', 'lg'] as const) {
 			const startContent = random() < 0.5 ? HeartIcon : undefined
 			const endContent = random() < 0.5 ? GalaxyIcon : undefined
@@ -83,7 +83,7 @@ const TextInputs = memo(() => {
 			const readOnly = random() < 0.1
 			const label = key.toFixed(0)
 
-			elements.push(<TextInput disabled={disabled} endContent={endContent} key={key++} label={label} onValueChange={setValue} readOnly={readOnly} size={size} startContent={startContent} value={value} />)
+			elements.push(<TextInput color={color} disabled={disabled} endContent={endContent} key={key++} label={label} onValueChange={setValue} readOnly={readOnly} size={size} startContent={startContent} value={value} />)
 		}
 	}
 
@@ -96,17 +96,17 @@ const NumberInputs = memo(() => {
 	const elements: React.ReactNode[] = []
 	let key = 0
 
-	for (let i = 1; i <= 8; i++) {
+	for (const color of COLORS) {
 		for (const size of ['md', 'lg'] as const) {
 			const startContent = random() < 0.5 ? HeartIcon : undefined
 			const endContent = random() < 0.5 ? GalaxyIcon : undefined
 			const disabled = random() < 0.1
 			const readOnly = random() < 0.1
-			const step = i / 4
+			const step = key / 4
 			const fractionDigits = Math.trunc(random() * 8)
 			const label = key.toFixed(0)
 
-			elements.push(<NumberInput disabled={disabled} endContent={endContent} fractionDigits={fractionDigits} key={key++} label={label} maxValue={60} minValue={15} onValueChange={setValue} readOnly={readOnly} size={size} startContent={startContent} step={step} value={value} />)
+			elements.push(<NumberInput color={color} disabled={disabled} endContent={endContent} fractionDigits={fractionDigits} key={key++} label={label} maxValue={60} minValue={15} onValueChange={setValue} readOnly={readOnly} size={size} startContent={startContent} step={step} value={value} />)
 		}
 	}
 
@@ -200,7 +200,7 @@ const Calendars = memo(() => {
 	return (
 		<>
 			<Popover onOpenChange={setOpen} open={open} placement="end" trigger={<Button label="Calendar" />}>
-				<Calendar onValueChange={setValue} showWeekNumber value={value} />
+				<Calendar onValueChange={setValue} showWeekNumber value={value} color="default" />
 			</Popover>
 
 			<Calendar color="success" disabled onValueChange={setValue} value={value} />
@@ -250,8 +250,8 @@ const Selects = memo(() => {
 		for (const color of COLORS) {
 			const startContent = random() < 0.5 ? HeartIcon : undefined
 			const endContent = random() < 0.5 ? GalaxyIcon : undefined
-			const disabled = random() < 0.1
-			const readOnly = random() < 0.1
+			const disabled = random() < 0.05
+			const readOnly = random() < 0.05
 			const headerContent = random() < 0.1 ? <TextInput placeholder="Search" fullWidth startContent={SearchIcon} /> : undefined
 			const label = key.toFixed(0)
 

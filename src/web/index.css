@@ -16,6 +16,14 @@
 	color: color-mix(in oklab, --value(--color-*, [*]), black calc(--modifier(integer) * 1%));
 }
 
+@utility bg-lighter-* {
+	background-color: color-mix(in oklab, --value(--color-*, [*]), white calc(--modifier(integer) * 1%));
+}
+
+@utility bg-darker-* {
+	background-color: color-mix(in oklab, --value(--color-*, [*]), black calc(--modifier(integer) * 1%));
+}
+
 html {
 	@apply m-0 h-dvh w-dvw touch-none overflow-hidden scroll-smooth bg-neutral-900 p-0 tabular-nums;
 }

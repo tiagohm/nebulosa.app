@@ -36,6 +36,13 @@ const chipStyles = tv({
 			},
 		},
 		color: {
+			default: {
+				base: '[--color-variant:var(--color-neutral-500)] border-(--color-variant)/30 bg-(--color-variant)/15 text-(--color-variant)',
+				startContent: 'text-(--color-variant)',
+				label: 'text-(--color-variant)',
+				endContent: 'text-(--color-variant)',
+				closeButton: 'text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
+			},
 			primary: {
 				base: '[--color-variant:var(--primary)] border-(--color-variant)/30 bg-(--color-variant)/15 text-(--color-variant)',
 				startContent: 'text-(--color-variant)',

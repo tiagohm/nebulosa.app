@@ -33,6 +33,7 @@ const checkboxStyles = tv({
 			},
 		},
 		color: {
+			default: '[--color-variant:var(--color-neutral-500)]',
 			primary: '[--color-variant:var(--primary)]',
 			secondary: '[--color-variant:var(--secondary)]',
 			success: '[--color-variant:var(--success)]',

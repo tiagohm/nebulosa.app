@@ -1,7 +1,7 @@
 import { Icons } from '../Icon'
 import { TextInput, type TextInputProps } from './TextInput'
 
-export interface SearchInputProps extends Omit<TextInputProps, 'startContent'> {
+export interface SearchInputProps extends TextInputProps {
 	minLengthToSearch?: number
 }
 

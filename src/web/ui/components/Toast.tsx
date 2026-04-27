@@ -42,6 +42,9 @@ const toastStyles = tv({
 			},
 		},
 		color: {
+			default: {
+				toast: '[--color-variant:var(--color-neutral-500)]',
+			},
 			primary: {
 				toast: '[--color-variant:var(--primary)]',
 			},

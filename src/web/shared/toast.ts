@@ -11,7 +11,7 @@ const DEFAULT_TOAST_SIZE = 'md'
 
 export type ToastDefaults = Pick<ToastRecord, 'color' | 'delay' | 'placement' | 'size'>
 export type ToastPlacement = (typeof TOAST_PLACEMENTS)[number]
-export type ToastColor = 'primary' | 'secondary' | 'success' | 'warning' | 'danger'
+export type ToastColor = 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'danger'
 export type ToastSize = 'sm' | 'md' | 'lg'
 
 export interface ToastOptions extends Omit<React.ComponentPropsWithoutRef<'div'>, 'children' | 'color' | 'title' | 'className'> {

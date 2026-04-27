@@ -37,7 +37,7 @@ const Devices = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-center gap-2">
-			<CameraDropdown endContent={<CameraDropdownEndContent />} isDisabled={running} onValueChange={(value) => (flatWizard.state.camera = value)} showLabel value={camera} />
+			<CameraDropdown endContent={<CameraDropdownEndContent />} disabled={running} onValueChange={(value) => (flatWizard.state.camera = value)} showLabel value={camera} />
 		</div>
 	)
 })

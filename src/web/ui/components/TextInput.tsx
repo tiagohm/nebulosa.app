@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { type ClassValue, tv } from 'tailwind-variants'
+import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
 import { tw } from '@/shared/util'
 
 const textInputStyles = tv({
@@ -14,20 +14,37 @@ const textInputStyles = tv({
 	variants: {
 		size: {
 			md: {
-				input: 'h-10 px-4 text-sm',
-				label: 'left-4 right-4 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-sm peer-focus:text-xs',
-				content: 'px-4 text-sm',
+				input: 'h-10 px-3 text-sm',
+				label: 'left-3 right-3 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-sm peer-focus:text-xs',
+				content: 'px-3 text-sm',
 			},
 			lg: {
-				input: 'h-11 px-5 text-base',
-				label: 'left-5 right-5 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-base peer-focus:text-xs',
+				input: 'h-11 px-4 text-base',
+				label: 'left-4 right-4 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-base peer-focus:text-xs',
 				content: 'px-4 text-base',
+			},
+		},
+		color: {
+			primary: {
+				label: '[--color-variant:var(--primary)]',
+			},
+			secondary: {
+				label: '[--color-variant:var(--secondary)]',
+			},
+			success: {
+				label: '[--color-variant:var(--success)]',
+			},
+			danger: {
+				label: '[--color-variant:var(--danger)]',
+			},
+			warning: {
+				label: '[--color-variant:var(--warning)]',
 			},
 		},
 		hasLabel: {
 			true: {
 				input: 'placeholder:text-transparent focus:placeholder:text-neutral-500',
-				label: 'text-neutral-400 peer-placeholder-shown:text-neutral-500 peer-focus:text-neutral-200',
+				label: 'text-neutral-400 peer-placeholder-shown:text-neutral-500 peer-focus:text-lighter-(--color-variant)/30',
 			},
 			false: {
 				input: 'placeholder:text-neutral-500',
@@ -43,6 +60,7 @@ const textInputStyles = tv({
 	defaultVariants: {
 		size: 'md',
 		hasLabel: false,
+		color: 'primary',
 	},
 })
 
@@ -57,7 +75,7 @@ const textInputSizeStyles = {
 	},
 } as const
 
-export type TextInputSize = keyof typeof textInputSizeStyles
+type TextInputVariants = VariantProps<typeof textInputStyles>
 
 export interface TextInputClassNames {
 	readonly base?: ClassValue
@@ -69,15 +87,13 @@ export interface TextInputClassNames {
 	readonly endContent?: ClassValue
 }
 
-export interface TextInputProps extends Omit<React.ComponentPropsWithRef<'input'>, 'children' | 'defaultValue' | 'size' | 'type' | 'value'> {
+export interface TextInputProps extends Omit<React.ComponentPropsWithRef<'input'>, 'children' | 'defaultValue' | 'size' | 'color' | 'type' | 'value'>, Omit<TextInputVariants, 'hasLabel'> {
 	readonly classNames?: TextInputClassNames
 	readonly label?: React.ReactNode
 	readonly value?: string
 	readonly onValueChange?: (value: string) => void
 	readonly onEnter?: () => void
 	readonly fireOnEnter?: boolean
-	readonly fullWidth?: boolean
-	readonly size?: TextInputSize
 	readonly startContent?: React.ReactNode
 	readonly endContent?: React.ReactNode
 }
@@ -107,6 +123,7 @@ export function TextInput({
 	readOnly = false,
 	ref,
 	size = 'md',
+	color,
 	startContent,
 	endContent,
 	spellCheck,
@@ -120,7 +137,7 @@ export function TextInput({
 	const focusedRef = useRef(false)
 	const composingRef = useRef(false)
 	const lastCommittedValueRef = useRef(value)
-	const styles = textInputStyles({ size, hasLabel: !!label })
+	const styles = textInputStyles({ size, color, hasLabel: !!label, fullWidth })
 	const sizeStyles = textInputSizeStyles[size]
 	const displayedPlaceholder = label ? (placeholder ?? ' ') : placeholder
 	const hasStartContent = startContent !== undefined && startContent !== null
@@ -176,7 +193,7 @@ export function TextInput({
 	}
 
 	return (
-		<div className={tw(styles.base({ fullWidth }), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90 pointer-events-none', classNames?.base)}>
+		<div className={tw(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90 pointer-events-none', classNames?.base)}>
 			<div className={tw(styles.surface(), disabled ? 'bg-neutral-900/35 text-neutral-500' : readOnly ? 'bg-neutral-900/55 text-neutral-300' : 'bg-neutral-900/70 text-neutral-100 hover:bg-neutral-800 focus-within:bg-neutral-800', classNames?.surface)}>
 				{hasStartContent && <div className={tw(styles.content(), disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-neutral-400', classNames?.startContent)}>{startContent}</div>}
 				<div className={tw(styles.field(), classNames?.field)}>
@@ -187,7 +204,7 @@ export function TextInput({
 						autoCorrect={autoCorrect}
 						autoFocus={autoFocus}
 						className={tw(
-							styles.input({ fullWidth }),
+							styles.input(),
 							label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel,
 							hasStartContent && 'pl-0',
 							hasEndContent && 'pr-0',

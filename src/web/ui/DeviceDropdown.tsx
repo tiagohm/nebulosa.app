@@ -1,92 +1,74 @@
-import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip, type TooltipProps } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { Device } from 'nebulosa/src/indi.device'
-import type { DeepReadonly } from 'nebulosa/src/types'
-import { memo, useMemo } from 'react'
+import { memo } from 'react'
+import type { Atom } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from '@/molecules/indi/equipment'
 import type { DeviceTypeMap } from '@/shared/types'
-import { stopPropagationDesktopOnly, tw } from '@/shared/util'
+import { stopPropagation } from '@/shared/util'
+import { Dropdown, type DropdownProps } from './components/Dropdown'
+import { ListItem } from './components/List'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
-import { IconButton, type IconButtonProps } from './IconButton'
+import { IconButton } from './IconButton'
 
-export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends Pick<IconButtonProps, 'icon' | 'label' | 'color' | 'size' | 'iconSize' | 'variant' | 'endContent'> {
+export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends DropdownProps {
 	readonly type: T
-	readonly value?: DeepReadonly<DeviceTypeMap[T]>
+	readonly value?: DeviceTypeMap[T]
 	readonly onValueChange?: (value?: DeviceTypeMap[T]) => void
-	readonly isDisabled?: boolean
 	readonly disallowNoneSelection?: boolean
-	readonly tooltipContent?: React.ReactNode
-	readonly tooltipPlacement?: TooltipProps['placement']
-	readonly label?: string
 	readonly showLabel?: boolean
 	readonly showLabelOnEmpty?: boolean
 }
 
-export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, isDisabled, disallowNoneSelection = false, label, showLabel = false, showLabelOnEmpty = showLabel, icon, color, tooltipContent, tooltipPlacement = 'bottom', ...props }: DeviceDropdownProps<T>) {
+function DeviceItem(item: Device | undefined, onPointerDown: React.PointerEventHandler, equipment: Atom<typeof EquipmentMolecule>) {
+	return <ListItem data-id={item?.id ?? 'none'} onPointerDown={onPointerDown} label={item?.name || 'None'} description={<DeviceDropdownStartContent isConnected={item?.connected} />} endContent={<DeviceDropdownEndContent device={item} onConnect={equipment.connect} onShow={equipment.show} />} />
+}
+
+export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, disabled, disallowNoneSelection = false, label, showLabel = false, showLabelOnEmpty = showLabel, color, ...props }: DeviceDropdownProps<T>) {
 	const equipment = useMolecule(EquipmentMolecule)
 	const state = equipment.state[type]
 	const devices = useSnapshot(state)
-	const items = useMemo(() => (disallowNoneSelection ? devices : [undefined, ...devices]), [devices, disallowNoneSelection])
 
-	function handleOnAction(key: React.Key) {
-		onValueChange?.(key === 'none' ? undefined : (state.find((e) => e.id === key) as never))
+	function handleAction(event: React.PointerEvent<HTMLElement>) {
+		const id = event.currentTarget.dataset.id
+		onValueChange?.(id === 'none' ? undefined : (state.find((e) => e.id === id) as never))
 	}
 
+	const items = new Array<React.ReactNode>(devices.length + (disallowNoneSelection ? 0 : 1))
+
+	if (!disallowNoneSelection) items[0] = DeviceItem(undefined, handleAction, equipment)
+	for (let i = disallowNoneSelection ? 0 : 1, p = 0; i < devices.length; i++, p++) items[i] = DeviceItem(devices[p], handleAction, equipment)
+
 	return (
-		<Dropdown isDisabled={isDisabled || items.length === 0}>
-			<Tooltip content={tooltipContent} isDisabled={isDisabled || items.length === 0} placement={tooltipPlacement} showArrow>
-				<div className="max-w-fit">
-					<DropdownTrigger>
-						<IconButton
-							color={color ?? (value === undefined ? 'secondary' : value.connected ? 'success' : 'danger')}
-							disabled={isDisabled || items.length === 0}
-							icon={icon}
-							label={showLabel ? (value?.name ?? (showLabelOnEmpty ? label || 'None' : undefined)) : undefined}
-							onPointerUp={stopPropagationDesktopOnly}
-							{...props}
-						/>
-					</DropdownTrigger>
-				</div>
-			</Tooltip>
-			<DropdownMenu onAction={handleOnAction}>
-				{items.map((item) => (
-					<DropdownItem
-						className={tw('min-h-11', { 'bg-green-900/30': value?.name === item?.name })}
-						endContent={<DeviceDropdownEndContent device={item} onConnect={equipment.connect} onShow={equipment.show} />}
-						key={item?.id || 'none'}
-						startContent={<DeviceDropdownStartContent isConnected={item?.connected} />}>
-						{item?.name || 'None'}
-					</DropdownItem>
-				))}
-			</DropdownMenu>
+		<Dropdown label={showLabel ? (value?.name ?? (showLabelOnEmpty ? label || 'None' : undefined)) : undefined} color={color ?? (value === undefined ? 'secondary' : value.connected ? 'success' : 'danger')} disabled={disabled || items.length === 0} {...props}>
+			{items}
 		</Dropdown>
 	)
 }
 
-export const CameraDropdown = memo(({ icon = Icons.Camera, tooltipContent = 'Camera', ...props }: Omit<Partial<DeviceDropdownProps<'CAMERA'>>, 'type'>) => {
-	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type="CAMERA" />
+export const CameraDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'CAMERA'>>, 'type'>) => {
+	return <DeviceDropdown tooltipContent="Camera" type="CAMERA" {...props} />
 })
 
-export const MountDropdown = memo(({ icon = Icons.Telescope, tooltipContent = 'Mount', ...props }: Omit<Partial<DeviceDropdownProps<'MOUNT'>>, 'type'>) => {
-	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type="MOUNT" />
+export const MountDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'MOUNT'>>, 'type'>) => {
+	return <DeviceDropdown tooltipContent="Mount" type="MOUNT" {...props} />
 })
 
-export const WheelDropdown = memo(({ icon = Icons.FilterWheel, tooltipContent = 'Filter Wheel', ...props }: Omit<Partial<DeviceDropdownProps<'WHEEL'>>, 'type'>) => {
-	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type="WHEEL" />
+export const WheelDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'WHEEL'>>, 'type'>) => {
+	return <DeviceDropdown tooltipContent="Filter Wheel" type="WHEEL" {...props} />
 })
 
-export const FocuserDropdown = memo(({ icon = Icons.Focuser, tooltipContent = 'Focuser', ...props }: Omit<Partial<DeviceDropdownProps<'FOCUSER'>>, 'type'>) => {
-	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type="FOCUSER" />
+export const FocuserDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'FOCUSER'>>, 'type'>) => {
+	return <DeviceDropdown tooltipContent="Focuser" type="FOCUSER" {...props} />
 })
 
-export const RotatorDropdown = memo(({ icon = Icons.RotateRight, tooltipContent = 'Rotator', ...props }: Omit<Partial<DeviceDropdownProps<'ROTATOR'>>, 'type'>) => {
-	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type="ROTATOR" />
+export const RotatorDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'ROTATOR'>>, 'type'>) => {
+	return <DeviceDropdown tooltipContent="Rotator" type="ROTATOR" {...props} />
 })
 
-export const GuideOutputDropdown = memo(({ icon = Icons.Pulse, tooltipContent = 'Guide Output', ...props }: Omit<Partial<DeviceDropdownProps<'GUIDE_OUTPUT'>>, 'type'>) => {
-	return <DeviceDropdown {...props} icon={icon} tooltipContent={tooltipContent} type="GUIDE_OUTPUT" />
+export const GuideOutputDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'GUIDE_OUTPUT'>>, 'type'>) => {
+	return <DeviceDropdown tooltipContent="Guide Output" type="GUIDE_OUTPUT" {...props} />
 })
 
 const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected: boolean | undefined }) => {
@@ -101,12 +83,12 @@ interface DeviceDropdownEndContentProps {
 
 function DeviceDropdownEndContent({ device, onConnect, onShow }: DeviceDropdownEndContentProps) {
 	function handleConnectPointerUp(event: React.PointerEvent) {
-		stopPropagationDesktopOnly(event)
+		stopPropagation(event)
 		onConnect(device!)
 	}
 
 	function handleShowPointerUp(event: React.PointerEvent) {
-		stopPropagationDesktopOnly(event)
+		stopPropagation(event)
 		onShow(device!)
 	}
 

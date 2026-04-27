@@ -1,6 +1,6 @@
 import type * as React from 'react'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { type ClassValue, tv } from 'tailwind-variants'
+import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
 import { assignRef, clamp, tw } from '@/shared/util'
 import { Icons } from '../Icon'
 
@@ -19,24 +19,41 @@ const numberInputStyles = tv({
 	variants: {
 		size: {
 			md: {
-				input: 'h-10 px-4 text-sm',
-				label: 'left-4 right-4 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-sm peer-focus:text-xs',
-				content: 'px-4 text-sm',
+				input: 'h-10 px-3 text-sm',
+				label: 'left-3 right-3 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-sm peer-focus:text-xs',
+				content: 'px-3 text-sm',
 				stepper: 'relative inset-auto w-6 self-stretch',
 				stepIcon: 'size-[1.25em]',
 			},
 			lg: {
-				input: 'h-11 px-5 text-base',
-				label: 'left-5 right-5 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-base peer-focus:text-xs',
+				input: 'h-11 px-4 text-base',
+				label: 'left-4 right-4 top-1.5 text-xs leading-none peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-focus:top-1.5 peer-focus:translate-y-0 peer-placeholder-shown:text-base peer-focus:text-xs',
 				content: 'px-4 text-base',
 				stepper: 'relative inset-auto w-7 self-stretch',
 				stepIcon: 'size-[1.5em]',
 			},
 		},
+		color: {
+			primary: {
+				label: '[--color-variant:var(--primary)]',
+			},
+			secondary: {
+				label: '[--color-variant:var(--secondary)]',
+			},
+			success: {
+				label: '[--color-variant:var(--success)]',
+			},
+			danger: {
+				label: '[--color-variant:var(--danger)]',
+			},
+			warning: {
+				label: '[--color-variant:var(--warning)]',
+			},
+		},
 		hasLabel: {
 			true: {
 				input: 'placeholder:text-transparent focus:placeholder:text-neutral-500',
-				label: 'text-neutral-400 peer-placeholder-shown:text-neutral-500 peer-focus:text-neutral-200',
+				label: 'text-neutral-400 peer-placeholder-shown:text-neutral-500 peer-focus:text-lighter-(--color-variant)/30',
 			},
 			false: {
 				input: 'placeholder:text-neutral-500',
@@ -52,6 +69,7 @@ const numberInputStyles = tv({
 	defaultVariants: {
 		size: 'md',
 		hasLabel: false,
+		color: 'primary',
 	},
 })
 
@@ -66,7 +84,7 @@ const numberInputSizeStyles = {
 	},
 } as const
 
-export type NumberInputSize = keyof typeof numberInputSizeStyles
+type NumberInputVariants = VariantProps<typeof numberInputStyles>
 
 export interface NumberInputClassNames {
 	readonly base?: ClassValue
@@ -81,7 +99,7 @@ export interface NumberInputClassNames {
 	readonly stepIcon?: ClassValue
 }
 
-export interface NumberInputProps extends Omit<React.ComponentPropsWithRef<'input'>, 'children' | 'defaultValue' | 'inputMode' | 'placeholder' | 'size' | 'type' | 'value'> {
+export interface NumberInputProps extends Omit<React.ComponentPropsWithRef<'input'>, 'children' | 'defaultValue' | 'inputMode' | 'placeholder' | 'size' | 'color' | 'type' | 'value'>, Omit<NumberInputVariants, 'hasLabel'> {
 	readonly classNames?: NumberInputClassNames
 	readonly label?: React.ReactNode
 	readonly placeholder?: string
@@ -89,13 +107,11 @@ export interface NumberInputProps extends Omit<React.ComponentPropsWithRef<'inpu
 	readonly onValueChange?: (value: number) => void
 	readonly onEnter?: () => void
 	readonly fireOnEnter?: boolean
-	readonly fullWidth?: boolean
 	readonly minValue?: number
 	readonly maxValue?: number
 	readonly step?: number
 	readonly fractionDigits?: number
 	readonly hideStepper?: boolean
-	readonly size?: NumberInputSize
 	readonly startContent?: React.ReactNode
 	readonly endContent?: React.ReactNode
 }
@@ -192,6 +208,7 @@ export function NumberInput({
 	readOnly = false,
 	ref,
 	size = 'md',
+	color,
 	startContent,
 	endContent,
 	spellCheck,
@@ -212,7 +229,7 @@ export function NumberInput({
 	const hasStepper = hideStepper !== true && disabled !== true && readOnly !== true
 	const hasStartContent = startContent !== undefined && startContent !== null
 	const hasEndContent = endContent !== undefined && endContent !== null
-	const styles = numberInputStyles({ size, hasLabel: !!label, fullWidth })
+	const styles = numberInputStyles({ size, color, hasLabel: !!label, fullWidth })
 	const sizeStyles = numberInputSizeStyles[size]
 	const displayedPlaceholder = label ? (placeholder ?? ' ') : placeholder
 

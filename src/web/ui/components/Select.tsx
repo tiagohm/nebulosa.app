@@ -320,7 +320,7 @@ export function Select<T>({
 		)
 	}
 
-	const panelContent = (
+	const PanelContent = (
 		<div className={tw(styles.panelContent(), classNames?.panelContent)}>
 			{headerContent !== undefined && headerContent !== null && <div className={tw(styles.header(), classNames?.header)}>{headerContent}</div>}
 			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: tw(styles.listItem(), classNames?.listItem) }} emptyContent={emptyContent} itemCount={items.length} itemHeight={optionHeight} overscan={overscan}>
@@ -357,7 +357,7 @@ export function Select<T>({
 				classNames={{ content: tw(styles.panel(), classNames?.panel) }}
 				closeOnEscape
 				closeOnPointerDownOutside
-				content={panelContent}
+				content={PanelContent}
 				hideArrow
 				interactive
 				offset={DEFAULT_FLOATING_OFFSET / 2}

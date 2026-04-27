@@ -194,9 +194,9 @@ export function ListItem({ className, description, label, children, startContent
 	const content = children ?? label
 
 	return (
-		<div className={tw('inline-flex flex-col justify-center gap-0 p-3', className, disabled && 'opacity-70 pointer-events-none')} {...props}>
+		<div className={tw('inline-flex flex-col justify-center gap-0 p-1', className, disabled && 'opacity-70 pointer-events-none')} {...props}>
 			{startContent}
-			<div className="flex flex-col justify-center gap-0 p-3">
+			<div className="flex flex-col justify-center gap-0 p-1">
 				{description && <span className="text-xs font-bold text-neutral-600 uppercase">{description}</span>}
 				{content && <span className="overflow-auto whitespace-nowrap">{content}</span>}
 			</div>

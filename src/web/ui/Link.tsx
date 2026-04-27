@@ -6,8 +6,8 @@ export interface LinkProps extends Omit<React.ComponentProps<'a'>, 'rel' | 'targ
 
 export function Link({ label, className, children, ...props }: LinkProps) {
 	return (
-		<span className={tw('w-full text-center text-xs text-neutral-500 hover:text-neutral-300', className)}>
-			<a {...props} rel="noreferrer" target="_blank">
+		<span className={tw('w-full inline-block text-center text-xs text-neutral-500 hover:text-neutral-300', className)}>
+			<a rel="noreferrer" target="_blank" {...props}>
 				{children ?? label}
 			</a>
 		</span>

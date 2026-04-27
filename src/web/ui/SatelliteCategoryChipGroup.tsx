@@ -1,9 +1,8 @@
-import { ScrollShadow } from '@heroui/react'
 import type { SatelliteCategory } from 'src/shared/types'
 import { stopPropagationDesktopOnly } from '@/shared/util'
 import { Chip, type ChipProps } from './components/Chip'
 
-export interface SatelliteCategoryChipGroupProps {
+export interface SatelliteCategoryChipGroupProps extends React.ComponentProps<'div'> {
 	readonly className?: string
 	readonly value: readonly SatelliteCategory[]
 	readonly onValueChange: (value: SatelliteCategory[]) => void
@@ -12,7 +11,7 @@ export interface SatelliteCategoryChipGroupProps {
 
 const ENTRIES = ['SPECIAL', 'WEATHER', 'COMMUNICATION', 'NAVIGATION', 'SCIENTIFIC', 'MISCELLANEOUS'] as const
 
-export function SatelliteCategoryChipGroup({ className, value, onValueChange, size = 'sm' }: SatelliteCategoryChipGroupProps) {
+export function SatelliteCategoryChipGroup({ value, onValueChange, size = 'sm', ...props }: SatelliteCategoryChipGroupProps) {
 	function onHandlePointerUp(event: React.PointerEvent, type: SatelliteCategory, remove: boolean) {
 		stopPropagationDesktopOnly(event)
 
@@ -24,13 +23,11 @@ export function SatelliteCategoryChipGroup({ className, value, onValueChange, si
 	}
 
 	return (
-		<ScrollShadow className={className}>
-			<div className="flex w-full flex-wrap gap-2">
-				{ENTRIES.map((item) => {
-					const selected = value.includes(item)
-					return <Chip className="cursor-pointer" color={selected ? 'success' : 'secondary'} key={item} label={item} onPointerUp={(event) => onHandlePointerUp(event, item, selected)} size={size} />
-				})}
-			</div>
-		</ScrollShadow>
+		<div className="flex w-full flex-wrap gap-2" {...props}>
+			{ENTRIES.map((item) => {
+				const selected = value.includes(item)
+				return <Chip className="cursor-pointer" color={selected ? 'success' : 'secondary'} key={item} label={item} onPointerUp={(event) => onHandlePointerUp(event, item, selected)} size={size} />
+			})}
+		</div>
 	)
 }

@@ -1,4 +1,4 @@
-import { ScrollShadow, Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
+import { Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
@@ -849,11 +849,9 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 				<ToggleButton color="primary" icon={Icons.Info} isSelected={!showChart} onPointerUp={() => setShowChart(false)} />
 				<ToggleButton color="primary" icon={Icons.Chart} isSelected={showChart} onPointerUp={() => setShowChart(true)} />
 				<div className="flex flex-1 items-center justify-center overflow-hidden text-sm font-bold">
-					<ScrollShadow className="flex w-full gap-1" hideScrollBar orientation="horizontal">
-						{tags?.map((tag) => (
-							<Chip color={tag.color} key={tag.label} label={tag.label} />
-						))}
-					</ScrollShadow>
+					{tags?.map((tag) => (
+						<Chip color={tag.color} key={tag.label} label={tag.label} />
+					))}
 				</div>
 				{onFavoriteChange && <IconButton color={isFavorite ? 'danger' : 'warning'} disabled={isFavorite === undefined} icon={isFavorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onPointerUp={() => onFavoriteChange(!isFavorite)} tooltipContent={isFavorite ? 'Remove bookmark' : 'Add bookmark'} />}
 			</div>
@@ -882,8 +880,8 @@ const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => {
 				<BodyCoordinateInfo position={position} />
 			</div>
 			<div className="col-span-full flex items-center justify-center gap-2">
-				<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} isDisabled={position.pierSide === 'NEITHER'} onValueChange={atlas.sync} tooltipContent="Sync" variant="flat" />
-				<MountDropdown color="success" disallowNoneSelection isDisabled={position.pierSide === 'NEITHER'} onValueChange={atlas.goTo} tooltipContent="Go" variant="flat" />
+				<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} disabled={position.pierSide === 'NEITHER'} onValueChange={atlas.sync} tooltipContent="Sync" variant="flat" />
+				<MountDropdown color="success" disallowNoneSelection disabled={position.pierSide === 'NEITHER'} onValueChange={atlas.goTo} tooltipContent="Go" variant="flat" />
 				<IconButton color="secondary" disabled={position.pierSide === 'NEITHER'} icon={Icons.Image} onPointerUp={atlas.frame} tooltipContent="Frame" variant="flat" />
 			</div>
 		</div>

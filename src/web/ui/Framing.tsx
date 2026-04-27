@@ -39,7 +39,7 @@ const Body = memo(() => {
 			<NumberInput className="col-span-4" disabled={loading} fractionDigits={2} label="Rotation (°)" maxValue={360} minValue={-360} onValueChange={(value) => framing.update('rotation', value)} step={0.1} value={rotation} />
 			<NumberInput className="col-span-6" disabled={loading} label="Focal Length (mm)" maxValue={100000} minValue={0} onValueChange={(value) => framing.update('focalLength', value)} value={focalLength} />
 			<NumberInput className="col-span-6" disabled={loading} fractionDigits={1} label="Pixel size (µm)" maxValue={1000} minValue={0} onValueChange={(value) => framing.update('pixelSize', value)} step={0.01} value={pixelSize} />
-			<HipsSurveySelect className="col-span-full" isDisabled={loading} onValueChange={(value) => framing.update('hipsSurvey', value)} value={hipsSurvey} />
+			<HipsSurveySelect className="col-span-full" disabled={loading} onValueChange={(value) => framing.update('hipsSurvey', value)} value={hipsSurvey} />
 			<Checkbox className="col-span-full" disabled={loading} label="Open in new image" onValueChange={(value) => (framing.state.openNewImage = value)} value={openNewImage} />
 		</div>
 	)
@@ -49,14 +49,12 @@ const Footer = memo(() => {
 	const framing = useMolecule(FramingMolecule)
 	const { loading } = useSnapshot(framing.state)
 	const { width, height, focalLength, pixelSize } = useSnapshot(framing.state.request)
-
 	const size = angularSizeOfPixel(focalLength, pixelSize)
-	const fov = `${((size * width) / 3600).toFixed(2)}° x ${((size * height) / 3600).toFixed(2)}°`
 
 	return (
 		<>
 			<div className="flex flex-1 items-center">
-				<Chip color="primary">{fov}</Chip>
+				<Chip color="primary" label={`${((size * width) / 3600).toFixed(2)}° x ${((size * height) / 3600).toFixed(2)}°`} />
 			</div>
 			<Button color="success" label="Load" loading={loading} onPointerUp={framing.load} startContent={<Icons.Download />} />
 		</>

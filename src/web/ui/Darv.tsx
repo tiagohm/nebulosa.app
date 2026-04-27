@@ -37,8 +37,8 @@ const DeviceChooser = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-center gap-2">
-			<CameraDropdown endContent={<CameraDropdownEndContent />} isDisabled={running} onValueChange={(value) => (darv.state.camera = value)} showLabel value={camera} />
-			<MountDropdown isDisabled={running} onValueChange={(value) => (darv.state.mount = value)} showLabel value={mount} />
+			<CameraDropdown endContent={<CameraDropdownEndContent />} disabled={running} onValueChange={(value) => (darv.state.camera = value)} showLabel value={camera} />
+			<MountDropdown disabled={running} onValueChange={(value) => (darv.state.mount = value)} showLabel value={mount} />
 		</div>
 	)
 })

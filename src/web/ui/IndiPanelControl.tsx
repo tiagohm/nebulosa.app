@@ -1,4 +1,3 @@
-import { Tooltip } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import type { DeviceProperty } from 'nebulosa/src/indi.device'
 import type { DefElement, DefTextVector, Message, NewVector, SwitchRule } from 'nebulosa/src/indi.types'
@@ -35,12 +34,8 @@ const Header = memo(() => {
 	return (
 		<div className="flex flex-row items-center justify-start gap-2">
 			<span className="me-3">INDI Panel Control</span>
-			<Tooltip content="Properties" placement="bottom" showArrow>
-				<ToggleButton color="secondary" icon={Icons.ViewList} isSelected={tab === 'property'} onPointerUp={() => (control.state.tab = 'property')} />
-			</Tooltip>
-			<Tooltip content="Messages" placement="bottom" showArrow>
-				<ToggleButton color="secondary" icon={Icons.Message} isSelected={tab === 'message'} onPointerUp={() => (control.state.tab = 'message')} />
-			</Tooltip>
+			<ToggleButton tooltipContent="Properties" color="secondary" icon={Icons.ViewList} isSelected={tab === 'property'} onPointerUp={() => (control.state.tab = 'property')} />
+			<ToggleButton tooltipContent="Messages" color="secondary" icon={Icons.Message} isSelected={tab === 'message'} onPointerUp={() => (control.state.tab = 'message')} />
 		</div>
 	)
 })

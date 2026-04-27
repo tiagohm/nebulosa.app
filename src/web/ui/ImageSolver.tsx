@@ -72,8 +72,8 @@ const Solution = memo(() => {
 			<TextInput className="col-span-4" label="Size (arcmin)" readOnly value={`${toArcmin(solution?.width ?? 0).toFixed(2)} x ${toArcmin(solution?.height ?? 0).toFixed(2)}`} />
 			<TextInput className="col-span-4" label="Radius (°)" readOnly value={toDeg(solution?.radius ?? 0).toFixed(4)} />
 			<div className="col-span-full flex items-center justify-center gap-2">
-				<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} isDisabled={!solution} onValueChange={solver.sync} tooltipContent="Sync" variant="flat" />
-				<MountDropdown color="success" disallowNoneSelection isDisabled={!solution} onValueChange={solver.goTo} tooltipContent="Go" variant="flat" />
+				<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} disabled={!solution} onValueChange={solver.sync} tooltipContent="Sync" variant="flat" />
+				<MountDropdown color="success" disallowNoneSelection disabled={!solution} onValueChange={solver.goTo} tooltipContent="Go" variant="flat" />
 				<IconButton color="secondary" disabled={!solution} icon={Icons.Image} onPointerUp={solver.frame} tooltipContent="Frame" variant="flat" />
 			</div>
 		</>

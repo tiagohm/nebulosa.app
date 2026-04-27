@@ -1,6 +1,6 @@
 import { useDebounce } from '@uidotdev/usehooks'
 import { useMemo, useState } from 'react'
-import { SearchTextInput } from './components/SearchInput'
+import { SearchTextInput } from './components/SearchTextInput'
 import { Select, type SelectProps } from './components/Select'
 
 export interface FilterableSelectProps<T extends object> extends Omit<SelectProps<T>, 'listboxProps' | 'items'> {

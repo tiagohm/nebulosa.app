@@ -170,14 +170,14 @@ export function Dropdown({
 		}
 	}
 
-	const triggerEndContent = (
+	const TriggerEndContent = (
 		<>
 			{endContent}
 			<Icons.ChevronDown className={tw(styles.chevron(), classNames?.chevron)} />
 		</>
 	)
 
-	const panelContent = (
+	const PanelContent = (
 		<div className={tw(styles.panelContent(), classNames?.panelContent)}>
 			{headerContent !== undefined && headerContent !== null && <div className={tw(styles.header(), classNames?.header)}>{headerContent}</div>}
 			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: classNames?.listItem }} emptyContent={emptyContent} itemHeight={optionHeight} overscan={overscan}>
@@ -193,7 +193,7 @@ export function Dropdown({
 				{...props}
 				className={tw(styles.trigger(), readOnly && !disabled && 'cursor-default opacity-90 pointer-events-none', className, classNames?.trigger)}
 				disabled={disabled}
-				endContent={triggerEndContent}
+				endContent={TriggerEndContent}
 				loading={loading}
 				onKeyDown={handleKeyDown}
 				onPointerDown={handlePointerDown}
@@ -205,7 +205,7 @@ export function Dropdown({
 				classNames={{ content: tw(styles.panel(), classNames?.panel) }}
 				closeOnEscape
 				closeOnPointerDownOutside
-				content={panelContent}
+				content={PanelContent}
 				hideArrow
 				interactive
 				offset={DEFAULT_FLOATING_OFFSET / 2}

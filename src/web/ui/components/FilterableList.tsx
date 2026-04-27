@@ -1,7 +1,7 @@
 import { useDebounce } from '@uidotdev/usehooks'
 import { useMemo, useState } from 'react'
 import { List, type ListProps } from './List'
-import { SearchTextInput } from './SearchInput'
+import { SearchTextInput } from './SearchTextInput'
 
 export type FilterableListItemRenderer<T> = (item: T, index: number) => React.ReactNode
 

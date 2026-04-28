@@ -39,10 +39,14 @@ const tabsStyles = tv({
 			true: {
 				base: 'w-full',
 			},
+			false: {
+				tabList: 'w-fit',
+			},
 		},
 	},
 	defaultVariants: {
 		placement: 'top',
+		fullWidth: false,
 	},
 })
 
@@ -254,7 +258,7 @@ function fallbackTabId<T extends TabId>(tabs: readonly React.ReactElement<TabPro
 }
 
 // Renders a controlled or uncontrolled tab set with linked tab panels.
-export function Tabs<T extends TabId = string>({ children, className, classNames, color = 'default', defaultValue, disabled = false, fullWidth, onValueChange, placement = 'top', ref, size = 'md', value, ...props }: TabsProps<T>) {
+export function Tabs<T extends TabId = string>({ children, className, classNames, color, defaultValue, disabled = false, fullWidth, onValueChange, placement, ref, size, value, ...props }: TabsProps<T>) {
 	const { panels, tabs } = collectTabsChildren<T>(children)
 	const [uncontrolledValue, setUncontrolledValue] = useState<T | undefined>(() => defaultValue ?? fallbackTabId(tabs))
 	const isControlled = value !== undefined

@@ -1,4 +1,4 @@
-import { Tab, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Tabs } from '@heroui/react'
+import { Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
@@ -22,6 +22,7 @@ import { List, ListItem } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { Slider } from './components/Slider'
+import { Tab, TabPanel, Tabs } from './components/Tabs'
 import { TextInput } from './components/TextInput'
 import { ConstellationSelect } from './ConstellationSelect'
 import { MountDropdown } from './DeviceDropdown'
@@ -472,13 +473,15 @@ const AsteroidTab = memo(() => {
 	return (
 		<div className="grid grid-cols-12 items-center gap-2">
 			<div className="relative col-span-full flex max-h-80 min-h-[200px] flex-col gap-2">
-				<Tabs className="w-full" classNames={{ panel: 'py-0' }} onSelectionChange={(value) => (asteroid.state.tab = value as never)} selectedKey={tab}>
-					<Tab key="search" title="Search">
+				<Tabs onValueChange={(value) => (asteroid.state.tab = value as never)} value={tab}>
+					<Tab id="search"> Search</Tab>
+					<Tab id="closeApproaches">Close Approaches</Tab>
+					<TabPanel id="search">
 						<AsteroidSearchTab />
-					</Tab>
-					<Tab key="closeApproaches" title="Close Approaches">
+					</TabPanel>
+					<TabPanel id="closeApproaches">
 						<AsteroidCloseApproachesTab />
-					</Tab>
+					</TabPanel>
 				</Tabs>
 			</div>
 			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'asteroid', selected.id)} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} position={position} tags={tags} twilight={twilight} />

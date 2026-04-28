@@ -17,7 +17,7 @@ export const FITSHeader = memo(() => {
 })
 
 function FITSHeaderItem([key, value]: [string, FitsHeaderValue]) {
-	return <ListItem description={value === true ? 'T' : value === false ? 'F' : value} label={key} />
+	return <ListItem label={value === true ? 'T' : value === false ? 'F' : value} description={key} />
 }
 
 const Body = memo(() => {

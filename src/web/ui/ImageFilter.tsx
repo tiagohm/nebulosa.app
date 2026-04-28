@@ -1,4 +1,3 @@
-import { Tab, Tabs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -6,6 +5,7 @@ import { ImageFilterMolecule } from '@/molecules/image/filter'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
+import { Tab, TabPanel, Tabs } from './components/Tabs'
 import { Icons } from './Icon'
 import { ImageFFTFilterTypeRadioGroup } from './ImageFFTFilterTypeRadioGroup'
 import { ImageKernelFilterTypeRadioGroup } from './ImageKernelFilterTypeRadioGroup'
@@ -23,16 +23,16 @@ export const ImageFilter = memo(() => {
 
 const Body = memo(() => {
 	return (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<Tabs classNames={{ base: 'col-span-full', panel: 'col-span-full' }}>
-				<Tab title="Kernel">
-					<Kernel />
-				</Tab>
-				<Tab title="FFT">
-					<FFT />
-				</Tab>
-			</Tabs>
-		</div>
+		<Tabs className="w-full">
+			<Tab id="kernel">Kernel</Tab>
+			<Tab id="fft">FFT</Tab>
+			<TabPanel id="kernel">
+				<Kernel />
+			</TabPanel>
+			<TabPanel id="fft">
+				<FFT />
+			</TabPanel>
+		</Tabs>
 	)
 })
 

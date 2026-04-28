@@ -58,7 +58,7 @@ export function Button({ className, variant, size, color, fullWidth, disabled, l
 			<div className={buttonStyles({ variant, size, color, fullWidth, className: clsx(className, { 'opacity-40 pointer-events-none': disabled || loading === true }) })} ref={ref} role="button" tabIndex={0} {...props}>
 				{/* Swap the leading content for a spinner while loading. */}
 				{loading === true ? <Icons.Loading className="spin" /> : startContent}
-				{loading === true && hideChildrenOnLoading === true ? undefined : <span className="flex-1 text-center">{children ?? label}</span>}
+				{loading === true && hideChildrenOnLoading === true ? undefined : (children ?? label)}
 				{endContent}
 			</div>
 		</Tooltip>

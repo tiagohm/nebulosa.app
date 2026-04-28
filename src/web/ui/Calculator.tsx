@@ -1,10 +1,10 @@
-import { Tab, Tabs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { CalculatorMolecule } from '@/molecules/calculator'
 import { Chip } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
+import { Tab, TabPanel, Tabs } from './components/Tabs'
 import { Modal } from './Modal'
 
 export const Calculator = memo(() => {
@@ -20,28 +20,36 @@ export const Calculator = memo(() => {
 const Body = memo(() => {
 	return (
 		<div className="mt-0 px-1 py-2">
-			<Tabs classNames={{ panel: 'w-full' }} isVertical>
-				<Tab key="focalLength" title="Focal Length">
+			<Tabs placement="start">
+				<Tab id="focalLength">Focal Length</Tab>
+				<Tab id="focalRatio">Focal Ratio</Tab>
+				<Tab id="dawes">Dawes Limit</Tab>
+				<Tab id="rayleigh">Rayleigh Limit</Tab>
+				<Tab id="limitingMagnitude">Limiting Magnitude</Tab>
+				<Tab id="lightGraspRatio">Light Grasp Ratio</Tab>
+				<Tab id="ccdResolution">CCD Resolution</Tab>
+
+				<TabPanel id="focalLength">
 					<FocalLength />
-				</Tab>
-				<Tab key="focalRatio" title="Focal Ratio">
+				</TabPanel>
+				<TabPanel id="focalRatio">
 					<FocalRatio />
-				</Tab>
-				<Tab key="dawes" title="Dawes Limit">
+				</TabPanel>
+				<TabPanel id="dawes">
 					<DawesLimit />
-				</Tab>
-				<Tab key="rayleigh" title="Rayleigh Limit">
+				</TabPanel>
+				<TabPanel id="rayleigh">
 					<RayleighLimit />
-				</Tab>
-				<Tab key="limitingMagnitude" title="Limiting Magnitude">
+				</TabPanel>
+				<TabPanel id="limitingMagnitude">
 					<LimitingMagnitude />
-				</Tab>
-				<Tab key="lightGraspRatio" title="Light Grasp Ratio">
+				</TabPanel>
+				<TabPanel id="lightGraspRatio">
 					<LightGraspRatio />
-				</Tab>
-				<Tab key="ccdResolution" title="CCD Resolution">
+				</TabPanel>
+				<TabPanel id="ccdResolution">
 					<CCDResolution />
-				</Tab>
+				</TabPanel>
 			</Tabs>
 		</div>
 	)

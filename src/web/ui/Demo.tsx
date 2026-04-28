@@ -5,9 +5,11 @@ import { Button } from './components/Button'
 import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'
+import { Dropdown } from './components/Dropdown'
 import { List } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
+import { ProgressBar } from './components/ProgressBar'
 import { Radio } from './components/Radio'
 import { SearchTextInput } from './components/SearchTextInput'
 import { Select } from './components/Select'
@@ -30,6 +32,8 @@ export function Demo() {
 			<Calendars />
 			<Lists />
 			<Selects />
+			<Dropdowns />
+			<ProgressBars />
 		</div>
 	)
 }
@@ -259,7 +263,7 @@ const Selects = memo(() => {
 			const label = key.toFixed(0)
 
 			elements.push(
-				<Select color={color} items={items} headerContent={headerContent} size={size} disabled={disabled} readOnly={readOnly} startContent={startContent} endContent={endContent} label={label} description="Select an item" className="min-w-80" itemHeight={32} value={value} onValueChange={setValue}>
+				<Select color={color} items={items} headerContent={headerContent} key={key++} size={size} disabled={disabled} readOnly={readOnly} startContent={startContent} endContent={endContent} label={label} description="Select an item" className="min-w-80" itemHeight={32} value={value} onValueChange={setValue}>
 					{(i) => <span className="flex h-full w-full items-center justify-center">{i}</span>}
 				</Select>,
 			)
@@ -267,4 +271,50 @@ const Selects = memo(() => {
 	}
 
 	return <div className="grid grid-cols-3 items-center gap-2">{elements}</div>
+})
+
+const Dropdowns = memo(() => {
+	const random = mulberry32(0)
+	const elements: React.ReactNode[] = []
+	let key = 0
+
+	for (const size of SIZES) {
+		for (const color of COLORS) {
+			const startContent = random() < 0.5 ? HeartIcon : undefined
+			const endContent = random() < 0.5 ? GalaxyIcon : undefined
+			const disabled = random() < 0.05
+			const readOnly = random() < 0.05
+			const headerContent = random() < 0.1 ? <TextInput placeholder="Search" fullWidth startContent={SearchIcon} /> : undefined
+			const label = key.toFixed(0)
+
+			elements.push(
+				<Dropdown color={color} headerContent={headerContent} key={key++} size={size} disabled={disabled} readOnly={readOnly} startContent={startContent} endContent={endContent} label={label} className="min-w-80" itemHeight={32}>
+					<span className="flex h-full w-full items-center justify-center">A</span>
+				</Dropdown>,
+			)
+		}
+	}
+
+	return <div className="grid grid-cols-3 items-center gap-2">{elements}</div>
+})
+
+const ProgressBars = memo(() => {
+	const random = mulberry32(0)
+	const elements: React.ReactNode[] = []
+	let key = 0
+
+	for (const size of SIZES) {
+		for (const color of COLORS) {
+			const startContent = random() < 0.5 ? HeartIcon : undefined
+			const endContent = random() < 0.5 ? GalaxyIcon : undefined
+			const disabled = random() < 0.1
+			const readOnly = random() < 0.1
+			const indeterminate = random() < 0.1
+			const value = 1 + random() * 99
+
+			elements.push(<ProgressBar startContent={startContent} endContent={endContent} size={size} color={color} disabled={disabled} readOnly={readOnly} indeterminate={indeterminate} value={value} key={key++} />)
+		}
+	}
+
+	return <div className="grid grid-cols-3 items-center gap-3">{elements}</div>
 })

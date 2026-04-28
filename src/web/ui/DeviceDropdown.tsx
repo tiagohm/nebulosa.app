@@ -9,7 +9,7 @@ import { stopPropagation } from '@/shared/util'
 import { Dropdown, type DropdownProps } from './components/Dropdown'
 import { ListItem } from './components/List'
 import { ConnectButton } from './ConnectButton'
-import { Icons } from './Icon'
+import { Icons, type Icon } from './Icon'
 import { IconButton } from './IconButton'
 
 export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends DropdownProps {
@@ -19,13 +19,15 @@ export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends Drop
 	readonly disallowNoneSelection?: boolean
 	readonly showLabel?: boolean
 	readonly showLabelOnEmpty?: boolean
+	readonly icon?: Icon
 }
 
 function DeviceItem(item: Device | undefined, onPointerDown: React.PointerEventHandler, equipment: Atom<typeof EquipmentMolecule>) {
-	return <ListItem data-id={item?.id ?? 'none'} onPointerDown={onPointerDown} label={item?.name || 'None'} description={<DeviceDropdownStartContent isConnected={item?.connected} />} endContent={<DeviceDropdownEndContent device={item} onConnect={equipment.connect} onShow={equipment.show} />} />
+	const key = item?.id ?? 'none'
+	return <ListItem key={key} data-id={key} onPointerDown={onPointerDown} label={item?.name || 'None'} description={<DeviceDropdownStartContent isConnected={item?.connected} />} endContent={<DeviceDropdownEndContent device={item} onConnect={equipment.connect} onShow={equipment.show} />} />
 }
 
-export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, disabled, disallowNoneSelection = false, label, showLabel = false, showLabelOnEmpty = showLabel, color, ...props }: DeviceDropdownProps<T>) {
+export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, disabled, disallowNoneSelection = false, label, showLabel = false, showLabelOnEmpty = showLabel, color, startContent, icon: Icon, ...props }: DeviceDropdownProps<T>) {
 	const equipment = useMolecule(EquipmentMolecule)
 	const state = equipment.state[type]
 	const devices = useSnapshot(state)
@@ -41,7 +43,12 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 	for (let i = disallowNoneSelection ? 0 : 1, p = 0; i < devices.length; i++, p++) items[i] = DeviceItem(devices[p], handleAction, equipment)
 
 	return (
-		<Dropdown label={showLabel ? (value?.name ?? (showLabelOnEmpty ? label || 'None' : undefined)) : undefined} color={color ?? (value === undefined ? 'secondary' : value.connected ? 'success' : 'danger')} disabled={disabled || items.length === 0} {...props}>
+		<Dropdown
+			label={showLabel ? (value?.name ?? (showLabelOnEmpty ? label || 'None' : undefined)) : undefined}
+			color={color ?? (value === undefined ? 'secondary' : value.connected ? 'success' : 'danger')}
+			disabled={disabled || items.length === 0}
+			startContent={startContent ?? (Icon ? <Icon /> : undefined)}
+			{...props}>
 			{items}
 		</Dropdown>
 	)

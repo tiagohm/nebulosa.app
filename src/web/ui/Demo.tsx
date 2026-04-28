@@ -15,26 +15,66 @@ import { SearchTextInput } from './components/SearchTextInput'
 import { Select } from './components/Select'
 import { Slider } from './components/Slider'
 import { Switch } from './components/Switch'
+import { Tab, TabPanel, Tabs } from './components/Tabs'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 
 export function Demo() {
 	return (
-		<div className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
-			<Buttons />
-			<Chips />
-			<TextInputs />
-			<NumberInputs />
-			<Checkboxes />
-			<Radios />
-			<Switches />
-			<Sliders />
-			<Calendars />
-			<Lists />
-			<Selects />
-			<Dropdowns />
-			<ProgressBars />
-		</div>
+		<Tabs color="primary" className="p-4">
+			<Tab id="0">Buttons</Tab>
+			<Tab id="1">Chips</Tab>
+			<Tab id="2">TextInputs</Tab>
+			<Tab id="3">NumberInputs</Tab>
+			<Tab id="4">Checkboxes</Tab>
+			<Tab id="5">Radios</Tab>
+			<Tab id="6">Switches</Tab>
+			<Tab id="7">Sliders</Tab>
+			<Tab id="8">Calendars</Tab>
+			<Tab id="9">Lists</Tab>
+			<Tab id="10">Selects</Tab>
+			<Tab id="11">Dropdowns</Tab>
+			<Tab id="12">ProgressBars</Tab>
+			<TabPanel id="0" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<Buttons />
+			</TabPanel>
+			<TabPanel id="1" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<Chips />
+			</TabPanel>
+			<TabPanel id="2" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<TextInputs />
+			</TabPanel>
+			<TabPanel id="3" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<NumberInputs />
+			</TabPanel>
+			<TabPanel id="4" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<Checkboxes />
+			</TabPanel>
+			<TabPanel id="5" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<Radios />
+			</TabPanel>
+			<TabPanel id="6" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<Switches />
+			</TabPanel>
+			<TabPanel id="7" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<Sliders />
+			</TabPanel>
+			<TabPanel id="8" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<Calendars />
+			</TabPanel>
+			<TabPanel id="9" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<Lists />
+			</TabPanel>
+			<TabPanel id="10" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<Selects />
+			</TabPanel>
+			<TabPanel id="11" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<Dropdowns />
+			</TabPanel>
+			<TabPanel id="12" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<ProgressBars />
+			</TabPanel>
+		</Tabs>
 	)
 }
 

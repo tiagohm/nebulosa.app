@@ -1,10 +1,11 @@
-import { Badge, BreadcrumbItem, Breadcrumbs } from '@heroui/react'
+import { BreadcrumbItem, Breadcrumbs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import React, { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerMolecule } from '@/molecules/filepicker'
 import { stopPropagation, tw } from '../shared/util'
+import { Badge } from './components/Badge'
 import { Button } from './components/Button'
 import { List } from './components/List'
 import { TextInput } from './components/TextInput'
@@ -144,7 +145,7 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 			</Activity>
 			<Activity mode={mode !== 'save' ? 'visible' : 'hidden'}>
 				<Button color="danger" disabled={selected.length === 0} label="Clear" onPointerUp={picker.unselectAll} startContent={<Icons.Broom />} />
-				<Badge color="success" content={selected.length} showOutline={false}>
+				<Badge color="success" label={selected.length}>
 					<Button color="success" disabled={selected.length === 0} label="Choose" onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
 				</Badge>
 			</Activity>

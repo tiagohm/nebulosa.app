@@ -1,8 +1,8 @@
-import { Badge } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiServerMolecule } from '@/molecules/indi/server'
+import { Badge } from './components/Badge'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
@@ -60,7 +60,7 @@ const Footer = memo(() => {
 	return (
 		<>
 			<Button color="danger" disabled={!running} label="Stop" onPointerUp={indi.stop} startContent={<Icons.Stop />} />
-			<Badge color="success" content={drivers.length} showOutline={false}>
+			<Badge color="success" label={drivers.length}>
 				<Button color="success" disabled={running || drivers.length === 0} label="Start" onPointerUp={indi.start} startContent={<Icons.Play />} />
 			</Badge>
 		</>

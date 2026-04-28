@@ -1,6 +1,7 @@
 import { mulberry32 } from 'nebulosa/src/random'
 import { memo, useState } from 'react'
 import { toast } from '../shared/toast'
+import { Badge } from './components/Badge'
 import { Button } from './components/Button'
 import { ButtonGroup, ButtonGroupItem } from './components/ButtonGroup'
 import { Calendar } from './components/Calendar'
@@ -101,8 +102,8 @@ const Buttons = memo(() => {
 				const startContent = random() < 0.5 ? HeartIcon : undefined
 				const endContent = random() < 0.5 ? GalaxyIcon : undefined
 				const tooltipContent = random() < 0.4 ? 'This button has a tooltip!' : undefined
-				const toltipPlacementHit = tooltipContent !== undefined ? random() : 0
-				const toltipPlacement = toltipPlacementHit >= 0.75 ? 'start' : toltipPlacementHit >= 0.5 ? 'top' : toltipPlacementHit >= 0.25 ? 'end' : 'bottom'
+				const tooltipPlacementHit = tooltipContent !== undefined ? random() : 0
+				const tooltipPlacement = tooltipPlacementHit >= 0.75 ? 'start' : tooltipPlacementHit >= 0.5 ? 'top' : tooltipPlacementHit >= 0.25 ? 'end' : 'bottom'
 				const disabled = random() < 0.1
 				const loading = random() < 0.02
 				const label = key.toFixed(0)
@@ -111,7 +112,11 @@ const Buttons = memo(() => {
 					toast({ title: 'Hello!', onPointerUp: () => alert(label), description: 'Description', color, size, startContent, endContent, onClose: (autoDismiss) => !autoDismiss && alert('Hello!') })
 				}
 
-				elements.push(<Button color={color} disabled={disabled} endContent={endContent} key={key++} label={label} loading={loading} onPointerUp={handlePointer} size={size} startContent={startContent} tooltipContent={tooltipContent} tooltipPlacement={toltipPlacement} variant={variant} />)
+				elements.push(
+					<Badge color={color} size={size} label={disabled ? undefined : label} placement="top-end" visible={!loading}>
+						<Button color={color} disabled={disabled} endContent={endContent} key={key++} label={label} loading={loading} onPointerUp={handlePointer} size={size} startContent={startContent} tooltipContent={tooltipContent} tooltipPlacement={tooltipPlacement} variant={variant} />
+					</Badge>,
+				)
 			}
 		}
 	}

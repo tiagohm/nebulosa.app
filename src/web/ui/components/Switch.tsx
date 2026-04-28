@@ -75,7 +75,7 @@ export interface SwitchProps extends Omit<React.ComponentPropsWithRef<'input'>, 
 // Render a controlled switch with a sliding thumb and optional label content.
 export function Switch({ autoFocus, children, className, classNames, disabled = false, label, name, onBlur, onChange, onClick, onFocus, onKeyDown, onValueChange, readOnly = false, ref, size = 'md', color = 'primary', style, tabIndex, thumbContent, value = false, ...props }: SwitchProps) {
 	const checked = value === true
-	const content = label ?? children
+	const content = children ?? label
 	const styles = switchStyles({ size, color })
 
 	// Ignore state changes while disabled or read-only.

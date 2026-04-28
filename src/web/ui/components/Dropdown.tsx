@@ -259,7 +259,7 @@ export interface DropdownItemProps extends React.ComponentProps<'div'> {
 
 // Render a dropdown row with optional leading and trailing content.
 export function DropdownItem({ label, children, className, classNames, disabled = false, endContent, startContent, ...props }: DropdownItemProps) {
-	const content = label ?? children
+	const content = children ?? label
 	const styles = dropdownItemStyles({ disabled })
 
 	return (

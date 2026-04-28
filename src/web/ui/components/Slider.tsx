@@ -323,7 +323,7 @@ export function Slider<V extends SliderValue>({
 	const styles = sliderStyles({ size, color, vertical, fullWidth })
 	const sizeStyles = sliderSizeStyles[size]
 	const valueKey = sliderValueKey(normalizedValue)
-	const content = label ?? children
+	const content = children ?? label
 	const range = isRangeValue(normalizedValue)
 	const hasStartContent = startContent !== undefined && startContent !== null
 	const hasEndContent = endContent !== undefined && endContent !== null

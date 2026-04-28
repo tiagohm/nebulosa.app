@@ -6,11 +6,10 @@ import { Icons } from '../Icon'
 import { Calendar, type CalendarProps } from './Calendar'
 import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from './Floating'
 
-const DATE_INPUT_FORMAT_PARTS = 'YMD'
-const DATE_INPUT_TIME_PARTS = 'hms'
-const DATE_INPUT_DEFAULT_FORMAT = DATE_INPUT_FORMAT_PARTS
+const DATE_INPUT_PARTS = 'YMD'
+const TIME_INPUT_PARTS = 'hms'
 
-const dateInputStyles = tv({
+const dateTimeInputStyles = tv({
 	slots: {
 		base: 'relative inline-flex min-w-0 align-top',
 		surface: 'flex w-full min-w-0 items-stretch overflow-hidden rounded-lg transition',
@@ -87,7 +86,7 @@ const dateInputStyles = tv({
 	},
 })
 
-const dateInputSizeStyles = {
+const dateTimeInputSizeStyles = {
 	md: {
 		segmentsWithLabel: 'pt-5 pb-1.5',
 		segmentsWithoutLabel: 'py-2.5',
@@ -98,15 +97,15 @@ const dateInputSizeStyles = {
 	},
 } as const
 
-type DateInputVariants = VariantProps<typeof dateInputStyles>
-type DateInputTimePart = 'h' | 'm' | 's'
-type DateInputSegmentPart = DateInputFormatPart | DateInputTimePart
-type DateInputDrafts = Partial<Record<DateInputSegmentPart, string>>
+type DateTimeInputVariants = VariantProps<typeof dateTimeInputStyles>
+type DateTimeInputTimePart = 'h' | 'm' | 's'
+type DateTimeInputSegmentPart = DateTimeInputFormatPart | DateTimeInputTimePart
+type DateTimeInputDrafts = Partial<Record<DateTimeInputSegmentPart, string>>
 
-export type DateInputFormatPart = 'Y' | 'M' | 'D'
-export type DateInputGranularity = 'none' | 'hour' | 'minute' | 'second'
+export type DateTimeInputFormatPart = 'Y' | 'M' | 'D'
+export type DateTimeInputGranularity = 'none' | 'hour' | 'minute' | 'second'
 
-export interface DateInputClassNames {
+export interface DateTimeInputClassNames {
 	readonly base?: ClassValue
 	readonly surface?: ClassValue
 	readonly field?: ClassValue
@@ -122,15 +121,15 @@ export interface DateInputClassNames {
 	readonly calendar?: ClassValue
 }
 
-export interface DateInputProps extends Omit<React.ComponentPropsWithRef<'div'>, 'children' | 'defaultValue' | 'color'>, Omit<DateInputVariants, 'hasLabel'>, Pick<CalendarProps, 'minDate' | 'maxDate' | 'showWeekNumber'> {
+export interface DateTimeInputProps extends Omit<React.ComponentPropsWithRef<'div'>, 'children' | 'defaultValue' | 'color'>, Omit<DateTimeInputVariants, 'hasLabel'>, Pick<CalendarProps, 'minDate' | 'maxDate' | 'showWeekNumber'> {
 	readonly autoFlip?: boolean
-	readonly classNames?: DateInputClassNames
+	readonly classNames?: DateTimeInputClassNames
 	readonly defaultValue?: Temporal.PlainDateTime
 	readonly disabled?: boolean
 	readonly endContent?: React.ReactNode
 	readonly fireOnEnter?: boolean
-	readonly format?: `${DateInputFormatPart}${DateInputFormatPart}${DateInputFormatPart}`
-	readonly granularity?: DateInputGranularity
+	readonly format?: `${DateTimeInputFormatPart}${DateTimeInputFormatPart}${DateTimeInputFormatPart}`
+	readonly granularity?: DateTimeInputGranularity
 	readonly label?: React.ReactNode
 	readonly onEnter?: () => void
 	readonly onValueChange?: (value: Temporal.PlainDateTime) => void
@@ -158,39 +157,39 @@ function normalizeDateBounds(minDate?: Temporal.PlainDate, maxDate?: Temporal.Pl
 }
 
 // Checks whether a format part belongs to the editable date group.
-function isDatePart(part: DateInputSegmentPart): part is DateInputFormatPart {
+function isDatePart(part: DateTimeInputSegmentPart): part is DateTimeInputFormatPart {
 	return part === 'Y' || part === 'M' || part === 'D'
 }
 
 // Checks whether a format part belongs to the editable time group.
-function isTimePart(part: DateInputSegmentPart): part is DateInputTimePart {
+function isTimePart(part: DateTimeInputSegmentPart): part is DateTimeInputTimePart {
 	return part === 'h' || part === 'm' || part === 's'
 }
 
 // Keeps the configured format valid, ordered, and duplicate-free.
-function normalizeFormat(format: DateInputProps['format']) {
+function normalizeFormat(format: DateTimeInputProps['format']) {
 	let normalized = ''
-	const source = format && format.length > 0 ? format : DATE_INPUT_DEFAULT_FORMAT
+	const source = format && format.length > 0 ? format : DATE_INPUT_PARTS
 
 	for (const part of source) {
-		if (DATE_INPUT_FORMAT_PARTS.includes(part) && !normalized.includes(part)) {
+		if (DATE_INPUT_PARTS.includes(part) && !normalized.includes(part)) {
 			normalized += part
 		}
 	}
 
-	return normalized.length > 0 ? normalized : DATE_INPUT_DEFAULT_FORMAT
+	return normalized.length > 0 ? normalized : DATE_INPUT_PARTS
 }
 
 // Resolves which time segments are visible for the requested granularity.
-function timePartsForGranularity(granularity: DateInputGranularity | undefined) {
+function timePartsForGranularity(granularity: DateTimeInputGranularity | undefined) {
 	if (granularity === 'hour') return 'h'
 	if (granularity === 'minute') return 'hm'
-	if (granularity === 'second') return DATE_INPUT_TIME_PARTS
+	if (granularity === 'second') return TIME_INPUT_PARTS
 	return ''
 }
 
 // Returns the fixed editable width for each segment.
-function partWidth(part: DateInputSegmentPart) {
+function partWidth(part: DateTimeInputSegmentPart) {
 	return part === 'Y' ? 4 : 2
 }
 
@@ -200,7 +199,7 @@ function padPart(value: number, width: number) {
 }
 
 // Formats one segment from the committed Temporal value.
-function formatPart(value: Temporal.PlainDateTime, part: DateInputSegmentPart) {
+function formatPart(value: Temporal.PlainDateTime, part: DateTimeInputSegmentPart) {
 	if (part === 'Y') return padPart(value.year, 4)
 	if (part === 'M') return padPart(value.month, 2)
 	if (part === 'D') return padPart(value.day, 2)
@@ -210,19 +209,19 @@ function formatPart(value: Temporal.PlainDateTime, part: DateInputSegmentPart) {
 }
 
 // Builds the editable draft strings for the active format.
-function draftsFromValue(value: Temporal.PlainDateTime, format: string): DateInputDrafts {
-	const drafts = Object.create(null) as DateInputDrafts
-	for (const part of format) drafts[part as keyof DateInputDrafts] = formatPart(value, part as keyof DateInputDrafts)
+function draftsFromValue(value: Temporal.PlainDateTime, format: string): DateTimeInputDrafts {
+	const drafts = Object.create(null) as DateTimeInputDrafts
+	for (const part of format) drafts[part as keyof DateTimeInputDrafts] = formatPart(value, part as keyof DateTimeInputDrafts)
 	return drafts
 }
 
 // Removes non-digits and enforces the segment width.
-function sanitizeDraft(value: string, part: DateInputSegmentPart) {
+function sanitizeDraft(value: string, part: DateTimeInputSegmentPart) {
 	return value.replaceAll(/\D/g, '').slice(0, partWidth(part))
 }
 
 // Computes the separator between two neighboring editable segments.
-function separatorBetween(left: DateInputSegmentPart, right: DateInputSegmentPart) {
+function separatorBetween(left: DateTimeInputSegmentPart, right: DateTimeInputSegmentPart) {
 	if (isDatePart(left) && isDatePart(right)) return '-'
 	if (isTimePart(left) && isTimePart(right)) return ':'
 	return ' '
@@ -240,7 +239,7 @@ function clampInteger(value: number, minValue: number, maxValue: number) {
 }
 
 // Replaces one date segment while keeping the resulting date valid.
-function replaceDatePart(value: Temporal.PlainDateTime, part: DateInputFormatPart, nextPartValue: number) {
+function replaceDatePart(value: Temporal.PlainDateTime, part: DateTimeInputFormatPart, nextPartValue: number) {
 	const year = part === 'Y' ? clampInteger(nextPartValue, 0, 9999) : value.year
 	const month = part === 'M' ? clampInteger(nextPartValue, 1, 12) : value.month
 	const dayLimit = daysInMonth(year, month)
@@ -250,19 +249,19 @@ function replaceDatePart(value: Temporal.PlainDateTime, part: DateInputFormatPar
 }
 
 // Replaces one time segment while preserving the rest of the date-time.
-function replaceTimePart(value: Temporal.PlainDateTime, part: DateInputTimePart, nextPartValue: number) {
+function replaceTimePart(value: Temporal.PlainDateTime, part: DateTimeInputTimePart, nextPartValue: number) {
 	if (part === 'h') return value.with({ hour: clampInteger(nextPartValue, 0, 23) })
 	if (part === 'm') return value.with({ minute: clampInteger(nextPartValue, 0, 59) })
 	return value.with({ second: clampInteger(nextPartValue, 0, 59) })
 }
 
 // Replaces a single segment on the current Temporal value.
-function replacePart(value: Temporal.PlainDateTime, part: DateInputSegmentPart, nextPartValue: number) {
+function replacePart(value: Temporal.PlainDateTime, part: DateTimeInputSegmentPart, nextPartValue: number) {
 	return isDatePart(part) ? replaceDatePart(value, part, nextPartValue) : replaceTimePart(value, part, nextPartValue)
 }
 
 // Applies one keyboard step to a segment using Temporal arithmetic.
-function stepPart(value: Temporal.PlainDateTime, part: DateInputSegmentPart, direction: -1 | 1) {
+function stepPart(value: Temporal.PlainDateTime, part: DateTimeInputSegmentPart, direction: -1 | 1) {
 	if (part === 'Y') return direction > 0 ? value.add({ years: 1 }) : value.subtract({ years: 1 })
 	if (part === 'M') return direction > 0 ? value.add({ months: 1 }) : value.subtract({ months: 1 })
 	if (part === 'D') return direction > 0 ? value.add({ days: 1 }) : value.subtract({ days: 1 })
@@ -271,9 +270,9 @@ function stepPart(value: Temporal.PlainDateTime, part: DateInputSegmentPart, dir
 	return direction > 0 ? value.add({ seconds: 1 }) : value.subtract({ seconds: 1 })
 }
 
-function mapDisplayParts<T>(displayParts: string, action: (part: DateInputSegmentPart, index: number) => T) {
+function mapDisplayParts<T>(displayParts: string, action: (part: DateTimeInputSegmentPart, index: number) => T) {
 	const res = new Array<T>(displayParts.length)
-	for (let i = 0; i < displayParts.length; i++) res[i] = action(displayParts[i] as DateInputSegmentPart, i)
+	for (let i = 0; i < displayParts.length; i++) res[i] = action(displayParts[i] as DateTimeInputSegmentPart, i)
 	return res
 }
 
@@ -302,7 +301,7 @@ function clampDateTimeDate(value: Temporal.PlainDateTime, minDate?: Temporal.Pla
 }
 
 // Renders a segmented date-time input with a Temporal-backed calendar picker.
-export function DateInput({
+export function DateTimeInput({
 	autoFlip = true,
 	autoFocus,
 	className,
@@ -329,7 +328,7 @@ export function DateInput({
 	startContent,
 	value,
 	...props
-}: DateInputProps) {
+}: DateTimeInputProps) {
 	const [minimumDate, maximumDate] = normalizeDateBounds(minDate, maxDate)
 	const normalizedFormat = normalizeFormat(format)
 	const displayParts = `${normalizedFormat}${timePartsForGranularity(granularity)}`
@@ -341,11 +340,11 @@ export function DateInput({
 	const currentValue = clampDateTimeDate(value ?? uncontrolledValue, minimumDate, maximumDate)
 	const currentValueKey = currentValue.toString()
 	const lastCommittedValueRef = useRef(currentValue)
-	const activePartRef = useRef<DateInputSegmentPart | null>(null)
-	const inputRefs = useRef<Partial<Record<DateInputSegmentPart, HTMLInputElement | null>>>({})
+	const activePartRef = useRef<DateTimeInputSegmentPart | null>(null)
+	const inputRefs = useRef<Partial<Record<DateTimeInputSegmentPart, HTMLInputElement | null>>>({})
 	const [drafts, setDrafts] = useState(() => draftsFromValue(currentValue, displayParts))
-	const styles = dateInputStyles({ size, color, hasLabel: !!label, fullWidth })
-	const sizeStyles = dateInputSizeStyles[size]
+	const styles = dateTimeInputStyles({ size, color, hasLabel: !!label, fullWidth })
+	const sizeStyles = dateTimeInputSizeStyles[size]
 	const hasStartContent = startContent !== undefined && startContent !== null
 	const hasEndContent = endContent !== undefined && endContent !== null
 	const hasColorVariant = color !== undefined && color !== null && color !== 'default'
@@ -406,14 +405,14 @@ export function DateInput({
 	})
 
 	// Moves focus to the next editable segment when one exists.
-	function focusNextPart(part: DateInputSegmentPart) {
+	function focusNextPart(part: DateTimeInputSegmentPart) {
 		const currentIndex = displayParts.indexOf(part)
-		const nextPart = displayParts[currentIndex + 1] as DateInputSegmentPart | undefined
+		const nextPart = displayParts[currentIndex + 1] as DateTimeInputSegmentPart | undefined
 		if (nextPart) inputRefs.current[nextPart]?.focus()
 	}
 
 	// Commits a segment draft into the Temporal value.
-	function commitPart(part: DateInputSegmentPart, rawDraft: string, allowPadding: boolean) {
+	function commitPart(part: DateTimeInputSegmentPart, rawDraft: string, allowPadding: boolean) {
 		const sanitizedDraft = sanitizeDraft(rawDraft, part)
 		const width = partWidth(part)
 
@@ -436,24 +435,24 @@ export function DateInput({
 	}
 
 	// Stores a segment input by its format part.
-	function handleSegmentRef(part: DateInputSegmentPart, element: HTMLInputElement | null) {
+	function handleSegmentRef(part: DateTimeInputSegmentPart, element: HTMLInputElement | null) {
 		inputRefs.current[part] = element
 	}
 
 	// Tracks and selects the active segment for direct replacement.
-	function handleSegmentFocus(part: DateInputSegmentPart, event: React.FocusEvent<HTMLInputElement>) {
+	function handleSegmentFocus(part: DateTimeInputSegmentPart, event: React.FocusEvent<HTMLInputElement>) {
 		activePartRef.current = part
 		event.currentTarget.select()
 	}
 
 	// Commits or restores a segment when focus leaves it.
-	function handleSegmentBlur(part: DateInputSegmentPart, event: React.FocusEvent<HTMLInputElement>) {
+	function handleSegmentBlur(part: DateTimeInputSegmentPart, event: React.FocusEvent<HTMLInputElement>) {
 		activePartRef.current = null
 		commitPart(part, event.currentTarget.value, true)
 	}
 
 	// Keeps one segment draft numeric while the user types.
-	function handleSegmentChange(part: DateInputSegmentPart, event: React.ChangeEvent<HTMLInputElement>) {
+	function handleSegmentChange(part: DateTimeInputSegmentPart, event: React.ChangeEvent<HTMLInputElement>) {
 		const nextDraft = sanitizeDraft(event.currentTarget.value, part)
 		setDrafts((currentDrafts) => ({ ...currentDrafts, [part]: nextDraft }))
 
@@ -463,7 +462,7 @@ export function DateInput({
 	}
 
 	// Applies keyboard behavior for one focused segment.
-	function handleSegmentKeyDown(part: DateInputSegmentPart, event: React.KeyboardEvent<HTMLInputElement>) {
+	function handleSegmentKeyDown(part: DateTimeInputSegmentPart, event: React.KeyboardEvent<HTMLInputElement>) {
 		if (event.defaultPrevented) return
 
 		if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
@@ -475,14 +474,14 @@ export function DateInput({
 
 		if (event.key === 'ArrowRight' && event.currentTarget.selectionStart === event.currentTarget.value.length) {
 			const currentIndex = displayParts.indexOf(part)
-			const nextPart = displayParts[currentIndex + 1] as DateInputSegmentPart | undefined
+			const nextPart = displayParts[currentIndex + 1] as DateTimeInputSegmentPart | undefined
 			if (nextPart) inputRefs.current[nextPart]?.focus()
 			return
 		}
 
 		if (event.key === 'ArrowLeft' && event.currentTarget.selectionStart === 0) {
 			const currentIndex = displayParts.indexOf(part)
-			const previousPart = displayParts[currentIndex - 1] as DateInputSegmentPart | undefined
+			const previousPart = displayParts[currentIndex - 1] as DateTimeInputSegmentPart | undefined
 			if (previousPart) inputRefs.current[previousPart]?.focus()
 			return
 		}
@@ -500,7 +499,7 @@ export function DateInput({
 		}
 	}
 
-	function handleSegmentWheel(part: DateInputSegmentPart, event: React.WheelEvent<HTMLInputElement>) {
+	function handleSegmentWheel(part: DateTimeInputSegmentPart, event: React.WheelEvent<HTMLInputElement>) {
 		if (event.defaultPrevented) return
 
 		const delta = event.deltaY || event.deltaX
@@ -548,7 +547,7 @@ export function DateInput({
 						<div className={tw(styles.segments(), label ? sizeStyles.segmentsWithLabel : sizeStyles.segmentsWithoutLabel, hasStartContent && 'pl-0', contentClassName, classNames?.segments)}>
 							{mapDisplayParts(displayParts, (part, index) => (
 								<Fragment key={part}>
-									{index > 0 && <span className={tw(styles.separator(), contentClassName, classNames?.separator)}>{separatorBetween(displayParts[index - 1] as DateInputSegmentPart, part)}</span>}
+									{index > 0 && <span className={tw(styles.separator(), contentClassName, classNames?.separator)}>{separatorBetween(displayParts[index - 1] as DateTimeInputSegmentPart, part)}</span>}
 									<input
 										autoFocus={autoFocus && index === 0}
 										className={tw(styles.segment(), styles[part](), segmentClassName, classNames?.segment)}

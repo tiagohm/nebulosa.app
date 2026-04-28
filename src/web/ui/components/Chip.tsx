@@ -109,7 +109,7 @@ export interface ChipProps extends Omit<React.ComponentPropsWithRef<'div'>, 'chi
 
 // Render a compact, color-aware chip with optional adornments and close action.
 export function Chip({ children, className, classNames, color, disabled = false, endContent, label, onClose, readOnly = false, ref, size, startContent, ...props }: ChipProps) {
-	const content = label ?? children
+	const content = children ?? label
 	const styles = chipStyles({ color, size })
 	const hasRootInteraction = props.onClick !== undefined || props.onPointerDown !== undefined || props.onPointerUp !== undefined || props.onDoubleClick !== undefined || props.onContextMenu !== undefined
 	const stateClassName = disabled ? 'cursor-not-allowed opacity-40 pointer-events-none' : readOnly ? 'cursor-default opacity-90 pointer-events-none' : hasRootInteraction ? 'cursor-pointer' : 'cursor-default'

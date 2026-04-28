@@ -7,7 +7,7 @@ import { ButtonGroup, ButtonGroupItem } from './components/ButtonGroup'
 import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'
-import { DateInput } from './components/DateInput'
+import { DateTimeInput } from './components/DateTimeInput'
 import { Dropdown, DropdownItem } from './components/Dropdown'
 import { List } from './components/List'
 import { NumberInput } from './components/NumberInput'
@@ -28,9 +28,9 @@ export function Demo() {
 			<Tab id="0">Buttons</Tab>
 			<Tab id="13">Button Groups</Tab>
 			<Tab id="1">Chips</Tab>
-			<Tab id="2">TextInputs</Tab>
-			<Tab id="14">DateInputs</Tab>
-			<Tab id="3">NumberInputs</Tab>
+			<Tab id="2">Text Inputs</Tab>
+			<Tab id="14">Date Time Inputs</Tab>
+			<Tab id="3">Number Inputs</Tab>
 			<Tab id="4">Checkboxes</Tab>
 			<Tab id="5">Radios</Tab>
 			<Tab id="6">Switches</Tab>
@@ -39,7 +39,7 @@ export function Demo() {
 			<Tab id="9">Lists</Tab>
 			<Tab id="10">Selects</Tab>
 			<Tab id="11">Dropdowns</Tab>
-			<Tab id="12">ProgressBars</Tab>
+			<Tab id="12">Progress Bars</Tab>
 			<TabPanel id="0" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
 				<Buttons />
 			</TabPanel>
@@ -198,7 +198,7 @@ const DateInputs = memo(() => {
 				const readOnly = random() < 0.1
 				const label = key.toFixed(0)
 
-				elements.push(<DateInput color={color} disabled={disabled} endContent={endContent} format={format} granularity={granularity} key={key++} label={label} onValueChange={setValue} readOnly={readOnly} size={size} startContent={startContent} value={value} />)
+				elements.push(<DateTimeInput color={color} disabled={disabled} endContent={endContent} format={format} granularity={granularity} key={key++} label={label} onValueChange={setValue} readOnly={readOnly} size={size} startContent={startContent} value={value} />)
 			}
 		}
 	}

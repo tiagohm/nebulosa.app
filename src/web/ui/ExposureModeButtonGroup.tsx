@@ -1,19 +1,15 @@
-import { ButtonGroup, type ButtonGroupProps } from '@heroui/react'
 import type { ExposureMode } from 'src/shared/types'
-import { Button, type ButtonProps } from './components/Button'
+import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from './components/ButtonGroup'
 
-export interface ExposureModeButtonGroupProps extends Omit<ButtonGroupProps, 'color' | 'variant'>, Pick<ButtonProps, 'color'> {
-	readonly variant?: Exclude<ButtonProps['variant'], 'solid'>
-	readonly value: ExposureMode
-	readonly onValueChange: (mode: ExposureMode) => void
-}
+export type ExposureModeButtonGroupProps = Omit<ButtonGroupProps<ExposureMode>, 'children'>
 
-export function ExposureModeButtonGroup({ value, onValueChange, color = 'primary', variant = 'ghost', ...props }: ExposureModeButtonGroupProps) {
+// Render the exposure mode segmented selector.
+export function ExposureModeButtonGroup({ value, onValueChange, color = 'primary', ...props }: ExposureModeButtonGroupProps) {
 	return (
-		<ButtonGroup {...props}>
-			<Button color={color} label="Single" onPointerUp={() => onValueChange('SINGLE')} variant={value === 'SINGLE' ? 'solid' : variant} />
-			<Button color={color} label="Fixed" onPointerUp={() => onValueChange('FIXED')} variant={value === 'FIXED' ? 'solid' : variant} />
-			<Button color={color} label="Loop" onPointerUp={() => onValueChange('LOOP')} variant={value === 'LOOP' ? 'solid' : variant} />
+		<ButtonGroup {...props} color={color} onValueChange={onValueChange} value={value}>
+			<ButtonGroupItem id="SINGLE" label="Single" />
+			<ButtonGroupItem id="FIXED" label="Fixed" />
+			<ButtonGroupItem id="LOOP" label="Loop" />
 		</ButtonGroup>
 	)
 }

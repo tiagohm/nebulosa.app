@@ -1,4 +1,3 @@
-import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
@@ -8,10 +7,9 @@ import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
-import { stopPropagationDesktopOnly } from '@/shared/util'
+import { Dropdown, DropdownItem } from './components/Dropdown'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 
 export const ImageInfo = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
@@ -72,30 +70,16 @@ export interface SelectedCoordinateDropdownProps {
 const SelectedCoordinateDropdown = memo((props: SelectedCoordinateDropdownProps) => {
 	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
 
-	function handleAction(key: React.Key) {
-		if (key === 'FRAME_AT_HERE') props.onFrameAt(mouseCoordinate.state.coordinate.selected)
-		else if (key === 'UNPIN') mouseCoordinate.state.coordinate.selected.show = false
-	}
-
 	return (
-		<Dropdown>
-			<DropdownTrigger>
-				<IconButton className="pointer-events-auto" icon={Icons.DotsVertical} onPointerUp={stopPropagationDesktopOnly} />
-			</DropdownTrigger>
-			<DropdownMenu onAction={handleAction}>
-				<DropdownItem key="POINT_MOUNT_HERE" startContent={<Icons.Telescope />}>
-					<span className="flex flex-row items-center gap-1">
-						<span>Point mount here:</span>
-						<MountDropdown disallowNoneSelection onValueChange={(value) => value && props.onPointMountHere(value, mouseCoordinate.state.coordinate.selected)} />
-					</span>
-				</DropdownItem>
-				<DropdownItem key="FRAME_AT_HERE" startContent={<Icons.Image />}>
-					Frame at this coordinate
-				</DropdownItem>
-				<DropdownItem className="text-danger" color="danger" key="UNPIN" startContent={<Icons.Trash />}>
-					Unpin
-				</DropdownItem>
-			</DropdownMenu>
+		<Dropdown label={<Icons.DotsVertical />}>
+			<DropdownItem startContent={<Icons.Telescope />}>
+				<span className="flex flex-row items-center gap-1">
+					<span>Point mount here:</span>
+					<MountDropdown disallowNoneSelection onValueChange={(value) => value && props.onPointMountHere(value, mouseCoordinate.state.coordinate.selected)} />
+				</span>
+			</DropdownItem>
+			<DropdownItem label="Frame at this coordinate" onPointerUp={() => props.onFrameAt(mouseCoordinate.state.coordinate.selected)} startContent={<Icons.Image />} />
+			<DropdownItem label="Unpin" onPointerUp={() => (mouseCoordinate.state.coordinate.selected.show = false)} className="text-danger" color="danger" key="UNPIN" startContent={<Icons.Trash />} />
 		</Dropdown>
 	)
 })

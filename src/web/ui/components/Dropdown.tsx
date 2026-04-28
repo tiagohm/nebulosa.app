@@ -32,6 +32,28 @@ const dropdownStyles = tv({
 	},
 })
 
+const dropdownItemStyles = tv({
+	slots: {
+		base: 'flex h-full w-full min-w-0 items-center justify-center gap-2 text-center transition p-1',
+		startContent: 'flex shrink-0 items-center justify-center px-2',
+		label: 'min-w-0 flex-1 truncate',
+		endContent: 'flex shrink-0 items-center justify-center px-2',
+	},
+	variants: {
+		disabled: {
+			true: {
+				base: 'cursor-not-allowed opacity-40 pointer-events-none',
+			},
+			false: {
+				base: 'cursor-pointer',
+			},
+		},
+	},
+	defaultVariants: {
+		disabled: false,
+	},
+})
+
 type DropdownSize = keyof typeof DROPDOWN_ITEM_HEIGHTS
 
 export interface DropdownClassNames {
@@ -217,5 +239,34 @@ export function Dropdown({
 				triggerElement={triggerElement}
 			/>
 		</>
+	)
+}
+
+export interface DropdownItemClassNames {
+	readonly base?: ClassValue
+	readonly startContent?: ClassValue
+	readonly label?: ClassValue
+	readonly endContent?: ClassValue
+}
+
+export interface DropdownItemProps extends React.ComponentProps<'div'> {
+	readonly classNames?: DropdownItemClassNames
+	readonly disabled?: boolean
+	readonly endContent?: React.ReactNode
+	readonly label?: React.ReactNode
+	readonly startContent?: React.ReactNode
+}
+
+// Render a dropdown row with optional leading and trailing content.
+export function DropdownItem({ label, children, className, classNames, disabled = false, endContent, startContent, ...props }: DropdownItemProps) {
+	const content = label ?? children
+	const styles = dropdownItemStyles({ disabled })
+
+	return (
+		<div className={tw(styles.base(), className, classNames?.base)} {...props}>
+			{startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
+			{content !== undefined && content !== null && <div className={tw(styles.label(), classNames?.label)}>{content}</div>}
+			{endContent !== undefined && endContent !== null && <span className={tw(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
+		</div>
 	)
 }

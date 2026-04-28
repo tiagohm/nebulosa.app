@@ -2,10 +2,11 @@ import { mulberry32 } from 'nebulosa/src/random'
 import { memo, useState } from 'react'
 import { toast } from '../shared/toast'
 import { Button } from './components/Button'
+import { ButtonGroup, ButtonGroupItem } from './components/ButtonGroup'
 import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'
-import { Dropdown } from './components/Dropdown'
+import { Dropdown, DropdownItem } from './components/Dropdown'
 import { List } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
@@ -23,6 +24,7 @@ export function Demo() {
 	return (
 		<Tabs color="primary" className="p-4">
 			<Tab id="0">Buttons</Tab>
+			<Tab id="13">Button Groups</Tab>
 			<Tab id="1">Chips</Tab>
 			<Tab id="2">TextInputs</Tab>
 			<Tab id="3">NumberInputs</Tab>
@@ -74,6 +76,9 @@ export function Demo() {
 			<TabPanel id="12" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
 				<ProgressBars />
 			</TabPanel>
+			<TabPanel id="13" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<ButtonGroups />
+			</TabPanel>
 		</Tabs>
 	)
 }
@@ -108,6 +113,30 @@ const Buttons = memo(() => {
 
 				elements.push(<Button color={color} disabled={disabled} endContent={endContent} key={key++} label={label} loading={loading} onPointerUp={handlePointer} size={size} startContent={startContent} tooltipContent={tooltipContent} tooltipPlacement={toltipPlacement} variant={variant} />)
 			}
+		}
+	}
+
+	return elements
+})
+
+const ButtonGroups = memo(() => {
+	const [value, setValue] = useState('A')
+	const random = mulberry32(0)
+	const elements: React.ReactNode[] = []
+	let key = 0
+
+	for (const size of SIZES) {
+		for (const color of COLORS) {
+			const disabled = random() < 0.1
+			const readOnly = random() < 0.1
+
+			elements.push(
+				<ButtonGroup color={color} disabled={disabled} key={key++} onValueChange={setValue} readOnly={readOnly} size={size} value={value}>
+					<ButtonGroupItem id="A" label="A" />
+					<ButtonGroupItem id="B" label="B" />
+					<ButtonGroupItem id="C" label="C" />
+				</ButtonGroup>,
+			)
 		}
 	}
 
@@ -329,7 +358,13 @@ const Dropdowns = memo(() => {
 
 			elements.push(
 				<Dropdown color={color} headerContent={headerContent} key={key++} size={size} disabled={disabled} readOnly={readOnly} startContent={startContent} endContent={endContent} label={label} className="min-w-80" itemHeight={32}>
-					<span className="flex h-full w-full items-center justify-center">A</span>
+					<DropdownItem startContent={HeartIcon}>A</DropdownItem>
+					<DropdownItem disabled startContent={GalaxyIcon}>
+						B
+					</DropdownItem>
+					<DropdownItem className="bg-red-700 text-white" startContent={<Icons.Trash />}>
+						C
+					</DropdownItem>
 				</Dropdown>,
 			)
 		}

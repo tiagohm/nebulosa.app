@@ -1,12 +1,11 @@
-import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
 import type { Connection } from '@/shared/types'
-import { stopPropagationDesktopOnly } from '@/shared/util'
 import { Chip } from './components/Chip'
+import { Dropdown, DropdownItem } from './components/Dropdown'
 import { Select } from './components/Select'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
@@ -91,21 +90,10 @@ const EditDropdown = memo(({ item }: EditDropdownProps) => {
 
 	return (
 		<div className="flex items-center justify-center">
-			<Dropdown>
-				<DropdownTrigger>
-					<IconButton icon={Icons.VerticalMenu} onPointerUp={stopPropagationDesktopOnly} />
-				</DropdownTrigger>
-				<DropdownMenu disabledKeys={connections.length === 1 ? ['delete'] : []}>
-					<DropdownItem key="edit" onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit />}>
-						Edit
-					</DropdownItem>
-					<DropdownItem key="duplicate" onPointerUp={() => connection.duplicate(item)} startContent={<Icons.Copy />}>
-						Duplicate
-					</DropdownItem>
-					<DropdownItem className="text-danger" color="danger" key="delete" onPointerUp={() => connection.remove(item)} startContent={<Icons.Trash />}>
-						Delete
-					</DropdownItem>
-				</DropdownMenu>
+			<Dropdown label={<Icons.VerticalMenu />}>
+				<DropdownItem label="Edit" onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit />} />
+				<DropdownItem label="Duplicate" onPointerUp={() => connection.duplicate(item)} startContent={<Icons.Copy />} />
+				<DropdownItem label="Delete" disabled={connections.length === 1} className="text-danger" color="danger" onPointerUp={() => connection.remove(item)} startContent={<Icons.Trash />} />
 			</Dropdown>
 		</div>
 	)

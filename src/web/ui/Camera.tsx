@@ -215,7 +215,7 @@ const ExposureMode = memo(() => {
 
 	return (
 		<>
-			<ExposureModeButtonGroup className="col-span-6" color="secondary" isDisabled={!connected || capturing} onValueChange={(value) => camera.update('exposureMode', value)} value={exposureMode} />
+			<ExposureModeButtonGroup className="col-span-6" color="secondary" disabled={!connected || capturing} onValueChange={(value) => camera.update('exposureMode', value)} value={exposureMode} />
 			<NumberInput className="col-span-3" disabled={!connected || exposureMode === 'SINGLE' || capturing} label="Delay (s)" minValue={0} onValueChange={(value) => camera.update('delay', value)} value={delay} />
 			<NumberInput className="col-span-3" disabled={!connected || exposureMode !== 'FIXED' || capturing} label="Count" minValue={1} onValueChange={(value) => camera.update('count', value)} value={count} />
 		</>

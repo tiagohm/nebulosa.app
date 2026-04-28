@@ -7,6 +7,7 @@ import { ButtonGroup, ButtonGroupItem } from './components/ButtonGroup'
 import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'
+import { DateInput } from './components/DateInput'
 import { Dropdown, DropdownItem } from './components/Dropdown'
 import { List } from './components/List'
 import { NumberInput } from './components/NumberInput'
@@ -28,6 +29,7 @@ export function Demo() {
 			<Tab id="13">Button Groups</Tab>
 			<Tab id="1">Chips</Tab>
 			<Tab id="2">TextInputs</Tab>
+			<Tab id="14">DateInputs</Tab>
 			<Tab id="3">NumberInputs</Tab>
 			<Tab id="4">Checkboxes</Tab>
 			<Tab id="5">Radios</Tab>
@@ -46,6 +48,9 @@ export function Demo() {
 			</TabPanel>
 			<TabPanel id="2" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
 				<TextInputs />
+			</TabPanel>
+			<TabPanel id="14" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<DateInputs />
 			</TabPanel>
 			<TabPanel id="3" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
 				<NumberInputs />
@@ -167,6 +172,36 @@ const TextInputs = memo(() => {
 	}
 
 	elements.push(<SearchTextInput onClear={() => alert('clear')} value={value} onValueChange={setValue} />)
+
+	return elements
+})
+
+const DateInputs = memo(() => {
+	const [value, setValue] = useState(() => Temporal.Now.plainDateTimeISO())
+	const formats = [
+		{ format: 'YMD', granularity: 'none' },
+		{ format: 'DMY', granularity: 'hour' },
+		{ format: 'YMD', granularity: 'minute' },
+		{ format: 'DMY', granularity: 'second' },
+	] as const
+
+	const random = mulberry32(0)
+	const elements: React.ReactNode[] = []
+	let key = 0
+
+	for (const { format, granularity } of formats) {
+		for (const color of COLORS) {
+			for (const size of ['md', 'lg'] as const) {
+				const startContent = random() < 0.5 ? HeartIcon : undefined
+				const endContent = random() < 0.5 ? GalaxyIcon : undefined
+				const disabled = random() < 0.1
+				const readOnly = random() < 0.1
+				const label = key.toFixed(0)
+
+				elements.push(<DateInput color={color} disabled={disabled} endContent={endContent} format={format} granularity={granularity} key={key++} label={label} onValueChange={setValue} readOnly={readOnly} size={size} startContent={startContent} value={value} />)
+			}
+		}
+	}
 
 	return elements
 })

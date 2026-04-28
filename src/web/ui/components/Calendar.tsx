@@ -9,7 +9,7 @@ const calendarWeekdayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const
 
 const calendarStyles = tv({
 	slots: {
-		base: 'inline-flex flex-col gap-3 rounded-lg bg-neutral-900/70 p-3 align-top select-none',
+		base: 'inline-flex flex-col gap-3 rounded-lg bg-neutral-900 p-3 align-top select-none',
 		header: 'flex items-center justify-between gap-2',
 		navGroup: 'flex items-center gap-2',
 		navButton: 'flex size-8 items-center justify-center rounded-md text-neutral-300 outline-none transition disabled:opacity-40 cursor-pointer',

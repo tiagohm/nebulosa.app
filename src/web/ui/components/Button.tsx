@@ -1,5 +1,4 @@
 import clsx from 'clsx'
-import type * as React from 'react'
 import { tv, type VariantProps } from 'tailwind-variants'
 import { Icons } from '../Icon'
 import { Tooltip, type TooltipPlacement } from './Tooltip'

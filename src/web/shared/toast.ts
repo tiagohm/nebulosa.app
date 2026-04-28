@@ -1,4 +1,3 @@
-import type * as React from 'react'
 import type { ClassValue } from 'tailwind-variants'
 import { tw } from './util'
 

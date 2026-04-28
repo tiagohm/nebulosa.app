@@ -1,4 +1,3 @@
-import type * as React from 'react'
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { type ClassValue, tv } from 'tailwind-variants'

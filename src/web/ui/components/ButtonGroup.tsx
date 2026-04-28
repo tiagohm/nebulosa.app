@@ -1,4 +1,3 @@
-import type * as React from 'react'
 import { Children, Fragment, isValidElement } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
 import { tw } from '@/shared/util'

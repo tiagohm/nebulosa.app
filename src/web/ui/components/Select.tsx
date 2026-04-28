@@ -1,4 +1,3 @@
-import type * as React from 'react'
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
 import { assignRef, tw } from '@/shared/util'

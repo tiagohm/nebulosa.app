@@ -1,4 +1,3 @@
-import type * as React from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
 import { stopPropagation, tw } from '@/shared/util'
 import { Icons } from '../Icon'

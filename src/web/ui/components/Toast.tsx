@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { tv } from 'tailwind-variants'
 import { dismissToast, readToasts, subscribeToasts, TOAST_PLACEMENTS, type ToastPlacement, type ToastProviderDefaults, type ToastRecord, toast, updateToastDefaults } from '@/shared/toast'
-import { stopPropagation, tw } from '@/shared/util'
+import { hasRootInteraction, tw } from '@/shared/util'
 import { Icons } from '../Icon'
 
 const toastStyles = tv({
@@ -107,7 +107,7 @@ function ToastItem({ className, color, delay, description, endContent, id, onClo
 	}
 
 	return (
-		<div {...props} className={tw(styles.toast(), className, props.onPointerUp !== undefined || props.onClick !== undefined ? 'cursor-pointer' : undefined)}>
+		<div {...props} className={tw(styles.toast(), className, hasRootInteraction(props) ? 'cursor-pointer' : undefined)}>
 			{startContent !== undefined && startContent !== null && <div className={tw(styles.startContent())}>{startContent}</div>}
 			<div className={tw(styles.content())}>
 				{title !== undefined && title !== null && <div className={tw(styles.title())}>{title}</div>}
@@ -115,7 +115,7 @@ function ToastItem({ className, color, delay, description, endContent, id, onClo
 			</div>
 			{endContent !== undefined && endContent !== null && <div className={tw(styles.endContent())}>{endContent}</div>}
 			{closeButtonVisible && (
-				<button className={tw(styles.closeButton())} onClick={stopPropagation} onPointerDown={handleClose} onPointerUp={stopPropagation} type="button">
+				<button className={tw(styles.closeButton())} onClick={handleClose} type="button">
 					<Icons.Close />
 				</button>
 			)}

@@ -202,7 +202,7 @@ export function Select<T>({
 	label,
 	onKeyDown,
 	onOpenChange,
-	onPointerDown,
+	onClick,
 	onValueChange,
 	open,
 	overscan,
@@ -284,11 +284,10 @@ export function Select<T>({
 	}
 
 	// Toggles the panel from pointer interaction on the trigger.
-	function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-		onPointerDown?.(event)
+	function handleClick(event: React.MouseEvent<HTMLDivElement>) {
+		onClick?.(event)
 
 		if (event.defaultPrevented || disabled || readOnly) return
-		if (event.pointerType === 'mouse' && event.button !== 0) return
 
 		setTriggerElement(event.currentTarget)
 		setTriggerWidth(event.currentTarget.getBoundingClientRect().width)
@@ -313,9 +312,7 @@ export function Select<T>({
 	}
 
 	// Selects a visible option and closes the floating panel.
-	function selectItem(event: React.PointerEvent, item: T, index: number, selected: boolean) {
-		if (event.pointerType === 'mouse' && event.button !== 0) return
-
+	function selectItem(event: React.MouseEvent, item: T, index: number, selected: boolean) {
 		event.preventDefault()
 
 		if (disabled || readOnly) return
@@ -331,7 +328,7 @@ export function Select<T>({
 		const selected = value !== undefined && value !== null && isItemEqual(item, value)
 
 		return (
-			<div className={tw(styles.option(), selected ? 'bg-(--color-variant)/15 text-lighter-(--color-variant)/75' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)} onPointerDown={(event) => selectItem(event, item, index, selected)} role="button">
+			<div className={tw(styles.option(), selected ? 'bg-(--color-variant)/15 text-lighter-(--color-variant)/75' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)} onClick={(event) => selectItem(event, item, index, selected)} role="button">
 				<span className={tw(styles.optionContent(), classNames?.optionContent)}>{children(item, index, selected, 'list')}</span>
 				<span className={tw(styles.selectedIcon(), selected ? 'opacity-100' : 'opacity-0', classNames?.selectedIcon)}>
 					<Icons.Check />
@@ -357,7 +354,7 @@ export function Select<T>({
 				className={tw(styles.base(), disabled && 'cursor-not-allowed opacity-40', readOnly && !disabled && 'cursor-default opacity-90 pointer-events-none', className, classNames?.base)}
 				id={id}
 				onKeyDown={handleKeyDown}
-				onPointerDown={handlePointerDown}
+				onClick={handleClick}
 				ref={handleTriggerRef}
 				tabIndex={disabled ? undefined : (tabIndex ?? 0)}>
 				<div className={tw(styles.trigger(), triggerClassName, classNames?.trigger)}>
@@ -378,7 +375,7 @@ export function Select<T>({
 				autoFlip={autoFlip}
 				classNames={{ content: tw(styles.panel(), classNames?.panel) }}
 				closeOnEscape
-				closeOnPointerDownOutside
+				closeOnClickOutside
 				content={PanelContent}
 				hideArrow
 				interactive

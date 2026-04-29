@@ -58,7 +58,7 @@ export interface FloatingProps extends Omit<React.ComponentPropsWithRef<'div'>, 
 	readonly offset?: number
 	readonly interactive?: boolean
 	readonly closeOnEscape?: boolean
-	readonly closeOnPointerDownOutside?: boolean
+	readonly closeOnClickOutside?: boolean
 	readonly hideArrow?: boolean
 	readonly onOpenChange?: (open: boolean) => void
 }
@@ -151,7 +151,7 @@ export function Floating({
 	classNames,
 	content,
 	closeOnEscape = false,
-	closeOnPointerDownOutside = false,
+	closeOnClickOutside = false,
 	id,
 	open = false,
 	interactive = false,
@@ -211,7 +211,7 @@ export function Floating({
 		}
 
 		function handlePointerDown(event: PointerEvent) {
-			if (!closeOnPointerDownOutside || !contentRef.current) return
+			if (!closeOnClickOutside || !contentRef.current) return
 			if (!(event.target instanceof Node)) return
 			if (contentRef.current.contains(event.target)) return
 			if (triggerElement?.contains(event.target)) return
@@ -225,7 +225,7 @@ export function Floating({
 			document.removeEventListener('keydown', handleKeyDown)
 			document.removeEventListener('pointerdown', handlePointerDown)
 		}
-	}, [closeOnEscape, closeOnPointerDownOutside, rendered, requestOpenChange, triggerElement])
+	}, [closeOnEscape, closeOnClickOutside, rendered, requestOpenChange, triggerElement])
 
 	// Keeps the overlay aligned while the viewport, trigger, or content changes.
 	useLayoutEffect(() => {

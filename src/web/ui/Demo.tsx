@@ -353,8 +353,8 @@ const Chips = memo(() => {
 
 const Lists = memo(() => {
 	return (
-		<List className="min-w-80" itemHeight={20} itemCount={100000}>
-			{(i) => <span className="flex h-full w-full items-center justify-center">{i}</span>}
+		<List className="min-w-80" itemHeight={20} itemCount={100000} onAction={alert} classNames={{ item: 'text-center' }}>
+			{(i) => i}
 		</List>
 	)
 })

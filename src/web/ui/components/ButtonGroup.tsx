@@ -6,7 +6,7 @@ const BUTTON_GROUP_ITEM_CHILD_TYPE = Symbol('ButtonGroupItem')
 
 const buttonGroupStyles = tv({
 	slots: {
-		base: 'inline-flex min-w-0 items-stretch gap-px align-top',
+		base: 'inline-flex min-w-0 items-stretch align-top',
 		item: ['inline-flex min-w-0 items-center justify-center gap-2 font-normal select-none transition', 'focus-visible:outline-none focus-visible:ring-0'],
 		startContent: 'flex shrink-0 items-center justify-center',
 		label: 'min-w-0 flex-1 truncate text-center',
@@ -64,7 +64,7 @@ const buttonGroupStyles = tv({
 				item: 'bg-(--color-variant) text-white hover:bg-(--color-variant)/90 active:bg-(--color-variant)/85',
 			},
 			false: {
-				item: 'bg-(--color-variant)/20 text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
+				item: 'bg-(--color-variant)/20 text-(--color-variant) hover:bg-(--color-variant)/35 active:bg-(--color-variant)/40',
 			},
 		},
 		position: {
@@ -197,7 +197,7 @@ export function ButtonGroup<T extends ButtonGroupId = string>({ children, classN
 
 	// Renders one selectable ButtonGroup item declaration.
 	function renderItem(item: React.ReactElement<ButtonGroupItemProps<T>>, index: number) {
-		const { children: itemChildren, className: itemClassName, color: itemColor = color, disabled: itemDisabled = false, endContent, id, label, onKeyDown, onPointerUp, readOnly: itemReadOnly = false, ref: itemRef, size: itemSize = size, startContent, tabIndex, ...itemProps } = item.props
+		const { children: itemChildren, className: itemClassName, color: itemColor = color, disabled: itemDisabled = false, endContent, id, label, onKeyDown, onClick, readOnly: itemReadOnly = false, ref: itemRef, size: itemSize = size, startContent, tabIndex, ...itemProps } = item.props
 		const selected = Object.is(value, id)
 		const itemStyles = buttonGroupStyles({ color: itemColor, fullWidth, position: buttonGroupItemPosition(index, items.length), selected, size: itemSize })
 		const content = label ?? itemChildren
@@ -205,8 +205,8 @@ export function ButtonGroup<T extends ButtonGroupId = string>({ children, classN
 		const stateClassName = disabled || itemDisabled ? 'cursor-not-allowed opacity-40 pointer-events-none' : readOnly || itemReadOnly ? 'cursor-default opacity-90 pointer-events-none' : 'cursor-pointer'
 
 		// Selects this item from pointer interaction.
-		function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
-			onPointerUp?.(event)
+		function handleClick(event: React.PointerEvent<HTMLDivElement>) {
+			onClick?.(event)
 
 			if (event.defaultPrevented || blocked) return
 			if (event.pointerType === 'mouse' && event.button !== 0) return
@@ -228,7 +228,7 @@ export function ButtonGroup<T extends ButtonGroupId = string>({ children, classN
 		}
 
 		return (
-			<div {...itemProps} className={tw(itemStyles.item(), stateClassName, classNames?.item, itemClassName)} key={item.key ?? String(id)} onKeyDown={handleKeyDown} onPointerUp={handlePointerUp} ref={itemRef} role="button" tabIndex={disabled || itemDisabled ? undefined : (tabIndex ?? 0)}>
+			<div {...itemProps} className={tw(itemStyles.item(), stateClassName, classNames?.item, itemClassName)} key={item.key ?? String(id)} onKeyDown={handleKeyDown} onClick={handleClick} ref={itemRef} role="button" tabIndex={disabled || itemDisabled ? undefined : (tabIndex ?? 0)}>
 				{startContent !== undefined && startContent !== null && <span className={tw(itemStyles.startContent(), classNames?.itemStartContent)}>{startContent}</span>}
 				{content !== undefined && content !== null && <span className={tw(itemStyles.label(), classNames?.itemLabel)}>{content}</span>}
 				{endContent !== undefined && endContent !== null && <span className={tw(itemStyles.endContent(), classNames?.itemEndContent)}>{endContent}</span>}

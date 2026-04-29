@@ -1,4 +1,4 @@
-import { stopPropagation, tw } from 'src/web/shared/util'
+import { tw } from 'src/web/shared/util'
 import { tv, type ClassValue } from 'tailwind-variants'
 import { Icons } from '../Icon'
 import { TextInput, type TextInputProps } from './TextInput'
@@ -69,7 +69,7 @@ export function SearchTextInput({ color, size, classNames, disabled, readOnly, p
 	}
 
 	const ClearButton = onClear !== undefined && value !== undefined && value !== '' && (
-		<button className={tw(styles.closeButton(), classNames?.clearButton)} onClick={stopPropagation} onPointerDown={handleClear} onPointerUp={stopPropagation} type="button">
+		<button className={tw(styles.closeButton(), classNames?.clearButton)} onClick={handleClear} type="button">
 			<Icons.Close />
 		</button>
 	)

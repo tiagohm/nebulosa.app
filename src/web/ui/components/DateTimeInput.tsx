@@ -513,7 +513,7 @@ export function DateTimeInput({
 	}
 
 	// Toggles the calendar picker from the end-content button.
-	function handleCalendarPointerDown(event: React.PointerEvent<HTMLButtonElement>) {
+	function handleCalendarClick(event: React.PointerEvent<HTMLButtonElement>) {
 		if (event.defaultPrevented || disabled || readOnly) return
 		if (event.pointerType === 'mouse' && event.button !== 0) return
 		setCalendarOpen((open) => !open)
@@ -529,7 +529,7 @@ export function DateTimeInput({
 	const EndContent = (
 		<>
 			{hasEndContent && endContent}
-			<button className={tw(styles.calendarButton(), calendarButtonClassName, classNames?.calendarButton)} disabled={disabled || readOnly} onPointerDown={handleCalendarPointerDown} ref={setCalendarTriggerElement} tabIndex={-1} type="button">
+			<button className={tw(styles.calendarButton(), calendarButtonClassName, classNames?.calendarButton)} disabled={disabled || readOnly} onClick={handleCalendarClick} ref={setCalendarTriggerElement} tabIndex={-1} type="button">
 				<Icons.Calendar className={tw(styles.calendarIcon(), classNames?.calendarIcon)} />
 			</button>
 		</>
@@ -576,7 +576,7 @@ export function DateTimeInput({
 				autoFlip={autoFlip}
 				classNames={{ content: tw(styles.popover(), classNames?.popover) }}
 				closeOnEscape
-				closeOnPointerDownOutside
+				closeOnClickOutside
 				content={CalendarContent}
 				hideArrow
 				interactive

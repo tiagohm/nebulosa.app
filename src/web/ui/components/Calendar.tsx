@@ -199,7 +199,7 @@ export function Calendar({ className, classNames, color = 'primary', disabled = 
 	}
 
 	// Emits a new selected day when the day cell is interactive.
-	function handleDayPointerDown(day: Temporal.PlainDate) {
+	function handleDayClick(day: Temporal.PlainDate) {
 		if (disabled || readOnly || isDateUnavailable(day, minimumDate, maximumDate)) return
 		if (isSameDay(selectedValue, day)) return
 		setVisibleMonth(startOfMonth(day))
@@ -262,7 +262,7 @@ export function Calendar({ className, classNames, color = 'primary', disabled = 
 									)}
 									disabled={disabled || readOnly || unavailable}
 									key={`${day.year}-${day.dayOfYear}`}
-									onPointerDown={() => handleDayPointerDown(day)}
+									onClick={() => handleDayClick(day)}
 									type="button">
 									{day.day}
 								</button>

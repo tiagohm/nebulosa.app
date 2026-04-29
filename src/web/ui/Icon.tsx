@@ -20,7 +20,7 @@ const PathItem = (path: string, i: number) => <path d={path} key={i} />
 
 export function mdiIcon(...paths: string[]) {
 	return memo(({ stroke = 1, color = 'currentColor', className, ...props }: IconProps) => (
-		<svg className={tw('size-[1.25em]', className)} fill={color} strokeWidth={stroke} viewBox="0 0 24 24" {...props}>
+		<svg className={tw('size-[1.5em]', className)} fill={color} strokeWidth={stroke} viewBox="0 0 24 24" {...props}>
 			{paths.map(PathItem)}
 		</svg>
 	))
@@ -28,7 +28,7 @@ export function mdiIcon(...paths: string[]) {
 
 export function lucideIcon(...paths: string[]) {
 	return memo(({ stroke = 2, color = 'currentColor', className, ...props }: IconProps) => (
-		<svg className={tw('size-[1.25em]', className)} fill="none" stroke={color} strokeWidth={stroke} viewBox="0 0 24 24" {...props}>
+		<svg className={tw('size-[1.5em]', className)} fill="none" stroke={color} strokeWidth={stroke} viewBox="0 0 24 24" {...props}>
 			{paths.map(PathItem)}
 		</svg>
 	))
@@ -111,6 +111,10 @@ export namespace Icons {
 	export const LockOpen = mdiIcon('M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6C4.89,22 4,21.1 4,20V10A2,2 0 0,1 6,8H15V6A3,3 0 0,0 12,3A3,3 0 0,0 9,6H7A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,17A2,2 0 0,0 14,15A2,2 0 0,0 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17Z')
 	export const MapMarker = mdiIcon('M12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5M12,2A7,7 0 0,0 5,9C5,14.25 12,22 12,22C12,22 19,14.25 19,9A7,7 0 0,0 12,2Z')
 	export const Menu = mdiIcon('M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z')
+	export const MenuDown = mdiIcon('M7,10L12,15L17,10H7Z')
+	export const MenuUp = mdiIcon('M7,15L12,10L17,15H7Z')
+	export const MenuLeft = mdiIcon('M14,7L9,12L14,17V7Z')
+	export const MenuRight = mdiIcon('M10,17L15,12L10,7V17Z')
 	export const Message = mdiIcon('M20,2H4A2,2 0 0,0 2,4V22L6,18H20A2,2 0 0,0 22,16V4C22,2.89 21.1,2 20,2Z')
 	export const Meteor = mdiIcon('M21.874 3.486l-4.174 7.514h3.3c.846 0 1.293 .973 .791 1.612l-.074 .085l-6.9 7.095a7.5 7.5 0 1 1 -10.21 -10.974l7.746 -6.58c.722 -.614 1.814 .028 1.628 .958l-.577 2.879l7.11 -3.95c.88 -.488 1.849 .481 1.36 1.36m-12.374 7.515a3.5 3.5 0 0 0 -3.495 3.308l-.005 .192a3.5 3.5 0 1 0 3.5 -3.5')
 	export const Monitor = mdiIcon('M21,16H3V4H21M21,2H3C1.89,2 1,2.89 1,4V16A2,2 0 0,0 3,18H10V20H8V22H16V20H14V18H21A2,2 0 0,0 23,16V4C23,2.89 22.1,2 21,2Z')

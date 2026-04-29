@@ -1,6 +1,6 @@
 import { Children, useEffect, useMemo, useRef, useState } from 'react'
 import { type ClassValue, tv } from 'tailwind-variants'
-import { assignRef, clamp, tw } from '@/shared/util'
+import { assignRef, clamp, hasRootInteraction, tw } from '@/shared/util'
 
 const DEFAULT_ITEM_HEIGHT = 40
 const DEFAULT_OVERSCAN = 3
@@ -21,6 +21,27 @@ const listStyles = tv({
 	},
 })
 
+const listItemStyles = tv({
+	slots: {
+		base: 'flex h-full w-full min-w-0 items-center gap-2 px-2 py-1 text-sm transition',
+		startContent: 'flex shrink-0 items-center justify-center text-neutral-400',
+		body: 'flex min-w-0 flex-1 flex-col justify-center gap-0',
+		description: 'truncate text-xs font-bold text-neutral-600 uppercase',
+		label: 'min-w-0 truncate text-neutral-100',
+		endContent: 'flex shrink-0 items-center justify-center text-neutral-400',
+	},
+	variants: {
+		disabled: {
+			true: {
+				base: 'cursor-not-allowed opacity-40 pointer-events-none',
+			},
+		},
+	},
+	defaultVariants: {
+		disabled: false,
+	},
+})
+
 export type ListItemRenderer = (index: number) => React.ReactNode
 
 export interface ListClassNames {
@@ -38,6 +59,7 @@ export interface ListProps extends Omit<React.ComponentPropsWithRef<'div'>, 'chi
 	readonly itemHeight?: number
 	readonly overscan?: number
 	readonly itemCount?: number
+	readonly onAction?: (index: number) => void
 }
 
 // Normalizes row height so virtual range math always has a positive divisor.
@@ -70,7 +92,7 @@ function virtualRange(itemCount: number, itemHeight: number, overscan: number, s
 }
 
 // Builds the visible item wrappers without copying a window of the full item array.
-function virtualItems(items: readonly React.ReactNode[] | ListItemRenderer, startIndex: number, endIndex: number, itemHeight: number, itemClassName: string) {
+function virtualItems(items: readonly React.ReactNode[] | ListItemRenderer, startIndex: number, endIndex: number, itemHeight: number, itemClassName: string, onClick?: React.MouseEventHandler) {
 	const elements = new Array<React.ReactNode>(endIndex - startIndex)
 	const render = items instanceof Function ? items : (i: number) => items[i]
 
@@ -78,7 +100,7 @@ function virtualItems(items: readonly React.ReactNode[] | ListItemRenderer, star
 		const slotIndex = itemIndex - startIndex
 
 		elements[p] = (
-			<div className={itemClassName} key={slotIndex} style={{ height: itemHeight, transform: `translateY(${itemIndex * itemHeight}px)` }}>
+			<div className={itemClassName} key={slotIndex} data-index={itemIndex} onClick={onClick} style={{ height: itemHeight, transform: `translateY(${itemIndex * itemHeight}px)` }}>
 				{render(itemIndex)}
 			</div>
 		)
@@ -88,7 +110,7 @@ function virtualItems(items: readonly React.ReactNode[] | ListItemRenderer, star
 }
 
 // Renders a fixed-height vertical list with only visible children mounted.
-export function List({ children, itemCount, className, classNames, emptyContent, fullWidth, itemHeight, onScroll, overscan, ref, ...props }: ListProps) {
+export function List({ children, itemCount, className, classNames, emptyContent, fullWidth, itemHeight, onScroll, onAction, overscan, ref, ...props }: ListProps) {
 	const items = useMemo(() => (children instanceof Function ? [] : Children.toArray(children)), [children])
 	const length = children instanceof Function ? normalizeItemCount(itemCount) : items.length
 	const normalizedItemHeight = normalizeItemHeight(itemHeight)
@@ -102,7 +124,17 @@ export function List({ children, itemCount, className, classNames, emptyContent,
 	const range = virtualRange(length, normalizedItemHeight, normalizedOverscan, scrollTop, viewportHeight)
 	const totalHeight = length * normalizedItemHeight
 	const itemClassName = tw(styles.item(), classNames?.item)
-	const mountedItems = useMemo(() => virtualItems(children instanceof Function ? children : items, range.startIndex, range.endIndex, normalizedItemHeight, itemClassName), [items, range.startIndex, range.endIndex, normalizedItemHeight, itemClassName])
+
+	function handleClick(event: React.MouseEvent<HTMLElement>) {
+		const index = event.currentTarget.dataset.index
+
+		if (index !== undefined) {
+			event.stopPropagation()
+			onAction!(+index)
+		}
+	}
+
+	const mountedItems = useMemo(() => virtualItems(children instanceof Function ? children : items, range.startIndex, range.endIndex, normalizedItemHeight, itemClassName, onAction && handleClick), [items, range.startIndex, range.endIndex, normalizedItemHeight, itemClassName])
 
 	// Measures the scroll viewport and keeps the virtual range aligned to resize.
 	useEffect(() => {
@@ -181,7 +213,17 @@ export function List({ children, itemCount, className, classNames, emptyContent,
 	)
 }
 
+export interface ListItemClassNames {
+	readonly base?: ClassValue
+	readonly startContent?: ClassValue
+	readonly body?: ClassValue
+	readonly description?: ClassValue
+	readonly label?: ClassValue
+	readonly endContent?: ClassValue
+}
+
 export interface ListItemProps extends Omit<React.ComponentProps<'div'>, 'children'> {
+	readonly classNames?: ListItemClassNames
 	readonly description?: React.ReactNode
 	readonly label?: React.ReactNode
 	readonly startContent?: React.ReactNode
@@ -190,17 +232,20 @@ export interface ListItemProps extends Omit<React.ComponentProps<'div'>, 'childr
 	readonly children?: React.ReactNode
 }
 
-export function ListItem({ className, description, label, children, startContent, endContent, disabled, ...props }: ListItemProps) {
+// Renders a full-height list row with optional leading, trailing, and secondary content.
+export function ListItem({ className, classNames, description, label, children, startContent, endContent, disabled = false, ...props }: ListItemProps) {
 	const content = children ?? label
+	const styles = listItemStyles({ disabled })
+	const stateClassName = disabled ? undefined : hasRootInteraction(props) ? 'cursor-pointer' : 'cursor-default'
 
 	return (
-		<div className={tw('inline-flex flex-col justify-center gap-0 p-1', className, disabled && 'opacity-70 pointer-events-none')} {...props}>
-			{startContent}
-			<div className="flex flex-col justify-center gap-0 p-1">
-				{description && <span className="text-xs font-bold text-neutral-600 uppercase">{description}</span>}
-				{content && <span className="overflow-auto whitespace-nowrap">{content}</span>}
+		<div className={tw(styles.base(), stateClassName, className, classNames?.base)} {...props}>
+			{startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
+			<div className={tw(styles.body(), classNames?.body)}>
+				{description !== undefined && description !== null && <span className={tw(styles.description(), classNames?.description)}>{description}</span>}
+				{content !== undefined && content !== null && <span className={tw(styles.label(), classNames?.label)}>{content}</span>}
 			</div>
-			{endContent}
+			{endContent !== undefined && endContent !== null && <span className={tw(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
 		</div>
 	)
 }

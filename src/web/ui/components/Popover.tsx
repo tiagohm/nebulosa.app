@@ -54,9 +54,8 @@ export function Popover({ autoFlip, trigger, children, className, classNames, id
 
 	if (hasContent) {
 		// Toggles the popover from the current trigger element.
-		function handlePointerDown(event: React.PointerEvent<HTMLElement>) {
+		function handleClick(event: React.MouseEvent<HTMLElement>) {
 			if (disabled || !hasContent) return
-			if (event.pointerType === 'mouse' && event.button !== 0) return
 			handleTriggerRef(event.currentTarget)
 			setOpen(!isOpen)
 		}
@@ -69,17 +68,17 @@ export function Popover({ autoFlip, trigger, children, className, classNames, id
 					handleTriggerRef(element)
 					assignRef(child.props.ref, element)
 				},
-				onPointerDown: (event) => {
-					child.props.onPointerDown?.(event)
+				onClick: (event) => {
+					child.props.onClick?.(event)
 
 					if (!event.defaultPrevented) {
-						handlePointerDown(event)
+						handleClick(event)
 					}
 				},
 			})
 		} else {
 			trigger = (
-				<span className="w-fit" onPointerDown={handlePointerDown} ref={handleTriggerRef}>
+				<span className="w-fit" onClick={handleClick} ref={handleTriggerRef}>
 					{trigger}
 				</span>
 			)
@@ -96,7 +95,7 @@ export function Popover({ autoFlip, trigger, children, className, classNames, id
 					className={className}
 					classNames={classNames}
 					closeOnEscape
-					closeOnPointerDownOutside
+					closeOnClickOutside
 					content={children}
 					id={id}
 					interactive

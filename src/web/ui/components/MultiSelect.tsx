@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { assignRef, stopPropagation, tw } from '@/shared/util'
+import { assignRef, tw } from '@/shared/util'
 import { Icons } from '../Icon'
 import { Chip, type ChipClassNames, type ChipProps } from './Chip'
 import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from './Floating'
@@ -235,7 +235,7 @@ export function MultiSelect<T>({
 	label,
 	onKeyDown,
 	onOpenChange,
-	onPointerDown,
+	onClick,
 	onValueChange,
 	open,
 	overscan,
@@ -329,11 +329,10 @@ export function MultiSelect<T>({
 	}
 
 	// Toggles the panel from pointer interaction on the trigger.
-	function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-		onPointerDown?.(event)
+	function handleClick(event: React.MouseEvent<HTMLDivElement>) {
+		onClick?.(event)
 
 		if (event.defaultPrevented || disabled || readOnly) return
-		if (event.pointerType === 'mouse' && event.button !== 0) return
 
 		setTriggerElement(event.currentTarget)
 		setTriggerWidth(event.currentTarget.getBoundingClientRect().width)
@@ -365,9 +364,7 @@ export function MultiSelect<T>({
 	}
 
 	// Toggles one visible option without closing the floating panel.
-	function toggleItem(event: React.PointerEvent, item: T, selected: boolean) {
-		if (event.pointerType === 'mouse' && event.button !== 0) return
-
+	function toggleItem(event: React.MouseEvent, item: T, selected: boolean) {
 		event.preventDefault()
 
 		if (disabled || readOnly) return
@@ -412,7 +409,7 @@ export function MultiSelect<T>({
 		const selected = selectedValueIndexOf(selectedItems, item, isItemEqual) >= 0
 
 		return (
-			<div className={tw(styles.option(), selected ? 'bg-(--color-variant)/15 text-lighter-(--color-variant)/75' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)} onPointerDown={(event) => toggleItem(event, item, selected)} role="button">
+			<div className={tw(styles.option(), selected ? 'bg-(--color-variant)/15 text-lighter-(--color-variant)/75' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)} onClick={(event) => toggleItem(event, item, selected)} role="button">
 				<span className={tw(styles.optionContent(), classNames?.optionContent)}>{children(item, index, selected, 'list')}</span>
 				<span className={tw(styles.selectedIcon(), selected ? 'opacity-100' : 'opacity-0', classNames?.selectedIcon)}>
 					<Icons.Check />
@@ -438,7 +435,7 @@ export function MultiSelect<T>({
 				className={tw(styles.base(), disabled && 'cursor-not-allowed opacity-40', readOnly && !disabled && 'cursor-default opacity-90 pointer-events-none', className, classNames?.base)}
 				id={id}
 				onKeyDown={handleKeyDown}
-				onPointerDown={handlePointerDown}
+				onClick={handleClick}
 				ref={handleTriggerRef}
 				tabIndex={disabled ? undefined : (tabIndex ?? 0)}>
 				<div className={tw(styles.trigger(), triggerClassName, classNames?.trigger)}>
@@ -453,7 +450,7 @@ export function MultiSelect<T>({
 						<div className={tw(styles.endContent(), contentClassName, classNames?.endContent)}>
 							{endContent}
 							{showClearButton && (
-								<button className={tw(styles.clearButton(), clearButtonClassName, classNames?.clearButton)} onClick={stopPropagation} onPointerDown={clearSelection} onPointerUp={stopPropagation} type="button">
+								<button className={tw(styles.clearButton(), clearButtonClassName, classNames?.clearButton)} onClick={clearSelection} type="button">
 									<Icons.Close />
 								</button>
 							)}
@@ -468,7 +465,7 @@ export function MultiSelect<T>({
 				autoFlip={autoFlip}
 				classNames={{ content: tw(styles.panel(), classNames?.panel) }}
 				closeOnEscape
-				closeOnPointerDownOutside
+				closeOnClickOutside
 				content={PanelContent}
 				hideArrow
 				interactive

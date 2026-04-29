@@ -1,6 +1,6 @@
 import { Children, Fragment, isValidElement, useEffect, useState } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { stopPropagation, tw } from '@/shared/util'
+import { tw } from '@/shared/util'
 import { Icons } from '../Icon'
 
 const TAB_CHILD_TYPE = Symbol('Tab')
@@ -283,18 +283,17 @@ export function Tabs<T extends TabId = string>({ children, className, classNames
 
 	// Renders a single clickable tab declaration.
 	function renderTab(tab: React.ReactElement<TabProps<T>>, index: number) {
-		const { children: tabChildren, className: tabClassName, classNames: tabClassNames, color: tabColor = color, disabled: tabDisabled = false, endContent, id, label, onClose, onKeyDown, onPointerDown, ref: tabRef, size: tabSize = size, startContent, tabIndex, ...tabProps } = tab.props
+		const { children: tabChildren, className: tabClassName, classNames: tabClassNames, color: tabColor = color, disabled: tabDisabled = false, endContent, id, label, onClose, onKeyDown, onClick, ref: tabRef, size: tabSize = size, startContent, tabIndex, ...tabProps } = tab.props
 		const selected = index === selectedTabIndex
 		const blocked = disabled || tabDisabled
 		const tabVariantStyles = tabStyles({ color: tabColor, disabled: blocked, selected, size: tabSize })
 		const content = label ?? tabChildren
 
 		// Selects this tab from pointer interaction.
-		function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-			onPointerDown?.(event)
+		function handleClick(event: React.MouseEvent<HTMLDivElement>) {
+			onClick?.(event)
 
 			if (event.defaultPrevented || blocked) return
-			if (event.pointerType === 'mouse' && event.button !== 0) return
 
 			event.preventDefault()
 			selectTab(id)
@@ -320,12 +319,12 @@ export function Tabs<T extends TabId = string>({ children, className, classNames
 		}
 
 		return (
-			<div {...tabProps} className={tw(tabVariantStyles.base(), classNames?.tab, tabClassName, tabClassNames?.base)} key={tab.key ?? index} onKeyDown={handleKeyDown} onPointerDown={handlePointerDown} ref={tabRef} tabIndex={blocked ? undefined : (tabIndex ?? 0)}>
+			<div {...tabProps} className={tw(tabVariantStyles.base(), classNames?.tab, tabClassName, tabClassNames?.base)} key={tab.key ?? index} onKeyDown={handleKeyDown} onClick={handleClick} ref={tabRef} tabIndex={blocked ? undefined : (tabIndex ?? 0)}>
 				{startContent !== undefined && startContent !== null && <span className={tw(tabVariantStyles.startContent(), classNames?.tabStartContent, tabClassNames?.startContent)}>{startContent}</span>}
 				{content !== undefined && content !== null && <span className={tw(tabVariantStyles.label(), classNames?.tabLabel, tabClassNames?.label)}>{content}</span>}
 				{endContent !== undefined && endContent !== null && <span className={tw(tabVariantStyles.endContent(), classNames?.tabEndContent, tabClassNames?.endContent)}>{endContent}</span>}
 				{onClose !== undefined && (
-					<button className={tw(tabVariantStyles.closeButton(), classNames?.closeButton, tabClassNames?.closeButton)} onClick={stopPropagation} onPointerDown={handleClose} onPointerUp={stopPropagation} type="button">
+					<button className={tw(tabVariantStyles.closeButton(), classNames?.closeButton, tabClassNames?.closeButton)} onClick={handleClose} type="button">
 						<Icons.Close />
 					</button>
 				)}

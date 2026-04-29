@@ -67,7 +67,7 @@ export interface DropdownClassNames {
 	readonly empty?: ClassValue
 }
 
-export interface DropdownProps extends Omit<ButtonProps, 'children'> {
+export interface DropdownProps extends Omit<ButtonProps, 'children' | 'classNames'> {
 	readonly autoFlip?: boolean
 	readonly children?: React.ReactNode
 	readonly classNames?: DropdownClassNames
@@ -103,7 +103,7 @@ export function Dropdown({
 	loading,
 	onKeyDown,
 	onOpenChange,
-	onPointerDown,
+	onClick,
 	open,
 	overscan,
 	placement = 'bottom',
@@ -163,8 +163,8 @@ export function Dropdown({
 	}
 
 	// Toggles the panel from pointer interaction on the trigger.
-	function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-		onPointerDown?.(event)
+	function handleClick(event: React.PointerEvent<HTMLDivElement>) {
+		onClick?.(event)
 
 		if (event.defaultPrevented || disabled || readOnly || loading === true) return
 		if (event.pointerType === 'mouse' && event.button !== 0) return
@@ -217,7 +217,7 @@ export function Dropdown({
 				endContent={TriggerEndContent}
 				loading={loading}
 				onKeyDown={handleKeyDown}
-				onPointerDown={handlePointerDown}
+				onClick={handleClick}
 				ref={handleTriggerRef}
 				size={size}
 			/>
@@ -225,7 +225,7 @@ export function Dropdown({
 				autoFlip={autoFlip}
 				classNames={{ content: tw(styles.panel(), classNames?.panel) }}
 				closeOnEscape
-				closeOnPointerDownOutside
+				closeOnClickOutside
 				content={PanelContent}
 				hideArrow
 				interactive

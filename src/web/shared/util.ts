@@ -20,6 +20,10 @@ export function assignRef<T>(ref: React.Ref<T> | undefined, value: T) {
 	}
 }
 
+export function hasRootInteraction(props: React.DOMAttributes<HTMLElement>) {
+	return props.onClick !== undefined || props.onPointerDown !== undefined || props.onPointerUp !== undefined || props.onDoubleClick !== undefined || props.onContextMenu !== undefined
+}
+
 // Clamps a number into the inclusive [min, max] range.
 export function clamp(value: number, min: number, max: number) {
 	if (!(value >= min)) return min // handles NaN value

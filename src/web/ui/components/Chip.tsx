@@ -1,5 +1,5 @@
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { stopPropagation, tw } from '@/shared/util'
+import { hasRootInteraction, tw } from '@/shared/util'
 import { Icons } from '../Icon'
 
 const chipStyles = tv({
@@ -110,8 +110,7 @@ export interface ChipProps extends Omit<React.ComponentPropsWithRef<'div'>, 'chi
 export function Chip({ children, className, classNames, color, disabled = false, endContent, label, onClose, readOnly = false, ref, size, startContent, ...props }: ChipProps) {
 	const content = children ?? label
 	const styles = chipStyles({ color, size })
-	const hasRootInteraction = props.onClick !== undefined || props.onPointerDown !== undefined || props.onPointerUp !== undefined || props.onDoubleClick !== undefined || props.onContextMenu !== undefined
-	const stateClassName = disabled ? 'cursor-not-allowed opacity-40 pointer-events-none' : readOnly ? 'cursor-default opacity-90 pointer-events-none' : hasRootInteraction ? 'cursor-pointer' : 'cursor-default'
+	const stateClassName = disabled ? 'cursor-not-allowed opacity-40 pointer-events-none' : readOnly ? 'cursor-default opacity-90 pointer-events-none' : hasRootInteraction(props) ? 'cursor-pointer' : 'cursor-default'
 
 	// Reports close requests without letting the event bubble into the chip root.
 	function handleClose(event: React.PointerEvent<HTMLButtonElement>) {
@@ -126,7 +125,7 @@ export function Chip({ children, className, classNames, color, disabled = false,
 			{content !== undefined && content !== null && <span className={tw(styles.label(), classNames?.label)}>{content}</span>}
 			{endContent !== undefined && endContent !== null && <span className={tw(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
 			{onClose !== undefined && (
-				<button className={tw(styles.closeButton(), classNames?.closeButton)} onClick={stopPropagation} onPointerDown={handleClose} onPointerUp={stopPropagation} type="button">
+				<button className={tw(styles.closeButton(), classNames?.closeButton)} onClick={handleClose} type="button">
 					<Icons.Close />
 				</button>
 			)}

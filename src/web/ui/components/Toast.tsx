@@ -101,7 +101,7 @@ function ToastItem({ className, color, delay, description, endContent, id, onClo
 	}, [delay, id])
 
 	// Dismisses the toast without bubbling into the toast root handlers.
-	function handleClose(event: React.PointerEvent<HTMLButtonElement>) {
+	function handleClose(event: React.MouseEvent<HTMLButtonElement>) {
 		event.stopPropagation()
 		dismissToast(id, false)
 	}

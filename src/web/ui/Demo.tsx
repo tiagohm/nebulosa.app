@@ -388,6 +388,7 @@ const Selects = memo(() => {
 })
 
 const Dropdowns = memo(() => {
+	const [value, setValue] = useState('A')
 	const random = mulberry32(0)
 	const elements: React.ReactNode[] = []
 	let key = 0
@@ -399,10 +400,9 @@ const Dropdowns = memo(() => {
 			const disabled = random() < 0.05
 			const readOnly = random() < 0.05
 			const headerContent = random() < 0.1 ? <TextInput placeholder="Search" fullWidth startContent={SearchIcon} /> : undefined
-			const label = key.toFixed(0)
 
 			elements.push(
-				<Dropdown color={color} headerContent={headerContent} key={key++} size={size} disabled={disabled} readOnly={readOnly} startContent={startContent} endContent={endContent} label={label} className="min-w-80" itemHeight={32}>
+				<Dropdown color={color} onAction={(index) => setValue(String.fromCodePoint(65 + index))} headerContent={headerContent} key={key++} size={size} disabled={disabled} readOnly={readOnly} startContent={startContent} endContent={endContent} label={value} className="min-w-80" itemHeight={32}>
 					<DropdownItem startContent={HeartIcon}>A</DropdownItem>
 					<DropdownItem disabled startContent={GalaxyIcon}>
 						B

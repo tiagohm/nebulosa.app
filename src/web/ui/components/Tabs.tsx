@@ -312,7 +312,7 @@ export function Tabs<T extends TabId = string>({ children, className, classNames
 		}
 
 		// Reports close requests without selecting the tab.
-		function handleClose(event: React.PointerEvent<HTMLButtonElement>) {
+		function handleClose(event: React.MouseEvent<HTMLButtonElement>) {
 			event.stopPropagation()
 			if (blocked || onClose === undefined) return
 			onClose(event)

@@ -81,6 +81,7 @@ export interface DropdownProps extends Omit<ButtonProps, 'children' | 'className
 	readonly placement?: FloatingPlacement
 	readonly portalContainer?: Element
 	readonly readOnly?: boolean
+	readonly onAction?: (index: number) => void
 }
 
 // Normalizes panel item height to match the trigger size by default.
@@ -104,6 +105,7 @@ export function Dropdown({
 	onKeyDown,
 	onOpenChange,
 	onClick,
+	onAction,
 	open,
 	overscan,
 	placement = 'bottom',
@@ -163,11 +165,10 @@ export function Dropdown({
 	}
 
 	// Toggles the panel from pointer interaction on the trigger.
-	function handleClick(event: React.PointerEvent<HTMLDivElement>) {
+	function handleClick(event: React.MouseEvent<HTMLDivElement>) {
 		onClick?.(event)
 
 		if (event.defaultPrevented || disabled || readOnly || loading === true) return
-		if (event.pointerType === 'mouse' && event.button !== 0) return
 
 		setTriggerElement(event.currentTarget)
 		setTriggerWidth(event.currentTarget.getBoundingClientRect().width)
@@ -191,6 +192,12 @@ export function Dropdown({
 		}
 	}
 
+	function handleOnAction(index: number) {
+		if (disabled || readOnly || loading === true || onAction === undefined) return
+		onAction(index)
+		setOpen(false)
+	}
+
 	const TriggerEndContent = (
 		<>
 			{endContent}
@@ -201,7 +208,7 @@ export function Dropdown({
 	const PanelContent = (
 		<div className={tw(styles.panelContent(), classNames?.panelContent)}>
 			{headerContent !== undefined && headerContent !== null && <div className={tw(styles.header(), classNames?.header)}>{headerContent}</div>}
-			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: classNames?.listItem }} emptyContent={emptyContent} itemHeight={optionHeight} overscan={overscan}>
+			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: classNames?.listItem }} emptyContent={emptyContent} itemHeight={optionHeight} overscan={overscan} onAction={handleOnAction}>
 				{children}
 			</List>
 			{footerContent !== undefined && footerContent !== null && <div className={tw(styles.footer(), classNames?.footer)}>{footerContent}</div>}

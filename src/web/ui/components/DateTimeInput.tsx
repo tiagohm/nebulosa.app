@@ -513,9 +513,8 @@ export function DateTimeInput({
 	}
 
 	// Toggles the calendar picker from the end-content button.
-	function handleCalendarClick(event: React.PointerEvent<HTMLButtonElement>) {
+	function handleCalendarClick(event: React.MouseEvent<HTMLButtonElement>) {
 		if (event.defaultPrevented || disabled || readOnly) return
-		if (event.pointerType === 'mouse' && event.button !== 0) return
 		setCalendarOpen((open) => !open)
 	}
 

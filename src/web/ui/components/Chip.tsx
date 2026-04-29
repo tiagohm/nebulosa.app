@@ -113,7 +113,7 @@ export function Chip({ children, className, classNames, color, disabled = false,
 	const stateClassName = disabled ? 'cursor-not-allowed opacity-40 pointer-events-none' : readOnly ? 'cursor-default opacity-90 pointer-events-none' : hasRootInteraction(props) ? 'cursor-pointer' : 'cursor-default'
 
 	// Reports close requests without letting the event bubble into the chip root.
-	function handleClose(event: React.PointerEvent<HTMLButtonElement>) {
+	function handleClose(event: React.MouseEvent<HTMLButtonElement>) {
 		event.stopPropagation()
 		if (disabled || readOnly || onClose === undefined) return
 		onClose(event)

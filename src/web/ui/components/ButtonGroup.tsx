@@ -205,11 +205,10 @@ export function ButtonGroup<T extends ButtonGroupId = string>({ children, classN
 		const stateClassName = disabled || itemDisabled ? 'cursor-not-allowed opacity-40 pointer-events-none' : readOnly || itemReadOnly ? 'cursor-default opacity-90 pointer-events-none' : 'cursor-pointer'
 
 		// Selects this item from pointer interaction.
-		function handleClick(event: React.PointerEvent<HTMLDivElement>) {
+		function handleClick(event: React.MouseEvent<HTMLDivElement>) {
 			onClick?.(event)
 
 			if (event.defaultPrevented || blocked) return
-			if (event.pointerType === 'mouse' && event.button !== 0) return
 
 			event.preventDefault()
 			selectItem(id)

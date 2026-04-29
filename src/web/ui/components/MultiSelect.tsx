@@ -185,6 +185,7 @@ export interface MultiSelectProps<T> extends Omit<React.ComponentPropsWithRef<'d
 	readonly placement?: FloatingPlacement
 	readonly portalContainer?: Element
 	readonly startContent?: React.ReactNode
+	readonly onAction?: (item: T, index: number) => void
 }
 
 // Finds a selected value in the current option list.
@@ -237,6 +238,7 @@ export function MultiSelect<T>({
 	onOpenChange,
 	onClick,
 	onValueChange,
+	onAction,
 	open,
 	overscan,
 	placement = 'bottom',
@@ -377,7 +379,7 @@ export function MultiSelect<T>({
 	}
 
 	// Clears all selected items from the controlled value list.
-	function clearSelection(event: React.PointerEvent<HTMLButtonElement>) {
+	function clearSelection(event: React.MouseEvent<HTMLButtonElement>) {
 		event.preventDefault()
 		event.stopPropagation()
 
@@ -418,10 +420,14 @@ export function MultiSelect<T>({
 		)
 	}
 
+	function handleOnAction(index: number) {
+		onAction!(items[index], index)
+	}
+
 	const PanelContent = (
 		<div className={tw(styles.panelContent(), classNames?.panelContent)}>
 			{headerContent !== undefined && headerContent !== null && <div className={tw(styles.header(), classNames?.header)}>{headerContent}</div>}
-			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: tw(styles.listItem(), classNames?.listItem) }} emptyContent={emptyContent} itemCount={items.length} itemHeight={optionHeight} overscan={overscan}>
+			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: tw(styles.listItem(), classNames?.listItem) }} emptyContent={emptyContent} itemCount={items.length} itemHeight={optionHeight} overscan={overscan} onAction={onAction && handleOnAction}>
 				{renderOption}
 			</List>
 			{footerContent !== undefined && footerContent !== null && <div className={tw(styles.footer(), classNames?.footer)}>{footerContent}</div>}

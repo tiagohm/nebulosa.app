@@ -62,7 +62,7 @@ export function SearchTextInput({ color, size, classNames, disabled, readOnly, p
 	}
 
 	// Reports close requests without letting the event bubble into the chip root.
-	function handleClear(event: React.PointerEvent<HTMLButtonElement>) {
+	function handleClear(event: React.MouseEvent<HTMLButtonElement>) {
 		event.stopPropagation()
 		if (disabled || readOnly || onClear === undefined) return
 		if (onClear(event) !== false) onValueChange?.('')

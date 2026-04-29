@@ -154,7 +154,7 @@ export const FilePickerMolecule = molecule(() => {
 		}
 	}
 
-	function unselectAll(event?: React.PointerEvent) {
+	function unselectAll(event?: React.MouseEvent) {
 		event?.stopPropagation()
 		state.selected.length = 0
 	}

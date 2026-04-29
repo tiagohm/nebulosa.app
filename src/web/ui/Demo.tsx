@@ -2,6 +2,7 @@ import { mulberry32 } from 'nebulosa/src/random'
 import { memo, useState } from 'react'
 import { toast } from '../shared/toast'
 import { Badge } from './components/Badge'
+import { Breadcrumbs } from './components/Breadcrumbs'
 import { Button } from './components/Button'
 import { ButtonGroup, ButtonGroupItem } from './components/ButtonGroup'
 import { Calendar } from './components/Calendar'
@@ -28,6 +29,7 @@ export function Demo() {
 		<Tabs color="primary" className="p-4">
 			<Tab id="0">Buttons</Tab>
 			<Tab id="13">Button Groups</Tab>
+			<Tab id="16">Breadcrumbs</Tab>
 			<Tab id="1">Chips</Tab>
 			<Tab id="2">Text Inputs</Tab>
 			<Tab id="14">Date Time Inputs</Tab>
@@ -89,6 +91,9 @@ export function Demo() {
 			</TabPanel>
 			<TabPanel id="15" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
 				<MultiSelects />
+			</TabPanel>
+			<TabPanel id="16" className="flex w-full flex-col gap-3 p-4">
+				<BreadCrumbs />
 			</TabPanel>
 		</Tabs>
 	)
@@ -156,6 +161,39 @@ const ButtonGroups = memo(() => {
 	}
 
 	return elements
+})
+
+const BreadCrumbs = memo(() => {
+	return (
+		<>
+			<Breadcrumbs>
+				<Button color="default" label="Home" size="sm" variant="ghost" />
+				<Button color="primary" label="Capture" size="sm" variant="ghost" />
+				<Chip color="secondary" label="Sequence" size="sm" />
+			</Breadcrumbs>
+
+			<Breadcrumbs maxItems={3}>
+				<Button color="default" label="Home" size="sm" variant="ghost" />
+				<Button color="default" label="Profile" size="sm" variant="ghost" />
+				<Button color="default" label="Capture" size="sm" variant="ghost" />
+				<Button color="primary" label="Sequences" size="sm" variant="ghost" />
+				<Chip color="secondary" label="M42" size="sm" />
+			</Breadcrumbs>
+
+			<Breadcrumbs ellipsis={<Chip color="default" label="More" size="sm" />} maxItems={2} separator={<span>/</span>}>
+				<Button color="default" label="Home" size="sm" variant="ghost" />
+				<Button color="default" label="Equipment" size="sm" variant="ghost" />
+				<Button color="primary" label="Camera" size="sm" variant="ghost" />
+				<Chip color="success" label="Connected" size="sm" />
+			</Breadcrumbs>
+
+			<Breadcrumbs disabled>
+				<Button color="default" label="Home" size="sm" variant="ghost" />
+				<Button color="default" label="Settings" size="sm" variant="ghost" />
+				<span>Disabled</span>
+			</Breadcrumbs>
+		</>
+	)
 })
 
 const TextInputs = memo(() => {

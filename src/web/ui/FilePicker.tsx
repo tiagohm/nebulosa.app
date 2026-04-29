@@ -1,4 +1,3 @@
-import { BreadcrumbItem, Breadcrumbs } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import React, { Activity, memo } from 'react'
@@ -6,6 +5,7 @@ import { useSnapshot } from 'valtio'
 import { FilePickerMolecule } from '@/molecules/filepicker'
 import { stopPropagation, tw } from '../shared/util'
 import { Badge } from './components/Badge'
+import { Breadcrumbs } from './components/Breadcrumbs'
 import { Button } from './components/Button'
 import { List } from './components/List'
 import { TextInput } from './components/TextInput'
@@ -51,17 +51,15 @@ const Toolbar = memo(() => {
 
 	return (
 		<div className="flex flex-row items-center gap-2">
-			<IconButton color="secondary" disabled={history.length === 0} icon={Icons.ArrowLeft} onPointerUp={picker.navigateBack} tooltipContent="Go Back" />
-			<Breadcrumbs className="flex-1" itemsAfterCollapse={2} itemsBeforeCollapse={1} maxItems={3}>
+			<IconButton color="secondary" disabled={history.length === 0} icon={Icons.ArrowLeft} onClick={picker.navigateBack} tooltipContent="Go Back" />
+			<Breadcrumbs className="flex-1" maxItems={3}>
 				{directoryTree.map((item) => (
-					<BreadcrumbItem key={item.name} onPointerUp={() => picker.navigateTo(item)} startContent={item.name ? undefined : <Icons.FolderRoot />}>
-						{item.name}
-					</BreadcrumbItem>
+					<Button key={item.name} label={item.name} onClick={() => picker.navigateTo(item)} startContent={item.name ? undefined : <Icons.FolderRoot />} size="sm" variant="ghost" />
 				))}
 			</Breadcrumbs>
-			<IconButton color="secondary" disabled={directoryTree.length <= 1} icon={Icons.ArrowUp} onPointerUp={picker.navigateToParent} tooltipContent="Go To Parent" />
-			<IconButton color="warning" icon={directory.create ? Icons.Filter : Icons.FolderPlus} onPointerUp={picker.toggleCreateDirectory} tooltipContent={directory.create ? 'Filter' : 'New Directory'} />
-			<IconButton color="primary" icon={Icons.Sync} onPointerUp={picker.list} tooltipContent="Refresh" />
+			<IconButton color="secondary" disabled={directoryTree.length <= 1} icon={Icons.ArrowUp} onClick={picker.navigateToParent} tooltipContent="Go To Parent" />
+			<IconButton color="warning" icon={directory.create ? Icons.Filter : Icons.FolderPlus} onClick={picker.toggleCreateDirectory} tooltipContent={directory.create ? 'Filter' : 'New Directory'} />
+			<IconButton color="primary" icon={Icons.Sync} onClick={picker.list} tooltipContent="Refresh" />
 		</div>
 	)
 })
@@ -85,7 +83,7 @@ const CreateDirectory = memo(() => {
 		<Activity mode={create ? 'visible' : 'hidden'}>
 			<div className="flex flex-row items-center gap-2">
 				<TextInput label="Name" onValueChange={(value) => (picker.state.directory.name = value)} value={name} />
-				<IconButton color="success" disabled={name.length === 0} icon={Icons.Check} onPointerUp={picker.createDirectory} tooltipContent="Create" variant="ghost" />
+				<IconButton color="success" disabled={name.length === 0} icon={Icons.Check} onClick={picker.createDirectory} tooltipContent="Create" variant="ghost" />
 			</div>
 		</Activity>
 	)
@@ -95,7 +93,7 @@ const Files = memo(() => {
 	const picker = useMolecule(FilePickerMolecule)
 	const { mode, selected, filtered } = useSnapshot(picker.state)
 
-	function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
+	function handleClick(event: React.MouseEvent<HTMLElement>) {
 		stopPropagation(event)
 		const index = +event.currentTarget.dataset.index!
 		return picker.select(filtered[index])
@@ -107,7 +105,7 @@ const Files = memo(() => {
 				const item = filtered[i]
 
 				return (
-					<div onPointerUp={handlePointerUp} data-index={i} className={tw('flex flex-row items-center justify-between gap-1 p-2 cursor-pointer border-e-2', selected.includes(item.path) ? 'border-green-700' : 'border-transparent')}>
+					<div onClick={handleClick} data-index={i} className={tw('flex flex-row items-center justify-between gap-1 p-2 cursor-pointer border-e-2', selected.includes(item.path) ? 'border-green-700' : 'border-transparent')}>
 						{item.directory ? <Icons.Folder color="orange" /> : <Icons.File color="gray" />}
 						<div className="flex w-full flex-col justify-center gap-0">
 							<span className="w-0 break-all whitespace-nowrap">{item.name}</span>
@@ -116,7 +114,7 @@ const Files = memo(() => {
 								{!item.directory && <span className="text-xs text-gray-500">{item.size} B</span>}
 							</div>
 						</div>
-						{mode === 'directory' && <IconButton color="secondary" icon={Icons.FolderOpen} onPointerUp={() => picker.navigateTo(item)} />}
+						{mode === 'directory' && <IconButton color="secondary" icon={Icons.FolderOpen} onClick={() => picker.navigateTo(item)} />}
 					</div>
 				)
 			}}
@@ -141,12 +139,12 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 		<>
 			<Activity mode={mode === 'save' ? 'visible' : 'hidden'}>
 				<TextInput className="flex-1" color={save.alreadyExists ? 'warning' : 'default'} label="Name" onValueChange={picker.updateSaveName} value={save.name} />
-				<Button color="success" disabled={save.name.length === 0} label="Choose" onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
+				<Button color="success" disabled={save.name.length === 0} label="Choose" onClick={handleOnChoose} startContent={<Icons.Check />} />
 			</Activity>
 			<Activity mode={mode !== 'save' ? 'visible' : 'hidden'}>
-				<Button color="danger" disabled={selected.length === 0} label="Clear" onPointerUp={picker.unselectAll} startContent={<Icons.Broom />} />
+				<Button color="danger" disabled={selected.length === 0} label="Clear" onClick={picker.unselectAll} startContent={<Icons.Broom />} />
 				<Badge color="success" label={selected.length}>
-					<Button color="success" disabled={selected.length === 0} label="Choose" onPointerUp={handleOnChoose} startContent={<Icons.Check />} />
+					<Button color="success" disabled={selected.length === 0} label="Choose" onClick={handleOnChoose} startContent={<Icons.Check />} />
 				</Badge>
 			</Activity>
 		</>

@@ -10,7 +10,7 @@ export interface MountTargetCoordinateTypeRadioGroupProps extends React.Componen
 
 export function MountTargetCoordinateTypeRadioGroup({ value, onValueChange, disabled, className, ...props }: MountTargetCoordinateTypeRadioGroupProps) {
 	return (
-		<div className={tw('flex items-start justify-center gap-1 flex-col', className)} {...props}>
+		<div className={tw('flex items-center justify-center gap-1 flex-row', className)} {...props}>
 			<Radio disabled={disabled} label="J2000" onValueChange={(value) => value && onValueChange('J2000')} value={value === 'J2000'} />
 			<Radio disabled={disabled} label="JNOW" onValueChange={(value) => value && onValueChange('JNOW')} value={value === 'JNOW'} />
 			<Radio disabled={disabled} label="HOR" onValueChange={(value) => value && onValueChange('ALTAZ')} value={value === 'ALTAZ'} />

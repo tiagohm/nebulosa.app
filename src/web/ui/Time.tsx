@@ -1,12 +1,9 @@
-import { DateInput } from '@heroui/react'
-import { fromAbsolute, now, type ZonedDateTime } from '@internationalized/date'
-import { I18nProvider } from '@react-aria/i18n'
 import type { UTCTime } from 'nebulosa/src/indi.device'
 import { useState } from 'react'
 import { Button } from './components/Button'
+import { DateTimeInput } from './components/DateTimeInput'
 import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
-import { IconButton, type IconButtonProps } from './IconButton'
 import { Modal } from './Modal'
 
 export interface TimeProps extends UTCTime {
@@ -16,20 +13,15 @@ export interface TimeProps extends UTCTime {
 }
 
 export function Time({ id, onTimeChange, onClose, ...time }: TimeProps) {
-	// https://react-spectrum.adobe.com/internationalized/date/ZonedDateTime.html
-	const [date, setDate] = useState<ZonedDateTime | null>(fromAbsolute(time.utc, 'UTC'))
+	const [date, setDate] = useState<Temporal.PlainDateTime | undefined>(() => Temporal.Instant.fromEpochMilliseconds(time.utc).toZonedDateTimeISO('UTC').toPlainDateTime())
 	const [offset, setOffset] = useState(time.offset)
 
 	function handleChoose() {
 		if (date && onTimeChange) {
-			const utc = date.toDate().getTime()
+			const utc = date.toZonedDateTime('UTC').toInstant().epochMilliseconds
 			onTimeChange({ utc, offset })
 			onClose?.()
 		}
-	}
-
-	function handleNow() {
-		setDate(now('UTC'))
 	}
 
 	const Footer = <Button color="success" label="Apply" onPointerUp={handleChoose} startContent={<Icons.Check />} />
@@ -37,17 +29,9 @@ export function Time({ id, onTimeChange, onClose, ...time }: TimeProps) {
 	return (
 		<Modal footer={Footer} header="Time" id={id} maxWidth="328px" onHide={onClose}>
 			<div className="mt-0 grid grid-cols-3 gap-2">
-				<I18nProvider locale="sv-SE">
-					<DateInput className="col-span-2" endContent={<Now onPointerUp={handleNow} />} granularity="second" hideTimeZone hourCycle={24} label="UTC" onChange={setDate} value={date} />
-				</I18nProvider>
+				<DateTimeInput className="col-span-2" label="UTC" granularity="second" onValueChange={setDate} value={date} />
 				<NumberInput className="col-span-1" label="Offset (min)" maxValue={720} minValue={-720} onValueChange={setOffset} step={30} value={offset} />
 			</div>
 		</Modal>
 	)
-}
-
-type NowProps = Omit<IconButtonProps, 'variant' | 'icon'>
-
-function Now({ color = 'secondary', size = 'sm', ...props }: NowProps) {
-	return <IconButton color={color} icon={Icons.CalendarToday} size={size} tooltipContent="Now" {...props} />
 }

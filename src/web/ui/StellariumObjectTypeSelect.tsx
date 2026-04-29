@@ -1,61 +1,20 @@
-import { type SelectedItemProps, type SelectedItems, SelectItem } from '@heroui/react'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
-import { EnumMultipleSelect, type EnumMultipleSelectProps } from './EnumMultipleSelect'
+import { MultiSelect, type MultiSelectProps } from './components/MultiSelect'
 
-const TYPES: readonly [StellariumObjectType, string, string][] = [
-	[29, 'Star', 'S'],
-	[6, 'Star Cluster', 'SC'],
-	[7, 'Open Star Cluster', 'OC'],
-	[8, 'Globular Star Cluster', 'GC'],
-	[11, 'Nebula', 'N'],
-	[12, 'Planetary Nebula', 'PN'],
-	[13, 'Dark Nebula', 'DN'],
-	[14, 'Reflection Nebula', 'RN'],
-	[15, 'Bipolar Nebula', 'BN'],
-	[16, 'Emission Nebula', 'EN'],
-	[18, 'HII Region', 'HII'],
-	[10, 'Star Cloud', 'SCL'],
-	[1, 'Galaxy', 'G'],
-	[2, 'Active Galaxy', 'AG'],
-	[3, 'Radio Galaxy', 'RG'],
-	[4, 'Interacting Galaxy', 'IG'],
-	[5, 'Quasar', 'Q'],
-	[9, 'Stellar Association', 'SA'],
-	[17, 'Cluster Associated with Nebulosity', 'CAN'],
-	[19, 'Supernova Remnant', 'SNR'],
-	[20, 'Interstellar Matter', 'ISM'],
-	[21, 'Emission Object', 'EO'],
-	[22, 'BL Lacertae Object', 'BL'],
-	[23, 'Blazar', 'BLZ'],
-	[24, 'Molecular Cloud', 'MCL'],
-	[25, 'Young Stellar Object', 'YSO'],
-	[26, 'Possible Quasar', 'PQ'],
-	[27, 'Possible Planetary Nebula', 'PPN'],
-	[28, 'Protoplanetary Nebula', 'PPN'],
-	[32, 'Supernova Candidate', 'SNC'],
-	[33, 'Super Nova Remnant Candidate', 'SNRC'],
-	[34, 'Cluster of Galaxies', 'CG'],
-	[35, 'Part of Galaxy', 'PG'],
-	[36, 'Region of the Sky', 'RS'],
-]
+const ITEMS = [29, 6, 7, 8, 11, 12, 13, 14, 15, 16, 18, 10, 1, 2, 3, 4, 5, 9, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 32, 33, 34, 35, 36] as const
+// oxfmt-ignore
+const LABELS = ['Galaxy', 'Active Galaxy', 'Radio Galaxy', 'Interacting Galaxy', 'Quasar', 'Star Cluster', 'Open Star Cluster', 'Globular Star Cluster', 'Stellar Association', 'Star Cloud', 'Nebula', 'Planetary Nebula', 'Dark Nebula', 'Reflection Nebula', 'Bipolar Nebula', 'Emission Nebula', 'Cluster Associated with Nebulosity', 'HII Region', 'Supernova Remnant', 'Interstellar Matter', 'Emission Object', 'BL Lacertae Object', 'Blazar', 'Molecular Cloud', 'Young Stellar Object', 'Possible Quasar', 'Possible Planetary Nebula', 'Protoplanetary Nebula', 'Star', 'Supernova Candidate', 'Super Nova Remnant Candidate', 'Cluster of Galaxies', 'Part of Galaxy', 'Region of the Sky']
 
-export interface StellariumObjectTypeSelectProps extends Omit<EnumMultipleSelectProps, 'children' | 'value' | 'onValueChange'> {
-	readonly value: readonly StellariumObjectType[]
-	readonly onValueChange: (value: StellariumObjectType[]) => void
+export type StellariumObjectTypeSelectProps = Omit<MultiSelectProps<StellariumObjectType>, 'children' | 'items'>
+
+function StellariumObjectTypeItem(item: StellariumObjectType) {
+	return <span>{LABELS[item]}</span>
 }
-
-const StellariumObjectTypeItem = (item: (typeof TYPES)[number]) => <SelectItem key={item[0]}>{item[1]}</SelectItem>
-
-const StellariumObjectTypeValue = (item: StellariumObjectType) => item.toFixed(0)
-
-const StellariumObjectTypeSelectedItems = (items: SelectedItems) => <div className="mt-2 flex flex-nowrap gap-2">{items.map(StellariumObjectTypeRenderedItem).join(', ')}</div>
-
-const StellariumObjectTypeRenderedItem = (item: SelectedItemProps) => TYPES.find((e) => e[0] === +(item.key as never))![2]
 
 export function StellariumObjectTypeSelect({ label = 'Type', value, onValueChange, ...props }: StellariumObjectTypeSelectProps) {
 	return (
-		<EnumMultipleSelect {...props} classNames={{ trigger: 'min-h-15!' }} isClearable label={label} onValueChange={(value) => onValueChange(value.map(Number))} placeholder="All" renderValue={StellariumObjectTypeSelectedItems} value={value.map(StellariumObjectTypeValue)}>
-			{TYPES.map(StellariumObjectTypeItem)}
-		</EnumMultipleSelect>
+		<MultiSelect clearable label={label} items={ITEMS} {...props}>
+			{StellariumObjectTypeItem}
+		</MultiSelect>
 	)
 }

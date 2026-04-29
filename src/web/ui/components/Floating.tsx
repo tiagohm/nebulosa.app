@@ -10,7 +10,7 @@ const ARROW_INSET = 12
 const floatingContentStyles = tv({
 	slots: {
 		base: 'fixed left-0 top-0 isolate z-10000001 overflow-visible',
-		content: 'relative z-10 max-w-80 leading-inherit rounded-lg bg-neutral-950 p-3 text-xs font-medium whitespace-pre-wrap text-neutral-100 shadow-lg shadow-black/40',
+		content: 'relative z-10 leading-inherit rounded-lg bg-neutral-950 p-3 text-xs font-medium whitespace-pre-wrap text-neutral-100 shadow-lg shadow-black/40',
 		arrow: 'pointer-events-none absolute z-0 size-2.5 rotate-45 bg-neutral-950 shadow-sm shadow-black/30',
 	},
 	variants: {

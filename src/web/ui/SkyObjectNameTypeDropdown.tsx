@@ -1,24 +1,29 @@
-import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from '@heroui/react'
 import { SKY_OBJECT_NAME_TYPES } from '@/shared/types'
-import { stopPropagationDesktopOnly } from '@/shared/util'
-import { Button, type ButtonProps } from './components/Button'
+import { Dropdown, DropdownItem, type DropdownProps } from './components/Dropdown'
 
-export interface SkyObjectNameTypeDropdownProps extends Omit<ButtonProps, 'isIconOnly' | 'value'> {
+export interface SkyObjectNameTypeDropdownProps extends Omit<DropdownProps, 'children'> {
 	readonly value: number
 	readonly onValueChange: (value: number) => void
 }
 
-const SkyObjectNameItem = (name: string, i: number) => <DropdownItem key={i - 1}>{name}</DropdownItem>
-
-export function SkyObjectNameTypeDropdown({ value, onValueChange, size = 'sm', variant = 'ghost', ...props }: SkyObjectNameTypeDropdownProps) {
+function SkyObjectNameItem(name: string, index: number, onPointerDown: React.PointerEventHandler<HTMLElement>) {
 	return (
-		<Dropdown>
-			<DropdownTrigger>
-				<Button {...props} label={SKY_OBJECT_NAME_TYPES[value + 1]} onPointerUp={stopPropagationDesktopOnly} size={size} variant={variant} />
-			</DropdownTrigger>
-			<DropdownMenu className="no-scrollbar max-h-60 overflow-auto" onAction={(key) => onValueChange(+key)} selectedKeys={new Set([`${value}`])} selectionMode="single">
-				{SKY_OBJECT_NAME_TYPES.map(SkyObjectNameItem)}
-			</DropdownMenu>
+		<DropdownItem data-index={index} onPointerDown={onPointerDown}>
+			{name}
+		</DropdownItem>
+	)
+}
+
+export function SkyObjectNameTypeDropdown({ value, onValueChange, variant = 'ghost', ...props }: SkyObjectNameTypeDropdownProps) {
+	function handleOnPointer(event: React.PointerEvent<HTMLElement>) {
+		event.stopPropagation()
+		const index = +event.currentTarget.dataset.index!
+		onValueChange(index - 1)
+	}
+
+	return (
+		<Dropdown label={SKY_OBJECT_NAME_TYPES[value + 1]} variant={variant} {...props}>
+			{SKY_OBJECT_NAME_TYPES.map((name, index) => SkyObjectNameItem(name, index, handleOnPointer))}
 		</Dropdown>
 	)
 }

@@ -10,6 +10,7 @@ import { Chip } from './components/Chip'
 import { DateTimeInput } from './components/DateTimeInput'
 import { Dropdown, DropdownItem } from './components/Dropdown'
 import { List } from './components/List'
+import { MultiSelect } from './components/MultiSelect'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { ProgressBar } from './components/ProgressBar'
@@ -38,6 +39,7 @@ export function Demo() {
 			<Tab id="8">Calendars</Tab>
 			<Tab id="9">Lists</Tab>
 			<Tab id="10">Selects</Tab>
+			<Tab id="15">Multi Selects</Tab>
 			<Tab id="11">Dropdowns</Tab>
 			<Tab id="12">Progress Bars</Tab>
 			<TabPanel id="0" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
@@ -48,9 +50,6 @@ export function Demo() {
 			</TabPanel>
 			<TabPanel id="2" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
 				<TextInputs />
-			</TabPanel>
-			<TabPanel id="14" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
-				<DateInputs />
 			</TabPanel>
 			<TabPanel id="3" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
 				<NumberInputs />
@@ -84,6 +83,12 @@ export function Demo() {
 			</TabPanel>
 			<TabPanel id="13" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
 				<ButtonGroups />
+			</TabPanel>
+			<TabPanel id="14" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<DateTimeInputs />
+			</TabPanel>
+			<TabPanel id="15" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
+				<MultiSelects />
 			</TabPanel>
 		</Tabs>
 	)
@@ -176,7 +181,7 @@ const TextInputs = memo(() => {
 	return elements
 })
 
-const DateInputs = memo(() => {
+const DateTimeInputs = memo(() => {
 	const [value, setValue] = useState(() => Temporal.Now.plainDateTimeISO())
 	const formats = [
 		{ format: 'YMD', granularity: 'none' },
@@ -432,4 +437,48 @@ const ProgressBars = memo(() => {
 	}
 
 	return <div className="grid grid-cols-3 items-center gap-3">{elements}</div>
+})
+
+const MultiSelects = memo(() => {
+	const [value, setValue] = useState(['A'])
+	const items = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'] as const
+
+	const random = mulberry32(0)
+	const elements: React.ReactNode[] = []
+	let key = 0
+
+	for (const size of SIZES) {
+		for (const color of COLORS) {
+			const startContent = random() < 0.5 ? HeartIcon : undefined
+			const endContent = random() < 0.5 ? GalaxyIcon : undefined
+			const disabled = random() < 0.05
+			const readOnly = random() < 0.05
+			const disallowEmptySelection = random() < 0.05
+			const label = key.toFixed(0)
+
+			elements.push(
+				<MultiSelect
+					clearable
+					color={color}
+					items={items}
+					disallowEmptySelection={disallowEmptySelection}
+					key={key++}
+					size={size}
+					disabled={disabled}
+					readOnly={readOnly}
+					startContent={startContent}
+					endContent={endContent}
+					label={label}
+					description="Select an item"
+					className="w-100"
+					itemHeight={32}
+					value={value}
+					onValueChange={setValue}>
+					{(i) => <span className="flex h-full w-full items-center justify-center">{i}</span>}
+				</MultiSelect>,
+			)
+		}
+	}
+
+	return <div className="grid grid-cols-3 items-center gap-2">{elements}</div>
 })

@@ -59,7 +59,6 @@ export const SkyAtlas = memo(() => {
 
 const Header = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
-	const { tab } = useSnapshot(atlas.state)
 	const { time } = useSnapshot(atlas.state.request)
 
 	return (
@@ -154,7 +153,7 @@ const HeaderFilterPopover = memo(() => {
 
 	return (
 		<Activity mode={tab === 'planet' || tab === 'galaxy' || tab === 'satellite' ? 'visible' : 'hidden'}>
-			<Popover trigger={<IconButton color="secondary" icon={Icons.Filter} tooltipContent="Filter" variant="flat" />}>
+			<Popover className="max-w-140" trigger={<IconButton color="secondary" icon={Icons.Filter} tooltipContent="Filter" variant="flat" />}>
 				<Activity mode={tab === 'planet' ? 'visible' : 'hidden'}>
 					<PlanetFilter />
 				</Activity>
@@ -174,7 +173,7 @@ const PlanetFilter = memo(() => {
 	const { name, type } = useSnapshot(planet.state.search, { sync: true })
 
 	return (
-		<div className="grid min-w-77 grid-cols-12 items-center gap-2 p-2">
+		<div className="grid w-full grid-cols-12 items-center gap-2 p-2">
 			<TextInput className="col-span-full" onValueChange={(value) => planet.update('name', value)} placeholder="Search" value={name} />
 			<PlanetTypeSelect className="col-span-full" onValueChange={(value) => planet.update('type', value)} value={type} />
 		</div>
@@ -188,14 +187,14 @@ const GalaxyFilter = memo(() => {
 	const { loading } = useSnapshot(dso.state)
 
 	return (
-		<div className="grid grid-cols-12 items-center gap-2 p-2">
-			<TextInput className="col-span-full" onValueChange={(value) => dso.update('name', value)} placeholder="Search" startContent={<SkyObjectNameTypeDropdown color="secondary" onValueChange={(value) => dso.update('nameType', value)} value={nameType} />} value={name} />
-			<ConstellationSelect className="col-span-6" onValueChange={(value) => dso.update('constellations', value)} value={constellations} />
-			<StellariumObjectTypeSelect className="col-span-6" onValueChange={(value) => dso.update('types', value)} value={types} />
+		<div className="grid w-full grid-cols-12 items-center gap-2 p-2">
+			<TextInput className="col-span-full" onValueChange={(value) => dso.update('name', value)} placeholder="Search" startContent={<SkyObjectNameTypeDropdown color="secondary" onValueChange={(value) => dso.update('nameType', value)} value={nameType} size="sm" />} value={name} />
+			<ConstellationSelect className="col-span-full" onValueChange={(value) => dso.update('constellations', value)} value={constellations} />
+			<StellariumObjectTypeSelect className="col-span-full" onValueChange={(value) => dso.update('types', value)} value={types} />
 			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="RA" onValueChange={(value) => dso.update('rightAscension', value)} value={rightAscension} />
 			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="DEC" onValueChange={(value) => dso.update('declination', value)} value={declination} />
 			<NumberInput className="col-span-4" fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} step={0.1} value={radius} />
-			<Slider className="col-span-5" endContent={`min: ${magnitudeMin.toFixed(1)} max: ${magnitudeMax.toFixed(1)}`} label="Magnitude" maxValue={30} minValue={-30} onValueChange={dso.updateMagnitude} step={0.1} value={[magnitudeMin, magnitudeMax]} />
+			<Slider className="col-span-5" startContent={magnitudeMin.toFixed(1)} endContent={magnitudeMax.toFixed(1)} label="Magnitude" maxValue={30} minValue={-30} onValueChange={dso.updateMagnitude} step={0.1} classNames={{ endContent: 'w-[5ch]', startContent: 'w-[5ch]' }} value={[magnitudeMin, magnitudeMax]} />
 			<Checkbox className="col-span-4 flex w-full max-w-none justify-center" label="Show visible" onValueChange={(value) => dso.update('visible', value)} value={visible} />
 			<NumberInput className="col-span-3" disabled={!visible || loading} label="Above (°)" maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} value={visibleAbove} />
 			<div className="col-span-full flex flex-row items-center justify-center">
@@ -212,7 +211,7 @@ const SatelliteFilter = memo(() => {
 	const { loading } = useSnapshot(satellite.state)
 
 	return (
-		<div className="grid grid-cols-12 items-center gap-2 p-2">
+		<div className="grid w-full grid-cols-12 items-center gap-2 p-2">
 			<TextInput className="col-span-full" label="Search" onValueChange={(value) => satellite.update('text', value)} value={text} />
 			<p className="col-span-full font-bold">CATEGORY</p>
 			<SatelliteCategoryChipGroup className="col-span-full" onValueChange={(value) => satellite.update('category', value)} value={category} />
@@ -431,14 +430,14 @@ const PlanetTab = memo(() => {
 		atlas.toggleBookmark('planet', name!, code!, favorite)
 	}
 
-	function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
+	function handlePointer(event: React.PointerEvent<HTMLElement>) {
 		const code = event.currentTarget.dataset.code!
 		return planet.select(code)
 	}
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2">
-			<List itemCount={items.length}>{(i) => PlanetItem(items[i], handlePointerUp)}</List>
+			<List itemCount={items.length}>{(i) => PlanetItem(items[i], handlePointer)}</List>
 			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleFavoriteChange} position={position} twilight={twilight} />
 		</div>
 	)
@@ -509,7 +508,7 @@ const AsteroidSearchTab = memo(() => {
 	const { loading, selected, list } = useSnapshot(asteroid.state)
 	const { text } = useSnapshot(asteroid.state.search, { sync: true })
 
-	function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
+	function handlePointer(event: React.PointerEvent<HTMLElement>) {
 		const pdes = event.currentTarget.dataset.pdes!
 		return asteroid.select(pdes)
 	}
@@ -522,7 +521,7 @@ const AsteroidSearchTab = memo(() => {
 			</div>
 			{list ? (
 				<List className="mt-2" fullWidth itemCount={list.length}>
-					{(i) => AsteroidSearchListItem(list[i], handlePointerUp)}
+					{(i) => AsteroidSearchListItem(list[i], handlePointer)}
 				</List>
 			) : selected?.parameters ? (
 				<List className="mt-2" fullWidth itemCount={selected.parameters.length}>

@@ -1,7 +1,7 @@
 import type { ExposureTimeUnit } from 'src/shared/types'
 import { Dropdown, DropdownItem, type DropdownProps } from './components/Dropdown'
 
-export interface ExposureTimeUnitDropdownProps extends Omit<DropdownProps, 'label'> {
+export interface ExposureTimeUnitDropdownProps extends Omit<DropdownProps, 'label' | 'children'> {
 	readonly value: ExposureTimeUnit
 	readonly onValueChange: (unit: ExposureTimeUnit) => void
 }

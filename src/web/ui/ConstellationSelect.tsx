@@ -1,19 +1,16 @@
-import { SelectItem } from '@heroui/react'
 import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa/src/constellation'
-import { EnumMultipleSelect, type EnumMultipleSelectProps } from './EnumMultipleSelect'
+import { type MultiSelectProps, MultiSelect } from './components/MultiSelect'
 
-export type ConstellationSelectProps = Omit<EnumMultipleSelectProps<Constellation>, 'children'>
+export type ConstellationSelectProps = Omit<MultiSelectProps<Constellation>, 'children' | 'items'>
 
-const ConstellationItem = (c: Constellation) => (
-	<SelectItem key={c}>
-		{CONSTELLATIONS[c].name} ({c})
-	</SelectItem>
-)
+function ConstellationItem(c: Constellation) {
+	return <span>{CONSTELLATIONS[c].name}</span>
+}
 
 export function ConstellationSelect({ label = 'Constellation', ...props }: ConstellationSelectProps) {
 	return (
-		<EnumMultipleSelect {...props} classNames={{ trigger: 'min-h-15!' }} isClearable label={label} placeholder="All" renderValue={(items) => <div className="mt-2 flex flex-nowrap gap-2">{items.map((e) => e.key).join(', ')}</div>}>
-			{CONSTELLATION_LIST.map(ConstellationItem)}
-		</EnumMultipleSelect>
+		<MultiSelect clearable label={label} items={CONSTELLATION_LIST} {...props}>
+			{ConstellationItem}
+		</MultiSelect>
 	)
 }

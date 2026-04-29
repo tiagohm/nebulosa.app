@@ -40,6 +40,7 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 	const hideTimerRef = useRef<number | null>(null)
 	const hoveringRef = useRef(false)
 	const focusingRef = useRef(false)
+	const pointerPressingRef = useRef(false)
 	const mounted = typeof document !== 'undefined'
 	const hasContent = content !== undefined && content !== null && content !== false
 	const isControlled = open !== undefined
@@ -128,6 +129,7 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 	// Forces the tooltip closed when content disappears or the trigger becomes disabled.
 	useEffect(() => {
 		if (disabled || !hasContent) {
+			pointerPressingRef.current = false
 			hoveringRef.current = false
 			focusingRef.current = false
 			hideTooltip()
@@ -142,14 +144,31 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 			scheduleOpen(event.currentTarget)
 		}
 
+		// Tracks pointer activation so pointer focus does not pin hover tooltips open.
+		function handlePointerDown() {
+			pointerPressingRef.current = true
+			if (trigger !== 'focus') focusingRef.current = false
+		}
+
+		// Clears the pointer activation state after the click gesture completes.
+		function handlePointerUp() {
+			pointerPressingRef.current = false
+		}
+
 		// Tracks hover exit on the trigger element.
 		function handlePointerLeave() {
+			pointerPressingRef.current = false
 			hoveringRef.current = false
 			scheduleClose()
 		}
 
 		// Tracks focus entry on the trigger element.
 		function handleFocus(event: React.FocusEvent<HTMLElement>) {
+			if (trigger !== 'focus' && pointerPressingRef.current) {
+				handleTriggerRef(event.currentTarget)
+				return
+			}
+
 			focusingRef.current = true
 			scheduleOpen(event.currentTarget)
 		}
@@ -157,6 +176,7 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 		// Tracks focus exit on the trigger element.
 		function handleBlur(event: React.FocusEvent<HTMLElement>) {
 			if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+			pointerPressingRef.current = false
 			focusingRef.current = false
 			scheduleClose()
 		}
@@ -181,14 +201,26 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 					handlePointerEnter(event)
 					child.props.onPointerEnter?.(event)
 				},
+				onPointerDown: (event) => {
+					handlePointerDown()
+					child.props.onPointerDown?.(event)
+				},
+				onPointerUp: (event) => {
+					handlePointerUp()
+					child.props.onPointerUp?.(event)
+				},
 				onPointerLeave: (event) => {
 					handlePointerLeave()
 					child.props.onPointerLeave?.(event)
 				},
+				onPointerCancel: (event) => {
+					handlePointerLeave()
+					child.props.onPointerCancel?.(event)
+				},
 			})
 		} else {
 			children = (
-				<span className="w-fit" onBlur={handleBlur} onFocus={handleFocus} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave} ref={handleTriggerRef}>
+				<span className="w-fit" onBlur={handleBlur} onFocus={handleFocus} onPointerEnter={handlePointerEnter} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} onPointerLeave={handlePointerLeave} onPointerCancel={handlePointerLeave} ref={handleTriggerRef}>
 					{children}
 				</span>
 			)

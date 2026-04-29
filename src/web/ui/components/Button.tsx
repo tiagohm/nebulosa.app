@@ -117,7 +117,7 @@ export function Button({ children, className, classNames, color, disabled = fals
 	const labelContent = showContent && content !== undefined && content !== null ? hasChildren ? content : <span className={tw(styles.label(), classNames?.label)}>{content}</span> : undefined
 
 	return (
-		<Tooltip content={tooltipContent} disabled={tooltipDisabled} placement={tooltipPlacement}>
+		<Tooltip content={tooltipContent} disabled={blocked || tooltipDisabled} placement={tooltipPlacement}>
 			<div {...props} className={tw(styles.base(), stateClassName, className, classNames?.base)} ref={ref} role="button" tabIndex={blocked ? undefined : (tabIndex ?? 0)}>
 				{/* Swap the leading content for a spinner while loading. */}
 				{loading ? <Icons.Loading className={tw(styles.loadingIcon(), classNames?.loadingIcon)} /> : startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}

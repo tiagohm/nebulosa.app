@@ -26,6 +26,7 @@
 
 html {
 	@apply m-0 h-dvh w-dvw touch-none overflow-hidden scroll-smooth bg-neutral-900 p-0 tabular-nums;
+	-webkit-tap-highlight-color: transparent;
 }
 
 html,

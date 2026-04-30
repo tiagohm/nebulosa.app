@@ -177,17 +177,17 @@ export class MountRemoteControlHandler {
 	start(mount: Mount, req: MountRemoteControlStart) {
 		if (req.protocol === 'STELLARIUM') {
 			if (!this.stellarium.has(mount)) {
-				const server = new StellariumProtocolServer(req.host, req.port, { handler: this.stellariumHandler })
+				const server = new StellariumProtocolServer({ handler: this.stellariumHandler })
 
-				if (server.start()) {
+				if (server.start(req.host, req.port)) {
 					this.stellarium.set(mount, server)
 				}
 			}
 		} else if (req.protocol === 'LX200') {
 			if (!this.lx200.has(mount)) {
-				const server = new Lx200ProtocolServer(req.host, req.port, { handler: this.lx200Handler, name: 'Nebulosa', version: '0.2.0' })
+				const server = new Lx200ProtocolServer({ handler: this.lx200Handler, name: 'Nebulosa', version: '0.2.0' })
 
-				if (server.start()) {
+				if (server.start(req.host, req.port)) {
 					this.lx200.set(mount, server)
 				}
 			}
@@ -215,7 +215,7 @@ export class MountRemoteControlHandler {
 	status(mount: Mount): MountRemoteControlStatus {
 		const a = this.lx200.get(mount)
 		const b = this.stellarium.get(mount)
-		return { LX200: !!a && { host: a.host, port: a.port }, STELLARIUM: !!b && { host: b.host, port: b.port } }
+		return { LX200: !!a && { host: a.hostname!, port: a.port }, STELLARIUM: !!b && { host: b.hostname!, port: b.port } }
 	}
 
 	private get(server: Lx200ProtocolServer | StellariumProtocolServer) {

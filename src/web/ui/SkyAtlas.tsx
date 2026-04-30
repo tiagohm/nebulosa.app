@@ -1,4 +1,3 @@
-import { Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from '@heroui/react'
 import { useMolecule } from 'bunshi/react'
 import { RAD2DEG } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
@@ -22,6 +21,7 @@ import { List, ListItem } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { Slider } from './components/Slider'
+import { Table } from './components/Table'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
 import { TextInput } from './components/TextInput'
 import { ConstellationSelect } from './ConstellationSelect'
@@ -592,33 +592,25 @@ const GalaxyTab = memo(() => {
 
 const GalaxyTable = memo(() => {
 	const galaxy = useMolecule(GalaxyMolecule)
-	const { sort } = useSnapshot(galaxy.state.request)
+	// const { sort } = useSnapshot(galaxy.state.request)
 	const { result } = useSnapshot(galaxy.state)
 
 	return (
-		<Table className="relative col-span-full max-h-80 min-h-[200px]" onRowAction={(key) => galaxy.select(+(key as never))} onSortChange={(value) => galaxy.update('sort', value)} removeWrapper selectionMode="single" sortDescriptor={sort}>
-			<TableHeader>
-				<TableColumn key="name">Name</TableColumn>
-				<TableColumn allowsSorting className="text-center" key="magnitude">
-					Mag.
-				</TableColumn>
-				<TableColumn allowsSorting className="text-center" key="type">
-					Type
-				</TableColumn>
-				<TableColumn allowsSorting className="text-center" key="constellation">
-					Const.
-				</TableColumn>
-			</TableHeader>
-			<TableBody items={result}>
-				{(item) => (
-					<TableRow key={item.id}>
-						<TableCell className="max-w-50 overflow-hidden whitespace-nowrap">{skyObjectName(item.name, item.constellation)}</TableCell>
-						<TableCell className="text-center">{item.magnitude}</TableCell>
-						<TableCell className="max-w-40 overflow-hidden text-center whitespace-nowrap">{skyObjectType(item.type)}</TableCell>
-						<TableCell className="text-center">{CONSTELLATION_LIST[item.constellation]}</TableCell>
-					</TableRow>
-				)}
-			</TableBody>
+		<Table rowCount={result.length} columnCount={4} className="col-span-full" onAction={galaxy.select}>
+			<span>Name</span>
+			<span>Mag.</span>
+			<span>Type</span>
+			<span>Const.</span>
+			{result.map((item) => {
+				return (
+					<>
+						<span>{skyObjectName(item.name, item.constellation)}</span>
+						<span>{item.magnitude}</span>
+						<span>{skyObjectType(item.type)}</span>
+						<span>{CONSTELLATION_LIST[item.constellation]}</span>
+					</>
+				)
+			})}
 		</Table>
 	)
 })
@@ -656,31 +648,23 @@ const SatelliteTab = memo(() => {
 
 const SatelliteTable = memo(() => {
 	const satellite = useMolecule(SatelliteMolecule)
-	const { sort } = useSnapshot(satellite.state.request)
+	// const { sort } = useSnapshot(satellite.state.request)
 	const { result } = useSnapshot(satellite.state)
 
 	return (
-		<Table className="relative col-span-full max-h-80 min-h-[200px]" onRowAction={(key) => satellite.select(+(key as never))} onSortChange={(value) => satellite.update('sort', value)} removeWrapper selectionMode="single" sortDescriptor={sort}>
-			<TableHeader>
-				<TableColumn allowsSorting className="text-center" key="id">
-					ID
-				</TableColumn>
-				<TableColumn allowsSorting className="text-center" key="name">
-					Name
-				</TableColumn>
-				<TableColumn className="text-center" key="group">
-					Group
-				</TableColumn>
-			</TableHeader>
-			<TableBody items={result}>
-				{(item) => (
-					<TableRow key={item.id}>
-						<TableCell className="max-w-50 overflow-hidden whitespace-nowrap">{item.id}</TableCell>
-						<TableCell className="text-center">{item.name}</TableCell>
-						<TableCell className="max-w-40 overflow-hidden text-center whitespace-nowrap">{item.groups.join(', ')}</TableCell>
-					</TableRow>
-				)}
-			</TableBody>
+		<Table rowCount={result.length} columnCount={4} className="col-span-full" onAction={satellite.select}>
+			<span>ID</span>
+			<span>Name</span>
+			<span>Group</span>
+			{result.map((item) => {
+				return (
+					<>
+						<span>{item.id}</span>
+						<span>{item.name}</span>
+						<span>{item.groups.join(', ')}</span>
+					</>
+				)
+			})}
 		</Table>
 	)
 })

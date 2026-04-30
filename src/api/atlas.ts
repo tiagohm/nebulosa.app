@@ -356,8 +356,9 @@ export class AtlasHandler {
 
 		if (where.length === 0) where.push('1 = 1')
 
-		const sortDirection = req.sort.direction === 'ascending' ? 'ASC' : 'DESC'
-		const q = `SELECT DISTINCT d.id, d.magnitude, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ${req.nameType >= 0 ? `AND n.type = ${req.nameType}` : 'ORDER BY n.type'} LIMIT 1) as name FROM dsos d ${joinWhere.length > 1 ? `JOIN names n ON ${joinWhere.join(' AND ')}` : ''} WHERE ${where.join(' AND ')} ORDER BY d.${req.sort.column} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
+		const sortColumn = 'magnitude' // req.sort.column
+		const sortDirection = 'ASC' // req.sort.direction === 'ascending' ? 'ASC' : 'DESC'
+		const q = `SELECT DISTINCT d.id, d.magnitude, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ${req.nameType >= 0 ? `AND n.type = ${req.nameType}` : 'ORDER BY n.type'} LIMIT 1) as name FROM dsos d ${joinWhere.length > 1 ? `JOIN names n ON ${joinWhere.join(' AND ')}` : ''} WHERE ${where.join(' AND ')} ORDER BY d.${sortColumn} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
 
 		return nebulosa.query<SkyObjectSearchItem, []>(q).all()
 	}
@@ -529,7 +530,7 @@ export class AtlasHandler {
 	}
 
 	searchSatellites(req: SearchSatellite) {
-		const { text, category, page, limit, sort } = req
+		const { text, category, page, limit } = req
 		const offset = Math.max(0, page - 1) * limit
 		const name = text.trim().toUpperCase()
 		const searchGroups = category.length === 0 ? req.groups : req.groups.filter((e) => category.includes(SATELLITE_GROUP_TYPES[e].category))
@@ -544,8 +545,9 @@ export class AtlasHandler {
 
 		if (searchGroups.length > 0) joinWhere.push(`sg.name IN (${searchGroups.map((e) => `'${e}'`).join(',')})`)
 
-		const sortDirection = req.sort.direction === 'ascending' ? 'ASC' : 'DESC'
-		const q = `SELECT DISTINCT s.id, s.name, s.line1, s.line2 FROM satellites s ${joinWhere.length > 1 ? `JOIN satelliteGroups sg ON ${joinWhere.join(' AND ')}` : ''} ${where.join(' AND ')} ORDER BY s.${sort.column ?? 'name'} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
+		const sortColumn = 'name' // req.sort.column
+		const sortDirection = 'ASC' // req.sort.direction === 'ascending' ? 'ASC' : 'DESC'
+		const q = `SELECT DISTINCT s.id, s.name, s.line1, s.line2 FROM satellites s ${joinWhere.length > 1 ? `JOIN satelliteGroups sg ON ${joinWhere.join(' AND ')}` : ''} ${where.join(' AND ')} ORDER BY s.${sortColumn} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
 		const satellites = SATELLITES.query<Satellite, []>(q).all()
 		for (const s of satellites) s.groups = SATELLITES.query<never, []>(`SELECT sg.name FROM satelliteGroups sg WHERE sg.satelliteId = ${s.id}`).values().flat() as never
 		return satellites

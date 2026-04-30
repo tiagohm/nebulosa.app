@@ -1,5 +1,5 @@
 import { mulberry32 } from 'nebulosa/src/random'
-import { memo, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { toast } from '../shared/toast'
 import { Badge } from './components/Badge'
 import { Breadcrumbs } from './components/Breadcrumbs'
@@ -20,6 +20,7 @@ import { SearchTextInput } from './components/SearchTextInput'
 import { Select } from './components/Select'
 import { Slider } from './components/Slider'
 import { Switch } from './components/Switch'
+import { Table } from './components/Table'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
@@ -44,6 +45,7 @@ export function Demo() {
 			<Tab id="15">Multi Selects</Tab>
 			<Tab id="11">Dropdowns</Tab>
 			<Tab id="12">Progress Bars</Tab>
+			<Tab id="17">Tables</Tab>
 			<TabPanel id="0" className="flex w-full flex-row flex-wrap items-center gap-2 p-4">
 				<Buttons />
 			</TabPanel>
@@ -94,6 +96,9 @@ export function Demo() {
 			</TabPanel>
 			<TabPanel id="16" className="flex w-full flex-col gap-3 p-4">
 				<BreadCrumbs />
+			</TabPanel>
+			<TabPanel id="17" className="flex w-full flex-col gap-3 p-4">
+				<Tables />
 			</TabPanel>
 		</Tabs>
 	)
@@ -390,9 +395,11 @@ const Chips = memo(() => {
 })
 
 const Lists = memo(() => {
+	const render = useCallback((i: number) => i, [])
+
 	return (
-		<List className="min-w-80" itemHeight={20} itemCount={100000} onAction={alert} classNames={{ item: 'text-center' }}>
-			{(i) => i}
+		<List className="min-w-80" itemHeight={20} itemCount={100000} onAction={alert} classNames={{ item: 'text-center' }} overscan={8}>
+			{render}
 		</List>
 	)
 })
@@ -519,4 +526,20 @@ const MultiSelects = memo(() => {
 	}
 
 	return <div className="grid grid-cols-3 items-center gap-2">{elements}</div>
+})
+
+const Tables = memo(() => {
+	return (
+		<Table className="min-w-80" rowHeight={28} columnCount={3} rowCount={2} onAction={(row, col) => alert(`row: ${row}, col: ${col}`)} overscan={8}>
+			<span>Name</span>
+			<span>Magnitude</span>
+			<span>Type</span>
+			<span>M1</span>
+			<span>8.4</span>
+			<span>Supernova Remnant</span>
+			<span>M2</span>
+			<span>6.3</span>
+			<span>Globular Cluster</span>
+		</Table>
+	)
 })

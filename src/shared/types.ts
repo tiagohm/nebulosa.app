@@ -1,4 +1,3 @@
-import type { SortDescriptor } from '@heroui/react'
 import type { MoleculeOrInterface } from 'bunshi'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
 import type { Angle } from 'nebulosa/src/angle'
@@ -233,7 +232,7 @@ export interface SearchSkyObject extends LocationAndTime {
 	readonly visibleAbove: number // deg
 	page: number
 	readonly limit: number
-	readonly sort: SortDescriptor
+	// readonly sort: SortDescriptor
 }
 
 export interface SkyObjectSearchItem {
@@ -288,7 +287,7 @@ export interface SearchSatellite {
 	page: number
 	readonly limit: number
 	category: SatelliteCategory[]
-	readonly sort: SortDescriptor
+	// readonly sort: SortDescriptor
 }
 
 // Confirmation
@@ -1228,10 +1227,10 @@ export const DEFAULT_SKY_OBJECT_SEARCH: SearchSkyObject = {
 	...DEFAULT_POSITION_OF_BODY,
 	page: 1,
 	limit: 4,
-	sort: {
-		column: 'magnitude',
-		direction: 'ascending',
-	},
+	// sort: {
+	// 	column: 'magnitude',
+	// 	direction: 'ascending',
+	// },
 }
 
 export const DEFAULT_BODY_POSITION: BodyPosition = {
@@ -1283,10 +1282,10 @@ export const DEFAULT_SEARCH_SATELLITE: SearchSatellite = {
 	category: ['SPECIAL', 'WEATHER', 'COMMUNICATION', 'NAVIGATION', 'SCIENTIFIC'],
 	page: 1,
 	limit: 4,
-	sort: {
-		column: 'name',
-		direction: 'ascending',
-	},
+	// sort: {
+	// 	column: 'name',
+	// 	direction: 'ascending',
+	// },
 }
 
 export const DEFAULT_SATELLITE: Satellite = {

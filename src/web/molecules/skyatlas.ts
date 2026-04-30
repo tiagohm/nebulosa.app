@@ -512,7 +512,7 @@ export const GalaxyMolecule = molecule(() => {
 		state.request[key] = value
 
 		// Search again if page or sort has been changed
-		if (key === 'page' || key === 'sort') void search(false)
+		if (key === 'page') void search(false)
 	}
 
 	function updateMagnitude(value: number | readonly number[]) {
@@ -548,8 +548,8 @@ export const GalaxyMolecule = molecule(() => {
 		update('page', state.request.page - 1)
 	}
 
-	async function select(id: number, force: boolean = true) {
-		const selected = state.result.find((dso) => dso.id === id)
+	async function select(row: number, col: number, force: boolean = true, rowMode: boolean = true) {
+		const selected = rowMode ? state.result[row] : state.result.find((dso) => dso.id === row)
 
 		// Fetches object's position and chart if a new one was selected
 		if (selected && (force || state.selected?.id !== selected.id)) {
@@ -645,7 +645,7 @@ export const SatelliteMolecule = molecule(() => {
 		state.request[key] = value
 
 		// Search again if page or sort has been changed
-		if (key === 'page' || key === 'sort') void search(false)
+		if (key === 'page') void search(false)
 	}
 
 	async function search(reset: boolean | React.PointerEvent) {
@@ -666,8 +666,8 @@ export const SatelliteMolecule = molecule(() => {
 		state.request.groups = [...DEFAULT_SEARCH_SATELLITE.groups]
 	}
 
-	async function select(id: number, force: boolean = true) {
-		const selected = state.result.find((dso) => dso.id === id)
+	async function select(row: number, col: number = 0, force: boolean = true, rowMode: boolean = true) {
+		const selected = rowMode ? state.result[row] : state.result.find((dso) => dso.id === row)
 
 		// Fetches object's position and chart if a new one was selected
 		if (selected && (force || state.selected?.id !== selected.id)) {
@@ -890,8 +890,8 @@ export const SkyAtlasMolecule = molecule(() => {
 	function selectBookmark({ type, code }: BookmarkItem) {
 		if (type === 'planet') void planet.select(code, false)
 		else if (type === 'asteroid') void asteroid.select(code)
-		else if (type === 'galaxy') void galaxy.select(+code, false)
-		else if (type === 'satellite') void satellite.select(+code, false)
+		else if (type === 'galaxy') void galaxy.select(+code, 0, false)
+		else if (type === 'satellite') void satellite.select(+code, 0, false)
 
 		state.tab = type
 		state.bookmark.show = false

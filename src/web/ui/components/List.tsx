@@ -93,26 +93,24 @@ function virtualRange(itemCount: number, itemHeight: number, overscan: number, s
 
 // Builds the visible item wrappers without copying a window of the full item array.
 function virtualItems(items: readonly React.ReactNode[] | ListItemRenderer, startIndex: number, endIndex: number, itemHeight: number, itemClassName: string, onClick?: React.MouseEventHandler) {
-	const elements = new Array<React.ReactNode>(endIndex - startIndex)
-	const render = items instanceof Function ? items : (i: number) => items[i]
+	const render = typeof items === 'function' ? items : (i: number) => items[i]
 
-	for (let itemIndex = startIndex, p = 0; itemIndex < endIndex; itemIndex++, p++) {
-		const slotIndex = itemIndex - startIndex
+	return Array.from({ length: endIndex - startIndex }, (_, slotIndex) => {
+		const itemIndex = startIndex + slotIndex
 
-		elements[p] = (
+		return (
 			<div className={itemClassName} key={slotIndex} data-index={itemIndex} onClick={onClick} style={{ height: itemHeight, transform: `translateY(${itemIndex * itemHeight}px)` }}>
 				{render(itemIndex)}
 			</div>
 		)
-	}
-
-	return elements
+	})
 }
 
 // Renders a fixed-height vertical list with only visible children mounted.
 export function List({ children, itemCount, className, classNames, emptyContent, fullWidth, itemHeight, onScroll, onAction, overscan, ref, ...props }: ListProps) {
-	const items = useMemo(() => (children instanceof Function ? [] : Children.toArray(children)), [children])
-	const length = children instanceof Function ? normalizeItemCount(itemCount) : items.length
+	const hasItemRenderer = typeof children === 'function'
+	const items = useMemo(() => (hasItemRenderer ? [] : Children.toArray(children)), [hasItemRenderer ? false : children])
+	const length = hasItemRenderer ? normalizeItemCount(itemCount) : items.length
 	const normalizedItemHeight = normalizeItemHeight(itemHeight)
 	const normalizedOverscan = normalizeOverscan(overscan)
 	const styles = listStyles({ fullWidth })
@@ -134,7 +132,7 @@ export function List({ children, itemCount, className, classNames, emptyContent,
 		}
 	}
 
-	const mountedItems = useMemo(() => virtualItems(children instanceof Function ? children : items, range.startIndex, range.endIndex, normalizedItemHeight, itemClassName, onAction && handleClick), [items, range.startIndex, range.endIndex, normalizedItemHeight, itemClassName])
+	const mountedItems = useMemo(() => virtualItems(hasItemRenderer ? children : items, range.startIndex, range.endIndex, normalizedItemHeight, itemClassName, onAction && handleClick), [hasItemRenderer ? children : items, range.startIndex, range.endIndex, normalizedItemHeight, itemClassName, onAction])
 
 	// Measures the scroll viewport and keeps the virtual range aligned to resize.
 	useEffect(() => {

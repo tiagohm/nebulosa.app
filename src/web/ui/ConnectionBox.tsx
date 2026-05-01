@@ -12,10 +12,10 @@ import { ConnectionEdit } from './ConnectionEdit'
 import { Icons } from './Icon'
 import { IconButton } from './IconButton'
 
-function ConnectionItem(item: Connection, index: number, selected: boolean) {
-	if (selected) {
+function ConnectionItem(item: Connection, index: number, selected: boolean, placement: 'trigger' | 'list') {
+	if (placement === 'trigger') {
 		return (
-			<div className="flex items-center justify-between gap-0 p-1" key={item.id}>
+			<div className="flex items-center justify-between gap-2 p-1 text-xs">
 				<div className="flex flex-col gap-0">
 					<span className="font-bold">{item.name}</span>
 					<Activity mode={item.type === 'SIMULATOR' ? 'hidden' : 'visible'}>
@@ -25,19 +25,19 @@ function ConnectionItem(item: Connection, index: number, selected: boolean) {
 					</Activity>
 				</div>
 				<div className="hidden items-center sm:flex">
-					<Chip color="primary">{item.type}</Chip>
+					<Chip color="primary" label={item.type} size="sm" />
 				</div>
 			</div>
 		)
 	}
 
 	return (
-		<div className="flex items-center justify-between gap-2">
+		<div className="flex items-center justify-between gap-2 text-xs">
 			<div className="flex flex-1 items-center justify-between gap-1">
 				<div className="mt-1 flex flex-col gap-1">
 					<span className="flex items-center gap-2 font-bold">
 						{item.name}
-						<Chip color="primary" label={item.type} />
+						<Chip color="primary" label={item.type} size="sm" />
 					</span>
 					<span className="text-default-500 text-tiny flex items-center gap-1">
 						<Activity mode={item.type === 'SIMULATOR' ? 'hidden' : 'visible'}>
@@ -66,7 +66,7 @@ export const ConnectionBox = memo(() => {
 
 	return (
 		<>
-			<div className="flex w-full max-w-120 flex-row items-center gap-2">
+			<div className="flex w-full flex-row items-center gap-2">
 				<IconButton color="success" disabled={loading || !!connected} icon={Icons.Plus} onPointerUp={connection.create} tooltipContent="New Connection" />
 				<Select className="flex-1" disabled={loading || !!connected} items={connections} onValueChange={handleValueChange} value={selected} size="lg">
 					{ConnectionItem}
@@ -89,12 +89,10 @@ const EditDropdown = memo(({ item }: EditDropdownProps) => {
 	const { connections } = useSnapshot(connection.state)
 
 	return (
-		<div className="flex items-center justify-center">
-			<Dropdown label={<Icons.VerticalMenu />}>
-				<DropdownItem label="Edit" onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit />} />
-				<DropdownItem label="Duplicate" onPointerUp={() => connection.duplicate(item)} startContent={<Icons.Copy />} />
-				<DropdownItem label="Delete" disabled={connections.length === 1} className="text-danger" color="danger" onPointerUp={() => connection.remove(item)} startContent={<Icons.Trash />} />
-			</Dropdown>
-		</div>
+		<Dropdown hideChevron itemHeight={28} label={<Icons.VerticalMenu />} variant="ghost">
+			<DropdownItem label="Edit" onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit />} />
+			<DropdownItem label="Duplicate" onPointerUp={() => connection.duplicate(item)} startContent={<Icons.Copy />} />
+			<DropdownItem label="Delete" disabled={connections.length === 1} className="bg-(--danger)" color="danger" onPointerUp={() => connection.remove(item)} startContent={<Icons.Trash />} />
+		</Dropdown>
 	)
 })

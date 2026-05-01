@@ -221,7 +221,7 @@ const server = Bun.serve({
 	reusePort: false,
 	development: process.env.NODE_ENV !== 'production' && {
 		hmr: true,
-		console: false,
+		console: true,
 	},
 	tls: secure && {
 		cert: Bun.file(cert),

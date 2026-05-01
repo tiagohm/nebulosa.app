@@ -82,6 +82,7 @@ export interface DropdownProps extends Omit<ButtonProps, 'children' | 'className
 	readonly portalContainer?: Element
 	readonly readOnly?: boolean
 	readonly onAction?: (index: number) => void
+	readonly hideChevron?: boolean
 }
 
 // Normalizes panel item height to match the trigger size by default.
@@ -113,6 +114,7 @@ export function Dropdown({
 	readOnly = false,
 	ref,
 	size = 'md',
+	hideChevron,
 	...props
 }: DropdownProps) {
 	const [uncontrolledIsOpen, setUncontrolledIsOpen] = useState(false)
@@ -201,7 +203,7 @@ export function Dropdown({
 	const TriggerEndContent = (
 		<>
 			{endContent}
-			<Icons.ChevronDown className={tw(styles.chevron(), classNames?.chevron)} />
+			{!hideChevron && <Icons.ChevronDown className={tw(styles.chevron(), classNames?.chevron)} />}
 		</>
 	)
 

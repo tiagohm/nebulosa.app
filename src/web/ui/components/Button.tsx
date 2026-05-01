@@ -1,14 +1,14 @@
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { tw } from '@/shared/util'
+import { stopPropagationForAll, tw } from '@/shared/util'
 import { Icons } from '../Icon'
 import { Tooltip, type TooltipPlacement } from './Tooltip'
 
 const buttonStyles = tv({
 	slots: {
-		base: ['inline-flex min-w-0 items-center justify-center gap-2 rounded-lg font-normal transition select-none', 'focus-visible:outline-none focus-visible:ring-0'],
+		base: ['inline-flex min-w-0 items-center justify-center font-normal transition select-none', 'focus-visible:outline-none focus-visible:ring-0'],
 		startContent: 'flex shrink-0 items-center justify-center',
 		loadingIcon: 'shrink-0 spin',
-		label: 'min-w-0 truncate text-center w-full',
+		label: 'flex shrink-0 items-center justify-center px-1',
 		endContent: 'flex shrink-0 items-center justify-center',
 	},
 	variants: {
@@ -74,6 +74,14 @@ const buttonStyles = tv({
 				base: 'w-full',
 			},
 		},
+		rounded: {
+			true: {
+				base: 'rounded-full aspect-square',
+			},
+			false: {
+				base: 'rounded-lg',
+			},
+		},
 	},
 	defaultVariants: {
 		variant: 'flat',
@@ -107,19 +115,18 @@ export interface ButtonProps extends Omit<React.ComponentPropsWithRef<'div'>, 'c
 }
 
 // Render the shared button surface with variant-aware color styling.
-export function Button({ children, className, classNames, color, disabled = false, endContent, fullWidth, hideChildrenOnLoading, label, loading = false, readOnly = false, ref, size, startContent, tabIndex, tooltipContent, tooltipDisabled, tooltipPlacement, variant, ...props }: ButtonProps) {
-	const styles = buttonStyles({ variant, size, color, fullWidth })
-	const hasChildren = children !== undefined && children !== null
+export function Button({ children, className, classNames, color, disabled = false, endContent, fullWidth, hideChildrenOnLoading, label, loading = false, readOnly = false, ref, size, startContent, tabIndex, tooltipContent, tooltipDisabled, tooltipPlacement, variant, rounded, ...props }: ButtonProps) {
+	const styles = buttonStyles({ variant, size, color, fullWidth, rounded })
+	const hasChildren = children !== undefined && children !== null && children !== ''
 	const content = hasChildren ? children : label
 	const blocked = disabled || loading || readOnly
 	const stateClassName = disabled ? 'cursor-not-allowed opacity-40 pointer-events-none' : loading ? 'cursor-progress opacity-40 pointer-events-none' : readOnly ? 'cursor-default opacity-90 pointer-events-none' : 'cursor-pointer'
 	const showContent = !(loading && hideChildrenOnLoading)
-	const labelContent = showContent && content !== undefined && content !== null ? hasChildren ? content : <span className={tw(styles.label(), classNames?.label)}>{content}</span> : undefined
+	const labelContent = showContent && content !== undefined && content !== null && content !== '' ? hasChildren ? content : <span className={tw(styles.label(), classNames?.label)}>{content}</span> : undefined
 
 	return (
 		<Tooltip content={tooltipContent} disabled={blocked || tooltipDisabled} placement={tooltipPlacement}>
-			<div {...props} className={tw(styles.base(), stateClassName, className, classNames?.base)} ref={ref} role="button" tabIndex={blocked ? undefined : (tabIndex ?? 0)}>
-				{/* Swap the leading content for a spinner while loading. */}
+			<div className={tw(styles.base(), stateClassName, className, classNames?.base)} ref={ref} role="button" tabIndex={blocked ? undefined : (tabIndex ?? 0)} {...stopPropagationForAll(props)}>
 				{loading ? <Icons.Loading className={tw(styles.loadingIcon(), classNames?.loadingIcon)} /> : startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
 				{labelContent}
 				{endContent !== undefined && endContent !== null && <span className={tw(styles.endContent(), classNames?.endContent)}>{endContent}</span>}

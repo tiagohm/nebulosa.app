@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
 import { assignRef, tw } from '@/shared/util'
 import { Icons } from '../Icon'
@@ -28,13 +28,13 @@ const multiSelectStyles = tv({
 		endContent: 'flex shrink-0 items-center gap-1 whitespace-nowrap',
 		clearButton: 'flex shrink-0 items-center justify-center rounded-full outline-none transition cursor-pointer',
 		chevron: 'flex shrink-0 items-center justify-center transition',
-		panel: 'w-(--multi-select-width) min-w-48 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg bg-neutral-950 p-0 text-neutral-100 shadow-lg shadow-black/40',
+		panel: 'min-w-(--multi-select-width) max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg bg-neutral-950 p-0 text-neutral-100 shadow-lg shadow-black/40',
 		panelContent: 'min-w-0',
 		header: 'p-2',
 		list: 'max-h-72 rounded-none bg-transparent text-neutral-100',
 		listItem: 'hover:bg-transparent',
-		option: 'flex h-full w-full min-w-0 items-center gap-2 text-left transition',
-		optionContent: 'min-w-0 flex-1 overflow-hidden',
+		option: 'flex h-full w-full min-w-max items-center gap-2 text-left transition',
+		optionContent: 'min-w-max flex-1 overflow-visible',
 		selectedIcon: 'flex shrink-0 items-center justify-center text-(--color-variant)',
 		footer: 'p-2',
 	},
@@ -64,8 +64,8 @@ const multiSelectStyles = tv({
 			},
 			lg: {
 				trigger: 'min-h-11 text-base',
-				startContent: 'px-5 text-base',
-				value: 'min-h-11 px-5 text-base',
+				startContent: 'px-4 text-base',
+				value: 'min-h-11 px-4 text-base',
 				label: 'left-5 right-5 top-1.5',
 				endContent: 'px-4 text-base',
 				clearButton: 'size-6 text-base',
@@ -256,6 +256,8 @@ export function MultiSelect<T>({
 	const [uncontrolledIsOpen, setUncontrolledIsOpen] = useState(false)
 	const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(null)
 	const [triggerWidth, setTriggerWidth] = useState(0)
+	const [optionContentWidth, setOptionContentWidth] = useState(0)
+	const optionContentWidthRef = useRef(0)
 	const selectedItems = value ?? EMPTY_SELECTED_ITEMS
 	const selectedEntries = useMemo(() => selectedItems.map((item) => ({ index: itemIndexOf(items, item, isItemEqual), item })), [items, selectedItems, isItemEqual])
 	const isControlledOpen = open !== undefined
@@ -264,7 +266,7 @@ export function MultiSelect<T>({
 	const hasLabel = label !== undefined && label !== null
 	const optionHeight = multiSelectItemHeight(size, itemHeight)
 	const styles = multiSelectStyles({ fullWidth, hasLabel, open: visible, size, color })
-	const panelStyle = useMemo(() => ({ '--multi-select-width': `${Math.max(triggerWidth, 0)}px` }) as React.CSSProperties, [triggerWidth])
+	const panelStyle = useMemo(() => ({ '--multi-select-width': `${Math.max(triggerWidth, 0)}px`, minWidth: Math.max(triggerWidth, optionContentWidth, 0) }) as React.CSSProperties, [optionContentWidth, triggerWidth])
 	const hasColorVariant = color !== undefined && color !== null && color !== 'default'
 	const hasSelectedItems = selectedEntries.length > 0
 	const canClearSelection = !disallowEmptySelection && hasSelectedItems
@@ -323,6 +325,25 @@ export function MultiSelect<T>({
 			setOpen(false)
 		}
 	}, [disabled, isOpen, readOnly, setOpen])
+
+	// Clears mounted option measurements when the floating panel closes.
+	useEffect(() => {
+		if (visible) return
+
+		optionContentWidthRef.current = 0
+		setOptionContentWidth(0)
+	}, [visible])
+
+	// Tracks the widest mounted option so the panel can fit visible content.
+	function measureOptionWidth(element: HTMLDivElement | null) {
+		if (element === null) return
+
+		const width = Math.ceil(element.scrollWidth)
+		if (width <= optionContentWidthRef.current) return
+
+		optionContentWidthRef.current = width
+		setOptionContentWidth(width)
+	}
 
 	// Stores the trigger element while preserving the caller ref.
 	function handleTriggerRef(element: HTMLDivElement | null) {
@@ -411,7 +432,11 @@ export function MultiSelect<T>({
 		const selected = selectedValueIndexOf(selectedItems, item, isItemEqual) >= 0
 
 		return (
-			<div className={tw(styles.option(), selected ? 'bg-(--color-variant)/15 text-lighter-(--color-variant)/75' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)} onClick={(event) => toggleItem(event, item, selected)} role="button">
+			<div
+				className={tw(styles.option(), selected ? 'bg-(--color-variant)/15 text-lighter-(--color-variant)/75' : 'text-neutral-200 hover:bg-neutral-800 hover:text-neutral-100 active:bg-neutral-700', classNames?.option)}
+				onClick={(event) => toggleItem(event, item, selected)}
+				ref={measureOptionWidth}
+				role="button">
 				<span className={tw(styles.optionContent(), classNames?.optionContent)}>{children(item, index, selected, 'list')}</span>
 				<span className={tw(styles.selectedIcon(), selected ? 'opacity-100' : 'opacity-0', classNames?.selectedIcon)}>
 					<Icons.Check />

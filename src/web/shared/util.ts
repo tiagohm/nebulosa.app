@@ -36,6 +36,25 @@ export function stopPropagation(event: Event | React.BaseSyntheticEvent<Event>) 
 	event.stopPropagation()
 }
 
+const EVENTS = ['onClick', 'onPointerUp', 'onPointerDown'] as const
+
+export function stopPropagationForAll<P extends React.DOMAttributes<HTMLElement>>(props?: P): P | undefined {
+	if (props === undefined) return
+
+	for (const event of EVENTS) {
+		const callback = props[event]
+
+		if (callback !== undefined) {
+			props[event] = function (event) {
+				stopPropagation(event)
+				callback(event as never)
+			}
+		}
+	}
+
+	return props
+}
+
 export function stopPropagationDesktopOnly(event: Event | React.BaseSyntheticEvent<Event>) {
 	if (isMousePresent === true) event.stopPropagation()
 }

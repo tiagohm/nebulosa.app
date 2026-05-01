@@ -93,12 +93,12 @@ const CameraDropdownEndContent = memo(() => {
 	const { camera } = useSnapshot(autoFocus.state)
 	const { capture } = useSnapshot(autoFocus.state.request)
 
-	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode="autoFocus" onValueChange={autoFocus.updateCapture} value={capture} />
+	return camera && <CameraCaptureStartPopover camera={camera} mode="autoFocus" onValueChange={autoFocus.updateCapture} value={capture} />
 })
 
 const StarDetectionSelectEndContent = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)
 	const { starDetection } = useSnapshot(autoFocus.state.request)
 
-	return <StarDetectionPopover isRounded onValueChange={autoFocus.updateStarDetection} value={starDetection} variant="ghost" />
+	return <StarDetectionPopover onValueChange={autoFocus.updateStarDetection} value={starDetection} variant="ghost" />
 })

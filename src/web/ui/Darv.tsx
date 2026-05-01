@@ -73,7 +73,7 @@ const CameraDropdownEndContent = memo(() => {
 	const { camera } = useSnapshot(darv.state)
 	const { capture } = useSnapshot(darv.state.request)
 
-	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode="darv" onValueChange={darv.updateCapture} value={capture} />
+	return camera && <CameraCaptureStartPopover camera={camera} mode="darv" onValueChange={darv.updateCapture} value={capture} />
 })
 
 const Footer = memo(() => {

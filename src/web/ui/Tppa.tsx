@@ -53,7 +53,7 @@ const CameraDropdownEndContent = memo(() => {
 	const { camera } = useSnapshot(tppa.state)
 	const { capture } = useSnapshot(tppa.state.request)
 
-	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode="tppa" onValueChange={tppa.updateCapture} value={capture} />
+	return camera && <CameraCaptureStartPopover camera={camera} mode="tppa" onValueChange={tppa.updateCapture} value={capture} />
 })
 
 const Status = memo(() => {

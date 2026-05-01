@@ -91,5 +91,5 @@ const CameraDropdownEndContent = memo(() => {
 	const { camera } = useSnapshot(flatWizard.state)
 	const { capture } = useSnapshot(flatWizard.state.request)
 
-	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode="flatWizard" onValueChange={flatWizard.updateCapture} value={capture} />
+	return camera && <CameraCaptureStartPopover camera={camera} mode="flatWizard" onValueChange={flatWizard.updateCapture} value={capture} />
 })

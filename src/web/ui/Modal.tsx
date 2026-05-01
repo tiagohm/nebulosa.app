@@ -24,7 +24,7 @@ export function Modal({ id, onHide, header, subHeader, footer, children, maxWidt
 					{typeof header === 'string' ? <div className="ms-10 text-lg leading-3 font-semibold text-neutral-100">{header}</div> : header}
 					{subHeader && <div className="ms-10 text-sm font-normal text-neutral-400">{subHeader}</div>}
 				</div>
-				<Button className="rounded-full" color="danger" label={<Icons.Close />} onClick={modal.hide} variant="flat" />
+				<Button rounded color="danger" label={<Icons.Close />} onClick={modal.hide} variant="flat" />
 			</div>
 			<div className="overflow-visible py-4">{children}</div>
 			<div {...modal.moveProps} className="flex flex-row items-center justify-end gap-2">

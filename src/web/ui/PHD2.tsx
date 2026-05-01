@@ -84,7 +84,7 @@ const CameraDropdownEndContent = memo(() => {
 	const { camera } = useSnapshot(phd2.state)
 	const { capture } = useSnapshot(phd2.state.connection)
 
-	return camera && <CameraCaptureStartPopover camera={camera} isRounded mode="guider" onValueChange={phd2.updateCapture} value={capture} />
+	return camera && <CameraCaptureStartPopover camera={camera} mode="guider" onValueChange={phd2.updateCapture} value={capture} />
 })
 
 const Settle = memo(() => {

@@ -2,7 +2,7 @@ import '@/index.css'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { ToastProvider } from 'src/web/ui/components/Toast'
-import { Home } from 'src/web/ui/Home'
+import { Demo } from 'src/web/ui/Demo'
 
 // Mounts the web app with a shared toast provider.
 function start() {
@@ -11,7 +11,7 @@ function start() {
 		<React.StrictMode>
 			<ToastProvider color="secondary" delay={2000} maxVisible={1} placement="top-end" size="sm">
 				<main className="h-dvh w-dvw">
-					<Home />
+					<Demo />
 				</main>
 			</ToastProvider>
 		</React.StrictMode>,

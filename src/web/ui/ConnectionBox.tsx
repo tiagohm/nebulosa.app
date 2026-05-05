@@ -6,11 +6,11 @@ import { ConnectionMolecule } from '@/molecules/connection'
 import type { Connection } from '@/shared/types'
 import { Chip } from './components/Chip'
 import { Dropdown, DropdownItem } from './components/Dropdown'
+import { IconButton } from './components/IconButton'
 import { Select } from './components/Select'
 import { ConnectButton } from './ConnectButton'
 import { ConnectionEdit } from './ConnectionEdit'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 
 function ConnectionItem(item: Connection, index: number, selected: boolean, placement: 'trigger' | 'list') {
 	if (placement === 'trigger') {

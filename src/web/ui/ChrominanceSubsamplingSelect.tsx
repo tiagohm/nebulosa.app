@@ -1,4 +1,4 @@
-import type { ChrominanceSubsampling } from 'nebulosa/src/jpeg'
+import type { ChrominanceSubsampling } from 'nebulosa/src/libturbojpeg'
 import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
 const ITEMS = ['4:4:4', '4:2:2', '4:2:0', 'GRAY', '4:4:0', '4:1:1', '4:4:1'] as const

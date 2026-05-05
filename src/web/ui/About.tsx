@@ -5,8 +5,8 @@ import nebulosaLogo from '@/assets/nebulosa.ico'
 import { AboutMolecule } from '@/molecules/about'
 import packageJson from '../../../package.json'
 import { Chip } from './components/Chip'
+import { Link } from './components/Link'
 import { Icons } from './Icon'
-import { Link } from './Link'
 import { Modal } from './Modal'
 
 export const About = memo(() => {

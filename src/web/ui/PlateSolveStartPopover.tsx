@@ -2,11 +2,11 @@ import { useMolecule } from 'bunshi/react'
 import type { PlateSolverType, PlateSolveStart } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { SettingsMolecule } from '@/molecules/settings'
+import { IconButton } from './components/IconButton'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 
 export interface PlateSolveStartPopoverProps extends Pick<PlateSolveStart, 'radius' | 'focalLength' | 'pixelSize'> {
 	readonly type: PlateSolverType

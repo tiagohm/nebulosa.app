@@ -3,9 +3,9 @@ import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerScope } from '@/molecules/filepicker'
 import { ImageWorkspaceMolecule } from '@/molecules/image/workspace'
+import { IconButton } from './components/IconButton'
 import { FilePicker } from './FilePicker'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 
 export const ImagePickerButton = memo(() => {
 	const workspace = useMolecule(ImageWorkspaceMolecule)

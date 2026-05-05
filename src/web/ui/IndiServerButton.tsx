@@ -2,8 +2,8 @@ import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiServerMolecule } from '@/molecules/indi/server'
+import { IconButton } from './components/IconButton'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 import { IndiServer } from './IndiServer'
 
 export const IndiServerButton = memo(() => {

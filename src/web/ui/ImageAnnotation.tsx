@@ -4,9 +4,9 @@ import { useSnapshot } from 'valtio'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
+import { IconButton } from './components/IconButton'
 import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 
 export const ImageAnnotation = memo(() => {

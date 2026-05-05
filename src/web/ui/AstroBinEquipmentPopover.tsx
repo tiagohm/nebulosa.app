@@ -1,10 +1,10 @@
 import { memo, useState } from 'react'
 import { FilterableList } from './components/FilterableList'
+import { IconButton } from './components/IconButton'
+import { Link } from './components/Link'
 import { ListItem } from './components/List'
 import { Popover } from './components/Popover'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
-import { Link } from './Link'
 
 export interface AstroBinEquipmentPopoverItem {
 	readonly id: number

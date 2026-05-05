@@ -6,11 +6,11 @@ import { FramingMolecule } from '@/molecules/framing'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'
+import { Link } from './components/Link'
 import { NumberInput } from './components/NumberInput'
 import { TextInput } from './components/TextInput'
 import { HipsSurveySelect } from './HipsSurveySelect'
 import { Icons } from './Icon'
-import { Link } from './Link'
 import { Modal } from './Modal'
 
 export const Framing = memo(() => {

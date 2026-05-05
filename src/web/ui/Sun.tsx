@@ -2,7 +2,7 @@ import { memo, useEffect, useRef } from 'react'
 import { SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource } from 'src/shared/types'
 import sunWebp from '@/assets/sun.webp'
 import { API_URL } from '@/shared/api'
-import { Link } from './Link'
+import { Link } from './components/Link'
 import { SolarImageSourceSelect } from './SolarImageSourceSelect'
 
 export interface SunProps {

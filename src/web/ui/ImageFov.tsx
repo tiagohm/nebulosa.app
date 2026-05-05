@@ -7,10 +7,10 @@ import cameras from '../../../data/cameras.json'
 import telescopes from '../../../data/telescopes.json'
 import { AstroBinEquipmentPopover } from './AstroBinEquipmentPopover'
 import { Checkbox } from './components/Checkbox'
+import { IconButton } from './components/IconButton'
 import { List } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 
 export const ImageFov = memo(() => {

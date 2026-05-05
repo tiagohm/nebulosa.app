@@ -6,12 +6,12 @@ import { ConnectionMolecule } from '@/molecules/connection'
 import { Button } from '@/ui/components/Button'
 import { ClientTypeSelect } from './ClientTypeSelect'
 import { Checkbox } from './components/Checkbox'
+import { IconButton } from './components/IconButton'
 import { List, ListItem } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 
 export const ConnectionEdit = memo(() => {

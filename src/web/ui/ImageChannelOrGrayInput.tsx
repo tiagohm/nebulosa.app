@@ -1,10 +1,10 @@
 import { GRAYSCALES, type Grayscale, type ImageChannelOrGray } from 'nebulosa/src/image.types'
 import { useRef, useState } from 'react'
 import { tw } from '@/shared/util'
+import { IconButton } from './components/IconButton'
 import { NumberInput } from './components/NumberInput'
 import { Select, type SelectItemRenderer } from './components/Select'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 import { ImageChannelOrGraySelect } from './ImageChannelOrGraySelect'
 
 export type ImageChannelOrGrayInputMode = 'select' | 'input'

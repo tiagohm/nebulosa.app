@@ -17,6 +17,8 @@ import { Calendar } from './components/Calendar'
 import { Checkbox } from './components/Checkbox'
 import { Chip, type ChipProps } from './components/Chip'
 import { FilterableList } from './components/FilterableList'
+import { IconButton } from './components/IconButton'
+import { Link } from './components/Link'
 import { List, ListItem } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
@@ -24,11 +26,10 @@ import { Slider } from './components/Slider'
 import { Table } from './components/Table'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
 import { TextInput } from './components/TextInput'
+import { ToggleButton } from './components/ToggleButton'
 import { ConstellationSelect } from './ConstellationSelect'
 import { MountDropdown } from './DeviceDropdown'
 import { type Icon, Icons } from './Icon'
-import { IconButton } from './IconButton'
-import { Link } from './Link'
 import { Location } from './Location'
 import { Modal } from './Modal'
 import { Moon } from './Moon'
@@ -38,7 +39,6 @@ import { SatelliteGroupTypeChipGroup } from './SatelliteGroupTypeChipGroup'
 import { SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 import { Sun } from './Sun'
-import { ToggleButton } from './ToggleButton'
 
 export const SkyAtlas = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
@@ -832,8 +832,8 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 	return (
 		<div className={tw('h-[140px] col-span-full relative flex flex-col justify-start items-center gap-1', className)}>
 			<div className="flex w-full flex-row gap-2 text-start text-sm font-bold">
-				<ToggleButton color="primary" icon={Icons.Info} isSelected={!showChart} onPointerUp={() => setShowChart(false)} />
-				<ToggleButton color="primary" icon={Icons.Chart} isSelected={showChart} onPointerUp={() => setShowChart(true)} />
+				<ToggleButton color="primary" icon={Icons.Info} selected={!showChart} onPointerUp={() => setShowChart(false)} />
+				<ToggleButton color="primary" icon={Icons.Chart} selected={showChart} onPointerUp={() => setShowChart(true)} />
 				<div className="flex flex-1 items-center justify-center overflow-hidden text-sm font-bold">
 					{tags?.map((tag) => (
 						<Chip color={tag.color} key={tag.label} label={tag.label} />

@@ -7,10 +7,10 @@ import { type EquipmentDevice, EquipmentMolecule } from '@/molecules/indi/equipm
 import type { DeviceTypeMap } from '@/shared/types'
 import { stopPropagation } from '@/shared/util'
 import { Dropdown, type DropdownProps } from './components/Dropdown'
+import { IconButton } from './components/IconButton'
 import { ListItem } from './components/List'
 import { ConnectButton } from './ConnectButton'
 import { Icons, type Icon } from './Icon'
-import { IconButton } from './IconButton'
 
 export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends DropdownProps {
 	readonly type: T

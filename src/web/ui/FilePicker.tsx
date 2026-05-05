@@ -7,10 +7,10 @@ import { stopPropagation, tw } from '../shared/util'
 import { Badge } from './components/Badge'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { Button } from './components/Button'
+import { IconButton } from './components/IconButton'
 import { List } from './components/List'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 
 export interface FilePickerProps {

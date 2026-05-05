@@ -9,11 +9,11 @@ import { blur, brightness, calibrate, contrast, debayer, FFTWorkspace, fft, gamm
 import type { AdaptiveDisplayFunctionOptions, Image } from 'nebulosa/src/image.types'
 import type { Camera } from 'nebulosa/src/indi.device'
 import { fileHandleSink } from 'nebulosa/src/io'
+import { Wcs } from 'nebulosa/src/libwcs'
 import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/platesolver'
 import { identify } from 'nebulosa/src/sbd'
 import { spaceMotion, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
-import { Wcs } from 'nebulosa/src/wcs'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true',type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }

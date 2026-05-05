@@ -3,12 +3,12 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import type { CameraCaptureStart } from 'src/shared/types'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
 import { Checkbox } from './components/Checkbox'
+import { IconButton, type IconButtonProps } from './components/IconButton'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameFormatSelect } from './FrameFormatSelect'
 import { Icons } from './Icon'
-import { IconButton, type IconButtonProps } from './IconButton'
 
 export type CameraCaptureStartPopoverKey = 'exposureTime' | 'exposureTimeUnit' | 'binX' | 'binY' | 'gain' | 'offset' | 'frameFormat' | 'x' | 'y' | 'width' | 'height' | 'transferFormat' | 'compressed'
 

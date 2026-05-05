@@ -6,14 +6,14 @@ import { useSnapshot } from 'valtio'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { Button } from './components/Button'
 import { FilterableList } from './components/FilterableList'
+import { IconButton } from './components/IconButton'
 import { ListItem } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Select, type SelectItemRenderer } from './components/Select'
 import { TextInput } from './components/TextInput'
+import { ToggleButton } from './components/ToggleButton'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 import { Modal } from './Modal'
-import { ToggleButton } from './ToggleButton'
 
 const MessageFilter = (item: Message, text: string) => item.message.toLowerCase().includes(text)
 
@@ -34,8 +34,8 @@ const Header = memo(() => {
 	return (
 		<div className="flex flex-row items-center justify-start gap-2">
 			<span className="me-3">INDI Panel Control</span>
-			<ToggleButton tooltipContent="Properties" color="secondary" icon={Icons.ViewList} isSelected={tab === 'property'} onPointerUp={() => (control.state.tab = 'property')} />
-			<ToggleButton tooltipContent="Messages" color="secondary" icon={Icons.Message} isSelected={tab === 'message'} onPointerUp={() => (control.state.tab = 'message')} />
+			<ToggleButton tooltipContent="Properties" color="secondary" icon={Icons.ViewList} selected={tab === 'property'} onPointerUp={() => (control.state.tab = 'property')} />
+			<ToggleButton tooltipContent="Messages" color="secondary" icon={Icons.Message} selected={tab === 'message'} onPointerUp={() => (control.state.tab = 'message')} />
 		</div>
 	)
 })

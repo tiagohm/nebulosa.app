@@ -16,12 +16,12 @@ import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
+import { IconButton } from './components/IconButton'
 import { Popover } from './components/Popover'
 import { Slider } from './components/Slider'
 import { Switch } from './components/Switch'
+import { ToggleButton } from './components/ToggleButton'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
-import { ToggleButton } from './ToggleButton'
 
 export const ImageToolBar = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
@@ -40,9 +40,9 @@ export const ImageToolBar = memo(() => {
 				<IconButton color="secondary" icon={Icons.Save} onPointerUp={save.show} tooltipContent="Save" tooltipPlacement="top" variant="flat" />
 				<IconButton color="secondary" icon={Icons.Sigma} onPointerUp={solver.show} tooltipContent="Plate Solver" tooltipPlacement="top" variant="flat" />
 				<IconButton color="secondary" icon={Icons.Tune} onPointerUp={stretch.show} tooltipContent="Stretch" tooltipPlacement="top" variant="flat" />
-				<ToggleButton color="primary" icon={Icons.WandSparkles} isSelected={transformation.stretch.auto} onPointerUp={stretch.toggle} tooltipContent="Auto Stretch" tooltipPlacement="top" />
+				<ToggleButton color="primary" icon={Icons.WandSparkles} selected={transformation.stretch.auto} onPointerUp={stretch.toggle} tooltipContent="Auto Stretch" tooltipPlacement="top" />
 				<Activity mode={info?.metadata.bayer ? 'visible' : 'hidden'}>
-					<ToggleButton color="primary" icon={Icons.Grid} isSelected={transformation.debayer} onPointerUp={viewer.toggleDebayer} tooltipContent="Debayer" tooltipPlacement="top" />
+					<ToggleButton color="primary" icon={Icons.Grid} selected={transformation.debayer} onPointerUp={viewer.toggleDebayer} tooltipContent="Debayer" tooltipPlacement="top" />
 				</Activity>
 				<RotatePopover />
 				<TransformationPopover />
@@ -107,7 +107,7 @@ const OverlayPopoverContent = memo(() => {
 
 	return (
 		<div className="flex flex-row items-start justify-center gap-2 p-2">
-			<ToggleButton color="primary" icon={Icons.Crosshair} isSelected={crosshair} onPointerUp={viewer.toggleCrosshair} tooltipContent="Crosshair" tooltipPlacement="top" />
+			<ToggleButton color="primary" icon={Icons.Crosshair} selected={crosshair} onPointerUp={viewer.toggleCrosshair} tooltipContent="Crosshair" tooltipPlacement="top" />
 			<div className="flex flex-col justify-center gap-2">
 				<IconButton color="secondary" disabled={!solution} icon={Icons.Pen} onPointerUp={annotation.show} tooltipContent="Annotation" tooltipPlacement="top" variant="flat" />
 				<Activity mode={annotatedStars.length > 0 ? 'visible' : 'hidden'}>
@@ -123,7 +123,7 @@ const OverlayPopoverContent = memo(() => {
 			<IconButton color="secondary" icon={Icons.Box} tooltipContent="ROI" tooltipPlacement="top" variant="flat" />
 			<Activity mode={solution?.scale ? 'visible' : 'hidden'}>
 				<IconButton color="secondary" icon={Icons.FocusField} onPointerUp={fov.show} tooltipContent="FOV" tooltipPlacement="top" variant="flat" />
-				<ToggleButton color="primary" icon={Icons.MousePointerClick} isSelected={isMouseCoordinateVisible} onPointerUp={mouseCoordinate.toggle} tooltipContent="Mouse Coordinate" tooltipPlacement="top" />
+				<ToggleButton color="primary" icon={Icons.MousePointerClick} selected={isMouseCoordinateVisible} onPointerUp={mouseCoordinate.toggle} tooltipContent="Mouse Coordinate" tooltipPlacement="top" />
 			</Activity>
 		</div>
 	)
@@ -153,9 +153,9 @@ const TransformationPopoverContent = memo(() => {
 			</Activity>
 			<IconButton color="secondary" icon={Icons.ImageEdit} onPointerUp={adjustment.show} tooltipContent="Adjustment" tooltipPlacement="top" variant="flat" />
 			<IconButton color="secondary" icon={Icons.Brush} onPointerUp={filter.show} tooltipContent="Filter" tooltipPlacement="top" variant="flat" />
-			<ToggleButton color="primary" icon={Icons.FlipHorizontal} isSelected={transformation.horizontalMirror} onPointerUp={viewer.toggleHorizontalMirror} tooltipContent="Horizontal mirror" tooltipPlacement="top" />
-			<ToggleButton color="primary" icon={Icons.FlipVertical} isSelected={transformation.verticalMirror} onPointerUp={viewer.toggleVerticalMirror} tooltipContent="Vertical Mirror" tooltipPlacement="top" />
-			<ToggleButton color="primary" icon={Icons.InvertColor} isSelected={transformation.invert} onPointerUp={viewer.toggleInvert} tooltipContent="Invert" tooltipPlacement="top" />
+			<ToggleButton color="primary" icon={Icons.FlipHorizontal} selected={transformation.horizontalMirror} onPointerUp={viewer.toggleHorizontalMirror} tooltipContent="Horizontal mirror" tooltipPlacement="top" />
+			<ToggleButton color="primary" icon={Icons.FlipVertical} selected={transformation.verticalMirror} onPointerUp={viewer.toggleVerticalMirror} tooltipContent="Vertical Mirror" tooltipPlacement="top" />
+			<ToggleButton color="primary" icon={Icons.InvertColor} selected={transformation.invert} onPointerUp={viewer.toggleInvert} tooltipContent="Invert" tooltipPlacement="top" />
 		</div>
 	)
 })

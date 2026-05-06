@@ -25,16 +25,14 @@ export const Tppa = memo(() => {
 	)
 })
 
-const Body = memo(() => {
-	return (
+const Body = memo(() => (
 		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Devices />
 			<Status />
 			<Inputs />
 			<Result />
 		</div>
-	)
-})
+	))
 
 const Devices = memo(() => {
 	const tppa = useMolecule(TppaMolecule)

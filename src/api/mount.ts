@@ -143,18 +143,10 @@ export class MountRemoteControlHandler {
 			if (latitude !== undefined) this.mountManager.geographicCoordinate(device, { ...device.geographicCoordinate, latitude })
 			return normalizePI(device.geographicCoordinate.latitude)
 		},
-		dateTime: (server: Lx200ProtocolServer) => {
-			return [temporalAdd(Date.now(), TIMEZONE, 'm'), TIMEZONE] as const
-		},
-		tracking: (server: Lx200ProtocolServer) => {
-			return this.get(server).tracking
-		},
-		parked: (server: Lx200ProtocolServer) => {
-			return this.get(server).parked
-		},
-		slewing: (server: Lx200ProtocolServer) => {
-			return this.get(server).slewing
-		},
+		dateTime: (server: Lx200ProtocolServer) => [temporalAdd(Date.now(), TIMEZONE, 'm'), TIMEZONE] as const,
+		tracking: (server: Lx200ProtocolServer) => this.get(server).tracking,
+		parked: (server: Lx200ProtocolServer) => this.get(server).parked,
+		slewing: (server: Lx200ProtocolServer) => this.get(server).slewing,
 		slewRate: (server: Lx200ProtocolServer, rate: 'CENTER' | 'GUIDE' | 'FIND' | 'MAX') => {
 			const rates = this.get(server).slewRates
 

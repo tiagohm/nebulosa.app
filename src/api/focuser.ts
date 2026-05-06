@@ -78,26 +78,26 @@ export function focuser(focuserHandler: FocuserHandler): Endpoints {
 }
 
 export function waitForFocuser(focuser: Focuser, expectedPosition: number, onCompleted: (action: 'reach' | 'timeout' | 'cancel') => void, delay: number = 30000) {
-	let timer: NodeJS.Timeout
-	let cancelled = false
+	let timer: number | undefined = undefined
+	let finished = false
 
 	// Wait the focuser reach the position
 	const unsubscriber = bus.subscribe<FocuserUpdated>('focuser:update', (event) => {
-		if (!cancelled && event.device.id === focuser.id && (event.property === 'moving' || event.property === 'position') && !focuser.moving && focuser.position.value === expectedPosition) {
+		if (!finished && event.device.id === focuser.id && (event.property === 'moving' || event.property === 'position') && !focuser.moving && focuser.position.value === expectedPosition) {
 			clearTimeout(timer)
 			unsubscriber()
 			onCompleted('reach')
 		}
 	})
 
-	timer = setTimeout(() => {
-		if (cancelled) return
+	timer = window.setTimeout(() => {
+		if (finished) return
 		unsubscriber()
 		onCompleted('timeout')
 	}, delay)
 
 	return () => {
-		cancelled = true
+		finished = true
 		clearTimeout(timer)
 		unsubscriber()
 		onCompleted('cancel')

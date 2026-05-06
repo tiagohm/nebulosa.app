@@ -157,13 +157,11 @@ export function List({ children, itemCount, className, classNames, emptyContent,
 	}, [])
 
 	// Cancels any pending scroll frame when the list unmounts.
-	useEffect(() => {
-		return () => {
+	useEffect(() => () => {
 			if (animationFrameRef.current !== undefined) {
 				window.cancelAnimationFrame(animationFrameRef.current)
 			}
-		}
-	}, [])
+		}, [])
 
 	// Keeps scroll position valid when children or item size shrink the list.
 	useEffect(() => {

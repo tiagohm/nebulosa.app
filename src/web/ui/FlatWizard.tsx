@@ -21,15 +21,13 @@ export const FlatWizard = memo(() => {
 	)
 })
 
-const Body = memo(() => {
-	return (
+const Body = memo(() => (
 		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Devices />
 			<Status />
 			<Input />
 		</div>
-	)
-})
+	))
 
 const Devices = memo(() => {
 	const flatWizard = useMolecule(FlatWizardMolecule)

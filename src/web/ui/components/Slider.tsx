@@ -439,7 +439,7 @@ export function Slider<V extends SliderValue>({
 
 			if (dragFromThumbRef.current && !moved) return
 
-			dragMovedRef.current = dragMovedRef.current || moved
+			dragMovedRef.current ||= moved
 			const nextValue = dragFromThumbRef.current ? valueFromThumbDrag(event.clientX, event.clientY, draggingThumbIndex) : valueFromPointer(event.clientX, event.clientY, draggingThumbIndex).value
 			setInteractiveValue(nextValue)
 		}

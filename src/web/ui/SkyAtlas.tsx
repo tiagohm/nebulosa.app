@@ -102,9 +102,7 @@ const TabPopoverContent = memo(() => {
 
 	return (
 		<div className="inline-flex flex-row gap-2">
-			{Object.entries(TAB_ICONS).map(([key, icon]) => {
-				return <IconButton icon={icon} key={key} onPointerUp={() => (atlas.state.tab = key as never)} tooltipContent={key} />
-			})}
+			{Object.entries(TAB_ICONS).map(([key, icon]) => <IconButton icon={icon} key={key} onPointerUp={() => (atlas.state.tab = key as never)} tooltipContent={key} />)}
 		</div>
 	)
 })
@@ -601,16 +599,14 @@ const GalaxyTable = memo(() => {
 			<span>Mag.</span>
 			<span>Type</span>
 			<span>Const.</span>
-			{result.map((item) => {
-				return (
+			{result.map((item) => (
 					<>
 						<span>{skyObjectName(item.name, item.constellation)}</span>
 						<span>{item.magnitude}</span>
 						<span>{skyObjectType(item.type)}</span>
 						<span>{CONSTELLATION_LIST[item.constellation]}</span>
 					</>
-				)
-			})}
+				))}
 		</Table>
 	)
 })
@@ -656,15 +652,13 @@ const SatelliteTable = memo(() => {
 			<span>ID</span>
 			<span>Name</span>
 			<span>Group</span>
-			{result.map((item) => {
-				return (
+			{result.map((item) => (
 					<>
 						<span>{item.id}</span>
 						<span>{item.name}</span>
 						<span>{item.groups.join(', ')}</span>
 					</>
-				)
-			})}
+				))}
 		</Table>
 	)
 })
@@ -779,8 +773,7 @@ interface AstronomicalEventProps {
 	readonly format: string
 }
 
-const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format }: AstronomicalEventProps) => {
-	return (
+const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format }: AstronomicalEventProps) => (
 		<div className="flex flex-col gap-0">
 			<span className="flex items-start gap-1 font-bold">
 				<Icon />
@@ -788,8 +781,7 @@ const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format }: Ast
 			</span>
 			<span className="mb-1 ps-5">{formatTemporal(time, format, offset)}</span>
 		</div>
-	)
-})
+	))
 
 interface EphemerisAndChartTag {
 	readonly label: string
@@ -916,8 +908,7 @@ function ChartTickFormatter(value: unknown, i: number) {
 
 const DEFAULT_AREA_PROPS: Partial<AreaProps<keyof EphemerisChartData, number>> = { dot: false, connectNulls: true, activeDot: false, fillOpacity: 0.3, isAnimationActive: false, stroke: 'transparent', type: 'monotone' }
 
-const EphemerisChart = memo(({ data }: EphemerisChartProps) => {
-	return (
+const EphemerisChart = memo(({ data }: EphemerisChartProps) => (
 		<ComposedChart data={data} height={120} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive>
 			<XAxis dataKey="name" domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={ChartTickFormatter} tickMargin={6} />
 			<YAxis domain={[0, 90]} width={25} />
@@ -934,8 +925,7 @@ const EphemerisChart = memo(({ data }: EphemerisChartProps) => {
 			<ChartTooltip content={ChartTooltipContent} />
 			<Line dataKey="value" dot={false} isAnimationActive={false} stroke="#F44336" strokeWidth={2} type="monotone" />
 		</ComposedChart>
-	)
-})
+	))
 
 function makeEphemerisChart(data: readonly number[], twilight: Twilight = EMPTY_TWILIGHT): EphemerisChartData[] {
 	const chart = new Array<EphemerisChartData>(1441)

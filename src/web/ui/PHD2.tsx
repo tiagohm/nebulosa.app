@@ -31,8 +31,7 @@ const SubHeader = memo(() => {
 	return <span>{profile}</span>
 })
 
-const Body = memo(() => {
-	return (
+const Body = memo(() => (
 		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Connection />
 			<Settle />
@@ -40,8 +39,7 @@ const Body = memo(() => {
 			<Buttons />
 			<Status />
 		</div>
-	)
-})
+	))
 
 const Connection = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)

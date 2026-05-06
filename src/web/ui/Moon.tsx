@@ -3,10 +3,8 @@ import moonWebp from '@/assets/moon.webp'
 
 export interface MoonProps {}
 
-export const Moon = memo((props: MoonProps) => {
-	return (
+export const Moon = memo((props: MoonProps) => (
 		<span className="relative">
 			<img className="h-auto w-full max-w-48 pt-8 select-none" draggable={false} src={moonWebp} />
 		</span>
-	)
-})
+	))

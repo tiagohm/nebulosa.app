@@ -56,13 +56,11 @@ export const ImageToolBar = memo(() => {
 	)
 })
 
-const RotatePopover = memo(() => {
-	return (
+const RotatePopover = memo(() => (
 		<Popover trigger={<IconButton color="success" icon={Icons.RotateRight} tooltipContent="Rotate" variant="flat" />}>
 			<RotatePopoverContent />
 		</Popover>
-	)
-})
+	))
 
 const RotatePopoverContent = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
@@ -79,13 +77,11 @@ const RotatePopoverContent = memo(() => {
 	)
 })
 
-const OverlayPopover = memo(() => {
-	return (
+const OverlayPopover = memo(() => (
 		<Popover trigger={<IconButton color="success" icon={Icons.BringToFront} tooltipContent="Overlay" tooltipPlacement="top" variant="flat" />}>
 			<OverlayPopoverContent />
 		</Popover>
-	)
-})
+	))
 
 const OverlayPopoverContent = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
@@ -129,13 +125,11 @@ const OverlayPopoverContent = memo(() => {
 	)
 })
 
-const TransformationPopover = memo(() => {
-	return (
+const TransformationPopover = memo(() => (
 		<Popover trigger={<IconButton color="success" icon={Icons.Palette} tooltipContent="Transformation" tooltipPlacement="top" variant="flat" />}>
 			<TransformationPopoverContent />
 		</Popover>
-	)
-})
+	))
 
 const TransformationPopoverContent = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)

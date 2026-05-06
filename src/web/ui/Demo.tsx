@@ -168,8 +168,7 @@ const ButtonGroups = memo(() => {
 	return elements
 })
 
-const BreadCrumbs = memo(() => {
-	return (
+const BreadCrumbs = memo(() => (
 		<>
 			<Breadcrumbs>
 				<Button color="default" label="Home" size="sm" variant="ghost" />
@@ -198,8 +197,7 @@ const BreadCrumbs = memo(() => {
 				<span>Disabled</span>
 			</Breadcrumbs>
 		</>
-	)
-})
+	))
 
 const TextInputs = memo(() => {
 	const [value, setValue] = useState('A')
@@ -528,8 +526,7 @@ const MultiSelects = memo(() => {
 	return <div className="grid grid-cols-3 items-center gap-2">{elements}</div>
 })
 
-const Tables = memo(() => {
-	return (
+const Tables = memo(() => (
 		<Table className="min-w-80" rowHeight={28} columnCount={3} rowCount={2} onAction={(row, col) => alert(`row: ${row}, col: ${col}`)} overscan={8}>
 			<span>Name</span>
 			<span>Magnitude</span>
@@ -541,5 +538,4 @@ const Tables = memo(() => {
 			<span>6.3</span>
 			<span>Globular Cluster</span>
 		</Table>
-	)
-})
+	))

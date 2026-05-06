@@ -17,8 +17,7 @@ export const Calculator = memo(() => {
 	)
 })
 
-const Body = memo(() => {
-	return (
+const Body = memo(() => (
 		<div className="mt-0 px-1 py-2">
 			<Tabs placement="start">
 				<Tab id="focalLength">Focal Length</Tab>
@@ -52,8 +51,7 @@ const Body = memo(() => {
 				</TabPanel>
 			</Tabs>
 		</div>
-	)
-})
+	))
 
 interface FormulaProps {
 	readonly description: string

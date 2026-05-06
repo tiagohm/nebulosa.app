@@ -20,13 +20,11 @@ export const AlpacaServer = memo(() => {
 	)
 })
 
-const Body = memo(() => {
-	return (
+const Body = memo(() => (
 		<div className="mt-0 grid grid-cols-1 gap-2">
 			<DeviceList />
 		</div>
-	)
-})
+	))
 
 function DeviceItem(item: AlpacaConfiguredDevice) {
 	return <ListItem description={item.DeviceType} label={`${item.DeviceName} (#${item.DeviceNumber})`} />

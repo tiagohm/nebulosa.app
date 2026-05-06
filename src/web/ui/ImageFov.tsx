@@ -23,25 +23,21 @@ export const ImageFov = memo(() => {
 	)
 })
 
-const Body = memo(() => {
-	return (
+const Body = memo(() => (
 		<div className="mt-0 grid grid-cols-12 items-center gap-2">
 			<FovList />
 			<Edit />
 		</div>
-	)
-})
+	))
 
-const Edit = memo(() => {
-	return (
+const Edit = memo(() => (
 		<>
 			<Telescope />
 			<Camera />
 			<OrientationAndOptics />
 			<Actions />
 		</>
-	)
-})
+	))
 
 const Telescope = memo(() => {
 	const fov = useMolecule(ImageFovMolecule)
@@ -128,8 +124,7 @@ const FovList = memo(() => {
 	)
 })
 
-const ComputedFovItem = memo((item: FovItem) => {
-	return (
+const ComputedFovItem = memo((item: FovItem) => (
 		<div className="flex flex-row flex-wrap items-center justify-between gap-1">
 			<span>
 				<strong>FL:</strong> {item.focalLength}mm
@@ -153,5 +148,4 @@ const ComputedFovItem = memo((item: FovItem) => {
 				<strong>ROT:</strong> {item.rotation.toFixed(1)}°
 			</span>
 		</div>
-	)
-})
+	))

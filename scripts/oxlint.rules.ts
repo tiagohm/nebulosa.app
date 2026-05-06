@@ -14,6 +14,7 @@ const configuredRules: Record<string, object> = {
 	'typescript/prefer-nullish-coalescing': { ignorePrimitives: true },
 	'unicorn/no-instanceof-builtins': { exclude: ['Function', 'Array'] },
 	'typescript/prefer-string-starts-ends-with': { allowSingleElementEquality: 'always' },
+	'eslint/no-duplicate-imports': { allowSeparateTypeImports: true },
 }
 
 const alwaysDisabledRules = new Set(['unicorn/prefer-string-starts-ends-with'])

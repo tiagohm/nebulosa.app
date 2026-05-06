@@ -15,7 +15,7 @@ import { identify } from 'nebulosa/src/sbd'
 import { spaceMotion, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
 import fovCameras from '../../data/cameras.json' with { type: 'json' }
-import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true',type: 'sqlite' }
+import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from '../../data/telescopes.json' with { type: 'json' }
 import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateInterpolation, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'

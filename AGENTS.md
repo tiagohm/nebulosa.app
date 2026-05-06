@@ -6,11 +6,13 @@ This repository contains both the Bun runtime/API and the React frontend for ast
 
 This project uses **Bun** as runtime, package manager, builder, and test runner, ESM modules only.
 
-This project uses **React** for the web UI.
+This project uses **React 19** for the web UI.
 
-This project uses **Tailwind CSS v4** for styling.
+This project uses **Tailwind CSS v4** for styling, compiled through the local Bun plugin in `tailwind.plugin.ts`.
 
 This project uses **Valtio** and **Bunshi** for shared client-side state and orchestration.
+
+This project consumes `nebulosa` as the core astronomy, image-processing, and INDI/device-control library.
 
 ## Project Structure
 
@@ -19,15 +21,17 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 - `src/web`: Browser entrypoints, UI, molecules, hooks, and web-only helpers.
 - `src/web/pages`: HTML + React entrypoints. Currently only the `home` page exists.
 - `src/web/ui`: Feature and screen-level React components.
-- `src/web/ui/components`: Reusable UI primitives.
+- `src/web/ui/components`: Reusable UI primitives. Current primitives include actions (`Button`, `IconButton`, `ButtonGroup`, `ToggleButton`), fields (`TextInput`, `NumberInput`, `DateTimeInput`, `SearchTextInput`), selection/listing (`List`, `Table`, `Select`, `MultiSelect`, `FilterableList`, `FilterableSelect`, `Dropdown`, `Tabs`), overlays (`Floating`, `Popover`, `Tooltip`), and display/status controls (`Badge`, `Breadcrumbs`, `Calendar`, `Chip`, `Histogram`, `ProgressBar`, `Toast`).
 - `src/web/molecules`: Bunshi molecules and shared client orchestration/state.
 - `src/web/shared`: Browser-side helpers for API calls, storage, interpolation, proxying, and related utilities.
 - `src/web/hooks`: React hooks.
 - `src/web/assets`: Images and icons.
 - `src/shared`: Types and utilities shared between runtime and web. Keep it runtime-agnostic where practical.
-- `tests`: Currently API-focused tests.
+- `tests`: Currently API-focused tests under `tests/api`.
 - `data`: Data/assets used by `tests`, `api`, and `web`.
 - `bin`: Build-time data generation scripts.
+- `scripts`: Repository maintenance scripts, including codebase graph indexing.
+- `tailwind.plugin.ts`: Bun build plugin for Tailwind CSS v4 compilation.
 
 ## General Rules
 
@@ -38,7 +42,8 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 - Do not break existing behavior unless explicitly required.
 - Never add or expand HeroUI usage. Treat HeroUI as legacy code scheduled for removal; build new UI with React, Tailwind CSS, Tailwind Variants, and existing non-HeroUI primitives instead.
 - Do not add accessibility or ARIA work in this project unless explicitly requested. This is a personal project, so accessibility-specific enhancements are out of scope by default.
-- Always add single-line comments to methods, functions, and relevant lines of code.
+- Prefer targeted single-line comments before non-obvious logic, effect lifecycles, normalization, or interaction handlers. Do not add boilerplate comments to trivial code.
+- Use the local `Icons` namespace from `src/web/ui/Icon.tsx` and `IconButton` for icon actions. Do not add a new icon dependency unless explicitly requested.
 
 ## Repo Discovery
 
@@ -50,6 +55,7 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 - `trace_path(mode='calls')` is currently weak for JSX render relationships in this repo. Do not rely on it alone to answer which component renders another.
 - `trace_path` can also miss or partially represent JSX-based component usage inside returned markup, fragments, and compound component APIs.
 - Recommended discovery order for React/UI work in this repo is `search_graph(name_pattern='.*ExactComponentName.*')`, then `get_code_snippet(...)`, then `search_code(...)` scoped to `^src/web/` (or `^src/api/` / `^src/shared/` when appropriate), and only then shell search.
+- Refresh the codebase graph with `bun run index` after major symbol, file, or route changes if graph results look stale.
 
 ## Default Commands
 
@@ -58,9 +64,13 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 - Start production mode: `bun prod`
 - Build executable: `bun run compile`
 - Format: `bun run fmt`
-- Lint and Type-check: `bun run lint`
+- Format check: `bun run fmt:check`
+- Lint: `bun run lint`
 - Lint with fixes: `bun run lint:fix`
+- Type-check: `node_modules\.bin\tsgo.exe --noEmit` on Windows, or the equivalent local `tsgo --noEmit` binary on other platforms.
+- Refresh codebase graph: `bun run index`
 - If tests are added, prefer `bun test` before introducing another test runner.
+- If a Bun wrapper command fails because of local bin remapping, use the direct local binary for the same tool and report that fallback.
 
 ## Architecture Rules
 
@@ -84,6 +94,7 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 - Follow the current runtime configuration pattern in `main.ts`: parse CLI args and `Bun.env` near startup, normalize eagerly, and pass typed config inward instead of reading env ad hoc throughout the app.
 - Keep startup fast by statically importing core bootstrap code, lazy-loading infrequent or heavy features, and avoiding large synchronous setup in `main.ts`.
 - Do not add runtime transpilers, redundant CLIs, or duplicate bundling layers.
+- Keep Tailwind build integration inside `tailwind.plugin.ts`; do not add Vite, PostCSS, or another CSS build layer for Tailwind.
 - Any new dependency must justify its cost in startup time, binary size, or operational complexity.
 
 ## API Rules
@@ -130,7 +141,7 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 - Use `.tsx` only for files that render JSX. Keep hooks, stores, adapters, and other non-visual logic in `.ts` files.
 - Prefer local state first. Lift state only when multiple siblings or features truly share it.
 - Keep renders pure. Do not mirror props into state or create effect-driven derived state.
-- Preserve local component style in touched files. Many UI modules export `const Component = memo(() => ...)`; extend that pattern within the file instead of mixing declaration styles without a reason.
+- Preserve local component style in touched files. Reusable primitives usually export named functions and accept `ref` as a React 19 prop, while many feature-level UI modules export `const Component = memo(() => ...)`; extend the existing pattern within the file instead of mixing declaration styles without a reason.
 - Use `startTransition`, `useDeferredValue`, and `useEffectEvent` when they solve a real responsiveness or stale-closure problem.
 - Do not add `useMemo` or `useCallback` by default. Use them only for measured hot paths or third-party API boundaries that require stable references.
 - Use stable keys derived from data. Do not generate keys during render.
@@ -164,6 +175,10 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 - Use Tailwind classes in a controlled way. Do not scatter long class strings across many branches. Centralize styling rules with Tailwind Variants so variants, sizes, and states are easy to inspect and extend. Tailwind Variants supports typed variants, slots, composition, and compound variants, which makes it suitable for building reusable design-system components. It also supports extending existing component definitions.
 - Build small primitives that can be combined. Do not create giant "do everything" components.
 - Prefer primitives and composites to stay generic. Domain-specific components should not be mixed into the base UI layer.
+- Start from the current primitive family before adding a new one: `Button`/`IconButton` for actions, `ButtonGroup`/`ToggleButton`/`Tabs` for segmented selection, `TextInput`/`NumberInput`/`DateTimeInput` for fields, `List`/`Table` for virtualized rows, `Select`/`MultiSelect`/`FilterableSelect` for choices, and `Floating`/`Popover`/`Dropdown`/`Tooltip` for overlays.
+- For icon-only actions, use `IconButton` and an icon from `Icons`; for inline adornments, use `startContent` and `endContent`.
+- For compound components that consume `children`, flatten fragments like existing `ButtonGroup`, `Breadcrumbs`, `Tabs`, and `Table` primitives.
+- For very large option or row sets, prefer `itemCount` plus a renderer function, as in `List` and `Table`, instead of allocating sliced child arrays.
 - Before writing JSX, define:
     - component purpose
     - required props
@@ -192,11 +207,11 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 
 - Base new reusable component styling on the contracts already established in `src/web/ui/components`, and only add a new visual language when the existing one genuinely does not fit.
 - Define styles with a local `tv()` object named for the component, and use `slots` for multipart primitives like inputs, checkboxes, tooltips, and composed surfaces.
-- Reuse the shared semantic variant names whenever they fit the component: `variant` for presentation (`solid`, `outline`, `ghost`, `flat`), `color` for intent (`primary`, `secondary`, `success`, `danger`, `warning`), and `size` for scale (`sm`, `md`, `lg`).
+- Reuse the shared semantic variant names whenever they fit the component: `variant` for presentation (`solid`, `outline`, `ghost`, `flat`), `color` for intent (`default`, `primary`, `secondary`, `success`, `danger`, `warning`), and `size` for scale (`sm`, `md`, `lg`).
 - When a reusable component supports semantic color, map it through a local CSS variable such as `[--color-variant:var(--primary)]` and reference that variable in the classes instead of hardcoding separate color palettes in each variant.
 - Keep geometry aligned with the existing primitives: `rounded-lg` as the default surface radius, compact inline-flex or flex layouts, and the same height scale used by `Button`, `TextInput`, and `NumberInput` unless the component has a clear reason to differ.
 - Treat neutral dark surfaces as the default reusable component base. Inputs and other container-like controls should stay in the `bg-neutral-900/70` to `bg-neutral-800` family, while accent colors should be reserved for semantic actions, selection, and emphasis.
-- Expose `className` for single-surface components and a typed `classNames` object for multipart components. Merge overrides through `tw()` or `clsx` plus `tailwind-merge`, not by manually concatenating partial class fragments.
+- Expose `className` for single-surface components and a typed `classNames` object for multipart components. Merge overrides through `tw()` from `src/web/shared/util.ts` or `clsx` plus `tailwind-merge`, not by manually concatenating partial class fragments.
 - Prefer boolean styling flags that already exist in the component layer, such as `fullWidth`, `disabled`, `readOnly`, and `loading`, instead of forcing callers to recreate those states with ad hoc classes.
 - Disabled, read-only, and loading visuals should be handled by the component styles themselves with opacity, pointer-event, text, and background adjustments consistent with the current primitives, not by introducing separate alternate layouts.
 - Keep adornments inside the shared surface with explicit props such as `startContent`, `endContent`, `label`, or slot content instead of requiring wrapper elements around every usage.
@@ -265,8 +280,8 @@ This project uses **Valtio** and **Bunshi** for shared client-side state and orc
 - Follow OXC for both formatting and linting. Do not add Prettier or ESLint.
 - Respect OXC's current guardrails in new code: no import cycles, no floating promises, and prefer `performance.now()` over `Date.now()` for durations.
 - Keep modules focused and ownership clear.
-- Always add single-line comments to methods, functions, and relevant lines of code.
-- Validate with the smallest relevant check before finishing: `bun run lint`, the narrowest runtime check that exercises the changed path, and `bun run compile` when touching Bun runtime, env, or packaging code.
+- Add comments only where they explain non-obvious behavior, lifecycle cleanup, normalization, or interaction details.
+- Validate with the smallest relevant check before finishing: `git diff --check`, `bun run fmt:check`, `bun run lint`, the local `tsgo --noEmit` binary for type-only checks, the narrowest runtime check that exercises the changed path, and `bun run compile` when touching Bun runtime, env, packaging, or build-plugin code.
 - Preserve Bun-first workflows in every change.
 
 ## Placement Guide

@@ -43,14 +43,12 @@ const Header = memo(() => {
 
 const SlotItem = (name: string) => <span>{name}</span>
 
-const Body = memo(() => {
-	return (
+const Body = memo(() => (
 		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Status />
 			<Slot />
 		</div>
-	)
-})
+	))
 
 const Status = memo(() => {
 	const wheel = useMolecule(WheelMolecule)
@@ -80,13 +78,11 @@ const Slot = memo(() => {
 	)
 })
 
-const SlotPopover = memo(() => {
-	return (
+const SlotPopover = memo(() => (
 		<Popover trigger={<IconButton icon={Icons.Cog} />}>
 			<SlotPopoverContent />
 		</Popover>
-	)
-})
+	))
 
 const SlotPopoverContent = memo(() => {
 	const wheel = useMolecule(WheelMolecule)

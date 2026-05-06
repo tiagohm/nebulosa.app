@@ -19,13 +19,11 @@ export interface FilePickerProps {
 	readonly onChoose: (entries?: string[]) => void
 }
 
-export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => {
-	return (
+export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => (
 		<Modal footer={<Footer onChoose={onChoose} />} header={<Header header={header} />} id={id} maxWidth="416px" onHide={onChoose}>
 			<Body />
 		</Modal>
-	)
-})
+	))
 
 const Header = memo(({ header }: Pick<FilePickerProps, 'header'>) => {
 	const picker = useMolecule(FilePickerMolecule)
@@ -34,16 +32,14 @@ const Header = memo(({ header }: Pick<FilePickerProps, 'header'>) => {
 	return header ?? (mode === 'save' ? 'Save' : mode === 'directory' ? 'Open Directory' : 'Open File')
 })
 
-const Body = memo(() => {
-	return (
+const Body = memo(() => (
 		<div className="mt-0 flex flex-col flex-wrap gap-2">
 			<Toolbar />
 			<Filter />
 			<CreateDirectory />
 			<Files />
 		</div>
-	)
-})
+	))
 
 const Toolbar = memo(() => {
 	const picker = useMolecule(FilePickerMolecule)

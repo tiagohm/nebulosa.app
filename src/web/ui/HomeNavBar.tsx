@@ -5,8 +5,7 @@ import { ImagePickerButton } from './ImagePickerButton'
 import { IndiServerButton } from './IndiServerButton'
 import { WakeLockScreenButton } from './WakeLockScreenButton'
 
-export const HomeNavBar = memo(() => {
-	return (
+export const HomeNavBar = memo(() => (
 		<nav className="sticky top-0 z-1 w-full bg-neutral-900 shadow-none">
 			<header className="flex h-16 items-center justify-center gap-6 px-6">
 				<div className="flex items-center justify-center gap-3">
@@ -24,5 +23,4 @@ export const HomeNavBar = memo(() => {
 				</ul>
 			</header>
 		</nav>
-	)
-})
+	))

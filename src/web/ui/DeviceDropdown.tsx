@@ -54,33 +54,19 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 	)
 }
 
-export const CameraDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'CAMERA'>>, 'type'>) => {
-	return <DeviceDropdown tooltipContent="Camera" type="CAMERA" {...props} />
-})
+export const CameraDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'CAMERA'>>, 'type'>) => <DeviceDropdown tooltipContent="Camera" type="CAMERA" {...props} />)
 
-export const MountDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'MOUNT'>>, 'type'>) => {
-	return <DeviceDropdown tooltipContent="Mount" type="MOUNT" {...props} />
-})
+export const MountDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'MOUNT'>>, 'type'>) => <DeviceDropdown tooltipContent="Mount" type="MOUNT" {...props} />)
 
-export const WheelDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'WHEEL'>>, 'type'>) => {
-	return <DeviceDropdown tooltipContent="Filter Wheel" type="WHEEL" {...props} />
-})
+export const WheelDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'WHEEL'>>, 'type'>) => <DeviceDropdown tooltipContent="Filter Wheel" type="WHEEL" {...props} />)
 
-export const FocuserDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'FOCUSER'>>, 'type'>) => {
-	return <DeviceDropdown tooltipContent="Focuser" type="FOCUSER" {...props} />
-})
+export const FocuserDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'FOCUSER'>>, 'type'>) => <DeviceDropdown tooltipContent="Focuser" type="FOCUSER" {...props} />)
 
-export const RotatorDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'ROTATOR'>>, 'type'>) => {
-	return <DeviceDropdown tooltipContent="Rotator" type="ROTATOR" {...props} />
-})
+export const RotatorDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'ROTATOR'>>, 'type'>) => <DeviceDropdown tooltipContent="Rotator" type="ROTATOR" {...props} />)
 
-export const GuideOutputDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'GUIDE_OUTPUT'>>, 'type'>) => {
-	return <DeviceDropdown tooltipContent="Guide Output" type="GUIDE_OUTPUT" {...props} />
-})
+export const GuideOutputDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'GUIDE_OUTPUT'>>, 'type'>) => <DeviceDropdown tooltipContent="Guide Output" type="GUIDE_OUTPUT" {...props} />)
 
-const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected: boolean | undefined }) => {
-	return <Icons.Circle color={isConnected === undefined ? '#9353D3' : isConnected ? '#17C964' : '#F31260'} />
-})
+const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected: boolean | undefined }) => <Icons.Circle color={isConnected === undefined ? '#9353D3' : isConnected ? '#17C964' : '#F31260'} />)
 
 interface DeviceDropdownEndContentProps {
 	readonly device?: EquipmentDevice<Device>

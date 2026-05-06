@@ -23,7 +23,7 @@ export interface ConnectionState {
 	}
 }
 
-export const ConnectionComparator = (a: Connection, b: Connection) => {
+export function ConnectionComparator(a: Connection, b: Connection) {
 	return (b.connectedAt ?? 0) - (a.connectedAt ?? 0)
 }
 

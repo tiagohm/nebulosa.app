@@ -20,14 +20,12 @@ export const IndiServer = memo(() => {
 	)
 })
 
-const Body = memo(() => {
-	return (
+const Body = memo(() => (
 		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Inputs />
 			<Drivers />
 		</div>
-	)
-})
+	))
 
 const Inputs = memo(() => {
 	const indi = useMolecule(IndiServerMolecule)

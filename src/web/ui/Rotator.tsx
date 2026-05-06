@@ -39,16 +39,14 @@ const Header = memo(() => {
 	)
 })
 
-const Body = memo(() => {
-	return (
+const Body = memo(() => (
 		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Status />
 			<CurrentAngle />
 			<TargetAngle />
 			<Options />
 		</div>
-	)
-})
+	))
 
 const Status = memo(() => {
 	const rotator = useMolecule(RotatorMolecule)

@@ -24,15 +24,13 @@ export const AutoFocus = memo(() => {
 	)
 })
 
-const Body = memo(() => {
-	return (
+const Body = memo(() => (
 		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Devices />
 			<Status />
 			<Inputs />
 		</div>
-	)
-})
+	))
 
 const Devices = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)

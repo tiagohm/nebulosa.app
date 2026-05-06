@@ -1,7 +1,6 @@
 import { memo } from 'react'
 
-export const Crosshair = memo(() => {
-	return (
+export const Crosshair = memo(() => (
 		<svg className="crosshair pointer-events-none absolute top-0 left-0 h-full w-full" stroke="#E53935" strokeWidth={3}>
 			<line x1="0" x2="100%" y1="50%" y2="50%" />
 			<line x1="50%" x2="50%" y1="0" y2="100%" />
@@ -10,5 +9,4 @@ export const Crosshair = memo(() => {
 			<circle cx="50%" cy="50%" fill="none" r="15%" />
 			<circle cx="50%" cy="50%" fill="none" r="30%" />
 		</svg>
-	)
-})
+	))

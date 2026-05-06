@@ -19,14 +19,12 @@ export const ImageAnnotation = memo(() => {
 	)
 })
 
-const Body = memo(() => {
-	return (
+const Body = memo(() => (
 		<div className="mt-0 grid grid-cols-12 gap-2">
 			<StarsAndDsos />
 			<MinorPlanets />
 		</div>
-	)
-})
+	))
 
 const StarsAndDsos = memo(() => {
 	const annotation = useMolecule(ImageAnnotationMolecule)
@@ -46,9 +44,7 @@ const StarsAndDsos = memo(() => {
 
 const openSimbad = () => window.open('https://simbad.cds.unistra.fr/simbad/', '_blank', 'noopener')
 
-const SimbadLink = memo(() => {
-	return <IconButton icon={Icons.Link} onPointerUp={openSimbad} variant="ghost" />
-})
+const SimbadLink = memo(() => <IconButton icon={Icons.Link} onPointerUp={openSimbad} variant="ghost" />)
 
 const MinorPlanets = memo(() => {
 	const annotation = useMolecule(ImageAnnotationMolecule)

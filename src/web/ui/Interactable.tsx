@@ -41,8 +41,7 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 	const transformation = useRef<InteractTransform>({ x: 0, y: 0, scale: 1, angle: 0 })
 	const rotation = useRef(false)
 
-	useImperativeHandle(ref, () => {
-		return {
+	useImperativeHandle(ref, () => ({
 			get angle() {
 				return transformation.current.angle
 			},
@@ -85,8 +84,7 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 					}
 				}
 			},
-		}
-	}, [])
+		}), [])
 
 	// Prevent default gesture events to avoid zooming on iOS devices
 	// This is necessary to ensure that pinch and drag gestures work as expected

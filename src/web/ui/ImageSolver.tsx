@@ -25,11 +25,11 @@ export const ImageSolver = memo(() => {
 })
 
 const Body = memo(() => (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<Inputs />
-			<Solution />
-		</div>
-	))
+	<div className="mt-0 grid grid-cols-12 gap-2">
+		<Inputs />
+		<Solution />
+	</div>
+))
 
 const Inputs = memo(() => {
 	const solver = useMolecule(ImageSolverMolecule)

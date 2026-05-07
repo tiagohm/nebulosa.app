@@ -71,7 +71,7 @@ export const ConnectionBox = memo(() => {
 				<Select className="flex-1" disabled={loading || !!connected} items={connections} onValueChange={handleValueChange} value={selected} size="lg">
 					{ConnectionItem}
 				</Select>
-				<ConnectButton disabled={!selected} isConnected={!!connected} loading={loading} onPointerUp={connection.connect} />
+				<ConnectButton disabled={!selected} connected={!!connected} loading={loading} onPointerUp={connection.connect} />
 			</div>
 			<Activity mode={show && !connected ? 'visible' : 'hidden'}>
 				<ConnectionEdit />

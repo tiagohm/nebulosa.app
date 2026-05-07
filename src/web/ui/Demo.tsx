@@ -169,35 +169,35 @@ const ButtonGroups = memo(() => {
 })
 
 const BreadCrumbs = memo(() => (
-		<>
-			<Breadcrumbs>
-				<Button color="default" label="Home" size="sm" variant="ghost" />
-				<Button color="primary" label="Capture" size="sm" variant="ghost" />
-				<Chip color="secondary" label="Sequence" size="sm" />
-			</Breadcrumbs>
+	<>
+		<Breadcrumbs>
+			<Button color="default" label="Home" size="sm" variant="ghost" />
+			<Button color="primary" label="Capture" size="sm" variant="ghost" />
+			<Chip color="secondary" label="Sequence" size="sm" />
+		</Breadcrumbs>
 
-			<Breadcrumbs maxItems={3}>
-				<Button color="default" label="Home" size="sm" variant="ghost" />
-				<Button color="default" label="Profile" size="sm" variant="ghost" />
-				<Button color="default" label="Capture" size="sm" variant="ghost" />
-				<Button color="primary" label="Sequences" size="sm" variant="ghost" />
-				<Chip color="secondary" label="M42" size="sm" />
-			</Breadcrumbs>
+		<Breadcrumbs maxItems={3}>
+			<Button color="default" label="Home" size="sm" variant="ghost" />
+			<Button color="default" label="Profile" size="sm" variant="ghost" />
+			<Button color="default" label="Capture" size="sm" variant="ghost" />
+			<Button color="primary" label="Sequences" size="sm" variant="ghost" />
+			<Chip color="secondary" label="M42" size="sm" />
+		</Breadcrumbs>
 
-			<Breadcrumbs ellipsis={<Chip color="default" label="More" size="sm" />} maxItems={2} separator={<span>/</span>}>
-				<Button color="default" label="Home" size="sm" variant="ghost" />
-				<Button color="default" label="Equipment" size="sm" variant="ghost" />
-				<Button color="primary" label="Camera" size="sm" variant="ghost" />
-				<Chip color="success" label="Connected" size="sm" />
-			</Breadcrumbs>
+		<Breadcrumbs ellipsis={<Chip color="default" label="More" size="sm" />} maxItems={2} separator={<span>/</span>}>
+			<Button color="default" label="Home" size="sm" variant="ghost" />
+			<Button color="default" label="Equipment" size="sm" variant="ghost" />
+			<Button color="primary" label="Camera" size="sm" variant="ghost" />
+			<Chip color="success" label="Connected" size="sm" />
+		</Breadcrumbs>
 
-			<Breadcrumbs disabled>
-				<Button color="default" label="Home" size="sm" variant="ghost" />
-				<Button color="default" label="Settings" size="sm" variant="ghost" />
-				<span>Disabled</span>
-			</Breadcrumbs>
-		</>
-	))
+		<Breadcrumbs disabled>
+			<Button color="default" label="Home" size="sm" variant="ghost" />
+			<Button color="default" label="Settings" size="sm" variant="ghost" />
+			<span>Disabled</span>
+		</Breadcrumbs>
+	</>
+))
 
 const TextInputs = memo(() => {
 	const [value, setValue] = useState('A')
@@ -527,15 +527,15 @@ const MultiSelects = memo(() => {
 })
 
 const Tables = memo(() => (
-		<Table className="min-w-80" rowHeight={28} columnCount={3} rowCount={2} onAction={(row, col) => alert(`row: ${row}, col: ${col}`)} overscan={8}>
-			<span>Name</span>
-			<span>Magnitude</span>
-			<span>Type</span>
-			<span>M1</span>
-			<span>8.4</span>
-			<span>Supernova Remnant</span>
-			<span>M2</span>
-			<span>6.3</span>
-			<span>Globular Cluster</span>
-		</Table>
-	))
+	<Table className="min-w-80" rowHeight={28} columnCount={3} rowCount={2} onAction={(row, col) => alert(`row: ${row}, col: ${col}`)} overscan={8}>
+		<span>Name</span>
+		<span>Magnitude</span>
+		<span>Type</span>
+		<span>M1</span>
+		<span>8.4</span>
+		<span>Supernova Remnant</span>
+		<span>M2</span>
+		<span>6.3</span>
+		<span>Globular Cluster</span>
+	</Table>
+))

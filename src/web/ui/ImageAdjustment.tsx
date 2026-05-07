@@ -20,14 +20,14 @@ export const ImageAdjustment = memo(() => {
 })
 
 const Body = memo(() => (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<Enabled />
-			<Brightness />
-			<Contrast />
-			<Gamma />
-			<Saturation />
-		</div>
-	))
+	<div className="mt-0 grid grid-cols-12 gap-2">
+		<Enabled />
+		<Brightness />
+		<Contrast />
+		<Gamma />
+		<Saturation />
+	</div>
+))
 
 const Enabled = memo(() => {
 	const adjustment = useMolecule(ImageAdjustmentMolecule)

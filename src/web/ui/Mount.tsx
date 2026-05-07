@@ -41,7 +41,7 @@ const Header = memo(() => {
 	return (
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
-				<ConnectButton disabled={moving} isConnected={connected} loading={connecting} onPointerUp={mount.connect} />
+				<ConnectButton disabled={moving} connected={connected} loading={connecting} onPointerUp={mount.connect} />
 				<IndiPanelControlButton device={mount.scope.mount.name} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">

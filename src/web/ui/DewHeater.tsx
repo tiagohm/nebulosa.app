@@ -24,7 +24,7 @@ const Header = memo(() => {
 	return (
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
-				<ConnectButton isConnected={connected} loading={connecting} onPointerUp={dewHeater.connect} />
+				<ConnectButton connected={connected} loading={connecting} onPointerUp={dewHeater.connect} />
 				<IndiPanelControlButton device={dewHeater.scope.dewHeater.name} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">

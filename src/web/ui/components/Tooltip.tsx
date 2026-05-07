@@ -119,10 +119,13 @@ export function Tooltip({ autoFlip = true, children, className, classNames, clos
 	})
 
 	// Clears timers when the tooltip wrapper unmounts.
-	useEffect(() => () => {
+	useEffect(
+		() => () => {
 			clearTimer(showTimerRef)
 			clearTimer(hideTimerRef)
-		}, [])
+		},
+		[],
+	)
 
 	// Forces the tooltip closed when content disappears or the trigger becomes disabled.
 	useEffect(() => {

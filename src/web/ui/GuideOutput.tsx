@@ -16,7 +16,7 @@ export const GuideOutput = memo(() => {
 	const Header = (
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
-				<ConnectButton disabled={pulsing} isConnected={connected} loading={connecting} onPointerUp={guideOutput.connect} />
+				<ConnectButton disabled={pulsing} connected={connected} loading={connecting} onPointerUp={guideOutput.connect} />
 				<IndiPanelControlButton device={guideOutput.scope.guideOutput.name} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">

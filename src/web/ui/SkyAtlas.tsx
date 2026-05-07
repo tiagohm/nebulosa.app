@@ -102,7 +102,9 @@ const TabPopoverContent = memo(() => {
 
 	return (
 		<div className="inline-flex flex-row gap-2">
-			{Object.entries(TAB_ICONS).map(([key, icon]) => <IconButton icon={icon} key={key} onPointerUp={() => (atlas.state.tab = key as never)} tooltipContent={key} />)}
+			{Object.entries(TAB_ICONS).map(([key, icon]) => (
+				<IconButton icon={icon} key={key} onPointerUp={() => (atlas.state.tab = key as never)} tooltipContent={key} />
+			))}
 		</div>
 	)
 })
@@ -600,13 +602,13 @@ const GalaxyTable = memo(() => {
 			<span>Type</span>
 			<span>Const.</span>
 			{result.map((item) => (
-					<>
-						<span>{skyObjectName(item.name, item.constellation)}</span>
-						<span>{item.magnitude}</span>
-						<span>{skyObjectType(item.type)}</span>
-						<span>{CONSTELLATION_LIST[item.constellation]}</span>
-					</>
-				))}
+				<>
+					<span>{skyObjectName(item.name, item.constellation)}</span>
+					<span>{item.magnitude}</span>
+					<span>{skyObjectType(item.type)}</span>
+					<span>{CONSTELLATION_LIST[item.constellation]}</span>
+				</>
+			))}
 		</Table>
 	)
 })
@@ -653,12 +655,12 @@ const SatelliteTable = memo(() => {
 			<span>Name</span>
 			<span>Group</span>
 			{result.map((item) => (
-					<>
-						<span>{item.id}</span>
-						<span>{item.name}</span>
-						<span>{item.groups.join(', ')}</span>
-					</>
-				))}
+				<>
+					<span>{item.id}</span>
+					<span>{item.name}</span>
+					<span>{item.groups.join(', ')}</span>
+				</>
+			))}
 		</Table>
 	)
 })
@@ -774,14 +776,14 @@ interface AstronomicalEventProps {
 }
 
 const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format }: AstronomicalEventProps) => (
-		<div className="flex flex-col gap-0">
-			<span className="flex items-start gap-1 font-bold">
-				<Icon />
-				{label}
-			</span>
-			<span className="mb-1 ps-5">{formatTemporal(time, format, offset)}</span>
-		</div>
-	))
+	<div className="flex flex-col gap-0">
+		<span className="flex items-start gap-1 font-bold">
+			<Icon />
+			{label}
+		</span>
+		<span className="mb-1 ps-5">{formatTemporal(time, format, offset)}</span>
+	</div>
+))
 
 interface EphemerisAndChartTag {
 	readonly label: string
@@ -909,23 +911,23 @@ function ChartTickFormatter(value: unknown, i: number) {
 const DEFAULT_AREA_PROPS: Partial<AreaProps<keyof EphemerisChartData, number>> = { dot: false, connectNulls: true, activeDot: false, fillOpacity: 0.3, isAnimationActive: false, stroke: 'transparent', type: 'monotone' }
 
 const EphemerisChart = memo(({ data }: EphemerisChartProps) => (
-		<ComposedChart data={data} height={120} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive>
-			<XAxis dataKey="name" domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={ChartTickFormatter} tickMargin={6} />
-			<YAxis domain={[0, 90]} width={25} />
-			<Area dataKey="dayFirst" fill="#FFF176" {...DEFAULT_AREA_PROPS} />
-			<Area dataKey="civilDusk" fill="#7986CB" {...DEFAULT_AREA_PROPS} />
-			<Area dataKey="nauticalDusk" fill="#3F51B5" {...DEFAULT_AREA_PROPS} />
-			<Area dataKey="astronomicalDusk" fill="#303F9F" {...DEFAULT_AREA_PROPS} />
-			<Area dataKey="night" fill="#1A237E" {...DEFAULT_AREA_PROPS} />
-			<Area dataKey="astronomicalDawn" fill="#303F9F" {...DEFAULT_AREA_PROPS} />
-			<Area dataKey="nauticalDawn" fill="#3F51B5" {...DEFAULT_AREA_PROPS} />
-			<Area dataKey="civilDawn" fill="#7986CB" {...DEFAULT_AREA_PROPS} />
-			<Area dataKey="dayLast" fill="#FFF176" {...DEFAULT_AREA_PROPS} />
-			<CartesianGrid stroke="#FFFFFF10" strokeDasharray="3 3" />
-			<ChartTooltip content={ChartTooltipContent} />
-			<Line dataKey="value" dot={false} isAnimationActive={false} stroke="#F44336" strokeWidth={2} type="monotone" />
-		</ComposedChart>
-	))
+	<ComposedChart data={data} height={120} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive>
+		<XAxis dataKey="name" domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={ChartTickFormatter} tickMargin={6} />
+		<YAxis domain={[0, 90]} width={25} />
+		<Area dataKey="dayFirst" fill="#FFF176" {...DEFAULT_AREA_PROPS} />
+		<Area dataKey="civilDusk" fill="#7986CB" {...DEFAULT_AREA_PROPS} />
+		<Area dataKey="nauticalDusk" fill="#3F51B5" {...DEFAULT_AREA_PROPS} />
+		<Area dataKey="astronomicalDusk" fill="#303F9F" {...DEFAULT_AREA_PROPS} />
+		<Area dataKey="night" fill="#1A237E" {...DEFAULT_AREA_PROPS} />
+		<Area dataKey="astronomicalDawn" fill="#303F9F" {...DEFAULT_AREA_PROPS} />
+		<Area dataKey="nauticalDawn" fill="#3F51B5" {...DEFAULT_AREA_PROPS} />
+		<Area dataKey="civilDawn" fill="#7986CB" {...DEFAULT_AREA_PROPS} />
+		<Area dataKey="dayLast" fill="#FFF176" {...DEFAULT_AREA_PROPS} />
+		<CartesianGrid stroke="#FFFFFF10" strokeDasharray="3 3" />
+		<ChartTooltip content={ChartTooltipContent} />
+		<Line dataKey="value" dot={false} isAnimationActive={false} stroke="#F44336" strokeWidth={2} type="monotone" />
+	</ComposedChart>
+))
 
 function makeEphemerisChart(data: readonly number[], twilight: Twilight = EMPTY_TWILIGHT): EphemerisChartData[] {
 	const chart = new Array<EphemerisChartData>(1441)

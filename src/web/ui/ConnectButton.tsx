@@ -1,10 +1,11 @@
-import { Button, type ButtonProps } from './components/Button'
+import type { ButtonProps } from './components/Button'
+import { ToggleButton } from './components/ToggleButton'
 import { Icons } from './Icon'
 
 export interface ConnectButtonProps extends Omit<ButtonProps, 'color' | 'children'> {
-	readonly isConnected: boolean
+	readonly connected: boolean
 }
 
-export function ConnectButton({ isConnected, ...props }: ConnectButtonProps) {
-	return <Button children={isConnected ? <Icons.Close /> : <Icons.Connect />} color={isConnected ? 'danger' : 'primary'} hideChildrenOnLoading tooltipContent={isConnected ? 'Disconnect' : 'Connect'} {...props} />
+export function ConnectButton({ connected, ...props }: ConnectButtonProps) {
+	return <ToggleButton onVariant="flat" onIcon={Icons.Close} offIcon={Icons.Connect} color={connected ? 'danger' : 'primary'} hideChildrenOnLoading tooltipContent={connected ? 'Disconnect' : 'Connect'} {...props} />
 }

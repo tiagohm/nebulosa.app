@@ -24,20 +24,20 @@ export const ImageFov = memo(() => {
 })
 
 const Body = memo(() => (
-		<div className="mt-0 grid grid-cols-12 items-center gap-2">
-			<FovList />
-			<Edit />
-		</div>
-	))
+	<div className="mt-0 grid grid-cols-12 items-center gap-2">
+		<FovList />
+		<Edit />
+	</div>
+))
 
 const Edit = memo(() => (
-		<>
-			<Telescope />
-			<Camera />
-			<OrientationAndOptics />
-			<Actions />
-		</>
-	))
+	<>
+		<Telescope />
+		<Camera />
+		<OrientationAndOptics />
+		<Actions />
+	</>
+))
 
 const Telescope = memo(() => {
 	const fov = useMolecule(ImageFovMolecule)
@@ -125,27 +125,27 @@ const FovList = memo(() => {
 })
 
 const ComputedFovItem = memo((item: FovItem) => (
-		<div className="flex flex-row flex-wrap items-center justify-between gap-1">
-			<span>
-				<strong>FL:</strong> {item.focalLength}mm
-			</span>
-			<span>
-				<strong>AP:</strong> {item.aperture}mm
-			</span>
-			<span>
-				<strong>SZ:</strong> {item.cameraWidth}x{item.cameraHeight} px
-			</span>
-			<span>
-				<strong>PS:</strong> {item.pixelWidth.toFixed(2)}x{item.pixelHeight.toFixed(2)} µm
-			</span>
-			<span>
-				<strong>BIN:</strong> {item.bin}
-			</span>
-			<span>
-				<strong>B/R:</strong> {item.barlowReducer.toFixed(2)}x
-			</span>
-			<span>
-				<strong>ROT:</strong> {item.rotation.toFixed(1)}°
-			</span>
-		</div>
-	))
+	<div className="flex flex-row flex-wrap items-center justify-between gap-1">
+		<span>
+			<strong>FL:</strong> {item.focalLength}mm
+		</span>
+		<span>
+			<strong>AP:</strong> {item.aperture}mm
+		</span>
+		<span>
+			<strong>SZ:</strong> {item.cameraWidth}x{item.cameraHeight} px
+		</span>
+		<span>
+			<strong>PS:</strong> {item.pixelWidth.toFixed(2)}x{item.pixelHeight.toFixed(2)} µm
+		</span>
+		<span>
+			<strong>BIN:</strong> {item.bin}
+		</span>
+		<span>
+			<strong>B/R:</strong> {item.barlowReducer.toFixed(2)}x
+		</span>
+		<span>
+			<strong>ROT:</strong> {item.rotation.toFixed(1)}°
+		</span>
+	</div>
+))

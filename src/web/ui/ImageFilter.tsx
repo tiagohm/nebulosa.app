@@ -22,17 +22,17 @@ export const ImageFilter = memo(() => {
 })
 
 const Body = memo(() => (
-		<Tabs className="w-full">
-			<Tab id="kernel">Kernel</Tab>
-			<Tab id="fft">FFT</Tab>
-			<TabPanel id="kernel">
-				<Kernel />
-			</TabPanel>
-			<TabPanel id="fft">
-				<FFT />
-			</TabPanel>
-		</Tabs>
-	))
+	<Tabs className="w-full">
+		<Tab id="kernel">Kernel</Tab>
+		<Tab id="fft">FFT</Tab>
+		<TabPanel id="kernel">
+			<Kernel />
+		</TabPanel>
+		<TabPanel id="fft">
+			<FFT />
+		</TabPanel>
+	</Tabs>
+))
 
 const Kernel = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)

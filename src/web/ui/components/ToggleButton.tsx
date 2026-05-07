@@ -1,6 +1,6 @@
 import { IconButton, type IconButtonProps } from './IconButton'
 
-export interface ToggleButtonProps extends Omit<IconButtonProps, 'variant'> {
+export interface ToggleButtonProps extends Omit<Partial<IconButtonProps>, 'variant'> {
 	readonly selected?: boolean
 	readonly onValueChange?: (value: boolean) => void
 	readonly offVariant?: IconButtonProps['variant']
@@ -22,5 +22,5 @@ export function ToggleButton({ selected = false, onClick, onValueChange, offVari
 		}
 	}
 
-	return <IconButton {...props} disabled={disabled} loading={loading} icon={selected ? (onIcon ?? icon) : (offIcon ?? icon)} onClick={handleClick} readOnly={readOnly} variant={selected ? onVariant : offVariant} />
+	return <IconButton {...props} disabled={disabled} loading={loading} icon={selected ? (onIcon ?? icon!) : (offIcon ?? icon!)} onClick={handleClick} readOnly={readOnly} variant={selected ? onVariant : offVariant} />
 }

@@ -32,14 +32,14 @@ const SubHeader = memo(() => {
 })
 
 const Body = memo(() => (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<Connection />
-			<Settle />
-			<Dither />
-			<Buttons />
-			<Status />
-		</div>
-	))
+	<div className="mt-0 grid grid-cols-12 gap-2">
+		<Connection />
+		<Settle />
+		<Dither />
+		<Buttons />
+		<Status />
+	</div>
+))
 
 const Connection = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
@@ -59,7 +59,7 @@ const Connection = memo(() => {
 				<DeviceChooser />
 			</Activity>
 			<div className="col-span-2 flex flex-row items-center justify-center gap-2">
-				<ConnectButton disabled={!camera || !guideOutput} isConnected={connected} onPointerUp={phd2.connect} />
+				<ConnectButton disabled={!camera || !guideOutput} connected={connected} onPointerUp={phd2.connect} />
 			</div>
 		</>
 	)

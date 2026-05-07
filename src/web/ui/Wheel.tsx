@@ -30,7 +30,7 @@ const Header = memo(() => {
 	return (
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
-				<ConnectButton isConnected={connected} loading={connecting} onPointerUp={wheel.connect} />
+				<ConnectButton connected={connected} loading={connecting} onPointerUp={wheel.connect} />
 				<IndiPanelControlButton device={wheel.scope.wheel.name} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">
@@ -44,11 +44,11 @@ const Header = memo(() => {
 const SlotItem = (name: string) => <span>{name}</span>
 
 const Body = memo(() => (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<Status />
-			<Slot />
-		</div>
-	))
+	<div className="mt-0 grid grid-cols-12 gap-2">
+		<Status />
+		<Slot />
+	</div>
+))
 
 const Status = memo(() => {
 	const wheel = useMolecule(WheelMolecule)
@@ -79,10 +79,10 @@ const Slot = memo(() => {
 })
 
 const SlotPopover = memo(() => (
-		<Popover trigger={<IconButton icon={Icons.Cog} />}>
-			<SlotPopoverContent />
-		</Popover>
-	))
+	<Popover trigger={<IconButton icon={Icons.Cog} />}>
+		<SlotPopoverContent />
+	</Popover>
+))
 
 const SlotPopoverContent = memo(() => {
 	const wheel = useMolecule(WheelMolecule)

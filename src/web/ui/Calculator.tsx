@@ -18,40 +18,40 @@ export const Calculator = memo(() => {
 })
 
 const Body = memo(() => (
-		<div className="mt-0 px-1 py-2">
-			<Tabs placement="start">
-				<Tab id="focalLength">Focal Length</Tab>
-				<Tab id="focalRatio">Focal Ratio</Tab>
-				<Tab id="dawes">Dawes Limit</Tab>
-				<Tab id="rayleigh">Rayleigh Limit</Tab>
-				<Tab id="limitingMagnitude">Limiting Magnitude</Tab>
-				<Tab id="lightGraspRatio">Light Grasp Ratio</Tab>
-				<Tab id="ccdResolution">CCD Resolution</Tab>
+	<div className="mt-0 px-1 py-2">
+		<Tabs placement="start">
+			<Tab id="focalLength">Focal Length</Tab>
+			<Tab id="focalRatio">Focal Ratio</Tab>
+			<Tab id="dawes">Dawes Limit</Tab>
+			<Tab id="rayleigh">Rayleigh Limit</Tab>
+			<Tab id="limitingMagnitude">Limiting Magnitude</Tab>
+			<Tab id="lightGraspRatio">Light Grasp Ratio</Tab>
+			<Tab id="ccdResolution">CCD Resolution</Tab>
 
-				<TabPanel id="focalLength">
-					<FocalLength />
-				</TabPanel>
-				<TabPanel id="focalRatio">
-					<FocalRatio />
-				</TabPanel>
-				<TabPanel id="dawes">
-					<DawesLimit />
-				</TabPanel>
-				<TabPanel id="rayleigh">
-					<RayleighLimit />
-				</TabPanel>
-				<TabPanel id="limitingMagnitude">
-					<LimitingMagnitude />
-				</TabPanel>
-				<TabPanel id="lightGraspRatio">
-					<LightGraspRatio />
-				</TabPanel>
-				<TabPanel id="ccdResolution">
-					<CCDResolution />
-				</TabPanel>
-			</Tabs>
-		</div>
-	))
+			<TabPanel id="focalLength">
+				<FocalLength />
+			</TabPanel>
+			<TabPanel id="focalRatio">
+				<FocalRatio />
+			</TabPanel>
+			<TabPanel id="dawes">
+				<DawesLimit />
+			</TabPanel>
+			<TabPanel id="rayleigh">
+				<RayleighLimit />
+			</TabPanel>
+			<TabPanel id="limitingMagnitude">
+				<LimitingMagnitude />
+			</TabPanel>
+			<TabPanel id="lightGraspRatio">
+				<LightGraspRatio />
+			</TabPanel>
+			<TabPanel id="ccdResolution">
+				<CCDResolution />
+			</TabPanel>
+		</Tabs>
+	</div>
+))
 
 interface FormulaProps {
 	readonly description: string

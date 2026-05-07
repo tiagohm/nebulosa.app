@@ -1,10 +1,12 @@
 import type { PlateSolverType } from 'src/shared/types'
-import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
+import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['ASTAP', 'ASTROMETRY_NET', 'NOVA_ASTROMETRY_NET'] as const
 const LABELS = ['Astap', 'Astrometry.net (offline)', 'Nova Astrometry.net'] as const
 
-const PlateSolverItem: SelectItemRenderer<PlateSolverType> = (_, i) => <span>{LABELS[i]}</span>
+function PlateSolverItem(item: PlateSolverType, i: number) {
+	return <span>{LABELS[i]}</span>
+}
 
 export type PlateSolverSelectProps = Omit<SelectProps<PlateSolverType>, 'children' | 'items'>
 

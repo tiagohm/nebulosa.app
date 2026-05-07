@@ -1,10 +1,12 @@
 import type { ImageFormat } from 'nebulosa/src/image.types'
-import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
+import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['jpeg'] as const
 const LABELS = ['JPEG'] as const
 
-const ImageFormatItem: SelectItemRenderer<ImageFormat> = (_, i) => <span>{LABELS[i]}</span>
+function ImageFormatItem(item: ImageFormat, i: number) {
+	return <span>{LABELS[i]}</span>
+}
 
 export type ImageFormatSelectProps = Omit<SelectProps<ImageFormat>, 'children' | 'items'>
 

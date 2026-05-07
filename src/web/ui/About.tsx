@@ -1,5 +1,6 @@
 import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
+import { useSnapshot } from 'valtio'
 import brazilLogo from '@/assets/brazil.png'
 import nebulosaLogo from '@/assets/nebulosa.ico'
 import { AboutMolecule } from '@/molecules/about'
@@ -9,49 +10,116 @@ import { Link } from './components/Link'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 
+const PROJECT_URL = 'https://github.com/tiagohm/nebulosa.app'
+
+const ICON_CREDITS = [
+	{ href: 'https://www.flaticon.com/', label: 'Flaticon' },
+	{ href: 'https://lucide.dev/icons/', label: 'Lucide' },
+	{ href: 'https://pictogrammers.com/library/mdi/', label: 'MDI' },
+	{ href: 'https://tabler.io/icons/', label: 'Tabler' },
+] as const
+
+const STACK_LINKS = [
+	{ href: 'https://react.dev/', label: 'React', version: packageJson.dependencies.react },
+	{ href: 'https://bun.sh/', label: 'Bun', version: undefined },
+	{ href: 'https://tailwindcss.com/', label: 'Tailwind CSS', version: packageJson.dependencies.tailwindcss },
+] as const
+
+function StackLinktem(item: (typeof STACK_LINKS)[number]) {
+	return <LinkButton href={item.href} key={item.label} label={item.version === undefined ? item.label : `${item.label} ${item.version}`} />
+}
+
+function IconCreditItem(item: (typeof ICON_CREDITS)[number]) {
+	return <Link className="w-auto!" color="default" href={item.href} key={item.label} label={item.label} underline />
+}
+
 export const About = memo(() => {
 	const about = useMolecule(AboutMolecule)
-
-	const Header = (
-		<div className="ms-10 flex w-full items-center justify-center gap-3 text-4xl font-bold">
-			Nebulosa <Chip>{packageJson.version}</Chip>
-		</div>
-	)
+	const { year } = useSnapshot(about.state)
 
 	return (
-		<Modal header={Header} id="about" maxWidth="448px" onHide={about.hide}>
-			<div className="mt-0 grid grid-cols-12 gap-2">
-				<div className="col-span-full row-span-6 flex flex-col items-center gap-2 sm:col-span-3">
-					<img className="max-h-35" src={nebulosaLogo} />
-					<a href="https://github.com/tiagohm/nebulosa.app" rel="noreferrer" target="_blank">
-						<img src="https://img.shields.io/github/stars/tiagohm/nebulosa.app?style=flat&label=GitHub&color=%231a1e23" />
-					</a>
+		<Modal header={<Header />} id="about" maxWidth="472px" onHide={about.hide}>
+			<div className="grid grid-cols-12 gap-3">
+				<div className="col-span-full flex flex-col items-center gap-3 sm:col-span-4">
+					<img className="size-28 rounded-lg p-2" src={nebulosaLogo} />
+					<LinkButton href={PROJECT_URL} icon={<Icons.Link />} label="GitHub" />
 				</div>
-				<div className="col-span-full text-center text-gray-300 sm:col-span-9">The complete integrated solution for all of your astronomical imaging needs.</div>
-				<div className="col-span-full flex flex-row items-center justify-center gap-1 text-xs text-gray-400 sm:col-span-9">
-					© 2022-{about.state.year} Tiago Melo <img className="mx-1 w-6" src={brazilLogo} /> All rights reserved
+				<div className="col-span-full flex min-w-0 flex-col gap-3 sm:col-span-8">
+					<p className="text-center text-sm leading-5 text-neutral-300">{packageJson.description}</p>
+					<div className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-3">
+						<InfoRow label="Version">
+							<Chip color="primary" label={packageJson.version} size="sm" />
+						</InfoRow>
+						<InfoRow label="License">
+							<span>{packageJson.license}</span>
+						</InfoRow>
+						<InfoRow label="Author">
+							<span className="inline-flex min-w-0 items-center gap-1">
+								{packageJson.author.name}
+								<img className="h-4 w-5 shrink-0" src={brazilLogo} />
+							</span>
+						</InfoRow>
+						<InfoRow label="Copyright">
+							<span>2022-{year}</span>
+						</InfoRow>
+					</div>
+					<div className="rounded-lg border border-(--color-variant)/20 bg-(--color-variant)/10 p-3 text-center text-sm leading-5 text-neutral-200 [--color-variant:var(--warning)]">
+						This software is WIP, comes with absolutely no warranty, and the copyright holder is not liable or responsible for anything.
+					</div>
 				</div>
-				<div className="col-span-full mt-4 rounded-2xl bg-blue-600/10 p-4 text-center sm:col-span-9">This software is WIP, comes with absolutely no warranty and the copyright holder is not liable or responsible for anything.</div>
-				<div className="col-span-full flex flex-row flex-nowrap items-center justify-center gap-1 rounded-2xl bg-green-600/10 px-4 py-2 text-sm sm:col-span-9">
-					<Icons.Link />
-					Icons from
-					<Link className="w-auto! underline" href="https://www.flaticon.com/" label="Flaticon" />
-					,
-					<Link className="w-auto! underline" href="https://lucide.dev/icons/" label="Lucide" />
-					,
-					<Link className="w-auto! underline" href="https://pictogrammers.com/library/mdi/" label="MDI" />
-					and
-					<Link className="w-auto! underline" href="https://tabler.io/icons/" label="Tabler" />
+				<div className="col-span-full flex flex-wrap items-center justify-center gap-1.5 border-t border-neutral-800 pt-3 text-xs text-neutral-400">
+					<span>Powered by</span>
+					{STACK_LINKS.map(StackLinktem)}
 				</div>
-				<div className="col-span-full mt-4 mb-1 flex flex-row flex-wrap items-center justify-center gap-1 text-xs sm:col-span-9">
-					Powered by
-					<Link className="w-auto! rounded bg-neutral-700 px-1 text-neutral-100!" href="https://react.dev/" label="React" />
-					and
-					<Link className="w-auto! rounded bg-neutral-700 px-1 text-neutral-100!" href="https://bun.sh/" label="Bun" />
-					and developed with <Icons.Heart color="red" /> by
-					<Link className="w-auto! rounded bg-neutral-700 px-1 text-neutral-100!" href="https://github.com/tiagohm" label="Me" />
+				<div className="col-span-full flex flex-wrap items-center justify-center gap-1.5 text-xs text-neutral-500">
+					<Icons.Link className="shrink-0" />
+					<span>Icons from</span>
+					{ICON_CREDITS.map(IconCreditItem)}
 				</div>
 			</div>
 		</Modal>
 	)
 })
+
+interface InfoRowProps {
+	readonly children: ReactNode
+	readonly label: string
+}
+
+function InfoRow({ children, label }: InfoRowProps) {
+	return (
+		<div className="grid grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-2 py-1 text-sm">
+			<span className="text-neutral-500">{label}</span>
+			<div className="min-w-0 text-neutral-200">{children}</div>
+		</div>
+	)
+}
+
+interface LinkButtonProps {
+	readonly href: string
+	readonly icon?: ReactNode
+	readonly label: ReactNode
+}
+
+function LinkButton({ href, icon, label }: LinkButtonProps) {
+	return (
+		<Link
+			className="w-auto! rounded-lg bg-neutral-800 px-2 py-1 text-neutral-100! hover:bg-neutral-700"
+			href={href}
+			label={
+				<span className="inline-flex min-w-0 items-center gap-1">
+					{icon}
+					<span className="min-w-0 truncate">{label}</span>
+				</span>
+			}
+		/>
+	)
+}
+
+function Header() {
+	return (
+		<div className="ms-10 flex min-w-0 flex-1 items-center justify-center gap-3">
+			<span className="min-w-0 truncate text-3xl font-bold text-neutral-100">Nebulosa</span>
+		</div>
+	)
+}

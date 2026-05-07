@@ -3,8 +3,8 @@ import { tw } from '@/shared/util'
 
 const linkStyles = tv({
 	slots: {
-		base: 'inline-block min-w-0 text-center transition',
-		anchor: 'inline-block max-w-full min-w-0 truncate outline-none transition',
+		base: 'inline-flex items-center justify-center min-w-0 text-center transition',
+		anchor: 'inline-flex items-center max-w-full min-w-0 truncate outline-none transition',
 	},
 	variants: {
 		size: {

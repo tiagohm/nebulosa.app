@@ -1,8 +1,17 @@
 import { createUseGesture, dragAction, type GestureHandlers, pinchAction, wheelAction } from '@use-gesture/react'
-import { memo, useImperativeHandle, useLayoutEffect, useRef } from 'react'
-import { preventDefault } from '@/shared/util'
+import { memo, useEffectEvent, useImperativeHandle, useLayoutEffect, useRef } from 'react'
+import { clamp, preventDefault } from '@/shared/util'
 
 export type InteractType = 'drag' | 'pinch' | 'wheel' | 'none'
+
+const MIN_SCALE = 0.1
+const MAX_SCALE = 500
+const ZOOM_STEPS_PER_DOUBLE = 8
+const WHEEL_DELTA_PER_ZOOM_STEP = 100
+const WHEEL_LINE_DELTA = 40
+const ZOOM_STEP_EPSILON = 1e-10
+const MIN_ZOOM_STEP = Math.floor(Math.log2(MIN_SCALE) * ZOOM_STEPS_PER_DOUBLE)
+const MAX_ZOOM_STEP = Math.ceil(Math.log2(MAX_SCALE) * ZOOM_STEPS_PER_DOUBLE)
 
 export interface InteractTransform {
 	x: number
@@ -32,16 +41,76 @@ export interface InteractableProps extends Omit<GestureHandlers, 'onDragStart' |
 // Better tree shaking with createUseGesture
 const useGesture = createUseGesture([dragAction, pinchAction, wheelAction])
 
+let documentGestureListeners = 0
+
 function normalizeAngle(angle: number) {
 	return angle === 0 ? 0 : ((angle % 360) + 360) % 360
+}
+
+function normalizeScale(scale: number, fallback: number) {
+	return Number.isFinite(scale) ? clamp(scale, MIN_SCALE, MAX_SCALE) : fallback
+}
+
+function zoomStepFromScale(scale: number, direction: number) {
+	const currentScale = normalizeScale(scale, 1)
+	const currentStep = Math.log2(currentScale) * ZOOM_STEPS_PER_DOUBLE
+
+	if (direction > 0) return Math.floor(currentStep + ZOOM_STEP_EPSILON)
+	if (direction < 0) return Math.ceil(currentStep - ZOOM_STEP_EPSILON)
+	return Math.round(currentStep)
+}
+
+function zoomScaleBySteps(scale: number, steps: number, currentStep?: number) {
+	if (steps === 0) return { scale, step: currentStep }
+
+	const step = Math.trunc(clamp((currentStep ?? zoomStepFromScale(scale, steps)) + steps, MIN_ZOOM_STEP, MAX_ZOOM_STEP))
+
+	return { scale: normalizeScale(2 ** (step / ZOOM_STEPS_PER_DOUBLE), normalizeScale(scale, 1)), step }
+}
+
+function normalizeWheelDeltaY(deltaY: number, deltaMode: number) {
+	if (deltaMode === 1) return deltaY * WHEEL_LINE_DELTA
+	if (deltaMode === 2) return deltaY * WHEEL_DELTA_PER_ZOOM_STEP
+	return deltaY
+}
+
+function addDocumentGestureListeners() {
+	if (documentGestureListeners++ === 0) {
+		document.addEventListener('gesturestart', preventDefault)
+		document.addEventListener('gesturechange', preventDefault)
+		document.addEventListener('gestureend', preventDefault)
+	}
+}
+
+function removeDocumentGestureListeners() {
+	documentGestureListeners = Math.max(documentGestureListeners - 1, 0)
+
+	if (documentGestureListeners === 0) {
+		document.removeEventListener('gesturestart', preventDefault)
+		document.removeEventListener('gesturechange', preventDefault)
+		document.removeEventListener('gestureend', preventDefault)
+	}
 }
 
 export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...handlers }: InteractableProps) => {
 	const wrapperRef = useRef<HTMLDivElement>(null)
 	const transformation = useRef<InteractTransform>({ x: 0, y: 0, scale: 1, angle: 0 })
 	const rotation = useRef(false)
+	const bodyUserSelect = useRef<string | undefined>(undefined)
+	const wheelZoomDelta = useRef(0)
+	const wheelZoomStep = useRef<number | undefined>(undefined)
 
-	useImperativeHandle(ref, () => ({
+	const transform = useEffectEvent((type: InteractType, event?: Event) => {
+		if (wrapperRef.current) {
+			const { x, y, scale, angle } = transformation.current
+			wrapperRef.current.style.transform = `translate(${x}px, ${y}px) scale(${scale}) rotate(${angle}deg)`
+			onGesture?.(transformation.current, type, event)
+		}
+	})
+
+	useImperativeHandle(
+		ref,
+		() => ({
 			get angle() {
 				return transformation.current.angle
 			},
@@ -49,12 +118,17 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 				return transformation.current.scale
 			},
 			zoomTo: (scale: number) => {
-				if (scale !== transformation.current.scale) {
-					transformation.current.scale = scale
+				const nextScale = normalizeScale(scale, transformation.current.scale)
+
+				if (nextScale !== transformation.current.scale) {
+					transformation.current.scale = nextScale
+					wheelZoomStep.current = undefined
 					transform('none')
 				}
 			},
 			rotateTo: (angle) => {
+				if (!Number.isFinite(angle)) return
+
 				angle = normalizeAngle(angle)
 
 				if (angle !== transformation.current.angle) {
@@ -76,36 +150,38 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 
 					if (ix > 0 && iy > 0) {
 						const { clientWidth: px, clientHeight: py } = parent
-						const { scale } = transformation.current
 
-						transformation.current.x = ((px - ix) / 2) * scale
-						transformation.current.y = ((py - iy) / 2) * scale
+						transformation.current.x = (px - ix) / 2
+						transformation.current.y = (py - iy) / 2
 						transform('none')
 					}
 				}
 			},
-		}), [])
+		}),
+		[],
+	)
 
 	// Prevent default gesture events to avoid zooming on iOS devices
 	// This is necessary to ensure that pinch and drag gestures work as expected
 	// without triggering the browser's default zoom behavior.
 	useLayoutEffect(() => {
-		document.addEventListener('gesturestart', preventDefault)
-		document.addEventListener('gesturechange', preventDefault)
-		document.addEventListener('gestureend', preventDefault)
+		addDocumentGestureListeners()
 
 		return () => {
-			document.removeEventListener('gesturestart', preventDefault)
-			document.removeEventListener('gesturechange', preventDefault)
-			document.removeEventListener('gestureend', preventDefault)
+			removeDocumentGestureListeners()
+			restoreBodyUserSelect()
 		}
 	}, [])
 
-	function transform(type: InteractType, event?: Event) {
-		if (wrapperRef.current) {
-			const { x, y, scale, angle } = transformation.current
-			wrapperRef.current.style.transform = `translate(${x}px, ${y}px) scale(${scale}) rotate(${angle}deg)`
-			onGesture?.(transformation.current, type, event)
+	function disableBodyUserSelect() {
+		bodyUserSelect.current ??= document.body.style.userSelect
+		document.body.style.userSelect = 'none'
+	}
+
+	function restoreBodyUserSelect() {
+		if (bodyUserSelect.current !== undefined) {
+			document.body.style.userSelect = bodyUserSelect.current
+			bodyUserSelect.current = undefined
 		}
 	}
 
@@ -120,12 +196,31 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 		}
 	}
 
+	function consumeWheelZoomSteps(deltaY: number) {
+		if (deltaY === 0) return 0
+
+		const direction = Math.sign(deltaY)
+
+		if (Math.sign(wheelZoomDelta.current) !== direction) {
+			wheelZoomDelta.current = 0
+		}
+
+		// Small trackpad deltas use the same fixed zoom ladder as mouse-wheel notches.
+		wheelZoomDelta.current += deltaY
+
+		if (Math.abs(wheelZoomDelta.current) < WHEEL_DELTA_PER_ZOOM_STEP) return 0
+
+		wheelZoomDelta.current = 0
+
+		return -direction
+	}
+
 	useGesture(
 		{
 			...handlers,
 			onDragStart: () => {
 				// Disable text selection during drag event
-				document.body.style.userSelect = 'none'
+				disableBodyUserSelect()
 			},
 			onDrag: ({ event, pinching, cancel, delta, movement, offset, tap, memo }) => {
 				if (pinching || tap) return cancel()
@@ -133,6 +228,8 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 				const { scale } = transformation.current
 
 				if (memo === undefined) {
+					if (!wrapperRef.current) return memo
+
 					const { offsetX, offsetY } = event as PointerEvent
 
 					if (rotation.current) {
@@ -142,7 +239,11 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 
 				if (memo !== undefined && memo[2] === true) {
 					const [x, y] = memo
-					const { clientWidth, clientHeight } = wrapperRef.current!
+					const wrapper = wrapperRef.current
+
+					if (!wrapper) return memo
+
+					const { clientWidth, clientHeight } = wrapper
 					const cx = clientWidth / 2
 					const cy = clientHeight / 2
 					const v0x = x - cx
@@ -164,26 +265,32 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 			},
 			onDragEnd: () => {
 				// Re-enable text selection after dragging
-				document.body.style.userSelect = ''
+				restoreBodyUserSelect()
 
 				rotation.current = false
 			},
-			onPinch: ({ event, origin: [ox, oy], first, offset: [s, a], memo }) => {
+			onPinch: ({ event, origin: [ox, oy], first, offset: [s], memo }) => {
+				const nextScale = normalizeScale(s, transformation.current.scale)
+
 				if (first) {
-					const rect = wrapperRef.current!.getBoundingClientRect()
+					const wrapper = wrapperRef.current
+
+					if (!wrapper) return memo
+
+					const rect = wrapper.getBoundingClientRect()
 					const tx = ox - (rect.x + rect.width / 2)
 					const ty = oy - (rect.y + rect.height / 2)
-					memo = [transformation.current.x, transformation.current.y, tx, ty, s] // Store initial position and scale
+					memo = [transformation.current.x, transformation.current.y, tx, ty, nextScale] // Store initial position and scale
 				}
 
 				// Calculate the position offset based on
 				// the distance from pinch origin to element center (memo[2] and memo[3])
-				// and the relative scale change (1 - s/memo[4])
-				const dx = memo[2] * (1 - s / memo[4])
-				const dy = memo[3] * (1 - s / memo[4])
+				// and the relative scale change (1 - nextScale/memo[4])
+				const dx = memo[2] * (1 - nextScale / memo[4])
+				const dy = memo[3] * (1 - nextScale / memo[4])
 
-				transformation.current.scale = s
-				// transform.current.angle = a
+				transformation.current.scale = nextScale
+				wheelZoomStep.current = undefined
 				transformation.current.x = memo[0] + dx
 				transformation.current.y = memo[1] + dy
 
@@ -194,15 +301,28 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 			onWheel: ({ event, delta }) => {
 				if (event.ctrlKey) return
 
-				if (event.shiftKey && delta[1]) {
+				const deltaY = normalizeWheelDeltaY(delta[1], event.deltaMode)
+
+				if (event.shiftKey && deltaY) {
+					wheelZoomDelta.current = 0
+					wheelZoomStep.current = undefined
+
 					const { angle } = transformation.current
 					const increment = event.altKey ? 0.1 : 1
-					transformation.current.angle = delta[1] < 0 ? (angle + increment) % 360 : (angle + 360 - increment) % 360
+					transformation.current.angle = deltaY < 0 ? (angle + increment) % 360 : (angle + 360 - increment) % 360
 					transform('wheel', event)
 					return
 				}
 
-				const rect = wrapperRef.current!.getBoundingClientRect()
+				const zoomSteps = consumeWheelZoomSteps(deltaY)
+
+				if (zoomSteps === 0) return
+
+				const wrapper = wrapperRef.current
+
+				if (!wrapper) return
+
+				const rect = wrapper.getBoundingClientRect()
 				const ox = event.clientX
 				const oy = event.clientY
 
@@ -211,10 +331,15 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 				const ty = oy - (rect.y + rect.height / 2)
 
 				// Calculate new scale (zoom in/out based on wheel direction)
-				const newScale = Math.min(Math.max(transformation.current.scale * 0.95 ** (delta[1] / 100), 0.1), 500)
+				const currentScale = transformation.current.scale
+				const { scale: newScale, step: nextZoomStep } = zoomScaleBySteps(currentScale, zoomSteps, wheelZoomStep.current)
+
+				if (newScale === currentScale) return
+
+				wheelZoomStep.current = nextZoomStep
 
 				// Calculate position offset to maintain zoom point
-				const f = 1 - newScale / transformation.current.scale
+				const f = 1 - newScale / currentScale
 				const dx = tx * f
 				const dy = ty * f
 
@@ -233,7 +358,11 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 				button: 0, // Left mouse button
 				filterTaps: true, // Ignore taps
 			},
-			pinch: { scaleBounds: { min: 0.1, max: 500 }, rubberband: true },
+			pinch: {
+				from: () => [transformation.current.scale, transformation.current.angle],
+				scaleBounds: { min: MIN_SCALE, max: MAX_SCALE },
+				rubberband: true,
+			},
 		},
 	)
 

@@ -4,7 +4,7 @@
 	/* https://observablehq.com/@shan/oklab-color-wheel */
 	--primary: oklab(0.9 -0.129 -0.483);
 	--secondary: oklab(0.9 0 -0.5);
-	--success: oklab(0.9 -0.321 0.383);
+	--success: oklab(0.65 -0.492 0.087);
 	--warning: oklab(0.9 0 0.5);
 	--danger: oklab(0.9 0.171 0.47);
 }

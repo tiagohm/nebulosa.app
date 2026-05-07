@@ -1,9 +1,9 @@
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
-import React, { Activity, memo } from 'react'
+import { Activity, memo, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerMolecule } from '@/molecules/filepicker'
-import { stopPropagation, tw } from '../shared/util'
+import { tw } from '../shared/util'
 import { Badge } from './components/Badge'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { Button } from './components/Button'
@@ -12,6 +12,8 @@ import { List } from './components/List'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
+
+const FILE_SIZE_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB'] as const
 
 export interface FilePickerProps {
 	readonly id: string
@@ -40,6 +42,21 @@ const Body = memo(() => (
 		<Files />
 	</div>
 ))
+
+function formatFileSize(size: number) {
+	if (!Number.isFinite(size) || size <= 0) return '0 B'
+
+	let value = size
+	let unitIndex = 0
+
+	while (value >= 1024 && unitIndex < FILE_SIZE_UNITS.length - 1) {
+		value /= 1024
+		unitIndex++
+	}
+
+	const digits = unitIndex === 0 ? 0 : value >= 10 ? 1 : 2
+	return `${value.toFixed(digits)} ${FILE_SIZE_UNITS[unitIndex]}`
+}
 
 const Toolbar = memo(() => {
 	const picker = useMolecule(FilePickerMolecule)
@@ -87,30 +104,35 @@ const CreateDirectory = memo(() => {
 
 const Files = memo(() => {
 	const picker = useMolecule(FilePickerMolecule)
-	const { mode, selected, filtered } = useSnapshot(picker.state)
+	const { mode, selected, filtered, filter } = useSnapshot(picker.state)
+	const selectedPaths = useMemo(() => new Set(selected), [selected])
+	const emptyContent = filter.trim().length > 0 ? 'No matching entries' : 'No entries'
 
-	function handleClick(event: React.MouseEvent<HTMLElement>) {
-		stopPropagation(event)
-		const index = +event.currentTarget.dataset.index!
-		return picker.select(filtered[index])
+	function handleAction(index: number) {
+		const item = filtered[index]
+		if (item !== undefined) void picker.select(item)
 	}
 
 	return (
-		<List itemHeight={42} itemCount={filtered.length}>
+		<List emptyContent={emptyContent} itemCount={filtered.length} itemHeight={44} onAction={handleAction}>
 			{(i) => {
 				const item = filtered[i]
 
+				if (item === undefined) return null
+
+				const selected = selectedPaths.has(item.path)
+				const Icon = item.directory ? Icons.Folder : Icons.File
+				const updatedAt = formatTemporal(item.updatedAt, 'YYYY-MM-DD HH:mm:ss')
+				const metadata = item.directory ? updatedAt : `${updatedAt} | ${formatFileSize(item.size)}`
+
 				return (
-					<div onClick={handleClick} data-index={i} className={tw('flex flex-row items-center justify-between gap-1 p-2 cursor-pointer border-e-2', selected.includes(item.path) ? 'border-green-700' : 'border-transparent')}>
-						{item.directory ? <Icons.Folder color="orange" /> : <Icons.File color="gray" />}
-						<div className="flex w-full flex-col justify-center gap-0">
-							<span className="w-0 break-all whitespace-nowrap">{item.name}</span>
-							<div className="flex w-full flex-row items-center justify-between gap-1">
-								<span className="text-xs text-gray-500">{formatTemporal(item.updatedAt, 'YYYY-MM-DD HH:mm:ss')}</span>
-								{!item.directory && <span className="text-xs text-gray-500">{item.size} B</span>}
-							</div>
+					<div className={tw('flex h-full min-w-0 cursor-pointer flex-row items-center gap-2 border-e-2 px-2 py-1 text-sm transition hover:bg-neutral-800/80', selected ? '[--color-variant:var(--success)] border-(--color-variant) bg-(--color-variant)/10' : 'border-transparent')}>
+						<Icon className={tw('shrink-0', item.directory ? 'text-(--warning)' : 'text-neutral-500')} />
+						<div className="flex min-w-0 flex-1 flex-col justify-center gap-0">
+							<span className="min-w-0 truncate text-neutral-100">{item.name}</span>
+							<span className="min-w-0 truncate text-xs text-neutral-500">{metadata}</span>
 						</div>
-						{mode === 'directory' && <IconButton color="secondary" icon={Icons.FolderOpen} onClick={() => picker.navigateTo(item)} />}
+						{mode === 'directory' && item.directory && <IconButton color="secondary" icon={Icons.FolderOpen} onClick={() => void picker.navigateTo(item)} tooltipContent="Open Directory" />}
 					</div>
 				)
 			}}
@@ -127,7 +149,7 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 		if (mode === 'save') {
 			void picker.save(onChoose)
 		} else {
-			onChoose(selected.length === 0 ? undefined : (selected as string[]))
+			onChoose(selected.length === 0 ? undefined : Array.from(selected))
 		}
 	}
 
@@ -139,7 +161,7 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 			</Activity>
 			<Activity mode={mode !== 'save' ? 'visible' : 'hidden'}>
 				<Button color="danger" disabled={selected.length === 0} label="Clear" onClick={picker.unselectAll} startContent={<Icons.Broom />} />
-				<Badge color="success" label={selected.length}>
+				<Badge color="success" label={selected.length} visible={selected.length > 0}>
 					<Button color="success" disabled={selected.length === 0} label="Choose" onClick={handleOnChoose} startContent={<Icons.Check />} />
 				</Badge>
 			</Activity>

@@ -1,6 +1,5 @@
 import { useMolecule } from 'bunshi/react'
 import { memo, type ReactNode } from 'react'
-import { useSnapshot } from 'valtio'
 import brazilLogo from '@/assets/brazil.png'
 import nebulosaLogo from '@/assets/nebulosa.ico'
 import { AboutMolecule } from '@/molecules/about'
@@ -35,7 +34,6 @@ function IconCreditItem(item: (typeof ICON_CREDITS)[number]) {
 
 export const About = memo(() => {
 	const about = useMolecule(AboutMolecule)
-	const { year } = useSnapshot(about.state)
 
 	return (
 		<Modal header={<Header />} id="about" maxWidth="472px" onHide={about.hide}>
@@ -60,7 +58,7 @@ export const About = memo(() => {
 							</span>
 						</InfoRow>
 						<InfoRow label="Copyright">
-							<span>2022-{year}</span>
+							<span>2022-{about.state.year}</span>
 						</InfoRow>
 					</div>
 					<div className="rounded-lg border border-(--color-variant)/20 bg-(--color-variant)/10 p-3 text-center text-sm leading-5 text-neutral-200 [--color-variant:var(--warning)]">

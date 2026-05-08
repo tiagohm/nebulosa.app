@@ -7,10 +7,16 @@ import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
+import { toast } from '../shared/toast'
+
+export const MIN_ALPACA_PORT = 80
+export const MAX_ALPACA_PORT = 65535
+export const DEFAULT_ALPACA_PORT = 2222
 
 export interface AlpacaState {
 	show: boolean
 	port: number
+	pendingAction?: 'start' | 'stop'
 	readonly status: AlpacaServerStatus
 }
 
@@ -62,12 +68,37 @@ export const AlpacaMolecule = molecule(() => {
 		status && Object.assign(state.status, status)
 	}
 
-	function start() {
-		return Api.Alpaca.start(state.port)
+	function normalizePort(port: unknown) {
+		if (typeof port !== 'number' || !Number.isFinite(port)) return DEFAULT_ALPACA_PORT
+		return Math.min(MAX_ALPACA_PORT, Math.max(MIN_ALPACA_PORT, Math.trunc(port)))
 	}
 
-	function stop() {
-		return Api.Alpaca.stop()
+	function updatePort(port: number) {
+		state.port = normalizePort(port)
+	}
+
+	async function start() {
+		try {
+			state.pendingAction = 'start'
+			return await Api.Alpaca.start(state.port)
+		} catch (e) {
+			console.error(e)
+			toast({ title: 'ASCOM ALPACA', description: 'Failed to start server', color: 'danger' })
+		} finally {
+			state.pendingAction = undefined
+		}
+	}
+
+	async function stop() {
+		try {
+			state.pendingAction = 'stop'
+			return await Api.Alpaca.stop()
+		} catch (e) {
+			console.error(e)
+			toast({ title: 'ASCOM ALPACA', description: 'Failed to stop server', color: 'danger' })
+		} finally {
+			state.pendingAction = undefined
+		}
 	}
 
 	function show() {
@@ -79,5 +110,5 @@ export const AlpacaMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, start, stop, show, hide } as const
+	return { state, updatePort, start, stop, show, hide } as const
 })

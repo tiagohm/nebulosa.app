@@ -65,9 +65,8 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 - Build executable: `bun run compile`
 - Format: `bun run fmt`
 - Format check: `bun run fmt:check`
-- Lint: `bun run lint`
+- Lint and Type-check: `bun run lint`
 - Lint with fixes: `bun run lint:fix`
-- Type-check: `node_modules\.bin\tsgo.exe --noEmit` on Windows, or the equivalent local `tsgo --noEmit` binary on other platforms.
 - Refresh codebase graph: `bun run index`
 - If tests are added, prefer `bun test` before introducing another test runner.
 - If a Bun wrapper command fails because of local bin remapping, use the direct local binary for the same tool and report that fallback.
@@ -225,6 +224,7 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 - Use `onMount` for subscriptions, timers, and browser lifecycle wiring, and always return a cleanup function when resources were acquired.
 - When shared browser state must survive reloads, persist it with `initProxy`, `storageGet`, or `storageSet` instead of ad hoc `localStorage` access inside UI components.
 - Reuse `src/shared/bus` for cross-feature browser events instead of introducing another event emitter.
+- Prefer add new logic into molecules instead of using useState and functions inside React component.
 
 ## Valtio Rules
 
@@ -281,7 +281,7 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 - Respect OXC's current guardrails in new code: no import cycles, no floating promises, and prefer `performance.now()` over `Date.now()` for durations.
 - Keep modules focused and ownership clear.
 - Add comments only where they explain non-obvious behavior, lifecycle cleanup, normalization, or interaction details.
-- Validate with the smallest relevant check before finishing: `git diff --check`, `bun run fmt:check`, `bun run lint`, the local `tsgo --noEmit` binary for type-only checks, the narrowest runtime check that exercises the changed path, and `bun run compile` when touching Bun runtime, env, packaging, or build-plugin code.
+- Validate with the smallest relevant check before finishing: `git diff --check`, `bun run fmt:check`, `bun run lint`, and `bun run compile` when touching Bun runtime, env, packaging, or build-plugin code.
 - Preserve Bun-first workflows in every change.
 
 ## Placement Guide

@@ -826,8 +826,8 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 	return (
 		<div className={tw('h-[140px] col-span-full relative flex flex-col justify-start items-center gap-1', className)}>
 			<div className="flex w-full flex-row gap-2 text-start text-sm font-bold">
-				<ToggleButton color="primary" icon={Icons.Info} selected={!showChart} onPointerUp={() => setShowChart(false)} />
-				<ToggleButton color="primary" icon={Icons.Chart} selected={showChart} onPointerUp={() => setShowChart(true)} />
+				<ToggleButton color="primary" icon={Icons.Info} value={!showChart} onPointerUp={() => setShowChart(false)} />
+				<ToggleButton color="primary" icon={Icons.Chart} value={showChart} onPointerUp={() => setShowChart(true)} />
 				<div className="flex flex-1 items-center justify-center overflow-hidden text-sm font-bold">
 					{tags?.map((tag) => (
 						<Chip color={tag.color} key={tag.label} label={tag.label} />

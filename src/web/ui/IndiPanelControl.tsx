@@ -15,7 +15,9 @@ import { ToggleButton } from './components/ToggleButton'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 
-const MessageFilter = (item: Message, text: string) => item.message.toLowerCase().includes(text)
+function FilterMessage(item: Message, text: string) {
+	return item.message.toLowerCase().includes(text)
+}
 
 export const IndiPanelControl = memo(() => {
 	const control = useMolecule(IndiPanelControlMolecule)
@@ -34,8 +36,8 @@ const Header = memo(() => {
 	return (
 		<div className="flex flex-row items-center justify-start gap-2">
 			<span className="me-3">INDI Panel Control</span>
-			<ToggleButton tooltipContent="Properties" color="secondary" icon={Icons.ViewList} selected={tab === 'property'} onPointerUp={() => (control.state.tab = 'property')} />
-			<ToggleButton tooltipContent="Messages" color="secondary" icon={Icons.Message} selected={tab === 'message'} onPointerUp={() => (control.state.tab = 'message')} />
+			<ToggleButton tooltipContent="Properties" color="secondary" icon={Icons.ViewList} value={tab === 'property'} onPointerUp={() => (control.state.tab = 'property')} />
+			<ToggleButton tooltipContent="Messages" color="secondary" icon={Icons.Message} value={tab === 'message'} onPointerUp={() => (control.state.tab = 'message')} />
 		</div>
 	)
 })
@@ -116,7 +118,7 @@ const Messages = memo(() => {
 
 	return (
 		<Activity mode={tab === 'message' ? 'visible' : 'hidden'}>
-			<FilterableList className="col-span-full" filter={MessageFilter} items={messages} minLengthToSearch={1} itemHeight={36}>
+			<FilterableList className="col-span-full" filter={FilterMessage} items={messages} minLengthToSearch={1} itemHeight={36}>
 				{MessageItem}
 			</FilterableList>
 			<div className="col-span-full flex flex-row items-center justify-center gap-2">

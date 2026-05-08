@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { type ClassValue, tv } from 'tailwind-variants'
-import { assignRef, tw } from '@/shared/util'
+import { assignRef, stopPropagation, tw } from '@/shared/util'
 import { Icons } from '../Icon'
 import { Button, type ButtonProps } from './Button'
 import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from './Floating'
@@ -172,6 +172,7 @@ export function Dropdown({
 
 		if (event.defaultPrevented || disabled || readOnly || loading === true) return
 
+		stopPropagation(event)
 		setTriggerElement(event.currentTarget)
 		setTriggerWidth(event.currentTarget.getBoundingClientRect().width)
 		setOpen(!isOpen)

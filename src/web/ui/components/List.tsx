@@ -1,6 +1,6 @@
 import { Children, useEffect, useMemo, useRef, useState } from 'react'
 import { type ClassValue, tv } from 'tailwind-variants'
-import { assignRef, clamp, hasRootInteraction, tw } from '@/shared/util'
+import { assignRef, clamp, hasRootInteraction, stopPropagation, stopPropagationForAll, tw } from '@/shared/util'
 
 const DEFAULT_ITEM_HEIGHT = 40
 const DEFAULT_OVERSCAN = 3
@@ -124,6 +124,8 @@ export function List({ children, itemCount, className, classNames, emptyContent,
 	const itemClassName = tw(styles.item(), classNames?.item)
 
 	function handleClick(event: React.MouseEvent<HTMLElement>) {
+		stopPropagation(event)
+
 		const index = event.currentTarget.dataset.index
 
 		if (index !== undefined) {
@@ -238,7 +240,7 @@ export function ListItem({ className, classNames, description, label, children, 
 	const stateClassName = disabled ? undefined : hasRootInteraction(props) ? 'cursor-pointer' : 'cursor-default'
 
 	return (
-		<div className={tw(styles.base(), stateClassName, className, classNames?.base)} {...props}>
+		<div className={tw(styles.base(), stateClassName, className, classNames?.base)} {...stopPropagationForAll(props)}>
 			{startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
 			<div className={tw(styles.body(), classNames?.body)}>
 				{description !== undefined && description !== null && <span className={tw(styles.description(), classNames?.description)}>{description}</span>}

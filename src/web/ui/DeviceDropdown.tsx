@@ -1,7 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import type { Device } from 'nebulosa/src/indi.device'
 import { memo } from 'react'
-import type { Atom } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from '@/molecules/indi/equipment'
 import type { DeviceTypeMap } from '@/shared/types'
@@ -22,9 +21,9 @@ export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends Drop
 	readonly icon?: Icon
 }
 
-function DeviceItem(item: Device | undefined, onPointerDown: React.PointerEventHandler, equipment: Atom<typeof EquipmentMolecule>) {
+function DeviceItem(item: Device | undefined, onClick: React.MouseEventHandler) {
 	const key = item?.id ?? 'none'
-	return <ListItem key={key} data-id={key} onPointerDown={onPointerDown} label={item?.name || 'None'} description={<DeviceDropdownStartContent isConnected={item?.connected} />} endContent={<DeviceDropdownEndContent device={item} onConnect={equipment.connect} onShow={equipment.show} />} />
+	return <ListItem key={key} data-id={key} onClick={onClick} label={item?.name || 'None'} description={<DeviceDropdownStartContent isConnected={item?.connected} />} endContent={<DeviceDropdownEndContent device={item} />} />
 }
 
 export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, disabled, disallowNoneSelection = false, label, showLabel = false, showLabelOnEmpty = showLabel, color, startContent, icon: Icon, ...props }: DeviceDropdownProps<T>) {
@@ -32,15 +31,15 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 	const state = equipment.state[type]
 	const devices = useSnapshot(state)
 
-	function handleAction(event: React.PointerEvent<HTMLElement>) {
+	function handleAction(event: React.MouseEvent<HTMLElement>) {
 		const id = event.currentTarget.dataset.id
 		onValueChange?.(id === 'none' ? undefined : (state.find((e) => e.id === id) as never))
 	}
 
 	const items = new Array<React.ReactNode>(devices.length + (disallowNoneSelection ? 0 : 1))
 
-	if (!disallowNoneSelection) items[0] = DeviceItem(undefined, handleAction, equipment)
-	for (let i = disallowNoneSelection ? 0 : 1, p = 0; i < devices.length; i++, p++) items[i] = DeviceItem(devices[p], handleAction, equipment)
+	if (!disallowNoneSelection) items[0] = DeviceItem(undefined, handleAction)
+	for (let i = disallowNoneSelection ? 0 : 1, p = 0; p < devices.length; i++, p++) items[i] = DeviceItem(devices[p], handleAction)
 
 	return (
 		<Dropdown
@@ -70,19 +69,19 @@ const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected
 
 interface DeviceDropdownEndContentProps {
 	readonly device?: EquipmentDevice<Device>
-	readonly onConnect: (device: Device) => void
-	readonly onShow: (device: Device) => void
 }
 
-function DeviceDropdownEndContent({ device, onConnect, onShow }: DeviceDropdownEndContentProps) {
+const DeviceDropdownEndContent = memo(({ device }: DeviceDropdownEndContentProps) => {
+	const equipment = useMolecule(EquipmentMolecule)
+
 	function handleConnectPointerUp(event: React.PointerEvent) {
 		stopPropagation(event)
-		onConnect(device!)
+		void equipment.connect(device!)
 	}
 
 	function handleShowPointerUp(event: React.PointerEvent) {
 		stopPropagation(event)
-		onShow(device!)
+		equipment.show(device!)
 	}
 
 	return (
@@ -91,4 +90,4 @@ function DeviceDropdownEndContent({ device, onConnect, onShow }: DeviceDropdownE
 			{device && <ConnectButton connected={device.connected} loading={device?.connecting} onPointerUp={handleConnectPointerUp} />}
 		</div>
 	)
-}
+})

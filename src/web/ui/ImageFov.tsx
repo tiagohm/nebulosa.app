@@ -47,7 +47,7 @@ const Telescope = memo(() => {
 	return (
 		<>
 			<div className="col-span-2 items-center">
-				<AstroBinEquipmentPopover items={telescopes} onSelectedChange={fov.selectTelescope} type="telescope" />
+				<AstroBinEquipmentPopover items={telescopes} onValueChange={fov.selectTelescope} type="telescope" />
 			</div>
 			<NumberInput className="col-span-5" label="Focal Length (mm)" maxValue={100000} minValue={100} onValueChange={(value) => fov.update('focalLength', value)} value={focalLength} />
 			<NumberInput className="col-span-5" label="Aperture (mm)" maxValue={10000} minValue={10} onValueChange={(value) => fov.update('aperture', value)} value={aperture} />
@@ -63,7 +63,7 @@ const Camera = memo(() => {
 	return (
 		<>
 			<div className="col-span-2 items-center">
-				<AstroBinEquipmentPopover items={cameras} onSelectedChange={fov.selectCamera} type="camera" />
+				<AstroBinEquipmentPopover items={cameras} onValueChange={fov.selectCamera} type="camera" />
 			</div>
 			<NumberInput className="col-span-5" label="Width (px)" maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraWidth', value)} value={cameraWidth} />
 			<NumberInput className="col-span-5" label="Height (px)" maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraHeight', value)} value={cameraHeight} />

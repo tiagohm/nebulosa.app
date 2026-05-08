@@ -2,7 +2,7 @@ import { AutoFocus } from 'nebulosa/src/autofocus'
 import type { Point } from 'nebulosa/src/geometry'
 import type { Camera, Focuser } from 'nebulosa/src/indi.device'
 import type { Regression } from 'nebulosa/src/regression'
-import { medianOf } from 'nebulosa/src/util'
+import { medianOf, NumberComparator } from 'nebulosa/src/util'
 import { type AutoFocusEvent, type AutoFocusStart, type AutoFocusState, type CameraCaptureEvent, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
 import type { CameraHandler } from './camera'
 import { type FocuserHandler, waitForFocuser } from './focuser'
@@ -101,7 +101,7 @@ export class AutoFocusTask {
 			}
 
 			// Compute the HFD from detected stars
-			const hfd = medianOf(stars.map((e) => e.hfd).sort((a, b) => a - b))
+			const hfd = medianOf(stars.map((e) => e.hfd).sort(NumberComparator))
 			// Compute the next step given current focuser position and HFD
 			const step = this.autoFocus.add(this.focuser.position.value, hfd)
 

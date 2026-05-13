@@ -32,14 +32,12 @@ export interface SkyAtlasState {
 	readonly galaxy: GalaxyState
 	readonly satellite: SatelliteState
 	readonly calendar: {
-		show: boolean
 		manual: boolean
 	}
 	readonly location: {
 		show: boolean
 	}
 	readonly bookmark: {
-		show: boolean
 		readonly items: BookmarkItem[]
 	}
 }
@@ -741,7 +739,6 @@ const state = proxy<SkyAtlasState>({
 		},
 	},
 	calendar: {
-		show: false,
 		manual: false,
 	},
 	location: {
@@ -754,7 +751,6 @@ const state = proxy<SkyAtlasState>({
 	galaxy: galaxyState,
 	satellite: satelliteState,
 	bookmark: {
-		show: false,
 		items: [],
 	},
 })
@@ -894,7 +890,6 @@ export const SkyAtlasMolecule = molecule(() => {
 		else if (type === 'satellite') void satellite.select(+code, 0, false)
 
 		state.tab = type
-		state.bookmark.show = false
 	}
 
 	function removeBookmark(item: BookmarkItem) {

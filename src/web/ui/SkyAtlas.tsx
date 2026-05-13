@@ -4,7 +4,7 @@ import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import type { LunarPhase } from 'nebulosa/src/moon'
 import type { SmallBodySearchListItem } from 'nebulosa/src/sbd'
 import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/temporal'
-import React, { Activity, memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
+import React, { Activity, memo, useCallback, useDeferredValue, useMemo, useRef, useState } from 'react'
 import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
 import { type BodyPosition, EMPTY_TWILIGHT, type MinorPlanetParameter, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
@@ -21,7 +21,7 @@ import { IconButton } from './components/IconButton'
 import { Link } from './components/Link'
 import { List, ListItem } from './components/List'
 import { NumberInput } from './components/NumberInput'
-import { Popover } from './components/Popover'
+import { Popover, type PopoverMethods } from './components/Popover'
 import { Slider } from './components/Slider'
 import { Table } from './components/Table'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
@@ -86,12 +86,12 @@ const TAB_ICONS = {
 } as const
 
 const TabPopover = memo(() => {
-	const [isOpen, setOpen] = useState(false)
+	const popoverRef = useRef<PopoverMethods | null>(null)
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { tab } = useSnapshot(atlas.state)
 
 	return (
-		<Popover onOpenChange={setOpen} open={isOpen} trigger={<IconButton color="secondary" icon={TAB_ICONS[tab]} onWheel={atlas.handleOnTabWheel} />}>
+		<Popover ref={popoverRef} trigger={<IconButton color="secondary" icon={TAB_ICONS[tab]} onWheel={atlas.handleOnTabWheel} />}>
 			<TabPopoverContent />
 		</Popover>
 	)
@@ -115,16 +115,11 @@ function isBookmarked(bookmark: readonly Readonly<BookmarkItem>[], type: SkyAtla
 	return bookmark.some((e) => e.type === type && e.code === code)
 }
 
-const BookmarkPopover = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { show } = useSnapshot(atlas.state.bookmark)
-
-	return (
-		<Popover open={show} onOpenChange={(value) => (atlas.state.bookmark.show = value)} trigger={<IconButton color="warning" icon={Icons.Bookmark} tooltipContent="Bookmarks" />}>
-			<BookmarkPopoverContent />
-		</Popover>
-	)
-})
+const BookmarkPopover = memo(() => (
+	<Popover trigger={<IconButton color="warning" icon={Icons.Bookmark} tooltipContent="Bookmarks" />}>
+		<BookmarkPopoverContent />
+	</Popover>
+))
 
 const BookmarkPopoverContent = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
@@ -699,7 +694,7 @@ const ONE_MINUTE = 60 * 1000
 const TimeBar = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { utc, offset } = useSnapshot(atlas.state.request.time)
-	const { show, manual } = useSnapshot(atlas.state.calendar)
+	const { manual } = useSnapshot(atlas.state.calendar)
 
 	const local = utc + offset * ONE_MINUTE
 
@@ -711,13 +706,9 @@ const TimeBar = memo(() => {
 		atlas.updateTime(utc, value, manual)
 	}, [])
 
-	const handleOnOpenChange = useCallback((isOpen: boolean) => {
-		atlas.state.calendar.show = isOpen
-	}, [])
-
 	return (
 		<div className="inline-flex flex-row items-center gap-1">
-			<CalendarPopover date={local} isOpen={show} offset={offset} onDateChange={handleOnDateChange} onOffsetChange={handleOnOffsetChange} onOpenChange={handleOnOpenChange} />
+			<CalendarPopover date={local} offset={offset} onDateChange={handleOnDateChange} onOffsetChange={handleOnOffsetChange} />
 			{manual ? (
 				<IconButton color="warning" icon={Icons.TimerPlay} onClick={() => atlas.updateTime(Date.now(), offset, false)} tooltipContent="Play" variant="flat" />
 			) : (
@@ -732,11 +723,9 @@ interface CalendarPopoverProps {
 	readonly offset: number
 	readonly onDateChange: (date: number) => void
 	readonly onOffsetChange: (offset: number) => void
-	readonly isOpen?: boolean
-	readonly onOpenChange?: (isOpen: boolean) => void
 }
 
-const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOpen, onOpenChange }: CalendarPopoverProps) => {
+const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange }: CalendarPopoverProps) => {
 	const hour = temporalGet(date, 'h')
 	const minute = temporalGet(date, 'm')
 
@@ -753,7 +742,7 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange, isOp
 	}
 
 	return (
-		<Popover onOpenChange={onOpenChange} open={isOpen} trigger={<Button color="secondary" label={formatTemporal(date, 'YYYY-MM-DD HH:mm', 0)} startContent={<Icons.CalendarToday />} tooltipContent="Time" />}>
+		<Popover trigger={<Button color="secondary" label={formatTemporal(date, 'YYYY-MM-DD HH:mm', 0)} startContent={<Icons.CalendarToday />} tooltipContent="Time" />}>
 			<div className="grid max-w-[256px] grid-cols-12 gap-2 pb-2">
 				<Calendar className="col-span-full" onValueChange={handleDateChange} value={Temporal.Instant.fromEpochMilliseconds(date).toZonedDateTimeISO('GMT').toPlainDate()} />
 				<div className="col-span-6 flex flex-row items-center justify-center gap-1">

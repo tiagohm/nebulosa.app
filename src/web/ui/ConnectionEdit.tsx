@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
-import { memo, useState } from 'react'
+import { memo, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
 import { Button } from '@/ui/components/Button'
@@ -9,7 +9,7 @@ import { Checkbox } from './components/Checkbox'
 import { IconButton } from './components/IconButton'
 import { List, ListItem } from './components/List'
 import { NumberInput } from './components/NumberInput'
-import { Popover } from './components/Popover'
+import { Popover, type PopoverMethods } from './components/Popover'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
@@ -55,20 +55,20 @@ function AlpacaDeviceServerItem(item: AlpacaDeviceServer, index: number, onPoint
 }
 
 const AlpacaDeviceServerDiscovery = memo(() => {
+	const popoverRef = useRef<PopoverMethods | null>(null)
 	const connection = useMolecule(ConnectionMolecule)
 	const { alpaca, edited } = useSnapshot(connection.state)
-	const [open, setOpen] = useState(false)
 
 	function handleOnPointer(event: React.PointerEvent) {
 		const index = +(event.target as HTMLElement).dataset.index!
 		const item = alpaca.servers[index]
 		connection.state.edited.host = item.address
 		connection.state.edited.port = item.port
-		setOpen(false)
+		popoverRef.current?.hide()
 	}
 
 	return (
-		<Popover onOpenChange={setOpen} open={open} trigger={<IconButton color="secondary" disabled={edited.type !== 'ALPACA'} icon={Icons.Radar} tooltipContent="Discovery" />}>
+		<Popover ref={popoverRef} trigger={<IconButton color="secondary" disabled={edited.type !== 'ALPACA'} icon={Icons.Radar} tooltipContent="Discovery" />}>
 			<div className="mt-0 grid max-w-100 grid-cols-12 items-center gap-2 p-4">
 				<p className="col-span-full text-center font-bold">ALPACA DEVICE SERVER DISCOVERY</p>
 				<List className="col-span-full min-w-90" itemCount={alpaca.servers.length} emptyContent="No servers">

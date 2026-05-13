@@ -1,5 +1,5 @@
 import { mulberry32 } from 'nebulosa/src/random'
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
 import { toast } from '../shared/toast'
 import { Badge } from './components/Badge'
 import { Breadcrumbs } from './components/Breadcrumbs'
@@ -13,7 +13,7 @@ import { Dropdown, DropdownItem } from './components/Dropdown'
 import { List } from './components/List'
 import { MultiSelect } from './components/MultiSelect'
 import { NumberInput } from './components/NumberInput'
-import { Popover } from './components/Popover'
+import { Popover, type PopoverMethods } from './components/Popover'
 import { ProgressBar } from './components/ProgressBar'
 import { Radio } from './components/Radio'
 import { SearchTextInput } from './components/SearchTextInput'
@@ -356,12 +356,12 @@ const Sliders = memo(() => {
 })
 
 const Calendars = memo(() => {
+	const popoverRef = useRef<PopoverMethods | null>(null)
 	const [value, setValue] = useState(Temporal.Now.plainDateISO())
-	const [open, setOpen] = useState(true)
 
 	return (
 		<>
-			<Popover onOpenChange={setOpen} open={open} placement="end" trigger={<Button label="Calendar" />}>
+			<Popover ref={popoverRef} placement="end" trigger={<Button label="Calendar" />}>
 				<Calendar onValueChange={setValue} showWeekNumber value={value} color="default" />
 			</Popover>
 

@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import type { DeviceType } from 'nebulosa/src/indi.device'
-import { Activity, memo } from 'react'
+import { Activity, memo, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
 import alignmentIcon from '@/assets/alignment.webp'
@@ -44,7 +44,7 @@ import { Calculator } from './Calculator'
 import { Button } from './components/Button'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
-import { Popover } from './components/Popover'
+import { Popover, type PopoverMethods } from './components/Popover'
 import { Darv } from './Darv'
 import { FlatWizard } from './FlatWizard'
 import { Framing } from './Framing'
@@ -135,11 +135,15 @@ export const HomeMenu = memo(() => {
 })
 
 export const HomeMenuPopover = memo(() => {
+	const popoverRef = useRef<PopoverMethods | null>(null)
 	const home = useMolecule(HomeMolecule)
-	const { show } = useSnapshot(home.state.menu)
+
+	useEffect(() => {
+		if (home.state.menu.show) popoverRef.current?.show()
+	}, [])
 
 	return (
-		<Popover onOpenChange={(value) => (home.state.menu.show = value)} open={show} trigger={<IconButton color="secondary" icon={Icons.Menu} tooltipContent="Menu" />}>
+		<Popover ref={popoverRef} onOpenChange={(value) => (home.state.menu.show = value)} trigger={<IconButton color="secondary" icon={Icons.Menu} tooltipContent="Menu" />}>
 			<HomeMenuPopoverContent />
 		</Popover>
 	)

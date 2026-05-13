@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatRA } from 'nebulosa/src/angle'
-import { Activity, memo, useState } from 'react'
+import { Activity, memo, useRef } from 'react'
 import type { CoordinateType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { MountMolecule } from '@/molecules/indi/mount'
@@ -8,7 +8,7 @@ import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
 import { List, ListItem } from './components/List'
-import { Popover } from './components/Popover'
+import { Popover, type PopoverMethods } from './components/Popover'
 import { Switch } from './components/Switch'
 import { TextInput } from './components/TextInput'
 import { ConnectButton } from './ConnectButton'
@@ -173,12 +173,12 @@ const TargetCoordinateAndPosition = memo(() => {
 })
 
 const TargetCoordinatePopupButton = memo(() => {
-	const [open, setOpen] = useState(false)
+	const popoverRef = useRef<PopoverMethods | null>(null)
 	const mount = useMolecule(MountMolecule)
 	const { connected } = useSnapshot(mount.state.mount)
 
 	return (
-		<Popover classNames={{ content: 'p-0' }} onOpenChange={setOpen} open={open} trigger={<IconButton disabled={!connected} color="secondary" icon={Icons.DotsVertical} variant="ghost" />}>
+		<Popover classNames={{ content: 'p-0' }} ref={popoverRef} trigger={<IconButton disabled={!connected} color="secondary" icon={Icons.DotsVertical} variant="ghost" />}>
 			<TargetCoordinatePopupButtonContent />
 		</Popover>
 	)
@@ -263,7 +263,7 @@ const TrackModeAndRate = memo(() => {
 	const moving = slewing || parking || homing
 
 	return (
-		<div className='col-span-8 flex flex-row gap-2 items-center'>
+		<div className="col-span-8 flex flex-row items-center gap-2">
 			<TrackModeSelect className="w-1/2" disabled={!connected || moving || parked} modes={trackModes} onValueChange={mount.trackMode} value={trackMode} />
 			<SlewRateSelect className="w-1/2" disabled={!connected || moving || parked} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
 		</div>

@@ -50,7 +50,9 @@ const Status = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-between">
-			<Chip color="primary" size="sm">{!connected ? 'idle' : parking ? 'moving' : parked ? 'closed' : 'open'}</Chip>
+			<Chip color="primary" size="sm">
+				{!connected ? 'idle' : parking ? 'moving' : parked ? 'closed' : 'open'}
+			</Chip>
 		</div>
 	)
 })

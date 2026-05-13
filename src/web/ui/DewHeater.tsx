@@ -44,7 +44,7 @@ const Body = memo(() => {
 
 	return (
 		<div className="col-span-full mt-0 flex flex-col items-center justify-center">
-			<div className="flex w-full flex-col items-center justify-center gap-1 mt-4">
+			<div className="mt-4 flex w-full flex-col items-center justify-center gap-1">
 				<Slider color={color} disabled={!connected} endContent={max} fullWidth maxValue={max} minValue={min} onValueChange={dewHeater.update} onValueChangeEnd={dewHeater.dutyCycle} size="lg" startContent={min} value={value} />
 				<span className="text-lg font-bold">{value}</span>
 			</div>

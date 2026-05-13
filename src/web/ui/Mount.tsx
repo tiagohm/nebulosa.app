@@ -52,32 +52,25 @@ const Header = memo(() => {
 	)
 })
 
-const Body = memo(() => {
-	const mount = useMolecule(MountMolecule)
-	const { connected, parking, parked, slewing, tracking, homing, canAbort, trackModes, trackMode, slewRates, slewRate, time } = useSnapshot(mount.state.mount)
-	const moving = slewing || parking || homing
-
-	return (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<div className="col-span-full flex flex-row items-center justify-between">
-				<Status />
-				<div className="flex flex-row items-center gap-2">
-					<LocationButton />
-					<TimeButton />
-					<RemoteControlButton />
-				</div>
+const Body = memo(() => (
+	<div className="mt-0 grid grid-cols-12 gap-2">
+		<div className="col-span-full flex flex-row items-center justify-between">
+			<Status />
+			<div className="flex flex-row items-center gap-2">
+				<LocationButton />
+				<TimeButton />
+				<RemoteControlButton />
 			</div>
-			<CurrentPosition />
-			<hr className="col-span-full border-dotted text-neutral-800" />
-			<TargetCoordinateAndPosition />
-			<Nudge className="col-span-5 row-span-2" disabled={!connected || parked} isCancelDisabled={!canAbort || parked || !moving} isNudgeDisabled={moving} onCancel={mount.stop} onNudge={mount.moveTo} />
-			<Switch disabled={!connected || moving || parked} label="Tracking" onValueChange={mount.tracking} value={tracking} />
-			<ParkAndHome />
-			<TrackModeSelect className="col-span-4" disabled={!connected || moving || parked} modes={trackModes} onValueChange={mount.trackMode} value={trackMode} />
-			<SlewRateSelect className="col-span-3" disabled={!connected || moving || parked} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
 		</div>
-	)
-})
+		<CurrentPosition />
+		<hr className="col-span-full border-dotted text-neutral-800" />
+		<TargetCoordinateAndPosition />
+		<HandControl />
+		<Tracking />
+		<ParkAndHome />
+		<TrackModeAndRate />
+	</div>
+))
 
 const Status = memo(() => {
 	const mount = useMolecule(MountMolecule)
@@ -156,7 +149,7 @@ const TargetCoordinateAndPosition = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	const { connected, slewing, parking, homing, parked } = useSnapshot(mount.state.mount)
 	const { type } = useSnapshot(mount.state.targetCoordinate.coordinate)
-	const coordinate = useSnapshot(mount.state.targetCoordinate.coordinate, { sync: true })
+	const coordinate = useSnapshot(mount.state.targetCoordinate.coordinate)
 	const disabled = !connected || slewing || parking || homing || parked
 	const { x, y } = coordinate[type]!
 
@@ -181,9 +174,11 @@ const TargetCoordinateAndPosition = memo(() => {
 
 const TargetCoordinatePopupButton = memo(() => {
 	const [open, setOpen] = useState(false)
+	const mount = useMolecule(MountMolecule)
+	const { connected } = useSnapshot(mount.state.mount)
 
 	return (
-		<Popover onOpenChange={setOpen} open={open} trigger={<IconButton color="secondary" icon={Icons.DotsVertical} variant="ghost" />}>
+		<Popover classNames={{ content: 'p-0' }} onOpenChange={setOpen} open={open} trigger={<IconButton disabled={!connected} color="secondary" icon={Icons.DotsVertical} variant="ghost" />}>
 			<TargetCoordinatePopupButtonContent />
 		</Popover>
 	)
@@ -218,7 +213,7 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 	}
 
 	return (
-		<List>
+		<List fullWidth className="min-w-80">
 			<ListItem label="Bookmark" data-action="bookmark" startContent={<Icons.Bookmark />} onPointerUp={handlePointerUp} />
 			<ListItem label="Paste current J2000 position" data-action="copy-equatorialJ2000" startContent={<Icons.Paste />} onPointerUp={handlePointerUp} />
 			<ListItem label="Paste current JNOW position" data-action="copy-equatorial" startContent={<Icons.Paste />} onPointerUp={handlePointerUp} />
@@ -232,16 +227,45 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 	)
 })
 
+const HandControl = memo(() => {
+	const mount = useMolecule(MountMolecule)
+	const { connected, parking, parked, slewing, homing, canAbort } = useSnapshot(mount.state.mount)
+	const moving = slewing || parking || homing
+
+	return <Nudge className="col-span-4 row-span-2" disabled={!connected || parked} isCancelDisabled={!canAbort || parked || !moving} isNudgeDisabled={moving} onCancel={mount.stop} onNudge={mount.moveTo} />
+})
+
+const Tracking = memo(() => {
+	const mount = useMolecule(MountMolecule)
+	const { connected, parking, parked, slewing, homing, tracking } = useSnapshot(mount.state.mount)
+	const moving = slewing || parking || homing
+
+	return <Switch className="col-span-3" disabled={!connected || moving || parked} label="Tracking" onValueChange={mount.tracking} value={tracking} />
+})
+
 const ParkAndHome = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	const { connected, parking, parked, slewing, homing, canPark, canHome, canFindHome } = useSnapshot(mount.state.mount)
 	const moving = slewing || parking || homing
 
 	return (
-		<div className="col-span-4 flex flex-row items-center justify-center gap-2">
+		<div className="col-span-5 flex flex-row items-center justify-center gap-2">
 			<IconButton color={parked ? 'success' : 'danger'} disabled={!connected || !canPark || moving} icon={parked ? Icons.Play : Icons.Stop} onPointerUp={mount.togglePark} tooltipContent={parked ? 'Unpark' : 'Park'} />
 			<IconButton color="primary" disabled={!connected || !canHome || moving || parked} icon={Icons.Home} onPointerUp={mount.home} tooltipContent="Home" />
 			<IconButton color="secondary" disabled={!connected || !canFindHome || moving || parked} icon={Icons.HomeSearch} onPointerUp={mount.findHome} tooltipContent="Find Home" />
+		</div>
+	)
+})
+
+const TrackModeAndRate = memo(() => {
+	const mount = useMolecule(MountMolecule)
+	const { connected, parking, parked, slewing, homing, trackModes, trackMode, slewRates, slewRate } = useSnapshot(mount.state.mount)
+	const moving = slewing || parking || homing
+
+	return (
+		<div className='col-span-8 flex flex-row gap-2 items-center'>
+			<TrackModeSelect className="w-1/2" disabled={!connected || moving || parked} modes={trackModes} onValueChange={mount.trackMode} value={trackMode} />
+			<SlewRateSelect className="w-1/2" disabled={!connected || moving || parked} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
 		</div>
 	)
 })

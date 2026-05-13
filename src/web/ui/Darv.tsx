@@ -47,7 +47,7 @@ const Status = memo(() => {
 
 	return (
 		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
-			<Chip color="primary">{state === 'IDLE' ? 'idle' : state === 'WAITING' ? 'waiting' : state === 'FORWARDING' ? 'forwading' : 'backwarding'}</Chip>
+			<Chip color="primary" size="sm">{state === 'IDLE' ? 'idle' : state === 'WAITING' ? 'waiting' : state === 'FORWARDING' ? 'forwading' : 'backwarding'}</Chip>
 		</div>
 	)
 })

@@ -148,9 +148,11 @@ const Cooler = memo(() => {
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, hasCooler, cooler, coolerPower } = useSnapshot(camera.state.camera)
 
+	if (!hasCooler) return null
+
 	return (
 		<>
-			<Switch className="col-span-6" disabled={!connected || capturing || !hasCooler} onValueChange={camera.cooler} label={`${(coolerPower * 100).toFixed(1)}%`} value={cooler} />
+			<Switch className="col-span-6" disabled={!connected || capturing || !hasCooler} onValueChange={camera.cooler} label={`${(coolerPower * 100).toFixed(1)}%`} thumbContent={<Icons.SnowFlake />} value={cooler} />
 		</>
 	)
 })
@@ -160,6 +162,8 @@ const Temperature = memo(() => {
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, temperature, canSetTemperature } = useSnapshot(camera.state.camera)
 	const { targetTemperature } = useSnapshot(camera.state)
+
+	if (!canSetTemperature) return null
 
 	return (
 		<NumberInput
@@ -241,8 +245,8 @@ const Bin = memo(() => {
 const Frame = memo(() => {
 	const camera = useMolecule(CameraMolecule)
 	const { capturing } = useSnapshot(camera.state)
-	const { connected, canSubFrame, frame } = useSnapshot(camera.state.camera)
-	const { subframe, x, y, width, height } = useSnapshot(camera.state.request)
+	const { connected, canSubFrame } = useSnapshot(camera.state.camera)
+	const { subframe } = useSnapshot(camera.state.request)
 
 	return (
 		<>
@@ -250,6 +254,21 @@ const Frame = memo(() => {
 				<Checkbox className="max-w-none flex-col-reverse justify-center gap-0.5 text-xs" disabled={!connected || !canSubFrame || capturing} label="Subframe" onValueChange={(value) => camera.update('subframe', value)} value={subframe} />
 				<IconButton color="secondary" disabled={!connected || !subframe || capturing} icon={Icons.Fullscreen} onPointerUp={camera.fullscreen} tooltipContent="Fullscreen" variant="flat" />
 			</div>
+			<FrameDimensions />
+		</>
+	)
+})
+
+const FrameDimensions = memo(() => {
+	const camera = useMolecule(CameraMolecule)
+	const { capturing } = useSnapshot(camera.state)
+	const { connected, frame } = useSnapshot(camera.state.camera)
+	const { subframe, x, y, width, height } = useSnapshot(camera.state.request)
+
+	if (!subframe) return null
+
+	return (
+		<>
 			<NumberInput className="col-span-3" disabled={!connected || !subframe || capturing} label="X" maxValue={frame.x.max} minValue={frame.x.min} onValueChange={(value) => camera.update('x', value)} value={x} />
 			<NumberInput className="col-span-3" disabled={!connected || !subframe || capturing} label="Y" maxValue={frame.y.max} minValue={frame.y.min} onValueChange={(value) => camera.update('y', value)} value={y} />
 			<NumberInput className="col-span-3" disabled={!connected || !subframe || capturing} label="Width" maxValue={frame.width.max} minValue={frame.width.min} onValueChange={(value) => camera.update('width', value)} value={width} />

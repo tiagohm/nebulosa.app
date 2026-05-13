@@ -92,7 +92,7 @@ const EditDropdown = memo(({ item }: EditDropdownProps) => {
 		<Dropdown hideChevron itemHeight={28} label={<Icons.VerticalMenu color="var(--color-neutral-500)" />} color="default" variant="ghost" size="sm">
 			<DropdownItem label="Edit" onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit />} />
 			<DropdownItem label="Duplicate" onPointerUp={() => connection.duplicate(item)} startContent={<Icons.Copy />} />
-			<DropdownItem label="Delete" disabled={connections.length === 1} color="danger" onPointerUp={() => connection.remove(item)} startContent={<Icons.Trash />} />
+			<DropdownItem label="Delete" disabled={connections.length === 1} color="danger" onPointerUp={() => connection.remove(item)} startContent={<Icons.Trash />} variant="flat" />
 		</Dropdown>
 	)
 })

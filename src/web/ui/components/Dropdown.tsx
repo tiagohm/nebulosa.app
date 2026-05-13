@@ -35,7 +35,7 @@ const dropdownStyles = tv({
 
 const dropdownItemStyles = tv({
 	slots: {
-		base: 'flex h-full w-full min-w-max items-center justify-center gap-2 transition py-2 px-4',
+		base: 'flex h-full w-full min-w-max items-center justify-center gap-2 transition py-2 ps-1 pe-4',
 		startContent: 'flex shrink-0 items-center justify-center px-2',
 		label: 'min-w-max flex-1 overflow-visible whitespace-nowrap',
 		endContent: 'flex shrink-0 items-center justify-center px-2',
@@ -49,48 +49,54 @@ const dropdownItemStyles = tv({
 				base: 'cursor-pointer',
 			},
 		},
+		variant: {
+			solid: {
+				base: 'bg-(--color-variant) text-white hover:bg-(--color-variant)/90 active:bg-(--color-variant)/85',
+			},
+			ghost: {
+				base: 'bg-transparent text-(--color-variant) hover:bg-(--color-variant)/20 active:bg-(--color-variant)/15',
+			},
+			flat: {
+				base: 'bg-(--color-variant)/20 text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
+			},
+		},
 		color: {
 			default: {
-				base: '[--color-variant:var(--color-neutral-500)] text-neutral-100 hover:bg-neutral-800 active:bg-neutral-700',
+				base: '[--color-variant:var(--color-neutral-500)]',
+			},
+			primary: {
+				base: '[--color-variant:var(--primary)]',
+			},
+			secondary: {
+				base: '[--color-variant:var(--secondary)]',
+			},
+			success: {
+				base: '[--color-variant:var(--success)]',
+			},
+			danger: {
+				base: '[--color-variant:var(--danger)]',
+			},
+			warning: {
+				base: '[--color-variant:var(--warning)]',
+			},
+		},
+	},
+	compoundVariants: [
+		{
+			color: 'default',
+			variant: 'ghost',
+			class: {
+				base: 'text-neutral-100 hover:bg-neutral-800 active:bg-neutral-700',
 				startContent: 'text-neutral-400',
 				label: 'text-neutral-100',
 				endContent: 'text-neutral-400',
 			},
-			primary: {
-				base: '[--color-variant:var(--primary)] text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
-				startContent: 'text-(--color-variant)',
-				label: 'text-(--color-variant)',
-				endContent: 'text-(--color-variant)',
-			},
-			secondary: {
-				base: '[--color-variant:var(--secondary)] text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
-				startContent: 'text-(--color-variant)',
-				label: 'text-(--color-variant)',
-				endContent: 'text-(--color-variant)',
-			},
-			success: {
-				base: '[--color-variant:var(--success)] text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
-				startContent: 'text-(--color-variant)',
-				label: 'text-(--color-variant)',
-				endContent: 'text-(--color-variant)',
-			},
-			danger: {
-				base: '[--color-variant:var(--danger)] text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
-				startContent: 'text-(--color-variant)',
-				label: 'text-(--color-variant)',
-				endContent: 'text-(--color-variant)',
-			},
-			warning: {
-				base: '[--color-variant:var(--warning)] text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
-				startContent: 'text-(--color-variant)',
-				label: 'text-(--color-variant)',
-				endContent: 'text-(--color-variant)',
-			},
 		},
-	},
+	],
 	defaultVariants: {
 		disabled: false,
 		color: 'default',
+		variant: 'ghost',
 	},
 })
 
@@ -341,9 +347,9 @@ export interface DropdownItemProps extends Omit<React.ComponentProps<'div'>, 'co
 }
 
 // Render a dropdown row with optional leading and trailing content.
-export function DropdownItem({ label, children, className, classNames, color, disabled = false, endContent, startContent, ...props }: DropdownItemProps) {
+export function DropdownItem({ label, children, className, classNames, color, disabled = false, endContent, startContent, variant, ...props }: DropdownItemProps) {
 	const content = children ?? label
-	const styles = dropdownItemStyles({ color, disabled })
+	const styles = dropdownItemStyles({ color, disabled, variant })
 
 	return (
 		<div className={tw(styles.base(), className, classNames?.base)} {...props}>

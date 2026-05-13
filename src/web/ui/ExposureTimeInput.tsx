@@ -16,7 +16,7 @@ export interface ExposureTimeInputProps extends Omit<NumberInputProps, 'size' | 
 	readonly onUnitChange: (unit: ExposureTimeUnit) => void
 }
 
-export function ExposureTimeInput({ className, value, onValueChange, unit, onUnitChange, minValue, minValueUnit, maxValue, maxValueUnit, ...props }: ExposureTimeInputProps) {
+export function ExposureTimeInput({ className, value, onValueChange, unit, onUnitChange, minValue, minValueUnit, maxValue, maxValueUnit, disabled, readOnly, ...props }: ExposureTimeInputProps) {
 	const min = Math.max(1, exposureTimeIn(minValue, minValueUnit, unit))
 	const max = Math.max(1, exposureTimeIn(maxValue, maxValueUnit, unit))
 
@@ -33,9 +33,11 @@ export function ExposureTimeInput({ className, value, onValueChange, unit, onUni
 		handleValueChange(0)
 	}
 
+	const EndContent = <ExposureTimeUnitDropdown color="secondary" onValueChange={handleUnitChange} size="sm" value={unit} disabled={disabled} readOnly={readOnly} />
+
 	return (
 		<div className={tw('flex flex-row gap-1 items-center', className)}>
-			<NumberInput endContent={<ExposureTimeUnitDropdown color="secondary" onValueChange={handleUnitChange} size="sm" value={unit} />} label="Exposure Time" maxValue={max} minValue={min} onValueChange={handleValueChange} value={value} {...props} />
+			<NumberInput endContent={EndContent} label="Exposure Time" maxValue={max} minValue={min} onValueChange={handleValueChange} value={value} disabled={disabled} readOnly={readOnly} {...props} />
 		</div>
 	)
 }

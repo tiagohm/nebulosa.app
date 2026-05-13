@@ -56,9 +56,15 @@ const Status = memo(() => {
 
 	return (
 		<div className="col-span-3 flex flex-row items-center justify-start gap-2">
-			<Chip color="primary">{moving ? 'moving' : 'idle'}</Chip>
-			<Chip color="warning">POSITION: {position}</Chip>
-			<Chip color="success">FILTER: {names[position]}</Chip>
+			<Chip color="primary" size="sm">
+				{moving ? 'moving' : 'idle'}
+			</Chip>
+			<Chip color="warning" size="sm">
+				POSITION: {position}
+			</Chip>
+			<Chip color="success" size="sm">
+				FILTER: {names[position]}
+			</Chip>
 		</div>
 	)
 })
@@ -79,7 +85,7 @@ const Slot = memo(() => {
 })
 
 const SlotPopover = memo(() => (
-	<Popover trigger={<IconButton icon={Icons.Cog} />}>
+	<Popover trigger={<IconButton icon={Icons.Cog} size="sm" />}>
 		<SlotPopoverContent />
 	</Popover>
 ))

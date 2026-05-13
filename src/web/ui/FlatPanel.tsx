@@ -36,17 +36,12 @@ const Header = memo(() => {
 	)
 })
 
-const Body = memo(() => {
-	const flatPanel = useMolecule(FlatPanelMolecule)
-	const { connected, enabled, intensity } = useSnapshot(flatPanel.state.flatPanel)
-
-	return (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<Toggle />
-			<Intensity />
-		</div>
-	)
-})
+const Body = memo(() => (
+	<div className="mt-0 grid grid-cols-12 gap-3">
+		<Toggle />
+		<Intensity />
+	</div>
+))
 
 const Toggle = memo(() => {
 	const flatPanel = useMolecule(FlatPanelMolecule)
@@ -54,7 +49,7 @@ const Toggle = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-center">
-			<Switch disabled={!connected} onValueChange={flatPanel.toggle} value={enabled} />
+			<Switch disabled={!connected} onValueChange={flatPanel.toggle} value={enabled} label="Enabled" />
 		</div>
 	)
 })
@@ -65,7 +60,7 @@ const Intensity = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-col items-center justify-center gap-1">
-			<Slider disabled={!connected || !enabled} endContent={intensity.max} maxValue={intensity.max} minValue={intensity.min} onValueChange={flatPanel.update} onValueChangeEnd={flatPanel.intensity} size="lg" startContent={intensity.min} value={intensity.value} />
+			<Slider disabled={!connected || !enabled} endContent={intensity.max} fullWidth maxValue={intensity.max} minValue={intensity.min} onValueChange={flatPanel.update} onValueChangeEnd={flatPanel.intensity} size="lg" startContent={intensity.min} value={intensity.value} />
 			<span className="text-lg font-bold">{intensity.value}</span>
 		</div>
 	)

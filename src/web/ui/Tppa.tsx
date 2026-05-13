@@ -61,11 +61,19 @@ const Status = memo(() => {
 
 	return (
 		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
-			<Chip color="primary">{state === 'IDLE' ? 'idle' : state === 'MOVING' ? 'moving' : state === 'CAPTURING' ? 'capturing' : state === 'SOLVING' ? 'solving' : state === 'WAITING' ? 'waiting' : state === 'SETTLING' ? 'settling' : 'aligning'}</Chip>
+			<Chip color="primary" size="sm">
+				{state === 'IDLE' ? 'idle' : state === 'MOVING' ? 'moving' : state === 'CAPTURING' ? 'capturing' : state === 'SOLVING' ? 'solving' : state === 'WAITING' ? 'waiting' : state === 'SETTLING' ? 'settling' : 'aligning'}
+			</Chip>
 			<div className="flex flex-row items-center gap-1">
-				<Chip color="warning">{event.step}</Chip>
-				<Chip color={solved ? 'success' : 'danger'}>RA: {formatRA(solver.rightAscension)}</Chip>
-				<Chip color={solved ? 'success' : 'danger'}>DEC: {formatDEC(solver.declination)}</Chip>
+				<Chip color="warning" size="sm">
+					{event.step}
+				</Chip>
+				<Chip color={solved ? 'success' : 'danger'} size="sm">
+					RA: {formatRA(solver.rightAscension)}
+				</Chip>
+				<Chip color={solved ? 'success' : 'danger'} size="sm">
+					DEC: {formatDEC(solver.declination)}
+				</Chip>
 			</div>
 		</div>
 	)

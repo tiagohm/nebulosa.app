@@ -14,10 +14,10 @@ const SELECT_ITEM_HEIGHTS = {
 const selectStyles = tv({
 	slots: {
 		base: 'relative inline-flex min-w-0 align-top',
-		trigger: 'flex w-full min-w-0 items-stretch overflow-hidden rounded-lg outline-none transition cursor-pointer',
+		trigger: 'flex w-full min-w-0 items-stretch overflow-hidden rounded-lg outline-none transition',
 		startContent: 'flex shrink-0 items-center whitespace-nowrap',
 		field: 'relative min-w-0 flex-1',
-		value: 'flex h-full w-full min-w-0 items-center overflow-hidden',
+		value: 'flex w-full min-w-0 items-center overflow-hidden',
 		description: 'min-w-0 truncate',
 		label: 'pointer-events-none absolute origin-left truncate text-xs leading-none',
 		endContent: 'flex shrink-0 items-center whitespace-nowrap',
@@ -107,6 +107,14 @@ const selectStyles = tv({
 		fullWidth: {
 			true: {
 				base: 'w-full',
+			},
+		},
+		disabled: {
+			true: {
+				trigger: 'cursor-default',
+			},
+			false: {
+				trigger: 'cursor-pointer',
 			},
 		},
 	},
@@ -234,7 +242,7 @@ export function Select<T>({
 	const visible = isOpen && !disabled && !readOnly
 	const hasLabel = label !== undefined && label !== null
 	const optionHeight = selectItemHeight(size, itemHeight)
-	const styles = selectStyles({ fullWidth, hasLabel, open: visible, size, color })
+	const styles = selectStyles({ fullWidth, hasLabel, open: visible, size, color, disabled })
 	const selectedContent = selectedItem !== undefined && selectedItem !== null ? children(selectedItem, selectedIndex, true, 'trigger') : description
 	const panelStyle = useMemo(() => ({ '--select-width': `${Math.max(triggerWidth, 0)}px`, minWidth: Math.max(triggerWidth, optionContentWidth, 0) }) as React.CSSProperties, [optionContentWidth, triggerWidth])
 	const hasColorVariant = color !== undefined && color !== null && color !== 'default'

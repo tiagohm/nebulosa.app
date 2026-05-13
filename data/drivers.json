@@ -28,6 +28,10 @@
     "driver": "indi_ahp_xc"
   },
   {
+    "name": "Alignment Correction Simulator",
+    "driver": "indi_simulator_pac"
+  },
+  {
     "name": "Alluna TCS2",
     "driver": "indi_alluna_tcs2"
   },
@@ -38,6 +42,18 @@
   {
     "name": "Alpaca Dome",
     "driver": "indi_alpaca_dome"
+  },
+  {
+    "name": "Alpaca FilterWheel",
+    "driver": "indi_alpaca_filterwheel"
+  },
+  {
+    "name": "Alpaca Focuser",
+    "driver": "indi_alpaca_focuser"
+  },
+  {
+    "name": "Alpaca Telescope",
+    "driver": "indi_alpaca_telescope"
   },
   {
     "name": "Altair",
@@ -62,6 +78,10 @@
   {
     "name": "Armadillo focuser",
     "driver": "indi_armadillo_focus"
+  },
+  {
+    "name": "AStarBox",
+    "driver": "indi_astarbox"
   },
   {
     "name": "Astro-Electronic FS-2",
@@ -106,6 +126,10 @@
   {
     "name": "Atik",
     "driver": "indi_atik_ccd"
+  },
+  {
+    "name": "Avalon UPAS",
+    "driver": "indi_avalon_upas"
   },
   {
     "name": "AvalonUD Aux",
@@ -376,6 +400,10 @@
     "driver": "indi_simulator_guide"
   },
   {
+    "name": "Hakos Roll Off Roof",
+    "driver": "indi_hakos_roof"
+  },
+  {
     "name": "HitecAstro DC",
     "driver": "indi_hitecastrodc_focus"
   },
@@ -488,6 +516,10 @@
     "driver": "indi_lx200classic"
   },
   {
+    "name": "LX200 ESP32go",
+    "driver": "indi_lx200_esp32go"
+  },
+  {
     "name": "LX200 GPS",
     "driver": "indi_lx200gps"
   },
@@ -542,6 +574,10 @@
   {
     "name": "Microtouch",
     "driver": "indi_microtouch_focus"
+  },
+  {
+    "name": "MLAstro RPA",
+    "driver": "indi_mlastro_rpa"
   },
   {
     "name": "MoonLite",
@@ -828,6 +864,10 @@
     "driver": "indi_simulator_rotator"
   },
   {
+    "name": "RTI Dome",
+    "driver": "indi_rti_dome"
+  },
+  {
     "name": "RTKLIB Precise Positioning",
     "driver": "indi_rtklib"
   },
@@ -848,6 +888,10 @@
     "driver": "indi_scopedome_dome"
   },
   {
+    "name": "Seestar CCD",
+    "driver": "indi_seestar_ccd"
+  },
+  {
     "name": "Seletek Rotator",
     "driver": "indi_seletek_rotator"
   },
@@ -858,6 +902,10 @@
   {
     "name": "Sesto Senso 2",
     "driver": "indi_sestosenso2_focus"
+  },
+  {
+    "name": "Sesto Senso 3",
+    "driver": "indi_sestosenso3_focus"
   },
   {
     "name": "Shelyak eShel",
@@ -1048,6 +1096,10 @@
     "driver": "indi_vantage_weather"
   },
   {
+    "name": "Wake On Lan",
+    "driver": "indi_wake_on_lan"
+  },
+  {
     "name": "Wanderer Cover V3",
     "driver": "indi_wanderer_cover"
   },
@@ -1060,6 +1112,10 @@
     "driver": "indi_wanderer_eclipse"
   },
   {
+    "name": "Wanderer ETA",
+    "driver": "indi_wanderer_eta"
+  },
+  {
     "name": "Wanderer Rotator Lite",
     "driver": "indi_wanderer_lite_rotator"
   },
@@ -1070,6 +1126,10 @@
   {
     "name": "Wanderer Rotator Mini",
     "driver": "indi_wanderer_rotator_mini"
+  },
+  {
+    "name": "Wanderer Snowflake Filter Wheel",
+    "driver": "indi_wanderer_snowflake_wheel"
   },
   {
     "name": "WandererBox Plus V3",

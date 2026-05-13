@@ -62,7 +62,7 @@ const Input = memo(() => {
 
 	return (
 		<>
-			<FilePickerInput className="col-span-full" id="flatwizard" mode="directory" onValueChange={flatWizard.updatePath} value={path} />
+			<FilePickerInput className="col-span-full" fullWidth id="flatwizard" mode="directory" onValueChange={flatWizard.updatePath} value={path} />
 			<NumberInput className="col-span-6" disabled={!camera?.connected} label="Min exposure (ms)" maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={(value) => flatWizard.update('minExposure', value)} value={minExposure} />
 			<NumberInput className="col-span-6" disabled={!camera?.connected} label="Max exposure (ms)" maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={(value) => flatWizard.update('maxExposure', value)} value={maxExposure} />
 			<NumberInput className="col-span-6" label="Mean target" maxValue={65565} minValue={0} onValueChange={(value) => flatWizard.update('meanTarget', value)} value={meanTarget} />

@@ -69,7 +69,7 @@ const Header = memo(() => {
 			</div>
 			<div className="flex flex-1 items-center justify-center gap-2">
 				<TimeBar key={`${time.utc}${time.offset}`} />
-				<IconButton color="primary" icon={Icons.MapMarker} onPointerUp={atlas.showLocation} tooltipContent="Location" variant="flat" />
+				<IconButton color="primary" icon={Icons.MapMarker} onClick={atlas.showLocation} tooltipContent="Location" variant="flat" />
 			</div>
 			<HeaderFilterPopover />
 		</div>
@@ -103,7 +103,7 @@ const TabPopoverContent = memo(() => {
 	return (
 		<div className="inline-flex flex-row gap-2">
 			{Object.entries(TAB_ICONS).map(([key, icon]) => (
-				<IconButton icon={icon} key={key} onPointerUp={() => (atlas.state.tab = key as never)} tooltipContent={key} />
+				<IconButton icon={icon} key={key} onClick={() => (atlas.state.tab = key as never)} tooltipContent={key} />
 			))}
 		</div>
 	)
@@ -120,7 +120,7 @@ const BookmarkPopover = memo(() => {
 	const { show } = useSnapshot(atlas.state.bookmark)
 
 	return (
-		<Popover open={show} trigger={<IconButton color="warning" icon={Icons.Bookmark} tooltipContent="Bookmarks" />}>
+		<Popover open={show} onOpenChange={(value) => (atlas.state.bookmark.show = value)} trigger={<IconButton color="warning" icon={Icons.Bookmark} tooltipContent="Bookmarks" />}>
 			<BookmarkPopoverContent />
 		</Popover>
 	)
@@ -134,12 +134,12 @@ const BookmarkPopoverContent = memo(() => {
 		<div className="w-full">
 			<FilterableList className="col-span-full" filter={BookmarkFilter} items={items} minLengthToSearch={1}>
 				{(item) => (
-					<div onPointerUp={() => atlas.selectBookmark(item)} className="flex flex-row items-center justify-between gap-2 p-2">
+					<div onClick={() => atlas.selectBookmark(item)} className="flex flex-row items-center justify-between gap-2 p-2">
 						<div className="flex flex-col justify-center gap-0">
 							<span className="text-xs font-bold text-neutral-600 uppercase">{item.type}</span>
 							<span className="overflow-auto whitespace-nowrap">{item.name}</span>
 						</div>
-						<IconButton color="danger" icon={Icons.Trash} onPointerUp={() => atlas.removeBookmark(item)} />
+						<IconButton color="danger" icon={Icons.Trash} onClick={() => atlas.removeBookmark(item)} size="sm" />
 					</div>
 				)}
 			</FilterableList>
@@ -198,7 +198,7 @@ const GalaxyFilter = memo(() => {
 			<Checkbox className="col-span-4 flex w-full max-w-none justify-center" label="Show visible" onValueChange={(value) => dso.update('visible', value)} value={visible} />
 			<NumberInput className="col-span-3" disabled={!visible || loading} label="Above (°)" maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} value={visibleAbove} />
 			<div className="col-span-full flex flex-row items-center justify-center">
-				<IconButton color="primary" disabled={loading} icon={Icons.Search} onPointerUp={dso.search} tooltipContent="Filter" variant="flat" />
+				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={dso.search} tooltipContent="Filter" variant="flat" />
 			</div>
 		</div>
 	)
@@ -218,8 +218,8 @@ const SatelliteFilter = memo(() => {
 			<p className="col-span-full font-bold">GROUP</p>
 			<SatelliteGroupTypeChipGroup category={category} className="col-span-full h-[200px]" onValueChange={(value) => satellite.update('groups', value)} value={groups} />
 			<div className="col-span-full flex flex-row items-center justify-center gap-2">
-				<IconButton color="danger" disabled={loading} icon={Icons.Restore} onPointerUp={satellite.resetFilter} tooltipContent="Reset" variant="flat" />
-				<IconButton color="primary" disabled={loading} icon={Icons.Search} onPointerUp={satellite.search} tooltipContent="Filter" variant="flat" />
+				<IconButton color="danger" disabled={loading} icon={Icons.Restore} onClick={satellite.resetFilter} tooltipContent="Reset" variant="flat" />
+				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={satellite.search} tooltipContent="Filter" variant="flat" />
 			</div>
 		</div>
 	)
@@ -397,9 +397,9 @@ const PLANETS = [
 	...planetarySatelliteEphemeris.pluto,
 ] as const
 
-function PlanetItem(planet: (typeof PLANETS)[number], onPointerUp: React.PointerEventHandler) {
+function PlanetItem(planet: (typeof PLANETS)[number], onClick: React.UIEventHandler) {
 	return (
-		<ListItem description={planet.type} data-code={planet.code} onPointerUp={onPointerUp}>
+		<ListItem description={planet.type} data-code={planet.code} onClick={onClick}>
 			<span className="flex flex-row items-center justify-between">
 				<span>{planet.name}</span>
 				<span className="text-xs">{planet.solution}</span>
@@ -437,7 +437,9 @@ const PlanetTab = memo(() => {
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2">
-			<List itemCount={items.length}>{(i) => PlanetItem(items[i], handlePointer)}</List>
+			<List className="col-span-full" itemCount={items.length}>
+				{(i) => PlanetItem(items[i], handlePointer)}
+			</List>
 			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleFavoriteChange} position={position} twilight={twilight} />
 		</div>
 	)
@@ -471,7 +473,7 @@ const AsteroidTab = memo(() => {
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2">
-			<div className="relative col-span-full flex max-h-80 min-h-[200px] flex-col gap-2">
+			<div className="relative col-span-full flex min-h-[200px] flex-col gap-2">
 				<Tabs onValueChange={(value) => (asteroid.state.tab = value as never)} value={tab}>
 					<Tab id="search"> Search</Tab>
 					<Tab id="closeApproaches">Close Approaches</Tab>
@@ -488,8 +490,8 @@ const AsteroidTab = memo(() => {
 	)
 })
 
-function AsteroidSearchListItem(item: SmallBodySearchListItem, onPointerUp: React.PointerEventHandler) {
-	return <ListItem description={item.pdes} label={item.name} data-pdes={item.pdes} onPointerUp={onPointerUp} />
+function AsteroidSearchListItem(item: SmallBodySearchListItem, onClick: React.UIEventHandler) {
+	return <ListItem description={item.pdes} label={item.name} data-pdes={item.pdes} onClick={onClick} />
 }
 
 function AsteroidSearchParameterItem(parameter: MinorPlanetParameter) {
@@ -514,21 +516,21 @@ const AsteroidSearchTab = memo(() => {
 	}
 
 	return (
-		<div className="flex w-full flex-col gap-0">
+		<div className="flex w-full flex-col gap-2">
 			<div className="flex w-full flex-row items-center justify-center gap-2">
 				<TextInput className="flex-1" disabled={loading} label="Search" onValueChange={asteroid.updateSearch} placeholder="Enter the IAU number, designation, name or SPK ID" value={text} />
-				<IconButton color="primary" disabled={loading || !text} icon={Icons.Search} onPointerUp={asteroid.search} variant="ghost" />
+				<IconButton color="primary" disabled={loading || !text} icon={Icons.Search} onClick={asteroid.search} variant="ghost" />
 			</div>
 			{list ? (
-				<List className="mt-2" fullWidth itemCount={list.length}>
+				<List fullWidth itemCount={list.length}>
 					{(i) => AsteroidSearchListItem(list[i], handlePointer)}
 				</List>
 			) : selected?.parameters ? (
-				<List className="mt-2" fullWidth itemCount={selected.parameters.length}>
+				<List fullWidth itemCount={selected.parameters.length}>
 					{(i) => AsteroidSearchParameterItem(selected.parameters![i])}
 				</List>
 			) : null}
-			<Link className="mt-1" href="https://ssd-api.jpl.nasa.gov/doc/sbdb.html" label="NASA/JPL Small-Body Database (SBDB) API" />
+			<Link href="https://ssd-api.jpl.nasa.gov/doc/sbdb.html" label="NASA/JPL Small-Body Database (SBDB) API" />
 		</div>
 	)
 })
@@ -541,11 +543,11 @@ const AsteroidCloseApproachesTab = memo(() => {
 	const { offset } = useSnapshot(asteroid.state.request.time)
 
 	return (
-		<div className="flex w-full flex-col gap-0">
+		<div className="flex w-full flex-col gap-2">
 			<div className="flex w-full flex-row items-center justify-center gap-2">
 				<NumberInput className="flex-1" disabled={loading} label="Days" maxValue={30} minValue={1} onValueChange={(value) => asteroid.updateCloseApproaches('days', value)} value={days} />
 				<NumberInput className="flex-1" disabled={loading} fractionDigits={1} label="Distance (LD)" maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} step={0.1} value={distance} />
-				<IconButton color="primary" disabled={loading} icon={Icons.Search} onPointerUp={asteroid.closeApproaches} variant="ghost" />
+				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={asteroid.closeApproaches} variant="ghost" />
 			</div>
 			<List itemCount={result.length} fullWidth>
 				{(i) => {
@@ -584,7 +586,7 @@ const GalaxyTab = memo(() => {
 	return (
 		<div className="grid grid-cols-12 items-center gap-2">
 			<GalaxyTable />
-			<GalaxyPaginator className="absolute col-span-full w-full" />
+			<GalaxyPaginator className="col-span-full w-full" />
 			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'galaxy', selected.id.toFixed(0))} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
 		</div>
 	)
@@ -638,7 +640,7 @@ const SatelliteTab = memo(() => {
 	return (
 		<div className="relative grid grid-cols-12 items-center gap-2">
 			<SatelliteTable />
-			<SatellitePaginator className="absolute col-span-full w-full" />
+			<SatellitePaginator className="col-span-full w-full" />
 			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'satellite', selected.id.toFixed(0))} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
 		</div>
 	)
@@ -650,7 +652,7 @@ const SatelliteTable = memo(() => {
 	const { result } = useSnapshot(satellite.state)
 
 	return (
-		<Table rowCount={result.length} columnCount={4} className="col-span-full" onAction={satellite.select}>
+		<Table rowCount={result.length} columnCount={3} className="col-span-full" onAction={satellite.select}>
 			<span>ID</span>
 			<span>Name</span>
 			<span>Group</span>
@@ -682,12 +684,12 @@ interface PaginatorProps extends React.ComponentProps<'div'> {
 	readonly onNext: VoidFunction
 }
 
-function Paginator({ page, count, onPrev, onNext, loading = false, readOnly = false, className, ...props }: PaginatorProps) {
+function Paginator({ page, count, onPrev, onNext, loading = false, readOnly = true, className, ...props }: PaginatorProps) {
 	return (
 		<div {...props} className={tw('flex flex-row items-center justify-center gap-3', className)}>
-			<IconButton color="secondary" disabled={page <= 1 || loading} icon={Icons.ChevronLeft} onPointerUp={onPrev} />
+			<IconButton color="secondary" disabled={page <= 1 || loading} icon={Icons.ChevronLeft} onClick={onPrev} />
 			<NumberInput className="max-w-20" classNames={{ input: 'text-center' }} disabled={loading || (page <= 1 && count < 4)} minValue={1} readOnly={readOnly} value={page} />
-			<IconButton color="secondary" disabled={count < 4 || loading} icon={Icons.ChevronRight} onPointerUp={onNext} />
+			<IconButton color="secondary" disabled={count < 4 || loading} icon={Icons.ChevronRight} onClick={onNext} />
 		</div>
 	)
 }
@@ -717,9 +719,9 @@ const TimeBar = memo(() => {
 		<div className="inline-flex flex-row items-center gap-1">
 			<CalendarPopover date={local} isOpen={show} offset={offset} onDateChange={handleOnDateChange} onOffsetChange={handleOnOffsetChange} onOpenChange={handleOnOpenChange} />
 			{manual ? (
-				<IconButton color="warning" icon={Icons.TimerPlay} onPointerUp={() => atlas.updateTime(Date.now(), offset, false)} tooltipContent="Play" variant="flat" />
+				<IconButton color="warning" icon={Icons.TimerPlay} onClick={() => atlas.updateTime(Date.now(), offset, false)} tooltipContent="Play" variant="flat" />
 			) : (
-				<IconButton color="success" icon={Icons.TimerPause} onPointerUp={() => (atlas.state.calendar.manual = true)} tooltipContent="Pause" variant="flat" />
+				<IconButton color="success" icon={Icons.TimerPause} onClick={() => (atlas.state.calendar.manual = true)} tooltipContent="Pause" variant="flat" />
 			)}
 		</div>
 	)
@@ -826,14 +828,14 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 	return (
 		<div className={tw('h-[140px] col-span-full relative flex flex-col justify-start items-center gap-1', className)}>
 			<div className="flex w-full flex-row gap-2 text-start text-sm font-bold">
-				<ToggleButton color="primary" icon={Icons.Info} value={!showChart} onPointerUp={() => setShowChart(false)} />
-				<ToggleButton color="primary" icon={Icons.Chart} value={showChart} onPointerUp={() => setShowChart(true)} />
+				<ToggleButton color="primary" icon={Icons.Info} value={!showChart} onClick={() => setShowChart(false)} />
+				<ToggleButton color="primary" icon={Icons.Chart} value={showChart} onClick={() => setShowChart(true)} />
 				<div className="flex flex-1 items-center justify-center overflow-hidden text-sm font-bold">
 					{tags?.map((tag) => (
 						<Chip color={tag.color} key={tag.label} label={tag.label} />
 					))}
 				</div>
-				{onFavoriteChange && <IconButton color={isFavorite ? 'danger' : 'warning'} disabled={isFavorite === undefined} icon={isFavorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onPointerUp={() => onFavoriteChange(!isFavorite)} tooltipContent={isFavorite ? 'Remove bookmark' : 'Add bookmark'} />}
+				{onFavoriteChange && <IconButton color={isFavorite ? 'danger' : 'warning'} disabled={isFavorite === undefined} icon={isFavorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onClick={() => onFavoriteChange(!isFavorite)} tooltipContent={isFavorite ? 'Remove bookmark' : 'Add bookmark'} />}
 			</div>
 			<span className="w-full">
 				<Activity mode={showChart ? 'hidden' : 'visible'}>
@@ -862,7 +864,7 @@ const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => {
 			<div className="col-span-full flex items-center justify-center gap-2">
 				<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} disabled={position.pierSide === 'NEITHER'} onValueChange={atlas.sync} tooltipContent="Sync" variant="flat" />
 				<MountDropdown color="success" disallowNoneSelection disabled={position.pierSide === 'NEITHER'} onValueChange={atlas.goTo} tooltipContent="Go" variant="flat" />
-				<IconButton color="secondary" disabled={position.pierSide === 'NEITHER'} icon={Icons.Image} onPointerUp={atlas.frame} tooltipContent="Frame" variant="flat" />
+				<IconButton color="secondary" disabled={position.pierSide === 'NEITHER'} icon={Icons.Image} onClick={atlas.frame} tooltipContent="Frame" variant="flat" />
 			</div>
 		</div>
 	)

@@ -5,9 +5,8 @@ import { useSnapshot } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from '@/molecules/indi/equipment'
 import type { DeviceTypeMap } from '@/shared/types'
 import { stopPropagation } from '@/shared/util'
-import { Dropdown, type DropdownProps } from './components/Dropdown'
+import { Dropdown, DropdownItem, type DropdownProps } from './components/Dropdown'
 import { IconButton } from './components/IconButton'
-import { ListItem } from './components/List'
 import { ConnectButton } from './ConnectButton'
 import { Icons, type Icon } from './Icon'
 
@@ -23,7 +22,7 @@ export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends Drop
 
 function DeviceItem(item: Device | undefined, onClick: React.MouseEventHandler) {
 	const key = item?.id ?? 'none'
-	return <ListItem key={key} data-id={key} onClick={onClick} label={item?.name || 'None'} startContent={<DeviceDropdownStartContent isConnected={item?.connected} />} endContent={<DeviceDropdownEndContent device={item} />} />
+	return <DropdownItem key={key} data-id={key} onClick={onClick} label={item?.name || 'None'} startContent={<DeviceDropdownStartContent isConnected={item?.connected} />} endContent={<DeviceDropdownEndContent device={item} />} />
 }
 
 export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, disabled, disallowNoneSelection = false, label, showLabel = false, showLabelOnEmpty = showLabel, color, startContent, icon: Icon, ...props }: DeviceDropdownProps<T>) {
@@ -86,8 +85,8 @@ const DeviceDropdownEndContent = memo(({ device }: DeviceDropdownEndContentProps
 
 	return (
 		<div className="flex flex-row items-center gap-2">
-			{device && <IconButton color="secondary" icon={Icons.OpenInNew} iconSize={12} onPointerUp={handleShowPointerUp} />}
-			{device && <ConnectButton connected={device.connected} loading={device?.connecting} onPointerUp={handleConnectPointerUp} />}
+			{device && <IconButton color="secondary" icon={Icons.OpenInNew} tooltipContent="Open" onPointerUp={handleShowPointerUp} size="sm" />}
+			{device && <ConnectButton connected={device.connected} loading={device?.connecting} onPointerUp={handleConnectPointerUp} size="sm" />}
 		</div>
 	)
 })

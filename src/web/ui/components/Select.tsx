@@ -14,7 +14,7 @@ const SELECT_ITEM_HEIGHTS = {
 const selectStyles = tv({
 	slots: {
 		base: 'relative inline-flex min-w-0 align-top',
-		trigger: 'flex w-full min-w-0 items-stretch overflow-hidden rounded-lg outline-none transition',
+		trigger: 'flex w-full min-w-0 items-stretch overflow-hidden rounded-lg outline-none transition cursor-pointer',
 		startContent: 'flex shrink-0 items-center whitespace-nowrap',
 		field: 'relative min-w-0 flex-1',
 		value: 'flex h-full w-full min-w-0 items-center overflow-hidden',

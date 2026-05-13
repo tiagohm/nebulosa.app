@@ -11,9 +11,10 @@ export interface FilterableListProps<T> extends Omit<ListProps, 'children' | 'it
 	readonly filterPlaceholder?: string
 	readonly minLengthToSearch?: number
 	readonly children: FilterableListItemRenderer<T>
+	readonly disabled?: boolean
 }
 
-export function FilterableList<T>({ items, filter, filterPlaceholder = 'Search', minLengthToSearch = 3, children, ...props }: FilterableListProps<T>) {
+export function FilterableList<T>({ items, filter, filterPlaceholder = 'Search', minLengthToSearch = 3, disabled, children, ...props }: FilterableListProps<T>) {
 	const [search, setSearch] = useState('')
 	const debouncedSearch = useDebounce(search, 500)
 
@@ -23,9 +24,9 @@ export function FilterableList<T>({ items, filter, filterPlaceholder = 'Search',
 	}, [debouncedSearch, items])
 
 	return (
-		<div>
-			<SearchTextInput fullWidth minLengthToSearch={minLengthToSearch} onValueChange={setSearch} placeholder={filterPlaceholder} value={search} />
-			<List itemCount={filtered.length} {...props}>
+		<div className='flex flex-col gap-2'>
+			<SearchTextInput disabled={disabled || items.length === 0} fullWidth minLengthToSearch={minLengthToSearch} onValueChange={setSearch} placeholder={filterPlaceholder} value={search} />
+			<List itemCount={filtered.length} emptyContent='No bookmarks' {...props}>
 				{(i) => children(filtered[i], i)}
 			</List>
 		</div>

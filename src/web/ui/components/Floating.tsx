@@ -158,6 +158,10 @@ export function Floating({
 	offset = DEFAULT_FLOATING_OFFSET,
 	hideArrow,
 	onOpenChange,
+	onClick,
+	onKeyDown,
+	onPointerDown,
+	onPointerUp,
 	placement = 'bottom',
 	portalContainer,
 	ref,
@@ -180,6 +184,32 @@ export function Floating({
 			onOpenChange?.(nextOpen)
 		}
 	})
+
+	// Portal events still bubble through React parents; keep overlay interaction local.
+	function stopInteractivePropagation(event: React.SyntheticEvent<HTMLDivElement>) {
+		if (interactive) event.stopPropagation()
+	}
+
+	function handleClick(event: React.MouseEvent<HTMLDivElement>) {
+		onClick?.(event)
+		stopInteractivePropagation(event)
+	}
+
+	function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+		onKeyDown?.(event)
+		if (!event.defaultPrevented && closeOnEscape && event.key === 'Escape') requestOpenChange(false)
+		stopInteractivePropagation(event)
+	}
+
+	function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+		onPointerDown?.(event)
+		stopInteractivePropagation(event)
+	}
+
+	function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+		onPointerUp?.(event)
+		stopInteractivePropagation(event)
+	}
 
 	// Recomputes the overlay position from the current trigger and content rectangles.
 	const updatePosition = useEffectEvent(() => {
@@ -259,6 +289,10 @@ export function Floating({
 			className={tw(styles.base(), className, classNames?.base)}
 			data-placement={position?.placement ?? placement}
 			id={id}
+			onClick={handleClick}
+			onKeyDown={handleKeyDown}
+			onPointerDown={handlePointerDown}
+			onPointerUp={handlePointerUp}
 			ref={(node) => {
 				contentRef.current = node
 				assignRef(ref, node)

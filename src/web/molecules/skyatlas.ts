@@ -525,7 +525,7 @@ export const GalaxyMolecule = molecule(() => {
 		}
 	}
 
-	async function search(reset: boolean | React.PointerEvent) {
+	async function search(reset: boolean | React.UIEvent) {
 		try {
 			state.loading = true
 
@@ -648,7 +648,7 @@ export const SatelliteMolecule = molecule(() => {
 		if (key === 'page') void search(false)
 	}
 
-	async function search(reset: boolean | React.PointerEvent) {
+	async function search(reset: boolean | React.UIEvent) {
 		try {
 			state.loading = true
 

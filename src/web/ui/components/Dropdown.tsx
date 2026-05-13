@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useState } from 'react'
+import { Children, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { type ClassValue, tv } from 'tailwind-variants'
 import { assignRef, stopPropagation, tw } from '@/shared/util'
 import { Icons } from '../Icon'
@@ -16,10 +16,12 @@ const dropdownStyles = tv({
 	slots: {
 		trigger: 'min-w-0',
 		chevron: 'shrink-0 transition',
-		panel: 'w-(--dropdown-width) min-w-48 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg bg-neutral-950 p-0 text-neutral-100 shadow-lg shadow-black/40',
+		panel: 'min-w-(--dropdown-width) max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg bg-neutral-950 p-0 text-neutral-100 shadow-lg shadow-black/40',
 		panelContent: 'min-w-0',
 		header: 'p-2',
 		list: 'max-h-72 rounded-none bg-transparent text-neutral-100',
+		listItem: 'hover:bg-transparent',
+		option: 'flex h-full w-full min-w-max items-center',
 		footer: 'p-2',
 	},
 	variants: {
@@ -33,9 +35,9 @@ const dropdownStyles = tv({
 
 const dropdownItemStyles = tv({
 	slots: {
-		base: 'flex h-full w-full min-w-0 items-center justify-center gap-2 text-center transition p-1',
+		base: 'flex h-full w-full min-w-max items-center justify-center gap-2 transition p-1',
 		startContent: 'flex shrink-0 items-center justify-center px-2',
-		label: 'min-w-0 flex-1 truncate',
+		label: 'min-w-max flex-1 overflow-visible whitespace-nowrap',
 		endContent: 'flex shrink-0 items-center justify-center px-2',
 	},
 	variants: {
@@ -44,7 +46,7 @@ const dropdownItemStyles = tv({
 				base: 'cursor-not-allowed opacity-40 pointer-events-none',
 			},
 			false: {
-				base: 'cursor-pointer',
+				base: 'cursor-pointer hover:bg-neutral-800 active:bg-neutral-700',
 			},
 		},
 	},
@@ -63,6 +65,7 @@ export interface DropdownClassNames {
 	readonly header?: ClassValue
 	readonly list?: ClassValue
 	readonly listItem?: ClassValue
+	readonly option?: ClassValue
 	readonly footer?: ClassValue
 	readonly empty?: ClassValue
 }
@@ -120,12 +123,15 @@ export function Dropdown({
 	const [uncontrolledIsOpen, setUncontrolledIsOpen] = useState(false)
 	const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(null)
 	const [triggerWidth, setTriggerWidth] = useState(0)
+	const [optionContentWidth, setOptionContentWidth] = useState(0)
+	const optionContentWidthRef = useRef(0)
+	const items = useMemo(() => Children.toArray(children), [children])
 	const isControlledOpen = open !== undefined
 	const isOpen = isControlledOpen ? open : uncontrolledIsOpen
 	const visible = isOpen && !disabled && !readOnly && loading !== true
 	const styles = dropdownStyles({ open: visible })
 	const optionHeight = dropdownItemHeight(size, itemHeight)
-	const panelStyle = useMemo(() => ({ '--dropdown-width': `${Math.max(triggerWidth, 0)}px` }) as React.CSSProperties, [triggerWidth])
+	const panelStyle = useMemo(() => ({ '--dropdown-width': `${Math.max(triggerWidth, 0)}px`, minWidth: Math.max(triggerWidth, optionContentWidth, 0) }) as React.CSSProperties, [optionContentWidth, triggerWidth])
 
 	// Updates open state in controlled and uncontrolled modes.
 	const setOpen = useEffectEvent((nextOpen: boolean) => {
@@ -159,6 +165,25 @@ export function Dropdown({
 			setOpen(false)
 		}
 	}, [disabled, isOpen, loading, readOnly, setOpen])
+
+	// Clears mounted item measurements when the floating panel closes.
+	useEffect(() => {
+		if (visible) return
+
+		optionContentWidthRef.current = 0
+		setOptionContentWidth(0)
+	}, [visible])
+
+	// Tracks the widest mounted item so the panel can fit visible content.
+	function measureOptionWidth(element: HTMLDivElement | null) {
+		if (element === null) return
+
+		const width = Math.ceil(element.scrollWidth)
+		if (width <= optionContentWidthRef.current) return
+
+		optionContentWidthRef.current = width
+		setOptionContentWidth(width)
+	}
 
 	// Stores the trigger element while preserving the caller ref.
 	function handleTriggerRef(element: HTMLDivElement | null) {
@@ -201,6 +226,14 @@ export function Dropdown({
 		setOpen(false)
 	}
 
+	function renderItem(index: number) {
+		return (
+			<div className={tw(styles.option(), classNames?.option)} ref={measureOptionWidth}>
+				{items[index]}
+			</div>
+		)
+	}
+
 	const TriggerEndContent = (
 		<>
 			{endContent}
@@ -211,8 +244,8 @@ export function Dropdown({
 	const PanelContent = (
 		<div className={tw(styles.panelContent(), classNames?.panelContent)}>
 			{headerContent !== undefined && headerContent !== null && <div className={tw(styles.header(), classNames?.header)}>{headerContent}</div>}
-			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: classNames?.listItem }} emptyContent={emptyContent} itemHeight={optionHeight} overscan={overscan} onAction={handleOnAction}>
-				{children}
+			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: tw(styles.listItem(), classNames?.listItem) }} emptyContent={emptyContent} itemCount={items.length} itemHeight={optionHeight} overscan={overscan} onAction={onAction && handleOnAction}>
+				{renderItem}
 			</List>
 			{footerContent !== undefined && footerContent !== null && <div className={tw(styles.footer(), classNames?.footer)}>{footerContent}</div>}
 		</div>

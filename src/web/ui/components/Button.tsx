@@ -28,11 +28,11 @@ const buttonStyles = tv({
 		},
 		size: {
 			sm: {
-				base: 'h-8 min-w-8 px-2 text-sm',
-				startContent: 'text-sm',
-				loadingIcon: 'text-sm',
-				label: 'text-sm',
-				endContent: 'text-sm',
+				base: 'h-8 min-w-8 px-2 text-xs',
+				startContent: 'text-xs',
+				loadingIcon: 'text-xs',
+				label: 'text-xs',
+				endContent: 'text-xs',
 			},
 			md: {
 				base: 'h-10 min-w-10 px-2 text-sm',

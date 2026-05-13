@@ -7,7 +7,7 @@ const DEFAULT_OVERSCAN = 3
 
 const listStyles = tv({
 	slots: {
-		base: 'relative block min-h-0 max-h-80 min-w-0 overflow-x-hidden overflow-y-auto rounded-lg bg-neutral-900/70 text-neutral-100',
+		base: 'relative block min-h-0 max-h-80 min-w-0 overflow-x-hidden overflow-y-auto rounded-lg bg-neutral-900/70 text-neutral-100 cursor-pointer',
 		spacer: 'relative w-full min-w-0',
 		item: 'absolute left-0 top-0 w-full min-w-0 overflow-hidden hover:bg-neutral-800',
 		empty: 'flex min-h-10 items-center px-4 text-sm text-neutral-500',

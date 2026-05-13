@@ -87,13 +87,14 @@ const Progress = memo(() => {
 
 const Path = memo(() => {
 	const camera = useMolecule(CameraMolecule)
+	const { capturing } = useSnapshot(camera.state)
 	const { autoSave, autoSubFolderMode, savePath } = useSnapshot(camera.state.request)
 
 	return (
 		<div className="col-span-full flex flex-row items-center gap-1">
-			<AutoSaveButton onValueChange={(value) => camera.update('autoSave', value)} value={autoSave} />
-			<AutoSubFolderModeButton disabled={!autoSave} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={autoSubFolderMode} />
-			<FilePickerInput disabled={!autoSave} id={`camera-${camera.scope.camera.name}`} mode="directory" onValueChange={camera.updateSavePath} value={savePath} />
+			<AutoSaveButton disabled={capturing} onValueChange={(value) => camera.update('autoSave', value)} value={autoSave} />
+			<AutoSubFolderModeButton disabled={!autoSave || capturing} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={autoSubFolderMode} />
+			<FilePickerInput disabled={!autoSave || capturing} fullWidth id={`camera-${camera.scope.camera.name}`} mode="directory" onValueChange={camera.updateSavePath} value={savePath} />
 		</div>
 	)
 })
@@ -130,9 +131,9 @@ const OptionsBody = memo(() => {
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-2">
-			<CameraTransferFormatSelect className="col-span-6" onValueChange={(value) => camera.update('transferFormat', value)} value={transferFormat} />
-			<Checkbox className="col-span-6" label="Compressed" onValueChange={(value) => camera.update('compressed', value)} value={compressed} />
-			<div className="col-span-full flex flex-row items-center gap-2">
+			<CameraTransferFormatSelect className="col-span-7" onValueChange={(value) => camera.update('transferFormat', value)} value={transferFormat} />
+			<Checkbox className="col-span-5" label="Compressed" onValueChange={(value) => camera.update('compressed', value)} value={compressed} />
+			<div className="col-span-full flex flex-row items-center gap-2 pt-2 border-t border-dashed border-neutral-500">
 				<span className="text-sm font-bold">DITHER</span>
 				<Switch onValueChange={(value) => camera.updateDither('enabled', value)} value={dither.enabled} />
 			</div>
@@ -149,7 +150,7 @@ const Cooler = memo(() => {
 
 	return (
 		<>
-			<Switch className="gap-0.2 col-span-3 max-w-none flex-col-reverse justify-center" disabled={!connected || capturing || !hasCooler} onValueChange={camera.cooler} thumbContent={`${(coolerPower * 100).toFixed(1)}%`} value={cooler} />
+			<Switch className="col-span-6" disabled={!connected || capturing || !hasCooler} onValueChange={camera.cooler} label={`${(coolerPower * 100).toFixed(1)}%`} value={cooler} />
 		</>
 	)
 })
@@ -166,6 +167,7 @@ const Temperature = memo(() => {
 			disabled={!connected || !canSetTemperature || capturing}
 			endContent={<TemperatureNumberInputEndContent />}
 			fractionDigits={1}
+			fullWidth
 			label={`Temperature (${temperature.toFixed(1)}°C)`}
 			maxValue={50}
 			minValue={-50}
@@ -179,7 +181,7 @@ const Temperature = memo(() => {
 const TemperatureNumberInputEndContent = memo(() => {
 	const camera = useMolecule(CameraMolecule)
 
-	return <IconButton color="success" icon={Icons.Check} onPointerUp={camera.temperature} tooltipContent="Apply" />
+	return <IconButton color="success" icon={Icons.Check} onPointerUp={camera.temperature} size="sm" tooltipContent="Apply" />
 })
 
 const Exposure = memo(() => {
@@ -215,7 +217,7 @@ const ExposureMode = memo(() => {
 
 	return (
 		<>
-			<ExposureModeButtonGroup className="col-span-6" color="secondary" disabled={!connected || capturing} onValueChange={(value) => camera.update('exposureMode', value)} value={exposureMode} />
+			<ExposureModeButtonGroup className="col-span-6" fullWidth color="secondary" disabled={!connected || capturing} onValueChange={(value) => camera.update('exposureMode', value)} value={exposureMode} />
 			<NumberInput className="col-span-3" disabled={!connected || exposureMode === 'SINGLE' || capturing} label="Delay (s)" minValue={0} onValueChange={(value) => camera.update('delay', value)} value={delay} />
 			<NumberInput className="col-span-3" disabled={!connected || exposureMode !== 'FIXED' || capturing} label="Count" minValue={1} onValueChange={(value) => camera.update('count', value)} value={count} />
 		</>
@@ -245,7 +247,7 @@ const Frame = memo(() => {
 	return (
 		<>
 			<div className="col-span-6 flex flex-row items-center justify-center gap-2">
-				<Checkbox className="gap-0.4 max-w-none flex-col-reverse justify-center" classNames={{ label: 'text-xs ms-0' }} disabled={!connected || !canSubFrame || capturing} label="Subframe" onValueChange={(value) => camera.update('subframe', value)} value={subframe} />
+				<Checkbox className="gap-0.5 max-w-none flex-col-reverse justify-center text-xs" disabled={!connected || !canSubFrame || capturing} label="Subframe" onValueChange={(value) => camera.update('subframe', value)} value={subframe} />
 				<IconButton color="secondary" disabled={!connected || !subframe || capturing} icon={Icons.Fullscreen} onPointerUp={camera.fullscreen} tooltipContent="Fullscreen" variant="flat" />
 			</div>
 			<NumberInput className="col-span-3" disabled={!connected || !subframe || capturing} label="X" maxValue={frame.x.max} minValue={frame.x.min} onValueChange={(value) => camera.update('x', value)} value={x} />

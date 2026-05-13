@@ -91,10 +91,10 @@ export class AtlasHandler {
 
 	seasons(req: PositionOfBody): SolarSeasons {
 		const [year] = temporalToDate(req.time.utc)
-		const spring = timeToUnixMillis(season(year, 'SPRING')) // Autumn in southern hemisphere
-		const summer = timeToUnixMillis(season(year, 'SUMMER')) // Winter in southern hemisphere
-		const autumn = timeToUnixMillis(season(year, 'AUTUMN')) // Spring in southern hemisphere
-		const winter = timeToUnixMillis(season(year, 'WINTER')) // Summer in southern hemisphere
+		const spring = timeToUnixMillis(season(year, 'spring')) // Autumn in southern hemisphere
+		const summer = timeToUnixMillis(season(year, 'summer')) // Winter in southern hemisphere
+		const autumn = timeToUnixMillis(season(year, 'autumn')) // Spring in southern hemisphere
+		const winter = timeToUnixMillis(season(year, 'winter')) // Summer in southern hemisphere
 		return { spring, summer, autumn, winter }
 	}
 
@@ -199,7 +199,7 @@ export class AtlasHandler {
 					magnitude: +row[8],
 					gamma: +row[7],
 					u: 0,
-					type: type === 'T' ? 'TOTAL' : type === 'P' ? 'PARTIAL' : type === 'A' ? 'ANNULAR' : 'HYBRID',
+					type: type === 'T' ? 'total' : type === 'P' ? 'partial' : type === 'A' ? 'annular' : 'hybrid',
 				}
 
 				this.solarEclipses.push(eclipse)

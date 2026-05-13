@@ -11,7 +11,7 @@ const useGesture = createUseGesture([dragAction])
 const MIN_VISIBLE_SIZE = 128
 const GRID_SIZE = 8
 
-const BLOCKED_DRAG_SELECTOR = 'button,a,input,select,textarea,[contenteditable="true"]'
+const BLOCKED_DRAG_SELECTOR = 'button,a,input,select,textarea,[contenteditable="true"],[role="button"]'
 
 const modalTransformMap = new Map<string, Point>()
 

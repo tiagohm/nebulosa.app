@@ -8,8 +8,8 @@ export interface IndiPanelControlButtonProps extends Omit<ButtonProps, 'onPointe
 	readonly device?: Device | string
 }
 
-export function IndiPanelControlButton({ device, color = 'secondary', size = 'md', variant = 'ghost', ...props }: IndiPanelControlButtonProps) {
+export function IndiPanelControlButton({ device, color = 'primary', size = 'md', variant = 'ghost', ...props }: IndiPanelControlButtonProps) {
 	const indi = useMolecule(IndiPanelControlMolecule)
 
-	return <Button children={<img className={size === 'md' ? 'w-6' : 'w-9'} src={indiIcon} />} color={color} onPointerUp={() => indi.show(device)} size={size} tooltipContent="INDI" variant={variant} {...props} />
+	return <Button children={<img className={size === 'md' ? 'w-6' : 'w-9'} src={indiIcon} />} rounded color={color} onPointerUp={() => indi.show(device)} size={size} tooltipContent="INDI" variant={variant} {...props} />
 }

@@ -22,7 +22,7 @@
 		"index": "bun run scripts/codebase.index.ts"
 	},
 	"dependencies": {
-		"@tailwindcss/cli": "4.2.4",
+		"@tailwindcss/cli": "4.3.0",
 		"@uidotdev/usehooks": "2.4.1",
 		"@use-gesture/react": "10.3.1",
 		"bunshi": "2.2.0",
@@ -33,9 +33,9 @@
 		"react-dom": "19.2.6",
 		"react-leaflet": "5.0.0",
 		"recharts": "3.8.1",
-		"tailwind-merge": "3.5.0",
+		"tailwind-merge": "3.6.0",
 		"tailwind-variants": "3.2.2",
-		"tailwindcss": "4.2.4",
+		"tailwindcss": "4.3.0",
 		"valtio": "2.3.2"
 	},
 	"devDependencies": {

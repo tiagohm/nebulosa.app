@@ -29,7 +29,7 @@ export function CameraCaptureStartPopover({ mode, camera, color, disabled, value
 	const exposureTimeDisabled = !canExposureTime(mode)
 
 	return (
-		<Popover className='w-120 max-w-90vw' trigger={<IconButton {...props} color={color ?? (camera.connected ? 'success' : 'danger')} disabled={disabled || !camera.connected} icon={Icons.Cog} size='sm' />}>
+		<Popover className="max-w-90vw w-120" trigger={<IconButton {...props} color={color ?? (camera.connected ? 'success' : 'danger')} disabled={disabled || !camera.connected} icon={Icons.Cog} size="sm" />}>
 			<div className="grid grid-cols-12 items-center gap-2 p-4">
 				<p className="col-span-full font-bold">CAMERA CAPTURE OPTIONS</p>
 				<ExposureTimeInput

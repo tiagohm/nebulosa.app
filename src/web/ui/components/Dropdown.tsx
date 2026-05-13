@@ -1,5 +1,5 @@
 import { Children, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { type ClassValue, tv } from 'tailwind-variants'
+import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
 import { assignRef, stopPropagation, tw } from '@/shared/util'
 import { Icons } from '../Icon'
 import { Button, type ButtonProps } from './Button'
@@ -35,7 +35,7 @@ const dropdownStyles = tv({
 
 const dropdownItemStyles = tv({
 	slots: {
-		base: 'flex h-full w-full min-w-max items-center justify-center gap-2 transition p-1',
+		base: 'flex h-full w-full min-w-max items-center justify-center gap-2 transition py-2 px-4',
 		startContent: 'flex shrink-0 items-center justify-center px-2',
 		label: 'min-w-max flex-1 overflow-visible whitespace-nowrap',
 		endContent: 'flex shrink-0 items-center justify-center px-2',
@@ -46,14 +46,55 @@ const dropdownItemStyles = tv({
 				base: 'cursor-not-allowed opacity-40 pointer-events-none',
 			},
 			false: {
-				base: 'cursor-pointer hover:bg-neutral-800 active:bg-neutral-700',
+				base: 'cursor-pointer',
+			},
+		},
+		color: {
+			default: {
+				base: '[--color-variant:var(--color-neutral-500)] text-neutral-100 hover:bg-neutral-800 active:bg-neutral-700',
+				startContent: 'text-neutral-400',
+				label: 'text-neutral-100',
+				endContent: 'text-neutral-400',
+			},
+			primary: {
+				base: '[--color-variant:var(--primary)] text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
+				startContent: 'text-(--color-variant)',
+				label: 'text-(--color-variant)',
+				endContent: 'text-(--color-variant)',
+			},
+			secondary: {
+				base: '[--color-variant:var(--secondary)] text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
+				startContent: 'text-(--color-variant)',
+				label: 'text-(--color-variant)',
+				endContent: 'text-(--color-variant)',
+			},
+			success: {
+				base: '[--color-variant:var(--success)] text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
+				startContent: 'text-(--color-variant)',
+				label: 'text-(--color-variant)',
+				endContent: 'text-(--color-variant)',
+			},
+			danger: {
+				base: '[--color-variant:var(--danger)] text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
+				startContent: 'text-(--color-variant)',
+				label: 'text-(--color-variant)',
+				endContent: 'text-(--color-variant)',
+			},
+			warning: {
+				base: '[--color-variant:var(--warning)] text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
+				startContent: 'text-(--color-variant)',
+				label: 'text-(--color-variant)',
+				endContent: 'text-(--color-variant)',
 			},
 		},
 	},
 	defaultVariants: {
 		disabled: false,
+		color: 'default',
 	},
 })
+
+type DropdownItemVariants = VariantProps<typeof dropdownItemStyles>
 
 type DropdownSize = keyof typeof DROPDOWN_ITEM_HEIGHTS
 
@@ -291,7 +332,7 @@ export interface DropdownItemClassNames {
 	readonly endContent?: ClassValue
 }
 
-export interface DropdownItemProps extends React.ComponentProps<'div'> {
+export interface DropdownItemProps extends Omit<React.ComponentProps<'div'>, 'color'>, Omit<DropdownItemVariants, 'disabled'> {
 	readonly classNames?: DropdownItemClassNames
 	readonly disabled?: boolean
 	readonly endContent?: React.ReactNode
@@ -300,9 +341,9 @@ export interface DropdownItemProps extends React.ComponentProps<'div'> {
 }
 
 // Render a dropdown row with optional leading and trailing content.
-export function DropdownItem({ label, children, className, classNames, disabled = false, endContent, startContent, ...props }: DropdownItemProps) {
+export function DropdownItem({ label, children, className, classNames, color, disabled = false, endContent, startContent, ...props }: DropdownItemProps) {
 	const content = children ?? label
-	const styles = dropdownItemStyles({ disabled })
+	const styles = dropdownItemStyles({ color, disabled })
 
 	return (
 		<div className={tw(styles.base(), className, classNames?.base)} {...props}>

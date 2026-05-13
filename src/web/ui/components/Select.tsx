@@ -184,6 +184,8 @@ function selectItemHeight(size: Exclude<SelectVariants['size'], undefined>, item
 	return itemHeight !== undefined && Number.isFinite(itemHeight) && itemHeight > 0 ? itemHeight : SELECT_ITEM_HEIGHTS[size]
 }
 
+const CheckIcon = <Icons.Check color="var(--success)" />
+
 // Renders a controlled single-select trigger with a floating virtualized option list.
 export function Select<T>({
 	autoFlip = true,
@@ -357,9 +359,7 @@ export function Select<T>({
 				ref={measureOptionWidth}
 				role="button">
 				<span className={tw(styles.optionContent(), classNames?.optionContent)}>{children(item, index, selected, 'list')}</span>
-				<span className={tw(styles.selectedIcon(), selected ? 'opacity-100' : 'opacity-0', classNames?.selectedIcon)}>
-					<Icons.Check />
-				</span>
+				<span className={tw(styles.selectedIcon(), selected ? 'opacity-100' : 'opacity-0', classNames?.selectedIcon)} children={CheckIcon} />
 			</div>
 		)
 	}

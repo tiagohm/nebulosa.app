@@ -24,9 +24,9 @@ export function FilterableList<T>({ items, filter, filterPlaceholder = 'Search',
 	}, [debouncedSearch, items])
 
 	return (
-		<div className='flex flex-col gap-2'>
+		<div className="flex flex-col gap-2">
 			<SearchTextInput disabled={disabled || items.length === 0} fullWidth minLengthToSearch={minLengthToSearch} onValueChange={setSearch} placeholder={filterPlaceholder} value={search} />
-			<List itemCount={filtered.length} emptyContent='No bookmarks' {...props}>
+			<List itemCount={filtered.length} emptyContent="No bookmarks" {...props}>
 				{(i) => children(filtered[i], i)}
 			</List>
 		</div>

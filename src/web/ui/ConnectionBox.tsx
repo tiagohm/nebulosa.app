@@ -89,10 +89,10 @@ const EditDropdown = memo(({ item }: EditDropdownProps) => {
 	const { connections } = useSnapshot(connection.state)
 
 	return (
-		<Dropdown hideChevron itemHeight={28} label={<Icons.VerticalMenu />} variant="ghost">
+		<Dropdown hideChevron itemHeight={28} label={<Icons.VerticalMenu color="var(--color-neutral-500)" />} color="default" variant="ghost" size="sm">
 			<DropdownItem label="Edit" onPointerUp={() => connection.edit(item)} startContent={<Icons.Edit />} />
 			<DropdownItem label="Duplicate" onPointerUp={() => connection.duplicate(item)} startContent={<Icons.Copy />} />
-			<DropdownItem label="Delete" disabled={connections.length === 1} className="bg-(--danger)" color="danger" onPointerUp={() => connection.remove(item)} startContent={<Icons.Trash />} />
+			<DropdownItem label="Delete" disabled={connections.length === 1} color="danger" onPointerUp={() => connection.remove(item)} startContent={<Icons.Trash />} />
 		</Dropdown>
 	)
 })

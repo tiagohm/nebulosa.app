@@ -133,7 +133,7 @@ const OptionsBody = memo(() => {
 		<div className="grid grid-cols-12 items-center gap-2 p-2">
 			<CameraTransferFormatSelect className="col-span-7" onValueChange={(value) => camera.update('transferFormat', value)} value={transferFormat} />
 			<Checkbox className="col-span-5" label="Compressed" onValueChange={(value) => camera.update('compressed', value)} value={compressed} />
-			<div className="col-span-full flex flex-row items-center gap-2 pt-2 border-t border-dashed border-neutral-500">
+			<div className="col-span-full flex flex-row items-center gap-2 border-t border-dashed border-neutral-500 pt-2">
 				<span className="text-sm font-bold">DITHER</span>
 				<Switch onValueChange={(value) => camera.updateDither('enabled', value)} value={dither.enabled} />
 			</div>
@@ -247,7 +247,7 @@ const Frame = memo(() => {
 	return (
 		<>
 			<div className="col-span-6 flex flex-row items-center justify-center gap-2">
-				<Checkbox className="gap-0.5 max-w-none flex-col-reverse justify-center text-xs" disabled={!connected || !canSubFrame || capturing} label="Subframe" onValueChange={(value) => camera.update('subframe', value)} value={subframe} />
+				<Checkbox className="max-w-none flex-col-reverse justify-center gap-0.5 text-xs" disabled={!connected || !canSubFrame || capturing} label="Subframe" onValueChange={(value) => camera.update('subframe', value)} value={subframe} />
 				<IconButton color="secondary" disabled={!connected || !subframe || capturing} icon={Icons.Fullscreen} onPointerUp={camera.fullscreen} tooltipContent="Fullscreen" variant="flat" />
 			</div>
 			<NumberInput className="col-span-3" disabled={!connected || !subframe || capturing} label="X" maxValue={frame.x.max} minValue={frame.x.min} onValueChange={(value) => camera.update('x', value)} value={x} />

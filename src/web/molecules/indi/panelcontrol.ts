@@ -127,7 +127,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 	}
 
 	async function retrieveMessages(device: string = state.device) {
-		const messages = connection.state.connected && await Api.Indi.messages(device, connection.state.connected)
+		const messages = connection.state.connected && (await Api.Indi.messages(device, connection.state.connected))
 		if (messages) state.messages = messages.sort((a, b) => b.timestamp!.localeCompare(a.timestamp!))
 	}
 

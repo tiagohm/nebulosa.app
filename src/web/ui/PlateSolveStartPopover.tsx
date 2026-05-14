@@ -19,7 +19,7 @@ export function PlateSolveStartPopover({ type, radius, focalLength, pixelSize, o
 	const { executable, apiUrl, apiKey } = useSnapshot(settings.state.solver[type])
 
 	return (
-		<Popover className="max-w-130" trigger={<IconButton icon={Icons.Cog} />}>
+		<Popover className="max-w-130" trigger={<IconButton icon={Icons.Cog} size="sm" />}>
 			<div className="grid grid-cols-12 gap-2 p-4">
 				<p className="col-span-full font-bold">PLATE SOLVE OPTIONS: {type}</p>
 				{type !== 'NOVA_ASTROMETRY_NET' && <TextInput className="col-span-full" label="Executable" onValueChange={(value) => settings.updateSolver(type, 'executable', value)} value={executable} />}

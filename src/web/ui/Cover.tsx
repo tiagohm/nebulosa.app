@@ -26,7 +26,7 @@ const Header = memo(() => {
 	return (
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
-				<ConnectButton connected={connected} loading={connecting} onPointerUp={cover.connect} />
+				<ConnectButton connected={connected} loading={connecting} onClick={cover.connect} />
 				<IndiPanelControlButton device={name} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
@@ -71,8 +71,8 @@ const OpenAndClose = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-center gap-2">
-			<IconButton color={parked ? 'primary' : 'success'} disabled={!canMove} icon={parked ? Icons.LockOpen : Icons.Lock} onPointerUp={parked ? cover.unpark : cover.park} size="lg" tooltipContent={parked ? 'Open' : 'Close'} />
-			{canAbort && <IconButton color="danger" disabled={!connected || !parking} icon={Icons.Stop} onPointerUp={cover.stop} size="lg" tooltipContent="Stop" />}
+			<IconButton color={parked ? 'primary' : 'success'} disabled={!canMove} icon={parked ? Icons.LockOpen : Icons.Lock} onClick={parked ? cover.unpark : cover.park} size="lg" tooltipContent={parked ? 'Open' : 'Close'} />
+			{canAbort && <IconButton color="danger" disabled={!connected || !parking} icon={Icons.Stop} onClick={cover.stop} size="lg" tooltipContent="Stop" />}
 		</div>
 	)
 })

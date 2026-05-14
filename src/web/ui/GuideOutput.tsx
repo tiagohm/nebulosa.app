@@ -25,7 +25,7 @@ const Header = memo(() => {
 	return (
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
-				<ConnectButton connected={connected} disabled={pulsing} loading={connecting} onPointerUp={guideOutput.connect} />
+				<ConnectButton connected={connected} disabled={pulsing} loading={connecting} onClick={guideOutput.connect} />
 				<IndiPanelControlButton device={name} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">

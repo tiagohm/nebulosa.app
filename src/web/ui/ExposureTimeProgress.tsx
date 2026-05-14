@@ -47,8 +47,8 @@ export function ExposureTimeProgress({ progress, className = '', ...props }: Exp
 		<div {...props} className={tw('flex flex-row items-center gap-2 overflow-hidden', className)}>
 			<Chip size="sm" className="lowercase" color={CAPTURE_STATE_COLORS[progress.state]} label={CAPTURE_STATE_LABELS[progress.state]} />
 			<Chip size="sm" color="warning" label={countLabel} startContent={<Icons.Counter />} />
-			<Chip size="sm" color="secondary" label={progress.loop ? formatTime(progress.totalProgress.elapsedTime) : formatProgressTime(progress.totalProgress, showRemainingTime)} onPointerUp={toggleShowRemaining} startContent={<Icons.TimerSand />} />
-			<Chip size="sm" color="primary" label={formatProgressTime(progress.frameProgress, showRemainingTime)} onPointerUp={toggleShowRemaining} startContent={<Icons.TimerSand />} />
+			<Chip size="sm" color="secondary" label={progress.loop ? formatTime(progress.totalProgress.elapsedTime) : formatProgressTime(progress.totalProgress, showRemainingTime)} onClick={toggleShowRemaining} startContent={<Icons.TimerSand />} />
+			<Chip size="sm" color="primary" label={formatProgressTime(progress.frameProgress, showRemainingTime)} onClick={toggleShowRemaining} startContent={<Icons.TimerSand />} />
 		</div>
 	)
 }

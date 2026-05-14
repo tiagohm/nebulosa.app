@@ -11,6 +11,12 @@ import { Icons } from './Icon'
 import { ImageFormatSelect } from './ImageFormatSelect'
 import { Modal } from './Modal'
 
+const JPEG_FORMAT = 'jpeg'
+
+function isJpegFormat(format: string) {
+	return format === JPEG_FORMAT
+}
+
 export const ImageSettings = memo(() => {
 	const settings = useMolecule(ImageSettingsMolecule)
 
@@ -27,12 +33,12 @@ const Body = memo(() => {
 
 	return (
 		<div className="mt-0 grid grid-cols-12 items-center gap-2">
-			<ImageFormatSelect className="col-span-full" onValueChange={settings.updateFormatType} value={transformation.format.type} />
-			<Activity mode={transformation.format.type === 'jpeg' ? 'visible' : 'hidden'}>
+			<ImageFormatSelect className="col-span-full min-w-0" fullWidth onValueChange={settings.updateFormatType} value={transformation.format.type} />
+			<Activity mode={isJpegFormat(transformation.format.type) ? 'visible' : 'hidden'}>
 				<JpegFormat />
 			</Activity>
-			<Checkbox className="col-span-full" label="Pixelated" onValueChange={(value) => settings.update('pixelated', value)} value={pixelated} />
-			<CfaPatternSelect className="col-span-full" onValueChange={(value) => settings.updateTransformation('cfaPattern', value)} value={transformation.cfaPattern} />
+			<Checkbox className="col-span-full min-w-0" label="Pixelated" onValueChange={(value) => settings.update('pixelated', value)} value={pixelated} />
+			<CfaPatternSelect className="col-span-full min-w-0" fullWidth onValueChange={(value) => settings.updateTransformation('cfaPattern', value)} value={transformation.cfaPattern} />
 		</div>
 	)
 })
@@ -42,8 +48,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color="danger" label="Reset" onPointerUp={settings.reset} startContent={<Icons.Restore />} />
-			<Button color="success" label="Apply" onPointerUp={settings.apply} startContent={<Icons.Check />} />
+			<Button color="danger" label="Reset" onClick={settings.reset} startContent={<Icons.Restore />} />
+			<Button color="success" label="Apply" onClick={settings.apply} startContent={<Icons.Check />} />
 		</>
 	)
 })
@@ -54,8 +60,8 @@ const JpegFormat = memo(() => {
 
 	return (
 		<div className="col-span-full grid grid-cols-subgrid gap-2">
-			<NumberInput className="col-span-5" label="Quality" maxValue={100} minValue={0} onValueChange={(value) => settings.updateFormat('jpeg', 'quality', value)} value={quality} />
-			<ChrominanceSubsamplingSelect className="col-span-7" onValueChange={(value) => settings.updateFormat('jpeg', 'chrominanceSubsampling', value)} value={chrominanceSubsampling} />
+			<NumberInput className="col-span-5 min-w-0" label="Quality" maxValue={100} minValue={0} onValueChange={(value) => settings.updateFormat(JPEG_FORMAT, 'quality', value)} value={quality} />
+			<ChrominanceSubsamplingSelect className="col-span-7 min-w-0" fullWidth onValueChange={(value) => settings.updateFormat(JPEG_FORMAT, 'chrominanceSubsampling', value)} value={chrominanceSubsampling} />
 		</div>
 	)
 })

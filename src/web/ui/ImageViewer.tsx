@@ -39,6 +39,14 @@ import { ImageToolBar } from './ImageToolBar'
 import { Interactable, type InteractableProps } from './Interactable'
 import { StarDetection } from './StarDetection'
 
+function activityMode(visible: boolean) {
+	return visible ? 'visible' : 'hidden'
+}
+
+function hasScaledSolution(solution: { readonly scale?: number } | undefined) {
+	return solution?.scale !== undefined && Number.isFinite(solution.scale) && solution.scale > 0
+}
+
 export const ImageViewer = memo(() => {
 	const imgRef = useRef<HTMLImageElement>(null)
 
@@ -88,8 +96,11 @@ export const ImageViewer = memo(() => {
 	const { show: showFov } = useSnapshot(fov.state)
 
 	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
+	const isSelected = selected?.key === image.key
+	const hasSolution = solution !== undefined
+	const hasSolutionScale = hasScaledSolution(solution)
 
-	// Before layout renderering
+	// Attaches the image element before the first paint so interactions can bind to it.
 	useLayoutEffect(() => {
 		if (imgRef.current) {
 			viewer.attachImage(imgRef.current)
@@ -101,75 +112,84 @@ export const ImageViewer = memo(() => {
 		}
 	}, [])
 
-	// After layout rendering and state loading
+	// Loads after layout so the image node is already available for cached/object URLs.
 	useEffect(() => {
 		if (imgRef.current) {
 			void viewer.load(false)
 		}
 	}, [])
 
-	const handleGesture = useCallback<Exclude<InteractableProps['onGesture'], undefined>>(({ scale, angle }) => {
-		viewer.state.scale = scale
-		viewer.state.angle = angle
-	}, [])
+	const handleGesture = useCallback<Exclude<InteractableProps['onGesture'], undefined>>(
+		({ scale, angle }) => {
+			if (viewer.state.scale !== scale) viewer.state.scale = scale
+			if (viewer.state.angle !== angle) viewer.state.angle = angle
+		},
+		[viewer],
+	)
 
-	const handlePointerUp = useCallback<Exclude<InteractableProps['onPointerUp'], undefined>>(({ event, dragging, pinching }) => {
-		if (!mouseCoordinate.state.visible || dragging || pinching) return
-		mouseCoordinate.handleInterpolatedCoordinate(event.offsetX, event.offsetY, true)
-	}, [])
+	const handleClick = useCallback<Exclude<InteractableProps['onClick'], undefined>>(
+		({ event, dragging, pinching }) => {
+			if (!mouseCoordinate.state.visible || dragging || pinching) return
+			mouseCoordinate.handleInterpolatedCoordinate(event.offsetX, event.offsetY, true)
+		},
+		[mouseCoordinate],
+	)
 
-	const handleMouseMove = useCallback<Exclude<InteractableProps['onMouseMove'], undefined>>(({ event, dragging, pinching }) => {
-		if (!mouseCoordinate.state.visible || dragging || pinching) return
-		mouseCoordinate.handleInterpolatedCoordinate(event.offsetX, event.offsetY, false)
-	}, [])
+	const handleMouseMove = useCallback<Exclude<InteractableProps['onMouseMove'], undefined>>(
+		({ event, dragging, pinching }) => {
+			if (!mouseCoordinate.state.visible || dragging || pinching) return
+			mouseCoordinate.handleInterpolatedCoordinate(event.offsetX, event.offsetY, false)
+		},
+		[mouseCoordinate],
+	)
 
 	return (
 		<>
-			<Activity mode={selected?.key === image.key ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(isSelected)}>
 				<ImageToolBar />
 				<ImageInfo />
 			</Activity>
-			<Interactable onGesture={handleGesture} onMouseMove={handleMouseMove} onPointerUp={handlePointerUp} onTap={viewer.select} ref={viewer.attachInteractable} zIndex={image.position}>
+			<Interactable onGesture={handleGesture} onMouseMove={handleMouseMove} onClick={handleClick} onTap={viewer.select} ref={viewer.attachInteractable} zIndex={image.position}>
 				<img className="image pointer-events-none max-w-none touch-none rounded-sm outline-8 outline-black/25 outline-solid select-none" draggable={false} id={image.key} onLoad={viewer.handleOnLoad} ref={imgRef} />
 				<InteractableOverlay />
 			</Interactable>
-			<Activity mode={showStretch ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showStretch)}>
 				<ImageStretch />
 			</Activity>
-			<Activity mode={showPlateSolver ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showPlateSolver)}>
 				<ImageSolver />
 			</Activity>
-			<Activity mode={showScnr ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showScnr)}>
 				<ImageScnr />
 			</Activity>
-			<Activity mode={showAdjustment ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showAdjustment)}>
 				<ImageAdjustment />
 			</Activity>
-			<Activity mode={showFilter ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showFilter)}>
 				<ImageFilter />
 			</Activity>
-			<Activity mode={showCalibration ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showCalibration)}>
 				<ImageCalibration />
 			</Activity>
-			<Activity mode={showStarDetection ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showStarDetection)}>
 				<StarDetection />
 			</Activity>
-			<Activity mode={showHeader ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showHeader)}>
 				<FITSHeader />
 			</Activity>
-			<Activity mode={showSettings ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showSettings)}>
 				<ImageSettings />
 			</Activity>
-			<Activity mode={showAnnotation && solution ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showAnnotation && hasSolution)}>
 				<ImageAnnotation />
 			</Activity>
-			<Activity mode={showSave ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showSave)}>
 				<ImageSave />
 			</Activity>
-			<Activity mode={showStatistics ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showStatistics)}>
 				<ImageStatistics />
 			</Activity>
-			<Activity mode={showFov && solution ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(showFov && hasSolutionScale)}>
 				<ImageFov />
 			</Activity>
 		</>
@@ -187,26 +207,30 @@ const InteractableOverlay = memo(() => {
 	const { visible: isAnnotatedStarsVisible } = useSnapshot(annotation.state)
 
 	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
-	const { visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
+	const { interpolator, visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
 
 	const fov = useMolecule(ImageFovMolecule)
 	const { show: isFovVisible } = useSnapshot(fov.state)
 
+	const solver = useMolecule(ImageSolverMolecule)
+	const { solution } = useSnapshot(solver.state)
+	const hasSolutionScale = hasScaledSolution(solution)
+
 	return (
 		<>
-			<Activity mode={crosshair ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(crosshair)}>
 				<Crosshair />
 			</Activity>
-			<Activity mode={isDetectedStarsVisible ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(isDetectedStarsVisible)}>
 				<DetectedStars />
 			</Activity>
-			<Activity mode={isAnnotatedStarsVisible ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(isAnnotatedStarsVisible)}>
 				<AnnotatedStars />
 			</Activity>
-			<Activity mode={isMouseCoordinateVisible ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(isMouseCoordinateVisible && interpolator !== undefined)}>
 				<CoordinateOnMouse />
 			</Activity>
-			<Activity mode={isFovVisible ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(isFovVisible && hasSolutionScale)}>
 				<Fov />
 			</Activity>
 		</>

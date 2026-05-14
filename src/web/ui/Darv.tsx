@@ -97,8 +97,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color="danger" disabled={!running} label="Stop" onPointerUp={darv.stop} startContent={<Icons.Stop />} />
-			<Button color="success" disabled={!camera?.connected || !mount?.connected} label="Start" loading={running} onPointerUp={darv.start} startContent={<Icons.Play />} />
+			<Button color="danger" disabled={!running} label="Stop" onClick={darv.stop} startContent={<Icons.Stop />} />
+			<Button color="success" disabled={!camera?.connected || !mount?.connected} label="Start" loading={running} onClick={darv.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

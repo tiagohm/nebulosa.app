@@ -11,10 +11,10 @@ export const Fov = memo(() => {
 		<svg className="fov pointer-events-none absolute top-0 left-0 h-full w-full" overflow="visible">
 			{items.map(({ id, visible, color, rotation }, index) => {
 				const item = computed[index]
+
+				if (!visible || !item || !isDrawableFov(item.focalRatio, item.svg.width, item.svg.height)) return null
+
 				const { width, height } = item.svg
-
-				if (!visible || !item || !isDrawableFov(item.focalRatio, width, height)) return null
-
 				const x = FOV_CENTER - width / 2
 				const y = FOV_CENTER - height / 2
 				const safeRotation = Number.isFinite(rotation) ? rotation : 0

@@ -102,8 +102,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color="danger" disabled={!running} label="Stop" onPointerUp={flatWizard.stop} startContent={<Icons.Stop />} />
-			<Button color="success" disabled={!canStart} label="Start" loading={running} onPointerUp={flatWizard.start} startContent={<Icons.Play />} />
+			<Button color="danger" disabled={!running} label="Stop" onClick={flatWizard.stop} startContent={<Icons.Stop />} />
+			<Button color="success" disabled={!canStart} label="Start" loading={running} onClick={flatWizard.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

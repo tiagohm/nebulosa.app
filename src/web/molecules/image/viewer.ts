@@ -236,6 +236,10 @@ export const ImageViewerMolecule = molecule(() => {
 		return Api.Mounts.goTo(mount, { type: 'J2000', J2000: { x: coordinate.rightAscension, y: coordinate.declination } })
 	}
 
+	function syncMountHere(mount: Mount, coordinate: EquatorialCoordinate) {
+		return Api.Mounts.sync(mount, { type: 'J2000', J2000: { x: coordinate.rightAscension, y: coordinate.declination } })
+	}
+
 	function frameAt(coordinate: EquatorialCoordinate) {
 		const focalLength = state.info && numericKeyword(state.info.headers, 'FOCALLEN', undefined)
 		const pixelSize = state.info && numericKeyword(state.info.headers, 'XPIXSZ', undefined)
@@ -308,6 +312,7 @@ export const ImageViewerMolecule = molecule(() => {
 		detach,
 		select,
 		pointMountHere,
+		syncMountHere,
 		frameAt,
 	} as const
 })

@@ -8,6 +8,20 @@ import { TextInput } from './components/TextInput'
 import { ImageChannelButtonGroup } from './ImageChannelButtonGroup'
 import { Modal } from './Modal'
 
+const CHANNEL_VALUES = ['RED', 'GREEN', 'BLUE'] as const
+
+function selectedChannelIndex(value: (typeof CHANNEL_VALUES)[number]) {
+	return value === 'GREEN' ? 1 : value === 'BLUE' ? 2 : 0
+}
+
+function channelValueOf(index: number) {
+	return CHANNEL_VALUES[index] ?? CHANNEL_VALUES[0]
+}
+
+function formatStat(value: number, fractionDigits: number) {
+	return Number.isFinite(value) ? value.toFixed(fractionDigits) : '--'
+}
+
 export const ImageStatistics = memo(() => {
 	const statistics = useMolecule(ImageStatisticsMolecule)
 
@@ -27,7 +41,7 @@ const Body = memo(() => {
 			<Options />
 			<Stats />
 			<div className="col-span-full">
-				<Histogram histogram={histogram} style={{ width: '275px', height: '120px' }} />
+				<Histogram className="h-30 w-full rounded-lg bg-neutral-950/40" histogram={histogram} />
 			</div>
 		</div>
 	)
@@ -40,9 +54,9 @@ const Options = memo(() => {
 
 	return (
 		<>
-			<Checkbox className="col-span-full" label="Transformed" onValueChange={(value) => statistics.update('transformed', value)} value={transformed} />
+			<Checkbox className="col-span-full min-w-0" label="Transformed" onValueChange={(value) => statistics.update('transformed', value)} value={transformed} />
 			<Activity mode={histogram.length === 3 ? 'visible' : 'hidden'}>
-				<ImageChannelButtonGroup className="col-span-full" onValueChange={(value) => (statistics.state.selected = value === 'GREEN' ? 1 : value === 'BLUE' ? 2 : 0)} value={selected === 0 ? 'RED' : selected === 1 ? 'GREEN' : 'BLUE'} />
+				<ImageChannelButtonGroup className="col-span-full min-w-0" onValueChange={(value) => (statistics.state.selected = selectedChannelIndex(value ?? 'RED'))} value={channelValueOf(selected)} />
 			</Activity>
 		</>
 	)
@@ -51,18 +65,18 @@ const Options = memo(() => {
 const Stats = memo(() => {
 	const statistics = useMolecule(ImageStatisticsMolecule)
 	const { histogram, selected } = useSnapshot(statistics.state)
-	const hs = histogram[selected]
+	const hs = histogram[selected] ?? histogram[0]
 
 	if (hs === undefined) return null
 
 	return (
 		<>
-			<TextInput className="col-span-6" label="Count: Total | Max" readOnly value={`${hs.count[0].toFixed(0)} | ${hs.count[1].toFixed(0)}`} />
-			<TextInput className="col-span-6" label="Mean" readOnly value={hs.mean.toFixed(8)} />
-			<TextInput className="col-span-6" label="Median" readOnly value={hs.median.toFixed(8)} />
-			<TextInput className="col-span-6" label="Variance" readOnly value={hs.variance.toFixed(8)} />
-			<TextInput className="col-span-6" label="Std Dev" readOnly value={hs.standardDeviation.toFixed(8)} />
-			<TextInput className="col-span-6" label="Min | Max" readOnly value={`${hs.minimum[0].toFixed(6)} | ${hs.maximum[0].toFixed(6)}`} />
+			<TextInput className="col-span-6 min-w-0" label="Count: Total | Max" readOnly value={`${formatStat(hs.count[0], 0)} | ${formatStat(hs.count[1], 0)}`} />
+			<TextInput className="col-span-6 min-w-0" label="Mean" readOnly value={formatStat(hs.mean, 8)} />
+			<TextInput className="col-span-6 min-w-0" label="Median" readOnly value={formatStat(hs.median, 8)} />
+			<TextInput className="col-span-6 min-w-0" label="Variance" readOnly value={formatStat(hs.variance, 8)} />
+			<TextInput className="col-span-6 min-w-0" label="Std Dev" readOnly value={formatStat(hs.standardDeviation, 8)} />
+			<TextInput className="col-span-6 min-w-0" label="Min | Max" readOnly value={`${formatStat(hs.minimum[0], 6)} | ${formatStat(hs.maximum[0], 6)}`} />
 		</>
 	)
 })

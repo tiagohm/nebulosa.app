@@ -199,8 +199,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color="danger" disabled={!running} label="Stop" onPointerUp={autoFocus.stop} startContent={<Icons.Stop />} />
-			<Button color="success" disabled={!camera?.connected || !focuser?.connected} label="Start" loading={running} onPointerUp={autoFocus.start} startContent={<Icons.Play />} />
+			<Button color="danger" disabled={!running} label="Stop" onClick={autoFocus.stop} startContent={<Icons.Stop />} />
+			<Button color="success" disabled={!camera?.connected || !focuser?.connected} label="Start" loading={running} onClick={autoFocus.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

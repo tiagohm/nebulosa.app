@@ -57,7 +57,7 @@ const Footer = memo(() => {
 			<div className="flex min-w-0 flex-1 items-center">
 				<Chip className="max-w-full" color={canLoad ? 'primary' : 'default'} label={field ?? 'Invalid FOV'} />
 			</div>
-			<Button color="success" disabled={!canLoad} label="Load" loading={loading} onPointerUp={framing.load} startContent={<Icons.Download />} />
+			<Button color="success" disabled={!canLoad} label="Load" loading={loading} onClick={framing.load} startContent={<Icons.Download />} />
 		</>
 	)
 })

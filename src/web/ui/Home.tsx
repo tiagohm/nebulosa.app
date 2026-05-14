@@ -28,10 +28,11 @@ import { Thermometer } from './Thermometer'
 import { Wheel } from './Wheel'
 
 export const Home = memo(() => {
-	const webSocket = useMolecule(WebSocketMolecule)
+	// Mounts the websocket lifecycle once the home screen is active.
+	useMolecule(WebSocketMolecule)
 
 	return (
-		<div className="flex h-full w-full flex-col">
+		<div className="flex h-full min-h-0 w-full min-w-0 flex-col">
 			<HomeNavBar />
 			<ImageWorkspace />
 			<CameraList />
@@ -68,7 +69,7 @@ export const MountList = memo(() => {
 
 	return mount.map((mount) => (
 		<Activity key={mount.name} mode={mount.show ? 'visible' : 'hidden'}>
-			<ScopeProvider key={mount.name} scope={MountScope} value={{ mount }}>
+			<ScopeProvider scope={MountScope} value={{ mount }}>
 				<Mount />
 			</ScopeProvider>
 		</Activity>
@@ -81,7 +82,7 @@ export const FocuserList = memo(() => {
 
 	return focuser.map((focuser) => (
 		<Activity key={focuser.name} mode={focuser.show ? 'visible' : 'hidden'}>
-			<ScopeProvider key={focuser.name} scope={FocuserScope} value={{ focuser }}>
+			<ScopeProvider scope={FocuserScope} value={{ focuser }}>
 				<Focuser />
 			</ScopeProvider>
 		</Activity>

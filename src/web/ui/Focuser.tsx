@@ -28,7 +28,7 @@ const Header = memo(() => {
 	return (
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
-				<ConnectButton connected={connected} loading={connecting} onPointerUp={focuser.connect} />
+				<ConnectButton connected={connected} loading={connecting} onClick={focuser.connect} />
 				<IndiPanelControlButton device={name} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
@@ -69,7 +69,7 @@ const Position = memo(() => {
 	return (
 		<div className="col-span-9 flex min-w-0 flex-row items-center justify-end gap-2">
 			<NumberInput className="min-w-0 flex-1" label="Position" readOnly value={position.value} />
-			<IconButton color="danger" disabled={!connected || !canAbort || !moving} icon={Icons.Stop} onPointerUp={focuser.stop} tooltipContent="Stop" />
+			<IconButton color="danger" disabled={!connected || !canAbort || !moving} icon={Icons.Stop} onClick={focuser.stop} tooltipContent="Stop" />
 		</div>
 	)
 })
@@ -84,9 +84,9 @@ const RelativePosition = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-between gap-2">
-			<IconButton color="secondary" disabled={!canMoveRelative} icon={Icons.ArrowLeft} onPointerUp={focuser.moveIn} tooltipContent="Move In" />
+			<IconButton color="secondary" disabled={!canMoveRelative} icon={Icons.ArrowLeft} onClick={focuser.moveIn} tooltipContent="Move In" />
 			<NumberInput className="min-w-0 flex-1" disabled={!connected || moving} label="Relative" maxValue={position.max} minValue={1} onValueChange={(value) => focuser.update('relative', value)} value={relative} />
-			<IconButton color="secondary" disabled={!canMoveRelative} icon={Icons.ArrowRight} onPointerUp={focuser.moveOut} tooltipContent="Move Out" />
+			<IconButton color="secondary" disabled={!canMoveRelative} icon={Icons.ArrowRight} onClick={focuser.moveOut} tooltipContent="Move Out" />
 		</div>
 	)
 })
@@ -101,9 +101,9 @@ const AbsolutePosition = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-between gap-2">
-			<IconButton color="primary" disabled={!canUseAbsolute || !canSync} icon={Icons.Sync} onPointerUp={focuser.sync} tooltipContent="Sync" />
+			<IconButton color="primary" disabled={!canUseAbsolute || !canSync} icon={Icons.Sync} onClick={focuser.sync} tooltipContent="Sync" />
 			<NumberInput className="min-w-0 flex-1" disabled={!connected || moving} label="Absolute" maxValue={position.max} minValue={0} onValueChange={(value) => focuser.update('absolute', value)} value={absolute} />
-			<IconButton color="success" disabled={!canUseAbsolute || absolute === position.value} icon={Icons.Check} onPointerUp={focuser.moveTo} tooltipContent="Move" />
+			<IconButton color="success" disabled={!canUseAbsolute || absolute === position.value} icon={Icons.Check} onClick={focuser.moveTo} tooltipContent="Move" />
 		</div>
 	)
 })

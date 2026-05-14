@@ -60,8 +60,8 @@ export function FilePickerInput({ filter, mode, id, value, onValueChange, readOn
 		}
 	}
 
-	const StartContent = <IconButton disabled={blocked} icon={Icons.FolderOpen} color="warning" onPointerUp={handleBrowse} tooltipContent="Browse" size="sm" variant="ghost" />
-	const EndContent = hasValue ? <IconButton disabled={blocked} icon={Icons.CloseCircle} color="danger" onPointerUp={handleClear} size="sm" tooltipContent="Clear" variant="ghost" /> : null
+	const StartContent = <IconButton disabled={blocked} icon={Icons.FolderOpen} color="warning" onClick={handleBrowse} tooltipContent="Browse" size="sm" variant="ghost" />
+	const EndContent = hasValue ? <IconButton disabled={blocked} icon={Icons.CloseCircle} color="danger" onClick={handleClear} size="sm" tooltipContent="Clear" variant="ghost" /> : null
 
 	return (
 		<>

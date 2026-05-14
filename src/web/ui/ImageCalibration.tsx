@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
-import type { ImageCalibrationFileType } from 'src/shared/types'
+import type { ImageCalibrationFile, ImageCalibrationFileType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageCalibrationMolecule } from '@/molecules/image/calibration'
 import { Button } from './components/Button'
@@ -26,32 +26,46 @@ const Body = memo(() => {
 	return (
 		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Checkbox className="col-span-full" label="Enabled" onValueChange={(value) => (calibration.state.calibration.enabled = value)} value={enabled} />
-			<CalibrationFile type="dark" />
-			<CalibrationFile type="flat" />
-			<CalibrationFile type="bias" />
-			<CalibrationFile type="darkFlat" />
+			<CalibrationFile calibrationEnabled={enabled} type="dark" />
+			<CalibrationFile calibrationEnabled={enabled} type="flat" />
+			<CalibrationFile calibrationEnabled={enabled} type="bias" />
+			<CalibrationFile calibrationEnabled={enabled} type="darkFlat" />
 		</div>
 	)
 })
 
 interface CalibrationFileProps {
+	readonly calibrationEnabled: boolean
 	readonly type: ImageCalibrationFileType
 }
 
-const CalibrationFile = memo(({ type }: CalibrationFileProps) => {
+const CalibrationFile = memo(({ calibrationEnabled, type }: CalibrationFileProps) => {
 	const calibration = useMolecule(ImageCalibrationMolecule)
 	const { enabled, path } = useSnapshot(calibration.state.calibration[type])
 
 	return (
-		<div className="col-span-full flex flex-row gap-2">
-			<Checkbox onValueChange={(value) => calibration.update(type, 'enabled', value)} value={enabled} />
-			<FilePickerInput disabled={!enabled} id={`calibration-${calibration.viewer.storageKey}-${type}`} onValueChange={(value) => calibration.update(type, 'path', value)} placeholder={type} value={path} />
+		<div className="col-span-full flex min-w-0 flex-row gap-2">
+			<Checkbox disabled={!calibrationEnabled} onValueChange={(value) => calibration.update(type, 'enabled', value)} value={enabled} />
+			<FilePickerInput disabled={!calibrationEnabled || !enabled} filter="*.{fits,fit,xisf}" id={`calibration-${calibration.viewer.storageKey}-${type}`} onValueChange={(value) => calibration.update(type, 'path', value)} placeholder={CALIBRATION_FILE_LABELS[type]} value={path} />
 		</div>
 	)
 })
 
 const Footer = memo(() => {
 	const calibration = useMolecule(ImageCalibrationMolecule)
+	const { enabled, dark, flat, bias, darkFlat } = useSnapshot(calibration.state.calibration)
+	const canApply = !enabled || hasEnabledCalibrationFile(dark) || hasEnabledCalibrationFile(flat) || hasEnabledCalibrationFile(bias) || hasEnabledCalibrationFile(darkFlat)
 
-	return <Button color="success" label="Apply" onPointerUp={calibration.apply} startContent={<Icons.Check />} />
+	return <Button color="success" disabled={!canApply} label="Apply" onClick={calibration.apply} startContent={<Icons.Check />} />
 })
+
+const CALIBRATION_FILE_LABELS = {
+	dark: 'Dark',
+	flat: 'Flat',
+	bias: 'Bias',
+	darkFlat: 'Dark Flat',
+} satisfies Record<ImageCalibrationFileType, string>
+
+function hasEnabledCalibrationFile(file: ImageCalibrationFile) {
+	return file.enabled && file.path !== undefined && file.path.trim().length > 0
+}

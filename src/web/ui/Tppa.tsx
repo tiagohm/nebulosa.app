@@ -128,8 +128,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color="danger" disabled={!running} label="Stop" onPointerUp={tppa.stop} startContent={<Icons.Stop />} />
-			<Button color="success" disabled={!camera?.connected || !mount?.connected} label="Start" loading={running} onPointerUp={tppa.start} startContent={<Icons.Play />} />
+			<Button color="danger" disabled={!running} label="Stop" onClick={tppa.stop} startContent={<Icons.Stop />} />
+			<Button color="success" disabled={!camera?.connected || !mount?.connected} label="Start" loading={running} onClick={tppa.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

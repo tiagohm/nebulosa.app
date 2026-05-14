@@ -13,8 +13,8 @@ export interface IndiDriverListboxProps {
 	readonly onSelectedChange?: (drivers: string[]) => void
 }
 
-function DriverItem(item: Driver, onPointerUp: React.PointerEventHandler) {
-	return <ListItem description={item.driver} label={item.name} data-driver={item.driver} onPointerUp={onPointerUp} />
+function DriverItem(item: Driver, onClick: React.UIEventHandler) {
+	return <ListItem description={item.driver} label={item.name} data-driver={item.driver} onClick={onClick} />
 }
 
 function DriverFilter(item: Driver, search: string) {
@@ -24,7 +24,7 @@ function DriverFilter(item: Driver, search: string) {
 export const IndiDriverListbox = memo(({ showAll, selected, onSelectedChange }: IndiDriverListboxProps) => {
 	const [drivers, setDrivers] = useState<readonly string[]>([])
 
-	function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
+	function handleClick(event: React.UIEvent<HTMLElement>) {
 		stopPropagation(event)
 
 		const driver = event.currentTarget.dataset.driver!
@@ -42,7 +42,7 @@ export const IndiDriverListbox = memo(({ showAll, selected, onSelectedChange }: 
 
 	return (
 		<FilterableList className="col-span-full" filter={DriverFilter} items={showAll || drivers.length === 0 ? DRIVERS : DRIVERS.filter((e) => drivers.includes(e.driver))}>
-			{(item) => DriverItem(item, handlePointerUp)}
+			{(item) => DriverItem(item, handleClick)}
 		</FilterableList>
 	)
 })

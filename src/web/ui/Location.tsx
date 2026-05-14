@@ -55,12 +55,12 @@ export function Location({ id, latitude, longitude, elevation, onCoordinateChang
 	const Header = (
 		<div className="flex flex-row items-center justify-start gap-2">
 			<span className="me-3 font-bold">Location</span>
-			<IconButton className="col-span-2" color="secondary" icon={Icons.HomeMapMarker} onPointerUp={findCurrentPosition} tooltipContent="Load from current location" />
+			<IconButton className="col-span-2" color="secondary" icon={Icons.HomeMapMarker} onClick={findCurrentPosition} tooltipContent="Load from current location" />
 			<MountDropdown disallowNoneSelection onValueChange={handleMountChange} tooltipContent="Load from mount" />
 		</div>
 	)
 
-	const Footer = <Button color="success" label="Choose" onPointerUp={handleChoose} startContent={<Icons.Check />} />
+	const Footer = <Button color="success" label="Choose" onClick={handleChoose} startContent={<Icons.Check />} />
 
 	return (
 		<Modal footer={Footer} header={Header} id={id} maxWidth="326px" onHide={onClose}>

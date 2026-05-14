@@ -60,7 +60,7 @@ const Connection = memo(() => {
 				<DeviceChooser />
 			)}
 			<div className="col-span-2 flex flex-row items-center justify-center gap-2">
-				<ConnectButton disabled={!camera || !guideOutput} connected={connected} onPointerUp={phd2.connect} />
+				<ConnectButton disabled={!camera || !guideOutput} connected={connected} onClick={phd2.connect} />
 			</div>
 		</>
 	)
@@ -119,10 +119,10 @@ const Buttons = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-center gap-2">
-			<IconButton color="primary" disabled={!connected || looping || running} icon={Icons.Reload} onPointerUp={phd2.loop} />
-			<IconButton color="warning" disabled={!connected || !looping} icon={Icons.Star} onPointerUp={phd2.findStar} />
-			<IconButton color="success" disabled={!connected || running} icon={Icons.Play} onPointerUp={phd2.start} />
-			<IconButton color="danger" disabled={!connected || (!running && !looping)} icon={Icons.Stop} onPointerUp={phd2.stop} />
+			<IconButton color="primary" disabled={!connected || looping || running} icon={Icons.Reload} onClick={phd2.loop} />
+			<IconButton color="warning" disabled={!connected || !looping} icon={Icons.Star} onClick={phd2.findStar} />
+			<IconButton color="success" disabled={!connected || running} icon={Icons.Play} onClick={phd2.start} />
+			<IconButton color="danger" disabled={!connected || (!running && !looping)} icon={Icons.Stop} onClick={phd2.stop} />
 		</div>
 	)
 })
@@ -150,7 +150,7 @@ const Footer = memo(() => {
 			<span>RA: {rmsRA.toFixed(2)}"</span>
 			<span>DEC: {rmsDEC.toFixed(2)}"</span>
 			<span>Total: {Math.hypot(rmsRA, rmsDEC).toFixed(2)}"</span>
-			<IconButton color="primary" icon={Icons.Broom} onPointerUp={phd2.clear} />
+			<IconButton color="primary" icon={Icons.Broom} onClick={phd2.clear} />
 		</div>
 	)
 })

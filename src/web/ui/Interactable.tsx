@@ -187,8 +187,7 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 
 	function handleTap(event: React.PointerEvent<HTMLDivElement>) {
 		if (onTap) {
-			const target = event.target as HTMLElement
-			const rect = target.getBoundingClientRect()
+			const rect = event.currentTarget.getBoundingClientRect()
 			const tx = Math.trunc((event.clientX - rect.x) / transformation.current.scale)
 			const ty = Math.trunc((event.clientY - rect.y) / transformation.current.scale)
 

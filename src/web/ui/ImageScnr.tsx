@@ -44,8 +44,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color="danger" label="Reset" onPointerUp={scnr.reset} startContent={<Icons.Restore />} />
-			<Button color="success" label="Apply" onPointerUp={scnr.apply} startContent={<Icons.Check />} />
+			<Button color="danger" label="Reset" onClick={scnr.reset} startContent={<Icons.Restore />} />
+			<Button color="success" label="Apply" onClick={scnr.apply} startContent={<Icons.Check />} />
 		</>
 	)
 })

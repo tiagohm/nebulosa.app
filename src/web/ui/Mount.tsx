@@ -41,7 +41,7 @@ const Header = memo(() => {
 	return (
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
-				<ConnectButton disabled={moving} connected={connected} loading={connecting} onPointerUp={mount.connect} />
+				<ConnectButton disabled={moving} connected={connected} loading={connecting} onClick={mount.connect} />
 				<IndiPanelControlButton device={mount.scope.mount.name} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">
@@ -90,7 +90,7 @@ const LocationButton = memo(() => {
 
 	return (
 		<>
-			<IconButton color="danger" disabled={!connected} icon={Icons.MapMarker} onPointerUp={mount.showLocation} tooltipContent="Location" />
+			<IconButton color="danger" disabled={!connected} icon={Icons.MapMarker} onClick={mount.showLocation} tooltipContent="Location" />
 			{show && <Location {...geographicCoordinate} id={`location-mount-${mount.scope.mount.name}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}
 		</>
 	)
@@ -103,7 +103,7 @@ const TimeButton = memo(() => {
 
 	return (
 		<>
-			<IconButton color="primary" disabled={!connected || time.utc === 0} icon={Icons.Clock} onPointerUp={mount.showTime} tooltipContent="Time" />
+			<IconButton color="primary" disabled={!connected || time.utc === 0} icon={Icons.Clock} onClick={mount.showTime} tooltipContent="Time" />
 			{show && <Time id={`time-mount-${mount.scope.mount.name}`} onClose={mount.hideTime} onTimeChange={mount.time} {...time} />}
 		</>
 	)
@@ -116,7 +116,7 @@ const RemoteControlButton = memo(() => {
 
 	return (
 		<>
-			<IconButton color="secondary" disabled={!connected} icon={Icons.RemoteControl} onPointerUp={mount.showRemoteControl} tooltipContent="Remote Control" />
+			<IconButton color="secondary" disabled={!connected} icon={Icons.RemoteControl} onClick={mount.showRemoteControl} tooltipContent="Remote Control" />
 			{show && <MountRemoteControl />}
 		</>
 	)
@@ -163,9 +163,9 @@ const TargetCoordinateAndPosition = memo(() => {
 				<TextInput className="col-span-5" disabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={mount.updateTargetCoordinateY} value={y} />
 				<div className="col-span-10 flex flex-row items-center justify-center gap-1">
 					<TargetCoordinatePopupButton />
-					<IconButton color="success" disabled={disabled} icon={Icons.Telescope} onPointerUp={mount.goTo} />
-					<IconButton color="primary" disabled={disabled} icon={Icons.Sync} onPointerUp={mount.sync} />
-					<IconButton color="secondary" disabled={disabled} icon={Icons.Image} onPointerUp={mount.frame} />
+					<IconButton color="success" disabled={disabled} icon={Icons.Telescope} onClick={mount.goTo} />
+					<IconButton color="primary" disabled={disabled} icon={Icons.Sync} onClick={mount.sync} />
+					<IconButton color="secondary" disabled={disabled} icon={Icons.Image} onClick={mount.frame} />
 				</div>
 			</div>
 		</div>
@@ -188,7 +188,7 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	const { latitude } = useSnapshot(mount.state.mount.geographicCoordinate)
 
-	function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
+	function handleClick(event: React.UIEvent<HTMLElement>) {
 		const action = event.currentTarget.dataset.action!
 
 		if (action === 'bookmark') {
@@ -214,15 +214,15 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 
 	return (
 		<List fullWidth className="min-w-80">
-			<ListItem label="Bookmark" data-action="bookmark" startContent={<Icons.Bookmark />} onPointerUp={handlePointerUp} />
-			<ListItem label="Paste current J2000 position" data-action="copy-equatorialJ2000" startContent={<Icons.Paste />} onPointerUp={handlePointerUp} />
-			<ListItem label="Paste current JNOW position" data-action="copy-equatorial" startContent={<Icons.Paste />} onPointerUp={handlePointerUp} />
-			<ListItem label="Paste current Horizontal position" data-action="copy-horizontal" startContent={<Icons.Paste />} onPointerUp={handlePointerUp} />
-			<ListItem label="Paste current Eclíptic position" data-action="copy-ecliptic" startContent={<Icons.Paste />} onPointerUp={handlePointerUp} />
-			<ListItem label="Paste current Galactic position" data-action="copy-galactic" startContent={<Icons.Paste />} onPointerUp={handlePointerUp} />
-			<ListItem label="Zenith" data-action="zenith" startContent={<Icons.Telescope />} onPointerUp={handlePointerUp} />
-			<ListItem disabled={latitude > 0} label="South Pole" data-action="south-pole" startContent={<Icons.Telescope />} onPointerUp={handlePointerUp} />
-			<ListItem disabled={latitude < 0} label="North Pole" data-action="north-pole" startContent={<Icons.Telescope />} onPointerUp={handlePointerUp} />
+			<ListItem label="Bookmark" data-action="bookmark" startContent={<Icons.Bookmark />} onClick={handleClick} />
+			<ListItem label="Paste current J2000 position" data-action="copy-equatorialJ2000" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Paste current JNOW position" data-action="copy-equatorial" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Paste current Horizontal position" data-action="copy-horizontal" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Paste current Eclíptic position" data-action="copy-ecliptic" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Paste current Galactic position" data-action="copy-galactic" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Zenith" data-action="zenith" startContent={<Icons.Telescope />} onClick={handleClick} />
+			<ListItem disabled={latitude > 0} label="South Pole" data-action="south-pole" startContent={<Icons.Telescope />} onClick={handleClick} />
+			<ListItem disabled={latitude < 0} label="North Pole" data-action="north-pole" startContent={<Icons.Telescope />} onClick={handleClick} />
 		</List>
 	)
 })
@@ -250,9 +250,9 @@ const ParkAndHome = memo(() => {
 
 	return (
 		<div className="col-span-5 flex flex-row items-center justify-center gap-2">
-			<IconButton color={parked ? 'success' : 'danger'} disabled={!connected || !canPark || moving} icon={parked ? Icons.Play : Icons.Stop} onPointerUp={mount.togglePark} tooltipContent={parked ? 'Unpark' : 'Park'} />
-			<IconButton color="primary" disabled={!connected || !canHome || moving || parked} icon={Icons.Home} onPointerUp={mount.home} tooltipContent="Home" />
-			<IconButton color="secondary" disabled={!connected || !canFindHome || moving || parked} icon={Icons.HomeSearch} onPointerUp={mount.findHome} tooltipContent="Find Home" />
+			<IconButton color={parked ? 'success' : 'danger'} disabled={!connected || !canPark || moving} icon={parked ? Icons.Play : Icons.Stop} onClick={mount.togglePark} tooltipContent={parked ? 'Unpark' : 'Park'} />
+			<IconButton color="primary" disabled={!connected || !canHome || moving || parked} icon={Icons.Home} onClick={mount.home} tooltipContent="Home" />
+			<IconButton color="secondary" disabled={!connected || !canFindHome || moving || parked} icon={Icons.HomeSearch} onClick={mount.findHome} tooltipContent="Find Home" />
 		</div>
 	)
 })

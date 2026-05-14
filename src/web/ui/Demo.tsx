@@ -128,13 +128,13 @@ const Buttons = memo(() => {
 				const loading = random() < 0.02
 				const label = key.toFixed(0)
 
-				function handlePointer() {
-					toast({ title: 'Hello!', onPointerUp: () => alert(label), description: 'Description', color, size, startContent, endContent, onClose: (autoDismiss) => !autoDismiss && alert('Hello!') })
+				function handleClick() {
+					toast({ title: 'Hello!', onClick: () => alert(label), description: 'Description', color, size, startContent, endContent, onClose: (autoDismiss) => !autoDismiss && alert('Hello!') })
 				}
 
 				elements.push(
 					<Badge color={color} size={size} label={disabled ? undefined : label} placement="top-end" visible={!loading}>
-						<Button color={color} disabled={disabled} endContent={endContent} key={key++} label={label} loading={loading} onPointerUp={handlePointer} size={size} startContent={startContent} tooltipContent={tooltipContent} tooltipPlacement={tooltipPlacement} variant={variant} />
+						<Button color={color} disabled={disabled} endContent={endContent} key={key++} label={label} loading={loading} onClick={handleClick} size={size} startContent={startContent} tooltipContent={tooltipContent} tooltipPlacement={tooltipPlacement} variant={variant} />
 					</Badge>,
 				)
 			}

@@ -57,9 +57,9 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color="danger" disabled={!running} label="Stop" onPointerUp={indi.stop} startContent={<Icons.Stop />} />
+			<Button color="danger" disabled={!running} label="Stop" onClick={indi.stop} startContent={<Icons.Stop />} />
 			<Badge color="success" label={drivers.length}>
-				<Button color="success" disabled={running || drivers.length === 0} label="Start" onPointerUp={indi.start} startContent={<Icons.Play />} />
+				<Button color="success" disabled={running || drivers.length === 0} label="Start" onClick={indi.start} startContent={<Icons.Play />} />
 			</Badge>
 		</>
 	)

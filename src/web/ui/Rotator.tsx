@@ -28,7 +28,7 @@ const Header = memo(() => {
 	return (
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
-				<ConnectButton connected={connected} loading={connecting} onPointerUp={rotator.connect} />
+				<ConnectButton connected={connected} loading={connecting} onClick={rotator.connect} />
 				<IndiPanelControlButton device={rotator.scope.rotator.name} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">
@@ -66,7 +66,7 @@ const CurrentAngle = memo(() => {
 	return (
 		<div className="col-span-9 flex flex-row items-center justify-end gap-2">
 			<NumberInput className="flex-1" label="Angle (°)" readOnly value={angle.value} />
-			<IconButton color="danger" disabled={!connected || !canAbort || !moving} icon={Icons.Stop} onPointerUp={rotator.stop} tooltipContent="Stop" />
+			<IconButton color="danger" disabled={!connected || !canAbort || !moving} icon={Icons.Stop} onClick={rotator.stop} tooltipContent="Stop" />
 		</div>
 	)
 })
@@ -78,9 +78,9 @@ const TargetAngle = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-between gap-2">
-			<IconButton color="primary" disabled={!connected || !canSync || moving} icon={Icons.Sync} onPointerUp={rotator.sync} tooltipContent="Sync" />
+			<IconButton color="primary" disabled={!connected || !canSync || moving} icon={Icons.Sync} onClick={rotator.sync} tooltipContent="Sync" />
 			<NumberInput className="flex-1" disabled={!connected} label="Move (°)" maxValue={angle.max} minValue={angle.min} onValueChange={(value) => rotator.update('angle', value)} value={targetAngle} />
-			<IconButton color="success" disabled={!connected || moving || targetAngle === angle.value} icon={Icons.Check} onPointerUp={rotator.moveTo} tooltipContent="Move" />
+			<IconButton color="success" disabled={!connected || moving || targetAngle === angle.value} icon={Icons.Check} onClick={rotator.moveTo} tooltipContent="Move" />
 		</div>
 	)
 })

@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { SATELLITE_GROUP_TYPES, type SatelliteCategory, type SatelliteGroupType } from 'src/shared/types'
-import { stopPropagationDesktopOnly } from '@/shared/util'
 import { Chip, type ChipProps } from './components/Chip'
 
 export interface SatelliteGroupTypeChipGroupProps extends React.ComponentProps<'div'> {
@@ -15,9 +14,7 @@ const ENTRIES = Object.entries(SATELLITE_GROUP_TYPES).sort((a, b) => a[1].descri
 export function SatelliteGroupTypeChipGroup({ value, category, onValueChange, size = 'sm', ...props }: SatelliteGroupTypeChipGroupProps) {
 	const types = useMemo(() => ENTRIES.filter((e) => category.includes(e[1].category)), [category])
 
-	function onHandlePointerUp(event: React.PointerEvent, type: SatelliteGroupType, remove: boolean) {
-		stopPropagationDesktopOnly(event)
-
+	function handleClick(type: SatelliteGroupType, remove: boolean) {
 		if (remove) {
 			onValueChange(value.filter((e) => e !== type))
 		} else {
@@ -29,7 +26,7 @@ export function SatelliteGroupTypeChipGroup({ value, category, onValueChange, si
 		<div className="flex w-full flex-wrap gap-2" {...props}>
 			{types.map(([key, item]) => {
 				const selected = value.includes(key as never)
-				return <Chip className="cursor-pointer" color={selected ? 'primary' : 'secondary'} key={key} label={item.description} onPointerUp={(event) => onHandlePointerUp(event, key as never, selected)} size={size} />
+				return <Chip className="cursor-pointer" color={selected ? 'primary' : 'secondary'} key={key} label={item.description} onClick={() => handleClick(key as never, selected)} size={size} />
 			})}
 		</div>
 	)

@@ -42,8 +42,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color="danger" disabled={!status} label="Stop" onPointerUp={mount.stopRemoteControl} startContent={<Icons.Stop />} />
-			<Button color="primary" disabled={!host || !!status} label="Connect" onPointerUp={mount.startRemoteControl} startContent={<Icons.Connect />} />
+			<Button color="danger" disabled={!status} label="Stop" onClick={mount.stopRemoteControl} startContent={<Icons.Stop />} />
+			<Button color="primary" disabled={!host || !!status} label="Connect" onClick={mount.startRemoteControl} startContent={<Icons.Connect />} />
 		</>
 	)
 })

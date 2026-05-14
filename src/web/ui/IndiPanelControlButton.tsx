@@ -4,12 +4,12 @@ import indiIcon from '@/assets/indi.webp'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { Button, type ButtonProps } from './components/Button'
 
-export interface IndiPanelControlButtonProps extends Omit<ButtonProps, 'onPointerUp' | 'children'> {
+export interface IndiPanelControlButtonProps extends Omit<ButtonProps, 'children'> {
 	readonly device?: Device | string
 }
 
 export function IndiPanelControlButton({ device, color = 'primary', size = 'md', variant = 'ghost', ...props }: IndiPanelControlButtonProps) {
 	const indi = useMolecule(IndiPanelControlMolecule)
 
-	return <Button children={<img className={size === 'md' ? 'w-6' : 'w-9'} src={indiIcon} />} rounded color={color} onPointerUp={() => indi.show(device)} size={size} tooltipContent="INDI" variant={variant} {...props} />
+	return <Button children={<img className={size === 'md' ? 'w-6' : 'w-9'} src={indiIcon} />} rounded color={color} onClick={() => indi.show(device)} size={size} tooltipContent="INDI" variant={variant} {...props} />
 }

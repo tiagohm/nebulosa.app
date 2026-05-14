@@ -24,7 +24,7 @@ export function Time({ id, onTimeChange, onClose, ...time }: TimeProps) {
 		}
 	}
 
-	const Footer = <Button color="success" label="Apply" onPointerUp={handleChoose} startContent={<Icons.Check />} />
+	const Footer = <Button color="success" label="Apply" onClick={handleChoose} startContent={<Icons.Check />} />
 
 	return (
 		<Modal footer={Footer} header="Time" id={id} maxWidth="328px" onHide={onClose}>

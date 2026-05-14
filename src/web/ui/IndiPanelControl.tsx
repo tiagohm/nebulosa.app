@@ -37,8 +37,8 @@ const Header = memo(() => {
 	return (
 		<div className="flex flex-row items-center justify-start gap-2">
 			<span className="me-3">INDI Panel Control</span>
-			<ToggleButton tooltipContent="Properties" color="secondary" icon={Icons.ViewList} value={tab === 'property'} onPointerUp={() => (control.state.tab = 'property')} />
-			<ToggleButton tooltipContent="Messages" color="secondary" icon={Icons.Message} value={tab === 'message'} onPointerUp={() => (control.state.tab = 'message')} />
+			<ToggleButton tooltipContent="Properties" color="secondary" icon={Icons.ViewList} value={tab === 'property'} onClick={() => (control.state.tab = 'property')} />
+			<ToggleButton tooltipContent="Messages" color="secondary" icon={Icons.Message} value={tab === 'message'} onClick={() => (control.state.tab = 'message')} />
 		</div>
 	)
 })
@@ -115,7 +115,7 @@ const Messages = memo(() => {
 				{MessageItem}
 			</FilterableList>
 			<div className="col-span-full flex flex-row items-center justify-center gap-2">
-				<Button color="danger" disabled={messages.length === 0} label="Clear" onPointerUp={control.clearMessages} startContent={<Icons.Broom />} />
+				<Button color="danger" disabled={messages.length === 0} label="Clear" onClick={control.clearMessages} startContent={<Icons.Broom />} />
 			</div>
 		</Activity>
 	)
@@ -152,7 +152,7 @@ const Property = memo(({ property, onSend }: PropertyProps) => {
 						<span className="mt-[-4px] text-[0.6rem] text-neutral-400">{property.name}</span>
 					</div>
 				</div>
-				{!isReadonly && property.type !== 'SWITCH' && <IconButton color="primary" icon={Icons.Send} onPointerUp={handlePointerUp} tooltipContent="Send" tooltipPlacement="start" />}
+				{!isReadonly && property.type !== 'SWITCH' && <IconButton color="primary" icon={Icons.Send} onClick={handlePointerUp} tooltipContent="Send" tooltipPlacement="start" />}
 			</div>
 			<div className="flex flex-col gap-1">
 				{property.type === 'TEXT' && Object.entries(property.elements).map(([key, element]) => <TextElement isReadonly={isReadonly} key={key} label={element.label} onValueChange={(value) => handleValueChange(element, value)} value={element.value} />)}
@@ -234,5 +234,5 @@ function SwitchElement({ label, value, rule, isReadonly, onValueChange }: Switch
 		}
 	}
 
-	return <Button color={rule === 'AtMostOne' ? 'secondary' : value ? 'success' : 'danger'} disabled={isReadonly} label={label} onPointerUp={handleValueChange} />
+	return <Button color={rule === 'AtMostOne' ? 'secondary' : value ? 'success' : 'danger'} disabled={isReadonly} label={label} onClick={handleValueChange} />
 }

@@ -63,14 +63,6 @@ export function stopPropagationForAll<P extends React.DOMAttributes<HTMLElement>
 	return props
 }
 
-export function stopPropagationDesktopOnly(event: Event | React.BaseSyntheticEvent<Event>) {
-	if (isMousePresent === true) event.stopPropagation()
-}
-
-export function stopPropagationMobileOnly(event: Event | React.BaseSyntheticEvent<Event>) {
-	if (isMousePresent === false) event.stopPropagation()
-}
-
 // Prevents the default action of an event if it is cancelable
 export function preventDefault(event: Event | React.BaseSyntheticEvent<Event>) {
 	event.cancelable && event.preventDefault()

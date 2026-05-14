@@ -76,5 +76,5 @@ const Footer = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
 	const { loading } = useSnapshot(starDetection.state)
 
-	return <Button color="success" label="Detect" loading={loading} onPointerUp={starDetection.detect} startContent={<Icons.Check />} />
+	return <Button color="success" label="Detect" loading={loading} onClick={starDetection.detect} startContent={<Icons.Check />} />
 })

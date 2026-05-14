@@ -30,7 +30,7 @@ const Header = memo(() => {
 	return (
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
-				<ConnectButton connected={connected} loading={connecting} onPointerUp={wheel.connect} />
+				<ConnectButton connected={connected} loading={connecting} onClick={wheel.connect} />
 				<IndiPanelControlButton device={wheel.scope.wheel.name} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">
@@ -79,7 +79,7 @@ const Slot = memo(() => {
 			<Select className="flex-1" items={names} endContent={<SlotPopover />} disabled={!connected || moving || names.length === 0} label="Slot" onValueChange={(value) => wheel.update('position', names.indexOf(value))} value={names[selected.position]}>
 				{SlotItem}
 			</Select>
-			<Button color="success" disabled={!connected || selected.position === position || names.length === 0} label="Move" loading={moving} onPointerUp={wheel.moveTo} startContent={<Icons.Check />} variant="ghost" />
+			<Button color="success" disabled={!connected || selected.position === position || names.length === 0} label="Move" loading={moving} onClick={wheel.moveTo} startContent={<Icons.Check />} variant="ghost" />
 		</div>
 	)
 })
@@ -100,7 +100,7 @@ const SlotPopoverContent = memo(() => {
 			<p className="col-span-full font-bold">SLOT OPTIONS</p>
 			<TextInput className="col-span-10" disabled={!canSetNames} label="Name" onValueChange={(value) => value && wheel.update('name', value)} value={name} />
 			<div className="col-span-2 flex flex-row items-center justify-center">
-				<IconButton color="success" disabled={!canSetNames || name.length === 0} icon={Icons.Check} onPointerUp={wheel.apply} tooltipContent="Apply" />
+				<IconButton color="success" disabled={!canSetNames || name.length === 0} icon={Icons.Check} onClick={wheel.apply} tooltipContent="Apply" />
 			</div>
 		</div>
 	)

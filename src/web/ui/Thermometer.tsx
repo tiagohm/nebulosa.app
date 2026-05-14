@@ -23,7 +23,7 @@ const Header = memo(() => {
 	return (
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
-				<ConnectButton connected={connected} loading={connecting} onPointerUp={thermometer.connect} />
+				<ConnectButton connected={connected} loading={connecting} onClick={thermometer.connect} />
 				<IndiPanelControlButton device={thermometer.scope.thermometer.name} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">

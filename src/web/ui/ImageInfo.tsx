@@ -3,10 +3,11 @@ import { formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import type { Point } from 'nebulosa/src/geometry'
 import type { Mount } from 'nebulosa/src/indi.device'
-import { Activity, memo } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
+import { formatNumber, tw } from '../shared/util'
 import { Dropdown, DropdownItem } from './components/Dropdown'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
@@ -31,29 +32,31 @@ export const ImageInfo = memo(() => {
 					<Icons.Restore />
 					{formatNumber(angle, 1)}°
 				</div>
-				<Activity mode={isMouseCoordinateVisible && interpolator ? 'visible' : 'hidden'}>
-					<Coordinate declination={hover.declination} rightAscension={hover.rightAscension} x={hover.x} y={hover.y} />
-					<Activity mode={selected.show ? 'visible' : 'hidden'}>
-						<span className="flex flex-row items-center gap-1">
-							<Coordinate declination={selected.declination} pinned rightAscension={selected.rightAscension} x={selected.x} y={selected.y} />
-							<b className="ms-1">D:</b> {formatAZ(selected.distance, true)}
-							<SelectedCoordinateDropdown onFrameAt={viewer.frameAt} onPointMountHere={viewer.pointMountHere} onSyncMountHere={viewer.syncMountHere} />
-						</span>
-					</Activity>
-				</Activity>
+				{isMouseCoordinateVisible && interpolator && (
+					<>
+						<Coordinate className="mt-2" declination={hover.declination} rightAscension={hover.rightAscension} x={hover.x} y={hover.y} />
+						{selected.show && (
+							<span className="flex flex-row items-center gap-1">
+								<Coordinate declination={selected.declination} pinned rightAscension={selected.rightAscension} x={selected.x} y={selected.y} />
+								<b>D:</b> {formatAZ(selected.distance, true)}
+								<SelectedCoordinateDropdown onFrameAt={viewer.frameAt} onPointMountHere={viewer.pointMountHere} onSyncMountHere={viewer.syncMountHere} />
+							</span>
+						)}
+					</>
+				)}
 			</div>
 		</div>
 	)
 })
 
-interface CoordinateProps extends Readonly<EquatorialCoordinate>, Readonly<Point> {
+interface CoordinateProps extends React.ComponentProps<'div'>, Readonly<EquatorialCoordinate>, Readonly<Point> {
 	readonly pinned?: boolean
 }
 
-function Coordinate({ pinned = false, x, y, rightAscension, declination }: CoordinateProps) {
+function Coordinate({ pinned = false, x, y, rightAscension, declination, className, ...props }: CoordinateProps) {
 	return (
-		<div className="inline-flex min-w-0 flex-row items-center gap-1">
-			{pinned ? <Icons.Pin /> : <Icons.Cursor />}
+		<div className={tw('inline-flex min-w-0 flex-row items-center gap-1', className)} {...props}>
+			{pinned ? <Icons.Pin className="size-[1em]" /> : <Icons.Cursor className="size-[1em]" />}
 			<b>X:</b> {formatNumber(x, 0)}
 			<b className="ms-1">Y:</b> {formatNumber(y, 0)}
 			<b className="ms-1">RA:</b> {formatAngle(rightAscension, formatRA)}
@@ -87,7 +90,7 @@ const SelectedCoordinateDropdown = memo((props: SelectedCoordinateDropdownProps)
 	}
 
 	return (
-		<Dropdown className="pointer-events-auto" label={<Icons.DotsVertical />} itemHeight={38} size="sm">
+		<Dropdown className="pointer-events-auto" itemHeight={32} size="sm">
 			<DropdownItem startContent={<Icons.Telescope />}>
 				<span className="flex flex-row items-center gap-1">
 					<span>Mount:</span>
@@ -100,10 +103,6 @@ const SelectedCoordinateDropdown = memo((props: SelectedCoordinateDropdownProps)
 		</Dropdown>
 	)
 })
-
-function formatNumber(value: number, fractionDigits: number) {
-	return Number.isFinite(value) ? value.toFixed(fractionDigits) : '--'
-}
 
 function formatAngle(value: number, format: (value: number, signed?: boolean) => string) {
 	return Number.isFinite(value) ? format(value, true) : '--'

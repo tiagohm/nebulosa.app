@@ -2,6 +2,7 @@ import { useMolecule } from 'bunshi/react'
 import { Activity, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { CameraMolecule } from '@/molecules/indi/camera'
+import { activityMode } from '../shared/util'
 import { AutoSaveButton } from './AutoSaveButton'
 import { AutoSubFolderModeButton } from './AutoSubFolderButton'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
@@ -39,7 +40,7 @@ const Body = memo(() => {
 	return (
 		<div className="mt-0 grid grid-cols-12 gap-2">
 			<Progress />
-			<Activity mode={minimized ? 'hidden' : 'visible'}>
+			<Activity mode={activityMode(!minimized)}>
 				<Path />
 				<Cooler />
 				<Temperature />
@@ -108,9 +109,7 @@ const OptionsButton = memo(() => {
 	return (
 		<>
 			<IconButton disabled={!connected || capturing} icon={Icons.Cog} onClick={() => (camera.state.request.show = true)} />
-			<Activity mode={show && connected && !capturing ? 'visible' : 'hidden'}>
-				<OptionsModal />
-			</Activity>
+			{show && connected && !capturing && <OptionsModal />}
 		</>
 	)
 })

@@ -1,6 +1,7 @@
 import { useMolecule } from 'bunshi/react'
 import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/angle'
 import { memo } from 'react'
+import type { PlateSolveStart } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageSolverMolecule } from '@/molecules/image/solver'
 import { Button } from './components/Button'
@@ -14,15 +15,6 @@ import { Modal } from './Modal'
 import { PlateSolverSelect } from './PlateSolverSelect'
 import { PlateSolveStartPopover } from './PlateSolveStartPopover'
 
-type SolveRequestFields = {
-	readonly blind: boolean
-	readonly rightAscension: unknown
-	readonly declination: unknown
-	readonly radius: number
-	readonly focalLength: number
-	readonly pixelSize: number
-}
-
 function hasPositiveFiniteValue(value: number) {
 	return Number.isFinite(value) && value > 0
 }
@@ -31,7 +23,7 @@ function hasTextValue(value: unknown) {
 	return String(value).trim().length > 0
 }
 
-function canStartSolve(request: SolveRequestFields, hasImageInfo: boolean) {
+function canStartSolve(request: Readonly<PlateSolveStart>, hasImageInfo: boolean) {
 	if (!hasImageInfo || !hasPositiveFiniteValue(request.focalLength) || !hasPositiveFiniteValue(request.pixelSize)) return false
 	if (request.blind) return true
 	return hasPositiveFiniteValue(request.radius) && hasTextValue(request.rightAscension) && hasTextValue(request.declination)
@@ -121,9 +113,10 @@ const Solution = memo(() => {
 
 const Footer = memo(() => {
 	const solver = useMolecule(ImageSolverMolecule)
+	const { info } = useSnapshot(solver.viewer.state)
 	const { loading } = useSnapshot(solver.state)
 	const request = useSnapshot(solver.state.request)
-	const canSolve = canStartSolve(request, solver.viewer.state.info !== undefined)
+	const canSolve = canStartSolve(request, info !== undefined)
 
 	return (
 		<>

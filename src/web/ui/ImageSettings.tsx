@@ -1,5 +1,5 @@
 import { useMolecule } from 'bunshi/react'
-import { Activity, memo } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageSettingsMolecule } from '@/molecules/image/settings'
 import { CfaPatternSelect } from './CfaPatternSelect'
@@ -12,10 +12,6 @@ import { ImageFormatSelect } from './ImageFormatSelect'
 import { Modal } from './Modal'
 
 const JPEG_FORMAT = 'jpeg'
-
-function isJpegFormat(format: string) {
-	return format === JPEG_FORMAT
-}
 
 export const ImageSettings = memo(() => {
 	const settings = useMolecule(ImageSettingsMolecule)
@@ -34,9 +30,7 @@ const Body = memo(() => {
 	return (
 		<div className="mt-0 grid grid-cols-12 items-center gap-2">
 			<ImageFormatSelect className="col-span-full min-w-0" fullWidth onValueChange={settings.updateFormatType} value={transformation.format.type} />
-			<Activity mode={isJpegFormat(transformation.format.type) ? 'visible' : 'hidden'}>
-				<JpegFormat />
-			</Activity>
+			{transformation.format.type === JPEG_FORMAT && <JpegFormat />}
 			<Checkbox className="col-span-full min-w-0" label="Pixelated" onValueChange={(value) => settings.update('pixelated', value)} value={pixelated} />
 			<CfaPatternSelect className="col-span-full min-w-0" fullWidth onValueChange={(value) => settings.updateTransformation('cfaPattern', value)} value={transformation.cfaPattern} />
 		</div>

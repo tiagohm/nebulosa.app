@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatRA } from 'nebulosa/src/angle'
-import { Activity, memo, useRef } from 'react'
+import { memo, useRef } from 'react'
 import type { CoordinateType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { MountMolecule } from '@/molecules/indi/mount'
@@ -104,9 +104,7 @@ const TimeButton = memo(() => {
 	return (
 		<>
 			<IconButton color="primary" disabled={!connected || time.utc === 0} icon={Icons.Clock} onPointerUp={mount.showTime} tooltipContent="Time" />
-			<Activity mode={show ? 'visible' : 'hidden'}>
-				<Time id={`time-mount-${mount.scope.mount.name}`} onClose={mount.hideTime} onTimeChange={mount.time} {...time} />
-			</Activity>
+			{show && <Time id={`time-mount-${mount.scope.mount.name}`} onClose={mount.hideTime} onTimeChange={mount.time} {...time} />}
 		</>
 	)
 })
@@ -119,9 +117,7 @@ const RemoteControlButton = memo(() => {
 	return (
 		<>
 			<IconButton color="secondary" disabled={!connected} icon={Icons.RemoteControl} onPointerUp={mount.showRemoteControl} tooltipContent="Remote Control" />
-			<Activity mode={show ? 'visible' : 'hidden'}>
-				<MountRemoteControl />
-			</Activity>
+			{show && <MountRemoteControl />}
 		</>
 	)
 })

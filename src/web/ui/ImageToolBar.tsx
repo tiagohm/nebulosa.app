@@ -1,5 +1,5 @@
 import { useMolecule } from 'bunshi/react'
-import { Activity, memo } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
@@ -44,9 +44,7 @@ export const ImageToolBar = memo(() => {
 				<IconButton color="secondary" icon={Icons.Sigma} onClick={solver.show} tooltipContent="Plate Solver" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
 				<IconButton color="secondary" icon={Icons.Tune} onClick={stretch.show} tooltipContent="Stretch" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
 				<ToggleButton color="primary" icon={Icons.WandSparkles} onClick={stretch.toggle} tooltipContent="Auto Stretch" tooltipPlacement={TOOLTIP_PLACEMENT} value={transformation.stretch.auto} />
-				<Activity mode={info?.metadata.bayer ? 'visible' : 'hidden'}>
-					<ToggleButton color="primary" icon={Icons.Grid} onClick={viewer.toggleDebayer} tooltipContent="Debayer" tooltipPlacement={TOOLTIP_PLACEMENT} value={transformation.debayer} />
-				</Activity>
+				{info?.metadata.bayer && <ToggleButton color="primary" icon={Icons.Grid} onClick={viewer.toggleDebayer} tooltipContent="Debayer" tooltipPlacement={TOOLTIP_PLACEMENT} value={transformation.debayer} />}
 				<RotatePopover />
 				<TransformationPopover />
 				<OverlayPopover />
@@ -112,21 +110,19 @@ const OverlayPopoverContent = memo(() => {
 			<ToggleButton color="primary" icon={Icons.Crosshair} onClick={viewer.toggleCrosshair} tooltipContent="Crosshair" tooltipPlacement={TOOLTIP_PLACEMENT} value={crosshair} />
 			<div className="flex flex-col justify-center gap-2">
 				<IconButton color="secondary" disabled={!solution} icon={Icons.Pen} onClick={annotation.show} tooltipContent="Annotation" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-				<Activity mode={hasAnnotatedStars ? 'visible' : 'hidden'}>
-					<Switch onValueChange={annotation.toggle} value={isAnnotatedStarsVisible} />
-				</Activity>
+				{hasAnnotatedStars && <Switch onValueChange={annotation.toggle} value={isAnnotatedStarsVisible} />}
 			</div>
 			<div className="flex flex-col justify-center gap-2">
 				<IconButton color="secondary" icon={Icons.Stars} onClick={starDetection.show} tooltipContent="Star Detection" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-				<Activity mode={hasDetectedStars ? 'visible' : 'hidden'}>
-					<Switch onValueChange={starDetection.toggle} value={isDetectedStarsVisible} />
-				</Activity>
+				{hasDetectedStars && <Switch onValueChange={starDetection.toggle} value={isDetectedStarsVisible} />}
 			</div>
 			<IconButton color="secondary" disabled icon={Icons.Box} tooltipContent="ROI" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-			<Activity mode={hasSolvedScale ? 'visible' : 'hidden'}>
-				<IconButton color="secondary" icon={Icons.FocusField} onClick={fov.show} tooltipContent="FOV" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-				<ToggleButton color="primary" icon={Icons.MousePointerClick} onClick={mouseCoordinate.toggle} tooltipContent="Mouse Coordinate" tooltipPlacement={TOOLTIP_PLACEMENT} value={isMouseCoordinateVisible} />
-			</Activity>
+			{hasSolvedScale && (
+				<>
+					<IconButton color="secondary" icon={Icons.FocusField} onClick={fov.show} tooltipContent="FOV" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+					<ToggleButton color="primary" icon={Icons.MousePointerClick} onClick={mouseCoordinate.toggle} tooltipContent="Mouse Coordinate" tooltipPlacement={TOOLTIP_PLACEMENT} value={isMouseCoordinateVisible} />
+				</>
+			)}
 		</div>
 	)
 })
@@ -148,9 +144,7 @@ const TransformationPopoverContent = memo(() => {
 	return (
 		<div className={`${POPOVER_PANEL_CLASS} flex flex-row items-center justify-center gap-2 p-2`}>
 			<IconButton color="secondary" icon={Icons.Image} onClick={calibration.show} tooltipContent="Calibration" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-			<Activity mode={info && !info.mono ? 'visible' : 'hidden'}>
-				<IconButton color="secondary" icon={Icons.Swatch} onClick={scnr.show} tooltipContent="SCNR" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-			</Activity>
+			{info?.mono === false && <IconButton color="secondary" icon={Icons.Swatch} onClick={scnr.show} tooltipContent="SCNR" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />}
 			<IconButton color="secondary" icon={Icons.ImageEdit} onClick={adjustment.show} tooltipContent="Adjustment" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
 			<IconButton color="secondary" icon={Icons.Brush} onClick={filter.show} tooltipContent="Filter" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
 			<ToggleButton color="primary" icon={Icons.FlipHorizontal} onClick={viewer.toggleHorizontalMirror} tooltipContent="Horizontal mirror" tooltipPlacement={TOOLTIP_PLACEMENT} value={transformation.horizontalMirror} />

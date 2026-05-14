@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
-import { Activity, memo } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
 import type { Connection } from '@/shared/types'
@@ -71,9 +71,7 @@ export const ConnectionBox = memo(() => {
 				</Select>
 				<ConnectButton disabled={!selected} connected={!!connected} loading={loading} onClick={connection.connect} />
 			</div>
-			<Activity mode={show && !connected ? 'visible' : 'hidden'}>
-				<ConnectionEdit />
-			</Activity>
+			{show && !connected && <ConnectionEdit />}
 		</>
 	)
 })

@@ -1,5 +1,5 @@
 import { useMolecule } from 'bunshi/react'
-import { Activity, memo } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
@@ -51,13 +51,14 @@ const Connection = memo(() => {
 			<div className="col-span-full flex flex-row items-center justify-center">
 				<PHD2ClientModeRadioGroup horizontal onValueChange={(value) => (phd2.state.connection.mode = value)} value={mode} />
 			</div>
-			<Activity mode={mode === 'REMOTE' ? 'visible' : 'hidden'}>
-				<TextInput className="col-span-7" disabled={connected} label="Host" maxLength={128} onValueChange={(value) => phd2.updateConnection('host', value)} placeholder="localhost" value={host} />
-				<NumberInput className="col-span-3" disabled={connected} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => phd2.updateConnection('port', value)} placeholder="4400" value={port} />
-			</Activity>
-			<Activity mode={mode === 'INTERNAL' ? 'visible' : 'hidden'}>
+			{mode === 'REMOTE' ? (
+				<>
+					<TextInput className="col-span-7" disabled={connected} label="Host" maxLength={128} onValueChange={(value) => phd2.updateConnection('host', value)} placeholder="localhost" value={host} />
+					<NumberInput className="col-span-3" disabled={connected} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => phd2.updateConnection('port', value)} placeholder="4400" value={port} />
+				</>
+			) : (
 				<DeviceChooser />
-			</Activity>
+			)}
 			<div className="col-span-2 flex flex-row items-center justify-center gap-2">
 				<ConnectButton disabled={!camera || !guideOutput} connected={connected} onPointerUp={phd2.connect} />
 			</div>

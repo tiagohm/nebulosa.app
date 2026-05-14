@@ -1,5 +1,5 @@
 import { useMolecule } from 'bunshi/react'
-import { Activity, memo } from 'react'
+import { memo } from 'react'
 import type { ImageAdjustment as ImageAdjustmentType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
@@ -63,13 +63,13 @@ const Saturation = memo(() => {
 	const { info } = useSnapshot(adjustment.viewer.state)
 	const { enabled, saturation } = useSnapshot(adjustment.state.adjustment)
 
+	if (!info?.mono) return null
+
 	return (
-		<Activity mode={info?.mono ? 'hidden' : 'visible'}>
-			<div className="col-span-full flex flex-col gap-2">
-				<AdjustmentValueInput enabled={enabled} label="Saturation" type="saturation" value={saturation.value} />
-				<ImageChannelOrGrayInput disabled={!enabled || saturation.value === 1} onValueChange={(value) => adjustment.update('saturation', 'channel', value)} value={saturation.channel} />
-			</div>
-		</Activity>
+		<div className="col-span-full flex flex-col gap-2">
+			<AdjustmentValueInput enabled={enabled} label="Saturation" type="saturation" value={saturation.value} />
+			<ImageChannelOrGrayInput disabled={!enabled || saturation.value === 1} onValueChange={(value) => adjustment.update('saturation', 'channel', value)} value={saturation.channel} />
+		</div>
 	)
 })
 

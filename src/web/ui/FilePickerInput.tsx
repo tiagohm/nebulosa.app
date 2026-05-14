@@ -1,5 +1,5 @@
 import { ScopeProvider } from 'bunshi/react'
-import { Activity, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FilePickerScope, type FilePickerScopeValue } from '@/molecules/filepicker'
 import { IconButton } from './components/IconButton'
 import { TextInput, type TextInputProps } from './components/TextInput'
@@ -68,11 +68,11 @@ export function FilePickerInput({ filter, mode, id, value, onValueChange, readOn
 			<div className="col-span-full flex w-full flex-1 flex-row items-center gap-1">
 				<TextInput disabled={blocked} endContent={EndContent} onValueChange={handleValueChange} startContent={StartContent} value={value} {...props} />
 			</div>
-			<Activity mode={show && !blocked ? 'visible' : 'hidden'}>
+			{show && !blocked && (
 				<ScopeProvider scope={FilePickerScope} value={{ path: initialPath.current, filter, mode, multiple: false }}>
 					<FilePicker header="Choose Path" id={`file-picker-input-${id}`} onChoose={handleOnChoose} />
 				</ScopeProvider>
-			</Activity>
+			)}
 		</>
 	)
 }

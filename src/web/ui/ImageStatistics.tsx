@@ -1,5 +1,5 @@
 import { useMolecule } from 'bunshi/react'
-import { Activity, memo } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
 import { Checkbox } from './components/Checkbox'
@@ -55,9 +55,7 @@ const Options = memo(() => {
 	return (
 		<>
 			<Checkbox className="col-span-full min-w-0" label="Transformed" onValueChange={(value) => statistics.update('transformed', value)} value={transformed} />
-			<Activity mode={histogram.length === 3 ? 'visible' : 'hidden'}>
-				<ImageChannelButtonGroup className="col-span-full min-w-0" onValueChange={(value) => (statistics.state.selected = selectedChannelIndex(value ?? 'RED'))} value={channelValueOf(selected)} />
-			</Activity>
+			{histogram.length === 3 && <ImageChannelButtonGroup className="col-span-full min-w-0" onValueChange={(value) => (statistics.state.selected = selectedChannelIndex(value ?? 'RED'))} value={channelValueOf(selected)} />}
 		</>
 	)
 })

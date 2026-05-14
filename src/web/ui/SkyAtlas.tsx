@@ -9,7 +9,7 @@ import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedC
 import { type BodyPosition, EMPTY_TWILIGHT, type MinorPlanetParameter, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { AsteroidMolecule, type BookmarkItem, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, type SkyAtlasTab, SunMolecule } from '@/molecules/skyatlas'
-import { formatDistance, skyObjectName, skyObjectType, tw } from '@/shared/util'
+import { activityMode, formatDistance, skyObjectName, skyObjectType, tw } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { Button } from './components/Button'
@@ -145,21 +145,16 @@ const BookmarkPopoverContent = memo(() => {
 const HeaderFilterPopover = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { tab } = useSnapshot(atlas.state)
+	const show = tab === 'planet' || tab === 'galaxy' || tab === 'satellite'
+
+	if (!show) return null
 
 	return (
-		<Activity mode={tab === 'planet' || tab === 'galaxy' || tab === 'satellite' ? 'visible' : 'hidden'}>
-			<Popover className="max-w-140" trigger={<IconButton color="secondary" icon={Icons.Filter} tooltipContent="Filter" variant="flat" />}>
-				<Activity mode={tab === 'planet' ? 'visible' : 'hidden'}>
-					<PlanetFilter />
-				</Activity>
-				<Activity mode={tab === 'galaxy' ? 'visible' : 'hidden'}>
-					<GalaxyFilter />
-				</Activity>
-				<Activity mode={tab === 'satellite' ? 'visible' : 'hidden'}>
-					<SatelliteFilter />
-				</Activity>
-			</Popover>
-		</Activity>
+		<Popover className="max-w-140" trigger={<IconButton color="secondary" icon={Icons.Filter} tooltipContent="Filter" variant="flat" />}>
+			{tab === 'planet' && <PlanetFilter />}
+			{tab === 'galaxy' && <GalaxyFilter />}
+			{tab === 'satellite' && <SatelliteFilter />}
+		</Popover>
 	)
 })
 
@@ -226,24 +221,12 @@ const Body = memo(() => {
 
 	return (
 		<div className="mt-0 flex flex-col gap-2">
-			<Activity mode={tab === 'sun' ? 'visible' : 'hidden'}>
-				<SunTab />
-			</Activity>
-			<Activity mode={tab === 'moon' ? 'visible' : 'hidden'}>
-				<MoonTab />
-			</Activity>
-			<Activity mode={tab === 'planet' ? 'visible' : 'hidden'}>
-				<PlanetTab />
-			</Activity>
-			<Activity mode={tab === 'asteroid' ? 'visible' : 'hidden'}>
-				<AsteroidTab />
-			</Activity>
-			<Activity mode={tab === 'galaxy' ? 'visible' : 'hidden'}>
-				<GalaxyTab />
-			</Activity>
-			<Activity mode={tab === 'satellite' ? 'visible' : 'hidden'}>
-				<SatelliteTab />
-			</Activity>
+			{tab === 'sun' && <SunTab />}
+			{tab === 'moon' && <MoonTab />}
+			{tab === 'planet' && <PlanetTab />}
+			{tab === 'asteroid' && <AsteroidTab />}
+			{tab === 'galaxy' && <GalaxyTab />}
+			{tab === 'satellite' && <SatelliteTab />}
 		</div>
 	)
 })
@@ -807,8 +790,14 @@ function makeTags(name: string | undefined, position: BodyPosition, extra?: Ephe
 	return tags
 }
 
+type EphemerisAndChartMode = 'info' | 'chart'
+
+function TagItem(tag: EphemerisAndChartTag) {
+	return <Chip color={tag.color} key={tag.label} label={tag.label} />
+}
+
 const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, className, isFavorite, onFavoriteChange }: EphemerisAndChartProps) => {
-	const [showChart, setShowChart] = useState(false)
+	const [mode, setMode] = useState<EphemerisAndChartMode>('info')
 	tags = useMemo(() => makeTags(name, position, tags), [name, position.constellation, position.names, tags])
 	const deferredChart = useDeferredValue(chart, [])
 	const data = useMemo(() => makeEphemerisChart(deferredChart, twilight), [deferredChart, twilight])
@@ -817,20 +806,16 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 	return (
 		<div className={tw('h-[140px] col-span-full relative flex flex-col justify-start items-center gap-1', className)}>
 			<div className="flex w-full flex-row gap-2 text-start text-sm font-bold">
-				<ToggleButton color="primary" icon={Icons.Info} value={!showChart} onClick={() => setShowChart(false)} />
-				<ToggleButton color="primary" icon={Icons.Chart} value={showChart} onClick={() => setShowChart(true)} />
-				<div className="flex flex-1 items-center justify-center overflow-hidden text-sm font-bold">
-					{tags?.map((tag) => (
-						<Chip color={tag.color} key={tag.label} label={tag.label} />
-					))}
-				</div>
+				<ToggleButton color="primary" icon={Icons.Info} value={mode === 'info'} onClick={() => setMode('info')} />
+				<ToggleButton color="primary" icon={Icons.Chart} value={mode === 'chart'} onClick={() => setMode('chart')} />
+				<div className="flex flex-1 items-center justify-center overflow-hidden text-sm font-bold">{tags.map(TagItem)}</div>
 				{onFavoriteChange && <IconButton color={isFavorite ? 'danger' : 'warning'} disabled={isFavorite === undefined} icon={isFavorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onClick={() => onFavoriteChange(!isFavorite)} tooltipContent={isFavorite ? 'Remove bookmark' : 'Add bookmark'} />}
 			</div>
 			<span className="w-full">
-				<Activity mode={showChart ? 'hidden' : 'visible'}>
+				<Activity mode={activityMode(mode === 'info')}>
 					<EphemerisPosition position={position} />
 				</Activity>
-				<Activity mode={showChart ? 'visible' : 'hidden'}>
+				<Activity mode={activityMode(mode === 'chart')}>
 					<EphemerisChart data={deferredData} />
 				</Activity>
 			</span>

@@ -1,5 +1,5 @@
 import { useMolecule } from 'bunshi/react'
-import { Activity, memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
 import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
@@ -38,10 +38,6 @@ import { ImageStretch } from './ImageStretch'
 import { ImageToolBar } from './ImageToolBar'
 import { Interactable, type InteractableProps } from './Interactable'
 import { StarDetection } from './StarDetection'
-
-function activityMode(visible: boolean) {
-	return visible ? 'visible' : 'hidden'
-}
 
 function hasScaledSolution(solution: { readonly scale?: number } | undefined) {
 	return solution?.scale !== undefined && Number.isFinite(solution.scale) && solution.scale > 0
@@ -145,53 +141,25 @@ export const ImageViewer = memo(() => {
 
 	return (
 		<>
-			<Activity mode={activityMode(isSelected)}>
-				<ImageToolBar />
-				<ImageInfo />
-			</Activity>
+			{isSelected && <ImageToolBar />}
+			{isSelected && <ImageInfo />}
 			<Interactable onGesture={handleGesture} onMouseMove={handleMouseMove} onClick={handleClick} onTap={viewer.select} ref={viewer.attachInteractable} zIndex={image.position}>
 				<img className="image pointer-events-none max-w-none touch-none rounded-sm outline-8 outline-black/25 outline-solid select-none" draggable={false} id={image.key} onLoad={viewer.handleOnLoad} ref={imgRef} />
 				<InteractableOverlay />
 			</Interactable>
-			<Activity mode={activityMode(showStretch)}>
-				<ImageStretch />
-			</Activity>
-			<Activity mode={activityMode(showPlateSolver)}>
-				<ImageSolver />
-			</Activity>
-			<Activity mode={activityMode(showScnr)}>
-				<ImageScnr />
-			</Activity>
-			<Activity mode={activityMode(showAdjustment)}>
-				<ImageAdjustment />
-			</Activity>
-			<Activity mode={activityMode(showFilter)}>
-				<ImageFilter />
-			</Activity>
-			<Activity mode={activityMode(showCalibration)}>
-				<ImageCalibration />
-			</Activity>
-			<Activity mode={activityMode(showStarDetection)}>
-				<StarDetection />
-			</Activity>
-			<Activity mode={activityMode(showHeader)}>
-				<FITSHeader />
-			</Activity>
-			<Activity mode={activityMode(showSettings)}>
-				<ImageSettings />
-			</Activity>
-			<Activity mode={activityMode(showAnnotation && hasSolution)}>
-				<ImageAnnotation />
-			</Activity>
-			<Activity mode={activityMode(showSave)}>
-				<ImageSave />
-			</Activity>
-			<Activity mode={activityMode(showStatistics)}>
-				<ImageStatistics />
-			</Activity>
-			<Activity mode={activityMode(showFov && hasSolutionScale)}>
-				<ImageFov />
-			</Activity>
+			{showStretch && <ImageStretch />}
+			{showPlateSolver && <ImageSolver />}
+			{showScnr && <ImageScnr />}
+			{showAdjustment && <ImageAdjustment />}
+			{showFilter && <ImageFilter />}
+			{showCalibration && <ImageCalibration />}
+			{showStarDetection && <StarDetection />}
+			{showHeader && <FITSHeader />}
+			{showSettings && <ImageSettings />}
+			{showAnnotation && hasSolution && <ImageAnnotation />}
+			{showSave && <ImageSave />}
+			{showStatistics && <ImageStatistics />}
+			{showFov && hasSolutionScale && <ImageFov />}
 		</>
 	)
 })
@@ -218,21 +186,11 @@ const InteractableOverlay = memo(() => {
 
 	return (
 		<>
-			<Activity mode={activityMode(crosshair)}>
-				<Crosshair />
-			</Activity>
-			<Activity mode={activityMode(isDetectedStarsVisible)}>
-				<DetectedStars />
-			</Activity>
-			<Activity mode={activityMode(isAnnotatedStarsVisible)}>
-				<AnnotatedStars />
-			</Activity>
-			<Activity mode={activityMode(isMouseCoordinateVisible && interpolator !== undefined)}>
-				<CoordinateOnMouse />
-			</Activity>
-			<Activity mode={activityMode(isFovVisible && hasSolutionScale)}>
-				<Fov />
-			</Activity>
+			{crosshair && <Crosshair />}
+			{isDetectedStarsVisible && <DetectedStars />}
+			{isAnnotatedStarsVisible && <AnnotatedStars />}
+			{isMouseCoordinateVisible && interpolator !== undefined && <CoordinateOnMouse />}
+			{isFovVisible && hasSolutionScale && <Fov />}
 		</>
 	)
 })

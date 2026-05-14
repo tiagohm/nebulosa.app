@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import type { DeviceType } from 'nebulosa/src/indi.device'
-import { Activity, memo, useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
 import alignmentIcon from '@/assets/alignment.webp'
@@ -97,39 +97,17 @@ export const HomeMenu = memo(() => {
 	return (
 		<>
 			<HomeMenuPopover />
-			<Activity mode={showSkyAtlas ? 'visible' : 'hidden'}>
-				<SkyAtlas />
-			</Activity>
-			<Activity mode={showFraming ? 'visible' : 'hidden'}>
-				<Framing />
-			</Activity>
-			<Activity mode={showTPPA && connected ? 'visible' : 'hidden'}>
-				<Tppa />
-			</Activity>
-			<Activity mode={showDARV && connected ? 'visible' : 'hidden'}>
-				<Darv />
-			</Activity>
-			<Activity mode={showAutoFocus && connected ? 'visible' : 'hidden'}>
-				<AutoFocus />
-			</Activity>
-			<Activity mode={showFlatWizard && connected ? 'visible' : 'hidden'}>
-				<FlatWizard />
-			</Activity>
-			<Activity mode={showPHD2 ? 'visible' : 'hidden'}>
-				<PHD2 />
-			</Activity>
-			<Activity mode={showIndiPanelControl && connected ? 'visible' : 'hidden'}>
-				<IndiPanelControl />
-			</Activity>
-			<Activity mode={showAlpaca && connected ? 'visible' : 'hidden'}>
-				<AlpacaServer />
-			</Activity>
-			<Activity mode={showAbout ? 'visible' : 'hidden'}>
-				<About />
-			</Activity>
-			<Activity mode={showCalculator ? 'visible' : 'hidden'}>
-				<Calculator />
-			</Activity>
+			{showSkyAtlas && <SkyAtlas />}
+			{showFraming && <Framing />}
+			{showTPPA && connected && <Tppa />}
+			{showDARV && connected && <Darv />}
+			{showAutoFocus && connected && <AutoFocus />}
+			{showFlatWizard && connected && <FlatWizard />}
+			{showPHD2 && <PHD2 />}
+			{showIndiPanelControl && connected && <IndiPanelControl />}
+			{showAlpaca && connected && <AlpacaServer />}
+			{showAbout && <About />}
+			{showCalculator && <Calculator />}
 		</>
 	)
 })

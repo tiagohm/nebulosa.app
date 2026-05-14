@@ -1,5 +1,5 @@
 import { useMolecule } from 'bunshi/react'
-import { Activity, memo } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiServerMolecule } from '@/molecules/indi/server'
 import { IconButton } from './components/IconButton'
@@ -13,9 +13,7 @@ export const IndiServerButton = memo(() => {
 	return (
 		<>
 			<IconButton color={running ? 'success' : 'danger'} disabled={!enabled} icon={running ? Icons.Server : Icons.ServerOff} onPointerUp={indi.show} tooltipContent="INDI Server" />
-			<Activity mode={show ? 'visible' : 'hidden'}>
-				<IndiServer />
-			</Activity>
+			{show && <IndiServer />}
 		</>
 	)
 })

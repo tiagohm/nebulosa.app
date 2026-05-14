@@ -1,5 +1,5 @@
 import { useMolecule } from 'bunshi/react'
-import { Activity, memo } from 'react'
+import { memo } from 'react'
 import type { ImageFFT, ImageFilter as ImageKernelFilter } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageFilterMolecule } from '@/molecules/image/filter'
@@ -55,35 +55,31 @@ const Mean = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
 	const { enabled, type, mean } = useSnapshot(filter.state.kernel)
 
-	return (
-		<Activity mode={type === 'mean' ? 'visible' : 'hidden'}>
-			<KernelSizeInput disabled={!enabled} value={mean.size} onValueChange={(value) => filter.updateKernel('mean', 'size', value)} />
-		</Activity>
-	)
+	if (type !== 'mean') return null
+
+	return <KernelSizeInput disabled={!enabled} value={mean.size} onValueChange={(value) => filter.updateKernel('mean', 'size', value)} />
 })
 
 const Blur = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
 	const { enabled, type, blur } = useSnapshot(filter.state.kernel)
 
-	return (
-		<Activity mode={type === 'blur' ? 'visible' : 'hidden'}>
-			<KernelSizeInput disabled={!enabled} value={blur.size} onValueChange={(value) => filter.updateKernel('blur', 'size', value)} />
-		</Activity>
-	)
+	if (type !== 'blur') return null
+
+	return <KernelSizeInput disabled={!enabled} value={blur.size} onValueChange={(value) => filter.updateKernel('blur', 'size', value)} />
 })
 
 const GaussianBlur = memo(() => {
 	const filter = useMolecule(ImageFilterMolecule)
 	const { enabled, type, gaussianBlur } = useSnapshot(filter.state.kernel)
 
+	if (type !== 'gaussianBlur') return null
+
 	return (
-		<Activity mode={type === 'gaussianBlur' ? 'visible' : 'hidden'}>
-			<div className="col-span-full grid grid-cols-12 gap-2">
-				<NumberInput className="col-span-6 min-w-0" disabled={!enabled} label="Size" maxValue={MAX_KERNEL_SIZE} minValue={MIN_KERNEL_SIZE} onValueChange={(value) => filter.updateKernel('gaussianBlur', 'size', value)} step={2} value={gaussianBlur.size} />
-				<NumberInput className="col-span-6 min-w-0" disabled={!enabled} fractionDigits={2} label="Sigma" maxValue={3} minValue={1} onValueChange={(value) => filter.updateKernel('gaussianBlur', 'sigma', value)} step={0.01} value={gaussianBlur.sigma} />
-			</div>
-		</Activity>
+		<div className="col-span-full grid grid-cols-12 gap-2">
+			<NumberInput className="col-span-6 min-w-0" disabled={!enabled} label="Size" maxValue={MAX_KERNEL_SIZE} minValue={MIN_KERNEL_SIZE} onValueChange={(value) => filter.updateKernel('gaussianBlur', 'size', value)} step={2} value={gaussianBlur.size} />
+			<NumberInput className="col-span-6 min-w-0" disabled={!enabled} fractionDigits={2} label="Sigma" maxValue={3} minValue={1} onValueChange={(value) => filter.updateKernel('gaussianBlur', 'sigma', value)} step={0.01} value={gaussianBlur.sigma} />
+		</div>
 	)
 })
 

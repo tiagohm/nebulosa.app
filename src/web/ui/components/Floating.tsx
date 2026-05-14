@@ -175,7 +175,8 @@ export function Floating({
 	const mounted = typeof document !== 'undefined'
 	const contentContainer = portalContainer ?? (mounted ? document.body : undefined)
 	const hasContent = content !== undefined && content !== null && content !== false
-	const rendered = mounted && open && hasContent && !!triggerElement
+	const hasConnectedTrigger = triggerElement?.isConnected === true
+	const rendered = mounted && open && hasContent && hasConnectedTrigger
 	const styles = floatingContentStyles({ interactive })
 
 	// Reports requested open-state changes back to the caller.
@@ -229,6 +230,13 @@ export function Floating({
 			setPosition(null)
 		}
 	}, [rendered])
+
+	// Closes stale overlays when their trigger element is removed from the DOM.
+	useEffect(() => {
+		if (open && triggerElement !== undefined && triggerElement !== null && !triggerElement.isConnected) {
+			requestOpenChange(false)
+		}
+	}, [open, requestOpenChange, triggerElement])
 
 	// Handles global close interactions like Escape and outside pointer presses.
 	useEffect(() => {

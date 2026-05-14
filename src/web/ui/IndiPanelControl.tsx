@@ -4,6 +4,7 @@ import type { DefElement, DefTextVector, Message, NewVector, SwitchRule } from '
 import { Activity, memo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
+import { activityMode } from '../shared/util'
 import { Button } from './components/Button'
 import { FilterableList } from './components/FilterableList'
 import { IconButton } from './components/IconButton'
@@ -48,7 +49,7 @@ const Body = memo(() => {
 
 	return (
 		<div className="mt-0 grid grid-cols-12 gap-2">
-			<Activity mode={tab === 'property' ? 'visible' : 'hidden'}>
+			<Activity mode={activityMode(tab === 'property')}>
 				<DeviceAndGroup />
 				<GroupList key={device} />
 			</Activity>
@@ -81,15 +82,7 @@ const GroupList = memo(() => {
 	const control = useMolecule(IndiPanelControlMolecule)
 	const { device, group, groups } = useSnapshot(control.state)
 
-	return (
-		<div className="col-span-full flex max-h-100 flex-col gap-4 overflow-y-auto p-1">
-			{groups.map((e) => (
-				<Activity key={`${device}-${e}`} mode={e === group ? 'visible' : 'hidden'}>
-					<PropertyList group={e} />
-				</Activity>
-			))}
-		</div>
-	)
+	return <div className="col-span-full flex max-h-100 flex-col gap-4 overflow-y-auto p-1">{groups.map((e) => e === group && <PropertyList key={`${device}-${e}`} group={e} />)}</div>
 })
 
 const DevicePropertyComparator = (a: DeviceProperty, b: DeviceProperty) => a.label!.localeCompare(b.label!)
@@ -117,7 +110,7 @@ const Messages = memo(() => {
 	const { tab, messages } = useSnapshot(control.state)
 
 	return (
-		<Activity mode={tab === 'message' ? 'visible' : 'hidden'}>
+		<Activity mode={activityMode(tab === 'message')}>
 			<FilterableList className="col-span-full" filter={FilterMessage} items={messages} minLengthToSearch={1} itemHeight={36}>
 				{MessageItem}
 			</FilterableList>

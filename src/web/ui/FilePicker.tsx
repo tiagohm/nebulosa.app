@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
-import { Activity, memo, useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { FilePickerMolecule } from '@/molecules/filepicker'
 import { tw } from '../shared/util'
@@ -85,25 +85,22 @@ const Filter = memo(() => {
 	const picker = useMolecule(FilePickerMolecule)
 	const { directory, filter } = useSnapshot(picker.state)
 
-	return (
-		<Activity mode={directory.create ? 'hidden' : 'visible'}>
-			<TextInput fullWidth label="Filter" onValueChange={picker.filter} value={filter} />
-		</Activity>
-	)
+	if (directory.create) return null
+
+	return <TextInput fullWidth label="Filter" onValueChange={picker.filter} value={filter} />
 })
 
 const CreateDirectory = memo(() => {
 	const picker = useMolecule(FilePickerMolecule)
 	const { create, name } = useSnapshot(picker.state.directory)
-	const canCreate = name.trim().length > 0
+
+	if (!create) return null
 
 	return (
-		<Activity mode={create ? 'visible' : 'hidden'}>
-			<div className="flex flex-row items-center gap-2">
-				<TextInput fullWidth label="Name" onValueChange={(value) => (picker.state.directory.name = value)} value={name} />
-				<IconButton color="success" disabled={!canCreate} icon={Icons.Check} onClick={picker.createDirectory} tooltipContent="Create" variant="ghost" />
-			</div>
-		</Activity>
+		<div className="flex flex-row items-center gap-2">
+			<TextInput fullWidth label="Name" onValueChange={(value) => (picker.state.directory.name = value)} value={name} />
+			<IconButton color="success" disabled={name.trim().length <= 0} icon={Icons.Check} onClick={picker.createDirectory} tooltipContent="Create" variant="ghost" />
+		</div>
 	)
 })
 
@@ -151,7 +148,6 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 	const picker = useMolecule(FilePickerMolecule)
 	const { mode, selected } = useSnapshot(picker.state)
 	const { save } = useSnapshot(picker.state)
-	const canChooseSave = save.name.trim().length > 0
 
 	function handleOnChoose() {
 		if (mode === 'save') {
@@ -163,16 +159,19 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 
 	return (
 		<>
-			<Activity mode={mode === 'save' ? 'visible' : 'hidden'}>
-				<TextInput className="flex-1" color={save.alreadyExists ? 'warning' : 'default'} label="Name" onValueChange={picker.updateSaveName} value={save.name} />
-				<Button color="success" disabled={!canChooseSave} label="Choose" onClick={handleOnChoose} startContent={<Icons.Check />} />
-			</Activity>
-			<Activity mode={mode !== 'save' ? 'visible' : 'hidden'}>
-				<Button color="danger" disabled={selected.length === 0} label="Clear" onClick={picker.unselectAll} startContent={<Icons.Broom />} />
-				<Badge color="success" label={selected.length} visible={selected.length > 0}>
-					<Button color="success" disabled={selected.length === 0} label="Choose" onClick={handleOnChoose} startContent={<Icons.Check />} />
-				</Badge>
-			</Activity>
+			{mode === 'save' ? (
+				<>
+					<TextInput className="flex-1" color={save.alreadyExists ? 'warning' : 'default'} label="Name" onValueChange={picker.updateSaveName} value={save.name} />
+					<Button color="success" disabled={save.name.trim().length <= 0} label="Choose" onClick={handleOnChoose} startContent={<Icons.Check />} />
+				</>
+			) : (
+				<>
+					<Button color="danger" disabled={selected.length === 0} label="Clear" onClick={picker.unselectAll} startContent={<Icons.Broom />} />
+					<Badge color="success" label={selected.length} visible={selected.length > 0}>
+						<Button color="success" disabled={selected.length === 0} label="Choose" onClick={handleOnChoose} startContent={<Icons.Check />} />
+					</Badge>
+				</>
+			)}
 		</>
 	)
 })

@@ -24,6 +24,14 @@ export function hasRootInteraction(props: React.DOMAttributes<HTMLElement>) {
 	return props.onClick !== undefined || props.onPointerDown !== undefined || props.onPointerUp !== undefined || props.onDoubleClick !== undefined || props.onContextMenu !== undefined
 }
 
+export function activityMode(visible: boolean | undefined | null) {
+	return visible === true ? 'visible' : 'hidden'
+}
+
+export function formatNumber(value: number | undefined | null, fractionDigits: number) {
+	return value !== undefined && value !== null && Number.isFinite(value) ? value.toFixed(fractionDigits) : '--'
+}
+
 // Clamps a number into the inclusive [min, max] range.
 export function clamp(value: number, min: number, max: number) {
 	if (!(value >= min)) return min // handles NaN value

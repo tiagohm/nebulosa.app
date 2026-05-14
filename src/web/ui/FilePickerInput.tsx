@@ -1,5 +1,5 @@
 import { ScopeProvider } from 'bunshi/react'
-import { Activity, useRef, useState } from 'react'
+import { Activity, useEffect, useRef, useState } from 'react'
 import { FilePickerScope, type FilePickerScopeValue } from '@/molecules/filepicker'
 import { IconButton } from './components/IconButton'
 import { TextInput, type TextInputProps } from './components/TextInput'
@@ -16,6 +16,33 @@ export function FilePickerInput({ filter, mode, id, value, onValueChange, readOn
 	const [show, setShow] = useState(false)
 	const initialPath = useRef(value)
 	const blocked = readOnly || disabled
+	const hasValue = value !== undefined && value.length > 0
+
+	useEffect(() => {
+		if (!show) {
+			initialPath.current = value
+		}
+	}, [show, value])
+
+	useEffect(() => {
+		if (blocked) {
+			setShow(false)
+		}
+	}, [blocked])
+
+	function handleBrowse() {
+		if (blocked) return
+
+		initialPath.current = value
+		setShow(true)
+	}
+
+	function handleClear() {
+		if (blocked) return
+
+		initialPath.current = ''
+		onValueChange('')
+	}
 
 	function handleOnChoose(paths?: string[]) {
 		if (!blocked && paths?.length) {
@@ -33,8 +60,8 @@ export function FilePickerInput({ filter, mode, id, value, onValueChange, readOn
 		}
 	}
 
-	const StartContent = <IconButton disabled={blocked} icon={Icons.FolderOpen} color="warning" onPointerUp={() => setShow(true)} tooltipContent="Browse" size="sm" variant="ghost" />
-	const EndContent = value ? <IconButton disabled={blocked} icon={Icons.CloseCircle} color="danger" onPointerUp={() => onValueChange('')} size="sm" tooltipContent="Clear" variant="ghost" /> : null
+	const StartContent = <IconButton disabled={blocked} icon={Icons.FolderOpen} color="warning" onPointerUp={handleBrowse} tooltipContent="Browse" size="sm" variant="ghost" />
+	const EndContent = hasValue ? <IconButton disabled={blocked} icon={Icons.CloseCircle} color="danger" onPointerUp={handleClear} size="sm" tooltipContent="Clear" variant="ghost" /> : null
 
 	return (
 		<>

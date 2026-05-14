@@ -42,6 +42,10 @@ export interface CalculatorState {
 	readonly ccdResolution: CcdResolution
 }
 
+type CalculatorSection = keyof Omit<CalculatorState, 'show'>
+
+const CALCULATOR_SECTIONS = ['focalLength', 'focalRatio', 'dawesLimit', 'rayleighLimit', 'limitingMagnitude', 'lightGraspRatio', 'ccdResolution'] as const satisfies readonly CalculatorSection[]
+
 const state = proxy<CalculatorState>({
 	show: false,
 	focalLength: { focalLength: 1368, aperture: 152, focalRatio: 9 },
@@ -55,6 +59,32 @@ const state = proxy<CalculatorState>({
 
 initProxy(state, 'calculator', ['p:show', 'o:focalLength', 'o:focalRatio', 'o:dawesLimit', 'o:rayleighLimit', 'o:limitingMagnitude', 'o:lightGraspRatio', 'o:ccdResolution'])
 
+refreshDerivedValues()
+
+function positive(value: number) {
+	return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+function divideOrZero(dividend: number, divisor: number) {
+	const denominator = positive(divisor)
+
+	return denominator > 0 ? positive(dividend) / denominator : 0
+}
+
+function refreshDerivedValue(property: CalculatorSection) {
+	if (property === 'focalLength') state.focalLength.focalLength = positive(state.focalLength.aperture) * positive(state.focalLength.focalRatio)
+	else if (property === 'focalRatio') state.focalRatio.focalRatio = divideOrZero(state.focalRatio.focalLength, state.focalRatio.aperture)
+	else if (property === 'dawesLimit') state.dawesLimit.resolution = divideOrZero(116, state.dawesLimit.aperture)
+	else if (property === 'rayleighLimit') state.rayleighLimit.resolution = divideOrZero(138, state.rayleighLimit.aperture)
+	else if (property === 'limitingMagnitude') state.limitingMagnitude.magnitude = positive(state.limitingMagnitude.aperture) > 0 ? 2.7 + 5 * Math.log10(state.limitingMagnitude.aperture) : 0
+	else if (property === 'lightGraspRatio') state.lightGraspRatio.ratio = divideOrZero(state.lightGraspRatio.largerAperture, state.lightGraspRatio.smallerAperture) ** 2
+	else if (property === 'ccdResolution') state.ccdResolution.resolution = divideOrZero(state.ccdResolution.pixelSize, state.ccdResolution.focalLength) * 206.265
+}
+
+function refreshDerivedValues() {
+	for (const property of CALCULATOR_SECTIONS) refreshDerivedValue(property)
+}
+
 export const CalculatorMolecule = molecule(() => {
 	function show() {
 		bus.emit('homeMenu:toggle', false)
@@ -67,14 +97,7 @@ export const CalculatorMolecule = molecule(() => {
 
 	function update<P extends keyof Omit<CalculatorState, 'show'>, K extends keyof CalculatorState[P]>(property: P, key: K, value: CalculatorState[P][K]) {
 		state[property][key] = value
-
-		if (property === 'focalLength') state.focalLength.focalLength = state.focalLength.aperture * state.focalLength.focalRatio
-		else if (property === 'focalRatio') state.focalRatio.focalRatio = state.focalRatio.focalLength / state.focalRatio.aperture
-		else if (property === 'dawesLimit') state.dawesLimit.resolution = 116 / state.dawesLimit.aperture
-		else if (property === 'rayleighLimit') state.rayleighLimit.resolution = 138 / state.rayleighLimit.aperture
-		else if (property === 'limitingMagnitude') state.limitingMagnitude.magnitude = 2.7 + 5 * Math.log10(state.limitingMagnitude.aperture)
-		else if (property === 'lightGraspRatio') state.lightGraspRatio.ratio = (state.lightGraspRatio.largerAperture / state.lightGraspRatio.smallerAperture) ** 2
-		else if (property === 'ccdResolution') state.ccdResolution.resolution = (state.ccdResolution.pixelSize / state.ccdResolution.focalLength) * 206.265
+		refreshDerivedValue(property)
 	}
 
 	return { state, show, hide, update } as const

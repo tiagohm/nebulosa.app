@@ -29,11 +29,21 @@ const state = proxy<DarvState>({
 
 initProxy(state, 'darv', ['o:request', 'p:show'])
 
+function nextDarvRequestId() {
+	return Date.now().toFixed(0)
+}
+
+function resetDarvEvent() {
+	state.running = false
+	state.event.id = state.request.id
+	state.event.state = 'IDLE'
+}
+
 export const DarvMolecule = molecule(() => {
 	const equipment = use(EquipmentMolecule)
 
 	onMount(() => {
-		state.request.id = Date.now().toFixed(0)
+		state.request.id ||= nextDarvRequestId()
 
 		const unsubscribers = new Array<VoidFunction>(5)
 
@@ -87,12 +97,29 @@ export const DarvMolecule = molecule(() => {
 		state.request.capture[key] = value
 	}
 
-	function start() {
-		return Api.DARV.start(state.camera!, state.mount!, state.request)
+	async function start() {
+		if (state.running || !state.camera?.connected || !state.mount?.connected) return
+
+		state.request.id = nextDarvRequestId()
+		state.running = true
+		state.event.id = state.request.id
+		state.event.state = 'WAITING'
+
+		const response = await Api.DARV.start(state.camera, state.mount, state.request).catch(() => undefined)
+
+		if (!response?.ok) {
+			resetDarvEvent()
+		}
 	}
 
-	function stop() {
-		return Api.DARV.stop(state.request)
+	async function stop() {
+		if (!state.running) return
+
+		const response = await Api.DARV.stop(state.request).catch(() => undefined)
+
+		if (response?.ok) {
+			resetDarvEvent()
+		}
 	}
 
 	function show() {
@@ -104,5 +131,5 @@ export const DarvMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, update, updateCapture, start, stop, show, hide }
+	return { state, update, updateCapture, start, stop, show, hide } as const
 })

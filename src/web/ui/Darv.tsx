@@ -1,15 +1,30 @@
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
+import type { DarvState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { DarvMolecule } from '@/molecules/darv'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { Button } from './components/Button'
-import { Chip } from './components/Chip'
+import { Chip, type ChipProps } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
 import { CameraDropdown, MountDropdown } from './DeviceDropdown'
 import { HemisphereSelect } from './HemisphereSelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
+
+const DARV_STATE_LABELS = {
+	IDLE: 'idle',
+	WAITING: 'waiting',
+	FORWARDING: 'forwarding',
+	BACKWARDING: 'backwarding',
+} satisfies Record<DarvState, string>
+
+const DARV_STATE_COLORS = {
+	IDLE: 'default',
+	WAITING: 'warning',
+	FORWARDING: 'primary',
+	BACKWARDING: 'secondary',
+} satisfies Record<DarvState, NonNullable<ChipProps['color']>>
 
 export const Darv = memo(() => {
 	const darv = useMolecule(DarvMolecule)
@@ -47,8 +62,8 @@ const Status = memo(() => {
 
 	return (
 		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
-			<Chip color="primary" size="sm">
-				{state === 'IDLE' ? 'idle' : state === 'WAITING' ? 'waiting' : state === 'FORWARDING' ? 'forwading' : 'backwarding'}
+			<Chip color={DARV_STATE_COLORS[state]} size="sm">
+				{DARV_STATE_LABELS[state]}
 			</Chip>
 		</div>
 	)

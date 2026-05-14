@@ -175,9 +175,19 @@ export const CameraMolecule = molecule(() => {
 		state.equipment.rotator = rotator
 	}
 
-	function start() {
+	async function start() {
+		if (state.capturing) return
+
 		state.capturing = true
-		return Api.Cameras.start(camera, state.request)
+
+		try {
+			const response = await Api.Cameras.start(camera, state.request)
+			if (!response.ok) state.capturing = false
+			return response
+		} catch (error) {
+			state.capturing = false
+			throw error
+		}
 	}
 
 	function stop() {

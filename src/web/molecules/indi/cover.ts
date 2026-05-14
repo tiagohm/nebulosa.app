@@ -66,9 +66,13 @@ export const CoverMolecule = molecule(() => {
 		return Api.Covers.unpark(cover)
 	}
 
+	function stop() {
+		return Api.Covers.stop(cover)
+	}
+
 	function hide() {
 		equipment.hide('COVER', cover)
 	}
 
-	return { state, scope, connect, park, unpark, hide } as const
+	return { state, scope, connect, park, unpark, stop, hide } as const
 })

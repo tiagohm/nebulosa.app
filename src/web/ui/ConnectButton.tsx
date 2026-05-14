@@ -2,7 +2,7 @@ import type { ButtonProps } from './components/Button'
 import { ToggleButton } from './components/ToggleButton'
 import { Icons } from './Icon'
 
-export interface ConnectButtonProps extends Omit<ButtonProps, 'color' | 'children'> {
+export interface ConnectButtonProps extends Omit<ButtonProps, 'children'> {
 	readonly connected: boolean
 }
 

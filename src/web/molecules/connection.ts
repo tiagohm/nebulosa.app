@@ -44,6 +44,12 @@ state.connections.sort(ConnectionComparator)
 
 const APP_RELOAD_CONNECTION_ID = 'app.reload.connection.id'
 
+const DEFAULT_CONNECTION_PORT = {
+	INDI: DEFAULT_CONNECTION.port,
+	ALPACA: 32323,
+	SIMULATOR: 0,
+} satisfies Record<Connection['type'], number>
+
 export const ConnectionMolecule = molecule(() => {
 	if (state.connections.length === 0) {
 		state.connections.push(structuredClone(DEFAULT_CONNECTION))
@@ -105,9 +111,19 @@ export const ConnectionMolecule = molecule(() => {
 		return Promise.all([a, b, c, d, e, f, g, h, i, j])
 	}
 
+	function createConnectionId() {
+		let id = Date.now().toFixed(0)
+
+		while (state.connections.some((connection) => connection.id === id)) {
+			id = (+id + 1).toFixed(0)
+		}
+
+		return id
+	}
+
 	function create() {
 		state.mode = 'NEW'
-		state.edited.id = DEFAULT_CONNECTION.id
+		Object.assign(state.edited, structuredClone(DEFAULT_CONNECTION))
 		state.show = true
 	}
 
@@ -123,14 +139,30 @@ export const ConnectionMolecule = molecule(() => {
 
 	function duplicate(connection: Connection) {
 		const duplicated = deepClone(connection)
-		if (duplicated.id === DEFAULT_CONNECTION.id) duplicated.id = Date.now().toFixed(0)
+		duplicated.id = createConnectionId()
 		add(duplicated)
 	}
 
 	function update<K extends keyof Connection>(name: K, value: Connection[K]) {
-		if (state.edited) {
-			state.edited[name] = value
+		if (name === 'type') {
+			const previousType = state.edited.type
+			const previousPort = state.edited.port
+			const nextType = value as Connection['type']
+
+			state.edited.type = nextType
+
+			if (previousPort === DEFAULT_CONNECTION_PORT[previousType]) {
+				state.edited.port = DEFAULT_CONNECTION_PORT[nextType]
+			}
+
+			if (nextType !== 'ALPACA') {
+				state.edited.secured = false
+			}
+
+			return
 		}
+
+		state.edited[name] = value
 	}
 
 	function select(connection: Connection | string) {
@@ -167,7 +199,7 @@ export const ConnectionMolecule = molecule(() => {
 			}
 
 			// Generate a new id for the edited connection
-			edited.id = Date.now().toFixed(0)
+			edited.id = createConnectionId()
 
 			// Add the edited connection to the list
 			add(edited)

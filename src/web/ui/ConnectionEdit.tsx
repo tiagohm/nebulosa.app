@@ -3,6 +3,7 @@ import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import { memo, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { ConnectionMolecule } from '@/molecules/connection'
+import type { Connection } from '@/shared/types'
 import { Button } from '@/ui/components/Button'
 import { ClientTypeSelect } from './ClientTypeSelect'
 import { Checkbox } from './components/Checkbox'
@@ -13,6 +14,22 @@ import { Popover, type PopoverMethods } from './components/Popover'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
+
+const CONNECTION_PORT_PLACEHOLDER = {
+	INDI: '7624',
+	ALPACA: '32323',
+	SIMULATOR: '0',
+} satisfies Record<Connection['type'], string>
+
+function isNetworkConnection(type: Connection['type']) {
+	return type !== 'SIMULATOR'
+}
+
+function canSaveConnection({ host, name, port, type }: Pick<Connection, 'host' | 'name' | 'port' | 'type'>) {
+	if (name.trim().length === 0) return false
+	if (!Number.isInteger(port) || port < 1 || port > 65535) return false
+	return !isNetworkConnection(type) || host.trim().length > 0
+}
 
 export const ConnectionEdit = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
@@ -28,12 +45,13 @@ export const ConnectionEdit = memo(() => {
 const Body = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
 	const { name, host, port, type, secured } = useSnapshot(connection.state.edited, { sync: true })
+	const networkConnection = isNetworkConnection(type)
 
 	return (
 		<div className="mt-0 grid grid-cols-12 items-center gap-2">
 			<TextInput className="col-span-full" label="Name" maxLength={64} onValueChange={(value) => connection.update('name', value)} placeholder="Local" value={name} />
-			<TextInput className="col-span-7" disabled={type === 'SIMULATOR'} label="Host" maxLength={128} onValueChange={(value) => connection.update('host', value)} placeholder="localhost" value={host} />
-			<NumberInput className="col-span-5" disabled={type === 'SIMULATOR'} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => connection.update('port', value)} placeholder={type === 'INDI' ? '7624' : '32323'} value={port} />
+			<TextInput className="col-span-7" disabled={!networkConnection} label="Host" maxLength={128} onValueChange={(value) => connection.update('host', value)} placeholder="localhost" value={host} />
+			<NumberInput className="col-span-5" disabled={!networkConnection} label="Port" maxValue={65535} minValue={1} onValueChange={(value) => connection.update('port', value)} placeholder={CONNECTION_PORT_PLACEHOLDER[type]} value={port} />
 			<ClientTypeSelect className="col-span-5" onValueChange={(value) => connection.update('type', value)} value={type} />
 			<Checkbox className="col-span-5" disabled={type !== 'ALPACA'} label="Secured" onValueChange={(value) => connection.update('secured', value)} value={secured} />
 			<div className="col-span-2">
@@ -45,13 +63,14 @@ const Body = memo(() => {
 
 const Footer = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
-	const { name, host, port } = useSnapshot(connection.state.edited, { sync: true })
+	const { name, host, port, type } = useSnapshot(connection.state.edited, { sync: true })
 
-	return <Button color="success" disabled={!name || !host || !port} label="Save" onPointerUp={connection.save} startContent={<Icons.Check />} />
+	return <Button color="success" disabled={!canSaveConnection({ host, name, port, type })} label="Save" onPointerUp={connection.save} startContent={<Icons.Check />} />
 })
 
-function AlpacaDeviceServerItem(item: AlpacaDeviceServer, index: number, onPointerUp: React.PointerEventHandler) {
-	return <ListItem description={`${item.address}:${item.port}`} label={item.devices.map((e) => e.DeviceName).join(' | ')} data-index={index} onPointerUp={onPointerUp} />
+function AlpacaDeviceServerItem(item: AlpacaDeviceServer) {
+	const devices = item.devices.map((e) => e.DeviceName).join(' | ')
+	return <ListItem className="cursor-pointer" description={`${item.address}:${item.port}`} label={devices || 'No devices'} />
 }
 
 const AlpacaDeviceServerDiscovery = memo(() => {
@@ -59,11 +78,13 @@ const AlpacaDeviceServerDiscovery = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
 	const { alpaca, edited } = useSnapshot(connection.state)
 
-	function handleOnPointer(event: React.PointerEvent) {
-		const index = +(event.target as HTMLElement).dataset.index!
+	function handleItemAction(index: number) {
 		const item = alpaca.servers[index]
-		connection.state.edited.host = item.address
-		connection.state.edited.port = item.port
+
+		if (!item) return
+
+		connection.update('host', item.address)
+		connection.update('port', item.port)
 		popoverRef.current?.hide()
 	}
 
@@ -71,8 +92,8 @@ const AlpacaDeviceServerDiscovery = memo(() => {
 		<Popover ref={popoverRef} trigger={<IconButton color="secondary" disabled={edited.type !== 'ALPACA'} icon={Icons.Radar} tooltipContent="Discovery" />}>
 			<div className="mt-0 grid max-w-100 grid-cols-12 items-center gap-2 p-4">
 				<p className="col-span-full text-center font-bold">ALPACA DEVICE SERVER DISCOVERY</p>
-				<List className="col-span-full min-w-90" itemCount={alpaca.servers.length} emptyContent="No servers">
-					{(i) => AlpacaDeviceServerItem(alpaca.servers[i], i, handleOnPointer)}
+				<List className="col-span-full min-w-90" itemCount={alpaca.servers.length} emptyContent="No servers" onAction={handleItemAction}>
+					{(i) => AlpacaDeviceServerItem(alpaca.servers[i])}
 				</List>
 				<div className="col-span-full flex flex-row items-center justify-end">
 					<Button color="primary" label="Discovery" loading={alpaca.discovering} onPointerUp={connection.discovery} startContent={<Icons.Reload />} />

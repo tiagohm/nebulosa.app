@@ -7,7 +7,7 @@ import { AutoSubFolderModeButton } from './AutoSubFolderButton'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
-import { IconButton } from './components/IconButton'
+import { IconButton, type IconButtonProps } from './components/IconButton'
 import { NumberInput } from './components/NumberInput'
 import { Switch } from './components/Switch'
 import { ConnectButton } from './ConnectButton'
@@ -61,14 +61,14 @@ const Header = memo(() => {
 	return (
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
-				<ConnectButton disabled={capturing} connected={connected} loading={connecting} onPointerUp={camera.connect} />
+				<ConnectButton disabled={capturing} connected={connected} loading={connecting} onClick={camera.connect} />
 				<IndiPanelControlButton device={camera.scope.camera.name} />
 			</div>
-			<div className="flex flex-1 flex-col items-center justify-center gap-0">
+			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Camera</span>
-				<span className="max-w-full text-xs font-normal text-gray-400">{camera.scope.camera.name}</span>
+				<span className="max-w-full truncate text-xs font-normal text-gray-400">{camera.scope.camera.name}</span>
 			</div>
-			<IconButton color="primary" icon={minimized ? Icons.ChevronDown : Icons.ChevronUp} onPointerUp={camera.minimize} variant="ghost" />
+			<IconButton color="primary" icon={minimized ? Icons.ChevronDown : Icons.ChevronUp} onClick={camera.minimize} variant="ghost" />
 		</div>
 	)
 })
@@ -78,8 +78,8 @@ const Progress = memo(() => {
 	const { progress } = useSnapshot(camera.state)
 
 	return (
-		<div className="col-span-full mb-2 flex flex-row items-center justify-between">
-			<ExposureTimeProgress progress={progress} />
+		<div className="col-span-full mb-2 flex flex-row items-center justify-between gap-2">
+			<ExposureTimeProgress className="min-w-0 flex-1 overflow-x-auto" progress={progress} />
 			<OptionsButton />
 		</div>
 	)
@@ -107,7 +107,7 @@ const OptionsButton = memo(() => {
 
 	return (
 		<>
-			<IconButton disabled={!connected || capturing} icon={Icons.Cog} onPointerUp={() => (camera.state.request.show = true)} />
+			<IconButton disabled={!connected || capturing} icon={Icons.Cog} onClick={() => (camera.state.request.show = true)} />
 			<Activity mode={show && connected && !capturing ? 'visible' : 'hidden'}>
 				<OptionsModal />
 			</Activity>
@@ -147,13 +147,14 @@ const Cooler = memo(() => {
 	const camera = useMolecule(CameraMolecule)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, hasCooler, cooler, coolerPower } = useSnapshot(camera.state.camera)
+	const isDisabled = !connected || capturing
 
 	if (!hasCooler) return null
 
 	return (
-		<>
-			<Switch className="col-span-6" disabled={!connected || capturing || !hasCooler} onValueChange={camera.cooler} label={`${(coolerPower * 100).toFixed(1)}%`} thumbContent={<Icons.SnowFlake />} value={cooler} />
-		</>
+		<div className="col-span-6 flex flex-row items-center">
+			<Switch className="w-1/2" disabled={isDisabled} onValueChange={camera.cooler} label={`${(coolerPower * 100).toFixed(1)}%`} thumbContent={<Icons.SnowFlake />} value={cooler} />
+		</div>
 	)
 })
 
@@ -162,14 +163,15 @@ const Temperature = memo(() => {
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, temperature, canSetTemperature } = useSnapshot(camera.state.camera)
 	const { targetTemperature } = useSnapshot(camera.state)
+	const isDisabled = !connected || !canSetTemperature || capturing
 
 	if (!canSetTemperature) return null
 
 	return (
 		<NumberInput
 			className="col-span-6"
-			disabled={!connected || !canSetTemperature || capturing}
-			endContent={<TemperatureNumberInputEndContent />}
+			disabled={isDisabled}
+			endContent={<TemperatureNumberInputEndContent disabled={isDisabled} onClick={camera.temperature} />}
 			fractionDigits={1}
 			fullWidth
 			label={`Temperature (${temperature.toFixed(1)}°C)`}
@@ -182,11 +184,11 @@ const Temperature = memo(() => {
 	)
 })
 
-const TemperatureNumberInputEndContent = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+interface TemperatureNumberInputEndContentProps extends Omit<IconButtonProps, 'icon' | 'children'> {}
 
-	return <IconButton color="success" icon={Icons.Check} onPointerUp={camera.temperature} size="sm" tooltipContent="Apply" />
-})
+function TemperatureNumberInputEndContent(props: TemperatureNumberInputEndContentProps) {
+	return <IconButton color="success" icon={Icons.Check} size="sm" tooltipContent="Apply" {...props} />
+}
 
 const Exposure = memo(() => {
 	const camera = useMolecule(CameraMolecule)
@@ -236,8 +238,8 @@ const Bin = memo(() => {
 
 	return (
 		<>
-			<NumberInput className="col-span-3" disabled={!connected || !canBin || capturing} label="Bin X" maxValue={bin.x.max} minValue={1} onValueChange={(value) => camera.update('binX', value)} value={binX} />
-			<NumberInput className="col-span-3" disabled={!connected || !canBin || capturing} label="Bin Y" maxValue={bin.y.max} minValue={1} onValueChange={(value) => camera.update('binY', value)} value={binY} />
+			<NumberInput className="col-span-3" disabled={!connected || !canBin || capturing} label="Bin X" maxValue={bin.x.max} minValue={bin.x.min} onValueChange={(value) => camera.update('binX', value)} value={binX} />
+			<NumberInput className="col-span-3" disabled={!connected || !canBin || capturing} label="Bin Y" maxValue={bin.y.max} minValue={bin.y.min} onValueChange={(value) => camera.update('binY', value)} value={binY} />
 		</>
 	)
 })
@@ -252,7 +254,7 @@ const Frame = memo(() => {
 		<>
 			<div className="col-span-6 flex flex-row items-center justify-center gap-2">
 				<Checkbox className="max-w-none flex-col-reverse justify-center gap-0.5 text-xs" disabled={!connected || !canSubFrame || capturing} label="Subframe" onValueChange={(value) => camera.update('subframe', value)} value={subframe} />
-				<IconButton color="secondary" disabled={!connected || !subframe || capturing} icon={Icons.Fullscreen} onPointerUp={camera.fullscreen} tooltipContent="Fullscreen" variant="flat" />
+				<IconButton color="secondary" disabled={!connected || !canSubFrame || !subframe || capturing} icon={Icons.Fullscreen} onClick={camera.fullscreen} tooltipContent="Fullscreen" variant="flat" />
 			</div>
 			<FrameDimensions />
 		</>
@@ -262,17 +264,18 @@ const Frame = memo(() => {
 const FrameDimensions = memo(() => {
 	const camera = useMolecule(CameraMolecule)
 	const { capturing } = useSnapshot(camera.state)
-	const { connected, frame } = useSnapshot(camera.state.camera)
+	const { connected, canSubFrame, frame } = useSnapshot(camera.state.camera)
 	const { subframe, x, y, width, height } = useSnapshot(camera.state.request)
+	const isDisabled = !connected || !canSubFrame || capturing
 
-	if (!subframe) return null
+	if (!subframe || !canSubFrame) return null
 
 	return (
 		<>
-			<NumberInput className="col-span-3" disabled={!connected || !subframe || capturing} label="X" maxValue={frame.x.max} minValue={frame.x.min} onValueChange={(value) => camera.update('x', value)} value={x} />
-			<NumberInput className="col-span-3" disabled={!connected || !subframe || capturing} label="Y" maxValue={frame.y.max} minValue={frame.y.min} onValueChange={(value) => camera.update('y', value)} value={y} />
-			<NumberInput className="col-span-3" disabled={!connected || !subframe || capturing} label="Width" maxValue={frame.width.max} minValue={frame.width.min} onValueChange={(value) => camera.update('width', value)} value={width} />
-			<NumberInput className="col-span-3" disabled={!connected || !subframe || capturing} label="Height" maxValue={frame.height.max} minValue={frame.height.min} onValueChange={(value) => camera.update('height', value)} value={height} />
+			<NumberInput className="col-span-3" disabled={isDisabled} label="X" maxValue={frame.x.max} minValue={frame.x.min} onValueChange={(value) => camera.update('x', value)} value={x} />
+			<NumberInput className="col-span-3" disabled={isDisabled} label="Y" maxValue={frame.y.max} minValue={frame.y.min} onValueChange={(value) => camera.update('y', value)} value={y} />
+			<NumberInput className="col-span-3" disabled={isDisabled} label="Width" maxValue={frame.width.max} minValue={frame.width.min} onValueChange={(value) => camera.update('width', value)} value={width} />
+			<NumberInput className="col-span-3" disabled={isDisabled} label="Height" maxValue={frame.height.max} minValue={frame.height.min} onValueChange={(value) => camera.update('height', value)} value={height} />
 		</>
 	)
 })
@@ -316,11 +319,11 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<div className="flex flex-1 flex-row items-center gap-1">
+			<div className="flex min-w-0 flex-1 flex-row items-center gap-1 overflow-x-auto">
 				<CameraEquipment />
 			</div>
-			<Button color="danger" disabled={!connected || !canAbort || !capturing} label="Stop" onPointerUp={camera.stop} startContent={<Icons.Stop />} />
-			<Button color="success" disabled={!connected} label="Start" loading={capturing} onPointerUp={camera.start} startContent={<Icons.Play />} />
+			<Button color="danger" disabled={!connected || !canAbort || !capturing} label="Stop" onClick={camera.stop} startContent={<Icons.Stop />} />
+			<Button color="success" disabled={!connected} label="Start" loading={capturing} onClick={camera.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

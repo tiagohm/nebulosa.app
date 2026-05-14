@@ -21,17 +21,17 @@ export const Cover = memo(() => {
 
 const Header = memo(() => {
 	const cover = useMolecule(CoverMolecule)
-	const { connecting, connected } = useSnapshot(cover.state.cover)
+	const { connecting, connected, name } = useSnapshot(cover.state.cover)
 
 	return (
-		<div className="flex w-full flex-row items-center justify-between">
-			<div className="flex flex-row items-center gap-1">
+		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
+			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onPointerUp={cover.connect} />
-				<IndiPanelControlButton device={cover.scope.cover.name} />
+				<IndiPanelControlButton device={name} />
 			</div>
-			<div className="flex flex-1 flex-col items-center justify-center gap-0">
+			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Cover</span>
-				<span className="max-w-full text-xs font-normal text-gray-400">{cover.scope.cover.name}</span>
+				<span className="max-w-full truncate text-xs font-normal text-neutral-400">{name}</span>
 			</div>
 		</div>
 	)
@@ -44,26 +44,35 @@ const Body = memo(() => (
 	</div>
 ))
 
+function coverStatus(connected: boolean, canPark: boolean, parking: boolean, parked: boolean) {
+	if (!connected) return { color: 'default', label: 'disconnected' } as const
+	if (!canPark) return { color: 'warning', label: 'unsupported' } as const
+	if (parking) return { color: 'warning', label: 'moving' } as const
+	if (parked) return { color: 'success', label: 'closed' } as const
+	return { color: 'primary', label: 'open' } as const
+}
+
 const Status = memo(() => {
 	const cover = useMolecule(CoverMolecule)
-	const { connected, parking, parked } = useSnapshot(cover.state.cover)
+	const { connected, canPark, parking, parked } = useSnapshot(cover.state.cover)
+	const { color, label } = coverStatus(connected, canPark, parking, parked)
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-between">
-			<Chip color="primary" size="sm">
-				{!connected ? 'idle' : parking ? 'moving' : parked ? 'closed' : 'open'}
-			</Chip>
+			<Chip color={color} label={label} size="sm" />
 		</div>
 	)
 })
 
 const OpenAndClose = memo(() => {
 	const cover = useMolecule(CoverMolecule)
-	const { connected, parking, parked, canPark } = useSnapshot(cover.state.cover)
+	const { connected, parking, parked, canPark, canAbort } = useSnapshot(cover.state.cover)
+	const canMove = connected && canPark && !parking
 
 	return (
-		<div className="col-span-full flex flex-row items-center justify-center">
-			<IconButton color={parked ? 'success' : 'danger'} disabled={!connected || !canPark || parking} icon={parked ? Icons.Lock : Icons.LockOpen} onPointerUp={parked ? cover.unpark : cover.park} size="lg" tooltipContent={parked ? 'Open' : 'Close'} />
+		<div className="col-span-full flex flex-row items-center justify-center gap-2">
+			<IconButton color={parked ? 'primary' : 'success'} disabled={!canMove} icon={parked ? Icons.LockOpen : Icons.Lock} onPointerUp={parked ? cover.unpark : cover.park} size="lg" tooltipContent={parked ? 'Open' : 'Close'} />
+			{canAbort && <IconButton color="danger" disabled={!connected || !parking} icon={Icons.Stop} onPointerUp={cover.stop} size="lg" tooltipContent="Stop" />}
 		</div>
 	)
 })

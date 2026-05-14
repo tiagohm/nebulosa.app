@@ -9,13 +9,24 @@ export const Fov = memo(() => {
 
 	return (
 		<svg className="fov pointer-events-none absolute top-0 left-0 h-full w-full" overflow="visible">
-			{computed.map(({ focalRatio, svg: { width, height } }, index) => {
-				const { id, visible, color, rotation } = items[index]
-				const x = 50 - width / 2
-				const y = 50 - height / 2
+			{items.map(({ id, visible, color, rotation }, index) => {
+				const item = computed[index]
+				const { width, height } = item.svg
 
-				return <rect fill="none" height={`${height}%`} key={id} stroke={color} strokeWidth="1" style={{ transformOrigin: '50% 50%', transform: `rotate(${rotation}deg)`, display: focalRatio && visible ? 'inline' : 'none' }} width={`${width}%`} x={`${x}%`} y={`${y}%`} />
+				if (!visible || !item || !isDrawableFov(item.focalRatio, width, height)) return null
+
+				const x = FOV_CENTER - width / 2
+				const y = FOV_CENTER - height / 2
+				const safeRotation = Number.isFinite(rotation) ? rotation : 0
+
+				return <rect fill="none" height={`${height}%`} key={id} stroke={color} strokeWidth="1" style={{ transformOrigin: '50% 50%', transform: `rotate(${safeRotation}deg)` }} width={`${width}%`} x={`${x}%`} y={`${y}%`} />
 			})}
 		</svg>
 	)
 })
+
+const FOV_CENTER = 50
+
+function isDrawableFov(focalRatio: number, width: number, height: number) {
+	return focalRatio > 0 && Number.isFinite(focalRatio) && width > 0 && Number.isFinite(width) && height > 0 && Number.isFinite(height)
+}

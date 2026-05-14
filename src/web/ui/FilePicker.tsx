@@ -27,11 +27,15 @@ export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => (
 	</Modal>
 ))
 
+function filePickerTitle(mode: 'directory' | 'file' | 'save') {
+	return mode === 'save' ? 'Save' : mode === 'directory' ? 'Open Directory' : 'Open File'
+}
+
 const Header = memo(({ header }: Pick<FilePickerProps, 'header'>) => {
 	const picker = useMolecule(FilePickerMolecule)
 	const { mode } = useSnapshot(picker.state)
 
-	return header ?? (mode === 'save' ? 'Save' : mode === 'directory' ? 'Open Directory' : 'Open File')
+	return header ?? filePickerTitle(mode)
 })
 
 const Body = memo(() => (
@@ -67,7 +71,7 @@ const Toolbar = memo(() => {
 			<IconButton color="secondary" disabled={history.length === 0} icon={Icons.ArrowLeft} onClick={picker.navigateBack} tooltipContent="Go Back" />
 			<Breadcrumbs className="flex-1" maxItems={3}>
 				{directoryTree.map((item) => (
-					<Button key={item.name} label={item.name} onClick={() => picker.navigateTo(item)} startContent={item.name ? undefined : <Icons.FolderRoot />} size="sm" variant="ghost" />
+					<Button key={item.path} label={item.name} onClick={() => picker.navigateTo(item)} startContent={item.name ? undefined : <Icons.FolderRoot />} size="sm" variant="ghost" />
 				))}
 			</Breadcrumbs>
 			<IconButton color="secondary" disabled={directoryTree.length <= 1} icon={Icons.ArrowUp} onClick={picker.navigateToParent} tooltipContent="Go To Parent" />
@@ -83,7 +87,7 @@ const Filter = memo(() => {
 
 	return (
 		<Activity mode={directory.create ? 'hidden' : 'visible'}>
-			<TextInput label="Filter" onValueChange={picker.filter} value={filter} />
+			<TextInput fullWidth label="Filter" onValueChange={picker.filter} value={filter} />
 		</Activity>
 	)
 })
@@ -91,12 +95,13 @@ const Filter = memo(() => {
 const CreateDirectory = memo(() => {
 	const picker = useMolecule(FilePickerMolecule)
 	const { create, name } = useSnapshot(picker.state.directory, { sync: true })
+	const canCreate = name.trim().length > 0
 
 	return (
 		<Activity mode={create ? 'visible' : 'hidden'}>
 			<div className="flex flex-row items-center gap-2">
-				<TextInput label="Name" onValueChange={(value) => (picker.state.directory.name = value)} value={name} />
-				<IconButton color="success" disabled={name.length === 0} icon={Icons.Check} onClick={picker.createDirectory} tooltipContent="Create" variant="ghost" />
+				<TextInput fullWidth label="Name" onValueChange={(value) => (picker.state.directory.name = value)} value={name} />
+				<IconButton color="success" disabled={!canCreate} icon={Icons.Check} onClick={picker.createDirectory} tooltipContent="Create" variant="ghost" />
 			</div>
 		</Activity>
 	)
@@ -109,6 +114,8 @@ const Files = memo(() => {
 	const emptyContent = filter.trim().length > 0 ? 'No matching entries' : 'No entries'
 
 	function handleAction(index: number) {
+		if (!Number.isInteger(index) || index < 0 || index >= filtered.length) return
+
 		const item = filtered[index]
 		if (item !== undefined) void picker.select(item)
 	}
@@ -120,13 +127,13 @@ const Files = memo(() => {
 
 				if (item === undefined) return null
 
-				const selected = selectedPaths.has(item.path)
+				const isSelected = selectedPaths.has(item.path)
 				const Icon = item.directory ? Icons.Folder : Icons.File
 				const updatedAt = formatTemporal(item.updatedAt, 'YYYY-MM-DD HH:mm:ss')
 				const metadata = item.directory ? updatedAt : `${updatedAt} | ${formatFileSize(item.size)}`
 
 				return (
-					<div className={tw('flex h-full min-w-0 cursor-pointer flex-row items-center gap-2 border-e-2 px-2 py-1 text-sm transition hover:bg-neutral-800/80', selected ? '[--color-variant:var(--success)] border-(--color-variant) bg-(--color-variant)/10' : 'border-transparent')}>
+					<div className={tw('flex h-full min-w-0 cursor-pointer flex-row items-center gap-2 border-e-2 px-2 py-1 text-sm transition hover:bg-neutral-800/80', isSelected ? '[--color-variant:var(--success)] border-(--color-variant) bg-(--color-variant)/10' : 'border-transparent')}>
 						<Icon className={tw('shrink-0', item.directory ? 'text-(--warning)' : 'text-neutral-500')} />
 						<div className="flex min-w-0 flex-1 flex-col justify-center gap-0">
 							<span className="min-w-0 truncate text-neutral-100">{item.name}</span>
@@ -144,6 +151,7 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 	const picker = useMolecule(FilePickerMolecule)
 	const { mode, selected } = useSnapshot(picker.state)
 	const { save } = useSnapshot(picker.state, { sync: true })
+	const canChooseSave = save.name.trim().length > 0
 
 	function handleOnChoose() {
 		if (mode === 'save') {
@@ -157,7 +165,7 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 		<>
 			<Activity mode={mode === 'save' ? 'visible' : 'hidden'}>
 				<TextInput className="flex-1" color={save.alreadyExists ? 'warning' : 'default'} label="Name" onValueChange={picker.updateSaveName} value={save.name} />
-				<Button color="success" disabled={save.name.length === 0} label="Choose" onClick={handleOnChoose} startContent={<Icons.Check />} />
+				<Button color="success" disabled={!canChooseSave} label="Choose" onClick={handleOnChoose} startContent={<Icons.Check />} />
 			</Activity>
 			<Activity mode={mode !== 'save' ? 'visible' : 'hidden'}>
 				<Button color="danger" disabled={selected.length === 0} label="Clear" onClick={picker.unselectAll} startContent={<Icons.Broom />} />

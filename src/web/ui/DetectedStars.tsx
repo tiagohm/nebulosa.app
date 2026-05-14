@@ -1,33 +1,53 @@
 import { useMolecule } from 'bunshi/react'
+import type { DetectedStar } from 'nebulosa/src/star.detector'
 import { type CSSProperties, memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 
-const TEXT_STYLE: CSSProperties = { textAnchor: 'middle', alignmentBaseline: 'text-before-edge', transform: 'rotate(0deg)' }
+const STAR_RADIUS = 4
+const SELECTED_STAR_RADIUS = 6
+const STAR_STROKE = 'var(--warning)'
+const SELECTED_STAR_STROKE = 'var(--success)'
+const STAR_LABEL_FILL = 'var(--secondary)'
+const TEXT_STYLE = { textAnchor: 'middle', alignmentBaseline: 'text-before-edge', transform: 'rotate(0deg)' } satisfies CSSProperties
+
+function starKey(star: DetectedStar) {
+	return `${star.x}:${star.y}:${star.hfd}`
+}
+
+function isSameStar(a: DetectedStar | undefined, b: DetectedStar) {
+	return a !== undefined && a.x === b.x && a.y === b.y && a.hfd === b.hfd
+}
 
 export const DetectedStars = memo(() => {
 	const starDetection = useMolecule(StarDetectionMolecule)
-	const { stars } = useSnapshot(starDetection.state)
+	const { selected, stars } = useSnapshot(starDetection.state)
 
 	if (stars.length === 0) return null
 
-	function handleOnPointerUp(event: React.PointerEvent) {
-		const target = (event.target as HTMLElement).closest('g')!
-		const index = target.dataset.index
-		if (index === null || index === undefined || index === '') return
-		starDetection.select(stars[+index])
+	function handleOnClick(event: React.UIEvent<SVGGElement>) {
+		const index = Number(event.currentTarget.dataset.index)
+		const star = Number.isInteger(index) ? stars[index] : undefined
+
+		if (star) {
+			starDetection.select(star)
+		}
 	}
 
 	return (
-		<svg className="detected-stars pointer-events-none absolute top-0 left-0 h-full w-full select-none">
-			{stars.map((s, i) => (
-				<g className="pointer-events-auto cursor-pointer" data-index={i} key={`${s.x}-${s.y}`} onPointerUp={handleOnPointerUp}>
-					<circle cx={s.x} cy={s.y} fill="none" r={4} stroke="#FDD835" strokeWidth={1}></circle>
-					<text className="text-xs font-bold" fill="#00897B" style={TEXT_STYLE} x={s.x} y={s.y + 0.5}>
-						{s.hfd.toFixed(1)}
-					</text>
-				</g>
-			))}
+		<svg className="detected-stars pointer-events-none absolute top-0 left-0 h-full w-full select-none" fill="none">
+			{stars.map((star, index) => {
+				const isSelected = isSameStar(selected, star)
+
+				return (
+					<g className="pointer-events-auto cursor-pointer" data-index={index} key={starKey(star)} onClick={handleOnClick}>
+						<circle cx={star.x} cy={star.y} r={isSelected ? SELECTED_STAR_RADIUS : STAR_RADIUS} stroke={isSelected ? SELECTED_STAR_STROKE : STAR_STROKE} strokeWidth={isSelected ? 2 : 1} />
+						<text className="text-xs font-bold" fill={STAR_LABEL_FILL} style={TEXT_STYLE} x={star.x} y={star.y + (isSelected ? 4 : 1)}>
+							{star.hfd.toFixed(1)}
+						</text>
+					</g>
+				)
+			})}
 		</svg>
 	)
 })

@@ -4,13 +4,12 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { type EquipmentDevice, EquipmentMolecule } from '@/molecules/indi/equipment'
 import type { DeviceTypeMap } from '@/shared/types'
-import { stopPropagation } from '@/shared/util'
 import { Dropdown, DropdownItem, type DropdownProps } from './components/Dropdown'
 import { IconButton } from './components/IconButton'
 import { ConnectButton } from './ConnectButton'
 import { Icons, type Icon } from './Icon'
 
-export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends DropdownProps {
+export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends Omit<DropdownProps, 'children' | 'onAction'> {
 	readonly type: T
 	readonly value?: DeviceTypeMap[T]
 	readonly onValueChange?: (value?: DeviceTypeMap[T]) => void
@@ -20,9 +19,14 @@ export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends Drop
 	readonly icon?: Icon
 }
 
-function DeviceItem(item: Device | undefined, onClick: React.MouseEventHandler) {
-	const key = item?.id ?? 'none'
-	return <DropdownItem key={key} data-id={key} onClick={onClick} label={item?.name || 'None'} startContent={<DeviceDropdownStartContent isConnected={item?.connected} />} endContent={<DeviceDropdownEndContent device={item} />} />
+function deviceStatusColor(isConnected: boolean | undefined) {
+	return isConnected === undefined ? 'var(--secondary)' : isConnected ? 'var(--success)' : 'var(--danger)'
+}
+
+function DeviceItem(device: EquipmentDevice<Device> | undefined) {
+	const key = device?.id ?? 'none'
+
+	return <DropdownItem key={key} label={device?.name ?? 'None'} startContent={<DeviceDropdownStartContent isConnected={device?.connected} />} endContent={device && <DeviceDropdownEndContent device={device} />} />
 }
 
 export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, disabled, disallowNoneSelection = false, label, showLabel = false, showLabelOnEmpty = showLabel, color, startContent, icon: Icon, ...props }: DeviceDropdownProps<T>) {
@@ -30,24 +34,33 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 	const state = equipment.state[type]
 	const devices = useSnapshot(state)
 
-	function handleAction(event: React.MouseEvent<HTMLElement>) {
-		const id = event.currentTarget.dataset.id
-		onValueChange?.(id === 'none' ? undefined : (state.find((e) => e.id === id) as never))
+	const items = new Array<EquipmentDevice<Device> | undefined>(devices.length + (disallowNoneSelection ? 0 : 1))
+
+	if (!disallowNoneSelection) items[0] = undefined
+	for (let i = disallowNoneSelection ? 0 : 1, p = 0; p < devices.length; i++, p++) items[i] = devices[p] as EquipmentDevice<Device>
+
+	function handleAction(index: number) {
+		if (index < 0 || index >= items.length) return
+
+		const device = items[index]
+
+		if (device === undefined) {
+			onValueChange?.(undefined)
+		} else {
+			const currentDevice = state.find((e) => e.id === device.id)
+			if (currentDevice) onValueChange?.(currentDevice as never)
+		}
 	}
-
-	const items = new Array<React.ReactNode>(devices.length + (disallowNoneSelection ? 0 : 1))
-
-	if (!disallowNoneSelection) items[0] = DeviceItem(undefined, handleAction)
-	for (let i = disallowNoneSelection ? 0 : 1, p = 0; p < devices.length; i++, p++) items[i] = DeviceItem(devices[p], handleAction)
 
 	return (
 		<Dropdown
-			label={showLabel ? (value?.name ?? (showLabelOnEmpty ? label || 'None' : undefined)) : undefined}
+			label={showLabel ? (value?.name ?? (showLabelOnEmpty ? (label ?? 'None') : undefined)) : undefined}
 			color={color ?? (value === undefined ? 'secondary' : value.connected ? 'success' : 'danger')}
 			disabled={disabled || items.length === 0}
+			onAction={handleAction}
 			startContent={startContent ?? (Icon ? <Icon /> : undefined)}
 			{...props}>
-			{items}
+			{items.map(DeviceItem)}
 		</Dropdown>
 	)
 }
@@ -64,29 +77,19 @@ export const RotatorDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'RO
 
 export const GuideOutputDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'GUIDE_OUTPUT'>>, 'type'>) => <DeviceDropdown icon={Icons.Pulse} tooltipContent="Guide Output" type="GUIDE_OUTPUT" {...props} />)
 
-const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected: boolean | undefined }) => <Icons.Circle color={isConnected === undefined ? '#9353D3' : isConnected ? '#17C964' : '#F31260'} />)
+const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected: boolean | undefined }) => <Icons.Circle color={deviceStatusColor(isConnected)} />)
 
 interface DeviceDropdownEndContentProps {
-	readonly device?: EquipmentDevice<Device>
+	readonly device: EquipmentDevice<Device>
 }
 
 const DeviceDropdownEndContent = memo(({ device }: DeviceDropdownEndContentProps) => {
 	const equipment = useMolecule(EquipmentMolecule)
 
-	function handleConnectPointerUp(event: React.PointerEvent) {
-		stopPropagation(event)
-		void equipment.connect(device!)
-	}
-
-	function handleShowPointerUp(event: React.PointerEvent) {
-		stopPropagation(event)
-		equipment.show(device!)
-	}
-
 	return (
 		<div className="flex flex-row items-center gap-2">
-			{device && <IconButton color="secondary" icon={Icons.OpenInNew} tooltipContent="Open" onPointerUp={handleShowPointerUp} size="sm" />}
-			{device && <ConnectButton connected={device.connected} loading={device?.connecting} onPointerUp={handleConnectPointerUp} size="sm" />}
+			<IconButton color="secondary" icon={Icons.OpenInNew} tooltipContent="Open" onClick={() => equipment.show(device)} size="sm" />
+			<ConnectButton connected={device.connected} loading={device.connecting} onClick={() => equipment.connect(device)} size="sm" />
 		</div>
 	)
 })

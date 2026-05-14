@@ -1,5 +1,5 @@
 import { useMolecule } from 'bunshi/react'
-import type { FitsHeaderValue } from 'nebulosa/src/fits'
+import type { FitsHeaderCard, FitsHeaderValue } from 'nebulosa/src/fits'
 import { memo, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageHeaderMolecule } from '@/molecules/image/header'
@@ -16,19 +16,30 @@ export const FITSHeader = memo(() => {
 	)
 })
 
-function FITSHeaderItem([key, value]: [string, FitsHeaderValue]) {
-	return <ListItem label={value === true ? 'T' : value === false ? 'F' : value} description={key} />
+function formatFITSHeaderValue(value: FitsHeaderValue) {
+	if (value === true) return 'T'
+	if (value === false) return 'F'
+	if (value === undefined) return '-'
+	return String(value)
+}
+
+function FITSHeaderItem(entry: FitsHeaderCard | undefined) {
+	if (entry === undefined) return null
+
+	const [key, value] = entry
+	return <ListItem label={formatFITSHeaderValue(value)} description={key} />
 }
 
 const Body = memo(() => {
 	const header = useMolecule(ImageHeaderMolecule)
 	const { info } = useSnapshot(header.viewer.state)
+	const headers = info?.headers
 
-	const entries = useMemo(() => Object.entries(info?.headers ?? {}), [info])
+	const entries = useMemo(() => Object.entries(headers ?? {}) as FitsHeaderCard[], [headers])
 
 	return (
 		<div className="mt-0 px-1 py-2">
-			<List itemHeight={48} itemCount={entries.length}>
+			<List emptyContent="No headers" fullWidth itemHeight={38} itemCount={entries.length}>
 				{(i) => FITSHeaderItem(entries[i])}
 			</List>
 		</div>

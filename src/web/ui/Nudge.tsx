@@ -64,9 +64,7 @@ export function Nudge({ onNudge, onCancel, disabled, isNudgeDisabled, isUpLeftDi
 
 	useEffect(() => {
 		if (disabled || activeDirectionDisabled) stopActiveNudge()
-	}, [disabled, activeDirectionDisabled, stopActiveNudge])
-
-	useEffect(() => () => stopActiveNudge(false), [stopActiveNudge])
+	}, [disabled, activeDirectionDisabled])
 
 	function handleNudgePointer(nextDirection: NudgeDirection, down: boolean) {
 		if (down) {

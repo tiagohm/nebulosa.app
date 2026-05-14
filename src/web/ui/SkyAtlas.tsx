@@ -165,7 +165,7 @@ const HeaderFilterPopover = memo(() => {
 
 const PlanetFilter = memo(() => {
 	const planet = useMolecule(PlanetMolecule)
-	const { name, type } = useSnapshot(planet.state.search, { sync: true })
+	const { name, type } = useSnapshot(planet.state.search)
 
 	return (
 		<div className="grid w-full grid-cols-12 items-center gap-2 p-2">
@@ -178,7 +178,7 @@ const PlanetFilter = memo(() => {
 const GalaxyFilter = memo(() => {
 	const dso = useMolecule(GalaxyMolecule)
 	const { nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, radius } = useSnapshot(dso.state.request)
-	const { name, rightAscension, declination } = useSnapshot(dso.state.request, { sync: true })
+	const { name, rightAscension, declination } = useSnapshot(dso.state.request)
 	const { loading } = useSnapshot(dso.state)
 
 	return (
@@ -202,7 +202,7 @@ const GalaxyFilter = memo(() => {
 const SatelliteFilter = memo(() => {
 	const satellite = useMolecule(SatelliteMolecule)
 	const { groups, category } = useSnapshot(satellite.state.request)
-	const { text } = useSnapshot(satellite.state.request, { sync: true })
+	const { text } = useSnapshot(satellite.state.request)
 	const { loading } = useSnapshot(satellite.state)
 
 	return (
@@ -503,7 +503,7 @@ function AsteroidSearchParameterItem(parameter: MinorPlanetParameter) {
 const AsteroidSearchTab = memo(() => {
 	const asteroid = useMolecule(AsteroidMolecule)
 	const { loading, selected, list } = useSnapshot(asteroid.state)
-	const { text } = useSnapshot(asteroid.state.search, { sync: true })
+	const { text } = useSnapshot(asteroid.state.search)
 
 	function handlePointer(event: React.PointerEvent<HTMLElement>) {
 		const pdes = event.currentTarget.dataset.pdes!

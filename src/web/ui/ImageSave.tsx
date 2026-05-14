@@ -22,7 +22,7 @@ export const ImageSave = memo(() => {
 const Body = memo(() => {
 	const save = useMolecule(ImageSaveMolecule)
 	const { format, transformed } = useSnapshot(save.state)
-	const { path } = useSnapshot(save.state, { sync: true })
+	const { path } = useSnapshot(save.state)
 
 	return (
 		<div className="mt-0 grid grid-cols-12 gap-2">

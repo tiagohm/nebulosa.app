@@ -34,7 +34,7 @@ const Body = memo(() => (
 const Inputs = memo(() => {
 	const solver = useMolecule(ImageSolverMolecule)
 	const { blind, type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request)
-	const { rightAscension, declination } = useSnapshot(solver.state.request, { sync: true })
+	const { rightAscension, declination } = useSnapshot(solver.state.request)
 
 	return (
 		<>

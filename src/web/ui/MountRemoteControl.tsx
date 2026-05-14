@@ -23,7 +23,7 @@ const Body = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	const { protocol, port } = useSnapshot(mount.state.remoteControl.request)
 	const status = useSnapshot(mount.state.remoteControl).status[protocol]
-	const { host } = useSnapshot(mount.state.remoteControl.request, { sync: true })
+	const { host } = useSnapshot(mount.state.remoteControl.request)
 
 	return (
 		<div className="mt-0 grid grid-cols-12 gap-2">
@@ -38,7 +38,7 @@ const Footer = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	const { protocol } = useSnapshot(mount.state.remoteControl.request)
 	const status = useSnapshot(mount.state.remoteControl).status[protocol]
-	const { host } = useSnapshot(mount.state.remoteControl.request, { sync: true })
+	const { host } = useSnapshot(mount.state.remoteControl.request)
 
 	return (
 		<>

@@ -35,7 +35,7 @@ const dropdownStyles = tv({
 
 const dropdownItemStyles = tv({
 	slots: {
-		base: 'flex h-full w-full min-w-max items-center justify-center gap-2 transition py-2 ps-1 pe-4',
+		base: 'flex h-full w-full min-w-max items-center justify-center gap-2 transition py-2 ps-2 pe-4',
 		startContent: 'flex shrink-0 items-center justify-center px-2',
 		label: 'min-w-max flex-1 overflow-visible whitespace-nowrap',
 		endContent: 'flex shrink-0 items-center justify-center px-2',

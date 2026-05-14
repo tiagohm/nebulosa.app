@@ -93,7 +93,7 @@ const SlotPopover = memo(() => (
 const SlotPopoverContent = memo(() => {
 	const wheel = useMolecule(WheelMolecule)
 	const { canSetNames } = useSnapshot(wheel.state.wheel)
-	const { name } = useSnapshot(wheel.state.selected, { sync: true })
+	const { name } = useSnapshot(wheel.state.selected)
 
 	return (
 		<div className="grid grid-cols-12 gap-2 p-4">

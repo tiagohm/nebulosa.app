@@ -27,8 +27,9 @@ function isNetworkConnection(type: Connection['type']) {
 
 function canSaveConnection({ host, name, port, type }: Pick<Connection, 'host' | 'name' | 'port' | 'type'>) {
 	if (name.trim().length === 0) return false
+	if (!isNetworkConnection(type)) return true
 	if (!Number.isInteger(port) || port < 1 || port > 65535) return false
-	return !isNetworkConnection(type) || host.trim().length > 0
+	return host.trim().length > 0
 }
 
 export const ConnectionEdit = memo(() => {
@@ -36,7 +37,7 @@ export const ConnectionEdit = memo(() => {
 	const { mode } = useSnapshot(connection.state)
 
 	return (
-		<Modal footer={<Footer />} header="Connection" id="connection" maxWidth="256px" onHide={connection.hide} subHeader={mode}>
+		<Modal footer={<Footer />} header="Connection" id="connection" maxWidth="264px" onHide={connection.hide} subHeader={mode}>
 			<Body />
 		</Modal>
 	)
@@ -44,7 +45,7 @@ export const ConnectionEdit = memo(() => {
 
 const Body = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
-	const { name, host, port, type, secured } = useSnapshot(connection.state.edited, { sync: true })
+	const { name, host, port, type, secured } = useSnapshot(connection.state.edited)
 	const networkConnection = isNetworkConnection(type)
 
 	return (
@@ -63,9 +64,9 @@ const Body = memo(() => {
 
 const Footer = memo(() => {
 	const connection = useMolecule(ConnectionMolecule)
-	const { name, host, port, type } = useSnapshot(connection.state.edited, { sync: true })
+	const edited = useSnapshot(connection.state.edited)
 
-	return <Button color="success" disabled={!canSaveConnection({ host, name, port, type })} label="Save" onPointerUp={connection.save} startContent={<Icons.Check />} />
+	return <Button color="success" disabled={!canSaveConnection(edited)} label="Save" onClick={connection.save} startContent={<Icons.Check />} />
 })
 
 function AlpacaDeviceServerItem(item: AlpacaDeviceServer) {
@@ -96,7 +97,7 @@ const AlpacaDeviceServerDiscovery = memo(() => {
 					{(i) => AlpacaDeviceServerItem(alpaca.servers[i])}
 				</List>
 				<div className="col-span-full flex flex-row items-center justify-end">
-					<Button color="primary" label="Discovery" loading={alpaca.discovering} onPointerUp={connection.discovery} startContent={<Icons.Reload />} />
+					<Button color="primary" label="Discovery" loading={alpaca.discovering} onClick={connection.discovery} startContent={<Icons.Reload />} />
 				</div>
 			</div>
 		</Popover>

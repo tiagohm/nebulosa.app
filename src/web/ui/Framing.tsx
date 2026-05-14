@@ -28,7 +28,7 @@ const Body = memo(() => {
 	const framing = useMolecule(FramingMolecule)
 	const { loading, openNewImage } = useSnapshot(framing.state)
 	const { width, height, rotation, focalLength, pixelSize, hipsSurvey } = useSnapshot(framing.state.request)
-	const { rightAscension, declination } = useSnapshot(framing.state.request, { sync: true })
+	const { rightAscension, declination } = useSnapshot(framing.state.request)
 
 	return (
 		<div className="mt-0 grid grid-cols-12 items-center gap-2">

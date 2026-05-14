@@ -174,7 +174,7 @@ const Temperature = memo(() => {
 			endContent={<TemperatureNumberInputEndContent disabled={isDisabled} onClick={camera.temperature} />}
 			fractionDigits={1}
 			fullWidth
-			label={`Temperature (${temperature.toFixed(1)}°C)`}
+			label={`Temp: ${temperature.toFixed(1)}°C`}
 			maxValue={50}
 			minValue={-50}
 			onValueChange={(value) => (camera.state.targetTemperature = value)}

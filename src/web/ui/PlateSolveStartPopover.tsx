@@ -16,7 +16,7 @@ export interface PlateSolveStartPopoverProps extends Pick<PlateSolveStart, 'radi
 export function PlateSolveStartPopover({ type, radius, focalLength, pixelSize, onValueChange }: PlateSolveStartPopoverProps) {
 	const settings = useMolecule(SettingsMolecule)
 	const { downsample, timeout } = useSnapshot(settings.state.solver[type])
-	const { executable, apiUrl, apiKey } = useSnapshot(settings.state.solver[type], { sync: true })
+	const { executable, apiUrl, apiKey } = useSnapshot(settings.state.solver[type])
 
 	return (
 		<Popover className="max-w-130" trigger={<IconButton icon={Icons.Cog} />}>

@@ -94,7 +94,7 @@ const Filter = memo(() => {
 
 const CreateDirectory = memo(() => {
 	const picker = useMolecule(FilePickerMolecule)
-	const { create, name } = useSnapshot(picker.state.directory, { sync: true })
+	const { create, name } = useSnapshot(picker.state.directory)
 	const canCreate = name.trim().length > 0
 
 	return (
@@ -150,7 +150,7 @@ const Files = memo(() => {
 const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 	const picker = useMolecule(FilePickerMolecule)
 	const { mode, selected } = useSnapshot(picker.state)
-	const { save } = useSnapshot(picker.state, { sync: true })
+	const { save } = useSnapshot(picker.state)
 	const canChooseSave = save.name.trim().length > 0
 
 	function handleOnChoose() {

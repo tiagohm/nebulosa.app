@@ -76,7 +76,11 @@ const Status = memo(() => {
 	const mount = useMolecule(MountMolecule)
 	const { parking, parked, slewing, tracking, homing } = useSnapshot(mount.state.mount)
 
-	return <Chip color="primary">{parking ? 'parking' : parked ? 'parked' : homing ? 'homing' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}</Chip>
+	return (
+		<Chip color="primary" size="sm">
+			{parking ? 'parking' : parked ? 'parked' : homing ? 'homing' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
+		</Chip>
+	)
 })
 
 const LocationButton = memo(() => {

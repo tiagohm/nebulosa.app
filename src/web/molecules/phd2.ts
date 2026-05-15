@@ -18,6 +18,8 @@ export interface PHD2State extends PHD2Status {
 	guideOutput?: EquipmentDevice<GuideOutput>
 	readonly event: PHD2Event
 	index: number
+	connecting: boolean
+	pendingCommand?: 'loop' | 'findStar' | 'start' | 'stop' | 'calibrate' | 'clear'
 }
 
 const state = proxy<PHD2State>({
@@ -32,6 +34,8 @@ const state = proxy<PHD2State>({
 	},
 	event: structuredClone(DEFAULT_PHD2_EVENT),
 	index: 0,
+	connecting: false,
+	pendingCommand: undefined,
 })
 
 initProxy(state, 'phd2', ['p:show', 'o:connection'])
@@ -105,10 +109,27 @@ export const PHD2Molecule = molecule(() => {
 
 	async function connect() {
 		if (!state.connected) {
-			await Api.PHD2.connect(state.connection)
-			await load()
+			try {
+				if (state.connecting) return
+
+				state.connecting = true
+				await Api.PHD2.connect(state.connection)
+				await load()
+			} finally {
+				state.connecting = false
+			}
 		} else {
 			await Api.PHD2.disconnect()
+		}
+	}
+
+	async function runCommand(command: Exclude<PHD2State['pendingCommand'], undefined>) {
+		try {
+			if (state.pendingCommand !== undefined) return
+			state.pendingCommand = command
+			return await Api.PHD2[command]()
+		} catch {
+			state.pendingCommand = undefined
 		}
 	}
 
@@ -116,27 +137,27 @@ export const PHD2Molecule = molecule(() => {
 		state.event.rmsRA = 0
 		state.event.rmsDEC = 0
 		state.index = 0
-		return Api.PHD2.clear()
+		return runCommand('clear')
 	}
 
 	function loop() {
-		return Api.PHD2.loop()
+		return runCommand('loop')
 	}
 
 	function findStar() {
-		return Api.PHD2.findStar()
+		return runCommand('findStar')
 	}
 
 	function start() {
-		return Api.PHD2.start()
+		return runCommand('start')
 	}
 
 	function stop() {
-		return Api.PHD2.stop()
+		return runCommand('stop')
 	}
 
 	function calibrate() {
-		return Api.PHD2.calibrate()
+		return runCommand('calibrate')
 	}
 
 	function show() {

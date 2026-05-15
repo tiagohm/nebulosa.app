@@ -11,6 +11,10 @@ import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
+function hasAngleChanged(targetAngle: number, currentAngle: number) {
+	return Number.isFinite(targetAngle) && Math.abs(targetAngle - currentAngle) > 1e-6
+}
+
 export const Rotator = memo(() => {
 	const rotator = useMolecule(RotatorMolecule)
 
@@ -61,11 +65,12 @@ const Status = memo(() => {
 
 const CurrentAngle = memo(() => {
 	const rotator = useMolecule(RotatorMolecule)
-	const { connected, moving, angle, canAbort } = useSnapshot(rotator.state.rotator)
+	const { connected, moving, angle, canAbort, canHome } = useSnapshot(rotator.state.rotator)
 
 	return (
 		<div className="col-span-9 flex flex-row items-center justify-end gap-2">
 			<NumberInput className="flex-1" label="Angle (°)" readOnly value={angle.value} />
+			<IconButton color="primary" disabled={!connected || !canHome || moving} icon={Icons.Home} onClick={rotator.home} tooltipContent="Home" />
 			<IconButton color="danger" disabled={!connected || !canAbort || !moving} icon={Icons.Stop} onClick={rotator.stop} tooltipContent="Stop" />
 		</div>
 	)
@@ -75,19 +80,20 @@ const TargetAngle = memo(() => {
 	const rotator = useMolecule(RotatorMolecule)
 	const { connected, moving, angle, canSync } = useSnapshot(rotator.state.rotator)
 	const { angle: targetAngle } = useSnapshot(rotator.state)
+	const canMove = connected && !moving && hasAngleChanged(targetAngle, angle.value)
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-between gap-2">
 			<IconButton color="primary" disabled={!connected || !canSync || moving} icon={Icons.Sync} onClick={rotator.sync} tooltipContent="Sync" />
-			<NumberInput className="flex-1" disabled={!connected} label="Move (°)" maxValue={angle.max} minValue={angle.min} onValueChange={(value) => rotator.update('angle', value)} value={targetAngle} />
-			<IconButton color="success" disabled={!connected || moving || targetAngle === angle.value} icon={Icons.Check} onClick={rotator.moveTo} tooltipContent="Move" />
+			<NumberInput className="flex-1" disabled={!connected || moving} label="Move (°)" maxValue={angle.max} minValue={angle.min} onValueChange={(value) => rotator.update('angle', value)} value={targetAngle} />
+			<IconButton color="success" disabled={!canMove} icon={Icons.Check} onClick={rotator.moveTo} tooltipContent="Move" />
 		</div>
 	)
 })
 
 const Options = memo(() => {
 	const rotator = useMolecule(RotatorMolecule)
-	const { connected, canReverse, reversed } = useSnapshot(rotator.state.rotator)
+	const { connected, moving, canReverse, reversed } = useSnapshot(rotator.state.rotator)
 
-	return <Checkbox className="col-span-full mt-1" disabled={!connected || !canReverse} label="Reversed" onValueChange={rotator.reverse} value={reversed} />
+	return <Checkbox className="col-span-full mt-1" disabled={!connected || moving || !canReverse} label="Reversed" onValueChange={rotator.reverse} value={reversed} />
 })

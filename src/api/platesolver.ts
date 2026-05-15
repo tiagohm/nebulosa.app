@@ -35,12 +35,16 @@ export class PlateSolverHandler {
 			solver = novaAstrometryNetPlateSolve(
 				req.path,
 				{
+					apiKey: req.apiKey,
+					apiUrl: req.apiUrl,
+					downsample: req.downsample,
 					rightAscension,
 					declination,
 					radius,
 					scaleType: req.fov <= 0 ? 'ul' : 'ev',
 					scaleEstimated: req.fov <= 0 ? undefined : req.fov,
 					scaleError: req.fov <= 0 ? undefined : 10, // %
+					timeout: req.timeout,
 				},
 				aborter.signal,
 			)

@@ -48,7 +48,7 @@ export function Nudge({ onNudge, onCancel, disabled, isNudgeDisabled, isUpLeftDi
 		downLeft: isDownLeftDisabled,
 		down: isDownDisabled,
 		downRight: isDownRightDisabled,
-	} satisfies Record<NudgeDirection, boolean | undefined>
+	} as const
 
 	const stopActiveNudge = useEffectEvent((updateDirection = true) => {
 		const activeDirection = activeDirectionRef.current

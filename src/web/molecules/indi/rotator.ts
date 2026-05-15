@@ -33,7 +33,7 @@ export const RotatorMolecule = molecule(() => {
 		stateMap.get(rotator.name) ??
 		proxy<RotatorState>({
 			rotator,
-			angle: 0,
+			angle: rotator.angle.value,
 		})
 
 	stateMap.set(rotator.name, state)

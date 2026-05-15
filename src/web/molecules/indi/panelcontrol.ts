@@ -193,15 +193,13 @@ export const IndiPanelControlMolecule = molecule(() => {
 				delete group[property.name]
 
 				if (Object.keys(group).length === 0) {
-					delete group[property.group]
+					delete state.properties[property.group]
 
-					if (Object.keys(group[property.group]).length === 0) {
-						const index = state.groups.indexOf(property.group)
+					const index = state.groups.indexOf(property.group)
 
-						if (index >= 0) {
-							state.groups.splice(index, 1)
-							if (state.group === property.group) state.group = state.groups[0] || ''
-						}
+					if (index >= 0) {
+						state.groups.splice(index, 1)
+						if (state.group === property.group) state.group = state.groups[0] || ''
 					}
 				}
 			}

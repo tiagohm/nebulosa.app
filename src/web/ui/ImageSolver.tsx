@@ -83,9 +83,10 @@ const Inputs = memo(() => {
 
 const PlateSolverSelectEndContent = memo(() => {
 	const solver = useMolecule(ImageSolverMolecule)
+	const { loading } = useSnapshot(solver.state)
 	const { type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request)
 
-	return <PlateSolveStartPopover focalLength={focalLength} onValueChange={solver.update} pixelSize={pixelSize} radius={radius} type={type} />
+	return <PlateSolveStartPopover disabled={loading} focalLength={focalLength} onValueChange={solver.update} pixelSize={pixelSize} radius={radius} type={type} />
 })
 
 const Solution = memo(() => {

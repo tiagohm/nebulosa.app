@@ -82,7 +82,15 @@ export const StarDetectionMolecule = molecule(() => {
 			const request = { ...state.request, path: viewer.path }
 			const stars = await Api.StarDetection.detect(request)
 
-			if (!stars) return
+			state.selected = undefined
+			clearCanvas()
+
+			if (!stars) {
+				state.stars = []
+				state.visible = false
+				resetComputed()
+				return
+			}
 
 			if (stars.length === 0) {
 				toast({ title: 'STAR DETECTION', description: 'No stars detected', color: 'warning' })
@@ -93,8 +101,8 @@ export const StarDetectionMolecule = molecule(() => {
 
 			let hfd = 0
 			let snr = 0
-			let fluxMin = Number.MAX_VALUE
-			let fluxMax = Number.MIN_VALUE
+			let fluxMin = Number.POSITIVE_INFINITY
+			let fluxMax = Number.NEGATIVE_INFINITY
 
 			for (const star of stars) {
 				hfd += star.hfd
@@ -123,31 +131,51 @@ export const StarDetectionMolecule = molecule(() => {
 	}
 
 	function draw() {
-		if (!canvas || !state.selected) return
-
-		const { x, y } = state.selected
+		if (!canvas) return
 
 		const ctx = canvas.getContext('2d')
+		if (!ctx) return
+
+		ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+		if (!state.selected) return
+
+		const { x, y } = state.selected
 		const image = viewer.target
-		ctx && image && ctx.drawImage(image, x - 8.5, y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
+		if (image) {
+			ctx.drawImage(image, x - 8.5, y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
+		}
 	}
 
-	function attach(element: HTMLCanvasElement) {
+	function attach(element: HTMLCanvasElement | null) {
 		if (canvas !== element) {
-			canvas = element
+			canvas = element ?? undefined
 			draw()
 		}
 	}
 
 	function reset() {
-		if (state.stars.length > 0) {
-			state.stars = []
-			state.selected = undefined
-			state.computed.hfd = 0
-			state.computed.snr = 0
-			state.computed.fluxMin = 0
-			state.computed.fluxMax = 0
-		}
+		if (state.stars.length === 0 && state.selected === undefined) return
+
+		state.stars = []
+		state.selected = undefined
+		state.visible = false
+		resetComputed()
+		clearCanvas()
+	}
+
+	function clearCanvas() {
+		if (!canvas) return
+
+		const ctx = canvas.getContext('2d')
+		ctx?.clearRect(0, 0, canvas.width, canvas.height)
+	}
+
+	function resetComputed() {
+		state.computed.hfd = 0
+		state.computed.snr = 0
+		state.computed.fluxMin = 0
+		state.computed.fluxMax = 0
 	}
 
 	function show() {

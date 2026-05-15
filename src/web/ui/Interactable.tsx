@@ -100,6 +100,11 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 	const wheelZoomDelta = useRef(0)
 	const wheelZoomStep = useRef<number | undefined>(undefined)
 
+	function resetWheelZoomState() {
+		wheelZoomDelta.current = 0
+		wheelZoomStep.current = undefined
+	}
+
 	const transform = useEffectEvent((type: InteractType, event?: Event) => {
 		if (wrapperRef.current) {
 			const { x, y, scale, angle } = transformation.current
@@ -122,7 +127,7 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 
 				if (nextScale !== transformation.current.scale) {
 					transformation.current.scale = nextScale
-					wheelZoomStep.current = undefined
+					resetWheelZoomState()
 					transform('none')
 				}
 			},
@@ -288,8 +293,8 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 				const dx = memo[2] * (1 - nextScale / memo[4])
 				const dy = memo[3] * (1 - nextScale / memo[4])
 
+				if (nextScale !== transformation.current.scale) resetWheelZoomState()
 				transformation.current.scale = nextScale
-				wheelZoomStep.current = undefined
 				transformation.current.x = memo[0] + dx
 				transformation.current.y = memo[1] + dy
 
@@ -303,8 +308,7 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 				const deltaY = normalizeWheelDeltaY(delta[1], event.deltaMode)
 
 				if (event.shiftKey && deltaY) {
-					wheelZoomDelta.current = 0
-					wheelZoomStep.current = undefined
+					resetWheelZoomState()
 
 					const { angle } = transformation.current
 					const increment = event.altKey ? 0.1 : 1

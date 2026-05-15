@@ -1,5 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
+import type { MountRemoteControlStart } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { MountMolecule } from '@/molecules/indi/mount'
 import { Button } from './components/Button'
@@ -21,29 +22,58 @@ export const MountRemoteControl = memo(() => {
 
 const Body = memo(() => {
 	const mount = useMolecule(MountMolecule)
-	const { protocol, port } = useSnapshot(mount.state.remoteControl.request)
-	const status = useSnapshot(mount.state.remoteControl).status[protocol]
-	const { host } = useSnapshot(mount.state.remoteControl.request)
+	const { request, status, pendingAction } = useSnapshot(mount.state.remoteControl)
+	const currentStatus = status[request.protocol]
+	const disabled = pendingAction !== undefined || !!currentStatus
 
 	return (
 		<div className="mt-0 grid grid-cols-12 gap-2">
-			<MountRemoteControlProtocolSelect className="col-span-full" onValueChange={(value) => mount.updateRemoteControl('protocol', value)} value={protocol} />
-			<TextInput className="col-span-7" disabled={!!status} label="Host" onValueChange={(value) => mount.updateRemoteControl('host', value)} value={status ? status.host : host} />
-			<NumberInput className="col-span-5" disabled={!!status} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => mount.updateRemoteControl('port', value)} value={status ? status.port : port} />
+			<MountRemoteControlProtocolSelect className="col-span-full" disabled={pendingAction !== undefined} onValueChange={(value) => mount.updateRemoteControl('protocol', value)} value={request.protocol} />
+			<TextInput className="col-span-7" disabled={disabled} label="Host" onValueChange={(value) => mount.updateRemoteControl('host', value)} value={currentStatus ? currentStatus.host : request.host} />
+			<NumberInput className="col-span-5" disabled={disabled} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => mount.updateRemoteControl('port', value)} value={currentStatus ? currentStatus.port : request.port} />
 		</div>
 	)
 })
 
+function canStartRemoteControl({ host, port }: MountRemoteControlStart) {
+	return host.trim().length > 0 && Number.isInteger(port) && port >= 80 && port <= 65535
+}
+
 const Footer = memo(() => {
 	const mount = useMolecule(MountMolecule)
-	const { protocol } = useSnapshot(mount.state.remoteControl.request)
-	const status = useSnapshot(mount.state.remoteControl).status[protocol]
-	const { host } = useSnapshot(mount.state.remoteControl.request)
+	const { request, status, pendingAction } = useSnapshot(mount.state.remoteControl)
+	const currentStatus = status[request.protocol]
+	const busy = pendingAction !== undefined
+	const canStart = !currentStatus && canStartRemoteControl(request)
+
+	async function handleStart() {
+		if (!canStart || busy) return
+
+		mount.state.remoteControl.pendingAction = 'start'
+
+		try {
+			await mount.startRemoteControl()
+		} finally {
+			mount.state.remoteControl.pendingAction = undefined
+		}
+	}
+
+	async function handleStop() {
+		if (!currentStatus || busy) return
+
+		mount.state.remoteControl.pendingAction = 'stop'
+
+		try {
+			await mount.stopRemoteControl()
+		} finally {
+			mount.state.remoteControl.pendingAction = undefined
+		}
+	}
 
 	return (
 		<>
-			<Button color="danger" disabled={!status} label="Stop" onClick={mount.stopRemoteControl} startContent={<Icons.Stop />} />
-			<Button color="primary" disabled={!host || !!status} label="Connect" onClick={mount.startRemoteControl} startContent={<Icons.Connect />} />
+			<Button color="danger" disabled={!currentStatus || busy} label="Stop" loading={pendingAction === 'stop'} onClick={() => void handleStop()} startContent={<Icons.Stop />} />
+			<Button color="primary" disabled={!canStart || busy} label="Connect" loading={pendingAction === 'start'} onClick={() => void handleStart()} startContent={<Icons.Connect />} />
 		</>
 	)
 })

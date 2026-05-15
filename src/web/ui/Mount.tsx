@@ -1,14 +1,15 @@
 import { useMolecule } from 'bunshi/react'
-import { formatALT, formatAZ, formatRA } from 'nebulosa/src/angle'
-import { memo, useRef } from 'react'
-import type { CoordinateType } from 'src/shared/types'
+import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
+import type { MountTargetCoordinateType } from 'nebulosa/src/indi.device'
+import { memo } from 'react'
+import type { CoordinateInfo, CoordinateType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { MountMolecule } from '@/molecules/indi/mount'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
 import { List, ListItem } from './components/List'
-import { Popover, type PopoverMethods } from './components/Popover'
+import { Popover } from './components/Popover'
 import { Switch } from './components/Switch'
 import { TextInput } from './components/TextInput'
 import { ConnectButton } from './ConnectButton'
@@ -22,6 +23,34 @@ import { Nudge } from './Nudge'
 import { SlewRateSelect } from './SlewRateSelect'
 import { Time } from './Time'
 import { TrackModeSelect } from './TrackModeSelect'
+
+const TARGET_TYPE_BY_COORDINATE_TYPE = {
+	equatorial: 'JNOW',
+	equatorialJ2000: 'J2000',
+	horizontal: 'ALTAZ',
+	ecliptic: 'ECLIPTIC',
+	galactic: 'GALACTIC',
+} as const satisfies Record<CoordinateType, MountTargetCoordinateType>
+
+const COPY_COORDINATE_TYPE_BY_ACTION = {
+	'copy-equatorialJ2000': 'equatorialJ2000',
+	'copy-equatorial': 'equatorial',
+	'copy-horizontal': 'horizontal',
+	'copy-ecliptic': 'ecliptic',
+	'copy-galactic': 'galactic',
+} as const satisfies Record<string, CoordinateType>
+
+function isCopyCoordinateAction(action: string): action is keyof typeof COPY_COORDINATE_TYPE_BY_ACTION {
+	return Object.hasOwn(COPY_COORDINATE_TYPE_BY_ACTION, action)
+}
+
+function formatTargetCoordinateX(type: CoordinateType, position: CoordinateInfo) {
+	return type === 'equatorial' || type === 'equatorialJ2000' ? formatRA(position[type][0]) : formatAZ(position[type][0])
+}
+
+function formatTargetCoordinateY(type: CoordinateType, position: CoordinateInfo) {
+	return type === 'horizontal' ? formatALT(position[type][1]) : formatDEC(position[type][1])
+}
 
 export const Mount = memo(() => {
 	const mount = useMolecule(MountMolecule)
@@ -163,9 +192,9 @@ const TargetCoordinateAndPosition = memo(() => {
 				<TextInput className="col-span-5" disabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={mount.updateTargetCoordinateY} value={y} />
 				<div className="col-span-10 flex flex-row items-center justify-center gap-1">
 					<TargetCoordinatePopupButton />
-					<IconButton color="success" disabled={disabled} icon={Icons.Telescope} onClick={mount.goTo} />
-					<IconButton color="primary" disabled={disabled} icon={Icons.Sync} onClick={mount.sync} />
-					<IconButton color="secondary" disabled={disabled} icon={Icons.Image} onClick={mount.frame} />
+					<IconButton color="success" disabled={disabled} icon={Icons.Telescope} onClick={mount.goTo} tooltipContent="Go" />
+					<IconButton color="primary" disabled={disabled} icon={Icons.Sync} onClick={mount.sync} tooltipContent="Sync" />
+					<IconButton color="secondary" disabled={disabled} icon={Icons.Image} onClick={mount.frame} tooltipContent="Frame" />
 				</div>
 			</div>
 		</div>
@@ -173,12 +202,11 @@ const TargetCoordinateAndPosition = memo(() => {
 })
 
 const TargetCoordinatePopupButton = memo(() => {
-	const popoverRef = useRef<PopoverMethods | null>(null)
 	const mount = useMolecule(MountMolecule)
 	const { connected } = useSnapshot(mount.state.mount)
 
 	return (
-		<Popover classNames={{ content: 'p-0' }} ref={popoverRef} trigger={<IconButton disabled={!connected} color="secondary" icon={Icons.DotsVertical} variant="ghost" />}>
+		<Popover classNames={{ content: 'p-0' }} trigger={<IconButton disabled={!connected} color="secondary" icon={Icons.DotsVertical} tooltipContent="Target presets" variant="ghost" />}>
 			<TargetCoordinatePopupButtonContent />
 		</Popover>
 	)
@@ -189,16 +217,15 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 	const { latitude } = useSnapshot(mount.state.mount.geographicCoordinate)
 
 	function handleClick(event: React.UIEvent<HTMLElement>) {
-		const action = event.currentTarget.dataset.action!
+		const action = event.currentTarget.dataset.action
 
-		if (action === 'bookmark') {
+		if (action === undefined || action === 'bookmark') {
 			return
-		} else if (action.startsWith('copy-')) {
-			const type = action.slice(5) as CoordinateType
-			mount.updateTargetCoordinateType(type === 'ecliptic' ? 'ECLIPTIC' : type === 'galactic' ? 'GALACTIC' : type === 'horizontal' ? 'ALTAZ' : type === 'equatorial' ? 'JNOW' : 'J2000')
-			if (type === 'equatorial' || type === 'equatorialJ2000') mount.updateTargetCoordinateX(formatRA(mount.state.currentPosition[type][0]))
-			else mount.updateTargetCoordinateX(formatAZ(mount.state.currentPosition[type][0]))
-			mount.updateTargetCoordinateY(formatALT(mount.state.currentPosition[type][1]))
+		} else if (isCopyCoordinateAction(action)) {
+			const type = COPY_COORDINATE_TYPE_BY_ACTION[action]
+			mount.updateTargetCoordinateType(TARGET_TYPE_BY_COORDINATE_TYPE[type])
+			mount.updateTargetCoordinateX(formatTargetCoordinateX(type, mount.state.currentPosition))
+			mount.updateTargetCoordinateY(formatTargetCoordinateY(type, mount.state.currentPosition))
 		} else if (action.endsWith('-pole')) {
 			mount.updateTargetCoordinateType('JNOW')
 			mount.updateTargetCoordinateX(formatRA(mount.state.currentPosition.lst))
@@ -206,10 +233,10 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 		} else if (action === 'zenith') {
 			mount.updateTargetCoordinateType('JNOW')
 			mount.updateTargetCoordinateX(formatRA(mount.state.currentPosition.lst))
-			mount.updateTargetCoordinateY(formatAZ(latitude))
+			mount.updateTargetCoordinateY(formatDEC(latitude))
 		}
 
-		void mount.updateCurrentCoordinatePosition()
+		void mount.updateTargetCoordinatePosition()
 	}
 
 	return (
@@ -218,7 +245,7 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 			<ListItem label="Paste current J2000 position" data-action="copy-equatorialJ2000" startContent={<Icons.Paste />} onClick={handleClick} />
 			<ListItem label="Paste current JNOW position" data-action="copy-equatorial" startContent={<Icons.Paste />} onClick={handleClick} />
 			<ListItem label="Paste current Horizontal position" data-action="copy-horizontal" startContent={<Icons.Paste />} onClick={handleClick} />
-			<ListItem label="Paste current Eclíptic position" data-action="copy-ecliptic" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Paste current Ecliptic position" data-action="copy-ecliptic" startContent={<Icons.Paste />} onClick={handleClick} />
 			<ListItem label="Paste current Galactic position" data-action="copy-galactic" startContent={<Icons.Paste />} onClick={handleClick} />
 			<ListItem label="Zenith" data-action="zenith" startContent={<Icons.Telescope />} onClick={handleClick} />
 			<ListItem disabled={latitude > 0} label="South Pole" data-action="south-pole" startContent={<Icons.Telescope />} onClick={handleClick} />

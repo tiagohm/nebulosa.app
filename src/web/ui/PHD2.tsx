@@ -1,5 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
+import type { PHD2RemoteConnect } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
@@ -13,6 +14,10 @@ import { CameraDropdown, GuideOutputDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { PHD2ClientModeRadioGroup } from './PHD2ClientModeRadioGroup'
+
+function canConnectRemote({ host, port }: Pick<PHD2RemoteConnect, 'host' | 'port'>) {
+	return host.trim().length > 0 && Number.isInteger(port) && port >= 80 && port <= 65535
+}
 
 export const PHD2 = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
@@ -43,24 +48,25 @@ const Body = memo(() => (
 
 const Connection = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
-	const { connected, camera, guideOutput } = useSnapshot(phd2.state)
+	const { connecting, connected, camera, guideOutput } = useSnapshot(phd2.state)
 	const { host, port, mode } = useSnapshot(phd2.state.connection)
+	const canConnect = mode === 'REMOTE' ? canConnectRemote({ host, port }) : !!camera && !!guideOutput
 
 	return (
 		<>
 			<div className="col-span-full flex flex-row items-center justify-center">
-				<PHD2ClientModeRadioGroup horizontal onValueChange={(value) => (phd2.state.connection.mode = value)} value={mode} />
+				<PHD2ClientModeRadioGroup disabled={connected || connecting} horizontal onValueChange={(value) => phd2.updateConnection('mode', value)} value={mode} />
 			</div>
 			{mode === 'REMOTE' ? (
 				<>
-					<TextInput className="col-span-7" disabled={connected} label="Host" maxLength={128} onValueChange={(value) => phd2.updateConnection('host', value)} placeholder="localhost" value={host} />
-					<NumberInput className="col-span-3" disabled={connected} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => phd2.updateConnection('port', value)} placeholder="4400" value={port} />
+					<TextInput className="col-span-7" disabled={connected || connecting} label="Host" maxLength={128} onValueChange={(value) => phd2.updateConnection('host', value)} placeholder="localhost" value={host} />
+					<NumberInput className="col-span-3" disabled={connected || connecting} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => phd2.updateConnection('port', value)} placeholder="4400" value={port} />
 				</>
 			) : (
 				<DeviceChooser />
 			)}
 			<div className="col-span-2 flex flex-row items-center justify-center gap-2">
-				<ConnectButton disabled={!camera || !guideOutput} connected={connected} onClick={phd2.connect} />
+				<ConnectButton disabled={!canConnect || connecting} connected={connected} loading={connecting} onClick={phd2.connect} />
 			</div>
 		</>
 	)
@@ -68,12 +74,13 @@ const Connection = memo(() => {
 
 const DeviceChooser = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
-	const { camera, guideOutput, connected } = useSnapshot(phd2.state)
+	const { camera, guideOutput, connected, connecting } = useSnapshot(phd2.state)
+	const blocked = connected || connecting
 
 	return (
 		<div className="col-span-10 flex flex-row items-center justify-center gap-2">
-			<CameraDropdown endContent={<CameraDropdownEndContent />} disabled={connected} onValueChange={(value) => (phd2.state.camera = value)} showLabel value={camera} />
-			<GuideOutputDropdown disabled={connected} onValueChange={(value) => (phd2.state.guideOutput = value)} showLabel value={guideOutput} />
+			<CameraDropdown endContent={<CameraDropdownEndContent />} disabled={blocked} onValueChange={(value) => (phd2.state.camera = value)} showLabel value={camera} />
+			<GuideOutputDropdown disabled={blocked} onValueChange={(value) => (phd2.state.guideOutput = value)} showLabel value={guideOutput} />
 		</div>
 	)
 })
@@ -115,14 +122,15 @@ const Dither = memo(() => {
 
 const Buttons = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
-	const { connected, running, looping } = useSnapshot(phd2.state)
+	const { connected, running, looping, pendingCommand } = useSnapshot(phd2.state)
+	const busy = pendingCommand !== undefined
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-center gap-2">
-			<IconButton color="primary" disabled={!connected || looping || running} icon={Icons.Reload} onClick={phd2.loop} />
-			<IconButton color="warning" disabled={!connected || !looping} icon={Icons.Star} onClick={phd2.findStar} />
-			<IconButton color="success" disabled={!connected || running} icon={Icons.Play} onClick={phd2.start} />
-			<IconButton color="danger" disabled={!connected || (!running && !looping)} icon={Icons.Stop} onClick={phd2.stop} />
+			<IconButton color="primary" disabled={!connected || looping || running || busy} icon={Icons.Reload} loading={pendingCommand === 'loop'} onClick={phd2.loop} tooltipContent="Loop exposures" />
+			<IconButton color="warning" disabled={!connected || !looping || busy} icon={Icons.Star} loading={pendingCommand === 'findStar'} onClick={phd2.findStar} tooltipContent="Find guide star" />
+			<IconButton color="success" disabled={!connected || running || busy} icon={Icons.Play} loading={pendingCommand === 'start'} onClick={phd2.start} tooltipContent="Start guiding" />
+			<IconButton color="danger" disabled={!connected || (!running && !looping) || busy} icon={Icons.Stop} loading={pendingCommand === 'stop'} onClick={phd2.stop} tooltipContent="Stop guiding" />
 		</div>
 	)
 })
@@ -133,16 +141,25 @@ const Status = memo(() => {
 
 	return (
 		<div className="col-span-full mt-2 flex flex-row items-center justify-center gap-1">
-			<Chip color="primary">{state === 'IDLE' ? 'idle' : state === 'CALIBRATING' ? 'calibrating' : state === 'GUIDING' ? 'guiding' : state === 'LOOPING' ? 'looping' : state === 'SETTLING' ? 'settling' : state === 'PAUSED' ? 'paused' : 'star lost'}</Chip>
-			<Chip color="success">SNR: {snr.toFixed(0)}</Chip>
-			<Chip color="warning">HFD: {hfd.toFixed(2)}</Chip>
-			<Chip color="secondary">Star mass: {starMass.toFixed(0)}</Chip>
+			<Chip size="sm" color="primary">
+				{state === 'IDLE' ? 'idle' : state === 'CALIBRATING' ? 'calibrating' : state === 'GUIDING' ? 'guiding' : state === 'LOOPING' ? 'looping' : state === 'SETTLING' ? 'settling' : state === 'PAUSED' ? 'paused' : 'star lost'}
+			</Chip>
+			<Chip size="sm" color="success">
+				SNR: {snr.toFixed(0)}
+			</Chip>
+			<Chip size="sm" color="warning">
+				HFD: {hfd.toFixed(2)}
+			</Chip>
+			<Chip size="sm" color="secondary">
+				Star mass: {starMass.toFixed(0)}
+			</Chip>
 		</div>
 	)
 })
 
 const Footer = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
+	const { pendingCommand } = useSnapshot(phd2.state)
 	const { rmsRA, rmsDEC } = useSnapshot(phd2.state.event)
 
 	return (
@@ -150,7 +167,7 @@ const Footer = memo(() => {
 			<span>RA: {rmsRA.toFixed(2)}"</span>
 			<span>DEC: {rmsDEC.toFixed(2)}"</span>
 			<span>Total: {Math.hypot(rmsRA, rmsDEC).toFixed(2)}"</span>
-			<IconButton color="primary" icon={Icons.Broom} onClick={phd2.clear} />
+			<IconButton color="primary" icon={Icons.Broom} loading={pendingCommand === 'clear'} onClick={phd2.clear} tooltipContent="Clear guide graph" />
 		</div>
 	)
 })

@@ -53,8 +53,12 @@ export const ThermometerMolecule = molecule(() => {
 		}
 	})
 
-	function connect() {
-		return equipment.connect(thermometer)
+	async function connect() {
+		try {
+			return await equipment.connect(state.thermometer)
+		} finally {
+			state.thermometer.connecting = false
+		}
 	}
 
 	function hide() {

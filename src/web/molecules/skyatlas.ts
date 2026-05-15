@@ -805,7 +805,7 @@ export const SkyAtlasMolecule = molecule(() => {
 	}
 
 	function updateLocation(location: GeographicCoordinate) {
-		twilightUpdate = state.request.location.longitude !== location.longitude
+		twilightUpdate ||= isLocationChanged(location, state.request.location)
 		Object.assign(state.request.location, location)
 		void tick()
 	}
@@ -815,32 +815,34 @@ export const SkyAtlasMolecule = molecule(() => {
 
 		updating = true
 
-		const { time, location } = state.request
+		try {
+			const { time, location } = state.request
 
-		utc ??= state.calendar.manual ? time.utc : Date.now()
+			utc ??= state.calendar.manual ? time.utc : Date.now()
 
-		if (!twilightUpdate || twilightStartTime === 0) {
-			const b = computeStartTime(utc, time.offset)
+			if (!twilightUpdate || twilightStartTime === 0) {
+				const b = computeStartTime(utc, time.offset)
 
-			if (twilightStartTime !== b) {
-				twilightUpdate = true
-				twilightStartTime = b
+				if (twilightStartTime !== b) {
+					twilightUpdate = true
+					twilightStartTime = b
+				}
 			}
+
+			time.utc = utc
+			const dateHasChanged = twilightUpdate
+
+			await twilight()
+
+			if (state.tab === 'sun') void sun.tick(time, location, dateHasChanged)
+			else if (state.tab === 'moon') void moon.tick(time, location, dateHasChanged)
+			else if (state.tab === 'planet') void planet.tick(time, location, dateHasChanged)
+			else if (state.tab === 'asteroid') void asteroid.tick(time, location, dateHasChanged)
+			else if (state.tab === 'galaxy') void galaxy.tick(time, location, dateHasChanged)
+			else if (state.tab === 'satellite') void satellite.tick(time, location, dateHasChanged)
+		} finally {
+			updating = false
 		}
-
-		time.utc = utc
-		const dateHasChanged = twilightUpdate
-
-		await twilight()
-
-		if (state.tab === 'sun') void sun.tick(time, location, dateHasChanged)
-		else if (state.tab === 'moon') void moon.tick(time, location, dateHasChanged)
-		else if (state.tab === 'planet') void planet.tick(time, location, dateHasChanged)
-		else if (state.tab === 'asteroid') void asteroid.tick(time, location, dateHasChanged)
-		else if (state.tab === 'galaxy') void galaxy.tick(time, location, dateHasChanged)
-		else if (state.tab === 'satellite') void satellite.tick(time, location, dateHasChanged)
-
-		updating = false
 	}
 
 	async function twilight() {
@@ -876,7 +878,9 @@ export const SkyAtlasMolecule = molecule(() => {
 		const { items } = state.bookmark
 
 		if (favorite) {
-			items.push({ type, name, code })
+			if (!items.some((e) => e.type === type && e.code === code)) {
+				items.push({ type, name, code })
+			}
 		} else {
 			const index = items.findIndex((e) => e.type === type && e.code === code)
 			index >= 0 && items.splice(index, 1)
@@ -886,8 +890,8 @@ export const SkyAtlasMolecule = molecule(() => {
 	function selectBookmark({ type, code }: BookmarkItem) {
 		if (type === 'planet') void planet.select(code, false)
 		else if (type === 'asteroid') void asteroid.select(code)
-		else if (type === 'galaxy') void galaxy.select(+code, 0, false)
-		else if (type === 'satellite') void satellite.select(+code, 0, false)
+		else if (type === 'galaxy') void galaxy.select(+code, 0, false, false)
+		else if (type === 'satellite') void satellite.select(+code, 0, false, false)
 
 		state.tab = type
 	}

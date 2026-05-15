@@ -4,7 +4,7 @@ import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import type { LunarPhase } from 'nebulosa/src/moon'
 import type { SmallBodySearchListItem } from 'nebulosa/src/sbd'
 import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/temporal'
-import React, { Activity, memo, useCallback, useDeferredValue, useMemo, useRef, useState } from 'react'
+import React, { Activity, memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
 import { type BodyPosition, EMPTY_TWILIGHT, type MinorPlanetParameter, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
@@ -21,7 +21,7 @@ import { IconButton } from './components/IconButton'
 import { Link } from './components/Link'
 import { List, ListItem } from './components/List'
 import { NumberInput } from './components/NumberInput'
-import { Popover, type PopoverMethods } from './components/Popover'
+import { Popover } from './components/Popover'
 import { Slider } from './components/Slider'
 import { Table } from './components/Table'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
@@ -86,12 +86,11 @@ const TAB_ICONS = {
 } as const
 
 const TabPopover = memo(() => {
-	const popoverRef = useRef<PopoverMethods | null>(null)
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { tab } = useSnapshot(atlas.state)
 
 	return (
-		<Popover ref={popoverRef} trigger={<IconButton color="secondary" icon={TAB_ICONS[tab]} onWheel={atlas.handleOnTabWheel} />}>
+		<Popover trigger={<IconButton color="secondary" icon={TAB_ICONS[tab]} onWheel={atlas.handleOnTabWheel} />}>
 			<TabPopoverContent />
 		</Popover>
 	)
@@ -405,7 +404,7 @@ const PlanetTab = memo(() => {
 	}, [search.name, search.type])
 
 	function handleFavoriteChange(favorite: boolean) {
-		atlas.toggleBookmark('planet', name!, code!, favorite)
+		if (name && code) atlas.toggleBookmark('planet', name, code, favorite)
 	}
 
 	function handlePointer(event: React.PointerEvent<HTMLElement>) {
@@ -444,7 +443,7 @@ const AsteroidTab = memo(() => {
 
 	const handleOnFavoriteChange = useCallback(
 		(favorite: boolean) => {
-			atlas.toggleBookmark('asteroid', selected!.name, selected!.id, favorite)
+			if (selected) atlas.toggleBookmark('asteroid', selected.name, selected.id, favorite)
 		},
 		[selected],
 	)
@@ -555,10 +554,11 @@ const GalaxyTab = memo(() => {
 
 	const handleOnFavoriteChange = useCallback(
 		(favorite: boolean) => {
-			const name = skyObjectName(position.names![0], position.constellation)
-			atlas.toggleBookmark('galaxy', name, selected!.id.toFixed(0), favorite)
+			if (!selected) return
+			const name = position.names?.length ? skyObjectName(position.names[0], position.constellation) : skyObjectName(selected.name, selected.constellation)
+			atlas.toggleBookmark('galaxy', name, selected.id.toFixed(0), favorite)
 		},
-		[position, selected],
+		[position.constellation, position.names, selected],
 	)
 
 	return (
@@ -610,7 +610,7 @@ const SatelliteTab = memo(() => {
 
 	const handleOnFavoriteChange = useCallback(
 		(favorite: boolean) => {
-			atlas.toggleBookmark('satellite', selected!.name, selected!.id.toFixed(0), favorite)
+			if (selected) atlas.toggleBookmark('satellite', selected.name, selected.id.toFixed(0), favorite)
 		},
 		[selected],
 	)
@@ -681,17 +681,23 @@ const TimeBar = memo(() => {
 
 	const local = utc + offset * ONE_MINUTE
 
-	const handleOnDateChange = useCallback((value: Temporal) => {
-		atlas.updateTime(value - offset * ONE_MINUTE, offset)
-	}, [])
+	const handleDateChange = useCallback(
+		(value: Temporal) => {
+			atlas.updateTime(value - offset * ONE_MINUTE, offset)
+		},
+		[offset],
+	)
 
-	const handleOnOffsetChange = useCallback((value: number) => {
-		atlas.updateTime(utc, value, manual)
-	}, [])
+	const handleOffsetChange = useCallback(
+		(value: number) => {
+			atlas.updateTime(utc, value, manual)
+		},
+		[manual, utc],
+	)
 
 	return (
 		<div className="inline-flex flex-row items-center gap-1">
-			<CalendarPopover date={local} offset={offset} onDateChange={handleOnDateChange} onOffsetChange={handleOnOffsetChange} />
+			<CalendarPopover date={local} offset={offset} onDateChange={handleDateChange} onOffsetChange={handleOffsetChange} />
 			{manual ? (
 				<IconButton color="warning" icon={Icons.TimerPlay} onClick={() => atlas.updateTime(Date.now(), offset, false)} tooltipContent="Play" variant="flat" />
 			) : (
@@ -867,8 +873,8 @@ function ChartTooltipContent({ active, payload }: TooltipContentProps) {
 
 	const item = payload[0].payload as EphemerisChartData
 	const time = (+item.name + 720) % 1440
-	const hour = (time / 1440) * 24
-	const minute = (hour - Math.trunc(hour)) * 60
+	const hour = Math.trunc(time / 60)
+	const minute = Math.trunc(time % 60)
 
 	return (
 		<div className="text-small shadow-small bg-default-100 rounded-small inline-flex flex-col px-1.5 py-0.5 font-normal">

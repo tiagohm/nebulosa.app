@@ -31,6 +31,10 @@ function defaultPosition(): Point {
 	return { x: window.innerWidth / 2, y: window.innerHeight / 2 }
 }
 
+function clonePoint(point: Point): Point {
+	return { x: point.x, y: point.y }
+}
+
 function isPoint(value: unknown): value is Point {
 	if (typeof value !== 'object' || value === null) return false
 
@@ -40,18 +44,18 @@ function isPoint(value: unknown): value is Point {
 
 function loadPosition(id: string) {
 	const cached = modalTransformMap.get(id)
-	if (cached !== undefined) return cached
+	if (cached !== undefined) return clonePoint(cached)
 
 	const fallback = defaultPosition()
 
 	try {
 		const stored = storageGet<unknown>(positionStorageKey(id), fallback)
 		const position = isPoint(stored) ? stored : fallback
-		modalTransformMap.set(id, position)
-		return position
+		modalTransformMap.set(id, clonePoint(position))
+		return clonePoint(position)
 	} catch {
-		modalTransformMap.set(id, fallback)
-		return fallback
+		modalTransformMap.set(id, clonePoint(fallback))
+		return clonePoint(fallback)
 	}
 }
 
@@ -86,7 +90,9 @@ export function useModal(id: string, onHide?: VoidFunction) {
 
 	const savePosition = useCallback(() => {
 		try {
-			storageSet(positionStorageKey(id), xy.current)
+			const position = clonePoint(xy.current)
+			modalTransformMap.set(id, position)
+			storageSet(positionStorageKey(id), position)
 		} catch {
 			// Modal position persistence should never block closing or dragging.
 		}
@@ -123,8 +129,11 @@ export function useModal(id: string, onHide?: VoidFunction) {
 
 	const bind = useGesture(
 		{
-			onDragStart: (event) => {
-				if (!modalRef.current || !canDrag(event.target)) return
+			onDragStart: ({ cancel, target }) => {
+				if (!modalRef.current || !canDrag(target)) {
+					cancel()
+					return
+				}
 
 				isDragging.current = true
 				zIndex.increment(id, true)

@@ -99,9 +99,10 @@ const Inputs = memo(() => {
 
 const PlateSolverSelectEndContent = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
+	const { running } = useSnapshot(tppa.state)
 	const { type, radius, focalLength, pixelSize } = useSnapshot(tppa.state.request.solver)
 
-	return <PlateSolveStartPopover focalLength={focalLength} onValueChange={tppa.updateSolver} pixelSize={pixelSize} radius={radius} type={type} />
+	return <PlateSolveStartPopover disabled={running} focalLength={focalLength} onValueChange={tppa.updateSolver} pixelSize={pixelSize} radius={radius} type={type} />
 })
 
 const Result = memo(() => {

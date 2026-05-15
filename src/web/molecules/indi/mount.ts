@@ -37,6 +37,7 @@ export interface MountState {
 	}
 	readonly remoteControl: {
 		show: boolean
+		pendingAction?: 'start' | 'stop'
 		readonly status: MountRemoteControlStatus
 		readonly request: {
 			protocol: MountRemoteControlProtocol
@@ -329,6 +330,7 @@ export const MountMolecule = molecule(() => {
 		updateTargetCoordinateX,
 		updateTargetCoordinateY,
 		updateCurrentCoordinatePosition,
+		updateTargetCoordinatePosition,
 		goTo,
 		sync,
 		frame,

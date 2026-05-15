@@ -449,14 +449,15 @@ export function Slider<V extends SliderValue>({
 			endInteraction(event.clientX, event.clientY)
 		}
 
-		window.addEventListener('pointermove', handlePointerMove)
-		window.addEventListener('pointerup', handlePointerUp)
-		window.addEventListener('pointercancel', handlePointerUp)
+		// Capture drag events before overlay portals can stop pointer bubbling.
+		window.addEventListener('pointermove', handlePointerMove, true)
+		window.addEventListener('pointerup', handlePointerUp, true)
+		window.addEventListener('pointercancel', handlePointerUp, true)
 
 		return () => {
-			window.removeEventListener('pointermove', handlePointerMove)
-			window.removeEventListener('pointerup', handlePointerUp)
-			window.removeEventListener('pointercancel', handlePointerUp)
+			window.removeEventListener('pointermove', handlePointerMove, true)
+			window.removeEventListener('pointerup', handlePointerUp, true)
+			window.removeEventListener('pointercancel', handlePointerUp, true)
 		}
 	}, [draggingThumbIndex, endInteraction, setInteractiveValue, valueFromPointer, valueKey])
 

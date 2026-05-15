@@ -1,5 +1,5 @@
 import { ScopeProvider, useMolecule } from 'bunshi/react'
-import { Activity, memo } from 'react'
+import { Activity, memo, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { CameraScope } from '@/molecules/indi/camera'
 import { CoverScope } from '@/molecules/indi/cover'
@@ -51,132 +51,242 @@ export const Home = memo(() => {
 	)
 })
 
-export const CameraList = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
-	const camera = useSnapshot(equipment.state.CAMERA)
+function makeDevices(length: number, callback: (index: number) => React.ReactNode) {
+	const devices = new Array(length)
+	for (let i = 0; i < length; i++) devices[i] = callback(i)
+	return devices
+}
 
-	return camera.map((camera) => (
-		<Activity key={camera.name} mode={activityMode(camera.show)}>
+interface DeviceItemProps {
+	readonly index: number
+}
+
+function CameraItem({ index }: DeviceItemProps) {
+	const equipment = useMolecule(EquipmentMolecule)
+	const camera = equipment.state.CAMERA[index]
+	const { show } = useSnapshot(camera)
+
+	return (
+		<Activity mode={activityMode(show)}>
 			<ScopeProvider scope={CameraScope} value={{ camera }}>
 				<Camera />
 			</ScopeProvider>
 		</Activity>
-	))
-})
+	)
+}
 
-export const MountList = memo(() => {
+function MountItem({ index }: DeviceItemProps) {
 	const equipment = useMolecule(EquipmentMolecule)
-	const mount = useSnapshot(equipment.state.MOUNT)
+	const mount = equipment.state.MOUNT[index]
+	const { show } = useSnapshot(mount)
 
-	return mount.map((mount) => (
-		<Activity key={mount.name} mode={activityMode(mount.show)}>
+	return (
+		<Activity mode={activityMode(show)}>
 			<ScopeProvider scope={MountScope} value={{ mount }}>
 				<Mount />
 			</ScopeProvider>
 		</Activity>
-	))
-})
+	)
+}
 
-export const FocuserList = memo(() => {
+function FocuserItem({ index }: DeviceItemProps) {
 	const equipment = useMolecule(EquipmentMolecule)
-	const focuser = useSnapshot(equipment.state.FOCUSER)
+	const focuser = equipment.state.FOCUSER[index]
+	const { show } = useSnapshot(focuser)
 
-	return focuser.map((focuser) => (
-		<Activity key={focuser.name} mode={activityMode(focuser.show)}>
+	return (
+		<Activity mode={activityMode(show)}>
 			<ScopeProvider scope={FocuserScope} value={{ focuser }}>
 				<Focuser />
 			</ScopeProvider>
 		</Activity>
-	))
-})
+	)
+}
 
-export const WheelList = memo(() => {
+function WheelItem({ index }: DeviceItemProps) {
 	const equipment = useMolecule(EquipmentMolecule)
-	const wheel = useSnapshot(equipment.state.WHEEL)
+	const wheel = equipment.state.WHEEL[index]
+	const { show } = useSnapshot(wheel)
 
-	return wheel.map((wheel) => (
-		<Activity key={wheel.name} mode={activityMode(wheel.show)}>
+	return (
+		<Activity mode={activityMode(show)}>
 			<ScopeProvider scope={WheelScope} value={{ wheel }}>
 				<Wheel />
 			</ScopeProvider>
 		</Activity>
-	))
-})
+	)
+}
 
-export const GuideOutputList = memo(() => {
+function GuideOutputItem({ index }: DeviceItemProps) {
 	const equipment = useMolecule(EquipmentMolecule)
-	const guideOutput = useSnapshot(equipment.state.GUIDE_OUTPUT)
+	const guideOutput = equipment.state.GUIDE_OUTPUT[index]
+	const { show } = useSnapshot(guideOutput)
 
-	return guideOutput.map((guideOutput) => (
-		<Activity key={guideOutput.name} mode={activityMode(guideOutput.show)}>
+	return (
+		<Activity mode={activityMode(show)}>
 			<ScopeProvider scope={GuideOutputScope} value={{ guideOutput }}>
 				<GuideOutput />
 			</ScopeProvider>
 		</Activity>
-	))
-})
+	)
+}
 
-export const ThermometerList = memo(() => {
+function ThermometerItem({ index }: DeviceItemProps) {
 	const equipment = useMolecule(EquipmentMolecule)
-	const thermometer = useSnapshot(equipment.state.THERMOMETER)
+	const thermometer = equipment.state.THERMOMETER[index]
+	const { show } = useSnapshot(thermometer)
 
-	return thermometer.map((thermometer) => (
-		<Activity key={thermometer.name} mode={activityMode(thermometer.show)}>
+	return (
+		<Activity mode={activityMode(show)}>
 			<ScopeProvider scope={ThermometerScope} value={{ thermometer }}>
 				<Thermometer />
 			</ScopeProvider>
 		</Activity>
-	))
-})
+	)
+}
 
-export const CoverList = memo(() => {
+function CoverItem({ index }: DeviceItemProps) {
 	const equipment = useMolecule(EquipmentMolecule)
-	const cover = useSnapshot(equipment.state.COVER)
+	const cover = equipment.state.COVER[index]
+	const { show } = useSnapshot(cover)
 
-	return cover.map((cover) => (
-		<Activity key={cover.name} mode={activityMode(cover.show)}>
+	return (
+		<Activity mode={activityMode(show)}>
 			<ScopeProvider scope={CoverScope} value={{ cover }}>
 				<Cover />
 			</ScopeProvider>
 		</Activity>
-	))
-})
+	)
+}
 
-export const FlatPanelList = memo(() => {
+function FlatPanelItem({ index }: DeviceItemProps) {
 	const equipment = useMolecule(EquipmentMolecule)
-	const flatPanel = useSnapshot(equipment.state.FLAT_PANEL)
+	const flatPanel = equipment.state.FLAT_PANEL[index]
+	const { show } = useSnapshot(flatPanel)
 
-	return flatPanel.map((flatPanel) => (
-		<Activity key={flatPanel.name} mode={activityMode(flatPanel.show)}>
+	return (
+		<Activity mode={activityMode(show)}>
 			<ScopeProvider scope={FlatPanelScope} value={{ flatPanel }}>
 				<FlatPanel />
 			</ScopeProvider>
 		</Activity>
-	))
-})
+	)
+}
 
-export const DewHeaterList = memo(() => {
+function DewHeaterItem({ index }: DeviceItemProps) {
 	const equipment = useMolecule(EquipmentMolecule)
-	const dewHeater = useSnapshot(equipment.state.DEW_HEATER)
+	const dewHeater = equipment.state.DEW_HEATER[index]
+	const { show } = useSnapshot(dewHeater)
 
-	return dewHeater.map((dewHeater) => (
-		<Activity key={dewHeater.name} mode={activityMode(dewHeater.show)}>
+	return (
+		<Activity mode={activityMode(show)}>
 			<ScopeProvider scope={DewHeaterScope} value={{ dewHeater }}>
 				<DewHeater />
 			</ScopeProvider>
 		</Activity>
-	))
-})
+	)
+}
 
-export const RotatorList = memo(() => {
+function RotatorItem({ index }: DeviceItemProps) {
 	const equipment = useMolecule(EquipmentMolecule)
-	const rotator = useSnapshot(equipment.state.ROTATOR)
+	const rotator = equipment.state.ROTATOR[index]
+	const { show } = useSnapshot(rotator)
 
-	return rotator.map((rotator) => (
-		<Activity key={rotator.name} mode={activityMode(rotator.show)}>
+	return (
+		<Activity mode={activityMode(show)}>
 			<ScopeProvider scope={RotatorScope} value={{ rotator }}>
 				<Rotator />
 			</ScopeProvider>
 		</Activity>
-	))
+	)
+}
+
+export const CameraList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { length } = useSnapshot(equipment.state.CAMERA)
+
+	const devices = useMemo(() => makeDevices(length, (i) => <CameraItem key={equipment.state.CAMERA[i].id} index={i} />), [length])
+
+	return devices
+})
+
+export const MountList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { length } = useSnapshot(equipment.state.MOUNT)
+
+	const devices = useMemo(() => makeDevices(length, (i) => <MountItem key={equipment.state.MOUNT[i].id} index={i} />), [length])
+
+	return devices
+})
+
+export const FocuserList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { length } = useSnapshot(equipment.state.FOCUSER)
+
+	const devices = useMemo(() => makeDevices(length, (i) => <FocuserItem key={equipment.state.FOCUSER[i].id} index={i} />), [length])
+
+	return devices
+})
+
+export const WheelList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { length } = useSnapshot(equipment.state.WHEEL)
+
+	const devices = useMemo(() => makeDevices(length, (i) => <WheelItem key={equipment.state.WHEEL[i].id} index={i} />), [length])
+
+	return devices
+})
+
+export const GuideOutputList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { length } = useSnapshot(equipment.state.GUIDE_OUTPUT)
+
+	const devices = useMemo(() => makeDevices(length, (i) => <GuideOutputItem key={equipment.state.GUIDE_OUTPUT[i].id} index={i} />), [length])
+
+	return devices
+})
+
+export const ThermometerList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { length } = useSnapshot(equipment.state.THERMOMETER)
+
+	const devices = useMemo(() => makeDevices(length, (i) => <ThermometerItem key={equipment.state.THERMOMETER[i].id} index={i} />), [length])
+
+	return devices
+})
+
+export const CoverList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { length } = useSnapshot(equipment.state.COVER)
+
+	const devices = useMemo(() => makeDevices(length, (i) => <CoverItem key={equipment.state.COVER[i].id} index={i} />), [length])
+
+	return devices
+})
+
+export const FlatPanelList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { length } = useSnapshot(equipment.state.FLAT_PANEL)
+
+	const devices = useMemo(() => makeDevices(length, (i) => <FlatPanelItem key={equipment.state.FLAT_PANEL[i].id} index={i} />), [length])
+
+	return devices
+})
+
+export const DewHeaterList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { length } = useSnapshot(equipment.state.DEW_HEATER)
+
+	const devices = useMemo(() => makeDevices(length, (i) => <DewHeaterItem key={equipment.state.DEW_HEATER[i].id} index={i} />), [length])
+
+	return devices
+})
+
+export const RotatorList = memo(() => {
+	const equipment = useMolecule(EquipmentMolecule)
+	const { length } = useSnapshot(equipment.state.ROTATOR)
+
+	const devices = useMemo(() => makeDevices(length, (i) => <RotatorItem key={equipment.state.ROTATOR[i].id} index={i} />), [length])
+
+	return devices
 })

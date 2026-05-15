@@ -1,5 +1,5 @@
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { hasRootInteraction, tw } from '@/shared/util'
+import { hasRootInteraction, stopPropagationForAll, tw } from '@/shared/util'
 import { Icons } from '../Icon'
 
 const chipStyles = tv({
@@ -120,7 +120,7 @@ export function Chip({ children, className, classNames, color, disabled = false,
 	}
 
 	return (
-		<div {...props} className={tw(styles.base(), stateClassName, className, classNames?.base)} ref={ref}>
+		<div {...stopPropagationForAll(props)} className={tw(styles.base(), stateClassName, className, classNames?.base)} ref={ref}>
 			{startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
 			{content !== undefined && content !== null && <span className={tw(styles.label(), classNames?.label)}>{content}</span>}
 			{endContent !== undefined && endContent !== null && <span className={tw(styles.endContent(), classNames?.endContent)}>{endContent}</span>}

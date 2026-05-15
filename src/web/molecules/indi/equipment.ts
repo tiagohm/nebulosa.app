@@ -14,7 +14,7 @@ export type EquipmentDevice<T extends Device> = T & {
 }
 
 export interface EquipmentState {
-	selected?: DeviceType
+	selected: DeviceType
 	readonly CAMERA: EquipmentDevice<Omit<Camera, symbol>>[]
 	readonly MOUNT: EquipmentDevice<Omit<Mount, symbol>>[]
 	readonly WHEEL: EquipmentDevice<Omit<Wheel, symbol>>[]
@@ -31,7 +31,7 @@ export interface EquipmentState {
 }
 
 const state = proxy<EquipmentState>({
-	selected: undefined,
+	selected: 'CAMERA',
 	CAMERA: [],
 	MOUNT: [],
 	WHEEL: [],
@@ -123,21 +123,12 @@ export const EquipmentMolecule = molecule(() => {
 
 		if (index >= 0) {
 			devices.splice(index, 1)
-
-			if (devices.length === 0 && state.selected === type) {
-				state.selected = undefined
-			}
-
 			bus.emit('device:remove', device)
 		}
 	}
 
 	function select(type: DeviceType) {
-		if (state.selected === type) {
-			state.selected = undefined
-		} else {
-			state.selected = type
-		}
+		state.selected = type
 	}
 
 	function connect(device: Device) {

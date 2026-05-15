@@ -1,9 +1,8 @@
 import { createUseGesture, dragAction } from '@use-gesture/react'
-import { useMolecule } from 'bunshi/react'
 import type { Point } from 'nebulosa/src/geometry'
 import { useCallback, useEffect, useRef } from 'react'
-import { ZIndexMolecule } from '@/molecules/zindex'
 import { storageGet, storageSet } from '@/shared/storage'
+import { zIndex } from '../store/zindex.store'
 
 // Better tree shaking with createUseGesture
 const useGesture = createUseGesture([dragAction])
@@ -64,7 +63,6 @@ function clampToBoundary(value: number, min: number, max: number) {
 }
 
 export function useModal(id: string, onHide?: VoidFunction) {
-	const zIndex = useMolecule(ZIndexMolecule)
 	const modalRef = useRef<HTMLElement>(null)
 	const currentId = useRef(id)
 	const xy = useRef(loadPosition(id))

@@ -1,7 +1,6 @@
-import { useMolecule } from 'bunshi/react'
 import { memo, type ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { CalculatorMolecule } from '@/molecules/calculator'
+import { calculator } from '../store/calculator.store'
 import { Chip } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
@@ -12,15 +11,11 @@ const MIN_FOCAL_LENGTH = 1
 const MIN_FOCAL_RATIO = 0.01
 const MIN_PIXEL_SIZE = 0.01
 
-export const Calculator = memo(() => {
-	const calculator = useMolecule(CalculatorMolecule)
-
-	return (
-		<Modal header="Calculator" id="calculator" maxWidth="440px" onHide={calculator.hide}>
-			<Body />
-		</Modal>
-	)
-})
+export const Calculator = memo(() => (
+	<Modal header="Calculator" id="calculator" maxWidth="440px" onHide={calculator.hide}>
+		<Body />
+	</Modal>
+))
 
 const Body = memo(() => (
 	<div className="mt-0 px-1 py-2">
@@ -77,7 +72,6 @@ function Formula({ description, expression, children }: FormulaProps) {
 }
 
 const FocalLength = memo(() => {
-	const calculator = useMolecule(CalculatorMolecule)
 	const { aperture, focalRatio, focalLength } = useSnapshot(calculator.state.focalLength)
 
 	return (
@@ -90,7 +84,6 @@ const FocalLength = memo(() => {
 })
 
 const FocalRatio = memo(() => {
-	const calculator = useMolecule(CalculatorMolecule)
 	const { aperture, focalRatio, focalLength } = useSnapshot(calculator.state.focalRatio)
 
 	return (
@@ -103,7 +96,6 @@ const FocalRatio = memo(() => {
 })
 
 const DawesLimit = memo(() => {
-	const calculator = useMolecule(CalculatorMolecule)
 	const { aperture, resolution } = useSnapshot(calculator.state.dawesLimit)
 
 	return (
@@ -115,7 +107,6 @@ const DawesLimit = memo(() => {
 })
 
 const RayleighLimit = memo(() => {
-	const calculator = useMolecule(CalculatorMolecule)
 	const { aperture, resolution } = useSnapshot(calculator.state.rayleighLimit)
 
 	return (
@@ -127,7 +118,6 @@ const RayleighLimit = memo(() => {
 })
 
 const LimitingMagnitude = memo(() => {
-	const calculator = useMolecule(CalculatorMolecule)
 	const { aperture, magnitude } = useSnapshot(calculator.state.limitingMagnitude)
 
 	return (
@@ -139,7 +129,6 @@ const LimitingMagnitude = memo(() => {
 })
 
 const LightGraspRatio = memo(() => {
-	const calculator = useMolecule(CalculatorMolecule)
 	const { smallerAperture, largerAperture, ratio } = useSnapshot(calculator.state.lightGraspRatio)
 
 	return (
@@ -152,7 +141,6 @@ const LightGraspRatio = memo(() => {
 })
 
 const CCDResolution = memo(() => {
-	const calculator = useMolecule(CalculatorMolecule)
 	const { pixelSize, focalLength, resolution } = useSnapshot(calculator.state.ccdResolution)
 
 	return (

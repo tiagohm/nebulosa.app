@@ -9,6 +9,8 @@ export type PopoverClassNames = FloatingClassNames
 export interface PopoverMethods {
 	readonly show: VoidFunction
 	readonly hide: VoidFunction
+	readonly toggle: VoidFunction
+	readonly showing: boolean
 }
 
 export interface PopoverProps extends Omit<React.ComponentPropsWithoutRef<'div'>, 'children' | 'content'> {
@@ -47,6 +49,12 @@ export function Popover({ autoFlip, trigger, children, className, classNames, id
 		},
 		hide: () => {
 			setOpen(false)
+		},
+		toggle: () => {
+			setOpen(!isOpen)
+		},
+		get showing() {
+			return isOpen
 		},
 	}))
 

@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
 import type { DeviceType } from 'nebulosa/src/indi.device'
-import { memo, useEffect, useRef } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
 import alignmentIcon from '@/assets/alignment.webp'
@@ -24,18 +24,17 @@ import settingsIcon from '@/assets/settings.webp'
 import skyAtlasIcon from '@/assets/sky-atlas.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
 import { AutoFocusMolecule } from '@/molecules/autofocus'
-import { CalculatorMolecule } from '@/molecules/calculator'
 import { ConnectionMolecule } from '@/molecules/connection'
 import { DarvMolecule } from '@/molecules/darv'
 import { FlatWizardMolecule } from '@/molecules/flatwizard'
 import { FramingMolecule } from '@/molecules/framing'
-import { HomeMolecule } from '@/molecules/home'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { TppaMolecule } from '@/molecules/tppa'
 import { about } from '../store/about.store'
 import { alpaca } from '../store/alpaca.store'
+import { calculator } from '../store/calculator.store'
 import { equipment } from '../store/equipment.store'
 import { homeMenu } from '../store/home.menu.store'
 import { About } from './About'
@@ -45,7 +44,7 @@ import { Calculator } from './Calculator'
 import { Button } from './components/Button'
 import { Chip, type ChipProps } from './components/Chip'
 import { IconButton } from './components/IconButton'
-import { Popover, type PopoverMethods } from './components/Popover'
+import { Popover } from './components/Popover'
 import { Darv } from './Darv'
 import { FlatWizard } from './FlatWizard'
 import { Framing } from './Framing'
@@ -87,10 +86,7 @@ export const HomeMenu = memo(() => {
 	const { show: showIndiPanelControl } = useSnapshot(indi.state)
 
 	const { show: showAlpaca } = useSnapshot(alpaca.state)
-
-	const calculator = useMolecule(CalculatorMolecule)
 	const { show: showCalculator } = useSnapshot(calculator.state)
-
 	const { show: showAbout } = useSnapshot(about.state)
 
 	return (
@@ -111,25 +107,41 @@ export const HomeMenu = memo(() => {
 	)
 })
 
-export const HomeMenuPopover = memo(() => {
-	const popoverRef = useRef<PopoverMethods | null>(null)
-	const home = useMolecule(HomeMolecule)
-	const { show } = useSnapshot(home.state.menu)
+export const HomeMenuPopover = memo(() => (
+	<Popover ref={homeMenu.popover} trigger={<IconButton color="secondary" icon={Icons.Menu} tooltipContent="Menu" />}>
+		<HomeMenuPopoverContent />
+	</Popover>
+))
 
-	useEffect(() => {
-		if (show) {
-			popoverRef.current?.show()
-		} else {
-			popoverRef.current?.hide()
-		}
-	}, [show])
+function handleButtonClick(event: React.MouseEvent<HTMLElement>) {
+	const key = event.currentTarget.dataset.key
 
-	return (
-		<Popover ref={popoverRef} onOpenChange={(value) => (home.state.menu.show = value)} trigger={<IconButton color="secondary" icon={Icons.Menu} tooltipContent="Menu" />}>
-			<HomeMenuPopoverContent />
-		</Popover>
-	)
-})
+	switch (key) {
+		case 'CAMERA':
+		case 'MOUNT':
+		case 'WHEEL':
+		case 'FOCUSER':
+		case 'ROTATOR':
+		case 'FLAT_PANEL':
+		case 'COVER':
+		case 'GUIDE_OUTPUT':
+		case 'DEW_HEATER':
+		case 'THERMOMETER':
+			homeMenu.select(key)
+			return
+		case 'ALPACA':
+			alpaca.show()
+			break
+		case 'CALCULATOR':
+			calculator.show()
+			break
+		case 'ABOUT':
+			about.show()
+			break
+	}
+
+	homeMenu.hide()
+}
 
 export const HomeMenuPopoverContent = memo(() => {
 	const { length: cameraLength } = useSnapshot(equipment.state.CAMERA)
@@ -150,35 +162,34 @@ export const HomeMenuPopoverContent = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)
 	const flatWizard = useMolecule(FlatWizardMolecule)
 	const phd2 = useMolecule(PHD2Molecule)
-	const calculator = useMolecule(CalculatorMolecule)
 
 	const isIndiDisabled = cameraLength === 0 && mountLength === 0 && focuserLength === 0 && coverLength === 0 && flatPanelLength === 0 && guideOutputLength === 0 && thermometerLength === 0 && dewHeaterLength === 0 && rotatorLength === 0 && wheelLength === 0
 
 	return (
 		<div className="home-menu grid grid-cols-6 gap-2 p-4">
-			<Button children={<img className="w-9" src={cameraIcon} />} color="secondary" disabled={cameraLength === 0} onClick={() => homeMenu.select('CAMERA')} size="lg" tooltipContent="Camera" variant="ghost" />
-			<Button children={<img className="w-9" src={mountIcon} />} color="secondary" disabled={mountLength === 0} onClick={() => homeMenu.select('MOUNT')} size="lg" tooltipContent="Mount" variant="ghost" />
-			<Button children={<img className="w-9" src={filterWheelIcon} />} color="secondary" disabled={wheelLength === 0} onClick={() => homeMenu.select('WHEEL')} size="lg" tooltipContent="Filter Wheel" variant="ghost" />
-			<Button children={<img className="w-9" src={focuserIcon} />} color="secondary" disabled={focuserLength === 0} onClick={() => homeMenu.select('FOCUSER')} size="lg" tooltipContent="Focuser" variant="ghost" />
-			<Button children={<img className="w-9" src={rotatorIcon} />} color="secondary" disabled={rotatorLength === 0} onClick={() => homeMenu.select('ROTATOR')} size="lg" tooltipContent="Rotator" variant="ghost" />
-			<Button children={<img className="w-9" src={flatPanelIcon} />} color="secondary" disabled={flatPanelLength === 0} onClick={() => homeMenu.select('FLAT_PANEL')} size="lg" tooltipContent="Flat Panel" variant="ghost" />
-			<Button children={<img className="w-9" src={coverIcon} />} color="secondary" disabled={coverLength === 0} onClick={() => homeMenu.select('COVER')} size="lg" tooltipContent="Cover" variant="ghost" />
-			<Button children={<img className="w-9" src={guideOutputIcon} />} color="secondary" disabled={guideOutputLength === 0} onClick={() => homeMenu.select('GUIDE_OUTPUT')} size="lg" tooltipContent="Guide Output" variant="ghost" />
-			<Button children={<img className="w-9" src={heaterIcon} />} color="secondary" disabled={dewHeaterLength === 0} onClick={() => homeMenu.select('DEW_HEATER')} size="lg" tooltipContent="Dew Heater" variant="ghost" />
-			<Button children={<img className="w-9" src={thermometerIcon} />} color="secondary" disabled={thermometerLength === 0} onClick={() => homeMenu.select('THERMOMETER')} size="lg" tooltipContent="Thermometer" variant="ghost" />
-			<Button children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={phd2.show} size="lg" tooltipContent="PHD2" variant="ghost" />
-			<Button children={<img className="w-9" src={skyAtlasIcon} />} color="secondary" onClick={skyAtlas.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
-			<Button children={<img className="w-9" src={framingIcon} />} color="secondary" onClick={framing.show} size="lg" tooltipContent="Framing" variant="ghost" />
-			<Button children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={tppa.show} size="lg" tooltipContent="TPPA" variant="ghost" />
-			<Button children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={darv.show} size="lg" tooltipContent="DARV" variant="ghost" />
-			<Button children={<img className="w-9" src={autoFocusIcon} />} color="secondary" disabled={cameraLength === 0 || focuserLength === 0} onClick={autoFocus.show} size="lg" tooltipContent="Auto Focus" variant="ghost" />
-			<Button children={<img className="w-9" src={flatWizardIcon} />} color="secondary" disabled={cameraLength === 0} onClick={flatWizard.show} size="lg" tooltipContent="Flat Wizard" variant="ghost" />
-			<Button children={<img className="w-9" src={sequencerIcon} />} color="secondary" disabled={cameraLength === 0} size="lg" tooltipContent="Sequencer" variant="ghost" />
+			<Button data-key="CAMERA" children={<img className="w-9" src={cameraIcon} />} color="secondary" disabled={cameraLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Camera" variant="ghost" />
+			<Button data-key="MOUNT" children={<img className="w-9" src={mountIcon} />} color="secondary" disabled={mountLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Mount" variant="ghost" />
+			<Button data-key="WHEEL" children={<img className="w-9" src={filterWheelIcon} />} color="secondary" disabled={wheelLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Filter Wheel" variant="ghost" />
+			<Button data-key="FOCUSER" children={<img className="w-9" src={focuserIcon} />} color="secondary" disabled={focuserLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Focuser" variant="ghost" />
+			<Button data-key="ROTATOR" children={<img className="w-9" src={rotatorIcon} />} color="secondary" disabled={rotatorLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Rotator" variant="ghost" />
+			<Button data-key="FLAT_PANEL" children={<img className="w-9" src={flatPanelIcon} />} color="secondary" disabled={flatPanelLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Flat Panel" variant="ghost" />
+			<Button data-key="COVER" children={<img className="w-9" src={coverIcon} />} color="secondary" disabled={coverLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Cover" variant="ghost" />
+			<Button data-key="GUIDE_OUTPUT" children={<img className="w-9" src={guideOutputIcon} />} color="secondary" disabled={guideOutputLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Guide Output" variant="ghost" />
+			<Button data-key="DEW_HEATER" children={<img className="w-9" src={heaterIcon} />} color="secondary" disabled={dewHeaterLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Dew Heater" variant="ghost" />
+			<Button data-key="THERMOMETER" children={<img className="w-9" src={thermometerIcon} />} color="secondary" disabled={thermometerLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Thermometer" variant="ghost" />
+			<Button data-key="PHD2" children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={phd2.show} size="lg" tooltipContent="PHD2" variant="ghost" />
+			<Button data-key="ATLAS" children={<img className="w-9" src={skyAtlasIcon} />} color="secondary" onClick={skyAtlas.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
+			<Button data-key="FRAMING" children={<img className="w-9" src={framingIcon} />} color="secondary" onClick={framing.show} size="lg" tooltipContent="Framing" variant="ghost" />
+			<Button data-key="TPPA" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={tppa.show} size="lg" tooltipContent="TPPA" variant="ghost" />
+			<Button data-key="DARV" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={darv.show} size="lg" tooltipContent="DARV" variant="ghost" />
+			<Button data-key="AUTO_FOCUS" children={<img className="w-9" src={autoFocusIcon} />} color="secondary" disabled={cameraLength === 0 || focuserLength === 0} onClick={autoFocus.show} size="lg" tooltipContent="Auto Focus" variant="ghost" />
+			<Button data-key="FLAT_WIZARD" children={<img className="w-9" src={flatWizardIcon} />} color="secondary" disabled={cameraLength === 0} onClick={flatWizard.show} size="lg" tooltipContent="Flat Wizard" variant="ghost" />
+			<Button data-key="SEQUENCER" children={<img className="w-9" src={sequencerIcon} />} color="secondary" disabled={cameraLength === 0} size="lg" tooltipContent="Sequencer" variant="ghost" />
 			<IndiPanelControlButton disabled={isIndiDisabled} size="lg" />
-			<Button children={<img className="w-9" src={alpacaIcon} />} color="secondary" disabled={isIndiDisabled} onClick={alpaca.show} size="lg" tooltipContent="ASCOM Alpaca Server" variant="ghost" />
-			<Button children={<img className="w-9" src={calculatorIcon} />} color="secondary" onClick={calculator.show} size="lg" tooltipContent="Calculator" variant="ghost" />
-			<Button children={<img className="w-9" src={settingsIcon} />} color="secondary" size="lg" tooltipContent="Settings" variant="ghost" />
-			<Button children={<img className="w-9" src={aboutIcon} />} color="secondary" onClick={about.show} size="lg" tooltipContent="About" variant="ghost" />
+			<Button data-key="ALPACA" children={<img className="w-9" src={alpacaIcon} />} color="secondary" disabled={isIndiDisabled} onClick={handleButtonClick} size="lg" tooltipContent="ASCOM Alpaca Server" variant="ghost" />
+			<Button data-key="CALCULATOR" children={<img className="w-9" src={calculatorIcon} />} color="secondary" onClick={handleButtonClick} size="lg" tooltipContent="Calculator" variant="ghost" />
+			<Button data-key="SETTINGS" children={<img className="w-9" src={settingsIcon} />} color="secondary" size="lg" tooltipContent="Settings" variant="ghost" />
+			<Button data-key="ABOUT" children={<img className="w-9" src={aboutIcon} />} color="secondary" onClick={handleButtonClick} size="lg" tooltipContent="About" variant="ghost" />
 			<Devices />
 		</div>
 	)
@@ -201,6 +212,7 @@ const Devices = memo(() => {
 	function handleClick(id: string) {
 		const device = equipment.get(selected, id)
 		if (device !== undefined) device.show = true
+		homeMenu.hide()
 	}
 
 	const devices = new Array<React.ReactNode>(length)

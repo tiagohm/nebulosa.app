@@ -1,5 +1,3 @@
-import { molecule } from 'bunshi'
-import bus from 'src/shared/bus'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
 
@@ -42,9 +40,9 @@ export interface CalculatorState {
 	readonly ccdResolution: CcdResolution
 }
 
-type CalculatorSection = keyof Omit<CalculatorState, 'show'>
+const CALCULATOR_SECTIONS = ['focalLength', 'focalRatio', 'dawesLimit', 'rayleighLimit', 'limitingMagnitude', 'lightGraspRatio', 'ccdResolution'] as const
 
-const CALCULATOR_SECTIONS = ['focalLength', 'focalRatio', 'dawesLimit', 'rayleighLimit', 'limitingMagnitude', 'lightGraspRatio', 'ccdResolution'] as const satisfies readonly CalculatorSection[]
+type CalculatorSection = (typeof CALCULATOR_SECTIONS)[number]
 
 const state = proxy<CalculatorState>({
 	show: false,
@@ -59,15 +57,12 @@ const state = proxy<CalculatorState>({
 
 initProxy(state, 'calculator', ['p:show', 'o:focalLength', 'o:focalRatio', 'o:dawesLimit', 'o:rayleighLimit', 'o:limitingMagnitude', 'o:lightGraspRatio', 'o:ccdResolution'])
 
-refreshDerivedValues()
-
 function positive(value: number) {
 	return Number.isFinite(value) && value > 0 ? value : 0
 }
 
 function divideOrZero(dividend: number, divisor: number) {
 	const denominator = positive(divisor)
-
 	return denominator > 0 ? positive(dividend) / denominator : 0
 }
 
@@ -85,20 +80,24 @@ function refreshDerivedValues() {
 	for (const property of CALCULATOR_SECTIONS) refreshDerivedValue(property)
 }
 
-export const CalculatorMolecule = molecule(() => {
-	function show() {
-		bus.emit('homeMenu:toggle', false)
-		state.show = true
-	}
+refreshDerivedValues()
 
-	function hide() {
-		state.show = false
-	}
+function update<P extends keyof Omit<CalculatorState, 'show'>, K extends keyof CalculatorState[P]>(property: P, key: K, value: CalculatorState[P][K]) {
+	state[property][key] = value
+	refreshDerivedValue(property)
+}
 
-	function update<P extends keyof Omit<CalculatorState, 'show'>, K extends keyof CalculatorState[P]>(property: P, key: K, value: CalculatorState[P][K]) {
-		state[property][key] = value
-		refreshDerivedValue(property)
-	}
+function show() {
+	state.show = true
+}
 
-	return { state, show, hide, update } as const
-})
+function hide() {
+	state.show = false
+}
+
+export const calculator = {
+	state,
+	show,
+	hide,
+	update,
+} as const

@@ -1,5 +1,5 @@
-import { ScopeProvider, useMolecule } from 'bunshi/react'
-import { Activity, memo, useMemo } from 'react'
+import { ScopeProvider } from 'bunshi/react'
+import { Activity, memo, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { CameraScope } from '@/molecules/indi/camera'
 import { CoverScope } from '@/molecules/indi/cover'
@@ -11,9 +11,9 @@ import { MountScope } from '@/molecules/indi/mount'
 import { RotatorScope } from '@/molecules/indi/rotator'
 import { ThermometerScope } from '@/molecules/indi/thermometer'
 import { WheelScope } from '@/molecules/indi/wheel'
-import { WebSocketMolecule } from '@/molecules/ws'
 import { activityMode } from '../shared/util'
 import { equipment } from '../store/equipment.store'
+import { ws } from '../store/ws.store'
 import { Camera } from './Camera'
 import { Confirmation } from './Confirmation'
 import { Cover } from './Cover'
@@ -30,7 +30,7 @@ import { Wheel } from './Wheel'
 
 export const Home = memo(() => {
 	// Mounts the websocket lifecycle once the home screen is active.
-	useMolecule(WebSocketMolecule)
+	useEffect(ws.mount, [])
 
 	return (
 		<div className="flex h-full min-h-0 w-full min-w-0 flex-col">

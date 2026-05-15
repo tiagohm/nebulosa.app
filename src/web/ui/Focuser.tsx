@@ -15,7 +15,7 @@ export const Focuser = memo(() => {
 	const focuser = useMolecule(FocuserMolecule)
 
 	return (
-		<Modal header={<Header />} id={`focuser-${focuser.scope.focuser.name}`} maxWidth="256px" onHide={focuser.hide}>
+		<Modal header={<Header />} id={`focuser-${focuser.scope.focuser.id}`} maxWidth="256px" onHide={focuser.hide}>
 			<Body />
 		</Modal>
 	)
@@ -29,7 +29,7 @@ const Header = memo(() => {
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={focuser.connect} />
-				<IndiPanelControlButton device={name} />
+				<IndiPanelControlButton device={focuser.scope.focuser} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Focuser</span>

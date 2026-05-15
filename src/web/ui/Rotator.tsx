@@ -19,7 +19,7 @@ export const Rotator = memo(() => {
 	const rotator = useMolecule(RotatorMolecule)
 
 	return (
-		<Modal header={<Header />} id={`rotator-${rotator.scope.rotator.name}`} maxWidth="256px" onHide={rotator.hide}>
+		<Modal header={<Header />} id={`rotator-${rotator.scope.rotator.id}`} maxWidth="256px" onHide={rotator.hide}>
 			<Body />
 		</Modal>
 	)
@@ -33,7 +33,7 @@ const Header = memo(() => {
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={rotator.connect} />
-				<IndiPanelControlButton device={rotator.scope.rotator.name} />
+				<IndiPanelControlButton device={rotator.scope.rotator} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Rotator</span>

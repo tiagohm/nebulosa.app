@@ -22,7 +22,7 @@ export const DewHeater = memo(() => {
 	const dewHeater = useMolecule(DewHeaterMolecule)
 
 	return (
-		<Modal header={<Header />} id={`dew-heater-${dewHeater.scope.dewHeater.name}`} maxWidth="256px" onHide={dewHeater.hide}>
+		<Modal header={<Header />} id={`dew-heater-${dewHeater.scope.dewHeater.id}`} maxWidth="256px" onHide={dewHeater.hide}>
 			<Body />
 		</Modal>
 	)
@@ -36,7 +36,7 @@ const Header = memo(() => {
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={dewHeater.connect} />
-				<IndiPanelControlButton device={name} />
+				<IndiPanelControlButton device={dewHeater.scope.dewHeater} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Dew Heater</span>

@@ -14,7 +14,7 @@ export const MountRemoteControl = memo(() => {
 	const mount = useMolecule(MountMolecule)
 
 	return (
-		<Modal footer={<Footer />} header="Remote Control" id={`mount-remote-control-${mount.scope.mount.name}`} maxWidth="236px" onHide={mount.hideRemoteControl}>
+		<Modal footer={<Footer />} header="Remote Control" id={`mount-remote-control-${mount.scope.mount.id}`} maxWidth="236px" onHide={mount.hideRemoteControl}>
 			<Body />
 		</Modal>
 	)

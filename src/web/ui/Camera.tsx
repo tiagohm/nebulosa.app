@@ -27,7 +27,7 @@ export const Camera = memo(() => {
 	const camera = useMolecule(CameraMolecule)
 
 	return (
-		<Modal footer={<Footer />} header={<Header />} id={`camera-${camera.scope.camera.name}`} maxWidth="360px" onHide={camera.hide}>
+		<Modal footer={<Footer />} header={<Header />} id={`camera-${camera.scope.camera.id}`} maxWidth="360px" onHide={camera.hide}>
 			<Body />
 		</Modal>
 	)
@@ -63,7 +63,7 @@ const Header = memo(() => {
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
 				<ConnectButton disabled={capturing} connected={connected} loading={connecting} onClick={camera.connect} />
-				<IndiPanelControlButton device={camera.scope.camera.name} />
+				<IndiPanelControlButton device={camera.scope.camera} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Camera</span>
@@ -95,7 +95,7 @@ const Path = memo(() => {
 		<div className="col-span-full flex flex-row items-center gap-1">
 			<AutoSaveButton disabled={capturing} onValueChange={(value) => camera.update('autoSave', value)} value={autoSave} />
 			<AutoSubFolderModeButton disabled={!autoSave || capturing} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={autoSubFolderMode} />
-			<FilePickerInput disabled={!autoSave || capturing} fullWidth id={`camera-${camera.scope.camera.name}`} mode="directory" onValueChange={camera.updateSavePath} value={savePath} />
+			<FilePickerInput disabled={!autoSave || capturing} fullWidth id={`camera-${camera.scope.camera.id}`} mode="directory" onValueChange={camera.updateSavePath} value={savePath} />
 		</div>
 	)
 })
@@ -118,7 +118,7 @@ const OptionsModal = memo(() => {
 	const camera = useMolecule(CameraMolecule)
 
 	return (
-		<Modal header="Options" id={`camera-options-${camera.scope.camera.name}`} maxWidth="280px" onHide={() => (camera.state.request.show = false)}>
+		<Modal header="Options" id={`camera-options-${camera.scope.camera.id}`} maxWidth="280px" onHide={() => (camera.state.request.show = false)}>
 			<OptionsBody />
 		</Modal>
 	)

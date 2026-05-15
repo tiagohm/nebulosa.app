@@ -9,8 +9,6 @@ function update(key: string, value: number) {
 }
 
 function increment(key: string, force: boolean = false) {
-	key = key.replaceAll(/[\W]+/g, '-')
-
 	const index = store.findIndex((e) => e[0] === key)
 
 	if (index < 0) {
@@ -44,12 +42,10 @@ function increment(key: string, force: boolean = false) {
 }
 
 function apply(element: HTMLElement, key: string) {
-	key = key.replaceAll(/[\W]+/g, '-')
 	element.style.zIndex = `var(--z-index-${key})`
 }
 
 function remove(key: string) {
-	key = key.replaceAll(/[\W]+/g, '-')
 	const index = store.findIndex((e) => e[0] === key)
 	if (index < 0) return
 	store.splice(index, 1)

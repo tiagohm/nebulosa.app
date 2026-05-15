@@ -56,7 +56,7 @@ export const Mount = memo(() => {
 	const mount = useMolecule(MountMolecule)
 
 	return (
-		<Modal header={<Header />} id={`mount-${mount.scope.mount.name}`} maxWidth="400px" onHide={mount.hide}>
+		<Modal header={<Header />} id={`mount-${mount.scope.mount.id}`} maxWidth="400px" onHide={mount.hide}>
 			<Body />
 		</Modal>
 	)
@@ -71,7 +71,7 @@ const Header = memo(() => {
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
 				<ConnectButton disabled={moving} connected={connected} loading={connecting} onClick={mount.connect} />
-				<IndiPanelControlButton device={mount.scope.mount.name} />
+				<IndiPanelControlButton device={mount.scope.mount} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Mount</span>
@@ -120,7 +120,7 @@ const LocationButton = memo(() => {
 	return (
 		<>
 			<IconButton color="danger" disabled={!connected} icon={Icons.MapMarker} onClick={mount.showLocation} tooltipContent="Location" />
-			{show && <Location {...geographicCoordinate} id={`location-mount-${mount.scope.mount.name}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}
+			{show && <Location {...geographicCoordinate} id={`location-mount-${mount.scope.mount.id}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}
 		</>
 	)
 })
@@ -133,7 +133,7 @@ const TimeButton = memo(() => {
 	return (
 		<>
 			<IconButton color="primary" disabled={!connected || time.utc === 0} icon={Icons.Clock} onClick={mount.showTime} tooltipContent="Time" />
-			{show && <Time id={`time-mount-${mount.scope.mount.name}`} onClose={mount.hideTime} onTimeChange={mount.time} {...time} />}
+			{show && <Time id={`time-mount-${mount.scope.mount.id}`} onClose={mount.hideTime} onTimeChange={mount.time} {...time} />}
 		</>
 	)
 })

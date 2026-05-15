@@ -13,7 +13,7 @@ export const Cover = memo(() => {
 	const cover = useMolecule(CoverMolecule)
 
 	return (
-		<Modal header={<Header />} id={`cover-${cover.scope.cover.name}`} maxWidth="256px" onHide={cover.hide}>
+		<Modal header={<Header />} id={`cover-${cover.scope.cover.id}`} maxWidth="256px" onHide={cover.hide}>
 			<Body />
 		</Modal>
 	)
@@ -27,7 +27,7 @@ const Header = memo(() => {
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={cover.connect} />
-				<IndiPanelControlButton device={name} />
+				<IndiPanelControlButton device={cover.scope.cover} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Cover</span>

@@ -12,7 +12,7 @@ export const GuideOutput = memo(() => {
 	const guideOutput = useMolecule(GuideOutputMolecule)
 
 	return (
-		<Modal header={<Header />} id={`guide-output-${guideOutput.scope.guideOutput.name}`} maxWidth="336px" onHide={guideOutput.hide}>
+		<Modal header={<Header />} id={`guide-output-${guideOutput.scope.guideOutput.id}`} maxWidth="336px" onHide={guideOutput.hide}>
 			<Body />
 		</Modal>
 	)
@@ -26,7 +26,7 @@ const Header = memo(() => {
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} disabled={pulsing} loading={connecting} onClick={guideOutput.connect} />
-				<IndiPanelControlButton device={name} />
+				<IndiPanelControlButton device={guideOutput.scope.guideOutput} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Guide Output</span>

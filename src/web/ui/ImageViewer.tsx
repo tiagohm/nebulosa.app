@@ -115,7 +115,7 @@ export const ImageViewer = memo(() => {
 		}
 	}, [])
 
-	const handleGesture = useCallback<Exclude<InteractableProps['onGesture'], undefined>>(
+	const handleGesture = useCallback<NonNullable<InteractableProps['onGesture']>>(
 		({ scale, angle }) => {
 			if (viewer.state.scale !== scale) viewer.state.scale = scale
 			if (viewer.state.angle !== angle) viewer.state.angle = angle
@@ -123,7 +123,7 @@ export const ImageViewer = memo(() => {
 		[viewer],
 	)
 
-	const handleClick = useCallback<Exclude<InteractableProps['onClick'], undefined>>(
+	const handleClick = useCallback<NonNullable<InteractableProps['onClick']>>(
 		({ event, dragging, pinching }) => {
 			if (!mouseCoordinate.state.visible || dragging || pinching) return
 			mouseCoordinate.handleInterpolatedCoordinate(event.offsetX, event.offsetY, true)
@@ -131,7 +131,7 @@ export const ImageViewer = memo(() => {
 		[mouseCoordinate],
 	)
 
-	const handleMouseMove = useCallback<Exclude<InteractableProps['onMouseMove'], undefined>>(
+	const handleMouseMove = useCallback<NonNullable<InteractableProps['onMouseMove']>>(
 		({ event, dragging, pinching }) => {
 			if (!mouseCoordinate.state.visible || dragging || pinching) return
 			mouseCoordinate.handleInterpolatedCoordinate(event.offsetX, event.offsetY, false)

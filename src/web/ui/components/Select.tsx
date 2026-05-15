@@ -188,7 +188,7 @@ function selectedIndexOf<T>(items: readonly T[], value: T | null | undefined, is
 }
 
 // Normalizes panel item height to match the Select size by default.
-function selectItemHeight(size: Exclude<SelectVariants['size'], undefined>, itemHeight: number | undefined) {
+function selectItemHeight(size: NonNullable<SelectVariants['size']>, itemHeight: number | undefined) {
 	return itemHeight !== undefined && Number.isFinite(itemHeight) && itemHeight > 0 ? itemHeight : SELECT_ITEM_HEIGHTS[size]
 }
 

@@ -136,7 +136,7 @@ type TabsChildComponent = {
 }
 
 export type TabId = string | number | symbol | bigint | boolean
-export type TabPlacement = Exclude<TabsVariants['placement'], undefined>
+export type TabPlacement = NonNullable<TabsVariants['placement']>
 
 export interface TabsClassNames {
 	readonly base?: ClassValue

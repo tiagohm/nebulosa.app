@@ -1,12 +1,13 @@
 import { useMolecule } from 'bunshi/react'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import { memo } from 'react'
+import type { TppaState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { TppaMolecule } from '@/molecules/tppa'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
-import { Chip } from './components/Chip'
+import { Chip, type ChipProps } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
 import { CameraDropdown, MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
@@ -14,6 +15,26 @@ import { Modal } from './Modal'
 import { PlateSolverSelect } from './PlateSolverSelect'
 import { PlateSolveStartPopover } from './PlateSolveStartPopover'
 import { TppaDirectionSelect } from './TppaDirectionSelect'
+
+const TPPA_STATE_LABELS = {
+	IDLE: 'idle',
+	WAITING: 'waiting',
+	MOVING: 'moving',
+	CAPTURING: 'capturing',
+	SOLVING: 'solving',
+	ALIGNING: 'aligning',
+	SETTLING: 'settling',
+} satisfies Record<TppaState, string>
+
+const TPPA_STATE_COLORS = {
+	IDLE: 'default',
+	WAITING: 'warning',
+	MOVING: 'secondary',
+	CAPTURING: 'primary',
+	SOLVING: 'primary',
+	ALIGNING: 'success',
+	SETTLING: 'warning',
+} satisfies Record<TppaState, NonNullable<ChipProps['color']>>
 
 export const Tppa = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
@@ -48,10 +69,10 @@ const Devices = memo(() => {
 
 const CameraDropdownEndContent = memo(() => {
 	const tppa = useMolecule(TppaMolecule)
-	const { camera } = useSnapshot(tppa.state)
+	const { camera, running } = useSnapshot(tppa.state)
 	const { capture } = useSnapshot(tppa.state.request)
 
-	return camera && <CameraCaptureStartPopover camera={camera} mode="tppa" onValueChange={tppa.updateCapture} value={capture} />
+	return camera && <CameraCaptureStartPopover camera={camera} disabled={running} mode="tppa" onValueChange={tppa.updateCapture} value={capture} />
 })
 
 const Status = memo(() => {
@@ -61,12 +82,12 @@ const Status = memo(() => {
 
 	return (
 		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
-			<Chip color="primary" size="sm">
-				{state === 'IDLE' ? 'idle' : state === 'MOVING' ? 'moving' : state === 'CAPTURING' ? 'capturing' : state === 'SOLVING' ? 'solving' : state === 'WAITING' ? 'waiting' : state === 'SETTLING' ? 'settling' : 'aligning'}
+			<Chip color={TPPA_STATE_COLORS[state]} size="sm">
+				{TPPA_STATE_LABELS[state]}
 			</Chip>
 			<div className="flex flex-row items-center gap-1">
 				<Chip color="warning" size="sm">
-					{event.step}
+					Step {event.step}
 				</Chip>
 				<Chip color={solved ? 'success' : 'danger'} size="sm">
 					RA: {formatRA(solver.rightAscension)}
@@ -130,7 +151,7 @@ const Footer = memo(() => {
 	return (
 		<>
 			<Button color="danger" disabled={!running} label="Stop" onClick={tppa.stop} startContent={<Icons.Stop />} />
-			<Button color="success" disabled={!camera?.connected || !mount?.connected} label="Start" loading={running} onClick={tppa.start} startContent={<Icons.Play />} />
+			<Button color="success" disabled={running || !camera?.connected || !mount?.connected} label="Start" loading={running} onClick={tppa.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

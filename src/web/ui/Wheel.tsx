@@ -25,23 +25,33 @@ export const Wheel = memo(() => {
 
 const Header = memo(() => {
 	const wheel = useMolecule(WheelMolecule)
-	const { connecting, connected } = useSnapshot(wheel.state.wheel)
+	const { connecting, connected, name } = useSnapshot(wheel.state.wheel)
 
 	return (
-		<div className="flex w-full flex-row items-center justify-between">
-			<div className="flex flex-row items-center gap-1">
+		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
+			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={wheel.connect} />
-				<IndiPanelControlButton device={wheel.scope.wheel.name} />
+				<IndiPanelControlButton device={name} />
 			</div>
-			<div className="flex flex-1 flex-col items-center justify-center gap-0">
+			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Filter Wheel</span>
-				<span className="max-w-full text-xs font-normal text-gray-400">{wheel.scope.wheel.name}</span>
+				<span className="max-w-full truncate text-xs font-normal text-neutral-400">{name}</span>
 			</div>
 		</div>
 	)
 })
 
-const SlotItem = (name: string) => <span>{name}</span>
+function slotCount(count: number, names: readonly string[]) {
+	return Math.max(Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0, names.length)
+}
+
+function slotName(names: readonly string[], position: number) {
+	return names[position] || `Slot ${position + 1}`
+}
+
+function slotPosition(position: number, count: number, names: readonly string[]) {
+	return Number.isInteger(position) && position >= 0 && position < slotCount(count, names) ? position + 1 : '--'
+}
 
 const Body = memo(() => (
 	<div className="mt-0 grid grid-cols-12 gap-2">
@@ -52,18 +62,18 @@ const Body = memo(() => (
 
 const Status = memo(() => {
 	const wheel = useMolecule(WheelMolecule)
-	const { moving, position, names } = useSnapshot(wheel.state.wheel)
+	const { count, moving, position, names } = useSnapshot(wheel.state.wheel)
 
 	return (
-		<div className="col-span-3 flex flex-row items-center justify-start gap-2">
-			<Chip color="primary" size="sm">
+		<div className="col-span-full flex flex-row flex-wrap items-center justify-start gap-2">
+			<Chip color={moving ? 'warning' : 'default'} size="sm">
 				{moving ? 'moving' : 'idle'}
 			</Chip>
 			<Chip color="warning" size="sm">
-				POSITION: {position}
+				POSITION: {slotPosition(position, count, names)}
 			</Chip>
 			<Chip color="success" size="sm">
-				FILTER: {names[position]}
+				FILTER: {slotPosition(position, count, names) === '--' ? '--' : slotName(names, position)}
 			</Chip>
 		</div>
 	)
@@ -72,35 +82,50 @@ const Status = memo(() => {
 const Slot = memo(() => {
 	const wheel = useMolecule(WheelMolecule)
 	const { selected } = useSnapshot(wheel.state)
-	const { connected, moving, position, names } = useSnapshot(wheel.state.wheel)
+	const { connected, count, moving, position, names } = useSnapshot(wheel.state.wheel)
+	const positions = Array.from({ length: slotCount(count, names) }, (_, index) => index)
+	const selectedPosition = positions.includes(selected.position) ? selected.position : null
+	const canMove = connected && !moving && selectedPosition !== null && selected.position !== position
+
+	function renderSlot(position: number) {
+		return <span>{slotName(names, position)}</span>
+	}
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-end gap-2">
-			<Select className="flex-1" items={names} endContent={<SlotPopover />} disabled={!connected || moving || names.length === 0} label="Slot" onValueChange={(value) => wheel.update('position', names.indexOf(value))} value={names[selected.position]}>
-				{SlotItem}
+			<Select className="flex-1" disabled={!connected || moving || positions.length === 0} endContent={<SlotPopover />} items={positions} label="Slot" onValueChange={(value) => wheel.update('position', value)} value={selectedPosition}>
+				{renderSlot}
 			</Select>
-			<Button color="success" disabled={!connected || selected.position === position || names.length === 0} label="Move" loading={moving} onClick={wheel.moveTo} startContent={<Icons.Check />} variant="ghost" />
+			<Button color="success" disabled={!canMove} label="Move" loading={moving} onClick={wheel.moveTo} startContent={<Icons.Check />} variant="ghost" />
 		</div>
 	)
 })
 
-const SlotPopover = memo(() => (
-	<Popover trigger={<IconButton icon={Icons.Cog} size="sm" />}>
-		<SlotPopoverContent />
-	</Popover>
-))
+const SlotPopover = memo(() => {
+	const wheel = useMolecule(WheelMolecule)
+	const { connected, count, moving, names } = useSnapshot(wheel.state.wheel)
+	const disabled = !connected || moving || slotCount(count, names) === 0
+
+	return (
+		<Popover disabled={disabled} trigger={<IconButton disabled={disabled} icon={Icons.Cog} size="sm" />}>
+			<SlotPopoverContent />
+		</Popover>
+	)
+})
 
 const SlotPopoverContent = memo(() => {
 	const wheel = useMolecule(WheelMolecule)
-	const { canSetNames } = useSnapshot(wheel.state.wheel)
-	const { name } = useSnapshot(wheel.state.selected)
+	const { canSetNames, connected, moving } = useSnapshot(wheel.state.wheel)
+	const { name, position } = useSnapshot(wheel.state.selected)
+	const disabled = !connected || moving || !canSetNames
+	const canApply = !disabled && position >= 0 && name.length > 0
 
 	return (
 		<div className="grid grid-cols-12 gap-2 p-4">
 			<p className="col-span-full font-bold">SLOT OPTIONS</p>
-			<TextInput className="col-span-10" disabled={!canSetNames} label="Name" onValueChange={(value) => value && wheel.update('name', value)} value={name} />
+			<TextInput className="col-span-10" disabled={disabled} label="Name" onValueChange={(value) => wheel.update('name', value)} value={name} />
 			<div className="col-span-2 flex flex-row items-center justify-center">
-				<IconButton color="success" disabled={!canSetNames || name.length === 0} icon={Icons.Check} onClick={wheel.apply} tooltipContent="Apply" />
+				<IconButton color="success" disabled={!canApply} icon={Icons.Check} onClick={wheel.apply} tooltipContent="Apply" />
 			</div>
 		</div>
 	)

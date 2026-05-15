@@ -9,14 +9,14 @@ import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
 import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
-import { EquipmentMolecule } from './indi/equipment'
+import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
 export interface TppaState {
 	show: boolean
 	running: boolean
 	readonly request: TppaStart
-	camera?: Camera
-	mount?: Mount
+	camera?: EquipmentDevice<Camera>
+	mount?: EquipmentDevice<Mount>
 	event: TppaEvent
 }
 
@@ -29,11 +29,21 @@ const state = proxy<TppaState>({
 
 initProxy(state, 'tppa', ['o:request', 'p:show'])
 
+function nextTppaRequestId() {
+	return Date.now().toFixed(0)
+}
+
+function resetTppaEvent() {
+	state.running = false
+	Object.assign(state.event, DEFAULT_TPPA_EVENT)
+	state.event.id = state.request.id
+}
+
 export const TppaMolecule = molecule(() => {
 	const equipment = use(EquipmentMolecule)
 
 	onMount(() => {
-		state.request.id = Date.now().toFixed(0)
+		state.request.id ||= nextTppaRequestId()
 
 		const unsubscribers = new Array<VoidFunction>(5)
 
@@ -95,12 +105,27 @@ export const TppaMolecule = molecule(() => {
 		state.request.refraction[key] = value
 	}
 
-	function start() {
-		return Api.TPPA.start(state.camera!, state.mount!, state.request)
+	async function start() {
+		if (state.running || !state.camera?.connected || !state.mount?.connected) return
+
+		state.running = true
+		state.request.id = nextTppaRequestId()
+
+		const response = await Api.TPPA.start(state.camera, state.mount, state.request).catch(() => undefined)
+
+		if (!response?.ok) {
+			resetTppaEvent()
+		}
 	}
 
-	function stop() {
-		return Api.TPPA.stop(state.request)
+	async function stop() {
+		if (!state.running) return
+
+		const response = await Api.TPPA.stop(state.request).catch(() => undefined)
+
+		if (response?.ok) {
+			resetTppaEvent()
+		}
 	}
 
 	function show() {
@@ -112,5 +137,5 @@ export const TppaMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, update, updateSolver, updateCapture, updateRefraction, start, stop, show, hide }
+	return { state, update, updateSolver, updateCapture, updateRefraction, start, stop, show, hide } as const
 })

@@ -123,7 +123,7 @@ export const PHD2Molecule = molecule(() => {
 		}
 	}
 
-	async function runCommand(command: Exclude<PHD2State['pendingCommand'], undefined>) {
+	async function runCommand(command: NonNullable<PHD2State['pendingCommand']>) {
 		try {
 			if (state.pendingCommand !== undefined) return
 			state.pendingCommand = command

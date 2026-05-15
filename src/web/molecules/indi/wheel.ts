@@ -26,6 +26,19 @@ export const WheelScope = createScope<WheelScopeValue>({ wheel: DEFAULT_WHEEL })
 
 const stateMap = new Map<string, WheelState>()
 
+function slotCount(wheel: Pick<Wheel, 'count' | 'names'>) {
+	const count = Number.isFinite(wheel.count) ? Math.max(0, Math.trunc(wheel.count)) : 0
+	return Math.max(count, wheel.names.length)
+}
+
+function isValidSlotPosition(wheel: Pick<Wheel, 'count' | 'names'>, position: number) {
+	return Number.isInteger(position) && position >= 0 && position < slotCount(wheel)
+}
+
+function slotName(wheel: Pick<Wheel, 'count' | 'names'>, position: number) {
+	return isValidSlotPosition(wheel, position) ? (wheel.names[position] ?? `Slot ${position + 1}`) : ''
+}
+
 export const WheelMolecule = molecule(() => {
 	const scope = use(WheelScope)
 	const equipment = use(EquipmentMolecule)
@@ -38,7 +51,7 @@ export const WheelMolecule = molecule(() => {
 			wheel,
 			selected: {
 				position: wheel.position,
-				name: wheel.names[wheel.position] || '',
+				name: slotName(wheel, wheel.position),
 			},
 		})
 
@@ -50,19 +63,21 @@ export const WheelMolecule = molecule(() => {
 		const unsubscribers = new Array<VoidFunction>(2)
 
 		unsubscribers[0] = bus.subscribe<WheelUpdated>('wheel:update', (event) => {
-			if (event.device.id === wheel.id) {
+			if (event.device.id === state.wheel.id) {
 				if (event.property === 'connected') {
 					if (!event.device.connected && event.state === 'Alert') {
-						toast({ title: 'FILTER WHEEL', description: `Failed to connect to filter wheel ${wheel.name}`, color: 'danger' })
+						toast({ title: 'FILTER WHEEL', description: `Failed to connect to filter wheel ${state.wheel.name}`, color: 'danger' })
 					}
 
 					state.wheel.connecting = false
+				} else if (event.property === 'names') {
+					state.selected.name = slotName(state.wheel, state.selected.position)
 				}
 			}
 		})
 
 		unsubscribers[1] = subscribeKey(state.selected, 'position', (position) => {
-			state.selected.name = wheel.names[position]
+			state.selected.name = slotName(state.wheel, position)
 		})
 
 		return () => {
@@ -71,25 +86,36 @@ export const WheelMolecule = molecule(() => {
 	})
 
 	function update<K extends keyof WheelState['selected']>(key: K, value: WheelState['selected'][K]) {
+		if (key === 'position') {
+			if (!isValidSlotPosition(state.wheel, value as number)) return
+		}
+
 		state.selected[key] = value
 	}
 
-	function connect() {
-		return equipment.connect(wheel)
+	async function connect() {
+		try {
+			return await equipment.connect(state.wheel)
+		} finally {
+			state.wheel.connecting = false
+		}
 	}
 
 	function moveTo() {
-		return Api.Wheels.moveTo(wheel, state.selected.position)
+		if (!state.wheel.connected || state.wheel.moving || !isValidSlotPosition(state.wheel, state.selected.position)) return
+		return Api.Wheels.moveTo(state.wheel, state.selected.position)
 	}
 
 	function apply() {
-		const names = [...wheel.names]
+		if (!state.wheel.connected || state.wheel.moving || !state.wheel.canSetNames || !isValidSlotPosition(state.wheel, state.selected.position)) return
+
+		const names = Array.from({ length: slotCount(state.wheel) }, (_, index) => state.wheel.names[index] ?? `Slot ${index + 1}`)
 		names[state.selected.position] = state.selected.name
-		return Api.Wheels.names(wheel, names)
+		return Api.Wheels.names(state.wheel, names)
 	}
 
 	function hide() {
-		equipment.hide('WHEEL', wheel)
+		equipment.hide('WHEEL', state.wheel)
 	}
 
 	return { state, scope, update, connect, moveTo, apply, hide } as const

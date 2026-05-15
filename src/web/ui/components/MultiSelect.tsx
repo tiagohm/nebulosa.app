@@ -207,7 +207,7 @@ function selectedValueIndexOf<T>(selectedItems: readonly T[], item: T, isItemEqu
 }
 
 // Normalizes panel item height to match the MultiSelect size by default.
-function multiSelectItemHeight(size: Exclude<MultiSelectVariants['size'], undefined>, itemHeight: number | undefined) {
+function multiSelectItemHeight(size: NonNullable<MultiSelectVariants['size']>, itemHeight: number | undefined) {
 	return itemHeight !== undefined && Number.isFinite(itemHeight) && itemHeight > 0 ? itemHeight : MULTI_SELECT_ITEM_HEIGHTS[size]
 }
 

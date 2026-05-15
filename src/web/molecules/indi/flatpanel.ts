@@ -3,17 +3,17 @@ import { DEFAULT_FLAT_PANEL, type FlatPanel } from 'nebulosa/src/indi.device'
 import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { FlatPanelUpdated } from 'src/shared/types'
+import { equipment, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { toast } from '@/shared/toast'
-import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface FlatPanelScopeValue {
 	readonly flatPanel: DeepReadonly<Omit<FlatPanel, symbol>>
 }
 
 export interface FlatPanelState {
-	flatPanel: EquipmentDevice<FlatPanel>
+	flatPanel: DeviceState<FlatPanel>
 }
 
 export const FlatPanelScope = createScope<FlatPanelScopeValue>({ flatPanel: DEFAULT_FLAT_PANEL })
@@ -22,20 +22,19 @@ const stateMap = new Map<string, FlatPanelState>()
 
 export const FlatPanelMolecule = molecule(() => {
 	const scope = use(FlatPanelScope)
-	const equipment = use(EquipmentMolecule)
 
-	const flatPanel = equipment.get('FLAT_PANEL', scope.flatPanel.name)!
+	const flatPanel = equipment.get('FLAT_PANEL', scope.flatPanel.id)!
 
 	const state =
-		stateMap.get(flatPanel.name) ??
+		stateMap.get(flatPanel.id) ??
 		proxy<FlatPanelState>({
 			flatPanel,
 		})
 
-	stateMap.set(flatPanel.name, state)
+	stateMap.set(flatPanel.id, state)
 
 	onMount(() => {
-		state.flatPanel = equipment.get('FLAT_PANEL', state.flatPanel.name)!
+		state.flatPanel = equipment.get('FLAT_PANEL', state.flatPanel.id)!
 
 		const unsubscriber = bus.subscribe<FlatPanelUpdated>('flatPanel:update', (event) => {
 			if (event.device.id === flatPanel.id) {
@@ -79,7 +78,7 @@ export const FlatPanelMolecule = molecule(() => {
 	}
 
 	function hide() {
-		equipment.hide('FLAT_PANEL', flatPanel)
+		state.flatPanel.show = false
 	}
 
 	return { state, scope, connect, update, enable, disable, toggle, intensity, hide } as const

@@ -9,13 +9,13 @@ import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
-import type { EquipmentDevice } from './indi/equipment'
+import type { DeviceState } from '../store/equipment.store'
 
 export interface PHD2State extends PHD2Status {
 	show: boolean
 	readonly connection: Writable<Omit<PHD2RemoteConnect, 'mode'> & Omit<PHD2InternalConnect, 'mode'> & { mode: PHD2ClientMode }>
-	camera?: EquipmentDevice<Camera>
-	guideOutput?: EquipmentDevice<GuideOutput>
+	camera?: DeviceState<Camera>
+	guideOutput?: DeviceState<GuideOutput>
 	readonly event: PHD2Event
 	index: number
 	connecting: boolean

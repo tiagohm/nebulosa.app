@@ -4,18 +4,18 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { WheelUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { equipment, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { toast } from '@/shared/toast'
-import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface WheelScopeValue {
 	readonly wheel: DeepReadonly<Omit<Wheel, symbol>>
 }
 
 export interface WheelState {
-	wheel: EquipmentDevice<Wheel>
+	wheel: DeviceState<Wheel>
 	readonly selected: {
 		position: number
 		name: string
@@ -41,12 +41,11 @@ function slotName(wheel: Pick<Wheel, 'count' | 'names'>, position: number) {
 
 export const WheelMolecule = molecule(() => {
 	const scope = use(WheelScope)
-	const equipment = use(EquipmentMolecule)
 
-	const wheel = equipment.get('WHEEL', scope.wheel.name)!
+	const wheel = equipment.get('WHEEL', scope.wheel.id)!
 
 	const state =
-		stateMap.get(wheel.name) ??
+		stateMap.get(wheel.id) ??
 		proxy<WheelState>({
 			wheel,
 			selected: {
@@ -55,10 +54,10 @@ export const WheelMolecule = molecule(() => {
 			},
 		})
 
-	stateMap.set(wheel.name, state)
+	stateMap.set(wheel.id, state)
 
 	onMount(() => {
-		state.wheel = equipment.get('WHEEL', state.wheel.name)!
+		state.wheel = equipment.get('WHEEL', state.wheel.id)!
 
 		const unsubscribers = new Array<VoidFunction>(2)
 
@@ -115,7 +114,7 @@ export const WheelMolecule = molecule(() => {
 	}
 
 	function hide() {
-		equipment.hide('WHEEL', state.wheel)
+		state.wheel.show = false
 	}
 
 	return { state, scope, update, connect, moveTo, apply, hide } as const

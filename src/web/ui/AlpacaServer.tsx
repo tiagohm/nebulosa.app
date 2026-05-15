@@ -1,24 +1,18 @@
-import { useMolecule } from 'bunshi/react'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
-import { memo } from 'react'
+import { memo, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { AlpacaMolecule, MAX_ALPACA_PORT, MIN_ALPACA_PORT } from '@/molecules/alpaca'
 import { Button } from '@/ui/components/Button'
 import { NumberInput } from '@/ui/components/NumberInput'
+import { alpaca, MAX_ALPACA_PORT, MIN_ALPACA_PORT } from '../store/alpaca.store'
 import { List, ListItem } from './components/List'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 
-function formatDeviceCount(count: number) {
-	return `${count} ${count === 1 ? 'device' : 'devices'}`
-}
-
 export const AlpacaServer = memo(() => {
-	const alpaca = useMolecule(AlpacaMolecule)
-	const { devices, running } = useSnapshot(alpaca.state.status)
+	useEffect(alpaca.mount, [])
 
 	return (
-		<Modal footer={<Footer />} header="ASCOM Alpaca Server" id="alpaca" maxWidth="296px" onHide={alpaca.hide} subHeader={running ? formatDeviceCount(devices.length) : undefined}>
+		<Modal footer={<Footer />} header="ASCOM Alpaca Server" id="alpaca" maxWidth="296px" onHide={alpaca.hide}>
 			<Body />
 		</Modal>
 	)
@@ -37,7 +31,6 @@ function DeviceItem({ item }: { readonly item?: AlpacaConfiguredDevice }) {
 }
 
 const DeviceList = memo(() => {
-	const alpaca = useMolecule(AlpacaMolecule)
 	const { devices } = useSnapshot(alpaca.state.status)
 
 	return (
@@ -48,7 +41,6 @@ const DeviceList = memo(() => {
 })
 
 const Footer = memo(() => {
-	const alpaca = useMolecule(AlpacaMolecule)
 	const { running } = useSnapshot(alpaca.state.status)
 	const { port, pendingAction } = useSnapshot(alpaca.state)
 	const disabled = pendingAction !== undefined

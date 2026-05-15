@@ -1,4 +1,4 @@
-import { molecule, onMount, use } from 'bunshi'
+import { molecule, onMount } from 'bunshi'
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import { type CameraUpdated, DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type TppaEvent, type TppaStart } from 'src/shared/types'
@@ -8,15 +8,15 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
+import { equipment, type DeviceState } from '../store/equipment.store'
 import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
-import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
 export interface TppaState {
 	show: boolean
 	running: boolean
 	readonly request: TppaStart
-	camera?: EquipmentDevice<Camera>
-	mount?: EquipmentDevice<Mount>
+	camera?: DeviceState<Camera>
+	mount?: DeviceState<Mount>
 	event: TppaEvent
 }
 
@@ -40,8 +40,6 @@ function resetTppaEvent() {
 }
 
 export const TppaMolecule = molecule(() => {
-	const equipment = use(EquipmentMolecule)
-
 	onMount(() => {
 		state.request.id ||= nextTppaRequestId()
 

@@ -1,9 +1,8 @@
-import { useMolecule } from 'bunshi/react'
 import { memo, type ReactNode } from 'react'
 import brazilLogo from '@/assets/brazil.png'
 import nebulosaLogo from '@/assets/nebulosa.ico'
-import { AboutMolecule } from '@/molecules/about'
 import packageJson from '../../../package.json'
+import { about } from '../store/about.store'
 import { Chip } from './components/Chip'
 import { Link } from './components/Link'
 import { Icons } from './Icon'
@@ -24,7 +23,7 @@ const STACK_LINKS = [
 	{ href: 'https://tailwindcss.com/', label: 'Tailwind CSS', version: packageJson.dependencies.tailwindcss },
 ] as const
 
-function StackLinktem(item: (typeof STACK_LINKS)[number]) {
+function StackLinkItem(item: (typeof STACK_LINKS)[number]) {
 	return <LinkButton href={item.href} key={item.label} label={item.version === undefined ? item.label : `${item.label} ${item.version}`} />
 }
 
@@ -32,52 +31,76 @@ function IconCreditItem(item: (typeof ICON_CREDITS)[number]) {
 	return <Link className="w-auto!" color="default" href={item.href} key={item.label} label={item.label} underline />
 }
 
-export const About = memo(() => {
-	const about = useMolecule(AboutMolecule)
+export const About = memo(() => (
+	<Modal header={<Header />} id="about" maxWidth="472px" onHide={about.hide}>
+		<Body />
+	</Modal>
+))
 
+function Body() {
 	return (
-		<Modal header={<Header />} id="about" maxWidth="472px" onHide={about.hide}>
-			<div className="grid grid-cols-12 gap-3">
-				<div className="col-span-full flex flex-col items-center gap-3 sm:col-span-4">
-					<img className="size-28 rounded-lg p-2" src={nebulosaLogo} />
-					<LinkButton href={PROJECT_URL} icon={<Icons.Link />} label="GitHub" />
-				</div>
-				<div className="col-span-full flex min-w-0 flex-col gap-3 sm:col-span-8">
-					<p className="text-center text-sm leading-5 text-neutral-300">{packageJson.description}</p>
-					<div className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-3">
-						<InfoRow label="Version">
-							<Chip color="primary" label={packageJson.version} size="sm" />
-						</InfoRow>
-						<InfoRow label="License">
-							<span>{packageJson.license}</span>
-						</InfoRow>
-						<InfoRow label="Author">
-							<span className="inline-flex min-w-0 items-center gap-1">
-								{packageJson.author.name}
-								<img className="h-4 w-5 shrink-0" src={brazilLogo} />
-							</span>
-						</InfoRow>
-						<InfoRow label="Copyright">
-							<span>2022-{about.state.year}</span>
-						</InfoRow>
-					</div>
-					<div className="rounded-lg border border-(--color-variant)/20 bg-(--color-variant)/10 p-3 text-center text-sm leading-5 text-neutral-200 [--color-variant:var(--warning)]">
-						This software is WIP, comes with absolutely no warranty, and the copyright holder is not liable or responsible for anything.
-					</div>
-				</div>
-				<div className="col-span-full flex flex-wrap items-center justify-center gap-1.5 border-t border-neutral-800 pt-3 text-xs text-neutral-400">
-					<span>Powered by</span>
-					{STACK_LINKS.map(StackLinktem)}
-				</div>
-				<div className="col-span-full flex flex-wrap items-center justify-center gap-1.5 text-xs text-neutral-500">
-					<Icons.Link className="shrink-0" />
-					<span>Icons from</span>
-					{ICON_CREDITS.map(IconCreditItem)}
-				</div>
-			</div>
-		</Modal>
+		<div className="grid grid-cols-12 gap-3">
+			<Logo />
+			<Info />
+			<PoweredBy />
+			<IconCredits />
+		</div>
 	)
-})
+}
+
+function Logo() {
+	return (
+		<div className="col-span-full flex flex-col items-center gap-3 sm:col-span-4">
+			<img className="size-28 rounded-lg p-2" src={nebulosaLogo} />
+			<LinkButton href={PROJECT_URL} icon={<Icons.Link />} label="GitHub" />
+		</div>
+	)
+}
+
+function Info() {
+	return (
+		<div className="col-span-full flex min-w-0 flex-col gap-3 sm:col-span-8">
+			<p className="text-center text-sm leading-5 text-neutral-300">{packageJson.description}</p>
+			<div className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-3">
+				<InfoRow label="Version">
+					<Chip color="primary" label={packageJson.version} size="sm" />
+				</InfoRow>
+				<InfoRow label="License">
+					<span>{packageJson.license}</span>
+				</InfoRow>
+				<InfoRow label="Author">
+					<span className="inline-flex min-w-0 items-center gap-1">
+						{packageJson.author.name}
+						<img className="h-4 w-5 shrink-0" src={brazilLogo} />
+					</span>
+				</InfoRow>
+				<InfoRow label="Copyright">
+					<span>2022-{about.state.year}</span>
+				</InfoRow>
+			</div>
+			<div className="rounded-lg border border-(--color-variant)/20 bg-(--color-variant)/10 p-3 text-center text-sm leading-5 text-neutral-200 [--color-variant:var(--warning)]">This software is WIP, comes with absolutely no warranty, and the copyright holder is not liable or responsible for anything.</div>
+		</div>
+	)
+}
+
+function PoweredBy() {
+	return (
+		<div className="col-span-full flex flex-wrap items-center justify-center gap-1.5 border-t border-neutral-800 pt-3 text-xs text-neutral-400">
+			<span>Powered by</span>
+			{STACK_LINKS.map(StackLinkItem)}
+		</div>
+	)
+}
+
+function IconCredits() {
+	return (
+		<div className="col-span-full flex flex-wrap items-center justify-center gap-1.5 text-xs text-neutral-500">
+			<Icons.Link className="shrink-0" />
+			<span>Icons from</span>
+			{ICON_CREDITS.map(IconCreditItem)}
+		</div>
+	)
+}
 
 interface InfoRowProps {
 	readonly children: ReactNode

@@ -3,17 +3,17 @@ import { type Cover, DEFAULT_COVER } from 'nebulosa/src/indi.device'
 import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { CoverUpdated } from 'src/shared/types'
+import { equipment, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { toast } from '@/shared/toast'
-import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface CoverScopeValue {
 	readonly cover: DeepReadonly<Omit<Cover, symbol>>
 }
 
 export interface CoverState {
-	cover: EquipmentDevice<Cover>
+	cover: DeviceState<Cover>
 }
 
 export const CoverScope = createScope<CoverScopeValue>({ cover: DEFAULT_COVER })
@@ -22,20 +22,19 @@ const stateMap = new Map<string, CoverState>()
 
 export const CoverMolecule = molecule(() => {
 	const scope = use(CoverScope)
-	const equipment = use(EquipmentMolecule)
 
-	const cover = equipment.get('COVER', scope.cover.name)!
+	const cover = equipment.get('COVER', scope.cover.id)!
 
 	const state =
-		stateMap.get(cover.name) ??
+		stateMap.get(cover.id) ??
 		proxy<CoverState>({
 			cover,
 		})
 
-	stateMap.set(cover.name, state)
+	stateMap.set(cover.id, state)
 
 	onMount(() => {
-		state.cover = equipment.get('COVER', state.cover.name)!
+		state.cover = equipment.get('COVER', state.cover.id)!
 
 		const unsubscriber = bus.subscribe<CoverUpdated>('cover:update', (event) => {
 			if (event.device.id === cover.id) {
@@ -71,7 +70,7 @@ export const CoverMolecule = molecule(() => {
 	}
 
 	function hide() {
-		equipment.hide('COVER', cover)
+		state.cover.show = false
 	}
 
 	return { state, scope, connect, park, unpark, stop, hide } as const

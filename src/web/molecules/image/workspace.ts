@@ -1,11 +1,11 @@
-import { molecule, onMount, use } from 'bunshi'
+import { molecule, onMount } from 'bunshi'
 import type { Camera } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { Atom, CameraCaptureEvent } from 'src/shared/types'
+import { equipment } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
 import type { Image } from '@/shared/types'
-import { EquipmentMolecule } from '../indi/equipment'
 import type { ImageViewerMolecule } from './viewer'
 
 export interface ImageWorkspaceState {
@@ -32,8 +32,6 @@ initProxy(state.picker, 'workspace.picker', ['p:show', 'p:path'])
 const viewers = new Map<string, Atom<typeof ImageViewerMolecule>>()
 
 export const ImageWorkspaceMolecule = molecule(() => {
-	const equipment = use(EquipmentMolecule)
-
 	onMount(() => {
 		const unsubscriber = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
 			if (event.savedPath) {

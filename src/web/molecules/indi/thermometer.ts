@@ -3,16 +3,16 @@ import { DEFAULT_THERMOMETER, type Thermometer } from 'nebulosa/src/indi.device'
 import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { ThermometerUpdated } from 'src/shared/types'
+import { equipment, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { toast } from '@/shared/toast'
-import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface ThermometerScopeValue {
 	readonly thermometer: DeepReadonly<Omit<Thermometer, symbol>>
 }
 
 export interface ThermometerState {
-	thermometer: EquipmentDevice<Thermometer>
+	thermometer: DeviceState<Thermometer>
 }
 
 export const ThermometerScope = createScope<ThermometerScopeValue>({ thermometer: DEFAULT_THERMOMETER })
@@ -21,20 +21,19 @@ const stateMap = new Map<string, ThermometerState>()
 
 export const ThermometerMolecule = molecule(() => {
 	const scope = use(ThermometerScope)
-	const equipment = use(EquipmentMolecule)
 
-	const thermometer = equipment.get('THERMOMETER', scope.thermometer.name)!
+	const thermometer = equipment.get('THERMOMETER', scope.thermometer.id)!
 
 	const state =
-		stateMap.get(thermometer.name) ??
+		stateMap.get(thermometer.id) ??
 		proxy<ThermometerState>({
 			thermometer,
 		})
 
-	stateMap.set(thermometer.name, state)
+	stateMap.set(thermometer.id, state)
 
 	onMount(() => {
-		state.thermometer = equipment.get('THERMOMETER', state.thermometer.name)!
+		state.thermometer = equipment.get('THERMOMETER', state.thermometer.id)!
 
 		const unsubscriber = bus.subscribe<ThermometerUpdated>('thermometer:update', (event) => {
 			if (event.device.id === thermometer.id) {
@@ -62,7 +61,7 @@ export const ThermometerMolecule = molecule(() => {
 	}
 
 	function hide() {
-		equipment.hide('THERMOMETER', thermometer)
+		state.thermometer.show = false
 	}
 
 	return { state, scope, connect, hide } as const

@@ -23,8 +23,6 @@ import sequencerIcon from '@/assets/sequencer.webp'
 import settingsIcon from '@/assets/settings.webp'
 import skyAtlasIcon from '@/assets/sky-atlas.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
-import { AboutMolecule } from '@/molecules/about'
-import { AlpacaMolecule } from '@/molecules/alpaca'
 import { AutoFocusMolecule } from '@/molecules/autofocus'
 import { CalculatorMolecule } from '@/molecules/calculator'
 import { ConnectionMolecule } from '@/molecules/connection'
@@ -32,11 +30,14 @@ import { DarvMolecule } from '@/molecules/darv'
 import { FlatWizardMolecule } from '@/molecules/flatwizard'
 import { FramingMolecule } from '@/molecules/framing'
 import { HomeMolecule } from '@/molecules/home'
-import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { TppaMolecule } from '@/molecules/tppa'
+import { about } from '../store/about.store'
+import { alpaca } from '../store/alpaca.store'
+import { equipment } from '../store/equipment.store'
+import { homeMenu } from '../store/home.menu.store'
 import { About } from './About'
 import { AlpacaServer } from './AlpacaServer'
 import { AutoFocus } from './AutoFocus'
@@ -85,13 +86,11 @@ export const HomeMenu = memo(() => {
 	const indi = useMolecule(IndiPanelControlMolecule)
 	const { show: showIndiPanelControl } = useSnapshot(indi.state)
 
-	const alpaca = useMolecule(AlpacaMolecule)
 	const { show: showAlpaca } = useSnapshot(alpaca.state)
 
 	const calculator = useMolecule(CalculatorMolecule)
 	const { show: showCalculator } = useSnapshot(calculator.state)
 
-	const about = useMolecule(AboutMolecule)
 	const { show: showAbout } = useSnapshot(about.state)
 
 	return (
@@ -133,7 +132,6 @@ export const HomeMenuPopover = memo(() => {
 })
 
 export const HomeMenuPopoverContent = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
 	const { length: cameraLength } = useSnapshot(equipment.state.CAMERA)
 	const { length: mountLength } = useSnapshot(equipment.state.MOUNT)
 	const { length: focuserLength } = useSnapshot(equipment.state.FOCUSER)
@@ -152,24 +150,22 @@ export const HomeMenuPopoverContent = memo(() => {
 	const autoFocus = useMolecule(AutoFocusMolecule)
 	const flatWizard = useMolecule(FlatWizardMolecule)
 	const phd2 = useMolecule(PHD2Molecule)
-	const alpaca = useMolecule(AlpacaMolecule)
 	const calculator = useMolecule(CalculatorMolecule)
-	const about = useMolecule(AboutMolecule)
 
 	const isIndiDisabled = cameraLength === 0 && mountLength === 0 && focuserLength === 0 && coverLength === 0 && flatPanelLength === 0 && guideOutputLength === 0 && thermometerLength === 0 && dewHeaterLength === 0 && rotatorLength === 0 && wheelLength === 0
 
 	return (
 		<div className="home-menu grid grid-cols-6 gap-2 p-4">
-			<Button children={<img className="w-9" src={cameraIcon} />} color="secondary" disabled={cameraLength === 0} onClick={() => equipment.select('CAMERA')} size="lg" tooltipContent="Camera" variant="ghost" />
-			<Button children={<img className="w-9" src={mountIcon} />} color="secondary" disabled={mountLength === 0} onClick={() => equipment.select('MOUNT')} size="lg" tooltipContent="Mount" variant="ghost" />
-			<Button children={<img className="w-9" src={filterWheelIcon} />} color="secondary" disabled={wheelLength === 0} onClick={() => equipment.select('WHEEL')} size="lg" tooltipContent="Filter Wheel" variant="ghost" />
-			<Button children={<img className="w-9" src={focuserIcon} />} color="secondary" disabled={focuserLength === 0} onClick={() => equipment.select('FOCUSER')} size="lg" tooltipContent="Focuser" variant="ghost" />
-			<Button children={<img className="w-9" src={rotatorIcon} />} color="secondary" disabled={rotatorLength === 0} onClick={() => equipment.select('ROTATOR')} size="lg" tooltipContent="Rotator" variant="ghost" />
-			<Button children={<img className="w-9" src={flatPanelIcon} />} color="secondary" disabled={flatPanelLength === 0} onClick={() => equipment.select('FLAT_PANEL')} size="lg" tooltipContent="Flat Panel" variant="ghost" />
-			<Button children={<img className="w-9" src={coverIcon} />} color="secondary" disabled={coverLength === 0} onClick={() => equipment.select('COVER')} size="lg" tooltipContent="Cover" variant="ghost" />
-			<Button children={<img className="w-9" src={guideOutputIcon} />} color="secondary" disabled={guideOutputLength === 0} onClick={() => equipment.select('GUIDE_OUTPUT')} size="lg" tooltipContent="Guide Output" variant="ghost" />
-			<Button children={<img className="w-9" src={heaterIcon} />} color="secondary" disabled={dewHeaterLength === 0} onClick={() => equipment.select('DEW_HEATER')} size="lg" tooltipContent="Dew Heater" variant="ghost" />
-			<Button children={<img className="w-9" src={thermometerIcon} />} color="secondary" disabled={thermometerLength === 0} onClick={() => equipment.select('THERMOMETER')} size="lg" tooltipContent="Thermometer" variant="ghost" />
+			<Button children={<img className="w-9" src={cameraIcon} />} color="secondary" disabled={cameraLength === 0} onClick={() => homeMenu.select('CAMERA')} size="lg" tooltipContent="Camera" variant="ghost" />
+			<Button children={<img className="w-9" src={mountIcon} />} color="secondary" disabled={mountLength === 0} onClick={() => homeMenu.select('MOUNT')} size="lg" tooltipContent="Mount" variant="ghost" />
+			<Button children={<img className="w-9" src={filterWheelIcon} />} color="secondary" disabled={wheelLength === 0} onClick={() => homeMenu.select('WHEEL')} size="lg" tooltipContent="Filter Wheel" variant="ghost" />
+			<Button children={<img className="w-9" src={focuserIcon} />} color="secondary" disabled={focuserLength === 0} onClick={() => homeMenu.select('FOCUSER')} size="lg" tooltipContent="Focuser" variant="ghost" />
+			<Button children={<img className="w-9" src={rotatorIcon} />} color="secondary" disabled={rotatorLength === 0} onClick={() => homeMenu.select('ROTATOR')} size="lg" tooltipContent="Rotator" variant="ghost" />
+			<Button children={<img className="w-9" src={flatPanelIcon} />} color="secondary" disabled={flatPanelLength === 0} onClick={() => homeMenu.select('FLAT_PANEL')} size="lg" tooltipContent="Flat Panel" variant="ghost" />
+			<Button children={<img className="w-9" src={coverIcon} />} color="secondary" disabled={coverLength === 0} onClick={() => homeMenu.select('COVER')} size="lg" tooltipContent="Cover" variant="ghost" />
+			<Button children={<img className="w-9" src={guideOutputIcon} />} color="secondary" disabled={guideOutputLength === 0} onClick={() => homeMenu.select('GUIDE_OUTPUT')} size="lg" tooltipContent="Guide Output" variant="ghost" />
+			<Button children={<img className="w-9" src={heaterIcon} />} color="secondary" disabled={dewHeaterLength === 0} onClick={() => homeMenu.select('DEW_HEATER')} size="lg" tooltipContent="Dew Heater" variant="ghost" />
+			<Button children={<img className="w-9" src={thermometerIcon} />} color="secondary" disabled={thermometerLength === 0} onClick={() => homeMenu.select('THERMOMETER')} size="lg" tooltipContent="Thermometer" variant="ghost" />
 			<Button children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={phd2.show} size="lg" tooltipContent="PHD2" variant="ghost" />
 			<Button children={<img className="w-9" src={skyAtlasIcon} />} color="secondary" onClick={skyAtlas.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
 			<Button children={<img className="w-9" src={framingIcon} />} color="secondary" onClick={framing.show} size="lg" tooltipContent="Framing" variant="ghost" />
@@ -194,27 +190,24 @@ interface DeviceChipProps extends Omit<ChipProps, 'children'> {
 }
 
 function DeviceChip({ type, index, ...props }: DeviceChipProps) {
-	const equipment = useMolecule(EquipmentMolecule)
 	const { connected, name } = useSnapshot(equipment.state[type][index])
 	return <Chip className="min-w-full cursor-pointer" color={connected ? 'success' : 'danger'} label={name} {...props} />
 }
 
 const Devices = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
-	const { selected } = useSnapshot(equipment.state)
+	const { selected } = useSnapshot(homeMenu.state)
 	const { length } = useSnapshot(equipment.state[selected])
 
-	function handleClick(name: string) {
-		const device = equipment.get(selected, name)
-		console.info(device)
-		if (device) equipment.show(device, selected)
+	function handleClick(id: string) {
+		const device = equipment.get(selected, id)
+		if (device !== undefined) device.show = true
 	}
 
 	const devices = new Array<React.ReactNode>(length)
 
 	for (let i = 0; i < length; i++) {
-		const { id, name } = equipment.state[selected][i]
-		devices[i] = <DeviceChip key={id} type={selected} index={i} onClick={() => handleClick(name)} />
+		const { id } = equipment.state[selected][i]
+		devices[i] = <DeviceChip key={id} type={selected} index={i} onClick={() => handleClick(id)} />
 	}
 
 	return (

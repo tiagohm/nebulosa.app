@@ -4,18 +4,18 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { RotatorUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { equipment, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { toast } from '@/shared/toast'
-import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface RotatorScopeValue {
 	readonly rotator: DeepReadonly<Omit<Rotator, symbol>>
 }
 
 export interface RotatorState {
-	rotator: EquipmentDevice<Rotator>
+	rotator: DeviceState<Rotator>
 	readonly angle: number
 }
 
@@ -25,21 +25,20 @@ const stateMap = new Map<string, RotatorState>()
 
 export const RotatorMolecule = molecule(() => {
 	const scope = use(RotatorScope)
-	const equipment = use(EquipmentMolecule)
 
-	const rotator = equipment.get('ROTATOR', scope.rotator.name)!
+	const rotator = equipment.get('ROTATOR', scope.rotator.id)!
 
 	const state =
-		stateMap.get(rotator.name) ??
+		stateMap.get(rotator.id) ??
 		proxy<RotatorState>({
 			rotator,
 			angle: rotator.angle.value,
 		})
 
-	stateMap.set(rotator.name, state)
+	stateMap.set(rotator.id, state)
 
 	onMount(() => {
-		state.rotator = equipment.get('ROTATOR', state.rotator.name)!
+		state.rotator = equipment.get('ROTATOR', state.rotator.id)!
 
 		const unsubscribers = new Array<VoidFunction>(2)
 
@@ -91,7 +90,7 @@ export const RotatorMolecule = molecule(() => {
 	}
 
 	function hide() {
-		equipment.hide('ROTATOR', rotator)
+		state.rotator.show = false
 	}
 
 	return { state, scope, update, connect, moveTo, sync, reverse, home, stop, hide } as const

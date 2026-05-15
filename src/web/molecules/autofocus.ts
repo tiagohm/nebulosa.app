@@ -1,4 +1,4 @@
-import { molecule, onMount, use } from 'bunshi'
+import { molecule, onMount } from 'bunshi'
 import type { Camera, Focuser } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import { type AutoFocusEvent, type AutoFocusStart, type CameraUpdated, DEFAULT_AUTO_FOCUS_EVENT, DEFAULT_AUTO_FOCUS_START } from 'src/shared/types'
@@ -8,15 +8,15 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
+import { equipment, type DeviceState } from '../store/equipment.store'
 import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
-import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
 export interface AutoFocusState {
 	show: boolean
 	running: boolean
 	readonly request: AutoFocusStart
-	camera?: EquipmentDevice<Camera>
-	focuser?: EquipmentDevice<Focuser>
+	camera?: DeviceState<Camera>
+	focuser?: DeviceState<Focuser>
 	event: AutoFocusEvent
 }
 
@@ -30,8 +30,6 @@ const state = proxy<AutoFocusState>({
 initProxy(state, 'autofocus', ['o:request', 'p:show'])
 
 export const AutoFocusMolecule = molecule(() => {
-	const equipment = use(EquipmentMolecule)
-
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(5)
 

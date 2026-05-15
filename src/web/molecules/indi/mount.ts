@@ -7,6 +7,7 @@ import bus from 'src/shared/bus'
 // oxfmt-ignore
 import { type CoordinateInfo, DEFAULT_COORDINATE_INFO, type Framing, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { equipment, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -14,14 +15,13 @@ import { initProxy } from '@/shared/proxy'
 import { toast } from '@/shared/toast'
 import type { NudgeDirection } from '@/ui/Nudge'
 import { ConnectionMolecule } from '../connection'
-import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface MountScopeValue {
 	readonly mount: DeepReadonly<Omit<Mount, symbol>>
 }
 
 export interface MountState {
-	mount: EquipmentDevice<Mount>
+	mount: DeviceState<Mount>
 	readonly targetCoordinate: {
 		readonly coordinate: MountTargetCoordinate
 		readonly position: CoordinateInfo
@@ -62,13 +62,12 @@ const stateMap = new Map<string, MountState>()
 
 export const MountMolecule = molecule(() => {
 	const scope = use(MountScope)
-	const equipment = use(EquipmentMolecule)
 	const connection = use(ConnectionMolecule)
 
-	const mount = equipment.get('MOUNT', scope.mount.name)!
+	const mount = equipment.get('MOUNT', scope.mount.id)!
 
 	const state =
-		stateMap.get(mount.name) ??
+		stateMap.get(mount.id) ??
 		proxy<MountState>({
 			mount,
 			targetCoordinate: {
@@ -98,12 +97,12 @@ export const MountMolecule = molecule(() => {
 			},
 		})
 
-	stateMap.set(mount.name, state)
+	stateMap.set(mount.id, state)
 
 	let updateCoordinateTime = 0
 
 	onMount(() => {
-		state.mount = equipment.get('MOUNT', state.mount.name)!
+		state.mount = equipment.get('MOUNT', state.mount.id)!
 
 		const unsubscribers = new Array<VoidFunction>(3)
 
@@ -316,7 +315,7 @@ export const MountMolecule = molecule(() => {
 	}
 
 	function hide() {
-		equipment.hide('MOUNT', mount)
+		state.mount.show = false
 	}
 
 	return {

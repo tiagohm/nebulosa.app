@@ -4,12 +4,12 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START } from 'src/shared/types'
 import { exposureTimeIn, unsubscribe } from 'src/shared/util'
+import { equipment, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { toast } from '@/shared/toast'
 import type { Image } from '@/shared/types'
-import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface CameraScopeValue {
 	readonly camera: DeepReadonly<Omit<Camera, symbol>>
@@ -17,17 +17,17 @@ export interface CameraScopeValue {
 
 export interface CameraState {
 	minimized: boolean
-	camera: EquipmentDevice<Camera>
+	camera: DeviceState<Camera>
 	readonly request: CameraCaptureStart & { show: boolean }
 	readonly progress: CameraCaptureEvent
 	capturing: boolean
 	targetTemperature: number
 	image?: Image
 	readonly equipment: {
-		mount?: EquipmentDevice<Mount>
-		wheel?: EquipmentDevice<Wheel>
-		focuser?: EquipmentDevice<Focuser>
-		rotator?: EquipmentDevice<Rotator>
+		mount?: DeviceState<Mount>
+		wheel?: DeviceState<Wheel>
+		focuser?: DeviceState<Focuser>
+		rotator?: DeviceState<Rotator>
 	}
 }
 
@@ -37,12 +37,11 @@ const stateMap = new Map<string, CameraState>()
 
 export const CameraMolecule = molecule(() => {
 	const scope = use(CameraScope)
-	const equipment = use(EquipmentMolecule)
 
-	const camera = equipment.get('CAMERA', scope.camera.name)!
+	const camera = equipment.get('CAMERA', scope.camera.id)!
 
 	const state =
-		stateMap.get(camera.name) ??
+		stateMap.get(camera.id) ??
 		proxy<CameraState>({
 			minimized: false,
 			camera,
@@ -53,10 +52,10 @@ export const CameraMolecule = molecule(() => {
 			equipment: {},
 		})
 
-	stateMap.set(camera.name, state)
+	stateMap.set(camera.id, state)
 
 	onMount(() => {
-		state.camera = equipment.get('CAMERA', state.camera.name)!
+		state.camera = equipment.get('CAMERA', state.camera.id)!
 
 		const unsubscribers = new Array<VoidFunction>(7)
 
@@ -159,19 +158,19 @@ export const CameraMolecule = molecule(() => {
 		state.request.height = camera.frame.height.max
 	}
 
-	function updateMount(mount?: EquipmentDevice<Mount>) {
+	function updateMount(mount?: DeviceState<Mount>) {
 		state.equipment.mount = mount
 	}
 
-	function updateWheel(wheel?: EquipmentDevice<Wheel>) {
+	function updateWheel(wheel?: DeviceState<Wheel>) {
 		state.equipment.wheel = wheel
 	}
 
-	function updateFocuser(focuser?: EquipmentDevice<Focuser>) {
+	function updateFocuser(focuser?: DeviceState<Focuser>) {
 		state.equipment.focuser = focuser
 	}
 
-	function updateRotator(rotator?: EquipmentDevice<Rotator>) {
+	function updateRotator(rotator?: DeviceState<Rotator>) {
 		state.equipment.rotator = rotator
 	}
 
@@ -195,7 +194,7 @@ export const CameraMolecule = molecule(() => {
 	}
 
 	function hide() {
-		equipment.hide('CAMERA', camera)
+		state.camera.show = false
 	}
 
 	function minimize() {

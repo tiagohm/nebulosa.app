@@ -4,7 +4,6 @@ import { useSnapshot } from 'valtio'
 import { CameraScope } from '@/molecules/indi/camera'
 import { CoverScope } from '@/molecules/indi/cover'
 import { DewHeaterScope } from '@/molecules/indi/dewheater'
-import { EquipmentMolecule } from '@/molecules/indi/equipment'
 import { FlatPanelScope } from '@/molecules/indi/flatpanel'
 import { FocuserScope } from '@/molecules/indi/focuser'
 import { GuideOutputScope } from '@/molecules/indi/guideoutput'
@@ -14,6 +13,7 @@ import { ThermometerScope } from '@/molecules/indi/thermometer'
 import { WheelScope } from '@/molecules/indi/wheel'
 import { WebSocketMolecule } from '@/molecules/ws'
 import { activityMode } from '../shared/util'
+import { equipment } from '../store/equipment.store'
 import { Camera } from './Camera'
 import { Confirmation } from './Confirmation'
 import { Cover } from './Cover'
@@ -62,7 +62,6 @@ interface DeviceItemProps {
 }
 
 function CameraItem({ index }: DeviceItemProps) {
-	const equipment = useMolecule(EquipmentMolecule)
 	const camera = equipment.state.CAMERA[index]
 	const { show } = useSnapshot(camera)
 
@@ -76,7 +75,6 @@ function CameraItem({ index }: DeviceItemProps) {
 }
 
 function MountItem({ index }: DeviceItemProps) {
-	const equipment = useMolecule(EquipmentMolecule)
 	const mount = equipment.state.MOUNT[index]
 	const { show } = useSnapshot(mount)
 
@@ -90,7 +88,6 @@ function MountItem({ index }: DeviceItemProps) {
 }
 
 function FocuserItem({ index }: DeviceItemProps) {
-	const equipment = useMolecule(EquipmentMolecule)
 	const focuser = equipment.state.FOCUSER[index]
 	const { show } = useSnapshot(focuser)
 
@@ -104,7 +101,6 @@ function FocuserItem({ index }: DeviceItemProps) {
 }
 
 function WheelItem({ index }: DeviceItemProps) {
-	const equipment = useMolecule(EquipmentMolecule)
 	const wheel = equipment.state.WHEEL[index]
 	const { show } = useSnapshot(wheel)
 
@@ -118,7 +114,6 @@ function WheelItem({ index }: DeviceItemProps) {
 }
 
 function GuideOutputItem({ index }: DeviceItemProps) {
-	const equipment = useMolecule(EquipmentMolecule)
 	const guideOutput = equipment.state.GUIDE_OUTPUT[index]
 	const { show } = useSnapshot(guideOutput)
 
@@ -132,7 +127,6 @@ function GuideOutputItem({ index }: DeviceItemProps) {
 }
 
 function ThermometerItem({ index }: DeviceItemProps) {
-	const equipment = useMolecule(EquipmentMolecule)
 	const thermometer = equipment.state.THERMOMETER[index]
 	const { show } = useSnapshot(thermometer)
 
@@ -146,7 +140,6 @@ function ThermometerItem({ index }: DeviceItemProps) {
 }
 
 function CoverItem({ index }: DeviceItemProps) {
-	const equipment = useMolecule(EquipmentMolecule)
 	const cover = equipment.state.COVER[index]
 	const { show } = useSnapshot(cover)
 
@@ -160,7 +153,6 @@ function CoverItem({ index }: DeviceItemProps) {
 }
 
 function FlatPanelItem({ index }: DeviceItemProps) {
-	const equipment = useMolecule(EquipmentMolecule)
 	const flatPanel = equipment.state.FLAT_PANEL[index]
 	const { show } = useSnapshot(flatPanel)
 
@@ -174,7 +166,6 @@ function FlatPanelItem({ index }: DeviceItemProps) {
 }
 
 function DewHeaterItem({ index }: DeviceItemProps) {
-	const equipment = useMolecule(EquipmentMolecule)
 	const dewHeater = equipment.state.DEW_HEATER[index]
 	const { show } = useSnapshot(dewHeater)
 
@@ -188,7 +179,6 @@ function DewHeaterItem({ index }: DeviceItemProps) {
 }
 
 function RotatorItem({ index }: DeviceItemProps) {
-	const equipment = useMolecule(EquipmentMolecule)
 	const rotator = equipment.state.ROTATOR[index]
 	const { show } = useSnapshot(rotator)
 
@@ -202,7 +192,6 @@ function RotatorItem({ index }: DeviceItemProps) {
 }
 
 export const CameraList = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
 	const { length } = useSnapshot(equipment.state.CAMERA)
 
 	const devices = useMemo(() => makeDevices(length, (i) => <CameraItem key={equipment.state.CAMERA[i].id} index={i} />), [length])
@@ -211,7 +200,6 @@ export const CameraList = memo(() => {
 })
 
 export const MountList = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
 	const { length } = useSnapshot(equipment.state.MOUNT)
 
 	const devices = useMemo(() => makeDevices(length, (i) => <MountItem key={equipment.state.MOUNT[i].id} index={i} />), [length])
@@ -220,7 +208,6 @@ export const MountList = memo(() => {
 })
 
 export const FocuserList = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
 	const { length } = useSnapshot(equipment.state.FOCUSER)
 
 	const devices = useMemo(() => makeDevices(length, (i) => <FocuserItem key={equipment.state.FOCUSER[i].id} index={i} />), [length])
@@ -229,7 +216,6 @@ export const FocuserList = memo(() => {
 })
 
 export const WheelList = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
 	const { length } = useSnapshot(equipment.state.WHEEL)
 
 	const devices = useMemo(() => makeDevices(length, (i) => <WheelItem key={equipment.state.WHEEL[i].id} index={i} />), [length])
@@ -238,7 +224,6 @@ export const WheelList = memo(() => {
 })
 
 export const GuideOutputList = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
 	const { length } = useSnapshot(equipment.state.GUIDE_OUTPUT)
 
 	const devices = useMemo(() => makeDevices(length, (i) => <GuideOutputItem key={equipment.state.GUIDE_OUTPUT[i].id} index={i} />), [length])
@@ -247,7 +232,6 @@ export const GuideOutputList = memo(() => {
 })
 
 export const ThermometerList = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
 	const { length } = useSnapshot(equipment.state.THERMOMETER)
 
 	const devices = useMemo(() => makeDevices(length, (i) => <ThermometerItem key={equipment.state.THERMOMETER[i].id} index={i} />), [length])
@@ -256,7 +240,6 @@ export const ThermometerList = memo(() => {
 })
 
 export const CoverList = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
 	const { length } = useSnapshot(equipment.state.COVER)
 
 	const devices = useMemo(() => makeDevices(length, (i) => <CoverItem key={equipment.state.COVER[i].id} index={i} />), [length])
@@ -265,7 +248,6 @@ export const CoverList = memo(() => {
 })
 
 export const FlatPanelList = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
 	const { length } = useSnapshot(equipment.state.FLAT_PANEL)
 
 	const devices = useMemo(() => makeDevices(length, (i) => <FlatPanelItem key={equipment.state.FLAT_PANEL[i].id} index={i} />), [length])
@@ -274,7 +256,6 @@ export const FlatPanelList = memo(() => {
 })
 
 export const DewHeaterList = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
 	const { length } = useSnapshot(equipment.state.DEW_HEATER)
 
 	const devices = useMemo(() => makeDevices(length, (i) => <DewHeaterItem key={equipment.state.DEW_HEATER[i].id} index={i} />), [length])
@@ -283,7 +264,6 @@ export const DewHeaterList = memo(() => {
 })
 
 export const RotatorList = memo(() => {
-	const equipment = useMolecule(EquipmentMolecule)
 	const { length } = useSnapshot(equipment.state.ROTATOR)
 
 	const devices = useMemo(() => makeDevices(length, (i) => <RotatorItem key={equipment.state.ROTATOR[i].id} index={i} />), [length])

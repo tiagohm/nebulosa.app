@@ -4,18 +4,18 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { FocuserUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { equipment, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { toast } from '@/shared/toast'
-import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface FocuserScopeValue {
 	readonly focuser: DeepReadonly<Omit<Focuser, symbol>>
 }
 
 export interface FocuserState {
-	focuser: EquipmentDevice<Focuser>
+	focuser: DeviceState<Focuser>
 	readonly request: {
 		readonly relative: number
 		readonly absolute: number
@@ -28,21 +28,20 @@ const stateMap = new Map<string, FocuserState>()
 
 export const FocuserMolecule = molecule(() => {
 	const scope = use(FocuserScope)
-	const equipment = use(EquipmentMolecule)
 
-	const focuser = equipment.get('FOCUSER', scope.focuser.name)!
+	const focuser = equipment.get('FOCUSER', scope.focuser.id)!
 
 	const state =
-		stateMap.get(focuser.name) ??
+		stateMap.get(focuser.id) ??
 		proxy<FocuserState>({
 			focuser,
 			request: { absolute: 0, relative: 100 },
 		})
 
-	stateMap.set(focuser.name, state)
+	stateMap.set(focuser.id, state)
 
 	onMount(() => {
-		state.focuser = equipment.get('FOCUSER', state.focuser.name)!
+		state.focuser = equipment.get('FOCUSER', state.focuser.id)!
 
 		const unsubscribers = new Array<VoidFunction>(2)
 
@@ -98,7 +97,7 @@ export const FocuserMolecule = molecule(() => {
 	}
 
 	function hide() {
-		equipment.hide('FOCUSER', focuser)
+		state.focuser.show = false
 	}
 
 	return { state, scope, update, connect, moveTo, moveIn, moveOut, sync, reverse, stop, hide } as const

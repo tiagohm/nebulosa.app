@@ -1,4 +1,4 @@
-import { molecule, onMount, use } from 'bunshi'
+import { molecule, onMount } from 'bunshi'
 import type { Camera } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import { type CameraUpdated, DEFAULT_FLAT_WIZARD_EVENT, DEFAULT_FLAT_WIZARD_START, type FlatWizardEvent, type FlatWizardStart } from 'src/shared/types'
@@ -8,14 +8,14 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
+import { equipment, type DeviceState } from '../store/equipment.store'
 import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
-import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
 export interface FlatWizardState {
 	show: boolean
 	running: boolean
 	readonly request: FlatWizardStart
-	camera?: EquipmentDevice<Camera>
+	camera?: DeviceState<Camera>
 	event: FlatWizardEvent
 }
 
@@ -29,8 +29,6 @@ const state = proxy<FlatWizardState>({
 initProxy(state, 'flatwizard', ['o:request', 'p:show'])
 
 export const FlatWizardMolecule = molecule(() => {
-	const equipment = use(EquipmentMolecule)
-
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(4)
 

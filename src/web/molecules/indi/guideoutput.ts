@@ -4,19 +4,19 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { GuideOutputUpdated, GuidePulse } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { equipment, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { toast } from '@/shared/toast'
 import type { NudgeDirection } from '@/ui/Nudge'
-import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface GuideOutputScopeValue {
 	readonly guideOutput: DeepReadonly<Omit<GuideOutput, symbol>>
 }
 
 export interface GuideOutputState {
-	guideOutput: EquipmentDevice<GuideOutput>
+	guideOutput: DeviceState<GuideOutput>
 	readonly request: {
 		readonly north: GuidePulse
 		readonly south: GuidePulse
@@ -38,21 +38,20 @@ const stateMap = new Map<string, GuideOutputState>()
 
 export const GuideOutputMolecule = molecule(() => {
 	const scope = use(GuideOutputScope)
-	const equipment = use(EquipmentMolecule)
 
-	const guideOutput = equipment.get('GUIDE_OUTPUT', scope.guideOutput.name)!
+	const guideOutput = equipment.get('GUIDE_OUTPUT', scope.guideOutput.id)!
 
 	const state =
-		stateMap.get(guideOutput.name) ??
+		stateMap.get(guideOutput.id) ??
 		proxy<GuideOutputState>({
 			guideOutput,
 			request: structuredClone(DEFAULT_GUIDE_OUTPUT_REQUEST),
 		})
 
-	stateMap.set(guideOutput.name, state)
+	stateMap.set(guideOutput.id, state)
 
 	onMount(() => {
-		state.guideOutput = equipment.get('GUIDE_OUTPUT', state.guideOutput.name)!
+		state.guideOutput = equipment.get('GUIDE_OUTPUT', state.guideOutput.id)!
 
 		const unsubscribers = new Array<VoidFunction>(2)
 
@@ -115,7 +114,7 @@ export const GuideOutputMolecule = molecule(() => {
 	}
 
 	function hide() {
-		equipment.hide('GUIDE_OUTPUT', guideOutput)
+		state.guideOutput.show = false
 	}
 
 	return { state, scope, update, connect, pulse, stop, hide } as const

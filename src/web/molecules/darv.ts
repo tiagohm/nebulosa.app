@@ -1,4 +1,4 @@
-import { molecule, onMount, use } from 'bunshi'
+import { molecule, onMount } from 'bunshi'
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import { type CameraUpdated, type DarvEvent, type DarvStart, DEFAULT_DARV_EVENT, DEFAULT_DARV_START } from 'src/shared/types'
@@ -8,15 +8,15 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
+import { equipment, type DeviceState } from '../store/equipment.store'
 import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
-import { type EquipmentDevice, EquipmentMolecule } from './indi/equipment'
 
 export interface DarvState {
 	show: boolean
 	running: boolean
 	readonly request: DarvStart
-	camera?: EquipmentDevice<Camera>
-	mount?: EquipmentDevice<Mount>
+	camera?: DeviceState<Camera>
+	mount?: DeviceState<Mount>
 	event: DarvEvent
 }
 
@@ -40,8 +40,6 @@ function resetDarvEvent() {
 }
 
 export const DarvMolecule = molecule(() => {
-	const equipment = use(EquipmentMolecule)
-
 	onMount(() => {
 		state.request.id ||= nextDarvRequestId()
 

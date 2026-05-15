@@ -3,17 +3,17 @@ import { DEFAULT_DEW_HEATER, type DewHeater } from 'nebulosa/src/indi.device'
 import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { DewHeaterUpdated } from 'src/shared/types'
+import { equipment, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { toast } from '@/shared/toast'
-import { type EquipmentDevice, EquipmentMolecule } from './equipment'
 
 export interface DewHeaterScopeValue {
 	readonly dewHeater: DeepReadonly<Omit<DewHeater, symbol>>
 }
 
 export interface DewHeaterState {
-	dewHeater: EquipmentDevice<DewHeater>
+	dewHeater: DeviceState<DewHeater>
 }
 
 export const DewHeaterScope = createScope<DewHeaterScopeValue>({ dewHeater: DEFAULT_DEW_HEATER })
@@ -22,20 +22,19 @@ const stateMap = new Map<string, DewHeaterState>()
 
 export const DewHeaterMolecule = molecule(() => {
 	const scope = use(DewHeaterScope)
-	const equipment = use(EquipmentMolecule)
 
-	const dewHeater = equipment.get('DEW_HEATER', scope.dewHeater.name)!
+	const dewHeater = equipment.get('DEW_HEATER', scope.dewHeater.id)!
 
 	const state =
-		stateMap.get(dewHeater.name) ??
+		stateMap.get(dewHeater.id) ??
 		proxy<DewHeaterState>({
 			dewHeater,
 		})
 
-	stateMap.set(dewHeater.name, state)
+	stateMap.set(dewHeater.id, state)
 
 	onMount(() => {
-		state.dewHeater = equipment.get('DEW_HEATER', state.dewHeater.name)!
+		state.dewHeater = equipment.get('DEW_HEATER', state.dewHeater.id)!
 
 		const unsubscriber = bus.subscribe<DewHeaterUpdated>('dewHeater:update', (event) => {
 			if (event.device.id === dewHeater.id) {
@@ -67,7 +66,7 @@ export const DewHeaterMolecule = molecule(() => {
 	}
 
 	function hide() {
-		equipment.hide('DEW_HEATER', dewHeater)
+		state.dewHeater.show = false
 	}
 
 	return { state, scope, connect, update, dutyCycle, hide } as const

@@ -23,7 +23,7 @@ const stateMap = new Map<string, CoverState>()
 export const CoverMolecule = molecule(() => {
 	const scope = use(CoverScope)
 
-	const cover = equipment.get('COVER', scope.cover.id)!
+	const cover = equipment.get('cover', scope.cover.id)!
 
 	const state =
 		stateMap.get(cover.id) ??
@@ -34,7 +34,7 @@ export const CoverMolecule = molecule(() => {
 	stateMap.set(cover.id, state)
 
 	onMount(() => {
-		state.cover = equipment.get('COVER', state.cover.id)!
+		state.cover = equipment.get('cover', state.cover.id)!
 
 		const unsubscriber = bus.subscribe<CoverUpdated>('cover:update', (event) => {
 			if (event.device.id === cover.id) {

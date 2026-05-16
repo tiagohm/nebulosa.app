@@ -35,7 +35,7 @@ export const ImageWorkspaceMolecule = molecule(() => {
 	onMount(() => {
 		const unsubscriber = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
 			if (event.savedPath) {
-				const camera = equipment.get('CAMERA', event.camera)
+				const camera = equipment.get('camera', event.camera)
 				add(event.savedPath, event.camera, camera!)
 			}
 		})

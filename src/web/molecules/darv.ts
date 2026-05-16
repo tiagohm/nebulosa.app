@@ -81,8 +81,8 @@ export const DarvMolecule = molecule(() => {
 	})
 
 	function load() {
-		state.camera = equipment.get('CAMERA', storageGet('darv.camera', ''))
-		state.mount = equipment.get('MOUNT', storageGet('darv.mount', ''))
+		state.camera = equipment.get('camera', storageGet('darv.camera', ''))
+		state.mount = equipment.get('mount', storageGet('darv.mount', ''))
 
 		state.camera && updateCameraCaptureStartFromCamera(state.request.capture, state.camera)
 	}

@@ -7,7 +7,7 @@ export interface HomeMenuState {
 }
 
 const state = proxy<HomeMenuState>({
-	selected: 'CAMERA',
+	selected: 'camera',
 })
 
 let popoverMethods: PopoverMethods | null = null

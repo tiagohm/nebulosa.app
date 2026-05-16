@@ -117,25 +117,25 @@ function handleButtonClick(event: React.MouseEvent<HTMLElement>) {
 	const key = event.currentTarget.dataset.key
 
 	switch (key) {
-		case 'CAMERA':
-		case 'MOUNT':
-		case 'WHEEL':
-		case 'FOCUSER':
-		case 'ROTATOR':
-		case 'FLAT_PANEL':
-		case 'COVER':
-		case 'GUIDE_OUTPUT':
-		case 'DEW_HEATER':
-		case 'THERMOMETER':
+		case 'camera':
+		case 'mount':
+		case 'wheel':
+		case 'focuser':
+		case 'rotator':
+		case 'flatPanel':
+		case 'cover':
+		case 'guideOutput':
+		case 'dewHeater':
+		case 'thermometer':
 			homeMenu.select(key)
 			return
-		case 'ALPACA':
+		case 'alpaca':
 			alpaca.show()
 			break
-		case 'CALCULATOR':
+		case 'calculator':
 			calculator.show()
 			break
-		case 'ABOUT':
+		case 'about':
 			about.show()
 			break
 	}
@@ -144,16 +144,16 @@ function handleButtonClick(event: React.MouseEvent<HTMLElement>) {
 }
 
 export const HomeMenuPopoverContent = memo(() => {
-	const { length: cameraLength } = useSnapshot(equipment.state.CAMERA)
-	const { length: mountLength } = useSnapshot(equipment.state.MOUNT)
-	const { length: focuserLength } = useSnapshot(equipment.state.FOCUSER)
-	const { length: wheelLength } = useSnapshot(equipment.state.WHEEL)
-	const { length: coverLength } = useSnapshot(equipment.state.COVER)
-	const { length: flatPanelLength } = useSnapshot(equipment.state.FLAT_PANEL)
-	const { length: guideOutputLength } = useSnapshot(equipment.state.GUIDE_OUTPUT)
-	const { length: thermometerLength } = useSnapshot(equipment.state.THERMOMETER)
-	const { length: dewHeaterLength } = useSnapshot(equipment.state.DEW_HEATER)
-	const { length: rotatorLength } = useSnapshot(equipment.state.ROTATOR)
+	const { length: cameraLength } = useSnapshot(equipment.state.camera)
+	const { length: mountLength } = useSnapshot(equipment.state.mount)
+	const { length: focuserLength } = useSnapshot(equipment.state.focuser)
+	const { length: wheelLength } = useSnapshot(equipment.state.wheel)
+	const { length: coverLength } = useSnapshot(equipment.state.cover)
+	const { length: flatPanelLength } = useSnapshot(equipment.state.flatPanel)
+	const { length: guideOutputLength } = useSnapshot(equipment.state.guideOutput)
+	const { length: thermometerLength } = useSnapshot(equipment.state.thermometer)
+	const { length: dewHeaterLength } = useSnapshot(equipment.state.dewHeater)
+	const { length: rotatorLength } = useSnapshot(equipment.state.rotator)
 
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
 	const framing = useMolecule(FramingMolecule)
@@ -167,29 +167,29 @@ export const HomeMenuPopoverContent = memo(() => {
 
 	return (
 		<div className="home-menu grid grid-cols-6 gap-2 p-4">
-			<Button data-key="CAMERA" children={<img className="w-9" src={cameraIcon} />} color="secondary" disabled={cameraLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Camera" variant="ghost" />
-			<Button data-key="MOUNT" children={<img className="w-9" src={mountIcon} />} color="secondary" disabled={mountLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Mount" variant="ghost" />
-			<Button data-key="WHEEL" children={<img className="w-9" src={filterWheelIcon} />} color="secondary" disabled={wheelLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Filter Wheel" variant="ghost" />
-			<Button data-key="FOCUSER" children={<img className="w-9" src={focuserIcon} />} color="secondary" disabled={focuserLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Focuser" variant="ghost" />
-			<Button data-key="ROTATOR" children={<img className="w-9" src={rotatorIcon} />} color="secondary" disabled={rotatorLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Rotator" variant="ghost" />
-			<Button data-key="FLAT_PANEL" children={<img className="w-9" src={flatPanelIcon} />} color="secondary" disabled={flatPanelLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Flat Panel" variant="ghost" />
-			<Button data-key="COVER" children={<img className="w-9" src={coverIcon} />} color="secondary" disabled={coverLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Cover" variant="ghost" />
-			<Button data-key="GUIDE_OUTPUT" children={<img className="w-9" src={guideOutputIcon} />} color="secondary" disabled={guideOutputLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Guide Output" variant="ghost" />
-			<Button data-key="DEW_HEATER" children={<img className="w-9" src={heaterIcon} />} color="secondary" disabled={dewHeaterLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Dew Heater" variant="ghost" />
-			<Button data-key="THERMOMETER" children={<img className="w-9" src={thermometerIcon} />} color="secondary" disabled={thermometerLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Thermometer" variant="ghost" />
-			<Button data-key="PHD2" children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={phd2.show} size="lg" tooltipContent="PHD2" variant="ghost" />
-			<Button data-key="ATLAS" children={<img className="w-9" src={skyAtlasIcon} />} color="secondary" onClick={skyAtlas.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
-			<Button data-key="FRAMING" children={<img className="w-9" src={framingIcon} />} color="secondary" onClick={framing.show} size="lg" tooltipContent="Framing" variant="ghost" />
-			<Button data-key="TPPA" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={tppa.show} size="lg" tooltipContent="TPPA" variant="ghost" />
-			<Button data-key="DARV" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={darv.show} size="lg" tooltipContent="DARV" variant="ghost" />
-			<Button data-key="AUTO_FOCUS" children={<img className="w-9" src={autoFocusIcon} />} color="secondary" disabled={cameraLength === 0 || focuserLength === 0} onClick={autoFocus.show} size="lg" tooltipContent="Auto Focus" variant="ghost" />
-			<Button data-key="FLAT_WIZARD" children={<img className="w-9" src={flatWizardIcon} />} color="secondary" disabled={cameraLength === 0} onClick={flatWizard.show} size="lg" tooltipContent="Flat Wizard" variant="ghost" />
-			<Button data-key="SEQUENCER" children={<img className="w-9" src={sequencerIcon} />} color="secondary" disabled={cameraLength === 0} size="lg" tooltipContent="Sequencer" variant="ghost" />
+			<Button data-key="camera" children={<img className="w-9" src={cameraIcon} />} color="secondary" disabled={cameraLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Camera" variant="ghost" />
+			<Button data-key="mount" children={<img className="w-9" src={mountIcon} />} color="secondary" disabled={mountLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Mount" variant="ghost" />
+			<Button data-key="wheel" children={<img className="w-9" src={filterWheelIcon} />} color="secondary" disabled={wheelLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Filter Wheel" variant="ghost" />
+			<Button data-key="focuser" children={<img className="w-9" src={focuserIcon} />} color="secondary" disabled={focuserLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Focuser" variant="ghost" />
+			<Button data-key="rotator" children={<img className="w-9" src={rotatorIcon} />} color="secondary" disabled={rotatorLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Rotator" variant="ghost" />
+			<Button data-key="flatPanel" children={<img className="w-9" src={flatPanelIcon} />} color="secondary" disabled={flatPanelLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Flat Panel" variant="ghost" />
+			<Button data-key="cover" children={<img className="w-9" src={coverIcon} />} color="secondary" disabled={coverLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Cover" variant="ghost" />
+			<Button data-key="guideOutput" children={<img className="w-9" src={guideOutputIcon} />} color="secondary" disabled={guideOutputLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Guide Output" variant="ghost" />
+			<Button data-key="dewHeater" children={<img className="w-9" src={heaterIcon} />} color="secondary" disabled={dewHeaterLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Dew Heater" variant="ghost" />
+			<Button data-key="thermometer" children={<img className="w-9" src={thermometerIcon} />} color="secondary" disabled={thermometerLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Thermometer" variant="ghost" />
+			<Button data-key="phd2" children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={phd2.show} size="lg" tooltipContent="PHD2" variant="ghost" />
+			<Button data-key="atlas" children={<img className="w-9" src={skyAtlasIcon} />} color="secondary" onClick={skyAtlas.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
+			<Button data-key="framing" children={<img className="w-9" src={framingIcon} />} color="secondary" onClick={framing.show} size="lg" tooltipContent="Framing" variant="ghost" />
+			<Button data-key="tppa" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={tppa.show} size="lg" tooltipContent="TPPA" variant="ghost" />
+			<Button data-key="darv" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={darv.show} size="lg" tooltipContent="DARV" variant="ghost" />
+			<Button data-key="autoFocus" children={<img className="w-9" src={autoFocusIcon} />} color="secondary" disabled={cameraLength === 0 || focuserLength === 0} onClick={autoFocus.show} size="lg" tooltipContent="Auto Focus" variant="ghost" />
+			<Button data-key="flatWizard" children={<img className="w-9" src={flatWizardIcon} />} color="secondary" disabled={cameraLength === 0} onClick={flatWizard.show} size="lg" tooltipContent="Flat Wizard" variant="ghost" />
+			<Button data-key="sequencer" children={<img className="w-9" src={sequencerIcon} />} color="secondary" disabled={cameraLength === 0} size="lg" tooltipContent="Sequencer" variant="ghost" />
 			<IndiPanelControlButton disabled={isIndiDisabled} size="lg" />
-			<Button data-key="ALPACA" children={<img className="w-9" src={alpacaIcon} />} color="secondary" disabled={isIndiDisabled} onClick={handleButtonClick} size="lg" tooltipContent="ASCOM Alpaca Server" variant="ghost" />
-			<Button data-key="CALCULATOR" children={<img className="w-9" src={calculatorIcon} />} color="secondary" onClick={handleButtonClick} size="lg" tooltipContent="Calculator" variant="ghost" />
-			<Button data-key="SETTINGS" children={<img className="w-9" src={settingsIcon} />} color="secondary" size="lg" tooltipContent="Settings" variant="ghost" />
-			<Button data-key="ABOUT" children={<img className="w-9" src={aboutIcon} />} color="secondary" onClick={handleButtonClick} size="lg" tooltipContent="About" variant="ghost" />
+			<Button data-key="alpaca" children={<img className="w-9" src={alpacaIcon} />} color="secondary" disabled={isIndiDisabled} onClick={handleButtonClick} size="lg" tooltipContent="ASCOM Alpaca Server" variant="ghost" />
+			<Button data-key="calculator" children={<img className="w-9" src={calculatorIcon} />} color="secondary" onClick={handleButtonClick} size="lg" tooltipContent="Calculator" variant="ghost" />
+			<Button data-key="settings" children={<img className="w-9" src={settingsIcon} />} color="secondary" size="lg" tooltipContent="Settings" variant="ghost" />
+			<Button data-key="about" children={<img className="w-9" src={aboutIcon} />} color="secondary" onClick={handleButtonClick} size="lg" tooltipContent="About" variant="ghost" />
 			<Devices />
 		</div>
 	)
@@ -224,19 +224,15 @@ const Devices = memo(() => {
 
 	return (
 		<div className="col-span-full my-2 flex flex-col flex-wrap items-center justify-center gap-2">
-			<span className="mt-2 text-sm font-bold uppercase">{deviceName(selected)}</span>
+			<span className="mt-2 text-sm font-bold uppercase">{DEVICE_TYPE_LABELS[selected] ?? selected}</span>
 			{length === 0 ? 'No devices' : devices}
 		</div>
 	)
 })
 
-const DEVICE_NAMES: Partial<Record<DeviceType, string>> = {
-	GUIDE_OUTPUT: 'Guide Output',
-	FLAT_PANEL: 'Flat Panel',
-	DEW_HEATER: 'Dew Heater',
-	WHEEL: 'Filter Wheel',
-}
-
-function deviceName(type: DeviceType) {
-	return DEVICE_NAMES[type] ?? type
+const DEVICE_TYPE_LABELS: Partial<Record<DeviceType, string>> = {
+	guideOutput: 'Guide Output',
+	flatPanel: 'Flat Panel',
+	dewHeater: 'Dew Heater',
+	wheel: 'Filter Wheel',
 }

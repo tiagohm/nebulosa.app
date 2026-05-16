@@ -32,16 +32,16 @@ export interface ImageSolved {
 }
 
 export interface DeviceTypeMap {
-	readonly CAMERA: Camera
-	readonly MOUNT: Mount
-	readonly WHEEL: Wheel
-	readonly FOCUSER: Focuser
-	readonly ROTATOR: Rotator
-	readonly FLAT_PANEL: FlatPanel
-	readonly COVER: Cover
-	readonly THERMOMETER: Thermometer
-	readonly GUIDE_OUTPUT: GuideOutput
-	readonly DEW_HEATER: DewHeater
+	readonly camera: Camera
+	readonly mount: Mount
+	readonly wheel: Wheel
+	readonly focuser: Focuser
+	readonly rotator: Rotator
+	readonly flatPanel: FlatPanel
+	readonly cover: Cover
+	readonly thermometer: Thermometer
+	readonly guideOutput: GuideOutput
+	readonly dewHeater: DewHeater
 }
 
 export const DEFAULT_CONNECTION: Connection = {

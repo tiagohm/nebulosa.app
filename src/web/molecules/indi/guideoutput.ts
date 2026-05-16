@@ -39,7 +39,7 @@ const stateMap = new Map<string, GuideOutputState>()
 export const GuideOutputMolecule = molecule(() => {
 	const scope = use(GuideOutputScope)
 
-	const guideOutput = equipment.get('GUIDE_OUTPUT', scope.guideOutput.id)!
+	const guideOutput = equipment.get('guideOutput', scope.guideOutput.id)!
 
 	const state =
 		stateMap.get(guideOutput.id) ??
@@ -51,7 +51,7 @@ export const GuideOutputMolecule = molecule(() => {
 	stateMap.set(guideOutput.id, state)
 
 	onMount(() => {
-		state.guideOutput = equipment.get('GUIDE_OUTPUT', state.guideOutput.id)!
+		state.guideOutput = equipment.get('guideOutput', state.guideOutput.id)!
 
 		const unsubscribers = new Array<VoidFunction>(2)
 

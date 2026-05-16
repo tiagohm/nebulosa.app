@@ -81,8 +81,8 @@ export const TppaMolecule = molecule(() => {
 	})
 
 	function load() {
-		state.camera = equipment.get('CAMERA', storageGet('tppa.camera', ''))
-		state.mount = equipment.get('MOUNT', storageGet('tppa.mount', ''))
+		state.camera = equipment.get('camera', storageGet('tppa.camera', ''))
+		state.mount = equipment.get('mount', storageGet('tppa.mount', ''))
 
 		state.camera && updateCameraCaptureStartFromCamera(state.request.capture, state.camera)
 	}

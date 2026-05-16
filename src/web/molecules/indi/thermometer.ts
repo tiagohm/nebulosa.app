@@ -22,7 +22,7 @@ const stateMap = new Map<string, ThermometerState>()
 export const ThermometerMolecule = molecule(() => {
 	const scope = use(ThermometerScope)
 
-	const thermometer = equipment.get('THERMOMETER', scope.thermometer.id)!
+	const thermometer = equipment.get('thermometer', scope.thermometer.id)!
 
 	const state =
 		stateMap.get(thermometer.id) ??
@@ -33,7 +33,7 @@ export const ThermometerMolecule = molecule(() => {
 	stateMap.set(thermometer.id, state)
 
 	onMount(() => {
-		state.thermometer = equipment.get('THERMOMETER', state.thermometer.id)!
+		state.thermometer = equipment.get('thermometer', state.thermometer.id)!
 
 		const unsubscriber = bus.subscribe<ThermometerUpdated>('thermometer:update', (event) => {
 			if (event.device.id === thermometer.id) {

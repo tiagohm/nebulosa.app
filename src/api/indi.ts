@@ -197,16 +197,16 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 			)
 		}
 
-		if (type === 'CAMERA') return this.cameraManager.get(client, id)
-		else if (type === 'MOUNT') return this.mountManager.get(client, id)
-		else if (type === 'FOCUSER') return this.focuserManager.get(client, id)
-		else if (type === 'WHEEL') return this.wheelManager.get(client, id)
-		else if (type === 'COVER') return this.coverManager.get(client, id)
-		else if (type === 'FLAT_PANEL') return this.flatPanelManager.get(client, id)
-		else if (type === 'ROTATOR') return this.rotatorManager.get(client, id)
-		else if (type === 'GUIDE_OUTPUT') return this.guideOutputManager.get(client, id)
-		else if (type === 'THERMOMETER') return this.thermometerManager.get(client, id)
-		else if (type === 'DEW_HEATER') return this.dewHeaterManager.get(client, id)
+		if (type === 'camera') return this.cameraManager.get(client, id)
+		else if (type === 'mount') return this.mountManager.get(client, id)
+		else if (type === 'focuser') return this.focuserManager.get(client, id)
+		else if (type === 'wheel') return this.wheelManager.get(client, id)
+		else if (type === 'cover') return this.coverManager.get(client, id)
+		else if (type === 'flatPanel') return this.flatPanelManager.get(client, id)
+		else if (type === 'rotator') return this.rotatorManager.get(client, id)
+		else if (type === 'guideOutput') return this.guideOutputManager.get(client, id)
+		else if (type === 'thermometer') return this.thermometerManager.get(client, id)
+		else if (type === 'dewHeater') return this.dewHeaterManager.get(client, id)
 		else return undefined
 	}
 

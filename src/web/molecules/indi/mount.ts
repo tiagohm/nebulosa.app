@@ -64,7 +64,7 @@ export const MountMolecule = molecule(() => {
 	const scope = use(MountScope)
 	const connection = use(ConnectionMolecule)
 
-	const mount = equipment.get('MOUNT', scope.mount.id)!
+	const mount = equipment.get('mount', scope.mount.id)!
 
 	const state =
 		stateMap.get(mount.id) ??
@@ -102,7 +102,7 @@ export const MountMolecule = molecule(() => {
 	let updateCoordinateTime = 0
 
 	onMount(() => {
-		state.mount = equipment.get('MOUNT', state.mount.id)!
+		state.mount = equipment.get('mount', state.mount.id)!
 
 		const unsubscribers = new Array<VoidFunction>(3)
 

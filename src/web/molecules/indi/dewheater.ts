@@ -23,7 +23,7 @@ const stateMap = new Map<string, DewHeaterState>()
 export const DewHeaterMolecule = molecule(() => {
 	const scope = use(DewHeaterScope)
 
-	const dewHeater = equipment.get('DEW_HEATER', scope.dewHeater.id)!
+	const dewHeater = equipment.get('dewHeater', scope.dewHeater.id)!
 
 	const state =
 		stateMap.get(dewHeater.id) ??
@@ -34,7 +34,7 @@ export const DewHeaterMolecule = molecule(() => {
 	stateMap.set(dewHeater.id, state)
 
 	onMount(() => {
-		state.dewHeater = equipment.get('DEW_HEATER', state.dewHeater.id)!
+		state.dewHeater = equipment.get('dewHeater', state.dewHeater.id)!
 
 		const unsubscriber = bus.subscribe<DewHeaterUpdated>('dewHeater:update', (event) => {
 			if (event.device.id === dewHeater.id) {

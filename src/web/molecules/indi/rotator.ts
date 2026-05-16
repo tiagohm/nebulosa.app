@@ -26,7 +26,7 @@ const stateMap = new Map<string, RotatorState>()
 export const RotatorMolecule = molecule(() => {
 	const scope = use(RotatorScope)
 
-	const rotator = equipment.get('ROTATOR', scope.rotator.id)!
+	const rotator = equipment.get('rotator', scope.rotator.id)!
 
 	const state =
 		stateMap.get(rotator.id) ??
@@ -38,7 +38,7 @@ export const RotatorMolecule = molecule(() => {
 	stateMap.set(rotator.id, state)
 
 	onMount(() => {
-		state.rotator = equipment.get('ROTATOR', state.rotator.id)!
+		state.rotator = equipment.get('rotator', state.rotator.id)!
 
 		const unsubscribers = new Array<VoidFunction>(2)
 

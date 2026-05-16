@@ -42,7 +42,7 @@ function slotName(wheel: Pick<Wheel, 'count' | 'names'>, position: number) {
 export const WheelMolecule = molecule(() => {
 	const scope = use(WheelScope)
 
-	const wheel = equipment.get('WHEEL', scope.wheel.id)!
+	const wheel = equipment.get('wheel', scope.wheel.id)!
 
 	const state =
 		stateMap.get(wheel.id) ??
@@ -57,7 +57,7 @@ export const WheelMolecule = molecule(() => {
 	stateMap.set(wheel.id, state)
 
 	onMount(() => {
-		state.wheel = equipment.get('WHEEL', state.wheel.id)!
+		state.wheel = equipment.get('wheel', state.wheel.id)!
 
 		const unsubscribers = new Array<VoidFunction>(2)
 

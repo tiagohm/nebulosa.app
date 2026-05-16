@@ -23,7 +23,7 @@ const stateMap = new Map<string, FlatPanelState>()
 export const FlatPanelMolecule = molecule(() => {
 	const scope = use(FlatPanelScope)
 
-	const flatPanel = equipment.get('FLAT_PANEL', scope.flatPanel.id)!
+	const flatPanel = equipment.get('flatPanel', scope.flatPanel.id)!
 
 	const state =
 		stateMap.get(flatPanel.id) ??
@@ -34,7 +34,7 @@ export const FlatPanelMolecule = molecule(() => {
 	stateMap.set(flatPanel.id, state)
 
 	onMount(() => {
-		state.flatPanel = equipment.get('FLAT_PANEL', state.flatPanel.id)!
+		state.flatPanel = equipment.get('flatPanel', state.flatPanel.id)!
 
 		const unsubscriber = bus.subscribe<FlatPanelUpdated>('flatPanel:update', (event) => {
 			if (event.device.id === flatPanel.id) {

@@ -64,7 +64,7 @@ export const FlatWizardMolecule = molecule(() => {
 	})
 
 	function load() {
-		state.camera = equipment.get('CAMERA', storageGet('flatwizard.camera', ''))
+		state.camera = equipment.get('camera', storageGet('flatwizard.camera', ''))
 
 		state.camera && updateCameraCaptureStartFromCamera(state.request.capture, state.camera)
 	}

@@ -29,7 +29,7 @@ const stateMap = new Map<string, FocuserState>()
 export const FocuserMolecule = molecule(() => {
 	const scope = use(FocuserScope)
 
-	const focuser = equipment.get('FOCUSER', scope.focuser.id)!
+	const focuser = equipment.get('focuser', scope.focuser.id)!
 
 	const state =
 		stateMap.get(focuser.id) ??
@@ -41,7 +41,7 @@ export const FocuserMolecule = molecule(() => {
 	stateMap.set(focuser.id, state)
 
 	onMount(() => {
-		state.focuser = equipment.get('FOCUSER', state.focuser.id)!
+		state.focuser = equipment.get('focuser', state.focuser.id)!
 
 		const unsubscribers = new Array<VoidFunction>(2)
 

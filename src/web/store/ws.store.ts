@@ -2,6 +2,8 @@ import bus from 'src/shared/bus'
 import type { DeviceAdded, DeviceRemoved, Notification } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { toast } from '@/shared/toast'
+import { confirmation } from './confirmation.store'
+import { equipment } from './equipment.store'
 
 export interface WebSocketState {
 	connected: boolean
@@ -70,37 +72,36 @@ function create() {
 		const text = content.slice(index + 1)
 		const data = text !== '' ? JSON.parse(text) : undefined
 
-		switch (key) {
-			case 'camera:add':
-			case 'camera:remove':
-			case 'mount:add':
-			case 'mount:remove':
-			case 'focuser:add':
-			case 'focuser:remove':
-			case 'wheel:add':
-			case 'wheel:remove':
-			case 'guideOutput:add':
-			case 'guideOutput:remove':
-			case 'thermometer:add':
-			case 'thermometer:remove':
-			case 'cover:add':
-			case 'cover:remove':
-			case 'flatPanel:add':
-			case 'flatPanel:remove':
-			case 'dewHeater:add':
-			case 'dewHeater:remove':
-			case 'power:add':
-			case 'power:remove':
-			case 'rotator:add':
-			case 'rotator:remove':
-				bus.emit(key, (data as DeviceAdded | DeviceRemoved).device)
-				break
-			case 'notification':
-				toast(data as Notification)
-				break
-			default:
+		if (
+			key.startsWith('camera:') ||
+			key.startsWith('cover:') ||
+			key.startsWith('dewHeater:') ||
+			key.startsWith('flatPanel:') ||
+			key.startsWith('focuser:') ||
+			key.startsWith('guideOutput:') ||
+			key.startsWith('mount:') ||
+			key.startsWith('power:') ||
+			key.startsWith('rotator:') ||
+			key.startsWith('thermometer:') ||
+			key.startsWith('wheel:')
+		) {
+			const [type, action] = key.split(':')
+
+			if (action === 'update') {
+				equipment.update(type as never, data)
+			} else if (action === 'add') {
+				equipment.add(type as never, (data as DeviceAdded).device)
+			} else if (action === 'remove') {
+				equipment.remove(type as never, (data as DeviceRemoved).device)
+			} else {
 				bus.emit(key, data)
-				break
+			}
+		} else if (key === 'notification') {
+			toast(data as Notification)
+		} else if (key === 'confirmation') {
+			confirmation.show(data)
+		} else {
+			bus.emit(key, data)
 		}
 	})
 }

@@ -69,8 +69,8 @@ export const AutoFocusMolecule = molecule(() => {
 	})
 
 	function load() {
-		state.camera = equipment.get('CAMERA', storageGet('autofocus.camera', ''))
-		state.focuser = equipment.get('FOCUSER', storageGet('autofocus.focuser', ''))
+		state.camera = equipment.get('camera', storageGet('autofocus.camera', ''))
+		state.focuser = equipment.get('focuser', storageGet('autofocus.focuser', ''))
 
 		state.camera && updateCameraCaptureStartFromCamera(state.request.capture, state.camera)
 	}

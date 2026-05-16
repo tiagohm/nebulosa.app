@@ -7,6 +7,7 @@ import bus from 'src/shared/bus'
 // oxfmt-ignore
 import { type CoordinateInfo, DEFAULT_COORDINATE_INFO, type Framing, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { connection } from 'src/web/store/connection.store'
 import { equipment, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -14,7 +15,6 @@ import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { toast } from '@/shared/toast'
 import type { NudgeDirection } from '@/ui/Nudge'
-import { ConnectionMolecule } from '../connection'
 
 export interface MountScopeValue {
 	readonly mount: DeepReadonly<Omit<Mount, symbol>>
@@ -62,7 +62,6 @@ const stateMap = new Map<string, MountState>()
 
 export const MountMolecule = molecule(() => {
 	const scope = use(MountScope)
-	const connection = use(ConnectionMolecule)
 
 	const mount = equipment.get('mount', scope.mount.id)!
 

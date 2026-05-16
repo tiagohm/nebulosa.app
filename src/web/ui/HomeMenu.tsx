@@ -24,7 +24,6 @@ import settingsIcon from '@/assets/settings.webp'
 import skyAtlasIcon from '@/assets/sky-atlas.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
 import { AutoFocusMolecule } from '@/molecules/autofocus'
-import { ConnectionMolecule } from '@/molecules/connection'
 import { DarvMolecule } from '@/molecules/darv'
 import { FlatWizardMolecule } from '@/molecules/flatwizard'
 import { FramingMolecule } from '@/molecules/framing'
@@ -35,6 +34,7 @@ import { TppaMolecule } from '@/molecules/tppa'
 import { about } from '../store/about.store'
 import { alpaca } from '../store/alpaca.store'
 import { calculator } from '../store/calculator.store'
+import { connection } from '../store/connection.store'
 import { equipment } from '../store/equipment.store'
 import { homeMenu } from '../store/home.menu.store'
 import { About } from './About'
@@ -58,7 +58,6 @@ import { Tppa } from './Tppa'
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
 
 export const HomeMenu = memo(() => {
-	const connection = useMolecule(ConnectionMolecule)
 	const { connected } = useSnapshot(connection.state)
 
 	const atlas = useMolecule(SkyAtlasMolecule)

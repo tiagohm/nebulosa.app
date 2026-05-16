@@ -1,10 +1,9 @@
-import { useMolecule } from 'bunshi/react'
 import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import { memo, useRef } from 'react'
 import { useSnapshot } from 'valtio'
-import { ConnectionMolecule } from '@/molecules/connection'
 import type { Connection } from '@/shared/types'
 import { Button } from '@/ui/components/Button'
+import { connection } from '../store/connection.store'
 import { ClientTypeSelect } from './ClientTypeSelect'
 import { Checkbox } from './components/Checkbox'
 import { IconButton } from './components/IconButton'
@@ -33,7 +32,6 @@ function canSaveConnection({ host, name, port, type }: Pick<Connection, 'host' |
 }
 
 export const ConnectionEdit = memo(() => {
-	const connection = useMolecule(ConnectionMolecule)
 	const { mode } = useSnapshot(connection.state)
 
 	return (
@@ -44,7 +42,6 @@ export const ConnectionEdit = memo(() => {
 })
 
 const Body = memo(() => {
-	const connection = useMolecule(ConnectionMolecule)
 	const { name, host, port, type, secured } = useSnapshot(connection.state.edited)
 	const networkConnection = isNetworkConnection(type)
 
@@ -63,7 +60,6 @@ const Body = memo(() => {
 })
 
 const Footer = memo(() => {
-	const connection = useMolecule(ConnectionMolecule)
 	const edited = useSnapshot(connection.state.edited)
 
 	return <Button color="success" disabled={!canSaveConnection(edited)} label="Save" onClick={connection.save} startContent={<Icons.Check />} />
@@ -76,7 +72,6 @@ function AlpacaDeviceServerItem(item: AlpacaDeviceServer) {
 
 const AlpacaDeviceServerDiscovery = memo(() => {
 	const popoverRef = useRef<PopoverMethods | null>(null)
-	const connection = useMolecule(ConnectionMolecule)
 	const { alpaca, edited } = useSnapshot(connection.state)
 
 	function handleItemAction(index: number) {

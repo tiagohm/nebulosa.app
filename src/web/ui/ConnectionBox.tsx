@@ -1,9 +1,8 @@
-import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { ConnectionMolecule } from '@/molecules/connection'
 import type { Connection } from '@/shared/types'
+import { connection } from '../store/connection.store'
 import { Chip } from './components/Chip'
 import { Dropdown, DropdownItem } from './components/Dropdown'
 import { IconButton } from './components/IconButton'
@@ -55,18 +54,13 @@ function ConnectionItem(item: Connection, index: number, selected: boolean, plac
 }
 
 export const ConnectionBox = memo(() => {
-	const connection = useMolecule(ConnectionMolecule)
 	const { connections, loading, selected, connected, show } = useSnapshot(connection.state)
-
-	function handleValueChange(value: Connection) {
-		connection.select(value)
-	}
 
 	return (
 		<>
 			<div className="flex w-full min-w-0 flex-row items-center gap-2">
 				<IconButton color="success" disabled={loading || !!connected} icon={Icons.Plus} onClick={connection.create} tooltipContent="New Connection" />
-				<Select className="min-w-0 flex-1" disabled={loading || !!connected} items={connections} onValueChange={handleValueChange} value={selected} size="lg">
+				<Select className="min-w-0 flex-1" disabled={loading || !!connected} items={connections} onValueChange={connection.select} value={selected} size="lg">
 					{ConnectionItem}
 				</Select>
 				<ConnectButton disabled={!selected} connected={!!connected} loading={loading} onClick={connection.connect} />
@@ -81,7 +75,6 @@ interface EditDropdownProps {
 }
 
 const EditDropdown = memo(({ item }: EditDropdownProps) => {
-	const connection = useMolecule(ConnectionMolecule)
 	const { connections } = useSnapshot(connection.state)
 
 	return (

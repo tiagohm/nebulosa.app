@@ -1,14 +1,14 @@
-import { molecule, onMount, use } from 'bunshi'
+import { molecule, onMount } from 'bunshi'
 import type { Device, DeviceProperties, DeviceProperty } from 'nebulosa/src/indi.device'
 import type { Message, NewVector } from 'nebulosa/src/indi.types'
 import bus from 'src/shared/bus'
 import type { ConnectionEvent, IndiDevicePropertyEvent } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { connection } from 'src/web/store/connection.store'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
-import { ConnectionMolecule } from '../connection'
 
 export interface IndiPanelControlState {
 	show: boolean
@@ -35,8 +35,6 @@ const state = proxy<IndiPanelControlState>({
 initProxy(state, 'indi', ['p:show', 'p:device', 'p:group', 'p:tab'])
 
 export const IndiPanelControlMolecule = molecule(() => {
-	const connection = use(ConnectionMolecule)
-
 	onMount(() => {
 		const unsubscribers = new Array<VoidFunction>(7)
 

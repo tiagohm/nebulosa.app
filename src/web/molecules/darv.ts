@@ -8,7 +8,7 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
-import { equipment, type DeviceState } from '../store/equipment.store'
+import { equipmentStore, type DeviceState } from '../store/equipment.store'
 import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
 
 export interface DarvState {
@@ -81,8 +81,8 @@ export const DarvMolecule = molecule(() => {
 	})
 
 	function load() {
-		state.camera = equipment.get('camera', storageGet('darv.camera', ''))
-		state.mount = equipment.get('mount', storageGet('darv.mount', ''))
+		state.camera = equipmentStore.get('camera', storageGet('darv.camera', ''))
+		state.mount = equipmentStore.get('mount', storageGet('darv.mount', ''))
 
 		state.camera && updateCameraCaptureStartFromCamera(state.request.capture, state.camera)
 	}

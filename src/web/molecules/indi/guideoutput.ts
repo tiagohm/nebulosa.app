@@ -4,7 +4,7 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { GuideOutputUpdated, GuidePulse } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
-import { equipment, type DeviceState } from 'src/web/store/equipment.store'
+import { equipmentStore, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -39,7 +39,7 @@ const stateMap = new Map<string, GuideOutputState>()
 export const GuideOutputMolecule = molecule(() => {
 	const scope = use(GuideOutputScope)
 
-	const guideOutput = equipment.get('guideOutput', scope.guideOutput.id)!
+	const guideOutput = equipmentStore.get('guideOutput', scope.guideOutput.id)!
 
 	const state =
 		stateMap.get(guideOutput.id) ??
@@ -51,7 +51,7 @@ export const GuideOutputMolecule = molecule(() => {
 	stateMap.set(guideOutput.id, state)
 
 	onMount(() => {
-		state.guideOutput = equipment.get('guideOutput', state.guideOutput.id)!
+		state.guideOutput = equipmentStore.get('guideOutput', state.guideOutput.id)!
 
 		const unsubscribers = new Array<VoidFunction>(2)
 
@@ -79,7 +79,7 @@ export const GuideOutputMolecule = molecule(() => {
 	}
 
 	function connect() {
-		return equipment.connect(guideOutput)
+		return equipmentStore.connect(guideOutput)
 	}
 
 	function pulse(direction: NudgeDirection, down: boolean) {

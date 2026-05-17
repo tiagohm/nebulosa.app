@@ -3,7 +3,7 @@ import { memo, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import type { Connection } from '@/shared/types'
 import { Button } from '@/ui/components/Button'
-import { connection } from '../store/connection.store'
+import { connectionStore } from '../store/connection.store'
 import { ClientTypeSelect } from './ClientTypeSelect'
 import { Checkbox } from './components/Checkbox'
 import { IconButton } from './components/IconButton'
@@ -32,26 +32,26 @@ function canSaveConnection({ host, name, port, type }: Pick<Connection, 'host' |
 }
 
 export const ConnectionEdit = memo(() => {
-	const { mode } = useSnapshot(connection.state)
+	const { mode } = useSnapshot(connectionStore.state)
 
 	return (
-		<Modal footer={<Footer />} header="Connection" id="connection" maxWidth="264px" onHide={connection.hide} subHeader={mode}>
+		<Modal footer={<Footer />} header="Connection" id="connection" maxWidth="264px" onHide={connectionStore.hide} subHeader={mode}>
 			<Body />
 		</Modal>
 	)
 })
 
 const Body = memo(() => {
-	const { name, host, port, type, secured } = useSnapshot(connection.state.edited)
+	const { name, host, port, type, secured } = useSnapshot(connectionStore.state.edited)
 	const networkConnection = isNetworkConnection(type)
 
 	return (
 		<div className="mt-0 grid grid-cols-12 items-center gap-2">
-			<TextInput className="col-span-full" label="Name" maxLength={64} onValueChange={(value) => connection.update('name', value)} placeholder="Local" value={name} />
-			<TextInput className="col-span-7" disabled={!networkConnection} label="Host" maxLength={128} onValueChange={(value) => connection.update('host', value)} placeholder="localhost" value={host} />
-			<NumberInput className="col-span-5" disabled={!networkConnection} label="Port" maxValue={65535} minValue={1} onValueChange={(value) => connection.update('port', value)} placeholder={CONNECTION_PORT_PLACEHOLDER[type]} value={port} />
-			<ClientTypeSelect className="col-span-5" onValueChange={(value) => connection.update('type', value)} value={type} />
-			<Checkbox className="col-span-5" disabled={type !== 'ALPACA'} label="Secured" onValueChange={(value) => connection.update('secured', value)} value={secured} />
+			<TextInput className="col-span-full" label="Name" maxLength={64} onValueChange={(value) => connectionStore.update('name', value)} placeholder="Local" value={name} />
+			<TextInput className="col-span-7" disabled={!networkConnection} label="Host" maxLength={128} onValueChange={(value) => connectionStore.update('host', value)} placeholder="localhost" value={host} />
+			<NumberInput className="col-span-5" disabled={!networkConnection} label="Port" maxValue={65535} minValue={1} onValueChange={(value) => connectionStore.update('port', value)} placeholder={CONNECTION_PORT_PLACEHOLDER[type]} value={port} />
+			<ClientTypeSelect className="col-span-5" onValueChange={(value) => connectionStore.update('type', value)} value={type} />
+			<Checkbox className="col-span-5" disabled={type !== 'ALPACA'} label="Secured" onValueChange={(value) => connectionStore.update('secured', value)} value={secured} />
 			<div className="col-span-2">
 				<AlpacaDeviceServerDiscovery />
 			</div>
@@ -60,9 +60,9 @@ const Body = memo(() => {
 })
 
 const Footer = memo(() => {
-	const edited = useSnapshot(connection.state.edited)
+	const edited = useSnapshot(connectionStore.state.edited)
 
-	return <Button color="success" disabled={!canSaveConnection(edited)} label="Save" onClick={connection.save} startContent={<Icons.Check />} />
+	return <Button color="success" disabled={!canSaveConnection(edited)} label="Save" onClick={connectionStore.save} startContent={<Icons.Check />} />
 })
 
 function AlpacaDeviceServerItem(item: AlpacaDeviceServer) {
@@ -72,15 +72,15 @@ function AlpacaDeviceServerItem(item: AlpacaDeviceServer) {
 
 const AlpacaDeviceServerDiscovery = memo(() => {
 	const popoverRef = useRef<PopoverMethods | null>(null)
-	const { alpaca, edited } = useSnapshot(connection.state)
+	const { alpaca, edited } = useSnapshot(connectionStore.state)
 
 	function handleItemAction(index: number) {
 		const item = alpaca.servers[index]
 
 		if (!item) return
 
-		connection.update('host', item.address)
-		connection.update('port', item.port)
+		connectionStore.update('host', item.address)
+		connectionStore.update('port', item.port)
 		popoverRef.current?.hide()
 	}
 
@@ -92,7 +92,7 @@ const AlpacaDeviceServerDiscovery = memo(() => {
 					{(i) => AlpacaDeviceServerItem(alpaca.servers[i])}
 				</List>
 				<div className="col-span-full flex flex-row items-center justify-end">
-					<Button color="primary" label="Discovery" loading={alpaca.discovering} onClick={connection.discovery} startContent={<Icons.Reload />} />
+					<Button color="primary" label="Discovery" loading={alpaca.discovering} onClick={connectionStore.discovery} startContent={<Icons.Reload />} />
 				</div>
 			</div>
 		</Popover>

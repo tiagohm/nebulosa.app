@@ -2,7 +2,7 @@ import { createUseGesture, dragAction } from '@use-gesture/react'
 import type { Point } from 'nebulosa/src/geometry'
 import { useCallback, useEffect, useRef } from 'react'
 import { storageGet, storageSet } from '@/shared/storage'
-import { zIndex } from '../store/zindex.store'
+import { zIndexStore } from '../store/zindex.store'
 
 // Better tree shaking with createUseGesture
 const useGesture = createUseGesture([dragAction])
@@ -134,7 +134,7 @@ export function useModal(id: string, onHide?: VoidFunction) {
 				}
 
 				isDragging.current = true
-				zIndex.increment(id, true)
+				zIndexStore.increment(id, true)
 				computeBoundary()
 
 				previousUserSelect.current ??= document.body.style.userSelect
@@ -172,26 +172,26 @@ export function useModal(id: string, onHide?: VoidFunction) {
 
 			applyTransform()
 			fitToBoundary()
-			zIndex.apply(node, id)
+			zIndexStore.apply(node, id)
 		},
-		[applyTransform, fitToBoundary, id, zIndex],
+		[applyTransform, fitToBoundary, id, zIndexStore],
 	)
 
 	const hide = useCallback(() => {
 		isDragging.current = false
 		restoreBodySelection()
-		zIndex.remove(id)
+		zIndexStore.remove(id)
 		onHide?.()
-	}, [id, onHide, restoreBodySelection, zIndex])
+	}, [id, onHide, restoreBodySelection, zIndexStore])
 
 	useEffect(() => {
-		zIndex.increment(id, true)
+		zIndexStore.increment(id, true)
 		return () => {
 			isDragging.current = false
 			restoreBodySelection()
-			zIndex.remove(id)
+			zIndexStore.remove(id)
 		}
-	}, [id, restoreBodySelection, zIndex])
+	}, [id, restoreBodySelection, zIndexStore])
 
 	useEffect(() => {
 		window.addEventListener('resize', fitToBoundary)

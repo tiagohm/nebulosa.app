@@ -2,7 +2,7 @@ import { memo, type ReactNode } from 'react'
 import brazilLogo from '@/assets/brazil.png'
 import nebulosaLogo from '@/assets/nebulosa.ico'
 import packageJson from '../../../package.json'
-import { about } from '../store/about.store'
+import { aboutStore } from '../store/about.store'
 import { Chip } from './components/Chip'
 import { Link } from './components/Link'
 import { Icons } from './Icon'
@@ -32,7 +32,7 @@ function IconCreditItem(item: (typeof ICON_CREDITS)[number]) {
 }
 
 export const About = memo(() => (
-	<Modal header={<Header />} id="about" maxWidth="472px" onHide={about.hide}>
+	<Modal header={<Header />} id="about" maxWidth="472px" onHide={aboutStore.hide}>
 		<Body />
 	</Modal>
 ))
@@ -75,7 +75,7 @@ function Info() {
 					</span>
 				</InfoRow>
 				<InfoRow label="Copyright">
-					<span>2022-{about.state.year}</span>
+					<span>2022-{aboutStore.state.year}</span>
 				</InfoRow>
 			</div>
 			<div className="rounded-lg border border-(--color-variant)/20 bg-(--color-variant)/10 p-3 text-center text-sm leading-5 text-neutral-200 [--color-variant:var(--warning)]">This software is WIP, comes with absolutely no warranty, and the copyright holder is not liable or responsible for anything.</div>

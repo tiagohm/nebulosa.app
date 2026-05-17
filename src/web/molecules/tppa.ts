@@ -8,7 +8,7 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
-import { equipment, type DeviceState } from '../store/equipment.store'
+import { equipmentStore, type DeviceState } from '../store/equipment.store'
 import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
 
 export interface TppaState {
@@ -81,8 +81,8 @@ export const TppaMolecule = molecule(() => {
 	})
 
 	function load() {
-		state.camera = equipment.get('camera', storageGet('tppa.camera', ''))
-		state.mount = equipment.get('mount', storageGet('tppa.mount', ''))
+		state.camera = equipmentStore.get('camera', storageGet('tppa.camera', ''))
+		state.mount = equipmentStore.get('mount', storageGet('tppa.mount', ''))
 
 		state.camera && updateCameraCaptureStartFromCamera(state.request.capture, state.camera)
 	}

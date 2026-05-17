@@ -8,7 +8,7 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
-import { equipment, type DeviceState } from '../store/equipment.store'
+import { equipmentStore, type DeviceState } from '../store/equipment.store'
 import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
 
 export interface FlatWizardState {
@@ -64,7 +64,7 @@ export const FlatWizardMolecule = molecule(() => {
 	})
 
 	function load() {
-		state.camera = equipment.get('camera', storageGet('flatwizard.camera', ''))
+		state.camera = equipmentStore.get('camera', storageGet('flatwizard.camera', ''))
 
 		state.camera && updateCameraCaptureStartFromCamera(state.request.capture, state.camera)
 	}

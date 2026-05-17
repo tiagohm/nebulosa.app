@@ -2,7 +2,7 @@ import { formatTemporal } from 'nebulosa/src/temporal'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import type { Connection } from '@/shared/types'
-import { connection } from '../store/connection.store'
+import { connectionStore } from '../store/connection.store'
 import { Chip } from './components/Chip'
 import { Dropdown, DropdownItem } from './components/Dropdown'
 import { IconButton } from './components/IconButton'
@@ -54,16 +54,16 @@ function ConnectionItem(item: Connection, index: number, selected: boolean, plac
 }
 
 export const ConnectionBox = memo(() => {
-	const { connections, loading, selected, connected, show } = useSnapshot(connection.state)
+	const { connections, loading, selected, connected, show } = useSnapshot(connectionStore.state)
 
 	return (
 		<>
 			<div className="flex w-full min-w-0 flex-row items-center gap-2">
-				<IconButton color="success" disabled={loading || !!connected} icon={Icons.Plus} onClick={connection.create} tooltipContent="New Connection" />
-				<Select className="min-w-0 flex-1" disabled={loading || !!connected} items={connections} onValueChange={connection.select} value={selected} size="lg">
+				<IconButton color="success" disabled={loading || !!connected} icon={Icons.Plus} onClick={connectionStore.create} tooltipContent="New Connection" />
+				<Select className="min-w-0 flex-1" disabled={loading || !!connected} items={connections} onValueChange={connectionStore.select} value={selected} size="lg">
 					{ConnectionItem}
 				</Select>
-				<ConnectButton disabled={!selected} connected={!!connected} loading={loading} onClick={connection.connect} />
+				<ConnectButton disabled={!selected} connected={!!connected} loading={loading} onClick={connectionStore.connect} />
 			</div>
 			{show && !connected && <ConnectionEdit />}
 		</>
@@ -75,13 +75,13 @@ interface EditDropdownProps {
 }
 
 const EditDropdown = memo(({ item }: EditDropdownProps) => {
-	const { connections } = useSnapshot(connection.state)
+	const { connections } = useSnapshot(connectionStore.state)
 
 	return (
 		<Dropdown hideChevron itemHeight={28} label={<Icons.VerticalMenu color="var(--color-neutral-500)" />} color="default" variant="ghost" size="sm">
-			<DropdownItem label="Edit" onClick={() => connection.edit(item)} startContent={<Icons.Edit />} />
-			<DropdownItem label="Duplicate" onClick={() => connection.duplicate(item)} startContent={<Icons.Copy />} />
-			<DropdownItem label="Delete" disabled={connections.length === 1} color="danger" onClick={() => connection.remove(item)} startContent={<Icons.Trash />} variant="flat" />
+			<DropdownItem label="Edit" onClick={() => connectionStore.edit(item)} startContent={<Icons.Edit />} />
+			<DropdownItem label="Duplicate" onClick={() => connectionStore.duplicate(item)} startContent={<Icons.Copy />} />
+			<DropdownItem label="Delete" disabled={connections.length === 1} color="danger" onClick={() => connectionStore.remove(item)} startContent={<Icons.Trash />} variant="flat" />
 		</Dropdown>
 	)
 })

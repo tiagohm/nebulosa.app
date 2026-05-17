@@ -3,7 +3,7 @@ import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
 
-export type AlpacaStore = typeof alpaca
+export type AlpacaStore = typeof alpacaStore
 
 export interface AlpacaState {
 	show: boolean
@@ -92,7 +92,7 @@ function mount() {
 	return unmount
 }
 
-export const alpaca = {
+export const alpacaStore = {
 	state,
 	mount,
 	unmount,

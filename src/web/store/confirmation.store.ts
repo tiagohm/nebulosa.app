@@ -2,7 +2,7 @@ import type { Confirmation } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 
-export type ConfirmationStore = typeof confirmation
+export type ConfirmationStore = typeof confirmationStore
 
 type ConfirmationPendingAction = 'accept' | 'reject'
 
@@ -59,7 +59,7 @@ function reject() {
 	return answer(false)
 }
 
-export const confirmation = {
+export const confirmationStore = {
 	state,
 	show,
 	hide,

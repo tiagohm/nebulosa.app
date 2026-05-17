@@ -31,12 +31,12 @@ import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { TppaMolecule } from '@/molecules/tppa'
-import { about } from '../store/about.store'
-import { alpaca } from '../store/alpaca.store'
-import { calculator } from '../store/calculator.store'
-import { connection } from '../store/connection.store'
-import { equipment } from '../store/equipment.store'
-import { homeMenu } from '../store/home.menu.store'
+import { aboutStore } from '../store/about.store'
+import { alpacaStore } from '../store/alpaca.store'
+import { calculatorStore } from '../store/calculator.store'
+import { connectionStore } from '../store/connection.store'
+import { equipmentStore } from '../store/equipment.store'
+import { homeMenuStore } from '../store/home.menu.store'
 import { About } from './About'
 import { AlpacaServer } from './AlpacaServer'
 import { AutoFocus } from './AutoFocus'
@@ -58,7 +58,7 @@ import { Tppa } from './Tppa'
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
 
 export const HomeMenu = memo(() => {
-	const { connected } = useSnapshot(connection.state)
+	const { connected } = useSnapshot(connectionStore.state)
 
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { show: showSkyAtlas } = useSnapshot(atlas.state)
@@ -84,9 +84,9 @@ export const HomeMenu = memo(() => {
 	const indi = useMolecule(IndiPanelControlMolecule)
 	const { show: showIndiPanelControl } = useSnapshot(indi.state)
 
-	const { show: showAlpaca } = useSnapshot(alpaca.state)
-	const { show: showCalculator } = useSnapshot(calculator.state)
-	const { show: showAbout } = useSnapshot(about.state)
+	const { show: showAlpaca } = useSnapshot(alpacaStore.state)
+	const { show: showCalculator } = useSnapshot(calculatorStore.state)
+	const { show: showAbout } = useSnapshot(aboutStore.state)
 
 	return (
 		<>
@@ -107,7 +107,7 @@ export const HomeMenu = memo(() => {
 })
 
 export const HomeMenuPopover = memo(() => (
-	<Popover ref={homeMenu.popover} trigger={<IconButton color="secondary" icon={Icons.Menu} tooltipContent="Menu" />}>
+	<Popover ref={homeMenuStore.popover} trigger={<IconButton color="secondary" icon={Icons.Menu} tooltipContent="Menu" />}>
 		<HomeMenuPopoverContent />
 	</Popover>
 ))
@@ -126,33 +126,33 @@ function handleButtonClick(event: React.MouseEvent<HTMLElement>) {
 		case 'guideOutput':
 		case 'dewHeater':
 		case 'thermometer':
-			homeMenu.select(key)
+			homeMenuStore.select(key)
 			return
 		case 'alpaca':
-			alpaca.show()
+			alpacaStore.show()
 			break
 		case 'calculator':
-			calculator.show()
+			calculatorStore.show()
 			break
 		case 'about':
-			about.show()
+			aboutStore.show()
 			break
 	}
 
-	homeMenu.hide()
+	homeMenuStore.hide()
 }
 
 export const HomeMenuPopoverContent = memo(() => {
-	const { length: cameraLength } = useSnapshot(equipment.state.camera)
-	const { length: mountLength } = useSnapshot(equipment.state.mount)
-	const { length: focuserLength } = useSnapshot(equipment.state.focuser)
-	const { length: wheelLength } = useSnapshot(equipment.state.wheel)
-	const { length: coverLength } = useSnapshot(equipment.state.cover)
-	const { length: flatPanelLength } = useSnapshot(equipment.state.flatPanel)
-	const { length: guideOutputLength } = useSnapshot(equipment.state.guideOutput)
-	const { length: thermometerLength } = useSnapshot(equipment.state.thermometer)
-	const { length: dewHeaterLength } = useSnapshot(equipment.state.dewHeater)
-	const { length: rotatorLength } = useSnapshot(equipment.state.rotator)
+	const { length: cameraLength } = useSnapshot(equipmentStore.state.camera)
+	const { length: mountLength } = useSnapshot(equipmentStore.state.mount)
+	const { length: focuserLength } = useSnapshot(equipmentStore.state.focuser)
+	const { length: wheelLength } = useSnapshot(equipmentStore.state.wheel)
+	const { length: coverLength } = useSnapshot(equipmentStore.state.cover)
+	const { length: flatPanelLength } = useSnapshot(equipmentStore.state.flatPanel)
+	const { length: guideOutputLength } = useSnapshot(equipmentStore.state.guideOutput)
+	const { length: thermometerLength } = useSnapshot(equipmentStore.state.thermometer)
+	const { length: dewHeaterLength } = useSnapshot(equipmentStore.state.dewHeater)
+	const { length: rotatorLength } = useSnapshot(equipmentStore.state.rotator)
 
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
 	const framing = useMolecule(FramingMolecule)
@@ -200,24 +200,24 @@ interface DeviceChipProps extends Omit<ChipProps, 'children'> {
 }
 
 function DeviceChip({ type, index, ...props }: DeviceChipProps) {
-	const { connected, name } = useSnapshot(equipment.state[type][index])
+	const { connected, name } = useSnapshot(equipmentStore.state[type][index])
 	return <Chip className="min-w-full cursor-pointer" color={connected ? 'success' : 'danger'} label={name} {...props} />
 }
 
 const Devices = memo(() => {
-	const { selected } = useSnapshot(homeMenu.state)
-	const { length } = useSnapshot(equipment.state[selected])
+	const { selected } = useSnapshot(homeMenuStore.state)
+	const { length } = useSnapshot(equipmentStore.state[selected])
 
 	function handleClick(id: string) {
-		const device = equipment.get(selected, id)
+		const device = equipmentStore.get(selected, id)
 		if (device !== undefined) device.show = true
-		homeMenu.hide()
+		homeMenuStore.hide()
 	}
 
 	const devices = new Array<React.ReactNode>(length)
 
 	for (let i = 0; i < length; i++) {
-		const { id } = equipment.state[selected][i]
+		const { id } = equipmentStore.state[selected][i]
 		devices[i] = <DeviceChip key={id} type={selected} index={i} onClick={() => handleClick(id)} />
 	}
 

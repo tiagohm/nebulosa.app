@@ -1,6 +1,6 @@
 import type { Thermometer } from 'nebulosa/src/indi.device'
 import { proxy } from 'valtio'
-import { equipment, type DeviceState } from './equipment.store'
+import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type ThermometerStore = ReturnType<typeof thermometerStore>
 
@@ -22,15 +22,15 @@ export function thermometerStore(thermometer: Thermometer) {
 	}
 
 	function connect() {
-		return equipment.connect(thermometer)
+		return equipmentStore.connect(thermometer)
 	}
 
 	function show() {
-		return equipment.show(thermometer)
+		return equipmentStore.show(thermometer)
 	}
 
 	function hide() {
-		return equipment.hide(thermometer)
+		return equipmentStore.hide(thermometer)
 	}
 
 	return {

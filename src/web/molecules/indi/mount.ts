@@ -7,8 +7,8 @@ import bus from 'src/shared/bus'
 // oxfmt-ignore
 import { type CoordinateInfo, DEFAULT_COORDINATE_INFO, type Framing, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
-import { connection } from 'src/web/store/connection.store'
-import { equipment, type DeviceState } from 'src/web/store/equipment.store'
+import { connectionStore } from 'src/web/store/connection.store'
+import { equipmentStore, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -63,7 +63,7 @@ const stateMap = new Map<string, MountState>()
 export const MountMolecule = molecule(() => {
 	const scope = use(MountScope)
 
-	const mount = equipment.get('mount', scope.mount.id)!
+	const mount = equipmentStore.get('mount', scope.mount.id)!
 
 	const state =
 		stateMap.get(mount.id) ??
@@ -101,7 +101,7 @@ export const MountMolecule = molecule(() => {
 	let updateCoordinateTime = 0
 
 	onMount(() => {
-		state.mount = equipment.get('mount', state.mount.id)!
+		state.mount = equipmentStore.get('mount', state.mount.id)!
 
 		const unsubscribers = new Array<VoidFunction>(3)
 
@@ -135,7 +135,7 @@ export const MountMolecule = molecule(() => {
 		})
 
 		const timer = setInterval(() => {
-			if (mount.connected && connection.state.connected) {
+			if (mount.connected && connectionStore.state.connected) {
 				updateCoordinatePosition()
 			}
 		}, 60000)
@@ -151,7 +151,7 @@ export const MountMolecule = molecule(() => {
 	})
 
 	function connect() {
-		return equipment.connect(mount)
+		return equipmentStore.connect(mount)
 	}
 
 	function updateRemoteControl<K extends keyof MountState['remoteControl']['request']>(key: K, value: MountState['remoteControl']['request'][K]) {

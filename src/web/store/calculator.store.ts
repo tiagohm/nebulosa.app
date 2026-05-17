@@ -1,7 +1,7 @@
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
 
-export type CalculatorStore = typeof calculator
+export type CalculatorStore = typeof calculatorStore
 
 export interface FocalLengthRatio {
 	aperture: number
@@ -97,7 +97,7 @@ function hide() {
 	state.show = false
 }
 
-export const calculator = {
+export const calculatorStore = {
 	state,
 	show,
 	hide,

@@ -4,7 +4,7 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { WheelUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
-import { equipment, type DeviceState } from 'src/web/store/equipment.store'
+import { equipmentStore, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -42,7 +42,7 @@ function slotName(wheel: Pick<Wheel, 'count' | 'names'>, position: number) {
 export const WheelMolecule = molecule(() => {
 	const scope = use(WheelScope)
 
-	const wheel = equipment.get('wheel', scope.wheel.id)!
+	const wheel = equipmentStore.get('wheel', scope.wheel.id)!
 
 	const state =
 		stateMap.get(wheel.id) ??
@@ -57,7 +57,7 @@ export const WheelMolecule = molecule(() => {
 	stateMap.set(wheel.id, state)
 
 	onMount(() => {
-		state.wheel = equipment.get('wheel', state.wheel.id)!
+		state.wheel = equipmentStore.get('wheel', state.wheel.id)!
 
 		const unsubscribers = new Array<VoidFunction>(2)
 
@@ -94,7 +94,7 @@ export const WheelMolecule = molecule(() => {
 
 	async function connect() {
 		try {
-			return await equipment.connect(state.wheel)
+			return await equipmentStore.connect(state.wheel)
 		} finally {
 			state.wheel.connecting = false
 		}

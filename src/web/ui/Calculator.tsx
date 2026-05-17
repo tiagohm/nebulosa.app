@@ -1,6 +1,6 @@
 import { memo, type ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { calculator } from '../store/calculator.store'
+import { calculatorStore } from '../store/calculator.store'
 import { Chip } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
@@ -12,7 +12,7 @@ const MIN_FOCAL_RATIO = 0.01
 const MIN_PIXEL_SIZE = 0.01
 
 export const Calculator = memo(() => (
-	<Modal header="Calculator" id="calculator" maxWidth="440px" onHide={calculator.hide}>
+	<Modal header="Calculator" id="calculator" maxWidth="440px" onHide={calculatorStore.hide}>
 		<Body />
 	</Modal>
 ))
@@ -72,81 +72,81 @@ function Formula({ description, expression, children }: FormulaProps) {
 }
 
 const FocalLength = memo(() => {
-	const { aperture, focalRatio, focalLength } = useSnapshot(calculator.state.focalLength)
+	const { aperture, focalRatio, focalLength } = useSnapshot(calculatorStore.state.focalLength)
 
 	return (
 		<Formula description="Calculate the focal length of your telescope" expression="Aperture * Focal Ratio">
-			<NumberInput endContent="mm" fullWidth label="Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculator.update('focalLength', 'aperture', value)} value={aperture} />
-			<NumberInput fractionDigits={2} fullWidth label="Focal Ratio" minValue={MIN_FOCAL_RATIO} onValueChange={(value) => calculator.update('focalLength', 'focalRatio', value)} startContent="F/" step={0.1} value={focalRatio} />
+			<NumberInput endContent="mm" fullWidth label="Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculatorStore.update('focalLength', 'aperture', value)} value={aperture} />
+			<NumberInput fractionDigits={2} fullWidth label="Focal Ratio" minValue={MIN_FOCAL_RATIO} onValueChange={(value) => calculatorStore.update('focalLength', 'focalRatio', value)} startContent="F/" step={0.1} value={focalRatio} />
 			<NumberInput endContent="mm" fullWidth label="Focal Length" readOnly value={focalLength} />
 		</Formula>
 	)
 })
 
 const FocalRatio = memo(() => {
-	const { aperture, focalRatio, focalLength } = useSnapshot(calculator.state.focalRatio)
+	const { aperture, focalRatio, focalLength } = useSnapshot(calculatorStore.state.focalRatio)
 
 	return (
 		<Formula description="Calculate the focal ratio of your telescope" expression="Focal Length / Aperture">
-			<NumberInput endContent="mm" fullWidth label="Focal Length" minValue={MIN_FOCAL_LENGTH} onValueChange={(value) => calculator.update('focalRatio', 'focalLength', value)} value={focalLength} />
-			<NumberInput endContent="mm" fullWidth label="Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculator.update('focalRatio', 'aperture', value)} value={aperture} />
+			<NumberInput endContent="mm" fullWidth label="Focal Length" minValue={MIN_FOCAL_LENGTH} onValueChange={(value) => calculatorStore.update('focalRatio', 'focalLength', value)} value={focalLength} />
+			<NumberInput endContent="mm" fullWidth label="Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculatorStore.update('focalRatio', 'aperture', value)} value={aperture} />
 			<NumberInput fractionDigits={2} fullWidth label="Focal Ratio" readOnly startContent="F/" value={focalRatio} />
 		</Formula>
 	)
 })
 
 const DawesLimit = memo(() => {
-	const { aperture, resolution } = useSnapshot(calculator.state.dawesLimit)
+	const { aperture, resolution } = useSnapshot(calculatorStore.state.dawesLimit)
 
 	return (
 		<Formula description="Calculate the maximum resolving power of your telescope using the Dawes Limit formula" expression="116 / Aperture">
-			<NumberInput endContent="mm" fullWidth label="Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculator.update('dawesLimit', 'aperture', value)} value={aperture} />
+			<NumberInput endContent="mm" fullWidth label="Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculatorStore.update('dawesLimit', 'aperture', value)} value={aperture} />
 			<NumberInput endContent="arcsec" fractionDigits={2} fullWidth label="Resolution" readOnly value={resolution} />
 		</Formula>
 	)
 })
 
 const RayleighLimit = memo(() => {
-	const { aperture, resolution } = useSnapshot(calculator.state.rayleighLimit)
+	const { aperture, resolution } = useSnapshot(calculatorStore.state.rayleighLimit)
 
 	return (
 		<Formula description="Calculate the maximum resolving power of your telescope using the Rayleigh Limit formula" expression="138 / Aperture">
-			<NumberInput endContent="mm" fullWidth label="Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculator.update('rayleighLimit', 'aperture', value)} value={aperture} />
+			<NumberInput endContent="mm" fullWidth label="Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculatorStore.update('rayleighLimit', 'aperture', value)} value={aperture} />
 			<NumberInput endContent="arcsec" fractionDigits={2} fullWidth label="Resolution" readOnly value={resolution} />
 		</Formula>
 	)
 })
 
 const LimitingMagnitude = memo(() => {
-	const { aperture, magnitude } = useSnapshot(calculator.state.limitingMagnitude)
+	const { aperture, magnitude } = useSnapshot(calculatorStore.state.limitingMagnitude)
 
 	return (
 		<Formula description="Calculate a telescope's approximate limiting magnitude" expression="2.7 + 5 * log10(Aperture)">
-			<NumberInput endContent="mm" fullWidth label="Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculator.update('limitingMagnitude', 'aperture', value)} value={aperture} />
+			<NumberInput endContent="mm" fullWidth label="Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculatorStore.update('limitingMagnitude', 'aperture', value)} value={aperture} />
 			<NumberInput fractionDigits={2} fullWidth label="Magnitude" readOnly value={magnitude} />
 		</Formula>
 	)
 })
 
 const LightGraspRatio = memo(() => {
-	const { smallerAperture, largerAperture, ratio } = useSnapshot(calculator.state.lightGraspRatio)
+	const { smallerAperture, largerAperture, ratio } = useSnapshot(calculatorStore.state.lightGraspRatio)
 
 	return (
 		<Formula description="Calculate the light grasp ratio between two telescopes" expression="(Larger Aperture / Smaller Aperture)²">
-			<NumberInput endContent="mm" fullWidth label="Smaller Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculator.update('lightGraspRatio', 'smallerAperture', value)} value={smallerAperture} />
-			<NumberInput endContent="mm" fullWidth label="Larger Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculator.update('lightGraspRatio', 'largerAperture', value)} value={largerAperture} />
+			<NumberInput endContent="mm" fullWidth label="Smaller Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculatorStore.update('lightGraspRatio', 'smallerAperture', value)} value={smallerAperture} />
+			<NumberInput endContent="mm" fullWidth label="Larger Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculatorStore.update('lightGraspRatio', 'largerAperture', value)} value={largerAperture} />
 			<NumberInput fractionDigits={2} fullWidth label="Ratio" readOnly value={ratio} />
 		</Formula>
 	)
 })
 
 const CCDResolution = memo(() => {
-	const { pixelSize, focalLength, resolution } = useSnapshot(calculator.state.ccdResolution)
+	const { pixelSize, focalLength, resolution } = useSnapshot(calculatorStore.state.ccdResolution)
 
 	return (
 		<Formula description="Calculate the resolution in arcseconds per pixel of a CCD with a particular telescope" expression="Pixel Size / Focal Length * 206.265">
-			<NumberInput endContent="µm" fractionDigits={2} fullWidth label="Pixel Size" minValue={MIN_PIXEL_SIZE} onValueChange={(value) => calculator.update('ccdResolution', 'pixelSize', value)} step={0.01} value={pixelSize} />
-			<NumberInput endContent="mm" fullWidth label="Focal Length" minValue={MIN_FOCAL_LENGTH} onValueChange={(value) => calculator.update('ccdResolution', 'focalLength', value)} value={focalLength} />
+			<NumberInput endContent="µm" fractionDigits={2} fullWidth label="Pixel Size" minValue={MIN_PIXEL_SIZE} onValueChange={(value) => calculatorStore.update('ccdResolution', 'pixelSize', value)} step={0.01} value={pixelSize} />
+			<NumberInput endContent="mm" fullWidth label="Focal Length" minValue={MIN_FOCAL_LENGTH} onValueChange={(value) => calculatorStore.update('ccdResolution', 'focalLength', value)} value={focalLength} />
 			<NumberInput endContent="arcsec/px" fractionDigits={2} fullWidth label="Resolution" readOnly value={resolution} />
 		</Formula>
 	)

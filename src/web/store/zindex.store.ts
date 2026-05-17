@@ -1,4 +1,4 @@
-export type ZIndexStore = typeof zIndex
+export type ZIndexStore = typeof zIndexStore
 
 const store: [string, number][] = []
 
@@ -53,7 +53,7 @@ function remove(key: string) {
 	store.splice(index, 1)
 }
 
-export const zIndex = {
+export const zIndexStore = {
 	increment,
 	apply,
 	remove,

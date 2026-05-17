@@ -4,7 +4,7 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { FocuserUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
-import { equipment, type DeviceState } from 'src/web/store/equipment.store'
+import { equipmentStore, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -29,7 +29,7 @@ const stateMap = new Map<string, FocuserState>()
 export const FocuserMolecule = molecule(() => {
 	const scope = use(FocuserScope)
 
-	const focuser = equipment.get('focuser', scope.focuser.id)!
+	const focuser = equipmentStore.get('focuser', scope.focuser.id)!
 
 	const state =
 		stateMap.get(focuser.id) ??
@@ -41,7 +41,7 @@ export const FocuserMolecule = molecule(() => {
 	stateMap.set(focuser.id, state)
 
 	onMount(() => {
-		state.focuser = equipment.get('focuser', state.focuser.id)!
+		state.focuser = equipmentStore.get('focuser', state.focuser.id)!
 
 		const unsubscribers = new Array<VoidFunction>(2)
 
@@ -69,7 +69,7 @@ export const FocuserMolecule = molecule(() => {
 	}
 
 	function connect() {
-		return equipment.connect(focuser)
+		return equipmentStore.connect(focuser)
 	}
 
 	function moveTo() {

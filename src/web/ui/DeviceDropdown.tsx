@@ -2,7 +2,7 @@ import type { Device } from 'nebulosa/src/indi.device'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import type { DeviceTypeMap } from '@/shared/types'
-import { equipment, type DeviceState } from '../store/equipment.store'
+import { equipmentStore, type DeviceState } from '../store/equipment.store'
 import { Dropdown, DropdownItem, type DropdownProps } from './components/Dropdown'
 import { IconButton } from './components/IconButton'
 import { ConnectButton } from './ConnectButton'
@@ -29,7 +29,7 @@ function DeviceItem(device: DeviceState<Device> | undefined) {
 }
 
 export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, disabled, disallowNoneSelection = false, label, showLabel = false, showLabelOnEmpty = showLabel, color, startContent, icon: Icon, ...props }: DeviceDropdownProps<T>) {
-	const state = equipment.state[type]
+	const state = equipmentStore.state[type]
 	const devices = useSnapshot(state)
 
 	const items = new Array<DeviceState<Device> | undefined>(devices.length + (disallowNoneSelection ? 0 : 1))
@@ -84,6 +84,6 @@ interface DeviceDropdownEndContentProps {
 const DeviceDropdownEndContent = memo(({ device }: DeviceDropdownEndContentProps) => (
 	<div className="flex flex-row items-center gap-2">
 		<IconButton color="secondary" icon={Icons.OpenInNew} tooltipContent="Open" onClick={() => (device.show = true)} size="sm" />
-		<ConnectButton connected={device.connected} loading={device.connecting} onClick={() => equipment.connect(device)} size="sm" />
+		<ConnectButton connected={device.connected} loading={device.connecting} onClick={() => equipmentStore.connect(device)} size="sm" />
 	</div>
 ))

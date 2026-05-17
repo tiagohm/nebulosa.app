@@ -6,7 +6,7 @@ import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
 import { DEFAULT_CONNECTION, type Connection } from '../shared/types'
 
-export type ConnectionStore = typeof connection
+export type ConnectionStore = typeof connectionStore
 
 export interface ConnectionState {
 	show: boolean
@@ -222,7 +222,7 @@ function hide() {
 	state.show = false
 }
 
-export const connection = {
+export const connectionStore = {
 	state,
 	create,
 	edit,

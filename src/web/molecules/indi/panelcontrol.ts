@@ -4,7 +4,7 @@ import type { Message, NewVector } from 'nebulosa/src/indi.types'
 import bus from 'src/shared/bus'
 import type { ConnectionEvent, IndiDevicePropertyEvent } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
-import { connection } from 'src/web/store/connection.store'
+import { connectionStore } from 'src/web/store/connection.store'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
@@ -39,7 +39,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 		const unsubscribers = new Array<VoidFunction>(7)
 
 		unsubscribers[0] = bus.subscribe<ConnectionEvent>('connection:close', ({ status }) => {
-			if (connection.state.connected?.id === status.id) {
+			if (connectionStore.state.connected?.id === status.id) {
 				state.devices = []
 				state.device = ''
 				state.groups = []
@@ -49,36 +49,36 @@ export const IndiPanelControlMolecule = molecule(() => {
 		})
 
 		unsubscribers[1] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:add', (event) => {
-			if (state.device === event.device && connection.state.connected?.id === event.clientId) {
+			if (state.device === event.device && connectionStore.state.connected?.id === event.clientId) {
 				addProperty(event.property)
 			}
 		})
 
 		unsubscribers[2] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:update', (event) => {
-			if (state.device === event.device && connection.state.connected?.id === event.clientId) {
+			if (state.device === event.device && connectionStore.state.connected?.id === event.clientId) {
 				updateProperty(event.property)
 			}
 		})
 
 		unsubscribers[3] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:remove', (event) => {
-			if (state.device === event.device && connection.state.connected?.id === event.clientId) {
+			if (state.device === event.device && connectionStore.state.connected?.id === event.clientId) {
 				removeProperty(event.property)
 			}
 		})
 
 		unsubscribers[4] = bus.subscribe<Message & { clientId: string }>('indi:message', (event) => {
-			if (event.device === state.device && connection.state.connected?.id === event.clientId) {
+			if (event.device === state.device && connectionStore.state.connected?.id === event.clientId) {
 				state.messages.unshift(event)
 			}
 		})
 
-		unsubscribers[5] = subscribeKey(connection.state, 'connected', (event) => {
-			if (event && connection.state.connected?.id === event.id) {
+		unsubscribers[5] = subscribeKey(connectionStore.state, 'connected', (event) => {
+			if (event && connectionStore.state.connected?.id === event.id) {
 				void retrieveDevices()
 			}
 		})
 
-		unsubscribers[6] = subscribeKey(connection.state, 'show', (show) => {
+		unsubscribers[6] = subscribeKey(connectionStore.state, 'show', (show) => {
 			if (show) {
 				void retrieveDevices()
 			}
@@ -86,7 +86,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 
 		const timer = setInterval(ping, 5000)
 
-		if (state.show && connection.state.connected) {
+		if (state.show && connectionStore.state.connected) {
 			void retrieveDevices()
 		}
 
@@ -97,7 +97,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 	})
 
 	async function retrieveDevices(device: Device | string = state.device) {
-		const devices = connection.state.connected?.id ? await Api.Indi.devices(connection.state.connected) : []
+		const devices = connectionStore.state.connected?.id ? await Api.Indi.devices(connectionStore.state.connected) : []
 		state.devices = devices?.sort() ?? []
 		void changeDevice((typeof device === 'string' ? device : device.name) || state.devices[0] || '')
 		ping()
@@ -105,7 +105,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 
 	async function retrieveProperties(device: string = state.device) {
 		if (device) {
-			const properties = await Api.Indi.Properties.list(device, connection.state.connected!)
+			const properties = await Api.Indi.Properties.list(device, connectionStore.state.connected!)
 
 			if (properties !== undefined) {
 				const output = {}
@@ -125,7 +125,7 @@ export const IndiPanelControlMolecule = molecule(() => {
 	}
 
 	async function retrieveMessages(device: string = state.device) {
-		const messages = connection.state.connected && (await Api.Indi.messages(device, connection.state.connected))
+		const messages = connectionStore.state.connected && (await Api.Indi.messages(device, connectionStore.state.connected))
 		if (messages) state.messages = messages.sort((a, b) => b.timestamp!.localeCompare(a.timestamp!))
 	}
 
@@ -205,12 +205,12 @@ export const IndiPanelControlMolecule = molecule(() => {
 	}
 
 	function send(property: DeviceProperty, message: NewVector) {
-		return Api.Indi.Properties.send(state.device, property.type, message, connection.state.connected!)
+		return Api.Indi.Properties.send(state.device, property.type, message, connectionStore.state.connected!)
 	}
 
 	function ping(device: string = state.device) {
-		if (device && state.show && connection.state.connected) {
-			void Api.Indi.Properties.ping(device, connection.state.connected)
+		if (device && state.show && connectionStore.state.connected) {
+			void Api.Indi.Properties.ping(device, connectionStore.state.connected)
 		}
 	}
 

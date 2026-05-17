@@ -4,7 +4,7 @@ import type { DeviceUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 
-export type EquipmentStore = typeof equipment
+export type EquipmentStore = typeof equipmentStore
 
 export type DeviceState<D extends Device> = Omit<D, symbol> & {
 	show?: boolean
@@ -147,7 +147,7 @@ function off<T>(topic: string, callback: BusCallback<T>) {
 	return bus.unsubscribe(topic, callback)
 }
 
-export const equipment = {
+export const equipmentStore = {
 	state,
 	get,
 	connect,

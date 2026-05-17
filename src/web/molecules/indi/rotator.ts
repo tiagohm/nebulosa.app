@@ -4,7 +4,7 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { RotatorUpdated } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
-import { equipment, type DeviceState } from 'src/web/store/equipment.store'
+import { equipmentStore, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -26,7 +26,7 @@ const stateMap = new Map<string, RotatorState>()
 export const RotatorMolecule = molecule(() => {
 	const scope = use(RotatorScope)
 
-	const rotator = equipment.get('rotator', scope.rotator.id)!
+	const rotator = equipmentStore.get('rotator', scope.rotator.id)!
 
 	const state =
 		stateMap.get(rotator.id) ??
@@ -38,7 +38,7 @@ export const RotatorMolecule = molecule(() => {
 	stateMap.set(rotator.id, state)
 
 	onMount(() => {
-		state.rotator = equipment.get('rotator', state.rotator.id)!
+		state.rotator = equipmentStore.get('rotator', state.rotator.id)!
 
 		const unsubscribers = new Array<VoidFunction>(2)
 
@@ -66,7 +66,7 @@ export const RotatorMolecule = molecule(() => {
 	}
 
 	function connect() {
-		return equipment.connect(rotator)
+		return equipmentStore.connect(rotator)
 	}
 
 	function moveTo() {

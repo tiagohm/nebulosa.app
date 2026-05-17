@@ -1,7 +1,7 @@
 import { proxy } from 'valtio'
 import { initProxy } from '../shared/proxy'
 
-export type AboutStore = typeof about
+export type AboutStore = typeof aboutStore
 
 export interface AboutState {
 	show: boolean
@@ -23,7 +23,7 @@ function hide() {
 	state.show = false
 }
 
-export const about = {
+export const aboutStore = {
 	state,
 	show,
 	hide,

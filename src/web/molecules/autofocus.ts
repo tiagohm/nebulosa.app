@@ -8,7 +8,7 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
-import { equipment, type DeviceState } from '../store/equipment.store'
+import { equipmentStore, type DeviceState } from '../store/equipment.store'
 import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
 
 export interface AutoFocusState {
@@ -69,8 +69,8 @@ export const AutoFocusMolecule = molecule(() => {
 	})
 
 	function load() {
-		state.camera = equipment.get('camera', storageGet('autofocus.camera', ''))
-		state.focuser = equipment.get('focuser', storageGet('autofocus.focuser', ''))
+		state.camera = equipmentStore.get('camera', storageGet('autofocus.camera', ''))
+		state.focuser = equipmentStore.get('focuser', storageGet('autofocus.focuser', ''))
 
 		state.camera && updateCameraCaptureStartFromCamera(state.request.capture, state.camera)
 	}

@@ -3,7 +3,7 @@ import { DEFAULT_DEW_HEATER, type DewHeater } from 'nebulosa/src/indi.device'
 import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import type { DewHeaterUpdated } from 'src/shared/types'
-import { equipment, type DeviceState } from 'src/web/store/equipment.store'
+import { equipmentStore, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { toast } from '@/shared/toast'
@@ -23,7 +23,7 @@ const stateMap = new Map<string, DewHeaterState>()
 export const DewHeaterMolecule = molecule(() => {
 	const scope = use(DewHeaterScope)
 
-	const dewHeater = equipment.get('dewHeater', scope.dewHeater.id)!
+	const dewHeater = equipmentStore.get('dewHeater', scope.dewHeater.id)!
 
 	const state =
 		stateMap.get(dewHeater.id) ??
@@ -34,7 +34,7 @@ export const DewHeaterMolecule = molecule(() => {
 	stateMap.set(dewHeater.id, state)
 
 	onMount(() => {
-		state.dewHeater = equipment.get('dewHeater', state.dewHeater.id)!
+		state.dewHeater = equipmentStore.get('dewHeater', state.dewHeater.id)!
 
 		const unsubscriber = bus.subscribe<DewHeaterUpdated>('dewHeater:update', (event) => {
 			if (event.device.id === dewHeater.id) {
@@ -54,7 +54,7 @@ export const DewHeaterMolecule = molecule(() => {
 	})
 
 	function connect() {
-		return equipment.connect(dewHeater)
+		return equipmentStore.connect(dewHeater)
 	}
 
 	function update(value: number | number[]) {

@@ -2,7 +2,7 @@ import type { DeviceType } from 'nebulosa/src/indi.device'
 import { proxy } from 'valtio'
 import type { PopoverMethods } from '../ui/components/Popover'
 
-export type HomeMenuStore = typeof homeMenu
+export type HomeMenuStore = typeof homeMenuStore
 
 export interface HomeMenuState {
 	selected: DeviceType
@@ -36,7 +36,7 @@ function popover(ref: PopoverMethods | null) {
 	popoverMethods = ref
 }
 
-export const homeMenu = {
+export const homeMenuStore = {
 	state,
 	select,
 	toggle,

@@ -11,7 +11,7 @@ import { MountScope } from '@/molecules/indi/mount'
 import { RotatorScope } from '@/molecules/indi/rotator'
 import { WheelScope } from '@/molecules/indi/wheel'
 import { activityMode } from '../shared/util'
-import { equipment } from '../store/equipment.store'
+import { equipmentStore } from '../store/equipment.store'
 import { ws } from '../store/ws.store'
 import { Camera } from './Camera'
 import { Confirmation } from './Confirmation'
@@ -61,7 +61,7 @@ interface DeviceItemProps {
 }
 
 function CameraItem({ index }: DeviceItemProps) {
-	const camera = equipment.state.camera[index]
+	const camera = equipmentStore.state.camera[index]
 	const { show } = useSnapshot(camera)
 
 	return (
@@ -74,7 +74,7 @@ function CameraItem({ index }: DeviceItemProps) {
 }
 
 function MountItem({ index }: DeviceItemProps) {
-	const mount = equipment.state.mount[index]
+	const mount = equipmentStore.state.mount[index]
 	const { show } = useSnapshot(mount)
 
 	return (
@@ -87,7 +87,7 @@ function MountItem({ index }: DeviceItemProps) {
 }
 
 function FocuserItem({ index }: DeviceItemProps) {
-	const focuser = equipment.state.focuser[index]
+	const focuser = equipmentStore.state.focuser[index]
 	const { show } = useSnapshot(focuser)
 
 	return (
@@ -100,7 +100,7 @@ function FocuserItem({ index }: DeviceItemProps) {
 }
 
 function WheelItem({ index }: DeviceItemProps) {
-	const wheel = equipment.state.wheel[index]
+	const wheel = equipmentStore.state.wheel[index]
 	const { show } = useSnapshot(wheel)
 
 	return (
@@ -113,7 +113,7 @@ function WheelItem({ index }: DeviceItemProps) {
 }
 
 function GuideOutputItem({ index }: DeviceItemProps) {
-	const guideOutput = equipment.state.guideOutput[index]
+	const guideOutput = equipmentStore.state.guideOutput[index]
 	const { show } = useSnapshot(guideOutput)
 
 	return (
@@ -126,7 +126,7 @@ function GuideOutputItem({ index }: DeviceItemProps) {
 }
 
 function ThermometerItem({ index }: DeviceItemProps) {
-	const thermometer = equipment.state.thermometer[index]
+	const thermometer = equipmentStore.state.thermometer[index]
 	const { show } = useSnapshot(thermometer)
 
 	return (
@@ -139,7 +139,7 @@ function ThermometerItem({ index }: DeviceItemProps) {
 }
 
 function CoverItem({ index }: DeviceItemProps) {
-	const cover = equipment.state.cover[index]
+	const cover = equipmentStore.state.cover[index]
 	const { show } = useSnapshot(cover)
 
 	return (
@@ -152,7 +152,7 @@ function CoverItem({ index }: DeviceItemProps) {
 }
 
 function FlatPanelItem({ index }: DeviceItemProps) {
-	const flatPanel = equipment.state.flatPanel[index]
+	const flatPanel = equipmentStore.state.flatPanel[index]
 	const { show } = useSnapshot(flatPanel)
 
 	return (
@@ -165,7 +165,7 @@ function FlatPanelItem({ index }: DeviceItemProps) {
 }
 
 function DewHeaterItem({ index }: DeviceItemProps) {
-	const dewHeater = equipment.state.dewHeater[index]
+	const dewHeater = equipmentStore.state.dewHeater[index]
 	const { show } = useSnapshot(dewHeater)
 
 	return (
@@ -178,7 +178,7 @@ function DewHeaterItem({ index }: DeviceItemProps) {
 }
 
 function RotatorItem({ index }: DeviceItemProps) {
-	const rotator = equipment.state.rotator[index]
+	const rotator = equipmentStore.state.rotator[index]
 	const { show } = useSnapshot(rotator)
 
 	return (
@@ -191,81 +191,81 @@ function RotatorItem({ index }: DeviceItemProps) {
 }
 
 export const CameraList = memo(() => {
-	const { length } = useSnapshot(equipment.state.camera)
+	const { length } = useSnapshot(equipmentStore.state.camera)
 
-	const devices = useMemo(() => makeDevices(length, (i) => <CameraItem key={equipment.state.camera[i].id} index={i} />), [length])
+	const devices = useMemo(() => makeDevices(length, (i) => <CameraItem key={equipmentStore.state.camera[i].id} index={i} />), [length])
 
 	return devices
 })
 
 export const MountList = memo(() => {
-	const { length } = useSnapshot(equipment.state.mount)
+	const { length } = useSnapshot(equipmentStore.state.mount)
 
-	const devices = useMemo(() => makeDevices(length, (i) => <MountItem key={equipment.state.mount[i].id} index={i} />), [length])
+	const devices = useMemo(() => makeDevices(length, (i) => <MountItem key={equipmentStore.state.mount[i].id} index={i} />), [length])
 
 	return devices
 })
 
 export const FocuserList = memo(() => {
-	const { length } = useSnapshot(equipment.state.focuser)
+	const { length } = useSnapshot(equipmentStore.state.focuser)
 
-	const devices = useMemo(() => makeDevices(length, (i) => <FocuserItem key={equipment.state.focuser[i].id} index={i} />), [length])
+	const devices = useMemo(() => makeDevices(length, (i) => <FocuserItem key={equipmentStore.state.focuser[i].id} index={i} />), [length])
 
 	return devices
 })
 
 export const WheelList = memo(() => {
-	const { length } = useSnapshot(equipment.state.wheel)
+	const { length } = useSnapshot(equipmentStore.state.wheel)
 
-	const devices = useMemo(() => makeDevices(length, (i) => <WheelItem key={equipment.state.wheel[i].id} index={i} />), [length])
+	const devices = useMemo(() => makeDevices(length, (i) => <WheelItem key={equipmentStore.state.wheel[i].id} index={i} />), [length])
 
 	return devices
 })
 
 export const GuideOutputList = memo(() => {
-	const { length } = useSnapshot(equipment.state.guideOutput)
+	const { length } = useSnapshot(equipmentStore.state.guideOutput)
 
-	const devices = useMemo(() => makeDevices(length, (i) => <GuideOutputItem key={equipment.state.guideOutput[i].id} index={i} />), [length])
+	const devices = useMemo(() => makeDevices(length, (i) => <GuideOutputItem key={equipmentStore.state.guideOutput[i].id} index={i} />), [length])
 
 	return devices
 })
 
 export const ThermometerList = memo(() => {
-	const { length } = useSnapshot(equipment.state.thermometer)
+	const { length } = useSnapshot(equipmentStore.state.thermometer)
 
-	const devices = useMemo(() => makeDevices(length, (i) => <ThermometerItem key={equipment.state.thermometer[i].id} index={i} />), [length])
+	const devices = useMemo(() => makeDevices(length, (i) => <ThermometerItem key={equipmentStore.state.thermometer[i].id} index={i} />), [length])
 
 	return devices
 })
 
 export const CoverList = memo(() => {
-	const { length } = useSnapshot(equipment.state.cover)
+	const { length } = useSnapshot(equipmentStore.state.cover)
 
-	const devices = useMemo(() => makeDevices(length, (i) => <CoverItem key={equipment.state.cover[i].id} index={i} />), [length])
+	const devices = useMemo(() => makeDevices(length, (i) => <CoverItem key={equipmentStore.state.cover[i].id} index={i} />), [length])
 
 	return devices
 })
 
 export const FlatPanelList = memo(() => {
-	const { length } = useSnapshot(equipment.state.flatPanel)
+	const { length } = useSnapshot(equipmentStore.state.flatPanel)
 
-	const devices = useMemo(() => makeDevices(length, (i) => <FlatPanelItem key={equipment.state.flatPanel[i].id} index={i} />), [length])
+	const devices = useMemo(() => makeDevices(length, (i) => <FlatPanelItem key={equipmentStore.state.flatPanel[i].id} index={i} />), [length])
 
 	return devices
 })
 
 export const DewHeaterList = memo(() => {
-	const { length } = useSnapshot(equipment.state.dewHeater)
+	const { length } = useSnapshot(equipmentStore.state.dewHeater)
 
-	const devices = useMemo(() => makeDevices(length, (i) => <DewHeaterItem key={equipment.state.dewHeater[i].id} index={i} />), [length])
+	const devices = useMemo(() => makeDevices(length, (i) => <DewHeaterItem key={equipmentStore.state.dewHeater[i].id} index={i} />), [length])
 
 	return devices
 })
 
 export const RotatorList = memo(() => {
-	const { length } = useSnapshot(equipment.state.rotator)
+	const { length } = useSnapshot(equipmentStore.state.rotator)
 
-	const devices = useMemo(() => makeDevices(length, (i) => <RotatorItem key={equipment.state.rotator[i].id} index={i} />), [length])
+	const devices = useMemo(() => makeDevices(length, (i) => <RotatorItem key={equipmentStore.state.rotator[i].id} index={i} />), [length])
 
 	return devices
 })

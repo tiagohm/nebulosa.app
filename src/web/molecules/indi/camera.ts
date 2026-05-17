@@ -4,7 +4,7 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START } from 'src/shared/types'
 import { exposureTimeIn, unsubscribe } from 'src/shared/util'
-import { equipment, type DeviceState } from 'src/web/store/equipment.store'
+import { equipmentStore, type DeviceState } from 'src/web/store/equipment.store'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -38,7 +38,7 @@ const stateMap = new Map<string, CameraState>()
 export const CameraMolecule = molecule(() => {
 	const scope = use(CameraScope)
 
-	const camera = equipment.get('camera', scope.camera.id)!
+	const camera = equipmentStore.get('camera', scope.camera.id)!
 
 	const state =
 		stateMap.get(camera.id) ??
@@ -55,7 +55,7 @@ export const CameraMolecule = molecule(() => {
 	stateMap.set(camera.id, state)
 
 	onMount(() => {
-		state.camera = equipment.get('camera', state.camera.id)!
+		state.camera = equipmentStore.get('camera', state.camera.id)!
 
 		const unsubscribers = new Array<VoidFunction>(7)
 
@@ -106,10 +106,10 @@ export const CameraMolecule = molecule(() => {
 		unsubscribers[5] = initProxy(state, `camera.${camera.name}`, ['o:request', 'p:minimized', 'p:targetTemperature'])
 
 		const timer = setTimeout(() => {
-			state.equipment.mount = equipment.get('mount', state.request.mount ?? '')
-			state.equipment.wheel = equipment.get('wheel', state.request.wheel ?? '')
-			state.equipment.focuser = equipment.get('focuser', state.request.focuser ?? '')
-			state.equipment.rotator = equipment.get('rotator', state.request.rotator ?? '')
+			state.equipment.mount = equipmentStore.get('mount', state.request.mount ?? '')
+			state.equipment.wheel = equipmentStore.get('wheel', state.request.wheel ?? '')
+			state.equipment.focuser = equipmentStore.get('focuser', state.request.focuser ?? '')
+			state.equipment.rotator = equipmentStore.get('rotator', state.request.rotator ?? '')
 		}, 2000)
 
 		unsubscribers[6] = subscribe(state.equipment, () => {
@@ -140,7 +140,7 @@ export const CameraMolecule = molecule(() => {
 	}
 
 	function connect() {
-		return equipment.connect(camera)
+		return equipmentStore.connect(camera)
 	}
 
 	function cooler(enabled: boolean) {

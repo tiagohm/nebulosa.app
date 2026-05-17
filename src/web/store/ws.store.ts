@@ -2,8 +2,8 @@ import bus from 'src/shared/bus'
 import type { DeviceAdded, DeviceRemoved, Notification } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { toast } from '@/shared/toast'
-import { confirmation } from './confirmation.store'
-import { equipment } from './equipment.store'
+import { confirmationStore } from './confirmation.store'
+import { equipmentStore } from './equipment.store'
 
 export type WebSocketStore = typeof ws
 
@@ -90,18 +90,18 @@ function create() {
 			const [type, action] = key.split(':')
 
 			if (action === 'update') {
-				equipment.update(type as never, data)
+				equipmentStore.update(type as never, data)
 			} else if (action === 'add') {
-				equipment.add(type as never, (data as DeviceAdded).device)
+				equipmentStore.add(type as never, (data as DeviceAdded).device)
 			} else if (action === 'remove') {
-				equipment.remove(type as never, (data as DeviceRemoved).device)
+				equipmentStore.remove(type as never, (data as DeviceRemoved).device)
 			} else {
 				bus.emit(key, data)
 			}
 		} else if (key === 'notification') {
 			toast(data as Notification)
 		} else if (key === 'confirmation') {
-			confirmation.show(data)
+			confirmationStore.show(data)
 		} else {
 			bus.emit(key, data)
 		}

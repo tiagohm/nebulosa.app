@@ -20,7 +20,7 @@ export class WheelHandler implements DeviceHandler<Wheel> {
 	}
 
 	updated(device: Wheel, property: keyof Wheel & string, state?: PropertyState) {
-		this.wsm.send('wheel:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies WheelUpdated)
+		this.wsm.send('wheel:update', { device: { type: 'wheel', id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies WheelUpdated)
 	}
 
 	removed(device: Wheel) {

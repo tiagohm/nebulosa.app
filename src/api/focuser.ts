@@ -21,7 +21,7 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 	}
 
 	updated(device: Focuser, property: keyof Focuser & string, state?: PropertyState) {
-		this.wsm.send('focuser:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies FocuserUpdated)
+		this.wsm.send('focuser:update', { device: { type: 'focuser', id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies FocuserUpdated)
 	}
 
 	removed(device: Focuser) {

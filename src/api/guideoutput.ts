@@ -20,7 +20,7 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 	}
 
 	updated(device: GuideOutput, property: keyof GuideOutput & string, state?: PropertyState) {
-		const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies CameraUpdated | MountUpdated | GuideOutputUpdated
+		const event = { device: { type: 'guideOutput', id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies CameraUpdated | MountUpdated | GuideOutputUpdated
 
 		if (device.type === 'camera') this.wsm.send('camera:update', event)
 		else if (device.type === 'mount') this.wsm.send('mount:update', event)

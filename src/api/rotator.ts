@@ -20,7 +20,7 @@ export class RotatorHandler implements DeviceHandler<Rotator> {
 	}
 
 	updated(device: Rotator, property: keyof Rotator & string, state?: PropertyState) {
-		this.wsm.send('rotator:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies RotatorUpdated)
+		this.wsm.send('rotator:update', { device: { type: 'rotator', id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies RotatorUpdated)
 	}
 
 	removed(device: Rotator) {

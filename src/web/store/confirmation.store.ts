@@ -2,6 +2,8 @@ import type { Confirmation } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 
+export type ConfirmationStore = typeof confirmation
+
 type ConfirmationPendingAction = 'accept' | 'reject'
 
 export interface ConfirmationState {

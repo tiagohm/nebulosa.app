@@ -20,7 +20,7 @@ export class FlatPanelHandler implements DeviceHandler<FlatPanel> {
 	}
 
 	updated(device: FlatPanel, property: keyof FlatPanel & string, state?: PropertyState) {
-		this.wsm.send('flatPanel:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies FlatPanelUpdated)
+		this.wsm.send('flatPanel:update', { device: { type: 'flatPanel', id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies FlatPanelUpdated)
 	}
 
 	removed(device: FlatPanel) {

@@ -1,8 +1,10 @@
 import type { Camera, Cover, Device, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/indi.device'
-import bus from 'src/shared/bus'
+import { EventBus, type BusCallback } from 'src/shared/bus'
 import type { DeviceUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
+
+export type EquipmentStore = typeof equipment
 
 export type DeviceState<D extends Device> = Omit<D, symbol> & {
 	show?: boolean
@@ -41,6 +43,8 @@ const state = proxy<EquipmentState>({
 	power: [],
 })
 
+const bus = new EventBus()
+
 function get<T extends keyof EquipmentState>(type: T, id: string) {
 	const devices = state[type]
 	const n = devices.length
@@ -56,13 +60,20 @@ function get<T extends keyof EquipmentState>(type: T, id: string) {
 	return undefined
 }
 
-function add(type: keyof EquipmentState, device: Pick<Device, 'id'>) {
-	const devices = state[type]
+function emit(device: DeviceState<Device>, action: 'add' | 'remove') {
+	bus.emit(`device:${action}`, device)
+	bus.emit(`${device.type}:${action}`, device)
+	bus.emit(`${device.id}:${action}`, device)
+}
 
-	if (!devices.some((e) => e.id === device.id)) {
+function add(type: keyof EquipmentState, device: Device) {
+	const devices = state[type]
+	const index = devices.findIndex((e) => e.id === device.id)
+
+	if (index < 0) {
 		devices.push(device as never)
 		// device.show = storageGet(`equipment.${type}.${device.name}.show`, false)
-		bus.emit('device:add', device)
+		emit(device, 'add')
 	}
 }
 
@@ -88,7 +99,7 @@ function remove(type: keyof EquipmentState, device: Pick<Device, 'id'>) {
 
 		if (device.id === id) {
 			devices.splice(i, 1)
-			bus.emit('device:remove', device)
+			emit(device, 'remove')
 			break
 		}
 	}
@@ -112,6 +123,30 @@ async function connect(device: Device) {
 	}
 }
 
+function show(device: Device) {
+	const found = get(device.type, device.id)
+
+	if (found !== undefined) {
+		found.show = true
+	}
+}
+
+function hide(device: Device) {
+	const found = get(device.type, device.id)
+
+	if (found !== undefined) {
+		found.show = false
+	}
+}
+
+function on<T>(topic: string, callback: BusCallback<T>) {
+	return bus.subscribe(topic, callback)
+}
+
+function off<T>(topic: string, callback: BusCallback<T>) {
+	return bus.unsubscribe(topic, callback)
+}
+
 export const equipment = {
 	state,
 	get,
@@ -119,4 +154,8 @@ export const equipment = {
 	add,
 	update,
 	remove,
+	show,
+	hide,
+	on,
+	off,
 } as const

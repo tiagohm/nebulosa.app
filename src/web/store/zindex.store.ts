@@ -1,3 +1,5 @@
+export type ZIndexStore = typeof zIndex
+
 const store: [string, number][] = []
 
 function max() {

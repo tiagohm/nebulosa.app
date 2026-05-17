@@ -9,7 +9,6 @@ import { FocuserScope } from '@/molecules/indi/focuser'
 import { GuideOutputScope } from '@/molecules/indi/guideoutput'
 import { MountScope } from '@/molecules/indi/mount'
 import { RotatorScope } from '@/molecules/indi/rotator'
-import { ThermometerScope } from '@/molecules/indi/thermometer'
 import { WheelScope } from '@/molecules/indi/wheel'
 import { activityMode } from '../shared/util'
 import { equipment } from '../store/equipment.store'
@@ -25,7 +24,7 @@ import { HomeNavBar } from './HomeNavBar'
 import { ImageWorkspace } from './ImageWorkspace'
 import { Mount } from './Mount'
 import { Rotator } from './Rotator'
-import { Thermometer } from './Thermometer'
+import { Thermometer, ThermometerDeviceContext } from './Thermometer'
 import { Wheel } from './Wheel'
 
 export const Home = memo(() => {
@@ -132,9 +131,9 @@ function ThermometerItem({ index }: DeviceItemProps) {
 
 	return (
 		<Activity mode={activityMode(show)}>
-			<ScopeProvider scope={ThermometerScope} value={{ thermometer }}>
+			<ThermometerDeviceContext value={thermometer}>
 				<Thermometer />
-			</ScopeProvider>
+			</ThermometerDeviceContext>
 		</Activity>
 	)
 }

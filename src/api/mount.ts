@@ -48,7 +48,7 @@ export class MountHandler implements DeviceHandler<Mount> {
 	}
 
 	updated(device: Mount, property: keyof Mount & string, state?: PropertyState) {
-		this.wsm.send('mount:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies MountUpdated)
+		this.wsm.send('mount:update', { device: { type: 'mount', id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies MountUpdated)
 	}
 
 	removed(device: Mount) {

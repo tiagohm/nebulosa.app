@@ -1,6 +1,8 @@
 import { proxy } from 'valtio'
 import { initProxy } from '@/shared/proxy'
 
+export type CalculatorStore = typeof calculator
+
 export interface FocalLengthRatio {
 	aperture: number
 	focalRatio: number

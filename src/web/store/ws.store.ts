@@ -5,6 +5,8 @@ import { toast } from '@/shared/toast'
 import { confirmation } from './confirmation.store'
 import { equipment } from './equipment.store'
 
+export type WebSocketStore = typeof ws
+
 export interface WebSocketState {
 	connected: boolean
 }

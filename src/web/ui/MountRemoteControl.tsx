@@ -1,27 +1,26 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import type { MountRemoteControlStart } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { MountMolecule } from '@/molecules/indi/mount'
 import { Button } from './components/Button'
 import { NumberInput } from './components/NumberInput'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
+import { MountStoreContext } from './Mount'
 import { MountRemoteControlProtocolSelect } from './MountRemoteControlProtocolSelect'
 
 export const MountRemoteControl = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 
 	return (
-		<Modal footer={<Footer />} header="Remote Control" id={`mount-remote-control-${mount.scope.mount.id}`} maxWidth="236px" onHide={mount.hideRemoteControl}>
+		<Modal footer={<Footer />} header="Remote Control" id={`mount-remote-control-${mount.state.mount.id}`} maxWidth="236px" onHide={mount.hideRemoteControl}>
 			<Body />
 		</Modal>
 	)
 })
 
 const Body = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { request, status, pendingAction } = useSnapshot(mount.state.remoteControl)
 	const currentStatus = status[request.protocol]
 	const disabled = pendingAction !== undefined || !!currentStatus
@@ -40,8 +39,9 @@ function canStartRemoteControl({ host, port }: MountRemoteControlStart) {
 }
 
 const Footer = memo(() => {
-	const mount = useMolecule(MountMolecule)
-	const { request, status, pendingAction } = useSnapshot(mount.state.remoteControl)
+	const mount = useContext(MountStoreContext)
+	const { remoteControl } = mount.state
+	const { request, status, pendingAction } = useSnapshot(remoteControl)
 	const currentStatus = status[request.protocol]
 	const busy = pendingAction !== undefined
 	const canStart = !currentStatus && canStartRemoteControl(request)
@@ -49,24 +49,24 @@ const Footer = memo(() => {
 	async function handleStart() {
 		if (!canStart || busy) return
 
-		mount.state.remoteControl.pendingAction = 'start'
+		remoteControl.pendingAction = 'start'
 
 		try {
 			await mount.startRemoteControl()
 		} finally {
-			mount.state.remoteControl.pendingAction = undefined
+			remoteControl.pendingAction = undefined
 		}
 	}
 
 	async function handleStop() {
 		if (!currentStatus || busy) return
 
-		mount.state.remoteControl.pendingAction = 'stop'
+		remoteControl.pendingAction = 'stop'
 
 		try {
 			await mount.stopRemoteControl()
 		} finally {
-			mount.state.remoteControl.pendingAction = undefined
+			remoteControl.pendingAction = undefined
 		}
 	}
 

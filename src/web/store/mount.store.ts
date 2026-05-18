@@ -1,24 +1,16 @@
-import { createScope, molecule, onMount, use } from 'bunshi'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
-import { DEFAULT_MOUNT, type Mount, type MountTargetCoordinate, type MountTargetCoordinateType, type TrackMode } from 'nebulosa/src/indi.device'
+import type { Mount, MountTargetCoordinate, MountTargetCoordinateType, TrackMode } from 'nebulosa/src/indi.device'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
-import type { DeepReadonly } from 'nebulosa/src/types'
-import bus from 'src/shared/bus'
-// oxfmt-ignore
-import { type CoordinateInfo, DEFAULT_COORDINATE_INFO, type Framing, type MountRemoteControlProtocol, type MountRemoteControlStatus, type MountUpdated } from 'src/shared/types'
-import { unsubscribe } from 'src/shared/util'
-import { connectionStore } from 'src/web/store/connection.store'
-import { equipmentStore, type DeviceState } from 'src/web/store/equipment.store'
+import { DEFAULT_COORDINATE_INFO, type CoordinateInfo, type MountRemoteControlProtocol, type MountRemoteControlStatus } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '@/shared/api'
-import { initProxy } from '@/shared/proxy'
-import { toast } from '@/shared/toast'
-import type { NudgeDirection } from '@/ui/Nudge'
+import { Api } from '../shared/api'
+import { initProxy } from '../shared/proxy'
+import type { NudgeDirection } from '../ui/Nudge'
+import { equipmentStore, type DeviceState } from './equipment.store'
+import { framingStore } from './framing.store'
 
-export interface MountScopeValue {
-	readonly mount: DeepReadonly<Omit<Mount, symbol>>
-}
+export type MountStore = ReturnType<typeof mountStore>
 
 export interface MountState {
 	mount: DeviceState<Mount>
@@ -56,99 +48,50 @@ const DEFAULT_TARGET_COORDINATE: MountState['targetCoordinate']['coordinate'] = 
 	GALACTIC: { x: '000 00 00', y: '+00 00 00' },
 }
 
-export const MountScope = createScope<MountScopeValue>({ mount: DEFAULT_MOUNT })
-
-const stateMap = new Map<string, MountState>()
-
-export const MountMolecule = molecule(() => {
-	const scope = use(MountScope)
-
-	const mount = equipmentStore.get('mount', scope.mount.id)!
-
-	const state =
-		stateMap.get(mount.id) ??
-		proxy<MountState>({
-			mount,
-			targetCoordinate: {
-				coordinate: structuredClone(DEFAULT_TARGET_COORDINATE),
-				position: structuredClone(DEFAULT_COORDINATE_INFO),
+export function mountStore(mount: Mount) {
+	const state = proxy<MountState>({
+		mount,
+		targetCoordinate: {
+			coordinate: structuredClone(DEFAULT_TARGET_COORDINATE),
+			position: structuredClone(DEFAULT_COORDINATE_INFO),
+		},
+		currentPosition: structuredClone(DEFAULT_COORDINATE_INFO),
+		location: {
+			show: false,
+			coordinate: mount.geographicCoordinate,
+		},
+		time: {
+			show: false,
+			time: mount.time,
+		},
+		remoteControl: {
+			show: false,
+			status: {
+				LX200: false,
+				STELLARIUM: false,
 			},
-			currentPosition: structuredClone(DEFAULT_COORDINATE_INFO),
-			location: {
-				show: false,
-				coordinate: mount.geographicCoordinate,
+			request: {
+				protocol: 'LX200',
+				host: '0.0.0.0',
+				port: 10001,
 			},
-			time: {
-				show: false,
-				time: mount.time,
-			},
-			remoteControl: {
-				show: false,
-				status: {
-					LX200: false,
-					STELLARIUM: false,
-				},
-				request: {
-					protocol: 'LX200',
-					host: '0.0.0.0',
-					port: 10001,
-				},
-			},
-		})
+		},
+	})
 
-	stateMap.set(mount.id, state)
+	function $mount() {
+		const a = initProxy(state.targetCoordinate, `mount.${mount.id}.targetcoordinate`, ['o:coordinate'])
+		const b = subscribeKey(state.mount, 'slewing', updateCoordinatePosition)
 
-	let updateCoordinateTime = 0
+		const timer = setInterval(updateCoordinatePosition, 5000)
 
-	onMount(() => {
-		state.mount = equipmentStore.get('mount', state.mount.id)!
-
-		const unsubscribers = new Array<VoidFunction>(3)
-
-		unsubscribers[0] = bus.subscribe<MountUpdated>('mount:update', (event) => {
-			if (event.device.id === mount.id) {
-				if (event.property === 'connected') {
-					if (event.device.connected) {
-						updateCoordinatePosition()
-					} else if (event.state === 'Alert') {
-						toast({ title: 'MOUNT', description: `Failed to connect to mount ${mount.name}`, color: 'danger' })
-					}
-
-					state.mount.connecting = false
-				} else if (event.property === 'equatorialCoordinate') {
-					const equatorial = state.currentPosition.equatorial as [number, number]
-					equatorial[0] = event.device.equatorialCoordinate!.rightAscension
-					equatorial[1] = event.device.equatorialCoordinate!.declination
-					updateCoordinatePosition()
-				} else if (event.property === 'slewing') {
-					if (event.device.slewing === false) {
-						updateCoordinatePosition()
-					}
-				}
-			}
-		})
-
-		unsubscribers[1] = initProxy(state.targetCoordinate, `mount.${mount.name}.targetcoordinate`, ['o:coordinate'])
-
-		unsubscribers[2] = subscribeKey(state.remoteControl, 'show', (show) => {
-			if (show) void updateRemoteControlStatus()
-		})
-
-		const timer = setInterval(() => {
-			if (mount.connected && connectionStore.state.connected) {
-				updateCoordinatePosition()
-			}
-		}, 60000)
-
-		if (mount.connected) {
-			updateCoordinatePosition()
-		}
+		updateCoordinatePosition()
 
 		return () => {
-			unsubscribe(unsubscribers)
 			clearInterval(timer)
+			a()
+			b()
 		}
-	})
+	}
 
 	function connect() {
 		return equipmentStore.connect(mount)
@@ -196,13 +139,9 @@ export const MountMolecule = molecule(() => {
 	}
 
 	function updateCoordinatePosition() {
-		const now = Date.now()
-
-		if (now - updateCoordinateTime >= 60000) {
-			updateCoordinateTime = now
-			void updateCurrentCoordinatePosition()
-			void updateTargetCoordinatePosition()
-		}
+		if (!mount.connected) return
+		void updateCurrentCoordinatePosition()
+		void updateTargetCoordinatePosition()
 	}
 
 	function goTo() {
@@ -214,12 +153,10 @@ export const MountMolecule = molecule(() => {
 	}
 
 	function frame() {
-		const request: Partial<Framing> = {
+		return framingStore.load({
 			rightAscension: formatRA(state.targetCoordinate.position.equatorialJ2000[0]),
 			declination: formatDEC(state.targetCoordinate.position.equatorialJ2000[1]),
-		}
-
-		bus.emit('framing:load', request)
+		})
 	}
 
 	function park() {
@@ -313,13 +250,17 @@ export const MountMolecule = molecule(() => {
 		state.remoteControl.show = false
 	}
 
+	function show() {
+		equipmentStore.show(mount)
+	}
+
 	function hide() {
-		state.mount.show = false
+		equipmentStore.hide(mount)
 	}
 
 	return {
 		state,
-		scope,
+		mount: $mount,
 		connect,
 		updateRemoteControl,
 		startRemoteControl,
@@ -350,6 +291,7 @@ export const MountMolecule = molecule(() => {
 		location,
 		time,
 		stop,
+		show,
 		hide,
 	} as const
-})
+}

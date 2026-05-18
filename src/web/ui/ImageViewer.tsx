@@ -16,7 +16,7 @@ import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
 import { ImageStretchMolecule } from '@/molecules/image/stretch'
 import { ImageViewerMolecule } from '@/molecules/image/viewer'
-import { ImageWorkspaceMolecule } from '@/molecules/image/workspace'
+import { imageWorkspaceStore } from '../store/image.workspace.store'
 import { AnnotatedStars } from './AnnotatedStars'
 import { CoordinateOnMouse } from './CoordinateOnMouse'
 import { Crosshair } from './Crosshair'
@@ -49,8 +49,7 @@ export const ImageViewer = memo(() => {
 	const viewer = useMolecule(ImageViewerMolecule)
 	const { image } = viewer.scope
 
-	const workspace = useMolecule(ImageWorkspaceMolecule)
-	const { selected } = useSnapshot(workspace.state)
+	const { selected } = useSnapshot(imageWorkspaceStore.state)
 
 	const starDetection = useMolecule(StarDetectionMolecule)
 	const { show: showStarDetection } = useSnapshot(starDetection.state)
@@ -100,7 +99,7 @@ export const ImageViewer = memo(() => {
 	useLayoutEffect(() => {
 		if (imgRef.current) {
 			viewer.attachImage(imgRef.current)
-			workspace.link(image, viewer)
+			imageWorkspaceStore.link(image, viewer)
 		}
 
 		return () => {

@@ -1,10 +1,10 @@
-import { useMolecule } from 'bunshi/react'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { MountTargetCoordinateType } from 'nebulosa/src/indi.device'
-import { memo } from 'react'
+import type * as Device from 'nebulosa/src/indi.device'
+import { createContext, memo, useContext, useEffect, useMemo } from 'react'
 import type { CoordinateInfo, CoordinateType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { MountMolecule } from '@/molecules/indi/mount'
+import { mountStore, type MountStore } from '../store/mount.store'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
@@ -52,30 +52,38 @@ function formatTargetCoordinateY(type: CoordinateType, position: CoordinateInfo)
 	return type === 'horizontal' ? formatALT(position[type][1]) : formatDEC(position[type][1])
 }
 
+export const MountDeviceContext = createContext<Device.Mount>(null as never)
+
+export const MountStoreContext = createContext<MountStore>(null as never)
+
 export const Mount = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const device = useContext(MountDeviceContext)
+	const mount = useMemo(() => mountStore(device), [device])
+	useEffect(mount.mount, [])
 
 	return (
-		<Modal header={<Header />} id={`mount-${mount.scope.mount.id}`} maxWidth="400px" onHide={mount.hide}>
-			<Body />
-		</Modal>
+		<MountStoreContext value={mount}>
+			<Modal header={<Header />} id={`mount-${device.id}`} maxWidth="400px" onHide={mount.hide}>
+				<Body />
+			</Modal>
+		</MountStoreContext>
 	)
 })
 
 const Header = memo(() => {
-	const mount = useMolecule(MountMolecule)
-	const { connecting, connected, parking, slewing, homing } = useSnapshot(mount.state.mount)
+	const mount = useContext(MountStoreContext)
+	const { connecting, connected, parking, slewing, homing, name } = useSnapshot(mount.state.mount)
 	const moving = slewing || parking || homing
 
 	return (
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
 				<ConnectButton disabled={moving} connected={connected} loading={connecting} onClick={mount.connect} />
-				<IndiPanelControlButton device={mount.scope.mount} />
+				<IndiPanelControlButton device={mount.state.mount} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Mount</span>
-				<span className="max-w-full text-xs font-normal text-gray-400">{mount.scope.mount.name}</span>
+				<span className="max-w-full text-xs font-normal text-gray-400">{name}</span>
 			</div>
 		</div>
 	)
@@ -102,7 +110,7 @@ const Body = memo(() => (
 ))
 
 const Status = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { parking, parked, slewing, tracking, homing } = useSnapshot(mount.state.mount)
 
 	return (
@@ -113,33 +121,33 @@ const Status = memo(() => {
 })
 
 const LocationButton = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { show } = useSnapshot(mount.state.location)
 	const { connected, geographicCoordinate } = useSnapshot(mount.state.mount)
 
 	return (
 		<>
 			<IconButton color="danger" disabled={!connected} icon={Icons.MapMarker} onClick={mount.showLocation} tooltipContent="Location" />
-			{show && <Location {...geographicCoordinate} id={`location-mount-${mount.scope.mount.id}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}
+			{show && <Location {...geographicCoordinate} id={`location-mount-${mount.state.mount.id}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}
 		</>
 	)
 })
 
 const TimeButton = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { show } = useSnapshot(mount.state.time)
 	const { connected, time } = useSnapshot(mount.state.mount)
 
 	return (
 		<>
 			<IconButton color="primary" disabled={!connected || time.utc === 0} icon={Icons.Clock} onClick={mount.showTime} tooltipContent="Time" />
-			{show && <Time id={`time-mount-${mount.scope.mount.id}`} onClose={mount.hideTime} onTimeChange={mount.time} {...time} />}
+			{show && <Time id={`time-mount-${mount.state.mount.id}`} onClose={mount.hideTime} onTimeChange={mount.time} {...time} />}
 		</>
 	)
 })
 
 const RemoteControlButton = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { show } = useSnapshot(mount.state.remoteControl)
 	const { connected } = useSnapshot(mount.state.mount)
 
@@ -152,7 +160,7 @@ const RemoteControlButton = memo(() => {
 })
 
 const CurrentPosition = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const position = useSnapshot(mount.state.currentPosition)
 
 	return (
@@ -163,7 +171,7 @@ const CurrentPosition = memo(() => {
 })
 
 const TargetPosition = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { type } = useSnapshot(mount.state.targetCoordinate.coordinate)
 	const { position } = useSnapshot(mount.state.targetCoordinate)
 
@@ -175,7 +183,7 @@ const TargetPosition = memo(() => {
 })
 
 const TargetCoordinateAndPosition = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { connected, slewing, parking, homing, parked } = useSnapshot(mount.state.mount)
 	const { type } = useSnapshot(mount.state.targetCoordinate.coordinate)
 	const coordinate = useSnapshot(mount.state.targetCoordinate.coordinate)
@@ -202,7 +210,7 @@ const TargetCoordinateAndPosition = memo(() => {
 })
 
 const TargetCoordinatePopupButton = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { connected } = useSnapshot(mount.state.mount)
 
 	return (
@@ -213,7 +221,7 @@ const TargetCoordinatePopupButton = memo(() => {
 })
 
 const TargetCoordinatePopupButtonContent = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { latitude } = useSnapshot(mount.state.mount.geographicCoordinate)
 
 	function handleClick(event: React.UIEvent<HTMLElement>) {
@@ -255,7 +263,7 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 })
 
 const HandControl = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { connected, parking, parked, slewing, homing, canAbort } = useSnapshot(mount.state.mount)
 	const moving = slewing || parking || homing
 
@@ -263,7 +271,7 @@ const HandControl = memo(() => {
 })
 
 const Tracking = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { connected, parking, parked, slewing, homing, tracking } = useSnapshot(mount.state.mount)
 	const moving = slewing || parking || homing
 
@@ -271,7 +279,7 @@ const Tracking = memo(() => {
 })
 
 const ParkAndHome = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { connected, parking, parked, slewing, homing, canPark, canHome, canFindHome } = useSnapshot(mount.state.mount)
 	const moving = slewing || parking || homing
 
@@ -285,7 +293,7 @@ const ParkAndHome = memo(() => {
 })
 
 const TrackModeAndRate = memo(() => {
-	const mount = useMolecule(MountMolecule)
+	const mount = useContext(MountStoreContext)
 	const { connected, parking, parked, slewing, homing, trackModes, trackMode, slewRates, slewRate } = useSnapshot(mount.state.mount)
 	const moving = slewing || parking || homing
 

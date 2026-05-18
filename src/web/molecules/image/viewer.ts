@@ -7,12 +7,12 @@ import { pmod } from 'nebulosa/src/math'
 import bus from 'src/shared/bus'
 import { DEFAULT_IMAGE_TRANSFORMATION, type Framing, type ImageInfo, type ImageTransformation } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { imageWorkspaceStore } from 'src/web/store/image.workspace.store'
 import { proxy, ref, subscribe } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import type { Image, ImageLoaded } from '@/shared/types'
 import type { InteractableMethods } from '@/ui/Interactable'
-import { ImageWorkspaceMolecule } from './workspace'
 
 export interface CachedImage {
 	url: string
@@ -37,7 +37,6 @@ export const ImageViewerScope = createScope<ImageViewerScopeValue>({ image: { ke
 
 export const ImageViewerMolecule = molecule(() => {
 	const scope = use(ImageViewerScope)
-	const workspace = use(ImageWorkspaceMolecule)
 	const { key, camera } = scope.image
 
 	let target = document.getElementById(key) as HTMLImageElement | null | undefined
@@ -121,7 +120,7 @@ export const ImageViewerMolecule = molecule(() => {
 	}
 
 	function remove() {
-		workspace.remove(scope.image)
+		imageWorkspaceStore.remove(scope.image)
 	}
 
 	async function load(force: boolean = false, path?: string) {
@@ -228,7 +227,7 @@ export const ImageViewerMolecule = molecule(() => {
 
 	function select() {
 		if (!target) return
-		workspace.state.selected = scope.image
+		imageWorkspaceStore.state.selected = scope.image
 		bringToFront(target)
 	}
 
@@ -276,7 +275,7 @@ export const ImageViewerMolecule = molecule(() => {
 
 		adjustZIndexAfterBeRemoved()
 
-		workspace.state.selected = undefined
+		imageWorkspaceStore.state.selected = undefined
 		target = undefined
 		interactable = undefined
 	}

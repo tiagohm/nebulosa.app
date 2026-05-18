@@ -26,7 +26,6 @@ import thermometerIcon from '@/assets/thermometer.webp'
 import { AutoFocusMolecule } from '@/molecules/autofocus'
 import { DarvMolecule } from '@/molecules/darv'
 import { FlatWizardMolecule } from '@/molecules/flatwizard'
-import { FramingMolecule } from '@/molecules/framing'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
@@ -36,6 +35,7 @@ import { alpacaStore } from '../store/alpaca.store'
 import { calculatorStore } from '../store/calculator.store'
 import { connectionStore } from '../store/connection.store'
 import { equipmentStore } from '../store/equipment.store'
+import { framingStore } from '../store/framing.store'
 import { homeMenuStore } from '../store/home.menu.store'
 import { About } from './About'
 import { AlpacaServer } from './AlpacaServer'
@@ -63,8 +63,7 @@ export const HomeMenu = memo(() => {
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { show: showSkyAtlas } = useSnapshot(atlas.state)
 
-	const framing = useMolecule(FramingMolecule)
-	const { show: showFraming } = useSnapshot(framing.state)
+	const { show: showFraming } = useSnapshot(framingStore.state)
 
 	const tppa = useMolecule(TppaMolecule)
 	const { show: showTPPA } = useSnapshot(tppa.state)
@@ -155,7 +154,6 @@ export const HomeMenuPopoverContent = memo(() => {
 	const { length: rotatorLength } = useSnapshot(equipmentStore.state.rotator)
 
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
-	const framing = useMolecule(FramingMolecule)
 	const tppa = useMolecule(TppaMolecule)
 	const darv = useMolecule(DarvMolecule)
 	const autoFocus = useMolecule(AutoFocusMolecule)
@@ -178,7 +176,7 @@ export const HomeMenuPopoverContent = memo(() => {
 			<Button data-key="thermometer" children={<img className="w-9" src={thermometerIcon} />} color="secondary" disabled={thermometerLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Thermometer" variant="ghost" />
 			<Button data-key="phd2" children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={phd2.show} size="lg" tooltipContent="PHD2" variant="ghost" />
 			<Button data-key="atlas" children={<img className="w-9" src={skyAtlasIcon} />} color="secondary" onClick={skyAtlas.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
-			<Button data-key="framing" children={<img className="w-9" src={framingIcon} />} color="secondary" onClick={framing.show} size="lg" tooltipContent="Framing" variant="ghost" />
+			<Button data-key="framing" children={<img className="w-9" src={framingIcon} />} color="secondary" onClick={framingStore.show} size="lg" tooltipContent="Framing" variant="ghost" />
 			<Button data-key="tppa" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={tppa.show} size="lg" tooltipContent="TPPA" variant="ghost" />
 			<Button data-key="darv" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={darv.show} size="lg" tooltipContent="DARV" variant="ghost" />
 			<Button data-key="autoFocus" children={<img className="w-9" src={autoFocusIcon} />} color="secondary" disabled={cameraLength === 0 || focuserLength === 0} onClick={autoFocus.show} size="lg" tooltipContent="Auto Focus" variant="ghost" />

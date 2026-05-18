@@ -2,7 +2,6 @@ import { ScopeProvider } from 'bunshi/react'
 import { Activity, memo, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { CameraScope } from '@/molecules/indi/camera'
-import { MountScope } from '@/molecules/indi/mount'
 import { activityMode } from '../shared/util'
 import { equipmentStore } from '../store/equipment.store'
 import { wsStore } from '../store/ws.store'
@@ -15,7 +14,7 @@ import { Focuser, FocuserDeviceContext } from './Focuser'
 import { GuideOutput, GuideOutputDeviceContext } from './GuideOutput'
 import { HomeNavBar } from './HomeNavBar'
 import { ImageWorkspace } from './ImageWorkspace'
-import { Mount } from './Mount'
+import { Mount, MountDeviceContext } from './Mount'
 import { Rotator, RotatorDeviceContext } from './Rotator'
 import { Thermometer, ThermometerDeviceContext } from './Thermometer'
 import { Wheel, WheelDeviceContext } from './Wheel'
@@ -72,9 +71,9 @@ function MountItem({ index }: DeviceItemProps) {
 
 	return (
 		<Activity mode={activityMode(show)}>
-			<ScopeProvider scope={MountScope} value={{ mount }}>
+			<MountDeviceContext value={mount}>
 				<Mount />
-			</ScopeProvider>
+			</MountDeviceContext>
 		</Activity>
 	)
 }

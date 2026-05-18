@@ -1,5 +1,5 @@
 import type { Camera } from 'nebulosa/src/indi.device'
-import { EventBus, type BusCallback } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import type { CameraCaptureEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { initProxy } from '../shared/proxy'
@@ -29,14 +29,12 @@ const state = proxy<ImageWorkspaceState>({
 
 initProxy(state.picker, 'workspace.picker', ['p:show', 'p:path'])
 
-equipmentStore.on<CameraCaptureEvent>('camera:capture', (event) => {
+bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
 	if (event.savedPath) {
 		const camera = equipmentStore.get('camera', event.camera)
 		add(event.savedPath, event.camera, camera!)
 	}
 })
-
-const bus = new EventBus()
 
 const viewers = new Map<string, unknown>()
 
@@ -45,7 +43,6 @@ function link(image: Image, viewer: unknown) {
 }
 
 function add(path: string, key: string | undefined | null, source: Image['source'] | Camera) {
-	const camera = typeof source === 'object' ? source : undefined
 	source = typeof source === 'string' ? source : 'camera'
 
 	const position = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => e.position)) + 1
@@ -62,6 +59,7 @@ function add(path: string, key: string | undefined | null, source: Image['source
 		void viewers.get(image.key)?.load(true, path)
 		bus.emit('update', image)
 	} else {
+		const camera = typeof source === 'object' ? source : undefined
 		image = { path, key, position, source, camera }
 		state.images.push(image)
 		bus.emit('add', image)
@@ -94,14 +92,6 @@ function choose(paths: string[] = []) {
 	hidePicker()
 }
 
-function on(topic: ImageWorkspaceEventType, callback: BusCallback<Image>) {
-	return bus.subscribe(topic, callback)
-}
-
-function off(topic: ImageWorkspaceEventType, callback: BusCallback<Image>) {
-	return bus.unsubscribe(topic, callback)
-}
-
 function showPicker() {
 	state.picker.show = true
 }
@@ -116,8 +106,6 @@ export const imageWorkspaceStore = {
 	add,
 	remove,
 	choose,
-	on,
-	off,
 	showPicker,
 	hidePicker,
 } as const

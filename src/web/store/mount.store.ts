@@ -78,9 +78,14 @@ export function mountStore(mount: Mount) {
 		},
 	})
 
+	console.info('mount created:', mount.name)
+
 	function $mount() {
+		console.info('mount mounted:', mount.name)
+
 		const a = initProxy(state.targetCoordinate, `mount.${mount.id}.targetcoordinate`, ['o:coordinate'])
 		const b = subscribeKey(state.mount, 'slewing', updateCoordinatePosition)
+		const c = subscribeKey(state.mount, 'connected', updateCoordinatePosition)
 
 		const timer = setInterval(updateCoordinatePosition, 5000)
 
@@ -90,7 +95,13 @@ export function mountStore(mount: Mount) {
 			clearInterval(timer)
 			a()
 			b()
+			c()
+			unmount()
 		}
+	}
+
+	function unmount() {
+		console.info('mount unmounted:', mount.name)
 	}
 
 	function connect() {

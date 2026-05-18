@@ -1,5 +1,5 @@
 import type { Camera, Cover, Device, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/indi.device'
-import { EventBus, type BusCallback } from 'src/shared/bus'
+import bus from 'src/shared/bus'
 import type { DeviceUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
@@ -42,8 +42,6 @@ const state = proxy<EquipmentState>({
 	dewHeater: [],
 	power: [],
 })
-
-const bus = new EventBus()
 
 function get<T extends keyof EquipmentState>(type: T, id: string) {
 	const devices = state[type]
@@ -141,14 +139,6 @@ function hide(device: Device, type = device.type) {
 	}
 }
 
-function on<T>(topic: string, callback: BusCallback<T>) {
-	return bus.subscribe(topic, callback)
-}
-
-function off<T>(topic: string, callback: BusCallback<T>) {
-	return bus.unsubscribe(topic, callback)
-}
-
 export const equipmentStore = {
 	state,
 	get,
@@ -158,6 +148,4 @@ export const equipmentStore = {
 	remove,
 	show,
 	hide,
-	on,
-	off,
 } as const

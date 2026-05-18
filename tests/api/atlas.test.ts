@@ -116,11 +116,11 @@ describe('search sky object', () => {
 		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, types: [StellariumObjectType.DARK_NEBULA] })
 
 		expect(result).toHaveLength(5)
-		expect(result[0].id).toBe(1010829)
-		expect(result[0].magnitude).toBe(93)
+		expect(result[0].id).toBe(1006463)
+		expect(result[0].magnitude).toBe(83.8)
 		expect(result[0].type).toBe(StellariumObjectType.DARK_NEBULA)
-		expect(result[0].constellation).toBe(7)
-		expect(result[0].name).toBe('10:26')
+		expect(result[0].constellation).toBe(4)
+		expect(result[0].name).toBe('1:6963')
 	})
 
 	test('name type only', () => {

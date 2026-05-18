@@ -1,32 +1,40 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import type * as Device from 'nebulosa/src/indi.device'
+import { createContext, memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { GuideOutputMolecule } from '@/molecules/indi/guideoutput'
+import { guideOutputStore, type GuideOutputStore } from '../store/guideoutput.store'
 import { NumberInput } from './components/NumberInput'
 import { ConnectButton } from './ConnectButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 import { Nudge } from './Nudge'
 
+export const GuideOutputDeviceContext = createContext<Device.GuideOutput>(null as never)
+
+export const GuideOutputStoreContext = createContext<GuideOutputStore>(null as never)
+
 export const GuideOutput = memo(() => {
-	const guideOutput = useMolecule(GuideOutputMolecule)
+	const device = useContext(GuideOutputDeviceContext)
+	const guideOutput = useMemo(() => guideOutputStore(device), [device])
+	useEffect(guideOutput.mount, [])
 
 	return (
-		<Modal header={<Header />} id={`guide-output-${guideOutput.scope.guideOutput.id}`} maxWidth="336px" onHide={guideOutput.hide}>
-			<Body />
-		</Modal>
+		<GuideOutputStoreContext value={guideOutput}>
+			<Modal header={<Header />} id={`guide-output-${device.id}`} maxWidth="336px" onHide={guideOutput.hide}>
+				<Body />
+			</Modal>
+		</GuideOutputStoreContext>
 	)
 })
 
 const Header = memo(() => {
-	const guideOutput = useMolecule(GuideOutputMolecule)
+	const guideOutput = useContext(GuideOutputStoreContext)
 	const { connecting, connected, pulsing, name } = useSnapshot(guideOutput.state.guideOutput)
 
 	return (
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} disabled={pulsing} loading={connecting} onClick={guideOutput.connect} />
-				<IndiPanelControlButton device={guideOutput.scope.guideOutput} />
+				<IndiPanelControlButton device={guideOutput.state.guideOutput} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Guide Output</span>
@@ -37,7 +45,7 @@ const Header = memo(() => {
 })
 
 const Body = memo(() => {
-	const guideOutput = useMolecule(GuideOutputMolecule)
+	const guideOutput = useContext(GuideOutputStoreContext)
 	const { connected, pulsing } = useSnapshot(guideOutput.state.guideOutput)
 	const { north, south, west, east } = useSnapshot(guideOutput.state.request)
 	const canPulseNorth = hasPulseDuration(north.duration)

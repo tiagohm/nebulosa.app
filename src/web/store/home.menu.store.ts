@@ -1,5 +1,6 @@
 import type { DeviceType } from 'nebulosa/src/indi.device'
 import { proxy } from 'valtio'
+import { initProxy } from '../shared/proxy'
 import type { PopoverMethods } from '../ui/components/Popover'
 
 export type HomeMenuStore = typeof homeMenuStore
@@ -11,6 +12,8 @@ export interface HomeMenuState {
 const state = proxy<HomeMenuState>({
 	selected: 'camera',
 })
+
+initProxy(state, 'home.menu', ['p:selected'])
 
 let popoverMethods: PopoverMethods | null = null
 

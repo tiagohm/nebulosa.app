@@ -16,11 +16,11 @@ export class ThermometerHandler implements DeviceHandler<Thermometer> {
 
 	added(device: Thermometer) {
 		this.wsm.send('thermometer:add', { device } satisfies ThermometerAdded)
-		console.info('thermometer added:', device.name)
+		console.info(device.type, 'added:', device.name)
 	}
 
 	updated(device: Thermometer, property: keyof Thermometer & string, state?: PropertyState) {
-		const event = { device: { type: 'thermometer', id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies CameraUpdated | FocuserUpdated | ThermometerUpdated
+		const event = { device: { type: device.type, id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies CameraUpdated | FocuserUpdated | ThermometerUpdated
 
 		if (device.type === 'camera') this.wsm.send('camera:update', event)
 		else if (device.type === 'focuser') this.wsm.send('focuser:update', event)
@@ -29,7 +29,7 @@ export class ThermometerHandler implements DeviceHandler<Thermometer> {
 
 	removed(device: Thermometer) {
 		this.wsm.send('thermometer:remove', { device } satisfies ThermometerRemoved)
-		console.info('thermometer removed:', device.name)
+		console.info(device.type, 'removed:', device.name)
 	}
 
 	list(client?: string | IndiClient) {

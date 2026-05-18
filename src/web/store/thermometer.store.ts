@@ -13,12 +13,15 @@ export function thermometerStore(thermometer: Thermometer) {
 		thermometer,
 	})
 
+	console.info('thermometer created:', thermometer.name)
+
 	function mount() {
-		console.info('thermometer mounted', thermometer.name)
+		console.info('thermometer mounted:', thermometer.name)
+		return unmount
 	}
 
 	function unmount() {
-		console.info('thermometer unmounted', thermometer.name)
+		console.info('thermometer unmounted:', thermometer.name)
 	}
 
 	function connect() {
@@ -26,11 +29,11 @@ export function thermometerStore(thermometer: Thermometer) {
 	}
 
 	function show() {
-		return equipmentStore.show(thermometer)
+		return equipmentStore.show(thermometer, 'thermometer')
 	}
 
 	function hide() {
-		return equipmentStore.hide(thermometer)
+		return equipmentStore.hide(thermometer, 'thermometer')
 	}
 
 	return {

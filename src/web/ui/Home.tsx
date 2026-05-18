@@ -2,34 +2,27 @@ import { ScopeProvider } from 'bunshi/react'
 import { Activity, memo, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { CameraScope } from '@/molecules/indi/camera'
-import { CoverScope } from '@/molecules/indi/cover'
-import { DewHeaterScope } from '@/molecules/indi/dewheater'
-import { FlatPanelScope } from '@/molecules/indi/flatpanel'
-import { FocuserScope } from '@/molecules/indi/focuser'
-import { GuideOutputScope } from '@/molecules/indi/guideoutput'
 import { MountScope } from '@/molecules/indi/mount'
-import { RotatorScope } from '@/molecules/indi/rotator'
-import { WheelScope } from '@/molecules/indi/wheel'
 import { activityMode } from '../shared/util'
 import { equipmentStore } from '../store/equipment.store'
-import { ws } from '../store/ws.store'
+import { wsStore } from '../store/ws.store'
 import { Camera } from './Camera'
 import { Confirmation } from './Confirmation'
-import { Cover } from './Cover'
-import { DewHeater } from './DewHeater'
-import { FlatPanel } from './FlatPanel'
-import { Focuser } from './Focuser'
-import { GuideOutput } from './GuideOutput'
+import { Cover, CoverDeviceContext } from './Cover'
+import { DewHeater, DewHeaterDeviceContext } from './DewHeater'
+import { FlatPanel, FlatPanelDeviceContext } from './FlatPanel'
+import { Focuser, FocuserDeviceContext } from './Focuser'
+import { GuideOutput, GuideOutputDeviceContext } from './GuideOutput'
 import { HomeNavBar } from './HomeNavBar'
 import { ImageWorkspace } from './ImageWorkspace'
 import { Mount } from './Mount'
-import { Rotator } from './Rotator'
+import { Rotator, RotatorDeviceContext } from './Rotator'
 import { Thermometer, ThermometerDeviceContext } from './Thermometer'
-import { Wheel } from './Wheel'
+import { Wheel, WheelDeviceContext } from './Wheel'
 
 export const Home = memo(() => {
 	// Mounts the websocket lifecycle once the home screen is active.
-	useEffect(ws.mount, [])
+	useEffect(wsStore.mount, [])
 
 	return (
 		<div className="flex h-full min-h-0 w-full min-w-0 flex-col">
@@ -92,9 +85,9 @@ function FocuserItem({ index }: DeviceItemProps) {
 
 	return (
 		<Activity mode={activityMode(show)}>
-			<ScopeProvider scope={FocuserScope} value={{ focuser }}>
+			<FocuserDeviceContext value={focuser}>
 				<Focuser />
-			</ScopeProvider>
+			</FocuserDeviceContext>
 		</Activity>
 	)
 }
@@ -105,9 +98,9 @@ function WheelItem({ index }: DeviceItemProps) {
 
 	return (
 		<Activity mode={activityMode(show)}>
-			<ScopeProvider scope={WheelScope} value={{ wheel }}>
+			<WheelDeviceContext value={wheel}>
 				<Wheel />
-			</ScopeProvider>
+			</WheelDeviceContext>
 		</Activity>
 	)
 }
@@ -118,9 +111,9 @@ function GuideOutputItem({ index }: DeviceItemProps) {
 
 	return (
 		<Activity mode={activityMode(show)}>
-			<ScopeProvider scope={GuideOutputScope} value={{ guideOutput }}>
+			<GuideOutputDeviceContext value={guideOutput}>
 				<GuideOutput />
-			</ScopeProvider>
+			</GuideOutputDeviceContext>
 		</Activity>
 	)
 }
@@ -144,9 +137,9 @@ function CoverItem({ index }: DeviceItemProps) {
 
 	return (
 		<Activity mode={activityMode(show)}>
-			<ScopeProvider scope={CoverScope} value={{ cover }}>
+			<CoverDeviceContext value={cover}>
 				<Cover />
-			</ScopeProvider>
+			</CoverDeviceContext>
 		</Activity>
 	)
 }
@@ -157,9 +150,9 @@ function FlatPanelItem({ index }: DeviceItemProps) {
 
 	return (
 		<Activity mode={activityMode(show)}>
-			<ScopeProvider scope={FlatPanelScope} value={{ flatPanel }}>
+			<FlatPanelDeviceContext value={flatPanel}>
 				<FlatPanel />
-			</ScopeProvider>
+			</FlatPanelDeviceContext>
 		</Activity>
 	)
 }
@@ -170,9 +163,9 @@ function DewHeaterItem({ index }: DeviceItemProps) {
 
 	return (
 		<Activity mode={activityMode(show)}>
-			<ScopeProvider scope={DewHeaterScope} value={{ dewHeater }}>
+			<DewHeaterDeviceContext value={dewHeater}>
 				<DewHeater />
-			</ScopeProvider>
+			</DewHeaterDeviceContext>
 		</Activity>
 	)
 }
@@ -183,9 +176,9 @@ function RotatorItem({ index }: DeviceItemProps) {
 
 	return (
 		<Activity mode={activityMode(show)}>
-			<ScopeProvider scope={RotatorScope} value={{ rotator }}>
+			<RotatorDeviceContext value={rotator}>
 				<Rotator />
-			</ScopeProvider>
+			</RotatorDeviceContext>
 		</Activity>
 	)
 }

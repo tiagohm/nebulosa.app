@@ -74,6 +74,7 @@ function add(type: keyof EquipmentState, device: Device) {
 		devices.push(device as never)
 		// device.show = storageGet(`equipment.${type}.${device.name}.show`, false)
 		emit(device, 'add')
+		console.info(device.type, 'added:', device.name)
 	}
 }
 
@@ -100,6 +101,7 @@ function remove(type: keyof EquipmentState, device: Pick<Device, 'id'>) {
 		if (device.id === id) {
 			devices.splice(i, 1)
 			emit(device, 'remove')
+			console.info(device.type, 'removed:', device.name)
 			break
 		}
 	}
@@ -123,16 +125,16 @@ async function connect(device: Device) {
 	}
 }
 
-function show(device: Device) {
-	const found = get(device.type, device.id)
+function show(device: Device, type = device.type) {
+	const found = get(type, device.id)
 
 	if (found !== undefined) {
 		found.show = true
 	}
 }
 
-function hide(device: Device) {
-	const found = get(device.type, device.id)
+function hide(device: Device, type = device.type) {
+	const found = get(type, device.id)
 
 	if (found !== undefined) {
 		found.show = false

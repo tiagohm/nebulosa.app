@@ -1,7 +1,7 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import type * as Device from 'nebulosa/src/indi.device'
+import { createContext, memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { WheelMolecule } from '@/molecules/indi/wheel'
+import { wheelStore, type WheelStore } from '../store/wheel.store'
 import { Button } from './components/Button'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
@@ -13,25 +13,33 @@ import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
+export const WheelDeviceContext = createContext<Device.Wheel>(null as never)
+
+export const WheelStoreContext = createContext<WheelStore>(null as never)
+
 export const Wheel = memo(() => {
-	const wheel = useMolecule(WheelMolecule)
+	const device = useContext(WheelDeviceContext)
+	const wheel = useMemo(() => wheelStore(device), [device])
+	useEffect(wheel.mount, [])
 
 	return (
-		<Modal header={<Header />} id={`wheel-${wheel.scope.wheel.id}`} maxWidth="256px" onHide={wheel.hide}>
-			<Body />
-		</Modal>
+		<WheelStoreContext value={wheel}>
+			<Modal header={<Header />} id={`wheel-${device.id}`} maxWidth="256px" onHide={wheel.hide}>
+				<Body />
+			</Modal>
+		</WheelStoreContext>
 	)
 })
 
 const Header = memo(() => {
-	const wheel = useMolecule(WheelMolecule)
+	const wheel = useContext(WheelStoreContext)
 	const { connecting, connected, name } = useSnapshot(wheel.state.wheel)
 
 	return (
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={wheel.connect} />
-				<IndiPanelControlButton device={wheel.scope.wheel} />
+				<IndiPanelControlButton device={wheel.state.wheel} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Filter Wheel</span>
@@ -61,7 +69,7 @@ const Body = memo(() => (
 ))
 
 const Status = memo(() => {
-	const wheel = useMolecule(WheelMolecule)
+	const wheel = useContext(WheelStoreContext)
 	const { count, moving, position, names } = useSnapshot(wheel.state.wheel)
 
 	return (
@@ -80,7 +88,7 @@ const Status = memo(() => {
 })
 
 const Slot = memo(() => {
-	const wheel = useMolecule(WheelMolecule)
+	const wheel = useContext(WheelStoreContext)
 	const { selected } = useSnapshot(wheel.state)
 	const { connected, count, moving, position, names } = useSnapshot(wheel.state.wheel)
 	const positions = Array.from({ length: slotCount(count, names) }, (_, index) => index)
@@ -96,13 +104,13 @@ const Slot = memo(() => {
 			<Select className="flex-1" disabled={!connected || moving || positions.length === 0} endContent={<SlotPopover />} items={positions} label="Slot" onValueChange={(value) => wheel.update('position', value)} value={selectedPosition}>
 				{renderSlot}
 			</Select>
-			<Button color="success" disabled={!canMove} label="Move" loading={moving} onClick={wheel.moveTo} startContent={<Icons.Check />} variant="ghost" />
+			<Button color="success" disabled={!canMove} label="Move" loading={moving} onClick={wheel.move} startContent={<Icons.Check />} variant="ghost" />
 		</div>
 	)
 })
 
 const SlotPopover = memo(() => {
-	const wheel = useMolecule(WheelMolecule)
+	const wheel = useContext(WheelStoreContext)
 	const { connected, count, moving, names } = useSnapshot(wheel.state.wheel)
 	const disabled = !connected || moving || slotCount(count, names) === 0
 
@@ -114,7 +122,7 @@ const SlotPopover = memo(() => {
 })
 
 const SlotPopoverContent = memo(() => {
-	const wheel = useMolecule(WheelMolecule)
+	const wheel = useContext(WheelStoreContext)
 	const { canSetNames, connected, moving } = useSnapshot(wheel.state.wheel)
 	const { name, position } = useSnapshot(wheel.state.selected)
 	const disabled = !connected || moving || !canSetNames

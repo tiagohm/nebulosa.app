@@ -1,7 +1,7 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import type * as Device from 'nebulosa/src/indi.device'
+import { createContext, memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { DewHeaterMolecule } from '@/molecules/indi/dewheater'
+import { dewHeaterStore, type DewHeaterStore } from '../store/dewheater.store'
 import { Slider } from './components/Slider'
 import { ConnectButton } from './ConnectButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
@@ -18,25 +18,33 @@ function dutyCycleColor(value: number, min: number, max: number) {
 	return ratio < 0.5 ? 'primary' : ratio < 0.9 ? 'warning' : 'danger'
 }
 
+export const DewHeaterDeviceContext = createContext<Device.DewHeater>(null as never)
+
+export const DewHeaterStoreContext = createContext<DewHeaterStore>(null as never)
+
 export const DewHeater = memo(() => {
-	const dewHeater = useMolecule(DewHeaterMolecule)
+	const device = useContext(DewHeaterDeviceContext)
+	const dewHeater = useMemo(() => dewHeaterStore(device), [device])
+	useEffect(dewHeater.mount, [])
 
 	return (
-		<Modal header={<Header />} id={`dew-heater-${dewHeater.scope.dewHeater.id}`} maxWidth="256px" onHide={dewHeater.hide}>
-			<Body />
-		</Modal>
+		<DewHeaterStoreContext value={dewHeater}>
+			<Modal header={<Header />} id={`dew-heater-${device.id}`} maxWidth="256px" onHide={dewHeater.hide}>
+				<Body />
+			</Modal>
+		</DewHeaterStoreContext>
 	)
 })
 
 const Header = memo(() => {
-	const dewHeater = useMolecule(DewHeaterMolecule)
+	const dewHeater = useContext(DewHeaterStoreContext)
 	const { connecting, connected, name } = useSnapshot(dewHeater.state.dewHeater)
 
 	return (
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={dewHeater.connect} />
-				<IndiPanelControlButton device={dewHeater.scope.dewHeater} />
+				<IndiPanelControlButton device={dewHeater.state.dewHeater} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Dew Heater</span>
@@ -47,7 +55,7 @@ const Header = memo(() => {
 })
 
 const Body = memo(() => {
-	const dewHeater = useMolecule(DewHeaterMolecule)
+	const dewHeater = useContext(DewHeaterStoreContext)
 	const { connected, dutyCycle } = useSnapshot(dewHeater.state.dewHeater)
 	const { min, max, value } = dutyCycle
 	const color = dutyCycleColor(value, min, max)

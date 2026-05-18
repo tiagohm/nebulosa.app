@@ -1,7 +1,7 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import type * as Device from 'nebulosa/src/indi.device'
+import { createContext, memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { CoverMolecule } from '@/molecules/indi/cover'
+import { coverStore, type CoverStore } from '../store/cover.store'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
 import { ConnectButton } from './ConnectButton'
@@ -9,25 +9,33 @@ import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
+export const CoverDeviceContext = createContext<Device.Cover>(null as never)
+
+export const CoverStoreContext = createContext<CoverStore>(null as never)
+
 export const Cover = memo(() => {
-	const cover = useMolecule(CoverMolecule)
+	const device = useContext(CoverDeviceContext)
+	const cover = useMemo(() => coverStore(device), [device])
+	useEffect(cover.mount, [])
 
 	return (
-		<Modal header={<Header />} id={`cover-${cover.scope.cover.id}`} maxWidth="256px" onHide={cover.hide}>
-			<Body />
-		</Modal>
+		<CoverStoreContext value={cover}>
+			<Modal header={<Header />} id={`cover-${device.id}`} maxWidth="256px" onHide={cover.hide}>
+				<Body />
+			</Modal>
+		</CoverStoreContext>
 	)
 })
 
 const Header = memo(() => {
-	const cover = useMolecule(CoverMolecule)
+	const cover = useContext(CoverStoreContext)
 	const { connecting, connected, name } = useSnapshot(cover.state.cover)
 
 	return (
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={cover.connect} />
-				<IndiPanelControlButton device={cover.scope.cover} />
+				<IndiPanelControlButton device={cover.state.cover} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Cover</span>
@@ -53,7 +61,7 @@ function coverStatus(connected: boolean, canPark: boolean, parking: boolean, par
 }
 
 const Status = memo(() => {
-	const cover = useMolecule(CoverMolecule)
+	const cover = useContext(CoverStoreContext)
 	const { connected, canPark, parking, parked } = useSnapshot(cover.state.cover)
 	const { color, label } = coverStatus(connected, canPark, parking, parked)
 
@@ -65,7 +73,7 @@ const Status = memo(() => {
 })
 
 const OpenAndClose = memo(() => {
-	const cover = useMolecule(CoverMolecule)
+	const cover = useContext(CoverStoreContext)
 	const { connected, parking, parked, canPark, canAbort } = useSnapshot(cover.state.cover)
 	const canMove = connected && canPark && !parking
 

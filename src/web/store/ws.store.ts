@@ -5,7 +5,7 @@ import { toast } from '@/shared/toast'
 import { confirmationStore } from './confirmation.store'
 import { equipmentStore } from './equipment.store'
 
-export type WebSocketStore = typeof ws
+export type WebSocketStore = typeof wsStore
 
 export interface WebSocketState {
 	connected: boolean
@@ -111,6 +111,8 @@ function create() {
 function mount() {
 	timer = window.setInterval(() => {
 		if (webSocket && webSocket.readyState === WebSocket.CLOSED) {
+			webSocket.close()
+			webSocket = undefined
 			console.info('reconnecting web socket...')
 			create()
 		}
@@ -135,7 +137,7 @@ function close() {
 	webSocket = undefined
 }
 
-export const ws = {
+export const wsStore = {
 	state,
 	mount,
 	unmount,

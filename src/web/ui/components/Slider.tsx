@@ -554,7 +554,8 @@ export function Slider<V extends SliderValue>({
 
 		if (direction !== 1 && direction !== -1) return
 
-		event.preventDefault()
+		// Wheel is never default prevented when in passive move
+		// event.isDefaultPrevented() && event.preventDefault()
 		const currentValue = draftValueRef.current
 		const thumbIndex = isRangeValue(currentValue) ? valueFromPointer(event.clientX, event.clientY).thumbIndex : 0
 		const currentThumbValue = isRangeValue(currentValue) ? currentValue[thumbIndex] : currentValue

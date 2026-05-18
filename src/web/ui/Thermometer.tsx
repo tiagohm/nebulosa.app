@@ -1,4 +1,4 @@
-import * as Device from 'nebulosa/src/indi.device'
+import type * as Device from 'nebulosa/src/indi.device'
 import { createContext, memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatNumber } from '@/shared/util'
@@ -9,7 +9,7 @@ import { Modal } from './Modal'
 
 export const ThermometerDeviceContext = createContext<Device.Thermometer>(null as never)
 
-const ThermometerStoreContext = createContext<ThermometerStore>(null as never)
+export const ThermometerStoreContext = createContext<ThermometerStore>(null as never)
 
 export const Thermometer = memo(() => {
 	const device = useContext(ThermometerDeviceContext)

@@ -1,7 +1,7 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import type * as Device from 'nebulosa/src/indi.device'
+import { createContext, memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { FocuserMolecule } from '@/molecules/indi/focuser'
+import { focuserStore, type FocuserStore } from '../store/focuser.store'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
@@ -11,25 +11,33 @@ import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
+export const FocuserDeviceContext = createContext<Device.Focuser>(null as never)
+
+export const FocuserStoreContext = createContext<FocuserStore>(null as never)
+
 export const Focuser = memo(() => {
-	const focuser = useMolecule(FocuserMolecule)
+	const device = useContext(FocuserDeviceContext)
+	const focuser = useMemo(() => focuserStore(device), [device])
+	useEffect(focuser.mount, [])
 
 	return (
-		<Modal header={<Header />} id={`focuser-${focuser.scope.focuser.id}`} maxWidth="256px" onHide={focuser.hide}>
-			<Body />
-		</Modal>
+		<FocuserStoreContext value={focuser}>
+			<Modal header={<Header />} id={`focuser-${device.id}`} maxWidth="256px" onHide={focuser.hide}>
+				<Body />
+			</Modal>
+		</FocuserStoreContext>
 	)
 })
 
 const Header = memo(() => {
-	const focuser = useMolecule(FocuserMolecule)
+	const focuser = useContext(FocuserStoreContext)
 	const { connecting, connected, name } = useSnapshot(focuser.state.focuser)
 
 	return (
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={focuser.connect} />
-				<IndiPanelControlButton device={focuser.scope.focuser} />
+				<IndiPanelControlButton device={focuser.state.focuser} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Focuser</span>
@@ -50,7 +58,7 @@ const Body = memo(() => (
 ))
 
 const Status = memo(() => {
-	const focuser = useMolecule(FocuserMolecule)
+	const focuser = useContext(FocuserStoreContext)
 	const { moving } = useSnapshot(focuser.state.focuser)
 
 	return (
@@ -63,7 +71,7 @@ const Status = memo(() => {
 })
 
 const Position = memo(() => {
-	const focuser = useMolecule(FocuserMolecule)
+	const focuser = useContext(FocuserStoreContext)
 	const { connected, moving, position, canAbort } = useSnapshot(focuser.state.focuser)
 
 	return (
@@ -75,7 +83,7 @@ const Position = memo(() => {
 })
 
 const RelativePosition = memo(() => {
-	const focuser = useMolecule(FocuserMolecule)
+	const focuser = useContext(FocuserStoreContext)
 	const { connected, moving, position, canRelativeMove } = useSnapshot(focuser.state.focuser)
 	const { relative } = useSnapshot(focuser.state.request)
 	const canMoveRelative = connected && !moving && Number.isFinite(relative) && relative > 0
@@ -92,7 +100,7 @@ const RelativePosition = memo(() => {
 })
 
 const AbsolutePosition = memo(() => {
-	const focuser = useMolecule(FocuserMolecule)
+	const focuser = useContext(FocuserStoreContext)
 	const { connected, moving, position, canSync, canAbsoluteMove } = useSnapshot(focuser.state.focuser)
 	const { absolute } = useSnapshot(focuser.state.request)
 	const canUseAbsolute = connected && !moving && Number.isFinite(absolute)
@@ -109,7 +117,7 @@ const AbsolutePosition = memo(() => {
 })
 
 const Options = memo(() => {
-	const focuser = useMolecule(FocuserMolecule)
+	const focuser = useContext(FocuserStoreContext)
 	const { connected, moving, canReverse, reversed } = useSnapshot(focuser.state.focuser)
 
 	return (

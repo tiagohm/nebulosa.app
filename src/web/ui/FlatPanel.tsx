@@ -1,7 +1,7 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import type * as Device from 'nebulosa/src/indi.device'
+import { createContext, memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { FlatPanelMolecule } from '@/molecules/indi/flatpanel'
+import { flatPanelStore, type FlatPanelStore } from '../store/flatpanel.store'
 import { Slider } from './components/Slider'
 import { Switch } from './components/Switch'
 import { ConnectButton } from './ConnectButton'
@@ -12,25 +12,33 @@ function formatIntensity(value: number) {
 	return Number.isFinite(value) ? value : 0
 }
 
+export const FlatPanelDeviceContext = createContext<Device.FlatPanel>(null as never)
+
+export const FlatPanelStoreContext = createContext<FlatPanelStore>(null as never)
+
 export const FlatPanel = memo(() => {
-	const flatPanel = useMolecule(FlatPanelMolecule)
+	const device = useContext(FlatPanelDeviceContext)
+	const flatPanel = useMemo(() => flatPanelStore(device), [device])
+	useEffect(flatPanel.mount, [])
 
 	return (
-		<Modal header={<Header />} id={`flat-panel-${flatPanel.scope.flatPanel.id}`} maxWidth="256px" onHide={flatPanel.hide}>
-			<Body />
-		</Modal>
+		<FlatPanelStoreContext value={flatPanel}>
+			<Modal header={<Header />} id={`flat-panel-${device.id}`} maxWidth="256px" onHide={flatPanel.hide}>
+				<Body />
+			</Modal>
+		</FlatPanelStoreContext>
 	)
 })
 
 const Header = memo(() => {
-	const flatPanel = useMolecule(FlatPanelMolecule)
+	const flatPanel = useContext(FlatPanelStoreContext)
 	const { connecting, connected, name } = useSnapshot(flatPanel.state.flatPanel)
 
 	return (
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={flatPanel.connect} />
-				<IndiPanelControlButton device={flatPanel.scope.flatPanel} />
+				<IndiPanelControlButton device={flatPanel.state.flatPanel} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Flat Panel</span>
@@ -48,7 +56,7 @@ const Body = memo(() => (
 ))
 
 const Toggle = memo(() => {
-	const flatPanel = useMolecule(FlatPanelMolecule)
+	const flatPanel = useContext(FlatPanelStoreContext)
 	const { connected, enabled } = useSnapshot(flatPanel.state.flatPanel)
 
 	return (
@@ -59,7 +67,7 @@ const Toggle = memo(() => {
 })
 
 const Intensity = memo(() => {
-	const flatPanel = useMolecule(FlatPanelMolecule)
+	const flatPanel = useContext(FlatPanelStoreContext)
 	const { connected, enabled, intensity } = useSnapshot(flatPanel.state.flatPanel)
 
 	return (

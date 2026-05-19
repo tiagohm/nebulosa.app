@@ -1,11 +1,9 @@
-import { ScopeProvider } from 'bunshi/react'
 import { Activity, memo, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { CameraScope } from '@/molecules/indi/camera'
 import { activityMode } from '../shared/util'
 import { equipmentStore } from '../store/equipment.store'
 import { wsStore } from '../store/ws.store'
-import { Camera } from './Camera'
+import { Camera, CameraDeviceContext } from './Camera'
 import { Confirmation } from './Confirmation'
 import { Cover, CoverDeviceContext } from './Cover'
 import { DewHeater, DewHeaterDeviceContext } from './DewHeater'
@@ -58,9 +56,9 @@ function CameraItem({ index }: DeviceItemProps) {
 
 	return (
 		<Activity mode={activityMode(show)}>
-			<ScopeProvider scope={CameraScope} value={{ camera }}>
+			<CameraDeviceContext value={camera}>
 				<Camera />
-			</ScopeProvider>
+			</CameraDeviceContext>
 		</Activity>
 	)
 }

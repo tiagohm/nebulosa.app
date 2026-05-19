@@ -32,16 +32,8 @@ const TARGET_TYPE_BY_COORDINATE_TYPE = {
 	galactic: 'GALACTIC',
 } as const satisfies Record<CoordinateType, MountTargetCoordinateType>
 
-const COPY_COORDINATE_TYPE_BY_ACTION = {
-	'copy-equatorialJ2000': 'equatorialJ2000',
-	'copy-equatorial': 'equatorial',
-	'copy-horizontal': 'horizontal',
-	'copy-ecliptic': 'ecliptic',
-	'copy-galactic': 'galactic',
-} as const satisfies Record<string, CoordinateType>
-
-function isCopyCoordinateAction(action: string): action is keyof typeof COPY_COORDINATE_TYPE_BY_ACTION {
-	return Object.hasOwn(COPY_COORDINATE_TYPE_BY_ACTION, action)
+function isCopyCoordinateAction(action: string) {
+	return action.startsWith('copy-')
 }
 
 function formatTargetCoordinateX(type: CoordinateType, position: CoordinateInfo) {
@@ -161,7 +153,7 @@ const RemoteControlButton = memo(() => {
 
 const CurrentPosition = memo(() => {
 	const mount = useContext(MountStoreContext)
-	const position = useSnapshot(mount.state.currentPosition)
+	const position = useSnapshot(mount.state.current.position)
 
 	return (
 		<div className="col-span-full">
@@ -172,8 +164,8 @@ const CurrentPosition = memo(() => {
 
 const TargetPosition = memo(() => {
 	const mount = useContext(MountStoreContext)
-	const { type } = useSnapshot(mount.state.targetCoordinate.coordinate)
-	const { position } = useSnapshot(mount.state.targetCoordinate)
+	const { type } = useSnapshot(mount.state.target.coordinate)
+	const { position } = useSnapshot(mount.state.target)
 
 	return (
 		<div className="col-span-full">
@@ -185,8 +177,8 @@ const TargetPosition = memo(() => {
 const TargetCoordinateAndPosition = memo(() => {
 	const mount = useContext(MountStoreContext)
 	const { connected, slewing, parking, homing, parked } = useSnapshot(mount.state.mount)
-	const { type } = useSnapshot(mount.state.targetCoordinate.coordinate)
-	const coordinate = useSnapshot(mount.state.targetCoordinate.coordinate)
+	const { type } = useSnapshot(mount.state.target.coordinate)
+	const coordinate = useSnapshot(mount.state.target.coordinate)
 	const disabled = !connected || slewing || parking || homing || parked
 	const { x, y } = coordinate[type]!
 
@@ -226,21 +218,22 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 
 	function handleClick(event: React.UIEvent<HTMLElement>) {
 		const action = event.currentTarget.dataset.action
+		const position = mount.state.current.position
 
 		if (action === undefined || action === 'bookmark') {
 			return
 		} else if (isCopyCoordinateAction(action)) {
-			const type = COPY_COORDINATE_TYPE_BY_ACTION[action]
+			const type = action.slice(5) as CoordinateType
 			mount.updateTargetCoordinateType(TARGET_TYPE_BY_COORDINATE_TYPE[type])
-			mount.updateTargetCoordinateX(formatTargetCoordinateX(type, mount.state.currentPosition))
-			mount.updateTargetCoordinateY(formatTargetCoordinateY(type, mount.state.currentPosition))
+			mount.updateTargetCoordinateX(formatTargetCoordinateX(type, position))
+			mount.updateTargetCoordinateY(formatTargetCoordinateY(type, position))
 		} else if (action.endsWith('-pole')) {
 			mount.updateTargetCoordinateType('JNOW')
-			mount.updateTargetCoordinateX(formatRA(mount.state.currentPosition.lst))
+			mount.updateTargetCoordinateX(formatRA(position.lst))
 			mount.updateTargetCoordinateY(action.startsWith('north') ? '+90 00 00' : '-90 00 00')
 		} else if (action === 'zenith') {
 			mount.updateTargetCoordinateType('JNOW')
-			mount.updateTargetCoordinateX(formatRA(mount.state.currentPosition.lst))
+			mount.updateTargetCoordinateX(formatRA(position.lst))
 			mount.updateTargetCoordinateY(formatDEC(latitude))
 		}
 

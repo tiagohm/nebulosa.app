@@ -6,7 +6,7 @@ const chipStyles = tv({
 	slots: {
 		base: 'inline-flex w-fit max-w-none shrink-0 items-center gap-1.5 rounded-full border align-top whitespace-nowrap select-none transition',
 		startContent: 'flex shrink-0 items-center justify-center',
-		label: 'whitespace-nowrap font-medium leading-none',
+		label: 'whitespace-nowrap font-medium leading-none!',
 		endContent: 'flex shrink-0 items-center justify-center',
 		closeButton: 'flex shrink-0 items-center justify-center rounded-full outline-none transition cursor-pointer',
 	},

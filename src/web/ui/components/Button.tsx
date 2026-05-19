@@ -8,7 +8,7 @@ const buttonStyles = tv({
 		base: ['inline-flex min-w-0 items-center justify-center font-normal transition select-none', 'focus-visible:outline-none focus-visible:ring-0'],
 		startContent: 'flex shrink-0 items-center justify-center',
 		loadingIcon: 'shrink-0 spin',
-		label: 'flex shrink-0 items-center justify-center px-1',
+		label: 'flex shrink-0 items-center justify-center px-1 leading-none!',
 		endContent: 'flex shrink-0 items-center justify-center',
 	},
 	variants: {

@@ -1,8 +1,8 @@
-import { useMolecule } from 'bunshi/react'
-import { Activity, memo } from 'react'
+import type * as Device from 'nebulosa/src/indi.device'
+import { Activity, createContext, memo, useContext, useEffect, useMemo, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { CameraMolecule } from '@/molecules/indi/camera'
 import { activityMode } from '../shared/util'
+import { cameraStore, type CameraStore } from '../store/camera.store'
 import { AutoSaveButton } from './AutoSaveButton'
 import { AutoSubFolderModeButton } from './AutoSubFolderButton'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
@@ -23,18 +23,26 @@ import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
+export const CameraDeviceContext = createContext<Device.Camera>(null as never)
+
+export const CameraStoreContext = createContext<CameraStore>(null as never)
+
 export const Camera = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const device = useContext(CameraDeviceContext)
+	const camera = useMemo(() => cameraStore(device), [device])
+	useEffect(camera.mount, [])
 
 	return (
-		<Modal footer={<Footer />} header={<Header />} id={`camera-${camera.scope.camera.id}`} maxWidth="360px" onHide={camera.hide}>
-			<Body />
-		</Modal>
+		<CameraStoreContext value={camera}>
+			<Modal footer={<Footer />} header={<Header />} id={`camera-${device.id}`} maxWidth="360px" onHide={camera.hide}>
+				<Body />
+			</Modal>
+		</CameraStoreContext>
 	)
 })
 
 const Body = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { minimized } = useSnapshot(camera.state)
 
 	return (
@@ -55,19 +63,19 @@ const Body = memo(() => {
 })
 
 const Header = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing, minimized } = useSnapshot(camera.state)
-	const { connected, connecting } = useSnapshot(camera.state.camera)
+	const { connected, connecting, name } = useSnapshot(camera.state.camera)
 
 	return (
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
 				<ConnectButton disabled={capturing} connected={connected} loading={connecting} onClick={camera.connect} />
-				<IndiPanelControlButton device={camera.scope.camera} />
+				<IndiPanelControlButton device={camera.state.camera} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Camera</span>
-				<span className="max-w-full truncate text-xs font-normal text-gray-400">{camera.scope.camera.name}</span>
+				<span className="max-w-full truncate text-xs font-normal text-gray-400">{name}</span>
 			</div>
 			<IconButton color="primary" icon={minimized ? Icons.ChevronDown : Icons.ChevronUp} onClick={camera.minimize} variant="ghost" />
 		</div>
@@ -75,7 +83,7 @@ const Header = memo(() => {
 })
 
 const Progress = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { progress } = useSnapshot(camera.state)
 
 	return (
@@ -87,7 +95,7 @@ const Progress = memo(() => {
 })
 
 const Path = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { autoSave, autoSubFolderMode, savePath } = useSnapshot(camera.state.request)
 
@@ -95,37 +103,31 @@ const Path = memo(() => {
 		<div className="col-span-full flex flex-row items-center gap-1">
 			<AutoSaveButton disabled={capturing} onValueChange={(value) => camera.update('autoSave', value)} value={autoSave} />
 			<AutoSubFolderModeButton disabled={!autoSave || capturing} onValueChange={(value) => camera.update('autoSubFolderMode', value)} value={autoSubFolderMode} />
-			<FilePickerInput disabled={!autoSave || capturing} fullWidth id={`camera-${camera.scope.camera.id}`} mode="directory" onValueChange={camera.updateSavePath} value={savePath} />
+			<FilePickerInput disabled={!autoSave || capturing} fullWidth id={`camera-${camera.state.camera.id}`} mode="directory" onValueChange={camera.updateSavePath} value={savePath} />
 		</div>
 	)
 })
 
 const OptionsButton = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected } = useSnapshot(camera.state.camera)
-	const { show } = useSnapshot(camera.state.request)
+	const [show, setShow] = useState(false)
 
 	return (
 		<>
-			<IconButton disabled={!connected || capturing} icon={Icons.Cog} onClick={() => (camera.state.request.show = true)} />
-			{show && connected && !capturing && <OptionsModal />}
+			<IconButton disabled={!connected || capturing} icon={Icons.Cog} onClick={() => setShow(true)} />
+			{show && connected && !capturing && (
+				<Modal header="Options" id={`camera-options-${camera.state.camera.id}`} maxWidth="280px" onHide={() => setShow(false)}>
+					<OptionsBody />
+				</Modal>
+			)}
 		</>
 	)
 })
 
-const OptionsModal = memo(() => {
-	const camera = useMolecule(CameraMolecule)
-
-	return (
-		<Modal header="Options" id={`camera-options-${camera.scope.camera.id}`} maxWidth="280px" onHide={() => (camera.state.request.show = false)}>
-			<OptionsBody />
-		</Modal>
-	)
-})
-
 const OptionsBody = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { transferFormat, compressed, dither } = useSnapshot(camera.state.request)
 
 	return (
@@ -143,7 +145,7 @@ const OptionsBody = memo(() => {
 })
 
 const Cooler = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, hasCooler, cooler, coolerPower } = useSnapshot(camera.state.camera)
 	const isDisabled = !connected || capturing
@@ -158,7 +160,7 @@ const Cooler = memo(() => {
 })
 
 const Temperature = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, temperature, canSetTemperature } = useSnapshot(camera.state.camera)
 	const { targetTemperature } = useSnapshot(camera.state)
@@ -190,7 +192,7 @@ function TemperatureNumberInputEndContent(props: TemperatureNumberInputEndConten
 }
 
 const Exposure = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, exposure } = useSnapshot(camera.state.camera)
 	const { exposureTime, exposureTimeUnit, frameType } = useSnapshot(camera.state.request)
@@ -215,7 +217,7 @@ const Exposure = memo(() => {
 })
 
 const ExposureMode = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected } = useSnapshot(camera.state.camera)
 	const { exposureMode, delay, count } = useSnapshot(camera.state.request)
@@ -230,7 +232,7 @@ const ExposureMode = memo(() => {
 })
 
 const Bin = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, bin, canBin } = useSnapshot(camera.state.camera)
 	const { binX, binY } = useSnapshot(camera.state.request)
@@ -244,7 +246,7 @@ const Bin = memo(() => {
 })
 
 const Frame = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, canSubFrame } = useSnapshot(camera.state.camera)
 	const { subframe } = useSnapshot(camera.state.request)
@@ -261,7 +263,7 @@ const Frame = memo(() => {
 })
 
 const FrameDimensions = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, canSubFrame, frame } = useSnapshot(camera.state.camera)
 	const { subframe, x, y, width, height } = useSnapshot(camera.state.request)
@@ -280,7 +282,7 @@ const FrameDimensions = memo(() => {
 })
 
 const GainAndFormat = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, gain, offset, frameFormats } = useSnapshot(camera.state.camera)
 	const { request } = useSnapshot(camera.state)
@@ -295,7 +297,7 @@ const GainAndFormat = memo(() => {
 })
 
 const CameraEquipment = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected } = useSnapshot(camera.state.camera)
 	const { mount, wheel, focuser, rotator } = useSnapshot(camera.state.equipment)
@@ -312,7 +314,7 @@ const CameraEquipment = memo(() => {
 })
 
 const Footer = memo(() => {
-	const camera = useMolecule(CameraMolecule)
+	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, canAbort } = useSnapshot(camera.state.camera)
 

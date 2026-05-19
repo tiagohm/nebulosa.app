@@ -8,8 +8,8 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
+import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from '../store/camera.store'
 import { equipmentStore, type DeviceState } from '../store/equipment.store'
-import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from './indi/camera'
 
 export interface FlatWizardState {
 	show: boolean

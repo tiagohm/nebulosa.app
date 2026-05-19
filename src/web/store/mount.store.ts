@@ -14,11 +14,13 @@ export type MountStore = ReturnType<typeof mountStore>
 
 export interface MountState {
 	mount: DeviceState<Mount>
-	readonly targetCoordinate: {
+	readonly target: {
 		readonly coordinate: MountTargetCoordinate
 		readonly position: CoordinateInfo
 	}
-	readonly currentPosition: CoordinateInfo
+	readonly current: {
+		readonly position: CoordinateInfo
+	}
 	readonly location: {
 		show: boolean
 		coordinate: Mount['geographicCoordinate']
@@ -39,7 +41,7 @@ export interface MountState {
 	}
 }
 
-const DEFAULT_TARGET_COORDINATE: MountState['targetCoordinate']['coordinate'] = {
+const DEFAULT_TARGET_COORDINATE: MountState['target']['coordinate'] = {
 	type: 'J2000',
 	J2000: { x: '00 00 00', y: '+00 00 00' },
 	JNOW: { x: '00 00 00', y: '+00 00 00' },
@@ -51,11 +53,13 @@ const DEFAULT_TARGET_COORDINATE: MountState['targetCoordinate']['coordinate'] = 
 export function mountStore(mount: Mount) {
 	const state = proxy<MountState>({
 		mount,
-		targetCoordinate: {
+		target: {
 			coordinate: structuredClone(DEFAULT_TARGET_COORDINATE),
 			position: structuredClone(DEFAULT_COORDINATE_INFO),
 		},
-		currentPosition: structuredClone(DEFAULT_COORDINATE_INFO),
+		current: {
+			position: structuredClone(DEFAULT_COORDINATE_INFO),
+		},
 		location: {
 			show: false,
 			coordinate: mount.geographicCoordinate,
@@ -83,7 +87,7 @@ export function mountStore(mount: Mount) {
 	function $mount() {
 		console.info('mount mounted:', mount.name)
 
-		const a = initProxy(state.targetCoordinate, `mount.${mount.id}.targetcoordinate`, ['o:coordinate'])
+		const a = initProxy(state.target, `mount.${mount.id}.targetcoordinate`, ['o:coordinate'])
 		const b = subscribeKey(state.mount, 'slewing', updateCoordinatePosition)
 		const c = subscribeKey(state.mount, 'connected', updateCoordinatePosition)
 
@@ -128,25 +132,25 @@ export function mountStore(mount: Mount) {
 	}
 
 	function updateTargetCoordinateType(value: MountTargetCoordinateType) {
-		state.targetCoordinate.coordinate.type = value
+		state.target.coordinate.type = value
 	}
 
 	function updateTargetCoordinateX(value: string) {
-		state.targetCoordinate.coordinate[state.targetCoordinate.coordinate.type]!.x = value
+		state.target.coordinate[state.target.coordinate.type]!.x = value
 	}
 
 	function updateTargetCoordinateY(value: string) {
-		state.targetCoordinate.coordinate[state.targetCoordinate.coordinate.type]!.y = value
+		state.target.coordinate[state.target.coordinate.type]!.y = value
 	}
 
 	async function updateCurrentCoordinatePosition() {
 		const position = await Api.Mounts.currentPosition(mount)
-		position && Object.assign(state.currentPosition, position)
+		position && Object.assign(state.current, position)
 	}
 
 	async function updateTargetCoordinatePosition() {
-		const position = await Api.Mounts.targetPosition(mount, state.targetCoordinate.coordinate)
-		position && Object.assign(state.targetCoordinate.position, position)
+		const position = await Api.Mounts.targetPosition(mount, state.target.coordinate)
+		position && Object.assign(state.target.position, position)
 	}
 
 	function updateCoordinatePosition() {
@@ -156,17 +160,17 @@ export function mountStore(mount: Mount) {
 	}
 
 	function goTo() {
-		return Api.Mounts.goTo(mount, state.targetCoordinate.coordinate)
+		return Api.Mounts.goTo(mount, state.target.coordinate)
 	}
 
 	function sync() {
-		return Api.Mounts.sync(mount, state.targetCoordinate.coordinate)
+		return Api.Mounts.sync(mount, state.target.coordinate)
 	}
 
 	function frame() {
 		return framingStore.load({
-			rightAscension: formatRA(state.targetCoordinate.position.equatorialJ2000[0]),
-			declination: formatDEC(state.targetCoordinate.position.equatorialJ2000[1]),
+			rightAscension: formatRA(state.target.position.equatorialJ2000[0]),
+			declination: formatDEC(state.target.position.equatorialJ2000[1]),
 		})
 	}
 

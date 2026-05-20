@@ -1,4 +1,4 @@
-import type { Camera, Cover, Device, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { DeviceUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
@@ -25,6 +25,8 @@ export interface EquipmentState {
 	readonly thermometer: DeviceState<Thermometer>[]
 	readonly dewHeater: DeviceState<DewHeater>[]
 	readonly power: DeviceState<Power>[]
+	readonly tppa: { show: boolean; camera: DeviceState<Camera>; mount: DeviceState<Mount> }[]
+	readonly darv: { show: boolean; camera: DeviceState<Camera>; mount: DeviceState<Mount> }[]
 }
 
 const state = proxy<EquipmentState>({
@@ -41,9 +43,11 @@ const state = proxy<EquipmentState>({
 	thermometer: [],
 	dewHeater: [],
 	power: [],
+	tppa: [],
+	darv: [],
 })
 
-function get<T extends keyof EquipmentState>(type: T, id: string) {
+function get<T extends DeviceType>(type: T, id: string) {
 	const devices = state[type]
 	const n = devices.length
 
@@ -64,7 +68,7 @@ function emit(device: DeviceState<Device>, action: 'add' | 'remove') {
 	bus.emit(`${device.id}:${action}`, device)
 }
 
-function add(type: keyof EquipmentState, device: Device) {
+function add(type: DeviceType, device: Device) {
 	const devices = state[type]
 	const index = devices.findIndex((e) => e.id === device.id)
 
@@ -76,7 +80,7 @@ function add(type: keyof EquipmentState, device: Device) {
 	}
 }
 
-function update<T extends keyof EquipmentState>(type: T, event: DeviceUpdated<EquipmentState[T][number]>) {
+function update<T extends DeviceType>(type: T, event: DeviceUpdated<EquipmentState[T][number]>) {
 	const device = get(type, event.device.id!)
 
 	if (device !== undefined) {
@@ -88,7 +92,7 @@ function update<T extends keyof EquipmentState>(type: T, event: DeviceUpdated<Eq
 	console.warn('device not found:', event.device.name)
 }
 
-function remove(type: keyof EquipmentState, device: Pick<Device, 'id'>) {
+function remove(type: DeviceType, device: Pick<Device, 'id'>) {
 	const devices = state[type]
 	const n = devices.length
 	const id = device.id
@@ -98,11 +102,27 @@ function remove(type: keyof EquipmentState, device: Pick<Device, 'id'>) {
 
 		if (device.id === id) {
 			devices.splice(i, 1)
+
+			if (type === 'camera' || type === 'mount') {
+				removeTppa(device as Camera | Mount)
+				removeDarv(device as Camera | Mount)
+			}
+
 			emit(device, 'remove')
 			console.info(device.type, 'removed:', device.name)
 			break
 		}
 	}
+}
+
+function removeTppa(device: Camera | Mount) {
+	const index = state.tppa.findIndex((e) => e.camera === device || e.mount === device)
+	index >= 0 && state.tppa.splice(index, 1)
+}
+
+function removeDarv(device: Camera | Mount) {
+	const index = state.darv.findIndex((e) => e.camera === device || e.mount === device)
+	index >= 0 && state.darv.splice(index, 1)
 }
 
 async function connect(device: Device) {
@@ -121,6 +141,36 @@ async function connect(device: Device) {
 			}
 		}
 	}
+}
+
+function showTppa(camera: Camera, mount: Mount) {
+	const tppa = state.tppa.find((e) => e.camera === camera && e.mount === mount)
+
+	if (tppa === undefined) {
+		state.tppa.push({ show: true, camera, mount })
+	} else {
+		tppa.show = true
+	}
+}
+
+function hideTppa(camera: Camera, mount: Mount) {
+	const index = state.tppa.findIndex((e) => e.camera === camera || e.mount === mount)
+	index >= 0 && state.tppa.splice(index, 1)
+}
+
+function showDarv(camera: Camera, mount: Mount) {
+	const darv = state.darv.find((e) => e.camera === camera && e.mount === mount)
+
+	if (darv === undefined) {
+		state.darv.push({ show: true, camera, mount })
+	} else {
+		darv.show = true
+	}
+}
+
+function hideDarv(camera: Camera, mount: Mount) {
+	const index = state.darv.findIndex((e) => e.camera === camera || e.mount === mount)
+	index >= 0 && state.darv.splice(index, 1)
 }
 
 function show(device: Device, type = device.type) {
@@ -146,6 +196,10 @@ export const equipmentStore = {
 	add,
 	update,
 	remove,
+	showTppa,
+	hideTppa,
+	showDarv,
+	hideDarv,
 	show,
 	hide,
 } as const

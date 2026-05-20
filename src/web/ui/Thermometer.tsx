@@ -1,15 +1,11 @@
-import type * as Device from 'nebulosa/src/indi.device'
-import { createContext, memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatNumber } from '@/shared/util'
-import { thermometerStore, type ThermometerStore } from '../store/thermometer.store'
+import { ThermometerDeviceContext, ThermometerStoreContext } from '../shared/context'
+import { thermometerStore } from '../store/thermometer.store'
 import { ConnectButton } from './ConnectButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
-
-export const ThermometerDeviceContext = createContext<Device.Thermometer>(null as never)
-
-export const ThermometerStoreContext = createContext<ThermometerStore>(null as never)
 
 export const Thermometer = memo(() => {
 	const device = useContext(ThermometerDeviceContext)

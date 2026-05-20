@@ -1,7 +1,7 @@
-import type * as Device from 'nebulosa/src/indi.device'
-import { createContext, memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { flatPanelStore, type FlatPanelStore } from '../store/flatpanel.store'
+import { FlatPanelDeviceContext, FlatPanelStoreContext } from '../shared/context'
+import { flatPanelStore } from '../store/flatpanel.store'
 import { Slider } from './components/Slider'
 import { Switch } from './components/Switch'
 import { ConnectButton } from './ConnectButton'
@@ -12,14 +12,10 @@ function formatIntensity(value: number) {
 	return Number.isFinite(value) ? value : 0
 }
 
-export const FlatPanelDeviceContext = createContext<Device.FlatPanel>(null as never)
-
-export const FlatPanelStoreContext = createContext<FlatPanelStore>(null as never)
-
 export const FlatPanel = memo(() => {
 	const device = useContext(FlatPanelDeviceContext)
 	const flatPanel = useMemo(() => flatPanelStore(device), [device])
-	useEffect(flatPanel.mount, [])
+	useEffect(flatPanel.mount, [flatPanel])
 
 	return (
 		<FlatPanelStoreContext value={flatPanel}>

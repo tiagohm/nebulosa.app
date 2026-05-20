@@ -8,7 +8,7 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { storageGet, storageSet } from '@/shared/storage'
-import { updateCameraCaptureStartFromCamera, updateCameraCaptureStartFromCameraUpdated } from '../store/camera.store'
+import { updateCameraCaptureStartFromCamera } from '../store/camera.store'
 import { equipmentStore, type DeviceState } from '../store/equipment.store'
 
 export interface AutoFocusState {
@@ -44,7 +44,7 @@ export const AutoFocusMolecule = molecule(() => {
 
 		unsubscribers[2] = bus.subscribe<CameraUpdated>('camera:update', (event) => {
 			if (event.device.id === state.camera?.id && !state.camera.exposuring) {
-				updateCameraCaptureStartFromCameraUpdated(state.request.capture, event)
+				updateCameraCaptureStartFromCamera(state.request.capture, event as never)
 			}
 		})
 

@@ -14,7 +14,7 @@ const DROPDOWN_ITEM_HEIGHTS = {
 
 const dropdownStyles = tv({
 	slots: {
-		trigger: 'min-w-0',
+		trigger: 'min-w-0 justify-between',
 		chevron: 'shrink-0 transition',
 		panel: 'min-w-(--dropdown-width) max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg bg-neutral-950 p-0 text-neutral-100 shadow-lg shadow-black/40',
 		panelContent: 'min-w-0',

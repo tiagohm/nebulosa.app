@@ -1,8 +1,8 @@
-import type * as Device from 'nebulosa/src/indi.device'
-import { Activity, createContext, memo, useContext, useEffect, useMemo, useState } from 'react'
+import { Activity, memo, useContext, useEffect, useMemo, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { CameraDeviceContext, CameraStoreContext } from '../shared/context'
 import { activityMode } from '../shared/util'
-import { cameraStore, type CameraStore } from '../store/camera.store'
+import { cameraStore } from '../store/camera.store'
 import { AutoSaveButton } from './AutoSaveButton'
 import { AutoSubFolderModeButton } from './AutoSubFolderButton'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
@@ -23,14 +23,10 @@ import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
-export const CameraDeviceContext = createContext<Device.Camera>(null as never)
-
-export const CameraStoreContext = createContext<CameraStore>(null as never)
-
 export const Camera = memo(() => {
 	const device = useContext(CameraDeviceContext)
 	const camera = useMemo(() => cameraStore(device), [device])
-	useEffect(camera.mount, [])
+	useEffect(camera.mount, [camera])
 
 	return (
 		<CameraStoreContext value={camera}>

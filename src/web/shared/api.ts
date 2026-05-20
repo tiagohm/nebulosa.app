@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid'
 import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import type { Angle } from 'nebulosa/src/angle'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
@@ -13,7 +14,7 @@ import { type ImageCoordinateInterpolation, type SkyObjectSearchItem, X_IMAGE_IN
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
-export const CLIENT_ID = Date.now().toFixed(0)
+export const CLIENT_ID = nanoid()
 
 const DEFAULT_HEADERS: HeadersInit = {
 	'Content-Type': 'application/json',
@@ -651,14 +652,20 @@ export namespace Api {
 	}
 }
 
-function req(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {
+async function req(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {
 	const options: RequestInit = { method, cache: 'no-cache', headers: DEFAULT_HEADERS, body: body === undefined ? undefined : JSON.stringify(body) }
-	return fetch(`${API_URL}${path}`, options)
+
+	try {
+		return await fetch(`${API_URL}${path}`, options)
+	} catch (e) {
+		console.info('failed to request:', method, path, body, e)
+		return undefined
+	}
 }
 
 async function json<T>(path: string, method: 'get' | 'post' | 'put', body?: unknown) {
 	const response = await req(path, method, body)
-	if (!response.ok) return undefined
+	if (!response?.ok) return undefined
 	const text = await response.text()
 	return text ? (JSON.parse(text) as T) : undefined
 }

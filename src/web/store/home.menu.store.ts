@@ -5,8 +5,10 @@ import type { PopoverMethods } from '../ui/components/Popover'
 
 export type HomeMenuStore = typeof homeMenuStore
 
+export type HomeMenuSelectionType = DeviceType | 'tppa' | 'darv' | 'autoFocus' | 'flatWizard'
+
 export interface HomeMenuState {
-	selected: DeviceType
+	selected: HomeMenuSelectionType
 }
 
 const state = proxy<HomeMenuState>({
@@ -15,9 +17,13 @@ const state = proxy<HomeMenuState>({
 
 initProxy(state, 'home.menu', ['p:selected'])
 
+export function isDevice(type: HomeMenuSelectionType): type is DeviceType {
+	return type !== 'tppa' && type !== 'darv' && type !== 'autoFocus' && type !== 'flatWizard'
+}
+
 let popoverMethods: PopoverMethods | null = null
 
-function select(type: DeviceType) {
+function select(type: HomeMenuSelectionType) {
 	state.selected = type
 }
 

@@ -1,7 +1,7 @@
-import type * as Device from 'nebulosa/src/indi.device'
-import { createContext, memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { focuserStore, type FocuserStore } from '../store/focuser.store'
+import { FocuserDeviceContext, FocuserStoreContext } from '../shared/context'
+import { focuserStore } from '../store/focuser.store'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
@@ -11,14 +11,10 @@ import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
-export const FocuserDeviceContext = createContext<Device.Focuser>(null as never)
-
-export const FocuserStoreContext = createContext<FocuserStore>(null as never)
-
 export const Focuser = memo(() => {
 	const device = useContext(FocuserDeviceContext)
 	const focuser = useMemo(() => focuserStore(device), [device])
-	useEffect(focuser.mount, [])
+	useEffect(focuser.mount, [focuser])
 
 	return (
 		<FocuserStoreContext value={focuser}>

@@ -1,10 +1,10 @@
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { MountTargetCoordinateType } from 'nebulosa/src/indi.device'
-import type * as Device from 'nebulosa/src/indi.device'
-import { createContext, memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext, useEffect, useMemo } from 'react'
 import type { CoordinateInfo, CoordinateType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { mountStore, type MountStore } from '../store/mount.store'
+import { MountDeviceContext, MountStoreContext } from '../shared/context'
+import { mountStore } from '../store/mount.store'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
@@ -44,14 +44,10 @@ function formatTargetCoordinateY(type: CoordinateType, position: CoordinateInfo)
 	return type === 'horizontal' ? formatALT(position[type][1]) : formatDEC(position[type][1])
 }
 
-export const MountDeviceContext = createContext<Device.Mount>(null as never)
-
-export const MountStoreContext = createContext<MountStore>(null as never)
-
 export const Mount = memo(() => {
 	const device = useContext(MountDeviceContext)
 	const mount = useMemo(() => mountStore(device), [device])
-	useEffect(mount.mount, [])
+	useEffect(mount.mount, [mount])
 
 	return (
 		<MountStoreContext value={mount}>

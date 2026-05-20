@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
-import type { DeviceType } from 'nebulosa/src/indi.device'
-import { memo } from 'react'
+import type { Camera, DeviceType, Mount } from 'nebulosa/src/indi.device'
+import { memo, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
 import alignmentIcon from '@/assets/alignment.webp'
@@ -24,19 +24,18 @@ import settingsIcon from '@/assets/settings.webp'
 import skyAtlasIcon from '@/assets/sky-atlas.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
 import { AutoFocusMolecule } from '@/molecules/autofocus'
-import { DarvMolecule } from '@/molecules/darv'
 import { FlatWizardMolecule } from '@/molecules/flatwizard'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { SkyAtlasMolecule } from '@/molecules/skyatlas'
-import { TppaMolecule } from '@/molecules/tppa'
+import { CameraDeviceContext, MountDeviceContext } from '../shared/context'
 import { aboutStore } from '../store/about.store'
 import { alpacaStore } from '../store/alpaca.store'
 import { calculatorStore } from '../store/calculator.store'
 import { connectionStore } from '../store/connection.store'
 import { equipmentStore } from '../store/equipment.store'
 import { framingStore } from '../store/framing.store'
-import { homeMenuStore } from '../store/home.menu.store'
+import { homeMenuStore, isDevice } from '../store/home.menu.store'
 import { About } from './About'
 import { AlpacaServer } from './AlpacaServer'
 import { AutoFocus } from './AutoFocus'
@@ -46,6 +45,7 @@ import { Chip, type ChipProps } from './components/Chip'
 import { IconButton } from './components/IconButton'
 import { Popover } from './components/Popover'
 import { Darv } from './Darv'
+import { CameraDropdown, MountDropdown } from './DeviceDropdown'
 import { FlatWizard } from './FlatWizard'
 import { Framing } from './Framing'
 import { Icons } from './Icon'
@@ -62,14 +62,7 @@ export const HomeMenu = memo(() => {
 
 	const atlas = useMolecule(SkyAtlasMolecule)
 	const { show: showSkyAtlas } = useSnapshot(atlas.state)
-
 	const { show: showFraming } = useSnapshot(framingStore.state)
-
-	const tppa = useMolecule(TppaMolecule)
-	const { show: showTPPA } = useSnapshot(tppa.state)
-
-	const darv = useMolecule(DarvMolecule)
-	const { show: showDARV } = useSnapshot(darv.state)
 
 	const autoFocus = useMolecule(AutoFocusMolecule)
 	const { show: showAutoFocus } = useSnapshot(autoFocus.state)
@@ -92,8 +85,6 @@ export const HomeMenu = memo(() => {
 			<HomeMenuPopover />
 			{showSkyAtlas && <SkyAtlas />}
 			{showFraming && <Framing />}
-			{showTPPA && connected && <Tppa />}
-			{showDARV && connected && <Darv />}
 			{showAutoFocus && connected && <AutoFocus />}
 			{showFlatWizard && connected && <FlatWizard />}
 			{showPHD2 && <PHD2 />}
@@ -101,6 +92,8 @@ export const HomeMenu = memo(() => {
 			{showAlpaca && connected && <AlpacaServer />}
 			{showAbout && <About />}
 			{showCalculator && <Calculator />}
+			<TppaList />
+			<DarvList />
 		</>
 	)
 })
@@ -125,6 +118,10 @@ function handleButtonClick(event: React.MouseEvent<HTMLElement>) {
 		case 'guideOutput':
 		case 'dewHeater':
 		case 'thermometer':
+		case 'tppa':
+		case 'darv':
+		case 'autoFocus':
+		case 'flatWizard':
 			homeMenuStore.select(key)
 			return
 		case 'alpaca':
@@ -154,10 +151,6 @@ export const HomeMenuPopoverContent = memo(() => {
 	const { length: rotatorLength } = useSnapshot(equipmentStore.state.rotator)
 
 	const skyAtlas = useMolecule(SkyAtlasMolecule)
-	const tppa = useMolecule(TppaMolecule)
-	const darv = useMolecule(DarvMolecule)
-	const autoFocus = useMolecule(AutoFocusMolecule)
-	const flatWizard = useMolecule(FlatWizardMolecule)
 	const phd2 = useMolecule(PHD2Molecule)
 
 	const isIndiDisabled = cameraLength === 0 && mountLength === 0 && focuserLength === 0 && coverLength === 0 && flatPanelLength === 0 && guideOutputLength === 0 && thermometerLength === 0 && dewHeaterLength === 0 && rotatorLength === 0 && wheelLength === 0
@@ -177,37 +170,49 @@ export const HomeMenuPopoverContent = memo(() => {
 			<Button data-key="phd2" children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={phd2.show} size="lg" tooltipContent="PHD2" variant="ghost" />
 			<Button data-key="atlas" children={<img className="w-9" src={skyAtlasIcon} />} color="secondary" onClick={skyAtlas.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
 			<Button data-key="framing" children={<img className="w-9" src={framingIcon} />} color="secondary" onClick={framingStore.show} size="lg" tooltipContent="Framing" variant="ghost" />
-			<Button data-key="tppa" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={tppa.show} size="lg" tooltipContent="TPPA" variant="ghost" />
-			<Button data-key="darv" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={darv.show} size="lg" tooltipContent="DARV" variant="ghost" />
-			<Button data-key="autoFocus" children={<img className="w-9" src={autoFocusIcon} />} color="secondary" disabled={cameraLength === 0 || focuserLength === 0} onClick={autoFocus.show} size="lg" tooltipContent="Auto Focus" variant="ghost" />
-			<Button data-key="flatWizard" children={<img className="w-9" src={flatWizardIcon} />} color="secondary" disabled={cameraLength === 0} onClick={flatWizard.show} size="lg" tooltipContent="Flat Wizard" variant="ghost" />
+			<Button data-key="tppa" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="TPPA" variant="ghost" />
+			<Button data-key="darv" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="DARV" variant="ghost" />
+			<Button data-key="autoFocus" children={<img className="w-9" src={autoFocusIcon} />} color="secondary" disabled={cameraLength === 0 || focuserLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Auto Focus" variant="ghost" />
+			<Button data-key="flatWizard" children={<img className="w-9" src={flatWizardIcon} />} color="secondary" disabled={cameraLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Flat Wizard" variant="ghost" />
 			<Button data-key="sequencer" children={<img className="w-9" src={sequencerIcon} />} color="secondary" disabled={cameraLength === 0} size="lg" tooltipContent="Sequencer" variant="ghost" />
 			<IndiPanelControlButton disabled={isIndiDisabled} size="lg" />
 			<Button data-key="alpaca" children={<img className="w-9" src={alpacaIcon} />} color="secondary" disabled={isIndiDisabled} onClick={handleButtonClick} size="lg" tooltipContent="ASCOM Alpaca Server" variant="ghost" />
 			<Button data-key="calculator" children={<img className="w-9" src={calculatorIcon} />} color="secondary" onClick={handleButtonClick} size="lg" tooltipContent="Calculator" variant="ghost" />
 			<Button data-key="settings" children={<img className="w-9" src={settingsIcon} />} color="secondary" size="lg" tooltipContent="Settings" variant="ghost" />
 			<Button data-key="about" children={<img className="w-9" src={aboutIcon} />} color="secondary" onClick={handleButtonClick} size="lg" tooltipContent="About" variant="ghost" />
-			<Devices />
+			<DeviceList />
+			<DarvDeviceChooser />
+			<TppaDeviceChooser />
 		</div>
 	)
 })
 
-interface DeviceChipProps extends Omit<ChipProps, 'children'> {
+interface DeviceItemProps extends Omit<ChipProps, 'children'> {
 	readonly type: DeviceType
 	readonly index: number
 }
 
-function DeviceChip({ type, index, ...props }: DeviceChipProps) {
+function DeviceItem({ type, index, ...props }: DeviceItemProps) {
 	const { connected, name } = useSnapshot(equipmentStore.state[type][index])
 	return <Chip className="min-w-full cursor-pointer" color={connected ? 'success' : 'danger'} label={name} {...props} />
 }
 
-const Devices = memo(() => {
+const DEVICE_TYPE_LABELS: Partial<Record<DeviceType, string>> = {
+	guideOutput: 'Guide Output',
+	flatPanel: 'Flat Panel',
+	dewHeater: 'Dew Heater',
+	wheel: 'Filter Wheel',
+}
+
+const DeviceList = memo(() => {
 	const { selected } = useSnapshot(homeMenuStore.state)
-	const { length } = useSnapshot(equipmentStore.state[selected])
+	const isDeviceSelected = isDevice(selected)
+	const { length } = useSnapshot(equipmentStore.state[isDeviceSelected ? selected : 'camera'])
+
+	if (!isDeviceSelected) return null
 
 	function handleClick(id: string) {
-		const device = equipmentStore.get(selected, id)
+		const device = equipmentStore.get(selected as DeviceType, id)
 		if (device !== undefined) device.show = true
 		homeMenuStore.hide()
 	}
@@ -216,7 +221,7 @@ const Devices = memo(() => {
 
 	for (let i = 0; i < length; i++) {
 		const { id } = equipmentStore.state[selected][i]
-		devices[i] = <DeviceChip key={id} type={selected} index={i} onClick={() => handleClick(id)} />
+		devices[i] = <DeviceItem key={id} type={selected} index={i} onClick={() => handleClick(id)} />
 	}
 
 	return (
@@ -227,9 +232,76 @@ const Devices = memo(() => {
 	)
 })
 
-const DEVICE_TYPE_LABELS: Partial<Record<DeviceType, string>> = {
-	guideOutput: 'Guide Output',
-	flatPanel: 'Flat Panel',
-	dewHeater: 'Dew Heater',
-	wheel: 'Filter Wheel',
-}
+export const TppaDeviceChooser = memo(() => {
+	const { selected } = useSnapshot(homeMenuStore.state)
+	const [camera, setCamera] = useState<Camera>()
+	const [mount, setMount] = useState<Mount>()
+
+	if (selected !== 'tppa') return null
+
+	return (
+		<div className="col-span-full flex flex-col items-center gap-2">
+			<span className="font-bold">TPPA</span>
+			<CameraDropdown showLabel fullWidth value={camera} onValueChange={setCamera} />
+			<MountDropdown showLabel fullWidth value={mount} onValueChange={setMount} />
+			<Button disabled={!camera || !mount} startContent={<Icons.OpenInNew />} label="Open" onClick={() => equipmentStore.showTppa(camera!, mount!)} />
+		</div>
+	)
+})
+
+export const TppaList = memo(() => {
+	const { length } = useSnapshot(equipmentStore.state.tppa)
+	const equipment = new Array<React.ReactNode>(length)
+
+	for (let i = 0; i < length; i++) {
+		const { show, camera, mount } = equipmentStore.state.tppa[i]
+		const key = `${camera.id}.${mount.id}`
+
+		equipment[i] = show && (
+			<CameraDeviceContext key={key} value={camera}>
+				<MountDeviceContext value={mount}>
+					<Tppa />
+				</MountDeviceContext>
+			</CameraDeviceContext>
+		)
+	}
+
+	return equipment
+})
+
+export const DarvDeviceChooser = memo(() => {
+	const { selected } = useSnapshot(homeMenuStore.state)
+	const [camera, setCamera] = useState<Camera>()
+	const [mount, setMount] = useState<Mount>()
+
+	if (selected !== 'darv') return null
+
+	return (
+		<div className="col-span-full flex flex-col items-center gap-2">
+			<span className="font-bold">DARV</span>
+			<CameraDropdown showLabel fullWidth value={camera} onValueChange={setCamera} />
+			<MountDropdown showLabel fullWidth value={mount} onValueChange={setMount} />
+			<Button disabled={!camera || !mount} startContent={<Icons.OpenInNew />} label="Open" onClick={() => equipmentStore.showDarv(camera!, mount!)} />
+		</div>
+	)
+})
+
+export const DarvList = memo(() => {
+	const { length } = useSnapshot(equipmentStore.state.darv)
+	const equipment = new Array<React.ReactNode>(length)
+
+	for (let i = 0; i < length; i++) {
+		const { show, camera, mount } = equipmentStore.state.darv[i]
+		const key = `${camera.id}.${mount.id}`
+
+		equipment[i] = show && (
+			<CameraDeviceContext key={key} value={camera}>
+				<MountDeviceContext value={mount}>
+					<Darv />
+				</MountDeviceContext>
+			</CameraDeviceContext>
+		)
+	}
+
+	return equipment
+})

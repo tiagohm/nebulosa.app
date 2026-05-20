@@ -1,7 +1,7 @@
-import type * as Device from 'nebulosa/src/indi.device'
-import { createContext, memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { coverStore, type CoverStore } from '../store/cover.store'
+import { CoverDeviceContext, CoverStoreContext } from '../shared/context'
+import { coverStore } from '../store/cover.store'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
 import { ConnectButton } from './ConnectButton'
@@ -9,14 +9,10 @@ import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
-export const CoverDeviceContext = createContext<Device.Cover>(null as never)
-
-export const CoverStoreContext = createContext<CoverStore>(null as never)
-
 export const Cover = memo(() => {
 	const device = useContext(CoverDeviceContext)
 	const cover = useMemo(() => coverStore(device), [device])
-	useEffect(cover.mount, [])
+	useEffect(cover.mount, [cover])
 
 	return (
 		<CoverStoreContext value={cover}>

@@ -1,7 +1,7 @@
-import type * as Device from 'nebulosa/src/indi.device'
-import { createContext, memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { rotatorStore, type RotatorStore } from '../store/rotator.store'
+import { RotatorDeviceContext, RotatorStoreContext } from '../shared/context'
+import { rotatorStore } from '../store/rotator.store'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
@@ -15,14 +15,10 @@ function hasAngleChanged(targetAngle: number, currentAngle: number) {
 	return Number.isFinite(targetAngle) && Math.abs(targetAngle - currentAngle) > 1e-6
 }
 
-export const RotatorDeviceContext = createContext<Device.Rotator>(null as never)
-
-export const RotatorStoreContext = createContext<RotatorStore>(null as never)
-
 export const Rotator = memo(() => {
 	const device = useContext(RotatorDeviceContext)
 	const rotator = useMemo(() => rotatorStore(device), [device])
-	useEffect(rotator.mount, [])
+	useEffect(rotator.mount, [rotator])
 
 	return (
 		<RotatorStoreContext value={rotator}>

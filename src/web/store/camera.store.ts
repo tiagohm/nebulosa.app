@@ -127,7 +127,7 @@ export function cameraStore(camera: Camera) {
 
 		try {
 			const response = await Api.Cameras.start(camera, state.request)
-			if (!response.ok) state.capturing = false
+			if (!response?.ok) state.capturing = false
 		} catch {
 			state.capturing = false
 		}
@@ -209,13 +209,19 @@ export function updateCameraCaptureStartFromCamera(capture: CameraCaptureStart, 
 }
 
 export function updateCameraCaptureStartFromCameraUpdated(capture: CameraCaptureStart, event: CameraUpdated) {
-	if (event.state === 'Alert' || event.state === 'Busy') return
+	if (event.state === 'Alert') return
 
 	if (event.property === 'frame') {
 		updateCameraFrame(capture, event.device.frame!)
-	} else if (event.property === 'frameFormats' && event.device.frameFormats?.length) {
+	} else if (event.property === 'frameFormats' && event.device.frameFormats!.length > 0) {
 		updateCameraFrameFormat(capture, event.device.frameFormats)
-	} else if (event.property === 'exposure' && event.device.exposure?.max) {
-		updateCameraExposureTime(capture, event.device.exposure)
+	} else if (event.property === 'exposure' && event.device.exposure!.max !== 0) {
+		updateCameraExposureTime(capture, event.device.exposure!)
 	}
+}
+
+export function subscribeToUpdateCameraCaptureStartFromCamera(u: VoidFunction[], camera: Camera, request: CameraCaptureStart) {
+	u.push(subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(request, formats)))
+	u.push(subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(request, exposure)))
+	u.push(subscribeKey(camera, 'frame', (frame) => updateCameraFrame(request, frame)))
 }

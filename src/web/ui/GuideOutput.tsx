@@ -1,21 +1,17 @@
-import type * as Device from 'nebulosa/src/indi.device'
-import { createContext, memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { guideOutputStore, type GuideOutputStore } from '../store/guideoutput.store'
+import { GuideOutputDeviceContext, GuideOutputStoreContext } from '../shared/context'
+import { guideOutputStore } from '../store/guideoutput.store'
 import { NumberInput } from './components/NumberInput'
 import { ConnectButton } from './ConnectButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 import { Nudge } from './Nudge'
 
-export const GuideOutputDeviceContext = createContext<Device.GuideOutput>(null as never)
-
-export const GuideOutputStoreContext = createContext<GuideOutputStore>(null as never)
-
 export const GuideOutput = memo(() => {
 	const device = useContext(GuideOutputDeviceContext)
 	const guideOutput = useMemo(() => guideOutputStore(device), [device])
-	useEffect(guideOutput.mount, [])
+	useEffect(guideOutput.mount, [guideOutput])
 
 	return (
 		<GuideOutputStoreContext value={guideOutput}>

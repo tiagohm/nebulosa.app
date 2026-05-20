@@ -1,7 +1,7 @@
-import type * as Device from 'nebulosa/src/indi.device'
-import { createContext, memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { dewHeaterStore, type DewHeaterStore } from '../store/dewheater.store'
+import { DewHeaterDeviceContext, DewHeaterStoreContext } from '../shared/context'
+import { dewHeaterStore } from '../store/dewheater.store'
 import { Slider } from './components/Slider'
 import { ConnectButton } from './ConnectButton'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
@@ -18,14 +18,10 @@ function dutyCycleColor(value: number, min: number, max: number) {
 	return ratio < 0.5 ? 'primary' : ratio < 0.9 ? 'warning' : 'danger'
 }
 
-export const DewHeaterDeviceContext = createContext<Device.DewHeater>(null as never)
-
-export const DewHeaterStoreContext = createContext<DewHeaterStore>(null as never)
-
 export const DewHeater = memo(() => {
 	const device = useContext(DewHeaterDeviceContext)
 	const dewHeater = useMemo(() => dewHeaterStore(device), [device])
-	useEffect(dewHeater.mount, [])
+	useEffect(dewHeater.mount, [dewHeater])
 
 	return (
 		<DewHeaterStoreContext value={dewHeater}>

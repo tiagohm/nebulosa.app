@@ -1,13 +1,15 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext, useEffect, useMemo } from 'react'
 import type { DarvState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { DarvMolecule } from '@/molecules/darv'
+import { CameraDeviceContext, DarvStoreContext, MountDeviceContext } from '../shared/context'
+import { darvStore } from '../store/darv.store'
+import { equipmentStore } from '../store/equipment.store'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { Button } from './components/Button'
 import { Chip, type ChipProps } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
-import { CameraDropdown, MountDropdown } from './DeviceDropdown'
+import { TextInput } from './components/TextInput'
+import { ConnectButton } from './ConnectButton'
 import { HemisphereSelect } from './HemisphereSelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
@@ -27,37 +29,48 @@ const DARV_STATE_COLORS = {
 } satisfies Record<DarvState, NonNullable<ChipProps['color']>>
 
 export const Darv = memo(() => {
-	const darv = useMolecule(DarvMolecule)
+	const camera = useContext(CameraDeviceContext)
+	const mount = useContext(MountDeviceContext)
+	const darv = useMemo(() => darvStore(camera, mount), [camera, mount])
+	useEffect(darv.mount, [darv])
 
 	return (
-		<Modal footer={<Footer />} header="Drift Alignment by Robert Vice" id="darv" maxWidth="360px" onHide={darv.hide}>
-			<Body />
-		</Modal>
+		<DarvStoreContext value={darv}>
+			<Modal footer={<Footer />} header="Drift Alignment by Robert Vice" id="darv" maxWidth="360px" onHide={darv.hide}>
+				<Body />
+			</Modal>
+		</DarvStoreContext>
 	)
 })
 
 const Body = memo(() => (
 	<div className="mt-0 grid grid-cols-12 gap-2">
-		<DeviceChooser />
+		<CameraAndMount />
 		<Status />
 		<Input />
 	</div>
 ))
 
-const DeviceChooser = memo(() => {
-	const darv = useMolecule(DarvMolecule)
-	const { running, camera, mount } = useSnapshot(darv.state)
+const CameraAndMount = memo(() => {
+	const darv = useContext(DarvStoreContext)
+	const { capture } = useSnapshot(darv.state.request)
+	const { connected: cameraConnected } = useSnapshot(darv.state.camera)
+	const { connected: mountConnected } = useSnapshot(darv.state.mount)
+
+	const CameraStartContent = <ConnectButton connected={cameraConnected} onClick={() => equipmentStore.connect(darv.state.camera)} size="sm" />
+	const MountStartContent = <ConnectButton connected={mountConnected} onClick={() => equipmentStore.connect(darv.state.mount)} size="sm" />
+	const CameraEndContent = <CameraCaptureStartPopover camera={darv.state.camera} mode="darv" onValueChange={darv.updateCapture} value={capture} />
 
 	return (
-		<div className="col-span-full flex flex-row items-center justify-center gap-2">
-			<CameraDropdown endContent={<CameraDropdownEndContent />} disabled={running} onValueChange={(value) => (darv.state.camera = value)} showLabel value={camera} />
-			<MountDropdown disabled={running} onValueChange={(value) => (darv.state.mount = value)} showLabel value={mount} />
+		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
+			<TextInput readOnly label="Camera" value={darv.state.camera.name} startContent={CameraStartContent} endContent={CameraEndContent} />
+			<TextInput readOnly label="Mount" value={darv.state.mount.name} startContent={MountStartContent} />
 		</div>
 	)
 })
 
 const Status = memo(() => {
-	const darv = useMolecule(DarvMolecule)
+	const darv = useContext(DarvStoreContext)
 	const { state } = useSnapshot(darv.state.event)
 
 	return (
@@ -70,7 +83,7 @@ const Status = memo(() => {
 })
 
 const Input = memo(() => {
-	const darv = useMolecule(DarvMolecule)
+	const darv = useContext(DarvStoreContext)
 	const { running } = useSnapshot(darv.state)
 	const { hemisphere, duration, initialPause } = useSnapshot(darv.state.request)
 
@@ -83,16 +96,8 @@ const Input = memo(() => {
 	)
 })
 
-const CameraDropdownEndContent = memo(() => {
-	const darv = useMolecule(DarvMolecule)
-	const { camera } = useSnapshot(darv.state)
-	const { capture } = useSnapshot(darv.state.request)
-
-	return camera && <CameraCaptureStartPopover camera={camera} mode="darv" onValueChange={darv.updateCapture} value={capture} />
-})
-
 const Footer = memo(() => {
-	const darv = useMolecule(DarvMolecule)
+	const darv = useContext(DarvStoreContext)
 	const { running, camera, mount } = useSnapshot(darv.state)
 
 	return (

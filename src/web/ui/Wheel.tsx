@@ -1,7 +1,7 @@
-import type * as Device from 'nebulosa/src/indi.device'
-import { createContext, memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { wheelStore, type WheelStore } from '../store/wheel.store'
+import { WheelDeviceContext, WheelStoreContext } from '../shared/context'
+import { wheelStore } from '../store/wheel.store'
 import { Button } from './components/Button'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
@@ -13,14 +13,10 @@ import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
-export const WheelDeviceContext = createContext<Device.Wheel>(null as never)
-
-export const WheelStoreContext = createContext<WheelStore>(null as never)
-
 export const Wheel = memo(() => {
 	const device = useContext(WheelDeviceContext)
 	const wheel = useMemo(() => wheelStore(device), [device])
-	useEffect(wheel.mount, [])
+	useEffect(wheel.mount, [wheel])
 
 	return (
 		<WheelStoreContext value={wheel}>

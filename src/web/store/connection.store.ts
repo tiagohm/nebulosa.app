@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid'
 import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import bus from 'src/shared/bus'
 import type { ConnectionEvent, ConnectionStatus } from 'src/shared/types'
@@ -67,16 +68,6 @@ function list(connection: ConnectionStatus) {
 	//
 }
 
-function createConnectionId() {
-	let id = Date.now().toFixed(0)
-
-	while (state.connections.some((connection) => connection.id === id)) {
-		id = (+id + 1).toFixed(0)
-	}
-
-	return id
-}
-
 function create() {
 	state.mode = 'new'
 	Object.assign(state.edited, structuredClone(DEFAULT_CONNECTION))
@@ -95,7 +86,7 @@ function add(connection: Connection) {
 
 function duplicate(connection: Connection) {
 	const { host, port, name, type, secured } = connection
-	add({ id: createConnectionId(), host, port, name, type, secured })
+	add({ id: nanoid(), host, port, name, type, secured })
 }
 
 function update<K extends keyof Connection>(name: K, value: Connection[K]) {
@@ -154,7 +145,7 @@ function save() {
 		}
 
 		// Generate a new id for the edited connection
-		edited.id = createConnectionId()
+		edited.id = nanoid()
 
 		// Add the edited connection to the list
 		add(edited)

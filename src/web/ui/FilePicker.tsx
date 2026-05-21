@@ -1,9 +1,10 @@
-import { useMolecule } from 'bunshi/react'
 import { formatTemporal } from 'nebulosa/src/temporal'
-import { memo, useMemo } from 'react'
+import { memo, useContext, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { FilePickerMolecule } from '@/molecules/filepicker'
+import { useStore } from '../hooks/store.hook'
+import { FilePickerStoreContext } from '../shared/context'
 import { tw } from '../shared/util'
+import { filePicker, type FilePickerScope } from '../store/filepicker.store'
 import { Badge } from './components/Badge'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { Button } from './components/Button'
@@ -15,24 +16,30 @@ import { Modal } from './Modal'
 
 const FILE_SIZE_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB'] as const
 
-export interface FilePickerProps {
+export interface FilePickerProps extends FilePickerScope {
 	readonly id: string
 	readonly header?: React.ReactNode
 	readonly onChoose: (entries?: string[]) => void
 }
 
-export const FilePicker = memo(({ id, header, onChoose }: FilePickerProps) => (
-	<Modal footer={<Footer onChoose={onChoose} />} header={<Header header={header} />} id={id} maxWidth="416px" onHide={onChoose}>
-		<Body />
-	</Modal>
-))
+export const FilePicker = memo(({ id, header, onChoose, ...scope }: FilePickerProps) => {
+	const picker = useStore(() => filePicker(scope), [scope.path, scope.mode, scope.multiple, scope.filter])
+
+	return (
+		<FilePickerStoreContext value={picker}>
+			<Modal footer={<Footer onChoose={onChoose} />} header={<Header header={header} />} id={id} maxWidth="416px" onHide={onChoose}>
+				<Body />
+			</Modal>
+		</FilePickerStoreContext>
+	)
+})
 
 function filePickerTitle(mode: 'directory' | 'file' | 'save') {
 	return mode === 'save' ? 'Save' : mode === 'directory' ? 'Open Directory' : 'Open File'
 }
 
 const Header = memo(({ header }: Pick<FilePickerProps, 'header'>) => {
-	const picker = useMolecule(FilePickerMolecule)
+	const picker = useContext(FilePickerStoreContext)
 	const { mode } = useSnapshot(picker.state)
 
 	return header ?? filePickerTitle(mode)
@@ -63,7 +70,7 @@ function formatFileSize(size: number) {
 }
 
 const Toolbar = memo(() => {
-	const picker = useMolecule(FilePickerMolecule)
+	const picker = useContext(FilePickerStoreContext)
 	const { history, directoryTree, directory } = useSnapshot(picker.state)
 
 	return (
@@ -82,7 +89,7 @@ const Toolbar = memo(() => {
 })
 
 const Filter = memo(() => {
-	const picker = useMolecule(FilePickerMolecule)
+	const picker = useContext(FilePickerStoreContext)
 	const { directory, filter } = useSnapshot(picker.state)
 
 	if (directory.create) return null
@@ -91,7 +98,7 @@ const Filter = memo(() => {
 })
 
 const CreateDirectory = memo(() => {
-	const picker = useMolecule(FilePickerMolecule)
+	const picker = useContext(FilePickerStoreContext)
 	const { create, name } = useSnapshot(picker.state.directory)
 
 	if (!create) return null
@@ -105,7 +112,7 @@ const CreateDirectory = memo(() => {
 })
 
 const Files = memo(() => {
-	const picker = useMolecule(FilePickerMolecule)
+	const picker = useContext(FilePickerStoreContext)
 	const { mode, selected, filtered, filter } = useSnapshot(picker.state)
 	const selectedPaths = useMemo(() => new Set(selected), [selected])
 	const emptyContent = filter.trim().length > 0 ? 'No matching entries' : 'No entries'
@@ -145,7 +152,7 @@ const Files = memo(() => {
 })
 
 const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
-	const picker = useMolecule(FilePickerMolecule)
+	const picker = useContext(FilePickerStoreContext)
 	const { mode, selected } = useSnapshot(picker.state)
 	const { save } = useSnapshot(picker.state)
 
@@ -161,7 +168,7 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 		<>
 			{mode === 'save' ? (
 				<>
-					<TextInput className="flex-1" color={save.alreadyExists ? 'warning' : 'default'} label="Name" onValueChange={picker.updateSaveName} value={save.name} />
+					<TextInput className="flex-1" color={save.exists ? 'warning' : 'default'} label="Name" onValueChange={picker.updateSaveName} value={save.name} />
 					<Button color="success" disabled={save.name.trim().length <= 0} label="Choose" onClick={handleOnChoose} startContent={<Icons.Check />} />
 				</>
 			) : (

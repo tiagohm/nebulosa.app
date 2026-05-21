@@ -1,12 +1,11 @@
-import { ScopeProvider } from 'bunshi/react'
 import { useEffect, useRef, useState } from 'react'
-import { FilePickerScope, type FilePickerScopeValue } from '@/molecules/filepicker'
+import type { FilePickerScope } from '../store/filepicker.store'
 import { IconButton } from './components/IconButton'
 import { TextInput, type TextInputProps } from './components/TextInput'
 import { FilePicker } from './FilePicker'
 import { Icons } from './Icon'
 
-export interface FilePickerInputProps extends Omit<FilePickerScopeValue, 'multiple' | 'path'>, Omit<TextInputProps, 'value' | 'onValueChange' | 'startContent' | 'endContent' | 'label'> {
+export interface FilePickerInputProps extends Omit<FilePickerScope, 'multiple' | 'path'>, Omit<TextInputProps, 'value' | 'onValueChange' | 'startContent' | 'endContent' | 'label'> {
 	readonly id: string
 	readonly value?: string
 	readonly onValueChange: (value?: string) => void
@@ -68,11 +67,7 @@ export function FilePickerInput({ filter, mode, id, value, onValueChange, readOn
 			<div className="col-span-full flex w-full flex-1 flex-row items-center gap-1">
 				<TextInput disabled={blocked} endContent={EndContent} onValueChange={handleValueChange} startContent={StartContent} value={value} {...props} />
 			</div>
-			{show && !blocked && (
-				<ScopeProvider scope={FilePickerScope} value={{ path: initialPath.current, filter, mode, multiple: false }}>
-					<FilePicker header="Choose Path" id={`file-picker-input-${id}`} onChoose={handleOnChoose} />
-				</ScopeProvider>
-			)}
+			{show && !blocked && <FilePicker header="Choose Path" id={`file-picker-input-${id}`} onChoose={handleOnChoose} path={initialPath.current} filter={filter} mode={mode} />}
 		</>
 	)
 }

@@ -12,6 +12,7 @@ import type { RotatorStore } from '@/store/rotator.store'
 import type { ThermometerStore } from '@/store/thermometer.store'
 import type { TppaStore } from '@/store/tppa.store'
 import type { WheelStore } from '@/store/wheel.store'
+import type { FilePickerStore } from '../store/filepicker.store'
 
 export const CameraDeviceContext = createContext<Camera>(null as never)
 export const CameraStoreContext = createContext<CameraStore>(null as never)
@@ -26,6 +27,8 @@ export const DewHeaterStoreContext = createContext<DewHeaterStore>(null as never
 
 export const FlatPanelDeviceContext = createContext<FlatPanel>(null as never)
 export const FlatPanelStoreContext = createContext<FlatPanelStore>(null as never)
+
+export const FilePickerStoreContext = createContext<FilePickerStore>(null as never)
 
 export const FocuserDeviceContext = createContext<Focuser>(null as never)
 export const FocuserStoreContext = createContext<FocuserStore>(null as never)

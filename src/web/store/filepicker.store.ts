@@ -1,10 +1,18 @@
-import { createScope, molecule, onMount, use } from 'bunshi'
-import type { DirectoryEntry, FileEntry } from 'src/shared/types'
+import type { FileEntry, DirectoryEntry } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '@/shared/api'
-import type { FilePickerMode } from '@/shared/types'
+import { Api } from '../shared/api'
+import type { FilePickerMode } from '../shared/types'
+
+export type FilePickerStore = ReturnType<typeof filePicker>
+
+export interface FilePickerScope {
+	readonly path?: string
+	readonly filter?: string
+	readonly mode?: FilePickerMode
+	readonly multiple?: boolean
+}
 
 export interface FilePickerState {
 	path: string
@@ -21,22 +29,11 @@ export interface FilePickerState {
 	}
 	readonly save: {
 		name: string
-		alreadyExists: boolean
+		exists: boolean
 	}
 }
 
-export interface FilePickerScopeValue {
-	readonly path?: string
-	readonly filter?: string
-	readonly mode?: FilePickerMode
-	readonly multiple?: boolean
-}
-
-export const FilePickerScope = createScope<FilePickerScopeValue>({})
-
-export const FilePickerMolecule = molecule(() => {
-	const scope = use(FilePickerScope)
-
+export function filePicker(scope: FilePickerScope) {
 	const multiple = !!scope.multiple && scope.mode !== 'save'
 
 	const state = proxy<FilePickerState>({
@@ -54,27 +51,34 @@ export const FilePickerMolecule = molecule(() => {
 		},
 		save: {
 			name: '',
-			alreadyExists: false,
+			exists: false,
 		},
 	})
 
-	onMount(() => {
+	const u: VoidFunction[] = []
+	let mounted = false
+
+	function mount() {
+		if (mounted) return
+
 		void list()
 
-		const unsubscribers = new Array<VoidFunction>(2)
+		mounted = true
 
-		unsubscribers[0] = subscribeKey(state.save, 'name', async (name) => {
-			state.save.alreadyExists = name.length > 0 && !!(await Api.FileSystem.exists({ path: state.path, name }))
+		u[0] = subscribeKey(state.save, 'name', async (name) => {
+			state.save.exists = name.length > 0 && !!(await Api.FileSystem.exists({ path: state.path, name }))
 		})
 
-		unsubscribers[1] = subscribeKey(state, 'path', async (path) => {
-			state.save.alreadyExists = state.save.name.length > 0 && path.length > 0 && !!(await Api.FileSystem.exists({ path, name: state.save.name }))
+		u[1] = subscribeKey(state, 'path', async (path) => {
+			state.save.exists = state.save.name.length > 0 && path.length > 0 && !!(await Api.FileSystem.exists({ path, name: state.save.name }))
 		})
+	}
 
-		return () => {
-			unsubscribe(unsubscribers)
-		}
-	})
+	function unmount() {
+		if (!mounted) return
+		unsubscribe(u)
+		mounted = false
+	}
 
 	function filter(text?: string) {
 		if (text !== undefined) state.filter = text
@@ -175,5 +179,20 @@ export const FilePickerMolecule = molecule(() => {
 		}
 	}
 
-	return { state, filter, list, navigateTo, navigateBack, navigateToParent, toggleCreateDirectory, createDirectory, select, unselectAll, updateSaveName, save } as const
-})
+	return {
+		state,
+		mount,
+		unmount,
+		filter,
+		list,
+		navigateTo,
+		navigateBack,
+		navigateToParent,
+		toggleCreateDirectory,
+		createDirectory,
+		select,
+		unselectAll,
+		updateSaveName,
+		save,
+	} as const
+}

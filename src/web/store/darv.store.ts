@@ -34,7 +34,7 @@ export function darvStore(camera: Camera, mount: Mount) {
 	let mounted = false
 
 	function _mount() {
-		if(mounted) return
+		if (mounted) return
 
 		console.info('darv mounted:', camera.name, mount.name)
 
@@ -57,7 +57,7 @@ export function darvStore(camera: Camera, mount: Mount) {
 	}
 
 	function unmount() {
-		if(!mounted) return
+		if (!mounted) return
 		console.info('darv unmounted:', camera.name, mount.name)
 		unsubscribe(u)
 		mounted = false

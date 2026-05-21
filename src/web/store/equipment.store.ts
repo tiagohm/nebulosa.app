@@ -154,7 +154,7 @@ function showTppa(camera: Camera, mount: Mount) {
 }
 
 function hideTppa(camera: Camera, mount: Mount) {
-	const index = state.tppa.findIndex((e) => e.camera === camera || e.mount === mount)
+	const index = state.tppa.findIndex((e) => e.camera === camera && e.mount === mount)
 	index >= 0 && state.tppa.splice(index, 1)
 }
 
@@ -169,7 +169,7 @@ function showDarv(camera: Camera, mount: Mount) {
 }
 
 function hideDarv(camera: Camera, mount: Mount) {
-	const index = state.darv.findIndex((e) => e.camera === camera || e.mount === mount)
+	const index = state.darv.findIndex((e) => e.camera === camera && e.mount === mount)
 	index >= 0 && state.darv.splice(index, 1)
 }
 

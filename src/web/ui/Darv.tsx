@@ -36,7 +36,7 @@ export const Darv = memo(() => {
 
 	return (
 		<DarvStoreContext value={darv}>
-			<Modal footer={<Footer />} header="Drift Alignment by Robert Vice" id="darv" maxWidth="360px" onHide={darv.hide}>
+			<Modal footer={<Footer />} header="Drift Alignment by Robert Vice" id={`darv-${camera.id}-${mount.id}`} maxWidth="360px" onHide={darv.hide}>
 				<Body />
 			</Modal>
 		</DarvStoreContext>

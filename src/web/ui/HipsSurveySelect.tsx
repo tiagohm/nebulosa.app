@@ -18,7 +18,7 @@ function HipsSurveySelectItem(item: HipsSurvey) {
 
 export function HipsSurveySelect({ onValueChange, value, ...props }: HipsSurveyProps) {
 	return (
-		<FilterableSelect filter={Filter} onValueChange={(value) => onValueChange?.(value.id)} value={hipsSurveys.find((e) => e.id === value) as never} itemHeight={38} items={hipsSurveys as readonly HipsSurvey[]} {...props}>
+		<FilterableSelect filter={Filter} onValueChange={(value) => onValueChange?.(value.id)} value={hipsSurveys.find((e) => e.id === value) as never} items={hipsSurveys as readonly HipsSurvey[]} {...props}>
 			{HipsSurveySelectItem}
 		</FilterableSelect>
 	)

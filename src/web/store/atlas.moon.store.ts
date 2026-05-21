@@ -81,14 +81,14 @@ async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChange
 }
 
 async function updatePosition() {
-	const position = await Api.SkyAtlas.positionOfMoon(state.request)
+	const position = await Api.Atlas.positionOfMoon(state.request)
 	if (position) Object.assign(state.position, position)
 }
 
 async function updateChart(force: boolean = false) {
 	if (!chartUpdate && !force) return
 	chartUpdate = false
-	const chart = await Api.SkyAtlas.chartOfMoon(state.request)
+	const chart = await Api.Atlas.chartOfMoon(state.request)
 	if (chart) state.chart = chart
 	else chartUpdate = true
 }
@@ -96,7 +96,7 @@ async function updateChart(force: boolean = false) {
 async function updatePhases() {
 	if (!phasesUpdate) return
 	phasesUpdate = false
-	const phases = await Api.SkyAtlas.moonPhases(state.request)
+	const phases = await Api.Atlas.moonPhases(state.request)
 	if (phases) state.phases = phases
 	else phasesUpdate = true
 }
@@ -105,7 +105,7 @@ async function updateEclipses() {
 	if (!eclipsesUpdate) return
 	eclipsesUpdate = false
 	const request = { ...state.request, count: 1 }
-	const eclipses = await Api.SkyAtlas.moonEclipses(request)
+	const eclipses = await Api.Atlas.moonEclipses(request)
 	if (eclipses) state.eclipses = eclipses
 	else eclipsesUpdate = true
 }
@@ -114,7 +114,7 @@ async function updateApsis() {
 	if (!apsisUpdate) return
 	apsisUpdate = false
 	const request = { ...state.request, count: 1 }
-	const apsis = await Api.SkyAtlas.moonApsis(request)
+	const apsis = await Api.Atlas.moonApsis(request)
 	if (apsis) state.apsis = apsis
 	else apsisUpdate = true
 }

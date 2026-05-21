@@ -39,7 +39,7 @@ const Body = memo(() => {
 
 	return (
 		<div className="mt-0 px-1 py-2">
-			<List emptyContent="No headers" fullWidth itemHeight={38} itemCount={entries.length}>
+			<List emptyContent="No headers" fullWidth itemCount={entries.length}>
 				{(i) => FITSHeaderItem(entries[i])}
 			</List>
 		</div>

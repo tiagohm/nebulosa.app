@@ -59,7 +59,7 @@ async function search() {
 	try {
 		state.loading = true
 
-		const result = await Api.SkyAtlas.searchMinorPlanet({ text: state.search.text })
+		const result = await Api.Atlas.searchMinorPlanet({ text: state.search.text })
 
 		if (!result) return
 
@@ -81,7 +81,7 @@ async function closeApproaches() {
 	try {
 		state.loading = true
 
-		const result = await Api.SkyAtlas.findCloseApproaches(state.closeApproaches.request)
+		const result = await Api.Atlas.findCloseApproaches(state.closeApproaches.request)
 		state.closeApproaches.result = result ?? []
 	} finally {
 		state.loading = false
@@ -96,7 +96,7 @@ function select(pdes: string) {
 
 async function updatePosition() {
 	const code = `DES=${state.selected!.id};`
-	const position = await Api.SkyAtlas.positionOfPlanet(state.request, code)
+	const position = await Api.Atlas.positionOfPlanet(state.request, code)
 	if (position) Object.assign(state.position, position)
 }
 
@@ -104,7 +104,7 @@ async function updateChart(force: boolean = false) {
 	if (!chartUpdate && !force) return
 	chartUpdate = false
 	const code = `DES=${state.selected!.id};`
-	const chart = await Api.SkyAtlas.chartOfPlanet(state.request, code)
+	const chart = await Api.Atlas.chartOfPlanet(state.request, code)
 	if (chart) state.chart = chart
 	else chartUpdate = true
 }

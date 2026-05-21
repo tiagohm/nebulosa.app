@@ -59,7 +59,7 @@ async function search(reset: boolean | React.UIEvent) {
 
 		if (reset === true || typeof reset !== 'boolean') state.request.page = 1
 
-		const result = await Api.SkyAtlas.searchSkyObject(state.request)
+		const result = await Api.Atlas.searchSkyObject(state.request)
 		state.result = result ?? []
 	} finally {
 		state.loading = false
@@ -90,7 +90,7 @@ async function select(row: number, col: number, force: boolean = true, rowMode: 
 
 async function updatePosition() {
 	const { id } = state.selected!
-	const position = await Api.SkyAtlas.positionOfSkyObject(state.request, id)
+	const position = await Api.Atlas.positionOfSkyObject(state.request, id)
 	if (position) Object.assign(state.position, position)
 }
 
@@ -98,7 +98,7 @@ async function updateChart(force: boolean = false) {
 	if (!chartUpdate && !force) return
 	chartUpdate = false
 	const { id } = state.selected!
-	const chart = await Api.SkyAtlas.chartOfSkyObject(state.request, id)
+	const chart = await Api.Atlas.chartOfSkyObject(state.request, id)
 	if (chart) state.chart = chart
 	else chartUpdate = true
 }

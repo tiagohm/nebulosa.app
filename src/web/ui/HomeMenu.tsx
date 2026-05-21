@@ -21,7 +21,7 @@ import phd2Icon from '@/assets/phd2.webp'
 import rotatorIcon from '@/assets/rotator.webp'
 import sequencerIcon from '@/assets/sequencer.webp'
 import settingsIcon from '@/assets/settings.webp'
-import skyAtlasIcon from '@/assets/sky-atlas.webp'
+import skyIcon from '@/assets/sky.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
 import { AutoFocusMolecule } from '@/molecules/autofocus'
 import { FlatWizardMolecule } from '@/molecules/flatwizard'
@@ -38,6 +38,7 @@ import { framingStore } from '../store/framing.store'
 import { homeMenuStore, isDevice } from '../store/home.menu.store'
 import { About } from './About'
 import { AlpacaServer } from './AlpacaServer'
+import { Atlas } from './Atlas'
 import { AutoFocus } from './AutoFocus'
 import { Calculator } from './Calculator'
 import { Button } from './components/Button'
@@ -52,7 +53,6 @@ import { Icons } from './Icon'
 import { IndiPanelControl } from './IndiPanelControl'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { PHD2 } from './PHD2'
-import { SkyAtlas } from './SkyAtlas'
 import { Tppa } from './Tppa'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
@@ -60,7 +60,7 @@ export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'ro
 export const HomeMenu = memo(() => {
 	const { connected } = useSnapshot(connectionStore.state)
 
-	const { show: showSkyAtlas } = useSnapshot(atlasStore.state)
+	const { show: showAtlas } = useSnapshot(atlasStore.state)
 	const { show: showFraming } = useSnapshot(framingStore.state)
 
 	const autoFocus = useMolecule(AutoFocusMolecule)
@@ -82,7 +82,7 @@ export const HomeMenu = memo(() => {
 	return (
 		<>
 			<HomeMenuPopover />
-			{showSkyAtlas && <SkyAtlas />}
+			{showAtlas && <Atlas />}
 			{showFraming && <Framing />}
 			{showAutoFocus && connected && <AutoFocus />}
 			{showFlatWizard && connected && <FlatWizard />}
@@ -166,7 +166,7 @@ export const HomeMenuPopoverContent = memo(() => {
 			<Button data-key="dewHeater" children={<img className="w-9" src={heaterIcon} />} color="secondary" disabled={dewHeaterLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Dew Heater" variant="ghost" />
 			<Button data-key="thermometer" children={<img className="w-9" src={thermometerIcon} />} color="secondary" disabled={thermometerLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Thermometer" variant="ghost" />
 			<Button data-key="phd2" children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={phd2.show} size="lg" tooltipContent="PHD2" variant="ghost" />
-			<Button data-key="atlas" children={<img className="w-9" src={skyAtlasIcon} />} color="secondary" onClick={atlasStore.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
+			<Button data-key="atlas" children={<img className="w-9" src={skyIcon} />} color="secondary" onClick={atlasStore.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
 			<Button data-key="framing" children={<img className="w-9" src={framingIcon} />} color="secondary" onClick={framingStore.show} size="lg" tooltipContent="Framing" variant="ghost" />
 			<Button data-key="tppa" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="TPPA" variant="ghost" />
 			<Button data-key="darv" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="DARV" variant="ghost" />

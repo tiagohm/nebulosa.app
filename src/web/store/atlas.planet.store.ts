@@ -64,7 +64,7 @@ function update<K extends keyof AtlasPlanetState['search']>(key: K, value: Atlas
 
 async function updatePosition() {
 	if (!state.code) return
-	const position = await Api.SkyAtlas.positionOfPlanet(state.request, state.code)
+	const position = await Api.Atlas.positionOfPlanet(state.request, state.code)
 	if (position) Object.assign(state.position, position)
 }
 
@@ -72,7 +72,7 @@ async function updateChart(force: boolean = false) {
 	if (!state.code) return
 	if (!chartUpdate && !force) return
 	chartUpdate = false
-	const chart = await Api.SkyAtlas.chartOfPlanet(state.request, state.code)
+	const chart = await Api.Atlas.chartOfPlanet(state.request, state.code)
 	if (chart) state.chart = chart
 	else chartUpdate = true
 }

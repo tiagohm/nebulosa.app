@@ -75,14 +75,14 @@ async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChange
 }
 
 async function updatePosition() {
-	const position = await Api.SkyAtlas.positionOfSun(state.request)
+	const position = await Api.Atlas.positionOfSun(state.request)
 	if (position) Object.assign(state.position, position)
 }
 
 async function updateChart(force: boolean = false) {
 	if (!chartUpdate && !force) return
 	chartUpdate = false
-	const chart = await Api.SkyAtlas.chartOfSun(state.request)
+	const chart = await Api.Atlas.chartOfSun(state.request)
 	if (chart) state.chart = chart
 	else chartUpdate = true
 }
@@ -90,7 +90,7 @@ async function updateChart(force: boolean = false) {
 async function updateSeasons() {
 	if (!seasonsUpdate) return
 	seasonsUpdate = false
-	const seasons = await Api.SkyAtlas.seasons(state.request)
+	const seasons = await Api.Atlas.seasons(state.request)
 	if (seasons) Object.assign(state.seasons, seasons)
 	else seasonsUpdate = true
 }
@@ -99,7 +99,7 @@ async function updateEclipses() {
 	if (!eclipsesUpdate) return
 	eclipsesUpdate = false
 	const request = { ...state.request, count: 1 }
-	const eclipses = await Api.SkyAtlas.solarEclipses(request)
+	const eclipses = await Api.Atlas.solarEclipses(request)
 	if (eclipses) state.eclipses = eclipses
 	else eclipsesUpdate = true
 }

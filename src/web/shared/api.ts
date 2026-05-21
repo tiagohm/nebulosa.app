@@ -439,7 +439,7 @@ export namespace Api {
 		}
 	}
 
-	export namespace SkyAtlas {
+	export namespace Atlas {
 		export function positionOfSun(req: PositionOfBody) {
 			return json<BodyPosition>('/atlas/sun/position', 'post', req)
 		}

@@ -45,7 +45,7 @@ import { SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 import { Sun } from './Sun'
 
-export const SkyAtlas = memo(() => {
+export const Atlas = memo(() => {
 	const { tab, location } = useSnapshot(atlasStore.state)
 	const request = useSnapshot(atlasStore.state.request)
 
@@ -498,6 +498,13 @@ const AsteroidCloseApproachesTab = memo(() => {
 	const { result } = useSnapshot(asteroidStore.state.closeApproaches)
 	const { offset } = useSnapshot(asteroidStore.state.request.time)
 
+	function handleAction(index: number) {
+		const item = result[index]
+		asteroidStore.state.search.text = item.name
+		asteroidStore.state.tab = 'search'
+		void asteroidStore.search()
+	}
+
 	return (
 		<div className="flex w-full flex-col gap-2">
 			<div className="flex w-full flex-row items-center justify-center gap-2">
@@ -505,12 +512,12 @@ const AsteroidCloseApproachesTab = memo(() => {
 				<NumberInput className="flex-1" disabled={loading} fractionDigits={1} label="Distance (LD)" maxValue={100} minValue={0.1} onValueChange={(value) => asteroidStore.updateCloseApproaches('distance', value)} step={0.1} value={distance} />
 				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={asteroidStore.closeApproaches} variant="ghost" />
 			</div>
-			<List itemCount={result.length} fullWidth>
+			<List itemCount={result.length} fullWidth onAction={handleAction}>
 				{(i) => {
 					const item = result[i]
 
 					return (
-						<ListItem description={`${item.distance.toFixed(3)} LD`}>
+						<ListItem className="cursor-pointer" description={`${item.distance.toFixed(3)} LD`}>
 							<span className="flex items-center justify-between">
 								<span>{item.name}</span>
 								<span>{formatTemporal(item.date, 'YYYY-MM-DD HH:mm', offset)}</span>
@@ -778,7 +785,7 @@ const EphemerisAndChart = memo(({ tab, name, tags, className, isFavorite, onFavo
 			<div className="flex w-full flex-row gap-2 text-start text-sm font-bold">
 				<ToggleButton color="primary" icon={Icons.Info} value={mode === 'info'} onClick={() => (state.mode = 'info')} />
 				<ToggleButton color="primary" icon={Icons.Chart} value={mode === 'chart'} onClick={() => (state.mode = 'chart')} />
-				<div className="flex flex-1 items-center justify-center overflow-hidden text-sm font-bold">{tags.map(TagItem)}</div>
+				<div className="flex flex-1 items-center justify-center gap-1 overflow-hidden text-sm font-bold">{tags.map(TagItem)}</div>
 				{onFavoriteChange && <IconButton color={isFavorite ? 'danger' : 'warning'} disabled={isFavorite === undefined} icon={isFavorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onClick={() => onFavoriteChange(!isFavorite)} tooltipContent={isFavorite ? 'Remove bookmark' : 'Add bookmark'} />}
 			</div>
 			<span className="w-full">

@@ -136,7 +136,7 @@ async function tick(utc?: Temporal) {
 async function twilight() {
 	if (!twilightUpdate) return
 	twilightUpdate = false
-	const twilight = await Api.SkyAtlas.twilight(state.request)
+	const twilight = await Api.Atlas.twilight(state.request)
 	if (twilight) state.twilight = twilight
 	else twilightUpdate = true
 }

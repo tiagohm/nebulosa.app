@@ -1,4 +1,5 @@
 import type { Wheel } from 'nebulosa/src/indi.device'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
@@ -38,25 +39,29 @@ export function wheelStore(wheel: Wheel) {
 
 	console.info('wheel created:', wheel.name)
 
+	const u: VoidFunction[] = []
+	let mounted = false
+
 	function mount() {
+		if (mounted) return
+
 		console.info('wheel mounted:', wheel.name)
+
+		mounted = true
 
 		function refresh() {
 			state.selected.name = slotName(wheel, state.selected.position)
 		}
 
-		const a = subscribeKey(wheel, 'position', refresh)
-		const b = subscribeKey(wheel, 'names', refresh)
-
-		return () => {
-			a()
-			b()
-			unmount()
-		}
+		u[0] = subscribeKey(wheel, 'position', refresh)
+		u[1] = subscribeKey(wheel, 'names', refresh)
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('wheel unmounted:', wheel.name)
+		unsubscribe(u)
+		mounted = false
 	}
 
 	function update<K extends keyof WheelState['selected']>(key: K, value: WheelState['selected'][K]) {

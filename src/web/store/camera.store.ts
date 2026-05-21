@@ -39,10 +39,15 @@ export function cameraStore(camera: Camera) {
 
 	console.info('camera created:', camera.name)
 
+	const u: VoidFunction[] = []
+	let mounted = false
+
 	function mount() {
+		if (mounted) return
+
 		console.info('camera mounted:', camera.name)
 
-		const u: VoidFunction[] = []
+		mounted = true
 
 		u[0] = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
 			if (event.camera === camera.id) {
@@ -62,15 +67,13 @@ export function cameraStore(camera: Camera) {
 		u[4] = subscribeKey(camera, 'frame', (frame) => updateCameraFrame(state.request, frame))
 
 		updateCameraCaptureStartFromCamera(state.request, camera)
-
-		return () => {
-			unsubscribe(u)
-			unmount()
-		}
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('camera unmounted:', camera.name)
+		unsubscribe(u)
+		mounted = false
 	}
 
 	function update<K extends keyof CameraState['request']>(key: K, value: CameraState['request'][K]) {
@@ -152,6 +155,7 @@ export function cameraStore(camera: Camera) {
 	return {
 		state,
 		mount,
+		unmount,
 		connect,
 		update,
 		updateSavePath,

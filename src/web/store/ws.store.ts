@@ -109,6 +109,8 @@ function create() {
 }
 
 function mount() {
+	console.info('web socket mounted')
+
 	timer = window.setInterval(() => {
 		if (webSocket && webSocket.readyState === WebSocket.CLOSED) {
 			webSocket.close()
@@ -119,11 +121,10 @@ function mount() {
 	}, 5000)
 
 	create()
-
-	return unmount
 }
 
 function unmount() {
+	console.info('web socket unmounted')
 	window.clearInterval(timer)
 	timer = undefined
 }

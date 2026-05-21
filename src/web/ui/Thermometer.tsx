@@ -1,6 +1,7 @@
-import { memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatNumber } from '@/shared/util'
+import { useStore } from '../hooks/store.hook'
 import { ThermometerDeviceContext, ThermometerStoreContext } from '../shared/context'
 import { thermometerStore } from '../store/thermometer.store'
 import { ConnectButton } from './ConnectButton'
@@ -9,8 +10,7 @@ import { Modal } from './Modal'
 
 export const Thermometer = memo(() => {
 	const device = useContext(ThermometerDeviceContext)
-	const thermometer = useMemo(() => thermometerStore(device), [device])
-	useEffect(thermometer.mount, [])
+	const thermometer = useStore(() => thermometerStore(device), [device])
 
 	return (
 		<ThermometerStoreContext value={thermometer}>

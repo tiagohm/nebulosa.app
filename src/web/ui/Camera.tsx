@@ -1,5 +1,6 @@
-import { Activity, memo, useContext, useEffect, useMemo, useState } from 'react'
+import { Activity, memo, useContext, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { useStore } from '../hooks/store.hook'
 import { CameraDeviceContext, CameraStoreContext } from '../shared/context'
 import { activityMode } from '../shared/util'
 import { cameraStore } from '../store/camera.store'
@@ -25,8 +26,7 @@ import { Modal } from './Modal'
 
 export const Camera = memo(() => {
 	const device = useContext(CameraDeviceContext)
-	const camera = useMemo(() => cameraStore(device), [device])
-	useEffect(camera.mount, [camera])
+	const camera = useStore(() => cameraStore(device), [device])
 
 	return (
 		<CameraStoreContext value={camera}>

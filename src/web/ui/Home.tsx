@@ -1,5 +1,6 @@
-import { Activity, memo, useEffect, useMemo } from 'react'
+import { Activity, memo, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
+import { useStore } from '../hooks/store.hook'
 import { CameraDeviceContext, MountDeviceContext, FocuserDeviceContext, WheelDeviceContext, GuideOutputDeviceContext, ThermometerDeviceContext, CoverDeviceContext, FlatPanelDeviceContext, DewHeaterDeviceContext, RotatorDeviceContext } from '../shared/context'
 import { activityMode } from '../shared/util'
 import { equipmentStore } from '../store/equipment.store'
@@ -20,7 +21,7 @@ import { Wheel } from './Wheel'
 
 export const Home = memo(() => {
 	// Mounts the websocket lifecycle once the home screen is active.
-	useEffect(wsStore.mount, [])
+	useStore(wsStore, [])
 
 	return (
 		<div className="flex h-full min-h-0 w-full min-w-0 flex-col">
@@ -58,7 +59,7 @@ function CameraItem({ index }: DeviceItemProps) {
 	return (
 		<Activity mode={activityMode(show)}>
 			<CameraDeviceContext value={camera}>
-				<Camera />
+				<Camera key={camera.id} />
 			</CameraDeviceContext>
 		</Activity>
 	)
@@ -71,7 +72,7 @@ function MountItem({ index }: DeviceItemProps) {
 	return (
 		<Activity mode={activityMode(show)}>
 			<MountDeviceContext value={mount}>
-				<Mount />
+				<Mount key={mount.id} />
 			</MountDeviceContext>
 		</Activity>
 	)
@@ -84,7 +85,7 @@ function FocuserItem({ index }: DeviceItemProps) {
 	return (
 		<Activity mode={activityMode(show)}>
 			<FocuserDeviceContext value={focuser}>
-				<Focuser />
+				<Focuser key={focuser.id} />
 			</FocuserDeviceContext>
 		</Activity>
 	)
@@ -97,7 +98,7 @@ function WheelItem({ index }: DeviceItemProps) {
 	return (
 		<Activity mode={activityMode(show)}>
 			<WheelDeviceContext value={wheel}>
-				<Wheel />
+				<Wheel key={wheel.id} />
 			</WheelDeviceContext>
 		</Activity>
 	)
@@ -110,7 +111,7 @@ function GuideOutputItem({ index }: DeviceItemProps) {
 	return (
 		<Activity mode={activityMode(show)}>
 			<GuideOutputDeviceContext value={guideOutput}>
-				<GuideOutput />
+				<GuideOutput key={guideOutput.id} />
 			</GuideOutputDeviceContext>
 		</Activity>
 	)
@@ -123,7 +124,7 @@ function ThermometerItem({ index }: DeviceItemProps) {
 	return (
 		<Activity mode={activityMode(show)}>
 			<ThermometerDeviceContext value={thermometer}>
-				<Thermometer />
+				<Thermometer key={thermometer.id} />
 			</ThermometerDeviceContext>
 		</Activity>
 	)
@@ -136,7 +137,7 @@ function CoverItem({ index }: DeviceItemProps) {
 	return (
 		<Activity mode={activityMode(show)}>
 			<CoverDeviceContext value={cover}>
-				<Cover />
+				<Cover key={cover.id} />
 			</CoverDeviceContext>
 		</Activity>
 	)
@@ -149,7 +150,7 @@ function FlatPanelItem({ index }: DeviceItemProps) {
 	return (
 		<Activity mode={activityMode(show)}>
 			<FlatPanelDeviceContext value={flatPanel}>
-				<FlatPanel />
+				<FlatPanel key={flatPanel.id} />
 			</FlatPanelDeviceContext>
 		</Activity>
 	)
@@ -162,7 +163,7 @@ function DewHeaterItem({ index }: DeviceItemProps) {
 	return (
 		<Activity mode={activityMode(show)}>
 			<DewHeaterDeviceContext value={dewHeater}>
-				<DewHeater />
+				<DewHeater key={dewHeater.id} />
 			</DewHeaterDeviceContext>
 		</Activity>
 	)
@@ -175,7 +176,7 @@ function RotatorItem({ index }: DeviceItemProps) {
 	return (
 		<Activity mode={activityMode(show)}>
 			<RotatorDeviceContext value={rotator}>
-				<Rotator />
+				<Rotator key={rotator.id} />
 			</RotatorDeviceContext>
 		</Activity>
 	)
@@ -183,80 +184,60 @@ function RotatorItem({ index }: DeviceItemProps) {
 
 export const CameraList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.camera)
-
 	const devices = useMemo(() => makeDevices(length, (i) => <CameraItem key={equipmentStore.state.camera[i].id} index={i} />), [length])
-
 	return devices
 })
 
 export const MountList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.mount)
-
 	const devices = useMemo(() => makeDevices(length, (i) => <MountItem key={equipmentStore.state.mount[i].id} index={i} />), [length])
-
 	return devices
 })
 
 export const FocuserList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.focuser)
-
 	const devices = useMemo(() => makeDevices(length, (i) => <FocuserItem key={equipmentStore.state.focuser[i].id} index={i} />), [length])
-
 	return devices
 })
 
 export const WheelList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.wheel)
-
 	const devices = useMemo(() => makeDevices(length, (i) => <WheelItem key={equipmentStore.state.wheel[i].id} index={i} />), [length])
-
 	return devices
 })
 
 export const GuideOutputList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.guideOutput)
-
 	const devices = useMemo(() => makeDevices(length, (i) => <GuideOutputItem key={equipmentStore.state.guideOutput[i].id} index={i} />), [length])
-
 	return devices
 })
 
 export const ThermometerList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.thermometer)
-
 	const devices = useMemo(() => makeDevices(length, (i) => <ThermometerItem key={equipmentStore.state.thermometer[i].id} index={i} />), [length])
-
 	return devices
 })
 
 export const CoverList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.cover)
-
 	const devices = useMemo(() => makeDevices(length, (i) => <CoverItem key={equipmentStore.state.cover[i].id} index={i} />), [length])
-
 	return devices
 })
 
 export const FlatPanelList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.flatPanel)
-
 	const devices = useMemo(() => makeDevices(length, (i) => <FlatPanelItem key={equipmentStore.state.flatPanel[i].id} index={i} />), [length])
-
 	return devices
 })
 
 export const DewHeaterList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.dewHeater)
-
 	const devices = useMemo(() => makeDevices(length, (i) => <DewHeaterItem key={equipmentStore.state.dewHeater[i].id} index={i} />), [length])
-
 	return devices
 })
 
 export const RotatorList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.rotator)
-
 	const devices = useMemo(() => makeDevices(length, (i) => <RotatorItem key={equipmentStore.state.rotator[i].id} index={i} />), [length])
-
 	return devices
 })

@@ -1,5 +1,6 @@
-import { memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
+import { useStore } from '../hooks/store.hook'
 import { FocuserDeviceContext, FocuserStoreContext } from '../shared/context'
 import { focuserStore } from '../store/focuser.store'
 import { Checkbox } from './components/Checkbox'
@@ -13,8 +14,7 @@ import { Modal } from './Modal'
 
 export const Focuser = memo(() => {
 	const device = useContext(FocuserDeviceContext)
-	const focuser = useMemo(() => focuserStore(device), [device])
-	useEffect(focuser.mount, [focuser])
+	const focuser = useStore(() => focuserStore(device), [device])
 
 	return (
 		<FocuserStoreContext value={focuser}>

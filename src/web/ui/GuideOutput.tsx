@@ -1,5 +1,6 @@
-import { memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
+import { useStore } from '../hooks/store.hook'
 import { GuideOutputDeviceContext, GuideOutputStoreContext } from '../shared/context'
 import { guideOutputStore } from '../store/guideoutput.store'
 import { NumberInput } from './components/NumberInput'
@@ -10,8 +11,7 @@ import { Nudge } from './Nudge'
 
 export const GuideOutput = memo(() => {
 	const device = useContext(GuideOutputDeviceContext)
-	const guideOutput = useMemo(() => guideOutputStore(device), [device])
-	useEffect(guideOutput.mount, [guideOutput])
+	const guideOutput = useStore(() => guideOutputStore(device), [device])
 
 	return (
 		<GuideOutputStoreContext value={guideOutput}>

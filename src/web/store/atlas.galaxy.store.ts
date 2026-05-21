@@ -33,6 +33,7 @@ state.request.time.utc = 0
 let chartUpdate = true
 
 function mount() {
+	console.info('atlas galaxy mounted')
 	void search(true)
 }
 

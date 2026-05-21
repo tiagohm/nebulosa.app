@@ -30,10 +30,15 @@ export function tppaStore(camera: Camera, mount: Mount) {
 
 	console.info('tppa created:', camera.name, mount.name)
 
+	const u: VoidFunction[] = []
+	let mounted = false
+
 	function _mount() {
+		if (mounted) return
+
 		console.info('tppa mounted:', camera.name, mount.name)
 
-		const u: VoidFunction[] = []
+		mounted = true
 
 		u[0] = initProxy(state, `tppa.${camera.id}.${mount.id}`, ['o:request'])
 
@@ -48,14 +53,14 @@ export function tppaStore(camera: Camera, mount: Mount) {
 
 		state.request.id = nanoid()
 
-		return () => {
-			unsubscribe(u)
-			unmount()
-		}
+		return unmount
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('tppa unmounted:', camera.name, mount.name)
+		unsubscribe(u)
+		mounted = false
 	}
 
 	function reset() {

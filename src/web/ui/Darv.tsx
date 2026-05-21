@@ -1,6 +1,7 @@
-import { memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext } from 'react'
 import type { DarvState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
+import { useStore } from '../hooks/store.hook'
 import { CameraDeviceContext, DarvStoreContext, MountDeviceContext } from '../shared/context'
 import { darvStore } from '../store/darv.store'
 import { equipmentStore } from '../store/equipment.store'
@@ -31,8 +32,7 @@ const DARV_STATE_COLORS = {
 export const Darv = memo(() => {
 	const camera = useContext(CameraDeviceContext)
 	const mount = useContext(MountDeviceContext)
-	const darv = useMemo(() => darvStore(camera, mount), [camera, mount])
-	useEffect(darv.mount, [darv])
+	const darv = useStore(() => darvStore(camera, mount), [camera, mount])
 
 	return (
 		<DarvStoreContext value={darv}>

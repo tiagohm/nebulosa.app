@@ -1,5 +1,6 @@
-import { memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
+import { useStore } from '../hooks/store.hook'
 import { RotatorDeviceContext, RotatorStoreContext } from '../shared/context'
 import { rotatorStore } from '../store/rotator.store'
 import { Checkbox } from './components/Checkbox'
@@ -17,8 +18,7 @@ function hasAngleChanged(targetAngle: number, currentAngle: number) {
 
 export const Rotator = memo(() => {
 	const device = useContext(RotatorDeviceContext)
-	const rotator = useMemo(() => rotatorStore(device), [device])
-	useEffect(rotator.mount, [rotator])
+	const rotator = useStore(() => rotatorStore(device), [device])
 
 	return (
 		<RotatorStoreContext value={rotator}>

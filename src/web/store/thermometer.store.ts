@@ -17,7 +17,6 @@ export function thermometerStore(thermometer: Thermometer) {
 
 	function mount() {
 		console.info('thermometer mounted:', thermometer.name)
-		return unmount
 	}
 
 	function unmount() {

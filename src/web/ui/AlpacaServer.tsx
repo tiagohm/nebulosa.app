@@ -1,15 +1,16 @@
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
-import { memo, useEffect } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { Button } from '@/ui/components/Button'
 import { NumberInput } from '@/ui/components/NumberInput'
+import { useStore } from '../hooks/store.hook'
 import { alpacaStore, MAX_ALPACA_PORT, MIN_ALPACA_PORT } from '../store/alpaca.store'
 import { List, ListItem } from './components/List'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 
 export const AlpacaServer = memo(() => {
-	useEffect(alpacaStore.mount, [])
+	useStore(alpacaStore, [])
 
 	return (
 		<Modal footer={<Footer />} header="ASCOM Alpaca Server" id="alpaca" maxWidth="296px" onHide={alpacaStore.hide}>

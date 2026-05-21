@@ -258,7 +258,7 @@ export const TppaList = memo(() => {
 		equipment[i] = show && (
 			<CameraDeviceContext key={key} value={camera}>
 				<MountDeviceContext value={mount}>
-					<Tppa />
+					<Tppa key={key} />
 				</MountDeviceContext>
 			</CameraDeviceContext>
 		)
@@ -295,7 +295,7 @@ export const DarvList = memo(() => {
 		equipment[i] = show && (
 			<CameraDeviceContext key={key} value={camera}>
 				<MountDeviceContext value={mount}>
-					<Darv />
+					<Darv key={key} />
 				</MountDeviceContext>
 			</CameraDeviceContext>
 		)

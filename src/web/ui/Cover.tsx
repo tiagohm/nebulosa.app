@@ -1,5 +1,6 @@
-import { memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
+import { useStore } from '../hooks/store.hook'
 import { CoverDeviceContext, CoverStoreContext } from '../shared/context'
 import { coverStore } from '../store/cover.store'
 import { Chip } from './components/Chip'
@@ -11,8 +12,7 @@ import { Modal } from './Modal'
 
 export const Cover = memo(() => {
 	const device = useContext(CoverDeviceContext)
-	const cover = useMemo(() => coverStore(device), [device])
-	useEffect(cover.mount, [cover])
+	const cover = useStore(() => coverStore(device), [device])
 
 	return (
 		<CoverStoreContext value={cover}>

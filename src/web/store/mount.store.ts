@@ -2,6 +2,7 @@ import { formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { Mount, MountTargetCoordinate, MountTargetCoordinateType, TrackMode } from 'nebulosa/src/indi.device'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import { DEFAULT_COORDINATE_INFO, type CoordinateInfo, type MountRemoteControlProtocol, type MountRemoteControlStatus } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
@@ -84,28 +85,35 @@ export function mountStore(mount: Mount) {
 
 	console.info('mount created:', mount.name)
 
-	function $mount() {
+	const u: VoidFunction[] = []
+	let timer: number | undefined
+	let mounted = false
+
+	function _mount() {
+		if (mounted) return
+
 		console.info('mount mounted:', mount.name)
 
-		const a = initProxy(state.target, `mount.${mount.id}.targetcoordinate`, ['o:coordinate'])
-		const b = subscribeKey(state.mount, 'slewing', updateCoordinatePosition)
-		const c = subscribeKey(state.mount, 'connected', updateCoordinatePosition)
+		mounted = true
 
-		const timer = setInterval(updateCoordinatePosition, 5000)
+		u[0] = initProxy(state.target, `mount.${mount.id}.targetcoordinate`, ['o:coordinate'])
+		u[1] = subscribeKey(state.mount, 'slewing', updateCoordinatePosition)
+		u[2] = subscribeKey(state.mount, 'connected', updateCoordinatePosition)
+
+		timer = window.setInterval(updateCoordinatePosition, 5000)
 
 		updateCoordinatePosition()
 
-		return () => {
-			clearInterval(timer)
-			a()
-			b()
-			c()
-			unmount()
-		}
+		return unmount
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('mount unmounted:', mount.name)
+		unsubscribe(u)
+		window.clearInterval(timer)
+		timer = undefined
+		mounted = false
 	}
 
 	function connect() {
@@ -275,7 +283,7 @@ export function mountStore(mount: Mount) {
 
 	return {
 		state,
-		mount: $mount,
+		mount: _mount,
 		connect,
 		updateRemoteControl,
 		startRemoteControl,

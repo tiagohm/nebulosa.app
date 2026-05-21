@@ -1,5 +1,6 @@
-import { memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
+import { useStore } from '../hooks/store.hook'
 import { FlatPanelDeviceContext, FlatPanelStoreContext } from '../shared/context'
 import { flatPanelStore } from '../store/flatpanel.store'
 import { Slider } from './components/Slider'
@@ -14,8 +15,7 @@ function formatIntensity(value: number) {
 
 export const FlatPanel = memo(() => {
 	const device = useContext(FlatPanelDeviceContext)
-	const flatPanel = useMemo(() => flatPanelStore(device), [device])
-	useEffect(flatPanel.mount, [flatPanel])
+	const flatPanel = useStore(() => flatPanelStore(device), [device])
 
 	return (
 		<FlatPanelStoreContext value={flatPanel}>

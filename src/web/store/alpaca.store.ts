@@ -76,20 +76,28 @@ function hide() {
 	state.show = false
 }
 
-let statusTimer: number | undefined
-
-function unmount() {
-	window.clearInterval(statusTimer)
-	statusTimer = undefined
-}
+let timer: number | undefined
+let mounted = false
 
 function mount() {
+	if (mounted) return
+
+	console.info('alpaca mounted')
+
+	mounted = true
+
 	if (state.show) void status()
 
-	window.clearInterval(statusTimer)
-	statusTimer = window.setInterval(status, 5000)
+	window.clearInterval(timer)
+	timer = window.setInterval(status, 5000)
+}
 
-	return unmount
+function unmount() {
+	if (!mounted) return
+	console.info('alpaca unmounted')
+	window.clearInterval(timer)
+	timer = undefined
+	mounted = false
 }
 
 export const alpacaStore = {

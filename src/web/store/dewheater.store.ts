@@ -18,7 +18,6 @@ export function dewHeaterStore(dewHeater: DewHeater) {
 
 	function mount() {
 		console.info('dew heater mounted:', dewHeater.name)
-		return unmount
 	}
 
 	function unmount() {
@@ -48,6 +47,7 @@ export function dewHeaterStore(dewHeater: DewHeater) {
 	return {
 		state,
 		mount,
+		unmount,
 		connect,
 		update,
 		dutyCycle,

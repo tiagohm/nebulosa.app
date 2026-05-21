@@ -3,12 +3,13 @@ import { CONSTELLATION_LIST, type Constellation } from 'nebulosa/src/constellati
 import type { LunarPhase } from 'nebulosa/src/moon'
 import type { SmallBodySearchListItem } from 'nebulosa/src/sbd'
 import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/temporal'
-import React, { Activity, memo, useCallback, useDeferredValue, useEffect, useMemo } from 'react'
+import React, { Activity, memo, useCallback, useDeferredValue, useMemo } from 'react'
 import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
 import { EMPTY_TWILIGHT, type MinorPlanetParameter, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { activityMode, formatDistance, skyObjectName, skyObjectType, tw } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
+import { useStore } from '../hooks/store.hook'
 import { asteroidStore } from '../store/atlas.asteroid.store'
 import { galaxyStore } from '../store/atlas.galaxy.store'
 import { moonStore } from '../store/atlas.moon.store'
@@ -535,7 +536,7 @@ const GalaxyTab = memo(() => {
 	const { bookmark } = useSnapshot(atlasStore.state)
 	const { selected } = useSnapshot(galaxyStore.state)
 	const { names, constellation } = useSnapshot(galaxyStore.state.position)
-	useEffect(galaxyStore.mount, [])
+	useStore(galaxyStore, [])
 
 	const handleOnFavoriteChange = useCallback(
 		(favorite: boolean) => {
@@ -586,7 +587,7 @@ const GalaxyPaginator = memo((props: React.ComponentProps<'div'>) => {
 const SatelliteTab = memo(() => {
 	const { bookmark } = useSnapshot(atlasStore.state)
 	const { selected } = useSnapshot(satelliteStore.state)
-	useEffect(satelliteStore.mount, [])
+	useStore(satelliteStore, [])
 
 	const handleOnFavoriteChange = useCallback(
 		(favorite: boolean) => {

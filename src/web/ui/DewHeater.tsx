@@ -1,5 +1,6 @@
-import { memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
+import { useStore } from '../hooks/store.hook'
 import { DewHeaterDeviceContext, DewHeaterStoreContext } from '../shared/context'
 import { dewHeaterStore } from '../store/dewheater.store'
 import { Slider } from './components/Slider'
@@ -20,8 +21,7 @@ function dutyCycleColor(value: number, min: number, max: number) {
 
 export const DewHeater = memo(() => {
 	const device = useContext(DewHeaterDeviceContext)
-	const dewHeater = useMemo(() => dewHeaterStore(device), [device])
-	useEffect(dewHeater.mount, [dewHeater])
+	const dewHeater = useStore(() => dewHeaterStore(device), [device])
 
 	return (
 		<DewHeaterStoreContext value={dewHeater}>

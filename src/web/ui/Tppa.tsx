@@ -1,7 +1,8 @@
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
-import { memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext } from 'react'
 import type { TppaState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
+import { useStore } from '../hooks/store.hook'
 import { CameraDeviceContext, TppaStoreContext, MountDeviceContext } from '../shared/context'
 import { equipmentStore } from '../store/equipment.store'
 import { tppaStore } from '../store/tppa.store'
@@ -41,8 +42,7 @@ const TPPA_STATE_COLORS = {
 export const Tppa = memo(() => {
 	const camera = useContext(CameraDeviceContext)
 	const mount = useContext(MountDeviceContext)
-	const tppa = useMemo(() => tppaStore(camera, mount), [camera, mount])
-	useEffect(tppa.mount, [tppa])
+	const tppa = useStore(() => tppaStore(camera, mount), [camera, mount])
 
 	return (
 		<TppaStoreContext value={tppa}>

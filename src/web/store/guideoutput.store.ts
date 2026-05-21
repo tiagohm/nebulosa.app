@@ -1,5 +1,6 @@
 import type { GuideOutput } from 'nebulosa/src/indi.device'
 import type { GuidePulse } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
@@ -33,19 +34,24 @@ export function guideOutputStore(guideOutput: GuideOutput) {
 
 	console.info('guide output created:', guideOutput.name)
 
+	const u: VoidFunction[] = []
+	let mounted = false
+
 	function mount() {
+		if (mounted) return
+
 		console.info('guide output mounted:', guideOutput.name)
 
-		const a = initProxy(state, `guideoutput.${guideOutput.id}`, ['o:request'])
+		mounted = true
 
-		return () => {
-			a()
-			unmount()
-		}
+		u[0] = initProxy(state, `guideoutput.${guideOutput.id}`, ['o:request'])
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('guide output unmounted:', guideOutput.name)
+		unsubscribe(u)
+		mounted = false
 	}
 
 	function update(direction: Lowercase<GuidePulse['direction']>, value: number) {
@@ -98,6 +104,7 @@ export function guideOutputStore(guideOutput: GuideOutput) {
 	return {
 		state,
 		mount,
+		unmount,
 		update,
 		connect,
 		pulse,

@@ -1,8 +1,9 @@
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { MountTargetCoordinateType } from 'nebulosa/src/indi.device'
-import { memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext } from 'react'
 import type { CoordinateInfo, CoordinateType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
+import { useStore } from '../hooks/store.hook'
 import { MountDeviceContext, MountStoreContext } from '../shared/context'
 import { mountStore } from '../store/mount.store'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
@@ -46,8 +47,7 @@ function formatTargetCoordinateY(type: CoordinateType, position: CoordinateInfo)
 
 export const Mount = memo(() => {
 	const device = useContext(MountDeviceContext)
-	const mount = useMemo(() => mountStore(device), [device])
-	useEffect(mount.mount, [mount])
+	const mount = useStore(() => mountStore(device), [device])
 
 	return (
 		<MountStoreContext value={mount}>

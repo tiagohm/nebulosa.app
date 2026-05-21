@@ -18,7 +18,6 @@ export function flatPanelStore(flatPanel: FlatPanel) {
 
 	function mount() {
 		console.info('flat panel mounted:', flatPanel.name)
-		return unmount
 	}
 
 	function unmount() {
@@ -60,6 +59,7 @@ export function flatPanelStore(flatPanel: FlatPanel) {
 	return {
 		state,
 		mount,
+		unmount,
 		connect,
 		update,
 		enable,

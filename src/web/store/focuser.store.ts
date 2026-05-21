@@ -1,4 +1,5 @@
 import type { Focuser } from 'nebulosa/src/indi.device'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
@@ -24,19 +25,24 @@ export function focuserStore(focuser: Focuser) {
 
 	console.info('focuser created:', focuser.name)
 
+	const u: VoidFunction[] = []
+	let mounted = false
+
 	function mount() {
+		if (mounted) return
+
 		console.info('focuser mounted:', focuser.name)
 
-		const a = initProxy(state, `focuser.${focuser.id}`, PROXY_PROPERTIES)
+		mounted = true
 
-		return () => {
-			a()
-			unmount()
-		}
+		u[0] = initProxy(state, `focuser.${focuser.id}`, PROXY_PROPERTIES)
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('focuser unmounted:', focuser.name)
+		unsubscribe(u)
+		mounted = false
 	}
 
 	function update<K extends keyof FocuserState['request']>(key: K, value: FocuserState['request'][K]) {

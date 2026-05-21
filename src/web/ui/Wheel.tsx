@@ -1,5 +1,6 @@
-import { memo, useContext, useEffect, useMemo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
+import { useStore } from '../hooks/store.hook'
 import { WheelDeviceContext, WheelStoreContext } from '../shared/context'
 import { wheelStore } from '../store/wheel.store'
 import { Button } from './components/Button'
@@ -15,8 +16,7 @@ import { Modal } from './Modal'
 
 export const Wheel = memo(() => {
 	const device = useContext(WheelDeviceContext)
-	const wheel = useMemo(() => wheelStore(device), [device])
-	useEffect(wheel.mount, [wheel])
+	const wheel = useStore(() => wheelStore(device), [device])
 
 	return (
 		<WheelStoreContext value={wheel}>

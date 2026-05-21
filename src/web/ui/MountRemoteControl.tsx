@@ -72,8 +72,8 @@ const Footer = memo(() => {
 
 	return (
 		<>
-			<Button color="danger" disabled={!currentStatus || busy} label="Stop" loading={pendingAction === 'stop'} onClick={() => void handleStop()} startContent={<Icons.Stop />} />
-			<Button color="primary" disabled={!canStart || busy} label="Connect" loading={pendingAction === 'start'} onClick={() => void handleStart()} startContent={<Icons.Connect />} />
+			<Button color="danger" disabled={!currentStatus || busy} label="Stop" loading={pendingAction === 'stop'} onClick={handleStop} startContent={<Icons.Stop />} />
+			<Button color="primary" disabled={!canStart || busy} label="Connect" loading={pendingAction === 'start'} onClick={handleStart} startContent={<Icons.Connect />} />
 		</>
 	)
 })

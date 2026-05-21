@@ -1,5 +1,5 @@
 import { type Angle, formatALT, formatAZ, formatDEC, formatHMS, formatRA, toDeg } from 'nebulosa/src/angle'
-import { type ComponentProps, memo } from 'react'
+import type { ComponentProps } from 'react'
 import type { BodyPosition, CoordinateInfo, CoordinateType } from 'src/shared/types'
 import { formatDistance, tw } from '@/shared/util'
 
@@ -20,7 +20,7 @@ const COORDINATE_LABELS = {
 	galactic: 'GAL LON/LAT',
 } as const satisfies Record<CoordinateType, string>
 
-export const BodyCoordinateInfo = memo(({ position, hide, className, ...props }: BodyCoordinateInfoProps) => {
+export function BodyCoordinateInfo({ position, hide, className, ...props }: BodyCoordinateInfoProps) {
 	const isVisible = (field: BodyCoordinateInfoField) => !hide?.includes(field)
 
 	return (
@@ -43,7 +43,7 @@ export const BodyCoordinateInfo = memo(({ position, hide, className, ...props }:
 			</div>
 		</div>
 	)
-})
+}
 
 interface CoordinateProps {
 	readonly type: CoordinateType

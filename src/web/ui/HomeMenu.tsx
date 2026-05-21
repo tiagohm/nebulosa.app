@@ -27,10 +27,10 @@ import { AutoFocusMolecule } from '@/molecules/autofocus'
 import { FlatWizardMolecule } from '@/molecules/flatwizard'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { PHD2Molecule } from '@/molecules/phd2'
-import { SkyAtlasMolecule } from '@/molecules/skyatlas'
 import { CameraDeviceContext, MountDeviceContext } from '../shared/context'
 import { aboutStore } from '../store/about.store'
 import { alpacaStore } from '../store/alpaca.store'
+import { atlasStore } from '../store/atlas.store'
 import { calculatorStore } from '../store/calculator.store'
 import { connectionStore } from '../store/connection.store'
 import { equipmentStore } from '../store/equipment.store'
@@ -60,8 +60,7 @@ export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'ro
 export const HomeMenu = memo(() => {
 	const { connected } = useSnapshot(connectionStore.state)
 
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { show: showSkyAtlas } = useSnapshot(atlas.state)
+	const { show: showSkyAtlas } = useSnapshot(atlasStore.state)
 	const { show: showFraming } = useSnapshot(framingStore.state)
 
 	const autoFocus = useMolecule(AutoFocusMolecule)
@@ -150,7 +149,6 @@ export const HomeMenuPopoverContent = memo(() => {
 	const { length: dewHeaterLength } = useSnapshot(equipmentStore.state.dewHeater)
 	const { length: rotatorLength } = useSnapshot(equipmentStore.state.rotator)
 
-	const skyAtlas = useMolecule(SkyAtlasMolecule)
 	const phd2 = useMolecule(PHD2Molecule)
 
 	const isIndiDisabled = cameraLength === 0 && mountLength === 0 && focuserLength === 0 && coverLength === 0 && flatPanelLength === 0 && guideOutputLength === 0 && thermometerLength === 0 && dewHeaterLength === 0 && rotatorLength === 0 && wheelLength === 0
@@ -168,7 +166,7 @@ export const HomeMenuPopoverContent = memo(() => {
 			<Button data-key="dewHeater" children={<img className="w-9" src={heaterIcon} />} color="secondary" disabled={dewHeaterLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Dew Heater" variant="ghost" />
 			<Button data-key="thermometer" children={<img className="w-9" src={thermometerIcon} />} color="secondary" disabled={thermometerLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Thermometer" variant="ghost" />
 			<Button data-key="phd2" children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={phd2.show} size="lg" tooltipContent="PHD2" variant="ghost" />
-			<Button data-key="atlas" children={<img className="w-9" src={skyAtlasIcon} />} color="secondary" onClick={skyAtlas.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
+			<Button data-key="atlas" children={<img className="w-9" src={skyAtlasIcon} />} color="secondary" onClick={atlasStore.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
 			<Button data-key="framing" children={<img className="w-9" src={framingIcon} />} color="secondary" onClick={framingStore.show} size="lg" tooltipContent="Framing" variant="ghost" />
 			<Button data-key="tppa" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="TPPA" variant="ghost" />
 			<Button data-key="darv" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="DARV" variant="ghost" />

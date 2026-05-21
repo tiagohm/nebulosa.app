@@ -1,16 +1,21 @@
-import { useMolecule } from 'bunshi/react'
 import { RAD2DEG } from 'nebulosa/src/constants'
-import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
+import { CONSTELLATION_LIST, type Constellation } from 'nebulosa/src/constellation'
 import type { LunarPhase } from 'nebulosa/src/moon'
 import type { SmallBodySearchListItem } from 'nebulosa/src/sbd'
 import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/temporal'
-import React, { Activity, memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
+import React, { Activity, memo, useCallback, useDeferredValue, useEffect, useMemo } from 'react'
 import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
-import { type BodyPosition, EMPTY_TWILIGHT, type MinorPlanetParameter, type Twilight } from 'src/shared/types'
+import { EMPTY_TWILIGHT, type MinorPlanetParameter, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { AsteroidMolecule, type BookmarkItem, GalaxyMolecule, MoonMolecule, PlanetMolecule, SatelliteMolecule, SkyAtlasMolecule, type SkyAtlasTab, SunMolecule } from '@/molecules/skyatlas'
 import { activityMode, formatDistance, skyObjectName, skyObjectType, tw } from '@/shared/util'
 import planetarySatelliteEphemeris from '../../../data/planetary-satellite-ephemeris.json'
+import { asteroidStore } from '../store/atlas.asteroid.store'
+import { galaxyStore } from '../store/atlas.galaxy.store'
+import { moonStore } from '../store/atlas.moon.store'
+import { planetStore } from '../store/atlas.planet.store'
+import { satelliteStore } from '../store/atlas.satellite.store'
+import { atlasStore, type AtlasTab, type BookmarkItem } from '../store/atlas.store'
+import { sunStore } from '../store/atlas.sun.store'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { Button } from './components/Button'
 import { Calendar } from './components/Calendar'
@@ -41,25 +46,23 @@ import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 import { Sun } from './Sun'
 
 export const SkyAtlas = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { tab, location } = useSnapshot(atlas.state)
-	const request = useSnapshot(atlas.state.request)
+	const { tab, location } = useSnapshot(atlasStore.state)
+	const request = useSnapshot(atlasStore.state.request)
 
 	const Footer = tab !== 'galaxy' ? <Link className="mt-1" href="https://ssd-api.jpl.nasa.gov/doc/horizons.html" label="NASA/JPL Horizons API" /> : null
 
 	return (
 		<>
-			<Modal footer={Footer} header={<Header />} id="sky-atlas" maxWidth="456px" onHide={atlas.hide}>
+			<Modal footer={Footer} header={<Header />} id="sky-atlas" maxWidth="456px" onHide={atlasStore.hide}>
 				<Body />
 			</Modal>
-			{location.show && <Location {...request.location} id="location-atlas" onClose={atlas.hideLocation} onCoordinateChange={atlas.updateLocation} />}
+			{location.show && <Location {...request.location} id="location-atlas" onClose={atlasStore.hideLocation} onCoordinateChange={atlasStore.updateLocation} />}
 		</>
 	)
 })
 
 const Header = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { time } = useSnapshot(atlas.state.request)
+	const { time } = useSnapshot(atlasStore.state.request)
 
 	return (
 		<div className="flex flex-row items-center justify-between gap-2">
@@ -69,7 +72,7 @@ const Header = memo(() => {
 			</div>
 			<div className="flex flex-1 items-center justify-center gap-2">
 				<TimeBar key={`${time.utc}${time.offset}`} />
-				<IconButton color="primary" icon={Icons.MapMarker} onClick={atlas.showLocation} tooltipContent="Location" variant="flat" />
+				<IconButton color="primary" icon={Icons.MapMarker} onClick={atlasStore.showLocation} tooltipContent="Location" variant="flat" />
 			</div>
 			<HeaderFilterPopover />
 		</div>
@@ -86,31 +89,28 @@ const TAB_ICONS = {
 } as const
 
 const TabPopover = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { tab } = useSnapshot(atlas.state)
+	const { tab } = useSnapshot(atlasStore.state)
 
 	return (
-		<Popover trigger={<IconButton color="secondary" icon={TAB_ICONS[tab]} onWheel={atlas.handleOnTabWheel} />}>
+		<Popover trigger={<IconButton color="secondary" icon={TAB_ICONS[tab]} onWheel={atlasStore.handleOnTabWheel} />}>
 			<TabPopoverContent />
 		</Popover>
 	)
 })
 
-const TabPopoverContent = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
+const TabPopoverContent = memo(() => (
+	<div className="inline-flex flex-row gap-2">
+		{Object.entries(TAB_ICONS).map(([key, icon]) => (
+			<IconButton icon={icon} key={key} onClick={() => (atlasStore.state.tab = key as never)} tooltipContent={key} />
+		))}
+	</div>
+))
 
-	return (
-		<div className="inline-flex flex-row gap-2">
-			{Object.entries(TAB_ICONS).map(([key, icon]) => (
-				<IconButton icon={icon} key={key} onClick={() => (atlas.state.tab = key as never)} tooltipContent={key} />
-			))}
-		</div>
-	)
-})
+function BookmarkFilter(item: BookmarkItem, text: string) {
+	return item.name.toLowerCase().includes(text) || item.type.includes(text)
+}
 
-const BookmarkFilter = (item: BookmarkItem, text: string) => item.name.toLowerCase().includes(text) || item.type.includes(text)
-
-function isBookmarked(bookmark: readonly Readonly<BookmarkItem>[], type: SkyAtlasTab, code: string) {
+function isBookmarked(bookmark: readonly Readonly<BookmarkItem>[], type: AtlasTab, code: string) {
 	return bookmark.some((e) => e.type === type && e.code === code)
 }
 
@@ -121,19 +121,18 @@ const BookmarkPopover = memo(() => (
 ))
 
 const BookmarkPopoverContent = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { items } = useSnapshot(atlas.state.bookmark)
+	const { items } = useSnapshot(atlasStore.state.bookmark)
 
 	return (
 		<div className="w-full">
 			<FilterableList className="col-span-full" filter={BookmarkFilter} items={items} minLengthToSearch={1}>
 				{(item) => (
-					<div onClick={() => atlas.selectBookmark(item)} className="flex flex-row items-center justify-between gap-2 p-2">
+					<div onClick={() => atlasStore.selectBookmark(item)} className="flex flex-row items-center justify-between gap-2 p-2">
 						<div className="flex flex-col justify-center gap-0">
 							<span className="text-xs font-bold text-neutral-600 uppercase">{item.type}</span>
 							<span className="overflow-auto whitespace-nowrap">{item.name}</span>
 						</div>
-						<IconButton color="danger" icon={Icons.Trash} onClick={() => atlas.removeBookmark(item)} size="sm" />
+						<IconButton color="danger" icon={Icons.Trash} onClick={() => atlasStore.removeBookmark(item)} size="sm" />
 					</div>
 				)}
 			</FilterableList>
@@ -142,8 +141,7 @@ const BookmarkPopoverContent = memo(() => {
 })
 
 const HeaderFilterPopover = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { tab } = useSnapshot(atlas.state)
+	const { tab } = useSnapshot(atlasStore.state)
 	const show = tab === 'planet' || tab === 'galaxy' || tab === 'satellite'
 
 	if (!show) return null
@@ -158,65 +156,72 @@ const HeaderFilterPopover = memo(() => {
 })
 
 const PlanetFilter = memo(() => {
-	const planet = useMolecule(PlanetMolecule)
-	const { name, type } = useSnapshot(planet.state.search)
+	const { name, type } = useSnapshot(planetStore.state.search)
 
 	return (
 		<div className="grid w-full grid-cols-12 items-center gap-2 p-2">
-			<TextInput className="col-span-full" onValueChange={(value) => planet.update('name', value)} placeholder="Search" value={name} />
-			<PlanetTypeSelect className="col-span-full" onValueChange={(value) => planet.update('type', value)} value={type} />
+			<TextInput className="col-span-full" onValueChange={(value) => planetStore.update('name', value)} placeholder="Search" value={name} />
+			<PlanetTypeSelect className="col-span-full" onValueChange={(value) => planetStore.update('type', value)} value={type} />
 		</div>
 	)
 })
 
 const GalaxyFilter = memo(() => {
-	const dso = useMolecule(GalaxyMolecule)
-	const { nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, radius } = useSnapshot(dso.state.request)
-	const { name, rightAscension, declination } = useSnapshot(dso.state.request)
-	const { loading } = useSnapshot(dso.state)
+	const { nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, radius } = useSnapshot(galaxyStore.state.request)
+	const { name, rightAscension, declination } = useSnapshot(galaxyStore.state.request)
+	const { loading } = useSnapshot(galaxyStore.state)
 
 	return (
 		<div className="grid w-full grid-cols-12 items-center gap-2 p-2">
-			<TextInput className="col-span-full" onValueChange={(value) => dso.update('name', value)} placeholder="Search" startContent={<SkyObjectNameTypeDropdown color="secondary" onValueChange={(value) => dso.update('nameType', value)} value={nameType} size="sm" />} value={name} />
-			<ConstellationSelect className="col-span-full" onValueChange={(value) => dso.update('constellations', value)} value={constellations} />
-			<StellariumObjectTypeSelect className="col-span-full" onValueChange={(value) => dso.update('types', value)} value={types} />
-			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="RA" onValueChange={(value) => dso.update('rightAscension', value)} value={rightAscension} />
-			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="DEC" onValueChange={(value) => dso.update('declination', value)} value={declination} />
-			<NumberInput className="col-span-4" fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={(value) => dso.update('radius', value)} step={0.1} value={radius} />
-			<Slider className="col-span-5" startContent={magnitudeMin.toFixed(1)} endContent={magnitudeMax.toFixed(1)} label="Magnitude" maxValue={30} minValue={-30} onValueChange={dso.updateMagnitude} step={0.1} classNames={{ endContent: 'w-[5ch]', startContent: 'w-[5ch]' }} value={[magnitudeMin, magnitudeMax]} />
-			<Checkbox className="col-span-4 flex w-full max-w-none justify-center" label="Show visible" onValueChange={(value) => dso.update('visible', value)} value={visible} />
-			<NumberInput className="col-span-3" disabled={!visible || loading} label="Above (°)" maxValue={89} minValue={0} onValueChange={(value) => dso.update('visibleAbove', value)} value={visibleAbove} />
+			<TextInput className="col-span-full" onValueChange={(value) => galaxyStore.update('name', value)} placeholder="Search" startContent={<SkyObjectNameTypeDropdown color="secondary" onValueChange={(value) => galaxyStore.update('nameType', value)} value={nameType} size="sm" />} value={name} />
+			<ConstellationSelect className="col-span-full" onValueChange={(value) => galaxyStore.update('constellations', value)} value={constellations} />
+			<StellariumObjectTypeSelect className="col-span-full" onValueChange={(value) => galaxyStore.update('types', value)} value={types} />
+			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="RA" onValueChange={(value) => galaxyStore.update('rightAscension', value)} value={rightAscension} />
+			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="DEC" onValueChange={(value) => galaxyStore.update('declination', value)} value={declination} />
+			<NumberInput className="col-span-4" fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={(value) => galaxyStore.update('radius', value)} step={0.1} value={radius} />
+			<Slider
+				className="col-span-5"
+				startContent={magnitudeMin.toFixed(1)}
+				endContent={magnitudeMax.toFixed(1)}
+				label="Magnitude"
+				maxValue={30}
+				minValue={-30}
+				onValueChange={galaxyStore.updateMagnitude}
+				step={0.1}
+				classNames={{ endContent: 'w-[5ch]', startContent: 'w-[5ch]' }}
+				value={[magnitudeMin, magnitudeMax]}
+			/>
+			<Checkbox className="col-span-4 flex w-full max-w-none justify-center" label="Show visible" onValueChange={(value) => galaxyStore.update('visible', value)} value={visible} />
+			<NumberInput className="col-span-3" disabled={!visible || loading} label="Above (°)" maxValue={89} minValue={0} onValueChange={(value) => galaxyStore.update('visibleAbove', value)} value={visibleAbove} />
 			<div className="col-span-full flex flex-row items-center justify-center">
-				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={dso.search} tooltipContent="Filter" variant="flat" />
+				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={galaxyStore.search} tooltipContent="Filter" variant="flat" />
 			</div>
 		</div>
 	)
 })
 
 const SatelliteFilter = memo(() => {
-	const satellite = useMolecule(SatelliteMolecule)
-	const { groups, category } = useSnapshot(satellite.state.request)
-	const { text } = useSnapshot(satellite.state.request)
-	const { loading } = useSnapshot(satellite.state)
+	const { groups, category } = useSnapshot(satelliteStore.state.request)
+	const { text } = useSnapshot(satelliteStore.state.request)
+	const { loading } = useSnapshot(satelliteStore.state)
 
 	return (
 		<div className="grid w-full grid-cols-12 items-center gap-2 p-2">
-			<TextInput className="col-span-full" label="Search" onValueChange={(value) => satellite.update('text', value)} value={text} />
+			<TextInput className="col-span-full" label="Search" onValueChange={(value) => satelliteStore.update('text', value)} value={text} />
 			<p className="col-span-full font-bold">CATEGORY</p>
-			<SatelliteCategoryChipGroup className="col-span-full" onValueChange={(value) => satellite.update('category', value)} value={category} />
+			<SatelliteCategoryChipGroup className="col-span-full" onValueChange={(value) => satelliteStore.update('category', value)} value={category} />
 			<p className="col-span-full font-bold">GROUP</p>
-			<SatelliteGroupTypeChipGroup category={category} className="col-span-full h-[200px]" onValueChange={(value) => satellite.update('groups', value)} value={groups} />
+			<SatelliteGroupTypeChipGroup category={category} className="col-span-full h-[200px]" onValueChange={(value) => satelliteStore.update('groups', value)} value={groups} />
 			<div className="col-span-full flex flex-row items-center justify-center gap-2">
-				<IconButton color="danger" disabled={loading} icon={Icons.Restore} onClick={satellite.resetFilter} tooltipContent="Reset" variant="flat" />
-				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={satellite.search} tooltipContent="Filter" variant="flat" />
+				<IconButton color="danger" disabled={loading} icon={Icons.Restore} onClick={satelliteStore.resetFilter} tooltipContent="Reset" variant="flat" />
+				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={satelliteStore.search} tooltipContent="Filter" variant="flat" />
 			</div>
 		</div>
 	)
 })
 
 const Body = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { tab } = useSnapshot(atlas.state)
+	const { tab } = useSnapshot(atlasStore.state)
 
 	return (
 		<div className="mt-0 flex flex-col gap-2">
@@ -231,16 +236,12 @@ const Body = memo(() => {
 })
 
 const SunTab = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { twilight } = useSnapshot(atlas.state)
-
-	const sun = useMolecule(SunMolecule)
-	const { source, position, chart } = useSnapshot(sun.state)
+	const { source } = useSnapshot(sunStore.state)
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2">
 			<div className="relative col-span-full flex max-h-80 min-h-[200px] items-center justify-center">
-				<Sun onSourceChange={(source) => (sun.state.source = source)} source={source} />
+				<Sun onSourceChange={(source) => (sunStore.state.source = source)} source={source} />
 				<div className="absolute top-auto left-0 p-0 text-xs">
 					<SolarEclipses />
 				</div>
@@ -248,15 +249,14 @@ const SunTab = memo(() => {
 					<Seasons />
 				</div>
 			</div>
-			<EphemerisAndChart chart={chart} className="col-span-full" name="Sun" position={position} twilight={twilight} />
+			<EphemerisAndChart tab="sun" className="col-span-full" name="Sun" />
 		</div>
 	)
 })
 
 const SolarEclipses = memo(() => {
-	const sun = useMolecule(SunMolecule)
-	const { eclipses } = useSnapshot(sun.state)
-	const { offset } = useSnapshot(sun.state.request.time)
+	const { eclipses } = useSnapshot(sunStore.state)
+	const { offset } = useSnapshot(sunStore.state.request.time)
 
 	return (
 		<div className="flex flex-col gap-0">
@@ -268,10 +268,9 @@ const SolarEclipses = memo(() => {
 })
 
 const Seasons = memo(() => {
-	const sun = useMolecule(SunMolecule)
-	const { offset } = useSnapshot(sun.state.request.time)
-	const { summer, spring, autumn, winter } = useSnapshot(sun.state.seasons)
-	const { latitude } = useSnapshot(sun.state.request.location)
+	const { offset } = useSnapshot(sunStore.state.request.time)
+	const { summer, spring, autumn, winter } = useSnapshot(sunStore.state.seasons)
+	const { latitude } = useSnapshot(sunStore.state.request.location)
 	const isSouthern = latitude < 0
 
 	return (
@@ -284,29 +283,21 @@ const Seasons = memo(() => {
 	)
 })
 
-const MoonTab = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { twilight } = useSnapshot(atlas.state)
-
-	const moon = useMolecule(MoonMolecule)
-	const { position, chart } = useSnapshot(moon.state)
-
-	return (
-		<div className="grid grid-cols-12 items-center gap-2">
-			<div className="relative col-span-full flex max-h-80 min-h-[200px] items-center justify-center">
-				<Moon />
-				<div className="absolute top-auto left-0 p-0 text-xs">
-					<LunarEclipses />
-					<LunarApsis />
-				</div>
-				<div className="absolute top-auto right-0 p-0 text-xs">
-					<MoonPhases />
-				</div>
+const MoonTab = memo(() => (
+	<div className="grid grid-cols-12 items-center gap-2">
+		<div className="relative col-span-full flex max-h-80 min-h-[200px] items-center justify-center">
+			<Moon />
+			<div className="absolute top-auto left-0 p-0 text-xs">
+				<LunarEclipses />
+				<LunarApsis />
 			</div>
-			<EphemerisAndChart chart={chart} className="col-span-full" name="Moon" position={position} twilight={twilight} />
+			<div className="absolute top-auto right-0 p-0 text-xs">
+				<MoonPhases />
+			</div>
 		</div>
-	)
-})
+		<EphemerisAndChart tab="moon" className="col-span-full" name="Moon" />
+	</div>
+))
 
 function mapLunarPhase(phase: LunarPhase, time: number, offset: number) {
 	if (phase === 'NEW') return <AstronomicalEvent format="DD HH:mm" icon={Icons.MoonNew} key={time} label="NEW MOON" offset={offset} time={time} />
@@ -317,17 +308,15 @@ function mapLunarPhase(phase: LunarPhase, time: number, offset: number) {
 }
 
 const MoonPhases = memo(() => {
-	const moon = useMolecule(MoonMolecule)
-	const { phases } = useSnapshot(moon.state)
-	const { offset } = useSnapshot(moon.state.request.time)
+	const { phases } = useSnapshot(moonStore.state)
+	const { offset } = useSnapshot(moonStore.state.request.time)
 
 	return <div className="flex flex-col gap-0">{phases.map(([phase, time]) => mapLunarPhase(phase, time, offset))}</div>
 })
 
 const LunarEclipses = memo(() => {
-	const moon = useMolecule(MoonMolecule)
-	const { eclipses } = useSnapshot(moon.state)
-	const { offset } = useSnapshot(moon.state.request.time)
+	const { eclipses } = useSnapshot(moonStore.state)
+	const { offset } = useSnapshot(moonStore.state.request.time)
 
 	return (
 		<div className="flex flex-col gap-0">
@@ -339,9 +328,8 @@ const LunarEclipses = memo(() => {
 })
 
 const LunarApsis = memo(() => {
-	const moon = useMolecule(MoonMolecule)
-	const { apsis } = useSnapshot(moon.state)
-	const { offset } = useSnapshot(moon.state.request.time)
+	const { apsis } = useSnapshot(moonStore.state)
+	const { offset } = useSnapshot(moonStore.state.request.time)
 
 	return (
 		<div className="flex flex-col gap-0">
@@ -374,9 +362,9 @@ const PLANETS = [
 	...planetarySatelliteEphemeris.pluto,
 ] as const
 
-function PlanetItem(planet: (typeof PLANETS)[number], onClick: React.UIEventHandler) {
+function PlanetItem(planet: (typeof PLANETS)[number]) {
 	return (
-		<ListItem description={planet.type} data-code={planet.code} onClick={onClick}>
+		<ListItem description={planet.type}>
 			<span className="flex flex-row items-center justify-between">
 				<span>{planet.name}</span>
 				<span className="text-xs">{planet.solution}</span>
@@ -386,11 +374,8 @@ function PlanetItem(planet: (typeof PLANETS)[number], onClick: React.UIEventHand
 }
 
 const PlanetTab = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { twilight, bookmark } = useSnapshot(atlas.state)
-
-	const planet = useMolecule(PlanetMolecule)
-	const { code, position, chart, search } = useSnapshot(planet.state)
+	const { bookmark } = useSnapshot(atlasStore.state)
+	const { code, search } = useSnapshot(planetStore.state)
 	const name = PLANETS.find((e) => e.code === code)?.name
 
 	const items = useMemo(() => {
@@ -404,30 +389,26 @@ const PlanetTab = memo(() => {
 	}, [search.name, search.type])
 
 	function handleFavoriteChange(favorite: boolean) {
-		if (name && code) atlas.toggleBookmark('planet', name, code, favorite)
+		if (name && code) atlasStore.toggleBookmark('planet', name, code, favorite)
 	}
 
-	function handlePointer(event: React.PointerEvent<HTMLElement>) {
-		const code = event.currentTarget.dataset.code!
-		return planet.select(code)
+	function handleAction(index: number) {
+		return planetStore.select(items[index].code)
 	}
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2">
-			<List className="col-span-full" itemCount={items.length}>
-				{(i) => PlanetItem(items[i], handlePointer)}
+			<List className="col-span-full" itemCount={items.length} onAction={handleAction}>
+				{(i) => PlanetItem(items[i])}
 			</List>
-			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleFavoriteChange} position={position} twilight={twilight} />
+			<EphemerisAndChart tab="planet" className="col-span-full" isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleFavoriteChange} />
 		</div>
 	)
 })
 
 const AsteroidTab = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { twilight, bookmark } = useSnapshot(atlas.state)
-
-	const asteroid = useMolecule(AsteroidMolecule)
-	const { tab, selected, position, chart } = useSnapshot(asteroid.state)
+	const { bookmark } = useSnapshot(atlasStore.state)
+	const { tab, selected } = useSnapshot(asteroidStore.state)
 
 	const tags = useMemo(() => {
 		const tags: EphemerisAndChartTag[] = []
@@ -443,7 +424,7 @@ const AsteroidTab = memo(() => {
 
 	const handleOnFavoriteChange = useCallback(
 		(favorite: boolean) => {
-			if (selected) atlas.toggleBookmark('asteroid', selected.name, selected.id, favorite)
+			if (selected) atlasStore.toggleBookmark('asteroid', selected.name, selected.id, favorite)
 		},
 		[selected],
 	)
@@ -451,7 +432,7 @@ const AsteroidTab = memo(() => {
 	return (
 		<div className="grid grid-cols-12 items-center gap-2">
 			<div className="relative col-span-full flex min-h-[200px] flex-col gap-2">
-				<Tabs onValueChange={(value) => (asteroid.state.tab = value as never)} value={tab}>
+				<Tabs onValueChange={(value) => (asteroidStore.state.tab = value as never)} value={tab}>
 					<Tab id="search"> Search</Tab>
 					<Tab id="closeApproaches">Close Approaches</Tab>
 					<TabPanel id="search">
@@ -462,7 +443,7 @@ const AsteroidTab = memo(() => {
 					</TabPanel>
 				</Tabs>
 			</div>
-			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'asteroid', selected.id)} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} position={position} tags={tags} twilight={twilight} />
+			<EphemerisAndChart tab="asteroid" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'asteroid', selected.id)} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} tags={tags} />
 		</div>
 	)
 })
@@ -483,20 +464,19 @@ function AsteroidSearchParameterItem(parameter: MinorPlanetParameter) {
 }
 
 const AsteroidSearchTab = memo(() => {
-	const asteroid = useMolecule(AsteroidMolecule)
-	const { loading, selected, list } = useSnapshot(asteroid.state)
-	const { text } = useSnapshot(asteroid.state.search)
+	const { loading, selected, list } = useSnapshot(asteroidStore.state)
+	const { text } = useSnapshot(asteroidStore.state.search)
 
 	function handlePointer(event: React.PointerEvent<HTMLElement>) {
 		const pdes = event.currentTarget.dataset.pdes!
-		return asteroid.select(pdes)
+		return asteroidStore.select(pdes)
 	}
 
 	return (
 		<div className="flex w-full flex-col gap-2">
 			<div className="flex w-full flex-row items-center justify-center gap-2">
-				<TextInput className="flex-1" disabled={loading} label="Search" onValueChange={asteroid.updateSearch} placeholder="Enter the IAU number, designation, name or SPK ID" value={text} />
-				<IconButton color="primary" disabled={loading || !text} icon={Icons.Search} onClick={asteroid.search} variant="ghost" />
+				<TextInput className="flex-1" disabled={loading} label="Search" onValueChange={asteroidStore.updateSearch} placeholder="Enter the IAU number, designation, name or SPK ID" value={text} />
+				<IconButton color="primary" disabled={loading || !text} icon={Icons.Search} onClick={asteroidStore.search} variant="ghost" />
 			</div>
 			{list ? (
 				<List fullWidth itemCount={list.length}>
@@ -513,18 +493,17 @@ const AsteroidSearchTab = memo(() => {
 })
 
 const AsteroidCloseApproachesTab = memo(() => {
-	const asteroid = useMolecule(AsteroidMolecule)
-	const { loading } = useSnapshot(asteroid.state)
-	const { days, distance } = useSnapshot(asteroid.state.closeApproaches.request)
-	const { result } = useSnapshot(asteroid.state.closeApproaches)
-	const { offset } = useSnapshot(asteroid.state.request.time)
+	const { loading } = useSnapshot(asteroidStore.state)
+	const { days, distance } = useSnapshot(asteroidStore.state.closeApproaches.request)
+	const { result } = useSnapshot(asteroidStore.state.closeApproaches)
+	const { offset } = useSnapshot(asteroidStore.state.request.time)
 
 	return (
 		<div className="flex w-full flex-col gap-2">
 			<div className="flex w-full flex-row items-center justify-center gap-2">
-				<NumberInput className="flex-1" disabled={loading} label="Days" maxValue={30} minValue={1} onValueChange={(value) => asteroid.updateCloseApproaches('days', value)} value={days} />
-				<NumberInput className="flex-1" disabled={loading} fractionDigits={1} label="Distance (LD)" maxValue={100} minValue={0.1} onValueChange={(value) => asteroid.updateCloseApproaches('distance', value)} step={0.1} value={distance} />
-				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={asteroid.closeApproaches} variant="ghost" />
+				<NumberInput className="flex-1" disabled={loading} label="Days" maxValue={30} minValue={1} onValueChange={(value) => asteroidStore.updateCloseApproaches('days', value)} value={days} />
+				<NumberInput className="flex-1" disabled={loading} fractionDigits={1} label="Distance (LD)" maxValue={100} minValue={0.1} onValueChange={(value) => asteroidStore.updateCloseApproaches('distance', value)} step={0.1} value={distance} />
+				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={asteroidStore.closeApproaches} variant="ghost" />
 			</div>
 			<List itemCount={result.length} fullWidth>
 				{(i) => {
@@ -546,37 +525,34 @@ const AsteroidCloseApproachesTab = memo(() => {
 })
 
 const GalaxyTab = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { twilight, bookmark } = useSnapshot(atlas.state)
-
-	const galaxy = useMolecule(GalaxyMolecule)
-	const { position, chart, selected } = useSnapshot(galaxy.state)
+	const { bookmark } = useSnapshot(atlasStore.state)
+	const { selected } = useSnapshot(galaxyStore.state)
+	const { names, constellation } = useSnapshot(galaxyStore.state.position)
+	useEffect(galaxyStore.mount, [])
 
 	const handleOnFavoriteChange = useCallback(
 		(favorite: boolean) => {
 			if (!selected) return
-			const name = position.names?.length ? skyObjectName(position.names[0], position.constellation) : skyObjectName(selected.name, selected.constellation)
-			atlas.toggleBookmark('galaxy', name, selected.id.toFixed(0), favorite)
+			const name = names?.length ? skyObjectName(names[0], constellation) : skyObjectName(selected.name, selected.constellation)
+			atlasStore.toggleBookmark('galaxy', name, selected.id.toFixed(0), favorite)
 		},
-		[position.constellation, position.names, selected],
+		[constellation, names, selected],
 	)
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2">
 			<GalaxyTable />
 			<GalaxyPaginator className="col-span-full w-full" />
-			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'galaxy', selected.id.toFixed(0))} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
+			<EphemerisAndChart tab="galaxy" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'galaxy', selected.id.toFixed(0))} onFavoriteChange={handleOnFavoriteChange} />
 		</div>
 	)
 })
 
 const GalaxyTable = memo(() => {
-	const galaxy = useMolecule(GalaxyMolecule)
-	// const { sort } = useSnapshot(galaxy.state.request)
-	const { result } = useSnapshot(galaxy.state)
+	const { result } = useSnapshot(galaxyStore.state)
 
 	return (
-		<Table rowCount={result.length} columnCount={4} className="col-span-full" onAction={galaxy.select}>
+		<Table rowCount={result.length} columnCount={4} className="col-span-full" onAction={galaxyStore.select}>
 			<span>Name</span>
 			<span>Mag.</span>
 			<span>Type</span>
@@ -594,23 +570,20 @@ const GalaxyTable = memo(() => {
 })
 
 const GalaxyPaginator = memo((props: React.ComponentProps<'div'>) => {
-	const galaxy = useMolecule(GalaxyMolecule)
-	const { page } = useSnapshot(galaxy.state.request)
-	const { loading, result } = useSnapshot(galaxy.state)
+	const { page } = useSnapshot(galaxyStore.state.request)
+	const { loading, result } = useSnapshot(galaxyStore.state)
 
-	return <Paginator {...props} count={result.length} loading={loading} onNext={galaxy.next} onPrev={galaxy.prev} page={page} />
+	return <Paginator {...props} count={result.length} loading={loading} onNext={galaxyStore.next} onPrev={galaxyStore.prev} page={page} />
 })
 
 const SatelliteTab = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { twilight, bookmark } = useSnapshot(atlas.state)
-
-	const satellite = useMolecule(SatelliteMolecule)
-	const { position, chart, selected } = useSnapshot(satellite.state)
+	const { bookmark } = useSnapshot(atlasStore.state)
+	const { selected } = useSnapshot(satelliteStore.state)
+	useEffect(satelliteStore.mount, [])
 
 	const handleOnFavoriteChange = useCallback(
 		(favorite: boolean) => {
-			if (selected) atlas.toggleBookmark('satellite', selected.name, selected.id.toFixed(0), favorite)
+			if (selected) atlasStore.toggleBookmark('satellite', selected.name, selected.id.toFixed(0), favorite)
 		},
 		[selected],
 	)
@@ -619,18 +592,16 @@ const SatelliteTab = memo(() => {
 		<div className="relative grid grid-cols-12 items-center gap-2">
 			<SatelliteTable />
 			<SatellitePaginator className="col-span-full w-full" />
-			<EphemerisAndChart chart={chart} className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'satellite', selected.id.toFixed(0))} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} position={position} twilight={twilight} />
+			<EphemerisAndChart tab="satellite" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'satellite', selected.id.toFixed(0))} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} />
 		</div>
 	)
 })
 
 const SatelliteTable = memo(() => {
-	const satellite = useMolecule(SatelliteMolecule)
-	// const { sort } = useSnapshot(satellite.state.request)
-	const { result } = useSnapshot(satellite.state)
+	const { result } = useSnapshot(satelliteStore.state)
 
 	return (
-		<Table rowCount={result.length} columnCount={3} className="col-span-full" onAction={satellite.select}>
+		<Table rowCount={result.length} columnCount={3} className="col-span-full" onAction={satelliteStore.select}>
 			<span>ID</span>
 			<span>Name</span>
 			<span>Group</span>
@@ -646,11 +617,10 @@ const SatelliteTable = memo(() => {
 })
 
 const SatellitePaginator = memo((props: React.ComponentProps<'div'>) => {
-	const satellite = useMolecule(SatelliteMolecule)
-	const { page } = useSnapshot(satellite.state.request)
-	const { loading, result } = useSnapshot(satellite.state)
+	const { page } = useSnapshot(satelliteStore.state.request)
+	const { loading, result } = useSnapshot(satelliteStore.state)
 
-	return <Paginator {...props} count={result.length} loading={loading} onNext={satellite.next} onPrev={satellite.prev} page={page} />
+	return <Paginator {...props} count={result.length} loading={loading} onNext={satelliteStore.next} onPrev={satelliteStore.prev} page={page} />
 })
 
 interface PaginatorProps extends React.ComponentProps<'div'> {
@@ -675,22 +645,21 @@ function Paginator({ page, count, onPrev, onNext, loading = false, readOnly = tr
 const ONE_MINUTE = 60 * 1000
 
 const TimeBar = memo(() => {
-	const atlas = useMolecule(SkyAtlasMolecule)
-	const { utc, offset } = useSnapshot(atlas.state.request.time)
-	const { manual } = useSnapshot(atlas.state.calendar)
+	const { utc, offset } = useSnapshot(atlasStore.state.request.time)
+	const { manual } = useSnapshot(atlasStore.state.calendar)
 
 	const local = utc + offset * ONE_MINUTE
 
 	const handleDateChange = useCallback(
 		(value: Temporal) => {
-			atlas.updateTime(value - offset * ONE_MINUTE, offset)
+			atlasStore.updateTime(value - offset * ONE_MINUTE, offset)
 		},
 		[offset],
 	)
 
 	const handleOffsetChange = useCallback(
 		(value: number) => {
-			atlas.updateTime(utc, value, manual)
+			atlasStore.updateTime(utc, value, manual)
 		},
 		[manual, utc],
 	)
@@ -699,9 +668,9 @@ const TimeBar = memo(() => {
 		<div className="inline-flex flex-row items-center gap-1">
 			<CalendarPopover date={local} offset={offset} onDateChange={handleDateChange} onOffsetChange={handleOffsetChange} />
 			{manual ? (
-				<IconButton color="warning" icon={Icons.TimerPlay} onClick={() => atlas.updateTime(Date.now(), offset, false)} tooltipContent="Play" variant="flat" />
+				<IconButton color="warning" icon={Icons.TimerPlay} onClick={() => atlasStore.updateTime(Date.now(), offset, false)} tooltipContent="Play" variant="flat" />
 			) : (
-				<IconButton color="success" icon={Icons.TimerPause} onClick={() => (atlas.state.calendar.manual = true)} tooltipContent="Pause" variant="flat" />
+				<IconButton color="success" icon={Icons.TimerPause} onClick={() => (atlasStore.state.calendar.manual = true)} tooltipContent="Pause" variant="flat" />
 			)}
 		</div>
 	)
@@ -771,22 +740,20 @@ interface EphemerisAndChartTag {
 }
 
 interface EphemerisAndChartProps extends React.ComponentProps<'div'> {
+	readonly tab: AtlasTab
 	readonly name?: string
-	readonly position: BodyPosition
-	readonly chart: readonly number[]
-	readonly twilight?: Twilight
 	readonly tags?: EphemerisAndChartTag[]
 	readonly isFavorite?: boolean
 	readonly onFavoriteChange?: (favorite: boolean) => void
 }
 
-function makeTags(name: string | undefined, position: BodyPosition, extra?: EphemerisAndChartTag[]): EphemerisAndChartTag[] {
+function makeTags(name: string | undefined, names: readonly string[] | undefined, constellation: Constellation, extra?: EphemerisAndChartTag[]): EphemerisAndChartTag[] {
 	const tags: EphemerisAndChartTag[] = []
 
 	if (name) {
 		tags.push({ label: name, color: 'primary' })
-	} else if (position.names?.length) {
-		for (const name of position.names) tags.push({ label: skyObjectName(name, position.constellation), color: 'primary' })
+	} else if (names?.length) {
+		for (const name of names) tags.push({ label: skyObjectName(name, constellation), color: 'primary' })
 	}
 
 	if (extra?.length) {
@@ -796,33 +763,30 @@ function makeTags(name: string | undefined, position: BodyPosition, extra?: Ephe
 	return tags
 }
 
-type EphemerisAndChartMode = 'info' | 'chart'
-
 function TagItem(tag: EphemerisAndChartTag) {
-	return <Chip color={tag.color} key={tag.label} label={tag.label} />
+	return <Chip color={tag.color} key={tag.label} label={tag.label} size="sm" />
 }
 
-const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, className, isFavorite, onFavoriteChange }: EphemerisAndChartProps) => {
-	const [mode, setMode] = useState<EphemerisAndChartMode>('info')
-	tags = useMemo(() => makeTags(name, position, tags), [name, position.constellation, position.names, tags])
-	const deferredChart = useDeferredValue(chart, [])
-	const data = useMemo(() => makeEphemerisChart(deferredChart, twilight), [deferredChart, twilight])
-	const deferredData = useDeferredValue(data, [])
+const EphemerisAndChart = memo(({ tab, name, tags, className, isFavorite, onFavoriteChange }: EphemerisAndChartProps) => {
+	const state = atlasStore.state[tab]!.state
+	const { mode } = useSnapshot(state)
+	const { names, constellation } = useSnapshot(state.position)
+	tags = useMemo(() => makeTags(name, names, constellation, tags), [name, constellation, names, tags])
 
 	return (
 		<div className={tw('h-[140px] col-span-full relative flex flex-col justify-start items-center gap-1', className)}>
 			<div className="flex w-full flex-row gap-2 text-start text-sm font-bold">
-				<ToggleButton color="primary" icon={Icons.Info} value={mode === 'info'} onClick={() => setMode('info')} />
-				<ToggleButton color="primary" icon={Icons.Chart} value={mode === 'chart'} onClick={() => setMode('chart')} />
+				<ToggleButton color="primary" icon={Icons.Info} value={mode === 'info'} onClick={() => (state.mode = 'info')} />
+				<ToggleButton color="primary" icon={Icons.Chart} value={mode === 'chart'} onClick={() => (state.mode = 'chart')} />
 				<div className="flex flex-1 items-center justify-center overflow-hidden text-sm font-bold">{tags.map(TagItem)}</div>
 				{onFavoriteChange && <IconButton color={isFavorite ? 'danger' : 'warning'} disabled={isFavorite === undefined} icon={isFavorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onClick={() => onFavoriteChange(!isFavorite)} tooltipContent={isFavorite ? 'Remove bookmark' : 'Add bookmark'} />}
 			</div>
 			<span className="w-full">
 				<Activity mode={activityMode(mode === 'info')}>
-					<EphemerisPosition position={position} />
+					<EphemerisPosition tab={tab} />
 				</Activity>
 				<Activity mode={activityMode(mode === 'chart')}>
-					<EphemerisChart data={deferredData} />
+					<EphemerisChart tab={tab} />
 				</Activity>
 			</span>
 		</div>
@@ -830,22 +794,30 @@ const EphemerisAndChart = memo(({ name, position, chart, twilight, tags, classNa
 })
 
 interface EphemerisPositionProps {
-	readonly position: BodyPosition
+	readonly tab: AtlasTab
 }
 
-const EphemerisPosition = memo(({ position }: EphemerisPositionProps) => {
-	const atlas = useMolecule(SkyAtlasMolecule)
+const EphemerisPosition = memo(({ tab }: EphemerisPositionProps) => {
+	const state = atlasStore.state[tab]!.state
+	const { position } = useSnapshot(state)
 
 	return (
-		<div className="grid w-full grid-cols-12 gap-2 p-0">
-			<div className="col-span-full">
-				<BodyCoordinateInfo position={position} />
-			</div>
-			<div className="col-span-full flex items-center justify-center gap-2">
-				<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} disabled={position.pierSide === 'NEITHER'} onValueChange={atlas.sync} tooltipContent="Sync" variant="flat" />
-				<MountDropdown color="success" disallowNoneSelection disabled={position.pierSide === 'NEITHER'} onValueChange={atlas.goTo} tooltipContent="Go" variant="flat" />
-				<IconButton color="secondary" disabled={position.pierSide === 'NEITHER'} icon={Icons.Image} onClick={atlas.frame} tooltipContent="Frame" variant="flat" />
-			</div>
+		<div className="flex w-full flex-col gap-2 p-0">
+			<BodyCoordinateInfo position={position} />
+			<EphemerisPositionButtons tab={tab} />
+		</div>
+	)
+})
+
+const EphemerisPositionButtons = memo(({ tab }: EphemerisPositionProps) => {
+	const state = atlasStore.state[tab]!.state
+	const { pierSide } = useSnapshot(state.position)
+
+	return (
+		<div className="flex items-center justify-center gap-2">
+			<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} disabled={pierSide === 'NEITHER'} onValueChange={atlasStore.sync} tooltipContent="Sync" variant="flat" />
+			<MountDropdown color="success" disallowNoneSelection disabled={pierSide === 'NEITHER'} onValueChange={atlasStore.goTo} tooltipContent="Go" variant="flat" />
+			<IconButton color="secondary" disabled={pierSide === 'NEITHER'} icon={Icons.Image} onClick={atlasStore.frame} tooltipContent="Frame" variant="flat" />
 		</div>
 	)
 })
@@ -865,7 +837,7 @@ interface EphemerisChartData {
 }
 
 interface EphemerisChartProps {
-	readonly data: EphemerisChartData[]
+	readonly tab: AtlasTab
 }
 
 function ChartTooltipContent({ active, payload }: TooltipContentProps) {
@@ -892,24 +864,33 @@ function ChartTickFormatter(value: unknown, i: number) {
 
 const DEFAULT_AREA_PROPS: Partial<AreaProps<keyof EphemerisChartData, number>> = { dot: false, connectNulls: true, activeDot: false, fillOpacity: 0.3, isAnimationActive: false, stroke: 'transparent', type: 'monotone' }
 
-const EphemerisChart = memo(({ data }: EphemerisChartProps) => (
-	<ComposedChart data={data} height={120} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive>
-		<XAxis dataKey="name" domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={ChartTickFormatter} tickMargin={6} />
-		<YAxis domain={[0, 90]} width={25} />
-		<Area dataKey="dayFirst" fill="#FFF176" {...DEFAULT_AREA_PROPS} />
-		<Area dataKey="civilDusk" fill="#7986CB" {...DEFAULT_AREA_PROPS} />
-		<Area dataKey="nauticalDusk" fill="#3F51B5" {...DEFAULT_AREA_PROPS} />
-		<Area dataKey="astronomicalDusk" fill="#303F9F" {...DEFAULT_AREA_PROPS} />
-		<Area dataKey="night" fill="#1A237E" {...DEFAULT_AREA_PROPS} />
-		<Area dataKey="astronomicalDawn" fill="#303F9F" {...DEFAULT_AREA_PROPS} />
-		<Area dataKey="nauticalDawn" fill="#3F51B5" {...DEFAULT_AREA_PROPS} />
-		<Area dataKey="civilDawn" fill="#7986CB" {...DEFAULT_AREA_PROPS} />
-		<Area dataKey="dayLast" fill="#FFF176" {...DEFAULT_AREA_PROPS} />
-		<CartesianGrid stroke="#FFFFFF10" strokeDasharray="3 3" />
-		<ChartTooltip content={ChartTooltipContent} />
-		<Line dataKey="value" dot={false} isAnimationActive={false} stroke="#F44336" strokeWidth={2} type="monotone" />
-	</ComposedChart>
-))
+const EphemerisChart = memo(({ tab }: EphemerisChartProps) => {
+	const state = atlasStore.state[tab]!.state
+	const { chart } = useSnapshot(state)
+	const { twilight } = useSnapshot(atlasStore.state)
+	const deferredChart = useDeferredValue(chart, [])
+	const data = useMemo(() => makeEphemerisChart(deferredChart, twilight), [deferredChart, twilight])
+	const deferredData = useDeferredValue(data, [])
+
+	return (
+		<ComposedChart data={deferredData} height={120} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive>
+			<XAxis dataKey="name" domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={ChartTickFormatter} tickMargin={6} />
+			<YAxis domain={[0, 90]} width={25} />
+			<Area dataKey="dayFirst" fill="#FFF176" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="civilDusk" fill="#7986CB" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="nauticalDusk" fill="#3F51B5" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="astronomicalDusk" fill="#303F9F" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="night" fill="#1A237E" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="astronomicalDawn" fill="#303F9F" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="nauticalDawn" fill="#3F51B5" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="civilDawn" fill="#7986CB" {...DEFAULT_AREA_PROPS} />
+			<Area dataKey="dayLast" fill="#FFF176" {...DEFAULT_AREA_PROPS} />
+			<CartesianGrid stroke="#FFFFFF10" strokeDasharray="3 3" />
+			<ChartTooltip content={ChartTooltipContent} />
+			<Line dataKey="value" dot={false} isAnimationActive={false} stroke="#F44336" strokeWidth={2} type="monotone" />
+		</ComposedChart>
+	)
+})
 
 function makeEphemerisChart(data: readonly number[], twilight: Twilight = EMPTY_TWILIGHT): EphemerisChartData[] {
 	const chart = new Array<EphemerisChartData>(1441)

@@ -1,16 +1,19 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import { CartesianGrid, ComposedChart, Line, ReferenceDot, Scatter, XAxis, YAxis } from 'recharts'
 import type { AutoFocusState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { AutoFocusMolecule } from '@/molecules/autofocus'
+import { useStore } from '../hooks/store.hook'
+import { AutoFocusStoreContext, CameraDeviceContext, FocuserDeviceContext } from '../shared/context'
+import { autoFocusStore } from '../store/autofocus.store'
+import { equipmentStore } from '../store/equipment.store'
 import { AutoFocusFittingModeSelect } from './AutoFocusFittingModeSelect'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { Chip, type ChipProps } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
-import { CameraDropdown, FocuserDropdown } from './DeviceDropdown'
+import { TextInput } from './components/TextInput'
+import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { StarDetectionPopover } from './StarDetectionPopover'
@@ -86,38 +89,48 @@ function focusChartDomain(points: readonly FocusChartPoint[], key: keyof FocusCh
 }
 
 export const AutoFocus = memo(() => {
-	const autoFocus = useMolecule(AutoFocusMolecule)
+	const camera = useContext(CameraDeviceContext)
+	const focuser = useContext(FocuserDeviceContext)
+	const autoFocus = useStore(() => autoFocusStore(camera, focuser), [camera, focuser])
 
 	return (
-		<Modal footer={<Footer />} header="Auto Focus" id="autofocus" maxWidth="440px" onHide={autoFocus.hide}>
-			<Body />
-		</Modal>
+		<AutoFocusStoreContext value={autoFocus}>
+			<Modal footer={<Footer />} header="Auto Focus" id={`autofocus-${camera.id}-${focuser.id}`} maxWidth="440px" onHide={autoFocus.hide}>
+				<Body />
+			</Modal>
+		</AutoFocusStoreContext>
 	)
 })
 
 const Body = memo(() => (
 	<div className="mt-0 grid grid-cols-12 gap-2">
-		<Devices />
+		<CameraAndFocuser />
 		<Status />
 		<Inputs />
 		<FocusChart />
 	</div>
 ))
 
-const Devices = memo(() => {
-	const autoFocus = useMolecule(AutoFocusMolecule)
-	const { running, camera, focuser } = useSnapshot(autoFocus.state)
+const CameraAndFocuser = memo(() => {
+	const autoFocus = useContext(AutoFocusStoreContext)
+	const { capture } = useSnapshot(autoFocus.state.request)
+	const { connected: cameraConnected } = useSnapshot(autoFocus.state.camera)
+	const { connected: focuserConnected } = useSnapshot(autoFocus.state.focuser)
+
+	const CameraStartContent = <ConnectButton connected={cameraConnected} onClick={() => equipmentStore.connect(autoFocus.state.camera)} size="sm" />
+	const FocuserStartContent = <ConnectButton connected={focuserConnected} onClick={() => equipmentStore.connect(autoFocus.state.focuser)} size="sm" />
+	const CameraEndContent = <CameraCaptureStartPopover camera={autoFocus.state.camera} mode="autoFocus" onValueChange={autoFocus.updateCapture} value={capture} />
 
 	return (
-		<div className="col-span-full flex flex-row items-center justify-center gap-2">
-			<CameraDropdown endContent={<CameraDropdownEndContent />} disabled={running} onValueChange={(value) => (autoFocus.state.camera = value)} showLabel value={camera} />
-			<FocuserDropdown disabled={running} onValueChange={(value) => (autoFocus.state.focuser = value)} showLabel value={focuser} />
+		<div className="col-span-full mt-2 flex flex-row items-center justify-between gap-2">
+			<TextInput className="flex-1" readOnly label="Camera" value={autoFocus.state.camera.name} startContent={CameraStartContent} endContent={CameraEndContent} />
+			<TextInput className="flex-1" readOnly label="Focuser" value={autoFocus.state.focuser.name} startContent={FocuserStartContent} />
 		</div>
 	)
 })
 
 const Status = memo(() => {
-	const autoFocus = useMolecule(AutoFocusMolecule)
+	const autoFocus = useContext(AutoFocusStoreContext)
 	const { event } = useSnapshot(autoFocus.state)
 	const { state, starCount, hfd, message, focusPoint } = event
 
@@ -143,7 +156,7 @@ const Status = memo(() => {
 })
 
 const Inputs = memo(() => {
-	const autoFocus = useMolecule(AutoFocusMolecule)
+	const autoFocus = useContext(AutoFocusStoreContext)
 	const { focuser, running } = useSnapshot(autoFocus.state)
 	const { starDetection, initialOffsetSteps, stepSize, fittingMode, rmsdThreshold, reversed } = useSnapshot(autoFocus.state.request)
 	const stepSizeMax = focuser?.connected ? Math.max(1, focuser.position.max - focuser.position.min) : undefined
@@ -161,7 +174,7 @@ const Inputs = memo(() => {
 })
 
 const FocusChart = memo(() => {
-	const autoFocus = useMolecule(AutoFocusMolecule)
+	const autoFocus = useContext(AutoFocusStoreContext)
 	const { event } = useSnapshot(autoFocus.state)
 	const samples = focusChartSamples(event.x, event.y)
 	const left = focusCurve(event.left)
@@ -194,7 +207,7 @@ const FocusChart = memo(() => {
 })
 
 const Footer = memo(() => {
-	const autoFocus = useMolecule(AutoFocusMolecule)
+	const autoFocus = useContext(AutoFocusStoreContext)
 	const { running, camera, focuser } = useSnapshot(autoFocus.state)
 
 	return (
@@ -206,7 +219,7 @@ const Footer = memo(() => {
 })
 
 const CameraDropdownEndContent = memo(() => {
-	const autoFocus = useMolecule(AutoFocusMolecule)
+	const autoFocus = useContext(AutoFocusStoreContext)
 	const { camera } = useSnapshot(autoFocus.state)
 	const { capture } = useSnapshot(autoFocus.state.request)
 
@@ -214,7 +227,7 @@ const CameraDropdownEndContent = memo(() => {
 })
 
 const StarDetectionSelectEndContent = memo(() => {
-	const autoFocus = useMolecule(AutoFocusMolecule)
+	const autoFocus = useContext(AutoFocusStoreContext)
 	const { starDetection } = useSnapshot(autoFocus.state.request)
 
 	return <StarDetectionPopover onValueChange={autoFocus.updateStarDetection} value={starDetection} variant="ghost" />

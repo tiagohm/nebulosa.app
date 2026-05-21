@@ -62,9 +62,9 @@ const CameraAndMount = memo(() => {
 	const CameraEndContent = <CameraCaptureStartPopover camera={darv.state.camera} mode="darv" onValueChange={darv.updateCapture} value={capture} />
 
 	return (
-		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
-			<TextInput readOnly label="Camera" value={darv.state.camera.name} startContent={CameraStartContent} endContent={CameraEndContent} />
-			<TextInput readOnly label="Mount" value={darv.state.mount.name} startContent={MountStartContent} />
+		<div className="col-span-full mt-2 flex flex-row items-center justify-between gap-2">
+			<TextInput className="flex-1" readOnly label="Camera" value={darv.state.camera.name} startContent={CameraStartContent} endContent={CameraEndContent} />
+			<TextInput className="flex-1" readOnly label="Mount" value={darv.state.mount.name} startContent={MountStartContent} />
 		</div>
 	)
 })

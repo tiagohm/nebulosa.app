@@ -12,7 +12,10 @@ import type { RotatorStore } from '@/store/rotator.store'
 import type { ThermometerStore } from '@/store/thermometer.store'
 import type { TppaStore } from '@/store/tppa.store'
 import type { WheelStore } from '@/store/wheel.store'
+import type { AutoFocusStore } from '../store/autofocus.store'
 import type { FilePickerStore } from '../store/filepicker.store'
+
+export const AutoFocusStoreContext = createContext<AutoFocusStore>(null as never)
 
 export const CameraDeviceContext = createContext<Camera>(null as never)
 export const CameraStoreContext = createContext<CameraStore>(null as never)

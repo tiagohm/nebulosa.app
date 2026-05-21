@@ -73,9 +73,9 @@ const CameraAndMount = memo(() => {
 	const CameraEndContent = <CameraCaptureStartPopover camera={tppa.state.camera} mode="tppa" onValueChange={tppa.updateCapture} value={capture} />
 
 	return (
-		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
-			<TextInput readOnly label="Camera" value={tppa.state.camera.name} startContent={CameraStartContent} endContent={CameraEndContent} />
-			<TextInput readOnly label="Mount" value={tppa.state.mount.name} startContent={MountStartContent} />
+		<div className="col-span-full mt-2 flex flex-row items-center justify-between gap-2">
+			<TextInput className="flex-1" readOnly label="Camera" value={tppa.state.camera.name} startContent={CameraStartContent} endContent={CameraEndContent} />
+			<TextInput className="flex-1" readOnly label="Mount" value={tppa.state.mount.name} startContent={MountStartContent} />
 		</div>
 	)
 })

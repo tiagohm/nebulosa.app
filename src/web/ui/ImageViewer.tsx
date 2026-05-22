@@ -102,9 +102,7 @@ export const ImageViewer = memo(() => {
 			imageWorkspaceStore.link(image, viewer)
 		}
 
-		return () => {
-			viewer.detach()
-		}
+		return viewer.detach
 	}, [])
 
 	// Loads after layout so the image node is already available for cached/object URLs.

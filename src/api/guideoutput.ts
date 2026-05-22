@@ -1,3 +1,4 @@
+import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import type { IndiClient } from 'nebulosa/src/indi.client'
 import type { GuideOutput } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, GuideOutputManager } from 'nebulosa/src/indi.manager'
@@ -36,8 +37,12 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 		return Array.from(this.guideOutputManager.list(client))
 	}
 
-	pulse(device: GuideOutput, body: GuidePulse) {
-		return this.guideOutputManager.pulse(device, body.direction, body.duration)
+	guideRate(device: GuideOutput, rate: EquatorialCoordinate) {
+		return this.guideOutputManager.guideRate(device, rate.rightAscension, rate.declination)
+	}
+
+	pulse(device: GuideOutput, pulse: GuidePulse) {
+		return this.guideOutputManager.pulse(device, pulse.direction, pulse.duration)
 	}
 }
 
@@ -51,6 +56,7 @@ export function guideOutput(guideOutputHandler: GuideOutputHandler): Endpoints {
 	return {
 		'/guideoutputs': { GET: (req) => response(guideOutputHandler.list(query(req).client)) },
 		'/guideoutputs/:id': { GET: (req) => response(guideOutputFromParams(req)) },
+		'/guideoutputs/:id/guiderate': { POST: async (req) => response(guideOutputHandler.guideRate(guideOutputFromParams(req), await req.json())) },
 		'/guideoutputs/:id/pulse': { POST: async (req) => response(guideOutputHandler.pulse(guideOutputFromParams(req), await req.json())) },
 	}
 }

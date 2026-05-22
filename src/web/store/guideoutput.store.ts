@@ -62,6 +62,14 @@ export function guideOutputStore(guideOutput: GuideOutput) {
 		return equipmentStore.connect(guideOutput)
 	}
 
+	function guideRateRA(rightAscension: number) {
+		return Api.GuideOutputs.guideRate(guideOutput, { ...guideOutput.guideRate, rightAscension })
+	}
+
+	function guideRateDEC(declination: number) {
+		return Api.GuideOutputs.guideRate(guideOutput, { ...guideOutput.guideRate, declination })
+	}
+
 	function pulse(direction: NudgeDirection, down: boolean) {
 		if (!down) {
 			const { north, south, west, east } = state.request
@@ -107,6 +115,8 @@ export function guideOutputStore(guideOutput: GuideOutput) {
 		unmount,
 		update,
 		connect,
+		guideRateRA,
+		guideRateDEC,
 		pulse,
 		stop,
 		show,

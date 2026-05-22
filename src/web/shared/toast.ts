@@ -1,10 +1,11 @@
+import { nanoid } from 'nanoid'
 import type { ClassValue } from 'tailwind-variants'
 import { tw } from './util'
 
 export const TOAST_PLACEMENTS = ['top-start', 'top', 'top-end', 'bottom-start', 'bottom', 'bottom-end'] as const
 
 const DEFAULT_TOAST_COLOR = 'primary'
-const DEFAULT_TOAST_DELAY = 2000
+const DEFAULT_TOAST_DELAY = 5000
 const DEFAULT_TOAST_PLACEMENT = 'top-end'
 const DEFAULT_TOAST_SIZE = 'md'
 
@@ -36,7 +37,6 @@ export interface ToastRecord extends ToastOptions {
 	readonly size: ToastSize
 }
 
-let toastSequence = 0
 let toastEntries: readonly ToastRecord[] = []
 let toastDefaults: ToastProviderDefaults = {
 	color: DEFAULT_TOAST_COLOR,
@@ -54,18 +54,13 @@ function emitToastChange() {
 	}
 }
 
-// Creates a stable in-memory toast identifier.
-function nextToastId() {
-	return `toast-${++toastSequence}`
-}
-
 // Resolves the complete toast payload from provider defaults and toast overrides.
 function resolveToastRecord(options: ToastOptions): ToastRecord {
 	const mergedOptions = { ...toastDefaults, ...options, className: tw(toastDefaults.className, options.className) }
 
 	return {
 		...mergedOptions,
-		id: nextToastId(),
+		id: nanoid(),
 		color: mergedOptions.color ?? DEFAULT_TOAST_COLOR,
 		delay: mergedOptions.delay ?? DEFAULT_TOAST_DELAY,
 		placement: mergedOptions.placement ?? DEFAULT_TOAST_PLACEMENT,

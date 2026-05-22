@@ -42,6 +42,10 @@ function link(image: Image, viewer: unknown) {
 	viewers.set(image.key, viewer)
 }
 
+function unlink(image: Image) {
+	viewers.delete(image.key)
+}
+
 function add(path: string, key: string | undefined | null, source: Image['source'] | Camera) {
 	source = typeof source === 'string' ? source : 'camera'
 
@@ -103,6 +107,7 @@ function hidePicker() {
 export const imageWorkspaceStore = {
 	state,
 	link,
+	unlink,
 	add,
 	remove,
 	choose,

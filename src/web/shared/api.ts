@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid'
 import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import type { Angle } from 'nebulosa/src/angle'
+import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
 import type { Camera, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, MountTargetCoordinate, NameAndLabel, Rotator, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
 import type { Message, NewVector } from 'nebulosa/src/indi.types'
@@ -344,6 +345,10 @@ export namespace Api {
 
 		export function get(name: string, connection: ConnectionStatus) {
 			return json<GuideOutput>(`/guideoutputs/${name}?client=${connection.id}`, 'get')
+		}
+
+		export function guideRate(guideOutput: GuideOutput, rate: EquatorialCoordinate) {
+			return res(`/guideoutputs/${guideOutput.name}/guiderate?client=${guideOutput.client.id}`, 'post', rate)
 		}
 
 		export function pulse(guideOutput: GuideOutput, req: GuidePulse) {

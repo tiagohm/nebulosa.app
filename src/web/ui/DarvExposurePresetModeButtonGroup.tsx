@@ -1,7 +1,7 @@
-import type { DarvExposurePresetType } from 'nebulosa/src/polaralignment'
+import type { DarvExposurePresetMode } from 'nebulosa/src/polaralignment'
 import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from './components/ButtonGroup'
 
-export function DarvExposurePresetTypeButtonGroup(props: Omit<ButtonGroupProps<'custom' | DarvExposurePresetType>, 'children'>) {
+export function DarvExposurePresetModeButtonGroup(props: Omit<ButtonGroupProps<'custom' | DarvExposurePresetMode>, 'children'>) {
 	return (
 		<ButtonGroup {...props}>
 			<ButtonGroupItem id="coarse" label="Coarse" />

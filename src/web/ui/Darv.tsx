@@ -1,4 +1,3 @@
-import { COARSE_DARV_EXPOSURE_PRESET } from 'nebulosa/src/polaralignment'
 import { memo, useContext } from 'react'
 import type { DarvState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
@@ -15,7 +14,7 @@ import { Popover } from './components/Popover'
 import { TextInput } from './components/TextInput'
 import { ConnectButton } from './ConnectButton'
 import { DarvExposureModeButtonGroup } from './DarvExposureModeButtonGroup'
-import { DarvExposurePresetTypeButtonGroup } from './DarvExposurePresetTypeButtonGroup'
+import { DarvExposurePresetModeButtonGroup } from './DarvExposurePresetModeButtonGroup'
 import { HemisphereSelect } from './HemisphereSelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
@@ -95,7 +94,7 @@ const Input = memo(() => {
 	return (
 		<>
 			<NumberInput className="col-span-6" disabled={running} label="Initial pause" endContent="s" maxValue={60} minValue={1} onValueChange={(value) => darv.update('initialPause', value)} value={initialPause} />
-			<NumberInput className="col-span-6" disabled={running} label="Drift for (s)" maxValue={1200} minValue={1} onValueChange={(value) => darv.update('duration', value)} value={duration} endContent={<ExposureEstimatorPopover />} />
+			<NumberInput className="col-span-6" disabled={running} label="Exposure time" maxValue={1200} minValue={1} onValueChange={(value) => darv.update('duration', value)} value={duration} startContent={<ExposureEstimatorPopover />} endContent="s" />
 			<HemisphereSelect className="col-span-6" disabled={running} onValueChange={(value) => darv.update('hemisphere', value)} value={hemisphere} />
 		</>
 	)
@@ -116,9 +115,10 @@ const Footer = memo(() => {
 const ExposureEstimatorPopover = memo(() => {
 	const darv = useContext(DarvStoreContext)
 	const { running } = useSnapshot(darv.state)
+	const { connected } = useSnapshot(darv.state.mount)
 
 	return (
-		<Popover className="w-100" disabled={running} trigger={<IconButton disabled={running} icon={Icons.Calculator} size="sm" tooltipContent="Estimate exposure" />}>
+		<Popover className="w-100" disabled={running} trigger={<IconButton disabled={running || !connected} icon={Icons.Calculator} size="sm" tooltipContent="Estimate exposure" />}>
 			<ExposureEstimatorPopoverContent />
 		</Popover>
 	)
@@ -126,28 +126,23 @@ const ExposureEstimatorPopover = memo(() => {
 
 const ExposureEstimatorPopoverContent = memo(() => {
 	const darv = useContext(DarvStoreContext)
-	const { focalLength, pixelSize, mode, preset } = useSnapshot(darv.state.exposureEstimation)
+	const { focalLength, pixelSize, mode, preset, presetMode } = useSnapshot(darv.state.exposureEstimation)
 
 	return (
-		<div className="grid w-full grid-cols-6 gap-2 p-1">
-			<NumberInput className="col-span-full" endContent="mm" fullWidth label="Focal length" maxValue={100000} minValue={1} onValueChange={(value) => darv.updateExposureEstimation('focalLength', value)} value={focalLength} />
-			<NumberInput className="col-span-full" endContent="µm" fractionDigits={2} fullWidth label="Pixel size" maxValue={1000} minValue={0.01} onValueChange={(value) => darv.updateExposureEstimation('pixelSize', value)} step={0.01} value={pixelSize} />
+		<div className="grid w-full grid-cols-24 gap-2 p-1">
+			<NumberInput className="col-span-12" endContent="mm" fullWidth label="Focal length" maxValue={100000} minValue={1} onValueChange={(value) => darv.updateExposureEstimation('focalLength', value)} value={focalLength} />
+			<NumberInput className="col-span-12" endContent="µm" fractionDigits={2} fullWidth label="Pixel size" maxValue={1000} minValue={0.01} onValueChange={(value) => darv.updateExposureEstimation('pixelSize', value)} step={0.01} value={pixelSize} />
 			<div className="col-span-full flex flex-col gap-1">
 				<span className="text-xs text-neutral-400">Mode</span>
 				<DarvExposureModeButtonGroup fullWidth onValueChange={(value) => darv.updateExposureEstimation('mode', value)} size="sm" value={mode} />
 			</div>
 			<div className="col-span-full flex flex-col gap-1">
 				<span className="text-xs text-neutral-400">Preset</span>
-				<DarvExposurePresetTypeButtonGroup fullWidth onValueChange={(value) => darv.updateExposureEstimation('preset', value === 'custom' ? structuredClone(COARSE_DARV_EXPOSURE_PRESET) : value)} size="sm" value={typeof preset === 'object' ? 'custom' : preset} />
+				<DarvExposurePresetModeButtonGroup fullWidth onValueChange={(value) => darv.updateExposureEstimation('presetMode', value)} size="sm" value={presetMode} />
 			</div>
-			{typeof preset === 'object' && (
-				<>
-					<NumberInput className="col-span-3" label="RA trail length" endContent="px" minValue={1} maxValue={1000} value={preset.targetTrail} onValueChange={(value) => darv.updateExposureEstimationPreset('targetTrail', value)} />
-					<NumberInput className="col-span-3" label="Min. detectable separation" endContent="px" minValue={1} maxValue={10} value={preset.detectableSeparation} onValueChange={(value) => darv.updateExposureEstimationPreset('detectableSeparation', value)} />
-					<NumberInput className="col-span-3" label="Target polar error" minValue={1} maxValue={30} endContent="arcmin" value={preset.targetPolarError} onValueChange={(value) => darv.updateExposureEstimationPreset('targetPolarError', value)} />
-					<NumberInput className="col-span-3" label="Guide rate" step={0.01} endContent="x" fractionDigits={2} minValue={0.01} maxValue={1} value={preset.guideRateSidereal} onValueChange={(value) => darv.updateExposureEstimationPreset('guideRateSidereal', value)} />
-				</>
-			)}
+			<NumberInput disabled={presetMode !== 'custom'} className="col-span-12" label="RA trail length" endContent="px" minValue={1} maxValue={1000} value={preset.targetTrail} onValueChange={(value) => darv.updateExposureEstimationPreset('targetTrail', value)} />
+			<NumberInput disabled={presetMode !== 'custom'} className="col-span-12" label="Min. separation" endContent="px" minValue={1} maxValue={10} value={preset.detectableSeparation} onValueChange={(value) => darv.updateExposureEstimationPreset('detectableSeparation', value)} />
+			<NumberInput disabled={presetMode !== 'custom'} className="col-span-full" label="Target polar error" minValue={1} maxValue={30} endContent="arcmin" value={preset.targetPolarError} onValueChange={(value) => darv.updateExposureEstimationPreset('targetPolarError', value)} />
 			<Button className="col-span-full mt-1" color="success" fullWidth label="Estimate" onClick={darv.estimateExposure} startContent={<Icons.Calculator />} />
 		</div>
 	)

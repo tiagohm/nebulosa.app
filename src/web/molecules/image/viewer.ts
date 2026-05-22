@@ -275,6 +275,7 @@ export const ImageViewerMolecule = molecule(() => {
 
 		adjustZIndexAfterBeRemoved()
 
+		imageWorkspaceStore.unlink(scope.image)
 		imageWorkspaceStore.state.selected = undefined
 		target = undefined
 		interactable = undefined

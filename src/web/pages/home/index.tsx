@@ -12,7 +12,7 @@ function start() {
 
 	root.render(
 		<React.StrictMode>
-			<ToastProvider color="secondary" delay={2000} maxVisible={1} placement="top-end" size="sm">
+			<ToastProvider color="secondary" maxVisible={1} placement="top-end" size="sm">
 				<main className="h-dvh w-dvw">
 					<Home />
 				</main>

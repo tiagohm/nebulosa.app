@@ -103,8 +103,6 @@ export function mountStore(mount: Mount) {
 		timer = window.setInterval(updateCoordinatePosition, 5000)
 
 		updateCoordinatePosition()
-
-		return unmount
 	}
 
 	function unmount() {
@@ -153,7 +151,7 @@ export function mountStore(mount: Mount) {
 
 	async function updateCurrentCoordinatePosition() {
 		const position = await Api.Mounts.currentPosition(mount)
-		position && Object.assign(state.current, position)
+		position && Object.assign(state.current.position, position)
 	}
 
 	async function updateTargetCoordinatePosition() {
@@ -284,6 +282,7 @@ export function mountStore(mount: Mount) {
 	return {
 		state,
 		mount: _mount,
+		unmount,
 		connect,
 		updateRemoteControl,
 		startRemoteControl,

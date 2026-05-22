@@ -209,7 +209,6 @@ const DeviceList = memo(() => {
 	function handleClick(id: string) {
 		const device = equipmentStore.get(selected as DeviceType, id)
 		if (device !== undefined) device.show = true
-		homeMenuStore.hide()
 	}
 
 	const devices = new Array<React.ReactNode>(length)

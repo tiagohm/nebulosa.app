@@ -1,12 +1,13 @@
 import { nanoid } from 'nanoid'
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
-import { estimateDarvExposure, type DarvExposureInput, type DarvExposurePreset } from 'nebulosa/src/polaralignment'
+import { COARSE_DARV_EXPOSURE_PRESET, DARV_EXPOSURE_PRESETS, estimateDarvExposure, type DarvExposureInput, type DarvExposurePreset, type DarvExposurePresetMode } from 'nebulosa/src/polaralignment'
 import bus from 'src/shared/bus'
 import { DEFAULT_DARV_EVENT, DEFAULT_DARV_START, type DarvEvent, type DarvStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
+import { toast } from '../shared/toast'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
 import { equipmentStore, type DeviceState } from './equipment.store'
 
@@ -18,7 +19,7 @@ export interface DarvState {
 	camera: DeviceState<Camera>
 	mount: DeviceState<Mount>
 	readonly event: DarvEvent
-	readonly exposureEstimation: DarvExposureInput
+	readonly exposureEstimation: DarvExposureInput & { presetMode: DarvExposurePresetMode | 'custom' }
 }
 
 export function darvStore(camera: Camera, mount: Mount) {
@@ -34,7 +35,8 @@ export function darvStore(camera: Camera, mount: Mount) {
 			declination: 0,
 			latitude: 0,
 			mode: 'azimuth',
-			preset: 'coarse',
+			preset: structuredClone(COARSE_DARV_EXPOSURE_PRESET),
+			presetMode: 'coarse',
 		},
 	})
 
@@ -62,8 +64,6 @@ export function darvStore(camera: Camera, mount: Mount) {
 		subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
 
 		state.request.id = nanoid()
-
-		return unmount
 	}
 
 	function unmount() {
@@ -86,8 +86,15 @@ export function darvStore(camera: Camera, mount: Mount) {
 		state.request.capture[key] = value
 	}
 
-	function updateExposureEstimation<K extends keyof DarvExposureInput>(key: K, value: DarvExposureInput[K]) {
+	function updateExposureEstimation<K extends keyof DarvState['exposureEstimation']>(key: K, value: DarvState['exposureEstimation'][K]) {
 		state.exposureEstimation[key] = value
+
+		if (key === 'presetMode') {
+			if (value !== 'custom') {
+				const preset = DARV_EXPOSURE_PRESETS[value as DarvExposurePresetMode]
+				Object.assign(state.exposureEstimation.preset, preset)
+			}
+		}
 	}
 
 	function updateExposureEstimationPreset<K extends keyof DarvExposurePreset>(key: K, value: DarvExposurePreset[K]) {
@@ -98,8 +105,17 @@ export function darvStore(camera: Camera, mount: Mount) {
 	function estimateExposure() {
 		state.exposureEstimation.latitude = mount.geographicCoordinate.latitude
 		state.exposureEstimation.declination = mount.equatorialCoordinate.declination
-		const { recommendedExposure } = estimateDarvExposure(state.exposureEstimation)
-		update('duration', Math.ceil(recommendedExposure))
+		if (mount.hasGuideRate) state.exposureEstimation.preset.guideRateSidereal = mount.guideRate.rightAscension
+		else state.exposureEstimation.preset.guideRateSidereal = 1
+
+		try {
+			const { recommendedExposure } = estimateDarvExposure(state.exposureEstimation)
+			update('duration', Math.ceil(recommendedExposure))
+		} catch (e) {
+			if (Error.isError(e)) {
+				toast({ title: 'DARV EXPOSURE ESTIMATOR', description: e.message, color: 'danger' })
+			}
+		}
 	}
 
 	async function start() {
@@ -137,6 +153,7 @@ export function darvStore(camera: Camera, mount: Mount) {
 	return {
 		state,
 		mount: _mount,
+		unmount,
 		update,
 		updateCapture,
 		updateExposureEstimation,

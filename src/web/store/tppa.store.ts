@@ -52,8 +52,6 @@ export function tppaStore(camera: Camera, mount: Mount) {
 		subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
 
 		state.request.id = nanoid()
-
-		return unmount
 	}
 
 	function unmount() {
@@ -117,6 +115,7 @@ export function tppaStore(camera: Camera, mount: Mount) {
 	return {
 		state,
 		mount: _mount,
+		unmount,
 		update,
 		updateSolver,
 		updateCapture,

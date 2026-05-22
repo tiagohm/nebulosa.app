@@ -1,6 +1,7 @@
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import { type CameraCaptureStart, type DarvEvent, type DarvStart, type DarvStop, DEFAULT_DARV_EVENT } from 'src/shared/types'
 import type { CameraHandler } from './camera'
+import type { GuideOutputHandler } from './guideoutput'
 import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { MountHandler } from './mount'
@@ -14,6 +15,7 @@ export class DarvHandler {
 		readonly wsm: WebSocketMessageHandler,
 		readonly cameraHandler: CameraHandler,
 		readonly mountHandler: MountHandler,
+		readonly guideOutputHandler: GuideOutputHandler,
 	) {}
 
 	sendEvent(event: DarvEvent) {
@@ -49,9 +51,9 @@ export class DarvHandler {
 export class DarvTask {
 	readonly event = structuredClone(DEFAULT_DARV_EVENT)
 
-	private readonly capture: CameraCaptureStart
-	private readonly handleDarvEvent: () => void
-	private stopped = false
+	readonly #capture: CameraCaptureStart
+	readonly #handleDarvEvent: () => void
+	#stopped = false
 
 	constructor(
 		private readonly darv: DarvHandler,
@@ -60,23 +62,23 @@ export class DarvTask {
 		private readonly request: DarvStart,
 		handleDarvEvent: (event: DarvEvent) => void,
 	) {
-		this.capture = request.capture
-		this.capture.autoSave = false
-		this.capture.count = 1
-		this.capture.delay = 0
-		this.capture.frameType = 'LIGHT'
-		this.capture.exposureMode = 'SINGLE'
-		this.capture.mount = mount?.name
-		this.capture.x = 0
-		this.capture.y = 0
-		this.capture.width = camera.frame.width.max
-		this.capture.height = camera.frame.height.max
-		this.capture.exposureTime = Math.trunc(request.duration + request.initialPause)
-		this.capture.exposureTimeUnit = 'SECOND'
+		this.#capture = request.capture
+		this.#capture.autoSave = false
+		this.#capture.count = 1
+		this.#capture.delay = 0
+		this.#capture.frameType = 'LIGHT'
+		this.#capture.exposureMode = 'SINGLE'
+		this.#capture.mount = mount?.name
+		this.#capture.x = 0
+		this.#capture.y = 0
+		this.#capture.width = camera.frame.width.max
+		this.#capture.height = camera.frame.height.max
+		this.#capture.exposureTime = Math.trunc(request.duration + request.initialPause)
+		this.#capture.exposureTimeUnit = 'SECOND'
 
 		this.event.id = request.id
 
-		this.handleDarvEvent = () => {
+		this.#handleDarvEvent = () => {
 			handleDarvEvent(this.event)
 		}
 	}
@@ -89,63 +91,67 @@ export class DarvTask {
 
 		// Wait for initial pause
 		this.event.state = 'WAITING'
-		this.handleDarvEvent()
+		this.#handleDarvEvent()
 
-		let success = await waitFor(this.request.initialPause * 1000, () => !this.stopped)
+		let success = await waitFor(this.request.initialPause * 1000, () => !this.#stopped)
 
 		if (success) {
 			// Move the mount forward
 			this.event.state = 'FORWARDING'
-			this.handleDarvEvent()
+			this.#handleDarvEvent()
 
-			this.move(true, false)
+			const duration = this.request.duration * 500 // ms
 
-			success = await waitFor(this.request.duration * 500, () => !this.stopped)
+			this.move(true, false, duration)
+
+			success = await waitFor(duration, () => !this.#stopped)
 
 			if (success) {
 				// Move the mount backward
 				this.event.state = 'BACKWARDING'
-				this.handleDarvEvent()
+				this.#handleDarvEvent()
 
-				this.move(true, true)
+				this.move(true, true, duration)
 
-				await waitFor(this.request.duration * 500, () => !this.stopped)
+				await waitFor(duration, () => !this.#stopped)
 			}
 		}
 
 		// Done
-		this.move(false, false)
+		this.move(false, false, 0)
 		this.event.state = 'IDLE'
-		this.handleDarvEvent()
+		this.#handleDarvEvent()
 	}
 
 	stop() {
-		if (!this.stopped) {
-			this.stopped = true
+		if (!this.#stopped) {
+			this.#stopped = true
 
-			this.move(false, false)
-			this.darv.mountHandler.mountManager.stop(this.mount)
+			this.move(false, false, 0)
 			this.darv.cameraHandler.stop(this.camera)
 
 			if (this.event.state !== 'IDLE') {
 				this.event.state = 'IDLE'
-				this.handleDarvEvent()
+				this.#handleDarvEvent()
 			}
 		}
 	}
 
-	private move(enabled: boolean, reversed: boolean) {
+	private move(enabled: boolean, reversed: boolean, duration: number) {
+		const guideOutputManager = this.darv.guideOutputHandler.guideOutputManager
+
 		if (enabled) {
 			if ((this.request.hemisphere === 'NORTHERN') !== !reversed) {
-				this.darv.mountHandler.mountManager.moveWest(this.mount, false)
-				this.darv.mountHandler.mountManager.moveEast(this.mount, true)
+				guideOutputManager.pulseWest(this.mount, 0)
+				guideOutputManager.pulseEast(this.mount, duration)
 			} else {
-				this.darv.mountHandler.mountManager.moveEast(this.mount, false)
-				this.darv.mountHandler.mountManager.moveWest(this.mount, true)
+				guideOutputManager.pulseEast(this.mount, 0)
+				guideOutputManager.pulseWest(this.mount, duration)
 			}
 		} else {
-			this.darv.mountHandler.mountManager.moveEast(this.mount, false)
-			this.darv.mountHandler.mountManager.moveWest(this.mount, false)
+			guideOutputManager.pulseEast(this.mount, 0)
+			guideOutputManager.pulseWest(this.mount, 0)
+			this.darv.mountHandler.mountManager.stop(this.mount)
 		}
 	}
 }

@@ -10,7 +10,7 @@ export class WebSocketMessageHandler {
 	open(socket: Messager) {
 		if (!this.sockets.has(socket)) {
 			this.sockets.add(socket)
-			bus.emit('ws:open', undefined)
+			bus.emit('ws:open', socket)
 			console.info('web socket connected')
 		}
 	}
@@ -23,12 +23,13 @@ export class WebSocketMessageHandler {
 		if (this.sockets.has(socket)) {
 			console.info('web socket closed:', code, reason)
 			this.sockets.delete(socket)
-			bus.emit('ws:close', undefined)
+			bus.emit('ws:close', socket)
 		}
 	}
 
-	send(type: string, message: object | undefined | null, socket?: Messager) {
-		bus.emit(type, message)
+	// oxlint-disable-next-line typescript/no-unnecessary-type-parameters
+	send<T = unknown>(type: string, message: T | undefined | null, socket?: Messager) {
+		// bus.emit(type, message)
 
 		if (this.sockets.size > 0) {
 			const data = `${type}@${message ? JSON.stringify(message) : ''}`

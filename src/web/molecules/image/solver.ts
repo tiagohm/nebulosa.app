@@ -1,4 +1,5 @@
 import { molecule, onMount, use } from 'bunshi'
+import { nanoid } from 'nanoid'
 import { arcsec, formatDEC, formatRA, toDeg } from 'nebulosa/src/angle'
 import { numericKeyword } from 'nebulosa/src/fits.util'
 import type { Mount } from 'nebulosa/src/indi.device'
@@ -68,6 +69,7 @@ export const ImageSolverMolecule = molecule(() => {
 		})
 
 		state.solution ??= viewer.state.info?.solution && ref(viewer.state.info.solution)
+		state.request.id = nanoid()
 
 		unsubscribers[2] = initProxy(state, `image.${viewer.storageKey}.solver`, ['p:show', 'o:request'])
 
@@ -95,7 +97,7 @@ export const ImageSolverMolecule = molecule(() => {
 	}
 
 	function stop() {
-		return Api.PlateSolver.stop({ id: viewer.scope.image.key })
+		return Api.PlateSolver.stop(state.request.id)
 	}
 
 	async function goTo(mount?: Mount) {

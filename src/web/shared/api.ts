@@ -10,7 +10,7 @@ import type { PHD2Profile } from 'nebulosa/src/phd2'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/star.detector'
 // oxfmt-ignore
-import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DarvStop, DirectoryEntry, FileSystem, FindCloseApproaches, FindNextLunarEclipse, FindNextSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, NextLunarApsis, NextLunarEclipse, NextSolarEclipse, OpenImage, PHD2Connect, PHD2Event, PHD2Status, PlateSolveStart, PlateSolveStop, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SolarSeasons, StarDetection, StatisticImage, TppaStart, TppaStop, Twilight } from 'src/shared/types'
+import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DirectoryEntry, FileSystem, FindCloseApproaches, FindNextLunarEclipse, FindNextSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, NextLunarApsis, NextLunarEclipse, NextSolarEclipse, OpenImage, PHD2Connect, PHD2Event, PHD2Status, PlateSolveStart, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SolarSeasons, StarDetection, StatisticImage, TppaStart, Twilight } from 'src/shared/types'
 import { type ImageCoordinateInterpolation, type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -531,8 +531,8 @@ export namespace Api {
 			return json<PlateSolution>('/platesolver/start', 'post', req)
 		}
 
-		export function stop(req: PlateSolveStop) {
-			return res('/platesolver/stop', 'post', req)
+		export function stop(id: string) {
+			return res(`/platesolver/${id}/stop`, 'post')
 		}
 	}
 
@@ -557,8 +557,8 @@ export namespace Api {
 			return res(`/tppa/${camera.name}/${mount.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
-		export function stop(req: TppaStop) {
-			return res('/tppa/stop', 'post', req)
+		export function stop(id: string) {
+			return res(`/tppa/${id}/stop`, 'post')
 		}
 	}
 
@@ -567,8 +567,8 @@ export namespace Api {
 			return res(`/darv/${camera.name}/${mount.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
-		export function stop(req: DarvStop) {
-			return res('/darv/stop', 'post', req)
+		export function stop(id: string) {
+			return res(`/darv/${id}/stop`, 'post')
 		}
 	}
 
@@ -577,8 +577,8 @@ export namespace Api {
 			return res(`/autofocus/${camera.name}/${focuser.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
-		export function stop(camera: Camera, focuser: Focuser) {
-			return res(`/autofocus/${camera.name}/${focuser.name}/stop?client=${camera.client.id}`, 'post')
+		export function stop(id: string) {
+			return res(`/autofocus/${id}/stop`, 'post')
 		}
 	}
 
@@ -587,8 +587,8 @@ export namespace Api {
 			return res(`/flatwizard/${camera.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
-		export function stop(camera: Camera) {
-			return res(`/flatwizard/${camera.name}/stop?client=${camera.client.id}`, 'post')
+		export function stop(id: string) {
+			return res(`/flatwizard/${id}/stop`, 'post')
 		}
 	}
 

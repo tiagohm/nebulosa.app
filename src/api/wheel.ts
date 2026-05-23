@@ -2,9 +2,10 @@ import type { IndiClient } from 'nebulosa/src/indi.client'
 import type { Wheel } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, WheelManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
+import bus from 'src/shared/bus'
 import type { WheelAdded, WheelRemoved, WheelUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 
 export class WheelHandler implements DeviceHandler<Wheel> {
 	constructor(
@@ -12,19 +13,25 @@ export class WheelHandler implements DeviceHandler<Wheel> {
 		readonly wheelManager: WheelManager,
 	) {
 		wheelManager.addHandler(this)
+
+		bus.subscribe<Messager>('ws:open', (socket) => {
+			for (const device of wheelManager.list()) {
+				this.wsm.send<WheelAdded>('wheel:add', { device }, socket)
+			}
+		})
 	}
 
 	added(device: Wheel) {
-		this.wsm.send('wheel:add', { device } satisfies WheelAdded)
+		this.wsm.send<WheelAdded>('wheel:add', { device })
 		console.info('wheel added:', device.name)
 	}
 
 	updated(device: Wheel, property: keyof Wheel & string, state?: PropertyState) {
-		this.wsm.send('wheel:update', { device: { type: 'wheel', id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies WheelUpdated)
+		this.wsm.send<WheelUpdated>('wheel:update', { device: { type: 'wheel', id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Wheel) {
-		this.wsm.send('wheel:remove', { device } satisfies WheelRemoved)
+		this.wsm.send<WheelRemoved>('wheel:remove', { device })
 		console.info('wheel removed:', device.name)
 	}
 

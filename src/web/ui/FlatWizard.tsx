@@ -1,13 +1,16 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import type { FlatWizardState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { FlatWizardMolecule } from '@/molecules/flatwizard'
+import { useStore } from '../hooks/store.hook'
+import { CameraDeviceContext, FlatWizardStoreContext } from '../shared/context'
+import { equipmentStore } from '../store/equipment.store'
+import { flatWizardStore } from '../store/flatwizard.store'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { Button } from './components/Button'
 import { Chip, type ChipProps } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
-import { CameraDropdown } from './DeviceDropdown'
+import { TextInput } from './components/TextInput'
+import { ConnectButton } from './ConnectButton'
 import { FilePickerInput } from './FilePickerInput'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
@@ -27,36 +30,43 @@ const FLAT_WIZARD_STATE_COLORS = {
 } satisfies Record<FlatWizardState, NonNullable<ChipProps['color']>>
 
 export const FlatWizard = memo(() => {
-	const flatWizard = useMolecule(FlatWizardMolecule)
+	const camera = useContext(CameraDeviceContext)
+	const flatWizard = useStore(() => flatWizardStore(camera), [camera])
 
 	return (
-		<Modal footer={<Footer />} header="Flat Wizard" id="flatwizard" maxWidth="376px" onHide={flatWizard.hide}>
-			<Body />
-		</Modal>
+		<FlatWizardStoreContext value={flatWizard}>
+			<Modal footer={<Footer />} header="Flat Wizard" id="flatwizard" maxWidth="376px" onHide={flatWizard.hide}>
+				<Body />
+			</Modal>
+		</FlatWizardStoreContext>
 	)
 })
 
 const Body = memo(() => (
 	<div className="mt-0 grid grid-cols-12 gap-2">
-		<Devices />
+		<Camera />
 		<Status />
 		<Input />
 	</div>
 ))
 
-const Devices = memo(() => {
-	const flatWizard = useMolecule(FlatWizardMolecule)
-	const { running, camera } = useSnapshot(flatWizard.state)
+const Camera = memo(() => {
+	const flatWizard = useContext(FlatWizardStoreContext)
+	const { capture } = useSnapshot(flatWizard.state.request)
+	const { connected: cameraConnected } = useSnapshot(flatWizard.state.camera)
+
+	const CameraStartContent = <ConnectButton connected={cameraConnected} onClick={() => equipmentStore.connect(flatWizard.state.camera)} size="sm" />
+	const CameraEndContent = <CameraCaptureStartPopover camera={flatWizard.state.camera} mode="flatWizard" onValueChange={flatWizard.updateCapture} value={capture} />
 
 	return (
-		<div className="col-span-full flex flex-row items-center justify-center gap-2">
-			<CameraDropdown endContent={<CameraDropdownEndContent />} disabled={running} onValueChange={(value) => (flatWizard.state.camera = value)} showLabel value={camera} />
+		<div className="col-span-full mt-2 flex flex-row items-center justify-between gap-2">
+			<TextInput className="flex-1" readOnly label="Camera" value={flatWizard.state.camera.name} startContent={CameraStartContent} endContent={CameraEndContent} />
 		</div>
 	)
 })
 
 const Status = memo(() => {
-	const flatWizard = useMolecule(FlatWizardMolecule)
+	const flatWizard = useContext(FlatWizardStoreContext)
 	const { median, state, message } = useSnapshot(flatWizard.state.event)
 
 	return (
@@ -75,7 +85,7 @@ const Status = memo(() => {
 })
 
 const Input = memo(() => {
-	const flatWizard = useMolecule(FlatWizardMolecule)
+	const flatWizard = useContext(FlatWizardStoreContext)
 	const { camera, running } = useSnapshot(flatWizard.state)
 	const { minExposure, maxExposure, meanTarget, meanTolerance, path } = useSnapshot(flatWizard.state.request)
 
@@ -85,7 +95,7 @@ const Input = memo(() => {
 
 	return (
 		<>
-			<FilePickerInput className="col-span-full" disabled={running} fullWidth id="flatwizard" mode="directory" onValueChange={flatWizard.updatePath} value={path} />
+			<FilePickerInput className="col-span-full" disabled={running} fullWidth id="flatwizard" mode="directory" onValueChange={flatWizard.setPath} value={path} />
 			<NumberInput className="col-span-6" disabled={disabled} label="Min exposure (ms)" maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={(value) => flatWizard.update('minExposure', value)} value={minExposure} />
 			<NumberInput className="col-span-6" disabled={disabled} label="Max exposure (ms)" maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={(value) => flatWizard.update('maxExposure', value)} value={maxExposure} />
 			<NumberInput className="col-span-6" disabled={running} label="Mean target" maxValue={MEAN_MAX_VALUE} minValue={0} onValueChange={(value) => flatWizard.update('meanTarget', value)} value={meanTarget} />
@@ -95,7 +105,7 @@ const Input = memo(() => {
 })
 
 const Footer = memo(() => {
-	const flatWizard = useMolecule(FlatWizardMolecule)
+	const flatWizard = useContext(FlatWizardStoreContext)
 	const { running, camera } = useSnapshot(flatWizard.state)
 	const { path: saveAt } = useSnapshot(flatWizard.state.request)
 	const canStart = camera?.connected === true && saveAt.trim().length > 0
@@ -109,7 +119,7 @@ const Footer = memo(() => {
 })
 
 const CameraDropdownEndContent = memo(() => {
-	const flatWizard = useMolecule(FlatWizardMolecule)
+	const flatWizard = useContext(FlatWizardStoreContext)
 	const { camera } = useSnapshot(flatWizard.state)
 	const { capture } = useSnapshot(flatWizard.state.request)
 

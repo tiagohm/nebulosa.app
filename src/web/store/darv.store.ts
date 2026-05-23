@@ -9,16 +9,16 @@ import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
 import { toast } from '../shared/toast'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
-import { equipmentStore, type DeviceState } from './equipment.store'
 import { darvListStore } from './darv.list.store'
+import type { DeviceState } from './equipment.store'
 
 export type DarvStore = ReturnType<typeof darvStore>
 
 export interface DarvState {
 	running: boolean
 	readonly request: DarvStart
-	camera: DeviceState<Camera>
-	mount: DeviceState<Mount>
+	readonly camera: DeviceState<Camera>
+	readonly mount: DeviceState<Mount>
 	readonly event: DarvEvent
 	readonly exposureEstimation: DarvExposureInput & { presetMode: DarvExposurePresetMode | 'custom' }
 }
@@ -56,7 +56,7 @@ export function darvStore(camera: Camera, mount: Mount) {
 		u[0] = initProxy(state, `darv.${camera.id}.${mount.id}`, ['o:request', 'o:exposureEstimation'])
 
 		u[1] = bus.subscribe<DarvEvent>('darv', (event) => {
-			if (state.request.id === event.id) {
+			if (state.camera.id === event.camera && state.mount.id === event.mount) {
 				state.running = event.state !== 'IDLE'
 				Object.assign(state.event, event)
 			}
@@ -64,7 +64,7 @@ export function darvStore(camera: Camera, mount: Mount) {
 
 		subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
 
-		state.request.id = nanoid()
+		state.request.id ||= nanoid()
 	}
 
 	function unmount() {
@@ -123,8 +123,6 @@ export function darvStore(camera: Camera, mount: Mount) {
 		if (state.running || !camera.connected || !mount.connected) return
 
 		state.running = true
-		state.event.id = state.request.id
-		state.event.state = 'WAITING'
 
 		const response = await Api.DARV.start(camera, mount, state.request)
 
@@ -136,15 +134,11 @@ export function darvStore(camera: Camera, mount: Mount) {
 	async function stop() {
 		if (!state.running) return
 
-		const response = await Api.DARV.stop(state.request)
+		const response = await Api.DARV.stop(state.request.id)
 
 		if (response?.ok) {
 			reset()
 		}
-	}
-
-	function show() {
-		darvListStore.show(camera, mount)
 	}
 
 	function hide() {
@@ -162,7 +156,6 @@ export function darvStore(camera: Camera, mount: Mount) {
 		estimateExposure,
 		start,
 		stop,
-		show,
 		hide,
 	} as const
 }

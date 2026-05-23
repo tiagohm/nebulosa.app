@@ -2,9 +2,10 @@ import type { IndiClient } from 'nebulosa/src/indi.client'
 import type { Rotator } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, RotatorManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
+import bus from 'src/shared/bus'
 import type { RotatorAdded, RotatorRemoved, RotatorUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 
 export class RotatorHandler implements DeviceHandler<Rotator> {
 	constructor(
@@ -12,19 +13,25 @@ export class RotatorHandler implements DeviceHandler<Rotator> {
 		readonly rotatorManager: RotatorManager,
 	) {
 		rotatorManager.addHandler(this)
+
+		bus.subscribe<Messager>('ws:open', (socket) => {
+			for (const device of rotatorManager.list()) {
+				this.wsm.send<RotatorAdded>('rotator:add', { device }, socket)
+			}
+		})
 	}
 
 	added(device: Rotator) {
-		this.wsm.send('rotator:add', { device } satisfies RotatorAdded)
+		this.wsm.send<RotatorAdded>('rotator:add', { device })
 		console.info('rotator added:', device.name)
 	}
 
 	updated(device: Rotator, property: keyof Rotator & string, state?: PropertyState) {
-		this.wsm.send('rotator:update', { device: { type: 'rotator', id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies RotatorUpdated)
+		this.wsm.send<RotatorUpdated>('rotator:update', { device: { type: 'rotator', id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Rotator) {
-		this.wsm.send('rotator:remove', { device } satisfies RotatorRemoved)
+		this.wsm.send<RotatorRemoved>('rotator:remove', { device })
 		console.info('rotator removed:', device.name)
 	}
 

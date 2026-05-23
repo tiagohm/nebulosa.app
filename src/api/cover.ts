@@ -2,9 +2,10 @@ import type { IndiClient } from 'nebulosa/src/indi.client'
 import type { Cover } from 'nebulosa/src/indi.device'
 import type { CoverManager, DeviceHandler } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
+import bus from 'src/shared/bus'
 import type { CoverAdded, CoverRemoved, CoverUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 
 export class CoverHandler implements DeviceHandler<Cover> {
 	constructor(
@@ -12,19 +13,25 @@ export class CoverHandler implements DeviceHandler<Cover> {
 		readonly coverManager: CoverManager,
 	) {
 		coverManager.addHandler(this)
+
+		bus.subscribe<Messager>('ws:open', (socket) => {
+			for (const device of coverManager.list()) {
+				this.wsm.send<CoverAdded>('cover:add', { device }, socket)
+			}
+		})
 	}
 
 	added(device: Cover) {
-		this.wsm.send('cover:add', { device } satisfies CoverAdded)
+		this.wsm.send<CoverAdded>('cover:add', { device })
 		console.info('cover added:', device.name)
 	}
 
 	updated(device: Cover, property: keyof Cover & string, state?: PropertyState) {
-		this.wsm.send('cover:update', { device: { type: 'cover', id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies CoverUpdated)
+		this.wsm.send<CoverUpdated>('cover:update', { device: { type: 'cover', id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Cover) {
-		this.wsm.send('cover:remove', { device } satisfies CoverRemoved)
+		this.wsm.send<CoverRemoved>('cover:remove', { device })
 		console.info('cover removed:', device.name)
 	}
 

@@ -1,7 +1,7 @@
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import { proxy } from 'valtio'
-import type { DeviceState } from './equipment.store'
+import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type TppaListStore = typeof tppaListStore
 
@@ -12,10 +12,14 @@ export interface TppaItemState {
 }
 
 export interface TppaListState {
+	camera?: DeviceState<Camera>
+	mount?: DeviceState<Mount>
 	readonly list: TppaItemState[]
 }
 
 const state = proxy<TppaListState>({
+	camera: undefined,
+	mount: undefined,
 	list: [],
 })
 
@@ -24,7 +28,19 @@ bus.subscribe('device:remove', (device) => {
 	index >= 0 && state.list.splice(index, 1)
 })
 
-function show(camera: Camera, mount: Mount) {
+function setCamera(camera?: Camera) {
+	state.camera = camera
+}
+
+function setMount(mount?: Mount) {
+	state.mount = mount
+}
+
+function show() {
+	const { camera, mount } = state
+
+	if (camera === undefined || mount === undefined) return
+
 	const tppa = state.list.find((e) => e.camera === camera && e.mount === mount)
 
 	if (tppa === undefined) {
@@ -41,6 +57,8 @@ function hide(camera: Camera, mount: Mount) {
 
 export const tppaListStore = {
 	state,
+	setCamera,
+	setMount,
 	show,
 	hide,
 }

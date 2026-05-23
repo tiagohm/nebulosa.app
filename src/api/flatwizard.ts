@@ -10,7 +10,7 @@ import type { WebSocketMessageHandler } from './message'
 const FLAT_WIZARD_IMAGE_TRANSFORMTION: ImageTransformation = { ...DEFAULT_IMAGE_TRANSFORMATION, enabled: false, format: { ...DEFAULT_IMAGE_TRANSFORMATION.format, type: 'fits' } }
 
 export class FlatWizardHandler {
-	private readonly tasks = new Map<string, FlatWizardTask>()
+	private readonly tasks: FlatWizardTask[] = []
 
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
@@ -21,36 +21,36 @@ export class FlatWizardHandler {
 		this.wsm.send('flatwizard', event)
 	}
 
-	private handleFlatWizardEvent({ camera }: FlatWizardTask, event: FlatWizardEvent) {
+	private handleFlatWizardEvent(event: FlatWizardEvent, task: FlatWizardTask) {
 		this.sendEvent(event)
 
-		// Remove the task after it finished
 		if (event.state === 'IDLE') {
-			const task = this.tasks.get(camera.id)
-
-			if (task) {
-				task.stop()
-				this.tasks.delete(camera.id)
-			}
+			this.stop(event.id)
 		}
 	}
 
 	start(camera: Camera, request: FlatWizardStart) {
-		this.stop(camera)
+		if (this.tasks.some((e) => e.request.id === request.id || e.camera.id === camera.id)) return
 		const task = new FlatWizardTask(this, request, camera, this.handleFlatWizardEvent.bind(this))
-		this.tasks.set(camera.id, task)
+		this.tasks.push(task)
 		void task.start()
 	}
 
-	stop(camera: Camera) {
-		this.tasks.get(camera.id)?.stop()
-		this.tasks.delete(camera.id)
+	stop(id: string) {
+		const index = this.tasks.findIndex((e) => e.request.id === id)
+
+		if (index >= 0) {
+			const task = this.tasks[index]
+			task.stop()
+			this.tasks.splice(index, 1)
+		}
 	}
 }
 
 export class FlatWizardTask {
-	private readonly event = structuredClone(DEFAULT_FLAT_WIZARD_EVENT)
-	private readonly handleFlatWizardEvent: (state: FlatWizardState, message: string) => void
+	readonly event = structuredClone(DEFAULT_FLAT_WIZARD_EVENT)
+
+	private readonly handleFlatWizardEvent: (state: FlatWizardState, message?: string) => void
 	private readonly exposure: MinMaxValueProperty = { min: 0, max: 0, value: 0, step: 1 }
 	private readonly mean: MinMaxValueProperty = { min: 0, max: 0, value: 0, step: 1 }
 	private stopped = false
@@ -59,8 +59,9 @@ export class FlatWizardTask {
 		readonly flatWizardHandler: FlatWizardHandler,
 		readonly request: FlatWizardStart,
 		readonly camera: Camera,
-		handleFlatWizardEvent: (task: FlatWizardTask, event: FlatWizardEvent) => void,
+		handleFlatWizardEvent: (event: FlatWizardEvent, task: FlatWizardTask) => void,
 	) {
+		this.event.id = request.id
 		this.event.camera = camera.id
 
 		this.exposure.min = Math.min(request.minExposure, request.maxExposure)
@@ -72,9 +73,11 @@ export class FlatWizardTask {
 		this.mean.max = meanTarget + meanTolerance
 
 		this.handleFlatWizardEvent = (state, message) => {
-			this.event.state = state
-			this.event.message = message
-			handleFlatWizardEvent(this, this.event)
+			if (state !== this.event.state) {
+				this.event.state = state
+				this.event.message = message
+				handleFlatWizardEvent(this.event, this)
+			}
 		}
 	}
 
@@ -83,7 +86,7 @@ export class FlatWizardTask {
 
 		if (savedPath && !this.stopped && !event.stopped) {
 			if (this.stopped) {
-				return this.handleFlatWizardEvent('IDLE', 'Stopped')
+				return this.handleFlatWizardEvent('IDLE', 'stopped')
 			}
 
 			this.handleFlatWizardEvent('COMPUTING', '')
@@ -97,7 +100,7 @@ export class FlatWizardTask {
 				const extension = this.request.capture.transferFormat === 'XISF' ? 'xisf' : 'fit'
 				const path = join(this.request.path || Bun.env.capturesDir, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS')}.${extension}`)
 				await this.flatWizardHandler.cameraHandler.imageProcessor.export(savedPath, FLAT_WIZARD_IMAGE_TRANSFORMTION, this.camera?.name, path)
-				return this.handleFlatWizardEvent('IDLE', `Saved at ${path}`)
+				return this.handleFlatWizardEvent('IDLE', `saved at ${path}`)
 			} else if (median < this.mean.min) {
 				this.exposure.min = this.request.capture.exposureTime
 			} else {
@@ -105,14 +108,14 @@ export class FlatWizardTask {
 			}
 
 			if (this.stopped) {
-				return this.handleFlatWizardEvent('IDLE', 'Stopped')
+				return this.handleFlatWizardEvent('IDLE', 'stopped')
 			}
 
 			const delta = this.exposure.max - this.exposure.min
 
 			// 1 ms
 			if (delta < 1) {
-				return this.handleFlatWizardEvent('IDLE', 'Unable to find an optimal exposure time')
+				return this.handleFlatWizardEvent('IDLE', 'unable to find an optimal exposure time')
 			}
 
 			await this.start()
@@ -131,7 +134,7 @@ export class FlatWizardTask {
 		this.request.capture.frameType = 'FLAT'
 		this.request.capture.exposureMode = 'SINGLE'
 
-		this.handleFlatWizardEvent('CAPTURING', `Exposure of ${this.request.capture.exposureTime.toFixed(0)} ms`)
+		this.handleFlatWizardEvent('CAPTURING', `exposure of ${this.request.capture.exposureTime.toFixed(0)} ms`)
 
 		return this.flatWizardHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}
@@ -140,7 +143,7 @@ export class FlatWizardTask {
 		if (!this.stopped) {
 			this.stopped = true
 			this.flatWizardHandler.cameraHandler.stop(this.camera)
-			this.handleFlatWizardEvent('IDLE', 'Stopped')
+			this.handleFlatWizardEvent('IDLE', 'stopped')
 		}
 	}
 }
@@ -154,6 +157,6 @@ export function flatWizard(flatWizardHandler: FlatWizardHandler): Endpoints {
 
 	return {
 		'/flatwizard/:camera/start': { POST: async (req) => response(flatWizardHandler.start(cameraFromParams(req), await req.json())) },
-		'/flatwizard/:camera/stop': { POST: (req) => response(flatWizardHandler.stop(cameraFromParams(req))) },
+		'/flatwizard/:id/stop': { POST: (req) => response(flatWizardHandler.stop(req.params.id)) },
 	}
 }

@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid'
 import type { Camera, Focuser } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import { type AutoFocusStart, type AutoFocusEvent, DEFAULT_AUTO_FOCUS_START, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
@@ -14,8 +15,8 @@ export type AutoFocusStore = ReturnType<typeof autoFocusStore>
 export interface AutoFocusState {
 	running: boolean
 	readonly request: AutoFocusStart
-	camera: DeviceState<Camera>
-	focuser: DeviceState<Focuser>
+	readonly camera: DeviceState<Camera>
+	readonly focuser: DeviceState<Focuser>
 	readonly event: AutoFocusEvent
 }
 
@@ -36,10 +37,12 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 
 		console.info('autofocus mounted:', camera.name, focuser.name)
 
+		mounted = true
+
 		u[0] = initProxy(state, `autofocus.${camera.id}.${focuser.id}`, ['o:request'])
 
 		u[1] = bus.subscribe<AutoFocusEvent>('autofocus', (event) => {
-			if (state.camera?.id === event.camera && state.focuser?.id === event.focuser) {
+			if (state.camera.id === event.camera && state.focuser.id === event.focuser) {
 				state.running = event.state !== 'IDLE'
 				Object.assign(state.event, event)
 			}
@@ -47,7 +50,7 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 
 		subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
 
-		mounted = true
+		state.request.id ||= nanoid()
 	}
 
 	function unmount() {
@@ -55,6 +58,11 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 		console.info('autofocus unmounted:', camera.name, focuser.name)
 		unsubscribe(u)
 		mounted = false
+	}
+
+	function reset() {
+		state.running = false
+		state.event.state = 'IDLE'
 	}
 
 	function update<K extends keyof AutoFocusStart>(key: K, value: AutoFocusStart[K]) {
@@ -69,16 +77,26 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 		state.request.starDetection[key] = value
 	}
 
-	function start() {
-		return Api.AutoFocus.start(camera, focuser, state.request)
+	async function start() {
+		if (state.running || !camera.connected || !focuser.connected) return
+
+		state.running = true
+
+		const response = await Api.AutoFocus.start(camera, focuser, state.request)
+
+		if (!response?.ok) {
+			reset()
+		}
 	}
 
-	function stop() {
-		return Api.AutoFocus.stop(camera, focuser)
-	}
+	async function stop() {
+		if (!state.running) return
 
-	function show() {
-		autoFocusListStore.show(camera, focuser)
+		const response = await Api.AutoFocus.stop(state.request.id)
+
+		if (response?.ok) {
+			reset()
+		}
 	}
 
 	function hide() {
@@ -94,7 +112,6 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 		updateStarDetection,
 		start,
 		stop,
-		show,
 		hide,
 	} as const
 }

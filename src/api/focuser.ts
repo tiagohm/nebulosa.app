@@ -5,7 +5,7 @@ import type { PropertyState } from 'nebulosa/src/indi.types'
 import bus from 'src/shared/bus'
 import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 
 export class FocuserHandler implements DeviceHandler<Focuser> {
 	constructor(
@@ -13,19 +13,25 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 		readonly focuserManager: FocuserManager,
 	) {
 		focuserManager.addHandler(this)
+
+		bus.subscribe<Messager>('ws:open', (socket) => {
+			for (const device of focuserManager.list()) {
+				this.wsm.send<FocuserAdded>('focuser:add', { device }, socket)
+			}
+		})
 	}
 
 	added(device: Focuser) {
-		this.wsm.send('focuser:add', { device } satisfies FocuserAdded)
+		this.wsm.send<FocuserAdded>('focuser:add', { device })
 		console.info('focuser added:', device.name)
 	}
 
 	updated(device: Focuser, property: keyof Focuser & string, state?: PropertyState) {
-		this.wsm.send('focuser:update', { device: { type: 'focuser', id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies FocuserUpdated)
+		this.wsm.send<FocuserUpdated>('focuser:update', { device: { type: 'focuser', id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Focuser) {
-		this.wsm.send('focuser:remove', { device } satisfies FocuserRemoved)
+		this.wsm.send<FocuserRemoved>('focuser:remove', { device })
 		console.info('focuser removed:', device.name)
 	}
 

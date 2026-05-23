@@ -12,10 +12,14 @@ export interface AutoFocusItemState {
 }
 
 export interface AutoFocusListState {
+	camera?: DeviceState<Camera>
+	focuser?: DeviceState<Focuser>
 	readonly list: AutoFocusItemState[]
 }
 
 const state = proxy<AutoFocusListState>({
+	camera: undefined,
+	focuser: undefined,
 	list: [],
 })
 
@@ -24,7 +28,19 @@ bus.subscribe('device:remove', (device) => {
 	index >= 0 && state.list.splice(index, 1)
 })
 
-function show(camera: Camera, focuser: Focuser) {
+function setCamera(camera?: Camera) {
+	state.camera = camera
+}
+
+function setFocuser(focuser?: Focuser) {
+	state.focuser = focuser
+}
+
+function show() {
+	const { camera, focuser } = state
+
+	if (camera === undefined || focuser === undefined) return
+
 	const autoFocus = state.list.find((e) => e.camera === camera && e.focuser === focuser)
 
 	if (autoFocus === undefined) {
@@ -41,6 +57,8 @@ function hide(camera: Camera, focuser: Focuser) {
 
 export const autoFocusListStore = {
 	state,
+	setCamera,
+	setFocuser,
 	show,
 	hide,
 }

@@ -2,9 +2,10 @@ import type { IndiClient } from 'nebulosa/src/indi.client'
 import type { DewHeater } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, DewHeaterManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
-import type { CoverUpdated, DewHeaterAdded, DewHeaterRemoved, DewHeaterUpdated } from 'src/shared/types'
+import bus from 'src/shared/bus'
+import type { DewHeaterAdded, DewHeaterRemoved, DewHeaterUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 
 export class DewHeaterHandler implements DeviceHandler<DewHeater> {
 	constructor(
@@ -12,22 +13,28 @@ export class DewHeaterHandler implements DeviceHandler<DewHeater> {
 		readonly dewHeaterManager: DewHeaterManager,
 	) {
 		dewHeaterManager.addHandler(this)
+
+		bus.subscribe<Messager>('ws:open', (socket) => {
+			for (const device of dewHeaterManager.list()) {
+				this.wsm.send<DewHeaterAdded>('dewHeater:add', { device }, socket)
+			}
+		})
 	}
 
 	added(device: DewHeater) {
-		this.wsm.send('dewHeater:add', { device } satisfies DewHeaterAdded)
+		this.wsm.send<DewHeaterAdded>('dewHeater:add', { device })
 		console.info('dew heater added:', device.name)
 	}
 
 	updated(device: DewHeater, property: keyof DewHeater & string, state?: PropertyState) {
-		const event = { device: { type: device.type, id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies CoverUpdated | DewHeaterUpdated
+		const event: DewHeaterUpdated = { device: { type: device.type, id: device.id, name: device.name, [property]: device[property] }, property, state }
 
 		if (device.type === 'cover') this.wsm.send('cover:update', event)
 		this.wsm.send('dewHeater:update', event)
 	}
 
 	removed(device: DewHeater) {
-		this.wsm.send('dewHeater:remove', { device } satisfies DewHeaterRemoved)
+		this.wsm.send<DewHeaterRemoved>('dewHeater:remove', { device })
 		console.info('dew heater removed:', device.name)
 	}
 

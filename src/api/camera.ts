@@ -5,11 +5,12 @@ import { type Camera, CLIENT } from 'nebulosa/src/indi.device'
 import type { CameraManager, DeviceHandler, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } from 'nebulosa/src/temporal'
+import bus from 'src/shared/bus'
 import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import { type Endpoints, query, response } from './http'
 import type { ImageProcessor } from './image'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 import type { PHD2Handler } from './phd2'
 import { directoryExists, waitFor } from './util'
 
@@ -17,7 +18,6 @@ const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
 
 export class CameraHandler implements DeviceHandler<Camera> {
 	private readonly tasks = new Map<string, CameraCaptureTask>()
-	private readonly events = new Map<string, CameraCaptureEvent>()
 
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
@@ -30,20 +30,26 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		readonly phd2Handler?: PHD2Handler,
 	) {
 		cameraManager.addHandler(this)
+
+		bus.subscribe<Messager>('ws:open', (socket) => {
+			for (const device of cameraManager.list()) {
+				this.wsm.send<CameraAdded>('camera:add', { device }, socket)
+			}
+		})
 	}
 
 	added(device: Camera) {
-		this.wsm.send('camera:add', { device } satisfies CameraAdded)
+		this.wsm.send<CameraAdded>('camera:add', { device })
 		console.info('camera added:', device.name)
 	}
 
 	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {
-		this.wsm.send('camera:update', { device: { type: 'camera', id: camera.id, name: camera.name, [property]: camera[property] }, property, state } satisfies CameraUpdated)
+		this.wsm.send<CameraUpdated>('camera:update', { device: { type: 'camera', id: camera.id, name: camera.name, [property]: camera[property] }, property, state })
 		void this.tasks.get(camera.id)?.cameraUpdated(camera, property, state)
 	}
 
 	removed(camera: Camera) {
-		this.wsm.send('camera:remove', { device: camera } satisfies CameraRemoved)
+		this.wsm.send<CameraRemoved>('camera:remove', { device: camera })
 		console.info('camera removed:', camera.name)
 	}
 
@@ -60,7 +66,6 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	private handleCameraCaptureEvent({ camera }: CameraCaptureTask, event: CameraCaptureEvent) {
-		this.events.set(camera.id, event)
 		this.sendEvent(event)
 
 		// Remove the task after it finished

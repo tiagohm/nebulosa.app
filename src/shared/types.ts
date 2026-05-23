@@ -780,10 +780,6 @@ export interface PlateSolveStart extends Omit<PlateSolveOptions, 'rightAscension
 	radius: number // deg
 }
 
-export interface PlateSolveStop {
-	readonly id: string
-}
-
 // Star Detection
 
 export type StarDetectionType = 'ASTAP' | 'NEBULOSA'
@@ -814,20 +810,18 @@ export interface TppaStart {
 	readonly compensateRefraction: boolean
 }
 
-export interface TppaStop {
-	readonly id: string
-}
-
 export interface TppaEvent {
 	id: string
+	camera: string
+	mount: string
 	step: number
 	state: TppaState
+	message?: string
 	attempts: number
 	solved: boolean
 	readonly solver: EquatorialCoordinate
 	aligned: boolean
 	readonly error: HorizontalCoordinate
-	failed: boolean
 	count: number
 }
 
@@ -845,13 +839,12 @@ export interface DarvStart {
 	readonly capture: CameraCaptureStart
 }
 
-export interface DarvStop {
-	readonly id: string
-}
-
 export interface DarvEvent {
 	id: string
+	camera: string
+	mount: string
 	state: DarvState
+	message?: string
 }
 
 // Auto Focus
@@ -859,11 +852,13 @@ export interface DarvEvent {
 export type AutoFocusState = 'IDLE' | 'MOVING' | 'CAPTURING' | 'COMPUTING'
 
 export interface AutoFocusStart extends AutoFocusOptions {
+	id: string
 	readonly capture: CameraCaptureStart
 	readonly starDetection: StarDetection
 }
 
 export interface AutoFocusEvent {
+	id: string
 	state: AutoFocusState
 	camera: string
 	focuser: string
@@ -886,6 +881,7 @@ export interface AutoFocusEvent {
 export type FlatWizardState = 'IDLE' | 'CAPTURING' | 'COMPUTING'
 
 export interface FlatWizardStart {
+	id: string
 	readonly capture: CameraCaptureStart
 	minExposure: number // ms
 	maxExposure: number // ms
@@ -895,8 +891,9 @@ export interface FlatWizardStart {
 }
 
 export interface FlatWizardEvent {
-	state: FlatWizardState
+	id: string
 	camera: string
+	state: FlatWizardState
 	median: number
 	message?: string
 }
@@ -1317,12 +1314,13 @@ export const DEFAULT_TPPA_START: TppaStart = {
 
 export const DEFAULT_TPPA_EVENT: TppaEvent = {
 	id: '',
+	camera: '',
+	mount: '',
 	step: 0,
 	state: 'IDLE',
 	attempts: 0,
 	solved: false,
 	aligned: false,
-	failed: false,
 	count: 0,
 	solver: {
 		rightAscension: 0,
@@ -1344,10 +1342,13 @@ export const DEFAULT_DARV_START: DarvStart = {
 
 export const DEFAULT_DARV_EVENT: DarvEvent = {
 	id: '',
+	camera: '',
+	mount: '',
 	state: 'IDLE',
 }
 
 export const DEFAULT_AUTO_FOCUS_START: AutoFocusStart = {
+	id: '',
 	capture: DEFAULT_CAMERA_CAPTURE_START,
 	starDetection: DEFAULT_STAR_DETECTION,
 	initialOffsetSteps: 5,
@@ -1359,6 +1360,7 @@ export const DEFAULT_AUTO_FOCUS_START: AutoFocusStart = {
 }
 
 export const DEFAULT_AUTO_FOCUS_EVENT: AutoFocusEvent = {
+	id: '',
 	state: 'IDLE',
 	camera: '',
 	focuser: '',
@@ -1369,6 +1371,7 @@ export const DEFAULT_AUTO_FOCUS_EVENT: AutoFocusEvent = {
 }
 
 export const DEFAULT_FLAT_WIZARD_START: FlatWizardStart = {
+	id: '',
 	capture: DEFAULT_CAMERA_CAPTURE_START,
 	minExposure: 1,
 	maxExposure: 2000,
@@ -1378,8 +1381,9 @@ export const DEFAULT_FLAT_WIZARD_START: FlatWizardStart = {
 }
 
 export const DEFAULT_FLAT_WIZARD_EVENT: FlatWizardEvent = {
-	state: 'IDLE',
+	id: '',
 	camera: '',
+	state: 'IDLE',
 	median: 0,
 }
 

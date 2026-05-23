@@ -1,6 +1,6 @@
 import { useMolecule } from 'bunshi/react'
-import type { Camera, DeviceType, Focuser, Mount } from 'nebulosa/src/indi.device'
-import { memo, useState } from 'react'
+import type { DeviceType } from 'nebulosa/src/indi.device'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
 import alignmentIcon from '@/assets/alignment.webp'
@@ -23,7 +23,6 @@ import sequencerIcon from '@/assets/sequencer.webp'
 import settingsIcon from '@/assets/settings.webp'
 import skyIcon from '@/assets/sky.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
-import { FlatWizardMolecule } from '@/molecules/flatwizard'
 import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { CameraDeviceContext, FocuserDeviceContext, MountDeviceContext } from '../shared/context'
@@ -35,6 +34,7 @@ import { calculatorStore } from '../store/calculator.store'
 import { connectionStore } from '../store/connection.store'
 import { darvListStore } from '../store/darv.list.store'
 import { equipmentStore } from '../store/equipment.store'
+import { flatWizardListStore } from '../store/flatwizard.list.store'
 import { framingStore } from '../store/framing.store'
 import { homeMenuStore, isDevice } from '../store/home.menu.store'
 import { tppaListStore } from '../store/tppa.list.store'
@@ -61,12 +61,8 @@ export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'ro
 
 export const HomeMenu = memo(() => {
 	const { connected } = useSnapshot(connectionStore.state)
-
 	const { show: showAtlas } = useSnapshot(atlasStore.state)
 	const { show: showFraming } = useSnapshot(framingStore.state)
-
-	const flatWizard = useMolecule(FlatWizardMolecule)
-	const { show: showFlatWizard } = useSnapshot(flatWizard.state)
 
 	const phd2 = useMolecule(PHD2Molecule)
 	const { show: showPHD2 } = useSnapshot(phd2.state)
@@ -83,7 +79,6 @@ export const HomeMenu = memo(() => {
 			<HomeMenuPopover />
 			{showAtlas && <Atlas />}
 			{showFraming && <Framing />}
-			{showFlatWizard && connected && <FlatWizard />}
 			{showPHD2 && <PHD2 />}
 			{showIndiPanelControl && connected && <IndiPanelControl />}
 			{showAlpaca && connected && <AlpacaServer />}
@@ -92,6 +87,7 @@ export const HomeMenu = memo(() => {
 			<TppaList />
 			<DarvList />
 			<AutoFocusList />
+			<FlatWizardList />
 		</>
 	)
 })
@@ -181,6 +177,7 @@ export const HomeMenuPopoverContent = memo(() => {
 			<DarvDeviceDropdown />
 			<TppaDeviceDropdown />
 			<AutoFocusDeviceDropdown />
+			<FlatWizardDeviceDropdown />
 		</div>
 	)
 })
@@ -212,8 +209,7 @@ const DeviceList = memo(() => {
 	const devices = equipmentStore.state[selected]
 
 	function handleAction(index: number) {
-		const device = devices[index]
-		device.show = true
+		devices[index].show = true
 	}
 
 	return (
@@ -228,17 +224,16 @@ const DeviceList = memo(() => {
 
 export const TppaDeviceDropdown = memo(() => {
 	const { selected } = useSnapshot(homeMenuStore.state)
-	const [camera, setCamera] = useState<Camera>()
-	const [mount, setMount] = useState<Mount>()
+	const { camera, mount } = useSnapshot(tppaListStore.state)
 
 	if (selected !== 'tppa') return null
 
 	return (
 		<div className="col-span-full flex flex-col items-center gap-2">
 			<span className="font-bold">TPPA</span>
-			<CameraDropdown showLabel fullWidth value={camera} onValueChange={setCamera} />
-			<MountDropdown showLabel fullWidth value={mount} onValueChange={setMount} />
-			<Button fullWidth disabled={!camera || !mount} startContent={<Icons.OpenInNew />} label="Open" onClick={() => tppaListStore.show(camera!, mount!)} />
+			<CameraDropdown showLabel fullWidth value={camera} onValueChange={tppaListStore.setCamera} />
+			<MountDropdown showLabel fullWidth value={mount} onValueChange={tppaListStore.setMount} />
+			<Button fullWidth disabled={!camera || !mount} startContent={<Icons.OpenInNew />} label="Open" onClick={tppaListStore.show} />
 		</div>
 	)
 })
@@ -265,17 +260,16 @@ export const TppaList = memo(() => {
 
 export const DarvDeviceDropdown = memo(() => {
 	const { selected } = useSnapshot(homeMenuStore.state)
-	const [camera, setCamera] = useState<Camera>()
-	const [mount, setMount] = useState<Mount>()
+	const { camera, mount } = useSnapshot(darvListStore.state)
 
 	if (selected !== 'darv') return null
 
 	return (
 		<div className="col-span-full flex flex-col items-center gap-2">
 			<span className="font-bold">DARV</span>
-			<CameraDropdown showLabel fullWidth value={camera} onValueChange={setCamera} />
-			<MountDropdown showLabel fullWidth value={mount} onValueChange={setMount} />
-			<Button fullWidth disabled={!camera || !mount} startContent={<Icons.OpenInNew />} label="Open" onClick={() => darvListStore.show(camera!, mount!)} />
+			<CameraDropdown showLabel fullWidth value={camera} onValueChange={darvListStore.setCamera} />
+			<MountDropdown showLabel fullWidth value={mount} onValueChange={darvListStore.setMount} />
+			<Button fullWidth disabled={!camera || !mount} startContent={<Icons.OpenInNew />} label="Open" onClick={darvListStore.show} />
 		</div>
 	)
 })
@@ -302,17 +296,16 @@ export const DarvList = memo(() => {
 
 export const AutoFocusDeviceDropdown = memo(() => {
 	const { selected } = useSnapshot(homeMenuStore.state)
-	const [camera, setCamera] = useState<Camera>()
-	const [focuser, setFocuser] = useState<Focuser>()
+	const { camera, focuser } = useSnapshot(autoFocusListStore.state)
 
 	if (selected !== 'autoFocus') return null
 
 	return (
 		<div className="col-span-full flex flex-col items-center gap-2">
-			<span className="font-bold">DARV</span>
-			<CameraDropdown showLabel fullWidth value={camera} onValueChange={setCamera} />
-			<FocuserDropdown showLabel fullWidth value={focuser} onValueChange={setFocuser} />
-			<Button fullWidth disabled={!camera || !focuser} startContent={<Icons.OpenInNew />} label="Open" onClick={() => autoFocusListStore.show(camera!, focuser!)} />
+			<span className="font-bold">Auto Focus</span>
+			<CameraDropdown showLabel fullWidth value={camera} onValueChange={autoFocusListStore.setCamera} />
+			<FocuserDropdown showLabel fullWidth value={focuser} onValueChange={autoFocusListStore.setFocuser} />
+			<Button fullWidth disabled={!camera || !focuser} startContent={<Icons.OpenInNew />} label="Open" onClick={autoFocusListStore.show} />
 		</div>
 	)
 })
@@ -330,6 +323,39 @@ export const AutoFocusList = memo(() => {
 				<FocuserDeviceContext value={focuser}>
 					<AutoFocus key={key} />
 				</FocuserDeviceContext>
+			</CameraDeviceContext>
+		)
+	}
+
+	return list
+})
+
+export const FlatWizardDeviceDropdown = memo(() => {
+	const { selected } = useSnapshot(homeMenuStore.state)
+	const { camera } = useSnapshot(flatWizardListStore.state)
+
+	if (selected !== 'flatWizard') return null
+
+	return (
+		<div className="col-span-full flex flex-col items-center gap-2">
+			<span className="font-bold">Flat Wizard</span>
+			<CameraDropdown showLabel fullWidth value={camera} onValueChange={flatWizardListStore.setCamera} />
+			<Button fullWidth disabled={!camera} startContent={<Icons.OpenInNew />} label="Open" onClick={flatWizardListStore.show} />
+		</div>
+	)
+})
+
+export const FlatWizardList = memo(() => {
+	const { length } = useSnapshot(flatWizardListStore.state.list)
+	const list = new Array<React.ReactNode>(length)
+
+	for (let i = 0; i < length; i++) {
+		const { show, camera } = flatWizardListStore.state.list[i]
+		const key = camera.id
+
+		list[i] = show && (
+			<CameraDeviceContext key={key} value={camera}>
+				<FlatWizard key={key} />
 			</CameraDeviceContext>
 		)
 	}

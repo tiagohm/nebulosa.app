@@ -2,7 +2,7 @@ import { deg, parseAngle } from 'nebulosa/src/angle'
 import { astapPlateSolve } from 'nebulosa/src/astap'
 import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebulosa/src/astrometrynet'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
-import type { PlateSolveStart, PlateSolveStop } from '../shared/types'
+import type { PlateSolveStart } from '../shared/types'
 import { type Endpoints, response } from './http'
 import type { ImageProcessor } from './image'
 import type { NotificationHandler } from './notification'
@@ -71,14 +71,14 @@ export class PlateSolverHandler {
 		return undefined
 	}
 
-	stop(req: PlateSolveStop) {
-		this.tasks.get(req.id)?.abort()
+	stop(id: string) {
+		this.tasks.get(id)?.abort()
 	}
 }
 
 export function plateSolver(solver: PlateSolverHandler): Endpoints {
 	return {
 		'/platesolver/start': { POST: async (req) => response(await solver.start(await req.json())) },
-		'/platesolver/stop': { POST: async (req) => response(solver.stop(await req.json())) },
+		'/platesolver/:id/stop': { POST: (req) => response(solver.stop(req.params.id)) },
 	}
 }

@@ -15,8 +15,8 @@ export type TppaStore = ReturnType<typeof tppaStore>
 export interface TppaState {
 	running: boolean
 	readonly request: TppaStart
-	camera: DeviceState<Camera>
-	mount: DeviceState<Mount>
+	readonly camera: DeviceState<Camera>
+	readonly mount: DeviceState<Mount>
 	readonly event: TppaEvent
 }
 
@@ -44,7 +44,7 @@ export function tppaStore(camera: Camera, mount: Mount) {
 		u[0] = initProxy(state, `tppa.${camera.id}.${mount.id}`, ['o:request'])
 
 		u[1] = bus.subscribe<TppaEvent>('tppa', (event) => {
-			if (state.request.id === event.id) {
+			if (state.camera.id === event.camera && state.mount.id === event.mount) {
 				state.running = event.state !== 'IDLE'
 				Object.assign(state.event, event)
 			}
@@ -52,7 +52,7 @@ export function tppaStore(camera: Camera, mount: Mount) {
 
 		subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
 
-		state.request.id = nanoid()
+		state.request.id ||= nanoid()
 	}
 
 	function unmount() {
@@ -98,15 +98,11 @@ export function tppaStore(camera: Camera, mount: Mount) {
 	async function stop() {
 		if (!state.running) return
 
-		const response = await Api.TPPA.stop(state.request)
+		const response = await Api.TPPA.stop(state.request.id)
 
 		if (response?.ok) {
 			reset()
 		}
-	}
-
-	function show() {
-		tppaListStore.show(camera, mount)
 	}
 
 	function hide() {
@@ -123,7 +119,6 @@ export function tppaStore(camera: Camera, mount: Mount) {
 		updateRefraction,
 		start,
 		stop,
-		show,
 		hide,
 	} as const
 }

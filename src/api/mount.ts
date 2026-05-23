@@ -13,11 +13,12 @@ import { TIMEZONE, temporalAdd } from 'nebulosa/src/temporal'
 import { Timescale, timeJulianYear, timeNow } from 'nebulosa/src/time'
 // oxfmt-ignore
 import { DEFAULT_COORDINATE_INFO, type MountAdded, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountUpdated } from 'src/shared/types'
+import bus from 'src/shared/bus'
 import { coordinateInfo } from 'src/shared/util'
 import type { CacheManager } from './cache'
 import type { ConfirmationHandler } from './confirmation'
 import { type Endpoints, query, response } from './http'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 
 const J2000 = timeJulianYear(2000, Timescale.UTC)
 const JNOW = timeNow(true)
@@ -40,19 +41,25 @@ export class MountHandler implements DeviceHandler<Mount> {
 		readonly cache: CacheManager,
 	) {
 		mountManager.addHandler(this)
+
+		bus.subscribe<Messager>('ws:open', (socket) => {
+			for (const device of mountManager.list()) {
+				this.wsm.send<MountAdded>('mount:add', { device }, socket)
+			}
+		})
 	}
 
 	added(device: Mount) {
-		this.wsm.send('mount:add', { device } satisfies MountAdded)
+		this.wsm.send<MountAdded>('mount:add', { device })
 		console.info('mount added:', device.name)
 	}
 
 	updated(device: Mount, property: keyof Mount & string, state?: PropertyState) {
-		this.wsm.send('mount:update', { device: { type: 'mount', id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies MountUpdated)
+		this.wsm.send<MountUpdated>('mount:update', { device: { type: 'mount', id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Mount) {
-		this.wsm.send('mount:remove', { device } satisfies MountRemoved)
+		this.wsm.send<MountRemoved>('mount:remove', { device })
 		console.info('mount removed:', device.name)
 	}
 

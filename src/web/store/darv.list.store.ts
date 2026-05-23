@@ -12,10 +12,14 @@ export interface DarvItemState {
 }
 
 export interface DarvListState {
+	camera?: DeviceState<Camera>
+	mount?: DeviceState<Mount>
 	readonly list: DarvItemState[]
 }
 
 const state = proxy<DarvListState>({
+	camera: undefined,
+	mount: undefined,
 	list: [],
 })
 
@@ -24,7 +28,19 @@ bus.subscribe('device:remove', (device) => {
 	index >= 0 && state.list.splice(index, 1)
 })
 
-function show(camera: Camera, mount: Mount) {
+function setCamera(camera?: Camera) {
+	state.camera = camera
+}
+
+function setMount(mount?: Mount) {
+	state.mount = mount
+}
+
+function show() {
+	const { camera, mount } = state
+
+	if (camera === undefined || mount === undefined) return
+
 	const darv = state.list.find((e) => e.camera === camera && e.mount === mount)
 
 	if (darv === undefined) {
@@ -41,6 +57,8 @@ function hide(camera: Camera, mount: Mount) {
 
 export const darvListStore = {
 	state,
+	setCamera,
+	setMount,
 	show,
 	hide,
 }

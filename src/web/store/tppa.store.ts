@@ -7,7 +7,8 @@ import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
-import { equipmentStore, type DeviceState } from './equipment.store'
+import type { DeviceState } from './equipment.store'
+import { tppaListStore } from './tppa.list.store'
 
 export type TppaStore = ReturnType<typeof tppaStore>
 
@@ -83,11 +84,11 @@ export function tppaStore(camera: Camera, mount: Mount) {
 	}
 
 	async function start() {
-		if (state.running || !state.camera?.connected || !state.mount?.connected) return
+		if (state.running || !camera.connected || !mount.connected) return
 
 		state.running = true
 
-		const response = await Api.TPPA.start(state.camera, state.mount, state.request)
+		const response = await Api.TPPA.start(camera, mount, state.request)
 
 		if (!response?.ok) {
 			reset()
@@ -105,11 +106,11 @@ export function tppaStore(camera: Camera, mount: Mount) {
 	}
 
 	function show() {
-		equipmentStore.showTppa(camera, mount)
+		tppaListStore.show(camera, mount)
 	}
 
 	function hide() {
-		equipmentStore.hideTppa(camera, mount)
+		tppaListStore.hide(camera, mount)
 	}
 
 	return {

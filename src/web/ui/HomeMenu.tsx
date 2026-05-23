@@ -30,19 +30,22 @@ import { CameraDeviceContext, FocuserDeviceContext, MountDeviceContext } from '.
 import { aboutStore } from '../store/about.store'
 import { alpacaStore } from '../store/alpaca.store'
 import { atlasStore } from '../store/atlas.store'
+import { autoFocusListStore } from '../store/autofocus.list.store'
 import { calculatorStore } from '../store/calculator.store'
 import { connectionStore } from '../store/connection.store'
+import { darvListStore } from '../store/darv.list.store'
 import { equipmentStore } from '../store/equipment.store'
 import { framingStore } from '../store/framing.store'
 import { homeMenuStore, isDevice } from '../store/home.menu.store'
+import { tppaListStore } from '../store/tppa.list.store'
 import { About } from './About'
 import { AlpacaServer } from './AlpacaServer'
 import { Atlas } from './Atlas'
 import { AutoFocus } from './AutoFocus'
 import { Calculator } from './Calculator'
 import { Button } from './components/Button'
-import { Chip, type ChipProps } from './components/Chip'
 import { IconButton } from './components/IconButton'
+import { List, ListItem, type ListItemProps } from './components/List'
 import { Popover } from './components/Popover'
 import { Darv } from './Darv'
 import { CameraDropdown, FocuserDropdown, MountDropdown } from './DeviceDropdown'
@@ -182,14 +185,14 @@ export const HomeMenuPopoverContent = memo(() => {
 	)
 })
 
-interface DeviceItemProps extends Omit<ChipProps, 'children'> {
+interface DeviceItemProps extends Omit<ListItemProps, 'children'> {
 	readonly type: DeviceType
 	readonly index: number
 }
 
 function DeviceItem({ type, index, ...props }: DeviceItemProps) {
 	const { connected, name } = useSnapshot(equipmentStore.state[type][index])
-	return <Chip className="min-w-full cursor-pointer" color={connected ? 'success' : 'danger'} label={name} {...props} />
+	return <ListItem startContent={<Icons.Circle className="size-[0.8em]" color={connected ? 'var(--success)' : 'var(--danger)'} />} className="min-w-full cursor-pointer" label={name} {...props} />
 }
 
 const DEVICE_TYPE_LABELS: Partial<Record<DeviceType, string>> = {
@@ -206,22 +209,19 @@ const DeviceList = memo(() => {
 
 	if (!isDeviceSelected) return null
 
-	function handleClick(id: string) {
-		const device = equipmentStore.get(selected as DeviceType, id)
-		if (device !== undefined) device.show = true
-	}
+	const devices = equipmentStore.state[selected]
 
-	const devices = new Array<React.ReactNode>(length)
-
-	for (let i = 0; i < length; i++) {
-		const { id } = equipmentStore.state[selected][i]
-		devices[i] = <DeviceItem key={id} type={selected} index={i} onClick={() => handleClick(id)} />
+	function handleAction(index: number) {
+		const device = devices[index]
+		device.show = true
 	}
 
 	return (
 		<div className="col-span-full my-2 flex flex-col flex-wrap items-center justify-center gap-2">
 			<span className="mt-2 text-sm font-bold uppercase">{DEVICE_TYPE_LABELS[selected] ?? selected}</span>
-			{length === 0 ? 'No devices' : devices}
+			<List fullWidth itemCount={length} itemHeight={36} onAction={handleAction}>
+				{(i) => <DeviceItem key={devices[i].id} type={selected} index={i} />}
+			</List>
 		</div>
 	)
 })
@@ -238,20 +238,20 @@ export const TppaDeviceDropdown = memo(() => {
 			<span className="font-bold">TPPA</span>
 			<CameraDropdown showLabel fullWidth value={camera} onValueChange={setCamera} />
 			<MountDropdown showLabel fullWidth value={mount} onValueChange={setMount} />
-			<Button disabled={!camera || !mount} startContent={<Icons.OpenInNew />} label="Open" onClick={() => equipmentStore.showTppa(camera!, mount!)} />
+			<Button fullWidth disabled={!camera || !mount} startContent={<Icons.OpenInNew />} label="Open" onClick={() => tppaListStore.show(camera!, mount!)} />
 		</div>
 	)
 })
 
 export const TppaList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.tppa)
-	const equipment = new Array<React.ReactNode>(length)
+	const { length } = useSnapshot(tppaListStore.state.list)
+	const list = new Array<React.ReactNode>(length)
 
 	for (let i = 0; i < length; i++) {
-		const { show, camera, mount } = equipmentStore.state.tppa[i]
+		const { show, camera, mount } = tppaListStore.state.list[i]
 		const key = `${camera.id}.${mount.id}`
 
-		equipment[i] = show && (
+		list[i] = show && (
 			<CameraDeviceContext key={key} value={camera}>
 				<MountDeviceContext value={mount}>
 					<Tppa key={key} />
@@ -260,7 +260,7 @@ export const TppaList = memo(() => {
 		)
 	}
 
-	return equipment
+	return list
 })
 
 export const DarvDeviceDropdown = memo(() => {
@@ -275,20 +275,20 @@ export const DarvDeviceDropdown = memo(() => {
 			<span className="font-bold">DARV</span>
 			<CameraDropdown showLabel fullWidth value={camera} onValueChange={setCamera} />
 			<MountDropdown showLabel fullWidth value={mount} onValueChange={setMount} />
-			<Button disabled={!camera || !mount} startContent={<Icons.OpenInNew />} label="Open" onClick={() => equipmentStore.showDarv(camera!, mount!)} />
+			<Button fullWidth disabled={!camera || !mount} startContent={<Icons.OpenInNew />} label="Open" onClick={() => darvListStore.show(camera!, mount!)} />
 		</div>
 	)
 })
 
 export const DarvList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.darv)
-	const equipment = new Array<React.ReactNode>(length)
+	const { length } = useSnapshot(darvListStore.state.list)
+	const list = new Array<React.ReactNode>(length)
 
 	for (let i = 0; i < length; i++) {
-		const { show, camera, mount } = equipmentStore.state.darv[i]
+		const { show, camera, mount } = darvListStore.state.list[i]
 		const key = `${camera.id}.${mount.id}`
 
-		equipment[i] = show && (
+		list[i] = show && (
 			<CameraDeviceContext key={key} value={camera}>
 				<MountDeviceContext value={mount}>
 					<Darv key={key} />
@@ -297,7 +297,7 @@ export const DarvList = memo(() => {
 		)
 	}
 
-	return equipment
+	return list
 })
 
 export const AutoFocusDeviceDropdown = memo(() => {
@@ -312,20 +312,20 @@ export const AutoFocusDeviceDropdown = memo(() => {
 			<span className="font-bold">DARV</span>
 			<CameraDropdown showLabel fullWidth value={camera} onValueChange={setCamera} />
 			<FocuserDropdown showLabel fullWidth value={focuser} onValueChange={setFocuser} />
-			<Button disabled={!camera || !focuser} startContent={<Icons.OpenInNew />} label="Open" onClick={() => equipmentStore.showAutoFocus(camera!, focuser!)} />
+			<Button fullWidth disabled={!camera || !focuser} startContent={<Icons.OpenInNew />} label="Open" onClick={() => autoFocusListStore.show(camera!, focuser!)} />
 		</div>
 	)
 })
 
 export const AutoFocusList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.autoFocus)
-	const equipment = new Array<React.ReactNode>(length)
+	const { length } = useSnapshot(autoFocusListStore.state.list)
+	const list = new Array<React.ReactNode>(length)
 
 	for (let i = 0; i < length; i++) {
-		const { show, camera, focuser } = equipmentStore.state.autoFocus[i]
+		const { show, camera, focuser } = autoFocusListStore.state.list[i]
 		const key = `${camera.id}.${focuser.id}`
 
-		equipment[i] = show && (
+		list[i] = show && (
 			<CameraDeviceContext key={key} value={camera}>
 				<FocuserDeviceContext value={focuser}>
 					<AutoFocus key={key} />
@@ -334,5 +334,5 @@ export const AutoFocusList = memo(() => {
 		)
 	}
 
-	return equipment
+	return list
 })

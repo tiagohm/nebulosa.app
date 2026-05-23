@@ -10,6 +10,7 @@ import { initProxy } from '../shared/proxy'
 import { toast } from '../shared/toast'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
 import { equipmentStore, type DeviceState } from './equipment.store'
+import { darvListStore } from './darv.list.store'
 
 export type DarvStore = ReturnType<typeof darvStore>
 
@@ -119,13 +120,13 @@ export function darvStore(camera: Camera, mount: Mount) {
 	}
 
 	async function start() {
-		if (state.running || !state.camera?.connected || !state.mount?.connected) return
+		if (state.running || !camera.connected || !mount.connected) return
 
 		state.running = true
 		state.event.id = state.request.id
 		state.event.state = 'WAITING'
 
-		const response = await Api.DARV.start(state.camera, state.mount, state.request)
+		const response = await Api.DARV.start(camera, mount, state.request)
 
 		if (!response?.ok) {
 			reset()
@@ -143,11 +144,11 @@ export function darvStore(camera: Camera, mount: Mount) {
 	}
 
 	function show() {
-		equipmentStore.showDarv(camera, mount)
+		darvListStore.show(camera, mount)
 	}
 
 	function hide() {
-		equipmentStore.hideDarv(camera, mount)
+		darvListStore.hide(camera, mount)
 	}
 
 	return {

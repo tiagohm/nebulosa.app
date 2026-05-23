@@ -5,8 +5,9 @@ import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
+import { autoFocusListStore } from './autofocus.list.store'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
-import { equipmentStore, type DeviceState } from './equipment.store'
+import type { DeviceState } from './equipment.store'
 
 export type AutoFocusStore = ReturnType<typeof autoFocusStore>
 
@@ -69,19 +70,19 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 	}
 
 	function start() {
-		return Api.AutoFocus.start(state.camera, state.focuser, state.request)
+		return Api.AutoFocus.start(camera, focuser, state.request)
 	}
 
 	function stop() {
-		return Api.AutoFocus.stop(state.camera, state.focuser)
+		return Api.AutoFocus.stop(camera, focuser)
 	}
 
 	function show() {
-		equipmentStore.showAutoFocus(camera, focuser)
+		autoFocusListStore.show(camera, focuser)
 	}
 
 	function hide() {
-		equipmentStore.hideAutoFocus(state.camera, state.focuser)
+		autoFocusListStore.hide(camera, focuser)
 	}
 
 	return {

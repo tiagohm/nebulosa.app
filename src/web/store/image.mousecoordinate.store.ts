@@ -11,6 +11,7 @@ import { CoordinateInterpolator } from '../shared/coordinate-interpolation'
 import type { ImageLoaded } from '../shared/types'
 import { isMousePresent } from '../shared/util'
 import type { InteractableProps, InteractTransform } from '../ui/Interactable'
+import { hasScaledSolution } from './image.solver.store'
 import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageMouseCoordinateStore = ReturnType<typeof imageMouseCoordinateStore>
@@ -58,7 +59,7 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 		mounted = true
 
 		u[0] = bus.subscribe<ImageLoaded>('image:load', ({ image, info, refreshed }) => {
-			if (refreshed && image.id === viewer.image.id) {
+			if (refreshed && image === viewer.image) {
 				if (info.solution && state.visible) void compute(info.solution, true)
 				else state.interpolator = undefined
 			}
@@ -67,6 +68,10 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 		u[1] = subscribeKey(viewer.solver.state, 'solution', (solution) => {
 			if (state.visible) void compute(solution, true)
 			else state.interpolator = undefined
+		})
+
+		u[2] = subscribeKey(state, 'visible', (visible) => {
+			if (visible) void compute()
 		})
 	}
 
@@ -78,7 +83,7 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 	}
 
 	async function compute(solution: PlateSolution | undefined = viewer.solver.state.solution, force: boolean = false) {
-		if ((!state.interpolator || force) && solution?.scale) {
+		if ((!state.interpolator || force) && hasScaledSolution(solution)) {
 			const coordinateInterpolation = await Api.Image.coordinateInterpolation(solution)
 
 			if (coordinateInterpolation) {
@@ -86,10 +91,6 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 				state.interpolator = ref(new CoordinateInterpolator(new Float32Array(ma), new Float32Array(md), x0, y0, x1, y1, delta))
 			}
 		}
-	}
-
-	function toggle() {
-		state.visible = !state.visible
 	}
 
 	function handleInterpolatedCoordinate(x: number, y: number, clicked: boolean = false) {
@@ -132,6 +133,10 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 	function handleMouseMove({ event, dragging, pinching }: Parameters<NonNullable<InteractableProps['onMouseMove']>>[0]) {
 		if (!state.visible || dragging || pinching) return
 		handleInterpolatedCoordinate(event.offsetX, event.offsetY, false)
+	}
+
+	function toggle() {
+		state.visible = !state.visible
 	}
 
 	function show() {

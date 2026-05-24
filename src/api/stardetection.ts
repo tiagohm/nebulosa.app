@@ -18,9 +18,9 @@ export class StarDetectionHandler {
 	async detect(req: StarDetection) {
 		req.path = (await this.imageProcessor.store(req.path)) || req.path
 
-		if (req.type === 'ASTAP') {
+		if (req.type === 'astap') {
 			return await astapDetectStars(req.path, req)
-		} else if (req.type === 'NEBULOSA') {
+		} else if (req.type === 'nebulosa') {
 			const image = await this.imageProcessor.transform(req.path, STAR_DETECTION_IMAGE_TRANSFORMATION)
 			if (image) return detectStars(image.image, req)
 		}

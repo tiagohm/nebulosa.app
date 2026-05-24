@@ -24,7 +24,7 @@ export class FlatWizardHandler {
 	private handleFlatWizardEvent(event: FlatWizardEvent, task: FlatWizardTask) {
 		this.sendEvent(event)
 
-		if (event.state === 'IDLE') {
+		if (event.state === 'idle') {
 			this.stop(event.id)
 		}
 	}
@@ -86,10 +86,10 @@ export class FlatWizardTask {
 
 		if (savedPath && !this.stopped && !event.stopped) {
 			if (this.stopped) {
-				return this.handleFlatWizardEvent('IDLE', 'stopped')
+				return this.handleFlatWizardEvent('idle', 'stopped')
 			}
 
-			this.handleFlatWizardEvent('COMPUTING', '')
+			this.handleFlatWizardEvent('computing', '')
 
 			const { image } = (await this.flatWizardHandler.cameraHandler.imageProcessor.transform(savedPath, false, this.camera?.name))!
 			const { median } = histogram(image)
@@ -100,7 +100,7 @@ export class FlatWizardTask {
 				const extension = this.request.capture.transferFormat === 'XISF' ? 'xisf' : 'fit'
 				const path = join(this.request.path || Bun.env.capturesDir, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS')}.${extension}`)
 				await this.flatWizardHandler.cameraHandler.imageProcessor.export(savedPath, FLAT_WIZARD_IMAGE_TRANSFORMTION, this.camera?.name, path)
-				return this.handleFlatWizardEvent('IDLE', `saved at ${path}`)
+				return this.handleFlatWizardEvent('idle', `saved at ${path}`)
 			} else if (median < this.mean.min) {
 				this.exposure.min = this.request.capture.exposureTime
 			} else {
@@ -108,18 +108,18 @@ export class FlatWizardTask {
 			}
 
 			if (this.stopped) {
-				return this.handleFlatWizardEvent('IDLE', 'stopped')
+				return this.handleFlatWizardEvent('idle', 'stopped')
 			}
 
 			const delta = this.exposure.max - this.exposure.min
 
 			// 1 ms
 			if (delta < 1) {
-				return this.handleFlatWizardEvent('IDLE', 'unable to find an optimal exposure time')
+				return this.handleFlatWizardEvent('idle', 'unable to find an optimal exposure time')
 			}
 
 			await this.start()
-		} else if (event.state === 'ERROR' || event.stopped) {
+		} else if (event.state === 'error' || event.stopped) {
 			this.stop()
 		}
 	}
@@ -130,11 +130,11 @@ export class FlatWizardTask {
 		this.request.capture.autoSave = false
 		this.request.capture.savePath = undefined
 		this.request.capture.exposureTime = (this.exposure.min + this.exposure.max) / 2
-		this.request.capture.exposureTimeUnit = 'MILLISECOND'
+		this.request.capture.exposureTimeUnit = 'millisecond'
 		this.request.capture.frameType = 'FLAT'
-		this.request.capture.exposureMode = 'SINGLE'
+		this.request.capture.exposureMode = 'single'
 
-		this.handleFlatWizardEvent('CAPTURING', `exposure of ${this.request.capture.exposureTime.toFixed(0)} ms`)
+		this.handleFlatWizardEvent('capturing', `exposure of ${this.request.capture.exposureTime.toFixed(0)} ms`)
 
 		return this.flatWizardHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}
@@ -143,7 +143,7 @@ export class FlatWizardTask {
 		if (!this.stopped) {
 			this.stopped = true
 			this.flatWizardHandler.cameraHandler.stop(this.camera)
-			this.handleFlatWizardEvent('IDLE', 'stopped')
+			this.handleFlatWizardEvent('idle', 'stopped')
 		}
 	}
 }

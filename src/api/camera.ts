@@ -69,7 +69,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		this.sendEvent(event)
 
 		// Remove the task after it finished
-		if (event.state === 'IDLE') {
+		if (event.state === 'idle') {
 			this.cameraManager.disableBlob(camera)
 			this.tasks.get(camera.id)?.destroy()
 			this.tasks.delete(camera.id)
@@ -136,14 +136,14 @@ export class CameraCaptureTask {
 		readonly camera: Camera,
 		private readonly handleCameraCaptureEvent: (task: CameraCaptureTask, event: CameraCaptureEvent) => void,
 	) {
-		this.event.loop = request.exposureMode === 'LOOP'
+		this.event.loop = request.exposureMode === 'loop'
 		this.event.camera = camera.id
-		this.event.count = request.exposureMode === 'SINGLE' ? 1 : request.exposureMode === 'FIXED' ? request.count : Number.MAX_SAFE_INTEGER
+		this.event.count = request.exposureMode === 'single' ? 1 : request.exposureMode === 'fixed' ? request.count : Number.MAX_SAFE_INTEGER
 		this.event.remainingCount = this.event.count
 
 		this.event.frameExposureTime = exposureTimeInMicroseconds(request.exposureTime, request.exposureTimeUnit)
-		this.event.totalExposureTime = this.event.frameExposureTime * this.event.count + exposureTimeInMicroseconds(request.delay, 'SECOND') * (this.event.count - 1)
-		this.waitingTime = exposureTimeInMicroseconds(request.delay, 'SECOND')
+		this.event.totalExposureTime = this.event.frameExposureTime * this.event.count + exposureTimeInMicroseconds(request.delay, 'second') * (this.event.count - 1)
+		this.waitingTime = exposureTimeInMicroseconds(request.delay, 'second')
 
 		this.totalExposureProgress[0] = this.event.loop ? 0 : this.event.totalExposureTime
 
@@ -158,11 +158,11 @@ export class CameraCaptureTask {
 		if (property === 'exposure') {
 			const { exposure } = camera
 
-			const remainingTime = exposureTimeInMicroseconds(exposure.value, 'SECOND')
+			const remainingTime = exposureTimeInMicroseconds(exposure.value, 'second')
 			const elapsedTime = this.event.frameExposureTime - remainingTime
 
 			if (state === 'Busy') {
-				this.event.state = 'EXPOSING'
+				this.event.state = 'exposing'
 
 				if (!this.event.loop) {
 					this.event.totalProgress.remainingTime = this.totalExposureProgress[0] - elapsedTime
@@ -175,7 +175,7 @@ export class CameraCaptureTask {
 				this.event.frameProgress.progress = Math.max(0, (1 - remainingTime / this.event.frameExposureTime) * 100)
 				return this.handleCameraCaptureEvent(this, this.event)
 			} else if (state === 'Ok') {
-				this.event.state = 'EXPOSURE_FINISHED'
+				this.event.state = 'exposureFinished'
 				this.event.frameProgress.remainingTime = 0
 				this.event.frameProgress.elapsedTime = this.event.frameExposureTime
 				this.event.frameProgress.progress = 100
@@ -188,7 +188,7 @@ export class CameraCaptureTask {
 				if (!this.stopped && this.event.remainingCount > 0) {
 					// Check if we need to wait before the next exposure
 					if (this.waitingTime >= MINIMUM_WAITING_TIME) {
-						this.event.state = 'WAITING'
+						this.event.state = 'waiting'
 
 						// Wait for the specified waiting time and send progress event
 						waitFor(this.waitingTime / 1000, (remainingTime) => {
@@ -220,7 +220,7 @@ export class CameraCaptureTask {
 								return this.start()
 							} else {
 								// Finish
-								this.event.state = 'IDLE'
+								this.event.state = 'idle'
 								this.handleCameraCaptureEvent(this, this.event)
 							}
 						}, console.error)
@@ -233,14 +233,14 @@ export class CameraCaptureTask {
 					}
 				}
 			} else if (state === 'Alert') {
-				this.event.state = 'ERROR'
+				this.event.state = 'error'
 				this.stop()
 				return this.handleCameraCaptureEvent(this, this.event)
 			}
 
 			// If no more frames or was stopped, finish the task
 			if (this.event.remainingCount <= 0 || this.stopped) {
-				this.event.state = 'IDLE'
+				this.event.state = 'idle'
 				this.handleCameraCaptureEvent(this, this.event)
 			}
 		}
@@ -288,12 +288,12 @@ export class CameraCaptureTask {
 	async start() {
 		if (!this.stopped && this.event.remainingCount > 0) {
 			if (this.request.dither && this.cameraHandler.phd2Handler?.isRunning) {
-				this.event.state = 'DITHERING'
+				this.event.state = 'dithering'
 				this.handleCameraCaptureEvent(this, this.event)
 				await this.cameraHandler.phd2Handler.dither(undefined, this.aborter.signal)
 			}
 
-			this.event.state = 'EXPOSURE_STARTED'
+			this.event.state = 'exposureStarted'
 			this.event.elapsedCount++
 			this.event.remainingCount--
 			this.event.frameProgress.remainingTime = this.event.frameExposureTime
@@ -321,11 +321,11 @@ async function makePathFor(req: CameraCaptureStart) {
 	if (req.autoSave) {
 		const savePath = req.savePath && (await directoryExists(req.savePath)) ? req.savePath : Bun.env.capturesDir
 
-		if (req.autoSubFolderMode === 'OFF') return savePath
+		if (req.autoSubFolderMode === 'off') return savePath
 
 		const now = temporalAdd(Date.now(), TIMEZONE, 'm')
 		const hour = temporalGet(now, 'h')
-		const directory = req.autoSubFolderMode === 'MIDNIGHT' || hour < 12 ? formatTemporal(now, 'YYYY-MM-DD') : formatTemporal(temporalSubtract(now, 12, 'h'), 'YYYY-MM-DD')
+		const directory = req.autoSubFolderMode === 'midnight' || hour < 12 ? formatTemporal(now, 'YYYY-MM-DD') : formatTemporal(temporalSubtract(now, 12, 'h'), 'YYYY-MM-DD')
 		const path = join(savePath, directory)
 		await mkdir(path, { recursive: true })
 		return path

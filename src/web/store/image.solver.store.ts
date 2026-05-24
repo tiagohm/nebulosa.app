@@ -13,6 +13,7 @@ import { initProxy } from '../shared/proxy'
 import type { ImageLoaded } from '../shared/types'
 import { framingStore } from './framing.store'
 import type { ImageViewerStore } from './image.viewer.store'
+import { settingsStore } from './settings.store'
 
 export type ImageSolverStore = ReturnType<typeof imageSolverStore>
 
@@ -82,7 +83,7 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 		try {
 			state.loading = true
 
-			const request: PlateSolveStart = { ...state.request, ...viewer.settings.state.solver[state.request.type], path: viewer.state.path, id: viewer.image.id }
+			const request: PlateSolveStart = { ...settingsStore.state.solver[state.request.type], ...state.request, path: viewer.state.path, id: viewer.image.id }
 			request.fov = arcsec(angularSizeOfPixel(request.focalLength, request.pixelSize) * viewer.state.info!.height)
 
 			const solution = await Api.PlateSolver.start(request)
@@ -146,6 +147,6 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 	} as const
 }
 
-export function hasScaledSolution(solution: { readonly scale?: number } | undefined) {
+export function hasScaledSolution(solution: PlateSolution | undefined): solution is PlateSolution {
 	return solution?.scale !== undefined && Number.isFinite(solution.scale) && solution.scale > 0
 }

@@ -19,24 +19,14 @@ import { PlateSolverSelect } from './PlateSolverSelect'
 import { PlateSolveStartPopover } from './PlateSolveStartPopover'
 import { TppaDirectionSelect } from './TppaDirectionSelect'
 
-const TPPA_STATE_LABELS = {
-	IDLE: 'idle',
-	WAITING: 'waiting',
-	MOVING: 'moving',
-	CAPTURING: 'capturing',
-	SOLVING: 'solving',
-	ALIGNING: 'aligning',
-	SETTLING: 'settling',
-} satisfies Record<TppaState, string>
-
 const TPPA_STATE_COLORS = {
-	IDLE: 'default',
-	WAITING: 'warning',
-	MOVING: 'secondary',
-	CAPTURING: 'primary',
-	SOLVING: 'primary',
-	ALIGNING: 'success',
-	SETTLING: 'warning',
+	idle: 'default',
+	waiting: 'warning',
+	moving: 'secondary',
+	capturing: 'primary',
+	solving: 'primary',
+	aligning: 'success',
+	settling: 'warning',
 } satisfies Record<TppaState, NonNullable<ChipProps['color']>>
 
 export const Tppa = memo(() => {
@@ -88,7 +78,7 @@ const Status = memo(() => {
 	return (
 		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
 			<Chip color={TPPA_STATE_COLORS[state]} size="sm">
-				{TPPA_STATE_LABELS[state]}
+				{state}
 			</Chip>
 			<div className="flex flex-row items-center gap-1">
 				<Chip color="warning" size="sm">

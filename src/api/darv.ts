@@ -24,7 +24,7 @@ export class DarvHandler {
 	handleDarvEvent(event: DarvEvent, task: DarvTask) {
 		this.sendEvent(event)
 
-		if (event.state === 'IDLE') {
+		if (event.state === 'idle') {
 			this.stop(event.id)
 		}
 	}
@@ -64,14 +64,14 @@ export class DarvTask {
 		request.capture.count = 1
 		request.capture.delay = 0
 		request.capture.frameType = 'LIGHT'
-		request.capture.exposureMode = 'SINGLE'
+		request.capture.exposureMode = 'single'
 		request.capture.mount = mount?.name
 		request.capture.x = 0
 		request.capture.y = 0
 		request.capture.width = camera.frame.width.max
 		request.capture.height = camera.frame.height.max
 		request.capture.exposureTime = Math.trunc(request.duration + request.initialPause)
-		request.capture.exposureTimeUnit = 'SECOND'
+		request.capture.exposureTimeUnit = 'second'
 
 		this.event.id = request.id
 		this.event.camera = camera.id
@@ -89,17 +89,17 @@ export class DarvTask {
 	async start() {
 		// Start capture
 		await this.darv.cameraHandler.start(this.camera, this.request.capture, (event) => {
-			if (event.state === 'IDLE' || event.state === 'ERROR' || event.stopped) this.stop()
+			if (event.state === 'idle' || event.state === 'error' || event.stopped) this.stop()
 		})
 
 		// Wait for initial pause
-		this.handleDarvEvent('WAITING')
+		this.handleDarvEvent('waiting')
 
 		let success = await waitFor(this.request.initialPause * 1000, () => !this.stopped)
 
 		if (success) {
 			// Move the mount forward
-			this.handleDarvEvent('FORWARDING')
+			this.handleDarvEvent('forwarding')
 
 			const duration = this.request.duration * 500 // ms
 
@@ -109,7 +109,7 @@ export class DarvTask {
 
 			if (success) {
 				// Move the mount backward
-				this.handleDarvEvent('BACKWARDING')
+				this.handleDarvEvent('backwarding')
 
 				this.move(true, true, duration)
 
@@ -119,7 +119,7 @@ export class DarvTask {
 
 		// Done
 		this.move(false, false, 0)
-		this.handleDarvEvent('IDLE')
+		this.handleDarvEvent('idle')
 	}
 
 	stop() {
@@ -129,8 +129,8 @@ export class DarvTask {
 			this.move(false, false, 0)
 			this.darv.cameraHandler.stop(this.camera)
 
-			if (this.event.state !== 'IDLE') {
-				this.handleDarvEvent('IDLE')
+			if (this.event.state !== 'idle') {
+				this.handleDarvEvent('idle')
 			}
 		}
 	}
@@ -139,7 +139,7 @@ export class DarvTask {
 		const guideOutputManager = this.darv.guideOutputHandler.guideOutputManager
 
 		if (enabled) {
-			if ((this.request.hemisphere === 'NORTHERN') !== !reversed) {
+			if ((this.request.hemisphere === 'northern') !== !reversed) {
 				guideOutputManager.pulseWest(this.mount, 0)
 				guideOutputManager.pulseEast(this.mount, duration)
 			} else {

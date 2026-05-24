@@ -43,7 +43,7 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 
 		u[1] = bus.subscribe<AutoFocusEvent>('autofocus', (event) => {
 			if (state.camera.id === event.camera && state.focuser.id === event.focuser) {
-				state.running = event.state !== 'IDLE'
+				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)
 			}
 		})
@@ -62,7 +62,7 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 
 	function reset() {
 		state.running = false
-		state.event.state = 'IDLE'
+		state.event.state = 'idle'
 	}
 
 	function update<K extends keyof AutoFocusStart>(key: K, value: AutoFocusStart[K]) {

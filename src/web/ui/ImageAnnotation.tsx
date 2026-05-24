@@ -11,6 +11,9 @@ import { Modal } from './Modal'
 export const ImageAnnotation = memo(() => {
 	const viewer = useContext(ImageViewerStoreContext)
 	const { annotation } = viewer
+	const { show } = useSnapshot(annotation.state)
+
+	if (!show) return null
 
 	return (
 		<Modal footer={<Footer />} header="Annotation" id={`annotation-${viewer.image.id}`} maxWidth="376px" onHide={annotation.hide}>

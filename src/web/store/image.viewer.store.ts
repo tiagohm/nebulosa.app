@@ -104,6 +104,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	let loading = false
 	let interactable: InteractableMethods | undefined
 	let target: HTMLImageElement | undefined
+	let centered = false
 	const stores: Pick<ImageViewerStore, 'mount' | 'unmount'>[] = []
 	const key = camera?.id || 'default'
 
@@ -201,6 +202,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 			loading = true
 
 			// Load the image
+			console.info(state.transformation.stretch)
 			const data = await Api.Image.open({ path, transformation: state.transformation, camera: camera?.name })
 
 			if (data === undefined) {
@@ -273,7 +275,11 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	function handleLoad(event: React.SyntheticEvent<HTMLImageElement>) {
 		const target = event.currentTarget
 		URL.revokeObjectURL(target.src)
-		interactable?.center()
+
+		if (!centered && interactable !== undefined) {
+			interactable.center()
+			centered = true
+		}
 	}
 
 	function select() {

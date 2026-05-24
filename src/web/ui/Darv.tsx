@@ -19,18 +19,11 @@ import { HemisphereSelect } from './HemisphereSelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 
-const DARV_STATE_LABELS = {
-	IDLE: 'idle',
-	WAITING: 'waiting',
-	FORWARDING: 'forwarding',
-	BACKWARDING: 'backwarding',
-} satisfies Record<DarvState, string>
-
 const DARV_STATE_COLORS = {
-	IDLE: 'default',
-	WAITING: 'warning',
-	FORWARDING: 'primary',
-	BACKWARDING: 'secondary',
+	idle: 'default',
+	waiting: 'warning',
+	forwarding: 'primary',
+	backwarding: 'secondary',
 } satisfies Record<DarvState, NonNullable<ChipProps['color']>>
 
 export const Darv = memo(() => {
@@ -80,7 +73,7 @@ const Status = memo(() => {
 	return (
 		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
 			<Chip color={DARV_STATE_COLORS[state]} size="sm">
-				{DARV_STATE_LABELS[state]}
+				{state}
 			</Chip>
 		</div>
 	)

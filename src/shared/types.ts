@@ -675,13 +675,13 @@ export interface GuidePulse {
 
 // Camera
 
-export type ExposureTimeUnit = 'MINUTE' | 'SECOND' | 'MILLISECOND' | 'MICROSECOND'
+export type ExposureTimeUnit = 'minute' | 'second' | 'millisecond' | 'microsecond'
 
-export type ExposureMode = 'SINGLE' | 'FIXED' | 'LOOP'
+export type ExposureMode = 'single' | 'fixed' | 'loop'
 
-export type AutoSubFolderMode = 'OFF' | 'NOON' | 'MIDNIGHT'
+export type AutoSubFolderMode = 'off' | 'noon' | 'midnight'
 
-export type CameraCaptureState = 'IDLE' | 'EXPOSURE_STARTED' | 'EXPOSING' | 'WAITING' | 'SETTLING' | 'DITHERING' | 'PAUSING' | 'PAUSED' | 'EXPOSURE_FINISHED' | 'ERROR'
+export type CameraCaptureState = 'idle' | 'exposureStarted' | 'exposing' | 'waiting' | 'settling' | 'dithering' | 'pausing' | 'paused' | 'exposureFinished' | 'error'
 
 export interface CameraCaptureStart extends Size {
 	exposureTime: number
@@ -733,7 +733,7 @@ export interface CameraCaptureEvent {
 
 // Mount
 
-export type MountRemoteControlProtocol = 'LX200' | 'STELLARIUM'
+export type MountRemoteControlProtocol = 'lx200' | 'stellarium'
 
 export type CoordinateType = 'equatorial' | 'equatorialJ2000' | 'horizontal' | 'ecliptic' | 'galactic'
 
@@ -763,7 +763,7 @@ export interface Notification {
 
 // Plate Solver
 
-export type PlateSolverType = 'ASTAP' | 'ASTROMETRY_NET' | 'NOVA_ASTROMETRY_NET'
+export type PlateSolverType = 'astap' | 'astrometryNet' | 'novaAstrometryNet'
 
 export interface PlateSolveStart extends Omit<PlateSolveOptions, 'rightAscension' | 'declination' | 'radius'>, EquatorialCoordinate<string | Angle> {
 	id: string
@@ -782,7 +782,7 @@ export interface PlateSolveStart extends Omit<PlateSolveOptions, 'rightAscension
 
 // Star Detection
 
-export type StarDetectionType = 'ASTAP' | 'NEBULOSA'
+export type StarDetectionType = 'astap' | 'nebulosa'
 
 export interface StarDetection {
 	readonly type: StarDetectionType
@@ -796,11 +796,11 @@ export interface StarDetection {
 
 // Tppa
 
-export type TppaState = 'IDLE' | 'WAITING' | 'MOVING' | 'CAPTURING' | 'SOLVING' | 'ALIGNING' | 'SETTLING'
+export type TppaState = 'idle' | 'waiting' | 'moving' | 'capturing' | 'solving' | 'aligning' | 'settling'
 
 export interface TppaStart {
 	id: string
-	readonly direction: 'EAST' | 'WEST'
+	readonly direction: 'east' | 'west'
 	readonly moveDuration: number // seconds
 	readonly delayBeforeCapture: number // seconds
 	readonly maxAttempts: number
@@ -827,9 +827,9 @@ export interface TppaEvent {
 
 // Darv
 
-export type Hemisphere = 'NORTHERN' | 'SOUTHERN'
+export type Hemisphere = 'northern' | 'southern'
 
-export type DarvState = 'IDLE' | 'WAITING' | 'FORWARDING' | 'BACKWARDING'
+export type DarvState = 'idle' | 'waiting' | 'forwarding' | 'backwarding'
 
 export interface DarvStart {
 	id: string
@@ -849,7 +849,7 @@ export interface DarvEvent {
 
 // Auto Focus
 
-export type AutoFocusState = 'IDLE' | 'MOVING' | 'CAPTURING' | 'COMPUTING'
+export type AutoFocusState = 'idle' | 'moving' | 'capturing' | 'computing'
 
 export interface AutoFocusStart extends AutoFocusOptions {
 	id: string
@@ -878,7 +878,7 @@ export interface AutoFocusEvent {
 
 // Flat Wizard
 
-export type FlatWizardState = 'IDLE' | 'CAPTURING' | 'COMPUTING'
+export type FlatWizardState = 'idle' | 'capturing' | 'computing'
 
 export interface FlatWizardStart {
 	id: string
@@ -909,13 +909,13 @@ export interface AlpacaServerStatus {
 
 // PHD2
 
-export type PHD2ClientMode = 'INTERNAL' | 'REMOTE'
+export type PHD2ClientMode = 'internal' | 'remote'
 
-export type PHD2State = 'IDLE' | 'CALIBRATING' | 'SETTLING' | 'GUIDING' | 'LOOPING' | 'STAR_LOST' | 'PAUSED'
+export type PHD2State = 'idle' | 'calibrating' | 'settling' | 'guiding' | 'looping' | 'starLost' | 'paused'
 
 export interface PHD2RemoteConnect extends Readonly<HostAndPort> {
 	readonly dither: PHD2Dither
-	readonly mode: 'REMOTE'
+	readonly mode: 'remote'
 }
 
 export interface PHD2InternalConnect {
@@ -924,7 +924,7 @@ export interface PHD2InternalConnect {
 	readonly camera: string
 	readonly guideOutput: string
 	readonly capture: Omit<CameraCaptureStart, 'dither'>
-	readonly mode: 'INTERNAL'
+	readonly mode: 'internal'
 }
 
 export type PHD2Connect = PHD2RemoteConnect | PHD2InternalConnect
@@ -974,9 +974,9 @@ export const DEFAULT_PHD2_DITHER: Required<PHD2Dither> = {
 
 export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	exposureTime: 0,
-	exposureTimeUnit: 'MICROSECOND',
+	exposureTimeUnit: 'microsecond',
 	frameType: 'LIGHT',
-	exposureMode: 'SINGLE',
+	exposureMode: 'single',
 	delay: 0,
 	count: 1,
 	x: 0,
@@ -990,7 +990,7 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	gain: 0,
 	offset: 0,
 	autoSave: false,
-	autoSubFolderMode: 'OFF',
+	autoSubFolderMode: 'off',
 	dither: { ...DEFAULT_PHD2_DITHER, enabled: false },
 	transferFormat: 'FITS',
 	compressed: false,
@@ -998,7 +998,7 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 
 export const DEFAULT_CAMERA_CAPTURE_EVENT: CameraCaptureEvent = {
 	camera: '',
-	state: 'IDLE',
+	state: 'idle',
 	count: 0,
 	remainingCount: 0,
 	elapsedCount: 0,
@@ -1021,7 +1021,7 @@ export const DEFAULT_CAMERA_CAPTURE_EVENT: CameraCaptureEvent = {
 
 export const DEFAULT_PLATE_SOLVE_START: PlateSolveStart = {
 	id: '',
-	type: 'ASTAP',
+	type: 'astap',
 	executable: '',
 	path: '',
 	focalLength: 0,
@@ -1051,7 +1051,7 @@ export const DEFAULT_FRAMING: Framing = {
 }
 
 export const DEFAULT_STAR_DETECTION: StarDetection = {
-	type: 'ASTAP',
+	type: 'astap',
 	path: '',
 	timeout: 30000,
 	minSNR: 0,
@@ -1302,7 +1302,7 @@ export const DEFAULT_INDI_SERVER_START: Required<IndiServerStart> = {
 
 export const DEFAULT_TPPA_START: TppaStart = {
 	id: '',
-	direction: 'EAST',
+	direction: 'east',
 	moveDuration: 5,
 	delayBeforeCapture: 5,
 	maxAttempts: 15,
@@ -1317,7 +1317,7 @@ export const DEFAULT_TPPA_EVENT: TppaEvent = {
 	camera: '',
 	mount: '',
 	step: 0,
-	state: 'IDLE',
+	state: 'idle',
 	attempts: 0,
 	solved: false,
 	aligned: false,
@@ -1334,7 +1334,7 @@ export const DEFAULT_TPPA_EVENT: TppaEvent = {
 
 export const DEFAULT_DARV_START: DarvStart = {
 	id: '',
-	hemisphere: 'NORTHERN',
+	hemisphere: 'northern',
 	initialPause: 5,
 	duration: 30,
 	capture: DEFAULT_CAMERA_CAPTURE_START,
@@ -1344,7 +1344,7 @@ export const DEFAULT_DARV_EVENT: DarvEvent = {
 	id: '',
 	camera: '',
 	mount: '',
-	state: 'IDLE',
+	state: 'idle',
 }
 
 export const DEFAULT_AUTO_FOCUS_START: AutoFocusStart = {
@@ -1361,7 +1361,7 @@ export const DEFAULT_AUTO_FOCUS_START: AutoFocusStart = {
 
 export const DEFAULT_AUTO_FOCUS_EVENT: AutoFocusEvent = {
 	id: '',
-	state: 'IDLE',
+	state: 'idle',
 	camera: '',
 	focuser: '',
 	starCount: 0,
@@ -1383,12 +1383,12 @@ export const DEFAULT_FLAT_WIZARD_START: FlatWizardStart = {
 export const DEFAULT_FLAT_WIZARD_EVENT: FlatWizardEvent = {
 	id: '',
 	camera: '',
-	state: 'IDLE',
+	state: 'idle',
 	median: 0,
 }
 
 export const DEFAULT_PHD2_EVENT: PHD2Event = {
-	state: 'IDLE',
+	state: 'idle',
 	rmsRA: 0,
 	rmsDEC: 0,
 	starMass: 0,
@@ -1405,14 +1405,14 @@ export const DEFAULT_PHD2_EVENT: PHD2Event = {
 }
 
 export const DEFAULT_PHD2_REMOTE_CONNECT: PHD2RemoteConnect = {
-	mode: 'REMOTE',
+	mode: 'remote',
 	host: 'localhost',
 	port: 4400,
 	dither: DEFAULT_PHD2_DITHER,
 }
 
 export const DEFAULT_PHD2_INTERNAL_CONNECT: PHD2InternalConnect = {
-	mode: 'INTERNAL',
+	mode: 'internal',
 	focalLength: 0,
 	camera: '',
 	guideOutput: '',

@@ -1,7 +1,7 @@
 import type { MountRemoteControlProtocol } from 'src/shared/types'
 import { Select, type SelectProps } from './components/Select'
 
-const ITEMS = ['LX200', 'STELLARIUM'] as const
+const ITEMS = ['lx200', 'stellarium'] as const
 const LABELS = ['LX200', 'Stellarium'] as const
 
 function MountRemoteControlProtocolItem(item: MountRemoteControlProtocol, i: number) {

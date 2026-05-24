@@ -37,9 +37,9 @@ export function CameraCaptureStartPopover({ mode, camera, color, disabled, value
 					disabled={exposureTimeDisabled}
 					fullWidth
 					maxValue={camera.exposure.max}
-					maxValueUnit="SECOND"
+					maxValueUnit="second"
 					minValue={exposureTimeDisabled ? 0 : camera.exposure.min}
-					minValueUnit="SECOND"
+					minValueUnit="second"
 					onUnitChange={(value) => onValueChange('exposureTimeUnit', value)}
 					onValueChange={(value) => onValueChange('exposureTime', value)}
 					unit={exposureTimeUnit}

@@ -4,6 +4,7 @@ import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { initProxy } from '../shared/proxy'
 import type { ImageLoaded } from '../shared/types'
+import type { SliderRangeValue } from '../ui/components/Slider'
 import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageStretchStore = ReturnType<typeof imageStretchStore>
@@ -54,6 +55,21 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 		state.stretch[key] = value
 	}
 
+	function handleShadowChange(value: number) {
+		update('shadow', value)
+		if (value > state.stretch.highlight) update('highlight', value)
+	}
+
+	function handleHighlightChange(value: number) {
+		update('highlight', value)
+		if (value < state.stretch.shadow) update('shadow', value)
+	}
+
+	function handleShadowHighlightChange(value: SliderRangeValue) {
+		update('shadow', value[0])
+		update('highlight', value[1])
+	}
+
 	function auto() {
 		state.stretch.auto = true
 		return load()
@@ -78,7 +94,8 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 	}
 
 	function load() {
-		return viewer.reload()
+		console.info(state.stretch)
+			return viewer.reload()
 	}
 
 	function show() {
@@ -95,6 +112,9 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 		mount,
 		unmount,
 		update,
+		handleShadowChange,
+		handleHighlightChange,
+		handleShadowHighlightChange,
 		auto,
 		reset,
 		toggle,

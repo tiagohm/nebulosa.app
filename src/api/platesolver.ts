@@ -27,11 +27,11 @@ export class PlateSolverHandler {
 
 		let solver: Promise<PlateSolution | undefined> | undefined
 
-		if (req.type === 'ASTAP') {
+		if (req.type === 'astap') {
 			solver = astapPlateSolve(req.path, { ...req, rightAscension, declination, radius }, aborter.signal)
-		} else if (req.type === 'ASTROMETRY_NET') {
+		} else if (req.type === 'astrometryNet') {
 			solver = localAstrometryNetPlateSolve(req.path, { ...req, rightAscension, declination, radius }, aborter.signal)
-		} else if (req.type === 'NOVA_ASTROMETRY_NET') {
+		} else if (req.type === 'novaAstrometryNet') {
 			solver = novaAstrometryNetPlateSolve(
 				req.path,
 				{

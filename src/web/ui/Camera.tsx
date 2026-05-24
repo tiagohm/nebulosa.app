@@ -199,9 +199,9 @@ const Exposure = memo(() => {
 				className="col-span-6"
 				disabled={!connected || frameType === 'BIAS' || capturing}
 				maxValue={exposure.max}
-				maxValueUnit="SECOND"
+				maxValueUnit="second"
 				minValue={exposure.min}
-				minValueUnit="SECOND"
+				minValueUnit="second"
 				onUnitChange={(value) => camera.update('exposureTimeUnit', value)}
 				onValueChange={(value) => camera.update('exposureTime', value)}
 				unit={exposureTimeUnit}
@@ -221,8 +221,8 @@ const ExposureMode = memo(() => {
 	return (
 		<>
 			<ExposureModeButtonGroup className="col-span-6" fullWidth color="secondary" disabled={!connected || capturing} onValueChange={(value) => camera.update('exposureMode', value)} value={exposureMode} />
-			<NumberInput className="col-span-3" disabled={!connected || exposureMode === 'SINGLE' || capturing} label="Delay (s)" minValue={0} onValueChange={(value) => camera.update('delay', value)} value={delay} />
-			<NumberInput className="col-span-3" disabled={!connected || exposureMode !== 'FIXED' || capturing} label="Count" minValue={1} onValueChange={(value) => camera.update('count', value)} value={count} />
+			<NumberInput className="col-span-3" disabled={!connected || exposureMode === 'single' || capturing} label="Delay (s)" minValue={0} onValueChange={(value) => camera.update('delay', value)} value={delay} />
+			<NumberInput className="col-span-3" disabled={!connected || exposureMode !== 'fixed' || capturing} label="Count" minValue={1} onValueChange={(value) => camera.update('count', value)} value={count} />
 		</>
 	)
 })

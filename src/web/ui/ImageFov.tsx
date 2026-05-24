@@ -134,7 +134,7 @@ const FovList = memo(() => {
 				const isSelected = i === selected
 
 				return (
-					<div data-index={i} onClick={handleClick} className={tw('flex h-full min-w-0 flex-row items-center justify-between gap-1 border-e-2 ps-3 transition hover:bg-neutral-800/80', isSelected && 'bg-neutral-800/70')} style={{ borderColor: item.color }}>
+					<div data-index={i} onClick={handleClick} className={tw('flex h-full min-w-0 flex-row items-center justify-between gap-0 border-e-2 ps-3 transition hover:bg-neutral-800/80', isSelected && 'bg-neutral-800/70')} style={{ borderColor: item.color }}>
 						<Checkbox onValueChange={(selected) => fov.update('visible', selected, item.id)} value={item.visible} />
 						<ComputedFovItem {...item} />
 					</div>
@@ -145,7 +145,7 @@ const FovList = memo(() => {
 })
 
 const ComputedFovItem = memo((item: FovItem) => (
-	<div className="flex min-w-0 flex-1 flex-row flex-wrap items-center justify-between gap-1">
+	<div className="flex min-w-0 flex-1 flex-row flex-wrap items-center justify-between gap-1 text-sm px-2">
 		<span>
 			<strong>FL:</strong> {formatFovNumber(item.focalLength)}mm
 		</span>

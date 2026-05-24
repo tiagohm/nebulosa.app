@@ -8,30 +8,17 @@ export interface ExposureTimeProgressProps extends React.ComponentProps<'div'> {
 	readonly progress: CameraCaptureEvent
 }
 
-const CAPTURE_STATE_LABELS = {
-	IDLE: 'idle',
-	EXPOSURE_STARTED: 'exposing',
-	EXPOSING: 'exposing',
-	WAITING: 'waiting',
-	SETTLING: 'settling',
-	DITHERING: 'dithering',
-	PAUSING: 'pausing',
-	PAUSED: 'paused',
-	EXPOSURE_FINISHED: 'downloading',
-	ERROR: 'error',
-} satisfies Record<CameraCaptureState, string>
-
 const CAPTURE_STATE_COLORS = {
-	IDLE: 'default',
-	EXPOSURE_STARTED: 'success',
-	EXPOSING: 'success',
-	WAITING: 'warning',
-	SETTLING: 'warning',
-	DITHERING: 'secondary',
-	PAUSING: 'warning',
-	PAUSED: 'warning',
-	EXPOSURE_FINISHED: 'primary',
-	ERROR: 'danger',
+	idle: 'default',
+	exposureStarted: 'success',
+	exposing: 'success',
+	waiting: 'warning',
+	settling: 'warning',
+	dithering: 'secondary',
+	pausing: 'warning',
+	paused: 'warning',
+	exposureFinished: 'primary',
+	error: 'danger',
 } satisfies Record<CameraCaptureState, NonNullable<ChipProps['color']>>
 
 export function ExposureTimeProgress({ progress, className = '', ...props }: ExposureTimeProgressProps) {
@@ -45,7 +32,7 @@ export function ExposureTimeProgress({ progress, className = '', ...props }: Exp
 
 	return (
 		<div {...props} className={tw('flex flex-row items-center gap-2 overflow-hidden', className)}>
-			<Chip size="sm" className="lowercase" color={CAPTURE_STATE_COLORS[progress.state]} label={CAPTURE_STATE_LABELS[progress.state]} />
+			<Chip size="sm" className="lowercase" color={CAPTURE_STATE_COLORS[progress.state]} label={progress.state} />
 			<Chip size="sm" color="warning" label={countLabel} startContent={<Icons.Counter />} />
 			<Chip size="sm" color="secondary" label={progress.loop ? formatTime(progress.totalProgress.elapsedTime) : formatProgressTime(progress.totalProgress, showRemainingTime)} onClick={toggleShowRemaining} startContent={<Icons.TimerSand />} />
 			<Chip size="sm" color="primary" label={formatProgressTime(progress.frameProgress, showRemainingTime)} onClick={toggleShowRemaining} startContent={<Icons.TimerSand />} />

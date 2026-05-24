@@ -9,12 +9,12 @@ export interface AutoSubFolderModeButtonProps extends Omit<ButtonProps, 'childre
 }
 
 const ICONS = {
-	OFF: [Icons.FolderOff, 'default'],
-	NOON: [Icons.Sun, 'warning'],
-	MIDNIGHT: [Icons.Moon, 'primary'],
+	off: [Icons.FolderOff, 'default'],
+	noon: [Icons.Sun, 'warning'],
+	midnight: [Icons.Moon, 'primary'],
 } as const
 
 export function AutoSubFolderModeButton({ value, onValueChange, ...props }: AutoSubFolderModeButtonProps) {
 	const [icon, color] = ICONS[value]
-	return <IconButton color={color} icon={icon} onClick={() => onValueChange(value === 'OFF' ? 'NOON' : value === 'NOON' ? 'MIDNIGHT' : 'OFF')} tooltipContent={`Auto sub-folder mode: ${value}`} variant="ghost" {...props} />
+	return <IconButton color={color} icon={icon} onClick={() => onValueChange(value === 'off' ? 'noon' : value === 'noon' ? 'midnight' : 'off')} tooltipContent={`Auto sub-folder mode: ${value}`} variant="ghost" {...props} />
 }

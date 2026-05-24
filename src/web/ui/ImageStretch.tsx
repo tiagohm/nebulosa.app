@@ -4,7 +4,7 @@ import { ImageViewerStoreContext } from '../shared/context'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
-import { Slider, type SliderRangeValue } from './components/Slider'
+import { Slider } from './components/Slider'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { SigmaClipCenterMethodSelect } from './SigmaClipCenterMethodSelect'
@@ -38,26 +38,11 @@ const Stretch = memo(() => {
 	const { stretch } = useContext(ImageViewerStoreContext)
 	const { shadow, midtone, highlight, bits } = useSnapshot(stretch.state.stretch)
 
-	function handleShadowChange(value: number) {
-		stretch.update('shadow', value)
-		if (value > highlight) stretch.update('highlight', value)
-	}
-
-	function handleHighlightChange(value: number) {
-		stretch.update('highlight', value)
-		if (value < shadow) stretch.update('shadow', value)
-	}
-
-	function handleShadowHighlightChange(value: SliderRangeValue) {
-		stretch.update('shadow', value[0])
-		stretch.update('highlight', value[1])
-	}
-
 	return (
 		<>
-			<NumberInput className="col-span-6 min-w-0" label="Shadow" maxValue={STRETCH_MAX_VALUE} minValue={STRETCH_MIN_VALUE} onValueChange={handleShadowChange} value={shadow} />
-			<NumberInput className="col-span-6 min-w-0" label="Highlight" maxValue={STRETCH_MAX_VALUE} minValue={STRETCH_MIN_VALUE} onValueChange={handleHighlightChange} value={highlight} />
-			<Slider className="col-span-full min-w-0" fullWidth maxValue={STRETCH_MAX_VALUE} minValue={STRETCH_MIN_VALUE} onValueChange={handleShadowHighlightChange} step={8} value={[shadow, highlight]} />
+			<NumberInput className="col-span-6 min-w-0" label="Shadow" maxValue={STRETCH_MAX_VALUE} minValue={STRETCH_MIN_VALUE} onValueChange={stretch.handleShadowChange} value={shadow} />
+			<NumberInput className="col-span-6 min-w-0" label="Highlight" maxValue={STRETCH_MAX_VALUE} minValue={STRETCH_MIN_VALUE} onValueChange={stretch.handleHighlightChange} value={highlight} />
+			<Slider className="col-span-full min-w-0" fullWidth maxValue={STRETCH_MAX_VALUE} minValue={STRETCH_MIN_VALUE} onValueChange={stretch.handleShadowHighlightChange} step={8} value={[shadow, highlight]} />
 			<NumberInput className="col-span-9 min-w-0" label="Midtone" maxValue={STRETCH_MAX_VALUE} minValue={STRETCH_MIN_VALUE} onValueChange={(value) => stretch.update('midtone', value)} value={midtone} />
 			<NumberInput className="col-span-3 min-w-0" label="Bits" maxValue={20} minValue={8} onValueChange={(value) => stretch.update('bits', value)} value={bits} />
 			<Slider className="col-span-full min-w-0" fullWidth maxValue={STRETCH_MAX_VALUE} minValue={STRETCH_MIN_VALUE} onValueChange={(value) => stretch.update('midtone', value)} step={8} value={midtone} />

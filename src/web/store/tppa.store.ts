@@ -45,7 +45,7 @@ export function tppaStore(camera: Camera, mount: Mount) {
 
 		u[1] = bus.subscribe<TppaEvent>('tppa', (event) => {
 			if (state.camera.id === event.camera && state.mount.id === event.mount) {
-				state.running = event.state !== 'IDLE'
+				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)
 			}
 		})

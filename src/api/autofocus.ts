@@ -28,7 +28,7 @@ export class AutoFocusHandler {
 	private handleAutoFocusEvent(event: AutoFocusEvent, task: AutoFocusTask) {
 		this.sendEvent(event)
 
-		if (event.state === 'IDLE') {
+		if (event.state === 'idle') {
 			this.stop(event.id)
 		}
 	}
@@ -87,18 +87,18 @@ export class AutoFocusTask {
 
 		if (savedPath && !this.stopped && !event.stopped) {
 			if (this.stopped) {
-				return this.handleAutoFocusEvent('IDLE', 'stopped')
+				return this.handleAutoFocusEvent('idle', 'stopped')
 			}
 
-			this.handleAutoFocusEvent('COMPUTING', '')
+			this.handleAutoFocusEvent('computing', '')
 
 			// Detect stars
 			const stars = await this.autoFocusHandler.starDetectionHandler.detect({ ...this.request.starDetection, path: savedPath })
 
 			if (this.stopped) {
-				return this.handleAutoFocusEvent('IDLE', 'stopped')
+				return this.handleAutoFocusEvent('idle', 'stopped')
 			} else if (stars.length === 0) {
-				return this.handleAutoFocusEvent('IDLE', 'no stars detected')
+				return this.handleAutoFocusEvent('idle', 'no stars detected')
 			}
 
 			// Compute the HFD from detected stars
@@ -113,7 +113,7 @@ export class AutoFocusTask {
 			const position = Math.max(this.focuser.position.min, Math.min(step.absolute ? step.absolute : step.relative ? this.focuser.position.value + step.relative : 0, this.focuser.position.max))
 
 			if (this.stopped) {
-				this.handleAutoFocusEvent('IDLE', 'stopped')
+				this.handleAutoFocusEvent('idle', 'stopped')
 			} else if (step.type === 'MOVE') {
 				this.computeChart()
 
@@ -122,33 +122,33 @@ export class AutoFocusTask {
 					if (event === 'reach') {
 						void this.start()
 					} else if (event === 'cancel') {
-						this.handleAutoFocusEvent('IDLE', 'stopped')
+						this.handleAutoFocusEvent('idle', 'stopped')
 					} else {
-						this.handleAutoFocusEvent('IDLE', `failed to move to position ${position}`)
+						this.handleAutoFocusEvent('idle', `failed to move to position ${position}`)
 					}
 				})
 
 				// Move the focuser
-				this.handleAutoFocusEvent('MOVING', `moving to position ${position}`)
+				this.handleAutoFocusEvent('moving', `moving to position ${position}`)
 				this.autoFocusHandler.focuserHandler.moveTo(this.focuser, position)
 			} else if (step.type === 'COMPLETED') {
 				this.computeChart()
 
 				// Move the focuser to determined focus point
 				const position = this.autoFocus.focusPoint!.x
-				this.handleAutoFocusEvent('MOVING', `moving to best focus at position ${position}`)
+				this.handleAutoFocusEvent('moving', `moving to best focus at position ${position}`)
 				this.autoFocusHandler.focuserHandler.moveTo(this.focuser, position)
 
 				this.unsubscribers[0] = waitForFocuser(this.focuser, position, () => {
 					// TODO: Compare the HFD at best focus with the initial HFD. If it's worse, go back to initial position.
-					this.handleAutoFocusEvent('IDLE', 'best focus!')
+					this.handleAutoFocusEvent('idle', 'best focus!')
 				})
 			} else {
 				this.unsubscribers[0] = waitForFocuser(this.focuser, position, () => {
-					this.handleAutoFocusEvent('IDLE', 'restoring to initial focus position')
+					this.handleAutoFocusEvent('idle', 'restoring to initial focus position')
 				})
 			}
-		} else if (event.state === 'ERROR' || event.stopped) {
+		} else if (event.state === 'error' || event.stopped) {
 			this.stop()
 		}
 	}
@@ -189,9 +189,9 @@ export class AutoFocusTask {
 		this.request.capture.savePath = undefined
 		this.request.capture.focuser = this.focuser?.name
 		this.request.capture.frameType = 'LIGHT'
-		this.request.capture.exposureMode = 'SINGLE'
+		this.request.capture.exposureMode = 'single'
 
-		this.handleAutoFocusEvent('CAPTURING', '')
+		this.handleAutoFocusEvent('capturing', '')
 
 		return this.autoFocusHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}
@@ -204,7 +204,7 @@ export class AutoFocusTask {
 		unsubscribe(this.unsubscribers)
 		this.autoFocusHandler.focuserHandler.stop(this.focuser)
 		this.autoFocusHandler.cameraHandler.stop(this.camera)
-		this.handleAutoFocusEvent('IDLE', 'stopped')
+		this.handleAutoFocusEvent('idle', 'stopped')
 	}
 }
 

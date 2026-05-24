@@ -31,36 +31,36 @@ export class PHD2Handler {
 
 					switch (this.state) {
 						case 'Calibrating':
-							this.handlePHD2Event('CALIBRATING')
+							this.handlePHD2Event('calibrating')
 							break
 						case 'Guiding':
-							this.handlePHD2Event('GUIDING')
+							this.handlePHD2Event('guiding')
 							break
 						case 'Looping':
-							this.handlePHD2Event('LOOPING')
+							this.handlePHD2Event('looping')
 							break
 						case 'LostLock':
-							this.handlePHD2Event('STAR_LOST')
+							this.handlePHD2Event('starLost')
 							break
 						default:
-							this.handlePHD2Event('IDLE')
+							this.handlePHD2Event('idle')
 							break
 					}
 
 					break
 				case 'StartCalibration':
-					this.handlePHD2Event('CALIBRATING')
+					this.handlePHD2Event('calibrating')
 					break
 				case 'LoopingExposures':
 					this.event.starMass = event.StarMass
 					this.event.snr = event.SNR
 					this.event.hfd = event.HFD
-					this.handlePHD2Event('LOOPING')
+					this.handlePHD2Event('looping')
 					break
 				case 'SettleBegin':
 					this.settling?.resolve(false)
 					this.settling = Promise.withResolvers()
-					this.handlePHD2Event('SETTLING')
+					this.handlePHD2Event('settling')
 					break
 				case 'SettleDone':
 					this.settleDone(true)
@@ -79,7 +79,7 @@ export class PHD2Handler {
 					this.event.step.decCorrection = DECDirection === 'North' ? DECDuration : -DECDuration
 					this.event.step.dx = null
 					this.event.step.dy = null
-					this.handlePHD2Event('GUIDING')
+					this.handlePHD2Event('guiding')
 					break
 				}
 				case 'GuidingDithered': {
@@ -89,14 +89,14 @@ export class PHD2Handler {
 					this.event.step.decCorrection = null
 					this.event.step.dx = event.dx
 					this.event.step.dy = event.dy
-					this.handlePHD2Event('GUIDING')
+					this.handlePHD2Event('guiding')
 					break
 				}
 				case 'StarLost':
-					this.handlePHD2Event('STAR_LOST')
+					this.handlePHD2Event('starLost')
 					break
 				case 'Paused':
-					this.handlePHD2Event('PAUSED')
+					this.handlePHD2Event('paused')
 					break
 			}
 
@@ -117,11 +117,11 @@ export class PHD2Handler {
 	}
 
 	get isRunning() {
-		return this.event.state === 'GUIDING'
+		return this.event.state === 'guiding'
 	}
 
 	get isLooping() {
-		return this.event.state === 'LOOPING'
+		return this.event.state === 'looping'
 	}
 
 	sendEvent(event: PHD2Event) {
@@ -142,7 +142,7 @@ export class PHD2Handler {
 		if (this.client) return false
 
 		try {
-			if (req.mode === 'REMOTE') {
+			if (req.mode === 'remote') {
 				const client = new PHD2Client({ handler: this.handler })
 
 				if (await client.connect(req.host, req.port)) {

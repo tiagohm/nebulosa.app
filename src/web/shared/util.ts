@@ -94,6 +94,40 @@ export function saveAs(blob: Blob | MediaSource, name: string) {
 	}
 }
 
+export function isObject(value: unknown): value is object {
+	if (value === null) return false
+	const type = typeof value
+	return type === 'object' || type === 'function'
+}
+
+function assignKey<T extends {}>(to: T, from: T, key: keyof T & string) {
+	var value = from[key]
+
+	if (value === undefined || value === null) {
+		return
+	}
+
+	if (Object.hasOwnProperty.call(to, key) && isObject(value) && !Array.isArray(value)) {
+		to[key] = deepAssign(to[key] as never, from[key] as never)
+	} else {
+		to[key] = value
+	}
+}
+
+export function deepAssign<T extends {}>(to: T, from: Partial<T>) {
+	if (to === from) {
+		return to
+	}
+
+	for (const key in from) {
+		if (Object.hasOwnProperty.call(from, key)) {
+			assignKey(to, from, key)
+		}
+	}
+
+	return to
+}
+
 // Deletes undefined or null properties
 export function deleteUndefinedOrNull<T extends object>(o: T): T {
 	for (const [key, value] of Object.entries(o)) {

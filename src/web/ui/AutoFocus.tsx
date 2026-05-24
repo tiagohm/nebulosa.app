@@ -19,18 +19,11 @@ import { Modal } from './Modal'
 import { StarDetectionPopover } from './StarDetectionPopover'
 import { StarDetectionSelect } from './StarDetectionSelect'
 
-const AUTO_FOCUS_STATE_LABELS = {
-	IDLE: 'idle',
-	MOVING: 'moving',
-	CAPTURING: 'capturing',
-	COMPUTING: 'computing',
-} satisfies Record<AutoFocusState, string>
-
 const AUTO_FOCUS_STATE_COLORS = {
-	IDLE: 'default',
-	MOVING: 'secondary',
-	CAPTURING: 'warning',
-	COMPUTING: 'primary',
+	idle: 'default',
+	moving: 'secondary',
+	capturing: 'warning',
+	computing: 'primary',
 } satisfies Record<AutoFocusState, ChipProps['color']>
 
 interface FocusChartPoint {
@@ -138,7 +131,7 @@ const Status = memo(() => {
 		<div className="col-span-full mt-2 flex min-w-0 flex-col gap-2">
 			<div className="flex min-w-0 flex-row flex-wrap items-center gap-1.5">
 				<Chip color={AUTO_FOCUS_STATE_COLORS[state]} size="sm">
-					{AUTO_FOCUS_STATE_LABELS[state]}
+					{state}
 				</Chip>
 				<Chip color="warning" size="sm">
 					Stars: {starCount}

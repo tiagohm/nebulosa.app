@@ -17,16 +17,10 @@ import { Modal } from './Modal'
 
 const MEAN_MAX_VALUE = 65535
 
-const FLAT_WIZARD_STATE_LABELS = {
-	IDLE: 'idle',
-	CAPTURING: 'capturing',
-	COMPUTING: 'computing',
-} satisfies Record<FlatWizardState, string>
-
 const FLAT_WIZARD_STATE_COLORS = {
-	IDLE: 'default',
-	CAPTURING: 'primary',
-	COMPUTING: 'warning',
+	idle: 'default',
+	capturing: 'primary',
+	computing: 'warning',
 } satisfies Record<FlatWizardState, NonNullable<ChipProps['color']>>
 
 export const FlatWizard = memo(() => {
@@ -72,7 +66,7 @@ const Status = memo(() => {
 	return (
 		<div className="col-span-full mt-2 flex min-w-0 flex-row items-center justify-between gap-2">
 			<Chip color={FLAT_WIZARD_STATE_COLORS[state]} size="sm">
-				{FLAT_WIZARD_STATE_LABELS[state]}
+				{state}
 			</Chip>
 			{median > 0 && (
 				<Chip color="secondary" size="sm">

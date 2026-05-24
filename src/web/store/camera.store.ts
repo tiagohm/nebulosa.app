@@ -53,9 +53,9 @@ export function cameraStore(camera: Camera) {
 			if (event.camera === camera.id) {
 				Object.assign(state.progress, event)
 
-				if (event.state === 'IDLE') {
+				if (event.state === 'idle') {
 					state.capturing = false
-				} else if (event.state === 'EXPOSURE_STARTED') {
+				} else if (event.state === 'exposureStarted') {
 					state.capturing = true
 				}
 			}
@@ -200,8 +200,8 @@ export function updateCameraFrameFormat(request: CameraCaptureStart, frameFormat
 
 export function updateCameraExposureTime(request: CameraCaptureStart, exposure: MinMaxValueProperty) {
 	if (exposure.max > 0) {
-		const min = Math.max(1, exposureTimeIn(exposure.min, 'SECOND', request.exposureTimeUnit))
-		const max = exposureTimeIn(exposure.max, 'SECOND', request.exposureTimeUnit)
+		const min = Math.max(1, exposureTimeIn(exposure.min, 'second', request.exposureTimeUnit))
+		const max = exposureTimeIn(exposure.max, 'second', request.exposureTimeUnit)
 		request.exposureTime = Math.max(min, Math.min(request.exposureTime, max))
 	}
 }

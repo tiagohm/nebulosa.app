@@ -50,14 +50,14 @@ const Connection = memo(() => {
 	const phd2 = useMolecule(PHD2Molecule)
 	const { connecting, connected, camera, guideOutput } = useSnapshot(phd2.state)
 	const { host, port, mode } = useSnapshot(phd2.state.connection)
-	const canConnect = mode === 'REMOTE' ? canConnectRemote({ host, port }) : !!camera && !!guideOutput
+	const canConnect = mode === 'remote' ? canConnectRemote({ host, port }) : !!camera && !!guideOutput
 
 	return (
 		<>
 			<div className="col-span-full flex flex-row items-center justify-center">
 				<PHD2ClientModeRadioGroup disabled={connected || connecting} horizontal onValueChange={(value) => phd2.updateConnection('mode', value)} value={mode} />
 			</div>
-			{mode === 'REMOTE' ? (
+			{mode === 'remote' ? (
 				<>
 					<TextInput className="col-span-7" disabled={connected || connecting} label="Host" maxLength={128} onValueChange={(value) => phd2.updateConnection('host', value)} placeholder="localhost" value={host} />
 					<NumberInput className="col-span-3" disabled={connected || connecting} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => phd2.updateConnection('port', value)} placeholder="4400" value={port} />
@@ -142,7 +142,7 @@ const Status = memo(() => {
 	return (
 		<div className="col-span-full mt-2 flex flex-row items-center justify-center gap-1">
 			<Chip size="sm" color="primary">
-				{state === 'IDLE' ? 'idle' : state === 'CALIBRATING' ? 'calibrating' : state === 'GUIDING' ? 'guiding' : state === 'LOOPING' ? 'looping' : state === 'SETTLING' ? 'settling' : state === 'PAUSED' ? 'paused' : 'star lost'}
+				{state}
 			</Chip>
 			<Chip size="sm" color="success">
 				SNR: {snr.toFixed(0)}

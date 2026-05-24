@@ -16,36 +16,36 @@ export function unsubscribe(unsubscribers?: readonly (VoidFunction | undefined)[
 // Returns a factor to convert exposure time to minutes
 export function exposureTimeUnitFactor(unit: ExposureTimeUnit) {
 	switch (unit) {
-		case 'MINUTE':
+		case 'minute':
 		default:
 			return 1
-		case 'SECOND':
+		case 'second':
 			return 60
-		case 'MILLISECOND':
+		case 'millisecond':
 			return 60000
-		case 'MICROSECOND':
+		case 'microsecond':
 			return 60000000
 	}
 }
 
 // Converts exposure time in given unit to minutes
 export function exposureTimeInMinutes(time: number, unit: ExposureTimeUnit) {
-	return unit === 'MINUTE' ? time : time / exposureTimeUnitFactor(unit)
+	return unit === 'minute' ? time : time / exposureTimeUnitFactor(unit)
 }
 
 // Converts exposure time in given unit to seconds
 export function exposureTimeInSeconds(time: number, unit: ExposureTimeUnit) {
-	return unit === 'SECOND' ? time : time * (60 / exposureTimeUnitFactor(unit))
+	return unit === 'second' ? time : time * (60 / exposureTimeUnitFactor(unit))
 }
 
 // Converts exposure time in given unit to milliseconds
 export function exposureTimeInMilliseconds(time: number, unit: ExposureTimeUnit) {
-	return unit === 'MILLISECOND' ? time : time * (60000 / exposureTimeUnitFactor(unit))
+	return unit === 'millisecond' ? time : time * (60000 / exposureTimeUnitFactor(unit))
 }
 
 // Converts exposure time in given unit to microseconds
 export function exposureTimeInMicroseconds(time: number, unit: ExposureTimeUnit) {
-	return unit === 'MICROSECOND' ? time : time * (60000000 / exposureTimeUnitFactor(unit))
+	return unit === 'microsecond' ? time : time * (60000000 / exposureTimeUnitFactor(unit))
 }
 
 // Converts exposure time from one unit to another

@@ -24,6 +24,9 @@ function formatStat(value: number, fractionDigits: number) {
 export const ImageStatistics = memo(() => {
 	const viewer = useContext(ImageViewerStoreContext)
 	const { statistics } = viewer
+	const { show } = useSnapshot(statistics.state)
+
+	if (!show) return null
 
 	return (
 		<Modal header="Statistics" id={`settings-${viewer.image.id}`} maxWidth="296px" onHide={statistics.hide}>

@@ -1,7 +1,7 @@
 import type { Hemisphere } from 'src/shared/types'
 import { Select, type SelectProps } from './components/Select'
 
-const ITEMS = ['NORTHERN', 'SOUTHERN'] as const
+const ITEMS = ['northern', 'southern'] as const
 const LABELS = ['Northern', 'Southern'] as const
 
 function HemisphereItem(item: Hemisphere, i: number) {

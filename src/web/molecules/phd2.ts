@@ -30,7 +30,7 @@ const state = proxy<PHD2State>({
 	connection: {
 		...DEFAULT_PHD2_REMOTE_CONNECT,
 		...DEFAULT_PHD2_INTERNAL_CONNECT,
-		mode: 'REMOTE',
+		mode: 'remote',
 	},
 	event: structuredClone(DEFAULT_PHD2_EVENT),
 	index: 0,
@@ -49,8 +49,8 @@ export const PHD2Molecule = molecule(() => {
 
 			Object.assign(state.event, event)
 
-			state.looping = state.event.state === 'LOOPING'
-			state.running = state.event.state === 'GUIDING'
+			state.looping = state.event.state === 'looping'
+			state.running = state.event.state === 'guiding'
 		})
 
 		unsubscribers[1] = bus.subscribe('phd2:close', () => {

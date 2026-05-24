@@ -1,7 +1,7 @@
 import type { TppaStart } from 'src/shared/types'
 import { Select, type SelectProps } from './components/Select'
 
-const ITEMS = ['EAST', 'WEST'] as const
+const ITEMS = ['east', 'west'] as const
 const LABELS = ['East', 'West'] as const
 
 function TppaDirectionItem(item: TppaStart['direction'], i: number) {

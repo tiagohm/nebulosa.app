@@ -72,11 +72,11 @@ export function mountStore(mount: Mount) {
 		remoteControl: {
 			show: false,
 			status: {
-				LX200: false,
-				STELLARIUM: false,
+				lx200: false,
+				stellarium: false,
 			},
 			request: {
-				protocol: 'LX200',
+				protocol: 'lx200',
 				host: '0.0.0.0',
 				port: 10001,
 			},

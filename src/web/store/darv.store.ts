@@ -57,7 +57,7 @@ export function darvStore(camera: Camera, mount: Mount) {
 
 		u[1] = bus.subscribe<DarvEvent>('darv', (event) => {
 			if (state.camera.id === event.camera && state.mount.id === event.mount) {
-				state.running = event.state !== 'IDLE'
+				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)
 			}
 		})
@@ -76,7 +76,7 @@ export function darvStore(camera: Camera, mount: Mount) {
 
 	function reset() {
 		state.running = false
-		state.event.state = 'IDLE'
+		state.event.state = 'idle'
 	}
 
 	function update<K extends keyof DarvStart>(key: K, value: DarvStart[K]) {

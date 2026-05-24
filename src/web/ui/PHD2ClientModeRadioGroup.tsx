@@ -12,8 +12,8 @@ export interface PHD2ClientModeRadioGroupProps extends React.ComponentProps<'div
 export function PHD2ClientModeRadioGroup({ value, onValueChange, horizontal, disabled, className, ...props }: PHD2ClientModeRadioGroupProps) {
 	return (
 		<div className={tw('flex gap-1', horizontal ? 'flex-row items-center justify-center' : 'flex-col items-start justify-center', className)} {...props}>
-			<Radio disabled={disabled} label="Remote" onValueChange={(value) => value && onValueChange('REMOTE')} value={value === 'REMOTE'} />
-			<Radio disabled={disabled} label="Internal" onValueChange={(value) => value && onValueChange('INTERNAL')} value={value === 'INTERNAL'} />
+			<Radio disabled={disabled} label="Remote" onValueChange={(value) => value && onValueChange('remote')} value={value === 'remote'} />
+			<Radio disabled={disabled} label="Internal" onValueChange={(value) => value && onValueChange('internal')} value={value === 'internal'} />
 		</div>
 	)
 }

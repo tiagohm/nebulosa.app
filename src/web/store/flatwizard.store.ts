@@ -42,7 +42,7 @@ export function flatWizardStore(camera: Camera) {
 
 		u[1] = bus.subscribe<FlatWizardEvent>('flatwizard', (event) => {
 			if (state.camera.id === event.camera) {
-				state.running = event.state !== 'IDLE'
+				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)
 			}
 		})
@@ -61,7 +61,7 @@ export function flatWizardStore(camera: Camera) {
 
 	function reset() {
 		state.running = false
-		state.event.state = 'IDLE'
+		state.event.state = 'idle'
 	}
 
 	function update<K extends keyof FlatWizardStart>(key: K, value: FlatWizardStart[K]) {

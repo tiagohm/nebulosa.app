@@ -1,7 +1,6 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
+import { ImageViewerStoreContext } from '../shared/context'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { IconButton } from './components/IconButton'
@@ -10,10 +9,11 @@ import { Icons } from './Icon'
 import { Modal } from './Modal'
 
 export const ImageAnnotation = memo(() => {
-	const annotation = useMolecule(ImageAnnotationMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { annotation } = viewer
 
 	return (
-		<Modal footer={<Footer />} header="Annotation" id={`annotation-${annotation.viewer.storageKey}`} maxWidth="376px" onHide={annotation.hide}>
+		<Modal footer={<Footer />} header="Annotation" id={`annotation-${viewer.image.id}`} maxWidth="376px" onHide={annotation.hide}>
 			<Body />
 		</Modal>
 	)
@@ -27,7 +27,7 @@ const Body = memo(() => (
 ))
 
 const StarsAndDsos = memo(() => {
-	const annotation = useMolecule(ImageAnnotationMolecule)
+	const { annotation } = useContext(ImageViewerStoreContext)
 	const { loading } = useSnapshot(annotation.state)
 	const { stars, dsos, useSimbad } = useSnapshot(annotation.state.request)
 	const canUseSimbad = !loading && (stars || dsos)
@@ -49,7 +49,7 @@ const openSimbad = () => window.open('https://simbad.cds.unistra.fr/simbad/', '_
 const SimbadLink = memo(() => <IconButton icon={Icons.Link} onClick={openSimbad} tooltipContent="Open SIMBAD" variant="ghost" />)
 
 const MinorPlanets = memo(() => {
-	const annotation = useMolecule(ImageAnnotationMolecule)
+	const { annotation } = useContext(ImageViewerStoreContext)
 	const { loading } = useSnapshot(annotation.state)
 	const { minorPlanets, minorPlanetsMagnitudeLimit, includeMinorPlanetsWithoutMagnitude } = useSnapshot(annotation.state.request)
 	const canIncludeWithoutMagnitude = !loading && minorPlanets && isValidMagnitudeLimit(minorPlanetsMagnitudeLimit) && minorPlanetsMagnitudeLimit < MAX_MINOR_PLANET_MAGNITUDE_LIMIT
@@ -64,7 +64,7 @@ const MinorPlanets = memo(() => {
 })
 
 const Footer = memo(() => {
-	const annotation = useMolecule(ImageAnnotationMolecule)
+	const { annotation } = useContext(ImageViewerStoreContext)
 	const { loading } = useSnapshot(annotation.state)
 	const { stars, dsos, minorPlanets, minorPlanetsMagnitudeLimit } = useSnapshot(annotation.state.request)
 	const canAnnotate = stars || dsos || (minorPlanets && isValidMagnitudeLimit(minorPlanetsMagnitudeLimit))

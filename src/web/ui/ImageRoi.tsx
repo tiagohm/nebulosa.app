@@ -1,10 +1,9 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
-import { ImageViewerMolecule } from '@/molecules/image/viewer'
+import { memo, useContext } from 'react'
+import { ImageViewerStoreContext } from '../shared/context'
 
 export const ImageRoi = memo(() => {
-	const viewer = useMolecule(ImageViewerMolecule)
-	const { image } = viewer.scope
+	const viewer = useContext(ImageViewerStoreContext)
+	const { image } = viewer
 
 	return <div className="roi"></div>
 })

@@ -1,9 +1,8 @@
-import { useMolecule } from 'bunshi/react'
 import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/angle'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import type { PlateSolveStart } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { ImageSolverMolecule } from '@/molecules/image/solver'
+import { ImageViewerStoreContext } from '../shared/context'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { IconButton } from './components/IconButton'
@@ -45,10 +44,14 @@ function formatSolutionSize(width: number | undefined, height: number | undefine
 }
 
 export const ImageSolver = memo(() => {
-	const solver = useMolecule(ImageSolverMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { solver } = viewer
+	const { show } = useSnapshot(solver.state)
+
+	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Plate Solver" id={`plate-solver-${solver.viewer.storageKey}`} maxWidth="360px" onHide={solver.hide}>
+		<Modal footer={<Footer />} header="Plate Solver" id={`platesolver-${viewer.image.id}`} maxWidth="360px" onHide={solver.hide}>
 			<Body />
 		</Modal>
 	)
@@ -62,7 +65,7 @@ const Body = memo(() => (
 ))
 
 const Inputs = memo(() => {
-	const solver = useMolecule(ImageSolverMolecule)
+	const { solver } = useContext(ImageViewerStoreContext)
 	const { loading } = useSnapshot(solver.state)
 	const { blind, type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request)
 	const { rightAscension, declination } = useSnapshot(solver.state.request)
@@ -82,7 +85,7 @@ const Inputs = memo(() => {
 })
 
 const PlateSolverSelectEndContent = memo(() => {
-	const solver = useMolecule(ImageSolverMolecule)
+	const { solver } = useContext(ImageViewerStoreContext)
 	const { loading } = useSnapshot(solver.state)
 	const { type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request)
 
@@ -90,7 +93,7 @@ const PlateSolverSelectEndContent = memo(() => {
 })
 
 const Solution = memo(() => {
-	const solver = useMolecule(ImageSolverMolecule)
+	const { solver } = useContext(ImageViewerStoreContext)
 	const { loading, solution } = useSnapshot(solver.state)
 	const hasSolution = solution !== undefined
 
@@ -113,7 +116,7 @@ const Solution = memo(() => {
 })
 
 const Footer = memo(() => {
-	const solver = useMolecule(ImageSolverMolecule)
+	const { solver } = useContext(ImageViewerStoreContext)
 	const { info } = useSnapshot(solver.viewer.state)
 	const { loading } = useSnapshot(solver.state)
 	const request = useSnapshot(solver.state.request)

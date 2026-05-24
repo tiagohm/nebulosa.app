@@ -26,8 +26,8 @@ export interface InteractableMethods {
 	readonly zoomTo: (scale: number) => void
 	readonly center: () => void
 	readonly rotateTo: (angle: number) => void
-	readonly startRotation: () => void
-	readonly stopRotation: () => void
+	readonly enableRotation: () => void
+	readonly disableRotation: () => void
 }
 
 export interface InteractableProps extends Omit<GestureHandlers, 'onDragStart' | 'onDrag' | 'onDragEnd' | 'onPinch' | 'onWheel'> {
@@ -141,10 +141,10 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 					transform('none')
 				}
 			},
-			startRotation: () => {
+			enableRotation: () => {
 				rotation.current = true
 			},
-			stopRotation: () => {
+			disableRotation: () => {
 				rotation.current = false
 			},
 			center: () => {

@@ -1,9 +1,8 @@
-import { useMolecule } from 'bunshi/react'
-import { type CSSProperties, memo } from 'react'
+import { type CSSProperties, memo, useContext } from 'react'
 import type { AnnotatedSkyObject } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
 import { skyObjectName } from '@/shared/util'
+import { ImageViewerStoreContext } from '../shared/context'
 
 const TEXT_STYLE: CSSProperties = { textAnchor: 'middle', alignmentBaseline: 'text-before-edge', transform: 'rotate(0deg)' }
 
@@ -21,7 +20,8 @@ function Star(s: AnnotatedSkyObject) {
 }
 
 export const AnnotatedStars = memo(() => {
-	const annotation = useMolecule(ImageAnnotationMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { annotation } = viewer
 	const { stars } = useSnapshot(annotation.state)
 
 	if (stars.length === 0) return null

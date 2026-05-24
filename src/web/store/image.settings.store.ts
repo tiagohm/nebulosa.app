@@ -1,9 +1,11 @@
-import { molecule, onMount, use } from 'bunshi'
 import type { ImageFormat } from 'nebulosa/src/image.types'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { initProxy } from '@/shared/proxy'
-import { ImageViewerMolecule } from './viewer'
+import { initProxy } from '../shared/proxy'
+import type { ImageViewerStore } from './image.viewer.store'
+
+export type ImageSettingsStore = ReturnType<typeof imageSettingsStore>
 
 export interface ImageSettingsState {
 	show: boolean
@@ -11,38 +13,41 @@ export interface ImageSettingsState {
 	transformation: ImageTransformation
 }
 
-const stateMap = new Map<string, ImageSettingsState>()
+export function imageSettingsStore(viewer: ImageViewerStore) {
+	const state = proxy<ImageSettingsState>({
+		show: false,
+		pixelated: false,
+		transformation: viewer.state.transformation,
+	})
 
-export const ImageSettingsMolecule = molecule(() => {
-	const viewer = use(ImageViewerMolecule)
-	const { key } = viewer.scope.image
+	console.info('image settings created:', viewer.state.path)
 
-	const state =
-		stateMap.get(key) ??
-		proxy<ImageSettingsState>({
-			show: false,
-			pixelated: false,
-			transformation: viewer.state.transformation,
-		})
+	const u: VoidFunction[] = []
+	let mounted = false
 
-	stateMap.set(key, state)
+	function mount() {
+		if (mounted) return
 
-	onMount(() => {
-		const unsubscriber = initProxy(state, `image.${viewer.storageKey}.settings`, ['p:show', 'p:pixelated'])
+		console.info('image settings mounted:', viewer.state.path)
 
-		state.transformation = viewer.state.transformation
+		mounted = true
+
+		u[0] = initProxy(state, `image.${viewer.key}.settings`, ['p:show', 'p:pixelated'])
 
 		update('pixelated', state.pixelated)
+	}
 
-		return () => {
-			unsubscriber()
-		}
-	})
+	function unmount() {
+		if (!mounted) return
+		console.info('image settings unmounted:', viewer.state.path)
+		unsubscribe(u)
+		mounted = false
+	}
 
 	function update<K extends keyof ImageSettingsState>(key: K, value: ImageSettingsState[K]) {
 		state[key] = value
 
-		if (key === 'pixelated') viewer.target?.classList.toggle('pixelated', value as never)
+		if (key === 'pixelated') viewer.toggleClass('pixelated', value as boolean)
 	}
 
 	function updateTransformation<K extends keyof ImageTransformation>(key: K, value: ImageTransformation[K]) {
@@ -66,8 +71,8 @@ export const ImageSettingsMolecule = molecule(() => {
 	}
 
 	function apply() {
-		viewer.target?.classList.toggle('pixelated', state.pixelated)
-		return viewer.load(true)
+		viewer.toggleClass('pixelated', state.pixelated)
+		return viewer.reload()
 	}
 
 	function show() {
@@ -78,5 +83,18 @@ export const ImageSettingsMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, scope: viewer.scope, viewer, update, updateTransformation, updateFormatType, updateFormat, reset, apply, show, hide } as const
-})
+	return {
+		state,
+		viewer,
+		mount,
+		unmount,
+		update,
+		updateTransformation,
+		updateFormatType,
+		updateFormat,
+		reset,
+		apply,
+		show,
+		hide,
+	} as const
+}

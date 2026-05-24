@@ -1,55 +1,47 @@
-import { molecule, onMount, use } from 'bunshi'
+import { nanoid } from 'nanoid'
 import { toArcsec } from 'nebulosa/src/angle'
 import { angularSizeOfPixel } from 'nebulosa/src/util'
-import bus from 'src/shared/bus'
-import { type ComputedFov, DEFAULT_FOV_ITEM, type FovItem } from 'src/shared/types'
+import { DEFAULT_FOV_ITEM, type ComputedFov, type FovItem } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
-import type { AstroBinEquipmentPopoverItem } from 'src/web/ui/AstroBinEquipmentPopover'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { initProxy } from '@/shared/proxy'
-import type { ImageSolved } from '@/shared/types'
-import { ImageSolverMolecule } from './solver'
-import { ImageViewerMolecule } from './viewer'
+import { initProxy } from '../shared/proxy'
+import type { AstroBinEquipmentPopoverItem } from '../ui/AstroBinEquipmentPopover'
+import type { ImageViewerStore } from './image.viewer.store'
+
+export type ImageFovStore = ReturnType<typeof imageFovStore>
 
 export interface ImageFovState {
 	show: boolean
-	selected: number
+	selected: number // item index
 	readonly items: FovItem[]
 	readonly computed: ComputedFov[]
 }
 
-const stateMap = new Map<string, ImageFovState>()
+export function imageFovStore(viewer: ImageViewerStore) {
+	const state = proxy<ImageFovState>({
+		show: false,
+		selected: 0,
+		items: [],
+		computed: [],
+	})
 
-export const ImageFovMolecule = molecule(() => {
-	const viewer = use(ImageViewerMolecule)
-	const solver = use(ImageSolverMolecule)
-	const { key } = viewer.scope.image
+	console.info('image fov created:', viewer.state.path)
 
-	const state =
-		stateMap.get(key) ??
-		proxy<ImageFovState>({
-			show: false,
-			selected: 0,
-			items: [],
-			computed: [],
-		})
+	const u: VoidFunction[] = []
+	let mounted = false
 
-	stateMap.set(key, state)
+	function mount() {
+		if (mounted) return
 
-	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(3)
+		console.info('image fov mounted:', viewer.state.path)
 
-		unsubscribers[0] = initProxy(state, `image.${viewer.storageKey}.fov`, ['p:show', 'o:items'])
+		mounted = true
 
-		unsubscribers[1] = subscribeKey(state, 'show', (show) => {
-			show && compute()
-		})
+		u[0] = initProxy(state, `image.${viewer.key}.fov`, ['p:show', 'o:items'])
 
-		unsubscribers[2] = bus.subscribe<ImageSolved>('image:solved', ({ image }) => {
-			if (image.key === key && state.show) {
-				compute()
-			}
+		u[1] = subscribeKey(viewer.solver.state, 'solution', (solution) => {
+			solution && compute()
 		})
 
 		if (state.items.length === 0) {
@@ -57,13 +49,16 @@ export const ImageFovMolecule = molecule(() => {
 		} else {
 			compute()
 		}
+	}
 
-		return () => {
-			unsubscribe(unsubscribers)
-		}
-	})
+	function unmount() {
+		if (!mounted) return
+		console.info('image fov unmounted:', viewer.state.path)
+		unsubscribe(u)
+		mounted = false
+	}
 
-	function update<K extends keyof FovItem>(key: K, value: FovItem[K], id?: number) {
+	function update<K extends keyof FovItem>(key: K, value: FovItem[K], id?: string) {
 		const index = id !== undefined ? state.items.findIndex((e) => e.id === id) : state.selected
 		if (index >= 0) state.items[index][key] = value
 		if (key !== 'visible') compute(id)
@@ -87,7 +82,7 @@ export const ImageFovMolecule = molecule(() => {
 
 	function add() {
 		const item = structuredClone(DEFAULT_FOV_ITEM)
-		item.id = Date.now()
+		item.id = nanoid()
 		state.items.push(item)
 		state.selected = state.items.length - 1
 		compute(item.id)
@@ -104,9 +99,9 @@ export const ImageFovMolecule = molecule(() => {
 		}
 	}
 
-	function compute(id?: number) {
+	function compute(id?: string) {
 		const { info } = viewer.state
-		const { solution } = solver.state
+		const { solution } = viewer.solver.state
 
 		if (!info || !solution?.scale) return
 
@@ -150,8 +145,9 @@ export const ImageFovMolecule = molecule(() => {
 
 	return {
 		state,
-		scope: viewer.scope,
 		viewer,
+		mount,
+		unmount,
 		update,
 		selectTelescope,
 		selectCamera,
@@ -161,4 +157,4 @@ export const ImageFovMolecule = molecule(() => {
 		show,
 		hide,
 	} as const
-})
+}

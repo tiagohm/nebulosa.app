@@ -1,7 +1,6 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageSettingsMolecule } from '@/molecules/image/settings'
+import { ImageViewerStoreContext } from '../shared/context'
 import { CfaPatternSelect } from './CfaPatternSelect'
 import { ChrominanceSubsamplingSelect } from './ChrominanceSubsamplingSelect'
 import { Button } from './components/Button'
@@ -14,17 +13,21 @@ import { Modal } from './Modal'
 const JPEG_FORMAT = 'jpeg'
 
 export const ImageSettings = memo(() => {
-	const settings = useMolecule(ImageSettingsMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { settings } = viewer
+	const { show } = useSnapshot(settings.state)
+
+	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Settings" id={`settings-${settings.viewer.storageKey}`} maxWidth="256px" onHide={settings.hide}>
+		<Modal footer={<Footer />} header="Settings" id={`settings-${viewer.image.id}`} maxWidth="256px" onHide={settings.hide}>
 			<Body />
 		</Modal>
 	)
 })
 
 const Body = memo(() => {
-	const settings = useMolecule(ImageSettingsMolecule)
+	const { settings } = useContext(ImageViewerStoreContext)
 	const { pixelated, transformation } = useSnapshot(settings.state)
 
 	return (
@@ -38,7 +41,7 @@ const Body = memo(() => {
 })
 
 const Footer = memo(() => {
-	const settings = useMolecule(ImageSettingsMolecule)
+	const { settings } = useContext(ImageViewerStoreContext)
 
 	return (
 		<>
@@ -49,7 +52,7 @@ const Footer = memo(() => {
 })
 
 const JpegFormat = memo(() => {
-	const settings = useMolecule(ImageSettingsMolecule)
+	const { settings } = useContext(ImageViewerStoreContext)
 	const { quality, chrominanceSubsampling } = useSnapshot(settings.state.transformation.format.jpeg)
 
 	return (

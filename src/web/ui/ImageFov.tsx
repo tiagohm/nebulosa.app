@@ -1,11 +1,11 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import type { FovItem } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { ImageFovMolecule } from '@/molecules/image/fov'
 import { tw } from '@/shared/util'
 import cameras from '../../../data/cameras.json'
 import telescopes from '../../../data/telescopes.json'
+import { ImageViewerStoreContext } from '../shared/context'
+import { hasScaledSolution } from '../store/image.solver.store'
 import { AstroBinEquipmentPopover } from './AstroBinEquipmentPopover'
 import { Checkbox } from './components/Checkbox'
 import { IconButton } from './components/IconButton'
@@ -15,10 +15,16 @@ import { Icons } from './Icon'
 import { Modal } from './Modal'
 
 export const ImageFov = memo(() => {
-	const fov = useMolecule(ImageFovMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { fov, solver } = viewer
+	const { show } = useSnapshot(fov.state)
+	const { solution } = useSnapshot(solver.state)
+	const hasSolutionScale = hasScaledSolution(solution)
+
+	if (!show || !hasSolutionScale) return null
 
 	return (
-		<Modal header="FOV" id={`fov-${fov.viewer.storageKey}`} maxWidth="336px" onHide={fov.hide}>
+		<Modal header="FOV" id={`fov-${viewer.image.id}`} maxWidth="336px" onHide={fov.hide}>
 			<Body />
 		</Modal>
 	)
@@ -41,7 +47,7 @@ const Edit = memo(() => (
 ))
 
 const Telescope = memo(() => {
-	const fov = useMolecule(ImageFovMolecule)
+	const { fov } = useContext(ImageViewerStoreContext)
 	const { items, selected } = useSnapshot(fov.state)
 	const item = items[selected]
 
@@ -61,7 +67,7 @@ const Telescope = memo(() => {
 })
 
 const Camera = memo(() => {
-	const fov = useMolecule(ImageFovMolecule)
+	const { fov } = useContext(ImageViewerStoreContext)
 	const { items, selected } = useSnapshot(fov.state)
 	const item = items[selected]
 
@@ -83,7 +89,7 @@ const Camera = memo(() => {
 })
 
 const OrientationAndOptics = memo(() => {
-	const fov = useMolecule(ImageFovMolecule)
+	const { fov } = useContext(ImageViewerStoreContext)
 	const { items, selected } = useSnapshot(fov.state)
 	const item = items[selected]
 
@@ -101,7 +107,7 @@ const OrientationAndOptics = memo(() => {
 })
 
 const Actions = memo(() => {
-	const fov = useMolecule(ImageFovMolecule)
+	const { fov } = useContext(ImageViewerStoreContext)
 	const { items } = useSnapshot(fov.state)
 
 	return (
@@ -113,7 +119,7 @@ const Actions = memo(() => {
 })
 
 const FovList = memo(() => {
-	const fov = useMolecule(ImageFovMolecule)
+	const { fov } = useContext(ImageViewerStoreContext)
 	const { items, selected } = useSnapshot(fov.state)
 
 	function handleClick(event: React.UIEvent<HTMLElement>) {

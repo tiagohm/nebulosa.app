@@ -13,7 +13,7 @@ export interface Connection extends Connect {
 }
 
 export interface Image {
-	readonly key: string
+	readonly id: string
 	readonly position: number
 	readonly path: string
 	readonly source: ImageSource
@@ -23,7 +23,7 @@ export interface Image {
 export interface ImageLoaded {
 	readonly image: Image
 	readonly info: ImageInfo
-	readonly newImage: boolean
+	readonly refreshed: boolean
 }
 
 export interface ImageSolved {

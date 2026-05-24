@@ -1,8 +1,7 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { StarDetectionMolecule } from '@/molecules/image/stardetection'
 import { formatNumber } from '@/shared/util'
+import { ImageViewerStoreContext } from '../shared/context'
 import { Button } from './components/Button'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
@@ -10,18 +9,22 @@ import { Modal } from './Modal'
 import { StarDetectionPopover } from './StarDetectionPopover'
 import { StarDetectionSelect } from './StarDetectionSelect'
 
-export const StarDetection = memo(() => {
-	const starDetection = useMolecule(StarDetectionMolecule)
+export const ImageStarDetection = memo(() => {
+	const viewer = useContext(ImageViewerStoreContext)
+	const { starDetection } = viewer
+	const { show } = useSnapshot(starDetection.state)
+
+	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Star Detection" id={`star-detection-${starDetection.viewer.storageKey}`} maxWidth="312px" onHide={starDetection.hide}>
+		<Modal footer={<Footer />} header="Star Detection" id={`star-detection-${viewer.image.id}`} maxWidth="312px" onHide={starDetection.hide}>
 			<Body />
 		</Modal>
 	)
 })
 
 const Body = memo(() => {
-	const starDetection = useMolecule(StarDetectionMolecule)
+	const { starDetection } = useContext(ImageViewerStoreContext)
 	const { type } = useSnapshot(starDetection.state.request)
 	const { loading } = useSnapshot(starDetection.state)
 
@@ -35,14 +38,14 @@ const Body = memo(() => {
 })
 
 const StarDetectionEndContent = memo(() => {
-	const starDetection = useMolecule(StarDetectionMolecule)
+	const { starDetection } = useContext(ImageViewerStoreContext)
 	const { loading, request } = useSnapshot(starDetection.state)
 
 	return <StarDetectionPopover disabled={loading} onValueChange={starDetection.update} value={request} variant="ghost" />
 })
 
 const Computed = memo(() => {
-	const starDetection = useMolecule(StarDetectionMolecule)
+	const { starDetection } = useContext(ImageViewerStoreContext)
 	const { stars, computed } = useSnapshot(starDetection.state)
 
 	return (
@@ -57,7 +60,7 @@ const Computed = memo(() => {
 })
 
 const Selected = memo(() => {
-	const starDetection = useMolecule(StarDetectionMolecule)
+	const { starDetection } = useContext(ImageViewerStoreContext)
 	const { selected } = useSnapshot(starDetection.state)
 
 	return (
@@ -75,7 +78,7 @@ const Selected = memo(() => {
 })
 
 const Footer = memo(() => {
-	const starDetection = useMolecule(StarDetectionMolecule)
+	const { starDetection } = useContext(ImageViewerStoreContext)
 	const { loading } = useSnapshot(starDetection.state)
 
 	return <Button color="success" disabled={loading} label="Detect" loading={loading} onClick={starDetection.detect} startContent={<Icons.Check />} />

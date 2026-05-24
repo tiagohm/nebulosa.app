@@ -15,6 +15,8 @@ import type { WheelStore } from '@/store/wheel.store'
 import type { AutoFocusStore } from '../store/autofocus.store'
 import type { FilePickerStore } from '../store/filepicker.store'
 import type { FlatWizardStore } from '../store/flatwizard.store'
+import type { ImageViewerStore } from '../store/image.viewer.store'
+import type { Image } from './types'
 
 export const AutoFocusStoreContext = createContext<AutoFocusStore>(null as never)
 
@@ -41,6 +43,9 @@ export const FocuserStoreContext = createContext<FocuserStore>(null as never)
 
 export const GuideOutputDeviceContext = createContext<GuideOutput>(null as never)
 export const GuideOutputStoreContext = createContext<GuideOutputStore>(null as never)
+
+export const ImageContext = createContext<Image>(null as never)
+export const ImageViewerStoreContext = createContext<ImageViewerStore>(null as never)
 
 export const MountDeviceContext = createContext<Mount>(null as never)
 export const MountStoreContext = createContext<MountStore>(null as never)

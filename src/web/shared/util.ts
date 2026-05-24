@@ -78,6 +78,22 @@ export function isMouseDeviceSupported() {
 	return matchMedia('(pointer:fine)').matches
 }
 
+export function saveAs(blob: Blob | MediaSource, name: string) {
+	const url = URL.createObjectURL(blob)
+
+	const a = document.createElement('a')
+	a.href = url
+	a.download = name
+
+	try {
+		document.body.append(a)
+		a.click()
+	} finally {
+		URL.revokeObjectURL(url)
+		a.remove()
+	}
+}
+
 // Deletes undefined or null properties
 export function deleteUndefinedOrNull<T extends object>(o: T): T {
 	for (const [key, value] of Object.entries(o)) {

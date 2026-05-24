@@ -1,23 +1,24 @@
-import { molecule, onMount, use } from 'bunshi'
 import type { DetectedStar } from 'nebulosa/src/star.detector'
 import bus from 'src/shared/bus'
 import { DEFAULT_STAR_DETECTION, type StarDetection } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '@/shared/api'
-import { initProxy } from '@/shared/proxy'
-import { toast } from '@/shared/toast'
-import type { ImageLoaded } from '@/shared/types'
-import { ImageViewerMolecule } from './viewer'
+import { Api } from '../shared/api'
+import { initProxy } from '../shared/proxy'
+import { toast } from '../shared/toast'
+import type { ImageLoaded } from '../shared/types'
+import type { ImageViewerStore } from './image.viewer.store'
 
-export interface StartDetectionState {
+export type ImageStarDetectionStore = ReturnType<typeof imageStarDetectionStore>
+
+export interface ImageStarDetectionState {
 	show: boolean
 	visible: boolean
 	loading: boolean
 	stars: readonly DetectedStar[]
 	selected?: DetectedStar
 	request: StarDetection
-	computed: {
+	readonly computed: {
 		hfd: number
 		snr: number
 		fluxMin: number
@@ -25,47 +26,49 @@ export interface StartDetectionState {
 	}
 }
 
-const stateMap = new Map<string, StartDetectionState>()
+export function imageStarDetectionStore(viewer: ImageViewerStore) {
+	const state = proxy<ImageStarDetectionState>({
+		show: false,
+		visible: false,
+		loading: false,
+		stars: [],
+		request: structuredClone(DEFAULT_STAR_DETECTION),
+		computed: {
+			hfd: 0,
+			snr: 0,
+			fluxMin: 0,
+			fluxMax: 0,
+		},
+	})
 
-export const StarDetectionMolecule = molecule(() => {
-	const viewer = use(ImageViewerMolecule)
-	const { key } = viewer.scope.image
+	console.info('image star detection created:', viewer.state.path)
 
-	const state =
-		stateMap.get(key) ??
-		proxy<StartDetectionState>({
-			show: false,
-			visible: false,
-			loading: false,
-			stars: [],
-			request: structuredClone(DEFAULT_STAR_DETECTION),
-			computed: {
-				hfd: 0,
-				snr: 0,
-				fluxMin: 0,
-				fluxMax: 0,
-			},
-		})
-
-	stateMap.set(key, state)
-
+	const u: VoidFunction[] = []
+	let mounted = false
 	let canvas: HTMLCanvasElement | undefined
 
-	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(2)
+	function mount() {
+		if (mounted) return
 
-		unsubscribers[0] = bus.subscribe<ImageLoaded>('image:load', ({ image, newImage }) => {
-			if (newImage && image.key === key) {
+		console.info('image star detection mounted:', viewer.state.path)
+
+		mounted = true
+
+		u[0] = initProxy(state, `image.${viewer.key}.star detection`, ['p:show', 'o:request'])
+
+		u[1] = bus.subscribe<ImageLoaded>('image:load', ({ image, refreshed }) => {
+			if (refreshed && image === viewer.image) {
 				reset()
 			}
 		})
+	}
 
-		unsubscribers[1] = initProxy(state, `image.${viewer.storageKey}.stardetection`, ['p:show', 'o:request'])
-
-		return () => {
-			unsubscribe(unsubscribers)
-		}
-	})
+	function unmount() {
+		if (!mounted) return
+		console.info('image star detection unmounted:', viewer.state.path)
+		unsubscribe(u)
+		mounted = false
+	}
 
 	function update<K extends keyof StarDetection>(key: K, value: StarDetection[K]) {
 		state.request[key] = value
@@ -79,22 +82,17 @@ export const StarDetectionMolecule = molecule(() => {
 		try {
 			state.loading = true
 
-			const request = { ...state.request, path: viewer.path }
+			const request = { ...state.request, path: viewer.state.path }
 			const stars = await Api.StarDetection.detect(request)
 
-			state.selected = undefined
-			clearCanvas()
-
-			if (!stars) {
-				state.stars = []
-				state.visible = false
-				resetComputed()
+			if (!stars?.length) {
+				toast({ title: 'STAR DETECTION', description: 'No stars detected', color: 'warning' })
+				reset()
 				return
 			}
 
-			if (stars.length === 0) {
-				toast({ title: 'STAR DETECTION', description: 'No stars detected', color: 'warning' })
-			}
+			state.selected = undefined
+			clearCanvas()
 
 			state.stars = stars
 			state.visible = stars.length > 0
@@ -119,7 +117,10 @@ export const StarDetectionMolecule = molecule(() => {
 				fluxMax = 0
 			}
 
-			state.computed = { hfd, snr, fluxMin, fluxMax }
+			state.computed.hfd = hfd
+			state.computed.snr = snr
+			state.computed.fluxMin = fluxMin
+			state.computed.fluxMax = fluxMax
 		} finally {
 			state.loading = false
 		}
@@ -142,6 +143,7 @@ export const StarDetectionMolecule = molecule(() => {
 
 		const { x, y } = state.selected
 		const image = viewer.target
+
 		if (image) {
 			ctx.drawImage(image, x - 8.5, y - 8.5, 16, 16, 0, 0, canvas.width, canvas.height)
 		}
@@ -155,8 +157,6 @@ export const StarDetectionMolecule = molecule(() => {
 	}
 
 	function reset() {
-		if (state.stars.length === 0 && state.selected === undefined) return
-
 		state.stars = []
 		state.selected = undefined
 		state.visible = false
@@ -189,7 +189,8 @@ export const StarDetectionMolecule = molecule(() => {
 	return {
 		state,
 		viewer,
-		scope: viewer.scope,
+		mount,
+		unmount,
 		update,
 		toggle,
 		detect,
@@ -199,4 +200,4 @@ export const StarDetectionMolecule = molecule(() => {
 		show,
 		hide,
 	} as const
-})
+}

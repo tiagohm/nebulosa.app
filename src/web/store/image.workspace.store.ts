@@ -1,10 +1,12 @@
+import { nanoid } from 'nanoid'
 import type { Camera } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { CameraCaptureEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { initProxy } from '../shared/proxy'
-import type { Image } from '../shared/types'
+import type { Image, ImageSource } from '../shared/types'
 import { equipmentStore } from './equipment.store'
+import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageWorkspaceStore = typeof imageWorkspaceStore
 
@@ -27,44 +29,40 @@ const state = proxy<ImageWorkspaceState>({
 	},
 })
 
-initProxy(state.picker, 'workspace.picker', ['p:show', 'p:path'])
+initProxy(state.picker, 'workspace.picker', ['p:path'])
 
 bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
 	if (event.savedPath) {
 		const camera = equipmentStore.get('camera', event.camera)
-		add(event.savedPath, event.camera, camera!)
+		camera && add(event.savedPath, camera)
 	}
 })
 
-const viewers = new Map<string, unknown>()
+const viewers = new Map<string, ImageViewerStore>()
 
-function link(image: Image, viewer: unknown) {
-	viewers.set(image.key, viewer)
+function link(image: Image, viewer: ImageViewerStore) {
+	viewers.set(image.id, viewer)
 }
 
 function unlink(image: Image) {
-	viewers.delete(image.key)
+	viewers.delete(image.id)
 }
 
-function add(path: string, key: string | undefined | null, source: Image['source'] | Camera) {
+function add(path: string, source: ImageSource | Camera, id?: string) {
+	const camera = typeof source === 'object' ? source : undefined
 	source = typeof source === 'string' ? source : 'camera'
-
 	const position = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => e.position)) + 1
-	key ||= `${Date.now()}-${position}`
-	key = `${source}-${key}`
+	id = `${source}-${id || camera?.id || nanoid()}`
+	const index = state.images.findIndex((e) => e.id === id)
 
-	const index = state.images.findIndex((e) => e.key === key)
 	let image: Image
 
 	if (index >= 0) {
 		image = state.images[index]
-		// @ts-expect-error TODO: implement imageViewerStore
-		// oxlint-disable-next-line typescript/no-unsafe-call
-		void viewers.get(image.key)?.load(true, path)
+		void viewers.get(image.id)?.load(path)
 		bus.emit('update', image)
 	} else {
-		const camera = typeof source === 'object' ? source : undefined
-		image = { path, key, position, source, camera }
+		image = { path, id, position, source, camera }
 		state.images.push(image)
 		bus.emit('add', image)
 	}
@@ -77,11 +75,11 @@ function add(path: string, key: string | undefined | null, source: Image['source
 }
 
 function remove(image: Image) {
-	const index = state.images.findIndex((e) => e.key === image.key)
+	const index = state.images.findIndex((e) => e.id === image.id)
 
 	if (index >= 0) {
 		state.images.splice(index, 1)
-		viewers.delete(image.key)
+		viewers.delete(image.id)
 		bus.emit('remove', image)
 	}
 }
@@ -89,7 +87,7 @@ function remove(image: Image) {
 function choose(paths: string[] = []) {
 	if (paths.length > 0) {
 		for (const path of paths) {
-			add(path, undefined, 'file')
+			add(path, 'file')
 		}
 	}
 

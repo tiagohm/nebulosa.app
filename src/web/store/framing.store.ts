@@ -42,8 +42,8 @@ async function load(request: Partial<Framing> = state.request) {
 		const frame = await Api.Framing.frame(state.request)
 
 		if (frame) {
-			const image = imageWorkspaceStore.add(frame.path, request.id, 'framing')
-			// const index = state.images.findIndex((e) => e.key === image.key)
+			const image = imageWorkspaceStore.add(frame.path, 'framing', request.id)
+			// const index = state.images.findIndex((e) => e.id === image.id)
 			// index >= 0 ? (state.images[index] = image) : state.images.push(image)
 		}
 	} finally {

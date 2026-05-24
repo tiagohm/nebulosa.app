@@ -1,8 +1,7 @@
-import { useMolecule } from 'bunshi/react'
 import type { DetectedStar } from 'nebulosa/src/star.detector'
-import { type CSSProperties, memo } from 'react'
+import { type CSSProperties, memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { StarDetectionMolecule } from '@/molecules/image/stardetection'
+import { ImageViewerStoreContext } from '../shared/context'
 
 const STAR_RADIUS = 4
 const SELECTED_STAR_RADIUS = 6
@@ -20,12 +19,13 @@ function isSameStar(a: DetectedStar | undefined, b: DetectedStar) {
 }
 
 export const DetectedStars = memo(() => {
-	const starDetection = useMolecule(StarDetectionMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { starDetection } = viewer
 	const { selected, stars } = useSnapshot(starDetection.state)
 
 	if (stars.length === 0) return null
 
-	function handleOnClick(event: React.UIEvent<SVGGElement>) {
+	function handleClick(event: React.UIEvent<SVGGElement>) {
 		const index = Number(event.currentTarget.dataset.index)
 		const star = Number.isInteger(index) ? stars[index] : undefined
 
@@ -40,7 +40,7 @@ export const DetectedStars = memo(() => {
 				const isSelected = isSameStar(selected, star)
 
 				return (
-					<g className="pointer-events-auto cursor-pointer" data-index={index} key={starKey(star)} onClick={handleOnClick}>
+					<g className="pointer-events-auto cursor-pointer" data-index={index} key={starKey(star)} onClick={handleClick}>
 						<circle cx={star.x} cy={star.y} r={isSelected ? SELECTED_STAR_RADIUS : STAR_RADIUS} stroke={isSelected ? SELECTED_STAR_STROKE : STAR_STROKE} strokeWidth={isSelected ? 2 : 1} />
 						<text className="text-xs font-bold" fill={STAR_LABEL_FILL} style={TEXT_STYLE} x={star.x} y={star.y + (isSelected ? 4 : 1)}>
 							{star.hfd.toFixed(1)}

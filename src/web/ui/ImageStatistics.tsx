@@ -1,7 +1,6 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
+import { ImageViewerStoreContext } from '../shared/context'
 import { Checkbox } from './components/Checkbox'
 import { Histogram } from './components/Histogram'
 import { TextInput } from './components/TextInput'
@@ -23,17 +22,18 @@ function formatStat(value: number, fractionDigits: number) {
 }
 
 export const ImageStatistics = memo(() => {
-	const statistics = useMolecule(ImageStatisticsMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { statistics } = viewer
 
 	return (
-		<Modal header="Statistics" id={`settings-${statistics.viewer.storageKey}`} maxWidth="296px" onHide={statistics.hide}>
+		<Modal header="Statistics" id={`settings-${viewer.image.id}`} maxWidth="296px" onHide={statistics.hide}>
 			<Body />
 		</Modal>
 	)
 })
 
 const Body = memo(() => {
-	const statistics = useMolecule(ImageStatisticsMolecule)
+	const { statistics } = useContext(ImageViewerStoreContext)
 	const { histogram } = useSnapshot(statistics.state)
 
 	return (
@@ -48,7 +48,7 @@ const Body = memo(() => {
 })
 
 const Options = memo(() => {
-	const statistics = useMolecule(ImageStatisticsMolecule)
+	const { statistics } = useContext(ImageViewerStoreContext)
 	const { histogram, selected } = useSnapshot(statistics.state)
 	const { transformed } = useSnapshot(statistics.state.request)
 
@@ -61,7 +61,7 @@ const Options = memo(() => {
 })
 
 const Stats = memo(() => {
-	const statistics = useMolecule(ImageStatisticsMolecule)
+	const { statistics } = useContext(ImageViewerStoreContext)
 	const { histogram, selected } = useSnapshot(statistics.state)
 	const hs = histogram[selected] ?? histogram[0]
 

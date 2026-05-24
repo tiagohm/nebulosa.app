@@ -519,7 +519,7 @@ export interface ImageInfo extends Partial<EquatorialCoordinate>, Size {
 }
 
 export interface FovItem {
-	id: number
+	id: string
 	visible: boolean
 	focalLength: number // mm
 	aperture: number // mm
@@ -1170,7 +1170,7 @@ export const DEFAULT_IMAGE_TRANSFORMATION: ImageTransformation = {
 }
 
 export const DEFAULT_FOV_ITEM: FovItem = {
-	id: 0,
+	id: '',
 	visible: true,
 	// William Optics RedCat 51
 	focalLength: 250,

@@ -1,10 +1,12 @@
-import { molecule, onMount, use } from 'bunshi'
 import type { FFTFilterType } from 'nebulosa/src/image.types'
 import type { Writable } from 'nebulosa/src/types'
 import { DEFAULT_IMAGE_FFT, DEFAULT_IMAGE_FILTER, type ImageFFT, type ImageFilter, type ImageKernelFilterType } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { initProxy } from '@/shared/proxy'
-import { ImageViewerMolecule } from './viewer'
+import { initProxy } from '../shared/proxy'
+import type { ImageViewerStore } from './image.viewer.store'
+
+export type ImageFilterStore = ReturnType<typeof imageFilterStore>
 
 export interface ImageFilterState {
 	show: boolean
@@ -12,32 +14,34 @@ export interface ImageFilterState {
 	fft: Writable<ImageFFT>
 }
 
-const stateMap = new Map<string, ImageFilterState>()
-
-export const ImageFilterMolecule = molecule(() => {
-	const viewer = use(ImageViewerMolecule)
-	const { key } = viewer.scope.image
-
-	const state =
-		stateMap.get(key) ??
-		proxy<ImageFilterState>({
-			show: false,
-			kernel: viewer.state.transformation.filter,
-			fft: viewer.state.transformation.fft,
-		})
-
-	stateMap.set(key, state)
-
-	onMount(() => {
-		const unsubscriber = initProxy(state, `image.${viewer.storageKey}.filter`, ['p:show'])
-
-		state.kernel = viewer.state.transformation.filter
-		state.fft = viewer.state.transformation.fft
-
-		return () => {
-			unsubscriber()
-		}
+export function imageFilterStore(viewer: ImageViewerStore) {
+	const state = proxy<ImageFilterState>({
+		show: false,
+		kernel: viewer.state.transformation.filter,
+		fft: viewer.state.transformation.fft,
 	})
+
+	console.info('image filter created:', viewer.state.path)
+
+	const u: VoidFunction[] = []
+	let mounted = false
+
+	function mount() {
+		if (mounted) return
+
+		console.info('image filter mounted:', viewer.state.path)
+
+		mounted = true
+
+		u[0] = initProxy(state, `image.${viewer.key}.filter`, ['p:show'])
+	}
+
+	function unmount() {
+		if (!mounted) return
+		console.info('image filter unmounted:', viewer.state.path)
+		unsubscribe(u)
+		mounted = false
+	}
 
 	function updateKernelType(type: ImageKernelFilterType) {
 		state.kernel.type = type
@@ -64,7 +68,7 @@ export const ImageFilterMolecule = molecule(() => {
 	}
 
 	function apply() {
-		return viewer.load(true)
+		return viewer.reload()
 	}
 
 	function show() {
@@ -77,8 +81,9 @@ export const ImageFilterMolecule = molecule(() => {
 
 	return {
 		state,
-		scope: viewer.scope,
 		viewer,
+		mount,
+		unmount,
 		updateKernelType,
 		updateFFTType,
 		updateKernel,
@@ -88,4 +93,4 @@ export const ImageFilterMolecule = molecule(() => {
 		show,
 		hide,
 	} as const
-})
+}

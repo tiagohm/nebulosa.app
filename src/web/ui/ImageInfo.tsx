@@ -1,20 +1,18 @@
-import { useMolecule } from 'bunshi/react'
 import { formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
 import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import type { Point } from 'nebulosa/src/geometry'
 import type { Mount } from 'nebulosa/src/indi.device'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
-import { ImageViewerMolecule } from '@/molecules/image/viewer'
+import { ImageViewerStoreContext } from '../shared/context'
 import { formatNumber, tw } from '../shared/util'
 import { Dropdown, DropdownItem } from './components/Dropdown'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 
 export const ImageInfo = memo(() => {
-	const viewer = useMolecule(ImageViewerMolecule)
-	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { mouseCoordinate } = viewer
 	const { info, scale, angle } = useSnapshot(viewer.state)
 	const { visible: isMouseCoordinateVisible, interpolator } = useSnapshot(mouseCoordinate.state)
 	const { hover, selected } = useSnapshot(mouseCoordinate.state.coordinate)
@@ -72,7 +70,8 @@ export interface SelectedCoordinateDropdownProps {
 }
 
 const SelectedCoordinateDropdown = memo((props: SelectedCoordinateDropdownProps) => {
-	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { mouseCoordinate } = viewer
 
 	function handlePointMountHere(mount: Mount | undefined) {
 		const coordinate = mouseCoordinate.state.coordinate.selected

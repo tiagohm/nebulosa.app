@@ -1,6 +1,5 @@
-import { molecule, onMount, use } from 'bunshi'
 import { nanoid } from 'nanoid'
-import { arcsec, formatDEC, formatRA, toDeg } from 'nebulosa/src/angle'
+import { formatRA, formatDEC, toDeg, arcsec } from 'nebulosa/src/angle'
 import { numericKeyword } from 'nebulosa/src/fits.util'
 import type { Mount } from 'nebulosa/src/indi.device'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
@@ -9,42 +8,44 @@ import bus from 'src/shared/bus'
 import { DEFAULT_PLATE_SOLVE_START, type Framing, type PlateSolveStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
-import { subscribeKey } from 'valtio/utils'
-import { Api } from '@/shared/api'
-import { initProxy } from '@/shared/proxy'
-import type { ImageLoaded, ImageSolved } from '@/shared/types'
-import { SettingsMolecule } from '../settings'
-import { ImageViewerMolecule } from './viewer'
+import { Api } from '../shared/api'
+import { initProxy } from '../shared/proxy'
+import type { ImageLoaded } from '../shared/types'
+import { framingStore } from './framing.store'
+import type { ImageViewerStore } from './image.viewer.store'
+
+export type ImageSolverStore = ReturnType<typeof imageSolverStore>
 
 export interface ImageSolverState {
 	show: boolean
 	loading: boolean
-	request: PlateSolveStart
+	readonly request: PlateSolveStart
 	solution?: PlateSolution
 }
 
-const stateMap = new Map<string, ImageSolverState>()
+export function imageSolverStore(viewer: ImageViewerStore) {
+	const state = proxy<ImageSolverState>({
+		show: false,
+		loading: false,
+		request: structuredClone(DEFAULT_PLATE_SOLVE_START),
+	})
 
-export const ImageSolverMolecule = molecule(() => {
-	const viewer = use(ImageViewerMolecule)
-	const settings = use(SettingsMolecule)
-	const { key } = viewer.scope.image
+	console.info('image solver created:', viewer.state.path)
 
-	const state =
-		stateMap.get(key) ??
-		proxy<ImageSolverState>({
-			show: false,
-			loading: false,
-			request: structuredClone(DEFAULT_PLATE_SOLVE_START),
-		})
+	const u: VoidFunction[] = []
+	let mounted = false
 
-	stateMap.set(key, state)
+	function mount() {
+		if (mounted) return
 
-	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(3)
+		console.info('image solver mounted:', viewer.state.path)
 
-		unsubscribers[0] = bus.subscribe<ImageLoaded>('image:load', ({ image, info, newImage }) => {
-			if (newImage && image.key === key) {
+		mounted = true
+
+		u[0] = initProxy(state, `image.${viewer.key}.solver`, ['p:show', 'o:request'])
+
+		u[1] = bus.subscribe<ImageLoaded>('image:load', ({ image, info, refreshed }) => {
+			if (refreshed && image === viewer.image) {
 				const { request } = state
 
 				// Update current solution
@@ -62,21 +63,16 @@ export const ImageSolverMolecule = molecule(() => {
 			}
 		})
 
-		unsubscribers[1] = subscribeKey(state, 'solution', (solution) => {
-			if (solution) {
-				bus.emit('image:solved', { image: viewer.scope.image, solution } satisfies ImageSolved)
-			}
-		})
-
 		state.solution ??= viewer.state.info?.solution && ref(viewer.state.info.solution)
-		state.request.id = nanoid()
+		state.request.id ||= nanoid()
+	}
 
-		unsubscribers[2] = initProxy(state, `image.${viewer.storageKey}.solver`, ['p:show', 'o:request'])
-
-		return () => {
-			unsubscribe(unsubscribers)
-		}
-	})
+	function unmount() {
+		if (!mounted) return
+		console.info('image solver unmounted:', viewer.state.path)
+		unsubscribe(u)
+		mounted = false
+	}
 
 	function update<K extends keyof PlateSolveStart>(key: K, value: PlateSolveStart[K]) {
 		state.request[key] = value
@@ -86,7 +82,7 @@ export const ImageSolverMolecule = molecule(() => {
 		try {
 			state.loading = true
 
-			const request: PlateSolveStart = { ...state.request, ...settings.state.solver[state.request.type], path: viewer.path, id: viewer.scope.image.key }
+			const request: PlateSolveStart = { ...state.request, ...viewer.settings.state.solver[state.request.type], path: viewer.state.path, id: viewer.image.id }
 			request.fov = arcsec(angularSizeOfPixel(request.focalLength, request.pixelSize) * viewer.state.info!.height)
 
 			const solution = await Api.PlateSolver.start(request)
@@ -110,7 +106,7 @@ export const ImageSolverMolecule = molecule(() => {
 		await Api.Mounts.sync(mount, { type: 'J2000', J2000: { x: state.solution.rightAscension, y: state.solution.declination } })
 	}
 
-	function frame() {
+	async function frame() {
 		if (!state.solution) return
 
 		const request: Partial<Framing> = {
@@ -123,7 +119,7 @@ export const ImageSolverMolecule = molecule(() => {
 			rotation: toDeg(state.solution.orientation),
 		}
 
-		bus.emit('framing:load', request)
+		await framingStore.load(request)
 	}
 
 	function show() {
@@ -134,5 +130,22 @@ export const ImageSolverMolecule = molecule(() => {
 		state.show = false
 	}
 
-	return { state, viewer, scope: viewer.scope, update, start, stop, goTo, sync, frame, show, hide } as const
-})
+	return {
+		state,
+		viewer,
+		mount,
+		unmount,
+		update,
+		start,
+		stop,
+		goTo,
+		sync,
+		frame,
+		show,
+		hide,
+	} as const
+}
+
+export function hasScaledSolution(solution: { readonly scale?: number } | undefined) {
+	return solution?.scale !== undefined && Number.isFinite(solution.scale) && solution.scale > 0
+}

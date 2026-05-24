@@ -1,21 +1,7 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { Activity, memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
-import { ImageAnnotationMolecule } from '@/molecules/image/annotation'
-import { ImageCalibrationMolecule } from '@/molecules/image/calibration'
-import { ImageFilterMolecule } from '@/molecules/image/filter'
-import { ImageFovMolecule } from '@/molecules/image/fov'
-import { ImageHeaderMolecule } from '@/molecules/image/header'
-import { ImageMouseCoordinateMolecule } from '@/molecules/image/mousecoordinate'
-import { ImageSaveMolecule } from '@/molecules/image/save'
-import { ImageScnrMolecule } from '@/molecules/image/scnr'
-import { ImageSettingsMolecule } from '@/molecules/image/settings'
-import { ImageSolverMolecule } from '@/molecules/image/solver'
-import { StarDetectionMolecule } from '@/molecules/image/stardetection'
-import { ImageStatisticsMolecule } from '@/molecules/image/statistics'
-import { ImageStretchMolecule } from '@/molecules/image/stretch'
-import { ImageViewerMolecule } from '@/molecules/image/viewer'
+import { ImageViewerStoreContext } from '../shared/context'
+import { hasScaledSolution } from '../store/image.solver.store'
 import { IconButton } from './components/IconButton'
 import { Popover } from './components/Popover'
 import { Slider } from './components/Slider'
@@ -27,15 +13,9 @@ const TOOLTIP_PLACEMENT = 'top'
 const POPOVER_PANEL_CLASS = 'max-w-[calc(100vw-1rem)] overflow-x-auto'
 
 export const ImageToolBar = memo(() => {
-	const viewer = useMolecule(ImageViewerMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
 	const { transformation, info } = useSnapshot(viewer.state)
-
-	const save = useMolecule(ImageSaveMolecule)
-	const solver = useMolecule(ImageSolverMolecule)
-	const stretch = useMolecule(ImageStretchMolecule)
-	const settings = useMolecule(ImageSettingsMolecule)
-	const statistics = useMolecule(ImageStatisticsMolecule)
-	const header = useMolecule(ImageHeaderMolecule)
+	const { save, solver, stretch, settings, statistics, header } = viewer
 
 	return (
 		<div className="pointer-events-none fixed bottom-0 z-99999 mb-1 w-full p-1">
@@ -64,7 +44,7 @@ const RotatePopover = memo(() => (
 ))
 
 const RotatePopoverContent = memo(() => {
-	const viewer = useMolecule(ImageViewerMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
 	const { angle } = useSnapshot(viewer.state)
 
 	return (
@@ -85,25 +65,16 @@ const OverlayPopover = memo(() => (
 ))
 
 const OverlayPopoverContent = memo(() => {
-	const viewer = useMolecule(ImageViewerMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
 	const { crosshair } = useSnapshot(viewer.state)
-
-	const starDetection = useMolecule(StarDetectionMolecule)
+	const { solver, starDetection, annotation, fov, mouseCoordinate } = viewer
 	const { stars: detectedStars, visible: isDetectedStarsVisible } = useSnapshot(starDetection.state)
-
-	const annotation = useMolecule(ImageAnnotationMolecule)
 	const { stars: annotatedStars, visible: isAnnotatedStarsVisible } = useSnapshot(annotation.state)
-
-	const solver = useMolecule(ImageSolverMolecule)
 	const { solution } = useSnapshot(solver.state)
-
-	const fov = useMolecule(ImageFovMolecule)
-
-	const mouseCoordinate = useMolecule(ImageMouseCoordinateMolecule)
 	const { visible: isMouseCoordinateVisible } = useSnapshot(mouseCoordinate.state)
 	const hasAnnotatedStars = annotatedStars.length > 0
 	const hasDetectedStars = detectedStars.length > 0
-	const hasSolvedScale = solution?.scale !== undefined && Number.isFinite(solution.scale) && solution.scale > 0
+	const hasSolvedScale = hasScaledSolution(solution)
 
 	return (
 		<div className={`${POPOVER_PANEL_CLASS} flex flex-row items-start justify-center gap-2 p-2`}>
@@ -117,12 +88,10 @@ const OverlayPopoverContent = memo(() => {
 				{hasDetectedStars && <Switch onValueChange={starDetection.toggle} value={isDetectedStarsVisible} />}
 			</div>
 			<IconButton color="secondary" disabled icon={Icons.Box} tooltipContent="ROI" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-			{hasSolvedScale && (
-				<>
-					<IconButton color="secondary" icon={Icons.FocusField} onClick={fov.show} tooltipContent="FOV" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-					<ToggleButton color="primary" icon={Icons.MousePointerClick} onClick={mouseCoordinate.toggle} tooltipContent="Mouse Coordinate" tooltipPlacement={TOOLTIP_PLACEMENT} value={isMouseCoordinateVisible} />
-				</>
-			)}
+			<Activity mode={hasSolvedScale ? 'visible' : 'hidden'}>
+				<IconButton color="secondary" icon={Icons.FocusField} onClick={fov.show} tooltipContent="FOV" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+				<ToggleButton color="primary" icon={Icons.MousePointerClick} onClick={mouseCoordinate.toggle} tooltipContent="Mouse Coordinate" tooltipPlacement={TOOLTIP_PLACEMENT} value={isMouseCoordinateVisible} />
+			</Activity>
 		</div>
 	)
 })
@@ -134,11 +103,11 @@ const TransformationPopover = memo(() => (
 ))
 
 const TransformationPopoverContent = memo(() => {
-	const viewer = useMolecule(ImageViewerMolecule)
-	const scnr = useMolecule(ImageScnrMolecule)
-	const adjustment = useMolecule(ImageAdjustmentMolecule)
-	const filter = useMolecule(ImageFilterMolecule)
-	const calibration = useMolecule(ImageCalibrationMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const scnr = viewer.scnr
+	const adjustment = viewer.adjustment
+	const filter = viewer.filter
+	const calibration = viewer.calibration
 	const { transformation, info } = useSnapshot(viewer.state)
 
 	return (

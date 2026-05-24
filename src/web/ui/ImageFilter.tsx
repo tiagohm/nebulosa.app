@@ -1,8 +1,7 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import type { ImageFFT, ImageFilter as ImageKernelFilter } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { ImageFilterMolecule } from '@/molecules/image/filter'
+import { ImageViewerStoreContext } from '../shared/context'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput, type NumberInputProps } from './components/NumberInput'
@@ -13,10 +12,14 @@ import { ImageKernelFilterTypeRadioGroup } from './ImageKernelFilterTypeRadioGro
 import { Modal } from './Modal'
 
 export const ImageFilter = memo(() => {
-	const filter = useMolecule(ImageFilterMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { filter } = viewer
+	const { show } = useSnapshot(filter.state)
+
+	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Filter" id={`filter-${filter.viewer.storageKey}`} maxWidth="216px" onHide={filter.hide}>
+		<Modal footer={<Footer />} header="Filter" id={`filter-${viewer.image.id}`} maxWidth="216px" onHide={filter.hide}>
 			<Body />
 		</Modal>
 	)
@@ -37,7 +40,7 @@ const Body = memo(() => (
 ))
 
 const Kernel = memo(() => {
-	const filter = useMolecule(ImageFilterMolecule)
+	const { filter } = useContext(ImageViewerStoreContext)
 	const { enabled, type } = useSnapshot(filter.state.kernel)
 
 	return (
@@ -52,7 +55,7 @@ const Kernel = memo(() => {
 })
 
 const Mean = memo(() => {
-	const filter = useMolecule(ImageFilterMolecule)
+	const { filter } = useContext(ImageViewerStoreContext)
 	const { enabled, type, mean } = useSnapshot(filter.state.kernel)
 
 	if (type !== 'mean') return null
@@ -61,7 +64,7 @@ const Mean = memo(() => {
 })
 
 const Blur = memo(() => {
-	const filter = useMolecule(ImageFilterMolecule)
+	const { filter } = useContext(ImageViewerStoreContext)
 	const { enabled, type, blur } = useSnapshot(filter.state.kernel)
 
 	if (type !== 'blur') return null
@@ -70,7 +73,7 @@ const Blur = memo(() => {
 })
 
 const GaussianBlur = memo(() => {
-	const filter = useMolecule(ImageFilterMolecule)
+	const { filter } = useContext(ImageViewerStoreContext)
 	const { enabled, type, gaussianBlur } = useSnapshot(filter.state.kernel)
 
 	if (type !== 'gaussianBlur') return null
@@ -84,7 +87,7 @@ const GaussianBlur = memo(() => {
 })
 
 const FFT = memo(() => {
-	const filter = useMolecule(ImageFilterMolecule)
+	const { filter } = useContext(ImageViewerStoreContext)
 	const { enabled, type, cutoff, weight } = useSnapshot(filter.state.fft)
 
 	return (
@@ -98,7 +101,7 @@ const FFT = memo(() => {
 })
 
 const Footer = memo(() => {
-	const filter = useMolecule(ImageFilterMolecule)
+	const { filter } = useContext(ImageViewerStoreContext)
 	const kernel = useSnapshot(filter.state.kernel)
 	const fft = useSnapshot(filter.state.fft)
 	const canApply = isValidKernelFilter(kernel) && isValidFFTFilter(fft)

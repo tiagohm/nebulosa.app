@@ -1,52 +1,54 @@
-import { molecule, onMount, use } from 'bunshi'
 import bus from 'src/shared/bus'
 import { DEFAULT_IMAGE_STRETCH, type ImageStretch } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { initProxy } from '@/shared/proxy'
-import type { ImageLoaded } from '@/shared/types'
-import { ImageViewerMolecule } from './viewer'
+import { initProxy } from '../shared/proxy'
+import type { ImageLoaded } from '../shared/types'
+import type { ImageViewerStore } from './image.viewer.store'
+
+export type ImageStretchStore = ReturnType<typeof imageStretchStore>
 
 export interface ImageStretchState {
 	show: boolean
-	stretch: ImageStretch
+	readonly stretch: ImageStretch
 }
 
-const stateMap = new Map<string, ImageStretchState>()
+export function imageStretchStore(viewer: ImageViewerStore) {
+	const state = proxy<ImageStretchState>({
+		show: false,
+		stretch: viewer.state.transformation.stretch,
+	})
 
-export const ImageStretchMolecule = molecule(() => {
-	const viewer = use(ImageViewerMolecule)
-	const { key } = viewer.scope.image
+	console.info('image stretch created:', viewer.state.path)
 
-	const state =
-		stateMap.get(key) ??
-		proxy<ImageStretchState>({
-			show: false,
-			stretch: viewer.state.transformation.stretch,
-		})
+	const u: VoidFunction[] = []
+	let mounted = false
 
-	stateMap.set(key, state)
+	function mount() {
+		if (mounted) return
 
-	onMount(() => {
-		const unsubscribers = new Array<VoidFunction>(2)
+		console.info('image stretch mounted:', viewer.state.path)
 
-		unsubscribers[0] = initProxy(state, `image.${viewer.storageKey}.stretch`, ['p:show'])
+		mounted = true
 
-		unsubscribers[1] = bus.subscribe<ImageLoaded>('image:load', ({ image, info }) => {
-			if (image.key === key) {
+		u[0] = initProxy(state, `image.${viewer.key}.stretch`, ['p:show'])
+
+		u[1] = bus.subscribe<ImageLoaded>('image:load', ({ image, info }) => {
+			if (image === viewer.image) {
 				state.stretch.auto = info.transformation.stretch.auto
 				state.stretch.shadow = info.transformation.stretch.shadow
 				state.stretch.highlight = info.transformation.stretch.highlight
 				state.stretch.midtone = info.transformation.stretch.midtone
 			}
 		})
+	}
 
-		state.stretch = viewer.state.transformation.stretch
-
-		return () => {
-			unsubscribe(unsubscribers)
-		}
-	})
+	function unmount() {
+		if (!mounted) return
+		console.info('image stretch unmounted:', viewer.state.path)
+		unsubscribe(u)
+		mounted = false
+	}
 
 	function update<K extends keyof ImageStretch>(key: K, value: ImageStretch[K]) {
 		state.stretch[key] = value
@@ -76,7 +78,7 @@ export const ImageStretchMolecule = molecule(() => {
 	}
 
 	function load() {
-		return viewer.load(true)
+		return viewer.reload()
 	}
 
 	function show() {
@@ -89,8 +91,9 @@ export const ImageStretchMolecule = molecule(() => {
 
 	return {
 		state,
-		scope: viewer.scope,
 		viewer,
+		mount,
+		unmount,
 		update,
 		auto,
 		reset,
@@ -99,4 +102,4 @@ export const ImageStretchMolecule = molecule(() => {
 		show,
 		hide,
 	} as const
-})
+}

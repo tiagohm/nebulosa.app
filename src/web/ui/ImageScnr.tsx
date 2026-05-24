@@ -1,8 +1,7 @@
-import { useMolecule } from 'bunshi/react'
 import type { SCNRProtectionMethod } from 'nebulosa/src/image.types'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageScnrMolecule } from '@/molecules/image/scnr'
+import { ImageViewerStoreContext } from '../shared/context'
 import { Button } from './components/Button'
 import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
@@ -15,17 +14,21 @@ function isMaskProtectionMethod(method: SCNRProtectionMethod) {
 }
 
 export const ImageScnr = memo(() => {
-	const scnr = useMolecule(ImageScnrMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { scnr } = viewer
+	const { show } = useSnapshot(scnr.state)
+
+	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="SCNR" id={`scnr-${scnr.viewer.storageKey}`} maxWidth="288px" onHide={scnr.hide}>
+		<Modal footer={<Footer />} header="SCNR" id={`scnr-${viewer.image.id}`} maxWidth="288px" onHide={scnr.hide}>
 			<Body />
 		</Modal>
 	)
 })
 
 const Body = memo(() => {
-	const scnr = useMolecule(ImageScnrMolecule)
+	const { scnr } = useContext(ImageViewerStoreContext)
 	const { method, amount, channel } = useSnapshot(scnr.state.scnr)
 	const hasChannel = channel !== undefined
 	const amountDisabled = !hasChannel || isMaskProtectionMethod(method)
@@ -40,7 +43,7 @@ const Body = memo(() => {
 })
 
 const Footer = memo(() => {
-	const scnr = useMolecule(ImageScnrMolecule)
+	const { scnr } = useContext(ImageViewerStoreContext)
 
 	return (
 		<>

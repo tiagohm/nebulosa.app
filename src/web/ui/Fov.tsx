@@ -1,10 +1,21 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageFovMolecule } from '@/molecules/image/fov'
+import { ImageViewerStoreContext } from '../shared/context'
+import { hasScaledSolution } from '../store/image.solver.store'
 
 export const Fov = memo(() => {
-	const fov = useMolecule(ImageFovMolecule)
+	const { fov, solver } = useContext(ImageViewerStoreContext)
+	const { show } = useSnapshot(fov.state)
+	const { solution } = useSnapshot(solver.state)
+	const hasSolutionScale = hasScaledSolution(solution)
+
+	if (!show || !hasSolutionScale) return null
+
+	return <Items />
+})
+
+const Items = memo(() => {
+	const { fov } = useContext(ImageViewerStoreContext)
 	const { computed, items } = useSnapshot(fov.state)
 
 	return (

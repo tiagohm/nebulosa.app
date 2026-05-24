@@ -1,8 +1,7 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import type { ImageAdjustment as ImageAdjustmentType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { ImageAdjustmentMolecule } from '@/molecules/image/adjustment'
+import { ImageViewerStoreContext } from '../shared/context'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
@@ -11,10 +10,14 @@ import { ImageChannelOrGrayInput } from './ImageChannelOrGrayInput'
 import { Modal } from './Modal'
 
 export const ImageAdjustment = memo(() => {
-	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { adjustment } = viewer
+	const { show } = useSnapshot(adjustment.state)
+
+	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Adjustment" id={`adjustment-${adjustment.viewer.storageKey}`} maxWidth="256px" onHide={adjustment.hide}>
+		<Modal footer={<Footer />} header="Adjustment" id={`adjustment-${viewer.image.id}`} maxWidth="256px" onHide={adjustment.hide}>
 			<Body />
 		</Modal>
 	)
@@ -31,35 +34,35 @@ const Body = memo(() => (
 ))
 
 const Enabled = memo(() => {
-	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const { adjustment } = useContext(ImageViewerStoreContext)
 	const { enabled } = useSnapshot(adjustment.state.adjustment)
 
 	return <Checkbox className="col-span-full" label="Enabled" onValueChange={(value) => (adjustment.state.adjustment.enabled = value)} value={enabled} />
 })
 
 const Brightness = memo(() => {
-	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const { adjustment } = useContext(ImageViewerStoreContext)
 	const { enabled, brightness } = useSnapshot(adjustment.state.adjustment)
 
 	return <AdjustmentValueInput enabled={enabled} label="Brightness" type="brightness" value={brightness.value} />
 })
 
 const Contrast = memo(() => {
-	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const { adjustment } = useContext(ImageViewerStoreContext)
 	const { enabled, contrast } = useSnapshot(adjustment.state.adjustment)
 
 	return <AdjustmentValueInput enabled={enabled} label="Contrast" type="contrast" value={contrast.value} />
 })
 
 const Gamma = memo(() => {
-	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const { adjustment } = useContext(ImageViewerStoreContext)
 	const { enabled, gamma } = useSnapshot(adjustment.state.adjustment)
 
 	return <AdjustmentValueInput enabled={enabled} label="Gamma" minValue={1} type="gamma" value={gamma.value} />
 })
 
 const Saturation = memo(() => {
-	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const { adjustment } = useContext(ImageViewerStoreContext)
 	const { info } = useSnapshot(adjustment.viewer.state)
 	const { enabled, saturation } = useSnapshot(adjustment.state.adjustment)
 
@@ -74,7 +77,7 @@ const Saturation = memo(() => {
 })
 
 const Footer = memo(() => {
-	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const { adjustment } = useContext(ImageViewerStoreContext)
 	const snapshot = useSnapshot(adjustment.state.adjustment)
 	const { enabled } = snapshot
 	const canApply = !enabled || isValidAdjustment(snapshot)
@@ -98,7 +101,7 @@ interface AdjustmentValueInputProps {
 }
 
 const AdjustmentValueInput = memo(({ enabled, label, minValue = 0, type, value }: AdjustmentValueInputProps) => {
-	const adjustment = useMolecule(ImageAdjustmentMolecule)
+	const { adjustment } = useContext(ImageViewerStoreContext)
 
 	return <NumberInput className="col-span-full min-w-0" disabled={!enabled} fractionDigits={2} label={label} maxValue={10} minValue={minValue} onValueChange={(value) => adjustment.update(type, 'value', value)} step={0.01} value={value} />
 })

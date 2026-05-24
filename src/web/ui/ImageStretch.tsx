@@ -1,7 +1,6 @@
-import { useMolecule } from 'bunshi/react'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageStretchMolecule } from '@/molecules/image/stretch'
+import { ImageViewerStoreContext } from '../shared/context'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
@@ -15,10 +14,14 @@ const STRETCH_MIN_VALUE = 0
 const STRETCH_MAX_VALUE = 65536
 
 export const ImageStretch = memo(() => {
-	const stretch = useMolecule(ImageStretchMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { stretch } = viewer
+	const { show } = useSnapshot(stretch.state)
+
+	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Stretch" id={`stretch-${stretch.viewer.storageKey}`} maxWidth="296px" onHide={stretch.hide}>
+		<Modal footer={<Footer />} header="Stretch" id={`stretch-${viewer.image.id}`} maxWidth="296px" onHide={stretch.hide}>
 			<Body />
 		</Modal>
 	)
@@ -32,7 +35,7 @@ const Body = memo(() => (
 ))
 
 const Stretch = memo(() => {
-	const stretch = useMolecule(ImageStretchMolecule)
+	const { stretch } = useContext(ImageViewerStoreContext)
 	const { shadow, midtone, highlight, bits } = useSnapshot(stretch.state.stretch)
 
 	function handleShadowChange(value: number) {
@@ -63,7 +66,7 @@ const Stretch = memo(() => {
 })
 
 const AutoStretch = memo(() => {
-	const stretch = useMolecule(ImageStretchMolecule)
+	const { stretch } = useContext(ImageViewerStoreContext)
 	const { meanBackground, clippingPoint } = useSnapshot(stretch.state.stretch)
 
 	return (
@@ -77,7 +80,7 @@ const AutoStretch = memo(() => {
 })
 
 const SigmaClip = memo(() => {
-	const stretch = useMolecule(ImageStretchMolecule)
+	const { stretch } = useContext(ImageViewerStoreContext)
 	const { sigmaClip, centerMethod, dispersionMethod, sigmaLower, sigmaUpper } = useSnapshot(stretch.state.stretch)
 
 	return (
@@ -92,7 +95,7 @@ const SigmaClip = memo(() => {
 })
 
 const Footer = memo(() => {
-	const stretch = useMolecule(ImageStretchMolecule)
+	const { stretch } = useContext(ImageViewerStoreContext)
 	const { auto } = useSnapshot(stretch.state.stretch)
 
 	return (

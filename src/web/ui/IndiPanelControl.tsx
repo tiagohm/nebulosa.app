@@ -1,16 +1,15 @@
-import { useMolecule } from 'bunshi/react'
-import type { DeviceProperty } from 'nebulosa/src/indi.device'
+import type { Device, DeviceProperty } from 'nebulosa/src/indi.device'
 import type { DefElement, Message, NewVector, SwitchRule } from 'nebulosa/src/indi.types'
-import { Activity, memo, useEffect, useRef, useState } from 'react'
+import { Activity, memo, useContext, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
+import { IndiPanelControlStoreContext } from '../shared/context'
 import { activityMode } from '../shared/util'
 import { Button } from './components/Button'
 import { FilterableList } from './components/FilterableList'
 import { IconButton } from './components/IconButton'
 import { ListItem } from './components/List'
 import { NumberInput } from './components/NumberInput'
-import { Select, type SelectItemRenderer } from './components/Select'
+import { Select } from './components/Select'
 import { TextInput } from './components/TextInput'
 import { ToggleButton } from './components/ToggleButton'
 import { Icons } from './Icon'
@@ -32,57 +31,63 @@ function propertyStateColor(state: DeviceProperty['state']) {
 }
 
 export const IndiPanelControl = memo(() => {
-	const control = useMolecule(IndiPanelControlMolecule)
+	const panel = useContext(IndiPanelControlStoreContext)
 
 	return (
-		<Modal header={<Header />} id="indi-panel-control" maxWidth="400px" onHide={control.hide}>
+		<Modal header={<Header />} id="indi-panel-control" maxWidth="400px" onHide={panel.hide}>
 			<Body />
 		</Modal>
 	)
 })
 
 const Header = memo(() => {
-	const control = useMolecule(IndiPanelControlMolecule)
-	const { tab } = useSnapshot(control.state)
+	const panel = useContext(IndiPanelControlStoreContext)
+	const { tab } = useSnapshot(panel.state)
 
 	return (
 		<div className="flex min-w-0 flex-row items-center justify-start gap-2">
 			<span className="me-3 min-w-0 truncate">INDI Panel Control</span>
-			<ToggleButton color="secondary" icon={Icons.ViewList} onClick={() => (control.state.tab = 'property')} tooltipContent="Properties" value={tab === 'property'} />
-			<ToggleButton color="secondary" icon={Icons.Message} onClick={() => (control.state.tab = 'message')} tooltipContent="Messages" value={tab === 'message'} />
+			<ToggleButton color="secondary" icon={Icons.ViewList} onClick={() => (panel.state.tab = 'property')} tooltipContent="Properties" value={tab === 'property'} />
+			<ToggleButton color="secondary" icon={Icons.Message} onClick={() => (panel.state.tab = 'message')} tooltipContent="Messages" value={tab === 'message'} />
 		</div>
 	)
 })
 
 const Body = memo(() => {
-	const control = useMolecule(IndiPanelControlMolecule)
-	const { device, tab } = useSnapshot(control.state)
+	const panel = useContext(IndiPanelControlStoreContext)
+	const { device, tab } = useSnapshot(panel.state)
 
 	return (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<Activity mode={activityMode(tab === 'property')}>
-				<DeviceAndGroup />
-				<GroupList key={device} />
-			</Activity>
-			<Messages />
-		</div>
+		device && (
+			<div className="mt-0 grid grid-cols-12 gap-2">
+				<Activity mode={activityMode(tab === 'property')}>
+					<DeviceAndGroup />
+					<GroupList key={device.id} />
+				</Activity>
+				<Messages />
+			</div>
+		)
 	)
 })
 
-const DeviceItem: SelectItemRenderer<string> = (device) => <span>{device}</span>
+function DeviceItem(device: Device) {
+	return <span>{device.name}</span>
+}
 
-const GroupItem: SelectItemRenderer<string> = (group) => <span>{group}</span>
+function GroupItem(group: string) {
+	return <span>{group}</span>
+}
 
 const DeviceAndGroup = memo(() => {
-	const control = useMolecule(IndiPanelControlMolecule)
-	const { devices, device, groups, group } = useSnapshot(control.state)
+	const panel = useContext(IndiPanelControlStoreContext)
+	const { devices, device, groups, group } = useSnapshot(panel.state)
 
 	return (
 		<>
-			<Select className="col-span-6 min-w-0" disabled={devices.length === 0} fullWidth items={devices} label="Device" onValueChange={control.changeDevice} value={device}>
+			<Select className="col-span-6 min-w-0" disabled={devices.length === 0} fullWidth items={devices} label="Device" onValueChange={panel.selectDevice} value={device}>
 				{DeviceItem}
 			</Select>
-			<Select className="col-span-6 min-w-0" disabled={groups.length === 0} fullWidth items={groups} label="Group" onValueChange={control.changeGroup} value={group}>
+			<Select className="col-span-6 min-w-0" disabled={groups.length === 0} fullWidth items={groups} label="Group" onValueChange={panel.selectGroup} value={group}>
 				{GroupItem}
 			</Select>
 		</>
@@ -90,24 +95,26 @@ const DeviceAndGroup = memo(() => {
 })
 
 const GroupList = memo(() => {
-	const control = useMolecule(IndiPanelControlMolecule)
-	const { device, group, groups } = useSnapshot(control.state)
+	const panel = useContext(IndiPanelControlStoreContext)
+	const { device, group, groups } = useSnapshot(panel.state)
 	const selectedGroup = groups.includes(group) ? group : undefined
 
-	return <div className="col-span-full flex max-h-100 min-w-0 flex-col gap-4 overflow-y-auto p-1">{selectedGroup === undefined ? <div className="px-2 py-3 text-sm text-neutral-500">No properties</div> : <PropertyList key={`${device}-${selectedGroup}`} group={selectedGroup} />}</div>
+	return <div className="col-span-full flex max-h-100 min-w-0 flex-col gap-4 overflow-y-auto p-1">{device === undefined || selectedGroup === undefined ? <div className="px-2 py-3 text-sm text-neutral-500">No properties</div> : <PropertyList key={`${device.id}-${selectedGroup}`} group={selectedGroup} />}</div>
 })
 
-const DevicePropertyComparator = (a: DeviceProperty, b: DeviceProperty) => propertyLabel(a).localeCompare(propertyLabel(b))
+function DevicePropertyComparator(a: DeviceProperty, b: DeviceProperty) {
+	return propertyLabel(a).localeCompare(propertyLabel(b))
+}
 
 const PropertyList = memo(({ group }: Readonly<{ group: string }>) => {
-	const control = useMolecule(IndiPanelControlMolecule)
-	const properties = useSnapshot(control.state.properties[group])
+	const panel = useContext(IndiPanelControlStoreContext)
+	const properties = useSnapshot(panel.state.properties[group])
 	const entries = Object.values(properties ?? {}).sort(DevicePropertyComparator)
 
 	return (
 		<>
 			{entries.map((e) => (
-				<Property key={e.name} onSend={control.send} property={e} />
+				<Property key={e.name} onSend={panel.send} property={e} />
 			))}
 		</>
 	)
@@ -118,8 +125,8 @@ function MessageItem(item: Message) {
 }
 
 const Messages = memo(() => {
-	const control = useMolecule(IndiPanelControlMolecule)
-	const { tab, messages } = useSnapshot(control.state)
+	const panel = useContext(IndiPanelControlStoreContext)
+	const { tab, messages } = useSnapshot(panel.state)
 
 	return (
 		<Activity mode={activityMode(tab === 'message')}>
@@ -127,7 +134,7 @@ const Messages = memo(() => {
 				{MessageItem}
 			</FilterableList>
 			<div className="col-span-full flex flex-row items-center justify-center gap-2">
-				<Button color="danger" disabled={messages.length === 0} label="Clear" onClick={control.clearMessages} startContent={<Icons.Broom />} />
+				<Button color="danger" disabled={messages.length === 0} label="Clear" onClick={panel.clear} startContent={<Icons.Broom />} />
 			</div>
 		</Activity>
 	)

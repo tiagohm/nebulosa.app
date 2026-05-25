@@ -47,8 +47,10 @@ import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 import { Sun } from './Sun'
 
 export const Atlas = memo(() => {
-	const { tab, location } = useSnapshot(atlasStore.state)
+	const { show, tab, location } = useSnapshot(atlasStore.state)
 	const request = useSnapshot(atlasStore.state.request)
+
+	if (!show) return null
 
 	const Footer = tab !== 'galaxy' ? <Link className="mt-1" href="https://ssd-api.jpl.nasa.gov/doc/horizons.html" label="NASA/JPL Horizons API" /> : null
 

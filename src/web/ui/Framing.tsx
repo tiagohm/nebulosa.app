@@ -12,12 +12,18 @@ import { HipsSurveySelect } from './HipsSurveySelect'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 
-export const Framing = memo(() => (
-	<Modal footer={<Footer />} header="Framing" id="framing" maxWidth="296px" onHide={framingStore.hide}>
-		<Body />
-		<Link className="col-span-full mt-2" href="https://alasky.cds.unistra.fr/hips-image-services/hips2fits" label="Powered by hips2fits, a service provided by CDS" />
-	</Modal>
-))
+export const Framing = memo(() => {
+	const { show } = useSnapshot(framingStore.state)
+
+	if (!show) return null
+
+	return (
+		<Modal footer={<Footer />} header="Framing" id="framing" maxWidth="296px" onHide={framingStore.hide}>
+			<Body />
+			<Link className="col-span-full mt-2" href="https://alasky.cds.unistra.fr/hips-image-services/hips2fits" label="Powered by hips2fits, a service provided by CDS" />
+		</Modal>
+	)
+})
 
 const Body = memo(() => {
 	const { loading, openNewImage } = useSnapshot(framingStore.state)

@@ -11,11 +11,17 @@ const MIN_FOCAL_LENGTH = 1
 const MIN_FOCAL_RATIO = 0.01
 const MIN_PIXEL_SIZE = 0.01
 
-export const Calculator = memo(() => (
-	<Modal header="Calculator" id="calculator" maxWidth="440px" onHide={calculatorStore.hide}>
-		<Body />
-	</Modal>
-))
+export const Calculator = memo(() => {
+	const { show } = useSnapshot(calculatorStore.state)
+
+	if (!show) return null
+
+	return (
+		<Modal header="Calculator" id="calculator" maxWidth="440px" onHide={calculatorStore.hide}>
+			<Body />
+		</Modal>
+	)
+})
 
 const Body = memo(() => (
 	<div className="mt-0 px-1 py-2">

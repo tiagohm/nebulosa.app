@@ -105,10 +105,6 @@ export namespace Api {
 	}
 
 	export namespace Indi {
-		export function devices(connection: ConnectionStatus) {
-			return json<string[]>(`/indi/devices?client=${connection.id}`, 'get')
-		}
-
 		export function connect(device: Device) {
 			return res(`/indi/${device.name}/connect?client=${device.client.id}`, 'post')
 		}
@@ -117,21 +113,17 @@ export namespace Api {
 			return res(`/indi/${device.name}/disconnect?client=${device.client.id}`, 'post')
 		}
 
-		export function messages(device: string | undefined, connection: ConnectionStatus) {
-			return json<Message[]>(`/indi/messages?device=${device ?? ''}&client=${connection.id}`, 'get')
+		export function messages(device: Device | undefined, connection: ConnectionStatus) {
+			return json<Message[]>(`/indi/messages?device=${device?.id ?? ''}&client=${connection.id}`, 'get')
 		}
 
 		export namespace Properties {
-			export function list(device: string, connection: ConnectionStatus) {
-				return json<DeviceProperties>(`/indi/${device}/properties?client=${connection.id}`, 'get')
+			export function list(device: Device, connection: ConnectionStatus) {
+				return json<DeviceProperties>(`/indi/${device.id}/properties?client=${connection.id}`, 'get')
 			}
 
-			export function send(device: string, type: DeviceProperty['type'], message: NewVector, connection: ConnectionStatus) {
-				return json<DeviceProperties>(`/indi/${device}/properties/send?type=${type}&client=${connection.id}`, 'post', message)
-			}
-
-			export function ping(device: string, connection: ConnectionStatus) {
-				return res(`/indi/${device}/properties/ping?client=${connection.id}`, 'post')
+			export function send(device: Device, type: DeviceProperty['type'], message: NewVector, connection: ConnectionStatus) {
+				return json<DeviceProperties>(`/indi/${device.id}/properties/send?type=${type}&client=${connection.id}`, 'post', message)
 			}
 		}
 

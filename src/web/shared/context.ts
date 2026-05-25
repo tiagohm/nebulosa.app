@@ -1,5 +1,6 @@
 import type { Camera, Cover, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, Thermometer, Wheel } from 'nebulosa/src/indi.device'
 import { createContext } from 'react'
+import type { ConnectionStatus } from 'src/shared/types'
 import type { CameraStore } from '@/store/camera.store'
 import type { CoverStore } from '@/store/cover.store'
 import type { DarvStore } from '@/store/darv.store'
@@ -16,12 +17,15 @@ import type { AutoFocusStore } from '../store/autofocus.store'
 import type { FilePickerStore } from '../store/filepicker.store'
 import type { FlatWizardStore } from '../store/flatwizard.store'
 import type { ImageViewerStore } from '../store/image.viewer.store'
+import type { IndiPanelControlStore } from '../store/indi.panelcontrol.store'
 import type { Image } from './types'
 
 export const AutoFocusStoreContext = createContext<AutoFocusStore>(null as never)
 
 export const CameraDeviceContext = createContext<Camera>(null as never)
 export const CameraStoreContext = createContext<CameraStore>(null as never)
+
+export const ConnectionStatusContext = createContext<ConnectionStatus>(null as never)
 
 export const CoverDeviceContext = createContext<Cover>(null as never)
 export const CoverStoreContext = createContext<CoverStore>(null as never)
@@ -46,6 +50,8 @@ export const GuideOutputStoreContext = createContext<GuideOutputStore>(null as n
 
 export const ImageContext = createContext<Image>(null as never)
 export const ImageViewerStoreContext = createContext<ImageViewerStore>(null as never)
+
+export const IndiPanelControlStoreContext = createContext<IndiPanelControlStore>(null as never)
 
 export const MountDeviceContext = createContext<Mount>(null as never)
 export const MountStoreContext = createContext<MountStore>(null as never)

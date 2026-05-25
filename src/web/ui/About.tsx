@@ -1,4 +1,5 @@
 import { memo, type ReactNode } from 'react'
+import { useSnapshot } from 'valtio'
 import brazilLogo from '@/assets/brazil.png'
 import nebulosaLogo from '@/assets/nebulosa.ico'
 import packageJson from '../../../package.json'
@@ -31,11 +32,17 @@ function IconCreditItem(item: (typeof ICON_CREDITS)[number]) {
 	return <Link className="w-auto!" color="default" href={item.href} key={item.label} label={item.label} underline />
 }
 
-export const About = memo(() => (
-	<Modal header={<Header />} id="about" maxWidth="472px" onHide={aboutStore.hide}>
-		<Body />
-	</Modal>
-))
+export const About = memo(() => {
+	const { show } = useSnapshot(aboutStore.state)
+
+	if (!show) return null
+
+	return (
+		<Modal header={<Header />} id="about" maxWidth="472px" onHide={aboutStore.hide}>
+			<Body />
+		</Modal>
+	)
+})
 
 function Body() {
 	return (

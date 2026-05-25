@@ -10,7 +10,10 @@ import { Icons } from './Icon'
 import { Modal } from './Modal'
 
 export const AlpacaServer = memo(() => {
-	useStore(alpacaStore, [])
+	const alpaca = useStore(alpacaStore, [])
+	const { show } = useSnapshot(alpaca.state)
+
+	if (!show) return null
 
 	return (
 		<Modal footer={<Footer />} header="ASCOM Alpaca Server" id="alpaca" maxWidth="296px" onHide={alpacaStore.hide}>

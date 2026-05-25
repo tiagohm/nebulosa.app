@@ -23,7 +23,6 @@ import sequencerIcon from '@/assets/sequencer.webp'
 import settingsIcon from '@/assets/settings.webp'
 import skyIcon from '@/assets/sky.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
-import { IndiPanelControlMolecule } from '@/molecules/indi/panelcontrol'
 import { PHD2Molecule } from '@/molecules/phd2'
 import { CameraDeviceContext, FocuserDeviceContext, MountDeviceContext } from '../shared/context'
 import { aboutStore } from '../store/about.store'
@@ -31,7 +30,6 @@ import { alpacaStore } from '../store/alpaca.store'
 import { atlasStore } from '../store/atlas.store'
 import { autoFocusListStore } from '../store/autofocus.list.store'
 import { calculatorStore } from '../store/calculator.store'
-import { connectionStore } from '../store/connection.store'
 import { darvListStore } from '../store/darv.list.store'
 import { equipmentStore } from '../store/equipment.store'
 import { flatWizardListStore } from '../store/flatwizard.list.store'
@@ -52,38 +50,24 @@ import { CameraDropdown, FocuserDropdown, MountDropdown } from './DeviceDropdown
 import { FlatWizard } from './FlatWizard'
 import { Framing } from './Framing'
 import { Icons } from './Icon'
-import { IndiPanelControl } from './IndiPanelControl'
-import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { PHD2 } from './PHD2'
 import { Tppa } from './Tppa'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
 
 export const HomeMenu = memo(() => {
-	const { connected } = useSnapshot(connectionStore.state)
-	const { show: showAtlas } = useSnapshot(atlasStore.state)
-	const { show: showFraming } = useSnapshot(framingStore.state)
-
 	const phd2 = useMolecule(PHD2Molecule)
 	const { show: showPHD2 } = useSnapshot(phd2.state)
-
-	const indi = useMolecule(IndiPanelControlMolecule)
-	const { show: showIndiPanelControl } = useSnapshot(indi.state)
-
-	const { show: showAlpaca } = useSnapshot(alpacaStore.state)
-	const { show: showCalculator } = useSnapshot(calculatorStore.state)
-	const { show: showAbout } = useSnapshot(aboutStore.state)
 
 	return (
 		<>
 			<HomeMenuPopover />
-			{showAtlas && <Atlas />}
-			{showFraming && <Framing />}
+			<Atlas />
+			<Framing />
 			{showPHD2 && <PHD2 />}
-			{showIndiPanelControl && connected && <IndiPanelControl />}
-			{showAlpaca && connected && <AlpacaServer />}
-			{showAbout && <About />}
-			{showCalculator && <Calculator />}
+			<AlpacaServer />
+			<About />
+			<Calculator />
 			<TppaList />
 			<DarvList />
 			<AutoFocusList />
@@ -168,7 +152,6 @@ export const HomeMenuPopoverContent = memo(() => {
 			<Button data-key="autoFocus" children={<img className="w-9" src={autoFocusIcon} />} color="secondary" disabled={cameraLength === 0 || focuserLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Auto Focus" variant="ghost" />
 			<Button data-key="flatWizard" children={<img className="w-9" src={flatWizardIcon} />} color="secondary" disabled={cameraLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Flat Wizard" variant="ghost" />
 			<Button data-key="sequencer" children={<img className="w-9" src={sequencerIcon} />} color="secondary" disabled={cameraLength === 0} size="lg" tooltipContent="Sequencer" variant="ghost" />
-			<IndiPanelControlButton disabled={isIndiDisabled} size="lg" />
 			<Button data-key="alpaca" children={<img className="w-9" src={alpacaIcon} />} color="secondary" disabled={isIndiDisabled} onClick={handleButtonClick} size="lg" tooltipContent="ASCOM Alpaca Server" variant="ghost" />
 			<Button data-key="calculator" children={<img className="w-9" src={calculatorIcon} />} color="secondary" onClick={handleButtonClick} size="lg" tooltipContent="Calculator" variant="ghost" />
 			<Button data-key="settings" children={<img className="w-9" src={settingsIcon} />} color="secondary" size="lg" tooltipContent="Settings" variant="ghost" />

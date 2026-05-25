@@ -1,6 +1,6 @@
 import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
-import type { DeviceUpdated } from 'src/shared/types'
+import type { ConnectionStatus, DeviceUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 
@@ -49,6 +49,24 @@ const state = proxy<EquipmentState>({
 	dewHeater: [],
 	power: [],
 })
+
+function list(connection: ConnectionStatus) {
+	const devices: DeviceState<Device>[] = []
+	for (const device of state.camera) device.client.id === connection.id && devices.push(device)
+	for (const device of state.mount) device.client.id === connection.id && devices.push(device)
+	for (const device of state.wheel) device.client.id === connection.id && devices.push(device)
+	for (const device of state.focuser) device.client.id === connection.id && devices.push(device)
+	for (const device of state.rotator) device.client.id === connection.id && devices.push(device)
+	for (const device of state.gps) device.client.id === connection.id && devices.push(device)
+	for (const device of state.dome) device.client.id === connection.id && devices.push(device)
+	for (const device of state.guideOutput) device.client.id === connection.id && devices.push(device)
+	for (const device of state.flatPanel) device.client.id === connection.id && devices.push(device)
+	for (const device of state.cover) device.client.id === connection.id && devices.push(device)
+	for (const device of state.thermometer) device.client.id === connection.id && devices.push(device)
+	for (const device of state.dewHeater) device.client.id === connection.id && devices.push(device)
+	for (const device of state.power) device.client.id === connection.id && devices.push(device)
+	return devices
+}
 
 function get<T extends DeviceType>(type: T, id: string) {
 	const devices = state[type]
@@ -149,6 +167,7 @@ function hide(device: Device, type = device.type) {
 
 export const equipmentStore = {
 	state,
+	list,
 	get,
 	connect,
 	add,

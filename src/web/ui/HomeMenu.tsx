@@ -1,4 +1,3 @@
-import { useMolecule } from 'bunshi/react'
 import type { DeviceType } from 'nebulosa/src/indi.device'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
@@ -23,7 +22,6 @@ import sequencerIcon from '@/assets/sequencer.webp'
 import settingsIcon from '@/assets/settings.webp'
 import skyIcon from '@/assets/sky.webp'
 import thermometerIcon from '@/assets/thermometer.webp'
-import { PHD2Molecule } from '@/molecules/phd2'
 import { CameraDeviceContext, FocuserDeviceContext, MountDeviceContext } from '../shared/context'
 import { aboutStore } from '../store/about.store'
 import { alpacaStore } from '../store/alpaca.store'
@@ -35,6 +33,7 @@ import { equipmentStore } from '../store/equipment.store'
 import { flatWizardListStore } from '../store/flatwizard.list.store'
 import { framingStore } from '../store/framing.store'
 import { homeMenuStore, isDevice } from '../store/home.menu.store'
+import { phd2Store } from '../store/phd2.store'
 import { tppaListStore } from '../store/tppa.list.store'
 import { About } from './About'
 import { AlpacaServer } from './AlpacaServer'
@@ -55,26 +54,21 @@ import { Tppa } from './Tppa'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
 
-export const HomeMenu = memo(() => {
-	const phd2 = useMolecule(PHD2Molecule)
-	const { show: showPHD2 } = useSnapshot(phd2.state)
-
-	return (
-		<>
-			<HomeMenuPopover />
-			<Atlas />
-			<Framing />
-			{showPHD2 && <PHD2 />}
-			<AlpacaServer />
-			<About />
-			<Calculator />
-			<TppaList />
-			<DarvList />
-			<AutoFocusList />
-			<FlatWizardList />
-		</>
-	)
-})
+export const HomeMenu = memo(() => (
+	<>
+		<HomeMenuPopover />
+		<Atlas />
+		<Framing />
+		<PHD2 />
+		<AlpacaServer />
+		<About />
+		<Calculator />
+		<TppaList />
+		<DarvList />
+		<AutoFocusList />
+		<FlatWizardList />
+	</>
+))
 
 export const HomeMenuPopover = memo(() => (
 	<Popover ref={homeMenuStore.popover} trigger={<IconButton color="secondary" icon={Icons.Menu} tooltipContent="Menu" />}>
@@ -128,8 +122,6 @@ export const HomeMenuPopoverContent = memo(() => {
 	const { length: dewHeaterLength } = useSnapshot(equipmentStore.state.dewHeater)
 	const { length: rotatorLength } = useSnapshot(equipmentStore.state.rotator)
 
-	const phd2 = useMolecule(PHD2Molecule)
-
 	const isIndiDisabled = cameraLength === 0 && mountLength === 0 && focuserLength === 0 && coverLength === 0 && flatPanelLength === 0 && guideOutputLength === 0 && thermometerLength === 0 && dewHeaterLength === 0 && rotatorLength === 0 && wheelLength === 0
 
 	return (
@@ -144,7 +136,7 @@ export const HomeMenuPopoverContent = memo(() => {
 			<Button data-key="guideOutput" children={<img className="w-9" src={guideOutputIcon} />} color="secondary" disabled={guideOutputLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Guide Output" variant="ghost" />
 			<Button data-key="dewHeater" children={<img className="w-9" src={heaterIcon} />} color="secondary" disabled={dewHeaterLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Dew Heater" variant="ghost" />
 			<Button data-key="thermometer" children={<img className="w-9" src={thermometerIcon} />} color="secondary" disabled={thermometerLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Thermometer" variant="ghost" />
-			<Button data-key="phd2" children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={phd2.show} size="lg" tooltipContent="PHD2" variant="ghost" />
+			<Button data-key="phd2" children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={phd2Store.show} size="lg" tooltipContent="PHD2" variant="ghost" />
 			<Button data-key="atlas" children={<img className="w-9" src={skyIcon} />} color="secondary" onClick={atlasStore.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
 			<Button data-key="framing" children={<img className="w-9" src={framingIcon} />} color="secondary" onClick={framingStore.show} size="lg" tooltipContent="Framing" variant="ghost" />
 			<Button data-key="tppa" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="TPPA" variant="ghost" />

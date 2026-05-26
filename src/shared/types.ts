@@ -1,4 +1,3 @@
-import type { MoleculeOrInterface } from 'bunshi'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
 import type { Angle } from 'nebulosa/src/angle'
 import { DEFAULT_REFRACTION_PARAMETERS, type RefractionParameters } from 'nebulosa/src/astrometry'
@@ -25,8 +24,6 @@ import type { SolarEclipse } from 'nebulosa/src/sun'
 import type { Temporal } from 'nebulosa/src/temporal'
 import type { DeepRequired, RequiredOnly } from 'nebulosa/src/types'
 import type { Velocity } from 'nebulosa/src/velocity'
-
-export type Atom<T> = T extends MoleculeOrInterface<infer X> ? X : never
 
 export interface LocationAndTime {
 	readonly location: GeographicCoordinate

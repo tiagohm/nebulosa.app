@@ -1,6 +1,6 @@
 import { memo, type ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { calculatorStore } from '../store/calculator.store'
+import { calculatorStore } from '@/stores/calculator.store'
 import { Chip } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
 import { Tab, TabPanel, Tabs } from './components/Tabs'

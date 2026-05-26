@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { confirmationStore } from '../store/confirmation.store'
+import { confirmationStore } from '@/stores/confirmation.store'
 import { Button } from './components/Button'
 import { Icons } from './Icon'
 import { Modal } from './Modal'

@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
+import { imageWorkspaceStore } from '@/stores/image.workspace.store'
 import { ImageContext } from '../shared/context'
-import { imageWorkspaceStore } from '../store/image.workspace.store'
 import { ImageViewer } from './ImageViewer'
 
 export const ImageWorkspace = memo(() => {

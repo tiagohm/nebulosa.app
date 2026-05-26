@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { indiServerStore } from '../store/indi.server.store'
+import { indiServerStore } from '@/stores/indi.server.store'
 import { IconButton } from './components/IconButton'
 import { Icons } from './Icon'
 import { IndiServer } from './IndiServer'

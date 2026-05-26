@@ -1,6 +1,6 @@
 import { DEFAULT_PLATE_SOLVE_START, type PlateSolverType, type PlateSolveStart } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { settingsStore } from '../store/settings.store'
+import { settingsStore } from '@/stores/settings.store'
 import { IconButton } from './components/IconButton'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'

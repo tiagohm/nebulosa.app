@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import type { PHD2RemoteConnect } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { phd2Store } from '../store/phd2.store'
+import { phd2Store } from '@/stores/phd2.store'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'

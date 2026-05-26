@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { FilePickerScope } from '../store/filepicker.store'
+import type { FilePickerScope } from '@/stores/filepicker.store'
 import { IconButton } from './components/IconButton'
 import { TextInput, type TextInputProps } from './components/TextInput'
 import { FilePicker } from './FilePicker'

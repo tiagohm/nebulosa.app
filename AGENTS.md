@@ -10,7 +10,7 @@ This project uses **React 19** for the web UI.
 
 This project uses **Tailwind CSS v4** for styling, compiled through the local Bun plugin in `tailwind.plugin.ts`.
 
-This project uses **Valtio** and **Bunshi** for shared client-side state and orchestration.
+This project uses **Valtio** for shared client-side state and orchestration.
 
 This project consumes `nebulosa` as the core astronomy, image-processing, and INDI/device-control library.
 
@@ -18,11 +18,11 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 
 - `src`: Application source files.
 - `src/api`: Bun runtime handlers, services, and route-facing backend code.
-- `src/web`: Browser entrypoints, UI, molecules, hooks, and web-only helpers.
+- `src/web`: Browser entrypoints, UI, store, hooks, and web-only helpers.
 - `src/web/pages`: HTML + React entrypoints. Currently only the `home` page exists.
 - `src/web/ui`: Feature and screen-level React components.
 - `src/web/ui/components`: Reusable UI primitives. Current primitives include actions (`Button`, `IconButton`, `ButtonGroup`, `ToggleButton`), fields (`TextInput`, `NumberInput`, `DateTimeInput`, `SearchTextInput`), selection/listing (`List`, `Table`, `Select`, `MultiSelect`, `FilterableList`, `FilterableSelect`, `Dropdown`, `Tabs`), overlays (`Floating`, `Popover`, `Tooltip`), and display/status controls (`Badge`, `Breadcrumbs`, `Calendar`, `Chip`, `Histogram`, `ProgressBar`, `Toast`).
-- `src/web/molecules`: Bunshi molecules and shared client orchestration/state.
+- `src/web/stores`: Shared client orchestration/state.
 - `src/web/shared`: Browser-side helpers for API calls, storage, interpolation, proxying, and related utilities.
 - `src/web/hooks`: React hooks.
 - `src/web/assets`: Images and icons.
@@ -77,10 +77,10 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 - Put Bun-only code in the root runtime or `src/api`.
 - When adding HTTP endpoints, follow the existing `class XHandler` plus `function x(handler): Endpoints` module pattern in `src/api`, then register the returned route map in `main.ts`.
 - Put reusable visual components in `src/web/ui/components`, not in app feature files.
-- Put browser-side orchestration and shared client state in `src/web/molecules`.
+- Put browser-side orchestration and shared client state in `src/web/stores`.
 - Keep `src/shared` reusable across runtime and web when practical. Avoid browser-only or Bun-only runtime imports there unless the shared contract genuinely requires them.
-- Keep browser-side HTTP, WebSocket, and storage access in `src/web/shared` or `src/web/molecules`, not scattered across leaf UI components.
-- Keep browser fetch logic in `src/web/shared/api.ts`, browser WebSocket lifecycle in `src/web/molecules/ws.ts`, and reuse `src/shared/bus` for cross-feature browser events instead of creating parallel transport layers.
+- Keep browser-side HTTP, WebSocket, and storage access in `src/web/shared` or `src/web/stores`, not scattered across leaf UI components.
+- Keep browser fetch logic in `src/web/shared/api.ts`, browser WebSocket lifecycle in `src/web/stores/ws.store.ts`, and reuse `src/shared/bus` for cross-feature browser events instead of creating parallel transport layers.
 - Filesystem, process, device-control, and server-listener side effects belong in `main.ts` or `src/api`, not presentational React components.
 - Move CPU-heavy and IO-heavy work out of React render paths and into async boundaries, workers, or `src/api`.
 - Do not introduce `npm`, `yarn`, or `pnpm` workflows into this repository.
@@ -217,14 +217,14 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 - Preserve the current focus treatment unless the component has a strong reason to differ. Existing reusable primitives generally remove default outlines and rely on the surrounding surface styling rather than adding a new ring system per component.
 - If a new reusable component is action-like, start from the `Button` API and styling vocabulary. If it is field-like, start from `TextInput` or `NumberInput`, including their slot-based surface, neutral palette, and internal content layout.
 
-## Bunshi Rules
+## Store Rules
 
-- Name shared orchestrators `FeatureMolecule` to match the existing repository convention.
-- Keep long-lived molecule state at module scope, expose actions from the molecule body, and return `{ state, ...actions } as const`.
-- Use `onMount` for subscriptions, timers, and browser lifecycle wiring, and always return a cleanup function when resources were acquired.
+- Name shared orchestrators `featureStore` to match the existing repository convention. The file name must end with `.store.ts`.
+- Keep long-lived store state at module scope, implement actions, and export `{ state, ...actions } as const`.
+- Use `mount` function for subscriptions, timers, and browser lifecycle wiring, and always add a `unmount` cleanup function when resources were acquired.
 - When shared browser state must survive reloads, persist it with `initProxy`, `storageGet`, or `storageSet` instead of ad hoc `localStorage` access inside UI components.
 - Reuse `src/shared/bus` for cross-feature browser events instead of introducing another event emitter.
-- Prefer add new logic into molecules instead of using useState and functions inside React component.
+- Prefer add new logic into stores instead of using useState and functions inside React component.
 
 ## Valtio Rules
 
@@ -272,7 +272,7 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 - Avoid effect chains that trigger cascaded renders.
 - Keep props small and stable at component boundaries.
 - Push expensive computations out of render and off the main thread when they can block interaction.
-- Before adding a library, ask whether existing Bun, React, Tailwind, Valtio, or Bunshi primitives already solve the problem.
+- Before adding a library, ask whether existing Bun, React, Tailwind, Valtio primitives already solve the problem.
 
 ## Quality Gates
 

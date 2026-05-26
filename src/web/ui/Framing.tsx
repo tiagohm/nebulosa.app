@@ -1,7 +1,7 @@
 import { angularSizeOfPixel } from 'nebulosa/src/util'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { framingStore } from '../store/framing.store'
+import { framingStore } from '@/stores/framing.store'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'

@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { imageWorkspaceStore } from '../store/image.workspace.store'
+import { imageWorkspaceStore } from '@/stores/image.workspace.store'
 import { IconButton } from './components/IconButton'
 import { FilePicker } from './FilePicker'
 import { Icons } from './Icon'

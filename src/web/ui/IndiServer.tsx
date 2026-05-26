@@ -1,7 +1,6 @@
-import { useMolecule } from 'bunshi/react'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { IndiServerMolecule } from '@/molecules/indi/server'
+import { indiServerStore } from '../store/indi.server.store'
 import { Badge } from './components/Badge'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
@@ -10,15 +9,11 @@ import { Icons } from './Icon'
 import { IndiDriverListbox } from './IndiDriverListbox'
 import { Modal } from './Modal'
 
-export const IndiServer = memo(() => {
-	const indi = useMolecule(IndiServerMolecule)
-
-	return (
-		<Modal footer={<Footer />} header="INDI Server" id="indi-server" maxWidth="276px" onHide={indi.hide}>
-			<Body />
-		</Modal>
-	)
-})
+export const IndiServer = memo(() => (
+	<Modal footer={<Footer />} header="INDI Server" id="indi-server" maxWidth="276px" onHide={indiServerStore.hide}>
+		<Body />
+	</Modal>
+))
 
 const Body = memo(() => (
 	<div className="mt-0 grid grid-cols-12 gap-2">
@@ -28,30 +23,28 @@ const Body = memo(() => (
 ))
 
 const Inputs = memo(() => {
-	const indi = useMolecule(IndiServerMolecule)
-	const { enabled, running, showAll } = useSnapshot(indi.state)
-	const { port, repeat, verbose } = useSnapshot(indi.state.request)
+	const { enabled, running, showAll } = useSnapshot(indiServerStore.state)
+	const { port, repeat, verbose } = useSnapshot(indiServerStore.state.request)
 	const blocked = !enabled || running
 
 	return (
 		<>
-			<NumberInput className="col-span-4 min-w-0" disabled={blocked} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => indi.update('port', value)} value={port} />
-			<NumberInput className="col-span-4 min-w-0" disabled={blocked} label="Repeat" maxValue={10} minValue={1} onValueChange={(value) => indi.update('repeat', value)} value={repeat} />
-			<NumberInput className="col-span-4 min-w-0" disabled={blocked} label="Verbose" maxValue={3} minValue={0} onValueChange={(value) => indi.update('verbose', value)} value={verbose} />
-			<Checkbox className="col-span-full min-w-0" disabled={blocked} label="Show all drivers" onValueChange={(value) => (indi.state.showAll = value)} value={showAll} />
+			<NumberInput className="col-span-4 min-w-0" disabled={blocked} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => indiServerStore.update('port', value)} value={port} />
+			<NumberInput className="col-span-4 min-w-0" disabled={blocked} label="Repeat" maxValue={10} minValue={1} onValueChange={(value) => indiServerStore.update('repeat', value)} value={repeat} />
+			<NumberInput className="col-span-4 min-w-0" disabled={blocked} label="Verbose" maxValue={3} minValue={0} onValueChange={(value) => indiServerStore.update('verbose', value)} value={verbose} />
+			<Checkbox className="col-span-full min-w-0" disabled={blocked} label="Show all drivers" onValueChange={(value) => (indiServerStore.state.showAll = value)} value={showAll} />
 		</>
 	)
 })
 
 const Drivers = memo(() => {
-	const indi = useMolecule(IndiServerMolecule)
-	const { enabled, running, showAll } = useSnapshot(indi.state)
-	const { drivers } = useSnapshot(indi.state.request)
+	const { enabled, running, showAll } = useSnapshot(indiServerStore.state)
+	const { drivers } = useSnapshot(indiServerStore.state.request)
 	const blocked = !enabled || running
 
 	return (
 		<div className={blocked ? 'pointer-events-none col-span-full min-w-0 opacity-50' : 'col-span-full min-w-0'}>
-			<IndiDriverListbox onSelectedChange={blocked ? undefined : (drivers) => indi.update('drivers', drivers)} selected={drivers} showAll={showAll} />
+			<IndiDriverListbox onSelectedChange={blocked ? undefined : (drivers) => indiServerStore.update('drivers', drivers)} selected={drivers} showAll={showAll} />
 		</div>
 	)
 })
@@ -65,16 +58,15 @@ function canStartServer(enabled: boolean, running: boolean, drivers: readonly st
 }
 
 const Footer = memo(() => {
-	const indi = useMolecule(IndiServerMolecule)
-	const { enabled, running } = useSnapshot(indi.state)
-	const { drivers, port, repeat, verbose } = useSnapshot(indi.state.request)
+	const { enabled, running } = useSnapshot(indiServerStore.state)
+	const { drivers, port, repeat, verbose } = useSnapshot(indiServerStore.state.request)
 	const canStart = canStartServer(enabled, running, drivers, port, repeat, verbose)
 
 	return (
 		<>
-			<Button color="danger" disabled={!enabled || !running} label="Stop" onClick={indi.stop} startContent={<Icons.Stop />} />
+			<Button color="danger" disabled={!enabled || !running} label="Stop" onClick={indiServerStore.stop} startContent={<Icons.Stop />} />
 			<Badge color="success" label={drivers.length}>
-				<Button color="success" disabled={!canStart} label="Start" onClick={indi.start} startContent={<Icons.Play />} />
+				<Button color="success" disabled={!canStart} label="Start" onClick={indiServerStore.start} startContent={<Icons.Play />} />
 			</Badge>
 		</>
 	)

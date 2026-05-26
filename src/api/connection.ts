@@ -246,19 +246,19 @@ export class ConnectionHandler {
 		}
 	}
 
-	status(key: string | Client): ConnectionStatus | undefined {
-		if (typeof key === 'string') {
-			const client = this.clients.get(key)
-			return client && { type: client.type, id: key }
+	status(client?: string | Client): ConnectionStatus | undefined {
+		if (client === undefined) return undefined
+
+		if (typeof client === 'string') {
+			client = this.clients.get(client)
+			return client && this.status(client)
 		} else {
-			for (const [id, client] of this.clients) {
-				if (client === key) {
-					return client && { type: client.type, id }
-				}
+			if (client instanceof IndiClient || client instanceof AlpacaClient) {
+				return { id: client.id, host: client.remoteHost ?? '', ip: client.remoteIp!, port: client.remotePort ?? -1, type: client.type }
+			} else {
+				return { id: client.id, host: '', ip: '', type: 'SIMULATOR', port: -1 }
 			}
 		}
-
-		return undefined
 	}
 
 	list() {

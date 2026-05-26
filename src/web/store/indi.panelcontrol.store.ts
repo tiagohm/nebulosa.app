@@ -3,7 +3,6 @@ import type { Message, NewVector } from 'nebulosa/src/indi.types'
 import bus from 'src/shared/bus'
 import type { ConnectionEvent, ConnectionStatus, IndiDevicePropertyEvent } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
-import { connectionStore } from 'src/web/store/connection.store'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
@@ -57,7 +56,7 @@ export function indiPanelControlStore(connection: ConnectionStatus) {
 		u[0] = initProxy(state, 'indi', ['p:show', 'p:tab'])
 
 		u[1] = bus.subscribe<ConnectionEvent>('connection:close', ({ status }) => {
-			if (connectionStore.state.connected?.id === status.id) {
+			if (connection.id === status.id) {
 				state.devices.length = 0
 				state.device = undefined
 				state.groups.length = 0
@@ -67,25 +66,25 @@ export function indiPanelControlStore(connection: ConnectionStatus) {
 		})
 
 		u[2] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:add', (event) => {
-			if (state.device?.id === event.device && connectionStore.state.connected?.id === event.client) {
+			if (state.device?.id === event.device && connection.id === event.client) {
 				addProperty(event.property)
 			}
 		})
 
 		u[3] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:update', (event) => {
-			if (state.device?.id === event.device && connectionStore.state.connected?.id === event.client) {
+			if (state.device?.id === event.device && connection.id === event.client) {
 				updateProperty(event.property)
 			}
 		})
 
 		u[4] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:remove', (event) => {
-			if (state.device?.id === event.device && connectionStore.state.connected?.id === event.client) {
+			if (state.device?.id === event.device && connection.id === event.client) {
 				removeProperty(event.property)
 			}
 		})
 
 		u[5] = bus.subscribe<Message & { clientId: string }>('indi:message', (event) => {
-			if (event.device === state.device && connectionStore.state.connected?.id === event.clientId) {
+			if (event.device === state.device && connection.id === event.clientId) {
 				state.messages.unshift(event)
 			}
 		})
@@ -106,7 +105,7 @@ export function indiPanelControlStore(connection: ConnectionStatus) {
 
 	async function retrieveProperties(device = state.device) {
 		if (device) {
-			const properties = await Api.Indi.Properties.list(device, connectionStore.state.connected!)
+			const properties = await Api.Indi.Properties.list(device, connection)
 
 			if (properties !== undefined) {
 				const output = {}
@@ -125,7 +124,7 @@ export function indiPanelControlStore(connection: ConnectionStatus) {
 	}
 
 	async function retrieveMessages(device = state.device) {
-		const messages = connectionStore.state.connected && (await Api.Indi.messages(device, connectionStore.state.connected))
+		const messages = await Api.Indi.messages(device, connection)
 
 		if (messages) {
 			Object.assign(state.messages, messages.sort(MessageComparator))
@@ -208,8 +207,8 @@ export function indiPanelControlStore(connection: ConnectionStatus) {
 	}
 
 	async function send(property: DeviceProperty, message: NewVector) {
-		if (state.device && state.show && connectionStore.state.connected) {
-			await Api.Indi.Properties.send(state.device, property.type, message, connectionStore.state.connected)
+		if (state.device && state.show) {
+			await Api.Indi.Properties.send(state.device, property.type, message, connection)
 		}
 	}
 

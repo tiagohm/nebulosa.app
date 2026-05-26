@@ -10,17 +10,19 @@ import { DEFAULT_CONNECTION, type Connection } from '../shared/types'
 export type ConnectionStore = typeof connectionStore
 
 export interface ConnectionState {
-	show: boolean
+	readonly activeConnections: readonly ConnectionStatus[]
 	readonly connections: Connection[]
-	mode: 'new' | 'edit'
-	loading: boolean
-	selected?: Connection & { id?: string }
+	connecting: boolean
+	selected?: Connection
 	readonly edited: Connection
-	connected?: ConnectionStatus
 	readonly alpaca: {
 		servers: readonly AlpacaDeviceServer[]
 		discovering: boolean
 	}
+}
+
+export function isNetworkConnection(type: Connection['type']) {
+	return type !== 'SIMULATOR'
 }
 
 export function ConnectionComparator(a: Connection, b: Connection) {
@@ -28,18 +30,17 @@ export function ConnectionComparator(a: Connection, b: Connection) {
 }
 
 const state = proxy<ConnectionState>({
-	show: false,
+	activeConnections: [],
 	connections: [],
-	mode: 'new',
 	edited: structuredClone(DEFAULT_CONNECTION),
-	loading: false,
+	connecting: false,
 	alpaca: {
 		servers: [],
 		discovering: false,
 	},
 })
 
-initProxy(state, 'connection', ['p:show', 'p:mode', 'o:edited', 'o:connections'])
+initProxy(state, 'connection', ['o:edited', 'o:connections'])
 state.connections.sort(ConnectionComparator)
 
 const DEFAULT_CONNECTION_PORT = {
@@ -54,30 +55,30 @@ if (state.connections.length === 0) {
 
 state.selected ??= state.connections[0]
 
-bus.subscribe<ConnectionEvent>('connection:open', ({ status, reused }) => {
-	reused && list(status)
+bus.subscribe<ConnectionEvent>('connection:open', ({ reused }) => {
+	!reused && void list()
 })
 
-bus.subscribe<ConnectionEvent>('connection:close', ({ status }) => {
-	if (state.connected?.id === status.id) {
-		state.connected = undefined
+bus.subscribe<ConnectionEvent>('connection:close', () => {
+	void list()
+})
+
+async function list() {
+	const connections = await Api.Connection.list()
+
+	if (connections !== undefined) {
+		Object.assign(state.activeConnections, connections)
 	}
-})
-
-function list(connection: ConnectionStatus) {
-	//
 }
 
 function create() {
-	state.mode = 'new'
-	Object.assign(state.edited, structuredClone(DEFAULT_CONNECTION))
-	state.show = true
+	const connection = { ...DEFAULT_CONNECTION, id: nanoid() }
+	Object.assign(state.edited, connection)
 }
 
 function edit(connection: Connection) {
-	state.mode = 'edit'
-	Object.assign(state.edited, connection)
-	state.show = true
+	const { id, host, port, name, type, secured } = connection
+	Object.assign(state.edited, { id, host, port, name, type, secured })
 }
 
 function add(connection: Connection) {
@@ -111,16 +112,10 @@ function update<K extends keyof Connection>(name: K, value: Connection[K]) {
 	state.edited[name] = value
 }
 
-function select(connection: Connection | string) {
-	if (typeof connection === 'string') {
-		const selected = state.connections.find((e) => e.id === connection)
-		if (selected) state.selected = selected
-		else console.warn('unknown connection', connection)
-	} else if (state.connections.includes(connection)) {
-		state.selected = connection
-	} else {
-		select(connection.id)
-	}
+function select(connection: Connection) {
+	const selected = state.connections.find((e) => e.id === connection.id)
+	if (selected) state.selected = selected
+	else console.warn('unknown connection:', connection)
 }
 
 async function discovery() {
@@ -136,35 +131,13 @@ async function discovery() {
 }
 
 function save() {
-	const edited = { ...state.edited }
+	const selected = state.connections.find((e) => e.id === state.edited.id)
 
-	if (edited.id === DEFAULT_CONNECTION.id) {
-		// If the edited connection is the default one, we remove it first
-		if (state.mode === 'edit') {
-			removeOnly(DEFAULT_CONNECTION)
-		}
-
-		// Generate a new id for the edited connection
-		edited.id = nanoid()
-
-		// Add the edited connection to the list
-		add(edited)
-
-		// Set the edited connection as the selected one
-		state.selected = edited
+	if (selected) {
+		Object.assign(selected, state.edited)
 	} else {
-		const index = state.connections.findIndex((e) => e.id === edited.id)
-
-		if (index >= 0) {
-			state.connections[index] = edited
-
-			if (state.selected?.id === edited.id) {
-				state.selected = edited
-			}
-		}
+		add({ ...state.edited })
 	}
-
-	state.show = false
 }
 
 function removeOnly(connection: Connection) {
@@ -181,37 +154,52 @@ function remove(connection: Connection) {
 	const { connections } = state
 
 	if (connections.length === 0) {
-		connections.push(structuredClone(DEFAULT_CONNECTION))
-		state.selected = connections[0]
+		state.selected = undefined
 	} else if (state.selected?.id === connection.id) {
 		state.selected = connections[0]
 	}
 }
 
-async function connect() {
-	if (state.connected) {
-		void Api.Connection.disconnect(state.connected.id)
-		state.connected = undefined
-	} else if (state.selected) {
-		try {
-			state.loading = true
+async function connect(connection: Connection) {
+	if (state.activeConnections.some((c) => c.id === connection.id)) {
+		console.warn('already connected:', connection)
+		return
+	}
 
-			const status = await Api.Connection.connect(state.selected)
+	const selected = state.connections.find((e) => e.id === connection.id)
 
-			if (status) {
-				state.connected = status
-				state.selected.connectedAt = Date.now()
-				state.selected.id = status.id
-			}
-		} finally {
-			state.loading = false
+	if (!selected) {
+		console.warn('unknown connection:', connection)
+		return
+	}
+
+	try {
+		state.connecting = true
+
+		const status = await Api.Connection.connect(selected)
+
+		if (status) {
+			selected.connectedAt = Date.now()
 		}
+	} finally {
+		state.connecting = false
 	}
 }
 
-function hide() {
-	state.show = false
+async function connectToEdited() {
+	await connect(state.edited)
 }
+
+async function connectToSelected() {
+	state.selected !== undefined && (await connect(state.selected))
+}
+
+function removeEdited() {
+	return remove(state.edited)
+}
+
+create()
+void list()
 
 export const connectionStore = {
 	state,
@@ -222,7 +210,9 @@ export const connectionStore = {
 	select,
 	save,
 	connect,
+	connectToEdited,
+	connectToSelected,
 	duplicate,
 	remove,
-	hide,
+	removeEdited,
 } as const

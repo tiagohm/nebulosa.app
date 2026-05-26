@@ -304,7 +304,11 @@ export interface Confirmation {
 
 // Connection
 
-export type ConnectionStatus = ClientInfo
+export interface ConnectionStatus extends ClientInfo {
+	readonly host: string
+	readonly ip: string
+	readonly port: number
+}
 
 export interface HostAndPort {
 	host: string

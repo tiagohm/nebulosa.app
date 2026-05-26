@@ -94,8 +94,7 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 	}
 
 	function load() {
-		console.info(state.stretch)
-			return viewer.reload()
+		return viewer.reload()
 	}
 
 	function show() {

@@ -1,19 +1,16 @@
 import type { Device, DeviceProperties, DeviceProperty } from 'nebulosa/src/indi.device'
 import type { Message, NewVector } from 'nebulosa/src/indi.types'
 import bus from 'src/shared/bus'
-import type { ConnectionEvent, ConnectionStatus, IndiDevicePropertyEvent } from 'src/shared/types'
+import type { IndiDevicePropertyEvent } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
-import { equipmentStore } from './equipment.store'
 
 export type IndiPanelControlStore = ReturnType<typeof indiPanelControlStore>
 
 export interface IndiPanelControlState {
 	show: boolean
-	readonly devices: Device[]
-	device?: Device
 	readonly groups: string[]
 	group: string
 	properties: Record<string, DeviceProperties>
@@ -25,15 +22,9 @@ function MessageComparator(a: Message, b: Message) {
 	return b.timestamp!.localeCompare(a.timestamp!)
 }
 
-function DeviceComparator(a: Device, b: Device) {
-	return a.name.localeCompare(b.name)
-}
-
-export function indiPanelControlStore(connection: ConnectionStatus) {
+export function indiPanelControlStore(device: Device) {
 	const state = proxy<IndiPanelControlState>({
 		show: false,
-		devices: [],
-		device: undefined,
 		groups: [],
 		group: '',
 		properties: {},
@@ -41,7 +32,7 @@ export function indiPanelControlStore(connection: ConnectionStatus) {
 		tab: 'property',
 	})
 
-	console.info('indi panel control created:', connection.id)
+	console.info('indi panel control created:', device.name)
 
 	const u: VoidFunction[] = []
 	let mounted = false
@@ -49,94 +40,69 @@ export function indiPanelControlStore(connection: ConnectionStatus) {
 	function mount() {
 		if (mounted) return
 
-		console.info('indi panel control mounted:', connection.id)
+		console.info('indi panel control mounted:', device.name)
 
 		mounted = true
 
 		u[0] = initProxy(state, 'indi', ['p:show', 'p:tab'])
 
-		u[1] = bus.subscribe<ConnectionEvent>('connection:close', ({ status }) => {
-			if (connection.id === status.id) {
-				state.devices.length = 0
-				state.device = undefined
-				state.groups.length = 0
-				state.group = ''
-				state.properties = {}
-			}
-		})
-
-		u[2] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:add', (event) => {
-			if (state.device?.id === event.device && connection.id === event.client) {
+		u[1] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:add', (event) => {
+			if (device.id === event.device) {
 				addProperty(event.property)
 			}
 		})
 
-		u[3] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:update', (event) => {
-			if (state.device?.id === event.device && connection.id === event.client) {
+		u[2] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:update', (event) => {
+			if (device.id === event.device) {
 				updateProperty(event.property)
 			}
 		})
 
-		u[4] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:remove', (event) => {
-			if (state.device?.id === event.device && connection.id === event.client) {
+		u[3] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:remove', (event) => {
+			if (device.id === event.device) {
 				removeProperty(event.property)
 			}
 		})
 
-		u[5] = bus.subscribe<Message & { clientId: string }>('indi:message', (event) => {
-			if (event.device === state.device && connection.id === event.clientId) {
+		u[4] = bus.subscribe<Message>('indi:message', (event) => {
+			if (device.id === event.device) {
 				state.messages.unshift(event)
 			}
 		})
 
-		retrieveDevices()
+		void retrieveProperties()
 	}
 
 	function unmount() {
 		if (!mounted) return
-		console.info('indi panel control unmounted:', connection.id)
+		console.info('indi panel control unmounted:', device.name)
 		unsubscribe(u)
 		mounted = false
 	}
 
-	function retrieveDevices() {
-		Object.assign(state.devices, equipmentStore.list(connection).sort(DeviceComparator))
-	}
+	async function retrieveProperties() {
+		const properties = await Api.Indi.Properties.list(device)
 
-	async function retrieveProperties(device = state.device) {
-		if (device) {
-			const properties = await Api.Indi.Properties.list(device, connection)
+		if (properties !== undefined) {
+			const output = {}
+			const groups = addProperties(properties, output)
+			Object.assign(state.groups, Array.from(groups).sort())
+			state.properties = output
+		} else {
+			state.groups.length = 0
+			state.properties = {}
+		}
 
-			if (properties !== undefined) {
-				const output = {}
-				const groups = addProperties(properties, output)
-				Object.assign(state.groups, Array.from(groups).sort())
-				state.properties = output
-			} else {
-				state.groups.length = 0
-				state.properties = {}
-			}
-
-			if (!state.group || !state.groups.includes(state.group)) {
-				state.group = state.groups[0] || ''
-			}
+		if (!state.group || !state.groups.includes(state.group)) {
+			state.group = state.groups[0] || ''
 		}
 	}
 
-	async function retrieveMessages(device = state.device) {
-		const messages = await Api.Indi.messages(device, connection)
+	async function retrieveMessages() {
+		const messages = await Api.Indi.messages(device, device.client)
 
 		if (messages) {
 			Object.assign(state.messages, messages.sort(MessageComparator))
-		}
-	}
-
-	async function selectDevice(device?: Device) {
-		if (device) {
-			void retrieveMessages()
-			device = state.devices.find((e) => e.id === device!.id) ?? state.devices[0] ?? undefined
-			await retrieveProperties(device)
-			state.device = device
 		}
 	}
 
@@ -207,18 +173,12 @@ export function indiPanelControlStore(connection: ConnectionStatus) {
 	}
 
 	async function send(property: DeviceProperty, message: NewVector) {
-		if (state.device && state.show) {
-			await Api.Indi.Properties.send(state.device, property.type, message, connection)
+		if (state.show) {
+			await Api.Indi.Properties.send(device, property.type, message)
 		}
 	}
 
-	async function show(device?: Device) {
-		if (!state.show) {
-			retrieveDevices()
-		} else if (device) {
-			await selectDevice(device)
-		}
-
+	function show() {
 		state.show = true
 	}
 
@@ -228,12 +188,11 @@ export function indiPanelControlStore(connection: ConnectionStatus) {
 
 	return {
 		state,
+		device,
 		mount,
 		unmount,
-		retrieveDevices,
 		retrieveProperties,
 		retrieveMessages,
-		selectDevice,
 		selectGroup,
 		clear,
 		send,

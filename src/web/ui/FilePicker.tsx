@@ -156,7 +156,7 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 	const { mode, selected } = useSnapshot(picker.state)
 	const { save } = useSnapshot(picker.state)
 
-	function handleOnChoose() {
+	function handleChoose() {
 		if (mode === 'save') {
 			void picker.save(onChoose)
 		} else {
@@ -169,13 +169,13 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 			{mode === 'save' ? (
 				<>
 					<TextInput className="flex-1" color={save.exists ? 'warning' : 'default'} label="Name" onValueChange={picker.updateSaveName} value={save.name} />
-					<Button color="success" disabled={save.name.trim().length <= 0} label="Choose" onClick={handleOnChoose} startContent={<Icons.Check />} />
+					<Button color="success" disabled={save.name.trim().length <= 0} label="Choose" onClick={handleChoose} startContent={<Icons.Check />} />
 				</>
 			) : (
 				<>
 					<Button color="danger" disabled={selected.length === 0} label="Clear" onClick={picker.unselectAll} startContent={<Icons.Broom />} />
 					<Badge color="success" label={selected.length} visible={selected.length > 0}>
-						<Button color="success" disabled={selected.length === 0} label="Choose" onClick={handleOnChoose} startContent={<Icons.Check />} />
+						<Button color="success" disabled={selected.length === 0} label="Choose" onClick={handleChoose} startContent={<Icons.Check />} />
 					</Badge>
 				</>
 			)}

@@ -3,7 +3,7 @@ import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import type { Angle } from 'nebulosa/src/angle'
 import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
-import type { Camera, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, MountTargetCoordinate, NameAndLabel, Rotator, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, ClientInfo, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, MountTargetCoordinate, NameAndLabel, Rotator, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
 import type { Message, NewVector } from 'nebulosa/src/indi.types'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { PHD2Profile } from 'nebulosa/src/phd2'
@@ -113,17 +113,17 @@ export namespace Api {
 			return res(`/indi/${device.name}/disconnect?client=${device.client.id}`, 'post')
 		}
 
-		export function messages(device: Device | undefined, connection: ConnectionStatus) {
-			return json<Message[]>(`/indi/messages?device=${device?.id ?? ''}&client=${connection.id}`, 'get')
+		export function messages(device: Device | undefined, client: ClientInfo) {
+			return json<Message[]>(`/indi/messages?device=${device?.id ?? ''}&client=${client.id}`, 'get')
 		}
 
 		export namespace Properties {
-			export function list(device: Device, connection: ConnectionStatus) {
-				return json<DeviceProperties>(`/indi/${device.id}/properties?client=${connection.id}`, 'get')
+			export function list(device: Device, client: ClientInfo = device.client) {
+				return json<DeviceProperties>(`/indi/${device.id}/properties?client=${client.id}`, 'get')
 			}
 
-			export function send(device: Device, type: DeviceProperty['type'], message: NewVector, connection: ConnectionStatus) {
-				return json<DeviceProperties>(`/indi/${device.id}/properties/send?type=${type}&client=${connection.id}`, 'post', message)
+			export function send(device: Device, type: DeviceProperty['type'], message: NewVector, client: ClientInfo = device.client) {
+				return json<DeviceProperties>(`/indi/${device.id}/properties/send?type=${type}&client=${client.id}`, 'post', message)
 			}
 		}
 
@@ -147,12 +147,12 @@ export namespace Api {
 	}
 
 	export namespace Cameras {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Camera[]>(`/cameras?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Camera[]>(`/cameras?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Camera>(`/cameras/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Camera>(`/cameras/${name}?client=${client.id}`, 'get')
 		}
 
 		export function cooler(camera: Camera, enabled: boolean) {
@@ -173,12 +173,12 @@ export namespace Api {
 	}
 
 	export namespace Mounts {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Mount[]>(`/mounts?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Mount[]>(`/mounts?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Mount>(`/mounts/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Mount>(`/mounts/${name}?client=${client.id}`, 'get')
 		}
 
 		export function goTo(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
@@ -269,12 +269,12 @@ export namespace Api {
 	}
 
 	export namespace Focusers {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Focuser[]>(`/focusers?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Focuser[]>(`/focusers?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Focuser>(`/focusers/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Focuser>(`/focusers/${name}?client=${client.id}`, 'get')
 		}
 
 		export function sync(focuser: Focuser, position: number) {
@@ -303,12 +303,12 @@ export namespace Api {
 	}
 
 	export namespace Wheels {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Wheel[]>(`/wheels?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Wheel[]>(`/wheels?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Wheel>(`/wheels/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Wheel>(`/wheels/${name}?client=${client.id}`, 'get')
 		}
 
 		export function moveTo(wheel: Wheel, position: number) {
@@ -321,22 +321,22 @@ export namespace Api {
 	}
 
 	export namespace Thermometers {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Thermometer[]>(`/thermometers?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Thermometer[]>(`/thermometers?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Thermometer>(`/thermometers/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Thermometer>(`/thermometers/${name}?client=${client.id}`, 'get')
 		}
 	}
 
 	export namespace GuideOutputs {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly GuideOutput[]>(`/guideoutputs?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly GuideOutput[]>(`/guideoutputs?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<GuideOutput>(`/guideoutputs/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<GuideOutput>(`/guideoutputs/${name}?client=${client.id}`, 'get')
 		}
 
 		export function guideRate(guideOutput: GuideOutput, rate: EquatorialCoordinate) {
@@ -349,12 +349,12 @@ export namespace Api {
 	}
 
 	export namespace Covers {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Cover[]>(`/covers?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Cover[]>(`/covers?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Cover>(`/covers/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Cover>(`/covers/${name}?client=${client.id}`, 'get')
 		}
 
 		export function park(cover: Cover) {
@@ -371,12 +371,12 @@ export namespace Api {
 	}
 
 	export namespace FlatPanels {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly FlatPanel[]>(`/flatpanels?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly FlatPanel[]>(`/flatpanels?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<FlatPanel>(`/flatpanels/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<FlatPanel>(`/flatpanels/${name}?client=${client.id}`, 'get')
 		}
 
 		export function enable(flatPanel: FlatPanel) {
@@ -393,12 +393,12 @@ export namespace Api {
 	}
 
 	export namespace Rotators {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Rotator[]>(`/rotators?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Rotator[]>(`/rotators?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Rotator>(`/rotators/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Rotator>(`/rotators/${name}?client=${client.id}`, 'get')
 		}
 
 		export function sync(rotator: Rotator, angle: number) {
@@ -423,12 +423,12 @@ export namespace Api {
 	}
 
 	export namespace DewHeaters {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly DewHeater[]>(`/dewheaters?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly DewHeater[]>(`/dewheaters?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<DewHeater>(`/dewheaters/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<DewHeater>(`/dewheaters/${name}?client=${client.id}`, 'get')
 		}
 
 		export function dutyCycle(dewHeater: DewHeater, value: number) {

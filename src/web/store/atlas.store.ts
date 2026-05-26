@@ -196,7 +196,7 @@ function hideLocation() {
 	state.location.show = false
 }
 
-function handleOnTabWheel(event: React.WheelEvent) {
+function handleTabWheel(event: React.WheelEvent) {
 	if (event.deltaY === 0) return
 	const { tab } = state
 	const index = event.deltaY < 0 ? (TABS.indexOf(tab) + 1) % TABS.length : (TABS.indexOf(tab) + TABS.length - 1) % TABS.length
@@ -223,7 +223,7 @@ export const atlasStore = {
 	removeBookmark,
 	showLocation,
 	hideLocation,
-	handleOnTabWheel,
+	handleTabWheel,
 	show,
 	hide,
 }

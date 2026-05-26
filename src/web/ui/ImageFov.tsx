@@ -145,7 +145,7 @@ const FovList = memo(() => {
 })
 
 const ComputedFovItem = memo((item: FovItem) => (
-	<div className="flex min-w-0 flex-1 flex-row flex-wrap items-center justify-between gap-1 text-sm px-2">
+	<div className="flex min-w-0 flex-1 flex-row flex-wrap items-center justify-between gap-1 px-2 text-sm">
 		<span>
 			<strong>FL:</strong> {formatFovNumber(item.focalLength)}mm
 		</span>

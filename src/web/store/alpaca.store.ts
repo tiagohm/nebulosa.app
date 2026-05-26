@@ -30,6 +30,7 @@ const state = proxy<AlpacaState>({
 initProxy(state, 'alpaca', ['p:show', 'p:port'])
 
 async function status() {
+	if (!state.show) return undefined
 	const status = await Api.Alpaca.status()
 	if (status !== undefined) Object.assign(state.status, status)
 	return status

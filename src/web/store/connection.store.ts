@@ -42,18 +42,13 @@ const state = proxy<ConnectionState>({
 
 initProxy(state, 'connection', ['o:edited', 'o:connections'])
 state.connections.sort(ConnectionComparator)
+state.edited.id = nanoid() // start as new connection
 
 const DEFAULT_CONNECTION_PORT = {
 	INDI: DEFAULT_CONNECTION.port,
 	ALPACA: 32323,
 	SIMULATOR: 0,
 } satisfies Record<Connection['type'], number>
-
-if (state.connections.length === 0) {
-	state.connections.push(structuredClone(DEFAULT_CONNECTION))
-}
-
-state.selected ??= state.connections[0]
 
 bus.subscribe<ConnectionEvent>('connection:open', ({ reused }) => {
 	!reused && void list()
@@ -115,7 +110,8 @@ function update<K extends keyof Connection>(name: K, value: Connection[K]) {
 function select(connection: Connection) {
 	const selected = state.connections.find((e) => e.id === connection.id)
 	if (selected) state.selected = selected
-	else console.warn('unknown connection:', connection)
+	else return console.warn('unknown connection:', connection)
+	edit(selected)
 }
 
 async function discovery() {
@@ -170,15 +166,14 @@ async function connect(connection: Connection) {
 
 	if (!selected) {
 		console.warn('unknown connection:', connection)
-		return
 	}
 
 	try {
 		state.connecting = true
 
-		const status = await Api.Connection.connect(selected)
+		const status = await Api.Connection.connect(connection)
 
-		if (status) {
+		if (status && selected) {
 			selected.connectedAt = Date.now()
 		}
 	} finally {
@@ -191,14 +186,13 @@ async function connectToEdited() {
 }
 
 async function connectToSelected() {
-	state.selected !== undefined && (await connect(state.selected))
+	if (state.selected !== undefined) await connect(state.selected)
 }
 
 function removeEdited() {
 	return remove(state.edited)
 }
 
-create()
 void list()
 
 export const connectionStore = {

@@ -1,6 +1,5 @@
-import type { Camera, Cover, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, Thermometer, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, Cover, Device, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, Thermometer, Wheel } from 'nebulosa/src/indi.device'
 import { createContext } from 'react'
-import type { ConnectionStatus } from 'src/shared/types'
 import type { CameraStore } from '@/store/camera.store'
 import type { CoverStore } from '@/store/cover.store'
 import type { DarvStore } from '@/store/darv.store'
@@ -25,7 +24,7 @@ export const AutoFocusStoreContext = createContext<AutoFocusStore>(null as never
 export const CameraDeviceContext = createContext<Camera>(null as never)
 export const CameraStoreContext = createContext<CameraStore>(null as never)
 
-export const ConnectionStatusContext = createContext<ConnectionStatus>(null as never)
+export const DeviceContext = createContext<Device>(null as never)
 
 export const CoverDeviceContext = createContext<Cover>(null as never)
 export const CoverStoreContext = createContext<CoverStore>(null as never)

@@ -1,8 +1,8 @@
+import bus from 'src/shared/bus'
 import { DEFAULT_INDI_SERVER_START, type IndiServerStart } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { initProxy } from '../shared/proxy'
 import { Api } from '../shared/api'
-import bus from 'src/shared/bus'
+import { initProxy } from '../shared/proxy'
 
 export interface IndiServerState {
 	enabled: boolean

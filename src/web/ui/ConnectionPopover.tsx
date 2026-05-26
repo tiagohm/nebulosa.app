@@ -15,7 +15,6 @@ import { NumberInput } from './components/NumberInput'
 import { Popover, type PopoverMethods } from './components/Popover'
 import { Select } from './components/Select'
 import { TextInput } from './components/TextInput'
-import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
 
 const CONNECTION_PORT_PLACEHOLDER = {
@@ -52,7 +51,7 @@ function canConnect({ host, port, type }: Pick<Connection, 'host' | 'port' | 'ty
 }
 
 function ActiveConnectionItem(connection: ConnectionStatus) {
-	return <ListItem description={connection.type} label={`${connection.ip}:${connection.port}`} />
+	return <ListItem description={connection.type} label={isNetworkConnection(connection.type) ? `${connection.ip}:${connection.port}` : 'simulator'} />
 }
 
 const ActiveConnectionList = memo(() => {
@@ -107,15 +106,13 @@ function ConnectionItem(item: Connection, index: number, selected: boolean, plac
 }
 
 const ConnectionSelect = memo(() => {
-	const { connections, selected, connecting, activeConnections } = useSnapshot(connectionStore.state)
-	const connected = selected !== undefined && activeConnections.some((e) => e.id === selected.id)
+	const { connections, selected, connecting } = useSnapshot(connectionStore.state)
 
 	return (
 		<div className="flex w-full flex-row items-center gap-2">
-			<Select className="min-w-0 flex-1" disabled={connecting} items={connections} onValueChange={connectionStore.select} value={selected} size="lg">
+			<Select className="min-w-0 flex-1" description="Select a connection" disabled={connecting} items={connections} onValueChange={connectionStore.select} value={selected} size="lg">
 				{ConnectionItem}
 			</Select>
-			<ConnectButton disabled={!selected} connected={connected} onClick={connectionStore.connectToSelected} />
 		</div>
 	)
 })
@@ -125,7 +122,8 @@ const ConnectionEdit = memo(() => {
 	const edited = useSnapshot(connectionStore.state.edited)
 	const { name, host, port, type, secured } = edited
 	const networkConnection = isNetworkConnection(type)
-	const canRemove = connections.some((e) => e.id === edited.id)
+	const updatable = connections.some((e) => e.id === edited.id)
+	const canRemove = updatable
 
 	return (
 		<div className="mt-4 grid w-full grid-cols-12 items-center gap-2">
@@ -140,7 +138,7 @@ const ConnectionEdit = memo(() => {
 			<div className="col-span-full mt-2 flex flex-row items-center justify-between gap-2">
 				<Button fullWidth color="primary" disabled={!canConnect(edited)} label="Connect" onClick={connectionStore.connectToEdited} startContent={<Icons.Connect />} />
 				<Button fullWidth color="secondary" label="Create" onClick={connectionStore.create} startContent={<Icons.Plus />} />
-				<Button fullWidth color="success" disabled={!canSaveConnection(edited)} label="Save" onClick={connectionStore.save} startContent={<Icons.Check />} />
+				<Button fullWidth color="success" disabled={!canSaveConnection(edited)} label={updatable ? 'Update' : 'Save'} onClick={connectionStore.save} startContent={<Icons.Check />} />
 				<Button fullWidth color="danger" disabled={!canRemove} label="Remove" onClick={connectionStore.removeEdited} startContent={<Icons.Trash />} />
 			</div>
 		</div>

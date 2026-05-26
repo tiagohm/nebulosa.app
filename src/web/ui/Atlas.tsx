@@ -95,7 +95,7 @@ const TabPopover = memo(() => {
 	const { tab } = useSnapshot(atlasStore.state)
 
 	return (
-		<Popover trigger={<IconButton color="secondary" icon={TAB_ICONS[tab]} onWheel={atlasStore.handleOnTabWheel} />}>
+		<Popover trigger={<IconButton color="secondary" icon={TAB_ICONS[tab]} onWheel={atlasStore.handleTabWheel} />}>
 			<TabPopoverContent />
 		</Popover>
 	)
@@ -425,7 +425,7 @@ const AsteroidTab = memo(() => {
 		return tags
 	}, [selected])
 
-	const handleOnFavoriteChange = useCallback(
+	const handleFavoriteChange = useCallback(
 		(favorite: boolean) => {
 			if (selected) atlasStore.toggleBookmark('asteroid', selected.name, selected.id, favorite)
 		},
@@ -446,7 +446,7 @@ const AsteroidTab = memo(() => {
 					</TabPanel>
 				</Tabs>
 			</div>
-			<EphemerisAndChart tab="asteroid" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'asteroid', selected.id)} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} tags={tags} />
+			<EphemerisAndChart tab="asteroid" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'asteroid', selected.id)} name={selected?.name} onFavoriteChange={handleFavoriteChange} tags={tags} />
 		</div>
 	)
 })
@@ -540,7 +540,7 @@ const GalaxyTab = memo(() => {
 	const { names, constellation } = useSnapshot(galaxyStore.state.position)
 	useStore(galaxyStore, [])
 
-	const handleOnFavoriteChange = useCallback(
+	const handleFavoriteChange = useCallback(
 		(favorite: boolean) => {
 			if (!selected) return
 			const name = names?.length ? skyObjectName(names[0], constellation) : skyObjectName(selected.name, selected.constellation)
@@ -553,7 +553,7 @@ const GalaxyTab = memo(() => {
 		<div className="grid grid-cols-12 items-center gap-2">
 			<GalaxyTable />
 			<GalaxyPaginator className="col-span-full w-full" />
-			<EphemerisAndChart tab="galaxy" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'galaxy', selected.id.toFixed(0))} onFavoriteChange={handleOnFavoriteChange} />
+			<EphemerisAndChart tab="galaxy" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'galaxy', selected.id.toFixed(0))} onFavoriteChange={handleFavoriteChange} />
 		</div>
 	)
 })
@@ -591,7 +591,7 @@ const SatelliteTab = memo(() => {
 	const { selected } = useSnapshot(satelliteStore.state)
 	useStore(satelliteStore, [])
 
-	const handleOnFavoriteChange = useCallback(
+	const handleFavoriteChange = useCallback(
 		(favorite: boolean) => {
 			if (selected) atlasStore.toggleBookmark('satellite', selected.name, selected.id.toFixed(0), favorite)
 		},
@@ -602,7 +602,7 @@ const SatelliteTab = memo(() => {
 		<div className="relative grid grid-cols-12 items-center gap-2">
 			<SatelliteTable />
 			<SatellitePaginator className="col-span-full w-full" />
-			<EphemerisAndChart tab="satellite" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'satellite', selected.id.toFixed(0))} name={selected?.name} onFavoriteChange={handleOnFavoriteChange} />
+			<EphemerisAndChart tab="satellite" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'satellite', selected.id.toFixed(0))} name={selected?.name} onFavoriteChange={handleFavoriteChange} />
 		</div>
 	)
 })
@@ -701,11 +701,11 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange }: Ca
 		onDateChange(date.toZonedDateTime({ plainTime: { hour, minute }, timeZone: 'UTC' }).epochMilliseconds)
 	}
 
-	function handleOnHourChange(value: number) {
+	function handleHourChange(value: number) {
 		onDateChange(temporalSet(date, value, 'h'))
 	}
 
-	function handleOnMinuteChange(value: number) {
+	function handleMinuteChange(value: number) {
 		onDateChange(temporalSet(date, value, 'm'))
 	}
 
@@ -714,9 +714,9 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange }: Ca
 			<div className="grid max-w-[256px] grid-cols-12 gap-2 pb-2">
 				<Calendar className="col-span-full" onValueChange={handleDateChange} value={Temporal.Instant.fromEpochMilliseconds(date).toZonedDateTimeISO('GMT').toPlainDate()} />
 				<div className="col-span-6 flex flex-row items-center justify-center gap-1">
-					<NumberInput className="max-w-20" maxValue={23} minValue={0} onValueChange={handleOnHourChange} value={hour} />
+					<NumberInput className="max-w-20" maxValue={23} minValue={0} onValueChange={handleHourChange} value={hour} />
 					<span className="text-lg font-bold">:</span>
-					<NumberInput className="max-w-20" maxValue={59} minValue={0} onValueChange={handleOnMinuteChange} value={minute} />
+					<NumberInput className="max-w-20" maxValue={59} minValue={0} onValueChange={handleMinuteChange} value={minute} />
 				</div>
 				<div className="col-span-6 flex flex-row items-center justify-center gap-1">
 					<NumberInput className="w-fit" label="Timezone (min)" maxValue={720} minValue={-720} onValueChange={onOffsetChange} step={30} value={offset} />

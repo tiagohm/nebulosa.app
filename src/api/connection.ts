@@ -254,7 +254,7 @@ export class ConnectionHandler {
 			return client && this.status(client)
 		} else {
 			if (client instanceof IndiClient || client instanceof AlpacaClient) {
-				return { id: client.id, host: client.remoteHost ?? '', ip: client.remoteIp!, port: client.remotePort ?? -1, type: client.type }
+				return { id: client.id, host: client.remoteHost ?? '', ip: 'remoteIp' in client ? (client.remoteIp ?? '') : '', port: client.remotePort ?? -1, type: client.type }
 			} else {
 				return { id: client.id, host: '', ip: '', type: 'SIMULATOR', port: -1 }
 			}

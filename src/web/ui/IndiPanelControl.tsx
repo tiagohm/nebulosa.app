@@ -1,4 +1,4 @@
-import type { Device, DeviceProperty } from 'nebulosa/src/indi.device'
+import type { DeviceProperty } from 'nebulosa/src/indi.device'
 import type { DefElement, Message, NewVector, SwitchRule } from 'nebulosa/src/indi.types'
 import { Activity, memo, useContext, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -32,9 +32,12 @@ function propertyStateColor(state: DeviceProperty['state']) {
 
 export const IndiPanelControl = memo(() => {
 	const panel = useContext(IndiPanelControlStoreContext)
+	const { show } = useSnapshot(panel.state)
+
+	if (!show) return null
 
 	return (
-		<Modal header={<Header />} id="indi-panel-control" maxWidth="400px" onHide={panel.hide}>
+		<Modal header={<Header />} id={`indi-panelcontrol-${panel.device.id}`} maxWidth="400px" onHide={panel.hide}>
 			<Body />
 		</Modal>
 	)
@@ -46,7 +49,10 @@ const Header = memo(() => {
 
 	return (
 		<div className="flex min-w-0 flex-row items-center justify-start gap-2">
-			<span className="me-3 min-w-0 truncate">INDI Panel Control</span>
+			<div className="me-3 flex min-w-0 flex-1 flex-col justify-center gap-0 text-end">
+				<span className="leading-5 font-semibold">Camera</span>
+				<span className="max-w-full truncate text-xs font-normal text-gray-400">{panel.device.name}</span>
+			</div>
 			<ToggleButton color="secondary" icon={Icons.ViewList} onClick={() => (panel.state.tab = 'property')} tooltipContent="Properties" value={tab === 'property'} />
 			<ToggleButton color="secondary" icon={Icons.Message} onClick={() => (panel.state.tab = 'message')} tooltipContent="Messages" value={tab === 'message'} />
 		</div>
@@ -55,24 +61,18 @@ const Header = memo(() => {
 
 const Body = memo(() => {
 	const panel = useContext(IndiPanelControlStoreContext)
-	const { device, tab } = useSnapshot(panel.state)
+	const { tab } = useSnapshot(panel.state)
 
 	return (
-		device && (
-			<div className="mt-0 grid grid-cols-12 gap-2">
-				<Activity mode={activityMode(tab === 'property')}>
-					<DeviceAndGroup />
-					<GroupList key={device.id} />
-				</Activity>
-				<Messages />
-			</div>
-		)
+		<div className="mt-0 grid grid-cols-12 gap-2">
+			<Activity mode={activityMode(tab === 'property')}>
+				<DeviceAndGroup />
+				<GroupList />
+			</Activity>
+			<Messages />
+		</div>
 	)
 })
-
-function DeviceItem(device: Device) {
-	return <span>{device.name}</span>
-}
 
 function GroupItem(group: string) {
 	return <span>{group}</span>
@@ -80,14 +80,11 @@ function GroupItem(group: string) {
 
 const DeviceAndGroup = memo(() => {
 	const panel = useContext(IndiPanelControlStoreContext)
-	const { devices, device, groups, group } = useSnapshot(panel.state)
+	const { groups, group } = useSnapshot(panel.state)
 
 	return (
 		<>
-			<Select className="col-span-6 min-w-0" disabled={devices.length === 0} fullWidth items={devices} label="Device" onValueChange={panel.selectDevice} value={device}>
-				{DeviceItem}
-			</Select>
-			<Select className="col-span-6 min-w-0" disabled={groups.length === 0} fullWidth items={groups} label="Group" onValueChange={panel.selectGroup} value={group}>
+			<Select className="col-span-full min-w-0" disabled={groups.length === 0} fullWidth items={groups} label="Group" onValueChange={panel.selectGroup} value={group}>
 				{GroupItem}
 			</Select>
 		</>
@@ -96,10 +93,10 @@ const DeviceAndGroup = memo(() => {
 
 const GroupList = memo(() => {
 	const panel = useContext(IndiPanelControlStoreContext)
-	const { device, group, groups } = useSnapshot(panel.state)
+	const { group, groups } = useSnapshot(panel.state)
 	const selectedGroup = groups.includes(group) ? group : undefined
 
-	return <div className="col-span-full flex max-h-100 min-w-0 flex-col gap-4 overflow-y-auto p-1">{device === undefined || selectedGroup === undefined ? <div className="px-2 py-3 text-sm text-neutral-500">No properties</div> : <PropertyList key={`${device.id}-${selectedGroup}`} group={selectedGroup} />}</div>
+	return <div className="col-span-full flex max-h-100 min-w-0 flex-col gap-4 overflow-y-auto p-1">{selectedGroup === undefined ? <div className="px-2 py-3 text-sm text-neutral-500">No properties</div> : <PropertyList group={selectedGroup} />}</div>
 })
 
 function DevicePropertyComparator(a: DeviceProperty, b: DeviceProperty) {

@@ -10,6 +10,11 @@ const MIN_APERTURE = 1
 const MIN_FOCAL_LENGTH = 1
 const MIN_FOCAL_RATIO = 0.01
 const MIN_PIXEL_SIZE = 0.01
+const MIN_SENSOR_SIZE = 0.01
+const MIN_EYEPIECE_FOCAL_LENGTH = 0.1
+const MIN_APPARENT_FIELD = 0.1
+const MIN_HUMIDITY = 1
+const MAX_HUMIDITY = 100
 
 export const Calculator = memo(() => {
 	const { show } = useSnapshot(calculatorStore.state)
@@ -33,6 +38,9 @@ const Body = memo(() => (
 			<Tab id="limitingMagnitude">Limiting Magnitude</Tab>
 			<Tab id="lightGraspRatio">Light Grasp Ratio</Tab>
 			<Tab id="ccdResolution">CCD Resolution</Tab>
+			<Tab id="sensorFieldOfView">Sensor FOV</Tab>
+			<Tab id="eyepieceView">Eyepiece View</Tab>
+			<Tab id="dewPoint">Dew Point</Tab>
 
 			<TabPanel id="focalLength">
 				<FocalLength />
@@ -54,6 +62,15 @@ const Body = memo(() => (
 			</TabPanel>
 			<TabPanel id="ccdResolution">
 				<CCDResolution />
+			</TabPanel>
+			<TabPanel id="sensorFieldOfView">
+				<SensorFieldOfView />
+			</TabPanel>
+			<TabPanel id="eyepieceView">
+				<EyepieceView />
+			</TabPanel>
+			<TabPanel id="dewPoint">
+				<DewPoint />
 			</TabPanel>
 		</Tabs>
 	</div>
@@ -154,6 +171,48 @@ const CCDResolution = memo(() => {
 			<NumberInput endContent="µm" fractionDigits={2} fullWidth label="Pixel Size" minValue={MIN_PIXEL_SIZE} onValueChange={(value) => calculatorStore.update('ccdResolution', 'pixelSize', value)} step={0.01} value={pixelSize} />
 			<NumberInput endContent="mm" fullWidth label="Focal Length" minValue={MIN_FOCAL_LENGTH} onValueChange={(value) => calculatorStore.update('ccdResolution', 'focalLength', value)} value={focalLength} />
 			<NumberInput endContent="arcsec/px" fractionDigits={2} fullWidth label="Resolution" readOnly value={resolution} />
+		</Formula>
+	)
+})
+
+const SensorFieldOfView = memo(() => {
+	const { sensorWidth, sensorHeight, focalLength, width, height } = useSnapshot(calculatorStore.state.sensorFieldOfView)
+
+	return (
+		<Formula description="Calculate the angular field of view covered by a camera sensor" expression="Sensor Size / Focal Length * 57.2958">
+			<NumberInput endContent="mm" fractionDigits={2} fullWidth label="Sensor Width" minValue={MIN_SENSOR_SIZE} onValueChange={(value) => calculatorStore.update('sensorFieldOfView', 'sensorWidth', value)} step={0.01} value={sensorWidth} />
+			<NumberInput endContent="mm" fractionDigits={2} fullWidth label="Sensor Height" minValue={MIN_SENSOR_SIZE} onValueChange={(value) => calculatorStore.update('sensorFieldOfView', 'sensorHeight', value)} step={0.01} value={sensorHeight} />
+			<NumberInput endContent="mm" fullWidth label="Focal Length" minValue={MIN_FOCAL_LENGTH} onValueChange={(value) => calculatorStore.update('sensorFieldOfView', 'focalLength', value)} value={focalLength} />
+			<NumberInput endContent="deg" fractionDigits={2} fullWidth label="Width" readOnly value={width} />
+			<NumberInput endContent="deg" fractionDigits={2} fullWidth label="Height" readOnly value={height} />
+		</Formula>
+	)
+})
+
+const EyepieceView = memo(() => {
+	const { aperture, telescopeFocalLength, eyepieceFocalLength, apparentField, magnification, trueField, exitPupil } = useSnapshot(calculatorStore.state.eyepieceView)
+
+	return (
+		<Formula description="Calculate visual magnification, true field and exit pupil for an eyepiece" expression="Telescope Focal Length / Eyepiece Focal Length">
+			<NumberInput endContent="mm" fullWidth label="Aperture" minValue={MIN_APERTURE} onValueChange={(value) => calculatorStore.update('eyepieceView', 'aperture', value)} value={aperture} />
+			<NumberInput endContent="mm" fullWidth label="Telescope Focal Length" minValue={MIN_FOCAL_LENGTH} onValueChange={(value) => calculatorStore.update('eyepieceView', 'telescopeFocalLength', value)} value={telescopeFocalLength} />
+			<NumberInput endContent="mm" fractionDigits={1} fullWidth label="Eyepiece Focal Length" minValue={MIN_EYEPIECE_FOCAL_LENGTH} onValueChange={(value) => calculatorStore.update('eyepieceView', 'eyepieceFocalLength', value)} step={0.1} value={eyepieceFocalLength} />
+			<NumberInput endContent="deg" fractionDigits={1} fullWidth label="Apparent Field" minValue={MIN_APPARENT_FIELD} onValueChange={(value) => calculatorStore.update('eyepieceView', 'apparentField', value)} step={0.1} value={apparentField} />
+			<NumberInput endContent="x" fractionDigits={1} fullWidth label="Magnification" readOnly value={magnification} />
+			<NumberInput endContent="deg" fractionDigits={2} fullWidth label="True Field" readOnly value={trueField} />
+			<NumberInput endContent="mm" fractionDigits={2} fullWidth label="Exit Pupil" readOnly value={exitPupil} />
+		</Formula>
+	)
+})
+
+const DewPoint = memo(() => {
+	const { temperature, humidity, dewPoint } = useSnapshot(calculatorStore.state.dewPoint)
+
+	return (
+		<Formula description="Estimate dew point from ambient temperature and relative humidity" expression="Magnus: b * α / (a - α)">
+			<NumberInput endContent="°C" fractionDigits={1} fullWidth label="Temperature" minValue={-100} onValueChange={(value) => calculatorStore.update('dewPoint', 'temperature', value)} step={0.1} value={temperature} />
+			<NumberInput endContent="%" fullWidth label="Humidity" maxValue={MAX_HUMIDITY} minValue={MIN_HUMIDITY} onValueChange={(value) => calculatorStore.update('dewPoint', 'humidity', value)} value={humidity} />
+			<NumberInput endContent="°C" fractionDigits={1} fullWidth label="Dew Point" readOnly value={dewPoint} />
 		</Formula>
 	)
 })

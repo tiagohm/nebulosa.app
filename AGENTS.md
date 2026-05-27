@@ -10,7 +10,7 @@ This project uses **React 19** for the web UI.
 
 This project uses **Tailwind CSS v4** for styling, compiled through the local Bun plugin in `tailwind.plugin.ts`.
 
-This project uses **Valtio** for shared client-side state and orchestration.
+This project uses **Valtio** for shared client-side state and orchestration, with the local `useStore` hook in `src/web/hooks/store.hook.ts` managing store factory lifecycles.
 
 This project consumes `nebulosa` as the core astronomy, image-processing, and INDI/device-control library.
 
@@ -18,13 +18,13 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 
 - `src`: Application source files.
 - `src/api`: Bun runtime handlers, services, and route-facing backend code.
-- `src/web`: Browser entrypoints, UI, store, hooks, and web-only helpers.
+- `src/web`: Browser entrypoints, UI, stores, hooks, and web-only helpers.
 - `src/web/pages`: HTML + React entrypoints. Currently only the `home` page exists.
 - `src/web/ui`: Feature and screen-level React components.
 - `src/web/ui/components`: Reusable UI primitives. Current primitives include actions (`Button`, `IconButton`, `ButtonGroup`, `ToggleButton`), fields (`TextInput`, `NumberInput`, `DateTimeInput`, `SearchTextInput`), selection/listing (`List`, `Table`, `Select`, `MultiSelect`, `FilterableList`, `FilterableSelect`, `Dropdown`, `Tabs`), overlays (`Floating`, `Popover`, `Tooltip`), and display/status controls (`Badge`, `Breadcrumbs`, `Calendar`, `Chip`, `Histogram`, `ProgressBar`, `Toast`).
 - `src/web/stores`: Shared client orchestration/state.
 - `src/web/shared`: Browser-side helpers for API calls, storage, interpolation, proxying, and related utilities.
-- `src/web/hooks`: React hooks.
+- `src/web/hooks`: React hooks, including the local store lifecycle hook.
 - `src/web/assets`: Images and icons.
 - `src/shared`: Types and utilities shared between runtime and web. Keep it runtime-agnostic where practical.
 - `tests`: Currently API-focused tests under `tests/api`.
@@ -219,12 +219,20 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 
 ## Store Rules
 
-- Name shared orchestrators `featureStore` to match the existing repository convention. The file name must end with `.store.ts`.
-- Keep long-lived store state at module scope, implement actions, and export `{ state, ...actions } as const`.
-- Use `mount` function for subscriptions, timers, and browser lifecycle wiring, and always add a `unmount` cleanup function when resources were acquired.
-- When shared browser state must survive reloads, persist it with `initProxy`, `storageGet`, or `storageSet` instead of ad hoc `localStorage` access inside UI components.
+- Use the local store lifecycle pattern in `src/web/hooks/store.hook.ts`. Do not reintroduce Bunshi, molecule APIs, scopes, or generic provider abstractions.
+- Name shared singleton orchestrators `featureStore` and factory stores `featureStore(...)` to match the existing repository convention. Store files must end with `.store.ts`.
+- Singleton stores should keep long-lived state at module scope, implement actions as local functions, and export `{ state, ...actions } as const`.
+- Factory stores should create their `proxy(...)` state inside the factory, export `type FeatureStore = ReturnType<typeof featureStore>`, and return `{ state, mount, unmount, ...actions } as const`.
+- Components should instantiate factory stores with `useStore(() => featureStore(args), deps)` and singleton stores with `useStore(featureStore, [])` when mount/unmount handling is needed.
+- Keep `useStore` dependency lists minimal and stable. Include only values that should recreate the store instance, such as the device, image, or explicit store scope.
+- Use explicit React contexts from `src/web/shared/context.ts` only when a subtree must share the same device or store instance. Do not add a parallel store-provider framework.
+- Use `mount` for subscriptions, timers, browser lifecycle wiring, and persisted proxy subscriptions. Make `mount` idempotent when it can be called repeatedly.
+- Always add an idempotent `unmount` cleanup function when resources were acquired. Store unsubscribe callbacks in a local `VoidFunction[]` and clean them with `unsubscribe(...)` from `src/shared/util`.
+- When shared browser state must survive reloads, persist it with the local `initProxy`, `fillProxy`, `subscribeProxy`, `storageGet`, or `storageSet` helpers instead of ad hoc `localStorage` access inside UI components.
+- Treat `initProxy` as both hydration and subscription setup: keep its returned cleanup for scoped/factory stores, and only run it at module scope for stores that intentionally live for the whole app lifetime.
+- Use `p:key` proxy properties for primitive persisted fields and `o:key` for object/nested proxy fields so the local persistence helper can either replace or deep-assign correctly.
 - Reuse `src/shared/bus` for cross-feature browser events instead of introducing another event emitter.
-- Prefer add new logic into stores instead of using useState and functions inside React component.
+- Prefer adding shared orchestration logic to stores instead of scattering async actions, event handling, or persistence across React components.
 
 ## Valtio Rules
 

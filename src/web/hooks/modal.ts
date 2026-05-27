@@ -14,8 +14,8 @@ const BLOCKED_DRAG_SELECTOR = 'button,a,input,select,textarea,[contenteditable="
 
 const modalTransformMap = new Map<string, Point>()
 
-function canDrag(target: EventTarget | null) {
-	return target instanceof Element && target.closest('.modal') !== null && target.closest(BLOCKED_DRAG_SELECTOR) === null
+function canDrag(target: EventTarget | null, modal: HTMLElement) {
+	return target instanceof Element && target.closest('.modal') === modal && target.closest(BLOCKED_DRAG_SELECTOR) === null
 }
 
 function snapToGrid(pos: number) {
@@ -128,7 +128,7 @@ export function useModal(id: string, onHide?: VoidFunction) {
 	const bind = useGesture(
 		{
 			onDragStart: ({ cancel, target }) => {
-				if (!modalRef.current || !canDrag(target)) {
+				if (!modalRef.current || !canDrag(target, modalRef.current)) {
 					cancel()
 					return
 				}

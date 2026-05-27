@@ -2,6 +2,8 @@ import { DEFAULT_PLATE_SOLVE_START, type PlateSolverType, type PlateSolveStart }
 import { proxy } from 'valtio'
 import { initProxy } from '../shared/proxy'
 
+export type SettingsStore = typeof settingsStore
+
 const DEFAULT_PLATE_SOLVE_START_SETTINGS = {
 	executable: DEFAULT_PLATE_SOLVE_START.executable,
 	apiUrl: DEFAULT_PLATE_SOLVE_START.apiUrl,

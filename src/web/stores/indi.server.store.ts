@@ -4,6 +4,8 @@ import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
 
+export type IndiServerStore = typeof indiServerStore
+
 export interface IndiServerState {
 	enabled: boolean
 	running: boolean

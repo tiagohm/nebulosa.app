@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid'
 import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
@@ -24,7 +25,7 @@ const state = proxy<FramingState>({
 	count: 0,
 })
 
-const ID = Date.now()
+const ID = nanoid()
 
 initProxy(state, 'framing', ['p:show', 'o:request', 'p:openNewImage'])
 
@@ -37,6 +38,7 @@ async function load(request: Partial<Framing> = state.request) {
 
 	try {
 		state.loading = true
+		state.show = true
 
 		request.id = `${ID}.${state.openNewImage ? state.count++ : DEFAULT_FRAMING.id}`
 		const frame = await Api.Framing.frame(state.request)

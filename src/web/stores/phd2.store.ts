@@ -9,6 +9,8 @@ import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
 import type { DeviceState } from './equipment.store'
 
+export type PHD2Store = typeof phd2Store
+
 export interface PHD2State extends PHD2Status {
 	show: boolean
 	readonly connection: Writable<Omit<PHD2RemoteConnect, 'mode'> & Omit<PHD2InternalConnect, 'mode'> & { mode: PHD2ClientMode }>

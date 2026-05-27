@@ -15,6 +15,8 @@ import type { AtlasSatelliteStore } from './atlas.satellite.store'
 import type { AtlasSunStore } from './atlas.sun.store'
 import { framingStore } from './framing.store'
 
+export type AtlasStore = typeof atlasStore
+
 export type AtlasTab = 'sun' | 'moon' | 'planet' | 'asteroid' | 'galaxy' | 'satellite'
 
 export interface BookmarkItem {

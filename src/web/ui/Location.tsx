@@ -87,7 +87,7 @@ export function Location({ id, latitude, longitude, elevation, onCoordinateChang
 					<NumberInput className="col-span-1" fractionDigits={3} label="Longitude (°)" maxValue={180} minValue={-180} onValueChange={(value) => updatePosition('longitude', value)} step={0.001} value={position[1]} />
 					<NumberInput className="col-span-1" label="Elevation (m)" maxValue={10000} minValue={-100} onValueChange={(value) => updatePosition('elevation', value)} value={position[2] ?? 0} />
 				</div>
-				<MapViewer onPositionChange={handlePositionChange} position={position} width={298} />
+				<MapViewer onPositionChange={handlePositionChange} position={position} width={290} />
 			</div>
 		</Modal>
 	)

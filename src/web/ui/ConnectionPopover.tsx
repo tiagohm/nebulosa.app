@@ -51,7 +51,8 @@ function canConnect({ host, port, type }: Pick<Connection, 'host' | 'port' | 'ty
 }
 
 function ActiveConnectionItem(connection: ConnectionStatus) {
-	return <ListItem description={connection.type} label={isNetworkConnection(connection.type) ? `${connection.ip}:${connection.port}` : 'simulator'} />
+	const EndContent = <IconButton icon={Icons.Close} color="danger" variant="flat" tooltipContent="Disconnect" onClick={() => connectionStore.disconnect(connection)} size="sm" />
+	return <ListItem description={connection.type} endContent={EndContent} label={isNetworkConnection(connection.type) ? `${connection.ip}:${connection.port}` : 'simulator'} />
 }
 
 const ActiveConnectionList = memo(() => {

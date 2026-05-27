@@ -39,33 +39,33 @@ test('seasons', () => {
 
 test('solar eclipses from meeus', () => {
 	const request: FindNextSolarEclipse = { count: 1, ...POSITION_OF_BODY }
-	let eclipses = atlas.solarEclipsesFromMeeus({ ...request, time: { ...request.time, utc: 1771377240000 } }) // Tue Feb 17 2026 22:14:00 GMT-0300 (Horário Padrão de Brasília)
+	let eclipses = atlas.solarEclipses({ ...request, time: { ...request.time, utc: 1771377240000 } }) // Tue Feb 17 2026 22:14:00 GMT-0300 (Horário Padrão de Brasília)
 
 	expect(eclipses).toHaveLength(1)
 	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-02-17 12:12')
 	expect(eclipses[0].type).toBe('annular')
 
-	eclipses = atlas.solarEclipsesFromMeeus({ ...request, time: { ...request.time, utc: 1771384440000 } }) // Wed Feb 18 2026 00:14:00 GMT-0300 (Horário Padrão de Brasília)
+	eclipses = atlas.solarEclipses({ ...request, time: { ...request.time, utc: 1771384440000 } }) // Wed Feb 18 2026 00:14:00 GMT-0300 (Horário Padrão de Brasília)
 
 	expect(eclipses).toHaveLength(1)
 	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-08-12 17:46')
 	expect(eclipses[0].type).toBe('total')
 })
 
-test('solar eclipses from nasa', async () => {
-	const request: FindNextSolarEclipse = { count: 1, ...POSITION_OF_BODY }
-	let eclipses = await atlas.solarEclipsesFromNasa({ ...request, time: { ...request.time, utc: 1771377240000 } }) // Tue Feb 17 2026 22:14:00 GMT-0300 (Horário Padrão de Brasília)
+// test('solar eclipses from nasa', async () => {
+// 	const request: FindNextSolarEclipse = { count: 1, ...POSITION_OF_BODY }
+// 	let eclipses = await atlas.solarEclipsesFromNasa({ ...request, time: { ...request.time, utc: 1771377240000 } }) // Tue Feb 17 2026 22:14:00 GMT-0300 (Horário Padrão de Brasília)
 
-	expect(eclipses).toHaveLength(1)
-	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-02-17 12:13')
-	expect(eclipses[0].type).toBe('annular')
+// 	expect(eclipses).toHaveLength(1)
+// 	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-02-17 12:13')
+// 	expect(eclipses[0].type).toBe('annular')
 
-	eclipses = await atlas.solarEclipsesFromNasa({ ...request, time: { ...request.time, utc: 1771384440000 } }) // Wed Feb 18 2026 00:14:00 GMT-0300 (Horário Padrão de Brasília)
+// 	eclipses = await atlas.solarEclipsesFromNasa({ ...request, time: { ...request.time, utc: 1771384440000 } }) // Wed Feb 18 2026 00:14:00 GMT-0300 (Horário Padrão de Brasília)
 
-	expect(eclipses).toHaveLength(1)
-	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-08-12 17:47')
-	expect(eclipses[0].type).toBe('total')
-})
+// 	expect(eclipses).toHaveLength(1)
+// 	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-08-12 17:47')
+// 	expect(eclipses[0].type).toBe('total')
+// })
 
 describe('search sky object', () => {
 	test('no filter', () => {

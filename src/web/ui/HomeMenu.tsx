@@ -170,8 +170,8 @@ function DeviceItem({ type, index, ...props }: DeviceItemProps) {
 
 	const EndContent = (
 		<div className="flex flex-row items-center justify-center gap-1">
-			<ConnectButton connected={connected} onClick={() => equipmentStore.connect(device)} size="sm" />
 			<IndiPanelControlButton device={device} size="sm" />
+			<ConnectButton connected={connected} onClick={() => equipmentStore.connect(device)} size="sm" />
 		</div>
 	)
 

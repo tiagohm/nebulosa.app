@@ -5,7 +5,7 @@ import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astrometry'
 import { AU_KM, DAYSEC, DEG2RAD, MOON_SYNODIC_DAYS, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import { equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic } from 'nebulosa/src/coordinate'
-import { type CsvRow, readCsv } from 'nebulosa/src/csv'
+import type { CsvRow } from 'nebulosa/src/csv'
 import { toMeter } from 'nebulosa/src/distance'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
 import { iersb } from 'nebulosa/src/iers'
@@ -19,8 +19,6 @@ import { nearestSolarEclipse, season } from 'nebulosa/src/sun'
 import { daysInMonth, formatTemporal, parseTemporal, type Temporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
 import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS } from 'nebulosa/src/time'
 import type { Writable } from 'nebulosa/src/types'
-import { binarySearchWithComparator } from 'nebulosa/src/util'
-import besselianElementsOfSolarEclipsesCsv from '../../data/besselian-elements-of-solar-eclipses.csv' with { type: 'file' }
 import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // oxfmt-ignore
 import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarApsis, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight } from '../shared/types'
@@ -161,56 +159,16 @@ export class AtlasHandler {
 		return twilight
 	}
 
-	solarEclipsesFromMeeus(req: FindNextSolarEclipse) {
+	solarEclipses(req: FindNextSolarEclipse) {
 		const location = this.cache.geographicCoordinate(req.location)
-		let time = this.cache.time(temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm')), location, 'm')
-		const eclipses: NextSolarEclipse[] = []
+		let time = this.cache.time(temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm')), location)
+		const eclipses = new Array<NextSolarEclipse>(req.count)
 
 		for (let i = 0; i < req.count; i++) {
 			const { maximalTime, ...eclipse } = nearestSolarEclipse(time, true)
 			;(eclipse as NextSolarEclipse).time = temporalFromTime(maximalTime)
-			eclipses.push(eclipse as never)
+			eclipses[i] = eclipse as never
 			time = maximalTime
-		}
-
-		return eclipses
-	}
-
-	private readonly solarEclipses: NextSolarEclipse[] = []
-
-	// https://eclipse.gsfc.nasa.gov/SEcat5/beselm.html
-	// https://eclipse.gsfc.nasa.gov/eclipse_besselian_from_mysqldump2.csv
-	async solarEclipsesFromNasa(req: FindNextSolarEclipse) {
-		const eclipses = new Array<NextSolarEclipse>(req.count)
-
-		if (this.solarEclipses.length === 0) {
-			const csv = readCsv(await Bun.file(besselianElementsOfSolarEclipsesCsv).text())
-
-			for (const row of csv) {
-				const [year, month, day, hms, , , type] = row
-
-				if (year[0] === '-') continue
-
-				const time = parseTemporal(`${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${hms}`, 'YYYY-MM-DD HH:mm:ss')
-
-				const eclipse: NextSolarEclipse = {
-					time,
-					lunation: +row[4],
-					magnitude: +row[8],
-					gamma: +row[7],
-					u: 0,
-					type: type === 'T' ? 'total' : type === 'P' ? 'partial' : type === 'A' ? 'annular' : 'hybrid',
-				}
-
-				this.solarEclipses.push(eclipse)
-			}
-		}
-
-		const time = temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm'))
-		const index = binarySearchWithComparator(this.solarEclipses, (item) => item.time - time, { positive: true })
-
-		for (let i = 0, k = index; i < req.count; i++, k++) {
-			eclipses[i] = this.solarEclipses[k]
 		}
 
 		return eclipses
@@ -249,7 +207,7 @@ export class AtlasHandler {
 
 	moonEclipses(req: FindNextLunarEclipse) {
 		const location = this.cache.geographicCoordinate(req.location)
-		let time = this.cache.time(req.time.utc, location, 'm')
+		let time = this.cache.time(req.time.utc, location)
 		const eclipses = new Array<NextLunarEclipse>(req.count)
 
 		for (let i = 0; i < req.count; i++) {
@@ -263,7 +221,7 @@ export class AtlasHandler {
 
 	moonApsis(req: LocationAndTime): readonly [NextLunarApsis, NextLunarApsis] {
 		const location = this.cache.geographicCoordinate(req.location)
-		const time = this.cache.time(req.time.utc, location, 'm')
+		const time = this.cache.time(req.time.utc, location)
 
 		const apogee = nearestLunarApsis(time, 'APOGEE', true)
 		const perigee = nearestLunarApsis(time, 'PERIGEE', true)
@@ -348,7 +306,7 @@ export class AtlasHandler {
 
 		if (req.visible && req.visibleAbove >= 0) {
 			const location = this.cache.geographicCoordinate(req.location)
-			const time = this.cache.time(req.time.utc, location, 'm')
+			const time = this.cache.time(req.time.utc, location)
 			const lst = localSiderealTime(time, location, true)
 
 			where.push(`(asin(sin(d.declination) * ${Math.sin(location.latitude)} + cos(d.declination) * ${Math.cos(location.latitude)} * cos(${lst} - d.rightAscension)) >= ${deg(req.visibleAbove)})`)
@@ -368,7 +326,7 @@ export class AtlasHandler {
 		const names = nebulosa.query<{ name: string }, []>(`SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ${dso.id}`).all()
 
 		const location = this.cache.geographicCoordinate(req.location)
-		const time = this.cache.time(req.time.utc, location, 'm')
+		const time = this.cache.time(req.time.utc, location)
 		const lst = localSiderealTime(time, location, true)
 
 		const horizontal: Writable<BodyPosition['horizontal']> = [0, 0]
@@ -419,8 +377,7 @@ export class AtlasHandler {
 
 		// Generate chart data for each minute
 		for (let i = 0; i < data.length; i++) {
-			const time = this.cache.time(startTime, location, 'm')
-
+			const time = this.cache.time(startTime, location)
 			const ebpv = this.cache.earth(time)
 
 			if (dso.pmRA && dso.pmDEC) {
@@ -593,7 +550,7 @@ export class AtlasHandler {
 			position = map.get(key)!
 		}
 
-		const time = this.cache.time(req.time.utc, location, 'm')
+		const time = this.cache.time(req.time.utc, location)
 		const lst = localSiderealTime(time, location, true)
 
 		const [rightAscension, declination] = position.equatorial
@@ -675,7 +632,7 @@ export function atlas(atlas: AtlasHandler): Endpoints {
 		'/atlas/sun/chart': { POST: async (req) => response(atlas.chartOfSun(await req.json())) },
 		'/atlas/sun/seasons': { POST: async (req) => response(atlas.seasons(await req.json())) },
 		'/atlas/sun/twilight': { POST: async (req) => response(await atlas.twilight(await req.json())) },
-		'/atlas/sun/eclipses': { POST: async (req) => response(await atlas.solarEclipsesFromNasa(await req.json())) },
+		'/atlas/sun/eclipses': { POST: async (req) => response(atlas.solarEclipses(await req.json())) },
 		'/atlas/moon/position': { POST: async (req) => response(await atlas.positionOfMoon(await req.json())) },
 		'/atlas/moon/chart': { POST: async (req) => response(atlas.chartOfMoon(await req.json())) },
 		'/atlas/moon/phases': { POST: async (req) => response(atlas.moonPhases(await req.json())) },

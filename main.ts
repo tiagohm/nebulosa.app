@@ -272,10 +272,6 @@ const every15Minutes = Bun.cron('*/15 * * * *', () => {
 	void atlasHandler.refreshImageOfSun()
 })
 
-const everyHour = Bun.cron('0 * * * *', () => {
-	cacheManager.clear()
-})
-
 const everyDay = Bun.cron('0 0 * * *', () => {
 	void atlasHandler.refreshSatellites()
 	void atlasHandler.refreshEarthOrientationData()

@@ -140,7 +140,7 @@ export class ConnectionHandler {
 			) {
 				console.info('reusing existing connection:', client.id, client.description)
 				const status = this.status(client)!
-				this.wsm.send('connection:open', { status, reused: true } satisfies ConnectionEvent)
+				this.wsm.send<ConnectionEvent>('connection:open', { status, reused: true })
 				return status
 			}
 		}
@@ -155,7 +155,7 @@ export class ConnectionHandler {
 					console.info('new connection to:', client.id, client.description)
 
 					const status = this.status(client)!
-					this.wsm.send('connection:open', { status, reused: false } satisfies ConnectionEvent)
+					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
 					return status
 				} else {
 					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to INDI server', color: 'danger' })
@@ -173,7 +173,7 @@ export class ConnectionHandler {
 					console.info('new connection to:', client.id, client.description)
 
 					const status = this.status(client)!
-					this.wsm.send('connection:open', { status, reused: false } satisfies ConnectionEvent)
+					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
 					return status
 				} else {
 					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })
@@ -207,7 +207,7 @@ export class ConnectionHandler {
 			console.info('new connection to:', client.id, client.description)
 
 			const status = this.status(client)!
-			this.wsm.send('connection:open', { status, reused: false } satisfies ConnectionEvent)
+			this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
 			return status
 		}
 
@@ -226,7 +226,7 @@ export class ConnectionHandler {
 
 				client[Symbol.dispose]()
 
-				this.wsm.send('connection:close', { status } satisfies ConnectionEvent)
+				this.wsm.send<ConnectionEvent>('connection:close', { status })
 			}
 		} else {
 			for (const [key, client] of this.clients) {
@@ -238,7 +238,7 @@ export class ConnectionHandler {
 
 					client[Symbol.dispose]()
 
-					this.wsm.send('connection:close', { status } satisfies ConnectionEvent)
+					this.wsm.send<ConnectionEvent>('connection:close', { status })
 
 					break
 				}

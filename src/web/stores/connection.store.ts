@@ -10,7 +10,7 @@ import { DEFAULT_CONNECTION, type Connection } from '../shared/types'
 export type ConnectionStore = typeof connectionStore
 
 export interface ConnectionState {
-	readonly activeConnections: readonly ConnectionStatus[]
+	readonly activeConnections: ConnectionStatus[]
 	readonly connections: Connection[]
 	connecting: boolean
 	selected?: Connection
@@ -62,6 +62,7 @@ async function list() {
 	const connections = await Api.Connection.list()
 
 	if (connections !== undefined) {
+		state.activeConnections.length = 0
 		Object.assign(state.activeConnections, connections)
 	}
 }
@@ -181,6 +182,12 @@ async function connect(connection: Connection) {
 	}
 }
 
+async function disconnect(connection: ConnectionStatus) {
+	if (state.activeConnections.some((c) => c.id === connection.id)) {
+		await Api.Connection.disconnect(connection.id)
+	}
+}
+
 async function connectToEdited() {
 	await connect(state.edited)
 }
@@ -206,6 +213,7 @@ export const connectionStore = {
 	connect,
 	connectToEdited,
 	connectToSelected,
+	disconnect,
 	duplicate,
 	remove,
 	removeEdited,

@@ -69,12 +69,12 @@ export class MountHandler implements DeviceHandler<Mount> {
 
 	currentPosition(mount: Mount) {
 		if (!mount) return DEFAULT_COORDINATE_INFO
-		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate), 'm'), mount.geographicCoordinate.longitude, mount.equatorialCoordinate)
+		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate)), mount.geographicCoordinate.longitude, mount.equatorialCoordinate)
 	}
 
 	targetPosition(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
 		if (!mount) return DEFAULT_COORDINATE_INFO
-		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate), 'm'), mount.geographicCoordinate.longitude, coordinate)
+		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate)), mount.geographicCoordinate.longitude, coordinate)
 	}
 
 	goTo(mount: Mount, req: MountTargetCoordinate) {

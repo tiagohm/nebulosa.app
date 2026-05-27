@@ -4,6 +4,7 @@ import bus from 'src/shared/bus'
 import type { IndiDevicePropertyEvent } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 
@@ -44,7 +45,7 @@ export function indiPanelControlStore(device: Device) {
 
 		mounted = true
 
-		u[0] = initProxy(state, 'indi', ['p:show', 'p:tab'])
+		u[0] = initProxy(state, `indi.panelcontrol.${device.id}`, ['p:show', 'p:tab', 'p:group'])
 
 		u[1] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:add', (event) => {
 			if (device.id === event.device) {
@@ -70,7 +71,23 @@ export function indiPanelControlStore(device: Device) {
 			}
 		})
 
-		void retrieveProperties()
+		u[5] = bus.subscribe<Device>('indi:panelcontrol:toggle', (event) => {
+			if (device === event) {
+				state.show = !state.show
+			}
+		})
+
+		u[6] = subscribeKey(state, 'show', (show) => {
+			if (show) {
+				void retrieveProperties()
+				void retrieveMessages()
+			}
+		})
+
+		if (state.show) {
+			void retrieveProperties()
+			void retrieveMessages()
+		}
 	}
 
 	function unmount() {

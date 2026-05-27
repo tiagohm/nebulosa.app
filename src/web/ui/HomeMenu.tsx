@@ -44,11 +44,13 @@ import { Button } from './components/Button'
 import { IconButton } from './components/IconButton'
 import { List, ListItem, type ListItemProps } from './components/List'
 import { Popover } from './components/Popover'
+import { ConnectButton } from './ConnectButton'
 import { Darv } from './Darv'
 import { CameraDropdown, FocuserDropdown, MountDropdown } from './DeviceDropdown'
 import { FlatWizard } from './FlatWizard'
 import { Framing } from './Framing'
 import { Icons } from './Icon'
+import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { PHD2 } from './PHD2'
 import { Tppa } from './Tppa'
 
@@ -163,8 +165,17 @@ interface DeviceItemProps extends Omit<ListItemProps, 'children'> {
 }
 
 function DeviceItem({ type, index, ...props }: DeviceItemProps) {
-	const { connected, name } = useSnapshot(equipmentStore.state[type][index])
-	return <ListItem startContent={<Icons.Circle className="size-[0.8em]" color={connected ? 'var(--success)' : 'var(--danger)'} />} className="min-w-full cursor-pointer" label={name} {...props} />
+	const device = equipmentStore.state[type][index]
+	const { connected, name } = useSnapshot(device)
+
+	const EndContent = (
+		<div className="flex flex-row items-center justify-center gap-1">
+			<ConnectButton connected={connected} onClick={() => equipmentStore.connect(device)} size="sm" />
+			<IndiPanelControlButton device={device} size="sm" />
+		</div>
+	)
+
+	return <ListItem endContent={EndContent} startContent={<Icons.Circle className="size-[0.8em]" color={connected ? 'var(--success)' : 'var(--danger)'} />} className="min-w-full cursor-pointer" label={name} {...props} />
 }
 
 const DEVICE_TYPE_LABELS: Partial<Record<DeviceType, string>> = {

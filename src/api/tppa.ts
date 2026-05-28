@@ -1,4 +1,3 @@
-import { deg } from 'nebulosa/src/angle'
 import type { Camera, Mount } from 'nebulosa/src/indi.device'
 import { ThreePointPolarAlignment } from 'nebulosa/src/polaralignment'
 import { timeNow } from 'nebulosa/src/time'
@@ -27,9 +26,8 @@ export class TppaHandler {
 	handleTppaEvent(event: TppaEvent, task: TppaTask) {
 		this.sendEvent(event)
 
-		// Remove the task after it finished
 		if (event.state === 'idle') {
-			this.stop(event.id)
+			if (this.remove(task)) task.destroy()
 		}
 	}
 
@@ -37,7 +35,7 @@ export class TppaHandler {
 		if (this.tasks.some((e) => e.request.id === request.id || e.camera.id === camera.id || e.mount.id === mount.id)) return
 		const task = new TppaTask(this, request, camera, mount, this.handleTppaEvent.bind(this))
 		this.tasks.push(task)
-		void task.start()
+		void task.start().catch((error) => task.fail(error))
 	}
 
 	stop(id: string) {
@@ -45,9 +43,20 @@ export class TppaHandler {
 
 		if (index >= 0) {
 			const task = this.tasks[index]
-			task.stop()
 			this.tasks.splice(index, 1)
+			task.stop()
 		}
+	}
+
+	private remove(task: TppaTask) {
+		const index = this.tasks.indexOf(task)
+
+		if (index >= 0) {
+			this.tasks.splice(index, 1)
+			return true
+		}
+
+		return false
 	}
 }
 
@@ -83,7 +92,7 @@ export class TppaTask {
 		this.event.mount = mount.id
 
 		this.handleTppaEvent = (state, message) => {
-			if (state !== this.event.state) {
+			if (state !== this.event.state || message !== this.event.message) {
 				this.event.state = state
 				this.event.message = message
 				handleTppaEvent(this.event, this)
@@ -96,7 +105,7 @@ export class TppaTask {
 			this.handleTppaEvent('solving')
 
 			// Solve image
-			const solution = await this.tppa.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: deg(8), path: event.savedPath, id: this.request.id, blind: false })
+			const solution = await this.tppa.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: 8, path: event.savedPath, id: this.request.id, blind: false })
 
 			if (this.stopped) return
 
@@ -131,7 +140,6 @@ export class TppaTask {
 				this.event.solved = false
 			} else {
 				// Failed to solve after reaching max attempts
-				this.event.state = 'idle'
 				this.event.solved = false
 				this.handleTppaEvent('idle', 'solving failed')
 				return
@@ -145,7 +153,7 @@ export class TppaTask {
 					this.handleTppaEvent('moving')
 
 					this.move(true)
-					await waitFor(Math.max(1, this.request.moveDuration) * 1000, () => !this.stopped)
+					await waitFor(this.moveDuration, () => !this.stopped)
 					this.move(false)
 
 					if (!this.stopped) {
@@ -153,10 +161,10 @@ export class TppaTask {
 						this.handleTppaEvent('settling')
 						await waitFor(2500, () => !this.stopped)
 					}
-				} else if (this.request.delayBeforeCapture) {
+				} else if (this.delayBeforeCapture > 0) {
 					// Wait before next capture
 					this.handleTppaEvent('waiting')
-					await waitFor(this.request.delayBeforeCapture * 1000, () => !this.stopped)
+					await waitFor(this.delayBeforeCapture, () => !this.stopped)
 				}
 			}
 
@@ -164,7 +172,9 @@ export class TppaTask {
 			if (!this.stopped) {
 				await this.start()
 			}
-		} else if (event.state === 'error' || event.stopped) {
+		} else if (event.state === 'error') {
+			this.fail(new Error('camera capture failed'))
+		} else if (event.stopped) {
 			this.stop()
 		}
 	}
@@ -180,22 +190,45 @@ export class TppaTask {
 		// Start next capture
 		this.event.count++
 		this.handleTppaEvent('capturing')
-		await this.tppa.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
+		await this.tppa.cameraHandler.start(this.camera, this.request.capture, (event) => {
+			void this.cameraCaptured(event).catch((error) => this.fail(error))
+		})
 	}
 
 	stop() {
 		if (!this.stopped) {
-			this.stopped = true
-
-			this.move(false)
-			this.tppa.mountHandler.mountManager.stop(this.mount)
-			this.tppa.solver.stop(this.request.id)
-			this.tppa.cameraHandler.stop(this.camera)
+			this.destroy()
 
 			if (this.event.state !== 'idle') {
 				this.handleTppaEvent('idle')
 			}
 		}
+	}
+
+	fail(error: unknown) {
+		if (this.stopped) return
+
+		console.error('tppa failed:', error)
+		this.destroy()
+		this.handleTppaEvent('idle', 'tppa failed')
+	}
+
+	destroy() {
+		if (this.stopped) return
+
+		this.stopped = true
+		this.move(false)
+		this.tppa.mountHandler.mountManager.stop(this.mount)
+		this.tppa.solver.stop(this.request.id)
+		this.tppa.cameraHandler.stop(this.camera)
+	}
+
+	private get moveDuration() {
+		return Math.max(1, this.request.moveDuration) * 1000
+	}
+
+	private get delayBeforeCapture() {
+		return Math.max(0, this.request.delayBeforeCapture) * 1000
 	}
 
 	private move(enabled: boolean) {
@@ -217,6 +250,6 @@ export function tppa(tppaHandler: TppaHandler): Endpoints {
 
 	return {
 		'/tppa/:camera/:mount/start': { POST: async (req) => response(tppaHandler.start(await req.json(), cameraFromParams(req), mountFromParams(req))) },
-		'/tppa/stop': { POST: async (req) => response(tppaHandler.stop(await req.json())) },
+		'/tppa/:id/stop': { POST: (req) => response(tppaHandler.stop(req.params.id)) },
 	}
 }

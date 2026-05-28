@@ -6,7 +6,7 @@ import { medianOf, NumberComparator } from 'nebulosa/src/util'
 import { type AutoFocusEvent, type AutoFocusStart, type AutoFocusState, type CameraCaptureEvent, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import type { CameraHandler } from './camera'
-import { type FocuserHandler, waitForFocuser } from './focuser'
+import { type FocuserHandler, waitForFocuser, type WaitForFocuserAction } from './focuser'
 import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { StarDetectionHandler } from './stardetection'
@@ -29,7 +29,7 @@ export class AutoFocusHandler {
 		this.sendEvent(event)
 
 		if (event.state === 'idle') {
-			this.stop(event.id)
+			if (this.remove(task)) task.destroy()
 		}
 	}
 
@@ -37,7 +37,7 @@ export class AutoFocusHandler {
 		if (this.tasks.some((e) => e.request.id === request.id || e.camera.id === camera.id || e.focuser.id === focuser.id)) return
 		const task = new AutoFocusTask(this, request, camera, focuser, this.handleAutoFocusEvent.bind(this))
 		this.tasks.push(task)
-		void task.start()
+		void task.start().catch((error) => task.fail(error))
 	}
 
 	stop(id: string) {
@@ -45,9 +45,20 @@ export class AutoFocusHandler {
 
 		if (index >= 0) {
 			const task = this.tasks[index]
-			task.stop()
 			this.tasks.splice(index, 1)
+			task.stop()
 		}
+	}
+
+	private remove(task: AutoFocusTask) {
+		const index = this.tasks.indexOf(task)
+
+		if (index >= 0) {
+			this.tasks.splice(index, 1)
+			return true
+		}
+
+		return false
 	}
 }
 
@@ -74,7 +85,7 @@ export class AutoFocusTask {
 		this.event.focuser = focuser.id
 
 		this.handleAutoFocusEvent = (state, message) => {
-			if (state !== this.event.state) {
+			if (state !== this.event.state || message !== this.event.message) {
 				this.event.state = state
 				this.event.message = message
 				handleAutoFocusEvent(this.event, this)
@@ -83,6 +94,14 @@ export class AutoFocusTask {
 	}
 
 	private async cameraCaptured(event: CameraCaptureEvent) {
+		try {
+			await this.processCameraCapture(event)
+		} catch (error) {
+			this.fail(error)
+		}
+	}
+
+	private async processCameraCapture(event: CameraCaptureEvent) {
 		const { savedPath } = event
 
 		if (savedPath && !this.stopped && !event.stopped) {
@@ -118,9 +137,9 @@ export class AutoFocusTask {
 				this.computeChart()
 
 				// Wait for focuser reach position
-				this.unsubscribers[0] = waitForFocuser(this.focuser, position, (event) => {
+				this.waitForFocuser(position, (event) => {
 					if (event === 'reach') {
-						void this.start()
+						void this.start().catch((error) => this.fail(error))
 					} else if (event === 'cancel') {
 						this.handleAutoFocusEvent('idle', 'stopped')
 					} else {
@@ -139,13 +158,24 @@ export class AutoFocusTask {
 				this.handleAutoFocusEvent('moving', `moving to best focus at position ${position}`)
 				this.autoFocusHandler.focuserHandler.moveTo(this.focuser, position)
 
-				this.unsubscribers[0] = waitForFocuser(this.focuser, position, () => {
-					// TODO: Compare the HFD at best focus with the initial HFD. If it's worse, go back to initial position.
-					this.handleAutoFocusEvent('idle', 'best focus!')
+				this.waitForFocuser(position, (event) => {
+					if (event === 'reach') {
+						this.handleAutoFocusEvent('idle', 'best focus!')
+					} else if (event === 'cancel') {
+						this.handleAutoFocusEvent('idle', 'stopped')
+					} else {
+						this.handleAutoFocusEvent('idle', `failed to move to best focus at position ${position}`)
+					}
 				})
 			} else {
-				this.unsubscribers[0] = waitForFocuser(this.focuser, position, () => {
-					this.handleAutoFocusEvent('idle', 'restoring to initial focus position')
+				this.waitForFocuser(position, (event) => {
+					if (event === 'reach') {
+						this.handleAutoFocusEvent('idle', 'restoring to initial focus position')
+					} else if (event === 'cancel') {
+						this.handleAutoFocusEvent('idle', 'stopped')
+					} else {
+						this.handleAutoFocusEvent('idle', `failed to restore focus position ${position}`)
+					}
 				})
 			}
 		} else if (event.state === 'error' || event.stopped) {
@@ -182,7 +212,9 @@ export class AutoFocusTask {
 		return points
 	}
 
-	start() {
+	async start() {
+		if (this.stopped) return
+
 		this.request.capture.delay = 0
 		this.request.capture.count = 1
 		this.request.capture.autoSave = false
@@ -193,18 +225,38 @@ export class AutoFocusTask {
 
 		this.handleAutoFocusEvent('capturing', '')
 
-		return this.autoFocusHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
+		await this.autoFocusHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}
 
 	stop() {
 		if (this.stopped) return
 
-		this.stopped = true
+		this.destroy()
+		this.handleAutoFocusEvent('idle', 'stopped')
+	}
 
+	fail(error: unknown) {
+		if (this.stopped) return
+
+		console.error('autofocus failed:', error)
+		this.destroy()
+		this.handleAutoFocusEvent('idle', 'autofocus failed')
+	}
+
+	destroy() {
+		if (this.stopped) return
+
+		this.stopped = true
 		unsubscribe(this.unsubscribers)
 		this.autoFocusHandler.focuserHandler.stop(this.focuser)
 		this.autoFocusHandler.cameraHandler.stop(this.camera)
-		this.handleAutoFocusEvent('idle', 'stopped')
+	}
+
+	private waitForFocuser(position: number, onCompleted: (event: WaitForFocuserAction) => void) {
+		this.unsubscribers[0] = waitForFocuser(this.focuser, position, (event) => {
+			if (this.stopped) return
+			onCompleted(event)
+		})
 	}
 }
 

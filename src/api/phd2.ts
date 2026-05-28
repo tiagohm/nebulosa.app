@@ -12,7 +12,9 @@ export class PHD2Handler {
 	private client?: PHD2Client | GuiderClient
 	private state: PHD2AppState = 'Stopped'
 	private pixelScale = 1
+	private connecting = false
 	private settling?: PromiseWithResolvers<boolean>
+	private settleTimer?: ReturnType<typeof setTimeout>
 	private readonly settings = structuredClone(DEFAULT_PHD2_DITHER)
 	private readonly rms = new RMS()
 
@@ -25,6 +27,8 @@ export class PHD2Handler {
 
 	private readonly handler = {
 		event: (client: PHD2Client | GuiderClient, event: PHD2Events) => {
+			if (client !== this.client) return
+
 			switch (event.Event) {
 				case 'AppState':
 					this.state = event.State
@@ -49,23 +53,26 @@ export class PHD2Handler {
 
 					break
 				case 'StartCalibration':
+					this.state = 'Calibrating'
 					this.handlePHD2Event('calibrating')
 					break
 				case 'LoopingExposures':
+					this.state = 'Looping'
 					this.event.starMass = event.StarMass
 					this.event.snr = event.SNR
 					this.event.hfd = event.HFD
 					this.handlePHD2Event('looping')
 					break
 				case 'SettleBegin':
-					this.settling?.resolve(false)
+					this.settleDone(false)
 					this.settling = Promise.withResolvers()
 					this.handlePHD2Event('settling')
 					break
 				case 'SettleDone':
-					this.settleDone(true)
+					this.settleDone(event.Status === 0)
 					break
 				case 'GuideStep': {
+					this.state = 'Guiding'
 					const { RADistanceRaw, DECDistanceRaw, RADuration, RADirection, DECDuration, DECDirection } = event
 					const { rightAscension, declination } = this.rms.addDataPoint(RADistanceRaw, DECDistanceRaw)
 					this.event.starMass = event.StarMass
@@ -83,6 +90,7 @@ export class PHD2Handler {
 					break
 				}
 				case 'GuidingDithered': {
+					this.state = 'Guiding'
 					this.event.step.ra = null
 					this.event.step.dec = null
 					this.event.step.raCorrection = null
@@ -93,22 +101,35 @@ export class PHD2Handler {
 					break
 				}
 				case 'StarLost':
+					this.state = 'LostLock'
 					this.handlePHD2Event('starLost')
 					break
 				case 'Paused':
+					this.state = 'Paused'
 					this.handlePHD2Event('paused')
+					break
+				case 'StartGuiding':
+					this.state = 'Guiding'
+					this.handlePHD2Event('guiding')
+					break
+				case 'GuidingStopped':
+				case 'LoopingExposuresStopped':
+					this.state = 'Stopped'
+					this.handlePHD2Event('idle')
 					break
 			}
 
 			// console.info('event: %j', event)
 		},
 		command: (client: PHD2Client, command: PHD2Command, success: boolean, result: unknown) => {
+			if (client !== this.client) return
 			console.info(command.method, 'received:', success, JSON.stringify(result))
 		},
-		close: () => {
-			this.wsm.send('phd2:close', undefined)
+		close: (client: PHD2Client | GuiderClient) => {
+			if (client !== this.client) return
 			this.client = undefined
-			this.clear()
+			this.reset()
+			this.wsm.send('phd2:close', undefined)
 		},
 	} as const
 
@@ -139,7 +160,9 @@ export class PHD2Handler {
 	}
 
 	async connect(req: PHD2Connect, cameraManager: CameraManager, guideOutputManager: GuideOutputManager) {
-		if (this.client) return false
+		if (this.client || this.connecting) return false
+
+		this.connecting = true
 
 		try {
 			if (req.mode === 'remote') {
@@ -148,7 +171,7 @@ export class PHD2Handler {
 				if (await client.connect(req.host, req.port)) {
 					this.client = client
 					Object.assign(this.settings, req.dither)
-					this.clear()
+					this.reset()
 					this.pixelScale = (await client.getPixelScale()) || 1
 					return true
 				}
@@ -178,7 +201,7 @@ export class PHD2Handler {
 					client.setExposure(exposureTimeInSeconds(capture.exposureTime, capture.exposureTimeUnit))
 
 					Object.assign(this.settings, req.dither)
-					this.clear()
+					this.reset()
 					this.pixelScale = client.getPixelScale() || 1
 					return true
 				}
@@ -188,28 +211,50 @@ export class PHD2Handler {
 		} catch (e) {
 			console.error(e)
 			this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to PHD2 server', color: 'danger' })
+		} finally {
+			this.connecting = false
 		}
 
 		return false
 	}
 
 	async dither(req?: Partial<PHD2Dither>, abort?: AbortSignal) {
-		if (!this.client) return
+		const client = this.client
 
-		if (this.state === 'Guiding') {
+		if (!client || abort?.aborted || !this.isRunning) return false
+
+		if (this.state === 'Guiding' || this.event.state === 'guiding') {
 			const settle = req?.settle ?? this.settings.settle
 
-			if (!abort?.aborted) await this.waitForSettle(settle.timeout)
-			if (!abort?.aborted) await this.client.dither(req?.amount ?? this.settings.amount, req?.raOnly ?? this.settings.raOnly, settle)
-			if (!abort?.aborted) await waitFor(settle.time * 1000, () => !abort?.aborted)
-			if (!abort?.aborted) await this.waitForSettle(settle.timeout)
+			if (!abort?.aborted && !(await this.waitForSettle(settle.timeout))) return false
+			if (abort?.aborted) return false
+
+			const amount = req?.amount ?? this.settings.amount
+			const raOnly = req?.raOnly ?? this.settings.raOnly
+			const dithered = client instanceof PHD2Client ? await client.send<number>('dither', { amount, raOnly, settle }) : client.dither(amount, raOnly, settle)
+
+			if (dithered === undefined || dithered === false) return false
+			if (!abort?.aborted && !(await waitFor(Math.max(0, settle.time) * 1000, () => !abort?.aborted))) return false
+			if (!abort?.aborted) return await this.waitForSettle(settle.timeout)
 		}
+
+		return false
 	}
 
 	private async waitForSettle(timeout: number) {
-		if (!this.settling) return true
-		setTimeout(this.settleDone.bind(this, false), timeout * 1000)
-		return await this.settling.promise
+		const settling = this.settling
+
+		if (!settling) return true
+
+		this.clearSettleTimer()
+		this.settleTimer = setTimeout(
+			() => {
+				if (this.settling === settling) this.settleDone(false)
+			},
+			Math.max(1, timeout) * 1000,
+		)
+
+		return await settling.promise
 	}
 
 	loop() {
@@ -233,10 +278,17 @@ export class PHD2Handler {
 	}
 
 	disconnect() {
-		if (this.client) {
-			this.client instanceof PHD2Client && this.client.close()
-			this.client = undefined
-		}
+		const client = this.client
+
+		if (!client) return
+
+		this.client = undefined
+
+		if (client instanceof PHD2Client) client.close()
+		else client.disconnect()
+
+		this.reset()
+		this.wsm.send('phd2:close', undefined)
 	}
 
 	async status() {
@@ -249,8 +301,24 @@ export class PHD2Handler {
 	}
 
 	settleDone(status: boolean) {
+		this.clearSettleTimer()
 		this.settling?.resolve(status)
 		this.settling = undefined
+	}
+
+	private reset() {
+		this.state = 'Stopped'
+		this.pixelScale = 1
+		this.settleDone(false)
+		this.clear()
+		Object.assign(this.event, structuredClone(DEFAULT_PHD2_EVENT))
+	}
+
+	private clearSettleTimer() {
+		if (this.settleTimer) {
+			clearTimeout(this.settleTimer)
+			this.settleTimer = undefined
+		}
 	}
 }
 
@@ -288,8 +356,10 @@ class RMS {
 
 	private compute() {
 		const { size, sumRA, sumDEC } = this
-		const rightAscension = Math.sqrt(size * this.sumRASquared - sumRA * sumRA) / size
-		const declination = Math.sqrt(size * this.sumDECSquared - sumDEC * sumDEC) / size
+		if (size <= 0) return { rightAscension: 0, declination: 0 } as const
+
+		const rightAscension = Math.sqrt(Math.max(0, size * this.sumRASquared - sumRA * sumRA)) / size
+		const declination = Math.sqrt(Math.max(0, size * this.sumDECSquared - sumDEC * sumDEC)) / size
 		return { rightAscension, declination } as const
 	}
 

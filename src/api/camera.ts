@@ -45,7 +45,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 
 	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {
 		this.wsm.send<CameraUpdated>('camera:update', { device: { type: 'camera', id: camera.id, name: camera.name, [property]: camera[property] }, property, state })
-		void this.tasks.get(camera.id)?.cameraUpdated(camera, property, state)
+		this.tasks.get(camera.id)?.cameraUpdated(camera, property, state)
 	}
 
 	removed(camera: Camera) {
@@ -54,7 +54,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	blobReceived(camera: Camera, data: string | Buffer) {
-		void this.tasks.get(camera.id)?.blobReceived(camera, data)
+		void this.tasks.get(camera.id)?.blobReceived(camera, data).catch(console.error)
 	}
 
 	list(client?: string | IndiClient) {
@@ -65,28 +65,32 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		this.wsm.send('camera:capture', event)
 	}
 
-	private handleCameraCaptureEvent({ camera }: CameraCaptureTask, event: CameraCaptureEvent) {
+	private handleCameraCaptureEvent(task: CameraCaptureTask, event: CameraCaptureEvent) {
+		const { camera } = task
+
+		if (this.tasks.get(camera.id) !== task) return false
+
 		this.sendEvent(event)
 
 		// Remove the task after it finished
 		if (event.state === 'idle') {
 			this.cameraManager.disableBlob(camera)
-			this.tasks.get(camera.id)?.destroy()
+			task.destroy()
 			this.tasks.delete(camera.id)
 		}
+
+		return true
 	}
 
 	start(camera: Camera, req: CameraCaptureStart, onCameraCaptureEvent?: (event: CameraCaptureEvent) => void) {
 		// Stop any existing task for this camera and remove its handler
-		if (this.tasks.has(camera.id)) {
-			const task = this.tasks.get(camera.id)!
-			task.stop()
-		}
+		this.tasks.get(camera.id)?.stop()
 
 		// Start a new task for the camera
 		const task = new CameraCaptureTask(this, req, camera, (task, event) => {
-			this.handleCameraCaptureEvent(task, event)
-			onCameraCaptureEvent?.(event)
+			if (this.handleCameraCaptureEvent(task, event)) {
+				onCameraCaptureEvent?.(event)
+			}
 		})
 
 		this.tasks.set(camera.id, task)
@@ -129,6 +133,7 @@ export class CameraCaptureTask {
 	private readonly waitingTime: number
 	private readonly totalExposureProgress = [0, 0] // remaining, elapsed
 	private readonly aborter = new AbortController()
+	private destroyed = false
 
 	constructor(
 		readonly cameraHandler: CameraHandler,
@@ -191,7 +196,7 @@ export class CameraCaptureTask {
 						this.event.state = 'waiting'
 
 						// Wait for the specified waiting time and send progress event
-						waitFor(this.waitingTime / 1000, (remainingTime) => {
+						void waitFor(this.waitingTime / 1000, (remainingTime) => {
 							if (this.stopped) return false
 
 							remainingTime *= 1000
@@ -210,60 +215,64 @@ export class CameraCaptureTask {
 							this.handleCameraCaptureEvent(this, this.event)
 
 							return true
-						}).then((success) => {
-							if (success) {
-								// Update total exposure progress
-								this.totalExposureProgress[0] -= this.waitingTime
-								this.totalExposureProgress[1] += this.waitingTime
+						}).then(
+							(success) => {
+								if (success) {
+									// Update total exposure progress
+									this.totalExposureProgress[0] -= this.waitingTime
+									this.totalExposureProgress[1] += this.waitingTime
 
-								// Start the next exposure
-								return this.start()
-							} else {
-								// Finish
-								this.event.state = 'idle'
-								this.handleCameraCaptureEvent(this, this.event)
-							}
-						}, console.error)
+									// Start the next exposure
+									void this.start()
+								} else {
+									// Finish
+									this.finish()
+								}
+							},
+							(error: unknown) => this.fail(error),
+						)
 
 						// Do nothing if it wasn't stopped
 						if (!this.stopped) return
 					} else {
 						// Start the next exposure
-						return this.start()
+						void this.start()
+						return
 					}
 				}
 			} else if (state === 'Alert') {
-				this.event.state = 'error'
-				this.stop()
-				return this.handleCameraCaptureEvent(this, this.event)
+				return this.fail()
 			}
 
 			// If no more frames or was stopped, finish the task
 			if (this.event.remainingCount <= 0 || this.stopped) {
-				this.event.state = 'idle'
-				this.handleCameraCaptureEvent(this, this.event)
+				this.finish()
 			}
 		}
 	}
 
 	async blobReceived(camera: Camera, data: string | Buffer) {
 		if (this.camera.id === camera.id) {
-			const buffer = typeof data === 'string' ? Buffer.from(data, 'base64') : data
+			try {
+				const buffer = typeof data === 'string' ? Buffer.from(data, 'base64') : data
 
-			// Save image
-			const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : camera.name
-			const extension = this.request.transferFormat === 'XISF' ? 'xisf' : 'fit'
-			const path = join(await makePathFor(this.request), `${name}.${extension}`)
-			this.cameraHandler.imageProcessor.save(buffer, path, camera)
+				// Save image
+				const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : camera.name
+				const extension = this.request.transferFormat === 'XISF' ? 'xisf' : 'fit'
+				const path = join(await makePathFor(this.request), `${name}.${extension}`)
+				this.cameraHandler.imageProcessor.save(buffer, path, camera)
 
-			if (this.request.autoSave) {
-				void Bun.write(path, buffer)
+				if (this.request.autoSave) {
+					await Bun.write(path, buffer)
+				}
+
+				// Send event
+				this.event.savedPath = path
+				this.handleCameraCaptureEvent(this, this.event)
+				this.event.savedPath = undefined
+			} catch (error) {
+				this.fail(error)
 			}
-
-			// Send event
-			this.event.savedPath = path
-			this.handleCameraCaptureEvent(this, this.event)
-			this.event.savedPath = undefined
 		}
 	}
 
@@ -287,10 +296,18 @@ export class CameraCaptureTask {
 
 	async start() {
 		if (!this.stopped && this.event.remainingCount > 0) {
-			if (this.request.dither && this.cameraHandler.phd2Handler?.isRunning) {
+			if (this.request.dither.enabled && this.cameraHandler.phd2Handler?.isRunning) {
 				this.event.state = 'dithering'
 				this.handleCameraCaptureEvent(this, this.event)
-				await this.cameraHandler.phd2Handler.dither(undefined, this.aborter.signal)
+
+				try {
+					await this.cameraHandler.phd2Handler.dither(this.request.dither, this.aborter.signal)
+				} catch (error) {
+					if (!this.stopped) this.fail(error)
+					return
+				}
+
+				if (this.stopped) return
 			}
 
 			this.event.state = 'exposureStarted'
@@ -309,11 +326,29 @@ export class CameraCaptureTask {
 		this.event.stopped = true
 		this.stopExposure(this.camera)
 		this.destroy()
+		this.finish()
 	}
 
 	destroy() {
+		if (this.destroyed) return
+		this.destroyed = true
 		this.aborter.abort()
 		this.cameraHandler.phd2Handler?.settleDone(false)
+	}
+
+	private fail(error?: unknown) {
+		if (error) console.error('camera capture failed:', error)
+		this.event.state = 'error'
+		this.event.stopped = true
+		this.handleCameraCaptureEvent(this, this.event)
+		this.stopExposure(this.camera)
+		this.destroy()
+		this.finish()
+	}
+
+	private finish() {
+		this.event.state = 'idle'
+		this.handleCameraCaptureEvent(this, this.event)
 	}
 }
 

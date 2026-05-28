@@ -25,7 +25,7 @@ export class DarvHandler {
 		this.sendEvent(event)
 
 		if (event.state === 'idle') {
-			this.stop(event.id)
+			if (this.remove(task)) task.destroy()
 		}
 	}
 
@@ -33,7 +33,7 @@ export class DarvHandler {
 		if (this.tasks.some((e) => e.request.id === request.id || e.camera.id === camera.id || e.mount.id === mount.id)) return
 		const task = new DarvTask(this, request, camera, mount, this.handleDarvEvent.bind(this))
 		this.tasks.push(task)
-		void task.start()
+		void task.start().catch((error) => task.fail(error))
 	}
 
 	stop(id: string) {
@@ -41,9 +41,20 @@ export class DarvHandler {
 
 		if (index >= 0) {
 			const task = this.tasks[index]
-			task.stop()
 			this.tasks.splice(index, 1)
+			task.stop()
 		}
+	}
+
+	private remove(task: DarvTask) {
+		const index = this.tasks.indexOf(task)
+
+		if (index >= 0) {
+			this.tasks.splice(index, 1)
+			return true
+		}
+
+		return false
 	}
 }
 
@@ -70,7 +81,7 @@ export class DarvTask {
 		request.capture.y = 0
 		request.capture.width = camera.frame.width.max
 		request.capture.height = camera.frame.height.max
-		request.capture.exposureTime = Math.trunc(request.duration + request.initialPause)
+		request.capture.exposureTime = Math.ceil(Math.max(0, request.duration + request.initialPause))
 		request.capture.exposureTimeUnit = 'second'
 
 		this.event.id = request.id
@@ -78,7 +89,7 @@ export class DarvTask {
 		this.event.mount = mount.id
 
 		this.handleDarvEvent = (state, message) => {
-			if (state !== this.event.state) {
+			if (state !== this.event.state || message !== this.event.message) {
 				this.event.state = state
 				this.event.message = message
 				handleDarvEvent(this.event, this)
@@ -87,21 +98,25 @@ export class DarvTask {
 	}
 
 	async start() {
+		if (this.stopped) return
+
 		// Start capture
 		await this.darv.cameraHandler.start(this.camera, this.request.capture, (event) => {
 			if (event.state === 'idle' || event.state === 'error' || event.stopped) this.stop()
 		})
 
+		if (this.stopped) return
+
 		// Wait for initial pause
 		this.handleDarvEvent('waiting')
 
-		let success = await waitFor(this.request.initialPause * 1000, () => !this.stopped)
+		let success = await waitFor(this.initialPause, () => !this.stopped)
 
 		if (success) {
 			// Move the mount forward
 			this.handleDarvEvent('forwarding')
 
-			const duration = this.request.duration * 500 // ms
+			const duration = this.duration / 2
 
 			this.move(true, false, duration)
 
@@ -118,21 +133,41 @@ export class DarvTask {
 		}
 
 		// Done
-		this.move(false, false, 0)
+		this.destroy()
 		this.handleDarvEvent('idle')
 	}
 
 	stop() {
 		if (!this.stopped) {
-			this.stopped = true
-
-			this.move(false, false, 0)
-			this.darv.cameraHandler.stop(this.camera)
-
+			this.destroy()
 			if (this.event.state !== 'idle') {
 				this.handleDarvEvent('idle')
 			}
 		}
+	}
+
+	fail(error: unknown) {
+		if (this.stopped) return
+
+		console.error('darv failed:', error)
+		this.destroy()
+		this.handleDarvEvent('idle', 'darv failed')
+	}
+
+	destroy() {
+		if (this.stopped) return
+
+		this.stopped = true
+		this.move(false, false, 0)
+		this.darv.cameraHandler.stop(this.camera)
+	}
+
+	private get initialPause() {
+		return Math.max(0, this.request.initialPause * 1000)
+	}
+
+	private get duration() {
+		return Math.max(0, this.request.duration * 1000)
 	}
 
 	private move(enabled: boolean, reversed: boolean, duration: number) {

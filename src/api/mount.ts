@@ -102,18 +102,7 @@ export class MountRemoteControlHandler {
 
 	constructor(readonly mountManager: MountManager) {}
 
-	private readonly disconnectHandler = (server: Lx200ProtocolServer | StellariumProtocolServer) => {
-		const mount = this.get(server)
-
-		if (server instanceof Lx200ProtocolServer) {
-			this.lx200.delete(mount)
-		} else if (server instanceof StellariumProtocolServer) {
-			this.stellarium.delete(mount)
-		}
-	}
-
 	private readonly stellariumHandler: StellariumProtocolHandler = {
-		disconnect: this.disconnectHandler,
 		goto: (server, rightAscension, declination) => {
 			;[rightAscension, declination] = precessToJNow(rightAscension, declination)
 			this.mountManager.goTo(this.get(server), rightAscension, declination)
@@ -121,7 +110,6 @@ export class MountRemoteControlHandler {
 	}
 
 	private readonly lx200Handler: Lx200ProtocolHandler = {
-		disconnect: this.disconnectHandler,
 		goto: (server, rightAscension, declination) => {
 			;[rightAscension, declination] = precessToJNow(rightAscension, declination)
 			this.mountManager.goTo(this.get(server), rightAscension, declination)

@@ -7,7 +7,7 @@ import type { CameraHandler } from './camera'
 import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 
-const FLAT_WIZARD_IMAGE_TRANSFORMTION: ImageTransformation = { ...DEFAULT_IMAGE_TRANSFORMATION, enabled: false, format: { ...DEFAULT_IMAGE_TRANSFORMATION.format, type: 'fits' } }
+const FLAT_WIZARD_IMAGE_TRANSFORMATION: ImageTransformation = { ...DEFAULT_IMAGE_TRANSFORMATION, enabled: false, format: { ...DEFAULT_IMAGE_TRANSFORMATION.format, type: 'fits' } }
 
 export class FlatWizardHandler {
 	private readonly tasks: FlatWizardTask[] = []
@@ -25,7 +25,7 @@ export class FlatWizardHandler {
 		this.sendEvent(event)
 
 		if (event.state === 'idle') {
-			this.stop(event.id)
+			if (this.remove(task)) task.destroy()
 		}
 	}
 
@@ -33,7 +33,7 @@ export class FlatWizardHandler {
 		if (this.tasks.some((e) => e.request.id === request.id || e.camera.id === camera.id)) return
 		const task = new FlatWizardTask(this, request, camera, this.handleFlatWizardEvent.bind(this))
 		this.tasks.push(task)
-		void task.start()
+		void task.start().catch((error) => task.fail(error))
 	}
 
 	stop(id: string) {
@@ -41,9 +41,20 @@ export class FlatWizardHandler {
 
 		if (index >= 0) {
 			const task = this.tasks[index]
-			task.stop()
 			this.tasks.splice(index, 1)
+			task.stop()
 		}
+	}
+
+	private remove(task: FlatWizardTask) {
+		const index = this.tasks.indexOf(task)
+
+		if (index >= 0) {
+			this.tasks.splice(index, 1)
+			return true
+		}
+
+		return false
 	}
 }
 
@@ -73,7 +84,7 @@ export class FlatWizardTask {
 		this.mean.max = meanTarget + meanTolerance
 
 		this.handleFlatWizardEvent = (state, message) => {
-			if (state !== this.event.state) {
+			if (state !== this.event.state || message !== this.event.message) {
 				this.event.state = state
 				this.event.message = message
 				handleFlatWizardEvent(this.event, this)
@@ -91,7 +102,16 @@ export class FlatWizardTask {
 
 			this.handleFlatWizardEvent('computing', '')
 
-			const { image } = (await this.flatWizardHandler.cameraHandler.imageProcessor.transform(savedPath, false, this.camera?.name))!
+			const transformed = await this.flatWizardHandler.cameraHandler.imageProcessor.transform(savedPath, false, this.camera.name)
+
+			if (!transformed) {
+				this.fail(new Error('failed to load captured flat frame'))
+				return
+			}
+
+			if (this.stopped) return
+
+			const { image } = transformed
 			const { median } = histogram(image)
 
 			this.event.median = median
@@ -99,7 +119,15 @@ export class FlatWizardTask {
 			if (median >= this.mean.min && median <= this.mean.max) {
 				const extension = this.request.capture.transferFormat === 'XISF' ? 'xisf' : 'fit'
 				const path = join(this.request.path || Bun.env.capturesDir, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS')}.${extension}`)
-				await this.flatWizardHandler.cameraHandler.imageProcessor.export(savedPath, FLAT_WIZARD_IMAGE_TRANSFORMTION, this.camera?.name, path)
+				const exported = await this.flatWizardHandler.cameraHandler.imageProcessor.export(savedPath, FLAT_WIZARD_IMAGE_TRANSFORMATION, this.camera.name, path)
+
+				if (this.stopped) return
+
+				if (!exported) {
+					this.fail(new Error('failed to save flat frame'))
+					return
+				}
+
 				return this.handleFlatWizardEvent('idle', `saved at ${path}`)
 			} else if (median < this.mean.min) {
 				this.exposure.min = this.request.capture.exposureTime
@@ -119,12 +147,16 @@ export class FlatWizardTask {
 			}
 
 			await this.start()
-		} else if (event.state === 'error' || event.stopped) {
+		} else if (event.state === 'error') {
+			this.fail(new Error('camera capture failed'))
+		} else if (event.stopped) {
 			this.stop()
 		}
 	}
 
-	start() {
+	async start() {
+		if (this.stopped) return
+
 		this.request.capture.delay = 0
 		this.request.capture.count = 1
 		this.request.capture.autoSave = false
@@ -136,15 +168,31 @@ export class FlatWizardTask {
 
 		this.handleFlatWizardEvent('capturing', `exposure of ${this.request.capture.exposureTime.toFixed(0)} ms`)
 
-		return this.flatWizardHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
+		await this.flatWizardHandler.cameraHandler.start(this.camera, this.request.capture, (event) => {
+			void this.cameraCaptured(event).catch((error) => this.fail(error))
+		})
 	}
 
 	stop() {
 		if (!this.stopped) {
-			this.stopped = true
-			this.flatWizardHandler.cameraHandler.stop(this.camera)
+			this.destroy()
 			this.handleFlatWizardEvent('idle', 'stopped')
 		}
+	}
+
+	fail(error: unknown) {
+		if (this.stopped) return
+
+		console.error('flat wizard failed:', error)
+		this.destroy()
+		this.handleFlatWizardEvent('idle', 'flat wizard failed')
+	}
+
+	destroy() {
+		if (this.stopped) return
+
+		this.stopped = true
+		this.flatWizardHandler.cameraHandler.stop(this.camera)
 	}
 }
 

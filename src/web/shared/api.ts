@@ -604,7 +604,7 @@ export namespace Api {
 
 	export namespace PHD2 {
 		export function profiles() {
-			return json<readonly PHD2Profile[]>('/phd2/profiles', 'post')
+			return json<readonly PHD2Profile[]>('/phd2/profiles', 'get')
 		}
 
 		export function connect(req: PHD2Connect) {

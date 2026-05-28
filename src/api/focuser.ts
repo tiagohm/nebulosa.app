@@ -83,29 +83,40 @@ export function focuser(focuserHandler: FocuserHandler): Endpoints {
 	}
 }
 
-export function waitForFocuser(focuser: Focuser, expectedPosition: number, onCompleted: (action: 'reach' | 'timeout' | 'cancel') => void, delay: number = 30000) {
-	let timer: number | undefined = undefined
+export type WaitForFocuserAction = 'reach' | 'timeout' | 'cancel'
+
+export function waitForFocuser(focuser: Focuser, expectedPosition: number, onCompleted: (action: WaitForFocuserAction) => void, delay: number = 30000) {
+	// oxlint-disable-next-line prefer-const
+	let timer: ReturnType<typeof setTimeout> | undefined
+	let unsubscriber: VoidFunction = () => undefined
 	let finished = false
 
-	// Wait the focuser reach the position
-	const unsubscriber = bus.subscribe<FocuserUpdated>('focuser:update', (event) => {
-		if (!finished && event.device.id === focuser.id && (event.property === 'moving' || event.property === 'position') && !focuser.moving && focuser.position.value === expectedPosition) {
+	function complete(action: WaitForFocuserAction) {
+		if (!finished) {
+			finished = true
 			clearTimeout(timer)
 			unsubscriber()
-			onCompleted('reach')
+			onCompleted(action)
 		}
+	}
+
+	function hasReachedPosition() {
+		return !focuser.moving && focuser.position.value === expectedPosition
+	}
+
+	// Wait the focuser reach the position
+	unsubscriber = bus.subscribe<FocuserUpdated>('focuser:update', (event) => {
+		if (event.device.id === focuser.id && (event.property === 'moving' || event.property === 'position') && hasReachedPosition()) complete('reach')
 	})
 
-	timer = window.setTimeout(() => {
-		if (finished) return
-		unsubscriber()
-		onCompleted('timeout')
-	}, delay)
+	timer = setTimeout(() => complete('timeout'), delay)
+
+	if (hasReachedPosition()) {
+		// Let callers finish issuing the movement command before reporting an already-reached target.
+		queueMicrotask(() => complete('reach'))
+	}
 
 	return () => {
-		finished = true
-		clearTimeout(timer)
-		unsubscriber()
-		onCompleted('cancel')
+		complete('cancel')
 	}
 }

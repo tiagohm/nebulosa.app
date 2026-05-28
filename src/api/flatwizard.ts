@@ -92,17 +92,15 @@ export class FlatWizardTask {
 		}
 	}
 
-	private async cameraCaptured(event: CameraCaptureEvent) {
-		const { savedPath } = event
-
-		if (savedPath && !this.stopped && !event.stopped) {
+	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
+		if (path && !this.stopped) {
 			if (this.stopped) {
 				return this.handleFlatWizardEvent('idle', 'stopped')
 			}
 
 			this.handleFlatWizardEvent('computing', '')
 
-			const transformed = await this.flatWizardHandler.cameraHandler.imageProcessor.transform(savedPath, false, this.camera.name)
+			const transformed = await this.flatWizardHandler.cameraHandler.imageProcessor.transform(path, false, this.camera.name)
 
 			if (!transformed) {
 				this.fail(new Error('failed to load captured flat frame'))
@@ -119,7 +117,7 @@ export class FlatWizardTask {
 			if (median >= this.mean.min && median <= this.mean.max) {
 				const extension = this.request.capture.transferFormat === 'XISF' ? 'xisf' : 'fit'
 				const path = join(this.request.path || Bun.env.capturesDir, `${formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS')}.${extension}`)
-				const exported = await this.flatWizardHandler.cameraHandler.imageProcessor.export(savedPath, FLAT_WIZARD_IMAGE_TRANSFORMATION, this.camera.name, path)
+				const exported = await this.flatWizardHandler.cameraHandler.imageProcessor.export(path, FLAT_WIZARD_IMAGE_TRANSFORMATION, this.camera.name, path)
 
 				if (this.stopped) return
 

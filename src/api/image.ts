@@ -48,6 +48,7 @@ export interface ImageProcessorItem<T> {
 }
 
 const DEFAULT_IMAGE_EXPIRES_IN = 60000
+const COORDINATE_INTERPOLATION_DELTA = 24
 
 export class ImageProcessor {
 	private readonly buffered = new Map<string, ImageProcessorItem<BufferedImageItem>>()
@@ -71,15 +72,8 @@ export class ImageProcessor {
 		}
 
 		// Store the buffer
-		let item: BufferedImageItem
-
-		if (canBuffer) {
-			item = { buffer, path, camera: camera?.id }
-			this.buffered.set(path, { date: Date.now(), item })
-		} else {
-			item = { buffer: Buffer.allocUnsafe(0), path, camera: camera?.id }
-			this.buffered.set(path, { date: Date.now(), item })
-		}
+		const item: BufferedImageItem = { buffer: canBuffer ? buffer : undefined, path, camera: camera?.id }
+		this.buffered.set(path, { date: performance.now(), item })
 
 		console.info('image at', path, 'was buffered:', item.buffer?.byteLength)
 
@@ -92,7 +86,7 @@ export class ImageProcessor {
 		let item = this.transformed.get(hash)?.item
 
 		if (item) {
-			this.transformed.set(hash, { date: Date.now(), item })
+			this.transformed.set(hash, { date: performance.now(), item })
 			console.info('reusing transformed image at', path)
 			return item
 		}
@@ -115,7 +109,7 @@ export class ImageProcessor {
 
 		image = await this.applyTransformation(image, transformation)
 		item = { buffered: buffered ?? { path, camera }, image, transformation, hash }
-		this.transformed.set(hash, { date: Date.now(), item })
+		this.transformed.set(hash, { date: performance.now(), item })
 		console.info('image at', path, 'was transformed:', item.image.raw.byteLength)
 		return item
 	}
@@ -183,10 +177,12 @@ export class ImageProcessor {
 		if (!calibration.enabled) return image
 
 		try {
-			const dark = calibration.dark.enabled && calibration.dark.path ? await readImageFromPath(calibration.dark.path, 32) : undefined
-			const flat = calibration.flat.enabled && calibration.flat.path ? await readImageFromPath(calibration.flat.path, 32) : undefined
-			const bias = calibration.bias.enabled && calibration.bias.path ? await readImageFromPath(calibration.bias.path, 32) : undefined
-			const darkFlat = calibration.darkFlat.enabled && calibration.darkFlat.path ? await readImageFromPath(calibration.darkFlat.path, 32) : undefined
+			const [dark, flat, bias, darkFlat] = await Promise.all([
+				calibration.dark.enabled && calibration.dark.path ? readImageFromPath(calibration.dark.path, 32) : undefined,
+				calibration.flat.enabled && calibration.flat.path ? readImageFromPath(calibration.flat.path, 32) : undefined,
+				calibration.bias.enabled && calibration.bias.path ? readImageFromPath(calibration.bias.path, 32) : undefined,
+				calibration.darkFlat.enabled && calibration.darkFlat.path ? readImageFromPath(calibration.darkFlat.path, 32) : undefined,
+			])
 
 			return calibrate(image, dark, flat, bias, darkFlat)
 		} catch (e) {
@@ -206,7 +202,7 @@ export class ImageProcessor {
 
 			if (item) {
 				// Refresh the exported image's date
-				this.exported.set(hash, { date: Date.now(), item })
+				this.exported.set(hash, { date: performance.now(), item })
 				console.info('reusing exported image at', path)
 				return item
 			}
@@ -266,7 +262,7 @@ export class ImageProcessor {
 			}
 
 			const item = { output, info, transformed, hash }
-			output && this.exported.set(hash, { date: Date.now(), item })
+			output && this.exported.set(hash, { date: performance.now(), item })
 			console.info('image at', path, 'was exported to format', format.type, ':', item.output.byteLength)
 			return item
 		} else {
@@ -277,14 +273,15 @@ export class ImageProcessor {
 	}
 
 	get(path: string) {
-		return this.buffered.get(path)?.item.buffer
+		const buffer = this.buffered.get(path)?.item.buffer
+		return buffer?.byteLength ? buffer : undefined
 	}
 
 	// Stores the saved buffer for given path into local file
 	async store(path: string) {
 		const buffer = this.get(path)
 
-		if (buffer) {
+		if (buffer?.byteLength) {
 			path = join(Bun.env.tmpDir, basename(path))
 			await Bun.write(path, buffer)
 			return path
@@ -308,12 +305,12 @@ export class ImageProcessor {
 	private computeImageStretchHash(stretch: ImageStretch) {
 		const { auto, shadow, midtone, highlight, meanBackground, clippingPoint, centerMethod, dispersionMethod, sigmaLower, sigmaUpper, bits } = stretch
 		const sigmaClip = auto && stretch.sigmaClip ? `T:${centerMethod}:${dispersionMethod}:${sigmaLower}:${sigmaUpper}` : 'F'
-		return auto ? `T:${meanBackground}:${clippingPoint}:${sigmaClip}:${bits}` : `F:${shadow}:${midtone}:${highlight}:${sigmaClip}:${bits}`
+		return auto ? `T:${meanBackground}:${clippingPoint}:${sigmaClip}:${bits}` : `F:${shadow}:${midtone}:${highlight}:${bits}`
 	}
 
 	private computeImageScnrHash(scnr: ImageScnr) {
-		const { channel = 'GREEN', amount, method } = scnr
-		return `${channel}:${amount}:${method}`
+		const { channel, amount, method } = scnr
+		return channel ? `T:${channel}:${amount}:${method}` : 'F'
 	}
 
 	private computeImageFFTHash(fft: ImageFFT) {
@@ -345,7 +342,7 @@ export class ImageProcessor {
 
 	private computeImageAdjustmentHash(adjustment: ImageAdjustment) {
 		const { enabled, brightness, contrast, gamma, saturation } = adjustment
-		return enabled ? `T:${brightness.value}:${contrast.value}:${gamma.value}${this.computeImageAdjustmentSaturationHash(saturation)}` : 'F'
+		return enabled ? `T:${brightness.value}:${contrast.value}:${gamma.value}:${this.computeImageAdjustmentSaturationHash(saturation)}` : 'F'
 	}
 
 	private computeImageAdjustmentSaturationHash(saturation: ImageAdjustment['saturation']) {
@@ -371,7 +368,7 @@ export class ImageProcessor {
 
 	clear() {
 		let deleted = false
-		const now = Date.now()
+		const now = performance.now()
 
 		for (const [key, { date, item }] of this.exported) {
 			if (now - date >= DEFAULT_IMAGE_EXPIRES_IN) {
@@ -403,7 +400,7 @@ export class ImageProcessor {
 	}
 
 	ping(path: string, hash?: string, camera?: string, now?: number) {
-		now ??= Date.now()
+		now ??= performance.now()
 
 		for (const exported of this.exported.values()) {
 			if (exported.item.hash === hash) {
@@ -418,7 +415,7 @@ export class ImageProcessor {
 		}
 
 		for (const [key, value] of this.buffered) {
-			if (key === path || value.item.camera === camera) {
+			if (key === path || (camera !== undefined && value.item.camera === camera)) {
 				value.date = now
 			}
 		}
@@ -447,7 +444,7 @@ export class ImageHandler {
 
 	async save(req: SaveImage) {
 		if (!req.saveAt) return
-		await this.imageProcessor.export(req.path, req.transformation, undefined, req.saveAt)
+		await this.imageProcessor.export(req.path, req.transformation, req.camera, req.saveAt)
 	}
 
 	async annotate(req: AnnotateImage) {
@@ -470,7 +467,11 @@ export class ImageHandler {
 				const sb = eraPvstar(...spaceMotion(sa, utc))
 
 				if (sb) {
-					const [x, y] = wcs.skyToPix(sb[0], sb[1])!
+					const point = wcs.skyToPix(sb[0], sb[1])
+
+					if (!point) continue
+
+					const [x, y] = point
 
 					if (x >= 0 && y >= 0 && x < width && y < height) {
 						o.x = x
@@ -492,11 +493,17 @@ export class ImageHandler {
 
 				for (const body of ident.data_second_pass) {
 					const name = body[0]
-					const rightAscension = parseAngle(body[1], true)!
-					const declination = parseAngle(body[2])!
+					const rightAscension = parseAngle(body[1], true)
+					const declination = parseAngle(body[2])
 					const magnitude = +body[6]
 
-					const [x, y] = wcs.skyToPix(rightAscension, declination)!
+					if (rightAscension === undefined || declination === undefined) continue
+
+					const point = wcs.skyToPix(rightAscension, declination)
+
+					if (!point) continue
+
+					const [x, y] = point
 
 					if (x >= 0 && y >= 0 && x < width && y < height) {
 						res.push({ type: 'MINOR_PLANET', id: 3000000 + i++, name, x, y, rightAscension, declination, magnitude, pmRA: 0, pmDEC: 0, rv: 0, distance: 0, constellation: 0 })
@@ -514,17 +521,21 @@ export class ImageHandler {
 		using wcs = new Wcs(solution)
 		const { widthInPixels, heightInPixels } = solution
 
-		const delta = 24
+		const delta = COORDINATE_INTERPOLATION_DELTA
 		const width = widthInPixels + (widthInPixels % delta === 0 ? 0 : delta - (widthInPixels % delta))
 		const height = heightInPixels + (heightInPixels % delta === 0 ? 0 : delta - (heightInPixels % delta))
 
-		const md = new Array<number>((width / 24 + 1) * (height / 24 + 1))
+		const md = new Array<number>((width / delta + 1) * (height / delta + 1))
 		const ma = new Array<number>(md.length)
-		var n = 0
+		let n = 0
 
 		for (let y = 0; y <= height; y += delta) {
 			for (let x = 0; x <= width; x += delta, n++) {
-				const [rightAscension, declination] = wcs.pixToSky(x, y)!
+				const point = wcs.pixToSky(x, y)
+
+				if (!point) throw new Error(`failed to interpolate image coordinate at ${x},${y}`)
+
+				const [rightAscension, declination] = point
 				ma[n] = rightAscension
 				md[n] = declination
 			}
@@ -534,8 +545,8 @@ export class ImageHandler {
 	}
 
 	async statistics(req: StatisticImage) {
-		req.transformation.enabled = req.transformed
-		const image = await this.imageProcessor.transform(req.path, req.transformation)
+		const transformation = { ...req.transformation, enabled: req.transformed }
+		const image = await this.imageProcessor.transform(req.path, transformation, req.camera)
 
 		if (image?.image) {
 			const stats = new Array<ImageHistogram>(image.image.metadata.channels)

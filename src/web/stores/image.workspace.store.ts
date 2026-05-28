@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid'
 import type { Camera } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
-import type { CameraCaptureEvent } from 'src/shared/types'
+import type { CameraFrameEvent } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { initProxy } from '../shared/proxy'
 import type { Image, ImageSource } from '../shared/types'
@@ -31,10 +31,10 @@ const state = proxy<ImageWorkspaceState>({
 
 initProxy(state.picker, 'workspace.picker', ['p:path'])
 
-bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
-	if (event.savedPath) {
+bus.subscribe<CameraFrameEvent>('camera:frame', (event) => {
+	if (event.path) {
 		const camera = equipmentStore.get('camera', event.camera)
-		camera && add(event.savedPath, camera)
+		camera && add(event.path, camera)
 	}
 })
 

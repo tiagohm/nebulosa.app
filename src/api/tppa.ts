@@ -100,12 +100,12 @@ export class TppaTask {
 		}
 	}
 
-	private async cameraCaptured(event: CameraCaptureEvent) {
-		if (event.savedPath && !this.stopped && !event.stopped) {
+	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
+		if (path && !this.stopped) {
 			this.handleTppaEvent('solving')
 
 			// Solve image
-			const solution = await this.tppa.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: 8, path: event.savedPath, id: this.request.id, blind: false })
+			const solution = await this.tppa.solver.start({ ...this.request.solver, ...this.mount.equatorialCoordinate, radius: 8, path, id: this.request.id, blind: false })
 
 			if (this.stopped) return
 

@@ -1,5 +1,7 @@
 import bus from 'src/shared/bus'
 
+const MESSAGE_SEPARATOR = '@'
+
 export interface Messager {
 	readonly sendText: (data: string) => void
 }
@@ -31,14 +33,37 @@ export class WebSocketMessageHandler {
 	send<T = unknown>(type: string, message: T | undefined | null, socket?: Messager) {
 		// bus.emit(type, message)
 
-		if (this.sockets.size > 0) {
-			const data = `${type}@${message ? JSON.stringify(message) : ''}`
+		const data = serializeMessage(type, message)
 
-			if (socket) {
-				socket.sendText(data)
-			} else {
-				for (const socket of this.sockets) socket.sendText(data)
-			}
+		if (data === undefined) return
+
+		if (socket) {
+			this.sendText(socket, data)
+		} else if (this.sockets.size > 0) {
+			for (const socket of this.sockets) this.sendText(socket, data)
 		}
+	}
+
+	private sendText(socket: Messager, data: string) {
+		try {
+			socket.sendText(data)
+		} catch (e) {
+			if (this.sockets.delete(socket)) {
+				bus.emit('ws:close', socket)
+			}
+
+			console.error('failed to send web socket message', e)
+		}
+	}
+}
+
+function serializeMessage(type: string, message: unknown) {
+	if (type.length === 0 || type.includes(MESSAGE_SEPARATOR)) return
+	if (message === undefined || message === null) return `${type}${MESSAGE_SEPARATOR}`
+
+	try {
+		return `${type}${MESSAGE_SEPARATOR}${JSON.stringify(message) ?? ''}`
+	} catch (e) {
+		console.error('failed to serialize web socket message', e)
 	}
 }

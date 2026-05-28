@@ -728,8 +728,12 @@ export interface CameraCaptureEvent {
 	frameExposureTime: number
 	totalProgress: CameraCaptureTime
 	frameProgress: CameraCaptureTime
-	savedPath?: string
 	stopped: boolean
+}
+
+export interface CameraFrameEvent {
+	readonly camera: string // id
+	readonly path: string
 }
 
 // Mount
@@ -1016,7 +1020,6 @@ export const DEFAULT_CAMERA_CAPTURE_EVENT: CameraCaptureEvent = {
 		elapsedTime: 0,
 		progress: 0,
 	},
-	savedPath: undefined,
 	stopped: false,
 }
 

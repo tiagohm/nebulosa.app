@@ -9,42 +9,22 @@ import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
 
-export enum DeviceInterfaceType {
-	TELESCOPE = 0x0001, // Telescope interface, must subclass INDI::Telescope.
-	CCD = 0x0002, // CCD interface, must subclass INDI::CCD.
-	GUIDER = 0x0004, // Guider interface, must subclass INDI::GuiderInterface.
-	FOCUSER = 0x0008, // Focuser interface, must subclass INDI::FocuserInterface.
-	FILTER = 0x0010, // Filter interface, must subclass INDI::FilterInterface.
-	DOME = 0x0020, // Dome interface, must subclass INDI::Dome.
-	GPS = 0x0040, // GPS interface, must subclass INDI::GPS.
-	WEATHER = 0x0080, // Weather interface, must subclass INDI::Weather.
-	AO = 0x0100, // Adaptive Optics Interface.
-	DUSTCAP = 0x0200, // Dust Cap Interface.
-	LIGHTBOX = 0x0400, // Light Box Interface.
-	DETECTOR = 0x0800, // Detector interface, must subclass INDI::Detector.
-	ROTATOR = 0x1000, // Rotator interface, must subclass INDI::RotatorInterface.
-	SPECTROGRAPH = 0x2000, // Spectrograph interface.
-	CORRELATOR = 0x4000, // Correlators (interferometers) interface.
-	AUXILIARY = 0x8000, // Auxiliary interface.
-	OUTPUT = 0x10000, // Digital Output (e.g. Relay) interface.
-	INPUT = 0x20000, // Digital/Analog Input (e.g. GPIO) interface.
-	POWER = 0x40000, // Auxiliary interface.
-	SENSOR_INTERFACE = SPECTROGRAPH | DETECTOR | CORRELATOR,
-}
-
-export function isInterfaceType(value: number, type: DeviceInterfaceType) {
-	return (value & type) !== 0
-}
+const MAX_DEVICE_MESSAGES = 100
+const DEVICE_PROPERTY_LISTENER_TTL = 60000
 
 export function connect(device: Device) {
-	if (!device.connected) {
-		device[CLIENT]!.sendSwitch({ device: device.name, name: 'CONNECTION', elements: { CONNECT: true } })
+	const client = device[CLIENT]
+
+	if (client && !device.connected) {
+		client.sendSwitch({ device: device.name, name: 'CONNECTION', elements: { CONNECT: true } })
 	}
 }
 
 export function disconnect(device: Device) {
-	if (device.connected) {
-		device[CLIENT]!.sendSwitch({ device: device.name, name: 'CONNECTION', elements: { DISCONNECT: true } })
+	const client = device[CLIENT]
+
+	if (client && device.connected) {
+		client.sendSwitch({ device: device.name, name: 'CONNECTION', elements: { DISCONNECT: true } })
 	}
 }
 
@@ -73,7 +53,7 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 		this.messageListeners.add(listener)
 	}
 
-	remoteMessageListener(listener: IndiMessageListener) {
+	removeMessageListener(listener: IndiMessageListener) {
 		this.messageListeners.delete(listener)
 	}
 
@@ -172,13 +152,20 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 			messages.set(device, list)
 		}
 
-		if (list.length > 100) {
+		if (list.length >= MAX_DEVICE_MESSAGES) {
 			list.shift()
 		}
 
 		list.push(message)
 
-		for (const listener of this.messageListeners) listener(client, message)
+		for (const listener of this.messageListeners) {
+			try {
+				listener(client, message)
+			} catch (e) {
+				this.messageListeners.delete(listener)
+				console.error('failed to notify INDI message listener', e)
+			}
+		}
 	}
 
 	get(client: Client | string | undefined, id: string, type?: DeviceType): Device | undefined {
@@ -210,9 +197,22 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 		else return undefined
 	}
 
-	messages(client: Client | string, device?: string) {
-		client = typeof client === 'string' ? this.messageMap.keys().find((e) => e.id === client)! : client
-		return this.messageMap.get(client)?.get(device || 'GLOBAL') ?? []
+	messages(client: Client | string, id?: string) {
+		let resolvedClient = typeof client === 'string' ? undefined : client
+
+		if (typeof client === 'string') {
+			for (const current of this.messageMap.keys()) {
+				if (current.id === client) {
+					resolvedClient = current
+					break
+				}
+			}
+		}
+
+		if (!resolvedClient) return []
+
+		const device = id && this.get(resolvedClient, id)
+		return this.messageMap.get(resolvedClient)?.get((device && device?.name) || id || 'GLOBAL') ?? []
 	}
 }
 
@@ -231,7 +231,9 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 			if (!message.device) {
 				notificationHandler.send({ title: 'INFO', description: message.message, color: 'primary' })
 			} else if (this.listeners.has(`${client.id}:${message.device}`)) {
-				wsm.send('indi:message', { ...message, clientId: client.id } satisfies Message & { clientId: string })
+				this.listen(client.id, message.device)
+				const device = indiHandler.get(client, message.device)
+				wsm.send('indi:message', { ...message, device: device?.id ?? message.device, clientId: client.id } satisfies Message & { clientId: string })
 			}
 		})
 	}
@@ -249,10 +251,10 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 	}
 
 	clear() {
-		const now = Date.now()
+		const now = performance.now()
 
 		for (const [name, ping] of this.listeners) {
-			if (now - ping >= 10000) {
+			if (now - ping >= DEVICE_PROPERTY_LISTENER_TTL) {
 				this.listeners.delete(name)
 				console.info('device', name, 'was unlistened')
 			}
@@ -261,16 +263,36 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 
 	notify(client: string, device: string, property: DeviceProperty, type: 'add' | 'update' | 'remove') {
 		if (this.listeners.has(`${client}:${device}`)) {
-			this.wsm.send(`indi:property:${type}`, { client, device, name: property.name, property } satisfies IndiDevicePropertyEvent)
+			this.listen(client, device)
+			const resolvedDevice = this.indiHandler.get(client, device)
+			this.wsm.send(`indi:property:${type}`, { client, device: resolvedDevice?.id ?? device, name: property.name, property } satisfies IndiDevicePropertyEvent)
 		}
 	}
 
-	send(client: string, type: DevicePropertyType, message: NewVector) {
-		const device = this.indiHandler.get(client, message.device)!
+	list(client: string, device: Device) {
+		if (!client) return
 
-		if (type === 'SWITCH') device[CLIENT]!.sendSwitch(message as never)
-		else if (type === 'NUMBER') device[CLIENT]!.sendNumber(message as never)
-		else if (type === 'TEXT') device[CLIENT]!.sendText(message as never)
+		this.listen(client, device.name)
+		return this.properties.get(client, device.name)
+	}
+
+	send(client: string, type: DevicePropertyType, message: NewVector) {
+		if (!client) return
+
+		const device = this.indiHandler.get(client, message.device)
+		const indi = device?.[CLIENT]
+
+		if (!device || !indi) return
+
+		this.listen(client, device.name)
+
+		if (type === 'SWITCH') indi.sendSwitch(message as never)
+		else if (type === 'NUMBER') indi.sendNumber(message as never)
+		else if (type === 'TEXT') indi.sendText(message as never)
+	}
+
+	private listen(client: string, device: string) {
+		this.listeners.set(`${client}:${device}`, performance.now())
 	}
 }
 
@@ -284,10 +306,14 @@ export class IndiServerHandler {
 
 		this.stop()
 
-		const cmd = ['indiserver', '-p', req.port?.toFixed(0) || '7624', '-r', req.repeat?.toFixed(0) || '1', req.verbose ? `-${'v'.repeat(req.verbose)}` : '', ...req.drivers].filter((e) => !!e)
+		const cmd = ['indiserver', '-p', port(req.port).toFixed(0), '-r', repeat(req.repeat).toFixed(0), verbose(req.verbose), ...drivers(req.drivers)].filter((e) => !!e)
 		const p = Bun.spawn({ cmd })
 
-		void p.exited.then((code) => this.wsm.send('indi:server:stop', { pid: p.pid, code } satisfies IndiServerEvent))
+		void p.exited.then((code) => {
+			if (this.subprocess !== p) return
+			this.subprocess = undefined
+			this.wsm.send('indi:server:stop', { pid: p.pid, code } satisfies IndiServerEvent)
+		})
 
 		this.wsm.send('indi:server:start', { pid: p.pid } satisfies IndiServerEvent)
 		this.subprocess = p
@@ -335,4 +361,20 @@ export function indi(indiHandler: IndiHandler, indiDevicePropertyHandler: IndiDe
 		'/indi/server/status': { GET: async () => response(await indiServerHandler.status()) },
 		'/indi/server/drivers': { GET: async () => response(await indiServerHandler.drivers()) },
 	}
+}
+
+function port(value: unknown) {
+	return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 65535 ? value : 7624
+}
+
+function repeat(value: unknown) {
+	return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : 1
+}
+
+function verbose(value: unknown) {
+	return typeof value === 'number' && Number.isInteger(value) && value > 0 ? `-${'v'.repeat(Math.min(value, 4))}` : ''
+}
+
+function drivers(value: unknown) {
+	return Array.isArray(value) ? value.filter((e): e is string => typeof e === 'string' && e.length > 0) : []
 }

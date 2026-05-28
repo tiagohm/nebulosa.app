@@ -6,7 +6,7 @@ import type { CameraManager, DeviceHandler, FocuserManager, MountManager, Rotato
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } from 'nebulosa/src/temporal'
 import bus from 'src/shared/bus'
-import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
+import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
 import { type Endpoints, query, response } from './http'
 import type { ImageProcessor } from './image'
@@ -45,7 +45,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 
 	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {
 		this.wsm.send<CameraUpdated>('camera:update', { device: { type: 'camera', id: camera.id, name: camera.name, [property]: camera[property] }, property, state })
-		this.tasks.get(camera.id)?.cameraUpdated(camera, property, state)
+		void this.tasks.get(camera.id)?.cameraUpdated(camera, property, state)
 	}
 
 	removed(camera: Camera) {
@@ -61,19 +61,18 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		return Array.from(this.cameraManager.list(client))
 	}
 
-	sendEvent(event: CameraCaptureEvent) {
-		this.wsm.send('camera:capture', event)
+	sendEvent(event: CameraCaptureEvent, path?: string) {
+		if (path) this.wsm.send<CameraFrameEvent>('camera:frame', { camera: event.camera, path })
+		else this.wsm.send('camera:capture', event)
 	}
 
-	private handleCameraCaptureEvent(task: CameraCaptureTask, event: CameraCaptureEvent) {
+	private handleCameraCaptureEvent(task: CameraCaptureTask, event: CameraCaptureEvent, path?: string) {
 		const { camera } = task
 
-		if (this.tasks.get(camera.id) !== task) return false
-
-		this.sendEvent(event)
+		this.sendEvent(event, path)
 
 		// Remove the task after it finished
-		if (event.state === 'idle') {
+		if (!path && event.state === 'idle') {
 			this.cameraManager.disableBlob(camera)
 			task.destroy()
 			this.tasks.delete(camera.id)
@@ -82,14 +81,14 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		return true
 	}
 
-	start(camera: Camera, req: CameraCaptureStart, onCameraCaptureEvent?: (event: CameraCaptureEvent) => void) {
+	start(camera: Camera, req: CameraCaptureStart, onCameraCaptureEvent?: (event: CameraCaptureEvent, path?: string) => void) {
 		// Stop any existing task for this camera and remove its handler
 		this.tasks.get(camera.id)?.stop()
 
 		// Start a new task for the camera
-		const task = new CameraCaptureTask(this, req, camera, (task, event) => {
-			if (this.handleCameraCaptureEvent(task, event)) {
-				onCameraCaptureEvent?.(event)
+		const task = new CameraCaptureTask(this, req, camera, (task, event, path) => {
+			if (this.handleCameraCaptureEvent(task, event, path)) {
+				onCameraCaptureEvent?.(event, path)
 			}
 		})
 
@@ -139,7 +138,7 @@ export class CameraCaptureTask {
 		readonly cameraHandler: CameraHandler,
 		readonly request: CameraCaptureStart,
 		readonly camera: Camera,
-		private readonly handleCameraCaptureEvent: (task: CameraCaptureTask, event: CameraCaptureEvent) => void,
+		private readonly handleCameraCaptureEvent: (task: CameraCaptureTask, event: CameraCaptureEvent, path?: string) => void,
 	) {
 		this.event.loop = request.exposureMode === 'loop'
 		this.event.camera = camera.id
@@ -159,7 +158,7 @@ export class CameraCaptureTask {
 		return this.event.stopped
 	}
 
-	cameraUpdated(camera: Camera, property: keyof Camera, state?: PropertyState) {
+	async cameraUpdated(camera: Camera, property: keyof Camera, state?: PropertyState) {
 		if (property === 'exposure') {
 			const { exposure } = camera
 
@@ -195,49 +194,49 @@ export class CameraCaptureTask {
 					if (this.waitingTime >= MINIMUM_WAITING_TIME) {
 						this.event.state = 'waiting'
 
-						// Wait for the specified waiting time and send progress event
-						void waitFor(this.waitingTime / 1000, (remainingTime) => {
-							if (this.stopped) return false
+						try {
+							// Wait for the specified waiting time and send progress event
+							const success = await waitFor(this.waitingTime / 1000, (remainingTime) => {
+								if (this.stopped) return false
 
-							remainingTime *= 1000
+								remainingTime *= 1000
 
-							const elapsedTime = this.waitingTime - remainingTime
+								const elapsedTime = this.waitingTime - remainingTime
 
-							if (!this.event.loop) {
-								this.event.totalProgress.remainingTime = this.totalExposureProgress[0] - elapsedTime
-								this.event.totalProgress.progress = Math.max(0, (1 - this.event.totalProgress.remainingTime / this.event.totalExposureTime) * 100)
-							}
-
-							this.event.totalProgress.elapsedTime = this.totalExposureProgress[1] + elapsedTime
-							this.event.frameProgress.remainingTime = remainingTime
-							this.event.frameProgress.elapsedTime = this.waitingTime - remainingTime
-							this.event.frameProgress.progress = Math.max(0, (1 - remainingTime / this.waitingTime) * 100)
-							this.handleCameraCaptureEvent(this, this.event)
-
-							return true
-						}).then(
-							(success) => {
-								if (success) {
-									// Update total exposure progress
-									this.totalExposureProgress[0] -= this.waitingTime
-									this.totalExposureProgress[1] += this.waitingTime
-
-									// Start the next exposure
-									void this.start()
-								} else {
-									// Finish
-									this.finish()
+								if (!this.event.loop) {
+									this.event.totalProgress.remainingTime = this.totalExposureProgress[0] - elapsedTime
+									this.event.totalProgress.progress = Math.max(0, (1 - this.event.totalProgress.remainingTime / this.event.totalExposureTime) * 100)
 								}
-							},
-							(error: unknown) => this.fail(error),
-						)
+
+								this.event.totalProgress.elapsedTime = this.totalExposureProgress[1] + elapsedTime
+								this.event.frameProgress.remainingTime = remainingTime
+								this.event.frameProgress.elapsedTime = this.waitingTime - remainingTime
+								this.event.frameProgress.progress = Math.max(0, (1 - remainingTime / this.waitingTime) * 100)
+								this.handleCameraCaptureEvent(this, this.event)
+
+								return true
+							})
+
+							if (success) {
+								// Update total exposure progress
+								this.totalExposureProgress[0] -= this.waitingTime
+								this.totalExposureProgress[1] += this.waitingTime
+
+								// Start the next exposure
+								void this.start()
+							} else {
+								// Finish
+								this.finish()
+							}
+						} catch (error) {
+							this.fail(error)
+						}
 
 						// Do nothing if it wasn't stopped
 						if (!this.stopped) return
 					} else {
 						// Start the next exposure
-						void this.start()
-						return
+						return this.start()
 					}
 				}
 			} else if (state === 'Alert') {
@@ -267,9 +266,7 @@ export class CameraCaptureTask {
 				}
 
 				// Send event
-				this.event.savedPath = path
-				this.handleCameraCaptureEvent(this, this.event)
-				this.event.savedPath = undefined
+				this.handleCameraCaptureEvent(this, this.event, path)
 			} catch (error) {
 				this.fail(error)
 			}
@@ -347,6 +344,7 @@ export class CameraCaptureTask {
 	}
 
 	private finish() {
+		console.info(new Error().stack)
 		this.event.state = 'idle'
 		this.handleCameraCaptureEvent(this, this.event)
 	}

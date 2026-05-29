@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useModal } from '@/hooks/modal'
+import { useModal } from '@/hooks/modal.hook'
 import { IconButton } from './components/IconButton'
 import { Icons } from './Icon'
 

@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { useWakeLock } from 'src/web/hooks/wakelock'
+import { useWakeLock } from '@/hooks/wakelock.hook'
 import { isWakeLockSupported } from '@/shared/util'
 import { IconButton, type IconButtonProps } from './components/IconButton'
 import { Icons } from './Icon'

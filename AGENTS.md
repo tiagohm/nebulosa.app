@@ -63,13 +63,13 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 - Start development: `bun dev`
 - Start production mode: `bun prod`
 - Build executable: `bun run compile`
-- Format: `bun run fmt`
-- Format check: `bun run fmt:check`
-- Lint and Type-check: `bun run lint`
-- Lint with fixes: `bun run lint:fix`
+- Format: use the `nebulosa-oxc` MCP server's `oxfmt` tool with no args instead of running `bun run fmt` locally.
+- Format check: use the `nebulosa-oxc` MCP server's `oxfmt` tool with `["--check"]` instead of running `bun run fmt:check` locally.
+- Lint and Type-check: use the `nebulosa-oxc` MCP server's `oxlint` tool with no args instead of running `bun run lint` locally.
+- Lint with fixes: use the `nebulosa-oxc` MCP server's `oxlint` tool with `["--fix"]` instead of running `bun run lint:fix` locally.
 - Refresh codebase graph: `bun run index`
 - If tests are added, prefer `bun test` before introducing another test runner.
-- If a Bun wrapper command fails because of local bin remapping, use the direct local binary for the same tool and report that fallback.
+- Do not try local `oxlint`, `oxfmt`, or Bun wrapper commands from the Codex sandbox first; this checkout provides the `nebulosa-oxc` MCP server specifically to avoid local bin remapping and sandbox spawn failures.
 
 ## Architecture Rules
 
@@ -289,7 +289,7 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 - Respect OXC's current guardrails in new code: no import cycles, no floating promises, and prefer `performance.now()` over `Date.now()` for durations.
 - Keep modules focused and ownership clear.
 - Add comments only where they explain non-obvious behavior, lifecycle cleanup, normalization, or interaction details.
-- Validate with the smallest relevant check before finishing: `git diff --check`, `bun run fmt:check`, `bun run lint`, and `bun run compile` when touching Bun runtime, env, packaging, or build-plugin code.
+- Validate with the smallest relevant check before finishing: `git diff --check`, the `nebulosa-oxc` MCP server's `oxfmt` tool with `["--check"]`, the `nebulosa-oxc` MCP server's `oxlint` tool, and `bun run compile` when touching Bun runtime, env, packaging, or build-plugin code.
 - Preserve Bun-first workflows in every change.
 
 ## Placement Guide

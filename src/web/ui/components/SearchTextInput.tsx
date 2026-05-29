@@ -1,5 +1,5 @@
-import { tw } from 'src/web/shared/util'
 import { tv, type ClassValue } from 'tailwind-variants'
+import { tw } from '@/shared/util'
 import { Icons } from '../Icon'
 import { TextInput, type TextInputProps } from './TextInput'
 

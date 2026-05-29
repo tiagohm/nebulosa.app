@@ -2,8 +2,10 @@ import { memo, type ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { calculatorStore } from '@/stores/calculator.store'
 import { Chip } from './components/Chip'
+import { IconButton } from './components/IconButton'
 import { NumberInput } from './components/NumberInput'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
+import { Icons } from './Icon'
 import { Modal } from './Modal'
 
 const MIN_APERTURE = 1
@@ -37,28 +39,41 @@ export const Calculator = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal header="Calculator" id="calculator" maxWidth="440px" onHide={calculatorStore.hide}>
+		<Modal header="Calculator" id="calculator" maxWidth="456px" onHide={calculatorStore.hide}>
 			<Body />
 		</Modal>
 	)
 })
 
-const Body = memo(() => (
-	<div className="mt-0 px-1 py-2">
-		<Tabs className="max-h-100" classNames={{ panelContainer: 'overflow-y-auto pr-1', tabList: 'max-h-100 w-44', tab: 'min-h-7' }} placement="start">
-			{FORMULA_TABS.map(({ id, label }) => (
-				<Tab id={id} key={id}>
-					{label}
-				</Tab>
-			))}
-			{FORMULA_TABS.map(({ Component, id }) => (
-				<TabPanel id={id} key={id}>
-					<Component />
-				</TabPanel>
-			))}
-		</Tabs>
-	</div>
-))
+const Body = memo(() => {
+	const { favorites } = useSnapshot(calculatorStore.state)
+	const tabs = FORMULA_TABS.toSorted((a, b) => {
+		const ai = favorites.indexOf(a.id)
+		const bi = favorites.indexOf(b.id)
+
+		if (ai === bi) return a.label.localeCompare(b.label)
+		if (ai === -1) return 1
+		if (bi === -1) return -1
+		return a.label.localeCompare(b.label)
+	})
+
+	return (
+		<div className="mt-0 px-1 py-2">
+			<Tabs className="max-h-100" classNames={{ panelContainer: 'overflow-y-auto pr-1', tabList: 'max-h-100 w-56', tab: 'min-h-9' }} placement="start">
+				{tabs.map(({ id, label }) => (
+					<Tab id={id} key={id} endContent={<IconButton icon={Icons.Star} color={favorites.includes(id) ? 'warning' : 'default'} onClick={() => calculatorStore.toggleFavorite(id)} size="sm" />}>
+						{label}
+					</Tab>
+				))}
+				{tabs.map(({ Component, id }) => (
+					<TabPanel id={id} key={id}>
+						<Component />
+					</TabPanel>
+				))}
+			</Tabs>
+		</div>
+	)
+})
 
 interface FormulaProps {
 	readonly description: string
@@ -71,7 +86,7 @@ function Formula({ description, expression, children }: FormulaProps) {
 		<div className="flex h-full w-full flex-col justify-between gap-2">
 			<div className="flex flex-1 flex-col items-center justify-center gap-1">
 				<p className="text-center text-sm">{description}</p>
-				<Chip className="text-medium" color="primary" label={expression} />
+				<Chip className="text-medium" color="primary" label={expression} size="sm" />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-2">{children}</div>
 		</div>
@@ -642,8 +657,8 @@ const AsteroidMagnitude = memo(() => {
 const FORMULA_TABS = [
 	{ id: 'focalLength', label: 'Focal Length', Component: FocalLength },
 	{ id: 'focalRatio', label: 'Focal Ratio', Component: FocalRatio },
-	{ id: 'dawes', label: 'Dawes Limit', Component: DawesLimit },
-	{ id: 'rayleigh', label: 'Rayleigh Limit', Component: RayleighLimit },
+	{ id: 'dawesLimit', label: 'Dawes Limit', Component: DawesLimit },
+	{ id: 'rayleighLimit', label: 'Rayleigh Limit', Component: RayleighLimit },
 	{ id: 'limitingMagnitude', label: 'Limiting Magnitude', Component: LimitingMagnitude },
 	{ id: 'lightGraspRatio', label: 'Light Grasp Ratio', Component: LightGraspRatio },
 	{ id: 'magnification', label: 'Magnification', Component: Magnification },
@@ -686,4 +701,4 @@ const FORMULA_TABS = [
 	{ id: 'surfaceBrightness', label: 'Surface Brightness', Component: SurfaceBrightness },
 	{ id: 'cometMagnitude', label: 'Comet Magnitude', Component: CometMagnitude },
 	{ id: 'asteroidMagnitude', label: 'Asteroid Magnitude', Component: AsteroidMagnitude },
-].sort((a, b) => a.label.localeCompare(b.label))
+] as const

@@ -16,7 +16,7 @@
 		"typeCheck": true
 	},
 	"rules": {
-		// Correctness (243)
+		// Correctness (253)
 		"eslint/constructor-super": "error",
 		"eslint/for-direction": "error",
 		"eslint/getter-return": "off",
@@ -140,7 +140,7 @@
 		"unicorn/prefer-array-find": "error",
 		"unicorn/prefer-array-flat-map": "error",
 		"unicorn/prefer-set-has": "error",
-		// Restriction (95)
+		// Restriction (96)
 		"eslint/class-methods-use-this": "off",
 		"eslint/complexity": "off",
 		"eslint/default-case": "off",
@@ -200,6 +200,7 @@
 		"typescript/prefer-literal-enum-member": "off",
 		"typescript/promise-function-async": "off",
 		"typescript/use-unknown-in-catch-callback-variable": "off",
+		"unicorn/import-style": "off",
 		"unicorn/no-abusive-eslint-disable": "off",
 		"unicorn/no-anonymous-default-export": "off",
 		"unicorn/no-array-for-each": "error",
@@ -367,7 +368,7 @@
 		"unicorn/prefer-top-level-await": "error",
 		"unicorn/prefer-type-error": "error",
 		"unicorn/require-number-to-fixed-digits-argument": "error",
-		// Style (259)
+		// Style (260)
 		"eslint/arrow-body-style": "error",
 		"eslint/capitalized-comments": "off",
 		"eslint/curly": "off",

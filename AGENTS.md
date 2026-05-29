@@ -63,13 +63,12 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 - Start development: `bun dev`
 - Start production mode: `bun prod`
 - Build executable: `bun run compile`
-- Format: use the `nebulosa-oxc` MCP server's `oxfmt` tool with no args instead of running `bun run fmt` locally.
-- Format check: use the `nebulosa-oxc` MCP server's `oxfmt` tool with `["--check"]` instead of running `bun run fmt:check` locally.
-- Lint and Type-check: use the `nebulosa-oxc` MCP server's `oxlint` tool with no args instead of running `bun run lint` locally.
-- Lint with fixes: use the `nebulosa-oxc` MCP server's `oxlint` tool with `["--fix"]` instead of running `bun run lint:fix` locally.
+- Format: `bun run fmt`
+- Format check: `bun run fmt:check`
+- Lint and Type-check: `bun run lint`
+- Lint with fixes: `bun run lint:fix`
 - Refresh codebase graph: `bun run index`
 - If tests are added, prefer `bun test` before introducing another test runner.
-- Do not try local `oxlint`, `oxfmt`, or Bun wrapper commands from the Codex sandbox first; this checkout provides the `nebulosa-oxc` MCP server specifically to avoid local bin remapping and sandbox spawn failures.
 
 ## Architecture Rules
 

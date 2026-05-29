@@ -281,6 +281,7 @@ export interface AsteroidMagnitude {
 
 export interface CalculatorState {
 	show: boolean
+	favorites: CalculatorSection[]
 	readonly focalLength: FocalLengthRatio
 	readonly focalRatio: FocalLengthRatio
 	readonly dawesLimit: ResolutionLimit
@@ -382,6 +383,7 @@ type CalculatorSection = (typeof CALCULATOR_SECTIONS)[number]
 
 const state = proxy<CalculatorState>({
 	show: false,
+	favorites: [],
 	focalLength: { aperture: 152, focalRatio: 9, focalLength: 1368 },
 	focalRatio: { focalLength: 1368, aperture: 152, focalRatio: 9 },
 	dawesLimit: { aperture: 152, resolution: 0.763 },
@@ -430,7 +432,7 @@ const state = proxy<CalculatorState>({
 	asteroidMagnitude: { absoluteMagnitude: 12, heliocentricDistance: 2, delta: 1.5, phaseCorrection: 0.3, magnitude: 14.69 },
 })
 
-initProxy(state, 'calculator', ['p:show', ...CALCULATOR_SECTIONS.map((section) => `o:${section}` as ProxyProperties<typeof state>)])
+initProxy(state, 'calculator', ['p:show', 'o:favorites', ...CALCULATOR_SECTIONS.map((section) => `o:${section}` as ProxyProperties<typeof state>)])
 
 function refreshDerivedValue(property: CalculatorSection) {
 	switch (property) {
@@ -588,6 +590,16 @@ function update<P extends CalculatorSection, K extends keyof CalculatorState[P]>
 	refreshDerivedValue(property)
 }
 
+function toggleFavorite(section: CalculatorSection) {
+	const index = state.favorites.indexOf(section)
+
+	if (index === -1) {
+		state.favorites.push(section)
+	} else {
+		state.favorites.splice(index, 1)
+	}
+}
+
 function show() {
 	state.show = true
 }
@@ -598,6 +610,7 @@ function hide() {
 
 export const calculatorStore = {
 	state,
+	toggleFavorite,
 	show,
 	hide,
 	update,

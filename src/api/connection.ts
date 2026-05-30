@@ -6,7 +6,7 @@ import type { AstronomicalImageStar } from 'nebulosa/src/image.generator'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi.client'
 import type { Client, Device } from 'nebulosa/src/indi.device'
 import type { DeviceProvider, FocuserManager, GuideOutputManager, MountManager, RotatorManager } from 'nebulosa/src/indi.manager'
-import { CameraSimulator, type CatalogSource, type CatalogSourceStar, ClientSimulator, CoverSimulator, type DeviceSimulatorOptions, FilterWheelSimulator, FlatPanelSimulator, FocuserSimulator, MountSimulator, RotatorSimulator } from 'nebulosa/src/indi.simulator'
+import { CameraSimulator, type CatalogSource, type CatalogSourceStar, ClientSimulator, CoverSimulator, type DeviceSimulatorOptions, FlatPanelSimulator, FocuserSimulator, MountSimulator, RotatorSimulator, WheelSimulator } from 'nebulosa/src/indi.simulator'
 import { clamp } from 'nebulosa/src/math'
 import type { Writable } from 'nebulosa/src/types'
 import { VizierGaiaCatalog, type VizierGaiaCatalogEntry } from 'nebulosa/src/vizier'
@@ -199,7 +199,7 @@ export class ConnectionHandler {
 			const camera = new CameraSimulator('Camera Simulator', client, { ...options, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogSources })
 			const guideCamera = new CameraSimulator('Guide Camera Simulator', client, { ...options, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogSources })
 			const focuser = new FocuserSimulator('Focuser Simulator', client, options)
-			const filterWheel = new FilterWheelSimulator('Filter Wheel Simulator', client, options)
+			const wheel = new WheelSimulator('Wheel Simulator', client, options)
 			const rotator = new RotatorSimulator('Rotator Simulator', client, options)
 			const flatPanel = new FlatPanelSimulator('Flat Panel Simulator', client, options)
 			const cover = new CoverSimulator('Dust Cap Simulator', client, options)

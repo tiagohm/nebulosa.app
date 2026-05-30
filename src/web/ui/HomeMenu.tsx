@@ -201,7 +201,7 @@ const DeviceList = memo(() => {
 	return (
 		<div className="col-span-full my-2 flex flex-col flex-wrap items-center justify-center gap-2">
 			<span className="mt-2 text-sm font-bold uppercase">{DEVICE_TYPE_LABELS[selected] ?? selected}</span>
-			<List fullWidth itemCount={length} itemHeight={36} onAction={handleAction}>
+			<List fullWidth itemCount={length} itemHeight={36} onAction={handleAction} emptyContent="No devices">
 				{(i) => <DeviceItem key={devices[i].id} type={selected} index={i} />}
 			</List>
 		</div>

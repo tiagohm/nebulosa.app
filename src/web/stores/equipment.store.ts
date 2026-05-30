@@ -106,7 +106,7 @@ function update<T extends DeviceType>(type: T, event: DeviceUpdated<EquipmentSta
 
 	if (device !== undefined) {
 		Object.assign(device, event.device)
-		if (event.property === 'connected') device.connecting = false
+		if (event.property === 'connected' && event.state !== 'Busy') device.connecting = false
 		return
 	}
 
@@ -142,7 +142,7 @@ async function connect(device: Device) {
 
 			try {
 				await Api.Indi.connect(device)
-			} finally {
+			} catch {
 				found.connecting = false
 			}
 		}

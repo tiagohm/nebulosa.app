@@ -1,11 +1,12 @@
 import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import { formatTemporal } from 'nebulosa/src/temporal'
-import { memo, useRef } from 'react'
+import { memo, type ComponentPropsWithRef, useRef } from 'react'
 import type { ConnectionStatus } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { connectionStore, isNetworkConnection } from '@/stores/connection.store'
 import type { Connection } from '../shared/types'
 import { ClientTypeSelect } from './ClientTypeSelect'
+import { Badge } from './components/Badge'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
 import { Chip } from './components/Chip'
@@ -24,10 +25,21 @@ const CONNECTION_PORT_PLACEHOLDER = {
 } satisfies Record<Connection['type'], string>
 
 export const ConnectionPopover = memo(() => (
-	<Popover className="max-w-110 min-w-90" trigger={<IconButton icon={Icons.Connect} />}>
+	<Popover className="max-w-110 min-w-90" trigger={<ConnectionPopoverTrigger />}>
 		<ConnectionPopoverContent />
 	</Popover>
 ))
+
+// NOTE: props is required to pass (onClick and ref) on popover's cloned trigger.
+const ConnectionPopoverTrigger = memo((props: Omit<ComponentPropsWithRef<'div'>, 'color'>) => {
+	const { length } = useSnapshot(connectionStore.state.activeConnections)
+
+	return (
+		<Badge {...props} classNames={{ badge: 'bottom-3' }} color="success" size="sm" label={length} placement="bottom-end" visible={length > 0}>
+			<IconButton icon={Icons.Connect} tooltipContent="Connection" />
+		</Badge>
+	)
+})
 
 const ConnectionPopoverContent = memo(() => (
 	<div className="flex flex-col gap-2">

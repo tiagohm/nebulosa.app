@@ -2,6 +2,7 @@ import { Activity, memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 import { hasScaledSolution } from '@/stores/image.solver.store'
 import { ImageViewerStoreContext } from '../shared/context'
+import { imageWorkspaceStore } from '../stores/image.workspace.store'
 import { IconButton } from './components/IconButton'
 import { Popover } from './components/Popover'
 import { Slider } from './components/Slider'
@@ -13,8 +14,12 @@ const TOOLTIP_PLACEMENT = 'top'
 const POPOVER_PANEL_CLASS = 'max-w-[calc(100vw-1rem)] overflow-x-auto'
 
 export const ImageToolBar = memo(() => {
+	const { selected } = useSnapshot(imageWorkspaceStore.state)
 	const viewer = useContext(ImageViewerStoreContext)
 	const { transformation, info } = useSnapshot(viewer.state)
+
+	if (selected?.id !== viewer.image.id) return null
+
 	const { save, solver, stretch, settings, statistics, header } = viewer
 
 	return (

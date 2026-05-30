@@ -69,6 +69,7 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 - Lint with fixes: `bun run lint:fix`
 - Refresh codebase graph: `bun run index`
 - If tests are added, prefer `bun test` before introducing another test runner.
+- DO NOT use `bun run compile` as fallback to linting.
 
 ## Architecture Rules
 

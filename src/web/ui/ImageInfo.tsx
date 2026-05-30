@@ -6,18 +6,20 @@ import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerStoreContext } from '../shared/context'
 import { formatNumber, tw } from '../shared/util'
+import { imageWorkspaceStore } from '../stores/image.workspace.store'
 import { Dropdown, DropdownItem } from './components/Dropdown'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 
 export const ImageInfo = memo(() => {
+	const { selected: selectedImage } = useSnapshot(imageWorkspaceStore.state)
 	const viewer = useContext(ImageViewerStoreContext)
-	const { mouseCoordinate } = viewer
 	const { info, scale, angle } = useSnapshot(viewer.state)
+	const { mouseCoordinate } = viewer
 	const { visible: isMouseCoordinateVisible, interpolator } = useSnapshot(mouseCoordinate.state)
 	const { hover, selected } = useSnapshot(mouseCoordinate.state.coordinate)
 
-	if (!info) return null
+	if (!info || selectedImage?.id !== viewer.image.id) return null
 
 	return (
 		<div className="pointer-events-none absolute top-2 left-2 z-999999 max-w-[calc(100vw-1rem)] rounded-2xl bg-black/60 p-3 text-sm opacity-80 select-none">

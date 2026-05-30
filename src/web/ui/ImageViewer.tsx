@@ -1,5 +1,4 @@
 import { memo, useContext, useEffect, useLayoutEffect, useRef } from 'react'
-import { useSnapshot } from 'valtio'
 import { imageViewerStore } from '@/stores/image.viewer.store'
 import { imageWorkspaceStore } from '@/stores/image.workspace.store'
 import { useStore } from '../hooks/store.hook'
@@ -30,8 +29,6 @@ export const ImageViewer = memo(() => {
 	const imgRef = useRef<HTMLImageElement>(null)
 	const image = useContext(ImageContext)
 	const viewer = useStore(() => imageViewerStore(image), [image])
-	const { selected } = useSnapshot(imageWorkspaceStore.state)
-	const isSelected = selected?.id === image.id
 
 	// Attaches the image element before the first paint so interactions can bind to it.
 	useLayoutEffect(() => {
@@ -52,8 +49,8 @@ export const ImageViewer = memo(() => {
 
 	return (
 		<ImageViewerStoreContext value={viewer}>
-			{isSelected && <ImageToolBar />}
-			{isSelected && <ImageInfo />}
+			<ImageToolBar />
+			<ImageInfo />
 			<Interactable onGesture={viewer.mouseCoordinate.handleGesture} onMouseMove={viewer.mouseCoordinate.handleMouseMove} onClick={viewer.mouseCoordinate.handleClick} onTap={viewer.select} ref={viewer.attachInteractable} zIndex={image.position}>
 				<img className="image pointer-events-none max-w-none touch-none rounded-sm outline-8 outline-black/25 outline-solid select-none" draggable={false} id={image.id} onLoad={viewer.handleLoad} ref={imgRef} />
 				<InteractableOverlay />

@@ -8,10 +8,12 @@ import { IndiServer } from './IndiServer'
 export const IndiServerButton = memo(() => {
 	const { enabled, running, show } = useSnapshot(indiServerStore.state)
 
+	if (!enabled) return null
+
 	return (
 		<>
-			<IconButton color={running ? 'success' : 'danger'} disabled={!enabled} icon={running ? Icons.Server : Icons.ServerOff} onClick={indiServerStore.show} tooltipContent="INDI Server" />
-			{show && enabled && <IndiServer />}
+			<IconButton color={running ? 'success' : 'danger'} icon={running ? Icons.Server : Icons.ServerOff} onClick={indiServerStore.show} tooltipContent="INDI Server" />
+			{show && <IndiServer />}
 		</>
 	)
 })

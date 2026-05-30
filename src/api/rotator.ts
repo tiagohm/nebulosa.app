@@ -40,7 +40,7 @@ export class RotatorHandler implements DeviceHandler<Rotator> {
 	}
 }
 
-export function rotator(rotatorHandler: RotatorHandler): Endpoints {
+export function rotator(rotatorHandler: RotatorHandler) {
 	const { rotatorManager } = rotatorHandler
 
 	function rotatorFromParams(req: Bun.BunRequest) {
@@ -55,5 +55,5 @@ export function rotator(rotatorHandler: RotatorHandler): Endpoints {
 		'/rotators/:id/home': { POST: (req) => response(rotatorManager.home(rotatorFromParams(req))) },
 		'/rotators/:id/reverse': { POST: async (req) => response(rotatorManager.reverse(rotatorFromParams(req), await req.json())) },
 		'/rotators/:id/stop': { POST: (req) => response(rotatorManager.stop(rotatorFromParams(req))) },
-	}
+	} as const satisfies Endpoints
 }

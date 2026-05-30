@@ -107,7 +107,7 @@ export class AlpacaHandler {
 	}
 }
 
-export function alpaca(alpacaHandler: AlpacaHandler, alpacaPort: number | undefined, shouldStart: boolean): Endpoints {
+export function alpaca(alpacaHandler: AlpacaHandler, alpacaPort: number | undefined, shouldStart: boolean) {
 	if (shouldStart) void alpacaHandler.start(alpacaPort || 2222)
 
 	return {
@@ -115,5 +115,5 @@ export function alpaca(alpacaHandler: AlpacaHandler, alpacaPort: number | undefi
 		'/alpaca/start': { POST: async (req) => response(await alpacaHandler.start(+query(req).port)) },
 		'/alpaca/stop': { POST: async () => response(await alpacaHandler.stop()) },
 		'/alpaca/discovery': { POST: async () => response(await alpacaHandler.discovery()) },
-	}
+	} as const satisfies Endpoints
 }

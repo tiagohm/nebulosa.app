@@ -40,7 +40,7 @@ export class FlatPanelHandler implements DeviceHandler<FlatPanel> {
 	}
 }
 
-export function flatPanel(flatPanelHandler: FlatPanelHandler): Endpoints {
+export function flatPanel(flatPanelHandler: FlatPanelHandler) {
 	const { flatPanelManager } = flatPanelHandler
 
 	function flatPanelFromParams(req: Bun.BunRequest) {
@@ -54,5 +54,5 @@ export function flatPanel(flatPanelHandler: FlatPanelHandler): Endpoints {
 		'/flatpanels/:id/disable': { POST: (req) => response(flatPanelManager.disable(flatPanelFromParams(req))) },
 		'/flatpanels/:id/toggle': { POST: (req) => response(flatPanelManager.toggle(flatPanelFromParams(req))) },
 		'/flatpanels/:id/intensity': { POST: async (req) => response(flatPanelManager.intensity(flatPanelFromParams(req), await req.json())) },
-	}
+	} as const satisfies Endpoints
 }

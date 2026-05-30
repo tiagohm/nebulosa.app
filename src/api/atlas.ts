@@ -749,7 +749,7 @@ export class AtlasHandler {
 	}
 }
 
-export function atlas(atlas: AtlasHandler): Endpoints {
+export function atlas(atlas: AtlasHandler) {
 	return {
 		'/atlas/sun/image': { GET: async (req) => new Response(await atlas.imageOfSun(solarImageSource(query(req).source))) },
 		'/atlas/sun/position': { POST: async (req) => response(await atlas.positionOfSun(await req.json())) },
@@ -772,7 +772,7 @@ export function atlas(atlas: AtlasHandler): Endpoints {
 		'/atlas/satellites/search': { POST: async (req) => response(atlas.searchSatellites(await req.json())) },
 		'/atlas/satellites/:id/position': { POST: async (req) => response(await atlas.positionOfSatellite(req.params.id, await req.json())) },
 		'/atlas/satellites/:id/chart': { POST: async (req) => response(await atlas.chartOfSatellite(req.params.id, await req.json())) },
-	}
+	} as const satisfies Endpoints
 }
 
 function finiteNumber(value: unknown): value is number {

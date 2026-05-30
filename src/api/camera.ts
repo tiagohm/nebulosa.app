@@ -109,7 +109,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 }
 
-export function camera(cameraHandler: CameraHandler): Endpoints {
+export function camera(cameraHandler: CameraHandler) {
 	const { cameraManager } = cameraHandler
 
 	function cameraFromParams(req: Bun.BunRequest) {
@@ -123,7 +123,7 @@ export function camera(cameraHandler: CameraHandler): Endpoints {
 		'/cameras/:id/temperature': { POST: async (req) => response(cameraManager.temperature(cameraFromParams(req), await req.json())) },
 		'/cameras/:id/start': { POST: async (req) => response(await cameraHandler.start(cameraFromParams(req), await req.json())) },
 		'/cameras/:id/stop': { POST: (req) => response(cameraHandler.stop(cameraFromParams(req))) },
-	}
+	} as const satisfies Endpoints
 }
 
 export class CameraCaptureTask {

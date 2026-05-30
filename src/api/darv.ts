@@ -189,7 +189,7 @@ export class DarvTask {
 	}
 }
 
-export function darv(darvHandler: DarvHandler): Endpoints {
+export function darv(darvHandler: DarvHandler) {
 	const { cameraHandler, mountHandler } = darvHandler
 
 	function cameraFromParams(req: Bun.BunRequest) {
@@ -203,5 +203,5 @@ export function darv(darvHandler: DarvHandler): Endpoints {
 	return {
 		'/darv/:camera/:mount/start': { POST: async (req) => response(darvHandler.start(await req.json(), cameraFromParams(req), mountFromParams(req))) },
 		'/darv/:id/stop': { POST: (req) => response(darvHandler.stop(req.params.id)) },
-	}
+	} as const satisfies Endpoints
 }

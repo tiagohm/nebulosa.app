@@ -64,7 +64,7 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 	}
 }
 
-export function focuser(focuserHandler: FocuserHandler): Endpoints {
+export function focuser(focuserHandler: FocuserHandler) {
 	const { focuserManager } = focuserHandler
 
 	function focuserFromParams(req: Bun.BunRequest) {
@@ -80,7 +80,7 @@ export function focuser(focuserHandler: FocuserHandler): Endpoints {
 		'/focusers/:id/sync': { POST: async (req) => response(focuserHandler.syncTo(focuserFromParams(req), await req.json())) },
 		'/focusers/:id/reverse': { POST: async (req) => response(focuserHandler.reverse(focuserFromParams(req), await req.json())) },
 		'/focusers/:id/stop': { POST: (req) => response(focuserHandler.stop(focuserFromParams(req))) },
-	}
+	} as const satisfies Endpoints
 }
 
 export type WaitForFocuserAction = 'reach' | 'timeout' | 'cancel'

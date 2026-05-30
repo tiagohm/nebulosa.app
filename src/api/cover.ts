@@ -52,7 +52,7 @@ export class CoverHandler implements DeviceHandler<Cover> {
 	}
 }
 
-export function cover(coverHandler: CoverHandler): Endpoints {
+export function cover(coverHandler: CoverHandler) {
 	const { coverManager } = coverHandler
 
 	function coverFromParams(req: Bun.BunRequest) {
@@ -65,5 +65,5 @@ export function cover(coverHandler: CoverHandler): Endpoints {
 		'/covers/:id/park': { POST: (req) => response(coverHandler.park(coverFromParams(req))) },
 		'/covers/:id/stop': { POST: (req) => response(coverHandler.stop(coverFromParams(req))) },
 		'/covers/:id/unpark': { POST: (req) => response(coverHandler.unpark(coverFromParams(req))) },
-	}
+	} as const satisfies Endpoints
 }

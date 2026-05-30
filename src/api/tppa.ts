@@ -238,7 +238,7 @@ export class TppaTask {
 	}
 }
 
-export function tppa(tppaHandler: TppaHandler): Endpoints {
+export function tppa(tppaHandler: TppaHandler) {
 	const { cameraHandler, mountHandler } = tppaHandler
 
 	function cameraFromParams(req: Bun.BunRequest) {
@@ -252,5 +252,5 @@ export function tppa(tppaHandler: TppaHandler): Endpoints {
 	return {
 		'/tppa/:camera/:mount/start': { POST: async (req) => response(tppaHandler.start(await req.json(), cameraFromParams(req), mountFromParams(req))) },
 		'/tppa/:id/stop': { POST: (req) => response(tppaHandler.stop(req.params.id)) },
-	}
+	} as const satisfies Endpoints
 }

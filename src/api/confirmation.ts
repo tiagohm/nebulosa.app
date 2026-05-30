@@ -59,10 +59,10 @@ export class ConfirmationHandler {
 	}
 }
 
-export function confirmation(confirmationHandler: ConfirmationHandler): Endpoints {
+export function confirmation(confirmationHandler: ConfirmationHandler) {
 	return {
 		'/confirmation': { POST: async (req) => response(confirmationHandler.confirm(await req.json())) },
-	}
+	} as const satisfies Endpoints
 }
 
 function confirmationKey(req: unknown) {

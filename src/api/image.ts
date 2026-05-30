@@ -569,7 +569,7 @@ export class ImageHandler {
 	}
 }
 
-export function image(imageHandler: ImageHandler): Endpoints {
+export function image(imageHandler: ImageHandler) {
 	return {
 		'/image/open': {
 			POST: async (req) => {
@@ -595,5 +595,5 @@ export function image(imageHandler: ImageHandler): Endpoints {
 		'/image/statistics': { POST: async (req) => response(await imageHandler.statistics(await req.json())) },
 		'/image/fovcameras': { GET: response(fovCameras) },
 		'/image/fovtelescopes': { GET: response(fovTelescopes) },
-	}
+	} as const satisfies Endpoints
 }

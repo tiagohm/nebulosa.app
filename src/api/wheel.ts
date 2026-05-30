@@ -44,7 +44,7 @@ export class WheelHandler implements DeviceHandler<Wheel> {
 	}
 }
 
-export function wheel(wheelHandler: WheelHandler): Endpoints {
+export function wheel(wheelHandler: WheelHandler) {
 	const { wheelManager } = wheelHandler
 
 	function wheelFromParams(req: Bun.BunRequest) {
@@ -56,5 +56,5 @@ export function wheel(wheelHandler: WheelHandler): Endpoints {
 		'/wheels/:id': { GET: (req) => response(wheelFromParams(req)) },
 		'/wheels/:id/moveto': { POST: async (req) => response(wheelHandler.moveTo(wheelFromParams(req), await req.json())) },
 		'/wheels/:id/names': { POST: async (req) => response(wheelManager.slots(wheelFromParams(req), await req.json())) },
-	}
+	} as const satisfies Endpoints
 }

@@ -62,8 +62,8 @@ function fileId(id: unknown) {
 	return normalized || Bun.randomUUIDv7()
 }
 
-export function framing(framing: FramingHandler): Endpoints {
+export function framing(framing: FramingHandler) {
 	return {
 		'/framing': { POST: async (req) => response(await framing.frame(await req.json())) },
-	}
+	} as const satisfies Endpoints
 }

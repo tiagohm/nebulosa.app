@@ -372,7 +372,7 @@ class RMS {
 	}
 }
 
-export function phd2(phd2Handler: PHD2Handler, cameraManager: CameraManager, guideOutputManager: GuideOutputManager): Endpoints {
+export function phd2(phd2Handler: PHD2Handler, cameraManager: CameraManager, guideOutputManager: GuideOutputManager) {
 	return {
 		'/phd2/profiles': { GET: async () => response(await phd2Handler.profiles()) },
 		'/phd2/connect': { POST: async (req) => response(await phd2Handler.connect(await req.json(), cameraManager, guideOutputManager)) },
@@ -386,5 +386,5 @@ export function phd2(phd2Handler: PHD2Handler, cameraManager: CameraManager, gui
 		'/phd2/loop': { POST: () => response(phd2Handler.loop()) },
 		'/phd2/findstar': { POST: () => response(phd2Handler.findStar()) },
 		'/phd2/calibrate': { POST: () => response(phd2Handler.calibrate()) },
-	}
+	} as const satisfies Endpoints
 }

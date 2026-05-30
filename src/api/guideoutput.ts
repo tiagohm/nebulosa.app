@@ -53,7 +53,7 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 	}
 }
 
-export function guideOutput(guideOutputHandler: GuideOutputHandler): Endpoints {
+export function guideOutput(guideOutputHandler: GuideOutputHandler) {
 	const { guideOutputManager } = guideOutputHandler
 
 	function guideOutputFromParams(req: Bun.BunRequest) {
@@ -65,5 +65,5 @@ export function guideOutput(guideOutputHandler: GuideOutputHandler): Endpoints {
 		'/guideoutputs/:id': { GET: (req) => response(guideOutputFromParams(req)) },
 		'/guideoutputs/:id/guiderate': { POST: async (req) => response(guideOutputHandler.guideRate(guideOutputFromParams(req), await req.json())) },
 		'/guideoutputs/:id/pulse': { POST: async (req) => response(guideOutputHandler.pulse(guideOutputFromParams(req), await req.json())) },
-	}
+	} as const satisfies Endpoints
 }

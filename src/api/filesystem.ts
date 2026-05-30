@@ -71,14 +71,14 @@ export class FileSystemHandler {
 	}
 }
 
-export function fileSystem(fileSystem: FileSystemHandler): Endpoints {
+export function fileSystem(fileSystem: FileSystemHandler) {
 	return {
 		'/filesystem/list': { POST: async (req) => response(await fileSystem.list(await req.json())) },
 		'/filesystem/create': { POST: async (req) => response(await fileSystem.create(await req.json())) },
 		'/filesystem/directory': { POST: async (req) => response(await fileSystem.directory(await req.json())) },
 		'/filesystem/exists': { POST: async (req) => response(await fileSystem.exists(await req.json())) },
 		'/filesystem/join': { POST: async (req) => response(fileSystem.join(await req.json())) },
-	}
+	} as const satisfies Endpoints
 }
 
 export async function findDirectory(path?: string, parent?: string) {

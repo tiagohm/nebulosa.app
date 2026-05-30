@@ -216,7 +216,7 @@ export class MountRemoteControlHandler {
 	}
 }
 
-export function mount(mountHandler: MountHandler, mountRemoteControlHandler: MountRemoteControlHandler): Endpoints {
+export function mount(mountHandler: MountHandler, mountRemoteControlHandler: MountRemoteControlHandler) {
 	const { mountManager } = mountHandler
 
 	function mountFromParams(req: Bun.BunRequest) {
@@ -248,5 +248,5 @@ export function mount(mountHandler: MountHandler, mountRemoteControlHandler: Mou
 		'/mounts/:id/remotecontrol/start': { POST: async (req) => response(mountRemoteControlHandler.start(mountFromParams(req), await req.json())) },
 		'/mounts/:id/remotecontrol/stop': { POST: async (req) => response(mountRemoteControlHandler.stop(mountFromParams(req), await req.json())) },
 		'/mounts/:id/remotecontrol': { GET: (req) => response(mountRemoteControlHandler.status(mountFromParams(req))) },
-	}
+	} as const satisfies Endpoints
 }

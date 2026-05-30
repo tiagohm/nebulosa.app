@@ -268,9 +268,9 @@ export class ConnectionHandler {
 	}
 }
 
-export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler & DeviceProvider<Device>, mountManager: MountManager, focuserManager: FocuserManager, rotatorManager: RotatorManager, guideOutputManager: GuideOutputManager): Endpoints {
+export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler & DeviceProvider<Device>, mountManager: MountManager, focuserManager: FocuserManager, rotatorManager: RotatorManager, guideOutputManager: GuideOutputManager) {
 	return {
 		'/connections': { GET: () => response(connectionHandler.list()), POST: async (req) => response(await connectionHandler.connect(await req.json(), indi, mountManager, focuserManager, rotatorManager, guideOutputManager)) },
 		'/connections/:id': { GET: (req) => response(connectionHandler.status(req.params.id)), DELETE: (req) => response(connectionHandler.disconnect(req.params.id)) },
-	}
+	} as const satisfies Endpoints
 }

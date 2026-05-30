@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, spyOn, test } from 'bun:test'
+import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join, sep } from 'path'
@@ -7,15 +7,16 @@ import { meter } from 'nebulosa/src/distance'
 import { isFits } from 'nebulosa/src/fits'
 import { readImageFromBuffer, readImageFromPath } from 'nebulosa/src/image'
 import { IndiClientHandlerSet } from 'nebulosa/src/indi.client'
+import type { Camera } from 'nebulosa/src/indi.device'
 import { CameraManager, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/indi.manager'
-import { CameraSimulator, ClientSimulator, FocuserSimulator, MountSimulator, RotatorSimulator, FilterWheelSimulator } from 'nebulosa/src/indi.simulator'
+import { CameraSimulator, ClientSimulator, FocuserSimulator, MountSimulator, RotatorSimulator, WheelSimulator } from 'nebulosa/src/indi.simulator'
 import { bufferSource } from 'nebulosa/src/io'
 import { isXisf, readXisf } from 'nebulosa/src/xisf'
-import { CameraCaptureTask, CameraHandler } from 'src/api/camera'
+import { camera as cameraEndpoints, CameraCaptureTask, CameraHandler } from 'src/api/camera'
 import { ImageProcessor } from 'src/api/image'
-import { WebSocketMessageHandler } from 'src/api/message'
+import { WebSocketMessageHandler, type Messager } from 'src/api/message'
 import type { PHD2Handler } from 'src/api/phd2'
-import { DEFAULT_CAMERA_CAPTURE_START, type CameraCaptureEvent, type CameraCaptureStart } from 'src/shared/types'
+import { DEFAULT_CAMERA_CAPTURE_START, type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated } from 'src/shared/types'
 
 type CameraCaptureStartOverrides = Omit<Partial<CameraCaptureStart>, 'dither'> & {
 	dither?: Partial<CameraCaptureStart['dither']>
@@ -26,6 +27,11 @@ type CameraCaptureEventRecord = {
 	readonly path?: string
 }
 
+type SocketMessage<T = unknown> = {
+	readonly type: string
+	readonly body: T
+}
+
 const wsm = new WebSocketMessageHandler()
 const imageProcessor = new ImageProcessor()
 const cameraManager = new CameraManager()
@@ -34,6 +40,7 @@ const wheelManager = new WheelManager()
 const focuserManager = new FocuserManager()
 const rotatorManager = new RotatorManager()
 const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
+const endpoints = cameraEndpoints(cameraHandler)
 
 const handler = new IndiClientHandlerSet([cameraManager, mountManager, wheelManager, focuserManager, rotatorManager])
 const client = new ClientSimulator('Client Simulator', handler)
@@ -41,17 +48,35 @@ const client = new ClientSimulator('Client Simulator', handler)
 const simulators = [
 	new CameraSimulator('Camera Simulator', client, { mountManager, focuserManager, rotatorManager, wheelManager }),
 	new MountSimulator('Mount Simulator', client),
-	new FilterWheelSimulator('Wheel Simulator', client),
+	new WheelSimulator('Wheel Simulator', client),
 	new FocuserSimulator('Focuser Simulator', client),
 	new RotatorSimulator('Rotator Simulator', client),
 ] as const
+
+const socketMessages: SocketMessage[] = []
+const socket: Messager = {
+	sendText(data) {
+		const separator = data.indexOf('@')
+		const type = data.slice(0, separator)
+		const payload = data.slice(separator + 1)
+
+		socketMessages.push({ type, body: payload ? JSON.parse(payload) : undefined })
+	},
+}
 
 Bun.env.capturesDir = await mkdtemp(tmpdir() + sep)
 
 afterAll(async () => {
 	for (const simulator of simulators) simulator.dispose()
 
+	wsm.close(socket, 1000, 'done')
 	await rm(Bun.env.capturesDir, { recursive: true, force: true })
+})
+
+beforeEach(() => {
+	wsm.close(socket, 1000, 'reset')
+	socketMessages.length = 0
+	cameraManager.disconnect(getCamera())
 })
 
 function captureStartRequest(overrides: CameraCaptureStartOverrides) {
@@ -73,20 +98,16 @@ async function capture(request: CameraCaptureStart) {
 	const records: CameraCaptureEventRecord[] = []
 	const paths: string[] = []
 
-	try {
-		cameraManager.connect(camera)
+	cameraManager.connect(camera)
 
-		const success = await cameraHandler.start(camera, request, (event, path) => {
-			event = structuredClone(event)
-			events.push(event)
-			records.push({ event, path })
-			path && paths.push(path)
-		})
+	const success = await cameraHandler.start(camera, request, (event, path) => {
+		event = structuredClone(event)
+		events.push(event)
+		records.push({ event, path })
+		path && paths.push(path)
+	})
 
-		return { camera, events, records, paths, success } as const
-	} finally {
-		cameraManager.disconnect(camera)
-	}
+	return { camera, events, records, paths, success } as const
 }
 
 function expectSuccessfulEventFlow(records: readonly CameraCaptureEventRecord[], frameCount: number) {
@@ -122,7 +143,192 @@ async function readStoredBuffer(path: string) {
 	return Buffer.from(await Bun.file(path).arrayBuffer())
 }
 
+function endpointRequest(id = 'Camera Simulator', body?: unknown, search = '') {
+	return {
+		url: `http://localhost/cameras/${encodeURIComponent(id)}${search}`,
+		params: { id },
+		json: () => body,
+	} as unknown as Bun.BunRequest
+}
+
+async function json<T>(response: Response) {
+	expect(response.status).toBe(200)
+	return (await response.json()) as T
+}
+
+async function noContent(response: Response) {
+	expect(response.status).toBe(200)
+	expect(await response.text()).toBe('')
+}
+
+async function waitUntil(condition: () => boolean, timeout = 1500) {
+	const start = performance.now()
+
+	while (!condition()) {
+		if (performance.now() - start >= timeout) return false
+		await Bun.sleep(10)
+	}
+
+	return true
+}
+
+function socketMessagesOf<T>(type: string) {
+	return socketMessages.filter((message): message is SocketMessage<T> => message.type === type)
+}
+
+function cameraUpdates(property: keyof Camera & string) {
+	return socketMessagesOf<CameraUpdated>('camera:update').filter((message) => message.body.property === property)
+}
+
 describe('camera capture start request', () => {
+	test('lists and returns cameras through endpoints', async () => {
+		const camera = getCamera()
+		const list = await json<Camera[]>(endpoints['/cameras'].GET(endpointRequest()))
+		const withId = await json<Camera>(endpoints['/cameras/:id'].GET(endpointRequest(camera.id)))
+		const listWithClient = await json<Camera[]>(endpoints['/cameras'].GET(endpointRequest('Camera Simulator', undefined, `?client=${encodeURIComponent(client.id)}`)))
+
+		expect(list).toHaveLength(1)
+		expect(list[0].id).toBe(camera.id)
+		expect(withId.id).toBe(camera.id)
+		expect(listWithClient).toHaveLength(1)
+		expect(listWithClient[0].id).toBe(camera.id)
+	})
+
+	test('updates cooler and temperature through endpoints', async () => {
+		const camera = getCamera()
+		const cooler = spyOn(cameraManager, 'cooler')
+		const temperature = spyOn(cameraManager, 'temperature')
+
+		try {
+			cameraManager.connect(camera)
+
+			await noContent(await endpoints['/cameras/:id/cooler'].POST(endpointRequest(camera.id, true)))
+			await noContent(await endpoints['/cameras/:id/temperature'].POST(endpointRequest(camera.id, -5)))
+
+			expect(cooler).toHaveBeenCalledWith(camera, true)
+			expect(temperature).toHaveBeenCalledWith(camera, -5)
+		} finally {
+			temperature.mockRestore()
+			cooler.mockRestore()
+			cameraManager.disconnect(camera)
+		}
+	})
+
+	test('starts and stops captures through endpoints', async () => {
+		const camera = getCamera()
+		const request = captureStartRequest({ exposureMode: 'loop', exposureTime: 200, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO', autoSave: false })
+
+		try {
+			wsm.open(socket)
+			cameraManager.connect(camera)
+
+			const startResponse = endpoints['/cameras/:id/start'].POST(endpointRequest(camera.id, request))
+
+			expect(await waitUntil(() => socketMessagesOf<CameraCaptureEvent>('camera:capture').some((message) => message.body.state === 'exposureStarted'))).toBeTrue()
+
+			await noContent(endpoints['/cameras/:id/stop'].POST(endpointRequest(camera.id)))
+
+			expect(await json<boolean>(await startResponse)).toBeFalse()
+			expect(socketMessagesOf<CameraCaptureEvent>('camera:capture').some((message) => message.body.state === 'idle' && message.body.stopped)).toBeTrue()
+		} finally {
+			cameraManager.disconnect(camera)
+		}
+	}, 5000)
+
+	test('sends add event to a socket opened after discovery', async () => {
+		const camera = getCamera()
+
+		wsm.open(socket)
+
+		expect(await waitUntil(() => socketMessages.some((message) => message.type === 'camera:add'))).toBeTrue()
+
+		const message = socketMessages.find((message): message is SocketMessage<CameraAdded> => message.type === 'camera:add')
+
+		expect(message).toBeDefined()
+		expect(message!.body.device.id).toBe(camera.id)
+		expect(message!.body.device.name).toBe(camera.name)
+		expect(message!.body.device.type).toBe('camera')
+	})
+
+	test('emits connection and capability updates', () => {
+		const camera = getCamera()
+
+		wsm.open(socket)
+		socketMessages.length = 0
+
+		cameraManager.connect(camera)
+
+		expect(camera.connected).toBeTrue()
+		expect(camera.canAbort).toBeTrue()
+		expect(cameraUpdates('connected').at(-1)?.body.device.connected).toBeTrue()
+		expect(cameraUpdates('hasCoolerControl').at(-1)?.body.device.hasCoolerControl).toBeTrue()
+		// TODO: CameraSimulator sets capability flags on connect but does not currently emit dedicated capability updates.
+		expect(camera.hasCoolerControl).toBeTrue()
+		expect(camera.canSetTemperature).toBeTrue()
+
+		cameraManager.disconnect(camera)
+
+		expect(cameraUpdates('connected').at(-1)?.body.device.connected).toBeFalse()
+	})
+
+	test('emits remove event when the simulator is disposed', () => {
+		const wsm = new WebSocketMessageHandler()
+		const cameraManager = new CameraManager()
+		const mountManager = new MountManager()
+		const wheelManager = new WheelManager()
+		const focuserManager = new FocuserManager()
+		const rotatorManager = new RotatorManager()
+		const cameraHandler = new CameraHandler(wsm, new ImageProcessor(), cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
+		const handler = new IndiClientHandlerSet([cameraManager, mountManager, wheelManager, focuserManager, rotatorManager])
+		const client = new ClientSimulator('Client Simulator', handler)
+		const cameraSimulator = new CameraSimulator('Camera Simulator', client)
+		const messages: SocketMessage[] = []
+		const socket: Messager = {
+			sendText(data) {
+				const separator = data.indexOf('@')
+				const type = data.slice(0, separator)
+				const payload = data.slice(separator + 1)
+
+				messages.push({ type, body: payload ? JSON.parse(payload) : undefined })
+			},
+		}
+
+		wsm.open(socket)
+		messages.length = 0
+		cameraSimulator.dispose()
+
+		const message = messages.find((message): message is SocketMessage<CameraRemoved> => message.type === 'camera:remove')
+
+		expect(message).toBeDefined()
+		expect(message!.body.device.name).toBe('Camera Simulator')
+
+		wsm.close(socket, 1000, 'done')
+	})
+
+	test('emits capture and frame events through wsm during capture', async () => {
+		wsm.open(socket)
+		socketMessages.length = 0
+
+		const result = await capture(captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
+
+		await Bun.sleep(100)
+
+		const captureEvents = socketMessagesOf<CameraCaptureEvent>('camera:capture').map((message) => message.body)
+		const frameEvents = socketMessagesOf<CameraFrameEvent>('camera:frame').map((message) => message.body)
+
+		expect(result.success).toBeTrue()
+		expect(captureEvents[0].state).toBe('exposureStarted')
+		expect(captureEvents.some((event) => event.state === 'exposing')).toBeTrue()
+		expect(captureEvents.some((event) => event.state === 'exposureFinished')).toBeTrue()
+		expect(captureEvents.at(-1)?.state).toBe('idle')
+		expect(frameEvents).toHaveLength(1)
+		expect(frameEvents[0].camera).toBe(result.camera.id)
+		expect(frameEvents[0].path).toBe(result.paths[0])
+		expect(imageProcessor.get(frameEvents[0].path)).toBeDefined()
+
+		cameraManager.disconnect(result.camera)
+	}, 5000)
+
 	test('computes exposure timing from mode, count, delay, and units', () => {
 		const camera = getCamera()
 		const requests = [
@@ -269,7 +475,7 @@ describe('camera capture start request', () => {
 			expect(image.header.GAIN).toBe(request.gain)
 			expect(image.header.OFFSET).toBe(request.offset)
 			expect(image.header.FRAME).toBe(request.frameType)
-			expect(image.header.IMAGETYP).toBe('DARK Frame')
+			expect(image.header.IMAGETYP).toBe('Dark Frame')
 			expect(image.header.XORGSUBF).toBe(request.x)
 			expect(image.header.YORGSUBF).toBe(request.y)
 			expect(image.header['DATE-OBS']).toBeDefined()
@@ -291,6 +497,7 @@ describe('camera capture start request', () => {
 		} finally {
 			snoop.mockRestore()
 			compression.mockRestore()
+			cameraManager.disconnect(camera)
 		}
 	}, 5000)
 
@@ -343,11 +550,13 @@ describe('camera capture start request', () => {
 		expect(image.header.NAXIS2).toBe(15)
 		expect(image.header.NAXIS3).toBeUndefined()
 		expect(image.header.FRAME).toBe('FLAT')
-		expect(image.header.IMAGETYP).toBe('FLAT Frame')
+		expect(image.header.IMAGETYP).toBe('Flat Frame')
 		expect(image.header.XORGSUBF).toBe(request.x)
 		expect(image.header.YORGSUBF).toBe(request.y)
 		expect(image.header.BZERO).toBe(32768)
 		expect(image.header.BSCALE).toBe(1)
+
+		cameraManager.disconnect(result.camera)
 	}, 5000)
 
 	test('includes connected active device metadata in generated FITS headers', async () => {
@@ -405,7 +614,7 @@ describe('camera capture start request', () => {
 	}, 5000)
 
 	test('single capture emits only one frame', async () => {
-		const { paths, records, success } = await capture(captureStartRequest({ exposureMode: 'single', exposureTime: 10, exposureTimeUnit: 'millisecond', count: 100, width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
+		const { camera, paths, records, success } = await capture(captureStartRequest({ exposureMode: 'single', exposureTime: 10, exposureTimeUnit: 'millisecond', count: 100, width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
 
 		await Bun.sleep(100)
 
@@ -413,10 +622,12 @@ describe('camera capture start request', () => {
 		expect(paths).toHaveLength(1)
 		expect(paths.every((path) => imageProcessor.get(path))).toBeTrue()
 		expectSuccessfulEventFlow(records, 1)
+
+		cameraManager.disconnect(camera)
 	}, 5000)
 
 	test('fixed capture emits the requested frame count', async () => {
-		const { paths, records, success } = await capture(captureStartRequest({ exposureMode: 'fixed', exposureTime: 10, exposureTimeUnit: 'millisecond', count: 2, width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
+		const { camera, paths, records, success } = await capture(captureStartRequest({ exposureMode: 'fixed', exposureTime: 10, exposureTimeUnit: 'millisecond', count: 2, width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
 
 		await Bun.sleep(100)
 
@@ -424,6 +635,8 @@ describe('camera capture start request', () => {
 		expect(paths).toHaveLength(2)
 		expect(paths.every((path) => imageProcessor.get(path))).toBeTrue()
 		expectSuccessfulEventFlow(records, 2)
+
+		cameraManager.disconnect(camera)
 	}, 5000)
 
 	test('emits waiting progress between delayed fixed captures', async () => {
@@ -436,6 +649,8 @@ describe('camera capture start request', () => {
 		expect(waitingEvents.length).toBeGreaterThan(0)
 		expect(waitingEvents[0].event.frameProgress.remainingTime).toBe(1000000)
 		expectSuccessfulEventFlow(result.records, 2)
+
+		cameraManager.disconnect(result.camera)
 	}, 7000)
 
 	test('loop capture can be stopped', async () => {

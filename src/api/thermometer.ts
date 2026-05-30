@@ -44,7 +44,7 @@ export class ThermometerHandler implements DeviceHandler<Thermometer> {
 	}
 }
 
-export function thermometer(thermometerHandler: ThermometerHandler): Endpoints {
+export function thermometer(thermometerHandler: ThermometerHandler) {
 	const { thermometerManager } = thermometerHandler
 
 	function thermometerFromParams(req: Bun.BunRequest) {
@@ -54,5 +54,5 @@ export function thermometer(thermometerHandler: ThermometerHandler): Endpoints {
 	return {
 		'/thermometers': { GET: (req) => response(thermometerHandler.list(query(req).client)) },
 		'/thermometers/:id': { GET: (req) => response(thermometerFromParams(req)) },
-	}
+	} as const satisfies Endpoints
 }

@@ -258,7 +258,7 @@ export class AutoFocusTask {
 	}
 }
 
-export function autoFocus(autoFocusHandler: AutoFocusHandler): Endpoints {
+export function autoFocus(autoFocusHandler: AutoFocusHandler) {
 	const { cameraHandler, focuserHandler } = autoFocusHandler
 
 	function cameraFromParams(req: Bun.BunRequest) {
@@ -272,5 +272,5 @@ export function autoFocus(autoFocusHandler: AutoFocusHandler): Endpoints {
 	return {
 		'/autofocus/:camera/:focuser/start': { POST: async (req) => response(autoFocusHandler.start(cameraFromParams(req), focuserFromParams(req), await req.json())) },
 		'/autofocus/:id/stop': { POST: (req) => response(autoFocusHandler.stop(req.params.id)) },
-	}
+	} as const satisfies Endpoints
 }

@@ -52,8 +52,8 @@ function normalizeMaxStars(maxStars: number) {
 	return maxStars > 0 ? maxStars : 2000
 }
 
-export function starDetection(detection: StarDetectionHandler): Endpoints {
+export function starDetection(detection: StarDetectionHandler) {
 	return {
 		'/stardetection': { POST: async (req) => response(await detection.detect(await req.json())) },
-	}
+	} as const satisfies Endpoints
 }

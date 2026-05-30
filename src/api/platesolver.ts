@@ -89,9 +89,9 @@ export class PlateSolverHandler {
 	}
 }
 
-export function plateSolver(solver: PlateSolverHandler): Endpoints {
+export function plateSolver(solver: PlateSolverHandler) {
 	return {
 		'/platesolver/start': { POST: async (req) => response(await solver.start(await req.json())) },
 		'/platesolver/:id/stop': { POST: (req) => response(solver.stop(req.params.id)) },
-	}
+	} as const satisfies Endpoints
 }

@@ -194,7 +194,7 @@ export class FlatWizardTask {
 	}
 }
 
-export function flatWizard(flatWizardHandler: FlatWizardHandler): Endpoints {
+export function flatWizard(flatWizardHandler: FlatWizardHandler) {
 	const { cameraHandler } = flatWizardHandler
 
 	function cameraFromParams(req: Bun.BunRequest) {
@@ -204,5 +204,5 @@ export function flatWizard(flatWizardHandler: FlatWizardHandler): Endpoints {
 	return {
 		'/flatwizard/:camera/start': { POST: async (req) => response(flatWizardHandler.start(cameraFromParams(req), await req.json())) },
 		'/flatwizard/:id/stop': { POST: (req) => response(flatWizardHandler.stop(req.params.id)) },
-	}
+	} as const satisfies Endpoints
 }

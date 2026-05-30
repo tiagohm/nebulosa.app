@@ -403,7 +403,7 @@ export class IndiServerHandler {
 	}
 }
 
-export function indi(indiHandler: IndiHandler, indiDevicePropertyHandler: IndiDevicePropertyHandler, indiServerHandler: IndiServerHandler): Endpoints {
+export function indi(indiHandler: IndiHandler, indiDevicePropertyHandler: IndiDevicePropertyHandler, indiServerHandler: IndiServerHandler) {
 	function deviceFromParams(req: Bun.BunRequest) {
 		return indiHandler.get(query(req).client, req.params.id)!
 	}
@@ -418,7 +418,7 @@ export function indi(indiHandler: IndiHandler, indiDevicePropertyHandler: IndiDe
 		'/indi/server/stop': { POST: () => response(indiServerHandler.stop()) },
 		'/indi/server/status': { GET: async () => response(await indiServerHandler.status()) },
 		'/indi/server/drivers': { GET: async () => response(await indiServerHandler.drivers()) },
-	}
+	} as const satisfies Endpoints
 }
 
 function port(value: unknown) {

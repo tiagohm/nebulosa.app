@@ -43,7 +43,7 @@ export class DewHeaterHandler implements DeviceHandler<DewHeater> {
 	}
 }
 
-export function dewHeater(dewHeaterHandler: DewHeaterHandler): Endpoints {
+export function dewHeater(dewHeaterHandler: DewHeaterHandler) {
 	const { dewHeaterManager } = dewHeaterHandler
 
 	function dewHeaterFromParams(req: Bun.BunRequest) {
@@ -54,5 +54,5 @@ export function dewHeater(dewHeaterHandler: DewHeaterHandler): Endpoints {
 		'/dewheaters': { GET: (req) => response(dewHeaterHandler.list(query(req).client)) },
 		'/dewheaters/:id': { GET: (req) => response(dewHeaterFromParams(req)) },
 		'/dewheaters/:id/dutycycle': { POST: async (req) => response(dewHeaterManager.dutyCycle(dewHeaterFromParams(req), await req.json())) },
-	}
+	} as const satisfies Endpoints
 }

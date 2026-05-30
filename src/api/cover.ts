@@ -23,7 +23,7 @@ export class CoverHandler implements DeviceHandler<Cover> {
 
 	added(device: Cover) {
 		this.wsm.send<CoverAdded>('cover:add', { device })
-		console.info('cover added:', device.name)
+		console.info('cover added:', device.name, device.id)
 	}
 
 	updated(device: Cover, property: keyof Cover & string, state?: PropertyState) {
@@ -32,7 +32,7 @@ export class CoverHandler implements DeviceHandler<Cover> {
 
 	removed(device: Cover) {
 		this.wsm.send<CoverRemoved>('cover:remove', { device })
-		console.info('cover removed:', device.name)
+		console.info('cover removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {

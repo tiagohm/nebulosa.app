@@ -51,7 +51,7 @@ export class MountHandler implements DeviceHandler<Mount> {
 
 	added(device: Mount) {
 		this.wsm.send<MountAdded>('mount:add', { device })
-		console.info('mount added:', device.name)
+		console.info('mount added:', device.name, device.id)
 	}
 
 	updated(device: Mount, property: keyof Mount & string, state?: PropertyState) {
@@ -60,7 +60,7 @@ export class MountHandler implements DeviceHandler<Mount> {
 
 	removed(device: Mount) {
 		this.wsm.send<MountRemoved>('mount:remove', { device })
-		console.info('mount removed:', device.name)
+		console.info('mount removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {

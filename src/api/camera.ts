@@ -40,7 +40,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 
 	added(device: Camera) {
 		this.wsm.send<CameraAdded>('camera:add', { device })
-		console.info('camera added:', device.name)
+		console.info('camera added:', device.name, device.id)
 	}
 
 	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {

@@ -23,7 +23,7 @@ export class ThermometerHandler implements DeviceHandler<Thermometer> {
 
 	added(device: Thermometer) {
 		this.wsm.send<ThermometerAdded>('thermometer:add', { device })
-		console.info('thermometer added:', device.name)
+		console.info('thermometer added:', device.name, device.id)
 	}
 
 	updated(device: Thermometer, property: keyof Thermometer & string, state?: PropertyState) {
@@ -36,7 +36,7 @@ export class ThermometerHandler implements DeviceHandler<Thermometer> {
 
 	removed(device: Thermometer) {
 		this.wsm.send<ThermometerRemoved>('thermometer:remove', { device })
-		console.info('thermometer removed:', device.name)
+		console.info('thermometer removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {

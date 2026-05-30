@@ -95,9 +95,9 @@ function add(type: DeviceType, device: Device) {
 
 	if (index < 0) {
 		devices.push(device as never)
-		// device.show = storageGet(`equipment.${type}.${device.name}.show`, false)
+		// device.show = storageGet(`equipment.${device.id}.show`, false)
 		emit(device, 'add')
-		console.info(device.type, 'added:', device.name)
+		console.info(device.type, 'added:', device.name, device.id)
 	}
 }
 
@@ -110,7 +110,7 @@ function update<T extends DeviceType>(type: T, event: DeviceUpdated<EquipmentSta
 		return
 	}
 
-	console.warn('device not found:', event.device.name)
+	console.warn('device not found:', event.device.name, event.device.id)
 }
 
 function remove(type: DeviceType, device: Pick<Device, 'id'>) {
@@ -125,7 +125,7 @@ function remove(type: DeviceType, device: Pick<Device, 'id'>) {
 			devices.splice(i, 1)
 
 			emit(device, 'remove')
-			console.info(device.type, 'removed:', device.name)
+			console.info(device.type, 'removed:', device.name, device.id)
 			break
 		}
 	}

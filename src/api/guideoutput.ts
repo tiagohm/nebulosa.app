@@ -24,7 +24,7 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 
 	added(device: GuideOutput) {
 		this.wsm.send<GuideOutputAdded>('guideOutput:add', { device })
-		console.info('guide output added:', device.name)
+		console.info('guide output added:', device.name, device.id)
 	}
 
 	updated(device: GuideOutput, property: keyof GuideOutput & string, state?: PropertyState) {
@@ -37,7 +37,7 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 
 	removed(device: GuideOutput) {
 		this.wsm.send<GuideOutputRemoved>('guideOutput:remove', { device })
-		console.info('guide output removed:', device.name)
+		console.info('guide output removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {

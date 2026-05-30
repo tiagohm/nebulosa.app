@@ -1,4 +1,5 @@
 import bus from 'src/shared/bus'
+import type { IndiPropertyListenEvent } from 'src/shared/types'
 
 const MESSAGE_SEPARATOR = '@'
 
@@ -18,7 +19,21 @@ export class WebSocketMessageHandler {
 	}
 
 	message(socket: Messager, body: unknown) {
-		//
+		if (typeof body !== 'string') return
+
+		if (body.startsWith('indi:listen:')) {
+			const id = body.slice(12)
+
+			if (id.length > 0) {
+				bus.emit('indi:listen', { id, socket } satisfies IndiPropertyListenEvent)
+			}
+		} else if (body.startsWith('indi:unlisten:')) {
+			const id = body.slice(14)
+
+			if (id.length > 0) {
+				bus.emit('indi:unlisten', { id, socket } satisfies IndiPropertyListenEvent)
+			}
+		}
 	}
 
 	close(socket: Messager, code: number, reason: string) {

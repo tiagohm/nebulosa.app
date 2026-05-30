@@ -7,6 +7,7 @@ import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
+import { wsStore } from './ws.store'
 
 export type IndiPanelControlStore = ReturnType<typeof indiPanelControlStore>
 
@@ -81,12 +82,18 @@ export function indiPanelControlStore(device: Device) {
 			if (show) {
 				void retrieveProperties()
 				void retrieveMessages()
+
+				listen()
+			} else {
+				unlisten()
 			}
 		})
 
 		if (state.show) {
 			void retrieveProperties()
 			void retrieveMessages()
+
+			listen()
 		}
 	}
 
@@ -94,7 +101,16 @@ export function indiPanelControlStore(device: Device) {
 		if (!mounted) return
 		console.info('indi panel control unmounted:', device.name)
 		unsubscribe(u)
+		unlisten()
 		mounted = false
+	}
+
+	function listen() {
+		wsStore.send(`indi:listen:${device.id}`)
+	}
+
+	function unlisten() {
+		wsStore.send(`indi:unlisten:${device.id}`)
 	}
 
 	async function retrieveProperties() {

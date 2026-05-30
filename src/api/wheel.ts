@@ -23,7 +23,7 @@ export class WheelHandler implements DeviceHandler<Wheel> {
 
 	added(device: Wheel) {
 		this.wsm.send<WheelAdded>('wheel:add', { device })
-		console.info('wheel added:', device.name)
+		console.info('wheel added:', device.name, device.id)
 	}
 
 	updated(device: Wheel, property: keyof Wheel & string, state?: PropertyState) {
@@ -32,7 +32,7 @@ export class WheelHandler implements DeviceHandler<Wheel> {
 
 	removed(device: Wheel) {
 		this.wsm.send<WheelRemoved>('wheel:remove', { device })
-		console.info('wheel removed:', device.name)
+		console.info('wheel removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {

@@ -23,7 +23,7 @@ export class DewHeaterHandler implements DeviceHandler<DewHeater> {
 
 	added(device: DewHeater) {
 		this.wsm.send<DewHeaterAdded>('dewHeater:add', { device })
-		console.info('dew heater added:', device.name)
+		console.info('dew heater added:', device.name, device.id)
 	}
 
 	updated(device: DewHeater, property: keyof DewHeater & string, state?: PropertyState) {
@@ -35,7 +35,7 @@ export class DewHeaterHandler implements DeviceHandler<DewHeater> {
 
 	removed(device: DewHeater) {
 		this.wsm.send<DewHeaterRemoved>('dewHeater:remove', { device })
-		console.info('dew heater removed:', device.name)
+		console.info('dew heater removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {

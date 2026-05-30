@@ -23,7 +23,7 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 
 	added(device: Focuser) {
 		this.wsm.send<FocuserAdded>('focuser:add', { device })
-		console.info('focuser added:', device.name)
+		console.info('focuser added:', device.name, device.id)
 	}
 
 	updated(device: Focuser, property: keyof Focuser & string, state?: PropertyState) {
@@ -32,7 +32,7 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 
 	removed(device: Focuser) {
 		this.wsm.send<FocuserRemoved>('focuser:remove', { device })
-		console.info('focuser removed:', device.name)
+		console.info('focuser removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {

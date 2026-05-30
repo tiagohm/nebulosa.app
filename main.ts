@@ -4,7 +4,7 @@ import os from 'os'
 import { join } from 'path'
 import { parseArgs } from 'util'
 import type { Client, DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
-import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
+import { CameraManager, CoverManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import { default as openDefaultApp } from 'open'
 import { AlpacaHandler, alpaca } from 'src/api/alpaca'
 import { AtlasHandler, atlas } from 'src/api/atlas'
@@ -187,9 +187,8 @@ const coverHandler = new CoverHandler(wsm, coverManager)
 const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager)
 const rotatorHandler = new RotatorHandler(wsm, rotatorManager)
 const dewHeaterHandler = new DewHeaterHandler(wsm, dewHeaterManager)
-const devicePropertyManager = new DevicePropertyManager()
-const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, rotatorManager, devicePropertyManager, wsm)
-const indiDevicePropertyHandler = new IndiDevicePropertyHandler(wsm, notificationHandler, indiHandler, devicePropertyManager)
+const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, rotatorManager, wsm)
+const indiDevicePropertyHandler = new IndiDevicePropertyHandler(wsm, notificationHandler, indiHandler)
 const indiServerHandler = new IndiServerHandler(wsm)
 const framingHandler = new FramingHandler(imageProcessor)
 const fileSystemHandler = new FileSystemHandler()
@@ -265,7 +264,6 @@ const server = Bun.serve({
 
 const everyMinute = Bun.cron('*/1 * * * *', () => {
 	imageProcessor.clear()
-	indiDevicePropertyHandler.clear()
 })
 
 const every15Minutes = Bun.cron('*/15 * * * *', () => {

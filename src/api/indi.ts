@@ -1,16 +1,16 @@
 import type { IndiClientHandler } from 'nebulosa/src/indi.client'
 import { CLIENT, type Client, type Device, type DeviceProperty, type DevicePropertyType, type DeviceType } from 'nebulosa/src/indi.device'
-import type { CameraManager, CoverManager, DevicePropertyHandler, DevicePropertyManager, DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
+import type { CameraManager, CoverManager, DevicePropertyHandler, DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 // oxfmt-ignore
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, Message, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/indi.types'
-import bus from '../shared/bus'
-import type { IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from '../shared/types'
+import bus from 'src/shared/bus'
+import type { IndiPropertyListenEvent, IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { type Endpoints, query, response } from './http'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
 
 const MAX_DEVICE_MESSAGES = 100
-const DEVICE_PROPERTY_LISTENER_TTL = 60000
 
 export function connect(device: Device) {
 	const client = device[CLIENT]
@@ -31,8 +31,8 @@ export function disconnect(device: Device) {
 export type IndiMessageListener = (client: Client, message: Message) => void
 
 export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
-	private readonly messageMap = new Map<Client, Map<string, Message[]>>()
-	private readonly messageListeners = new Set<IndiMessageListener>()
+	readonly #messages = new Map<Client, Map<string, Message[]>>()
+	readonly #messageListeners = new Set<IndiMessageListener>()
 
 	constructor(
 		readonly cameraManager: CameraManager,
@@ -45,37 +45,58 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 		readonly flatPanelManager: FlatPanelManager,
 		readonly dewHeaterManager: DewHeaterManager,
 		readonly rotatorManager: RotatorManager,
-		readonly properties: DevicePropertyManager,
 		readonly wsm: WebSocketMessageHandler,
 	) {}
 
 	addMessageListener(listener: IndiMessageListener) {
-		this.messageListeners.add(listener)
+		this.#messageListeners.add(listener)
 	}
 
 	removeMessageListener(listener: IndiMessageListener) {
-		this.messageListeners.delete(listener)
+		this.#messageListeners.delete(listener)
+	}
+
+	properties(type: DeviceType) {
+		if (type === 'camera') return this.cameraManager.properties
+		else if (type === 'mount') return this.mountManager.properties
+		else if (type === 'focuser') return this.focuserManager.properties
+		else if (type === 'wheel') return this.wheelManager.properties
+		else if (type === 'cover') return this.coverManager.properties
+		else if (type === 'flatPanel') return this.flatPanelManager.properties
+		else if (type === 'rotator') return this.rotatorManager.properties
+		else if (type === 'guideOutput') return this.guideOutputManager.properties
+		else if (type === 'thermometer') return this.thermometerManager.properties
+		else if (type === 'dewHeater') return this.dewHeaterManager.properties
+		else return undefined
 	}
 
 	close(client: Client, server: boolean) {
 		bus.emit('indi:close', client)
 
-		this.properties.close(client, server)
-		this.messageMap.delete(client)
+		this.#messages.delete(client)
 		this.cameraManager.close(client, server)
 		this.mountManager.close(client, server)
 		this.focuserManager.close(client, server)
 		this.wheelManager.close(client, server)
 		this.coverManager.close(client, server)
 		this.flatPanelManager.close(client, server)
+		this.rotatorManager.close(client, server)
 		this.guideOutputManager.close(client, server)
 		this.thermometerManager.close(client, server)
 		this.dewHeaterManager.close(client, server)
-		this.rotatorManager.close(client, server)
 	}
 
 	vector(client: Client, message: DefVector | SetVector, tag: string) {
-		this.properties.vector(client, message, tag)
+		this.cameraManager.vector(client, message, tag)
+		this.mountManager.vector(client, message, tag)
+		this.focuserManager.vector(client, message, tag)
+		this.wheelManager.vector(client, message, tag)
+		this.coverManager.vector(client, message, tag)
+		this.flatPanelManager.vector(client, message, tag)
+		this.rotatorManager.vector(client, message, tag)
+		this.guideOutputManager.vector(client, message, tag)
+		this.thermometerManager.vector(client, message, tag)
+		this.dewHeaterManager.vector(client, message, tag)
 	}
 
 	switchVector(client: Client, message: DefSwitchVector | SetSwitchVector, tag: string) {
@@ -85,10 +106,10 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 		this.wheelManager.switchVector(client, message, tag)
 		this.coverManager.switchVector(client, message, tag)
 		this.flatPanelManager.switchVector(client, message, tag)
+		this.rotatorManager.switchVector(client, message, tag)
 		this.guideOutputManager.switchVector(client, message, tag)
 		this.thermometerManager.switchVector(client, message, tag)
 		this.dewHeaterManager.switchVector(client, message, tag)
-		this.rotatorManager.switchVector(client, message, tag)
 	}
 
 	numberVector(client: Client, message: DefNumberVector | SetNumberVector, tag: string) {
@@ -98,10 +119,10 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 		this.wheelManager.numberVector(client, message, tag)
 		// this.cover.numberVector(client, message, tag)
 		this.flatPanelManager.numberVector(client, message, tag)
+		this.rotatorManager.numberVector(client, message, tag)
 		this.guideOutputManager.numberVector(client, message, tag)
 		this.thermometerManager.numberVector(client, message, tag)
 		this.dewHeaterManager.numberVector(client, message, tag)
-		this.rotatorManager.numberVector(client, message, tag)
 	}
 
 	textVector(client: Client, message: DefTextVector | SetTextVector, tag: string) {
@@ -111,10 +132,10 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 		this.wheelManager.textVector(client, message, tag)
 		this.coverManager.textVector(client, message, tag)
 		this.flatPanelManager.textVector(client, message, tag)
+		this.rotatorManager.textVector(client, message, tag)
 		// this.guideOutput.textVector(client, message, tag)
 		// this.thermometer.textVector(client, message, tag)
 		// this.dewHeater.textVector(client, message, tag)
-		this.rotatorManager.textVector(client, message, tag)
 	}
 
 	blobVector(client: Client, message: DefBlobVector | SetBlobVector, tag: string) {
@@ -128,21 +149,20 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 		this.wheelManager.delProperty(client, message)
 		this.coverManager.delProperty(client, message)
 		this.flatPanelManager.delProperty(client, message)
+		this.rotatorManager.delProperty(client, message)
 		this.guideOutputManager.delProperty(client, message)
 		this.thermometerManager.delProperty(client, message)
 		this.dewHeaterManager.delProperty(client, message)
-		this.rotatorManager.delProperty(client, message)
-		this.properties.delProperty(client, message)
 	}
 
 	message(client: Client, message: Message) {
 		const device = message.device || 'GLOBAL'
 
-		let messages = this.messageMap.get(client)
+		let messages = this.#messages.get(client)
 
 		if (!messages) {
 			messages = new Map()
-			this.messageMap.set(client, messages)
+			this.#messages.set(client, messages)
 		}
 
 		let list = messages.get(device)
@@ -158,11 +178,11 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 
 		list.push(message)
 
-		for (const listener of this.messageListeners) {
+		for (const listener of this.#messageListeners) {
 			try {
 				listener(client, message)
 			} catch (e) {
-				this.messageListeners.delete(listener)
+				this.#messageListeners.delete(listener)
 				console.error('failed to notify INDI message listener', e)
 			}
 		}
@@ -201,7 +221,7 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 		let resolvedClient = typeof client === 'string' ? undefined : client
 
 		if (typeof client === 'string') {
-			for (const current of this.messageMap.keys()) {
+			for (const current of this.#messages.keys()) {
 				if (current.id === client) {
 					resolvedClient = current
 					break
@@ -212,68 +232,95 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 		if (!resolvedClient) return []
 
 		const device = id && this.get(resolvedClient, id)
-		return this.messageMap.get(resolvedClient)?.get((device && device?.name) || id || 'GLOBAL') ?? []
+		return this.#messages.get(resolvedClient)?.get((device && device?.name) || id || 'GLOBAL') ?? []
 	}
 }
 
-export class IndiDevicePropertyHandler implements DevicePropertyHandler {
-	private readonly listeners = new Map<string, number>()
+const DEVICE_TYPES: readonly DeviceType[] = ['camera', 'mount', 'focuser', 'wheel', 'cover', 'flatPanel', 'rotator', 'guideOutput', 'thermometer', 'dewHeater']
+
+export class IndiDevicePropertyHandler implements DevicePropertyHandler<Device>, Disposable {
+	readonly #listeners = new Map<string, Set<Messager>>()
+	readonly #unsubscribers: VoidFunction[] = []
+
+	readonly #messageListener: IndiMessageListener = (client, message) => {
+		if (!message.device) {
+			this.notificationHandler.send({ title: 'INFO', description: message.message, color: 'primary' })
+		} else {
+			const device = this.indiHandler.get(client, message.device)
+
+			if (device !== undefined) {
+				this.wsm.send('indi:message', { ...message, device: device.id, client: client.id } satisfies Message & { client: string })
+			}
+		}
+	}
 
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly notificationHandler: NotificationHandler,
 		readonly indiHandler: IndiHandler,
-		readonly properties: DevicePropertyManager,
 	) {
-		properties.addHandler(this)
+		for (const type of DEVICE_TYPES) indiHandler.properties(type)?.addHandler(this)
+		indiHandler.addMessageListener(this.#messageListener)
 
-		indiHandler.addMessageListener((client, message) => {
-			if (!message.device) {
-				notificationHandler.send({ title: 'INFO', description: message.message, color: 'primary' })
-			} else if (this.listeners.has(`${client.id}:${message.device}`)) {
-				this.listen(client.id, message.device)
-				const device = indiHandler.get(client, message.device)
-				wsm.send('indi:message', { ...message, device: device?.id ?? message.device, clientId: client.id } satisfies Message & { clientId: string })
+		this.#unsubscribers[0] = bus.subscribe<IndiPropertyListenEvent>('indi:listen', (event) => {
+			this.listen(event)
+		})
+
+		this.#unsubscribers[1] = bus.subscribe<IndiPropertyListenEvent>('indi:unlisten', ({ id, socket }) => {
+			const sockets = this.#listeners.get(id)
+
+			if (!sockets?.size) return
+
+			if (sockets.delete(socket)) {
+				console.info(`indi stopped listening to ${id}`)
+
+				if (sockets.size === 0) {
+					this.#listeners.delete(id)
+				}
+			}
+		})
+
+		this.#unsubscribers[2] = bus.subscribe('ws:close', (socket: Messager) => {
+			for (const [key, sockets] of this.#listeners.entries()) {
+				if (sockets.delete(socket)) {
+					console.info(`indi stopped listening to ${key}`)
+
+					if (sockets.size === 0) {
+						this.#listeners.delete(key)
+					}
+				}
 			}
 		})
 	}
 
-	added(client: Client, device: string, property: DeviceProperty) {
-		this.notify(client.id, device, property, 'add')
+	added(device: Device, property: DeviceProperty) {
+		this.notify(device, property, 'add')
 	}
 
-	updated(client: Client, device: string, property: DeviceProperty) {
-		this.notify(client.id, device, property, 'update')
+	updated(device: Device, property: DeviceProperty) {
+		this.notify(device, property, 'update')
 	}
 
-	removed(client: Client, device: string, property: DeviceProperty) {
-		this.notify(client.id, device, property, 'remove')
+	removed(device: Device, property: DeviceProperty) {
+		this.notify(device, property, 'remove')
 	}
 
-	clear() {
-		const now = performance.now()
+	notify(device: Device, property: DeviceProperty, type: 'add' | 'update' | 'remove') {
+		const sockets = this.#listeners.get(device.id)
 
-		for (const [name, ping] of this.listeners) {
-			if (now - ping >= DEVICE_PROPERTY_LISTENER_TTL) {
-				this.listeners.delete(name)
-				console.info('device', name, 'was unlistened')
-			}
+		if (!sockets?.size) return
+
+		const topic = `indi:property:${type}`
+		const event: IndiDevicePropertyEvent = { client: device.client.id, device: device.id, name: property.name, property }
+
+		for (const socket of sockets) {
+			this.wsm.send(topic, event, socket)
 		}
 	}
 
-	notify(client: string, device: string, property: DeviceProperty, type: 'add' | 'update' | 'remove') {
-		if (this.listeners.has(`${client}:${device}`)) {
-			this.listen(client, device)
-			const resolvedDevice = this.indiHandler.get(client, device)
-			this.wsm.send(`indi:property:${type}`, { client, device: resolvedDevice?.id ?? device, name: property.name, property } satisfies IndiDevicePropertyEvent)
-		}
-	}
-
-	list(client: string, device: Device) {
-		if (!client) return
-
-		this.listen(client, device.name)
-		return this.properties.get(client, device.name)
+	list(device: Device) {
+		const properties = this.indiHandler.properties(device.type)
+		return properties?.get(device as never)
 	}
 
 	send(client: string, type: DevicePropertyType, message: NewVector) {
@@ -284,15 +331,28 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler {
 
 		if (!device || !indi) return
 
-		this.listen(client, device.name)
-
 		if (type === 'SWITCH') indi.sendSwitch(message as never)
 		else if (type === 'NUMBER') indi.sendNumber(message as never)
 		else if (type === 'TEXT') indi.sendText(message as never)
 	}
 
-	private listen(client: string, device: string) {
-		this.listeners.set(`${client}:${device}`, performance.now())
+	private listen({ id, socket }: IndiPropertyListenEvent) {
+		const sockets = this.#listeners.get(id) ?? new Set<Messager>()
+		sockets.add(socket) && console.info(`indi started listening to ${id}`)
+		this.#listeners.set(id, sockets)
+	}
+
+	dispose() {
+		for (const type of DEVICE_TYPES) this.indiHandler.properties(type)?.removeHandler(this)
+		this.indiHandler.removeMessageListener(this.#messageListener)
+
+		unsubscribe(this.#unsubscribers)
+
+		this.#listeners.clear()
+	}
+
+	[Symbol.dispose]() {
+		this.dispose()
 	}
 }
 
@@ -344,8 +404,6 @@ export class IndiServerHandler {
 }
 
 export function indi(indiHandler: IndiHandler, indiDevicePropertyHandler: IndiDevicePropertyHandler, indiServerHandler: IndiServerHandler): Endpoints {
-	const { properties } = indiDevicePropertyHandler
-
 	function deviceFromParams(req: Bun.BunRequest) {
 		return indiHandler.get(query(req).client, req.params.id)!
 	}
@@ -354,7 +412,7 @@ export function indi(indiHandler: IndiHandler, indiDevicePropertyHandler: IndiDe
 		'/indi/messages': { GET: (req) => response(indiHandler.messages(query(req).client, req.params.device)) },
 		'/indi/:id/connect': { POST: (req) => response(connect(deviceFromParams(req))) },
 		'/indi/:id/disconnect': { POST: (req) => response(disconnect(deviceFromParams(req))) },
-		'/indi/:id/properties': { GET: (req) => response(properties.get(query(req).client, deviceFromParams(req).name)) },
+		'/indi/:id/properties': { GET: (req) => response(indiDevicePropertyHandler.list(deviceFromParams(req))) },
 		'/indi/:id/properties/send': { POST: async (req) => response(indiDevicePropertyHandler.send(query(req).client, req.params.type as never, await req.json())) },
 		'/indi/server/start': { POST: async (req) => response(indiServerHandler.start(await req.json())) },
 		'/indi/server/stop': { POST: () => response(indiServerHandler.stop()) },

@@ -23,7 +23,7 @@ export class RotatorHandler implements DeviceHandler<Rotator> {
 
 	added(device: Rotator) {
 		this.wsm.send<RotatorAdded>('rotator:add', { device })
-		console.info('rotator added:', device.name)
+		console.info('rotator added:', device.name, device.id)
 	}
 
 	updated(device: Rotator, property: keyof Rotator & string, state?: PropertyState) {
@@ -32,7 +32,7 @@ export class RotatorHandler implements DeviceHandler<Rotator> {
 
 	removed(device: Rotator) {
 		this.wsm.send<RotatorRemoved>('rotator:remove', { device })
-		console.info('rotator removed:', device.name)
+		console.info('rotator removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {

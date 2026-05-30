@@ -23,7 +23,7 @@ export class FlatPanelHandler implements DeviceHandler<FlatPanel> {
 
 	added(device: FlatPanel) {
 		this.wsm.send<FlatPanelAdded>('flatPanel:add', { device })
-		console.info('flat panel added:', device.name)
+		console.info('flat panel added:', device.name, device.id)
 	}
 
 	updated(device: FlatPanel, property: keyof FlatPanel & string, state?: PropertyState) {
@@ -32,7 +32,7 @@ export class FlatPanelHandler implements DeviceHandler<FlatPanel> {
 
 	removed(device: FlatPanel) {
 		this.wsm.send<FlatPanelRemoved>('flatPanel:remove', { device })
-		console.info('flat panel removed:', device.name)
+		console.info('flat panel removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {

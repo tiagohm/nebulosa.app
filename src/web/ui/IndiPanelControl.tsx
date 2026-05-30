@@ -50,8 +50,10 @@ const Header = memo(() => {
 	return (
 		<div className="flex min-w-0 flex-row items-center justify-start gap-2">
 			<div className="me-3 flex min-w-0 flex-1 flex-col justify-center gap-0 text-end">
-				<span className="leading-5 font-semibold">Camera</span>
-				<span className="max-w-full truncate text-xs font-normal text-gray-400">{panel.device.name}</span>
+				<span className="leading-5 font-semibold">INDI Panel Control</span>
+				<span className="max-w-full truncate text-xs font-normal text-gray-400">
+					{panel.device.name} | <span className="uppercase">{panel.device.type}</span>
+				</span>
 			</div>
 			<ToggleButton color="secondary" icon={Icons.ViewList} onClick={() => (panel.state.tab = 'property')} tooltipContent="Properties" value={tab === 'property'} />
 			<ToggleButton color="secondary" icon={Icons.Message} onClick={() => (panel.state.tab = 'message')} tooltipContent="Messages" value={tab === 'message'} />

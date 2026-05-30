@@ -24,6 +24,7 @@ import type { SolarEclipse } from 'nebulosa/src/sun'
 import type { Temporal } from 'nebulosa/src/temporal'
 import type { DeepRequired, RequiredOnly } from 'nebulosa/src/types'
 import type { Velocity } from 'nebulosa/src/velocity'
+import type { Messager } from 'src/api/message'
 
 export interface LocationAndTime {
 	readonly location: GeographicCoordinate
@@ -565,6 +566,11 @@ export interface IndiDevicePropertyEvent {
 	readonly device: string
 	readonly name: string
 	readonly property: DeviceProperty
+}
+
+export interface IndiPropertyListenEvent {
+	readonly id: string
+	readonly socket: Messager
 }
 
 export interface DeviceAdded<D extends Device = Device> {

@@ -165,10 +165,6 @@ async function connect(connection: Connection) {
 
 	const selected = state.connections.find((e) => e.id === connection.id)
 
-	if (!selected) {
-		console.warn('unknown connection:', connection)
-	}
-
 	try {
 		state.connecting = true
 

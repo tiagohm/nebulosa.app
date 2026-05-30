@@ -132,6 +132,7 @@ export class CameraCaptureTask {
 	private readonly waitingTime: number
 	private readonly totalExposureProgress = [0, 0] // remaining, elapsed
 	private readonly aborter = new AbortController()
+	private readonly promise = Promise.withResolvers<boolean>()
 	private destroyed = false
 
 	constructor(
@@ -226,7 +227,7 @@ export class CameraCaptureTask {
 								void this.start()
 							} else {
 								// Finish
-								this.finish()
+								this.finish(false)
 							}
 						} catch (error) {
 							this.fail(error)
@@ -245,7 +246,7 @@ export class CameraCaptureTask {
 
 			// If no more frames or was stopped, finish the task
 			if (this.event.remainingCount <= 0 || this.stopped) {
-				this.finish()
+				this.finish(this.stopped ? false : state === 'Ok')
 			}
 		}
 	}
@@ -292,7 +293,7 @@ export class CameraCaptureTask {
 	}
 
 	async start() {
-		if (!this.stopped && this.event.remainingCount > 0) {
+		if (!this.stopped && this.camera.connected && this.event.remainingCount > 0 && this.request.exposureTime > 0) {
 			if (this.request.dither.enabled && this.cameraHandler.phd2Handler?.isRunning) {
 				this.event.state = 'dithering'
 				this.handleCameraCaptureEvent(this, this.event)
@@ -301,10 +302,10 @@ export class CameraCaptureTask {
 					await this.cameraHandler.phd2Handler.dither(this.request.dither, this.aborter.signal)
 				} catch (error) {
 					if (!this.stopped) this.fail(error)
-					return
+					return false
 				}
 
-				if (this.stopped) return
+				if (this.stopped) return false
 			}
 
 			this.event.state = 'exposureStarted'
@@ -315,7 +316,11 @@ export class CameraCaptureTask {
 			this.event.frameProgress.progress = 0
 			this.handleCameraCaptureEvent(this, this.event)
 			this.startExposure(this.camera, this.request)
+		} else {
+			this.promise.resolve(false)
 		}
+
+		return this.promise.promise
 	}
 
 	stop() {
@@ -323,7 +328,7 @@ export class CameraCaptureTask {
 		this.event.stopped = true
 		this.stopExposure(this.camera)
 		this.destroy()
-		this.finish()
+		this.finish(false)
 	}
 
 	destroy() {
@@ -340,13 +345,13 @@ export class CameraCaptureTask {
 		this.handleCameraCaptureEvent(this, this.event)
 		this.stopExposure(this.camera)
 		this.destroy()
-		this.finish()
+		this.finish(false)
 	}
 
-	private finish() {
-		console.info(new Error().stack)
+	private finish(success: boolean) {
 		this.event.state = 'idle'
 		this.handleCameraCaptureEvent(this, this.event)
+		this.promise.resolve(success)
 	}
 }
 

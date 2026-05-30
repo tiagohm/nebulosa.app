@@ -190,6 +190,7 @@ export class TppaTask {
 		// Start next capture
 		this.event.count++
 		this.handleTppaEvent('capturing')
+
 		await this.tppa.cameraHandler.start(this.camera, this.request.capture, (event) => {
 			void this.cameraCaptured(event).catch((error) => this.fail(error))
 		})

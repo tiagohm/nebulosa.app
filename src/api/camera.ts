@@ -277,7 +277,7 @@ export class CameraCaptureTask {
 	startExposure(camera: Camera, request: CameraCaptureStart) {
 		const { cameraManager } = this.cameraHandler
 		cameraManager.enableBlob(camera)
-		request.width && request.height && cameraManager.frame(camera, request.x, request.y, request.width, request.height)
+		request.width && request.height && request.subframe && cameraManager.frame(camera, request.x, request.y, request.width, request.height)
 		cameraManager.frameType(camera, request.frameType)
 		if (request.frameFormat) cameraManager.frameFormat(camera, request.frameFormat)
 		cameraManager.bin(camera, request.binX, request.binY)

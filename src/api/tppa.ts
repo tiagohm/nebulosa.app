@@ -32,10 +32,10 @@ export class TppaHandler {
 	}
 
 	start(request: TppaStart, camera: Camera, mount: Mount) {
-		if (this.tasks.some((e) => e.request.id === request.id || e.camera.id === camera.id || e.mount.id === mount.id)) return
+		if (this.tasks.some((e) => e.request.id === request.id || e.camera === camera || e.mount === mount)) return
 		const task = new TppaTask(this, request, camera, mount, this.handleTppaEvent.bind(this))
 		this.tasks.push(task)
-		void task.start().catch((error) => task.fail(error))
+		task.start()
 	}
 
 	stop(id: string) {
@@ -170,16 +170,16 @@ export class TppaTask {
 
 			// Capture next image
 			if (!this.stopped) {
-				await this.start()
+				this.start()
 			}
 		} else if (event.state === 'error') {
-			this.fail(new Error('camera capture failed'))
+			this.fail('camera capture failed')
 		} else if (event.stopped) {
 			this.stop()
 		}
 	}
 
-	async start() {
+	start() {
 		if (this.stopped) return
 
 		// Enable mount tracking
@@ -191,8 +191,8 @@ export class TppaTask {
 		this.event.count++
 		this.handleTppaEvent('capturing')
 
-		await this.tppa.cameraHandler.start(this.camera, this.request.capture, (event) => {
-			void this.cameraCaptured(event).catch((error) => this.fail(error))
+		void this.tppa.cameraHandler.start(this.camera, this.request.capture, (event, path) => {
+			void this.cameraCaptured(event, path).catch((error) => this.fail(error))
 		})
 	}
 

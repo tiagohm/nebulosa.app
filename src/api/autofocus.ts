@@ -37,7 +37,7 @@ export class AutoFocusHandler {
 		if (this.tasks.some((e) => e.request.id === request.id || e.camera.id === camera.id || e.focuser.id === focuser.id)) return
 		const task = new AutoFocusTask(this, request, camera, focuser, this.handleAutoFocusEvent.bind(this))
 		this.tasks.push(task)
-		void task.start().catch((error) => task.fail(error))
+		task.start()
 	}
 
 	stop(id: string) {
@@ -93,9 +93,9 @@ export class AutoFocusTask {
 		}
 	}
 
-	private async cameraCaptured(event: CameraCaptureEvent) {
+	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
 		try {
-			await this.processCameraCapture(event)
+			await this.processCameraCapture(event, path)
 		} catch (error) {
 			this.fail(error)
 		}
@@ -137,7 +137,7 @@ export class AutoFocusTask {
 				// Wait for focuser reach position
 				this.waitForFocuser(position, (event) => {
 					if (event === 'reach') {
-						void this.start().catch((error) => this.fail(error))
+						this.start()
 					} else if (event === 'cancel') {
 						this.handleAutoFocusEvent('idle', 'stopped')
 					} else {
@@ -210,7 +210,7 @@ export class AutoFocusTask {
 		return points
 	}
 
-	async start() {
+	start() {
 		if (this.stopped) return
 
 		this.request.capture.delay = 0
@@ -223,7 +223,7 @@ export class AutoFocusTask {
 
 		this.handleAutoFocusEvent('capturing', '')
 
-		await this.autoFocusHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
+		void this.autoFocusHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}
 
 	stop() {

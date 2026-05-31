@@ -103,7 +103,7 @@ export class FlatWizardTask {
 			const transformed = await this.flatWizardHandler.cameraHandler.imageProcessor.transform(path, false, this.camera.name)
 
 			if (!transformed) {
-				this.fail(new Error('failed to load captured flat frame'))
+				this.fail('failed to load captured flat frame')
 				return
 			}
 
@@ -122,7 +122,7 @@ export class FlatWizardTask {
 				if (this.stopped) return
 
 				if (!exported) {
-					this.fail(new Error('failed to save flat frame'))
+					this.fail('failed to save flat frame')
 					return
 				}
 
@@ -146,7 +146,7 @@ export class FlatWizardTask {
 
 			await this.start()
 		} else if (event.state === 'error') {
-			this.fail(new Error('camera capture failed'))
+			this.fail('camera capture failed')
 		} else if (event.stopped) {
 			this.stop()
 		}
@@ -166,8 +166,8 @@ export class FlatWizardTask {
 
 		this.handleFlatWizardEvent('capturing', `exposure of ${this.request.capture.exposureTime.toFixed(0)} ms`)
 
-		await this.flatWizardHandler.cameraHandler.start(this.camera, this.request.capture, (event) => {
-			void this.cameraCaptured(event).catch((error) => this.fail(error))
+		await this.flatWizardHandler.cameraHandler.start(this.camera, this.request.capture, (event, path) => {
+			void this.cameraCaptured(event, path).catch((error) => this.fail(error))
 		})
 	}
 

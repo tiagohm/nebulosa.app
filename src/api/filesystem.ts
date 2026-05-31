@@ -61,13 +61,14 @@ export class FileSystemHandler {
 	async exists(req?: Partial<DirectoryEntry>) {
 		const path = await findDirectory(req?.path || Bun.env.homeDir)
 		if (!path) return false
-		if (!req?.name) return true
+		if (req?.name === undefined) return true
 		const name = fileName(req.name)
-		return !!name && (await Bun.file(join(path, name)).exists())
+		return !!name && (await statEntry(join(path, name))) !== undefined
 	}
 
 	join(req: readonly unknown[]) {
-		return { path: join(...(Array.isArray(req) ? req.filter((e) => typeof e === 'string' && e.length > 0) : [])) }
+		const parts = Array.isArray(req) ? req.filter((e) => typeof e === 'string' && e.length > 0) : []
+		return { path: parts.length > 0 ? join(...parts) : '' }
 	}
 }
 
@@ -84,7 +85,7 @@ export function fileSystem(fileSystem: FileSystemHandler) {
 export async function findDirectory(path?: string, parent?: string) {
 	// If no path is provided, return
 	if (!path) return undefined
-	else if (path === parent) return path
+	else if (path === parent) return (await directoryExists(path)) ? normalize(path) : undefined
 	// If the path does not exist, go up until a directory is found
 	else if (!(await directoryExists(path))) return findDirectory(dirname(path), path)
 	// If the path exists, return if it is a directory, otherwise go up

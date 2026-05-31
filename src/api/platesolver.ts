@@ -87,6 +87,16 @@ export class PlateSolverHandler {
 			aborter.abort()
 		}
 	}
+
+	stopAll() {
+		for (const key of this.tasks.keys()) {
+			this.stop(key)
+		}
+	}
+
+	isRunning(id: string) {
+		return this.tasks.get(id)?.signal.aborted === false
+	}
 }
 
 export function plateSolver(solver: PlateSolverHandler) {

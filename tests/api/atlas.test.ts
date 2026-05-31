@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, spyOn, test, type Mock } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test, type Mock } from 'bun:test'
 import { join } from 'path'
 import { deg, formatALT, parseAngle } from 'nebulosa/src/angle'
 import { lightYear, meter, toKilometer } from 'nebulosa/src/distance'
@@ -7,6 +7,7 @@ import { formatTemporal } from 'nebulosa/src/temporal'
 import { AtlasHandler } from 'src/api/atlas'
 import cache from 'src/api/cache'
 import { DEFAULT_SKY_OBJECT_SEARCH, type FindNextSolarEclipse, type PositionOfBody, type SearchSkyObject } from 'src/shared/types'
+import { spyFetch } from './util'
 
 const atlas = new AtlasHandler(cache)
 
@@ -39,16 +40,14 @@ for (const [, file] of await FETCH_ARCHIVE.files()) {
 	FETCH_FILES.set(url, content)
 }
 
-let fetchSpy: Mock<typeof fetch> | undefined
+let fetchMock: Mock<typeof fetch> | undefined
 
 beforeAll(() => {
-	// const fetch = globalThis.fetch
-	const fetchMock: typeof fetch = ((input: string) => Promise.resolve(new Response(FETCH_FILES.get(input)))) as never
-	fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
+	fetchMock = spyFetch((input: string) => Promise.resolve(new Response(FETCH_FILES.get(input))))
 })
 
 afterAll(() => {
-	fetchSpy?.mockRestore()
+	fetchMock?.mockRestore()
 })
 
 test('seasons', () => {

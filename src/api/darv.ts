@@ -30,7 +30,7 @@ export class DarvHandler {
 	}
 
 	start(request: DarvStart, camera: Camera, mount: Mount) {
-		if (this.tasks.some((e) => e.request.id === request.id || e.camera.id === camera.id || e.mount.id === mount.id)) return
+		if (this.tasks.some((e) => e.request.id === request.id || e.camera === camera || e.mount === mount)) return
 		const task = new DarvTask(this, request, camera, mount, this.handleDarvEvent.bind(this))
 		this.tasks.push(task)
 		void task.start().catch((error) => task.fail(error))

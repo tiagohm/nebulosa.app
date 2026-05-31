@@ -1,4 +1,4 @@
-import { expect } from 'bun:test'
+import { expect, spyOn } from 'bun:test'
 import type { Messager } from 'src/api/message'
 
 export type SocketMessage<T = unknown> = {
@@ -52,4 +52,8 @@ export async function waitUntil(condition: () => boolean, timeout = 1500) {
 	}
 
 	return true
+}
+
+export function spyFetch<I extends URL | RequestInfo>(fetch: (input: I, init?: RequestInit) => Promise<Response>) {
+	return spyOn(globalThis, 'fetch').mockImplementation(fetch as never)
 }

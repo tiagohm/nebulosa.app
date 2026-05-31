@@ -27,8 +27,10 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 - `src/web/hooks`: React hooks, including the local store lifecycle hook.
 - `src/web/assets`: Images and icons.
 - `src/shared`: Types and utilities shared between runtime and web. Keep it runtime-agnostic where practical.
+- `src/data`: Data/assets used by `api`, and `web`.
 - `tests`: Currently API-focused tests under `tests/api`.
-- `data`: Data/assets used by `tests`, `api`, and `web`.
+- `tests/data`: Data/assets used by `tests`.
+- `tests/util.ts`: Utility file used by `tests`.
 - `bin`: Build-time data generation scripts.
 - `scripts`: Repository maintenance scripts, including codebase graph indexing.
 - `tailwind.plugin.ts`: Bun build plugin for Tailwind CSS v4 compilation.
@@ -289,7 +291,7 @@ This project consumes `nebulosa` as the core astronomy, image-processing, and IN
 - Respect OXC's current guardrails in new code: no import cycles, no floating promises, and prefer `performance.now()` over `Date.now()` for durations.
 - Keep modules focused and ownership clear.
 - Add comments only where they explain non-obvious behavior, lifecycle cleanup, normalization, or interaction details.
-- Validate with the smallest relevant check before finishing: `git diff --check`, the `nebulosa-oxc` MCP server's `oxfmt` tool with `["--check"]`, the `nebulosa-oxc` MCP server's `oxlint` tool, and `bun run compile` when touching Bun runtime, env, packaging, or build-plugin code.
+- Validate with the smallest relevant check before finishing: `git diff --check`, the `oxfmt` tool, the `oxlint` tool, and `bun run compile` when touching Bun runtime, env, packaging, or build-plugin code.
 - Preserve Bun-first workflows in every change.
 
 ## Placement Guide

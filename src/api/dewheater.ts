@@ -27,10 +27,7 @@ export class DewHeaterHandler implements DeviceHandler<DewHeater> {
 	}
 
 	updated(device: DewHeater, property: keyof DewHeater & string, state?: PropertyState) {
-		const event: DewHeaterUpdated = { device: { type: device.type, id: device.id, name: device.name, [property]: device[property] }, property, state }
-
-		if (device.type === 'cover') this.wsm.send('cover:update', event)
-		this.wsm.send('dewHeater:update', event)
+		this.wsm.send<DewHeaterUpdated>('dewHeater:update', { device: { type: 'dewHeater', id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: DewHeater) {

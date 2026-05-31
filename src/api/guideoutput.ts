@@ -1,6 +1,5 @@
 import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
-import type { IndiClient } from 'nebulosa/src/indi.client'
-import type { GuideOutput } from 'nebulosa/src/indi.device'
+import type { Client, GuideOutput } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, GuideOutputManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
 import bus from 'src/shared/bus'
@@ -28,11 +27,7 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 	}
 
 	updated(device: GuideOutput, property: keyof GuideOutput & string, state?: PropertyState) {
-		const event: GuideOutputUpdated = { device: { type: device.type, id: device.id, name: device.name, [property]: device[property] }, property, state }
-
-		if (device.type === 'camera') this.wsm.send('camera:update', event)
-		else if (device.type === 'mount') this.wsm.send('mount:update', event)
-		this.wsm.send('guideOutput:update', event)
+		this.wsm.send<GuideOutputUpdated>('guideOutput:update', { device: { type: 'guideOutput', id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: GuideOutput) {
@@ -40,7 +35,7 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 		console.info('guide output removed:', device.name, device.id)
 	}
 
-	list(client?: string | IndiClient) {
+	list(client?: string | Client) {
 		return Array.from(this.guideOutputManager.list(client))
 	}
 

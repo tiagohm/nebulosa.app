@@ -27,11 +27,7 @@ export class ThermometerHandler implements DeviceHandler<Thermometer> {
 	}
 
 	updated(device: Thermometer, property: keyof Thermometer & string, state?: PropertyState) {
-		const event: ThermometerUpdated = { device: { type: device.type, id: device.id, name: device.name, [property]: device[property] }, property, state }
-
-		if (device.type === 'camera') this.wsm.send('camera:update', event)
-		else if (device.type === 'focuser') this.wsm.send('focuser:update', event)
-		this.wsm.send('thermometer:update', event)
+		this.wsm.send<ThermometerUpdated>('thermometer:update', { device: { type: 'thermometer', id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Thermometer) {

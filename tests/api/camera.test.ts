@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
+import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join, sep } from 'path'
@@ -76,6 +76,10 @@ afterAll(async () => {
 beforeEach(() => {
 	wsm.close(socket, 1000, 'reset')
 	socketMessages.length = 0
+	cameraManager.disconnect(getCamera())
+})
+
+afterEach(() => {
 	cameraManager.disconnect(getCamera())
 })
 
@@ -210,7 +214,6 @@ describe('camera capture start request', () => {
 		} finally {
 			temperature.mockRestore()
 			cooler.mockRestore()
-			cameraManager.disconnect(camera)
 		}
 	})
 
@@ -218,21 +221,17 @@ describe('camera capture start request', () => {
 		const camera = getCamera()
 		const request = captureStartRequest({ exposureMode: 'loop', exposureTime: 200, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO', autoSave: false })
 
-		try {
-			wsm.open(socket)
-			cameraManager.connect(camera)
+		wsm.open(socket)
+		cameraManager.connect(camera)
 
-			const startResponse = endpoints['/cameras/:id/start'].POST(endpointRequest(camera.id, request))
+		const startResponse = endpoints['/cameras/:id/start'].POST(endpointRequest(camera.id, request))
 
-			expect(await waitUntil(() => socketMessagesOf<CameraCaptureEvent>('camera:capture').some((message) => message.body.state === 'exposureStarted'))).toBeTrue()
+		expect(await waitUntil(() => socketMessagesOf<CameraCaptureEvent>('camera:capture').some((message) => message.body.state === 'exposureStarted'))).toBeTrue()
 
-			await noContent(endpoints['/cameras/:id/stop'].POST(endpointRequest(camera.id)))
+		await noContent(endpoints['/cameras/:id/stop'].POST(endpointRequest(camera.id)))
 
-			expect(await json<boolean>(await startResponse)).toBeFalse()
-			expect(socketMessagesOf<CameraCaptureEvent>('camera:capture').some((message) => message.body.state === 'idle' && message.body.stopped)).toBeTrue()
-		} finally {
-			cameraManager.disconnect(camera)
-		}
+		expect(await json<boolean>(await startResponse)).toBeFalse()
+		expect(socketMessagesOf<CameraCaptureEvent>('camera:capture').some((message) => message.body.state === 'idle' && message.body.stopped)).toBeTrue()
 	}, 5000)
 
 	test('sends add event to a socket opened after discovery', async () => {
@@ -261,10 +260,9 @@ describe('camera capture start request', () => {
 		expect(camera.connected).toBeTrue()
 		expect(camera.canAbort).toBeTrue()
 		expect(cameraUpdates('connected').at(-1)?.body.device.connected).toBeTrue()
+		expect(cameraUpdates('canAbort').at(-1)?.body.device.canAbort).toBeTrue()
 		expect(cameraUpdates('hasCoolerControl').at(-1)?.body.device.hasCoolerControl).toBeTrue()
-		// TODO: CameraSimulator sets capability flags on connect but does not currently emit dedicated capability updates.
-		expect(camera.hasCoolerControl).toBeTrue()
-		expect(camera.canSetTemperature).toBeTrue()
+		expect(cameraUpdates('canSetTemperature').at(-1)?.body.device.canSetTemperature).toBeTrue()
 
 		cameraManager.disconnect(camera)
 
@@ -325,8 +323,6 @@ describe('camera capture start request', () => {
 		expect(frameEvents[0].camera).toBe(result.camera.id)
 		expect(frameEvents[0].path).toBe(result.paths[0])
 		expect(imageProcessor.get(frameEvents[0].path)).toBeDefined()
-
-		cameraManager.disconnect(result.camera)
 	}, 5000)
 
 	test('computes exposure timing from mode, count, delay, and units', () => {
@@ -497,7 +493,6 @@ describe('camera capture start request', () => {
 		} finally {
 			snoop.mockRestore()
 			compression.mockRestore()
-			cameraManager.disconnect(camera)
 		}
 	}, 5000)
 
@@ -555,8 +550,6 @@ describe('camera capture start request', () => {
 		expect(image.header.YORGSUBF).toBe(request.y)
 		expect(image.header.BZERO).toBe(32768)
 		expect(image.header.BSCALE).toBe(1)
-
-		cameraManager.disconnect(result.camera)
 	}, 5000)
 
 	test('includes connected active device metadata in generated FITS headers', async () => {
@@ -622,8 +615,6 @@ describe('camera capture start request', () => {
 		expect(paths).toHaveLength(1)
 		expect(paths.every((path) => imageProcessor.get(path))).toBeTrue()
 		expectSuccessfulEventFlow(records, 1)
-
-		cameraManager.disconnect(camera)
 	}, 5000)
 
 	test('fixed capture emits the requested frame count', async () => {
@@ -635,8 +626,6 @@ describe('camera capture start request', () => {
 		expect(paths).toHaveLength(2)
 		expect(paths.every((path) => imageProcessor.get(path))).toBeTrue()
 		expectSuccessfulEventFlow(records, 2)
-
-		cameraManager.disconnect(camera)
 	}, 5000)
 
 	test('emits waiting progress between delayed fixed captures', async () => {
@@ -649,8 +638,6 @@ describe('camera capture start request', () => {
 		expect(waitingEvents.length).toBeGreaterThan(0)
 		expect(waitingEvents[0].event.frameProgress.remainingTime).toBe(1000000)
 		expectSuccessfulEventFlow(result.records, 2)
-
-		cameraManager.disconnect(result.camera)
 	}, 7000)
 
 	test('loop capture can be stopped', async () => {
@@ -658,23 +645,19 @@ describe('camera capture start request', () => {
 		const events: CameraCaptureEvent[] = []
 		const request = captureStartRequest({ exposureMode: 'loop', exposureTime: 200, exposureTimeUnit: 'millisecond' })
 
-		try {
-			cameraManager.connect(camera)
+		cameraManager.connect(camera)
 
-			const promise = cameraHandler.start(camera, request, (event) => {
-				events.push(structuredClone(event))
-			})
+		const promise = cameraHandler.start(camera, request, (event) => {
+			events.push(structuredClone(event))
+		})
 
-			while (!events.some((event) => event.state === 'exposureStarted')) {
-				await Bun.sleep(10)
-			}
-
-			cameraHandler.stop(camera)
-
-			expect(await promise).toBeFalse()
-		} finally {
-			cameraManager.disconnect(camera)
+		while (!events.some((event) => event.state === 'exposureStarted')) {
+			await Bun.sleep(10)
 		}
+
+		cameraHandler.stop(camera)
+
+		expect(await promise).toBeFalse()
 
 		expect(events[0].loop).toBeTrue()
 		expect(events[0].count).toBe(Number.MAX_SAFE_INTEGER)
@@ -704,17 +687,13 @@ describe('camera capture start request', () => {
 			dither: { enabled: true, amount: 3, raOnly: true },
 		})
 
-		try {
-			cameraManager.connect(camera)
+		cameraManager.connect(camera)
 
-			const success = await cameraHandler.start(camera, request, (event) => {
-				events.push(structuredClone(event))
-			})
+		const success = await cameraHandler.start(camera, request, (event) => {
+			events.push(structuredClone(event))
+		})
 
-			expect(success).toBeTrue()
-		} finally {
-			cameraManager.disconnect(camera)
-		}
+		expect(success).toBeTrue()
 
 		expect(dithered).toEqual(request.dither)
 		expect(signal).toBeInstanceOf(AbortSignal)

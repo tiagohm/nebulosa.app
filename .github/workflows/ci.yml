@@ -37,5 +37,8 @@ jobs:
             - name: Install Dependencies
               run: bun i --omit=dev
 
+            - name: Build Database
+              run: bun run bin/nebulosa.sqlite.ts
+
             - name: Run Tests
               run: bun test --timeout 5000 --parallel

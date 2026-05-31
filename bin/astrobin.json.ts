@@ -64,7 +64,7 @@ while (true) {
 	Bun.sleepSync(100)
 }
 
-await Bun.write('data/cameras.json', JSON.stringify(cameras))
+await Bun.write('src/data/cameras.json', JSON.stringify(cameras))
 
 console.info(`found ${cameras.length} cameras`)
 
@@ -91,6 +91,6 @@ while (true) {
 	Bun.sleepSync(100)
 }
 
-await Bun.write('data/telescopes.json', JSON.stringify(telescopes))
+await Bun.write('src/data/telescopes.json', JSON.stringify(telescopes))
 
 console.info(`found ${telescopes.length} telescopes`)

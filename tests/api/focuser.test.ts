@@ -4,13 +4,9 @@ import type { Focuser } from 'nebulosa/src/indi.device'
 import { FocuserManager } from 'nebulosa/src/indi.manager'
 import { ClientSimulator, FocuserSimulator } from 'nebulosa/src/indi.simulator'
 import { FocuserHandler, focuser as focuserEndpoints } from 'src/api/focuser'
-import { WebSocketMessageHandler, type Messager } from 'src/api/message'
+import { WebSocketMessageHandler } from 'src/api/message'
 import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from 'src/shared/types'
-
-type SocketMessage<T = unknown> = {
-	readonly type: string
-	readonly body: T
-}
+import { json, noContent, SocketMessager, waitUntil } from './util'
 
 const wsm = new WebSocketMessageHandler()
 const focuserManager = new FocuserManager()
@@ -19,17 +15,7 @@ const endpoints = focuserEndpoints(focuserHandler)
 const handler = new IndiClientHandlerSet([focuserManager])
 const client = new ClientSimulator('Client Simulator', handler)
 const simulator = new FocuserSimulator('Focuser Simulator', client)
-
-const socketMessages: SocketMessage[] = []
-const socket: Messager = {
-	sendText(data) {
-		const separator = data.indexOf('@')
-		const type = data.slice(0, separator)
-		const payload = data.slice(separator + 1)
-
-		socketMessages.push({ type, body: payload ? JSON.parse(payload) : undefined })
-	},
-}
+const socket = new SocketMessager()
 
 afterAll(() => {
 	simulator.dispose()
@@ -38,7 +24,7 @@ afterAll(() => {
 
 beforeEach(() => {
 	wsm.close(socket, 1000, 'reset')
-	socketMessages.length = 0
+	socket.clear()
 	focuserManager.disconnect(getFocuser())
 })
 
@@ -60,29 +46,8 @@ function request(id = 'Focuser Simulator', body?: unknown, search = '') {
 	} as unknown as Bun.BunRequest
 }
 
-async function json<T>(response: Response) {
-	expect(response.status).toBe(200)
-	return (await response.json()) as T
-}
-
-async function noContent(response: Response) {
-	expect(response.status).toBe(200)
-	expect(await response.text()).toBe('')
-}
-
-async function waitUntil(condition: () => boolean, timeout = 1500) {
-	const start = performance.now()
-
-	while (!condition()) {
-		if (performance.now() - start >= timeout) return false
-		await Bun.sleep(10)
-	}
-
-	return true
-}
-
 function focuserUpdates(property: keyof Focuser & string) {
-	return socketMessages.filter((message): message is SocketMessage<FocuserUpdated> => message.type === 'focuser:update' && (message.body as FocuserUpdated).property === property)
+	return socket.filter<FocuserUpdated>((message) => message.type === 'focuser:update' && message.body.property === property)
 }
 
 describe('focuser handler', () => {
@@ -104,9 +69,9 @@ describe('focuser handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socketMessages.some((message) => message.type === 'focuser:add'))).toBeTrue()
+		expect(await waitUntil(() => socket.some((message) => message.type === 'focuser:add'))).toBeTrue()
 
-		const message = socketMessages.find((message): message is SocketMessage<FocuserAdded> => message.type === 'focuser:add')
+		const message = socket.find<FocuserAdded>((message) => message.type === 'focuser:add')
 
 		expect(message).toBeDefined()
 		expect(message!.body.device.id).toBe(device.id)
@@ -118,7 +83,7 @@ describe('focuser handler', () => {
 		const device = getFocuser()
 
 		wsm.open(socket)
-		socketMessages.length = 0
+		socket.clear()
 
 		focuserManager.connect(device)
 
@@ -146,7 +111,7 @@ describe('focuser handler', () => {
 
 		wsm.open(socket)
 		focuserManager.connect(device)
-		socketMessages.length = 0
+		socket.clear()
 
 		await noContent(await endpoints['/focusers/:id/sync'].POST(request(device.id, 1234)))
 
@@ -170,7 +135,7 @@ describe('focuser handler', () => {
 		wsm.open(socket)
 		focuserManager.connect(device)
 		focuserManager.syncTo(device, 2000)
-		socketMessages.length = 0
+		socket.clear()
 
 		await noContent(await endpoints['/focusers/:id/moveto'].POST(request(device.id, 2100)))
 
@@ -224,22 +189,13 @@ describe('focuser handler', () => {
 		const handler = new IndiClientHandlerSet([focuserManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const focuserSimulator = new FocuserSimulator('Focuser Simulator', client)
-		const messages: SocketMessage[] = []
-		const socket: Messager = {
-			sendText(data) {
-				const separator = data.indexOf('@')
-				const type = data.slice(0, separator)
-				const payload = data.slice(separator + 1)
-
-				messages.push({ type, body: payload ? JSON.parse(payload) : undefined })
-			},
-		}
+		const socket = new SocketMessager()
 
 		wsm.open(socket)
-		messages.length = 0
+		socket.clear()
 		focuserSimulator.dispose()
 
-		const message = messages.find((message): message is SocketMessage<FocuserRemoved> => message.type === 'focuser:remove')
+		const message = socket.find<FocuserRemoved>((message) => message.type === 'focuser:remove')
 
 		expect(message).toBeDefined()
 		expect(message!.body.device.name).toBe('Focuser Simulator')

@@ -7,14 +7,10 @@ import { MountManager } from 'nebulosa/src/indi.manager'
 import { ClientSimulator, MountSimulator } from 'nebulosa/src/indi.simulator'
 import { CacheManager } from 'src/api/cache'
 import { ConfirmationHandler } from 'src/api/confirmation'
-import { WebSocketMessageHandler, type Messager } from 'src/api/message'
+import { WebSocketMessageHandler } from 'src/api/message'
 import { mount as mountEndpoints, MountHandler, MountRemoteControlHandler } from 'src/api/mount'
 import type { CoordinateInfo, MountAdded, MountRemoved, MountUpdated } from 'src/shared/types'
-
-type SocketMessage<T = unknown> = {
-	readonly type: string
-	readonly body: T
-}
+import { SocketMessager } from './util'
 
 const wsm = new WebSocketMessageHandler()
 const mountManager = new MountManager()
@@ -26,17 +22,7 @@ const endpoints = mountEndpoints(mountHandler, mountRemoteControlHandler)
 const handler = new IndiClientHandlerSet([mountManager])
 const client = new ClientSimulator('Client Simulator', handler)
 const simulator = new MountSimulator('Mount Simulator', client)
-
-const socketMessages: SocketMessage[] = []
-const socket: Messager = {
-	sendText(data) {
-		const separator = data.indexOf('@')
-		const type = data.slice(0, separator)
-		const payload = data.slice(separator + 1)
-
-		socketMessages.push({ type, body: payload ? JSON.parse(payload) : undefined })
-	},
-}
+const socket = new SocketMessager()
 
 afterAll(() => {
 	simulator.dispose()
@@ -45,7 +31,7 @@ afterAll(() => {
 
 beforeEach(() => {
 	wsm.close(socket, 1000, 'reset')
-	socketMessages.length = 0
+	socket.clear()
 	mountManager.disconnect(getMount())
 })
 
@@ -89,7 +75,7 @@ async function waitUntil(condition: () => boolean, timeout = 1500) {
 }
 
 function mountUpdates(property: keyof Mount & string) {
-	return socketMessages.filter((message): message is SocketMessage<MountUpdated> => message.type === 'mount:update' && (message.body as MountUpdated).property === property)
+	return socket.filter<MountUpdated>((message) => message.type === 'mount:update' && message.body.property === property)
 }
 
 function targetCoordinate(): MountTargetCoordinate {
@@ -115,9 +101,9 @@ describe('mount handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socketMessages.some((message) => message.type === 'mount:add'))).toBeTrue()
+		expect(await waitUntil(() => socket.some<MountAdded>((message) => message.type === 'mount:add'))).toBeTrue()
 
-		const message = socketMessages.find((message): message is SocketMessage<MountAdded> => message.type === 'mount:add')
+		const message = socket.find<MountAdded>((message) => message.type === 'mount:add')
 
 		expect(message).toBeDefined()
 		expect(message!.body.device.id).toBe(device.id)
@@ -129,7 +115,7 @@ describe('mount handler', () => {
 		const device = getMount()
 
 		wsm.open(socket)
-		socketMessages.length = 0
+		socket.clear()
 
 		mountManager.connect(device)
 
@@ -172,7 +158,7 @@ describe('mount handler', () => {
 
 		wsm.open(socket)
 		mountManager.connect(device)
-		socketMessages.length = 0
+		socket.clear()
 
 		await noContent(await endpoints['/mounts/:id/tracking'].POST(request(device.id, true)))
 		await noContent(await endpoints['/mounts/:id/trackmode'].POST(request(device.id, 'SOLAR')))
@@ -200,7 +186,7 @@ describe('mount handler', () => {
 
 		wsm.open(socket)
 		mountManager.connect(device)
-		socketMessages.length = 0
+		socket.clear()
 
 		await noContent(await endpoints['/mounts/:id/movenorth'].POST(request(device.id, true)))
 
@@ -224,7 +210,7 @@ describe('mount handler', () => {
 		expect(device.parked).toBeFalse()
 		expect(mountUpdates('parked').at(-1)?.body.device.parked).toBeFalse()
 
-		socketMessages.length = 0
+		socket.clear()
 
 		await noContent(endpoints['/mounts/:id/home'].POST(request(device.id)))
 
@@ -261,7 +247,7 @@ describe('mount handler', () => {
 
 			await noContent(await endpoints['/mounts/:id/goto'].POST(request(device.id, target)))
 
-			const message = socketMessages.find((message) => message.type === 'confirmation')
+			const message = socket.find((message) => message.type === 'confirmation')
 
 			expect(message).toBeDefined()
 			expect(message!.body).toEqual({ key: `mount.${device.id}.move`, message: `Are you sure you want to slew the mount '${device.name}'?` })
@@ -353,22 +339,13 @@ describe('mount handler', () => {
 		const handler = new IndiClientHandlerSet([mountManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const mountSimulator = new MountSimulator('Mount Simulator', client)
-		const messages: SocketMessage[] = []
-		const socket: Messager = {
-			sendText(data) {
-				const separator = data.indexOf('@')
-				const type = data.slice(0, separator)
-				const payload = data.slice(separator + 1)
-
-				messages.push({ type, body: payload ? JSON.parse(payload) : undefined })
-			},
-		}
+		const socket = new SocketMessager()
 
 		wsm.open(socket)
-		messages.length = 0
+		socket.clear()
 		mountSimulator.dispose()
 
-		const message = messages.find((message): message is SocketMessage<MountRemoved> => message.type === 'mount:remove')
+		const message = socket.find<MountRemoved>((message) => message.type === 'mount:remove')
 
 		expect(message).toBeDefined()
 		expect(message!.body.device.name).toBe('Mount Simulator')

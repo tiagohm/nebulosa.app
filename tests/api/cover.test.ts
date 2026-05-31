@@ -4,13 +4,9 @@ import type { Cover } from 'nebulosa/src/indi.device'
 import { CoverManager } from 'nebulosa/src/indi.manager'
 import { ClientSimulator, CoverSimulator } from 'nebulosa/src/indi.simulator'
 import { CoverHandler, cover as coverEndpoints } from 'src/api/cover'
-import { WebSocketMessageHandler, type Messager } from 'src/api/message'
+import { WebSocketMessageHandler } from 'src/api/message'
 import type { CoverAdded, CoverRemoved, CoverUpdated } from 'src/shared/types'
-
-type SocketMessage<T = unknown> = {
-	readonly type: string
-	readonly body: T
-}
+import { json, SocketMessager, waitUntil } from './util'
 
 const wsm = new WebSocketMessageHandler()
 const coverManager = new CoverManager()
@@ -19,17 +15,7 @@ const endpoints = coverEndpoints(coverHandler)
 const handler = new IndiClientHandlerSet([coverManager])
 const client = new ClientSimulator('Client Simulator', handler)
 const simulator = new CoverSimulator('Cover Simulator', client)
-
-const socketMessages: SocketMessage[] = []
-const socket: Messager = {
-	sendText(data) {
-		const separator = data.indexOf('@')
-		const type = data.slice(0, separator)
-		const payload = data.slice(separator + 1)
-
-		socketMessages.push({ type, body: payload ? JSON.parse(payload) : undefined })
-	},
-}
+const socket = new SocketMessager()
 
 afterAll(() => {
 	simulator.dispose()
@@ -38,7 +24,7 @@ afterAll(() => {
 
 beforeEach(() => {
 	wsm.close(socket, 1000, 'reset')
-	socketMessages.length = 0
+	socket.clear()
 	coverManager.disconnect(getCover())
 })
 
@@ -52,24 +38,8 @@ function request(id = 'Cover Simulator', search = '') {
 	return { url: `http://localhost/covers/${encodeURIComponent(id)}${search}`, params: { id } } as unknown as Bun.BunRequest
 }
 
-async function json<T>(response: Response) {
-	expect(response.status).toBe(200)
-	return (await response.json()) as T
-}
-
-async function waitUntil(condition: () => boolean, timeout = 1500) {
-	const start = performance.now()
-
-	while (!condition()) {
-		if (performance.now() - start >= timeout) return false
-		await Bun.sleep(10)
-	}
-
-	return true
-}
-
 function coverUpdates(property: keyof Cover & string) {
-	return socketMessages.filter((message): message is SocketMessage<CoverUpdated> => message.type === 'cover:update' && (message.body as CoverUpdated).property === property)
+	return socket.filter<CoverUpdated>((message) => message.type === 'cover:update' && message.body.property === property)
 }
 
 describe('cover handler', () => {
@@ -91,9 +61,9 @@ describe('cover handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socketMessages.some((message) => message.type === 'cover:add'))).toBeTrue()
+		expect(await waitUntil(() => socket.some((message) => message.type === 'cover:add'))).toBeTrue()
 
-		const message = socketMessages.find((message): message is SocketMessage<CoverAdded> => message.type === 'cover:add')
+		const message = socket.find<CoverAdded>((message) => message.type === 'cover:add')
 
 		expect(message).toBeDefined()
 		expect(message!.body.device.id).toBe(device.id)
@@ -105,7 +75,7 @@ describe('cover handler', () => {
 		const device = getCover()
 
 		wsm.open(socket)
-		socketMessages.length = 0
+		socket.clear()
 
 		coverManager.connect(device)
 
@@ -123,7 +93,7 @@ describe('cover handler', () => {
 
 		wsm.open(socket)
 		coverManager.connect(device)
-		socketMessages.length = 0
+		socket.clear()
 
 		expect(endpoints['/covers/:id/park'].POST(request(device.id))).toBeDefined()
 		expect(device.parking).toBeTrue()
@@ -133,7 +103,7 @@ describe('cover handler', () => {
 		expect(device.parked).toBeTrue()
 		expect(coverUpdates('parked').at(-1)?.body.device.parked).toBeTrue()
 
-		socketMessages.length = 0
+		socket.clear()
 
 		expect(endpoints['/covers/:id/unpark'].POST(request(device.id))).toBeDefined()
 		expect(device.parking).toBeTrue()
@@ -148,7 +118,7 @@ describe('cover handler', () => {
 
 		wsm.open(socket)
 		coverManager.connect(device)
-		socketMessages.length = 0
+		socket.clear()
 
 		coverHandler.park(device)
 
@@ -189,22 +159,13 @@ describe('cover handler', () => {
 		const handler = new IndiClientHandlerSet([coverManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const coverSimulator = new CoverSimulator('Cover Simulator', client)
-		const messages: SocketMessage[] = []
-		const socket: Messager = {
-			sendText(data) {
-				const separator = data.indexOf('@')
-				const type = data.slice(0, separator)
-				const payload = data.slice(separator + 1)
-
-				messages.push({ type, body: payload ? JSON.parse(payload) : undefined })
-			},
-		}
+		const socket = new SocketMessager()
 
 		wsm.open(socket)
-		messages.length = 0
+		socket.clear()
 		coverSimulator.dispose()
 
-		const message = messages.find((message): message is SocketMessage<CoverRemoved> => message.type === 'cover:remove')
+		const message = socket.find<CoverRemoved>((message) => message.type === 'cover:remove')
 
 		expect(message).toBeDefined()
 		expect(message!.body.device.name).toBe('Cover Simulator')

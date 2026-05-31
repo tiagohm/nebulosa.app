@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, spyOn, test, type Mock } from 'bun:test'
+import { join } from 'path'
 import { deg, formatALT, parseAngle } from 'nebulosa/src/angle'
 import { lightYear, meter, toKilometer } from 'nebulosa/src/distance'
 import { StellariumObjectType } from 'nebulosa/src/stellarium'
@@ -26,6 +27,29 @@ const SKY_OBJECT_SEARCH: SearchSkyObject = {
 	time: POSITION_OF_BODY.time,
 	location: POSITION_OF_BODY.location,
 }
+
+const FETCH_ARCHIVE = new Bun.Archive(await Bun.file(join('tests', 'data', 'fetch.tar.gz')).bytes(), { compress: 'gzip' })
+const FETCH_FILES = new Map<string, string>()
+
+for (const [, file] of await FETCH_ARCHIVE.files()) {
+	const text = await file.text()
+	const start = text.indexOf('\n')
+	const url = text.slice(0, start)
+	const content = text.slice(start + 1)
+	FETCH_FILES.set(url, content)
+}
+
+let fetchSpy: Mock<typeof fetch> | undefined
+
+beforeAll(() => {
+	// const fetch = globalThis.fetch
+	const fetchMock: typeof fetch = ((input: string) => Promise.resolve(new Response(FETCH_FILES.get(input)))) as never
+	fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
+})
+
+afterAll(() => {
+	fetchSpy?.mockRestore()
+})
 
 test('seasons', () => {
 	const { spring, summer, autumn, winter } = atlas.seasons(POSITION_OF_BODY)

@@ -836,14 +836,14 @@ const GITHUB_FILES: Readonly<Record<string, string>> = {
 }
 
 for (const [name, url] of Object.entries(GITHUB_FILES)) {
-	const file = Bun.file(`data/${name}`)
+	const file = Bun.file(`src/data/${name}`)
 
 	if (!(await file.exists())) {
 		await Bun.write(file, await (await fetch(url)).blob())
 	}
 }
 
-const file = Bun.file('data/nebulosa.sqlite')
+const file = Bun.file('src/data/nebulosa.sqlite')
 
 if (await file.exists()) await file.delete()
 
@@ -900,7 +900,7 @@ const GUM_CATALOG_MAP = mapCatalog(GUM_CATALOG)
 
 const NAMES = new Map<number, [string, string][]>()
 
-for await (const entry of readNamesDat(fileHandleSource(await fs.open('data/names.dat')))) {
+for await (const entry of readNamesDat(fileHandleSource(await fs.open('src/data/names.dat')))) {
 	const type = CATALOGS[entry.prefix as never] ?? -1
 	const names = NAMES.get(type) ?? []
 	names.push([entry.id, mapNameWithGreekLetter(entry.name)])
@@ -947,7 +947,7 @@ function addNameFromTypeAndId(dsoId: number | bigint, type: number, id: string, 
 async function readDsosFromStellarium() {
 	db.run('BEGIN TRANSACTION;')
 
-	for await (const entry of readCatalogDat(fileHandleSource(await fs.open('data/catalog.dat')))) {
+	for await (const entry of readCatalogDat(fileHandleSource(await fs.open('src/data/catalog.dat')))) {
 		const { type, rightAscension, declination, distance, magnitude } = entry
 
 		if (type === StellariumObjectType.UNKNOWN) {
@@ -998,7 +998,7 @@ async function readDsosFromStellarium() {
 async function readStarsFromHyg() {
 	db.run('BEGIN TRANSACTION;')
 
-	for await (const row of readHygCatalog(fileHandleSource(await fs.open('data/hyg_v42.csv')))) {
+	for await (const row of readHygCatalog(fileHandleSource(await fs.open('src/data/hyg_v42.csv')))) {
 		const { id, rightAscension, declination, magnitude, pmRA, pmDEC, distance, rv, constellation, hd, hip, hr, bayer, flamsteed, name, spType } = row
 
 		if (id !== 0 && magnitude <= 7 && (bayer || flamsteed || name)) {

@@ -17,6 +17,7 @@ import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler, type Messager } from 'src/api/message'
 import type { PHD2Handler } from 'src/api/phd2'
 import { DEFAULT_CAMERA_CAPTURE_START, type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated } from 'src/shared/types'
+import { json, noContent, SocketMessager, waitUntil, type SocketMessage } from './util'
 
 type CameraCaptureStartOverrides = Omit<Partial<CameraCaptureStart>, 'dither'> & {
 	dither?: Partial<CameraCaptureStart['dither']>
@@ -25,11 +26,6 @@ type CameraCaptureStartOverrides = Omit<Partial<CameraCaptureStart>, 'dither'> &
 type CameraCaptureEventRecord = {
 	readonly event: CameraCaptureEvent
 	readonly path?: string
-}
-
-type SocketMessage<T = unknown> = {
-	readonly type: string
-	readonly body: T
 }
 
 const wsm = new WebSocketMessageHandler()
@@ -53,16 +49,7 @@ const simulators = [
 	new RotatorSimulator('Rotator Simulator', client),
 ] as const
 
-const socketMessages: SocketMessage[] = []
-const socket: Messager = {
-	sendText(data) {
-		const separator = data.indexOf('@')
-		const type = data.slice(0, separator)
-		const payload = data.slice(separator + 1)
-
-		socketMessages.push({ type, body: payload ? JSON.parse(payload) : undefined })
-	},
-}
+const socket = new SocketMessager()
 
 Bun.env.capturesDir = await mkdtemp(tmpdir() + sep)
 
@@ -75,7 +62,7 @@ afterAll(async () => {
 
 beforeEach(() => {
 	wsm.close(socket, 1000, 'reset')
-	socketMessages.length = 0
+	socket.clear()
 	cameraManager.disconnect(getCamera())
 })
 
@@ -155,29 +142,8 @@ function endpointRequest(id = 'Camera Simulator', body?: unknown, search = '') {
 	} as unknown as Bun.BunRequest
 }
 
-async function json<T>(response: Response) {
-	expect(response.status).toBe(200)
-	return (await response.json()) as T
-}
-
-async function noContent(response: Response) {
-	expect(response.status).toBe(200)
-	expect(await response.text()).toBe('')
-}
-
-async function waitUntil(condition: () => boolean, timeout = 1500) {
-	const start = performance.now()
-
-	while (!condition()) {
-		if (performance.now() - start >= timeout) return false
-		await Bun.sleep(10)
-	}
-
-	return true
-}
-
 function socketMessagesOf<T>(type: string) {
-	return socketMessages.filter((message): message is SocketMessage<T> => message.type === type)
+	return socket.filter<T>((message) => message.type === type)
 }
 
 function cameraUpdates(property: keyof Camera & string) {
@@ -239,9 +205,9 @@ describe('camera capture start request', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socketMessages.some((message) => message.type === 'camera:add'))).toBeTrue()
+		expect(await waitUntil(() => socket.some((message) => message.type === 'camera:add'))).toBeTrue()
 
-		const message = socketMessages.find((message): message is SocketMessage<CameraAdded> => message.type === 'camera:add')
+		const message = socket.find<CameraAdded>((message) => message.type === 'camera:add')
 
 		expect(message).toBeDefined()
 		expect(message!.body.device.id).toBe(camera.id)
@@ -253,7 +219,7 @@ describe('camera capture start request', () => {
 		const camera = getCamera()
 
 		wsm.open(socket)
-		socketMessages.length = 0
+		socket.clear()
 
 		cameraManager.connect(camera)
 
@@ -305,7 +271,7 @@ describe('camera capture start request', () => {
 
 	test('emits capture and frame events through wsm during capture', async () => {
 		wsm.open(socket)
-		socketMessages.length = 0
+		socket.clear()
 
 		const result = await capture(captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
 

@@ -6,3 +6,6 @@ exact = true
 [serve.static]
 env = "APP_*"
 plugins = ["./tailwind.plugin.ts"]
+
+[test]
+root = "./tests"

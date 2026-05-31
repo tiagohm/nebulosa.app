@@ -1,5 +1,8 @@
 {
-	"mars": [{ "name": "Phobos", "code": "401", "type": "MARTIAN_SATELLITE", "solution": "MAR099" }, { "name": "Deimos", "code": "402", "type": "MARTIAN_SATELLITE", "solution": "MAR099" }],
+	"mars": [
+		{ "name": "Phobos", "code": "401", "type": "MARTIAN_SATELLITE", "solution": "MAR099" },
+		{ "name": "Deimos", "code": "402", "type": "MARTIAN_SATELLITE", "solution": "MAR099" }
+	],
 	"jupiter": [
 		{ "name": "Io", "code": "501", "type": "JOVIAN_REGULAR_SATELLITE", "solution": "JUP365" },
 		{ "name": "Europa", "code": "502", "type": "JOVIAN_REGULAR_SATELLITE", "solution": "JUP365" },

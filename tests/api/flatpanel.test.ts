@@ -4,13 +4,9 @@ import type { FlatPanel } from 'nebulosa/src/indi.device'
 import { FlatPanelManager } from 'nebulosa/src/indi.manager'
 import { ClientSimulator, FlatPanelSimulator } from 'nebulosa/src/indi.simulator'
 import { FlatPanelHandler, flatPanel as flatPanelEndpoints } from 'src/api/flatpanel'
-import { WebSocketMessageHandler, type Messager } from 'src/api/message'
+import { WebSocketMessageHandler } from 'src/api/message'
 import type { FlatPanelAdded, FlatPanelRemoved, FlatPanelUpdated } from 'src/shared/types'
-
-type SocketMessage<T = unknown> = {
-	readonly type: string
-	readonly body: T
-}
+import { json, noContent, SocketMessager, waitUntil } from './util'
 
 const wsm = new WebSocketMessageHandler()
 const flatPanelManager = new FlatPanelManager()
@@ -19,17 +15,7 @@ const endpoints = flatPanelEndpoints(flatPanelHandler)
 const handler = new IndiClientHandlerSet([flatPanelManager])
 const client = new ClientSimulator('Client Simulator', handler)
 const simulator = new FlatPanelSimulator('Flat Panel Simulator', client)
-
-const socketMessages: SocketMessage[] = []
-const socket: Messager = {
-	sendText(data) {
-		const separator = data.indexOf('@')
-		const type = data.slice(0, separator)
-		const payload = data.slice(separator + 1)
-
-		socketMessages.push({ type, body: payload ? JSON.parse(payload) : undefined })
-	},
-}
+const socket = new SocketMessager()
 
 afterAll(() => {
 	simulator.dispose()
@@ -38,7 +24,7 @@ afterAll(() => {
 
 beforeEach(() => {
 	wsm.close(socket, 1000, 'reset')
-	socketMessages.length = 0
+	socket.clear()
 	flatPanelManager.disconnect(getFlatPanel())
 })
 
@@ -60,29 +46,8 @@ function request(id = 'Flat Panel Simulator', body?: unknown, search = '') {
 	} as unknown as Bun.BunRequest
 }
 
-async function json<T>(response: Response) {
-	expect(response.status).toBe(200)
-	return (await response.json()) as T
-}
-
-async function noContent(response: Response) {
-	expect(response.status).toBe(200)
-	expect(await response.text()).toBe('')
-}
-
-async function waitUntil(condition: () => boolean, timeout = 1500) {
-	const start = performance.now()
-
-	while (!condition()) {
-		if (performance.now() - start >= timeout) return false
-		await Bun.sleep(10)
-	}
-
-	return true
-}
-
 function flatPanelUpdates(property: keyof FlatPanel & string) {
-	return socketMessages.filter((message): message is SocketMessage<FlatPanelUpdated> => message.type === 'flatPanel:update' && (message.body as FlatPanelUpdated).property === property)
+	return socket.filter<FlatPanelUpdated>((message) => message.type === 'flatPanel:update' && message.body.property === property)
 }
 
 describe('flat panel handler', () => {
@@ -104,9 +69,9 @@ describe('flat panel handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socketMessages.some((message) => message.type === 'flatPanel:add'))).toBeTrue()
+		expect(await waitUntil(() => socket.some((message) => message.type === 'flatPanel:add'))).toBeTrue()
 
-		const message = socketMessages.find((message): message is SocketMessage<FlatPanelAdded> => message.type === 'flatPanel:add')
+		const message = socket.find<FlatPanelAdded>((message) => message.type === 'flatPanel:add')
 
 		expect(message).toBeDefined()
 		expect(message!.body.device.id).toBe(device.id)
@@ -118,7 +83,7 @@ describe('flat panel handler', () => {
 		const device = getFlatPanel()
 
 		wsm.open(socket)
-		socketMessages.length = 0
+		socket.clear()
 
 		flatPanelManager.connect(device)
 
@@ -138,7 +103,7 @@ describe('flat panel handler', () => {
 
 		wsm.open(socket)
 		flatPanelManager.connect(device)
-		socketMessages.length = 0
+		socket.clear()
 
 		await noContent(endpoints['/flatpanels/:id/enable'].POST(request(device.id)))
 
@@ -193,22 +158,13 @@ describe('flat panel handler', () => {
 		const handler = new IndiClientHandlerSet([flatPanelManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const flatPanelSimulator = new FlatPanelSimulator('Flat Panel Simulator', client)
-		const messages: SocketMessage[] = []
-		const socket: Messager = {
-			sendText(data) {
-				const separator = data.indexOf('@')
-				const type = data.slice(0, separator)
-				const payload = data.slice(separator + 1)
-
-				messages.push({ type, body: payload ? JSON.parse(payload) : undefined })
-			},
-		}
+		const socket = new SocketMessager()
 
 		wsm.open(socket)
-		messages.length = 0
+		socket.clear()
 		flatPanelSimulator.dispose()
 
-		const message = messages.find((message): message is SocketMessage<FlatPanelRemoved> => message.type === 'flatPanel:remove')
+		const message = socket.find<FlatPanelRemoved>((message) => message.type === 'flatPanel:remove')
 
 		expect(message).toBeDefined()
 		expect(message!.body.device.name).toBe('Flat Panel Simulator')

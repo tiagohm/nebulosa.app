@@ -27,7 +27,7 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 	}
 
 	updated(device: GuideOutput, property: keyof GuideOutput & string, state?: PropertyState) {
-		this.wsm.send<GuideOutputUpdated>('guideOutput:update', { device: { type: 'guideOutput', id: device.id, name: device.name, [property]: device[property] }, property, state })
+		this.wsm.send<GuideOutputUpdated>(`${device.type}:update`, { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: GuideOutput) {

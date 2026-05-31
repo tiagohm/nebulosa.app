@@ -27,7 +27,7 @@ export class CoverHandler implements DeviceHandler<Cover> {
 	}
 
 	updated(device: Cover, property: keyof Cover & string, state?: PropertyState) {
-		this.wsm.send<CoverUpdated>('cover:update', { device: { type: 'cover', id: device.id, name: device.name, [property]: device[property] }, property, state })
+		this.wsm.send<CoverUpdated>('cover:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Cover) {

@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useMemo, useState } from 'react'
+import DRIVERS from 'src/data/drivers.json' with { type: 'json' }
 import { Api } from '@/shared/api'
-import DRIVERS from '../../../data/drivers.json' with { type: 'json' }
 import { stopPropagation } from '../shared/util'
 import { FilterableList } from './components/FilterableList'
 import { ListItem } from './components/List'

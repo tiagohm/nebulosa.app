@@ -27,7 +27,7 @@ export class ThermometerHandler implements DeviceHandler<Thermometer> {
 	}
 
 	updated(device: Thermometer, property: keyof Thermometer & string, state?: PropertyState) {
-		this.wsm.send<ThermometerUpdated>('thermometer:update', { device: { type: 'thermometer', id: device.id, name: device.name, [property]: device[property] }, property, state })
+		this.wsm.send<ThermometerUpdated>(`${device.type}:update`, { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Thermometer) {

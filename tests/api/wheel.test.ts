@@ -3,14 +3,10 @@ import { IndiClientHandlerSet } from 'nebulosa/src/indi.client'
 import type { Wheel } from 'nebulosa/src/indi.device'
 import { WheelManager } from 'nebulosa/src/indi.manager'
 import { ClientSimulator, WheelSimulator } from 'nebulosa/src/indi.simulator'
-import { WebSocketMessageHandler, type Messager } from 'src/api/message'
+import { WebSocketMessageHandler } from 'src/api/message'
 import { WheelHandler, wheel as wheelEndpoints } from 'src/api/wheel'
 import type { WheelAdded, WheelRemoved, WheelUpdated } from 'src/shared/types'
-
-type SocketMessage<T = unknown> = {
-	readonly type: string
-	readonly body: T
-}
+import { json, noContent, SocketMessager, waitUntil } from './util'
 
 const wsm = new WebSocketMessageHandler()
 const wheelManager = new WheelManager()
@@ -19,17 +15,7 @@ const endpoints = wheelEndpoints(wheelHandler)
 const handler = new IndiClientHandlerSet([wheelManager])
 const client = new ClientSimulator('Client Simulator', handler)
 const simulator = new WheelSimulator('Wheel Simulator', client)
-
-const socketMessages: SocketMessage[] = []
-const socket: Messager = {
-	sendText(data) {
-		const separator = data.indexOf('@')
-		const type = data.slice(0, separator)
-		const payload = data.slice(separator + 1)
-
-		socketMessages.push({ type, body: payload ? JSON.parse(payload) : undefined })
-	},
-}
+const socket = new SocketMessager()
 
 afterAll(() => {
 	simulator.dispose()
@@ -38,7 +24,7 @@ afterAll(() => {
 
 beforeEach(() => {
 	wsm.close(socket, 1000, 'reset')
-	socketMessages.length = 0
+	socket.clear()
 	wheelManager.disconnect(getWheel())
 })
 
@@ -60,29 +46,8 @@ function request(id = 'Wheel Simulator', body?: unknown, search = '') {
 	} as unknown as Bun.BunRequest
 }
 
-async function json<T>(response: Response) {
-	expect(response.status).toBe(200)
-	return (await response.json()) as T
-}
-
-async function noContent(response: Response) {
-	expect(response.status).toBe(200)
-	expect(await response.text()).toBe('')
-}
-
-async function waitUntil(condition: () => boolean, timeout = 1500) {
-	const start = performance.now()
-
-	while (!condition()) {
-		if (performance.now() - start >= timeout) return false
-		await Bun.sleep(10)
-	}
-
-	return true
-}
-
 function wheelUpdates(property: keyof Wheel & string) {
-	return socketMessages.filter((message): message is SocketMessage<WheelUpdated> => message.type === 'wheel:update' && (message.body as WheelUpdated).property === property)
+	return socket.filter<WheelUpdated>((message) => message.type === 'wheel:update' && message.body.property === property)
 }
 
 describe('wheel handler', () => {
@@ -104,9 +69,9 @@ describe('wheel handler', () => {
 
 		wsm.open(socket)
 
-		expect(await waitUntil(() => socketMessages.some((message) => message.type === 'wheel:add'))).toBeTrue()
+		expect(await waitUntil(() => socket.some((message) => message.type === 'wheel:add'))).toBeTrue()
 
-		const message = socketMessages.find((message): message is SocketMessage<WheelAdded> => message.type === 'wheel:add')
+		const message = socket.find<WheelAdded>((message) => message.type === 'wheel:add')
 
 		expect(message).toBeDefined()
 		expect(message!.body.device.id).toBe(device.id)
@@ -118,7 +83,7 @@ describe('wheel handler', () => {
 		const device = getWheel()
 
 		wsm.open(socket)
-		socketMessages.length = 0
+		socket.clear()
 
 		wheelManager.connect(device)
 
@@ -141,7 +106,7 @@ describe('wheel handler', () => {
 
 		wsm.open(socket)
 		wheelManager.connect(device)
-		socketMessages.length = 0
+		socket.clear()
 
 		await noContent(await endpoints['/wheels/:id/moveto'].POST(request(device.id, 2)))
 
@@ -183,22 +148,13 @@ describe('wheel handler', () => {
 		const handler = new IndiClientHandlerSet([wheelManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const wheelSimulator = new WheelSimulator('Wheel Simulator', client)
-		const messages: SocketMessage[] = []
-		const socket: Messager = {
-			sendText(data) {
-				const separator = data.indexOf('@')
-				const type = data.slice(0, separator)
-				const payload = data.slice(separator + 1)
-
-				messages.push({ type, body: payload ? JSON.parse(payload) : undefined })
-			},
-		}
+		const socket = new SocketMessager()
 
 		wsm.open(socket)
-		messages.length = 0
+		socket.clear()
 		wheelSimulator.dispose()
 
-		const message = messages.find((message): message is SocketMessage<WheelRemoved> => message.type === 'wheel:remove')
+		const message = socket.find<WheelRemoved>((message) => message.type === 'wheel:remove')
 
 		expect(message).toBeDefined()
 		expect(message!.body.device.name).toBe('Wheel Simulator')

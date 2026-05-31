@@ -27,7 +27,7 @@ export class DewHeaterHandler implements DeviceHandler<DewHeater> {
 	}
 
 	updated(device: DewHeater, property: keyof DewHeater & string, state?: PropertyState) {
-		this.wsm.send<DewHeaterUpdated>('dewHeater:update', { device: { type: 'dewHeater', id: device.id, name: device.name, [property]: device[property] }, property, state })
+		this.wsm.send<DewHeaterUpdated>(`${device.type}:update`, { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: DewHeater) {

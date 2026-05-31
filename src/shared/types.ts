@@ -578,7 +578,7 @@ export interface DeviceAdded<D extends Device = Device> {
 }
 
 export interface DeviceUpdated<D extends Device = Device> {
-	readonly device: RequiredOnly<Partial<D>, 'name' | 'id' | 'type'>
+	readonly device: RequiredOnly<Partial<D>, 'name' | 'id'>
 	readonly property: keyof D & string
 	readonly state?: PropertyState
 }

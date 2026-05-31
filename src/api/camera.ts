@@ -44,7 +44,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {
-		this.wsm.send<CameraUpdated>('camera:update', { device: { type: 'camera', id: camera.id, name: camera.name, [property]: camera[property] }, property, state })
+		this.wsm.send<CameraUpdated>('camera:update', { device: { id: camera.id, name: camera.name, [property]: camera[property] }, property, state })
 		void this.tasks.get(camera.id)?.cameraUpdated(camera, property, state)
 	}
 

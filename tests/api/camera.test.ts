@@ -343,11 +343,13 @@ describe('camera capture start request', () => {
 		})
 
 		try {
+			cameraManager.connect(camera)
+
 			const task = new CameraCaptureTask(cameraHandler, request, camera, () => {})
 
 			task.startExposure(camera, request)
 
-			expect(frame).not.toHaveBeenCalled()
+			expect(frame).toHaveBeenCalledWith(camera, 0, 0, 1280, 1024)
 
 			request.subframe = true
 			task.startExposure(camera, request)

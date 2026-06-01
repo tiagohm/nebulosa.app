@@ -1,3 +1,5 @@
+import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
+import bus from 'src/shared/bus'
 import type { AlpacaServerStatus } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
@@ -29,6 +31,23 @@ const state = proxy<AlpacaState>({
 
 initProxy(state, 'alpaca', ['p:show', 'p:port'])
 
+bus.subscribe('alpaca:start', (status: AlpacaServerStatus) => {
+	Object.assign(state.status, status)
+})
+
+bus.subscribe('alpaca:device:add', (device: AlpacaConfiguredDevice) => {
+	state.status.devices.push(device)
+})
+
+bus.subscribe('alpaca:device:remove', (device: AlpacaConfiguredDevice) => {
+	const index = state.status.devices.findIndex((d) => d.DeviceNumber === device.DeviceNumber && d.DeviceType === device.DeviceType)
+	if (index !== -1) state.status.devices.splice(index, 1)
+})
+
+bus.subscribe('alpaca:stop', () => {
+	Object.assign(state.status, { running: false, serverPort: -1, discoveryPort: -1, devices: [] })
+})
+
 async function status() {
 	if (!state.show) return undefined
 	const status = await Api.Alpaca.status()
@@ -49,7 +68,6 @@ async function start() {
 	try {
 		state.pendingAction = 'start'
 		await Api.Alpaca.start(state.port)
-		void status()
 	} catch (e) {
 		// toast({ title: 'ASCOM ALPACA', description: 'Failed to start server', color: 'danger' })
 	} finally {
@@ -61,7 +79,6 @@ async function stop() {
 	try {
 		state.pendingAction = 'stop'
 		await Api.Alpaca.stop()
-		void status()
 	} catch (e) {
 		// toast({ title: 'ASCOM ALPACA', description: 'Failed to stop server', color: 'danger' })
 	} finally {
@@ -77,7 +94,6 @@ function hide() {
 	state.show = false
 }
 
-let timer: number | undefined
 let mounted = false
 
 function mount() {
@@ -86,20 +102,15 @@ function mount() {
 	console.info('alpaca mounted')
 
 	mounted = true
-
-	if (state.show) void status()
-
-	window.clearInterval(timer)
-	timer = window.setInterval(status, 5000)
 }
 
 function unmount() {
 	if (!mounted) return
 	console.info('alpaca unmounted')
-	window.clearInterval(timer)
-	timer = undefined
 	mounted = false
 }
+
+void status()
 
 export const alpacaStore = {
 	state,

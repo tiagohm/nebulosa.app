@@ -20,7 +20,7 @@ const ICON_CREDITS = [
 
 const STACK_LINKS = [
 	{ href: 'https://react.dev/', label: 'React', version: packageJson.dependencies.react },
-	{ href: 'https://bun.sh/', label: 'Bun', version: undefined },
+	{ href: 'https://bun.com/', label: 'Bun', version: undefined },
 	{ href: 'https://tailwindcss.com/', label: 'Tailwind CSS', version: packageJson.dependencies.tailwindcss },
 ] as const
 

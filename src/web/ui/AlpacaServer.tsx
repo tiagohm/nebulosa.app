@@ -52,8 +52,8 @@ const Footer = memo(() => {
 	return (
 		<>
 			<NumberInput className="flex flex-1" disabled={running || disabled} label="Port" placeholder="2222" maxValue={MAX_ALPACA_PORT} minValue={MIN_ALPACA_PORT} onValueChange={alpacaStore.updatePort} value={port} />
-			<Button color="danger" disabled={!running || disabled} label="Stop" loading={pendingAction === 'stop'} onClick={alpacaStore.start} startContent={<Icons.Stop />} />
-			<Button color="success" disabled={running || disabled} label="Start" loading={pendingAction === 'start'} onClick={alpacaStore.stop} startContent={<Icons.Play />} />
+			<Button color="danger" disabled={!running || disabled} label="Stop" loading={pendingAction === 'stop'} onClick={alpacaStore.stop} startContent={<Icons.Stop />} />
+			<Button color="success" disabled={running || disabled} label="Start" loading={pendingAction === 'start'} onClick={alpacaStore.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

@@ -95,6 +95,7 @@ function removeDocumentGestureListeners() {
 export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...handlers }: InteractableProps) => {
 	const wrapperRef = useRef<HTMLDivElement>(null)
 	const transformation = useRef<InteractTransform>({ x: 0, y: 0, scale: 1, angle: 0 })
+	const wrapperSize = useRef({ width: 0, height: 0 })
 	const rotation = useRef(false)
 	const bodyUserSelect = useRef<string | undefined>(undefined)
 	const wheelZoomDelta = useRef(0)
@@ -112,6 +113,18 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 			onGesture?.(transformation.current, type, event)
 		}
 	})
+
+	function handleWrapperResize(width: number, height: number) {
+		const previous = wrapperSize.current
+		wrapperSize.current = { width, height }
+
+		if (previous.width <= 0 || previous.height <= 0 || width <= 0 || height <= 0 || (previous.width === width && previous.height === height)) return
+
+		// Preserve the wrapper center when a newly loaded image changes its intrinsic size.
+		transformation.current.x += (previous.width - width) / 2
+		transformation.current.y += (previous.height - height) / 2
+		transform('none')
+	}
 
 	useImperativeHandle(
 		ref,
@@ -172,7 +185,17 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 	useLayoutEffect(() => {
 		addDocumentGestureListeners()
 
+		const wrapper = wrapperRef.current
+		const resizeObserver =
+			wrapper &&
+			new ResizeObserver(([entry]) => {
+				if (entry) handleWrapperResize(entry.contentRect.width, entry.contentRect.height)
+			})
+
+		if (resizeObserver) resizeObserver.observe(wrapper)
+
 		return () => {
+			resizeObserver?.disconnect()
 			removeDocumentGestureListeners()
 			restoreBodyUserSelect()
 		}

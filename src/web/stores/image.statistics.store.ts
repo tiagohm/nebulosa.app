@@ -47,7 +47,9 @@ export function imageStatisticsStore(viewer: ImageViewerStore) {
 		u[1] = bus.subscribe<ImageLoaded>('image:load', compute)
 		u[2] = subscribe(state.request, compute)
 		u[3] = subscribeKey(state, 'roi', compute)
-		u[4] = subscribe(viewer.roi.state.roi, () => state.roi && computeDebounced())
+		u[4] = subscribeKey(viewer.roi.state, 'visible', compute)
+		u[5] = subscribe(viewer.roi.state.roi, () => state.roi && computeDebounced())
+		u[6] = subscribeKey(state, 'show', compute)
 
 		if (state.histogram.length === 0) {
 			void compute()
@@ -70,12 +72,16 @@ export function imageStatisticsStore(viewer: ImageViewerStore) {
 	}
 
 	async function compute() {
+		if (!state.show) return
+
 		const area = isRoiEnabled() ? viewer.roi.state.roi : undefined
 		const histogram = await Api.Image.statistics({ path: viewer.state.path, transformation: viewer.state.transformation, camera: viewer.image.camera?.id, ...state.request, area })
 		if (histogram) state.histogram = ref(histogram)
 	}
 
 	function computeDebounced() {
+		if (!state.show) return
+
 		if (computeTimer) {
 			clearTimeout(computeTimer)
 		}

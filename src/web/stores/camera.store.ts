@@ -7,6 +7,7 @@ import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
 import { type DeviceState, equipmentStore } from './equipment.store'
+import { clampInteger } from '../shared/util'
 
 export type CameraStore = ReturnType<typeof cameraStore>
 
@@ -171,7 +172,7 @@ export function cameraStore(camera: Camera) {
 		state.minimized = !state.minimized
 	}
 
-	const store = {
+	return {
 		state,
 		mount,
 		unmount,
@@ -193,8 +194,6 @@ export function cameraStore(camera: Camera) {
 		hide,
 		minimize,
 	} as const
-
-	return store
 }
 
 function requestCameraRoi(camera: Camera) {
@@ -290,12 +289,6 @@ export function subscribeToUpdateCameraCaptureStartFromCamera(u: VoidFunction[],
 	u.push(subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(request, formats)))
 	u.push(subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(request, exposure)))
 	u.push(subscribeKey(camera, 'frame', (frame) => updateCameraFrame(request, frame)))
-}
-
-function clampInteger(value: number, min: number, max: number) {
-	if (max < min) return min
-	if (!Number.isFinite(value)) return min
-	return Math.max(min, Math.min(Math.trunc(value), max))
 }
 
 function cameraRoiRequestTopic(camera: string) {

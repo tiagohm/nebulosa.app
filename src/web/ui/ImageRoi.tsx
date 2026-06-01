@@ -1,19 +1,8 @@
-import { type CSSProperties, memo, useContext, useLayoutEffect } from 'react'
+import { memo, useContext, useLayoutEffect } from 'react'
 import { tv } from 'tailwind-variants'
 import { useSnapshot } from 'valtio'
-import { IMAGE_ROI_HANDLES, type ImageRoiHandle } from '@/stores/image.roi.store'
+import { IMAGE_ROI_HANDLES } from '@/stores/image.roi.store'
 import { ImageViewerStoreContext } from '../shared/context'
-
-const HANDLE_STYLES = {
-	n: { top: 0, left: '50%', transform: 'translate(-50%, -50%)' },
-	ne: { top: 0, right: 0, transform: 'translate(50%, -50%)' },
-	e: { top: '50%', right: 0, transform: 'translate(50%, -50%)' },
-	se: { right: 0, bottom: 0, transform: 'translate(50%, 50%)' },
-	s: { bottom: 0, left: '50%', transform: 'translate(-50%, 50%)' },
-	sw: { bottom: 0, left: 0, transform: 'translate(-50%, 50%)' },
-	w: { top: '50%', left: 0, transform: 'translate(-50%, -50%)' },
-	nw: { top: 0, left: 0, transform: 'translate(-50%, -50%)' },
-} satisfies Record<Exclude<ImageRoiHandle, 'move'>, CSSProperties>
 
 const roiStyles = tv({
 	slots: {
@@ -23,14 +12,14 @@ const roiStyles = tv({
 	},
 	variants: {
 		handle: {
-			n: { handle: 'cursor-n-resize' },
-			ne: { handle: 'cursor-ne-resize' },
-			e: { handle: 'cursor-e-resize' },
-			se: { handle: 'cursor-se-resize' },
-			s: { handle: 'cursor-s-resize' },
-			sw: { handle: 'cursor-sw-resize' },
-			w: { handle: 'cursor-w-resize' },
-			nw: { handle: 'cursor-nw-resize' },
+			n: { handle: 'cursor-n-resize top-0 left-1/2 -translate-1/2' },
+			ne: { handle: 'cursor-ne-resize top-0 right-0 translate-x-1/2 -translate-y-1/2' },
+			e: { handle: 'cursor-e-resize top-1/2 right-0 translate-x-1/2 -translate-y-1/2' },
+			se: { handle: 'cursor-se-resize right-0 bottom-0 translate-1/2' },
+			s: { handle: 'cursor-s-resize bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2' },
+			sw: { handle: 'cursor-sw-resize bottom-0 left-0 -translate-x-1/2 translate-y-1/2' },
+			w: { handle: 'cursor-w-resize top-1/2 left-0 -translate-1/2' },
+			nw: { handle: 'cursor-nw-resize top-0 left-0 -translate-1/2' },
 		},
 	},
 })
@@ -50,7 +39,7 @@ export const ImageRoi = memo(() => {
 		<div className={styles.root()} onPointerDown={(event) => roi.startGesture('move', event)} ref={roi.attachRoot}>
 			<div className={styles.label()} ref={roi.attachLabel} />
 			{IMAGE_ROI_HANDLES.map((handle) => (
-				<div className={roiStyles({ handle }).handle()} key={handle} onPointerDown={(event) => roi.startGesture(handle, event)} style={HANDLE_STYLES[handle]} />
+				<div className={roiStyles({ handle }).handle()} key={handle} onPointerDown={(event) => roi.startGesture(handle, event)} />
 			))}
 		</div>
 	)

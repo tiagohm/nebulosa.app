@@ -39,6 +39,13 @@ export function clamp(value: number, min: number, max: number) {
 	return value
 }
 
+// Clamps a number into an integer range.
+export function clampInteger(value: number, min: number, max: number) {
+	if (max < min) return min
+	if (!Number.isFinite(value)) return min
+	return Math.max(min, Math.min(Math.trunc(value), max))
+}
+
 // Stops the propagation of an event to parent elements
 export function stopPropagation(event: Event | React.BaseSyntheticEvent<Event>) {
 	event.stopPropagation()

@@ -7,6 +7,7 @@ import { subscribeKey } from 'valtio/utils'
 import { initProxy } from '../shared/proxy'
 import { sendCameraRoi, subscribeToCameraRoiRequests } from './camera.store'
 import type { ImageViewerStore } from './image.viewer.store'
+import { clamp, clampInteger } from '../shared/util'
 
 export type ImageRoiStore = ReturnType<typeof imageRoiStore>
 
@@ -300,10 +301,10 @@ function resizeRoi(roi: CameraSubframe, handle: ImageRoiHandle, dx: number, dy: 
 	let x2 = roi.x + roi.width
 	let y2 = roi.y + roi.height
 
-	if (handle.includes('w')) x1 = clampNumber(x1 + dx, 0, x2 - MIN_ROI_SIZE)
-	if (handle.includes('e')) x2 = clampNumber(x2 + dx, x1 + MIN_ROI_SIZE, bounds.width)
-	if (handle.includes('n')) y1 = clampNumber(y1 + dy, 0, y2 - MIN_ROI_SIZE)
-	if (handle.includes('s')) y2 = clampNumber(y2 + dy, y1 + MIN_ROI_SIZE, bounds.height)
+	if (handle.includes('w')) x1 = clamp(x1 + dx, 0, x2 - MIN_ROI_SIZE)
+	if (handle.includes('e')) x2 = clamp(x2 + dx, x1 + MIN_ROI_SIZE, bounds.width)
+	if (handle.includes('n')) y1 = clamp(y1 + dy, 0, y2 - MIN_ROI_SIZE)
+	if (handle.includes('s')) y2 = clamp(y2 + dy, y1 + MIN_ROI_SIZE, bounds.height)
 
 	return { x: Math.round(x1), y: Math.round(y1), width: Math.round(x2 - x1), height: Math.round(y2 - y1) }
 }
@@ -325,16 +326,4 @@ function unscaleRoi(roi: CameraSubframe, binning: Point): CameraSubframe {
 		width: clampInteger(roi.width / binning.x, MIN_ROI_SIZE, roi.width),
 		height: clampInteger(roi.height / binning.y, MIN_ROI_SIZE, roi.height),
 	}
-}
-
-function clampNumber(value: number, min: number, max: number) {
-	if (max < min) return min
-	if (!Number.isFinite(value)) return min
-	return Math.max(min, Math.min(value, max))
-}
-
-function clampInteger(value: number, min: number, max: number) {
-	if (max < min) return min
-	if (!Number.isFinite(value)) return min
-	return Math.max(min, Math.min(Math.trunc(value), max))
 }

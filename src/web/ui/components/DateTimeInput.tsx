@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { clamp, tw } from '@/shared/util'
+import { clampInteger, tw } from '@/shared/util'
 import { Icons } from '../Icon'
 import { Calendar, type CalendarProps } from './Calendar'
 import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from './Floating'
@@ -229,12 +229,6 @@ function separatorBetween(left: DateTimeInputSegmentPart, right: DateTimeInputSe
 // Returns the number of days available in the target year and month.
 function daysInMonth(year: number, month: number) {
 	return Temporal.PlainDate.from({ year, month, day: 1 }).daysInMonth
-}
-
-// Normalizes numeric input into an integer range.
-function clampInteger(value: number, minValue: number, maxValue: number) {
-	if (!Number.isFinite(value)) return minValue
-	return Math.trunc(clamp(value, minValue, maxValue))
 }
 
 // Replaces one date segment while keeping the resulting date valid.

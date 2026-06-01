@@ -252,6 +252,7 @@ const Frame = memo(() => {
 			<div className="col-span-6 flex flex-row items-center justify-center gap-2">
 				<Checkbox className="max-w-none flex-col-reverse justify-center gap-0.5 text-xs" disabled={!connected || !canSubFrame || capturing} label="Subframe" onValueChange={(value) => camera.update('subframe', value)} value={subframe} />
 				<IconButton color="secondary" disabled={!connected || !canSubFrame || !subframe || capturing} icon={Icons.Fullscreen} onClick={camera.fullscreen} tooltipContent="Fullscreen" variant="flat" />
+				<IconButton color="secondary" disabled={!connected || !canSubFrame || !subframe || capturing} icon={Icons.Box} onClick={camera.requestRoi} tooltipContent="Apply ROI" variant="flat" />
 			</div>
 			<FrameDimensions />
 		</>

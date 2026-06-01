@@ -1,6 +1,6 @@
 import type { Camera, Focuser, MinMaxValueProperty, Mount, NameAndLabel, Rotator, Wheel } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
-import { type CameraCaptureStart, type CameraCaptureEvent, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_EVENT, type CameraUpdated } from 'src/shared/types'
+import { type CameraCaptureStart, type CameraCaptureEvent, type CameraSubframe, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_EVENT, type CameraUpdated } from 'src/shared/types'
 import { exposureTimeIn, unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -65,6 +65,8 @@ export function cameraStore(camera: Camera) {
 		u[2] = subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(state.request, formats))
 		u[3] = subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(state.request, exposure))
 		u[4] = subscribeKey(camera, 'frame', (frame) => updateCameraFrame(state.request, frame))
+		u[5] = bus.subscribe<CameraSubframe>(cameraRoiSubframeTopic(camera.id), applySubframe)
+		u[6] = bus.subscribe(cameraRoiSubframeSnapshotRequestTopic(camera.id), sendSubframeSnapshot)
 
 		updateCameraCaptureStartFromCamera(state.request, camera)
 	}
@@ -105,6 +107,23 @@ export function cameraStore(camera: Camera) {
 		state.request.y = camera.frame.y.min
 		state.request.width = camera.frame.width.max
 		state.request.height = camera.frame.height.max
+	}
+
+	function requestRoi() {
+		requestCameraRoi(camera)
+	}
+
+	function applySubframe(subframe: CameraSubframe) {
+		return updateCameraSubframe(state.request, camera, subframe)
+	}
+
+	function sendSubframeSnapshot() {
+		sendCameraRoiSubframeSnapshot(camera, {
+			x: state.request.x,
+			y: state.request.y,
+			width: state.request.width || camera.frame.width.max || 1,
+			height: state.request.height || camera.frame.height.max || 1,
+		})
 	}
 
 	function updateMount(mount?: DeviceState<Mount>) {
@@ -152,7 +171,7 @@ export function cameraStore(camera: Camera) {
 		state.minimized = !state.minimized
 	}
 
-	return {
+	const store = {
 		state,
 		mount,
 		unmount,
@@ -163,6 +182,7 @@ export function cameraStore(camera: Camera) {
 		cooler,
 		temperature,
 		fullscreen,
+		requestRoi,
 		updateMount,
 		updateWheel,
 		updateFocuser,
@@ -173,6 +193,48 @@ export function cameraStore(camera: Camera) {
 		hide,
 		minimize,
 	} as const
+
+	return store
+}
+
+function requestCameraRoi(camera: Camera) {
+	bus.emitSync(cameraRoiRequestTopic(camera.id), undefined)
+}
+
+export function sendCameraRoi(camera: Camera, subframe: CameraSubframe) {
+	bus.emitSync(cameraRoiSubframeTopic(camera.id), subframe)
+}
+
+export function subscribeToCameraRoiRequests(camera: Camera, callback: VoidFunction) {
+	return bus.subscribe(cameraRoiRequestTopic(camera.id), callback)
+}
+
+export function updateCameraSubframe(request: CameraCaptureStart, camera: Camera, subframe: CameraSubframe) {
+	if (!camera.canSubFrame) return false
+
+	const { frame } = camera
+	const xMin = frame.x.min
+	const yMin = frame.y.min
+	const widthMin = Math.max(1, frame.width.min)
+	const heightMin = Math.max(1, frame.height.min)
+	const widthMax = Math.max(widthMin, frame.width.max || subframe.width)
+	const heightMax = Math.max(heightMin, frame.height.max || subframe.height)
+	const xMax = frame.x.max || Math.max(xMin, xMin + widthMax - widthMin)
+	const yMax = frame.y.max || Math.max(yMin, yMin + heightMax - heightMin)
+	const width = clampInteger(subframe.width, widthMin, widthMax)
+	const height = clampInteger(subframe.height, heightMin, heightMax)
+	const x = clampInteger(subframe.x, xMin, Math.min(xMax, xMin + widthMax - width))
+	const y = clampInteger(subframe.y, yMin, Math.min(yMax, yMin + heightMax - height))
+	const maxWidthFromX = Math.max(widthMin, widthMax - Math.max(0, x - xMin))
+	const maxHeightFromY = Math.max(heightMin, heightMax - Math.max(0, y - yMin))
+
+	request.subframe = true
+	request.x = x
+	request.y = y
+	request.width = clampInteger(width, widthMin, maxWidthFromX)
+	request.height = clampInteger(height, heightMin, maxHeightFromY)
+
+	return true
 }
 
 export function updateCameraFrame(request: CameraCaptureStart, frame: Camera['frame']) {
@@ -228,4 +290,30 @@ export function subscribeToUpdateCameraCaptureStartFromCamera(u: VoidFunction[],
 	u.push(subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(request, formats)))
 	u.push(subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(request, exposure)))
 	u.push(subscribeKey(camera, 'frame', (frame) => updateCameraFrame(request, frame)))
+}
+
+function clampInteger(value: number, min: number, max: number) {
+	if (max < min) return min
+	if (!Number.isFinite(value)) return min
+	return Math.max(min, Math.min(Math.trunc(value), max))
+}
+
+function cameraRoiRequestTopic(camera: string) {
+	return `camera:${camera}:roi:request`
+}
+
+function cameraRoiSubframeTopic(camera: string) {
+	return `camera:${camera}:roi:subframe`
+}
+
+function cameraRoiSubframeSnapshotRequestTopic(camera: string) {
+	return `camera:${camera}:roi:subframe:snapshot:request`
+}
+
+function cameraRoiSubframeSnapshotTopic(camera: string) {
+	return `camera:${camera}:roi:subframe:snapshot`
+}
+
+function sendCameraRoiSubframeSnapshot(camera: Camera, subframe: CameraSubframe) {
+	bus.emitSync(cameraRoiSubframeSnapshotTopic(camera.id), subframe)
 }

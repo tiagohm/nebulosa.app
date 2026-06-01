@@ -71,8 +71,9 @@ const OverlayPopover = memo(() => (
 
 const OverlayPopoverContent = memo(() => {
 	const viewer = useContext(ImageViewerStoreContext)
-	const { crosshair } = useSnapshot(viewer.state)
-	const { solver, starDetection, annotation, fov, mouseCoordinate } = viewer
+	const { crosshair, info } = useSnapshot(viewer.state)
+	const { visible: isRoiVisible } = useSnapshot(viewer.roi.state)
+	const { solver, starDetection, annotation, fov, mouseCoordinate, roi } = viewer
 	const { stars: detectedStars, visible: isDetectedStarsVisible } = useSnapshot(starDetection.state)
 	const { stars: annotatedStars, visible: isAnnotatedStarsVisible } = useSnapshot(annotation.state)
 	const { solution } = useSnapshot(solver.state)
@@ -80,6 +81,7 @@ const OverlayPopoverContent = memo(() => {
 	const hasAnnotatedStars = annotatedStars.length > 0
 	const hasDetectedStars = detectedStars.length > 0
 	const hasSolvedScale = hasScaledSolution(solution)
+	const canUseRoi = !!info && !!viewer.image.camera?.canSubFrame
 
 	return (
 		<div className={`${POPOVER_PANEL_CLASS} flex flex-row items-start justify-center gap-2 p-2`}>
@@ -92,7 +94,7 @@ const OverlayPopoverContent = memo(() => {
 				<IconButton color="secondary" icon={Icons.Stars} onClick={starDetection.show} tooltipContent="Star Detection" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
 				{hasDetectedStars && <Switch onValueChange={starDetection.toggle} value={isDetectedStarsVisible} />}
 			</div>
-			<IconButton color="secondary" disabled icon={Icons.Box} tooltipContent="ROI" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+			<ToggleButton color="primary" disabled={!canUseRoi} icon={Icons.Box} onClick={roi.toggle} tooltipContent="ROI" tooltipPlacement={TOOLTIP_PLACEMENT} value={isRoiVisible} />
 			<Activity mode={hasSolvedScale ? 'visible' : 'hidden'}>
 				<IconButton color="secondary" icon={Icons.FocusField} onClick={fov.show} tooltipContent="FOV" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
 				<ToggleButton color="primary" icon={Icons.MousePointerClick} onClick={mouseCoordinate.toggle} tooltipContent="Mouse Coordinate" tooltipPlacement={TOOLTIP_PLACEMENT} value={isMouseCoordinateVisible} />

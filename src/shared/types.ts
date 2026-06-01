@@ -717,6 +717,8 @@ export interface CameraCaptureStart extends Size {
 	compressed: boolean
 }
 
+export type CameraSubframe = Size & Point
+
 export interface CameraCaptureTime {
 	remainingTime: number
 	elapsedTime: number

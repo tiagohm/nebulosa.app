@@ -20,6 +20,7 @@ import { imageFilterStore, type ImageFilterStore } from './image.filter.store'
 import { imageFovStore, type ImageFovStore } from './image.fov.store'
 import { imageHeaderStore, type ImageHeaderStore } from './image.header.store'
 import { imageMouseCoordinateStore, type ImageMouseCoordinateStore } from './image.mousecoordinate.store'
+import { imageRoiStore, type ImageRoiStore } from './image.roi.store'
 import { imageSaveStore, type ImageSaveStore } from './image.save.store'
 import { imageScnrStore, type ImageScnrStore } from './image.scnr.store'
 import { imageSettingsStore, type ImageSettingsStore } from './image.settings.store'
@@ -67,6 +68,7 @@ export interface ImageViewerStore {
 	readonly fov: ImageFovStore
 	readonly header: ImageHeaderStore
 	readonly mouseCoordinate: ImageMouseCoordinateStore
+	readonly roi: ImageRoiStore
 	readonly save: ImageSaveStore
 	readonly scnr: ImageScnrStore
 	readonly settings: ImageSettingsStore
@@ -355,6 +357,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	const fov = (store.fov = imageFovStore(store))
 	const header = (store.header = imageHeaderStore(store))
 	const mouseCoordinate = (store.mouseCoordinate = imageMouseCoordinateStore(store))
+	const roi = (store.roi = imageRoiStore(store))
 	const save = (store.save = imageSaveStore(store))
 	const scnr = (store.scnr = imageScnrStore(store))
 	const settings = (store.settings = imageSettingsStore(store))
@@ -363,7 +366,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	const statistics = (store.statistics = imageStatisticsStore(store))
 	const stretch = (store.stretch = imageStretchStore(store))
 
-	stores.push(adjustment, annotation, calibration, filter, fov, header, mouseCoordinate, save, scnr, settings, solver, starDetection, statistics, stretch)
+	stores.push(adjustment, annotation, calibration, filter, fov, header, mouseCoordinate, roi, save, scnr, settings, solver, starDetection, statistics, stretch)
 
 	return store
 }

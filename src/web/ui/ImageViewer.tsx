@@ -15,6 +15,7 @@ import { ImageFilter } from './ImageFilter'
 import { ImageFov } from './ImageFov'
 import { ImageHeader } from './ImageHeader'
 import { ImageInfo } from './ImageInfo'
+import { ImageRoi } from './ImageRoi'
 import { ImageSave } from './ImageSave'
 import { ImageScnr } from './ImageScnr'
 import { ImageSettings } from './ImageSettings'
@@ -79,5 +80,6 @@ const InteractableOverlay = memo(() => (
 		<AnnotatedStars />
 		<CoordinateOnMouse />
 		<Fov />
+		<ImageRoi />
 	</>
 ))

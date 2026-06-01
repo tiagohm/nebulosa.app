@@ -81,7 +81,7 @@ const OverlayPopoverContent = memo(() => {
 	const hasAnnotatedStars = annotatedStars.length > 0
 	const hasDetectedStars = detectedStars.length > 0
 	const hasSolvedScale = hasScaledSolution(solution)
-	const canUseRoi = !!info && !!viewer.image.camera?.canSubFrame
+	const canUseRoi = !!info
 
 	return (
 		<div className={`${POPOVER_PANEL_CLASS} flex flex-row items-start justify-center gap-2 p-2`}>

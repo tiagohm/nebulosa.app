@@ -1,13 +1,14 @@
 import type { Camera, Focuser, MinMaxValueProperty, Mount, NameAndLabel, Rotator, Wheel } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
-import { type CameraCaptureStart, type CameraCaptureEvent, type CameraSubframe, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_EVENT, type CameraUpdated } from 'src/shared/types'
+import { type CameraCaptureStart, type CameraCaptureEvent, type Roi, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_EVENT, type CameraUpdated } from 'src/shared/types'
 import { exposureTimeIn, unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
-import { type DeviceState, equipmentStore } from './equipment.store'
+import type { ImageRoiRequest } from '../shared/types'
 import { clampInteger } from '../shared/util'
+import { type DeviceState, equipmentStore } from './equipment.store'
 
 export type CameraStore = ReturnType<typeof cameraStore>
 
@@ -66,7 +67,7 @@ export function cameraStore(camera: Camera) {
 		u[2] = subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(state.request, formats))
 		u[3] = subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(state.request, exposure))
 		u[4] = subscribeKey(camera, 'frame', (frame) => updateCameraFrame(state.request, frame))
-		u[5] = bus.subscribe<CameraSubframe>(cameraRoiSubframeTopic(camera.id), applySubframe)
+		u[5] = bus.subscribe<Roi>(cameraRoiSubframeTopic(camera.id), applySubframe)
 		u[6] = bus.subscribe(cameraRoiSubframeSnapshotRequestTopic(camera.id), sendSubframeSnapshot)
 
 		updateCameraCaptureStartFromCamera(state.request, camera)
@@ -114,7 +115,7 @@ export function cameraStore(camera: Camera) {
 		requestCameraRoi(camera)
 	}
 
-	function applySubframe(subframe: CameraSubframe) {
+	function applySubframe(subframe: Roi) {
 		return updateCameraSubframe(state.request, camera, subframe)
 	}
 
@@ -196,19 +197,19 @@ export function cameraStore(camera: Camera) {
 	} as const
 }
 
-function requestCameraRoi(camera: Camera) {
-	bus.emitSync(cameraRoiRequestTopic(camera.id), undefined)
+function requestCameraRoi(camera: Camera, options?: ImageRoiRequest) {
+	bus.emitSync(cameraRoiRequestTopic(camera.id), options)
 }
 
-export function sendCameraRoi(camera: Camera, subframe: CameraSubframe) {
+export function sendCameraRoi(camera: Camera, subframe: Roi) {
 	bus.emitSync(cameraRoiSubframeTopic(camera.id), subframe)
 }
 
-export function subscribeToCameraRoiRequests(camera: Camera, callback: VoidFunction) {
+export function subscribeToCameraRoiRequests(camera: Camera, callback: (options?: ImageRoiRequest) => void) {
 	return bus.subscribe(cameraRoiRequestTopic(camera.id), callback)
 }
 
-export function updateCameraSubframe(request: CameraCaptureStart, camera: Camera, subframe: CameraSubframe) {
+export function updateCameraSubframe(request: CameraCaptureStart, camera: Camera, subframe: Roi) {
 	if (!camera.canSubFrame) return false
 
 	const { frame } = camera
@@ -307,6 +308,6 @@ function cameraRoiSubframeSnapshotTopic(camera: string) {
 	return `camera:${camera}:roi:subframe:snapshot`
 }
 
-function sendCameraRoiSubframeSnapshot(camera: Camera, subframe: CameraSubframe) {
+function sendCameraRoiSubframeSnapshot(camera: Camera, subframe: Roi) {
 	bus.emitSync(cameraRoiSubframeSnapshotTopic(camera.id), subframe)
 }

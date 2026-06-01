@@ -52,12 +52,13 @@ const Body = memo(() => {
 
 const Options = memo(() => {
 	const { statistics } = useContext(ImageViewerStoreContext)
-	const { histogram, selected } = useSnapshot(statistics.state)
+	const { histogram, selected, roi } = useSnapshot(statistics.state)
 	const { transformed } = useSnapshot(statistics.state.request)
 
 	return (
 		<>
-			<Checkbox className="col-span-full min-w-0" label="Transformed" onValueChange={(value) => statistics.update('transformed', value)} value={transformed} />
+			<Checkbox className="col-span-6 min-w-0" label="Transformed" onValueChange={(value) => statistics.update('transformed', value)} value={transformed} />
+			<Checkbox className="col-span-6 min-w-0" label="ROI" onValueChange={(value) => (statistics.state.roi = value)} value={roi} />
 			{histogram.length === 3 && <ImageChannelButtonGroup className="col-span-full min-w-0" onValueChange={(value) => (statistics.state.selected = selectedChannelIndex(value ?? 'RED'))} value={channelValueOf(selected)} />}
 		</>
 	)

@@ -5,10 +5,10 @@ import type { Mount } from 'nebulosa/src/indi.device'
 import { pmod } from 'nebulosa/src/math'
 import type { Writable } from 'nebulosa/src/types'
 import bus from 'src/shared/bus'
-import { type ImageTransformation, type ImageInfo, DEFAULT_IMAGE_TRANSFORMATION, type Framing } from 'src/shared/types'
+import { type ImageTransformation, type ImageInfo, DEFAULT_IMAGE_TRANSFORMATION, type Framing, type Roi } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
-import type { Image, ImageLoaded } from '@/shared/types'
+import type { Image, ImageLoaded, ImageRoiRequest } from '@/shared/types'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
 import type { InteractableMethods } from '../ui/Interactable'
@@ -420,4 +420,20 @@ function bringToFront(e: HTMLElement) {
 
 	// Update the selected element z-index
 	elements[zIndex].style.zIndex = max.toFixed(0)
+}
+
+function imageRoiRequestTopic(image: string) {
+	return `image:${image}:roi:request`
+}
+
+function imageRoiSubframeSnapshotTopic(image: string) {
+	return `image:${image}:roi:subframe:snapshot`
+}
+
+export function subscribeToImageRoiRequests(image: Image, callback: (options?: ImageRoiRequest) => void) {
+	return bus.subscribe(imageRoiRequestTopic(image.id), callback)
+}
+
+export function sendImageRoiSubframeSnapshot(image: Image, subframe: Roi) {
+	bus.emitSync(imageRoiSubframeSnapshotTopic(image.id), subframe)
 }

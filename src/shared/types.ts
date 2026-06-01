@@ -484,10 +484,12 @@ export interface AnnotateImage {
 }
 
 export interface StatisticImage extends Omit<OpenImage, 'statistics'> {
-	readonly area?: Rect
+	readonly area?: Rect | Roi
 	readonly bits: number
 	readonly transformed: boolean
 }
+
+export type Roi = Size & Point
 
 export interface ImageHistogram {
 	readonly standardDeviation: number
@@ -716,8 +718,6 @@ export interface CameraCaptureStart extends Size {
 	transferFormat: CameraTransferFormat
 	compressed: boolean
 }
-
-export type CameraSubframe = Size & Point
 
 export interface CameraCaptureTime {
 	remainingTime: number

@@ -1,13 +1,14 @@
 import type { Point } from 'nebulosa/src/geometry'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import type { CameraSubframe } from 'src/shared/types'
+import type { Roi } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { initProxy } from '../shared/proxy'
-import { sendCameraRoi, subscribeToCameraRoiRequests } from './camera.store'
-import type { ImageViewerStore } from './image.viewer.store'
+import type { ImageRoiRequest } from '../shared/types'
 import { clamp, clampInteger } from '../shared/util'
+import { sendCameraRoi, subscribeToCameraRoiRequests } from './camera.store'
+import { subscribeToImageRoiRequests, type ImageViewerStore } from './image.viewer.store'
 
 export type ImageRoiStore = ReturnType<typeof imageRoiStore>
 
@@ -15,7 +16,7 @@ export type ImageRoiHandle = 'move' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
 
 export interface ImageRoiState {
 	visible: boolean
-	readonly roi: CameraSubframe
+	readonly roi: Roi
 	readonly binning: Point
 }
 
@@ -26,7 +27,7 @@ interface RoiGesture {
 	readonly clientY: number
 	readonly scale: number
 	readonly angle: number
-	readonly roi: CameraSubframe
+	readonly roi: Roi
 	readonly aborter: AbortController
 }
 
@@ -83,8 +84,6 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 	}
 
 	function toggle() {
-		if (!viewer.image.camera?.canSubFrame) return
-
 		state.visible = !state.visible
 	}
 
@@ -96,10 +95,12 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 
 		syncImage()
 
-		const unsubscribe = camera ? subscribeToCameraRoiRequests(camera, sendRoi) : undefined
+		const u: VoidFunction[] = []
+		if (camera) u[0] = subscribeToCameraRoiRequests(camera, sendRoi)
+		u[1] = subscribeToImageRoiRequests(viewer.image, sendRoi)
 
 		return () => {
-			unsubscribe?.()
+			unsubscribe(u)
 			stopGesture()
 		}
 	}
@@ -170,13 +171,12 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		}
 	}
 
-	function sendRoi() {
+	function sendRoi(options?: ImageRoiRequest) {
 		const camera = viewer.image.camera
-
-		if (camera && restoredRoi()) sendCameraRoi(camera, scaleRoi(state.roi, state.binning))
+		if (camera && restoredRoi()) sendCameraRoi(camera, options?.unbinned ? state.roi : scaleRoi(state.roi, state.binning))
 	}
 
-	function applyRoi(roi: CameraSubframe, binning: Point = imageBinning()) {
+	function applyRoi(roi: Roi, binning: Point = imageBinning()) {
 		Object.assign(state.roi, roi)
 		Object.assign(state.binning, binning)
 
@@ -225,7 +225,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		} as const
 	}
 
-	function centeredRoi(info = viewer.state.info): CameraSubframe {
+	function centeredRoi(info = viewer.state.info): Roi {
 		const bounds = imageBounds(info)
 		const width = Math.max(1, Math.trunc(bounds.width / 2))
 		const height = Math.max(1, Math.trunc(bounds.height / 2))
@@ -238,7 +238,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		}
 	}
 
-	function normalizeRoi(roi: CameraSubframe, info = viewer.state.info): CameraSubframe {
+	function normalizeRoi(roi: Roi, info = viewer.state.info): Roi {
 		const bounds = imageBounds(info)
 		const width = clampInteger(roi.width, MIN_ROI_SIZE, bounds.width)
 		const height = clampInteger(roi.height, MIN_ROI_SIZE, bounds.height)
@@ -286,7 +286,7 @@ function localDelta(screenX: number, screenY: number, scale: number, angle: numb
 	} as const
 }
 
-function resizeRoi(roi: CameraSubframe, handle: ImageRoiHandle, dx: number, dy: number, bounds: Pick<CameraSubframe, 'width' | 'height'>): CameraSubframe {
+function resizeRoi(roi: Roi, handle: ImageRoiHandle, dx: number, dy: number, bounds: Pick<Roi, 'width' | 'height'>): Roi {
 	if (handle === 'move') {
 		return {
 			x: clampInteger(Math.round(roi.x + dx), 0, bounds.width - roi.width),
@@ -309,17 +309,17 @@ function resizeRoi(roi: CameraSubframe, handle: ImageRoiHandle, dx: number, dy: 
 	return { x: Math.round(x1), y: Math.round(y1), width: Math.round(x2 - x1), height: Math.round(y2 - y1) }
 }
 
-function rebinRoi(roi: CameraSubframe, from: Point | undefined, to: Point): CameraSubframe {
+function rebinRoi(roi: Roi, from: Point | undefined, to: Point): Roi {
 	if (!from || (from.x === to.x && from.y === to.y)) return roi
 
 	return unscaleRoi(scaleRoi(roi, from), to)
 }
 
-function scaleRoi(roi: CameraSubframe, binning: Point): CameraSubframe {
+function scaleRoi(roi: Roi, binning: Point): Roi {
 	return { x: roi.x * binning.x, y: roi.y * binning.y, width: roi.width * binning.x, height: roi.height * binning.y }
 }
 
-function unscaleRoi(roi: CameraSubframe, binning: Point): CameraSubframe {
+function unscaleRoi(roi: Roi, binning: Point): Roi {
 	return {
 		x: clampInteger(roi.x / binning.x, 0, roi.x),
 		y: clampInteger(roi.y / binning.y, 0, roi.y),

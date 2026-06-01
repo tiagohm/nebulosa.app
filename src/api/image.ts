@@ -552,10 +552,11 @@ export class ImageHandler {
 			const stats = new Array<ImageHistogram>(image.image.metadata.channels)
 			const isMono = stats.length === 1
 			const bits = new Int32Array(1 << Math.max(8, Math.min(req.bits ?? 16, 20)))
+			const area = req.area && ('x' in req.area ? { top: req.area.y, left: req.area.x, bottom: req.area.y + req.area.height, right: req.area.x + req.area.width } : req.area)
 
 			for (let i = 0; i < stats.length; i++) {
 				const channel = isMono ? 'GRAY' : i === 0 ? 'RED' : i === 1 ? 'GREEN' : 'BLUE'
-				const hist = histogram(image.image, { channel, area: req.area, bits })
+				const hist = histogram(image.image, { channel, area, bits })
 				const { standardDeviation, variance, count, mean, median, maximum, minimum } = hist
 				stats[i] = { standardDeviation, variance, count, mean, median, maximum, minimum, data: Array.from(bits) }
 			}

@@ -31,6 +31,10 @@ export interface ImageSolved {
 	readonly solution: PlateSolution
 }
 
+export interface ImageRoiRequest {
+	readonly unbinned?: boolean
+}
+
 export interface DeviceTypeMap {
 	readonly camera: Camera
 	readonly mount: Mount

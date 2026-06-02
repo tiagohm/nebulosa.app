@@ -4,8 +4,10 @@ on:
     push:
         branches: [main]
         paths:
-            - 'src/**.ts'
-            - 'tests/**.ts'
+            - 'src/api/**.ts'
+            - 'src/shared/**.ts'
+            - 'src/data/**'
+            - 'tests/**'
             - 'package.json'
             - 'tsconfig.json'
             - 'bunfig.toml'

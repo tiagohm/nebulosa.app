@@ -82,7 +82,7 @@ function Info() {
 					</span>
 				</InfoRow>
 				<InfoRow label="Copyright">
-					<span>2022-{aboutStore.state.year}</span>
+					<span>2025-{aboutStore.state.year}</span>
 				</InfoRow>
 			</div>
 			<div className="rounded-lg border border-(--color-variant)/20 bg-(--color-variant)/10 p-3 text-center text-sm leading-5 text-neutral-200 [--color-variant:var(--warning)]">This software is WIP, comes with absolutely no warranty, and the copyright holder is not liable or responsible for anything.</div>

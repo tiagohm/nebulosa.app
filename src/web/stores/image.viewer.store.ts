@@ -181,7 +181,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		state.crosshair = !state.crosshair
 	}
 
-	async function load(path: string | boolean = state.path) {
+	async function load(path: string | true = '') {
 		if (loading) return
 
 		console.info('loading image:', path)
@@ -189,24 +189,13 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		try {
 			loading = true
 
-			if (path) {
-				await open(path === true ? state.path : path)
-			}
-		} finally {
-			loading = false
-		}
-	}
+			const first = state.info === undefined
+			const refreshed = first || state.path !== path || path.length > 0
 
-	function reload() {
-		return load(true)
-	}
-
-	async function open(path: string) {
-		try {
-			loading = true
+			// If the path is true or empty, it means to load the current image path.
+			if (path === true || path === '') path = state.path
 
 			// Load the image
-			console.info(state.transformation.stretch)
 			const data = await Api.Image.open({ path, transformation: state.transformation, camera: camera?.name })
 
 			if (data === undefined) {
@@ -216,14 +205,13 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 			const url = URL.createObjectURL(data.blob)
 
 			// Update the state
-			const refreshed = state.info === undefined || state.path !== path
 			state.info = ref(data.info)
 			state.path = state.info.path
 
 			if (target) {
 				target.src = url
 
-				bus.emit('image:load', { image, info: data.info, refreshed } satisfies ImageLoaded)
+				bus.emit('image:load', { image, info: data.info, first, refreshed } satisfies ImageLoaded)
 
 				console.info('image loaded:', path, url, data.info)
 			} else {
@@ -232,6 +220,10 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		} finally {
 			loading = false
 		}
+	}
+
+	function reload() {
+		return load(true)
 	}
 
 	function rotateTo(angle: number) {

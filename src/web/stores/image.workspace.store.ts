@@ -53,13 +53,17 @@ function add(path: string, source: ImageSource | Camera, id?: string) {
 	source = typeof source === 'string' ? source : 'camera'
 	const position = state.images.length === 0 ? 0 : Math.max(...state.images.map((e) => e.position)) + 1
 	id = `${source}-${id || camera?.id || nanoid()}`
-	const index = state.images.findIndex((e) => e.id === id)
 
+	const index = state.images.findIndex((e) => e.id === id)
 	let image: Image
 
 	if (index >= 0) {
 		image = state.images[index]
-		void viewers.get(image.id)?.load(path)
+		const viewer = viewers.get(image.id)
+
+		if (viewer) void viewer.load(path)
+		else return console.warn('image viewer not found:', image)
+
 		bus.emit('update', image)
 	} else {
 		image = { path, id, position, source, camera }

@@ -23,6 +23,7 @@ export interface Image {
 export interface ImageLoaded {
 	readonly image: Image
 	readonly info: ImageInfo
+	readonly first: boolean
 	readonly refreshed: boolean
 }
 

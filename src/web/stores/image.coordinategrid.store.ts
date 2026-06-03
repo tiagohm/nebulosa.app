@@ -66,6 +66,8 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 	}
 
 	async function compute(solution: PlateSolution | undefined = viewer.solver.state.solution, force: boolean = false) {
+		if (state.loading) return
+
 		if (!hasScaledSolution(solution)) {
 			reset()
 			return

@@ -64,7 +64,7 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 			}
 		})
 
-		state.solution ??= viewer.state.info?.solution && ref(viewer.state.info.solution)
+		state.solution = viewer.state.info?.solution && ref(viewer.state.info.solution)
 		state.request.id ||= nanoid()
 	}
 

@@ -45,7 +45,7 @@ export const ImageViewer = memo(() => {
 	// Loads after layout so the image node is already available.
 	useEffect(() => {
 		if (imgRef.current) {
-			void viewer.load()
+			void viewer.load() // First load, opens the image.path
 		}
 	}, [imgRef.current])
 

@@ -522,26 +522,24 @@ export class ImageHandler {
 		const { widthInPixels, heightInPixels } = solution
 
 		const delta = COORDINATE_INTERPOLATION_DELTA
-		const width = widthInPixels + (widthInPixels % delta === 0 ? 0 : delta - (widthInPixels % delta))
-		const height = heightInPixels + (heightInPixels % delta === 0 ? 0 : delta - (heightInPixels % delta))
-
-		const md = new Array<number>((width / delta + 1) * (height / delta + 1))
+		const width = Math.ceil(widthInPixels / delta)
+		const height = Math.ceil(heightInPixels / delta)
+		const md = new Array<number>(width * height)
 		const ma = new Array<number>(md.length)
-		let n = 0
 
-		for (let y = 0; y <= height; y += delta) {
-			for (let x = 0; x <= width; x += delta, n++) {
+		for (let y = 0, i = 0; y <= heightInPixels; y += delta) {
+			for (let x = 0; x <= widthInPixels; x += delta, i++) {
 				const point = wcs.pixToSky(x, y)
 
 				if (!point) throw new Error(`failed to interpolate image coordinate at ${x},${y}`)
 
 				const [rightAscension, declination] = point
-				ma[n] = rightAscension
-				md[n] = declination
+				ma[i] = rightAscension
+				md[i] = declination
 			}
 		}
 
-		return { ma, md, x0: 0, y0: 0, x1: width, y1: height, delta }
+		return { ma, md, delta, width, height }
 	}
 
 	async statistics(req: StatisticImage) {

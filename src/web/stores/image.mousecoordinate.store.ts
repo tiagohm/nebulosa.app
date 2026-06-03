@@ -1,13 +1,13 @@
 import type { Angle } from 'nebulosa/src/angle'
 import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import type { Point } from 'nebulosa/src/geometry'
+import { AstrometricInterpolator } from 'nebulosa/src/interpolator.astrometric'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import bus from 'src/shared/bus'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
-import { CoordinateInterpolator } from '../shared/coordinate-interpolation'
 import type { ImageLoaded } from '../shared/types'
 import { isMousePresent } from '../shared/util'
 import type { InteractableProps, InteractTransform } from '../ui/Interactable'
@@ -18,7 +18,7 @@ export type ImageMouseCoordinateStore = ReturnType<typeof imageMouseCoordinateSt
 
 export interface ImageMouseCoordinateState {
 	visible: boolean
-	interpolator?: CoordinateInterpolator
+	interpolator?: AstrometricInterpolator
 	readonly coordinate: {
 		hover: EquatorialCoordinate & Point
 		selected: EquatorialCoordinate & Point & { show: boolean; distance: Angle }
@@ -87,8 +87,8 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 			const coordinateInterpolation = await Api.Image.coordinateInterpolation(solution)
 
 			if (coordinateInterpolation) {
-				const { ma, md, x0, y0, x1, y1, delta } = coordinateInterpolation
-				state.interpolator = ref(new CoordinateInterpolator(new Float32Array(ma), new Float32Array(md), x0, y0, x1, y1, delta))
+				const { ma, md, width, height, delta } = coordinateInterpolation
+				state.interpolator = ref(new AstrometricInterpolator(new Float32Array(ma), new Float32Array(md), width, height, delta, delta))
 			}
 		}
 	}
@@ -97,7 +97,7 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 		const { interpolator, coordinate } = state
 
 		if (interpolator) {
-			const [rightAscension, declination] = interpolator.interpolate(x, y)
+			const [rightAscension, declination] = interpolator.pixelToSky(x, y)
 
 			if (clicked) {
 				coordinate.selected.rightAscension = rightAscension

@@ -505,10 +505,8 @@ export interface ImageHistogram {
 export interface ImageCoordinateInterpolation {
 	readonly ma: number[]
 	readonly md: number[]
-	readonly x0: number
-	readonly y0: number
-	readonly x1: number
-	readonly y1: number
+	readonly width: number
+	readonly height: number
 	readonly delta: number
 }
 

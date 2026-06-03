@@ -108,7 +108,7 @@ export function TextInput({
 	className,
 	classNames,
 	disabled = false,
-	fireOnEnter = false,
+	fireOnEnter = true,
 	inputMode,
 	label,
 	maxLength,

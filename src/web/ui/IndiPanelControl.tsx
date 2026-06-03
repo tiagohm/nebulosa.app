@@ -1,6 +1,6 @@
 import type { DeviceProperty } from 'nebulosa/src/indi.device'
 import type { DefElement, Message, NewVector, SwitchRule } from 'nebulosa/src/indi.types'
-import { Activity, memo, useContext, useEffect, useRef, useState } from 'react'
+import { Activity, memo, useContext, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiPanelControlStoreContext } from '../shared/context'
 import { activityMode } from '../shared/util'
@@ -145,7 +145,7 @@ interface PropertyProps {
 }
 
 const Property = memo(({ property, onSend }: PropertyProps) => {
-	const elements = useRef<NewVector['elements']>({})
+	const edited = useRef<Record<string, unknown>>(Object.create(null))
 	const isReadonly = 'permission' in property && property.permission === 'ro'
 	const label = propertyLabel(property)
 
@@ -153,12 +153,25 @@ const Property = memo(({ property, onSend }: PropertyProps) => {
 		if (property.type === 'SWITCH') {
 			onSend(property, { device: property.device, name: property.name, elements: { [element.name]: value as boolean } })
 		} else {
-			elements.current[element.name] = value as never
+			edited.current[element.name] = value
 		}
 	}
 
-	function handlePointerUp() {
-		onSend(property, { device: property.device, name: property.name, elements: elements.current as never })
+	function handleClick() {
+		if (property.type === 'SWITCH') return
+
+		const elements = Object.create(null)
+
+		for (const element of Object.values(property.elements) as DefElement[]) {
+			console.info(element)
+			if (element.value !== undefined) elements[element.name] = element.value
+		}
+
+		for (const [name, value] of Object.entries(edited.current)) {
+			if (value !== undefined) elements[name] = value
+		}
+
+		onSend(property, { device: property.device, name: property.name, elements })
 	}
 
 	return (
@@ -171,7 +184,7 @@ const Property = memo(({ property, onSend }: PropertyProps) => {
 						<span className="mt-[-4px] text-[0.6rem] text-neutral-400">{property.name}</span>
 					</div>
 				</div>
-				{!isReadonly && property.type !== 'SWITCH' && <IconButton color="primary" icon={Icons.Send} onClick={handlePointerUp} tooltipContent="Send" tooltipPlacement="start" />}
+				{!isReadonly && property.type !== 'SWITCH' && <IconButton color="primary" icon={Icons.Send} onClick={handleClick} tooltipContent="Send" tooltipPlacement="start" />}
 			</div>
 			<div className="flex flex-col gap-1">
 				{property.type === 'TEXT' && Object.entries(property.elements).map(([key, element]) => <TextElement isReadonly={isReadonly} key={key} label={element.label} onValueChange={(value) => handleValueChange(element, value)} value={element.value} />)}
@@ -196,21 +209,10 @@ interface TextElementProps {
 }
 
 function TextElement({ label, value, isReadonly, onValueChange }: TextElementProps) {
-	const [text, setText] = useState(value)
-
-	useEffect(() => {
-		setText(value)
-	}, [value])
-
-	function handleValueChange(value: string) {
-		setText(value)
-		onValueChange(value)
-	}
-
 	return (
 		<div className="grid grid-cols-12 gap-1">
 			<TextInput className={isReadonly ? 'col-span-full min-w-0' : 'col-span-6 min-w-0'} label={label} readOnly value={value} />
-			{!isReadonly && <TextInput className="col-span-6 min-w-0" label={label} onValueChange={handleValueChange} value={text} />}
+			{!isReadonly && <TextInput className="col-span-6 min-w-0" label={label} onValueChange={onValueChange} value={value} />}
 		</div>
 	)
 }
@@ -225,21 +227,10 @@ interface NumberElementProps {
 }
 
 function NumberElement({ label, value, isReadonly, min, max, onValueChange }: NumberElementProps) {
-	const [number, setNumber] = useState(value)
-
-	useEffect(() => {
-		setNumber(value)
-	}, [value])
-
-	function handleValueChange(value: number) {
-		setNumber(value)
-		onValueChange(value)
-	}
-
 	return (
 		<div className="grid grid-cols-12 gap-1">
-			<TextInput className={isReadonly ? 'col-span-full min-w-0' : 'col-span-6 min-w-0'} label={label} readOnly value={value.toString()} />
-			{!isReadonly && <NumberInput className="col-span-6 min-w-0" fractionDigits={8} label={label} maxValue={max} minValue={min} onValueChange={handleValueChange} value={number} />}
+			<NumberInput className={isReadonly ? 'col-span-full min-w-0' : 'col-span-6 min-w-0'} label={label} readOnly value={value} />
+			{!isReadonly && <NumberInput className="col-span-6 min-w-0" fractionDigits={8} label={label} maxValue={max} minValue={min} onValueChange={onValueChange} value={value} />}
 		</div>
 	)
 }

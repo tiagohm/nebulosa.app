@@ -1,6 +1,6 @@
 import fs from 'fs/promises'
 import { basename, join } from 'path'
-import { deg, parseAngle } from 'nebulosa/src/angle'
+import { deg, normalizeAngle, parseAngle } from 'nebulosa/src/angle'
 import { eraPvstar } from 'nebulosa/src/erfa'
 import { declinationKeyword, numericKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/fits.util'
 import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/image'
@@ -17,7 +17,9 @@ import { timeUnix } from 'nebulosa/src/time'
 import fovCameras from 'src/data/cameras.json' with { type: 'json' }
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 import fovTelescopes from 'src/data/telescopes.json' with { type: 'json' }
-import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateInterpolation, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
+// oxfmt-ignore
+import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateGrid, ImageCoordinateGridAxis, ImageCoordinateGridLine, ImageCoordinateGridPoint, ImageCoordinateInterpolation, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
+import { DEG2RAD, PI, RAD2DEG, TAU } from 'nebulosa/src/constants'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
 import { DEFAULT_HEADERS, type Endpoints, INTERNAL_SERVER_ERROR_RESPONSE, response } from './http'
 import type { NotificationHandler } from './notification'
@@ -49,6 +51,205 @@ export interface ImageProcessorItem<T> {
 
 const DEFAULT_IMAGE_EXPIRES_IN = 60000
 const COORDINATE_INTERPOLATION_DELTA = 24
+const COORDINATE_GRID_TARGET_LINES = 7
+const COORDINATE_GRID_BORDER_SAMPLES = 24
+const COORDINATE_GRID_LINE_SAMPLES = 96
+const COORDINATE_GRID_LABEL_MARGIN = 48
+
+interface CoordinateGridBounds {
+	readonly rightAscension: readonly [number, number]
+	readonly declination: readonly [number, number]
+}
+
+function unwrapAngleAround(angle: number, center: number) {
+	while (angle - center > PI) angle -= TAU
+	while (angle - center < -PI) angle += TAU
+	return angle
+}
+
+function niceAngularStep(span: number) {
+	const raw = Math.abs(span) / Math.max(1, COORDINATE_GRID_TARGET_LINES - 1)
+	const rawDeg = raw * RAD2DEG
+
+	if (!(rawDeg > 0) || !Number.isFinite(rawDeg)) return DEG2RAD
+
+	const exponent = Math.floor(Math.log10(rawDeg))
+	const scale = 10 ** exponent
+	const fraction = rawDeg / scale
+	const nice = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10
+
+	return nice * scale * DEG2RAD
+}
+
+function coordinateGridValues(min: number, max: number, step: number) {
+	const values: number[] = []
+
+	if (!(step > 0) || !Number.isFinite(step)) return values
+
+	const first = Math.ceil(min / step) * step
+
+	for (let value = first; value <= max + step * 0.25; value += step) {
+		if (Number.isFinite(value)) values.push(value)
+	}
+
+	return values
+}
+
+function isFinitePoint(point: readonly [number, number] | undefined): point is readonly [number, number] {
+	if (!point) return false
+	const [x, y] = point
+	return Number.isFinite(x) && Number.isFinite(y)
+}
+
+function clampCoordinateGridLabel(point: ImageCoordinateGridPoint, width: number, height: number): ImageCoordinateGridPoint {
+	return {
+		x: Math.min(Math.max(point.x, COORDINATE_GRID_LABEL_MARGIN), Math.max(width - COORDINATE_GRID_LABEL_MARGIN, COORDINATE_GRID_LABEL_MARGIN)),
+		y: Math.min(Math.max(point.y, COORDINATE_GRID_LABEL_MARGIN), Math.max(height - COORDINATE_GRID_LABEL_MARGIN, COORDINATE_GRID_LABEL_MARGIN)),
+	}
+}
+
+function clipCoordinateGridSegment(a: readonly [number, number], b: readonly [number, number], width: number, height: number): readonly [ImageCoordinateGridPoint, ImageCoordinateGridPoint] | undefined {
+	const [x0, y0] = a
+	const [x1, y1] = b
+	const dx = x1 - x0
+	const dy = y1 - y0
+	let t0 = 0
+	let t1 = 1
+
+	function clip(p: number, q: number) {
+		if (p === 0) return q >= 0
+
+		const t = q / p
+
+		if (p < 0) {
+			if (t > t1) return false
+			if (t > t0) t0 = t
+		} else {
+			if (t < t0) return false
+			if (t < t1) t1 = t
+		}
+
+		return true
+	}
+
+	if (!clip(-dx, x0) || !clip(dx, width - x0) || !clip(-dy, y0) || !clip(dy, height - y0)) return undefined
+
+	return [
+		{ x: x0 + dx * t0, y: y0 + dy * t0 },
+		{ x: x0 + dx * t1, y: y0 + dy * t1 },
+	]
+}
+
+function isSameCoordinateGridPoint(a: ImageCoordinateGridPoint | undefined, b: ImageCoordinateGridPoint) {
+	return !!a && Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6
+}
+
+function coordinateGridLabels(points: readonly ImageCoordinateGridPoint[], width: number, height: number) {
+	const labels: ImageCoordinateGridPoint[] = []
+
+	for (const point of [points[0], points.at(-1)]) {
+		if (!point) continue
+
+		const label = clampCoordinateGridLabel(point, width, height)
+
+		if (!isSameCoordinateGridPoint(labels.at(-1), label)) {
+			labels.push(label)
+		}
+	}
+
+	return labels
+}
+
+function coordinateGridBounds(wcs: Wcs, solution: PlateSolution): CoordinateGridBounds | undefined {
+	const { widthInPixels: width, heightInPixels: height, rightAscension: center } = solution
+	let minRA = Number.POSITIVE_INFINITY
+	let maxRA = Number.NEGATIVE_INFINITY
+	let minDEC = Number.POSITIVE_INFINITY
+	let maxDEC = Number.NEGATIVE_INFINITY
+
+	function include(x: number, y: number) {
+		const point = wcs.pixToSky(x, y)
+
+		if (!point) return
+
+		const rightAscension = unwrapAngleAround(point[0], center)
+		const declination = point[1]
+
+		if (!Number.isFinite(rightAscension) || !Number.isFinite(declination)) return
+
+		minRA = Math.min(minRA, rightAscension)
+		maxRA = Math.max(maxRA, rightAscension)
+		minDEC = Math.min(minDEC, declination)
+		maxDEC = Math.max(maxDEC, declination)
+	}
+
+	for (let i = 0; i <= COORDINATE_GRID_BORDER_SAMPLES; i++) {
+		const x = (width * i) / COORDINATE_GRID_BORDER_SAMPLES
+		const y = (height * i) / COORDINATE_GRID_BORDER_SAMPLES
+
+		include(x, 0)
+		include(x, height)
+		include(0, y)
+		include(width, y)
+	}
+
+	if (!Number.isFinite(minRA) || !Number.isFinite(maxRA) || !Number.isFinite(minDEC) || !Number.isFinite(maxDEC)) return undefined
+
+	return {
+		rightAscension: [minRA, maxRA],
+		declination: [minDEC, maxDEC],
+	}
+}
+
+function coordinateGridSegments(axis: ImageCoordinateGridAxis, value: number, width: number, height: number, project: (ratio: number) => readonly [number, number] | undefined) {
+	const lines: ImageCoordinateGridLine[] = []
+	let points: ImageCoordinateGridPoint[] = []
+	let previous: readonly [number, number] | undefined
+
+	function flush() {
+		if (points.length >= 2) {
+			const labels = coordinateGridLabels(points, width, height)
+			lines.push({ axis, value: axis === 'rightAscension' ? normalizeAngle(value) : value, points, labels })
+		}
+
+		points = []
+	}
+
+	for (let i = 0; i <= COORDINATE_GRID_LINE_SAMPLES; i++) {
+		const point = project(i / COORDINATE_GRID_LINE_SAMPLES)
+
+		if (!isFinitePoint(point)) {
+			flush()
+			previous = undefined
+			continue
+		}
+
+		if (previous) {
+			const clipped = clipCoordinateGridSegment(previous, point, width, height)
+
+			if (clipped) {
+				const last = points.at(-1)
+
+				if (!isSameCoordinateGridPoint(last, clipped[0])) {
+					if (points.length > 0) flush()
+					points.push(clipped[0])
+				}
+
+				if (!isSameCoordinateGridPoint(points.at(-1), clipped[1])) {
+					points.push(clipped[1])
+				}
+			} else {
+				flush()
+			}
+		}
+
+		previous = point
+	}
+
+	flush()
+
+	return lines
+}
 
 export class ImageProcessor {
 	private readonly buffered = new Map<string, ImageProcessorItem<BufferedImageItem>>()
@@ -542,6 +743,40 @@ export class ImageHandler {
 		return { ma, md, delta, width, height }
 	}
 
+	coordinateGrid(solution: PlateSolution): ImageCoordinateGrid {
+		using wcs = new Wcs(solution)
+		const bounds = coordinateGridBounds(wcs, solution)
+
+		if (!bounds) return { lines: [] }
+
+		const { widthInPixels: width, heightInPixels: height } = solution
+		const [minRA, maxRA] = bounds.rightAscension
+		const [minDEC, maxDEC] = bounds.declination
+		const rightAscensionStep = niceAngularStep(maxRA - minRA)
+		const declinationStep = niceAngularStep(maxDEC - minDEC)
+		const lines: ImageCoordinateGridLine[] = []
+
+		for (const rightAscension of coordinateGridValues(minRA, maxRA, rightAscensionStep)) {
+			lines.push(
+				...coordinateGridSegments('rightAscension', rightAscension, width, height, (ratio) => {
+					const declination = minDEC - declinationStep + (maxDEC - minDEC + declinationStep * 2) * ratio
+					return wcs.skyToPix(normalizeAngle(rightAscension), declination)
+				}),
+			)
+		}
+
+		for (const declination of coordinateGridValues(minDEC, maxDEC, declinationStep)) {
+			lines.push(
+				...coordinateGridSegments('declination', declination, width, height, (ratio) => {
+					const rightAscension = minRA - rightAscensionStep + (maxRA - minRA + rightAscensionStep * 2) * ratio
+					return wcs.skyToPix(normalizeAngle(rightAscension), declination)
+				}),
+			)
+		}
+
+		return { lines }
+	}
+
 	async statistics(req: StatisticImage) {
 		const transformation = { ...req.transformation, enabled: req.transformed }
 		const image = await this.imageProcessor.transform(req.path, transformation, req.camera)
@@ -591,6 +826,7 @@ export function image(imageHandler: ImageHandler) {
 		'/image/save': { POST: async (req) => response(await imageHandler.save(await req.json())) },
 		'/image/annotate': { POST: async (req) => response(await imageHandler.annotate(await req.json())) },
 		'/image/coordinateinterpolation': { POST: async (req) => response(imageHandler.coordinateInterpolation(await req.json())) },
+		'/image/coordinategrid': { POST: async (req) => response(imageHandler.coordinateGrid(await req.json())) },
 		'/image/statistics': { POST: async (req) => response(await imageHandler.statistics(await req.json())) },
 		'/image/fovcameras': { GET: response(fovCameras) },
 		'/image/fovtelescopes': { GET: response(fovTelescopes) },

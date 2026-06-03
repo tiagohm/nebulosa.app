@@ -510,6 +510,21 @@ export interface ImageCoordinateInterpolation {
 	readonly delta: number
 }
 
+export type ImageCoordinateGridAxis = 'rightAscension' | 'declination'
+
+export type ImageCoordinateGridPoint = Point
+
+export interface ImageCoordinateGridLine {
+	readonly axis: ImageCoordinateGridAxis
+	readonly value: Angle
+	readonly points: readonly ImageCoordinateGridPoint[]
+	readonly labels?: readonly ImageCoordinateGridPoint[]
+}
+
+export interface ImageCoordinateGrid {
+	readonly lines: readonly ImageCoordinateGridLine[]
+}
+
 export interface ImageInfo extends Partial<EquatorialCoordinate>, Size {
 	readonly path: string
 	readonly mono: boolean

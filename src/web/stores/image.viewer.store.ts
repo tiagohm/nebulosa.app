@@ -16,6 +16,7 @@ import { framingStore } from './framing.store'
 import { imageAdjustmentStore, type ImageAdjustmentStore } from './image.adjustment.store'
 import { imageAnnotationStore, type ImageAnnotationStore } from './image.annotation.store'
 import { imageCalibrationStore, type ImageCalibrationStore } from './image.calibration.store'
+import { imageCoordinateGridStore, type ImageCoordinateGridStore } from './image.coordinategrid.store'
 import { imageFilterStore, type ImageFilterStore } from './image.filter.store'
 import { imageFovStore, type ImageFovStore } from './image.fov.store'
 import { imageHeaderStore, type ImageHeaderStore } from './image.header.store'
@@ -64,6 +65,7 @@ export interface ImageViewerStore {
 	readonly adjustment: ImageAdjustmentStore
 	readonly annotation: ImageAnnotationStore
 	readonly calibration: ImageCalibrationStore
+	readonly coordinateGrid: ImageCoordinateGridStore
 	readonly filter: ImageFilterStore
 	readonly fov: ImageFovStore
 	readonly header: ImageHeaderStore
@@ -353,6 +355,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	const adjustment = (store.adjustment = imageAdjustmentStore(store))
 	const annotation = (store.annotation = imageAnnotationStore(store))
 	const calibration = (store.calibration = imageCalibrationStore(store))
+	const coordinateGrid = (store.coordinateGrid = imageCoordinateGridStore(store))
 	const filter = (store.filter = imageFilterStore(store))
 	const fov = (store.fov = imageFovStore(store))
 	const header = (store.header = imageHeaderStore(store))
@@ -366,7 +369,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	const statistics = (store.statistics = imageStatisticsStore(store))
 	const stretch = (store.stretch = imageStretchStore(store))
 
-	stores.push(adjustment, annotation, calibration, filter, fov, header, mouseCoordinate, roi, save, scnr, settings, solver, starDetection, statistics, stretch)
+	stores.push(adjustment, annotation, calibration, coordinateGrid, filter, fov, header, mouseCoordinate, roi, save, scnr, settings, solver, starDetection, statistics, stretch)
 
 	return store
 }

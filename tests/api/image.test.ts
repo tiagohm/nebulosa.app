@@ -6,7 +6,7 @@ import { readImageFromPath, writeImageToFits, writeImageToXisf } from 'nebulosa/
 import type { Image } from 'nebulosa/src/image.types'
 import { bufferSink } from 'nebulosa/src/io'
 import { ImageHandler, ImageProcessor, image as imageEndpoints } from 'src/api/image'
-import { DEFAULT_IMAGE_TRANSFORMATION, X_IMAGE_INFO_HEADER, type AnnotateImage, type ImageHistogram, type ImageInfo, type ImageTransformation } from 'src/shared/types'
+import { DEFAULT_IMAGE_TRANSFORMATION, X_IMAGE_INFO_HEADER, type AnnotateImage, type ImageCoordinateGrid, type ImageHistogram, type ImageInfo, type ImageTransformation } from 'src/shared/types'
 import { json, noContent } from './util'
 
 const EMPTY_ANNOTATE_IMAGE: Omit<AnnotateImage, 'solution'> = {
@@ -17,6 +17,39 @@ const EMPTY_ANNOTATE_IMAGE: Omit<AnnotateImage, 'solution'> = {
 	minorPlanetsMagnitudeLimit: 0,
 	includeMinorPlanetsWithoutMagnitude: false,
 }
+
+const SOLVED_IMAGE_SOLUTION = {
+	'DATE-OBS': '2024-07-11T04:00:00.000',
+	SIMPLE: true,
+	BITPIX: 16,
+	NAXIS: 2,
+	NAXIS1: 1280,
+	NAXIS2: 1024,
+	WCSAXES: 2,
+	CRPIX1: 640,
+	CRPIX2: 512,
+	CDELT1: -0.002282778583712,
+	CDELT2: 0.002282778583712,
+	CUNIT1: 'deg',
+	CUNIT2: 'deg',
+	CTYPE1: 'RA---TAN',
+	CTYPE2: 'DEC--TAN',
+	CRVAL1: 284.84583333333,
+	CRVAL2: -29.661666666667,
+	LONPOLE: 180,
+	LATPOLE: -29.661666666667,
+	RADESYS: 'ICRS',
+	orientation: -Math.PI,
+	scale: 0.000039842002379787396,
+	rightAscension: 4.971497652253623,
+	declination: -0.5176937449623905,
+	width: 0.05099776304612787,
+	height: 0.040798210436902294,
+	radius: 0.03265450126155186,
+	parity: 'FLIPPED',
+	widthInPixels: 1280,
+	heightInPixels: 1024,
+} as const
 
 const processor = new ImageProcessor()
 const image = new ImageHandler(processor)
@@ -121,60 +154,68 @@ function imageInfo(response: Response) {
 	return JSON.parse(decodeURIComponent(response.headers.get(X_IMAGE_INFO_HEADER)!)) as ImageInfo
 }
 
-describe('annotate', () => {
-	const solution = {
-		'DATE-OBS': '2024-07-11T04:00:00.000',
-		SIMPLE: true,
-		BITPIX: 16,
-		NAXIS: 2,
-		NAXIS1: 1280,
-		NAXIS2: 1024,
-		WCSAXES: 2,
-		CRPIX1: 640,
-		CRPIX2: 512,
-		CDELT1: -0.002282778583712,
-		CDELT2: 0.002282778583712,
-		CUNIT1: 'deg',
-		CUNIT2: 'deg',
-		CTYPE1: 'RA---TAN',
-		CTYPE2: 'DEC--TAN',
-		CRVAL1: 284.84583333333,
-		CRVAL2: -29.661666666667,
-		LONPOLE: 180,
-		LATPOLE: -29.661666666667,
-		RADESYS: 'ICRS',
-		orientation: -Math.PI,
-		scale: 0.000039842002379787396,
-		rightAscension: 4.971497652253623,
-		declination: -0.5176937449623905,
-		width: 0.05099776304612787,
-		height: 0.040798210436902294,
-		radius: 0.03265450126155186,
-		parity: 'FLIPPED',
-		widthInPixels: 1280,
-		heightInPixels: 1024,
-	} as const
+function expectCoordinateGrid(grid: ImageCoordinateGrid) {
+	expect(grid.lines.some((line) => line.axis === 'rightAscension')).toBeTrue()
+	expect(grid.lines.some((line) => line.axis === 'declination')).toBeTrue()
+	expect(grid.lines.some((line) => line.axis === 'rightAscension' && line.labels?.some((label) => label.y === 48))).toBeTrue()
+	expect(grid.lines.some((line) => line.axis === 'declination' && line.labels?.some((label) => label.x === 48))).toBeTrue()
 
+	function isOnFrame(x: number, y: number) {
+		const epsilon = 1e-6
+		return Math.abs(x) <= epsilon || Math.abs(y) <= epsilon || Math.abs(x - SOLVED_IMAGE_SOLUTION.widthInPixels) <= epsilon || Math.abs(y - SOLVED_IMAGE_SOLUTION.heightInPixels) <= epsilon
+	}
+
+	for (const line of grid.lines) {
+		expect(line.points.length).toBeGreaterThanOrEqual(2)
+		expect(line.labels?.length).toBeGreaterThanOrEqual(2)
+		expect(Number.isFinite(line.value)).toBeTrue()
+		const first = line.points[0]
+		const last = line.points.at(-1)!
+
+		for (const point of line.points) {
+			expect(Number.isFinite(point.x)).toBeTrue()
+			expect(Number.isFinite(point.y)).toBeTrue()
+			expect(point.x).toBeGreaterThanOrEqual(0)
+			expect(point.y).toBeGreaterThanOrEqual(0)
+			expect(point.x).toBeLessThanOrEqual(SOLVED_IMAGE_SOLUTION.widthInPixels)
+			expect(point.y).toBeLessThanOrEqual(SOLVED_IMAGE_SOLUTION.heightInPixels)
+		}
+
+		expect(isOnFrame(first.x, first.y)).toBeTrue()
+		expect(isOnFrame(last.x, last.y)).toBeTrue()
+
+		for (const label of line.labels ?? []) {
+			expect(Number.isFinite(label.x)).toBeTrue()
+			expect(Number.isFinite(label.y)).toBeTrue()
+			expect(label.x).toBeGreaterThanOrEqual(48)
+			expect(label.y).toBeGreaterThanOrEqual(48)
+			expect(label.x).toBeLessThanOrEqual(SOLVED_IMAGE_SOLUTION.widthInPixels - 48)
+			expect(label.y).toBeLessThanOrEqual(SOLVED_IMAGE_SOLUTION.heightInPixels - 48)
+		}
+	}
+}
+
+describe('annotate', () => {
 	test('stars & dsos', async () => {
-		const res = await image.annotate({ solution, ...EMPTY_ANNOTATE_IMAGE, stars: true, dsos: true })
+		const res = await image.annotate({ solution: SOLVED_IMAGE_SOLUTION, ...EMPTY_ANNOTATE_IMAGE, stars: true, dsos: true })
 
 		expect(res).toHaveLength(8)
 	})
 
 	test('stars', async () => {
-		const res = await image.annotate({ solution, ...EMPTY_ANNOTATE_IMAGE, stars: true })
+		const res = await image.annotate({ solution: SOLVED_IMAGE_SOLUTION, ...EMPTY_ANNOTATE_IMAGE, stars: true })
 
 		expect(res).toHaveLength(1)
 	})
 
 	test('dsos', async () => {
-		const res = await image.annotate({ solution, ...EMPTY_ANNOTATE_IMAGE, dsos: true })
+		const res = await image.annotate({ solution: SOLVED_IMAGE_SOLUTION, ...EMPTY_ANNOTATE_IMAGE, dsos: true })
 
 		expect(res).toHaveLength(7)
 	})
 
 	test.skip('minor planets', async () => {
-		const res = await image.annotate({ solution, ...EMPTY_ANNOTATE_IMAGE, minorPlanets: true, minorPlanetsMagnitudeLimit: 10 })
+		const res = await image.annotate({ solution: SOLVED_IMAGE_SOLUTION, ...EMPTY_ANNOTATE_IMAGE, minorPlanets: true, minorPlanetsMagnitudeLimit: 10 })
 
 		expect(res).toHaveLength(1)
 		expect(res.filter((e) => e.name.includes('1 Ceres'))).toHaveLength(1)
@@ -220,6 +261,21 @@ describe('image handler', () => {
 		const endpoints = imageEndpoints(handler)
 
 		expect(endpoints['/image/open'].POST(request(imageRequest(join(root, 'missing.fit'))))).rejects.toThrow('ENOENT')
+	})
+
+	test('coordinate grid returns drawable RA and DEC line segments', () => {
+		const handler = new ImageHandler(new ImageProcessor())
+		const grid = handler.coordinateGrid(SOLVED_IMAGE_SOLUTION)
+
+		expectCoordinateGrid(grid)
+	})
+
+	test('coordinate grid endpoint serializes drawable RA and DEC line segments', async () => {
+		const handler = new ImageHandler(new ImageProcessor())
+		const endpoints = imageEndpoints(handler)
+		const grid = await json<ImageCoordinateGrid>(await endpoints['/image/coordinategrid'].POST(request(SOLVED_IMAGE_SOLUTION)))
+
+		expectCoordinateGrid(grid)
 	})
 
 	test('save endpoint exports FITS and XISF files that can be read back', async () => {

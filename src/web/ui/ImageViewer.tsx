@@ -4,6 +4,7 @@ import { imageWorkspaceStore } from '@/stores/image.workspace.store'
 import { useStore } from '../hooks/store.hook'
 import { ImageContext, ImageViewerStoreContext } from '../shared/context'
 import { AnnotatedStars } from './AnnotatedStars'
+import { CoordinateGrid } from './CoordinateGrid'
 import { CoordinateOnMouse } from './CoordinateOnMouse'
 import { Crosshair } from './Crosshair'
 import { DetectedStars } from './DetectedStars'
@@ -75,6 +76,7 @@ export const ImageViewer = memo(() => {
 
 const InteractableOverlay = memo(() => (
 	<>
+		<CoordinateGrid />
 		<Crosshair />
 		<DetectedStars />
 		<AnnotatedStars />

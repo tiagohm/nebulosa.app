@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid'
 import type { Camera } from 'nebulosa/src/indi.device'
 import bus from 'src/shared/bus'
 import type { CameraFrameEvent } from 'src/shared/types'
-import { proxy } from 'valtio'
+import { proxy, ref } from 'valtio'
 import { initProxy } from '../shared/proxy'
 import type { Image, ImageSource } from '../shared/types'
 import { equipmentStore } from './equipment.store'
@@ -78,6 +78,20 @@ function add(path: string, source: ImageSource | Camera, id?: string) {
 	return image
 }
 
+function select(image: Image | undefined) {
+	if (image !== undefined) {
+		if (state.selected?.id !== image.id) {
+			state.selected = ref(image)
+		}
+	} else if (state.selected !== undefined) {
+		state.selected = undefined
+	}
+}
+
+function selectFirst() {
+	select(state.images[0])
+}
+
 function remove(image: Image) {
 	const index = state.images.findIndex((e) => e.id === image.id)
 
@@ -111,6 +125,8 @@ export const imageWorkspaceStore = {
 	link,
 	unlink,
 	add,
+	select,
+	selectFirst,
 	remove,
 	choose,
 	showPicker,

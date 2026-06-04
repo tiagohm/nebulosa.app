@@ -202,18 +202,19 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 				return remove()
 			}
 
-			const url = URL.createObjectURL(data.blob)
+			const { blob, info } = data
+			const url = URL.createObjectURL(blob)
 
 			// Update the state
-			state.info = ref(data.info)
-			state.path = state.info.path
+			state.info = ref(info)
+			state.path = info.path
 
 			if (target) {
 				target.src = url
 
-				bus.emit('image:load', { image, info: data.info, first, refreshed } satisfies ImageLoaded)
+				bus.emit('image:load', { image, info, first, refreshed } satisfies ImageLoaded)
 
-				console.info('image loaded:', path, url, data.info)
+				console.info('image loaded:', path, url, info)
 			} else {
 				console.warn('image not mounted yet:', path)
 			}
@@ -280,7 +281,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 
 	function select() {
 		if (!target) return
-		imageWorkspaceStore.state.selected = ref(image)
+		imageWorkspaceStore.select(image)
 		bringToFront(target)
 	}
 
@@ -292,9 +293,10 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		adjustZIndexAfterBeRemoved()
 
 		imageWorkspaceStore.unlink(image)
-		imageWorkspaceStore.state.selected = undefined
+		imageWorkspaceStore.selectFirst()
 		target = undefined
 		interactable = undefined
+		stores.length = 0
 	}
 
 	function toggleClass(token: string, force?: boolean) {

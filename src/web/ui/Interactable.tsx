@@ -92,6 +92,10 @@ function removeDocumentGestureListeners() {
 	}
 }
 
+function isRoiInteraction(event: Event) {
+	return event.target instanceof Element && event.target.closest('.roi') !== null
+}
+
 export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...handlers }: InteractableProps) => {
 	const wrapperRef = useRef<HTMLDivElement>(null)
 	const transformation = useRef<InteractTransform>({ x: 0, y: 0, scale: 1, angle: 0 })
@@ -245,11 +249,14 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 	useGesture(
 		{
 			...handlers,
-			onDragStart: () => {
+			onDragStart: ({ event, cancel }) => {
+				if (isRoiInteraction(event)) return cancel()
+
 				// Disable text selection during drag event
 				disableBodyUserSelect()
 			},
 			onDrag: ({ event, pinching, cancel, delta, movement, offset, tap, memo }) => {
+				if (isRoiInteraction(event)) return cancel()
 				if (pinching || tap) return cancel()
 
 				const { scale } = transformation.current

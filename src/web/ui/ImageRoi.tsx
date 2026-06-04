@@ -8,7 +8,7 @@ const roiStyles = tv({
 	slots: {
 		root: 'roi pointer-events-auto absolute cursor-move touch-none border border-white bg-transparent',
 		label: 'pointer-events-none absolute bottom-full left-0 mb-1 whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[11px] leading-4 font-semibold text-white shadow',
-		handle: 'absolute h-3 w-3 rounded-full border-2 border-white bg-sky-500 transition-[background-color,box-shadow] hover:bg-sky-300 hover:shadow-[0_0_0_3px_rgba(56,189,248,0.45)] active:bg-sky-400',
+		handle: 'absolute h-4 w-4 touch-none rounded-full border-2 border-white bg-sky-500 transition-[background-color,box-shadow] select-none hover:bg-sky-300 hover:shadow-[0_0_0_3px_rgba(56,189,248,0.45)] active:bg-sky-400',
 	},
 	variants: {
 		handle: {

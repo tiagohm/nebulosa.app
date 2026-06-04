@@ -10,9 +10,9 @@ Nebulosa is an integrated astronomical imaging application built with Bun, React
 ## Features
 
 - Local Bun server with a React web interface.
-- INDI device orchestration for cameras, mounts, focusers, filter wheels, rotators, covers, flat panels, dew heaters, thermometers, and guide outputs.
-- Multiple simultaneous device connections.
+- INDI device orchestration for cameras, mounts, focusers, filter wheels, rotators, dust covers, and flat panels.
 - Alpaca-compatible device endpoints, including the ability to start an Alpaca server that hosts the currently connected devices.
+- Multiple simultaneous device connections.
 - PHD2 integration for guiding workflows.
 - Capture helpers for autofocus, flat wizard, TPPA, DARV, framing, and plate solving.
 - Image workspace for opening, inspecting, debayering, stretching, filtering, annotating, solving, saving, and processing astronomical images.

@@ -140,13 +140,20 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		if (event.buttons === 0) return stopGesture()
 
 		event.preventDefault()
+		event.stopPropagation()
+		event.stopImmediatePropagation()
 
 		const delta = localDelta(event.clientX - gesture.clientX, event.clientY - gesture.clientY, gesture.scale, gesture.angle)
 		applyRoi(resizeRoi(gesture.roi, gesture.handle, delta.x, delta.y, imageBounds()))
 	}
 
 	function handlePointerEnd(event: PointerEvent) {
-		if (event.pointerId === gesture?.pointerId) stopGesture()
+		if (event.pointerId === gesture?.pointerId) {
+			event.preventDefault()
+			event.stopPropagation()
+			event.stopImmediatePropagation()
+			stopGesture()
+		}
 	}
 
 	function handleMouseEnd(event: MouseEvent) {

@@ -18,7 +18,7 @@ jobs:
             - name: Install Dependencies
               run: bun i --production
 
-            - name: Build
+            - name: Build Database
               run: bun run bin/nebulosa.sqlite.ts
 
             - name: Upload Artifact

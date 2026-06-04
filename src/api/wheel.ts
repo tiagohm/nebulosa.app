@@ -2,9 +2,10 @@ import type { IndiClient } from 'nebulosa/src/indi.client'
 import type { Wheel } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, WheelManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
+import bus from 'src/shared/bus'
 import type { WheelAdded, WheelRemoved, WheelUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 
 export class WheelHandler implements DeviceHandler<Wheel> {
 	constructor(
@@ -12,20 +13,26 @@ export class WheelHandler implements DeviceHandler<Wheel> {
 		readonly wheelManager: WheelManager,
 	) {
 		wheelManager.addHandler(this)
+
+		bus.subscribe<Messager>('ws:open', (socket) => {
+			for (const device of wheelManager.list()) {
+				this.wsm.send<WheelAdded>('wheel:add', { device }, socket)
+			}
+		})
 	}
 
 	added(device: Wheel) {
-		this.wsm.send('wheel:add', { device } satisfies WheelAdded)
-		console.info('wheel added:', device.name)
+		this.wsm.send<WheelAdded>('wheel:add', { device })
+		console.info('wheel added:', device.name, device.id)
 	}
 
 	updated(device: Wheel, property: keyof Wheel & string, state?: PropertyState) {
-		this.wsm.send('wheel:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies WheelUpdated)
+		this.wsm.send<WheelUpdated>('wheel:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Wheel) {
-		this.wsm.send('wheel:remove', { device } satisfies WheelRemoved)
-		console.info('wheel removed:', device.name)
+		this.wsm.send<WheelRemoved>('wheel:remove', { device })
+		console.info('wheel removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {
@@ -37,7 +44,7 @@ export class WheelHandler implements DeviceHandler<Wheel> {
 	}
 }
 
-export function wheel(wheelHandler: WheelHandler): Endpoints {
+export function wheel(wheelHandler: WheelHandler) {
 	const { wheelManager } = wheelHandler
 
 	function wheelFromParams(req: Bun.BunRequest) {
@@ -49,5 +56,5 @@ export function wheel(wheelHandler: WheelHandler): Endpoints {
 		'/wheels/:id': { GET: (req) => response(wheelFromParams(req)) },
 		'/wheels/:id/moveto': { POST: async (req) => response(wheelHandler.moveTo(wheelFromParams(req), await req.json())) },
 		'/wheels/:id/names': { POST: async (req) => response(wheelManager.slots(wheelFromParams(req), await req.json())) },
-	}
+	} as const satisfies Endpoints
 }

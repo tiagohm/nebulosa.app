@@ -1,93 +1,131 @@
-import { useMolecule } from 'bunshi/react'
 import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/angle'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
+import type { PlateSolveStart } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { ImageSolverMolecule } from '@/molecules/image/solver'
+import { ImageViewerStoreContext } from '../shared/context'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
+import { IconButton } from './components/IconButton'
 import { NumberInput } from './components/NumberInput'
 import { TextInput } from './components/TextInput'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 import { Modal } from './Modal'
 import { PlateSolverSelect } from './PlateSolverSelect'
 import { PlateSolveStartPopover } from './PlateSolveStartPopover'
 
+function hasPositiveFiniteValue(value: number) {
+	return Number.isFinite(value) && value > 0
+}
+
+function hasTextValue(value: unknown) {
+	return String(value).trim().length > 0
+}
+
+function canStartSolve(request: Readonly<PlateSolveStart>, hasImageInfo: boolean) {
+	if (!hasImageInfo || !hasPositiveFiniteValue(request.focalLength) || !hasPositiveFiniteValue(request.pixelSize)) return false
+	if (request.blind) return true
+	return hasPositiveFiniteValue(request.radius) && hasTextValue(request.rightAscension) && hasTextValue(request.declination)
+}
+
+function formatSolutionField(value: number | undefined, converter: (value: number) => number, fractionDigits: number) {
+	if (value === undefined || !Number.isFinite(value)) return '--'
+	return converter(value).toFixed(fractionDigits)
+}
+
+function formatSolutionCoordinate(value: number | undefined, formatter: (value: number) => string) {
+	if (value === undefined || !Number.isFinite(value)) return '--'
+	return formatter(value)
+}
+
+function formatSolutionSize(width: number | undefined, height: number | undefined) {
+	if (width === undefined || height === undefined || !Number.isFinite(width) || !Number.isFinite(height)) return '--'
+	return `${toArcmin(width).toFixed(2)} x ${toArcmin(height).toFixed(2)}`
+}
+
 export const ImageSolver = memo(() => {
-	const solver = useMolecule(ImageSolverMolecule)
+	const viewer = useContext(ImageViewerStoreContext)
+	const { solver } = viewer
+	const { show } = useSnapshot(solver.state)
+
+	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Plate Solver" id={`plate-solver-${solver.viewer.storageKey}`} maxWidth="360px" onHide={solver.hide}>
+		<Modal footer={<Footer />} header="Plate Solver" id={`platesolver-${viewer.image.id}`} maxWidth="360px" onHide={solver.hide}>
 			<Body />
 		</Modal>
 	)
 })
 
-const Body = memo(() => {
-	return (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<Inputs />
-			<Solution />
-		</div>
-	)
-})
+const Body = memo(() => (
+	<div className="mt-0 grid grid-cols-12 gap-2">
+		<Inputs />
+		<Solution />
+	</div>
+))
 
 const Inputs = memo(() => {
-	const solver = useMolecule(ImageSolverMolecule)
+	const { solver } = useContext(ImageViewerStoreContext)
+	const { loading } = useSnapshot(solver.state)
 	const { blind, type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request)
-	const { rightAscension, declination } = useSnapshot(solver.state.request, { sync: true })
+	const { rightAscension, declination } = useSnapshot(solver.state.request)
+	const coordinateDisabled = loading || blind
 
 	return (
 		<>
-			<PlateSolverSelect className="col-span-8" endContent={<PlateSolverSelectEndContent />} onValueChange={(value) => solver.update('type', value)} value={type} />
-			<Checkbox className="col-span-3 col-end-13" label="Blind" onValueChange={(value) => solver.update('blind', value)} value={blind} />
-			<TextInput className="col-span-4" disabled={blind} label="RA" onValueChange={(value) => solver.update('rightAscension', value)} value={rightAscension.toString()} />
-			<TextInput className="col-span-4" disabled={blind} label="DEC" onValueChange={(value) => solver.update('declination', value)} value={declination.toString()} />
-			<NumberInput className="col-span-4" disabled={blind} fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={(value) => solver.update('radius', value)} step={0.1} value={radius ?? 4} />
-			<NumberInput className="col-span-6" label="Focal Length (mm)" maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} value={focalLength} />
-			<NumberInput className="col-span-6" fractionDigits={2} label="Pixel size (µm)" maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} step={0.01} value={pixelSize} />
+			<PlateSolverSelect className="col-span-8 min-w-0" disabled={loading} endContent={<PlateSolverSelectEndContent />} onValueChange={(value) => solver.update('type', value)} value={type} />
+			<Checkbox className="col-span-3 col-end-13 min-w-0" disabled={loading} label="Blind" onValueChange={(value) => solver.update('blind', value)} value={blind} />
+			<TextInput className="col-span-4 min-w-0" disabled={coordinateDisabled} label="RA" onValueChange={(value) => solver.update('rightAscension', value)} value={String(rightAscension)} />
+			<TextInput className="col-span-4 min-w-0" disabled={coordinateDisabled} label="DEC" onValueChange={(value) => solver.update('declination', value)} value={String(declination)} />
+			<NumberInput className="col-span-4 min-w-0" disabled={coordinateDisabled} fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={(value) => solver.update('radius', value)} step={0.1} value={radius ?? 4} />
+			<NumberInput className="col-span-6 min-w-0" disabled={loading} label="Focal Length (mm)" maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} value={focalLength} />
+			<NumberInput className="col-span-6 min-w-0" disabled={loading} fractionDigits={2} label="Pixel size (µm)" maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} step={0.01} value={pixelSize} />
 		</>
 	)
 })
 
 const PlateSolverSelectEndContent = memo(() => {
-	const solver = useMolecule(ImageSolverMolecule)
+	const { solver } = useContext(ImageViewerStoreContext)
+	const { loading } = useSnapshot(solver.state)
 	const { type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request)
 
-	return <PlateSolveStartPopover focalLength={focalLength} onValueChange={solver.update} pixelSize={pixelSize} radius={radius} type={type} />
+	return <PlateSolveStartPopover disabled={loading} focalLength={focalLength} onValueChange={solver.update} pixelSize={pixelSize} radius={radius} type={type} />
 })
 
 const Solution = memo(() => {
-	const solver = useMolecule(ImageSolverMolecule)
-	const { solution } = useSnapshot(solver.state)
+	const { solver } = useContext(ImageViewerStoreContext)
+	const { loading, solution } = useSnapshot(solver.state)
+	const hasSolution = solution !== undefined
 
 	return (
 		<>
 			<div className="col-span-full my-1 text-sm font-bold">SOLUTION</div>
-			<TextInput className="col-span-4" label="RA (J2000)" readOnly value={formatRA(solution?.rightAscension ?? 0)} />
-			<TextInput className="col-span-4" label="DEC (J2000)" readOnly value={formatDEC(solution?.declination ?? 0)} />
-			<TextInput className="col-span-4" label="Orientation (°)" readOnly value={toDeg(solution?.orientation ?? 0).toFixed(4)} />
-			<TextInput className="col-span-4" label="Scale (arcsec/px)" readOnly value={toArcsec(solution?.scale ?? 0).toFixed(4)} />
-			<TextInput className="col-span-4" label="Size (arcmin)" readOnly value={`${toArcmin(solution?.width ?? 0).toFixed(2)} x ${toArcmin(solution?.height ?? 0).toFixed(2)}`} />
-			<TextInput className="col-span-4" label="Radius (°)" readOnly value={toDeg(solution?.radius ?? 0).toFixed(4)} />
+			<TextInput className="col-span-4 min-w-0" label="RA (J2000)" readOnly value={formatSolutionCoordinate(solution?.rightAscension, formatRA)} />
+			<TextInput className="col-span-4 min-w-0" label="DEC (J2000)" readOnly value={formatSolutionCoordinate(solution?.declination, formatDEC)} />
+			<TextInput className="col-span-4 min-w-0" label="Orientation (°)" readOnly value={formatSolutionField(solution?.orientation, toDeg, 4)} />
+			<TextInput className="col-span-4 min-w-0" label="Scale (arcsec/px)" readOnly value={formatSolutionField(solution?.scale, toArcsec, 4)} />
+			<TextInput className="col-span-4 min-w-0" label="Size (arcmin)" readOnly value={formatSolutionSize(solution?.width, solution?.height)} />
+			<TextInput className="col-span-4 min-w-0" label="Radius (°)" readOnly value={formatSolutionField(solution?.radius, toDeg, 4)} />
 			<div className="col-span-full flex items-center justify-center gap-2">
-				<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} disabled={!solution} onValueChange={solver.sync} tooltipContent="Sync" variant="flat" />
-				<MountDropdown color="success" disallowNoneSelection disabled={!solution} onValueChange={solver.goTo} tooltipContent="Go" variant="flat" />
-				<IconButton color="secondary" disabled={!solution} icon={Icons.Image} onPointerUp={solver.frame} tooltipContent="Frame" variant="flat" />
+				<MountDropdown color="primary" disabled={loading || !hasSolution} disallowNoneSelection icon={Icons.Sync} onValueChange={solver.sync} tooltipContent="Sync" variant="flat" />
+				<MountDropdown color="success" disabled={loading || !hasSolution} disallowNoneSelection onValueChange={solver.goTo} tooltipContent="Go" variant="flat" />
+				<IconButton color="secondary" disabled={loading || !hasSolution} icon={Icons.Image} onClick={solver.frame} tooltipContent="Frame" variant="flat" />
 			</div>
 		</>
 	)
 })
 
 const Footer = memo(() => {
-	const solver = useMolecule(ImageSolverMolecule)
+	const { solver } = useContext(ImageViewerStoreContext)
+	const { info } = useSnapshot(solver.viewer.state)
 	const { loading } = useSnapshot(solver.state)
+	const request = useSnapshot(solver.state.request)
+	const canSolve = canStartSolve(request, info !== undefined)
 
 	return (
 		<>
-			<Button color="danger" disabled={!loading} label="Stop" onPointerUp={solver.stop} startContent={<Icons.Stop />} />
-			<Button color="success" label="Solve" loading={loading} onPointerUp={solver.start} startContent={<Icons.Sigma />} />
+			<Button color="danger" disabled={!loading} label="Stop" onClick={solver.stop} startContent={<Icons.Stop />} />
+			<Button color="success" disabled={!canSolve} label="Solve" loading={loading} onClick={solver.start} startContent={<Icons.Sigma />} />
 		</>
 	)
 })

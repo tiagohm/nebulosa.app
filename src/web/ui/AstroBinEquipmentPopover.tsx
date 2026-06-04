@@ -1,10 +1,14 @@
-import { memo, useState } from 'react'
+import { memo, useRef } from 'react'
 import { FilterableList } from './components/FilterableList'
+import { IconButton } from './components/IconButton'
+import { Link } from './components/Link'
 import { ListItem } from './components/List'
-import { Popover } from './components/Popover'
+import { Popover, type PopoverMethods } from './components/Popover'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
-import { Link } from './Link'
+
+const EQUIPMENT_ITEM_HEIGHT = 44
+
+export type AstroBinEquipmentType = 'camera' | 'telescope'
 
 export interface AstroBinEquipmentPopoverItem {
 	readonly id: number
@@ -18,42 +22,66 @@ export interface AstroBinEquipmentPopoverItem {
 }
 
 export interface AstroBinEquipmentPopoverProps {
-	readonly type: 'camera' | 'telescope'
+	readonly type: AstroBinEquipmentType
 	readonly items: readonly AstroBinEquipmentPopoverItem[]
-	readonly onSelectedChange?: (item: AstroBinEquipmentPopoverItem) => void
+	readonly onValueChange?: (item: AstroBinEquipmentPopoverItem) => void
+}
+
+interface EquipmentItemProps {
+	readonly item: AstroBinEquipmentPopoverItem
+	readonly type: AstroBinEquipmentType
+	readonly onClick: VoidFunction
+}
+
+function isKnownNumber(value: number | undefined) {
+	return typeof value === 'number' && Number.isFinite(value)
+}
+
+function hasSearchMatch(value: string | number | undefined, text: string) {
+	return value !== undefined && `${value}`.toLowerCase().includes(text)
 }
 
 function EquipmentFilter(item: AstroBinEquipmentPopoverItem, text: string) {
-	const { name, sensor } = item
-	return name.toLowerCase().includes(text) || (!!sensor && sensor.toLowerCase().includes(text))
+	const { name, sensor, w, h, ps, ap, fl } = item
+	return [name, sensor, w, h, ps, ap, fl].some((value) => hasSearchMatch(value, text))
 }
 
-function EquipmentItem(item: AstroBinEquipmentPopoverItem, onPointerUp: React.PointerEventHandler) {
-	const { sensor, w, h, ps, ap, fl } = item
-	return <ListItem description={sensor ? `${sensor} ${w}x${h} ${ps}μm` : `AP: ${ap}mm FL: ${fl}mm`} label={item.name} data-id={item.id} onPointerUp={onPointerUp} />
+function cameraDescription({ sensor, w, h, ps }: AstroBinEquipmentPopoverItem) {
+	const size = isKnownNumber(w) && isKnownNumber(h) ? `${w}x${h}` : undefined
+	const pixelSize = isKnownNumber(ps) ? `${ps}μm` : undefined
+	return [sensor, size, pixelSize].filter(Boolean).join(' ') || undefined
 }
 
-export const AstroBinEquipmentPopover = memo(({ type, items, onSelectedChange }: AstroBinEquipmentPopoverProps) => {
-	const [open, setOpen] = useState(false)
+function telescopeDescription({ ap, fl }: AstroBinEquipmentPopoverItem) {
+	const aperture = isKnownNumber(ap) ? `AP: ${ap}mm` : undefined
+	const focalLength = isKnownNumber(fl) ? `FL: ${fl}mm` : undefined
+	return [aperture, focalLength].filter(Boolean).join(' ') || undefined
+}
+
+function EquipmentItem({ item, type, onClick }: EquipmentItemProps) {
+	const description = type === 'camera' ? cameraDescription(item) : telescopeDescription(item)
+
+	return <ListItem description={description} label={item.name} onClick={onClick} />
+}
+
+export const AstroBinEquipmentPopover = memo(({ type, items, onValueChange }: AstroBinEquipmentPopoverProps) => {
+	const popoverRef = useRef<PopoverMethods | null>(null)
 	const isCamera = type === 'camera'
+	const tooltipContent = isCamera ? 'Cameras' : 'Telescopes'
+	const filterPlaceholder = isCamera ? 'Search cameras' : 'Search telescopes'
+	const emptyContent = isCamera ? 'No cameras found' : 'No telescopes found'
 
-	function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
-		const id = +event.currentTarget.dataset.id!
-
-		if (onSelectedChange) {
-			const item = items.find((e) => e.id === id)
-			item && onSelectedChange(item)
-		}
-
-		setOpen(false)
+	function handleClick(item: AstroBinEquipmentPopoverItem) {
+		onValueChange?.(item)
+		popoverRef.current?.hide()
 	}
 
 	return (
-		<Popover onOpenChange={setOpen} open={open} trigger={<IconButton color="secondary" icon={isCamera ? Icons.Camera : Icons.Telescope} tooltipContent={isCamera ? 'Cameras' : 'Telescopes'} variant="flat" />}>
-			<FilterableList className="col-span-full" filter={EquipmentFilter} items={items} itemHeight={36}>
-				{(item) => EquipmentItem(item, handlePointerUp)}
+		<Popover ref={popoverRef} trigger={<IconButton color="secondary" icon={isCamera ? Icons.Camera : Icons.Telescope} tooltipContent={tooltipContent} variant="flat" />}>
+			<FilterableList className="w-96 max-w-[calc(100vw-3rem)]" emptyContent={emptyContent} filter={EquipmentFilter} filterPlaceholder={filterPlaceholder} items={items} itemHeight={EQUIPMENT_ITEM_HEIGHT}>
+				{(item) => <EquipmentItem item={item} onClick={() => handleClick(item)} type={type} />}
 			</FilterableList>
-			<Link className="py-2" href="https://www.astrobin.com/api/v2/equipment/" label={`AstroBin's equipment database API`} />
+			<Link className="py-2" href="https://www.astrobin.com/api/v2/equipment/" label="AstroBin's equipment database API" />
 		</Popover>
 	)
 })

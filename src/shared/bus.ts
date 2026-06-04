@@ -31,8 +31,8 @@ export class EventBus {
 	// Subscribes to a topic with a callback that will be called only once
 	subscribeOnce<T>(topic: string, callback: BusCallback<T>) {
 		const wrapped: BusCallback<T> = (data) => {
-			callback(data)
 			this.unsubscribe(topic, wrapped)
+			callback(data)
 		}
 
 		return this.subscribe(topic, wrapped)
@@ -53,21 +53,27 @@ export class EventBus {
 
 	// Emits data to all subscribers of a topic
 	emit(topic: string, data: unknown) {
-		queueMicrotask(() => this.emitSync(topic, data))
+		const callbacks = this.bus.get(topic)
+
+		if (callbacks) {
+			queueMicrotask(() => this.emitCallbacks(callbacks, data))
+		}
 	}
 
-	emitAll(event: string, devices?: readonly unknown[]) {
-		if (devices !== undefined && devices.length > 0) queueMicrotask(() => this.emitAllSync(event, devices))
+	emitAll(topic: string, data?: readonly unknown[]) {
+		const callbacks = this.bus.get(topic)
+
+		if (callbacks && data !== undefined && data.length > 0) {
+			queueMicrotask(() => this.emitAllCallbacks(callbacks, data))
+		}
 	}
 
 	// Emits data to all subscribers of a topic synchronously
 	emitSync(topic: string, data: unknown) {
 		const callbacks = this.bus.get(topic)
 
-		if (callbacks) {
-			for (const callback of callbacks) {
-				callback(data as never)
-			}
+		if (callbacks !== undefined) {
+			this.emitCallbacks(callbacks, data)
 		}
 	}
 
@@ -75,11 +81,21 @@ export class EventBus {
 	emitAllSync(topic: string, data: readonly unknown[]) {
 		const callbacks = this.bus.get(topic)
 
-		if (callbacks && data.length > 0) {
-			for (const item of data) {
-				for (const callback of callbacks) {
-					callback(item as never)
-				}
+		if (callbacks !== undefined && data.length > 0) {
+			this.emitAllCallbacks(callbacks, data)
+		}
+	}
+
+	private emitCallbacks(callbacks: Set<BusCallback<never>>, data: unknown) {
+		for (const callback of callbacks) {
+			callback(data as never)
+		}
+	}
+
+	private emitAllCallbacks(callbacks: Set<BusCallback<never>>, data: readonly unknown[]) {
+		for (const item of data) {
+			for (const callback of callbacks) {
+				callback(item as never)
 			}
 		}
 	}

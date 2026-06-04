@@ -1,5 +1,5 @@
 import type { NameAndLabel } from 'nebulosa/src/indi.device'
-import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
+import { Select, type SelectProps } from './components/Select'
 
 export interface SlewRateSelectProps extends Omit<SelectProps<NameAndLabel>, 'children' | 'items' | 'onValueChange' | 'value'> {
 	readonly rates: readonly Readonly<NameAndLabel>[]
@@ -7,7 +7,9 @@ export interface SlewRateSelectProps extends Omit<SelectProps<NameAndLabel>, 'ch
 	readonly onValueChange?: (value: string, index: number) => void
 }
 
-const SlewRateItem: SelectItemRenderer<NameAndLabel> = (rate) => <span>{rate.label}</span>
+function SlewRateItem(rate: NameAndLabel) {
+	return <span>{rate.label}</span>
+}
 
 export function SlewRateSelect({ disabled, label = 'Slew Rate', onValueChange, rates, value, ...props }: SlewRateSelectProps) {
 	const selectedRate = rates.find((rate) => rate.name === value) ?? null

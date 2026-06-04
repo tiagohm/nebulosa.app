@@ -1,7 +1,7 @@
 import type { StarDetectionType } from 'src/shared/types'
 import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
 
-const ITEMS = ['ASTAP', 'NEBULOSA'] as const
+const ITEMS = ['astap', 'nebulosa'] as const
 const LABELS = ['Astap', 'Nebulosa'] as const
 
 const StarDetectionItem: SelectItemRenderer<StarDetectionType> = (_, i) => <span>{LABELS[i]}</span>

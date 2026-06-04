@@ -1,12 +1,12 @@
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { hasRootInteraction, tw } from '@/shared/util'
+import { hasRootInteraction, stopPropagationForAll, tw } from '@/shared/util'
 import { Icons } from '../Icon'
 
 const chipStyles = tv({
 	slots: {
-		base: 'inline-flex max-w-full items-center gap-1.5 rounded-full border align-top whitespace-nowrap select-none transition',
+		base: 'inline-flex w-fit max-w-none shrink-0 items-center gap-1.5 rounded-full border align-top whitespace-nowrap select-none transition',
 		startContent: 'flex shrink-0 items-center justify-center',
-		label: 'min-w-0 truncate font-medium leading-none',
+		label: 'whitespace-nowrap font-medium leading-none!',
 		endContent: 'flex shrink-0 items-center justify-center',
 		closeButton: 'flex shrink-0 items-center justify-center rounded-full outline-none transition cursor-pointer',
 	},
@@ -120,7 +120,7 @@ export function Chip({ children, className, classNames, color, disabled = false,
 	}
 
 	return (
-		<div {...props} className={tw(styles.base(), stateClassName, className, classNames?.base)} ref={ref}>
+		<div {...stopPropagationForAll(props)} className={tw(styles.base(), stateClassName, className, classNames?.base)} ref={ref}>
 			{startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
 			{content !== undefined && content !== null && <span className={tw(styles.label(), classNames?.label)}>{content}</span>}
 			{endContent !== undefined && endContent !== null && <span className={tw(styles.endContent(), classNames?.endContent)}>{endContent}</span>}

@@ -1,80 +1,102 @@
-import { useMolecule } from 'bunshi/react'
 import { formatDEC, formatRA } from 'nebulosa/src/angle'
-import { memo } from 'react'
+import { memo, useContext } from 'react'
+import type { TppaState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { TppaMolecule } from '@/molecules/tppa'
+import { equipmentStore } from '@/stores/equipment.store'
+import { tppaStore } from '@/stores/tppa.store'
+import { useStore } from '../hooks/store.hook'
+import { CameraDeviceContext, TppaStoreContext, MountDeviceContext } from '../shared/context'
 import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
 import { Button } from './components/Button'
 import { Checkbox } from './components/Checkbox'
-import { Chip } from './components/Chip'
+import { Chip, type ChipProps } from './components/Chip'
 import { NumberInput } from './components/NumberInput'
-import { CameraDropdown, MountDropdown } from './DeviceDropdown'
+import { TextInput } from './components/TextInput'
+import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 import { PlateSolverSelect } from './PlateSolverSelect'
 import { PlateSolveStartPopover } from './PlateSolveStartPopover'
 import { TppaDirectionSelect } from './TppaDirectionSelect'
 
+const TPPA_STATE_COLORS = {
+	idle: 'default',
+	waiting: 'warning',
+	moving: 'secondary',
+	capturing: 'primary',
+	solving: 'primary',
+	aligning: 'success',
+	settling: 'warning',
+} satisfies Record<TppaState, NonNullable<ChipProps['color']>>
+
 export const Tppa = memo(() => {
-	const tppa = useMolecule(TppaMolecule)
+	const camera = useContext(CameraDeviceContext)
+	const mount = useContext(MountDeviceContext)
+	const tppa = useStore(() => tppaStore(camera, mount), [camera, mount])
 
 	return (
-		<Modal footer={<Footer />} header="Three-Point Polar Alignment" id="tppa" maxWidth="400px" onHide={tppa.hide}>
-			<Body />
-		</Modal>
+		<TppaStoreContext value={tppa}>
+			<Modal footer={<Footer />} header="Three-Point Polar Alignment" id={`tppa-${camera.id}-${mount.id}`} maxWidth="416px" onHide={tppa.hide}>
+				<Body />
+			</Modal>
+		</TppaStoreContext>
 	)
 })
 
-const Body = memo(() => {
-	return (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<Devices />
-			<Status />
-			<Inputs />
-			<Result />
-		</div>
-	)
-})
+const Body = memo(() => (
+	<div className="mt-0 grid grid-cols-12 gap-2">
+		<CameraAndMount />
+		<Status />
+		<Inputs />
+		<Result />
+	</div>
+))
 
-const Devices = memo(() => {
-	const tppa = useMolecule(TppaMolecule)
-	const { running, camera, mount } = useSnapshot(tppa.state)
-
-	return (
-		<div className="col-span-full flex flex-row items-center justify-center gap-2">
-			<CameraDropdown endContent={<CameraDropdownEndContent />} disabled={running} onValueChange={(value) => (tppa.state.camera = value)} showLabel value={camera} />
-			<MountDropdown disabled={running} onValueChange={(value) => (tppa.state.mount = value)} showLabel value={mount} />
-		</div>
-	)
-})
-
-const CameraDropdownEndContent = memo(() => {
-	const tppa = useMolecule(TppaMolecule)
-	const { camera } = useSnapshot(tppa.state)
+const CameraAndMount = memo(() => {
+	const tppa = useContext(TppaStoreContext)
 	const { capture } = useSnapshot(tppa.state.request)
+	const { connected: cameraConnected } = useSnapshot(tppa.state.camera)
+	const { connected: mountConnected } = useSnapshot(tppa.state.mount)
 
-	return camera && <CameraCaptureStartPopover camera={camera} mode="tppa" onValueChange={tppa.updateCapture} value={capture} />
+	const CameraStartContent = <ConnectButton connected={cameraConnected} onClick={() => equipmentStore.connect(tppa.state.camera)} size="sm" />
+	const MountStartContent = <ConnectButton connected={mountConnected} onClick={() => equipmentStore.connect(tppa.state.mount)} size="sm" />
+	const CameraEndContent = <CameraCaptureStartPopover camera={tppa.state.camera} mode="tppa" onValueChange={tppa.updateCapture} value={capture} />
+
+	return (
+		<div className="col-span-full mt-2 flex flex-row items-center justify-between gap-2">
+			<TextInput className="flex-1" readOnly label="Camera" value={tppa.state.camera.name} startContent={CameraStartContent} endContent={CameraEndContent} />
+			<TextInput className="flex-1" readOnly label="Mount" value={tppa.state.mount.name} startContent={MountStartContent} />
+		</div>
+	)
 })
 
 const Status = memo(() => {
-	const tppa = useMolecule(TppaMolecule)
+	const tppa = useContext(TppaStoreContext)
 	const { event } = useSnapshot(tppa.state)
 	const { state, solved, solver } = event
 
 	return (
 		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
-			<Chip color="primary">{state === 'IDLE' ? 'idle' : state === 'MOVING' ? 'moving' : state === 'CAPTURING' ? 'capturing' : state === 'SOLVING' ? 'solving' : state === 'WAITING' ? 'waiting' : state === 'SETTLING' ? 'settling' : 'aligning'}</Chip>
+			<Chip color={TPPA_STATE_COLORS[state]} size="sm">
+				{state}
+			</Chip>
 			<div className="flex flex-row items-center gap-1">
-				<Chip color="warning">{event.step}</Chip>
-				<Chip color={solved ? 'success' : 'danger'}>RA: {formatRA(solver.rightAscension)}</Chip>
-				<Chip color={solved ? 'success' : 'danger'}>DEC: {formatDEC(solver.declination)}</Chip>
+				<Chip color="warning" size="sm">
+					Step: {event.step}
+				</Chip>
+				<Chip color={solved ? 'success' : 'danger'} size="sm">
+					RA: {formatRA(solver.rightAscension)}
+				</Chip>
+				<Chip color={solved ? 'success' : 'danger'} size="sm">
+					DEC: {formatDEC(solver.declination)}
+				</Chip>
 			</div>
 		</div>
 	)
 })
 
 const Inputs = memo(() => {
-	const tppa = useMolecule(TppaMolecule)
+	const tppa = useContext(TppaStoreContext)
 	const { running } = useSnapshot(tppa.state)
 	const { direction, moveDuration, compensateRefraction, maxAttempts, delayBeforeCapture } = useSnapshot(tppa.state.request)
 	const { type } = useSnapshot(tppa.state.request.solver)
@@ -92,14 +114,15 @@ const Inputs = memo(() => {
 })
 
 const PlateSolverSelectEndContent = memo(() => {
-	const tppa = useMolecule(TppaMolecule)
+	const tppa = useContext(TppaStoreContext)
+	const { running } = useSnapshot(tppa.state)
 	const { type, radius, focalLength, pixelSize } = useSnapshot(tppa.state.request.solver)
 
-	return <PlateSolveStartPopover focalLength={focalLength} onValueChange={tppa.updateSolver} pixelSize={pixelSize} radius={radius} type={type} />
+	return <PlateSolveStartPopover disabled={running} focalLength={focalLength} onValueChange={tppa.updateSolver} pixelSize={pixelSize} radius={radius} type={type} />
 })
 
 const Result = memo(() => {
-	const tppa = useMolecule(TppaMolecule)
+	const tppa = useContext(TppaStoreContext)
 	const { event } = useSnapshot(tppa.state)
 
 	return (
@@ -117,13 +140,13 @@ const Result = memo(() => {
 })
 
 const Footer = memo(() => {
-	const tppa = useMolecule(TppaMolecule)
+	const tppa = useContext(TppaStoreContext)
 	const { running, camera, mount } = useSnapshot(tppa.state)
 
 	return (
 		<>
-			<Button color="danger" disabled={!running} label="Stop" onPointerUp={tppa.stop} startContent={<Icons.Stop />} />
-			<Button color="success" disabled={!camera?.connected || !mount?.connected} label="Start" loading={running} onPointerUp={tppa.start} startContent={<Icons.Play />} />
+			<Button color="danger" disabled={!running} label="Stop" onClick={tppa.stop} startContent={<Icons.Stop />} />
+			<Button color="success" disabled={running || !camera?.connected || !mount?.connected} label="Start" loading={running} onClick={tppa.start} startContent={<Icons.Play />} />
 		</>
 	)
 })

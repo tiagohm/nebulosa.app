@@ -1,3 +1,5 @@
+import { mkdtemp, rm } from 'fs/promises'
+import { join } from 'path'
 import { astapDetectStars } from 'nebulosa/src/astap'
 import { detectStars } from 'nebulosa/src/star.detector'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation, type StarDetection } from '../shared/types'
@@ -16,21 +18,42 @@ export class StarDetectionHandler {
 	constructor(readonly imageProcessor: ImageProcessor) {}
 
 	async detect(req: StarDetection) {
-		req.path = (await this.imageProcessor.store(req.path)) || req.path
+		if (!req.path) return []
 
-		if (req.type === 'ASTAP') {
-			return await astapDetectStars(req.path, req)
-		} else if (req.type === 'NEBULOSA') {
-			const image = await this.imageProcessor.transform(req.path, STAR_DETECTION_IMAGE_TRANSFORMATION)
-			if (image) return detectStars(image.image, req)
+		try {
+			const path = (await this.imageProcessor.store(req.path)) || req.path
+			const request = { ...req, path }
+
+			if (request.type === 'astap') {
+				return await this.detectWithAstap(request)
+			} else if (request.type === 'nebulosa') {
+				const image = await this.imageProcessor.transform(path, STAR_DETECTION_IMAGE_TRANSFORMATION)
+				if (image) return detectStars(image.image, { ...request, maxStars: normalizeMaxStars(request.maxStars) })
+			}
+		} catch (error) {
+			console.error('star detection failed:', error)
 		}
 
 		return []
 	}
+
+	private async detectWithAstap(req: StarDetection) {
+		const outputDirectory = await mkdtemp(join(Bun.env.tmpDir, 'stardetection-'))
+
+		try {
+			return await astapDetectStars(req.path, { ...req, outputDirectory })
+		} finally {
+			await rm(outputDirectory, { recursive: true, force: true })
+		}
+	}
 }
 
-export function starDetection(detection: StarDetectionHandler): Endpoints {
+function normalizeMaxStars(maxStars: number) {
+	return maxStars > 0 ? maxStars : 2000
+}
+
+export function starDetection(detection: StarDetectionHandler) {
 	return {
 		'/stardetection': { POST: async (req) => response(await detection.detect(await req.json())) },
-	}
+	} as const satisfies Endpoints
 }

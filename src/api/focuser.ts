@@ -5,7 +5,7 @@ import type { PropertyState } from 'nebulosa/src/indi.types'
 import bus from 'src/shared/bus'
 import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 
 export class FocuserHandler implements DeviceHandler<Focuser> {
 	constructor(
@@ -13,20 +13,26 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 		readonly focuserManager: FocuserManager,
 	) {
 		focuserManager.addHandler(this)
+
+		bus.subscribe<Messager>('ws:open', (socket) => {
+			for (const device of focuserManager.list()) {
+				this.wsm.send<FocuserAdded>('focuser:add', { device }, socket)
+			}
+		})
 	}
 
 	added(device: Focuser) {
-		this.wsm.send('focuser:add', { device } satisfies FocuserAdded)
-		console.info('focuser added:', device.name)
+		this.wsm.send<FocuserAdded>('focuser:add', { device })
+		console.info('focuser added:', device.name, device.id)
 	}
 
 	updated(device: Focuser, property: keyof Focuser & string, state?: PropertyState) {
-		this.wsm.send('focuser:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies FocuserUpdated)
+		this.wsm.send<FocuserUpdated>('focuser:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Focuser) {
-		this.wsm.send('focuser:remove', { device } satisfies FocuserRemoved)
-		console.info('focuser removed:', device.name)
+		this.wsm.send<FocuserRemoved>('focuser:remove', { device })
+		console.info('focuser removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {
@@ -58,7 +64,7 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 	}
 }
 
-export function focuser(focuserHandler: FocuserHandler): Endpoints {
+export function focuser(focuserHandler: FocuserHandler) {
 	const { focuserManager } = focuserHandler
 
 	function focuserFromParams(req: Bun.BunRequest) {
@@ -74,32 +80,43 @@ export function focuser(focuserHandler: FocuserHandler): Endpoints {
 		'/focusers/:id/sync': { POST: async (req) => response(focuserHandler.syncTo(focuserFromParams(req), await req.json())) },
 		'/focusers/:id/reverse': { POST: async (req) => response(focuserHandler.reverse(focuserFromParams(req), await req.json())) },
 		'/focusers/:id/stop': { POST: (req) => response(focuserHandler.stop(focuserFromParams(req))) },
-	}
+	} as const satisfies Endpoints
 }
 
-export function waitForFocuser(focuser: Focuser, expectedPosition: number, onCompleted: (action: 'reach' | 'timeout' | 'cancel') => void, delay: number = 30000) {
-	let timer: NodeJS.Timeout
-	let cancelled = false
+export type WaitForFocuserAction = 'reach' | 'timeout' | 'cancel'
 
-	// Wait the focuser reach the position
-	const unsubscriber = bus.subscribe<FocuserUpdated>('focuser:update', (event) => {
-		if (!cancelled && event.device.id === focuser.id && (event.property === 'moving' || event.property === 'position') && !focuser.moving && focuser.position.value === expectedPosition) {
+export function waitForFocuser(focuser: Focuser, expectedPosition: number, onCompleted: (action: WaitForFocuserAction) => void, delay: number = 30000) {
+	// oxlint-disable-next-line prefer-const
+	let timer: ReturnType<typeof setTimeout> | undefined
+	let unsubscriber: VoidFunction = () => undefined
+	let finished = false
+
+	function complete(action: WaitForFocuserAction) {
+		if (!finished) {
+			finished = true
 			clearTimeout(timer)
 			unsubscriber()
-			onCompleted('reach')
+			onCompleted(action)
 		}
+	}
+
+	function hasReachedPosition() {
+		return !focuser.moving && focuser.position.value === expectedPosition
+	}
+
+	// Wait the focuser reach the position
+	unsubscriber = bus.subscribe<FocuserUpdated>('focuser:update', (event) => {
+		if (event.device.id === focuser.id && (event.property === 'moving' || event.property === 'position') && hasReachedPosition()) complete('reach')
 	})
 
-	timer = setTimeout(() => {
-		if (cancelled) return
-		unsubscriber()
-		onCompleted('timeout')
-	}, delay)
+	timer = setTimeout(() => complete('timeout'), delay)
+
+	if (hasReachedPosition()) {
+		// Let callers finish issuing the movement command before reporting an already-reached target.
+		queueMicrotask(() => complete('reach'))
+	}
 
 	return () => {
-		cancelled = true
-		clearTimeout(timer)
-		unsubscriber()
-		onCompleted('cancel')
+		complete('cancel')
 	}
 }

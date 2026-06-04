@@ -8,7 +8,7 @@ const buttonStyles = tv({
 		base: ['inline-flex min-w-0 items-center justify-center font-normal transition select-none', 'focus-visible:outline-none focus-visible:ring-0'],
 		startContent: 'flex shrink-0 items-center justify-center',
 		loadingIcon: 'shrink-0 spin',
-		label: 'flex shrink-0 items-center justify-center px-1',
+		label: 'flex shrink-0 items-center justify-center px-1 leading-none!',
 		endContent: 'flex shrink-0 items-center justify-center',
 	},
 	variants: {
@@ -28,11 +28,11 @@ const buttonStyles = tv({
 		},
 		size: {
 			sm: {
-				base: 'h-8 min-w-8 px-2 text-sm',
-				startContent: 'text-sm',
-				loadingIcon: 'text-sm',
-				label: 'text-sm',
-				endContent: 'text-sm',
+				base: 'h-8 min-w-8 px-2 text-xs',
+				startContent: 'text-xs',
+				loadingIcon: 'text-xs',
+				label: 'text-xs',
+				endContent: 'text-xs',
 			},
 			md: {
 				base: 'h-10 min-w-10 px-2 text-sm',

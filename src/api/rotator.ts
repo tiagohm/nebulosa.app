@@ -2,9 +2,10 @@ import type { IndiClient } from 'nebulosa/src/indi.client'
 import type { Rotator } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, RotatorManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
+import bus from 'src/shared/bus'
 import type { RotatorAdded, RotatorRemoved, RotatorUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 
 export class RotatorHandler implements DeviceHandler<Rotator> {
 	constructor(
@@ -12,20 +13,26 @@ export class RotatorHandler implements DeviceHandler<Rotator> {
 		readonly rotatorManager: RotatorManager,
 	) {
 		rotatorManager.addHandler(this)
+
+		bus.subscribe<Messager>('ws:open', (socket) => {
+			for (const device of rotatorManager.list()) {
+				this.wsm.send<RotatorAdded>('rotator:add', { device }, socket)
+			}
+		})
 	}
 
 	added(device: Rotator) {
-		this.wsm.send('rotator:add', { device } satisfies RotatorAdded)
-		console.info('rotator added:', device.name)
+		this.wsm.send<RotatorAdded>('rotator:add', { device })
+		console.info('rotator added:', device.name, device.id)
 	}
 
 	updated(device: Rotator, property: keyof Rotator & string, state?: PropertyState) {
-		this.wsm.send('rotator:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies RotatorUpdated)
+		this.wsm.send<RotatorUpdated>('rotator:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Rotator) {
-		this.wsm.send('rotator:remove', { device } satisfies RotatorRemoved)
-		console.info('rotator removed:', device.name)
+		this.wsm.send<RotatorRemoved>('rotator:remove', { device })
+		console.info('rotator removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {
@@ -33,7 +40,7 @@ export class RotatorHandler implements DeviceHandler<Rotator> {
 	}
 }
 
-export function rotator(rotatorHandler: RotatorHandler): Endpoints {
+export function rotator(rotatorHandler: RotatorHandler) {
 	const { rotatorManager } = rotatorHandler
 
 	function rotatorFromParams(req: Bun.BunRequest) {
@@ -48,5 +55,5 @@ export function rotator(rotatorHandler: RotatorHandler): Endpoints {
 		'/rotators/:id/home': { POST: (req) => response(rotatorManager.home(rotatorFromParams(req))) },
 		'/rotators/:id/reverse': { POST: async (req) => response(rotatorManager.reverse(rotatorFromParams(req), await req.json())) },
 		'/rotators/:id/stop': { POST: (req) => response(rotatorManager.stop(rotatorFromParams(req))) },
-	}
+	} as const satisfies Endpoints
 }

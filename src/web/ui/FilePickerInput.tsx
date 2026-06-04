@@ -1,23 +1,50 @@
-import { ScopeProvider } from 'bunshi/react'
-import { Activity, useRef, useState } from 'react'
-import { FilePickerScope, type FilePickerScopeValue } from '@/molecules/filepicker'
-import { Button } from './components/Button'
+import { useEffect, useRef, useState } from 'react'
+import type { FilePickerScope } from '@/stores/filepicker.store'
+import { IconButton } from './components/IconButton'
 import { TextInput, type TextInputProps } from './components/TextInput'
 import { FilePicker } from './FilePicker'
 import { Icons } from './Icon'
 
-export interface FilePickerInputProps extends Omit<FilePickerScopeValue, 'multiple' | 'path'>, Omit<TextInputProps, 'value' | 'onValueChange' | 'startContent' | 'endContent' | 'label'> {
+export interface FilePickerInputProps extends Omit<FilePickerScope, 'multiple' | 'path'>, Omit<TextInputProps, 'value' | 'onValueChange' | 'startContent' | 'endContent' | 'label'> {
 	readonly id: string
 	readonly value?: string
 	readonly onValueChange: (value?: string) => void
 }
 
-export function FilePickerInput({ filter, mode, id, value, onValueChange, readOnly = true, ...props }: FilePickerInputProps) {
+export function FilePickerInput({ filter, mode, id, value, onValueChange, readOnly = false, disabled = false, ...props }: FilePickerInputProps) {
 	const [show, setShow] = useState(false)
 	const initialPath = useRef(value)
+	const blocked = readOnly || disabled
+	const hasValue = value !== undefined && value.length > 0
 
-	function handleOnChoose(paths?: string[]) {
-		if (paths?.length) {
+	useEffect(() => {
+		if (!show) {
+			initialPath.current = value
+		}
+	}, [show, value])
+
+	useEffect(() => {
+		if (blocked) {
+			setShow(false)
+		}
+	}, [blocked])
+
+	function handleBrowse() {
+		if (blocked) return
+
+		initialPath.current = value
+		setShow(true)
+	}
+
+	function handleClear() {
+		if (blocked) return
+
+		initialPath.current = ''
+		onValueChange('')
+	}
+
+	function handleChoose(paths?: string[]) {
+		if (!blocked && paths?.length) {
 			initialPath.current = paths[0]
 			onValueChange(paths[0])
 		}
@@ -26,25 +53,21 @@ export function FilePickerInput({ filter, mode, id, value, onValueChange, readOn
 	}
 
 	function handleValueChange(path: string) {
-		if (!show) {
+		if (!show && !blocked) {
 			initialPath.current = path
 			onValueChange(path)
 		}
 	}
 
-	const StartContent = <Button children={<Icons.FolderOpen className="cursor-pointer" color="#FF9800" onPointerUp={() => setShow(true)} />} tooltipContent="Browse" variant="ghost" />
-	const EndContent = value ? <Button children={<Icons.CloseCircle className="cursor-pointer" color="#F44336" onPointerUp={() => onValueChange('')} />} variant="ghost" /> : null
+	const StartContent = <IconButton disabled={blocked} icon={Icons.FolderOpen} color="warning" onClick={handleBrowse} tooltipContent="Browse" size="sm" variant="ghost" />
+	const EndContent = hasValue ? <IconButton disabled={blocked} icon={Icons.CloseCircle} color="danger" onClick={handleClear} size="sm" tooltipContent="Clear" variant="ghost" /> : null
 
 	return (
 		<>
 			<div className="col-span-full flex w-full flex-1 flex-row items-center gap-1">
-				<TextInput endContent={EndContent} onValueChange={handleValueChange} readOnly={readOnly} startContent={StartContent} value={value} {...props} />
+				<TextInput disabled={blocked} endContent={EndContent} onValueChange={handleValueChange} startContent={StartContent} value={value} {...props} />
 			</div>
-			<Activity mode={show ? 'visible' : 'hidden'}>
-				<ScopeProvider scope={FilePickerScope} value={{ path: initialPath.current, filter, mode, multiple: false }}>
-					<FilePicker header="Choose Path" id={`file-picker-input-${id}`} onChoose={handleOnChoose} />
-				</ScopeProvider>
-			</Activity>
+			{show && !blocked && <FilePicker header="Choose Path" id={`file-picker-input-${id}`} onChoose={handleChoose} path={initialPath.current} filter={filter} mode={mode} />}
 		</>
 	)
 }

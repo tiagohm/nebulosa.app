@@ -108,7 +108,7 @@ export function TextInput({
 	className,
 	classNames,
 	disabled = false,
-	fireOnEnter = false,
+	fireOnEnter = true,
 	inputMode,
 	label,
 	maxLength,
@@ -224,9 +224,9 @@ export function TextInput({
 	}
 
 	return (
-		<div className={tw(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90 pointer-events-none', classNames?.base)}>
+		<div className={tw(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90', classNames?.base)}>
 			<div className={tw(styles.surface(), surfaceClassName, classNames?.surface)}>
-				{hasStartContent && <div className={tw(styles.content(), contentClassName, classNames?.startContent)}>{startContent}</div>}
+				{hasStartContent && <div className={tw(styles.content(), disabled && 'pointer-events-none', contentClassName, classNames?.startContent)}>{startContent}</div>}
 				<div className={tw(styles.field(), classNames?.field)}>
 					<input
 						{...props}
@@ -234,7 +234,7 @@ export function TextInput({
 						autoComplete={autoComplete}
 						autoCorrect={autoCorrect}
 						autoFocus={autoFocus}
-						className={tw(styles.input(), label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel, hasStartContent && 'pl-0', hasEndContent && 'pr-0', inputClassName, classNames?.input)}
+						className={tw(styles.input(), label ? sizeStyles.inputWithLabel : sizeStyles.inputWithoutLabel, hasStartContent && 'pl-0', hasEndContent && 'pr-0', disabled && 'pointer-events-none', inputClassName, classNames?.input)}
 						disabled={disabled}
 						inputMode={inputMode}
 						maxLength={maxLength}
@@ -256,7 +256,7 @@ export function TextInput({
 					/>
 					{label && <label className={tw(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</label>}
 				</div>
-				{hasEndContent && <div className={tw(styles.content(), contentClassName, classNames?.endContent)}>{endContent}</div>}
+				{hasEndContent && <div className={tw(styles.content(), disabled && 'pointer-events-none', contentClassName, classNames?.endContent)}>{endContent}</div>}
 			</div>
 		</div>
 	)

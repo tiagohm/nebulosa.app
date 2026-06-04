@@ -1,9 +1,10 @@
-import React, { memo, useEffect, useState } from 'react'
+import React, { memo, useEffect, useMemo, useState } from 'react'
+import DRIVERS from 'src/data/drivers.json' with { type: 'json' }
 import { Api } from '@/shared/api'
-import DRIVERS from '../../../data/drivers.json' with { type: 'json' }
 import { stopPropagation } from '../shared/util'
 import { FilterableList } from './components/FilterableList'
 import { ListItem } from './components/List'
+import { Icons } from './Icon'
 
 type Driver = (typeof DRIVERS)[number]
 
@@ -13,23 +14,27 @@ export interface IndiDriverListboxProps {
 	readonly onSelectedChange?: (drivers: string[]) => void
 }
 
-function DriverItem(item: Driver, onPointerUp: React.PointerEventHandler) {
-	return <ListItem description={item.driver} label={item.name} data-driver={item.driver} onPointerUp={onPointerUp} />
+function DriverItem(item: Driver, selected: boolean, onClick: React.UIEventHandler) {
+	return <ListItem data-driver={item.driver} description={item.driver} endContent={selected ? <Icons.Check color="var(--success)" /> : undefined} label={item.name} onClick={onClick} />
 }
 
 function DriverFilter(item: Driver, search: string) {
-	return item.name.toLowerCase().includes(search) || item.driver.includes(search)
+	return item.name.toLowerCase().includes(search) || item.driver.toLowerCase().includes(search)
 }
 
 export const IndiDriverListbox = memo(({ showAll, selected, onSelectedChange }: IndiDriverListboxProps) => {
 	const [drivers, setDrivers] = useState<readonly string[]>([])
+	const availableDrivers = useMemo(() => new Set(drivers), [drivers])
+	const selectedDrivers = useMemo(() => new Set(selected), [selected])
+	const items = useMemo(() => (showAll || drivers.length === 0 ? DRIVERS : DRIVERS.filter((item) => availableDrivers.has(item.driver))), [availableDrivers, drivers.length, showAll])
 
-	function handlePointerUp(event: React.PointerEvent<HTMLElement>) {
+	function handleClick(event: React.UIEvent<HTMLElement>) {
 		stopPropagation(event)
 
-		const driver = event.currentTarget.dataset.driver!
+		const driver = event.currentTarget.dataset.driver
+		if (driver === undefined) return
 
-		if (selected.includes(driver)) {
+		if (selectedDrivers.has(driver)) {
 			onSelectedChange?.(selected.filter((e) => e !== driver))
 		} else {
 			onSelectedChange?.([...selected, driver])
@@ -37,12 +42,20 @@ export const IndiDriverListbox = memo(({ showAll, selected, onSelectedChange }: 
 	}
 
 	useEffect(() => {
-		void Api.Indi.Server.drivers().then((drivers) => setDrivers(drivers ?? []))
+		let mounted = true
+
+		void Api.Indi.Server.drivers().then((drivers) => {
+			if (mounted) setDrivers(drivers ?? [])
+		})
+
+		return () => {
+			mounted = false
+		}
 	}, [])
 
 	return (
-		<FilterableList className="col-span-full" filter={DriverFilter} items={showAll || drivers.length === 0 ? DRIVERS : DRIVERS.filter((e) => drivers.includes(e.driver))}>
-			{(item) => DriverItem(item, handlePointerUp)}
+		<FilterableList className="col-span-full min-w-0" emptyContent="No drivers" filter={DriverFilter} items={items}>
+			{(item) => DriverItem(item, selectedDrivers.has(item.driver), handleClick)}
 		</FilterableList>
 	)
 })

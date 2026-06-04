@@ -4,7 +4,7 @@ import os from 'os'
 import { join } from 'path'
 import { parseArgs } from 'util'
 import type { Client, DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/indi.device'
-import { CameraManager, CoverManager, DevicePropertyManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
+import { CameraManager, CoverManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/indi.manager'
 import { default as openDefaultApp } from 'open'
 import { AlpacaHandler, alpaca } from 'src/api/alpaca'
 import { AtlasHandler, atlas } from 'src/api/atlas'
@@ -159,21 +159,15 @@ const flatPanelManager = new FlatPanelManager()
 const rotatorManager = new RotatorManager()
 
 const guideOutputProvider: DeviceProvider<GuideOutput> = {
-	get: (client: Client | string | undefined, name: string) => {
-		return cameraManager.get(client, name) ?? mountManager.get(client, name)
-	},
+	get: (client: Client | string | undefined, name: string) => cameraManager.get(client, name) ?? mountManager.get(client, name),
 }
 
 const thermometerProvider: DeviceProvider<Thermometer> = {
-	get: (client: Client | string | undefined, name: string) => {
-		return cameraManager.get(client, name) ?? focuserManager.get(client, name)
-	},
+	get: (client: Client | string | undefined, name: string) => cameraManager.get(client, name) ?? focuserManager.get(client, name),
 }
 
 const dewHeaterProvider: DeviceProvider<DewHeater> = {
-	get: (client: Client | string | undefined, name: string) => {
-		return coverManager.get(client, name)
-	},
+	get: (client: Client | string | undefined, name: string) => coverManager.get(client, name),
 }
 
 const guideOutputManager = new GuideOutputManager(guideOutputProvider)
@@ -193,9 +187,8 @@ const coverHandler = new CoverHandler(wsm, coverManager)
 const flatPanelHandler = new FlatPanelHandler(wsm, flatPanelManager)
 const rotatorHandler = new RotatorHandler(wsm, rotatorManager)
 const dewHeaterHandler = new DewHeaterHandler(wsm, dewHeaterManager)
-const devicePropertyManager = new DevicePropertyManager()
-const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, rotatorManager, devicePropertyManager, wsm)
-const indiDevicePropertyHandler = new IndiDevicePropertyHandler(wsm, notificationHandler, indiHandler, devicePropertyManager)
+const indiHandler = new IndiHandler(cameraManager, guideOutputManager, thermometerManager, mountManager, focuserManager, wheelManager, coverManager, flatPanelManager, dewHeaterManager, rotatorManager, wsm)
+const indiDevicePropertyHandler = new IndiDevicePropertyHandler(wsm, notificationHandler, indiHandler)
 const indiServerHandler = new IndiServerHandler(wsm)
 const framingHandler = new FramingHandler(imageProcessor)
 const fileSystemHandler = new FileSystemHandler()
@@ -204,7 +197,7 @@ const plateSolverHandler = new PlateSolverHandler(notificationHandler, imageProc
 const atlasHandler = new AtlasHandler(cacheManager, notificationHandler)
 const imageHandler = new ImageHandler(imageProcessor, notificationHandler)
 const tppaHandler = new TppaHandler(wsm, cameraHandler, mountHandler, plateSolverHandler)
-const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler)
+const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler)
 const autoFocusHandler = new AutoFocusHandler(wsm, cameraHandler, focuserHandler, starDetectionHandler)
 const flatWizardHandler = new FlatWizardHandler(wsm, cameraHandler)
 const alpacaHandler = new AlpacaHandler(wsm, { camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager }, alpacaDiscoveryPort)
@@ -271,15 +264,10 @@ const server = Bun.serve({
 
 const everyMinute = Bun.cron('*/1 * * * *', () => {
 	imageProcessor.clear()
-	indiDevicePropertyHandler.clear()
 })
 
 const every15Minutes = Bun.cron('*/15 * * * *', () => {
 	void atlasHandler.refreshImageOfSun()
-})
-
-const everyHour = Bun.cron('0 * * * *', () => {
-	cacheManager.clear()
 })
 
 const everyDay = Bun.cron('0 0 * * *', () => {

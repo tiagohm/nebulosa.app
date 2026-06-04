@@ -1,5 +1,5 @@
 import type { NameAndLabel } from 'nebulosa/src/indi.device'
-import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
+import { Select, type SelectProps } from './components/Select'
 
 export interface FrameFormatSelectProps extends Omit<SelectProps<NameAndLabel>, 'children' | 'items' | 'onValueChange' | 'value'> {
 	readonly items: readonly NameAndLabel[]
@@ -7,7 +7,9 @@ export interface FrameFormatSelectProps extends Omit<SelectProps<NameAndLabel>, 
 	readonly onValueChange?: (value: string, index: number) => void
 }
 
-const FrameFormatItem: SelectItemRenderer<NameAndLabel> = (item) => <span>{item.label}</span>
+function FrameFormatItem(item: NameAndLabel) {
+	return <span>{item.label}</span>
+}
 
 export function FrameFormatSelect({ label = 'Format', items, onValueChange, value, ...props }: FrameFormatSelectProps) {
 	const selectedItem = items.find((item) => item.name === value) ?? null

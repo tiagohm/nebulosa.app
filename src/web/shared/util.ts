@@ -24,11 +24,26 @@ export function hasRootInteraction(props: React.DOMAttributes<HTMLElement>) {
 	return props.onClick !== undefined || props.onPointerDown !== undefined || props.onPointerUp !== undefined || props.onDoubleClick !== undefined || props.onContextMenu !== undefined
 }
 
+export function activityMode(visible: boolean | undefined | null) {
+	return visible === true ? 'visible' : 'hidden'
+}
+
+export function formatNumber(value: number | undefined | null, fractionDigits: number) {
+	return value !== undefined && value !== null && Number.isFinite(value) ? value.toFixed(fractionDigits) : '--'
+}
+
 // Clamps a number into the inclusive [min, max] range.
 export function clamp(value: number, min: number, max: number) {
 	if (!(value >= min)) return min // handles NaN value
 	if (value > max) return max
 	return value
+}
+
+// Clamps a number into an integer range.
+export function clampInteger(value: number, min: number, max: number) {
+	if (max < min) return min
+	if (!Number.isFinite(value)) return min
+	return Math.max(min, Math.min(Math.trunc(value), max))
 }
 
 // Stops the propagation of an event to parent elements
@@ -55,14 +70,6 @@ export function stopPropagationForAll<P extends React.DOMAttributes<HTMLElement>
 	return props
 }
 
-export function stopPropagationDesktopOnly(event: Event | React.BaseSyntheticEvent<Event>) {
-	if (isMousePresent === true) event.stopPropagation()
-}
-
-export function stopPropagationMobileOnly(event: Event | React.BaseSyntheticEvent<Event>) {
-	if (isMousePresent === false) event.stopPropagation()
-}
-
 // Prevents the default action of an event if it is cancelable
 export function preventDefault(event: Event | React.BaseSyntheticEvent<Event>) {
 	event.cancelable && event.preventDefault()
@@ -76,6 +83,56 @@ export function isWakeLockSupported() {
 // Checks if device like a mouse or a similar accurate pointing device is present.
 export function isMouseDeviceSupported() {
 	return matchMedia('(pointer:fine)').matches
+}
+
+export function saveAs(blob: Blob | MediaSource, name: string) {
+	const url = URL.createObjectURL(blob)
+
+	const a = document.createElement('a')
+	a.href = url
+	a.download = name
+
+	try {
+		document.body.append(a)
+		a.click()
+	} finally {
+		URL.revokeObjectURL(url)
+		a.remove()
+	}
+}
+
+export function isObject(value: unknown): value is object {
+	if (value === null) return false
+	const type = typeof value
+	return type === 'object' || type === 'function'
+}
+
+function assignKey<T extends {}>(to: T, from: T, key: keyof T & string) {
+	var value = from[key]
+
+	if (value === undefined || value === null) {
+		return
+	}
+
+	if (Object.hasOwnProperty.call(to, key) && isObject(value) && !Array.isArray(value)) {
+		to[key] = deepAssign(to[key] as never, from[key] as never)
+	} else {
+		to[key] = value
+	}
+}
+
+export function deepAssign<T extends {}>(to: T, from: Partial<T>) {
+	if (to === from) {
+		return to
+	}
+
+	for (const key in from) {
+		if (Object.hasOwnProperty.call(from, key)) {
+			assignKey(to, from, key)
+		}
+	}
+
+	return to
 }
 
 // Deletes undefined or null properties

@@ -7,7 +7,7 @@ const BUTTON_GROUP_ITEM_CHILD_TYPE = Symbol('ButtonGroupItem')
 const buttonGroupStyles = tv({
 	slots: {
 		base: 'inline-flex min-w-0 items-stretch align-top',
-		item: ['inline-flex min-w-0 items-center justify-center gap-2 font-normal select-none transition', 'focus-visible:outline-none focus-visible:ring-0'],
+		item: ['inline-flex min-w-0 items-center justify-center gap-2 font-normal select-none transition focus-visible:outline-none focus-visible:ring-0'],
 		startContent: 'flex shrink-0 items-center justify-center',
 		label: 'min-w-0 flex-1 truncate text-center',
 		endContent: 'flex shrink-0 items-center justify-center',

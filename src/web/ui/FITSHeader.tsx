@@ -1,36 +1,32 @@
-import { useMolecule } from 'bunshi/react'
-import type { FitsHeaderValue } from 'nebulosa/src/fits'
+import type { FitsHeader, FitsHeaderCard, FitsHeaderValue } from 'nebulosa/src/fits'
 import { memo, useMemo } from 'react'
-import { useSnapshot } from 'valtio'
-import { ImageHeaderMolecule } from '@/molecules/image/header'
 import { List, ListItem } from './components/List'
-import { Modal } from './Modal'
 
-export const FITSHeader = memo(() => {
-	const header = useMolecule(ImageHeaderMolecule)
-
-	return (
-		<Modal header="FITS Header" id={`fits-header-${header.viewer.storageKey}`} maxWidth="296px" onHide={header.hide}>
-			<Body />
-		</Modal>
-	)
-})
-
-function FITSHeaderItem([key, value]: [string, FitsHeaderValue]) {
-	return <ListItem label={value === true ? 'T' : value === false ? 'F' : value} description={key} />
+export interface FITSHeaderProps extends Omit<React.ComponentProps<'div'>, 'children'> {
+	readonly header: FitsHeader
 }
 
-const Body = memo(() => {
-	const header = useMolecule(ImageHeaderMolecule)
-	const { info } = useSnapshot(header.viewer.state)
-
-	const entries = useMemo(() => Object.entries(info?.headers ?? {}), [info])
+export const FITSHeader = memo(({ header, ...props }: FITSHeaderProps) => {
+	const entries = useMemo(() => Object.entries(header ?? {}) as FitsHeaderCard[], [header])
 
 	return (
-		<div className="mt-0 px-1 py-2">
-			<List itemHeight={48} itemCount={entries.length}>
+		<div {...props}>
+			<List emptyContent="No headers" fullWidth itemCount={entries.length}>
 				{(i) => FITSHeaderItem(entries[i])}
 			</List>
 		</div>
 	)
 })
+
+function formatFITSHeaderValue(value: FitsHeaderValue) {
+	if (value === true) return 'T'
+	if (value === false) return 'F'
+	if (value === undefined) return '-'
+	return String(value)
+}
+
+function FITSHeaderItem(entry: FitsHeaderCard | undefined) {
+	if (entry === undefined) return null
+	const [key, value] = entry
+	return <ListItem label={formatFITSHeaderValue(value)} description={key} />
+}

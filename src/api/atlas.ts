@@ -5,7 +5,7 @@ import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astrometry'
 import { AU_KM, DAYSEC, DEG2RAD, MOON_SYNODIC_DAYS, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import { equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic } from 'nebulosa/src/coordinate'
-import { type CsvRow, readCsv } from 'nebulosa/src/csv'
+import type { CsvRow } from 'nebulosa/src/csv'
 import { toMeter } from 'nebulosa/src/distance'
 import { observer, type Quantity } from 'nebulosa/src/horizons'
 import { iersb } from 'nebulosa/src/iers'
@@ -19,9 +19,7 @@ import { nearestSolarEclipse, season } from 'nebulosa/src/sun'
 import { daysInMonth, formatTemporal, parseTemporal, type Temporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
 import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS } from 'nebulosa/src/time'
 import type { Writable } from 'nebulosa/src/types'
-import { binarySearchWithComparator } from 'nebulosa/src/util'
-import besselianElementsOfSolarEclipsesCsv from '../../data/besselian-elements-of-solar-eclipses.csv' with { type: 'file' }
-import nebulosa from '../../data/nebulosa.sqlite' with { embed: 'true',type: 'sqlite' }
+import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // oxfmt-ignore
 import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarApsis, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight } from '../shared/types'
 import type { CacheManager } from './cache'
@@ -29,6 +27,12 @@ import { type Endpoints, query, response } from './http'
 import type { NotificationHandler } from './notification'
 
 const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
+
+type SqlValue = number | string
+
+const DEFAULT_SOLAR_IMAGE_SOURCE: SolarImageSource = 'HMI_INTENSITYGRAM_FLATTENED'
+const MAX_SEARCH_LIMIT = 100
+const MAX_EVENT_COUNT = 25
 
 const NAUTICAL_ALTITUDE = -6 * DEG2RAD
 const ASTRONOMICAL_ALTITUDE = -12 * DEG2RAD
@@ -39,6 +43,7 @@ const SATELLITE_TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?FORMAT=tl
 const IERSB_URL = 'https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now'
 
 const SATELLITES = new Database(':memory:')
+const SATELLITE_GROUPS = new Set(Object.keys(SATELLITE_GROUP_TYPES) as SatelliteGroupType[])
 
 SATELLITES.run('PRAGMA journal_mode = OFF;')
 SATELLITES.run('PRAGMA synchronous = OFF;')
@@ -51,6 +56,9 @@ SATELLITES.run('PRAGMA optimize;')
 SATELLITES.run('PRAGMA foreign_keys = OFF;')
 SATELLITES.run('CREATE TABLE satellites (id INTEGER PRIMARY KEY, name TEXT, line1 TEXT, line2 TEXT);')
 SATELLITES.run('CREATE TABLE satelliteGroups (satelliteId INTEGER, name TEXT);')
+SATELLITES.run('CREATE INDEX satellitesNameIdx ON satellites (name);')
+SATELLITES.run('CREATE INDEX satelliteGroupsSatelliteIdIdx ON satelliteGroups (satelliteId);')
+SATELLITES.run('CREATE INDEX satelliteGroupsNameIdx ON satelliteGroups (name);')
 
 export class AtlasHandler {
 	private readonly ephemeris: Record<string, Map<number, BodyPosition>> & { location?: GeographicPosition } = {}
@@ -61,8 +69,8 @@ export class AtlasHandler {
 		readonly notification?: NotificationHandler,
 	) {}
 
-	async imageOfSun(source: SolarImageSource) {
-		const file = Bun.file(`${Bun.env.tmpDir}/${source}.jpg`)
+	async imageOfSun(source: SolarImageSource = DEFAULT_SOLAR_IMAGE_SOURCE) {
+		const file = Bun.file(join(Bun.env.tmpDir, `${source}.jpg`))
 		if (!(await file.exists())) await this.refreshImageOfSun(source)
 		return file
 	}
@@ -73,10 +81,16 @@ export class AtlasHandler {
 
 			try {
 				const response = await fetch(url)
-				await Bun.write(`${Bun.env.tmpDir}/${s}.jpg`, await response.blob())
+
+				if (!response.ok) {
+					console.error('failed to fetch the sun image', s, response.status, response.statusText)
+					continue
+				}
+
+				const blob = await response.blob()
+				if (blob.size > 0) await Bun.write(join(Bun.env.tmpDir, `${s}.jpg`), blob)
 			} catch (e) {
 				console.error('failed to fetch the sun image', s, e)
-				break
 			}
 		}
 	}
@@ -85,16 +99,17 @@ export class AtlasHandler {
 		return this.computeFromHorizonsPositionAt('10', req)
 	}
 
-	chartOfSun(req: ChartOfBody) {
+	async chartOfSun(req: ChartOfBody) {
+		await this.positionOfSun(req)
 		return this.computeChart('10', req.time)
 	}
 
 	seasons(req: PositionOfBody): SolarSeasons {
 		const [year] = temporalToDate(req.time.utc)
-		const spring = timeToUnixMillis(season(year, 'SPRING')) // Autumn in southern hemisphere
-		const summer = timeToUnixMillis(season(year, 'SUMMER')) // Winter in southern hemisphere
-		const autumn = timeToUnixMillis(season(year, 'AUTUMN')) // Spring in southern hemisphere
-		const winter = timeToUnixMillis(season(year, 'WINTER')) // Summer in southern hemisphere
+		const spring = timeToUnixMillis(season(year, 'spring')) // Autumn in southern hemisphere
+		const summer = timeToUnixMillis(season(year, 'summer')) // Winter in southern hemisphere
+		const autumn = timeToUnixMillis(season(year, 'autumn')) // Spring in southern hemisphere
+		const winter = timeToUnixMillis(season(year, 'winter')) // Summer in southern hemisphere
 		return { spring, summer, autumn, winter }
 	}
 
@@ -161,56 +176,17 @@ export class AtlasHandler {
 		return twilight
 	}
 
-	solarEclipsesFromMeeus(req: FindNextSolarEclipse) {
+	solarEclipses(req: FindNextSolarEclipse) {
 		const location = this.cache.geographicCoordinate(req.location)
-		let time = this.cache.time(temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm')), location, 'm')
-		const eclipses: NextSolarEclipse[] = []
+		let time = this.cache.time(temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm')), location)
+		const count = normalizeCount(req.count)
+		const eclipses = new Array<NextSolarEclipse>(count)
 
-		for (let i = 0; i < req.count; i++) {
+		for (let i = 0; i < count; i++) {
 			const { maximalTime, ...eclipse } = nearestSolarEclipse(time, true)
 			;(eclipse as NextSolarEclipse).time = temporalFromTime(maximalTime)
-			eclipses.push(eclipse as never)
+			eclipses[i] = eclipse as never
 			time = maximalTime
-		}
-
-		return eclipses
-	}
-
-	private readonly solarEclipses: NextSolarEclipse[] = []
-
-	// https://eclipse.gsfc.nasa.gov/SEcat5/beselm.html
-	// https://eclipse.gsfc.nasa.gov/eclipse_besselian_from_mysqldump2.csv
-	async solarEclipsesFromNasa(req: FindNextSolarEclipse) {
-		const eclipses = new Array<NextSolarEclipse>(req.count)
-
-		if (this.solarEclipses.length === 0) {
-			const csv = readCsv(await Bun.file(besselianElementsOfSolarEclipsesCsv).text())
-
-			for (const row of csv) {
-				const [year, month, day, hms, , , type] = row
-
-				if (year[0] === '-') continue
-
-				const time = parseTemporal(`${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${hms}`, 'YYYY-MM-DD HH:mm:ss')
-
-				const eclipse: NextSolarEclipse = {
-					time,
-					lunation: +row[4],
-					magnitude: +row[8],
-					gamma: +row[7],
-					u: 0,
-					type: type === 'T' ? 'TOTAL' : type === 'P' ? 'PARTIAL' : type === 'A' ? 'ANNULAR' : 'HYBRID',
-				}
-
-				this.solarEclipses.push(eclipse)
-			}
-		}
-
-		const time = temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm'))
-		const index = binarySearchWithComparator(this.solarEclipses, (item) => item.time - time, { positive: true })
-
-		for (let i = 0, k = index; i < req.count; i++, k++) {
-			eclipses[i] = this.solarEclipses[k]
 		}
 
 		return eclipses
@@ -220,7 +196,8 @@ export class AtlasHandler {
 		return this.computeFromHorizonsPositionAt('301', req)
 	}
 
-	chartOfMoon(req: ChartOfBody) {
+	async chartOfMoon(req: ChartOfBody) {
+		await this.positionOfMoon(req)
 		return this.computeChart('301', req.time)
 	}
 
@@ -249,10 +226,11 @@ export class AtlasHandler {
 
 	moonEclipses(req: FindNextLunarEclipse) {
 		const location = this.cache.geographicCoordinate(req.location)
-		let time = this.cache.time(req.time.utc, location, 'm')
-		const eclipses = new Array<NextLunarEclipse>(req.count)
+		let time = this.cache.time(req.time.utc, location)
+		const count = normalizeCount(req.count)
+		const eclipses = new Array<NextLunarEclipse>(count)
 
-		for (let i = 0; i < req.count; i++) {
+		for (let i = 0; i < count; i++) {
 			const { type, firstContactPenumbraTime, lastContactPenumbraTime, maximalTime } = nearestLunarEclipse(time, true)
 			time = maximalTime
 			eclipses[i] = { type, startTime: temporalFromTime(firstContactPenumbraTime), endTime: temporalFromTime(lastContactPenumbraTime), time: temporalFromTime(maximalTime) }
@@ -263,7 +241,7 @@ export class AtlasHandler {
 
 	moonApsis(req: LocationAndTime): readonly [NextLunarApsis, NextLunarApsis] {
 		const location = this.cache.geographicCoordinate(req.location)
-		const time = this.cache.time(req.time.utc, location, 'm')
+		const time = this.cache.time(req.time.utc, location)
 
 		const apogee = nearestLunarApsis(time, 'APOGEE', true)
 		const perigee = nearestLunarApsis(time, 'PERIGEE', true)
@@ -278,7 +256,8 @@ export class AtlasHandler {
 		return this.computeFromHorizonsPositionAt(code, req)
 	}
 
-	chartOfPlanet(code: string, req: ChartOfBody) {
+	async chartOfPlanet(code: string, req: ChartOfBody) {
+		await this.positionOfPlanet(code, req)
 		return this.computeChart(code, req.time)
 	}
 
@@ -308,7 +287,9 @@ export class AtlasHandler {
 	}
 
 	async findCloseApproaches(req: FindCloseApproaches) {
-		const result = await closeApproaches('now', `${req.days}d`, req.distance)
+		const days = Math.max(1, Math.min(3650, Math.trunc(finiteNumber(req.days) ? req.days : 1)))
+		const distance = Math.max(0, finiteNumber(req.distance) ? req.distance : 0)
+		const result = await closeApproaches('now', `${days}d`, distance)
 
 		const ai = result.fields.indexOf('des')
 		const bi = result.fields.indexOf('dist')
@@ -321,54 +302,90 @@ export class AtlasHandler {
 	}
 
 	searchSkyObject(req: SearchSkyObject) {
-		const { page, limit } = req
-		const offset = Math.max(0, page - 1) * limit
+		const { limit, offset } = normalizePagination(req.page, req.limit)
+		const nameType = finiteNumber(req.nameType) ? Math.trunc(req.nameType) : -1
+		const radius = finiteNumber(req.radius) ? req.radius : 0
+		const visibleAbove = finiteNumber(req.visibleAbove) ? req.visibleAbove : -1
 		const where = []
 		const joinWhere = ['n.dsoId = d.id']
+		const selectParams: SqlValue[] = []
+		const joinParams: SqlValue[] = []
+		const whereParams: SqlValue[] = []
 
-		if (req.types.length > 0) where.push(`d.type IN (${req.types.join(',')})`)
-		if (req.constellations.length > 0) where.push(`d.constellation IN (${req.constellations.map((e) => CONSTELLATION_LIST.indexOf(e)).join(',')})`)
-		if (req.nameType >= 0) joinWhere.push(`n.type = ${req.nameType}`)
-		if (req.magnitudeMin > -30) where.push(`d.magnitude >= ${req.magnitudeMin}`)
-		if (req.magnitudeMax < 30) where.push(`d.magnitude <= ${req.magnitudeMax}`)
+		const types = (Array.isArray(req.types) ? req.types : []).filter(finiteNumber).map(Math.trunc)
+		const constellations = (Array.isArray(req.constellations) ? req.constellations : []).map((e) => CONSTELLATION_LIST.indexOf(e)).filter((e) => e >= 0)
+
+		if (types.length > 0) {
+			where.push(`d.type IN (${placeholders(types.length)})`)
+			whereParams.push(...types)
+		}
+
+		if (constellations.length > 0) {
+			where.push(`d.constellation IN (${placeholders(constellations.length)})`)
+			whereParams.push(...constellations)
+		}
+
+		if (nameType >= 0) {
+			selectParams.push(nameType)
+			joinWhere.push('n.type = ?')
+			joinParams.push(nameType)
+		}
+
+		if (finiteNumber(req.magnitudeMin) && req.magnitudeMin > -30) {
+			where.push('d.magnitude >= ?')
+			whereParams.push(req.magnitudeMin)
+		}
+
+		if (finiteNumber(req.magnitudeMax) && req.magnitudeMax < 30) {
+			where.push('d.magnitude <= ?')
+			whereParams.push(req.magnitudeMax)
+		}
 
 		const name = req.name.trim()
 
 		if (name)
-			if (name.startsWith('=')) joinWhere.push(`n.name = '${name.slice(1).trim()}'`)
-			else if (name.includes('%')) joinWhere.push(`n.name LIKE '${name}'`)
-			else joinWhere.push(`n.name LIKE '%${name}%'`)
+			if (name.startsWith('=')) {
+				joinWhere.push('n.name = ?')
+				joinParams.push(name.slice(1).trim())
+			} else {
+				joinWhere.push('n.name LIKE ?')
+				joinParams.push(name.includes('%') ? name : `%${name}%`)
+			}
 
-		if (req.radius > 0 && req.rightAscension && req.declination) {
-			const rightAscension = parseAngle(req.rightAscension, true)!
-			const declination = parseAngle(req.declination)!
+		if (radius > 0 && req.rightAscension && req.declination) {
+			const rightAscension = parseAngle(req.rightAscension, true)
+			const declination = parseAngle(req.declination)
 
-			where.push(`(acos(sin(d.declination) * ${Math.sin(declination)} + cos(d.declination) * ${Math.cos(declination)} * cos(d.rightAscension - ${rightAscension})) <= ${deg(req.radius)})`)
+			if (rightAscension !== undefined && declination !== undefined) {
+				where.push('(acos(sin(d.declination) * ? + cos(d.declination) * ? * cos(d.rightAscension - ?)) <= ?)')
+				whereParams.push(Math.sin(declination), Math.cos(declination), rightAscension, deg(radius))
+			}
 		}
 
-		if (req.visible && req.visibleAbove >= 0) {
+		if (req.visible && visibleAbove >= 0) {
 			const location = this.cache.geographicCoordinate(req.location)
-			const time = this.cache.time(req.time.utc, location, 'm')
+			const time = this.cache.time(req.time.utc, location)
 			const lst = localSiderealTime(time, location, true)
 
-			where.push(`(asin(sin(d.declination) * ${Math.sin(location.latitude)} + cos(d.declination) * ${Math.cos(location.latitude)} * cos(${lst} - d.rightAscension)) >= ${deg(req.visibleAbove)})`)
+			where.push('(asin(sin(d.declination) * ? + cos(d.declination) * ? * cos(? - d.rightAscension)) >= ?)')
+			whereParams.push(Math.sin(location.latitude), Math.cos(location.latitude), lst, deg(visibleAbove))
 		}
 
 		if (where.length === 0) where.push('1 = 1')
 
 		const sortColumn = 'magnitude' // req.sort.column
 		const sortDirection = 'ASC' // req.sort.direction === 'ascending' ? 'ASC' : 'DESC'
-		const q = `SELECT DISTINCT d.id, d.magnitude, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ${req.nameType >= 0 ? `AND n.type = ${req.nameType}` : 'ORDER BY n.type'} LIMIT 1) as name FROM dsos d ${joinWhere.length > 1 ? `JOIN names n ON ${joinWhere.join(' AND ')}` : ''} WHERE ${where.join(' AND ')} ORDER BY d.${sortColumn} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
+		const q = `SELECT DISTINCT d.id, d.magnitude, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ${nameType >= 0 ? 'AND n.type = ?' : 'ORDER BY n.type'} LIMIT 1) as name FROM dsos d ${joinWhere.length > 1 ? `JOIN names n ON ${joinWhere.join(' AND ')}` : ''} WHERE ${where.join(' AND ')} ORDER BY d.${sortColumn} ${sortDirection} LIMIT ? OFFSET ?`
 
-		return nebulosa.query<SkyObjectSearchItem, []>(q).all()
+		return nebulosa.query<SkyObjectSearchItem, SqlValue[]>(q).all(...selectParams, ...joinParams, ...whereParams, limit, offset)
 	}
 
 	positionOfSkyObject(req: PositionOfBody, id: string | number | SkyObject): BodyPosition {
-		const dso = typeof id === 'object' ? id : nebulosa.query<SkyObject, []>(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get()!
-		const names = nebulosa.query<{ name: string }, []>(`SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ${dso.id}`).all()
+		const dso = typeof id === 'object' ? id : this.skyObject(id)
+		const names = nebulosa.query<{ name: string }, [number]>("SELECT (n.type || ':' || n.name) as name FROM names n WHERE n.dsoId = ?").all(dso.id)
 
 		const location = this.cache.geographicCoordinate(req.location)
-		const time = this.cache.time(req.time.utc, location, 'm')
+		const time = this.cache.time(req.time.utc, location)
 		const lst = localSiderealTime(time, location, true)
 
 		const horizontal: Writable<BodyPosition['horizontal']> = [0, 0]
@@ -413,14 +430,13 @@ export class AtlasHandler {
 	chartOfSkyObject(req: ChartOfBody, id: string) {
 		let [startTime] = this.computeStartAndEndTime(req.time)
 
-		const dso = nebulosa.query<SkyObject, []>(`SELECT d.* FROM dsos d WHERE d.id = ${id}`).get()!
+		const dso = this.skyObject(id)
 		const location = this.cache.geographicCoordinate(req.location)
 		const data = new Array<number>(1441)
 
 		// Generate chart data for each minute
 		for (let i = 0; i < data.length; i++) {
-			const time = this.cache.time(startTime, location, 'm')
-
+			const time = this.cache.time(startTime, location)
 			const ebpv = this.cache.earth(time)
 
 			if (dso.pmRA && dso.pmDEC) {
@@ -439,7 +455,7 @@ export class AtlasHandler {
 	async refreshSatellites() {
 		console.info('loading satellites...')
 
-		const groups = new Set(Object.keys(SATELLITE_GROUP_TYPES) as SatelliteGroupType[])
+		const groups = new Set(SATELLITE_GROUPS)
 		const now = Date.now()
 		const satellites = new Set<number>()
 
@@ -488,79 +504,141 @@ export class AtlasHandler {
 			}
 		}
 
-		SATELLITES.run('DELETE FROM satelliteGroups;')
-		SATELLITES.run('DELETE FROM satellites;')
+		SATELLITES.run('BEGIN;')
 
-		// Update TLE files if older than 2 days
+		try {
+			SATELLITES.run('DELETE FROM satelliteGroups;')
+			SATELLITES.run('DELETE FROM satellites;')
 
-		for await (const file of new Bun.Glob('*.tle').scan({ cwd: Bun.env.satellitesDir })) {
-			const date = +file.slice(0, 13)
-			const group = file.slice(14, file.length - 4) as SatelliteGroupType
-			const outOfDate = now - date > 86400 * 1000 * 2
+			// Update TLE files if older than 2 days.
+			for await (const file of new Bun.Glob('*.tle').scan({ cwd: Bun.env.satellitesDir })) {
+				const date = +file.slice(0, 13)
+				const group = file.slice(14, file.length - 4) as SatelliteGroupType
+				const outOfDate = now - date > 86400 * 1000 * 2
 
-			if (outOfDate) {
-				if (groups.has(group)) {
-					if (await download(group)) {
-						const path = join(Bun.env.satellitesDir, file)
-						await Bun.file(path).delete()
-						continue
+				if (!SATELLITE_GROUPS.has(group)) continue
+
+				if (outOfDate) {
+					if (groups.has(group)) {
+						if (await download(group)) {
+							const path = join(Bun.env.satellitesDir, file)
+							await Bun.file(path).delete()
+							continue
+						}
 					}
+				}
+
+				if (groups.has(group)) {
+					const path = join(Bun.env.satellitesDir, file)
+					const text = await Bun.file(path).text()
+					groups.delete(group)
+					readTLE(text, group)
 				}
 			}
 
-			if (groups.has(group)) {
-				const path = join(Bun.env.satellitesDir, file)
-				const text = await Bun.file(path).text()
-				groups.delete(group)
-				readTLE(text, group)
+			// Create TLE files for missing groups.
+			for (const group of groups) {
+				await download(group)
 			}
+
+			SATELLITES.run('COMMIT;')
+		} catch (e) {
+			try {
+				SATELLITES.run('ROLLBACK;')
+			} catch {
+				// Keep the original refresh failure as the actionable error.
+			}
+
+			throw e
 		}
-
-		// Create TLE files for missing groups
-
-		SATELLITES.run('BEGIN;')
-
-		for (const group of groups) {
-			await download(group)
-		}
-
-		SATELLITES.run('COMMIT;')
 
 		console.info(`loaded ${satellites.size} satellites`)
 	}
 
 	searchSatellites(req: SearchSatellite) {
-		const { text, category, page, limit } = req
-		const offset = Math.max(0, page - 1) * limit
-		const name = text.trim().toUpperCase()
-		const searchGroups = category.length === 0 ? req.groups : req.groups.filter((e) => category.includes(SATELLITE_GROUP_TYPES[e].category))
+		const { limit, offset } = normalizePagination(req.page, req.limit)
+		const name = req.text.trim().toUpperCase()
+		const categories = new Set(Array.isArray(req.category) ? req.category : [])
+		const groups = (Array.isArray(req.groups) ? req.groups : []).filter(isSatelliteGroup)
+		const searchGroups = categories.size === 0 ? groups : groups.filter((e) => categories.has(SATELLITE_GROUP_TYPES[e].category))
 
 		const where = ['WHERE 1=1']
 		const joinWhere = ['sg.satelliteId = s.id']
+		const joinParams: SqlValue[] = []
+		const whereParams: SqlValue[] = []
 
 		if (name)
-			if (name.startsWith('=')) where.push(`s.name = '${name.slice(1).trim()}'`)
-			else if (name.includes('%')) where.push(`s.name LIKE '${name}'`)
-			else where.push(`s.name LIKE '%${name}%'`)
+			if (name.startsWith('=')) {
+				where.push('s.name = ?')
+				whereParams.push(name.slice(1).trim())
+			} else {
+				where.push('s.name LIKE ?')
+				whereParams.push(name.includes('%') ? name : `%${name}%`)
+			}
 
-		if (searchGroups.length > 0) joinWhere.push(`sg.name IN (${searchGroups.map((e) => `'${e}'`).join(',')})`)
+		if (searchGroups.length > 0) {
+			joinWhere.push(`sg.name IN (${placeholders(searchGroups.length)})`)
+			joinParams.push(...searchGroups)
+		}
 
 		const sortColumn = 'name' // req.sort.column
 		const sortDirection = 'ASC' // req.sort.direction === 'ascending' ? 'ASC' : 'DESC'
-		const q = `SELECT DISTINCT s.id, s.name, s.line1, s.line2 FROM satellites s ${joinWhere.length > 1 ? `JOIN satelliteGroups sg ON ${joinWhere.join(' AND ')}` : ''} ${where.join(' AND ')} ORDER BY s.${sortColumn} ${sortDirection} LIMIT ${limit} OFFSET ${offset}`
-		const satellites = SATELLITES.query<Satellite, []>(q).all()
-		for (const s of satellites) s.groups = SATELLITES.query<never, []>(`SELECT sg.name FROM satelliteGroups sg WHERE sg.satelliteId = ${s.id}`).values().flat() as never
+		const q = `SELECT DISTINCT s.id, s.name, s.line1, s.line2 FROM satellites s ${joinWhere.length > 1 ? `JOIN satelliteGroups sg ON ${joinWhere.join(' AND ')}` : ''} ${where.join(' AND ')} ORDER BY s.${sortColumn} ${sortDirection} LIMIT ? OFFSET ?`
+		const satellites = SATELLITES.query<Satellite, SqlValue[]>(q).all(...joinParams, ...whereParams, limit, offset)
+		this.fillSatelliteGroups(satellites)
 		return satellites
 	}
 
-	positionOfSatellite(id: number, req: PositionOfBody) {
-		const satellite = SATELLITES.query<Satellite, []>(`SELECT s.id, s.name, s.line1, s.line2 FROM satellites s WHERE s.id = ${id}`).get()
-		if (!satellite) throw new Error(`satellite not found: ${id}`)
+	positionOfSatellite(id: string | number, req: PositionOfBody) {
+		const satellite = this.satellite(id)
 		return this.computeFromHorizonsPositionAt(satellite, req)
 	}
 
-	chartOfSatellite(id: number, req: ChartOfBody) {
-		return this.computeChart(`TLE:${id}`, req.time)
+	async chartOfSatellite(id: string | number, req: ChartOfBody) {
+		const satellite = this.satellite(id)
+		await this.computeFromHorizonsPositionAt(satellite, req)
+		return this.computeChart(`TLE:${satellite.id}`, req.time)
+	}
+
+	private skyObject(id: string | number) {
+		const normalizedId = normalizeId(id)
+		if (normalizedId === undefined) throw new Error(`sky object not found: ${id}`)
+
+		const dso = nebulosa.query<SkyObject, [number]>('SELECT d.* FROM dsos d WHERE d.id = ?').get(normalizedId)
+		if (!dso) throw new Error(`sky object not found: ${id}`)
+		return dso
+	}
+
+	private satellite(id: string | number) {
+		const normalizedId = normalizeId(id)
+		if (normalizedId === undefined) throw new Error(`satellite not found: ${id}`)
+
+		const satellite = SATELLITES.query<Satellite, [number]>('SELECT s.id, s.name, s.line1, s.line2 FROM satellites s WHERE s.id = ?').get(normalizedId)
+		if (!satellite) throw new Error(`satellite not found: ${id}`)
+		return satellite
+	}
+
+	private fillSatelliteGroups(satellites: Satellite[]) {
+		if (satellites.length === 0) return
+
+		const ids = satellites.map((e) => e.id)
+		const groups = SATELLITES.query<{ satelliteId: number; name: SatelliteGroupType }, number[]>(`SELECT satelliteId, name FROM satelliteGroups WHERE satelliteId IN (${placeholders(ids.length)}) ORDER BY name`).all(...ids)
+		const bySatellite = new Map<number, SatelliteGroupType[]>()
+
+		for (const group of groups) {
+			let list = bySatellite.get(group.satelliteId)
+
+			if (!list) {
+				list = []
+				bySatellite.set(group.satelliteId, list)
+			}
+
+			list.push(group.name)
+		}
+
+		for (const satellite of satellites) {
+			satellite.groups = bySatellite.get(satellite.id) ?? []
+		}
 	}
 
 	async computeFromHorizonsPositionAt(input: string | Omit<Satellite, 'name' | 'groups'>, req: PositionOfBody) {
@@ -590,10 +668,11 @@ export class AtlasHandler {
 			makeBodyPositionFromHorizons(await horizonsObserverTask, map)
 			this.ephemeris[id] = map
 			this.ephemeris.location = location
-			position = map.get(key)!
+			position = map.get(key)
+			if (!position) throw new Error(`ephemeris not found for ${id} at ${formatTemporal(req.time.utc, undefined, 0)}`)
 		}
 
-		const time = this.cache.time(req.time.utc, location, 'm')
+		const time = this.cache.time(req.time.utc, location)
 		const lst = localSiderealTime(time, location, true)
 
 		const [rightAscension, declination] = position.equatorial
@@ -618,7 +697,9 @@ export class AtlasHandler {
 		const chart = new Array<number>(1441)
 
 		for (let i = 0; i <= 1440; i++) {
-			chart[i] = positions.get(seconds + i * 60)!.horizontal[1]
+			const position = positions.get(seconds + i * 60)
+			if (!position) throw new Error(`ephemeris not found for ${code} at chart index ${i}`)
+			chart[i] = position.horizontal[1]
 		}
 
 		return chart
@@ -668,33 +749,68 @@ export class AtlasHandler {
 	}
 }
 
-export function atlas(atlas: AtlasHandler): Endpoints {
+export function atlas(atlas: AtlasHandler) {
 	return {
-		'/atlas/sun/image': { GET: async (req) => new Response(await atlas.imageOfSun(query(req).source as never)) },
+		'/atlas/sun/image': { GET: async (req) => new Response(await atlas.imageOfSun(solarImageSource(query(req).source))) },
 		'/atlas/sun/position': { POST: async (req) => response(await atlas.positionOfSun(await req.json())) },
-		'/atlas/sun/chart': { POST: async (req) => response(atlas.chartOfSun(await req.json())) },
+		'/atlas/sun/chart': { POST: async (req) => response(await atlas.chartOfSun(await req.json())) },
 		'/atlas/sun/seasons': { POST: async (req) => response(atlas.seasons(await req.json())) },
 		'/atlas/sun/twilight': { POST: async (req) => response(await atlas.twilight(await req.json())) },
-		'/atlas/sun/eclipses': { POST: async (req) => response(await atlas.solarEclipsesFromNasa(await req.json())) },
+		'/atlas/sun/eclipses': { POST: async (req) => response(atlas.solarEclipses(await req.json())) },
 		'/atlas/moon/position': { POST: async (req) => response(await atlas.positionOfMoon(await req.json())) },
-		'/atlas/moon/chart': { POST: async (req) => response(atlas.chartOfMoon(await req.json())) },
+		'/atlas/moon/chart': { POST: async (req) => response(await atlas.chartOfMoon(await req.json())) },
 		'/atlas/moon/phases': { POST: async (req) => response(atlas.moonPhases(await req.json())) },
 		'/atlas/moon/eclipses': { POST: async (req) => response(atlas.moonEclipses(await req.json())) },
 		'/atlas/moon/apsis': { POST: async (req) => response(atlas.moonApsis(await req.json())) },
 		'/atlas/minorplanets/search': { POST: async (req) => response(await atlas.searchMinorPlanet(await req.json())) },
 		'/atlas/minorplanets/closeapproaches': { POST: async (req) => response(await atlas.findCloseApproaches(await req.json())) },
 		'/atlas/planets/:code/position': { POST: async (req) => response(await atlas.positionOfPlanet(req.params.code, await req.json())) },
-		'/atlas/planets/:code/chart': { POST: async (req) => response(atlas.chartOfPlanet(req.params.code, await req.json())) },
+		'/atlas/planets/:code/chart': { POST: async (req) => response(await atlas.chartOfPlanet(req.params.code, await req.json())) },
 		'/atlas/skyobjects/search': { POST: async (req) => response(atlas.searchSkyObject(await req.json())) },
 		'/atlas/skyobjects/:id/position': { POST: async (req) => response(atlas.positionOfSkyObject(await req.json(), req.params.id)) },
 		'/atlas/skyobjects/:id/chart': { POST: async (req) => response(atlas.chartOfSkyObject(await req.json(), req.params.id)) },
 		'/atlas/satellites/search': { POST: async (req) => response(atlas.searchSatellites(await req.json())) },
-		'/atlas/satellites/:id/position': { POST: async (req) => response(await atlas.positionOfSatellite(+req.params.id, await req.json())) },
-		'/atlas/satellites/:id/chart': { POST: async (req) => response(atlas.chartOfSatellite(+req.params.id, await req.json())) },
-	}
+		'/atlas/satellites/:id/position': { POST: async (req) => response(await atlas.positionOfSatellite(req.params.id, await req.json())) },
+		'/atlas/satellites/:id/chart': { POST: async (req) => response(await atlas.chartOfSatellite(req.params.id, await req.json())) },
+	} as const satisfies Endpoints
+}
+
+function finiteNumber(value: unknown): value is number {
+	return typeof value === 'number' && Number.isFinite(value)
+}
+
+function normalizeCount(value: unknown) {
+	return Math.max(0, Math.min(MAX_EVENT_COUNT, Math.trunc(finiteNumber(value) ? value : 0)))
+}
+
+function normalizeId(value: string | number) {
+	if (typeof value === 'string' && !/^\d+$/.test(value)) return undefined
+
+	const id = typeof value === 'number' ? value : Number.parseInt(value, 10)
+	return Number.isSafeInteger(id) && id >= 0 ? id : undefined
+}
+
+function normalizePagination(page: unknown, limit: unknown) {
+	const normalizedLimit = Math.max(0, Math.min(MAX_SEARCH_LIMIT, Math.trunc(finiteNumber(limit) ? limit : 0)))
+	const normalizedPage = Math.max(1, Math.trunc(finiteNumber(page) ? page : 1))
+	return { limit: normalizedLimit, offset: (normalizedPage - 1) * normalizedLimit } as const
+}
+
+function placeholders(count: number) {
+	return Array.from({ length: count }, () => '?').join(',')
+}
+
+function solarImageSource(source: unknown): SolarImageSource {
+	return typeof source === 'string' && source in SOLAR_IMAGE_SOURCE_URLS ? (source as SolarImageSource) : DEFAULT_SOLAR_IMAGE_SOURCE
+}
+
+function isSatelliteGroup(value: unknown): value is SatelliteGroupType {
+	return typeof value === 'string' && SATELLITE_GROUPS.has(value as SatelliteGroupType)
 }
 
 function makeBodyPositionFromHorizons(ephemeris: CsvRow[], output: Map<number, BodyPosition>) {
+	if (ephemeris.length === 0) throw new Error('empty ephemeris')
+
 	const seconds = Math.trunc(parseTemporal(ephemeris[0][0], 'YYYY-MMM-DD HH:mm') / 1000)
 
 	for (let i = 0; i < ephemeris.length; i++) {

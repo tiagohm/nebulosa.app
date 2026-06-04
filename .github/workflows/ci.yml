@@ -1,0 +1,46 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - 'src/api/**.ts'
+            - 'src/shared/**.ts'
+            - 'src/data/**'
+            - 'tests/**'
+            - 'package.json'
+            - 'tsconfig.json'
+            - 'bunfig.toml'
+            - '.github/workflows/**'
+    pull_request:
+        paths:
+            - 'src/**.ts'
+            - 'tests/**.ts'
+            - 'package.json'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    test:
+        name: Test
+        strategy:
+            matrix:
+                os: [ubuntu-24.04]
+        runs-on: ${{ matrix.os }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v6
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+
+            - name: Install Dependencies
+              run: bun i --omit=dev
+
+            - name: Build Database
+              run: bun run bin/nebulosa.sqlite.ts
+
+            - name: Run Tests
+              run: bun test --timeout 5000 --parallel

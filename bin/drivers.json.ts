@@ -23,4 +23,4 @@ for (const { name, driver } of drivers) {
 
 res.sort((a, b) => a.name.localeCompare(b.name))
 
-await write('data/drivers.json', JSON.stringify(res, null, 2))
+await write('src/data/drivers.json', JSON.stringify(res, null, 2))

@@ -1,10 +1,12 @@
 import type { Hemisphere } from 'src/shared/types'
-import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
+import { Select, type SelectProps } from './components/Select'
 
-const ITEMS = ['NORTHERN', 'SOUTHERN'] as const
+const ITEMS = ['northern', 'southern'] as const
 const LABELS = ['Northern', 'Southern'] as const
 
-const HemisphereItem: SelectItemRenderer<Hemisphere> = (_, i) => <span>{LABELS[i]}</span>
+function HemisphereItem(item: Hemisphere, i: number) {
+	return <span>{LABELS[i]}</span>
+}
 
 export type HemisphereSelectProps = Omit<SelectProps<Hemisphere>, 'children' | 'items'>
 

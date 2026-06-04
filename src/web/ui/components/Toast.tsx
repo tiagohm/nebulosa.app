@@ -6,7 +6,7 @@ import { Icons } from '../Icon'
 
 const toastStyles = tv({
 	slots: {
-		toast: 'pointer-events-auto flex w-full items-center gap-3 rounded-lg shadow-black/40 backdrop-blur-sm transition bg-neutral-900/95 text-neutral-100',
+		toast: 'pointer-events-auto flex w-full items-center gap-3 rounded-lg shadow-black/40 backdrop-blur-sm transition bg-neutral-950/95 text-neutral-100',
 		startContent: 'flex shrink-0 items-center justify-center text-(--color-variant)',
 		content: 'min-w-0 flex-1',
 		title: 'min-w-0 font-bold leading-none text-(--color-variant)',

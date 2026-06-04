@@ -1,10 +1,12 @@
 import type { TppaStart } from 'src/shared/types'
-import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
+import { Select, type SelectProps } from './components/Select'
 
-const ITEMS = ['EAST', 'WEST'] as const
+const ITEMS = ['east', 'west'] as const
 const LABELS = ['East', 'West'] as const
 
-const TppaDirectionItem: SelectItemRenderer<TppaStart['direction']> = (_, i) => <span>{LABELS[i]}</span>
+function TppaDirectionItem(item: TppaStart['direction'], i: number) {
+	return <span>{LABELS[i]}</span>
+}
 
 export type TppaDirectionSelectProps = Omit<SelectProps<TppaStart['direction']>, 'children' | 'items'>
 

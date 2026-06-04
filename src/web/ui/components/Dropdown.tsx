@@ -1,6 +1,6 @@
-import { useEffect, useEffectEvent, useMemo, useState } from 'react'
-import { type ClassValue, tv } from 'tailwind-variants'
-import { assignRef, tw } from '@/shared/util'
+import { Children, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
+import { assignRef, stopPropagation, tw } from '@/shared/util'
 import { Icons } from '../Icon'
 import { Button, type ButtonProps } from './Button'
 import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from './Floating'
@@ -14,12 +14,14 @@ const DROPDOWN_ITEM_HEIGHTS = {
 
 const dropdownStyles = tv({
 	slots: {
-		trigger: 'min-w-0',
+		trigger: 'min-w-0 justify-between',
 		chevron: 'shrink-0 transition',
-		panel: 'w-(--dropdown-width) min-w-48 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg bg-neutral-950 p-0 text-neutral-100 shadow-lg shadow-black/40',
+		panel: 'min-w-(--dropdown-width) max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg bg-neutral-950 p-0 text-neutral-100 shadow-lg shadow-black/40',
 		panelContent: 'min-w-0',
 		header: 'p-2',
 		list: 'max-h-72 rounded-none bg-transparent text-neutral-100',
+		listItem: 'hover:bg-transparent',
+		option: 'flex h-full w-full min-w-max items-center',
 		footer: 'p-2',
 	},
 	variants: {
@@ -33,9 +35,9 @@ const dropdownStyles = tv({
 
 const dropdownItemStyles = tv({
 	slots: {
-		base: 'flex h-full w-full min-w-0 items-center justify-center gap-2 text-center transition p-1',
+		base: 'flex h-full w-full min-w-max items-center justify-center gap-2 transition py-2 ps-2 pe-4',
 		startContent: 'flex shrink-0 items-center justify-center px-2',
-		label: 'min-w-0 flex-1 truncate',
+		label: 'min-w-max flex-1 overflow-visible whitespace-nowrap',
 		endContent: 'flex shrink-0 items-center justify-center px-2',
 	},
 	variants: {
@@ -47,11 +49,58 @@ const dropdownItemStyles = tv({
 				base: 'cursor-pointer',
 			},
 		},
+		variant: {
+			solid: {
+				base: 'bg-(--color-variant) text-white hover:bg-(--color-variant)/90 active:bg-(--color-variant)/85',
+			},
+			ghost: {
+				base: 'bg-transparent text-(--color-variant) hover:bg-(--color-variant)/20 active:bg-(--color-variant)/15',
+			},
+			flat: {
+				base: 'bg-(--color-variant)/20 text-(--color-variant) hover:bg-(--color-variant)/15 active:bg-(--color-variant)/10',
+			},
+		},
+		color: {
+			default: {
+				base: '[--color-variant:var(--color-neutral-500)]',
+			},
+			primary: {
+				base: '[--color-variant:var(--primary)]',
+			},
+			secondary: {
+				base: '[--color-variant:var(--secondary)]',
+			},
+			success: {
+				base: '[--color-variant:var(--success)]',
+			},
+			danger: {
+				base: '[--color-variant:var(--danger)]',
+			},
+			warning: {
+				base: '[--color-variant:var(--warning)]',
+			},
+		},
 	},
+	compoundVariants: [
+		{
+			color: 'default',
+			variant: 'ghost',
+			class: {
+				base: 'text-neutral-100 hover:bg-neutral-800 active:bg-neutral-700',
+				startContent: 'text-neutral-400',
+				label: 'text-neutral-100',
+				endContent: 'text-neutral-400',
+			},
+		},
+	],
 	defaultVariants: {
 		disabled: false,
+		color: 'default',
+		variant: 'ghost',
 	},
 })
+
+type DropdownItemVariants = VariantProps<typeof dropdownItemStyles>
 
 type DropdownSize = keyof typeof DROPDOWN_ITEM_HEIGHTS
 
@@ -63,6 +112,7 @@ export interface DropdownClassNames {
 	readonly header?: ClassValue
 	readonly list?: ClassValue
 	readonly listItem?: ClassValue
+	readonly option?: ClassValue
 	readonly footer?: ClassValue
 	readonly empty?: ClassValue
 }
@@ -120,12 +170,15 @@ export function Dropdown({
 	const [uncontrolledIsOpen, setUncontrolledIsOpen] = useState(false)
 	const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(null)
 	const [triggerWidth, setTriggerWidth] = useState(0)
+	const [optionContentWidth, setOptionContentWidth] = useState(0)
+	const optionContentWidthRef = useRef(0)
+	const items = useMemo(() => Children.toArray(children), [children])
 	const isControlledOpen = open !== undefined
 	const isOpen = isControlledOpen ? open : uncontrolledIsOpen
 	const visible = isOpen && !disabled && !readOnly && loading !== true
 	const styles = dropdownStyles({ open: visible })
 	const optionHeight = dropdownItemHeight(size, itemHeight)
-	const panelStyle = useMemo(() => ({ '--dropdown-width': `${Math.max(triggerWidth, 0)}px` }) as React.CSSProperties, [triggerWidth])
+	const panelStyle = useMemo(() => ({ '--dropdown-width': `${Math.max(triggerWidth, 0)}px`, minWidth: Math.max(triggerWidth, optionContentWidth, 0) }) as React.CSSProperties, [optionContentWidth, triggerWidth])
 
 	// Updates open state in controlled and uncontrolled modes.
 	const setOpen = useEffectEvent((nextOpen: boolean) => {
@@ -160,6 +213,25 @@ export function Dropdown({
 		}
 	}, [disabled, isOpen, loading, readOnly, setOpen])
 
+	// Clears mounted item measurements when the floating panel closes.
+	useEffect(() => {
+		if (visible) return
+
+		optionContentWidthRef.current = 0
+		setOptionContentWidth(0)
+	}, [visible])
+
+	// Tracks the widest mounted item so the panel can fit visible content.
+	function measureOptionWidth(element: HTMLDivElement | null) {
+		if (element === null) return
+
+		const width = Math.ceil(element.scrollWidth)
+		if (width <= optionContentWidthRef.current) return
+
+		optionContentWidthRef.current = width
+		setOptionContentWidth(width)
+	}
+
 	// Stores the trigger element while preserving the caller ref.
 	function handleTriggerRef(element: HTMLDivElement | null) {
 		if (element !== null) setTriggerElement(element)
@@ -172,6 +244,7 @@ export function Dropdown({
 
 		if (event.defaultPrevented || disabled || readOnly || loading === true) return
 
+		stopPropagation(event)
 		setTriggerElement(event.currentTarget)
 		setTriggerWidth(event.currentTarget.getBoundingClientRect().width)
 		setOpen(!isOpen)
@@ -194,10 +267,18 @@ export function Dropdown({
 		}
 	}
 
-	function handleOnAction(index: number) {
+	function handleAction(index: number) {
 		if (disabled || readOnly || loading === true || onAction === undefined) return
 		onAction(index)
 		setOpen(false)
+	}
+
+	function renderItem(index: number) {
+		return (
+			<div className={tw(styles.option(), classNames?.option)} ref={measureOptionWidth}>
+				{items[index]}
+			</div>
+		)
 	}
 
 	const TriggerEndContent = (
@@ -210,8 +291,8 @@ export function Dropdown({
 	const PanelContent = (
 		<div className={tw(styles.panelContent(), classNames?.panelContent)}>
 			{headerContent !== undefined && headerContent !== null && <div className={tw(styles.header(), classNames?.header)}>{headerContent}</div>}
-			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: classNames?.listItem }} emptyContent={emptyContent} itemHeight={optionHeight} overscan={overscan} onAction={handleOnAction}>
-				{children}
+			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: tw(styles.listItem(), classNames?.listItem) }} emptyContent={emptyContent} itemCount={items.length} itemHeight={optionHeight} overscan={overscan} onAction={onAction && handleAction}>
+				{renderItem}
 			</List>
 			{footerContent !== undefined && footerContent !== null && <div className={tw(styles.footer(), classNames?.footer)}>{footerContent}</div>}
 		</div>
@@ -257,7 +338,7 @@ export interface DropdownItemClassNames {
 	readonly endContent?: ClassValue
 }
 
-export interface DropdownItemProps extends React.ComponentProps<'div'> {
+export interface DropdownItemProps extends Omit<React.ComponentProps<'div'>, 'color'>, Omit<DropdownItemVariants, 'disabled'> {
 	readonly classNames?: DropdownItemClassNames
 	readonly disabled?: boolean
 	readonly endContent?: React.ReactNode
@@ -266,9 +347,9 @@ export interface DropdownItemProps extends React.ComponentProps<'div'> {
 }
 
 // Render a dropdown row with optional leading and trailing content.
-export function DropdownItem({ label, children, className, classNames, disabled = false, endContent, startContent, ...props }: DropdownItemProps) {
+export function DropdownItem({ label, children, className, classNames, color, disabled = false, endContent, startContent, variant, ...props }: DropdownItemProps) {
 	const content = children ?? label
-	const styles = dropdownItemStyles({ disabled })
+	const styles = dropdownItemStyles({ color, disabled, variant })
 
 	return (
 		<div className={tw(styles.base(), className, classNames?.base)} {...props}>

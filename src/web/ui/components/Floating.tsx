@@ -158,6 +158,10 @@ export function Floating({
 	offset = DEFAULT_FLOATING_OFFSET,
 	hideArrow,
 	onOpenChange,
+	onClick,
+	onKeyDown,
+	onPointerDown,
+	onPointerUp,
 	placement = 'bottom',
 	portalContainer,
 	ref,
@@ -171,7 +175,8 @@ export function Floating({
 	const mounted = typeof document !== 'undefined'
 	const contentContainer = portalContainer ?? (mounted ? document.body : undefined)
 	const hasContent = content !== undefined && content !== null && content !== false
-	const rendered = mounted && open && hasContent && !!triggerElement
+	const hasConnectedTrigger = triggerElement?.isConnected === true
+	const rendered = mounted && open && hasContent && hasConnectedTrigger
 	const styles = floatingContentStyles({ interactive })
 
 	// Reports requested open-state changes back to the caller.
@@ -180,6 +185,32 @@ export function Floating({
 			onOpenChange?.(nextOpen)
 		}
 	})
+
+	// Portal events still bubble through React parents; keep overlay interaction local.
+	function stopInteractivePropagation(event: React.SyntheticEvent<HTMLDivElement>) {
+		if (interactive) event.stopPropagation()
+	}
+
+	function handleClick(event: React.MouseEvent<HTMLDivElement>) {
+		onClick?.(event)
+		stopInteractivePropagation(event)
+	}
+
+	function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+		onKeyDown?.(event)
+		if (!event.defaultPrevented && closeOnEscape && event.key === 'Escape') requestOpenChange(false)
+		stopInteractivePropagation(event)
+	}
+
+	function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+		onPointerDown?.(event)
+		stopInteractivePropagation(event)
+	}
+
+	function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+		onPointerUp?.(event)
+		stopInteractivePropagation(event)
+	}
 
 	// Recomputes the overlay position from the current trigger and content rectangles.
 	const updatePosition = useEffectEvent(() => {
@@ -199,6 +230,13 @@ export function Floating({
 			setPosition(null)
 		}
 	}, [rendered])
+
+	// Closes stale overlays when their trigger element is removed from the DOM.
+	useEffect(() => {
+		if (open && triggerElement !== undefined && triggerElement !== null && !triggerElement.isConnected) {
+			requestOpenChange(false)
+		}
+	}, [open, requestOpenChange, triggerElement])
 
 	// Handles global close interactions like Escape and outside pointer presses.
 	useEffect(() => {
@@ -259,6 +297,10 @@ export function Floating({
 			className={tw(styles.base(), className, classNames?.base)}
 			data-placement={position?.placement ?? placement}
 			id={id}
+			onClick={handleClick}
+			onKeyDown={handleKeyDown}
+			onPointerDown={handlePointerDown}
+			onPointerUp={handlePointerUp}
 			ref={(node) => {
 				contentRef.current = node
 				assignRef(ref, node)

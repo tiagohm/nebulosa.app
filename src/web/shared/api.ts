@@ -1,19 +1,21 @@
+import { nanoid } from 'nanoid'
 import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
 import type { Angle } from 'nebulosa/src/angle'
+import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import type { HipsSurvey } from 'nebulosa/src/hips2fits'
-import type { Camera, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, MountTargetCoordinate, NameAndLabel, Rotator, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, ClientInfo, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, MountTargetCoordinate, NameAndLabel, Rotator, Thermometer, TrackMode, Wheel } from 'nebulosa/src/indi.device'
 import type { Message, NewVector } from 'nebulosa/src/indi.types'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { PHD2Profile } from 'nebulosa/src/phd2'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/star.detector'
 // oxfmt-ignore
-import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DarvStop, DirectoryEntry, FileSystem, FindCloseApproaches, FindNextLunarEclipse, FindNextSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, NextLunarApsis, NextLunarEclipse, NextSolarEclipse, OpenImage, PHD2Connect, PHD2Event, PHD2Status, PlateSolveStart, PlateSolveStop, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SolarSeasons, StarDetection, StatisticImage, TppaStart, TppaStop, Twilight } from 'src/shared/types'
+import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DirectoryEntry, FileSystem, FindCloseApproaches, FindNextLunarEclipse, FindNextSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, NextLunarApsis, NextLunarEclipse, NextSolarEclipse, OpenImage, PHD2Connect, PHD2Event, PHD2Status, PlateSolveStart, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SolarSeasons, StarDetection, StatisticImage, TppaStart, Twilight } from 'src/shared/types'
 import { type ImageCoordinateInterpolation, type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
-export const CLIENT_ID = Date.now().toFixed(0)
+export const CLIENT_ID = nanoid()
 
 const DEFAULT_HEADERS: HeadersInit = {
 	'Content-Type': 'application/json',
@@ -97,16 +99,16 @@ export namespace Api {
 			return json<ImageCoordinateInterpolation>('/image/coordinateinterpolation', 'post', req)
 		}
 
+		export function coordinateGrid(req: PlateSolution) {
+			return json<ImageCoordinateGrid>('/image/coordinategrid', 'post', req)
+		}
+
 		export function statistics(req: StatisticImage) {
 			return json<readonly ImageHistogram[]>('/image/statistics', 'post', req)
 		}
 	}
 
 	export namespace Indi {
-		export function devices(connection: ConnectionStatus) {
-			return json<string[]>(`/indi/devices?client=${connection.id}`, 'get')
-		}
-
 		export function connect(device: Device) {
 			return res(`/indi/${device.name}/connect?client=${device.client.id}`, 'post')
 		}
@@ -115,21 +117,17 @@ export namespace Api {
 			return res(`/indi/${device.name}/disconnect?client=${device.client.id}`, 'post')
 		}
 
-		export function messages(device: string | undefined, connection: ConnectionStatus) {
-			return json<Message[]>(`/indi/messages?device=${device ?? ''}&client=${connection.id}`, 'get')
+		export function messages(device: Device | undefined, client: ClientInfo) {
+			return json<Message[]>(`/indi/messages?device=${device?.id ?? ''}&client=${client.id}`, 'get')
 		}
 
 		export namespace Properties {
-			export function list(device: string, connection: ConnectionStatus) {
-				return json<DeviceProperties>(`/indi/${device}/properties?client=${connection.id}`, 'get')
+			export function list(device: Device, client: ClientInfo = device.client) {
+				return json<DeviceProperties>(`/indi/${device.id}/properties?client=${client.id}`, 'get')
 			}
 
-			export function send(device: string, type: DeviceProperty['type'], message: NewVector, connection: ConnectionStatus) {
-				return json<DeviceProperties>(`/indi/${device}/properties/send?type=${type}&client=${connection.id}`, 'post', message)
-			}
-
-			export function ping(device: string, connection: ConnectionStatus) {
-				return res(`/indi/${device}/properties/ping?client=${connection.id}`, 'post')
+			export function send(device: Device, type: DeviceProperty['type'], message: NewVector, client: ClientInfo = device.client) {
+				return json<DeviceProperties>(`/indi/${device.id}/properties/send?type=${type}&client=${client.id}`, 'post', message)
 			}
 		}
 
@@ -153,12 +151,12 @@ export namespace Api {
 	}
 
 	export namespace Cameras {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Camera[]>(`/cameras?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Camera[]>(`/cameras?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Camera>(`/cameras/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Camera>(`/cameras/${name}?client=${client.id}`, 'get')
 		}
 
 		export function cooler(camera: Camera, enabled: boolean) {
@@ -179,12 +177,12 @@ export namespace Api {
 	}
 
 	export namespace Mounts {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Mount[]>(`/mounts?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Mount[]>(`/mounts?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Mount>(`/mounts/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Mount>(`/mounts/${name}?client=${client.id}`, 'get')
 		}
 
 		export function goTo(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
@@ -275,12 +273,12 @@ export namespace Api {
 	}
 
 	export namespace Focusers {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Focuser[]>(`/focusers?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Focuser[]>(`/focusers?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Focuser>(`/focusers/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Focuser>(`/focusers/${name}?client=${client.id}`, 'get')
 		}
 
 		export function sync(focuser: Focuser, position: number) {
@@ -309,12 +307,12 @@ export namespace Api {
 	}
 
 	export namespace Wheels {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Wheel[]>(`/wheels?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Wheel[]>(`/wheels?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Wheel>(`/wheels/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Wheel>(`/wheels/${name}?client=${client.id}`, 'get')
 		}
 
 		export function moveTo(wheel: Wheel, position: number) {
@@ -327,22 +325,26 @@ export namespace Api {
 	}
 
 	export namespace Thermometers {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Thermometer[]>(`/thermometers?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Thermometer[]>(`/thermometers?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Thermometer>(`/thermometers/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Thermometer>(`/thermometers/${name}?client=${client.id}`, 'get')
 		}
 	}
 
 	export namespace GuideOutputs {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly GuideOutput[]>(`/guideoutputs?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly GuideOutput[]>(`/guideoutputs?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<GuideOutput>(`/guideoutputs/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<GuideOutput>(`/guideoutputs/${name}?client=${client.id}`, 'get')
+		}
+
+		export function guideRate(guideOutput: GuideOutput, rate: EquatorialCoordinate) {
+			return res(`/guideoutputs/${guideOutput.name}/guiderate?client=${guideOutput.client.id}`, 'post', rate)
 		}
 
 		export function pulse(guideOutput: GuideOutput, req: GuidePulse) {
@@ -351,12 +353,12 @@ export namespace Api {
 	}
 
 	export namespace Covers {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Cover[]>(`/covers?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Cover[]>(`/covers?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Cover>(`/covers/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Cover>(`/covers/${name}?client=${client.id}`, 'get')
 		}
 
 		export function park(cover: Cover) {
@@ -373,12 +375,12 @@ export namespace Api {
 	}
 
 	export namespace FlatPanels {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly FlatPanel[]>(`/flatpanels?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly FlatPanel[]>(`/flatpanels?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<FlatPanel>(`/flatpanels/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<FlatPanel>(`/flatpanels/${name}?client=${client.id}`, 'get')
 		}
 
 		export function enable(flatPanel: FlatPanel) {
@@ -395,12 +397,12 @@ export namespace Api {
 	}
 
 	export namespace Rotators {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly Rotator[]>(`/rotators?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly Rotator[]>(`/rotators?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<Rotator>(`/rotators/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<Rotator>(`/rotators/${name}?client=${client.id}`, 'get')
 		}
 
 		export function sync(rotator: Rotator, angle: number) {
@@ -425,12 +427,12 @@ export namespace Api {
 	}
 
 	export namespace DewHeaters {
-		export function list(connection: ConnectionStatus) {
-			return json<readonly DewHeater[]>(`/dewheaters?client=${connection.id}`, 'get')
+		export function list(client: ClientInfo) {
+			return json<readonly DewHeater[]>(`/dewheaters?client=${client.id}`, 'get')
 		}
 
-		export function get(name: string, connection: ConnectionStatus) {
-			return json<DewHeater>(`/dewheaters/${name}?client=${connection.id}`, 'get')
+		export function get(name: string, client: ClientInfo) {
+			return json<DewHeater>(`/dewheaters/${name}?client=${client.id}`, 'get')
 		}
 
 		export function dutyCycle(dewHeater: DewHeater, value: number) {
@@ -438,7 +440,7 @@ export namespace Api {
 		}
 	}
 
-	export namespace SkyAtlas {
+	export namespace Atlas {
 		export function positionOfSun(req: PositionOfBody) {
 			return json<BodyPosition>('/atlas/sun/position', 'post', req)
 		}
@@ -525,8 +527,8 @@ export namespace Api {
 			return json<PlateSolution>('/platesolver/start', 'post', req)
 		}
 
-		export function stop(req: PlateSolveStop) {
-			return res('/platesolver/stop', 'post', req)
+		export function stop(id: string) {
+			return res(`/platesolver/${id}/stop`, 'post')
 		}
 	}
 
@@ -551,8 +553,8 @@ export namespace Api {
 			return res(`/tppa/${camera.name}/${mount.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
-		export function stop(req: TppaStop) {
-			return res('/tppa/stop', 'post', req)
+		export function stop(id: string) {
+			return res(`/tppa/${id}/stop`, 'post')
 		}
 	}
 
@@ -561,8 +563,8 @@ export namespace Api {
 			return res(`/darv/${camera.name}/${mount.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
-		export function stop(req: DarvStop) {
-			return res('/darv/stop', 'post', req)
+		export function stop(id: string) {
+			return res(`/darv/${id}/stop`, 'post')
 		}
 	}
 
@@ -571,8 +573,8 @@ export namespace Api {
 			return res(`/autofocus/${camera.name}/${focuser.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
-		export function stop(camera: Camera, focuser: Focuser) {
-			return res(`/autofocus/${camera.name}/${focuser.name}/stop?client=${camera.client.id}`, 'post')
+		export function stop(id: string) {
+			return res(`/autofocus/${id}/stop`, 'post')
 		}
 	}
 
@@ -581,8 +583,8 @@ export namespace Api {
 			return res(`/flatwizard/${camera.name}/start?client=${camera.client.id}`, 'post', req)
 		}
 
-		export function stop(camera: Camera) {
-			return res(`/flatwizard/${camera.name}/stop?client=${camera.client.id}`, 'post')
+		export function stop(id: string) {
+			return res(`/flatwizard/${id}/stop`, 'post')
 		}
 	}
 
@@ -606,7 +608,7 @@ export namespace Api {
 
 	export namespace PHD2 {
 		export function profiles() {
-			return json<readonly PHD2Profile[]>('/phd2/profiles', 'post')
+			return json<readonly PHD2Profile[]>('/phd2/profiles', 'get')
 		}
 
 		export function connect(req: PHD2Connect) {
@@ -651,14 +653,20 @@ export namespace Api {
 	}
 }
 
-function req(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {
+async function req(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {
 	const options: RequestInit = { method, cache: 'no-cache', headers: DEFAULT_HEADERS, body: body === undefined ? undefined : JSON.stringify(body) }
-	return fetch(`${API_URL}${path}`, options)
+
+	try {
+		return await fetch(`${API_URL}${path}`, options)
+	} catch (e) {
+		console.info('failed to request:', method, path, body, e)
+		return undefined
+	}
 }
 
 async function json<T>(path: string, method: 'get' | 'post' | 'put', body?: unknown) {
 	const response = await req(path, method, body)
-	if (!response.ok) return undefined
+	if (!response?.ok) return undefined
 	const text = await response.text()
 	return text ? (JSON.parse(text) as T) : undefined
 }

@@ -1,10 +1,12 @@
 import type { SigmaClipDispersionMethod } from 'nebulosa/src/image.types'
-import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
+import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['std', 'mad'] as const
 const LABELS = ['Std Dev', 'MAD'] as const
 
-const SigmaClipDispersionMethodItem: SelectItemRenderer<SigmaClipDispersionMethod> = (_, i) => <span>{LABELS[i]}</span>
+function SigmaClipDispersionMethodItem(item: SigmaClipDispersionMethod, i: number) {
+	return <span>{LABELS[i]}</span>
+}
 
 export type SigmaClipDispersionMethodSelectProps = Omit<SelectProps<SigmaClipDispersionMethod>, 'children' | 'items'>
 

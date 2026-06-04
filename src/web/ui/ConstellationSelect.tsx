@@ -3,8 +3,8 @@ import { type MultiSelectProps, MultiSelect } from './components/MultiSelect'
 
 export type ConstellationSelectProps = Omit<MultiSelectProps<Constellation>, 'children' | 'items'>
 
-function ConstellationItem(c: Constellation) {
-	return <span>{CONSTELLATIONS[c].name}</span>
+function ConstellationItem(item: Constellation) {
+	return <span>{CONSTELLATIONS[item].name}</span>
 }
 
 export function ConstellationSelect({ label = 'Constellation', ...props }: ConstellationSelectProps) {

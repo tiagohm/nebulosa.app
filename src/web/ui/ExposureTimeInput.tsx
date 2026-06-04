@@ -5,7 +5,6 @@ import { NumberInput, type NumberInputProps } from './components/NumberInput'
 import { ExposureTimeUnitDropdown } from './ExposureTimeUnitDropdown'
 
 export interface ExposureTimeInputProps extends Omit<NumberInputProps, 'size' | 'minValue' | 'maxValue' | 'endContent' | 'value' | 'onValueChange'> {
-	readonly className: NumberInputProps['className']
 	readonly value: number
 	readonly unit: ExposureTimeUnit
 	readonly minValue: number
@@ -16,26 +15,47 @@ export interface ExposureTimeInputProps extends Omit<NumberInputProps, 'size' | 
 	readonly onUnitChange: (unit: ExposureTimeUnit) => void
 }
 
-export function ExposureTimeInput({ className, value, onValueChange, unit, onUnitChange, minValue, minValueUnit, maxValue, maxValueUnit, ...props }: ExposureTimeInputProps) {
-	const min = Math.max(1, exposureTimeIn(minValue, minValueUnit, unit))
-	const max = Math.max(1, exposureTimeIn(maxValue, maxValueUnit, unit))
+function finiteExposureTime(value: number, fallback: number) {
+	return Number.isFinite(value) ? value : fallback
+}
+
+function convertedExposureTime(value: number, from: ExposureTimeUnit, to: ExposureTimeUnit, fallback: number) {
+	return finiteExposureTime(exposureTimeIn(value, from, to), fallback)
+}
+
+function exposureTimeBounds(minValue: number, minValueUnit: ExposureTimeUnit, maxValue: number, maxValueUnit: ExposureTimeUnit, unit: ExposureTimeUnit) {
+	const convertedMin = convertedExposureTime(minValue, minValueUnit, unit, 1)
+	const min = Math.max(convertedMin <= 0 ? 0 : 1, convertedMin)
+	const convertedMax = convertedExposureTime(maxValue, maxValueUnit, unit, min)
+	const max = Math.max(min, convertedMax)
+
+	return { min, max } as const
+}
+
+function clampExposureTime(value: number | undefined, min: number, max: number) {
+	return Math.max(min, Math.min(finiteExposureTime(value ?? min, min), max))
+}
+
+export function ExposureTimeInput({ className, value, onValueChange, unit, onUnitChange, minValue, minValueUnit, maxValue, maxValueUnit, disabled, readOnly, ...props }: ExposureTimeInputProps) {
+	const { min, max } = exposureTimeBounds(minValue, minValueUnit, maxValue, maxValueUnit, unit)
+	const clampedValue = clampExposureTime(value, min, max)
 
 	function handleUnitChange(newUnit: ExposureTimeUnit) {
+		const nextBounds = exposureTimeBounds(minValue, minValueUnit, maxValue, maxValueUnit, newUnit)
+
 		onUnitChange(newUnit)
-		onValueChange(Math.max(1, exposureTimeIn(value, unit, newUnit)))
+		onValueChange(clampExposureTime(convertedExposureTime(value, unit, newUnit, nextBounds.min), nextBounds.min, nextBounds.max))
 	}
 
 	function handleValueChange(value?: number) {
-		onValueChange(Math.max(min, Math.min(value || min, max)))
+		onValueChange(clampExposureTime(value, min, max))
 	}
 
-	if (value === undefined || value === null) {
-		handleValueChange(0)
-	}
+	const EndContent = <ExposureTimeUnitDropdown color="secondary" onValueChange={handleUnitChange} size="sm" value={unit} disabled={disabled} readOnly={readOnly} />
 
 	return (
-		<div className={tw('flex flex-row gap-1 items-center', className)}>
-			<NumberInput endContent={<ExposureTimeUnitDropdown color="secondary" onValueChange={handleUnitChange} value={unit} />} label="Exposure Time" maxValue={max} minValue={min} onValueChange={handleValueChange} value={value} {...props} />
+		<div className={tw('flex flex-row items-center gap-1', className)}>
+			<NumberInput endContent={EndContent} label="Exposure Time" maxValue={max} minValue={min} onValueChange={handleValueChange} value={clampedValue} disabled={disabled} readOnly={readOnly} {...props} />
 		</div>
 	)
 }

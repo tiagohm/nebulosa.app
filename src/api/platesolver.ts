@@ -2,7 +2,7 @@ import { deg, parseAngle } from 'nebulosa/src/angle'
 import { astapPlateSolve } from 'nebulosa/src/astap'
 import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebulosa/src/astrometrynet'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
-import type { PlateSolveStart, PlateSolveStop } from '../shared/types'
+import type { PlateSolveStart } from '../shared/types'
 import { type Endpoints, response } from './http'
 import type { ImageProcessor } from './image'
 import type { NotificationHandler } from './notification'
@@ -16,50 +16,62 @@ export class PlateSolverHandler {
 	) {}
 
 	async start(req: PlateSolveStart): Promise<PlateSolution | undefined> {
-		req.path = (await this.imageProcessor.store(req.path)) || req.path
-
-		const rightAscension = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, true)
-		const declination = typeof req.declination === 'number' ? req.declination : parseAngle(req.declination)
-		const radius = req.blind || !req.radius ? 0 : deg(req.radius)
+		this.stop(req.id)
 
 		const aborter = new AbortController()
 		this.tasks.set(req.id, aborter)
 
-		let solver: Promise<PlateSolution | undefined> | undefined
+		try {
+			const path = (await this.imageProcessor.store(req.path)) || req.path
+			const rightAscension = typeof req.rightAscension === 'number' ? req.rightAscension : parseAngle(req.rightAscension, true)
+			const declination = typeof req.declination === 'number' ? req.declination : parseAngle(req.declination)
+			const radius = req.blind || !req.radius ? 0 : deg(req.radius)
 
-		if (req.type === 'ASTAP') {
-			solver = astapPlateSolve(req.path, { ...req, rightAscension, declination, radius }, aborter.signal)
-		} else if (req.type === 'ASTROMETRY_NET') {
-			solver = localAstrometryNetPlateSolve(req.path, { ...req, rightAscension, declination, radius }, aborter.signal)
-		} else if (req.type === 'NOVA_ASTROMETRY_NET') {
-			solver = novaAstrometryNetPlateSolve(
-				req.path,
-				{
-					rightAscension,
-					declination,
-					radius,
-					scaleType: req.fov <= 0 ? 'ul' : 'ev',
-					scaleEstimated: req.fov <= 0 ? undefined : req.fov,
-					scaleError: req.fov <= 0 ? undefined : 10, // %
-				},
-				aborter.signal,
-			)
-		}
+			let solver: Promise<PlateSolution | undefined> | undefined
 
-		if (solver) {
-			try {
-				const solution = await solver
+			if (req.type === 'astap') {
+				solver = astapPlateSolve(path, { ...req, rightAscension, declination, radius }, aborter.signal)
+			} else if (req.type === 'astrometryNet') {
+				solver = localAstrometryNetPlateSolve(path, { ...req, rightAscension, declination, radius }, aborter.signal)
+			} else if (req.type === 'novaAstrometryNet') {
+				solver = novaAstrometryNetPlateSolve(
+					path,
+					{
+						apiKey: req.apiKey,
+						apiUrl: req.apiUrl,
+						downsample: req.downsample,
+						rightAscension,
+						declination,
+						radius,
+						scaleType: req.fov <= 0 ? 'ul' : 'ev',
+						scaleEstimated: req.fov <= 0 ? undefined : req.fov,
+						scaleError: req.fov <= 0 ? undefined : 10, // %
+						timeout: req.timeout,
+					},
+					aborter.signal,
+				)
+			}
 
-				if (solution) {
-					return solution
-				} else {
-					this.notification.send({ title: 'PLATE SOLVER', description: 'No solution found', color: 'warning' })
-				}
-			} catch (e) {
+			if (!solver) return undefined
+
+			const solution = await solver
+
+			if (solution) {
+				return solution
+			}
+
+			if (!aborter.signal.aborted) {
+				this.notification.send({ title: 'PLATE SOLVER', description: 'No solution found', color: 'warning' })
+			}
+		} catch (e) {
+			if (!aborter.signal.aborted) {
 				console.error(e)
 				this.notification.send({ title: 'PLATE SOLVER', description: 'Failed to plate solve', color: 'danger' })
-			} finally {
-				aborter.abort()
+			}
+		} finally {
+			aborter.abort()
+
+			if (this.tasks.get(req.id) === aborter) {
 				this.tasks.delete(req.id)
 			}
 		}
@@ -67,14 +79,29 @@ export class PlateSolverHandler {
 		return undefined
 	}
 
-	stop(req: PlateSolveStop) {
-		this.tasks.get(req.id)?.abort()
+	stop(id: string) {
+		const aborter = this.tasks.get(id)
+
+		if (aborter) {
+			this.tasks.delete(id)
+			aborter.abort()
+		}
+	}
+
+	stopAll() {
+		for (const key of this.tasks.keys()) {
+			this.stop(key)
+		}
+	}
+
+	isRunning(id: string) {
+		return this.tasks.get(id)?.signal.aborted === false
 	}
 }
 
-export function plateSolver(solver: PlateSolverHandler): Endpoints {
+export function plateSolver(solver: PlateSolverHandler) {
 	return {
 		'/platesolver/start': { POST: async (req) => response(await solver.start(await req.json())) },
-		'/platesolver/stop': { POST: async (req) => response(solver.stop(await req.json())) },
-	}
+		'/platesolver/:id/stop': { POST: (req) => response(solver.stop(req.params.id)) },
+	} as const satisfies Endpoints
 }

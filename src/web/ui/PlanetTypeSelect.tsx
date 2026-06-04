@@ -1,5 +1,5 @@
 import type { PlanetType } from 'src/shared/types'
-import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
+import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = [
 	'ALL',
@@ -41,7 +41,9 @@ const LABELS = [
 	'Pluto Satellite',
 ] as const
 
-const PlanetTypeItem: SelectItemRenderer<PlanetType | 'ALL'> = (_, i) => <span>{LABELS[i]}</span>
+function PlanetTypeItem(item: PlanetType | 'ALL', i: number) {
+	return <span>{LABELS[i]}</span>
+}
 
 export type PlanetTypeSelectProps = Omit<SelectProps<PlanetType | 'ALL'>, 'children' | 'items'>
 

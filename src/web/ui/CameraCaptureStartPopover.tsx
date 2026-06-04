@@ -3,12 +3,12 @@ import type { DeepReadonly } from 'nebulosa/src/types'
 import type { CameraCaptureStart } from 'src/shared/types'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
 import { Checkbox } from './components/Checkbox'
+import { IconButton, type IconButtonProps } from './components/IconButton'
 import { NumberInput } from './components/NumberInput'
 import { Popover } from './components/Popover'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameFormatSelect } from './FrameFormatSelect'
 import { Icons } from './Icon'
-import { IconButton, type IconButtonProps } from './IconButton'
 
 export type CameraCaptureStartPopoverKey = 'exposureTime' | 'exposureTimeUnit' | 'binX' | 'binY' | 'gain' | 'offset' | 'frameFormat' | 'x' | 'y' | 'width' | 'height' | 'transferFormat' | 'compressed'
 
@@ -29,16 +29,17 @@ export function CameraCaptureStartPopover({ mode, camera, color, disabled, value
 	const exposureTimeDisabled = !canExposureTime(mode)
 
 	return (
-		<Popover trigger={<IconButton {...props} color={color ?? (camera.connected ? 'success' : 'danger')} disabled={disabled || !camera.connected} icon={Icons.Cog} />}>
+		<Popover className="max-w-90vw w-120" trigger={<IconButton {...props} color={color ?? (camera.connected ? 'success' : 'danger')} disabled={disabled || !camera.connected} icon={Icons.Cog} size="sm" />}>
 			<div className="grid grid-cols-12 items-center gap-2 p-4">
 				<p className="col-span-full font-bold">CAMERA CAPTURE OPTIONS</p>
 				<ExposureTimeInput
 					className="col-span-6"
 					disabled={exposureTimeDisabled}
+					fullWidth
 					maxValue={camera.exposure.max}
-					maxValueUnit="SECOND"
+					maxValueUnit="second"
 					minValue={exposureTimeDisabled ? 0 : camera.exposure.min}
-					minValueUnit="SECOND"
+					minValueUnit="second"
 					onUnitChange={(value) => onValueChange('exposureTimeUnit', value)}
 					onValueChange={(value) => onValueChange('exposureTime', value)}
 					unit={exposureTimeUnit}

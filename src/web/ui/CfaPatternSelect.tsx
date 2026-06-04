@@ -1,14 +1,13 @@
 import type { CfaPattern } from 'nebulosa/src/image.types'
-import { Select, type SelectItemRenderer, type SelectProps } from './components/Select'
-
-type CfaPatternOption = CfaPattern | 'AUTO'
+import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['AUTO', 'RGGB', 'BGGR', 'GBRG', 'GRBG', 'GRGB', 'GBGR', 'RGBG', 'BGRG'] as const
-const LABELS = ['Auto', 'RGGB', 'BGGR', 'GBRG', 'GRBG', 'GRGB', 'GBGR', 'RGBG', 'BGRG'] as const
 
-const CfaPatternItem: SelectItemRenderer<CfaPatternOption> = (_, i) => <span>{LABELS[i]}</span>
+function CfaPatternItem(item: CfaPattern | 'AUTO') {
+	return <span>{item === 'AUTO' ? 'Auto' : item}</span>
+}
 
-export type CfaPatternSelectProps = Omit<SelectProps<CfaPatternOption>, 'children' | 'items'>
+export type CfaPatternSelectProps = Omit<SelectProps<CfaPattern | 'AUTO'>, 'children' | 'items'>
 
 export function CfaPatternSelect({ label = 'CFA Pattern', ...props }: CfaPatternSelectProps) {
 	return (

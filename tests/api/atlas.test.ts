@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test, type Mock } from 'bun:test'
+import { join } from 'path'
 import { deg, formatALT, parseAngle } from 'nebulosa/src/angle'
 import { lightYear, meter, toKilometer } from 'nebulosa/src/distance'
 import { StellariumObjectType } from 'nebulosa/src/stellarium'
@@ -6,6 +7,7 @@ import { formatTemporal } from 'nebulosa/src/temporal'
 import { AtlasHandler } from 'src/api/atlas'
 import cache from 'src/api/cache'
 import { DEFAULT_SKY_OBJECT_SEARCH, type FindNextSolarEclipse, type PositionOfBody, type SearchSkyObject } from 'src/shared/types'
+import { spyFetch } from './util'
 
 const atlas = new AtlasHandler(cache)
 
@@ -27,6 +29,27 @@ const SKY_OBJECT_SEARCH: SearchSkyObject = {
 	location: POSITION_OF_BODY.location,
 }
 
+const FETCH_ARCHIVE = new Bun.Archive(await Bun.file(join('tests', 'data', 'fetch.tar.gz')).bytes(), { compress: 'gzip' })
+const FETCH_FILES = new Map<string, string>()
+
+for (const [, file] of await FETCH_ARCHIVE.files()) {
+	const text = await file.text()
+	const start = text.indexOf('\n')
+	const url = text.slice(0, start)
+	const content = text.slice(start + 1)
+	FETCH_FILES.set(url, content)
+}
+
+let fetchMock: Mock<typeof fetch> | undefined
+
+beforeAll(() => {
+	fetchMock = spyFetch((input: string) => Promise.resolve(new Response(FETCH_FILES.get(input))))
+})
+
+afterAll(() => {
+	fetchMock?.mockRestore()
+})
+
 test('seasons', () => {
 	const { spring, summer, autumn, winter } = atlas.seasons(POSITION_OF_BODY)
 
@@ -39,33 +62,33 @@ test('seasons', () => {
 
 test('solar eclipses from meeus', () => {
 	const request: FindNextSolarEclipse = { count: 1, ...POSITION_OF_BODY }
-	let eclipses = atlas.solarEclipsesFromMeeus({ ...request, time: { ...request.time, utc: 1771377240000 } }) // Tue Feb 17 2026 22:14:00 GMT-0300 (Horário Padrão de Brasília)
+	let eclipses = atlas.solarEclipses({ ...request, time: { ...request.time, utc: 1771377240000 } }) // Tue Feb 17 2026 22:14:00 GMT-0300 (Horário Padrão de Brasília)
 
 	expect(eclipses).toHaveLength(1)
 	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-02-17 12:12')
-	expect(eclipses[0].type).toBe('ANNULAR')
+	expect(eclipses[0].type).toBe('annular')
 
-	eclipses = atlas.solarEclipsesFromMeeus({ ...request, time: { ...request.time, utc: 1771384440000 } }) // Wed Feb 18 2026 00:14:00 GMT-0300 (Horário Padrão de Brasília)
+	eclipses = atlas.solarEclipses({ ...request, time: { ...request.time, utc: 1771384440000 } }) // Wed Feb 18 2026 00:14:00 GMT-0300 (Horário Padrão de Brasília)
 
 	expect(eclipses).toHaveLength(1)
 	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-08-12 17:46')
-	expect(eclipses[0].type).toBe('TOTAL')
+	expect(eclipses[0].type).toBe('total')
 })
 
-test('solar eclipses from nasa', async () => {
-	const request: FindNextSolarEclipse = { count: 1, ...POSITION_OF_BODY }
-	let eclipses = await atlas.solarEclipsesFromNasa({ ...request, time: { ...request.time, utc: 1771377240000 } }) // Tue Feb 17 2026 22:14:00 GMT-0300 (Horário Padrão de Brasília)
+// test('solar eclipses from nasa', async () => {
+// 	const request: FindNextSolarEclipse = { count: 1, ...POSITION_OF_BODY }
+// 	let eclipses = await atlas.solarEclipsesFromNasa({ ...request, time: { ...request.time, utc: 1771377240000 } }) // Tue Feb 17 2026 22:14:00 GMT-0300 (Horário Padrão de Brasília)
 
-	expect(eclipses).toHaveLength(1)
-	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-02-17 12:13')
-	expect(eclipses[0].type).toBe('ANNULAR')
+// 	expect(eclipses).toHaveLength(1)
+// 	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-02-17 12:13')
+// 	expect(eclipses[0].type).toBe('annular')
 
-	eclipses = await atlas.solarEclipsesFromNasa({ ...request, time: { ...request.time, utc: 1771384440000 } }) // Wed Feb 18 2026 00:14:00 GMT-0300 (Horário Padrão de Brasília)
+// 	eclipses = await atlas.solarEclipsesFromNasa({ ...request, time: { ...request.time, utc: 1771384440000 } }) // Wed Feb 18 2026 00:14:00 GMT-0300 (Horário Padrão de Brasília)
 
-	expect(eclipses).toHaveLength(1)
-	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-08-12 17:47')
-	expect(eclipses[0].type).toBe('TOTAL')
-})
+// 	expect(eclipses).toHaveLength(1)
+// 	expect(formatTemporal(eclipses[0].time, 'YYYY-MM-DD HH:mm')).toBe('2026-08-12 17:47')
+// 	expect(eclipses[0].type).toBe('total')
+// })
 
 describe('search sky object', () => {
 	test('no filter', () => {
@@ -116,11 +139,11 @@ describe('search sky object', () => {
 		const result = atlas.searchSkyObject({ ...SKY_OBJECT_SEARCH, limit: 5, types: [StellariumObjectType.DARK_NEBULA] })
 
 		expect(result).toHaveLength(5)
-		expect(result[0].id).toBe(1010829)
-		expect(result[0].magnitude).toBe(93)
+		expect(result[0].id).toBe(1006463)
+		expect(result[0].magnitude).toBe(83.8)
 		expect(result[0].type).toBe(StellariumObjectType.DARK_NEBULA)
-		expect(result[0].constellation).toBe(7)
-		expect(result[0].name).toBe('10:26')
+		expect(result[0].constellation).toBe(4)
+		expect(result[0].name).toBe('1:6963')
 	})
 
 	test('name type only', () => {

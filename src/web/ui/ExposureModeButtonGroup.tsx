@@ -7,9 +7,9 @@ export type ExposureModeButtonGroupProps = Omit<ButtonGroupProps<ExposureMode>, 
 export function ExposureModeButtonGroup({ value, onValueChange, color = 'primary', ...props }: ExposureModeButtonGroupProps) {
 	return (
 		<ButtonGroup {...props} color={color} onValueChange={onValueChange} value={value}>
-			<ButtonGroupItem id="SINGLE" label="Single" />
-			<ButtonGroupItem id="FIXED" label="Fixed" />
-			<ButtonGroupItem id="LOOP" label="Loop" />
+			<ButtonGroupItem id="single" label="Single" />
+			<ButtonGroupItem id="fixed" label="Fixed" />
+			<ButtonGroupItem id="loop" label="Loop" />
 		</ButtonGroup>
 	)
 }

@@ -6,7 +6,7 @@ import type { AstronomicalImageStar } from 'nebulosa/src/image.generator'
 import { IndiClient, type IndiClientHandler } from 'nebulosa/src/indi.client'
 import type { Client, Device } from 'nebulosa/src/indi.device'
 import type { DeviceProvider, FocuserManager, GuideOutputManager, MountManager, RotatorManager } from 'nebulosa/src/indi.manager'
-import { CameraSimulator, type CatalogSource, type CatalogSourceStar, ClientSimulator, type DeviceSimulatorOptions, DustCapSimulator, FilterWheelSimulator, FlatPanelSimulator, FocuserSimulator, MountSimulator, RotatorSimulator } from 'nebulosa/src/indi.simulator'
+import { CameraSimulator, type CatalogSource, type CatalogSourceStar, ClientSimulator, CoverSimulator, type DeviceSimulatorOptions, FlatPanelSimulator, FocuserSimulator, MountSimulator, RotatorSimulator, WheelSimulator } from 'nebulosa/src/indi.simulator'
 import { clamp } from 'nebulosa/src/math'
 import type { Writable } from 'nebulosa/src/types'
 import { VizierGaiaCatalog, type VizierGaiaCatalogEntry } from 'nebulosa/src/vizier'
@@ -140,7 +140,7 @@ export class ConnectionHandler {
 			) {
 				console.info('reusing existing connection:', client.id, client.description)
 				const status = this.status(client)!
-				this.wsm.send('connection:open', { status, reused: true } satisfies ConnectionEvent)
+				this.wsm.send<ConnectionEvent>('connection:open', { status, reused: true })
 				return status
 			}
 		}
@@ -155,7 +155,7 @@ export class ConnectionHandler {
 					console.info('new connection to:', client.id, client.description)
 
 					const status = this.status(client)!
-					this.wsm.send('connection:open', { status, reused: false } satisfies ConnectionEvent)
+					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
 					return status
 				} else {
 					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to INDI server', color: 'danger' })
@@ -173,7 +173,7 @@ export class ConnectionHandler {
 					console.info('new connection to:', client.id, client.description)
 
 					const status = this.status(client)!
-					this.wsm.send('connection:open', { status, reused: false } satisfies ConnectionEvent)
+					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
 					return status
 				} else {
 					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })
@@ -199,15 +199,15 @@ export class ConnectionHandler {
 			const camera = new CameraSimulator('Camera Simulator', client, { ...options, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogSources })
 			const guideCamera = new CameraSimulator('Guide Camera Simulator', client, { ...options, mountManager, guideOutputManager, focuserManager, rotatorManager, catalogSources })
 			const focuser = new FocuserSimulator('Focuser Simulator', client, options)
-			const filterWheel = new FilterWheelSimulator('Filter Wheel Simulator', client, options)
+			const wheel = new WheelSimulator('Wheel Simulator', client, options)
 			const rotator = new RotatorSimulator('Rotator Simulator', client, options)
 			const flatPanel = new FlatPanelSimulator('Flat Panel Simulator', client, options)
-			const dustCap = new DustCapSimulator('Dust Cap Simulator', client, options)
+			const cover = new CoverSimulator('Dust Cap Simulator', client, options)
 
 			console.info('new connection to:', client.id, client.description)
 
 			const status = this.status(client)!
-			this.wsm.send('connection:open', { status, reused: false } satisfies ConnectionEvent)
+			this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
 			return status
 		}
 
@@ -226,7 +226,7 @@ export class ConnectionHandler {
 
 				client[Symbol.dispose]()
 
-				this.wsm.send('connection:close', { status } satisfies ConnectionEvent)
+				this.wsm.send<ConnectionEvent>('connection:close', { status })
 			}
 		} else {
 			for (const [key, client] of this.clients) {
@@ -238,7 +238,7 @@ export class ConnectionHandler {
 
 					client[Symbol.dispose]()
 
-					this.wsm.send('connection:close', { status } satisfies ConnectionEvent)
+					this.wsm.send<ConnectionEvent>('connection:close', { status })
 
 					break
 				}
@@ -246,19 +246,19 @@ export class ConnectionHandler {
 		}
 	}
 
-	status(key: string | Client): ConnectionStatus | undefined {
-		if (typeof key === 'string') {
-			const client = this.clients.get(key)
-			return client && { type: client.type, id: key }
+	status(client?: string | Client): ConnectionStatus | undefined {
+		if (client === undefined) return undefined
+
+		if (typeof client === 'string') {
+			client = this.clients.get(client)
+			return client && this.status(client)
 		} else {
-			for (const [id, client] of this.clients) {
-				if (client === key) {
-					return client && { type: client.type, id }
-				}
+			if (client instanceof IndiClient || client instanceof AlpacaClient) {
+				return { id: client.id, host: client.remoteHost ?? '', ip: 'remoteIp' in client ? (client.remoteIp ?? '') : '', port: client.remotePort ?? -1, type: client.type }
+			} else {
+				return { id: client.id, host: '', ip: '', type: 'SIMULATOR', port: -1 }
 			}
 		}
-
-		return undefined
 	}
 
 	list() {
@@ -268,9 +268,9 @@ export class ConnectionHandler {
 	}
 }
 
-export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler & DeviceProvider<Device>, mountManager: MountManager, focuserManager: FocuserManager, rotatorManager: RotatorManager, guideOutputManager: GuideOutputManager): Endpoints {
+export function connection(connectionHandler: ConnectionHandler, indi: IndiClientHandler & DeviceProvider<Device>, mountManager: MountManager, focuserManager: FocuserManager, rotatorManager: RotatorManager, guideOutputManager: GuideOutputManager) {
 	return {
 		'/connections': { GET: () => response(connectionHandler.list()), POST: async (req) => response(await connectionHandler.connect(await req.json(), indi, mountManager, focuserManager, rotatorManager, guideOutputManager)) },
 		'/connections/:id': { GET: (req) => response(connectionHandler.status(req.params.id)), DELETE: (req) => response(connectionHandler.disconnect(req.params.id)) },
-	}
+	} as const satisfies Endpoints
 }

@@ -1,18 +1,14 @@
-import { useMolecule } from 'bunshi/react'
 import type { Device } from 'nebulosa/src/indi.device'
 import { memo } from 'react'
-import type { Atom } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { type EquipmentDevice, EquipmentMolecule } from '@/molecules/indi/equipment'
 import type { DeviceTypeMap } from '@/shared/types'
-import { stopPropagation } from '@/shared/util'
-import { Dropdown, type DropdownProps } from './components/Dropdown'
-import { ListItem } from './components/List'
+import { equipmentStore, type DeviceState } from '@/stores/equipment.store'
+import { Dropdown, DropdownItem, type DropdownProps } from './components/Dropdown'
+import { IconButton } from './components/IconButton'
 import { ConnectButton } from './ConnectButton'
 import { Icons, type Icon } from './Icon'
-import { IconButton } from './IconButton'
 
-export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends DropdownProps {
+export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends Omit<DropdownProps, 'children' | 'onAction'> {
 	readonly type: T
 	readonly value?: DeviceTypeMap[T]
 	readonly onValueChange?: (value?: DeviceTypeMap[T]) => void
@@ -22,87 +18,72 @@ export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends Drop
 	readonly icon?: Icon
 }
 
-function DeviceItem(item: Device | undefined, onPointerDown: React.PointerEventHandler, equipment: Atom<typeof EquipmentMolecule>) {
-	const key = item?.id ?? 'none'
-	return <ListItem key={key} data-id={key} onPointerDown={onPointerDown} label={item?.name || 'None'} description={<DeviceDropdownStartContent isConnected={item?.connected} />} endContent={<DeviceDropdownEndContent device={item} onConnect={equipment.connect} onShow={equipment.show} />} />
+function deviceStatusColor(isConnected: boolean | undefined) {
+	return isConnected === undefined ? 'var(--secondary)' : isConnected ? 'var(--success)' : 'var(--danger)'
+}
+
+function DeviceItem(device: DeviceState<Device> | undefined) {
+	const key = device?.id ?? 'none'
+
+	return <DropdownItem key={key} label={device?.name ?? 'None'} startContent={<DeviceDropdownStartContent isConnected={device?.connected} />} endContent={device && <DeviceDropdownEndContent device={device} />} />
 }
 
 export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onValueChange, disabled, disallowNoneSelection = false, label, showLabel = false, showLabelOnEmpty = showLabel, color, startContent, icon: Icon, ...props }: DeviceDropdownProps<T>) {
-	const equipment = useMolecule(EquipmentMolecule)
-	const state = equipment.state[type]
+	const state = equipmentStore.state[type]
 	const devices = useSnapshot(state)
 
-	function handleAction(event: React.PointerEvent<HTMLElement>) {
-		const id = event.currentTarget.dataset.id
-		onValueChange?.(id === 'none' ? undefined : (state.find((e) => e.id === id) as never))
+	const items = new Array<DeviceState<Device> | undefined>(devices.length + (disallowNoneSelection ? 0 : 1))
+
+	if (!disallowNoneSelection) items[0] = undefined
+	for (let i = disallowNoneSelection ? 0 : 1, p = 0; p < devices.length; i++, p++) items[i] = devices[p] as DeviceState<Device>
+
+	function handleAction(index: number) {
+		if (index < 0 || index >= items.length) return
+
+		const device = items[index]
+
+		if (device === undefined) {
+			onValueChange?.(undefined)
+		} else {
+			const currentDevice = state.find((e) => e.id === device.id)
+			if (currentDevice) onValueChange?.(currentDevice as never)
+		}
 	}
-
-	const items = new Array<React.ReactNode>(devices.length + (disallowNoneSelection ? 0 : 1))
-
-	if (!disallowNoneSelection) items[0] = DeviceItem(undefined, handleAction, equipment)
-	for (let i = disallowNoneSelection ? 0 : 1, p = 0; i < devices.length; i++, p++) items[i] = DeviceItem(devices[p], handleAction, equipment)
 
 	return (
 		<Dropdown
-			label={showLabel ? (value?.name ?? (showLabelOnEmpty ? label || 'None' : undefined)) : undefined}
+			label={showLabel ? (value?.name ?? (showLabelOnEmpty ? (label ?? 'None') : undefined)) : undefined}
 			color={color ?? (value === undefined ? 'secondary' : value.connected ? 'success' : 'danger')}
 			disabled={disabled || items.length === 0}
+			onAction={handleAction}
 			startContent={startContent ?? (Icon ? <Icon /> : undefined)}
 			{...props}>
-			{items}
+			{items.map(DeviceItem)}
 		</Dropdown>
 	)
 }
 
-export const CameraDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'CAMERA'>>, 'type'>) => {
-	return <DeviceDropdown tooltipContent="Camera" type="CAMERA" {...props} />
-})
+export const CameraDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'camera'>>, 'type'>) => <DeviceDropdown icon={Icons.Camera} tooltipContent="Camera" type="camera" {...props} />)
 
-export const MountDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'MOUNT'>>, 'type'>) => {
-	return <DeviceDropdown tooltipContent="Mount" type="MOUNT" {...props} />
-})
+export const MountDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'mount'>>, 'type'>) => <DeviceDropdown icon={Icons.Telescope} tooltipContent="Mount" type="mount" {...props} />)
 
-export const WheelDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'WHEEL'>>, 'type'>) => {
-	return <DeviceDropdown tooltipContent="Filter Wheel" type="WHEEL" {...props} />
-})
+export const WheelDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'wheel'>>, 'type'>) => <DeviceDropdown icon={Icons.FilterWheel} tooltipContent="Filter Wheel" type="wheel" {...props} />)
 
-export const FocuserDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'FOCUSER'>>, 'type'>) => {
-	return <DeviceDropdown tooltipContent="Focuser" type="FOCUSER" {...props} />
-})
+export const FocuserDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'focuser'>>, 'type'>) => <DeviceDropdown icon={Icons.Focuser} tooltipContent="Focuser" type="focuser" {...props} />)
 
-export const RotatorDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'ROTATOR'>>, 'type'>) => {
-	return <DeviceDropdown tooltipContent="Rotator" type="ROTATOR" {...props} />
-})
+export const RotatorDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'rotator'>>, 'type'>) => <DeviceDropdown icon={Icons.RotateRight} tooltipContent="Rotator" type="rotator" {...props} />)
 
-export const GuideOutputDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'GUIDE_OUTPUT'>>, 'type'>) => {
-	return <DeviceDropdown tooltipContent="Guide Output" type="GUIDE_OUTPUT" {...props} />
-})
+export const GuideOutputDropdown = memo((props: Omit<Partial<DeviceDropdownProps<'guideOutput'>>, 'type'>) => <DeviceDropdown icon={Icons.Pulse} tooltipContent="Guide Output" type="guideOutput" {...props} />)
 
-const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected: boolean | undefined }) => {
-	return <Icons.Circle color={isConnected === undefined ? '#9353D3' : isConnected ? '#17C964' : '#F31260'} />
-})
+const DeviceDropdownStartContent = memo(({ isConnected }: { readonly isConnected: boolean | undefined }) => <Icons.Circle color={deviceStatusColor(isConnected)} />)
 
 interface DeviceDropdownEndContentProps {
-	readonly device?: EquipmentDevice<Device>
-	readonly onConnect: (device: Device) => void
-	readonly onShow: (device: Device) => void
+	readonly device: DeviceState<Device>
 }
 
-function DeviceDropdownEndContent({ device, onConnect, onShow }: DeviceDropdownEndContentProps) {
-	function handleConnectPointerUp(event: React.PointerEvent) {
-		stopPropagation(event)
-		onConnect(device!)
-	}
-
-	function handleShowPointerUp(event: React.PointerEvent) {
-		stopPropagation(event)
-		onShow(device!)
-	}
-
-	return (
-		<div className="flex flex-row items-center gap-2">
-			{device && <IconButton color="secondary" icon={Icons.OpenInNew} iconSize={12} onPointerUp={handleShowPointerUp} />}
-			{device && <ConnectButton isConnected={device.connected} loading={device?.connecting} onPointerUp={handleConnectPointerUp} />}
-		</div>
-	)
-}
+const DeviceDropdownEndContent = memo(({ device }: DeviceDropdownEndContentProps) => (
+	<div className="flex flex-row items-center gap-2">
+		<IconButton color="secondary" icon={Icons.OpenInNew} tooltipContent="Open" onClick={() => equipmentStore.show(device)} size="sm" />
+		<ConnectButton connected={device.connected} loading={device.connecting} onClick={() => equipmentStore.connect(device)} size="sm" />
+	</div>
+))

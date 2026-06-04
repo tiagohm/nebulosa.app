@@ -13,11 +13,12 @@ import { TIMEZONE, temporalAdd } from 'nebulosa/src/temporal'
 import { Timescale, timeJulianYear, timeNow } from 'nebulosa/src/time'
 // oxfmt-ignore
 import { DEFAULT_COORDINATE_INFO, type MountAdded, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountUpdated } from 'src/shared/types'
+import bus from 'src/shared/bus'
 import { coordinateInfo } from 'src/shared/util'
 import type { CacheManager } from './cache'
 import type { ConfirmationHandler } from './confirmation'
 import { type Endpoints, query, response } from './http'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 
 const J2000 = timeJulianYear(2000, Timescale.UTC)
 const JNOW = timeNow(true)
@@ -40,20 +41,26 @@ export class MountHandler implements DeviceHandler<Mount> {
 		readonly cache: CacheManager,
 	) {
 		mountManager.addHandler(this)
+
+		bus.subscribe<Messager>('ws:open', (socket) => {
+			for (const device of mountManager.list()) {
+				this.wsm.send<MountAdded>('mount:add', { device }, socket)
+			}
+		})
 	}
 
 	added(device: Mount) {
-		this.wsm.send('mount:add', { device } satisfies MountAdded)
-		console.info('mount added:', device.name)
+		this.wsm.send<MountAdded>('mount:add', { device })
+		console.info('mount added:', device.name, device.id)
 	}
 
 	updated(device: Mount, property: keyof Mount & string, state?: PropertyState) {
-		this.wsm.send('mount:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies MountUpdated)
+		this.wsm.send<MountUpdated>('mount:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Mount) {
-		this.wsm.send('mount:remove', { device } satisfies MountRemoved)
-		console.info('mount removed:', device.name)
+		this.wsm.send<MountRemoved>('mount:remove', { device })
+		console.info('mount removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {
@@ -62,12 +69,12 @@ export class MountHandler implements DeviceHandler<Mount> {
 
 	currentPosition(mount: Mount) {
 		if (!mount) return DEFAULT_COORDINATE_INFO
-		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate), 'm'), mount.geographicCoordinate.longitude, mount.equatorialCoordinate)
+		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate)), mount.geographicCoordinate.longitude, mount.equatorialCoordinate)
 	}
 
 	targetPosition(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
 		if (!mount) return DEFAULT_COORDINATE_INFO
-		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate), 'm'), mount.geographicCoordinate.longitude, coordinate)
+		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate)), mount.geographicCoordinate.longitude, coordinate)
 	}
 
 	goTo(mount: Mount, req: MountTargetCoordinate) {
@@ -95,18 +102,7 @@ export class MountRemoteControlHandler {
 
 	constructor(readonly mountManager: MountManager) {}
 
-	private readonly disconnectHandler = (server: Lx200ProtocolServer | StellariumProtocolServer) => {
-		const mount = this.get(server)
-
-		if (server instanceof Lx200ProtocolServer) {
-			this.lx200.delete(mount)
-		} else if (server instanceof StellariumProtocolServer) {
-			this.stellarium.delete(mount)
-		}
-	}
-
 	private readonly stellariumHandler: StellariumProtocolHandler = {
-		disconnect: this.disconnectHandler,
 		goto: (server, rightAscension, declination) => {
 			;[rightAscension, declination] = precessToJNow(rightAscension, declination)
 			this.mountManager.goTo(this.get(server), rightAscension, declination)
@@ -114,7 +110,6 @@ export class MountRemoteControlHandler {
 	}
 
 	private readonly lx200Handler: Lx200ProtocolHandler = {
-		disconnect: this.disconnectHandler,
 		goto: (server, rightAscension, declination) => {
 			;[rightAscension, declination] = precessToJNow(rightAscension, declination)
 			this.mountManager.goTo(this.get(server), rightAscension, declination)
@@ -143,18 +138,10 @@ export class MountRemoteControlHandler {
 			if (latitude !== undefined) this.mountManager.geographicCoordinate(device, { ...device.geographicCoordinate, latitude })
 			return normalizePI(device.geographicCoordinate.latitude)
 		},
-		dateTime: (server: Lx200ProtocolServer) => {
-			return [temporalAdd(Date.now(), TIMEZONE, 'm'), TIMEZONE] as const
-		},
-		tracking: (server: Lx200ProtocolServer) => {
-			return this.get(server).tracking
-		},
-		parked: (server: Lx200ProtocolServer) => {
-			return this.get(server).parked
-		},
-		slewing: (server: Lx200ProtocolServer) => {
-			return this.get(server).slewing
-		},
+		dateTime: (server: Lx200ProtocolServer) => [temporalAdd(Date.now(), TIMEZONE, 'm'), TIMEZONE] as const,
+		tracking: (server: Lx200ProtocolServer) => this.get(server).tracking,
+		parked: (server: Lx200ProtocolServer) => this.get(server).parked,
+		slewing: (server: Lx200ProtocolServer) => this.get(server).slewing,
 		slewRate: (server: Lx200ProtocolServer, rate: 'CENTER' | 'GUIDE' | 'FIND' | 'MAX') => {
 			const rates = this.get(server).slewRates
 
@@ -175,7 +162,7 @@ export class MountRemoteControlHandler {
 	}
 
 	start(mount: Mount, req: MountRemoteControlStart) {
-		if (req.protocol === 'STELLARIUM') {
+		if (req.protocol === 'stellarium') {
 			if (!this.stellarium.has(mount)) {
 				const server = new StellariumProtocolServer({ handler: this.stellariumHandler })
 
@@ -183,7 +170,7 @@ export class MountRemoteControlHandler {
 					this.stellarium.set(mount, server)
 				}
 			}
-		} else if (req.protocol === 'LX200') {
+		} else if (req.protocol === 'lx200') {
 			if (!this.lx200.has(mount)) {
 				const server = new Lx200ProtocolServer({ handler: this.lx200Handler, name: 'Nebulosa', version: '0.2.0' })
 
@@ -195,14 +182,14 @@ export class MountRemoteControlHandler {
 	}
 
 	stop(mount: Mount, protocol: MountRemoteControlProtocol) {
-		if (protocol === 'STELLARIUM') {
+		if (protocol === 'stellarium') {
 			const server = this.stellarium.get(mount)
 
 			if (server) {
 				server.stop()
 				this.stellarium.delete(mount)
 			}
-		} else if (protocol === 'LX200') {
+		} else if (protocol === 'lx200') {
 			const server = this.lx200.get(mount)
 
 			if (server) {
@@ -215,7 +202,7 @@ export class MountRemoteControlHandler {
 	status(mount: Mount): MountRemoteControlStatus {
 		const a = this.lx200.get(mount)
 		const b = this.stellarium.get(mount)
-		return { LX200: !!a && { host: a.hostname!, port: a.port }, STELLARIUM: !!b && { host: b.hostname!, port: b.port } }
+		return { lx200: !!a && { host: a.hostname!, port: a.port }, stellarium: !!b && { host: b.hostname!, port: b.port } }
 	}
 
 	private get(server: Lx200ProtocolServer | StellariumProtocolServer) {
@@ -229,7 +216,7 @@ export class MountRemoteControlHandler {
 	}
 }
 
-export function mount(mountHandler: MountHandler, mountRemoteControlHandler: MountRemoteControlHandler): Endpoints {
+export function mount(mountHandler: MountHandler, mountRemoteControlHandler: MountRemoteControlHandler) {
 	const { mountManager } = mountHandler
 
 	function mountFromParams(req: Bun.BunRequest) {
@@ -261,5 +248,5 @@ export function mount(mountHandler: MountHandler, mountRemoteControlHandler: Mou
 		'/mounts/:id/remotecontrol/start': { POST: async (req) => response(mountRemoteControlHandler.start(mountFromParams(req), await req.json())) },
 		'/mounts/:id/remotecontrol/stop': { POST: async (req) => response(mountRemoteControlHandler.stop(mountFromParams(req), await req.json())) },
 		'/mounts/:id/remotecontrol': { GET: (req) => response(mountRemoteControlHandler.status(mountFromParams(req))) },
-	}
+	} as const satisfies Endpoints
 }

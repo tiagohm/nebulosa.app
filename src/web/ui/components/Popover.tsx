@@ -1,12 +1,19 @@
 import * as React from 'react'
-import { useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useEffectEvent, useImperativeHandle, useState } from 'react'
 import { assignRef } from '@/shared/util'
 import { Floating, type FloatingClassNames, type FloatingPlacement } from './Floating'
 
 export type PopoverPlacement = FloatingPlacement
 export type PopoverClassNames = FloatingClassNames
 
-export interface PopoverProps extends Omit<React.ComponentPropsWithRef<'div'>, 'children' | 'content'> {
+export interface PopoverMethods {
+	readonly show: VoidFunction
+	readonly hide: VoidFunction
+	readonly toggle: VoidFunction
+	readonly showing: boolean
+}
+
+export interface PopoverProps extends Omit<React.ComponentPropsWithoutRef<'div'>, 'children' | 'content'> {
 	readonly children?: React.ReactNode
 	readonly trigger?: React.ReactNode
 	readonly placement?: PopoverPlacement
@@ -17,6 +24,7 @@ export interface PopoverProps extends Omit<React.ComponentPropsWithRef<'div'>, '
 	readonly portalContainer?: Element
 	readonly classNames?: PopoverClassNames
 	readonly offset?: number
+	readonly ref?: React.Ref<PopoverMethods>
 }
 
 // Renders a pointer-triggered popover wrapper around the shared floating content.
@@ -34,6 +42,21 @@ export function Popover({ autoFlip, trigger, children, className, classNames, id
 		if (nextOpen === isOpen) return
 		onOpenChange?.(nextOpen)
 	})
+
+	useImperativeHandle(ref, () => ({
+		show: () => {
+			setOpen(true)
+		},
+		hide: () => {
+			setOpen(false)
+		},
+		toggle: () => {
+			setOpen(!isOpen)
+		},
+		get showing() {
+			return isOpen
+		},
+	}))
 
 	// Keeps the trigger element available for controlled initial-open rendering.
 	function handleTriggerRef(element: HTMLElement | null) {
@@ -104,7 +127,6 @@ export function Popover({ autoFlip, trigger, children, className, classNames, id
 					open={visible}
 					placement={placement}
 					portalContainer={portalContainer}
-					ref={ref}
 					style={style}
 					triggerElement={triggerElement}
 				/>

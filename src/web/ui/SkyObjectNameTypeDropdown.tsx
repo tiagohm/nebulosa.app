@@ -7,12 +7,12 @@ export interface SkyObjectNameTypeDropdownProps extends Omit<DropdownProps, 'chi
 }
 
 export function SkyObjectNameTypeDropdown({ value, onValueChange, variant = 'ghost', ...props }: SkyObjectNameTypeDropdownProps) {
-	function handleOnAction(index: number) {
+	function handleAction(index: number) {
 		onValueChange(index - 1)
 	}
 
 	return (
-		<Dropdown label={SKY_OBJECT_NAME_TYPES[value + 1]} variant={variant} onAction={handleOnAction} {...props}>
+		<Dropdown label={SKY_OBJECT_NAME_TYPES[value + 1]} variant={variant} onAction={handleAction} {...props}>
 			{SKY_OBJECT_NAME_TYPES}
 		</Dropdown>
 	)

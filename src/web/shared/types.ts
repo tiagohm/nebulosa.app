@@ -13,7 +13,7 @@ export interface Connection extends Connect {
 }
 
 export interface Image {
-	readonly key: string
+	readonly id: string
 	readonly position: number
 	readonly path: string
 	readonly source: ImageSource
@@ -23,7 +23,8 @@ export interface Image {
 export interface ImageLoaded {
 	readonly image: Image
 	readonly info: ImageInfo
-	readonly newImage: boolean
+	readonly first: boolean
+	readonly refreshed: boolean
 }
 
 export interface ImageSolved {
@@ -31,17 +32,21 @@ export interface ImageSolved {
 	readonly solution: PlateSolution
 }
 
+export interface ImageRoiRequest {
+	readonly unbinned?: boolean
+}
+
 export interface DeviceTypeMap {
-	readonly CAMERA: Camera
-	readonly MOUNT: Mount
-	readonly WHEEL: Wheel
-	readonly FOCUSER: Focuser
-	readonly ROTATOR: Rotator
-	readonly FLAT_PANEL: FlatPanel
-	readonly COVER: Cover
-	readonly THERMOMETER: Thermometer
-	readonly GUIDE_OUTPUT: GuideOutput
-	readonly DEW_HEATER: DewHeater
+	readonly camera: Camera
+	readonly mount: Mount
+	readonly wheel: Wheel
+	readonly focuser: Focuser
+	readonly rotator: Rotator
+	readonly flatPanel: FlatPanel
+	readonly cover: Cover
+	readonly thermometer: Thermometer
+	readonly guideOutput: GuideOutput
+	readonly dewHeater: DewHeater
 }
 
 export const DEFAULT_CONNECTION: Connection = {

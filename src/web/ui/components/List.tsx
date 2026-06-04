@@ -1,13 +1,13 @@
 import { Children, useEffect, useMemo, useRef, useState } from 'react'
 import { type ClassValue, tv } from 'tailwind-variants'
-import { assignRef, clamp, hasRootInteraction, tw } from '@/shared/util'
+import { assignRef, clamp, hasRootInteraction, stopPropagation, stopPropagationForAll, tw } from '@/shared/util'
 
-const DEFAULT_ITEM_HEIGHT = 40
+const DEFAULT_ITEM_HEIGHT = 38
 const DEFAULT_OVERSCAN = 3
 
 const listStyles = tv({
 	slots: {
-		base: 'relative block min-h-0 max-h-80 min-w-0 overflow-x-hidden overflow-y-auto rounded-lg bg-neutral-900/70 text-neutral-100',
+		base: 'relative block min-h-0 max-h-80 min-w-0 overflow-x-hidden overflow-y-auto rounded-lg bg-neutral-900/70 text-neutral-100 cursor-pointer',
 		spacer: 'relative w-full min-w-0',
 		item: 'absolute left-0 top-0 w-full min-w-0 overflow-hidden hover:bg-neutral-800',
 		empty: 'flex min-h-10 items-center px-4 text-sm text-neutral-500',
@@ -124,6 +124,8 @@ export function List({ children, itemCount, className, classNames, emptyContent,
 	const itemClassName = tw(styles.item(), classNames?.item)
 
 	function handleClick(event: React.MouseEvent<HTMLElement>) {
+		stopPropagation(event)
+
 		const index = event.currentTarget.dataset.index
 
 		if (index !== undefined) {
@@ -157,13 +159,14 @@ export function List({ children, itemCount, className, classNames, emptyContent,
 	}, [])
 
 	// Cancels any pending scroll frame when the list unmounts.
-	useEffect(() => {
-		return () => {
+	useEffect(
+		() => () => {
 			if (animationFrameRef.current !== undefined) {
 				window.cancelAnimationFrame(animationFrameRef.current)
 			}
-		}
-	}, [])
+		},
+		[],
+	)
 
 	// Keeps scroll position valid when children or item size shrink the list.
 	useEffect(() => {
@@ -237,7 +240,7 @@ export function ListItem({ className, classNames, description, label, children, 
 	const stateClassName = disabled ? undefined : hasRootInteraction(props) ? 'cursor-pointer' : 'cursor-default'
 
 	return (
-		<div className={tw(styles.base(), stateClassName, className, classNames?.base)} {...props}>
+		<div className={tw(styles.base(), stateClassName, className, classNames?.base)} {...stopPropagationForAll(props)}>
 			{startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
 			<div className={tw(styles.body(), classNames?.body)}>
 				{description !== undefined && description !== null && <span className={tw(styles.description(), classNames?.description)}>{description}</span>}

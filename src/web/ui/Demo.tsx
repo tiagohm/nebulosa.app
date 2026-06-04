@@ -1,5 +1,5 @@
 import { mulberry32 } from 'nebulosa/src/random'
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
 import type { ConstellationData, DeepSkyObject, Star } from 'src/lib/celestial/celestial'
 import { toast } from '../shared/toast'
 import { Badge } from './components/Badge'
@@ -14,7 +14,7 @@ import { Dropdown, DropdownItem } from './components/Dropdown'
 import { List } from './components/List'
 import { MultiSelect } from './components/MultiSelect'
 import { NumberInput } from './components/NumberInput'
-import { Popover } from './components/Popover'
+import { Popover, type PopoverMethods } from './components/Popover'
 import { ProgressBar } from './components/ProgressBar'
 import { Radio } from './components/Radio'
 import { SearchTextInput } from './components/SearchTextInput'
@@ -198,13 +198,13 @@ const Buttons = memo(() => {
 				const loading = random() < 0.02
 				const label = key.toFixed(0)
 
-				function handlePointer() {
-					toast({ title: 'Hello!', onPointerUp: () => alert(label), description: 'Description', color, size, startContent, endContent, onClose: (autoDismiss) => !autoDismiss && alert('Hello!') })
+				function handleClick() {
+					toast({ title: 'Hello!', onClick: () => alert(label), description: 'Description', color, size, startContent, endContent, onClose: (autoDismiss) => !autoDismiss && alert('Hello!') })
 				}
 
 				elements.push(
 					<Badge color={color} size={size} label={disabled ? undefined : label} placement="top-end" visible={!loading}>
-						<Button color={color} disabled={disabled} endContent={endContent} key={key++} label={label} loading={loading} onPointerUp={handlePointer} size={size} startContent={startContent} tooltipContent={tooltipContent} tooltipPlacement={tooltipPlacement} variant={variant} />
+						<Button color={color} disabled={disabled} endContent={endContent} key={key++} label={label} loading={loading} onClick={handleClick} size={size} startContent={startContent} tooltipContent={tooltipContent} tooltipPlacement={tooltipPlacement} variant={variant} />
 					</Badge>,
 				)
 			}
@@ -238,38 +238,36 @@ const ButtonGroups = memo(() => {
 	return elements
 })
 
-const BreadCrumbs = memo(() => {
-	return (
-		<>
-			<Breadcrumbs>
-				<Button color="default" label="Home" size="sm" variant="ghost" />
-				<Button color="primary" label="Capture" size="sm" variant="ghost" />
-				<Chip color="secondary" label="Sequence" size="sm" />
-			</Breadcrumbs>
+const BreadCrumbs = memo(() => (
+	<>
+		<Breadcrumbs>
+			<Button color="default" label="Home" size="sm" variant="ghost" />
+			<Button color="primary" label="Capture" size="sm" variant="ghost" />
+			<Chip color="secondary" label="Sequence" size="sm" />
+		</Breadcrumbs>
 
-			<Breadcrumbs maxItems={3}>
-				<Button color="default" label="Home" size="sm" variant="ghost" />
-				<Button color="default" label="Profile" size="sm" variant="ghost" />
-				<Button color="default" label="Capture" size="sm" variant="ghost" />
-				<Button color="primary" label="Sequences" size="sm" variant="ghost" />
-				<Chip color="secondary" label="M42" size="sm" />
-			</Breadcrumbs>
+		<Breadcrumbs maxItems={3}>
+			<Button color="default" label="Home" size="sm" variant="ghost" />
+			<Button color="default" label="Profile" size="sm" variant="ghost" />
+			<Button color="default" label="Capture" size="sm" variant="ghost" />
+			<Button color="primary" label="Sequences" size="sm" variant="ghost" />
+			<Chip color="secondary" label="M42" size="sm" />
+		</Breadcrumbs>
 
-			<Breadcrumbs ellipsis={<Chip color="default" label="More" size="sm" />} maxItems={2} separator={<span>/</span>}>
-				<Button color="default" label="Home" size="sm" variant="ghost" />
-				<Button color="default" label="Equipment" size="sm" variant="ghost" />
-				<Button color="primary" label="Camera" size="sm" variant="ghost" />
-				<Chip color="success" label="Connected" size="sm" />
-			</Breadcrumbs>
+		<Breadcrumbs ellipsis={<Chip color="default" label="More" size="sm" />} maxItems={2} separator={<span>/</span>}>
+			<Button color="default" label="Home" size="sm" variant="ghost" />
+			<Button color="default" label="Equipment" size="sm" variant="ghost" />
+			<Button color="primary" label="Camera" size="sm" variant="ghost" />
+			<Chip color="success" label="Connected" size="sm" />
+		</Breadcrumbs>
 
-			<Breadcrumbs disabled>
-				<Button color="default" label="Home" size="sm" variant="ghost" />
-				<Button color="default" label="Settings" size="sm" variant="ghost" />
-				<span>Disabled</span>
-			</Breadcrumbs>
-		</>
-	)
-})
+		<Breadcrumbs disabled>
+			<Button color="default" label="Home" size="sm" variant="ghost" />
+			<Button color="default" label="Settings" size="sm" variant="ghost" />
+			<span>Disabled</span>
+		</Breadcrumbs>
+	</>
+))
 
 const TextInputs = memo(() => {
 	const [value, setValue] = useState('A')
@@ -428,12 +426,12 @@ const Sliders = memo(() => {
 })
 
 const Calendars = memo(() => {
+	const popoverRef = useRef<PopoverMethods | null>(null)
 	const [value, setValue] = useState(Temporal.Now.plainDateISO())
-	const [open, setOpen] = useState(true)
 
 	return (
 		<>
-			<Popover onOpenChange={setOpen} open={open} placement="end" trigger={<Button label="Calendar" />}>
+			<Popover ref={popoverRef} placement="end" trigger={<Button label="Calendar" />}>
 				<Calendar onValueChange={setValue} showWeekNumber value={value} color="default" />
 			</Popover>
 
@@ -598,18 +596,16 @@ const MultiSelects = memo(() => {
 	return <div className="grid grid-cols-3 items-center gap-2">{elements}</div>
 })
 
-const Tables = memo(() => {
-	return (
-		<Table className="min-w-80" rowHeight={28} columnCount={3} rowCount={2} onAction={(row, col) => alert(`row: ${row}, col: ${col}`)} overscan={8}>
-			<span>Name</span>
-			<span>Magnitude</span>
-			<span>Type</span>
-			<span>M1</span>
-			<span>8.4</span>
-			<span>Supernova Remnant</span>
-			<span>M2</span>
-			<span>6.3</span>
-			<span>Globular Cluster</span>
-		</Table>
-	)
-})
+const Tables = memo(() => (
+	<Table className="min-w-80" rowHeight={28} columnCount={3} rowCount={2} onAction={(row, col) => alert(`row: ${row}, col: ${col}`)} overscan={8}>
+		<span>Name</span>
+		<span>Magnitude</span>
+		<span>Type</span>
+		<span>M1</span>
+		<span>8.4</span>
+		<span>Supernova Remnant</span>
+		<span>M2</span>
+		<span>6.3</span>
+		<span>Globular Cluster</span>
+	</Table>
+))

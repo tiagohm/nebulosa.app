@@ -1,8 +1,8 @@
 import { memo } from 'react'
-import { useWakeLock } from 'src/web/hooks/wakelock'
+import { useWakeLock } from '@/hooks/wakelock.hook'
 import { isWakeLockSupported } from '@/shared/util'
+import { IconButton, type IconButtonProps } from './components/IconButton'
 import { Icons } from './Icon'
-import { IconButton, type IconButtonProps } from './IconButton'
 
 export interface WakeLockScreenButtonProps extends Omit<IconButtonProps, 'icon' | 'color' | 'onPointerUp'> {}
 
@@ -11,5 +11,5 @@ export const WakeLockScreenButton = memo((props: WakeLockScreenButtonProps) => {
 
 	if (!isWakeLockSupported()) return null
 
-	return <IconButton color={active ? 'success' : 'primary'} icon={active ? Icons.Monitor : Icons.MonitorLock} onPointerUp={active ? release : request} tooltipContent="Wake Lock" {...props} />
+	return <IconButton color={active ? 'success' : 'primary'} icon={active ? Icons.Monitor : Icons.MonitorLock} onClick={active ? release : request} tooltipContent="Wake Lock" {...props} />
 })

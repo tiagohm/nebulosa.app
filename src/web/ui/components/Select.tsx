@@ -17,7 +17,7 @@ const selectStyles = tv({
 		trigger: 'flex w-full min-w-0 items-stretch overflow-hidden rounded-lg outline-none transition',
 		startContent: 'flex shrink-0 items-center whitespace-nowrap',
 		field: 'relative min-w-0 flex-1',
-		value: 'flex h-full w-full min-w-0 items-center overflow-hidden',
+		value: 'flex w-full min-w-0 items-center overflow-hidden',
 		description: 'min-w-0 truncate',
 		label: 'pointer-events-none absolute origin-left truncate text-xs leading-none',
 		endContent: 'flex shrink-0 items-center whitespace-nowrap',
@@ -109,6 +109,14 @@ const selectStyles = tv({
 				base: 'w-full',
 			},
 		},
+		disabled: {
+			true: {
+				trigger: 'cursor-default',
+			},
+			false: {
+				trigger: 'cursor-pointer',
+			},
+		},
 	},
 	defaultVariants: {
 		size: 'md',
@@ -180,9 +188,11 @@ function selectedIndexOf<T>(items: readonly T[], value: T | null | undefined, is
 }
 
 // Normalizes panel item height to match the Select size by default.
-function selectItemHeight(size: Exclude<SelectVariants['size'], undefined>, itemHeight: number | undefined) {
+function selectItemHeight(size: NonNullable<SelectVariants['size']>, itemHeight: number | undefined) {
 	return itemHeight !== undefined && Number.isFinite(itemHeight) && itemHeight > 0 ? itemHeight : SELECT_ITEM_HEIGHTS[size]
 }
+
+const CheckIcon = <Icons.Check color="var(--success)" />
 
 // Renders a controlled single-select trigger with a floating virtualized option list.
 export function Select<T>({
@@ -232,7 +242,7 @@ export function Select<T>({
 	const visible = isOpen && !disabled && !readOnly
 	const hasLabel = label !== undefined && label !== null
 	const optionHeight = selectItemHeight(size, itemHeight)
-	const styles = selectStyles({ fullWidth, hasLabel, open: visible, size, color })
+	const styles = selectStyles({ fullWidth, hasLabel, open: visible, size, color, disabled })
 	const selectedContent = selectedItem !== undefined && selectedItem !== null ? children(selectedItem, selectedIndex, true, 'trigger') : description
 	const panelStyle = useMemo(() => ({ '--select-width': `${Math.max(triggerWidth, 0)}px`, minWidth: Math.max(triggerWidth, optionContentWidth, 0) }) as React.CSSProperties, [optionContentWidth, triggerWidth])
 	const hasColorVariant = color !== undefined && color !== null && color !== 'default'
@@ -357,21 +367,19 @@ export function Select<T>({
 				ref={measureOptionWidth}
 				role="button">
 				<span className={tw(styles.optionContent(), classNames?.optionContent)}>{children(item, index, selected, 'list')}</span>
-				<span className={tw(styles.selectedIcon(), selected ? 'opacity-100' : 'opacity-0', classNames?.selectedIcon)}>
-					<Icons.Check />
-				</span>
+				<span className={tw(styles.selectedIcon(), selected ? 'opacity-100' : 'opacity-0', classNames?.selectedIcon)} children={CheckIcon} />
 			</div>
 		)
 	}
 
-	function handleOnAction(index: number) {
+	function handleAction(index: number) {
 		onAction!(items[index], index)
 	}
 
 	const PanelContent = (
 		<div className={tw(styles.panelContent(), classNames?.panelContent)}>
 			{headerContent !== undefined && headerContent !== null && <div className={tw(styles.header(), classNames?.header)}>{headerContent}</div>}
-			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: tw(styles.listItem(), classNames?.listItem) }} emptyContent={emptyContent} itemCount={items.length} itemHeight={optionHeight} overscan={overscan} onAction={onAction && handleOnAction}>
+			<List className={tw(styles.list(), classNames?.list)} classNames={{ empty: classNames?.empty, item: tw(styles.listItem(), classNames?.listItem) }} emptyContent={emptyContent} itemCount={items.length} itemHeight={optionHeight} overscan={overscan} onAction={onAction && handleAction}>
 				{renderOption}
 			</List>
 			{footerContent !== undefined && footerContent !== null && <div className={tw(styles.footer(), classNames?.footer)}>{footerContent}</div>}

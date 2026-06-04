@@ -1,0 +1,198 @@
+import type { FileEntry, DirectoryEntry } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
+import { proxy } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
+import { Api } from '../shared/api'
+import type { FilePickerMode } from '../shared/types'
+
+export type FilePickerStore = ReturnType<typeof filePicker>
+
+export interface FilePickerScope {
+	readonly path?: string
+	readonly filter?: string
+	readonly mode?: FilePickerMode
+	readonly multiple?: boolean
+}
+
+export interface FilePickerState {
+	path: string
+	readonly entries: FileEntry[]
+	readonly directoryTree: DirectoryEntry[]
+	readonly filtered: FileEntry[]
+	readonly selected: string[]
+	readonly history: string[]
+	filter: string
+	readonly mode: FilePickerMode
+	readonly directory: {
+		create: boolean
+		name: string
+	}
+	readonly save: {
+		name: string
+		exists: boolean
+	}
+}
+
+export function filePicker(scope: FilePickerScope) {
+	const multiple = !!scope.multiple && scope.mode !== 'save'
+
+	const state = proxy<FilePickerState>({
+		path: scope.path ?? '',
+		entries: [],
+		directoryTree: [],
+		filtered: [],
+		selected: [],
+		history: [],
+		filter: '',
+		mode: scope.mode ?? 'file',
+		directory: {
+			create: false,
+			name: '',
+		},
+		save: {
+			name: '',
+			exists: false,
+		},
+	})
+
+	const u: VoidFunction[] = []
+	let mounted = false
+
+	function mount() {
+		if (mounted) return
+
+		void list()
+
+		mounted = true
+
+		u[0] = subscribeKey(state.save, 'name', async (name) => {
+			state.save.exists = name.length > 0 && !!(await Api.FileSystem.exists({ path: state.path, name }))
+		})
+
+		u[1] = subscribeKey(state, 'path', async (path) => {
+			state.save.exists = state.save.name.length > 0 && path.length > 0 && !!(await Api.FileSystem.exists({ path, name: state.save.name }))
+		})
+	}
+
+	function unmount() {
+		if (!mounted) return
+		unsubscribe(u)
+		mounted = false
+	}
+
+	function filter(text?: string) {
+		if (text !== undefined) state.filter = text
+
+		state.filtered.splice(0)
+
+		if (state.filter.trim().length === 0) {
+			state.filtered.push(...state.entries)
+		} else {
+			const text = state.filter.toLowerCase()
+			state.filtered.push(...state.entries.filter((e) => e.name.toLowerCase().includes(text)))
+		}
+	}
+
+	async function list() {
+		const directory = await Api.FileSystem.list({ path: state.path, filter: scope.filter, directoryOnly: state.mode !== 'file' })
+
+		if (directory) {
+			state.entries.splice(0)
+			state.entries.push(...directory.entries)
+			filter()
+			state.directoryTree.splice(0)
+			state.directoryTree.push(...directory.tree)
+		}
+	}
+
+	function navigateTo(entry: DirectoryEntry) {
+		if (state.history.length === 0 || state.history.at(-1) !== state.path) {
+			state.history.push(state.path)
+		}
+
+		state.path = entry.path
+		return list()
+	}
+
+	async function navigateBack() {
+		if (state.history.length === 0) return
+		state.path = state.history.pop()!
+		await list()
+	}
+
+	function navigateToParent() {
+		if (state.directoryTree.length <= 1) return
+		void navigateTo(state.directoryTree.at(-2)!)
+	}
+
+	function toggleCreateDirectory() {
+		state.directory.create = !state.directory.create
+	}
+
+	async function createDirectory() {
+		if (state.directory.name) {
+			const directory = await Api.FileSystem.create({ path: state.path, name: state.directory.name })
+
+			if (directory?.path) {
+				state.directory.create = false
+				state.directory.name = ''
+				await list()
+			}
+		}
+	}
+
+	async function select(entry: FileEntry) {
+		if (state.mode !== 'directory' && entry.directory) {
+			await navigateTo(entry)
+			return
+		}
+
+		const index = state.selected.indexOf(entry.path)
+
+		if (index >= 0) {
+			state.selected.splice(index, 1)
+		} else if (multiple || state.selected.length === 0) {
+			state.selected.push(entry.path)
+		} else {
+			state.selected[0] = entry.path
+		}
+	}
+
+	function unselectAll(event?: React.MouseEvent) {
+		event?.stopPropagation()
+		state.selected.length = 0
+	}
+
+	function updateSaveName(name: string) {
+		state.save.name = name
+	}
+
+	async function save(action: (path: string[]) => void) {
+		const directory = await Api.FileSystem.directory(state.path)
+
+		if (directory?.path) {
+			const path = await Api.FileSystem.join([directory.path, state.save.name])
+
+			if (path) {
+				action([path.path])
+			}
+		}
+	}
+
+	return {
+		state,
+		mount,
+		unmount,
+		filter,
+		list,
+		navigateTo,
+		navigateBack,
+		navigateToParent,
+		toggleCreateDirectory,
+		createDirectory,
+		select,
+		unselectAll,
+		updateSaveName,
+		save,
+	} as const
+}

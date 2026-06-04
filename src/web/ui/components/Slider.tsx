@@ -439,7 +439,7 @@ export function Slider<V extends SliderValue>({
 
 			if (dragFromThumbRef.current && !moved) return
 
-			dragMovedRef.current = dragMovedRef.current || moved
+			dragMovedRef.current ||= moved
 			const nextValue = dragFromThumbRef.current ? valueFromThumbDrag(event.clientX, event.clientY, draggingThumbIndex) : valueFromPointer(event.clientX, event.clientY, draggingThumbIndex).value
 			setInteractiveValue(nextValue)
 		}
@@ -449,14 +449,15 @@ export function Slider<V extends SliderValue>({
 			endInteraction(event.clientX, event.clientY)
 		}
 
-		window.addEventListener('pointermove', handlePointerMove)
-		window.addEventListener('pointerup', handlePointerUp)
-		window.addEventListener('pointercancel', handlePointerUp)
+		// Capture drag events before overlay portals can stop pointer bubbling.
+		window.addEventListener('pointermove', handlePointerMove, true)
+		window.addEventListener('pointerup', handlePointerUp, true)
+		window.addEventListener('pointercancel', handlePointerUp, true)
 
 		return () => {
-			window.removeEventListener('pointermove', handlePointerMove)
-			window.removeEventListener('pointerup', handlePointerUp)
-			window.removeEventListener('pointercancel', handlePointerUp)
+			window.removeEventListener('pointermove', handlePointerMove, true)
+			window.removeEventListener('pointerup', handlePointerUp, true)
+			window.removeEventListener('pointercancel', handlePointerUp, true)
 		}
 	}, [draggingThumbIndex, endInteraction, setInteractiveValue, valueFromPointer, valueKey])
 
@@ -553,7 +554,8 @@ export function Slider<V extends SliderValue>({
 
 		if (direction !== 1 && direction !== -1) return
 
-		event.preventDefault()
+		// Wheel is never default prevented when in passive move
+		// event.isDefaultPrevented() && event.preventDefault()
 		const currentValue = draftValueRef.current
 		const thumbIndex = isRangeValue(currentValue) ? valueFromPointer(event.clientX, event.clientY).thumbIndex : 0
 		const currentThumbValue = isRangeValue(currentValue) ? currentValue[thumbIndex] : currentValue

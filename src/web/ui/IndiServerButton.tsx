@@ -1,21 +1,19 @@
-import { useMolecule } from 'bunshi/react'
-import { Activity, memo } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { IndiServerMolecule } from '@/molecules/indi/server'
+import { indiServerStore } from '@/stores/indi.server.store'
+import { IconButton } from './components/IconButton'
 import { Icons } from './Icon'
-import { IconButton } from './IconButton'
 import { IndiServer } from './IndiServer'
 
 export const IndiServerButton = memo(() => {
-	const indi = useMolecule(IndiServerMolecule)
-	const { enabled, running, show } = useSnapshot(indi.state)
+	const { enabled, running, show } = useSnapshot(indiServerStore.state)
+
+	if (!enabled) return null
 
 	return (
 		<>
-			<IconButton color={running ? 'success' : 'danger'} disabled={!enabled} icon={running ? Icons.Server : Icons.ServerOff} onPointerUp={indi.show} tooltipContent="INDI Server" />
-			<Activity mode={show ? 'visible' : 'hidden'}>
-				<IndiServer />
-			</Activity>
+			<IconButton color={running ? 'success' : 'danger'} icon={running ? Icons.Server : Icons.ServerOff} onClick={indiServerStore.show} tooltipContent="INDI Server" />
+			{show && <IndiServer />}
 		</>
 	)
 })

@@ -2,9 +2,10 @@ import type { IndiClient } from 'nebulosa/src/indi.client'
 import type { Thermometer } from 'nebulosa/src/indi.device'
 import type { DeviceHandler, ThermometerManager } from 'nebulosa/src/indi.manager'
 import type { PropertyState } from 'nebulosa/src/indi.types'
-import type { CameraUpdated, FocuserUpdated, ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from 'src/shared/types'
+import bus from 'src/shared/bus'
+import type { ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { WebSocketMessageHandler } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 
 export class ThermometerHandler implements DeviceHandler<Thermometer> {
 	constructor(
@@ -12,24 +13,26 @@ export class ThermometerHandler implements DeviceHandler<Thermometer> {
 		readonly thermometerManager: ThermometerManager,
 	) {
 		thermometerManager.addHandler(this)
+
+		bus.subscribe<Messager>('ws:open', (socket) => {
+			for (const device of thermometerManager.list()) {
+				this.wsm.send<ThermometerAdded>('thermometer:add', { device }, socket)
+			}
+		})
 	}
 
 	added(device: Thermometer) {
-		this.wsm.send('thermometer:add', { device } satisfies ThermometerAdded)
-		console.info('thermometer added:', device.name)
+		this.wsm.send<ThermometerAdded>('thermometer:add', { device })
+		console.info('thermometer added:', device.name, device.id)
 	}
 
 	updated(device: Thermometer, property: keyof Thermometer & string, state?: PropertyState) {
-		const event = { device: { id: device.id, name: device.name, [property]: device[property] }, property, state } satisfies CameraUpdated | FocuserUpdated | ThermometerUpdated
-
-		if (device.type === 'CAMERA') this.wsm.send('camera:update', event)
-		else if (device.type === 'FOCUSER') this.wsm.send('focuser:update', event)
-		this.wsm.send('thermometer:update', event)
+		this.wsm.send<ThermometerUpdated>(`${device.type}:update`, { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Thermometer) {
-		this.wsm.send('thermometer:remove', { device } satisfies ThermometerRemoved)
-		console.info('thermometer removed:', device.name)
+		this.wsm.send<ThermometerRemoved>('thermometer:remove', { device })
+		console.info('thermometer removed:', device.name, device.id)
 	}
 
 	list(client?: string | IndiClient) {
@@ -37,7 +40,7 @@ export class ThermometerHandler implements DeviceHandler<Thermometer> {
 	}
 }
 
-export function thermometer(thermometerHandler: ThermometerHandler): Endpoints {
+export function thermometer(thermometerHandler: ThermometerHandler) {
 	const { thermometerManager } = thermometerHandler
 
 	function thermometerFromParams(req: Bun.BunRequest) {
@@ -47,5 +50,5 @@ export function thermometer(thermometerHandler: ThermometerHandler): Endpoints {
 	return {
 		'/thermometers': { GET: (req) => response(thermometerHandler.list(query(req).client)) },
 		'/thermometers/:id': { GET: (req) => response(thermometerFromParams(req)) },
-	}
+	} as const satisfies Endpoints
 }

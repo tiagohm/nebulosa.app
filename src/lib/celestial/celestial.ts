@@ -401,6 +401,7 @@ const DEFAULT_LAYER_VISIBILITY: Record<string, boolean> = {
 	background: true,
 	stars: true,
 	constellations: true,
+	constellationBoundaries: false,
 	constellationLabels: true,
 	referenceLines: true,
 	grid: true,
@@ -2011,25 +2012,15 @@ class ReferenceLineLayer extends InternalLayer {
 	}
 }
 
-// Constellation line renderer.
-class ConstellationLineLayer extends InternalLayer {
+// Shared renderer for constellation line-like data.
+abstract class ConstellationSegmentLayer extends InternalLayer {
 	private readonly fromVector = new Float32Array(3)
 	private readonly toVector = new Float32Array(3)
 	private readonly sampleVector = new Float32Array(3)
 	private readonly point = new Float32Array(2)
 	private readonly previous = new Float32Array(2)
 
-	constructor() {
-		super('constellations', 30)
-	}
-
-	// Draws supplied constellation line segments.
-	render(ctx: CanvasRenderingContext2D, state: RenderState) {
-		this.drawSegments(ctx, state, state.constellations.boundaries ?? [], state.theme.constellations.opacity * 0.38, 0.55)
-		this.drawSegments(ctx, state, state.constellations.lines ?? [], state.theme.constellations.opacity, 0.9)
-	}
-
-	private drawSegments(ctx: CanvasRenderingContext2D, state: RenderState, lines: ConstellationLine[], alpha: number, lineWidth: number) {
+	protected drawSegments(ctx: CanvasRenderingContext2D, state: RenderState, lines: readonly ConstellationLine[], alpha: number, lineWidth: number) {
 		ctx.strokeStyle = state.theme.constellations.color
 		ctx.globalAlpha = alpha
 		ctx.lineWidth = lineWidth
@@ -2065,6 +2056,33 @@ class ConstellationLineLayer extends InternalLayer {
 			const dec = Math.asin(clamp(this.sampleVector[2], -1, 1))
 			return writeProjectedSample(out, state.equatorialVisibility(ra, dec), state.projectEquatorialToScreen(ra, dec, out))
 		})
+	}
+}
+
+// Constellation line renderer.
+class ConstellationLineLayer extends ConstellationSegmentLayer {
+	constructor() {
+		super('constellations', 30)
+	}
+
+	// Draws supplied constellation line segments.
+	render(ctx: CanvasRenderingContext2D, state: RenderState) {
+		this.drawSegments(ctx, state, state.constellations.lines ?? [], state.theme.constellations.opacity, 0.9)
+	}
+}
+
+// Constellation boundary renderer.
+class ConstellationBoundaryLayer extends ConstellationSegmentLayer {
+	constructor() {
+		super('constellationBoundaries', 32)
+	}
+
+	// Draws supplied constellation boundaries as dashed lines.
+	render(ctx: CanvasRenderingContext2D, state: RenderState) {
+		ctx.save()
+		ctx.setLineDash([4, 4])
+		this.drawSegments(ctx, state, state.constellations.boundaries ?? [], state.theme.constellations.opacity * 0.45, 0.6)
+		ctx.restore()
 	}
 }
 
@@ -2937,6 +2955,7 @@ export class Celestial {
 		}
 
 		this.renderer.markDirty('constellations')
+		this.renderer.markDirty('constellationBoundaries')
 		this.renderer.markDirty('constellationLabels')
 		this.rebuildPickingIndex()
 		this.requestRender()
@@ -3127,7 +3146,7 @@ export class Celestial {
 
 	// Creates and registers built-in layers.
 	private setupLayers() {
-		this.layers.push(new BackgroundLayer(), new HorizonLayer(), new GridLayer(), new ReferenceLineLayer(), new ConstellationLineLayer(), new DeepSkyObjectLayer(), new StarLayer(), new PlanetLayer(), new ConstellationLabelLayer(), new ShapeLayer(), new InteractionOverlayLayer())
+		this.layers.push(new BackgroundLayer(), new HorizonLayer(), new GridLayer(), new ReferenceLineLayer(), new ConstellationLineLayer(), new ConstellationBoundaryLayer(), new DeepSkyObjectLayer(), new StarLayer(), new PlanetLayer(), new ConstellationLabelLayer(), new ShapeLayer(), new InteractionOverlayLayer())
 
 		for (const layer of this.layers) {
 			layer.visible = this.options.layers[layer.id] ?? true

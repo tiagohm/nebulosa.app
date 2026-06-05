@@ -57,6 +57,7 @@ const DEFAULT_SKY_MAP_OPTIONS: CelestialOptions = {
 		},
 	},
 	layers: {
+		constellationBoundaries: false,
 		constellationLabels: true,
 		constellations: true,
 		deepSky: true,

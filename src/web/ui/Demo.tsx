@@ -31,7 +31,7 @@ import { SkyMap } from './SkyMap'
 
 export function Demo() {
 	return (
-		<Tabs defaultValue='18' color="primary" className="h-full p-4" classNames={{ panel: 'h-full' }}>
+		<Tabs defaultValue="18" color="primary" className="h-full p-4" classNames={{ panel: 'h-full' }}>
 			<Tab id="18">Sky Map</Tab>
 			<Tab id="0">Buttons</Tab>
 			<Tab id="13">Button Groups</Tab>

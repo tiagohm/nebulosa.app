@@ -60,20 +60,20 @@ By default, the app listens on `http://localhost:1234`.
 
 Runtime options can be passed as CLI flags or environment variables:
 
-| CLI flag | Environment variable | Default | Description |
-| --- | --- | --- | --- |
-| `--host`, `-h` | `host` | `localhost` | Server host name. |
-| `--port`, `-p` | `port` | `1234` | Server port. |
-| `--secure`, `-s` | `secure` | `false` | Enable HTTPS. |
-| `--cert`, `-c` | `cert` | `cert.pem` | TLS certificate path. |
-| `--key`, `-k` | `key` | `key.pem` | TLS key path. |
-| `--open`, `-o` | `open` | `false` | Open the app in the default browser after startup. |
-| `--dir`, `-d` | `appDir` | platform-specific | Override the application data directory. |
-| `--username`, `-u` | `username` | empty | Reserved for server authentication configuration. |
-| `--password` | `password` | empty | Reserved for server authentication configuration. |
-| `--alpaca`, `-a` | `alpaca` | `false` | Enable Alpaca routes. |
-| `--alpacaPort` | `alpacaPort` | app server port | Alpaca API port override. |
-| `--alpacaDiscoveryPort` | `alpacaDiscoveryPort` | automatic | Alpaca discovery port override. |
+| CLI flag                | Environment variable  | Default           | Description                                        |
+| ----------------------- | --------------------- | ----------------- | -------------------------------------------------- |
+| `--host`, `-h`          | `host`                | `localhost`       | Server host name.                                  |
+| `--port`, `-p`          | `port`                | `1234`            | Server port.                                       |
+| `--secure`, `-s`        | `secure`              | `false`           | Enable HTTPS.                                      |
+| `--cert`, `-c`          | `cert`                | `cert.pem`        | TLS certificate path.                              |
+| `--key`, `-k`           | `key`                 | `key.pem`         | TLS key path.                                      |
+| `--open`, `-o`          | `open`                | `false`           | Open the app in the default browser after startup. |
+| `--dir`, `-d`           | `appDir`              | platform-specific | Override the application data directory.           |
+| `--username`, `-u`      | `username`            | empty             | Reserved for server authentication configuration.  |
+| `--password`            | `password`            | empty             | Reserved for server authentication configuration.  |
+| `--alpaca`, `-a`        | `alpaca`              | `false`           | Enable Alpaca routes.                              |
+| `--alpacaPort`          | `alpacaPort`          | app server port   | Alpaca API port override.                          |
+| `--alpacaDiscoveryPort` | `alpacaDiscoveryPort` | automatic         | Alpaca discovery port override.                    |
 
 Example:
 

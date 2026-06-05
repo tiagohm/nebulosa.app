@@ -7,6 +7,7 @@ on:
             - 'src/api/**.ts'
             - 'src/shared/**.ts'
             - 'src/data/**'
+            - 'src/lib/**'
             - 'tests/**'
             - 'package.json'
             - 'tsconfig.json'
@@ -14,8 +15,11 @@ on:
             - '.github/workflows/**'
     pull_request:
         paths:
-            - 'src/**.ts'
-            - 'tests/**.ts'
+            - 'src/api/**.ts'
+            - 'src/shared/**.ts'
+            - 'src/data/**'
+            - 'src/lib/**'
+            - 'tests/**'
             - 'package.json'
     workflow_dispatch:
 

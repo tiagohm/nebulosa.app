@@ -153,7 +153,7 @@ const SKY_MAP_DEEP_SKY_OBJECTS = [
 	{
 		id: 'M42',
 		name: 'Orion Nebula',
-		type: 'nebula',
+		type: 11,
 		rightAscension: 5.588139 * HOUR_TO_RAD,
 		declination: -5.391111 * DEG2RAD,
 		mag: 4,

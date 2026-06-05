@@ -15,60 +15,6 @@ export interface SkyMapProps extends Omit<ComponentPropsWithoutRef<'div'>, 'chil
 
 const DEFAULT_SKY_MAP_SIZE = 320
 
-const DEFAULT_SKY_MAP_OPTIONS: CelestialOptions = {
-	coordinateSystem: 'horizontal',
-	projection: 'stereographic',
-	stars: {
-		colorByBV: true,
-		labels: true,
-		maxMagnitude: 8.5,
-		sizeByMagnitude: true,
-	},
-	theme: {
-		background: '#000000',
-		stars: {
-			labelColor: '#d8deca',
-			labelFont: '10px system-ui, sans-serif',
-			minRadius: 0.45,
-			maxRadius: 1.75,
-			magnitudeScale: [-1.5, 8.5],
-		},
-		grid: {
-			color: '#6c7178',
-			opacity: 0.38,
-		},
-		horizon: {
-			color: '#1f9a41',
-			fillBelowHorizon: 'rgba(0, 0, 0, 0)',
-		},
-		constellations: {
-			color: '#b8bcc4',
-			opacity: 0.72,
-			labelColor: '#b9c1b6',
-			labelFont: '10px system-ui, sans-serif',
-		},
-		deepSky: {
-			color: '#ff9d00',
-			labelColor: '#ffb000',
-		},
-		planets: {
-			color: '#ffb000',
-			labelColor: '#ffcc58',
-		},
-	},
-	layers: {
-		constellationBoundaries: false,
-		constellationLabels: true,
-		constellations: true,
-		deepSky: true,
-		grid: true,
-		horizon: true,
-		planets: false,
-		shapes: true,
-		stars: true,
-	},
-}
-
 // Renders an interactive Celestial star-map inside a React-managed container.
 export function SkyMap({ ref, className, height = DEFAULT_SKY_MAP_SIZE, onReady, options, style, width = '100%', ...props }: SkyMapProps) {
 	const containerRef = useRef<HTMLDivElement | null>(null)
@@ -105,12 +51,10 @@ export function SkyMap({ ref, className, height = DEFAULT_SKY_MAP_SIZE, onReady,
 	useEffect(() => {
 		const container = containerRef.current
 
-		if (!container) {
-			return
-		}
+		if (!container) return
 
 		const size = readContainerSize(container)
-		const celestial = new Celestial(container, createCelestialOptions(options, size.width, size.height))
+		const celestial = new Celestial(container, { ...options, ...size })
 		celestialRef.current = celestial
 		const onReadyResult = onReady?.(celestial)
 		if (onReady === undefined) celestial.queueRun()
@@ -135,26 +79,6 @@ export function SkyMap({ ref, className, height = DEFAULT_SKY_MAP_SIZE, onReady,
 	}, [])
 
 	return <div {...props} className={tw('relative overflow-hidden rounded-lg bg-neutral-950', className)} ref={containerRef} style={{ height, width, ...style }} />
-}
-
-// Combines default, caller, and measured sizing options for the Celestial instance.
-function createCelestialOptions(options: CelestialOptions | undefined, width: number, height: number): CelestialOptions {
-	return {
-		...DEFAULT_SKY_MAP_OPTIONS,
-		...options,
-		width,
-		height,
-		projection: options?.projection ?? DEFAULT_SKY_MAP_OPTIONS.projection,
-		stars: {
-			...DEFAULT_SKY_MAP_OPTIONS.stars,
-			...options?.stars,
-			maxMagnitude: options?.stars?.maxMagnitude ?? DEFAULT_SKY_MAP_OPTIONS.stars?.maxMagnitude,
-		},
-		layers: {
-			...DEFAULT_SKY_MAP_OPTIONS.layers,
-			...options?.layers,
-		},
-	}
 }
 
 // Reads the currently laid out container size with a safe initial fallback.

@@ -2800,6 +2800,7 @@ export class Celestial {
 		projection = validateProjection(projection)
 
 		if (projection !== this.options.projection) {
+			this.options.projection = projection
 			this.queueProjectionOnly()
 		}
 	}

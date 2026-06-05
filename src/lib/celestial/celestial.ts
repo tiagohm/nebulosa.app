@@ -2890,6 +2890,10 @@ function drawObjectHighlight(ctx: CanvasRenderingContext2D, state: RenderState, 
 
 // Projects a picked object to current screen coordinates.
 function projectObjectToScreen(object: CelestialObject, state: RenderState, out: NumberArray): boolean {
+	if (!isObjectLayerVisible(object, state)) {
+		return false
+	}
+
 	switch (object.type) {
 		case 'star': {
 			const catalog = state.starCatalog
@@ -2905,6 +2909,21 @@ function projectObjectToScreen(object: CelestialObject, state: RenderState, out:
 			return state.projectEquatorialToScreen(object.label.rightAscension, object.label.declination, out)
 		case 'shape':
 			return object.shape.visible !== false && object.shape.selectable !== false && state.projectEquatorialToScreen(object.shape.coordinate.rightAscension, object.shape.coordinate.declination, out)
+	}
+}
+
+function isObjectLayerVisible(object: CelestialObject, state: RenderState) {
+	switch (object.type) {
+		case 'star':
+			return state.celestial.isLayerVisible('stars')
+		case 'deepSky':
+			return state.celestial.isLayerVisible('deepSky')
+		case 'planet':
+			return state.celestial.isLayerVisible('planets')
+		case 'constellationLabel':
+			return state.celestial.isLayerVisible('constellationLabels')
+		case 'shape':
+			return state.celestial.isLayerVisible('shapes')
 	}
 }
 
@@ -3224,6 +3243,10 @@ export class Celestial {
 		this.requestRender()
 	}
 
+	isLayerVisible(layerId: string) {
+		return this.options.layers[layerId] !== false
+	}
+
 	// Destroys timers, listeners, canvases, and large references.
 	destroy() {
 		if (this.destroyed) return
@@ -3394,15 +3417,32 @@ export class Celestial {
 
 		if (layerId === 'planets') {
 			this.updatePlanets()
-			this.rebuildPickingIndex()
 			this.renderer.markDirty('planets')
+		}
 
-			if (this.selectedObject?.type === 'planet' || this.hoverObject?.type === 'planet') {
-				this.renderer.markDirty('overlay')
+		if (isPickableLayerId(layerId)) {
+			if (!visible) {
+				this.clearHiddenLayerObjects(layerId)
 			}
+
+			this.rebuildPickingIndex()
 		}
 
 		this.requestRender()
+	}
+
+	private clearHiddenLayerObjects(layerId: string) {
+		if (this.selectedObject && objectLayerId(this.selectedObject) === layerId) {
+			this.selectedObject = null
+			this.renderer.markDirty('overlay')
+		}
+
+		if (this.hoverObject && objectLayerId(this.hoverObject) === layerId) {
+			const object = this.hoverObject
+			this.hoverObject = null
+			this.renderer.markDirty('overlay')
+			this.emitter.has('objectLeave') && this.emitter.emit('objectLeave', { object })
+		}
 	}
 
 	// Centers the view on an equatorial coordinate.
@@ -3771,7 +3811,7 @@ export class Celestial {
 		this.pickedShapes.length = 0
 		const catalog = this.starCatalog
 
-		if (catalog) {
+		if (catalog && this.isLayerVisible('stars')) {
 			const indices = catalog.getBucketedVisibleIndices()
 
 			for (let i = 0; i < catalog.visibleCount; i++) {
@@ -3781,25 +3821,29 @@ export class Celestial {
 			}
 		}
 
-		for (let i = 0; i < this.dsos.length; i++) {
-			const object = this.dsos[i]
+		if (this.isLayerVisible('deepSky')) {
+			for (let i = 0; i < this.dsos.length; i++) {
+				const object = this.dsos[i]
 
-			if (this.projectEquatorialToScreen(object.rightAscension, object.declination, this.tempScreen)) {
-				this.picking.add(PICK_TYPE_DSO, i, this.tempScreen[0], this.tempScreen[1], object.mag ?? 10)
+				if (this.projectEquatorialToScreen(object.rightAscension, object.declination, this.tempScreen)) {
+					this.picking.add(PICK_TYPE_DSO, i, this.tempScreen[0], this.tempScreen[1], object.mag ?? 10)
+				}
 			}
 		}
 
-		for (let i = 0; i < this.planets.length; i++) {
-			const planet = this.planets[i]
+		if (this.isLayerVisible('planets')) {
+			for (let i = 0; i < this.planets.length; i++) {
+				const planet = this.planets[i]
 
-			if (this.projectEquatorialToScreen(planet.position.rightAscension, planet.position.declination, this.tempScreen)) {
-				this.picking.add(PICK_TYPE_PLANET, i, this.tempScreen[0], this.tempScreen[1], -5)
+				if (this.projectEquatorialToScreen(planet.position.rightAscension, planet.position.declination, this.tempScreen)) {
+					this.picking.add(PICK_TYPE_PLANET, i, this.tempScreen[0], this.tempScreen[1], -5)
+				}
 			}
 		}
 
 		const labels = this.constellations.labels ?? []
 
-		if (this.transform.k >= 0.75) {
+		if (this.isLayerVisible('constellationLabels') && this.transform.k >= 0.75) {
 			for (let i = 0; i < labels.length; i++) {
 				const label = labels[i]
 
@@ -3809,17 +3853,19 @@ export class Celestial {
 			}
 		}
 
-		for (let i = 0; i < this.shapeList.length; i++) {
-			const shape = this.shapeList[i]
+		if (this.isLayerVisible('shapes')) {
+			for (let i = 0; i < this.shapeList.length; i++) {
+				const shape = this.shapeList[i]
 
-			if (shape.visible === false || shape.selectable === false) {
-				continue
-			}
+				if (shape.visible === false || shape.selectable === false) {
+					continue
+				}
 
-			if (this.projectEquatorialToScreen(shape.coordinate.rightAscension, shape.coordinate.declination, this.tempScreen)) {
-				const index = this.pickedShapes.length
-				this.pickedShapes.push(shape)
-				this.picking.add(PICK_TYPE_SHAPE, index, this.tempScreen[0], this.tempScreen[1], -8)
+				if (this.projectEquatorialToScreen(shape.coordinate.rightAscension, shape.coordinate.declination, this.tempScreen)) {
+					const index = this.pickedShapes.length
+					this.pickedShapes.push(shape)
+					this.picking.add(PICK_TYPE_SHAPE, index, this.tempScreen[0], this.tempScreen[1], -8)
+				}
 			}
 		}
 	}
@@ -4131,6 +4177,34 @@ function pickMatchesObject(index: PickIndex | null, object: CelestialObject | nu
 			return false
 		default:
 			return false
+	}
+}
+
+function isPickableLayerId(layerId: string) {
+	switch (layerId) {
+		case 'stars':
+		case 'deepSky':
+		case 'planets':
+		case 'constellationLabels':
+		case 'shapes':
+			return true
+		default:
+			return false
+	}
+}
+
+function objectLayerId(object: CelestialObject) {
+	switch (object.type) {
+		case 'star':
+			return 'stars'
+		case 'deepSky':
+			return 'deepSky'
+		case 'planet':
+			return 'planets'
+		case 'constellationLabel':
+			return 'constellationLabels'
+		case 'shape':
+			return 'shapes'
 	}
 }
 

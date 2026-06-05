@@ -185,7 +185,7 @@ const SkyMaps = memo(() => {
 		celestial.setObserver(SKY_MAP_OBSERVER)
 		celestial.setMagnitudeLimit(6)
 		celestial.startAutoUpdate({ mode: 'realtime', interval: 15000 })
-		celestial.on('hover', (event) => console.info(event.x, event.y, event.coordinate))
+		celestial.on('click', (event) => console.info(event.x, event.y, event.coordinate))
 		celestial.addShape({ id: 'telescopio', visible: true, selectable: false, coordinate: { rightAscension: hour(14), declination: deg(-5) }, render: renderTelescope })
 	}
 

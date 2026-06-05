@@ -2,7 +2,7 @@ import '@/index.css'
 import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { ToastProvider } from '@/ui/components/Toast'
-import { Demo } from '@/ui/Demo'
+import { Home } from '@/ui/Home'
 
 import.meta.hot.accept()
 
@@ -14,7 +14,7 @@ function start() {
 		<React.StrictMode>
 			<ToastProvider color="secondary" maxVisible={1} placement="top-end" size="sm">
 				<main className="h-dvh w-dvw">
-					<Demo />
+					<Home />
 				</main>
 			</ToastProvider>
 		</React.StrictMode>,

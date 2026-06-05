@@ -3026,6 +3026,17 @@ export class Celestial {
 		layer.visible = visible
 		layer.markDirty()
 		this.options.layers[layerId] = visible
+
+		if (layerId === 'planets') {
+			this.updatePlanets()
+			this.rebuildPickingIndex()
+			this.renderer.markDirty('planets')
+
+			if (this.selectedObject?.type === 'planet' || this.hoverObject?.type === 'planet') {
+				this.renderer.markDirty('overlay')
+			}
+		}
+
 		this.requestRender()
 	}
 

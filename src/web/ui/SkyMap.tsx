@@ -3,11 +3,12 @@ import { Celestial, type CelestialOptions } from 'src/lib/celestial/celestial'
 import { tw } from '@/shared/util'
 
 // oxfmt-ignore
-export type SkyMapMethods = Pick<Celestial, 'loadStars' | 'loadConstellations' | 'loadMilkyWay' | 'loadDeepSkyObjects' | 'setObserver' | 'setTime' | 'setProjection' | 'setMagnitudeLimit' | 'setStarLabelsVisible' | 'setUpdateInterval' | 'setLayerVisible' | 'startAutoUpdate' | 'stopAutoUpdate' | 'render' | 'screenToEquatorial' | 'addShape' | 'removeShape' | 'clearShapes' | 'markShapeChanged' | 'on' | 'off'>
+export type SkyMapMethods = Pick<Celestial, 'loadStars' | 'loadConstellations' | 'loadMilkyWay' | 'loadDeepSkyObjects' | 'setObserver' | 'setTime' | 'setProjection' | 'setMagnitudeLimit' | 'setStarLabelsVisible' | 'setViewTransform' | 'setUpdateInterval' | 'setLayerVisible' | 'startAutoUpdate' | 'stopAutoUpdate' | 'render' | 'screenToEquatorial' | 'addShape' | 'removeShape' | 'clearShapes' | 'markShapeChanged' | 'on' | 'off'>
 
 export interface SkyMapProps extends Omit<ComponentPropsWithoutRef<'div'>, 'children'> {
 	readonly height?: CSSProperties['height']
 	readonly onReady?: (celestial: Celestial) => void | VoidFunction
+	readonly onDestroy?: (celestial: Celestial) => void | VoidFunction
 	readonly options?: CelestialOptions
 	readonly width?: CSSProperties['width']
 	readonly ref?: Ref<SkyMapMethods>
@@ -16,7 +17,7 @@ export interface SkyMapProps extends Omit<ComponentPropsWithoutRef<'div'>, 'chil
 const DEFAULT_SKY_MAP_SIZE = 320
 
 // Renders an interactive Celestial star-map inside a React-managed container.
-export function SkyMap({ ref, className, height = DEFAULT_SKY_MAP_SIZE, onReady, options, style, width = '100%', ...props }: SkyMapProps) {
+export function SkyMap({ ref, className, height = DEFAULT_SKY_MAP_SIZE, onReady, onDestroy, options, style, width = '100%', ...props }: SkyMapProps) {
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	const celestialRef = useRef<Celestial | null>(null)
 	const onReadyCleanupRef = useRef<VoidFunction | undefined>(undefined)
@@ -33,6 +34,7 @@ export function SkyMap({ ref, className, height = DEFAULT_SKY_MAP_SIZE, onReady,
 			setProjection: (projection) => celestialRef.current!.setProjection(projection),
 			setMagnitudeLimit: (limit) => celestialRef.current!.setMagnitudeLimit(limit),
 			setStarLabelsVisible: (visible) => celestialRef.current!.setStarLabelsVisible(visible),
+			setViewTransform: (transform) => celestialRef.current!.setViewTransform(transform),
 			setUpdateInterval: (ms) => celestialRef.current!.setUpdateInterval(ms),
 			setLayerVisible: (layerId, visible) => celestialRef.current!.setLayerVisible(layerId, visible),
 			startAutoUpdate: (nextOptions) => celestialRef.current!.startAutoUpdate(nextOptions),
@@ -76,6 +78,7 @@ export function SkyMap({ ref, className, height = DEFAULT_SKY_MAP_SIZE, onReady,
 			onReadyCleanupRef.current = undefined
 			celestial.destroy()
 			celestialRef.current = null
+			onDestroy?.(celestial)
 		}
 	}, [])
 

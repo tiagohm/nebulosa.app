@@ -54,7 +54,7 @@ export const ImageViewer = memo(() => {
 			<ImageToolBar />
 			<ImageInfo />
 			<Interactable onGesture={viewer.mouseCoordinate.handleGesture} onMouseMove={viewer.mouseCoordinate.handleMouseMove} onClick={viewer.mouseCoordinate.handleClick} onTap={viewer.select} ref={viewer.attachInteractable} zIndex={image.position}>
-				<img className="image pointer-events-none max-w-none touch-none rounded-sm outline-8 outline-black/25 outline-solid select-none" draggable={false} id={image.id} onLoad={viewer.handleLoad} ref={imgRef} />
+				<img className="image pointer-events-none max-w-none touch-none rounded-sm select-none" draggable={false} id={image.id} onLoad={viewer.handleLoad} ref={imgRef} />
 				<InteractableOverlay />
 			</Interactable>
 			<ImageStretch />

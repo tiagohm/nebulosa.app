@@ -190,7 +190,7 @@ export function NumberInput({
 	className,
 	classNames,
 	disabled = false,
-	fireOnEnter = false,
+	fireOnEnter = true,
 	fractionDigits = 0,
 	hideStepper = false,
 	label,

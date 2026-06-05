@@ -1,5 +1,5 @@
 import { select } from 'd3-selection'
-import { type D3ZoomEvent, zoom } from 'd3-zoom'
+import { type D3ZoomEvent, type ZoomBehavior, zoom, zoomIdentity } from 'd3-zoom'
 import { deg, normalizeAngle, type Angle } from 'nebulosa/src/angle'
 import { DEG2RAD, PI, PIOVERTWO, TAU } from 'nebulosa/src/constants'
 import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
@@ -14,7 +14,7 @@ export type ProjectionType = 'azimuthalEquidistant' | 'azimuthalEqualArea' | 'or
 export type CoordinateSystem = 'horizontal' | 'equatorial'
 
 // Supported event names emitted by Celestial.
-export type CelestialEventName = 'hover' | 'click' | 'objectHover' | 'objectLeave' | 'selectionChange' | 'renderStart' | 'renderEnd' | 'updateStart' | 'updateEnd' | 'resize' | 'error'
+export type CelestialEventName = 'hover' | 'click' | 'objectHover' | 'objectLeave' | 'selectionChange' | 'viewTransformChange' | 'renderStart' | 'renderEnd' | 'updateStart' | 'updateEnd' | 'resize' | 'error'
 
 export type CelestialTime = Date | number
 
@@ -180,6 +180,7 @@ export interface InteractionOptions {
 	pickRadius?: number
 	pointerMoveThrottleMs?: number
 	preferD3Zoom?: boolean
+	wheelZoomSpeed?: number
 }
 
 // Celestial constructor options.
@@ -281,6 +282,7 @@ export type CelestialEventMap = {
 	readonly objectHover: Readonly<{ object: CelestialObject }>
 	readonly objectLeave: Readonly<{ object: CelestialObject }>
 	readonly selectionChange: Readonly<{ object: CelestialObject }>
+	readonly viewTransformChange: Readonly<{ transform: ViewTransform }>
 	readonly renderStart: Readonly<{ time: number }>
 	readonly renderEnd: Readonly<{ time: number; duration: number; fps: number }>
 	readonly updateStart: Readonly<{ time: number }>
@@ -361,6 +363,8 @@ const YEAR_MS = 365.25 * DAY_MS
 const DEFAULT_WIDTH = 800
 const DEFAULT_HEIGHT = 800
 const DEFAULT_UPDATE_INTERVAL = 10000
+const WHEEL_DELTA_LINE_PIXELS = 16
+const WHEEL_DELTA_PAGE_PIXELS = 800
 const HORIZON_EPSILON = 1e-7
 const POLE_EPSILON = 1e-10
 const PROJECTION_PADDING = 10
@@ -493,6 +497,7 @@ const DEFAULT_INTERACTION_OPTIONS: Required<InteractionOptions> = {
 	pickRadius: 7,
 	pointerMoveThrottleMs: 32,
 	preferD3Zoom: true,
+	wheelZoomSpeed: 0.0004,
 }
 
 const DEFAULT_SOLAR_SYSTEM_BODIES: SolarSystemBody[] = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn']
@@ -500,6 +505,12 @@ const DEFAULT_SOLAR_SYSTEM_BODIES: SolarSystemBody[] = ['sun', 'moon', 'mercury'
 // Returns true for finite numbers only.
 function isFiniteNumber(value: unknown): value is number {
 	return typeof value === 'number' && Number.isFinite(value)
+}
+
+function normalizedWheelDeltaY(event: WheelEvent) {
+	if (event.deltaMode === 1) return event.deltaY * WHEEL_DELTA_LINE_PIXELS
+	if (event.deltaMode === 2) return event.deltaY * WHEEL_DELTA_PAGE_PIXELS
+	return event.deltaY
 }
 
 // Converts a unix epoch in milliseconds into a Julian date.
@@ -912,6 +923,8 @@ function mergeReferenceLine(defaults: ResolvedReferenceLineOptions, options?: Re
 // Normalizes options into a fully usable shape.
 function resolveOptions(options: CelestialOptions): ResolvedCelestialOptions {
 	const layers: Record<string, boolean> = { ...DEFAULT_LAYER_VISIBILITY }
+	const interactions = { ...DEFAULT_INTERACTION_OPTIONS, ...options.interactions }
+	interactions.wheelZoomSpeed = clamp(isFiniteNumber(interactions.wheelZoomSpeed) ? interactions.wheelZoomSpeed : DEFAULT_INTERACTION_OPTIONS.wheelZoomSpeed, 0.00005, 0.01)
 
 	for (const [id, visible] of Object.entries(options.layers ?? {})) {
 		if (typeof visible === 'boolean') {
@@ -931,7 +944,7 @@ function resolveOptions(options: CelestialOptions): ResolvedCelestialOptions {
 		referenceLines: mergeReferenceLines(options.referenceLines),
 		layers,
 		theme: mergeTheme(options.theme),
-		interactions: { ...DEFAULT_INTERACTION_OPTIONS, ...options.interactions },
+		interactions,
 		ephemerisProvider: options.ephemerisProvider,
 		solarSystemBodies: options.solarSystemBodies ?? DEFAULT_SOLAR_SYSTEM_BODIES,
 	}
@@ -2075,6 +2088,7 @@ class ReferenceLineLayer extends InternalLayer {
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
 		this.samplerState = state
 		ctx.save()
+		ctx.globalAlpha = 0.7
 		ctx.lineCap = 'round'
 		ctx.lineJoin = 'round'
 		this.drawLocalMeridian(ctx, state)
@@ -3098,6 +3112,7 @@ export class Celestial {
 	private pointerDown = false
 	private pointerMoved = false
 	private d3ZoomBound = false
+	private d3ZoomBehavior: ZoomBehavior<HTMLElement, unknown> | null = null
 	private pointerStartX = 0
 	private pointerStartY = 0
 	private transformStartX = 0
@@ -3169,6 +3184,18 @@ export class Celestial {
 			this.options.stars.labels = visible
 			this.renderer.markDirty('stars')
 			this.requestRender()
+		}
+	}
+
+	setViewTransform(transform: ViewTransform) {
+		const nextTransform = this.normalizeViewTransform(transform)
+
+		if (this.d3ZoomBehavior) {
+			this.syncD3ZoomTransform(nextTransform)
+		}
+
+		if (this.writeViewTransform(nextTransform)) {
+			this.afterTransformChanged()
 		}
 	}
 
@@ -4012,16 +4039,21 @@ export class Celestial {
 
 		const behavior = zoom<HTMLElement, unknown>()
 			.scaleExtent([this.options.interactions.minZoom, this.options.interactions.maxZoom])
+			.wheelDelta((event: WheelEvent) => -(normalizedWheelDeltaY(event) * this.options.interactions.wheelZoomSpeed) / Math.LN2)
 			.on('zoom', (event: D3ZoomEvent<HTMLElement, unknown>) => {
 				const k = event.transform.k
-				this.transform = { x: event.transform.x - (this.options.width / 2) * (1 - k), y: event.transform.y - (this.options.height / 2) * (1 - k), k }
-				this.afterTransformChanged()
+				const transform = this.normalizeViewTransform({ x: event.transform.x - (this.options.width / 2) * (1 - k), y: event.transform.y - (this.options.height / 2) * (1 - k), k })
+
+				if (this.writeViewTransform(transform)) {
+					this.afterTransformChanged()
+				}
 			})
 
 		const element = this.renderer.element
 		element.addEventListener('pointermove', this.handlePointerMove)
 		element.addEventListener('click', this.handleClick)
 		select(element).call(behavior)
+		this.d3ZoomBehavior = behavior
 		this.d3ZoomBound = true
 	}
 
@@ -4030,6 +4062,7 @@ export class Celestial {
 		if (!this.d3ZoomBound) return
 
 		select(this.renderer.element).on('.zoom', null)
+		this.d3ZoomBehavior = null
 		this.d3ZoomBound = false
 	}
 
@@ -4122,7 +4155,7 @@ export class Celestial {
 
 		const point = this.eventPoint(event)
 		const previousK = this.transform.k
-		const nextK = clamp(previousK * Math.exp(-event.deltaY * 0.001), this.options.interactions.minZoom, this.options.interactions.maxZoom)
+		const nextK = clamp(previousK * Math.exp(-normalizedWheelDeltaY(event) * this.options.interactions.wheelZoomSpeed), this.options.interactions.minZoom, this.options.interactions.maxZoom)
 
 		if (nextK === previousK) return
 
@@ -4136,10 +4169,33 @@ export class Celestial {
 		this.afterTransformChanged()
 	}
 
+	private normalizeViewTransform(transform: ViewTransform): ViewTransform {
+		return {
+			x: isFiniteNumber(transform.x) ? transform.x : 0,
+			y: isFiniteNumber(transform.y) ? transform.y : 0,
+			k: clamp(isFiniteNumber(transform.k) ? transform.k : 1, this.options.interactions.minZoom, this.options.interactions.maxZoom),
+		}
+	}
+
+	private writeViewTransform(transform: ViewTransform) {
+		if (transform.x === this.transform.x && transform.y === this.transform.y && transform.k === this.transform.k) return false
+		this.transform = transform
+		return true
+	}
+
+	private syncD3ZoomTransform(transform: ViewTransform) {
+		if (!this.d3ZoomBehavior) return
+
+		const d3Transform = zoomIdentity.translate(transform.x + (this.options.width / 2) * (1 - transform.k), transform.y + (this.options.height / 2) * (1 - transform.k)).scale(transform.k)
+
+		select(this.renderer.element).property('__zoom', d3Transform)
+	}
+
 	// Updates rendering and picking after pan/zoom transform changes.
 	private afterTransformChanged() {
 		this.pickingDirty = true
 		this.renderer.markAllDirty()
+		this.emitter.has('viewTransformChange') && this.emitter.emit('viewTransformChange', { transform: this.transform })
 		this.requestRender()
 	}
 

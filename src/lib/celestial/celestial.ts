@@ -3686,7 +3686,11 @@ export class Celestial {
 		let projected = 0
 
 		for (let i = 0; i < catalog.count; i++) {
-			if (catalog.mag[i] > maxMagnitude || catalog.visibleCount >= maxRenderStars) {
+			if (catalog.visibleCount >= maxRenderStars) {
+				break
+			}
+
+			if (catalog.mag[i] > maxMagnitude) {
 				continue
 			}
 

@@ -2364,11 +2364,11 @@ class StarLayer extends InternalLayer {
 
 	// Rebuilds sprite styles when theme or options change.
 	private ensureStyles(state: RenderState) {
-		const signature = `${state.theme.stars.baseColor}|${state.theme.stars.minRadius}|${state.theme.stars.maxRadius}`
+		const signature = `${state.stars.colorByBV}|${state.theme.stars.baseColor}|${state.theme.stars.minRadius}|${state.theme.stars.maxRadius}`
 
 		if (signature === this.styleSignature) return
 
-		this.styles = buildStarStyles(state.theme, DEFAULT_STAR_OPTIONS)
+		this.styles = buildStarStyles(state.theme, state.stars)
 		this.styleSignature = signature
 	}
 }

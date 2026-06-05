@@ -2429,12 +2429,20 @@ class StarLayer extends InternalLayer {
 			}
 
 			const style = this.styles[bucket]
+			const margin = Math.max(2, style.halfSize * transform.k + 2)
 
 			if (style.radius <= 0.8) {
 				ctx.fillStyle = style.color
 
 				for (let i = start; i < end; i++) {
 					const index = indices[i]
+
+					applyViewTransform(catalog.screenX[index], catalog.screenY[index], width, height, transform, this.point)
+
+					if (this.point[0] < -margin || this.point[0] > width + margin || this.point[1] < -margin || this.point[1] > height + margin) {
+						continue
+					}
+
 					ctx.fillRect(catalog.screenX[index], catalog.screenY[index], 1, 1)
 				}
 			} else {
@@ -2443,6 +2451,13 @@ class StarLayer extends InternalLayer {
 
 				for (let i = start; i < end; i++) {
 					const index = indices[i]
+
+					applyViewTransform(catalog.screenX[index], catalog.screenY[index], width, height, transform, this.point)
+
+					if (this.point[0] < -margin || this.point[0] > width + margin || this.point[1] < -margin || this.point[1] > height + margin) {
+						continue
+					}
+
 					ctx.drawImage(sprite, catalog.screenX[index] - halfSize, catalog.screenY[index] - halfSize)
 				}
 			}

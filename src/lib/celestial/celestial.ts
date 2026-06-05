@@ -3228,8 +3228,15 @@ export class Celestial {
 
 	// Resizes the map without recreating the instance.
 	resize(width: number, height: number) {
-		this.options.width = Math.max(1, Math.floor(width))
-		this.options.height = Math.max(1, Math.floor(height))
+		const nextWidth = Math.max(1, Math.floor(width))
+		const nextHeight = Math.max(1, Math.floor(height))
+
+		if (nextWidth === this.options.width && nextHeight === this.options.height) {
+			return
+		}
+
+		this.options.width = nextWidth
+		this.options.height = nextHeight
 		this.renderer.resize(this.options.width, this.options.height)
 		this.projectStars()
 		this.rebuildPickingIndex()

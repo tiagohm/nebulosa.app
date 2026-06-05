@@ -6,6 +6,7 @@ import type { Celestial, CelestialOptions, ConstellationData, DeepSkyObject, Sha
 import constellationBoundaries from '@/../data/constellation.boundaries.json' with { type: 'json' }
 import constellationLabels from '@/../data/constellation.labels.json' with { type: 'json' }
 import constellationLines from '@/../data/constellation.lines.json' with { type: 'json' }
+import mw from '@/../data/mw.json' with { type: 'json' }
 import { toast } from '../shared/toast'
 import { Badge } from './components/Badge'
 import { Breadcrumbs } from './components/Breadcrumbs'
@@ -170,6 +171,9 @@ const SKY_MAP_OPTIONS: CelestialOptions = {
 	layers: {
 		constellationBoundaries: true,
 	},
+	theme: {
+		background: 'transparent',
+	},
 }
 
 const SkyMaps = memo(() => {
@@ -184,6 +188,7 @@ const SkyMaps = memo(() => {
 		celestial.loadConstellations(SKY_MAP_CONSTELLATIONS)
 		celestial.loadDeepSkyObjects(SKY_MAP_DEEP_SKY_OBJECTS)
 		celestial.loadStars(SKY_MAP_STARS)
+		celestial.loadMilkyWay(mw as never)
 		celestial.setObserver(SKY_MAP_OBSERVER)
 		celestial.setMagnitudeLimit(6)
 		celestial.startAutoUpdate({ mode: 'realtime', interval: 15000 })

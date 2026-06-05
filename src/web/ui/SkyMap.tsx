@@ -3,7 +3,7 @@ import { Celestial, type CelestialOptions } from 'src/lib/celestial/celestial'
 import { tw } from '@/shared/util'
 
 // oxfmt-ignore
-export type SkyMapMethods = Pick<Celestial, 'loadStars' | 'loadConstellations' | 'loadDeepSkyObjects' | 'setObserver' | 'setTime' | 'setProjection' | 'setMagnitudeLimit' | 'setStarLabelsVisible' | 'setUpdateInterval' | 'setLayerVisible' | 'startAutoUpdate' | 'stopAutoUpdate' | 'render' | 'screenToEquatorial' | 'addShape' | 'removeShape' | 'clearShapes' | 'markShapeChanged' | 'on' | 'off'>
+export type SkyMapMethods = Pick<Celestial, 'loadStars' | 'loadConstellations' | 'loadMilkyWay' | 'loadDeepSkyObjects' | 'setObserver' | 'setTime' | 'setProjection' | 'setMagnitudeLimit' | 'setStarLabelsVisible' | 'setUpdateInterval' | 'setLayerVisible' | 'startAutoUpdate' | 'stopAutoUpdate' | 'render' | 'screenToEquatorial' | 'addShape' | 'removeShape' | 'clearShapes' | 'markShapeChanged' | 'on' | 'off'>
 
 export interface SkyMapProps extends Omit<ComponentPropsWithoutRef<'div'>, 'children'> {
 	readonly height?: CSSProperties['height']
@@ -26,6 +26,7 @@ export function SkyMap({ ref, className, height = DEFAULT_SKY_MAP_SIZE, onReady,
 		() => ({
 			loadStars: (nextStars) => celestialRef.current!.loadStars(nextStars),
 			loadConstellations: (data) => celestialRef.current!.loadConstellations(data),
+			loadMilkyWay: (coordinates) => celestialRef.current!.loadMilkyWay(coordinates),
 			loadDeepSkyObjects: (objects) => celestialRef.current!.loadDeepSkyObjects(objects),
 			setObserver: (nextObserver) => celestialRef.current!.setObserver(nextObserver),
 			setTime: (date) => celestialRef.current!.setTime(date),
@@ -78,7 +79,7 @@ export function SkyMap({ ref, className, height = DEFAULT_SKY_MAP_SIZE, onReady,
 		}
 	}, [])
 
-	return <div {...props} className={tw('relative overflow-hidden rounded-lg bg-neutral-950', className)} ref={containerRef} style={{ height, width, ...style }} />
+	return <div {...props} className={tw('relative overflow-hidden rounded-lg bg-transparent', className)} ref={containerRef} style={{ height, width, ...style }} />
 }
 
 // Reads the currently laid out container size with a safe initial fallback.

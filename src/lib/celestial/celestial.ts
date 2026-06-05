@@ -67,6 +67,11 @@ export interface ConstellationData {
 	boundaries?: ConstellationLine[]
 }
 
+export type MilkyWayPosition = readonly [Angle, Angle]
+export type MilkyWayLinearRingCoordinates = readonly MilkyWayPosition[]
+export type MilkyWayPolygonCoordinates = readonly MilkyWayLinearRingCoordinates[]
+export type MilkyWayCoordinates = readonly MilkyWayPolygonCoordinates[]
+
 // Deep-sky object shape.
 export interface DeepSkyObject extends EquatorialCoordinate {
 	id?: string
@@ -102,6 +107,15 @@ export interface ThemeOptions {
 	horizon: {
 		color: string
 		fillBelowHorizon: string
+	}
+	milkyWay: {
+		color: string
+		opacity: number
+		lineColor: string
+		levelColors?: readonly string[]
+		levelOpacities?: readonly number[]
+		lineOpacity: number
+		lineWidth: number
 	}
 	constellations: {
 		color: string
@@ -201,6 +215,7 @@ export interface RenderState {
 	readonly theme: Readonly<ThemeOptions>
 	readonly starCatalog: StarCatalog | null
 	readonly constellations: Readonly<ConstellationData>
+	readonly milkyWay: readonly Readonly<MilkyWayStep>[]
 	readonly dsos: readonly Readonly<DeepSkyObject>[]
 	readonly planets: readonly Readonly<PlanetRenderObject>[]
 	readonly shapes: readonly Readonly<CelestialShape>[]
@@ -301,6 +316,16 @@ type PlanetRenderObject = {
 	readonly position: EquatorialCoordinate
 }
 
+type MilkyWayRing = {
+	readonly vectors: Float32Array
+	readonly pointCount: number
+	readonly closed: boolean
+}
+
+type MilkyWayStep = {
+	readonly rings: readonly MilkyWayRing[]
+}
+
 type AnyCelestialEventCallback = (payload: CelestialEventMap[CelestialEventName], eventName: CelestialEventName) => void
 
 type ResolvedReferenceLineOptions = Required<ReferenceLineOptions>
@@ -375,13 +400,22 @@ const DEFAULT_THEME: ThemeOptions = {
 		color: '#1f9a41',
 		fillBelowHorizon: 'rgba(0, 0, 0, 0)',
 	},
+	milkyWay: {
+		color: '#f2f4ff',
+		opacity: 0,
+		lineColor: '#f8f9ff',
+		levelColors: ['#29B6F6', '#03A9F4', '#039BE5', '#0288D1', '#0277BD'],
+		levelOpacities: [0.7, 0.6, 0.5, 0.4, 0.3],
+		lineOpacity: 0.6,
+		lineWidth: 0.65,
+	},
 	constellations: {
 		color: '#b8bcc4',
 		opacity: 0.7,
 		labelColor: '#b9c1b6',
 		labelFont: '10px system-ui, sans-serif',
 		labelOpacity: 0.7,
-		lineColor: '#b8bcc4',
+		lineColor: '#FFEE58',
 		lineOpacity: 0.3,
 		boundaryColor: '#880E4F',
 		boundaryOpacity: 0.6,
@@ -411,6 +445,7 @@ const DEFAULT_OBSERVER: ObserverLocation = {
 const DEFAULT_LAYER_VISIBILITY: Record<string, boolean> = {
 	background: true,
 	stars: true,
+	milkyWay: true,
 	constellations: true,
 	constellationBoundaries: false,
 	constellationLabels: true,
@@ -422,6 +457,8 @@ const DEFAULT_LAYER_VISIBILITY: Record<string, boolean> = {
 	shapes: true,
 	overlay: true,
 }
+
+const ASTRONOMICAL_DIRTY_LAYER_IDS = ['grid', 'referenceLines', 'milkyWay', 'constellations', 'constellationBoundaries', 'constellationLabels', 'deepSky', 'stars', 'planets', 'shapes'] as const
 
 const DEFAULT_STAR_OPTIONS: Required<StarLayerOptions> = {
 	maxMagnitude: 9,
@@ -787,6 +824,59 @@ function validateObserver(observer: ObserverLocation): ObserverLocation {
 	}
 }
 
+function normalizeMilkyWayCoordinates(coordinates: MilkyWayCoordinates): MilkyWayStep[] {
+	const steps: MilkyWayStep[] = []
+
+	for (let i = 0; i < coordinates.length; i++) {
+		const rings = normalizeMilkyWayPolygon(coordinates[i])
+		if (rings.length > 0) steps.push({ rings })
+	}
+
+	return steps
+}
+
+function normalizeMilkyWayPolygon(polygon: MilkyWayPolygonCoordinates): MilkyWayRing[] {
+	const rings: MilkyWayRing[] = []
+
+	for (let i = 0; i < polygon.length; i++) {
+		const ring = normalizeMilkyWayRing(polygon[i])
+		if (ring) rings.push(ring)
+	}
+
+	return rings
+}
+
+function normalizeMilkyWayRing(ring: MilkyWayLinearRingCoordinates): MilkyWayRing | null {
+	const n = ring.length
+	const coordinates = new Float32Array(n * 2)
+	const vectors = new Float32Array(n * 3)
+	let pointCount = 0
+
+	for (let i = 0; i < n; i++) {
+		const [ra, dec] = ring[i]
+		coordinates[pointCount * 2] = ra
+		coordinates[pointCount * 2 + 1] = dec
+		writeRaDecUnitVector(ra, dec, vectors, pointCount * 3)
+		pointCount++
+	}
+
+	const closed = pointCount > 2 && milkyWayRingPointMatches(coordinates, 0, pointCount - 1)
+
+	if (closed) {
+		pointCount--
+	}
+
+	if (pointCount < 2) return null
+
+	return { vectors: vectors.subarray(0, pointCount * 3), pointCount, closed }
+}
+
+function milkyWayRingPointMatches(coordinates: Float32Array, a: number, b: number) {
+	const ai = a * 2
+	const bi = b * 2
+	return Math.abs(coordinates[ai] - coordinates[bi]) <= 1e-7 && Math.abs(coordinates[ai + 1] - coordinates[bi + 1]) <= 1e-7
+}
+
 // Deep-merges theme options without mutating defaults.
 function mergeTheme(theme?: PartialThemeOptions): ThemeOptions {
 	return {
@@ -794,6 +884,7 @@ function mergeTheme(theme?: PartialThemeOptions): ThemeOptions {
 		stars: { ...DEFAULT_THEME.stars, ...theme?.stars },
 		grid: { ...DEFAULT_THEME.grid, ...theme?.grid },
 		horizon: { ...DEFAULT_THEME.horizon, ...theme?.horizon },
+		milkyWay: { ...DEFAULT_THEME.milkyWay, ...theme?.milkyWay },
 		constellations: { ...DEFAULT_THEME.constellations, ...theme?.constellations },
 		deepSky: { ...DEFAULT_THEME.deepSky, ...theme?.deepSky },
 		planets: { ...DEFAULT_THEME.planets, ...theme?.planets },
@@ -2132,6 +2223,121 @@ class ConstellationBoundaryLayer extends ConstellationSegmentLayer {
 	}
 }
 
+// Milky Way renderer for d3-celestial mw.json MultiPolygon coordinate arrays.
+class MilkyWayLayer extends InternalLayer {
+	private readonly sampleVector = new Float32Array(3)
+	private readonly point = new Float32Array(2)
+	private readonly previous = new Float32Array(2)
+	private samplerState!: RenderState
+	private samplerRing!: MilkyWayRing
+
+	private readonly ringSampler: ProjectedSampler = (t, out) => {
+		const ring = this.samplerRing
+		const segmentCount = milkyWayRingSegmentCount(ring)
+
+		if (segmentCount <= 0) {
+			return writeProjectedSample(out, Number.NaN, false)
+		}
+
+		const segment = t * segmentCount
+		const index = Math.min(segmentCount - 1, Math.floor(segment))
+		const nextIndex = index + 1 === ring.pointCount ? 0 : index + 1
+		const localT = segment - index
+		const u = 1 - localT
+		const fromOffset = index * 3
+		const toOffset = nextIndex * 3
+
+		this.sampleVector[0] = ring.vectors[fromOffset] * u + ring.vectors[toOffset] * localT
+		this.sampleVector[1] = ring.vectors[fromOffset + 1] * u + ring.vectors[toOffset + 1] * localT
+		this.sampleVector[2] = ring.vectors[fromOffset + 2] * u + ring.vectors[toOffset + 2] * localT
+
+		if (!normalizeVector(this.sampleVector)) {
+			return writeProjectedSample(out, Number.NaN, false)
+		}
+
+		const state = this.samplerState
+		const ra = normalizeAngle(Math.atan2(this.sampleVector[1], this.sampleVector[0]))
+		const dec = Math.asin(clamp(this.sampleVector[2], -1, 1))
+		return writeProjectedSample(out, state.equatorialVisibility(ra, dec), state.projectEquatorialToScreen(ra, dec, out))
+	}
+
+	constructor() {
+		super('milkyWay', 15)
+	}
+
+	render(ctx: CanvasRenderingContext2D, state: RenderState) {
+		const steps = state.milkyWay
+
+		if (steps.length === 0) return
+
+		const theme = state.theme.milkyWay
+		const fillOpacity = clamp(theme.opacity, 0, 1)
+		const lineOpacity = clamp(theme.lineOpacity, 0, 1)
+
+		if (fillOpacity <= 0 && (lineOpacity <= 0 || theme.lineWidth <= 0)) return
+
+		this.samplerState = state
+		ctx.save()
+
+		if (isFiniteDiskProjection(state.projection)) {
+			clipProjectionDisk(ctx, state)
+		}
+
+		ctx.lineWidth = theme.lineWidth
+		ctx.lineJoin = 'round'
+		ctx.lineCap = 'round'
+
+		for (let i = 0; i < steps.length; i++) {
+			const lineOpacityPerLevel = milkyWayLevelOpacity(theme, i)
+
+			if (lineOpacityPerLevel <= 0) continue
+
+			const color = milkyWayLevelColor(theme, i)
+
+			ctx.fillStyle = color
+			ctx.strokeStyle = color
+			ctx.beginPath()
+			this.drawStep(ctx, state, steps[i])
+
+			// Filled clipped polygons need real polygon clipping; outlines avoid false closure segments at the projection boundary.
+			// if (fillOpacity > 0 && !isFiniteDiskProjection(state.projection)) {
+			// 	ctx.globalAlpha = fillOpacity
+			// 	ctx.fill('evenodd')
+			// }
+
+			ctx.globalAlpha = lineOpacity * lineOpacityPerLevel
+			ctx.stroke()
+		}
+
+		ctx.restore()
+	}
+
+	private drawStep(ctx: CanvasRenderingContext2D, state: RenderState, step: MilkyWayStep) {
+		const rings = step.rings
+
+		for (let i = 0; i < rings.length; i++) {
+			this.drawRing(ctx, state, rings[i])
+		}
+	}
+
+	private drawRing(ctx: CanvasRenderingContext2D, state: RenderState, ring: MilkyWayRing) {
+		this.samplerRing = ring
+		drawClippedPolyline(ctx, state, Math.max(16, milkyWayRingSegmentCount(ring)), this.point, this.previous, this.ringSampler)
+	}
+}
+
+function milkyWayRingSegmentCount(ring: MilkyWayRing) {
+	return ring.closed ? ring.pointCount : ring.pointCount - 1
+}
+
+function milkyWayLevelColor(theme: ThemeOptions['milkyWay'], index: number) {
+	return theme.levelColors?.[index] ?? theme.lineColor
+}
+
+function milkyWayLevelOpacity(theme: ThemeOptions['milkyWay'], index: number) {
+	return theme.levelOpacities?.[index] ?? 1
+}
+
 // Deep-sky object renderer.
 class DeepSkyObjectLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
@@ -2840,6 +3046,7 @@ export class Celestial {
 	private readonly options: ResolvedCelestialOptions
 	private starCatalog: StarCatalog | null = null
 	private constellations: ConstellationData = {}
+	private milkyWay: MilkyWayStep[] = []
 	private dsos: DeepSkyObject[] = []
 	private readonly planets: PlanetRenderObject[] = []
 	private readonly shapes = new Map<string, CelestialShape>()
@@ -2852,6 +3059,7 @@ export class Celestial {
 	private autoUpdateOptions: Required<AutoUpdateOptions> | null = null
 	private frameId = 0
 	private updateQueued = false
+	private pickingDirty = false
 	private destroyed = false
 	private pointerDown = false
 	private pointerMoved = false
@@ -3020,6 +3228,7 @@ export class Celestial {
 		this.starCatalog = null
 		this.dsos.length = 0
 		this.constellations = {}
+		this.milkyWay.length = 0
 		this.planets.length = 0
 		this.shapes.clear()
 		this.shapeList.length = 0
@@ -3048,6 +3257,12 @@ export class Celestial {
 		this.renderer.markDirty('constellationBoundaries')
 		this.renderer.markDirty('constellationLabels')
 		this.rebuildPickingIndex()
+		this.requestRender()
+	}
+
+	loadMilkyWay(coordinates: MilkyWayCoordinates) {
+		this.milkyWay = normalizeMilkyWayCoordinates(coordinates)
+		this.renderer.markDirty('milkyWay')
 		this.requestRender()
 	}
 
@@ -3261,7 +3476,21 @@ export class Celestial {
 
 	// Creates and registers built-in layers.
 	private setupLayers() {
-		this.layers.push(new BackgroundLayer(), new HorizonLayer(), new GridLayer(), new ReferenceLineLayer(), new ConstellationLineLayer(), new ConstellationBoundaryLayer(), new DeepSkyObjectLayer(), new StarLayer(), new PlanetLayer(), new ConstellationLabelLayer(), new ShapeLayer(), new InteractionOverlayLayer())
+		this.layers.push(
+			new BackgroundLayer(),
+			new HorizonLayer(),
+			new MilkyWayLayer(),
+			new GridLayer(),
+			new ReferenceLineLayer(),
+			new ConstellationLineLayer(),
+			new ConstellationBoundaryLayer(),
+			new DeepSkyObjectLayer(),
+			new StarLayer(),
+			new PlanetLayer(),
+			new ConstellationLabelLayer(),
+			new ShapeLayer(),
+			new InteractionOverlayLayer(),
+		)
 
 		for (const layer of this.layers) {
 			layer.visible = this.options.layers[layer.id] ?? true
@@ -3328,21 +3557,21 @@ export class Celestial {
 	run() {
 		if (this.destroyed) return
 
-		const start = performance.now()
-		this.emitter.has('updateStart') && this.emitter.emit('updateStart', { time: this.options.time })
+		const emitUpdateStart = this.emitter.has('updateStart')
+		const emitUpdateEnd = this.emitter.has('updateEnd')
+		const start = emitUpdateEnd ? performance.now() : 0
+		emitUpdateStart && this.emitter.emit('updateStart', { time: this.options.time })
 		writeEquatorialToHorizontalMatrix(this.options.time, this.options.observer, this.eqToHorizontal)
 		this.updatePlanets()
 
 		if (this.starCatalog) {
 			this.starCatalog.updateEquatorialVectors(julianEpochYear(this.options.time))
-			this.starCatalog.cacheStyleBuckets(this.options.stars, this.options.theme)
 		}
 
 		this.projectStars()
 		this.rebuildPickingIndex()
-		const duration = performance.now() - start
-		this.emitter.has('updateEnd') && this.emitter.emit('updateEnd', { time: this.options.time, duration })
-		this.renderer.markAllDirty()
+		emitUpdateEnd && this.emitter.emit('updateEnd', { time: this.options.time, duration: performance.now() - start })
+		this.markAstronomicalDirty()
 		this.requestRender()
 	}
 
@@ -3360,6 +3589,20 @@ export class Celestial {
 			} catch (error) {
 				this.emitError(normalizeError(error))
 			}
+		}
+	}
+
+	private markAstronomicalDirty() {
+		for (let i = 0; i < ASTRONOMICAL_DIRTY_LAYER_IDS.length; i++) {
+			this.renderer.markDirty(ASTRONOMICAL_DIRTY_LAYER_IDS[i])
+		}
+
+		if (this.options.coordinateSystem === 'equatorial') {
+			this.renderer.markDirty('horizon')
+		}
+
+		if (this.hoverObject || this.selectedObject) {
+			this.renderer.markDirty('overlay')
 		}
 	}
 
@@ -3507,6 +3750,7 @@ export class Celestial {
 
 	// Rebuilds the picking index from projected visible objects.
 	private rebuildPickingIndex() {
+		this.pickingDirty = false
 		const radius = this.options.interactions.pickRadius
 		this.picking.reset(this.options.width, this.options.height, Math.max(16, radius * 3))
 		this.pickedShapes.length = 0
@@ -3565,6 +3809,12 @@ export class Celestial {
 		}
 	}
 
+	private ensurePickingIndex() {
+		if (!this.pickingDirty) return
+
+		this.rebuildPickingIndex()
+	}
+
 	// Schedules one animation-frame render.
 	private requestRender() {
 		if (this.frameId || this.destroyed) return
@@ -3577,12 +3827,18 @@ export class Celestial {
 
 	// Flushes dirty layers.
 	private flushRender() {
-		const start = performance.now()
-		this.emitter.has('renderStart') && this.emitter.emit('renderStart', { time: this.options.time })
+		const emitRenderStart = this.emitter.has('renderStart')
+		const emitRenderEnd = this.emitter.has('renderEnd')
+		const start = emitRenderEnd ? performance.now() : 0
+		emitRenderStart && this.emitter.emit('renderStart', { time: this.options.time })
+		this.ensurePickingIndex()
 		this.renderer.render(this.createRenderState())
-		const duration = performance.now() - start
-		const fps = duration > 0 ? 1000 / duration : 0
-		this.emitter.has('renderEnd') && this.emitter.emit('renderEnd', { time: this.options.time, duration, fps })
+
+		if (emitRenderEnd) {
+			const duration = performance.now() - start
+			const fps = duration > 0 ? 1000 / duration : 0
+			this.emitter.emit('renderEnd', { time: this.options.time, duration, fps })
+		}
 	}
 
 	// Creates the render state passed to layers.
@@ -3603,6 +3859,7 @@ export class Celestial {
 			theme: this.options.theme,
 			starCatalog: this.starCatalog,
 			constellations: this.constellations,
+			milkyWay: this.milkyWay,
 			dsos: this.dsos,
 			planets: this.planets,
 			shapes: this.shapeList,
@@ -3738,6 +3995,7 @@ export class Celestial {
 		const x = point[0]
 		const y = point[1]
 
+		this.ensurePickingIndex()
 		const object = this.resolvePointerPick(this.picking.findNearest(x, y, this.options.interactions.pickRadius))
 
 		if (this.emitter.has('hover')) {
@@ -3767,6 +4025,7 @@ export class Celestial {
 		const x = point[0]
 		const y = point[1]
 
+		this.ensurePickingIndex()
 		const object = this.resolvePick(this.picking.findNearest(x, y, this.options.interactions.pickRadius))
 
 		if (this.emitter.has('click')) {
@@ -3807,7 +4066,7 @@ export class Celestial {
 
 	// Updates rendering and picking after pan/zoom transform changes.
 	private afterTransformChanged() {
-		this.rebuildPickingIndex()
+		this.pickingDirty = true
 		this.renderer.markAllDirty()
 		this.requestRender()
 	}

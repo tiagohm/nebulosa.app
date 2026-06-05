@@ -1479,12 +1479,20 @@ function appendProjectedPoint(ctx: CanvasRenderingContext2D, state: RenderState,
 	return true
 }
 
-interface ProjectedSample {
-	readonly visibility: number
-	readonly projected: boolean
+type ProjectedSampler = (t: number, out: NumberArray) => number
+
+function writeProjectedSample(out: NumberArray, visibility: number, projected: boolean) {
+	if (!projected) {
+		out[0] = Number.NaN
+		out[1] = Number.NaN
+	}
+
+	return visibility
 }
 
-type ProjectedSampler = (t: number, out: NumberArray) => ProjectedSample
+function isProjectedSample(out: NumberArray) {
+	return Number.isFinite(out[0]) && Number.isFinite(out[1])
+}
 
 function drawClippedPolyline(ctx: CanvasRenderingContext2D, state: RenderState, steps: number, point: NumberArray, previous: NumberArray, sampler: ProjectedSampler) {
 	let previousT = 0
@@ -1494,14 +1502,15 @@ function drawClippedPolyline(ctx: CanvasRenderingContext2D, state: RenderState, 
 
 	for (let i = 0; i <= steps; i++) {
 		const t = i / steps
-		const sample = sampler(t, point)
-		const visible = sample.visibility >= -HORIZON_EPSILON && sample.projected
+		const visibility = sampler(t, point)
+		const projected = isProjectedSample(point)
+		const visible = visibility >= -HORIZON_EPSILON && projected
 
-		if (i > 0 && Number.isFinite(previousVisibility) && previousVisibility * sample.visibility < 0) {
-			const intersectionT = findHorizonIntersection(previousT, previousVisibility, t, sample.visibility, sampler, point)
-			const intersection = sampler(intersectionT, point)
+		if (i > 0 && Number.isFinite(previousVisibility) && previousVisibility * visibility < 0) {
+			const intersectionT = findHorizonIntersection(previousT, previousVisibility, t, visibility, sampler, point)
+			sampler(intersectionT, point)
 
-			if (intersection.projected) {
+			if (isProjectedSample(point)) {
 				started = appendProjectedPoint(ctx, state, point, previous, started)
 
 				if (!visible) {
@@ -1516,13 +1525,13 @@ function drawClippedPolyline(ctx: CanvasRenderingContext2D, state: RenderState, 
 
 		if (visible) {
 			started = appendProjectedPoint(ctx, state, point, previous, started)
-		} else if (!previousProjected || sample.visibility < -HORIZON_EPSILON) {
+		} else if (!previousProjected || visibility < -HORIZON_EPSILON) {
 			started = false
 		}
 
 		previousT = t
-		previousVisibility = sample.visibility
-		previousProjected = sample.projected
+		previousVisibility = visibility
+		previousProjected = projected
 	}
 }
 
@@ -1534,7 +1543,7 @@ function findHorizonIntersection(minT: number, minVisibility: number, maxT: numb
 
 	for (let i = 0; i < 16; i++) {
 		const midT = (lowT + highT) / 2
-		const midVisibility = sampler(midT, point).visibility
+		const midVisibility = sampler(midT, point)
 
 		if (!Number.isFinite(midVisibility)) {
 			break
@@ -1746,16 +1755,17 @@ function findGridBoundaryLabelPoints(state: RenderState, steps: number, point: N
 
 	for (let i = 0; i <= steps; i++) {
 		const t = i / steps
-		const sample = sampler(t, point)
-		const visible = sample.visibility >= -HORIZON_EPSILON && sample.projected
+		const visibility = sampler(t, point)
+		const projected = isProjectedSample(point)
+		const visible = visibility >= -HORIZON_EPSILON && projected
 		const sampleX = point[0]
 		const sampleY = point[1]
 
-		if (i > 0 && Number.isFinite(previousVisibility) && previousVisibility * sample.visibility < 0) {
-			const intersectionT = findHorizonIntersection(previousT, previousVisibility, t, sample.visibility, sampler, point)
-			const intersection = sampler(intersectionT, point)
+		if (i > 0 && Number.isFinite(previousVisibility) && previousVisibility * visibility < 0) {
+			const intersectionT = findHorizonIntersection(previousT, previousVisibility, t, visibility, sampler, point)
+			sampler(intersectionT, point)
 
-			if (intersection.projected) {
+			if (isProjectedSample(point)) {
 				if (previousVisible || visible) {
 					appendVisiblePoint(point[0], point[1], true)
 				}
@@ -1768,13 +1778,13 @@ function findGridBoundaryLabelPoints(state: RenderState, steps: number, point: N
 
 		if (visible) {
 			appendVisiblePoint(sampleX, sampleY, false)
-		} else if (!previousProjected || sample.visibility < -HORIZON_EPSILON) {
+		} else if (!previousProjected || visibility < -HORIZON_EPSILON) {
 			previousVisible = false
 		}
 
 		previousT = t
-		previousVisibility = sample.visibility
-		previousProjected = sample.projected
+		previousVisibility = visibility
+		previousProjected = projected
 	}
 }
 
@@ -1850,22 +1860,14 @@ class GridLayer extends InternalLayer {
 		ctx.globalAlpha = 1
 	}
 
-	private raProjectedSampler(t: number, dec: Angle, out: NumberArray, state: RenderState): ProjectedSample {
+	private raProjectedSampler(t: number, dec: Angle, out: NumberArray, state: RenderState): number {
 		const ra = t * TAU
-
-		return {
-			visibility: state.equatorialVisibility(ra, dec),
-			projected: state.projectEquatorialToScreen(ra, dec, out),
-		}
+		return writeProjectedSample(out, state.equatorialVisibility(ra, dec), state.projectEquatorialToScreen(ra, dec, out))
 	}
 
-	private decProjectedSampler(t: number, ra: Angle, out: NumberArray, state: RenderState): ProjectedSample {
+	private decProjectedSampler(t: number, ra: Angle, out: NumberArray, state: RenderState): number {
 		const dec = -PIOVERTWO + t * PI
-
-		return {
-			visibility: state.equatorialVisibility(ra, dec),
-			projected: state.projectEquatorialToScreen(ra, dec, out),
-		}
+		return writeProjectedSample(out, state.equatorialVisibility(ra, dec), state.projectEquatorialToScreen(ra, dec, out))
 	}
 
 	// Draws RA/Dec grid lines.
@@ -1953,18 +1955,12 @@ class ReferenceLineLayer extends InternalLayer {
 
 		drawClippedPolyline(ctx, state, 120, this.point, this.previous, (t, out) => {
 			const alt = t * PIOVERTWO
-			return {
-				visibility: state.horizontalVisibility(0, alt),
-				projected: state.projectHorizontalToScreen(0, alt, out),
-			}
+			return writeProjectedSample(out, state.horizontalVisibility(0, alt), state.projectHorizontalToScreen(0, alt, out))
 		})
 
 		drawClippedPolyline(ctx, state, 120, this.point, this.previous, (t, out) => {
 			const alt = (1 - t) * PIOVERTWO
-			return {
-				visibility: state.horizontalVisibility(PI, alt),
-				projected: state.projectHorizontalToScreen(PI, alt, out),
-			}
+			return writeProjectedSample(out, state.horizontalVisibility(PI, alt), state.projectHorizontalToScreen(PI, alt, out))
 		})
 
 		ctx.stroke()
@@ -1981,10 +1977,7 @@ class ReferenceLineLayer extends InternalLayer {
 
 		drawClippedPolyline(ctx, state, 360, this.point, this.previous, (t, out) => {
 			const ra = t * TAU
-			return {
-				visibility: state.equatorialVisibility(ra, 0),
-				projected: state.projectEquatorialToScreen(ra, 0, out),
-			}
+			return writeProjectedSample(out, state.equatorialVisibility(ra, 0), state.projectEquatorialToScreen(ra, 0, out))
 		})
 
 		ctx.stroke()
@@ -2006,10 +1999,7 @@ class ReferenceLineLayer extends InternalLayer {
 			const sinLambda = Math.sin(lambda)
 			const ra = normalizeAngle(Math.atan2(sinLambda * cosObliquity, Math.cos(lambda)))
 			const dec = Math.asin(clamp(sinLambda * sinObliquity, -1, 1))
-			return {
-				visibility: state.equatorialVisibility(ra, dec),
-				projected: state.projectEquatorialToScreen(ra, dec, out),
-			}
+			return writeProjectedSample(out, state.equatorialVisibility(ra, dec), state.projectEquatorialToScreen(ra, dec, out))
 		})
 
 		ctx.stroke()
@@ -2068,16 +2058,12 @@ class ConstellationLineLayer extends InternalLayer {
 			this.sampleVector[2] = this.fromVector[2] * u + this.toVector[2] * t
 
 			if (!normalizeVector(this.sampleVector)) {
-				return { visibility: Number.NaN, projected: false }
+				return writeProjectedSample(out, Number.NaN, false)
 			}
 
 			const ra = normalizeAngle(Math.atan2(this.sampleVector[1], this.sampleVector[0]))
 			const dec = Math.asin(clamp(this.sampleVector[2], -1, 1))
-
-			return {
-				visibility: state.equatorialVisibility(ra, dec),
-				projected: state.projectEquatorialToScreen(ra, dec, out),
-			}
+			return writeProjectedSample(out, state.equatorialVisibility(ra, dec), state.projectEquatorialToScreen(ra, dec, out))
 		})
 	}
 }

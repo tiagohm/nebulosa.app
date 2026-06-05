@@ -3119,6 +3119,7 @@ export class Celestial {
 		}
 
 		this.resetViewCenter()
+		writeEquatorialToHorizontalMatrix(this.options.time, this.options.observer, this.eqToHorizontal)
 
 		// Should run after onReady callback to allow initial configuration before first render.
 		// this.run()

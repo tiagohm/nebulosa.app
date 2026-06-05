@@ -12,5 +12,13 @@
 	"sortImports": {
 		"newlinesBetween": false
 	},
-	"sortTailwindcss": true
+	"sortTailwindcss": true,
+	"overrides": [
+		{
+			"files": ["*.jsonc"],
+			"options": {
+				"trailingComma": "none"
+			}
+		}
+	]
 }

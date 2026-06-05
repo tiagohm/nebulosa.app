@@ -51,15 +51,10 @@ export interface StarCatalogInput {
 }
 
 // Constellation line segment.
-export interface ConstellationLine {
-	from: EquatorialCoordinate
-	to: EquatorialCoordinate
-	constellation?: string
-}
+export type ConstellationLine = readonly [Angle, Angle][]
 
 // Constellation label entry.
 export interface ConstellationLabel extends EquatorialCoordinate {
-	id?: string
 	name: string
 }
 
@@ -111,6 +106,10 @@ export interface ThemeOptions {
 		opacity: number
 		labelColor: string
 		labelFont: string
+		lineColor?: string
+		lineOpacity?: number
+		boundaryColor?: string
+		boundaryOpacity?: number
 	}
 	deepSky: {
 		color: string
@@ -371,9 +370,13 @@ const DEFAULT_THEME: ThemeOptions = {
 	},
 	constellations: {
 		color: '#b8bcc4',
-		opacity: 0.72,
+		opacity: 0.7,
 		labelColor: '#b9c1b6',
 		labelFont: '10px system-ui, sans-serif',
+		lineColor: '#b8bcc4',
+		lineOpacity: 0.7,
+		boundaryColor: '#880E4F',
+		boundaryOpacity: 0.5,
 	},
 	deepSky: {
 		color: '#ff9d00',
@@ -2020,23 +2023,25 @@ abstract class ConstellationSegmentLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly previous = new Float32Array(2)
 
-	protected drawSegments(ctx: CanvasRenderingContext2D, state: RenderState, lines: readonly ConstellationLine[], alpha: number, lineWidth: number) {
-		ctx.strokeStyle = state.theme.constellations.color
+	protected drawSegments(ctx: CanvasRenderingContext2D, state: RenderState, lines: readonly ConstellationLine[], color: string, alpha: number, lineWidth: number) {
+		ctx.strokeStyle = color
 		ctx.globalAlpha = alpha
 		ctx.lineWidth = lineWidth
 		ctx.beginPath()
 
-		for (let i = 0; i < lines.length; i++) {
-			this.drawSegment(ctx, state, lines[i])
+		for (const line of lines) {
+			for (let j = 1, k = 0; j < line.length; j++, k++) {
+				this.drawSegment(ctx, state, line[k], line[j])
+			}
 		}
 
 		ctx.stroke()
 		ctx.globalAlpha = 1
 	}
 
-	private drawSegment(ctx: CanvasRenderingContext2D, state: RenderState, line: ConstellationLine) {
-		writeRaDecUnitVector(line.from.rightAscension, line.from.declination, this.fromVector)
-		writeRaDecUnitVector(line.to.rightAscension, line.to.declination, this.toVector)
+	private drawSegment(ctx: CanvasRenderingContext2D, state: RenderState, from: ConstellationLine[number], to: ConstellationLine[number]) {
+		writeRaDecUnitVector(from[0], from[1], this.fromVector)
+		writeRaDecUnitVector(to[0], to[1], this.toVector)
 
 		const distance = angularDistance(this.fromVector[0], this.fromVector[1], this.fromVector[2], this.toVector[0], this.toVector[1], this.toVector[2])
 		const steps = Math.max(8, Math.min(180, Math.ceil(distance / deg(1))))
@@ -2067,9 +2072,14 @@ class ConstellationLineLayer extends ConstellationSegmentLayer {
 
 	// Draws supplied constellation line segments.
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
-		this.drawSegments(ctx, state, state.constellations.lines ?? [], state.theme.constellations.opacity, 0.9)
+		const theme = state.theme.constellations
+		const color = theme.lineColor || theme.color
+		const opacity = theme.lineOpacity ?? theme.opacity
+		this.drawSegments(ctx, state, state.constellations.lines ?? [], color, opacity, 0.9)
 	}
 }
+
+const CONSTELLATION_BOUNDARY_LINE_DASH = [4, 4] as const
 
 // Constellation boundary renderer.
 class ConstellationBoundaryLayer extends ConstellationSegmentLayer {
@@ -2080,8 +2090,11 @@ class ConstellationBoundaryLayer extends ConstellationSegmentLayer {
 	// Draws supplied constellation boundaries as dashed lines.
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
 		ctx.save()
-		ctx.setLineDash([4, 4])
-		this.drawSegments(ctx, state, state.constellations.boundaries ?? [], state.theme.constellations.opacity * 0.45, 0.6)
+		ctx.setLineDash(CONSTELLATION_BOUNDARY_LINE_DASH)
+		const theme = state.theme.constellations
+		const color = theme.lineColor || theme.color
+		const opacity = theme.lineOpacity ?? theme.opacity
+		this.drawSegments(ctx, state, state.constellations.boundaries ?? [], color, opacity, 0.6)
 		ctx.restore()
 	}
 }
@@ -2436,16 +2449,20 @@ class ConstellationLabelLayer extends InternalLayer {
 
 		const labels = state.constellations.labels ?? []
 		ctx.fillStyle = state.theme.constellations.labelColor
+		ctx.globalAlpha = 0.3
 		ctx.font = state.theme.constellations.labelFont
 		ctx.textAlign = 'center'
 		ctx.textBaseline = 'middle'
 
 		for (let i = 0; i < labels.length; i++) {
 			const label = labels[i]
+
 			if (state.projectEquatorialToScreen(label.rightAscension, label.declination, this.point)) {
 				ctx.fillText(label.name, this.point[0], this.point[1])
 			}
 		}
+
+		ctx.globalAlpha = 1
 	}
 }
 

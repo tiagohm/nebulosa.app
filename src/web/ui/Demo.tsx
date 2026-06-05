@@ -2,7 +2,10 @@ import { deg, hour } from 'nebulosa/src/angle'
 import { DEG2RAD, PI } from 'nebulosa/src/constants'
 import { mulberry32 } from 'nebulosa/src/random'
 import { memo, useCallback, useRef, useState } from 'react'
-import type { Celestial, ConstellationData, ConstellationLine, DeepSkyObject, ShapeRenderState, Star } from 'src/lib/celestial/celestial'
+import type { Celestial, CelestialOptions, ConstellationData, DeepSkyObject, ShapeRenderState, Star } from 'src/lib/celestial/celestial'
+import constellationBoundaries from '@/../data/constellation.boundaries.json' with { type: 'json' }
+import constellationLabels from '@/../data/constellation.labels.json' with { type: 'json' }
+import constellationLines from '@/../data/constellation.lines.json' with { type: 'json' }
 import { toast } from '../shared/toast'
 import { Badge } from './components/Badge'
 import { Breadcrumbs } from './components/Breadcrumbs'
@@ -141,8 +144,9 @@ const SKY_MAP_STARS = [
 ]
 
 const SKY_MAP_CONSTELLATIONS = {
-	lines: [line(5.919529, 7.407064, 5.603559, -1.201919), line(5.603559, -1.201919, 5.679312, -1.942572), line(5.679312, -1.942572, 5.242298, -8.20164)],
-	labels: [{ name: 'Orion', rightAscension: 5.58 * HOUR_TO_RAD, declination: 0 }],
+	lines: constellationLines as never,
+	labels: constellationLabels,
+	boundaries: constellationBoundaries as never,
 } satisfies ConstellationData
 
 const SKY_MAP_DEEP_SKY_OBJECTS = [
@@ -162,12 +166,10 @@ function star(name: string, raHours: number, decDegrees: number, mag: number, bv
 	return { name, rightAscension: raHours * HOUR_TO_RAD, declination: decDegrees * DEG2RAD, mag, bv }
 }
 
-// Builds a demo constellation segment from right ascension in hours and declination in degrees.
-function line(fromRaHours: number, fromDecDegrees: number, toRaHours: number, toDecDegrees: number): ConstellationLine {
-	return {
-		from: { rightAscension: fromRaHours * HOUR_TO_RAD, declination: fromDecDegrees * DEG2RAD },
-		to: { rightAscension: toRaHours * HOUR_TO_RAD, declination: toDecDegrees * DEG2RAD },
-	}
+const SKY_MAP_OPTIONS: CelestialOptions = {
+	layers: {
+		constellationBoundaries: true,
+	},
 }
 
 const SkyMaps = memo(() => {
@@ -189,7 +191,7 @@ const SkyMaps = memo(() => {
 		celestial.addShape({ id: 'telescopio', visible: true, selectable: false, coordinate: { rightAscension: hour(14), declination: deg(-5) }, render: renderTelescope })
 	}
 
-	return <SkyMap onReady={handleSkyMapReady} className="w-full" height="100%" />
+	return <SkyMap options={SKY_MAP_OPTIONS} onReady={handleSkyMapReady} className="w-full" height="100%" />
 })
 
 const Buttons = memo(() => {

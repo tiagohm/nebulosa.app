@@ -3846,7 +3846,6 @@ export class Celestial {
 		const emitRenderEnd = this.emitter.has('renderEnd')
 		const start = emitRenderEnd ? performance.now() : 0
 		emitRenderStart && this.emitter.emit('renderStart', { time: this.options.time })
-		this.ensurePickingIndex()
 		this.renderer.render(this.createRenderState())
 
 		if (emitRenderEnd) {

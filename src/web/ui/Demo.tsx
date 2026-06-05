@@ -1,6 +1,8 @@
+import { deg, hour } from 'nebulosa/src/angle'
+import { DEG2RAD, PI } from 'nebulosa/src/constants'
 import { mulberry32 } from 'nebulosa/src/random'
 import { memo, useCallback, useRef, useState } from 'react'
-import type { ConstellationData, DeepSkyObject, Star } from 'src/lib/celestial/celestial'
+import type { Celestial, ConstellationData, ConstellationLine, DeepSkyObject, ShapeRenderState, Star } from 'src/lib/celestial/celestial'
 import { toast } from '../shared/toast'
 import { Badge } from './components/Badge'
 import { Breadcrumbs } from './components/Breadcrumbs'
@@ -29,7 +31,8 @@ import { SkyMap } from './SkyMap'
 
 export function Demo() {
 	return (
-		<Tabs color="primary" className="h-full p-4" classNames={{ panel: 'h-full' }}>
+		<Tabs defaultValue='18' color="primary" className="h-full p-4" classNames={{ panel: 'h-full' }}>
+			<Tab id="18">Sky Map</Tab>
 			<Tab id="0">Buttons</Tab>
 			<Tab id="13">Button Groups</Tab>
 			<Tab id="16">Breadcrumbs</Tab>
@@ -48,53 +51,52 @@ export function Demo() {
 			<Tab id="11">Dropdowns</Tab>
 			<Tab id="12">Progress Bars</Tab>
 			<Tab id="17">Tables</Tab>
-			<Tab id="18">Sky Map</Tab>
-			<TabPanel id="0" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="0" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<Buttons />
 			</TabPanel>
-			<TabPanel id="1" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="1" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<Chips />
 			</TabPanel>
-			<TabPanel id="2" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="2" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<TextInputs />
 			</TabPanel>
-			<TabPanel id="3" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="3" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<NumberInputs />
 			</TabPanel>
-			<TabPanel id="4" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="4" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<Checkboxes />
 			</TabPanel>
-			<TabPanel id="5" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="5" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<Radios />
 			</TabPanel>
-			<TabPanel id="6" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="6" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<Switches />
 			</TabPanel>
-			<TabPanel id="7" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="7" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<Sliders />
 			</TabPanel>
-			<TabPanel id="8" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="8" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<Calendars />
 			</TabPanel>
-			<TabPanel id="9" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="9" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<Lists />
 			</TabPanel>
-			<TabPanel id="10" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="10" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<Selects />
 			</TabPanel>
-			<TabPanel id="11" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="11" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<Dropdowns />
 			</TabPanel>
-			<TabPanel id="12" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="12" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<ProgressBars />
 			</TabPanel>
-			<TabPanel id="13" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="13" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<ButtonGroups />
 			</TabPanel>
-			<TabPanel id="14" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="14" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<DateTimeInputs />
 			</TabPanel>
-			<TabPanel id="15" className="flex w-full flex-row flex-wrap items-center content-start gap-2 p-4">
+			<TabPanel id="15" className="flex w-full flex-row flex-wrap content-start items-center gap-2 p-4">
 				<MultiSelects />
 			</TabPanel>
 			<TabPanel id="16" className="flex w-full flex-col gap-3 p-4">
@@ -114,20 +116,17 @@ const HeartIcon = <Icons.Heart />
 const GalaxyIcon = <Icons.Galaxy />
 const SearchIcon = <Icons.Search />
 
-const DEG_TO_RAD = Math.PI / 180
-const HOUR_TO_RAD = Math.PI / 12
+const HOUR_TO_RAD = PI / 12
 const COLORS = ['default', 'primary', 'secondary', 'success', 'danger', 'warning'] as const
 const SIZES = ['sm', 'md', 'lg'] as const
 
-const DEMO_SKY_MAP_OBSERVER = {
+const SKY_MAP_OBSERVER = {
 	latitude: -22,
 	longitude: -45,
 	elevation: 900,
 }
 
-const DEMO_SKY_MAP_TIME = new Date('2026-05-05T03:00:00.000Z')
-
-const DEMO_SKY_MAP_STARS = [
+const SKY_MAP_STARS = [
 	star('Sirius', 6.752477, -16.716116, -1.46, 0),
 	star('Canopus', 6.399199, -52.695661, -0.74, 0.15),
 	star('Arcturus', 14.261021, 19.182417, -0.05, 1.23),
@@ -139,20 +138,20 @@ const DEMO_SKY_MAP_STARS = [
 	star('Achernar', 1.628571, -57.236753, 0.46, -0.16),
 	star('Hadar', 14.063729, -60.373039, 0.61, -0.23),
 	star('Acrux', 12.443304, -63.099092, 0.77, -0.24),
-] satisfies Star[]
+]
 
-const DEMO_SKY_MAP_CONSTELLATIONS = {
+const SKY_MAP_CONSTELLATIONS = {
 	lines: [line(5.919529, 7.407064, 5.603559, -1.201919), line(5.603559, -1.201919, 5.679312, -1.942572), line(5.679312, -1.942572, 5.242298, -8.20164)],
-	labels: [{ name: 'Orion', ra: 5.58 * HOUR_TO_RAD, dec: 0 }],
+	labels: [{ name: 'Orion', rightAscension: 5.58 * HOUR_TO_RAD, declination: 0 }],
 } satisfies ConstellationData
 
-const DEMO_SKY_MAP_DEEP_SKY_OBJECTS = [
+const SKY_MAP_DEEP_SKY_OBJECTS = [
 	{
 		id: 'M42',
 		name: 'Orion Nebula',
 		type: 'nebula',
-		ra: 5.588139 * HOUR_TO_RAD,
-		dec: -5.391111 * DEG_TO_RAD,
+		rightAscension: 5.588139 * HOUR_TO_RAD,
+		declination: -5.391111 * DEG2RAD,
 		mag: 4,
 		sizeArcMin: 65,
 	},
@@ -160,25 +159,37 @@ const DEMO_SKY_MAP_DEEP_SKY_OBJECTS = [
 
 // Builds a demo star from right ascension in hours and declination in degrees.
 function star(name: string, raHours: number, decDegrees: number, mag: number, bv: number): Star {
-	return {
-		name,
-		ra: raHours * HOUR_TO_RAD,
-		dec: decDegrees * DEG_TO_RAD,
-		mag,
-		bv,
-	}
+	return { name, rightAscension: raHours * HOUR_TO_RAD, declination: decDegrees * DEG2RAD, mag, bv }
 }
 
 // Builds a demo constellation segment from right ascension in hours and declination in degrees.
-function line(fromRaHours: number, fromDecDegrees: number, toRaHours: number, toDecDegrees: number) {
+function line(fromRaHours: number, fromDecDegrees: number, toRaHours: number, toDecDegrees: number): ConstellationLine {
 	return {
-		from: { ra: fromRaHours * HOUR_TO_RAD, dec: fromDecDegrees * DEG_TO_RAD },
-		to: { ra: toRaHours * HOUR_TO_RAD, dec: toDecDegrees * DEG_TO_RAD },
+		from: { rightAscension: fromRaHours * HOUR_TO_RAD, declination: fromDecDegrees * DEG2RAD },
+		to: { rightAscension: toRaHours * HOUR_TO_RAD, declination: toDecDegrees * DEG2RAD },
 	}
 }
 
 const SkyMaps = memo(() => {
-	return <SkyMap autoUpdate={{ mode: 'realtime', interval: 15000 }} className="w-full" height="100%" constellations={DEMO_SKY_MAP_CONSTELLATIONS} deepSkyObjects={DEMO_SKY_MAP_DEEP_SKY_OBJECTS} magnitudeLimit={6} observer={DEMO_SKY_MAP_OBSERVER} stars={DEMO_SKY_MAP_STARS} time={DEMO_SKY_MAP_TIME} />
+	function renderTelescope(celestial: Celestial, ctx: CanvasRenderingContext2D, state: ShapeRenderState) {
+		ctx.fillStyle = 'red'
+		ctx.beginPath()
+		ctx.rect(state.x - 2, state.y - 2, 4, 4)
+		ctx.fill()
+	}
+
+	function handleSkyMapReady(celestial: Celestial) {
+		celestial.loadConstellations(SKY_MAP_CONSTELLATIONS)
+		celestial.loadDeepSkyObjects(SKY_MAP_DEEP_SKY_OBJECTS)
+		celestial.loadStars(SKY_MAP_STARS)
+		celestial.setObserver(SKY_MAP_OBSERVER)
+		celestial.setMagnitudeLimit(6)
+		celestial.startAutoUpdate({ mode: 'realtime', interval: 15000 })
+		celestial.on('hover', (event) => console.info(event.x, event.y, event.coordinate))
+		celestial.addShape({ id: 'telescopio', visible: true, selectable: false, coordinate: { rightAscension: hour(14), declination: deg(-5) }, render: renderTelescope })
+	}
+
+	return <SkyMap onReady={handleSkyMapReady} className="w-full" height="100%" />
 })
 
 const Buttons = memo(() => {

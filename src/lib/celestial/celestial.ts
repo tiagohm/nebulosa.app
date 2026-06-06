@@ -27,9 +27,9 @@ export interface ObserverLocation {
 
 // Star object input for convenient object-array loading.
 export interface Star extends EquatorialCoordinate {
-	id?: string
+	id?: string | number
 	name?: string
-	mag?: number
+	magnitude?: number
 	bv?: number
 	pmRA?: number
 	pmDEC?: number
@@ -43,11 +43,11 @@ export interface StarCatalogInput {
 	dec: NumberArray
 	mag?: NumberArray
 	bv?: NumberArray
-	pmRa?: NumberArray
-	pmDec?: NumberArray
+	pmRA?: NumberArray
+	pmDEC?: NumberArray
 	flags?: NumberArray
-	names?: string[]
-	ids?: string[]
+	names?: readonly string[]
+	ids?: readonly StarId[]
 	epoch?: number
 	count?: number
 }
@@ -74,10 +74,10 @@ export type MilkyWayCoordinates = readonly MilkyWayPolygonCoordinates[]
 
 // Deep-sky object shape.
 export interface DeepSkyObject extends EquatorialCoordinate {
-	id?: string
+	id?: StarId
 	name?: string
 	type: StellariumObjectType
-	mag?: number
+	magnitude?: number
 	sizeArcMin?: number
 }
 
@@ -218,6 +218,7 @@ export interface RenderState {
 	readonly constellations: Readonly<ConstellationData>
 	readonly milkyWay: readonly Readonly<MilkyWayStep>[]
 	readonly dsos: readonly Readonly<DeepSkyObject>[]
+	readonly deepSkyLabelVisible: NumberArray
 	readonly planets: readonly Readonly<PlanetRenderObject>[]
 	readonly shapes: readonly Readonly<CelestialShape>[]
 	readonly hoverObject: Readonly<CelestialObject> | null
@@ -270,7 +271,7 @@ export interface CelestialShape {
 
 // Public object shape used by picking/events.
 export type CelestialObject =
-	| { type: 'star'; index: number; id?: string; name?: string; mag?: number; ra: number; dec: number }
+	| { type: 'star'; index: number; id?: StarId; name?: string; mag?: number; ra: number; dec: number }
 	| { type: 'deepSky'; index: number; object: DeepSkyObject }
 	| { type: 'planet'; index: number; body: SolarSystemBody; position: EquatorialCoordinate }
 	| { type: 'constellationLabel'; index: number; label: ConstellationLabel }
@@ -355,36 +356,49 @@ type ResolvedCelestialOptions = {
 	readonly solarSystemBodies: SolarSystemBody[]
 }
 
-const J2000_EPOCH = 2000
-const J2000_UNIX_MS = 946728000000
-const JULIAN_EPOCH = 2440587.5
-const DAY_MS = 86400000
-const YEAR_MS = 365.25 * DAY_MS
-const DEFAULT_WIDTH = 800
-const DEFAULT_HEIGHT = 800
-const DEFAULT_UPDATE_INTERVAL = 10000
-const WHEEL_DELTA_LINE_PIXELS = 16
-const WHEEL_DELTA_PAGE_PIXELS = 800
-const HORIZON_EPSILON = 1e-7
-const POLE_EPSILON = 1e-10
-const PROJECTION_PADDING = 10
-const STAR_RADIUS_BUCKETS = 6
-const STAR_COLOR_BUCKETS = 16
-const STAR_STYLE_BUCKETS = STAR_RADIUS_BUCKETS * STAR_COLOR_BUCKETS
-const VECTOR_STAR_ZOOM_THRESHOLD = 2.25
-const VECTOR_STAR_MAX_COUNT = 20000
-const VECTOR_STAR_MAX_RADIUS_SCALE = 3
-const STAR_LABEL_MAX_COUNT = 96
-const STAR_LABEL_BASE_MAGNITUDE = 1.5
-const STAR_LABEL_MAGNITUDE_PER_ZOOM = 1.8
-const STAR_LABEL_MIN_SPACING = 36
-const STAR_LABEL_OFFSET_X = 7
-const STAR_LABEL_OFFSET_Y = -7
-const PICK_TYPE_STAR = 1
-const PICK_TYPE_DSO = 2
-const PICK_TYPE_PLANET = 3
-const PICK_TYPE_CONSTELLATION_LABEL = 4
-const PICK_TYPE_SHAPE = 5
+const J2000_EPOCH = 2000 // Julian epoch used as the baseline for proper-motion star positions.
+const J2000_UNIX_MS = 946728000000 // Unix timestamp, in milliseconds, for the J2000 reference epoch.
+const JULIAN_EPOCH = 2440587.5 // Julian-date offset for converting Unix milliseconds to Julian date.
+const DAY_MS = 86400000 // Milliseconds in one civil day.
+const YEAR_MS = 365.25 * DAY_MS // Mean year length used for lightweight Julian epoch interpolation.
+const DEFAULT_WIDTH = 800 // Fallback canvas width when callers do not provide one.
+const DEFAULT_HEIGHT = 800 // Fallback canvas height when callers do not provide one.
+const DEFAULT_UPDATE_INTERVAL = 10000 // Default realtime update interval; lower updates sky positions more often, higher reduces background work.
+const WHEEL_DELTA_LINE_PIXELS = 16 // Pixel equivalent for wheel events reported in text-line units; higher makes those wheels zoom faster.
+const WHEEL_DELTA_PAGE_PIXELS = 800 // Pixel equivalent for wheel events reported in page units; higher makes page-mode wheels zoom faster.
+const HORIZON_EPSILON = 1e-7 // Horizon visibility tolerance; higher hides near-horizon geometry sooner, lower can show floating-point noise.
+const POLE_EPSILON = 1e-10 // Pole singularity tolerance for RA/Dec sampling; higher merges points near poles sooner.
+const PROJECTION_PADDING = 10 // Screen padding around finite projection disks; higher shrinks the sky disk, lower uses more canvas.
+const STAR_RADIUS_BUCKETS = 6 // Number of sprite size buckets; higher improves magnitude-size granularity but increases sprite cache work.
+const STAR_COLOR_BUCKETS = 16 // Number of B-V color buckets; higher improves color granularity but increases sprite cache work.
+const STAR_STYLE_BUCKETS = STAR_RADIUS_BUCKETS * STAR_COLOR_BUCKETS // Total cached star style buckets derived from radius and color bucket counts.
+const VECTOR_STAR_ZOOM_THRESHOLD = 2.25 // Zoom where stars switch to vector drawing; lower sharpens stars sooner, higher favors faster sprite drawing.
+const VECTOR_STAR_MAX_COUNT = 20000 // Catalog size ceiling for vector stars; higher keeps sharp rendering for denser views at greater CPU cost.
+const VECTOR_STAR_MAX_RADIUS_SCALE = 3 // Maximum vector-star radius growth while zooming; higher makes bright stars expand more at high zoom.
+const STAR_SYMBOL_BASE_MAGNITUDE = 7 // Star magnitude shown at base zoom; higher shows more faint stars initially, lower keeps the view cleaner.
+const STAR_SYMBOL_MAGNITUDE_PER_ZOOM = 1.9 // Extra star magnitude unlocked per zoom octave; higher reveals faint stars faster while zooming.
+const STAR_SYMBOL_MIN_MAGNITUDE = 4.5 // Faintest enforced lower bound when zoomed out; higher hides more stars at low zoom.
+const STAR_LABEL_BASE_MAGNITUDE = 1.5 // Star label magnitude shown at base zoom; higher labels more stars initially, lower labels only brighter ones.
+const STAR_LABEL_MAGNITUDE_PER_ZOOM = 2.2 // Extra labeled star magnitude unlocked per zoom octave; higher reveals labels faster while zooming.
+const STAR_LABEL_MIN_MAGNITUDE = 1.5 // Minimum star label magnitude limit; higher suppresses dimmer labels even at low zoom.
+const STAR_LABEL_MIN_SPACING = 36 // Minimum screen spacing between star labels; higher reduces overlap but shows fewer labels.
+const STAR_LABEL_OFFSET_X = 7 // Preferred horizontal star-label offset from the star position.
+const STAR_LABEL_OFFSET_Y = -7 // Preferred vertical star-label offset from the star position.
+const DSO_DEFAULT_MAGNITUDE = 10 // Magnitude assigned to DSOs without catalog magnitude; higher makes unknown objects appear later with zoom.
+const DSO_SYMBOL_BASE_MAGNITUDE = 8 // DSO magnitude shown at base zoom; higher shows more faint DSOs initially, lower keeps the map cleaner.
+const DSO_SYMBOL_MAGNITUDE_PER_ZOOM = 1.9 // Extra DSO magnitude unlocked per zoom octave; higher reveals faint DSOs faster while zooming.
+const DSO_SYMBOL_MIN_MAGNITUDE = 6 // Faintest enforced DSO lower bound when zoomed out; higher hides more DSOs at low zoom.
+const DSO_SYMBOL_MAX_MAGNITUDE = 14.5 // Faintest DSO symbol ever shown by zoom; higher allows dimmer DSOs, lower caps visual density.
+const DSO_LABEL_BASE_MAGNITUDE = 5.5 // DSO label magnitude shown at base zoom; higher labels more DSOs initially, lower labels only bright DSOs.
+const DSO_LABEL_MAGNITUDE_PER_ZOOM = 2.5 // Extra labeled DSO magnitude unlocked per zoom octave; higher reveals DSO labels faster while zooming.
+const DSO_LABEL_MIN_MAGNITUDE = 5.5 // Minimum DSO label magnitude limit; higher suppresses dimmer labels even at low zoom.
+const DSO_LABEL_MAX_MAGNITUDE = 14 // Faintest DSO label ever shown by zoom; higher allows more labels, lower reduces label clutter.
+const DSO_VIEWPORT_MARGIN = 16 // Viewport margin for drawing/picking DSOs; higher keeps near-edge objects active longer during pan.
+const PICK_TYPE_STAR = 1 // Picking index type id for stars.
+const PICK_TYPE_DSO = 2 // Picking index type id for deep-sky objects.
+const PICK_TYPE_PLANET = 3 // Picking index type id for planets.
+const PICK_TYPE_CONSTELLATION_LABEL = 4 // Picking index type id for constellation labels.
+const PICK_TYPE_SHAPE = 5 // Picking index type id for custom shapes.
 
 const DEFAULT_THEME: ThemeOptions = {
 	background: '#000000',
@@ -493,7 +507,7 @@ const DEFAULT_REFERENCE_LINES_OPTIONS: ResolvedReferenceLinesOptions = {
 const DEFAULT_INTERACTION_OPTIONS: Required<InteractionOptions> = {
 	enabled: true,
 	minZoom: 0.35,
-	maxZoom: 24,
+	maxZoom: 1000,
 	pickRadius: 7,
 	pointerMoveThrottleMs: 32,
 	preferD3Zoom: true,
@@ -794,6 +808,10 @@ function applyViewTransform(x: number, y: number, width: number, height: number,
 	out[1] = height / 2 + transform.y + (y - height / 2) * transform.k
 }
 
+function isPointInsideViewportMargin(x: number, y: number, width: number, height: number, margin: number) {
+	return x >= -margin && x <= width + margin && y >= -margin && y <= height + margin
+}
+
 // Returns the screen radius used by finite azimuthal projection disks.
 function projectionScale(width: number, height: number, projection: ProjectionType) {
 	const size = Math.min(width, height)
@@ -1032,6 +1050,8 @@ interface StarStyle {
 	readonly halfSize: number
 }
 
+type StarId = string | number
+
 // High-performance star catalog storage.
 export class StarCatalog {
 	readonly ra: NumberArray
@@ -1044,9 +1064,10 @@ export class StarCatalog {
 	readonly screenX: NumberArray
 	readonly screenY: NumberArray
 	readonly visible: NumberArray
+	readonly labelVisible: NumberArray
 	readonly flags?: NumberArray
-	readonly names?: string[]
-	readonly ids?: string[]
+	readonly names?: readonly string[]
+	readonly ids?: readonly StarId[]
 	readonly namedIndices?: Int32Array
 	readonly count: number
 
@@ -1056,13 +1077,16 @@ export class StarCatalog {
 	private readonly styleBucket: Uint16Array
 	private readonly visibleIndices: NumberArray
 	private readonly bucketedVisibleIndices: NumberArray
+	private readonly labelVisibleIndices: NumberArray
 	private readonly bucketCounts = new Int32Array(STAR_STYLE_BUCKETS)
 	private readonly bucketStarts = new Int32Array(STAR_STYLE_BUCKETS + 1)
 	private readonly bucketWriteOffsets = new Int32Array(STAR_STYLE_BUCKETS)
 	private preparedEpoch = Number.NaN
-	visibleCount = 0
 
-	constructor(input: Star[] | StarCatalogInput) {
+	visibleCount = 0
+	labelVisibleCount = 0
+
+	constructor(input: readonly Star[] | StarCatalogInput) {
 		const data = normalizeStarInput(input)
 		this.count = data.count
 		this.ra = data.ra
@@ -1073,8 +1097,8 @@ export class StarCatalog {
 		this.names = data.names
 		this.ids = data.ids
 		this.namedIndices = data.names ? collectNamedIndices(data.names, data.count) : undefined
-		this.pmRA = data.pmRa
-		this.pmDEC = data.pmDec
+		this.pmRA = data.pmRA
+		this.pmDEC = data.pmDEC
 		this.epochs = data.epochs
 		this.eqX = new Float32Array(this.count)
 		this.eqY = new Float32Array(this.count)
@@ -1082,9 +1106,11 @@ export class StarCatalog {
 		this.screenX = new Float32Array(this.count)
 		this.screenY = new Float32Array(this.count)
 		this.visible = new Uint8Array(this.count)
+		this.labelVisible = new Uint8Array(this.count)
 		this.styleBucket = new Uint16Array(this.count)
 		this.visibleIndices = new Int32Array(this.count)
 		this.bucketedVisibleIndices = new Int32Array(this.count)
+		this.labelVisibleIndices = new Int32Array(this.count)
 		this.updateEquatorialVectors(J2000_EPOCH, true)
 	}
 
@@ -1140,6 +1166,21 @@ export class StarCatalog {
 		this.screenY[index] = y
 		this.visibleIndices[this.visibleCount++] = index
 		this.bucketCounts[this.styleBucket[index]]++
+	}
+
+	beginLabelRender() {
+		for (let i = 0; i < this.labelVisibleCount; i++) {
+			this.labelVisible[this.labelVisibleIndices[i]] = 0
+		}
+
+		this.labelVisibleCount = 0
+	}
+
+	recordLabelVisible(index: number) {
+		if (this.labelVisible[index]) return
+
+		this.labelVisible[index] = 1
+		this.labelVisibleIndices[this.labelVisibleCount++] = index
 	}
 
 	// Builds contiguous style buckets for renderer state locality.
@@ -1209,19 +1250,31 @@ export class StarCatalog {
 }
 
 // Normalizes object-array and typed-array star inputs into typed arrays.
-function normalizeStarInput(input: Star[] | StarCatalogInput) {
-	if (Array.isArray(input)) {
+function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
+	if ('ra' in input) {
+		const count = Math.min(input.count ?? input.ra.length, input.ra.length, input.dec.length)
+		const ra = copyFloat32(input.ra, count, 0, normalizeAngle)
+		const dec = copyFloat32(input.dec, count, 0, (value) => clamp(value, -PIOVERTWO, PIOVERTWO))
+		const mag = input.mag ? copyFloat32(input.mag, count, 99) : fillFloat32(count, 99)
+		const bv = input.bv ? copyFloat32(input.bv, count, 0.65) : undefined
+		const pmRA = input.pmRA ? copyFloat32(input.pmRA, count, 0) : undefined
+		const pmDEC = input.pmDEC ? copyFloat32(input.pmDEC, count, 0) : undefined
+		const flags = input.flags ? copyUint8(input.flags, count) : undefined
+		const epochs = fillFloat32(count, input.epoch ?? J2000_EPOCH)
+
+		return { count, ra, dec, mag, bv, pmRA, pmDEC, flags, epochs, names: input.names, ids: input.ids } as const
+	} else {
 		const count = input.length
 		const ra = new Float32Array(count)
 		const dec = new Float32Array(count)
 		const mag = new Float32Array(count)
 		const bv = new Float32Array(count)
-		const pmRa = new Float32Array(count)
-		const pmDec = new Float32Array(count)
+		const pmRA = new Float32Array(count)
+		const pmDEC = new Float32Array(count)
 		const flags = new Uint8ClampedArray(count)
 		const epochs = new Float32Array(count)
 		const names: string[] = []
-		const ids: string[] = []
+		const ids: StarId[] = []
 		let hasBv = false
 		let hasPm = false
 		let hasFlags = false
@@ -1233,7 +1286,7 @@ function normalizeStarInput(input: Star[] | StarCatalogInput) {
 
 			ra[i] = normalizeAngle(isFiniteNumber(star.rightAscension) ? star.rightAscension : 0)
 			dec[i] = clamp(isFiniteNumber(star.declination) ? star.declination : 0, -PIOVERTWO, PIOVERTWO)
-			mag[i] = isFiniteNumber(star.mag) ? star.mag : 99
+			mag[i] = isFiniteNumber(star.magnitude) ? star.magnitude : 99
 
 			if (isFiniteNumber(star.bv)) {
 				bv[i] = star.bv
@@ -1241,8 +1294,8 @@ function normalizeStarInput(input: Star[] | StarCatalogInput) {
 			}
 
 			if (isFiniteNumber(star.pmRA) || isFiniteNumber(star.pmDEC)) {
-				pmRa[i] = star.pmRA ?? 0
-				pmDec[i] = star.pmDEC ?? 0
+				pmRA[i] = star.pmRA ?? 0
+				pmDEC[i] = star.pmDEC ?? 0
 				hasPm = true
 			}
 
@@ -1270,30 +1323,18 @@ function normalizeStarInput(input: Star[] | StarCatalogInput) {
 			dec,
 			mag,
 			bv: hasBv ? bv : undefined,
-			pmRa: hasPm ? pmRa : undefined,
-			pmDec: hasPm ? pmDec : undefined,
+			pmRA: hasPm ? pmRA : undefined,
+			pmDEC: hasPm ? pmDEC : undefined,
 			flags: hasFlags ? flags : undefined,
 			epochs,
 			names: hasNames ? names : undefined,
 			ids: hasIds ? ids : undefined,
 		} as const
 	}
-
-	const count = Math.min(input.count ?? input.ra.length, input.ra.length, input.dec.length)
-	const ra = copyFloat32(input.ra, count, 0, normalizeAngle)
-	const dec = copyFloat32(input.dec, count, 0, (value) => clamp(value, -PIOVERTWO, PIOVERTWO))
-	const mag = input.mag ? copyFloat32(input.mag, count, 99) : fillFloat32(count, 99)
-	const bv = input.bv ? copyFloat32(input.bv, count, 0.65) : undefined
-	const pmRa = input.pmRa ? copyFloat32(input.pmRa, count, 0) : undefined
-	const pmDec = input.pmDec ? copyFloat32(input.pmDec, count, 0) : undefined
-	const flags = input.flags ? copyUint8(input.flags, count) : undefined
-	const epochs = fillFloat32(count, input.epoch ?? J2000_EPOCH)
-
-	return { count, ra, dec, mag, bv, pmRa, pmDec, flags, epochs, names: input.names, ids: input.ids } as const
 }
 
 // Builds a compact index of labelable stars so render scans avoid unnamed catalog rows.
-function collectNamedIndices(names: string[], count: number) {
+function collectNamedIndices(names: readonly string[], count: number) {
 	let namedCount = 0
 
 	for (let i = 0; i < count; i++) {
@@ -2355,6 +2396,7 @@ function milkyWayLevelOpacity(theme: ThemeOptions['milkyWay'], index: number) {
 // Deep-sky object renderer.
 class DeepSkyObjectLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
+	private readonly labelPoint = new Float32Array(2)
 
 	constructor() {
 		super('deepSky', 40)
@@ -2365,14 +2407,15 @@ class DeepSkyObjectLayer extends InternalLayer {
 		ctx.strokeStyle = state.theme.deepSky.color
 		ctx.fillStyle = state.theme.deepSky.color
 		ctx.lineWidth = 1
-		ctx.font = state.theme.constellations.labelFont
+		ctx.font = skyLabelFont(state, 9)
 		ctx.textAlign = 'left'
 		ctx.textBaseline = 'middle'
+		state.deepSkyLabelVisible.fill(0)
 
 		for (let i = 0; i < state.dsos.length; i++) {
 			const object = state.dsos[i]
 
-			if (isFiniteNumber(object.mag) && object.mag > 14) {
+			if (!isDeepSkyObjectVisible(object, state)) {
 				continue
 			}
 
@@ -2380,12 +2423,21 @@ class DeepSkyObjectLayer extends InternalLayer {
 				continue
 			}
 
-			const radius = 4 // clamp((object.sizeArcMin ?? 4) / 5, 3, 12) * Math.sqrt(state.transform.k)
+			if (!isPointInsideViewportMargin(this.point[0], this.point[1], state.width, state.height, DSO_VIEWPORT_MARGIN)) {
+				continue
+			}
+
+			const radius = 4 // deepSkySymbolRadius(object, state)
 			drawDsoSymbol(ctx, object.type, this.point[0], this.point[1], radius)
 
-			if (object.name && (state.transform.k >= 0.75 || (object.mag ?? 99) <= 8)) {
+			if (object.name && isDeepSkyLabelVisible(object, state)) {
 				ctx.fillStyle = state.theme.deepSky.labelColor
-				ctx.fillText(object.name, this.point[0] + radius + 6, this.point[1] - radius * 0.35)
+
+				if (positionSkyLabel(ctx, state, object.name, this.point[0], this.point[1], 10, -2, this.labelPoint)) {
+					ctx.fillText(object.name, this.labelPoint[0], this.labelPoint[1])
+					state.deepSkyLabelVisible[i] = 1
+				}
+
 				ctx.fillStyle = state.theme.deepSky.color
 			}
 		}
@@ -2398,10 +2450,9 @@ class StarLayer extends InternalLayer {
 	private styleSignature = ''
 	private readonly point = new Float32Array(2)
 	private readonly labelPoint = new Float32Array(2)
-	private readonly labelIndices = new Int32Array(STAR_LABEL_MAX_COUNT)
-	private readonly labelMagnitudes = new Float32Array(STAR_LABEL_MAX_COUNT)
-	private readonly labelX = new Float32Array(STAR_LABEL_MAX_COUNT)
-	private readonly labelY = new Float32Array(STAR_LABEL_MAX_COUNT)
+	private labelIndices = new Int32Array(0)
+	private labelX = new Float32Array(0)
+	private labelY = new Float32Array(0)
 
 	constructor() {
 		super('stars', 50)
@@ -2426,6 +2477,7 @@ class StarLayer extends InternalLayer {
 
 	private renderSpriteStars(ctx: CanvasRenderingContext2D, state: RenderState, catalog: StarCatalog) {
 		const { transform, width, height } = state
+		const maxMagnitude = starSymbolMagnitudeLimit(state)
 
 		ctx.save()
 		ctx.translate(width / 2 + transform.x, height / 2 + transform.y)
@@ -2451,6 +2503,10 @@ class StarLayer extends InternalLayer {
 				for (let i = start; i < end; i++) {
 					const index = indices[i]
 
+					if (catalog.mag[index] > maxMagnitude) {
+						continue
+					}
+
 					applyViewTransform(catalog.screenX[index], catalog.screenY[index], width, height, transform, this.point)
 
 					if (this.point[0] < -margin || this.point[0] > width + margin || this.point[1] < -margin || this.point[1] > height + margin) {
@@ -2465,6 +2521,10 @@ class StarLayer extends InternalLayer {
 
 				for (let i = start; i < end; i++) {
 					const index = indices[i]
+
+					if (catalog.mag[index] > maxMagnitude) {
+						continue
+					}
 
 					applyViewTransform(catalog.screenX[index], catalog.screenY[index], width, height, transform, this.point)
 
@@ -2484,6 +2544,7 @@ class StarLayer extends InternalLayer {
 		const transform = state.transform
 		const width = state.width
 		const height = state.height
+		const maxMagnitude = starSymbolMagnitudeLimit(state)
 		const radiusScale = Math.min(Math.sqrt(transform.k), VECTOR_STAR_MAX_RADIUS_SCALE)
 		const margin = state.theme.stars.maxRadius * VECTOR_STAR_MAX_RADIUS_SCALE + 2
 
@@ -2505,6 +2566,10 @@ class StarLayer extends InternalLayer {
 			for (let i = start; i < end; i++) {
 				const index = indices[i]
 
+				if (catalog.mag[index] > maxMagnitude) {
+					continue
+				}
+
 				applyViewTransform(catalog.screenX[index], catalog.screenY[index], width, height, transform, this.point)
 
 				if (this.point[0] < -margin || this.point[0] > width + margin || this.point[1] < -margin || this.point[1] > height + margin) {
@@ -2520,12 +2585,13 @@ class StarLayer extends InternalLayer {
 	}
 
 	private renderStarLabels(ctx: CanvasRenderingContext2D, state: RenderState, catalog: StarCatalog) {
+		catalog.beginLabelRender()
+
 		if (!state.stars.labels || !catalog.names || !catalog.namedIndices || catalog.namedIndices.length === 0) return
 
 		const maxMagnitude = starLabelMagnitudeLimit(state)
 		let labelCount = 0
-		let worstLabelSlot = -1
-		let worstMagnitude = Number.NEGATIVE_INFINITY
+		this.ensureLabelCapacity(catalog.namedIndices.length)
 
 		for (let i = 0; i < catalog.namedIndices.length; i++) {
 			const index = catalog.namedIndices[i]
@@ -2541,37 +2607,14 @@ class StarLayer extends InternalLayer {
 				continue
 			}
 
-			if (labelCount < STAR_LABEL_MAX_COUNT) {
-				this.labelIndices[labelCount] = index
-				this.labelMagnitudes[labelCount] = magnitude
-				this.labelX[labelCount] = this.point[0]
-				this.labelY[labelCount] = this.point[1]
-
-				if (magnitude > worstMagnitude) {
-					worstMagnitude = magnitude
-					worstLabelSlot = labelCount
-				}
-
-				labelCount++
-			} else if (magnitude < worstMagnitude) {
-				this.labelIndices[worstLabelSlot] = index
-				this.labelMagnitudes[worstLabelSlot] = magnitude
-				this.labelX[worstLabelSlot] = this.point[0]
-				this.labelY[worstLabelSlot] = this.point[1]
-				worstMagnitude = magnitude
-
-				for (let j = 0; j < labelCount; j++) {
-					if (this.labelMagnitudes[j] > worstMagnitude) {
-						worstMagnitude = this.labelMagnitudes[j]
-						worstLabelSlot = j
-					}
-				}
-			}
+			this.labelIndices[labelCount] = index
+			this.labelX[labelCount] = this.point[0]
+			this.labelY[labelCount] = this.point[1]
+			labelCount++
 		}
 
 		if (labelCount === 0) return
 
-		this.sortLabelsByMagnitude(labelCount)
 		ctx.fillStyle = state.theme.stars.labelColor
 		ctx.font = state.theme.stars.labelFont
 		ctx.textAlign = 'left'
@@ -2580,7 +2623,8 @@ class StarLayer extends InternalLayer {
 		let drawn = 0
 
 		for (let i = 0; i < labelCount; i++) {
-			const name = catalog.names[this.labelIndices[i]]
+			const index = this.labelIndices[i]
+			const name = catalog.names[index]
 
 			if (!name || !this.positionStarLabel(ctx, state, name, this.labelX[i], this.labelY[i], this.labelPoint)) {
 				continue
@@ -2597,71 +2641,20 @@ class StarLayer extends InternalLayer {
 			this.labelY[drawn] = y
 			drawn++
 			ctx.fillText(name, x, y)
+			catalog.recordLabelVisible(index)
 		}
+	}
+
+	private ensureLabelCapacity(capacity: number) {
+		if (this.labelIndices.length >= capacity) return
+
+		this.labelIndices = new Int32Array(capacity)
+		this.labelX = new Float32Array(capacity)
+		this.labelY = new Float32Array(capacity)
 	}
 
 	private positionStarLabel(ctx: CanvasRenderingContext2D, state: RenderState, name: string, starX: number, starY: number, out: Float32Array) {
-		const width = ctx.measureText(name).width
-		const horizontalInset = 2
-		const verticalInset = 6
-		let minX = horizontalInset
-		let maxX = state.width - width - horizontalInset
-		let y = clamp(starY + STAR_LABEL_OFFSET_Y, verticalInset, state.height - verticalInset)
-
-		if (isFiniteDiskProjection(state.projection)) {
-			const cx = projectionCenterX(state)
-			const cy = projectionCenterY(state)
-			const radius = Math.max(1, transformedProjectionRadius(state) - horizontalInset)
-			y = clamp(y, cy - radius + verticalInset, cy + radius - verticalInset)
-			const dy = y - cy
-			const chord = Math.sqrt(Math.max(0, radius * radius - dy * dy))
-			minX = Math.max(minX, cx - chord + horizontalInset)
-			maxX = Math.min(maxX, cx + chord - width - horizontalInset)
-		}
-
-		if (maxX < minX) {
-			return false
-		}
-
-		const rightX = starX + STAR_LABEL_OFFSET_X
-		const leftX = starX - STAR_LABEL_OFFSET_X - width
-		let x: number
-
-		if (rightX >= minX && rightX <= maxX) {
-			x = rightX
-		} else if (leftX >= minX && leftX <= maxX) {
-			x = leftX
-		} else {
-			const preferredX = starX > projectionCenterX(state) ? leftX : rightX
-			x = clamp(preferredX, minX, maxX)
-		}
-
-		out[0] = x
-		out[1] = y
-		return true
-	}
-
-	private sortLabelsByMagnitude(count: number) {
-		for (let i = 1; i < count; i++) {
-			const index = this.labelIndices[i]
-			const magnitude = this.labelMagnitudes[i]
-			const x = this.labelX[i]
-			const y = this.labelY[i]
-			let j = i - 1
-
-			while (j >= 0 && this.labelMagnitudes[j] > magnitude) {
-				this.labelIndices[j + 1] = this.labelIndices[j]
-				this.labelMagnitudes[j + 1] = this.labelMagnitudes[j]
-				this.labelX[j + 1] = this.labelX[j]
-				this.labelY[j + 1] = this.labelY[j]
-				j--
-			}
-
-			this.labelIndices[j + 1] = index
-			this.labelMagnitudes[j + 1] = magnitude
-			this.labelX[j + 1] = x
-			this.labelY[j + 1] = y
-		}
+		return positionSkyLabel(ctx, state, name, starX, starY, STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, out)
 	}
 
 	private hasNearbyLabel(drawn: number, x: number, y: number) {
@@ -2688,6 +2681,47 @@ class StarLayer extends InternalLayer {
 		this.styles = buildStarStyles(state.theme, state.stars)
 		this.styleSignature = signature
 	}
+}
+
+function positionSkyLabel(ctx: CanvasRenderingContext2D, state: RenderState, name: string, anchorX: number, anchorY: number, offsetX: number, offsetY: number, out: Float32Array) {
+	const width = ctx.measureText(name).width
+	const horizontalInset = 2
+	const verticalInset = 6
+	let minX = horizontalInset
+	let maxX = state.width - width - horizontalInset
+	let y = clamp(anchorY + offsetY, verticalInset, state.height - verticalInset)
+
+	if (isFiniteDiskProjection(state.projection)) {
+		const cx = projectionCenterX(state)
+		const cy = projectionCenterY(state)
+		const radius = Math.max(1, transformedProjectionRadius(state) - horizontalInset)
+		y = clamp(y, cy - radius + verticalInset, cy + radius - verticalInset)
+		const dy = y - cy
+		const chord = Math.sqrt(Math.max(0, radius * radius - dy * dy))
+		minX = Math.max(minX, cx - chord + horizontalInset)
+		maxX = Math.min(maxX, cx + chord - width - horizontalInset)
+	}
+
+	if (maxX < minX) {
+		return false
+	}
+
+	const rightX = anchorX + offsetX
+	const leftX = anchorX - offsetX - width
+	let x: number
+
+	if (rightX >= minX && rightX <= maxX) {
+		x = rightX
+	} else if (leftX >= minX && leftX <= maxX) {
+		x = leftX
+	} else {
+		const preferredX = anchorX > projectionCenterX(state) ? leftX : rightX
+		x = clamp(preferredX, minX, maxX)
+	}
+
+	out[0] = x
+	out[1] = y
+	return true
 }
 
 // Planet renderer using the configured provider.
@@ -2792,6 +2826,9 @@ class ShapeLayer extends InternalLayer {
 
 // Interaction overlay draws hover and selection rings.
 class InteractionOverlayLayer extends InternalLayer {
+	private readonly point = new Float32Array(2)
+	private readonly labelPoint = new Float32Array(2)
+
 	constructor() {
 		super('overlay', 80)
 	}
@@ -2800,13 +2837,117 @@ class InteractionOverlayLayer extends InternalLayer {
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
 		drawObjectHighlight(ctx, state, state.selectedObject, state.theme.selectedObject.color, 8)
 		drawObjectHighlight(ctx, state, state.hoverObject, state.theme.hoverHighlight.color, 6)
+		this.drawHighlightedLabel(ctx, state, state.selectedObject)
+
+		if (!sameObject(state.selectedObject, state.hoverObject)) {
+			this.drawHighlightedLabel(ctx, state, state.hoverObject)
+		}
+	}
+
+	private drawHighlightedLabel(ctx: CanvasRenderingContext2D, state: RenderState, object: CelestialObject | null) {
+		if (!object) return
+
+		switch (object.type) {
+			case 'star':
+				this.drawHighlightedStarLabel(ctx, state, object)
+				break
+			case 'deepSky':
+				this.drawHighlightedDeepSkyLabel(ctx, state, object)
+				break
+		}
+	}
+
+	private drawHighlightedStarLabel(ctx: CanvasRenderingContext2D, state: RenderState, object: Extract<CelestialObject, { type: 'star' }>) {
+		const catalog = state.starCatalog
+
+		if (!catalog || !catalog.visible[object.index] || catalog.labelVisible[object.index] !== 0) return
+
+		const name = object.name ?? catalog.names?.[object.index]
+
+		if (!name) return
+
+		applyViewTransform(catalog.screenX[object.index], catalog.screenY[object.index], state.width, state.height, state.transform, this.point)
+
+		if (!isPointInsideViewportMargin(this.point[0], this.point[1], state.width, state.height, 0)) return
+
+		ctx.fillStyle = state.theme.stars.labelColor
+		ctx.font = state.theme.stars.labelFont
+		ctx.textAlign = 'left'
+		ctx.textBaseline = 'middle'
+
+		if (positionSkyLabel(ctx, state, name, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) {
+			ctx.fillText(name, this.labelPoint[0], this.labelPoint[1])
+		}
+	}
+
+	private drawHighlightedDeepSkyLabel(ctx: CanvasRenderingContext2D, state: RenderState, object: Extract<CelestialObject, { type: 'deepSky' }>) {
+		const dso = object.object
+
+		if (!dso.name || state.deepSkyLabelVisible[object.index] !== 0) return
+		if (!state.projectEquatorialToScreen(dso.rightAscension, dso.declination, this.point)) return
+		if (!isPointInsideViewportMargin(this.point[0], this.point[1], state.width, state.height, DSO_VIEWPORT_MARGIN)) return
+
+		ctx.fillStyle = state.theme.deepSky.labelColor
+		ctx.font = skyLabelFont(state, 9)
+		ctx.textAlign = 'left'
+		ctx.textBaseline = 'middle'
+
+		if (positionSkyLabel(ctx, state, dso.name, this.point[0], this.point[1], 10, -2, this.labelPoint)) {
+			ctx.fillText(dso.name, this.labelPoint[0], this.labelPoint[1])
+		}
 	}
 }
 
 // Bright stars can be labeled at base zoom; fainter names appear progressively while zooming in.
+function zoomMagnitudeLimit(k: number, baseMagnitude: number, magnitudePerZoom: number, minMagnitude: number, maxMagnitude: number) {
+	const upperMagnitude = Math.max(minMagnitude, maxMagnitude)
+	const limit = clamp(baseMagnitude + Math.log2(Math.max(k, 0.25)) * magnitudePerZoom, minMagnitude, upperMagnitude)
+	return Math.min(limit, maxMagnitude)
+}
+
+function starSymbolMagnitudeLimitAtZoom(zoom: number, maxMagnitude: number) {
+	return zoomMagnitudeLimit(zoom, STAR_SYMBOL_BASE_MAGNITUDE, STAR_SYMBOL_MAGNITUDE_PER_ZOOM, STAR_SYMBOL_MIN_MAGNITUDE, maxMagnitude)
+}
+
+function starSymbolMagnitudeLimit(state: RenderState) {
+	return starSymbolMagnitudeLimitAtZoom(state.transform.k, state.stars.maxMagnitude)
+}
+
 function starLabelMagnitudeLimit(state: RenderState) {
-	const zoomGain = Math.max(0, Math.log2(state.transform.k)) * STAR_LABEL_MAGNITUDE_PER_ZOOM
-	return Math.min(state.stars.maxMagnitude, STAR_LABEL_BASE_MAGNITUDE + zoomGain)
+	return zoomMagnitudeLimit(state.transform.k, STAR_LABEL_BASE_MAGNITUDE, STAR_LABEL_MAGNITUDE_PER_ZOOM, STAR_LABEL_MIN_MAGNITUDE, state.stars.maxMagnitude)
+}
+
+function isStarVisibleAtZoom(magnitude: number, zoom: number, maxMagnitude: number) {
+	return magnitude <= starSymbolMagnitudeLimitAtZoom(zoom, maxMagnitude)
+}
+
+function deepSkyMagnitude(object: DeepSkyObject) {
+	return isFiniteNumber(object.magnitude) ? object.magnitude : DSO_DEFAULT_MAGNITUDE
+}
+
+function deepSkyObjectMagnitudeLimit(k: number) {
+	return zoomMagnitudeLimit(k, DSO_SYMBOL_BASE_MAGNITUDE, DSO_SYMBOL_MAGNITUDE_PER_ZOOM, DSO_SYMBOL_MIN_MAGNITUDE, DSO_SYMBOL_MAX_MAGNITUDE)
+}
+
+function deepSkyLabelMagnitudeLimit(k: number) {
+	return zoomMagnitudeLimit(k, DSO_LABEL_BASE_MAGNITUDE, DSO_LABEL_MAGNITUDE_PER_ZOOM, DSO_LABEL_MIN_MAGNITUDE, DSO_LABEL_MAX_MAGNITUDE)
+}
+
+function isDeepSkyObjectVisibleAtZoom(object: DeepSkyObject, zoom: number) {
+	return deepSkyMagnitude(object) <= deepSkyObjectMagnitudeLimit(zoom)
+}
+
+function isDeepSkyObjectVisible(object: DeepSkyObject, state: RenderState) {
+	return isDeepSkyObjectVisibleAtZoom(object, state.transform.k)
+}
+
+function isDeepSkyLabelVisible(object: DeepSkyObject, state: RenderState) {
+	return deepSkyMagnitude(object) <= deepSkyLabelMagnitudeLimit(state.transform.k)
+}
+
+function deepSkySymbolRadius(object: DeepSkyObject, state: RenderState) {
+	const brightness = 1 - clamp((deepSkyMagnitude(object) - DSO_SYMBOL_MIN_MAGNITUDE) / (DSO_SYMBOL_MAX_MAGNITUDE - DSO_SYMBOL_MIN_MAGNITUDE), 0, 1)
+	return clamp((3.2 + brightness * 1.8) * Math.sqrt(state.transform.k), 3.2, 7)
 }
 
 const CARDINAL_POINT_LABELS = [
@@ -2862,13 +3003,18 @@ function drawDsoSymbol(ctx: CanvasRenderingContext2D, type: DeepSkyObject['type'
 		case 3: // radio galaxy
 		case 4: // interacting galaxy
 			ctx.beginPath()
-			ctx.ellipse(x, y, radius * 1.4, radius * 0.7, 0, 0, TAU)
+			ctx.ellipse(x, y, radius * 1.4, radius * 0.7, -PIOVERTWO / 2, 0, TAU)
 			ctx.stroke()
 			break
 		case 6: // star cluster
 		case 7: // open cluster
-		case 8: // globular cluster
 		case 9: // stellar association
+		case 17: // cluster associated with nebulosity
+			ctx.beginPath()
+			ctx.arc(x, y, radius, 0, TAU)
+			ctx.stroke()
+			break
+		case 8: // globular cluster
 			ctx.beginPath()
 			ctx.arc(x, y, radius, 0, TAU)
 			ctx.stroke()
@@ -2912,10 +3058,12 @@ function projectObjectToScreen(object: CelestialObject, state: RenderState, out:
 		case 'star': {
 			const catalog = state.starCatalog
 			if (!catalog || !catalog.visible[object.index]) return false
+			if (!isStarVisibleAtZoom(catalog.mag[object.index], state.transform.k, state.stars.maxMagnitude)) return false
 			applyViewTransform(catalog.screenX[object.index], catalog.screenY[object.index], state.width, state.height, state.transform, out)
 			return true
 		}
 		case 'deepSky':
+			if (!isDeepSkyObjectVisible(object.object, state)) return false
 			return state.projectEquatorialToScreen(object.object.rightAscension, object.object.declination, out)
 		case 'planet':
 			return state.projectEquatorialToScreen(object.position.rightAscension, object.position.declination, out)
@@ -3096,6 +3244,7 @@ export class Celestial {
 	private constellations: ConstellationData = {}
 	private milkyWay: MilkyWayStep[] = []
 	private dsos: DeepSkyObject[] = []
+	private deepSkyLabelVisible = new Uint8Array(0)
 	private readonly planets: PlanetRenderObject[] = []
 	private readonly shapes = new Map<string, CelestialShape>()
 	private readonly shapeList: CelestialShape[] = []
@@ -3308,12 +3457,13 @@ export class Celestial {
 	}
 
 	// Loads stars from object arrays or typed arrays.
-	loadStars(stars: Star[] | StarCatalogInput) {
+	loadStars(stars: readonly Star[] | StarCatalogInput) {
 		try {
 			this.starCatalog = new StarCatalog(stars)
 			this.starCatalog.cacheStyleBuckets(this.options.stars, this.options.theme)
 			this.queueUpdate()
 		} catch (error) {
+			console.error(error)
 			this.emitError(normalizeError(error))
 		}
 	}
@@ -3340,8 +3490,9 @@ export class Celestial {
 	}
 
 	// Loads deep-sky objects.
-	loadDeepSkyObjects(objects: DeepSkyObject[]) {
-		this.dsos = objects.slice()
+	loadDeepSkyObjects(objects: readonly DeepSkyObject[]) {
+		this.dsos = objects as never
+		this.deepSkyLabelVisible = new Uint8Array(this.dsos.length)
 		this.renderer.markDirty('deepSky')
 		this.rebuildPickingIndex()
 		this.requestRender()
@@ -3677,6 +3828,7 @@ export class Celestial {
 			try {
 				this.planets.push({ body, position: this.options.ephemerisProvider.positionAt(body, this.options.time) })
 			} catch (error) {
+				console.error(error)
 				this.emitError(normalizeError(error))
 			}
 		}
@@ -3852,9 +4004,15 @@ export class Celestial {
 
 		if (catalog && this.isLayerVisible('stars')) {
 			const indices = catalog.getBucketedVisibleIndices()
+			const maxMagnitude = starSymbolMagnitudeLimitAtZoom(this.transform.k, this.options.stars.maxMagnitude)
 
 			for (let i = 0; i < catalog.visibleCount; i++) {
 				const index = indices[i]
+
+				if (catalog.mag[index] > maxMagnitude) {
+					continue
+				}
+
 				applyViewTransform(catalog.screenX[index], catalog.screenY[index], this.options.width, this.options.height, this.transform, this.tempScreen)
 				this.picking.add(PICK_TYPE_STAR, index, this.tempScreen[0], this.tempScreen[1], catalog.mag[index])
 			}
@@ -3864,8 +4022,12 @@ export class Celestial {
 			for (let i = 0; i < this.dsos.length; i++) {
 				const object = this.dsos[i]
 
-				if (this.projectEquatorialToScreen(object.rightAscension, object.declination, this.tempScreen)) {
-					this.picking.add(PICK_TYPE_DSO, i, this.tempScreen[0], this.tempScreen[1], object.mag ?? 10)
+				if (!isDeepSkyObjectVisibleAtZoom(object, this.transform.k)) {
+					continue
+				}
+
+				if (this.projectEquatorialToScreen(object.rightAscension, object.declination, this.tempScreen) && isPointInsideViewportMargin(this.tempScreen[0], this.tempScreen[1], this.options.width, this.options.height, DSO_VIEWPORT_MARGIN)) {
+					this.picking.add(PICK_TYPE_DSO, i, this.tempScreen[0], this.tempScreen[1], deepSkyMagnitude(object))
 				}
 			}
 		}
@@ -3960,6 +4122,7 @@ export class Celestial {
 			constellations: this.constellations,
 			milkyWay: this.milkyWay,
 			dsos: this.dsos,
+			deepSkyLabelVisible: this.deepSkyLabelVisible,
 			planets: this.planets,
 			shapes: this.shapeList,
 			hoverObject: this.hoverObject,

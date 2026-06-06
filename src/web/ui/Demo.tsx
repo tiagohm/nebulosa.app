@@ -157,14 +157,14 @@ const SKY_MAP_DEEP_SKY_OBJECTS = [
 		type: 11,
 		rightAscension: 5.588139 * HOUR_TO_RAD,
 		declination: -5.391111 * DEG2RAD,
-		mag: 4,
+		magnitude: 4,
 		sizeArcMin: 65,
 	},
 ] satisfies DeepSkyObject[]
 
 // Builds a demo star from right ascension in hours and declination in degrees.
-function star(name: string, raHours: number, decDegrees: number, mag: number, bv: number): Star {
-	return { name, rightAscension: raHours * HOUR_TO_RAD, declination: decDegrees * DEG2RAD, mag, bv }
+function star(name: string, raHours: number, decDegrees: number, magnitude: number, bv: number): Star {
+	return { name, rightAscension: raHours * HOUR_TO_RAD, declination: decDegrees * DEG2RAD, magnitude, bv }
 }
 
 const SKY_MAP_OPTIONS: CelestialOptions = {

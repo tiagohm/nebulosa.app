@@ -288,6 +288,11 @@ export interface SearchSatellite {
 	// readonly sort: SortDescriptor
 }
 
+export interface PlanetariumRequest {
+	readonly types: readonly StellariumObjectType[]
+	readonly magnitudeLimit: number
+}
+
 // Confirmation
 
 export interface Confirm {

@@ -14,9 +14,9 @@ import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/platesolver'
 import { identify } from 'nebulosa/src/sbd'
 import { spaceMotion, star } from 'nebulosa/src/star'
 import { timeUnix } from 'nebulosa/src/time'
-import fovCameras from 'src/data/cameras.json' with { type: 'json' }
+import fovCameras from 'src/data/astrobin.cameras.json'
+import fovTelescopes from 'src/data/astrobin.telescopes.json'
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
-import fovTelescopes from 'src/data/telescopes.json' with { type: 'json' }
 // oxfmt-ignore
 import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateGrid, ImageCoordinateGridAxis, ImageCoordinateGridLine, ImageCoordinateGridPoint, ImageCoordinateInterpolation, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { DEG2RAD, PI, RAD2DEG, TAU } from 'nebulosa/src/constants'

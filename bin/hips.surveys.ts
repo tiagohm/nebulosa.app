@@ -11,4 +11,4 @@ function hipsSurveyComparator(a: HipsSurvey, b: HipsSurvey) {
 }
 
 const surveys = await hipsSurveys()
-await Bun.write('src/data/hips-surveys.json', JSON.stringify(surveys.sort(hipsSurveyComparator)))
+await Bun.write('src/data/hips.surveys.json', JSON.stringify(surveys.sort(hipsSurveyComparator)))

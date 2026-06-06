@@ -3,10 +3,10 @@ import { DEG2RAD, PI } from 'nebulosa/src/constants'
 import { mulberry32 } from 'nebulosa/src/random'
 import { memo, useCallback, useRef, useState } from 'react'
 import type { Celestial, CelestialOptions, ConstellationData, DeepSkyObject, ShapeRenderState, Star } from 'src/lib/celestial/celestial'
-import constellationBoundaries from '@/../data/constellation.boundaries.json' with { type: 'json' }
-import constellationLabels from '@/../data/constellation.labels.json' with { type: 'json' }
-import constellationLines from '@/../data/constellation.lines.json' with { type: 'json' }
-import mw from '@/../data/mw.json' with { type: 'json' }
+import constellationBoundaries from '@/../data/constellation.boundaries.json'
+import constellationLabels from '@/../data/constellation.labels.json'
+import constellationLines from '@/../data/constellation.lines.json'
+import mw from '@/../data/mw.json'
 import { toast } from '../shared/toast'
 import { Badge } from './components/Badge'
 import { Breadcrumbs } from './components/Breadcrumbs'

@@ -2,10 +2,10 @@ import { toDeg } from 'nebulosa/src/angle'
 import type { Celestial, ConstellationData, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
-import constellationBoundaries from '@/../data/constellation.boundaries.json' with { type: 'json' }
-import constellationLabels from '@/../data/constellation.labels.json' with { type: 'json' }
-import constellationLines from '@/../data/constellation.lines.json' with { type: 'json' }
-import mw from '@/../data/mw.json' with { type: 'json' }
+import constellationBoundaries from '@/../data/constellation.boundaries.json'
+import constellationLabels from '@/../data/constellation.labels.json'
+import constellationLines from '@/../data/constellation.lines.json'
+import mw from '@/../data/mw.json'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
 import { skyObjectName } from '../shared/util'

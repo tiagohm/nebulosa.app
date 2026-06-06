@@ -27,8 +27,6 @@ while (true) {
 
 	if (!res || res.results.length === 0) break
 
-	console.info('sensor:', res.results.length, page++)
-
 	for (const result of res.results) {
 		sensors.set(result.id, result)
 	}
@@ -48,8 +46,6 @@ while (true) {
 
 	if (!res || res.results.length === 0) break
 
-	console.info('camera:', res.results.length, page++)
-
 	for (const result of res.results) {
 		if (!result.sensor) continue
 		const sensor = sensors.get(result.sensor)
@@ -64,7 +60,7 @@ while (true) {
 	Bun.sleepSync(100)
 }
 
-await Bun.write('src/data/cameras.json', JSON.stringify(cameras))
+await Bun.write('src/data/astrobin.cameras.json', JSON.stringify(cameras, undefined, 4))
 
 console.info(`found ${cameras.length} cameras`)
 
@@ -78,8 +74,6 @@ while (true) {
 
 	if (!res || res.results.length === 0) break
 
-	console.info('telescope:', res.results.length, page++)
-
 	for (const result of res.results) {
 		if (!result.aperture || !result.maxFocalLength) continue
 		const name = `${result.brandName} ${result.name}`
@@ -91,6 +85,6 @@ while (true) {
 	Bun.sleepSync(100)
 }
 
-await Bun.write('src/data/telescopes.json', JSON.stringify(telescopes))
+await Bun.write('src/data/astrobin.telescopes.json', JSON.stringify(telescopes, undefined, 4))
 
 console.info(`found ${telescopes.length} telescopes`)

@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useMemo, useState } from 'react'
-import DRIVERS from 'src/data/drivers.json' with { type: 'json' }
+import DRIVERS from 'src/data/indi.drivers.json'
 import { Api } from '@/shared/api'
 import { stopPropagation } from '../shared/util'
 import { FilterableList } from './components/FilterableList'

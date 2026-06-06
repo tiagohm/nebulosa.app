@@ -1,6 +1,6 @@
 import { memo, useContext } from 'react'
-import cameras from 'src/data/cameras.json'
-import telescopes from 'src/data/telescopes.json'
+import cameras from 'src/data/astrobin.cameras.json'
+import telescopes from 'src/data/astrobin.telescopes.json'
 import type { FovItem } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { tw } from '@/shared/util'

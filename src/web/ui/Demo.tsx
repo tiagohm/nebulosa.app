@@ -30,6 +30,7 @@ import { Switch } from './components/Switch'
 import { Table } from './components/Table'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
 import { TextInput } from './components/TextInput'
+import { WorldMap, type WorldMapPosition } from './components/WorldMap'
 import { Icons } from './Icon'
 import { SkyMap } from './SkyMap'
 
@@ -37,6 +38,7 @@ export function Demo() {
 	return (
 		<Tabs defaultValue="18" color="primary" className="h-full p-4" classNames={{ panel: 'h-full' }}>
 			<Tab id="18">Sky Map</Tab>
+			<Tab id="19">World Map</Tab>
 			<Tab id="0">Buttons</Tab>
 			<Tab id="13">Button Groups</Tab>
 			<Tab id="16">Breadcrumbs</Tab>
@@ -111,6 +113,9 @@ export function Demo() {
 			</TabPanel>
 			<TabPanel id="18" className="flex w-full flex-col gap-3 p-4">
 				<SkyMaps />
+			</TabPanel>
+			<TabPanel id="19" className="flex w-full flex-col gap-3 p-4">
+				<WorldMaps />
 			</TabPanel>
 		</Tabs>
 	)
@@ -197,6 +202,23 @@ const SkyMaps = memo(() => {
 	}
 
 	return <SkyMap options={SKY_MAP_OPTIONS} onReady={handleSkyMapReady} className="w-full" height="100%" />
+})
+
+const WorldMaps = memo(() => {
+	const coordinateRef = useRef<HTMLSpanElement | null>(null)
+
+	function handleCoordinateMove(position: WorldMapPosition) {
+		const label = coordinateRef.current
+		if (!label) return
+		label.innerText = `${position.longitude.toFixed(6)}° | ${position.latitude.toFixed(6)}°`
+	}
+
+	return (
+		<div className="relative">
+			<span ref={coordinateRef} className="absolute top-4 left-4 z-1"></span>
+			<WorldMap onCoordinateMove={handleCoordinateMove} />
+		</div>
+	)
 })
 
 const Buttons = memo(() => {

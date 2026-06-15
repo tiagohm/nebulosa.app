@@ -360,13 +360,15 @@ export interface FileSystem {
 
 // Framing
 
-export interface Framing extends EquatorialCoordinate<string>, Size, Omit<Hips2FitsOptions, 'fov' | 'width' | 'height'> {
+export interface Framing extends Size, Omit<Hips2FitsOptions, 'fov' | 'width' | 'height'> {
 	id: string
 	hipsSurvey: string
 	fov?: number // deg
 	focalLength: number // mm
 	pixelSize: number // µm
 	rotation: number // deg
+	rightAscension: string
+	declination: string
 }
 
 // Image
@@ -796,7 +798,7 @@ export interface Notification {
 
 export type PlateSolverType = 'astap' | 'astrometryNet' | 'novaAstrometryNet'
 
-export interface PlateSolveStart extends Omit<PlateSolveOptions, 'rightAscension' | 'declination' | 'radius'>, EquatorialCoordinate<string | Angle> {
+export interface PlateSolveStart extends Omit<PlateSolveOptions, 'rightAscension' | 'declination' | 'radius'> {
 	id: string
 	type: PlateSolverType
 	executable: string
@@ -808,6 +810,8 @@ export interface PlateSolveStart extends Omit<PlateSolveOptions, 'rightAscension
 	apiKey?: string
 	slot?: number
 	blind: boolean
+	rightAscension: string | Angle
+	declination: string | Angle
 	radius: number // deg
 }
 

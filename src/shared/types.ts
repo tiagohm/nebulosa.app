@@ -21,6 +21,8 @@ import type { SmallBodySearchListItem, SmallBodySearchObject } from 'nebulosa/sr
 import type { StarCatalogEntry } from 'nebulosa/src/star.catalog'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
 import type { SolarEclipse } from 'nebulosa/src/sun'
+import type { LocalSolarEclipseCircumstances, LocalSolarEclipseViewOptions } from 'nebulosa/src/sun.eclipse.local'
+import type { PolynomialBesselianElements, SolarEclipseContactPoints, SolarEclipseMapSvgPaths } from 'nebulosa/src/sun.eclipse.map'
 import type { Temporal } from 'nebulosa/src/temporal'
 import type { DeepRequired, RequiredOnly } from 'nebulosa/src/types'
 import type { Velocity } from 'nebulosa/src/velocity'
@@ -165,17 +167,37 @@ export interface FindNextSolarEclipse extends LocationAndTime {
 }
 
 export interface NextSolarEclipse extends Omit<SolarEclipse, 'maximalTime'> {
-	time: Temporal
+	maximalTime: Temporal
+}
+
+export interface SolarEclipseMap {
+	readonly elements: Omit<PolynomialBesselianElements, 'time0' | 'maximumTime'> & { time0: number; maximumTime: number }
+	readonly points: Partial<Record<keyof SolarEclipseContactPoints, Point & { time: number }>>
+	readonly paths: SolarEclipseMapSvgPaths
+}
+
+export interface ComputeSolarEclipseLocalCircumstances {
+	readonly next: NextSolarEclipse
+	readonly location: GeographicCoordinate
+}
+
+export interface ComputeSolarEclipseLocalView {
+	readonly events: LocalSolarEclipseCircumstances['events']
+	readonly options: LocalSolarEclipseViewOptions
 }
 
 export interface FindNextLunarEclipse extends LocationAndTime {
 	count: number
 }
 
-export interface NextLunarEclipse extends Pick<LunarEclipse, 'type'> {
-	startTime: Temporal
-	endTime: Temporal
-	time: Temporal
+export interface NextLunarEclipse extends Omit<LunarEclipse, 'maximalTime' | 'firstContactPenumbraTime' | 'firstContactUmbraTime' | 'totalBeginTime' | 'totalEndTime' | 'lastContactUmbraTime' | 'lastContactPenumbraTime'> {
+	maximalTime: Temporal
+	firstContactPenumbraTime: Temporal
+	firstContactUmbraTime: Temporal
+	totalBeginTime: Temporal
+	totalEndTime: Temporal
+	lastContactUmbraTime: Temporal
+	lastContactPenumbraTime: Temporal
 }
 
 export interface NextLunarApsis {

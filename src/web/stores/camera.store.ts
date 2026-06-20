@@ -6,6 +6,7 @@ import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
+import { storageGet, storageSet } from '../shared/storage'
 import type { ImageRoiRequest } from '../shared/types'
 import { clampInteger } from '../shared/util'
 import { type DeviceState, equipmentStore } from './equipment.store'
@@ -69,7 +70,12 @@ export function cameraStore(camera: Camera) {
 		u[4] = subscribeKey(camera, 'frame', (frame) => updateCameraFrame(state.request, frame))
 		u[5] = bus.subscribe<Roi>(cameraRoiSubframeTopic(camera.id), applySubframe)
 		u[6] = bus.subscribe(cameraRoiSubframeSnapshotRequestTopic(camera.id), sendSubframeSnapshot)
+		u[7] = subscribeKey(equipmentStore.state.mount, 'length', refreshEquipment)
+		u[8] = subscribeKey(equipmentStore.state.wheel, 'length', refreshEquipment)
+		u[9] = subscribeKey(equipmentStore.state.focuser, 'length', refreshEquipment)
+		u[10] = subscribeKey(equipmentStore.state.rotator, 'length', refreshEquipment)
 
+		refreshEquipment()
 		updateCameraCaptureStartFromCamera(state.request, camera)
 	}
 
@@ -128,20 +134,36 @@ export function cameraStore(camera: Camera) {
 		})
 	}
 
+	function refreshEquipment() {
+		const mountId = storageGet(`camera.${camera.id}.equipment.mount`, '')
+		const wheelId = storageGet(`camera.${camera.id}.equipment.wheel`, '')
+		const focuserId = storageGet(`camera.${camera.id}.equipment.focuser`, '')
+		const rotatorId = storageGet(`camera.${camera.id}.equipment.rotator`, '')
+
+		state.equipment.mount = equipmentStore.state.mount.find((e) => e.id === mountId)
+		state.equipment.wheel = equipmentStore.state.wheel.find((e) => e.id === wheelId)
+		state.equipment.focuser = equipmentStore.state.focuser.find((e) => e.id === focuserId)
+		state.equipment.rotator = equipmentStore.state.rotator.find((e) => e.id === rotatorId)
+	}
+
 	function updateMount(mount?: DeviceState<Mount>) {
 		state.equipment.mount = mount
+		storageSet(`camera.${camera.id}.equipment.mount`, mount?.id)
 	}
 
 	function updateWheel(wheel?: DeviceState<Wheel>) {
 		state.equipment.wheel = wheel
+		storageSet(`camera.${camera.id}.equipment.wheel`, wheel?.id)
 	}
 
 	function updateFocuser(focuser?: DeviceState<Focuser>) {
 		state.equipment.focuser = focuser
+		storageSet(`camera.${camera.id}.equipment.focuser`, focuser?.id)
 	}
 
 	function updateRotator(rotator?: DeviceState<Rotator>) {
 		state.equipment.rotator = rotator
+		storageSet(`camera.${camera.id}.equipment.rotator`, rotator?.id)
 	}
 
 	async function start() {
@@ -150,7 +172,8 @@ export function cameraStore(camera: Camera) {
 		state.capturing = true
 
 		try {
-			const response = await Api.Cameras.start(camera, state.request)
+			const request: CameraCaptureStart = { ...state.request, mount: state.equipment.mount?.id, wheel: state.equipment.wheel?.id, focuser: state.equipment.focuser?.id, rotator: state.equipment.rotator?.id }
+			const response = await Api.Cameras.start(camera, request)
 			if (!response?.ok) state.capturing = false
 		} catch {
 			state.capturing = false

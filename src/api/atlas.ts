@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite'
 import { join } from 'path'
 import { deg, parseAngle, toDeg } from 'nebulosa/src/angle'
 import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astrometry'
-import { AU_KM, DAYSEC, DEG2RAD, MOON_SYNODIC_DAYS, SPEED_OF_LIGHT } from 'nebulosa/src/constants'
+import { AU_KM, DAYSEC, DEG2RAD, MOON_SYNODIC_DAYS, PIOVERTWO, SPEED_OF_LIGHT, TAU } from 'nebulosa/src/constants'
 import { CONSTELLATION_LIST } from 'nebulosa/src/constellation'
 import { equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic } from 'nebulosa/src/coordinate'
 import type { CsvRow } from 'nebulosa/src/csv'
@@ -17,11 +17,17 @@ import { closeApproaches, search } from 'nebulosa/src/sbd'
 import { observeStar } from 'nebulosa/src/star'
 import { nearestSolarEclipse, season } from 'nebulosa/src/sun'
 import { daysInMonth, formatTemporal, parseTemporal, type Temporal, temporalAdd, temporalFromTime, temporalGet, temporalSet, temporalStartOfDay, temporalSubtract, temporalToDate } from 'nebulosa/src/temporal'
-import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS } from 'nebulosa/src/time'
+import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS, tt, utc, type Time } from 'nebulosa/src/time'
 import type { Writable } from 'nebulosa/src/types'
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // oxfmt-ignore
-import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarApsis, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type PlanetariumRequest } from '../shared/types'
+import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarApsis, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type PlanetariumRequest, type SolarEclipseMap, type ComputeSolarEclipseLocalCircumstances, type ComputeSolarEclipseLocalView } from '../shared/types'
+import { computeSunMoonPositionAt } from 'nebulosa/src/eclipse'
+import * as elpmpp02 from 'nebulosa/src/elpmpp02'
+import { PlateCarree } from 'nebulosa/src/projection'
+import { computeLocalSolarEclipseCircumstances, computeLocalSolarEclipseViewGeometry } from 'nebulosa/src/sun.eclipse.local'
+import { computePolynomialBesselianElements, computeSolarEclipseMapGeometry, solarEclipseMapToSvgPaths, type PolynomialBesselianElements, type SolarEclipseContactPoints, type SolarEclipseGeoPoint, type SolarEclipseMapGeometryOptions } from 'nebulosa/src/sun.eclipse.map'
+import * as vsop87e from 'nebulosa/src/vsop87e'
 import type { CacheManager } from './cache'
 import { type Endpoints, query, response } from './http'
 import type { NotificationHandler } from './notification'
@@ -45,6 +51,11 @@ const IERSB_URL = 'https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now'
 const SATELLITES = new Database(':memory:')
 const SATELLITE_GROUPS = new Set(Object.keys(SATELLITE_GROUP_TYPES) as SatelliteGroupType[])
 
+const SOLAR_ECLIPSE_MAP_WIDTH = 2520.631
+const SOLAR_ECLIPSE_MAP_HEIGHT = 1260.315
+const SOLAR_ECLIPSE_MAP_GEOMETRY_OPTIONS: SolarEclipseMapGeometryOptions = { longitudeStep: 0.5 * DEG2RAD, maxAngularStep: 0.5 * DEG2RAD, includeRiseSetCurves: true, riseSetStep: 600 }
+const SOLAR_ECLIPSE_MAP_PROJECTION = new PlateCarree(0, { scale: SOLAR_ECLIPSE_MAP_WIDTH / TAU, falseEasting: SOLAR_ECLIPSE_MAP_WIDTH / 2, falseNorthing: SOLAR_ECLIPSE_MAP_HEIGHT / 2, yAxisDirection: 'southUp', centralMeridian: 0, longitudeWrapMode: 'pi', maxLatitude: PIOVERTWO })
+
 SATELLITES.run('PRAGMA journal_mode = OFF;')
 SATELLITES.run('PRAGMA synchronous = OFF;')
 SATELLITES.run('PRAGMA temp_store = MEMORY;')
@@ -60,9 +71,19 @@ SATELLITES.run('CREATE INDEX satellitesNameIdx ON satellites (name);')
 SATELLITES.run('CREATE INDEX satelliteGroupsSatelliteIdIdx ON satelliteGroups (satelliteId);')
 SATELLITES.run('CREATE INDEX satelliteGroupsNameIdx ON satelliteGroups (name);')
 
+// Apparent Sun/Moon position provider from the analytical ERFA/Meeus ephemerides (significantly faster).
+export function sunMoonPosition(time: Time) {
+	return computeSunMoonPositionAt(time, vsop87e.sun, vsop87e.earth, elpmpp02.moon)
+}
+
+export function mapSolarEclipseGeoPoint(point?: SolarEclipseGeoPoint) {
+	return point && { x: point.x, y: point.y, time: temporalFromTime(utc(time(point.jd!, 0, Timescale.TT))) }
+}
+
 export class AtlasHandler {
 	private readonly ephemeris: Record<string, Map<number, BodyPosition>> & { location?: GeographicPosition } = {}
 	private readonly horizonsObserverTasks = new Map<string, Promise<CsvRow[]>>()
+	private readonly solarEclipsePolynomialBesselianElements = new Map<number, PolynomialBesselianElements>()
 
 	constructor(
 		readonly cache: CacheManager,
@@ -183,13 +204,43 @@ export class AtlasHandler {
 		const eclipses = new Array<NextSolarEclipse>(count)
 
 		for (let i = 0; i < count; i++) {
-			const { maximalTime, ...eclipse } = nearestSolarEclipse(time, true)
-			;(eclipse as NextSolarEclipse).time = temporalFromTime(maximalTime)
-			eclipses[i] = eclipse as never
-			time = maximalTime
+			const eclipse = nearestSolarEclipse(time, true)
+			time = eclipse.maximalTime
+
+			const nextEclipse = eclipse as unknown as NextSolarEclipse
+			nextEclipse.maximalTime = temporalFromTime(utc(eclipse.maximalTime))
+
+			eclipses[i] = nextEclipse
 		}
 
 		return eclipses
+	}
+
+	solarEclipseMap(req: NextSolarEclipse): SolarEclipseMap {
+		const pbe = this.solarEclipsePolynomialBesselianElements.getOrInsertComputed(req.maximalTime, (time) => computePolynomialBesselianElements(tt(timeUnix(time / 1000)), sunMoonPosition))
+		const geometry = computeSolarEclipseMapGeometry(req as never, pbe, SOLAR_ECLIPSE_MAP_GEOMETRY_OPTIONS)
+		const paths = solarEclipseMapToSvgPaths(geometry, SOLAR_ECLIPSE_MAP_PROJECTION)
+
+		const time0 = temporalFromTime(pbe.time0)
+		const maximumTime = temporalFromTime(pbe.maximumTime)
+		const elements = { ...pbe, time0, maximumTime }
+
+		const points: SolarEclipseMap['points'] = {}
+
+		for (const [type, point] of Object.entries(geometry.points) as [keyof SolarEclipseContactPoints, SolarEclipseGeoPoint | undefined][]) {
+			if (point) points[type] = mapSolarEclipseGeoPoint(point)
+		}
+
+		return { elements, points, paths }
+	}
+
+	solarEclipseLocalCircumstances(req: ComputeSolarEclipseLocalCircumstances) {
+		const pbe = this.solarEclipsePolynomialBesselianElements.getOrInsertComputed(req.next.maximalTime, (time) => computePolynomialBesselianElements(tt(timeUnix(time / 1000)), sunMoonPosition))
+		return computeLocalSolarEclipseCircumstances(pbe, req.location.longitude, req.location.latitude, { sunMoonPosition })
+	}
+
+	solarEclipseLocalView(req: ComputeSolarEclipseLocalView) {
+		return computeLocalSolarEclipseViewGeometry(req, req.options)
 	}
 
 	positionOfMoon(req: PositionOfBody) {
@@ -231,9 +282,20 @@ export class AtlasHandler {
 		const eclipses = new Array<NextLunarEclipse>(count)
 
 		for (let i = 0; i < count; i++) {
-			const { type, firstContactPenumbraTime, lastContactPenumbraTime, maximalTime } = nearestLunarEclipse(time, true)
-			time = maximalTime
-			eclipses[i] = { type, startTime: temporalFromTime(firstContactPenumbraTime), endTime: temporalFromTime(lastContactPenumbraTime), time: temporalFromTime(maximalTime) }
+			const eclipse = nearestLunarEclipse(time, true)
+			time = eclipse.maximalTime
+
+			const nextEclipse = eclipse as unknown as NextLunarEclipse
+			nextEclipse.firstContactPenumbraTime = temporalFromTime(utc(eclipse.firstContactPenumbraTime))
+			nextEclipse.maximalTime = temporalFromTime(utc(eclipse.maximalTime))
+			nextEclipse.firstContactPenumbraTime = temporalFromTime(utc(eclipse.firstContactPenumbraTime))
+			nextEclipse.firstContactUmbraTime = temporalFromTime(utc(eclipse.firstContactUmbraTime))
+			nextEclipse.totalBeginTime = temporalFromTime(utc(eclipse.totalBeginTime))
+			nextEclipse.totalEndTime = temporalFromTime(utc(eclipse.totalEndTime))
+			nextEclipse.lastContactUmbraTime = temporalFromTime(utc(eclipse.lastContactUmbraTime))
+			nextEclipse.lastContactPenumbraTime = temporalFromTime(utc(eclipse.lastContactPenumbraTime))
+
+			eclipses[i] = nextEclipse
 		}
 
 		return eclipses
@@ -763,6 +825,9 @@ export function atlas(atlas: AtlasHandler) {
 		'/atlas/sun/seasons': { POST: async (req) => response(atlas.seasons(await req.json())) },
 		'/atlas/sun/twilight': { POST: async (req) => response(await atlas.twilight(await req.json())) },
 		'/atlas/sun/eclipses': { POST: async (req) => response(atlas.solarEclipses(await req.json())) },
+		'/atlas/sun/eclipses/map': { POST: async (req) => response(atlas.solarEclipseMap(await req.json())) },
+		'/atlas/sun/eclipses/local/circumstances': { POST: async (req) => response(atlas.solarEclipseLocalCircumstances(await req.json())) },
+		'/atlas/sun/eclipses/local/view': { POST: async (req) => response(atlas.solarEclipseLocalView(await req.json())) },
 		'/atlas/moon/position': { POST: async (req) => response(await atlas.positionOfMoon(await req.json())) },
 		'/atlas/moon/chart': { POST: async (req) => response(await atlas.chartOfMoon(await req.json())) },
 		'/atlas/moon/phases': { POST: async (req) => response(atlas.moonPhases(await req.json())) },

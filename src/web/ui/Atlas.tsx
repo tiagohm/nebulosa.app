@@ -17,6 +17,7 @@ import { satelliteStore } from '@/stores/atlas.satellite.store'
 import { atlasStore, type AtlasTab, type BookmarkItem } from '@/stores/atlas.store'
 import { sunStore } from '@/stores/atlas.sun.store'
 import { useStore } from '../hooks/store.hook'
+import { solarEclipseStore } from '../stores/solar.eclipse.store'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { Button } from './components/Button'
 import { Calendar } from './components/Calendar'
@@ -43,6 +44,7 @@ import { PlanetTypeSelect } from './PlanetTypeSelect'
 import { SatelliteCategoryChipGroup } from './SatelliteCategoryChipGroup'
 import { SatelliteGroupTypeChipGroup } from './SatelliteGroupTypeChipGroup'
 import { SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
+import { SolarEclipseMap } from './SolarEclipseMap'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
 import { Sun } from './Sun'
 
@@ -234,6 +236,7 @@ const Body = memo(() => {
 			{tab === 'asteroid' && <AsteroidTab />}
 			{tab === 'galaxy' && <GalaxyTab />}
 			{tab === 'satellite' && <SatelliteTab />}
+			<SolarEclipseMap />
 		</div>
 	)
 })
@@ -246,7 +249,7 @@ const SunTab = memo(() => {
 			<div className="relative col-span-full flex max-h-80 min-h-[200px] items-center justify-center">
 				<Sun onSourceChange={(source) => (sunStore.state.source = source)} source={source} />
 				<div className="absolute top-auto left-0 p-0 text-xs">
-					<SolarEclipses />
+					<NextSolarEclipse />
 				</div>
 				<div className="absolute top-auto right-0 p-0 text-xs">
 					<Seasons />
@@ -257,15 +260,17 @@ const SunTab = memo(() => {
 	)
 })
 
-const SolarEclipses = memo(() => {
+const NextSolarEclipse = memo(() => {
 	const { eclipses } = useSnapshot(sunStore.state)
 	const { offset } = useSnapshot(sunStore.state.request.time)
 
+	if (eclipses.length === 0) return null
+
+	const next = eclipses[0]
+
 	return (
 		<div className="flex flex-col gap-0">
-			{eclipses.map((eclipse) => (
-				<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Sun} key={eclipse.time} label={eclipse.type} offset={offset} time={eclipse.time} />
-			))}
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Sun} key={next.maximalTime} label={next.type} offset={offset} time={next.maximalTime} onClick={() => solarEclipseStore.load(next)} />
 		</div>
 	)
 })
@@ -321,11 +326,13 @@ const LunarEclipses = memo(() => {
 	const { eclipses } = useSnapshot(moonStore.state)
 	const { offset } = useSnapshot(moonStore.state.request.time)
 
+	if (eclipses.length === 0) return null
+
+	const next = eclipses[0]
+
 	return (
 		<div className="flex flex-col gap-0">
-			{eclipses.map((eclipse) => (
-				<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} key={eclipse.time} label={eclipse.type} offset={offset} time={eclipse.startTime} />
-			))}
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} key={next.maximalTime} label={next.type} offset={offset} time={next.maximalTime} />
 		</div>
 	)
 })
@@ -726,7 +733,7 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange }: Ca
 	)
 })
 
-interface AstronomicalEventProps {
+interface AstronomicalEventProps extends Omit<React.ComponentProps<'div'>, 'children'> {
 	readonly icon: Icon
 	readonly label: string
 	readonly time: number
@@ -734,13 +741,13 @@ interface AstronomicalEventProps {
 	readonly format: string
 }
 
-const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format }: AstronomicalEventProps) => (
-	<div className="flex flex-col gap-0">
-		<span className="flex items-start gap-1 font-bold">
-			<Icon />
+const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format, className, ...props }: AstronomicalEventProps) => (
+	<div className={tw('flex flex-row items-center gap-1 hover:bg-neutral-700 rounded-md p-2 cursor-pointer', className)} {...props}>
+		<Icon />
+		<div className="flex flex-col items-start justify-center gap-0 font-bold">
 			{label}
-		</span>
-		<span className="mb-1 ps-5">{formatTemporal(time, format, offset)}</span>
+			<span>{formatTemporal(time, format, offset)}</span>
+		</div>
 	</div>
 ))
 

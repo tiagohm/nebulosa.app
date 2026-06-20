@@ -17,6 +17,7 @@ import type { RotatorStore } from '@/stores/rotator.store'
 import type { ThermometerStore } from '@/stores/thermometer.store'
 import type { TppaStore } from '@/stores/tppa.store'
 import type { WheelStore } from '@/stores/wheel.store'
+import type { LocationStore } from '../stores/location.store'
 import type { Image } from './types'
 
 export const AutoFocusStoreContext = createContext<AutoFocusStore>(null as never)
@@ -51,6 +52,8 @@ export const ImageContext = createContext<Image>(null as never)
 export const ImageViewerStoreContext = createContext<ImageViewerStore>(null as never)
 
 export const IndiPanelControlStoreContext = createContext<IndiPanelControlStore>(null as never)
+
+export const LocationStoreContext = createContext<LocationStore>(null as never)
 
 export const MountDeviceContext = createContext<Mount>(null as never)
 export const MountStoreContext = createContext<MountStore>(null as never)

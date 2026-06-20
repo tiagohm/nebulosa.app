@@ -1,24 +1,24 @@
 import { deg, toDeg } from 'nebulosa/src/angle'
 import { meter, toMeter } from 'nebulosa/src/distance'
 import type { GeographicCoordinate } from 'nebulosa/src/location'
-import { createContext, memo, useContext, useEffect, type CSSProperties } from 'react'
+import { memo, useContext, useEffect, type CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
 import { useStore } from '../hooks/store.hook'
-import { locationStore, type LocationStore } from '../stores/location.store'
+import { LocationStoreContext } from '../shared/context'
+import { locationStore } from '../stores/location.store'
 import { Button } from './components/Button'
 import { IconButton } from './components/IconButton'
+import { Link } from './components/Link'
 import { NumberInput } from './components/NumberInput'
 import { WorldMap, worldMapCoordinateToPoint } from './components/WorldMap'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 
-const LocationStoreContext = createContext<LocationStore>(null as never)
-
 export interface LocationProps extends GeographicCoordinate {
 	readonly id: string
 	readonly onCoordinateChange?: (position: GeographicCoordinate) => void
-	readonly onClose?: () => void
+	readonly onClose?: VoidFunction
 }
 
 export function Location({ id, onCoordinateChange, onClose, ...coordinate }: LocationProps) {
@@ -41,10 +41,7 @@ export function Location({ id, onCoordinateChange, onClose, ...coordinate }: Loc
 	return (
 		<LocationStoreContext value={location}>
 			<Modal footer={Footer} header={<Header />} id={id} maxWidth="326px" onHide={onClose}>
-				<div className="mt-0 flex flex-col gap-2">
-					<Inputs />
-					<Map />
-				</div>
+				<Body />
 			</Modal>
 		</LocationStoreContext>
 	)
@@ -62,6 +59,13 @@ const Header = memo(() => {
 	)
 })
 
+const Body = memo(() => (
+	<div className="mt-0 flex flex-col gap-2">
+		<Inputs />
+		<Map />
+	</div>
+))
+
 const Inputs = memo(() => {
 	const location = useContext(LocationStoreContext)
 	const { latitude, longitude, elevation } = useSnapshot(location.state)
@@ -78,7 +82,12 @@ const Inputs = memo(() => {
 const Map = memo(() => {
 	const location = useContext(LocationStoreContext)
 
-	return <WorldMap defaultScale={5} onCoordinateClick={location.handleCoordinateChange} onTransformChange={location.handleTransformChange} children={<MapMarker />} />
+	return (
+		<div>
+			<WorldMap defaultScale={5} onCoordinateClick={location.handleCoordinateChange} onTransformChange={location.handleTransformChange} children={<MapMarker />} />
+			<Link label="Image source: Wikipedia" href="https://en.wikipedia.org/wiki/File:World_location_map_(equirectangular_180).svg" />
+		</div>
+	)
 })
 
 const MAP_MARKER_STYLE: CSSProperties = { fill: 'var(--danger)' }
@@ -87,7 +96,7 @@ const MapMarker = memo(() => {
 	const location = useContext(LocationStoreContext)
 	const coordinate = useSnapshot(location.state)
 	const point = worldMapCoordinateToPoint(coordinate)
-	const size = 172 / coordinate.scale
+	const size = 165 / coordinate.scale
 
 	return <Icons.MapMarker width={size} height={size} style={{ ...MAP_MARKER_STYLE, transform: `translate(${point.x - size * 0.5}px, ${point.y - size}px)` }} />
 })

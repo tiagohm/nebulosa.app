@@ -9,9 +9,10 @@ import type { GeographicCoordinate } from 'nebulosa/src/location'
 import type { PHD2Profile } from 'nebulosa/src/phd2'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
 import type { DetectedStar } from 'nebulosa/src/star.detector'
+import type { LocalSolarEclipseCircumstances, LocalSolarEclipseViewGeometry } from 'nebulosa/src/sun.eclipse.local'
 import type { Writable } from 'nebulosa/src/types'
 // oxfmt-ignore
-import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DirectoryEntry, FileSystem, FindCloseApproaches, FindNextLunarEclipse, FindNextSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, NextLunarApsis, NextLunarEclipse, NextSolarEclipse, OpenImage, PHD2Connect, PHD2Event, PHD2Status, PlanetariumRequest, PlateSolveStart, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SkyObject, SolarSeasons, StarDetection, StatisticImage, TppaStart, Twilight } from 'src/shared/types'
+import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DirectoryEntry, FileSystem, FindCloseApproaches, FindNextLunarEclipse, FindNextSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, NextLunarApsis, NextLunarEclipse, NextSolarEclipse, OpenImage, PHD2Connect, PHD2Event, PHD2Status, PlanetariumRequest, PlateSolveStart, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SkyObject, SolarEclipseMap, SolarSeasons, StarDetection, StatisticImage, TppaStart, Twilight } from 'src/shared/types'
 import { type ImageCoordinateInterpolation, type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -460,6 +461,18 @@ export namespace Api {
 
 		export function solarEclipses(req: FindNextSolarEclipse) {
 			return json<readonly NextSolarEclipse[]>('/atlas/sun/eclipses', 'post', req)
+		}
+
+		export function solarEclipseMap(req: NextSolarEclipse) {
+			return json<SolarEclipseMap>('/atlas/sun/eclipses/map', 'post', req)
+		}
+
+		export function solarEclipseLocalCircumstances(req: ComputeSolarEclipseLocalCircumstances) {
+			return json<LocalSolarEclipseCircumstances>('/atlas/sun/eclipses/local/circumstances', 'post', req)
+		}
+
+		export function solarEclipseLocalView(req: ComputeSolarEclipseLocalView) {
+			return json<LocalSolarEclipseViewGeometry>('/atlas/sun/eclipses/local/view', 'post', req)
 		}
 
 		export function positionOfMoon(req: PositionOfBody) {

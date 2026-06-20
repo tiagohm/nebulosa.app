@@ -14,7 +14,7 @@ export const Thermometer = memo(() => {
 
 	return (
 		<ThermometerStoreContext value={thermometer}>
-			<Modal header={<Header />} id={`thermometer-${device.id}`} maxWidth="256px" onHide={thermometer.hide}>
+			<Modal header={<Header />} id={`thermometer-${device.id}`} initialWidth="256px" onHide={thermometer.hide}>
 				<Body />
 			</Modal>
 		</ThermometerStoreContext>

@@ -21,7 +21,7 @@ import { Timescale, time, timeToUnixMillis, timeUnix, timeYMDHMS, tt, utc, type 
 import type { Writable } from 'nebulosa/src/types'
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // oxfmt-ignore
-import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, type FindCloseApproaches, type FindNextLunarEclipse, type FindNextSolarEclipse, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarApsis, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type PlanetariumRequest, type SolarEclipseMap, type ComputeSolarEclipseLocalCircumstances, type ComputeSolarEclipseLocalView } from '../shared/types'
+import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, type FindCloseApproaches, type FindNextLunarEclipse, type FindSolarEclipse, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type NextLunarApsis, type NextLunarEclipse, type NextSolarEclipse, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type PlanetariumRequest, type SolarEclipseMap, type ComputeSolarEclipseLocalCircumstances, type ComputeSolarEclipseLocalView } from '../shared/types'
 import { computeSunMoonPositionAt } from 'nebulosa/src/eclipse'
 import * as elpmpp02 from 'nebulosa/src/elpmpp02'
 import { PlateCarree } from 'nebulosa/src/projection'
@@ -197,14 +197,14 @@ export class AtlasHandler {
 		return twilight
 	}
 
-	solarEclipses(req: FindNextSolarEclipse) {
+	solarEclipses(req: FindSolarEclipse) {
 		const location = this.cache.geographicCoordinate(req.location)
 		let time = this.cache.time(temporalStartOfDay(temporalAdd(req.time.utc, req.time.offset, 'm')), location)
 		const count = normalizeCount(req.count)
 		const eclipses = new Array<NextSolarEclipse>(count)
 
 		for (let i = 0; i < count; i++) {
-			const eclipse = nearestSolarEclipse(time, true)
+			const eclipse = nearestSolarEclipse(time, req.next)
 			time = eclipse.maximalTime
 
 			const nextEclipse = eclipse as unknown as NextSolarEclipse

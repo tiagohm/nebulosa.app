@@ -21,7 +21,7 @@ export const ImageStretch = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Stretch" id={`stretch-${viewer.image.id}`} maxWidth="296px" onHide={stretch.hide}>
+		<Modal footer={<Footer />} header="Stretch" id={`stretch-${viewer.image.id}`} initialWidth="296px" onHide={stretch.hide}>
 			<Body />
 		</Modal>
 	)

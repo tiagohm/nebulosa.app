@@ -19,7 +19,7 @@ export const FlatPanel = memo(() => {
 
 	return (
 		<FlatPanelStoreContext value={flatPanel}>
-			<Modal header={<Header />} id={`flat-panel-${device.id}`} maxWidth="256px" onHide={flatPanel.hide}>
+			<Modal header={<Header />} id={`flat-panel-${device.id}`} initialWidth="256px" onHide={flatPanel.hide}>
 				<Body />
 			</Modal>
 		</FlatPanelStoreContext>

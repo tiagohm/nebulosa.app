@@ -29,7 +29,7 @@ export const ImageStatistics = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal header="Statistics" id={`settings-${viewer.image.id}`} maxWidth="296px" onHide={statistics.hide}>
+		<Modal header="Statistics" id={`settings-${viewer.image.id}`} initialWidth="296px" onHide={statistics.hide}>
 			<Body />
 		</Modal>
 	)

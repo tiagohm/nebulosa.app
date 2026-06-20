@@ -29,7 +29,7 @@ export const FlatWizard = memo(() => {
 
 	return (
 		<FlatWizardStoreContext value={flatWizard}>
-			<Modal footer={<Footer />} header="Flat Wizard" id="flatwizard" maxWidth="376px" onHide={flatWizard.hide}>
+			<Modal footer={<Footer />} header="Flat Wizard" id="flatwizard" initialWidth="376px" onHide={flatWizard.hide}>
 				<Body />
 			</Modal>
 		</FlatWizardStoreContext>

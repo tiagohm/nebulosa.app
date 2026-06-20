@@ -51,7 +51,7 @@ export const Mount = memo(() => {
 
 	return (
 		<MountStoreContext value={mount}>
-			<Modal header={<Header />} id={`mount-${device.id}`} maxWidth="392px" onHide={mount.hide}>
+			<Modal header={<Header />} id={`mount-${device.id}`} initialWidth="392px" onHide={mount.hide}>
 				<Body />
 			</Modal>
 		</MountStoreContext>

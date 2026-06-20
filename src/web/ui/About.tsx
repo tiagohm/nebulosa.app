@@ -38,7 +38,7 @@ export const About = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal header={<Header />} id="about" maxWidth="472px" onHide={aboutStore.hide}>
+		<Modal header={<Header />} id="about" initialWidth="472px" onHide={aboutStore.hide}>
 			<Body />
 		</Modal>
 	)

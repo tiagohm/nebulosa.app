@@ -12,7 +12,7 @@ export const ImageHeader = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal header="FITS Header" id={`fitsheader-${viewer.image.id}`} maxWidth="296px" onHide={header.hide}>
+		<Modal header="FITS Header" id={`fitsheader-${viewer.image.id}`} initialWidth="296px" onHide={header.hide}>
 			<Body />
 		</Modal>
 	)

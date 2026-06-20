@@ -37,7 +37,7 @@ export const IndiPanelControl = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal header={<Header />} id={`indi-panelcontrol-${panel.device.id}`} maxWidth="400px" onHide={panel.hide}>
+		<Modal header={<Header />} id={`indi-panelcontrol-${panel.device.id}`} initialWidth="400px" onHide={panel.hide}>
 			<Body />
 		</Modal>
 	)

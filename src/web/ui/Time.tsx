@@ -51,7 +51,7 @@ export function Time({ id, onTimeChange, onClose, ...time }: TimeProps) {
 	const Footer = <Button color="success" disabled={!canApply} label="Apply" onClick={handleChoose} startContent={<Icons.Check />} />
 
 	return (
-		<Modal footer={Footer} header="Time" id={id} maxWidth="328px" onHide={onClose}>
+		<Modal footer={Footer} header="Time" id={id} initialWidth="328px" onHide={onClose}>
 			<div className="mt-0 grid grid-cols-3 gap-2">
 				<DateTimeInput className="col-span-2" label="UTC" granularity="second" onValueChange={setDate} value={date} />
 				<NumberInput className="col-span-1" label="Offset (min)" maxValue={MAX_OFFSET} minValue={MIN_OFFSET} onValueChange={setOffset} step={30} value={offset} />

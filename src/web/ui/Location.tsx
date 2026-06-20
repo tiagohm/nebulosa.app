@@ -40,7 +40,7 @@ export function Location({ id, onCoordinateChange, onClose, ...coordinate }: Loc
 
 	return (
 		<LocationStoreContext value={location}>
-			<Modal footer={Footer} header={<Header />} id={id} maxWidth="326px" onHide={onClose}>
+			<Modal footer={Footer} header={<Header />} id={id} initialWidth="326px" onHide={onClose}>
 				<Body />
 			</Modal>
 		</LocationStoreContext>

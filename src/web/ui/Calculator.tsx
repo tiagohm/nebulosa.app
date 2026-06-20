@@ -39,7 +39,7 @@ export const Calculator = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal header="Calculator" id="calculator" maxWidth="456px" onHide={calculatorStore.hide}>
+		<Modal header="Calculator" id="calculator" initialWidth="456px" onHide={calculatorStore.hide}>
 			<Body />
 		</Modal>
 	)

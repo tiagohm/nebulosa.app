@@ -16,7 +16,7 @@ export const AlpacaServer = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="ASCOM Alpaca Server" id="alpaca" maxWidth="296px" onHide={alpacaStore.hide}>
+		<Modal footer={<Footer />} header="ASCOM Alpaca Server" id="alpaca" initialWidth="296px" onHide={alpacaStore.hide}>
 			<Body />
 		</Modal>
 	)

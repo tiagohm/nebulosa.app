@@ -36,7 +36,7 @@ export const Tppa = memo(() => {
 
 	return (
 		<TppaStoreContext value={tppa}>
-			<Modal footer={<Footer />} header="Three-Point Polar Alignment" id={`tppa-${camera.id}-${mount.id}`} maxWidth="416px" onHide={tppa.hide}>
+			<Modal footer={<Footer />} header="Three-Point Polar Alignment" id={`tppa-${camera.id}-${mount.id}`} initialWidth="416px" onHide={tppa.hide}>
 				<Body />
 			</Modal>
 		</TppaStoreContext>

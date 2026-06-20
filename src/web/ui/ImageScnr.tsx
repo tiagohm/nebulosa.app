@@ -21,7 +21,7 @@ export const ImageScnr = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="SCNR" id={`scnr-${viewer.image.id}`} maxWidth="288px" onHide={scnr.hide}>
+		<Modal footer={<Footer />} header="SCNR" id={`scnr-${viewer.image.id}`} initialWidth="288px" onHide={scnr.hide}>
 			<Body />
 		</Modal>
 	)

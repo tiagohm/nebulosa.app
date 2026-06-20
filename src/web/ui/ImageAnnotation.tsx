@@ -16,7 +16,7 @@ export const ImageAnnotation = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Annotation" id={`annotation-${viewer.image.id}`} maxWidth="376px" onHide={annotation.hide}>
+		<Modal footer={<Footer />} header="Annotation" id={`annotation-${viewer.image.id}`} initialWidth="376px" onHide={annotation.hide}>
 			<Body />
 		</Modal>
 	)

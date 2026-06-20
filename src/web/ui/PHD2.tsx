@@ -24,7 +24,7 @@ export const PHD2 = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="PHD2" id="phd2" maxWidth="360px" onHide={phd2Store.hide} subHeader={<SubHeader />}>
+		<Modal footer={<Footer />} header="PHD2" id="phd2" initialWidth="360px" onHide={phd2Store.hide} subHeader={<SubHeader />}>
 			<Body />
 		</Modal>
 	)

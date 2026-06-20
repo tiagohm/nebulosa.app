@@ -17,7 +17,7 @@ export const ImageStarDetection = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Star Detection" id={`star-detection-${viewer.image.id}`} maxWidth="312px" onHide={starDetection.hide}>
+		<Modal footer={<Footer />} header="Star Detection" id={`star-detection-${viewer.image.id}`} initialWidth="312px" onHide={starDetection.hide}>
 			<Body />
 		</Modal>
 	)

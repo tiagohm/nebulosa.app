@@ -15,7 +15,7 @@ export const GuideOutput = memo(() => {
 
 	return (
 		<GuideOutputStoreContext value={guideOutput}>
-			<Modal header={<Header />} id={`guide-output-${device.id}`} maxWidth="336px" onHide={guideOutput.hide}>
+			<Modal header={<Header />} id={`guide-output-${device.id}`} initialWidth="336px" onHide={guideOutput.hide}>
 				<Body />
 			</Modal>
 		</GuideOutputStoreContext>

@@ -20,7 +20,7 @@ export const ImageSettings = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Settings" id={`settings-${viewer.image.id}`} maxWidth="256px" onHide={settings.hide}>
+		<Modal footer={<Footer />} header="Settings" id={`settings-${viewer.image.id}`} initialWidth="256px" onHide={settings.hide}>
 			<Body />
 		</Modal>
 	)

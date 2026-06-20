@@ -6,6 +6,7 @@ import { memo, type CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
 import { atlasStore } from '../stores/atlas.store'
 import { solarEclipseStore } from '../stores/solar.eclipse.store'
+import { IconButton } from './components/IconButton'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
 import { TextInput } from './components/TextInput'
 import { WorldMap, worldMapCoordinateToPoint } from './components/WorldMap'
@@ -20,11 +21,19 @@ export const SolarEclipseMap = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal header="Solar Eclipse Map" id="solar-eclipse-map" maxWidth="480px" onHide={solarEclipseStore.hide}>
+		<Modal header={<Header />} id="solar-eclipse-map" initialWidth="480px" onHide={solarEclipseStore.hide}>
 			<Body />
 		</Modal>
 	)
 })
+
+const Header = memo(() => (
+	<div className="flex flex-row items-center justify-center gap-2">
+		<IconButton icon={Icons.ArrowLeft} onClick={solarEclipseStore.prev} tooltipContent="Prev" />
+		Solar Eclipse
+		<IconButton icon={Icons.ArrowRight} onClick={solarEclipseStore.next} tooltipContent="Next" />
+	</div>
+))
 
 const Body = memo(() => (
 	<div className="flex w-full flex-col gap-2">
@@ -237,7 +246,7 @@ const LocalView = memo(() => {
 })
 
 const Map = memo(() => (
-	<WorldMap ref={solarEclipseStore.setWorldMap} defaultScale={1} onCoordinateClick={solarEclipseStore.handleCoordinateChange} onTransformChange={solarEclipseStore.handleTransformChange}>
+	<WorldMap defaultScale={1} onCoordinateClick={solarEclipseStore.handleCoordinateChange} onTransformChange={solarEclipseStore.handleTransformChange}>
 		<MapMarker />
 		<MapGeometry />
 	</WorldMap>

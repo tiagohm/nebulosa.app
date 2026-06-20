@@ -16,7 +16,7 @@ export const ImageCalibration = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Calibration" id={`calibration-${viewer.image.id}`} maxWidth="264px" onHide={calibration.hide}>
+		<Modal footer={<Footer />} header="Calibration" id={`calibration-${viewer.image.id}`} initialWidth="264px" onHide={calibration.hide}>
 			<Body />
 		</Modal>
 	)

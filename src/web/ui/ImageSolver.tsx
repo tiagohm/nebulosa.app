@@ -51,7 +51,7 @@ export const ImageSolver = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Plate Solver" id={`platesolver-${viewer.image.id}`} maxWidth="360px" onHide={solver.hide}>
+		<Modal footer={<Footer />} header="Plate Solver" id={`platesolver-${viewer.image.id}`} initialWidth="360px" onHide={solver.hide}>
 			<Body />
 		</Modal>
 	)

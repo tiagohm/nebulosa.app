@@ -18,7 +18,7 @@ export const Focuser = memo(() => {
 
 	return (
 		<FocuserStoreContext value={focuser}>
-			<Modal header={<Header />} id={`focuser-${device.id}`} maxWidth="256px" onHide={focuser.hide}>
+			<Modal header={<Header />} id={`focuser-${device.id}`} initialWidth="256px" onHide={focuser.hide}>
 				<Body />
 			</Modal>
 		</FocuserStoreContext>

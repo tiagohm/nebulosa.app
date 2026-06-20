@@ -19,7 +19,7 @@ export const ImageFilter = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Filter" id={`filter-${viewer.image.id}`} maxWidth="216px" onHide={filter.hide}>
+		<Modal footer={<Footer />} header="Filter" id={`filter-${viewer.image.id}`} initialWidth="216px" onHide={filter.hide}>
 			<Body />
 		</Modal>
 	)

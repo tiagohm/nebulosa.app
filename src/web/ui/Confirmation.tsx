@@ -11,7 +11,7 @@ export const Confirmation = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Confirmation" id="confirmation" maxWidth="336px" onHide={confirmationStore.reject}>
+		<Modal footer={<Footer />} header="Confirmation" id="confirmation" initialWidth="336px" onHide={confirmationStore.reject}>
 			<Body />
 		</Modal>
 	)

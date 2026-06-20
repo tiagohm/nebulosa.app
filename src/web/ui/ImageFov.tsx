@@ -24,7 +24,7 @@ export const ImageFov = memo(() => {
 	if (!show || !hasSolutionScale) return null
 
 	return (
-		<Modal header="FOV" id={`fov-${viewer.image.id}`} maxWidth="336px" onHide={fov.hide}>
+		<Modal header="FOV" id={`fov-${viewer.image.id}`} initialWidth="336px" onHide={fov.hide}>
 			<Body />
 		</Modal>
 	)

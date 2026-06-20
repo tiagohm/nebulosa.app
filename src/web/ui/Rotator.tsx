@@ -22,7 +22,7 @@ export const Rotator = memo(() => {
 
 	return (
 		<RotatorStoreContext value={rotator}>
-			<Modal header={<Header />} id={`rotator-${device.id}`} maxWidth="256px" onHide={rotator.hide}>
+			<Modal header={<Header />} id={`rotator-${device.id}`} initialWidth="256px" onHide={rotator.hide}>
 				<Body />
 			</Modal>
 		</RotatorStoreContext>

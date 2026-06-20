@@ -17,7 +17,7 @@ export const ImageAdjustment = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Adjustment" id={`adjustment-${viewer.image.id}`} maxWidth="256px" onHide={adjustment.hide}>
+		<Modal footer={<Footer />} header="Adjustment" id={`adjustment-${viewer.image.id}`} initialWidth="256px" onHide={adjustment.hide}>
 			<Body />
 		</Modal>
 	)

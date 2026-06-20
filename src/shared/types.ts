@@ -162,8 +162,9 @@ export interface Twilight {
 	end: TwilightTime
 }
 
-export interface FindNextSolarEclipse extends LocationAndTime {
+export interface FindSolarEclipse extends LocationAndTime {
 	count: number
+	next: boolean
 }
 
 export interface NextSolarEclipse extends Omit<SolarEclipse, 'maximalTime'> {

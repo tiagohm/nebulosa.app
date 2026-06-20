@@ -6,13 +6,11 @@ import type { NextSolarEclipse, SolarEclipseMap } from 'src/shared/types'
 import { proxy, ref } from 'valtio'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
-import type { WorldMapMethods, WorldMapPosition } from '../ui/components/WorldMap'
+import type { WorldMapPosition } from '../ui/components/WorldMap'
 import type { InteractTransform } from '../ui/Interactable'
 import { atlasStore } from './atlas.store'
 
 export type SolarEclipseStore = typeof solarEclipseStore
-
-let worldMap: WorldMapMethods | null = null
 
 export interface SolarEclipseState {
 	show: boolean
@@ -44,7 +42,7 @@ const state = proxy<SolarEclipseState>({
 	},
 })
 
-initProxy(state, 'solareclipse', ['p:show', 'p:scale', 'o:localViewOptions'])
+initProxy(state, 'solareclipse', ['p:scale', 'o:localViewOptions'])
 
 async function loadMap() {
 	if (state.eclipse === undefined) return false
@@ -102,8 +100,19 @@ async function handleCoordinateChange(position: WorldMapPosition) {
 	await loadView()
 }
 
-function setWorldMap(map: WorldMapMethods | null) {
-	worldMap = map
+async function find(next: boolean) {
+	if (!state.eclipse) return
+	const eclipse = await Api.Atlas.solarEclipses({ time: { utc: state.eclipse.maximalTime + (next ? 86400000 : -86400000), offset: 0 }, location: atlasStore.state.request.location, count: 1, next })
+	if (!eclipse || eclipse.length === 0) return
+	await load(eclipse[0])
+}
+
+function prev() {
+	return find(false)
+}
+
+function next() {
+	return find(true)
 }
 
 function show() {
@@ -117,7 +126,8 @@ function hide() {
 export const solarEclipseStore = {
 	state,
 	load,
-	setWorldMap,
+	prev,
+	next,
 	handleCoordinateChange,
 	handleTransformChange,
 	updateLocalViewOptions,

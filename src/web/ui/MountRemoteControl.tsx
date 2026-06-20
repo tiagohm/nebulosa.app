@@ -13,7 +13,7 @@ export const MountRemoteControl = memo(() => {
 	const mount = useContext(MountStoreContext)
 
 	return (
-		<Modal footer={<Footer />} header="Remote Control" id={`mount-remote-control-${mount.state.mount.id}`} maxWidth="236px" onHide={mount.hideRemoteControl}>
+		<Modal footer={<Footer />} header="Remote Control" id={`mount-remote-control-${mount.state.mount.id}`} initialWidth="236px" onHide={mount.hideRemoteControl}>
 			<Body />
 		</Modal>
 	)

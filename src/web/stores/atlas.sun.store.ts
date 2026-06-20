@@ -98,7 +98,7 @@ async function updateSeasons() {
 async function updateEclipses() {
 	if (!eclipsesUpdate) return
 	eclipsesUpdate = false
-	const request = { ...state.request, count: 1 }
+	const request = { ...state.request, count: 1, next: true }
 	const eclipses = await Api.Atlas.solarEclipses(request)
 	if (eclipses) state.eclipses = eclipses
 	else eclipsesUpdate = true

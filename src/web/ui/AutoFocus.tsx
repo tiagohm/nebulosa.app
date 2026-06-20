@@ -88,7 +88,7 @@ export const AutoFocus = memo(() => {
 
 	return (
 		<AutoFocusStoreContext value={autoFocus}>
-			<Modal footer={<Footer />} header="Auto Focus" id={`autofocus-${camera.id}-${focuser.id}`} maxWidth="440px" onHide={autoFocus.hide}>
+			<Modal footer={<Footer />} header="Auto Focus" id={`autofocus-${camera.id}-${focuser.id}`} initialWidth="440px" onHide={autoFocus.hide}>
 				<Body />
 			</Modal>
 		</AutoFocusStoreContext>

@@ -27,7 +27,7 @@ export const FilePicker = memo(({ id, header, onChoose, ...scope }: FilePickerPr
 
 	return (
 		<FilePickerStoreContext value={picker}>
-			<Modal footer={<Footer onChoose={onChoose} />} header={<Header header={header} />} id={id} maxWidth="416px" onHide={onChoose}>
+			<Modal footer={<Footer onChoose={onChoose} />} header={<Header header={header} />} id={id} initialWidth="416px" onHide={onChoose}>
 				<Body />
 			</Modal>
 		</FilePickerStoreContext>

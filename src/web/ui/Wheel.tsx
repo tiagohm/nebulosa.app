@@ -20,7 +20,7 @@ export const Wheel = memo(() => {
 
 	return (
 		<WheelStoreContext value={wheel}>
-			<Modal header={<Header />} id={`wheel-${device.id}`} maxWidth="256px" onHide={wheel.hide}>
+			<Modal header={<Header />} id={`wheel-${device.id}`} initialWidth="256px" onHide={wheel.hide}>
 				<Body />
 			</Modal>
 		</WheelStoreContext>

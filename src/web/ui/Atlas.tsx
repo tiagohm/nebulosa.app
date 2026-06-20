@@ -58,7 +58,7 @@ export const Atlas = memo(() => {
 
 	return (
 		<>
-			<Modal footer={Footer} header={<Header />} id="sky-atlas" maxWidth="456px" onHide={atlasStore.hide}>
+			<Modal footer={Footer} header={<Header />} id="sky-atlas" initialWidth="456px" onHide={atlasStore.hide}>
 				<Body />
 			</Modal>
 			{location.show && <Location {...request.location} id="location-atlas" onClose={atlasStore.hideLocation} onCoordinateChange={atlasStore.updateLocation} />}

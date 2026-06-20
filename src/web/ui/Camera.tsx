@@ -30,7 +30,7 @@ export const Camera = memo(() => {
 
 	return (
 		<CameraStoreContext value={camera}>
-			<Modal footer={<Footer />} header={<Header />} id={`camera-${device.id}`} maxWidth="360px" onHide={camera.hide}>
+			<Modal footer={<Footer />} header={<Header />} id={`camera-${device.id}`} initialWidth="360px" onHide={camera.hide}>
 				<Body />
 			</Modal>
 		</CameraStoreContext>
@@ -114,7 +114,7 @@ const OptionsButton = memo(() => {
 		<>
 			<IconButton disabled={!connected || capturing} icon={Icons.Cog} onClick={() => setShow(true)} />
 			{show && connected && !capturing && (
-				<Modal header="Options" id={`camera-options-${camera.state.camera.id}`} maxWidth="280px" onHide={() => setShow(false)}>
+				<Modal header="Options" id={`camera-options-${camera.state.camera.id}`} initialWidth="280px" onHide={() => setShow(false)}>
 					<OptionsBody />
 				</Modal>
 			)}

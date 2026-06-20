@@ -10,7 +10,7 @@ import { IndiDriverListbox } from './IndiDriverListbox'
 import { Modal } from './Modal'
 
 export const IndiServer = memo(() => (
-	<Modal footer={<Footer />} header="INDI Server" id="indi-server" maxWidth="276px" onHide={indiServerStore.hide}>
+	<Modal footer={<Footer />} header="INDI Server" id="indi-server" initialWidth="276px" onHide={indiServerStore.hide}>
 		<Body />
 	</Modal>
 ))

@@ -16,7 +16,7 @@ export const Cover = memo(() => {
 
 	return (
 		<CoverStoreContext value={cover}>
-			<Modal header={<Header />} id={`cover-${device.id}`} maxWidth="256px" onHide={cover.hide}>
+			<Modal header={<Header />} id={`cover-${device.id}`} initialWidth="256px" onHide={cover.hide}>
 				<Body />
 			</Modal>
 		</CoverStoreContext>

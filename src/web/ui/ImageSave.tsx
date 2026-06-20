@@ -20,7 +20,7 @@ export const ImageSave = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal footer={<Footer />} header="Save" id={`save-${viewer.image.id}`} maxWidth="288px" onHide={save.hide}>
+		<Modal footer={<Footer />} header="Save" id={`save-${viewer.image.id}`} initialWidth="288px" onHide={save.hide}>
 			<Body />
 		</Modal>
 	)

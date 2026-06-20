@@ -129,7 +129,7 @@ function worldMapPositionFromClientPoint(map: SVGSVGElement, clientX: number, cl
 	})
 }
 
-export const WorldMap = memo(({ bordered, centerOnResize = false, children, className, classNames, defaultScale = 1, onCoordinateClick, onCoordinateMove, onTransformChange, onWheelCapture, ref, style, zIndex = 0, ...props }: WorldMapProps) => {
+export const WorldMap = memo(({ bordered, centerOnResize = false, children, className, classNames, defaultScale = 1, onCoordinateClick, onTransformChange, onWheelCapture, ref, style, zIndex = 0, ...props }: WorldMapProps) => {
 	const rootRef = useRef<HTMLDivElement>(null)
 	const mapRef = useRef<SVGSVGElement>(null)
 	const interactableRef = useRef<InteractableMethods>(null)
@@ -212,13 +212,6 @@ export const WorldMap = memo(({ bordered, centerOnResize = false, children, clas
 		if (position) onCoordinateClick!(position, event)
 	}
 
-	function handleCoordinateMove({ event, dragging, pinching }: InteractableMoveState) {
-		if (dragging || pinching) return
-		const map = mapRef.current
-		const position = map && worldMapPositionFromClientPoint(map, event.clientX, event.clientY)
-		if (position) onCoordinateMove!(position, event)
-	}
-
 	function handleWheelCapture(event: React.WheelEvent<HTMLDivElement>) {
 		onWheelCapture?.(event)
 
@@ -230,7 +223,7 @@ export const WorldMap = memo(({ bordered, centerOnResize = false, children, clas
 
 	return (
 		<div {...props} className={tw(styles.base(), className, classNames?.base)} onWheelCapture={handleWheelCapture} ref={rootRef} style={style}>
-			<Interactable onClick={onCoordinateClick && handleCoordinateClick} onGesture={handleTransformChange} onMouseMove={onCoordinateMove && handleCoordinateMove} ref={interactableRef} zIndex={zIndex}>
+			<Interactable onClick={onCoordinateClick !== undefined ? handleCoordinateClick : undefined} onGesture={handleTransformChange} ref={interactableRef} zIndex={zIndex}>
 				<svg className={tw(styles.map(), classNames?.map)} height={surfaceSize.height} preserveAspectRatio="xMidYMid meet" ref={mapRef} style={{ height: surfaceSize.height, width: surfaceSize.width }} viewBox={WORLD_MAP_VIEW_BOX} width={surfaceSize.width}>
 					<image className={tw(styles.image(), classNames?.image)} height={WORLD_MAP_HEIGHT} href={worldMapSvg} width={WORLD_MAP_WIDTH} x={0} y={0} />
 					<g className={tw(styles.overlay(), classNames?.overlay)}>{children}</g>

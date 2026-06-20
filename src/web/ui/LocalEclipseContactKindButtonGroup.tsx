@@ -3,7 +3,7 @@ import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from './component
 
 export function LocalEclipseContactKindButtonGroup(props: Omit<ButtonGroupProps<LocalEclipseContactKind>, 'children'>) {
 	return (
-		<ButtonGroup size='sm' {...props}>
+		<ButtonGroup size="sm" {...props}>
 			<ButtonGroupItem id="C1" label="C1" />
 			<ButtonGroupItem id="C2" label="C2" />
 			<ButtonGroupItem id="MAX" label="Max" />

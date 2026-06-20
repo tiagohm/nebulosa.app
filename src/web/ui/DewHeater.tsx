@@ -25,7 +25,7 @@ export const DewHeater = memo(() => {
 
 	return (
 		<DewHeaterStoreContext value={dewHeater}>
-			<Modal header={<Header />} id={`dew-heater-${device.id}`} maxWidth="256px" onHide={dewHeater.hide}>
+			<Modal header={<Header />} id={`dew-heater-${device.id}`} initialWidth="256px" onHide={dewHeater.hide}>
 				<Body />
 			</Modal>
 		</DewHeaterStoreContext>

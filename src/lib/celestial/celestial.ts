@@ -81,12 +81,19 @@ export interface DeepSkyObject extends EquatorialCoordinate {
 	sizeArcMin?: number
 }
 
-// Solar-system body ids are intentionally open for custom providers.
-export type SolarSystemBody = 'sun' | 'moon' | 'mercury' | 'venus' | 'mars' | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | (string & {})
+// Solar-system body ids are intentionally open for app-specific bodies.
+export type SolarSystemBody = 'sun' | 'moon' | 'mercury' | 'venus' | 'mars' | 'jupiter' | 'saturn' | 'uranus' | 'neptune'
 
-// Ephemeris providers can be replaced by accurate implementations later.
-export interface EphemerisProvider {
-	readonly positionAt: (body: SolarSystemBody, time: number) => EquatorialCoordinate
+export type MovingBodyType = SolarSystemBody | 'asteroid' | 'comet'
+
+export interface MovingBody {
+	readonly id: string
+	readonly type: MovingBodyType
+	readonly position: EquatorialCoordinate
+	readonly name?: string
+	magnitude?: number
+	visible?: boolean
+	selectable?: boolean
 }
 
 // Theme configuration used by Canvas renderers.
@@ -132,8 +139,10 @@ export interface ThemeOptions {
 		color: string
 		labelColor: string
 	}
-	planets: {
-		color: string
+	movingBodies: {
+		planetColor: string
+		asteroidColor: string
+		cometColor: string
 		labelColor: string
 	}
 	selectedObject: {
@@ -195,8 +204,6 @@ export interface CelestialOptions {
 	layers?: Partial<Record<string, boolean>>
 	theme?: PartialThemeOptions
 	interactions?: InteractionOptions
-	ephemerisProvider?: EphemerisProvider
-	solarSystemBodies?: SolarSystemBody[]
 }
 
 // Public render state passed to custom layers.
@@ -219,7 +226,7 @@ export interface RenderState {
 	readonly milkyWay: readonly Readonly<MilkyWayStep>[]
 	readonly dsos: readonly Readonly<DeepSkyObject>[]
 	readonly deepSkyLabelVisible: NumberArray
-	readonly planets: readonly Readonly<PlanetRenderObject>[]
+	readonly movingBodies: readonly Readonly<MovingBody>[]
 	readonly shapes: readonly Readonly<CelestialShape>[]
 	readonly hoverObject: Readonly<CelestialObject> | null
 	readonly selectedObject: Readonly<CelestialObject> | null
@@ -273,7 +280,7 @@ export interface CelestialShape {
 export type CelestialObject =
 	| { type: 'star'; index: number; id?: StarId; name?: string; mag?: number; ra: number; dec: number }
 	| { type: 'deepSky'; index: number; object: DeepSkyObject }
-	| { type: 'planet'; index: number; body: SolarSystemBody; position: EquatorialCoordinate }
+	| { type: 'movingBody'; index: number; object: MovingBody }
 	| { type: 'constellationLabel'; index: number; label: ConstellationLabel }
 	| { type: 'shape'; id: string; shape: CelestialShape }
 
@@ -314,11 +321,6 @@ type LayerRecord = {
 	readonly ctx: CanvasRenderingContext2D
 }
 
-type PlanetRenderObject = {
-	readonly body: SolarSystemBody
-	readonly position: EquatorialCoordinate
-}
-
 type MilkyWayRing = {
 	readonly vectors: Float32Array
 	readonly pointCount: number
@@ -352,8 +354,6 @@ type ResolvedCelestialOptions = {
 	readonly layers: Record<string, boolean>
 	readonly theme: ThemeOptions
 	readonly interactions: Required<InteractionOptions>
-	readonly ephemerisProvider?: EphemerisProvider
-	readonly solarSystemBodies: SolarSystemBody[]
 }
 
 const J2000_EPOCH = 2000 // Julian epoch used as the baseline for proper-motion star positions.
@@ -396,7 +396,7 @@ const DSO_LABEL_MAX_MAGNITUDE = 14 // Faintest DSO label ever shown by zoom; hig
 const DSO_VIEWPORT_MARGIN = 16 // Viewport margin for drawing/picking DSOs; higher keeps near-edge objects active longer during pan.
 const PICK_TYPE_STAR = 1 // Picking index type id for stars.
 const PICK_TYPE_DSO = 2 // Picking index type id for deep-sky objects.
-const PICK_TYPE_PLANET = 3 // Picking index type id for planets.
+const PICK_TYPE_MOVING_BODY = 3 // Picking index type id for planets, asteroids, and comets.
 const PICK_TYPE_CONSTELLATION_LABEL = 4 // Picking index type id for constellation labels.
 const PICK_TYPE_SHAPE = 5 // Picking index type id for custom shapes.
 
@@ -442,8 +442,10 @@ const DEFAULT_THEME: ThemeOptions = {
 		color: '#ff9d00',
 		labelColor: '#ffb000',
 	},
-	planets: {
-		color: '#ffb000',
+	movingBodies: {
+		planetColor: '#ffb000',
+		asteroidColor: '#d8d2c0',
+		cometColor: '#9ee7ff',
 		labelColor: '#ffcc58',
 	},
 	selectedObject: {
@@ -471,12 +473,12 @@ const DEFAULT_LAYER_VISIBILITY: Record<string, boolean> = {
 	grid: true,
 	horizon: true,
 	deepSky: true,
-	planets: false,
+	movingBodies: true,
 	shapes: true,
 	overlay: true,
 }
 
-const ASTRONOMICAL_DIRTY_LAYER_IDS = ['grid', 'referenceLines', 'milkyWay', 'constellations', 'constellationBoundaries', 'constellationLabels', 'deepSky', 'stars', 'planets', 'shapes'] as const
+const ASTRONOMICAL_DIRTY_LAYER_IDS = ['grid', 'referenceLines', 'milkyWay', 'constellations', 'constellationBoundaries', 'constellationLabels', 'deepSky', 'stars', 'movingBodies', 'shapes'] as const
 
 const DEFAULT_STAR_OPTIONS: Required<StarLayerOptions> = {
 	maxMagnitude: 9,
@@ -513,8 +515,6 @@ const DEFAULT_INTERACTION_OPTIONS: Required<InteractionOptions> = {
 	preferD3Zoom: true,
 	wheelZoomSpeed: 0.0004,
 }
-
-const DEFAULT_SOLAR_SYSTEM_BODIES: SolarSystemBody[] = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn']
 
 // Returns true for finite numbers only.
 function isFiniteNumber(value: unknown): value is number {
@@ -916,7 +916,7 @@ function mergeTheme(theme?: PartialThemeOptions): ThemeOptions {
 		milkyWay: { ...DEFAULT_THEME.milkyWay, ...theme?.milkyWay },
 		constellations: { ...DEFAULT_THEME.constellations, ...theme?.constellations },
 		deepSky: { ...DEFAULT_THEME.deepSky, ...theme?.deepSky },
-		planets: { ...DEFAULT_THEME.planets, ...theme?.planets },
+		movingBodies: { ...DEFAULT_THEME.movingBodies, ...theme?.movingBodies },
 		selectedObject: { ...DEFAULT_THEME.selectedObject, ...theme?.selectedObject },
 		hoverHighlight: { ...DEFAULT_THEME.hoverHighlight, ...theme?.hoverHighlight },
 	}
@@ -963,8 +963,6 @@ function resolveOptions(options: CelestialOptions): ResolvedCelestialOptions {
 		layers,
 		theme: mergeTheme(options.theme),
 		interactions,
-		ephemerisProvider: options.ephemerisProvider,
-		solarSystemBodies: options.solarSystemBodies ?? DEFAULT_SOLAR_SYSTEM_BODIES,
 	}
 }
 
@@ -2724,33 +2722,45 @@ function positionSkyLabel(ctx: CanvasRenderingContext2D, state: RenderState, nam
 	return true
 }
 
-// Planet renderer using the configured provider.
-class PlanetLayer extends InternalLayer {
+// Dynamic planet, asteroid, and comet renderer.
+class MovingBodyLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
+	private readonly labelPoint = new Float32Array(2)
 
 	constructor() {
-		super('planets', 60)
+		super('movingBodies', 60)
 	}
 
-	// Draws simple planet dots and labels.
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
-		ctx.fillStyle = state.theme.planets.color
-		ctx.strokeStyle = state.theme.planets.color
-		ctx.font = state.theme.constellations.labelFont
+		ctx.font = skyLabelFont(state, 9)
+		ctx.textAlign = 'left'
+		ctx.textBaseline = 'middle'
 
-		for (let i = 0; i < state.planets.length; i++) {
-			const planet = state.planets[i]
+		for (let i = 0; i < state.movingBodies.length; i++) {
+			const object = state.movingBodies[i]
 
-			if (!state.projectEquatorialToScreen(planet.position.rightAscension, planet.position.declination, this.point)) {
+			if (!isMovingBodyVisible(object, state)) {
 				continue
 			}
 
-			ctx.beginPath()
-			ctx.arc(this.point[0], this.point[1], 4.5, 0, TAU)
-			ctx.fill()
-			ctx.fillStyle = state.theme.planets.labelColor
-			ctx.fillText(planet.body, this.point[0] + 7, this.point[1] - 7)
-			ctx.fillStyle = state.theme.planets.color
+			if (!state.projectEquatorialToScreen(object.position.rightAscension, object.position.declination, this.point)) {
+				continue
+			}
+
+			const color = movingBodyColor(object, state)
+			ctx.strokeStyle = color
+			ctx.fillStyle = color
+			ctx.lineWidth = 1
+			drawMovingBodySymbol(ctx, object.type, this.point[0], this.point[1])
+
+			if (isMovingBodyLabelVisible(object, state)) {
+				const label = object.name ?? object.type
+				ctx.fillStyle = state.theme.movingBodies.labelColor
+
+				if (positionSkyLabel(ctx, state, label, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) {
+					ctx.fillText(label, this.labelPoint[0], this.labelPoint[1])
+				}
+			}
 		}
 	}
 }
@@ -2945,6 +2955,28 @@ function isDeepSkyLabelVisible(object: DeepSkyObject, state: RenderState) {
 	return deepSkyMagnitude(object) <= deepSkyLabelMagnitudeLimit(state.transform.k)
 }
 
+function movingBodyMagnitude(object: MovingBody) {
+	return isFiniteNumber(object.magnitude) ? object.magnitude : 0
+}
+
+function isMovingBodyVisibleAtZoom(object: MovingBody, zoom: number) {
+	return !isFiniteNumber(object.magnitude) || object.magnitude <= deepSkyObjectMagnitudeLimit(zoom)
+}
+
+function isMovingBodyVisible(object: MovingBody, state: RenderState) {
+	return object.visible !== false && isMovingBodyVisibleAtZoom(object, state.transform.k)
+}
+
+function isMovingBodyLabelVisible(object: MovingBody, state: RenderState) {
+	return !isFiniteNumber(object.magnitude) || object.magnitude <= deepSkyLabelMagnitudeLimit(state.transform.k)
+}
+
+function movingBodyColor(object: MovingBody, state: RenderState) {
+	if (object.type === 'comet') return state.theme.movingBodies.cometColor
+	if (object.type === 'asteroid') return state.theme.movingBodies.asteroidColor
+	return state.theme.movingBodies.planetColor
+}
+
 function deepSkySymbolRadius(object: DeepSkyObject, state: RenderState) {
 	const brightness = 1 - clamp((deepSkyMagnitude(object) - DSO_SYMBOL_MIN_MAGNITUDE) / (DSO_SYMBOL_MAX_MAGNITUDE - DSO_SYMBOL_MIN_MAGNITUDE), 0, 1)
 	return clamp((3.2 + brightness * 1.8) * Math.sqrt(state.transform.k), 3.2, 7)
@@ -3031,6 +3063,30 @@ function drawDsoSymbol(ctx: CanvasRenderingContext2D, type: DeepSkyObject['type'
 	}
 }
 
+function drawMovingBodySymbol(ctx: CanvasRenderingContext2D, type: MovingBodyType, x: number, y: number) {
+	if (type === 'comet') {
+		ctx.beginPath()
+		ctx.moveTo(x - 6, y + 3)
+		ctx.lineTo(x - 1, y)
+		ctx.stroke()
+		ctx.beginPath()
+		ctx.arc(x, y, 2.8, 0, TAU)
+		ctx.stroke()
+		return
+	}
+
+	if (type !== 'asteroid') {
+		ctx.beginPath()
+		ctx.arc(x, y, 4.5, 0, TAU)
+		ctx.fill()
+		return
+	}
+
+	ctx.beginPath()
+	ctx.rect(x - 2.5, y - 2.5, 5, 5)
+	ctx.stroke()
+}
+
 const OBJECT_HIGLIGHT_POINT = new Float32Array(2)
 
 // Draws hover/selection highlight for any pickable object.
@@ -3065,13 +3121,30 @@ function projectObjectToScreen(object: CelestialObject, state: RenderState, out:
 		case 'deepSky':
 			if (!isDeepSkyObjectVisible(object.object, state)) return false
 			return state.projectEquatorialToScreen(object.object.rightAscension, object.object.declination, out)
-		case 'planet':
-			return state.projectEquatorialToScreen(object.position.rightAscension, object.position.declination, out)
+		case 'movingBody': {
+			const movingBody = currentMovingBodyForObject(object, state)
+			return movingBody ? state.projectEquatorialToScreen(movingBody.position.rightAscension, movingBody.position.declination, out) : false
+		}
 		case 'constellationLabel':
 			return state.projectEquatorialToScreen(object.label.rightAscension, object.label.declination, out)
 		case 'shape':
 			return object.shape.visible !== false && object.shape.selectable !== false && state.projectEquatorialToScreen(object.shape.coordinate.rightAscension, object.shape.coordinate.declination, out)
 	}
+}
+
+function currentMovingBodyForObject(object: Extract<CelestialObject, { type: 'movingBody' }>, state: RenderState): Readonly<MovingBody> | null {
+	const indexed = state.movingBodies[object.index]
+
+	if (indexed?.id === object.object.id) {
+		return indexed
+	}
+
+	for (let i = 0; i < state.movingBodies.length; i++) {
+		const movingBody = state.movingBodies[i]
+		if (movingBody.id === object.object.id) return movingBody
+	}
+
+	return null
 }
 
 function isObjectLayerVisible(object: CelestialObject, state: RenderState) {
@@ -3080,8 +3153,8 @@ function isObjectLayerVisible(object: CelestialObject, state: RenderState) {
 			return state.celestial.isLayerVisible('stars')
 		case 'deepSky':
 			return state.celestial.isLayerVisible('deepSky')
-		case 'planet':
-			return state.celestial.isLayerVisible('planets')
+		case 'movingBody':
+			return state.celestial.isLayerVisible('movingBodies')
 		case 'constellationLabel':
 			return state.celestial.isLayerVisible('constellationLabels')
 		case 'shape':
@@ -3245,7 +3318,8 @@ export class Celestial {
 	private milkyWay: MilkyWayStep[] = []
 	private dsos: DeepSkyObject[] = []
 	private deepSkyLabelVisible = new Uint8Array(0)
-	private readonly planets: PlanetRenderObject[] = []
+	private readonly movingBodies = new Map<string, MovingBody>()
+	private readonly movingBodyList: MovingBody[] = []
 	private readonly shapes = new Map<string, CelestialShape>()
 	private readonly shapeList: CelestialShape[] = []
 	private readonly pickedShapes: CelestialShape[] = []
@@ -3451,7 +3525,8 @@ export class Celestial {
 		this.dsos.length = 0
 		this.constellations = {}
 		this.milkyWay.length = 0
-		this.planets.length = 0
+		this.movingBodies.clear()
+		this.movingBodyList.length = 0
 		this.shapes.clear()
 		this.shapeList.length = 0
 	}
@@ -3496,6 +3571,93 @@ export class Celestial {
 		this.renderer.markDirty('deepSky')
 		this.rebuildPickingIndex()
 		this.requestRender()
+	}
+
+	// Adds or replaces a dynamic moving body and returns its id.
+	addMovingBody(object: MovingBody) {
+		const id = object.id
+		const previous = this.movingBodies.get(id)
+		this.movingBodies.set(id, object)
+
+		if (previous) {
+			const index = this.movingBodyList.indexOf(previous)
+
+			if (index >= 0) {
+				this.movingBodyList[index] = object
+			} else {
+				this.movingBodyList.push(object)
+			}
+		} else {
+			this.movingBodyList.push(object)
+		}
+
+		return id
+	}
+
+	// Removes one dynamic moving body.
+	removeMovingBody(id: string) {
+		const object = this.movingBodies.get(id)
+		const removed = object !== undefined
+
+		if (removed) {
+			this.movingBodies.delete(id)
+			const index = this.movingBodyList.indexOf(object)
+
+			if (index >= 0) {
+				this.movingBodyList.splice(index, 1)
+			}
+		}
+
+		if (removed) {
+			if (this.selectedObject?.type === 'movingBody' && this.selectedObject.object.id === id) {
+				this.selectedObject = null
+				this.renderer.markDirty('overlay')
+			}
+
+			if (this.hoverObject?.type === 'movingBody' && this.hoverObject.object.id === id) {
+				this.hoverObject = null
+				this.renderer.markDirty('overlay')
+			}
+		}
+
+		return removed
+	}
+
+	// Removes all dynamic moving bodies.
+	clearMovingBodies() {
+		if (this.movingBodies.size === 0) return
+
+		this.movingBodies.clear()
+		this.movingBodyList.length = 0
+
+		if (this.selectedObject?.type === 'movingBody') {
+			this.selectedObject = null
+			this.renderer.markDirty('overlay')
+		}
+
+		if (this.hoverObject?.type === 'movingBody') {
+			this.hoverObject = null
+			this.renderer.markDirty('overlay')
+		}
+	}
+
+	// Marks dynamic moving bodies as changed after external mutation or batched updates.
+	markMovingBodyDirty(id?: string) {
+		if (id !== undefined && !this.movingBodies.has(id)) {
+			return false
+		}
+
+		this.syncSelectedMovingBodyObject()
+		this.syncHoverMovingBodyObject()
+		this.rebuildPickingIndex()
+		this.renderer.markDirty('movingBodies')
+
+		if (id === undefined || (this.selectedObject?.type === 'movingBody' && this.selectedObject.object.id === id) || (this.hoverObject?.type === 'movingBody' && this.hoverObject.object.id === id)) {
+			this.renderer.markDirty('overlay')
+		}
+
+		this.requestRender()
+		return true
 	}
 
 	// Adds or replaces a custom equatorial shape and returns its id.
@@ -3600,11 +3762,6 @@ export class Celestial {
 		layer.visible = visible
 		layer.markDirty()
 		this.options.layers[layerId] = visible
-
-		if (layerId === 'planets') {
-			this.updatePlanets()
-			this.renderer.markDirty('planets')
-		}
 
 		if (isPickableLayerId(layerId)) {
 			if (!visible) {
@@ -3727,7 +3884,7 @@ export class Celestial {
 			new ConstellationBoundaryLayer(),
 			new DeepSkyObjectLayer(),
 			new StarLayer(),
-			new PlanetLayer(),
+			new MovingBodyLayer(),
 			new ConstellationLabelLayer(),
 			new ShapeLayer(),
 			new InteractionOverlayLayer(),
@@ -3803,7 +3960,6 @@ export class Celestial {
 		const start = emitUpdateEnd ? performance.now() : 0
 		emitUpdateStart && this.emitter.emit('updateStart', { time: this.options.time })
 		writeEquatorialToHorizontalMatrix(this.options.time, this.options.observer, this.eqToHorizontal)
-		this.updatePlanets()
 
 		if (this.starCatalog) {
 			this.starCatalog.updateEquatorialVectors(julianEpochYear(this.options.time))
@@ -3816,22 +3972,31 @@ export class Celestial {
 		this.requestRender()
 	}
 
-	// Refreshes mock/provider planet positions.
-	private updatePlanets() {
-		this.planets.length = 0
+	private syncSelectedMovingBodyObject() {
+		if (this.selectedObject?.type !== 'movingBody') return
 
-		if (!this.options.layers.planets || !this.options.ephemerisProvider) return
+		this.selectedObject = this.currentMovingBodyObject(this.selectedObject)
+	}
 
-		for (let i = 0; i < this.options.solarSystemBodies.length; i++) {
-			const body = this.options.solarSystemBodies[i]
+	private syncHoverMovingBodyObject() {
+		if (this.hoverObject?.type !== 'movingBody') return
 
-			try {
-				this.planets.push({ body, position: this.options.ephemerisProvider.positionAt(body, this.options.time) })
-			} catch (error) {
-				console.error(error)
-				this.emitError(normalizeError(error))
-			}
+		this.hoverObject = this.currentMovingBodyObject(this.hoverObject)
+	}
+
+	private currentMovingBodyObject(object: Extract<CelestialObject, { type: 'movingBody' }>): CelestialObject | null {
+		const indexed = this.movingBodyList[object.index]
+
+		if (indexed?.id === object.object.id) {
+			return { type: 'movingBody', index: object.index, object: indexed }
 		}
+
+		for (let i = 0; i < this.movingBodyList.length; i++) {
+			const movingBody = this.movingBodyList[i]
+			if (movingBody.id === object.object.id) return { type: 'movingBody', index: i, object: movingBody }
+		}
+
+		return null
 	}
 
 	private markAstronomicalDirty() {
@@ -4032,12 +4197,16 @@ export class Celestial {
 			}
 		}
 
-		if (this.isLayerVisible('planets')) {
-			for (let i = 0; i < this.planets.length; i++) {
-				const planet = this.planets[i]
+		if (this.isLayerVisible('movingBodies')) {
+			for (let i = 0; i < this.movingBodyList.length; i++) {
+				const object = this.movingBodyList[i]
 
-				if (this.projectEquatorialToScreen(planet.position.rightAscension, planet.position.declination, this.tempScreen)) {
-					this.picking.add(PICK_TYPE_PLANET, i, this.tempScreen[0], this.tempScreen[1], -5)
+				if (object.visible === false || object.selectable === false || !isMovingBodyVisibleAtZoom(object, this.transform.k)) {
+					continue
+				}
+
+				if (this.projectEquatorialToScreen(object.position.rightAscension, object.position.declination, this.tempScreen)) {
+					this.picking.add(PICK_TYPE_MOVING_BODY, i, this.tempScreen[0], this.tempScreen[1], movingBodyMagnitude(object))
 				}
 			}
 		}
@@ -4123,7 +4292,7 @@ export class Celestial {
 			milkyWay: this.milkyWay,
 			dsos: this.dsos,
 			deepSkyLabelVisible: this.deepSkyLabelVisible,
-			planets: this.planets,
+			movingBodies: this.movingBodyList,
 			shapes: this.shapeList,
 			hoverObject: this.hoverObject,
 			selectedObject: this.selectedObject,
@@ -4144,8 +4313,8 @@ export class Celestial {
 				return this.starCatalog?.getObject(index.index) ?? null
 			case PICK_TYPE_DSO:
 				return this.dsos[index.index] ? { type: 'deepSky', index: index.index, object: this.dsos[index.index] } : null
-			case PICK_TYPE_PLANET:
-				return this.planets[index.index] ? { type: 'planet', index: index.index, body: this.planets[index.index].body, position: this.planets[index.index].position } : null
+			case PICK_TYPE_MOVING_BODY:
+				return this.movingBodyList[index.index] ? { type: 'movingBody', index: index.index, object: this.movingBodyList[index.index] } : null
 			case PICK_TYPE_CONSTELLATION_LABEL: {
 				const label = this.constellations.labels?.[index.index]
 				return label ? { type: 'constellationLabel', index: index.index, label } : null
@@ -4400,8 +4569,8 @@ function pickMatchesObject(index: PickIndex | null, object: CelestialObject | nu
 			return object.type === 'star' && object.index === index.index
 		case PICK_TYPE_DSO:
 			return object.type === 'deepSky' && object.index === index.index
-		case PICK_TYPE_PLANET:
-			return object.type === 'planet' && object.index === index.index
+		case PICK_TYPE_MOVING_BODY:
+			return object.type === 'movingBody' && object.index === index.index
 		case PICK_TYPE_CONSTELLATION_LABEL:
 			return object.type === 'constellationLabel' && object.index === index.index
 		case PICK_TYPE_SHAPE:
@@ -4415,7 +4584,7 @@ function isPickableLayerId(layerId: string) {
 	switch (layerId) {
 		case 'stars':
 		case 'deepSky':
-		case 'planets':
+		case 'movingBodies':
 		case 'constellationLabels':
 		case 'shapes':
 			return true
@@ -4430,8 +4599,8 @@ function objectLayerId(object: CelestialObject) {
 			return 'stars'
 		case 'deepSky':
 			return 'deepSky'
-		case 'planet':
-			return 'planets'
+		case 'movingBody':
+			return 'movingBodies'
 		case 'constellationLabel':
 			return 'constellationLabels'
 		case 'shape':
@@ -4449,6 +4618,10 @@ function sameObject(a: CelestialObject | null, b: CelestialObject | null) {
 
 	if (a.type === 'shape' && b.type === 'shape') {
 		return a.id === b.id
+	}
+
+	if (a.type === 'movingBody' && b.type === 'movingBody') {
+		return a.object.id === b.object.id
 	}
 
 	return 'index' in a && 'index' in b && a.index === b.index

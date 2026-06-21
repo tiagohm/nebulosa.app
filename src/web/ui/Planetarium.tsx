@@ -8,9 +8,13 @@ import { SkyMap } from './SkyMap'
 const SKY_MAP_OPTIONS: CelestialOptions = {
 	layers: {
 		constellationBoundaries: true,
+		movingBodies: true,
 	},
 	theme: {
 		background: 'transparent',
+		movingBodies: {
+			planetColor: 'red',
+		},
 	},
 }
 

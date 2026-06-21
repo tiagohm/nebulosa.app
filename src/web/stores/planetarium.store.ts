@@ -1,5 +1,5 @@
 import { toDeg } from 'nebulosa/src/angle'
-import type { Celestial, ConstellationData, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
+import type { Celestial, ConstellationData, MovingBody, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
 import constellationBoundaries from '@/../data/constellation.boundaries.json'
@@ -36,6 +36,7 @@ initProxy(state, 'planetarium', ['p:show', 'o:transform'])
 
 const u: VoidFunction[] = []
 let mounted = false
+let movingBodyUpdateGeneration = 0
 
 function mount() {
 	if (mounted) return
@@ -62,8 +63,19 @@ function handleReady(celestial: Celestial) {
 	celestial.loadConstellations(CONSTELLATIONS)
 	celestial.loadMilkyWay(mw as never)
 	celestial.setMagnitudeLimit(6)
-	celestial.startAutoUpdate({ mode: 'realtime', interval: 15000 })
-	celestial.on('viewTransformChange', ({ transform }) => Object.assign(state.transform, transform))
+	celestial.startAutoUpdate({ mode: 'realtime', interval: 30000 })
+
+	for (const body of MOVING_BODIES) {
+		celestial.addMovingBody(body)
+	}
+
+	const u: VoidFunction[] = []
+	u[0] = celestial.on('viewTransformChange', ({ transform }) => Object.assign(state.transform, transform))
+	u[1] = celestial.on('updateEnd', ({ time }) => {
+		void updateMovingBodies(celestial, time)
+	})
+
+	void updateMovingBodies(celestial, Date.now())
 
 	void Api.Atlas.planetarium({ types: [29], magnitudeLimit: 16 }).then((response) => {
 		if (response?.length) {
@@ -84,6 +96,10 @@ function handleReady(celestial: Celestial) {
 			celestial.loadDeepSkyObjects(response)
 		}
 	})
+
+	return () => {
+		unsubscribe(u)
+	}
 }
 
 function updateLocationFromAtlas() {
@@ -95,7 +111,122 @@ function updateLocationFromAtlas() {
 	state.celestial?.setObserver({ latitude, longitude })
 }
 
+const MOVING_BODIES: MovingBody[] = [
+	{
+		id: '10',
+		type: 'sun',
+		name: 'Sun',
+		position: { rightAscension: 0, declination: 0 },
+		visible: false,
+	},
+	{
+		id: '301',
+		type: 'moon',
+		name: 'Moon',
+		position: { rightAscension: 0, declination: 0 },
+		visible: false,
+	},
+	{
+		id: '499',
+		type: 'mars',
+		name: 'Mars',
+		position: { rightAscension: 0, declination: 0 },
+		visible: false,
+	},
+	{
+		id: '599',
+		type: 'jupiter',
+		name: 'Jupiter',
+		position: { rightAscension: 0, declination: 0 },
+		visible: false,
+	},
+	{
+		id: '699',
+		type: 'saturn',
+		name: 'Saturn',
+		position: { rightAscension: 0, declination: 0 },
+		visible: false,
+	},
+	{
+		id: '799',
+		type: 'uranus',
+		name: 'Uranus',
+		position: { rightAscension: 0, declination: 0 },
+		visible: false,
+	},
+	{
+		id: '899',
+		type: 'neptune',
+		name: 'Neptune',
+		position: { rightAscension: 0, declination: 0 },
+		visible: false,
+	},
+	{
+		id: '999',
+		type: 'asteroid',
+		name: 'Pluto',
+		position: { rightAscension: 0, declination: 0 },
+		visible: false,
+	},
+]
+
+async function updateMovingBodies(celestial: Celestial, time: number) {
+	const generation = ++movingBodyUpdateGeneration
+	let dirty = false
+
+	for (const body of MOVING_BODIES) {
+		let success = false
+
+		try {
+			await positionOfMovingBody(body, time)
+			success = true
+		} catch (e) {
+			console.error(e)
+		}
+
+		if (generation !== movingBodyUpdateGeneration || state.celestial !== celestial) {
+			return
+		}
+
+		body.visible = success
+
+		if (success) {
+			dirty = true
+		}
+	}
+
+	if (dirty && generation === movingBodyUpdateGeneration && state.celestial === celestial) {
+		celestial.markMovingBodyDirty()
+	}
+}
+
+async function positionOfMovingBody(body: MovingBody, time: number): Promise<MovingBody | undefined> {
+	const { location } = atlasStore.state.request
+
+	const req = {
+		time: { utc: time, offset: 0 },
+		location: {
+			latitude: location.latitude,
+			longitude: location.longitude,
+			elevation: location.elevation ?? 0,
+		},
+	}
+
+	// TODO: Use fast mode
+	const position = body.id === '10' ? await Api.Atlas.positionOfSun(req) : body.id === '301' ? await Api.Atlas.positionOfMoon(req) : await Api.Atlas.positionOfPlanet(req, body.id)
+
+	if (position) {
+		body.magnitude = position.magnitude ?? undefined
+		body.position.rightAscension = position.equatorial[0]
+		body.position.declination = position.equatorial[1]
+		return body
+	}
+
+	return undefined
+}
+
 function handleDestroy(celestial: Celestial) {
+	movingBodyUpdateGeneration++
 	unlink()
 }
 

@@ -1,14 +1,14 @@
 import { formatAZ, toDeg } from 'nebulosa/src/angle'
 import type { Point } from 'nebulosa/src/geometry'
-import type { LocalSolarEclipseSvgShape } from 'nebulosa/src/sun.eclipse.local'
-import { formatTemporal } from 'nebulosa/src/temporal'
-import { memo, type CSSProperties } from 'react'
+import type { LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipseEvent, LocalSolarEclipseSvgShape } from 'nebulosa/src/sun.eclipse.local'
+import { formatTemporal, temporalFromTime } from 'nebulosa/src/temporal'
+import { Fragment, memo, type CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
+import { tw } from '../shared/util'
 import { atlasStore } from '../stores/atlas.store'
 import { solarEclipseStore } from '../stores/solar.eclipse.store'
 import { IconButton } from './components/IconButton'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
-import { TextInput } from './components/TextInput'
 import { WorldMap, worldMapCoordinateToPoint } from './components/WorldMap'
 import { Icons } from './Icon'
 import { LocalEclipseContactKindButtonGroup } from './LocalEclipseContactKindButtonGroup'
@@ -21,22 +21,25 @@ export const SolarEclipseMap = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal header={<Header />} id="solar-eclipse-map" initialWidth="480px" onHide={solarEclipseStore.hide}>
+		<Modal header={<Header />} id="solar-eclipse-map" initialWidth="560px" onHide={solarEclipseStore.hide}>
 			<Body />
 		</Modal>
 	)
 })
 
 const Header = memo(() => (
-	<div className="flex flex-row items-center justify-center gap-2">
+	<div className="grid w-full grid-cols-[2.5rem_1fr_2.5rem] items-center gap-2">
 		<IconButton icon={Icons.ArrowLeft} onClick={solarEclipseStore.prev} tooltipContent="Prev" />
-		Solar Eclipse
+		<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">
+			<Icons.Sun className="text-warning" />
+			<span className="truncate">Solar Eclipse</span>
+		</span>
 		<IconButton icon={Icons.ArrowRight} onClick={solarEclipseStore.next} tooltipContent="Next" />
 	</div>
 ))
 
 const Body = memo(() => (
-	<div className="flex w-full flex-col gap-2">
+	<div className="flex w-full flex-col gap-3">
 		<Info />
 		<Map />
 	</div>
@@ -44,7 +47,7 @@ const Body = memo(() => (
 
 const Info = memo(() => (
 	<div className="flex w-full flex-col gap-2">
-		<Tabs>
+		<Tabs fullWidth>
 			<Tab id="details">Details</Tab>
 			<Tab id="contacts">Contacts</Tab>
 			<Tab id="besselianElements">Besselian Elements</Tab>
@@ -65,17 +68,33 @@ const Info = memo(() => (
 	</div>
 ))
 
+interface MetricCardProps {
+	readonly label: React.ReactNode
+	readonly value: React.ReactNode
+	readonly className?: string
+	readonly valueClassName?: string
+}
+
+function MetricCard({ className, label, value, valueClassName }: MetricCardProps) {
+	return (
+		<div className={tw('flex min-w-0 flex-col gap-0 rounded-lg bg-neutral-900/70 px-3 py-2', className)}>
+			<span className="truncate text-xs font-bold text-neutral-500 uppercase">{label}</span>
+			<span className={tw('min-w-0 truncate font-mono text-sm text-neutral-100', valueClassName)}>{value}</span>
+		</div>
+	)
+}
+
 const EclipseDetails = memo(() => {
 	const { eclipse, map } = useSnapshot(solarEclipseStore.state)
 
 	if (map === undefined || eclipse === undefined) return null
 
 	return (
-		<div className="grid w-full grid-cols-4 gap-2">
-			<TextInput className="col-span-1" readOnly value={eclipse.type} label="Type" />
-			<TextInput className="col-span-1" readOnly value={eclipse.lunation.toFixed(0)} label="Lunation" />
-			<TextInput className="col-span-1" readOnly value={eclipse.magnitude.toFixed(6)} label="Magnitude" />
-			<TextInput className="col-span-1" readOnly value={eclipse.gamma.toFixed(6)} label="Gamma" />
+		<div className="grid w-full grid-cols-2 gap-2 md:grid-cols-4">
+			<MetricCard label="Type" value={eclipse.type} valueClassName="capitalize" />
+			<MetricCard label="Lunation" value={eclipse.lunation.toFixed(0)} />
+			<MetricCard label="Magnitude" value={eclipse.magnitude.toFixed(6)} />
+			<MetricCard label="Gamma" value={eclipse.gamma.toFixed(6)} />
 		</div>
 	)
 })
@@ -84,22 +103,43 @@ interface ContactPointProps {
 	readonly name: string
 	readonly point: Point & { time: number }
 	readonly offset: number
+	readonly color: string
 }
 
-function ContactPoint({ point, name, offset }: ContactPointProps) {
+function ContactPoint({ point, name, offset, color }: ContactPointProps) {
 	return (
-		<div className="col-span-2 flex w-full flex-col items-center justify-center gap-0 rounded-md bg-neutral-800/40 px-2 py-1 text-xs">
-			<div className="flex w-full flex-row items-center justify-between">
-				<b>{name}</b>
-				<span className="flex flex-row items-center gap-1">
-					<b>LAT:</b> {formatAZ(point.y, true)}
-					<b>LON:</b> {formatAZ(point.x, true)}
+		<div className="flex min-w-0 flex-col gap-0 rounded-lg border border-neutral-800 bg-neutral-900/70 px-3 py-2 text-xs" style={{ borderLeftColor: color, borderLeftWidth: 3 }}>
+			<div className="flex min-w-0 flex-row items-center justify-between gap-2">
+				<span className="font-mono text-sm font-bold" style={{ color }}>
+					{name}
+				</span>
+				<span className="truncate font-mono text-neutral-300">{formatTemporal(point.time, 'YYYY-MM-DD HH:mm', offset)}</span>
+			</div>
+			<div className="flex min-w-0 flex-row flex-wrap gap-x-3 gap-y-1 font-mono text-neutral-400">
+				<span>
+					<b className="text-neutral-500">LAT</b> {formatAZ(point.y, true)}
+				</span>
+				<span>
+					<b className="text-neutral-500">LON</b> {formatAZ(point.x, true)}
 				</span>
 			</div>
-			<span className="w-full">{formatTemporal(point?.time, 'YYYY-MM-DD HH:mm', offset)}</span>
 		</div>
 	)
 }
+
+const CONTACT_POINT_ITEMS = [
+	['P1', '#FF9F1C'],
+	['U1', '#FFE66D'],
+	['C1', '#FF7BEA'],
+	['U2', '#FFE66D'],
+	['Max', '#FFFFFF'],
+	['U3', '#FFE66D'],
+	['C2', '#FF7BEA'],
+	['U4', '#FFE66D'],
+	['P3', '#FF9F1C'],
+	['P2', '#FF9F1C'],
+	['P4', '#FF9F1C'],
+] as const
 
 const Contacts = memo(() => {
 	const { eclipse, map } = useSnapshot(solarEclipseStore.state)
@@ -108,18 +148,11 @@ const Contacts = memo(() => {
 	if (map === undefined || eclipse === undefined) return null
 
 	return (
-		<div className="grid w-full grid-cols-4 gap-2">
-			{map.points.P1 && <ContactPoint point={map.points.P1} name="P1" offset={offset} />}
-			{map.points.U1 && <ContactPoint point={map.points.U1} name="U1" offset={offset} />}
-			{map.points.C1 && <ContactPoint point={map.points.C1} name="C1" offset={offset} />}
-			{map.points.U2 && <ContactPoint point={map.points.U2} name="U2" offset={offset} />}
-			{map.points.Max && <ContactPoint point={map.points.Max} name="MAX" offset={offset} />}
-			{map.points.U3 && <ContactPoint point={map.points.U3} name="U3" offset={offset} />}
-			{map.points.C2 && <ContactPoint point={map.points.C2} name="C2" offset={offset} />}
-			{map.points.U4 && <ContactPoint point={map.points.U4} name="U4" offset={offset} />}
-			{map.points.P3 && <ContactPoint point={map.points.P3} name="P3" offset={offset} />}
-			{map.points.P2 && <ContactPoint point={map.points.P2} name="P2" offset={offset} />}
-			{map.points.P4 && <ContactPoint point={map.points.P4} name="P4" offset={offset} />}
+		<div className="grid w-full grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+			{CONTACT_POINT_ITEMS.map(([name, color]) => {
+				const point = map.points[name]
+				return point && <ContactPoint color={color} key={name} point={point} name={name === 'Max' ? 'MAX' : name} offset={offset} />
+			})}
 		</div>
 	)
 })
@@ -132,30 +165,34 @@ const BesselianElements = memo(() => {
 	if (map === undefined) return null
 
 	return (
-		<div className="grid w-full grid-cols-13 items-center gap-2 font-mono text-sm">
-			<span className="col-span-full">Elements for t0 = {formatTemporal(map.elements.time0, 'YYYY-MM-DD HH:mm', 0)} TT</span>
-			<span>n</span>
-			<span className="col-span-2 text-end">x</span>
-			<span className="col-span-2 text-end">y</span>
-			<span className="col-span-2 text-end">D</span>
-			<span className="col-span-2 text-end">L1</span>
-			<span className="col-span-2 text-end">L2</span>
-			<span className="col-span-2 text-end">u</span>
-			{N.map((n) => (
-				<>
-					<span>{n}</span>
-					<span className="col-span-2 text-end">{map.elements.x[n].toFixed(7)}</span>
-					<span className="col-span-2 text-end">{map.elements.y[n].toFixed(7)}</span>
-					<span className="col-span-2 text-end">{map.elements.d[n].toFixed(7)}</span>
-					<span className="col-span-2 text-end">{map.elements.l1[n].toFixed(7)}</span>
-					<span className="col-span-2 text-end">{map.elements.l2[n].toFixed(7)}</span>
-					<span className="col-span-2 text-end">{map.elements.mu[n].toFixed(7)}</span>
-				</>
-			))}
-			<span className="col-span-full flex flex-row justify-center gap-3">
-				<span>tan F1: {map.elements.tanF1.toFixed(7)}</span>
-				<span>tan F2: {map.elements.tanF2.toFixed(7)}</span>
-			</span>
+		<div className="overflow-x-auto rounded-lg bg-neutral-900/70 text-sm text-neutral-100">
+			<div className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
+				<span className="font-mono text-xs text-neutral-400">t0 = {formatTemporal(map.elements.time0, 'YYYY-MM-DD HH:mm', 0)} TT</span>
+				<span className="flex flex-row gap-3 font-mono text-xs text-neutral-500">
+					<span>tan F1 {map.elements.tanF1.toFixed(7)}</span>
+					<span>tan F2 {map.elements.tanF2.toFixed(7)}</span>
+				</span>
+			</div>
+			<div className="grid w-full grid-cols-[2.5rem_repeat(6,minmax(5.5rem,1fr))] font-mono">
+				<span className="bg-neutral-950/70 px-3 py-2 text-xs font-bold text-neutral-500 uppercase">n</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-500 uppercase">x</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-500 uppercase">y</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-500 uppercase">D</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-500 uppercase">L1</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-500 uppercase">L2</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-500 uppercase">u</span>
+				{N.map((n) => (
+					<Fragment key={n}>
+						<span className="border-t border-neutral-800 px-3 py-2 text-neutral-500">{n}</span>
+						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.x[n].toFixed(7)}</span>
+						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.y[n].toFixed(7)}</span>
+						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.d[n].toFixed(7)}</span>
+						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.l1[n].toFixed(7)}</span>
+						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.l2[n].toFixed(7)}</span>
+						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.mu[n].toFixed(7)}</span>
+					</Fragment>
+				))}
+			</div>
 		</div>
 	)
 })
@@ -163,10 +200,16 @@ const BesselianElements = memo(() => {
 const LocalCircumstances = memo(() => (
 	<div className="flex flex-col gap-2">
 		<LocalHeader />
-		<Tabs>
+		<Tabs fullWidth>
 			<Tab id="details">Details</Tab>
 			<Tab id="instants">Instants</Tab>
 			<Tab id="view">View</Tab>
+			<TabPanel id="details">
+				<LocalDetails />
+			</TabPanel>
+			<TabPanel id="instants">
+				<LocalInstants />
+			</TabPanel>
 			<TabPanel id="view">
 				<LocalView />
 			</TabPanel>
@@ -176,53 +219,174 @@ const LocalCircumstances = memo(() => (
 
 const LocalHeader = memo(() => {
 	const { location, circumstances } = useSnapshot(solarEclipseStore.state)
+	const sunMotion = circumstances?.visibility.sunMotion
+	const motionLabel = sunMotion === 'rising' ? 'on sunrise' : sunMotion === 'setting' ? 'on sunset' : ''
 
 	return (
-		<div className="flex flex-col gap-0 font-mono">
-			<span>
-				LAT: {formatAZ(location.latitude)} LON: {formatAZ(location.longitude)}
-			</span>
-			<span className="flex flex-row items-center gap-1">
-				<span>{circumstances?.visibility.text}</span>
-				<span>{circumstances?.visibility.sunMotion === 'rising' ? 'on sunrise' : circumstances?.visibility.sunMotion === 'setting' ? 'on sunset' : ''}</span>
-				{circumstances?.details.maximalMagnitude && <span>, max phase: {circumstances.details.maximalMagnitude.toFixed(2) || ''}</span>}
+		<div className="flex min-w-0 flex-col gap-2 rounded-lg bg-neutral-900/70 px-3 py-2">
+			<div className="flex min-w-0 flex-row flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-neutral-400">
+				<span>
+					<b className="text-neutral-500">LAT</b> {formatAZ(location.latitude)}
+				</span>
+				<span>
+					<b className="text-neutral-500">LON</b> {formatAZ(location.longitude)}
+				</span>
+			</div>
+			<span className="flex min-w-0 flex-row flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-100">
+				<span className="font-medium">{circumstances?.visibility.text ?? 'No local circumstances'}</span>
+				{motionLabel && <span className="text-neutral-400">{motionLabel}</span>}
+				{circumstances?.details.maximalMagnitude !== null && circumstances?.details.maximalMagnitude !== undefined && <span className="font-mono text-neutral-400">max {circumstances.details.maximalMagnitude.toFixed(2)}</span>}
 			</span>
 		</div>
 	)
 })
 
-const LocalDetails = memo(() => {})
+function formatNullableNumber(value: number | null | undefined, fractionDigits: number) {
+	return value === null || value === undefined || !Number.isFinite(value) ? '--' : value.toFixed(fractionDigits)
+}
 
-const LocalInstants = memo(() => {})
+function formatDurationSeconds(value: number | null | undefined) {
+	if (value === null || value === undefined || !Number.isFinite(value)) return '--'
+
+	const seconds = Math.max(0, Math.round(value))
+	const h = Math.floor(seconds / 3600)
+	const m = Math.floor((seconds % 3600) / 60)
+	const s = seconds % 60
+
+	return `${padTime(h)}:${padTime(m)}:${padTime(s)}`
+}
+
+function padTime(value: number) {
+	return value.toFixed(0).padStart(2, '0')
+}
+
+function centralPhaseLabel(kind: LocalCentralPhaseKind) {
+	if (kind === 'total') return 'Total'
+	if (kind === 'annular') return 'Annular'
+	return 'Central'
+}
+
+const LocalDetails = memo(() => {
+	const { circumstances } = useSnapshot(solarEclipseStore.state)
+
+	if (circumstances === undefined) return null
+
+	const { details, visibility } = circumstances
+	const centralPhase = centralPhaseLabel(visibility.centralPhaseKind)
+
+	return (
+		<div className="grid w-full grid-cols-3 gap-2">
+			<MetricCard label="Maximal magnitude" value={formatNullableNumber(details.maximalMagnitude, 3)} />
+			<MetricCard label="Moon/Sun diameter ratio" value={formatNullableNumber(details.moonSunDiameterRatio, 4)} />
+			<MetricCard label="Partial phase duration" value={formatDurationSeconds(details.partialPhaseDuration)} />
+			<MetricCard label={`${centralPhase} phase duration`} value={formatDurationSeconds(details.centralPhaseDuration)} />
+			<MetricCard label="Shadow path width" value={details.shadowPathWidthKm === null ? '--' : `${details.shadowPathWidthKm.toFixed(0)} km`} />
+		</div>
+	)
+})
+
+const LOCAL_CONTACT_KINDS = ['C1', 'C2', 'MAX', 'C3', 'C4'] as const
+
+function describeLocalEvent(kind: LocalEclipseContactKind, centralKind: LocalCentralPhaseKind) {
+	switch (kind) {
+		case 'C1':
+			return 'Beginning of partial phase'
+		case 'C2':
+			return `Beginning of ${centralKind === 'annular' ? 'annular' : centralKind === 'total' ? 'total' : 'central'} phase`
+		case 'MAX':
+			return 'Local maximum'
+		case 'C3':
+			return `End of ${centralKind === 'annular' ? 'annular' : centralKind === 'total' ? 'total' : 'central'} phase`
+		case 'C4':
+			return 'End of partial phase'
+	}
+}
+
+function eventLabel(kind: LocalEclipseContactKind, event: LocalSolarEclipseEvent | null, centralKind: LocalCentralPhaseKind) {
+	return `${event?.kind ?? kind}: ${event?.description ?? describeLocalEvent(kind, centralKind)}`
+}
+
+function formatEventTime(event: LocalSolarEclipseEvent | null) {
+	return event === null ? '--' : formatTemporal(temporalFromTime(event.time), 'HH:mm:ss')
+}
+
+function formatSignedDegrees(value: number) {
+	const degrees = toDeg(value)
+	return `${degrees >= 0 ? '+' : ''}${degrees.toFixed(1)}°`
+}
+
+function formatDegrees(value: number | null) {
+	return value === null ? '--' : `${toDeg(value).toFixed(1)}°`
+}
+
+const LocalInstants = memo(() => {
+	const { circumstances } = useSnapshot(solarEclipseStore.state)
+
+	if (circumstances === undefined) return null
+
+	return (
+		<div className="overflow-x-auto rounded-lg bg-neutral-900/70 text-sm text-neutral-100">
+			<div className="grid w-full grid-cols-[1.5fr_1fr_0.5fr_0.5fr_0.5fr]">
+				<span className="bg-neutral-950/70 px-3 py-2 text-xs font-bold text-neutral-500 uppercase">Instant</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-xs font-bold text-neutral-500 uppercase">Time</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-xs font-bold text-neutral-500 uppercase">Alt</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-xs font-bold text-neutral-500 uppercase">P</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-xs font-bold text-neutral-500 uppercase">Z</span>
+				{LOCAL_CONTACT_KINDS.map((kind) => {
+					const event = circumstances.events[kind]
+					const cellClassName = tw('min-h-10 border-t border-neutral-800 px-3 py-2 font-mono', event === null ? 'text-neutral-500' : event.observable ? 'text-neutral-100' : 'text-neutral-400')
+
+					return (
+						<Fragment key={kind}>
+							<span className={tw(cellClassName, 'whitespace-normal font-sans')}>{eventLabel(kind, event, circumstances.visibility.centralPhaseKind)}</span>
+							<span className={cellClassName}>{formatEventTime(event)}</span>
+							<span className={cellClassName}>{event === null ? '--' : formatSignedDegrees(event.sunAltitude)}</span>
+							<span className={cellClassName}>{event === null ? '--' : formatDegrees(event.positionAngleP)}</span>
+							<span className={cellClassName}>{event === null ? '--' : formatDegrees(event.zenithAngleZ)}</span>
+						</Fragment>
+					)
+				})}
+			</div>
+		</div>
+	)
+})
 
 // const LOCAL_VIEW_SHAPE_TEXT_STYLE: CSSProperties = { textAnchor: 'middle', dominantBaseline: 'middle', fill: 'gray' }
 
 const LOCAL_VIEW_SHAPE_STYLES: Record<LocalSolarEclipseSvgShape['role'], CSSProperties> = {
-	sunDisk: { fill: 'yellow', stroke: 'none' },
-	moonDisk: { fill: 'blue', stroke: 'none' },
-	ghostSunDisk: {},
-	ghostMoonDisk: { fill: 'none', stroke: 'gray', opacity: 0.3 },
-	solarLimb: {},
-	lunarLimb: {},
-	horizonLine: {},
-	trajectoryLine: {},
-	trajectoryPath: {},
-	horizonBand: { fill: 'green', stroke: 'none', opacity: 0.8 },
+	sunDisk: { fill: '#FFD166', stroke: 'none' },
+	moonDisk: { fill: '#3645E1', stroke: 'none', strokeWidth: 1 },
+	ghostSunDisk: { fill: 'none', stroke: '#FFD166', strokeWidth: 1, opacity: 0.35 },
+	ghostMoonDisk: { fill: 'none', stroke: '#93C5FD', strokeWidth: 1, opacity: 0.35 },
+	solarLimb: { fill: 'none', stroke: '#FFD166', strokeWidth: 1 },
+	lunarLimb: { fill: 'none', stroke: '#93C5FD', strokeWidth: 1 },
+	horizonLine: { fill: 'none', stroke: 'none', strokeWidth: 1 },
+	trajectoryLine: { fill: 'none', stroke: '#F472B6', strokeWidth: 1, strokeDasharray: '5 5' },
+	trajectoryPath: { fill: 'none', stroke: '#F472B6', strokeWidth: 1 },
+	horizonBand: { fill: '#134E4A', stroke: 'none', opacity: 0.8 },
 }
 
-function ShapeItem(shape: LocalSolarEclipseSvgShape) {
+interface LocalViewShapeProps {
+	readonly shape: LocalSolarEclipseSvgShape
+}
+
+function LocalViewShape({ shape }: LocalViewShapeProps) {
 	if (shape.kind === 'circle') {
-		return (
-			<>
-				<circle cx={shape.cx} cy={shape.cy} r={shape.r} role={shape.role} style={LOCAL_VIEW_SHAPE_STYLES[shape.role]} />
-			</>
-		)
+		return <circle cx={shape.cx} cy={shape.cy} r={shape.r} role={shape.role} style={LOCAL_VIEW_SHAPE_STYLES[shape.role]} />
+	} else if (shape.kind === 'line') {
+		return <line x1={shape.x1} y1={shape.y1} x2={shape.x2} y2={shape.y2} role={shape.role} style={LOCAL_VIEW_SHAPE_STYLES[shape.role]} />
+	} else if (shape.kind === 'path') {
+		return <path d={shape.d} role={shape.role} style={LOCAL_VIEW_SHAPE_STYLES[shape.role]} />
 	} else if (shape.kind === 'polygon') {
 		const points = shape.points.map((p) => `${p.x},${p.y}`).join(' ')
-		return <polygon points={points} role={shape.role} style={LOCAL_VIEW_SHAPE_STYLES.horizonBand} />
+		return <polygon points={points} role={shape.role} style={LOCAL_VIEW_SHAPE_STYLES[shape.role]} />
 	}
 
 	return null
+}
+
+function localViewShapeKey(shape: LocalSolarEclipseSvgShape, index: number) {
+	return `${shape.kind}-${shape.role}-${'event' in shape ? (shape.event ?? '') : ''}-${index}`
 }
 
 const LocalView = memo(() => {
@@ -230,17 +394,23 @@ const LocalView = memo(() => {
 	const { orientationMode, selectedEvent } = useSnapshot(solarEclipseStore.state.localViewOptions)
 
 	if (!localView) return null
-	if (localView.shapes.length === 0) return 'Eclipse is invisible'
+	if (localView.shapes.length === 0) {
+		return <div className="rounded-lg bg-neutral-900/70 px-3 py-6 text-center text-sm text-neutral-500">Eclipse is invisible</div>
+	}
 
 	return (
 		<div className="flex flex-col gap-2">
-			<div className="flex flex-row items-center justify-between">
+			<div className="flex flex-row flex-wrap items-center justify-between gap-2">
 				<LocalEclipseContactKindButtonGroup value={selectedEvent} onValueChange={(value) => solarEclipseStore.updateLocalViewOptions('selectedEvent', value)} />
 				<LocalViewOrientationModeButtonGroup value={orientationMode} onValueChange={(value) => solarEclipseStore.updateLocalViewOptions('orientationMode', value)} />
 			</div>
-			<svg width="100%" height="100%" className="bg-(--primary)" viewBox={`0 0 ${localView.width} ${localView.height}`}>
-				{localView.shapes.map(ShapeItem)}
-			</svg>
+			<div className="overflow-hidden rounded-lg bg-neutral-950">
+				<svg width="100%" height="100%" className="aspect-2/ block bg-(--primary)" viewBox={`0 0 ${localView.width} ${localView.height}`}>
+					{localView.shapes.map((shape, index) => (
+						<LocalViewShape key={localViewShapeKey(shape, index)} shape={shape} />
+					))}
+				</svg>
+			</div>
 		</div>
 	)
 })
@@ -266,7 +436,25 @@ const UMBRA_STYLE: CSSProperties = { fill: 'none', stroke: '#FFE66D', strokeWidt
 const PENUMBRA_STYLE: CSSProperties = { fill: 'none', stroke: '#FF9F1C', strokeWidth: 2, strokeLinecap: 'round' }
 const CENTER_LINE_STYLE: CSSProperties = { fill: 'none', stroke: '#FF2ED1', strokeWidth: 2, strokeLinecap: 'round' }
 const RISESET_LINE_STYLE: CSSProperties = { fill: 'none', stroke: '#00E5FF', strokeWidth: 2, strokeLinecap: 'round' }
-const TEXT_STYLE: CSSProperties = { font: '14px sans-serif', fontWeight: 'bold', fill: '#fff' }
+const POINT_LABEL_STYLE: CSSProperties = { font: '12px sans-serif', fontWeight: 'bold', fill: '#fff' }
+
+const MAP_POINT_ITEMS = [
+	['P1', '#FF9F1C'],
+	['P2', '#FF9F1C'],
+	['P3', '#FF9F1C'],
+	['P4', '#FF9F1C'],
+	['U1', '#FFE66D'],
+	['U2', '#FFE66D'],
+	['U3', '#FFE66D'],
+	['U4', '#FFE66D'],
+	['C1', '#FF7BEA'],
+	['C2', '#FF7BEA'],
+	['N1', '#35FF7A'],
+	['N2', '#35FF7A'],
+	['S1', '#FF4D4D'],
+	['S2', '#FF4D4D'],
+	['Max', '#FFFFFF'],
+] as const
 
 const MapGeometry = memo(() => {
 	const { map } = useSnapshot(solarEclipseStore.state)
@@ -274,7 +462,6 @@ const MapGeometry = memo(() => {
 	if (map === undefined) return null
 
 	const { penumbraNorth, penumbraSouth, umbraNorth, umbraSouth, riseSetCurves, centerLine, points } = map.paths
-	const { C1, C2, P1, P2, P3, P4, U1, U2, U3, U4, N1, N2, S1, S2, Max } = points
 
 	return (
 		<g>
@@ -284,21 +471,10 @@ const MapGeometry = memo(() => {
 			<path style={UMBRA_STYLE} d={umbraSouth} />
 			<path style={RISESET_LINE_STYLE} className="riseset" d={riseSetCurves} />
 			<path style={CENTER_LINE_STYLE} d={centerLine} />
-			{P1 && <MapPoint name="P1" x={P1.x} y={P1.y} color="#FF9F1C" />}
-			{P2 && <MapPoint name="P2" x={P2.x} y={P2.y} color="#FF9F1C" />}
-			{P3 && <MapPoint name="P3" x={P3.x} y={P3.y} color="#FF9F1C" />}
-			{P4 && <MapPoint name="P4" x={P4.x} y={P4.y} color="#FF9F1C" />}
-			{U1 && <MapPoint name="U1" x={U1.x} y={U1.y} color="#FFE66D" />}
-			{U2 && <MapPoint name="U2" x={U2.x} y={U2.y} color="#FFE66D" />}
-			{U3 && <MapPoint name="U3" x={U3.x} y={U3.y} color="#FFE66D" />}
-			{U4 && <MapPoint name="U4" x={U4.x} y={U4.y} color="#FFE66D" />}
-			{C1 && <MapPoint name="C1" x={C1.x} y={C1.y} color="#FF7BEA" />}
-			{C2 && <MapPoint name="C2" x={C2.x} y={C2.y} color="#FF7BEA" />}
-			{N1 && <MapPoint name="N1" x={N1.x} y={N1.y} color="#35FF7A" />}
-			{N2 && <MapPoint name="N2" x={N2.x} y={N2.y} color="#35FF7A" />}
-			{S1 && <MapPoint name="S1" x={S1.x} y={S1.y} color="#FF4D4D" />}
-			{S2 && <MapPoint name="S2" x={S2.x} y={S2.y} color="#FF4D4D" />}
-			{Max && <MapPoint name="Max" x={Max.x} y={Max.y} color="#FFFFFF" />}
+			{MAP_POINT_ITEMS.map(([name, color]) => {
+				const point = points[name]
+				return point && <MapPoint key={name} name={name} x={point.x} y={point.y} color={color} />
+			})}
 		</g>
 	)
 })
@@ -311,8 +487,8 @@ interface MapPointProps {
 }
 
 const MapPoint = memo(({ name, x, y, color }: MapPointProps) => (
-	<>
-		<circle cx={x} cy={y} r="3" fill={color} />
-		<text x={x + 5} y={y - 5} children={name} style={TEXT_STYLE} />
-	</>
+	<g>
+		<circle cx={x} cy={y} r="4" fill={color} stroke="none" />
+		<text x={x + 10} y={y - 6} children={name} style={POINT_LABEL_STYLE} />
+	</g>
 ))

@@ -97,10 +97,12 @@ function handleReady(celestial: Celestial) {
 	}
 
 	const u: VoidFunction[] = []
+	let refreshed = false
 
 	u[0] = celestial.on('viewTransformChange', ({ transform }) => Object.assign(state.transform, transform))
 
 	u[1] = celestial.on('updateEnd', ({ time }) => {
+		refreshed = true
 		void updateMovingBodies(celestial, time)
 	})
 
@@ -114,8 +116,11 @@ function handleReady(celestial: Celestial) {
 		if (shape !== undefined) {
 			shape.visible = true
 			Object.assign(shape.coordinate, event.equatorialCoordinate)
-			celestial.markShapeChanged(shape.id)
-			console.info('coord changed')
+
+			if (refreshed) {
+				refreshed = false
+				celestial.markShapeChanged(shape.id)
+			}
 		}
 	})
 
@@ -125,7 +130,6 @@ function handleReady(celestial: Celestial) {
 		if (shape !== undefined) {
 			shape.visible = event.connected === true
 			celestial.markShapeChanged(shape.id)
-			console.info('connected changed')
 		}
 	})
 

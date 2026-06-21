@@ -28,7 +28,7 @@
 		"clsx": "2.1.1",
 		"d3-selection": "3.0.0",
 		"d3-zoom": "3.0.0",
-		"nanoid": "5.1.11",
+		"nanoid": "5.1.15",
 		"nebulosa": "github:tiagohm/nebulosa.ts",
 		"open": "11.0.0",
 		"react": "19.2.7",

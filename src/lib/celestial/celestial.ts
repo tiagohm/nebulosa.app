@@ -271,8 +271,9 @@ type MutableShapeRenderState = {
 export interface CelestialShape {
 	readonly id: string
 	readonly coordinate: EquatorialCoordinate
-	readonly visible?: boolean
-	readonly selectable?: boolean
+	visible?: boolean
+	selectable?: boolean
+	readonly data?: unknown
 	readonly render: (celestial: Celestial, ctx: CanvasRenderingContext2D, state: ShapeRenderState) => void
 }
 

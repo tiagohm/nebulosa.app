@@ -1,5 +1,8 @@
 import { toDeg } from 'nebulosa/src/angle'
-import type { Celestial, ConstellationData, MovingBody, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
+import { TAU } from 'nebulosa/src/constants'
+import type { Mount } from 'nebulosa/src/indi.device'
+import type { Celestial, CelestialShape, ConstellationData, MovingBody, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
+import bus from 'src/shared/bus'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
 import constellationBoundaries from '@/../data/constellation.boundaries.json'
@@ -10,6 +13,7 @@ import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
 import { skyObjectName } from '../shared/util'
 import { atlasStore } from './atlas.store'
+import { equipmentStore } from './equipment.store'
 
 export interface PlanetariumState {
 	show: boolean
@@ -55,6 +59,22 @@ function unmount() {
 	mounted = false
 }
 
+const connectedMounts = new Map<string, CelestialShape>()
+
+function mountShapeRenderer(celestial: Celestial, ctx: CanvasRenderingContext2D, state: ShapeRenderState) {
+	ctx.strokeStyle = 'blue'
+	ctx.fillStyle = 'blue'
+	ctx.beginPath()
+	ctx.arc(state.x, state.y, 6, 0, TAU)
+	ctx.stroke()
+	ctx.beginPath()
+	ctx.arc(state.x, state.y, 4, 0, TAU)
+	ctx.fill()
+	ctx.textAlign = 'center'
+	ctx.textBaseline = 'middle'
+	ctx.fillText(state.shape.data as string, state.x, state.y - 12)
+}
+
 function handleReady(celestial: Celestial) {
 	state.celestial = ref(celestial)
 
@@ -69,11 +89,53 @@ function handleReady(celestial: Celestial) {
 		celestial.addMovingBody(body)
 	}
 
+	function addMount(mount: Mount) {
+		if (!connectedMounts.has(mount.id)) {
+			const shape: CelestialShape = { id: mount.id, data: mount.name, coordinate: { ...mount.equatorialCoordinate }, render: mountShapeRenderer, visible: mount.connected }
+			connectedMounts.set(celestial.addShape(shape), shape)
+		}
+	}
+
 	const u: VoidFunction[] = []
+
 	u[0] = celestial.on('viewTransformChange', ({ transform }) => Object.assign(state.transform, transform))
+
 	u[1] = celestial.on('updateEnd', ({ time }) => {
 		void updateMovingBodies(celestial, time)
 	})
+
+	u[2] = bus.subscribe<Mount>('mount:add', (event) => {
+		addMount(event)
+	})
+
+	u[3] = bus.subscribe<Mount>('mount:update:equatorialCoordinate', (event) => {
+		const shape = connectedMounts.get(event.id)
+
+		if (shape !== undefined) {
+			shape.visible = true
+			Object.assign(shape.coordinate, event.equatorialCoordinate)
+			celestial.markShapeChanged(shape.id)
+			console.info('coord changed')
+		}
+	})
+
+	u[4] = bus.subscribe<Mount>('mount:update:connected', (event) => {
+		const shape = connectedMounts.get(event.id)
+
+		if (shape !== undefined) {
+			shape.visible = event.connected === true
+			celestial.markShapeChanged(shape.id)
+			console.info('connected changed')
+		}
+	})
+
+	u[5] = bus.subscribe<Mount>('mount:remove', (event) => {
+		connectedMounts.delete(event.id) && celestial.removeShape(event.id)
+	})
+
+	for (const mount of equipmentStore.state.mount) {
+		addMount(mount)
+	}
 
 	void updateMovingBodies(celestial, Date.now())
 
@@ -99,6 +161,7 @@ function handleReady(celestial: Celestial) {
 
 	return () => {
 		unsubscribe(u)
+		connectedMounts.clear()
 	}
 }
 

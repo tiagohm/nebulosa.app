@@ -83,10 +83,16 @@ function get<T extends DeviceType>(type: T, id: string) {
 	return undefined
 }
 
-function emit(device: DeviceState<Device>, action: 'add' | 'remove') {
+function emitAddOrRemove(device: DeviceState<Device>, action: 'add' | 'remove') {
 	bus.emit(`device:${action}`, device)
 	bus.emit(`${device.type}:${action}`, device)
 	bus.emit(`${device.id}:${action}`, device)
+}
+
+function emitUpdate(device: DeviceState<Device>, property: string) {
+	bus.emit(`device:update:${property}`, device)
+	bus.emit(`${device.type}:update:${property}`, device)
+	bus.emit(`${device.id}:update:${property}`, device)
 }
 
 function add(type: DeviceType, device: Device) {
@@ -96,7 +102,7 @@ function add(type: DeviceType, device: Device) {
 	if (index < 0) {
 		devices.push(device as never)
 		// device.show = storageGet(`equipment.${device.id}.show`, false)
-		emit(device, 'add')
+		emitAddOrRemove(device, 'add')
 		console.info(device.type, 'added:', device.name, device.id)
 	}
 }
@@ -107,6 +113,7 @@ function update<T extends DeviceType>(type: T, event: DeviceUpdated<EquipmentSta
 	if (device !== undefined) {
 		Object.assign(device, event.device)
 		if (event.property === 'connected' && event.state !== 'Busy') device.connecting = false
+		emitUpdate(device, event.property)
 		return
 	}
 
@@ -124,7 +131,7 @@ function remove(type: DeviceType, device: Pick<Device, 'id'>) {
 		if (device.id === id) {
 			devices.splice(i, 1)
 
-			emit(device, 'remove')
+			emitAddOrRemove(device, 'remove')
 			console.info(device.type, 'removed:', device.name, device.id)
 			break
 		}

@@ -11,7 +11,7 @@
         "clsx": "2.1.1",
         "d3-selection": "3.0.0",
         "d3-zoom": "3.0.0",
-        "nanoid": "5.1.11",
+        "nanoid": "5.1.15",
         "nebulosa": "github:tiagohm/nebulosa.ts",
         "open": "11.0.0",
         "react": "19.2.7",
@@ -361,7 +361,7 @@
 
     "mri": ["mri@1.2.0", "", {}, "sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA=="],
 
-    "nanoid": ["nanoid@5.1.11", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-v+KEsUv2ps74PaSKv0gHTxTCgMXOIfBEbaqa6w6ISIGC7ZsvHN4N9oJ8d4cmf0n5oTzQz2SLmThbQWhjd/8eKg=="],
+    "nanoid": ["nanoid@5.1.15", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-kBg3RpGtIe+RpTbyXwoI6pk5yD7KUiI3sygUqgeBMRst42KmhB4RZC7eiO9Wa1HIpaCCtpE2DJ6OI4Wi5ebwFw=="],
 
     "nebulosa": ["nebulosa@github:tiagohm/nebulosa.ts#a5649da", { "peerDependencies": { "@types/bun": "latest", "fast-xml-parser": "latest", "typescript": "6.0.3" } }, "tiagohm-nebulosa.ts-a5649da", "sha512-W/GQsS5bk3/1uikTIex3sdWtGizExkz1HL/GBRDiM/Y4B9gau7mOorKKndAVnTUiw9aQl0E1n/RKczuDbWcWBw=="],
 

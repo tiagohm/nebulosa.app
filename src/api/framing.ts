@@ -1,7 +1,7 @@
 import { join } from 'path'
 import { arcsec, deg, parseAngle } from 'nebulosa/src/angle'
+import { pixelScale } from 'nebulosa/src/formulas'
 import { HIPS2FITS_ALTERNATIVE_URL, HIPS2FITS_BASE_URL, hips2Fits, type Hips2FitsOptions } from 'nebulosa/src/hips2fits'
-import { angularSizeOfPixel } from 'nebulosa/src/util'
 import { normalizeTimeout } from 'src/shared/normalizer'
 import type { Framing } from '../shared/types'
 import { type Endpoints, response } from './http'
@@ -50,7 +50,7 @@ function normalizeDimension(value: unknown, fallback: number) {
 
 function computeFieldOfView(req: Framing, width: number, height: number) {
 	if (finiteNumber(req.focalLength) && req.focalLength > 0 && finiteNumber(req.pixelSize) && req.pixelSize > 0) {
-		return arcsec(angularSizeOfPixel(req.focalLength, req.pixelSize)) * Math.max(width, height)
+		return arcsec(pixelScale(req.pixelSize, req.focalLength)) * Math.max(width, height)
 	}
 
 	return deg(finiteNumber(req.fov) && req.fov > 0 ? req.fov : 1)

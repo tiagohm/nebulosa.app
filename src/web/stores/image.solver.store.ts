@@ -1,9 +1,9 @@
 import { nanoid } from 'nanoid'
 import { formatRA, formatDEC, toDeg, arcsec } from 'nebulosa/src/angle'
 import { numericKeyword } from 'nebulosa/src/fits.util'
+import { pixelScale } from 'nebulosa/src/formulas'
 import type { Mount } from 'nebulosa/src/indi.device'
 import type { PlateSolution } from 'nebulosa/src/platesolver'
-import { angularSizeOfPixel } from 'nebulosa/src/util'
 import bus from 'src/shared/bus'
 import { DEFAULT_PLATE_SOLVE_START, type Framing, type PlateSolveStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
@@ -84,7 +84,7 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 			state.loading = true
 
 			const request: PlateSolveStart = { ...settingsStore.state.solver[state.request.type], ...state.request, path: viewer.state.path, id: viewer.image.id }
-			request.fov = arcsec(angularSizeOfPixel(request.focalLength, request.pixelSize) * viewer.state.info!.height)
+			request.fov = arcsec(pixelScale(request.pixelSize, request.focalLength) * viewer.state.info!.height)
 
 			const solution = await Api.PlateSolver.start(request)
 			state.solution = solution && ref(solution)

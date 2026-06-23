@@ -227,7 +227,7 @@ export function ButtonGroup<T extends ButtonGroupId = string>({ children, classN
 		}
 
 		return (
-			<div {...itemProps} className={tw(itemStyles.item(), stateClassName, classNames?.item, itemClassName)} key={item.key ?? String(id)} onKeyDown={handleKeyDown} onClick={handleClick} ref={itemRef} role="button" tabIndex={disabled || itemDisabled ? undefined : (tabIndex ?? 0)}>
+			<div  key={item.key ?? String(id)} {...itemProps} className={tw(itemStyles.item(), stateClassName, classNames?.item, itemClassName)} onKeyDown={handleKeyDown} onClick={handleClick} ref={itemRef} role="button" tabIndex={disabled || itemDisabled ? undefined : (tabIndex ?? 0)}>
 				{startContent !== undefined && startContent !== null && <span className={tw(itemStyles.startContent(), classNames?.itemStartContent)}>{startContent}</span>}
 				{content !== undefined && content !== null && <span className={tw(itemStyles.label(), classNames?.itemLabel)}>{content}</span>}
 				{endContent !== undefined && endContent !== null && <span className={tw(itemStyles.endContent(), classNames?.itemEndContent)}>{endContent}</span>}

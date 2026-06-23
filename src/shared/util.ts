@@ -131,7 +131,7 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 		galactic,
 		constellation: constellation(...equatorial, time),
 		lst,
-		meridianIn: meridianTimeIn(equatorial[0], lst),
+		meridianTimeIn: meridianTimeIn(equatorial[0], lst),
 		pierSide: expectedPierSide(...equatorial, lst),
 	} as CoordinateInfo
 }

@@ -483,7 +483,7 @@ export class AtlasHandler {
 			ecliptic: equatorialToEcliptic(...equatorial, time),
 			galactic: equatorialToGalatic(...equatorialJ2000),
 			lst,
-			meridianIn: meridianTimeIn(equatorial[0], lst),
+			meridianTimeIn: meridianTimeIn(equatorial[0], lst),
 			pierSide: expectedPierSide(...equatorial, lst),
 			names: names.map((n) => n.name),
 		}
@@ -745,7 +745,7 @@ export class AtlasHandler {
 
 		const [rightAscension, declination] = position.equatorial
 		position.pierSide = expectedPierSide(rightAscension, declination, lst)
-		position.meridianIn = meridianTimeIn(rightAscension, lst)
+		position.meridianTimeIn = meridianTimeIn(rightAscension, lst)
 		position.lst = lst
 		Object.assign(position.ecliptic, equatorialToEcliptic(rightAscension, declination, time))
 		Object.assign(position.galactic, equatorialToGalatic(position.equatorialJ2000[0], position.equatorialJ2000[1]))
@@ -905,7 +905,7 @@ function makeBodyPositionFromHorizons(ephemeris: CsvRow[], output: Map<number, B
 			ecliptic: [0, 0],
 			pierSide: 'NEITHER',
 			lst: 0,
-			meridianIn: 0,
+			meridianTimeIn: 0,
 		} satisfies BodyPosition
 
 		output.set(seconds + i * 60, position)

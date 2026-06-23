@@ -796,7 +796,7 @@ export type CoordinateType = 'equatorial' | 'equatorialJ2000' | 'horizontal' | '
 export interface CoordinateInfo extends Record<CoordinateType, readonly [Angle, Angle]> {
 	readonly lst: Angle
 	readonly constellation: Constellation
-	readonly meridianIn: Angle
+	readonly meridianTimeIn: number // seconds
 	readonly pierSide: PierSide
 }
 
@@ -931,7 +931,7 @@ export interface AutoFocusEvent {
 	hyperbolic?: readonly Point[]
 	minimum?: Point
 	maximum?: Point
-	focusPoint?: Point
+	focusPoint?: Point | null
 }
 
 // Flat Wizard
@@ -1124,7 +1124,7 @@ export const DEFAULT_COORDINATE_INFO: CoordinateInfo = {
 	galactic: [0, 0],
 	lst: 0,
 	constellation: 'AND',
-	meridianIn: 0,
+	meridianTimeIn: 0,
 	pierSide: 'NEITHER',
 }
 

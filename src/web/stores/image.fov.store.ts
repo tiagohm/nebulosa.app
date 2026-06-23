@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid'
 import { toArcsec } from 'nebulosa/src/angle'
-import { angularSizeOfPixel } from 'nebulosa/src/util'
+import { pixelScale } from 'nebulosa/src/formulas'
 import { DEFAULT_FOV_ITEM, type ComputedFov, type FovItem } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
@@ -114,8 +114,8 @@ export function imageFovStore(viewer: ImageViewerStore) {
 			const item = state.items[i]
 
 			const focalLength = item.focalLength * (item.barlowReducer || 1)
-			const width = angularSizeOfPixel(focalLength, item.pixelWidth)
-			const height = angularSizeOfPixel(focalLength, item.pixelHeight)
+			const width = pixelScale(item.pixelWidth, focalLength)
+			const height = pixelScale(item.pixelHeight, focalLength)
 
 			state.computed[i] = {
 				focalRatio: item.aperture <= 0 ? 0 : focalLength / item.aperture,

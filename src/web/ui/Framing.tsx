@@ -1,4 +1,4 @@
-import { angularSizeOfPixel } from 'nebulosa/src/util'
+import { pixelScale } from 'nebulosa/src/formulas'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { framingStore } from '@/stores/framing.store'
@@ -65,7 +65,7 @@ function formatFieldOfView(width: number, height: number, focalLength: number, p
 	if (!isPositiveFinite(width) || !isPositiveFinite(height)) return undefined
 
 	if (isPositiveFinite(focalLength) && isPositiveFinite(pixelSize)) {
-		const size = angularSizeOfPixel(focalLength, pixelSize)
+		const size = pixelScale(pixelSize, focalLength)
 		const widthInDegrees = (size * width) / 3600
 		const heightInDegrees = (size * height) / 3600
 

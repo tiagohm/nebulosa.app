@@ -36,7 +36,7 @@ export function BodyCoordinateInfo({ position, hide, className, ...props }: Body
 			<div className="col-span-8 flex flex-col justify-start gap-0">
 				{isVisible('constellation') && <Extra label="CONST" value={position.constellation} />}
 				{isVisible('lst') && <Extra label="LST" value={formatHMS(position.lst, true)} />}
-				{isVisible('meridianIn') && <Extra label="MERIDIAN IN" value={formatHMS(position.meridianIn, true)} />}
+				{isVisible('meridianTimeIn') && <Extra label="MERIDIAN IN" value={formatSeconds(position.meridianTimeIn)} />}
 				{isVisible('pierSide') && <Extra label="PIER SIDE" value={position.pierSide} />}
 				{'illuminated' in position && isVisible('illuminated') && <Extra label="ILLUM (%)" value={position.illuminated.toFixed(2)} />}
 				{'elongation' in position && isVisible('elongation') && <Extra label="ELON (°)" value={toDeg(position.elongation).toFixed(2)} />}
@@ -67,6 +67,13 @@ function formatCoordinateLongitude(type: CoordinateType, angle: Angle) {
 
 function formatCoordinateLatitude(type: CoordinateType, angle: Angle) {
 	return type === 'horizontal' ? formatALT(angle, true) : formatDEC(angle, true)
+}
+
+function formatSeconds(seconds: number) {
+	const total = Math.round(seconds / 60) // minutos
+	const h = Math.floor(total / 60)
+	const m = total % 60
+	return `${h.toFixed(0).padStart(2, '0')}:${m.toFixed(0).padStart(2, '0')}`
 }
 
 interface ExtraProps extends ComponentProps<'div'> {

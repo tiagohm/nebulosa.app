@@ -319,7 +319,7 @@ export function Tabs<T extends TabId = string>({ children, className, classNames
 		}
 
 		return (
-			<div {...tabProps} className={tw(tabVariantStyles.base(), classNames?.tab, tabClassName, tabClassNames?.base)} key={tab.key ?? index} onKeyDown={handleKeyDown} onClick={handleClick} ref={tabRef} tabIndex={blocked ? undefined : (tabIndex ?? 0)}>
+			<div key={tab.key ?? index} {...tabProps} className={tw(tabVariantStyles.base(), classNames?.tab, tabClassName, tabClassNames?.base)} onKeyDown={handleKeyDown} onClick={handleClick} ref={tabRef} tabIndex={blocked ? undefined : (tabIndex ?? 0)}>
 				{startContent !== undefined && startContent !== null && <span className={tw(tabVariantStyles.startContent(), classNames?.tabStartContent, tabClassNames?.startContent)}>{startContent}</span>}
 				{content !== undefined && content !== null && <span className={tw(tabVariantStyles.label(), classNames?.tabLabel, tabClassNames?.label)}>{content}</span>}
 				{endContent !== undefined && endContent !== null && <span className={tw(tabVariantStyles.endContent(), classNames?.tabEndContent, tabClassNames?.endContent)}>{endContent}</span>}

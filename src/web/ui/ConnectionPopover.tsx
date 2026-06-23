@@ -22,6 +22,7 @@ const CONNECTION_PORT_PLACEHOLDER = {
 	INDI: '7624',
 	ALPACA: '32323',
 	SIMULATOR: '0',
+	FIRMATA: '27016',
 } satisfies Record<Connection['type'], string>
 
 export const ConnectionPopover = memo(() => (

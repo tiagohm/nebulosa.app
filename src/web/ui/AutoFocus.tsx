@@ -36,15 +36,15 @@ interface FocusPoint {
 	readonly y: number
 }
 
-function isFiniteFocusPoint(point: FocusPoint | undefined): point is FocusPoint {
-	return point !== undefined && Number.isFinite(point.x) && Number.isFinite(point.y) && point.y > 0
+function isFiniteFocusPoint(point: FocusPoint | undefined | null): point is FocusPoint {
+	return point !== undefined && point !== null && Number.isFinite(point.x) && Number.isFinite(point.y) && point.y > 0
 }
 
 function formatMetric(value: number, fractionDigits = 2) {
 	return Number.isFinite(value) && value > 0 ? value.toFixed(fractionDigits) : '--'
 }
 
-function formatPosition(point: FocusPoint | undefined) {
+function formatPosition(point: FocusPoint | undefined | null) {
 	return isFiniteFocusPoint(point) ? point.x.toFixed(0) : '--'
 }
 

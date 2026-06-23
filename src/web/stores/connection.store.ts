@@ -48,6 +48,7 @@ const DEFAULT_CONNECTION_PORT = {
 	INDI: DEFAULT_CONNECTION.port,
 	ALPACA: 32323,
 	SIMULATOR: 0,
+	FIRMATA: 27016,
 } satisfies Record<Connection['type'], number>
 
 bus.subscribe<ConnectionEvent>('connection:open', ({ reused }) => {

@@ -54,10 +54,10 @@ test('seasons', () => {
 	const { spring, summer, autumn, winter } = atlas.seasons(POSITION_OF_BODY)
 
 	// https://aa.usno.navy.mil/calculated/seasons?year=2025&tz=0.00&tz_sign=-1&tz_label=false&dst=false&submit=Get+Data
-	expect(formatTemporal(spring).slice(0, 16)).toBe('2025-03-20 09:02')
-	expect(formatTemporal(summer).slice(0, 16)).toBe('2025-06-21 02:43')
-	expect(formatTemporal(autumn).slice(0, 16)).toBe('2025-09-22 18:20')
-	expect(formatTemporal(winter).slice(0, 16)).toBe('2025-12-21 15:04')
+	expect(formatTemporal(spring).slice(0, 16)).toBe('2025-03-20 09:01')
+	expect(formatTemporal(summer).slice(0, 16)).toBe('2025-06-21 02:42')
+	expect(formatTemporal(autumn).slice(0, 16)).toBe('2025-09-22 18:19')
+	expect(formatTemporal(winter).slice(0, 16)).toBe('2025-12-21 15:03')
 })
 
 test('solar eclipses from meeus', () => {

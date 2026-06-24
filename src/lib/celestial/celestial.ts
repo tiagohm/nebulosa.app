@@ -2396,6 +2396,8 @@ function milkyWayLevelOpacity(theme: ThemeOptions['milkyWay'], index: number) {
 class DeepSkyObjectLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly labelPoint = new Float32Array(2)
+	private labelVisibleIndices = new Int32Array(0)
+	private labelVisibleCount = 0
 
 	constructor() {
 		super('deepSky', 40)
@@ -2409,7 +2411,7 @@ class DeepSkyObjectLayer extends InternalLayer {
 		ctx.font = skyLabelFont(state, 9)
 		ctx.textAlign = 'left'
 		ctx.textBaseline = 'middle'
-		state.deepSkyLabelVisible.fill(0)
+		this.beginLabelRender(state)
 
 		for (let i = 0; i < state.dsos.length; i++) {
 			const object = state.dsos[i]
@@ -2434,12 +2436,33 @@ class DeepSkyObjectLayer extends InternalLayer {
 
 				if (positionSkyLabel(ctx, state, object.name, this.point[0], this.point[1], 10, -2, this.labelPoint)) {
 					ctx.fillText(object.name, this.labelPoint[0], this.labelPoint[1])
-					state.deepSkyLabelVisible[i] = 1
+					this.recordLabelVisible(state, i)
 				}
 
 				ctx.fillStyle = state.theme.deepSky.color
 			}
 		}
+	}
+
+	// Clears only the entries marked on the previous frame so clearing stays proportional to drawn labels, mirroring StarCatalog.beginLabelRender.
+	private beginLabelRender(state: RenderState) {
+		const labelVisible = state.deepSkyLabelVisible
+
+		for (let i = 0; i < this.labelVisibleCount; i++) {
+			labelVisible[this.labelVisibleIndices[i]] = 0
+		}
+
+		this.labelVisibleCount = 0
+
+		if (this.labelVisibleIndices.length < state.dsos.length) {
+			this.labelVisibleIndices = new Int32Array(state.dsos.length)
+		}
+	}
+
+	// Marks one DSO label as drawn and tracks its index for the next frame's clear.
+	private recordLabelVisible(state: RenderState, index: number) {
+		state.deepSkyLabelVisible[index] = 1
+		this.labelVisibleIndices[this.labelVisibleCount++] = index
 	}
 }
 

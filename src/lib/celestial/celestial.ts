@@ -6,6 +6,7 @@ import type { EquatorialCoordinate } from 'nebulosa/src/coordinate'
 import type { Point, Size } from 'nebulosa/src/geometry'
 import { clamp, type NumberArray } from 'nebulosa/src/math'
 import type { StellariumObjectType } from 'nebulosa/src/stellarium'
+import type { Writable } from 'nebulosa/src/types'
 
 // Public coordinate/projection options.
 export type ProjectionType = 'azimuthalEquidistant' | 'azimuthalEqualArea' | 'orthographic' | 'stereographic' | 'gnomonic'
@@ -1119,17 +1120,32 @@ export class StarCatalog {
 	updateEquatorialVectors(epochYear: number, force = false) {
 		if (!force && Math.abs(this.preparedEpoch - epochYear) < 1e-4) return
 
+		const pmRA = this.pmRA
+		const pmDEC = this.pmDEC
+
+		// Without proper-motion data the equatorial unit vectors are epoch-independent, so after the
+		// initial (forced) computation there is nothing to recompute regardless of the target epoch.
+		if (!force && !pmRA && !pmDEC) {
+			this.preparedEpoch = epochYear
+			return
+		}
+
 		const vector = StarCatalog.EQUATORIAL_VECTOR
+		const ras = this.ra
+		const decs = this.dec
+		const epochs = this.epochs
+		const eqX = this.eqX
+		const eqY = this.eqY
+		const eqZ = this.eqZ
 
 		for (let i = 0; i < this.count; i++) {
-			const epoch = this.epochs?.[i] ?? J2000_EPOCH
-			const dt = epochYear - epoch
-			const ra = normalizeAngle(this.ra[i] + (this.pmRA?.[i] ?? 0) * dt)
-			const dec = clamp(this.dec[i] + (this.pmDEC?.[i] ?? 0) * dt, -PIOVERTWO, PIOVERTWO)
+			const dt = epochYear - (epochs?.[i] ?? J2000_EPOCH)
+			const ra = normalizeAngle(ras[i] + (pmRA?.[i] ?? 0) * dt)
+			const dec = clamp(decs[i] + (pmDEC?.[i] ?? 0) * dt, -PIOVERTWO, PIOVERTWO)
 			writeRaDecUnitVector(ra, dec, vector)
-			this.eqX[i] = vector[0]
-			this.eqY[i] = vector[1]
-			this.eqZ[i] = vector[2]
+			eqX[i] = vector[0]
+			eqY[i] = vector[1]
+			eqZ[i] = vector[2]
 		}
 
 		this.preparedEpoch = epochYear
@@ -3190,6 +3206,7 @@ function isObjectLayerVisible(object: CelestialObject, state: RenderState) {
 class CanvasRenderer {
 	private readonly root: HTMLDivElement
 	private readonly records: LayerRecord[] = []
+	private readonly recordsById = new Map<string, LayerRecord>()
 	private dpr = 1
 
 	constructor(
@@ -3219,7 +3236,9 @@ class CanvasRenderer {
 		canvas.style.zIndex = String(layer.zIndex)
 		canvas.style.pointerEvents = 'none'
 		this.root.append(canvas)
-		this.records.push({ layer, canvas, ctx })
+		const record = { layer, canvas, ctx }
+		this.records.push(record)
+		this.recordsById.set(layer.id, record)
 		this.records.sort((a, b) => a.layer.zIndex - b.layer.zIndex)
 		this.resizeCanvas(canvas)
 	}
@@ -3271,22 +3290,12 @@ class CanvasRenderer {
 
 	// Marks a single layer dirty.
 	markDirty(id: string) {
-		for (const record of this.records) {
-			if (record.layer.id === id) {
-				record.layer.markDirty()
-			}
-		}
+		this.recordsById.get(id)?.layer.markDirty()
 	}
 
 	// Gets a layer by id.
 	getLayer(id: string) {
-		for (const record of this.records) {
-			if (record.layer.id === id) {
-				return record.layer
-			}
-		}
-
-		return null
+		return this.recordsById.get(id)?.layer ?? null
 	}
 
 	// Removes all DOM nodes created by the renderer.
@@ -3297,6 +3306,7 @@ class CanvasRenderer {
 
 		this.root.remove()
 		this.records.length = 0
+		this.recordsById.clear()
 	}
 
 	// Exposes the root element for interaction binding.
@@ -3337,6 +3347,8 @@ export class Celestial {
 	private readonly layers: InternalLayer[] = []
 
 	private readonly options: ResolvedCelestialOptions
+	private renderState: Writable<RenderState> | null = null
+	private cachedRect: DOMRect | null = null
 	private starCatalog: StarCatalog | null = null
 	private constellations: ConstellationData = {}
 	private milkyWay: MilkyWayStep[] = []
@@ -3379,6 +3391,10 @@ export class Celestial {
 		} else {
 			this.bindLocalInteractions()
 		}
+
+		// The element rect is cached for pointer math; scroll/resize can move it, so invalidate on both.
+		window.addEventListener('scroll', this.invalidateRect, { capture: true, passive: true })
+		window.addEventListener('resize', this.invalidateRect, { passive: true })
 
 		this.resetViewCenter()
 		writeEquatorialToHorizontalMatrix(this.options.time, this.options.observer, this.eqToHorizontal)
@@ -3512,6 +3528,7 @@ export class Celestial {
 
 		this.options.width = nextWidth
 		this.options.height = nextHeight
+		this.cachedRect = null
 		this.renderer.resize(this.options.width, this.options.height)
 		this.projectStars()
 		this.rebuildPickingIndex()
@@ -3537,6 +3554,8 @@ export class Celestial {
 		this.stopAutoUpdate()
 		this.unbindD3Zoom()
 		this.unbindLocalInteractions()
+		window.removeEventListener('scroll', this.invalidateRect, { capture: true })
+		window.removeEventListener('resize', this.invalidateRect)
 
 		if (this.frameId) {
 			cancelAnimationFrame(this.frameId)
@@ -3545,6 +3564,7 @@ export class Celestial {
 
 		this.renderer.destroy()
 		this.emitter.clear()
+		this.renderState = null
 		this.starCatalog = null
 		this.dsos.length = 0
 		this.constellations = {}
@@ -4049,25 +4069,30 @@ export class Celestial {
 		const margin = Math.max(width, height)
 		const maxMagnitude = this.options.stars.maxMagnitude
 		const maxRenderStars = this.options.stars.maxRenderStars
+		const isHorizontal = this.options.coordinateSystem === 'horizontal'
+		const horizontalMatrix = this.eqToHorizontal
 		const temp = this.tempVector
+		const mag = catalog.mag
+		const eqX = catalog.eqX
+		const eqY = catalog.eqY
+		const eqZ = catalog.eqZ
 		catalog.beginProjection()
-		let projected = 0
 
 		for (let i = 0; i < catalog.count; i++) {
 			if (catalog.visibleCount >= maxRenderStars) {
 				break
 			}
 
-			if (catalog.mag[i] > maxMagnitude) {
+			if (mag[i] > maxMagnitude) {
 				continue
 			}
 
-			let x = catalog.eqX[i]
-			let y = catalog.eqY[i]
-			let z = catalog.eqZ[i]
+			let x = eqX[i]
+			let y = eqY[i]
+			let z = eqZ[i]
 
-			if (this.options.coordinateSystem === 'horizontal') {
-				multiplyMatrixVector(this.eqToHorizontal, x, y, z, temp)
+			if (isHorizontal) {
+				multiplyMatrixVector(horizontalMatrix, x, y, z, temp)
 				x = temp[0]
 				y = temp[1]
 				z = temp[2]
@@ -4089,7 +4114,6 @@ export class Celestial {
 			}
 
 			catalog.recordVisible(i, sx, sy)
-			projected++
 		}
 
 		catalog.finalizeProjectionBuckets()
@@ -4295,37 +4319,48 @@ export class Celestial {
 		}
 	}
 
-	// Creates the render state passed to layers.
+	// Creates the render state passed to layers. The object is reused across frames and only its
+	// volatile fields are refreshed, so per-frame work during pan/zoom avoids object allocation.
 	private createRenderState(): RenderState {
-		return {
-			celestial: this,
-			width: this.options.width,
-			height: this.options.height,
-			dpr: this.renderer.devicePixelRatio,
-			time: this.options.time,
-			observer: this.options.observer,
-			projection: this.options.projection,
-			coordinateSystem: this.options.coordinateSystem,
-			transform: this.transform,
-			projectionRadius: projectionScale(this.options.width, this.options.height, this.options.projection),
-			referenceLines: this.options.referenceLines,
-			stars: this.options.stars,
-			theme: this.options.theme,
-			starCatalog: this.starCatalog,
-			constellations: this.constellations,
-			milkyWay: this.milkyWay,
-			dsos: this.dsos,
-			deepSkyLabelVisible: this.deepSkyLabelVisible,
-			movingBodies: this.movingBodyList,
-			shapes: this.shapeList,
-			hoverObject: this.hoverObject,
-			selectedObject: this.selectedObject,
-			projectEquatorialToScreen: this.projectEquatorialToScreen,
-			projectHorizontalToScreen: this.projectHorizontalToScreen,
-			equatorialVisibility: this.equatorialVisibility,
-			horizontalVisibility: this.horizontalVisibility,
-			// __projectWorldVector: this.projectWorldVectorToScreen,
+		const options = this.options
+		let state = this.renderState
+
+		if (!state) {
+			// Bound method references and `this` are stable for the instance lifetime, so they are set once.
+			// Volatile fields are assigned right below; the cast covers the partial initializer.
+			state = {
+				celestial: this,
+				projectEquatorialToScreen: this.projectEquatorialToScreen,
+				projectHorizontalToScreen: this.projectHorizontalToScreen,
+				equatorialVisibility: this.equatorialVisibility,
+				horizontalVisibility: this.horizontalVisibility,
+			} as unknown as Writable<RenderState>
+
+			this.renderState = state
 		}
+
+		state.width = options.width
+		state.height = options.height
+		state.dpr = this.renderer.devicePixelRatio
+		state.time = options.time
+		state.observer = options.observer
+		state.projection = options.projection
+		state.coordinateSystem = options.coordinateSystem
+		state.transform = this.transform
+		state.projectionRadius = projectionScale(options.width, options.height, options.projection)
+		state.referenceLines = options.referenceLines
+		state.stars = options.stars
+		state.theme = options.theme
+		state.starCatalog = this.starCatalog
+		state.constellations = this.constellations
+		state.milkyWay = this.milkyWay
+		state.dsos = this.dsos
+		state.deepSkyLabelVisible = this.deepSkyLabelVisible
+		state.movingBodies = this.movingBodyList
+		state.shapes = this.shapeList
+		state.hoverObject = this.hoverObject
+		state.selectedObject = this.selectedObject
+		return state
 	}
 
 	// Resolves a pick index into a public object payload.
@@ -4573,9 +4608,20 @@ export class Celestial {
 		this.requestRender()
 	}
 
+	// Invalidates the cached element rect after scroll/resize moves the canvas.
+	private readonly invalidateRect = (): void => {
+		this.cachedRect = null
+	}
+
 	// Converts pointer event coordinates into renderer-local coordinates.
 	private eventPoint(event: MouseEvent | PointerEvent | WheelEvent) {
-		const rect = this.renderer.element.getBoundingClientRect()
+		let rect = this.cachedRect
+
+		if (!rect) {
+			rect = this.renderer.element.getBoundingClientRect()
+			this.cachedRect = rect
+		}
+
 		this.tempScreen[0] = event.clientX - rect.left
 		this.tempScreen[1] = event.clientY - rect.top
 		return this.tempScreen

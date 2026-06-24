@@ -2,331 +2,308 @@
 
 ## Overview
 
-This repository contains both the Bun runtime/API and the React frontend for astronomical software written in TypeScript. It includes observation planning, telescope/device control, and image capture, processing, and visualization features.
+This repository is an astronomical application written in TypeScript. It contains a Bun runtime/API and a React web UI for observation planning, device/telescope control, image capture, processing, and visualization.
 
-This project uses **Bun** as runtime, package manager, builder, and test runner, ESM modules only.
+- Runtime, package manager, builder, and test runner: **Bun**
+- Module format: **ESM only**
+- UI: **React 19**
+- Styling: **Tailwind CSS v4**, compiled by `tailwind.plugin.ts`
+- Shared client state/orchestration: **Valtio**, using `src/web/hooks/store.hook.ts`
+- Core astronomy, image-processing, and INDI/device library: **nebulosa**
 
-This project uses **React 19** for the web UI.
+## Repository Layout
 
-This project uses **Tailwind CSS v4** for styling, compiled through the local Bun plugin in `tailwind.plugin.ts`.
+- `src/api`: Bun handlers, services, integrations, and route-facing backend code.
+- `src/web`: browser entrypoints, UI, stores, hooks, and browser-only helpers.
+- `src/web/pages`: HTML and React entrypoints.
+- `src/web/ui`: feature-level screens and components.
+- `src/web/ui/components`: reusable UI primitives.
+- `src/web/stores`: shared browser orchestration and state.
+- `src/web/shared`: browser-only API, storage, interpolation, proxy, and utility helpers.
+- `src/web/hooks`: React hooks, including store lifecycle management.
+- `src/web/assets`: images and icons.
+- `src/shared`: cross-layer types, constants, and utilities; keep runtime-neutral where practical.
+- `src/data`: assets and data used by runtime and web code.
+- `tests`: tests, currently focused on API code.
+- `tests/data`: test data and assets.
+- `tests/util.ts`: shared test utilities.
+- `bin`: build-time data generation.
+- `scripts`: maintenance scripts, including codebase graph indexing.
+- `tailwind.plugin.ts`: Bun Tailwind CSS v4 build integration.
 
-This project uses **Valtio** for shared client-side state and orchestration, with the local `useStore` hook in `src/web/hooks/store.hook.ts` managing store factory lifecycles.
+## Core Principles
 
-This project consumes `nebulosa` as the core astronomy, image-processing, and INDI/device-control library.
+- Follow existing repository patterns; do not introduce parallel architectures.
+- Make the smallest localized change that fully solves the task.
+- Prefer clear, direct code over abstraction-heavy designs.
+- Preserve existing behavior unless the task explicitly changes it.
+- Deliver production-ready code: no TODOs, placeholders, or unfinished branches.
+- Avoid new dependencies unless their startup, bundle, binary-size, and operational costs are justified.
+- Keep comments limited to non-obvious logic, normalization, lifecycle cleanup, or interaction behavior.
+- Do not add accessibility- or ARIA-specific work unless explicitly requested.
+- Never add or expand HeroUI. Treat it as legacy; use React, Tailwind CSS, Tailwind Variants, and existing local primitives.
+- Use `Icons` from `src/web/ui/Icon.tsx` and `IconButton` for icon-only actions. Do not add an icon dependency without an explicit requirement.
 
-## Project Structure
+## Code Discovery
 
-- `src`: Application source files.
-- `src/api`: Bun runtime handlers, services, and route-facing backend code.
-- `src/web`: Browser entrypoints, UI, stores, hooks, and web-only helpers.
-- `src/web/pages`: HTML + React entrypoints. Currently only the `home` page exists.
-- `src/web/ui`: Feature and screen-level React components.
-- `src/web/ui/components`: Reusable UI primitives. Current primitives include actions (`Button`, `IconButton`, `ButtonGroup`, `ToggleButton`), fields (`TextInput`, `NumberInput`, `DateTimeInput`, `SearchTextInput`), selection/listing (`List`, `Table`, `Select`, `MultiSelect`, `FilterableList`, `FilterableSelect`, `Dropdown`, `Tabs`), overlays (`Floating`, `Popover`, `Tooltip`), and display/status controls (`Badge`, `Breadcrumbs`, `Calendar`, `Chip`, `Histogram`, `ProgressBar`, `Toast`).
-- `src/web/stores`: Shared client orchestration/state.
-- `src/web/shared`: Browser-side helpers for API calls, storage, interpolation, proxying, and related utilities.
-- `src/web/hooks`: React hooks, including the local store lifecycle hook.
-- `src/web/assets`: Images and icons.
-- `src/shared`: Types and utilities shared between runtime and web. Keep it runtime-agnostic where practical.
-- `src/data`: Data/assets used by `api`, and `web`.
-- `tests`: Currently API-focused tests under `tests/api`.
-- `tests/data`: Data/assets used by `tests`.
-- `tests/util.ts`: Utility file used by `tests`.
-- `bin`: Build-time data generation scripts.
-- `scripts`: Repository maintenance scripts, including codebase graph indexing.
-- `tailwind.plugin.ts`: Bun build plugin for Tailwind CSS v4 compilation.
+Prefer `codebase-memory-mcp` graph tools when the repository is indexed.
 
-## General Rules
+1. Search exact symbols with `search_graph(name_pattern=...)`.
+2. Inspect results with `get_code_snippet(...)`.
+3. Use scoped `search_code(...)`, such as `^src/web/`, `^src/api/`, or `^src/shared/`.
+4. Use shell search only for non-code files, string literals, or insufficient graph results.
 
-- Follow existing patterns in the repository. Do not invent new ones.
-- Make minimal, localized changes.
-- Prefer clarity over abstraction.
-- Deliver complete, production-ready code (no TODOs, no placeholders).
-- Do not break existing behavior unless explicitly required.
-- Never add or expand HeroUI usage. Treat HeroUI as legacy code scheduled for removal; build new UI with React, Tailwind CSS, Tailwind Variants, and existing non-HeroUI primitives instead.
-- Do not add accessibility or ARIA work in this project unless explicitly requested. This is a personal project, so accessibility-specific enhancements are out of scope by default.
-- Prefer targeted single-line comments before non-obvious logic, effect lifecycles, normalization, or interaction handlers. Do not add boilerplate comments to trivial code.
-- Use the local `Icons` namespace from `src/web/ui/Icon.tsx` and `IconButton` for icon actions. Do not add a new icon dependency unless explicitly requested.
+Additional repository-specific guidance:
 
-## Repo Discovery
+- Components declared as `const Component = memo(() => ...)` may appear as `Variable` nodes. Treat them as valid component results.
+- `trace_path(mode='calls')` is incomplete for JSX render relationships; verify rendered usage with `search_code(...)`.
+- After major route, file, or symbol changes, run `bun run index` when graph results may be stale.
 
-- Prefer `codebase-memory-mcp` graph tools first for code discovery when the repo is indexed.
-- Use shell search only for non-code files, string literals, or when graph results are insufficient.
-- For this repo, prefer `search_graph(name_pattern=...)` over BM25 text queries when looking for React components by exact name.
-- In this codebase, React components exported as `const Component = memo(() => ...)` are often indexed as `Variable` nodes instead of `Function` nodes.
-- `get_code_snippet` still works for those component variables once you have the qualified name, so treat `Variable` results as valid component hits.
-- `trace_path(mode='calls')` is currently weak for JSX render relationships in this repo. Do not rely on it alone to answer which component renders another.
-- `trace_path` can also miss or partially represent JSX-based component usage inside returned markup, fragments, and compound component APIs.
-- Recommended discovery order for React/UI work in this repo is `search_graph(name_pattern='.*ExactComponentName.*')`, then `get_code_snippet(...)`, then `search_code(...)` scoped to `^src/web/` (or `^src/api/` / `^src/shared/` when appropriate), and only then shell search.
-- Refresh the codebase graph with `bun run index` after major symbol, file, or route changes if graph results look stale.
-
-## Default Commands
+## Commands
 
 - Install dependencies: `bun install`
-- Start development: `bun dev`
-- Start production mode: `bun prod`
+- Development server: `bun dev`
+- Production mode: `bun prod`
 - Build executable: `bun run compile`
 - Format: `bun run fmt`
 - Format check: `bun run fmt:check`
-- Lint and Type-check: `bun run lint`
+- Lint and type-check: `bun run lint`
 - Lint with fixes: `bun run lint:fix`
 - Refresh codebase graph: `bun run index`
-- If tests are added, prefer `bun test` before introducing another test runner.
-- DO NOT use `bun run compile` as fallback to linting.
+- Test: `bun test`
 
-## Architecture Rules
+Do not introduce `npm`, `yarn`, `pnpm`, Vite, PostCSS, another test runner, or another bundling layer. Do not use `bun run compile` as a substitute for linting.
 
-- `main.ts` currently owns startup, CLI/env parsing, handler wiring, and `Bun.serve`. Prefer extracting reusable or domain logic into `src/api` or `src/shared` instead of growing inline blocks further.
+## Architecture and Placement
+
+### Runtime and API
+
+- `main.ts` owns startup, CLI/environment parsing, handler wiring, and `Bun.serve`.
+- Keep `main.ts` small. Extract reusable or domain logic into `src/api` or `src/shared`.
 - Put Bun-only code in the root runtime or `src/api`.
-- When adding HTTP endpoints, follow the existing `class XHandler` plus `function x(handler): Endpoints` module pattern in `src/api`, then register the returned route map in `main.ts`.
-- Put reusable visual components in `src/web/ui/components`, not in app feature files.
-- Put browser-side orchestration and shared client state in `src/web/stores`.
-- Keep `src/shared` reusable across runtime and web when practical. Avoid browser-only or Bun-only runtime imports there unless the shared contract genuinely requires them.
-- Keep browser-side HTTP, WebSocket, and storage access in `src/web/shared` or `src/web/stores`, not scattered across leaf UI components.
-- Keep browser fetch logic in `src/web/shared/api.ts`, browser WebSocket lifecycle in `src/web/stores/ws.store.ts`, and reuse `src/shared/bus` for cross-feature browser events instead of creating parallel transport layers.
-- Filesystem, process, device-control, and server-listener side effects belong in `main.ts` or `src/api`, not presentational React components.
-- Move CPU-heavy and IO-heavy work out of React render paths and into async boundaries, workers, or `src/api`.
-- Do not introduce `npm`, `yarn`, or `pnpm` workflows into this repository.
-
-## Bun Rules
-
-- Prefer Bun-native APIs when runtime code is needed: `Bun.file`, `Bun.write`, `Bun.spawn`, `Bun.serve`.
-- Keep all new code compatible with Bun's ESM-oriented toolchain and the existing `bun run compile` build.
+- Filesystem, process, device-control, and server-listener side effects belong in `main.ts` or `src/api`, never in presentational React components.
+- Parse and normalize CLI arguments and `Bun.env` near startup; pass typed configuration inward instead of reading environment variables throughout the codebase.
+- Keep startup fast: statically import bootstrap-critical code, lazy-load infrequent/heavy functionality, and avoid large synchronous setup.
+- Prefer Bun APIs for runtime work: `Bun.file`, `Bun.write`, `Bun.spawn`, and `Bun.serve`.
 - Avoid Node-only tooling or packages unless Bun compatibility is confirmed.
-- Follow the current runtime configuration pattern in `main.ts`: parse CLI args and `Bun.env` near startup, normalize eagerly, and pass typed config inward instead of reading env ad hoc throughout the app.
-- Keep startup fast by statically importing core bootstrap code, lazy-loading infrequent or heavy features, and avoiding large synchronous setup in `main.ts`.
-- Do not add runtime transpilers, redundant CLIs, or duplicate bundling layers.
-- Keep Tailwind build integration inside `tailwind.plugin.ts`; do not add Vite, PostCSS, or another CSS build layer for Tailwind.
-- Any new dependency must justify its cost in startup time, binary size, or operational complexity.
+- Keep Tailwind integration in `tailwind.plugin.ts`.
 
-## API Rules
+### HTTP APIs
 
-- Model feature APIs the same way existing modules do: keep long-lived behavior in handler classes and expose routes through a separate factory that returns `Endpoints`.
-- Reuse `query()` and `response()` from `src/api/http.ts` for route parsing and JSON responses instead of reimplementing small wrappers per file.
-- Register new endpoint maps by spreading them into the `routes` object in `main.ts`, not by inlining unrelated route logic there.
-- Reuse `WebSocketMessageHandler` for server-to-browser fanout instead of creating additional socket registries.
+- Follow the existing `class XHandler` plus `function x(handler): Endpoints` pattern.
+- Use `query()` and `response()` from `src/api/http.ts` for request parsing and JSON responses.
+- Register endpoint maps by spreading them into `routes` in `main.ts`; do not inline unrelated route logic there.
+- Reuse `WebSocketMessageHandler` for server-to-browser fanout. Do not add parallel socket registries.
+- Validate and normalize untrusted request data once at the boundary, then pass typed values inward.
+- Keep transport DTOs as small plain objects. Use richer internal types only where needed, converting once at the edge.
+- Use discriminated `Result`-style unions for expected failures rather than exceptions for routine control flow.
+- Keep large payload paths streaming-friendly; do not force full materialization or deep clones unnecessarily.
 
-## TypeScript Rules
+### Shared and Browser Code
 
-- Prefer TypeScript for all new code. Do not introduce new `.js` files unless a tool or external constraint requires it.
-- Use ESM syntax only. Do not introduce `require`, `module.exports`, or other CommonJS patterns.
-- Keep TypeScript strict and work with the type system instead of routing around it.
-- Prefer inference for local values, but add explicit types for exported APIs, public hooks, store contracts, and complex function returns.
-- Avoid `any`. Use `unknown`, generics, discriminated unions, or narrow helper functions instead.
-- Prefer `type` over `interface` unless declaration merging or class implementation behavior is specifically needed.
-- Match the repository's current import style: omit `.ts` and `.tsx` extensions in authored imports.
-- Prefer `src/*` imports from runtime/shared code, `@/*` imports for web-only aliases, and relative imports for nearby siblings in the same feature folder.
-- Avoid barrel files and broad `export *` surfaces by default, especially in hot paths or shared packages where they can obscure ownership and encourage import cycles.
-- Use `satisfies` to validate object shapes without weakening inference.
-- Use `as const` for literal config, action names, and tuple-like values that should stay narrow.
-- Prefer discriminated unions and exhaustive `switch` statements for state machines, async status, and command/result flows.
-- Keep shared domain models and cross-layer contracts in `src/shared` when both runtime and web consume them.
-- Validate untrusted input at runtime at every boundary: network, filesystem, environment variables, Bun process input, and third-party APIs.
-- For API code, validate and normalize payloads once at the boundary, then pass strongly typed data inward without repeated parsing, cloning, or shape rewriting.
-- Model API request and response bodies as small plain-object DTOs. Avoid class-based transport models, decorators, reflection, and other patterns that add runtime cost.
-- Prefer stable, explicit object shapes over wide index signatures and catch-all records in hot API paths. Narrower types usually lead to fewer checks and less defensive code.
-- Use discriminated `Result`-style unions for expected API failures instead of exception-driven control flow.
-- Separate transport DTOs from richer internal types when serialization, normalization, or caching needs differ. Convert once at the edge, not throughout the call chain.
-- Keep large payload paths streaming-friendly. Do not type APIs in a way that forces materializing large arrays, strings, or deeply cloned objects when iteration or chunking is enough.
-- Keep utility types shallow in exported APIs. Avoid deeply recursive conditional or mapped types that slow type-checking and make hot modules harder to maintain.
-- Prefer primitives and explicit serialized forms at API boundaries, such as numeric timestamp over `Date` objects, unless a richer runtime type is measurably necessary.
-- Await promises or intentionally mark fire-and-forget work with `void` plus explicit error handling. Do not leave floating promises in request, effect, or startup paths.
-- Throw `Error` instances only. Normalize unknown failures at boundaries before logging, returning, or rethrowing them.
-- Use `performance.now()` for duration measurement and profiling. Use `Date` only when a real wall-clock timestamp is required.
-- Use `import type` and `export type` for type-only traffic to keep modules explicit and reduce accidental runtime coupling.
-- Do not hide invalid states behind optional fields when a union or separate type is clearer.
-- Keep generics small and readable. If a generic signature is hard to explain, simplify the API before adding more type machinery.
+- Keep cross-layer contracts and domain models in `src/shared` when both runtime and web code use them.
+- Avoid Bun-only or browser-only imports in `src/shared` unless unavoidable.
+- Put browser HTTP access in `src/web/shared/api.ts`.
+- Keep WebSocket lifecycle in `src/web/stores/ws.store.ts`.
+- Use `src/shared/bus` for cross-feature browser events instead of introducing another transport or event layer.
+- Move CPU-heavy or IO-heavy work out of React render paths into async boundaries, workers, or `src/api`.
 
-## React Rules
+### UI Placement
+
+- Put reusable visual primitives in `src/web/ui/components`.
+- Put feature-specific screens and composites in `src/web/ui`.
+- Keep page entrypoints, feature composition, providers, hooks, and browser wiring in `src/web`.
+- Put browser-only adapters and utilities in `src/web/shared`.
+- Do not place generic reusable components inside feature folders.
+
+## TypeScript
+
+- Use TypeScript for new code. Add `.js` only for unavoidable external/tool constraints.
+- Use ESM syntax only; never introduce `require`, `module.exports`, or CommonJS.
+- Keep strict typing. Do not bypass errors with `any` or unsafe assertions.
+- Prefer `unknown`, generics, discriminated unions, and narrow helpers over `any`.
+- Prefer `type` over `interface`, except when declaration merging or class implementation behavior is required.
+- Prefer inference for local values; write explicit types for exported APIs, public hooks, store contracts, and complex returns.
+- Match existing imports: omit `.ts`/`.tsx`; use `src/*` for runtime/shared imports, `@/*` for web-only aliases, and relative paths for close siblings.
+- Use `import type` and `export type` for type-only traffic.
+- Avoid barrel files and broad `export *` surfaces, especially in hot or shared modules.
+- Use `satisfies` for shape validation without losing inference and `as const` for literal configuration, actions, and tuple-like values.
+- Model state machines and command/result flows with discriminated unions and exhaustive `switch` statements.
+- Do not encode invalid states through loosely optional fields when a union or separate type is clearer.
+- Keep exported utility types and generic signatures shallow, small, and readable.
+- Prefer stable explicit object shapes over broad index signatures or catch-all records in hot paths.
+- Prefer primitives and explicit serialized forms at API boundaries, such as numeric timestamps over `Date`, unless a richer type has a measured benefit.
+- Validate every untrusted boundary: network, filesystem, environment, process input, and third-party APIs.
+- Await promises, or explicitly mark intentional fire-and-forget work with `void` and error handling.
+- Throw only `Error` instances. Normalize unknown failures at logging, API, and rethrow boundaries.
+- Use `performance.now()` for durations and profiling. Use `Date` only for wall-clock timestamps.
+
+## React and UI
+
+### React
 
 - Use function components and hooks only.
-- Use `.tsx` only for files that render JSX. Keep hooks, stores, adapters, and other non-visual logic in `.ts` files.
-- Prefer local state first. Lift state only when multiple siblings or features truly share it.
-- Keep renders pure. Do not mirror props into state or create effect-driven derived state.
-- Preserve local component style in touched files. Reusable primitives usually export named functions and accept `ref` as a React 19 prop, while many feature-level UI modules export `const Component = memo(() => ...)`; extend the existing pattern within the file instead of mixing declaration styles without a reason.
-- Use `startTransition`, `useDeferredValue`, and `useEffectEvent` when they solve a real responsiveness or stale-closure problem.
-- Do not add `useMemo` or `useCallback` by default. Use them only for measured hot paths or third-party API boundaries that require stable references.
-- Use stable keys derived from data. Do not generate keys during render.
-- Clean up timers, subscriptions, observers, and async work in effects. Prefer `AbortController` or equivalent cancellation for interruptible async flows.
-- Split large screens into feature sections and small leaf components that subscribe only to the state they render.
-- Use `React.lazy` and Suspense for heavy or optional UI.
-- Virtualize long lists and large tables.
-- Defer expensive charts, maps, and other heavy visualizations until visible or requested.
-- Keep context usage narrow. Do not build large rerender-prone global contexts when Valtio or local state is enough.
+- Use `.tsx` only in files that render JSX; keep hooks, stores, adapters, and non-visual logic in `.ts`.
+- Keep render functions pure. Do not mirror props into state or derive state through effects.
+- Prefer local state. Lift it only when siblings or features genuinely share it.
+- Preserve the declaration style of files you touch:
+  - shared primitives commonly use named functions and React 19 `ref` props;
+  - feature modules commonly use `const Component = memo(() => ...)`.
+- Do not use `forwardRef`; React 19 supports `ref` as a normal prop.
+- Use `startTransition`, `useDeferredValue`, and `useEffectEvent` only when they solve a demonstrated responsiveness or stale-closure problem.
+- Do not add `useMemo` or `useCallback` by default. Use them only for measured hot paths or APIs that require stable references.
+- Use stable data-derived keys. Never generate keys during render.
+- Clean up timers, subscriptions, observers, and interruptible async work in effects; prefer `AbortController` where applicable.
+- Split large screens into feature sections and leaf components that subscribe only to the state they render.
+- Lazy-load optional or heavy UI with `React.lazy` and Suspense.
+- Virtualize large lists/tables and defer expensive maps, charts, and visualizations until visible or requested.
+- Keep context narrow. Do not build broad rerender-prone global contexts when local state or Valtio is sufficient.
 
-## Tailwind CSS 4 Rules
+### Tailwind CSS
 
 - Use Tailwind CSS v4 in CSS-first mode.
-- Prefer `@theme` and CSS variables for tokens rather than spreading arbitrary values throughout JSX.
-- There is no Tailwind config in the repo today. If config becomes necessary, keep it minimal and prefer v4 patterns over legacy JS-config habits.
-- Keep class names statically discoverable by Tailwind. Map states to complete class strings instead of concatenating partial fragments or generating arbitrary class names at runtime.
-- Keep utility classes readable and mostly static.
-- Use `clsx`, `tailwind-merge`, and `tailwind-variants` only when composition is truly needed.
-- Avoid giant utility strings that hide layout intent. Extract variants or reusable components when repetition starts.
-- Avoid arbitrary values unless they map to a real design token or a measured layout requirement.
-- Prefer transform- and opacity-based animation. Avoid animating layout- or paint-heavy properties.
-- Keep custom CSS limited to tokens, rare layout exceptions, and complex keyframes that utilities cannot express cleanly.
+- Prefer `@theme` and CSS variables for tokens.
+- Keep Tailwind classes statically discoverable. Map state to complete class strings; do not construct partial utility names dynamically.
+- Keep classes readable and mostly static.
+- Use `clsx`, `tailwind-merge`, and `tailwind-variants` only where composition actually benefits from them.
+- Avoid arbitrary values unless they represent a real token or measured one-off layout requirement.
+- Use transform and opacity for animation; avoid layout- and paint-heavy animation where possible.
+- Keep custom CSS for tokens, rare layout exceptions, and complex keyframes that utilities cannot express cleanly.
+- Do not add a Tailwind config unless necessary; prefer v4 patterns over legacy JavaScript configuration.
 
-### React Component Authoring Guidelines
+### Reusable Components
 
-- For new shared primitives, prefer hand-written React + Tailwind CSS + Tailwind Variants components instead of introducing another abstraction layer.
-- The goal is to build a small, consistent, accessible, maintainable component system with predictable APIs and minimal styling drift.
-- Write components by hand with clear structure and minimal abstraction. Do not recreate a full UI framework. Only abstract patterns that are already repeated or clearly part of the design system.
-- Write the component in a single file within `src/web/ui/components`.
-- Component props should be predictable across the system. Reuse the same naming conventions everywhere. Avoid one-off prop names when an existing convention already fits.
-- Use Tailwind classes in a controlled way. Do not scatter long class strings across many branches. Centralize styling rules with Tailwind Variants so variants, sizes, and states are easy to inspect and extend. Tailwind Variants supports typed variants, slots, composition, and compound variants, which makes it suitable for building reusable design-system components. It also supports extending existing component definitions.
-- Build small primitives that can be combined. Do not create giant "do everything" components.
-- Prefer primitives and composites to stay generic. Domain-specific components should not be mixed into the base UI layer.
-- Start from the current primitive family before adding a new one: `Button`/`IconButton` for actions, `ButtonGroup`/`ToggleButton`/`Tabs` for segmented selection, `TextInput`/`NumberInput`/`DateTimeInput` for fields, `List`/`Table` for virtualized rows, `Select`/`MultiSelect`/`FilterableSelect` for choices, and `Floating`/`Popover`/`Dropdown`/`Tooltip` for overlays.
-- For icon-only actions, use `IconButton` and an icon from `Icons`; for inline adornments, use `startContent` and `endContent`.
-- For compound components that consume `children`, flatten fragments like existing `ButtonGroup`, `Breadcrumbs`, `Tabs`, and `Table` primitives.
-- For very large option or row sets, prefer `itemCount` plus a renderer function, as in `List` and `Table`, instead of allocating sliced child arrays.
-- Before writing JSX, define:
-    - component purpose
-    - required props
-    - optional props
-    - supported variants
-    - supported sizes
-    - controlled vs uncontrolled behavior
-    - whether accessibility/ARIA work is intentionally out of scope
-    - whether it accepts `ref`
-- Start from the correct native element. Only add wrappers if necessary for layout, icons, loading indicators, descriptions, validation text, or slot composition.
-- Do not add ARIA attributes, accessibility-only wrappers, or extra accessibility abstractions unless explicitly requested.
-- Use a `tv` definition for the component's base styles and variants. Tailwind Variants is designed for base styles, variants, slots, compound variants, and composition/extension.
-- Use VariantProps<typeof ...> for variant typing. Keep custom props minimal and explicit.
-- `base` should contain only what is always true for the component.
-- `variants` should express meaning, not implementation.
-- If one style only applies when two or more variant conditions are combined, use `compoundVariants` instead of putting branching logic in JSX.
-- For components like Card, Tabs, Dialog, or InputGroup, use Tailwind Variants slots so each internal part has a stable styling contract. Tailwind Variants explicitly supports slots for multi-part components.
-- Do not build class names with large nested ternaries in JSX. Prefer `tv`, small boolean branches, helper utilities.
-- Do not hardcode arbitrary values repeatedly unless there is a real one-off need. Prefer shared semantic tokens such as: radius scale, spacing scale, font sizes, color roles, shadow roles, z-index layers.
-- If the component manages value, open state, selected state, or expanded state, decide explicitly whether it supports: controlled mode, uncontrolled mode, or both.
-- Loading buttons, inputs, cards, and menus should not jump in size unless that is deliberate.
-- Do not add an `as` prop to every component automatically. Only support polymorphism when there is a clear product need and the semantics remain valid.
-- Do not use `forwardRef`. Starting in React 19, you can now access `ref` as a prop for function components.
+Before adding a component, start with the closest existing primitive:
 
-### Reusable Component Styling Guidelines
+- Actions: `Button`, `IconButton`, `ButtonGroup`, `ToggleButton`
+- Fields: `TextInput`, `NumberInput`, `DateTimeInput`, `SearchTextInput`
+- Selection/lists: `List`, `Table`, `Select`, `MultiSelect`, `FilterableList`, `FilterableSelect`, `Dropdown`, `Tabs`
+- Overlays: `Floating`, `Popover`, `Tooltip`
+- Display/status: `Badge`, `Breadcrumbs`, `Calendar`, `Chip`, `Histogram`, `ProgressBar`, `Toast`
 
-- Base new reusable component styling on the contracts already established in `src/web/ui/components`, and only add a new visual language when the existing one genuinely does not fit.
-- Define styles with a local `tv()` object named for the component, and use `slots` for multipart primitives like inputs, checkboxes, tooltips, and composed surfaces.
-- Reuse the shared semantic variant names whenever they fit the component: `variant` for presentation (`solid`, `outline`, `ghost`, `flat`), `color` for intent (`default`, `primary`, `secondary`, `success`, `danger`, `warning`), and `size` for scale (`sm`, `md`, `lg`).
-- When a reusable component supports semantic color, map it through a local CSS variable such as `[--color-variant:var(--primary)]` and reference that variable in the classes instead of hardcoding separate color palettes in each variant.
-- Keep geometry aligned with the existing primitives: `rounded-lg` as the default surface radius, compact inline-flex or flex layouts, and the same height scale used by `Button`, `TextInput`, and `NumberInput` unless the component has a clear reason to differ.
-- Treat neutral dark surfaces as the default reusable component base. Inputs and other container-like controls should stay in the `bg-neutral-900/70` to `bg-neutral-800` family, while accent colors should be reserved for semantic actions, selection, and emphasis.
-- Expose `className` for single-surface components and a typed `classNames` object for multipart components. Merge overrides through `tw()` from `src/web/shared/util.ts` or `clsx` plus `tailwind-merge`, not by manually concatenating partial class fragments.
-- Prefer boolean styling flags that already exist in the component layer, such as `fullWidth`, `disabled`, `readOnly`, and `loading`, instead of forcing callers to recreate those states with ad hoc classes.
-- Disabled, read-only, and loading visuals should be handled by the component styles themselves with opacity, pointer-event, text, and background adjustments consistent with the current primitives, not by introducing separate alternate layouts.
-- Keep adornments inside the shared surface with explicit props such as `startContent`, `endContent`, `label`, or slot content instead of requiring wrapper elements around every usage.
-- Preserve the current focus treatment unless the component has a strong reason to differ. Existing reusable primitives generally remove default outlines and rely on the surrounding surface styling rather than adding a new ring system per component.
-- If a new reusable component is action-like, start from the `Button` API and styling vocabulary. If it is field-like, start from `TextInput` or `NumberInput`, including their slot-based surface, neutral palette, and internal content layout.
+Rules:
 
-## Store Rules
+- Build a new primitive only when existing components cannot satisfy the product need.
+- Keep primitives generic and composable; keep domain-specific UI outside the base component layer.
+- Use one file in `src/web/ui/components` for a new shared primitive.
+- Define the component purpose, required/optional props, variants, sizes, state mode (controlled/uncontrolled), and ref support before implementation.
+- Start with the appropriate native element. Add wrappers only when required for layout, slots, validation text, icons, descriptions, or loading indicators.
+- Use a local `tv()` definition for reusable styling. Use slots for multipart controls and `VariantProps<typeof ...>` for variant typing.
+- Keep `base` styles universal, variants semantic, and combined styling in `compoundVariants`.
+- Do not use large nested JSX ternaries to construct class names.
+- Keep APIs predictable: use `variant`, `color`, and `size` where the existing component family uses them.
+- Reuse semantic values where applicable:
+  - presentation: `solid`, `outline`, `ghost`, `flat`
+  - intent: `default`, `primary`, `secondary`, `success`, `danger`, `warning`
+  - size: `sm`, `md`, `lg`
+- For semantic colors, prefer a local CSS variable such as `[--color-variant:var(--primary)]` rather than duplicating palettes.
+- Match existing geometry: `rounded-lg` default surfaces and the established Button/Input height scale unless the component has a clear reason to differ.
+- Use neutral dark surfaces (`bg-neutral-900/70` to `bg-neutral-800`) as the default; reserve accent colors for action, selection, and emphasis.
+- Expose `className` for one-surface components and typed `classNames` for multipart components. Merge overrides through `tw()` from `src/web/shared/util.ts` or `clsx` plus `tailwind-merge`.
+- Support existing standard state props such as `fullWidth`, `disabled`, `readOnly`, and `loading` when relevant.
+- Style disabled, read-only, and loading states internally; do not require callers to build alternate layouts.
+- Use `startContent`, `endContent`, `label`, or slots for adornments rather than wrapper elements at each call site.
+- Preserve existing focus treatment unless there is a specific product reason to diverge.
+- For icon-only actions, use `IconButton`; for inline adornments, use `startContent`/`endContent`.
+- Flatten fragments in children-consuming compound components, following existing `ButtonGroup`, `Breadcrumbs`, `Tabs`, and `Table`.
+- For large rows/options, prefer `itemCount` plus a renderer function like `List` and `Table`; do not allocate sliced child arrays.
 
-- Use the local store lifecycle pattern in `src/web/hooks/store.hook.ts`. Do not reintroduce Bunshi, molecule APIs, scopes, or generic provider abstractions.
-- Name shared singleton orchestrators `featureStore` and factory stores `featureStore(...)` to match the existing repository convention. Store files must end with `.store.ts`.
-- Singleton stores should keep long-lived state at module scope, implement actions as local functions, and export `{ state, ...actions } as const`.
-- Factory stores should create their `proxy(...)` state inside the factory, export `type FeatureStore = ReturnType<typeof featureStore>`, and return `{ state, mount, unmount, ...actions } as const`.
-- Components should instantiate factory stores with `useStore(() => featureStore(args), deps)` and singleton stores with `useStore(featureStore, [])` when mount/unmount handling is needed.
-- Keep `useStore` dependency lists minimal and stable. Include only values that should recreate the store instance, such as the device, image, or explicit store scope.
-- Use explicit React contexts from `src/web/shared/context.ts` only when a subtree must share the same device or store instance. Do not add a parallel store-provider framework.
-- Use `mount` for subscriptions, timers, browser lifecycle wiring, and persisted proxy subscriptions. Make `mount` idempotent when it can be called repeatedly.
-- Always add an idempotent `unmount` cleanup function when resources were acquired. Store unsubscribe callbacks in a local `VoidFunction[]` and clean them with `unsubscribe(...)` from `src/shared/util`.
-- When shared browser state must survive reloads, persist it with the local `initProxy`, `fillProxy`, `subscribeProxy`, `storageGet`, or `storageSet` helpers instead of ad hoc `localStorage` access inside UI components.
-- Treat `initProxy` as both hydration and subscription setup: keep its returned cleanup for scoped/factory stores, and only run it at module scope for stores that intentionally live for the whole app lifetime.
-- Use `p:key` proxy properties for primitive persisted fields and `o:key` for object/nested proxy fields so the local persistence helper can either replace or deep-assign correctly.
-- Reuse `src/shared/bus` for cross-feature browser events instead of introducing another event emitter.
-- Prefer adding shared orchestration logic to stores instead of scattering async actions, event handling, or persistence across React components.
+## Stores and Valtio
 
-## Valtio Rules
-
-- Use one proxy store per domain or feature, not one monolithic global store.
-- Export mutations and actions from the store module. Shared state changes should not be scattered across random components.
-- Keep ephemeral UI state local unless it is genuinely shared across features.
-- Subscribe as low in the tree as possible. Call `useSnapshot` in the leaf component that renders the value.
-- Do not pass full snapshots deep through the tree. Read only the fields a component needs.
+- Use the lifecycle pattern from `src/web/hooks/store.hook.ts`.
+- Do not reintroduce Bunshi, molecule APIs, scopes, generic provider abstractions, or a parallel store framework.
+- Use one proxy store per feature/domain, not a monolithic global store.
+- Keep transient UI state local unless it is shared across features.
+- Export mutations/actions from store modules; do not scatter shared-state updates through components.
+- Subscribe as low as possible with `useSnapshot`. Read only fields rendered by the component and avoid passing full snapshots deep through the tree.
 - Keep expensive derived values out of hot render paths.
-- Avoid storing heavy, non-serializable, or constantly changing objects in broadly observed proxies when a local ref or specialized module is better.
-- Use Valtio for shared client state, not as a replacement for every piece of transient component state.
+- Avoid broadly observed proxies for heavy, non-serializable, or constantly changing values; prefer refs or specialized modules.
 
-## Testing Rules
+### Store Conventions
 
-- Prefer `bun test` as the default test runner and keep all new test tooling Bun-compatible.
-- Use `bun:test` directly in test files to match the existing test suite.
-- Write the smallest test that proves behavior at the right boundary. Prefer focused unit tests for pure logic and targeted integration tests for framework or IO boundaries.
-- Avoid brittle snapshot-heavy tests. Assert specific behavior, contract fields, accessibility state, and user-visible outcomes instead.
-- Keep tests close to the code they verify unless a shared integration harness clearly benefits from a central test location.
-- Keep test data small, explicit, and local to the test unless reuse clearly improves readability.
-- Mock only true external boundaries such as network, filesystem, time, process, and third-party services. Do not mock internal modules when a real call path is cheap and clearer.
-- Keep tests deterministic: no hidden time dependence, random inputs without fixed seeds, or shared mutable global state across tests.
+- Store files end in `.store.ts`.
+- Name singleton orchestrators `featureStore`; name factory functions `featureStore(...)`.
+- Singleton stores keep long-lived state at module scope, define actions locally, and export `{ state, ...actions } as const`.
+- Factory stores create `proxy(...)` inside the factory, export `type FeatureStore = ReturnType<typeof featureStore>`, and return `{ state, mount, unmount, ...actions } as const`.
+- Instantiate factory stores with `useStore(() => featureStore(args), deps)`.
+- Use `useStore(featureStore, [])` for singleton stores when mount/unmount handling is required.
+- Keep dependencies minimal and stable; include only values that should recreate the store instance.
+- Use explicit contexts from `src/web/shared/context.ts` only when a subtree must share a specific device or store instance.
+- Use `mount` for subscriptions, timers, browser lifecycle, and persisted proxy wiring. Make it idempotent when repeat calls are possible.
+- Always provide idempotent `unmount` cleanup when resources are acquired. Store unsubscribe callbacks in `VoidFunction[]` and clean them with `unsubscribe(...)` from `src/shared/util`.
+- Persist reload-surviving browser state through `initProxy`, `fillProxy`, `subscribeProxy`, `storageGet`, or `storageSet`; do not use ad hoc `localStorage` calls inside UI.
+- Treat `initProxy` as hydration plus subscription setup. Retain its cleanup for scoped/factory stores; use module scope only for intentional app-lifetime stores.
+- Use `p:key` for primitive persisted fields and `o:key` for object/nested proxy fields.
 
-### API Testing Rules
+## Testing
 
-- For Bun/TypeScript API code, prefer integration-style tests around request handlers, service boundaries, serializers, and adapters instead of mocking every internal function.
-- Prefer instantiating handlers and calling them directly before booting the whole Bun server when the lower-level seam already proves the behavior.
-- Test both happy paths and typed failure paths, especially validation failures, malformed payloads, missing environment configuration, timeout behavior, and upstream service errors.
-- Assert transport contracts explicitly: status/result shape, headers, serialized fields, error payloads, and boundary normalization behavior.
-- Exercise runtime validation with realistic invalid inputs, not only well-typed test fixtures.
-- Use temporary files, ephemeral directories, and isolated in-memory state for IO-heavy tests. Clean up resources and spawned processes within the test.
-- Keep API tests fast by stubbing only expensive or nondeterministic edges and by avoiding unnecessary server boot when the handler or service can be invoked directly.
+- Use `bun:test` and `bun test`; keep new test tooling Bun-compatible.
+- Write the smallest deterministic test that proves behavior at the correct boundary.
+- Prefer focused unit tests for pure logic and targeted integration tests for framework or IO boundaries.
+- Keep tests near the code they verify unless a shared integration harness is clearly better.
+- Keep fixtures small, explicit, and local unless reuse improves readability.
+- Mock only true external boundaries: network, filesystem, time, process, and third-party services.
+- Do not mock inexpensive internal call paths merely to isolate them.
+- Avoid snapshot-heavy tests. Assert precise behavior, contracts, and user-visible results.
+- Do not add UI tests or a UI test stack. Record a relevant UI coverage gap in final notes when applicable.
 
-### UI Testing Rules
+### API Tests
 
-- Do not add UI tests for now.
-- If a change would normally deserve UI coverage, document the testing gap in your final notes instead of introducing a UI test stack or new UI test files.
+- Prefer integration-style tests around handlers, services, serializers, and adapters.
+- Instantiate/call handlers directly before booting the whole server when that lower-level seam proves the behavior.
+- Cover success and typed failure paths, including malformed input, validation errors, missing configuration, timeouts, and upstream failures.
+- Assert status/result shape, headers, serialized fields, error payloads, and normalization behavior.
+- Use realistic invalid inputs, not only well-typed fixtures.
+- Use temporary files, isolated directories, and isolated in-memory state for IO tests. Clean up resources and child processes.
+- Stub only expensive or nondeterministic boundaries; keep tests fast.
 
-## Performance Defaults
+## Performance
 
 - Optimize for fast startup, small bundles, and low rerender frequency.
 - Prefer direct code over abstraction-heavy layers that increase indirection or bundle size.
-- Code-split optional UI and large feature modules.
-- Defer non-critical work until after the first meaningful paint or user intent.
-- Avoid effect chains that trigger cascaded renders.
+- Code-split optional and large feature modules.
+- Defer non-critical work until after first meaningful paint or user intent.
+- Avoid effect chains that cause cascaded renders.
 - Keep props small and stable at component boundaries.
-- Push expensive computations out of render and off the main thread when they can block interaction.
-- Before adding a library, ask whether existing Bun, React, Tailwind, Valtio primitives already solve the problem.
+- Move expensive computations off render paths and off the main thread when they can block interaction.
+- Before adding a library, verify that Bun, React, Tailwind, Valtio, or existing local primitives do not already solve the problem.
 
 ## Quality Gates
 
-- Keep TypeScript strict. Fix types instead of bypassing them.
-- Follow OXC for both formatting and linting. Do not add Prettier or ESLint.
-- Respect OXC's current guardrails in new code: no import cycles, no floating promises, and prefer `performance.now()` over `Date.now()` for durations.
-- Keep modules focused and ownership clear.
-- Add comments only where they explain non-obvious behavior, lifecycle cleanup, normalization, or interaction details.
-- Validate with the smallest relevant check before finishing: `git diff --check`, the `oxfmt` tool, the `oxlint` tool, and `bun run compile` when touching Bun runtime, env, packaging, or build-plugin code.
+- Keep TypeScript strict and modules focused with clear ownership.
+- Follow OXC for formatting and linting. Do not add Prettier or ESLint.
+- Respect current OXC guardrails: avoid import cycles and floating promises; use `performance.now()` for durations.
+- Run the smallest relevant checks before finishing:
+  - `git diff --check`
+  - `bun run fmt:check` or the relevant `oxfmt` check
+  - `bun run lint` or the relevant `oxlint` check
+  - `bun test` for relevant behavior
+  - `bun run compile` when changing Bun runtime, environment, packaging, or build-plugin code
 - Preserve Bun-first workflows in every change.
 
-## Placement Guide
+## Commit Messages
 
-- `src/web`: page entrypoints, screens, feature composition, providers, hooks, and browser-side wiring.
-- `src/web/ui`: feature-level UI, screens, and local composites.
-- `src/web/ui/components`: reusable UI primitives.
-- `src/web/shared`: browser-only helpers such as API/storage adapters and web utilities.
-- `src/shared`: cross-layer types, constants, and utilities with minimal runtime coupling.
-- `src/api`: service clients, adapters, Bun integrations, file/network/process code.
+Commit messages must be precise, English, and easy to scan.
 
-## Pre-merge Checklist For Agents
+- Use lowercase except for acronyms, proper nouns, package names, and file names.
+- Begin directly with a present-tense imperative verb, such as `implement`, `fix`, `improve`, `update`, `use`, `remove`, `rename`, or `refactor`.
+- Do not use Conventional Commit prefixes such as `feat:`, `fix:`, `perf:`, `docs:`, `refactor:`, or scopes.
+- Keep the subject concise and specific, ideally 72 characters or fewer, and do not end it with a period.
+- Describe the technical or user-visible effect, not implementation noise or effort.
+- Keep one logical change per commit.
+- Avoid vague subjects such as `fix bug`, `update code`, `changes`, `misc`, `cleanup`, `final`, or `wip`.
+- Add a body when rationale, trade-offs, migration steps, behavior changes, limitations, or follow-up work are not obvious.
+- Reference issues/tasks when applicable and state breaking changes explicitly.
 
-- Is the code in the correct workspace?
-- Is the dependency Bun-compatible and compile-safe?
-- Does the UI reuse existing `src/web/ui` patterns, Tailwind tokens, and shared primitives before adding new custom CSS or widgets?
-- Does shared state belong in Valtio, local React state, or not in state at all?
-- Does this change increase startup cost, binary size, or rerender frequency?
-- Is there a simpler implementation with fewer dependencies and less runtime work?
+## Completion Checklist
 
-### Output Requirements
+Before finalizing a change, verify:
 
-Every change must:
-
-- Compile without errors
-- Have correct types
-- Include necessary imports
-- Be consistent with project patterns
-- Be ready for production use
-
-### Before finishing:
-
-- Verify types
-- Verify rendering behavior
-- Verify state usage
-- Verify consistency with existing code
-
-Always choose the simplest correct solution.
+- Code is in the correct layer and follows existing patterns.
+- New dependencies are Bun-compatible and justified.
+- UI reuses existing primitives, Tailwind tokens, and component conventions before adding new CSS or widgets.
+- State belongs in Valtio, local React state, or nowhere; it is not global by default.
+- The change does not introduce avoidable startup, binary-size, bundle-size, or rerender costs.
+- The implementation is the simplest correct solution.
+- Types, imports, compilation, relevant behavior, state usage, and rendering behavior are correct.
+- The result is complete and production-ready.

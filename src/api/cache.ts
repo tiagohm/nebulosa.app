@@ -1,11 +1,9 @@
-import type { PositionAndVelocity } from 'nebulosa/src/astrometry'
-import { eraNut06a, eraPmat06, eraPnm06a, eraPom00, eraSp00 } from 'nebulosa/src/erfa'
-import * as iers from 'nebulosa/src/iers'
-import { type GeographicCoordinate, type GeographicPosition, geodeticLocation } from 'nebulosa/src/location'
-import { DEFAULT_TIME_PROVIDERS, type Time, type TimeProviders, timeUnix } from 'nebulosa/src/time'
-import { earth } from 'nebulosa/src/vsop87e'
-
-export type TimeGranularity = 's' | 'm' | 'h' | 'd'
+import type { PositionAndVelocity } from 'nebulosa/src/astronomy/coordinates/astrometry'
+import { eraNut06a, eraPmat06, eraPnm06a, eraPom00, eraSp00 } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
+import { earth } from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
+import { type GeographicCoordinate, type GeographicPosition, geodeticLocation } from 'nebulosa/src/astronomy/observer/location'
+import * as iers from 'nebulosa/src/astronomy/time/iers'
+import { DEFAULT_TIME_PROVIDERS, type Time, type TimeProviders, timeUnix } from 'nebulosa/src/astronomy/time/time'
 
 const ONE_DAY = 24 * 3600 * 1000
 
@@ -32,7 +30,7 @@ export class CacheManager {
 
 	time(utc: number | 'now', location?: GeographicPosition) {
 		utc = utc === 'now' ? Date.now() : utc
-		const time = timeUnix(utc / 1000, undefined, true)
+		const time = timeUnix(utc / 1000, true)
 		time.location = location
 		time.providers = this.timeProviders
 		this.recomputeTimeProviders(time)

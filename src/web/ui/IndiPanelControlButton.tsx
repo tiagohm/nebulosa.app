@@ -1,4 +1,4 @@
-import type { Device } from 'nebulosa/src/indi.device'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import bus from 'src/shared/bus'
 import indiIcon from '@/assets/indi.webp'
 import { Button, type ButtonProps } from './components/Button'

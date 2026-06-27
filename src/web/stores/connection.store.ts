@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
+import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
 import bus from 'src/shared/bus'
 import type { ConnectionEvent, ConnectionStatus } from 'src/shared/types'
 import { proxy } from 'valtio'

@@ -1,4 +1,4 @@
-import type { Camera, Mount } from 'nebulosa/src/indi.device'
+import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { type DarvEvent, type DarvStart, type DarvState, DEFAULT_DARV_EVENT } from 'src/shared/types'
 import type { CameraHandler } from './camera'
 import type { GuideOutputHandler } from './guideoutput'

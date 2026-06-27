@@ -1,4 +1,4 @@
-import { GRAYSCALES, type Grayscale, type ImageChannelOrGray } from 'nebulosa/src/image.types'
+import { GRAYSCALES, type Grayscale, type ImageChannelOrGray } from 'nebulosa/src/imaging/model/types'
 import { useEffect, useRef, useState } from 'react'
 import { tw } from '@/shared/util'
 import { IconButton } from './components/IconButton'

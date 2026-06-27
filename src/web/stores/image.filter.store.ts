@@ -1,5 +1,5 @@
-import type { FFTFilterType } from 'nebulosa/src/image.types'
-import type { Writable } from 'nebulosa/src/types'
+import type { Writable } from 'nebulosa/src/core/types'
+import type { FFTFilterType } from 'nebulosa/src/imaging/model/types'
 import { DEFAULT_IMAGE_FFT, DEFAULT_IMAGE_FILTER, type ImageFFT, type ImageFilter, type ImageKernelFilterType } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'

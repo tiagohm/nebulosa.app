@@ -1,4 +1,4 @@
-import type { Cover } from 'nebulosa/src/indi.device'
+import type { Cover } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 import { equipmentStore, type DeviceState } from './equipment.store'

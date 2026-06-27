@@ -1,4 +1,4 @@
-import type { Camera, Mount } from 'nebulosa/src/indi.device'
+import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import bus from 'src/shared/bus'
 import { proxy } from 'valtio'
 import { equipmentStore, type DeviceState } from './equipment.store'

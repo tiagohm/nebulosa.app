@@ -1,4 +1,4 @@
-import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
+import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
 import bus from 'src/shared/bus'
 import type { AlpacaServerStatus } from 'src/shared/types'
 import { proxy } from 'valtio'

@@ -1,4 +1,4 @@
-import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/devices/indi/device'
 import bus from 'src/shared/bus'
 import type { ConnectionStatus, DeviceUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'

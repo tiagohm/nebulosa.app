@@ -1,4 +1,4 @@
-import type { MountTargetCoordinateType } from 'nebulosa/src/indi.device'
+import type { MountTargetCoordinateType } from 'nebulosa/src/devices/indi/device'
 import { tw } from '../shared/util'
 import { Radio } from './components/Radio'
 

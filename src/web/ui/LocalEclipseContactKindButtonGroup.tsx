@@ -1,4 +1,4 @@
-import type { LocalEclipseContactKind } from 'nebulosa/src/sun.eclipse.local'
+import type { LocalEclipseContactKind } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
 import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from './components/ButtonGroup'
 
 export function LocalEclipseContactKindButtonGroup(props: Omit<ButtonGroupProps<LocalEclipseContactKind>, 'children'>) {

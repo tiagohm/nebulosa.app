@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from 'bun:test'
-import type { Image } from 'nebulosa/src/image.types'
-import type { DetectedStar } from 'nebulosa/src/star.detector'
+import type { Image } from 'nebulosa/src/imaging/model/types'
+import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import { ImageProcessor, type TransformedImageItem } from 'src/api/image'
 import { starDetection as starDetectionEndpoints, StarDetectionHandler } from 'src/api/stardetection'
 import { DEFAULT_STAR_DETECTION, type ImageTransformation, type StarDetection } from 'src/shared/types'

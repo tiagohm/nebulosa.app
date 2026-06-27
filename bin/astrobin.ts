@@ -1,4 +1,4 @@
-import * as astrobin from 'nebulosa/src/astrobin'
+import * as astrobin from 'nebulosa/src/adapters/imaging/astrobin'
 
 async function fetchAndRetryOnError<T>(action: () => Promise<T | undefined>) {
 	let attempt = 0

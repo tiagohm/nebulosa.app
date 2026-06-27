@@ -1,5 +1,5 @@
-import type { AlpacaDeviceServer } from 'nebulosa/src/alpaca.discovery'
-import { formatTemporal } from 'nebulosa/src/temporal'
+import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
+import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
 import { memo, type ComponentPropsWithRef, useRef } from 'react'
 import type { ConnectionStatus } from 'src/shared/types'
 import { useSnapshot } from 'valtio'

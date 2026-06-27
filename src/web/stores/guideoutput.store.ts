@@ -1,4 +1,4 @@
-import type { GuideOutput } from 'nebulosa/src/indi.device'
+import type { GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { GuidePulse } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'

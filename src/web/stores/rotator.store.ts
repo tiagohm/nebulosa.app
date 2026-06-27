@@ -1,4 +1,4 @@
-import type { Rotator } from 'nebulosa/src/indi.device'
+import type { Rotator } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'

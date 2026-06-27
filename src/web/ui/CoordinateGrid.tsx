@@ -1,4 +1,4 @@
-import { formatDEC, formatRA } from 'nebulosa/src/angle'
+import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { type CSSProperties, memo, useContext } from 'react'
 import type { ImageCoordinateGridAxis, ImageCoordinateGridLine } from 'src/shared/types'
 import { useSnapshot } from 'valtio'

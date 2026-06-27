@@ -1,4 +1,4 @@
-import type { SigmaClipCenterMethod } from 'nebulosa/src/image.types'
+import type { SigmaClipCenterMethod } from 'nebulosa/src/imaging/model/types'
 import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['mean', 'median'] as const

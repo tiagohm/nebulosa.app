@@ -1,4 +1,4 @@
-import type { DetectedStar } from 'nebulosa/src/star.detector'
+import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import bus from 'src/shared/bus'
 import { DEFAULT_STAR_DETECTION, type StarDetection } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'

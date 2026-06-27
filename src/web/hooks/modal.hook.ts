@@ -1,6 +1,6 @@
 import { createUseGesture, dragAction } from '@use-gesture/react'
-import type { Point } from 'nebulosa/src/geometry'
-import { clamp } from 'nebulosa/src/math'
+import type { Point } from 'nebulosa/src/math/numerical/geometry'
+import { clamp } from 'nebulosa/src/math/numerical/math'
 import { useCallback, useEffect, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { storageGet, storageSet } from '@/shared/storage'
 import { zIndexStore } from '@/stores/zindex.store'

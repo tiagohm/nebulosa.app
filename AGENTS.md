@@ -147,8 +147,8 @@ Do not introduce `npm`, `yarn`, `pnpm`, Vite, PostCSS, another test runner, or a
 - Keep render functions pure. Do not mirror props into state or derive state through effects.
 - Prefer local state. Lift it only when siblings or features genuinely share it.
 - Preserve the declaration style of files you touch:
-  - shared primitives commonly use named functions and React 19 `ref` props;
-  - feature modules commonly use `const Component = memo(() => ...)`.
+    - shared primitives commonly use named functions and React 19 `ref` props;
+    - feature modules commonly use `const Component = memo(() => ...)`.
 - Do not use `forwardRef`; React 19 supports `ref` as a normal prop.
 - Use `startTransition`, `useDeferredValue`, and `useEffectEvent` only when they solve a demonstrated responsiveness or stale-closure problem.
 - Do not add `useMemo` or `useCallback` by default. Use them only for measured hot paths or APIs that require stable references.
@@ -193,9 +193,9 @@ Rules:
 - Do not use large nested JSX ternaries to construct class names.
 - Keep APIs predictable: use `variant`, `color`, and `size` where the existing component family uses them.
 - Reuse semantic values where applicable:
-  - presentation: `solid`, `outline`, `ghost`, `flat`
-  - intent: `default`, `primary`, `secondary`, `success`, `danger`, `warning`
-  - size: `sm`, `md`, `lg`
+    - presentation: `solid`, `outline`, `ghost`, `flat`
+    - intent: `default`, `primary`, `secondary`, `success`, `danger`, `warning`
+    - size: `sm`, `md`, `lg`
 - For semantic colors, prefer a local CSS variable such as `[--color-variant:var(--primary)]` rather than duplicating palettes.
 - Match existing geometry: `rounded-lg` default surfaces and the established Button/Input height scale unless the component has a clear reason to differ.
 - Use neutral dark surfaces (`bg-neutral-900/70` to `bg-neutral-800`) as the default; reserve accent colors for action, selection, and emphasis.
@@ -274,11 +274,11 @@ Rules:
 - Follow OXC for formatting and linting. Do not add Prettier or ESLint.
 - Respect current OXC guardrails: avoid import cycles and floating promises; use `performance.now()` for durations.
 - Run the smallest relevant checks before finishing:
-  - `git diff --check`
-  - `bun run fmt:check` or the relevant `oxfmt` check
-  - `bun run lint` or the relevant `oxlint` check
-  - `bun test` for relevant behavior
-  - `bun run compile` when changing Bun runtime, environment, packaging, or build-plugin code
+    - `git diff --check`
+    - `bun run fmt:check` or the relevant `oxfmt` check
+    - `bun run lint` or the relevant `oxlint` check
+    - `bun test` for relevant behavior
+    - `bun run compile` when changing Bun runtime, environment, packaging, or build-plugin code
 - Preserve Bun-first workflows in every change.
 
 ## Commit Messages

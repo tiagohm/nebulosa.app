@@ -1,5 +1,5 @@
-import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/angle'
-import type { MountTargetCoordinateType } from 'nebulosa/src/indi.device'
+import type { MountTargetCoordinateType } from 'nebulosa/src/devices/indi/device'
+import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { memo, useContext } from 'react'
 import type { CoordinateInfo, CoordinateType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'

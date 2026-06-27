@@ -1,4 +1,4 @@
-import type { DetectedStar } from 'nebulosa/src/star.detector'
+import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import { type CSSProperties, memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerStoreContext } from '../shared/context'

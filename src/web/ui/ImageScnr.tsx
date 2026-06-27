@@ -1,4 +1,4 @@
-import type { SCNRProtectionMethod } from 'nebulosa/src/image.types'
+import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/model/types'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerStoreContext } from '../shared/context'

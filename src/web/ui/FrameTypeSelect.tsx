@@ -1,4 +1,4 @@
-import type { FrameType } from 'nebulosa/src/indi.device'
+import type { FrameType } from 'nebulosa/src/devices/indi/device'
 import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['LIGHT', 'DARK', 'FLAT', 'BIAS'] as const

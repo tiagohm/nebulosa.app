@@ -1,4 +1,4 @@
-import type { Camera, Cover, Device, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, Thermometer, Wheel } from 'nebulosa/src/indi.device'
+import type { Camera, Cover, Device, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, Thermometer, Wheel } from 'nebulosa/src/devices/indi/device'
 import { createContext } from 'react'
 import type { AutoFocusStore } from '@/stores/autofocus.store'
 import type { CameraStore } from '@/stores/camera.store'

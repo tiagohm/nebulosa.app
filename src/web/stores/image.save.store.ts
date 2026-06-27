@@ -1,5 +1,5 @@
-import type { ImageFormat } from 'nebulosa/src/image.types'
-import { formatTemporal } from 'nebulosa/src/temporal'
+import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
+import type { ImageFormat } from 'nebulosa/src/imaging/model/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'

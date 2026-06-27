@@ -1,4 +1,4 @@
-import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa/src/constellation'
+import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { type MultiSelectProps, MultiSelect } from './components/MultiSelect'
 
 export type ConstellationSelectProps = Omit<MultiSelectProps<Constellation>, 'children' | 'items'>

@@ -1,5 +1,5 @@
-import type { Device, DeviceProperties, DeviceProperty } from 'nebulosa/src/indi.device'
-import type { Message, NewVector } from 'nebulosa/src/indi.types'
+import type { Device, DeviceProperties, DeviceProperty } from 'nebulosa/src/devices/indi/device'
+import type { Message, NewVector } from 'nebulosa/src/devices/indi/types'
 import bus from 'src/shared/bus'
 import type { IndiDevicePropertyEvent } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'

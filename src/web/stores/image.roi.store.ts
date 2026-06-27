@@ -1,4 +1,4 @@
-import type { Point } from 'nebulosa/src/geometry'
+import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Roi } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'

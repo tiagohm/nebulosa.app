@@ -1,4 +1,4 @@
-import type { DeviceType } from 'nebulosa/src/indi.device'
+import type { DeviceType } from 'nebulosa/src/devices/indi/device'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'

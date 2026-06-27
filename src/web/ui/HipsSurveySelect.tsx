@@ -1,4 +1,4 @@
-import type { HipsSurvey } from 'nebulosa/src/hips2fits'
+import type { HipsSurvey } from 'nebulosa/src/adapters/sky/hips2fits'
 import hipsSurveys from 'src/data/hips.surveys.json'
 import { FilterableSelect, type FilterableSelectProps } from './components/FilterableSelect'
 import { ListItem } from './components/List'

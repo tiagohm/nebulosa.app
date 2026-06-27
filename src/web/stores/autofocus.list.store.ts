@@ -1,4 +1,4 @@
-import type { Camera, Focuser } from 'nebulosa/src/indi.device'
+import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
 import bus from 'src/shared/bus'
 import { proxy } from 'valtio'
 import type { DeviceState } from './equipment.store'

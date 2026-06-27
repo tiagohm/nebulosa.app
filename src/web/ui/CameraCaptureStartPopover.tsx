@@ -1,5 +1,5 @@
-import type { Camera } from 'nebulosa/src/indi.device'
-import type { DeepReadonly } from 'nebulosa/src/types'
+import type { DeepReadonly } from 'nebulosa/src/core/types'
+import type { Camera } from 'nebulosa/src/devices/indi/device'
 import type { CameraCaptureStart } from 'src/shared/types'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
 import { Checkbox } from './components/Checkbox'

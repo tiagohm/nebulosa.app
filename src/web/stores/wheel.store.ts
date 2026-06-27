@@ -1,4 +1,4 @@
-import type { Wheel } from 'nebulosa/src/indi.device'
+import type { Wheel } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'

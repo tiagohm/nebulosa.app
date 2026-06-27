@@ -1,4 +1,4 @@
-import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/angle'
+import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { memo, useContext } from 'react'
 import type { PlateSolveStart } from 'src/shared/types'
 import { useSnapshot } from 'valtio'

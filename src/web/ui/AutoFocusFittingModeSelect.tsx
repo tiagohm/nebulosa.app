@@ -1,4 +1,4 @@
-import type { AutoFocusFittingMode } from 'nebulosa/src/autofocus'
+import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
 import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['TRENDLINES', 'PARABOLIC', 'TREND_PARABOLIC', 'HYPERBOLIC', 'TREND_HYPERBOLIC'] as const

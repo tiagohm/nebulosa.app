@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid'
-import { toArcsec } from 'nebulosa/src/angle'
-import { pixelScale } from 'nebulosa/src/formulas'
+import { pixelScale } from 'nebulosa/src/astronomy/formulas'
+import { toArcsec } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_FOV_ITEM, type ComputedFov, type FovItem } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'

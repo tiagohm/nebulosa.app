@@ -1,4 +1,4 @@
-import type { SigmaClipDispersionMethod } from 'nebulosa/src/image.types'
+import type { SigmaClipDispersionMethod } from 'nebulosa/src/imaging/model/types'
 import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['std', 'mad'] as const

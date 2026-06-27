@@ -1,4 +1,4 @@
-import { pixelScale } from 'nebulosa/src/formulas'
+import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { framingStore } from '@/stores/framing.store'

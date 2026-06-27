@@ -1,4 +1,4 @@
-import type { Thermometer } from 'nebulosa/src/indi.device'
+import type { Thermometer } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
 import { equipmentStore, type DeviceState } from './equipment.store'
 

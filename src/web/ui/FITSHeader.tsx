@@ -1,4 +1,4 @@
-import type { FitsHeader, FitsHeaderCard, FitsHeaderValue } from 'nebulosa/src/fits'
+import type { FitsHeader, FitsHeaderCard, FitsHeaderValue } from 'nebulosa/src/io/formats/fits/fits'
 import { memo, useMemo } from 'react'
 import { List, ListItem } from './components/List'
 

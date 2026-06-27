@@ -1,4 +1,4 @@
-import type { FlatPanel } from 'nebulosa/src/indi.device'
+import type { FlatPanel } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 import { equipmentStore, type DeviceState } from './equipment.store'

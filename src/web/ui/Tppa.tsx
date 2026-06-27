@@ -1,4 +1,4 @@
-import { formatDEC, formatRA } from 'nebulosa/src/angle'
+import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { memo, useContext } from 'react'
 import type { TppaState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'

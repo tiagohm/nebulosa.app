@@ -1,4 +1,4 @@
-import type { PlateSolution } from 'nebulosa/src/platesolver'
+import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import bus from 'src/shared/bus'
 import type { ImageCoordinateGrid } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'

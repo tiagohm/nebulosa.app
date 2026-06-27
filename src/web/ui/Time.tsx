@@ -1,4 +1,4 @@
-import type { UTCTime } from 'nebulosa/src/indi.device'
+import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import { useEffect, useState } from 'react'
 import { clamp } from '@/shared/util'
 import { Button } from './components/Button'

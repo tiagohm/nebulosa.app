@@ -1,4 +1,4 @@
-import { formatTemporal } from 'nebulosa/src/temporal'
+import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { memo, useContext, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { filePicker, type FilePickerScope } from '@/stores/filepicker.store'

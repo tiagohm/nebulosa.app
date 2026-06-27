@@ -1,4 +1,4 @@
-import { type HipsSurvey, type HipsSurveyRegime, hipsSurveys } from 'nebulosa/src/hips2fits'
+import { type HipsSurvey, type HipsSurveyRegime, hipsSurveys } from 'nebulosa/src/adapters/sky/hips2fits'
 
 const REGIME: HipsSurveyRegime[] = ['optical', 'infrared', 'radio', 'uv', 'x-ray', 'gamma-ray']
 

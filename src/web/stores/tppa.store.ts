@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import type { Camera, Mount } from 'nebulosa/src/indi.device'
+import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import bus from 'src/shared/bus'
 import { DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type TppaEvent, type TppaStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'

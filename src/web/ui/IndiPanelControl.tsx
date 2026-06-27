@@ -1,5 +1,5 @@
-import type { DeviceProperty } from 'nebulosa/src/indi.device'
-import type { DefElement, Message, NewVector, SwitchRule } from 'nebulosa/src/indi.types'
+import type { DeviceProperty } from 'nebulosa/src/devices/indi/device'
+import type { DefElement, Message, NewVector, SwitchRule } from 'nebulosa/src/devices/indi/types'
 import { Activity, memo, useContext, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { IndiPanelControlStoreContext } from '../shared/context'

@@ -1,4 +1,4 @@
-import type { AlpacaConfiguredDevice } from 'nebulosa/src/alpaca.types'
+import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 import { alpacaStore, MAX_ALPACA_PORT, MIN_ALPACA_PORT } from '@/stores/alpaca.store'

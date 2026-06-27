@@ -1,4 +1,4 @@
-import type { Device } from 'nebulosa/src/indi.device'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import { Activity, memo, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { equipmentStore } from '@/stores/equipment.store'

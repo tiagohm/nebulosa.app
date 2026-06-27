@@ -1,4 +1,4 @@
-import type { CfaPattern } from 'nebulosa/src/image.types'
+import type { CfaPattern } from 'nebulosa/src/imaging/model/types'
 import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['AUTO', 'RGGB', 'BGGR', 'GBRG', 'GRBG', 'GRGB', 'GBGR', 'RGBG', 'BGRG'] as const

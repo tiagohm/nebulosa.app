@@ -1,5 +1,5 @@
-import type { Camera, Cover, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, Thermometer, Wheel } from 'nebulosa/src/indi.device'
-import type { PlateSolution } from 'nebulosa/src/platesolver'
+import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
+import type { Camera, Cover, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, Thermometer, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { Connect, ImageInfo } from 'src/shared/types'
 
 export type FilePickerMode = 'file' | 'directory' | 'save'

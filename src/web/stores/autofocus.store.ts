@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import type { Camera, Focuser } from 'nebulosa/src/indi.device'
+import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
 import bus from 'src/shared/bus'
 import { type AutoFocusStart, type AutoFocusEvent, DEFAULT_AUTO_FOCUS_START, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'

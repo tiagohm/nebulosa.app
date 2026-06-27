@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import type { Camera } from 'nebulosa/src/indi.device'
+import type { Camera } from 'nebulosa/src/devices/indi/device'
 import bus from 'src/shared/bus'
 import { type FlatWizardStart, type FlatWizardEvent, DEFAULT_FLAT_WIZARD_START, DEFAULT_FLAT_WIZARD_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'

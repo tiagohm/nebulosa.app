@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test, type Mock } from 'bun:test
 import { join } from 'path'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
-import { deg, formatALT, parseAngle } from 'nebulosa/src/math/units/angle'
+import { deg, formatALT, formatRA, parseAngle } from 'nebulosa/src/math/units/angle'
 import { lightYear, meter, toKilometer } from 'nebulosa/src/math/units/distance'
 import { AtlasHandler } from 'src/api/atlas'
 import cache from 'src/api/cache'
@@ -397,13 +397,12 @@ test('position of jupiter', async () => {
 test('position of sky object', () => {
 	const position = atlas.positionOfSkyObject(POSITION_OF_BODY, '32263')
 
-	// expect(position.equatorial[0]).toBeCloseTo(parseAngle('06 46 17.13', true)!, 6)
-	expect(position.equatorial[0]).toBeCloseTo(parseAngle('06 44 58.25', true)!, 6)
-	expect(position.equatorialJ2000[0]).toBeCloseTo(parseAngle('06 45 08.93', true)!, 6)
-	expect(position.equatorial[1]).toBeCloseTo(parseAngle('-16 45 02.90')!, 6)
-	expect(position.equatorialJ2000[1]).toBeCloseTo(parseAngle('-16 42 58.01')!, 6)
-	expect(position.horizontal[1]).toBeCloseTo(parseAngle('66 48 39.29')!, 6)
-	expect(position.horizontal[0]).toBeCloseTo(parseAngle('278 50 39.10')!, 6)
+	expect(formatRA(position.equatorial[0], true)).toBe('06 44 58')
+	expect(formatRA(position.equatorialJ2000[0], true)).toBe('06 45 09')
+	expect(formatALT(position.equatorial[1], true)).toBe('-16 45 03')
+	expect(formatALT(position.equatorialJ2000[1], true)).toBe('-16 42 58')
+	expect(formatALT(position.horizontal[1], true)).toBe('+66 48 39')
+	expect(formatALT(position.horizontal[0], true)).toBe('+278 50 39')
 	expect(position.distance).toBeCloseTo(lightYear(8.601071093), -1)
 	expect(position.magnitude).toBe(-1.44)
 	expect(position.constellation).toBe('CMA')
@@ -417,9 +416,9 @@ test('chart of sky object', () => {
 	const chart = atlas.chartOfSkyObject(POSITION_OF_BODY, '32263')
 
 	expect(chart).toHaveLength(1441)
-	expect(formatALT(chart[0])).toBe('+66 48 39.29')
-	expect(formatALT(chart[720])).toBe('-44 21 24.74')
-	expect(formatALT(chart[1440])).toBe('+65 54 26.76')
+	expect(formatALT(chart[0], true)).toBe('+66 48 39')
+	expect(formatALT(chart[720], true)).toBe('-44 21 24')
+	expect(formatALT(chart[1440], true)).toBe('+65 54 26')
 })
 
 describe('compute start and end time', () => {

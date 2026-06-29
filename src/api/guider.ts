@@ -1,24 +1,24 @@
 import { type PHD2AppState, PHD2Client, type PHD2Command, type PHD2Events } from 'nebulosa/src/devices/guiding/phd2'
 import type { CameraManager, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
 import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
-import { DEFAULT_PHD2_DITHER, DEFAULT_PHD2_EVENT, type PHD2Connect, type PHD2Dither, type PHD2Event, type PHD2State, type PHD2Status } from 'src/shared/types'
+import { DEFAULT_GUIDER_DITHER, DEFAULT_GUIDER_EVENT, type GuiderConnect, type GuiderDither, type GuiderEvent, type GuiderState, type GuiderStatus } from 'src/shared/types'
 import { exposureTimeInSeconds } from 'src/shared/util'
 import { type Endpoints, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
 import { waitFor } from './util'
 
-export class PHD2Handler {
+export class GuiderHandler {
 	private client?: PHD2Client | GuiderClient
 	private state: PHD2AppState = 'Stopped'
 	private pixelScale = 1
 	private connecting = false
 	private settling?: PromiseWithResolvers<boolean>
 	private settleTimer?: ReturnType<typeof setTimeout>
-	private readonly settings = structuredClone(DEFAULT_PHD2_DITHER)
+	private readonly settings = structuredClone(DEFAULT_GUIDER_DITHER)
 	private readonly rms = new RMS()
 
-	readonly event = structuredClone(DEFAULT_PHD2_EVENT)
+	readonly event = structuredClone(DEFAULT_GUIDER_EVENT)
 
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
@@ -35,38 +35,38 @@ export class PHD2Handler {
 
 					switch (this.state) {
 						case 'Calibrating':
-							this.handlePHD2Event('calibrating')
+							this.handleGuiderEvent('calibrating')
 							break
 						case 'Guiding':
-							this.handlePHD2Event('guiding')
+							this.handleGuiderEvent('guiding')
 							break
 						case 'Looping':
-							this.handlePHD2Event('looping')
+							this.handleGuiderEvent('looping')
 							break
 						case 'LostLock':
-							this.handlePHD2Event('starLost')
+							this.handleGuiderEvent('starLost')
 							break
 						default:
-							this.handlePHD2Event('idle')
+							this.handleGuiderEvent('idle')
 							break
 					}
 
 					break
 				case 'StartCalibration':
 					this.state = 'Calibrating'
-					this.handlePHD2Event('calibrating')
+					this.handleGuiderEvent('calibrating')
 					break
 				case 'LoopingExposures':
 					this.state = 'Looping'
 					this.event.starMass = event.StarMass
 					this.event.snr = event.SNR
 					this.event.hfd = event.HFD
-					this.handlePHD2Event('looping')
+					this.handleGuiderEvent('looping')
 					break
 				case 'SettleBegin':
 					this.settleDone(false)
 					this.settling = Promise.withResolvers()
-					this.handlePHD2Event('settling')
+					this.handleGuiderEvent('settling')
 					break
 				case 'SettleDone':
 					this.settleDone(event.Status === 0)
@@ -86,7 +86,7 @@ export class PHD2Handler {
 					this.event.step.decCorrection = DECDirection === 'North' ? DECDuration : -DECDuration
 					this.event.step.dx = null
 					this.event.step.dy = null
-					this.handlePHD2Event('guiding')
+					this.handleGuiderEvent('guiding')
 					break
 				}
 				case 'GuidingDithered': {
@@ -97,25 +97,25 @@ export class PHD2Handler {
 					this.event.step.decCorrection = null
 					this.event.step.dx = event.dx
 					this.event.step.dy = event.dy
-					this.handlePHD2Event('guiding')
+					this.handleGuiderEvent('guiding')
 					break
 				}
 				case 'StarLost':
 					this.state = 'LostLock'
-					this.handlePHD2Event('starLost')
+					this.handleGuiderEvent('starLost')
 					break
 				case 'Paused':
 					this.state = 'Paused'
-					this.handlePHD2Event('paused')
+					this.handleGuiderEvent('paused')
 					break
 				case 'StartGuiding':
 					this.state = 'Guiding'
-					this.handlePHD2Event('guiding')
+					this.handleGuiderEvent('guiding')
 					break
 				case 'GuidingStopped':
 				case 'LoopingExposuresStopped':
 					this.state = 'Stopped'
-					this.handlePHD2Event('idle')
+					this.handleGuiderEvent('idle')
 					break
 			}
 
@@ -129,37 +129,32 @@ export class PHD2Handler {
 			if (client !== this.client) return
 			this.client = undefined
 			this.reset()
-			this.wsm.send('phd2:close', undefined)
+			this.wsm.send('guider:close', undefined)
 		},
 	} as const
 
-	get isConnected() {
+	get connected() {
 		return !!this.client
 	}
 
-	get isRunning() {
+	get running() {
 		return this.event.state === 'guiding'
 	}
 
-	get isLooping() {
+	get looping() {
 		return this.event.state === 'looping'
 	}
 
-	sendEvent(event: PHD2Event) {
-		this.wsm.send('phd2', event)
+	sendEvent(event: GuiderEvent) {
+		this.wsm.send('guider', event)
 	}
 
-	private handlePHD2Event(state?: PHD2State) {
+	private handleGuiderEvent(state?: GuiderState) {
 		if (state !== undefined) this.event.state = state
 		this.sendEvent(this.event)
 	}
 
-	async profiles() {
-		if (this.client instanceof GuiderClient) return []
-		return (await this.client?.getProfiles()) ?? []
-	}
-
-	async connect(req: PHD2Connect, cameraManager: CameraManager, guideOutputManager: GuideOutputManager) {
+	async connect(req: GuiderConnect, cameraManager: CameraManager, guideOutputManager: GuideOutputManager) {
 		if (this.client || this.connecting) return false
 
 		this.connecting = true
@@ -181,16 +176,15 @@ export class PHD2Handler {
 
 				if (!camera?.connected || !guideOutput?.connected) return false
 
-				const client = new GuiderClient(cameraManager, guideOutputManager, {
-					handler: this.handler,
-				})
+				const client = new GuiderClient(cameraManager, guideOutputManager, { handler: this.handler })
 
 				if (client.connect(camera, guideOutput, req)) {
 					this.client = client
 
 					const { capture } = req
 
-					capture.width && capture.height && cameraManager.frame(camera, capture.x, capture.y, capture.width, capture.height)
+					if (capture.width > 0 && capture.height > 0 && capture.subframe) cameraManager.frame(camera, capture.x, capture.y, capture.width, capture.height)
+					else if (camera.frame.width.max > 0 && camera.frame.height.max > 0) cameraManager.frame(camera, 0, 0, camera.frame.width.max, camera.frame.height.max)
 					cameraManager.frameType(camera, capture.frameType)
 					if (capture.frameFormat) cameraManager.frameFormat(camera, capture.frameFormat)
 					cameraManager.bin(camera, capture.binX, capture.binY)
@@ -218,10 +212,10 @@ export class PHD2Handler {
 		return false
 	}
 
-	async dither(req?: Partial<PHD2Dither>, abort?: AbortSignal) {
+	async dither(req?: Partial<GuiderDither>, abort?: AbortSignal) {
 		const client = this.client
 
-		if (!client || abort?.aborted || !this.isRunning) return false
+		if (!client || abort?.aborted || !this.running) return false
 
 		if (this.state === 'Guiding' || this.event.state === 'guiding') {
 			const settle = req?.settle ?? this.settings.settle
@@ -288,12 +282,12 @@ export class PHD2Handler {
 		else client.disconnect()
 
 		this.reset()
-		this.wsm.send('phd2:close', undefined)
+		this.wsm.send('guider:close', undefined)
 	}
 
 	async status() {
 		const profile = this.client instanceof GuiderClient ? undefined : (await this.client?.getProfile())?.name
-		return { connected: this.isConnected, looping: this.isLooping, running: this.isRunning, profile } satisfies PHD2Status
+		return { connected: this.connected, looping: this.looping, running: this.running, profile } satisfies GuiderStatus
 	}
 
 	clear() {
@@ -311,7 +305,7 @@ export class PHD2Handler {
 		this.pixelScale = 1
 		this.settleDone(false)
 		this.clear()
-		Object.assign(this.event, structuredClone(DEFAULT_PHD2_EVENT))
+		Object.assign(this.event, structuredClone(DEFAULT_GUIDER_EVENT))
 	}
 
 	private clearSettleTimer() {
@@ -372,19 +366,18 @@ class RMS {
 	}
 }
 
-export function phd2(phd2Handler: PHD2Handler, cameraManager: CameraManager, guideOutputManager: GuideOutputManager) {
+export function guider(guiderHandler: GuiderHandler, cameraManager: CameraManager, guideOutputManager: GuideOutputManager) {
 	return {
-		'/phd2/profiles': { GET: async () => response(await phd2Handler.profiles()) },
-		'/phd2/connect': { POST: async (req) => response(await phd2Handler.connect(await req.json(), cameraManager, guideOutputManager)) },
-		'/phd2/dither': { POST: async (req) => response(await phd2Handler.dither(await req.json())) },
-		'/phd2/disconnect': { POST: () => response(phd2Handler.disconnect()) },
-		'/phd2/status': { GET: async () => response(await phd2Handler.status()) },
-		'/phd2/event': { GET: () => response(phd2Handler.event) },
-		'/phd2/clear': { POST: () => response(phd2Handler.clear()) },
-		'/phd2/start': { POST: () => response(phd2Handler.start()) },
-		'/phd2/stop': { POST: () => response(phd2Handler.stop()) },
-		'/phd2/loop': { POST: () => response(phd2Handler.loop()) },
-		'/phd2/findstar': { POST: () => response(phd2Handler.findStar()) },
-		'/phd2/calibrate': { POST: () => response(phd2Handler.calibrate()) },
+		'/guider/connect': { POST: async (req) => response(await guiderHandler.connect(await req.json(), cameraManager, guideOutputManager)) },
+		'/guider/dither': { POST: async (req) => response(await guiderHandler.dither(await req.json())) },
+		'/guider/disconnect': { POST: () => response(guiderHandler.disconnect()) },
+		'/guider/status': { GET: async () => response(await guiderHandler.status()) },
+		'/guider/event': { GET: () => response(guiderHandler.event) },
+		'/guider/clear': { POST: () => response(guiderHandler.clear()) },
+		'/guider/start': { POST: () => response(guiderHandler.start()) },
+		'/guider/stop': { POST: () => response(guiderHandler.stop()) },
+		'/guider/loop': { POST: () => response(guiderHandler.loop()) },
+		'/guider/findstar': { POST: () => response(guiderHandler.findStar()) },
+		'/guider/calibrate': { POST: () => response(guiderHandler.calibrate()) },
 	} as const satisfies Endpoints
 }

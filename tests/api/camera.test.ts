@@ -13,9 +13,9 @@ import { bufferSource } from 'nebulosa/src/io/io'
 import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { camera as cameraEndpoints, CameraCaptureTask, CameraHandler } from 'src/api/camera'
+import type { GuiderHandler } from 'src/api/guider'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler, type Messager } from 'src/api/message'
-import type { PHD2Handler } from 'src/api/phd2'
 import { DEFAULT_CAMERA_CAPTURE_START, type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated } from 'src/shared/types'
 import { json, noContent, SocketMessager, waitUntil, type SocketMessage } from './util'
 
@@ -636,16 +636,16 @@ describe('camera capture start request', () => {
 		let dithered: CameraCaptureStart['dither'] | undefined
 		let signal: AbortSignal | undefined
 
-		const phd2Handler = {
+		const guiderHandler = {
 			isRunning: true,
 			dither: (request: CameraCaptureStart['dither'], abortSignal: AbortSignal) => {
 				dithered = request
 				signal = abortSignal
 			},
 			settleDone: () => {},
-		} as unknown as PHD2Handler
+		} as unknown as GuiderHandler
 
-		const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, phd2Handler)
+		const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, guiderHandler)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 

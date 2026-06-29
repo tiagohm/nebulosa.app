@@ -19,11 +19,11 @@ import { FlatPanelHandler, flatPanel } from 'src/api/flatpanel'
 import { FlatWizardHandler, flatWizard } from 'src/api/flatwizard'
 import { FocuserHandler, focuser } from 'src/api/focuser'
 import { GuideOutputHandler, guideOutput } from 'src/api/guideoutput'
+import { GuiderHandler, guider } from 'src/api/guider'
 import { IndiDevicePropertyHandler, IndiHandler, IndiServerHandler, indi } from 'src/api/indi'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler, MountRemoteControlHandler, mount } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
-import { PHD2Handler, phd2 } from 'src/api/phd2'
 import { RotatorHandler, rotator } from 'src/api/rotator'
 import { ThermometerHandler, thermometer } from 'src/api/thermometer'
 import { TppaHandler, tppa } from 'src/api/tppa'
@@ -175,8 +175,8 @@ const thermometerManager = new ThermometerManager(thermometerProvider)
 const dewHeaterManager = new DewHeaterManager(dewHeaterProvider)
 
 const confirmationHandler = new ConfirmationHandler(wsm)
-const phd2Handler = new PHD2Handler(wsm, notificationHandler)
-const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, phd2Handler)
+const guiderHandler = new GuiderHandler(wsm, notificationHandler)
+const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, guiderHandler)
 const mountHandler = new MountHandler(wsm, mountManager, confirmationHandler, cacheManager)
 const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager)
 const focuserHandler = new FocuserHandler(wsm, focuserManager)
@@ -253,7 +253,7 @@ const server = Bun.serve({
 		...flatWizard(flatWizardHandler),
 		...autoFocus(autoFocusHandler),
 		...alpaca(alpacaHandler, alpacaPort, hasAlpaca),
-		...phd2(phd2Handler, cameraManager, guideOutputManager),
+		...guider(guiderHandler, cameraManager, guideOutputManager),
 	},
 	websocket: {
 		open: (socket) => wsm.open(socket),

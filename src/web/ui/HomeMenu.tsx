@@ -1,5 +1,6 @@
 import type { DeviceType } from 'nebulosa/src/devices/indi/device'
 import { memo } from 'react'
+import { guiderStore } from 'src/web/stores/guider.store'
 import { useSnapshot } from 'valtio'
 import aboutIcon from '@/assets/about.webp'
 import alignmentIcon from '@/assets/alignment.webp'
@@ -32,7 +33,6 @@ import { equipmentStore } from '@/stores/equipment.store'
 import { flatWizardListStore } from '@/stores/flatwizard.list.store'
 import { framingStore } from '@/stores/framing.store'
 import { homeMenuStore, isDevice } from '@/stores/home.menu.store'
-import { phd2Store } from '@/stores/phd2.store'
 import { tppaListStore } from '@/stores/tppa.list.store'
 import { CameraDeviceContext, FocuserDeviceContext, MountDeviceContext } from '../shared/context'
 import { About } from './About'
@@ -49,9 +49,9 @@ import { Darv } from './Darv'
 import { CameraDropdown, FocuserDropdown, MountDropdown } from './DeviceDropdown'
 import { FlatWizard } from './FlatWizard'
 import { Framing } from './Framing'
+import { Guider } from './Guider'
 import { Icons } from './Icon'
 import { IndiPanelControlButton } from './IndiPanelControlButton'
-import { PHD2 } from './PHD2'
 import { Tppa } from './Tppa'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
@@ -61,7 +61,7 @@ export const HomeMenu = memo(() => (
 		<HomeMenuPopover />
 		<Atlas />
 		<Framing />
-		<PHD2 />
+		<Guider />
 		<AlpacaServer />
 		<About />
 		<Calculator />
@@ -138,7 +138,7 @@ export const HomeMenuPopoverContent = memo(() => {
 			<Button data-key="guideOutput" children={<img className="w-9" src={guideOutputIcon} />} color="secondary" disabled={guideOutputLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Guide Output" variant="ghost" />
 			<Button data-key="dewHeater" children={<img className="w-9" src={heaterIcon} />} color="secondary" disabled={dewHeaterLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Dew Heater" variant="ghost" />
 			<Button data-key="thermometer" children={<img className="w-9" src={thermometerIcon} />} color="secondary" disabled={thermometerLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="Thermometer" variant="ghost" />
-			<Button data-key="phd2" children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={phd2Store.show} size="lg" tooltipContent="PHD2" variant="ghost" />
+			<Button data-key="guider" children={<img className="w-9" src={phd2Icon} />} color="secondary" onClick={guiderStore.show} size="lg" tooltipContent="Guider" variant="ghost" />
 			<Button data-key="atlas" children={<img className="w-9" src={skyIcon} />} color="secondary" onClick={atlasStore.show} size="lg" tooltipContent="Sky Atlas" variant="ghost" />
 			<Button data-key="framing" children={<img className="w-9" src={framingIcon} />} color="secondary" onClick={framingStore.show} size="lg" tooltipContent="Framing" variant="ghost" />
 			<Button data-key="tppa" children={<img className="w-9" src={alignmentIcon} />} color="secondary" disabled={cameraLength === 0 || mountLength === 0} onClick={handleButtonClick} size="lg" tooltipContent="TPPA" variant="ghost" />

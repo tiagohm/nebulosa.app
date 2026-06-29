@@ -763,7 +763,7 @@ export interface CameraCaptureStart extends Size {
 	wheel?: string
 	focuser?: string
 	rotator?: string
-	dither: PHD2Dither & { enabled: boolean }
+	dither: GuiderDither & { enabled: boolean }
 	transferFormat: CameraTransferFormat
 	compressed: boolean
 }
@@ -971,30 +971,30 @@ export interface AlpacaServerStatus {
 	readonly devices: AlpacaConfiguredDevice[]
 }
 
-// PHD2
+// Guider
 
-export type PHD2ClientMode = 'internal' | 'remote'
+export type GuiderClientMode = 'local' | 'remote'
 
-export type PHD2State = 'idle' | 'calibrating' | 'settling' | 'guiding' | 'looping' | 'starLost' | 'paused'
+export type GuiderState = 'idle' | 'calibrating' | 'settling' | 'guiding' | 'looping' | 'starLost' | 'paused'
 
-export interface PHD2RemoteConnect extends Readonly<HostAndPort> {
-	readonly dither: PHD2Dither
+export interface GuiderRemoteConnect extends Readonly<HostAndPort> {
+	readonly dither: GuiderDither
 	readonly mode: 'remote'
 }
 
-export interface PHD2InternalConnect {
-	readonly dither: PHD2Dither
+export interface GuiderLocalConnect {
+	readonly dither: GuiderDither
 	readonly focalLength: number
 	readonly camera: string
 	readonly guideOutput: string
 	readonly capture: Omit<CameraCaptureStart, 'dither'>
-	readonly mode: 'internal'
+	readonly mode: 'local'
 }
 
-export type PHD2Connect = PHD2RemoteConnect | PHD2InternalConnect
+export type GuiderConnect = GuiderRemoteConnect | GuiderLocalConnect
 
-export interface PHD2Event {
-	state: PHD2State
+export interface GuiderEvent {
+	state: GuiderState
 	rmsRA: number
 	rmsDEC: number
 	starMass: number
@@ -1010,13 +1010,13 @@ export interface PHD2Event {
 	}
 }
 
-export interface PHD2Dither {
+export interface GuiderDither {
 	readonly amount: number
 	readonly raOnly: boolean
 	readonly settle: PHD2Settle
 }
 
-export interface PHD2Status {
+export interface GuiderStatus {
 	connected: boolean
 	looping: boolean
 	running: boolean
@@ -1030,7 +1030,7 @@ export const DEFAULT_SIZE: Size = {
 	height: 0,
 }
 
-export const DEFAULT_PHD2_DITHER: Required<PHD2Dither> = {
+export const DEFAULT_GUIDER_DITHER: Required<GuiderDither> = {
 	amount: 5,
 	raOnly: false,
 	settle: DEFAULT_PHD2_SETTLE,
@@ -1055,7 +1055,7 @@ export const DEFAULT_CAMERA_CAPTURE_START: CameraCaptureStart = {
 	offset: 0,
 	autoSave: false,
 	autoSubFolderMode: 'off',
-	dither: { ...DEFAULT_PHD2_DITHER, enabled: false },
+	dither: { ...DEFAULT_GUIDER_DITHER, enabled: false },
 	transferFormat: 'FITS',
 	compressed: false,
 }
@@ -1450,7 +1450,7 @@ export const DEFAULT_FLAT_WIZARD_EVENT: FlatWizardEvent = {
 	median: 0,
 }
 
-export const DEFAULT_PHD2_EVENT: PHD2Event = {
+export const DEFAULT_GUIDER_EVENT: GuiderEvent = {
 	state: 'idle',
 	rmsRA: 0,
 	rmsDEC: 0,
@@ -1467,18 +1467,18 @@ export const DEFAULT_PHD2_EVENT: PHD2Event = {
 	},
 }
 
-export const DEFAULT_PHD2_REMOTE_CONNECT: PHD2RemoteConnect = {
+export const DEFAULT_GUIDER_REMOTE_CONNECT: GuiderRemoteConnect = {
 	mode: 'remote',
 	host: 'localhost',
 	port: 4400,
-	dither: DEFAULT_PHD2_DITHER,
+	dither: DEFAULT_GUIDER_DITHER,
 }
 
-export const DEFAULT_PHD2_INTERNAL_CONNECT: PHD2InternalConnect = {
-	mode: 'internal',
+export const DEFAULT_GUIDER_INTERNAL_CONNECT: GuiderLocalConnect = {
+	mode: 'local',
 	focalLength: 0,
 	camera: '',
 	guideOutput: '',
 	capture: structuredClone(DEFAULT_CAMERA_CAPTURE_START),
-	dither: DEFAULT_PHD2_DITHER,
+	dither: DEFAULT_GUIDER_DITHER,
 }

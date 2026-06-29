@@ -9,13 +9,12 @@ import type { LocalSolarEclipseCircumstances, LocalSolarEclipseViewGeometry } fr
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
-import type { PHD2Profile } from 'nebulosa/src/devices/guiding/phd2'
 import type { Camera, ClientInfo, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, MountTargetCoordinate, NameAndLabel, Rotator, Thermometer, TrackMode, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { Message, NewVector } from 'nebulosa/src/devices/indi/types'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
-import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, ComputeLunarEclipseLocalCircumstances, ComputeLunarEclipseLocalView, ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DirectoryEntry, FileSystem, FindCloseApproaches, FindLunarEclipse, FindSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarApsis, LunarEclipseMap, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, OpenImage, PHD2Connect, PHD2Event, PHD2Status, PlanetariumRequest, PlateSolveStart, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SkyObject, SolarEclipseMap, SolarSeasons, StarDetection, StatisticImage, TppaStart, Twilight } from 'src/shared/types'
+import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, ComputeLunarEclipseLocalCircumstances, ComputeLunarEclipseLocalView, ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DirectoryEntry, FileSystem, FindCloseApproaches, FindLunarEclipse, FindSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarApsis, LunarEclipseMap, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, OpenImage, GuiderConnect, GuiderEvent, GuiderStatus, PlanetariumRequest, PlateSolveStart, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SkyObject, SolarEclipseMap, SolarSeasons, StarDetection, StatisticImage, TppaStart, Twilight } from 'src/shared/types'
 import { type ImageCoordinateInterpolation, type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -639,49 +638,45 @@ export namespace Api {
 		}
 	}
 
-	export namespace PHD2 {
-		export function profiles() {
-			return json<readonly PHD2Profile[]>('/phd2/profiles', 'get')
-		}
-
-		export function connect(req: PHD2Connect) {
-			return json<boolean>('/phd2/connect', 'post', req)
+	export namespace Guider {
+		export function connect(req: GuiderConnect) {
+			return json<boolean>('/guider/connect', 'post', req)
 		}
 
 		export function disconnect() {
-			return res('/phd2/disconnect', 'post')
+			return res('/guider/disconnect', 'post')
 		}
 
 		export function clear() {
-			return res('/phd2/clear', 'post')
+			return res('/guider/clear', 'post')
 		}
 
 		export function status() {
-			return json<PHD2Status>('/phd2/status', 'get')
+			return json<GuiderStatus>('/guider/status', 'get')
 		}
 
 		export function event() {
-			return json<PHD2Event>('/phd2/event', 'get')
+			return json<GuiderEvent>('/guider/event', 'get')
 		}
 
 		export function start() {
-			return res('/phd2/start', 'post')
+			return res('/guider/start', 'post')
 		}
 
 		export function stop() {
-			return res('/phd2/stop', 'post')
+			return res('/guider/stop', 'post')
 		}
 
 		export function findStar() {
-			return res('/phd2/findstar', 'post')
+			return res('/guider/findstar', 'post')
 		}
 
 		export function loop() {
-			return res('/phd2/loop', 'post')
+			return res('/guider/loop', 'post')
 		}
 
 		export function calibrate() {
-			return res('/phd2/calibrate', 'post')
+			return res('/guider/calibrate', 'post')
 		}
 	}
 }

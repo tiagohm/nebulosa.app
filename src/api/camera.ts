@@ -8,10 +8,10 @@ import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import bus from 'src/shared/bus'
 import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
+import type { GuiderHandler } from './guider'
 import { type Endpoints, query, response } from './http'
 import type { ImageProcessor } from './image'
 import type { Messager, WebSocketMessageHandler } from './message'
-import type { PHD2Handler } from './phd2'
 import { directoryExists, waitFor } from './util'
 
 const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
@@ -27,7 +27,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		readonly wheelManager: WheelManager,
 		readonly focuserManager: FocuserManager,
 		readonly rotatorManager: RotatorManager,
-		readonly phd2Handler?: PHD2Handler,
+		readonly guiderHandler?: GuiderHandler,
 	) {
 		cameraManager.addHandler(this)
 
@@ -295,12 +295,12 @@ export class CameraCaptureTask {
 
 	async start() {
 		if (!this.stopped && this.camera.connected && this.event.remainingCount > 0 && this.request.exposureTime > 0) {
-			if (this.request.dither.enabled && this.cameraHandler.phd2Handler?.isRunning) {
+			if (this.request.dither.enabled && this.cameraHandler.guiderHandler?.running) {
 				this.event.state = 'dithering'
 				this.handleCameraCaptureEvent(this, this.event)
 
 				try {
-					await this.cameraHandler.phd2Handler.dither(this.request.dither, this.aborter.signal)
+					await this.cameraHandler.guiderHandler.dither(this.request.dither, this.aborter.signal)
 				} catch (error) {
 					if (!this.stopped) this.fail(error)
 					return false
@@ -336,7 +336,7 @@ export class CameraCaptureTask {
 		if (this.destroyed) return
 		this.destroyed = true
 		this.aborter.abort()
-		this.cameraHandler.phd2Handler?.settleDone(false)
+		this.cameraHandler.guiderHandler?.settleDone(false)
 	}
 
 	private fail(error?: unknown) {

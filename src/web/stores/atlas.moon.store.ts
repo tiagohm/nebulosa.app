@@ -1,7 +1,8 @@
+import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalAdd, temporalGet } from 'nebulosa/src/astronomy/time/temporal'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, type BodyPosition, type LunarPhaseTime, type NextLunarApsis, type NextLunarEclipse, type PositionOfBody } from 'src/shared/types'
+import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, type BodyPosition, type LunarApsis, type LunarPhaseTime, type PositionOfBody } from 'src/shared/types'
 import { proxy, ref } from 'valtio'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
@@ -15,8 +16,8 @@ export interface AtlasMoonState {
 	readonly position: BodyPosition
 	chart: readonly number[]
 	phases: readonly LunarPhaseTime[]
-	eclipses: readonly NextLunarEclipse[]
-	apsis: readonly [NextLunarApsis, NextLunarApsis]
+	eclipses: readonly LunarEclipse[]
+	apsis: readonly [LunarApsis, LunarApsis]
 }
 
 const state = proxy<AtlasMoonState>({
@@ -27,8 +28,8 @@ const state = proxy<AtlasMoonState>({
 	phases: [],
 	eclipses: [],
 	apsis: [
-		{ time: 0, distance: 0, diameter: 0 },
-		{ time: 0, distance: 0, diameter: 0 },
+		{ time: { day: 0, fraction: 0, scale: 3 }, distance: 0, diameter: 0 },
+		{ time: { day: 0, fraction: 0, scale: 3 }, distance: 0, diameter: 0 },
 	],
 })
 
@@ -104,8 +105,8 @@ async function updatePhases() {
 async function updateEclipses() {
 	if (!eclipsesUpdate) return
 	eclipsesUpdate = false
-	const request = { ...state.request, count: 1 }
-	const eclipses = await Api.Atlas.moonEclipses(request)
+	const request = { ...state.request, count: 1, next: true }
+	const eclipses = await Api.Atlas.lunarEclipses(request)
 	if (eclipses) state.eclipses = eclipses
 	else eclipsesUpdate = true
 }

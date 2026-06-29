@@ -1,7 +1,10 @@
 import { nanoid } from 'nanoid'
 import type { HipsSurvey } from 'nebulosa/src/adapters/sky/hips2fits'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
+import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
+import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import type { LocalLunarEclipseCircumstances, LocalLunarEclipseViewGeometry } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
 import type { LocalSolarEclipseCircumstances, LocalSolarEclipseViewGeometry } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import type { Writable } from 'nebulosa/src/core/types'
@@ -12,7 +15,7 @@ import type { Message, NewVector } from 'nebulosa/src/devices/indi/types'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
-import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DirectoryEntry, FileSystem, FindCloseApproaches, FindNextLunarEclipse, FindSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, NextLunarApsis, NextLunarEclipse, NextSolarEclipse, OpenImage, PHD2Connect, PHD2Event, PHD2Status, PlanetariumRequest, PlateSolveStart, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SkyObject, SolarEclipseMap, SolarSeasons, StarDetection, StatisticImage, TppaStart, Twilight } from 'src/shared/types'
+import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, ComputeLunarEclipseLocalCircumstances, ComputeLunarEclipseLocalView, ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DirectoryEntry, FileSystem, FindCloseApproaches, FindLunarEclipse, FindSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarApsis, LunarEclipseMap, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, OpenImage, PHD2Connect, PHD2Event, PHD2Status, PlanetariumRequest, PlateSolveStart, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SkyObject, SolarEclipseMap, SolarSeasons, StarDetection, StatisticImage, TppaStart, Twilight } from 'src/shared/types'
 import { type ImageCoordinateInterpolation, type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
@@ -460,10 +463,10 @@ export namespace Api {
 		}
 
 		export function solarEclipses(req: FindSolarEclipse) {
-			return json<readonly NextSolarEclipse[]>('/atlas/sun/eclipses', 'post', req)
+			return json<readonly SolarEclipse[]>('/atlas/sun/eclipses', 'post', req)
 		}
 
-		export function solarEclipseMap(req: NextSolarEclipse) {
+		export function solarEclipseMap(req: SolarEclipse) {
 			return json<SolarEclipseMap>('/atlas/sun/eclipses/map', 'post', req)
 		}
 
@@ -487,12 +490,24 @@ export namespace Api {
 			return json<readonly LunarPhaseTime[]>('/atlas/moon/phases', 'post', req)
 		}
 
-		export function moonEclipses(req: FindNextLunarEclipse) {
-			return json<readonly NextLunarEclipse[]>('/atlas/moon/eclipses', 'post', req)
+		export function lunarEclipses(req: FindLunarEclipse) {
+			return json<readonly LunarEclipse[]>('/atlas/moon/eclipses', 'post', req)
+		}
+
+		export function lunarEclipseMap(req: LunarEclipse) {
+			return json<LunarEclipseMap>('/atlas/moon/eclipses/map', 'post', req)
+		}
+
+		export function lunarEclipseLocalCircumstances(req: ComputeLunarEclipseLocalCircumstances) {
+			return json<LocalLunarEclipseCircumstances>('/atlas/moon/eclipses/local/circumstances', 'post', req)
+		}
+
+		export function lunarEclipseLocalView(req: ComputeLunarEclipseLocalView) {
+			return json<LocalLunarEclipseViewGeometry>('/atlas/moon/eclipses/local/view', 'post', req)
 		}
 
 		export function moonApsis(req: LocationAndTime) {
-			return json<readonly [NextLunarApsis, NextLunarApsis]>('/atlas/moon/apsis', 'post', req)
+			return json<readonly [LunarApsis, LunarApsis]>('/atlas/moon/apsis', 'post', req)
 		}
 
 		export function positionOfPlanet(req: PositionOfBody, code: string) {

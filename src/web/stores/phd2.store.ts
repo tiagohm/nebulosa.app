@@ -119,7 +119,7 @@ async function runCommand(command: NonNullable<PHD2State['pendingCommand']>) {
 		if (state.pendingCommand !== undefined) return
 		state.pendingCommand = command
 		return await Api.PHD2[command]()
-	} catch {
+	} finally {
 		state.pendingCommand = undefined
 	}
 }

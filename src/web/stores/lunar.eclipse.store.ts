@@ -1,10 +1,10 @@
-import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
-import type { LocalSolarEclipseCircumstances, LocalSolarEclipseViewGeometry, LocalSolarEclipseViewOptions } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
+import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
+import type { LocalLunarEclipseCircumstances, LocalLunarEclipseCircumstancesOptions, LocalLunarEclipseViewGeometry, LocalLunarEclipseViewOptions } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import type { Writable } from 'nebulosa/src/core/types'
 import { deg } from 'nebulosa/src/math/units/angle'
-import type { SolarEclipseMap } from 'src/shared/types'
+import type { LunarEclipseMap } from 'src/shared/types'
 import { proxy, ref } from 'valtio'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
@@ -12,20 +12,21 @@ import type { WorldMapPosition } from '../ui/components/WorldMap'
 import type { InteractTransform } from '../ui/Interactable'
 import { atlasStore } from './atlas.store'
 
-export type SolarEclipseStore = typeof solarEclipseStore
+export type LunarEclipseStore = typeof lunarEclipseStore
 
-export interface SolarEclipseState {
+export interface LunarEclipseState {
 	show: boolean
-	eclipse?: SolarEclipse
-	map?: SolarEclipseMap
-	circumstances?: LocalSolarEclipseCircumstances
-	localView?: LocalSolarEclipseViewGeometry
-	localViewOptions: Writable<LocalSolarEclipseViewOptions>
+	eclipse?: LunarEclipse
+	map?: LunarEclipseMap
+	circumstances?: LocalLunarEclipseCircumstances
+	localView?: LocalLunarEclipseViewGeometry
+	localViewOptions: Writable<LocalLunarEclipseViewOptions>
+	localCircumstancesOptions: Writable<LocalLunarEclipseCircumstancesOptions>
 	location: GeographicCoordinate
 	scale: number
 }
 
-const state = proxy<SolarEclipseState>({
+const state = proxy<LunarEclipseState>({
 	show: false,
 	location: {
 		latitude: atlasStore.state.request.location.latitude,
@@ -36,33 +37,36 @@ const state = proxy<SolarEclipseState>({
 	localViewOptions: {
 		width: 400,
 		height: 200,
-		selectedEvent: 'C1',
+		selectedEvent: 'P1',
 		orientationMode: 'zenith',
-		solarRadiusPx: 28,
+		umbraRadiusPx: 35,
 		includeGhostDisks: false,
 		includeHorizon: true,
 	},
+	localCircumstancesOptions: {
+		altitudeSamples: 36, // 10 min, 6h / 36 = 10 min
+	},
 })
 
-initProxy(state, 'solareclipse', ['p:scale', 'o:localViewOptions'])
+initProxy(state, 'lunareclipse', ['p:scale', 'o:localViewOptions', 'o:localCircumstancesOptions'])
 
 async function loadMap() {
 	if (state.eclipse === undefined) return false
-	const map = await Api.Atlas.solarEclipseMap(state.eclipse)
+	const map = await Api.Atlas.lunarEclipseMap(state.eclipse)
 	if (map) state.map = ref(map)
 	return map !== undefined
 }
 
 async function loadCircumstances() {
 	if (state.eclipse === undefined) return false
-	const circumstances = await Api.Atlas.solarEclipseLocalCircumstances({ eclipse: state.eclipse, location: state.location })
+	const circumstances = await Api.Atlas.lunarEclipseLocalCircumstances({ eclipse: state.eclipse, location: state.location })
 	if (circumstances) state.circumstances = ref(circumstances)
 	return circumstances !== undefined
 }
 
 async function loadView() {
 	if (state.circumstances === undefined) return false
-	const localView = await Api.Atlas.solarEclipseLocalView({ events: state.circumstances.events, options: state.localViewOptions })
+	const localView = await Api.Atlas.lunarEclipseLocalView({ eclipse: state.eclipse!, events: state.circumstances.events, options: state.localViewOptions })
 
 	if (localView) {
 		state.localView = ref(localView)
@@ -72,7 +76,7 @@ async function loadView() {
 	return localView !== undefined
 }
 
-async function load(next: SolarEclipse) {
+async function load(next: LunarEclipse) {
 	show()
 
 	if (next.maximalTime !== state.eclipse?.maximalTime) {
@@ -84,7 +88,7 @@ async function load(next: SolarEclipse) {
 	}
 }
 
-async function updateLocalViewOptions<K extends 'orientationMode' | 'selectedEvent'>(key: K, value: LocalSolarEclipseViewOptions[K]) {
+async function updateLocalViewOptions<K extends 'orientationMode' | 'selectedEvent'>(key: K, value: LocalLunarEclipseViewOptions[K]) {
 	state.localViewOptions[key] = value
 
 	await loadView()
@@ -105,7 +109,7 @@ async function handleCoordinateChange(position: WorldMapPosition) {
 async function find(next: boolean) {
 	if (!state.eclipse) return
 	const utc = temporalFromTime(state.eclipse.maximalTime) + (next ? 86400000 : -86400000)
-	const eclipse = await Api.Atlas.solarEclipses({ time: { utc, offset: 0 }, location: atlasStore.state.request.location, count: 1, next })
+	const eclipse = await Api.Atlas.lunarEclipses({ time: { utc, offset: 0 }, location: atlasStore.state.request.location, count: 1, next })
 	if (!eclipse || eclipse.length === 0) return
 	await load(eclipse[0])
 }
@@ -126,7 +130,7 @@ function hide() {
 	state.show = false
 }
 
-export const solarEclipseStore = {
+export const lunarEclipseStore = {
 	state,
 	load,
 	prev,

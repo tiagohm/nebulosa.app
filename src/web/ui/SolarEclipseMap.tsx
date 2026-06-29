@@ -1,9 +1,11 @@
 import type { LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipseEvent, LocalSolarEclipseSvgShape } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
+import type { SolarEclipseGeoPoint } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
-import type { Point } from 'nebulosa/src/math/numerical/geometry'
+import { time } from 'nebulosa/src/astronomy/time/time'
 import { formatAZ, toDeg } from 'nebulosa/src/math/units/angle'
 import { Fragment, memo, type CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
+import { astronomicEventTemporal } from '../shared/time'
 import { tw } from '../shared/util'
 import { atlasStore } from '../stores/atlas.store'
 import { solarEclipseStore } from '../stores/solar.eclipse.store'
@@ -27,16 +29,23 @@ export const SolarEclipseMap = memo(() => {
 	)
 })
 
-const Header = memo(() => (
-	<div className="grid w-full grid-cols-[2.5rem_1fr_2.5rem] items-center gap-2">
-		<IconButton icon={Icons.ArrowLeft} onClick={solarEclipseStore.prev} tooltipContent="Prev" />
-		<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">
-			<Icons.Sun className="text-warning" />
-			<span className="truncate">Solar Eclipse</span>
-		</span>
-		<IconButton icon={Icons.ArrowRight} onClick={solarEclipseStore.next} tooltipContent="Next" />
-	</div>
-))
+const Header = memo(() => {
+	const { eclipse } = useSnapshot(solarEclipseStore.state)
+
+	return (
+		<div className="grid w-full grid-cols-[2.5rem_1fr_2.5rem] items-center gap-2">
+			<IconButton icon={Icons.ArrowLeft} onClick={solarEclipseStore.prev} tooltipContent="Prev" />
+			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">
+				<Icons.Sun className="text-warning" />
+				<div className="flex flex-col items-center justify-center gap-0">
+					<span className="truncate">Solar Eclipse</span>
+					{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD')}</span>}
+				</div>
+			</span>
+			<IconButton icon={Icons.ArrowRight} onClick={solarEclipseStore.next} tooltipContent="Next" />
+		</div>
+	)
+})
 
 const Body = memo(() => (
 	<div className="flex w-full flex-col gap-3">
@@ -101,7 +110,7 @@ const EclipseDetails = memo(() => {
 
 interface ContactPointProps {
 	readonly name: string
-	readonly point: Point & { time: number }
+	readonly point: SolarEclipseGeoPoint
 	readonly offset: number
 	readonly color: string
 }
@@ -113,7 +122,7 @@ function ContactPoint({ point, name, offset, color }: ContactPointProps) {
 				<span className="font-mono text-sm font-bold" style={{ color }}>
 					{name}
 				</span>
-				<span className="truncate font-mono text-neutral-300">{formatTemporal(point.time, 'YYYY-MM-DD HH:mm', offset)}</span>
+				<span className="truncate font-mono text-neutral-300">{formatTemporal(temporalFromTime(time(point.jd!, 0, 3)), 'YYYY-MM-DD HH:mm', offset)}</span>
 			</div>
 			<div className="flex min-w-0 flex-row flex-wrap gap-x-3 gap-y-1 font-mono text-neutral-400">
 				<span>
@@ -167,7 +176,7 @@ const BesselianElements = memo(() => {
 	return (
 		<div className="overflow-x-auto rounded-lg bg-neutral-900/70 text-sm text-neutral-100">
 			<div className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
-				<span className="font-mono text-xs text-neutral-400">t0 = {formatTemporal(map.elements.time0, 'YYYY-MM-DD HH:mm', 0)} TT</span>
+				<span className="font-mono text-xs text-neutral-400">t0 = {formatTemporal(astronomicEventTemporal(map.elements.time0), 'YYYY-MM-DD HH:mm', 0)} TT</span>
 				<span className="flex flex-row gap-3 font-mono text-xs text-neutral-500">
 					<span>tan F1 {map.elements.tanF1.toFixed(7)}</span>
 					<span>tan F2 {map.elements.tanF2.toFixed(7)}</span>
@@ -224,7 +233,7 @@ const LocalHeader = memo(() => {
 
 	return (
 		<div className="flex min-w-0 flex-col gap-2 rounded-lg bg-neutral-900/70 px-3 py-2">
-			<div className="flex min-w-0 flex-row flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-neutral-400">
+			<div className="flex min-w-0 flex-row flex-wrap gap-x-4 gap-y-1 font-mono text-sm text-neutral-400">
 				<span>
 					<b className="text-neutral-500">LAT</b> {formatAZ(location.latitude)}
 				</span>
@@ -438,23 +447,7 @@ const CENTER_LINE_STYLE: CSSProperties = { fill: 'none', stroke: '#FF2ED1', stro
 const RISESET_LINE_STYLE: CSSProperties = { fill: 'none', stroke: '#00E5FF', strokeWidth: 2, strokeLinecap: 'round' }
 const POINT_LABEL_STYLE: CSSProperties = { font: '12px sans-serif', fontWeight: 'bold', fill: '#fff' }
 
-const MAP_POINT_ITEMS = [
-	['P1', '#FF9F1C'],
-	['P2', '#FF9F1C'],
-	['P3', '#FF9F1C'],
-	['P4', '#FF9F1C'],
-	['U1', '#FFE66D'],
-	['U2', '#FFE66D'],
-	['U3', '#FFE66D'],
-	['U4', '#FFE66D'],
-	['C1', '#FF7BEA'],
-	['C2', '#FF7BEA'],
-	['N1', '#35FF7A'],
-	['N2', '#35FF7A'],
-	['S1', '#FF4D4D'],
-	['S2', '#FF4D4D'],
-	['Max', '#FFFFFF'],
-] as const
+const MAP_POINT_ITEMS = [...CONTACT_POINT_ITEMS, ['N1', '#35FF7A'], ['N2', '#35FF7A'], ['S1', '#FF4D4D'], ['S2', '#FF4D4D']] as const
 
 const MapGeometry = memo(() => {
 	const { map } = useSnapshot(solarEclipseStore.state)

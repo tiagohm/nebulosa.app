@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test, type Mock } from 'bun:test'
 import { join } from 'path'
-import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
+import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
 import { deg, formatALT, formatRA, parseAngle } from 'nebulosa/src/math/units/angle'
 import { lightYear, meter, toKilometer } from 'nebulosa/src/math/units/distance'
@@ -65,13 +65,13 @@ test('solar eclipses from meeus', () => {
 	let eclipses = atlas.solarEclipses({ ...request, time: { ...request.time, utc: 1771377240000 } }) // Tue Feb 17 2026 22:14:00 GMT-0300 (Horário Padrão de Brasília)
 
 	expect(eclipses).toHaveLength(1)
-	expect(formatTemporal(eclipses[0].maximalTime, 'YYYY-MM-DD HH:mm')).toBe('2026-02-17 12:12')
+	expect(formatTemporal(temporalFromTime(eclipses[0].maximalTime), 'YYYY-MM-DD HH:mm')).toBe('2026-02-17 12:12')
 	expect(eclipses[0].type).toBe('annular')
 
 	eclipses = atlas.solarEclipses({ ...request, time: { ...request.time, utc: 1771384440000 } }) // Wed Feb 18 2026 00:14:00 GMT-0300 (Horário Padrão de Brasília)
 
 	expect(eclipses).toHaveLength(1)
-	expect(formatTemporal(eclipses[0].maximalTime, 'YYYY-MM-DD HH:mm')).toBe('2026-08-12 17:46')
+	expect(formatTemporal(temporalFromTime(eclipses[0].maximalTime), 'YYYY-MM-DD HH:mm')).toBe('2026-08-12 17:46')
 	expect(eclipses[0].type).toBe('total')
 })
 

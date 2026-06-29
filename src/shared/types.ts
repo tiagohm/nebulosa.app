@@ -15,11 +15,14 @@ import type { Camera, CameraTransferFormat, ClientInfo, ClientType, Cover, Devic
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { LunarEclipse, LunarPhase } from 'nebulosa/src/astronomy/bodies/moon'
 import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
+import type { LocalLunarEclipseCircumstances, LocalLunarEclipseCircumstancesOptions, LocalLunarEclipseViewOptions } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
+import type { LunarEclipseMapGeometry, LunarEclipseMapSvgPaths } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
 import type { LocalSolarEclipseCircumstances, LocalSolarEclipseViewOptions } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
 import type { PolynomialBesselianElements, SolarEclipseContactPoints, SolarEclipseMapSvgPaths } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import type { SmallBodySearchListItem, SmallBodySearchObject } from 'nebulosa/src/astronomy/orbits/sbd'
 import type { Temporal } from 'nebulosa/src/astronomy/time/temporal'
+import type { Time } from 'nebulosa/src/astronomy/time/time'
 import type { StarCatalogEntry } from 'nebulosa/src/catalogs/stars/catalog'
 import type { DeepRequired, RequiredOnly } from 'nebulosa/src/core/types'
 import { DEFAULT_PHD2_SETTLE, type PHD2Settle } from 'nebulosa/src/devices/guiding/phd2'
@@ -167,18 +170,14 @@ export interface FindSolarEclipse extends LocationAndTime {
 	next: boolean
 }
 
-export interface NextSolarEclipse extends Omit<SolarEclipse, 'maximalTime'> {
-	maximalTime: Temporal
-}
-
 export interface SolarEclipseMap {
-	readonly elements: Omit<PolynomialBesselianElements, 'time0' | 'maximumTime'> & { time0: number; maximumTime: number }
-	readonly points: Partial<Record<keyof SolarEclipseContactPoints, Point & { time: number }>>
+	readonly elements: PolynomialBesselianElements
+	readonly points: SolarEclipseContactPoints
 	readonly paths: SolarEclipseMapSvgPaths
 }
 
 export interface ComputeSolarEclipseLocalCircumstances {
-	readonly next: NextSolarEclipse
+	readonly eclipse: SolarEclipse
 	readonly location: GeographicCoordinate
 }
 
@@ -187,22 +186,29 @@ export interface ComputeSolarEclipseLocalView {
 	readonly options: LocalSolarEclipseViewOptions
 }
 
-export interface FindNextLunarEclipse extends LocationAndTime {
+export interface FindLunarEclipse extends LocationAndTime {
 	count: number
+	next: boolean
 }
 
-export interface NextLunarEclipse extends Omit<LunarEclipse, 'maximalTime' | 'firstContactPenumbraTime' | 'firstContactUmbraTime' | 'totalBeginTime' | 'totalEndTime' | 'lastContactUmbraTime' | 'lastContactPenumbraTime'> {
-	maximalTime: Temporal
-	firstContactPenumbraTime: Temporal
-	firstContactUmbraTime: Temporal
-	totalBeginTime: Temporal
-	totalEndTime: Temporal
-	lastContactUmbraTime: Temporal
-	lastContactPenumbraTime: Temporal
+export interface LunarEclipseMap extends Pick<LunarEclipseMapGeometry, 'events'> {
+	readonly paths: LunarEclipseMapSvgPaths
 }
 
-export interface NextLunarApsis {
-	readonly time: number
+export interface ComputeLunarEclipseLocalCircumstances {
+	readonly eclipse: LunarEclipse
+	readonly location: GeographicCoordinate
+	readonly options?: LocalLunarEclipseCircumstancesOptions
+}
+
+export interface ComputeLunarEclipseLocalView {
+	readonly eclipse: LunarEclipse
+	readonly events: LocalLunarEclipseCircumstances['events']
+	readonly options: LocalLunarEclipseViewOptions
+}
+
+export interface LunarApsis {
+	readonly time: Time
 	readonly distance: Distance
 	readonly diameter: Angle
 }

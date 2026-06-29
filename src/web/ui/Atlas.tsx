@@ -1,7 +1,7 @@
 import type { LunarPhase } from 'nebulosa/src/astronomy/bodies/moon'
 import { CONSTELLATION_LIST, type Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
 import type { SmallBodySearchListItem } from 'nebulosa/src/astronomy/orbits/sbd'
-import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/astronomy/time/temporal'
+import { formatTemporal, type Temporal, temporalFromTime, temporalGet, temporalSet } from 'nebulosa/src/astronomy/time/temporal'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
 import React, { Activity, memo, useCallback, useDeferredValue, useMemo } from 'react'
 import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
@@ -17,6 +17,7 @@ import { satelliteStore } from '@/stores/atlas.satellite.store'
 import { atlasStore, type AtlasTab, type BookmarkItem } from '@/stores/atlas.store'
 import { sunStore } from '@/stores/atlas.sun.store'
 import { useStore } from '../hooks/store.hook'
+import { lunarEclipseStore } from '../stores/lunar.eclipse.store'
 import { solarEclipseStore } from '../stores/solar.eclipse.store'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { Button } from './components/Button'
@@ -38,6 +39,7 @@ import { ConstellationSelect } from './ConstellationSelect'
 import { MountDropdown } from './DeviceDropdown'
 import { type Icon, Icons } from './Icon'
 import { Location } from './Location'
+import { LunarEclipseMap } from './LunarEclipseMap'
 import { Modal } from './Modal'
 import { Moon } from './Moon'
 import { PlanetTypeSelect } from './PlanetTypeSelect'
@@ -237,6 +239,7 @@ const Body = memo(() => {
 			{tab === 'galaxy' && <GalaxyTab />}
 			{tab === 'satellite' && <SatelliteTab />}
 			<SolarEclipseMap />
+			<LunarEclipseMap />
 		</div>
 	)
 })
@@ -270,7 +273,7 @@ const NextSolarEclipse = memo(() => {
 
 	return (
 		<div className="flex flex-col gap-0">
-			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Sun} key={next.maximalTime} label={next.type} offset={offset} time={next.maximalTime} onClick={() => solarEclipseStore.load(next)} />
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Sun} key={next.maximalTime.day} label={next.type} offset={offset} time={temporalFromTime(next.maximalTime)} onClick={() => solarEclipseStore.load(next)} />
 		</div>
 	)
 })
@@ -332,7 +335,7 @@ const LunarEclipses = memo(() => {
 
 	return (
 		<div className="flex flex-col gap-0">
-			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} key={next.maximalTime} label={next.type} offset={offset} time={next.maximalTime} />
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} key={next.maximalTime.day} label={next.type} offset={offset} time={temporalFromTime(next.maximalTime)} onClick={() => lunarEclipseStore.load(next)} />
 		</div>
 	)
 })
@@ -343,8 +346,8 @@ const LunarApsis = memo(() => {
 
 	return (
 		<div className="flex flex-col gap-0">
-			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} label={`APOGEE (${formatDistance(apsis[0].distance)})`} offset={offset} time={apsis[0].time} />
-			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} label={`PERIGEE (${formatDistance(apsis[1].distance)})`} offset={offset} time={apsis[1].time} />
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} label={`APOGEE (${formatDistance(apsis[0].distance)})`} offset={offset} time={temporalFromTime(apsis[0].time)} />
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} label={`PERIGEE (${formatDistance(apsis[1].distance)})`} offset={offset} time={temporalFromTime(apsis[1].time)} />
 		</div>
 	)
 })

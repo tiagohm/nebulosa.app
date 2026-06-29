@@ -1,7 +1,8 @@
+import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalAdd, temporalGet } from 'nebulosa/src/astronomy/time/temporal'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
-import { type PositionOfBody, type SolarImageSource, type BodyPosition, type SolarSeasons, type NextSolarEclipse, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/shared/types'
+import { type PositionOfBody, type SolarImageSource, type BodyPosition, type SolarSeasons, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/shared/types'
 import { proxy, ref } from 'valtio'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
@@ -16,7 +17,7 @@ export interface AtlasSunState {
 	readonly position: BodyPosition
 	chart: readonly number[]
 	readonly seasons: SolarSeasons
-	eclipses: readonly NextSolarEclipse[]
+	eclipses: readonly SolarEclipse[]
 }
 
 const state = proxy<AtlasSunState>({

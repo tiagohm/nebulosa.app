@@ -16,7 +16,7 @@ import { camera as cameraEndpoints, CameraCaptureTask, CameraHandler } from 'src
 import type { GuiderHandler } from 'src/api/guider'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler, type Messager } from 'src/api/message'
-import { DEFAULT_CAMERA_CAPTURE_START, type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated } from 'src/shared/types'
+import { DEFAULT_CAMERA_CAPTURE_START, DEFAULT_GUIDER_EVENT, type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated } from 'src/shared/types'
 import { json, noContent, SocketMessager, waitUntil, type SocketMessage } from './util'
 
 type CameraCaptureStartOverrides = Omit<Partial<CameraCaptureStart>, 'dither'> & {
@@ -575,7 +575,7 @@ describe('camera capture start request', () => {
 	}, 5000)
 
 	test('single capture emits only one frame', async () => {
-		const { camera, paths, records, success } = await capture(captureStartRequest({ exposureMode: 'single', exposureTime: 10, exposureTimeUnit: 'millisecond', count: 100, width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
+		const { paths, records, success } = await capture(captureStartRequest({ exposureMode: 'single', exposureTime: 10, exposureTimeUnit: 'millisecond', count: 100, width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
 
 		await Bun.sleep(100)
 
@@ -586,7 +586,7 @@ describe('camera capture start request', () => {
 	}, 5000)
 
 	test('fixed capture emits the requested frame count', async () => {
-		const { camera, paths, records, success } = await capture(captureStartRequest({ exposureMode: 'fixed', exposureTime: 10, exposureTimeUnit: 'millisecond', count: 2, width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
+		const { paths, records, success } = await capture(captureStartRequest({ exposureMode: 'fixed', exposureTime: 10, exposureTimeUnit: 'millisecond', count: 2, width: 16, height: 16, frameFormat: 'MONO', autoSave: false }))
 
 		await Bun.sleep(100)
 
@@ -637,12 +637,15 @@ describe('camera capture start request', () => {
 		let signal: AbortSignal | undefined
 
 		const guiderHandler = {
-			isRunning: true,
-			dither: (request: CameraCaptureStart['dither'], abortSignal: AbortSignal) => {
+			running: true,
+			dither: (request: CameraCaptureStart['dither'], options: Parameters<GuiderHandler['dither']>[1]) => {
 				dithered = request
-				signal = abortSignal
+				signal = options?.signal
+				options?.onEvent?.({ phase: 'dithered', guider: structuredClone(DEFAULT_GUIDER_EVENT), dx: 1.5, dy: -2 })
+				options?.onEvent?.({ phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
+				options?.onEvent?.({ phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'guiding' }, ok: true })
+				return Promise.resolve({ ok: true } as const)
 			},
-			settleDone: () => {},
 		} as unknown as GuiderHandler
 
 		const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, guiderHandler)
@@ -666,6 +669,75 @@ describe('camera capture start request', () => {
 		expect(dithered).toEqual(request.dither)
 		expect(signal).toBeInstanceOf(AbortSignal)
 		expect(events[0].state).toBe('dithering')
+		expect(events.some((event) => event.state === 'settling')).toBeTrue()
 		expect(events.some((event) => event.state === 'exposureStarted')).toBeTrue()
+	}, 5000)
+
+	test('does not start exposure when guider dither fails', async () => {
+		const error = spyOn(console, 'error').mockImplementation(() => {})
+		const guiderHandler = {
+			running: true,
+			dither: (_: CameraCaptureStart['dither'], options: Parameters<GuiderHandler['dither']>[1]) => {
+				options?.onEvent?.({ phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
+				options?.onEvent?.({ phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' }, ok: false, reason: 'settle-timeout' })
+				return Promise.resolve({ ok: false, reason: 'settle-timeout' } as const)
+			},
+		} as unknown as GuiderHandler
+
+		const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, guiderHandler)
+		const camera = getCamera()
+		const events: CameraCaptureEvent[] = []
+		const request = captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', dither: { enabled: true } })
+
+		try {
+			cameraManager.connect(camera)
+
+			const success = await cameraHandler.start(camera, request, (event) => {
+				events.push(structuredClone(event))
+			})
+
+			expect(success).toBeFalse()
+			expect(events.map((event) => event.state)).toContain('settling')
+			expect(events.map((event) => event.state)).toContain('error')
+			expect(events.some((event) => event.state === 'exposureStarted')).toBeFalse()
+		} finally {
+			error.mockRestore()
+		}
+	}, 5000)
+
+	test('aborts guider dither when capture stops', async () => {
+		let signal: AbortSignal | undefined
+		let resolveDither: ((value: Awaited<ReturnType<GuiderHandler['dither']>>) => void) | undefined
+		const guiderHandler = {
+			running: true,
+			dither: (_: CameraCaptureStart['dither'], options: Parameters<GuiderHandler['dither']>[1]) => {
+				signal = options?.signal
+				return new Promise<Awaited<ReturnType<GuiderHandler['dither']>>>((resolve) => {
+					resolveDither = resolve
+					options?.signal?.addEventListener('abort', () => resolve({ ok: false, reason: 'aborted' }), { once: true })
+				})
+			},
+		} as unknown as GuiderHandler
+
+		const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, guiderHandler)
+		const camera = getCamera()
+		const events: CameraCaptureEvent[] = []
+		const request = captureStartRequest({ exposureTime: 100, exposureTimeUnit: 'millisecond', dither: { enabled: true } })
+
+		cameraManager.connect(camera)
+
+		const promise = cameraHandler.start(camera, request, (event) => {
+			events.push(structuredClone(event))
+		})
+
+		expect(await waitUntil(() => events.some((event) => event.state === 'dithering'))).toBeTrue()
+
+		cameraHandler.stop(camera)
+		resolveDither?.({ ok: false, reason: 'aborted' })
+
+		expect(await promise).toBeFalse()
+		expect(signal?.aborted).toBeTrue()
+		expect(events.some((event) => event.state === 'exposureStarted')).toBeFalse()
+		expect(events.some((event) => event.state === 'idle' && event.stopped)).toBeTrue()
 	}, 5000)
 })

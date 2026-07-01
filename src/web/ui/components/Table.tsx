@@ -100,7 +100,7 @@ export function Table({ children, className, classNames, columnCount, emptyConte
 	const headerCellClassName = tw(styles.headerCell(), classNames?.headerCell)
 	const cellClassName = tw(styles.cell(), classNames?.cell)
 	const rowClassName = tw(styles.row(), onAction !== undefined && 'cursor-pointer', classNames?.row)
-	const tableStyle = useMemo(() => ({ ...style, '--table-columns': `repeat(${normalizedColumnCount}, minmax(0, 1fr))` }) as TableStyle, [normalizedColumnCount, style])
+	const tableStyle = useMemo(() => ({ ...style, '--table-columns': `repeat(${normalizedColumnCount}, minmax(0, 1fr))` }), [normalizedColumnCount, style])
 
 	function handleClick(event: React.MouseEvent<HTMLElement>) {
 		const row = event.currentTarget.dataset.row

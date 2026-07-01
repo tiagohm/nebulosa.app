@@ -8,7 +8,7 @@ import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import bus from 'src/shared/bus'
 import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
-import type { GuiderHandler } from './guider'
+import type { GuiderDitherEvent, GuiderHandler } from './guider'
 import { type Endpoints, query, response } from './http'
 import type { ImageProcessor } from './image'
 import type { Messager, WebSocketMessageHandler } from './message'
@@ -293,6 +293,13 @@ export class CameraCaptureTask {
 		this.cameraHandler.cameraManager.stopExposure(camera)
 	}
 
+	private handleGuiderDitherEvent(event: GuiderDitherEvent) {
+		if (this.stopped) return
+
+		this.event.state = event.phase === 'settling' || event.phase === 'settled' ? 'settling' : 'dithering'
+		this.handleCameraCaptureEvent(this, this.event)
+	}
+
 	async start() {
 		if (!this.stopped && this.camera.connected && this.event.remainingCount > 0 && this.request.exposureTime > 0) {
 			if (this.request.dither.enabled && this.cameraHandler.guiderHandler?.running) {
@@ -300,7 +307,15 @@ export class CameraCaptureTask {
 				this.handleCameraCaptureEvent(this, this.event)
 
 				try {
-					await this.cameraHandler.guiderHandler.dither(this.request.dither, this.aborter.signal)
+					const dither = await this.cameraHandler.guiderHandler.dither(this.request.dither, {
+						signal: this.aborter.signal,
+						onEvent: (event) => this.handleGuiderDitherEvent(event),
+					})
+
+					if (!dither.ok) {
+						if (!this.stopped) this.fail(new Error(`guider dither failed: ${dither.reason}${dither.error ? ` (${dither.error})` : ''}`))
+						return false
+					}
 				} catch (error) {
 					if (!this.stopped) this.fail(error)
 					return false
@@ -336,7 +351,6 @@ export class CameraCaptureTask {
 		if (this.destroyed) return
 		this.destroyed = true
 		this.aborter.abort()
-		this.cameraHandler.guiderHandler?.settleDone(false)
 	}
 
 	private fail(error?: unknown) {

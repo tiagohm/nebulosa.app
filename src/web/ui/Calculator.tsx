@@ -1,3 +1,4 @@
+import { toHour } from 'nebulosa/src/math/units/angle'
 import { memo, type ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { calculatorStore } from '@/stores/calculator.store'
@@ -5,6 +6,7 @@ import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
 import { NumberInput } from './components/NumberInput'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
+import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
 import { Modal } from './Modal'
 
@@ -39,7 +41,7 @@ export const Calculator = memo(() => {
 	if (!show) return null
 
 	return (
-		<Modal header="Calculator" id="calculator" initialWidth="456px" onHide={calculatorStore.hide}>
+		<Modal header="Calculator" id="calculator" initialWidth="460px" onHide={calculatorStore.hide}>
 			<Body />
 		</Modal>
 	)
@@ -654,6 +656,19 @@ const AsteroidMagnitude = memo(() => {
 	)
 })
 
+const HourAngleAtAltitude = memo(() => {
+	const { declination, latitude, targetAltitude, hourAngle } = useSnapshot(calculatorStore.state.hourAngleAtAltitude)
+
+	return (
+		<Formula description="Hour angle at altitude" expression="acos((sin(h0) - sin(lat) * sin(dec)) / (cos(lat) * cos(dec)))">
+			<NumberInput endContent="°" fractionDigits={3} fullWidth label="Declination" minValue={-90} maxValue={90} onValueChange={(value) => calculatorStore.update('hourAngleAtAltitude', 'declination', value)} step={0.001} value={declination} />
+			<NumberInput endContent="°" fractionDigits={3} fullWidth label="Latitude" minValue={-90} maxValue={90} onValueChange={(value) => calculatorStore.update('hourAngleAtAltitude', 'latitude', value)} step={0.001} value={latitude} />
+			<NumberInput endContent="°" fractionDigits={3} fullWidth label="Target Altitude (h0)" minValue={-1} maxValue={90} onValueChange={(value) => calculatorStore.update('hourAngleAtAltitude', 'targetAltitude', value)} step={0.001} value={targetAltitude} />
+			<TextInput endContent="h" fullWidth label="Hour Angle" readOnly value={hourAngle === undefined ? '--' : toHour(hourAngle).toFixed(2)} />
+		</Formula>
+	)
+})
+
 const FORMULA_TABS = [
 	{ id: 'focalLength', label: 'Focal Length', Component: FocalLength },
 	{ id: 'focalRatio', label: 'Focal Ratio', Component: FocalRatio },
@@ -701,4 +716,5 @@ const FORMULA_TABS = [
 	{ id: 'surfaceBrightness', label: 'Surface Brightness', Component: SurfaceBrightness },
 	{ id: 'cometMagnitude', label: 'Comet Magnitude', Component: CometMagnitude },
 	{ id: 'asteroidMagnitude', label: 'Asteroid Magnitude', Component: AsteroidMagnitude },
+	{ id: 'hourAngleAtAltitude', label: 'Hour Angle at Altitude', Component: HourAngleAtAltitude },
 ] as const

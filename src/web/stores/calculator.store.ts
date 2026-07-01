@@ -279,6 +279,13 @@ export interface AsteroidMagnitude {
 	magnitude: number
 }
 
+export interface HourAngleAtAltitude {
+	declination: number
+	latitude: number
+	targetAltitude: number
+	hourAngle?: number
+}
+
 export interface CalculatorState {
 	show: boolean
 	favorites: CalculatorSection[]
@@ -328,6 +335,7 @@ export interface CalculatorState {
 	readonly surfaceBrightness: SurfaceBrightness
 	readonly cometMagnitude: CometMagnitude
 	readonly asteroidMagnitude: AsteroidMagnitude
+	readonly hourAngleAtAltitude: HourAngleAtAltitude
 }
 
 const CALCULATOR_SECTIONS = [
@@ -377,6 +385,7 @@ const CALCULATOR_SECTIONS = [
 	'surfaceBrightness',
 	'cometMagnitude',
 	'asteroidMagnitude',
+	'hourAngleAtAltitude',
 ] as const
 
 type CalculatorSection = (typeof CALCULATOR_SECTIONS)[number]
@@ -430,9 +439,10 @@ const state = proxy<CalculatorState>({
 	surfaceBrightness: { magnitude: 8, area: 3600, surfaceBrightness: 16.89 },
 	cometMagnitude: { absoluteMagnitude: 6, delta: 1, heliocentricDistance: 1.5, activityCoefficient: 10, magnitude: 7.76 },
 	asteroidMagnitude: { absoluteMagnitude: 12, heliocentricDistance: 2, delta: 1.5, phaseCorrection: 0.3, magnitude: 14.69 },
+	hourAngleAtAltitude: { declination: 0, latitude: 0, targetAltitude: 30, hourAngle: 0 },
 })
 
-initProxy(state, 'calculator', ['p:show', 'o:favorites', ...CALCULATOR_SECTIONS.map((section) => `o:${section}` as ProxyProperties<typeof state>)])
+initProxy(state, 'calculator', ['p:show', 'o:favorites', ...CALCULATOR_SECTIONS.map((section): ProxyProperties<typeof state> => `o:${section}`)])
 
 function refreshDerivedValue(property: CalculatorSection) {
 	switch (property) {
@@ -575,6 +585,9 @@ function refreshDerivedValue(property: CalculatorSection) {
 			break
 		case 'asteroidMagnitude':
 			state.asteroidMagnitude.magnitude = formulas.asteroidMagnitudeEstimate(state.asteroidMagnitude.absoluteMagnitude, state.asteroidMagnitude.heliocentricDistance, state.asteroidMagnitude.delta, state.asteroidMagnitude.phaseCorrection)
+			break
+		case 'hourAngleAtAltitude':
+			state.hourAngleAtAltitude.hourAngle = formulas.hourAngleAtAltitude(deg(state.hourAngleAtAltitude.declination), deg(state.hourAngleAtAltitude.latitude), deg(state.hourAngleAtAltitude.targetAltitude))
 			break
 	}
 }

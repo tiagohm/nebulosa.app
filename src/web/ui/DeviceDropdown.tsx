@@ -35,7 +35,7 @@ export function DeviceDropdown<T extends keyof DeviceTypeMap>({ type, value, onV
 	const items = new Array<DeviceState<Device> | undefined>(devices.length + (disallowNoneSelection ? 0 : 1))
 
 	if (!disallowNoneSelection) items[0] = undefined
-	for (let i = disallowNoneSelection ? 0 : 1, p = 0; p < devices.length; i++, p++) items[i] = devices[p] as DeviceState<Device>
+	for (let i = disallowNoneSelection ? 0 : 1, p = 0; p < devices.length; i++, p++) items[i] = devices[p]
 
 	function handleAction(index: number) {
 		if (index < 0 || index >= items.length) return

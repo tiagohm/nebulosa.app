@@ -1,7 +1,7 @@
 import type { LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipseEvent, LocalSolarEclipseSvgShape } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
 import type { SolarEclipseGeoPoint } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
-import { time } from 'nebulosa/src/astronomy/time/time'
+import { time, Timescale } from 'nebulosa/src/astronomy/time/time'
 import { formatAZ, toDeg } from 'nebulosa/src/math/units/angle'
 import { Fragment, memo, type CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
@@ -141,7 +141,7 @@ const CONTACT_POINT_ITEMS = [
 	['U1', '#FFE66D'],
 	['C1', '#FF7BEA'],
 	['U2', '#FFE66D'],
-	['Max', '#FFFFFF'],
+	['MAX', '#FFFFFF'],
 	['U3', '#FFE66D'],
 	['C2', '#FF7BEA'],
 	['U4', '#FFE66D'],
@@ -160,7 +160,7 @@ const Contacts = memo(() => {
 		<div className="grid w-full grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
 			{CONTACT_POINT_ITEMS.map(([name, color]) => {
 				const point = map.points[name]
-				return point && <ContactPoint color={color} key={name} point={point} name={name === 'Max' ? 'MAX' : name} offset={offset} />
+				return point && <ContactPoint color={color} key={name} point={point} name={name} offset={offset} />
 			})}
 		</div>
 	)
@@ -176,23 +176,26 @@ const BesselianElements = memo(() => {
 	return (
 		<div className="overflow-x-auto rounded-lg bg-neutral-900/70 text-sm text-neutral-100">
 			<div className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
-				<span className="font-mono text-xs text-neutral-400">t0 = {formatTemporal(astronomicEventTemporal(map.elements.time0), 'YYYY-MM-DD HH:mm', 0)} TT</span>
-				<span className="flex flex-row gap-3 font-mono text-xs text-neutral-500">
-					<span>tan F1 {map.elements.tanF1.toFixed(7)}</span>
-					<span>tan F2 {map.elements.tanF2.toFixed(7)}</span>
+				<span className="font-mono text-sm text-neutral-400">
+					t0 = {formatTemporal(astronomicEventTemporal(map.elements.time0), 'YYYY-MM-DD HH:mm', 0)} {Timescale[map.elements.time0.scale]}
+				</span>
+				<span className="flex flex-row gap-3 font-mono text-sm text-neutral-400">
+					<span>ΔT = {map.elements.deltaT.toFixed(2)}</span>
+					<span>tan F1 = {map.elements.tanF1.toFixed(7)}</span>
+					<span>tan F2 = {map.elements.tanF2.toFixed(7)}</span>
 				</span>
 			</div>
 			<div className="grid w-full grid-cols-[2.5rem_repeat(6,minmax(5.5rem,1fr))] font-mono">
-				<span className="bg-neutral-950/70 px-3 py-2 text-xs font-bold text-neutral-500 uppercase">n</span>
-				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-500 uppercase">x</span>
-				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-500 uppercase">y</span>
-				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-500 uppercase">D</span>
-				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-500 uppercase">L1</span>
-				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-500 uppercase">L2</span>
-				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-500 uppercase">u</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-xs font-bold text-neutral-400 uppercase">n</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-400 uppercase">x</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-400 uppercase">y</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-400 uppercase">D</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-400 uppercase">L1</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-400 uppercase">L2</span>
+				<span className="bg-neutral-950/70 px-3 py-2 text-end text-xs font-bold text-neutral-400 uppercase">u</span>
 				{N.map((n) => (
 					<Fragment key={n}>
-						<span className="border-t border-neutral-800 px-3 py-2 text-neutral-500">{n}</span>
+						<span className="border-t border-neutral-800 px-3 py-2 text-neutral-400">{n}</span>
 						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.x[n].toFixed(7)}</span>
 						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.y[n].toFixed(7)}</span>
 						<span className="border-t border-neutral-800 px-3 py-2 text-end">{map.elements.d[n].toFixed(7)}</span>
@@ -289,7 +292,7 @@ const LocalDetails = memo(() => {
 			<MetricCard label="Moon/Sun diameter ratio" value={formatNullableNumber(details.moonSunDiameterRatio, 4)} />
 			<MetricCard label="Partial phase duration" value={formatDurationSeconds(details.partialPhaseDuration)} />
 			<MetricCard label={`${centralPhase} phase duration`} value={formatDurationSeconds(details.centralPhaseDuration)} />
-			<MetricCard label="Shadow path width" value={details.shadowPathWidthKm === null ? '--' : `${details.shadowPathWidthKm.toFixed(0)} km`} />
+			<MetricCard label="Shadow path width" value={details.shadowPathWidthKm === undefined ? '--' : `${details.shadowPathWidthKm.toFixed(0)} km`} />
 		</div>
 	)
 })
@@ -311,12 +314,12 @@ function describeLocalEvent(kind: LocalEclipseContactKind, centralKind: LocalCen
 	}
 }
 
-function eventLabel(kind: LocalEclipseContactKind, event: LocalSolarEclipseEvent | null, centralKind: LocalCentralPhaseKind) {
+function eventLabel(kind: LocalEclipseContactKind, event: LocalSolarEclipseEvent | undefined, centralKind: LocalCentralPhaseKind) {
 	return `${event?.kind ?? kind}: ${event?.description ?? describeLocalEvent(kind, centralKind)}`
 }
 
-function formatEventTime(event: LocalSolarEclipseEvent | null) {
-	return event === null ? '--' : formatTemporal(temporalFromTime(event.time), 'HH:mm:ss')
+function formatEventTime(event?: LocalSolarEclipseEvent) {
+	return event ? formatTemporal(temporalFromTime(event.time), 'HH:mm:ss') : '--'
 }
 
 function formatSignedDegrees(value: number) {
@@ -324,8 +327,8 @@ function formatSignedDegrees(value: number) {
 	return `${degrees >= 0 ? '+' : ''}${degrees.toFixed(1)}°`
 }
 
-function formatDegrees(value: number | null) {
-	return value === null ? '--' : `${toDeg(value).toFixed(1)}°`
+function formatDegrees(value?: number) {
+	return value !== undefined && Number.isFinite(value) ? `${toDeg(value).toFixed(1)}°` : '--'
 }
 
 const LocalInstants = memo(() => {
@@ -343,15 +346,15 @@ const LocalInstants = memo(() => {
 				<span className="bg-neutral-950/70 px-3 py-2 text-xs font-bold text-neutral-500 uppercase">Z</span>
 				{LOCAL_CONTACT_KINDS.map((kind) => {
 					const event = circumstances.events[kind]
-					const cellClassName = tw('min-h-10 border-t border-neutral-800 px-3 py-2 font-mono', event === null ? 'text-neutral-500' : event.observable ? 'text-neutral-100' : 'text-neutral-400')
+					const cellClassName = tw('min-h-10 border-t border-neutral-800 px-3 py-2 font-mono', !event ? 'text-neutral-500' : event.observable ? 'text-neutral-100' : 'text-neutral-400')
 
 					return (
 						<Fragment key={kind}>
 							<span className={tw(cellClassName, 'whitespace-normal font-sans')}>{eventLabel(kind, event, circumstances.visibility.centralPhaseKind)}</span>
 							<span className={cellClassName}>{formatEventTime(event)}</span>
-							<span className={cellClassName}>{event === null ? '--' : formatSignedDegrees(event.sunAltitude)}</span>
-							<span className={cellClassName}>{event === null ? '--' : formatDegrees(event.positionAngleP)}</span>
-							<span className={cellClassName}>{event === null ? '--' : formatDegrees(event.zenithAngleZ)}</span>
+							<span className={cellClassName}>{event === undefined ? '--' : formatSignedDegrees(event.sunAltitude)}</span>
+							<span className={cellClassName}>{event === undefined ? '--' : formatDegrees(event.positionAngle)}</span>
+							<span className={cellClassName}>{event === undefined ? '--' : formatDegrees(event.zenithAngle)}</span>
 						</Fragment>
 					)
 				})}

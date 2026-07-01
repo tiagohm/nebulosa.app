@@ -4,9 +4,11 @@ import { observer, type Quantity } from 'nebulosa/src/adapters/ephemeris/horizon
 import { nearestLunarApsis, nearestLunarEclipse, nearestLunarPhase, type LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
 import { observeStar } from 'nebulosa/src/astronomy/bodies/star'
 import { nearestSolarEclipse, season, type SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
-import { cirsToObserved, icrsToObserved, type PositionAndVelocity } from 'nebulosa/src/astronomy/coordinates/astrometry'
+import { cirsToObserved, icrsToObserved } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { CONSTELLATION_LIST } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import * as elpmpp02 from 'nebulosa/src/astronomy/ephemeris/models/analytical/elpmpp02'
+import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
 import { type GeographicPosition, localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { closeApproaches, search } from 'nebulosa/src/astronomy/orbits/sbd'
 import { iersb } from 'nebulosa/src/astronomy/time/iers'
@@ -22,7 +24,6 @@ import { toMeter } from 'nebulosa/src/math/units/distance'
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // oxfmt-ignore
 import { type BodyPosition, type ChartOfBody, type CloseApproach, DEFAULT_MINOR_PLANET, type FindCloseApproaches, type FindLunarEclipse, type FindSolarEclipse, type LocationAndTime, type LunarPhaseTime, type MinorPlanet, type MinorPlanetParameter, type PositionOfBody, SATELLITE_GROUP_TYPES, type Satellite, type SatelliteGroupType, type SearchMinorPlanet, type SearchSatellite, type SearchSkyObject, type SkyObject, type SkyObjectSearchItem, SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource, type SolarSeasons, type Twilight, type PlanetariumRequest, type SolarEclipseMap, type ComputeSolarEclipseLocalCircumstances, type ComputeSolarEclipseLocalView, type LunarApsis, type ComputeLunarEclipseLocalCircumstances, type ComputeLunarEclipseLocalView, type LunarEclipseMap } from '../shared/types'
-import { eraEpv00 } from 'nebulosa/src/astronomy/coordinates/erfa/earth'
 import { eraMoon98 } from 'nebulosa/src/astronomy/coordinates/erfa/moon'
 import { computeSunMoonPositionAt } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import { computeLocalLunarEclipseCircumstances, computeLocalLunarEclipseViewGeometry } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
@@ -30,7 +31,6 @@ import { computeLunarEclipseMapGeometry, lunarEclipseMapToSvgPaths, type LunarEc
 import { computeLocalSolarEclipseCircumstances, computeLocalSolarEclipseViewGeometry } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
 import { computePolynomialBesselianElements, computeSolarEclipseMapGeometry, solarEclipseMapToSvgPaths, type PolynomialBesselianElements, type SolarEclipseMapGeometryOptions } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { PlateCarree } from 'nebulosa/src/astronomy/projections/projection'
-import { vecMinus } from 'nebulosa/src/math/linear-algebra/vec3'
 import type { CacheManager } from './cache'
 import { type Endpoints, query, response } from './http'
 import type { NotificationHandler } from './notification'
@@ -81,24 +81,14 @@ function moon(time: Time) {
 	return eraMoon98(time.day, time.fraction) as never
 }
 
-let sunPosition: PositionAndVelocity
-
-// Faster Sun position provider from the ERFA ephemeris.
-function sun(time: Time) {
-	return sunPosition!
-}
-
-// Faster Earth position provider from the ERFA ephemeris.
-function earth(time: Time) {
-	time = tt(time)
-	const [helio, bary] = eraEpv00(time.day, time.fraction)
-	sunPosition = [vecMinus(bary[0], helio[0]), vecMinus(bary[1], helio[1])]
-	return bary
-}
-
-// Apparent Sun/Moon position provider from the ERFA ephemerides.
+// Apparent Sun/Moon position provider from the ERFA ephemerides (significantly faster for Moon calculation).
 export function fastSunMoonPosition(time: Time) {
-	return computeSunMoonPositionAt(time, sun, earth, moon)
+	return computeSunMoonPositionAt(time, vsop.sun, vsop.earth, moon)
+}
+
+// Apparent Sun/Moon position provider from the analytical ERFA/Meeus ephemerides.
+export function preciseSunMoonPosition(time: Time) {
+	return computeSunMoonPositionAt(time, vsop.sun, vsop.earth, elpmpp02.moon)
 }
 
 export class AtlasHandler {
@@ -235,7 +225,7 @@ export class AtlasHandler {
 
 	solarEclipseMap(req: SolarEclipse): SolarEclipseMap {
 		const maximalTime = Math.round(toJulianDay(req.maximalTime))
-		const elements = this.solarEclipsePolynomialBesselianElements.getOrInsertComputed(maximalTime, () => computePolynomialBesselianElements(req.maximalTime, fastSunMoonPosition))
+		const elements = this.solarEclipsePolynomialBesselianElements.getOrInsertComputed(maximalTime, () => computePolynomialBesselianElements(req.maximalTime, preciseSunMoonPosition))
 		const geometry = computeSolarEclipseMapGeometry(req, elements, SOLAR_ECLIPSE_MAP_GEOMETRY_OPTIONS)
 		const paths = solarEclipseMapToSvgPaths(geometry, ECLIPSE_MAP_PROJECTION)
 		return { elements, points: geometry.points, paths }
@@ -244,7 +234,7 @@ export class AtlasHandler {
 	solarEclipseLocalCircumstances(req: ComputeSolarEclipseLocalCircumstances) {
 		const maximalTime = Math.round(toJulianDay(req.eclipse.maximalTime))
 		const pbe = this.solarEclipsePolynomialBesselianElements.get(maximalTime)!
-		return computeLocalSolarEclipseCircumstances(pbe, req.location.longitude, req.location.latitude, { sunMoonPosition: fastSunMoonPosition })
+		return computeLocalSolarEclipseCircumstances(pbe, req.location.longitude, req.location.latitude, { sunMoonPosition: preciseSunMoonPosition })
 	}
 
 	solarEclipseLocalView(req: ComputeSolarEclipseLocalView) {
@@ -359,7 +349,7 @@ export class AtlasHandler {
 		}
 	}
 
-	async findCloseApproaches(req: FindCloseApproaches) {
+	async findCloseApproaches(req: FindCloseApproaches): Promise<CloseApproach[]> {
 		const days = Math.max(1, Math.min(3650, Math.trunc(finiteNumber(req.days) ? req.days : 1)))
 		const distance = Math.max(0, finiteNumber(req.distance) ? req.distance : 0)
 		const result = await closeApproaches('now', `${days}d`, distance)
@@ -370,7 +360,7 @@ export class AtlasHandler {
 
 		return result.data.map((e) => {
 			const jd = time(+e[ci], 0, Timescale.TDB)
-			return { name: e[ai], distance: +e[bi] * (AU_KM / 384399), date: temporalFromTime(jd) } as CloseApproach
+			return { name: e[ai], distance: +e[bi] * (AU_KM / 384399), date: temporalFromTime(jd) }
 		})
 	}
 

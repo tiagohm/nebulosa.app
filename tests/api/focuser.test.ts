@@ -3,10 +3,12 @@ import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Focuser } from 'nebulosa/src/devices/indi/device'
 import { FocuserManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator, FocuserSimulator } from 'nebulosa/src/devices/indi/simulator'
-import { FocuserHandler, focuser as focuserEndpoints } from 'src/api/focuser'
+import { FocuserHandler, focuserBus, focuser as focuserEndpoints } from 'src/api/focuser'
 import { WebSocketMessageHandler } from 'src/api/message'
 import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from 'src/shared/types'
 import { json, noContent, SocketMessager, waitUntil } from './util'
+
+focuserBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const focuserManager = new FocuserManager()

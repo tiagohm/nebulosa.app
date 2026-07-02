@@ -1,6 +1,7 @@
 import { type PHD2AppState, PHD2Client, type PHD2Command, type PHD2Events } from 'nebulosa/src/devices/guiding/phd2'
 import type { CameraManager, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
 import { GuiderClient } from 'nebulosa/src/observation/guiding/client'
+import { EventBus } from 'src/shared/bus'
 import { DEFAULT_GUIDER_DITHER, DEFAULT_GUIDER_EVENT, type GuiderConnect, type GuiderDither, type GuiderEvent, type GuiderState, type GuiderStatus } from 'src/shared/types'
 import { exposureTimeInSeconds } from 'src/shared/util'
 import { type Endpoints, response } from './http'
@@ -12,20 +13,15 @@ export type GuiderDitherFailureReason = 'not-guiding' | 'aborted' | 'busy' | 'co
 export type GuiderDitherResult = { readonly ok: true } | { readonly ok: false; readonly reason: GuiderDitherFailureReason; readonly error?: string }
 
 export type GuiderDitherEvent =
-	| { readonly phase: 'dithering'; readonly guider: GuiderEvent }
-	| { readonly phase: 'dithered'; readonly guider: GuiderEvent; readonly dx: number; readonly dy: number }
-	| { readonly phase: 'settling'; readonly guider: GuiderEvent }
-	| { readonly phase: 'settled'; readonly guider: GuiderEvent; readonly ok: boolean; readonly reason?: GuiderDitherFailureReason; readonly error?: string }
-
-export interface GuiderDitherOptions {
-	readonly signal?: AbortSignal
-	readonly onEvent?: (event: GuiderDitherEvent) => void
-}
+	| Readonly<{ id?: string; phase: 'dithering'; guider: GuiderEvent }>
+	| Readonly<{ id?: string; phase: 'dithered'; guider: GuiderEvent; dx: number; dy: number }>
+	| Readonly<{ id?: string; phase: 'settling'; guider: GuiderEvent }>
+	| Readonly<{ id?: string; phase: 'settled'; guider: GuiderEvent; ok: boolean; reason?: GuiderDitherFailureReason; error?: string }>
 
 interface GuiderDitherOperation {
+	readonly id?: string
 	readonly result: PromiseWithResolvers<GuiderDitherResult>
 	readonly settleStarted: PromiseWithResolvers<boolean>
-	readonly onEvent?: (event: GuiderDitherEvent) => void
 	readonly signal?: AbortSignal
 	readonly timeout: number
 	onAbort?: VoidFunction
@@ -34,6 +30,14 @@ interface GuiderDitherOperation {
 	settleTimer?: ReturnType<typeof setTimeout>
 	finished: boolean
 }
+
+export interface GuiderBusEvents {
+	readonly update: GuiderEvent
+	readonly dither: GuiderDitherEvent
+	readonly close: { readonly client: PHD2Client | GuiderClient }
+}
+
+export const guiderBus = new EventBus<GuiderBusEvents>()
 
 export class GuiderHandler {
 	private client?: PHD2Client | GuiderClient
@@ -50,7 +54,10 @@ export class GuiderHandler {
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly notificationHandler: NotificationHandler,
-	) {}
+	) {
+		guiderBus.subscribe('close', () => wsm.send('guider:close', undefined))
+		guiderBus.subscribe('update', (event) => wsm.send('guider:update', event))
+	}
 
 	private readonly handler = {
 		event: (client: PHD2Client | GuiderClient, event: PHD2Events) => {
@@ -99,7 +106,7 @@ export class GuiderHandler {
 					break
 				case 'Settling':
 					this.handleGuiderEvent('settling')
-					this.emitDitherOperationEvent({ phase: 'settling', guider: structuredClone(this.event) })
+					this.emitDitherEvent({ phase: 'settling', guider: structuredClone(this.event) })
 					break
 				case 'GuideStep': {
 					this.state = 'Guiding'
@@ -128,7 +135,7 @@ export class GuiderHandler {
 					this.event.step.dx = event.dx
 					this.event.step.dy = event.dy
 					this.handleGuiderEvent('guiding')
-					this.emitDitherOperationEvent({ phase: 'dithered', guider: structuredClone(this.event), dx: event.dx, dy: event.dy })
+					this.emitDitherEvent({ phase: 'dithered', guider: structuredClone(this.event), dx: event.dx, dy: event.dy })
 					break
 				}
 				case 'StarLost':
@@ -160,7 +167,7 @@ export class GuiderHandler {
 			if (client !== this.client) return
 			this.client = undefined
 			this.reset()
-			this.wsm.send('guider:close', undefined)
+			guiderBus.emit('close', { client })
 		},
 	} as const
 
@@ -177,7 +184,7 @@ export class GuiderHandler {
 	}
 
 	sendEvent(event: GuiderEvent) {
-		this.wsm.send('guider', event)
+		guiderBus.emit('update', structuredClone(event))
 	}
 
 	private handleGuiderEvent(state?: GuiderState) {
@@ -243,17 +250,17 @@ export class GuiderHandler {
 		return false
 	}
 
-	async dither(req?: Partial<GuiderDither>, options: GuiderDitherOptions = {}): Promise<GuiderDitherResult> {
+	async dither(req?: Partial<GuiderDither>, signal?: AbortSignal, id?: string): Promise<GuiderDitherResult> {
 		const client = this.client
 
-		if (!client || options.signal?.aborted || !this.running) return { ok: false, reason: options.signal?.aborted ? 'aborted' : 'not-guiding' }
+		if (!client || signal?.aborted || !this.running) return { ok: false, reason: signal?.aborted ? 'aborted' : 'not-guiding' }
 		if (this.ditherOperation) return { ok: false, reason: 'busy' }
 
 		if (this.state === 'Guiding' || this.event.state === 'guiding') {
 			const settle = req?.settle ?? this.settings.settle
-			const operation = this.startDitherOperation(settle.timeout, options)
+			const operation = this.startDitherOperation(settle.timeout, signal, id)
 
-			this.emitDitherOperationEvent({ phase: 'dithering', guider: structuredClone(this.event) })
+			this.emitDitherEvent({ id, phase: 'dithering', guider: structuredClone(this.event) })
 
 			const command = (async () => {
 				const amount = req?.amount ?? this.settings.amount
@@ -269,10 +276,11 @@ export class GuiderHandler {
 					// Wait for the matching SettleDone or timeout.
 				}
 			})().catch((error) => {
-				this.finishDitherOperation({ ok: false, reason: options.signal?.aborted ? 'aborted' : 'command-failed', error: error instanceof Error ? error.message : String(error) })
+				this.finishDitherOperation({ ok: false, reason: signal?.aborted ? 'aborted' : 'command-failed', error: error instanceof Error ? error.message : String(error) })
 			})
 
 			await Promise.race([command, operation.result.promise])
+
 			return await operation.result.promise
 		}
 
@@ -310,7 +318,7 @@ export class GuiderHandler {
 		else client.disconnect()
 
 		this.reset()
-		this.wsm.send('guider:close', undefined)
+		guiderBus.emit('close', { client })
 	}
 
 	async status() {
@@ -322,20 +330,20 @@ export class GuiderHandler {
 		this.rms.clear()
 	}
 
-	private startDitherOperation(timeout: number, options: GuiderDitherOptions) {
+	private startDitherOperation(timeout: number, signal?: AbortSignal, id?: string) {
 		const operation: GuiderDitherOperation = {
+			id,
 			result: Promise.withResolvers(),
 			settleStarted: Promise.withResolvers(),
-			onEvent: options.onEvent,
-			signal: options.signal,
+			signal,
 			timeout,
 			finished: false,
 		}
 
-		if (options.signal) {
+		if (signal) {
 			const onAbort = () => this.finishDitherOperation({ ok: false, reason: 'aborted' })
 			operation.onAbort = onAbort
-			options.signal.addEventListener('abort', onAbort, { once: true })
+			signal.addEventListener('abort', onAbort, { once: true })
 		}
 
 		operation.startTimer = setTimeout(
@@ -349,6 +357,7 @@ export class GuiderHandler {
 		)
 
 		this.ditherOperation = operation
+
 		return operation
 	}
 
@@ -364,7 +373,7 @@ export class GuiderHandler {
 		}
 
 		operation.settleStarted.resolve(true)
-		this.emitDitherOperationEvent({ phase: 'settling', guider: structuredClone(this.event) })
+		this.emitDitherEvent({ id: operation.id, phase: 'settling', guider: structuredClone(this.event) })
 
 		operation.settleTimer = setTimeout(
 			() => {
@@ -374,8 +383,8 @@ export class GuiderHandler {
 		)
 	}
 
-	private emitDitherOperationEvent(event: GuiderDitherEvent) {
-		this.ditherOperation?.onEvent?.(event)
+	private emitDitherEvent(event: GuiderDitherEvent) {
+		guiderBus.emit('dither', event)
 	}
 
 	private finishDitherOperation(result: GuiderDitherResult) {
@@ -391,8 +400,8 @@ export class GuiderHandler {
 
 		operation.settleStarted.resolve(operation.settleStartedAt !== undefined)
 
-		if (result.ok) this.emitDitherOperationEvent({ phase: 'settled', guider: structuredClone(this.event), ok: true })
-		else this.emitDitherOperationEvent({ phase: 'settled', guider: structuredClone(this.event), ok: false, reason: result.reason, error: result.error })
+		if (result.ok) this.emitDitherEvent({ id: operation.id, phase: 'settled', guider: structuredClone(this.event), ok: true })
+		else this.emitDitherEvent({ id: operation.id, phase: 'settled', guider: structuredClone(this.event), ok: false, reason: result.reason, error: result.error })
 
 		operation.result.resolve(result)
 		this.ditherOperation = undefined

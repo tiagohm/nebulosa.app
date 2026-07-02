@@ -1,8 +1,10 @@
 export type BusCallback<T> = (data: T) => void
 
 // A simple publish-subscribe bus
-export class EventBus {
-	private readonly bus = new Map<string, Set<BusCallback<never>>>()
+export class EventBus<T extends object = Record<string, unknown>> {
+	private readonly bus = new Map<keyof T, Set<BusCallback<never>>>()
+
+	constructor(public forceSync: boolean = false) {}
 
 	// Checks if there are any subscribers to the bus
 	hasSubscribers() {
@@ -10,12 +12,12 @@ export class EventBus {
 	}
 
 	// Checks if there are subscribers for a specific topic
-	hasSubscribersForTopic(topic: string) {
+	hasSubscribersForTopic(topic: keyof T) {
 		return this.bus.has(topic)
 	}
 
 	// Subscribes to a topic with a callback
-	subscribe<T>(topic: string, callback: BusCallback<T>) {
+	subscribe<K extends keyof T>(topic: K, callback: BusCallback<T[K]>) {
 		let callbacks = this.bus.get(topic)
 
 		if (!callbacks) {
@@ -29,8 +31,8 @@ export class EventBus {
 	}
 
 	// Subscribes to a topic with a callback that will be called only once
-	subscribeOnce<T>(topic: string, callback: BusCallback<T>) {
-		const wrapped: BusCallback<T> = (data) => {
+	subscribeOnce<K extends keyof T>(topic: K, callback: BusCallback<T[K]>) {
+		const wrapped: BusCallback<T[K]> = (data) => {
 			this.unsubscribe(topic, wrapped)
 			callback(data)
 		}
@@ -39,7 +41,7 @@ export class EventBus {
 	}
 
 	// Unsubscribes a callback from a topic
-	unsubscribe<T>(topic: string, callback: BusCallback<T>) {
+	unsubscribe<K extends keyof T>(topic: K, callback: BusCallback<T[K]>) {
 		const subscribers = this.bus.get(topic)
 
 		if (subscribers) {
@@ -52,24 +54,26 @@ export class EventBus {
 	}
 
 	// Emits data to all subscribers of a topic
-	emit(topic: string, data: unknown) {
+	emit<K extends keyof T>(topic: K, data: T[K]) {
 		const callbacks = this.bus.get(topic)
 
-		if (callbacks) {
-			queueMicrotask(() => this.emitCallbacks(callbacks, data))
+		if (callbacks !== undefined) {
+			if (this.forceSync) this.emitCallbacks(callbacks, data)
+			else queueMicrotask(() => this.emitCallbacks(callbacks, data))
 		}
 	}
 
-	emitAll(topic: string, data?: readonly unknown[]) {
+	emitAll<K extends keyof T>(topic: K, data: readonly T[K][]) {
 		const callbacks = this.bus.get(topic)
 
 		if (callbacks && data !== undefined && data.length > 0) {
-			queueMicrotask(() => this.emitAllCallbacks(callbacks, data))
+			if (this.forceSync) this.emitAllCallbacks(callbacks, data)
+			else queueMicrotask(() => this.emitAllCallbacks(callbacks, data))
 		}
 	}
 
 	// Emits data to all subscribers of a topic synchronously
-	emitSync(topic: string, data: unknown) {
+	emitSync<K extends keyof T>(topic: K, data: T[K]) {
 		const callbacks = this.bus.get(topic)
 
 		if (callbacks !== undefined) {
@@ -78,7 +82,7 @@ export class EventBus {
 	}
 
 	// Emits data to all subscribers of a topic synchronously
-	emitAllSync(topic: string, data: readonly unknown[]) {
+	emitAllSync<K extends keyof T>(topic: K, data: readonly T[K][]) {
 		const callbacks = this.bus.get(topic)
 
 		if (callbacks !== undefined && data.length > 0) {
@@ -100,5 +104,3 @@ export class EventBus {
 		}
 	}
 }
-
-export default new EventBus()

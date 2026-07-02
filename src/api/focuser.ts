@@ -2,10 +2,18 @@ import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Focuser } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, FocuserManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
-import bus from 'src/shared/bus'
+import { EventBus } from 'src/shared/bus'
 import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { Messager, WebSocketMessageHandler } from './message'
+import { webSocketBus, type WebSocketMessageHandler } from './message'
+
+export interface FocuserBusEvents {
+	readonly add: FocuserAdded
+	readonly update: FocuserUpdated
+	readonly remove: FocuserRemoved
+}
+
+export const focuserBus = new EventBus<FocuserBusEvents>()
 
 export class FocuserHandler implements DeviceHandler<Focuser> {
 	constructor(
@@ -14,24 +22,28 @@ export class FocuserHandler implements DeviceHandler<Focuser> {
 	) {
 		focuserManager.addHandler(this)
 
-		bus.subscribe<Messager>('ws:open', (socket) => {
+		webSocketBus.subscribe('open', (socket) => {
 			for (const device of focuserManager.list()) {
-				this.wsm.send<FocuserAdded>('focuser:add', { device }, socket)
+				wsm.send<FocuserAdded>('focuser:add', { device }, socket)
 			}
 		})
+
+		focuserBus.subscribe('add', (event) => wsm.send('focuser:add', event))
+		focuserBus.subscribe('update', (event) => wsm.send('focuser:update', event))
+		focuserBus.subscribe('remove', (event) => wsm.send('focuser:remove', event))
 	}
 
 	added(device: Focuser) {
-		this.wsm.send<FocuserAdded>('focuser:add', { device })
+		focuserBus.emit('add', { device })
 		console.info('focuser added:', device.name, device.id)
 	}
 
 	updated(device: Focuser, property: keyof Focuser & string, state?: PropertyState) {
-		this.wsm.send<FocuserUpdated>('focuser:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		focuserBus.emit('update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Focuser) {
-		this.wsm.send<FocuserRemoved>('focuser:remove', { device })
+		focuserBus.emit('remove', { device })
 		console.info('focuser removed:', device.name, device.id)
 	}
 
@@ -105,8 +117,8 @@ export function waitForFocuser(focuser: Focuser, expectedPosition: number, onCom
 	}
 
 	// Wait the focuser reach the position
-	unsubscriber = bus.subscribe<FocuserUpdated>('focuser:update', (event) => {
-		if (event.device.id === focuser.id && (event.property === 'moving' || event.property === 'position') && hasReachedPosition()) complete('reach')
+	unsubscriber = focuserBus.subscribe('update', (event) => {
+		if (event.device === focuser && (event.property === 'moving' || event.property === 'position') && hasReachedPosition()) complete('reach')
 	})
 
 	timer = setTimeout(() => complete('timeout'), delay)

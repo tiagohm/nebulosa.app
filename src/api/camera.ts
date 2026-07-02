@@ -5,16 +5,26 @@ import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import { type Camera, CLIENT } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager, DeviceHandler, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
-import bus from 'src/shared/bus'
+import { EventBus } from 'src/shared/bus'
 import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
-import type { GuiderDitherEvent, GuiderHandler } from './guider'
+import { guiderBus, type GuiderDitherEvent, type GuiderHandler } from './guider'
 import { type Endpoints, query, response } from './http'
 import type { ImageProcessor } from './image'
-import type { Messager, WebSocketMessageHandler } from './message'
+import { webSocketBus, type WebSocketMessageHandler } from './message'
 import { directoryExists, waitFor } from './util'
 
 const MINIMUM_WAITING_TIME = 1000000 // 1s in microseconds
+
+export interface CameraBusEvents {
+	readonly add: CameraAdded
+	readonly update: CameraUpdated
+	readonly remove: CameraRemoved
+	readonly frame: CameraFrameEvent
+	readonly capture: CameraCaptureEvent
+}
+
+export const cameraBus = new EventBus<CameraBusEvents>()
 
 export class CameraHandler implements DeviceHandler<Camera> {
 	private readonly tasks = new Map<string, CameraCaptureTask>()
@@ -31,25 +41,31 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	) {
 		cameraManager.addHandler(this)
 
-		bus.subscribe<Messager>('ws:open', (socket) => {
+		webSocketBus.subscribe('open', (socket) => {
 			for (const device of cameraManager.list()) {
-				this.wsm.send<CameraAdded>('camera:add', { device }, socket)
+				wsm.send<CameraAdded>('camera:add', { device }, socket)
 			}
 		})
+
+		cameraBus.subscribe('add', (event) => wsm.send('camera:add', event))
+		cameraBus.subscribe('update', (event) => wsm.send('camera:update', event))
+		cameraBus.subscribe('remove', (event) => wsm.send('camera:remove', event))
+		cameraBus.subscribe('frame', (event) => wsm.send('camera:frame', event))
+		cameraBus.subscribe('capture', (event) => wsm.send('camera:capture', event))
 	}
 
 	added(device: Camera) {
-		this.wsm.send<CameraAdded>('camera:add', { device })
+		cameraBus.emit('add', { device })
 		console.info('camera added:', device.name, device.id)
 	}
 
 	updated(camera: Camera, property: keyof Camera & string, state?: PropertyState) {
-		this.wsm.send<CameraUpdated>('camera:update', { device: { id: camera.id, name: camera.name, [property]: camera[property] }, property, state })
+		cameraBus.emit('update', { device: { id: camera.id, name: camera.name, [property]: camera[property] }, property, state })
 		void this.tasks.get(camera.id)?.cameraUpdated(camera, property, state)
 	}
 
 	removed(camera: Camera) {
-		this.wsm.send<CameraRemoved>('camera:remove', { device: camera })
+		cameraBus.emit('remove', { device: camera })
 		console.info('camera removed:', camera.name)
 	}
 
@@ -62,8 +78,11 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	}
 
 	sendEvent(event: CameraCaptureEvent, path?: string) {
-		if (path) this.wsm.send<CameraFrameEvent>('camera:frame', { camera: event.camera, path })
-		else this.wsm.send('camera:capture', event)
+		if (path) {
+			cameraBus.emit('frame', { camera: event.camera, path })
+		} else {
+			cameraBus.emit('capture', structuredClone(event))
+		}
 	}
 
 	private handleCameraCaptureEvent(task: CameraCaptureTask, event: CameraCaptureEvent, path?: string) {
@@ -134,6 +153,8 @@ export class CameraCaptureTask {
 	private readonly aborter = new AbortController()
 	private readonly promise = Promise.withResolvers<boolean>()
 	private destroyed = false
+	private readonly guiderDitherEventSubscription?: VoidFunction
+	private readonly ditherEventId = Bun.randomUUIDv7()
 
 	constructor(
 		readonly cameraHandler: CameraHandler,
@@ -153,6 +174,10 @@ export class CameraCaptureTask {
 		this.totalExposureProgress[0] = this.event.loop ? 0 : this.event.totalExposureTime
 
 		this.event.totalProgress.remainingTime = this.totalExposureProgress[0]
+
+		if (request.dither.enabled) {
+			this.guiderDitherEventSubscription = guiderBus.subscribe('dither', this.handleGuiderDitherEvent.bind(this))
+		}
 	}
 
 	get stopped() {
@@ -294,7 +319,7 @@ export class CameraCaptureTask {
 	}
 
 	private handleGuiderDitherEvent(event: GuiderDitherEvent) {
-		if (this.stopped) return
+		if (this.stopped || event.id !== this.ditherEventId) return
 
 		this.event.state = event.phase === 'settling' || event.phase === 'settled' ? 'settling' : 'dithering'
 		this.handleCameraCaptureEvent(this, this.event)
@@ -307,10 +332,7 @@ export class CameraCaptureTask {
 				this.handleCameraCaptureEvent(this, this.event)
 
 				try {
-					const dither = await this.cameraHandler.guiderHandler.dither(this.request.dither, {
-						signal: this.aborter.signal,
-						onEvent: (event) => this.handleGuiderDitherEvent(event),
-					})
+					const dither = await this.cameraHandler.guiderHandler.dither(this.request.dither, this.aborter.signal, this.ditherEventId)
 
 					if (!dither.ok) {
 						if (!this.stopped) this.fail(new Error(`guider dither failed: ${dither.reason}${dither.error ? ` (${dither.error})` : ''}`))
@@ -350,6 +372,7 @@ export class CameraCaptureTask {
 	destroy() {
 		if (this.destroyed) return
 		this.destroyed = true
+		this.guiderDitherEventSubscription?.()
 		this.aborter.abort()
 	}
 

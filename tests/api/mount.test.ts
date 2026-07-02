@@ -8,9 +8,11 @@ import { meter } from 'nebulosa/src/math/units/distance'
 import { CacheManager } from 'src/api/cache'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { WebSocketMessageHandler } from 'src/api/message'
-import { mount as mountEndpoints, MountHandler, MountRemoteControlHandler } from 'src/api/mount'
+import { mountBus, mount as mountEndpoints, MountHandler, MountRemoteControlHandler } from 'src/api/mount'
 import type { CoordinateInfo, MountAdded, MountRemoved, MountUpdated } from 'src/shared/types'
 import { SocketMessager } from './util'
+
+mountBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const mountManager = new MountManager()

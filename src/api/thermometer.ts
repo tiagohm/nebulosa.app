@@ -2,10 +2,18 @@ import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Thermometer } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, ThermometerManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
-import bus from 'src/shared/bus'
+import { EventBus } from 'src/shared/bus'
 import type { ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { Messager, WebSocketMessageHandler } from './message'
+import { webSocketBus, type WebSocketMessageHandler } from './message'
+
+export interface ThermometerBusEvents {
+	readonly add: ThermometerAdded
+	readonly update: ThermometerUpdated
+	readonly remove: ThermometerRemoved
+}
+
+export const thermometerBus = new EventBus<ThermometerBusEvents>()
 
 export class ThermometerHandler implements DeviceHandler<Thermometer> {
 	constructor(
@@ -14,24 +22,28 @@ export class ThermometerHandler implements DeviceHandler<Thermometer> {
 	) {
 		thermometerManager.addHandler(this)
 
-		bus.subscribe<Messager>('ws:open', (socket) => {
+		webSocketBus.subscribe('open', (socket) => {
 			for (const device of thermometerManager.list()) {
-				this.wsm.send<ThermometerAdded>('thermometer:add', { device }, socket)
+				wsm.send<ThermometerAdded>('thermometer:add', { device }, socket)
 			}
 		})
+
+		thermometerBus.subscribe('add', (event) => wsm.send('thermometer:add', event))
+		thermometerBus.subscribe('update', (event) => wsm.send('thermometer:update', event))
+		thermometerBus.subscribe('remove', (event) => wsm.send('thermometer:remove', event))
 	}
 
 	added(device: Thermometer) {
-		this.wsm.send<ThermometerAdded>('thermometer:add', { device })
+		thermometerBus.emit('add', { device })
 		console.info('thermometer added:', device.name, device.id)
 	}
 
 	updated(device: Thermometer, property: keyof Thermometer & string, state?: PropertyState) {
-		this.wsm.send<ThermometerUpdated>(`${device.type}:update`, { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		thermometerBus.emit('update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Thermometer) {
-		this.wsm.send<ThermometerRemoved>('thermometer:remove', { device })
+		thermometerBus.emit('remove', { device })
 		console.info('thermometer removed:', device.name, device.id)
 	}
 

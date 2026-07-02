@@ -1,7 +1,14 @@
-import bus from 'src/shared/bus'
-import type { IndiPropertyListenEvent } from 'src/shared/types'
+import { EventBus } from 'src/shared/bus'
+import { indiBus } from './indi'
 
 const MESSAGE_SEPARATOR = '@'
+
+export interface WebSocketBusEvents {
+	readonly open: Messager
+	readonly close: Messager
+}
+
+export const webSocketBus = new EventBus<WebSocketBusEvents>()
 
 export interface Messager {
 	readonly sendText: (data: string) => void
@@ -13,7 +20,7 @@ export class WebSocketMessageHandler {
 	open(socket: Messager) {
 		if (!this.sockets.has(socket)) {
 			this.sockets.add(socket)
-			bus.emit('ws:open', socket)
+			webSocketBus.emit('open', socket)
 			console.info('web socket connected')
 		}
 	}
@@ -25,13 +32,13 @@ export class WebSocketMessageHandler {
 			const id = body.slice(12)
 
 			if (id.length > 0) {
-				bus.emit('indi:listen', { id, socket } satisfies IndiPropertyListenEvent)
+				indiBus.emit('listen', { id, socket })
 			}
 		} else if (body.startsWith('indi:unlisten:')) {
 			const id = body.slice(14)
 
 			if (id.length > 0) {
-				bus.emit('indi:unlisten', { id, socket } satisfies IndiPropertyListenEvent)
+				indiBus.emit('unlisten', { id, socket })
 			}
 		}
 	}
@@ -40,14 +47,11 @@ export class WebSocketMessageHandler {
 		if (this.sockets.has(socket)) {
 			console.info('web socket closed:', code, reason)
 			this.sockets.delete(socket)
-			bus.emit('ws:close', socket)
+			webSocketBus.emit('close', socket)
 		}
 	}
 
-	// oxlint-disable-next-line typescript/no-unnecessary-type-parameters
 	send<T = unknown>(type: string, message: T | undefined | null, socket?: Messager) {
-		// bus.emit(type, message)
-
 		const data = serializeMessage(type, message)
 
 		if (data === undefined) return
@@ -64,7 +68,7 @@ export class WebSocketMessageHandler {
 			socket.sendText(data)
 		} catch (e) {
 			if (this.sockets.delete(socket)) {
-				bus.emit('ws:close', socket)
+				webSocketBus.emit('close', socket)
 			}
 
 			console.error('failed to send web socket message', e)

@@ -2,10 +2,18 @@ import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { DewHeater } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, DewHeaterManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
-import bus from 'src/shared/bus'
+import { EventBus } from 'src/shared/bus'
 import type { DewHeaterAdded, DewHeaterRemoved, DewHeaterUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { Messager, WebSocketMessageHandler } from './message'
+import { webSocketBus, type WebSocketMessageHandler } from './message'
+
+export interface DewHeaterBusEvents {
+	readonly add: DewHeaterAdded
+	readonly update: DewHeaterUpdated
+	readonly remove: DewHeaterRemoved
+}
+
+export const dewHeaterBus = new EventBus<DewHeaterBusEvents>()
 
 export class DewHeaterHandler implements DeviceHandler<DewHeater> {
 	constructor(
@@ -14,24 +22,28 @@ export class DewHeaterHandler implements DeviceHandler<DewHeater> {
 	) {
 		dewHeaterManager.addHandler(this)
 
-		bus.subscribe<Messager>('ws:open', (socket) => {
+		webSocketBus.subscribe('open', (socket) => {
 			for (const device of dewHeaterManager.list()) {
-				this.wsm.send<DewHeaterAdded>('dewHeater:add', { device }, socket)
+				wsm.send<DewHeaterAdded>('dewHeater:add', { device }, socket)
 			}
 		})
+
+		dewHeaterBus.subscribe('add', (event) => wsm.send('dewHeater:add', event))
+		dewHeaterBus.subscribe('update', (event) => wsm.send('dewHeater:update', event))
+		dewHeaterBus.subscribe('remove', (event) => wsm.send('dewHeater:remove', event))
 	}
 
 	added(device: DewHeater) {
-		this.wsm.send<DewHeaterAdded>('dewHeater:add', { device })
+		dewHeaterBus.emit('add', { device })
 		console.info('dew heater added:', device.name, device.id)
 	}
 
 	updated(device: DewHeater, property: keyof DewHeater & string, state?: PropertyState) {
-		this.wsm.send<DewHeaterUpdated>(`${device.type}:update`, { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		dewHeaterBus.emit('update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: DewHeater) {
-		this.wsm.send<DewHeaterRemoved>('dewHeater:remove', { device })
+		dewHeaterBus.emit('remove', { device })
 		console.info('dew heater removed:', device.name, device.id)
 	}
 

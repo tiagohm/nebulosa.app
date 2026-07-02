@@ -4,9 +4,11 @@ import type { Rotator } from 'nebulosa/src/devices/indi/device'
 import { RotatorManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator, RotatorSimulator } from 'nebulosa/src/devices/indi/simulator'
 import { WebSocketMessageHandler } from 'src/api/message'
-import { RotatorHandler, rotator as rotatorEndpoints } from 'src/api/rotator'
+import { RotatorHandler, rotatorBus, rotator as rotatorEndpoints } from 'src/api/rotator'
 import type { RotatorAdded, RotatorRemoved, RotatorUpdated } from 'src/shared/types'
 import { json, noContent, SocketMessager, waitUntil } from './util'
+
+rotatorBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const rotatorManager = new RotatorManager()

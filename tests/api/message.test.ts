@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
-import { WebSocketMessageHandler, type Messager } from 'src/api/message'
-import bus from 'src/shared/bus'
-import type { IndiPropertyListenEvent } from 'src/shared/types'
+import { indiBus, type IndiBusEvents } from 'src/api/indi'
+import { webSocketBus, WebSocketMessageHandler, type Messager, type WebSocketBusEvents } from 'src/api/message'
 import { SocketMessager, waitUntil } from './util'
 
 const wsm = new WebSocketMessageHandler()
@@ -15,16 +14,22 @@ afterEach(() => {
 	secondarySocket.clear()
 })
 
-function busRecorder<T>(topic: string) {
-	const events: T[] = []
-	const unsubscribe = bus.subscribe<T>(topic, (event) => events.push(event))
+function webSocketBusRecorder<K extends keyof WebSocketBusEvents>(topic: K) {
+	const events: WebSocketBusEvents[K][] = []
+	const unsubscribe = webSocketBus.subscribe(topic, (event) => events.push(event))
+	return { events, unsubscribe } as const
+}
+
+function indiBusRecorder<K extends keyof IndiBusEvents>(topic: K) {
+	const events: IndiBusEvents[K][] = []
+	const unsubscribe = indiBus.subscribe(topic, (event) => events.push(event))
 	return { events, unsubscribe } as const
 }
 
 describe('websocket message handler', () => {
 	test('opens and closes sockets with bus events only once', async () => {
-		const opened = busRecorder<Messager>('ws:open')
-		const closed = busRecorder<Messager>('ws:close')
+		const opened = webSocketBusRecorder('open')
+		const closed = webSocketBusRecorder('close')
 
 		try {
 			wsm.open(socket)
@@ -105,7 +110,7 @@ describe('websocket message handler', () => {
 	test('removes failing sockets, emits close event, and keeps broadcasting to healthy sockets', async () => {
 		const error = new Error('send failed')
 		const consoleError = spyOn(console, 'error').mockImplementation(() => {})
-		const closed = busRecorder<Messager>('ws:close')
+		const closed = webSocketBusRecorder('close')
 		const failingSocket: Messager = {
 			sendText() {
 				throw error
@@ -132,8 +137,8 @@ describe('websocket message handler', () => {
 	})
 
 	test('emits indi listen and unlisten events from string messages', async () => {
-		const listens = busRecorder<IndiPropertyListenEvent>('indi:listen')
-		const unlistens = busRecorder<IndiPropertyListenEvent>('indi:unlisten')
+		const listens = indiBusRecorder('listen')
+		const unlistens = indiBusRecorder('unlisten')
 
 		try {
 			wsm.message(socket, 'indi:listen:camera-1')
@@ -149,8 +154,8 @@ describe('websocket message handler', () => {
 	})
 
 	test('ignores non-string messages and listen messages without device id', async () => {
-		const listens = busRecorder<IndiPropertyListenEvent>('indi:listen')
-		const unlistens = busRecorder<IndiPropertyListenEvent>('indi:unlisten')
+		const listens = indiBusRecorder('listen')
+		const unlistens = indiBusRecorder('unlisten')
 
 		try {
 			wsm.message(socket, undefined)

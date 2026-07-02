@@ -2,10 +2,18 @@ import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/co
 import type { Client, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
-import bus from 'src/shared/bus'
+import { EventBus } from 'src/shared/bus'
 import type { GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from '../shared/types'
 import { type Endpoints, query, response } from './http'
-import type { Messager, WebSocketMessageHandler } from './message'
+import { webSocketBus, type WebSocketMessageHandler } from './message'
+
+export interface GuideOutputBusEvents {
+	readonly add: GuideOutputAdded
+	readonly remove: GuideOutputRemoved
+	readonly update: GuideOutputUpdated
+}
+
+export const guideOutputBus = new EventBus<GuideOutputBusEvents>()
 
 export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 	constructor(
@@ -14,24 +22,28 @@ export class GuideOutputHandler implements DeviceHandler<GuideOutput> {
 	) {
 		guideOutputManager.addHandler(this)
 
-		bus.subscribe<Messager>('ws:open', (socket) => {
+		webSocketBus.subscribe('open', (socket) => {
 			for (const device of guideOutputManager.list()) {
-				this.wsm.send<GuideOutputAdded>('guideOutput:add', { device }, socket)
+				wsm.send<GuideOutputAdded>('guideOutput:add', { device }, socket)
 			}
 		})
+
+		guideOutputBus.subscribe('add', (event) => wsm.send('guideOutput:add', event))
+		guideOutputBus.subscribe('remove', (event) => wsm.send('guideOutput:remove', event))
+		guideOutputBus.subscribe('update', (event) => wsm.send('guideOutput:update', event))
 	}
 
 	added(device: GuideOutput) {
-		this.wsm.send<GuideOutputAdded>('guideOutput:add', { device })
+		guideOutputBus.emit('add', { device })
 		console.info('guide output added:', device.name, device.id)
 	}
 
 	updated(device: GuideOutput, property: keyof GuideOutput & string, state?: PropertyState) {
-		this.wsm.send<GuideOutputUpdated>(`${device.type}:update`, { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		guideOutputBus.emit('update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: GuideOutput) {
-		this.wsm.send<GuideOutputRemoved>('guideOutput:remove', { device })
+		guideOutputBus.emit('remove', { device })
 		console.info('guide output removed:', device.name, device.id)
 	}
 

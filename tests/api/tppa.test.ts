@@ -5,14 +5,14 @@ import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { CameraManager, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
 import { CameraSimulator, ClientSimulator, MountSimulator } from 'nebulosa/src/devices/indi/simulator'
 import { CacheManager } from 'src/api/cache'
-import { CameraHandler } from 'src/api/camera'
+import { cameraBus, CameraHandler } from 'src/api/camera'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
 import { PlateSolverHandler } from 'src/api/platesolver'
-import { tppa as tppaEndpoints, TppaHandler } from 'src/api/tppa'
+import { tppaBus, tppa as tppaEndpoints, TppaHandler } from 'src/api/tppa'
 import { DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_TPPA_START, type CameraCaptureEvent, type TppaEvent, type TppaStart } from 'src/shared/types'
 import { noContent, SocketMessager, waitUntil } from './util'
 
@@ -21,6 +21,9 @@ type TppaStartOverrides = Omit<Partial<TppaStart>, 'capture' | 'solver' | 'refra
 	readonly solver?: Partial<TppaStart['solver']>
 	readonly refraction?: Partial<TppaStart['refraction']>
 }
+
+tppaBus.forceSync = true
+cameraBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const imageProcessor = new ImageProcessor()
@@ -112,7 +115,7 @@ function stopRequest(id: string) {
 }
 
 function tppaMessages() {
-	return socket.filter<TppaEvent>((message) => message.type === 'tppa')
+	return socket.filter<TppaEvent>((message) => message.type === 'tppa:update')
 }
 
 function tppaEvents() {

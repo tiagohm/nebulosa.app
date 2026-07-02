@@ -2,10 +2,18 @@ import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Cover } from 'nebulosa/src/devices/indi/device'
 import type { CoverManager, DeviceHandler } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
-import bus from 'src/shared/bus'
+import { EventBus } from 'src/shared/bus'
 import type { CoverAdded, CoverRemoved, CoverUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { Messager, WebSocketMessageHandler } from './message'
+import { webSocketBus, type WebSocketMessageHandler } from './message'
+
+export interface CoverBusEvents {
+	readonly add: CoverAdded
+	readonly update: CoverUpdated
+	readonly remove: CoverRemoved
+}
+
+export const coverBus = new EventBus<CoverBusEvents>()
 
 export class CoverHandler implements DeviceHandler<Cover> {
 	constructor(
@@ -14,24 +22,28 @@ export class CoverHandler implements DeviceHandler<Cover> {
 	) {
 		coverManager.addHandler(this)
 
-		bus.subscribe<Messager>('ws:open', (socket) => {
+		webSocketBus.subscribe('open', (socket) => {
 			for (const device of coverManager.list()) {
-				this.wsm.send<CoverAdded>('cover:add', { device }, socket)
+				wsm.send<CoverAdded>('cover:add', { device }, socket)
 			}
 		})
+
+		coverBus.subscribe('add', (event) => wsm.send('cover:add', event))
+		coverBus.subscribe('update', (event) => wsm.send('cover:update', event))
+		coverBus.subscribe('remove', (event) => wsm.send('cover:remove', event))
 	}
 
 	added(device: Cover) {
-		this.wsm.send<CoverAdded>('cover:add', { device })
+		coverBus.emit('add', { device })
 		console.info('cover added:', device.name, device.id)
 	}
 
 	updated(device: Cover, property: keyof Cover & string, state?: PropertyState) {
-		this.wsm.send<CoverUpdated>('cover:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		coverBus.emit('update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Cover) {
-		this.wsm.send<CoverRemoved>('cover:remove', { device })
+		coverBus.emit('remove', { device })
 		console.info('cover removed:', device.name, device.id)
 	}
 

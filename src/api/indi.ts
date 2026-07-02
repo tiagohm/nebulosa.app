@@ -3,14 +3,25 @@ import { CLIENT, type Client, type Device, type DeviceProperty, type DevicePrope
 import type { CameraManager, CoverManager, DevicePropertyHandler, DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
 // oxfmt-ignore
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, Message, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/devices/indi/types'
-import bus from 'src/shared/bus'
+import { EventBus } from 'src/shared/bus'
 import type { IndiPropertyListenEvent, IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { type Endpoints, query, response } from './http'
-import type { Messager, WebSocketMessageHandler } from './message'
+import { webSocketBus, type Messager, type WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
 
 const MAX_DEVICE_MESSAGES = 100
+
+export interface IndiBusEvents {
+	readonly close: Client
+	readonly listen: IndiPropertyListenEvent
+	readonly unlisten: IndiPropertyListenEvent
+	readonly message: Message & { client: string }
+	readonly serverStart: IndiServerEvent
+	readonly serverStop: IndiServerEvent
+}
+
+export const indiBus = new EventBus<IndiBusEvents>()
 
 export function connect(device: Device) {
 	const client = device[CLIENT]
@@ -46,7 +57,11 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 		readonly dewHeaterManager: DewHeaterManager,
 		readonly rotatorManager: RotatorManager,
 		readonly wsm: WebSocketMessageHandler,
-	) {}
+	) {
+		indiBus.subscribe('message', (event) => wsm.send('indi:message', event))
+		indiBus.subscribe('serverStart', (event) => wsm.send('indi:server:start', event))
+		indiBus.subscribe('serverStop', (event) => wsm.send('indi:server:stop', event))
+	}
 
 	addMessageListener(listener: IndiMessageListener) {
 		this.#messageListeners.add(listener)
@@ -71,7 +86,7 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 	}
 
 	close(client: Client, server: boolean) {
-		bus.emit('indi:close', client)
+		indiBus.emit('close', client)
 
 		this.#messages.delete(client)
 		this.cameraManager.close(client, server)
@@ -249,7 +264,7 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler<Device>,
 			const device = this.indiHandler.get(client, message.device)
 
 			if (device !== undefined) {
-				this.wsm.send('indi:message', { ...message, device: device.id, client: client.id } satisfies Message & { client: string })
+				indiBus.emit('message', { ...message, device: device.id, client: client.id })
 			}
 		}
 	}
@@ -262,11 +277,11 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler<Device>,
 		for (const type of DEVICE_TYPES) indiHandler.properties(type)?.addHandler(this)
 		indiHandler.addMessageListener(this.#messageListener)
 
-		this.#unsubscribers[0] = bus.subscribe<IndiPropertyListenEvent>('indi:listen', (event) => {
+		this.#unsubscribers[0] = indiBus.subscribe('listen', (event) => {
 			this.listen(event)
 		})
 
-		this.#unsubscribers[1] = bus.subscribe<IndiPropertyListenEvent>('indi:unlisten', ({ id, socket }) => {
+		this.#unsubscribers[1] = indiBus.subscribe('unlisten', ({ id, socket }) => {
 			const sockets = this.#listeners.get(id)
 
 			if (!sockets?.size) return
@@ -280,7 +295,7 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler<Device>,
 			}
 		})
 
-		this.#unsubscribers[2] = bus.subscribe('ws:close', (socket: Messager) => {
+		this.#unsubscribers[2] = webSocketBus.subscribe('close', (socket) => {
 			for (const [key, sockets] of this.#listeners.entries()) {
 				if (sockets.delete(socket)) {
 					console.info(`indi stopped listening to ${key}`)
@@ -310,7 +325,7 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler<Device>,
 
 		if (!sockets?.size) return
 
-		const topic = `indi:property:${type}`
+		const topic = type === 'add' ? 'indi:property:add' : type === 'update' ? 'indi:property:update' : 'indi:property:remove'
 		const event: IndiDevicePropertyEvent = { client: device.client.id, device: device.id, name: property.name, property }
 
 		for (const socket of sockets) {
@@ -372,10 +387,11 @@ export class IndiServerHandler {
 		void p.exited.then((code) => {
 			if (this.subprocess !== p) return
 			this.subprocess = undefined
-			this.wsm.send('indi:server:stop', { pid: p.pid, code } satisfies IndiServerEvent)
+			indiBus.emit('serverStop', { pid: p.pid, code })
 		})
 
-		this.wsm.send('indi:server:start', { pid: p.pid } satisfies IndiServerEvent)
+		indiBus.emit('serverStart', { pid: p.pid })
+
 		this.subprocess = p
 	}
 

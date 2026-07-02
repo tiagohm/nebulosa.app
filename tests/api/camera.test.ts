@@ -12,8 +12,8 @@ import { isXisf, readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
 import { bufferSource } from 'nebulosa/src/io/io'
 import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import { camera as cameraEndpoints, CameraCaptureTask, CameraHandler } from 'src/api/camera'
-import type { GuiderHandler } from 'src/api/guider'
+import { camera as cameraEndpoints, CameraCaptureTask, CameraHandler, cameraBus } from 'src/api/camera'
+import { guiderBus, type GuiderHandler } from 'src/api/guider'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler, type Messager } from 'src/api/message'
 import { DEFAULT_CAMERA_CAPTURE_START, DEFAULT_GUIDER_EVENT, type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated } from 'src/shared/types'
@@ -27,6 +27,9 @@ type CameraCaptureEventRecord = {
 	readonly event: CameraCaptureEvent
 	readonly path?: string
 }
+
+cameraBus.forceSync = true
+guiderBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const imageProcessor = new ImageProcessor()
@@ -638,12 +641,12 @@ describe('camera capture start request', () => {
 
 		const guiderHandler = {
 			running: true,
-			dither: (request: CameraCaptureStart['dither'], options: Parameters<GuiderHandler['dither']>[1]) => {
+			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal, id?: string) => {
 				dithered = request
-				signal = options?.signal
-				options?.onEvent?.({ phase: 'dithered', guider: structuredClone(DEFAULT_GUIDER_EVENT), dx: 1.5, dy: -2 })
-				options?.onEvent?.({ phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
-				options?.onEvent?.({ phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'guiding' }, ok: true })
+				signal = s
+				guiderBus.emit('dither', { id, phase: 'dithered', guider: structuredClone(DEFAULT_GUIDER_EVENT), dx: 1.5, dy: -2 })
+				guiderBus.emit('dither', { id, phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
+				guiderBus.emit('dither', { id, phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'guiding' }, ok: true })
 				return Promise.resolve({ ok: true } as const)
 			},
 		} as unknown as GuiderHandler
@@ -660,9 +663,7 @@ describe('camera capture start request', () => {
 
 		cameraManager.connect(camera)
 
-		const success = await cameraHandler.start(camera, request, (event) => {
-			events.push(structuredClone(event))
-		})
+		const success = await cameraHandler.start(camera, request, (event) => events.push(structuredClone(event)))
 
 		expect(success).toBeTrue()
 
@@ -677,9 +678,9 @@ describe('camera capture start request', () => {
 		const error = spyOn(console, 'error').mockImplementation(() => {})
 		const guiderHandler = {
 			running: true,
-			dither: (_: CameraCaptureStart['dither'], options: Parameters<GuiderHandler['dither']>[1]) => {
-				options?.onEvent?.({ phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
-				options?.onEvent?.({ phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' }, ok: false, reason: 'settle-timeout' })
+			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal, id?: string) => {
+				guiderBus.emit('dither', { id, phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
+				guiderBus.emit('dither', { id, phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' }, ok: false, reason: 'settle-timeout' })
 				return Promise.resolve({ ok: false, reason: 'settle-timeout' } as const)
 			},
 		} as unknown as GuiderHandler
@@ -692,9 +693,7 @@ describe('camera capture start request', () => {
 		try {
 			cameraManager.connect(camera)
 
-			const success = await cameraHandler.start(camera, request, (event) => {
-				events.push(structuredClone(event))
-			})
+			const success = await cameraHandler.start(camera, request, (event) => events.push(structuredClone(event)))
 
 			expect(success).toBeFalse()
 			expect(events.map((event) => event.state)).toContain('settling')
@@ -710,11 +709,11 @@ describe('camera capture start request', () => {
 		let resolveDither: ((value: Awaited<ReturnType<GuiderHandler['dither']>>) => void) | undefined
 		const guiderHandler = {
 			running: true,
-			dither: (_: CameraCaptureStart['dither'], options: Parameters<GuiderHandler['dither']>[1]) => {
-				signal = options?.signal
+			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal, id?: string) => {
+				signal = s
 				return new Promise<Awaited<ReturnType<GuiderHandler['dither']>>>((resolve) => {
 					resolveDither = resolve
-					options?.signal?.addEventListener('abort', () => resolve({ ok: false, reason: 'aborted' }), { once: true })
+					s?.addEventListener('abort', () => resolve({ ok: false, reason: 'aborted' }), { once: true })
 				})
 			},
 		} as unknown as GuiderHandler
@@ -726,9 +725,7 @@ describe('camera capture start request', () => {
 
 		cameraManager.connect(camera)
 
-		const promise = cameraHandler.start(camera, request, (event) => {
-			events.push(structuredClone(event))
-		})
+		const promise = cameraHandler.start(camera, request, (event) => events.push(structuredClone(event)))
 
 		expect(await waitUntil(() => events.some((event) => event.state === 'dithering'))).toBeTrue()
 

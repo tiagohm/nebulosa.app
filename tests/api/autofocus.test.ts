@@ -4,8 +4,8 @@ import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
 import { CameraManager, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
 import { CameraSimulator, ClientSimulator, FocuserSimulator } from 'nebulosa/src/devices/indi/simulator'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
-import { autoFocus as autoFocusEndpoints, AutoFocusHandler } from 'src/api/autofocus'
-import { CameraHandler } from 'src/api/camera'
+import { autoFocusBus, autoFocus as autoFocusEndpoints, AutoFocusHandler } from 'src/api/autofocus'
+import { cameraBus, CameraHandler } from 'src/api/camera'
 import { FocuserHandler } from 'src/api/focuser'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
@@ -17,6 +17,9 @@ type AutoFocusStartOverrides = Omit<Partial<AutoFocusStart>, 'capture' | 'starDe
 	readonly capture?: Partial<AutoFocusStart['capture']>
 	readonly starDetection?: Partial<AutoFocusStart['starDetection']>
 }
+
+autoFocusBus.forceSync = true
+cameraBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const imageProcessor = new ImageProcessor()
@@ -106,7 +109,7 @@ function stopRequest(id: string) {
 }
 
 function autoFocusMessages() {
-	return socket.filter<AutoFocusEvent>((message) => message.type === 'autofocus')
+	return socket.filter<AutoFocusEvent>((message) => message.type === 'autofocus:update')
 }
 
 function autoFocusEvents() {

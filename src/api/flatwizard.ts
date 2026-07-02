@@ -2,10 +2,17 @@ import { join } from 'path'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import type { Camera, MinMaxValueProperty } from 'nebulosa/src/devices/indi/device'
 import { histogram } from 'nebulosa/src/imaging/processing/computation'
+import { EventBus } from 'src/shared/bus'
 import { type CameraCaptureEvent, DEFAULT_FLAT_WIZARD_EVENT, DEFAULT_IMAGE_TRANSFORMATION, type FlatWizardEvent, type FlatWizardStart, type FlatWizardState, type ImageTransformation } from 'src/shared/types'
 import type { CameraHandler } from './camera'
 import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
+
+export interface FlatWizardBusEvents {
+	readonly update: FlatWizardEvent
+}
+
+export const flatWizardBus = new EventBus<FlatWizardBusEvents>()
 
 const FLAT_WIZARD_IMAGE_TRANSFORMATION: ImageTransformation = { ...DEFAULT_IMAGE_TRANSFORMATION, enabled: false, format: { ...DEFAULT_IMAGE_TRANSFORMATION.format, type: 'fits' } }
 
@@ -15,10 +22,12 @@ export class FlatWizardHandler {
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
 		readonly cameraHandler: CameraHandler,
-	) {}
+	) {
+		flatWizardBus.subscribe('update', (event) => wsm.send('flatwizard:update', event))
+	}
 
 	sendEvent(event: FlatWizardEvent) {
-		this.wsm.send('flatwizard', event)
+		flatWizardBus.emit('update', structuredClone(event))
 	}
 
 	private handleFlatWizardEvent(event: FlatWizardEvent, task: FlatWizardTask) {

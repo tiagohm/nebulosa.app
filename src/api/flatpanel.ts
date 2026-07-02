@@ -2,10 +2,18 @@ import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { FlatPanel } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, FlatPanelManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
-import bus from 'src/shared/bus'
+import { EventBus } from 'src/shared/bus'
 import type { FlatPanelAdded, FlatPanelRemoved, FlatPanelUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { Messager, WebSocketMessageHandler } from './message'
+import { webSocketBus, type WebSocketMessageHandler } from './message'
+
+export interface FlatPanelBusEvents {
+	readonly add: FlatPanelAdded
+	readonly update: FlatPanelUpdated
+	readonly remove: FlatPanelRemoved
+}
+
+export const flatPanelBus = new EventBus<FlatPanelBusEvents>()
 
 export class FlatPanelHandler implements DeviceHandler<FlatPanel> {
 	constructor(
@@ -14,24 +22,28 @@ export class FlatPanelHandler implements DeviceHandler<FlatPanel> {
 	) {
 		flatPanelManager.addHandler(this)
 
-		bus.subscribe<Messager>('ws:open', (socket) => {
+		webSocketBus.subscribe('open', (socket) => {
 			for (const device of flatPanelManager.list()) {
-				this.wsm.send<FlatPanelAdded>('flatPanel:add', { device }, socket)
+				wsm.send<FlatPanelAdded>('flatPanel:add', { device }, socket)
 			}
 		})
+
+		flatPanelBus.subscribe('add', (event) => wsm.send('flatPanel:add', event))
+		flatPanelBus.subscribe('update', (event) => wsm.send('flatPanel:update', event))
+		flatPanelBus.subscribe('remove', (event) => wsm.send('flatPanel:remove', event))
 	}
 
 	added(device: FlatPanel) {
-		this.wsm.send<FlatPanelAdded>('flatPanel:add', { device })
+		flatPanelBus.emit('add', { device })
 		console.info('flat panel added:', device.name, device.id)
 	}
 
 	updated(device: FlatPanel, property: keyof FlatPanel & string, state?: PropertyState) {
-		this.wsm.send<FlatPanelUpdated>('flatPanel:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		flatPanelBus.emit('update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: FlatPanel) {
-		this.wsm.send<FlatPanelRemoved>('flatPanel:remove', { device })
+		flatPanelBus.emit('remove', { device })
 		console.info('flat panel removed:', device.name, device.id)
 	}
 

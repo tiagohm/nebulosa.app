@@ -4,9 +4,11 @@ import type { Wheel } from 'nebulosa/src/devices/indi/device'
 import { WheelManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator, WheelSimulator } from 'nebulosa/src/devices/indi/simulator'
 import { WebSocketMessageHandler } from 'src/api/message'
-import { WheelHandler, wheel as wheelEndpoints } from 'src/api/wheel'
+import { WheelHandler, wheelBus, wheel as wheelEndpoints } from 'src/api/wheel'
 import type { WheelAdded, WheelRemoved, WheelUpdated } from 'src/shared/types'
 import { json, noContent, SocketMessager, waitUntil } from './util'
+
+wheelBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const wheelManager = new WheelManager()

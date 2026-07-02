@@ -1,6 +1,7 @@
 import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { ThreePointPolarAlignment } from 'nebulosa/src/observation/alignment/polaralignment'
+import { EventBus } from 'src/shared/bus'
 import { type CameraCaptureEvent, DEFAULT_TPPA_EVENT, type TppaEvent, type TppaStart, type TppaState } from 'src/shared/types'
 import type { CameraHandler } from './camera'
 import { type Endpoints, query, response } from './http'
@@ -8,6 +9,12 @@ import type { WebSocketMessageHandler } from './message'
 import type { MountHandler } from './mount'
 import type { PlateSolverHandler } from './platesolver'
 import { waitFor } from './util'
+
+export interface TppaBusEvents {
+	readonly update: TppaEvent
+}
+
+export const tppaBus = new EventBus<TppaBusEvents>()
 
 export class TppaHandler {
 	private readonly tasks: TppaTask[] = []
@@ -17,10 +24,12 @@ export class TppaHandler {
 		readonly cameraHandler: CameraHandler,
 		readonly mountHandler: MountHandler,
 		readonly solver: PlateSolverHandler,
-	) {}
+	) {
+		tppaBus.subscribe('update', (event) => wsm.send('tppa:update', event))
+	}
 
 	sendEvent(event: TppaEvent) {
-		this.wsm.send('tppa', event)
+		tppaBus.emit('update', structuredClone(event))
 	}
 
 	handleTppaEvent(event: TppaEvent, task: TppaTask) {

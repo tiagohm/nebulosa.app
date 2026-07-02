@@ -3,10 +3,20 @@ import { AlpacaServer } from 'nebulosa/src/devices/alpaca/server'
 import type { AlpacaServerHandler, AlpacaServerOptions } from 'nebulosa/src/devices/alpaca/server'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
 import type { Device } from 'nebulosa/src/devices/indi/device'
+import { EventBus } from 'src/shared/bus'
 import { normalizePort } from 'src/shared/normalizer'
 import type { AlpacaServerStatus } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
+
+export interface AlpacaBusEvents {
+	readonly add: AlpacaConfiguredDevice
+	readonly remove: AlpacaConfiguredDevice
+	readonly start: AlpacaServerStatus
+	readonly stop: undefined
+}
+
+export const alpacaBus = new EventBus<AlpacaBusEvents>()
 
 export class AlpacaHandler implements AlpacaServerHandler {
 	private alpacaServer?: AlpacaServer
@@ -18,7 +28,12 @@ export class AlpacaHandler implements AlpacaServerHandler {
 		readonly wsm: WebSocketMessageHandler,
 		readonly options: Omit<AlpacaServerOptions, 'handler'>,
 		private readonly alpacaDiscoveryPort?: number,
-	) {}
+	) {
+		alpacaBus.subscribe('add', (event) => wsm.send('alpaca:add', event))
+		alpacaBus.subscribe('remove', (event) => wsm.send('alpaca:remove', event))
+		alpacaBus.subscribe('start', (event) => wsm.send('alpaca:start', event))
+		alpacaBus.subscribe('stop', (event) => wsm.send('alpaca:stop', event))
+	}
 
 	status(): AlpacaServerStatus {
 		const running = this.running && !!this.alpacaServer?.running && !!this.alpacaDiscoveryServer?.running
@@ -26,11 +41,11 @@ export class AlpacaHandler implements AlpacaServerHandler {
 	}
 
 	deviceAdded(server: AlpacaServer, device: Device, configuredDevice: AlpacaConfiguredDevice) {
-		this.wsm.send('alpaca:device:add', configuredDevice)
+		alpacaBus.emit('add', configuredDevice)
 	}
 
 	deviceRemoved(server: AlpacaServer, device: Device, configuredDevice: AlpacaConfiguredDevice) {
-		this.wsm.send('alpaca:device:remove', configuredDevice)
+		alpacaBus.emit('remove', configuredDevice)
 	}
 
 	async start(port: unknown) {
@@ -66,7 +81,7 @@ export class AlpacaHandler implements AlpacaServerHandler {
 			this.running = true
 			started = true
 
-			this.wsm.send('alpaca:start', this.status())
+			alpacaBus.emit('start', this.status())
 		} catch (e) {
 			console.error(e)
 		} finally {
@@ -92,7 +107,7 @@ export class AlpacaHandler implements AlpacaServerHandler {
 		this.alpacaDiscoveryServer = undefined
 		console.info('alpaca discovery server is stopped')
 
-		this.wsm.send('alpaca:stop', undefined)
+		alpacaBus.emit('stop', undefined)
 	}
 
 	async discovery() {

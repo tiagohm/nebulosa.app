@@ -3,8 +3,8 @@ import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { CameraManager, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
 import { CameraSimulator, ClientSimulator } from 'nebulosa/src/devices/indi/simulator'
-import { CameraHandler } from 'src/api/camera'
-import { flatWizard as flatWizardEndpoints, FlatWizardHandler } from 'src/api/flatwizard'
+import { cameraBus, CameraHandler } from 'src/api/camera'
+import { flatWizardBus, flatWizard as flatWizardEndpoints, FlatWizardHandler } from 'src/api/flatwizard'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_FLAT_WIZARD_START, type CameraCaptureEvent, type FlatWizardEvent, type FlatWizardStart } from 'src/shared/types'
@@ -13,6 +13,9 @@ import { noContent, SocketMessager, waitUntil } from './util'
 type FlatWizardStartOverrides = Omit<Partial<FlatWizardStart>, 'capture'> & {
 	readonly capture?: Partial<FlatWizardStart['capture']>
 }
+
+flatWizardBus.forceSync = true
+cameraBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const imageProcessor = new ImageProcessor()
@@ -85,7 +88,7 @@ function stopRequest(id: string) {
 }
 
 function flatWizardMessages() {
-	return socket.filter<FlatWizardEvent>((message) => message.type === 'flatwizard')
+	return socket.filter<FlatWizardEvent>((message) => message.type === 'flatwizard:update')
 }
 
 function flatWizardEvents() {

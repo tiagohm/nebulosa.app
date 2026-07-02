@@ -10,11 +10,19 @@ import { CameraSimulator, type CatalogSource, type CatalogSourceStar, ClientSimu
 import type { AstronomicalImageStar } from 'nebulosa/src/imaging/synthetic/generator'
 import { clamp } from 'nebulosa/src/math/numerical/math'
 import { type Angle, normalizeAngle, toDeg } from 'nebulosa/src/math/units/angle'
-import bus from '../shared/bus'
+import { EventBus } from 'src/shared/bus'
 import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
 import { type Endpoints, response } from './http'
+import { indiBus } from './indi'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
+
+export interface ConnectionBusEvents {
+	readonly open: ConnectionEvent
+	readonly close: ConnectionEvent
+}
+
+export const connectionBus = new EventBus<ConnectionBusEvents>()
 
 function save(name: string, properties: unknown) {
 	const path = join(Bun.env.appDir, `${name}.config.json`)
@@ -116,10 +124,13 @@ export class ConnectionHandler {
 		readonly wsm: WebSocketMessageHandler,
 		readonly notificationHandler: NotificationHandler,
 	) {
-		bus.subscribe('indi:close', (client: IndiClient) => {
+		indiBus.subscribe('close', (client) => {
 			// Remove the client from the active connections
 			this.disconnect(client)
 		})
+
+		connectionBus.subscribe('open', (event) => wsm.send('connection:open', event))
+		connectionBus.subscribe('close', (event) => wsm.send('connection:close', event))
 	}
 
 	get(id?: string) {
@@ -140,7 +151,7 @@ export class ConnectionHandler {
 			) {
 				console.info('reusing existing connection:', client.id, client.description)
 				const status = this.status(client)!
-				this.wsm.send<ConnectionEvent>('connection:open', { status, reused: true })
+				connectionBus.emit('open', { status, reused: true })
 				return status
 			}
 		}
@@ -155,7 +166,7 @@ export class ConnectionHandler {
 					console.info('new connection to:', client.id, client.description)
 
 					const status = this.status(client)!
-					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
+					connectionBus.emit('open', { status, reused: false })
 					return status
 				} else {
 					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to INDI server', color: 'danger' })
@@ -173,7 +184,7 @@ export class ConnectionHandler {
 					console.info('new connection to:', client.id, client.description)
 
 					const status = this.status(client)!
-					this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
+					connectionBus.emit('open', { status, reused: false })
 					return status
 				} else {
 					this.notificationHandler.send({ title: 'CONNECTION', description: 'Failed to connect to Alpaca server', color: 'danger' })
@@ -207,7 +218,7 @@ export class ConnectionHandler {
 			console.info('new connection to:', client.id, client.description)
 
 			const status = this.status(client)!
-			this.wsm.send<ConnectionEvent>('connection:open', { status, reused: false })
+			connectionBus.emit('open', { status, reused: false })
 			return status
 		}
 
@@ -226,7 +237,7 @@ export class ConnectionHandler {
 
 				client[Symbol.dispose]()
 
-				this.wsm.send<ConnectionEvent>('connection:close', { status })
+				connectionBus.emit('close', { status })
 			}
 		} else {
 			for (const [key, client] of this.clients) {
@@ -238,7 +249,7 @@ export class ConnectionHandler {
 
 					client[Symbol.dispose]()
 
-					this.wsm.send<ConnectionEvent>('connection:close', { status })
+					connectionBus.emit('close', { status })
 
 					break
 				}

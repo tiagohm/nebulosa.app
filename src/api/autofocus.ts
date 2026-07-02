@@ -3,6 +3,7 @@ import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { Regression } from 'nebulosa/src/math/numerical/regression'
 import { AutoFocus } from 'nebulosa/src/observation/focus/autofocus'
+import { EventBus } from 'src/shared/bus'
 import { type AutoFocusEvent, type AutoFocusStart, type AutoFocusState, type CameraCaptureEvent, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import type { CameraHandler } from './camera'
@@ -10,6 +11,12 @@ import { type FocuserHandler, waitForFocuser, type WaitForFocuserAction } from '
 import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { StarDetectionHandler } from './stardetection'
+
+export interface AutoFocusBusEvents {
+	readonly update: AutoFocusEvent
+}
+
+export const autoFocusBus = new EventBus<AutoFocusBusEvents>()
 
 export class AutoFocusHandler {
 	private readonly tasks: AutoFocusTask[] = []
@@ -19,10 +26,12 @@ export class AutoFocusHandler {
 		readonly cameraHandler: CameraHandler,
 		readonly focuserHandler: FocuserHandler,
 		readonly starDetectionHandler: StarDetectionHandler,
-	) {}
+	) {
+		autoFocusBus.subscribe('update', (event) => wsm.send('autofocus:update', event))
+	}
 
 	sendEvent(event: AutoFocusEvent) {
-		this.wsm.send('autofocus', event)
+		autoFocusBus.emit('update', event)
 	}
 
 	private handleAutoFocusEvent(event: AutoFocusEvent, task: AutoFocusTask) {

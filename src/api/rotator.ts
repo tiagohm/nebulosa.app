@@ -2,10 +2,18 @@ import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Rotator } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, RotatorManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
-import bus from 'src/shared/bus'
+import { EventBus } from 'src/shared/bus'
 import type { RotatorAdded, RotatorRemoved, RotatorUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { Messager, WebSocketMessageHandler } from './message'
+import { webSocketBus, type WebSocketMessageHandler } from './message'
+
+export interface RotatorBusEvents {
+	readonly add: RotatorAdded
+	readonly update: RotatorUpdated
+	readonly remove: RotatorRemoved
+}
+
+export const rotatorBus = new EventBus<RotatorBusEvents>()
 
 export class RotatorHandler implements DeviceHandler<Rotator> {
 	constructor(
@@ -14,24 +22,28 @@ export class RotatorHandler implements DeviceHandler<Rotator> {
 	) {
 		rotatorManager.addHandler(this)
 
-		bus.subscribe<Messager>('ws:open', (socket) => {
+		webSocketBus.subscribe('open', (socket) => {
 			for (const device of rotatorManager.list()) {
-				this.wsm.send<RotatorAdded>('rotator:add', { device }, socket)
+				wsm.send<RotatorAdded>('rotator:add', { device }, socket)
 			}
 		})
+
+		rotatorBus.subscribe('add', (event) => wsm.send('rotator:add', event))
+		rotatorBus.subscribe('update', (event) => wsm.send('rotator:update', event))
+		rotatorBus.subscribe('remove', (event) => wsm.send('rotator:remove', event))
 	}
 
 	added(device: Rotator) {
-		this.wsm.send<RotatorAdded>('rotator:add', { device })
+		rotatorBus.emit('add', { device })
 		console.info('rotator added:', device.name, device.id)
 	}
 
 	updated(device: Rotator, property: keyof Rotator & string, state?: PropertyState) {
-		this.wsm.send<RotatorUpdated>('rotator:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		rotatorBus.emit('update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Rotator) {
-		this.wsm.send<RotatorRemoved>('rotator:remove', { device })
+		rotatorBus.emit('remove', { device })
 		console.info('rotator removed:', device.name, device.id)
 	}
 

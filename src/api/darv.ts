@@ -1,4 +1,5 @@
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
+import { EventBus } from 'src/shared/bus'
 import { type DarvEvent, type DarvStart, type DarvState, DEFAULT_DARV_EVENT } from 'src/shared/types'
 import type { CameraHandler } from './camera'
 import type { GuideOutputHandler } from './guideoutput'
@@ -6,6 +7,12 @@ import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 import type { MountHandler } from './mount'
 import { waitFor } from './util'
+
+export interface DarvBusEvents {
+	readonly update: DarvEvent
+}
+
+export const darvBus = new EventBus<DarvBusEvents>()
 
 export class DarvHandler {
 	private readonly tasks: DarvTask[] = []
@@ -15,10 +22,12 @@ export class DarvHandler {
 		readonly cameraHandler: CameraHandler,
 		readonly mountHandler: MountHandler,
 		readonly guideOutputHandler: GuideOutputHandler,
-	) {}
+	) {
+		darvBus.subscribe('update', (event) => wsm.send('darv:update', event))
+	}
 
 	sendEvent(event: DarvEvent) {
-		this.wsm.send('darv', event)
+		darvBus.emit('update', structuredClone(event))
 	}
 
 	handleDarvEvent(event: DarvEvent, task: DarvTask) {

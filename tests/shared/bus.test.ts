@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { EventBus } from 'src/shared/bus'
 
 test('emits only once for duplicate subscriptions', () => {
-	const bus = new EventBus()
+	const bus = new EventBus<Record<string, number>>()
 	const values: number[] = []
 	const callback = (value: number) => values.push(value)
 
@@ -18,7 +18,7 @@ test('emits only once for duplicate subscriptions', () => {
 })
 
 test('removes one-time subscriptions before invoking the callback', () => {
-	const bus = new EventBus()
+	const bus = new EventBus<Record<string, number | undefined>>()
 	let calls = 0
 
 	bus.subscribeOnce('topic', () => {
@@ -33,7 +33,7 @@ test('removes one-time subscriptions before invoking the callback', () => {
 })
 
 test('skips async scheduling for empty topics', async () => {
-	const bus = new EventBus()
+	const bus = new EventBus<Record<string, number>>()
 	const runtime = globalThis as typeof globalThis & { queueMicrotask: typeof queueMicrotask }
 	const queueMicrotaskOriginal = runtime.queueMicrotask
 	const values: number[] = []
@@ -48,7 +48,7 @@ test('skips async scheduling for empty topics', async () => {
 		bus.emit('empty', 0)
 		expect(schedules).toBe(0)
 
-		bus.subscribe<number>('topic', (value) => values.push(value))
+		bus.subscribe('topic', (value) => values.push(value))
 		bus.emit('topic', 1)
 		bus.emitAll('topic', [2, 3])
 

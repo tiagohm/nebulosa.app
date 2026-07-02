@@ -13,12 +13,20 @@ import { matMulVec, matTranspose } from 'nebulosa/src/math/linear-algebra/mat3'
 import { type Angle, normalizePI } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
 import { DEFAULT_COORDINATE_INFO, type MountAdded, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountUpdated } from 'src/shared/types'
-import bus from 'src/shared/bus'
+import { EventBus } from 'src/shared/bus'
 import { coordinateInfo } from 'src/shared/util'
 import type { CacheManager } from './cache'
 import type { ConfirmationHandler } from './confirmation'
 import { type Endpoints, query, response } from './http'
-import type { Messager, WebSocketMessageHandler } from './message'
+import { webSocketBus, type WebSocketMessageHandler } from './message'
+
+export interface MountBusEvents {
+	readonly add: MountAdded
+	readonly update: MountUpdated
+	readonly remove: MountRemoved
+}
+
+export const mountBus = new EventBus<MountBusEvents>()
 
 const J2000 = timeJulianYear(2000, Timescale.UTC)
 const JNOW = timeNow(true)
@@ -42,24 +50,28 @@ export class MountHandler implements DeviceHandler<Mount> {
 	) {
 		mountManager.addHandler(this)
 
-		bus.subscribe<Messager>('ws:open', (socket) => {
+		webSocketBus.subscribe('open', (socket) => {
 			for (const device of mountManager.list()) {
-				this.wsm.send<MountAdded>('mount:add', { device }, socket)
+				wsm.send<MountAdded>('mount:add', { device }, socket)
 			}
 		})
+
+		mountBus.subscribe('add', (event) => wsm.send('mount:add', event))
+		mountBus.subscribe('update', (event) => wsm.send('mount:update', event))
+		mountBus.subscribe('remove', (event) => wsm.send('mount:remove', event))
 	}
 
 	added(device: Mount) {
-		this.wsm.send<MountAdded>('mount:add', { device })
+		mountBus.emit('add', { device })
 		console.info('mount added:', device.name, device.id)
 	}
 
 	updated(device: Mount, property: keyof Mount & string, state?: PropertyState) {
-		this.wsm.send<MountUpdated>('mount:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		mountBus.emit('update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Mount) {
-		this.wsm.send<MountRemoved>('mount:remove', { device })
+		mountBus.emit('remove', { device })
 		console.info('mount removed:', device.name, device.id)
 	}
 

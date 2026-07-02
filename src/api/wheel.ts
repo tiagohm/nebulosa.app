@@ -2,10 +2,18 @@ import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Wheel } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, WheelManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
-import bus from 'src/shared/bus'
+import { EventBus } from 'src/shared/bus'
 import type { WheelAdded, WheelRemoved, WheelUpdated } from 'src/shared/types'
 import { type Endpoints, query, response } from './http'
-import type { Messager, WebSocketMessageHandler } from './message'
+import { webSocketBus, type WebSocketMessageHandler } from './message'
+
+export interface WheelBusEvents {
+	readonly add: WheelAdded
+	readonly update: WheelUpdated
+	readonly remove: WheelRemoved
+}
+
+export const wheelBus = new EventBus<WheelBusEvents>()
 
 export class WheelHandler implements DeviceHandler<Wheel> {
 	constructor(
@@ -14,24 +22,28 @@ export class WheelHandler implements DeviceHandler<Wheel> {
 	) {
 		wheelManager.addHandler(this)
 
-		bus.subscribe<Messager>('ws:open', (socket) => {
+		webSocketBus.subscribe('open', (socket) => {
 			for (const device of wheelManager.list()) {
-				this.wsm.send<WheelAdded>('wheel:add', { device }, socket)
+				wsm.send<WheelAdded>('wheel:add', { device }, socket)
 			}
 		})
+
+		wheelBus.subscribe('add', (event) => wsm.send('wheel:add', event))
+		wheelBus.subscribe('update', (event) => wsm.send('wheel:update', event))
+		wheelBus.subscribe('remove', (event) => wsm.send('wheel:remove', event))
 	}
 
 	added(device: Wheel) {
-		this.wsm.send<WheelAdded>('wheel:add', { device })
+		wheelBus.emit('add', { device })
 		console.info('wheel added:', device.name, device.id)
 	}
 
 	updated(device: Wheel, property: keyof Wheel & string, state?: PropertyState) {
-		this.wsm.send<WheelUpdated>('wheel:update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
+		wheelBus.emit('update', { device: { id: device.id, name: device.name, [property]: device[property] }, property, state })
 	}
 
 	removed(device: Wheel) {
-		this.wsm.send<WheelRemoved>('wheel:remove', { device })
+		wheelBus.emit('remove', { device })
 		console.info('wheel removed:', device.name, device.id)
 	}
 

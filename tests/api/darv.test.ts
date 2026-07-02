@@ -4,9 +4,9 @@ import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { CameraManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
 import { CameraSimulator, ClientSimulator, MountSimulator } from 'nebulosa/src/devices/indi/simulator'
 import { CacheManager } from 'src/api/cache'
-import { CameraHandler } from 'src/api/camera'
+import { cameraBus, CameraHandler } from 'src/api/camera'
 import { ConfirmationHandler } from 'src/api/confirmation'
-import { darv as darvEndpoints, DarvHandler } from 'src/api/darv'
+import { darvBus, darv as darvEndpoints, DarvHandler } from 'src/api/darv'
 import { GuideOutputHandler } from 'src/api/guideoutput'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
@@ -17,6 +17,9 @@ import { noContent, SocketMessager, waitUntil } from './util'
 type DarvStartOverrides = Omit<Partial<DarvStart>, 'capture'> & {
 	readonly capture?: Partial<DarvStart['capture']>
 }
+
+darvBus.forceSync = true
+cameraBus.forceSync = true
 
 const wsm = new WebSocketMessageHandler()
 const imageProcessor = new ImageProcessor()
@@ -105,7 +108,7 @@ function stopRequest(id: string) {
 }
 
 function darvMessages() {
-	return socket.filter<DarvEvent>((message) => message.type === 'darv')
+	return socket.filter<DarvEvent>((message) => message.type === 'darv:update')
 }
 
 function darvEvents() {

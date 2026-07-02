@@ -1,6 +1,6 @@
 import type { Camera } from 'nebulosa/src/devices/indi/device'
-import bus from 'src/shared/bus'
 import { proxy } from 'valtio'
+import { cameraBus } from '../shared/bus'
 import type { DeviceState } from './equipment.store'
 
 export type FlatWizardListStore = typeof flatWizardListStore
@@ -20,7 +20,7 @@ const state = proxy<FlatWizardListState>({
 	list: [],
 })
 
-bus.subscribe('device:remove', (device) => {
+cameraBus.subscribe('remove', (device) => {
 	const index = state.list.findIndex((e) => e.camera === device)
 	index >= 0 && state.list.splice(index, 1)
 })

@@ -1,12 +1,11 @@
 import type { Device, DeviceProperties, DeviceProperty } from 'nebulosa/src/devices/indi/device'
 import type { Message, NewVector } from 'nebulosa/src/devices/indi/types'
-import bus from 'src/shared/bus'
-import type { IndiDevicePropertyEvent } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
+import { indiBus } from '../shared/bus'
 import { wsStore } from './ws.store'
 
 export type IndiPanelControlStore = ReturnType<typeof indiPanelControlStore>
@@ -48,34 +47,32 @@ export function indiPanelControlStore(device: Device) {
 
 		u[0] = initProxy(state, `indi.panelcontrol.${device.id}`, ['p:show', 'p:tab', 'p:group'])
 
-		u[1] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:add', (event) => {
+		u[1] = indiBus.subscribe('addProperty', (event) => {
 			if (device.id === event.device) {
 				addProperty(event.property)
 			}
 		})
 
-		u[2] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:update', (event) => {
+		u[2] = indiBus.subscribe('updateProperty', (event) => {
 			if (device.id === event.device) {
 				updateProperty(event.property)
 			}
 		})
 
-		u[3] = bus.subscribe<IndiDevicePropertyEvent>('indi:property:remove', (event) => {
+		u[3] = indiBus.subscribe('removeProperty', (event) => {
 			if (device.id === event.device) {
 				removeProperty(event.property)
 			}
 		})
 
-		u[4] = bus.subscribe<Message>('indi:message', (event) => {
+		u[4] = indiBus.subscribe('message', (event) => {
 			if (device.id === event.device) {
 				state.messages.unshift(event)
 			}
 		})
 
-		u[5] = bus.subscribe<Device>('indi:panelcontrol:toggle', (event) => {
-			if (device === event) {
-				state.show = !state.show
-			}
+		u[5] = indiBus.subscribe('togglePanelControl', () => {
+			toggle()
 		})
 
 		u[6] = subscribeKey(state, 'show', (show) => {
@@ -219,6 +216,10 @@ export function indiPanelControlStore(device: Device) {
 		state.show = false
 	}
 
+	function toggle() {
+		state.show = !state.show
+	}
+
 	return {
 		state,
 		device,
@@ -231,5 +232,6 @@ export function indiPanelControlStore(device: Device) {
 		send,
 		show,
 		hide,
+		toggle,
 	} as const
 }

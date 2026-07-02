@@ -325,7 +325,7 @@ export class IndiDevicePropertyHandler implements DevicePropertyHandler<Device>,
 
 		if (!sockets?.size) return
 
-		const topic = type === 'add' ? 'indi:property:add' : type === 'update' ? 'indi:property:update' : 'indi:property:remove'
+		const topic = type === 'add' ? 'indi:addProperty' : type === 'update' ? 'indi:updateProperty' : 'indi:removeProperty'
 		const event: IndiDevicePropertyEvent = { client: device.client.id, device: device.id, name: property.name, property }
 
 		for (const socket of sockets) {

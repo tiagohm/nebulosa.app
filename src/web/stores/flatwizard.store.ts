@@ -1,10 +1,10 @@
 import { nanoid } from 'nanoid'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
-import bus from 'src/shared/bus'
 import { type FlatWizardStart, type FlatWizardEvent, DEFAULT_FLAT_WIZARD_START, DEFAULT_FLAT_WIZARD_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
+import { flatWizardBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
 import type { DeviceState } from './equipment.store'
@@ -40,7 +40,7 @@ export function flatWizardStore(camera: Camera) {
 
 		u[0] = initProxy(state, `flatwizard.${camera.id}`, ['o:request'])
 
-		u[1] = bus.subscribe<FlatWizardEvent>('flatwizard', (event) => {
+		u[1] = flatWizardBus.subscribe('update', (event) => {
 			if (state.camera.id === event.camera) {
 				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)

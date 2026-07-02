@@ -1,7 +1,7 @@
-import bus from 'src/shared/bus'
 import { DEFAULT_INDI_SERVER_START, type IndiServerStart } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
+import { indiBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 
 export type IndiServerStore = typeof indiServerStore
@@ -24,11 +24,11 @@ const state = proxy<IndiServerState>({
 
 initProxy(state, 'indi.server', ['p:show', 'p:showAll', 'o:request'])
 
-bus.subscribe('indi:server:start', () => {
+indiBus.subscribe('serverStart', () => {
 	state.running = true
 })
 
-bus.subscribe('indi:server:stop', () => {
+indiBus.subscribe('serverStop', () => {
 	state.running = false
 })
 

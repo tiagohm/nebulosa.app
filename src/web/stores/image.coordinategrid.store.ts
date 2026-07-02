@@ -1,12 +1,11 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
-import bus from 'src/shared/bus'
 import type { ImageCoordinateGrid } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
+import { imageBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
-import type { ImageLoaded } from '../shared/types'
 import { hasScaledSolution } from './image.solver.store'
 import type { ImageViewerStore } from './image.viewer.store'
 
@@ -39,7 +38,7 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 
 		u[0] = initProxy(state, `image.${viewer.key}.coordinategrid`, ['p:visible'])
 
-		u[1] = bus.subscribe<ImageLoaded>('image:load', ({ image, info, refreshed }) => {
+		u[1] = imageBus.subscribe('load', ({ image, info, refreshed }) => {
 			if (refreshed && image === viewer.image) {
 				if (state.visible && hasScaledSolution(info.solution)) void compute(info.solution, true)
 				else reset()

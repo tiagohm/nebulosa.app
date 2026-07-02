@@ -2,7 +2,6 @@ import { TAU } from 'nebulosa/src/core/constants'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import type { Celestial, CelestialShape, ConstellationData, MovingBody, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
-import bus from 'src/shared/bus'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
 import constellationBoundaries from '@/../data/constellation.boundaries.json'
@@ -10,6 +9,7 @@ import constellationLabels from '@/../data/constellation.labels.json'
 import constellationLines from '@/../data/constellation.lines.json'
 import mw from '@/../data/mw.json'
 import { Api } from '../shared/api'
+import { mountBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import { skyObjectName } from '../shared/util'
 import { atlasStore } from './atlas.store'
@@ -106,11 +106,11 @@ function handleReady(celestial: Celestial) {
 		void updateMovingBodies(celestial, time)
 	})
 
-	u[2] = bus.subscribe<Mount>('mount:add', (event) => {
+	u[2] = mountBus.subscribe('add', (event) => {
 		addMount(event)
 	})
 
-	u[3] = bus.subscribe<Mount>('mount:update:equatorialCoordinate', (event) => {
+	u[3] = mountBus.subscribe('update:equatorialCoordinate', (event) => {
 		const shape = connectedMounts.get(event.id)
 
 		if (shape !== undefined) {
@@ -124,7 +124,7 @@ function handleReady(celestial: Celestial) {
 		}
 	})
 
-	u[4] = bus.subscribe<Mount>('mount:update:connected', (event) => {
+	u[4] = mountBus.subscribe('update:connected', (event) => {
 		const shape = connectedMounts.get(event.id)
 
 		if (shape !== undefined) {
@@ -133,7 +133,7 @@ function handleReady(celestial: Celestial) {
 		}
 	})
 
-	u[5] = bus.subscribe<Mount>('mount:remove', (event) => {
+	u[5] = mountBus.subscribe('remove', (event) => {
 		connectedMounts.delete(event.id) && celestial.removeShape(event.id)
 	})
 

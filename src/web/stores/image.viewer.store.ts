@@ -4,12 +4,12 @@ import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { pmod } from 'nebulosa/src/math/numerical/math'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
-import bus from 'src/shared/bus'
 import { type ImageTransformation, type ImageInfo, DEFAULT_IMAGE_TRANSFORMATION, type Framing, type Roi } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
 import type { Image, ImageLoaded, ImageRoiRequest } from '@/shared/types'
 import { Api } from '../shared/api'
+import { imageBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import type { InteractableMethods } from '../ui/Interactable'
 import { framingStore } from './framing.store'
@@ -212,7 +212,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 			if (target) {
 				target.src = url
 
-				bus.emit('image:load', { image, info, first, refreshed } satisfies ImageLoaded)
+				imageBus.emit('load', { image, info, first, refreshed } satisfies ImageLoaded)
 
 				console.info('image loaded:', path, url, info)
 			} else {

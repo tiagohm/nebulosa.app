@@ -1,9 +1,8 @@
-import bus from 'src/shared/bus'
 import { DEFAULT_IMAGE_STRETCH, type ImageStretch } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
+import { imageBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
-import type { ImageLoaded } from '../shared/types'
 import type { SliderRangeValue } from '../ui/components/Slider'
 import type { ImageViewerStore } from './image.viewer.store'
 
@@ -34,7 +33,7 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 
 		u[0] = initProxy(state, `image.${viewer.key}.stretch`, ['p:show'])
 
-		u[1] = bus.subscribe<ImageLoaded>('image:load', ({ image, info }) => {
+		u[1] = imageBus.subscribe('load', ({ image, info }) => {
 			if (image === viewer.image) {
 				state.stretch.auto = info.transformation.stretch.auto
 				state.stretch.shadow = info.transformation.stretch.shadow

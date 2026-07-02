@@ -1,6 +1,6 @@
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
-import bus from 'src/shared/bus'
 import { proxy } from 'valtio'
+import { deviceBus } from '../shared/bus'
 import type { DeviceState } from './equipment.store'
 
 export type DarvListStore = typeof darvListStore
@@ -23,7 +23,7 @@ const state = proxy<DarvListState>({
 	list: [],
 })
 
-bus.subscribe('device:remove', (device) => {
+deviceBus.subscribe('remove', (device) => {
 	const index = state.list.findIndex((e) => e.camera === device || e.mount === device)
 	index >= 0 && state.list.splice(index, 1)
 })

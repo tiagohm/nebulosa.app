@@ -1,10 +1,10 @@
 import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
-import bus from 'src/shared/bus'
 import { DEFAULT_GUIDER_EVENT, DEFAULT_GUIDER_INTERNAL_CONNECT, DEFAULT_GUIDER_REMOTE_CONNECT, type GuiderClientMode, type GuiderDither, type GuiderEvent, type GuiderLocalConnect, type GuiderRemoteConnect, type GuiderStatus } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
+import { guiderBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import type { DeviceState } from './equipment.store'
 
@@ -39,7 +39,7 @@ const state = proxy<GuiderState>({
 
 initProxy(state, 'guider', ['p:show', 'o:connection'])
 
-bus.subscribe<GuiderEvent>('guider', (event) => {
+guiderBus.subscribe('update', (event) => {
 	if (!state.connected) return
 
 	Object.assign(state.event, event)
@@ -48,7 +48,7 @@ bus.subscribe<GuiderEvent>('guider', (event) => {
 	state.running = state.event.state === 'guiding'
 })
 
-bus.subscribe('guider:close', () => {
+guiderBus.subscribe('close', () => {
 	state.connected = false
 	state.looping = false
 	state.running = false
@@ -151,7 +151,6 @@ function calibrate() {
 }
 
 function show() {
-	bus.emit('homeMenu:toggle', false)
 	state.show = true
 }
 

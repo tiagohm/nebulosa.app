@@ -1,11 +1,11 @@
 import { nanoid } from 'nanoid'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { COARSE_DARV_EXPOSURE_PRESET, DARV_EXPOSURE_PRESETS, estimateDarvExposure, type DarvExposureInput, type DarvExposurePreset, type DarvExposurePresetMode } from 'nebulosa/src/observation/alignment/polaralignment'
-import bus from 'src/shared/bus'
 import { DEFAULT_DARV_EVENT, DEFAULT_DARV_START, type DarvEvent, type DarvStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
+import { darvBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import { toast } from '../shared/toast'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
@@ -55,7 +55,7 @@ export function darvStore(camera: Camera, mount: Mount) {
 
 		u[0] = initProxy(state, `darv.${camera.id}.${mount.id}`, ['o:request', 'o:exposureEstimation'])
 
-		u[1] = bus.subscribe<DarvEvent>('darv', (event) => {
+		u[1] = darvBus.subscribe('update', (event) => {
 			if (state.camera.id === event.camera && state.mount.id === event.mount) {
 				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)

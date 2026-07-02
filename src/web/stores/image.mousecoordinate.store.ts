@@ -3,12 +3,11 @@ import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/co
 import { AstrometricInterpolator } from 'nebulosa/src/astronomy/ephemeris/interpolation/astrometric'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import bus from 'src/shared/bus'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
-import type { ImageLoaded } from '../shared/types'
+import { imageBus } from '../shared/bus'
 import { isMousePresent } from '../shared/util'
 import type { InteractableProps, InteractTransform } from '../ui/Interactable'
 import { hasScaledSolution } from './image.solver.store'
@@ -58,7 +57,7 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = bus.subscribe<ImageLoaded>('image:load', ({ image, info, refreshed }) => {
+		u[0] = imageBus.subscribe('load', ({ image, info, refreshed }) => {
 			if (refreshed && image === viewer.image) {
 				if (info.solution && state.visible) void compute(info.solution, true)
 				else state.interpolator = undefined

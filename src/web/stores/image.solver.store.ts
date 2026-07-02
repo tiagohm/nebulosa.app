@@ -4,13 +4,12 @@ import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { formatRA, formatDEC, toDeg, arcsec } from 'nebulosa/src/math/units/angle'
-import bus from 'src/shared/bus'
 import { DEFAULT_PLATE_SOLVE_START, type Framing, type PlateSolveStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 import { Api } from '../shared/api'
+import { imageBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
-import type { ImageLoaded } from '../shared/types'
 import { framingStore } from './framing.store'
 import type { ImageViewerStore } from './image.viewer.store'
 import { settingsStore } from './settings.store'
@@ -45,7 +44,7 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 
 		u[0] = initProxy(state, `image.${viewer.key}.solver`, ['p:show', 'o:request'])
 
-		u[1] = bus.subscribe<ImageLoaded>('image:load', ({ image, info, refreshed }) => {
+		u[1] = imageBus.subscribe('load', ({ image, info, refreshed }) => {
 			if (refreshed && image === viewer.image) {
 				const { request } = state
 

@@ -1,10 +1,10 @@
 import { nanoid } from 'nanoid'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
-import bus from 'src/shared/bus'
 import { DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type TppaEvent, type TppaStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
+import { tppaBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
 import type { DeviceState } from './equipment.store'
@@ -43,7 +43,7 @@ export function tppaStore(camera: Camera, mount: Mount) {
 
 		u[0] = initProxy(state, `tppa.${camera.id}.${mount.id}`, ['o:request'])
 
-		u[1] = bus.subscribe<TppaEvent>('tppa', (event) => {
+		u[1] = tppaBus.subscribe('update', (event) => {
 			if (state.camera.id === event.camera && state.mount.id === event.mount) {
 				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)

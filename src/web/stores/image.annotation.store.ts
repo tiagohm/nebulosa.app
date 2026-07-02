@@ -1,10 +1,9 @@
-import bus from 'src/shared/bus'
 import type { AnnotatedSkyObject, AnnotateImage } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
+import { imageBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
-import type { ImageLoaded } from '../shared/types'
 import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageAnnotationStore = ReturnType<typeof imageAnnotationStore>
@@ -47,7 +46,7 @@ export function imageAnnotationStore(viewer: ImageViewerStore) {
 
 		u[0] = initProxy(state, `image.${viewer.key}.annotation`, ['p:show', 'o:request'])
 
-		u[1] = bus.subscribe<ImageLoaded>('image:load', ({ image, refreshed }) => {
+		u[1] = imageBus.subscribe('load', ({ image, refreshed }) => {
 			if (refreshed && image === viewer.image) {
 				reset()
 			}

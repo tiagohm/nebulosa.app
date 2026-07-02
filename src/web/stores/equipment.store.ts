@@ -1,8 +1,8 @@
 import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/devices/indi/device'
-import bus from 'src/shared/bus'
 import type { ConnectionStatus, DeviceUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
+import { cameraBus, coverBus, deviceBus, flatPanelBus, focuserBus, mountBus, rotatorBus, wheelBus } from '../shared/bus'
 
 export type EquipmentStore = typeof equipmentStore
 
@@ -83,16 +83,34 @@ function get<T extends DeviceType>(type: T, id: string) {
 	return undefined
 }
 
+const BUS = {
+	camera: cameraBus,
+	mount: mountBus,
+	wheel: wheelBus,
+	focuser: focuserBus,
+	rotator: rotatorBus,
+	flatPanel: flatPanelBus,
+	cover: coverBus,
+	// TODO: add buses for the following device types
+	dewHeater: deviceBus,
+	power: deviceBus,
+	guideOutput: deviceBus,
+	thermometer: deviceBus,
+	dome: deviceBus,
+	gps: deviceBus,
+} as const
+
 function emitAddOrRemove(device: DeviceState<Device>, action: 'add' | 'remove') {
-	bus.emit(`device:${action}`, device)
-	bus.emit(`${device.type}:${action}`, device)
-	bus.emit(`${device.id}:${action}`, device)
+	deviceBus.emit(action, device)
+	const bus = BUS[device.type] as typeof deviceBus
+	bus.emit(action, device)
 }
 
 function emitUpdate(device: DeviceState<Device>, property: string) {
-	bus.emit(`device:update:${property}`, device)
-	bus.emit(`${device.type}:update:${property}`, device)
-	bus.emit(`${device.id}:update:${property}`, device)
+	const action = `update:${property}`
+	deviceBus.emit(action as never, device as never)
+	const bus = BUS[device.type] as typeof deviceBus
+	bus.emit(action as never, device as never)
 }
 
 function add(type: DeviceType, device: Device) {

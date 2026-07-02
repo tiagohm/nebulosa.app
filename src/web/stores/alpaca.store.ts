@@ -1,8 +1,8 @@
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
-import bus from 'src/shared/bus'
 import type { AlpacaServerStatus } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
+import { alpacaBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 
 export type AlpacaStore = typeof alpacaStore
@@ -31,20 +31,20 @@ const state = proxy<AlpacaState>({
 
 initProxy(state, 'alpaca', ['p:show', 'p:port'])
 
-bus.subscribe('alpaca:start', (status: AlpacaServerStatus) => {
+alpacaBus.subscribe('start', (status: AlpacaServerStatus) => {
 	Object.assign(state.status, status)
 })
 
-bus.subscribe('alpaca:device:add', (device: AlpacaConfiguredDevice) => {
+alpacaBus.subscribe('add', (device: AlpacaConfiguredDevice) => {
 	state.status.devices.push(device)
 })
 
-bus.subscribe('alpaca:device:remove', (device: AlpacaConfiguredDevice) => {
+alpacaBus.subscribe('remove', (device: AlpacaConfiguredDevice) => {
 	const index = state.status.devices.findIndex((d) => d.DeviceNumber === device.DeviceNumber && d.DeviceType === device.DeviceType)
 	if (index !== -1) state.status.devices.splice(index, 1)
 })
 
-bus.subscribe('alpaca:stop', () => {
+alpacaBus.subscribe('stop', () => {
 	Object.assign(state.status, { running: false, serverPort: -1, discoveryPort: -1, devices: [] })
 })
 

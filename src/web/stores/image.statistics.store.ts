@@ -1,11 +1,10 @@
-import bus from 'src/shared/bus'
 import type { ImageHistogram, StatisticImage } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
+import { imageBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
-import type { ImageLoaded } from '../shared/types'
 import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageStatisticsStore = ReturnType<typeof imageStatisticsStore>
@@ -44,7 +43,7 @@ export function imageStatisticsStore(viewer: ImageViewerStore) {
 		mounted = true
 
 		u[0] = initProxy(state, `image.${viewer.key}.statistics`, ['p:show', 'o:request', 'p:roi'])
-		u[1] = bus.subscribe<ImageLoaded>('image:load', compute)
+		u[1] = imageBus.subscribe('load', compute)
 		u[2] = subscribe(state.request, compute)
 		u[3] = subscribeKey(state, 'roi', compute)
 		u[4] = subscribeKey(viewer.roi.state, 'visible', compute)

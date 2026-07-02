@@ -1,7 +1,8 @@
-import bus from 'src/shared/bus'
+import type { DeviceType } from 'nebulosa/src/devices/indi/device'
 import type { DeviceAdded, DeviceRemoved, Notification } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { toast } from '@/shared/toast'
+import { cameraBus, autoFocusBus, darvBus, flatWizardBus, tppaBus, alpacaBus, connectionBus, guiderBus, indiBus } from '../shared/bus'
 import { confirmationStore } from './confirmation.store'
 import { equipmentStore } from './equipment.store'
 
@@ -27,6 +28,12 @@ function updateDisconnectedStyleProperty(grayscale: string, display: string) {
 	document.documentElement.style.setProperty('--ws-disconnected-display', display)
 }
 
+const DEVICE_TYPES = new Set<DeviceType>(['camera', 'cover', 'dewHeater', 'flatPanel', 'focuser', 'guideOutput', 'mount', 'power', 'rotator', 'thermometer', 'wheel'])
+
+function isDeviceType(type: string): type is DeviceType {
+	return DEVICE_TYPES.has(type as never)
+}
+
 function create() {
 	if (webSocket && (webSocket.readyState === WebSocket.OPEN || webSocket.readyState === WebSocket.CONNECTING)) {
 		return
@@ -44,7 +51,7 @@ function create() {
 		} else {
 			connected = true
 			state.connected = true
-			bus.emit('ws:open', null)
+			webSocketBus.emit('open', null)
 			console.info('web socket open')
 		}
 
@@ -55,13 +62,11 @@ function create() {
 		disconnected = connected
 		state.connected = false
 		updateDisconnectedStyleProperty('100%', 'flex')
-		bus.emit('ws:close', null)
+		webSocketBus.emit('close', null)
 		console.info('web socket close', e)
 	})
 
 	webSocket.addEventListener('message', (message) => {
-		if (!bus.hasSubscribers()) return
-
 		const content = message.data as string
 		const index = content.indexOf('@')
 
@@ -74,36 +79,33 @@ function create() {
 		const text = content.slice(index + 1)
 		const data = text !== '' ? JSON.parse(text) : undefined
 
-		if (
-			key.startsWith('camera:') ||
-			key.startsWith('cover:') ||
-			key.startsWith('dewHeater:') ||
-			key.startsWith('flatPanel:') ||
-			key.startsWith('focuser:') ||
-			key.startsWith('guideOutput:') ||
-			key.startsWith('mount:') ||
-			key.startsWith('power:') ||
-			key.startsWith('rotator:') ||
-			key.startsWith('thermometer:') ||
-			key.startsWith('wheel:')
-		) {
-			const [type, action] = key.split(':')
-
-			if (action === 'update') {
-				equipmentStore.update(type as never, data)
-			} else if (action === 'add') {
-				equipmentStore.add(type as never, (data as DeviceAdded).device)
-			} else if (action === 'remove') {
-				equipmentStore.remove(type as never, (data as DeviceRemoved).device)
-			} else {
-				bus.emit(key, data)
-			}
-		} else if (key === 'notification') {
+		if (key === 'notification') {
 			toast(data as Notification)
 		} else if (key === 'confirmation') {
 			confirmationStore.show(data)
 		} else {
-			bus.emit(key, data)
+			const [type, action] = key.split(':')
+
+			if (isDeviceType(type)) {
+				if (action === 'update') {
+					equipmentStore.update(type, data)
+				} else if (action === 'add') {
+					equipmentStore.add(type, (data as DeviceAdded).device)
+				} else if (action === 'remove') {
+					equipmentStore.remove(type, (data as DeviceRemoved).device)
+				} else {
+					if (type === 'camera') cameraBus.emit(action as never, data as never)
+				}
+			} else {
+				if (type === 'darv') darvBus.emit(action as never, data as never)
+				else if (type === 'tppa') tppaBus.emit(action as never, data as never)
+				else if (type === 'autoFocus') autoFocusBus.emit(action as never, data as never)
+				else if (type === 'flatWizard') flatWizardBus.emit(action as never, data as never)
+				else if (type === 'alpaca') alpacaBus.emit(action as never, data as never)
+				else if (type === 'connection') connectionBus.emit(action as never, data as never)
+				else if (type === 'guider') guiderBus.emit(action as never, data as never)
+				else if (type === 'indi') indiBus.emit(action as never, data as never)
+			}
 		}
 	})
 }

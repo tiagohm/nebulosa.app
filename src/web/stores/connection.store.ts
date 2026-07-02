@@ -1,9 +1,9 @@
 import { nanoid } from 'nanoid'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
-import bus from 'src/shared/bus'
-import type { ConnectionEvent, ConnectionStatus } from 'src/shared/types'
+import type { ConnectionStatus } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
+import { connectionBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import { DEFAULT_CONNECTION, type Connection } from '../shared/types'
 
@@ -51,11 +51,11 @@ const DEFAULT_CONNECTION_PORT = {
 	FIRMATA: 27016,
 } satisfies Record<Connection['type'], number>
 
-bus.subscribe<ConnectionEvent>('connection:open', ({ reused }) => {
+connectionBus.subscribe('open', ({ reused }) => {
 	!reused && void list()
 })
 
-bus.subscribe<ConnectionEvent>('connection:close', () => {
+connectionBus.subscribe('close', () => {
 	void list()
 })
 

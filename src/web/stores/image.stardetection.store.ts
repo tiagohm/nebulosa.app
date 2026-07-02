@@ -1,12 +1,11 @@
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
-import bus from 'src/shared/bus'
 import { DEFAULT_STAR_DETECTION, type StarDetection } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
+import { imageBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import { toast } from '../shared/toast'
-import type { ImageLoaded } from '../shared/types'
 import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageStarDetectionStore = ReturnType<typeof imageStarDetectionStore>
@@ -56,7 +55,7 @@ export function imageStarDetectionStore(viewer: ImageViewerStore) {
 
 		u[0] = initProxy(state, `image.${viewer.key}.star detection`, ['p:show', 'o:request'])
 
-		u[1] = bus.subscribe<ImageLoaded>('image:load', ({ image, refreshed }) => {
+		u[1] = imageBus.subscribe('load', ({ image, refreshed }) => {
 			if (refreshed && image === viewer.image) {
 				reset()
 			}

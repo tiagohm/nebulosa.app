@@ -1,6 +1,6 @@
 import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
-import bus from 'src/shared/bus'
 import { proxy } from 'valtio'
+import { deviceBus } from '../shared/bus'
 import type { DeviceState } from './equipment.store'
 
 export type AutoFocusListStore = typeof autoFocusListStore
@@ -23,7 +23,7 @@ const state = proxy<AutoFocusListState>({
 	list: [],
 })
 
-bus.subscribe('device:remove', (device) => {
+deviceBus.subscribe('remove', (device) => {
 	const index = state.list.findIndex((e) => e.camera === device || e.focuser === device)
 	index >= 0 && state.list.splice(index, 1)
 })

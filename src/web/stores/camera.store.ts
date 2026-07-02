@@ -1,10 +1,10 @@
 import type { Camera, Focuser, MinMaxValueProperty, Mount, NameAndLabel, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
-import bus from 'src/shared/bus'
 import { type CameraCaptureStart, type CameraCaptureEvent, type Roi, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_EVENT, type CameraUpdated } from 'src/shared/types'
 import { exposureTimeIn, unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
+import { cameraBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import { storageGet, storageSet } from '../shared/storage'
 import type { ImageRoiRequest } from '../shared/types'
@@ -52,7 +52,7 @@ export function cameraStore(camera: Camera) {
 
 		mounted = true
 
-		u[0] = bus.subscribe<CameraCaptureEvent>('camera:capture', (event) => {
+		u[0] = cameraBus.subscribe('capture', (event) => {
 			if (event.camera === camera.id) {
 				Object.assign(state.progress, event)
 

@@ -1,10 +1,10 @@
 import { nanoid } from 'nanoid'
 import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
-import bus from 'src/shared/bus'
 import { type AutoFocusStart, type AutoFocusEvent, DEFAULT_AUTO_FOCUS_START, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
+import { autoFocusBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import { autoFocusListStore } from './autofocus.list.store'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
@@ -41,7 +41,7 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 
 		u[0] = initProxy(state, `autofocus.${camera.id}.${focuser.id}`, ['o:request'])
 
-		u[1] = bus.subscribe<AutoFocusEvent>('autofocus', (event) => {
+		u[1] = autoFocusBus.subscribe('update', (event) => {
 			if (state.camera.id === event.camera && state.focuser.id === event.focuser) {
 				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)

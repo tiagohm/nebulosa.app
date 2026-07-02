@@ -1,8 +1,7 @@
 import { nanoid } from 'nanoid'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
-import bus from 'src/shared/bus'
-import type { CameraFrameEvent } from 'src/shared/types'
 import { proxy, ref } from 'valtio'
+import { cameraBus, imageBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import type { Image, ImageSource } from '../shared/types'
 import { equipmentStore } from './equipment.store'
@@ -31,7 +30,7 @@ const state = proxy<ImageWorkspaceState>({
 
 initProxy(state.picker, 'workspace.picker', ['p:path'])
 
-bus.subscribe<CameraFrameEvent>('camera:frame', (event) => {
+cameraBus.subscribe('frame', (event) => {
 	if (event.path) {
 		const camera = equipmentStore.get('camera', event.camera)
 		camera && add(event.path, camera)
@@ -64,11 +63,11 @@ function add(path: string, source: ImageSource | Camera, id?: string) {
 		if (viewer) void viewer.load(path)
 		else return console.warn('image viewer not found:', image)
 
-		bus.emit('update', image)
+		imageBus.emit('update', image)
 	} else {
 		image = { path, id, position, source, camera }
 		state.images.push(image)
-		bus.emit('add', image)
+		imageBus.emit('add', image)
 	}
 
 	if (source === 'file') {
@@ -98,7 +97,7 @@ function remove(image: Image) {
 	if (index >= 0) {
 		state.images.splice(index, 1)
 		viewers.delete(image.id)
-		bus.emit('remove', image)
+		imageBus.emit('remove', image)
 	}
 }
 

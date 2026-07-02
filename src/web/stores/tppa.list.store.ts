@@ -1,7 +1,7 @@
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
-import bus from 'src/shared/bus'
 import { proxy } from 'valtio'
-import { equipmentStore, type DeviceState } from './equipment.store'
+import { deviceBus } from '../shared/bus'
+import type { DeviceState } from './equipment.store'
 
 export type TppaListStore = typeof tppaListStore
 
@@ -23,7 +23,7 @@ const state = proxy<TppaListState>({
 	list: [],
 })
 
-bus.subscribe('device:remove', (device) => {
+deviceBus.subscribe('remove', (device) => {
 	const index = state.list.findIndex((e) => e.camera === device || e.mount === device)
 	index >= 0 && state.list.splice(index, 1)
 })

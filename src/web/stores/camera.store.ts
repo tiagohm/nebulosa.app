@@ -4,7 +4,7 @@ import { exposureTimeIn, unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
-import { cameraBus } from '../shared/bus'
+import { cameraBus, imageBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import { storageGet, storageSet } from '../shared/storage'
 import type { ImageRoiRequest } from '../shared/types'
@@ -68,12 +68,11 @@ export function cameraStore(camera: Camera) {
 		u[2] = subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(state.request, formats))
 		u[3] = subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(state.request, exposure))
 		u[4] = subscribeKey(camera, 'frame', (frame) => updateCameraFrame(state.request, frame))
-		u[5] = bus.subscribe<Roi>(cameraRoiSubframeTopic(camera.id), applySubframe)
-		u[6] = bus.subscribe(cameraRoiSubframeSnapshotRequestTopic(camera.id), sendSubframeSnapshot)
-		u[7] = subscribeKey(equipmentStore.state.mount, 'length', refreshEquipment)
-		u[8] = subscribeKey(equipmentStore.state.wheel, 'length', refreshEquipment)
-		u[9] = subscribeKey(equipmentStore.state.focuser, 'length', refreshEquipment)
-		u[10] = subscribeKey(equipmentStore.state.rotator, 'length', refreshEquipment)
+		u[5] = cameraBus.subscribe('roi', sendRoi)
+		u[6] = subscribeKey(equipmentStore.state.mount, 'length', refreshEquipment)
+		u[7] = subscribeKey(equipmentStore.state.wheel, 'length', refreshEquipment)
+		u[8] = subscribeKey(equipmentStore.state.focuser, 'length', refreshEquipment)
+		u[9] = subscribeKey(equipmentStore.state.rotator, 'length', refreshEquipment)
 
 		refreshEquipment()
 		updateCameraCaptureStartFromCamera(state.request, camera)
@@ -118,20 +117,16 @@ export function cameraStore(camera: Camera) {
 	}
 
 	function requestRoi() {
-		requestCameraRoi(camera)
+		applySubframe(imageBus.emitWithResponse('roi', { camera }) as never)
 	}
 
 	function applySubframe(subframe: Roi) {
 		return updateCameraSubframe(state.request, camera, subframe)
 	}
 
-	function sendSubframeSnapshot() {
-		sendCameraRoiSubframeSnapshot(camera, {
-			x: state.request.x,
-			y: state.request.y,
-			width: state.request.width || camera.frame.width.max || 1,
-			height: state.request.height || camera.frame.height.max || 1,
-		})
+	function sendRoi(options: ImageRoiRequest) {
+		if (options.camera !== camera) return undefined
+		return { x: state.request.x, y: state.request.y, width: state.request.width || camera.frame.width.max || 1, height: state.request.height || camera.frame.height.max || 1 }
 	}
 
 	function refreshEquipment() {
@@ -220,18 +215,6 @@ export function cameraStore(camera: Camera) {
 	} as const
 }
 
-function requestCameraRoi(camera: Camera, options?: ImageRoiRequest) {
-	bus.emitSync(cameraRoiRequestTopic(camera.id), options)
-}
-
-export function sendCameraRoi(camera: Camera, subframe: Roi) {
-	bus.emitSync(cameraRoiSubframeTopic(camera.id), subframe)
-}
-
-export function subscribeToCameraRoiRequests(camera: Camera, callback: (options?: ImageRoiRequest) => void) {
-	return bus.subscribe(cameraRoiRequestTopic(camera.id), callback)
-}
-
 export function updateCameraSubframe(request: CameraCaptureStart, camera: Camera, subframe: Roi) {
 	if (!camera.canSubFrame) return false
 
@@ -313,24 +296,4 @@ export function subscribeToUpdateCameraCaptureStartFromCamera(u: VoidFunction[],
 	u.push(subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(request, formats)))
 	u.push(subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(request, exposure)))
 	u.push(subscribeKey(camera, 'frame', (frame) => updateCameraFrame(request, frame)))
-}
-
-function cameraRoiRequestTopic(camera: string) {
-	return `camera:${camera}:roi:request`
-}
-
-function cameraRoiSubframeTopic(camera: string) {
-	return `camera:${camera}:roi:subframe`
-}
-
-function cameraRoiSubframeSnapshotRequestTopic(camera: string) {
-	return `camera:${camera}:roi:subframe:snapshot:request`
-}
-
-function cameraRoiSubframeSnapshotTopic(camera: string) {
-	return `camera:${camera}:roi:subframe:snapshot`
-}
-
-function sendCameraRoiSubframeSnapshot(camera: Camera, subframe: Roi) {
-	bus.emitSync(cameraRoiSubframeSnapshotTopic(camera.id), subframe)
 }

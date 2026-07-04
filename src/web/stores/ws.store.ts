@@ -2,7 +2,7 @@ import type { DeviceType } from 'nebulosa/src/devices/indi/device'
 import type { DeviceAdded, DeviceRemoved, Notification } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { toast } from '@/shared/toast'
-import { cameraBus, autoFocusBus, darvBus, flatWizardBus, tppaBus, alpacaBus, connectionBus, guiderBus, indiBus } from '../shared/bus'
+import { cameraBus, autoFocusBus, darvBus, flatWizardBus, tppaBus, alpacaBus, connectionBus, guiderBus, indiBus, webSocketBus } from '../shared/bus'
 import { confirmationStore } from './confirmation.store'
 import { equipmentStore } from './equipment.store'
 
@@ -51,7 +51,7 @@ function create() {
 		} else {
 			connected = true
 			state.connected = true
-			webSocketBus.emit('open', null)
+			webSocketBus.emit('open', undefined)
 			console.info('web socket open')
 		}
 
@@ -62,7 +62,7 @@ function create() {
 		disconnected = connected
 		state.connected = false
 		updateDisconnectedStyleProperty('100%', 'flex')
-		webSocketBus.emit('close', null)
+		webSocketBus.emit('close', undefined)
 		console.info('web socket close', e)
 	})
 

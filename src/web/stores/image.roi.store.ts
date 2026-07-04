@@ -4,11 +4,11 @@ import type { Roi } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import { imageBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import type { ImageRoiRequest } from '../shared/types'
 import { clamp, clampInteger } from '../shared/util'
-import { sendCameraRoi, subscribeToCameraRoiRequests } from './camera.store'
-import { subscribeToImageRoiRequests, type ImageViewerStore } from './image.viewer.store'
+import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageRoiStore = ReturnType<typeof imageRoiStore>
 
@@ -65,6 +65,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 
 		if (camera) u[0] = initProxy(state, `image.roi.${camera.id}`, ['o:roi', 'o:binning'])
 		u[1] = subscribeKey(viewer.state, 'info', syncImage)
+		u[2] = imageBus.subscribe('roi', sendRoi)
 	}
 
 	function unmount() {
@@ -95,12 +96,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 
 		syncImage()
 
-		const u: VoidFunction[] = []
-		if (camera) u[0] = subscribeToCameraRoiRequests(camera, sendRoi)
-		u[1] = subscribeToImageRoiRequests(viewer.image, sendRoi)
-
 		return () => {
-			unsubscribe(u)
 			stopGesture()
 		}
 	}
@@ -178,9 +174,9 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		}
 	}
 
-	function sendRoi(options?: ImageRoiRequest) {
-		const camera = viewer.image.camera
-		if (camera && restoredRoi()) sendCameraRoi(camera, options?.unbinned ? state.roi : scaleRoi(state.roi, state.binning))
+	function sendRoi(options: ImageRoiRequest) {
+		if (options.camera.id === camera?.id && restoredRoi()) return options.unbinned ? state.roi : scaleRoi(state.roi, state.binning)
+		return undefined
 	}
 
 	function applyRoi(roi: Roi, binning: Point = imageBinning()) {

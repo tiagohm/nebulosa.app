@@ -33,6 +33,7 @@ export interface ImageSolved {
 }
 
 export interface ImageRoiRequest {
+	readonly camera: Camera
 	readonly unbinned?: boolean
 }
 

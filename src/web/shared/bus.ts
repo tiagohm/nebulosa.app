@@ -4,7 +4,12 @@ import type { Message } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
 import type { AlpacaServerStatus, AutoFocusEvent, CameraCaptureEvent, CameraFrameEvent, ConnectionEvent, DarvEvent, FlatWizardEvent, GuiderEvent, IndiDevicePropertyEvent, IndiServerEvent, TppaEvent } from 'src/shared/types'
 import type { DeviceState } from '../stores/equipment.store'
-import type { Image, ImageLoaded } from './types'
+import type { Image, ImageLoaded, ImageRoiRequest } from './types'
+
+export interface WebSocketBusEvents {
+	readonly open: unknown
+	readonly close: unknown
+}
 
 export type DeviceBusEvents<D extends Device = Device> = {
 	[K in keyof D & string as `update:${K}`]: DeviceState<D>
@@ -16,6 +21,7 @@ export type DeviceBusEvents<D extends Device = Device> = {
 export interface CameraBusEvents extends DeviceBusEvents<Camera> {
 	readonly frame: CameraFrameEvent
 	readonly capture: CameraCaptureEvent
+	readonly roi: ImageRoiRequest
 }
 
 export interface ImageBusEvents {
@@ -23,6 +29,7 @@ export interface ImageBusEvents {
 	readonly update: Image
 	readonly remove: Image
 	readonly load: ImageLoaded
+	readonly roi: ImageRoiRequest
 }
 
 export interface DarvBusEvents {
@@ -67,6 +74,8 @@ export interface IndiBusEvents {
 	readonly serverStop: IndiServerEvent
 	readonly togglePanelControl: unknown
 }
+
+export const webSocketBus = new EventBus<WebSocketBusEvents>()
 
 export const deviceBus = new EventBus<DeviceBusEvents>()
 

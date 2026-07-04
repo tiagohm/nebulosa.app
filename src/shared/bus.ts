@@ -1,8 +1,8 @@
-export type BusCallback<T> = (data: T) => void
+export type BusCallback<T, R = void> = (data: T) => R
 
 // A simple publish-subscribe bus
 export class EventBus<T extends object = Record<string, unknown>> {
-	private readonly bus = new Map<keyof T, Set<BusCallback<never>>>()
+	private readonly bus = new Map<keyof T, Set<BusCallback<never, unknown>>>()
 
 	constructor(public forceSync: boolean = false) {}
 
@@ -60,6 +60,20 @@ export class EventBus<T extends object = Record<string, unknown>> {
 		if (callbacks !== undefined) {
 			if (this.forceSync) this.emitCallbacks(callbacks, data)
 			else queueMicrotask(() => this.emitCallbacks(callbacks, data))
+		}
+	}
+
+	emitWithResponse<K extends keyof T>(topic: K, data: T[K]): unknown {
+		const callbacks = this.bus.get(topic)
+
+		if (callbacks !== undefined) {
+			for (const callback of callbacks) {
+				const response = callback(data as never)
+
+				if (response !== undefined) {
+					return response
+				}
+			}
 		}
 	}
 

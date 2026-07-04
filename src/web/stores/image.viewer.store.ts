@@ -4,10 +4,10 @@ import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { pmod } from 'nebulosa/src/math/numerical/math'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
-import { type ImageTransformation, type ImageInfo, DEFAULT_IMAGE_TRANSFORMATION, type Framing, type Roi } from 'src/shared/types'
+import { type ImageTransformation, type ImageInfo, DEFAULT_IMAGE_TRANSFORMATION, type Framing } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
-import type { Image, ImageLoaded, ImageRoiRequest } from '@/shared/types'
+import type { Image, ImageLoaded } from '@/shared/types'
 import { Api } from '../shared/api'
 import { imageBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
@@ -417,20 +417,4 @@ function bringToFront(e: HTMLElement) {
 
 	// Update the selected element z-index
 	elements[zIndex].style.zIndex = max.toFixed(0)
-}
-
-function imageRoiRequestTopic(image: string) {
-	return `image:${image}:roi:request`
-}
-
-function imageRoiSubframeSnapshotTopic(image: string) {
-	return `image:${image}:roi:subframe:snapshot`
-}
-
-export function subscribeToImageRoiRequests(image: Image, callback: (options?: ImageRoiRequest) => void) {
-	return bus.subscribe(imageRoiRequestTopic(image.id), callback)
-}
-
-export function sendImageRoiSubframeSnapshot(image: Image, subframe: Roi) {
-	bus.emitSync(imageRoiSubframeSnapshotTopic(image.id), subframe)
 }

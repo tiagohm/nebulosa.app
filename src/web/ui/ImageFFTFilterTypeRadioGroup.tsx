@@ -1,4 +1,4 @@
-import type { FFTFilterType } from 'nebulosa/src/imaging/model/types'
+import type { FFTFilterType } from 'nebulosa/src/imaging/processing/fft'
 import { tw } from '../shared/util'
 import { Radio } from './components/Radio'
 

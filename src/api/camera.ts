@@ -4,7 +4,8 @@ import { formatTemporal, TIMEZONE, temporalAdd, temporalGet, temporalSubtract } 
 import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import { type Camera, CLIENT } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager, DeviceHandler, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
-import type { PropertyState } from 'nebulosa/src/devices/indi/types'
+import type { BlobEncoding, PropertyState } from 'nebulosa/src/devices/indi/types'
+import { base64Source, bufferSource } from 'nebulosa/src/io/io'
 import { EventBus } from 'src/shared/bus'
 import { type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated, DEFAULT_CAMERA_CAPTURE_EVENT } from '../shared/types'
 import { exposureTimeInMicroseconds, exposureTimeInSeconds } from '../shared/util'
@@ -69,8 +70,8 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		console.info('camera removed:', camera.name)
 	}
 
-	blobReceived(camera: Camera, data: string | Buffer) {
-		void this.tasks.get(camera.id)?.blobReceived(camera, data).catch(console.error)
+	blobReceived(camera: Camera, data: Buffer, encoding: BlobEncoding) {
+		void this.tasks.get(camera.id)?.blobReceived(camera, data, encoding).catch(console.error)
 	}
 
 	list(client?: string | IndiClient) {
@@ -154,7 +155,6 @@ export class CameraCaptureTask {
 	private readonly promise = Promise.withResolvers<boolean>()
 	private destroyed = false
 	private readonly guiderDitherEventSubscription?: VoidFunction
-	private readonly ditherEventId = Bun.randomUUIDv7()
 
 	constructor(
 		readonly cameraHandler: CameraHandler,
@@ -276,10 +276,10 @@ export class CameraCaptureTask {
 		}
 	}
 
-	async blobReceived(camera: Camera, data: string | Buffer) {
+	async blobReceived(camera: Camera, data: Buffer, encoding: BlobEncoding) {
 		if (this.camera.id === camera.id) {
 			try {
-				const buffer = typeof data === 'string' ? Buffer.from(data, 'base64') : data
+				const buffer = encoding === 'raw' ? data : await decodeBase64(data)
 
 				// Save image
 				const name = this.request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : camera.name
@@ -319,7 +319,7 @@ export class CameraCaptureTask {
 	}
 
 	private handleGuiderDitherEvent(event: GuiderDitherEvent) {
-		if (this.stopped || event.id !== this.ditherEventId) return
+		if (this.stopped) return
 
 		this.event.state = event.phase === 'settling' || event.phase === 'settled' ? 'settling' : 'dithering'
 		this.handleCameraCaptureEvent(this, this.event)
@@ -332,7 +332,7 @@ export class CameraCaptureTask {
 				this.handleCameraCaptureEvent(this, this.event)
 
 				try {
-					const dither = await this.cameraHandler.guiderHandler.dither(this.request.dither, this.aborter.signal, this.ditherEventId)
+					const dither = await this.cameraHandler.guiderHandler.dither(this.request.dither, this.aborter.signal)
 
 					if (!dither.ok) {
 						if (!this.stopped) this.fail(new Error(`guider dither failed: ${dither.reason}${dither.error ? ` (${dither.error})` : ''}`))
@@ -408,4 +408,36 @@ async function makePathFor(req: CameraCaptureStart) {
 	}
 
 	return Bun.env.capturesDir
+}
+
+function computeDecodedBase64Length(data: Uint8Array) {
+	let paddingCount = 0
+
+	if (data[data.byteLength - 1] === 61) {
+		if (data[data.byteLength - 2] === 61) {
+			paddingCount = 2
+		} else {
+			paddingCount = 1
+		}
+	}
+
+	return Math.floor((data.byteLength * 3) / 4) - paddingCount
+}
+
+function trimBuffer<T extends Uint8Array>(data: T) {
+	const length = data.byteLength
+	let s = 0
+	while (s < length && data[s] <= 32) s++
+	let e = length - 1
+	while (e > s && data[e] <= 32) e--
+	return s !== 0 || e !== length - 1 ? data.subarray(s, e + 1) : data
+}
+
+async function decodeBase64(buffer: Buffer) {
+	const data = trimBuffer(buffer)
+	const decodedLength = computeDecodedBase64Length(data)
+	const output = Buffer.allocUnsafe(decodedLength)
+	const source = base64Source(bufferSource(Buffer.from(data.buffer, data.byteOffset, data.byteLength)))
+	const n = await source.read(output)
+	return n === decodedLength ? output : output.subarray(0, n)
 }

@@ -1,4 +1,4 @@
-import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/model/types'
+import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
 import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['MAXIMUM_MASK', 'ADDITIVE_MASK', 'AVERAGE_NEUTRAL', 'MAXIMUM_NEUTRAL', 'MINIMUM_NEUTRAL'] as const

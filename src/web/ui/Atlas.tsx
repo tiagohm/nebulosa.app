@@ -1,6 +1,6 @@
+import type { SmallBodySearchListItem } from 'nebulosa/src/adapters/orbits/sbd'
 import type { LunarPhase } from 'nebulosa/src/astronomy/bodies/moon'
 import { CONSTELLATION_LIST, type Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
-import type { SmallBodySearchListItem } from 'nebulosa/src/astronomy/orbits/sbd'
 import { formatTemporal, type Temporal, temporalFromTime, temporalGet, temporalSet } from 'nebulosa/src/astronomy/time/temporal'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
 import React, { Activity, memo, useCallback, useDeferredValue, useMemo } from 'react'

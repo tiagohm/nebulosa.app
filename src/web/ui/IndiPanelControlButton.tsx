@@ -9,7 +9,7 @@ export interface IndiPanelControlButtonProps extends Omit<ButtonProps, 'children
 
 export function IndiPanelControlButton({ device, color = 'primary', size = 'md', variant = 'ghost', ...props }: IndiPanelControlButtonProps) {
 	function handleClick() {
-		indiBus.emitSync('togglePanelControl', undefined)
+		indiBus.emitSync('togglePanelControl', device)
 	}
 
 	return <Button children={<img className={size === 'md' ? 'w-6' : 'w-9'} src={indiIcon} />} rounded color={color} onClick={handleClick} size={size} tooltipContent="INDI" variant={variant} {...props} />

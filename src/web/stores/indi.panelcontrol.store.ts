@@ -71,8 +71,8 @@ export function indiPanelControlStore(device: Device) {
 			}
 		})
 
-		u[5] = indiBus.subscribe('togglePanelControl', () => {
-			toggle()
+		u[5] = indiBus.subscribe('togglePanelControl', (event) => {
+			if (device.id === event.id) toggle()
 		})
 
 		u[6] = subscribeKey(state, 'show', (show) => {

@@ -3,7 +3,7 @@ import { eraNut06a, eraPmat06, eraPnm06a, eraPom00, eraSp00 } from 'nebulosa/src
 import { earth } from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
 import { type GeographicCoordinate, type GeographicPosition, geodeticLocation } from 'nebulosa/src/astronomy/observer/location'
 import * as iers from 'nebulosa/src/astronomy/time/iers'
-import { DEFAULT_TIME_PROVIDERS, type Time, type TimeProviders, timeUnix } from 'nebulosa/src/astronomy/time/time'
+import { TIME_PROVIDERS, type Time, type TimeProviders, timeUnix } from 'nebulosa/src/astronomy/time/time'
 
 const ONE_DAY = 24 * 3600 * 1000
 
@@ -11,10 +11,6 @@ export class CacheManager {
 	private readonly earthCache = new Map<number, PositionAndVelocity>()
 	private readonly geographicCoordinates: GeographicPosition[] = []
 	private readonly timeProvidersLastTime = new Map<keyof TimeProviders, number>()
-
-	private readonly timeProviders: Required<TimeProviders> = {
-		...DEFAULT_TIME_PROVIDERS,
-	}
 
 	earth(time: Time): PositionAndVelocity {
 		const jd = Math.trunc(time.day + time.fraction)
@@ -32,7 +28,6 @@ export class CacheManager {
 		utc = utc === 'now' ? Date.now() : utc
 		const time = timeUnix(utc / 1000, true)
 		time.location = location
-		time.providers = this.timeProviders
 		this.recomputeTimeProviders(time)
 		return time
 	}
@@ -55,39 +50,39 @@ export class CacheManager {
 
 		if (now - (this.timeProvidersLastTime.get('pm') ?? 0) > ONE_DAY) {
 			const pm = iers.xy(time)
-			this.timeProviders.pm = () => pm
+			TIME_PROVIDERS.pm = () => pm
 			this.timeProvidersLastTime.set('pm', now)
 		}
 
 		if (now - (this.timeProvidersLastTime.get('nut') ?? 0) > ONE_DAY) {
 			const nut = eraNut06a(time.day, time.fraction)
-			this.timeProviders.nut = () => nut
+			TIME_PROVIDERS.nut = () => nut
 			this.timeProvidersLastTime.set('nut', now)
 		}
 
 		if (now - (this.timeProvidersLastTime.get('pmat') ?? 0) > ONE_DAY) {
 			const pmat = eraPmat06(time.day, time.fraction)
-			this.timeProviders.pmat = () => pmat
+			TIME_PROVIDERS.pmat = () => pmat
 			this.timeProvidersLastTime.set('pmat', now)
 		}
 
 		if (now - (this.timeProvidersLastTime.get('pnm') ?? 0) > ONE_DAY) {
 			const pnm = eraPnm06a(time.day, time.fraction)
-			this.timeProviders.pnm = () => pnm
+			TIME_PROVIDERS.pnm = () => pnm
 			this.timeProvidersLastTime.set('pnm', now)
 		}
 
 		if (now - (this.timeProvidersLastTime.get('sp') ?? 0) > ONE_DAY) {
 			const sp = eraSp00(time.day, time.fraction)
-			this.timeProviders.sp = () => sp
+			TIME_PROVIDERS.sp = () => sp
 			this.timeProvidersLastTime.set('sp', now)
 		}
 
 		if (now - (this.timeProvidersLastTime.get('pom') ?? 0) > ONE_DAY) {
-			const [x, y] = this.timeProviders.pm(time)
-			const s = this.timeProviders.sp(time)
+			const [x, y] = TIME_PROVIDERS.pm(time)
+			const s = TIME_PROVIDERS.sp(time)
 			const pom = eraPom00(x, y, s)
-			this.timeProviders.pom = () => pom
+			TIME_PROVIDERS.pom = () => pom
 			this.timeProvidersLastTime.set('pom', now)
 		}
 	}

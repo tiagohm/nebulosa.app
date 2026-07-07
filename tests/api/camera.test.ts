@@ -641,12 +641,12 @@ describe('camera capture start request', () => {
 
 		const guiderHandler = {
 			running: true,
-			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal, id?: string) => {
+			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal) => {
 				dithered = request
 				signal = s
-				guiderBus.emit('dither', { id, phase: 'dithered', guider: structuredClone(DEFAULT_GUIDER_EVENT), dx: 1.5, dy: -2 })
-				guiderBus.emit('dither', { id, phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
-				guiderBus.emit('dither', { id, phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'guiding' }, ok: true })
+				guiderBus.emit('dither', { phase: 'dithered', guider: structuredClone(DEFAULT_GUIDER_EVENT), dx: 1.5, dy: -2 })
+				guiderBus.emit('dither', { phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
+				guiderBus.emit('dither', { phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'guiding' }, ok: true })
 				return Promise.resolve({ ok: true } as const)
 			},
 		} as unknown as GuiderHandler
@@ -678,9 +678,9 @@ describe('camera capture start request', () => {
 		const error = spyOn(console, 'error').mockImplementation(() => {})
 		const guiderHandler = {
 			running: true,
-			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal, id?: string) => {
-				guiderBus.emit('dither', { id, phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
-				guiderBus.emit('dither', { id, phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' }, ok: false, reason: 'settle-timeout' })
+			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal) => {
+				guiderBus.emit('dither', { phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
+				guiderBus.emit('dither', { phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' }, ok: false, reason: 'settle-timeout' })
 				return Promise.resolve({ ok: false, reason: 'settle-timeout' } as const)
 			},
 		} as unknown as GuiderHandler

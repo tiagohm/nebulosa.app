@@ -20,7 +20,7 @@ export function Modal({ id, onHide, header, subHeader, footer, children, maxWidt
 	const modal = useModal(id, onHide, { initialWidth, maxWidth, resizable })
 
 	return createPortal(
-		<div className="modal fixed top-0 left-0 m-auto min-w-0 rounded-xl bg-neutral-950 p-6 text-white shadow-none outline-8 outline-black/25 outline-solid" ref={modal.ref} style={modal.style}>
+		<div className="modal fixed top-0 left-0 m-auto min-w-0 rounded-xl bg-neutral-950 p-6 shadow-none outline-8 outline-black/25 outline-solid" ref={modal.ref} style={modal.style}>
 			<div {...modal.moveProps} className="flex w-full touch-none flex-row items-center justify-between gap-2 select-none">
 				<div className="flex min-w-0 flex-1 flex-col items-center justify-center">
 					{typeof header === 'string' ? <div className="ms-10 max-w-full truncate text-lg font-semibold text-neutral-100">{header}</div> : header}

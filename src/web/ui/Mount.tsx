@@ -15,7 +15,6 @@ import { Switch } from './components/Switch'
 import { TextInput } from './components/TextInput'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
-import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Location } from './Location'
 import { Modal } from './Modal'
 import { MountRemoteControl } from './MountRemoteControl'
@@ -67,7 +66,6 @@ const Header = memo(() => {
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
 				<ConnectButton disabled={moving} connected={connected} loading={connecting} onClick={mount.connect} />
-				<IndiPanelControlButton device={mount.state.mount} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Mount</span>

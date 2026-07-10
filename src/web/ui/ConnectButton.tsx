@@ -7,5 +7,5 @@ export interface ConnectButtonProps extends Omit<ButtonProps, 'children'> {
 }
 
 export function ConnectButton({ connected, ...props }: ConnectButtonProps) {
-	return <ToggleButton onVariant="flat" onIcon={Icons.Close} offIcon={Icons.Connect} color={connected ? 'danger' : 'primary'} hideChildrenOnLoading tooltipContent={connected ? 'Disconnect' : 'Connect'} {...props} />
+	return <ToggleButton value={connected} onVariant="flat" onIcon={Icons.Close} offIcon={Icons.Connect} color={connected ? 'danger' : 'primary'} hideChildrenOnLoading tooltipContent={connected ? 'Disconnect' : 'Connect'} {...props} />
 }

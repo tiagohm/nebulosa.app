@@ -9,13 +9,12 @@ import { initProxy } from '../shared/proxy'
 import { storageGet, storageSet } from '../shared/storage'
 import type { ImageRoiRequest } from '../shared/types'
 import { clampInteger } from '../shared/util'
-import { type DeviceState, equipmentStore } from './equipment.store'
+import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type CameraStore = ReturnType<typeof cameraStore>
 
 export interface CameraState {
 	camera: DeviceState<Camera>
-	minimized: boolean
 	readonly request: CameraCaptureStart
 	readonly progress: CameraCaptureEvent
 	capturing: boolean
@@ -32,7 +31,6 @@ export interface CameraState {
 export function cameraStore(camera: Camera) {
 	const state = proxy<CameraState>({
 		camera,
-		minimized: false,
 		request: structuredClone(DEFAULT_CAMERA_CAPTURE_START),
 		progress: structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT),
 		capturing: false,
@@ -64,7 +62,7 @@ export function cameraStore(camera: Camera) {
 			}
 		})
 
-		u[1] = initProxy(state, `camera.${camera.name}`, ['o:request', 'p:minimized', 'p:targetTemperature'])
+		u[1] = initProxy(state, `camera.${camera.name}`, ['o:request', 'p:targetTemperature'])
 		u[2] = subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(state.request, formats))
 		u[3] = subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(state.request, exposure))
 		u[4] = subscribeKey(camera, 'frame', (frame) => updateCameraFrame(state.request, frame))
@@ -76,6 +74,8 @@ export function cameraStore(camera: Camera) {
 
 		refreshEquipment()
 		updateCameraCaptureStartFromCamera(state.request, camera)
+
+		return unmount
 	}
 
 	function unmount() {
@@ -141,22 +141,22 @@ export function cameraStore(camera: Camera) {
 		state.equipment.rotator = equipmentStore.state.rotator.find((e) => e.id === rotatorId)
 	}
 
-	function updateMount(mount?: DeviceState<Mount>) {
+	function updateMount(mount?: Mount) {
 		state.equipment.mount = mount
 		storageSet(`camera.${camera.id}.equipment.mount`, mount?.id)
 	}
 
-	function updateWheel(wheel?: DeviceState<Wheel>) {
+	function updateWheel(wheel?: Wheel) {
 		state.equipment.wheel = wheel
 		storageSet(`camera.${camera.id}.equipment.wheel`, wheel?.id)
 	}
 
-	function updateFocuser(focuser?: DeviceState<Focuser>) {
+	function updateFocuser(focuser?: Focuser) {
 		state.equipment.focuser = focuser
 		storageSet(`camera.${camera.id}.equipment.focuser`, focuser?.id)
 	}
 
-	function updateRotator(rotator?: DeviceState<Rotator>) {
+	function updateRotator(rotator?: Rotator) {
 		state.equipment.rotator = rotator
 		storageSet(`camera.${camera.id}.equipment.rotator`, rotator?.id)
 	}
@@ -187,10 +187,6 @@ export function cameraStore(camera: Camera) {
 		equipmentStore.hide(camera)
 	}
 
-	function minimize() {
-		state.minimized = !state.minimized
-	}
-
 	return {
 		state,
 		mount,
@@ -211,7 +207,6 @@ export function cameraStore(camera: Camera) {
 		stop,
 		show,
 		hide,
-		minimize,
 	} as const
 }
 

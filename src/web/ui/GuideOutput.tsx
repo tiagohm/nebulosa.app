@@ -5,7 +5,6 @@ import { useStore } from '../hooks/store.hook'
 import { GuideOutputDeviceContext, GuideOutputStoreContext } from '../shared/context'
 import { NumberInput } from './components/NumberInput'
 import { ConnectButton } from './ConnectButton'
-import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 import { Nudge } from './Nudge'
 
@@ -30,7 +29,6 @@ const Header = memo(() => {
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} disabled={pulsing} loading={connecting} onClick={guideOutput.connect} />
-				<IndiPanelControlButton device={guideOutput.state.guideOutput} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Guide Output</span>

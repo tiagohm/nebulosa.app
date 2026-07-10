@@ -6,7 +6,6 @@ import { FlatPanelDeviceContext, FlatPanelStoreContext } from '../shared/context
 import { Slider } from './components/Slider'
 import { Switch } from './components/Switch'
 import { ConnectButton } from './ConnectButton'
-import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
 function formatIntensity(value: number) {
@@ -34,7 +33,6 @@ const Header = memo(() => {
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={flatPanel.connect} />
-				<IndiPanelControlButton device={flatPanel.state.flatPanel} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Flat Panel</span>

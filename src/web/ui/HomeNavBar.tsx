@@ -1,8 +1,6 @@
 import { memo } from 'react'
-import { ConnectionPopover } from './ConnectionPopover'
 import { HomeMenu } from './HomeMenu'
 import { ImagePickerButton } from './ImagePickerButton'
-import { IndiServerButton } from './IndiServerButton'
 import { PlanetariumButton } from './PlanetariumButton'
 import { WakeLockScreenButton } from './WakeLockScreenButton'
 
@@ -13,12 +11,10 @@ export const HomeNavBar = memo(() => (
 				<PlanetariumButton />
 			</div>
 			<div className="flex w-1/3 shrink-0 flex-row items-center justify-center gap-2 sm:gap-4">
-				<ConnectionPopover />
 				<HomeMenu />
 				<ImagePickerButton />
 			</div>
 			<div className="flex w-1/3 flex-row items-center justify-end gap-2">
-				<IndiServerButton />
 				<WakeLockScreenButton />
 			</div>
 		</header>

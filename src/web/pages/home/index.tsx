@@ -2,7 +2,7 @@ import '@/index.css'
 import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { ToastProvider } from '@/ui/components/Toast'
-import { Home } from '@/ui/Home'
+import { Home } from '@/ui/HomeV2'
 
 import.meta.hot.accept()
 

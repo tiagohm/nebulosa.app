@@ -51,7 +51,6 @@ import { FlatWizard } from './FlatWizard'
 import { Framing } from './Framing'
 import { Guider } from './Guider'
 import { Icons } from './Icon'
-import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Tppa } from './Tppa'
 
 export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'rotator' | 'light-box' | 'dust-cap' | 'guide-output' | 'dew-heater' | 'thermometer' | 'guider' | 'sky-atlas' | 'framing' | 'aligment' | 'auto-focus' | 'flat-wizard' | 'sequencer' | 'indi' | 'calculator' | 'settings' | 'about'
@@ -170,7 +169,6 @@ function DeviceItem({ type, index, ...props }: DeviceItemProps) {
 
 	const EndContent = (
 		<div className="flex flex-row items-center justify-center gap-1">
-			<IndiPanelControlButton device={device} size="sm" />
 			<ConnectButton connected={connected} onClick={() => equipmentStore.connect(device)} size="sm" />
 		</div>
 	)

@@ -2,7 +2,6 @@ import type { Device, DeviceProperties, DeviceProperty } from 'nebulosa/src/devi
 import type { Message, NewVector } from 'nebulosa/src/devices/indi/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { subscribeKey } from 'valtio/utils'
 import { Api } from '@/shared/api'
 import { initProxy } from '@/shared/proxy'
 import { indiBus } from '../shared/bus'
@@ -11,7 +10,6 @@ import { wsStore } from './ws.store'
 export type IndiPanelControlStore = ReturnType<typeof indiPanelControlStore>
 
 export interface IndiPanelControlState {
-	show: boolean
 	readonly groups: string[]
 	group: string
 	properties: Record<string, DeviceProperties>
@@ -25,7 +23,6 @@ function MessageComparator(a: Message, b: Message) {
 
 export function indiPanelControlStore(device: Device) {
 	const state = proxy<IndiPanelControlState>({
-		show: false,
 		groups: [],
 		group: '',
 		properties: {},
@@ -45,7 +42,7 @@ export function indiPanelControlStore(device: Device) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `indi.panelcontrol.${device.id}`, ['p:show', 'p:tab', 'p:group'])
+		u[0] = initProxy(state, `indi.panelcontrol.${device.id}`, ['p:tab', 'p:group'])
 
 		u[1] = indiBus.subscribe('addProperty', (event) => {
 			if (device.id === event.device) {
@@ -71,27 +68,10 @@ export function indiPanelControlStore(device: Device) {
 			}
 		})
 
-		u[5] = indiBus.subscribe('togglePanelControl', (event) => {
-			if (device.id === event.id) toggle()
-		})
+		void retrieveProperties()
+		void retrieveMessages()
 
-		u[6] = subscribeKey(state, 'show', (show) => {
-			if (show) {
-				void retrieveProperties()
-				void retrieveMessages()
-
-				listen()
-			} else {
-				unlisten()
-			}
-		})
-
-		if (state.show) {
-			void retrieveProperties()
-			void retrieveMessages()
-
-			listen()
-		}
+		listen()
 	}
 
 	function unmount() {
@@ -203,21 +183,7 @@ export function indiPanelControlStore(device: Device) {
 	}
 
 	async function send(property: DeviceProperty, message: NewVector) {
-		if (state.show) {
-			await Api.Indi.Properties.send(device, property.type, message)
-		}
-	}
-
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
-	function toggle() {
-		state.show = !state.show
+		await Api.Indi.Properties.send(device, property.type, message)
 	}
 
 	return {
@@ -230,8 +196,5 @@ export function indiPanelControlStore(device: Device) {
 		selectGroup,
 		clear,
 		send,
-		show,
-		hide,
-		toggle,
 	} as const
 }

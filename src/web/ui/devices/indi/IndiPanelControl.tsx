@@ -1,19 +1,20 @@
-import type { DeviceProperty } from 'nebulosa/src/devices/indi/device'
+import type { Device, DeviceProperty } from 'nebulosa/src/devices/indi/device'
 import type { DefElement, Message, NewVector, SwitchRule } from 'nebulosa/src/devices/indi/types'
 import { Activity, memo, useContext, useRef } from 'react'
+import { useStore } from 'src/web/hooks/store.hook'
+import { indiPanelControlStore } from 'src/web/stores/indi.panelcontrol.store'
 import { useSnapshot } from 'valtio'
-import { IndiPanelControlStoreContext } from '../shared/context'
-import { activityMode } from '../shared/util'
-import { Button } from './components/Button'
-import { FilterableList } from './components/FilterableList'
-import { IconButton } from './components/IconButton'
-import { ListItem } from './components/List'
-import { NumberInput } from './components/NumberInput'
-import { Select } from './components/Select'
-import { TextInput } from './components/TextInput'
-import { ToggleButton } from './components/ToggleButton'
-import { Icons } from './Icon'
-import { Modal } from './Modal'
+import { IndiPanelControlStoreContext } from '../../../shared/context'
+import { activityMode } from '../../../shared/util'
+import { Button } from '../../components/Button'
+import { FilterableList } from '../../components/FilterableList'
+import { IconButton } from '../../components/IconButton'
+import { ListItem } from '../../components/List'
+import { NumberInput } from '../../components/NumberInput'
+import { Select } from '../../components/Select'
+import { Tab, TabPanel, Tabs } from '../../components/Tabs'
+import { TextInput } from '../../components/TextInput'
+import { Icons } from '../../Icon'
 
 function FilterMessage(item: Message, text: string) {
 	return item.message.toLowerCase().includes(text)
@@ -30,34 +31,17 @@ function propertyStateColor(state: DeviceProperty['state']) {
 	return 'var(--danger)'
 }
 
-export const IndiPanelControl = memo(() => {
-	const panel = useContext(IndiPanelControlStoreContext)
-	const { show } = useSnapshot(panel.state)
+export interface IndiPanelControlProps {
+	readonly device: Device
+}
 
-	if (!show) return null
+export const IndiPanelControl = memo(({ device }: IndiPanelControlProps) => {
+	const panel = useStore(() => indiPanelControlStore(device), [device])
 
 	return (
-		<Modal header={<Header />} id={`indi-panelcontrol-${panel.device.id}`} initialWidth="400px" onHide={panel.hide}>
+		<IndiPanelControlStoreContext value={panel}>
 			<Body />
-		</Modal>
-	)
-})
-
-const Header = memo(() => {
-	const panel = useContext(IndiPanelControlStoreContext)
-	const { tab } = useSnapshot(panel.state)
-
-	return (
-		<div className="flex min-w-0 flex-row items-center justify-start gap-2">
-			<div className="me-3 flex min-w-0 flex-1 flex-col justify-center gap-0 text-end">
-				<span className="leading-5 font-semibold">INDI Panel Control</span>
-				<span className="max-w-full truncate text-xs font-normal text-gray-400">
-					{panel.device.name} | <span className="uppercase">{panel.device.type}</span>
-				</span>
-			</div>
-			<ToggleButton color="secondary" icon={Icons.ViewList} onClick={() => (panel.state.tab = 'property')} tooltipContent="Properties" value={tab === 'property'} />
-			<ToggleButton color="secondary" icon={Icons.Message} onClick={() => (panel.state.tab = 'message')} tooltipContent="Messages" value={tab === 'message'} />
-		</div>
+		</IndiPanelControlStoreContext>
 	)
 })
 
@@ -66,12 +50,18 @@ const Body = memo(() => {
 	const { tab } = useSnapshot(panel.state)
 
 	return (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<Activity mode={activityMode(tab === 'property')}>
-				<DeviceAndGroup />
-				<GroupList />
-			</Activity>
-			<Messages />
+		<div className="flex w-full">
+			<Tabs className="w-full" value={tab} onValueChange={(value) => (panel.state.tab = value)}>
+				<Tab id="property">Properties</Tab>
+				<Tab id="message">Messages</Tab>
+				<TabPanel id="property">
+					<DeviceAndGroup />
+					<GroupList />
+				</TabPanel>
+				<TabPanel id="message">
+					<Messages />
+				</TabPanel>
+			</Tabs>
 		</div>
 	)
 })
@@ -98,7 +88,7 @@ const GroupList = memo(() => {
 	const { group, groups } = useSnapshot(panel.state)
 	const selectedGroup = groups.includes(group) ? group : undefined
 
-	return <div className="col-span-full flex max-h-100 min-w-0 flex-col gap-4 overflow-y-auto p-1">{selectedGroup === undefined ? <div className="px-2 py-3 text-sm text-neutral-500">No properties</div> : <PropertyList group={selectedGroup} />}</div>
+	return <div className="col-span-full flex max-h-full min-w-0 flex-col gap-4 overflow-y-auto p-1">{selectedGroup === undefined ? <div className="px-2 py-3 text-sm text-neutral-500">No properties</div> : <PropertyList group={selectedGroup} />}</div>
 })
 
 function DevicePropertyComparator(a: DeviceProperty, b: DeviceProperty) {

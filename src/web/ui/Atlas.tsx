@@ -870,7 +870,7 @@ function ChartTooltipContent({ active, payload }: TooltipContentProps) {
 
 	return (
 		<div className="text-small shadow-small bg-default-100 rounded-small inline-flex flex-col px-1.5 py-0.5 font-normal">
-			<span className="font-bold text-white">
+			<span className="font-bold">
 				{hour.toFixed(0).padStart(2, '0')}:{minute.toFixed(0).padStart(2, '0')}
 			</span>
 			<span className="text-foreground-600">{item.value?.toFixed(3)}°</span>

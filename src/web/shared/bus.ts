@@ -72,7 +72,6 @@ export interface IndiBusEvents {
 	readonly message: Message
 	readonly serverStart: IndiServerEvent
 	readonly serverStop: IndiServerEvent
-	readonly togglePanelControl: Device
 }
 
 export const webSocketBus = new EventBus<WebSocketBusEvents>()

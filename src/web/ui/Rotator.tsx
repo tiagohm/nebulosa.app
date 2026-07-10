@@ -9,7 +9,6 @@ import { IconButton } from './components/IconButton'
 import { NumberInput } from './components/NumberInput'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
-import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
 function hasAngleChanged(targetAngle: number, currentAngle: number) {
@@ -37,7 +36,6 @@ const Header = memo(() => {
 		<div className="flex w-full flex-row items-center justify-between">
 			<div className="flex flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={rotator.connect} />
-				<IndiPanelControlButton device={rotator.state.rotator} />
 			</div>
 			<div className="flex flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Rotator</span>

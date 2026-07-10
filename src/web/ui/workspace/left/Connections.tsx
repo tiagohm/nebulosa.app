@@ -1,67 +1,36 @@
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
-import { memo, type ComponentPropsWithRef, useRef } from 'react'
+import { memo, useRef } from 'react'
 import type { ConnectionStatus } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { connectionStore, isNetworkConnection } from '@/stores/connection.store'
-import type { Connection } from '../shared/types'
-import { ClientTypeSelect } from './ClientTypeSelect'
-import { Badge } from './components/Badge'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { Chip } from './components/Chip'
-import { IconButton } from './components/IconButton'
-import { List, ListItem } from './components/List'
-import { NumberInput } from './components/NumberInput'
-import { Popover, type PopoverMethods } from './components/Popover'
-import { Select } from './components/Select'
-import { TextInput } from './components/TextInput'
-import { Icons } from './Icon'
+import type { Connection } from '../../../shared/types'
+import { ClientTypeSelect } from '../../ClientTypeSelect'
+import { Button } from '../../components/Button'
+import { Checkbox } from '../../components/Checkbox'
+import { Chip } from '../../components/Chip'
+import { IconButton } from '../../components/IconButton'
+import { List, ListItem } from '../../components/List'
+import { NumberInput } from '../../components/NumberInput'
+import { Popover, type PopoverMethods } from '../../components/Popover'
+import { Select } from '../../components/Select'
+import { TextInput } from '../../components/TextInput'
+import { Icons } from '../../Icon'
 
-const CONNECTION_PORT_PLACEHOLDER = {
-	INDI: '7624',
-	ALPACA: '32323',
-	SIMULATOR: '0',
-	FIRMATA: '27016',
-} satisfies Record<Connection['type'], string>
-
-export const ConnectionPopover = memo(() => (
-	<Popover className="max-w-110 min-w-90" trigger={<ConnectionPopoverTrigger />}>
-		<ConnectionPopoverContent />
-	</Popover>
-))
-
-// NOTE: props is required to pass (onClick and ref) on popover's cloned trigger.
-const ConnectionPopoverTrigger = memo((props: Omit<ComponentPropsWithRef<'div'>, 'color'>) => {
-	const { length } = useSnapshot(connectionStore.state.activeConnections)
-
-	return (
-		<Badge {...props} classNames={{ badge: 'bottom-3' }} color="success" size="sm" label={length} placement="bottom-end" visible={length > 0}>
-			<IconButton icon={Icons.Connect} tooltipContent="Connection" />
-		</Badge>
-	)
-})
-
-const ConnectionPopoverContent = memo(() => (
-	<div className="flex flex-col gap-2">
+export const Connections = memo(() => (
+	<div className="flex flex-col gap-2 p-3">
 		<span className="w-full font-bold text-neutral-300">ACTIVE CONNECTIONS:</span>
 		<ActiveConnectionList />
 		<SavedConnection />
 	</div>
 ))
 
-function canSaveConnection({ host, name, port, type }: Pick<Connection, 'host' | 'name' | 'port' | 'type'>) {
-	if (name.trim().length === 0) return false
-	if (!isNetworkConnection(type)) return true
-	if (!Number.isInteger(port) || port < 1 || port > 65535) return false
-	return host.trim().length > 0
-}
-
-function canConnect({ host, port, type }: Pick<Connection, 'host' | 'port' | 'type'>) {
-	if (!isNetworkConnection(type)) return true
-	if (!Number.isInteger(port) || port < 1 || port > 65535) return false
-	return host.trim().length > 0
-}
+const CONNECTION_PORT_PLACEHOLDER = {
+	INDI: '7624',
+	ALPACA: '32323',
+	SIMULATOR: '0',
+	FIRMATA: '27016',
+} as const satisfies Record<Connection['type'], string>
 
 function ActiveConnectionItem(connection: ConnectionStatus) {
 	const EndContent = <IconButton icon={Icons.Close} color="danger" variant="flat" tooltipContent="Disconnect" onClick={() => connectionStore.disconnect(connection)} size="sm" />
@@ -136,8 +105,8 @@ const ConnectionEdit = memo(() => {
 	const edited = useSnapshot(connectionStore.state.edited)
 	const { name, host, port, type, secured } = edited
 	const networkConnection = isNetworkConnection(type)
-	const updatable = connections.some((e) => e.id === edited.id)
-	const canRemove = updatable
+	const canUpdate = connections.some((e) => e.id === edited.id)
+	const canRemove = canUpdate
 
 	return (
 		<div className="mt-4 grid w-full grid-cols-12 items-center gap-2">
@@ -152,7 +121,7 @@ const ConnectionEdit = memo(() => {
 			<div className="col-span-full mt-2 flex flex-row items-center justify-between gap-2">
 				<Button fullWidth color="primary" disabled={!canConnect(edited)} label="Connect" onClick={connectionStore.connectToEdited} startContent={<Icons.Connect />} />
 				<Button fullWidth color="secondary" label="Create" onClick={connectionStore.create} startContent={<Icons.Plus />} />
-				<Button fullWidth color="success" disabled={!canSaveConnection(edited)} label={updatable ? 'Update' : 'Save'} onClick={connectionStore.save} startContent={<Icons.Check />} />
+				<Button fullWidth color="success" disabled={!canSave(edited)} label={canUpdate ? 'Update' : 'Save'} onClick={connectionStore.save} startContent={<Icons.Check />} />
 				<Button fullWidth color="danger" disabled={!canRemove} label="Remove" onClick={connectionStore.removeEdited} startContent={<Icons.Trash />} />
 			</div>
 		</div>
@@ -200,3 +169,16 @@ const SavedConnection = memo(() => (
 		<ConnectionEdit />
 	</div>
 ))
+
+function canSave({ host, name, port, type }: Pick<Connection, 'host' | 'name' | 'port' | 'type'>) {
+	if (name.trim().length === 0) return false
+	if (!isNetworkConnection(type)) return true
+	if (!Number.isInteger(port) || port < 1 || port > 65535) return false
+	return host.trim().length > 0
+}
+
+function canConnect({ host, port, type }: Pick<Connection, 'host' | 'port' | 'type'>) {
+	if (!isNetworkConnection(type)) return true
+	if (!Number.isInteger(port) || port < 1 || port > 65535) return false
+	return host.trim().length > 0
+}

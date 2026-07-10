@@ -28,6 +28,7 @@
 		"clsx": "2.1.1",
 		"d3-selection": "3.0.0",
 		"d3-zoom": "3.0.0",
+		"dockview-react": "7.0.2",
 		"nanoid": "5.1.16",
 		"nebulosa": "github:tiagohm/nebulosa.ts",
 		"open": "11.0.0",

@@ -7,7 +7,6 @@ import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
-import { IndiPanelControlButton } from './IndiPanelControlButton'
 import { Modal } from './Modal'
 
 export const Cover = memo(() => {
@@ -31,7 +30,6 @@ const Header = memo(() => {
 		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
 			<div className="flex shrink-0 flex-row items-center gap-1">
 				<ConnectButton connected={connected} loading={connecting} onClick={cover.connect} />
-				<IndiPanelControlButton device={cover.state.cover} />
 			</div>
 			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
 				<span className="leading-5 font-semibold">Cover</span>

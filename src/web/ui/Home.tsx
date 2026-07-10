@@ -1,13 +1,10 @@
-import type { Device } from 'nebulosa/src/devices/indi/device'
 import { Activity, memo, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { equipmentStore } from '@/stores/equipment.store'
 import { wsStore } from '@/stores/ws.store'
 import { useStore } from '../hooks/store.hook'
-import { CameraDeviceContext, MountDeviceContext, FocuserDeviceContext, WheelDeviceContext, GuideOutputDeviceContext, ThermometerDeviceContext, CoverDeviceContext, FlatPanelDeviceContext, DewHeaterDeviceContext, RotatorDeviceContext, IndiPanelControlStoreContext } from '../shared/context'
+import { MountDeviceContext, FocuserDeviceContext, WheelDeviceContext, GuideOutputDeviceContext, ThermometerDeviceContext, CoverDeviceContext, FlatPanelDeviceContext, DewHeaterDeviceContext, RotatorDeviceContext } from '../shared/context'
 import { activityMode } from '../shared/util'
-import { indiPanelControlStore } from '../stores/indi.panelcontrol.store'
-import { Camera } from './Camera'
 import { Confirmation } from './Confirmation'
 import { Cover } from './Cover'
 import { DewHeater } from './DewHeater'
@@ -16,7 +13,6 @@ import { Focuser } from './Focuser'
 import { GuideOutput } from './GuideOutput'
 import { HomeNavBar } from './HomeNavBar'
 import { ImageWorkspace } from './ImageWorkspace'
-import { IndiPanelControl } from './IndiPanelControl'
 import { Mount } from './Mount'
 import { Rotator } from './Rotator'
 import { Thermometer } from './Thermometer'
@@ -30,7 +26,6 @@ export const Home = memo(() => {
 		<div className="flex h-full min-h-0 w-full min-w-0 flex-col">
 			<HomeNavBar />
 			<ImageWorkspace />
-			<CameraList />
 			<MountList />
 			<FocuserList />
 			<WheelList />
@@ -51,38 +46,8 @@ function makeDevices(length: number, callback: (index: number) => React.ReactNod
 	return devices
 }
 
-interface IndiProps {
-	readonly device: Device
-}
-
-const Indi = memo(({ device }: IndiProps) => {
-	const panel = useStore(() => indiPanelControlStore(device), [device])
-
-	return (
-		<IndiPanelControlStoreContext value={panel}>
-			<IndiPanelControl />
-		</IndiPanelControlStoreContext>
-	)
-})
-
 interface DeviceItemProps {
 	readonly index: number
-}
-
-function CameraItem({ index }: DeviceItemProps) {
-	const camera = equipmentStore.state.camera[index]
-	const { show } = useSnapshot(camera)
-
-	return (
-		<>
-			<Indi device={camera} />
-			<Activity mode={activityMode(show)}>
-				<CameraDeviceContext value={camera}>
-					<Camera key={camera.id} />
-				</CameraDeviceContext>
-			</Activity>
-		</>
-	)
 }
 
 function MountItem({ index }: DeviceItemProps) {
@@ -91,7 +56,6 @@ function MountItem({ index }: DeviceItemProps) {
 
 	return (
 		<>
-			<Indi device={mount} />
 			<Activity mode={activityMode(show)}>
 				<MountDeviceContext value={mount}>
 					<Mount key={mount.id} />
@@ -107,7 +71,6 @@ function FocuserItem({ index }: DeviceItemProps) {
 
 	return (
 		<>
-			<Indi device={focuser} />
 			<Activity mode={activityMode(show)}>
 				<FocuserDeviceContext value={focuser}>
 					<Focuser key={focuser.id} />
@@ -123,7 +86,6 @@ function WheelItem({ index }: DeviceItemProps) {
 
 	return (
 		<>
-			<Indi device={wheel} />
 			<Activity mode={activityMode(show)}>
 				<WheelDeviceContext value={wheel}>
 					<Wheel key={wheel.id} />
@@ -139,7 +101,6 @@ function GuideOutputItem({ index }: DeviceItemProps) {
 
 	return (
 		<>
-			<Indi device={guideOutput} />
 			<Activity mode={activityMode(show)}>
 				<GuideOutputDeviceContext value={guideOutput}>
 					<GuideOutput key={guideOutput.id} />
@@ -155,7 +116,6 @@ function ThermometerItem({ index }: DeviceItemProps) {
 
 	return (
 		<>
-			<Indi device={thermometer} />
 			<Activity mode={activityMode(show)}>
 				<ThermometerDeviceContext value={thermometer}>
 					<Thermometer key={thermometer.id} />
@@ -171,7 +131,6 @@ function CoverItem({ index }: DeviceItemProps) {
 
 	return (
 		<>
-			<Indi device={cover} />
 			<Activity mode={activityMode(show)}>
 				<CoverDeviceContext value={cover}>
 					<Cover key={cover.id} />
@@ -187,7 +146,6 @@ function FlatPanelItem({ index }: DeviceItemProps) {
 
 	return (
 		<>
-			<Indi device={flatPanel} />
 			<Activity mode={activityMode(show)}>
 				<FlatPanelDeviceContext value={flatPanel}>
 					<FlatPanel key={flatPanel.id} />
@@ -203,7 +161,6 @@ function DewHeaterItem({ index }: DeviceItemProps) {
 
 	return (
 		<>
-			<Indi device={dewHeater} />
 			<Activity mode={activityMode(show)}>
 				<DewHeaterDeviceContext value={dewHeater}>
 					<DewHeater key={dewHeater.id} />
@@ -219,7 +176,6 @@ function RotatorItem({ index }: DeviceItemProps) {
 
 	return (
 		<>
-			<Indi device={rotator} />
 			<Activity mode={activityMode(show)}>
 				<RotatorDeviceContext value={rotator}>
 					<Rotator key={rotator.id} />
@@ -228,12 +184,6 @@ function RotatorItem({ index }: DeviceItemProps) {
 		</>
 	)
 }
-
-export const CameraList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.camera)
-	const devices = useMemo(() => makeDevices(length, (i) => <CameraItem key={equipmentStore.state.camera[i].id} index={i} />), [length])
-	return devices
-})
 
 export const MountList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.mount)

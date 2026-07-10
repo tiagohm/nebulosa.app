@@ -1,91 +1,100 @@
-import { Activity, memo, useContext, useState } from 'react'
+import type { IDockviewPanelProps } from 'dockview-react'
+import { memo, useContext, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
-import { cameraStore } from '@/stores/camera.store'
-import { useStore } from '../hooks/store.hook'
-import { CameraDeviceContext, CameraStoreContext } from '../shared/context'
-import { activityMode } from '../shared/util'
-import { AutoSaveButton } from './AutoSaveButton'
-import { AutoSubFolderModeButton } from './AutoSubFolderButton'
+import { cameraStore, type CameraStore } from '@/stores/camera.store'
+import { CameraStoreContext } from '../../../shared/context'
+import { equipmentStore } from '../../../stores/equipment.store'
+import type { DevicePanelParams } from '../../../stores/workspace.store'
+import { AutoSaveButton } from '../../AutoSaveButton'
+import { AutoSubFolderModeButton } from '../../AutoSubFolderButton'
+import { Button } from '../../components/Button'
+import { Checkbox } from '../../components/Checkbox'
+import { IconButton, type IconButtonProps } from '../../components/IconButton'
+import { NumberInput } from '../../components/NumberInput'
+import { Switch } from '../../components/Switch'
+import { Tab, TabPanel, Tabs } from '../../components/Tabs'
+import { ConnectButton } from '../../ConnectButton'
+import { FocuserDropdown, MountDropdown, RotatorDropdown, WheelDropdown } from '../../DeviceDropdown'
+import { ExposureModeButtonGroup } from '../../ExposureModeButtonGroup'
+import { ExposureTimeInput } from '../../ExposureTimeInput'
+import { ExposureTimeProgress } from '../../ExposureTimeProgress'
+import { FilePickerInput } from '../../FilePickerInput'
+import { FrameFormatSelect } from '../../FrameFormatSelect'
+import { FrameTypeSelect } from '../../FrameTypeSelect'
+import { Icons } from '../../Icon'
+import { IndiPanelControl } from '../indi/IndiPanelControl'
 import { CameraTransferFormatSelect } from './CameraTransferFormatSelect'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { IconButton, type IconButtonProps } from './components/IconButton'
-import { NumberInput } from './components/NumberInput'
-import { Switch } from './components/Switch'
-import { ConnectButton } from './ConnectButton'
-import { FocuserDropdown, MountDropdown, RotatorDropdown, WheelDropdown } from './DeviceDropdown'
-import { ExposureModeButtonGroup } from './ExposureModeButtonGroup'
-import { ExposureTimeInput } from './ExposureTimeInput'
-import { ExposureTimeProgress } from './ExposureTimeProgress'
-import { FilePickerInput } from './FilePickerInput'
-import { FrameFormatSelect } from './FrameFormatSelect'
-import { FrameTypeSelect } from './FrameTypeSelect'
-import { Icons } from './Icon'
-import { IndiPanelControlButton } from './IndiPanelControlButton'
-import { Modal } from './Modal'
 
-export const Camera = memo(() => {
-	const device = useContext(CameraDeviceContext)
-	const camera = useStore(() => cameraStore(device), [device])
+export const Camera = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) => {
+	const storeRef = useRef<CameraStore | undefined>(undefined)
+
+	useEffect(() => storeRef.current?.mount(), [])
+
+	const { length } = useSnapshot(equipmentStore.state.camera) // used only to rerender this component
+	const camera = length > 0 && equipmentStore.state.camera.find((e) => e.id === params.id)
+
+	if (!camera) {
+		storeRef.current?.unmount()
+		storeRef.current = undefined
+		return <div className="flex h-full w-full items-center justify-center">Not available</div>
+	}
+
+	const store = storeRef.current ?? cameraStore(camera)
+	storeRef.current = store
 
 	return (
-		<CameraStoreContext value={camera}>
-			<Modal footer={<Footer />} header={<Header />} id={`camera-${device.id}`} initialWidth="360px" onHide={camera.hide}>
-				<Body />
-			</Modal>
+		<CameraStoreContext value={store}>
+			<Body />
 		</CameraStoreContext>
 	)
 })
 
 const Body = memo(() => {
 	const camera = useContext(CameraStoreContext)
-	const { minimized } = useSnapshot(camera.state)
 
 	return (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<Progress />
-			<Activity mode={activityMode(!minimized)}>
-				<Path />
-				<Cooler />
-				<Temperature />
-				<Exposure />
-				<ExposureMode />
-				<Bin />
-				<Frame />
-				<GainAndFormat />
-			</Activity>
-		</div>
+		<Tabs classNames={{ tabList: 'w-full px-3 rounded-none', panelContainer: 'p-3' }}>
+			<Tab id="control">Câmera</Tab>
+			<Tab id="options">Options</Tab>
+			<Tab id="indi">INDI</Tab>
+
+			<TabPanel id="control">
+				<Control />
+			</TabPanel>
+			<TabPanel id="options">
+				<Options />
+			</TabPanel>
+			<TabPanel id="indi">
+				<IndiPanelControl device={camera.state.camera} />
+			</TabPanel>
+		</Tabs>
 	)
 })
+
+const Control = memo(() => (
+	<div className="grid grid-cols-12 gap-2">
+		<Header />
+		<Path />
+		<Cooler />
+		<Temperature />
+		<Exposure />
+		<ExposureMode />
+		<Bin />
+		<Frame />
+		<GainAndFormat />
+		<Footer />
+	</div>
+))
 
 const Header = memo(() => {
 	const camera = useContext(CameraStoreContext)
-	const { capturing, minimized } = useSnapshot(camera.state)
-	const { connected, connecting, name } = useSnapshot(camera.state.camera)
+	const { capturing, progress } = useSnapshot(camera.state)
+	const { connected, connecting } = useSnapshot(camera.state.camera)
 
 	return (
-		<div className="flex w-full flex-row items-center justify-between">
-			<div className="flex flex-row items-center gap-1">
-				<ConnectButton disabled={capturing} connected={connected} loading={connecting} onClick={camera.connect} />
-				<IndiPanelControlButton device={camera.state.camera} />
-			</div>
-			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
-				<span className="leading-5 font-semibold">Camera</span>
-				<span className="max-w-full truncate text-xs font-normal text-gray-400">{name}</span>
-			</div>
-			<IconButton color="primary" icon={minimized ? Icons.ChevronDown : Icons.ChevronUp} onClick={camera.minimize} variant="ghost" />
-		</div>
-	)
-})
-
-const Progress = memo(() => {
-	const camera = useContext(CameraStoreContext)
-	const { progress } = useSnapshot(camera.state)
-
-	return (
-		<div className="col-span-full mb-2 flex flex-row items-center justify-between gap-2">
+		<div className="col-span-full flex flex-row items-center justify-between gap-2">
+			<ConnectButton disabled={capturing} connected={connected} loading={connecting} onClick={camera.connect} />
 			<ExposureTimeProgress className="min-w-0 flex-1 overflow-x-auto" progress={progress} />
-			<OptionsButton />
 		</div>
 	)
 })
@@ -104,25 +113,7 @@ const Path = memo(() => {
 	)
 })
 
-const OptionsButton = memo(() => {
-	const camera = useContext(CameraStoreContext)
-	const { capturing } = useSnapshot(camera.state)
-	const { connected } = useSnapshot(camera.state.camera)
-	const [show, setShow] = useState(false)
-
-	return (
-		<>
-			<IconButton disabled={!connected || capturing} icon={Icons.Cog} onClick={() => setShow(true)} />
-			{show && connected && !capturing && (
-				<Modal header="Options" id={`camera-options-${camera.state.camera.id}`} initialWidth="280px" onHide={() => setShow(false)}>
-					<OptionsBody />
-				</Modal>
-			)}
-		</>
-	)
-})
-
-const OptionsBody = memo(() => {
+const Options = memo(() => {
 	const camera = useContext(CameraStoreContext)
 	const { transferFormat, compressed, dither } = useSnapshot(camera.state.request)
 
@@ -316,12 +307,12 @@ const Footer = memo(() => {
 	const { connected, canAbort } = useSnapshot(camera.state.camera)
 
 	return (
-		<>
+		<div className="col-span-full flex flex-row items-center gap-2">
 			<div className="flex min-w-0 flex-1 flex-row items-center gap-1 overflow-x-auto">
 				<CameraEquipment />
 			</div>
 			<Button color="danger" disabled={!connected || !canAbort || !capturing} label="Stop" onClick={camera.stop} startContent={<Icons.Stop />} />
 			<Button color="success" disabled={!connected} label="Start" loading={capturing} onClick={camera.start} startContent={<Icons.Play />} />
-		</>
+		</div>
 	)
 })

@@ -3,9 +3,8 @@ import { useSnapshot } from 'valtio'
 import { equipmentStore } from '@/stores/equipment.store'
 import { wsStore } from '@/stores/ws.store'
 import { useStore } from '../hooks/store.hook'
-import { FocuserDeviceContext, WheelDeviceContext, GuideOutputDeviceContext, ThermometerDeviceContext, CoverDeviceContext, FlatPanelDeviceContext, DewHeaterDeviceContext, RotatorDeviceContext } from '../shared/context'
+import { FocuserDeviceContext, WheelDeviceContext, GuideOutputDeviceContext, ThermometerDeviceContext, FlatPanelDeviceContext, DewHeaterDeviceContext, RotatorDeviceContext } from '../shared/context'
 import { activityMode } from '../shared/util'
-import { Cover } from './Cover'
 import { DewHeater } from './DewHeater'
 import { FlatPanel } from './FlatPanel'
 import { Focuser } from './Focuser'
@@ -27,7 +26,6 @@ export const Home = memo(() => {
 			<WheelList />
 			<ThermometerList />
 			<GuideOutputList />
-			<CoverList />
 			<FlatPanelList />
 			<DewHeaterList />
 			<RotatorList />
@@ -105,21 +103,6 @@ function ThermometerItem({ index }: DeviceItemProps) {
 	)
 }
 
-function CoverItem({ index }: DeviceItemProps) {
-	const cover = equipmentStore.state.cover[index]
-	const { show } = useSnapshot(cover)
-
-	return (
-		<>
-			<Activity mode={activityMode(show)}>
-				<CoverDeviceContext value={cover}>
-					<Cover key={cover.id} />
-				</CoverDeviceContext>
-			</Activity>
-		</>
-	)
-}
-
 function FlatPanelItem({ index }: DeviceItemProps) {
 	const flatPanel = equipmentStore.state.flatPanel[index]
 	const { show } = useSnapshot(flatPanel)
@@ -186,12 +169,6 @@ export const GuideOutputList = memo(() => {
 export const ThermometerList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.thermometer)
 	const devices = useMemo(() => makeDevices(length, (i) => <ThermometerItem key={equipmentStore.state.thermometer[i].id} index={i} />), [length])
-	return devices
-})
-
-export const CoverList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.cover)
-	const devices = useMemo(() => makeDevices(length, (i) => <CoverItem key={equipmentStore.state.cover[i].id} index={i} />), [length])
 	return devices
 })
 

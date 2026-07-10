@@ -63,7 +63,7 @@ export const Atlas = memo(() => {
 			<Modal footer={Footer} header={<Header />} id="sky-atlas" initialWidth="456px" onHide={atlasStore.hide}>
 				<Body />
 			</Modal>
-			{location.show && <Location {...request.location} id="location-atlas" onClose={atlasStore.hideLocation} onCoordinateChange={atlasStore.updateLocation} />}
+			{location.show && <Location {...request.location} onCoordinateChange={atlasStore.updateLocation} />}
 		</>
 	)
 })

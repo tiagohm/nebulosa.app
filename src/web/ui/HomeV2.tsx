@@ -1,9 +1,11 @@
 import { memo } from 'react'
 import { useStore } from '../hooks/store.hook'
 import { wsStore } from '../stores/ws.store'
+import { Confirmation } from './Confirmation'
 import { Workspace } from './workspace/Workspace'
 
 export const Home = memo(() => {
+	// Mounts the websocket lifecycle once the home screen is active.
 	useStore(wsStore, [])
 
 	return (
@@ -11,6 +13,7 @@ export const Home = memo(() => {
 			<header></header>
 			<div className="min-h-0">
 				<Workspace />
+				<Confirmation />
 			</div>
 		</div>
 	)

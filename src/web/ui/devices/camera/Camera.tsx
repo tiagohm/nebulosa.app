@@ -54,7 +54,7 @@ const Body = memo(() => {
 
 	return (
 		<Tabs classNames={{ tabList: 'w-full px-3 rounded-none', panelContainer: 'p-3' }}>
-			<Tab id="control">Câmera</Tab>
+			<Tab id="control">Camera</Tab>
 			<Tab id="options">Options</Tab>
 			<Tab id="indi">INDI</Tab>
 

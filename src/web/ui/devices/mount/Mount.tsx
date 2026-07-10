@@ -1,28 +1,31 @@
+import type { IDockviewPanelProps } from 'dockview-react'
 import type { MountTargetCoordinateType } from 'nebulosa/src/devices/indi/device'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
-import { memo, useContext } from 'react'
+import { memo, useContext, useEffect, useRef } from 'react'
 import type { CoordinateInfo, CoordinateType } from 'src/shared/types'
+import { equipmentStore } from 'src/web/stores/equipment.store'
+import type { DevicePanelParams } from 'src/web/stores/workspace.store'
 import { useSnapshot } from 'valtio'
-import { mountStore } from '@/stores/mount.store'
-import { useStore } from '../hooks/store.hook'
-import { MountDeviceContext, MountStoreContext } from '../shared/context'
-import { BodyCoordinateInfo } from './BodyCoordinateInfo'
-import { Chip } from './components/Chip'
-import { IconButton } from './components/IconButton'
-import { List, ListItem } from './components/List'
-import { Popover } from './components/Popover'
-import { Switch } from './components/Switch'
-import { TextInput } from './components/TextInput'
-import { ConnectButton } from './ConnectButton'
-import { Icons } from './Icon'
-import { Location } from './Location'
-import { Modal } from './Modal'
+import { mountStore, type MountStore } from '@/stores/mount.store'
+import { MountStoreContext } from '../../../shared/context'
+import { BodyCoordinateInfo } from '../../BodyCoordinateInfo'
+import { Chip } from '../../components/Chip'
+import { IconButton } from '../../components/IconButton'
+import { List, ListItem } from '../../components/List'
+import { Popover } from '../../components/Popover'
+import { Switch } from '../../components/Switch'
+import { Tabs, Tab, TabPanel } from '../../components/Tabs'
+import { TextInput } from '../../components/TextInput'
+import { ConnectButton } from '../../ConnectButton'
+import { Icons } from '../../Icon'
+import { Nudge } from '../../Nudge'
+import { SlewRateSelect } from '../../SlewRateSelect'
+import { TrackModeSelect } from '../../TrackModeSelect'
+import { IndiPanelControl } from '../indi/IndiPanelControl'
+import { MountLocation } from './MountLocation'
 import { MountRemoteControl } from './MountRemoteControl'
 import { MountTargetCoordinateTypeRadioGroup } from './MountTargetCoordinateTypeRadioGroup'
-import { Nudge } from './Nudge'
-import { SlewRateSelect } from './SlewRateSelect'
-import { Time } from './Time'
-import { TrackModeSelect } from './TrackModeSelect'
+import { MountTime } from './MountTime'
 
 const TARGET_TYPE_BY_COORDINATE_TYPE = {
 	equatorial: 'JNOW',
@@ -44,47 +47,63 @@ function formatTargetCoordinateY(type: CoordinateType, position: CoordinateInfo)
 	return type === 'horizontal' ? formatALT(position[type][1]) : formatDEC(position[type][1])
 }
 
-export const Mount = memo(() => {
-	const device = useContext(MountDeviceContext)
-	const mount = useStore(() => mountStore(device), [device])
+export const Mount = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) => {
+	const storeRef = useRef<MountStore | undefined>(undefined)
+
+	useEffect(() => storeRef.current?.mount(), [])
+
+	const { length } = useSnapshot(equipmentStore.state.mount) // used only to rerender this component
+	const mount = length > 0 && equipmentStore.state.mount.find((e) => e.id === params.id)
+
+	if (!mount) {
+		storeRef.current?.unmount()
+		storeRef.current = undefined
+		return <div className="flex h-full w-full items-center justify-center">Not available</div>
+	}
+
+	const store = storeRef.current ?? mountStore(mount)
+	storeRef.current = store
 
 	return (
-		<MountStoreContext value={mount}>
-			<Modal header={<Header />} id={`mount-${device.id}`} initialWidth="392px" onHide={mount.hide}>
-				<Body />
-			</Modal>
+		<MountStoreContext value={store}>
+			<Body />
 		</MountStoreContext>
 	)
 })
 
-const Header = memo(() => {
+const Body = memo(() => {
 	const mount = useContext(MountStoreContext)
-	const { connecting, connected, parking, slewing, homing, name } = useSnapshot(mount.state.mount)
-	const moving = slewing || parking || homing
 
 	return (
-		<div className="flex w-full flex-row items-center justify-between">
-			<div className="flex flex-row items-center gap-1">
-				<ConnectButton disabled={moving} connected={connected} loading={connecting} onClick={mount.connect} />
-			</div>
-			<div className="flex flex-1 flex-col items-center justify-center gap-0">
-				<span className="leading-5 font-semibold">Mount</span>
-				<span className="max-w-full text-xs font-normal text-gray-400">{name}</span>
-			</div>
-		</div>
+		<Tabs classNames={{ tabList: 'w-full px-3 rounded-none', panelContainer: 'p-3' }}>
+			<Tab id="control">Mount</Tab>
+			<Tab id="location">Location</Tab>
+			<Tab id="time">Time</Tab>
+			<Tab id="remoteControl">Remote Control</Tab>
+			<Tab id="indi">INDI</Tab>
+
+			<TabPanel id="control">
+				<Control />
+			</TabPanel>
+			<TabPanel id="location">
+				<MountLocation />
+			</TabPanel>
+			<TabPanel id="time">
+				<MountTime />
+			</TabPanel>
+			<TabPanel id="remoteControl">
+				<MountRemoteControl />
+			</TabPanel>
+			<TabPanel id="indi">
+				<IndiPanelControl device={mount.state.mount} />
+			</TabPanel>
+		</Tabs>
 	)
 })
 
-const Body = memo(() => (
+const Control = memo(() => (
 	<div className="mt-0 grid grid-cols-12 gap-2">
-		<div className="col-span-full flex flex-row items-center justify-between">
-			<Status />
-			<div className="flex flex-row items-center gap-2">
-				<LocationButton />
-				<TimeButton />
-				<RemoteControlButton />
-			</div>
-		</div>
+		<Status />
 		<CurrentPosition />
 		<hr className="col-span-full border-dotted text-neutral-800" />
 		<TargetCoordinateAndPosition />
@@ -97,51 +116,16 @@ const Body = memo(() => (
 
 const Status = memo(() => {
 	const mount = useContext(MountStoreContext)
-	const { parking, parked, slewing, tracking, homing } = useSnapshot(mount.state.mount)
+	const { connected, connecting, parking, parked, slewing, tracking, homing } = useSnapshot(mount.state.mount)
+	const moving = slewing || parking || homing
 
 	return (
-		<Chip color="primary" size="sm">
-			{parking ? 'parking' : parked ? 'parked' : homing ? 'homing' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
-		</Chip>
-	)
-})
-
-const LocationButton = memo(() => {
-	const mount = useContext(MountStoreContext)
-	const { show } = useSnapshot(mount.state.location)
-	const { connected, geographicCoordinate } = useSnapshot(mount.state.mount)
-
-	return (
-		<>
-			<IconButton color="danger" disabled={!connected} icon={Icons.MapMarker} onClick={mount.showLocation} tooltipContent="Location" />
-			{show && <Location {...geographicCoordinate} id={`location-mount-${mount.state.mount.id}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}
-		</>
-	)
-})
-
-const TimeButton = memo(() => {
-	const mount = useContext(MountStoreContext)
-	const { show } = useSnapshot(mount.state.time)
-	const { connected, time } = useSnapshot(mount.state.mount)
-
-	return (
-		<>
-			<IconButton color="primary" disabled={!connected || time.utc === 0} icon={Icons.Clock} onClick={mount.showTime} tooltipContent="Time" />
-			{show && <Time id={`time-mount-${mount.state.mount.id}`} onClose={mount.hideTime} onTimeChange={mount.time} {...time} />}
-		</>
-	)
-})
-
-const RemoteControlButton = memo(() => {
-	const mount = useContext(MountStoreContext)
-	const { show } = useSnapshot(mount.state.remoteControl)
-	const { connected } = useSnapshot(mount.state.mount)
-
-	return (
-		<>
-			<IconButton color="secondary" disabled={!connected} icon={Icons.RemoteControl} onClick={mount.showRemoteControl} tooltipContent="Remote Control" />
-			{show && <MountRemoteControl />}
-		</>
+		<div className="col-span-full flex flex-row items-center justify-between gap-2">
+			<ConnectButton disabled={moving} connected={connected} loading={connecting} onClick={mount.connect} />
+			<Chip color="primary" size="sm">
+				{parking ? 'parking' : parked ? 'parked' : homing ? 'homing' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
+			</Chip>
+		</div>
 	)
 })
 

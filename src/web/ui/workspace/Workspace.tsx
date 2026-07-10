@@ -3,6 +3,7 @@ import { memo } from 'react'
 import { useStore } from '../../hooks/store.hook'
 import { workspaceStore } from '../../stores/workspace.store'
 import { Camera } from '../devices/camera/Camera'
+import { Mount } from '../devices/mount/Mount'
 import { Connections } from './left/Connections'
 import { Devices } from './left/Devices'
 import { CloseableTab } from './tabs/CloseableTab'
@@ -17,6 +18,7 @@ const components = {
 	'component.connections': Connections,
 	'component.devices': Devices,
 	'component.device.camera': Camera,
+	'component.device.mount': Mount,
 } as const
 
 export const Workspace = memo(() => {

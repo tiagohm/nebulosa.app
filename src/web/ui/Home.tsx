@@ -3,9 +3,8 @@ import { useSnapshot } from 'valtio'
 import { equipmentStore } from '@/stores/equipment.store'
 import { wsStore } from '@/stores/ws.store'
 import { useStore } from '../hooks/store.hook'
-import { MountDeviceContext, FocuserDeviceContext, WheelDeviceContext, GuideOutputDeviceContext, ThermometerDeviceContext, CoverDeviceContext, FlatPanelDeviceContext, DewHeaterDeviceContext, RotatorDeviceContext } from '../shared/context'
+import { FocuserDeviceContext, WheelDeviceContext, GuideOutputDeviceContext, ThermometerDeviceContext, CoverDeviceContext, FlatPanelDeviceContext, DewHeaterDeviceContext, RotatorDeviceContext } from '../shared/context'
 import { activityMode } from '../shared/util'
-import { Confirmation } from './Confirmation'
 import { Cover } from './Cover'
 import { DewHeater } from './DewHeater'
 import { FlatPanel } from './FlatPanel'
@@ -13,20 +12,17 @@ import { Focuser } from './Focuser'
 import { GuideOutput } from './GuideOutput'
 import { HomeNavBar } from './HomeNavBar'
 import { ImageWorkspace } from './ImageWorkspace'
-import { Mount } from './Mount'
 import { Rotator } from './Rotator'
 import { Thermometer } from './Thermometer'
 import { Wheel } from './Wheel'
 
 export const Home = memo(() => {
-	// Mounts the websocket lifecycle once the home screen is active.
 	useStore(wsStore, [])
 
 	return (
 		<div className="flex h-full min-h-0 w-full min-w-0 flex-col">
 			<HomeNavBar />
 			<ImageWorkspace />
-			<MountList />
 			<FocuserList />
 			<WheelList />
 			<ThermometerList />
@@ -35,7 +31,6 @@ export const Home = memo(() => {
 			<FlatPanelList />
 			<DewHeaterList />
 			<RotatorList />
-			<Confirmation />
 		</div>
 	)
 })
@@ -48,21 +43,6 @@ function makeDevices(length: number, callback: (index: number) => React.ReactNod
 
 interface DeviceItemProps {
 	readonly index: number
-}
-
-function MountItem({ index }: DeviceItemProps) {
-	const mount = equipmentStore.state.mount[index]
-	const { show } = useSnapshot(mount)
-
-	return (
-		<>
-			<Activity mode={activityMode(show)}>
-				<MountDeviceContext value={mount}>
-					<Mount key={mount.id} />
-				</MountDeviceContext>
-			</Activity>
-		</>
-	)
 }
 
 function FocuserItem({ index }: DeviceItemProps) {
@@ -184,12 +164,6 @@ function RotatorItem({ index }: DeviceItemProps) {
 		</>
 	)
 }
-
-export const MountList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.mount)
-	const devices = useMemo(() => makeDevices(length, (i) => <MountItem key={equipmentStore.state.mount[i].id} index={i} />), [length])
-	return devices
-})
 
 export const FocuserList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.focuser)

@@ -62,8 +62,8 @@ function unmount() {
 const connectedMounts = new Map<string, CelestialShape>()
 
 function mountShapeRenderer(celestial: Celestial, ctx: CanvasRenderingContext2D, state: ShapeRenderState) {
-	ctx.strokeStyle = 'blue'
-	ctx.fillStyle = 'blue'
+	ctx.strokeStyle = '#00b1ff'
+	ctx.fillStyle = '#00b1ff'
 	ctx.beginPath()
 	ctx.arc(state.x, state.y, 6, 0, TAU)
 	ctx.stroke()
@@ -137,6 +137,31 @@ function handleReady(celestial: Celestial) {
 		connectedMounts.delete(event.id) && celestial.removeShape(event.id)
 	})
 
+	u[6] = celestial.on('selectionChange', (event) => {
+		const { object } = event
+
+		if (object.type === 'star') {
+			atlasStore.state.tab = 'galaxy'
+			void atlasStore.state.galaxy!.selectWithId(object.id)
+		} else if (object.type === 'deepSky') {
+			atlasStore.state.tab = 'galaxy'
+			void atlasStore.state.galaxy!.selectWithId(object.object.id)
+		} else if (object.type === 'movingBody') {
+			if (object.object.type === 'comet') {
+				//
+			} else if (object.object.type === 'asteroid') {
+				//
+			} else if (object.object.type === 'moon') {
+				atlasStore.state.tab = 'moon'
+			} else if (object.object.type === 'sun') {
+				atlasStore.state.tab = 'sun'
+			} else {
+				atlasStore.state.tab = 'planet'
+				void atlasStore.state.planet!.select(object.object.id, true)
+			}
+		}
+	})
+
 	for (const mount of equipmentStore.state.mount) {
 		addMount(mount)
 	}
@@ -146,7 +171,7 @@ function handleReady(celestial: Celestial) {
 	void Api.Atlas.planetarium({ types: [29], magnitudeLimit: 16 }).then((response) => {
 		if (response?.length) {
 			for (const star of response) {
-				star.name = skyObjectName(star.name!, star.constellation)
+				star.name = skyObjectName(star.name, star.constellation)
 			}
 
 			celestial.loadStars(response)
@@ -156,7 +181,7 @@ function handleReady(celestial: Celestial) {
 	void Api.Atlas.planetarium({ types: [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19], magnitudeLimit: 12 }).then((response) => {
 		if (response?.length) {
 			for (const star of response) {
-				star.name = skyObjectName(star.name!, star.constellation)
+				star.name = skyObjectName(star.name, star.constellation)
 			}
 
 			celestial.loadDeepSkyObjects(response)

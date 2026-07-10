@@ -25,6 +25,7 @@ import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler, MountRemoteControlHandler, mount } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
 import { RotatorHandler, rotator } from 'src/api/rotator'
+import { storage, StorageHandler } from 'src/api/storage'
 import { ThermometerHandler, thermometer } from 'src/api/thermometer'
 import { TppaHandler, tppa } from 'src/api/tppa'
 import { WheelHandler, wheel } from 'src/api/wheel'
@@ -201,6 +202,7 @@ const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutpu
 const autoFocusHandler = new AutoFocusHandler(wsm, cameraHandler, focuserHandler, starDetectionHandler)
 const flatWizardHandler = new FlatWizardHandler(wsm, cameraHandler)
 const alpacaHandler = new AlpacaHandler(wsm, { camera: cameraManager, mount: mountManager, focuser: focuserManager, wheel: wheelManager, cover: coverManager, flatPanel: flatPanelManager, rotator: rotatorManager, guideOutput: guideOutputManager }, alpacaDiscoveryPort)
+const storageHandler = new StorageHandler(false)
 
 void atlasHandler.refreshImageOfSun()
 void atlasHandler.refreshSatellites()
@@ -254,6 +256,7 @@ const server = Bun.serve({
 		...autoFocus(autoFocusHandler),
 		...alpaca(alpacaHandler, alpacaPort, hasAlpaca),
 		...guider(guiderHandler, cameraManager, guideOutputManager),
+		...storage(storageHandler),
 	},
 	websocket: {
 		open: (socket) => wsm.open(socket),

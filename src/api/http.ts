@@ -6,6 +6,11 @@ export const DEFAULT_HEADERS = {
 	Expires: '0',
 } as const
 
+export const JSON_DEFAULT_HEADERS = {
+	...DEFAULT_HEADERS,
+	'Content-Type': 'application/json',
+} as const
+
 export const NO_RESPONSE = new Response(undefined, { headers: DEFAULT_HEADERS })
 export const INTERNAL_SERVER_ERROR_RESPONSE = new Response('Internal Server Error', { status: 500 })
 

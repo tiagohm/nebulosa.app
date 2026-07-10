@@ -679,6 +679,28 @@ export namespace Api {
 			return res('/guider/calibrate', 'post')
 		}
 	}
+
+	export namespace Storage {
+		export function keys() {
+			return json<readonly string[]>('/storage/keys', 'get')
+		}
+
+		export function all() {
+			return json<Record<string, string>>('/storage?raw=true', 'get')
+		}
+
+		export function get<T>(key: string) {
+			return json<T>(`/storage/${key}`, 'get')
+		}
+
+		export function put(key: string, value: unknown) {
+			return res(`/storage/${key}`, 'put', value)
+		}
+
+		export function putAll(value: Record<string, string>) {
+			return res(`/storage?raw=true`, 'put', value)
+		}
+	}
 }
 
 async function req(path: string, method: 'get' | 'post' | 'put' | 'delete', body?: unknown) {

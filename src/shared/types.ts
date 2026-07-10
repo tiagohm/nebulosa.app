@@ -249,19 +249,20 @@ export interface MinorPlanet {
 }
 
 export interface SearchSkyObject extends LocationAndTime {
-	readonly name: string
-	readonly nameType: number
-	readonly constellations: Constellation[]
-	readonly types: StellariumObjectType[]
-	readonly magnitudeMin: number
-	readonly magnitudeMax: number
-	readonly rightAscension: string // hour
-	readonly declination: string // deg
-	readonly radius: number // deg
-	readonly visible: boolean
-	readonly visibleAbove: number // deg
-	page: number
-	readonly limit: number
+	readonly id?: number | string
+	readonly name?: string
+	readonly nameType?: number
+	readonly constellations?: Constellation[]
+	readonly types?: StellariumObjectType[]
+	readonly magnitudeMin?: number
+	readonly magnitudeMax?: number
+	readonly rightAscension?: string // hour
+	readonly declination?: string // deg
+	readonly radius?: number // deg
+	readonly visible?: boolean
+	readonly visibleAbove?: number // deg
+	page?: number
+	readonly limit?: number
 	// readonly sort: SortDescriptor
 }
 
@@ -280,7 +281,7 @@ export interface SkyObject extends Omit<Required<StarCatalogEntry>, 'id' | 'epoc
 	readonly rv: Velocity
 	readonly constellation: number
 	readonly spmType?: string
-	readonly name?: string
+	readonly name: string
 }
 
 export interface AnnotatedSkyObject extends Required<Omit<SkyObject, 'type' | 'spmType'>>, Point {
@@ -1275,7 +1276,8 @@ export const DEFAULT_POSITION_OF_BODY: PositionOfBody = {
 	time: DEFAULT_TIME,
 }
 
-export const DEFAULT_SKY_OBJECT_SEARCH: SearchSkyObject = {
+export const DEFAULT_SKY_OBJECT_SEARCH: Required<SearchSkyObject> = {
+	id: 0,
 	name: '',
 	nameType: -1,
 	constellations: [],

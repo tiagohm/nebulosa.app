@@ -47,8 +47,8 @@ export interface StarCatalogInput {
 	pmRA?: NumberArray
 	pmDEC?: NumberArray
 	flags?: NumberArray
-	names?: readonly string[]
-	ids?: readonly StarId[]
+	names: readonly string[]
+	ids: readonly StarId[]
 	epoch?: number
 	count?: number
 }
@@ -75,8 +75,8 @@ export type MilkyWayCoordinates = readonly MilkyWayPolygonCoordinates[]
 
 // Deep-sky object shape.
 export interface DeepSkyObject extends EquatorialCoordinate {
-	id?: StarId
-	name?: string
+	id: StarId
+	name: string
 	type: StellariumObjectType
 	magnitude?: number
 	sizeArcMin?: number
@@ -280,7 +280,7 @@ export interface CelestialShape {
 
 // Public object shape used by picking/events.
 export type CelestialObject =
-	| { type: 'star'; index: number; id?: StarId; name?: string; mag?: number; ra: number; dec: number }
+	| { type: 'star'; index: number; id: StarId; name?: string; mag?: number; ra: number; dec: number }
 	| { type: 'deepSky'; index: number; object: DeepSkyObject }
 	| { type: 'movingBody'; index: number; object: MovingBody }
 	| { type: 'constellationLabel'; index: number; label: ConstellationLabel }
@@ -1066,8 +1066,8 @@ export class StarCatalog {
 	readonly visible: NumberArray
 	readonly labelVisible: NumberArray
 	readonly flags?: NumberArray
-	readonly names?: readonly string[]
-	readonly ids?: readonly StarId[]
+	readonly names: readonly string[]
+	readonly ids: readonly StarId[]
 	readonly namedIndices?: Int32Array
 	readonly count: number
 
@@ -1237,8 +1237,8 @@ export class StarCatalog {
 		return {
 			type: 'star',
 			index,
-			id: this.ids?.[index],
-			name: this.names?.[index],
+			id: this.ids[index],
+			name: this.names[index],
 			mag: this.mag[index],
 			ra: this.ra[index],
 			dec: this.dec[index],
@@ -1337,13 +1337,13 @@ function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 			ra,
 			dec,
 			mag,
-			bv: hasBv ? bv : undefined,
-			pmRA: hasPm ? pmRA : undefined,
-			pmDEC: hasPm ? pmDEC : undefined,
-			flags: hasFlags ? flags : undefined,
+			bv: hasBv ? bv : [],
+			pmRA: hasPm ? pmRA : [],
+			pmDEC: hasPm ? pmDEC : [],
+			flags: hasFlags ? flags : [],
 			epochs,
-			names: hasNames ? names : undefined,
-			ids: hasIds ? ids : undefined,
+			names: hasNames ? names : [],
+			ids: hasIds ? ids : [],
 		} as const
 	}
 }

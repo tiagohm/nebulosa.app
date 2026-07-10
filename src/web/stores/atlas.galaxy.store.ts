@@ -11,7 +11,7 @@ export type AtlasGalaxyStore = typeof galaxyStore
 export interface AtlasGalaxyState {
 	mode: 'info' | 'chart'
 	loading: boolean
-	readonly request: SearchSkyObject
+	readonly request: Required<SearchSkyObject>
 	result: readonly SkyObjectSearchItem[]
 	selected?: SkyObjectSearchItem
 	readonly position: BodyPosition
@@ -37,7 +37,7 @@ function mount() {
 	void search(true)
 }
 
-function update<K extends keyof SearchSkyObject>(key: K, value: SearchSkyObject[K]) {
+function update<K extends keyof SearchSkyObject>(key: K, value: Required<SearchSkyObject>[K]) {
 	state.request[key] = value
 
 	// Search again if page or sort has been changed
@@ -83,6 +83,17 @@ async function select(row: number, col: number, force: boolean = true, rowMode: 
 	// Fetches object's position and chart if a new one was selected
 	if (selected && (force || state.selected?.id !== selected.id)) {
 		state.selected = selected
+
+		await updatePosition()
+		await updateChart(true)
+	}
+}
+
+async function selectWithId(id: number | string) {
+	const selected = await Api.Atlas.searchSkyObject({ id, limit: 1, location: state.request.location, time: state.request.time })
+
+	if (selected?.length) {
+		state.selected = selected[0]
 
 		await updatePosition()
 		await updateChart(true)
@@ -143,6 +154,7 @@ export const galaxyStore = {
 	next,
 	prev,
 	select,
+	selectWithId,
 	tick,
 } as const
 

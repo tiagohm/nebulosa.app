@@ -1,4 +1,4 @@
-import { Database } from 'bun:sqlite'
+import { Database, type SQLQueryBindings } from 'bun:sqlite'
 import { join } from 'path'
 import { observer, type Quantity } from 'nebulosa/src/adapters/ephemeris/horizons'
 import { closeApproaches, search } from 'nebulosa/src/adapters/orbits/sbd'
@@ -37,8 +37,6 @@ import type { NotificationHandler } from './notification'
 
 const HORIZONS_QUANTITIES: Quantity[] = [1, 2, 4, 9, 21, 10, 23, 29]
 
-type SqlValue = number | string | boolean
-
 const DEFAULT_SOLAR_IMAGE_SOURCE: SolarImageSource = 'HMI_INTENSITYGRAM_FLATTENED'
 const MAX_SEARCH_LIMIT = 100
 const MAX_EVENT_COUNT = 25
@@ -51,7 +49,6 @@ const SATELLITE_TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?FORMAT=tl
 
 const IERSB_URL = 'https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now'
 
-const SATELLITES = new Database(':memory:')
 const SATELLITE_GROUPS = new Set(Object.keys(SATELLITE_GROUP_TYPES) as SatelliteGroupType[])
 
 const ECLIPSE_MAP_WIDTH = 2520.631
@@ -60,20 +57,21 @@ const ECLIPSE_MAP_PROJECTION = new PlateCarree(0, { scale: ECLIPSE_MAP_WIDTH / T
 const SOLAR_ECLIPSE_MAP_GEOMETRY_OPTIONS: SolarEclipseMapGeometryOptions = { longitudeStep: 0.5 * DEG2RAD, maxAngularStep: 0.5 * DEG2RAD, includeRiseSetCurves: true, riseSetStep: 600 }
 const LUNAR_ECLIPSE_MAP_GEOMETRY_OPTIONS: LunarEclipseMapGeometryOptions = { maxAngularStep: 0.5 * DEG2RAD, refraction: true }
 
-SATELLITES.run('PRAGMA journal_mode = OFF;')
-SATELLITES.run('PRAGMA synchronous = OFF;')
-SATELLITES.run('PRAGMA temp_store = MEMORY;')
-SATELLITES.run('PRAGMA locking_mode = EXCLUSIVE;')
-SATELLITES.run('PRAGMA cache_size = -262144;')
-SATELLITES.run('PRAGMA mmap_size = 0;')
-SATELLITES.run('PRAGMA automatic_index = ON;')
-SATELLITES.run('PRAGMA optimize;')
-SATELLITES.run('PRAGMA foreign_keys = OFF;')
-SATELLITES.run('CREATE TABLE satellites (id INTEGER PRIMARY KEY, name TEXT, line1 TEXT, line2 TEXT);')
-SATELLITES.run('CREATE TABLE satelliteGroups (satelliteId INTEGER, name TEXT);')
-SATELLITES.run('CREATE INDEX satellitesNameIdx ON satellites (name);')
-SATELLITES.run('CREATE INDEX satelliteGroupsSatelliteIdIdx ON satelliteGroups (satelliteId);')
-SATELLITES.run('CREATE INDEX satelliteGroupsNameIdx ON satelliteGroups (name);')
+const satellitesDatabase = new Database(':memory:')
+satellitesDatabase.run('PRAGMA journal_mode = OFF;')
+satellitesDatabase.run('PRAGMA synchronous = OFF;')
+satellitesDatabase.run('PRAGMA temp_store = MEMORY;')
+satellitesDatabase.run('PRAGMA locking_mode = EXCLUSIVE;')
+satellitesDatabase.run('PRAGMA cache_size = -262144;')
+satellitesDatabase.run('PRAGMA mmap_size = 0;')
+satellitesDatabase.run('PRAGMA automatic_index = ON;')
+satellitesDatabase.run('PRAGMA optimize;')
+satellitesDatabase.run('PRAGMA foreign_keys = OFF;')
+satellitesDatabase.run('CREATE TABLE satellites (id INTEGER PRIMARY KEY, name TEXT, line1 TEXT, line2 TEXT);')
+satellitesDatabase.run('CREATE TABLE satelliteGroups (satelliteId INTEGER, name TEXT);')
+satellitesDatabase.run('CREATE INDEX satellitesNameIdx ON satellites (name);')
+satellitesDatabase.run('CREATE INDEX satelliteGroupsSatelliteIdIdx ON satelliteGroups (satelliteId);')
+satellitesDatabase.run('CREATE INDEX satelliteGroupsNameIdx ON satelliteGroups (name);')
 
 // Faster Moon position provider from the ERFA ephemeris.
 function moon(time: Time) {
@@ -371,9 +369,9 @@ export class AtlasHandler {
 		const visibleAbove = finiteNumber(req.visibleAbove) ? req.visibleAbove : -1
 		const where = []
 		const joinWhere = ['n.dsoId = d.id']
-		const selectParams: SqlValue[] = []
-		const joinParams: SqlValue[] = []
-		const whereParams: SqlValue[] = []
+		const selectParams: SQLQueryBindings[] = []
+		const joinParams: SQLQueryBindings[] = []
+		const whereParams: SQLQueryBindings[] = []
 
 		const types = (Array.isArray(req.types) ? req.types : []).filter(finiteNumber).map(Math.trunc)
 		const constellations = (Array.isArray(req.constellations) ? req.constellations : []).map((e) => CONSTELLATION_LIST.indexOf(e)).filter((e) => e >= 0)
@@ -404,7 +402,12 @@ export class AtlasHandler {
 			whereParams.push(req.magnitudeMax)
 		}
 
-		const name = req.name.trim()
+		if (req.id) {
+			where.push('d.id = ?')
+			whereParams.push(req.id)
+		}
+
+		const name = req.name?.trim()
 
 		if (name)
 			if (name.startsWith('=')) {
@@ -440,7 +443,7 @@ export class AtlasHandler {
 		const sortDirection = 'ASC' // req.sort.direction === 'ascending' ? 'ASC' : 'DESC'
 		const q = `SELECT DISTINCT d.id, d.magnitude, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ${nameType >= 0 ? 'AND n.type = ?' : 'ORDER BY n.type'} LIMIT 1) as name FROM dsos d ${joinWhere.length > 1 ? `JOIN names n ON ${joinWhere.join(' AND ')}` : ''} WHERE ${where.join(' AND ')} ORDER BY d.${sortColumn} ${sortDirection} LIMIT ? OFFSET ?`
 
-		return nebulosa.query<SkyObjectSearchItem, SqlValue[]>(q).all(...selectParams, ...joinParams, ...whereParams, limit, offset)
+		return nebulosa.query<SkyObjectSearchItem, SQLQueryBindings[]>(q).all(...selectParams, ...joinParams, ...whereParams, limit, offset)
 	}
 
 	positionOfSkyObject(req: PositionOfBody, id: string | number | SkyObject): BodyPosition {
@@ -518,7 +521,7 @@ export class AtlasHandler {
 	planetarium(req: PlanetariumRequest) {
 		const q = `SELECT d.id, d.magnitude, d.rightAscension, d.declination, d.pmRA, d.pmDEC, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ORDER BY n.type LIMIT 1) as name FROM dsos d WHERE d.magnitude <= ${req.magnitudeLimit} AND d.type IN (${placeholders(req.types.length)})`
 
-		return nebulosa.query<SkyObject, SqlValue[]>(q).all(...req.types)
+		return nebulosa.query<SkyObject, SQLQueryBindings[]>(q).all(...req.types)
 	}
 
 	async refreshSatellites() {
@@ -573,20 +576,20 @@ export class AtlasHandler {
 
 					if (!satellite) {
 						const name = lines[i].trim()
-						SATELLITES.run('INSERT INTO satellites VALUES (?, ?, ?, ?)', [id, name, a, b])
+						satellitesDatabase.run('INSERT INTO satellites VALUES (?, ?, ?, ?)', [id, name, a, b])
 						satellites.add(id)
 					}
 
-					SATELLITES.run('INSERT INTO satelliteGroups VALUES (?, ?)', [id, group])
+					satellitesDatabase.run('INSERT INTO satelliteGroups VALUES (?, ?)', [id, group])
 				}
 			}
 		}
 
-		SATELLITES.run('BEGIN;')
+		satellitesDatabase.run('BEGIN;')
 
 		try {
-			SATELLITES.run('DELETE FROM satelliteGroups;')
-			SATELLITES.run('DELETE FROM satellites;')
+			satellitesDatabase.run('DELETE FROM satelliteGroups;')
+			satellitesDatabase.run('DELETE FROM satellites;')
 
 			// Update TLE files if older than 2 days.
 			for await (const file of new Bun.Glob('*.tle').scan({ cwd: Bun.env.satellitesDir })) {
@@ -619,10 +622,10 @@ export class AtlasHandler {
 				await download(group)
 			}
 
-			SATELLITES.run('COMMIT;')
+			satellitesDatabase.run('COMMIT;')
 		} catch (e) {
 			try {
-				SATELLITES.run('ROLLBACK;')
+				satellitesDatabase.run('ROLLBACK;')
 			} catch {
 				// Keep the original refresh failure as the actionable error.
 			}
@@ -642,8 +645,8 @@ export class AtlasHandler {
 
 		const where = ['WHERE 1=1']
 		const joinWhere = ['sg.satelliteId = s.id']
-		const joinParams: SqlValue[] = []
-		const whereParams: SqlValue[] = []
+		const joinParams: SQLQueryBindings[] = []
+		const whereParams: SQLQueryBindings[] = []
 
 		if (name)
 			if (name.startsWith('=')) {
@@ -662,7 +665,7 @@ export class AtlasHandler {
 		const sortColumn = 'name' // req.sort.column
 		const sortDirection = 'ASC' // req.sort.direction === 'ascending' ? 'ASC' : 'DESC'
 		const q = `SELECT DISTINCT s.id, s.name, s.line1, s.line2 FROM satellites s ${joinWhere.length > 1 ? `JOIN satelliteGroups sg ON ${joinWhere.join(' AND ')}` : ''} ${where.join(' AND ')} ORDER BY s.${sortColumn} ${sortDirection} LIMIT ? OFFSET ?`
-		const satellites = SATELLITES.query<Satellite, SqlValue[]>(q).all(...joinParams, ...whereParams, limit, offset)
+		const satellites = satellitesDatabase.query<Satellite, SQLQueryBindings[]>(q).all(...joinParams, ...whereParams, limit, offset)
 		this.fillSatelliteGroups(satellites)
 		return satellites
 	}
@@ -691,7 +694,7 @@ export class AtlasHandler {
 		const normalizedId = normalizeId(id)
 		if (normalizedId === undefined) throw new Error(`satellite not found: ${id}`)
 
-		const satellite = SATELLITES.query<Satellite, [number]>('SELECT s.id, s.name, s.line1, s.line2 FROM satellites s WHERE s.id = ?').get(normalizedId)
+		const satellite = satellitesDatabase.query<Satellite, [number]>('SELECT s.id, s.name, s.line1, s.line2 FROM satellites s WHERE s.id = ?').get(normalizedId)
 		if (!satellite) throw new Error(`satellite not found: ${id}`)
 		return satellite
 	}
@@ -700,7 +703,7 @@ export class AtlasHandler {
 		if (satellites.length === 0) return
 
 		const ids = satellites.map((e) => e.id)
-		const groups = SATELLITES.query<{ satelliteId: number; name: SatelliteGroupType }, number[]>(`SELECT satelliteId, name FROM satelliteGroups WHERE satelliteId IN (${placeholders(ids.length)}) ORDER BY name`).all(...ids)
+		const groups = satellitesDatabase.query<{ satelliteId: number; name: SatelliteGroupType }, number[]>(`SELECT satelliteId, name FROM satelliteGroups WHERE satelliteId IN (${placeholders(ids.length)}) ORDER BY name`).all(...ids)
 		const bySatellite = new Map<number, SatelliteGroupType[]>()
 
 		for (const group of groups) {

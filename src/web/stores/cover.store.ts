@@ -18,6 +18,7 @@ export function coverStore(cover: Cover) {
 
 	function mount() {
 		console.info('cover mounted:', cover.name)
+		return unmount
 	}
 
 	function unmount() {

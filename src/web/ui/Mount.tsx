@@ -66,38 +66,30 @@ export const Mount = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) =
 
 	return (
 		<MountStoreContext value={store}>
-			<Body />
+			<Tabs className="px-3">
+				<Tab id="control">Mount</Tab>
+				<Tab id="location">Location</Tab>
+				<Tab id="time">Time</Tab>
+				<Tab id="remoteControl">Remote Control</Tab>
+				<Tab id="indi">INDI</Tab>
+
+				<TabPanel id="control">
+					<Control />
+				</TabPanel>
+				<TabPanel id="location">
+					<MountLocation />
+				</TabPanel>
+				<TabPanel id="time">
+					<MountTime />
+				</TabPanel>
+				<TabPanel id="remoteControl">
+					<MountRemoteControl />
+				</TabPanel>
+				<TabPanel id="indi">
+					<IndiPanelControl device={mount} />
+				</TabPanel>
+			</Tabs>
 		</MountStoreContext>
-	)
-})
-
-const Body = memo(() => {
-	const mount = useContext(MountStoreContext)
-
-	return (
-		<Tabs classNames={{ tabList: 'w-full px-3 rounded-none', panelContainer: 'p-3' }}>
-			<Tab id="control">Mount</Tab>
-			<Tab id="location">Location</Tab>
-			<Tab id="time">Time</Tab>
-			<Tab id="remoteControl">Remote Control</Tab>
-			<Tab id="indi">INDI</Tab>
-
-			<TabPanel id="control">
-				<Control />
-			</TabPanel>
-			<TabPanel id="location">
-				<MountLocation />
-			</TabPanel>
-			<TabPanel id="time">
-				<MountTime />
-			</TabPanel>
-			<TabPanel id="remoteControl">
-				<MountRemoteControl />
-			</TabPanel>
-			<TabPanel id="indi">
-				<IndiPanelControl device={mount.state.mount} />
-			</TabPanel>
-		</Tabs>
 	)
 })
 

@@ -44,30 +44,22 @@ export const Camera = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) 
 
 	return (
 		<CameraStoreContext value={store}>
-			<Body />
+			<Tabs className="px-3">
+				<Tab id="control">Camera</Tab>
+				<Tab id="options">Options</Tab>
+				<Tab id="indi">INDI</Tab>
+
+				<TabPanel id="control">
+					<Control />
+				</TabPanel>
+				<TabPanel id="options">
+					<Options />
+				</TabPanel>
+				<TabPanel id="indi">
+					<IndiPanelControl device={camera} />
+				</TabPanel>
+			</Tabs>
 		</CameraStoreContext>
-	)
-})
-
-const Body = memo(() => {
-	const camera = useContext(CameraStoreContext)
-
-	return (
-		<Tabs classNames={{ tabList: 'w-full px-3 rounded-none', panelContainer: 'p-3' }}>
-			<Tab id="control">Camera</Tab>
-			<Tab id="options">Options</Tab>
-			<Tab id="indi">INDI</Tab>
-
-			<TabPanel id="control">
-				<Control />
-			</TabPanel>
-			<TabPanel id="options">
-				<Options />
-			</TabPanel>
-			<TabPanel id="indi">
-				<IndiPanelControl device={camera.state.camera} />
-			</TabPanel>
-		</Tabs>
 	)
 })
 

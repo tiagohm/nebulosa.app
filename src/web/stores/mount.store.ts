@@ -97,6 +97,8 @@ export function mountStore(mount: Mount) {
 		timer = window.setInterval(updateCoordinatePosition, 5000)
 
 		updateCoordinatePosition()
+
+		return unmount
 	}
 
 	function unmount() {

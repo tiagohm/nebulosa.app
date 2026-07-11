@@ -31,26 +31,18 @@ export const Cover = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) =
 
 	return (
 		<CoverStoreContext value={store}>
-			<Body />
+			<Tabs className="px-3">
+				<Tab id="control">Cover</Tab>
+				<Tab id="indi">INDI</Tab>
+
+				<TabPanel id="control">
+					<Control />
+				</TabPanel>
+				<TabPanel id="indi">
+					<IndiPanelControl device={cover} />
+				</TabPanel>
+			</Tabs>
 		</CoverStoreContext>
-	)
-})
-
-const Body = memo(() => {
-	const cover = useContext(CoverStoreContext)
-
-	return (
-		<Tabs classNames={{ tabList: 'w-full px-3 rounded-none', panelContainer: 'p-3' }}>
-			<Tab id="control">Cover</Tab>
-			<Tab id="indi">INDI</Tab>
-
-			<TabPanel id="control">
-				<Control />
-			</TabPanel>
-			<TabPanel id="indi">
-				<IndiPanelControl device={cover.state.cover} />
-			</TabPanel>
-		</Tabs>
 	)
 })
 
@@ -75,7 +67,7 @@ const Status = memo(() => {
 	const { color, label } = coverStatus(connected, canPark, parking, parked)
 
 	return (
-		<div className="col-span-full flex flex-row items-center justify-between">
+		<div className="col-span-full flex flex-row items-center gap-2">
 			<ConnectButton connected={connected} loading={connecting} onClick={cover.connect} />
 			<Chip color={color} label={label} size="sm" />
 		</div>

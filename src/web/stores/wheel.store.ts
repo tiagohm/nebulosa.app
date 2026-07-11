@@ -55,6 +55,8 @@ export function wheelStore(wheel: Wheel) {
 
 		u[0] = subscribeKey(wheel, 'position', refresh)
 		u[1] = subscribeKey(wheel, 'names', refresh)
+
+		return unmount
 	}
 
 	function unmount() {

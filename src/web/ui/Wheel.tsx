@@ -1,61 +1,56 @@
-import { memo, useContext } from 'react'
+import type { IDockviewPanelProps } from 'dockview-react'
+import { memo, useContext, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
-import { wheelStore } from '@/stores/wheel.store'
-import { useStore } from '../hooks/store.hook'
-import { WheelDeviceContext, WheelStoreContext } from '../shared/context'
+import { wheelStore, type WheelStore } from '@/stores/wheel.store'
+import { WheelStoreContext } from '../shared/context'
+import { equipmentStore } from '../stores/equipment.store'
+import type { DevicePanelParams } from '../stores/workspace.store'
 import { Button } from './components/Button'
 import { Chip } from './components/Chip'
 import { IconButton } from './components/IconButton'
 import { Popover } from './components/Popover'
 import { Select } from './components/Select'
+import { Tabs, Tab, TabPanel } from './components/Tabs'
 import { TextInput } from './components/TextInput'
 import { ConnectButton } from './ConnectButton'
 import { Icons } from './Icon'
-import { Modal } from './Modal'
+import { IndiPanelControl } from './IndiPanelControl'
 
-export const Wheel = memo(() => {
-	const device = useContext(WheelDeviceContext)
-	const wheel = useStore(() => wheelStore(device), [device])
+export const Wheel = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) => {
+	const storeRef = useRef<WheelStore | undefined>(undefined)
+
+	useEffect(() => storeRef.current?.mount(), [])
+
+	const { length } = useSnapshot(equipmentStore.state.wheel) // used only to rerender this component
+	const wheel = length > 0 && equipmentStore.state.wheel.find((e) => e.id === params.id)
+
+	if (!wheel) {
+		storeRef.current?.unmount()
+		storeRef.current = undefined
+		return <div className="flex h-full w-full items-center justify-center">Not available</div>
+	}
+
+	const store = storeRef.current ?? wheelStore(wheel)
+	storeRef.current = store
 
 	return (
-		<WheelStoreContext value={wheel}>
-			<Modal header={<Header />} id={`wheel-${device.id}`} initialWidth="256px" onHide={wheel.hide}>
-				<Body />
-			</Modal>
+		<WheelStoreContext value={store}>
+			<Tabs className="px-3">
+				<Tab id="control">Filter Wheel</Tab>
+				<Tab id="indi">INDI</Tab>
+
+				<TabPanel id="control">
+					<Control />
+				</TabPanel>
+				<TabPanel id="indi">
+					<IndiPanelControl device={wheel} />
+				</TabPanel>
+			</Tabs>
 		</WheelStoreContext>
 	)
 })
 
-const Header = memo(() => {
-	const wheel = useContext(WheelStoreContext)
-	const { connecting, connected, name } = useSnapshot(wheel.state.wheel)
-
-	return (
-		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
-			<div className="flex shrink-0 flex-row items-center gap-1">
-				<ConnectButton connected={connected} loading={connecting} onClick={wheel.connect} />
-			</div>
-			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
-				<span className="leading-5 font-semibold">Filter Wheel</span>
-				<span className="max-w-full truncate text-xs font-normal text-neutral-400">{name}</span>
-			</div>
-		</div>
-	)
-})
-
-function slotCount(count: number, names: readonly string[]) {
-	return Math.max(Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0, names.length)
-}
-
-function slotName(names: readonly string[], position: number) {
-	return names[position] || `Slot ${position + 1}`
-}
-
-function slotPosition(position: number, count: number, names: readonly string[]) {
-	return Number.isInteger(position) && position >= 0 && position < slotCount(count, names) ? position + 1 : '--'
-}
-
-const Body = memo(() => (
+const Control = memo(() => (
 	<div className="mt-0 grid grid-cols-12 gap-2">
 		<Status />
 		<Slot />
@@ -64,10 +59,11 @@ const Body = memo(() => (
 
 const Status = memo(() => {
 	const wheel = useContext(WheelStoreContext)
-	const { count, moving, position, names } = useSnapshot(wheel.state.wheel)
+	const { connected, connecting, count, moving, position, names } = useSnapshot(wheel.state.wheel)
 
 	return (
 		<div className="col-span-full flex flex-row flex-wrap items-center justify-start gap-2">
+			<ConnectButton connected={connected} loading={connecting} onClick={wheel.connect} />
 			<Chip color={moving ? 'warning' : 'default'} size="sm">
 				{moving ? 'moving' : 'idle'}
 			</Chip>
@@ -132,3 +128,15 @@ const SlotPopoverContent = memo(() => {
 		</div>
 	)
 })
+
+function slotCount(count: number, names: readonly string[]) {
+	return Math.max(Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0, names.length)
+}
+
+function slotName(names: readonly string[], position: number) {
+	return names[position] || `Slot ${position + 1}`
+}
+
+function slotPosition(position: number, count: number, names: readonly string[]) {
+	return Number.isInteger(position) && position >= 0 && position < slotCount(count, names) ? position + 1 : '--'
+}

@@ -3,7 +3,7 @@ import { useSnapshot } from 'valtio'
 import { equipmentStore } from '@/stores/equipment.store'
 import { wsStore } from '@/stores/ws.store'
 import { useStore } from '../hooks/store.hook'
-import { FocuserDeviceContext, WheelDeviceContext, GuideOutputDeviceContext, ThermometerDeviceContext, FlatPanelDeviceContext, DewHeaterDeviceContext, RotatorDeviceContext } from '../shared/context'
+import { FocuserDeviceContext, GuideOutputDeviceContext, FlatPanelDeviceContext, DewHeaterDeviceContext, RotatorDeviceContext } from '../shared/context'
 import { activityMode } from '../shared/util'
 import { DewHeater } from './DewHeater'
 import { FlatPanel } from './FlatPanel'
@@ -11,8 +11,6 @@ import { Focuser } from './Focuser'
 import { GuideOutput } from './GuideOutput'
 import { HomeNavBar } from './HomeNavBar'
 import { Rotator } from './Rotator'
-import { Thermometer } from './Thermometer'
-import { Wheel } from './Wheel'
 
 export const Home = memo(() => {
 	useStore(wsStore, [])
@@ -21,8 +19,6 @@ export const Home = memo(() => {
 		<div className="flex h-full min-h-0 w-full min-w-0 flex-col">
 			<HomeNavBar />
 			<FocuserList />
-			<WheelList />
-			<ThermometerList />
 			<GuideOutputList />
 			<FlatPanelList />
 			<DewHeaterList />
@@ -56,21 +52,6 @@ function FocuserItem({ index }: DeviceItemProps) {
 	)
 }
 
-function WheelItem({ index }: DeviceItemProps) {
-	const wheel = equipmentStore.state.wheel[index]
-	const { show } = useSnapshot(wheel)
-
-	return (
-		<>
-			<Activity mode={activityMode(show)}>
-				<WheelDeviceContext value={wheel}>
-					<Wheel key={wheel.id} />
-				</WheelDeviceContext>
-			</Activity>
-		</>
-	)
-}
-
 function GuideOutputItem({ index }: DeviceItemProps) {
 	const guideOutput = equipmentStore.state.guideOutput[index]
 	const { show } = useSnapshot(guideOutput)
@@ -81,21 +62,6 @@ function GuideOutputItem({ index }: DeviceItemProps) {
 				<GuideOutputDeviceContext value={guideOutput}>
 					<GuideOutput key={guideOutput.id} />
 				</GuideOutputDeviceContext>
-			</Activity>
-		</>
-	)
-}
-
-function ThermometerItem({ index }: DeviceItemProps) {
-	const thermometer = equipmentStore.state.thermometer[index]
-	const { show } = useSnapshot(thermometer)
-
-	return (
-		<>
-			<Activity mode={activityMode(show)}>
-				<ThermometerDeviceContext value={thermometer}>
-					<Thermometer key={thermometer.id} />
-				</ThermometerDeviceContext>
 			</Activity>
 		</>
 	)
@@ -152,21 +118,9 @@ export const FocuserList = memo(() => {
 	return devices
 })
 
-export const WheelList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.wheel)
-	const devices = useMemo(() => makeDevices(length, (i) => <WheelItem key={equipmentStore.state.wheel[i].id} index={i} />), [length])
-	return devices
-})
-
 export const GuideOutputList = memo(() => {
 	const { length } = useSnapshot(equipmentStore.state.guideOutput)
 	const devices = useMemo(() => makeDevices(length, (i) => <GuideOutputItem key={equipmentStore.state.guideOutput[i].id} index={i} />), [length])
-	return devices
-})
-
-export const ThermometerList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.thermometer)
-	const devices = useMemo(() => makeDevices(length, (i) => <ThermometerItem key={equipmentStore.state.thermometer[i].id} index={i} />), [length])
 	return devices
 })
 

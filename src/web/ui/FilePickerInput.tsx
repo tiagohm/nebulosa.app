@@ -6,12 +6,11 @@ import { FilePicker } from './FilePicker'
 import { Icons } from './Icon'
 
 export interface FilePickerInputProps extends Omit<FilePickerScope, 'multiple' | 'path'>, Omit<TextInputProps, 'value' | 'onValueChange' | 'startContent' | 'endContent' | 'label'> {
-	readonly id: string
 	readonly value?: string
 	readonly onValueChange: (value?: string) => void
 }
 
-export function FilePickerInput({ filter, mode, id, value, onValueChange, readOnly = false, disabled = false, ...props }: FilePickerInputProps) {
+export function FilePickerInput({ filter, mode, value, onValueChange, readOnly = false, disabled = false, ...props }: FilePickerInputProps) {
 	const [show, setShow] = useState(false)
 	const initialPath = useRef(value)
 	const blocked = readOnly || disabled

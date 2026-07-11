@@ -1,50 +1,62 @@
-import { memo, useContext } from 'react'
+import type { IDockviewPanelProps } from 'dockview-react'
+import { memo, useContext, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatNumber } from '@/shared/util'
-import { thermometerStore } from '@/stores/thermometer.store'
-import { useStore } from '../hooks/store.hook'
-import { ThermometerDeviceContext, ThermometerStoreContext } from '../shared/context'
+import { thermometerStore, type ThermometerStore } from '@/stores/thermometer.store'
+import { ThermometerStoreContext } from '../shared/context'
+import { equipmentStore } from '../stores/equipment.store'
+import type { DevicePanelParams } from '../stores/workspace.store'
+import { TabPanel, Tab, Tabs } from './components/Tabs'
 import { ConnectButton } from './ConnectButton'
-import { Modal } from './Modal'
+import { IndiPanelControl } from './IndiPanelControl'
 
-export const Thermometer = memo(() => {
-	const device = useContext(ThermometerDeviceContext)
-	const thermometer = useStore(() => thermometerStore(device), [device])
+export const Thermometer = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) => {
+	const storeRef = useRef<ThermometerStore | undefined>(undefined)
+
+	useEffect(() => storeRef.current?.mount(), [])
+
+	const { length } = useSnapshot(equipmentStore.state.thermometer) // used only to rerender this component
+	const thermometer = length > 0 && equipmentStore.state.thermometer.find((e) => e.id === params.id)
+
+	if (!thermometer) {
+		storeRef.current?.unmount()
+		storeRef.current = undefined
+		return <div className="flex h-full w-full items-center justify-center">Not available</div>
+	}
+
+	const store = storeRef.current ?? thermometerStore(thermometer)
+	storeRef.current = store
 
 	return (
-		<ThermometerStoreContext value={thermometer}>
-			<Modal header={<Header />} id={`thermometer-${device.id}`} initialWidth="256px" onHide={thermometer.hide}>
-				<Body />
-			</Modal>
+		<ThermometerStoreContext value={store}>
+			<Tabs className="px-3">
+				<Tab id="control">Thermometer</Tab>
+				<Tab id="indi">INDI</Tab>
+
+				<TabPanel id="control">
+					<Control />
+				</TabPanel>
+				<TabPanel id="indi">
+					<IndiPanelControl device={thermometer} />
+				</TabPanel>
+			</Tabs>
 		</ThermometerStoreContext>
 	)
 })
 
-const Header = memo(() => {
+const Control = memo(() => {
 	const thermometer = useContext(ThermometerStoreContext)
-	const { connecting, connected, name } = useSnapshot(thermometer.state.thermometer)
-
-	return (
-		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
-			<div className="flex shrink-0 flex-row items-center gap-1">
-				<ConnectButton connected={connected} loading={connecting} onClick={thermometer.connect} />
-			</div>
-			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
-				<span className="leading-5 font-semibold">Thermometer</span>
-				<span className="max-w-full truncate text-xs font-normal text-neutral-400">{name}</span>
-			</div>
-		</div>
-	)
-})
-
-const Body = memo(() => {
-	const thermometer = useContext(ThermometerStoreContext)
-	const { connected, temperature } = useSnapshot(thermometer.state.thermometer)
+	const { connecting, connected, temperature } = useSnapshot(thermometer.state.thermometer)
 	const value = connected ? formatNumber(temperature, 1) : '--'
 
 	return (
-		<div className="mt-0 text-center text-5xl font-bold tabular-nums">
-			{value} <small className="font-thin">°C</small>
+		<div className="flex w-full min-w-0 flex-col gap-2">
+			<div className="flex flex-row items-center">
+				<ConnectButton connected={connected} loading={connecting} onClick={thermometer.connect} />
+			</div>
+			<div className="text-center text-5xl font-bold tabular-nums">
+				{value} <small className="font-thin">°C</small>
+			</div>
 		</div>
 	)
 })

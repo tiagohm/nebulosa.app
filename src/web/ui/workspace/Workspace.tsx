@@ -6,6 +6,8 @@ import { Camera } from '../Camera'
 import { Cover } from '../Cover'
 import { ImageWorkspace } from '../ImageWorkspace'
 import { Mount } from '../Mount'
+import { Thermometer } from '../Thermometer'
+import { Wheel } from '../Wheel'
 import { Connections } from './left/Connections'
 import { Devices } from './left/Devices'
 import { CloseableTab } from './tabs/CloseableTab'
@@ -22,6 +24,8 @@ const components = {
 	'component.device.camera': Camera,
 	'component.device.mount': Mount,
 	'component.device.cover': Cover,
+	'component.device.wheel': Wheel,
+	'component.device.thermometer': Thermometer,
 	'component.images': ImageWorkspace,
 } as const
 

@@ -1,6 +1,10 @@
 import type { DockviewApi, DockviewIDisposable, DockviewReadyEvent, EdgeGroupPosition, SerializedDockview } from 'dockview-react'
-import type { Device, DeviceType } from 'nebulosa/src/devices/indi/device'
+import { nanoid } from 'nanoid'
+import type { Camera, Device, DeviceType } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
+import { cameraBus, imageBus } from '../shared/bus'
+import type { Image, ImageSource } from '../shared/types'
+import { equipmentStore } from './equipment.store'
 
 export type WorkspaceStore = typeof workspaceStore
 
@@ -26,6 +30,13 @@ let api: DockviewApi | undefined
 let saveTimer: number | undefined
 let layoutDisposable: DockviewIDisposable | undefined
 
+cameraBus.subscribe('frame', (event) => {
+	if (event.path) {
+		const camera = equipmentStore.get('camera', event.camera)
+		camera && addImage(event.path, camera)
+	}
+})
+
 function restoreLayout() {
 	const serializedLayout = localStorage.getItem(LAYOUT_STORAGE_KEY)
 	if (serializedLayout) return JSON.parse(serializedLayout) as StoredWorkspaceLayout
@@ -46,7 +57,7 @@ function handleReady(event: DockviewReadyEvent) {
 
 	if (storedLayout) {
 		try {
-			api.fromJSON(storedLayout.layout)
+			// api.fromJSON(storedLayout.layout)
 		} catch (e) {
 			console.error('unable to restore layout:', e)
 			localStorage.removeItem(LAYOUT_STORAGE_KEY)
@@ -61,10 +72,10 @@ function handleReady(event: DockviewReadyEvent) {
 	const connections = api.getPanel('panel.connections') ?? api.addPanel({ id: 'panel.connections', component: 'component.connections', tabComponent: 'tab.fixed', title: 'Connections', position: { referenceGroup: left.id } })
 	const devices = api.getPanel('panel.devices') ?? api.addPanel({ id: 'panel.devices', component: 'component.devices', tabComponent: 'tab.fixed', title: 'Devices', position: { referenceGroup: left.id } })
 
-	layoutDisposable = api.onDidLayoutChange(() => {
-		window.clearTimeout(saveTimer)
-		saveTimer = window.setTimeout(saveLayout, 1000)
-	})
+	// layoutDisposable = api.onDidLayoutChange(() => {
+	// 	window.clearTimeout(saveTimer)
+	// 	saveTimer = window.setTimeout(saveLayout, 1000)
+	// })
 }
 
 function mount() {}
@@ -101,6 +112,46 @@ function openDevice(device: Device) {
 	return panel
 }
 
+function addImage(path: string, source: ImageSource | Camera, id?: string) {
+	if (!api) return undefined
+
+	const camera = typeof source === 'object' ? source : undefined
+	source = typeof source === 'string' ? source : 'camera'
+	id = `${source}-${id || camera?.id || nanoid()}`
+	const panelId = `panel.image.${id}`
+
+	const panel = api.getPanel(panelId)
+
+	if (panel) {
+		const image = panel.params as Image
+		imageBus.emit('update', { image, path })
+		return image
+	} else {
+		const images = api.getGroup('group.images') ?? api.addGroup({ id: 'group.images', direction: 'within', locked: true })
+
+		const image = { path, id, source, camera }
+		const title = image.camera?.name ?? image.path
+		const panel = api.addPanel({ id: panelId, component: 'component.images', title, tabComponent: 'tab.closeable', params: image, position: { referenceGroup: images.id } })
+
+		imageBus.emit('add', image)
+
+		return image
+	}
+}
+
+function closeImage(image: Image) {
+	if (!api) return undefined
+
+	const id = `panel.image.${image.id}`
+	const panel = api.getPanel(id)
+
+	if (panel) {
+		api.removePanel(panel)
+		panel.dispose()
+		imageBus.emit('remove', image)
+	}
+}
+
 function toggleEdge(position: EdgeGroupPosition) {
 	api?.setEdgeGroupVisible(position, !api.isEdgeGroupVisible(position))
 }
@@ -116,4 +167,6 @@ export const workspaceStore = {
 	unmount,
 	toggleEdge,
 	openDevice,
+	addImage,
+	closeImage,
 } as const

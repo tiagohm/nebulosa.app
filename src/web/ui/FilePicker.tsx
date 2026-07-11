@@ -12,62 +12,37 @@ import { IconButton } from './components/IconButton'
 import { List } from './components/List'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
-import { Modal } from './Modal'
 
 const FILE_SIZE_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB'] as const
 
 export interface FilePickerProps extends FilePickerScope {
-	readonly id: string
-	readonly header?: React.ReactNode
+	readonly title?: React.ReactNode
 	readonly onChoose: (entries?: string[]) => void
 }
 
-export const FilePicker = memo(({ id, header, onChoose, ...scope }: FilePickerProps) => {
+export const FilePicker = memo(({ title, onChoose, ...scope }: FilePickerProps) => {
 	const picker = useStore(() => filePicker(scope), [scope.path, scope.mode, scope.multiple, scope.filter])
 
 	return (
 		<FilePickerStoreContext value={picker}>
-			<Modal footer={<Footer onChoose={onChoose} />} header={<Header header={header} />} id={id} initialWidth="416px" onHide={onChoose}>
-				<Body />
-			</Modal>
+			<div className="flex flex-col flex-wrap gap-2">
+				<Header />
+				<Toolbar />
+				<Filter />
+				<CreateDirectory />
+				<Files />
+				<Footer onChoose={onChoose} />
+			</div>
 		</FilePickerStoreContext>
 	)
 })
 
-function filePickerTitle(mode: 'directory' | 'file' | 'save') {
-	return mode === 'save' ? 'Save' : mode === 'directory' ? 'Open Directory' : 'Open File'
-}
-
-const Header = memo(({ header }: Pick<FilePickerProps, 'header'>) => {
+const Header = memo(({ title }: Pick<FilePickerProps, 'title'>) => {
 	const picker = useContext(FilePickerStoreContext)
 	const { mode } = useSnapshot(picker.state)
 
-	return header ?? filePickerTitle(mode)
+	return <div className="w-full text-center">{title ?? (mode === 'save' ? 'Save' : mode === 'directory' ? 'Open Directory' : 'Open File')}</div>
 })
-
-const Body = memo(() => (
-	<div className="mt-0 flex flex-col flex-wrap gap-2">
-		<Toolbar />
-		<Filter />
-		<CreateDirectory />
-		<Files />
-	</div>
-))
-
-function formatFileSize(size: number) {
-	if (!Number.isFinite(size) || size <= 0) return '0 B'
-
-	let value = size
-	let unitIndex = 0
-
-	while (value >= 1024 && unitIndex < FILE_SIZE_UNITS.length - 1) {
-		value /= 1024
-		unitIndex++
-	}
-
-	const digits = unitIndex === 0 ? 0 : value >= 10 ? 1 : 2
-	return `${value.toFixed(digits)} ${FILE_SIZE_UNITS[unitIndex]}`
-}
 
 const Toolbar = memo(() => {
 	const picker = useContext(FilePickerStoreContext)
@@ -165,7 +140,7 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 	}
 
 	return (
-		<>
+		<div className="flex flex-1 flex-row justify-end gap-2">
 			{mode === 'save' ? (
 				<>
 					<TextInput className="flex-1" color={save.exists ? 'warning' : 'default'} label="Name" onValueChange={picker.updateSaveName} value={save.name} />
@@ -179,6 +154,21 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 					</Badge>
 				</>
 			)}
-		</>
+		</div>
 	)
 })
+
+function formatFileSize(size: number) {
+	if (!Number.isFinite(size) || size <= 0) return '0 B'
+
+	let value = size
+	let unitIndex = 0
+
+	while (value >= 1024 && unitIndex < FILE_SIZE_UNITS.length - 1) {
+		value /= 1024
+		unitIndex++
+	}
+
+	const digits = unitIndex === 0 ? 0 : value >= 10 ? 1 : 2
+	return `${value.toFixed(digits)} ${FILE_SIZE_UNITS[unitIndex]}`
+}

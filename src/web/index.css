@@ -13,7 +13,13 @@
 
 .dockview-theme-github-dark {
 	--dv-color-gh-canvas-default: var(--color-neutral-900);
-	--dv-color-gh-canvas-subtle: var(--color-neutral-800);
+	--dv-color-gh-canvas-subtle: var(--color-neutral-900);
+	--dv-color-gh-border: oklch(22% 0 0);
+	--dv-color-gh-border-muted: oklch(22% 0 0);
+}
+
+.dv-split-view-container .dv-view-container .dv-view {
+	overflow: hidden;
 }
 
 @utility text-lighter-* {

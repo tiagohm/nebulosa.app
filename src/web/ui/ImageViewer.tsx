@@ -1,8 +1,9 @@
-import { memo, useContext, useEffect, useLayoutEffect, useRef } from 'react'
+import type { IDockviewPanelProps } from 'dockview-react'
+import { memo, useEffect, useLayoutEffect, useRef } from 'react'
 import { imageViewerStore } from '@/stores/image.viewer.store'
-import { imageWorkspaceStore } from '@/stores/image.workspace.store'
 import { useStore } from '../hooks/store.hook'
-import { ImageContext, ImageViewerStoreContext } from '../shared/context'
+import { ImageViewerStoreContext } from '../shared/context'
+import type { Image } from '../shared/types'
 import { AnnotatedStars } from './AnnotatedStars'
 import { CoordinateGrid } from './CoordinateGrid'
 import { CoordinateOnMouse } from './CoordinateOnMouse'
@@ -27,16 +28,14 @@ import { ImageStretch } from './ImageStretch'
 import { ImageToolBar } from './ImageToolBar'
 import { Interactable } from './Interactable'
 
-export const ImageViewer = memo(() => {
+export const ImageViewer = memo(({ params }: IDockviewPanelProps<Image>) => {
 	const imgRef = useRef<HTMLImageElement>(null)
-	const image = useContext(ImageContext)
-	const viewer = useStore(() => imageViewerStore(image), [image])
+	const viewer = useStore(() => imageViewerStore(params), [params])
 
 	// Attaches the image element before the first paint so interactions can bind to it.
 	useLayoutEffect(() => {
 		if (imgRef.current) {
 			viewer.attachImage(imgRef.current)
-			imageWorkspaceStore.link(image, viewer)
 		}
 
 		return viewer.detach
@@ -53,8 +52,8 @@ export const ImageViewer = memo(() => {
 		<ImageViewerStoreContext value={viewer}>
 			<ImageToolBar />
 			<ImageInfo />
-			<Interactable onGesture={viewer.mouseCoordinate.handleGesture} onMouseMove={viewer.mouseCoordinate.handleMouseMove} onClick={viewer.mouseCoordinate.handleClick} onTap={viewer.select} ref={viewer.attachInteractable} zIndex={image.position}>
-				<img className="image pointer-events-none max-w-none touch-none rounded-sm select-none" draggable={false} id={image.id} onLoad={viewer.handleLoad} ref={imgRef} />
+			<Interactable onGesture={viewer.mouseCoordinate.handleGesture} onMouseMove={viewer.mouseCoordinate.handleMouseMove} onClick={viewer.mouseCoordinate.handleClick} onTap={viewer.select} ref={viewer.attachInteractable} zIndex={1}>
+				<img className="image pointer-events-none max-w-none touch-none rounded-sm select-none" draggable={false} id={params.id} onLoad={viewer.handleLoad} ref={imgRef} />
 				<InteractableOverlay />
 			</Interactable>
 			<ImageStretch />

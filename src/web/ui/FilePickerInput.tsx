@@ -67,7 +67,7 @@ export function FilePickerInput({ filter, mode, id, value, onValueChange, readOn
 			<div className="col-span-full flex w-full flex-1 flex-row items-center gap-1">
 				<TextInput disabled={blocked} endContent={EndContent} onValueChange={handleValueChange} startContent={StartContent} value={value} {...props} />
 			</div>
-			{show && !blocked && <FilePicker header="Choose Path" id={`file-picker-input-${id}`} onChoose={handleChoose} path={initialPath.current} filter={filter} mode={mode} />}
+			{show && !blocked && <FilePicker title="Choose Path" id={`file-picker-input-${id}`} onChoose={handleChoose} path={initialPath.current} filter={filter} mode={mode} />}
 		</>
 	)
 }

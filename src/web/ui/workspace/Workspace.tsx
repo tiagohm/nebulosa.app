@@ -5,6 +5,7 @@ import { workspaceStore } from '../../stores/workspace.store'
 import { Camera } from '../devices/camera/Camera'
 import { Cover } from '../devices/cover/Cover'
 import { Mount } from '../devices/mount/Mount'
+import { ImageWorkspace } from '../images/ImageWorkspace'
 import { Connections } from './left/Connections'
 import { Devices } from './left/Devices'
 import { CloseableTab } from './tabs/CloseableTab'
@@ -21,6 +22,7 @@ const components = {
 	'component.device.camera': Camera,
 	'component.device.mount': Mount,
 	'component.device.cover': Cover,
+	'component.images': ImageWorkspace,
 } as const
 
 export const Workspace = memo(() => {

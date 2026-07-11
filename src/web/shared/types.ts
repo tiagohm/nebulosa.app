@@ -14,7 +14,6 @@ export interface Connection extends Connect {
 
 export interface Image {
 	readonly id: string
-	readonly position: number
 	readonly path: string
 	readonly source: ImageSource
 	readonly camera?: Camera

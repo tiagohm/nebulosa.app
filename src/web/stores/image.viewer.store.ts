@@ -9,7 +9,7 @@ import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
 import type { Image, ImageLoaded } from '@/shared/types'
 import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
+import { cameraBus, imageBus } from '../shared/bus'
 import { initProxy } from '../shared/proxy'
 import type { InteractableMethods } from '../ui/Interactable'
 import { framingStore } from './framing.store'
@@ -29,7 +29,6 @@ import { imageSolverStore, type ImageSolverStore } from './image.solver.store'
 import { imageStarDetectionStore, type ImageStarDetectionStore } from './image.stardetection.store'
 import { imageStatisticsStore, type ImageStatisticsStore } from './image.statistics.store'
 import { imageStretchStore, type ImageStretchStore } from './image.stretch.store'
-import { imageWorkspaceStore } from './image.workspace.store'
 
 export interface ImageViewerStore {
 	readonly state: ImageViewerState
@@ -129,6 +128,12 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 
 		const timer = window.setInterval(ping, 30000)
 		u[2] = window.clearInterval.bind(window, timer)
+
+		u[3] = cameraBus.subscribe('frame', (event) => {
+			if (event.camera === camera?.id) {
+				void load(event.path)
+			}
+		})
 
 		for (const s of stores) s.mount()
 	}
@@ -281,7 +286,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 
 	function select() {
 		if (!target) return
-		imageWorkspaceStore.select(image)
 		bringToFront(target)
 	}
 
@@ -292,8 +296,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 
 		adjustZIndexAfterBeRemoved()
 
-		imageWorkspaceStore.unlink(image)
-		imageWorkspaceStore.selectFirst()
 		target = undefined
 		interactable = undefined
 		stores.length = 0
@@ -303,9 +305,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		target?.classList.toggle(token, force)
 	}
 
-	function remove() {
-		imageWorkspaceStore.remove(image)
-	}
+	function remove() {}
 
 	function close() {
 		return Api.Image.close({ path: state.path, hash: state.info?.hash, camera: camera?.name })

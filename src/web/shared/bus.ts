@@ -26,7 +26,7 @@ export interface CameraBusEvents extends DeviceBusEvents<Camera> {
 
 export interface ImageBusEvents {
 	readonly add: Image
-	readonly update: Image
+	readonly update: Readonly<{ image: Image; path: string }>
 	readonly remove: Image
 	readonly load: ImageLoaded
 	readonly roi: ImageRoiRequest

@@ -10,7 +10,6 @@ import { FlatPanel } from './FlatPanel'
 import { Focuser } from './Focuser'
 import { GuideOutput } from './GuideOutput'
 import { HomeNavBar } from './HomeNavBar'
-import { ImageWorkspace } from './ImageWorkspace'
 import { Rotator } from './Rotator'
 import { Thermometer } from './Thermometer'
 import { Wheel } from './Wheel'
@@ -21,7 +20,6 @@ export const Home = memo(() => {
 	return (
 		<div className="flex h-full min-h-0 w-full min-w-0 flex-col">
 			<HomeNavBar />
-			<ImageWorkspace />
 			<FocuserList />
 			<WheelList />
 			<ThermometerList />

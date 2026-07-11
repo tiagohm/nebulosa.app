@@ -8,14 +8,12 @@ import type { ImageViewerStore } from './image.viewer.store'
 export type ImageSettingsStore = ReturnType<typeof imageSettingsStore>
 
 export interface ImageSettingsState {
-	show: boolean
 	pixelated: boolean
 	transformation: ImageTransformation
 }
 
 export function imageSettingsStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageSettingsState>({
-		show: false,
 		pixelated: false,
 		transformation: viewer.state.transformation,
 	})
@@ -32,9 +30,11 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.settings`, ['p:show', 'p:pixelated'])
+		u[0] = initProxy(state, `image.${viewer.key}.settings`, ['p:pixelated'])
 
 		update('pixelated', state.pixelated)
+
+		return unmount
 	}
 
 	function unmount() {
@@ -75,14 +75,6 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 		return viewer.reload()
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
@@ -94,7 +86,5 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 		updateFormat,
 		reset,
 		apply,
-		show,
-		hide,
 	} as const
 }

@@ -12,7 +12,6 @@ import type { ImageViewerStore } from './image.viewer.store'
 export type ImageFovStore = ReturnType<typeof imageFovStore>
 
 export interface ImageFovState {
-	show: boolean
 	selected: number // item index
 	readonly items: FovItem[]
 	readonly computed: ComputedFov[]
@@ -20,7 +19,6 @@ export interface ImageFovState {
 
 export function imageFovStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageFovState>({
-		show: false,
 		selected: 0,
 		items: [],
 		computed: [],
@@ -38,7 +36,7 @@ export function imageFovStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.fov`, ['p:show', 'o:items'])
+		u[0] = initProxy(state, `image.${viewer.key}.fov`, ['o:items'])
 
 		u[1] = subscribeKey(viewer.solver.state, 'solution', (solution) => {
 			solution && compute()
@@ -49,6 +47,8 @@ export function imageFovStore(viewer: ImageViewerStore) {
 		} else {
 			compute()
 		}
+
+		return unmount
 	}
 
 	function unmount() {
@@ -135,14 +135,6 @@ export function imageFovStore(viewer: ImageViewerStore) {
 		}
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
@@ -154,7 +146,5 @@ export function imageFovStore(viewer: ImageViewerStore) {
 		select,
 		add,
 		remove,
-		show,
-		hide,
 	} as const
 }

@@ -55,6 +55,8 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 		})
 
 		if (state.visible) void compute()
+
+		return unmount
 	}
 
 	function unmount() {

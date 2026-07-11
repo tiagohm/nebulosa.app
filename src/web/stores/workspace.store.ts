@@ -65,7 +65,7 @@ function handleReady(event: DockviewReadyEvent) {
 	}
 
 	// Initial layout
-	const left = api.getEdgeGroup('left') ?? api.addEdgeGroup('left', { id: 'edge.left', initialSize: 320, collapsedSize: 38, collapsed: true })
+	const left = api.getEdgeGroup('left') ?? api.addEdgeGroup('left', { id: 'edge.left', initialSize: 380, collapsedSize: 38, collapsed: true })
 	const right = api.getEdgeGroup('right') ?? api.addEdgeGroup('right', { id: 'edge.right', initialSize: 480, collapsedSize: 38, collapsed: true })
 	const bottom = api.getEdgeGroup('bottom') ?? api.addEdgeGroup('bottom', { id: 'edge.bottom', initialSize: 280, collapsedSize: 38, collapsed: true })
 

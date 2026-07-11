@@ -9,7 +9,6 @@ import type { ImageViewerStore } from './image.viewer.store'
 export type ImageAnnotationStore = ReturnType<typeof imageAnnotationStore>
 
 export interface ImageAnnotationState {
-	show: boolean
 	visible: boolean
 	loading: boolean
 	readonly request: Omit<AnnotateImage, 'solution'>
@@ -18,7 +17,6 @@ export interface ImageAnnotationState {
 
 export function imageAnnotationStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageAnnotationState>({
-		show: false,
 		visible: false,
 		loading: false,
 		stars: [],
@@ -44,13 +42,15 @@ export function imageAnnotationStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.annotation`, ['p:show', 'o:request'])
+		u[0] = initProxy(state, `image.${viewer.key}.annotation`, ['o:request'])
 
 		u[1] = imageBus.subscribe('load', ({ image, refreshed }) => {
 			if (refreshed && image === viewer.image) {
 				reset()
 			}
 		})
+
+		return unmount
 	}
 
 	function unmount() {
@@ -91,14 +91,6 @@ export function imageAnnotationStore(viewer: ImageViewerStore) {
 		state.visible = false
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
@@ -108,7 +100,5 @@ export function imageAnnotationStore(viewer: ImageViewerStore) {
 		toggle,
 		annotate,
 		reset,
-		show,
-		hide,
 	} as const
 }

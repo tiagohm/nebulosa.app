@@ -72,6 +72,8 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 		u[2] = subscribeKey(state, 'visible', (visible) => {
 			if (visible) void compute()
 		})
+
+		return unmount
 	}
 
 	function unmount() {

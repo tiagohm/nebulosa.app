@@ -10,7 +10,6 @@ import type { ImageViewerStore } from './image.viewer.store'
 export type ImageSaveStore = ReturnType<typeof imageSaveStore>
 
 export interface ImageSaveState {
-	show: boolean
 	loading: boolean
 	path: string
 	format: ImageFormat
@@ -19,7 +18,6 @@ export interface ImageSaveState {
 
 export function imageSaveStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageSaveState>({
-		show: false,
 		loading: false,
 		path: '',
 		format: 'fits',
@@ -38,7 +36,9 @@ export function imageSaveStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.save`, ['p:show', 'p:format', 'p:path', 'p:transformed'])
+		u[0] = initProxy(state, `image.${viewer.key}.save`, ['p:format', 'p:path', 'p:transformed'])
+
+		return unmount
 	}
 
 	function unmount() {
@@ -84,14 +84,6 @@ export function imageSaveStore(viewer: ImageViewerStore) {
 		}
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
@@ -101,7 +93,5 @@ export function imageSaveStore(viewer: ImageViewerStore) {
 		setPath,
 		download,
 		save,
-		show,
-		hide,
 	} as const
 }

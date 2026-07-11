@@ -1,4 +1,4 @@
-import { memo, useContext } from 'react'
+import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerStoreContext } from '../shared/context'
 import { Button } from './components/Button'
@@ -6,28 +6,20 @@ import { Checkbox } from './components/Checkbox'
 import { IconButton } from './components/IconButton'
 import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
-import { Modal } from './Modal'
 
 export const ImageAnnotation = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { annotation } = viewer
-	const { show } = useSnapshot(annotation.state)
+	const { annotation } = useContext(ImageViewerStoreContext)
 
-	if (!show) return null
+	useEffect(annotation.mount, [])
 
 	return (
-		<Modal footer={<Footer />} header="Annotation" id={`annotation-${viewer.image.id}`} initialWidth="376px" onHide={annotation.hide}>
-			<Body />
-		</Modal>
+		<div className="grid grid-cols-12 gap-2 p-3">
+			<StarsAndDsos />
+			<MinorPlanets />
+			<Footer />
+		</div>
 	)
 })
-
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
-		<StarsAndDsos />
-		<MinorPlanets />
-	</div>
-))
 
 const StarsAndDsos = memo(() => {
 	const { annotation } = useContext(ImageViewerStoreContext)
@@ -72,7 +64,11 @@ const Footer = memo(() => {
 	const { stars, dsos, minorPlanets, minorPlanetsMagnitudeLimit } = useSnapshot(annotation.state.request)
 	const canAnnotate = stars || dsos || (minorPlanets && isValidMagnitudeLimit(minorPlanetsMagnitudeLimit))
 
-	return <Button color="success" disabled={!canAnnotate} label="Annotate" loading={loading} onClick={annotation.annotate} startContent={<Icons.Check />} />
+	return (
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
+			<Button color="success" disabled={!canAnnotate} label="Annotate" loading={loading} onClick={annotation.annotate} startContent={<Icons.Check />} />
+		</div>
+	)
 })
 
 const MAX_MINOR_PLANET_MAGNITUDE_LIMIT = 30

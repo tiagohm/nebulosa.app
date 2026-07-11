@@ -1,6 +1,6 @@
 import type { MountTargetCoordinateType } from 'nebulosa/src/devices/indi/device'
-import { tw } from '../../../shared/util'
-import { Radio } from '../../components/Radio'
+import { tw } from '../shared/util'
+import { Radio } from './components/Radio'
 
 export interface MountTargetCoordinateTypeRadioGroupProps extends React.ComponentProps<'div'> {
 	readonly value: MountTargetCoordinateType

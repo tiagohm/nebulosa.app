@@ -1,4 +1,4 @@
-import { memo, useContext } from 'react'
+import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerStoreContext } from '../shared/context'
 import { Button } from './components/Button'
@@ -6,7 +6,6 @@ import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
 import { Slider } from './components/Slider'
 import { Icons } from './Icon'
-import { Modal } from './Modal'
 import { SigmaClipCenterMethodSelect } from './SigmaClipCenterMethodSelect'
 import { SigmaClipDispersionMethodSelect } from './SigmaClipDispersionMethodSelect'
 
@@ -14,25 +13,18 @@ const STRETCH_MIN_VALUE = 0
 const STRETCH_MAX_VALUE = 65536
 
 export const ImageStretch = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { stretch } = viewer
-	const { show } = useSnapshot(stretch.state)
+	const { stretch } = useContext(ImageViewerStoreContext)
 
-	if (!show) return null
+	useEffect(stretch.mount, [])
 
 	return (
-		<Modal footer={<Footer />} header="Stretch" id={`stretch-${viewer.image.id}`} initialWidth="296px" onHide={stretch.hide}>
-			<Body />
-		</Modal>
+		<div className="grid grid-cols-12 gap-2 p-3">
+			<Stretch />
+			<AutoStretch />
+			<Footer />
+		</div>
 	)
 })
-
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
-		<Stretch />
-		<AutoStretch />
-	</div>
-))
 
 const Stretch = memo(() => {
 	const { stretch } = useContext(ImageViewerStoreContext)
@@ -84,10 +76,10 @@ const Footer = memo(() => {
 	const { auto } = useSnapshot(stretch.state.stretch)
 
 	return (
-		<>
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
 			<Button color="primary" label="Auto" onClick={stretch.auto} startContent={<Icons.WandSparkles />} variant={auto ? 'solid' : 'flat'} />
 			<Button color="danger" label="Reset" onClick={stretch.reset} startContent={<Icons.Restore />} />
 			<Button color="success" label="Stretch" onClick={stretch.apply} startContent={<Icons.Check />} />
-		</>
+		</div>
 	)
 })

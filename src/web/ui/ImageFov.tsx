@@ -1,4 +1,4 @@
-import { memo, useContext } from 'react'
+import { memo, useContext, useEffect } from 'react'
 import cameras from 'src/data/astrobin.cameras.json'
 import telescopes from 'src/data/astrobin.telescopes.json'
 import type { FovItem } from 'src/shared/types'
@@ -12,39 +12,26 @@ import { IconButton } from './components/IconButton'
 import { List } from './components/List'
 import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
-import { Modal } from './Modal'
 
 export const ImageFov = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { fov, solver } = viewer
-	const { show } = useSnapshot(fov.state)
+	const { solver, fov } = useContext(ImageViewerStoreContext)
 	const { solution } = useSnapshot(solver.state)
 	const hasSolutionScale = hasScaledSolution(solution)
 
-	if (!show || !hasSolutionScale) return null
+	useEffect(fov.mount, [])
+
+	if (!hasSolutionScale) return <div className="flex h-full w-full flex-row items-center justify-center">No solution available</div>
 
 	return (
-		<Modal header="FOV" id={`fov-${viewer.image.id}`} initialWidth="336px" onHide={fov.hide}>
-			<Body />
-		</Modal>
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<FovList />
+			<Telescope />
+			<Camera />
+			<OrientationAndOptics />
+			<Actions />
+		</div>
 	)
 })
-
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 items-center gap-2">
-		<FovList />
-		<Edit />
-	</div>
-))
-
-const Edit = memo(() => (
-	<>
-		<Telescope />
-		<Camera />
-		<OrientationAndOptics />
-		<Actions />
-	</>
-))
 
 const Telescope = memo(() => {
 	const { fov } = useContext(ImageViewerStoreContext)

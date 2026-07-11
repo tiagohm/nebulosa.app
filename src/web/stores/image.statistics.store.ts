@@ -10,7 +10,6 @@ import type { ImageViewerStore } from './image.viewer.store'
 export type ImageStatisticsStore = ReturnType<typeof imageStatisticsStore>
 
 export interface ImageStatisticsState {
-	show: boolean
 	selected: number
 	roi: boolean
 	readonly request: Pick<StatisticImage, 'bits' | 'area' | 'transformed'>
@@ -19,7 +18,6 @@ export interface ImageStatisticsState {
 
 export function imageStatisticsStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageStatisticsState>({
-		show: false,
 		selected: 0,
 		roi: false,
 		request: {
@@ -42,17 +40,18 @@ export function imageStatisticsStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.statistics`, ['p:show', 'o:request', 'p:roi'])
+		u[0] = initProxy(state, `image.${viewer.key}.statistics`, ['o:request', 'p:roi'])
 		u[1] = imageBus.subscribe('load', compute)
 		u[2] = subscribe(state.request, compute)
 		u[3] = subscribeKey(state, 'roi', compute)
 		u[4] = subscribeKey(viewer.roi.state, 'visible', compute)
 		u[5] = subscribe(viewer.roi.state.roi, () => state.roi && computeDebounced())
-		u[6] = subscribeKey(state, 'show', compute)
 
 		if (state.histogram.length === 0) {
 			void compute()
 		}
+
+		return unmount
 	}
 
 	function unmount() {
@@ -71,16 +70,12 @@ export function imageStatisticsStore(viewer: ImageViewerStore) {
 	}
 
 	async function compute() {
-		if (!state.show) return
-
 		const area = isRoiEnabled() ? viewer.roi.state.roi : undefined
 		const histogram = await Api.Image.statistics({ path: viewer.state.path, transformation: viewer.state.transformation, camera: viewer.image.camera?.id, ...state.request, area })
 		if (histogram) state.histogram = ref(histogram)
 	}
 
 	function computeDebounced() {
-		if (!state.show) return
-
 		if (computeTimer) {
 			clearTimeout(computeTimer)
 		}
@@ -91,14 +86,6 @@ export function imageStatisticsStore(viewer: ImageViewerStore) {
 		}, 500)
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
@@ -106,7 +93,5 @@ export function imageStatisticsStore(viewer: ImageViewerStore) {
 		unmount,
 		update,
 		compute,
-		show,
-		hide,
 	} as const
 }

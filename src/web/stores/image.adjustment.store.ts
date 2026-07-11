@@ -1,19 +1,16 @@
 import { DEFAULT_IMAGE_ADJUSTMENT, type ImageAdjustment } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { initProxy } from '../shared/proxy'
 import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageAdjustmentStore = ReturnType<typeof imageAdjustmentStore>
 
 export interface ImageAdjustmentState {
-	show: boolean
 	readonly adjustment: ImageAdjustment
 }
 
 export function imageAdjustmentStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageAdjustmentState>({
-		show: false,
 		adjustment: viewer.state.transformation.adjustment,
 	})
 
@@ -29,7 +26,7 @@ export function imageAdjustmentStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.adjustment`, ['p:show'])
+		return unmount
 	}
 
 	function unmount() {
@@ -55,14 +52,6 @@ export function imageAdjustmentStore(viewer: ImageViewerStore) {
 		return viewer.reload()
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
@@ -71,7 +60,5 @@ export function imageAdjustmentStore(viewer: ImageViewerStore) {
 		update,
 		reset,
 		apply,
-		show,
-		hide,
 	} as const
 }

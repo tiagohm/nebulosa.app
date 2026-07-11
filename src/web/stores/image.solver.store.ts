@@ -17,7 +17,6 @@ import { settingsStore } from './settings.store'
 export type ImageSolverStore = ReturnType<typeof imageSolverStore>
 
 export interface ImageSolverState {
-	show: boolean
 	loading: boolean
 	readonly request: PlateSolveStart
 	solution?: PlateSolution
@@ -25,7 +24,6 @@ export interface ImageSolverState {
 
 export function imageSolverStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageSolverState>({
-		show: false,
 		loading: false,
 		request: structuredClone(DEFAULT_PLATE_SOLVE_START),
 	})
@@ -42,7 +40,7 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.solver`, ['p:show', 'o:request'])
+		u[0] = initProxy(state, `image.${viewer.key}.solver`, ['o:request'])
 
 		u[1] = imageBus.subscribe('load', ({ image, info, refreshed }) => {
 			if (refreshed && image === viewer.image) {
@@ -65,6 +63,8 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 
 		state.solution = viewer.state.info?.solution && ref(viewer.state.info.solution)
 		state.request.id ||= nanoid()
+
+		return unmount
 	}
 
 	function unmount() {
@@ -122,14 +122,6 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 		await framingStore.load(request)
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
@@ -141,8 +133,6 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 		goTo,
 		sync,
 		frame,
-		show,
-		hide,
 	} as const
 }
 

@@ -8,7 +8,7 @@ const tableStyles = tv({
 		base: 'block min-w-0 overflow-hidden rounded-lg bg-neutral-900/70 text-sm text-neutral-100',
 		header: 'grid min-w-0 grid-cols-(--table-columns) bg-neutral-950/70 text-xs font-bold text-neutral-500 uppercase',
 		headerCell: 'min-w-0 truncate px-3 py-2',
-		list: 'max-h-80 rounded-none bg-transparent text-neutral-100',
+		list: 'max-h-full rounded-none bg-transparent text-neutral-100',
 		row: 'grid grid-cols-(--table-columns) text-neutral-200',
 		cell: 'flex min-w-0 items-center truncate px-3',
 		empty: 'min-h-10',

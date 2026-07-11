@@ -1,4 +1,4 @@
-import { memo, useContext } from 'react'
+import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerStoreContext } from '../shared/context'
 import { CfaPatternSelect } from './CfaPatternSelect'
@@ -8,27 +8,14 @@ import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
 import { ImageFormatSelect } from './ImageFormatSelect'
-import { Modal } from './Modal'
 
 const JPEG_FORMAT = 'jpeg'
 
 export const ImageSettings = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { settings } = viewer
-	const { show } = useSnapshot(settings.state)
-
-	if (!show) return null
-
-	return (
-		<Modal footer={<Footer />} header="Settings" id={`settings-${viewer.image.id}`} initialWidth="256px" onHide={settings.hide}>
-			<Body />
-		</Modal>
-	)
-})
-
-const Body = memo(() => {
 	const { settings } = useContext(ImageViewerStoreContext)
 	const { pixelated, transformation } = useSnapshot(settings.state)
+
+	useEffect(settings.mount, [])
 
 	return (
 		<div className="mt-0 grid grid-cols-12 items-center gap-2">
@@ -36,6 +23,7 @@ const Body = memo(() => {
 			{transformation.format.type === JPEG_FORMAT && <JpegFormat />}
 			<Checkbox className="col-span-full min-w-0" label="Pixelated" onValueChange={(value) => settings.update('pixelated', value)} value={pixelated} />
 			<CfaPatternSelect className="col-span-full min-w-0" fullWidth onValueChange={(value) => settings.updateTransformation('cfaPattern', value)} value={transformation.cfaPattern} />
+			<Footer />
 		</div>
 	)
 })
@@ -44,10 +32,10 @@ const Footer = memo(() => {
 	const { settings } = useContext(ImageViewerStoreContext)
 
 	return (
-		<>
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<Button color="danger" label="Reset" onClick={settings.reset} startContent={<Icons.Restore />} />
 			<Button color="success" label="Apply" onClick={settings.apply} startContent={<Icons.Check />} />
-		</>
+		</div>
 	)
 })
 

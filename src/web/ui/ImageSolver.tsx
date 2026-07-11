@@ -1,5 +1,5 @@
 import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
-import { memo, useContext } from 'react'
+import { memo, useContext, useEffect } from 'react'
 import type { PlateSolveStart } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageViewerStoreContext } from '../shared/context'
@@ -10,7 +10,6 @@ import { NumberInput } from './components/NumberInput'
 import { TextInput } from './components/TextInput'
 import { MountDropdown } from './DeviceDropdown'
 import { Icons } from './Icon'
-import { Modal } from './Modal'
 import { PlateSolverSelect } from './PlateSolverSelect'
 import { PlateSolveStartPopover } from './PlateSolveStartPopover'
 
@@ -43,24 +42,11 @@ function formatSolutionSize(width: number | undefined, height: number | undefine
 	return `${toArcmin(width).toFixed(2)} x ${toArcmin(height).toFixed(2)}`
 }
 
-export const ImageSolver = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { solver } = viewer
-	const { show } = useSnapshot(solver.state)
-
-	if (!show) return null
-
-	return (
-		<Modal footer={<Footer />} header="Plate Solver" id={`platesolver-${viewer.image.id}`} initialWidth="360px" onHide={solver.hide}>
-			<Body />
-		</Modal>
-	)
-})
-
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
+export const ImageSolver = memo(() => (
+	<div className="grid grid-cols-12 gap-2 p-3">
 		<Inputs />
 		<Solution />
+		<Footer />
 	</div>
 ))
 
@@ -70,6 +56,8 @@ const Inputs = memo(() => {
 	const { blind, type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request)
 	const { rightAscension, declination } = useSnapshot(solver.state.request)
 	const coordinateDisabled = loading || blind
+
+	useEffect(solver.mount, [])
 
 	return (
 		<>
@@ -123,9 +111,9 @@ const Footer = memo(() => {
 	const canSolve = canStartSolve(request, info !== undefined)
 
 	return (
-		<>
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
 			<Button color="danger" disabled={!loading} label="Stop" onClick={solver.stop} startContent={<Icons.Stop />} />
 			<Button color="success" disabled={!canSolve} label="Solve" loading={loading} onClick={solver.start} startContent={<Icons.Sigma />} />
-		</>
+		</div>
 	)
 })

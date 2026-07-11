@@ -1,4 +1,4 @@
-import { memo, useContext } from 'react'
+import { memo, useContext, useEffect } from 'react'
 import type { ImageFFT, ImageFilter as ImageKernelFilter } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageViewerStoreContext } from '../shared/context'
@@ -9,35 +9,29 @@ import { Tab, TabPanel, Tabs } from './components/Tabs'
 import { Icons } from './Icon'
 import { ImageFFTFilterTypeRadioGroup } from './ImageFFTFilterTypeRadioGroup'
 import { ImageKernelFilterTypeRadioGroup } from './ImageKernelFilterTypeRadioGroup'
-import { Modal } from './Modal'
 
 export const ImageFilter = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { filter } = viewer
-	const { show } = useSnapshot(filter.state)
+	const { filter } = useContext(ImageViewerStoreContext)
 
-	if (!show) return null
+	useEffect(filter.mount, [])
 
 	return (
-		<Modal footer={<Footer />} header="Filter" id={`filter-${viewer.image.id}`} initialWidth="216px" onHide={filter.hide}>
-			<Body />
-		</Modal>
+		<div className="grid grid-cols-12 gap-2 p-3">
+			<Tabs className="col-span-full">
+				<Tab id="kernel">Kernel</Tab>
+				<Tab id="fft">FFT</Tab>
+
+				<TabPanel id="kernel">
+					<Kernel />
+				</TabPanel>
+				<TabPanel id="fft">
+					<FFT />
+				</TabPanel>
+			</Tabs>
+			<Footer />
+		</div>
 	)
 })
-
-const Body = memo(() => (
-	<Tabs className="w-full">
-		<Tab id="kernel">Kernel</Tab>
-		<Tab id="fft">FFT</Tab>
-
-		<TabPanel id="kernel">
-			<Kernel />
-		</TabPanel>
-		<TabPanel id="fft">
-			<FFT />
-		</TabPanel>
-	</Tabs>
-))
 
 const Kernel = memo(() => {
 	const { filter } = useContext(ImageViewerStoreContext)
@@ -107,10 +101,10 @@ const Footer = memo(() => {
 	const canApply = isValidKernelFilter(kernel) && isValidFFTFilter(fft)
 
 	return (
-		<>
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
 			<Button color="danger" label="Reset" onClick={filter.reset} startContent={<Icons.Restore />} />
 			<Button color="success" disabled={!canApply} label="Apply" onClick={filter.apply} startContent={<Icons.Check />} />
-		</>
+		</div>
 	)
 })
 

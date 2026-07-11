@@ -1,9 +1,25 @@
 import { DockviewReact, themeGithubDark, type DockviewReadyEvent, type IDockviewPanelProps } from 'dockview-react'
 import { memo } from 'react'
+import { useStore } from 'src/web/hooks/store.hook'
+import { ImageViewerStoreContext } from 'src/web/shared/context'
 import type { Image } from 'src/web/shared/types'
-import { ImageViewer } from '../ImageViewer'
-import { CloseableTab } from '../workspace/tabs/CloseableTab'
-import { FixedTab } from '../workspace/tabs/FixedTab'
+import { imageViewerStore } from 'src/web/stores/image.viewer.store'
+import { ImageAdjustment } from './ImageAdjustment'
+import { ImageAnnotation } from './ImageAnnotation'
+import { ImageCalibration } from './ImageCalibration'
+import { ImageFilter } from './ImageFilter'
+import { ImageFov } from './ImageFov'
+import { ImageHeader } from './ImageHeader'
+import { ImageSave } from './ImageSave'
+import { ImageScnr } from './ImageScnr'
+import { ImageSettings } from './ImageSettings'
+import { ImageSolver } from './ImageSolver'
+import { ImageStarDetection } from './ImageStarDetection'
+import { ImageStatistics } from './ImageStatistics'
+import { ImageStretch } from './ImageStretch'
+import { ImageViewer } from './ImageViewer'
+import { CloseableTab } from './workspace/tabs/CloseableTab'
+import { FixedTab } from './workspace/tabs/FixedTab'
 
 const Dummy = () => <div></div>
 
@@ -14,27 +30,32 @@ const tabComponents = {
 
 const components = {
 	'component.image.viewer': ImageViewer,
-	'component.image.save': Dummy,
-	'component.image.solver': Dummy,
-	'component.image.stretch': Dummy,
+	'component.image.save': ImageSave,
+	'component.image.solver': ImageSolver,
+	'component.image.stretch': ImageStretch,
 	'component.image.rotation': Dummy,
-	'component.image.calibration': Dummy,
-	'component.image.scnr': Dummy,
-	'component.image.adjustment': Dummy,
-	'component.image.filter': Dummy,
-	'component.image.annotation': Dummy,
-	'component.image.starDetection': Dummy,
-	'component.image.fov': Dummy,
-}
+	'component.image.calibration': ImageCalibration,
+	'component.image.scnr': ImageScnr,
+	'component.image.adjustment': ImageAdjustment,
+	'component.image.filter': ImageFilter,
+	'component.image.annotation': ImageAnnotation,
+	'component.image.starDetection': ImageStarDetection,
+	'component.image.fov': ImageFov,
+	'component.image.header': ImageHeader,
+	'component.image.statistics': ImageStatistics,
+	'component.image.settings': ImageSettings,
+} as const
 
 export const ImageWorkspace = memo(({ params }: IDockviewPanelProps<Image>) => {
+	const viewer = useStore(() => imageViewerStore(params), [params])
+
 	function handleReady(event: DockviewReadyEvent) {
 		const { api } = event
 
 		api.addPanel({ id: 'panel.image', tabComponent: 'tab.fixed', component: 'component.image.viewer', params, title: 'Viewer' })
 
-		const left = api.addEdgeGroup('left', { id: 'edge.left', collapsed: true, collapsedSize: 38, initialSize: 480 })
-		const right = api.addEdgeGroup('right', { id: 'edge.right', collapsed: true, collapsedSize: 38, initialSize: 480 })
+		const left = api.addEdgeGroup('left', { id: 'edge.left', collapsed: true, collapsedSize: 38, initialSize: 380 })
+		const right = api.addEdgeGroup('right', { id: 'edge.right', collapsed: true, collapsedSize: 38, initialSize: 380 })
 
 		api.addPanel({ id: 'panel.save', tabComponent: 'tab.fixed', component: 'component.image.save', params, title: 'Save', position: { referenceGroup: left.id } })
 		api.addPanel({ id: 'panel.solver', tabComponent: 'tab.fixed', component: 'component.image.solver', params, title: 'Solver', position: { referenceGroup: right.id } })
@@ -47,11 +68,15 @@ export const ImageWorkspace = memo(({ params }: IDockviewPanelProps<Image>) => {
 		api.addPanel({ id: 'panel.annotation', tabComponent: 'tab.fixed', component: 'component.image.annotation', params, title: 'Annotation', position: { referenceGroup: right.id } })
 		api.addPanel({ id: 'panel.starDetection', tabComponent: 'tab.fixed', component: 'component.image.starDetection', params, title: 'Star Detection', position: { referenceGroup: right.id } })
 		api.addPanel({ id: 'panel.fov', tabComponent: 'tab.fixed', component: 'component.image.fov', params, title: 'FOV', position: { referenceGroup: right.id } })
+		api.addPanel({ id: 'panel.header', tabComponent: 'tab.fixed', component: 'component.image.header', params, title: 'FITS Header', position: { referenceGroup: right.id } })
+		api.addPanel({ id: 'panel.statistics', tabComponent: 'tab.fixed', component: 'component.image.statistics', params, title: 'Statistics', position: { referenceGroup: right.id } })
 	}
 
 	return (
 		<div className="workspace relative h-full min-h-0 w-full flex-1 overflow-hidden">
-			<DockviewReact hideBorders theme={themeGithubDark} className="h-full w-full" tabComponents={tabComponents} components={components} onReady={handleReady} />
+			<ImageViewerStoreContext value={viewer}>
+				<DockviewReact hideBorders theme={themeGithubDark} className="h-full w-full" tabComponents={tabComponents} components={components} onReady={handleReady} />
+			</ImageViewerStoreContext>
 		</div>
 	)
 })

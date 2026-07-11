@@ -1,10 +1,10 @@
 import React, { memo, useEffect, useMemo, useState } from 'react'
 import DRIVERS from 'src/data/indi.drivers.json'
 import { Api } from '@/shared/api'
-import { stopPropagation } from '../../../shared/util'
-import { FilterableList } from '../../components/FilterableList'
-import { ListItem } from '../../components/List'
-import { Icons } from '../../Icon'
+import { stopPropagation } from '../shared/util'
+import { FilterableList } from './components/FilterableList'
+import { ListItem } from './components/List'
+import { Icons } from './Icon'
 
 type Driver = (typeof DRIVERS)[number]
 

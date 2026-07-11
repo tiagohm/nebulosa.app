@@ -11,7 +11,6 @@ import type { ImageViewerStore } from './image.viewer.store'
 export type ImageStarDetectionStore = ReturnType<typeof imageStarDetectionStore>
 
 export interface ImageStarDetectionState {
-	show: boolean
 	visible: boolean
 	loading: boolean
 	stars: readonly DetectedStar[]
@@ -27,7 +26,6 @@ export interface ImageStarDetectionState {
 
 export function imageStarDetectionStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageStarDetectionState>({
-		show: false,
 		visible: false,
 		loading: false,
 		stars: [],
@@ -53,13 +51,15 @@ export function imageStarDetectionStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.star detection`, ['p:show', 'o:request'])
+		u[0] = initProxy(state, `image.${viewer.key}.star detection`, ['o:request'])
 
 		u[1] = imageBus.subscribe('load', ({ image, refreshed }) => {
 			if (refreshed && image === viewer.image) {
 				reset()
 			}
 		})
+
+		return unmount
 	}
 
 	function unmount() {
@@ -177,14 +177,6 @@ export function imageStarDetectionStore(viewer: ImageViewerStore) {
 		state.computed.fluxMax = 0
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
@@ -196,7 +188,5 @@ export function imageStarDetectionStore(viewer: ImageViewerStore) {
 		select,
 		attach,
 		reset,
-		show,
-		hide,
 	} as const
 }

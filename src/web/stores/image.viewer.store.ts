@@ -108,7 +108,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	let interactable: InteractableMethods | undefined
 	let target: HTMLImageElement | undefined
 	let centered = false
-	const stores: Pick<ImageViewerStore, 'mount' | 'unmount'>[] = []
 	const key = camera?.id || 'default'
 
 	function mount() {
@@ -134,8 +133,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 				void load(event.path)
 			}
 		})
-
-		for (const s of stores) s.mount()
 	}
 
 	function unmount() {
@@ -143,7 +140,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		console.info('image viewer unmounted:', state.path)
 		unsubscribe(u)
 		window.removeEventListener('beforeunload', close)
-		for (const s of stores) s.unmount()
 		mounted = false
 	}
 
@@ -298,7 +294,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 
 		target = undefined
 		interactable = undefined
-		stores.length = 0
 	}
 
 	function toggleClass(token: string, force?: boolean) {
@@ -362,8 +357,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	const starDetection = (store.starDetection = imageStarDetectionStore(store))
 	const statistics = (store.statistics = imageStatisticsStore(store))
 	const stretch = (store.stretch = imageStretchStore(store))
-
-	stores.push(adjustment, annotation, calibration, coordinateGrid, filter, fov, header, mouseCoordinate, roi, save, scnr, settings, solver, starDetection, statistics, stretch)
 
 	return store
 }

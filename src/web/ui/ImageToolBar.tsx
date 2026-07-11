@@ -25,17 +25,17 @@ export const ImageToolBar = memo(() => {
 	return (
 		<div className="pointer-events-none fixed bottom-0 z-99999 mb-1 w-full p-1">
 			<div className="no-scrollbar pointer-events-auto mx-auto flex w-fit max-w-full flex-row items-center justify-start gap-2 overflow-x-auto overflow-y-hidden rounded-xl bg-black px-2 py-1.5">
-				<IconButton color="secondary" icon={Icons.Save} onClick={save.show} tooltipContent="Save" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-				<IconButton color="secondary" icon={Icons.Sigma} onClick={solver.show} tooltipContent="Plate Solver" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-				<IconButton color="secondary" icon={Icons.Tune} onClick={stretch.show} tooltipContent="Stretch" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+				<IconButton color="secondary" icon={Icons.Save} tooltipContent="Save" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+				<IconButton color="secondary" icon={Icons.Sigma} tooltipContent="Plate Solver" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+				<IconButton color="secondary" icon={Icons.Tune} tooltipContent="Stretch" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
 				<ToggleButton color="primary" icon={Icons.WandSparkles} onClick={stretch.toggle} tooltipContent="Auto Stretch" tooltipPlacement={TOOLTIP_PLACEMENT} value={transformation.stretch.auto} />
 				{info?.metadata.bayer && <ToggleButton color="primary" icon={Icons.Grid} onClick={viewer.toggleDebayer} tooltipContent="Debayer" tooltipPlacement={TOOLTIP_PLACEMENT} value={transformation.debayer} />}
 				<RotatePopover />
 				<TransformationPopover />
 				<OverlayPopover />
-				<IconButton color="secondary" icon={Icons.Histogram} onClick={statistics.show} tooltipContent="Statistics" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-				<IconButton color="secondary" icon={Icons.Text} onClick={header.show} tooltipContent="FITS Header" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-				<IconButton color="secondary" icon={Icons.Cog} onClick={settings.show} tooltipContent="Settings" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+				<IconButton color="secondary" icon={Icons.Histogram} tooltipContent="Statistics" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+				<IconButton color="secondary" icon={Icons.Text} tooltipContent="FITS Header" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+				<IconButton color="secondary" icon={Icons.Cog} tooltipContent="Settings" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
 				<IconButton className="ms-2" color="danger" icon={Icons.Close} onClick={viewer.remove} tooltipContent="Close" tooltipPlacement={TOOLTIP_PLACEMENT} variant="solid" />
 			</div>
 		</div>
@@ -88,17 +88,17 @@ const OverlayPopoverContent = memo(() => {
 		<div className={`${POPOVER_PANEL_CLASS} flex flex-row items-start justify-center gap-2 p-2`}>
 			<ToggleButton color="primary" icon={Icons.Crosshair} onClick={viewer.toggleCrosshair} tooltipContent="Crosshair" tooltipPlacement={TOOLTIP_PLACEMENT} value={crosshair} />
 			<div className="flex flex-col justify-center gap-2">
-				<IconButton color="secondary" disabled={!solution} icon={Icons.Pen} onClick={annotation.show} tooltipContent="Annotation" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+				<IconButton color="secondary" disabled={!solution} icon={Icons.Pen} tooltipContent="Annotation" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
 				{hasAnnotatedStars && <Switch onValueChange={annotation.toggle} value={isAnnotatedStarsVisible} />}
 			</div>
 			<div className="flex flex-col justify-center gap-2">
-				<IconButton color="secondary" icon={Icons.Stars} onClick={starDetection.show} tooltipContent="Star Detection" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+				<IconButton color="secondary" icon={Icons.Stars} tooltipContent="Star Detection" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
 				{hasDetectedStars && <Switch onValueChange={starDetection.toggle} value={isDetectedStarsVisible} />}
 			</div>
 			<ToggleButton color="primary" disabled={!canUseRoi} icon={Icons.Box} onClick={roi.toggle} tooltipContent="ROI" tooltipPlacement={TOOLTIP_PLACEMENT} value={isRoiVisible} />
 			<Activity mode={hasSolvedScale ? 'visible' : 'hidden'}>
 				<ToggleButton color="primary" disabled={!hasSolvedScale} icon={Icons.Grid} onClick={coordinateGrid.toggle} tooltipContent="Coordinate Grid" tooltipPlacement={TOOLTIP_PLACEMENT} value={isCoordinateGridVisible} />
-				<IconButton color="secondary" icon={Icons.FocusField} onClick={fov.show} tooltipContent="FOV" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+				<IconButton color="secondary" icon={Icons.FocusField} tooltipContent="FOV" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
 				<ToggleButton color="primary" icon={Icons.MousePointerClick} onClick={mouseCoordinate.toggle} tooltipContent="Mouse Coordinate" tooltipPlacement={TOOLTIP_PLACEMENT} value={isMouseCoordinateVisible} />
 			</Activity>
 		</div>
@@ -121,10 +121,10 @@ const TransformationPopoverContent = memo(() => {
 
 	return (
 		<div className={`${POPOVER_PANEL_CLASS} flex flex-row items-center justify-center gap-2 p-2`}>
-			<IconButton color="secondary" icon={Icons.Image} onClick={calibration.show} tooltipContent="Calibration" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-			{info?.mono === false && <IconButton color="secondary" icon={Icons.Swatch} onClick={scnr.show} tooltipContent="SCNR" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />}
-			<IconButton color="secondary" icon={Icons.ImageEdit} onClick={adjustment.show} tooltipContent="Adjustment" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
-			<IconButton color="secondary" icon={Icons.Brush} onClick={filter.show} tooltipContent="Filter" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+			<IconButton color="secondary" icon={Icons.Image} tooltipContent="Calibration" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+			{info?.mono === false && <IconButton color="secondary" icon={Icons.Swatch} tooltipContent="SCNR" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />}
+			<IconButton color="secondary" icon={Icons.ImageEdit} tooltipContent="Adjustment" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
+			<IconButton color="secondary" icon={Icons.Brush} tooltipContent="Filter" tooltipPlacement={TOOLTIP_PLACEMENT} variant="flat" />
 			<ToggleButton color="primary" icon={Icons.FlipHorizontal} onClick={viewer.toggleHorizontalMirror} tooltipContent="Horizontal mirror" tooltipPlacement={TOOLTIP_PLACEMENT} value={transformation.horizontalMirror} />
 			<ToggleButton color="primary" icon={Icons.FlipVertical} onClick={viewer.toggleVerticalMirror} tooltipContent="Vertical Mirror" tooltipPlacement={TOOLTIP_PLACEMENT} value={transformation.verticalMirror} />
 			<ToggleButton color="primary" icon={Icons.InvertColor} onClick={viewer.toggleInvert} tooltipContent="Invert" tooltipPlacement={TOOLTIP_PLACEMENT} value={transformation.invert} />

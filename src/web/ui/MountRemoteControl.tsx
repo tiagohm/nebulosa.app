@@ -1,10 +1,10 @@
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { MountStoreContext } from '../../../shared/context'
-import { Button } from '../../components/Button'
-import { NumberInput } from '../../components/NumberInput'
-import { TextInput } from '../../components/TextInput'
-import { Icons } from '../../Icon'
+import { MountStoreContext } from '../shared/context'
+import { Button } from './components/Button'
+import { NumberInput } from './components/NumberInput'
+import { TextInput } from './components/TextInput'
+import { Icons } from './Icon'
 import { MountRemoteControlProtocolSelect } from './MountRemoteControlProtocolSelect'
 
 export const MountRemoteControl = memo(() => (

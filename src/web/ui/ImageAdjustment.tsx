@@ -1,4 +1,4 @@
-import { memo, useContext } from 'react'
+import { memo, useContext, useEffect } from 'react'
 import type { ImageAdjustment as ImageAdjustmentType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { ImageViewerStoreContext } from '../shared/context'
@@ -7,31 +7,23 @@ import { Checkbox } from './components/Checkbox'
 import { NumberInput } from './components/NumberInput'
 import { Icons } from './Icon'
 import { ImageChannelOrGrayInput } from './ImageChannelOrGrayInput'
-import { Modal } from './Modal'
 
 export const ImageAdjustment = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { adjustment } = viewer
-	const { show } = useSnapshot(adjustment.state)
+	const { adjustment } = useContext(ImageViewerStoreContext)
 
-	if (!show) return null
+	useEffect(adjustment.mount, [])
 
 	return (
-		<Modal footer={<Footer />} header="Adjustment" id={`adjustment-${viewer.image.id}`} initialWidth="256px" onHide={adjustment.hide}>
-			<Body />
-		</Modal>
+		<div className="grid grid-cols-12 gap-2 p-3">
+			<Enabled />
+			<Brightness />
+			<Contrast />
+			<Gamma />
+			<Saturation />
+			<Footer />
+		</div>
 	)
 })
-
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
-		<Enabled />
-		<Brightness />
-		<Contrast />
-		<Gamma />
-		<Saturation />
-	</div>
-))
 
 const Enabled = memo(() => {
 	const { adjustment } = useContext(ImageViewerStoreContext)
@@ -83,10 +75,10 @@ const Footer = memo(() => {
 	const canApply = !enabled || isValidAdjustment(snapshot)
 
 	return (
-		<>
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
 			<Button color="danger" disabled={!enabled} label="Reset" onClick={adjustment.reset} startContent={<Icons.Restore />} />
 			<Button color="success" disabled={!canApply} label="Adjust" onClick={adjustment.apply} startContent={<Icons.Check />} />
-		</>
+		</div>
 	)
 })
 

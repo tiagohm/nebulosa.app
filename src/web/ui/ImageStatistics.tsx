@@ -1,11 +1,10 @@
-import { memo, useContext } from 'react'
+import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { ImageViewerStoreContext } from '../shared/context'
 import { Checkbox } from './components/Checkbox'
 import { Histogram } from './components/Histogram'
 import { TextInput } from './components/TextInput'
 import { ImageChannelButtonGroup } from './ImageChannelButtonGroup'
-import { Modal } from './Modal'
 
 const CHANNEL_VALUES = ['RED', 'GREEN', 'BLUE'] as const
 
@@ -22,29 +21,17 @@ function formatStat(value: number, fractionDigits: number) {
 }
 
 export const ImageStatistics = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { statistics } = viewer
-	const { show } = useSnapshot(statistics.state)
-
-	if (!show) return null
-
-	return (
-		<Modal header="Statistics" id={`settings-${viewer.image.id}`} initialWidth="296px" onHide={statistics.hide}>
-			<Body />
-		</Modal>
-	)
-})
-
-const Body = memo(() => {
 	const { statistics } = useContext(ImageViewerStoreContext)
 	const { histogram } = useSnapshot(statistics.state)
 
+	useEffect(statistics.mount, [])
+
 	return (
-		<div className="mt-0 grid grid-cols-12 gap-2">
+		<div className="grid grid-cols-12 gap-2 p-3">
 			<Options />
 			<Stats />
 			<div className="col-span-full">
-				<Histogram className="h-30 w-full rounded-lg bg-neutral-950/40" histogram={histogram} />
+				<Histogram className="h-30 w-full rounded-lg bg-transparent" histogram={histogram} />
 			</div>
 		</div>
 	)

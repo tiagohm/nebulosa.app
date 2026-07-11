@@ -3,20 +3,17 @@ import type { FFTFilterType } from 'nebulosa/src/imaging/processing/fft'
 import { DEFAULT_IMAGE_FFT, DEFAULT_IMAGE_FILTER, type ImageFFT, type ImageFilter, type ImageKernelFilterType } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { initProxy } from '../shared/proxy'
 import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageFilterStore = ReturnType<typeof imageFilterStore>
 
 export interface ImageFilterState {
-	show: boolean
 	kernel: ImageFilter
 	fft: Writable<ImageFFT>
 }
 
 export function imageFilterStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageFilterState>({
-		show: false,
 		kernel: viewer.state.transformation.filter,
 		fft: viewer.state.transformation.fft,
 	})
@@ -33,7 +30,7 @@ export function imageFilterStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.filter`, ['p:show'])
+		return unmount
 	}
 
 	function unmount() {
@@ -71,14 +68,6 @@ export function imageFilterStore(viewer: ImageViewerStore) {
 		return viewer.reload()
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
@@ -90,7 +79,5 @@ export function imageFilterStore(viewer: ImageViewerStore) {
 		updateFFT,
 		reset,
 		apply,
-		show,
-		hide,
 	} as const
 }

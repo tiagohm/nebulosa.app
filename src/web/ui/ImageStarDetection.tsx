@@ -1,38 +1,25 @@
-import { memo, useContext } from 'react'
+import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatNumber } from '@/shared/util'
 import { ImageViewerStoreContext } from '../shared/context'
 import { Button } from './components/Button'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
-import { Modal } from './Modal'
 import { StarDetectionPopover } from './StarDetectionPopover'
 import { StarDetectionSelect } from './StarDetectionSelect'
 
 export const ImageStarDetection = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { starDetection } = viewer
-	const { show } = useSnapshot(starDetection.state)
-
-	if (!show) return null
-
-	return (
-		<Modal footer={<Footer />} header="Star Detection" id={`star-detection-${viewer.image.id}`} initialWidth="312px" onHide={starDetection.hide}>
-			<Body />
-		</Modal>
-	)
-})
-
-const Body = memo(() => {
 	const { starDetection } = useContext(ImageViewerStoreContext)
-	const { type } = useSnapshot(starDetection.state.request)
-	const { loading } = useSnapshot(starDetection.state)
+	const { loading, request } = useSnapshot(starDetection.state)
+
+	useEffect(starDetection.mount, [])
 
 	return (
-		<div className="mt-0 grid grid-cols-12 gap-2">
-			<StarDetectionSelect className="col-span-full" disabled={loading} endContent={<StarDetectionEndContent />} onValueChange={(value) => starDetection.update('type', value)} value={type} />
+		<div className="grid grid-cols-12 gap-2 p-3">
+			<StarDetectionSelect className="col-span-full" disabled={loading} endContent={<StarDetectionEndContent />} onValueChange={(value) => starDetection.update('type', value)} value={request.type} />
 			<Computed />
 			<Selected />
+			<Footer />
 		</div>
 	)
 })
@@ -81,5 +68,9 @@ const Footer = memo(() => {
 	const { starDetection } = useContext(ImageViewerStoreContext)
 	const { loading } = useSnapshot(starDetection.state)
 
-	return <Button color="success" disabled={loading} label="Detect" loading={loading} onClick={starDetection.detect} startContent={<Icons.Check />} />
+	return (
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
+			<Button color="success" disabled={loading} label="Detect" loading={loading} onClick={starDetection.detect} startContent={<Icons.Check />} />
+		</div>
+	)
 })

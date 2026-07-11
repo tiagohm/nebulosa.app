@@ -66,6 +66,8 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		if (camera) u[0] = initProxy(state, `image.roi.${camera.id}`, ['o:roi', 'o:binning'])
 		u[1] = subscribeKey(viewer.state, 'info', syncImage)
 		u[2] = imageBus.subscribe('roi', sendRoi)
+
+		return unmount
 	}
 
 	function unmount() {

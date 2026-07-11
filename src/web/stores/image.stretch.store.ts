@@ -2,20 +2,17 @@ import { DEFAULT_IMAGE_STRETCH, type ImageStretch } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
 import type { SliderRangeValue } from '../ui/components/Slider'
 import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageStretchStore = ReturnType<typeof imageStretchStore>
 
 export interface ImageStretchState {
-	show: boolean
 	readonly stretch: ImageStretch
 }
 
 export function imageStretchStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageStretchState>({
-		show: false,
 		stretch: viewer.state.transformation.stretch,
 	})
 
@@ -31,9 +28,7 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.stretch`, ['p:show'])
-
-		u[1] = imageBus.subscribe('load', ({ image, info }) => {
+		u[0] = imageBus.subscribe('load', ({ image, info }) => {
 			if (image === viewer.image) {
 				state.stretch.auto = info.transformation.stretch.auto
 				state.stretch.shadow = info.transformation.stretch.shadow
@@ -41,6 +36,8 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 				state.stretch.midtone = info.transformation.stretch.midtone
 			}
 		})
+
+		return unmount
 	}
 
 	function unmount() {
@@ -96,14 +93,6 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 		return viewer.reload()
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
@@ -117,7 +106,5 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 		reset,
 		toggle,
 		apply,
-		show,
-		hide,
 	} as const
 }

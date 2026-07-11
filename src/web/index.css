@@ -12,10 +12,10 @@
 }
 
 .dockview-theme-github-dark {
-	--dv-color-gh-canvas-default: var(--color-neutral-900);
-	--dv-color-gh-canvas-subtle: var(--color-neutral-900);
-	--dv-color-gh-border: oklch(22% 0 0);
-	--dv-color-gh-border-muted: oklch(22% 0 0);
+	--dv-color-gh-canvas-default: color-mix(in oklab, var(--color-neutral-900), black 15%);
+	--dv-color-gh-canvas-subtle: color-mix(in oklab, var(--color-neutral-900), black 15%);
+	--dv-color-gh-border: color-mix(in oklab, var(--color-neutral-900), black 8%);
+	--dv-color-gh-border-muted: color-mix(in oklab, var(--color-neutral-900), black 8%);
 }
 
 .dv-split-view-container .dv-view-container .dv-view {
@@ -39,7 +39,7 @@
 }
 
 html {
-	@apply m-0 h-dvh w-dvw touch-none overflow-hidden scroll-smooth bg-neutral-900 p-0 tabular-nums;
+	@apply bg-darker-neutral-900/15 m-0 h-dvh w-dvw touch-none overflow-hidden scroll-smooth p-0 tabular-nums;
 	-webkit-tap-highlight-color: transparent;
 }
 

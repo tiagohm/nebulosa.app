@@ -100,7 +100,7 @@ const Files = memo(() => {
 	}
 
 	return (
-		<List emptyContent={emptyContent} itemCount={filtered.length} itemHeight={44} onAction={handleAction}>
+		<List emptyContent={emptyContent} itemCount={filtered.length} itemHeight={44} onAction={handleAction} className="max-h-100">
 			{(i) => {
 				const item = filtered[i]
 

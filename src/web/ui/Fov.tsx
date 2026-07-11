@@ -5,11 +5,10 @@ import { ImageViewerStoreContext } from '../shared/context'
 
 export const Fov = memo(() => {
 	const { fov, solver } = useContext(ImageViewerStoreContext)
-	const { show } = useSnapshot(fov.state)
 	const { solution } = useSnapshot(solver.state)
 	const hasSolutionScale = hasScaledSolution(solution)
 
-	if (!show || !hasSolutionScale) return null
+	if (!hasSolutionScale) return null
 
 	return <Items />
 })

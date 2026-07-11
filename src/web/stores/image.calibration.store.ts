@@ -1,19 +1,16 @@
 import type { ImageCalibration, ImageCalibrationFileType } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { initProxy } from '../shared/proxy'
 import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageCalibrationStore = ReturnType<typeof imageCalibrationStore>
 
 export interface ImageCalibrationState {
-	show: boolean
 	readonly calibration: ImageCalibration
 }
 
 export function imageCalibrationStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageCalibrationState>({
-		show: false,
 		calibration: viewer.state.transformation.calibration,
 	})
 
@@ -29,7 +26,7 @@ export function imageCalibrationStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.calibration`, ['p:show'])
+		return unmount
 	}
 
 	function unmount() {
@@ -47,14 +44,6 @@ export function imageCalibrationStore(viewer: ImageViewerStore) {
 		return viewer.reload()
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
@@ -62,7 +51,5 @@ export function imageCalibrationStore(viewer: ImageViewerStore) {
 		unmount,
 		update,
 		apply,
-		show,
-		hide,
 	} as const
 }

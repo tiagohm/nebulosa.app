@@ -1,0 +1,46 @@
+import { memo, type SyntheticEvent, useEffect, useState } from 'react'
+import { SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource } from 'src/shared/types'
+import sunWebp from '@/assets/sun.webp'
+import { API_URL } from '@/shared/api'
+import { Link } from './components/Link'
+import { SolarImageSourceSelect } from './SolarImageSourceSelect'
+
+export interface SunProps {
+	readonly source: SolarImageSource
+	readonly onSourceChange: (source: SolarImageSource) => void
+}
+
+// NOTE: The contrast filter is used to make the image's background color from 0 to 10 (#101010)
+// The formula of "b" parameter of linear transformation for contrast filter is (128 - color) / 128 => (128 - 10) / 128 = 0.921875
+
+export const SunImage = memo(({ source, onSourceChange }: SunProps) => {
+	const [refreshToken, setRefreshToken] = useState(0)
+	const src = `${API_URL}/atlas/sun/image?source=${source}&refresh=${refreshToken}`
+
+	useEffect(() => {
+		const timer = setInterval(
+			() => {
+				setRefreshToken((token) => token + 1)
+			},
+			1000 * 60 * 15,
+		) // 15 min
+
+		return () => {
+			clearInterval(timer)
+		}
+	}, [source])
+
+	function handleError(event: SyntheticEvent<HTMLImageElement>) {
+		const target = event.currentTarget
+		if (target.src.endsWith(sunWebp)) return
+		target.src = sunWebp
+	}
+
+	return (
+		<div className="flex min-w-20 flex-col items-center justify-center gap-1">
+			<SolarImageSourceSelect fullWidth onValueChange={onSourceChange} value={source} />
+			<img className="h-auto w-full max-w-54 contrast-[0.890625] select-none" draggable={false} onError={handleError} src={src} />
+			<Link href={SOLAR_IMAGE_SOURCE_URLS[source].replace('256', '1024')} label="Image source: NASA/SDO" />
+		</div>
+	)
+})

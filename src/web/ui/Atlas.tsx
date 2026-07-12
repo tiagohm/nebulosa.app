@@ -3,22 +3,20 @@ import type { LunarPhase } from 'nebulosa/src/astronomy/bodies/moon'
 import { CONSTELLATION_LIST, type Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { formatTemporal, type Temporal, temporalFromTime, temporalGet, temporalSet } from 'nebulosa/src/astronomy/time/temporal'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
-import React, { Activity, memo, useCallback, useDeferredValue, useMemo } from 'react'
+import React, { memo, useCallback, useDeferredValue, useMemo } from 'react'
 import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
 import planetarySatelliteEphemeris from 'src/data/planetary.satellites.json'
 import { EMPTY_TWILIGHT, type MinorPlanetParameter, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { activityMode, formatDistance, skyObjectName, skyObjectType, tw } from '@/shared/util'
+import { formatDistance, skyObjectName, skyObjectType, tw } from '@/shared/util'
 import { asteroidStore } from '@/stores/atlas.asteroid.store'
 import { galaxyStore } from '@/stores/atlas.galaxy.store'
 import { moonStore } from '@/stores/atlas.moon.store'
 import { planetStore } from '@/stores/atlas.planet.store'
 import { satelliteStore } from '@/stores/atlas.satellite.store'
 import { atlasStore, type AtlasTab, type BookmarkItem } from '@/stores/atlas.store'
-import { sunStore } from '@/stores/atlas.sun.store'
 import { useStore } from '../hooks/store.hook'
 import { lunarEclipseStore } from '../stores/lunar.eclipse.store'
-import { solarEclipseStore } from '../stores/solar.eclipse.store'
 import { BodyCoordinateInfo } from './BodyCoordinateInfo'
 import { Button } from './components/Button'
 import { Calendar } from './components/Calendar'
@@ -34,7 +32,6 @@ import { Slider } from './components/Slider'
 import { Table } from './components/Table'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
 import { TextInput } from './components/TextInput'
-import { ToggleButton } from './components/ToggleButton'
 import { ConstellationSelect } from './ConstellationSelect'
 import { MountDropdown } from './DeviceDropdown'
 import { type Icon, Icons } from './Icon'
@@ -48,7 +45,6 @@ import { SatelliteGroupTypeChipGroup } from './SatelliteGroupTypeChipGroup'
 import { SkyObjectNameTypeDropdown } from './SkyObjectNameTypeDropdown'
 import { SolarEclipseMap } from './SolarEclipseMap'
 import { StellariumObjectTypeSelect } from './StellariumObjectTypeSelect'
-import { Sun } from './Sun'
 
 export const Atlas = memo(() => {
 	const { show, tab, location } = useSnapshot(atlasStore.state)
@@ -232,7 +228,6 @@ const Body = memo(() => {
 
 	return (
 		<div className="mt-0 flex flex-col gap-2">
-			{tab === 'sun' && <SunTab />}
 			{tab === 'moon' && <MoonTab />}
 			{tab === 'planet' && <PlanetTab />}
 			{tab === 'asteroid' && <AsteroidTab />}
@@ -240,56 +235,6 @@ const Body = memo(() => {
 			{tab === 'satellite' && <SatelliteTab />}
 			<SolarEclipseMap />
 			<LunarEclipseMap />
-		</div>
-	)
-})
-
-const SunTab = memo(() => {
-	const { source } = useSnapshot(sunStore.state)
-
-	return (
-		<div className="grid grid-cols-12 items-center gap-2">
-			<div className="relative col-span-full flex max-h-80 min-h-[200px] items-center justify-center">
-				<Sun onSourceChange={(source) => (sunStore.state.source = source)} source={source} />
-				<div className="absolute top-auto left-0 p-0 text-xs">
-					<NextSolarEclipse />
-				</div>
-				<div className="absolute top-auto right-0 p-0 text-xs">
-					<Seasons />
-				</div>
-			</div>
-			<EphemerisAndChart tab="sun" className="col-span-full" name="Sun" />
-		</div>
-	)
-})
-
-const NextSolarEclipse = memo(() => {
-	const { eclipses } = useSnapshot(sunStore.state)
-	const { offset } = useSnapshot(sunStore.state.request.time)
-
-	if (eclipses.length === 0) return null
-
-	const next = eclipses[0]
-
-	return (
-		<div className="flex flex-col gap-0">
-			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Sun} key={next.maximalTime.day} label={next.type} offset={offset} time={temporalFromTime(next.maximalTime)} onClick={() => solarEclipseStore.load(next)} />
-		</div>
-	)
-})
-
-const Seasons = memo(() => {
-	const { offset } = useSnapshot(sunStore.state.request.time)
-	const { summer, spring, autumn, winter } = useSnapshot(sunStore.state.seasons)
-	const { latitude } = useSnapshot(sunStore.state.request.location)
-	const isSouthern = latitude < 0
-
-	return (
-		<div className="flex flex-col gap-0">
-			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.Leaf : Icons.Flower} label={isSouthern ? 'AUTUMN/FALL' : 'SPRING'} offset={offset} time={spring} />
-			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.SnowFlake : Icons.Sun} label={isSouthern ? 'WINTER' : 'SUMMER'} offset={offset} time={summer} />
-			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.Flower : Icons.Leaf} label={isSouthern ? 'SPRING' : 'AUTUMN/FALL'} offset={offset} time={autumn} />
-			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.Sun : Icons.SnowFlake} label={isSouthern ? 'SUMMER' : 'WINTER'} offset={offset} time={winter} />
 		</div>
 	)
 })
@@ -736,7 +681,7 @@ const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange }: Ca
 	)
 })
 
-interface AstronomicalEventProps extends Omit<React.ComponentProps<'div'>, 'children'> {
+export interface AstronomicalEventProps extends Omit<React.ComponentProps<'div'>, 'children'> {
 	readonly icon: Icon
 	readonly label: string
 	readonly time: number
@@ -744,7 +689,7 @@ interface AstronomicalEventProps extends Omit<React.ComponentProps<'div'>, 'chil
 	readonly format: string
 }
 
-const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format, className, ...props }: AstronomicalEventProps) => (
+export const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format, className, ...props }: AstronomicalEventProps) => (
 	<div className={tw('flex flex-row items-center gap-1 hover:bg-neutral-700 rounded-md p-2 cursor-pointer', className)} {...props}>
 		<Icon />
 		<div className="flex flex-col items-start justify-center gap-0 font-bold">
@@ -765,6 +710,7 @@ interface EphemerisAndChartProps extends React.ComponentProps<'div'> {
 	readonly tags?: EphemerisAndChartTag[]
 	readonly isFavorite?: boolean
 	readonly onFavoriteChange?: (favorite: boolean) => void
+	readonly vertical?: boolean
 }
 
 function makeTags(name: string | undefined, names: readonly string[] | undefined, constellation: Constellation, extra?: EphemerisAndChartTag[]): EphemerisAndChartTag[] {
@@ -787,27 +733,20 @@ function TagItem(tag: EphemerisAndChartTag) {
 	return <Chip color={tag.color} key={tag.label} label={tag.label} size="sm" />
 }
 
-const EphemerisAndChart = memo(({ tab, name, tags, className, isFavorite, onFavoriteChange }: EphemerisAndChartProps) => {
+export const EphemerisAndChart = memo(({ tab, name, tags, className, isFavorite, onFavoriteChange, vertical }: EphemerisAndChartProps) => {
 	const state = atlasStore.state[tab]!.state
-	const { mode } = useSnapshot(state)
 	const { names, constellation } = useSnapshot(state.position)
 	tags = useMemo(() => makeTags(name, names, constellation, tags), [name, constellation, names, tags])
 
 	return (
-		<div className={tw('h-[140px] col-span-full relative flex flex-col justify-start items-center gap-1', className)}>
-			<div className="flex w-full flex-row gap-2 text-start text-sm font-bold">
-				<ToggleButton color="primary" icon={Icons.Info} value={mode === 'info'} onClick={() => (state.mode = 'info')} />
-				<ToggleButton color="primary" icon={Icons.Chart} value={mode === 'chart'} onClick={() => (state.mode = 'chart')} />
+		<div className={tw('col-span-full relative flex flex-1 flex-col justify-start items-center gap-1', className)}>
+			<div className="flex w-full flex-row gap-2 p-1 text-start text-sm font-bold">
 				<div className="flex flex-1 items-center justify-center gap-1 overflow-hidden text-sm font-bold">{tags.map(TagItem)}</div>
 				{onFavoriteChange && <IconButton color={isFavorite ? 'danger' : 'warning'} disabled={isFavorite === undefined} icon={isFavorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onClick={() => onFavoriteChange(!isFavorite)} tooltipContent={isFavorite ? 'Remove bookmark' : 'Add bookmark'} />}
 			</div>
-			<span className="w-full">
-				<Activity mode={activityMode(mode === 'info')}>
-					<EphemerisPosition tab={tab} />
-				</Activity>
-				<Activity mode={activityMode(mode === 'chart')}>
-					<EphemerisChart tab={tab} />
-				</Activity>
+			<span className={`flex w-full gap-2 ${vertical ? 'flex-col' : 'flex-row'}`}>
+				<EphemerisPosition tab={tab} />
+				<EphemerisChart tab={tab} />
 			</span>
 		</div>
 	)
@@ -822,7 +761,7 @@ const EphemerisPosition = memo(({ tab }: EphemerisPositionProps) => {
 	const { position } = useSnapshot(state)
 
 	return (
-		<div className="flex w-full flex-col gap-2 p-0">
+		<div className="flex w-full flex-1 flex-col gap-2 p-0">
 			<BodyCoordinateInfo position={position} />
 			<EphemerisPositionButtons tab={tab} />
 		</div>
@@ -893,7 +832,7 @@ const EphemerisChart = memo(({ tab }: EphemerisChartProps) => {
 	const deferredData = useDeferredValue(data, [])
 
 	return (
-		<ComposedChart data={deferredData} height={120} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive>
+		<ComposedChart data={deferredData} height={280} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive className="flex-1">
 			<XAxis dataKey="name" domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={ChartTickFormatter} tickMargin={6} />
 			<YAxis domain={[0, 90]} width={25} />
 			<Area dataKey="dayFirst" fill="#FFF176" {...DEFAULT_AREA_PROPS} />

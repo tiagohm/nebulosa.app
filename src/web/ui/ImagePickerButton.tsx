@@ -1,5 +1,5 @@
 import { memo, useRef } from 'react'
-import { workspaceStore } from '../stores/workspace.store'
+import { homeStore } from '../stores/home.store'
 import { IconButton } from './components/IconButton'
 import { Popover, type PopoverMethods } from './components/Popover'
 import { FilePicker } from './FilePicker'
@@ -13,7 +13,7 @@ export const ImagePickerButton = memo(() => {
 	function handleChoose(paths: string[] = []) {
 		if (paths.length > 0) {
 			for (const path of paths) {
-				workspaceStore.addImage(path, 'file')
+				homeStore.addImage(path, 'file')
 			}
 		}
 

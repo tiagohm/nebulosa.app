@@ -110,8 +110,14 @@ function create() {
 	})
 }
 
+let mounted = false
+
 function mount() {
+	if (mounted) return
+
 	console.info('web socket mounted')
+
+	mounted = true
 
 	timer = window.setInterval(() => {
 		if (webSocket && webSocket.readyState === WebSocket.CLOSED) {
@@ -123,12 +129,16 @@ function mount() {
 	}, 5000)
 
 	create()
+
+	return unmount
 }
 
 function unmount() {
+	if (!mounted) return
 	console.info('web socket unmounted')
 	window.clearInterval(timer)
 	timer = undefined
+	mounted = false
 }
 
 function send(data: string | Blob | BufferSource) {

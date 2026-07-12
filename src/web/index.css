@@ -18,8 +18,17 @@
 	--dv-color-gh-border-muted: color-mix(in oklab, var(--color-neutral-900), black 8%);
 }
 
+.dv-react-part {
+	position: relative;
+}
+
 .dv-split-view-container .dv-view-container .dv-view {
 	overflow: hidden;
+}
+
+.dv-tab-group-underline svg path {
+	stroke: color-mix(in oklab, var(--color-neutral-900), white 1%) !important;
+	stroke-width: 1;
 }
 
 @utility text-lighter-* {

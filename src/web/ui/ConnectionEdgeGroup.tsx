@@ -4,20 +4,20 @@ import { memo, useRef } from 'react'
 import type { ConnectionStatus } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 import { connectionStore, isNetworkConnection } from '@/stores/connection.store'
-import type { Connection } from '../../../shared/types'
-import { ClientTypeSelect } from '../../ClientTypeSelect'
-import { Button } from '../../components/Button'
-import { Checkbox } from '../../components/Checkbox'
-import { Chip } from '../../components/Chip'
-import { IconButton } from '../../components/IconButton'
-import { List, ListItem } from '../../components/List'
-import { NumberInput } from '../../components/NumberInput'
-import { Popover, type PopoverMethods } from '../../components/Popover'
-import { Select } from '../../components/Select'
-import { TextInput } from '../../components/TextInput'
-import { Icons } from '../../Icon'
+import type { Connection } from '../shared/types'
+import { ClientTypeSelect } from './ClientTypeSelect'
+import { Button } from './components/Button'
+import { Checkbox } from './components/Checkbox'
+import { Chip } from './components/Chip'
+import { IconButton } from './components/IconButton'
+import { List, ListItem } from './components/List'
+import { NumberInput } from './components/NumberInput'
+import { Popover, type PopoverMethods } from './components/Popover'
+import { Select } from './components/Select'
+import { TextInput } from './components/TextInput'
+import { Icons } from './Icon'
 
-export const Connections = memo(() => (
+export const ConnectionEdgeGroup = memo(() => (
 	<div className="flex flex-col gap-2 p-3">
 		<span className="w-full font-bold text-neutral-300">ACTIVE CONNECTIONS:</span>
 		<ActiveConnectionList />

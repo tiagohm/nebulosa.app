@@ -3,7 +3,7 @@ import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
 import { proxy } from 'valtio'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
-import { workspaceStore } from './workspace.store'
+import { homeStore } from './home.store'
 
 export type FramingStore = typeof framingStore
 
@@ -44,7 +44,7 @@ async function load(request: Partial<Framing> = state.request) {
 		const frame = await Api.Framing.frame(state.request)
 
 		if (frame) {
-			const image = workspaceStore.addImage(frame.path, 'framing', request.id)
+			const image = homeStore.addImage(frame.path, 'framing', request.id)
 			// const index = state.images.findIndex((e) => e.id === image.id)
 			// index >= 0 ? (state.images[index] = image) : state.images.push(image)
 		}

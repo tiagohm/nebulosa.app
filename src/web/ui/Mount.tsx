@@ -4,7 +4,7 @@ import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/math/unit
 import { memo, useContext, useEffect, useRef } from 'react'
 import type { CoordinateInfo, CoordinateType } from 'src/shared/types'
 import { equipmentStore } from 'src/web/stores/equipment.store'
-import type { DevicePanelParams } from 'src/web/stores/workspace.store'
+import type { DevicePanelParams } from 'src/web/stores/home.store'
 import { useSnapshot } from 'valtio'
 import { mountStore, type MountStore } from '@/stores/mount.store'
 import { MountStoreContext } from '../shared/context'

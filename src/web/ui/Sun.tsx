@@ -1,46 +1,56 @@
-import { memo, type SyntheticEvent, useEffect, useState } from 'react'
-import { SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource } from 'src/shared/types'
-import sunWebp from '@/assets/sun.webp'
-import { API_URL } from '@/shared/api'
-import { Link } from './components/Link'
-import { SolarImageSourceSelect } from './SolarImageSourceSelect'
+import type { IDockviewPanelProps } from 'dockview-react'
+import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
+import { memo } from 'react'
+import { useSnapshot } from 'valtio'
+import { sunStore } from '../stores/atlas.sun.store'
+import { solarEclipseStore } from '../stores/solar.eclipse.store'
+import { AstronomicalEvent, EphemerisAndChart } from './Atlas'
+import { Icons } from './Icon'
+import { SunImage } from './SunImage'
 
-export interface SunProps {
-	readonly source: SolarImageSource
-	readonly onSourceChange: (source: SolarImageSource) => void
-}
-
-// NOTE: The contrast filter is used to make the image's background color from 0 to 10 (#101010)
-// The formula of "b" parameter of linear transformation for contrast filter is (128 - color) / 128 => (128 - 10) / 128 = 0.921875
-
-export const Sun = memo(({ source, onSourceChange }: SunProps) => {
-	const [refreshToken, setRefreshToken] = useState(0)
-	const src = `${API_URL}/atlas/sun/image?source=${source}&refresh=${refreshToken}`
-
-	useEffect(() => {
-		const timer = setInterval(
-			() => {
-				setRefreshToken((token) => token + 1)
-			},
-			1000 * 60 * 15,
-		) // 15 min
-
-		return () => {
-			clearInterval(timer)
-		}
-	}, [source])
-
-	function handleError(event: SyntheticEvent<HTMLImageElement>) {
-		const target = event.currentTarget
-		if (target.src.endsWith(sunWebp)) return
-		target.src = sunWebp
-	}
+export const Sun = memo(({ api }: IDockviewPanelProps) => {
+	const { source } = useSnapshot(sunStore.state)
+	const vertical = api.group.id !== 'edge.bottom'
 
 	return (
-		<div className="flex min-w-20 flex-col items-center justify-center gap-1">
-			<SolarImageSourceSelect fullWidth onValueChange={onSourceChange} value={source} />
-			<img className="h-auto w-full max-w-54 contrast-[0.890625] select-none" draggable={false} onError={handleError} src={src} />
-			<Link href={SOLAR_IMAGE_SOURCE_URLS[source].replace('256', '1024')} label="Image source: NASA/SDO" />
+		<div className={`flex items-center justify-center gap-2 ${vertical ? 'flex-col' : 'flex-row'}`}>
+			<div className="col-span-full flex flex-row items-center justify-center gap-1">
+				<NextSolarEclipse />
+				<SunImage onSourceChange={(source) => (sunStore.state.source = source)} source={source} />
+				<Seasons />
+			</div>
+			<EphemerisAndChart tab="sun" className="col-span-full" name="Sun" vertical={vertical} />
+		</div>
+	)
+})
+
+const NextSolarEclipse = memo(() => {
+	const { eclipses } = useSnapshot(sunStore.state)
+	const { offset } = useSnapshot(sunStore.state.request.time)
+
+	if (eclipses.length === 0) return null
+
+	const next = eclipses[0]
+
+	return (
+		<div className="flex h-full flex-col justify-center gap-0 text-sm">
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Sun} key={next.maximalTime.day} label={next.type} offset={offset} time={temporalFromTime(next.maximalTime)} onClick={() => solarEclipseStore.load(next)} />
+		</div>
+	)
+})
+
+const Seasons = memo(() => {
+	const { offset } = useSnapshot(sunStore.state.request.time)
+	const { summer, spring, autumn, winter } = useSnapshot(sunStore.state.seasons)
+	const { latitude } = useSnapshot(sunStore.state.request.location)
+	const isSouthern = latitude < 0
+
+	return (
+		<div className="flex h-full flex-col justify-center gap-0 text-sm">
+			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.Leaf : Icons.Flower} label={isSouthern ? 'AUTUMN/FALL' : 'SPRING'} offset={offset} time={spring} />
+			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.SnowFlake : Icons.Sun} label={isSouthern ? 'WINTER' : 'SUMMER'} offset={offset} time={summer} />
+			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.Flower : Icons.Leaf} label={isSouthern ? 'SPRING' : 'AUTUMN/FALL'} offset={offset} time={autumn} />
+			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.Sun : Icons.SnowFlake} label={isSouthern ? 'SUMMER' : 'WINTER'} offset={offset} time={winter} />
 		</div>
 	)
 })

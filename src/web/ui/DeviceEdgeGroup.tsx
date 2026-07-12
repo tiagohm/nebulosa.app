@@ -1,13 +1,13 @@
 import type { DeviceType } from 'nebulosa/src/devices/indi/device'
 import { memo } from 'react'
 import { equipmentStore } from 'src/web/stores/equipment.store'
-import { workspaceStore } from 'src/web/stores/workspace.store'
+import { homeStore } from 'src/web/stores/home.store'
 import { useSnapshot } from 'valtio'
-import { List, ListItem, type ListItemProps } from '../../components/List'
-import { ConnectButton } from '../../ConnectButton'
-import { Icons } from '../../Icon'
+import { List, ListItem, type ListItemProps } from './components/List'
+import { ConnectButton } from './ConnectButton'
+import { Icons } from './Icon'
 
-export const Devices = memo(() => (
+export const DeviceEdgeGroup = memo(() => (
 	<div className="flex flex-col gap-2 p-3">
 		<DeviceList type="camera" />
 		<DeviceList type="mount" />
@@ -32,7 +32,7 @@ const DeviceList = memo(({ type, title }: DeviceListProps) => {
 	const devices = equipmentStore.state[type]
 
 	function handleAction(index: number) {
-		workspaceStore.openDevice(devices[index])
+		homeStore.openDevice(devices[index])
 	}
 
 	return (

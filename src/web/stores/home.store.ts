@@ -6,11 +6,11 @@ import { cameraBus, imageBus } from '../shared/bus'
 import type { Image, ImageSource } from '../shared/types'
 import { equipmentStore } from './equipment.store'
 
-export type WorkspaceStore = typeof workspaceStore
+export type HomeStore = typeof homeStore
 
-export interface WorkspaceState {}
+export interface HomeState {}
 
-export interface StoredWorkspaceLayout {
+export interface StoredHomeLayout {
 	readonly schemaVersion: number
 	readonly layout: SerializedDockview
 }
@@ -24,7 +24,7 @@ export interface DevicePanelParams {
 const LAYOUT_SCHEMA_VERSION = 1
 const LAYOUT_STORAGE_KEY = 'workspace.layout'
 
-const state = proxy<WorkspaceState>({})
+const state = proxy<HomeState>({})
 
 let api: DockviewApi | undefined
 let saveTimer: number | undefined
@@ -39,13 +39,13 @@ cameraBus.subscribe('frame', (event) => {
 
 function restoreLayout() {
 	const serializedLayout = localStorage.getItem(LAYOUT_STORAGE_KEY)
-	if (serializedLayout) return JSON.parse(serializedLayout) as StoredWorkspaceLayout
+	if (serializedLayout) return JSON.parse(serializedLayout) as StoredHomeLayout
 	return undefined
 }
 
 function saveLayout() {
 	if (api) {
-		const storedLayout: StoredWorkspaceLayout = { schemaVersion: LAYOUT_SCHEMA_VERSION, layout: api.toJSON() }
+		const storedLayout: StoredHomeLayout = { schemaVersion: LAYOUT_SCHEMA_VERSION, layout: api.toJSON() }
 		localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(storedLayout))
 	}
 }
@@ -72,15 +72,49 @@ function handleReady(event: DockviewReadyEvent) {
 	const connections = api.getPanel('panel.connections') ?? api.addPanel({ id: 'panel.connections', component: 'component.connections', tabComponent: 'tab.fixed', title: 'Connections', position: { referenceGroup: left.id } })
 	const devices = api.getPanel('panel.devices') ?? api.addPanel({ id: 'panel.devices', component: 'component.devices', tabComponent: 'tab.fixed', title: 'Devices', position: { referenceGroup: left.id } })
 
+	const atlas = api.createTabGroup({ groupId: bottom.id, color: 'blue', label: 'Atlas' })
+	const sun = api.addPanel({ id: 'panel.atlas.sun', component: 'component.atlas.sun', tabComponent: 'tab.fixed', title: 'Sun', position: { referenceGroup: bottom.id } })
+	api.addPanelToTabGroup({ groupId: bottom.id, tabGroupId: atlas.id, panelId: sun.id, index: 0 })
+	const moon = api.addPanel({ id: 'panel.atlas.moon', component: 'component.atlas.moon', tabComponent: 'tab.fixed', title: 'Moon', position: { referenceGroup: bottom.id } })
+	api.addPanelToTabGroup({ groupId: bottom.id, tabGroupId: atlas.id, panelId: moon.id, index: 1 })
+	const planet = api.addPanel({ id: 'panel.atlas.planet', component: 'component.atlas.planet', tabComponent: 'tab.fixed', title: 'Planet', position: { referenceGroup: bottom.id } })
+	api.addPanelToTabGroup({ groupId: bottom.id, tabGroupId: atlas.id, panelId: planet.id, index: 2 })
+	const asteroid = api.addPanel({ id: 'panel.atlas.asteroid', component: 'component.atlas.asteroid', tabComponent: 'tab.fixed', title: 'Asteroid', position: { referenceGroup: bottom.id } })
+	api.addPanelToTabGroup({ groupId: bottom.id, tabGroupId: atlas.id, panelId: asteroid.id, index: 3 })
+	const galaxy = api.addPanel({ id: 'panel.atlas.galaxy', component: 'component.atlas.galaxy', tabComponent: 'tab.fixed', title: 'Galaxy', position: { referenceGroup: bottom.id } })
+	api.addPanelToTabGroup({ groupId: bottom.id, tabGroupId: atlas.id, panelId: galaxy.id, index: 4 })
+	const satellite = api.addPanel({ id: 'panel.atlas.satellite', component: 'component.atlas.satellite', tabComponent: 'tab.fixed', title: 'Satellite', position: { referenceGroup: bottom.id } })
+	api.addPanelToTabGroup({ groupId: bottom.id, tabGroupId: atlas.id, panelId: satellite.id, index: 5 })
+	atlas.collapse()
+
+	const images = api.getGroup('group.images') ?? api.addGroup({ id: 'group.images', direction: 'within', locked: true })
+	const planetarium = api.addPanel({ id: 'panel.planetarium', component: 'component.planetarium', tabComponent: 'tab.fixed', title: 'Planetarium', position: { referenceGroup: images.id } })
+
 	// layoutDisposable = api.onDidLayoutChange(() => {
 	// 	window.clearTimeout(saveTimer)
 	// 	saveTimer = window.setTimeout(saveLayout, 1000)
 	// })
 }
 
-function mount() {}
+let mounted = false
+
+console.info('home created')
+
+function mount() {
+	if (mounted) return
+
+	console.info('home mounted')
+
+	mounted = true
+
+	return unmount
+}
 
 function unmount() {
+	if (!mounted) return
+
+	console.info('home unmounted')
+
 	layoutDisposable?.dispose()
 	layoutDisposable = undefined
 
@@ -88,6 +122,8 @@ function unmount() {
 	saveTimer = undefined
 
 	saveLayout()
+
+	mounted = false
 }
 
 function openDevice(device: Device) {
@@ -98,7 +134,7 @@ function openDevice(device: Device) {
 
 	if (!panel) {
 		const params: DevicePanelParams = { type: device.type, id: device.id, name: device.name }
-		panel = api.addPanel({ id, component: `component.device.${device.type}`, title: device.name, tabComponent: 'tab.closeable', params, position: { referenceGroup: 'edge.right' } })
+		panel = api.addPanel({ id, component: `component.device.${device.type}`, title: device.name, params, position: { referenceGroup: 'edge.right' } })
 	}
 
 	panel.api.setActive()
@@ -131,7 +167,7 @@ function addImage(path: string, source: ImageSource | Camera, id?: string) {
 
 		const image = { path, id, source, camera }
 		const title = image.camera?.name ?? image.path
-		const panel = api.addPanel({ id: panelId, component: 'component.images', title, tabComponent: 'tab.closeable', params: image, position: { referenceGroup: images.id } })
+		const panel = api.addPanel({ id: panelId, component: 'component.images', title, params: image, position: { referenceGroup: images.id } })
 
 		imageBus.emit('add', image)
 
@@ -160,7 +196,7 @@ window.addEventListener('beforeunload', () => {
 	saveLayout()
 })
 
-export const workspaceStore = {
+export const homeStore = {
 	state,
 	handleReady,
 	mount,

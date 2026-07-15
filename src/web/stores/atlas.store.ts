@@ -4,7 +4,6 @@ import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_GEOGRAPHIC_COORDINATE, type Framing, type LocationAndTime, type Twilight } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { subscribeKey } from 'valtio/utils'
 import { Api } from '../shared/api'
 import { initProxy } from '../shared/proxy'
 import type { AtlasAsteroidStore } from './atlas.asteroid.store'
@@ -26,8 +25,6 @@ export interface BookmarkItem {
 }
 
 export interface AtlasState {
-	show: boolean
-	tab: AtlasTab
 	twilight?: Twilight
 	readonly request: LocationAndTime
 	sun?: AtlasSunStore
@@ -39,17 +36,12 @@ export interface AtlasState {
 	readonly calendar: {
 		manual: boolean
 	}
-	readonly location: {
-		show: boolean
-	}
 	readonly bookmark: {
 		readonly items: BookmarkItem[]
 	}
 }
 
 const state = proxy<AtlasState>({
-	show: false,
-	tab: 'sun',
 	twilight: undefined,
 	request: {
 		location: structuredClone(DEFAULT_GEOGRAPHIC_COORDINATE),
@@ -61,49 +53,39 @@ const state = proxy<AtlasState>({
 	calendar: {
 		manual: false,
 	},
-	location: {
-		show: false,
-	},
 	bookmark: {
 		items: [],
 	},
 })
 
-initProxy(state, 'atlas', ['p:show', 'p:tab', 'o:bookmark'])
+initProxy(state, 'atlas', ['o:bookmark'])
 initProxy(state.request, 'atlas', ['o:location'])
 initProxy(state.request.time, 'atlas.time', ['p:offset'])
 
-const TABS = ['sun', 'moon', 'planet', 'asteroid', 'galaxy', 'satellite'] as const
-
-let updating = false
+let pendingTab: AtlasTab | false = false
 let twilightUpdate = true
 let twilightStartTime = 0
 
-subscribeKey(state, 'show', (show) => show && tick())
-subscribeKey(state, 'tab', () => tick())
-
 setInterval(tick, 60000)
 
-if (state.show) {
-	void tick()
-}
+void tick('sun')
 
-function updateTime(utc: number, offset: number, manual: boolean = true) {
+function updateTime(tab: AtlasTab, utc: number, offset: number, manual: boolean = true) {
 	state.request.time.offset = offset
 	state.calendar.manual = manual
-	void tick(utc)
+	void tick(tab, utc)
 }
 
-function updateLocation(location: GeographicCoordinate) {
+function updateLocation(tab: AtlasTab, location: GeographicCoordinate) {
 	twilightUpdate ||= isLocationChanged(location, state.request.location)
 	Object.assign(state.request.location, location)
-	void tick()
+	void tick(tab)
 }
 
-async function tick(utc?: Temporal) {
-	if (!state.show || updating) return
+async function tick(tab: AtlasTab, utc?: Temporal) {
+	if (pendingTab !== false) return
 
-	updating = true
+	pendingTab = tab
 
 	try {
 		const { time, location } = state.request
@@ -124,14 +106,9 @@ async function tick(utc?: Temporal) {
 
 		await twilight()
 
-		if (state.tab === 'sun') void state.sun!.tick(time, location, dateHasChanged)
-		else if (state.tab === 'moon') void state.moon!.tick(time, location, dateHasChanged)
-		else if (state.tab === 'planet') void state.planet!.tick(time, location, dateHasChanged)
-		else if (state.tab === 'asteroid') void state.asteroid!.tick(time, location, dateHasChanged)
-		else if (state.tab === 'galaxy') void state.galaxy!.tick(time, location, dateHasChanged)
-		else if (state.tab === 'satellite') void state.satellite!.tick(time, location, dateHasChanged)
+		void state[tab]!.tick(time, location, dateHasChanged)
 	} finally {
-		updating = false
+		pendingTab = false
 	}
 }
 
@@ -143,22 +120,22 @@ async function twilight() {
 	else twilightUpdate = true
 }
 
-function sync(mount?: Mount) {
+function sync(tab: AtlasTab, mount?: Mount) {
 	if (!mount) return undefined
-	const { position } = state[state.tab]!.state
+	const { position } = state[tab]!.state
 	const [rightAscension, declination] = position.equatorial
 	return Api.Mounts.sync(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
 }
 
-function goTo(mount?: Mount) {
+function goTo(tab: AtlasTab, mount?: Mount) {
 	if (!mount) return undefined
-	const { position } = state[state.tab]!.state
+	const { position } = state[tab]!.state
 	const [rightAscension, declination] = position.equatorial
 	return Api.Mounts.goTo(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
 }
 
-function frame() {
-	const { position } = state[state.tab]!.state
+function frame(tab: AtlasTab) {
+	const { position } = state[tab]!.state
 	const [rightAscension, declination] = position.equatorialJ2000
 	const request: Partial<Framing> = { rightAscension: formatRA(rightAscension), declination: formatDEC(declination) }
 	return framingStore.load(request)
@@ -182,39 +159,15 @@ function selectBookmark({ type, code }: BookmarkItem) {
 	else if (type === 'asteroid') void state.asteroid!.select(code)
 	else if (type === 'galaxy') void state.galaxy!.select(+code, 0, false, false)
 	else if (type === 'satellite') void state.satellite!.select(+code, 0, false, false)
-
-	state.tab = type
 }
 
 function removeBookmark(item: BookmarkItem) {
 	toggleBookmark(item.type, item.name, item.code, false)
 }
 
-function showLocation() {
-	state.location.show = true
-}
-
-function hideLocation() {
-	state.location.show = false
-}
-
-function handleTabWheel(event: React.WheelEvent) {
-	if (event.deltaY === 0) return
-	const { tab } = state
-	const index = event.deltaY < 0 ? (TABS.indexOf(tab) + 1) % TABS.length : (TABS.indexOf(tab) + TABS.length - 1) % TABS.length
-	state.tab = TABS[index]
-}
-
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
-
 export const atlasStore = {
 	state,
+	tick,
 	updateTime,
 	updateLocation,
 	sync,
@@ -223,11 +176,6 @@ export const atlasStore = {
 	toggleBookmark,
 	selectBookmark,
 	removeBookmark,
-	showLocation,
-	hideLocation,
-	handleTabWheel,
-	show,
-	hide,
 }
 
 export function isLocationChanged(a: GeographicCoordinate, b: GeographicCoordinate) {

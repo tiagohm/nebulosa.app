@@ -1,7 +1,8 @@
 import type { IDockviewPanelProps } from 'dockview-react'
 import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
-import { memo } from 'react'
+import { memo, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
+import { atlasStore } from '../stores/atlas.store'
 import { sunStore } from '../stores/atlas.sun.store'
 import { solarEclipseStore } from '../stores/solar.eclipse.store'
 import { AstronomicalEvent, EphemerisAndChart } from './Atlas'
@@ -10,16 +11,17 @@ import { SunImage } from './SunImage'
 
 export const Sun = memo(({ api }: IDockviewPanelProps) => {
 	const { source } = useSnapshot(sunStore.state)
-	const vertical = api.group.id !== 'edge.bottom'
+
+	useEffect(() => void atlasStore.tick('sun'), [])
 
 	return (
-		<div className={`flex items-center justify-center gap-2 ${vertical ? 'flex-col' : 'flex-row'}`}>
-			<div className="col-span-full flex flex-row items-center justify-center gap-1">
+		<div className="grid grid-cols-12 items-center gap-2">
+			<div className="relative col-span-full flex items-center justify-center">
 				<NextSolarEclipse />
 				<SunImage onSourceChange={(source) => (sunStore.state.source = source)} source={source} />
 				<Seasons />
 			</div>
-			<EphemerisAndChart tab="sun" className="col-span-full" name="Sun" vertical={vertical} />
+			<EphemerisAndChart type="sun" className="col-span-full" name="Sun" />
 		</div>
 	)
 })

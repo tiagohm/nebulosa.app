@@ -67,28 +67,19 @@ function handleReady(event: DockviewReadyEvent) {
 	// Initial layout
 	const left = api.getEdgeGroup('left') ?? api.addEdgeGroup('left', { id: 'edge.left', initialSize: 380, collapsedSize: 38, collapsed: true })
 	const right = api.getEdgeGroup('right') ?? api.addEdgeGroup('right', { id: 'edge.right', initialSize: 480, collapsedSize: 38, collapsed: true })
-	const bottom = api.getEdgeGroup('bottom') ?? api.addEdgeGroup('bottom', { id: 'edge.bottom', initialSize: 280, collapsedSize: 38, collapsed: true })
 
 	const connections = api.getPanel('panel.connections') ?? api.addPanel({ id: 'panel.connections', component: 'component.connections', tabComponent: 'tab.fixed', title: 'Connections', position: { referenceGroup: left.id } })
 	const devices = api.getPanel('panel.devices') ?? api.addPanel({ id: 'panel.devices', component: 'component.devices', tabComponent: 'tab.fixed', title: 'Devices', position: { referenceGroup: left.id } })
 
-	const atlas = api.createTabGroup({ groupId: bottom.id, color: 'blue', label: 'Atlas' })
-	const sun = api.addPanel({ id: 'panel.atlas.sun', component: 'component.atlas.sun', tabComponent: 'tab.fixed', title: 'Sun', position: { referenceGroup: bottom.id } })
-	api.addPanelToTabGroup({ groupId: bottom.id, tabGroupId: atlas.id, panelId: sun.id, index: 0 })
-	const moon = api.addPanel({ id: 'panel.atlas.moon', component: 'component.atlas.moon', tabComponent: 'tab.fixed', title: 'Moon', position: { referenceGroup: bottom.id } })
-	api.addPanelToTabGroup({ groupId: bottom.id, tabGroupId: atlas.id, panelId: moon.id, index: 1 })
-	const planet = api.addPanel({ id: 'panel.atlas.planet', component: 'component.atlas.planet', tabComponent: 'tab.fixed', title: 'Planet', position: { referenceGroup: bottom.id } })
-	api.addPanelToTabGroup({ groupId: bottom.id, tabGroupId: atlas.id, panelId: planet.id, index: 2 })
-	const asteroid = api.addPanel({ id: 'panel.atlas.asteroid', component: 'component.atlas.asteroid', tabComponent: 'tab.fixed', title: 'Asteroid', position: { referenceGroup: bottom.id } })
-	api.addPanelToTabGroup({ groupId: bottom.id, tabGroupId: atlas.id, panelId: asteroid.id, index: 3 })
-	const galaxy = api.addPanel({ id: 'panel.atlas.galaxy', component: 'component.atlas.galaxy', tabComponent: 'tab.fixed', title: 'Galaxy', position: { referenceGroup: bottom.id } })
-	api.addPanelToTabGroup({ groupId: bottom.id, tabGroupId: atlas.id, panelId: galaxy.id, index: 4 })
-	const satellite = api.addPanel({ id: 'panel.atlas.satellite', component: 'component.atlas.satellite', tabComponent: 'tab.fixed', title: 'Satellite', position: { referenceGroup: bottom.id } })
-	api.addPanelToTabGroup({ groupId: bottom.id, tabGroupId: atlas.id, panelId: satellite.id, index: 5 })
-	atlas.collapse()
-
-	const images = api.getGroup('group.images') ?? api.addGroup({ id: 'group.images', direction: 'within', locked: true })
+	const images = api.getGroup('group.images') ?? api.addGroup({ id: 'group.images', direction: 'within' })
 	const planetarium = api.addPanel({ id: 'panel.planetarium', component: 'component.planetarium', tabComponent: 'tab.fixed', title: 'Planetarium', position: { referenceGroup: images.id } })
+	const sun = api.addPanel({ id: 'panel.atlas.sun', component: 'component.atlas.sun', tabComponent: 'tab.fixed', title: 'Sun', position: { referenceGroup: images.id } })
+	const moon = api.addPanel({ id: 'panel.atlas.moon', component: 'component.atlas.moon', tabComponent: 'tab.fixed', title: 'Moon', position: { referenceGroup: images.id } })
+	const planet = api.addPanel({ id: 'panel.atlas.planet', component: 'component.atlas.planet', tabComponent: 'tab.fixed', title: 'Planet', position: { referenceGroup: images.id } })
+	const asteroid = api.addPanel({ id: 'panel.atlas.asteroid', component: 'component.atlas.asteroid', tabComponent: 'tab.fixed', title: 'Asteroid', position: { referenceGroup: images.id } })
+	const galaxy = api.addPanel({ id: 'panel.atlas.galaxy', component: 'component.atlas.galaxy', tabComponent: 'tab.fixed', title: 'Galaxy', position: { referenceGroup: images.id } })
+	const satellite = api.addPanel({ id: 'panel.atlas.satellite', component: 'component.atlas.satellite', tabComponent: 'tab.fixed', title: 'Satellite', position: { referenceGroup: images.id } })
+	const calculator = api.addPanel({ id: 'panel.calculator', component: 'component.calculator', tabComponent: 'tab.fixed', title: 'Calculator', position: { referenceGroup: images.id } })
 
 	// layoutDisposable = api.onDidLayoutChange(() => {
 	// 	window.clearTimeout(saveTimer)

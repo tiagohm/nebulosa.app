@@ -66,7 +66,7 @@ async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChange
 		}
 	}
 
-	if (changed) {
+	if (changed || chartUpdate || seasonsUpdate || eclipsesUpdate) {
 		void updateSeasons()
 		void updateEclipses()
 

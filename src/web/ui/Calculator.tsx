@@ -1,3 +1,4 @@
+import type { IDockviewPanelProps } from 'dockview-react'
 import { toHour } from 'nebulosa/src/math/units/angle'
 import { memo, type ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
@@ -8,7 +9,6 @@ import { NumberInput } from './components/NumberInput'
 import { Tab, TabPanel, Tabs } from './components/Tabs'
 import { TextInput } from './components/TextInput'
 import { Icons } from './Icon'
-import { Modal } from './Modal'
 
 const MIN_APERTURE = 1
 const MIN_FOCAL_LENGTH = 1
@@ -35,19 +35,7 @@ const MIN_AIRMASS = 1
 const MAX_ZENITH_DISTANCE = 89.9
 const MAX_OVERLAP = 99
 
-export const Calculator = memo(() => {
-	const { show } = useSnapshot(calculatorStore.state)
-
-	if (!show) return null
-
-	return (
-		<Modal header="Calculator" id="calculator" initialWidth="460px" onHide={calculatorStore.hide}>
-			<Body />
-		</Modal>
-	)
-})
-
-const Body = memo(() => {
+export const Calculator = memo(({ api }: IDockviewPanelProps) => {
 	const { favorites } = useSnapshot(calculatorStore.state)
 	const tabs = FORMULA_TABS.toSorted((a, b) => {
 		const ai = favorites.indexOf(a.id)
@@ -60,8 +48,8 @@ const Body = memo(() => {
 	})
 
 	return (
-		<div className="mt-0 px-1 py-2">
-			<Tabs className="max-h-100" classNames={{ panelContainer: 'overflow-y-auto pr-1', tabList: 'max-h-100 w-56', tab: 'min-h-9' }} placement="start">
+		<div className="h-full px-1 py-2">
+			<Tabs className="max-h-full" classNames={{ panelContainer: 'overflow-y-auto pr-1', tabList: 'max-h-full w-56', tab: 'min-h-9' }} placement="start">
 				{tabs.map(({ id, label }) => (
 					<Tab id={id} key={id} endContent={<IconButton icon={Icons.Star} color={favorites.includes(id) ? 'warning' : 'default'} onClick={() => calculatorStore.toggleFavorite(id)} size="sm" />}>
 						{label}

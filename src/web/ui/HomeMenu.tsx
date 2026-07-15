@@ -58,7 +58,6 @@ export type HomeMenuItem = 'camera' | 'mount' | 'filter-wheel' | 'focuser' | 'ro
 export const HomeMenu = memo(() => (
 	<>
 		<HomeMenuPopover />
-		<Atlas />
 		<Framing />
 		<Guider />
 		<AlpacaServer />

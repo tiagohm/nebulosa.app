@@ -1,9 +1,9 @@
-import { type Angle, formatALT, formatAZ, formatDEC, formatHMS, formatRA, toDeg } from 'nebulosa/src/math/units/angle'
+import { type Angle, formatALT, formatAZ, formatDEC, formatRA, toDeg } from 'nebulosa/src/math/units/angle'
 import type { ComponentProps } from 'react'
 import type { BodyPosition, CoordinateInfo, CoordinateType } from 'src/shared/types'
 import { formatDistance, tw } from '@/shared/util'
 
-export type BodyCoordinateInfoField = keyof CoordinateInfo | 'distance' | 'illuminated' | 'elongation'
+export type BodyCoordinateInfoField = keyof CoordinateInfo | 'distance' | 'illuminated' | 'elongation' | 'magnitude'
 
 export interface BodyCoordinateInfoProps extends ComponentProps<'div'> {
 	readonly position: CoordinateInfo | BodyPosition
@@ -31,11 +31,13 @@ export function BodyCoordinateInfo({ position, hide, className, ...props }: Body
 					const [x, y] = position[type]
 					return <Coordinate key={type} type={type} x={x} y={y} />
 				})}
-				<div className="grid grid-cols-2 items-center gap-2">{'distance' in position && isVisible('distance') && <Extra className="col-span-1" label="DIST" value={formatDistance(position.distance)} />}</div>
+				<div className="flex items-center gap-2">
+					{'distance' in position && isVisible('distance') && <Extra className="flex-1" label="DIST" value={position.distance ? formatDistance(position.distance) : '--'} />}
+					{'magnitude' in position && isVisible('magnitude') && <Extra className="flex-1" label="MAG" value={position.magnitude ?? '--'} />}
+				</div>
 			</div>
 			<div className="col-span-8 flex flex-col justify-start gap-0">
 				{isVisible('constellation') && <Extra label="CONST" value={position.constellation} />}
-				{isVisible('lst') && <Extra label="LST" value={formatHMS(position.lst, true)} />}
 				{isVisible('meridianTimeIn') && <Extra label="MERIDIAN IN" value={formatSeconds(position.meridianTimeIn)} />}
 				{isVisible('pierSide') && <Extra label="PIER SIDE" value={position.pierSide} />}
 				{'illuminated' in position && isVisible('illuminated') && <Extra label="ILLUM (%)" value={position.illuminated.toFixed(2)} />}

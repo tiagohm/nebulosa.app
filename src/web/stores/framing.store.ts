@@ -1,9 +1,9 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { homeStore } from '@stores/home.store'
 import { nanoid } from 'nanoid'
 import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import { homeStore } from './home.store'
 
 export type FramingStore = typeof framingStore
 

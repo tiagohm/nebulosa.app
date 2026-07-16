@@ -1,7 +1,7 @@
+import { Api } from '@shared/api'
+import { equipmentStore, type DeviceState } from '@stores/equipment.store'
 import type { FlatPanel } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type FlatPanelStore = ReturnType<typeof flatPanelStore>
 

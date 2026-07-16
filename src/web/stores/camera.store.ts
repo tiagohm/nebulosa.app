@@ -1,15 +1,15 @@
+import { Api } from '@shared/api'
+import { cameraBus, imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { storageGet, storageSet } from '@shared/storage'
+import type { ImageRoiRequest } from '@shared/types'
+import { clampInteger } from '@shared/util'
+import { equipmentStore, type DeviceState } from '@stores/equipment.store'
 import type { Camera, Focuser, MinMaxValueProperty, Mount, NameAndLabel, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import { type CameraCaptureStart, type CameraCaptureEvent, type Roi, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_EVENT, type CameraUpdated } from 'src/shared/types'
 import { exposureTimeIn, unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import { cameraBus, imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { storageGet, storageSet } from '../shared/storage'
-import type { ImageRoiRequest } from '../shared/types'
-import { clampInteger } from '../shared/util'
-import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type CameraStore = ReturnType<typeof cameraStore>
 

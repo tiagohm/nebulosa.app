@@ -1,3 +1,8 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { atlasStore } from '@stores/atlas.store'
+import type { WorldMapPosition } from '@ui/components/WorldMap'
+import type { InteractTransform } from '@ui/Interactable'
 import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
 import type { LocalLunarEclipseCircumstances, LocalLunarEclipseCircumstancesOptions, LocalLunarEclipseViewGeometry, LocalLunarEclipseViewOptions } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
@@ -6,11 +11,6 @@ import type { Writable } from 'nebulosa/src/core/types'
 import { deg } from 'nebulosa/src/math/units/angle'
 import type { LunarEclipseMap } from 'src/shared/types'
 import { proxy, ref } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import type { WorldMapPosition } from '../ui/components/WorldMap'
-import type { InteractTransform } from '../ui/Interactable'
-import { atlasStore } from './atlas.store'
 
 export type LunarEclipseStore = typeof lunarEclipseStore
 

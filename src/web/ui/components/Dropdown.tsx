@@ -1,10 +1,10 @@
+import { assignRef, stopPropagation, tw } from '@shared/util'
+import { Button, type ButtonProps } from '@ui/components/Button'
+import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from '@ui/components/Floating'
+import { List } from '@ui/components/List'
+import { Icons } from '@ui/Icon'
 import { Children, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { assignRef, stopPropagation, tw } from '@/shared/util'
-import { Icons } from '../Icon'
-import { Button, type ButtonProps } from './Button'
-import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from './Floating'
-import { List } from './List'
 
 const DROPDOWN_ITEM_HEIGHTS = {
 	sm: 32,

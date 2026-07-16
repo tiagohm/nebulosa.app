@@ -1,16 +1,16 @@
+import { coverStore, type CoverStore } from '@stores/cover.store'
+import { Chip } from '@ui/components/Chip'
+import { IconButton } from '@ui/components/IconButton'
+import { Tab, Tabs, TabPanel } from '@ui/components/Tabs'
+import { ConnectButton } from '@ui/ConnectButton'
+import { Icons } from '@ui/Icon'
+import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useContext, useEffect, useRef } from 'react'
 import { CoverStoreContext } from 'src/web/shared/context'
 import { equipmentStore } from 'src/web/stores/equipment.store'
 import type { DevicePanelParams } from 'src/web/stores/home.store'
 import { useSnapshot } from 'valtio'
-import { coverStore, type CoverStore } from '@/stores/cover.store'
-import { Chip } from './components/Chip'
-import { IconButton } from './components/IconButton'
-import { Tab, Tabs, TabPanel } from './components/Tabs'
-import { ConnectButton } from './ConnectButton'
-import { Icons } from './Icon'
-import { IndiPanelControl } from './IndiPanelControl'
 
 export const Cover = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) => {
 	const storeRef = useRef<CoverStore | undefined>(undefined)

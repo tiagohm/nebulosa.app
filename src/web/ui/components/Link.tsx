@@ -1,5 +1,5 @@
+import { tw } from '@shared/util'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { tw } from '@/shared/util'
 
 const linkStyles = tv({
 	slots: {

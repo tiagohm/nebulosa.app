@@ -1,8 +1,8 @@
+import { dismissToast, readToasts, subscribeToasts, TOAST_PLACEMENTS, type ToastPlacement, type ToastProviderDefaults, type ToastRecord, toast, updateToastDefaults } from '@shared/toast'
+import { hasRootInteraction, tw } from '@shared/util'
+import { Icons } from '@ui/Icon'
 import { useEffect, useSyncExternalStore } from 'react'
 import { tv } from 'tailwind-variants'
-import { dismissToast, readToasts, subscribeToasts, TOAST_PLACEMENTS, type ToastPlacement, type ToastProviderDefaults, type ToastRecord, toast, updateToastDefaults } from '@/shared/toast'
-import { hasRootInteraction, tw } from '@/shared/util'
-import { Icons } from '../Icon'
 
 const toastStyles = tv({
 	slots: {

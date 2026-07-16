@@ -1,10 +1,10 @@
+import { ImageViewerStoreContext } from '@shared/context'
+import { Checkbox } from '@ui/components/Checkbox'
+import { Histogram } from '@ui/components/Histogram'
+import { TextInput } from '@ui/components/TextInput'
+import { ImageChannelButtonGroup } from '@ui/ImageChannelButtonGroup'
 import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { Checkbox } from './components/Checkbox'
-import { Histogram } from './components/Histogram'
-import { TextInput } from './components/TextInput'
-import { ImageChannelButtonGroup } from './ImageChannelButtonGroup'
 
 const CHANNEL_VALUES = ['RED', 'GREEN', 'BLUE'] as const
 

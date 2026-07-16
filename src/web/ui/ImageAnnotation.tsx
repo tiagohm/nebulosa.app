@@ -1,11 +1,11 @@
+import { ImageViewerStoreContext } from '@shared/context'
+import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
+import { IconButton } from '@ui/components/IconButton'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Icons } from '@ui/Icon'
 import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { IconButton } from './components/IconButton'
-import { NumberInput } from './components/NumberInput'
-import { Icons } from './Icon'
 
 export const ImageAnnotation = memo(() => {
 	const { annotation } = useContext(ImageViewerStoreContext)

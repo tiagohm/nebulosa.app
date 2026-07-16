@@ -1,12 +1,12 @@
+import { ImageViewerStoreContext } from '@shared/context'
+import { formatNumber } from '@shared/util'
+import { Button } from '@ui/components/Button'
+import { TextInput } from '@ui/components/TextInput'
+import { Icons } from '@ui/Icon'
+import { StarDetectionPopover } from '@ui/StarDetectionPopover'
+import { StarDetectionSelect } from '@ui/StarDetectionSelect'
 import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatNumber } from '@/shared/util'
-import { ImageViewerStoreContext } from '../shared/context'
-import { Button } from './components/Button'
-import { TextInput } from './components/TextInput'
-import { Icons } from './Icon'
-import { StarDetectionPopover } from './StarDetectionPopover'
-import { StarDetectionSelect } from './StarDetectionSelect'
 
 export const ImageStarDetection = memo(() => {
 	const { starDetection } = useContext(ImageViewerStoreContext)

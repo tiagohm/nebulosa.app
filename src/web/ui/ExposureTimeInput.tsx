@@ -1,8 +1,8 @@
+import { tw } from '@shared/util'
+import { NumberInput, type NumberInputProps } from '@ui/components/NumberInput'
+import { ExposureTimeUnitDropdown } from '@ui/ExposureTimeUnitDropdown'
 import type { ExposureTimeUnit } from 'src/shared/types'
 import { exposureTimeIn } from 'src/shared/util'
-import { tw } from '@/shared/util'
-import { NumberInput, type NumberInputProps } from './components/NumberInput'
-import { ExposureTimeUnitDropdown } from './ExposureTimeUnitDropdown'
 
 export interface ExposureTimeInputProps extends Omit<NumberInputProps, 'size' | 'minValue' | 'maxValue' | 'endContent' | 'value' | 'onValueChange'> {
 	readonly value: number

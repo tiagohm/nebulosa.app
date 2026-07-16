@@ -1,9 +1,9 @@
+import { assignRef, tw } from '@shared/util'
+import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from '@ui/components/Floating'
+import { List } from '@ui/components/List'
+import { Icons } from '@ui/Icon'
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { assignRef, tw } from '@/shared/util'
-import { Icons } from '../Icon'
-import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from './Floating'
-import { List } from './List'
 
 const SELECT_ITEM_HEIGHTS = {
 	sm: 32,

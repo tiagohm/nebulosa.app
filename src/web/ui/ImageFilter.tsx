@@ -1,14 +1,14 @@
+import { ImageViewerStoreContext } from '@shared/context'
+import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
+import { NumberInput, type NumberInputProps } from '@ui/components/NumberInput'
+import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
+import { Icons } from '@ui/Icon'
+import { ImageFFTFilterTypeRadioGroup } from '@ui/ImageFFTFilterTypeRadioGroup'
+import { ImageKernelFilterTypeRadioGroup } from '@ui/ImageKernelFilterTypeRadioGroup'
 import { memo, useContext, useEffect } from 'react'
 import type { ImageFFT, ImageFilter as ImageKernelFilter } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { NumberInput, type NumberInputProps } from './components/NumberInput'
-import { Tab, TabPanel, Tabs } from './components/Tabs'
-import { Icons } from './Icon'
-import { ImageFFTFilterTypeRadioGroup } from './ImageFFTFilterTypeRadioGroup'
-import { ImageKernelFilterTypeRadioGroup } from './ImageKernelFilterTypeRadioGroup'
 
 export const ImageFilter = memo(() => {
 	const { filter } = useContext(ImageViewerStoreContext)

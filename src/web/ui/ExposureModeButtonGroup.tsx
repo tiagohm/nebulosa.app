@@ -1,5 +1,5 @@
+import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from '@ui/components/ButtonGroup'
 import type { ExposureMode } from 'src/shared/types'
-import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from './components/ButtonGroup'
 
 export type ExposureModeButtonGroupProps = Omit<ButtonGroupProps<ExposureMode>, 'children'>
 

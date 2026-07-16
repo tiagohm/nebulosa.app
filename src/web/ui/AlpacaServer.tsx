@@ -1,13 +1,13 @@
+import { useStore } from '@hooks/store.hook'
+import { alpacaStore, MAX_ALPACA_PORT, MIN_ALPACA_PORT } from '@stores/alpaca.store'
+import { Button } from '@ui/components/Button'
+import { List, ListItem } from '@ui/components/List'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Icons } from '@ui/Icon'
+import { Modal } from '@ui/Modal'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { alpacaStore, MAX_ALPACA_PORT, MIN_ALPACA_PORT } from '@/stores/alpaca.store'
-import { Button } from '@/ui/components/Button'
-import { NumberInput } from '@/ui/components/NumberInput'
-import { useStore } from '../hooks/store.hook'
-import { List, ListItem } from './components/List'
-import { Icons } from './Icon'
-import { Modal } from './Modal'
 
 export const AlpacaServer = memo(() => {
 	const alpaca = useStore(alpacaStore, [])

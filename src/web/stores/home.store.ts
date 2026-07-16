@@ -1,10 +1,10 @@
+import { cameraBus, imageBus } from '@shared/bus'
+import type { Image, ImageSource } from '@shared/types'
+import { equipmentStore } from '@stores/equipment.store'
 import type { DockviewApi, DockviewIDisposable, DockviewReadyEvent, EdgeGroupPosition, SerializedDockview } from 'dockview-react'
 import { nanoid } from 'nanoid'
 import type { Camera, Device, DeviceType } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
-import { cameraBus, imageBus } from '../shared/bus'
-import type { Image, ImageSource } from '../shared/types'
-import { equipmentStore } from './equipment.store'
 
 export type HomeStore = typeof homeStore
 

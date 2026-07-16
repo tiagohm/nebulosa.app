@@ -1,13 +1,13 @@
+import { indiServerStore } from '@stores/indi.server.store'
+import { Badge } from '@ui/components/Badge'
+import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Icons } from '@ui/Icon'
+import { IndiDriverListbox } from '@ui/IndiDriverListbox'
+import { Modal } from '@ui/Modal'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { indiServerStore } from '@/stores/indi.server.store'
-import { Badge } from './components/Badge'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { NumberInput } from './components/NumberInput'
-import { Icons } from './Icon'
-import { IndiDriverListbox } from './IndiDriverListbox'
-import { Modal } from './Modal'
 
 export const IndiServer = memo(() => (
 	<Modal footer={<Footer />} header="INDI Server" id="indi-server" initialWidth="276px" onHide={indiServerStore.hide}>

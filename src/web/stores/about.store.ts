@@ -1,5 +1,5 @@
+import { initProxy } from '@shared/proxy'
 import { proxy } from 'valtio'
-import { initProxy } from '../shared/proxy'
 
 export type AboutStore = typeof aboutStore
 

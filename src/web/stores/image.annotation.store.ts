@@ -1,10 +1,10 @@
+import { Api } from '@shared/api'
+import { imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { AnnotatedSkyObject, AnnotateImage } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageAnnotationStore = ReturnType<typeof imageAnnotationStore>
 

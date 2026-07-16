@@ -1,12 +1,12 @@
+import { ImageViewerStoreContext } from '@shared/context'
+import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Icons } from '@ui/Icon'
+import { ImageChannelOrGrayInput } from '@ui/ImageChannelOrGrayInput'
 import { memo, useContext, useEffect } from 'react'
 import type { ImageAdjustment as ImageAdjustmentType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { NumberInput } from './components/NumberInput'
-import { Icons } from './Icon'
-import { ImageChannelOrGrayInput } from './ImageChannelOrGrayInput'
 
 export const ImageAdjustment = memo(() => {
 	const { adjustment } = useContext(ImageViewerStoreContext)

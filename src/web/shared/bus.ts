@@ -1,10 +1,10 @@
+import type { Image, ImageLoaded, ImageRoiRequest } from '@shared/types'
+import type { DeviceState } from '@stores/equipment.store'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
 import type { Camera, Cover, Device, FlatPanel, Focuser, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { Message } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
 import type { AlpacaServerStatus, AutoFocusEvent, CameraCaptureEvent, CameraFrameEvent, ConnectionEvent, DarvEvent, FlatWizardEvent, GuiderEvent, IndiDevicePropertyEvent, IndiServerEvent, TppaEvent } from 'src/shared/types'
-import type { DeviceState } from '../stores/equipment.store'
-import type { Image, ImageLoaded, ImageRoiRequest } from './types'
 
 export interface WebSocketBusEvents {
 	readonly open: unknown

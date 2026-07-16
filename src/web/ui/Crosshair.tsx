@@ -1,6 +1,6 @@
+import { ImageViewerStoreContext } from '@shared/context'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
 
 const CROSSHAIR_RADII = ['1%', '5%', '15%', '30%'] as const
 const CROSSHAIR_STROKE = 'var(--danger)'

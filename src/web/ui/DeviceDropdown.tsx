@@ -1,12 +1,12 @@
+import type { DeviceTypeMap } from '@shared/types'
+import { equipmentStore, type DeviceState } from '@stores/equipment.store'
+import { Dropdown, DropdownItem, type DropdownProps } from '@ui/components/Dropdown'
+import { IconButton } from '@ui/components/IconButton'
+import { ConnectButton } from '@ui/ConnectButton'
+import { Icons, type Icon } from '@ui/Icon'
 import type { Device } from 'nebulosa/src/devices/indi/device'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import type { DeviceTypeMap } from '@/shared/types'
-import { equipmentStore, type DeviceState } from '@/stores/equipment.store'
-import { Dropdown, DropdownItem, type DropdownProps } from './components/Dropdown'
-import { IconButton } from './components/IconButton'
-import { ConnectButton } from './ConnectButton'
-import { Icons, type Icon } from './Icon'
 
 export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends Omit<DropdownProps, 'children' | 'onAction'> {
 	readonly type: T

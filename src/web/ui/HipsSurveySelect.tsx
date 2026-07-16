@@ -1,7 +1,7 @@
+import { FilterableSelect, type FilterableSelectProps } from '@ui/components/FilterableSelect'
+import { ListItem } from '@ui/components/List'
 import type { HipsSurvey } from 'nebulosa/src/adapters/sky/hips2fits'
 import hipsSurveys from 'src/data/hips.surveys.json'
-import { FilterableSelect, type FilterableSelectProps } from './components/FilterableSelect'
-import { ListItem } from './components/List'
 
 export interface HipsSurveyProps extends Omit<FilterableSelectProps<HipsSurvey>, 'items' | 'children' | 'filter' | 'itemHeight' | 'value' | 'onValueChange'> {
 	readonly value?: string

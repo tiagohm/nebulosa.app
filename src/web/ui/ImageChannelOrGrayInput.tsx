@@ -1,11 +1,11 @@
+import { tw } from '@shared/util'
+import { IconButton } from '@ui/components/IconButton'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Select, type SelectItemRenderer } from '@ui/components/Select'
+import { Icons } from '@ui/Icon'
+import { ImageChannelOrGraySelect } from '@ui/ImageChannelOrGraySelect'
 import { GRAYSCALES, type Grayscale, type ImageChannelOrGray } from 'nebulosa/src/imaging/model/types'
 import { useEffect, useRef, useState } from 'react'
-import { tw } from '@/shared/util'
-import { IconButton } from './components/IconButton'
-import { NumberInput } from './components/NumberInput'
-import { Select, type SelectItemRenderer } from './components/Select'
-import { Icons } from './Icon'
-import { ImageChannelOrGraySelect } from './ImageChannelOrGraySelect'
 
 export type ImageChannelOrGrayInputMode = 'select' | 'input'
 

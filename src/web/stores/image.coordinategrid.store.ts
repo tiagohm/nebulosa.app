@@ -1,13 +1,13 @@
+import { Api } from '@shared/api'
+import { imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { hasScaledSolution } from '@stores/image.solver.store'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { ImageCoordinateGrid } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { hasScaledSolution } from './image.solver.store'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageCoordinateGridStore = ReturnType<typeof imageCoordinateGridStore>
 

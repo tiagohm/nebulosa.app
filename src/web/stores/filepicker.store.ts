@@ -1,9 +1,9 @@
+import { Api } from '@shared/api'
+import type { FilePickerMode } from '@shared/types'
 import type { FileEntry, DirectoryEntry } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import type { FilePickerMode } from '../shared/types'
 
 export type FilePickerStore = ReturnType<typeof filePicker>
 

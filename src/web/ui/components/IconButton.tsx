@@ -1,5 +1,5 @@
-import type { Icon } from '../Icon'
-import { Button, type ButtonProps } from './Button'
+import { Button, type ButtonProps } from '@ui/components/Button'
+import type { Icon } from '@ui/Icon'
 
 export interface IconButtonProps extends Omit<ButtonProps, 'children' | 'label' | 'startContent'> {
 	readonly icon: Icon

@@ -1,11 +1,11 @@
+import { Api } from '@shared/api'
+import { connectionBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { DEFAULT_CONNECTION, type Connection } from '@shared/types'
 import { nanoid } from 'nanoid'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
 import type { ConnectionStatus } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { connectionBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { DEFAULT_CONNECTION, type Connection } from '../shared/types'
 
 export type ConnectionStore = typeof connectionStore
 

@@ -1,7 +1,7 @@
+import { tw } from '@shared/util'
+import { List } from '@ui/components/List'
 import { Children, Fragment, isValidElement, useCallback, useMemo } from 'react'
 import { type ClassValue, tv } from 'tailwind-variants'
-import { tw } from '@/shared/util'
-import { List } from './List'
 
 const tableStyles = tv({
 	slots: {

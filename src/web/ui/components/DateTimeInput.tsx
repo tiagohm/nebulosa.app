@@ -1,9 +1,9 @@
+import { clampInteger, tw } from '@shared/util'
+import { Calendar, type CalendarProps } from '@ui/components/Calendar'
+import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from '@ui/components/Floating'
+import { Icons } from '@ui/Icon'
 import { Fragment, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { clampInteger, tw } from '@/shared/util'
-import { Icons } from '../Icon'
-import { Calendar, type CalendarProps } from './Calendar'
-import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from './Floating'
 
 const DATE_INPUT_PARTS = 'YMD'
 const TIME_INPUT_PARTS = 'hms'

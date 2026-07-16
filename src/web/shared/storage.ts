@@ -1,4 +1,4 @@
-import { Api } from './api'
+import { Api } from '@shared/api'
 
 export function storageKey(index: number) {
 	return sessionStorage.key(index)

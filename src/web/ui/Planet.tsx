@@ -1,13 +1,13 @@
+import { planetStore } from '@stores/atlas.planet.store'
+import { atlasStore } from '@stores/atlas.store'
+import { EphemerisAndChart, isBookmarked } from '@ui/Atlas'
+import { ListItem, List } from '@ui/components/List'
+import { TextInput } from '@ui/components/TextInput'
+import { PlanetTypeSelect } from '@ui/PlanetTypeSelect'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useMemo } from 'react'
 import planetarySatelliteEphemeris from 'src/data/planetary.satellites.json'
 import { useSnapshot } from 'valtio'
-import { planetStore } from '../stores/atlas.planet.store'
-import { atlasStore } from '../stores/atlas.store'
-import { EphemerisAndChart, isBookmarked } from './Atlas'
-import { ListItem, List } from './components/List'
-import { TextInput } from './components/TextInput'
-import { PlanetTypeSelect } from './PlanetTypeSelect'
 
 const PLANETS = [
 	{ name: 'Mercury', code: '199', type: 'PLANET', solution: 'DE441' },

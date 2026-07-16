@@ -1,5 +1,5 @@
-import { SKY_OBJECT_NAME_TYPES } from '@/shared/types'
-import { Dropdown, type DropdownProps } from './components/Dropdown'
+import { SKY_OBJECT_NAME_TYPES } from '@shared/types'
+import { Dropdown, type DropdownProps } from '@ui/components/Dropdown'
 
 export interface SkyObjectNameTypeDropdownProps extends Omit<DropdownProps, 'children'> {
 	readonly value: number

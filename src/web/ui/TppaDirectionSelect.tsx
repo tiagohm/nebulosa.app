@@ -1,5 +1,5 @@
+import { Select, type SelectProps } from '@ui/components/Select'
 import type { TppaStart } from 'src/shared/types'
-import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['east', 'west'] as const
 const LABELS = ['East', 'West'] as const

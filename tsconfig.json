@@ -19,8 +19,14 @@
 		"forceConsistentCasingInFileNames": true,
 		"allowSyntheticDefaultImports": true,
 		"paths": {
+			"root/*": ["./*"],
 			"src/*": ["./src/*"],
-			"@/*": ["./src/web/*"]
+			"@/*": ["./src/web/*"],
+			"@assets/*": ["./src/web/assets/*"],
+			"@hooks/*": ["./src/web/hooks/*"],
+			"@stores/*": ["./src/web/stores/*"],
+			"@shared/*": ["./src/web/shared/*"],
+			"@ui/*": ["./src/web/ui/*"]
 		}
 	}
 }

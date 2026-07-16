@@ -1,5 +1,5 @@
+import { Icons } from '@ui/Icon'
 import type { IDockviewPanelHeaderProps } from 'dockview-react'
-import { Icons } from '../../Icon'
 
 export function CloseableTab(props: IDockviewPanelHeaderProps) {
 	return (

@@ -1,8 +1,8 @@
+import { ImageViewerStoreContext } from '@shared/context'
+import { IMAGE_ROI_HANDLES } from '@stores/image.roi.store'
 import { memo, useContext, useLayoutEffect } from 'react'
 import { tv } from 'tailwind-variants'
 import { useSnapshot } from 'valtio'
-import { IMAGE_ROI_HANDLES } from '@/stores/image.roi.store'
-import { ImageViewerStoreContext } from '../shared/context'
 
 const roiStyles = tv({
 	slots: {

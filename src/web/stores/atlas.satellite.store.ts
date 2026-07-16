@@ -1,10 +1,10 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { atlasStore, isLocationChanged, isTimeChanged } from '@stores/atlas.store'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import { type SearchSatellite, type PositionOfBody, type Satellite, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SEARCH_SATELLITE } from 'src/shared/types'
 import { proxy, ref } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import { atlasStore, isLocationChanged, isTimeChanged } from './atlas.store'
 
 export type AtlasSatelliteStore = typeof satelliteStore
 

@@ -1,5 +1,5 @@
+import { clamp, tw } from '@shared/util'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { clamp, tw } from '@/shared/util'
 
 const progressBarStyles = tv({
 	slots: {

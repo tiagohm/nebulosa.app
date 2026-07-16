@@ -1,7 +1,7 @@
+import { assignRef, clamp, tw } from '@shared/util'
+import { Icons } from '@ui/Icon'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { assignRef, clamp, tw } from '@/shared/util'
-import { Icons } from '../Icon'
 
 const numberInputStyles = tv({
 	slots: {

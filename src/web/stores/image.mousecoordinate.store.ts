@@ -1,3 +1,9 @@
+import { Api } from '@shared/api'
+import { imageBus } from '@shared/bus'
+import { isMousePresent } from '@shared/util'
+import { hasScaledSolution } from '@stores/image.solver.store'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { InteractableProps, InteractTransform } from '@ui/Interactable'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { AstrometricInterpolator } from 'nebulosa/src/astronomy/ephemeris/interpolation/astrometric'
@@ -6,12 +12,6 @@ import type { Angle } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
-import { isMousePresent } from '../shared/util'
-import type { InteractableProps, InteractTransform } from '../ui/Interactable'
-import { hasScaledSolution } from './image.solver.store'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageMouseCoordinateStore = ReturnType<typeof imageMouseCoordinateStore>
 

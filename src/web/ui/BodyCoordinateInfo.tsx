@@ -1,7 +1,7 @@
+import { formatDistance, tw } from '@shared/util'
 import { type Angle, formatALT, formatAZ, formatDEC, formatRA, toDeg } from 'nebulosa/src/math/units/angle'
 import type { ComponentProps } from 'react'
 import type { BodyPosition, CoordinateInfo, CoordinateType } from 'src/shared/types'
-import { formatDistance, tw } from '@/shared/util'
 
 export type BodyCoordinateInfoField = keyof CoordinateInfo | 'distance' | 'illuminated' | 'elongation' | 'magnitude'
 

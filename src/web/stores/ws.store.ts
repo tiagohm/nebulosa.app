@@ -1,10 +1,10 @@
+import { cameraBus, autoFocusBus, darvBus, flatWizardBus, tppaBus, alpacaBus, connectionBus, guiderBus, indiBus, webSocketBus } from '@shared/bus'
+import { toast } from '@shared/toast'
+import { confirmationStore } from '@stores/confirmation.store'
+import { equipmentStore } from '@stores/equipment.store'
 import type { DeviceType } from 'nebulosa/src/devices/indi/device'
 import type { DeviceAdded, DeviceRemoved, Notification } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { toast } from '@/shared/toast'
-import { cameraBus, autoFocusBus, darvBus, flatWizardBus, tppaBus, alpacaBus, connectionBus, guiderBus, indiBus, webSocketBus } from '../shared/bus'
-import { confirmationStore } from './confirmation.store'
-import { equipmentStore } from './equipment.store'
 
 export type WebSocketStore = typeof wsStore
 

@@ -1,14 +1,14 @@
+import { calculatorStore } from '@stores/calculator.store'
+import { Chip } from '@ui/components/Chip'
+import { IconButton } from '@ui/components/IconButton'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
+import { TextInput } from '@ui/components/TextInput'
+import { Icons } from '@ui/Icon'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { toHour } from 'nebulosa/src/math/units/angle'
 import { memo, type ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { calculatorStore } from '@/stores/calculator.store'
-import { Chip } from './components/Chip'
-import { IconButton } from './components/IconButton'
-import { NumberInput } from './components/NumberInput'
-import { Tab, TabPanel, Tabs } from './components/Tabs'
-import { TextInput } from './components/TextInput'
-import { Icons } from './Icon'
 
 const MIN_APERTURE = 1
 const MIN_FOCAL_LENGTH = 1

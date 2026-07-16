@@ -1,8 +1,8 @@
+import { tw } from '@shared/util'
+import { Chip, type ChipProps } from '@ui/components/Chip'
+import { Icons } from '@ui/Icon'
 import { useState } from 'react'
 import type { CameraCaptureEvent, CameraCaptureState, CameraCaptureTime } from 'src/shared/types'
-import { tw } from '@/shared/util'
-import { Chip, type ChipProps } from './components/Chip'
-import { Icons } from './Icon'
 
 export interface ExposureTimeProgressProps extends React.ComponentProps<'div'> {
 	readonly progress: CameraCaptureEvent

@@ -1,19 +1,19 @@
+import { Api } from '@shared/api'
+import { mountBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { skyObjectName } from '@shared/util'
+import { atlasStore } from '@stores/atlas.store'
+import { equipmentStore } from '@stores/equipment.store'
 import { TAU } from 'nebulosa/src/core/constants'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import type { Celestial, CelestialShape, ConstellationData, MovingBody, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
-import constellationBoundaries from '@/../data/constellation.boundaries.json'
-import constellationLabels from '@/../data/constellation.labels.json'
-import constellationLines from '@/../data/constellation.lines.json'
-import mw from '@/../data/mw.json'
-import { Api } from '../shared/api'
-import { mountBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { skyObjectName } from '../shared/util'
-import { atlasStore } from './atlas.store'
-import { equipmentStore } from './equipment.store'
+import constellationBoundaries from '../../data/constellation.boundaries.json'
+import constellationLabels from '../../data/constellation.labels.json'
+import constellationLines from '../../data/constellation.lines.json'
+import mw from '../../data/mw.json'
 
 export interface PlanetariumState {
 	show: boolean
@@ -141,10 +141,8 @@ function handleReady(celestial: Celestial) {
 		const { object } = event
 
 		if (object.type === 'star') {
-			atlasStore.state.tab = 'galaxy'
 			void atlasStore.state.galaxy!.selectWithId(object.id)
 		} else if (object.type === 'deepSky') {
-			atlasStore.state.tab = 'galaxy'
 			void atlasStore.state.galaxy!.selectWithId(object.object.id)
 		} else if (object.type === 'movingBody') {
 			if (object.object.type === 'comet') {
@@ -152,11 +150,8 @@ function handleReady(celestial: Celestial) {
 			} else if (object.object.type === 'asteroid') {
 				//
 			} else if (object.object.type === 'moon') {
-				atlasStore.state.tab = 'moon'
 			} else if (object.object.type === 'sun') {
-				atlasStore.state.tab = 'sun'
 			} else {
-				atlasStore.state.tab = 'planet'
 				void atlasStore.state.planet!.select(object.object.id, true)
 			}
 		}

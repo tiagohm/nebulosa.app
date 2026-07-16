@@ -1,7 +1,7 @@
+import { cameraBus } from '@shared/bus'
+import type { DeviceState } from '@stores/equipment.store'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
-import { cameraBus } from '../shared/bus'
-import type { DeviceState } from './equipment.store'
 
 export type FlatWizardListStore = typeof flatWizardListStore
 

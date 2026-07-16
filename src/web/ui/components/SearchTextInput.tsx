@@ -1,7 +1,7 @@
+import { tw } from '@shared/util'
+import { TextInput, type TextInputProps } from '@ui/components/TextInput'
+import { Icons } from '@ui/Icon'
 import { tv, type ClassValue } from 'tailwind-variants'
-import { tw } from '@/shared/util'
-import { Icons } from '../Icon'
-import { TextInput, type TextInputProps } from './TextInput'
 
 const searchTextInputStyles = tv({
 	slots: {

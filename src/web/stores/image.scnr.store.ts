@@ -1,7 +1,7 @@
+import type { ImageViewerStore } from '@stores/image.viewer.store'
 import { DEFAULT_IMAGE_SCNR, type ImageScnr } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageScnrStore = ReturnType<typeof imageScnrStore>
 

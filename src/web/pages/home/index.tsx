@@ -1,8 +1,8 @@
 import '@/index.css'
+import { ToastProvider } from '@ui/components/Toast'
+import { Home } from '@ui/Home'
 import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { ToastProvider } from '@/ui/components/Toast'
-import { Home } from '@/ui/Home'
 
 import.meta.hot.accept()
 

@@ -1,13 +1,13 @@
+import { atlasStore } from '@stores/atlas.store'
+import { sunStore } from '@stores/atlas.sun.store'
+import { solarEclipseStore } from '@stores/solar.eclipse.store'
+import { AstronomicalEvent, EphemerisAndChart } from '@ui/Atlas'
+import { Icons } from '@ui/Icon'
+import { SunImage } from '@ui/SunImage'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import { memo, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { atlasStore } from '../stores/atlas.store'
-import { sunStore } from '../stores/atlas.sun.store'
-import { solarEclipseStore } from '../stores/solar.eclipse.store'
-import { AstronomicalEvent, EphemerisAndChart } from './Atlas'
-import { Icons } from './Icon'
-import { SunImage } from './SunImage'
 
 export const Sun = memo(({ api }: IDockviewPanelProps) => {
 	const { source } = useSnapshot(sunStore.state)

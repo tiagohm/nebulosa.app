@@ -1,9 +1,9 @@
+import type { FilePickerScope } from '@stores/filepicker.store'
+import { IconButton } from '@ui/components/IconButton'
+import { TextInput, type TextInputProps } from '@ui/components/TextInput'
+import { FilePicker } from '@ui/FilePicker'
+import { Icons } from '@ui/Icon'
 import { useEffect, useRef, useState } from 'react'
-import type { FilePickerScope } from '@/stores/filepicker.store'
-import { IconButton } from './components/IconButton'
-import { TextInput, type TextInputProps } from './components/TextInput'
-import { FilePicker } from './FilePicker'
-import { Icons } from './Icon'
 
 export interface FilePickerInputProps extends Omit<FilePickerScope, 'multiple' | 'path'>, Omit<TextInputProps, 'value' | 'onValueChange' | 'startContent' | 'endContent' | 'label'> {
 	readonly value?: string

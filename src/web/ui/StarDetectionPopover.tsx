@@ -1,9 +1,9 @@
+import { IconButton, type IconButtonProps } from '@ui/components/IconButton'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Popover } from '@ui/components/Popover'
+import { TextInput } from '@ui/components/TextInput'
+import { Icons } from '@ui/Icon'
 import type { StarDetection } from 'src/shared/types'
-import { IconButton, type IconButtonProps } from './components/IconButton'
-import { NumberInput } from './components/NumberInput'
-import { Popover } from './components/Popover'
-import { TextInput } from './components/TextInput'
-import { Icons } from './Icon'
 
 export interface StarDetectionPopoverProps extends Omit<IconButtonProps, 'icon' | 'value' | 'onValueChange'> {
 	readonly value: StarDetection

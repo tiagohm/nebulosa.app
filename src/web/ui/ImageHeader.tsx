@@ -1,7 +1,7 @@
+import { ImageViewerStoreContext } from '@shared/context'
+import { FITSHeader } from '@ui/FITSHeader'
 import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { FITSHeader } from './FITSHeader'
 
 export const ImageHeader = memo(() => {
 	const { state, header } = useContext(ImageViewerStoreContext)

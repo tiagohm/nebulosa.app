@@ -1,11 +1,11 @@
+import { Api } from '@shared/api'
+import { indiBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { wsStore } from '@stores/ws.store'
 import type { Device, DeviceProperties, DeviceProperty } from 'nebulosa/src/devices/indi/device'
 import type { Message, NewVector } from 'nebulosa/src/devices/indi/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '@/shared/api'
-import { initProxy } from '@/shared/proxy'
-import { indiBus } from '../shared/bus'
-import { wsStore } from './ws.store'
 
 export type IndiPanelControlStore = ReturnType<typeof indiPanelControlStore>
 

@@ -1,12 +1,12 @@
+import { useStore } from '@hooks/store.hook'
+import { FlatPanelDeviceContext, FlatPanelStoreContext } from '@shared/context'
+import { flatPanelStore } from '@stores/flatpanel.store'
+import { Slider } from '@ui/components/Slider'
+import { Switch } from '@ui/components/Switch'
+import { ConnectButton } from '@ui/ConnectButton'
+import { Modal } from '@ui/Modal'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { flatPanelStore } from '@/stores/flatpanel.store'
-import { useStore } from '../hooks/store.hook'
-import { FlatPanelDeviceContext, FlatPanelStoreContext } from '../shared/context'
-import { Slider } from './components/Slider'
-import { Switch } from './components/Switch'
-import { ConnectButton } from './ConnectButton'
-import { Modal } from './Modal'
 
 function formatIntensity(value: number) {
 	return Number.isFinite(value) ? value : 0

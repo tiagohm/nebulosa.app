@@ -1,11 +1,11 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { saveAs } from '@shared/util'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import type { ImageFormat } from 'nebulosa/src/imaging/model/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import { saveAs } from '../shared/util'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageSaveStore = ReturnType<typeof imageSaveStore>
 

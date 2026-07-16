@@ -1,3 +1,9 @@
+import { Api } from '@shared/api'
+import { imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { framingStore } from '@stores/framing.store'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
+import { settingsStore } from '@stores/settings.store'
 import { nanoid } from 'nanoid'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { pixelScale } from 'nebulosa/src/astronomy/formulas'
@@ -7,12 +13,6 @@ import { formatRA, formatDEC, toDeg, arcsec } from 'nebulosa/src/math/units/angl
 import { DEFAULT_PLATE_SOLVE_START, type Framing, type PlateSolveStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
-import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { framingStore } from './framing.store'
-import type { ImageViewerStore } from './image.viewer.store'
-import { settingsStore } from './settings.store'
 
 export type ImageSolverStore = ReturnType<typeof imageSolverStore>
 

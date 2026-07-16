@@ -1,13 +1,13 @@
+import { ImageViewerStoreContext } from '@shared/context'
+import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Slider } from '@ui/components/Slider'
+import { Icons } from '@ui/Icon'
+import { SigmaClipCenterMethodSelect } from '@ui/SigmaClipCenterMethodSelect'
+import { SigmaClipDispersionMethodSelect } from '@ui/SigmaClipDispersionMethodSelect'
 import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { NumberInput } from './components/NumberInput'
-import { Slider } from './components/Slider'
-import { Icons } from './Icon'
-import { SigmaClipCenterMethodSelect } from './SigmaClipCenterMethodSelect'
-import { SigmaClipDispersionMethodSelect } from './SigmaClipDispersionMethodSelect'
 
 const STRETCH_MIN_VALUE = 0
 const STRETCH_MAX_VALUE = 65536

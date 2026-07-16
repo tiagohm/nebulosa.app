@@ -1,4 +1,4 @@
-import { IconButton, type IconButtonProps } from './IconButton'
+import { IconButton, type IconButtonProps } from '@ui/components/IconButton'
 
 export interface ToggleButtonProps extends Omit<Partial<IconButtonProps>, 'variant'> {
 	readonly value?: boolean

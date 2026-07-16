@@ -1,6 +1,6 @@
+import { ImageViewerStoreContext } from '@shared/context'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
 
 const MARKER_RADII = [16, 32] as const
 const MARKER_STROKE = 'var(--primary)'

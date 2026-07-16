@@ -1,6 +1,6 @@
-import type { ButtonProps } from './components/Button'
-import { ToggleButton } from './components/ToggleButton'
-import { Icons } from './Icon'
+import type { ButtonProps } from '@ui/components/Button'
+import { ToggleButton } from '@ui/components/ToggleButton'
+import { Icons } from '@ui/Icon'
 
 export interface ConnectButtonProps extends Omit<ButtonProps, 'children'> {
 	readonly connected: boolean

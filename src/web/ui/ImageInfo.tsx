@@ -1,15 +1,15 @@
+import { ImageViewerStoreContext } from '@shared/context'
+import { formatNumber, tw } from '@shared/util'
+import { imageWorkspaceStore } from '@stores/image.workspace.store'
+import { Dropdown, DropdownItem } from '@ui/components/Dropdown'
+import { MountDropdown } from '@ui/DeviceDropdown'
+import { Icons } from '@ui/Icon'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import { formatAZ, formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { formatNumber, tw } from '../shared/util'
-import { imageWorkspaceStore } from '../stores/image.workspace.store'
-import { Dropdown, DropdownItem } from './components/Dropdown'
-import { MountDropdown } from './DeviceDropdown'
-import { Icons } from './Icon'
 
 export const ImageInfo = memo(() => {
 	const { selected: selectedImage } = useSnapshot(imageWorkspaceStore.state)

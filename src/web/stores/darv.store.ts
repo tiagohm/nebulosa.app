@@ -1,16 +1,16 @@
+import { Api } from '@shared/api'
+import { darvBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { toast } from '@shared/toast'
+import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
+import { darvListStore } from '@stores/darv.list.store'
+import type { DeviceState } from '@stores/equipment.store'
 import { nanoid } from 'nanoid'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { COARSE_DARV_EXPOSURE_PRESET, DARV_EXPOSURE_PRESETS, estimateDarvExposure, type DarvExposureInput, type DarvExposurePreset, type DarvExposurePresetMode } from 'nebulosa/src/observation/alignment/polaralignment'
 import { DEFAULT_DARV_EVENT, DEFAULT_DARV_START, type DarvEvent, type DarvStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { darvBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { toast } from '../shared/toast'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
-import { darvListStore } from './darv.list.store'
-import type { DeviceState } from './equipment.store'
 
 export type DarvStore = ReturnType<typeof darvStore>
 

@@ -1,7 +1,7 @@
+import { IconButton } from '@ui/components/IconButton'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Icons } from '@ui/Icon'
 import { tw } from 'src/web/shared/util'
-import { Icons } from '../Icon'
-import { IconButton } from './IconButton'
-import { NumberInput } from './NumberInput'
 
 export interface PaginatorProps extends React.ComponentProps<'div'> {
 	readonly page: number

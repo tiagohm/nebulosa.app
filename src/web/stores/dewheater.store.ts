@@ -1,7 +1,7 @@
+import { Api } from '@shared/api'
+import { equipmentStore, type DeviceState } from '@stores/equipment.store'
 import type { DewHeater } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type DewHeaterStore = ReturnType<typeof dewHeaterStore>
 

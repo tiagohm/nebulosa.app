@@ -1,11 +1,11 @@
+import { useStore } from '@hooks/store.hook'
+import { DewHeaterDeviceContext, DewHeaterStoreContext } from '@shared/context'
+import { dewHeaterStore } from '@stores/dewheater.store'
+import { Slider } from '@ui/components/Slider'
+import { ConnectButton } from '@ui/ConnectButton'
+import { Modal } from '@ui/Modal'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { dewHeaterStore } from '@/stores/dewheater.store'
-import { useStore } from '../hooks/store.hook'
-import { DewHeaterDeviceContext, DewHeaterStoreContext } from '../shared/context'
-import { Slider } from './components/Slider'
-import { ConnectButton } from './ConnectButton'
-import { Modal } from './Modal'
 
 function dutyCycleRatio(value: number, min: number, max: number) {
 	if (!Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max)) return 0

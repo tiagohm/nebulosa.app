@@ -1,5 +1,5 @@
+import { Select, type SelectProps } from '@ui/components/Select'
 import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
-import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['TRENDLINES', 'PARABOLIC', 'TREND_PARABOLIC', 'HYPERBOLIC', 'TREND_HYPERBOLIC'] as const
 const LABELS = ['Trendlines', 'Parabolic', 'Trendlines + Parabolic', 'Hyperbolic', 'Trendlines + Hyperbolic'] as const

@@ -1,9 +1,9 @@
+import { imageBus } from '@shared/bus'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { SliderRangeValue } from '@ui/components/Slider'
 import { DEFAULT_IMAGE_STRETCH, type ImageStretch } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { imageBus } from '../shared/bus'
-import type { SliderRangeValue } from '../ui/components/Slider'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageStretchStore = ReturnType<typeof imageStretchStore>
 

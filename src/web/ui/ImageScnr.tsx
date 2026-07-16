@@ -1,12 +1,12 @@
+import { ImageViewerStoreContext } from '@shared/context'
+import { Button } from '@ui/components/Button'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Icons } from '@ui/Icon'
+import { ImageChannelButtonGroup } from '@ui/ImageChannelButtonGroup'
+import { SCNRProtectionMethodSelect } from '@ui/SCNRProtectionMethodSelect'
 import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
 import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { Button } from './components/Button'
-import { NumberInput } from './components/NumberInput'
-import { Icons } from './Icon'
-import { ImageChannelButtonGroup } from './ImageChannelButtonGroup'
-import { SCNRProtectionMethodSelect } from './SCNRProtectionMethodSelect'
 
 function isMaskProtectionMethod(method: SCNRProtectionMethod) {
 	return method.endsWith('MASK')

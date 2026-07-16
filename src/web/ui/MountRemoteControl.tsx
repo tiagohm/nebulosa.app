@@ -1,11 +1,11 @@
+import { MountStoreContext } from '@shared/context'
+import { Button } from '@ui/components/Button'
+import { NumberInput } from '@ui/components/NumberInput'
+import { TextInput } from '@ui/components/TextInput'
+import { Icons } from '@ui/Icon'
+import { MountRemoteControlProtocolSelect } from '@ui/MountRemoteControlProtocolSelect'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { MountStoreContext } from '../shared/context'
-import { Button } from './components/Button'
-import { NumberInput } from './components/NumberInput'
-import { TextInput } from './components/TextInput'
-import { Icons } from './Icon'
-import { MountRemoteControlProtocolSelect } from './MountRemoteControlProtocolSelect'
 
 export const MountRemoteControl = memo(() => (
 	<div className="flex flex-col gap-2">

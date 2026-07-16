@@ -1,6 +1,6 @@
+import { tw } from '@shared/util'
 import { type ComponentPropsWithoutRef, type CSSProperties, type Ref, useEffect, useImperativeHandle, useRef } from 'react'
 import { Celestial, type CelestialOptions } from 'src/lib/celestial/celestial'
-import { tw } from '@/shared/util'
 
 // oxfmt-ignore
 export type SkyMapMethods = Pick<Celestial, 'loadStars' | 'loadConstellations' | 'loadMilkyWay' | 'loadDeepSkyObjects' | 'setObserver' | 'setTime' | 'setProjection' | 'setMagnitudeLimit' | 'setStarLabelsVisible' | 'setViewTransform' | 'setUpdateInterval' | 'setLayerVisible' | 'startAutoUpdate' | 'stopAutoUpdate' | 'render' | 'screenToEquatorial' | 'addMovingBody' | 'removeMovingBody' | 'clearMovingBodies' | 'markMovingBodyDirty' | 'addShape' | 'removeShape' | 'clearShapes' | 'markShapeChanged' | 'on' | 'off'>

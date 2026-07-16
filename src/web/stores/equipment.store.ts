@@ -1,8 +1,8 @@
+import { Api } from '@shared/api'
+import { cameraBus, coverBus, deviceBus, flatPanelBus, focuserBus, mountBus, rotatorBus, wheelBus } from '@shared/bus'
 import type { Camera, Cover, Device, DeviceType, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { ConnectionStatus, DeviceUpdated } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { cameraBus, coverBus, deviceBus, flatPanelBus, focuserBus, mountBus, rotatorBus, wheelBus } from '../shared/bus'
 
 export type EquipmentStore = typeof equipmentStore
 

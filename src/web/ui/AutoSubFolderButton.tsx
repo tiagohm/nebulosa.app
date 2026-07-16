@@ -1,7 +1,7 @@
+import type { ButtonProps } from '@ui/components/Button'
+import { IconButton } from '@ui/components/IconButton'
+import { Icons } from '@ui/Icon'
 import type { AutoSubFolderMode } from 'src/shared/types'
-import type { ButtonProps } from './components/Button'
-import { IconButton } from './components/IconButton'
-import { Icons } from './Icon'
 
 export interface AutoSubFolderModeButtonProps extends Omit<ButtonProps, 'children'> {
 	readonly value: AutoSubFolderMode

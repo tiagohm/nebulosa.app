@@ -1,5 +1,5 @@
+import { Select, type SelectProps } from '@ui/components/Select'
 import type { NameAndLabel } from 'nebulosa/src/devices/indi/device'
-import { Select, type SelectProps } from './components/Select'
 
 export interface FrameFormatSelectProps extends Omit<SelectProps<NameAndLabel>, 'children' | 'items' | 'onValueChange' | 'value'> {
 	readonly items: readonly NameAndLabel[]

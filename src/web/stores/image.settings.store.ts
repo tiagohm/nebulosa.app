@@ -1,9 +1,9 @@
+import { initProxy } from '@shared/proxy'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { ImageFormat } from 'nebulosa/src/imaging/model/types'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { initProxy } from '../shared/proxy'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageSettingsStore = ReturnType<typeof imageSettingsStore>
 

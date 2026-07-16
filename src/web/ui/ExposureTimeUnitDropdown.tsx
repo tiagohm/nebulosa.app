@@ -1,5 +1,5 @@
+import { Dropdown, DropdownItem, type DropdownProps } from '@ui/components/Dropdown'
 import type { ExposureTimeUnit } from 'src/shared/types'
-import { Dropdown, DropdownItem, type DropdownProps } from './components/Dropdown'
 
 const EXPOSURE_TIME_UNITS = ['minute', 'second', 'millisecond', 'microsecond'] as const
 

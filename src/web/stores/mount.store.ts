@@ -1,3 +1,8 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { equipmentStore, type DeviceState } from '@stores/equipment.store'
+import { framingStore } from '@stores/framing.store'
+import type { NudgeDirection } from '@ui/Nudge'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import type { Mount, MountTargetCoordinate, MountTargetCoordinateType, TrackMode } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
@@ -5,11 +10,6 @@ import { DEFAULT_COORDINATE_INFO, type CoordinateInfo, type MountRemoteControlPr
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import type { NudgeDirection } from '../ui/Nudge'
-import { equipmentStore, type DeviceState } from './equipment.store'
-import { framingStore } from './framing.store'
 
 export type MountStore = ReturnType<typeof mountStore>
 

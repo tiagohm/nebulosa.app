@@ -1,8 +1,8 @@
+import { useModal } from '@hooks/modal.hook'
+import { IconButton } from '@ui/components/IconButton'
+import { Icons } from '@ui/Icon'
 import type { CSSProperties, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useModal } from '@/hooks/modal.hook'
-import { IconButton } from './components/IconButton'
-import { Icons } from './Icon'
 
 export interface ModalProps {
 	readonly id: string

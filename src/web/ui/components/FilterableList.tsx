@@ -1,7 +1,7 @@
+import { List, type ListProps } from '@ui/components/List'
+import { SearchTextInput } from '@ui/components/SearchTextInput'
 import { useDebounce } from '@uidotdev/usehooks'
 import { useMemo, useState } from 'react'
-import { List, type ListProps } from './List'
-import { SearchTextInput } from './SearchTextInput'
 
 export type FilterableListItemRenderer<T> = (item: T, index: number) => React.ReactNode
 

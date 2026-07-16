@@ -1,6 +1,6 @@
+import { tw } from '@shared/util'
+import { Icons } from '@ui/Icon'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { tw } from '@/shared/util'
-import { Icons } from '../Icon'
 
 const checkboxStyles = tv({
 	slots: {

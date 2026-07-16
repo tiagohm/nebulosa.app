@@ -1,9 +1,9 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { equipmentStore, type DeviceState } from '@stores/equipment.store'
 import type { Rotator } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type RotatorStore = ReturnType<typeof rotatorStore>
 

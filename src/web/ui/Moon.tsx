@@ -1,14 +1,14 @@
+import { formatDistance } from '@shared/util'
+import { moonStore } from '@stores/atlas.moon.store'
+import { lunarEclipseStore } from '@stores/lunar.eclipse.store'
+import { EphemerisAndChart, AstronomicalEvent } from '@ui/Atlas'
+import { Icons } from '@ui/Icon'
+import { MoonImage } from '@ui/MoonImage'
 import type { IDockviewPanelProps } from 'dockview-react'
 import type { LunarPhase } from 'nebulosa/src/astronomy/bodies/moon'
 import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDistance } from '../shared/util'
-import { moonStore } from '../stores/atlas.moon.store'
-import { lunarEclipseStore } from '../stores/lunar.eclipse.store'
-import { EphemerisAndChart, AstronomicalEvent } from './Atlas'
-import { Icons } from './Icon'
-import { MoonImage } from './MoonImage'
 
 export const Moon = memo(({ api }: IDockviewPanelProps) => (
 	<div className="grid grid-cols-12 items-center gap-2">

@@ -1,7 +1,7 @@
+import { initProxy, type ProxyProperties } from '@shared/proxy'
 import * as formulas from 'nebulosa/src/astronomy/formulas'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
-import { initProxy, type ProxyProperties } from '@/shared/proxy'
 
 export type CalculatorStore = typeof calculatorStore
 

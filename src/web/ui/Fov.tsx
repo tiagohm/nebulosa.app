@@ -1,7 +1,7 @@
+import { ImageViewerStoreContext } from '@shared/context'
+import { hasScaledSolution } from '@stores/image.solver.store'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { hasScaledSolution } from '@/stores/image.solver.store'
-import { ImageViewerStoreContext } from '../shared/context'
 
 export const Fov = memo(() => {
 	const { fov, solver } = useContext(ImageViewerStoreContext)

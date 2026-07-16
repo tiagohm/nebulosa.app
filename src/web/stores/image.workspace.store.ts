@@ -1,7 +1,7 @@
+import { initProxy } from '@shared/proxy'
+import type { Image } from '@shared/types'
 import type { DockviewReadyEvent } from 'dockview-react'
 import { proxy } from 'valtio'
-import { initProxy } from '../shared/proxy'
-import type { Image } from '../shared/types'
 
 export type ImageWorkspaceStore = typeof imageWorkspaceStore
 

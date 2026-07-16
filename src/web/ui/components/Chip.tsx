@@ -1,6 +1,6 @@
+import { hasRootInteraction, stopPropagationForAll, tw } from '@shared/util'
+import { Icons } from '@ui/Icon'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { hasRootInteraction, stopPropagationForAll, tw } from '@/shared/util'
-import { Icons } from '../Icon'
 
 const chipStyles = tv({
 	slots: {

@@ -1,12 +1,12 @@
+import { Api } from '@shared/api'
+import { imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { toast } from '@shared/toast'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import { DEFAULT_STAR_DETECTION, type StarDetection } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { toast } from '../shared/toast'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageStarDetectionStore = ReturnType<typeof imageStarDetectionStore>
 

@@ -1,5 +1,5 @@
+import { Select, type SelectProps } from '@ui/components/Select'
 import type { CameraTransferFormat } from 'nebulosa/src/devices/indi/device'
-import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['FITS', 'XISF'] as const
 const LABELS = ['FITS', 'XISF'] as const

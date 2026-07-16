@@ -1,6 +1,6 @@
+import { initProxy } from '@shared/proxy'
 import { DEFAULT_PLATE_SOLVE_START, type PlateSolverType, type PlateSolveStart } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { initProxy } from '../shared/proxy'
 
 export type SettingsStore = typeof settingsStore
 

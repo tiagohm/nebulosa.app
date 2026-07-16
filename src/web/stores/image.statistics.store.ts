@@ -1,11 +1,11 @@
+import { Api } from '@shared/api'
+import { imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { ImageHistogram, StatisticImage } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageStatisticsStore = ReturnType<typeof imageStatisticsStore>
 

@@ -1,9 +1,9 @@
+import { Api } from '@shared/api'
+import { alpacaBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
 import type { AlpacaServerStatus } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { alpacaBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
 
 export type AlpacaStore = typeof alpacaStore
 

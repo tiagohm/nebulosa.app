@@ -1,14 +1,14 @@
+import { Api } from '@shared/api'
+import { autoFocusBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { autoFocusListStore } from '@stores/autofocus.list.store'
+import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
+import type { DeviceState } from '@stores/equipment.store'
 import { nanoid } from 'nanoid'
 import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
 import { type AutoFocusStart, type AutoFocusEvent, DEFAULT_AUTO_FOCUS_START, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { autoFocusBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { autoFocusListStore } from './autofocus.list.store'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
-import type { DeviceState } from './equipment.store'
 
 export type AutoFocusStore = ReturnType<typeof autoFocusStore>
 

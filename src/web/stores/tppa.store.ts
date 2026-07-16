@@ -1,14 +1,14 @@
+import { Api } from '@shared/api'
+import { tppaBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
+import type { DeviceState } from '@stores/equipment.store'
+import { tppaListStore } from '@stores/tppa.list.store'
 import { nanoid } from 'nanoid'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type TppaEvent, type TppaStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { tppaBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
-import type { DeviceState } from './equipment.store'
-import { tppaListStore } from './tppa.list.store'
 
 export type TppaStore = ReturnType<typeof tppaStore>
 

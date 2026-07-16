@@ -1,13 +1,13 @@
+import { Api } from '@shared/api'
+import { flatWizardBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
+import type { DeviceState } from '@stores/equipment.store'
 import { nanoid } from 'nanoid'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { type FlatWizardStart, type FlatWizardEvent, DEFAULT_FLAT_WIZARD_START, DEFAULT_FLAT_WIZARD_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { flatWizardBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
-import type { DeviceState } from './equipment.store'
 
 export type FlatWizardStore = ReturnType<typeof flatWizardStore>
 

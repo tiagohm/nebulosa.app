@@ -1,12 +1,12 @@
+import { useStore } from '@hooks/store.hook'
+import { GuideOutputDeviceContext, GuideOutputStoreContext } from '@shared/context'
+import { guideOutputStore } from '@stores/guideoutput.store'
+import { NumberInput } from '@ui/components/NumberInput'
+import { ConnectButton } from '@ui/ConnectButton'
+import { Modal } from '@ui/Modal'
+import { Nudge } from '@ui/Nudge'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { guideOutputStore } from '@/stores/guideoutput.store'
-import { useStore } from '../hooks/store.hook'
-import { GuideOutputDeviceContext, GuideOutputStoreContext } from '../shared/context'
-import { NumberInput } from './components/NumberInput'
-import { ConnectButton } from './ConnectButton'
-import { Modal } from './Modal'
-import { Nudge } from './Nudge'
 
 export const GuideOutput = memo(() => {
 	const device = useContext(GuideOutputDeviceContext)

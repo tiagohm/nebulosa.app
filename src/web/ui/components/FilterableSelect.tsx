@@ -1,7 +1,7 @@
+import { SearchTextInput } from '@ui/components/SearchTextInput'
+import { Select, type SelectProps } from '@ui/components/Select'
 import { useDebounce } from '@uidotdev/usehooks'
 import { useMemo, useState } from 'react'
-import { SearchTextInput } from './SearchTextInput'
-import { Select, type SelectProps } from './Select'
 
 export interface FilterableSelectProps<T> extends Omit<SelectProps<T>, 'headerContent' | 'items'> {
 	readonly items: readonly T[]

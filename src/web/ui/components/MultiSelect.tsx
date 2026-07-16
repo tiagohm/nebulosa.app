@@ -1,10 +1,10 @@
+import { assignRef, tw } from '@shared/util'
+import { Chip, type ChipClassNames, type ChipProps } from '@ui/components/Chip'
+import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from '@ui/components/Floating'
+import { List } from '@ui/components/List'
+import { Icons } from '@ui/Icon'
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { assignRef, tw } from '@/shared/util'
-import { Icons } from '../Icon'
-import { Chip, type ChipClassNames, type ChipProps } from './Chip'
-import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingPlacement } from './Floating'
-import { List } from './List'
 
 const MULTI_SELECT_ITEM_HEIGHTS = {
 	sm: 32,

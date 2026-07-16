@@ -1,11 +1,11 @@
+import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
+import { FilePickerInput } from '@ui/FilePickerInput'
+import { Icons } from '@ui/Icon'
+import { ImageFormatButtonGroup } from '@ui/ImageFormatButtonGroup'
 import { memo, useContext, useEffect } from 'react'
 import { ImageViewerStoreContext } from 'src/web/shared/context'
 import { useSnapshot } from 'valtio'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { FilePickerInput } from './FilePickerInput'
-import { Icons } from './Icon'
-import { ImageFormatButtonGroup } from './ImageFormatButtonGroup'
 
 export const ImageSave = memo(() => {
 	const { save } = useContext(ImageViewerStoreContext)

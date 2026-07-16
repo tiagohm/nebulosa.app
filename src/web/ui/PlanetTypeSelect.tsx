@@ -1,5 +1,5 @@
+import { Select, type SelectProps } from '@ui/components/Select'
 import type { PlanetType } from 'src/shared/types'
-import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = [
 	'ALL',

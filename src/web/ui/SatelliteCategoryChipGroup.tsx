@@ -1,5 +1,5 @@
+import { Chip, type ChipProps } from '@ui/components/Chip'
 import type { SatelliteCategory } from 'src/shared/types'
-import { Chip, type ChipProps } from './components/Chip'
 
 export interface SatelliteCategoryChipGroupProps extends React.ComponentProps<'div'> {
 	readonly className?: string

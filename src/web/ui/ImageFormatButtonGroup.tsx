@@ -1,5 +1,5 @@
+import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from '@ui/components/ButtonGroup'
 import type { ImageFormat } from 'nebulosa/src/imaging/model/types'
-import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from './components/ButtonGroup'
 
 export type ImageFormatButtonGroupProps = Omit<ButtonGroupProps<ImageFormat>, 'children'>
 

@@ -1,12 +1,12 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { atlasStore, isLocationChanged, isTimeChanged } from '@stores/atlas.store'
 import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalAdd, temporalGet } from 'nebulosa/src/astronomy/time/temporal'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, type BodyPosition, type LunarApsis, type LunarPhaseTime, type PositionOfBody } from 'src/shared/types'
 import { proxy, ref } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import { atlasStore, isLocationChanged, isTimeChanged } from './atlas.store'
 
 export type AtlasMoonStore = typeof moonStore
 

@@ -1,8 +1,8 @@
+import { clamp, tw } from '@shared/util'
+import { type InteractableMethods, type InteractableProps, type InteractTransform, type InteractType, Interactable } from '@ui/Interactable'
 import { memo, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import worldMapSvg from 'src/data/world.map.svg'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { clamp, tw } from '@/shared/util'
-import { type InteractableMethods, type InteractableProps, type InteractTransform, type InteractType, Interactable } from '../Interactable'
 
 export const WORLD_MAP_WIDTH = 2520.631
 export const WORLD_MAP_HEIGHT = 1260.315

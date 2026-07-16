@@ -1,10 +1,10 @@
+import type { WorldMapPosition } from '@ui/components/WorldMap'
+import type { InteractTransform } from '@ui/Interactable'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import { toMeter } from 'nebulosa/src/math/units/distance'
 import { proxy } from 'valtio'
-import type { WorldMapPosition } from '../ui/components/WorldMap'
-import type { InteractTransform } from '../ui/Interactable'
 
 export type LocationStore = ReturnType<typeof locationStore>
 

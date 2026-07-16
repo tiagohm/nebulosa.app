@@ -1,3 +1,6 @@
+import { initProxy } from '@shared/proxy'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { AstroBinEquipmentPopoverItem } from '@ui/AstroBinEquipmentPopover'
 import { nanoid } from 'nanoid'
 import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import { toArcsec } from 'nebulosa/src/math/units/angle'
@@ -5,9 +8,6 @@ import { DEFAULT_FOV_ITEM, type ComputedFov, type FovItem } from 'src/shared/typ
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { initProxy } from '../shared/proxy'
-import type { AstroBinEquipmentPopoverItem } from '../ui/AstroBinEquipmentPopover'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageFovStore = ReturnType<typeof imageFovStore>
 

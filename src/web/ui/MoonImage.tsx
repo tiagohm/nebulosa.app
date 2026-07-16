@@ -1,5 +1,5 @@
+import moonWebp from '@assets/moon.webp'
 import { memo } from 'react'
-import moonWebp from '@/assets/moon.webp'
 
 export const MoonImage = memo(() => (
 	<span className="relative">

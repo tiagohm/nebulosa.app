@@ -1,6 +1,6 @@
+import { tw } from '@shared/util'
+import { Radio } from '@ui/components/Radio'
 import type { GuiderClientMode } from 'src/shared/types'
-import { tw } from '../shared/util'
-import { Radio } from './components/Radio'
 
 export interface GuiderClientModeRadioGroupProps extends React.ComponentProps<'div'> {
 	readonly value: GuiderClientMode

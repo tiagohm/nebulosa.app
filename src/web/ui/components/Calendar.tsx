@@ -1,7 +1,7 @@
+import { tw } from '@shared/util'
+import { Icons } from '@ui/Icon'
 import { useEffect, useState } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { tw } from '@/shared/util'
-import { Icons } from '../Icon'
 
 const calendarMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const
 const calendarWeekdayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const

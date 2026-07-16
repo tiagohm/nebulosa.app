@@ -1,11 +1,11 @@
+import { settingsStore } from '@stores/settings.store'
+import { IconButton } from '@ui/components/IconButton'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Popover } from '@ui/components/Popover'
+import { TextInput } from '@ui/components/TextInput'
+import { Icons } from '@ui/Icon'
 import { DEFAULT_PLATE_SOLVE_START, type PlateSolverType, type PlateSolveStart } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { settingsStore } from '@/stores/settings.store'
-import { IconButton } from './components/IconButton'
-import { NumberInput } from './components/NumberInput'
-import { Popover } from './components/Popover'
-import { TextInput } from './components/TextInput'
-import { Icons } from './Icon'
 
 export interface PlateSolveStartPopoverProps extends Pick<PlateSolveStart, 'radius' | 'focalLength' | 'pixelSize'> {
 	readonly type: PlateSolverType

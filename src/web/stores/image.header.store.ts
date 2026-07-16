@@ -1,5 +1,5 @@
+import type { ImageViewerStore } from '@stores/image.viewer.store'
 import { unsubscribe } from 'src/shared/util'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageHeaderStore = ReturnType<typeof imageHeaderStore>
 

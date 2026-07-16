@@ -1,7 +1,7 @@
+import { initProxy } from '@shared/proxy'
+import type { PopoverMethods } from '@ui/components/Popover'
 import type { DeviceType } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
-import { initProxy } from '../shared/proxy'
-import type { PopoverMethods } from '../ui/components/Popover'
 
 export type HomeMenuStore = typeof homeMenuStore
 

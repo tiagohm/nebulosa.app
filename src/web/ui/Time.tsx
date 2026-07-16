@@ -1,10 +1,10 @@
+import { clamp } from '@shared/util'
+import { Button } from '@ui/components/Button'
+import { DateTimeInput } from '@ui/components/DateTimeInput'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Icons } from '@ui/Icon'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import { useEffect, useState } from 'react'
-import { clamp } from '@/shared/util'
-import { Button } from './components/Button'
-import { DateTimeInput } from './components/DateTimeInput'
-import { NumberInput } from './components/NumberInput'
-import { Icons } from './Icon'
 
 export interface TimeProps extends UTCTime {
 	readonly onTimeChange?: (time: UTCTime) => void

@@ -1,14 +1,14 @@
+import { imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import type { ImageRoiRequest } from '@shared/types'
+import { clamp, clampInteger } from '@shared/util'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Roi } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import type { ImageRoiRequest } from '../shared/types'
-import { clamp, clampInteger } from '../shared/util'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageRoiStore = ReturnType<typeof imageRoiStore>
 

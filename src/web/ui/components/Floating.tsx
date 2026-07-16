@@ -1,7 +1,7 @@
+import { assignRef, clamp, tw } from '@shared/util'
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { type ClassValue, tv } from 'tailwind-variants'
-import { assignRef, clamp, tw } from '@/shared/util'
 
 const VIEWPORT_PADDING = 12
 const ARROW_SIZE = 8.125

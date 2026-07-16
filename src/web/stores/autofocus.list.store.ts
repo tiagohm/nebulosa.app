@@ -1,7 +1,7 @@
+import { deviceBus } from '@shared/bus'
+import type { DeviceState } from '@stores/equipment.store'
 import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
-import { deviceBus } from '../shared/bus'
-import type { DeviceState } from './equipment.store'
 
 export type AutoFocusListStore = typeof autoFocusListStore
 

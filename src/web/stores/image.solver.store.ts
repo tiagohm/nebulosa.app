@@ -4,7 +4,6 @@ import { initProxy } from '@shared/proxy'
 import { framingStore } from '@stores/framing.store'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import { settingsStore } from '@stores/settings.store'
-import { nanoid } from 'nanoid'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
@@ -62,7 +61,7 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 		})
 
 		state.solution = viewer.state.info?.solution && ref(viewer.state.info.solution)
-		state.request.id ||= nanoid()
+		state.request.id = viewer.image.id
 
 		return unmount
 	}

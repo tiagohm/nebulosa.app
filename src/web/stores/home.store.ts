@@ -80,6 +80,10 @@ function handleReady(event: DockviewReadyEvent) {
 	const galaxy = api.addPanel({ id: 'panel.atlas.galaxy', component: 'component.atlas.galaxy', tabComponent: 'tab.fixed', title: 'Galaxy', position: { referenceGroup: images.id } })
 	const satellite = api.addPanel({ id: 'panel.atlas.satellite', component: 'component.atlas.satellite', tabComponent: 'tab.fixed', title: 'Satellite', position: { referenceGroup: images.id } })
 	const calculator = api.addPanel({ id: 'panel.calculator', component: 'component.calculator', tabComponent: 'tab.fixed', title: 'Calculator', position: { referenceGroup: images.id } })
+	const darv = api.addPanel({ id: 'panel.darv', component: 'component.darv', tabComponent: 'tab.fixed', title: 'DARV', params: { id: nanoid() }, position: { referenceGroup: images.id } })
+	const tppa = api.addPanel({ id: 'panel.tppa', component: 'component.tppa', tabComponent: 'tab.fixed', title: 'TPPA', params: { id: nanoid() }, position: { referenceGroup: images.id } })
+	const flatWizard = api.addPanel({ id: 'panel.flatwizard', component: 'component.flatwizard', tabComponent: 'tab.fixed', title: 'Flat Wizard', params: { id: nanoid() }, position: { referenceGroup: images.id } })
+	const autoFocus = api.addPanel({ id: 'panel.autofocus', component: 'component.autofocus', tabComponent: 'tab.fixed', title: 'Auto Focus', params: { id: nanoid() }, position: { referenceGroup: images.id } })
 
 	// layoutDisposable = api.onDidLayoutChange(() => {
 	// 	window.clearTimeout(saveTimer)

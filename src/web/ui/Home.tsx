@@ -22,6 +22,10 @@ import { FixedTab } from '@ui/workspace/tabs/FixedTab'
 import { DockviewReact, themeGithubDark } from 'dockview-react'
 import { memo, useEffect } from 'react'
 import { wsStore } from 'src/web/stores/ws.store'
+import { AutoFocus } from './AutoFocus'
+import { Darv } from './Darv'
+import { FlatWizard } from './FlatWizard'
+import { Tppa } from './Tppa'
 
 const tabComponents = {
 	'tab.fixed': FixedTab,
@@ -45,6 +49,10 @@ const components = {
 	'component.atlas.satellite': Satellite,
 	'component.planetarium': Planetarium,
 	'component.calculator': Calculator,
+	'component.darv': Darv,
+	'component.tppa': Tppa,
+	'component.autofocus': AutoFocus,
+	'component.flatwizard': FlatWizard,
 } as const
 
 export const Home = memo(() => {

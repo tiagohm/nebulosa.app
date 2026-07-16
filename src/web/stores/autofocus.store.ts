@@ -1,10 +1,7 @@
 import { Api } from '@shared/api'
 import { autoFocusBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
-import { autoFocusListStore } from '@stores/autofocus.list.store'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
-import { nanoid } from 'nanoid'
 import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
 import { type AutoFocusStart, type AutoFocusEvent, DEFAULT_AUTO_FOCUS_START, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
@@ -15,18 +12,16 @@ export type AutoFocusStore = ReturnType<typeof autoFocusStore>
 export interface AutoFocusState {
 	running: boolean
 	readonly request: AutoFocusStart
-	readonly camera: DeviceState<Camera>
-	readonly focuser: DeviceState<Focuser>
+	camera?: DeviceState<Camera>
+	focuser?: DeviceState<Focuser>
 	readonly event: AutoFocusEvent
 }
 
-export function autoFocusStore(camera: Camera, focuser: Focuser) {
+export function autoFocusStore(id: string) {
 	const state = proxy<AutoFocusState>({
 		request: structuredClone(DEFAULT_AUTO_FOCUS_START),
 		running: false,
 		event: structuredClone(DEFAULT_AUTO_FOCUS_EVENT),
-		camera,
-		focuser,
 	})
 
 	const u: VoidFunction[] = []
@@ -35,27 +30,27 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 	function mount() {
 		if (mounted) return
 
-		console.info('autofocus mounted:', camera.name, focuser.name)
+		console.info('autofocus mounted:', id)
 
 		mounted = true
 
-		u[0] = initProxy(state, `autofocus.${camera.id}.${focuser.id}`, ['o:request'])
+		u[0] = initProxy(state, `autofocus.${id}`, ['o:request'])
 
 		u[1] = autoFocusBus.subscribe('update', (event) => {
-			if (state.camera.id === event.camera && state.focuser.id === event.focuser) {
+			if (state.camera?.id === event.camera && state.focuser?.id === event.focuser) {
 				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)
 			}
 		})
 
-		subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
+		// TODO: subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
 
-		state.request.id ||= nanoid()
+		state.request.id = id
 	}
 
 	function unmount() {
 		if (!mounted) return
-		console.info('autofocus unmounted:', camera.name, focuser.name)
+		console.info('autofocus unmounted:', id)
 		unsubscribe(u)
 		mounted = false
 	}
@@ -78,11 +73,11 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 	}
 
 	async function start() {
-		if (state.running || !camera.connected || !focuser.connected) return
+		if (state.running || !state.camera?.connected || !state.focuser?.connected) return
 
 		state.running = true
 
-		const response = await Api.AutoFocus.start(camera, focuser, state.request)
+		const response = await Api.AutoFocus.start(state.camera, state.focuser, state.request)
 
 		if (!response?.ok) {
 			reset()
@@ -99,10 +94,6 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 		}
 	}
 
-	function hide() {
-		autoFocusListStore.hide(camera, focuser)
-	}
-
 	return {
 		state,
 		mount,
@@ -112,6 +103,5 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 		updateStarDetection,
 		start,
 		stop,
-		hide,
 	} as const
 }

@@ -1,10 +1,7 @@
 import { Api } from '@shared/api'
 import { tppaBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
-import { tppaListStore } from '@stores/tppa.list.store'
-import { nanoid } from 'nanoid'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type TppaEvent, type TppaStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
@@ -15,21 +12,19 @@ export type TppaStore = ReturnType<typeof tppaStore>
 export interface TppaState {
 	running: boolean
 	readonly request: TppaStart
-	readonly camera: DeviceState<Camera>
-	readonly mount: DeviceState<Mount>
+	camera?: DeviceState<Camera>
+	mount?: DeviceState<Mount>
 	readonly event: TppaEvent
 }
 
-export function tppaStore(camera: Camera, mount: Mount) {
+export function tppaStore(id: string) {
 	const state = proxy<TppaState>({
 		request: structuredClone(DEFAULT_TPPA_START),
 		running: false,
 		event: structuredClone(DEFAULT_TPPA_EVENT),
-		camera,
-		mount,
 	})
 
-	console.info('tppa created:', camera.name, mount.name)
+	console.info('tppa created:', id)
 
 	const u: VoidFunction[] = []
 	let mounted = false
@@ -37,27 +32,27 @@ export function tppaStore(camera: Camera, mount: Mount) {
 	function _mount() {
 		if (mounted) return
 
-		console.info('tppa mounted:', camera.name, mount.name)
+		console.info('tppa mounted:', id)
 
 		mounted = true
 
-		u[0] = initProxy(state, `tppa.${camera.id}.${mount.id}`, ['o:request'])
+		u[0] = initProxy(state, `tppa.${id}`, ['o:request'])
 
 		u[1] = tppaBus.subscribe('update', (event) => {
-			if (state.camera.id === event.camera && state.mount.id === event.mount) {
+			if (state.camera?.id === event.camera && state.mount?.id === event.mount) {
 				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)
 			}
 		})
 
-		subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
+		// TODO: subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
 
-		state.request.id ||= nanoid()
+		state.request.id = id
 	}
 
 	function unmount() {
 		if (!mounted) return
-		console.info('tppa unmounted:', camera.name, mount.name)
+		console.info('tppa unmounted:', id)
 		unsubscribe(u)
 		mounted = false
 	}
@@ -84,11 +79,11 @@ export function tppaStore(camera: Camera, mount: Mount) {
 	}
 
 	async function start() {
-		if (state.running || !camera.connected || !mount.connected) return
+		if (state.running || !state.camera?.connected || !state.mount?.connected) return
 
 		state.running = true
 
-		const response = await Api.TPPA.start(camera, mount, state.request)
+		const response = await Api.TPPA.start(state.camera, state.mount, state.request)
 
 		if (!response?.ok) {
 			reset()
@@ -105,10 +100,6 @@ export function tppaStore(camera: Camera, mount: Mount) {
 		}
 	}
 
-	function hide() {
-		tppaListStore.hide(camera, mount)
-	}
-
 	return {
 		state,
 		mount: _mount,
@@ -119,6 +110,5 @@ export function tppaStore(camera: Camera, mount: Mount) {
 		updateRefraction,
 		start,
 		stop,
-		hide,
 	} as const
 }

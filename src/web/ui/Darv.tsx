@@ -1,67 +1,48 @@
 import { useStore } from '@hooks/store.hook'
-import { CameraDeviceContext, DarvStoreContext, MountDeviceContext } from '@shared/context'
+import { DarvStoreContext } from '@shared/context'
 import { darvStore } from '@stores/darv.store'
-import { equipmentStore } from '@stores/equipment.store'
-import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
 import { Button } from '@ui/components/Button'
-import { Chip, type ChipProps } from '@ui/components/Chip'
+import { Chip } from '@ui/components/Chip'
 import { IconButton } from '@ui/components/IconButton'
 import { NumberInput } from '@ui/components/NumberInput'
 import { Popover } from '@ui/components/Popover'
-import { TextInput } from '@ui/components/TextInput'
-import { ConnectButton } from '@ui/ConnectButton'
 import { DarvExposureModeButtonGroup } from '@ui/DarvExposureModeButtonGroup'
 import { DarvExposurePresetModeButtonGroup } from '@ui/DarvExposurePresetModeButtonGroup'
 import { HemisphereSelect } from '@ui/HemisphereSelect'
 import { Icons } from '@ui/Icon'
-import { Modal } from '@ui/Modal'
+import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useContext } from 'react'
-import type { DarvState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
+import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
+import { CameraDropdown, MountDropdown } from './DeviceDropdown'
 
-const DARV_STATE_COLORS = {
-	idle: 'default',
-	waiting: 'warning',
-	forwarding: 'primary',
-	backwarding: 'secondary',
-} satisfies Record<DarvState, NonNullable<ChipProps['color']>>
+export interface DarvParams {
+	readonly id: string
+}
 
-export const Darv = memo(() => {
-	const camera = useContext(CameraDeviceContext)
-	const mount = useContext(MountDeviceContext)
-	const darv = useStore(() => darvStore(camera, mount), [camera, mount])
+export const Darv = memo(({ params }: IDockviewPanelProps<DarvParams>) => {
+	const darv = useStore(() => darvStore(params.id), [params.id])
 
 	return (
 		<DarvStoreContext value={darv}>
-			<Modal footer={<Footer />} header="Drift Alignment by Robert Vice" id={`darv-${camera.id}-${mount.id}`} initialWidth="376px" onHide={darv.hide}>
-				<Body />
-			</Modal>
+			<div className="grid grid-cols-12 gap-2">
+				<CameraAndMount />
+				<Status />
+				<Input />
+				<Footer />
+			</div>
 		</DarvStoreContext>
 	)
 })
 
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
-		<CameraAndMount />
-		<Status />
-		<Input />
-	</div>
-))
-
 const CameraAndMount = memo(() => {
 	const darv = useContext(DarvStoreContext)
-	const { capture } = useSnapshot(darv.state.request)
-	const { connected: cameraConnected } = useSnapshot(darv.state.camera)
-	const { connected: mountConnected } = useSnapshot(darv.state.mount)
-
-	const CameraStartContent = <ConnectButton connected={cameraConnected} onClick={() => equipmentStore.connect(darv.state.camera)} size="sm" />
-	const MountStartContent = <ConnectButton connected={mountConnected} onClick={() => equipmentStore.connect(darv.state.mount)} size="sm" />
-	const CameraEndContent = <CameraCaptureStartPopover camera={darv.state.camera} mode="darv" onValueChange={darv.updateCapture} value={capture} />
+	const { camera, mount, running } = useSnapshot(darv.state)
 
 	return (
-		<div className="col-span-full mt-2 flex flex-row items-center justify-between gap-2">
-			<TextInput className="flex-1" readOnly label="Camera" value={darv.state.camera.name} startContent={CameraStartContent} endContent={CameraEndContent} />
-			<TextInput className="flex-1" readOnly label="Mount" value={darv.state.mount.name} startContent={MountStartContent} />
+		<div className="col-span-full mt-2 flex flex-row items-center justify-center gap-2">
+			<CameraDropdown showLabel disabled={running} value={camera} onValueChange={(value) => (darv.state.camera = value)} startContent={<CameraDropdownEndContent />} />
+			<MountDropdown showLabel disabled={running} value={mount} onValueChange={(value) => (darv.state.mount = value)} />
 		</div>
 	)
 })
@@ -69,10 +50,11 @@ const CameraAndMount = memo(() => {
 const Status = memo(() => {
 	const darv = useContext(DarvStoreContext)
 	const { state } = useSnapshot(darv.state.event)
+	const color = state === 'idle' ? 'default' : state === 'waiting' ? 'warning' : state === 'forwarding' ? 'primary' : 'secondary'
 
 	return (
 		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
-			<Chip color={DARV_STATE_COLORS[state]} size="sm">
+			<Chip color={color} size="sm">
 				{state}
 			</Chip>
 		</div>
@@ -98,24 +80,18 @@ const Footer = memo(() => {
 	const { running, camera, mount } = useSnapshot(darv.state)
 
 	return (
-		<>
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
 			<Button color="danger" disabled={!running} label="Stop" onClick={darv.stop} startContent={<Icons.Stop />} />
 			<Button color="success" disabled={!camera?.connected || !mount?.connected} label="Start" loading={running} onClick={darv.start} startContent={<Icons.Play />} />
-		</>
+		</div>
 	)
 })
 
-const ExposureEstimatorPopover = memo(() => {
-	const darv = useContext(DarvStoreContext)
-	const { running } = useSnapshot(darv.state)
-	const { connected } = useSnapshot(darv.state.mount)
-
-	return (
-		<Popover className="w-100" disabled={running} trigger={<IconButton disabled={running || !connected} icon={Icons.Calculator} size="sm" tooltipContent="Estimate exposure" />}>
-			<ExposureEstimatorPopoverContent />
-		</Popover>
-	)
-})
+const ExposureEstimatorPopover = memo(() => (
+	<Popover className="w-100" trigger={<IconButton icon={Icons.Calculator} size="sm" tooltipContent="Estimate exposure" />}>
+		<ExposureEstimatorPopoverContent />
+	</Popover>
+))
 
 const ExposureEstimatorPopoverContent = memo(() => {
 	const darv = useContext(DarvStoreContext)
@@ -139,4 +115,12 @@ const ExposureEstimatorPopoverContent = memo(() => {
 			<Button className="col-span-full mt-1" color="success" fullWidth label="Estimate" onClick={darv.estimateExposure} startContent={<Icons.Calculator />} />
 		</div>
 	)
+})
+
+const CameraDropdownEndContent = memo(() => {
+	const darv = useContext(DarvStoreContext)
+	const { camera } = useSnapshot(darv.state)
+	const { capture } = useSnapshot(darv.state.request)
+
+	return camera && <CameraCaptureStartPopover camera={camera} mode="tppa" onValueChange={darv.updateCapture} value={capture} />
 })

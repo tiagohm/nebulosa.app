@@ -1,60 +1,43 @@
 import { useStore } from '@hooks/store.hook'
-import { CameraDeviceContext, FlatWizardStoreContext } from '@shared/context'
-import { equipmentStore } from '@stores/equipment.store'
+import { FlatWizardStoreContext } from '@shared/context'
 import { flatWizardStore } from '@stores/flatwizard.store'
 import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
 import { Button } from '@ui/components/Button'
-import { Chip, type ChipProps } from '@ui/components/Chip'
+import { Chip } from '@ui/components/Chip'
 import { NumberInput } from '@ui/components/NumberInput'
-import { TextInput } from '@ui/components/TextInput'
-import { ConnectButton } from '@ui/ConnectButton'
 import { FilePickerInput } from '@ui/FilePickerInput'
 import { Icons } from '@ui/Icon'
-import { Modal } from '@ui/Modal'
+import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useContext } from 'react'
-import type { FlatWizardState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
+import { CameraDropdown } from './DeviceDropdown'
 
-const MEAN_MAX_VALUE = 65535
+export interface FlatWizardParams {
+	readonly id: string
+}
 
-const FLAT_WIZARD_STATE_COLORS = {
-	idle: 'default',
-	capturing: 'primary',
-	computing: 'warning',
-} satisfies Record<FlatWizardState, NonNullable<ChipProps['color']>>
-
-export const FlatWizard = memo(() => {
-	const camera = useContext(CameraDeviceContext)
-	const flatWizard = useStore(() => flatWizardStore(camera), [camera])
+export const FlatWizard = memo(({ params }: IDockviewPanelProps<FlatWizardParams>) => {
+	const flatWizard = useStore(() => flatWizardStore(params.id), [params.id])
 
 	return (
 		<FlatWizardStoreContext value={flatWizard}>
-			<Modal footer={<Footer />} header="Flat Wizard" id="flatwizard" initialWidth="376px" onHide={flatWizard.hide}>
-				<Body />
-			</Modal>
+			<div className="grid grid-cols-12 gap-2">
+				<Camera />
+				<Status />
+				<Input />
+				<Footer />
+			</div>
 		</FlatWizardStoreContext>
 	)
 })
 
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
-		<Camera />
-		<Status />
-		<Input />
-	</div>
-))
-
 const Camera = memo(() => {
 	const flatWizard = useContext(FlatWizardStoreContext)
-	const { capture } = useSnapshot(flatWizard.state.request)
-	const { connected: cameraConnected } = useSnapshot(flatWizard.state.camera)
-
-	const CameraStartContent = <ConnectButton connected={cameraConnected} onClick={() => equipmentStore.connect(flatWizard.state.camera)} size="sm" />
-	const CameraEndContent = <CameraCaptureStartPopover camera={flatWizard.state.camera} mode="flatWizard" onValueChange={flatWizard.updateCapture} value={capture} />
+	const { camera, running } = useSnapshot(flatWizard.state)
 
 	return (
-		<div className="col-span-full mt-2 flex flex-row items-center justify-between gap-2">
-			<TextInput className="flex-1" readOnly label="Camera" value={flatWizard.state.camera.name} startContent={CameraStartContent} endContent={CameraEndContent} />
+		<div className="col-span-full mt-2 flex flex-row items-center justify-center gap-2">
+			<CameraDropdown showLabel disabled={running} value={camera} onValueChange={(value) => (flatWizard.state.camera = value)} endContent={<CameraDropdownEndContent />} />
 		</div>
 	)
 })
@@ -62,10 +45,11 @@ const Camera = memo(() => {
 const Status = memo(() => {
 	const flatWizard = useContext(FlatWizardStoreContext)
 	const { median, state, message } = useSnapshot(flatWizard.state.event)
+	const color = state === 'idle' ? 'default' : state === 'capturing' ? 'primary' : 'warning'
 
 	return (
 		<div className="col-span-full mt-2 flex min-w-0 flex-row items-center justify-between gap-2">
-			<Chip color={FLAT_WIZARD_STATE_COLORS[state]} size="sm">
+			<Chip color={color} size="sm">
 				{state}
 			</Chip>
 			{median > 0 && (
@@ -92,7 +76,7 @@ const Input = memo(() => {
 			<FilePickerInput className="col-span-full" disabled={running} fullWidth id="flatwizard" mode="directory" onValueChange={flatWizard.setPath} value={path} />
 			<NumberInput className="col-span-6" disabled={disabled} label="Min exposure (ms)" maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={(value) => flatWizard.update('minExposure', value)} value={minExposure} />
 			<NumberInput className="col-span-6" disabled={disabled} label="Max exposure (ms)" maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={(value) => flatWizard.update('maxExposure', value)} value={maxExposure} />
-			<NumberInput className="col-span-6" disabled={running} label="Mean target" maxValue={MEAN_MAX_VALUE} minValue={0} onValueChange={(value) => flatWizard.update('meanTarget', value)} value={meanTarget} />
+			<NumberInput className="col-span-6" disabled={running} label="Mean target" maxValue={65536} minValue={0} onValueChange={(value) => flatWizard.update('meanTarget', value)} value={meanTarget} />
 			<NumberInput className="col-span-6" disabled={running} fractionDigits={1} label="Mean tolerance (%)" maxValue={100} minValue={0} onValueChange={(value) => flatWizard.update('meanTolerance', value)} step={0.1} value={meanTolerance} />
 		</>
 	)
@@ -105,10 +89,10 @@ const Footer = memo(() => {
 	const canStart = camera?.connected === true && saveAt.trim().length > 0
 
 	return (
-		<>
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
 			<Button color="danger" disabled={!running} label="Stop" onClick={flatWizard.stop} startContent={<Icons.Stop />} />
 			<Button color="success" disabled={!canStart} label="Start" loading={running} onClick={flatWizard.start} startContent={<Icons.Play />} />
-		</>
+		</div>
 	)
 })
 

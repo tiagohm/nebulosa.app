@@ -1,13 +1,11 @@
 import brazilLogo from '@assets/brazil.png'
 import nebulosaLogo from '@assets/nebulosa.ico'
-import { aboutStore } from '@stores/about.store'
 import { Chip } from '@ui/components/Chip'
 import { Link } from '@ui/components/Link'
 import { Icons } from '@ui/Icon'
-import { Modal } from '@ui/Modal'
+import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, type ReactNode } from 'react'
 import packageJson from 'root/package.json'
-import { useSnapshot } from 'valtio'
 
 const PROJECT_URL = 'https://github.com/tiagohm/nebulosa.app'
 
@@ -24,40 +22,23 @@ const STACK_LINKS = [
 	{ href: 'https://tailwindcss.com/', label: 'Tailwind CSS', version: packageJson.dependencies.tailwindcss },
 ] as const
 
-function StackLinkItem(item: (typeof STACK_LINKS)[number]) {
-	return <LinkButton href={item.href} key={item.label} label={item.version === undefined ? item.label : `${item.label} ${item.version}`} />
-}
+export const About = memo(({ api }: IDockviewPanelProps) => (
+	<div className="grid grid-cols-12 gap-2">
+		<Header />
+		<Logo />
+		<Info />
+		<PoweredBy />
+		<IconCredits />
+	</div>
+))
 
-function IconCreditItem(item: (typeof ICON_CREDITS)[number]) {
-	return <Link className="w-auto!" color="default" href={item.href} key={item.label} label={item.label} underline />
-}
-
-export const About = memo(() => {
-	const { show } = useSnapshot(aboutStore.state)
-
-	if (!show) return null
-
-	return (
-		<Modal header={<Header />} id="about" initialWidth="472px" onHide={aboutStore.hide}>
-			<Body />
-		</Modal>
-	)
-})
-
-function Body() {
-	return (
-		<div className="grid grid-cols-12 gap-3">
-			<Logo />
-			<Info />
-			<PoweredBy />
-			<IconCredits />
-		</div>
-	)
+function Header() {
+	return <span className="col-span-full min-w-0 truncate text-center text-3xl font-bold text-neutral-100">Nebulosa</span>
 }
 
 function Logo() {
 	return (
-		<div className="col-span-full flex flex-col items-center gap-3 sm:col-span-4">
+		<div className="col-span-full flex flex-col items-center gap-3">
 			<img className="size-28 rounded-lg p-2" src={nebulosaLogo} />
 			<LinkButton href={PROJECT_URL} icon={<Icons.Link />} label="GitHub" />
 		</div>
@@ -66,7 +47,7 @@ function Logo() {
 
 function Info() {
 	return (
-		<div className="col-span-full flex min-w-0 flex-col gap-3 sm:col-span-8">
+		<div className="col-span-full flex min-w-0 flex-col gap-3">
 			<p className="text-center text-sm leading-5 text-neutral-300">{packageJson.description}</p>
 			<div className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-3">
 				<InfoRow label="Version">
@@ -82,7 +63,7 @@ function Info() {
 					</span>
 				</InfoRow>
 				<InfoRow label="Copyright">
-					<span>2025-{aboutStore.state.year}</span>
+					<span>2025</span>
 				</InfoRow>
 			</div>
 			<div className="rounded-lg border border-(--color-variant)/20 bg-(--color-variant)/10 p-3 text-center text-sm leading-5 text-neutral-200 [--color-variant:var(--warning)]">This software is WIP, comes with absolutely no warranty, and the copyright holder is not liable or responsible for anything.</div>
@@ -99,6 +80,10 @@ function PoweredBy() {
 	)
 }
 
+function StackLinkItem(item: (typeof STACK_LINKS)[number]) {
+	return <LinkButton href={item.href} key={item.label} label={item.version === undefined ? item.label : `${item.label} ${item.version}`} />
+}
+
 function IconCredits() {
 	return (
 		<div className="col-span-full flex flex-wrap items-center justify-center gap-1.5 text-xs text-neutral-500">
@@ -107,6 +92,10 @@ function IconCredits() {
 			{ICON_CREDITS.map(IconCreditItem)}
 		</div>
 	)
+}
+
+function IconCreditItem(item: (typeof ICON_CREDITS)[number]) {
+	return <Link className="w-auto!" color="default" href={item.href} key={item.label} label={item.label} underline />
 }
 
 interface InfoRowProps {
@@ -141,13 +130,5 @@ function LinkButton({ href, icon, label }: LinkButtonProps) {
 				</span>
 			}
 		/>
-	)
-}
-
-function Header() {
-	return (
-		<div className="ms-10 flex min-w-0 flex-1 items-center justify-center gap-3">
-			<span className="min-w-0 truncate text-3xl font-bold text-neutral-100">Nebulosa</span>
-		</div>
 	)
 }

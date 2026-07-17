@@ -14,11 +14,12 @@ import { meter, toMeter } from 'nebulosa/src/math/units/distance'
 import { memo, useContext, useEffect, type CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
 
-export interface LocationProps extends GeographicCoordinate {
+export interface LocationMapProps extends GeographicCoordinate {
+	readonly mode: 'settings' | 'mount'
 	readonly onCoordinateChange?: (position: GeographicCoordinate) => void
 }
 
-export function Location({ onCoordinateChange, ...coordinate }: LocationProps) {
+export function LocationMap({ mode, onCoordinateChange, ...coordinate }: LocationMapProps) {
 	const location = useStore(() => locationStore(coordinate), [])
 
 	useEffect(() => {
@@ -35,26 +36,18 @@ export function Location({ onCoordinateChange, ...coordinate }: LocationProps) {
 	return (
 		<LocationStoreContext value={location}>
 			<div className="flex w-full flex-col gap-2">
-				<Header />
 				<Inputs />
 				<Map />
-				<Button color="success" label="Choose" onClick={handleChoose} startContent={<Icons.Check />} />
+				<div className="flex flex-row items-center justify-end gap-2">
+					<IconButton color="secondary" icon={Icons.HomeMapMarker} onClick={location.findCurrentPosition} tooltipContent="Load from current location" />
+					{mode !== 'settings' && <IconButton color="primary" icon={Icons.Cog} onClick={location.loadFromSettings} tooltipContent="Load from settings" />}
+					{mode !== 'mount' && <MountDropdown disallowNoneSelection onValueChange={location.handleMountChange} tooltipContent="Load from mount" />}
+					<Button color="success" label="Choose" onClick={handleChoose} startContent={<Icons.Check />} />
+				</div>
 			</div>
 		</LocationStoreContext>
 	)
 }
-
-const Header = memo(() => {
-	const location = useContext(LocationStoreContext)
-
-	return (
-		<div className="flex flex-row items-center justify-start gap-2">
-			<span className="me-3 font-bold">Location</span>
-			<IconButton className="col-span-2" color="secondary" icon={Icons.HomeMapMarker} onClick={location.findCurrentPosition} tooltipContent="Load from current location" />
-			<MountDropdown disallowNoneSelection onValueChange={location.handleMountChange} tooltipContent="Load from mount" />
-		</div>
-	)
-})
 
 const Inputs = memo(() => {
 	const location = useContext(LocationStoreContext)
@@ -90,5 +83,3 @@ const MapMarker = memo(() => {
 
 	return <Icons.MapMarker width={size} height={size} style={{ ...MAP_MARKER_STYLE, transform: `translate(${point.x - size * 0.5}px, ${point.y - size}px)` }} />
 })
-
-const Footer = memo(() => {})

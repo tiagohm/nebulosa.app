@@ -11,13 +11,13 @@ import { TextInput } from '@ui/components/TextInput'
 import { ConnectButton } from '@ui/ConnectButton'
 import { Icons } from '@ui/Icon'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
-import { MountLocation } from '@ui/MountLocation'
+import { LocationMap } from '@ui/LocationMap'
 import { MountRemoteControl } from '@ui/MountRemoteControl'
 import { MountTargetCoordinateTypeRadioGroup } from '@ui/MountTargetCoordinateTypeRadioGroup'
-import { MountTime } from '@ui/MountTime'
 import { Nudge } from '@ui/Nudge'
 import { SlewRateSelect } from '@ui/SlewRateSelect'
 import { TrackModeSelect } from '@ui/TrackModeSelect'
+import { UTCTimeInput } from '@ui/UTCTimeInput'
 import type { IDockviewPanelProps } from 'dockview-react'
 import type { MountTargetCoordinateType } from 'nebulosa/src/devices/indi/device'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
@@ -77,10 +77,10 @@ export const Mount = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) =
 					<Control />
 				</TabPanel>
 				<TabPanel id="location">
-					<MountLocation />
+					<Location />
 				</TabPanel>
 				<TabPanel id="time">
-					<MountTime />
+					<Time />
 				</TabPanel>
 				<TabPanel id="remoteControl">
 					<MountRemoteControl />
@@ -267,4 +267,18 @@ const TrackModeAndRate = memo(() => {
 			<SlewRateSelect className="w-11/24" disabled={disabled} onValueChange={mount.slewRate} rates={slewRates} value={slewRate ?? ''} />
 		</div>
 	)
+})
+
+export const Location = memo(() => {
+	const mount = useContext(MountStoreContext)
+	const { geographicCoordinate } = useSnapshot(mount.state.mount)
+
+	return <LocationMap mode="mount" {...geographicCoordinate} onCoordinateChange={mount.location} />
+})
+
+export const Time = memo(() => {
+	const mount = useContext(MountStoreContext)
+	const { time } = useSnapshot(mount.state.mount)
+
+	return <UTCTimeInput {...time} onTimeChange={mount.time} />
 })

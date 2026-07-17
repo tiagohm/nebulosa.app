@@ -17,7 +17,7 @@ import { memo, useRef } from 'react'
 import type { ConnectionStatus } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 
-export const ConnectionEdgeGroup = memo(() => (
+export const Connections = memo(() => (
 	<div className="flex flex-col gap-2 p-3">
 		<span className="w-full font-bold text-neutral-300">ACTIVE CONNECTIONS:</span>
 		<ActiveConnectionList />

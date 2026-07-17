@@ -1,19 +1,16 @@
 import { skyObjectName, tw } from '@shared/util'
 import { atlasStore, type AtlasTab, type BookmarkItem } from '@stores/atlas.store'
 import { BodyCoordinateInfo } from '@ui/BodyCoordinateInfo'
-import { Button } from '@ui/components/Button'
-import { Calendar } from '@ui/components/Calendar'
 import { Chip, type ChipProps } from '@ui/components/Chip'
 import { FilterableList } from '@ui/components/FilterableList'
 import { IconButton } from '@ui/components/IconButton'
-import { NumberInput } from '@ui/components/NumberInput'
 import { Popover } from '@ui/components/Popover'
 import { MountDropdown } from '@ui/DeviceDropdown'
 import { type Icon, Icons } from '@ui/Icon'
 import type { Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
-import { formatTemporal, type Temporal, temporalGet, temporalSet } from 'nebulosa/src/astronomy/time/temporal'
+import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
-import React, { memo, useCallback, useDeferredValue, useMemo } from 'react'
+import React, { memo, useDeferredValue, useMemo } from 'react'
 import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
 import { EMPTY_TWILIGHT, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
@@ -49,80 +46,6 @@ const BookmarkPopoverContent = memo(() => {
 				)}
 			</FilterableList>
 		</div>
-	)
-})
-
-const ONE_MINUTE = 60 * 1000
-
-const TimeBar = memo(() => {
-	const { utc, offset } = useSnapshot(atlasStore.state.request.time)
-	const { manual } = useSnapshot(atlasStore.state.calendar)
-
-	const local = utc + offset * ONE_MINUTE
-
-	const handleDateChange = useCallback(
-		(value: Temporal) => {
-			atlasStore.updateTime(value - offset * ONE_MINUTE, offset)
-		},
-		[offset],
-	)
-
-	const handleOffsetChange = useCallback(
-		(value: number) => {
-			atlasStore.updateTime(utc, value, manual)
-		},
-		[manual, utc],
-	)
-
-	return (
-		<div className="inline-flex flex-row items-center gap-1">
-			<CalendarPopover date={local} offset={offset} onDateChange={handleDateChange} onOffsetChange={handleOffsetChange} />
-			{manual ? (
-				<IconButton color="warning" icon={Icons.TimerPlay} onClick={() => atlasStore.updateTime(Date.now(), offset, false)} tooltipContent="Play" variant="flat" />
-			) : (
-				<IconButton color="success" icon={Icons.TimerPause} onClick={() => (atlasStore.state.calendar.manual = true)} tooltipContent="Pause" variant="flat" />
-			)}
-		</div>
-	)
-})
-
-interface CalendarPopoverProps {
-	readonly date: number
-	readonly offset: number
-	readonly onDateChange: (date: number) => void
-	readonly onOffsetChange: (offset: number) => void
-}
-
-const CalendarPopover = memo(({ date, offset, onDateChange, onOffsetChange }: CalendarPopoverProps) => {
-	const hour = temporalGet(date, 'h')
-	const minute = temporalGet(date, 'm')
-
-	function handleDateChange(date: Temporal.PlainDate) {
-		onDateChange(date.toZonedDateTime({ plainTime: { hour, minute }, timeZone: 'UTC' }).epochMilliseconds)
-	}
-
-	function handleHourChange(value: number) {
-		onDateChange(temporalSet(date, value, 'h'))
-	}
-
-	function handleMinuteChange(value: number) {
-		onDateChange(temporalSet(date, value, 'm'))
-	}
-
-	return (
-		<Popover trigger={<Button color="secondary" label={formatTemporal(date, 'YYYY-MM-DD HH:mm', 0)} startContent={<Icons.CalendarToday />} tooltipContent="Time" />}>
-			<div className="grid max-w-[256px] grid-cols-12 gap-2 pb-2">
-				<Calendar className="col-span-full" onValueChange={handleDateChange} value={Temporal.Instant.fromEpochMilliseconds(date).toZonedDateTimeISO('GMT').toPlainDate()} />
-				<div className="col-span-6 flex flex-row items-center justify-center gap-1">
-					<NumberInput className="max-w-20" maxValue={23} minValue={0} onValueChange={handleHourChange} value={hour} />
-					<span className="text-lg font-bold">:</span>
-					<NumberInput className="max-w-20" maxValue={59} minValue={0} onValueChange={handleMinuteChange} value={minute} />
-				</div>
-				<div className="col-span-6 flex flex-row items-center justify-center gap-1">
-					<NumberInput className="w-fit" label="Timezone (min)" maxValue={720} minValue={-720} onValueChange={onOffsetChange} step={30} value={offset} />
-				</div>
-			</div>
-		</Popover>
 	)
 })
 

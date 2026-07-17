@@ -7,7 +7,7 @@ import { equipmentStore } from 'src/web/stores/equipment.store'
 import { homeStore } from 'src/web/stores/home.store'
 import { useSnapshot } from 'valtio'
 
-export const DeviceEdgeGroup = memo(() => (
+export const Devices = memo(() => (
 	<div className="flex flex-col gap-2 p-3">
 		<DeviceList type="camera" />
 		<DeviceList type="mount" />

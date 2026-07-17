@@ -1,12 +1,52 @@
 import { cameraBus, imageBus } from '@shared/bus'
 import type { Image, ImageSource } from '@shared/types'
 import { equipmentStore } from '@stores/equipment.store'
-import type { DockviewApi, DockviewIDisposable, DockviewReadyEvent, EdgeGroupPosition, SerializedDockview } from 'dockview-react'
+import type { AddGroupOptions, AddPanelOptions, DockviewApi, DockviewGroupPanel, DockviewGroupPanelApi, DockviewIDisposable, DockviewReadyEvent, EdgeGroupOptions, EdgeGroupPosition, IDockviewGroupPanel, IDockviewPanel, SerializedDockview } from 'dockview-react'
 import { nanoid } from 'nanoid'
+import type { RequiredOnly } from 'nebulosa/src/core/types'
 import type { Camera, Device, DeviceType } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
 
 export type HomeStore = typeof homeStore
+
+const PANEL_TYPES = [
+	'connections',
+	'devices',
+	'settings',
+	'about',
+	'planetarium',
+	'sun',
+	'moon',
+	'planet',
+	'asteroid',
+	'galaxy',
+	'satellite',
+	'calculator',
+	'darv',
+	'tppa',
+	'flatWizard',
+	'autoFocus',
+	'image',
+	'camera',
+	'mount',
+	'wheel',
+	'focuser',
+	'rotator',
+	'gps',
+	'dome',
+	'guideOutput',
+	'flatPanel',
+	'cover',
+	'power',
+	'thermometer',
+	'dewHeater',
+] as const
+
+const MAX_PANELS = 100
+
+export type PanelType = (typeof PANEL_TYPES)[number]
+
+export type PanelOptions<P extends object = object> = Readonly<Omit<AddPanelOptions<P> & { index?: number }, 'position' | 'floating' | 'id' | 'component'>>
 
 export interface HomeState {}
 
@@ -26,9 +66,15 @@ const LAYOUT_STORAGE_KEY = 'workspace.layout'
 
 const state = proxy<HomeState>({})
 
-let api: DockviewApi | undefined
 let saveTimer: number | undefined
 let layoutDisposable: DockviewIDisposable | undefined
+
+let api: DockviewApi | undefined
+let left: DockviewGroupPanelApi | undefined
+let right: DockviewGroupPanelApi | undefined
+let main: DockviewGroupPanel | IDockviewGroupPanel | undefined
+
+const panels: Partial<Record<PanelType, IDockviewPanel[]>> = {}
 
 cameraBus.subscribe('frame', (event) => {
 	if (event.path) {
@@ -53,6 +99,35 @@ function saveLayout() {
 function handleReady(event: DockviewReadyEvent) {
 	api = event.api
 
+	load()
+
+	// Create Layout
+
+	left = addEdge('left', { initialSize: 380 })
+	right = addEdge('right', { initialSize: 480 })
+
+	addUniquePanel('connections', { tabComponent: 'fixed', title: 'Connections' }, left)
+	addUniquePanel('devices', { tabComponent: 'fixed', title: 'Devices' }, left)
+	addUniquePanel('settings', { tabComponent: 'fixed', title: 'Settings' }, left)
+	addUniquePanel('about', { tabComponent: 'fixed', title: 'About' }, left)
+
+	main = addGroup({ id: 'group.main' })
+
+	// layoutDisposable = api.onDidLayoutChange(() => {
+	// 	window.clearTimeout(saveTimer)
+	// 	saveTimer = window.setTimeout(saveLayout, 1000)
+	// })
+}
+
+function addEdge(position: EdgeGroupPosition, options: Omit<Readonly<EdgeGroupOptions>, 'id'>) {
+	return api!.getEdgeGroup(position) ?? api!.addEdgeGroup(position, { collapsedSize: 38, collapsed: true, ...options, id: `edge.${position}` })
+}
+
+function addGroup(options: RequiredOnly<Readonly<AddGroupOptions>, 'id'>) {
+	return api!.getGroup(options.id) ?? api!.addGroup({ ...options, direction: options.direction ?? 'within' })
+}
+
+function load() {
 	const storedLayout = restoreLayout()
 
 	if (storedLayout) {
@@ -64,31 +139,87 @@ function handleReady(event: DockviewReadyEvent) {
 		}
 	}
 
-	// Initial layout
-	const left = api.getEdgeGroup('left') ?? api.addEdgeGroup('left', { id: 'edge.left', initialSize: 380, collapsedSize: 38, collapsed: true })
-	const right = api.getEdgeGroup('right') ?? api.addEdgeGroup('right', { id: 'edge.right', initialSize: 480, collapsedSize: 38, collapsed: true })
+	for (const type of PANEL_TYPES) {
+		const ps: IDockviewPanel[] = []
 
-	const connections = api.getPanel('panel.connections') ?? api.addPanel({ id: 'panel.connections', component: 'component.connections', tabComponent: 'tab.fixed', title: 'Connections', position: { referenceGroup: left.id } })
-	const devices = api.getPanel('panel.devices') ?? api.addPanel({ id: 'panel.devices', component: 'component.devices', tabComponent: 'tab.fixed', title: 'Devices', position: { referenceGroup: left.id } })
+		for (let i = 0; i < MAX_PANELS; i++) {
+			const id = `${type}.${i}`
+			const p = api!.getPanel(id)
 
-	const images = api.getGroup('group.images') ?? api.addGroup({ id: 'group.images', direction: 'within' })
-	const planetarium = api.addPanel({ id: 'panel.planetarium', component: 'component.planetarium', tabComponent: 'tab.fixed', title: 'Planetarium', position: { referenceGroup: images.id } })
-	const sun = api.addPanel({ id: 'panel.atlas.sun', component: 'component.atlas.sun', tabComponent: 'tab.fixed', title: 'Sun', position: { referenceGroup: images.id } })
-	const moon = api.addPanel({ id: 'panel.atlas.moon', component: 'component.atlas.moon', tabComponent: 'tab.fixed', title: 'Moon', position: { referenceGroup: images.id } })
-	const planet = api.addPanel({ id: 'panel.atlas.planet', component: 'component.atlas.planet', tabComponent: 'tab.fixed', title: 'Planet', position: { referenceGroup: images.id } })
-	const asteroid = api.addPanel({ id: 'panel.atlas.asteroid', component: 'component.atlas.asteroid', tabComponent: 'tab.fixed', title: 'Asteroid', position: { referenceGroup: images.id } })
-	const galaxy = api.addPanel({ id: 'panel.atlas.galaxy', component: 'component.atlas.galaxy', tabComponent: 'tab.fixed', title: 'Galaxy', position: { referenceGroup: images.id } })
-	const satellite = api.addPanel({ id: 'panel.atlas.satellite', component: 'component.atlas.satellite', tabComponent: 'tab.fixed', title: 'Satellite', position: { referenceGroup: images.id } })
-	const calculator = api.addPanel({ id: 'panel.calculator', component: 'component.calculator', tabComponent: 'tab.fixed', title: 'Calculator', position: { referenceGroup: images.id } })
-	const darv = api.addPanel({ id: 'panel.darv', component: 'component.darv', tabComponent: 'tab.fixed', title: 'DARV', params: { id: nanoid() }, position: { referenceGroup: images.id } })
-	const tppa = api.addPanel({ id: 'panel.tppa', component: 'component.tppa', tabComponent: 'tab.fixed', title: 'TPPA', params: { id: nanoid() }, position: { referenceGroup: images.id } })
-	const flatWizard = api.addPanel({ id: 'panel.flatwizard', component: 'component.flatwizard', tabComponent: 'tab.fixed', title: 'Flat Wizard', params: { id: nanoid() }, position: { referenceGroup: images.id } })
-	const autoFocus = api.addPanel({ id: 'panel.autofocus', component: 'component.autofocus', tabComponent: 'tab.fixed', title: 'Auto Focus', params: { id: nanoid() }, position: { referenceGroup: images.id } })
+			if (p !== undefined) {
+				ps.push(p)
+			}
+		}
 
-	// layoutDisposable = api.onDidLayoutChange(() => {
-	// 	window.clearTimeout(saveTimer)
-	// 	saveTimer = window.setTimeout(saveLayout, 1000)
-	// })
+		panels[type] = ps
+	}
+}
+
+function addUniquePanel(type: PanelType, options: PanelOptions, group?: Pick<DockviewGroupPanel, 'id'>) {
+	const ps = panels[type] ?? []
+
+	if (ps.length > 0) return ps[0]
+
+	const id = `${type}.0`
+	const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, component: type, position: { referenceGroup: (group ?? main!).id, index: options.index } })
+	ps.push(p)
+	panels[type] = ps
+
+	console.info('unique panel added:', id)
+
+	const listener = api!.onDidRemovePanel((e) => {
+		if (e === p) {
+			const index = panels[type]!.indexOf(p)
+
+			if (index >= 0) {
+				panels[type]!.splice(index, 1)
+				console.info('unique panel removed:', id)
+			}
+
+			listener.dispose()
+		}
+	})
+
+	return p
+}
+
+function addMultiplePanel(type: PanelType, options: PanelOptions, group?: Pick<DockviewGroupPanel, 'id'>) {
+	const ps = panels[type] ?? []
+
+	if (ps.length >= MAX_PANELS) return
+
+	const referenceGroupId = (group ?? main!)?.id
+	let referencePanel: IDockviewPanel | undefined
+
+	for (let i = 0; i < MAX_PANELS; i++) {
+		const id = `${type}.${i}`
+		const p = ps.find((e) => e.id === id)
+
+		if (p === undefined) {
+			const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, component: type, position: referencePanel && !group?.id ? { referencePanel, direction: 'right' } : { referenceGroup: referenceGroupId } })
+			ps.push(p)
+			panels[type] = ps
+
+			console.info('multiple panel added:', id)
+
+			const listener = api!.onDidRemovePanel((e) => {
+				if (e === p) {
+					const index = panels[type]!.indexOf(p)
+
+					if (index >= 0) {
+						panels[type]!.splice(index, 1)
+						console.info('multiple panel removed:', id)
+					}
+
+					listener.dispose()
+				}
+			})
+
+			return p
+		} else if (p.group.id === referenceGroupId) {
+			referencePanel = p
+		}
+	}
 }
 
 let mounted = false
@@ -124,13 +255,10 @@ function unmount() {
 function openDevice(device: Device) {
 	if (!api) return
 
-	const id = `panel.device.${device.id}`
-	let panel = api.getPanel(id)
+	const params: DevicePanelParams = { type: device.type, id: device.id, name: device.name }
+	const panel = addMultiplePanel(device.type, { title: device.name, params }, right)
 
-	if (!panel) {
-		const params: DevicePanelParams = { type: device.type, id: device.id, name: device.name }
-		panel = api.addPanel({ id, component: `component.device.${device.type}`, title: device.name, params, position: { referenceGroup: 'edge.right' } })
-	}
+	if (panel === undefined) return
 
 	panel.api.setActive()
 
@@ -149,36 +277,34 @@ function addImage(path: string, source: ImageSource | Camera, id?: string) {
 	const camera = typeof source === 'object' ? source : undefined
 	source = typeof source === 'string' ? source : 'camera'
 	id = `${source}-${id || camera?.id || nanoid()}`
-	const panelId = `panel.image.${id}`
 
-	const panel = api.getPanel(panelId)
+	const ps = panels.image ?? []
+	let p = ps.find((e) => e.params!.id === id)
 
-	if (panel) {
-		const image = panel.params as Image
+	if (p) {
+		const image = p.params as Image
 		imageBus.emit('update', { image, path })
 		return image
 	} else {
-		const images = api.getGroup('group.images') ?? api.addGroup({ id: 'group.images', direction: 'within', locked: true })
-
 		const image = { path, id, source, camera }
 		const title = image.camera?.name ?? image.path
-		const panel = api.addPanel({ id: panelId, component: 'component.images', title, params: image, position: { referenceGroup: images.id } })
+		p = addMultiplePanel('image', { title, params: image }, main)
 
-		imageBus.emit('add', image)
-
-		return image
+		if (p !== undefined) {
+			imageBus.emit('add', image)
+			return image
+		}
 	}
 }
 
 function closeImage(image: Image) {
 	if (!api) return undefined
 
-	const id = `panel.image.${image.id}`
-	const panel = api.getPanel(id)
+	const p = panels.image?.find((e) => e.params!.id === image.id)
 
-	if (panel) {
-		api.removePanel(panel)
-		panel.dispose()
+	if (p) {
+		api.removePanel(p)
+		p.dispose()
 		imageBus.emit('remove', image)
 	}
 }

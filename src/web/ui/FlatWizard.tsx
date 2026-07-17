@@ -5,12 +5,12 @@ import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
 import { Button } from '@ui/components/Button'
 import { Chip } from '@ui/components/Chip'
 import { NumberInput } from '@ui/components/NumberInput'
+import { CameraDropdown } from '@ui/DeviceDropdown'
 import { FilePickerInput } from '@ui/FilePickerInput'
 import { Icons } from '@ui/Icon'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { CameraDropdown } from './DeviceDropdown'
 
 export interface FlatWizardParams {
 	readonly id: string

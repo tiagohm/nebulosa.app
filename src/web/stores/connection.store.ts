@@ -69,6 +69,7 @@ async function list() {
 }
 
 function create() {
+	state.selected = undefined
 	const connection = { ...DEFAULT_CONNECTION, id: nanoid() }
 	Object.assign(state.edited, connection)
 }

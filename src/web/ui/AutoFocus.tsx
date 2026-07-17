@@ -7,6 +7,7 @@ import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
 import { Chip } from '@ui/components/Chip'
 import { NumberInput } from '@ui/components/NumberInput'
+import { CameraDropdown, FocuserDropdown } from '@ui/DeviceDropdown'
 import { Icons } from '@ui/Icon'
 import { StarDetectionPopover } from '@ui/StarDetectionPopover'
 import { StarDetectionSelect } from '@ui/StarDetectionSelect'
@@ -15,7 +16,6 @@ import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import { memo, useContext } from 'react'
 import { CartesianGrid, ComposedChart, Line, ReferenceDot, Scatter, XAxis, YAxis } from 'recharts'
 import { useSnapshot } from 'valtio'
-import { CameraDropdown, FocuserDropdown } from './DeviceDropdown'
 
 export interface AutoFocusParams {
 	readonly id: string

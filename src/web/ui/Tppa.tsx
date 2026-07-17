@@ -1,10 +1,12 @@
 import { useStore } from '@hooks/store.hook'
 import { TppaStoreContext } from '@shared/context'
 import { tppaStore } from '@stores/tppa.store'
+import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
 import { Chip } from '@ui/components/Chip'
 import { NumberInput } from '@ui/components/NumberInput'
+import { CameraDropdown, MountDropdown } from '@ui/DeviceDropdown'
 import { Icons } from '@ui/Icon'
 import { PlateSolverSelect } from '@ui/PlateSolverSelect'
 import { PlateSolveStartPopover } from '@ui/PlateSolveStartPopover'
@@ -13,8 +15,6 @@ import type { IDockviewPanelProps } from 'dockview-react'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
-import { CameraDropdown, MountDropdown } from './DeviceDropdown'
 
 export interface TppaParams {
 	readonly id: string

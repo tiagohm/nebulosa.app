@@ -1,11 +1,17 @@
 import { homeStore } from '@stores/home.store'
+import { About } from '@ui/About'
 import { Asteroid } from '@ui/Asteroid'
+import { AutoFocus } from '@ui/AutoFocus'
 import { Calculator } from '@ui/Calculator'
 import { Camera } from '@ui/Camera'
+import { CloseableTab } from '@ui/CloseableTab'
 import { Confirmation } from '@ui/Confirmation'
-import { ConnectionEdgeGroup } from '@ui/ConnectionEdgeGroup'
+import { Connections } from '@ui/Connections'
 import { Cover } from '@ui/Cover'
-import { DeviceEdgeGroup } from '@ui/DeviceEdgeGroup'
+import { Darv } from '@ui/Darv'
+import { Devices } from '@ui/Devices'
+import { FixedTab } from '@ui/FixedTab'
+import { FlatWizard } from '@ui/FlatWizard'
 import { Galaxy } from '@ui/Galaxy'
 import { ImagePickerButton } from '@ui/ImagePickerButton'
 import { ImageWorkspace } from '@ui/ImageWorkspace'
@@ -14,52 +20,49 @@ import { Mount } from '@ui/Mount'
 import { Planet } from '@ui/Planet'
 import { Planetarium } from '@ui/Planetarium'
 import { Satellite } from '@ui/Satellite'
+import { Settings } from '@ui/Settings'
 import { Sun } from '@ui/Sun'
 import { Thermometer } from '@ui/Thermometer'
+import { Tppa } from '@ui/Tppa'
 import { Wheel } from '@ui/Wheel'
-import { CloseableTab } from '@ui/workspace/tabs/CloseableTab'
-import { FixedTab } from '@ui/workspace/tabs/FixedTab'
 import { DockviewReact, themeGithubDark } from 'dockview-react'
 import { memo, useEffect } from 'react'
 import { wsStore } from 'src/web/stores/ws.store'
-import { AutoFocus } from './AutoFocus'
-import { Darv } from './Darv'
-import { FlatWizard } from './FlatWizard'
-import { Tppa } from './Tppa'
 
 const tabComponents = {
-	'tab.fixed': FixedTab,
-	'tab.closeable': CloseableTab,
+	fixed: FixedTab,
+	closeable: CloseableTab,
 } as const
 
 const components = {
-	'component.connections': ConnectionEdgeGroup,
-	'component.devices': DeviceEdgeGroup,
-	'component.device.camera': Camera,
-	'component.device.mount': Mount,
-	'component.device.cover': Cover,
-	'component.device.wheel': Wheel,
-	'component.device.thermometer': Thermometer,
-	'component.images': ImageWorkspace,
-	'component.atlas.sun': Sun,
-	'component.atlas.moon': Moon,
-	'component.atlas.planet': Planet,
-	'component.atlas.asteroid': Asteroid,
-	'component.atlas.galaxy': Galaxy,
-	'component.atlas.satellite': Satellite,
-	'component.planetarium': Planetarium,
-	'component.calculator': Calculator,
-	'component.darv': Darv,
-	'component.tppa': Tppa,
-	'component.autofocus': AutoFocus,
-	'component.flatwizard': FlatWizard,
+	connections: Connections,
+	devices: Devices,
+	about: About,
+	camera: Camera,
+	mount: Mount,
+	cover: Cover,
+	wheel: Wheel,
+	thermometer: Thermometer,
+	image: ImageWorkspace,
+	sun: Sun,
+	moon: Moon,
+	planet: Planet,
+	asteroid: Asteroid,
+	galaxy: Galaxy,
+	satellite: Satellite,
+	planetarium: Planetarium,
+	calculator: Calculator,
+	darv: Darv,
+	tppa: Tppa,
+	autofocus: AutoFocus,
+	flatwizard: FlatWizard,
+	settings: Settings,
 } as const
 
 export const Home = memo(() => {
-	useEffect(homeStore.mount, [])
-
-	// Mounts the websocket lifecycle once the home screen is active.
+	// Mounts the websocket and home lifecycle once the home screen is active.
 	useEffect(wsStore.mount, [])
+	useEffect(homeStore.mount, [])
 
 	return (
 		<div className="grid h-dvh grid-rows-[auto_minmax(0,1fr)] text-white">

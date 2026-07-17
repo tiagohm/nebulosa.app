@@ -1,6 +1,7 @@
 import { useStore } from '@hooks/store.hook'
 import { DarvStoreContext } from '@shared/context'
 import { darvStore } from '@stores/darv.store'
+import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
 import { Button } from '@ui/components/Button'
 import { Chip } from '@ui/components/Chip'
 import { IconButton } from '@ui/components/IconButton'
@@ -8,13 +9,12 @@ import { NumberInput } from '@ui/components/NumberInput'
 import { Popover } from '@ui/components/Popover'
 import { DarvExposureModeButtonGroup } from '@ui/DarvExposureModeButtonGroup'
 import { DarvExposurePresetModeButtonGroup } from '@ui/DarvExposurePresetModeButtonGroup'
+import { CameraDropdown, MountDropdown } from '@ui/DeviceDropdown'
 import { HemisphereSelect } from '@ui/HemisphereSelect'
 import { Icons } from '@ui/Icon'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
-import { CameraDropdown, MountDropdown } from './DeviceDropdown'
 
 export interface DarvParams {
 	readonly id: string

@@ -1,11 +1,11 @@
 import { FlatPanelStoreContext } from '@shared/context'
+import { equipmentStore } from '@stores/equipment.store'
 import { flatPanelStore, type FlatPanelStore } from '@stores/flatpanel.store'
 import { Slider } from '@ui/components/Slider'
 import { Switch } from '@ui/components/Switch'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useContext, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
-import { equipmentStore } from '../stores/equipment.store'
 
 export interface FlatPanelParams {
 	readonly id: string

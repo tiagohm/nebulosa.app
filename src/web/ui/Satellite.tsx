@@ -9,10 +9,11 @@ import { TextInput } from '@ui/components/TextInput'
 import { Icons } from '@ui/Icon'
 import { SatelliteCategoryChipGroup } from '@ui/SatelliteCategoryChipGroup'
 import { SatelliteGroupTypeChipGroup } from '@ui/SatelliteGroupTypeChipGroup'
+import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useCallback } from 'react'
 import { useSnapshot } from 'valtio'
 
-export const Satellite = memo(() => {
+export const Satellite = memo(({ api }: IDockviewPanelProps) => {
 	const { bookmark } = useSnapshot(atlasStore.state)
 	const { selected } = useSnapshot(satelliteStore.state)
 

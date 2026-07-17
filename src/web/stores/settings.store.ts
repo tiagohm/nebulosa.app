@@ -1,5 +1,7 @@
 import { initProxy } from '@shared/proxy'
-import { DEFAULT_PLATE_SOLVE_START, type PlateSolverType, type PlateSolveStart } from 'src/shared/types'
+import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
+import type { UTCTime } from 'nebulosa/src/devices/indi/device'
+import { DEFAULT_GEOGRAPHIC_COORDINATE, DEFAULT_PLATE_SOLVE_START, type PlateSolverType, type PlateSolveStart } from 'src/shared/types'
 import { proxy } from 'valtio'
 
 export type SettingsStore = typeof settingsStore
@@ -14,6 +16,8 @@ const DEFAULT_PLATE_SOLVE_START_SETTINGS = {
 
 export interface SettingsState {
 	readonly solver: Record<PlateSolverType, Pick<PlateSolveStart, 'executable' | 'apiUrl' | 'apiKey' | 'downsample' | 'timeout'>>
+	readonly location: GeographicCoordinate
+	readonly time: UTCTime
 }
 
 const state = proxy<SettingsState>({
@@ -22,9 +26,14 @@ const state = proxy<SettingsState>({
 		astrometryNet: structuredClone(DEFAULT_PLATE_SOLVE_START_SETTINGS),
 		novaAstrometryNet: structuredClone(DEFAULT_PLATE_SOLVE_START_SETTINGS),
 	},
+	location: structuredClone(DEFAULT_GEOGRAPHIC_COORDINATE),
+	time: {
+		utc: Date.now(),
+		offset: 0,
+	},
 })
 
-initProxy(state.solver, 'settings.solver', ['o:astap', 'o:astrometryNet', 'o:novaAstrometryNet'])
+initProxy(state, 'settings', ['o:location', 'o:time', 'o:solver'])
 
 function updateSolver<K extends keyof typeof state.solver.astap>(type: PlateSolverType, key: K, value: PlateSolveStart[K]) {
 	state.solver[type][key] = value

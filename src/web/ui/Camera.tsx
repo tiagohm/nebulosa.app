@@ -1,7 +1,6 @@
 import { CameraStoreContext } from '@shared/context'
 import { cameraStore, type CameraStore } from '@stores/camera.store'
 import { equipmentStore } from '@stores/equipment.store'
-import type { DevicePanelParams } from '@stores/home.store'
 import { AutoSaveButton } from '@ui/AutoSaveButton'
 import { AutoSubFolderModeButton } from '@ui/AutoSubFolderButton'
 import { CameraTransferFormatSelect } from '@ui/CameraTransferFormatSelect'
@@ -22,10 +21,11 @@ import { FrameTypeSelect } from '@ui/FrameTypeSelect'
 import { Icons } from '@ui/Icon'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import { memo, useContext, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 
-export const Camera = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) => {
+export const Camera = memo(({ params }: IDockviewPanelProps<Device>) => {
 	const storeRef = useRef<CameraStore | undefined>(undefined)
 
 	useEffect(() => storeRef.current?.mount(), [])

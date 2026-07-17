@@ -2,10 +2,12 @@ import { Api } from '@shared/api'
 import { autoFocusBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import type { DeviceState } from '@stores/equipment.store'
+import type { DockviewPanelApi } from 'dockview-react'
 import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
 import { type AutoFocusStart, type AutoFocusEvent, DEFAULT_AUTO_FOCUS_START, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
 
 export type AutoFocusStore = ReturnType<typeof autoFocusStore>
 
@@ -17,7 +19,7 @@ export interface AutoFocusState {
 	readonly event: AutoFocusEvent
 }
 
-export function autoFocusStore(id: string) {
+export function autoFocusStore(id: string, api: DockviewPanelApi) {
 	const state = proxy<AutoFocusState>({
 		request: structuredClone(DEFAULT_AUTO_FOCUS_START),
 		running: false,
@@ -43,6 +45,11 @@ export function autoFocusStore(id: string) {
 			}
 		})
 
+		u[2] = subscribeKey(state, 'camera', updateTitle)
+		u[3] = subscribeKey(state, 'focuser', updateTitle)
+
+		updateTitle()
+
 		// TODO: subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
 
 		state.request.id = id
@@ -53,6 +60,10 @@ export function autoFocusStore(id: string) {
 		console.info('autofocus unmounted:', id)
 		unsubscribe(u)
 		mounted = false
+	}
+
+	function updateTitle() {
+		api.setTitle(`Auto Focus - ${state.camera?.name || 'None'} · ${state.focuser?.name || 'None'}`)
 	}
 
 	function reset() {

@@ -1,6 +1,5 @@
 import { WheelStoreContext } from '@shared/context'
 import { equipmentStore } from '@stores/equipment.store'
-import type { DevicePanelParams } from '@stores/home.store'
 import { wheelStore, type WheelStore } from '@stores/wheel.store'
 import { Button } from '@ui/components/Button'
 import { Chip } from '@ui/components/Chip'
@@ -13,10 +12,11 @@ import { ConnectButton } from '@ui/ConnectButton'
 import { Icons } from '@ui/Icon'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import { memo, useContext, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 
-export const Wheel = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) => {
+export const Wheel = memo(({ params }: IDockviewPanelProps<Device>) => {
 	const storeRef = useRef<WheelStore | undefined>(undefined)
 
 	useEffect(() => storeRef.current?.mount(), [])

@@ -6,13 +6,13 @@ import { ConnectButton } from '@ui/ConnectButton'
 import { Icons } from '@ui/Icon'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import { memo, useContext, useEffect, useRef } from 'react'
 import { CoverStoreContext } from 'src/web/shared/context'
 import { equipmentStore } from 'src/web/stores/equipment.store'
-import type { DevicePanelParams } from 'src/web/stores/home.store'
 import { useSnapshot } from 'valtio'
 
-export const Cover = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) => {
+export const Cover = memo(({ params }: IDockviewPanelProps<Device>) => {
 	const storeRef = useRef<CoverStore | undefined>(undefined)
 
 	useEffect(() => storeRef.current?.mount(), [])

@@ -1,16 +1,16 @@
 import { ThermometerStoreContext } from '@shared/context'
 import { formatNumber } from '@shared/util'
 import { equipmentStore } from '@stores/equipment.store'
-import type { DevicePanelParams } from '@stores/home.store'
 import { thermometerStore, type ThermometerStore } from '@stores/thermometer.store'
 import { TabPanel, Tab, Tabs } from '@ui/components/Tabs'
 import { ConnectButton } from '@ui/ConnectButton'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import { memo, useContext, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 
-export const Thermometer = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) => {
+export const Thermometer = memo(({ params }: IDockviewPanelProps<Device>) => {
 	const storeRef = useRef<ThermometerStore | undefined>(undefined)
 
 	useEffect(() => storeRef.current?.mount(), [])

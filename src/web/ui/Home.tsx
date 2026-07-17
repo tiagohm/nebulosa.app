@@ -1,4 +1,4 @@
-import { homeStore, type PanelType } from '@stores/home.store'
+import { homeStore, type HomePanelType } from '@stores/home.store'
 import { About } from '@ui/About'
 import { Asteroid } from '@ui/Asteroid'
 import { AutoFocus } from '@ui/AutoFocus'
@@ -69,7 +69,7 @@ const components = {
 	thermometer: Thermometer,
 	tppa: Tppa,
 	wheel: Wheel,
-} as const satisfies Record<PanelType, MemoExoticComponent<({ api }: IDockviewPanelProps) => React.ReactNode>>
+} as const satisfies Record<HomePanelType, MemoExoticComponent<({ api }: IDockviewPanelProps) => React.ReactNode>>
 
 export const Home = memo(() => {
 	// Mounts the websocket and home lifecycle once the home screen is active.

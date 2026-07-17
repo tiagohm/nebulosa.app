@@ -26,8 +26,8 @@ interface FocusChartPoint {
 	readonly hfd: number
 }
 
-export const AutoFocus = memo(({ params }: IDockviewPanelProps<AutoFocusParams>) => {
-	const autoFocus = useStore(() => autoFocusStore(params.id), [params.id])
+export const AutoFocus = memo(({ api, params }: IDockviewPanelProps<AutoFocusParams>) => {
+	const autoFocus = useStore(() => autoFocusStore(params.id, api), [params.id])
 
 	return (
 		<AutoFocusStoreContext value={autoFocus}>

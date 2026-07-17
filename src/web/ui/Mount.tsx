@@ -19,12 +19,11 @@ import { SlewRateSelect } from '@ui/SlewRateSelect'
 import { TrackModeSelect } from '@ui/TrackModeSelect'
 import { UTCTimeInput } from '@ui/UTCTimeInput'
 import type { IDockviewPanelProps } from 'dockview-react'
-import type { MountTargetCoordinateType } from 'nebulosa/src/devices/indi/device'
+import type { Device, MountTargetCoordinateType } from 'nebulosa/src/devices/indi/device'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { memo, useContext, useEffect, useRef } from 'react'
 import type { CoordinateInfo, CoordinateType } from 'src/shared/types'
 import { equipmentStore } from 'src/web/stores/equipment.store'
-import type { DevicePanelParams } from 'src/web/stores/home.store'
 import { useSnapshot } from 'valtio'
 
 const TARGET_TYPE_BY_COORDINATE_TYPE = {
@@ -47,7 +46,7 @@ function formatTargetCoordinateY(type: CoordinateType, position: CoordinateInfo)
 	return type === 'horizontal' ? formatALT(position[type][1]) : formatDEC(position[type][1])
 }
 
-export const Mount = memo(({ params }: IDockviewPanelProps<DevicePanelParams>) => {
+export const Mount = memo(({ params }: IDockviewPanelProps<Device>) => {
 	const storeRef = useRef<MountStore | undefined>(undefined)
 
 	useEffect(() => storeRef.current?.mount(), [])

@@ -1,10 +1,11 @@
 import { cameraBus, imageBus } from '@shared/bus'
 import type { Image, ImageSource } from '@shared/types'
 import { equipmentStore } from '@stores/equipment.store'
+import type { AutoFocusParams } from '@ui/AutoFocus'
 import type { AddGroupOptions, AddPanelOptions, DockviewApi, DockviewGroupPanel, DockviewGroupPanelApi, DockviewIDisposable, DockviewReadyEvent, EdgeGroupOptions, EdgeGroupPosition, IDockviewGroupPanel, IDockviewPanel, SerializedDockview } from 'dockview-react'
 import { nanoid } from 'nanoid'
 import type { RequiredOnly } from 'nebulosa/src/core/types'
-import type { Camera, Device, DeviceType } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Device } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
 
 export type HomeStore = typeof homeStore
@@ -45,21 +46,15 @@ const PANEL_TYPES = [
 
 const MAX_PANELS = 100
 
-export type PanelType = (typeof PANEL_TYPES)[number]
+export type HomePanelType = (typeof PANEL_TYPES)[number]
 
-export type PanelOptions<P extends object = object> = Readonly<Omit<AddPanelOptions<P> & { index?: number }, 'position' | 'floating' | 'id' | 'component'>>
+export type HomePanelOptions<P extends object = object> = Readonly<Omit<AddPanelOptions<P> & { index?: number }, 'position' | 'floating' | 'id' | 'component'>>
 
 export interface HomeState {}
 
 export interface StoredHomeLayout {
 	readonly schemaVersion: number
 	readonly layout: SerializedDockview
-}
-
-export interface DevicePanelParams {
-	readonly type: DeviceType
-	readonly id: string
-	readonly name: string
 }
 
 const LAYOUT_SCHEMA_VERSION = 1
@@ -75,7 +70,7 @@ let left: DockviewGroupPanelApi | undefined
 let right: DockviewGroupPanelApi | undefined
 let main: DockviewGroupPanel | IDockviewGroupPanel | undefined
 
-const panels: Partial<Record<PanelType, IDockviewPanel[]>> = {}
+const panels: Partial<Record<HomePanelType, IDockviewPanel[]>> = {}
 
 cameraBus.subscribe('frame', (event) => {
 	if (event.path) {
@@ -83,6 +78,36 @@ cameraBus.subscribe('frame', (event) => {
 		camera && addImage(event.path, camera)
 	}
 })
+
+let mounted = false
+
+console.info('home created')
+
+function mount() {
+	if (mounted) return
+
+	console.info('home mounted')
+
+	mounted = true
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+
+	console.info('home unmounted')
+
+	layoutDisposable?.dispose()
+	layoutDisposable = undefined
+
+	window.clearTimeout(saveTimer)
+	saveTimer = undefined
+
+	saveLayout()
+
+	mounted = false
+}
 
 function restoreLayout() {
 	const serializedLayout = localStorage.getItem(LAYOUT_STORAGE_KEY)
@@ -102,20 +127,26 @@ function handleReady(event: DockviewReadyEvent) {
 
 	load()
 
-	// Create Layout
+	// Init Layout
 
+	// Edge Panels
 	left = addEdge('left', { initialSize: 380 })
 	right = addEdge('right', { initialSize: 480 })
 
+	// Left Panel
 	addUniquePanel('connections', { tabComponent: 'fixed', title: 'Connections' }, left)
 	addUniquePanel('devices', { tabComponent: 'fixed', title: 'Devices' }, left)
 	addUniquePanel('alpaca', { tabComponent: 'fixed', title: 'Alpaca' }, left)
 	addUniquePanel('settings', { tabComponent: 'fixed', title: 'Settings' }, left)
 	addUniquePanel('about', { tabComponent: 'fixed', title: 'About' }, left)
 
+	// Central Panel
 	main = addGroup({ id: 'group.main' })
 
+	// Atlas
 	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
+
+	addAutoFocus()
 
 	// layoutDisposable = api.onDidLayoutChange(() => {
 	// 	window.clearTimeout(saveTimer)
@@ -159,7 +190,7 @@ function load() {
 	}
 }
 
-function addUniquePanel(type: PanelType, options: PanelOptions, group?: Pick<DockviewGroupPanel, 'id'>) {
+function addUniquePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>) {
 	const ps = panels[type] ?? []
 
 	if (ps.length > 0) return ps[0]
@@ -187,7 +218,7 @@ function addUniquePanel(type: PanelType, options: PanelOptions, group?: Pick<Doc
 	return p
 }
 
-function addMultiplePanel(type: PanelType, options: PanelOptions, group?: Pick<DockviewGroupPanel, 'id'>) {
+function addMultiplePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>) {
 	const ps = panels[type] ?? []
 
 	if (ps.length >= MAX_PANELS) return
@@ -226,40 +257,10 @@ function addMultiplePanel(type: PanelType, options: PanelOptions, group?: Pick<D
 	}
 }
 
-let mounted = false
-
-console.info('home created')
-
-function mount() {
-	if (mounted) return
-
-	console.info('home mounted')
-
-	mounted = true
-
-	return unmount
-}
-
-function unmount() {
-	if (!mounted) return
-
-	console.info('home unmounted')
-
-	layoutDisposable?.dispose()
-	layoutDisposable = undefined
-
-	window.clearTimeout(saveTimer)
-	saveTimer = undefined
-
-	saveLayout()
-
-	mounted = false
-}
-
-function openDevice(device: Device) {
+function addDevice(device: Device) {
 	if (!api) return
 
-	const params: DevicePanelParams = { type: device.type, id: device.id, name: device.name }
+	const params = { type: device.type, id: device.id, name: device.name } as const satisfies Pick<Device, 'id' | 'type' | 'name'>
 	const panel = addMultiplePanel(device.type, { title: device.name, params }, right)
 
 	if (panel === undefined) return
@@ -301,7 +302,7 @@ function addImage(path: string, source: ImageSource | Camera, id?: string) {
 	}
 }
 
-function closeImage(image: Image) {
+function removeImage(image: Image) {
 	if (!api) return undefined
 
 	const p = panels.image?.find((e) => e.params!.id === image.id)
@@ -311,6 +312,11 @@ function closeImage(image: Image) {
 		p.dispose()
 		imageBus.emit('remove', image)
 	}
+}
+
+function addAutoFocus() {
+	const params: AutoFocusParams = { id: nanoid() }
+	return addMultiplePanel('autoFocus', { title: 'Auto Focus', params }, main)
 }
 
 function toggleEdge(position: EdgeGroupPosition) {
@@ -327,7 +333,7 @@ export const homeStore = {
 	mount,
 	unmount,
 	toggleEdge,
-	openDevice,
+	openDevice: addDevice,
 	addImage,
-	closeImage,
+	closeImage: removeImage,
 } as const

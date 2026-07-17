@@ -1,18 +1,19 @@
 import { homeStore, type HomePanelType } from '@stores/home.store'
 import { About } from '@ui/About'
+import { Alpaca } from '@ui/Alpaca'
 import { Asteroid } from '@ui/Asteroid'
 import { AutoFocus } from '@ui/AutoFocus'
 import { Calculator } from '@ui/Calculator'
 import { Camera } from '@ui/Camera'
-import { CloseableTab } from '@ui/CloseableTab'
 import { Confirmation } from '@ui/Confirmation'
 import { Connections } from '@ui/Connections'
 import { Cover } from '@ui/Cover'
 import { Darv } from '@ui/Darv'
 import { Devices } from '@ui/Devices'
-import { FixedTab } from '@ui/FixedTab'
 import { FlatWizard } from '@ui/FlatWizard'
+import { Framing } from '@ui/Framing'
 import { Galaxy } from '@ui/Galaxy'
+import { Guider } from '@ui/Guider'
 import { ImagePickerButton } from '@ui/ImagePickerButton'
 import { ImageWorkspace } from '@ui/ImageWorkspace'
 import { Moon } from '@ui/Moon'
@@ -22,17 +23,17 @@ import { Planetarium } from '@ui/Planetarium'
 import { Satellite } from '@ui/Satellite'
 import { Settings } from '@ui/Settings'
 import { Sun } from '@ui/Sun'
+import { Tab } from '@ui/Tab'
 import { Thermometer } from '@ui/Thermometer'
 import { Tppa } from '@ui/Tppa'
 import { Wheel } from '@ui/Wheel'
 import { DockviewReact, themeGithubDark, type IDockviewPanelProps } from 'dockview-react'
 import { memo, useEffect, type MemoExoticComponent } from 'react'
 import { wsStore } from 'src/web/stores/ws.store'
-import { Alpaca } from './Alpaca'
 
 const tabComponents = {
-	fixed: FixedTab,
-	closeable: CloseableTab,
+	fixed: Tab,
+	closeable: Tab,
 } as const
 
 const Dummy = memo((_props: IDockviewPanelProps) => <div></div>)
@@ -53,9 +54,11 @@ const components = {
 	flatPanel: Dummy,
 	flatWizard: FlatWizard,
 	focuser: Dummy,
+	framing: Framing,
 	galaxy: Galaxy,
 	gps: Dummy,
 	guideOutput: Dummy,
+	guider: Guider,
 	image: ImageWorkspace,
 	moon: Moon,
 	mount: Mount,
@@ -82,7 +85,7 @@ export const Home = memo(() => {
 				<ImagePickerButton />
 			</header>
 			<div className="min-h-0">
-				<DockviewReact hideBorders scrollbars="native" defaultTabComponent={CloseableTab} theme={themeGithubDark} className="h-full w-full" tabComponents={tabComponents} components={components} onReady={homeStore.handleReady} />
+				<DockviewReact hideBorders scrollbars="native" defaultTabComponent={Tab} theme={themeGithubDark} className="h-full w-full" tabComponents={tabComponents} components={components} onReady={homeStore.handleReady} />
 				<Confirmation />
 			</div>
 		</div>

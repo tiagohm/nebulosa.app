@@ -31,7 +31,7 @@ export const Cover = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<CoverStoreContext value={store}>
-			<Tabs className="px-3">
+			<Tabs className="px-3" startContent={<TabsStartContent />}>
 				<Tab id="control">Cover</Tab>
 				<Tab id="indi">INDI</Tab>
 
@@ -44,6 +44,13 @@ export const Cover = memo(({ params }: IDockviewPanelProps<Device>) => {
 			</Tabs>
 		</CoverStoreContext>
 	)
+})
+
+const TabsStartContent = memo(() => {
+	const cover = useContext(CoverStoreContext)
+	const { connected, connecting, parking } = useSnapshot(cover.state.cover)
+
+	return <ConnectButton disabled={parking} connected={connected} loading={connecting} onClick={cover.connect} />
 })
 
 const Control = memo(() => (
@@ -63,12 +70,11 @@ function coverStatus(connected: boolean, canPark: boolean, parking: boolean, par
 
 const Status = memo(() => {
 	const cover = useContext(CoverStoreContext)
-	const { connecting, connected, canPark, parking, parked } = useSnapshot(cover.state.cover)
+	const { connected, canPark, parking, parked } = useSnapshot(cover.state.cover)
 	const { color, label } = coverStatus(connected, canPark, parking, parked)
 
 	return (
 		<div className="col-span-full flex flex-row items-center gap-2">
-			<ConnectButton connected={connected} loading={connecting} onClick={cover.connect} />
 			<Chip color={color} label={label} size="sm" />
 		</div>
 	)

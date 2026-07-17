@@ -11,7 +11,7 @@ import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Distance } from 'nebulosa/src/math/units/distance'
 import type { AutoFocusOptions } from 'nebulosa/src/observation/focus/autofocus'
 // oxfmt-ignore
-import type { Camera, CameraTransferFormat, ClientInfo, ClientType, Cover, Device, DeviceProperty, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Power, Rotator, Thermometer, UTCTime, Wheel } from 'nebulosa/src/devices/indi/device'
+import type { Camera, CameraTransferFormat, ClientInfo, ClientType, Cover, Device, DeviceProperty, DeviceType, DewHeater, FlatPanel, Focuser, FrameType, GuideDirection, GuideOutput, Mount, PierSide, Power, Rotator, Thermometer, UTCTime, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { SmallBodySearchListItem, SmallBodySearchObject } from 'nebulosa/src/adapters/orbits/sbd'
 import type { PlateSolution, PlateSolveOptions } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { LunarEclipse, LunarPhase } from 'nebulosa/src/astronomy/bodies/moon'
@@ -734,6 +734,8 @@ export interface GuidePulse {
 	direction: GuideDirection
 	duration: number
 }
+
+export const DEVICE_TYPES = new Set<DeviceType>(['camera', 'mount', 'focuser', 'wheel', 'cover', 'flatPanel', 'rotator', 'guideOutput', 'thermometer', 'dewHeater'])
 
 // Camera
 

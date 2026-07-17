@@ -1,4 +1,5 @@
 import { asteroidStore } from '@stores/atlas.asteroid.store'
+import { atlasStore } from '@stores/atlas.store'
 import { EphemerisAndChart, EphemerisPositionContext } from '@ui/Atlas'
 import { IconButton } from '@ui/components/IconButton'
 import { Link } from '@ui/components/Link'
@@ -13,7 +14,6 @@ import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { memo, useEffect } from 'react'
 import type { MinorPlanetParameter } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { atlasStore } from '../stores/atlas.store'
 
 export const Asteroid = memo(({ api }: IDockviewPanelProps) => {
 	useEffect(() => void atlasStore.tick('asteroid'), [])

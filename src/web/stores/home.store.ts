@@ -26,9 +26,11 @@ const PANEL_TYPES = [
 	'flatPanel',
 	'flatWizard',
 	'focuser',
+	'framing',
 	'galaxy',
 	'gps',
 	'guideOutput',
+	'guider',
 	'image',
 	'moon',
 	'mount',
@@ -158,6 +160,10 @@ function addEdge(position: EdgeGroupPosition, options: Omit<Readonly<EdgeGroupOp
 	return api!.getEdgeGroup(position) ?? api!.addEdgeGroup(position, { collapsedSize: 38, collapsed: true, ...options, id: `edge.${position}` })
 }
 
+function toggleEdge(position: EdgeGroupPosition) {
+	api?.setEdgeGroupVisible(position, !api.isEdgeGroupVisible(position))
+}
+
 function addGroup(options: RequiredOnly<Readonly<AddGroupOptions>, 'id'>) {
 	return api!.getGroup(options.id) ?? api!.addGroup({ ...options, direction: options.direction ?? 'within' })
 }
@@ -196,7 +202,7 @@ function addUniquePanel(type: HomePanelType, options: HomePanelOptions, group?: 
 	if (ps.length > 0) return ps[0]
 
 	const id = `${type}.0`
-	const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, component: type, position: { referenceGroup: (group ?? main!).id, index: options.index } })
+	const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, tabComponent: group === left ? 'fixed' : 'closeable', component: type, position: { referenceGroup: (group ?? main!).id, index: options.index } })
 	ps.push(p)
 	panels[type] = ps
 
@@ -231,7 +237,7 @@ function addMultiplePanel(type: HomePanelType, options: HomePanelOptions, group?
 		const p = ps.find((e) => e.id === id)
 
 		if (p === undefined) {
-			const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, component: type, position: referencePanel && !group?.id ? { referencePanel, direction: 'right' } : { referenceGroup: referenceGroupId } })
+			const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, tabComponent: 'closeable', component: type, position: referencePanel && !group?.id ? { referencePanel, direction: 'right' } : { referenceGroup: referenceGroupId } })
 			ps.push(p)
 			panels[type] = ps
 
@@ -323,10 +329,6 @@ function addCalculator() {
 	return addUniquePanel('calculator', { title: 'Calculator' }, main)
 }
 
-function toggleEdge(position: EdgeGroupPosition) {
-	api?.setEdgeGroupVisible(position, !api.isEdgeGroupVisible(position))
-}
-
 window.addEventListener('beforeunload', () => {
 	saveLayout()
 })
@@ -337,7 +339,9 @@ export const homeStore = {
 	mount,
 	unmount,
 	toggleEdge,
-	openDevice: addDevice,
+	addDevice,
 	addImage,
-	closeImage: removeImage,
+	removeImage,
+	addAutoFocus,
+	addCalculator,
 } as const

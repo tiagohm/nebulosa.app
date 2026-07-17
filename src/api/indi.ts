@@ -4,7 +4,7 @@ import type { CameraManager, CoverManager, DevicePropertyHandler, DeviceProvider
 // oxfmt-ignore
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, Message, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
-import type { IndiPropertyListenEvent, IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from 'src/shared/types'
+import { type IndiPropertyListenEvent, type IndiDevicePropertyEvent, type IndiServerEvent, type IndiServerStart, type IndiServerStatus, DEVICE_TYPES } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { type Endpoints, query, response } from './http'
 import { webSocketBus, type Messager, type WebSocketMessageHandler } from './message'
@@ -250,8 +250,6 @@ export class IndiHandler implements IndiClientHandler, DeviceProvider<Device> {
 		return this.#messages.get(resolvedClient)?.get((device && device?.name) || id || 'GLOBAL') ?? []
 	}
 }
-
-const DEVICE_TYPES: readonly DeviceType[] = ['camera', 'mount', 'focuser', 'wheel', 'cover', 'flatPanel', 'rotator', 'guideOutput', 'thermometer', 'dewHeater']
 
 export class IndiDevicePropertyHandler implements DevicePropertyHandler<Device>, Disposable {
 	readonly #listeners = new Map<string, Set<Messager>>()

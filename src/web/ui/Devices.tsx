@@ -32,7 +32,7 @@ const DeviceList = memo(({ type, title }: DeviceListProps) => {
 	const devices = equipmentStore.state[type]
 
 	function handleAction(index: number) {
-		homeStore.openDevice(devices[index])
+		homeStore.addDevice(devices[index])
 	}
 
 	return (

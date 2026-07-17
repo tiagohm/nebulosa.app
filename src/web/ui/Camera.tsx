@@ -44,7 +44,7 @@ export const Camera = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<CameraStoreContext value={store}>
-			<Tabs className="px-3">
+			<Tabs className="px-3" startContent={<TabsStartContent />}>
 				<Tab id="control">Camera</Tab>
 				<Tab id="options">Options</Tab>
 				<Tab id="indi">INDI</Tab>
@@ -61,6 +61,14 @@ export const Camera = memo(({ params }: IDockviewPanelProps<Device>) => {
 			</Tabs>
 		</CameraStoreContext>
 	)
+})
+
+const TabsStartContent = memo(() => {
+	const camera = useContext(CameraStoreContext)
+	const { capturing } = useSnapshot(camera.state)
+	const { connected, connecting } = useSnapshot(camera.state.camera)
+
+	return <ConnectButton disabled={capturing} connected={connected} loading={connecting} onClick={camera.connect} />
 })
 
 const Control = memo(() => (
@@ -80,12 +88,10 @@ const Control = memo(() => (
 
 const Header = memo(() => {
 	const camera = useContext(CameraStoreContext)
-	const { capturing, progress } = useSnapshot(camera.state)
-	const { connected, connecting } = useSnapshot(camera.state.camera)
+	const { progress } = useSnapshot(camera.state)
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-between gap-2">
-			<ConnectButton disabled={capturing} connected={connected} loading={connecting} onClick={camera.connect} />
 			<ExposureTimeProgress className="min-w-0 flex-1 overflow-x-auto" progress={progress} />
 		</div>
 	)

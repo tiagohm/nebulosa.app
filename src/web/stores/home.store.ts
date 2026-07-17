@@ -146,7 +146,7 @@ function handleReady(event: DockviewReadyEvent) {
 	// Atlas
 	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
 
-	addAutoFocus()
+	addCalculator()
 
 	// layoutDisposable = api.onDidLayoutChange(() => {
 	// 	window.clearTimeout(saveTimer)
@@ -317,6 +317,10 @@ function removeImage(image: Image) {
 function addAutoFocus() {
 	const params: AutoFocusParams = { id: nanoid() }
 	return addMultiplePanel('autoFocus', { title: 'Auto Focus', params }, main)
+}
+
+function addCalculator() {
+	return addUniquePanel('calculator', { title: 'Calculator' }, main)
 }
 
 function toggleEdge(position: EdgeGroupPosition) {

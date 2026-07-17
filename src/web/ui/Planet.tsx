@@ -1,6 +1,5 @@
 import { planetStore } from '@stores/atlas.planet.store'
 import { atlasStore } from '@stores/atlas.store'
-import { EphemerisAndChart, isBookmarked } from '@ui/Atlas'
 import { ListItem, List } from '@ui/components/List'
 import { TextInput } from '@ui/components/TextInput'
 import { PlanetTypeSelect } from '@ui/PlanetTypeSelect'
@@ -61,7 +60,7 @@ export const Planet = memo(({ api }: IDockviewPanelProps) => {
 			<List className="col-span-full max-h-120" itemCount={items.length} onAction={handleAction}>
 				{(i) => PlanetItem(items[i])}
 			</List>
-			<EphemerisAndChart type="planet" className="col-span-full" isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleFavoriteChange} />
+			{/* <EphemerisAndChart type="planet" className="col-span-full" isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleFavoriteChange} /> */}
 		</div>
 	)
 })

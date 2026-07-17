@@ -8,7 +8,7 @@ import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Alpaca = memo(() => (
-	<div className="grid grid-cols-12 gap-2">
+	<div className="grid grid-cols-12 items-center gap-2">
 		<DeviceList />
 		<Footer />
 	</div>

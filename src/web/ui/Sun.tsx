@@ -1,7 +1,7 @@
 import { atlasStore } from '@stores/atlas.store'
 import { sunStore } from '@stores/atlas.sun.store'
 import { solarEclipseStore } from '@stores/solar.eclipse.store'
-import { AstronomicalEvent, EphemerisAndChart } from '@ui/Atlas'
+import { AstronomicalEvent } from '@ui/Atlas'
 import { Icons } from '@ui/Icon'
 import { SunImage } from '@ui/SunImage'
 import type { IDockviewPanelProps } from 'dockview-react'
@@ -21,7 +21,7 @@ export const Sun = memo(({ api }: IDockviewPanelProps) => {
 				<SunImage onSourceChange={(source) => (sunStore.state.source = source)} source={source} />
 				<Seasons />
 			</div>
-			<EphemerisAndChart type="sun" className="col-span-full" name="Sun" />
+			{/* <EphemerisAndChart type="sun" className="col-span-full" name="Sun" /> */}
 		</div>
 	)
 })

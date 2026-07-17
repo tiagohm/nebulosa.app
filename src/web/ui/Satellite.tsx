@@ -1,7 +1,5 @@
 import { useStore } from '@hooks/store.hook'
 import { satelliteStore } from '@stores/atlas.satellite.store'
-import { atlasStore } from '@stores/atlas.store'
-import { EphemerisAndChart, isBookmarked } from '@ui/Atlas'
 import { IconButton } from '@ui/components/IconButton'
 import { Paginator } from '@ui/components/Paginator'
 import { Table } from '@ui/components/Table'
@@ -10,28 +8,18 @@ import { Icons } from '@ui/Icon'
 import { SatelliteCategoryChipGroup } from '@ui/SatelliteCategoryChipGroup'
 import { SatelliteGroupTypeChipGroup } from '@ui/SatelliteGroupTypeChipGroup'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { memo, useCallback } from 'react'
+import { memo } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Satellite = memo(({ api }: IDockviewPanelProps) => {
-	const { bookmark } = useSnapshot(atlasStore.state)
-	const { selected } = useSnapshot(satelliteStore.state)
-
 	useStore(satelliteStore, [])
-
-	const handleFavoriteChange = useCallback(
-		(favorite: boolean) => {
-			if (selected) atlasStore.toggleBookmark('satellite', selected.name, selected.id.toFixed(0), favorite)
-		},
-		[selected],
-	)
 
 	return (
 		<div className="relative grid grid-cols-12 items-center gap-2">
 			<SatelliteFilter />
 			<SatelliteTable />
 			<SatellitePaginator className="col-span-full w-full" />
-			<EphemerisAndChart type="satellite" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'satellite', selected.id.toFixed(0))} name={selected?.name} onFavoriteChange={handleFavoriteChange} />
+			{/* <EphemerisAndChart type="satellite" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'satellite', selected.id.toFixed(0))} name={selected?.name} onFavoriteChange={handleFavoriteChange} /> */}
 		</div>
 	)
 })

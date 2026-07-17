@@ -2,7 +2,6 @@ import { useStore } from '@hooks/store.hook'
 import { skyObjectName, skyObjectType } from '@shared/util'
 import { galaxyStore } from '@stores/atlas.galaxy.store'
 import { atlasStore } from '@stores/atlas.store'
-import { EphemerisAndChart, isBookmarked } from '@ui/Atlas'
 import { Checkbox } from '@ui/components/Checkbox'
 import { IconButton } from '@ui/components/IconButton'
 import { NumberInput } from '@ui/components/NumberInput'
@@ -40,7 +39,7 @@ export const Galaxy = memo(({ api }: IDockviewPanelProps) => {
 			<GalaxyFilter />
 			<GalaxyTable />
 			<GalaxyPaginator className="col-span-full w-full" />
-			<EphemerisAndChart type="galaxy" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'galaxy', selected.id.toFixed(0))} onFavoriteChange={handleFavoriteChange} />
+			{/* <EphemerisAndChart type="galaxy" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'galaxy', selected.id.toFixed(0))} onFavoriteChange={handleFavoriteChange} /> */}
 		</div>
 	)
 })

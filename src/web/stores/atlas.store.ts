@@ -6,12 +6,10 @@ import type { AtlasMoonStore } from '@stores/atlas.moon.store'
 import type { AtlasPlanetStore } from '@stores/atlas.planet.store'
 import type { AtlasSatelliteStore } from '@stores/atlas.satellite.store'
 import type { AtlasSunStore } from '@stores/atlas.sun.store'
-import { framingStore } from '@stores/framing.store'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalAdd, temporalGet, temporalStartOfDay, temporalSubtract, type Temporal } from 'nebulosa/src/astronomy/time/temporal'
-import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
-import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
-import { DEFAULT_GEOGRAPHIC_COORDINATE, type Framing, type LocationAndTime, type Twilight } from 'src/shared/types'
+import type { UTCTime } from 'nebulosa/src/devices/indi/device'
+import { DEFAULT_GEOGRAPHIC_COORDINATE, type LocationAndTime, type Twilight } from 'src/shared/types'
 import { proxy } from 'valtio'
 
 export type AtlasStore = typeof atlasStore
@@ -22,6 +20,11 @@ export interface BookmarkItem {
 	readonly name: string
 	readonly type: AtlasTab
 	readonly code: string // planet code, asteroid spk id, galaxy id, satellite id
+}
+
+export interface TagItem {
+	readonly label: string
+	readonly color: 'primary' | 'success' | 'warning' | 'danger' | 'secondary'
 }
 
 export interface AtlasState {
@@ -120,28 +123,11 @@ async function twilight() {
 	else twilightUpdate = true
 }
 
-function sync(tab: AtlasTab, mount?: Mount) {
-	if (!mount) return undefined
-	const { position } = state[tab]!.state
-	const [rightAscension, declination] = position.equatorial
-	return Api.Mounts.sync(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+export function isBookmarked(bookmark: readonly Readonly<BookmarkItem>[], type: AtlasTab, code: string) {
+	return bookmark.some((e) => e.type === type && e.code === code)
 }
 
-function goTo(tab: AtlasTab, mount?: Mount) {
-	if (!mount) return undefined
-	const { position } = state[tab]!.state
-	const [rightAscension, declination] = position.equatorial
-	return Api.Mounts.goTo(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
-}
-
-function frame(tab: AtlasTab) {
-	const { position } = state[tab]!.state
-	const [rightAscension, declination] = position.equatorialJ2000
-	const request: Partial<Framing> = { rightAscension: formatRA(rightAscension), declination: formatDEC(declination) }
-	return framingStore.load(request)
-}
-
-function toggleBookmark(type: AtlasTab, name: string, code: string, favorite: boolean) {
+export function toggleBookmark(type: AtlasTab, name: string, code: string, favorite: boolean) {
 	const { items } = state.bookmark
 
 	if (favorite) {
@@ -154,14 +140,14 @@ function toggleBookmark(type: AtlasTab, name: string, code: string, favorite: bo
 	}
 }
 
-function selectBookmark({ type, code }: BookmarkItem) {
+export function selectBookmark({ type, code }: BookmarkItem) {
 	if (type === 'planet') void state.planet!.select(code, false)
 	else if (type === 'asteroid') void state.asteroid!.select(code)
 	else if (type === 'galaxy') void state.galaxy!.select(+code, 0, false, false)
 	else if (type === 'satellite') void state.satellite!.select(+code, 0, false, false)
 }
 
-function removeBookmark(item: BookmarkItem) {
+export function removeBookmark(item: BookmarkItem) {
 	toggleBookmark(item.type, item.name, item.code, false)
 }
 
@@ -170,9 +156,6 @@ export const atlasStore = {
 	tick,
 	updateTime,
 	updateLocation,
-	sync,
-	goTo,
-	frame,
 	toggleBookmark,
 	selectBookmark,
 	removeBookmark,

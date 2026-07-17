@@ -1,26 +1,37 @@
-import { skyObjectName, tw } from '@shared/util'
-import { atlasStore, type AtlasTab, type BookmarkItem } from '@stores/atlas.store'
+import { tw } from '@shared/util'
+import { atlasStore, type BookmarkItem, type TagItem } from '@stores/atlas.store'
 import { BodyCoordinateInfo } from '@ui/BodyCoordinateInfo'
-import { Chip, type ChipProps } from '@ui/components/Chip'
+import { Chip } from '@ui/components/Chip'
 import { FilterableList } from '@ui/components/FilterableList'
 import { IconButton } from '@ui/components/IconButton'
 import { Popover } from '@ui/components/Popover'
 import { MountDropdown } from '@ui/DeviceDropdown'
 import { type Icon, Icons } from '@ui/Icon'
-import type { Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
-import React, { memo, useDeferredValue, useMemo } from 'react'
+import type { Mount } from 'nebulosa/src/devices/indi/device'
+import React, { createContext, memo, useContext, useDeferredValue, useMemo } from 'react'
 import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
-import { EMPTY_TWILIGHT, type Twilight } from 'src/shared/types'
+import { EMPTY_TWILIGHT, type BodyPosition, type Twilight } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
+
+export interface EphemerisPositionContextParameters {
+	readonly state: {
+		readonly favorite: boolean | undefined
+		readonly position: BodyPosition
+		readonly tags: readonly TagItem[]
+		readonly chart: readonly number[]
+	}
+	readonly sync: (mount?: Mount) => void
+	readonly goTo: (mount?: Mount) => void
+	readonly frame: () => void
+	readonly handleFavorite: (favorite: boolean) => void
+}
+
+export const EphemerisPositionContext = createContext<EphemerisPositionContextParameters>(null as never)
 
 function BookmarkFilter(item: BookmarkItem, text: string) {
 	return item.name.toLowerCase().includes(text) || item.type.includes(text)
-}
-
-export function isBookmarked(bookmark: readonly Readonly<BookmarkItem>[], type: AtlasTab, code: string) {
-	return bookmark.some((e) => e.type === type && e.code === code)
 }
 
 const BookmarkPopover = memo(() => (
@@ -67,84 +78,43 @@ export const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format
 	</div>
 ))
 
-export interface EphemerisAndChartTag {
-	readonly label: string
-	readonly color: ChipProps['color']
-}
+export const EphemerisAndChart = memo(() => (
+	<div className="col-span-full flex flex-col items-center justify-start gap-1">
+		<span className={`flex w-full flex-row gap-2`}>
+			<EphemerisPosition />
+			<EphemerisChart />
+		</span>
+	</div>
+))
 
-interface EphemerisAndChartProps extends React.ComponentProps<'div'> {
-	readonly type: AtlasTab
-	readonly name?: string
-	readonly tags?: EphemerisAndChartTag[]
-	readonly isFavorite?: boolean
-	readonly onFavoriteChange?: (favorite: boolean) => void
-	readonly vertical?: boolean
-}
+const EphemerisPosition = memo(() => {
+	const context = useContext(EphemerisPositionContext)
+	const { position, favorite, tags } = useSnapshot(context.state)
 
-function makeTags(name: string | undefined, names: readonly string[] | undefined, constellation: Constellation, extra?: EphemerisAndChartTag[]): EphemerisAndChartTag[] {
-	const tags: EphemerisAndChartTag[] = []
+	return (
+		<div className="flex flex-1 flex-col gap-2 p-0">
+			<div className="flex flex-row gap-2 p-1 text-start text-sm font-bold">
+				<div className="flex flex-1 items-center justify-center gap-1 overflow-hidden text-sm font-bold">{tags.map(TagChipItem)}</div>
+				<IconButton color={favorite ? 'danger' : 'warning'} disabled={favorite === undefined} icon={favorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onClick={() => context.handleFavorite(!favorite)} tooltipContent={favorite ? 'Remove bookmark' : 'Add bookmark'} />
+			</div>
+			<BodyCoordinateInfo position={position} />
+			<EphemerisPositionCommand />
+		</div>
+	)
+})
 
-	if (name) {
-		tags.push({ label: name, color: 'primary' })
-	} else if (names?.length) {
-		for (const name of names) tags.push({ label: skyObjectName(name, constellation), color: 'primary' })
-	}
-
-	if (extra?.length) {
-		tags.push(...extra)
-	}
-
-	return tags
-}
-
-function TagItem(tag: EphemerisAndChartTag) {
+function TagChipItem(tag: TagItem) {
 	return <Chip color={tag.color} key={tag.label} label={tag.label} size="sm" />
 }
 
-export const EphemerisAndChart = memo(({ type: tab, name, tags, className, isFavorite, onFavoriteChange, vertical }: EphemerisAndChartProps) => {
-	const state = atlasStore.state[tab]!.state
-	const { names, constellation } = useSnapshot(state.position)
-	tags = useMemo(() => makeTags(name, names, constellation, tags), [name, constellation, names, tags])
-
-	return (
-		<div className={tw('col-span-full relative flex flex-1 flex-col justify-start items-center gap-1', className)}>
-			<div className="flex w-full flex-row gap-2 p-1 text-start text-sm font-bold">
-				<div className="flex flex-1 items-center justify-center gap-1 overflow-hidden text-sm font-bold">{tags.map(TagItem)}</div>
-				{onFavoriteChange && <IconButton color={isFavorite ? 'danger' : 'warning'} disabled={isFavorite === undefined} icon={isFavorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onClick={() => onFavoriteChange(!isFavorite)} tooltipContent={isFavorite ? 'Remove bookmark' : 'Add bookmark'} />}
-			</div>
-			<span className={`flex w-full gap-2 ${vertical ? 'flex-col' : 'flex-row'}`}>
-				<EphemerisPosition tab={tab} />
-				<EphemerisChart tab={tab} />
-			</span>
-		</div>
-	)
-})
-
-interface EphemerisPositionProps {
-	readonly tab: AtlasTab
-}
-
-const EphemerisPosition = memo(({ tab }: EphemerisPositionProps) => {
-	const state = atlasStore.state[tab]!.state
-	const { position } = useSnapshot(state)
-
-	return (
-		<div className="flex w-full flex-1 flex-col gap-2 p-0">
-			<BodyCoordinateInfo position={position} />
-			<EphemerisPositionCommand tab={tab} />
-		</div>
-	)
-})
-
-const EphemerisPositionCommand = memo(({ tab }: EphemerisPositionProps) => {
-	const state = atlasStore.state[tab]!.state
-	const { pierSide } = useSnapshot(state.position)
+const EphemerisPositionCommand = memo(() => {
+	const context = useContext(EphemerisPositionContext)
 
 	return (
 		<div className="flex items-center justify-center gap-2">
-			<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} disabled={pierSide === 'NEITHER'} onValueChange={atlasStore.sync} tooltipContent="Sync" variant="flat" />
-			<MountDropdown color="success" disallowNoneSelection disabled={pierSide === 'NEITHER'} onValueChange={atlasStore.goTo} tooltipContent="Go" variant="flat" />
-			<IconButton color="secondary" disabled={pierSide === 'NEITHER'} icon={Icons.Image} onClick={atlasStore.frame} tooltipContent="Frame" variant="flat" />
+			<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} onValueChange={context.sync} tooltipContent="Sync" variant="flat" />
+			<MountDropdown color="success" disallowNoneSelection onValueChange={context.goTo} tooltipContent="Go" variant="flat" />
+			<IconButton color="secondary" icon={Icons.Image} onClick={context.frame} tooltipContent="Frame" variant="flat" />
 		</div>
 	)
 })
@@ -163,37 +133,11 @@ interface EphemerisChartData {
 	readonly night: number | null
 }
 
-interface EphemerisChartProps {
-	readonly tab: AtlasTab
-}
-
-function ChartTooltipContent({ active, payload }: TooltipContentProps) {
-	if (!active || !payload?.length || payload[0].name !== 'value') return null
-
-	const item = payload[0].payload as EphemerisChartData
-	const time = (+item.name + 720) % 1440
-	const hour = Math.trunc(time / 60)
-	const minute = Math.trunc(time % 60)
-
-	return (
-		<div className="text-small shadow-small bg-default-100 rounded-small inline-flex flex-col px-1.5 py-0.5 font-normal">
-			<span className="font-bold">
-				{hour.toFixed(0).padStart(2, '0')}:{minute.toFixed(0).padStart(2, '0')}
-			</span>
-			<span className="text-foreground-600">{item.value?.toFixed(3)}°</span>
-		</div>
-	)
-}
-
-function ChartTickFormatter(value: unknown, i: number) {
-	return ((i + 12) % 24).toFixed(0).padStart(2, '0')
-}
-
 const DEFAULT_AREA_PROPS: Partial<AreaProps<keyof EphemerisChartData, number>> = { dot: false, connectNulls: true, activeDot: false, fillOpacity: 0.3, isAnimationActive: false, stroke: 'transparent', type: 'monotone' }
 
-const EphemerisChart = memo(({ tab }: EphemerisChartProps) => {
-	const state = atlasStore.state[tab]!.state
-	const { chart } = useSnapshot(state)
+const EphemerisChart = memo(() => {
+	const context = useContext(EphemerisPositionContext)
+	const { chart } = useSnapshot(context.state)
 	const { twilight } = useSnapshot(atlasStore.state)
 	const deferredChart = useDeferredValue(chart, [])
 	const data = useMemo(() => makeEphemerisChart(deferredChart, twilight), [deferredChart, twilight])
@@ -218,6 +162,28 @@ const EphemerisChart = memo(({ tab }: EphemerisChartProps) => {
 		</ComposedChart>
 	)
 })
+
+function ChartTooltipContent({ active, payload }: TooltipContentProps) {
+	if (!active || !payload?.length || payload[0].name !== 'value') return null
+
+	const item = payload[0].payload as EphemerisChartData
+	const time = (+item.name + 720) % 1440
+	const hour = Math.trunc(time / 60)
+	const minute = Math.trunc(time % 60)
+
+	return (
+		<div className="text-small shadow-small bg-default-100 rounded-small inline-flex flex-col px-1.5 py-0.5 font-normal">
+			<span className="font-bold">
+				{hour.toFixed(0).padStart(2, '0')}:{minute.toFixed(0).padStart(2, '0')}
+			</span>
+			<span className="text-foreground-600">{item.value?.toFixed(3)}°</span>
+		</div>
+	)
+}
+
+function ChartTickFormatter(value: unknown, i: number) {
+	return ((i + 12) % 24).toFixed(0).padStart(2, '0')
+}
 
 function makeEphemerisChart(data: readonly number[], twilight: Twilight = EMPTY_TWILIGHT): EphemerisChartData[] {
 	const chart = new Array<EphemerisChartData>(1441)

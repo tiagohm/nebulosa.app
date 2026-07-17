@@ -1,8 +1,10 @@
 import { Api } from '@shared/api'
 import { initProxy } from '@shared/proxy'
-import { atlasStore, isLocationChanged, isTimeChanged } from '@stores/atlas.store'
+import { atlasStore, isBookmarked, isLocationChanged, isTimeChanged, type BookmarkItem, type TagItem } from '@stores/atlas.store'
+import { framingStore } from '@stores/framing.store'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
-import type { UTCTime } from 'nebulosa/src/devices/indi/device'
+import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
+import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { type FindCloseApproaches, type CloseApproach, type MinorPlanet, type PositionOfBody, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/shared/types'
 import { proxy, ref } from 'valtio'
 
@@ -24,6 +26,9 @@ export interface AtlasAsteroidState {
 	readonly request: PositionOfBody
 	readonly position: BodyPosition
 	chart: readonly number[]
+	readonly tags: TagItem[]
+	readonly bookmark: BookmarkItem[]
+	readonly favorite: boolean | undefined
 }
 
 const state = proxy<AtlasAsteroidState>({
@@ -40,10 +45,29 @@ const state = proxy<AtlasAsteroidState>({
 	request: structuredClone(DEFAULT_POSITION_OF_BODY),
 	position: structuredClone(DEFAULT_BODY_POSITION),
 	chart: [],
+	bookmark: [],
+	get tags() {
+		const { selected } = this
+		const res: AtlasAsteroidState['tags'] = []
+
+		if (selected !== undefined) {
+			res.push({ label: selected.name, color: 'primary' })
+			if (selected.orbitType) res.push({ label: selected.orbitType, color: 'success' })
+			if (selected.neo) res.push({ label: 'NEO', color: 'warning' })
+			if (selected.pha) res.push({ label: 'PHA', color: 'danger' })
+		}
+
+		return res
+	},
+	get favorite() {
+		const { selected, bookmark } = this
+		return selected && isBookmarked(bookmark, 'asteroid', selected.id)
+	},
 })
 
-initProxy(state, 'atlas.asteroid', ['p:tab', 'o:request'])
+initProxy(state, 'atlas.asteroid', ['p:tab', 'o:request', 'o:bookmark'])
 initProxy(state, 'atlas.asteroid.closeapproaches', ['o:request'])
+
 state.request.time.utc = 0
 let chartUpdate = true
 
@@ -132,6 +156,25 @@ async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChange
 	}
 }
 
+function sync(mount?: Mount) {
+	if (mount === undefined) return undefined
+	const [rightAscension, declination] = state.position.equatorial
+	return Api.Mounts.sync(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+}
+
+function goTo(mount?: Mount) {
+	if (mount === undefined) return undefined
+	const [rightAscension, declination] = state.position.equatorial
+	return Api.Mounts.goTo(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+}
+
+function frame() {
+	const [rightAscension, declination] = state.position.equatorialJ2000
+	return framingStore.load({ rightAscension: formatRA(rightAscension), declination: formatDEC(declination) })
+}
+
+function handleFavorite() {}
+
 export const asteroidStore = {
 	state,
 	updateSearch,
@@ -140,6 +183,10 @@ export const asteroidStore = {
 	closeApproaches,
 	select,
 	tick,
+	goTo,
+	sync,
+	frame,
+	handleFavorite,
 } as const
 
 atlasStore.state.asteroid = ref(asteroidStore)

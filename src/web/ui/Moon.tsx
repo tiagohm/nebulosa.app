@@ -1,7 +1,7 @@
 import { formatDistance } from '@shared/util'
 import { moonStore } from '@stores/atlas.moon.store'
 import { lunarEclipseStore } from '@stores/lunar.eclipse.store'
-import { EphemerisAndChart, AstronomicalEvent } from '@ui/Atlas'
+import { AstronomicalEvent } from '@ui/Atlas'
 import { Icons } from '@ui/Icon'
 import { MoonImage } from '@ui/MoonImage'
 import type { IDockviewPanelProps } from 'dockview-react'
@@ -22,7 +22,7 @@ export const Moon = memo(({ api }: IDockviewPanelProps) => (
 				<MoonPhases />
 			</div>
 		</div>
-		<EphemerisAndChart type="moon" className="col-span-full" name="Moon" />
+		{/* <EphemerisAndChart type="moon" className="col-span-full" name="Moon" /> */}
 	</div>
 ))
 

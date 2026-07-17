@@ -352,14 +352,14 @@ export class ImageProcessor {
 			}
 
 			const [midtone, shadow, highlight] = adf(image, options)
-			image = stf(image, midtone, shadow, highlight, { bits: stretch.bits })
+			image = stf(image, midtone, shadow, highlight)
 
 			stretch.midtone = Math.trunc(midtone * 65536)
 			stretch.shadow = Math.trunc(shadow * 65536)
 			stretch.highlight = Math.trunc(highlight * 65536)
 		} else {
 			const { midtone, shadow, highlight } = stretch
-			image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536, { bits: stretch.bits })
+			image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536)
 		}
 
 		if (adjustment.enabled) {
@@ -392,7 +392,7 @@ export class ImageProcessor {
 				calibration.darkFlat.enabled && calibration.darkFlat.path ? readImageFromPath(calibration.darkFlat.path, 32) : undefined,
 			])
 
-			return calibrate(image, dark, flat, bias, darkFlat)
+			return calibrate(image, { dark, flat, bias, darkFlat })
 		} catch (e) {
 			console.error('failed to calibrate', e)
 			return image

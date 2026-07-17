@@ -115,6 +115,8 @@ function handleReady(event: DockviewReadyEvent) {
 
 	main = addGroup({ id: 'group.main' })
 
+	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
+
 	// layoutDisposable = api.onDidLayoutChange(() => {
 	// 	window.clearTimeout(saveTimer)
 	// 	saveTimer = window.setTimeout(saveLayout, 1000)

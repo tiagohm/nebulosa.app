@@ -1,6 +1,5 @@
 import { asteroidStore } from '@stores/atlas.asteroid.store'
-import { atlasStore } from '@stores/atlas.store'
-import { EphemerisAndChart, isBookmarked, type EphemerisAndChartTag } from '@ui/Atlas'
+import { EphemerisAndChart, EphemerisPositionContext } from '@ui/Atlas'
 import { IconButton } from '@ui/components/IconButton'
 import { Link } from '@ui/components/Link'
 import { ListItem, List } from '@ui/components/List'
@@ -11,64 +10,40 @@ import { Icons } from '@ui/Icon'
 import type { IDockviewPanelProps } from 'dockview-react'
 import type { SmallBodySearchListItem } from 'nebulosa/src/adapters/orbits/sbd'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
-import { memo, useMemo, useCallback } from 'react'
+import { memo, useEffect } from 'react'
 import type { MinorPlanetParameter } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
+import { atlasStore } from '../stores/atlas.store'
 
 export const Asteroid = memo(({ api }: IDockviewPanelProps) => {
-	const { bookmark } = useSnapshot(atlasStore.state)
-	const { tab, selected } = useSnapshot(asteroidStore.state)
-
-	const tags = useMemo(() => {
-		const tags: EphemerisAndChartTag[] = []
-
-		if (selected) {
-			if (selected.orbitType) tags.push({ label: selected.orbitType, color: 'success' })
-			if (selected.neo) tags.push({ label: 'NEO', color: 'warning' })
-			if (selected.pha) tags.push({ label: 'PHA', color: 'danger' })
-		}
-
-		return tags
-	}, [selected])
-
-	const handleFavoriteChange = useCallback(
-		(favorite: boolean) => {
-			if (selected) atlasStore.toggleBookmark('asteroid', selected.name, selected.id, favorite)
-		},
-		[selected],
-	)
+	useEffect(() => void atlasStore.tick('asteroid'), [])
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2">
-			<div className="col-span-full flex flex-col gap-2">
-				<Tabs onValueChange={(value) => (asteroidStore.state.tab = value as never)} value={tab}>
-					<Tab id="search"> Search</Tab>
-					<Tab id="closeApproaches">Close Approaches</Tab>
-					<TabPanel id="search">
-						<AsteroidSearchTab />
-					</TabPanel>
-					<TabPanel id="closeApproaches">
-						<AsteroidCloseApproachesTab />
-					</TabPanel>
-				</Tabs>
-			</div>
-			<EphemerisAndChart type="asteroid" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'asteroid', selected.id)} name={selected?.name} onFavoriteChange={handleFavoriteChange} tags={tags} />
+			<SearchAndCloseApproaches />
+			<EphemerisPositionContext value={asteroidStore}>
+				<EphemerisAndChart />
+			</EphemerisPositionContext>
 		</div>
 	)
 })
 
-function AsteroidSearchListItem(item: SmallBodySearchListItem, onClick: React.UIEventHandler) {
-	return <ListItem description={item.pdes} label={item.name} data-pdes={item.pdes} onClick={onClick} />
-}
+function SearchAndCloseApproaches() {
+	const { tab } = useSnapshot(asteroidStore.state)
 
-function AsteroidSearchParameterItem(parameter: MinorPlanetParameter) {
 	return (
-		<ListItem description={parameter.description}>
-			<span className="flex items-center justify-between">
-				<span>{parameter.name}</span>
-				<span>{parameter.value}</span>
-			</span>
-		</ListItem>
+		<div className="col-span-full flex flex-col gap-2">
+			<Tabs onValueChange={(value) => (asteroidStore.state.tab = value)} value={tab}>
+				<Tab id="search"> Search</Tab>
+				<Tab id="closeApproaches">Close Approaches</Tab>
+				<TabPanel id="search">
+					<AsteroidSearchTab />
+				</TabPanel>
+				<TabPanel id="closeApproaches">
+					<AsteroidCloseApproachesTab />
+				</TabPanel>
+			</Tabs>
+		</div>
 	)
 }
 
@@ -76,7 +51,7 @@ const AsteroidSearchTab = memo(() => {
 	const { loading, selected, list } = useSnapshot(asteroidStore.state)
 	const { text } = useSnapshot(asteroidStore.state.search)
 
-	function handlePointer(event: React.PointerEvent<HTMLElement>) {
+	function handleSearchItemClick(event: React.MouseEvent<HTMLElement>) {
 		const pdes = event.currentTarget.dataset.pdes!
 		return asteroidStore.select(pdes)
 	}
@@ -88,11 +63,11 @@ const AsteroidSearchTab = memo(() => {
 				<IconButton color="primary" disabled={loading || !text} icon={Icons.Search} onClick={asteroidStore.search} variant="ghost" />
 			</div>
 			{list ? (
-				<List fullWidth itemCount={list.length}>
-					{(i) => AsteroidSearchListItem(list[i], handlePointer)}
+				<List fullWidth itemCount={list.length} className="max-h-100">
+					{(i) => AsteroidSearchListItem(list[i], handleSearchItemClick)}
 				</List>
 			) : selected?.parameters ? (
-				<List fullWidth itemCount={selected.parameters.length}>
+				<List fullWidth itemCount={selected.parameters.length} className="max-h-100">
 					{(i) => AsteroidSearchParameterItem(selected.parameters![i])}
 				</List>
 			) : null}
@@ -101,11 +76,25 @@ const AsteroidSearchTab = memo(() => {
 	)
 })
 
+function AsteroidSearchListItem(item: SmallBodySearchListItem, onClick: React.UIEventHandler) {
+	return <ListItem description={item.pdes} label={item.name} data-pdes={item.pdes} onClick={onClick} />
+}
+
+function AsteroidSearchParameterItem(parameter: MinorPlanetParameter) {
+	return (
+		<ListItem description={parameter.description}>
+			<div className="flex items-center justify-between">
+				<span>{parameter.name}</span>
+				<span>{parameter.value}</span>
+			</div>
+		</ListItem>
+	)
+}
+
 const AsteroidCloseApproachesTab = memo(() => {
 	const { loading } = useSnapshot(asteroidStore.state)
 	const { days, distance } = useSnapshot(asteroidStore.state.closeApproaches.request)
 	const { result } = useSnapshot(asteroidStore.state.closeApproaches)
-	const { offset } = useSnapshot(asteroidStore.state.request.time)
 
 	function handleAction(index: number) {
 		const item = result[index]
@@ -123,13 +112,13 @@ const AsteroidCloseApproachesTab = memo(() => {
 			</div>
 			<List itemCount={result.length} fullWidth onAction={handleAction}>
 				{(i) => {
-					const item = result[i]
+					const { distance, name, date } = result[i]
 
 					return (
-						<ListItem className="cursor-pointer" description={`${item.distance.toFixed(3)} LD`}>
+						<ListItem className="cursor-pointer" description={`${distance.toFixed(3)} LD`}>
 							<span className="flex items-center justify-between">
-								<span>{item.name}</span>
-								<span>{formatTemporal(item.date, 'YYYY-MM-DD HH:mm', offset)}</span>
+								<span>{name}</span>
+								<span>{formatTemporal(date, 'YYYY-MM-DD HH:mm')}</span>
 							</span>
 						</ListItem>
 					)

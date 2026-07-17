@@ -1,4 +1,4 @@
-import { homeStore } from '@stores/home.store'
+import { homeStore, type PanelType } from '@stores/home.store'
 import { About } from '@ui/About'
 import { Asteroid } from '@ui/Asteroid'
 import { AutoFocus } from '@ui/AutoFocus'
@@ -25,39 +25,51 @@ import { Sun } from '@ui/Sun'
 import { Thermometer } from '@ui/Thermometer'
 import { Tppa } from '@ui/Tppa'
 import { Wheel } from '@ui/Wheel'
-import { DockviewReact, themeGithubDark } from 'dockview-react'
-import { memo, useEffect } from 'react'
+import { DockviewReact, themeGithubDark, type IDockviewPanelProps } from 'dockview-react'
+import { memo, useEffect, type MemoExoticComponent } from 'react'
 import { wsStore } from 'src/web/stores/ws.store'
+import { Alpaca } from './Alpaca'
 
 const tabComponents = {
 	fixed: FixedTab,
 	closeable: CloseableTab,
 } as const
 
+const Dummy = memo((_props: IDockviewPanelProps) => <div></div>)
+
 const components = {
-	connections: Connections,
-	devices: Devices,
 	about: About,
-	camera: Camera,
-	mount: Mount,
-	cover: Cover,
-	wheel: Wheel,
-	thermometer: Thermometer,
-	image: ImageWorkspace,
-	sun: Sun,
-	moon: Moon,
-	planet: Planet,
+	alpaca: Alpaca,
 	asteroid: Asteroid,
-	galaxy: Galaxy,
-	satellite: Satellite,
-	planetarium: Planetarium,
+	autoFocus: AutoFocus,
 	calculator: Calculator,
+	camera: Camera,
+	connections: Connections,
+	cover: Cover,
 	darv: Darv,
-	tppa: Tppa,
-	autofocus: AutoFocus,
-	flatwizard: FlatWizard,
+	devices: Devices,
+	dewHeater: Dummy,
+	dome: Dummy,
+	flatPanel: Dummy,
+	flatWizard: FlatWizard,
+	focuser: Dummy,
+	galaxy: Galaxy,
+	gps: Dummy,
+	guideOutput: Dummy,
+	image: ImageWorkspace,
+	moon: Moon,
+	mount: Mount,
+	planet: Planet,
+	planetarium: Planetarium,
+	power: Dummy,
+	rotator: Dummy,
+	satellite: Satellite,
 	settings: Settings,
-} as const
+	sun: Sun,
+	thermometer: Thermometer,
+	tppa: Tppa,
+	wheel: Wheel,
+} as const satisfies Record<PanelType, MemoExoticComponent<({ api }: IDockviewPanelProps) => React.ReactNode>>
 
 export const Home = memo(() => {
 	// Mounts the websocket and home lifecycle once the home screen is active.

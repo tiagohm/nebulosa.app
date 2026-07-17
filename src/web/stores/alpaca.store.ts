@@ -8,7 +8,6 @@ import { proxy } from 'valtio'
 export type AlpacaStore = typeof alpacaStore
 
 export interface AlpacaState {
-	show: boolean
 	port: number
 	pendingAction?: 'start' | 'stop'
 	readonly status: AlpacaServerStatus
@@ -19,7 +18,6 @@ export const MAX_ALPACA_PORT = 65535
 export const DEFAULT_ALPACA_PORT = 2222
 
 const state = proxy<AlpacaState>({
-	show: false,
 	port: DEFAULT_ALPACA_PORT,
 	status: {
 		running: false,
@@ -29,7 +27,7 @@ const state = proxy<AlpacaState>({
 	},
 })
 
-initProxy(state, 'alpaca', ['p:show', 'p:port'])
+initProxy(state, 'alpaca', ['p:port'])
 
 alpacaBus.subscribe('start', (status: AlpacaServerStatus) => {
 	Object.assign(state.status, status)
@@ -49,7 +47,6 @@ alpacaBus.subscribe('stop', () => {
 })
 
 async function status() {
-	if (!state.show) return undefined
 	const status = await Api.Alpaca.status()
 	if (status !== undefined) Object.assign(state.status, status)
 	return status
@@ -86,14 +83,6 @@ async function stop() {
 	}
 }
 
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
-
 let mounted = false
 
 function mount() {
@@ -120,6 +109,4 @@ export const alpacaStore = {
 	updatePort,
 	start,
 	stop,
-	show,
-	hide,
 } as const

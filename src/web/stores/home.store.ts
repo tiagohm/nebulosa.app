@@ -10,36 +10,37 @@ import { proxy } from 'valtio'
 export type HomeStore = typeof homeStore
 
 const PANEL_TYPES = [
-	'connections',
-	'devices',
-	'settings',
 	'about',
-	'planetarium',
-	'sun',
-	'moon',
-	'planet',
+	'alpaca',
 	'asteroid',
-	'galaxy',
-	'satellite',
-	'calculator',
-	'darv',
-	'tppa',
-	'flatWizard',
 	'autoFocus',
-	'image',
+	'calculator',
 	'camera',
-	'mount',
-	'wheel',
-	'focuser',
-	'rotator',
-	'gps',
-	'dome',
-	'guideOutput',
-	'flatPanel',
+	'connections',
 	'cover',
-	'power',
-	'thermometer',
+	'darv',
+	'devices',
 	'dewHeater',
+	'dome',
+	'flatPanel',
+	'flatWizard',
+	'focuser',
+	'galaxy',
+	'gps',
+	'guideOutput',
+	'image',
+	'moon',
+	'mount',
+	'planet',
+	'planetarium',
+	'power',
+	'rotator',
+	'satellite',
+	'settings',
+	'sun',
+	'thermometer',
+	'tppa',
+	'wheel',
 ] as const
 
 const MAX_PANELS = 100
@@ -108,6 +109,7 @@ function handleReady(event: DockviewReadyEvent) {
 
 	addUniquePanel('connections', { tabComponent: 'fixed', title: 'Connections' }, left)
 	addUniquePanel('devices', { tabComponent: 'fixed', title: 'Devices' }, left)
+	addUniquePanel('alpaca', { tabComponent: 'fixed', title: 'Alpaca' }, left)
 	addUniquePanel('settings', { tabComponent: 'fixed', title: 'Settings' }, left)
 	addUniquePanel('about', { tabComponent: 'fixed', title: 'About' }, left)
 

@@ -1,6 +1,7 @@
 import { useStore } from '@hooks/store.hook'
 import { planetariumStore } from '@stores/planetarium.store'
 import { SkyMap } from '@ui/SkyMap'
+import type { IDockviewPanelProps } from 'dockview-react'
 import { memo } from 'react'
 import type { CelestialOptions } from 'src/lib/celestial/celestial'
 import { useSnapshot } from 'valtio'
@@ -18,7 +19,7 @@ const SKY_MAP_OPTIONS: CelestialOptions = {
 	},
 }
 
-export const Planetarium = memo(() => {
+export const Planetarium = memo(({ api }: IDockviewPanelProps) => {
 	const store = useStore(() => planetariumStore, [])
 	const { show } = useSnapshot(store.state)
 

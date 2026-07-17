@@ -31,7 +31,7 @@ export const AutoFocus = memo(({ api, params }: IDockviewPanelProps<AutoFocusPar
 
 	return (
 		<AutoFocusStoreContext value={autoFocus}>
-			<div className="grid grid-cols-12 gap-2">
+			<div className="grid grid-cols-12 gap-2 p-3">
 				<CameraAndFocuser />
 				<Status />
 				<Inputs />

@@ -20,12 +20,12 @@ export interface DarvParams {
 	readonly id: string
 }
 
-export const Darv = memo(({ params }: IDockviewPanelProps<DarvParams>) => {
-	const darv = useStore(() => darvStore(params.id), [params.id])
+export const Darv = memo(({ api, params }: IDockviewPanelProps<DarvParams>) => {
+	const darv = useStore(() => darvStore(params.id, api), [params.id])
 
 	return (
 		<DarvStoreContext value={darv}>
-			<div className="grid grid-cols-12 gap-2">
+			<div className="grid grid-cols-12 gap-2 p-2">
 				<CameraAndMount />
 				<Status />
 				<Input />

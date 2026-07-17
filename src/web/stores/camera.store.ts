@@ -287,8 +287,10 @@ export function updateCameraCaptureStartFromCameraUpdated(capture: CameraCapture
 	}
 }
 
-export function subscribeToUpdateCameraCaptureStartFromCamera(u: VoidFunction[], camera: Camera, request: CameraCaptureStart) {
-	u.push(subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(request, formats)))
-	u.push(subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(request, exposure)))
-	u.push(subscribeKey(camera, 'frame', (frame) => updateCameraFrame(request, frame)))
+export function subscribeToUpdateCameraCaptureStartFromCamera(camera: Camera, request: CameraCaptureStart) {
+	const u = new Array<VoidFunction>(3)
+	u[0] = subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(request, formats))
+	u[1] = subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(request, exposure))
+	u[2] = subscribeKey(camera, 'frame', (frame) => updateCameraFrame(request, frame))
+	return () => unsubscribe(u)
 }

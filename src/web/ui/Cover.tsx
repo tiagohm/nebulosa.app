@@ -31,7 +31,7 @@ export const Cover = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<CoverStoreContext value={store}>
-			<Tabs className="px-3" startContent={<TabsStartContent />}>
+			<Tabs className="p-3" startContent={<TabsStartContent />}>
 				<Tab id="control">Cover</Tab>
 				<Tab id="indi">INDI</Tab>
 

@@ -1,6 +1,7 @@
 import { Api } from '@shared/api'
 import { autoFocusBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
+import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { DockviewPanelApi } from 'dockview-react'
 import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
@@ -45,12 +46,18 @@ export function autoFocusStore(id: string, api: DockviewPanelApi) {
 			}
 		})
 
-		u[2] = subscribeKey(state, 'camera', updateTitle)
-		u[3] = subscribeKey(state, 'focuser', updateTitle)
+		u[2] = subscribeKey(state, 'camera', (camera) => {
+			updateTitle()
+
+			if (camera !== undefined) {
+				u[3]?.()
+				u[3] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.capture)
+			}
+		})
+
+		u[4] = subscribeKey(state, 'focuser', updateTitle)
 
 		updateTitle()
-
-		// TODO: subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
 
 		state.request.id = id
 	}
@@ -63,7 +70,7 @@ export function autoFocusStore(id: string, api: DockviewPanelApi) {
 	}
 
 	function updateTitle() {
-		api.setTitle(`Auto Focus - ${state.camera?.name || 'None'} · ${state.focuser?.name || 'None'}`)
+		api.setTitle(state.camera || state.focuser ? `Auto Focus - ${state.camera?.name || 'None'} · ${state.focuser?.name || 'None'}` : 'Auto Focus')
 	}
 
 	function reset() {

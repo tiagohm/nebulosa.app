@@ -19,7 +19,7 @@ export const Asteroid = memo(({ api }: IDockviewPanelProps) => {
 	useEffect(() => void atlasStore.tick('asteroid'), [])
 
 	return (
-		<div className="grid grid-cols-12 items-center gap-2">
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<SearchAndCloseApproaches />
 			<EphemerisPositionContext value={asteroidStore}>
 				<EphemerisAndChart />

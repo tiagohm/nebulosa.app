@@ -2,12 +2,15 @@ import { Api } from '@shared/api'
 import { darvBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import { toast } from '@shared/toast'
+import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
+import type { DockviewPanelApi } from 'dockview-react'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { COARSE_DARV_EXPOSURE_PRESET, DARV_EXPOSURE_PRESETS, estimateDarvExposure, type DarvExposureInput, type DarvExposurePreset, type DarvExposurePresetMode } from 'nebulosa/src/observation/alignment/polaralignment'
 import { DEFAULT_DARV_EVENT, DEFAULT_DARV_START, type DarvEvent, type DarvStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
 
 export type DarvStore = ReturnType<typeof darvStore>
 
@@ -20,7 +23,7 @@ export interface DarvState {
 	readonly exposureEstimation: DarvExposureInput & { presetMode: DarvExposurePresetMode | 'custom' }
 }
 
-export function darvStore(id: string) {
+export function darvStore(id: string, api: DockviewPanelApi) {
 	const state = proxy<DarvState>({
 		request: structuredClone(DEFAULT_DARV_START),
 		running: false,
@@ -57,7 +60,16 @@ export function darvStore(id: string) {
 			}
 		})
 
-		// TODO: subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
+		u[2] = subscribeKey(state, 'camera', (camera) => {
+			updateTitle()
+
+			if (camera !== undefined) {
+				u[3]?.()
+				u[3] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.capture)
+			}
+		})
+
+		u[4] = subscribeKey(state, 'mount', updateTitle)
 
 		state.request.id = id
 	}
@@ -67,6 +79,10 @@ export function darvStore(id: string) {
 		console.info('darv unmounted:', id)
 		unsubscribe(u)
 		mounted = false
+	}
+
+	function updateTitle() {
+		api.setTitle(state.camera || state.mount ? `DARV - ${state.camera?.name || 'None'} · ${state.mount?.name || 'None'}` : 'DARV')
 	}
 
 	function reset() {

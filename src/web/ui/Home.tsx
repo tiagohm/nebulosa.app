@@ -14,7 +14,6 @@ import { FlatWizard } from '@ui/FlatWizard'
 import { Framing } from '@ui/Framing'
 import { Galaxy } from '@ui/Galaxy'
 import { Guider } from '@ui/Guider'
-import { ImagePickerButton } from '@ui/ImagePickerButton'
 import { ImageWorkspace } from '@ui/ImageWorkspace'
 import { Moon } from '@ui/Moon'
 import { Mount } from '@ui/Mount'
@@ -81,9 +80,7 @@ export const Home = memo(() => {
 
 	return (
 		<div className="grid h-dvh grid-rows-[auto_minmax(0,1fr)] text-white">
-			<header className="flex flex-row justify-center p-2">
-				<ImagePickerButton />
-			</header>
+			<header className="flex flex-row justify-center p-0"></header>
 			<div className="min-h-0">
 				<DockviewReact hideBorders scrollbars="native" defaultTabComponent={Tab} theme={themeGithubDark} className="h-full w-full" tabComponents={tabComponents} components={components} onReady={homeStore.handleReady} />
 				<Confirmation />

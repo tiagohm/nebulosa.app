@@ -23,7 +23,7 @@ const STACK_LINKS = [
 ] as const
 
 export const About = memo(({ api }: IDockviewPanelProps) => (
-	<div className="grid grid-cols-12 items-center gap-2">
+	<div className="grid grid-cols-12 items-center gap-2 p-3">
 		<Header />
 		<Logo />
 		<Info />

@@ -150,7 +150,7 @@ function handleReady(event: DockviewReadyEvent) {
 	// Atlas
 	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
 
-	addFlatWizard()
+	addFraming()
 
 	// layoutDisposable = api.onDidLayoutChange(() => {
 	// 	window.clearTimeout(saveTimer)
@@ -341,6 +341,10 @@ function addFlatWizard() {
 	return addMultiplePanel('flatWizard', { title: 'Flat Wizard', params }, main)
 }
 
+function addFraming() {
+	return addUniquePanel('framing', { title: 'Framing' }, main)
+}
+
 window.addEventListener('beforeunload', () => {
 	saveLayout()
 })
@@ -357,4 +361,6 @@ export const homeStore = {
 	addAutoFocus,
 	addCalculator,
 	addDarv,
+	addFlatWizard,
+	addFraming,
 } as const

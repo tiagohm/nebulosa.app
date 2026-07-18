@@ -35,7 +35,7 @@ export const Wheel = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<WheelStoreContext value={store}>
-			<Tabs className="p-3">
+			<Tabs className="p-3" startContent={<TabStartContent />}>
 				<Tab id="control">Filter Wheel</Tab>
 				<Tab id="indi">INDI</Tab>
 
@@ -50,6 +50,13 @@ export const Wheel = memo(({ params }: IDockviewPanelProps<Device>) => {
 	)
 })
 
+const TabStartContent = memo(() => {
+	const wheel = useContext(WheelStoreContext)
+	const { connected, connecting } = useSnapshot(wheel.state.wheel)
+
+	return <ConnectButton connected={connected} loading={connecting} onClick={wheel.connect} />
+})
+
 const Main = memo(() => (
 	<div className="grid grid-cols-12 gap-2">
 		<Status />
@@ -59,11 +66,10 @@ const Main = memo(() => (
 
 const Status = memo(() => {
 	const wheel = useContext(WheelStoreContext)
-	const { connected, connecting, count, moving, position, names } = useSnapshot(wheel.state.wheel)
+	const { count, moving, position, names } = useSnapshot(wheel.state.wheel)
 
 	return (
 		<div className="col-span-full flex flex-row flex-wrap items-center justify-start gap-2">
-			<ConnectButton connected={connected} loading={connecting} onClick={wheel.connect} />
 			<Chip color={moving ? 'warning' : 'default'} size="sm">
 				{moving ? 'moving' : 'idle'}
 			</Chip>

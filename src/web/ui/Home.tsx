@@ -13,6 +13,7 @@ import { Devices } from '@ui/Devices'
 import { DewHeater } from '@ui/DewHeater'
 import { FlatPanel } from '@ui/FlatPanel'
 import { FlatWizard } from '@ui/FlatWizard'
+import { Focuser } from '@ui/Focuser'
 import { Framing } from '@ui/Framing'
 import { Galaxy } from '@ui/Galaxy'
 import { Guider } from '@ui/Guider'
@@ -54,7 +55,7 @@ const components = {
 	dome: Dummy,
 	flatPanel: FlatPanel,
 	flatWizard: FlatWizard,
-	focuser: Dummy,
+	focuser: Focuser,
 	framing: Framing,
 	galaxy: Galaxy,
 	gps: Dummy,

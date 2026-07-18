@@ -2,9 +2,8 @@ import { useStore } from '@hooks/store.hook'
 import { planetariumStore } from '@stores/planetarium.store'
 import { SkyMap } from '@ui/SkyMap'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { memo } from 'react'
+import { memo, useEffect } from 'react'
 import type { CelestialOptions } from 'src/lib/celestial/celestial'
-import { useSnapshot } from 'valtio'
 
 const SKY_MAP_OPTIONS: CelestialOptions = {
 	layers: {
@@ -20,10 +19,7 @@ const SKY_MAP_OPTIONS: CelestialOptions = {
 }
 
 export const Planetarium = memo(({ api }: IDockviewPanelProps) => {
-	const store = useStore(() => planetariumStore, [])
-	const { show } = useSnapshot(store.state)
+	useEffect(planetariumStore.mount, [])
 
-	if (!show) return null
-
-	return <SkyMap options={SKY_MAP_OPTIONS} onReady={store.handleReady} onDestroy={store.handleDestroy} className="absolute top-0 left-0 z-0 w-full opacity-80" height="100%" />
+	return <SkyMap options={SKY_MAP_OPTIONS} onReady={planetariumStore.handleReady} onDestroy={planetariumStore.handleDestroy} className="absolute top-0 left-0 z-0 w-full opacity-80" height="100%" />
 })

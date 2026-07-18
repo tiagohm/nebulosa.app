@@ -157,7 +157,7 @@ function handleReady(event: DockviewReadyEvent) {
 	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
 	addUniquePanel('galaxy', { title: 'DSO' }, main)
 
-	addTppa()
+	addPlanetarium()
 
 	// layoutDisposable = api.onDidLayoutChange(() => {
 	// 	window.clearTimeout(saveTimer)
@@ -368,6 +368,10 @@ function addTppa() {
 	return addMultiplePanel('tppa', { title: 'TPPA', params }, main)
 }
 
+function addPlanetarium() {
+	return addUniquePanel('planetarium', { title: 'Planetarium' }, main)
+}
+
 window.addEventListener('beforeunload', () => {
 	saveLayout()
 })
@@ -389,4 +393,5 @@ export const homeStore = {
 	addSolarEclipse,
 	addGuider,
 	addTppa,
+	addPlanetarium,
 } as const

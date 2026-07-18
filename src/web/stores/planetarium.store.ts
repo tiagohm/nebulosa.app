@@ -1,6 +1,5 @@
 import { Api } from '@shared/api'
 import { mountBus } from '@shared/bus'
-import { initProxy } from '@shared/proxy'
 import { skyObjectName } from '@shared/util'
 import { atlasStore } from '@stores/atlas.store'
 import { equipmentStore } from '@stores/equipment.store'
@@ -16,7 +15,6 @@ import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
 
 export interface PlanetariumState {
-	show: boolean
 	celestial?: Celestial
 	readonly transform: ViewTransform
 }
@@ -28,7 +26,6 @@ const CONSTELLATIONS = {
 } satisfies ConstellationData
 
 const state = proxy<PlanetariumState>({
-	show: false,
 	transform: {
 		x: 0,
 		y: 0,
@@ -50,6 +47,8 @@ function mount() {
 	mounted = true
 
 	u[0] = subscribe(atlasStore.state.request.location, updateLocationFromAtlas)
+
+	return unmount
 }
 
 function unmount() {
@@ -190,8 +189,6 @@ function handleReady(celestial: Celestial) {
 }
 
 function updateLocationFromAtlas() {
-	if (!state.show) return
-
 	const { location } = atlasStore.state.request
 	const latitude = toDeg(location.latitude)
 	const longitude = toDeg(location.longitude)
@@ -328,18 +325,6 @@ function unlink() {
 	state.celestial = undefined
 }
 
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
-
-function toggle() {
-	state.show = !state.show
-}
-
 export const planetariumStore = {
 	state,
 	mount,
@@ -348,7 +333,4 @@ export const planetariumStore = {
 	handleDestroy,
 	renderTelescope,
 	unlink,
-	show,
-	hide,
-	toggle,
 } as const

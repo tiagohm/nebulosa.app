@@ -12,17 +12,17 @@ import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const FlatPanel = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const flatPanel = useDevice('flatPanel', params.id, (device) => flatPanelStore(device))
+	const flatPanel = useDevice('flatPanel', params.id, flatPanelStore)
 
 	if (!flatPanel) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
 		<FlatPanelStoreContext value={flatPanel.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
-				<Tab id="control">Filter Wheel</Tab>
+				<Tab id="main">Filter Wheel</Tab>
 				<Tab id="indi">INDI</Tab>
 
-				<TabPanel id="control">
+				<TabPanel id="main">
 					<Main />
 				</TabPanel>
 				<TabPanel id="indi">

@@ -26,18 +26,18 @@ import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Camera = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const camera = useDevice('camera', params.id, (device) => cameraStore(device))
+	const camera = useDevice('camera', params.id, cameraStore)
 
 	if (!camera) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
 		<CameraStoreContext value={camera.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
-				<Tab id="control">Camera</Tab>
+				<Tab id="main">Camera</Tab>
 				<Tab id="options">Options</Tab>
 				<Tab id="indi">INDI</Tab>
 
-				<TabPanel id="control">
+				<TabPanel id="main">
 					<Main />
 				</TabPanel>
 				<TabPanel id="options">

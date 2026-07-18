@@ -11,17 +11,17 @@ import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Thermometer = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const thermometer = useDevice('thermometer', params.id, (device) => thermometerStore(device))
+	const thermometer = useDevice('thermometer', params.id, thermometerStore)
 
 	if (!thermometer) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
 		<ThermometerStoreContext value={thermometer.store}>
-			<Tabs className="p-3">
-				<Tab id="control">Thermometer</Tab>
+			<Tabs className="p-3" startContent={<TabStartContent />}>
+				<Tab id="main">Thermometer</Tab>
 				<Tab id="indi">INDI</Tab>
 
-				<TabPanel id="control">
+				<TabPanel id="main">
 					<Main />
 				</TabPanel>
 				<TabPanel id="indi">
@@ -32,16 +32,20 @@ export const Thermometer = memo(({ params }: IDockviewPanelProps<Device>) => {
 	)
 })
 
+const TabStartContent = memo(() => {
+	const thermometer = useContext(ThermometerStoreContext)
+	const { connected, connecting } = useSnapshot(thermometer.state.thermometer)
+
+	return <ConnectButton connected={connected} loading={connecting} onClick={thermometer.connect} />
+})
+
 const Main = memo(() => {
 	const thermometer = useContext(ThermometerStoreContext)
-	const { connecting, connected, temperature } = useSnapshot(thermometer.state.thermometer)
+	const { connected, temperature } = useSnapshot(thermometer.state.thermometer)
 	const value = connected ? formatNumber(temperature, 1) : '--'
 
 	return (
 		<div className="flex w-full min-w-0 flex-col gap-2">
-			<div className="flex flex-row items-center">
-				<ConnectButton connected={connected} loading={connecting} onClick={thermometer.connect} />
-			</div>
 			<div className="text-center text-5xl font-bold tabular-nums">
 				{value} <small className="font-thin">°C</small>
 			</div>

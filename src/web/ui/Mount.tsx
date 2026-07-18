@@ -35,20 +35,20 @@ const TARGET_TYPE_BY_COORDINATE_TYPE = {
 } as const satisfies Record<CoordinateType, MountTargetCoordinateType>
 
 export const Mount = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const mount = useDevice('mount', params.id, (device) => mountStore(device))
+	const mount = useDevice('mount', params.id, mountStore)
 
 	if (!mount) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
 		<MountStoreContext value={mount.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
-				<Tab id="control">Mount</Tab>
+				<Tab id="main">Mount</Tab>
 				<Tab id="location">Location</Tab>
 				<Tab id="time">Time</Tab>
 				<Tab id="remoteControl">Remote Control</Tab>
 				<Tab id="indi">INDI</Tab>
 
-				<TabPanel id="control">
+				<TabPanel id="main">
 					<Main />
 				</TabPanel>
 				<TabPanel id="location">

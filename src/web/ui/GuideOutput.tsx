@@ -12,17 +12,17 @@ import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const GuideOutput = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const guideOutput = useDevice('guideOutput', params.id, (device) => guideOutputStore(device))
+	const guideOutput = useDevice('guideOutput', params.id, guideOutputStore)
 
 	if (!guideOutput) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
 		<GuideOutputStoreContext value={guideOutput.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
-				<Tab id="control">Guide Output</Tab>
+				<Tab id="main">Guide Output</Tab>
 				<Tab id="indi">INDI</Tab>
 
-				<TabPanel id="control">
+				<TabPanel id="main">
 					<Main />
 				</TabPanel>
 				<TabPanel id="indi">

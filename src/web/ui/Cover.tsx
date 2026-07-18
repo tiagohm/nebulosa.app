@@ -13,17 +13,17 @@ import { CoverStoreContext } from 'src/web/shared/context'
 import { useSnapshot } from 'valtio'
 
 export const Cover = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const cover = useDevice('cover', params.id, (device) => coverStore(device))
+	const cover = useDevice('cover', params.id, coverStore)
 
 	if (!cover) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
 		<CoverStoreContext value={cover.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
-				<Tab id="control">Cover</Tab>
+				<Tab id="main">Cover</Tab>
 				<Tab id="indi">INDI</Tab>
 
-				<TabPanel id="control">
+				<TabPanel id="main">
 					<Main />
 				</TabPanel>
 				<TabPanel id="indi">

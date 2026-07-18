@@ -15,17 +15,17 @@ import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Focuser = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const focuser = useDevice('focuser', params.id, (device) => focuserStore(device))
+	const focuser = useDevice('focuser', params.id, focuserStore)
 
 	if (!focuser) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
 		<FocuserStoreContext value={focuser.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
-				<Tab id="control">Filter Wheel</Tab>
+				<Tab id="main">Filter Wheel</Tab>
 				<Tab id="indi">INDI</Tab>
 
-				<TabPanel id="control">
+				<TabPanel id="main">
 					<Main />
 				</TabPanel>
 				<TabPanel id="indi">

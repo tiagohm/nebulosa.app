@@ -11,17 +11,17 @@ import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const DewHeater = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const dewHeater = useDevice('dewHeater', params.id, (device) => dewHeaterStore(device))
+	const dewHeater = useDevice('dewHeater', params.id, dewHeaterStore)
 
 	if (!dewHeater) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
 		<DewHeaterStoreContext value={dewHeater.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
-				<Tab id="control">Dew Heater</Tab>
+				<Tab id="main">Dew Heater</Tab>
 				<Tab id="indi">INDI</Tab>
 
-				<TabPanel id="control">
+				<TabPanel id="main">
 					<Main />
 				</TabPanel>
 				<TabPanel id="indi">

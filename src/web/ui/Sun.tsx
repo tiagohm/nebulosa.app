@@ -33,7 +33,7 @@ const NextSolarEclipse = memo(() => {
 	const next = eclipses[0]
 
 	return (
-		<div className="flex h-full flex-col justify-center gap-0 text-sm">
+		<div className="flex h-full flex-col justify-center gap-0 text-xs">
 			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Sun} key={next.maximalTime.day} label={next.type} offset={offset} time={temporalFromTime(next.maximalTime)} onClick={sunStore.showSolarEclipse} />
 		</div>
 	)
@@ -52,7 +52,7 @@ const Seasons = memo(() => {
 	const isSouthern = latitude < 0
 
 	return (
-		<div className="flex h-full flex-col justify-center gap-0 text-sm">
+		<div className="flex h-full flex-col justify-center gap-0 text-xs">
 			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.Leaf : Icons.Flower} label={isSouthern ? 'AUTUMN/FALL' : 'SPRING'} offset={offset} time={spring} />
 			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.SnowFlake : Icons.Sun} label={isSouthern ? 'WINTER' : 'SUMMER'} offset={offset} time={summer} />
 			<AstronomicalEvent format="MM-DD HH:mm" icon={isSouthern ? Icons.Flower : Icons.Leaf} label={isSouthern ? 'SPRING' : 'AUTUMN/FALL'} offset={offset} time={autumn} />

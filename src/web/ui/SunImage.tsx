@@ -11,7 +11,7 @@ export interface SunProps {
 }
 
 // NOTE: The contrast filter is used to make the image's background color from 0 to 10 (#101010)
-// The formula of "b" parameter of linear transformation for contrast filter is (128 - color) / 128 => (128 - 10) / 128 = 0.921875
+// The formula of "b" parameter of linear transformation for contrast filter is (128 - color) / 128 => (128 - 14) / 128 = 0.921875
 
 export const SunImage = memo(({ source, onSourceChange }: SunProps) => {
 	const [refreshToken, setRefreshToken] = useState(0)
@@ -39,7 +39,7 @@ export const SunImage = memo(({ source, onSourceChange }: SunProps) => {
 	return (
 		<div className="flex min-w-20 flex-col items-center justify-center gap-1">
 			<SolarImageSourceSelect fullWidth onValueChange={onSourceChange} value={source} />
-			<img className="h-auto w-full max-w-54 contrast-[0.890625] select-none" draggable={false} onError={handleError} src={src} />
+			<img className="h-auto w-full max-w-54 contrast-[0.87] select-none" draggable={false} onError={handleError} src={src} />
 			<Link href={SOLAR_IMAGE_SOURCE_URLS[source].replace('256', '1024')} label="Image source: NASA/SDO" />
 		</div>
 	)

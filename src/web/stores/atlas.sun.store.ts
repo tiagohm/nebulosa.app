@@ -34,9 +34,7 @@ const state = proxy<AtlasSunState>({
 	eclipses: [],
 	source: 'HMI_INTENSITYGRAM_FLATTENED',
 	seasons: { spring: 0, summer: 0, autumn: 0, winter: 0 },
-	get tags() {
-		return [{ label: 'Sun', color: 'primary' }] as const
-	},
+	tags: [{ label: 'Sun', color: 'primary' }],
 })
 
 let chartUpdate = true

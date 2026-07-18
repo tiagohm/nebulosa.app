@@ -152,6 +152,7 @@ function handleReady(event: DockviewReadyEvent) {
 
 	// Atlas
 	addUniquePanel('sun', { title: 'Sun' }, main)
+	addUniquePanel('moon', { title: 'Moon' }, main)
 	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
 	addUniquePanel('galaxy', { title: 'DSO' }, main)
 

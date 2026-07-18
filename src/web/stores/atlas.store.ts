@@ -60,7 +60,7 @@ const state = proxy<AtlasState>({
 	},
 })
 
-let pendingTab: AtlasTab | false = false
+const pendingTabs = new Set<AtlasTab>()
 let twilightUpdate = true
 let twilightStartTime = 0
 
@@ -77,9 +77,9 @@ function updateLocation(tab: AtlasTab, location: GeographicCoordinate) {
 }
 
 async function tick(tab: AtlasTab, utc?: Temporal) {
-	if (pendingTab !== false) return
+	if (pendingTabs.has(tab)) return
 
-	pendingTab = tab
+	pendingTabs.add(tab)
 
 	try {
 		const { time, location } = state.request
@@ -102,7 +102,7 @@ async function tick(tab: AtlasTab, utc?: Temporal) {
 
 		void state[tab]!.tick(time, location, dateHasChanged)
 	} finally {
-		pendingTab = false
+		pendingTabs.delete(tab)
 	}
 }
 

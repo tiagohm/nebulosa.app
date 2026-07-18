@@ -36,14 +36,6 @@ export function dewHeaterStore(dewHeater: DewHeater) {
 		return Api.DewHeaters.dutyCycle(dewHeater, value)
 	}
 
-	function show() {
-		return equipmentStore.show(dewHeater, 'dewHeater')
-	}
-
-	function hide() {
-		return equipmentStore.hide(dewHeater, 'dewHeater')
-	}
-
 	return {
 		state,
 		mount,
@@ -51,7 +43,5 @@ export function dewHeaterStore(dewHeater: DewHeater) {
 		connect,
 		update,
 		dutyCycle,
-		show,
-		hide,
 	} as const
 }

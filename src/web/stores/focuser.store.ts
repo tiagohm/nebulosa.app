@@ -15,8 +15,6 @@ export interface FocuserState {
 	}
 }
 
-const PROXY_PROPERTIES = ['o:request'] as const
-
 export function focuserStore(focuser: Focuser) {
 	const state = proxy<FocuserState>({
 		focuser,
@@ -35,7 +33,7 @@ export function focuserStore(focuser: Focuser) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `focuser.${focuser.id}`, PROXY_PROPERTIES)
+		u[0] = initProxy(state, `focuser.${focuser.id}`, ['o:request'])
 	}
 
 	function unmount() {
@@ -77,14 +75,6 @@ export function focuserStore(focuser: Focuser) {
 		return Api.Focusers.reverse(focuser, enabled)
 	}
 
-	function show() {
-		equipmentStore.show(focuser)
-	}
-
-	function hide() {
-		equipmentStore.hide(focuser)
-	}
-
 	return {
 		state,
 		mount,
@@ -97,7 +87,5 @@ export function focuserStore(focuser: Focuser) {
 		sync,
 		reverse,
 		stop,
-		show,
-		hide,
 	} as const
 }

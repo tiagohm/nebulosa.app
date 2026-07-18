@@ -101,14 +101,6 @@ export function guideOutputStore(guideOutput: GuideOutput) {
 		// Api.GuideOutputs.stop(guideOutput)
 	}
 
-	function show() {
-		return equipmentStore.show(guideOutput, 'guideOutput')
-	}
-
-	function hide() {
-		return equipmentStore.hide(guideOutput, 'guideOutput')
-	}
-
 	return {
 		state,
 		mount,
@@ -119,7 +111,5 @@ export function guideOutputStore(guideOutput: GuideOutput) {
 		guideRateDEC,
 		pulse,
 		stop,
-		show,
-		hide,
 	} as const
 }

@@ -48,14 +48,6 @@ export function flatPanelStore(flatPanel: FlatPanel) {
 		return Api.FlatPanels.intensity(flatPanel, value)
 	}
 
-	function show() {
-		return equipmentStore.show(flatPanel)
-	}
-
-	function hide() {
-		return equipmentStore.hide(flatPanel)
-	}
-
 	return {
 		state,
 		mount,
@@ -66,7 +58,5 @@ export function flatPanelStore(flatPanel: FlatPanel) {
 		disable,
 		toggle,
 		intensity,
-		show,
-		hide,
 	} as const
 }

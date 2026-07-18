@@ -24,6 +24,7 @@ import { Moon } from '@ui/Moon'
 import { Mount } from '@ui/Mount'
 import { Planet } from '@ui/Planet'
 import { Planetarium } from '@ui/Planetarium'
+import { Rotator } from '@ui/Rotator'
 import { Satellite } from '@ui/Satellite'
 import { Settings } from '@ui/Settings'
 import { SolarEclipseMap } from '@ui/SolarEclipseMap'
@@ -70,7 +71,7 @@ const components = {
 	planet: Planet,
 	planetarium: Planetarium,
 	power: Dummy,
-	rotator: Dummy,
+	rotator: Rotator,
 	satellite: Satellite,
 	settings: Settings,
 	sun: Sun,

@@ -179,14 +179,6 @@ export function cameraStore(camera: Camera) {
 		return Api.Cameras.stop(camera)
 	}
 
-	function show() {
-		equipmentStore.show(camera)
-	}
-
-	function hide() {
-		equipmentStore.hide(camera)
-	}
-
 	return {
 		state,
 		mount,
@@ -205,8 +197,6 @@ export function cameraStore(camera: Camera) {
 		updateRotator,
 		start,
 		stop,
-		show,
-		hide,
 	} as const
 }
 

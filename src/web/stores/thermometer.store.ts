@@ -27,20 +27,10 @@ export function thermometerStore(thermometer: Thermometer) {
 		return equipmentStore.connect(thermometer)
 	}
 
-	function show() {
-		return equipmentStore.show(thermometer, 'thermometer')
-	}
-
-	function hide() {
-		return equipmentStore.hide(thermometer, 'thermometer')
-	}
-
 	return {
 		state,
 		mount,
 		unmount,
 		connect,
-		show,
-		hide,
 	} as const
 }

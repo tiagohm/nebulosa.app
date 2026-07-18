@@ -92,14 +92,6 @@ export function wheelStore(wheel: Wheel) {
 		return Api.Wheels.names(wheel, names)
 	}
 
-	function show() {
-		equipmentStore.show(wheel)
-	}
-
-	function hide() {
-		equipmentStore.hide(wheel)
-	}
-
 	return {
 		state,
 		mount,
@@ -108,7 +100,5 @@ export function wheelStore(wheel: Wheel) {
 		connect,
 		move,
 		apply,
-		show,
-		hide,
 	} as const
 }

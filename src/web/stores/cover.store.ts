@@ -41,14 +41,6 @@ export function coverStore(cover: Cover) {
 		return Api.Covers.stop(cover)
 	}
 
-	function show() {
-		return equipmentStore.show(cover)
-	}
-
-	function hide() {
-		return equipmentStore.hide(cover)
-	}
-
 	return {
 		state,
 		mount,
@@ -57,7 +49,5 @@ export function coverStore(cover: Cover) {
 		park,
 		unpark,
 		stop,
-		show,
-		hide,
 	} as const
 }

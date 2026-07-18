@@ -56,6 +56,10 @@ function unmount() {
 	mounted = false
 }
 
+function updateLocation(coordinate: GeographicCoordinate) {
+	Object.assign(state.location, coordinate)
+}
+
 function updateSolver<K extends keyof typeof state.solver.astap>(type: PlateSolverType, key: K, value: PlateSolveStart[K]) {
 	state.solver[type][key] = value
 }
@@ -64,5 +68,6 @@ export const settingsStore = {
 	state,
 	mount,
 	unmount,
+	updateLocation,
 	updateSolver,
 }

@@ -6,9 +6,9 @@ import type { AlpacaServerStatus } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 
-export type AlpacaStore = typeof alpacaStore
+export type AlpacaServerStore = typeof alpacaServerStore
 
-export interface AlpacaState {
+export interface AlpacaServerState {
 	port: number
 	pendingAction?: 'start' | 'stop'
 	readonly status: AlpacaServerStatus
@@ -18,7 +18,7 @@ export const MIN_ALPACA_PORT = 80
 export const MAX_ALPACA_PORT = 65535
 export const DEFAULT_ALPACA_PORT = 2222
 
-const state = proxy<AlpacaState>({
+const state = proxy<AlpacaServerState>({
 	port: DEFAULT_ALPACA_PORT,
 	status: {
 		running: false,
@@ -106,7 +106,7 @@ async function stop() {
 	}
 }
 
-export const alpacaStore = {
+export const alpacaServerStore = {
 	state,
 	mount,
 	unmount,

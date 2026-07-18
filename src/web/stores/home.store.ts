@@ -15,7 +15,7 @@ export type HomeStore = typeof homeStore
 
 const PANEL_TYPES = [
 	'about',
-	'alpaca',
+	'alpacaServer',
 	'asteroid',
 	'autoFocus',
 	'calculator',
@@ -143,7 +143,7 @@ function handleReady(event: DockviewReadyEvent) {
 	// Left Panel
 	addUniquePanel('connections', { tabComponent: 'fixed', title: 'Connections' }, left)
 	addUniquePanel('devices', { tabComponent: 'fixed', title: 'Devices' }, left)
-	addUniquePanel('alpaca', { tabComponent: 'fixed', title: 'Alpaca' }, left)
+	addUniquePanel('alpacaServer', { tabComponent: 'fixed', title: 'Alpaca Server' }, left)
 	addUniquePanel('indiServer', { tabComponent: 'fixed', title: 'INDI Server' }, left)
 	addUniquePanel('settings', { tabComponent: 'fixed', title: 'Settings' }, left)
 	addUniquePanel('about', { tabComponent: 'fixed', title: 'About' }, left)

@@ -37,7 +37,7 @@ import { DEVICE_TYPES } from 'root/src/shared/types'
 
 const icons = {
 	about: aboutIcon,
-	alpaca: alpacaIcon,
+	alpacaServer: alpacaIcon,
 	asteroid: asteroidIcon,
 	autoFocus: autoFocusIcon,
 	calculator: calculatorIcon,
@@ -76,6 +76,7 @@ const icons = {
 export function Tab(props: IDockviewPanelHeaderProps) {
 	const [title, setTitle] = useState(props.api.title)
 	const [active, setActive] = useState(props.api.isActive)
+	const [visible, setVisible] = useState(props.api.isVisible)
 	const isFixed = props.api.tabComponent === 'fixed'
 	const type = props.api.component as HomePanelType
 	const icon = icons[type]
@@ -83,18 +84,20 @@ export function Tab(props: IDockviewPanelHeaderProps) {
 	useEffect(() => {
 		const a = props.api.onDidTitleChange((e) => setTitle(e.title))
 		const b = props.api.onDidActiveChange((e) => setActive(e.isActive))
+		const c = props.api.onDidVisibilityChange((e) => setVisible(e.isVisible))
 
 		return () => {
 			a.dispose()
 			b.dispose()
+			c.dispose()
 		}
 	}, [])
 
 	return (
 		<div className="flex h-full w-full items-center justify-center gap-2 px-2 text-sm">
 			{icon && <img src={icon} width={16} height={16} />}
-			{(!icon || active || isTitleAlwaysVisible(type)) && <span>{title}</span>}
-			{isFixed === false && (active || isCloseButtonAlwaysVisible(type)) && <Icons.CloseCircle color="var(--danger)" className="hover:opacity-90" onClick={() => props.api.close()} />}
+			{(!icon || active || visible || isTitleAlwaysVisible(type)) && <span>{title}</span>}
+			{isFixed === false && (active || visible || isCloseButtonAlwaysVisible(type)) && <Icons.CloseCircle color="var(--danger)" className="hover:opacity-90" onClick={() => props.api.close()} />}
 		</div>
 	)
 }

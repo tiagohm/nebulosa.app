@@ -1,6 +1,6 @@
 import { homeStore, type HomePanelType } from '@stores/home.store'
 import { About } from '@ui/About'
-import { Alpaca } from '@ui/Alpaca'
+import { AlpacaServer } from '@ui/AlpacaServer'
 import { Asteroid } from '@ui/Asteroid'
 import { AutoFocus } from '@ui/AutoFocus'
 import { Calculator } from '@ui/Calculator'
@@ -46,7 +46,7 @@ const Dummy = memo((_props: IDockviewPanelProps) => <div></div>)
 
 const components = {
 	about: About,
-	alpaca: Alpaca,
+	alpacaServer: AlpacaServer,
 	asteroid: Asteroid,
 	autoFocus: AutoFocus,
 	calculator: Calculator,

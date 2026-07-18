@@ -3,6 +3,7 @@ import { mountBus } from '@shared/bus'
 import { skyObjectName } from '@shared/util'
 import { atlasStore } from '@stores/atlas.store'
 import { equipmentStore } from '@stores/equipment.store'
+import { settingsStore } from '@stores/settings.store'
 import { TAU } from 'nebulosa/src/core/constants'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { toDeg } from 'nebulosa/src/math/units/angle'
@@ -46,7 +47,7 @@ function mount() {
 
 	mounted = true
 
-	u[0] = subscribe(atlasStore.state.request.location, updateLocationFromAtlas)
+	u[0] = subscribe(settingsStore.state.location, updateLocationFromSettings)
 
 	return unmount
 }
@@ -78,7 +79,7 @@ function handleReady(celestial: Celestial) {
 	state.celestial = ref(celestial)
 
 	celestial.setViewTransform(state.transform)
-	updateLocationFromAtlas()
+	updateLocationFromSettings()
 	celestial.loadConstellations(CONSTELLATIONS)
 	celestial.loadMilkyWay(mw as never)
 	celestial.setMagnitudeLimit(6)
@@ -188,8 +189,8 @@ function handleReady(celestial: Celestial) {
 	}
 }
 
-function updateLocationFromAtlas() {
-	const { location } = atlasStore.state.request
+function updateLocationFromSettings() {
+	const { location } = settingsStore.state
 	const latitude = toDeg(location.latitude)
 	const longitude = toDeg(location.longitude)
 	state.celestial?.setObserver({ latitude, longitude })

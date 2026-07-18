@@ -21,7 +21,7 @@ const Time = memo(() => {
 
 	return (
 		<div className="flex flex-col gap-2">
-			<span className="font-bold">TIMEZONE</span>
+			<span className="text-sm font-bold">TIMEZONE</span>
 			<NumberInput className="w-full" label="Offset (min)" maxValue={720} minValue={-720} onValueChange={(value) => (settingsStore.state.time.offset = value)} step={30} value={offset} />
 		</div>
 	)
@@ -32,8 +32,8 @@ const Location = memo(() => {
 
 	return (
 		<div className="flex flex-col gap-2">
-			<span className="font-bold">LOCATION</span>
-			<LocationMap mode="settings" {...location} />
+			<span className="text-sm font-bold">LOCATION</span>
+			<LocationMap mode="settings" {...location} onCoordinateChange={settingsStore.updateLocation} />
 		</div>
 	)
 })

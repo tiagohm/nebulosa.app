@@ -24,6 +24,7 @@ import { Planet } from '@ui/Planet'
 import { Planetarium } from '@ui/Planetarium'
 import { Satellite } from '@ui/Satellite'
 import { Settings } from '@ui/Settings'
+import { SolarEclipseMap } from '@ui/SolarEclipseMap'
 import { Sun } from '@ui/Sun'
 import { Tab } from '@ui/Tab'
 import { Thermometer } from '@ui/Thermometer'
@@ -74,6 +75,7 @@ const components = {
 	thermometer: Thermometer,
 	tppa: Tppa,
 	wheel: Wheel,
+	solarEclipse: SolarEclipseMap,
 } as const satisfies Record<HomePanelType, MemoExoticComponent<({ api }: IDockviewPanelProps) => React.ReactNode>>
 
 export const Home = memo(() => {

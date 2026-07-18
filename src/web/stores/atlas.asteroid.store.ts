@@ -28,7 +28,7 @@ export interface AtlasAsteroidState {
 	chart: readonly number[]
 	readonly tags: TagItem[]
 	readonly bookmark: BookmarkItem[]
-	readonly favorite: boolean | undefined
+	readonly favorite: boolean
 }
 
 const state = proxy<AtlasAsteroidState>({

@@ -8,7 +8,6 @@ import { WorldMap, worldMapCoordinateToPoint } from '@ui/components/WorldMap'
 import { Icons } from '@ui/Icon'
 import { LocalEclipseContactKindButtonGroup } from '@ui/LocalEclipseContactKindButtonGroup'
 import { LocalViewOrientationModeButtonGroup } from '@ui/LocalViewOrientationModeButtonGroup'
-import { Modal } from '@ui/Modal'
 import type { LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipseEvent, LocalSolarEclipseSvgShape } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
 import type { SolarEclipseGeoPoint } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
@@ -17,45 +16,30 @@ import { formatAZ, toDeg } from 'nebulosa/src/math/units/angle'
 import { Fragment, memo, type CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
 
-export const SolarEclipseMap = memo(() => {
-	const { show } = useSnapshot(solarEclipseStore.state)
-
-	if (!show) return null
-
-	return (
-		<Modal header={<Header />} id="solar-eclipse-map" initialWidth="560px" onHide={solarEclipseStore.hide}>
-			<Body />
-		</Modal>
-	)
-})
+export const SolarEclipseMap = memo(() => (
+	<div className="grid grid-cols-12 items-center gap-2 p-3">
+		<Header />
+		<div className="col-span-full flex flex-row items-center gap-2">
+			<Map />
+			<Info />
+		</div>
+	</div>
+))
 
 const Header = memo(() => {
 	const { eclipse } = useSnapshot(solarEclipseStore.state)
 
 	return (
-		<div className="grid w-full grid-cols-[2.5rem_1fr_2.5rem] items-center gap-2">
+		<div className="col-span-full flex items-center justify-center gap-2">
 			<IconButton icon={Icons.ArrowLeft} onClick={solarEclipseStore.prev} tooltipContent="Prev" />
-			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">
-				<Icons.Sun className="text-warning" />
-				<div className="flex flex-col items-center justify-center gap-0">
-					<span className="truncate">Solar Eclipse</span>
-					{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD')}</span>}
-				</div>
-			</span>
+			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD')}</span>}</span>
 			<IconButton icon={Icons.ArrowRight} onClick={solarEclipseStore.next} tooltipContent="Next" />
 		</div>
 	)
 })
 
-const Body = memo(() => (
-	<div className="flex w-full flex-col gap-3">
-		<Info />
-		<Map />
-	</div>
-))
-
 const Info = memo(() => (
-	<div className="flex w-full flex-col gap-2">
+	<div className="flex flex-1 flex-col justify-start gap-2 self-start">
 		<Tabs fullWidth>
 			<Tab id="details">Details</Tab>
 			<Tab id="contacts">Contacts</Tab>
@@ -417,7 +401,7 @@ const LocalView = memo(() => {
 				<LocalViewOrientationModeButtonGroup value={orientationMode} onValueChange={(value) => solarEclipseStore.updateLocalViewOptions('orientationMode', value)} />
 			</div>
 			<div className="overflow-hidden rounded-lg bg-neutral-950">
-				<svg width="100%" height="100%" className="aspect-2/ block bg-(--primary)" viewBox={`0 0 ${localView.width} ${localView.height}`}>
+				<svg width="100%" height="100%" className="aspect-2/ block max-h-100 bg-(--primary)" viewBox={`0 0 ${localView.width} ${localView.height}`}>
 					{localView.shapes.map((shape, index) => (
 						<LocalViewShape key={localViewShapeKey(shape, index)} shape={shape} />
 					))}
@@ -428,7 +412,7 @@ const LocalView = memo(() => {
 })
 
 const Map = memo(() => (
-	<WorldMap defaultScale={1} onCoordinateClick={solarEclipseStore.handleCoordinateChange} onTransformChange={solarEclipseStore.handleTransformChange}>
+	<WorldMap className="h-full flex-1" defaultScale={1} onCoordinateClick={solarEclipseStore.handleCoordinateChange} onTransformChange={solarEclipseStore.handleTransformChange}>
 		<MapMarker />
 		<MapGeometry />
 	</WorldMap>
@@ -439,7 +423,7 @@ const MAP_MARKER_STYLE: CSSProperties = { fill: 'var(--danger)' }
 const MapMarker = memo(() => {
 	const { location, scale } = useSnapshot(solarEclipseStore.state)
 	const point = worldMapCoordinateToPoint({ latitude: toDeg(location.latitude), longitude: toDeg(location.longitude) })
-	const size = 132 / scale
+	const size = 32 / scale
 
 	return <Icons.MapMarker width={size} height={size} style={{ ...MAP_MARKER_STYLE, transform: `translate(${point.x - size * 0.5}px, ${point.y - size}px)` }} />
 })

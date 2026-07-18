@@ -1,4 +1,4 @@
-import sunWebp from '@assets/sun.webp'
+import sunWebp from '@assets/sun.real.webp'
 import { API_URL } from '@shared/api'
 import { Link } from '@ui/components/Link'
 import { SolarImageSourceSelect } from '@ui/SolarImageSourceSelect'

@@ -1,10 +1,14 @@
 import { Api } from '@shared/api'
 import { initProxy } from '@shared/proxy'
-import { atlasStore, isLocationChanged, isTimeChanged } from '@stores/atlas.store'
+import { atlasStore, isLocationChanged, isTimeChanged, type TagItem } from '@stores/atlas.store'
+import { framingStore } from '@stores/framing.store'
+import { homeStore } from '@stores/home.store'
+import { solarEclipseStore } from '@stores/solar.eclipse.store'
 import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalAdd, temporalGet } from 'nebulosa/src/astronomy/time/temporal'
-import type { UTCTime } from 'nebulosa/src/devices/indi/device'
+import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
+import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { type PositionOfBody, type SolarImageSource, type BodyPosition, type SolarSeasons, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/shared/types'
 import { proxy, ref } from 'valtio'
 
@@ -18,6 +22,7 @@ export interface AtlasSunState {
 	chart: readonly number[]
 	readonly seasons: SolarSeasons
 	eclipses: readonly SolarEclipse[]
+	readonly tags: readonly TagItem[]
 }
 
 const state = proxy<AtlasSunState>({
@@ -28,6 +33,9 @@ const state = proxy<AtlasSunState>({
 	eclipses: [],
 	source: 'HMI_INTENSITYGRAM_FLATTENED',
 	seasons: { spring: 0, summer: 0, autumn: 0, winter: 0 },
+	get tags() {
+		return [{ label: 'Sun', color: 'primary' }] as const
+	},
 })
 
 initProxy(state, 'atlas.sun', ['o:request', 'p:source'])
@@ -105,9 +113,36 @@ async function updateEclipses() {
 	else eclipsesUpdate = true
 }
 
+function showSolarEclipse() {
+	if (state.eclipses.length === 0) return
+	void solarEclipseStore.load(state.eclipses[0])
+	homeStore.addSolarEclipse()
+}
+
+function sync(mount?: Mount) {
+	if (mount === undefined) return undefined
+	const [rightAscension, declination] = state.position.equatorial
+	return Api.Mounts.sync(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+}
+
+function goTo(mount?: Mount) {
+	if (mount === undefined) return undefined
+	const [rightAscension, declination] = state.position.equatorial
+	return Api.Mounts.goTo(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+}
+
+function frame() {
+	const [rightAscension, declination] = state.position.equatorialJ2000
+	return framingStore.load({ rightAscension: formatRA(rightAscension), declination: formatDEC(declination) })
+}
+
 export const sunStore = {
 	state,
 	tick,
+	showSolarEclipse,
+	sync,
+	goTo,
+	frame,
 } as const
 
 atlasStore.state.sun = ref(sunStore)

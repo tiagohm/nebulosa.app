@@ -1,4 +1,4 @@
-import moonWebp from '@assets/moon.webp'
+import moonWebp from '@assets/moon.real.webp'
 import { memo } from 'react'
 
 export const MoonImage = memo(() => (

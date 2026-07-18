@@ -46,6 +46,7 @@ const PANEL_TYPES = [
 	'thermometer',
 	'tppa',
 	'wheel',
+	'solarEclipse',
 ] as const
 
 const MAX_PANELS = 100
@@ -148,6 +149,7 @@ function handleReady(event: DockviewReadyEvent) {
 	main = addGroup({ id: 'group.main' })
 
 	// Atlas
+	addUniquePanel('sun', { title: 'Sun' }, main)
 	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
 
 	addFraming()
@@ -201,7 +203,10 @@ function load() {
 function addUniquePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>) {
 	const ps = panels[type] ?? []
 
-	if (ps.length > 0) return ps[0]
+	if (ps.length > 0) {
+		ps[0].api.setActive()
+		return ps[0]
+	}
 
 	const id = `${type}.0`
 	const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, tabComponent: group === left ? 'fixed' : 'closeable', component: type, position: { referenceGroup: (group ?? main!).id, index: options.index } })
@@ -345,6 +350,10 @@ function addFraming() {
 	return addUniquePanel('framing', { title: 'Framing' }, main)
 }
 
+function addSolarEclipse() {
+	return addUniquePanel('solarEclipse', { title: 'Solar Eclipse' }, main)
+}
+
 window.addEventListener('beforeunload', () => {
 	saveLayout()
 })
@@ -363,4 +372,5 @@ export const homeStore = {
 	addDarv,
 	addFlatWizard,
 	addFraming,
+	addSolarEclipse,
 } as const

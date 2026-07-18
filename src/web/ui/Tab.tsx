@@ -13,13 +13,21 @@ import flatPanelIcon from '@assets/flat-panel.webp'
 import flatWizardIcon from '@assets/flat-wizard.webp'
 import focuserIcon from '@assets/focuser.webp'
 import framingIcon from '@assets/framing.webp'
+import galaxyIcon from '@assets/galaxy.webp'
 import guideOutputIcon from '@assets/guide-output.webp'
 import heaterIcon from '@assets/heater.webp'
+import imageIcon from '@assets/image.webp'
+import moonIcon from '@assets/moon.webp'
 import mountIcon from '@assets/mount.webp'
 import phd2Icon from '@assets/phd2.webp'
+import planetIcon from '@assets/planet.webp'
 import rotatorIcon from '@assets/rotator.webp'
+import satelliteIcon from '@assets/satellite.webp'
 import settingsIcon from '@assets/settings.webp'
 import skyIcon from '@assets/sky.webp'
+import solarEclipseIcon from '@assets/solar.eclipse.webp'
+import sunIcon from '@assets/sun.webp'
+import thermometerIcon from '@assets/thermometer.webp'
 import type { HomePanelType } from '@stores/home.store'
 import { Icons } from '@ui/Icon'
 import type { IDockviewPanelHeaderProps } from 'dockview-react'
@@ -43,23 +51,24 @@ const icons = {
 	flatWizard: flatWizardIcon,
 	focuser: focuserIcon,
 	framing: framingIcon,
-	galaxy: '',
+	galaxy: galaxyIcon,
 	gps: '',
 	guideOutput: guideOutputIcon,
 	guider: phd2Icon,
-	image: '',
-	moon: '',
+	image: imageIcon,
+	moon: moonIcon,
 	mount: mountIcon,
-	planet: '',
+	planet: planetIcon,
 	planetarium: skyIcon,
 	power: '',
 	rotator: rotatorIcon,
-	satellite: '',
+	satellite: satelliteIcon,
 	settings: settingsIcon,
-	sun: '',
-	thermometer: '',
+	sun: sunIcon,
+	thermometer: thermometerIcon,
 	tppa: alignmentIcon,
 	wheel: wheelIcon,
+	solarEclipse: solarEclipseIcon,
 } as const satisfies Record<HomePanelType, string>
 
 export function Tab(props: IDockviewPanelHeaderProps) {

@@ -15,7 +15,6 @@ import { proxy, ref } from 'valtio'
 export type SolarEclipseStore = typeof solarEclipseStore
 
 export interface SolarEclipseState {
-	show: boolean
 	eclipse?: SolarEclipse
 	map?: SolarEclipseMap
 	circumstances?: LocalSolarEclipseCircumstances
@@ -26,7 +25,6 @@ export interface SolarEclipseState {
 }
 
 const state = proxy<SolarEclipseState>({
-	show: false,
 	location: {
 		latitude: atlasStore.state.request.location.latitude,
 		longitude: atlasStore.state.request.location.longitude,
@@ -73,8 +71,6 @@ async function loadView() {
 }
 
 async function load(next: SolarEclipse) {
-	show()
-
 	if (next.maximalTime !== state.eclipse?.maximalTime) {
 		state.eclipse = ref(next)
 
@@ -118,14 +114,6 @@ function next() {
 	return find(true)
 }
 
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
-
 export const solarEclipseStore = {
 	state,
 	load,
@@ -134,6 +122,4 @@ export const solarEclipseStore = {
 	handleCoordinateChange,
 	handleTransformChange,
 	updateLocalViewOptions,
-	show,
-	hide,
 } as const

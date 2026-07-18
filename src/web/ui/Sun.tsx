@@ -1,7 +1,6 @@
 import { atlasStore } from '@stores/atlas.store'
 import { sunStore } from '@stores/atlas.sun.store'
-import { solarEclipseStore } from '@stores/solar.eclipse.store'
-import { AstronomicalEvent } from '@ui/Atlas'
+import { AstronomicalEvent, EphemerisAndChart, EphemerisPositionContext } from '@ui/Atlas'
 import { Icons } from '@ui/Icon'
 import { SunImage } from '@ui/SunImage'
 import type { IDockviewPanelProps } from 'dockview-react'
@@ -10,18 +9,18 @@ import { memo, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Sun = memo(({ api }: IDockviewPanelProps) => {
-	const { source } = useSnapshot(sunStore.state)
-
 	useEffect(() => void atlasStore.tick('sun'), [])
 
 	return (
-		<div className="grid grid-cols-12 items-center gap-2">
-			<div className="relative col-span-full flex items-center justify-center">
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<div className="relative col-span-full flex items-center justify-center gap-2">
 				<NextSolarEclipse />
-				<SunImage onSourceChange={(source) => (sunStore.state.source = source)} source={source} />
+				<RealTimeImage />
 				<Seasons />
 			</div>
-			{/* <EphemerisAndChart type="sun" className="col-span-full" name="Sun" /> */}
+			<EphemerisPositionContext value={sunStore}>
+				<EphemerisAndChart />
+			</EphemerisPositionContext>
 		</div>
 	)
 })
@@ -36,9 +35,15 @@ const NextSolarEclipse = memo(() => {
 
 	return (
 		<div className="flex h-full flex-col justify-center gap-0 text-sm">
-			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Sun} key={next.maximalTime.day} label={next.type} offset={offset} time={temporalFromTime(next.maximalTime)} onClick={() => solarEclipseStore.load(next)} />
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Sun} key={next.maximalTime.day} label={next.type} offset={offset} time={temporalFromTime(next.maximalTime)} onClick={sunStore.showSolarEclipse} />
 		</div>
 	)
+})
+
+const RealTimeImage = memo(() => {
+	const { source } = useSnapshot(sunStore.state)
+
+	return <SunImage onSourceChange={(source) => (sunStore.state.source = source)} source={source} />
 })
 
 const Seasons = memo(() => {

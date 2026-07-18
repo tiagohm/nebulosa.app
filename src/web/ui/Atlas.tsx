@@ -17,7 +17,7 @@ import { useSnapshot } from 'valtio'
 
 export interface EphemerisPositionContextParameters {
 	readonly state: {
-		readonly favorite: boolean | undefined
+		readonly favorite?: boolean
 		readonly position: BodyPosition
 		readonly tags: readonly TagItem[]
 		readonly chart: readonly number[]
@@ -25,7 +25,7 @@ export interface EphemerisPositionContextParameters {
 	readonly sync: (mount?: Mount) => void
 	readonly goTo: (mount?: Mount) => void
 	readonly frame: () => void
-	readonly handleFavorite: (favorite: boolean) => void
+	readonly handleFavorite?: (favorite: boolean) => void
 }
 
 export const EphemerisPositionContext = createContext<EphemerisPositionContextParameters>(null as never)
@@ -90,12 +90,13 @@ export const EphemerisAndChart = memo(() => (
 const EphemerisPosition = memo(() => {
 	const context = useContext(EphemerisPositionContext)
 	const { position, favorite, tags } = useSnapshot(context.state)
+	const { handleFavorite } = context
 
 	return (
 		<div className="flex flex-1 flex-col gap-2 p-0">
 			<div className="flex flex-row gap-2 p-1 text-start text-sm font-bold">
 				<div className="flex flex-1 items-center justify-center gap-1 overflow-hidden text-sm font-bold">{tags.map(TagChipItem)}</div>
-				<IconButton color={favorite ? 'danger' : 'warning'} disabled={favorite === undefined} icon={favorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onClick={() => context.handleFavorite(!favorite)} tooltipContent={favorite ? 'Remove bookmark' : 'Add bookmark'} />
+				{handleFavorite && <IconButton color={favorite ? 'danger' : 'warning'} disabled={favorite === undefined} icon={favorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onClick={() => handleFavorite(!favorite)} tooltipContent={favorite ? 'Remove bookmark' : 'Add bookmark'} />}
 			</div>
 			<BodyCoordinateInfo position={position} />
 			<EphemerisPositionCommand />

@@ -34,18 +34,6 @@ const TARGET_TYPE_BY_COORDINATE_TYPE = {
 	galactic: 'GALACTIC',
 } as const satisfies Record<CoordinateType, MountTargetCoordinateType>
 
-function isCopyCoordinateAction(action: string) {
-	return action.startsWith('copy-')
-}
-
-function formatTargetCoordinateX(type: CoordinateType, position: CoordinateInfo) {
-	return type === 'equatorial' || type === 'equatorialJ2000' ? formatRA(position[type][0]) : formatAZ(position[type][0])
-}
-
-function formatTargetCoordinateY(type: CoordinateType, position: CoordinateInfo) {
-	return type === 'horizontal' ? formatALT(position[type][1]) : formatDEC(position[type][1])
-}
-
 export const Mount = memo(({ params }: IDockviewPanelProps<Device>) => {
 	const mount = useDevice('mount', params.id, (device) => mountStore(device))
 
@@ -53,7 +41,7 @@ export const Mount = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<MountStoreContext value={mount.store}>
-			<Tabs className="p-3">
+			<Tabs className="p-3" startContent={<TabStartContent />}>
 				<Tab id="control">Mount</Tab>
 				<Tab id="location">Location</Tab>
 				<Tab id="time">Time</Tab>
@@ -93,14 +81,19 @@ const Main = memo(() => (
 	</div>
 ))
 
+const TabStartContent = memo(() => {
+	const mount = useContext(MountStoreContext)
+	const { connected, connecting } = useSnapshot(mount.state.mount)
+
+	return <ConnectButton connected={connected} loading={connecting} onClick={mount.connect} />
+})
+
 const Status = memo(() => {
 	const mount = useContext(MountStoreContext)
-	const { connected, connecting, parking, parked, slewing, tracking, homing } = useSnapshot(mount.state.mount)
-	const moving = slewing || parking || homing
+	const { parking, parked, slewing, tracking, homing } = useSnapshot(mount.state.mount)
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-between gap-2">
-			<ConnectButton disabled={moving} connected={connected} loading={connecting} onClick={mount.connect} />
 			<Chip color="primary" size="sm">
 				{parking ? 'parking' : parked ? 'parked' : homing ? 'homing' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
 			</Chip>
@@ -269,3 +262,15 @@ export const Time = memo(() => {
 
 	return <UTCTimeInput {...time} onTimeChange={mount.time} />
 })
+
+function isCopyCoordinateAction(action: string) {
+	return action.startsWith('copy-')
+}
+
+function formatTargetCoordinateX(type: CoordinateType, position: CoordinateInfo) {
+	return type === 'equatorial' || type === 'equatorialJ2000' ? formatRA(position[type][0]) : formatAZ(position[type][0])
+}
+
+function formatTargetCoordinateY(type: CoordinateType, position: CoordinateInfo) {
+	return type === 'horizontal' ? formatALT(position[type][1]) : formatDEC(position[type][1])
+}

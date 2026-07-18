@@ -20,12 +20,12 @@ export interface TppaParams {
 	readonly id: string
 }
 
-export const Tppa = memo(({ params }: IDockviewPanelProps<TppaParams>) => {
-	const tppa = useStore(() => tppaStore(params.id), [params.id])
+export const Tppa = memo(({ api, params }: IDockviewPanelProps<TppaParams>) => {
+	const tppa = useStore(() => tppaStore(params.id, api), [params.id])
 
 	return (
 		<TppaStoreContext value={tppa}>
-			<div className="mt-0 grid grid-cols-12 gap-2">
+			<div className="grid grid-cols-12 gap-2 p-3">
 				<CameraAndMount />
 				<Status />
 				<Inputs />

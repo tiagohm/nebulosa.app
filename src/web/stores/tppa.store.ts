@@ -1,11 +1,14 @@
 import { Api } from '@shared/api'
 import { tppaBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
+import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
+import type { DockviewPanelApi } from 'dockview-react'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type TppaEvent, type TppaStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
 
 export type TppaStore = ReturnType<typeof tppaStore>
 
@@ -17,7 +20,7 @@ export interface TppaState {
 	readonly event: TppaEvent
 }
 
-export function tppaStore(id: string) {
+export function tppaStore(id: string, api: DockviewPanelApi) {
 	const state = proxy<TppaState>({
 		request: structuredClone(DEFAULT_TPPA_START),
 		running: false,
@@ -45,7 +48,18 @@ export function tppaStore(id: string) {
 			}
 		})
 
-		// TODO: subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
+		u[2] = subscribeKey(state, 'camera', (camera) => {
+			updateTitle()
+
+			if (camera !== undefined) {
+				u[3]?.()
+				u[3] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.capture)
+			}
+		})
+
+		u[4] = subscribeKey(state, 'mount', updateTitle)
+
+		updateTitle()
 
 		state.request.id = id
 	}
@@ -55,6 +69,10 @@ export function tppaStore(id: string) {
 		console.info('tppa unmounted:', id)
 		unsubscribe(u)
 		mounted = false
+	}
+
+	function updateTitle() {
+		api.setTitle(state.camera || state.mount ? `TPPA - ${state.camera?.name || 'None'} · ${state.mount?.name || 'None'}` : 'TPPA')
 	}
 
 	function reset() {

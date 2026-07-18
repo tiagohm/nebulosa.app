@@ -4,6 +4,7 @@ import { equipmentStore } from '@stores/equipment.store'
 import type { AutoFocusParams } from '@ui/AutoFocus'
 import type { DarvParams } from '@ui/Darv'
 import type { FlatWizardParams } from '@ui/FlatWizard'
+import type { TppaParams } from '@ui/Tppa'
 import type { AddGroupOptions, AddPanelOptions, DockviewApi, DockviewGroupPanel, DockviewGroupPanelApi, DockviewIDisposable, DockviewReadyEvent, EdgeGroupOptions, EdgeGroupPosition, IDockviewGroupPanel, IDockviewPanel, SerializedDockview } from 'dockview-react'
 import { nanoid } from 'nanoid'
 import type { RequiredOnly } from 'nebulosa/src/core/types'
@@ -156,7 +157,7 @@ function handleReady(event: DockviewReadyEvent) {
 	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
 	addUniquePanel('galaxy', { title: 'DSO' }, main)
 
-	addGuider()
+	addTppa()
 
 	// layoutDisposable = api.onDidLayoutChange(() => {
 	// 	window.clearTimeout(saveTimer)
@@ -362,6 +363,11 @@ function addGuider() {
 	return addUniquePanel('guider', { title: 'Guider' }, main)
 }
 
+function addTppa() {
+	const params: TppaParams = { id: nanoid() }
+	return addMultiplePanel('tppa', { title: 'TPPA', params }, main)
+}
+
 window.addEventListener('beforeunload', () => {
 	saveLayout()
 })
@@ -382,4 +388,5 @@ export const homeStore = {
 	addFraming,
 	addSolarEclipse,
 	addGuider,
+	addTppa,
 } as const

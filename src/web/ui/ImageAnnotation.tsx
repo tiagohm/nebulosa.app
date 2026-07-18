@@ -13,7 +13,7 @@ export const ImageAnnotation = memo(() => {
 	useEffect(annotation.mount, [])
 
 	return (
-		<div className="grid grid-cols-12 gap-2 p-3">
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<StarsAndDsos />
 			<MinorPlanets />
 			<Footer />

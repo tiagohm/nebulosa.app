@@ -40,7 +40,7 @@ const u: VoidFunction[] = []
 function mount() {
 	if (mounted) return
 
-	console.info('galaxy mounted')
+	console.info('settings mounted')
 
 	mounted = true
 
@@ -51,7 +51,7 @@ function mount() {
 
 function unmount() {
 	if (!mounted) return
-	console.info('galaxy unmounted')
+	console.info('settings unmounted')
 	unsubscribe(u)
 	mounted = false
 }

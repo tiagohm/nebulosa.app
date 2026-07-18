@@ -47,6 +47,7 @@ const PANEL_TYPES = [
 	'tppa',
 	'wheel',
 	'solarEclipse',
+	'indiServer',
 ] as const
 
 const MAX_PANELS = 100
@@ -142,6 +143,7 @@ function handleReady(event: DockviewReadyEvent) {
 	addUniquePanel('connections', { tabComponent: 'fixed', title: 'Connections' }, left)
 	addUniquePanel('devices', { tabComponent: 'fixed', title: 'Devices' }, left)
 	addUniquePanel('alpaca', { tabComponent: 'fixed', title: 'Alpaca' }, left)
+	addUniquePanel('indiServer', { tabComponent: 'fixed', title: 'INDI Server' }, left)
 	addUniquePanel('settings', { tabComponent: 'fixed', title: 'Settings' }, left)
 	addUniquePanel('about', { tabComponent: 'fixed', title: 'About' }, left)
 

@@ -21,7 +21,7 @@ export const FlatWizard = memo(({ api, params }: IDockviewPanelProps<FlatWizardP
 
 	return (
 		<FlatWizardStoreContext value={flatWizard}>
-			<div className="grid grid-cols-12 gap-2 p-3">
+			<div className="grid grid-cols-12 items-center gap-2 p-3">
 				<Camera />
 				<Status />
 				<Input />

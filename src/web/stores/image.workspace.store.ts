@@ -31,7 +31,7 @@ const u: VoidFunction[] = []
 function mount() {
 	if (mounted) return
 
-	console.info('galaxy mounted')
+	console.info('image workspace mounted')
 
 	mounted = true
 
@@ -42,7 +42,7 @@ function mount() {
 
 function unmount() {
 	if (!mounted) return
-	console.info('galaxy unmounted')
+	console.info('image workspace unmounted')
 	unsubscribe(u)
 	mounted = false
 }

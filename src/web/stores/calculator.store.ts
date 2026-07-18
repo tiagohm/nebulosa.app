@@ -447,7 +447,7 @@ const u: VoidFunction[] = []
 function mount() {
 	if (mounted) return
 
-	console.info('alpaca mounted')
+	console.info('calculator mounted')
 
 	mounted = true
 
@@ -458,7 +458,7 @@ function mount() {
 
 function unmount() {
 	if (!mounted) return
-	console.info('alpaca unmounted')
+	console.info('calculator unmounted')
 	unsubscribe(u)
 	mounted = false
 }

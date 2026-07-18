@@ -16,7 +16,7 @@ export const ImageFilter = memo(() => {
 	useEffect(filter.mount, [])
 
 	return (
-		<div className="grid grid-cols-12 gap-2 p-3">
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<Tabs className="col-span-full">
 				<Tab id="kernel">Kernel</Tab>
 				<Tab id="fft">FFT</Tab>

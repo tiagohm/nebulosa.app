@@ -2,6 +2,7 @@ import { Api } from '@shared/api'
 import { indiBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import { DEFAULT_INDI_SERVER_START, type IndiServerStart } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 
 export type IndiServerStore = typeof indiServerStore
@@ -10,7 +11,6 @@ export interface IndiServerState {
 	enabled: boolean
 	running: boolean
 	showAll: boolean
-	show: boolean
 	request: IndiServerStart
 }
 
@@ -18,19 +18,40 @@ const state = proxy<IndiServerState>({
 	enabled: true,
 	running: false,
 	showAll: false,
-	show: false,
 	request: structuredClone(DEFAULT_INDI_SERVER_START),
 })
 
-initProxy(state, 'indi.server', ['p:show', 'p:showAll', 'o:request'])
+let mounted = false
+const u: VoidFunction[] = []
 
-indiBus.subscribe('serverStart', () => {
-	state.running = true
-})
+function mount() {
+	if (mounted) return
 
-indiBus.subscribe('serverStop', () => {
-	state.running = false
-})
+	console.info('indi server mounted')
+
+	mounted = true
+
+	u[0] = initProxy(state, 'indi.server', ['p:showAll', 'o:request'])
+
+	indiBus.subscribe('serverStart', () => {
+		state.running = true
+	})
+
+	indiBus.subscribe('serverStop', () => {
+		state.running = false
+	})
+
+	void status()
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('indi server unmounted')
+	unsubscribe(u)
+	mounted = false
+}
 
 async function status() {
 	const status = await Api.Indi.Server.status()
@@ -49,21 +70,11 @@ function stop() {
 	return Api.Indi.Server.stop()
 }
 
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
-
-await status()
-
 export const indiServerStore = {
 	state,
+	mount,
+	unmount,
 	update,
 	start,
 	stop,
-	show,
-	hide,
 } as const

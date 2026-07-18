@@ -19,6 +19,7 @@ import { Galaxy } from '@ui/Galaxy'
 import { GuideOutput } from '@ui/GuideOutput'
 import { Guider } from '@ui/Guider'
 import { ImageWorkspace } from '@ui/ImageWorkspace'
+import { IndiServer } from '@ui/IndiServer'
 import { Moon } from '@ui/Moon'
 import { Mount } from '@ui/Mount'
 import { Planet } from '@ui/Planet'
@@ -77,6 +78,7 @@ const components = {
 	tppa: Tppa,
 	wheel: Wheel,
 	solarEclipse: SolarEclipseMap,
+	indiServer: IndiServer,
 } as const satisfies Record<HomePanelType, MemoExoticComponent<({ api }: IDockviewPanelProps) => React.ReactNode>>
 
 export const Home = memo(() => {

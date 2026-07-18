@@ -15,7 +15,7 @@ export const ImageStarDetection = memo(() => {
 	useEffect(starDetection.mount, [])
 
 	return (
-		<div className="grid grid-cols-12 gap-2 p-3">
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<StarDetectionSelect className="col-span-full" disabled={loading} endContent={<StarDetectionEndContent />} onValueChange={(value) => starDetection.update('type', value)} value={request.type} />
 			<Computed />
 			<Selected />

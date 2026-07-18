@@ -32,7 +32,7 @@ const u: VoidFunction[] = []
 function mount() {
 	if (mounted) return
 
-	console.info('alpaca mounted')
+	console.info('framing mounted')
 
 	mounted = true
 
@@ -43,7 +43,7 @@ function mount() {
 
 function unmount() {
 	if (!mounted) return
-	console.info('alpaca unmounted')
+	console.info('framing unmounted')
 	unsubscribe(u)
 	mounted = false
 }

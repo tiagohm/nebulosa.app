@@ -18,7 +18,7 @@ export const ImageStretch = memo(() => {
 	useEffect(stretch.mount, [])
 
 	return (
-		<div className="grid grid-cols-12 gap-2 p-3">
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<Stretch />
 			<AutoStretch />
 			<Footer />

@@ -14,7 +14,7 @@ export const ImageCalibration = memo(() => {
 	useEffect(calibration.mount, [])
 
 	return (
-		<div className="grid grid-cols-12 gap-2 p-3">
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<Checkbox className="col-span-full" label="Enabled" onValueChange={(value) => (calibration.state.calibration.enabled = value)} value={enabled} />
 			<CalibrationFile calibrationEnabled={enabled} type="dark" />
 			<CalibrationFile calibrationEnabled={enabled} type="flat" />

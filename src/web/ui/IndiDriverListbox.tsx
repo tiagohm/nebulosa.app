@@ -1,6 +1,6 @@
 import { Api } from '@shared/api'
 import { stopPropagation } from '@shared/util'
-import { FilterableList } from '@ui/components/FilterableList'
+import { FilterableList, type FilterableListProps } from '@ui/components/FilterableList'
 import { ListItem } from '@ui/components/List'
 import { Icons } from '@ui/Icon'
 import React, { memo, useEffect, useMemo, useState } from 'react'
@@ -8,7 +8,7 @@ import DRIVERS from 'src/data/indi.drivers.json'
 
 type Driver = (typeof DRIVERS)[number]
 
-export interface IndiDriverListboxProps {
+export interface IndiDriverListboxProps extends Omit<FilterableListProps<Driver>, 'children' | 'filter' | 'items'> {
 	readonly showAll?: boolean
 	readonly selected: readonly string[]
 	readonly onSelectedChange?: (drivers: string[]) => void
@@ -22,7 +22,7 @@ function DriverFilter(item: Driver, search: string) {
 	return item.name.toLowerCase().includes(search) || item.driver.toLowerCase().includes(search)
 }
 
-export const IndiDriverListbox = memo(({ showAll, selected, onSelectedChange }: IndiDriverListboxProps) => {
+export const IndiDriverListbox = memo(({ showAll, selected, onSelectedChange, ...props }: IndiDriverListboxProps) => {
 	const [drivers, setDrivers] = useState<readonly string[]>([])
 	const availableDrivers = useMemo(() => new Set(drivers), [drivers])
 	const selectedDrivers = useMemo(() => new Set(selected), [selected])
@@ -54,7 +54,7 @@ export const IndiDriverListbox = memo(({ showAll, selected, onSelectedChange }: 
 	}, [])
 
 	return (
-		<FilterableList className="col-span-full min-w-0" emptyContent="No drivers" filter={DriverFilter} items={items}>
+		<FilterableList emptyContent="No drivers" {...props} filter={DriverFilter} items={items}>
 			{(item) => DriverItem(item, selectedDrivers.has(item.driver), handleClick)}
 		</FilterableList>
 	)

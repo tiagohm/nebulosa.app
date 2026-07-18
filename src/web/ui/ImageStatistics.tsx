@@ -27,7 +27,7 @@ export const ImageStatistics = memo(() => {
 	useEffect(statistics.mount, [])
 
 	return (
-		<div className="grid grid-cols-12 gap-2 p-3">
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<Options />
 			<Stats />
 			<div className="col-span-full">

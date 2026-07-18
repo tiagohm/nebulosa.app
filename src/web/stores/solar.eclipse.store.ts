@@ -49,7 +49,7 @@ const u: VoidFunction[] = []
 function mount() {
 	if (mounted) return
 
-	console.info('galaxy mounted')
+	console.info('solar eclipse mounted')
 
 	mounted = true
 
@@ -60,7 +60,7 @@ function mount() {
 
 function unmount() {
 	if (!mounted) return
-	console.info('galaxy unmounted')
+	console.info('solar eclipse unmounted')
 	unsubscribe(u)
 	mounted = false
 }

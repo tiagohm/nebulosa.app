@@ -54,7 +54,7 @@ const u: VoidFunction[] = []
 function mount() {
 	if (mounted) return
 
-	console.info('alpaca mounted')
+	console.info('connection mounted')
 
 	mounted = true
 
@@ -77,7 +77,7 @@ function mount() {
 
 function unmount() {
 	if (!mounted) return
-	console.info('alpaca unmounted')
+	console.info('connection unmounted')
 	unsubscribe(u)
 	mounted = false
 }

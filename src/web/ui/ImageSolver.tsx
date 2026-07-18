@@ -43,7 +43,7 @@ function formatSolutionSize(width: number | undefined, height: number | undefine
 }
 
 export const ImageSolver = memo(() => (
-	<div className="grid grid-cols-12 gap-2 p-3">
+	<div className="grid grid-cols-12 items-center gap-2 p-3">
 		<Inputs />
 		<Solution />
 		<Footer />

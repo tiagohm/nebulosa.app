@@ -123,10 +123,6 @@ async function twilight() {
 	else twilightUpdate = true
 }
 
-export function isBookmarked(bookmark: readonly Readonly<BookmarkItem>[], type: AtlasTab, code: string) {
-	return bookmark.some((e) => e.type === type && e.code === code)
-}
-
 export function toggleBookmark(type: AtlasTab, name: string, code: string, favorite: boolean) {
 	const { items } = state.bookmark
 

@@ -1,6 +1,6 @@
 import { Api } from '@shared/api'
 import { initProxy } from '@shared/proxy'
-import { atlasStore, isBookmarked, isLocationChanged, isTimeChanged, type BookmarkItem, type TagItem } from '@stores/atlas.store'
+import { atlasStore, isLocationChanged, isTimeChanged, type BookmarkItem, type TagItem } from '@stores/atlas.store'
 import { framingStore } from '@stores/framing.store'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
@@ -48,7 +48,7 @@ const state = proxy<AtlasAsteroidState>({
 	bookmark: [],
 	get tags() {
 		const { selected } = this
-		const res: AtlasAsteroidState['tags'] = []
+		const res: TagItem[] = []
 
 		if (selected !== undefined) {
 			res.push({ label: selected.name, color: 'primary' })
@@ -61,15 +61,34 @@ const state = proxy<AtlasAsteroidState>({
 	},
 	get favorite() {
 		const { selected, bookmark } = this
-		return selected && isBookmarked(bookmark, 'asteroid', selected.id)
+		return selected !== undefined && bookmark.some((e) => e.code === selected.id)
 	},
-})
+} satisfies AtlasAsteroidState)
 
 initProxy(state, 'atlas.asteroid', ['p:tab', 'o:request', 'o:bookmark'])
 initProxy(state, 'atlas.asteroid.closeapproaches', ['o:request'])
-
 state.request.time.utc = 0
+
 let chartUpdate = true
+let mounted = false
+
+function mount() {
+	if (mounted) return
+
+	console.info('asteroid mounted')
+
+	mounted = true
+
+	void atlasStore.tick('asteroid')
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('asteroid unmounted')
+	mounted = false
+}
 
 function updateSearch(value: string) {
 	state.search.text = value
@@ -173,10 +192,26 @@ function frame() {
 	return framingStore.load({ rightAscension: formatRA(rightAscension), declination: formatDEC(declination) })
 }
 
-function handleFavorite() {}
+function handleFavorite(favorite: boolean) {
+	const { selected } = state
+
+	if (selected) {
+		const index = state.bookmark.findIndex((e) => e.code === selected.id)
+
+		if (favorite !== index >= 0) return
+
+		if (favorite) {
+			state.bookmark.push({ code: selected.id, name: selected.name, type: 'asteroid' })
+		} else {
+			state.bookmark.splice(index, 1)
+		}
+	}
+}
 
 export const asteroidStore = {
 	state,
+	mount,
+	unmount,
 	updateSearch,
 	updateCloseApproaches,
 	search,

@@ -1,4 +1,3 @@
-import { atlasStore } from '@stores/atlas.store'
 import { sunStore } from '@stores/atlas.sun.store'
 import { AstronomicalEvent, EphemerisAndChart, EphemerisPositionContext } from '@ui/Atlas'
 import { Icons } from '@ui/Icon'
@@ -9,7 +8,7 @@ import { memo, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Sun = memo(({ api }: IDockviewPanelProps) => {
-	useEffect(() => void atlasStore.tick('sun'), [])
+	useEffect(sunStore.mount, [])
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">

@@ -1,7 +1,6 @@
-import { useStore } from '@hooks/store.hook'
 import { skyObjectName, skyObjectType } from '@shared/util'
 import { galaxyStore } from '@stores/atlas.galaxy.store'
-import { atlasStore } from '@stores/atlas.store'
+import { EphemerisAndChart, EphemerisPositionContext } from '@ui/Atlas'
 import { Checkbox } from '@ui/components/Checkbox'
 import { IconButton } from '@ui/components/IconButton'
 import { NumberInput } from '@ui/components/NumberInput'
@@ -15,31 +14,20 @@ import { SkyObjectNameTypeDropdown } from '@ui/SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from '@ui/StellariumObjectTypeSelect'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { CONSTELLATION_LIST } from 'nebulosa/src/astronomy/coordinates/constellation'
-import { memo, useCallback } from 'react'
+import { memo, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Galaxy = memo(({ api }: IDockviewPanelProps) => {
-	const { bookmark } = useSnapshot(atlasStore.state)
-	const { selected } = useSnapshot(galaxyStore.state)
-	const { names, constellation } = useSnapshot(galaxyStore.state.position)
-
-	useStore(galaxyStore, [])
-
-	const handleFavoriteChange = useCallback(
-		(favorite: boolean) => {
-			if (!selected) return
-			const name = names?.length ? skyObjectName(names[0], constellation) : skyObjectName(selected.name, selected.constellation)
-			atlasStore.toggleBookmark('galaxy', name, selected.id.toFixed(0), favorite)
-		},
-		[constellation, names, selected],
-	)
+	useEffect(galaxyStore.mount, [])
 
 	return (
-		<div className="grid grid-cols-12 items-center gap-2">
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<GalaxyFilter />
 			<GalaxyTable />
 			<GalaxyPaginator className="col-span-full w-full" />
-			{/* <EphemerisAndChart type="galaxy" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'galaxy', selected.id.toFixed(0))} onFavoriteChange={handleFavoriteChange} /> */}
+			<EphemerisPositionContext value={galaxyStore}>
+				<EphemerisAndChart />
+			</EphemerisPositionContext>
 		</div>
 	)
 })

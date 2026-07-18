@@ -91,6 +91,8 @@ function mount() {
 	console.info('alpaca mounted')
 
 	mounted = true
+
+	return unmount
 }
 
 function unmount() {

@@ -178,7 +178,8 @@ export function Dropdown({
 	const visible = isOpen && !disabled && !readOnly && loading !== true
 	const styles = dropdownStyles({ open: visible })
 	const optionHeight = dropdownItemHeight(size, itemHeight)
-	const panelStyle = useMemo(() => ({ '--dropdown-width': `${Math.max(triggerWidth, 0)}px`, minWidth: Math.max(triggerWidth, optionContentWidth, 0) }) as React.CSSProperties, [optionContentWidth, triggerWidth])
+	const dropdownWidth = Math.max(triggerWidth, optionContentWidth, 0) + 4
+	const panelStyle = useMemo(() => ({ '--dropdown-width': `${dropdownWidth}px`, minWidth: dropdownWidth }) as React.CSSProperties, [optionContentWidth, triggerWidth])
 
 	// Updates open state in controlled and uncontrolled modes.
 	const setOpen = useEffectEvent((nextOpen: boolean) => {

@@ -1,8 +1,11 @@
 import { Api } from '@shared/api'
 import { initProxy } from '@shared/proxy'
-import { atlasStore, isLocationChanged, isTimeChanged } from '@stores/atlas.store'
+import { skyObjectName } from '@shared/util'
+import { atlasStore, isLocationChanged, isTimeChanged, type BookmarkItem, type TagItem } from '@stores/atlas.store'
+import { framingStore } from '@stores/framing.store'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
-import type { UTCTime } from 'nebulosa/src/devices/indi/device'
+import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
+import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { type SearchSkyObject, type SkyObjectSearchItem, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_SKY_OBJECT_SEARCH } from 'src/shared/types'
 import { proxy, ref } from 'valtio'
 
@@ -16,6 +19,9 @@ export interface AtlasGalaxyState {
 	selected?: SkyObjectSearchItem
 	readonly position: BodyPosition
 	chart: readonly number[]
+	favorite: boolean
+	readonly bookmark: BookmarkItem[]
+	readonly tags: readonly TagItem[]
 }
 
 const state = proxy<AtlasGalaxyState>({
@@ -25,16 +31,56 @@ const state = proxy<AtlasGalaxyState>({
 	result: [],
 	position: structuredClone(DEFAULT_BODY_POSITION),
 	chart: [],
-})
+	bookmark: [],
+	get favorite() {
+		const { selected, bookmark } = this
+		const id = selected?.id.toFixed(0)
+		return id !== undefined && bookmark.some((e) => e.code === id)
+	},
+	get tags() {
+		const { selected } = this
+		const { names, constellation } = this.position
 
-initProxy(state, 'atlas.galaxy', ['o:request'])
+		if (names?.length) {
+			const res = new Array<TagItem>(names.length)
+
+			for (let i = 0; i < names.length; i++) {
+				const label = skyObjectName(names[i], constellation)
+				res[i] = { label, color: 'primary' }
+			}
+
+			return res
+		} else if (selected) {
+			return [{ label: selected.name, color: 'primary' }] as const
+		} else {
+			return []
+		}
+	},
+} satisfies AtlasGalaxyState)
+
+initProxy(state, 'atlas.galaxy', ['o:request', 'o:bookmark'])
 state.request.time.utc = 0
 
 let chartUpdate = true
+let mounted = false
 
 function mount() {
-	console.info('atlas galaxy mounted')
+	if (mounted) return
+
+	console.info('galaxy mounted')
+
+	mounted = true
+
+	void atlasStore.tick('galaxy')
 	void search(true)
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('galaxy unmounted')
+	mounted = false
 }
 
 function update<K extends keyof SearchSkyObject>(key: K, value: Required<SearchSkyObject>[K]) {
@@ -145,9 +191,44 @@ async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChange
 	}
 }
 
+function sync(mount?: Mount) {
+	if (mount === undefined) return undefined
+	const [rightAscension, declination] = state.position.equatorial
+	return Api.Mounts.sync(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+}
+
+function goTo(mount?: Mount) {
+	if (mount === undefined) return undefined
+	const [rightAscension, declination] = state.position.equatorial
+	return Api.Mounts.goTo(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+}
+
+function frame() {
+	const [rightAscension, declination] = state.position.equatorialJ2000
+	return framingStore.load({ rightAscension: formatRA(rightAscension), declination: formatDEC(declination) })
+}
+
+function handleFavorite(favorite: boolean) {
+	const { selected } = state
+
+	if (selected) {
+		const id = selected.id.toFixed(0)
+		const index = state.bookmark.findIndex((e) => e.code === id)
+
+		if (favorite !== index >= 0) return
+
+		if (favorite) {
+			state.bookmark.push({ code: id, name: selected.name, type: 'asteroid' })
+		} else {
+			state.bookmark.splice(index, 1)
+		}
+	}
+}
+
 export const galaxyStore = {
 	state,
 	mount,
+	unmount,
 	update,
 	updateMagnitude,
 	search,
@@ -156,6 +237,10 @@ export const galaxyStore = {
 	select,
 	selectWithId,
 	tick,
+	sync,
+	goTo,
+	frame,
+	handleFavorite,
 } as const
 
 atlasStore.state.galaxy = ref(galaxyStore)

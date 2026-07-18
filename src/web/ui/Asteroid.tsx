@@ -1,5 +1,4 @@
 import { asteroidStore } from '@stores/atlas.asteroid.store'
-import { atlasStore } from '@stores/atlas.store'
 import { EphemerisAndChart, EphemerisPositionContext } from '@ui/Atlas'
 import { IconButton } from '@ui/components/IconButton'
 import { Link } from '@ui/components/Link'
@@ -16,7 +15,7 @@ import type { MinorPlanetParameter } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 
 export const Asteroid = memo(({ api }: IDockviewPanelProps) => {
-	useEffect(() => void atlasStore.tick('asteroid'), [])
+	useEffect(asteroidStore.mount, [])
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">

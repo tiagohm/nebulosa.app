@@ -45,6 +45,25 @@ let chartUpdate = true
 let seasonsUpdate = true
 let seasonsYear = 0
 let eclipsesUpdate = true
+let mounted = false
+
+function mount() {
+	if (mounted) return
+
+	console.info('sun mounted')
+
+	mounted = true
+
+	void atlasStore.tick('sun')
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('sun unmounted')
+	mounted = false
+}
 
 async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
 	let changed = false
@@ -138,6 +157,8 @@ function frame() {
 
 export const sunStore = {
 	state,
+	mount,
+	unmount,
 	tick,
 	showSolarEclipse,
 	sync,

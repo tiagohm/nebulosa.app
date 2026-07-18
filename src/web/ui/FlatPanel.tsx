@@ -3,15 +3,15 @@ import { equipmentStore } from '@stores/equipment.store'
 import { flatPanelStore, type FlatPanelStore } from '@stores/flatpanel.store'
 import { Slider } from '@ui/components/Slider'
 import { Switch } from '@ui/components/Switch'
+import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
+import { ConnectButton } from '@ui/ConnectButton'
+import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import { memo, useContext, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 
-export interface FlatPanelParams {
-	readonly id: string
-}
-
-export const FlatPanel = memo(({ params }: IDockviewPanelProps<FlatPanelParams>) => {
+export const FlatPanel = memo(({ params }: IDockviewPanelProps<Device>) => {
 	const storeRef = useRef<FlatPanelStore | undefined>(undefined)
 
 	useEffect(() => storeRef.current?.mount(), [])
@@ -30,13 +30,34 @@ export const FlatPanel = memo(({ params }: IDockviewPanelProps<FlatPanelParams>)
 
 	return (
 		<FlatPanelStoreContext value={store}>
-			<div className="mt-0 grid grid-cols-12 gap-3">
-				<Toggle />
-				<Intensity />
-			</div>
+			<Tabs className="p-3" startContent={<TabStartContent />}>
+				<Tab id="control">Filter Wheel</Tab>
+				<Tab id="indi">INDI</Tab>
+
+				<TabPanel id="control">
+					<Main />
+				</TabPanel>
+				<TabPanel id="indi">
+					<IndiPanelControl device={flatPanel} />
+				</TabPanel>
+			</Tabs>
 		</FlatPanelStoreContext>
 	)
 })
+
+const TabStartContent = memo(() => {
+	const flatPanel = useContext(FlatPanelStoreContext)
+	const { connected, connecting } = useSnapshot(flatPanel.state.flatPanel)
+
+	return <ConnectButton connected={connected} loading={connecting} onClick={flatPanel.connect} />
+})
+
+const Main = memo(() => (
+	<div className="grid grid-cols-12 gap-2">
+		<Toggle />
+		<Intensity />
+	</div>
+))
 
 const Toggle = memo(() => {
 	const flatPanel = useContext(FlatPanelStoreContext)

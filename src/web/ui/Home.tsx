@@ -10,6 +10,8 @@ import { Connections } from '@ui/Connections'
 import { Cover } from '@ui/Cover'
 import { Darv } from '@ui/Darv'
 import { Devices } from '@ui/Devices'
+import { DewHeater } from '@ui/DewHeater'
+import { FlatPanel } from '@ui/FlatPanel'
 import { FlatWizard } from '@ui/FlatWizard'
 import { Framing } from '@ui/Framing'
 import { Galaxy } from '@ui/Galaxy'
@@ -48,9 +50,9 @@ const components = {
 	cover: Cover,
 	darv: Darv,
 	devices: Devices,
-	dewHeater: Dummy,
+	dewHeater: DewHeater,
 	dome: Dummy,
-	flatPanel: Dummy,
+	flatPanel: FlatPanel,
 	flatWizard: FlatWizard,
 	focuser: Dummy,
 	framing: Framing,

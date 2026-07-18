@@ -65,7 +65,7 @@ export const Mount = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<MountStoreContext value={store}>
-			<Tabs className="px-3">
+			<Tabs className="p-3">
 				<Tab id="control">Mount</Tab>
 				<Tab id="location">Location</Tab>
 				<Tab id="time">Time</Tab>
@@ -73,7 +73,7 @@ export const Mount = memo(({ params }: IDockviewPanelProps<Device>) => {
 				<Tab id="indi">INDI</Tab>
 
 				<TabPanel id="control">
-					<Control />
+					<Main />
 				</TabPanel>
 				<TabPanel id="location">
 					<Location />
@@ -92,8 +92,8 @@ export const Mount = memo(({ params }: IDockviewPanelProps<Device>) => {
 	)
 })
 
-const Control = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
+const Main = memo(() => (
+	<div className="grid grid-cols-12 gap-2">
 		<Status />
 		<CurrentPosition />
 		<hr className="col-span-full border-dotted text-neutral-800" />

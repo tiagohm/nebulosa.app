@@ -22,22 +22,22 @@
 		"index": "bun run scripts/codebase.index.ts"
 	},
 	"dependencies": {
-		"@tailwindcss/cli": "4.3.2",
+		"@tailwindcss/cli": "4.3.3",
 		"@uidotdev/usehooks": "2.4.1",
 		"@use-gesture/react": "10.3.1",
 		"clsx": "2.1.1",
 		"d3-selection": "3.0.0",
 		"d3-zoom": "3.0.0",
 		"dockview-react": "7.0.2",
-		"nanoid": "5.1.16",
+		"nanoid": "6.0.0",
 		"nebulosa": "github:tiagohm/nebulosa.ts",
 		"open": "11.0.0",
 		"react": "19.2.7",
 		"react-dom": "19.2.7",
-		"recharts": "3.9.1",
+		"recharts": "3.9.2",
 		"tailwind-merge": "3.6.0",
 		"tailwind-variants": "3.2.2",
-		"tailwindcss": "4.3.2",
+		"tailwindcss": "4.3.3",
 		"valtio": "2.3.2"
 	},
 	"devDependencies": {
@@ -46,10 +46,10 @@
 		"@types/d3-zoom": "3.0.8",
 		"@types/react": "19.2.17",
 		"@types/react-dom": "19.2.3",
-		"oxfmt": "0.58.0",
-		"oxlint": "1.73.0",
-		"oxlint-tsgolint": "0.24.0",
-		"typescript": "6.0.3"
+		"oxfmt": "0.59.0",
+		"oxlint": "1.74.0",
+		"oxlint-tsgolint": "0.25.0",
+		"typescript": "7.0.2"
 	},
 	"trustedDependencies": [
 		"nebulosa"

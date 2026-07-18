@@ -7,13 +7,13 @@ import { equipmentStore } from '@stores/equipment.store'
 import { TAU } from 'nebulosa/src/core/constants'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { toDeg } from 'nebulosa/src/math/units/angle'
+import constellationBoundaries from 'src/data/constellation.boundaries.json'
+import constellationLabels from 'src/data/constellation.labels.json'
+import constellationLines from 'src/data/constellation.lines.json'
+import mw from 'src/data/mw.json'
 import type { Celestial, CelestialShape, ConstellationData, MovingBody, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
-import constellationBoundaries from '../../data/constellation.boundaries.json'
-import constellationLabels from '../../data/constellation.labels.json'
-import constellationLines from '../../data/constellation.lines.json'
-import mw from '../../data/mw.json'
 
 export interface PlanetariumState {
 	show: boolean

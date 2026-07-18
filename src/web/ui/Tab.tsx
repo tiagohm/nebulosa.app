@@ -82,12 +82,16 @@ export function Tab(props: IDockviewPanelHeaderProps) {
 	return (
 		<div className="flex h-full w-full items-center justify-center gap-2 px-2 text-sm">
 			{icon && <img src={icon} width={16} height={16} />}
-			{(!icon || active || isAlwaysActive(type)) && <span>{title}</span>}
-			{isFixed === false && (active || isAlwaysActive(type)) && <Icons.CloseCircle color="var(--danger)" className="hover:opacity-90" onClick={() => props.api.close()} />}
+			{(!icon || active || isTitleAlwaysVisible(type)) && <span>{title}</span>}
+			{isFixed === false && (active || isCloseButtonAlwaysVisible(type)) && <Icons.CloseCircle color="var(--danger)" className="hover:opacity-90" onClick={() => props.api.close()} />}
 		</div>
 	)
 }
 
-function isAlwaysActive(type: HomePanelType) {
+function isTitleAlwaysVisible(type: HomePanelType) {
+	return DEVICE_TYPES.has(type as never) || type === 'darv'
+}
+
+function isCloseButtonAlwaysVisible(type: HomePanelType) {
 	return DEVICE_TYPES.has(type as never)
 }

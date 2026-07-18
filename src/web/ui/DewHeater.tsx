@@ -1,54 +1,57 @@
-import { useStore } from '@hooks/store.hook'
-import { DewHeaterDeviceContext, DewHeaterStoreContext } from '@shared/context'
-import { dewHeaterStore } from '@stores/dewheater.store'
+import { DewHeaterStoreContext } from '@shared/context'
+import { dewHeaterStore, type DewHeaterStore } from '@stores/dewheater.store'
+import { equipmentStore } from '@stores/equipment.store'
 import { Slider } from '@ui/components/Slider'
+import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
 import { ConnectButton } from '@ui/ConnectButton'
-import { Modal } from '@ui/Modal'
-import { memo, useContext } from 'react'
+import { IndiPanelControl } from '@ui/IndiPanelControl'
+import type { IDockviewPanelProps } from 'dockview-react'
+import type { Device } from 'nebulosa/src/devices/indi/device'
+import { memo, useContext, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 
-function dutyCycleRatio(value: number, min: number, max: number) {
-	if (!Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max)) return 0
-	if (max <= min) return 0
-	return Math.min(1, Math.max(0, (value - min) / (max - min)))
-}
+export const DewHeater = memo(({ params }: IDockviewPanelProps<Device>) => {
+	const storeRef = useRef<DewHeaterStore | undefined>(undefined)
 
-function dutyCycleColor(value: number, min: number, max: number) {
-	const ratio = dutyCycleRatio(value, min, max)
-	return ratio < 0.5 ? 'primary' : ratio < 0.9 ? 'warning' : 'danger'
-}
+	useEffect(() => storeRef.current?.mount(), [])
 
-export const DewHeater = memo(() => {
-	const device = useContext(DewHeaterDeviceContext)
-	const dewHeater = useStore(() => dewHeaterStore(device), [device])
+	const { length } = useSnapshot(equipmentStore.state.dewHeater) // used only to rerender this component
+	const dewHeater = length > 0 && equipmentStore.state.dewHeater.find((e) => e.id === params.id)
+
+	if (!dewHeater) {
+		storeRef.current?.unmount()
+		storeRef.current = undefined
+		return <div className="flex h-full w-full items-center justify-center">Not available</div>
+	}
+
+	const store = storeRef.current ?? dewHeaterStore(dewHeater)
+	storeRef.current = store
 
 	return (
-		<DewHeaterStoreContext value={dewHeater}>
-			<Modal header={<Header />} id={`dew-heater-${device.id}`} initialWidth="256px" onHide={dewHeater.hide}>
-				<Body />
-			</Modal>
+		<DewHeaterStoreContext value={store}>
+			<Tabs className="p-3" startContent={<TabStartContent />}>
+				<Tab id="control">Dew Heater</Tab>
+				<Tab id="indi">INDI</Tab>
+
+				<TabPanel id="control">
+					<Main />
+				</TabPanel>
+				<TabPanel id="indi">
+					<IndiPanelControl device={dewHeater} />
+				</TabPanel>
+			</Tabs>
 		</DewHeaterStoreContext>
 	)
 })
 
-const Header = memo(() => {
-	const dewHeater = useContext(DewHeaterStoreContext)
-	const { connecting, connected, name } = useSnapshot(dewHeater.state.dewHeater)
+const TabStartContent = memo(() => {
+	const dewHater = useContext(DewHeaterStoreContext)
+	const { connected, connecting } = useSnapshot(dewHater.state.dewHeater)
 
-	return (
-		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
-			<div className="flex shrink-0 flex-row items-center gap-1">
-				<ConnectButton connected={connected} loading={connecting} onClick={dewHeater.connect} />
-			</div>
-			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
-				<span className="leading-5 font-semibold">Dew Heater</span>
-				<span className="max-w-full truncate text-xs font-normal text-neutral-400">{name}</span>
-			</div>
-		</div>
-	)
+	return <ConnectButton connected={connected} loading={connecting} onClick={dewHater.connect} />
 })
 
-const Body = memo(() => {
+const Main = memo(() => {
 	const dewHeater = useContext(DewHeaterStoreContext)
 	const { connected, dutyCycle } = useSnapshot(dewHeater.state.dewHeater)
 	const { min, max, value } = dutyCycle
@@ -63,3 +66,14 @@ const Body = memo(() => {
 		</div>
 	)
 })
+
+function dutyCycleRatio(value: number, min: number, max: number) {
+	if (!Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max)) return 0
+	if (max <= min) return 0
+	return Math.min(1, Math.max(0, (value - min) / (max - min)))
+}
+
+function dutyCycleColor(value: number, min: number, max: number) {
+	const ratio = dutyCycleRatio(value, min, max)
+	return ratio < 0.5 ? 'primary' : ratio < 0.9 ? 'warning' : 'danger'
+}

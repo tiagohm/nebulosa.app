@@ -44,13 +44,13 @@ export const Camera = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<CameraStoreContext value={store}>
-			<Tabs className="p-3" startContent={<TabsStartContent />}>
+			<Tabs className="p-3" startContent={<TabStartContent />}>
 				<Tab id="control">Camera</Tab>
 				<Tab id="options">Options</Tab>
 				<Tab id="indi">INDI</Tab>
 
 				<TabPanel id="control">
-					<Control />
+					<Main />
 				</TabPanel>
 				<TabPanel id="options">
 					<Options />
@@ -63,7 +63,7 @@ export const Camera = memo(({ params }: IDockviewPanelProps<Device>) => {
 	)
 })
 
-const TabsStartContent = memo(() => {
+const TabStartContent = memo(() => {
 	const camera = useContext(CameraStoreContext)
 	const { capturing } = useSnapshot(camera.state)
 	const { connected, connecting } = useSnapshot(camera.state.camera)
@@ -71,7 +71,7 @@ const TabsStartContent = memo(() => {
 	return <ConnectButton disabled={capturing} connected={connected} loading={connecting} onClick={camera.connect} />
 })
 
-const Control = memo(() => (
+const Main = memo(() => (
 	<div className="grid grid-cols-12 gap-2">
 		<Header />
 		<Path />

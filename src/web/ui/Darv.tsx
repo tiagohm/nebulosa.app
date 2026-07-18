@@ -13,6 +13,7 @@ import { CameraDropdown, MountDropdown } from '@ui/DeviceDropdown'
 import { HemisphereSelect } from '@ui/HemisphereSelect'
 import { Icons } from '@ui/Icon'
 import type { IDockviewPanelProps } from 'dockview-react'
+import { formatALT } from 'nebulosa/src/math/units/angle'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
@@ -88,14 +89,24 @@ const Footer = memo(() => {
 })
 
 const ExposureEstimatorPopover = memo(() => (
-	<Popover className="w-100" trigger={<IconButton icon={Icons.Calculator} size="sm" tooltipContent="Estimate exposure" />}>
+	<Popover className="w-100" trigger={<ExposureEstimatorPopoverTrigger />}>
 		<ExposureEstimatorPopoverContent />
 	</Popover>
 ))
 
+const ExposureEstimatorPopoverTrigger = memo((props: Record<string, unknown>) => {
+	const darv = useContext(DarvStoreContext)
+	const { mount } = useSnapshot(darv.state)
+
+	return <IconButton {...props} disabled={!mount?.connected} icon={Icons.Calculator} size="sm" tooltipContent="Estimate exposure" />
+})
+
 const ExposureEstimatorPopoverContent = memo(() => {
 	const darv = useContext(DarvStoreContext)
+	const { mount } = useSnapshot(darv.state)
 	const { focalLength, pixelSize, mode, preset, presetMode } = useSnapshot(darv.state.exposureEstimation)
+
+	if (!mount) return null
 
 	return (
 		<div className="grid w-full grid-cols-24 gap-2 p-1">
@@ -108,6 +119,18 @@ const ExposureEstimatorPopoverContent = memo(() => {
 			<div className="col-span-full flex flex-col gap-1">
 				<span className="text-xs text-neutral-400">Preset</span>
 				<DarvExposurePresetModeButtonGroup fullWidth onValueChange={(value) => darv.updateExposureEstimation('presetMode', value)} size="sm" value={presetMode} />
+			</div>
+			<div className="col-span-8 flex flex-col gap-0">
+				<span className="font-bold">LATITUDE:</span>
+				<span>{formatALT(mount.geographicCoordinate.latitude)}</span>
+			</div>
+			<div className="col-span-8 flex flex-col gap-0">
+				<span className="font-bold">DECLINATION:</span>
+				<span>{formatALT(mount.equatorialCoordinate.declination)}</span>
+			</div>
+			<div className="col-span-8 flex flex-col gap-0">
+				<span className="font-bold">GUIDE RATE:</span>
+				<span>{mount.hasGuideRate ? mount.guideRate.rightAscension : 1}</span>
 			</div>
 			<NumberInput disabled={presetMode !== 'custom'} className="col-span-12" label="RA trail length" endContent="px" minValue={1} maxValue={1000} value={preset.targetTrail} onValueChange={(value) => darv.updateExposureEstimationPreset('targetTrail', value)} />
 			<NumberInput disabled={presetMode !== 'custom'} className="col-span-12" label="Min. separation" endContent="px" minValue={1} maxValue={10} value={preset.detectableSeparation} onValueChange={(value) => darv.updateExposureEstimationPreset('detectableSeparation', value)} />

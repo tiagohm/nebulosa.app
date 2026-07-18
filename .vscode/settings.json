@@ -9,7 +9,7 @@
 	"js/ts.format.semicolons": "remove",
 	"js/ts.preferences.quoteStyle": "single",
 	"js/ts.tsdk.path": "node_modules/typescript/lib",
-	"js/ts.experimental.useTsgo": true,
+	"js/ts.preferences.importModuleSpecifier": "non-relative",
 	"html.format.indentInnerHtml": true,
 	"html.format.wrapAttributes": "force-aligned",
 	"html.format.wrapLineLength": 300,

@@ -29,12 +29,12 @@ export const Thermometer = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<ThermometerStoreContext value={store}>
-			<Tabs className="px-3">
+			<Tabs className="p-3">
 				<Tab id="control">Thermometer</Tab>
 				<Tab id="indi">INDI</Tab>
 
 				<TabPanel id="control">
-					<Control />
+					<Main />
 				</TabPanel>
 				<TabPanel id="indi">
 					<IndiPanelControl device={thermometer} />
@@ -44,7 +44,7 @@ export const Thermometer = memo(({ params }: IDockviewPanelProps<Device>) => {
 	)
 })
 
-const Control = memo(() => {
+const Main = memo(() => {
 	const thermometer = useContext(ThermometerStoreContext)
 	const { connecting, connected, temperature } = useSnapshot(thermometer.state.thermometer)
 	const value = connected ? formatNumber(temperature, 1) : '--'

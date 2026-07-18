@@ -31,12 +31,12 @@ export const Cover = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<CoverStoreContext value={store}>
-			<Tabs className="p-3" startContent={<TabsStartContent />}>
+			<Tabs className="p-3" startContent={<TabStartContent />}>
 				<Tab id="control">Cover</Tab>
 				<Tab id="indi">INDI</Tab>
 
 				<TabPanel id="control">
-					<Control />
+					<Main />
 				</TabPanel>
 				<TabPanel id="indi">
 					<IndiPanelControl device={cover} />
@@ -46,14 +46,14 @@ export const Cover = memo(({ params }: IDockviewPanelProps<Device>) => {
 	)
 })
 
-const TabsStartContent = memo(() => {
+const TabStartContent = memo(() => {
 	const cover = useContext(CoverStoreContext)
 	const { connected, connecting, parking } = useSnapshot(cover.state.cover)
 
 	return <ConnectButton disabled={parking} connected={connected} loading={connecting} onClick={cover.connect} />
 })
 
-const Control = memo(() => (
+const Main = memo(() => (
 	<div className="grid grid-cols-12 gap-2">
 		<Status />
 		<OpenAndClose />

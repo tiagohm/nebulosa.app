@@ -35,12 +35,12 @@ export const Wheel = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<WheelStoreContext value={store}>
-			<Tabs className="px-3">
+			<Tabs className="p-3">
 				<Tab id="control">Filter Wheel</Tab>
 				<Tab id="indi">INDI</Tab>
 
 				<TabPanel id="control">
-					<Control />
+					<Main />
 				</TabPanel>
 				<TabPanel id="indi">
 					<IndiPanelControl device={wheel} />
@@ -50,8 +50,8 @@ export const Wheel = memo(({ params }: IDockviewPanelProps<Device>) => {
 	)
 })
 
-const Control = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
+const Main = memo(() => (
+	<div className="grid grid-cols-12 gap-2">
 		<Status />
 		<Slot />
 	</div>

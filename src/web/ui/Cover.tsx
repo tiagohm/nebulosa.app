@@ -1,4 +1,5 @@
-import { coverStore, type CoverStore } from '@stores/cover.store'
+import { useDevice } from '@hooks/device.hook'
+import { coverStore } from '@stores/cover.store'
 import { Chip } from '@ui/components/Chip'
 import { IconButton } from '@ui/components/IconButton'
 import { Tab, Tabs, TabPanel } from '@ui/components/Tabs'
@@ -7,30 +8,17 @@ import { Icons } from '@ui/Icon'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
 import type { Device } from 'nebulosa/src/devices/indi/device'
-import { memo, useContext, useEffect, useRef } from 'react'
+import { memo, useContext } from 'react'
 import { CoverStoreContext } from 'src/web/shared/context'
-import { equipmentStore } from 'src/web/stores/equipment.store'
 import { useSnapshot } from 'valtio'
 
 export const Cover = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const storeRef = useRef<CoverStore | undefined>(undefined)
+	const cover = useDevice('cover', params.id, (device) => coverStore(device))
 
-	useEffect(() => storeRef.current?.mount(), [])
-
-	const { length } = useSnapshot(equipmentStore.state.cover) // used only to rerender this component
-	const cover = length > 0 && equipmentStore.state.cover.find((e) => e.id === params.id)
-
-	if (!cover) {
-		storeRef.current?.unmount()
-		storeRef.current = undefined
-		return <div className="flex h-full w-full items-center justify-center">Not available</div>
-	}
-
-	const store = storeRef.current ?? coverStore(cover)
-	storeRef.current = store
+	if (!cover) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<CoverStoreContext value={store}>
+		<CoverStoreContext value={cover.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
 				<Tab id="control">Cover</Tab>
 				<Tab id="indi">INDI</Tab>
@@ -39,7 +27,7 @@ export const Cover = memo(({ params }: IDockviewPanelProps<Device>) => {
 					<Main />
 				</TabPanel>
 				<TabPanel id="indi">
-					<IndiPanelControl device={cover} />
+					<IndiPanelControl device={cover.device} />
 				</TabPanel>
 			</Tabs>
 		</CoverStoreContext>

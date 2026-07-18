@@ -1,6 +1,6 @@
+import { useDevice } from '@hooks/device.hook'
 import { WheelStoreContext } from '@shared/context'
-import { equipmentStore } from '@stores/equipment.store'
-import { wheelStore, type WheelStore } from '@stores/wheel.store'
+import { wheelStore } from '@stores/wheel.store'
 import { Button } from '@ui/components/Button'
 import { Chip } from '@ui/components/Chip'
 import { IconButton } from '@ui/components/IconButton'
@@ -13,28 +13,16 @@ import { Icons } from '@ui/Icon'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
 import type { Device } from 'nebulosa/src/devices/indi/device'
-import { memo, useContext, useEffect, useRef } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Wheel = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const storeRef = useRef<WheelStore | undefined>(undefined)
+	const wheel = useDevice('wheel', params.id, (device) => wheelStore(device))
 
-	useEffect(() => storeRef.current?.mount(), [])
-
-	const { length } = useSnapshot(equipmentStore.state.wheel) // used only to rerender this component
-	const wheel = length > 0 && equipmentStore.state.wheel.find((e) => e.id === params.id)
-
-	if (!wheel) {
-		storeRef.current?.unmount()
-		storeRef.current = undefined
-		return <div className="flex h-full w-full items-center justify-center">Not available</div>
-	}
-
-	const store = storeRef.current ?? wheelStore(wheel)
-	storeRef.current = store
+	if (!wheel) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<WheelStoreContext value={store}>
+		<WheelStoreContext value={wheel.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
 				<Tab id="control">Filter Wheel</Tab>
 				<Tab id="indi">INDI</Tab>
@@ -43,7 +31,7 @@ export const Wheel = memo(({ params }: IDockviewPanelProps<Device>) => {
 					<Main />
 				</TabPanel>
 				<TabPanel id="indi">
-					<IndiPanelControl device={wheel} />
+					<IndiPanelControl device={wheel.device} />
 				</TabPanel>
 			</Tabs>
 		</WheelStoreContext>

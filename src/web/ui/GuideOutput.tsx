@@ -1,52 +1,52 @@
-import { useStore } from '@hooks/store.hook'
-import { GuideOutputDeviceContext, GuideOutputStoreContext } from '@shared/context'
+import { useDevice } from '@hooks/device.hook'
+import { GuideOutputStoreContext } from '@shared/context'
 import { guideOutputStore } from '@stores/guideoutput.store'
 import { NumberInput } from '@ui/components/NumberInput'
+import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
 import { ConnectButton } from '@ui/ConnectButton'
-import { Modal } from '@ui/Modal'
+import { IndiPanelControl } from '@ui/IndiPanelControl'
 import { Nudge } from '@ui/Nudge'
+import type { IDockviewPanelProps } from 'dockview-react'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
-export const GuideOutput = memo(() => {
-	const device = useContext(GuideOutputDeviceContext)
-	const guideOutput = useStore(() => guideOutputStore(device), [device])
+export const GuideOutput = memo(({ params }: IDockviewPanelProps<Device>) => {
+	const guideOutput = useDevice('guideOutput', params.id, (device) => guideOutputStore(device))
+
+	if (!guideOutput) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<GuideOutputStoreContext value={guideOutput}>
-			<Modal header={<Header />} id={`guide-output-${device.id}`} initialWidth="336px" onHide={guideOutput.hide}>
-				<Body />
-			</Modal>
+		<GuideOutputStoreContext value={guideOutput.store}>
+			<Tabs className="p-3" startContent={<TabStartContent />}>
+				<Tab id="control">Guide Output</Tab>
+				<Tab id="indi">INDI</Tab>
+
+				<TabPanel id="control">
+					<Main />
+				</TabPanel>
+				<TabPanel id="indi">
+					<IndiPanelControl device={guideOutput.device} />
+				</TabPanel>
+			</Tabs>
 		</GuideOutputStoreContext>
 	)
 })
 
-const Header = memo(() => {
+const TabStartContent = memo(() => {
 	const guideOutput = useContext(GuideOutputStoreContext)
-	const { connecting, connected, pulsing, name } = useSnapshot(guideOutput.state.guideOutput)
+	const { connected, connecting } = useSnapshot(guideOutput.state.guideOutput)
 
-	return (
-		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
-			<div className="flex shrink-0 flex-row items-center gap-1">
-				<ConnectButton connected={connected} disabled={pulsing} loading={connecting} onClick={guideOutput.connect} />
-			</div>
-			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
-				<span className="leading-5 font-semibold">Guide Output</span>
-				<span className="max-w-full truncate text-xs font-normal text-neutral-400">{name}</span>
-			</div>
-		</div>
-	)
+	return <ConnectButton connected={connected} loading={connecting} onClick={guideOutput.connect} />
 })
 
-const Body = memo(() => (
-	<div className="flex flex-col gap-4">
-		<div className="mt-0 grid grid-cols-6 gap-1">
-			<North />
-			<West />
-			<HandControl />
-			<East />
-			<South />
-		</div>
+const Main = memo(() => (
+	<div className="grid grid-cols-6 gap-2">
+		<North />
+		<West />
+		<HandControl />
+		<East />
+		<South />
 		<GuideRates />
 	</div>
 ))
@@ -118,9 +118,9 @@ const GuideRates = memo(() => {
 	const disabled = !hasGuideRate || !connected || pulsing
 
 	return (
-		<div className="grid grid-cols-2 gap-2">
-			<NumberInput disabled={disabled} readOnly={!canSetGuideRate} className="col-span-1" label="Guide rate RA" step={0.01} endContent="x" fractionDigits={2} minValue={0.01} maxValue={1} value={guideRate.rightAscension} onValueChange={guideOutput.guideRateRA} />
-			<NumberInput disabled={disabled} readOnly={!canSetGuideRate} className="col-span-1" label="Guide rate DEC" step={0.01} endContent="x" fractionDigits={2} minValue={0.01} maxValue={1} value={guideRate.declination} onValueChange={guideOutput.guideRateDEC} />
+		<div className="col-span-full row-start-6 mt-4 flex flex-row gap-2">
+			<NumberInput className="flex-1" disabled={disabled} readOnly={!canSetGuideRate} label="Guide rate RA" step={0.01} endContent="x" fractionDigits={2} minValue={0.01} maxValue={1} value={guideRate.rightAscension} onValueChange={guideOutput.guideRateRA} />
+			<NumberInput className="flex-1" disabled={disabled} readOnly={!canSetGuideRate} label="Guide rate DEC" step={0.01} endContent="x" fractionDigits={2} minValue={0.01} maxValue={1} value={guideRate.declination} onValueChange={guideOutput.guideRateDEC} />
 		</div>
 	)
 })

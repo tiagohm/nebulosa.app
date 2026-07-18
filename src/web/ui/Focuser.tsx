@@ -1,6 +1,6 @@
+import { useDevice } from '@hooks/device.hook'
 import { FocuserStoreContext } from '@shared/context'
-import { equipmentStore } from '@stores/equipment.store'
-import { focuserStore, type FocuserStore } from '@stores/focuser.store'
+import { focuserStore } from '@stores/focuser.store'
 import { Checkbox } from '@ui/components/Checkbox'
 import { Chip } from '@ui/components/Chip'
 import { IconButton } from '@ui/components/IconButton'
@@ -11,28 +11,16 @@ import { Icons } from '@ui/Icon'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
 import type { Device } from 'nebulosa/src/devices/indi/device'
-import { memo, useContext, useEffect, useRef } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Focuser = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const storeRef = useRef<FocuserStore | undefined>(undefined)
+	const focuser = useDevice('focuser', params.id, (device) => focuserStore(device))
 
-	useEffect(() => storeRef.current?.mount(), [])
-
-	const { length } = useSnapshot(equipmentStore.state.focuser) // used only to rerender this component
-	const focuser = length > 0 && equipmentStore.state.focuser.find((e) => e.id === params.id)
-
-	if (!focuser) {
-		storeRef.current?.unmount()
-		storeRef.current = undefined
-		return <div className="flex h-full w-full items-center justify-center">Not available</div>
-	}
-
-	const store = storeRef.current ?? focuserStore(focuser)
-	storeRef.current = store
+	if (!focuser) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<FocuserStoreContext value={store}>
+		<FocuserStoreContext value={focuser.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
 				<Tab id="control">Filter Wheel</Tab>
 				<Tab id="indi">INDI</Tab>
@@ -41,7 +29,7 @@ export const Focuser = memo(({ params }: IDockviewPanelProps<Device>) => {
 					<Main />
 				</TabPanel>
 				<TabPanel id="indi">
-					<IndiPanelControl device={focuser} />
+					<IndiPanelControl device={focuser.device} />
 				</TabPanel>
 			</Tabs>
 		</FocuserStoreContext>

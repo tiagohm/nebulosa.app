@@ -1,34 +1,22 @@
+import { useDevice } from '@hooks/device.hook'
 import { ThermometerStoreContext } from '@shared/context'
 import { formatNumber } from '@shared/util'
-import { equipmentStore } from '@stores/equipment.store'
-import { thermometerStore, type ThermometerStore } from '@stores/thermometer.store'
+import { thermometerStore } from '@stores/thermometer.store'
 import { TabPanel, Tab, Tabs } from '@ui/components/Tabs'
 import { ConnectButton } from '@ui/ConnectButton'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
 import type { Device } from 'nebulosa/src/devices/indi/device'
-import { memo, useContext, useEffect, useRef } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Thermometer = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const storeRef = useRef<ThermometerStore | undefined>(undefined)
+	const thermometer = useDevice('thermometer', params.id, (device) => thermometerStore(device))
 
-	useEffect(() => storeRef.current?.mount(), [])
-
-	const { length } = useSnapshot(equipmentStore.state.thermometer) // used only to rerender this component
-	const thermometer = length > 0 && equipmentStore.state.thermometer.find((e) => e.id === params.id)
-
-	if (!thermometer) {
-		storeRef.current?.unmount()
-		storeRef.current = undefined
-		return <div className="flex h-full w-full items-center justify-center">Not available</div>
-	}
-
-	const store = storeRef.current ?? thermometerStore(thermometer)
-	storeRef.current = store
+	if (!thermometer) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<ThermometerStoreContext value={store}>
+		<ThermometerStoreContext value={thermometer.store}>
 			<Tabs className="p-3">
 				<Tab id="control">Thermometer</Tab>
 				<Tab id="indi">INDI</Tab>
@@ -37,7 +25,7 @@ export const Thermometer = memo(({ params }: IDockviewPanelProps<Device>) => {
 					<Main />
 				</TabPanel>
 				<TabPanel id="indi">
-					<IndiPanelControl device={thermometer} />
+					<IndiPanelControl device={thermometer.device} />
 				</TabPanel>
 			</Tabs>
 		</ThermometerStoreContext>

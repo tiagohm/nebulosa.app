@@ -1,34 +1,22 @@
+import { useDevice } from '@hooks/device.hook'
 import { DewHeaterStoreContext } from '@shared/context'
-import { dewHeaterStore, type DewHeaterStore } from '@stores/dewheater.store'
-import { equipmentStore } from '@stores/equipment.store'
+import { dewHeaterStore } from '@stores/dewheater.store'
 import { Slider } from '@ui/components/Slider'
 import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
 import { ConnectButton } from '@ui/ConnectButton'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
 import type { Device } from 'nebulosa/src/devices/indi/device'
-import { memo, useContext, useEffect, useRef } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const DewHeater = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const storeRef = useRef<DewHeaterStore | undefined>(undefined)
+	const dewHeater = useDevice('dewHeater', params.id, (device) => dewHeaterStore(device))
 
-	useEffect(() => storeRef.current?.mount(), [])
-
-	const { length } = useSnapshot(equipmentStore.state.dewHeater) // used only to rerender this component
-	const dewHeater = length > 0 && equipmentStore.state.dewHeater.find((e) => e.id === params.id)
-
-	if (!dewHeater) {
-		storeRef.current?.unmount()
-		storeRef.current = undefined
-		return <div className="flex h-full w-full items-center justify-center">Not available</div>
-	}
-
-	const store = storeRef.current ?? dewHeaterStore(dewHeater)
-	storeRef.current = store
+	if (!dewHeater) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<DewHeaterStoreContext value={store}>
+		<DewHeaterStoreContext value={dewHeater.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
 				<Tab id="control">Dew Heater</Tab>
 				<Tab id="indi">INDI</Tab>
@@ -37,7 +25,7 @@ export const DewHeater = memo(({ params }: IDockviewPanelProps<Device>) => {
 					<Main />
 				</TabPanel>
 				<TabPanel id="indi">
-					<IndiPanelControl device={dewHeater} />
+					<IndiPanelControl device={dewHeater.device} />
 				</TabPanel>
 			</Tabs>
 		</DewHeaterStoreContext>

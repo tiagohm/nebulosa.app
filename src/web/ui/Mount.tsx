@@ -1,5 +1,6 @@
+import { useDevice } from '@hooks/device.hook'
 import { MountStoreContext } from '@shared/context'
-import { mountStore, type MountStore } from '@stores/mount.store'
+import { mountStore } from '@stores/mount.store'
 import { BodyCoordinateInfo } from '@ui/BodyCoordinateInfo'
 import { Chip } from '@ui/components/Chip'
 import { IconButton } from '@ui/components/IconButton'
@@ -21,9 +22,8 @@ import { UTCTimeInput } from '@ui/UTCTimeInput'
 import type { IDockviewPanelProps } from 'dockview-react'
 import type { Device, MountTargetCoordinateType } from 'nebulosa/src/devices/indi/device'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
-import { memo, useContext, useEffect, useRef } from 'react'
+import { memo, useContext } from 'react'
 import type { CoordinateInfo, CoordinateType } from 'src/shared/types'
-import { equipmentStore } from 'src/web/stores/equipment.store'
 import { useSnapshot } from 'valtio'
 
 const TARGET_TYPE_BY_COORDINATE_TYPE = {
@@ -47,24 +47,12 @@ function formatTargetCoordinateY(type: CoordinateType, position: CoordinateInfo)
 }
 
 export const Mount = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const storeRef = useRef<MountStore | undefined>(undefined)
+	const mount = useDevice('mount', params.id, (device) => mountStore(device))
 
-	useEffect(() => storeRef.current?.mount(), [])
-
-	const { length } = useSnapshot(equipmentStore.state.mount) // used only to rerender this component
-	const mount = length > 0 && equipmentStore.state.mount.find((e) => e.id === params.id)
-
-	if (!mount) {
-		storeRef.current?.unmount()
-		storeRef.current = undefined
-		return <div className="flex h-full w-full items-center justify-center">Not available</div>
-	}
-
-	const store = storeRef.current ?? mountStore(mount)
-	storeRef.current = store
+	if (!mount) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<MountStoreContext value={store}>
+		<MountStoreContext value={mount.store}>
 			<Tabs className="p-3">
 				<Tab id="control">Mount</Tab>
 				<Tab id="location">Location</Tab>
@@ -85,7 +73,7 @@ export const Mount = memo(({ params }: IDockviewPanelProps<Device>) => {
 					<MountRemoteControl />
 				</TabPanel>
 				<TabPanel id="indi">
-					<IndiPanelControl device={mount} />
+					<IndiPanelControl device={mount.device} />
 				</TabPanel>
 			</Tabs>
 		</MountStoreContext>

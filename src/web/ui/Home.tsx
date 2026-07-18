@@ -16,6 +16,7 @@ import { FlatWizard } from '@ui/FlatWizard'
 import { Focuser } from '@ui/Focuser'
 import { Framing } from '@ui/Framing'
 import { Galaxy } from '@ui/Galaxy'
+import { GuideOutput } from '@ui/GuideOutput'
 import { Guider } from '@ui/Guider'
 import { ImageWorkspace } from '@ui/ImageWorkspace'
 import { Moon } from '@ui/Moon'
@@ -60,7 +61,7 @@ const components = {
 	framing: Framing,
 	galaxy: Galaxy,
 	gps: Dummy,
-	guideOutput: Dummy,
+	guideOutput: GuideOutput,
 	guider: Guider,
 	image: ImageWorkspace,
 	moon: Moon,

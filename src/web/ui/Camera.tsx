@@ -1,6 +1,6 @@
+import { useDevice } from '@hooks/device.hook'
 import { CameraStoreContext } from '@shared/context'
-import { cameraStore, type CameraStore } from '@stores/camera.store'
-import { equipmentStore } from '@stores/equipment.store'
+import { cameraStore } from '@stores/camera.store'
 import { AutoSaveButton } from '@ui/AutoSaveButton'
 import { AutoSubFolderModeButton } from '@ui/AutoSubFolderButton'
 import { CameraTransferFormatSelect } from '@ui/CameraTransferFormatSelect'
@@ -22,28 +22,16 @@ import { Icons } from '@ui/Icon'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
 import type { Device } from 'nebulosa/src/devices/indi/device'
-import { memo, useContext, useEffect, useRef } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Camera = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const storeRef = useRef<CameraStore | undefined>(undefined)
+	const camera = useDevice('camera', params.id, (device) => cameraStore(device))
 
-	useEffect(() => storeRef.current?.mount(), [])
-
-	const { length } = useSnapshot(equipmentStore.state.camera) // used only to rerender this component
-	const camera = length > 0 && equipmentStore.state.camera.find((e) => e.id === params.id)
-
-	if (!camera) {
-		storeRef.current?.unmount()
-		storeRef.current = undefined
-		return <div className="flex h-full w-full items-center justify-center">Not available</div>
-	}
-
-	const store = storeRef.current ?? cameraStore(camera)
-	storeRef.current = store
+	if (!camera) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<CameraStoreContext value={store}>
+		<CameraStoreContext value={camera.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
 				<Tab id="control">Camera</Tab>
 				<Tab id="options">Options</Tab>
@@ -56,7 +44,7 @@ export const Camera = memo(({ params }: IDockviewPanelProps<Device>) => {
 					<Options />
 				</TabPanel>
 				<TabPanel id="indi">
-					<IndiPanelControl device={camera} />
+					<IndiPanelControl device={camera.device} />
 				</TabPanel>
 			</Tabs>
 		</CameraStoreContext>

@@ -1,6 +1,6 @@
+import { useDevice } from '@hooks/device.hook'
 import { FlatPanelStoreContext } from '@shared/context'
-import { equipmentStore } from '@stores/equipment.store'
-import { flatPanelStore, type FlatPanelStore } from '@stores/flatpanel.store'
+import { flatPanelStore } from '@stores/flatpanel.store'
 import { Slider } from '@ui/components/Slider'
 import { Switch } from '@ui/components/Switch'
 import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
@@ -8,28 +8,16 @@ import { ConnectButton } from '@ui/ConnectButton'
 import { IndiPanelControl } from '@ui/IndiPanelControl'
 import type { IDockviewPanelProps } from 'dockview-react'
 import type { Device } from 'nebulosa/src/devices/indi/device'
-import { memo, useContext, useEffect, useRef } from 'react'
+import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const FlatPanel = memo(({ params }: IDockviewPanelProps<Device>) => {
-	const storeRef = useRef<FlatPanelStore | undefined>(undefined)
+	const flatPanel = useDevice('flatPanel', params.id, (device) => flatPanelStore(device))
 
-	useEffect(() => storeRef.current?.mount(), [])
-
-	const { length } = useSnapshot(equipmentStore.state.flatPanel) // used only to rerender this component
-	const flatPanel = length > 0 && equipmentStore.state.flatPanel.find((e) => e.id === params.id)
-
-	if (!flatPanel) {
-		storeRef.current?.unmount()
-		storeRef.current = undefined
-		return <div className="flex h-full w-full items-center justify-center">Not available</div>
-	}
-
-	const store = storeRef.current ?? flatPanelStore(flatPanel)
-	storeRef.current = store
+	if (!flatPanel) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<FlatPanelStoreContext value={store}>
+		<FlatPanelStoreContext value={flatPanel.store}>
 			<Tabs className="p-3" startContent={<TabStartContent />}>
 				<Tab id="control">Filter Wheel</Tab>
 				<Tab id="indi">INDI</Tab>
@@ -38,7 +26,7 @@ export const FlatPanel = memo(({ params }: IDockviewPanelProps<Device>) => {
 					<Main />
 				</TabPanel>
 				<TabPanel id="indi">
-					<IndiPanelControl device={flatPanel} />
+					<IndiPanelControl device={flatPanel.device} />
 				</TabPanel>
 			</Tabs>
 		</FlatPanelStoreContext>

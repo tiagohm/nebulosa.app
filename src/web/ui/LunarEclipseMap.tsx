@@ -6,25 +6,24 @@ import { WorldMap, worldMapCoordinateToPoint } from '@ui/components/WorldMap'
 import { Icons } from '@ui/Icon'
 import { LocalViewOrientationModeButtonGroup } from '@ui/LocalViewOrientationModeButtonGroup'
 import { LunarEclipseContactKindButtonGroup } from '@ui/LunarEclipseContactKindButtonGroup'
-import { Modal } from '@ui/Modal'
 import type { LocalLunarEclipseEvent, LocalLunarEclipseSvgShape } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
 import type { LunarEclipseContactKind } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import { formatAZ, toDeg } from 'nebulosa/src/math/units/angle'
-import { Fragment, memo, type CSSProperties } from 'react'
+import { Fragment, memo, useEffect, type CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const LunarEclipseMap = memo(() => {
-	const { show } = useSnapshot(lunarEclipseStore.state)
+	useEffect(lunarEclipseStore.mount, [])
 
-	if (!show) return null
+	return null
 
-	return (
-		<Modal header={<Header />} id="lunar-eclipse-map" initialWidth="560px" onHide={lunarEclipseStore.hide}>
-			<Body />
-		</Modal>
-	)
+	// return (
+	// 	<Modal header={<Header />} id="lunar-eclipse-map" initialWidth="560px" onHide={lunarEclipseStore.hide}>
+	// 		<Body />
+	// 	</Modal>
+	// )
 })
 
 const Header = memo(() => {

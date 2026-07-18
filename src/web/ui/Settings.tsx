@@ -2,15 +2,19 @@ import { settingsStore } from '@stores/settings.store'
 import { NumberInput } from '@ui/components/NumberInput'
 import { LocationMap } from '@ui/LocationMap'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { memo } from 'react'
+import { memo, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 
-export const Settings = memo(({ api }: IDockviewPanelProps) => (
-	<div className="flex flex-col gap-2 p-3">
-		<Time />
-		<Location />
-	</div>
-))
+export const Settings = memo(({ api }: IDockviewPanelProps) => {
+	useEffect(settingsStore.mount, [])
+
+	return (
+		<div className="flex flex-col gap-2 p-3">
+			<Time />
+			<Location />
+		</div>
+	)
+})
 
 const Time = memo(() => {
 	const { offset } = useSnapshot(settingsStore.state.time)

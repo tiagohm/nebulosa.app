@@ -13,17 +13,20 @@ import { TextInput } from '@ui/components/TextInput'
 import { Icons } from '@ui/Icon'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
-import { memo, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import type { ConnectionStatus } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 
-export const Connections = memo(() => (
-	<div className="flex flex-col gap-2 p-3">
-		<span className="w-full font-bold text-neutral-300">ACTIVE CONNECTIONS:</span>
-		<ActiveConnectionList />
-		<SavedConnection />
-	</div>
-))
+export const Connections = memo(() => {
+	useEffect(connectionStore.mount, [])
+
+	return (
+		<div className="flex flex-col gap-2 p-3">
+			<ActiveConnectionList />
+			<SavedConnection />
+		</div>
+	)
+})
 
 const CONNECTION_PORT_PLACEHOLDER = {
 	INDI: '7624',
@@ -41,9 +44,12 @@ const ActiveConnectionList = memo(() => {
 	const { activeConnections } = useSnapshot(connectionStore.state)
 
 	return (
-		<List fullWidth itemCount={activeConnections.length} emptyContent="No active connections">
-			{(i) => ActiveConnectionItem(activeConnections[i])}
-		</List>
+		<div className="flex w-full flex-col gap-2">
+			<span className="w-full font-bold text-neutral-300">ACTIVE CONNECTIONS:</span>
+			<List fullWidth itemCount={activeConnections.length} emptyContent="No active connections">
+				{(i) => ActiveConnectionItem(activeConnections[i])}
+			</List>
+		</div>
 	)
 })
 

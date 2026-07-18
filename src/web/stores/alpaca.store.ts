@@ -3,6 +3,7 @@ import { alpacaBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
 import type { AlpacaServerStatus } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 
 export type AlpacaStore = typeof alpacaStore
@@ -27,24 +28,46 @@ const state = proxy<AlpacaState>({
 	},
 })
 
-initProxy(state, 'alpaca', ['p:port'])
+let mounted = false
+const u: VoidFunction[] = []
 
-alpacaBus.subscribe('start', (status: AlpacaServerStatus) => {
-	Object.assign(state.status, status)
-})
+function mount() {
+	if (mounted) return
 
-alpacaBus.subscribe('add', (device: AlpacaConfiguredDevice) => {
-	state.status.devices.push(device)
-})
+	console.info('alpaca mounted')
 
-alpacaBus.subscribe('remove', (device: AlpacaConfiguredDevice) => {
-	const index = state.status.devices.findIndex((d) => d.DeviceNumber === device.DeviceNumber && d.DeviceType === device.DeviceType)
-	if (index !== -1) state.status.devices.splice(index, 1)
-})
+	mounted = true
 
-alpacaBus.subscribe('stop', () => {
-	Object.assign(state.status, { running: false, serverPort: -1, discoveryPort: -1, devices: [] })
-})
+	u[0] = initProxy(state, 'alpaca', ['p:port'])
+
+	u[1] = alpacaBus.subscribe('start', (status: AlpacaServerStatus) => {
+		Object.assign(state.status, status)
+	})
+
+	u[2] = alpacaBus.subscribe('add', (device: AlpacaConfiguredDevice) => {
+		state.status.devices.push(device)
+	})
+
+	u[3] = alpacaBus.subscribe('remove', (device: AlpacaConfiguredDevice) => {
+		const index = state.status.devices.findIndex((d) => d.DeviceNumber === device.DeviceNumber && d.DeviceType === device.DeviceType)
+		if (index !== -1) state.status.devices.splice(index, 1)
+	})
+
+	u[4] = alpacaBus.subscribe('stop', () => {
+		Object.assign(state.status, { running: false, serverPort: -1, discoveryPort: -1, devices: [] })
+	})
+
+	void status()
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('alpaca unmounted')
+	unsubscribe(u)
+	mounted = false
+}
 
 async function status() {
 	const status = await Api.Alpaca.status()
@@ -82,26 +105,6 @@ async function stop() {
 		state.pendingAction = undefined
 	}
 }
-
-let mounted = false
-
-function mount() {
-	if (mounted) return
-
-	console.info('alpaca mounted')
-
-	mounted = true
-
-	return unmount
-}
-
-function unmount() {
-	if (!mounted) return
-	console.info('alpaca unmounted')
-	mounted = false
-}
-
-void status()
 
 export const alpacaStore = {
 	state,

@@ -153,7 +153,7 @@ function handleReady(event: DockviewReadyEvent) {
 	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
 	addUniquePanel('galaxy', { title: 'DSO' }, main)
 
-	addFraming()
+	addGuider()
 
 	// layoutDisposable = api.onDidLayoutChange(() => {
 	// 	window.clearTimeout(saveTimer)
@@ -355,6 +355,10 @@ function addSolarEclipse() {
 	return addUniquePanel('solarEclipse', { title: 'Solar Eclipse' }, main)
 }
 
+function addGuider() {
+	return addUniquePanel('guider', { title: 'Guider' }, main)
+}
+
 window.addEventListener('beforeunload', () => {
 	saveLayout()
 })
@@ -374,4 +378,5 @@ export const homeStore = {
 	addFlatWizard,
 	addFraming,
 	addSolarEclipse,
+	addGuider,
 } as const

@@ -8,10 +8,12 @@ import { HipsSurveySelect } from '@ui/HipsSurveySelect'
 import { Icons } from '@ui/Icon'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { pixelScale } from 'nebulosa/src/astronomy/formulas'
-import { memo } from 'react'
+import { memo, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Framing = memo(({ params }: IDockviewPanelProps) => {
+	useEffect(framingStore.mount, [])
+
 	const { loading, openNewImage } = useSnapshot(framingStore.state)
 	const { width, height, rotation, focalLength, pixelSize, hipsSurvey } = useSnapshot(framingStore.state.request)
 	const { rightAscension, declination } = useSnapshot(framingStore.state.request)

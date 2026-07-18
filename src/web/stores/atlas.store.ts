@@ -1,5 +1,4 @@
 import { Api } from '@shared/api'
-import { initProxy } from '@shared/proxy'
 import type { AtlasAsteroidStore } from '@stores/atlas.asteroid.store'
 import type { AtlasGalaxyStore } from '@stores/atlas.galaxy.store'
 import type { AtlasMoonStore } from '@stores/atlas.moon.store'
@@ -61,17 +60,9 @@ const state = proxy<AtlasState>({
 	},
 })
 
-initProxy(state, 'atlas', ['o:bookmark'])
-initProxy(state.request, 'atlas', ['o:location'])
-initProxy(state.request.time, 'atlas.time', ['p:offset'])
-
 let pendingTab: AtlasTab | false = false
 let twilightUpdate = true
 let twilightStartTime = 0
-
-setInterval(tick, 60000)
-
-void tick('sun')
 
 function updateTime(tab: AtlasTab, utc: number, offset: number, manual: boolean = true) {
 	state.request.time.offset = offset

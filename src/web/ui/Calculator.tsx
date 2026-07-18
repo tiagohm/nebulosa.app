@@ -7,7 +7,7 @@ import { TextInput } from '@ui/components/TextInput'
 import { Icons } from '@ui/Icon'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { toHour } from 'nebulosa/src/math/units/angle'
-import { memo, type ReactNode } from 'react'
+import { memo, useEffect, type ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 
 const MIN_APERTURE = 1
@@ -36,7 +36,10 @@ const MAX_ZENITH_DISTANCE = 89.9
 const MAX_OVERLAP = 99
 
 export const Calculator = memo(({ api }: IDockviewPanelProps) => {
+	useEffect(calculatorStore.mount, [])
+
 	const { favorites } = useSnapshot(calculatorStore.state)
+
 	const tabs = FORMULA_TABS.toSorted((a, b) => {
 		const ai = favorites.indexOf(a.id)
 		const bi = favorites.indexOf(b.id)

@@ -3,12 +3,12 @@ import { initProxy } from '@shared/proxy'
 import { homeStore } from '@stores/home.store'
 import { nanoid } from 'nanoid'
 import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 
 export type FramingStore = typeof framingStore
 
 export interface FramingState {
-	show: boolean
 	readonly request: Framing
 	loading: boolean
 	openNewImage: boolean
@@ -17,7 +17,6 @@ export interface FramingState {
 }
 
 const state = proxy<FramingState>({
-	show: false,
 	request: structuredClone(DEFAULT_FRAMING),
 	loading: false,
 	openNewImage: false,
@@ -27,7 +26,27 @@ const state = proxy<FramingState>({
 
 const ID = nanoid()
 
-initProxy(state, 'framing', ['p:show', 'o:request', 'p:openNewImage'])
+let mounted = false
+const u: VoidFunction[] = []
+
+function mount() {
+	if (mounted) return
+
+	console.info('alpaca mounted')
+
+	mounted = true
+
+	u[0] = initProxy(state, 'framing', [])
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('alpaca unmounted')
+	unsubscribe(u)
+	mounted = false
+}
 
 function update<K extends keyof FramingState['request']>(key: K, value: FramingState['request'][K]) {
 	state.request[key] = value
@@ -38,7 +57,6 @@ async function load(request: Partial<Framing> = state.request) {
 
 	try {
 		state.loading = true
-		state.show = true
 
 		request.id = `${ID}.${state.openNewImage ? state.count++ : DEFAULT_FRAMING.id}`
 		const frame = await Api.Framing.frame(state.request)
@@ -53,18 +71,10 @@ async function load(request: Partial<Framing> = state.request) {
 	}
 }
 
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
-
 export const framingStore = {
 	state,
 	update,
 	load,
-	show,
-	hide,
+	mount,
+	unmount,
 } as const

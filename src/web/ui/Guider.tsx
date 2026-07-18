@@ -8,66 +8,63 @@ import { ConnectButton } from '@ui/ConnectButton'
 import { CameraDropdown, GuideOutputDropdown } from '@ui/DeviceDropdown'
 import { GuiderClientModeRadioGroup } from '@ui/GuiderClientModeRadioGroup'
 import { Icons } from '@ui/Icon'
-import { Modal } from '@ui/Modal'
-import { memo } from 'react'
+import { memo, useEffect } from 'react'
 import type { GuiderRemoteConnect } from 'src/shared/types'
 import { guiderStore } from 'src/web/stores/guider.store'
 import { useSnapshot } from 'valtio'
 
-function canConnectRemote({ host, port }: Pick<GuiderRemoteConnect, 'host' | 'port'>) {
-	return host.trim().length > 0 && Number.isInteger(port) && port >= 80 && port <= 65535
-}
-
 export const Guider = memo(() => {
-	const { show } = useSnapshot(guiderStore.state)
-
-	if (!show) return null
+	useEffect(guiderStore.mount, [])
 
 	return (
-		<Modal footer={<Footer />} header="Guider" id="guider" initialWidth="360px" onHide={guiderStore.hide} subHeader={<SubHeader />}>
-			<Body />
-		</Modal>
+		<div className="grid grid-cols-12 gap-2 p-3">
+			<Connection />
+			<Settle />
+			<Dither />
+			<Buttons />
+			<Status />
+			<Footer />
+		</div>
 	)
 })
 
-const SubHeader = memo(() => {
-	const { profile } = useSnapshot(guiderStore.state)
-
-	return <span>{profile}</span>
-})
-
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
-		<Connection />
-		<Settle />
-		<Dither />
-		<Buttons />
-		<Status />
-	</div>
-))
-
 const Connection = memo(() => {
-	const { connecting, connected, camera, guideOutput } = useSnapshot(guiderStore.state)
-	const { host, port, mode } = useSnapshot(guiderStore.state.connection)
-	const canConnect = mode === 'remote' ? canConnectRemote({ host, port }) : !!camera && !!guideOutput
+	const { connecting, connected } = useSnapshot(guiderStore.state)
+	const { mode } = useSnapshot(guiderStore.state.connection)
 
 	return (
 		<>
-			<div className="col-span-full flex flex-row items-center justify-center">
+			<div className="col-span-full flex flex-col items-center justify-center gap-3">
 				<GuiderClientModeRadioGroup disabled={connected || connecting} horizontal onValueChange={(value) => guiderStore.updateConnection('mode', value)} value={mode} />
-			</div>
-			{mode === 'remote' ? (
-				<>
-					<TextInput className="col-span-7" disabled={connected || connecting} label="Host" maxLength={128} onValueChange={(value) => guiderStore.updateConnection('host', value)} placeholder="localhost" value={host} />
-					<NumberInput className="col-span-3" disabled={connected || connecting} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => guiderStore.updateConnection('port', value)} placeholder="4400" value={port} />
-				</>
-			) : (
-				<DeviceChooser />
-			)}
-			<div className="col-span-2 flex flex-row items-center justify-center gap-2">
-				<ConnectButton disabled={!canConnect || connecting} connected={connected} loading={connecting} onClick={guiderStore.connect} />
+				{mode === 'remote' ? <RemoteConnection /> : <LocalConnection />}
 			</div>
 		</>
+	)
+})
+
+const RemoteConnection = memo(() => {
+	const { connecting, connected } = useSnapshot(guiderStore.state)
+	const { connection } = useSnapshot(guiderStore.state)
+	const canConnect = canConnectRemote(connection)
+
+	return (
+		<div className="flex flex-1 items-center gap-2">
+			<TextInput className="col-span-7" disabled={connected || connecting} label="Host" maxLength={128} onValueChange={(value) => guiderStore.updateConnection('host', value)} placeholder="localhost" value={connection.host} />
+			<NumberInput className="col-span-3" disabled={connected || connecting} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => guiderStore.updateConnection('port', value)} placeholder="4400" value={connection.port} />
+			<ConnectButton disabled={!canConnect || connecting} connected={connected} loading={connecting} onClick={guiderStore.connect} />
+		</div>
+	)
+})
+
+const LocalConnection = memo(() => {
+	const { connecting, connected, camera, guideOutput } = useSnapshot(guiderStore.state)
+	const canConnect = camera !== undefined && guideOutput !== undefined
+
+	return (
+		<div className="flex flex-1 items-center gap-2">
+			<DeviceChooser />
+			<ConnectButton disabled={!canConnect || connecting} connected={connected} loading={connecting} onClick={guiderStore.connect} />
+		</div>
 	)
 })
 
@@ -155,7 +152,7 @@ const Footer = memo(() => {
 	const { rmsRA, rmsDEC } = useSnapshot(guiderStore.state.event)
 
 	return (
-		<div className="flex w-full items-center justify-center gap-2">
+		<div className="col-span-full flex flex-row items-center justify-center gap-2">
 			<span>RA: {rmsRA.toFixed(2)}"</span>
 			<span>DEC: {rmsDEC.toFixed(2)}"</span>
 			<span>Total: {Math.hypot(rmsRA, rmsDEC).toFixed(2)}"</span>
@@ -163,3 +160,7 @@ const Footer = memo(() => {
 		</div>
 	)
 })
+
+function canConnectRemote({ host, port }: Pick<GuiderRemoteConnect, 'host' | 'port'>) {
+	return host.trim().length > 0 && Number.isInteger(port) && port >= 80 && port <= 65535
+}

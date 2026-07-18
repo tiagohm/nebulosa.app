@@ -7,6 +7,7 @@ import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/locat
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { type SearchSkyObject, type SkyObjectSearchItem, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_SKY_OBJECT_SEARCH } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 
 export type AtlasGalaxyStore = typeof galaxyStore
@@ -58,11 +59,9 @@ const state = proxy<AtlasGalaxyState>({
 	},
 } satisfies AtlasGalaxyState)
 
-initProxy(state, 'atlas.galaxy', ['o:request', 'o:bookmark'])
-state.request.time.utc = 0
-
 let chartUpdate = true
 let mounted = false
+const u: VoidFunction[] = []
 
 function mount() {
 	if (mounted) return
@@ -70,6 +69,10 @@ function mount() {
 	console.info('galaxy mounted')
 
 	mounted = true
+
+	u[0] = initProxy(state, 'atlas.galaxy', ['o:request', 'o:bookmark'])
+
+	state.request.time.utc = 0
 
 	void atlasStore.tick('galaxy')
 	void search(true)
@@ -80,6 +83,7 @@ function mount() {
 function unmount() {
 	if (!mounted) return
 	console.info('galaxy unmounted')
+	unsubscribe(u)
 	mounted = false
 }
 

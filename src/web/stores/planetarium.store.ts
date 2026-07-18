@@ -36,7 +36,7 @@ const state = proxy<PlanetariumState>({
 	},
 })
 
-initProxy(state, 'planetarium', ['p:show', 'o:transform'])
+// initProxy(state, 'planetarium', ['p:show', 'o:transform'])
 
 const u: VoidFunction[] = []
 let mounted = false

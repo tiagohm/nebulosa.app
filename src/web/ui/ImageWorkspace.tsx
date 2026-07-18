@@ -1,3 +1,4 @@
+import { imageWorkspaceStore } from '@stores/image.workspace.store'
 import { ImageAdjustment } from '@ui/ImageAdjustment'
 import { ImageAnnotation } from '@ui/ImageAnnotation'
 import { ImageCalibration } from '@ui/ImageCalibration'
@@ -14,7 +15,7 @@ import { ImageStretch } from '@ui/ImageStretch'
 import { ImageViewer } from '@ui/ImageViewer'
 import { Tab } from '@ui/Tab'
 import { DockviewReact, themeGithubDark, type DockviewReadyEvent, type IDockviewPanelProps } from 'dockview-react'
-import { memo } from 'react'
+import { memo, useEffect } from 'react'
 import { useStore } from 'src/web/hooks/store.hook'
 import { ImageViewerStoreContext } from 'src/web/shared/context'
 import type { Image } from 'src/web/shared/types'
@@ -46,6 +47,7 @@ const components = {
 } as const
 
 export const ImageWorkspace = memo(({ params }: IDockviewPanelProps<Image>) => {
+	useEffect(imageWorkspaceStore.mount, [])
 	const viewer = useStore(() => imageViewerStore(params), [params])
 
 	function handleReady(event: DockviewReadyEvent) {

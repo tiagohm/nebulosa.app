@@ -5,13 +5,13 @@ import type { DeviceState } from '@stores/equipment.store'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_GUIDER_EVENT, DEFAULT_GUIDER_INTERNAL_CONNECT, DEFAULT_GUIDER_REMOTE_CONNECT, type GuiderClientMode, type GuiderDither, type GuiderEvent, type GuiderLocalConnect, type GuiderRemoteConnect, type GuiderStatus } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 
 export type GuiderStore = typeof guiderStore
 
 export interface GuiderState extends GuiderStatus {
-	show: boolean
 	readonly connection: Writable<Omit<GuiderRemoteConnect, 'mode'> & Omit<GuiderLocalConnect, 'mode'> & { mode: GuiderClientMode }>
 	camera?: DeviceState<Camera>
 	guideOutput?: DeviceState<GuideOutput>
@@ -22,7 +22,6 @@ export interface GuiderState extends GuiderStatus {
 }
 
 const state = proxy<GuiderState>({
-	show: false,
 	connected: false,
 	looping: false,
 	running: false,
@@ -37,40 +36,50 @@ const state = proxy<GuiderState>({
 	pendingCommand: undefined,
 })
 
-initProxy(state, 'guider', ['p:show', 'o:connection'])
+let mounted = false
+const u: VoidFunction[] = []
 
-guiderBus.subscribe('update', (event) => {
-	if (!state.connected) return
+function mount() {
+	if (mounted) return
 
-	Object.assign(state.event, event)
+	console.info('galaxy mounted')
 
-	state.looping = state.event.state === 'looping'
-	state.running = state.event.state === 'guiding'
-})
+	mounted = true
 
-guiderBus.subscribe('close', () => {
-	state.connected = false
-	state.looping = false
-	state.running = false
-	state.profile = undefined
-})
+	u[0] = initProxy(state, 'guider', ['o:connection'])
 
-subscribeKey(state, 'show', (show) => {
-	if (show) {
-		void load()
-	}
-})
+	u[1] = guiderBus.subscribe('update', (event) => {
+		if (!state.connected) return
 
-subscribeKey(state, 'camera', (camera) => {
-	state.connection.camera = camera?.id ?? ''
-})
+		Object.assign(state.event, event)
 
-subscribeKey(state, 'guideOutput', (guideOutput) => {
-	state.connection.guideOutput = guideOutput?.id ?? ''
-})
+		state.looping = state.event.state === 'looping'
+		state.running = state.event.state === 'guiding'
+	})
 
-if (state.show) {
-	void load()
+	u[2] = guiderBus.subscribe('close', () => {
+		state.connected = false
+		state.looping = false
+		state.running = false
+		state.profile = undefined
+	})
+
+	u[3] = subscribeKey(state, 'camera', (camera) => {
+		state.connection.camera = camera?.id ?? ''
+	})
+
+	u[4] = subscribeKey(state, 'guideOutput', (guideOutput) => {
+		state.connection.guideOutput = guideOutput?.id ?? ''
+	})
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('galaxy unmounted')
+	unsubscribe(u)
+	mounted = false
 }
 
 async function load() {
@@ -150,16 +159,12 @@ function calibrate() {
 	return runCommand('calibrate')
 }
 
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
+void load()
 
 export const guiderStore = {
 	state,
+	mount,
+	unmount,
 	updateConnection,
 	updateDither,
 	updateSettle,
@@ -171,6 +176,4 @@ export const guiderStore = {
 	start,
 	stop,
 	calibrate,
-	show,
-	hide,
 }

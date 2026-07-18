@@ -1,6 +1,7 @@
 import { initProxy, type ProxyProperties } from '@shared/proxy'
 import * as formulas from 'nebulosa/src/astronomy/formulas'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 
 export type CalculatorStore = typeof calculatorStore
@@ -287,7 +288,6 @@ export interface HourAngleAtAltitude {
 }
 
 export interface CalculatorState {
-	show: boolean
 	favorites: CalculatorSection[]
 	readonly focalLength: FocalLengthRatio
 	readonly focalRatio: FocalLengthRatio
@@ -391,7 +391,6 @@ const CALCULATOR_SECTIONS = [
 type CalculatorSection = (typeof CALCULATOR_SECTIONS)[number]
 
 const state = proxy<CalculatorState>({
-	show: false,
 	favorites: [],
 	focalLength: { aperture: 152, focalRatio: 9, focalLength: 1368 },
 	focalRatio: { focalLength: 1368, aperture: 152, focalRatio: 9 },
@@ -442,7 +441,27 @@ const state = proxy<CalculatorState>({
 	hourAngleAtAltitude: { declination: 0, latitude: 0, targetAltitude: 30, hourAngle: 0 },
 })
 
-initProxy(state, 'calculator', ['p:show', 'o:favorites', ...CALCULATOR_SECTIONS.map((section): ProxyProperties<typeof state> => `o:${section}`)])
+let mounted = false
+const u: VoidFunction[] = []
+
+function mount() {
+	if (mounted) return
+
+	console.info('alpaca mounted')
+
+	mounted = true
+
+	u[0] = initProxy(state, 'calculator', ['o:favorites', ...CALCULATOR_SECTIONS.map((section): ProxyProperties<typeof state> => `o:${section}`)])
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('alpaca unmounted')
+	unsubscribe(u)
+	mounted = false
+}
 
 function refreshDerivedValue(property: CalculatorSection) {
 	switch (property) {
@@ -613,18 +632,10 @@ function toggleFavorite(section: CalculatorSection) {
 	}
 }
 
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
-
 export const calculatorStore = {
 	state,
+	mount,
+	unmount,
 	toggleFavorite,
-	show,
-	hide,
 	update,
 } as const

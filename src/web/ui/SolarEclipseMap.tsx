@@ -1,6 +1,7 @@
 import { astronomicEventTemporal } from '@shared/time'
 import { tw } from '@shared/util'
 import { atlasStore } from '@stores/atlas.store'
+import { lunarEclipseStore } from '@stores/lunar.eclipse.store'
 import { solarEclipseStore } from '@stores/solar.eclipse.store'
 import { IconButton } from '@ui/components/IconButton'
 import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
@@ -13,18 +14,22 @@ import type { SolarEclipseGeoPoint } from 'nebulosa/src/astronomy/events/eclipse
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import { time, Timescale } from 'nebulosa/src/astronomy/time/time'
 import { formatAZ, toDeg } from 'nebulosa/src/math/units/angle'
-import { Fragment, memo, type CSSProperties } from 'react'
+import { Fragment, memo, useEffect, type CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
 
-export const SolarEclipseMap = memo(() => (
-	<div className="grid grid-cols-12 items-center gap-2 p-3">
-		<Header />
-		<div className="col-span-full flex flex-row items-center gap-2">
-			<Map />
-			<Info />
+export const SolarEclipseMap = memo(() => {
+	useEffect(lunarEclipseStore.mount, [])
+
+	return (
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<Header />
+			<div className="col-span-full flex flex-row items-center gap-2">
+				<Map />
+				<Info />
+			</div>
 		</div>
-	</div>
-))
+	)
+})
 
 const Header = memo(() => {
 	const { eclipse } = useSnapshot(solarEclipseStore.state)

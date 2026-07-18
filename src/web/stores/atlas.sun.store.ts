@@ -10,6 +10,7 @@ import { temporalAdd, temporalGet } from 'nebulosa/src/astronomy/time/temporal'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { type PositionOfBody, type SolarImageSource, type BodyPosition, type SolarSeasons, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 
 export type AtlasSunStore = typeof sunStore
@@ -38,14 +39,12 @@ const state = proxy<AtlasSunState>({
 	},
 })
 
-initProxy(state, 'atlas.sun', ['o:request', 'p:source'])
-state.request.time.utc = 0
-
 let chartUpdate = true
 let seasonsUpdate = true
 let seasonsYear = 0
 let eclipsesUpdate = true
 let mounted = false
+const u: VoidFunction[] = []
 
 function mount() {
 	if (mounted) return
@@ -53,6 +52,10 @@ function mount() {
 	console.info('sun mounted')
 
 	mounted = true
+
+	u[0] = initProxy(state, 'atlas.sun', ['o:request', 'p:source'])
+
+	state.request.time.utc = 0
 
 	void atlasStore.tick('sun')
 
@@ -62,6 +65,7 @@ function mount() {
 function unmount() {
 	if (!mounted) return
 	console.info('sun unmounted')
+	unsubscribe(u)
 	mounted = false
 }
 

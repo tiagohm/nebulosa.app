@@ -10,12 +10,12 @@ import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import type { Writable } from 'nebulosa/src/core/types'
 import { deg } from 'nebulosa/src/math/units/angle'
 import type { LunarEclipseMap } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 
 export type LunarEclipseStore = typeof lunarEclipseStore
 
 export interface LunarEclipseState {
-	show: boolean
 	eclipse?: LunarEclipse
 	map?: LunarEclipseMap
 	circumstances?: LocalLunarEclipseCircumstances
@@ -27,7 +27,6 @@ export interface LunarEclipseState {
 }
 
 const state = proxy<LunarEclipseState>({
-	show: false,
 	location: {
 		latitude: atlasStore.state.request.location.latitude,
 		longitude: atlasStore.state.request.location.longitude,
@@ -48,7 +47,27 @@ const state = proxy<LunarEclipseState>({
 	},
 })
 
-initProxy(state, 'lunareclipse', ['p:scale', 'o:localViewOptions', 'o:localCircumstancesOptions'])
+let mounted = false
+const u: VoidFunction[] = []
+
+function mount() {
+	if (mounted) return
+
+	console.info('galaxy mounted')
+
+	mounted = true
+
+	u[0] = initProxy(state, 'lunareclipse', ['p:scale', 'o:localViewOptions', 'o:localCircumstancesOptions'])
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('galaxy unmounted')
+	unsubscribe(u)
+	mounted = false
+}
 
 async function loadMap() {
 	if (state.eclipse === undefined) return false
@@ -77,8 +96,6 @@ async function loadView() {
 }
 
 async function load(next: LunarEclipse) {
-	show()
-
 	if (next.maximalTime !== state.eclipse?.maximalTime) {
 		state.eclipse = ref(next)
 
@@ -122,22 +139,14 @@ function next() {
 	return find(true)
 }
 
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
-
 export const lunarEclipseStore = {
 	state,
+	mount,
+	unmount,
 	load,
 	prev,
 	next,
 	handleCoordinateChange,
 	handleTransformChange,
 	updateLocalViewOptions,
-	show,
-	hide,
 } as const

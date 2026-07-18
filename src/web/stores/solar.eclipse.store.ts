@@ -10,6 +10,7 @@ import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import type { Writable } from 'nebulosa/src/core/types'
 import { deg } from 'nebulosa/src/math/units/angle'
 import type { SolarEclipseMap } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 
 export type SolarEclipseStore = typeof solarEclipseStore
@@ -42,7 +43,27 @@ const state = proxy<SolarEclipseState>({
 	},
 })
 
-initProxy(state, 'solareclipse', ['p:scale', 'o:localViewOptions'])
+let mounted = false
+const u: VoidFunction[] = []
+
+function mount() {
+	if (mounted) return
+
+	console.info('galaxy mounted')
+
+	mounted = true
+
+	u[0] = initProxy(state, 'solareclipse', ['p:scale', 'o:localViewOptions'])
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('galaxy unmounted')
+	unsubscribe(u)
+	mounted = false
+}
 
 async function loadMap() {
 	if (state.eclipse === undefined) return false
@@ -116,6 +137,8 @@ function next() {
 
 export const solarEclipseStore = {
 	state,
+	mount,
+	unmount,
 	load,
 	prev,
 	next,

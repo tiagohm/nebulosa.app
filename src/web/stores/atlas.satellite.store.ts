@@ -32,7 +32,7 @@ const state = proxy<AtasSatelliteState>({
 	page: 1,
 })
 
-initProxy(state, 'atlas.satellite', ['o:request'])
+// initProxy(state, 'atlas.satellite', ['o:request'])
 state.request.time.utc = 0
 
 let chartUpdate = true

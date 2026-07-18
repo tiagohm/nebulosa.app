@@ -6,6 +6,7 @@ import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/locat
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { type FindCloseApproaches, type CloseApproach, type MinorPlanet, type PositionOfBody, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 
 export type AtlasAsteroidStore = typeof asteroidStore
@@ -65,12 +66,9 @@ const state = proxy<AtlasAsteroidState>({
 	},
 } satisfies AtlasAsteroidState)
 
-initProxy(state, 'atlas.asteroid', ['p:tab', 'o:request', 'o:bookmark'])
-initProxy(state, 'atlas.asteroid.closeapproaches', ['o:request'])
-state.request.time.utc = 0
-
 let chartUpdate = true
 let mounted = false
+const u: VoidFunction[] = []
 
 function mount() {
 	if (mounted) return
@@ -78,6 +76,11 @@ function mount() {
 	console.info('asteroid mounted')
 
 	mounted = true
+
+	u[0] = initProxy(state, 'atlas.asteroid', ['p:tab', 'o:request', 'o:bookmark'])
+	u[1] = initProxy(state, 'atlas.asteroid.closeapproaches', ['o:request'])
+
+	state.request.time.utc = 0
 
 	void atlasStore.tick('asteroid')
 
@@ -87,6 +90,7 @@ function mount() {
 function unmount() {
 	if (!mounted) return
 	console.info('asteroid unmounted')
+	unsubscribe(u)
 	mounted = false
 }
 

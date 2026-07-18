@@ -31,7 +31,7 @@ const state = proxy<AtlasPlanetState>({
 	chart: [],
 })
 
-initProxy(state, 'atlas.planet', ['o:search', 'o:request'])
+// initProxy(state, 'atlas.planet', ['o:search', 'o:request'])
 state.request.time.utc = 0
 
 let chartUpdate = true

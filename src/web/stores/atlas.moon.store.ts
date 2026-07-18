@@ -33,7 +33,7 @@ const state = proxy<AtlasMoonState>({
 	],
 })
 
-initProxy(state, 'atlas.moon', ['o:request'])
+// initProxy(state, 'atlas.moon', ['o:request'])
 state.request.time.utc = 0
 
 let chartUpdate = true

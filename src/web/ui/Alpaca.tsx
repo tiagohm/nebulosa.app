@@ -4,15 +4,19 @@ import { List, ListItem } from '@ui/components/List'
 import { NumberInput } from '@ui/components/NumberInput'
 import { Icons } from '@ui/Icon'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
-import { memo } from 'react'
+import { memo, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 
-export const Alpaca = memo(() => (
-	<div className="grid grid-cols-12 items-center gap-2 p-3">
-		<DeviceList />
-		<Footer />
-	</div>
-))
+export const Alpaca = memo(() => {
+	useEffect(alpacaStore.mount, [])
+
+	return (
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<DeviceList />
+			<Footer />
+		</div>
+	)
+})
 
 function DeviceList() {
 	const { devices } = useSnapshot(alpacaStore.state.status)

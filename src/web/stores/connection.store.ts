@@ -5,6 +5,7 @@ import { DEFAULT_CONNECTION, type Connection } from '@shared/types'
 import { nanoid } from 'nanoid'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
 import type { ConnectionStatus } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 
 export type ConnectionStore = typeof connectionStore
@@ -40,10 +41,6 @@ const state = proxy<ConnectionState>({
 	},
 })
 
-initProxy(state, 'connection', ['o:edited', 'o:connections'])
-state.connections.sort(ConnectionComparator)
-state.edited.id = nanoid() // start as new connection
-
 const DEFAULT_CONNECTION_PORT = {
 	INDI: DEFAULT_CONNECTION.port,
 	ALPACA: 32323,
@@ -51,13 +48,39 @@ const DEFAULT_CONNECTION_PORT = {
 	FIRMATA: 27016,
 } satisfies Record<Connection['type'], number>
 
-connectionBus.subscribe('open', ({ reused }) => {
-	!reused && void list()
-})
+let mounted = false
+const u: VoidFunction[] = []
 
-connectionBus.subscribe('close', () => {
+function mount() {
+	if (mounted) return
+
+	console.info('alpaca mounted')
+
+	mounted = true
+
+	u[0] = initProxy(state, 'connection', ['o:edited', 'o:connections'])
+	state.connections.sort(ConnectionComparator)
+	state.edited.id = nanoid() // start as new connection
+
+	u[1] = connectionBus.subscribe('open', ({ reused }) => {
+		!reused && void list()
+	})
+
+	u[2] = connectionBus.subscribe('close', () => {
+		void list()
+	})
+
 	void list()
-})
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('alpaca unmounted')
+	unsubscribe(u)
+	mounted = false
+}
 
 async function list() {
 	const connections = await Api.Connection.list()
@@ -198,10 +221,10 @@ function removeEdited() {
 	return remove(state.edited)
 }
 
-void list()
-
 export const connectionStore = {
 	state,
+	mount,
+	unmount,
 	create,
 	edit,
 	update,

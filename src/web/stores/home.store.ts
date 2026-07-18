@@ -3,6 +3,7 @@ import type { Image, ImageSource } from '@shared/types'
 import { equipmentStore } from '@stores/equipment.store'
 import type { AutoFocusParams } from '@ui/AutoFocus'
 import type { DarvParams } from '@ui/Darv'
+import type { FlatWizardParams } from '@ui/FlatWizard'
 import type { AddGroupOptions, AddPanelOptions, DockviewApi, DockviewGroupPanel, DockviewGroupPanelApi, DockviewIDisposable, DockviewReadyEvent, EdgeGroupOptions, EdgeGroupPosition, IDockviewGroupPanel, IDockviewPanel, SerializedDockview } from 'dockview-react'
 import { nanoid } from 'nanoid'
 import type { RequiredOnly } from 'nebulosa/src/core/types'
@@ -149,7 +150,7 @@ function handleReady(event: DockviewReadyEvent) {
 	// Atlas
 	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
 
-	addDarv()
+	addFlatWizard()
 
 	// layoutDisposable = api.onDidLayoutChange(() => {
 	// 	window.clearTimeout(saveTimer)
@@ -333,6 +334,11 @@ function addCalculator() {
 function addDarv() {
 	const params: DarvParams = { id: nanoid() }
 	return addMultiplePanel('darv', { title: 'DARV', params }, main)
+}
+
+function addFlatWizard() {
+	const params: FlatWizardParams = { id: nanoid() }
+	return addMultiplePanel('flatWizard', { title: 'Flat Wizard', params }, main)
 }
 
 window.addEventListener('beforeunload', () => {

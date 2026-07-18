@@ -16,12 +16,12 @@ export interface FlatWizardParams {
 	readonly id: string
 }
 
-export const FlatWizard = memo(({ params }: IDockviewPanelProps<FlatWizardParams>) => {
-	const flatWizard = useStore(() => flatWizardStore(params.id), [params.id])
+export const FlatWizard = memo(({ api, params }: IDockviewPanelProps<FlatWizardParams>) => {
+	const flatWizard = useStore(() => flatWizardStore(params.id, api), [params.id])
 
 	return (
 		<FlatWizardStoreContext value={flatWizard}>
-			<div className="grid grid-cols-12 gap-2">
+			<div className="grid grid-cols-12 gap-2 p-3">
 				<Camera />
 				<Status />
 				<Input />
@@ -40,6 +40,14 @@ const Camera = memo(() => {
 			<CameraDropdown showLabel disabled={running} value={camera} onValueChange={(value) => (flatWizard.state.camera = value)} endContent={<CameraDropdownEndContent />} />
 		</div>
 	)
+})
+
+const CameraDropdownEndContent = memo(() => {
+	const flatWizard = useContext(FlatWizardStoreContext)
+	const { camera } = useSnapshot(flatWizard.state)
+	const { capture } = useSnapshot(flatWizard.state.request)
+
+	return camera && <CameraCaptureStartPopover camera={camera} mode="flatWizard" onValueChange={flatWizard.updateCapture} value={capture} />
 })
 
 const Status = memo(() => {
@@ -94,12 +102,4 @@ const Footer = memo(() => {
 			<Button color="success" disabled={!canStart} label="Start" loading={running} onClick={flatWizard.start} startContent={<Icons.Play />} />
 		</div>
 	)
-})
-
-const CameraDropdownEndContent = memo(() => {
-	const flatWizard = useContext(FlatWizardStoreContext)
-	const { camera } = useSnapshot(flatWizard.state)
-	const { capture } = useSnapshot(flatWizard.state.request)
-
-	return camera && <CameraCaptureStartPopover camera={camera} mode="flatWizard" onValueChange={flatWizard.updateCapture} value={capture} />
 })

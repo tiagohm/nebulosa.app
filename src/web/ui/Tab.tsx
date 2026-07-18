@@ -89,7 +89,7 @@ export function Tab(props: IDockviewPanelHeaderProps) {
 }
 
 function isTitleAlwaysVisible(type: HomePanelType) {
-	return DEVICE_TYPES.has(type as never) || type === 'darv'
+	return DEVICE_TYPES.has(type as never) || type === 'darv' || type === 'flatWizard'
 }
 
 function isCloseButtonAlwaysVisible(type: HomePanelType) {

@@ -1,12 +1,14 @@
 import { Api } from '@shared/api'
 import { flatWizardBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
+import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
-import { nanoid } from 'nanoid'
+import type { DockviewPanelApi } from 'dockview-react'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { type FlatWizardStart, type FlatWizardEvent, DEFAULT_FLAT_WIZARD_START, DEFAULT_FLAT_WIZARD_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
 
 export type FlatWizardStore = ReturnType<typeof flatWizardStore>
 
@@ -17,7 +19,7 @@ export interface FlatWizardState {
 	readonly event: FlatWizardEvent
 }
 
-export function flatWizardStore(id: string) {
+export function flatWizardStore(id: string, api: DockviewPanelApi) {
 	const state = proxy<FlatWizardState>({
 		running: false,
 		request: structuredClone(DEFAULT_FLAT_WIZARD_START),
@@ -45,7 +47,16 @@ export function flatWizardStore(id: string) {
 			}
 		})
 
-		// TODO: subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
+		u[2] = subscribeKey(state, 'camera', (camera) => {
+			updateTitle()
+
+			if (camera !== undefined) {
+				u[3]?.()
+				u[3] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.capture)
+			}
+		})
+
+		updateTitle()
 
 		state.request.id = id
 	}
@@ -55,6 +66,10 @@ export function flatWizardStore(id: string) {
 		console.info('flat wizard unmounted:', id)
 		unsubscribe(u)
 		mounted = false
+	}
+
+	function updateTitle() {
+		api.setTitle(state.camera ? `FlatWizard - ${state.camera?.name || 'None'}` : 'Flat Wizard')
 	}
 
 	function reset() {

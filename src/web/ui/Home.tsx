@@ -20,6 +20,7 @@ import { GuideOutput } from '@ui/GuideOutput'
 import { Guider } from '@ui/Guider'
 import { ImageWorkspace } from '@ui/ImageWorkspace'
 import { IndiServer } from '@ui/IndiServer'
+import { LunarEclipseMap } from '@ui/LunarEclipseMap'
 import { Moon } from '@ui/Moon'
 import { Mount } from '@ui/Mount'
 import { Planet } from '@ui/Planet'
@@ -66,6 +67,8 @@ const components = {
 	guideOutput: GuideOutput,
 	guider: Guider,
 	image: ImageWorkspace,
+	indiServer: IndiServer,
+	lunarEclipse: LunarEclipseMap,
 	moon: Moon,
 	mount: Mount,
 	planet: Planet,
@@ -74,12 +77,11 @@ const components = {
 	rotator: Rotator,
 	satellite: Satellite,
 	settings: Settings,
+	solarEclipse: SolarEclipseMap,
 	sun: Sun,
 	thermometer: Thermometer,
 	tppa: Tppa,
 	wheel: Wheel,
-	solarEclipse: SolarEclipseMap,
-	indiServer: IndiServer,
 } as const satisfies Record<HomePanelType, MemoExoticComponent<({ api }: IDockviewPanelProps) => React.ReactNode>>
 
 export const Home = memo(() => {

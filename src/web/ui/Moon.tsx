@@ -1,6 +1,5 @@
 import { formatDistance } from '@shared/util'
 import { moonStore } from '@stores/atlas.moon.store'
-import { lunarEclipseStore } from '@stores/lunar.eclipse.store'
 import { AstronomicalEvent, EphemerisAndChart, EphemerisPositionContext } from '@ui/Atlas'
 import { Icons } from '@ui/Icon'
 import { MoonImage } from '@ui/MoonImage'
@@ -55,7 +54,7 @@ const LunarEclipses = memo(() => {
 
 	return (
 		<div className="flex flex-col gap-0 text-xs">
-			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} key={next.maximalTime.day} label={next.type} offset={offset} time={temporalFromTime(next.maximalTime)} onClick={() => lunarEclipseStore.load(next)} />
+			<AstronomicalEvent format="YYYY-MM-DD HH:mm" icon={Icons.Moon} key={next.maximalTime.day} label={next.type} offset={offset} time={temporalFromTime(next.maximalTime)} onClick={moonStore.showLunarEclipse} />
 		</div>
 	)
 })

@@ -18,6 +18,7 @@ import guideOutputIcon from '@assets/guide-output.webp'
 import heaterIcon from '@assets/heater.webp'
 import imageIcon from '@assets/image.webp'
 import indiIcon from '@assets/indi.webp'
+import lunarEclipseIcon from '@assets/lunar.eclipse.webp'
 import moonIcon from '@assets/moon.webp'
 import mountIcon from '@assets/mount.webp'
 import phd2Icon from '@assets/phd2.webp'
@@ -57,6 +58,8 @@ const icons = {
 	guideOutput: guideOutputIcon,
 	guider: phd2Icon,
 	image: imageIcon,
+	indiServer: indiIcon,
+	lunarEclipse: lunarEclipseIcon,
 	moon: moonIcon,
 	mount: mountIcon,
 	planet: planetIcon,
@@ -65,12 +68,11 @@ const icons = {
 	rotator: rotatorIcon,
 	satellite: satelliteIcon,
 	settings: settingsIcon,
+	solarEclipse: solarEclipseIcon,
 	sun: sunIcon,
 	thermometer: thermometerIcon,
 	tppa: alignmentIcon,
 	wheel: wheelIcon,
-	solarEclipse: solarEclipseIcon,
-	indiServer: indiIcon,
 } as const satisfies Record<HomePanelType, string>
 
 export function Tab(props: IDockviewPanelHeaderProps) {

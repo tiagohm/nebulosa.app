@@ -35,6 +35,8 @@ const PANEL_TYPES = [
 	'guideOutput',
 	'guider',
 	'image',
+	'indiServer',
+	'lunarEclipse',
 	'moon',
 	'mount',
 	'planet',
@@ -43,12 +45,11 @@ const PANEL_TYPES = [
 	'rotator',
 	'satellite',
 	'settings',
+	'solarEclipse',
 	'sun',
 	'thermometer',
 	'tppa',
 	'wheel',
-	'solarEclipse',
-	'indiServer',
 ] as const
 
 const MAX_PANELS = 100
@@ -361,6 +362,10 @@ function addSolarEclipse() {
 	return addUniquePanel('solarEclipse', { title: 'Solar Eclipse' }, main)
 }
 
+function addLunarEclipse() {
+	return addUniquePanel('lunarEclipse', { title: 'Lunar Eclipse' }, main)
+}
+
 function addGuider() {
 	return addUniquePanel('guider', { title: 'Guider' }, main)
 }
@@ -393,6 +398,7 @@ export const homeStore = {
 	addFlatWizard,
 	addFraming,
 	addSolarEclipse,
+	addLunarEclipse,
 	addGuider,
 	addTppa,
 	addPlanetarium,

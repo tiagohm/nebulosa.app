@@ -1,7 +1,6 @@
 import { astronomicEventTemporal } from '@shared/time'
 import { tw } from '@shared/util'
 import { atlasStore } from '@stores/atlas.store'
-import { lunarEclipseStore } from '@stores/lunar.eclipse.store'
 import { solarEclipseStore } from '@stores/solar.eclipse.store'
 import { IconButton } from '@ui/components/IconButton'
 import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
@@ -18,7 +17,7 @@ import { Fragment, memo, useEffect, type CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const SolarEclipseMap = memo(() => {
-	useEffect(lunarEclipseStore.mount, [])
+	useEffect(solarEclipseStore.mount, [])
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">

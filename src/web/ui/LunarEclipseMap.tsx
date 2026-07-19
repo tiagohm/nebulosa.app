@@ -17,42 +17,31 @@ import { useSnapshot } from 'valtio'
 export const LunarEclipseMap = memo(() => {
 	useEffect(lunarEclipseStore.mount, [])
 
-	return null
-
-	// return (
-	// 	<Modal header={<Header />} id="lunar-eclipse-map" initialWidth="560px" onHide={lunarEclipseStore.hide}>
-	// 		<Body />
-	// 	</Modal>
-	// )
+	return (
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<Header />
+			<div className="col-span-full flex flex-row items-center gap-2">
+				<Map />
+				<Info />
+			</div>
+		</div>
+	)
 })
 
 const Header = memo(() => {
 	const { eclipse } = useSnapshot(lunarEclipseStore.state)
 
 	return (
-		<div className="grid w-full grid-cols-[2.5rem_1fr_2.5rem] items-center gap-2">
+		<div className="col-span-full flex items-center justify-center gap-2">
 			<IconButton icon={Icons.ArrowLeft} onClick={lunarEclipseStore.prev} tooltipContent="Prev" />
-			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">
-				<Icons.Moon className="text-warning" />
-				<div className="flex flex-col items-center justify-center gap-0">
-					<span className="truncate">Lunar Eclipse</span>
-					{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD')}</span>}
-				</div>
-			</span>
+			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD')}</span>}</span>
 			<IconButton icon={Icons.ArrowRight} onClick={lunarEclipseStore.next} tooltipContent="Next" />
 		</div>
 	)
 })
 
-const Body = memo(() => (
-	<div className="flex w-full flex-col gap-3">
-		<Info />
-		<Map />
-	</div>
-))
-
 const Info = memo(() => (
-	<div className="flex w-full flex-col gap-2">
+	<div className="flex flex-1 flex-col justify-start gap-2 self-start">
 		<Tabs fullWidth>
 			<Tab id="details">Details</Tab>
 			<Tab id="contacts">Contacts</Tab>
@@ -359,7 +348,7 @@ const LocalView = memo(() => {
 })
 
 const Map = memo(() => (
-	<WorldMap defaultScale={1} onCoordinateClick={lunarEclipseStore.handleCoordinateChange} onTransformChange={lunarEclipseStore.handleTransformChange}>
+	<WorldMap className="h-full flex-1" defaultScale={1} onCoordinateClick={lunarEclipseStore.handleCoordinateChange} onTransformChange={lunarEclipseStore.handleTransformChange}>
 		<MapMarker />
 		<MapGeometry />
 	</WorldMap>

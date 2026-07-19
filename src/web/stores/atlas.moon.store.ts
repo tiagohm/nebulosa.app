@@ -2,6 +2,8 @@ import { Api } from '@shared/api'
 import { initProxy } from '@shared/proxy'
 import { atlasStore, isLocationChanged, isTimeChanged, type TagItem } from '@stores/atlas.store'
 import { framingStore } from '@stores/framing.store'
+import { homeStore } from '@stores/home.store'
+import { lunarEclipseStore } from '@stores/lunar.eclipse.store'
 import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalAdd, temporalGet } from 'nebulosa/src/astronomy/time/temporal'
@@ -147,6 +149,12 @@ async function updateApsis() {
 	else apsisUpdate = true
 }
 
+function showLunarEclipse() {
+	if (state.eclipses.length === 0) return
+	void lunarEclipseStore.load(state.eclipses[0])
+	homeStore.addLunarEclipse()
+}
+
 function sync(mount?: Mount) {
 	if (mount === undefined) return undefined
 	const [rightAscension, declination] = state.position.equatorial
@@ -169,6 +177,7 @@ export const moonStore = {
 	mount,
 	unmount,
 	tick,
+	showLunarEclipse,
 	sync,
 	goTo,
 	frame,

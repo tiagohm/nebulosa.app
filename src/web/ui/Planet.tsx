@@ -1,10 +1,10 @@
 import { planetStore } from '@stores/atlas.planet.store'
-import { atlasStore } from '@stores/atlas.store'
+import { EphemerisAndChart, EphemerisPositionContext } from '@ui/Atlas'
 import { ListItem, List } from '@ui/components/List'
 import { TextInput } from '@ui/components/TextInput'
 import { PlanetTypeSelect } from '@ui/PlanetTypeSelect'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { memo, useMemo } from 'react'
+import { memo, useEffect, useMemo } from 'react'
 import planetarySatelliteEphemeris from 'src/data/planetary.satellites.json'
 import { useSnapshot } from 'valtio'
 
@@ -32,9 +32,32 @@ const PLANETS = [
 ] as const
 
 export const Planet = memo(({ api }: IDockviewPanelProps) => {
-	const { bookmark } = useSnapshot(atlasStore.state)
-	const { code, search } = useSnapshot(planetStore.state)
-	const name = PLANETS.find((e) => e.code === code)?.name
+	useEffect(planetStore.mount, [])
+
+	return (
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<Filter />
+			<FilteredList />
+			<EphemerisPositionContext value={planetStore}>
+				<EphemerisAndChart />
+			</EphemerisPositionContext>
+		</div>
+	)
+})
+
+const Filter = memo(() => {
+	const { name, type } = useSnapshot(planetStore.state.search)
+
+	return (
+		<div className="col-span-full grid grid-cols-subgrid items-center gap-2 p-2">
+			<TextInput className="col-span-8" onValueChange={(value) => planetStore.update('name', value)} label="Search" value={name} />
+			<PlanetTypeSelect className="col-span-4" onValueChange={(value) => planetStore.update('type', value)} value={type} />
+		</div>
+	)
+})
+
+const FilteredList = memo(() => {
+	const { search } = useSnapshot(planetStore.state)
 
 	const items = useMemo(() => {
 		const noSearch = !search.name.trim()
@@ -46,33 +69,14 @@ export const Planet = memo(({ api }: IDockviewPanelProps) => {
 		return PLANETS.filter((e) => (all || e.type === search.type) && (noSearch || e.name.toUpperCase().includes(text) || e.code.includes(text) || e.solution.includes(text)))
 	}, [search.name, search.type])
 
-	function handleFavoriteChange(favorite: boolean) {
-		if (name && code) atlasStore.toggleBookmark('planet', name, code, favorite)
-	}
-
 	function handleAction(index: number) {
-		return planetStore.select(items[index].code)
+		return planetStore.select(items[index])
 	}
 
 	return (
-		<div className="grid grid-cols-12 items-center gap-2">
-			<PlanetFilter />
-			<List className="col-span-full max-h-120" itemCount={items.length} onAction={handleAction}>
-				{(i) => PlanetItem(items[i])}
-			</List>
-			{/* <EphemerisAndChart type="planet" className="col-span-full" isFavorite={code ? isBookmarked(bookmark.items, 'planet', code) : undefined} name={name} onFavoriteChange={handleFavoriteChange} /> */}
-		</div>
-	)
-})
-
-const PlanetFilter = memo(() => {
-	const { name, type } = useSnapshot(planetStore.state.search)
-
-	return (
-		<div className="col-span-full grid grid-cols-subgrid items-center gap-2 p-2">
-			<TextInput className="col-span-8" onValueChange={(value) => planetStore.update('name', value)} label="Search" value={name} />
-			<PlanetTypeSelect className="col-span-4" onValueChange={(value) => planetStore.update('type', value)} value={type} />
-		</div>
+		<List className="col-span-full max-h-120" itemCount={items.length} onAction={handleAction}>
+			{(i) => PlanetItem(items[i])}
+		</List>
 	)
 })
 

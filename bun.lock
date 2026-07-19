@@ -410,7 +410,7 @@
 
     "nanoid": ["nanoid@6.0.0", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-mkUH+rPkwU2qPadJ0oJZOjeZ5Mxn8Q1UhevwkTRWNuUZzyia3h4rhzK39hxaHTk0o2OxB8W2SQ6A8k23ZDi1pQ=="],
 
-    "nebulosa": ["nebulosa@github:tiagohm/nebulosa.ts#9b24e6d", { "peerDependencies": { "@types/bun": "latest", "fast-xml-parser": "latest", "typescript": "6.0.3" } }, "tiagohm-nebulosa.ts-9b24e6d", "sha512-vGfXjq0v94eXOtM4l95pGYZo6bGMfgwxadv3P9zI62ujbHKKMXiI+v8aDzYWW0W6F4NnpbUQkydVJ+p6OgCTOw=="],
+    "nebulosa": ["nebulosa@github:tiagohm/nebulosa.ts#beffff5", { "peerDependencies": { "@types/bun": "latest", "fast-xml-parser": "latest", "typescript": "6.0.3" } }, "tiagohm-nebulosa.ts-beffff5", "sha512-k1BfAWYpVPiVJ0sR4yWwG0ydZOJYGLfQBrq2o1GDiMq7GrlVH5xrDpn0i1ZOsNV5ZRRVP3ZiQwWlYLzWUMpRfA=="],
 
     "node-addon-api": ["node-addon-api@7.1.1", "", {}, "sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ=="],
 

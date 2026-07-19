@@ -1,5 +1,5 @@
-import { useStore } from '@hooks/store.hook'
 import { satelliteStore } from '@stores/atlas.satellite.store'
+import { EphemerisPositionContext, EphemerisAndChart } from '@ui/Atlas'
 import { IconButton } from '@ui/components/IconButton'
 import { Paginator } from '@ui/components/Paginator'
 import { Table } from '@ui/components/Table'
@@ -8,23 +8,25 @@ import { Icons } from '@ui/Icon'
 import { SatelliteCategoryChipGroup } from '@ui/SatelliteCategoryChipGroup'
 import { SatelliteGroupTypeChipGroup } from '@ui/SatelliteGroupTypeChipGroup'
 import type { IDockviewPanelProps } from 'dockview-react'
-import { memo } from 'react'
+import { memo, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const Satellite = memo(({ api }: IDockviewPanelProps) => {
-	useStore(satelliteStore, [])
+	useEffect(satelliteStore.mount, [])
 
 	return (
-		<div className="relative grid grid-cols-12 items-center gap-2">
-			<SatelliteFilter />
-			<SatelliteTable />
-			<SatellitePaginator className="col-span-full w-full" />
-			{/* <EphemerisAndChart type="satellite" className="col-span-full" isFavorite={selected && isBookmarked(bookmark.items, 'satellite', selected.id.toFixed(0))} name={selected?.name} onFavoriteChange={handleFavoriteChange} /> */}
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<Filter />
+			<Result />
+			<Page className="col-span-full w-full" />
+			<EphemerisPositionContext value={satelliteStore}>
+				<EphemerisAndChart />
+			</EphemerisPositionContext>
 		</div>
 	)
 })
 
-const SatelliteFilter = memo(() => {
+const Filter = memo(() => {
 	const { groups, category } = useSnapshot(satelliteStore.state.request)
 	const { text } = useSnapshot(satelliteStore.state.request)
 	const { loading } = useSnapshot(satelliteStore.state)
@@ -36,15 +38,15 @@ const SatelliteFilter = memo(() => {
 				<IconButton color="danger" disabled={loading} icon={Icons.Restore} onClick={satelliteStore.resetFilter} tooltipContent="Reset" variant="flat" />
 				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={satelliteStore.search} tooltipContent="Filter" variant="flat" />
 			</div>
-			<p className="col-span-full font-bold">CATEGORY</p>
+			<p className="col-span-full text-sm font-bold">CATEGORY</p>
 			<SatelliteCategoryChipGroup className="col-span-full" onValueChange={(value) => satelliteStore.update('category', value)} value={category} />
-			<p className="col-span-full font-bold">GROUP</p>
+			<p className="col-span-full text-sm font-bold">GROUP</p>
 			<SatelliteGroupTypeChipGroup category={category} className="col-span-full" onValueChange={(value) => satelliteStore.update('groups', value)} value={groups} />
 		</div>
 	)
 })
 
-const SatelliteTable = memo(() => {
+const Result = memo(() => {
 	const { result } = useSnapshot(satelliteStore.state)
 
 	return (
@@ -63,7 +65,7 @@ const SatelliteTable = memo(() => {
 	)
 })
 
-const SatellitePaginator = memo((props: React.ComponentProps<'div'>) => {
+const Page = memo((props: React.ComponentProps<'div'>) => {
 	const { page } = useSnapshot(satelliteStore.state.request)
 	const { loading, result } = useSnapshot(satelliteStore.state)
 

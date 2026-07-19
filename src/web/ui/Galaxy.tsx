@@ -23,8 +23,8 @@ export const Galaxy = memo(({ api }: IDockviewPanelProps) => {
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<Filter />
-			<GalaxyTable />
-			<GalaxyPaginator className="col-span-full w-full" />
+			<Result />
+			<Page className="col-span-full w-full" />
 			<EphemerisPositionContext value={galaxyStore}>
 				<EphemerisAndChart />
 			</EphemerisPositionContext>
@@ -66,7 +66,7 @@ const Filter = memo(() => {
 	)
 })
 
-const GalaxyTable = memo(() => {
+const Result = memo(() => {
 	const { result } = useSnapshot(galaxyStore.state)
 
 	return (
@@ -87,7 +87,7 @@ const GalaxyTable = memo(() => {
 	)
 })
 
-const GalaxyPaginator = memo((props: React.ComponentProps<'div'>) => {
+const Page = memo((props: React.ComponentProps<'div'>) => {
 	const { page } = useSnapshot(galaxyStore.state.request)
 	const { loading, result } = useSnapshot(galaxyStore.state)
 

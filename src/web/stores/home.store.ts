@@ -157,6 +157,7 @@ function handleReady(event: DockviewReadyEvent) {
 	addUniquePanel('planet', { title: 'Planet' }, main)
 	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
 	addUniquePanel('galaxy', { title: 'DSO' }, main)
+	addUniquePanel('satellite', { title: 'Satellite' }, main)
 
 	addPlanetarium()
 

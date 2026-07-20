@@ -2,7 +2,7 @@ import { Api } from '@shared/api'
 import { initProxy } from '@shared/proxy'
 import { atlasStore, isLocationChanged, isTimeChanged, type TagItem } from '@stores/atlas.store'
 import { framingStore } from '@stores/framing.store'
-import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
+import { settingsStore } from '@stores/settings.store'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatRA, formatDEC } from 'nebulosa/src/math/units/angle'
 import { type PlanetType, type PositionOfBody, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/shared/types'
@@ -12,7 +12,6 @@ import { proxy, ref } from 'valtio'
 export type AtlasPlanetStore = typeof planetStore
 
 export interface AtlasPlanetState {
-	mode: 'info' | 'chart'
 	readonly search: {
 		name: string
 		type: PlanetType | 'ALL'
@@ -25,7 +24,6 @@ export interface AtlasPlanetState {
 }
 
 const state = proxy<AtlasPlanetState>({
-	mode: 'info',
 	search: {
 		name: '',
 		type: 'ALL',
@@ -50,9 +48,9 @@ function mount() {
 
 	mounted = true
 
-	u[0] = initProxy(state, 'atlas.planet', ['o:search', 'o:request'])
+	atlasStore.state.planet = ref(planetStore)
 
-	state.request.time.utc = 0
+	u[0] = initProxy(state, 'atlas.planet', ['o:search'])
 
 	void atlasStore.tick('planet')
 
@@ -66,12 +64,12 @@ function unmount() {
 	mounted = false
 }
 
-async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
+async function tick(time: UTCTime, dateHasChanged: boolean) {
 	let changed = false
 
-	if (isLocationChanged(location, state.request.location)) {
+	if (isLocationChanged(settingsStore.state.location, state.request.location)) {
 		chartUpdate = true
-		Object.assign(state.request.location, location)
+		Object.assign(state.request.location, settingsStore.state.location)
 		changed = true
 	}
 
@@ -145,5 +143,3 @@ export const planetStore = {
 	goTo,
 	frame,
 } as const
-
-atlasStore.state.planet = ref(planetStore)

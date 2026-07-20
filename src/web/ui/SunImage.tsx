@@ -39,7 +39,7 @@ export const SunImage = memo(({ source, onSourceChange }: SunProps) => {
 	return (
 		<div className="flex min-w-20 flex-col items-center justify-center gap-1">
 			<SolarImageSourceSelect fullWidth onValueChange={onSourceChange} value={source} />
-			<img className="h-auto w-full max-w-54 contrast-[0.87] select-none" draggable={false} onError={handleError} src={src} />
+			<img className="h-auto w-full max-w-54 contrast-[0.875] select-none" draggable={false} onError={handleError} src={src} />
 			<Link href={SOLAR_IMAGE_SOURCE_URLS[source].replace('256', '1024')} label="Image source: NASA/SDO" />
 		</div>
 	)

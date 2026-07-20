@@ -2,7 +2,7 @@ import { Api } from '@shared/api'
 import { initProxy } from '@shared/proxy'
 import { atlasStore, isLocationChanged, isTimeChanged, type BookmarkItem, type TagItem } from '@stores/atlas.store'
 import { framingStore } from '@stores/framing.store'
-import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
+import { settingsStore } from '@stores/settings.store'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatRA, formatDEC } from 'nebulosa/src/math/units/angle'
 import { type SearchSatellite, type PositionOfBody, type Satellite, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SEARCH_SATELLITE } from 'src/shared/types'
@@ -12,7 +12,6 @@ import { proxy, ref } from 'valtio'
 export type AtlasSatelliteStore = typeof satelliteStore
 
 export interface AtasSatelliteState {
-	mode: 'info' | 'chart'
 	loading: boolean
 	readonly request: SearchSatellite & PositionOfBody
 	selected?: Satellite
@@ -26,7 +25,6 @@ export interface AtasSatelliteState {
 }
 
 const state = proxy<AtasSatelliteState>({
-	mode: 'info',
 	loading: false,
 	request: {
 		...structuredClone(DEFAULT_SEARCH_SATELLITE),
@@ -65,9 +63,9 @@ function mount() {
 
 	mounted = true
 
-	u[0] = initProxy(state, 'atlas.satellite', ['o:request', 'o:bookmark'])
+	atlasStore.state.satellite = ref(satelliteStore)
 
-	state.request.time.utc = 0
+	u[0] = initProxy(state, 'atlas.satellite', ['o:bookmark'])
 
 	void atlasStore.tick('satellite')
 	void search(true)
@@ -144,12 +142,12 @@ async function updateChart(force: boolean = false) {
 	else chartUpdate = true
 }
 
-async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
+async function tick(time: UTCTime, dateHasChanged: boolean) {
 	let changed = false
 
-	if (isLocationChanged(location, state.request.location)) {
+	if (isLocationChanged(settingsStore.state.location, state.request.location)) {
 		chartUpdate = true
-		Object.assign(state.request.location, location)
+		Object.assign(state.request.location, settingsStore.state.location)
 		changed = true
 	}
 
@@ -198,5 +196,3 @@ export const satelliteStore = {
 	goTo,
 	frame,
 } as const
-
-atlasStore.state.satellite = ref(satelliteStore)

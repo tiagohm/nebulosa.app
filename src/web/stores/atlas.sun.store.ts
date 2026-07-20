@@ -3,9 +3,9 @@ import { initProxy } from '@shared/proxy'
 import { atlasStore, isLocationChanged, isTimeChanged, type TagItem } from '@stores/atlas.store'
 import { framingStore } from '@stores/framing.store'
 import { homeStore } from '@stores/home.store'
+import { settingsStore } from '@stores/settings.store'
 import { solarEclipseStore } from '@stores/solar.eclipse.store'
 import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
-import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalAdd, temporalGet } from 'nebulosa/src/astronomy/time/temporal'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
@@ -16,7 +16,6 @@ import { proxy, ref } from 'valtio'
 export type AtlasSunStore = typeof sunStore
 
 export interface AtlasSunState {
-	mode: 'info' | 'chart'
 	readonly request: PositionOfBody
 	source: SolarImageSource
 	readonly position: BodyPosition
@@ -27,7 +26,6 @@ export interface AtlasSunState {
 }
 
 const state = proxy<AtlasSunState>({
-	mode: 'info',
 	request: structuredClone(DEFAULT_POSITION_OF_BODY),
 	position: structuredClone(DEFAULT_BODY_POSITION),
 	chart: [],
@@ -51,9 +49,9 @@ function mount() {
 
 	mounted = true
 
-	u[0] = initProxy(state, 'atlas.sun', ['o:request', 'p:source'])
+	atlasStore.state.sun = ref(sunStore)
 
-	state.request.time.utc = 0
+	u[0] = initProxy(state, 'atlas.sun', ['p:source'])
 
 	void atlasStore.tick('sun')
 
@@ -67,12 +65,12 @@ function unmount() {
 	mounted = false
 }
 
-async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
+async function tick(time: UTCTime, dateHasChanged: boolean) {
 	let changed = false
 
-	if (isLocationChanged(location, state.request.location)) {
+	if (isLocationChanged(settingsStore.state.location, state.request.location)) {
 		chartUpdate = true
-		Object.assign(state.request.location, location)
+		Object.assign(state.request.location, settingsStore.state.location)
 		changed = true
 	}
 
@@ -167,5 +165,3 @@ export const sunStore = {
 	goTo,
 	frame,
 } as const
-
-atlasStore.state.sun = ref(sunStore)

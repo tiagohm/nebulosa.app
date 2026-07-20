@@ -21,5 +21,5 @@ const SKY_MAP_OPTIONS: CelestialOptions = {
 export const Planetarium = memo(({ api }: IDockviewPanelProps) => {
 	useEffect(planetariumStore.mount, [])
 
-	return <SkyMap options={SKY_MAP_OPTIONS} onReady={planetariumStore.handleReady} onDestroy={planetariumStore.handleDestroy} className="absolute top-0 left-0 z-0 w-full opacity-80" height="100%" />
+	return <SkyMap options={SKY_MAP_OPTIONS} onReady={planetariumStore.handleReady} onDestroy={planetariumStore.handleDestroy} className="absolute top-0 left-0" height="100%" />
 })

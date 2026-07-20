@@ -208,11 +208,21 @@ function load() {
 	}
 }
 
-function addUniquePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>) {
+function activatePanel(panel: IDockviewPanel) {
+	panel.api.setActive()
+
+	const location = panel.api.location
+
+	if (location.type === 'edge') {
+		api?.getEdgeGroup(location.position)?.expand()
+	}
+}
+
+function addUniquePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>, activate: boolean = false) {
 	const ps = panels[type] ?? []
 
 	if (ps.length > 0) {
-		ps[0].api.setActive()
+		activatePanel(ps[0])
 		return ps[0]
 	}
 
@@ -220,6 +230,8 @@ function addUniquePanel(type: HomePanelType, options: HomePanelOptions, group?: 
 	const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, tabComponent: group === left ? 'fixed' : 'closeable', component: type, position: { referenceGroup: (group ?? main!).id, index: options.index } })
 	ps.push(p)
 	panels[type] = ps
+
+	if (activate) activatePanel(p)
 
 	console.info('unique panel added:', id)
 
@@ -239,7 +251,7 @@ function addUniquePanel(type: HomePanelType, options: HomePanelOptions, group?: 
 	return p
 }
 
-function addMultiplePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>) {
+function addMultiplePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>, activate: boolean = false) {
 	const ps = panels[type] ?? []
 
 	if (ps.length >= MAX_PANELS) return
@@ -255,6 +267,8 @@ function addMultiplePanel(type: HomePanelType, options: HomePanelOptions, group?
 			const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, tabComponent: 'closeable', component: type, position: referencePanel && !group?.id ? { referencePanel, direction: 'right' } : { referenceGroup: referenceGroupId } })
 			ps.push(p)
 			panels[type] = ps
+
+			if (activate) activatePanel(p)
 
 			console.info('multiple panel added:', id)
 
@@ -279,22 +293,16 @@ function addMultiplePanel(type: HomePanelType, options: HomePanelOptions, group?
 }
 
 function addDevice(device: Device) {
-	if (!api) return
+	const ps = panels[device.type] ?? []
+	const panel = ps.find((e) => e.params!.id === device.id)
 
-	const params = { type: device.type, id: device.id, name: device.name } as const satisfies Pick<Device, 'id' | 'type' | 'name'>
-	const panel = addMultiplePanel(device.type, { title: device.name, params }, right)
-
-	if (panel === undefined) return
-
-	panel.api.setActive()
-
-	const location = panel.api.location
-
-	if (location.type === 'edge') {
-		api.getEdgeGroup(location.position)?.expand()
+	if (panel) {
+		activatePanel(panel)
+		return panel
 	}
 
-	return panel
+	const params = { type: device.type, id: device.id, name: device.name } as const satisfies Pick<Device, 'id' | 'type' | 'name'>
+	return addMultiplePanel(device.type, { title: device.name, params }, right, true)
 }
 
 function addImage(path: string, source: ImageSource | Camera, id?: string) {
@@ -314,7 +322,7 @@ function addImage(path: string, source: ImageSource | Camera, id?: string) {
 	} else {
 		const image = { path, id, source, camera }
 		const title = image.camera?.name ?? image.path
-		p = addMultiplePanel('image', { title, params: image }, main)
+		p = addMultiplePanel('image', { title, params: image }, main, true)
 
 		if (p !== undefined) {
 			imageBus.emit('add', image)

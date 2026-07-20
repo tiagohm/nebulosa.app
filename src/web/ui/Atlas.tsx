@@ -1,10 +1,8 @@
 import { tw } from '@shared/util'
-import { atlasStore, type BookmarkItem, type TagItem } from '@stores/atlas.store'
+import { atlasStore, type TagItem } from '@stores/atlas.store'
 import { BodyCoordinateInfo } from '@ui/BodyCoordinateInfo'
 import { Chip } from '@ui/components/Chip'
-import { FilterableList } from '@ui/components/FilterableList'
 import { IconButton } from '@ui/components/IconButton'
-import { Popover } from '@ui/components/Popover'
 import { MountDropdown } from '@ui/DeviceDropdown'
 import { type Icon, Icons } from '@ui/Icon'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
@@ -29,36 +27,6 @@ export interface EphemerisPositionContextParameters {
 }
 
 export const EphemerisPositionContext = createContext<EphemerisPositionContextParameters>(null as never)
-
-function BookmarkFilter(item: BookmarkItem, text: string) {
-	return item.name.toLowerCase().includes(text) || item.type.includes(text)
-}
-
-const BookmarkPopover = memo(() => (
-	<Popover trigger={<IconButton color="warning" icon={Icons.Bookmark} tooltipContent="Bookmarks" />}>
-		<BookmarkPopoverContent />
-	</Popover>
-))
-
-const BookmarkPopoverContent = memo(() => {
-	const { items } = useSnapshot(atlasStore.state.bookmark)
-
-	return (
-		<div className="w-full">
-			<FilterableList className="col-span-full" filter={BookmarkFilter} items={items} minLengthToSearch={1}>
-				{(item) => (
-					<div onClick={() => atlasStore.selectBookmark(item)} className="flex flex-row items-center justify-between gap-2 p-2">
-						<div className="flex flex-col justify-center gap-0">
-							<span className="text-xs font-bold text-neutral-600 uppercase">{item.type}</span>
-							<span className="overflow-auto whitespace-nowrap">{item.name}</span>
-						</div>
-						<IconButton color="danger" icon={Icons.Trash} onClick={() => atlasStore.removeBookmark(item)} size="sm" />
-					</div>
-				)}
-			</FilterableList>
-		</div>
-	)
-})
 
 export interface AstronomicalEventProps extends Omit<React.ComponentProps<'div'>, 'children'> {
 	readonly icon: Icon

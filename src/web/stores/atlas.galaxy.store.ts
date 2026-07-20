@@ -3,7 +3,7 @@ import { initProxy } from '@shared/proxy'
 import { skyObjectName } from '@shared/util'
 import { atlasStore, isLocationChanged, isTimeChanged, type BookmarkItem, type TagItem } from '@stores/atlas.store'
 import { framingStore } from '@stores/framing.store'
-import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
+import { settingsStore } from '@stores/settings.store'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { type SearchSkyObject, type SkyObjectSearchItem, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_SKY_OBJECT_SEARCH } from 'src/shared/types'
@@ -13,7 +13,6 @@ import { proxy, ref } from 'valtio'
 export type AtlasGalaxyStore = typeof galaxyStore
 
 export interface AtlasGalaxyState {
-	mode: 'info' | 'chart'
 	loading: boolean
 	readonly request: Required<SearchSkyObject>
 	result: readonly SkyObjectSearchItem[]
@@ -26,7 +25,6 @@ export interface AtlasGalaxyState {
 }
 
 const state = proxy<AtlasGalaxyState>({
-	mode: 'info',
 	loading: false,
 	request: structuredClone(DEFAULT_SKY_OBJECT_SEARCH),
 	result: [],
@@ -70,9 +68,9 @@ function mount() {
 
 	mounted = true
 
-	u[0] = initProxy(state, 'atlas.galaxy', ['o:request', 'o:bookmark'])
+	atlasStore.state.galaxy = ref(galaxyStore)
 
-	state.request.time.utc = 0
+	u[0] = initProxy(state, 'atlas.galaxy', ['o:bookmark'])
 
 	void atlasStore.tick('galaxy')
 	void search(true)
@@ -165,12 +163,12 @@ async function updateChart(force: boolean = false) {
 	else chartUpdate = true
 }
 
-async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
+async function tick(time: UTCTime, dateHasChanged: boolean) {
 	let changed = false
 
-	if (isLocationChanged(location, state.request.location)) {
+	if (isLocationChanged(settingsStore.state.location, state.request.location)) {
 		chartUpdate = true
-		Object.assign(state.request.location, location)
+		Object.assign(state.request.location, settingsStore.state.location)
 		changed = true
 	}
 
@@ -246,5 +244,3 @@ export const galaxyStore = {
 	frame,
 	handleFavorite,
 } as const
-
-atlasStore.state.galaxy = ref(galaxyStore)

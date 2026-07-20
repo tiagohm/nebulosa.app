@@ -1,4 +1,6 @@
+import { atlasStore } from '@stores/atlas.store'
 import { homeStore, type HomePanelType } from '@stores/home.store'
+import { settingsStore } from '@stores/settings.store'
 import { About } from '@ui/About'
 import { AlpacaServer } from '@ui/AlpacaServer'
 import { Asteroid } from '@ui/Asteroid'
@@ -85,8 +87,10 @@ const components = {
 } as const satisfies Record<HomePanelType, MemoExoticComponent<({ api }: IDockviewPanelProps) => React.ReactNode>>
 
 export const Home = memo(() => {
-	// Mounts the websocket and home lifecycle once the home screen is active.
+	// Mounts the store lifecycle once the home screen is active.
 	useEffect(wsStore.mount, [])
+	useEffect(settingsStore.mount, [])
+	useEffect(atlasStore.mount, [])
 	useEffect(homeStore.mount, [])
 
 	return (

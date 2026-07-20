@@ -1,6 +1,6 @@
 import { Api } from '@shared/api'
 import { initProxy } from '@shared/proxy'
-import { atlasStore } from '@stores/atlas.store'
+import { settingsStore } from '@stores/settings.store'
 import type { WorldMapPosition } from '@ui/components/WorldMap'
 import type { InteractTransform } from '@ui/Interactable'
 import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
@@ -9,7 +9,7 @@ import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/locat
 import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import type { Writable } from 'nebulosa/src/core/types'
 import { deg } from 'nebulosa/src/math/units/angle'
-import type { SolarEclipseMap } from 'src/shared/types'
+import { DEFAULT_GEOGRAPHIC_COORDINATE, type SolarEclipseMap } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 
@@ -26,11 +26,7 @@ export interface SolarEclipseState {
 }
 
 const state = proxy<SolarEclipseState>({
-	location: {
-		latitude: atlasStore.state.request.location.latitude,
-		longitude: atlasStore.state.request.location.longitude,
-		elevation: atlasStore.state.request.location.elevation,
-	},
+	location: structuredClone(DEFAULT_GEOGRAPHIC_COORDINATE),
 	scale: 5,
 	localViewOptions: {
 		width: 400,
@@ -52,6 +48,10 @@ function mount() {
 	console.info('solar eclipse mounted')
 
 	mounted = true
+
+	state.location.latitude = settingsStore.state.location.latitude
+	state.location.longitude = settingsStore.state.location.longitude
+	state.location.elevation = settingsStore.state.location.elevation
 
 	u[0] = initProxy(state, 'solareclipse', ['p:scale', 'o:localViewOptions'])
 
@@ -122,7 +122,7 @@ async function handleCoordinateChange(position: WorldMapPosition) {
 async function find(next: boolean) {
 	if (!state.eclipse) return
 	const utc = temporalFromTime(state.eclipse.maximalTime) + (next ? 86400000 : -86400000)
-	const eclipse = await Api.Atlas.solarEclipses({ time: { utc, offset: 0 }, location: atlasStore.state.request.location, count: 1, next })
+	const eclipse = await Api.Atlas.solarEclipses({ time: { utc, offset: 0 }, location: settingsStore.state.location, count: 1, next })
 	if (!eclipse || eclipse.length === 0) return
 	await load(eclipse[0])
 }

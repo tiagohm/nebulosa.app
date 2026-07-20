@@ -1,11 +1,10 @@
 import { Api } from '@shared/api'
-import { initProxy } from '@shared/proxy'
 import { atlasStore, isLocationChanged, isTimeChanged, type TagItem } from '@stores/atlas.store'
 import { framingStore } from '@stores/framing.store'
 import { homeStore } from '@stores/home.store'
 import { lunarEclipseStore } from '@stores/lunar.eclipse.store'
+import { settingsStore } from '@stores/settings.store'
 import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
-import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalAdd, temporalGet } from 'nebulosa/src/astronomy/time/temporal'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatRA, formatDEC } from 'nebulosa/src/math/units/angle'
@@ -16,7 +15,6 @@ import { proxy, ref } from 'valtio'
 export type AtlasMoonStore = typeof moonStore
 
 export interface AtlasMoonState {
-	mode: 'info' | 'chart'
 	readonly request: PositionOfBody
 	readonly position: BodyPosition
 	chart: readonly number[]
@@ -27,7 +25,6 @@ export interface AtlasMoonState {
 }
 
 const state = proxy<AtlasMoonState>({
-	mode: 'info',
 	request: structuredClone(DEFAULT_POSITION_OF_BODY),
 	position: structuredClone(DEFAULT_BODY_POSITION),
 	chart: [],
@@ -55,9 +52,7 @@ function mount() {
 
 	mounted = true
 
-	u[0] = initProxy(state, 'atlas.moon', ['o:request'])
-
-	state.request.time.utc = 0
+	atlasStore.state.moon = ref(moonStore)
 
 	void atlasStore.tick('moon')
 
@@ -71,12 +66,12 @@ function unmount() {
 	mounted = false
 }
 
-async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
+async function tick(time: UTCTime, dateHasChanged: boolean) {
 	let changed = false
 
-	if (isLocationChanged(location, state.request.location)) {
+	if (isLocationChanged(settingsStore.state.location, state.request.location)) {
 		chartUpdate = true
-		Object.assign(state.request.location, location)
+		Object.assign(state.request.location, settingsStore.state.location)
 		changed = true
 	}
 
@@ -182,5 +177,3 @@ export const moonStore = {
 	goTo,
 	frame,
 } as const
-
-atlasStore.state.moon = ref(moonStore)

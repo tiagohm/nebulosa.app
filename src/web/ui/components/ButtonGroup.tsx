@@ -6,28 +6,28 @@ const BUTTON_GROUP_ITEM_CHILD_TYPE = Symbol('ButtonGroupItem')
 
 const buttonGroupStyles = tv({
 	slots: {
-		base: 'min-w-0 items-stretch align-top',
-		item: 'inline-flex flex-1 min-w-0 items-center justify-center gap-2 font-normal select-none transition focus-visible:outline-none focus-visible:ring-0',
+		base: 'inline-flex min-w-0 items-stretch align-top',
+		item: 'inline-flex flex-1 items-center justify-center gap-2 font-normal select-none transition focus-visible:outline-none focus-visible:ring-0',
 		startContent: 'flex shrink-0 items-center justify-center',
-		label: 'min-w-0 flex-1 truncate text-center',
+		label: 'min-w-0 flex-1 text-center',
 		endContent: 'flex shrink-0 items-center justify-center',
 	},
 	variants: {
 		size: {
 			sm: {
-				item: 'h-8 min-w-8 px-2 text-sm',
+				item: 'h-8 px-2 text-sm',
 				startContent: 'text-sm',
 				label: 'text-sm',
 				endContent: 'text-sm',
 			},
 			md: {
-				item: 'h-10 min-w-10 px-2 text-sm',
+				item: 'h-10 px-2 text-sm',
 				startContent: 'text-sm',
 				label: 'text-sm',
 				endContent: 'text-sm',
 			},
 			lg: {
-				item: 'h-11 min-w-11 px-2 text-base',
+				item: 'h-11 px-2 text-base',
 				startContent: 'text-base',
 				label: 'text-base',
 				endContent: 'text-base',

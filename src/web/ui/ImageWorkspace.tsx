@@ -29,21 +29,21 @@ const tabComponents = {
 } as const
 
 const components = {
-	'component.image.viewer': ImageViewer,
-	'component.image.save': ImageSave,
-	'component.image.solver': ImageSolver,
-	'component.image.stretch': ImageStretch,
-	'component.image.rotation': Dummy,
-	'component.image.calibration': ImageCalibration,
-	'component.image.scnr': ImageScnr,
-	'component.image.adjustment': ImageAdjustment,
-	'component.image.filter': ImageFilter,
-	'component.image.annotation': ImageAnnotation,
-	'component.image.starDetection': ImageStarDetection,
-	'component.image.fov': ImageFov,
-	'component.image.header': ImageHeader,
-	'component.image.statistics': ImageStatistics,
-	'component.image.settings': ImageSettings,
+	viewer: ImageViewer,
+	save: ImageSave,
+	solver: ImageSolver,
+	stretch: ImageStretch,
+	rotation: Dummy,
+	calibration: ImageCalibration,
+	scnr: ImageScnr,
+	adjustment: ImageAdjustment,
+	filter: ImageFilter,
+	annotation: ImageAnnotation,
+	starDetection: ImageStarDetection,
+	fov: ImageFov,
+	header: ImageHeader,
+	statistics: ImageStatistics,
+	settings: ImageSettings,
 } as const
 
 export const ImageWorkspace = memo(({ params }: IDockviewPanelProps<Image>) => {
@@ -53,24 +53,26 @@ export const ImageWorkspace = memo(({ params }: IDockviewPanelProps<Image>) => {
 	function handleReady(event: DockviewReadyEvent) {
 		const { api } = event
 
-		api.addPanel({ id: 'panel.image', tabComponent: 'fixed', component: 'component.image.viewer', params, title: 'Viewer' })
+		api.addPanel({ id: 'panel.image', tabComponent: 'fixed', component: 'viewer', params, title: 'Viewer' })
 
-		const left = api.addEdgeGroup('left', { id: 'edge.left', collapsed: true, collapsedSize: 38, initialSize: 380 })
-		const right = api.addEdgeGroup('right', { id: 'edge.right', collapsed: true, collapsedSize: 38, initialSize: 380 })
+		// TODO: Há um bug, estando dentro da aba (Image), abra o painel lateral, arraste para uma largura qualquer, mude para uma outra aba (Planetarium), volte para a aba (Image), a largura do painel volta para o mínimo (default).
+		// CONTORNO: Setar minimumSize = maximumSize = initialSize, mas isso não permite mais redimensionar a largura do painel
+		const left = api.addEdgeGroup('left', { id: 'edge.left', collapsed: true, collapsedSize: 36, minimumSize: 360, maximumSize: 360, initialSize: 360 })
+		const right = api.addEdgeGroup('right', { id: 'edge.right', collapsed: true, collapsedSize: 36, minimumSize: 360, maximumSize: 360, initialSize: 360 })
 
-		api.addPanel({ id: 'panel.save', tabComponent: 'fixed', component: 'component.image.save', params, title: 'Save', position: { referenceGroup: left.id } })
-		api.addPanel({ id: 'panel.solver', tabComponent: 'fixed', component: 'component.image.solver', params, title: 'Solver', position: { referenceGroup: right.id } })
-		api.addPanel({ id: 'panel.stretch', tabComponent: 'fixed', component: 'component.image.stretch', params, title: 'Stretch', position: { referenceGroup: left.id } })
-		api.addPanel({ id: 'panel.rotation', tabComponent: 'fixed', component: 'component.image.rotation', params, title: 'Rotate', position: { referenceGroup: left.id } })
-		api.addPanel({ id: 'panel.calibration', tabComponent: 'fixed', component: 'component.image.calibration', params, title: 'Calibration', position: { referenceGroup: left.id } })
-		api.addPanel({ id: 'panel.scnr', tabComponent: 'fixed', component: 'component.image.scnr', params, title: 'SCNR', position: { referenceGroup: left.id } })
-		api.addPanel({ id: 'panel.adjustment', tabComponent: 'fixed', component: 'component.image.adjustment', params, title: 'Adjustment', position: { referenceGroup: left.id } })
-		api.addPanel({ id: 'panel.filter', tabComponent: 'fixed', component: 'component.image.filter', params, title: 'Filter', position: { referenceGroup: left.id } })
-		api.addPanel({ id: 'panel.annotation', tabComponent: 'fixed', component: 'component.image.annotation', params, title: 'Annotation', position: { referenceGroup: right.id } })
-		api.addPanel({ id: 'panel.starDetection', tabComponent: 'fixed', component: 'component.image.starDetection', params, title: 'Star Detection', position: { referenceGroup: right.id } })
-		api.addPanel({ id: 'panel.fov', tabComponent: 'fixed', component: 'component.image.fov', params, title: 'FOV', position: { referenceGroup: right.id } })
-		api.addPanel({ id: 'panel.header', tabComponent: 'fixed', component: 'component.image.header', params, title: 'FITS Header', position: { referenceGroup: right.id } })
-		api.addPanel({ id: 'panel.statistics', tabComponent: 'fixed', component: 'component.image.statistics', params, title: 'Statistics', position: { referenceGroup: right.id } })
+		api.addPanel({ id: 'panel.save', tabComponent: 'fixed', component: 'save', params, title: 'Save', position: { referenceGroup: left.id } })
+		api.addPanel({ id: 'panel.solver', tabComponent: 'fixed', component: 'solver', params, title: 'Solver', position: { referenceGroup: right.id } })
+		api.addPanel({ id: 'panel.stretch', tabComponent: 'fixed', component: 'stretch', params, title: 'Stretch', position: { referenceGroup: left.id } })
+		api.addPanel({ id: 'panel.rotation', tabComponent: 'fixed', component: 'rotation', params, title: 'Rotate', position: { referenceGroup: left.id } })
+		api.addPanel({ id: 'panel.calibration', tabComponent: 'fixed', component: 'calibration', params, title: 'Calibration', position: { referenceGroup: left.id } })
+		api.addPanel({ id: 'panel.scnr', tabComponent: 'fixed', component: 'scnr', params, title: 'SCNR', position: { referenceGroup: left.id } })
+		api.addPanel({ id: 'panel.adjustment', tabComponent: 'fixed', component: 'adjustment', params, title: 'Adjustment', position: { referenceGroup: left.id } })
+		api.addPanel({ id: 'panel.filter', tabComponent: 'fixed', component: 'filter', params, title: 'Filter', position: { referenceGroup: left.id } })
+		api.addPanel({ id: 'panel.annotation', tabComponent: 'fixed', component: 'annotation', params, title: 'Annotation', position: { referenceGroup: right.id } })
+		api.addPanel({ id: 'panel.starDetection', tabComponent: 'fixed', component: 'starDetection', params, title: 'Star Detection', position: { referenceGroup: right.id } })
+		api.addPanel({ id: 'panel.fov', tabComponent: 'fixed', component: 'fov', params, title: 'FOV', position: { referenceGroup: right.id } })
+		api.addPanel({ id: 'panel.header', tabComponent: 'fixed', component: 'header', params, title: 'FITS Header', position: { referenceGroup: right.id } })
+		api.addPanel({ id: 'panel.statistics', tabComponent: 'fixed', component: 'statistics', params, title: 'Statistics', position: { referenceGroup: right.id } })
 	}
 
 	return (

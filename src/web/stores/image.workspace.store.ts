@@ -10,7 +10,6 @@ export type ImageWorkspaceEventType = 'add' | 'remove' | 'update'
 
 export interface ImageWorkspaceState {
 	readonly images: Image[]
-	selected?: Image
 	readonly picker: {
 		show: boolean
 		path: string

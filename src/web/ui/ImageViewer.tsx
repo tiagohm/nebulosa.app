@@ -8,7 +8,6 @@ import { DetectedStars } from '@ui/DetectedStars'
 import { Fov } from '@ui/Fov'
 import { ImageInfo } from '@ui/ImageInfo'
 import { ImageRoi } from '@ui/ImageRoi'
-import { ImageToolBar } from '@ui/ImageToolBar'
 import { Interactable } from '@ui/Interactable'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useContext, useEffect, useLayoutEffect, useRef } from 'react'
@@ -34,14 +33,13 @@ export const ImageViewer = memo(({ params }: IDockviewPanelProps<Image>) => {
 	}, [imgRef.current])
 
 	return (
-		<>
-			<ImageToolBar />
+		<div className="relative h-full w-full overflow-hidden">
 			<ImageInfo />
 			<Interactable onGesture={viewer.mouseCoordinate.handleGesture} onMouseMove={viewer.mouseCoordinate.handleMouseMove} onClick={viewer.mouseCoordinate.handleClick} onTap={viewer.select} ref={viewer.attachInteractable} zIndex={1}>
 				<img className="image pointer-events-none max-w-none touch-none rounded-sm select-none" draggable={false} id={params.id} onLoad={viewer.handleLoad} ref={imgRef} />
 				<InteractableOverlay />
 			</Interactable>
-		</>
+		</div>
 	)
 })
 

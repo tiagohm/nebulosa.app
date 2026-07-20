@@ -1,7 +1,6 @@
 import { Api } from '@shared/api'
 import { mountBus } from '@shared/bus'
 import { skyObjectName } from '@shared/util'
-import { atlasStore } from '@stores/atlas.store'
 import { equipmentStore } from '@stores/equipment.store'
 import { settingsStore } from '@stores/settings.store'
 import { TAU } from 'nebulosa/src/core/constants'
@@ -12,6 +11,7 @@ import constellationLabels from 'src/data/constellation.labels.json'
 import constellationLines from 'src/data/constellation.lines.json'
 import mw from 'src/data/mw.json'
 import type { Celestial, CelestialShape, ConstellationData, MovingBody, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
+import type { PositionOfBody } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
 
@@ -97,12 +97,10 @@ function handleReady(celestial: Celestial) {
 	}
 
 	const u: VoidFunction[] = []
-	let refreshed = false
 
 	u[0] = celestial.on('viewTransformChange', ({ transform }) => Object.assign(state.transform, transform))
 
 	u[1] = celestial.on('updateEnd', ({ time }) => {
-		refreshed = true
 		void updateMovingBodies(celestial, time)
 	})
 
@@ -116,11 +114,7 @@ function handleReady(celestial: Celestial) {
 		if (shape !== undefined) {
 			shape.visible = true
 			Object.assign(shape.coordinate, event.equatorialCoordinate)
-
-			if (refreshed) {
-				refreshed = false
-				celestial.markShapeChanged(shape.id)
-			}
+			celestial.markShapeChanged(shape.id)
 		}
 	})
 
@@ -141,9 +135,9 @@ function handleReady(celestial: Celestial) {
 		const { object } = event
 
 		if (object.type === 'star') {
-			void atlasStore.state.galaxy!.selectWithId(object.id)
+			// void atlasStore.state.galaxy!.selectWithId(object.id)
 		} else if (object.type === 'deepSky') {
-			void atlasStore.state.galaxy!.selectWithId(object.object.id)
+			// void atlasStore.state.galaxy!.selectWithId(object.object.id)
 		} else if (object.type === 'movingBody') {
 			if (object.object.type === 'comet') {
 				//
@@ -152,7 +146,7 @@ function handleReady(celestial: Celestial) {
 			} else if (object.object.type === 'moon') {
 			} else if (object.object.type === 'sun') {
 			} else {
-				void atlasStore.state.planet!.select(object.object.id, true)
+				// void atlasStore.state.planet!.select(object.object.id, true)
 			}
 		}
 	})
@@ -286,15 +280,9 @@ async function updateMovingBodies(celestial: Celestial, time: number) {
 }
 
 async function positionOfMovingBody(body: MovingBody, time: number): Promise<MovingBody | undefined> {
-	const { location } = atlasStore.state.request
-
-	const req = {
-		time: { utc: time, offset: 0 },
-		location: {
-			latitude: location.latitude,
-			longitude: location.longitude,
-			elevation: location.elevation ?? 0,
-		},
+	const req: PositionOfBody = {
+		time: { utc: time, offset: settingsStore.state.time.offset },
+		location: settingsStore.state.location,
 	}
 
 	// TODO: Use fast mode

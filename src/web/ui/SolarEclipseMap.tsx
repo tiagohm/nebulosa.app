@@ -1,6 +1,5 @@
 import { astronomicEventTemporal } from '@shared/time'
 import { tw } from '@shared/util'
-import { atlasStore } from '@stores/atlas.store'
 import { solarEclipseStore } from '@stores/solar.eclipse.store'
 import { IconButton } from '@ui/components/IconButton'
 import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
@@ -99,18 +98,17 @@ const EclipseDetails = memo(() => {
 interface ContactPointProps {
 	readonly name: string
 	readonly point: SolarEclipseGeoPoint
-	readonly offset: number
 	readonly color: string
 }
 
-function ContactPoint({ point, name, offset, color }: ContactPointProps) {
+function ContactPoint({ point, name, color }: ContactPointProps) {
 	return (
 		<div className="flex min-w-0 flex-col gap-0 rounded-lg border border-neutral-800 bg-neutral-900/70 px-3 py-2 text-xs" style={{ borderLeftColor: color, borderLeftWidth: 3 }}>
 			<div className="flex min-w-0 flex-row items-center justify-between gap-2">
 				<span className="font-mono text-sm font-bold" style={{ color }}>
 					{name}
 				</span>
-				<span className="truncate font-mono text-neutral-300">{formatTemporal(temporalFromTime(time(point.jd!, 0, 3)), 'YYYY-MM-DD HH:mm', offset)}</span>
+				<span className="truncate font-mono text-neutral-300">{formatTemporal(temporalFromTime(time(point.jd!, 0, 3)), 'YYYY-MM-DD HH:mm')}</span>
 			</div>
 			<div className="flex min-w-0 flex-row flex-wrap gap-x-3 gap-y-1 font-mono text-neutral-400">
 				<span>
@@ -140,7 +138,6 @@ const CONTACT_POINT_ITEMS = [
 
 const Contacts = memo(() => {
 	const { eclipse, map } = useSnapshot(solarEclipseStore.state)
-	const { offset } = useSnapshot(atlasStore.state.request.time)
 
 	if (map === undefined || eclipse === undefined) return null
 
@@ -148,7 +145,7 @@ const Contacts = memo(() => {
 		<div className="grid w-full grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
 			{CONTACT_POINT_ITEMS.map(([name, color]) => {
 				const point = map.points[name]
-				return point && <ContactPoint color={color} key={name} point={point} name={name} offset={offset} />
+				return point && <ContactPoint color={color} key={name} point={point} name={name} />
 			})}
 		</div>
 	)

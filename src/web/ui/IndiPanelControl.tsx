@@ -50,19 +50,17 @@ const Body = memo(() => {
 	const { tab } = useSnapshot(panel.state)
 
 	return (
-		<div className="flex w-full">
-			<Tabs className="w-full" value={tab} onValueChange={(value) => (panel.state.tab = value)}>
-				<Tab id="property">Properties</Tab>
-				<Tab id="message">Messages</Tab>
-				<TabPanel id="property">
-					<DeviceAndGroup />
-					<GroupList />
-				</TabPanel>
-				<TabPanel id="message">
-					<Messages />
-				</TabPanel>
-			</Tabs>
-		</div>
+		<Tabs className="w-full" value={tab} onValueChange={(value) => (panel.state.tab = value)}>
+			<Tab id="property">Properties</Tab>
+			<Tab id="message">Messages</Tab>
+			<TabPanel id="property">
+				<DeviceAndGroup />
+				<GroupList />
+			</TabPanel>
+			<TabPanel id="message">
+				<Messages />
+			</TabPanel>
+		</Tabs>
 	)
 })
 
@@ -88,7 +86,7 @@ const GroupList = memo(() => {
 	const { group, groups } = useSnapshot(panel.state)
 	const selectedGroup = groups.includes(group) ? group : undefined
 
-	return <div className="col-span-full flex max-h-full min-w-0 flex-col gap-4 overflow-y-auto p-1">{selectedGroup === undefined ? <div className="px-2 py-3 text-sm text-neutral-500">No properties</div> : <PropertyList group={selectedGroup} />}</div>
+	return <div className="col-span-full flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto p-1">{selectedGroup === undefined ? <div className="px-2 py-3 text-sm text-neutral-500">No properties</div> : <PropertyList group={selectedGroup} />}</div>
 })
 
 function DevicePropertyComparator(a: DeviceProperty, b: DeviceProperty) {

@@ -35,7 +35,7 @@ export const ImageViewer = memo(({ params }: IDockviewPanelProps<Image>) => {
 	return (
 		<div className="relative h-full w-full overflow-hidden">
 			<ImageInfo />
-			<Interactable onGesture={viewer.mouseCoordinate.handleGesture} onMouseMove={viewer.mouseCoordinate.handleMouseMove} onClick={viewer.mouseCoordinate.handleClick} onTap={viewer.select} ref={viewer.attachInteractable} zIndex={1}>
+			<Interactable className="z-1" onGesture={viewer.mouseCoordinate.handleGesture} onMouseMove={viewer.mouseCoordinate.handleMouseMove} onClick={viewer.mouseCoordinate.handleClick} onTap={viewer.select} ref={viewer.attachInteractable}>
 				<img className="image pointer-events-none max-w-none touch-none rounded-sm select-none" draggable={false} id={params.id} onLoad={viewer.handleLoad} ref={imgRef} />
 				<InteractableOverlay />
 			</Interactable>

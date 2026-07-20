@@ -1,4 +1,4 @@
-import { clamp, preventDefault } from '@shared/util'
+import { clamp, preventDefault, tw } from '@shared/util'
 import { createUseGesture, dragAction, type GestureHandlers, pinchAction, wheelAction } from '@use-gesture/react'
 import { memo, useEffectEvent, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 
@@ -31,7 +31,7 @@ export interface InteractableMethods {
 }
 
 export interface InteractableProps extends Omit<GestureHandlers, 'onDragStart' | 'onDrag' | 'onDragEnd' | 'onPinch' | 'onWheel'> {
-	readonly zIndex: number
+	readonly className?: string
 	readonly onGesture?: (transform: Readonly<InteractTransform>, type: InteractType, event?: Event) => void
 	readonly onTap?: (tx: number, ty: number, x: number, y: number, event: React.PointerEvent<HTMLDivElement>) => void
 	readonly ref?: React.Ref<InteractableMethods>
@@ -96,7 +96,7 @@ function isRoiInteraction(event: Event) {
 	return event.target instanceof Element && event.target.closest('.roi') !== null
 }
 
-export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...handlers }: InteractableProps) => {
+export const Interactable = memo(({ ref, className, children, onGesture, onTap, ...handlers }: InteractableProps) => {
 	const wrapperRef = useRef<HTMLDivElement>(null)
 	const transformation = useRef<InteractTransform>({ x: 0, y: 0, scale: 1, angle: 0 })
 	const wrapperSize = useRef({ width: 0, height: 0 })
@@ -400,7 +400,7 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 	)
 
 	return (
-		<div className="wrapper absolute inline-block cursor-crosshair active:cursor-grabbing" onPointerUp={handleTap} ref={wrapperRef} style={{ zIndex }}>
+		<div className={tw('wrapper absolute inline-block cursor-crosshair active:cursor-grabbing', className)} onPointerUp={handleTap} ref={wrapperRef}>
 			{children}
 		</div>
 	)

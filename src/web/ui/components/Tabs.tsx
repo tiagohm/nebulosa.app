@@ -8,11 +8,11 @@ const TAB_PANEL_CHILD_TYPE = Symbol('TabPanel')
 
 const tabsStyles = tv({
 	slots: {
-		base: 'flex min-w-0 gap-2 align-top',
-		tabList: 'flex min-w-0 shrink-0 gap-1 overflow-auto rounded-lg bg-neutral-900/70 p-1',
+		base: 'flex flex-1 min-h-0 min-w-0 gap-2 align-top',
+		tabList: 'flex min-h-0 min-w-0 shrink-0 gap-1 overflow-auto rounded-lg bg-neutral-900/70 p-1',
 		tabListContainer: 'flex flex-row items-center gap-2',
-		panelContainer: 'min-w-0 flex-1',
-		panel: 'min-w-0 text-neutral-100',
+		panelContainer: 'flex flex-col min-h-0 min-w-0 flex-1',
+		panel: 'flex flex-1 flex-col min-h-0 min-w-0 text-neutral-100',
 		startContent: 'flex shrink-0 items-center justify-center',
 		endContent: 'flex shrink-0 items-center justify-center',
 	},

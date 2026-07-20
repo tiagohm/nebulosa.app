@@ -144,9 +144,8 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	}
 
 	function attachImage(node: HTMLImageElement | null) {
-		if (node) {
+		if (node !== null) {
 			target = node
-			select()
 		}
 	}
 
@@ -280,17 +279,10 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		}
 	}
 
-	function select() {
-		if (!target) return
-		bringToFront(target)
-	}
-
 	function detach() {
 		if (loading) return
 
 		console.info('image detached:', state.path)
-
-		adjustZIndexAfterBeRemoved()
 
 		target = undefined
 		interactable = undefined
@@ -334,7 +326,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		syncMountHere,
 		frameAt,
 		handleLoad,
-		select,
 		detach,
 		toggleClass,
 		remove,
@@ -359,55 +350,4 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	const stretch = (store.stretch = imageStretchStore(store))
 
 	return store
-}
-
-function adjustZIndexAfterBeRemoved() {
-	const wrappers = document.querySelectorAll('.workspace .wrapper') ?? []
-
-	// There is nothing to do
-	if (wrappers.length === 0) return
-
-	// Get the z-index for each element that is not the target
-	const elements = new Array<HTMLElement>(wrappers.length)
-
-	for (const div of wrappers) {
-		const zIndex = +(div as HTMLElement).style.zIndex
-		elements[zIndex] = div as HTMLElement
-	}
-
-	// Update the z-index
-	for (let i = 0, z = 0; i < elements.length; i++) {
-		if (elements[i]) elements[i].style.zIndex = (z++).toFixed(0)
-	}
-}
-
-function bringToFront(e: HTMLElement) {
-	const selected = e.closest<HTMLElement>('.wrapper')!
-	const wrappers = selected.closest('.workspace')?.querySelectorAll('.wrapper') ?? []
-
-	// Only exist one element and it is already at the top
-	if (wrappers.length === 1) return
-
-	// Selected element z-index
-	const zIndex = +selected.style.zIndex
-	const max = wrappers.length - 1
-
-	// It is already at the top
-	if (zIndex === max) return
-
-	// Get the z-index for each element
-	const elements = new Array<HTMLElement>(wrappers.length)
-
-	for (const div of wrappers) {
-		const zIndex = +(div as HTMLElement).style.zIndex
-		elements[zIndex] = div as HTMLElement
-	}
-
-	// Shift the element z-index until selected element
-	for (let i = elements.length - 1; i > zIndex; i--) {
-		elements[i].style.zIndex = (i - 1).toFixed(0)
-	}
-
-	// Update the selected element z-index
-	elements[zIndex].style.zIndex = max.toFixed(0)
 }

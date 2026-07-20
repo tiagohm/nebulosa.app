@@ -32,7 +32,7 @@ export const Camera = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<CameraStoreContext value={camera.store}>
-			<Tabs className="p-3" startContent={<TabStartContent />}>
+			<Tabs className="h-full p-3" startContent={<TabStartContent />}>
 				<Tab id="main">Camera</Tab>
 				<Tab id="options">Options</Tab>
 				<Tab id="indi">INDI</Tab>

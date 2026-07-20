@@ -47,8 +47,8 @@ export const AstronomicalEvent = memo(({ icon: Icon, label, time, offset, format
 ))
 
 export const EphemerisAndChart = memo(() => (
-	<div className="col-span-full flex flex-col items-center justify-start gap-1">
-		<span className={`flex w-full flex-row gap-2`}>
+	<div className="@container col-span-full flex flex-col items-center justify-start gap-1">
+		<span className="flex w-full flex-col gap-2 @[750px]:flex-row">
 			<EphemerisPosition />
 			<EphemerisChart />
 		</span>

@@ -1,5 +1,6 @@
 import { atlasStore } from '@stores/atlas.store'
 import { homeStore, type HomePanelType } from '@stores/home.store'
+import { imageHomeStore } from '@stores/image.home.store'
 import { settingsStore } from '@stores/settings.store'
 import { About } from '@ui/About'
 import { AlpacaServer } from '@ui/AlpacaServer'
@@ -20,7 +21,7 @@ import { Framing } from '@ui/Framing'
 import { Galaxy } from '@ui/Galaxy'
 import { GuideOutput } from '@ui/GuideOutput'
 import { Guider } from '@ui/Guider'
-import { ImageWorkspace } from '@ui/ImageWorkspace'
+import { ImageHome } from '@ui/ImageHome'
 import { IndiServer } from '@ui/IndiServer'
 import { LunarEclipseMap } from '@ui/LunarEclipseMap'
 import { Moon } from '@ui/Moon'
@@ -68,7 +69,7 @@ const components = {
 	gps: Dummy,
 	guideOutput: GuideOutput,
 	guider: Guider,
-	image: ImageWorkspace,
+	image: ImageHome,
 	indiServer: IndiServer,
 	lunarEclipse: LunarEclipseMap,
 	moon: Moon,
@@ -92,6 +93,7 @@ export const Home = memo(() => {
 	useEffect(settingsStore.mount, [])
 	useEffect(atlasStore.mount, [])
 	useEffect(homeStore.mount, [])
+	useEffect(imageHomeStore.mount, [])
 
 	return (
 		<div className="grid h-dvh grid-rows-[auto_minmax(0,1fr)] text-white">

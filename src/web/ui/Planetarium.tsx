@@ -1,4 +1,3 @@
-import { useStore } from '@hooks/store.hook'
 import { planetariumStore } from '@stores/planetarium.store'
 import { SkyMap } from '@ui/SkyMap'
 import type { IDockviewPanelProps } from 'dockview-react'

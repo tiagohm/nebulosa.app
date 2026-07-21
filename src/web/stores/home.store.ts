@@ -262,7 +262,7 @@ function addMultiplePanel(type: HomePanelType, options: HomePanelOptions, group?
 		const p = ps.find((e) => e.id === id)
 
 		if (p === undefined) {
-			const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, tabComponent: 'closeable', component: type, position: referencePanel && !group?.id ? { referencePanel, direction: 'right' } : { referenceGroup: referenceGroupId } })
+			const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, tabComponent: type === 'image' ? 'image' : 'closeable', component: type, position: referencePanel && !group?.id ? { referencePanel, direction: 'right' } : { referenceGroup: referenceGroupId } })
 			ps.push(p)
 			panels[type] = ps
 
@@ -385,6 +385,30 @@ function addPlanetarium() {
 	return addUniquePanel('planetarium', { title: 'Planetarium' }, main)
 }
 
+function addSun() {
+	addUniquePanel('sun', { title: 'Sun' }, main)
+}
+
+function addMoon() {
+	addUniquePanel('moon', { title: 'Moon' }, main)
+}
+
+function addPlanet() {
+	addUniquePanel('planet', { title: 'Planet' }, main)
+}
+
+function addAsteroid() {
+	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
+}
+
+function addDSO() {
+	addUniquePanel('galaxy', { title: 'DSO' }, main)
+}
+
+function addSatellite() {
+	addUniquePanel('satellite', { title: 'Satellite' }, main)
+}
+
 window.addEventListener('beforeunload', () => {
 	saveLayout()
 })
@@ -408,4 +432,10 @@ export const homeStore = {
 	addGuider,
 	addTppa,
 	addPlanetarium,
+	addSun,
+	addMoon,
+	addPlanet,
+	addAsteroid,
+	addDSO,
+	addSatellite,
 } as const

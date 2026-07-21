@@ -51,20 +51,18 @@ export const Calculator = memo(({ api }: IDockviewPanelProps) => {
 	})
 
 	return (
-		<div className="h-full p-3">
-			<Tabs className="max-h-full" classNames={{ panelContainer: 'overflow-y-auto pr-1', tabList: 'max-h-full w-56', tab: 'min-h-9' }} placement="start">
-				{tabs.map(({ id, label }) => (
-					<Tab id={id} key={id} endContent={<IconButton icon={Icons.Star} color={favorites.includes(id) ? 'warning' : 'default'} onClick={() => calculatorStore.toggleFavorite(id)} size="sm" />}>
-						{label}
-					</Tab>
-				))}
-				{tabs.map(({ Component, id }) => (
-					<TabPanel id={id} key={id}>
-						<Component />
-					</TabPanel>
-				))}
-			</Tabs>
-		</div>
+		<Tabs className="p-3" classNames={{ panelContainer: 'overflow-y-auto pr-1', tabList: 'max-h-full w-56', tab: 'min-h-9' }} placement="start">
+			{tabs.map(({ id, label }) => (
+				<Tab id={id} key={id} endContent={<IconButton icon={Icons.Star} color={favorites.includes(id) ? 'warning' : 'default'} onClick={() => calculatorStore.toggleFavorite(id)} size="sm" />}>
+					{label}
+				</Tab>
+			))}
+			{tabs.map(({ Component, id }) => (
+				<TabPanel id={id} key={id}>
+					<Component />
+				</TabPanel>
+			))}
+		</Tabs>
 	)
 })
 
@@ -76,7 +74,7 @@ interface FormulaProps {
 
 function Formula({ description, expression, children }: FormulaProps) {
 	return (
-		<div className="flex h-full w-full flex-col justify-between gap-2">
+		<div className="flex w-full flex-col justify-between gap-2">
 			<div className="flex flex-1 flex-col items-center justify-center gap-1">
 				<p className="text-center text-sm">{description}</p>
 				<Chip className="text-medium" color="primary" label={expression} size="sm" />

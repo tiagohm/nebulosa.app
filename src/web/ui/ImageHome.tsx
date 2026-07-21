@@ -20,7 +20,7 @@ import { ImageStretch } from '@ui/ImageStretch'
 import { ImageViewer } from '@ui/ImageViewer'
 import { Tab } from '@ui/Tab'
 import { DockviewReact, themeGithubDark, type IDockviewPanelProps } from 'dockview-react'
-import { memo, type MemoExoticComponent } from 'react'
+import { memo } from 'react'
 import { useStore } from 'src/web/hooks/store.hook'
 import { ImageViewerStoreContext } from 'src/web/shared/context'
 import type { Image } from 'src/web/shared/types'
@@ -56,7 +56,7 @@ const components = {
 	statistics: ImageStatistics,
 	stretch: ImageStretch,
 	viewer: ImageViewer,
-} as const satisfies Record<ImagePanelType, MemoExoticComponent<({ api }: IDockviewPanelProps) => React.ReactNode>>
+} as const satisfies Record<ImagePanelType, React.FunctionComponent<IDockviewPanelProps>>
 
 export const ImageHome = memo(({ params }: IDockviewPanelProps<Image>) => {
 	const viewer = useStore(() => imageViewerStore(params), [params])

@@ -52,12 +52,13 @@ import sunIcon from '@assets/sun.webp'
 import thermometerIcon from '@assets/thermometer.webp'
 import type { HomePanelType } from '@stores/home.store'
 import type { ImagePanelType } from '@stores/image.home.store'
+import { Tooltip } from '@ui/components/Tooltip'
 import { Icons } from '@ui/Icon'
 import type { DockviewIDisposable, IDockviewPanelHeaderProps } from 'dockview-react'
 import { useEffect, useState } from 'react'
 import { DEVICE_TYPES } from 'root/src/shared/types'
 
-const homeIcons = {
+export const homeIcons = {
 	about: aboutIcon,
 	alpacaServer: alpacaIcon,
 	asteroid: asteroidIcon,
@@ -96,7 +97,7 @@ const homeIcons = {
 	wheel: filterWheelIcon,
 } as const satisfies Record<HomePanelType, string>
 
-const imageIcons = {
+export const imageIcons = {
 	adjustment: adjustmentIcon,
 	annotation: annotationIcon,
 	calibration: calibrationIcon,
@@ -122,15 +123,19 @@ const imageIcons = {
 } as const satisfies Record<ImagePanelType, string>
 
 export function Tab(props: IDockviewPanelHeaderProps) {
-	const [title, setTitle] = useState(props.api.title)
+	const [title, setTitle] = useState(props.api.title ?? '')
 	const [active, setActive] = useState(props.api.isActive)
 	const [visible, setVisible] = useState(props.api.isVisible)
 	const [colapsed, setColapsed] = useState(props.api.group.api.isCollapsed())
 
 	const show = !colapsed && (active || visible)
 	const isFixed = props.api.tabComponent === 'fixed'
+	const isImage = props.api.tabComponent === 'image'
 	const type = props.api.component as HomePanelType | ImagePanelType
 	const icon = homeIcons[type as HomePanelType] ?? imageIcons[type as ImagePanelType]
+	const showTitle = !icon || show || isTitleAlwaysVisible(type)
+	const showCloseButton = !isFixed && (show || isCloseButtonAlwaysVisible(type))
+	const showTooltip = isImage && (title.includes('/') || title.includes('\\') || !showTitle)
 
 	useEffect(() => {
 		const u: DockviewIDisposable[] = []
@@ -146,12 +151,20 @@ export function Tab(props: IDockviewPanelHeaderProps) {
 	}, [])
 
 	return (
-		<div className="flex h-full w-full items-center justify-center gap-2 px-2 text-sm">
-			{icon && <img src={icon} width={16} height={16} />}
-			{(!icon || show || isTitleAlwaysVisible(type)) && <span>{title}</span>}
-			{isFixed === false && (show || isCloseButtonAlwaysVisible(type)) && <Icons.CloseCircle color="var(--danger)" className="hover:opacity-90" onClick={() => props.api.close()} />}
-		</div>
+		<Tooltip content={title} disabled={!showTooltip}>
+			<div className="flex h-full w-full items-center justify-center gap-2 px-2 text-sm">
+				{icon && <img src={icon} width={16} height={16} />}
+				{showTitle && <span>{showTooltip ? extractFilename(title) : title}</span>}
+				{showCloseButton && <Icons.CloseCircle color="var(--danger)" className="hover:opacity-90" onClick={() => props.api.close()} />}
+			</div>
+		</Tooltip>
 	)
+}
+
+function extractFilename(path: string) {
+	const index = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'))
+	if (index >= 0) return path.slice(index + 1)
+	return path
 }
 
 function isTitleAlwaysVisible(type: HomePanelType | ImagePanelType) {

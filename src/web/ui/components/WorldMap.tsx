@@ -1,6 +1,6 @@
 import { clamp, tw } from '@shared/util'
 import { type InteractableMethods, type InteractableProps, type InteractTransform, type InteractType, Interactable } from '@ui/Interactable'
-import { memo, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { createContext, memo, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import worldMapSvg from 'src/data/world.map.svg'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
 
@@ -56,6 +56,8 @@ export interface WorldMapMethods {
 	readonly zoomTo: (scale: number) => void
 	readonly pointToCoordinate: (point: WorldMapPoint) => WorldMapCoordinate
 	readonly coordinateToPoint: (coordinate: WorldMapCoordinate) => WorldMapPoint
+	readonly centerCoordinate: (coordinate: WorldMapCoordinate) => void
+	readonly centerPoint: (point: WorldMapPoint) => void
 }
 
 export interface WorldMapClassNames {
@@ -70,7 +72,6 @@ export interface WorldMapProps extends Omit<React.ComponentPropsWithRef<'div'>, 
 	readonly classNames?: WorldMapClassNames
 	readonly defaultScale?: number
 	readonly centerOnResize?: boolean
-	readonly zIndex?: number
 	readonly onCoordinateClick?: (position: WorldMapPosition, event: MouseEvent) => void
 	readonly onCoordinateMove?: (position: WorldMapPosition, event: MouseEvent) => void
 	readonly onTransformChange?: InteractableProps['onGesture']
@@ -129,6 +130,8 @@ function worldMapPositionFromClientPoint(map: SVGSVGElement, clientX: number, cl
 	})
 }
 
+export const WorldMapContext = createContext<WorldMapMethods>(null as never)
+
 export const WorldMap = memo(({ bordered, centerOnResize = false, children, className, classNames, defaultScale = 1, onCoordinateClick, onTransformChange, onWheelCapture, ref, style, ...props }: WorldMapProps) => {
 	const rootRef = useRef<HTMLDivElement>(null)
 	const mapRef = useRef<SVGSVGElement>(null)
@@ -138,20 +141,24 @@ export const WorldMap = memo(({ bordered, centerOnResize = false, children, clas
 	const [surfaceSize, setSurfaceSize] = useState<WorldMapSurfaceSize>(ZERO_SURFACE_SIZE)
 	const styles = worldMapStyles({ bordered })
 
-	useImperativeHandle(
-		ref,
-		() => ({
-			center: () => {
-				interactableRef.current?.center()
-			},
-			zoomTo: (scale) => {
-				interactableRef.current?.zoomTo(scale)
-			},
-			pointToCoordinate: worldMapPointToCoordinate,
-			coordinateToPoint: worldMapCoordinateToPoint,
-		}),
-		[],
-	)
+	const methods: WorldMapMethods = {
+		center: () => {
+			interactableRef.current?.center()
+		},
+		zoomTo: (scale) => {
+			interactableRef.current?.zoomTo(scale)
+		},
+		pointToCoordinate: worldMapPointToCoordinate,
+		coordinateToPoint: worldMapCoordinateToPoint,
+		centerCoordinate: (coordinate) => {
+			methods.centerPoint(worldMapCoordinateToPoint(coordinate))
+		},
+		centerPoint: (point) => {
+			interactableRef.current?.centerCoordinate(point.x, point.y)
+		},
+	}
+
+	useImperativeHandle(ref, () => methods, [])
 
 	useLayoutEffect(() => {
 		const root = rootRef.current
@@ -226,7 +233,9 @@ export const WorldMap = memo(({ bordered, centerOnResize = false, children, clas
 			<Interactable onClick={onCoordinateClick !== undefined ? handleCoordinateClick : undefined} onGesture={handleTransformChange} ref={interactableRef}>
 				<svg className={tw(styles.map(), classNames?.map)} height={surfaceSize.height} preserveAspectRatio="xMidYMid meet" ref={mapRef} style={{ height: surfaceSize.height, width: surfaceSize.width }} viewBox={WORLD_MAP_VIEW_BOX} width={surfaceSize.width}>
 					<image className={tw(styles.image(), classNames?.image)} height={WORLD_MAP_HEIGHT} href={worldMapSvg} width={WORLD_MAP_WIDTH} x={0} y={0} />
-					<g className={tw(styles.overlay(), classNames?.overlay)}>{children}</g>
+					<WorldMapContext value={methods}>
+						<g className={tw(styles.overlay(), classNames?.overlay)}>{children}</g>
+					</WorldMapContext>
 				</svg>
 			</Interactable>
 		</div>

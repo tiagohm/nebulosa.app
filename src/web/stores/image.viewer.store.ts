@@ -7,6 +7,8 @@ import { imageAdjustmentStore, type ImageAdjustmentStore } from '@stores/image.a
 import { imageAnnotationStore, type ImageAnnotationStore } from '@stores/image.annotation.store'
 import { imageCalibrationStore, type ImageCalibrationStore } from '@stores/image.calibration.store'
 import { imageCoordinateGridStore, type ImageCoordinateGridStore } from '@stores/image.coordinategrid.store'
+import { imageCrosshairStore, type ImageCrosshairStore } from '@stores/image.crosshair.store'
+import { imageDebayerStore, type ImageDebayerStore } from '@stores/image.debayer.store'
 import { imageFilterStore, type ImageFilterStore } from '@stores/image.filter.store'
 import { imageFovStore, type ImageFovStore } from '@stores/image.fov.store'
 import { imageHeaderStore, type ImageHeaderStore } from '@stores/image.header.store'
@@ -77,11 +79,12 @@ export interface ImageViewerStore {
 	readonly starDetection: ImageStarDetectionStore
 	readonly statistics: ImageStatisticsStore
 	readonly stretch: ImageStretchStore
+	readonly debayer: ImageDebayerStore
+	readonly crosshair: ImageCrosshairStore
 }
 
 export interface ImageViewerState {
 	readonly transformation: ImageTransformation
-	crosshair: boolean
 	angle: number // deg
 	scale: number
 	info?: ImageInfo
@@ -91,7 +94,6 @@ export interface ImageViewerState {
 export function imageViewerStore(image: Image): ImageViewerStore {
 	const state = proxy<ImageViewerState>({
 		transformation: structuredClone(DEFAULT_IMAGE_TRANSFORMATION),
-		crosshair: false,
 		angle: 0,
 		scale: 1,
 		info: undefined,
@@ -117,7 +119,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${key}`, ['o:transformation', 'p:crosshair', 'p:angle'])
+		u[0] = initProxy(state, `image.${key}`, ['o:transformation', 'p:angle'])
 
 		u[1] = subscribe(state.transformation.format, () => {
 			void reload()
@@ -175,10 +177,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	function toggleInvert() {
 		state.transformation.invert = !state.transformation.invert
 		return reload()
-	}
-
-	function toggleCrosshair() {
-		state.crosshair = !state.crosshair
 	}
 
 	async function load(path: string | true = '') {
@@ -313,7 +311,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		toggleHorizontalMirror,
 		toggleVerticalMirror,
 		toggleInvert,
-		toggleCrosshair,
 		load,
 		reload,
 		rotateTo,
@@ -348,6 +345,8 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	const starDetection = (store.starDetection = imageStarDetectionStore(store))
 	const statistics = (store.statistics = imageStatisticsStore(store))
 	const stretch = (store.stretch = imageStretchStore(store))
+	const debayer = (store.debayer = imageDebayerStore(store))
+	const crosshair = (store.crosshair = imageCrosshairStore(store))
 
 	return store
 }

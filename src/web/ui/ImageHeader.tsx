@@ -9,9 +9,5 @@ export const ImageHeader = memo(() => {
 
 	useEffect(header.mount, [])
 
-	return (
-		<div className="grid grid-cols-12 items-center gap-2 p-3">
-			<FITSHeader header={info?.headers ?? {}} className="col-span-full h-full overflow-y-auto" />
-		</div>
-	)
+	return <FITSHeader header={info?.headers ?? {}} className="flex h-full overflow-y-auto" />
 })

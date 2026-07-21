@@ -1,5 +1,4 @@
 import { ImageViewerStoreContext } from '@shared/context'
-import { CfaPatternSelect } from '@ui/CfaPatternSelect'
 import { ChrominanceSubsamplingSelect } from '@ui/ChrominanceSubsamplingSelect'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
@@ -18,11 +17,10 @@ export const ImageSettings = memo(() => {
 	useEffect(settings.mount, [])
 
 	return (
-		<div className="mt-0 grid grid-cols-12 items-center gap-2">
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<ImageFormatSelect className="col-span-full min-w-0" fullWidth onValueChange={settings.updateFormatType} value={transformation.format.type} />
 			{transformation.format.type === JPEG_FORMAT && <JpegFormat />}
 			<Checkbox className="col-span-full min-w-0" label="Pixelated" onValueChange={(value) => settings.update('pixelated', value)} value={pixelated} />
-			<CfaPatternSelect className="col-span-full min-w-0" fullWidth onValueChange={(value) => settings.updateTransformation('cfaPattern', value)} value={transformation.cfaPattern} />
 			<Footer />
 		</div>
 	)
@@ -32,7 +30,7 @@ const Footer = memo(() => {
 	const { settings } = useContext(ImageViewerStoreContext)
 
 	return (
-		<div className="grid grid-cols-12 items-center gap-2 p-3">
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
 			<Button color="danger" label="Reset" onClick={settings.reset} startContent={<Icons.Restore />} />
 			<Button color="success" label="Apply" onClick={settings.apply} startContent={<Icons.Check />} />
 		</div>

@@ -3530,6 +3530,7 @@ export class Celestial {
 		this.options.height = nextHeight
 		this.cachedRect = null
 		this.renderer.resize(this.options.width, this.options.height)
+		this.syncD3ZoomTransform(this.transform)
 		this.projectStars()
 		this.rebuildPickingIndex()
 		this.renderer.markAllDirty()

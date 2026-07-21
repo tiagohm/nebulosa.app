@@ -155,7 +155,7 @@ const AlpacaDeviceServerDiscovery = memo(() => {
 
 	return (
 		<Popover ref={popoverRef} trigger={<IconButton color="secondary" disabled={edited.type !== 'ALPACA'} icon={Icons.Radar} tooltipContent="Discovery" />}>
-			<div className="mt-0 grid max-w-100 grid-cols-12 items-center gap-2 p-4">
+			<div className="grid max-w-100 grid-cols-12 items-center gap-2 p-4">
 				<p className="col-span-full text-center font-bold">ALPACA DEVICE SERVER DISCOVERY</p>
 				<List className="col-span-full min-w-90" itemCount={alpaca.servers.length} emptyContent="No servers" onAction={handleItemAction}>
 					{(i) => AlpacaDeviceServerItem(alpaca.servers[i])}

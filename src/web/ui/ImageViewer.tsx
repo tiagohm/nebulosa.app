@@ -28,7 +28,7 @@ export const ImageViewer = memo(({ params }: IDockviewPanelProps<Image>) => {
 	// Loads after layout so the image node is already available.
 	useEffect(() => {
 		if (imgRef.current) {
-			void viewer.load() // First load, opens the image.path
+			void viewer.load()
 		}
 	}, [imgRef.current])
 

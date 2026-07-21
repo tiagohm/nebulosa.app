@@ -2,6 +2,8 @@ import { imageHomeStore } from '@stores/image.home.store'
 import { ImageAdjustment } from '@ui/ImageAdjustment'
 import { ImageAnnotation } from '@ui/ImageAnnotation'
 import { ImageCalibration } from '@ui/ImageCalibration'
+import { ImageCrosshair } from '@ui/ImageCrosshair'
+import { ImageDebayer } from '@ui/ImageDebayer'
 import { ImageFilter } from '@ui/ImageFilter'
 import { ImageFov } from '@ui/ImageFov'
 import { ImageHeader } from '@ui/ImageHeader'
@@ -44,6 +46,8 @@ const components = {
 	header: ImageHeader,
 	statistics: ImageStatistics,
 	settings: ImageSettings,
+	debayer: ImageDebayer,
+	crosshair: ImageCrosshair,
 } as const
 
 export const ImageHome = memo(({ params }: IDockviewPanelProps<Image>) => {

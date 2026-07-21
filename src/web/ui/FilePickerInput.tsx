@@ -1,9 +1,10 @@
 import type { FilePickerScope } from '@stores/filepicker.store'
 import { IconButton } from '@ui/components/IconButton'
+import { Popover, type PopoverMethods } from '@ui/components/Popover'
 import { TextInput, type TextInputProps } from '@ui/components/TextInput'
 import { FilePicker } from '@ui/FilePicker'
 import { Icons } from '@ui/Icon'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 
 export interface FilePickerInputProps extends Omit<FilePickerScope, 'multiple' | 'path'>, Omit<TextInputProps, 'value' | 'onValueChange' | 'startContent' | 'endContent' | 'label'> {
 	readonly value?: string
@@ -11,20 +12,18 @@ export interface FilePickerInputProps extends Omit<FilePickerScope, 'multiple' |
 }
 
 export function FilePickerInput({ filter, mode, value, onValueChange, readOnly = false, disabled = false, ...props }: FilePickerInputProps) {
-	const [show, setShow] = useState(false)
+	const popoverRef = useRef<PopoverMethods | null>(null)
 	const initialPath = useRef(value)
 	const blocked = readOnly || disabled
 	const hasValue = value !== undefined && value.length > 0
 
 	useEffect(() => {
-		if (!show) {
-			initialPath.current = value
-		}
-	}, [show, value])
+		initialPath.current = value
+	}, [value])
 
 	useEffect(() => {
 		if (blocked) {
-			setShow(false)
+			popoverRef.current?.hide()
 		}
 	}, [blocked])
 
@@ -32,7 +31,7 @@ export function FilePickerInput({ filter, mode, value, onValueChange, readOnly =
 		if (blocked) return
 
 		initialPath.current = value
-		setShow(true)
+		popoverRef.current?.show()
 	}
 
 	function handleClear() {
@@ -48,17 +47,22 @@ export function FilePickerInput({ filter, mode, value, onValueChange, readOnly =
 			onValueChange(paths[0])
 		}
 
-		setShow(false)
+		popoverRef.current?.hide()
 	}
 
 	function handleValueChange(path: string) {
-		if (!show && !blocked) {
+		if (!blocked) {
 			initialPath.current = path
 			onValueChange(path)
 		}
 	}
 
-	const StartContent = <IconButton disabled={blocked} icon={Icons.FolderOpen} color="warning" onClick={handleBrowse} tooltipContent="Browse" size="sm" variant="ghost" />
+	const StartContent = (
+		<Popover ref={popoverRef} trigger={<IconButton disabled={blocked} icon={Icons.FolderOpen} color="warning" onClick={handleBrowse} tooltipContent="Browse" size="sm" variant="ghost" />}>
+			<FilePicker title="Choose Path" onChoose={handleChoose} path={initialPath.current} filter={filter} mode={mode} />
+		</Popover>
+	)
+
 	const EndContent = hasValue ? <IconButton disabled={blocked} icon={Icons.CloseCircle} color="danger" onClick={handleClear} size="sm" tooltipContent="Clear" variant="ghost" /> : null
 
 	return (
@@ -66,7 +70,6 @@ export function FilePickerInput({ filter, mode, value, onValueChange, readOnly =
 			<div className="col-span-full flex w-full flex-1 flex-row items-center gap-1">
 				<TextInput disabled={blocked} endContent={EndContent} onValueChange={handleValueChange} startContent={StartContent} value={value} {...props} />
 			</div>
-			{show && !blocked && <FilePicker title="Choose Path" onChoose={handleChoose} path={initialPath.current} filter={filter} mode={mode} />}
 		</>
 	)
 }

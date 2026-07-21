@@ -32,7 +32,7 @@ import sunIcon from '@assets/sun.webp'
 import thermometerIcon from '@assets/thermometer.webp'
 import type { HomePanelType } from '@stores/home.store'
 import { Icons } from '@ui/Icon'
-import type { IDockviewPanelHeaderProps } from 'dockview-react'
+import type { DockviewIDisposable, IDockviewPanelHeaderProps } from 'dockview-react'
 import { useEffect, useState } from 'react'
 import { DEVICE_TYPES } from 'root/src/shared/types'
 
@@ -79,27 +79,31 @@ export function Tab(props: IDockviewPanelHeaderProps) {
 	const [title, setTitle] = useState(props.api.title)
 	const [active, setActive] = useState(props.api.isActive)
 	const [visible, setVisible] = useState(props.api.isVisible)
+	const [colapsed, setColapsed] = useState(props.api.group.api.isCollapsed())
+
+	const show = !colapsed && (active || visible)
 	const isFixed = props.api.tabComponent === 'fixed'
 	const type = props.api.component as HomePanelType
 	const icon = icons[type]
 
 	useEffect(() => {
-		const a = props.api.onDidTitleChange((e) => setTitle(e.title))
-		const b = props.api.onDidActiveChange((e) => setActive(e.isActive))
-		const c = props.api.onDidVisibilityChange((e) => setVisible(e.isVisible))
+		const u: DockviewIDisposable[] = []
+		u[0] = props.api.onDidTitleChange((e) => setTitle(e.title))
+		u[1] = props.api.onDidActiveChange((e) => setActive(e.isActive))
+		u[2] = props.api.onDidVisibilityChange((e) => setVisible(e.isVisible))
+		u[3] = props.api.group.api.onDidCollapsedChange((e) => setColapsed(e.isCollapsed))
+		u[4] = props.api.onDidGroupChange(() => setColapsed(props.api.group.api.isCollapsed()))
 
 		return () => {
-			a.dispose()
-			b.dispose()
-			c.dispose()
+			for (const d of u) d.dispose()
 		}
 	}, [])
 
 	return (
 		<div className="flex h-full w-full items-center justify-center gap-2 px-2 text-sm">
 			{icon && <img src={icon} width={16} height={16} />}
-			{(!icon || active || visible || isTitleAlwaysVisible(type)) && <span>{title}</span>}
-			{isFixed === false && (active || visible || isCloseButtonAlwaysVisible(type)) && <Icons.CloseCircle color="var(--danger)" className="hover:opacity-90" onClick={() => props.api.close()} />}
+			{(!icon || show || isTitleAlwaysVisible(type)) && <span>{title}</span>}
+			{isFixed === false && (show || isCloseButtonAlwaysVisible(type)) && <Icons.CloseCircle color="var(--danger)" className="hover:opacity-90" onClick={() => props.api.close()} />}
 		</div>
 	)
 }

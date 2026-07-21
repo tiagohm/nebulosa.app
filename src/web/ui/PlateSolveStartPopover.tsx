@@ -19,7 +19,7 @@ export function PlateSolveStartPopover({ type, radius, focalLength, pixelSize, d
 
 	return (
 		<Popover className="max-w-130" disabled={disabled} trigger={<IconButton disabled={disabled} icon={Icons.Cog} size="sm" tooltipContent="Plate solve options" />}>
-			<div className="grid grid-cols-12 gap-2 p-4">
+			<div className="grid grid-cols-12 gap-2 p-3">
 				<p className="col-span-full font-bold">PLATE SOLVE OPTIONS: {type}</p>
 				{!isNovaAstrometryNet && <TextInput className="col-span-full" disabled={disabled} label="Executable" onValueChange={(value) => settingsStore.updateSolver(type, 'executable', value)} value={executable} />}
 				{isNovaAstrometryNet && <TextInput className="col-span-8" disabled={disabled} label="API URL" onValueChange={(value) => settingsStore.updateSolver(type, 'apiUrl', value)} placeholder="https://nova.astrometry.net" value={apiUrl} />}

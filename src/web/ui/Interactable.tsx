@@ -24,6 +24,9 @@ export interface InteractableMethods {
 	readonly angle: number
 	readonly scale: number
 	readonly zoomTo: (scale: number) => void
+	readonly isCoordinateVisible: (x: number, y: number) => boolean
+	readonly moveCoordinateTo: (x: number, y: number, parentX: number, parentY: number) => void
+	readonly centerCoordinate: (x: number, y: number) => void
 	readonly center: () => void
 	readonly rotateTo: (angle: number) => void
 	readonly enableRotation: () => void
@@ -130,6 +133,46 @@ export const Interactable = memo(({ ref, className, children, onGesture, onTap, 
 		transform('none')
 	}
 
+	function coordinateInClientSpace(x: number, y: number) {
+		const wrapper = wrapperRef.current
+
+		if (!wrapper || !Number.isFinite(x) || !Number.isFinite(y)) return
+
+		const { clientWidth: width, clientHeight: height } = wrapper
+
+		if (width <= 0 || height <= 0) return
+
+		const rect = wrapper.getBoundingClientRect()
+		const { scale, angle } = transformation.current
+		const rad = angle * (Math.PI / 180)
+		const c = Math.cos(rad)
+		const s = Math.sin(rad)
+		const dx = (x - width / 2) * scale
+		const dy = (y - height / 2) * scale
+
+		return {
+			x: rect.left + rect.width / 2 + dx * c - dy * s,
+			y: rect.top + rect.height / 2 + dx * s + dy * c,
+		} as const
+	}
+
+	function moveCoordinateTo(x: number, y: number, parentX: number, parentY: number) {
+		const wrapper = wrapperRef.current
+		const parent = wrapper?.parentElement
+		const coordinate = coordinateInClientSpace(x, y)
+
+		if (!parent || !coordinate || !Number.isFinite(parentX) || !Number.isFinite(parentY)) return
+
+		const parentRect = parent.getBoundingClientRect()
+		console.info(x, y, parentX, parentY, parent.clientLeft, parent.clientTop, parentRect, transformation.current)
+		const targetX = parentRect.left + parent.clientLeft + parentX
+		const targetY = parentRect.top + parent.clientTop + parentY
+
+		transformation.current.x += targetX - coordinate.x
+		transformation.current.y += targetY - coordinate.y
+		transform('none')
+	}
+
 	useImperativeHandle(
 		ref,
 		() => ({
@@ -164,19 +207,36 @@ export const Interactable = memo(({ ref, className, children, onGesture, onTap, 
 			disableRotation: () => {
 				rotation.current = false
 			},
+			isCoordinateVisible: (x, y) => {
+				const wrapper = wrapperRef.current
+				const parent = wrapper?.parentElement
+				const coordinate = coordinateInClientSpace(x, y)
+
+				if (!parent || !coordinate) return false
+
+				const parentRect = parent.getBoundingClientRect()
+				const left = parentRect.left + parent.clientLeft
+				const top = parentRect.top + parent.clientTop
+
+				return coordinate.x >= left && coordinate.x <= left + parent.clientWidth && coordinate.y >= top && coordinate.y <= top + parent.clientHeight
+			},
+			moveCoordinateTo,
+			centerCoordinate: (x: number, y: number) => {
+				const wrapper = wrapperRef.current
+				const parent = wrapper?.parentElement
+
+				if (wrapper && parent) {
+					moveCoordinateTo(x, y, parent.clientWidth / 2, parent.clientHeight / 2)
+				}
+			},
 			center: () => {
-				const parent = wrapperRef.current?.parentElement
+				const wrapper = wrapperRef.current
+				const parent = wrapper?.parentElement
 
-				if (parent) {
-					const { clientWidth: ix, clientHeight: iy } = wrapperRef.current!
+				if (wrapper && parent) {
+					const { clientWidth: width, clientHeight: height } = wrapper
 
-					if (ix > 0 && iy > 0) {
-						const { clientWidth: px, clientHeight: py } = parent
-
-						transformation.current.x = (px - ix) / 2
-						transformation.current.y = (py - iy) / 2
-						transform('none')
-					}
+					moveCoordinateTo(width / 2, height / 2, parent.clientWidth / 2, parent.clientHeight / 2)
 				}
 			},
 		}),

@@ -65,7 +65,8 @@ svg {
 
 /* Remove white border around SVG */
 
-svg:focus {
+svg:focus,
+g:focus {
 	outline: none;
 }
 

@@ -64,7 +64,6 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 
 	function reset() {
 		state.pixelated = true
-		state.transformation.cfaPattern = 'AUTO'
 		state.transformation.format.type = DEFAULT_IMAGE_TRANSFORMATION.format.type
 		Object.assign(state.transformation.format.jpeg, DEFAULT_IMAGE_TRANSFORMATION.format.jpeg)
 		return apply()

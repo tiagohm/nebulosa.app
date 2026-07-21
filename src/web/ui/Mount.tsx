@@ -1,4 +1,5 @@
 import { useDevice } from '@hooks/device.hook'
+import { planetariumBus } from '@shared/bus'
 import { MountStoreContext } from '@shared/context'
 import { mountStore } from '@stores/mount.store'
 import { BodyCoordinateInfo } from '@ui/BodyCoordinateInfo'
@@ -20,6 +21,7 @@ import { SlewRateSelect } from '@ui/SlewRateSelect'
 import { TrackModeSelect } from '@ui/TrackModeSelect'
 import { UTCTimeInput } from '@ui/UTCTimeInput'
 import type { IDockviewPanelProps } from 'dockview-react'
+import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { Device, MountTargetCoordinateType } from 'nebulosa/src/devices/indi/device'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { memo, useContext } from 'react'
@@ -185,6 +187,14 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 			mount.updateTargetCoordinateType('JNOW')
 			mount.updateTargetCoordinateX(formatRA(position.lst))
 			mount.updateTargetCoordinateY(formatDEC(latitude))
+		} else if (action === 'planetarium') {
+			const position = planetariumBus.emitWithResponse('selectedObjectCoordinate', null) as EquatorialCoordinate | undefined
+
+			if (position) {
+				mount.updateTargetCoordinateType('JNOW')
+				mount.updateTargetCoordinateX(formatRA(position.rightAscension))
+				mount.updateTargetCoordinateY(formatDEC(position.declination))
+			}
 		}
 
 		void mount.updateTargetCoordinatePosition()
@@ -193,11 +203,12 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 	return (
 		<List fullWidth className="min-w-80">
 			<ListItem label="Bookmark" data-action="bookmark" startContent={<Icons.Bookmark />} onClick={handleClick} />
-			<ListItem label="Paste current J2000 position" data-action="copy-equatorialJ2000" startContent={<Icons.Paste />} onClick={handleClick} />
-			<ListItem label="Paste current JNOW position" data-action="copy-equatorial" startContent={<Icons.Paste />} onClick={handleClick} />
-			<ListItem label="Paste current Horizontal position" data-action="copy-horizontal" startContent={<Icons.Paste />} onClick={handleClick} />
-			<ListItem label="Paste current Ecliptic position" data-action="copy-ecliptic" startContent={<Icons.Paste />} onClick={handleClick} />
-			<ListItem label="Paste current Galactic position" data-action="copy-galactic" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Current J2000 position" data-action="copy-equatorialJ2000" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Current JNOW position" data-action="copy-equatorial" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Current horizontal position" data-action="copy-horizontal" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Current ecliptic position" data-action="copy-ecliptic" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Current galactic position" data-action="copy-galactic" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Planetarium selected object" data-action="planetarium" startContent={<Icons.Paste />} onClick={handleClick} />
 			<ListItem label="Zenith" data-action="zenith" startContent={<Icons.Telescope />} onClick={handleClick} />
 			<ListItem disabled={latitude > 0} label="South Pole" data-action="south-pole" startContent={<Icons.Telescope />} onClick={handleClick} />
 			<ListItem disabled={latitude < 0} label="North Pole" data-action="north-pole" startContent={<Icons.Telescope />} onClick={handleClick} />

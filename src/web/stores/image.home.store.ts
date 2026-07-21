@@ -4,6 +4,34 @@ import { unsubscribe } from 'src/shared/util'
 
 export type ImageHomeStore = typeof imageHomeStore
 
+// oxfmt-ignore
+const PANEL_TYPES = [
+	'adjustment',
+	'annotation',
+	'calibration',
+	'coordinateGrid',
+	'cosmeticCorrection',
+	'crosshair',
+	'curveTransformation',
+	'debayer',
+	'filter',
+	'fov',
+	'header',
+	'mouseCoordinate',
+	'roi',
+	'rotation',
+	'save',
+	'scnr',
+	'settings',
+	'solver',
+	'starDetection',
+	'statistics',
+	'stretch',
+	'viewer',
+] as const
+
+export type ImagePanelType = (typeof PANEL_TYPES)[number]
+
 let mounted = false
 const u: VoidFunction[] = []
 

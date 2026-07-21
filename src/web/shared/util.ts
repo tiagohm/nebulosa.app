@@ -104,13 +104,13 @@ export function saveAs(blob: Blob | MediaSource, name: string) {
 export function isObject(value: unknown): value is object {
 	if (value === null) return false
 	const type = typeof value
-	return type === 'object' || type === 'function'
+	return type === 'object'
 }
 
 function assignKey<T extends {}>(to: T, from: T, key: keyof T & string) {
 	var value = from[key]
 
-	if (value === undefined || value === null) {
+	if (value === undefined || value === null || !isObject(to)) {
 		return
 	}
 

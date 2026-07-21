@@ -1,5 +1,5 @@
 import { formatDistance, tw } from '@shared/util'
-import { type Angle, formatALT, formatAZ, formatDEC, formatRA, toDeg } from 'nebulosa/src/math/units/angle'
+import { type Angle, formatALT, formatAZ, formatDEC, formatHMS, formatRA, toDeg } from 'nebulosa/src/math/units/angle'
 import type { ComponentProps } from 'react'
 import type { BodyPosition, CoordinateInfo, CoordinateType } from 'src/shared/types'
 
@@ -38,6 +38,7 @@ export function BodyCoordinateInfo({ position, hide, className, ...props }: Body
 			</div>
 			<div className="col-span-8 flex flex-col justify-start gap-0">
 				{isVisible('constellation') && <Extra label="CONST" value={position.constellation} />}
+				{isVisible('lst') && <Extra label="LST" value={formatHMS(position.lst, true)} />}
 				{isVisible('meridianTimeIn') && <Extra label="MERIDIAN IN" value={formatSeconds(position.meridianTimeIn)} />}
 				{isVisible('pierSide') && <Extra label="PIER SIDE" value={position.pierSide} />}
 				{'illuminated' in position && isVisible('illuminated') && <Extra label="ILLUM (%)" value={position.illuminated.toFixed(2)} />}

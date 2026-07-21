@@ -9,12 +9,6 @@ const SKY_MAP_OPTIONS: CelestialOptions = {
 		constellationBoundaries: true,
 		movingBodies: true,
 	},
-	theme: {
-		background: 'transparent',
-		movingBodies: {
-			planetColor: 'red',
-		},
-	},
 }
 
 export const Planetarium = memo(({ api }: IDockviewPanelProps) => {

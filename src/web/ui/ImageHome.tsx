@@ -1,4 +1,4 @@
-import { imageHomeStore } from '@stores/image.home.store'
+import { imageHomeStore, type ImagePanelType } from '@stores/image.home.store'
 import { ImageAdjustment } from '@ui/ImageAdjustment'
 import { ImageAnnotation } from '@ui/ImageAnnotation'
 import { ImageCalibration } from '@ui/ImageCalibration'
@@ -7,6 +7,7 @@ import { ImageDebayer } from '@ui/ImageDebayer'
 import { ImageFilter } from '@ui/ImageFilter'
 import { ImageFov } from '@ui/ImageFov'
 import { ImageHeader } from '@ui/ImageHeader'
+import { ImageRoi } from '@ui/ImageRoi'
 import { ImageSave } from '@ui/ImageSave'
 import { ImageScnr } from '@ui/ImageScnr'
 import { ImageSettings } from '@ui/ImageSettings'
@@ -17,13 +18,13 @@ import { ImageStretch } from '@ui/ImageStretch'
 import { ImageViewer } from '@ui/ImageViewer'
 import { Tab } from '@ui/Tab'
 import { DockviewReact, themeGithubDark, type IDockviewPanelProps } from 'dockview-react'
-import { memo } from 'react'
+import { memo, type MemoExoticComponent } from 'react'
 import { useStore } from 'src/web/hooks/store.hook'
 import { ImageViewerStoreContext } from 'src/web/shared/context'
 import type { Image } from 'src/web/shared/types'
 import { imageViewerStore } from 'src/web/stores/image.viewer.store'
 
-const Dummy = () => <div></div>
+const Dummy = memo(() => <div></div>)
 
 const tabComponents = {
 	fixed: Tab,
@@ -31,24 +32,29 @@ const tabComponents = {
 } as const
 
 const components = {
-	viewer: ImageViewer,
-	save: ImageSave,
-	solver: ImageSolver,
-	stretch: ImageStretch,
-	rotation: Dummy,
-	calibration: ImageCalibration,
-	scnr: ImageScnr,
 	adjustment: ImageAdjustment,
-	filter: ImageFilter,
 	annotation: ImageAnnotation,
-	starDetection: ImageStarDetection,
+	calibration: ImageCalibration,
+	coordinateGrid: Dummy,
+	cosmeticCorrection: Dummy,
+	crosshair: ImageCrosshair,
+	curveTransformation: Dummy,
+	debayer: ImageDebayer,
+	filter: ImageFilter,
 	fov: ImageFov,
 	header: ImageHeader,
-	statistics: ImageStatistics,
+	mouseCoordinate: Dummy,
+	roi: ImageRoi,
+	rotation: Dummy,
+	save: ImageSave,
+	scnr: ImageScnr,
 	settings: ImageSettings,
-	debayer: ImageDebayer,
-	crosshair: ImageCrosshair,
-} as const
+	solver: ImageSolver,
+	starDetection: ImageStarDetection,
+	statistics: ImageStatistics,
+	stretch: ImageStretch,
+	viewer: ImageViewer,
+} as const satisfies Record<ImagePanelType, MemoExoticComponent<({ api }: IDockviewPanelProps) => React.ReactNode>>
 
 export const ImageHome = memo(({ params }: IDockviewPanelProps<Image>) => {
 	const viewer = useStore(() => imageViewerStore(params), [params])

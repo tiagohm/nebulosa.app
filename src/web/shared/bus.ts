@@ -74,6 +74,10 @@ export interface IndiBusEvents {
 	readonly serverStop: IndiServerEvent
 }
 
+export interface PlanetariumBusEvents {
+	readonly selectedObjectCoordinate: unknown
+}
+
 export const webSocketBus = new EventBus<WebSocketBusEvents>()
 
 export const deviceBus = new EventBus<DeviceBusEvents>()
@@ -109,3 +113,5 @@ export const connectionBus = new EventBus<ConnectionBusEvents>()
 export const guiderBus = new EventBus<GuiderBusEvents>()
 
 export const indiBus = new EventBus<IndiBusEvents>()
+
+export const planetariumBus = new EventBus<PlanetariumBusEvents>()

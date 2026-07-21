@@ -139,7 +139,7 @@ function handleReady(event: DockviewReadyEvent) {
 
 	// Edge Panels
 	left = addEdge('left', { initialSize: 380 })
-	right = addEdge('right', { initialSize: 480 })
+	right = addEdge('right', { initialSize: 420 })
 
 	// Left Panel
 	addUniquePanel('connections', { tabComponent: 'fixed', title: 'Connections' }, left)

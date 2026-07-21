@@ -1,8 +1,9 @@
 import { Api } from '@shared/api'
-import { mountBus } from '@shared/bus'
+import { mountBus, planetariumBus } from '@shared/bus'
 import { skyObjectName } from '@shared/util'
 import { equipmentStore } from '@stores/equipment.store'
 import { settingsStore } from '@stores/settings.store'
+import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { TAU } from 'nebulosa/src/core/constants'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { toDeg } from 'nebulosa/src/math/units/angle'
@@ -10,7 +11,7 @@ import constellationBoundaries from 'src/data/constellation.boundaries.json'
 import constellationLabels from 'src/data/constellation.labels.json'
 import constellationLines from 'src/data/constellation.lines.json'
 import mw from 'src/data/mw.json'
-import type { Celestial, CelestialShape, ConstellationData, MovingBody, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
+import type { Celestial, CelestialEventMap, CelestialShape, ConstellationData, MovingBody, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
 import type { PositionOfBody } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
@@ -18,6 +19,7 @@ import { proxy, ref, subscribe } from 'valtio'
 export interface PlanetariumState {
 	celestial?: Celestial
 	readonly transform: ViewTransform
+	selected?: CelestialEventMap['click']
 }
 
 const CONSTELLATIONS = {
@@ -61,9 +63,9 @@ function unmount() {
 
 const connectedMounts = new Map<string, CelestialShape>()
 
-function mountShapeRenderer(celestial: Celestial, ctx: CanvasRenderingContext2D, state: ShapeRenderState) {
-	ctx.strokeStyle = '#00b1ff'
-	ctx.fillStyle = '#00b1ff'
+function renderMountShape(celestial: Celestial, ctx: CanvasRenderingContext2D, state: ShapeRenderState) {
+	ctx.strokeStyle = '#03A9F4'
+	ctx.fillStyle = '#03A9F4'
 	ctx.beginPath()
 	ctx.arc(state.x, state.y, 6, 0, TAU)
 	ctx.stroke()
@@ -75,6 +77,22 @@ function mountShapeRenderer(celestial: Celestial, ctx: CanvasRenderingContext2D,
 	ctx.fillText(state.shape.data as string, state.x, state.y - 12)
 }
 
+function renderSkyRegionShape(celestial: Celestial, ctx: CanvasRenderingContext2D, state: ShapeRenderState) {
+	ctx.strokeStyle = '#3F51B5'
+	ctx.fillStyle = '#3F51B5'
+	ctx.beginPath()
+	ctx.arc(state.x, state.y, 6, 0, TAU)
+	ctx.stroke()
+	ctx.beginPath()
+	ctx.arc(state.x, state.y, 4, 0, TAU)
+	ctx.fill()
+	// ctx.textAlign = 'center'
+	// ctx.textBaseline = 'middle'
+	// ctx.fillText(state.shape.data as string, state.x, state.y - 12)
+}
+
+const SKY_REGION_SELECTION: CelestialShape = { id: 'sky.region', data: '', coordinate: { rightAscension: 0, declination: 0 }, render: renderSkyRegionShape, visible: false }
+
 function handleReady(celestial: Celestial) {
 	state.celestial = ref(celestial)
 
@@ -84,6 +102,7 @@ function handleReady(celestial: Celestial) {
 	celestial.loadMilkyWay(mw as never)
 	celestial.setMagnitudeLimit(6)
 	celestial.startAutoUpdate({ mode: 'realtime', interval: 30000 })
+	celestial.addShape(SKY_REGION_SELECTION)
 
 	for (const body of MOVING_BODIES) {
 		celestial.addMovingBody(body)
@@ -91,7 +110,7 @@ function handleReady(celestial: Celestial) {
 
 	function addMount(mount: Mount) {
 		if (!connectedMounts.has(mount.id)) {
-			const shape: CelestialShape = { id: mount.id, data: mount.name, coordinate: { ...mount.equatorialCoordinate }, render: mountShapeRenderer, visible: mount.connected }
+			const shape: CelestialShape = { id: mount.id, data: mount.name, coordinate: { ...mount.equatorialCoordinate }, render: renderMountShape, visible: mount.connected }
 			connectedMounts.set(celestial.addShape(shape), shape)
 		}
 	}
@@ -131,22 +150,38 @@ function handleReady(celestial: Celestial) {
 		connectedMounts.delete(event.id) && celestial.removeShape(event.id)
 	})
 
-	u[6] = celestial.on('selectionChange', (event) => {
-		const { object } = event
-
-		if (object.type === 'star') {
-			// void atlasStore.state.galaxy!.selectWithId(object.id)
-		} else if (object.type === 'deepSky') {
-			// void atlasStore.state.galaxy!.selectWithId(object.object.id)
-		} else if (object.type === 'movingBody') {
-			if (object.object.type === 'comet') {
-				//
-			} else if (object.object.type === 'asteroid') {
-				//
-			} else if (object.object.type === 'moon') {
-			} else if (object.object.type === 'sun') {
+	u[6] = celestial.on('click', (event) => {
+		if (event.object) {
+			if (event.object.type !== 'shape' || event.object.shape !== SKY_REGION_SELECTION) {
+				SKY_REGION_SELECTION.visible = false
 			} else {
-				// void atlasStore.state.planet!.select(object.object.id, true)
+				return
+			}
+		} else if (event.event.detail === 2) {
+			SKY_REGION_SELECTION.visible = true
+			Object.assign(SKY_REGION_SELECTION.coordinate, event.coordinate)
+		} else {
+			return
+		}
+
+		state.selected = ref(event)
+
+		celestial.markShapeChanged('sky.region')
+	})
+
+	u[7] = planetariumBus.subscribe('selectedObjectCoordinate', (): EquatorialCoordinate | undefined => {
+		const { selectedObject } = celestial
+
+		if (selectedObject) {
+			switch (selectedObject.type) {
+				case 'star':
+					return selectedObject
+				case 'deepSky':
+					return selectedObject.object
+				case 'movingBody':
+					return selectedObject.object.position
+				case 'shape':
+					return selectedObject.shape.coordinate
 			}
 		}
 	})
@@ -303,13 +338,6 @@ function handleDestroy(celestial: Celestial) {
 	unlink()
 }
 
-function renderTelescope(celestial: Celestial, ctx: CanvasRenderingContext2D, state: ShapeRenderState) {
-	ctx.fillStyle = 'red'
-	ctx.beginPath()
-	ctx.rect(state.x - 2, state.y - 2, 4, 4)
-	ctx.fill()
-}
-
 function unlink() {
 	state.celestial = undefined
 }
@@ -320,6 +348,5 @@ export const planetariumStore = {
 	unmount,
 	handleReady,
 	handleDestroy,
-	renderTelescope,
 	unlink,
 } as const

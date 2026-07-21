@@ -280,7 +280,7 @@ export interface CelestialShape {
 
 // Public object shape used by picking/events.
 export type CelestialObject =
-	| { type: 'star'; index: number; id: StarId; name?: string; mag?: number; } & EquatorialCoordinate
+	| ({ type: 'star'; index: number; id: StarId; name?: string; mag?: number } & EquatorialCoordinate)
 	| { type: 'deepSky'; index: number; object: DeepSkyObject }
 	| { type: 'movingBody'; index: number; object: MovingBody }
 	| { type: 'constellationLabel'; index: number; label: ConstellationLabel }

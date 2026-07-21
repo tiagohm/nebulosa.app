@@ -1,6 +1,6 @@
 import { Api } from '@shared/api'
 import { imageBus } from '@shared/bus'
-import { isMousePresent } from '@shared/util'
+import { isMouseDeviceSupported } from '@shared/util'
 import { hasScaledSolution } from '@stores/image.solver.store'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { InteractableProps, InteractTransform } from '@ui/Interactable'
@@ -47,6 +47,7 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 
 	console.info('image mouse coordinate created:', viewer.state.path)
 
+	const isMousePresent = isMouseDeviceSupported()
 	const u: VoidFunction[] = []
 	let mounted = false
 

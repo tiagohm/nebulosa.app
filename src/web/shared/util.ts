@@ -6,8 +6,6 @@ import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/math/units
 import type { SkyObjectSearchItem } from 'src/shared/types'
 import { twMerge } from 'tailwind-merge'
 
-export const isMousePresent = isMouseDeviceSupported()
-
 export function tw(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs))
 }
@@ -32,6 +30,14 @@ export function formatNumber(value: number | undefined | null, fractionDigits: n
 	return value !== undefined && value !== null && Number.isFinite(value) ? value.toFixed(fractionDigits) : '--'
 }
 
+export function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null
+}
+
+export function finiteNumber(value: unknown, fallback: number) {
+	return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
 // Clamps a number into the inclusive [min, max] range.
 export function clamp(value: number, min: number, max: number) {
 	if (!(value >= min)) return min // handles NaN value
@@ -49,6 +55,13 @@ export function clampInteger(value: number, min: number, max: number) {
 // Stops the propagation of an event to parent elements
 export function stopPropagation(event: Event | React.BaseSyntheticEvent<Event>) {
 	event.stopPropagation()
+}
+
+// Stops the propagation of an event to parent elements and
+// prevents the default action of an event if it is cancelable
+export function stopPropagationAndPreventDefault(event: Event | React.BaseSyntheticEvent<Event>) {
+	stopPropagation(event)
+	preventDefault(event)
 }
 
 const EVENTS = ['onClick', 'onPointerUp', 'onPointerDown'] as const

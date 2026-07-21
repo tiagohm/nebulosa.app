@@ -95,8 +95,8 @@ function removeDocumentGestureListeners() {
 	}
 }
 
-function isRoiInteraction(event: Event) {
-	return event.target instanceof Element && event.target.closest('.roi') !== null
+function isOverlayInteraction(event: Event) {
+	return event.target instanceof Element && event.target.closest('[data-interactable-control]') !== null
 }
 
 export const Interactable = memo(({ ref, className, children, onGesture, onTap, ...handlers }: InteractableProps) => {
@@ -310,13 +310,13 @@ export const Interactable = memo(({ ref, className, children, onGesture, onTap, 
 		{
 			...handlers,
 			onDragStart: ({ event, cancel }) => {
-				if (isRoiInteraction(event)) return cancel()
+				if (isOverlayInteraction(event)) return cancel()
 
 				// Disable text selection during drag event
 				disableBodyUserSelect()
 			},
 			onDrag: ({ event, pinching, cancel, delta, movement, offset, tap, memo }) => {
-				if (isRoiInteraction(event)) return cancel()
+				if (isOverlayInteraction(event)) return cancel()
 				if (pinching || tap) return cancel()
 
 				const { scale } = transformation.current

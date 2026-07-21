@@ -27,9 +27,9 @@ function gridLineLabel(line: ImageCoordinateGridLine) {
 
 export const CoordinateGrid = memo(() => {
 	const { coordinateGrid } = useContext(ImageViewerStoreContext)
-	const { visible, grid } = useSnapshot(coordinateGrid.state)
+	const { enabled, grid } = useSnapshot(coordinateGrid.state)
 
-	if (!visible || !grid || grid.lines.length === 0) return null
+	if (!enabled || !grid || grid.lines.length === 0) return null
 
 	return (
 		<svg className="coordinate-grid pointer-events-none absolute top-0 left-0 h-full w-full select-none" fill="none">

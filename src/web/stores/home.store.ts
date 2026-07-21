@@ -160,8 +160,6 @@ function handleReady(event: DockviewReadyEvent) {
 	addUniquePanel('galaxy', { title: 'DSO' }, main)
 	addUniquePanel('satellite', { title: 'Satellite' }, main)
 
-	addPlanetarium()
-
 	// layoutDisposable = api.onDidLayoutChange(() => {
 	// 	window.clearTimeout(saveTimer)
 	// 	saveTimer = window.setTimeout(saveLayout, 1000)

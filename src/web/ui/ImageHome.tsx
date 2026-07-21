@@ -2,11 +2,13 @@ import { imageHomeStore, type ImagePanelType } from '@stores/image.home.store'
 import { ImageAdjustment } from '@ui/ImageAdjustment'
 import { ImageAnnotation } from '@ui/ImageAnnotation'
 import { ImageCalibration } from '@ui/ImageCalibration'
+import { ImageCoordinateGrid } from '@ui/ImageCoordinateGrid'
 import { ImageCrosshair } from '@ui/ImageCrosshair'
 import { ImageDebayer } from '@ui/ImageDebayer'
 import { ImageFilter } from '@ui/ImageFilter'
 import { ImageFov } from '@ui/ImageFov'
 import { ImageHeader } from '@ui/ImageHeader'
+import { ImageMouseCoordinate } from '@ui/ImageMouseCoordinate'
 import { ImageRoi } from '@ui/ImageRoi'
 import { ImageSave } from '@ui/ImageSave'
 import { ImageScnr } from '@ui/ImageScnr'
@@ -35,7 +37,7 @@ const components = {
 	adjustment: ImageAdjustment,
 	annotation: ImageAnnotation,
 	calibration: ImageCalibration,
-	coordinateGrid: Dummy,
+	coordinateGrid: ImageCoordinateGrid,
 	cosmeticCorrection: Dummy,
 	crosshair: ImageCrosshair,
 	curveTransformation: Dummy,
@@ -43,7 +45,7 @@ const components = {
 	filter: ImageFilter,
 	fov: ImageFov,
 	header: ImageHeader,
-	mouseCoordinate: Dummy,
+	mouseCoordinate: ImageMouseCoordinate,
 	roi: ImageRoi,
 	rotation: Dummy,
 	save: ImageSave,

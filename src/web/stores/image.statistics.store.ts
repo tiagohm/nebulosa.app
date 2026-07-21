@@ -62,7 +62,7 @@ export function imageStatisticsStore(viewer: ImageViewerStore) {
 	}
 
 	function isRoiEnabled() {
-		return state.roi && viewer.roi.state.visible
+		return state.roi && viewer.roi.state.enabled
 	}
 
 	function update<K extends keyof ImageStatisticsState['request']>(key: K, value: ImageStatisticsState['request'][K]) {

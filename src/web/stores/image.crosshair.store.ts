@@ -42,11 +42,16 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 		state[key] = value
 	}
 
+	function toggle() {
+		state.enabled = !state.enabled
+	}
+
 	return {
 		state,
 		viewer,
 		mount,
 		unmount,
 		update,
+		toggle,
 	} as const
 }

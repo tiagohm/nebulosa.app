@@ -75,6 +75,7 @@ function handleReady(event: DockviewReadyEvent, image: Image) {
 
 	api.addPanel({ id: 'annotation', tabComponent: 'fixed', component: 'annotation', params: image, title: 'Annotation', position: { referenceGroup: right.id } })
 	api.addPanel({ id: 'starDetection', tabComponent: 'fixed', component: 'starDetection', params: image, title: 'Star Detection', position: { referenceGroup: right.id } })
+	api.addPanel({ id: 'roi', tabComponent: 'fixed', component: 'roi', params: image, title: 'ROI', position: { referenceGroup: right.id } })
 	api.addPanel({ id: 'fov', tabComponent: 'fixed', component: 'fov', params: image, title: 'FOV', position: { referenceGroup: right.id } })
 	api.addPanel({ id: 'header', tabComponent: 'fixed', component: 'header', params: image, title: 'FITS Header', position: { referenceGroup: right.id } })
 	api.addPanel({ id: 'statistics', tabComponent: 'fixed', component: 'statistics', params: image, title: 'Statistics', position: { referenceGroup: right.id } })

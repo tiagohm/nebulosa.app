@@ -15,7 +15,7 @@ export type ImageRoiStore = ReturnType<typeof imageRoiStore>
 export type ImageRoiHandle = 'move' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw'
 
 export interface ImageRoiState {
-	visible: boolean
+	enabled: boolean
 	readonly roi: Roi
 	readonly binning: Point
 }
@@ -37,7 +37,7 @@ export const IMAGE_ROI_HANDLES = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'] as
 
 export function imageRoiStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageRoiState>({
-		visible: false,
+		enabled: false,
 		roi: { x: 0, y: 0, width: 0, height: 0 },
 		binning: { x: 1, y: 1 },
 	})
@@ -86,12 +86,16 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		label = node ?? undefined
 	}
 
+	function update<K extends keyof ImageRoiState>(key: K, value: ImageRoiState[K]) {
+		state[key] = value
+	}
+
 	function toggle() {
-		state.visible = !state.visible
+		state.enabled = !state.enabled
 	}
 
 	function sync() {
-		if (!state.visible) {
+		if (!state.enabled) {
 			stopGesture()
 			return
 		}
@@ -203,7 +207,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 
 		if (roi) {
 			applyRoi(normalizeRoi(rebinRoi(roi, state.binning, binning), info), binning)
-		} else if (state.visible) {
+		} else if (state.enabled) {
 			applyRoi(normalizeRoi(initialRoi(info), info), binning)
 		} else {
 			Object.assign(state.binning, binning)
@@ -271,6 +275,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		unmount,
 		attachRoot,
 		attachLabel,
+		update,
 		toggle,
 		sync,
 		startGesture,

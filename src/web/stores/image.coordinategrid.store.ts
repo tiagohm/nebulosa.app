@@ -12,14 +12,14 @@ import { subscribeKey } from 'valtio/utils'
 export type ImageCoordinateGridStore = ReturnType<typeof imageCoordinateGridStore>
 
 export interface ImageCoordinateGridState {
-	visible: boolean
+	enabled: boolean
 	loading: boolean
 	grid?: ImageCoordinateGrid
 }
 
 export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageCoordinateGridState>({
-		visible: false,
+		enabled: false,
 		loading: false,
 		grid: undefined,
 	})
@@ -36,25 +36,25 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.coordinategrid`, ['p:visible'])
+		u[0] = initProxy(state, `image.${viewer.key}.coordinategrid`, ['p:enabled'])
 
 		u[1] = imageBus.subscribe('load', ({ image, info, refreshed }) => {
 			if (refreshed && image === viewer.image) {
-				if (state.visible && hasScaledSolution(info.solution)) void compute(info.solution, true)
+				if (state.enabled && hasScaledSolution(info.solution)) void compute(info.solution, true)
 				else reset()
 			}
 		})
 
 		u[2] = subscribeKey(viewer.solver.state, 'solution', (solution) => {
-			if (state.visible) void compute(solution, true)
+			if (state.enabled) void compute(solution, true)
 			else reset()
 		})
 
-		u[3] = subscribeKey(state, 'visible', (visible) => {
-			if (visible) void compute()
+		u[3] = subscribeKey(state, 'enabled', (enabled) => {
+			if (enabled) void compute()
 		})
 
-		if (state.visible) void compute()
+		if (state.enabled) void compute()
 
 		return unmount
 	}
@@ -64,6 +64,10 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 		console.info('image coordinate grid unmounted:', viewer.state.path)
 		unsubscribe(u)
 		mounted = false
+	}
+
+	function update<K extends keyof ImageCoordinateGridState>(key: K, value: ImageCoordinateGridState[K]) {
+		state[key] = value
 	}
 
 	async function compute(solution: PlateSolution | undefined = viewer.solver.state.solution, force: boolean = false) {
@@ -90,15 +94,15 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 	}
 
 	function toggle() {
-		state.visible = !state.visible
+		state.enabled = !state.enabled
 	}
 
 	function show() {
-		state.visible = true
+		state.enabled = true
 	}
 
 	function hide() {
-		state.visible = false
+		state.enabled = false
 	}
 
 	return {
@@ -106,6 +110,7 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
+		update,
 		compute,
 		reset,
 		toggle,

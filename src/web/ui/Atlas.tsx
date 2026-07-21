@@ -113,7 +113,7 @@ const EphemerisChart = memo(() => {
 	const deferredData = useDeferredValue(data, [])
 
 	return (
-		<ComposedChart data={deferredData} height={200} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive className="flex-1">
+		<ComposedChart data={deferredData} height={200} margin={{ top: 0, right: 8, left: 0, bottom: 0 }} responsive className="max-h-[200px] min-h-[200px] flex-1">
 			<XAxis dataKey="name" domain={[0, 1440]} fontSize={10} interval={59} tickFormatter={ChartTickFormatter} tickMargin={6} />
 			<YAxis domain={[0, 90]} width={25} />
 			<Area dataKey="dayFirst" fill="#FFF176" {...DEFAULT_AREA_PROPS} />

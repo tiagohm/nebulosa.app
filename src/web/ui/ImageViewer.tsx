@@ -7,8 +7,8 @@ import { Crosshair } from '@ui/Crosshair'
 import { DetectedStars } from '@ui/DetectedStars'
 import { Fov } from '@ui/Fov'
 import { ImageInfo } from '@ui/ImageInfo'
-import { ImageRoi } from '@ui/ImageRoi'
 import { Interactable } from '@ui/Interactable'
+import { Roi } from '@ui/Roi'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useContext, useEffect, useLayoutEffect, useRef } from 'react'
 
@@ -51,6 +51,6 @@ const InteractableOverlay = memo(() => (
 		<AnnotatedStars />
 		<CoordinateOnMouse />
 		<Fov />
-		<ImageRoi />
+		<Roi />
 	</>
 ))

@@ -1,5 +1,6 @@
 import { ImageViewerStoreContext } from '@shared/context'
 import { formatNumber, tw } from '@shared/util'
+import { hasScaledSolution } from '@stores/image.solver.store'
 import { IconButton } from '@ui/components/IconButton'
 import { Switch } from '@ui/components/Switch'
 import { MountDropdown } from '@ui/DeviceDropdown'
@@ -12,9 +13,12 @@ import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const ImageMouseCoordinate = memo(() => {
-	const { mouseCoordinate } = useContext(ImageViewerStoreContext)
+	const { mouseCoordinate, solver } = useContext(ImageViewerStoreContext)
+	const { solution } = useSnapshot(solver.state)
 
 	useEffect(mouseCoordinate.mount, [])
+
+	if (!hasScaledSolution(solution)) return <div className="flex h-full w-full flex-row items-center justify-center">Not available</div>
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">

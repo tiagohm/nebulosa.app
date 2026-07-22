@@ -783,15 +783,14 @@ export class ImageHandler {
 		const md = new Array<number>(width * height)
 		const ma = new Array<number>(md.length)
 
-		for (let y = 0, i = 0; y <= heightInPixels; y += delta) {
-			for (let x = 0; x <= widthInPixels; x += delta, i++) {
-				const point = wcs.pixToSky(x, y)
+		for (let y = 0, i = 0; y < height; y++) {
+			for (let x = 0; x < width; x++, i++) {
+				const point = wcs.pixToSky(x * delta, y * delta)
 
-				if (!point) throw new Error(`failed to interpolate image coordinate at ${x},${y}`)
+				if (!point) throw new Error(`failed to interpolate image coordinate at ${x * delta},${y * delta}`)
 
-				const [rightAscension, declination] = point
-				ma[i] = rightAscension
-				md[i] = declination
+				ma[i] = point[0]
+				md[i] = point[1]
 			}
 		}
 

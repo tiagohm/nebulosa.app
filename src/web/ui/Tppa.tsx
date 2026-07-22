@@ -1,5 +1,5 @@
 import { useStore } from '@hooks/store.hook'
-import { CameraCaptureStoreContext, TppaStoreContext } from '@shared/context'
+import { CameraCaptureStoreContext, PlateSolverStoreContext, TppaStoreContext } from '@shared/context'
 import { tppaStore } from '@stores/tppa.store'
 import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
 import { Button } from '@ui/components/Button'
@@ -82,7 +82,7 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<PlateSolverSelect className="col-span-6" disabled={running} endContent={<PlateSolverSelectEndContent />} onValueChange={(value) => tppa.updateSolver('type', value)} value={type} />
+			<PlateSolverSelect className="col-span-6" disabled={running} endContent={<PlateSolverSelectEndContent />} onValueChange={tppa.solver.setType} value={type} />
 			<NumberInput className="col-span-3" disabled={running} label="Move for (s)" maxValue={60} minValue={1} onValueChange={tppa.setMoveDuration} value={moveDuration} />
 			<TppaDirectionSelect className="col-span-3" disabled={running} onValueChange={tppa.setDirection} value={direction} />
 			<NumberInput className="col-span-4" disabled={running} label="Max attempts" maxValue={30} minValue={3} onValueChange={tppa.setMaxAttempts} value={maxAttempts} />
@@ -95,9 +95,12 @@ const Inputs = memo(() => {
 const PlateSolverSelectEndContent = memo(() => {
 	const tppa = useContext(TppaStoreContext)
 	const { running } = useSnapshot(tppa.state)
-	const { type, radius, focalLength, pixelSize } = useSnapshot(tppa.state.request.solver)
 
-	return <PlateSolveStartPopover disabled={running} focalLength={focalLength} onFocalLengthChange={tppa.setSolverFocalLength} onPixelSizeChange={tppa.setSolverPixelSize} onRadiusChange={tppa.setSolverRadius} pixelSize={pixelSize} radius={radius} type={type} />
+	return (
+		<PlateSolverStoreContext value={tppa.solver}>
+			<PlateSolveStartPopover disabled={running} />
+		</PlateSolverStoreContext>
+	)
 })
 
 const Result = memo(() => {

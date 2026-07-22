@@ -109,10 +109,6 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 		state.request.hemisphere = value
 	}
 
-	function updateCapture<K extends keyof DarvStart['capture']>(key: K, value: DarvStart['capture'][K]) {
-		state.request.capture[key] = value
-	}
-
 	function updateExposureEstimation<K extends keyof DarvState['exposureEstimation']>(key: K, value: DarvState['exposureEstimation'][K]) {
 		state.exposureEstimation[key] = value
 
@@ -177,7 +173,6 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 		setInitialPause,
 		setDuration,
 		setHemisphere,
-		updateCapture,
 		updateExposureEstimation,
 		updateExposureEstimationPreset,
 		estimateExposure,

@@ -164,7 +164,6 @@ export const Interactable = memo(({ ref, className, children, onGesture, onTap, 
 		if (!parent || !coordinate || !Number.isFinite(parentX) || !Number.isFinite(parentY)) return
 
 		const parentRect = parent.getBoundingClientRect()
-		console.info(x, y, parentX, parentY, parent.clientLeft, parent.clientTop, parentRect, transformation.current)
 		const targetX = parentRect.left + parent.clientLeft + parentX
 		const targetY = parentRect.top + parent.clientTop + parentY
 

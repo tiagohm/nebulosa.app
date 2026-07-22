@@ -6,9 +6,8 @@ import { useSnapshot } from 'valtio'
 export const Fov = memo(() => {
 	const { fov, solver } = useContext(ImageViewerStoreContext)
 	const { solution } = useSnapshot(solver.state)
-	const hasSolutionScale = hasScaledSolution(solution)
 
-	if (!hasSolutionScale) return null
+	if (!hasScaledSolution(solution)) return null
 
 	return <Items />
 })

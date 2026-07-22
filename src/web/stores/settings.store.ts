@@ -1,19 +1,12 @@
 import { initProxy } from '@shared/proxy'
+import { plateSolverStore } from '@stores/plate.solver.store'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_GEOGRAPHIC_COORDINATE, DEFAULT_PLATE_SOLVE_START, type PlateSolverType, type PlateSolveStart } from 'src/shared/types'
+import { DEFAULT_GEOGRAPHIC_COORDINATE, type PlateSolverType, type PlateSolveStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 
 export type SettingsStore = typeof settingsStore
-
-const DEFAULT_PLATE_SOLVE_START_SETTINGS = {
-	executable: DEFAULT_PLATE_SOLVE_START.executable,
-	apiUrl: DEFAULT_PLATE_SOLVE_START.apiUrl,
-	apiKey: DEFAULT_PLATE_SOLVE_START.apiKey,
-	downsample: DEFAULT_PLATE_SOLVE_START.downsample,
-	timeout: DEFAULT_PLATE_SOLVE_START.timeout,
-} as const
 
 export interface SettingsState {
 	readonly solver: Record<PlateSolverType, Pick<PlateSolveStart, 'executable' | 'apiUrl' | 'apiKey' | 'downsample' | 'timeout'>>
@@ -21,11 +14,15 @@ export interface SettingsState {
 	readonly time: UTCTime
 }
 
+const astap = plateSolverStore()
+const astrometryNet = plateSolverStore()
+const novaAstrometryNet = plateSolverStore()
+
 const state = proxy<SettingsState>({
 	solver: {
-		astap: structuredClone(DEFAULT_PLATE_SOLVE_START_SETTINGS),
-		astrometryNet: structuredClone(DEFAULT_PLATE_SOLVE_START_SETTINGS),
-		novaAstrometryNet: structuredClone(DEFAULT_PLATE_SOLVE_START_SETTINGS),
+		astap: astap.state,
+		astrometryNet: astrometryNet.state,
+		novaAstrometryNet: novaAstrometryNet.state,
 	},
 	location: structuredClone(DEFAULT_GEOGRAPHIC_COORDINATE),
 	time: {
@@ -56,18 +53,16 @@ function unmount() {
 	mounted = false
 }
 
-function updateLocation(coordinate: GeographicCoordinate) {
+function setLocation(coordinate: GeographicCoordinate) {
 	Object.assign(state.location, coordinate)
-}
-
-function updateSolver<K extends keyof typeof state.solver.astap>(type: PlateSolverType, key: K, value: PlateSolveStart[K]) {
-	state.solver[type][key] = value
 }
 
 export const settingsStore = {
 	state,
+	astap,
+	astrometryNet,
+	novaAstrometryNet,
 	mount,
 	unmount,
-	updateLocation,
-	updateSolver,
-}
+	setLocation,
+} as const

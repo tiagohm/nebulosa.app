@@ -14,6 +14,7 @@ import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { IndiPanelControlStore } from '@stores/indi.panelcontrol.store'
 import type { LocationStore } from '@stores/location.store'
 import type { MountStore } from '@stores/mount.store'
+import type { PlateSolverStore } from '@stores/plate.solver.store'
 import type { RotatorStore } from '@stores/rotator.store'
 import type { ThermometerStore } from '@stores/thermometer.store'
 import type { TppaStore } from '@stores/tppa.store'
@@ -70,3 +71,5 @@ export const TppaStoreContext = createContext<TppaStore>(null as never)
 
 export const WheelDeviceContext = createContext<Wheel>(null as never)
 export const WheelStoreContext = createContext<WheelStore>(null as never)
+
+export const PlateSolverStoreContext = createContext<PlateSolverStore>(null as never)

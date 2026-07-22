@@ -4,6 +4,7 @@ import { initProxy } from '@shared/proxy'
 import { cameraCaptureStore } from '@stores/camera.capture.store'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
+import { plateSolverStore } from '@stores/plate.solver.store'
 import type { DockviewPanelApi } from 'dockview-react'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
@@ -24,11 +25,13 @@ export interface TppaState {
 
 export function tppaStore(id: string, api: DockviewPanelApi) {
 	const capture = cameraCaptureStore()
+	const solver = plateSolverStore()
 
 	const state = proxy<TppaState>({
 		request: {
 			...structuredClone(DEFAULT_TPPA_START),
 			capture: capture.state,
+			solver: solver.state,
 		},
 		running: false,
 		event: structuredClone(DEFAULT_TPPA_EVENT),
@@ -107,26 +110,6 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 		state.request.compensateRefraction = value
 	}
 
-	function setSolverRadius(value: number) {
-		state.request.solver.radius = value
-	}
-
-	function setSolverFocalLength(value: number) {
-		state.request.solver.focalLength = value
-	}
-
-	function setSolverPixelSize(value: number) {
-		state.request.solver.pixelSize = value
-	}
-
-	function updateSolver<K extends keyof TppaStart['solver']>(key: K, value: TppaStart['solver'][K]) {
-		state.request.solver[key] = value
-	}
-
-	function updateCapture<K extends keyof TppaStart['capture']>(key: K, value: TppaStart['capture'][K]) {
-		state.request.capture[key] = value
-	}
-
 	function updateRefraction<K extends keyof TppaStart['refraction']>(key: K, value: TppaStart['refraction'][K]) {
 		state.request.refraction[key] = value
 	}
@@ -156,6 +139,7 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 	return {
 		state,
 		capture,
+		solver,
 		mount: _mount,
 		unmount,
 		setMoveDuration,
@@ -163,11 +147,6 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 		setMaxAttempts,
 		setDelayBeforeCapture,
 		setCompensateRefraction,
-		setSolverRadius,
-		setSolverFocalLength,
-		setSolverPixelSize,
-		updateSolver,
-		updateCapture,
 		updateRefraction,
 		start,
 		stop,

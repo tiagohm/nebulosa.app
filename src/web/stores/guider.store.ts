@@ -106,10 +106,6 @@ function updateSettle<K extends keyof GuiderState['connection']['dither']['settl
 	state.connection.dither.settle[key] = value
 }
 
-function updateCapture<K extends keyof GuiderState['connection']['capture']>(key: K, value: GuiderState['connection']['capture'][K]) {
-	state.connection.capture[key] = value
-}
-
 async function connect() {
 	if (!state.connected) {
 		try {
@@ -173,7 +169,6 @@ export const guiderStore = {
 	updateConnection,
 	updateDither,
 	updateSettle,
-	updateCapture,
 	connect,
 	clear,
 	loop,

@@ -3,13 +3,14 @@ import { imageBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import { framingStore } from '@stores/framing.store'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
+import { plateSolverStore } from '@stores/plate.solver.store'
 import { settingsStore } from '@stores/settings.store'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { formatRA, formatDEC, toDeg, arcsec, type Angle } from 'nebulosa/src/math/units/angle'
-import { DEFAULT_PLATE_SOLVE_START, type Framing, type PlateSolveStart, type PlateSolverType } from 'src/shared/types'
+import type { Framing, PlateSolveStart, PlateSolverType } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 
@@ -22,9 +23,11 @@ export interface ImageSolverState {
 }
 
 export function imageSolverStore(viewer: ImageViewerStore) {
+	const solver = plateSolverStore()
+
 	const state = proxy<ImageSolverState>({
 		loading: false,
-		request: structuredClone(DEFAULT_PLATE_SOLVE_START),
+		request: solver.state,
 	})
 
 	console.info('image solver created:', viewer.state.path)
@@ -148,6 +151,7 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 	return {
 		state,
 		viewer,
+		solver,
 		mount,
 		unmount,
 		setType,

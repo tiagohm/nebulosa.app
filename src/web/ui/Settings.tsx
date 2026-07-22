@@ -33,7 +33,7 @@ const Location = memo(() => {
 	return (
 		<div className="flex flex-col gap-2">
 			<span className="text-sm font-bold">LOCATION</span>
-			<LocationMap mode="settings" {...location} onCoordinateChange={settingsStore.updateLocation} />
+			<LocationMap mode="settings" {...location} onCoordinateChange={settingsStore.setLocation} />
 		</div>
 	)
 })

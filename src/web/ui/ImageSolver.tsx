@@ -1,4 +1,4 @@
-import { ImageViewerStoreContext } from '@shared/context'
+import { ImageViewerStoreContext, PlateSolverStoreContext } from '@shared/context'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
 import { IconButton } from '@ui/components/IconButton'
@@ -75,9 +75,12 @@ const Inputs = memo(() => {
 const PlateSolverSelectEndContent = memo(() => {
 	const { solver } = useContext(ImageViewerStoreContext)
 	const { loading } = useSnapshot(solver.state)
-	const { type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request)
 
-	return <PlateSolveStartPopover disabled={loading} focalLength={focalLength} onFocalLengthChange={solver.setFocalLength} onPixelSizeChange={solver.setPixelSize} onRadiusChange={solver.setRadius} pixelSize={pixelSize} radius={radius} type={type} />
+	return (
+		<PlateSolverStoreContext value={solver.solver}>
+			<PlateSolveStartPopover disabled={loading} />
+		</PlateSolverStoreContext>
+	)
 })
 
 const Solution = memo(() => {

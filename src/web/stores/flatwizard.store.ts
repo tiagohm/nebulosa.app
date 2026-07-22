@@ -99,10 +99,6 @@ export function flatWizardStore(id: string, api: DockviewPanelApi) {
 		state.request.meanTolerance = value
 	}
 
-	function updateCapture<K extends keyof FlatWizardStart['capture']>(key: K, value: FlatWizardStart['capture'][K]) {
-		state.request.capture[key] = value
-	}
-
 	function setPath(path?: string) {
 		state.request.path = path ?? ''
 	}
@@ -138,7 +134,6 @@ export function flatWizardStore(id: string, api: DockviewPanelApi) {
 		setMaxExposure,
 		setMeanTarget,
 		setMeanTolerance,
-		updateCapture,
 		setPath,
 		start,
 		stop,

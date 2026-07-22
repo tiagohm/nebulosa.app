@@ -14,13 +14,12 @@ import type { FovItem } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 
 export const ImageFov = memo(() => {
-	const { solver, fov } = useContext(ImageViewerStoreContext)
+	const { fov, solver } = useContext(ImageViewerStoreContext)
 	const { solution } = useSnapshot(solver.state)
-	const hasSolutionScale = hasScaledSolution(solution)
 
 	useEffect(fov.mount, [])
 
-	if (!hasSolutionScale) return <div className="flex h-full w-full flex-row items-center justify-center">No solution available</div>
+	if (!hasScaledSolution(solution)) return <div className="flex h-full w-full flex-row items-center justify-center">Not available</div>
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">

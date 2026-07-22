@@ -1,4 +1,5 @@
 import { ImageViewerStoreContext } from '@shared/context'
+import { hasScaledSolution } from '@stores/image.solver.store'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
 import { IconButton } from '@ui/components/IconButton'
@@ -8,9 +9,12 @@ import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const ImageAnnotation = memo(() => {
-	const { annotation } = useContext(ImageViewerStoreContext)
+	const { annotation, solver } = useContext(ImageViewerStoreContext)
+	const { solution } = useSnapshot(solver.state)
 
 	useEffect(annotation.mount, [])
+
+	if (!hasScaledSolution(solution)) return <div className="flex h-full w-full flex-row items-center justify-center">Not available</div>
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">

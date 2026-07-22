@@ -86,8 +86,12 @@ async function tick(time: UTCTime, dateHasChanged: boolean) {
 	}
 }
 
-function update<K extends keyof AtlasPlanetState['search']>(key: K, value: AtlasPlanetState['search'][K]) {
-	state.search[key] = value
+function setName(value: string) {
+	state.search.name = value
+}
+
+function setType(value: PlanetType | 'ALL') {
+	state.search.type = value
 }
 
 async function updatePosition() {
@@ -137,7 +141,8 @@ export const planetStore = {
 	mount,
 	unmount,
 	tick,
-	update,
+	setName,
+	setType,
 	select,
 	sync,
 	goTo,

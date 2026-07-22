@@ -48,8 +48,36 @@ function unmount() {
 	mounted = false
 }
 
-function update<K extends keyof FramingState['request']>(key: K, value: FramingState['request'][K]) {
-	state.request[key] = value
+function setRightAscension(value: string) {
+	state.request.rightAscension = value
+}
+
+function setDeclination(value: string) {
+	state.request.declination = value
+}
+
+function setFocalLength(value: number) {
+	state.request.focalLength = value
+}
+
+function setPixelSize(value: number) {
+	state.request.pixelSize = value
+}
+
+function setWidth(value: number) {
+	state.request.width = value
+}
+
+function setHeight(value: number) {
+	state.request.height = value
+}
+
+function setRotation(value: number) {
+	state.request.rotation = value
+}
+
+function setHipsSurvey(value: string) {
+	state.request.hipsSurvey = value
 }
 
 async function load(request: Partial<Framing> = state.request) {
@@ -73,7 +101,14 @@ async function load(request: Partial<Framing> = state.request) {
 
 export const framingStore = {
 	state,
-	update,
+	setRightAscension,
+	setDeclination,
+	setFocalLength,
+	setPixelSize,
+	setWidth,
+	setHeight,
+	setRotation,
+	setHipsSurvey,
 	load,
 	mount,
 	unmount,

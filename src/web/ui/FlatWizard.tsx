@@ -82,10 +82,10 @@ const Input = memo(() => {
 	return (
 		<>
 			<FilePickerInput className="col-span-full" disabled={running} fullWidth id="flatwizard" mode="directory" onValueChange={flatWizard.setPath} value={path} />
-			<NumberInput className="col-span-6" disabled={disabled} label="Min exposure (ms)" maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={(value) => flatWizard.update('minExposure', value)} value={minExposure} />
-			<NumberInput className="col-span-6" disabled={disabled} label="Max exposure (ms)" maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={(value) => flatWizard.update('maxExposure', value)} value={maxExposure} />
-			<NumberInput className="col-span-6" disabled={running} label="Mean target" maxValue={65536} minValue={0} onValueChange={(value) => flatWizard.update('meanTarget', value)} value={meanTarget} />
-			<NumberInput className="col-span-6" disabled={running} fractionDigits={1} label="Mean tolerance (%)" maxValue={100} minValue={0} onValueChange={(value) => flatWizard.update('meanTolerance', value)} step={0.1} value={meanTolerance} />
+			<NumberInput className="col-span-6" disabled={disabled} label="Min exposure (ms)" maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={flatWizard.setMinExposure} value={minExposure} />
+			<NumberInput className="col-span-6" disabled={disabled} label="Max exposure (ms)" maxValue={exposureMaxValue} minValue={exposureMinValue} onValueChange={flatWizard.setMaxExposure} value={maxExposure} />
+			<NumberInput className="col-span-6" disabled={running} label="Mean target" maxValue={65536} minValue={0} onValueChange={flatWizard.setMeanTarget} value={meanTarget} />
+			<NumberInput className="col-span-6" disabled={running} fractionDigits={1} label="Mean tolerance (%)" maxValue={100} minValue={0} onValueChange={flatWizard.setMeanTolerance} step={0.1} value={meanTolerance} />
 		</>
 	)
 })

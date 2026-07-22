@@ -1,6 +1,7 @@
 import { imageBus } from '@shared/bus'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { SliderRangeValue } from '@ui/components/Slider'
+import type { SigmaClipCenterMethod, SigmaClipDispersionMethod } from 'nebulosa/src/imaging/processing/computation'
 import { DEFAULT_IMAGE_STRETCH, type ImageStretch } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
@@ -47,23 +48,63 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof ImageStretch>(key: K, value: ImageStretch[K]) {
-		state.stretch[key] = value
+	function setMidtone(value: number) {
+		state.stretch.midtone = value
+	}
+
+	function setBits(value: number) {
+		state.stretch.bits = value
+	}
+
+	function setMeanBackground(value: number) {
+		state.stretch.meanBackground = value
+	}
+
+	function setClippingPoint(value: number) {
+		state.stretch.clippingPoint = value
+	}
+
+	function setSigmaClip(value: boolean) {
+		state.stretch.sigmaClip = value
+	}
+
+	function setSigmaLower(value: number) {
+		state.stretch.sigmaLower = value
+	}
+
+	function setSigmaUpper(value: number) {
+		state.stretch.sigmaUpper = value
+	}
+
+	function setCenterMethod(value: SigmaClipCenterMethod) {
+		state.stretch.centerMethod = value
+	}
+
+	function setDispersionMethod(value: SigmaClipDispersionMethod) {
+		state.stretch.dispersionMethod = value
+	}
+
+	function setShadow(value: number) {
+		state.stretch.shadow = value
+	}
+
+	function setHighlight(value: number) {
+		state.stretch.highlight = value
 	}
 
 	function handleShadowChange(value: number) {
-		update('shadow', value)
-		if (value > state.stretch.highlight) update('highlight', value)
+		setShadow(value)
+		if (value > state.stretch.highlight) setHighlight(value)
 	}
 
 	function handleHighlightChange(value: number) {
-		update('highlight', value)
-		if (value < state.stretch.shadow) update('shadow', value)
+		setHighlight(value)
+		if (value < state.stretch.shadow) setShadow(value)
 	}
 
 	function handleShadowHighlightChange(value: SliderRangeValue) {
-		update('shadow', value[0])
-		update('highlight', value[1])
+		setShadow(value[0])
+		setHighlight(value[1])
 	}
 
 	function auto() {
@@ -98,7 +139,17 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
+		setMidtone,
+		setBits,
+		setMeanBackground,
+		setClippingPoint,
+		setSigmaClip,
+		setSigmaLower,
+		setSigmaUpper,
+		setCenterMethod,
+		setDispersionMethod,
+		setShadow,
+		setHighlight,
 		handleShadowChange,
 		handleHighlightChange,
 		handleShadowHighlightChange,

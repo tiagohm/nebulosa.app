@@ -19,9 +19,9 @@ export const ImageScnr = memo(() => {
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
-			<ImageChannelButtonGroup allowNoneSelection className="col-span-full min-w-0" fullWidth onValueChange={(value) => scnr.update('channel', value)} value={channel} />
-			<SCNRProtectionMethodSelect className="col-span-8 min-w-0" disabled={!hasChannel} fullWidth onValueChange={(value) => scnr.update('method', value)} value={method} />
-			<NumberInput className="col-span-4 min-w-0" fractionDigits={1} label="Amount" maxValue={1} minValue={0} onValueChange={(value) => scnr.update('amount', value)} step={0.1} value={amount} />
+			<ImageChannelButtonGroup allowNoneSelection className="col-span-full min-w-0" fullWidth onValueChange={scnr.setChannel} value={channel} />
+			<SCNRProtectionMethodSelect className="col-span-8 min-w-0" disabled={!hasChannel} fullWidth onValueChange={scnr.setMethod} value={method} />
+			<NumberInput className="col-span-4 min-w-0" fractionDigits={1} label="Amount" maxValue={1} minValue={0} onValueChange={scnr.setAmount} step={0.1} value={amount} />
 			<Footer />
 		</div>
 	)

@@ -3,8 +3,9 @@ import { imageBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import { toast } from '@shared/toast'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { Writable } from 'nebulosa/src/core/types'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
-import { DEFAULT_STAR_DETECTION, type StarDetection } from 'src/shared/types'
+import { DEFAULT_STAR_DETECTION, type StarDetection, type StarDetectionType } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 
@@ -15,7 +16,7 @@ export interface ImageStarDetectionState {
 	loading: boolean
 	stars: readonly DetectedStar[]
 	selected?: DetectedStar
-	request: StarDetection
+	request: Writable<StarDetection>
 	readonly computed: {
 		hfd: number
 		snr: number
@@ -69,8 +70,20 @@ export function imageStarDetectionStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof StarDetection>(key: K, value: StarDetection[K]) {
-		state.request[key] = value
+	function setType(value: StarDetectionType) {
+		state.request.type = value
+	}
+
+	function setExecutable(value: string) {
+		state.request.executable = value
+	}
+
+	function setMinSNR(value: number) {
+		state.request.minSNR = value
+	}
+
+	function setMaxStars(value: number) {
+		state.request.maxStars = value
 	}
 
 	function toggle(enabled?: boolean) {
@@ -182,7 +195,10 @@ export function imageStarDetectionStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
+		setType,
+		setExecutable,
+		setMinSNR,
+		setMaxStars,
 		toggle,
 		detect,
 		select,

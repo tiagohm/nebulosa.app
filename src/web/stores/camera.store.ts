@@ -5,8 +5,8 @@ import { storageGet, storageSet } from '@shared/storage'
 import type { ImageRoiRequest } from '@shared/types'
 import { clampInteger } from '@shared/util'
 import { equipmentStore, type DeviceState } from '@stores/equipment.store'
-import type { Camera, Focuser, MinMaxValueProperty, Mount, NameAndLabel, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
-import { type CameraCaptureStart, type CameraCaptureEvent, type Roi, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_EVENT, type CameraUpdated } from 'src/shared/types'
+import type { Camera, CameraTransferFormat, Focuser, FrameType, MinMaxValueProperty, Mount, NameAndLabel, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
+import { type AutoSubFolderMode, type CameraCaptureStart, type CameraCaptureEvent, type ExposureMode, type ExposureTimeUnit, type Roi, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_EVENT, type CameraUpdated } from 'src/shared/types'
 import { exposureTimeIn, unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -85,12 +85,88 @@ export function cameraStore(camera: Camera) {
 		mounted = false
 	}
 
-	function update<K extends keyof CameraState['request']>(key: K, value: CameraState['request'][K]) {
-		state.request[key] = value
+	function setAutoSave(value: boolean) {
+		state.request.autoSave = value
 	}
 
-	function updateSavePath(path?: string) {
-		return update('savePath', path)
+	function setAutoSubFolderMode(value: AutoSubFolderMode) {
+		state.request.autoSubFolderMode = value
+	}
+
+	function setTransferFormat(value: CameraTransferFormat) {
+		state.request.transferFormat = value
+	}
+
+	function setCompressed(value: boolean) {
+		state.request.compressed = value
+	}
+
+	function setExposureTimeUnit(value: ExposureTimeUnit) {
+		state.request.exposureTimeUnit = value
+	}
+
+	function setExposureTime(value: number) {
+		state.request.exposureTime = value
+	}
+
+	function setFrameType(value: FrameType) {
+		state.request.frameType = value
+	}
+
+	function setExposureMode(value: ExposureMode) {
+		state.request.exposureMode = value
+	}
+
+	function setDelay(value: number) {
+		state.request.delay = value
+	}
+
+	function setCount(value: number) {
+		state.request.count = value
+	}
+
+	function setBinX(value: number) {
+		state.request.binX = value
+	}
+
+	function setBinY(value: number) {
+		state.request.binY = value
+	}
+
+	function setSubframe(value: boolean) {
+		state.request.subframe = value
+	}
+
+	function setX(value: number) {
+		state.request.x = value
+	}
+
+	function setY(value: number) {
+		state.request.y = value
+	}
+
+	function setWidth(value: number) {
+		state.request.width = value
+	}
+
+	function setHeight(value: number) {
+		state.request.height = value
+	}
+
+	function setGain(value: number) {
+		state.request.gain = value
+	}
+
+	function setOffset(value: number) {
+		state.request.offset = value
+	}
+
+	function setFrameFormat(value: string) {
+		state.request.frameFormat = value
+	}
+
+	function setSavePath(path?: string) {
+		state.request.savePath = path
 	}
 
 	function updateDither<K extends keyof CameraState['request']['dither']>(key: K, value: CameraState['request']['dither'][K]) {
@@ -184,8 +260,27 @@ export function cameraStore(camera: Camera) {
 		mount,
 		unmount,
 		connect,
-		update,
-		updateSavePath,
+		setAutoSave,
+		setAutoSubFolderMode,
+		setTransferFormat,
+		setCompressed,
+		setExposureTimeUnit,
+		setExposureTime,
+		setFrameType,
+		setExposureMode,
+		setDelay,
+		setCount,
+		setBinX,
+		setBinY,
+		setSubframe,
+		setX,
+		setY,
+		setWidth,
+		setHeight,
+		setGain,
+		setOffset,
+		setFrameFormat,
+		setSavePath,
 		updateDither,
 		cooler,
 		temperature,

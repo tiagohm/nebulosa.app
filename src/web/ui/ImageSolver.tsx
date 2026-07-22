@@ -61,13 +61,13 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<PlateSolverSelect className="col-span-8 min-w-0" disabled={loading} endContent={<PlateSolverSelectEndContent />} onValueChange={(value) => solver.update('type', value)} value={type} />
-			<Checkbox className="col-span-3 col-end-13 min-w-0" disabled={loading} label="Blind" onValueChange={(value) => solver.update('blind', value)} value={blind} />
-			<TextInput className="col-span-4 min-w-0" disabled={coordinateDisabled} label="RA" onValueChange={(value) => solver.update('rightAscension', value)} value={String(rightAscension)} />
-			<TextInput className="col-span-4 min-w-0" disabled={coordinateDisabled} label="DEC" onValueChange={(value) => solver.update('declination', value)} value={String(declination)} />
-			<NumberInput className="col-span-4 min-w-0" disabled={coordinateDisabled} fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={(value) => solver.update('radius', value)} step={0.1} value={radius ?? 4} />
-			<NumberInput className="col-span-6 min-w-0" disabled={loading} label="Focal Length (mm)" maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} value={focalLength} />
-			<NumberInput className="col-span-6 min-w-0" disabled={loading} fractionDigits={2} label="Pixel size (µm)" maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} step={0.01} value={pixelSize} />
+			<PlateSolverSelect className="col-span-8 min-w-0" disabled={loading} endContent={<PlateSolverSelectEndContent />} onValueChange={solver.setType} value={type} />
+			<Checkbox className="col-span-3 col-end-13 min-w-0" disabled={loading} label="Blind" onValueChange={solver.setBlind} value={blind} />
+			<TextInput className="col-span-4 min-w-0" disabled={coordinateDisabled} label="RA" onValueChange={solver.setRightAscension} value={String(rightAscension)} />
+			<TextInput className="col-span-4 min-w-0" disabled={coordinateDisabled} label="DEC" onValueChange={solver.setDeclination} value={String(declination)} />
+			<NumberInput className="col-span-4 min-w-0" disabled={coordinateDisabled} fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={solver.setRadius} step={0.1} value={radius ?? 4} />
+			<NumberInput className="col-span-6 min-w-0" disabled={loading} label="Focal Length (mm)" maxValue={100000} minValue={0} onValueChange={solver.setFocalLength} value={focalLength} />
+			<NumberInput className="col-span-6 min-w-0" disabled={loading} fractionDigits={2} label="Pixel size (µm)" maxValue={1000} minValue={0} onValueChange={solver.setPixelSize} step={0.01} value={pixelSize} />
 		</>
 	)
 })
@@ -77,7 +77,7 @@ const PlateSolverSelectEndContent = memo(() => {
 	const { loading } = useSnapshot(solver.state)
 	const { type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request)
 
-	return <PlateSolveStartPopover disabled={loading} focalLength={focalLength} onValueChange={solver.update} pixelSize={pixelSize} radius={radius} type={type} />
+	return <PlateSolveStartPopover disabled={loading} focalLength={focalLength} onFocalLengthChange={solver.setFocalLength} onPixelSizeChange={solver.setPixelSize} onRadiusChange={solver.setRadius} pixelSize={pixelSize} radius={radius} type={type} />
 })
 
 const Solution = memo(() => {

@@ -16,8 +16,8 @@ export const ImageSave = memo(() => {
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<FilePickerInput fullWidth className="col-span-full min-w-0" disabled={loading} id={`save-${save.viewer.key}`} mode="save" onValueChange={save.setPath} placeholder="Path" size="md" value={path} />
-			<ImageFormatButtonGroup fullWidth className="col-span-full min-w-0" disabled={loading} onValueChange={(value) => save.update('format', value)} value={format} />
-			<Checkbox className="col-span-full min-w-0" disabled={loading} label="Apply transformation" onValueChange={(value) => save.update('transformed', value)} value={transformed} />
+			<ImageFormatButtonGroup fullWidth className="col-span-full min-w-0" disabled={loading} onValueChange={save.setFormat} value={format} />
+			<Checkbox className="col-span-full min-w-0" disabled={loading} label="Apply transformation" onValueChange={save.setTransformed} value={transformed} />
 			<Footer />
 		</div>
 	)

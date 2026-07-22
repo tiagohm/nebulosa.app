@@ -11,7 +11,7 @@ export const ImageRoi = memo(() => {
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
-			<Switch className="col-span-full min-w-0" label="Enabled" onValueChange={(value) => roi.update('enabled', value)} value={enabled} />
+			<Switch className="col-span-full min-w-0" label="Enabled" onValueChange={roi.setEnabled} value={enabled} />
 		</div>
 	)
 })

@@ -1,4 +1,6 @@
 import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { ImageChannel } from 'nebulosa/src/imaging/model/types'
+import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
 import { DEFAULT_IMAGE_SCNR, type ImageScnr } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
@@ -36,8 +38,16 @@ export function imageScnrStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof ImageScnr>(key: K, value: ImageScnr[K]) {
-		state.scnr[key] = value
+	function setChannel(value: ImageChannel | undefined) {
+		state.scnr.channel = value
+	}
+
+	function setMethod(value: SCNRProtectionMethod) {
+		state.scnr.method = value
+	}
+
+	function setAmount(value: number) {
+		state.scnr.amount = value
 	}
 
 	function reset() {
@@ -54,7 +64,9 @@ export function imageScnrStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
+		setChannel,
+		setMethod,
+		setAmount,
 		reset,
 		apply,
 	} as const

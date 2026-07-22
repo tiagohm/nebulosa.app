@@ -9,7 +9,7 @@ export type RotatorStore = ReturnType<typeof rotatorStore>
 
 export interface RotatorState {
 	rotator: DeviceState<Rotator>
-	readonly angle: number
+	angle: number
 }
 
 export function rotatorStore(rotator: Rotator) {
@@ -40,8 +40,8 @@ export function rotatorStore(rotator: Rotator) {
 		mounted = false
 	}
 
-	function update<K extends keyof RotatorState>(key: K, value: RotatorState[K]) {
-		state[key] = value
+	function setAngle(value: number) {
+		state.angle = value
 	}
 
 	function connect() {
@@ -72,7 +72,7 @@ export function rotatorStore(rotator: Rotator) {
 		state,
 		mount,
 		unmount,
-		update,
+		setAngle,
 		connect,
 		moveTo,
 		sync,

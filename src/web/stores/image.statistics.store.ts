@@ -2,6 +2,7 @@ import { Api } from '@shared/api'
 import { imageBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { Writable } from 'nebulosa/src/core/types'
 import type { ImageHistogram, StatisticImage } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
@@ -12,7 +13,7 @@ export type ImageStatisticsStore = ReturnType<typeof imageStatisticsStore>
 export interface ImageStatisticsState {
 	selected: number
 	roi: boolean
-	readonly request: Pick<StatisticImage, 'bits' | 'area' | 'transformed'>
+	readonly request: Writable<Pick<StatisticImage, 'bits' | 'area' | 'transformed'>>
 	histogram: readonly ImageHistogram[]
 }
 
@@ -65,8 +66,12 @@ export function imageStatisticsStore(viewer: ImageViewerStore) {
 		return state.roi && viewer.roi.state.enabled
 	}
 
-	function update<K extends keyof ImageStatisticsState['request']>(key: K, value: ImageStatisticsState['request'][K]) {
-		state.request[key] = value
+	function setTransformed(value: boolean) {
+		state.request.transformed = value
+	}
+
+	function setRoi(value: boolean) {
+		state.roi = value
 	}
 
 	async function compute() {
@@ -91,7 +96,8 @@ export function imageStatisticsStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
+		setTransformed,
+		setRoi,
 		compute,
 	} as const
 }

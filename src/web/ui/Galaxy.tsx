@@ -40,14 +40,14 @@ const Filter = memo(() => {
 	return (
 		<div className="col-span-full grid grid-cols-subgrid items-center gap-2">
 			<div className="col-span-full flex flex-row items-center justify-center gap-2">
-				<TextInput className="flex-1" onValueChange={(value) => galaxyStore.update('name', value)} placeholder="Search" startContent={<SkyObjectNameTypeDropdown color="secondary" onValueChange={(value) => galaxyStore.update('nameType', value)} value={nameType} size="sm" />} value={name} />
+				<TextInput className="flex-1" onValueChange={galaxyStore.setName} placeholder="Search" startContent={<SkyObjectNameTypeDropdown color="secondary" onValueChange={galaxyStore.setNameType} value={nameType} size="sm" />} value={name} />
 				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={galaxyStore.search} tooltipContent="Filter" variant="flat" />
 			</div>
-			<ConstellationSelect className="col-span-6" onValueChange={(value) => galaxyStore.update('constellations', value)} value={constellations} />
-			<StellariumObjectTypeSelect className="col-span-6" onValueChange={(value) => galaxyStore.update('types', value)} value={types} />
-			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="RA" onValueChange={(value) => galaxyStore.update('rightAscension', value)} value={rightAscension} />
-			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="DEC" onValueChange={(value) => galaxyStore.update('declination', value)} value={declination} />
-			<NumberInput className="col-span-4" fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={(value) => galaxyStore.update('radius', value)} step={0.1} value={radius} />
+			<ConstellationSelect className="col-span-6" onValueChange={galaxyStore.setConstellations} value={constellations} />
+			<StellariumObjectTypeSelect className="col-span-6" onValueChange={galaxyStore.setTypes} value={types} />
+			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="RA" onValueChange={galaxyStore.setRightAscension} value={rightAscension} />
+			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="DEC" onValueChange={galaxyStore.setDeclination} value={declination} />
+			<NumberInput className="col-span-4" fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={galaxyStore.setRadius} step={0.1} value={radius} />
 			<Slider
 				className="col-span-5"
 				startContent={magnitudeMin.toFixed(1)}
@@ -55,13 +55,13 @@ const Filter = memo(() => {
 				label="Magnitude"
 				maxValue={30}
 				minValue={-30}
-				onValueChange={galaxyStore.updateMagnitude}
+				onValueChange={galaxyStore.setMagnitude}
 				step={0.1}
 				classNames={{ endContent: 'w-[5ch]', startContent: 'w-[5ch]' }}
 				value={[magnitudeMin, magnitudeMax]}
 			/>
-			<Checkbox className="col-span-4 flex w-full max-w-none justify-center" label="Show visible" onValueChange={(value) => galaxyStore.update('visible', value)} value={visible} />
-			<NumberInput className="col-span-3" disabled={!visible || loading} label="Above (°)" maxValue={89} minValue={0} onValueChange={(value) => galaxyStore.update('visibleAbove', value)} value={visibleAbove} />
+			<Checkbox className="col-span-4 flex w-full max-w-none justify-center" label="Show visible" onValueChange={galaxyStore.setVisible} value={visible} />
+			<NumberInput className="col-span-3" disabled={!visible || loading} label="Above (°)" maxValue={89} minValue={0} onValueChange={galaxyStore.setVisibleAbove} value={visibleAbove} />
 		</div>
 	)
 })

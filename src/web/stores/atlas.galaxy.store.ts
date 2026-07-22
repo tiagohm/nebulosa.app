@@ -4,7 +4,10 @@ import { skyObjectName } from '@shared/util'
 import { atlasStore, isLocationChanged, isTimeChanged, type BookmarkItem, type TagItem } from '@stores/atlas.store'
 import { framingStore } from '@stores/framing.store'
 import { settingsStore } from '@stores/settings.store'
+import type { Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
+import type { Writable } from 'nebulosa/src/core/types'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
+import type { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { type SearchSkyObject, type SkyObjectSearchItem, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_SKY_OBJECT_SEARCH } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
@@ -14,7 +17,7 @@ export type AtlasGalaxyStore = typeof galaxyStore
 
 export interface AtlasGalaxyState {
 	loading: boolean
-	readonly request: Required<SearchSkyObject>
+	readonly request: Writable<Required<SearchSkyObject>>
 	result: readonly SkyObjectSearchItem[]
 	selected?: SkyObjectSearchItem
 	readonly position: BodyPosition
@@ -85,20 +88,63 @@ function unmount() {
 	mounted = false
 }
 
-function update<K extends keyof SearchSkyObject>(key: K, value: Required<SearchSkyObject>[K]) {
-	state.request[key] = value
-
-	// Search again if page or sort has been changed
-	if (key === 'page') void search(false)
+function setName(value: string) {
+	state.request.name = value
 }
 
-function updateMagnitude(value: number | readonly number[]) {
+function setNameType(value: number) {
+	state.request.nameType = value
+}
+
+function setConstellations(value: readonly Constellation[]) {
+	state.request.constellations = value
+}
+
+function setTypes(value: readonly StellariumObjectType[]) {
+	state.request.types = value
+}
+
+function setRightAscension(value: string) {
+	state.request.rightAscension = value
+}
+
+function setDeclination(value: string) {
+	state.request.declination = value
+}
+
+function setRadius(value: number) {
+	state.request.radius = value
+}
+
+function setVisible(value: boolean) {
+	state.request.visible = value
+}
+
+function setVisibleAbove(value: number) {
+	state.request.visibleAbove = value
+}
+
+function setMagnitudeMin(value: number) {
+	state.request.magnitudeMin = value
+}
+
+function setMagnitudeMax(value: number) {
+	state.request.magnitudeMax = value
+}
+
+function setPage(value: number) {
+	state.request.page = value
+
+	void search(false)
+}
+
+function setMagnitude(value: number | readonly number[]) {
 	if (typeof value === 'number') {
-		update('magnitudeMin', value)
-		update('magnitudeMax', 30)
+		setMagnitudeMin(value)
+		setMagnitudeMax(30)
 	} else {
-		update('magnitudeMin', value[0])
-		update('magnitudeMax', value[1])
+		setMagnitudeMin(value[0])
+		setMagnitudeMax(value[1])
 	}
 }
 
@@ -117,12 +163,12 @@ async function search(reset: boolean | React.UIEvent) {
 
 function next() {
 	if (state.result.length === 0) return
-	update('page', state.request.page + 1)
+	setPage(state.request.page + 1)
 }
 
 function prev() {
 	if (state.request.page <= 1) return
-	update('page', state.request.page - 1)
+	setPage(state.request.page - 1)
 }
 
 async function select(row: number, col: number, force: boolean = true, rowMode: boolean = true) {
@@ -231,8 +277,19 @@ export const galaxyStore = {
 	state,
 	mount,
 	unmount,
-	update,
-	updateMagnitude,
+	setName,
+	setNameType,
+	setConstellations,
+	setTypes,
+	setRightAscension,
+	setDeclination,
+	setRadius,
+	setVisible,
+	setVisibleAbove,
+	setMagnitudeMin,
+	setMagnitudeMax,
+	setPage,
+	setMagnitude,
 	search,
 	next,
 	prev,

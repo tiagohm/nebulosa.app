@@ -3,6 +3,7 @@ import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { AstroBinEquipmentPopoverItem } from '@ui/AstroBinEquipmentPopover'
 import { nanoid } from 'nanoid'
 import { pixelScale } from 'nebulosa/src/astronomy/formulas'
+import type { Writable } from 'nebulosa/src/core/types'
 import { toArcsec } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_FOV_ITEM, type ComputedFov, type FovItem } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
@@ -13,7 +14,7 @@ export type ImageFovStore = ReturnType<typeof imageFovStore>
 
 export interface ImageFovState {
 	selected: number // item index
-	readonly items: FovItem[]
+	readonly items: Writable<FovItem>[]
 	readonly computed: ComputedFov[]
 }
 
@@ -58,22 +59,66 @@ export function imageFovStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof FovItem>(key: K, value: FovItem[K], id?: string) {
-		const index = id !== undefined ? state.items.findIndex((e) => e.id === id) : state.selected
-		if (index >= 0) state.items[index][key] = value
-		if (key !== 'visible') compute(id)
+	function setFocalLength(value: number) {
+		if (state.selected >= 0) state.items[state.selected].focalLength = value
+		compute()
+	}
+
+	function setAperture(value: number) {
+		if (state.selected >= 0) state.items[state.selected].aperture = value
+		compute()
+	}
+
+	function setCameraWidth(value: number) {
+		if (state.selected >= 0) state.items[state.selected].cameraWidth = value
+		compute()
+	}
+
+	function setCameraHeight(value: number) {
+		if (state.selected >= 0) state.items[state.selected].cameraHeight = value
+		compute()
+	}
+
+	function setPixelWidth(value: number) {
+		if (state.selected >= 0) state.items[state.selected].pixelWidth = value
+		compute()
+	}
+
+	function setPixelHeight(value: number) {
+		if (state.selected >= 0) state.items[state.selected].pixelHeight = value
+		compute()
+	}
+
+	function setRotation(value: number) {
+		if (state.selected >= 0) state.items[state.selected].rotation = value
+		compute()
+	}
+
+	function setBarlowReducer(value: number) {
+		if (state.selected >= 0) state.items[state.selected].barlowReducer = value
+		compute()
+	}
+
+	function setBin(value: number) {
+		if (state.selected >= 0) state.items[state.selected].bin = value
+		compute()
+	}
+
+	function setVisible(id: string, value: boolean) {
+		const index = state.items.findIndex((e) => e.id === id)
+		if (index >= 0) state.items[index].visible = value
 	}
 
 	function selectTelescope(item: AstroBinEquipmentPopoverItem) {
-		update('aperture', item.ap ?? 0)
-		update('focalLength', item.fl ?? 0)
+		setAperture(item.ap ?? 0)
+		setFocalLength(item.fl ?? 0)
 	}
 
 	function selectCamera(item: AstroBinEquipmentPopoverItem) {
-		update('cameraWidth', item.w ?? 0)
-		update('cameraHeight', item.h ?? 0)
-		update('pixelWidth', item.ps ?? 0)
-		update('pixelHeight', item.ps ?? 0)
+		setCameraWidth(item.w ?? 0)
+		setCameraHeight(item.h ?? 0)
+		setPixelWidth(item.ps ?? 0)
+		setPixelHeight(item.ps ?? 0)
 	}
 
 	function select(item: FovItem | number) {
@@ -140,7 +185,16 @@ export function imageFovStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
+		setFocalLength,
+		setAperture,
+		setCameraWidth,
+		setCameraHeight,
+		setPixelWidth,
+		setPixelHeight,
+		setRotation,
+		setBarlowReducer,
+		setBin,
+		setVisible,
 		selectTelescope,
 		selectCamera,
 		select,

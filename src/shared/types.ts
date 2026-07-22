@@ -252,8 +252,8 @@ export interface SearchSkyObject extends LocationAndTime {
 	readonly id?: number | string
 	readonly name?: string
 	readonly nameType?: number
-	readonly constellations?: Constellation[]
-	readonly types?: StellariumObjectType[]
+	readonly constellations?: readonly Constellation[]
+	readonly types?: readonly StellariumObjectType[]
 	readonly magnitudeMin?: number
 	readonly magnitudeMax?: number
 	readonly rightAscension?: string // hour
@@ -314,10 +314,10 @@ export interface Satellite extends ObserverWithTLE {
 
 export interface SearchSatellite {
 	readonly text: string
-	groups: SatelliteGroupType[]
+	groups: readonly SatelliteGroupType[]
 	page: number
 	readonly limit: number
-	category: SatelliteCategory[]
+	category: readonly SatelliteCategory[]
 	// readonly sort: SortDescriptor
 }
 
@@ -637,7 +637,7 @@ export interface ComputedFov {
 
 export interface IndiServerStart {
 	port?: number
-	drivers: string[]
+	drivers: readonly string[]
 	verbose?: number
 	repeat?: number
 }

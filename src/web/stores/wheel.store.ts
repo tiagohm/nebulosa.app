@@ -66,12 +66,13 @@ export function wheelStore(wheel: Wheel) {
 		mounted = false
 	}
 
-	function update<K extends keyof WheelState['selected']>(key: K, value: WheelState['selected'][K]) {
-		if (key === 'position') {
-			if (!isValidSlotPosition(wheel, value as number)) return
-		}
+	function setPosition(value: number) {
+		if (!isValidSlotPosition(wheel, value)) return
+		state.selected.position = value
+	}
 
-		state.selected[key] = value
+	function setName(value: string) {
+		state.selected.name = value
 	}
 
 	function connect() {
@@ -96,7 +97,8 @@ export function wheelStore(wheel: Wheel) {
 		state,
 		mount,
 		unmount,
-		update,
+		setPosition,
+		setName,
 		connect,
 		move,
 		apply,

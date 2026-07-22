@@ -85,7 +85,7 @@ const Slot = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-end gap-2">
-			<Select className="flex-1" disabled={!connected || moving || positions.length === 0} endContent={<SlotPopover />} items={positions} label="Slot" onValueChange={(value) => wheel.update('position', value)} value={selectedPosition}>
+			<Select className="flex-1" disabled={!connected || moving || positions.length === 0} endContent={<SlotPopover />} items={positions} label="Slot" onValueChange={wheel.setPosition} value={selectedPosition}>
 				{renderSlot}
 			</Select>
 			<Button color="success" disabled={!canMove} label="Move" loading={moving} onClick={wheel.move} startContent={<Icons.Check />} variant="ghost" />
@@ -115,7 +115,7 @@ const SlotPopoverContent = memo(() => {
 	return (
 		<div className="grid grid-cols-12 gap-2 p-4">
 			<p className="col-span-full font-bold">SLOT OPTIONS</p>
-			<TextInput className="col-span-10" disabled={disabled} label="Name" onValueChange={(value) => wheel.update('name', value)} value={name} />
+			<TextInput className="col-span-10" disabled={disabled} label="Name" onValueChange={wheel.setName} value={name} />
 			<div className="col-span-2 flex flex-row items-center justify-center">
 				<IconButton color="success" disabled={!canApply} icon={Icons.Check} onClick={wheel.apply} tooltipContent="Apply" />
 			</div>

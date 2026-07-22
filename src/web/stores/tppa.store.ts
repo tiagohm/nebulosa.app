@@ -4,6 +4,7 @@ import { initProxy } from '@shared/proxy'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { DockviewPanelApi } from 'dockview-react'
+import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type TppaEvent, type TppaStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
@@ -14,7 +15,7 @@ export type TppaStore = ReturnType<typeof tppaStore>
 
 export interface TppaState {
 	running: boolean
-	readonly request: TppaStart
+	readonly request: Writable<TppaStart>
 	camera?: DeviceState<Camera>
 	mount?: DeviceState<Mount>
 	readonly event: TppaEvent
@@ -80,8 +81,36 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 		Object.assign(state.event, DEFAULT_TPPA_EVENT)
 	}
 
-	function update<K extends keyof TppaStart>(key: K, value: TppaStart[K]) {
-		state.request[key] = value
+	function setMoveDuration(value: number) {
+		state.request.moveDuration = value
+	}
+
+	function setDirection(value: 'east' | 'west') {
+		state.request.direction = value
+	}
+
+	function setMaxAttempts(value: number) {
+		state.request.maxAttempts = value
+	}
+
+	function setDelayBeforeCapture(value: number) {
+		state.request.delayBeforeCapture = value
+	}
+
+	function setCompensateRefraction(value: boolean) {
+		state.request.compensateRefraction = value
+	}
+
+	function setSolverRadius(value: number) {
+		state.request.solver.radius = value
+	}
+
+	function setSolverFocalLength(value: number) {
+		state.request.solver.focalLength = value
+	}
+
+	function setSolverPixelSize(value: number) {
+		state.request.solver.pixelSize = value
 	}
 
 	function updateSolver<K extends keyof TppaStart['solver']>(key: K, value: TppaStart['solver'][K]) {
@@ -122,7 +151,14 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 		state,
 		mount: _mount,
 		unmount,
-		update,
+		setMoveDuration,
+		setDirection,
+		setMaxAttempts,
+		setDelayBeforeCapture,
+		setCompensateRefraction,
+		setSolverRadius,
+		setSolverFocalLength,
+		setSolverPixelSize,
 		updateSolver,
 		updateCapture,
 		updateRefraction,

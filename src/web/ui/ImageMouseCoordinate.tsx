@@ -30,7 +30,7 @@ const Toggle = memo(() => {
 	const { mouseCoordinate } = useContext(ImageViewerStoreContext)
 	const { enabled } = useSnapshot(mouseCoordinate.state)
 
-	return <Switch className="col-span-full min-w-0" label="Enabled" onValueChange={(value) => mouseCoordinate.update('enabled', value)} value={enabled} />
+	return <Switch className="col-span-full min-w-0" label="Enabled" onValueChange={mouseCoordinate.setEnabled} value={enabled} />
 })
 
 const HoverCoordinate = memo(() => {

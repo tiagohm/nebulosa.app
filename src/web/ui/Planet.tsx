@@ -50,8 +50,8 @@ const Filter = memo(() => {
 
 	return (
 		<div className="col-span-full grid grid-cols-subgrid items-center gap-2 p-2">
-			<TextInput className="col-span-8" onValueChange={(value) => planetStore.update('name', value)} label="Search" value={name} />
-			<PlanetTypeSelect className="col-span-4" onValueChange={(value) => planetStore.update('type', value)} value={type} />
+			<TextInput className="col-span-8" onValueChange={planetStore.setName} label="Search" value={name} />
+			<PlanetTypeSelect className="col-span-4" onValueChange={planetStore.setType} value={type} />
 		</div>
 	)
 })

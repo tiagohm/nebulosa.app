@@ -58,8 +58,20 @@ async function status() {
 	status && Object.assign(state, status)
 }
 
-function update<K extends keyof IndiServerStart>(key: K, value: IndiServerStart[K]) {
-	state.request[key] = value
+function setPort(value: number | undefined) {
+	state.request.port = value
+}
+
+function setRepeat(value: number | undefined) {
+	state.request.repeat = value
+}
+
+function setVerbose(value: number | undefined) {
+	state.request.verbose = value
+}
+
+function setDrivers(value: readonly string[]) {
+	state.request.drivers = value
 }
 
 function start() {
@@ -74,7 +86,10 @@ export const indiServerStore = {
 	state,
 	mount,
 	unmount,
-	update,
+	setPort,
+	setRepeat,
+	setVerbose,
+	setDrivers,
 	start,
 	stop,
 } as const

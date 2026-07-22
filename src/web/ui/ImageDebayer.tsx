@@ -15,8 +15,8 @@ export const ImageDebayer = memo(() => {
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
-			<Switch className="col-span-full min-w-0" label="Enabled" onValueChange={(value) => debayer.update('enabled', value)} value={enabled} />
-			<CfaPatternSelect className="col-span-full min-w-0" fullWidth onValueChange={(value) => debayer.updateTransformation('cfaPattern', value)} value={transformation.cfaPattern} />
+			<Switch className="col-span-full min-w-0" label="Enabled" onValueChange={debayer.setEnabled} value={enabled} />
+			<CfaPatternSelect className="col-span-full min-w-0" fullWidth onValueChange={debayer.setCfaPattern} value={transformation.cfaPattern} />
 		</div>
 	)
 })

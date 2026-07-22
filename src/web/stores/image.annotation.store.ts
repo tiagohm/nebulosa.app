@@ -2,6 +2,7 @@ import { Api } from '@shared/api'
 import { imageBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { Writable } from 'nebulosa/src/core/types'
 import type { AnnotatedSkyObject, AnnotateImage } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
@@ -11,7 +12,7 @@ export type ImageAnnotationStore = ReturnType<typeof imageAnnotationStore>
 export interface ImageAnnotationState {
 	visible: boolean
 	loading: boolean
-	readonly request: Omit<AnnotateImage, 'solution'>
+	readonly request: Writable<Omit<AnnotateImage, 'solution'>>
 	stars: readonly AnnotatedSkyObject[]
 }
 
@@ -60,8 +61,28 @@ export function imageAnnotationStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof ImageAnnotationState['request']>(key: K, value: ImageAnnotationState['request'][K]) {
-		state.request[key] = value
+	function setStars(value: boolean) {
+		state.request.stars = value
+	}
+
+	function setDsos(value: boolean) {
+		state.request.dsos = value
+	}
+
+	function setUseSimbad(value: boolean) {
+		state.request.useSimbad = value
+	}
+
+	function setMinorPlanets(value: boolean) {
+		state.request.minorPlanets = value
+	}
+
+	function setMinorPlanetsMagnitudeLimit(value: number) {
+		state.request.minorPlanetsMagnitudeLimit = value
+	}
+
+	function setIncludeMinorPlanetsWithoutMagnitude(value: boolean) {
+		state.request.includeMinorPlanetsWithoutMagnitude = value
 	}
 
 	function toggle(enabled?: boolean) {
@@ -96,7 +117,12 @@ export function imageAnnotationStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
+		setStars,
+		setDsos,
+		setUseSimbad,
+		setMinorPlanets,
+		setMinorPlanetsMagnitudeLimit,
+		setIncludeMinorPlanetsWithoutMagnitude,
 		toggle,
 		annotate,
 		reset,

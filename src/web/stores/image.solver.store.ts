@@ -8,8 +8,8 @@ import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
-import { formatRA, formatDEC, toDeg, arcsec } from 'nebulosa/src/math/units/angle'
-import { DEFAULT_PLATE_SOLVE_START, type Framing, type PlateSolveStart } from 'src/shared/types'
+import { formatRA, formatDEC, toDeg, arcsec, type Angle } from 'nebulosa/src/math/units/angle'
+import { DEFAULT_PLATE_SOLVE_START, type Framing, type PlateSolveStart, type PlateSolverType } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 
@@ -73,8 +73,32 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof PlateSolveStart>(key: K, value: PlateSolveStart[K]) {
-		state.request[key] = value
+	function setType(value: PlateSolverType) {
+		state.request.type = value
+	}
+
+	function setBlind(value: boolean) {
+		state.request.blind = value
+	}
+
+	function setRightAscension(value: string | Angle) {
+		state.request.rightAscension = value
+	}
+
+	function setDeclination(value: string | Angle) {
+		state.request.declination = value
+	}
+
+	function setRadius(value: number) {
+		state.request.radius = value
+	}
+
+	function setFocalLength(value: number) {
+		state.request.focalLength = value
+	}
+
+	function setPixelSize(value: number) {
+		state.request.pixelSize = value
 	}
 
 	async function start() {
@@ -126,7 +150,13 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
+		setType,
+		setBlind,
+		setRightAscension,
+		setDeclination,
+		setRadius,
+		setFocalLength,
+		setPixelSize,
 		start,
 		stop,
 		goTo,

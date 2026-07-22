@@ -90,11 +90,11 @@ const Inputs = memo(() => {
 	return (
 		<>
 			<StarDetectionSelect className="col-span-6" disabled={running} endContent={<StarDetectionSelectEndContent />} onValueChange={(value) => autoFocus.updateStarDetection('type', value)} value={starDetection.type} />
-			<AutoFocusFittingModeSelect className="col-span-6" disabled={running} onValueChange={(value) => autoFocus.update('fittingMode', value)} value={fittingMode} />
-			<NumberInput className="col-span-4" disabled={running} label="Offset steps" maxValue={1000} minValue={1} onValueChange={(value) => autoFocus.update('initialOffsetSteps', value)} value={initialOffsetSteps} />
-			<NumberInput className="col-span-3" disabled={running || !focuser?.connected} label="Step size" maxValue={stepSizeMax} minValue={1} onValueChange={(value) => autoFocus.update('stepSize', value)} value={stepSize} />
-			<NumberInput className="col-span-5" disabled={running} fractionDigits={2} label="RMSD threshold" maxValue={1} minValue={0} onValueChange={(value) => autoFocus.update('rmsdThreshold', value)} step={0.01} value={rmsdThreshold} />
-			<Checkbox className="col-span-full" disabled={running} label="Reversed" onValueChange={(value) => autoFocus.update('reversed', value)} value={reversed} />
+			<AutoFocusFittingModeSelect className="col-span-6" disabled={running} onValueChange={autoFocus.setFittingMode} value={fittingMode} />
+			<NumberInput className="col-span-4" disabled={running} label="Offset steps" maxValue={1000} minValue={1} onValueChange={autoFocus.setInitialOffsetSteps} value={initialOffsetSteps} />
+			<NumberInput className="col-span-3" disabled={running || !focuser?.connected} label="Step size" maxValue={stepSizeMax} minValue={1} onValueChange={autoFocus.setStepSize} value={stepSize} />
+			<NumberInput className="col-span-5" disabled={running} fractionDigits={2} label="RMSD threshold" maxValue={1} minValue={0} onValueChange={autoFocus.setRmsdThreshold} step={0.01} value={rmsdThreshold} />
+			<Checkbox className="col-span-full" disabled={running} label="Reversed" onValueChange={autoFocus.setReversed} value={reversed} />
 		</>
 	)
 })
@@ -154,9 +154,9 @@ const CameraDropdownEndContent = memo(() => {
 
 const StarDetectionSelectEndContent = memo(() => {
 	const autoFocus = useContext(AutoFocusStoreContext)
-	const { starDetection } = useSnapshot(autoFocus.state.request)
+	const { type, executable, minSNR, maxStars } = useSnapshot(autoFocus.state.request.starDetection)
 
-	return <StarDetectionPopover onValueChange={autoFocus.updateStarDetection} value={starDetection} variant="ghost" />
+	return <StarDetectionPopover onExecutableChange={autoFocus.setStarDetectionExecutable} onMaxStarsChange={autoFocus.setStarDetectionMaxStars} onMinSNRChange={autoFocus.setStarDetectionMinSNR} type={type} executable={executable} minSNR={minSNR} maxStars={maxStars} variant="ghost" />
 })
 
 function isFiniteFocusPoint(point: Point | undefined | null): point is Point {

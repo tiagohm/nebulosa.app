@@ -20,7 +20,7 @@ export const ImageSettings = memo(() => {
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<ImageFormatSelect className="col-span-full min-w-0" fullWidth onValueChange={settings.updateFormatType} value={transformation.format.type} />
 			{transformation.format.type === JPEG_FORMAT && <JpegFormat />}
-			<Checkbox className="col-span-full min-w-0" label="Pixelated" onValueChange={(value) => settings.update('pixelated', value)} value={pixelated} />
+			<Checkbox className="col-span-full min-w-0" label="Pixelated" onValueChange={settings.setPixelated} value={pixelated} />
 			<Footer />
 		</div>
 	)

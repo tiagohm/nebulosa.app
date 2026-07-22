@@ -87,7 +87,7 @@ const TargetAngle = memo(() => {
 	return (
 		<div className="col-span-full flex flex-row items-center justify-between gap-2">
 			<IconButton color="primary" disabled={!connected || !canSync || moving} icon={Icons.Sync} onClick={rotator.sync} tooltipContent="Sync" />
-			<NumberInput className="flex-1" disabled={!connected || moving} label="Move (°)" maxValue={angle.max} minValue={angle.min} onValueChange={(value) => rotator.update('angle', value)} value={targetAngle} />
+			<NumberInput className="flex-1" disabled={!connected || moving} label="Move (°)" maxValue={angle.max} minValue={angle.min} onValueChange={rotator.setAngle} value={targetAngle} />
 			<IconButton color="success" disabled={!canMove} icon={Icons.Check} onClick={rotator.moveTo} tooltipContent="Move" />
 		</div>
 	)

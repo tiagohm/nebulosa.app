@@ -3,9 +3,10 @@ import { initProxy } from '@shared/proxy'
 import { atlasStore, isLocationChanged, isTimeChanged, type BookmarkItem, type TagItem } from '@stores/atlas.store'
 import { framingStore } from '@stores/framing.store'
 import { settingsStore } from '@stores/settings.store'
+import type { Writable } from 'nebulosa/src/core/types'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatRA, formatDEC } from 'nebulosa/src/math/units/angle'
-import { type SearchSatellite, type PositionOfBody, type Satellite, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SEARCH_SATELLITE } from 'src/shared/types'
+import { type SearchSatellite, type PositionOfBody, type Satellite, type BodyPosition, type SatelliteCategory, type SatelliteGroupType, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SEARCH_SATELLITE } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 
@@ -13,7 +14,7 @@ export type AtlasSatelliteStore = typeof satelliteStore
 
 export interface AtasSatelliteState {
 	loading: boolean
-	readonly request: SearchSatellite & PositionOfBody
+	readonly request: Writable<SearchSatellite> & PositionOfBody
 	selected?: Satellite
 	page: number
 	result: readonly Satellite[]
@@ -80,11 +81,22 @@ function unmount() {
 	mounted = false
 }
 
-function update<K extends keyof AtasSatelliteState['request']>(key: K, value: AtasSatelliteState['request'][K]) {
-	state.request[key] = value
+function setText(value: string) {
+	state.request.text = value
+}
 
-	// Search again if page or sort has been changed
-	if (key === 'page') void search(false)
+function setCategory(value: readonly SatelliteCategory[]) {
+	state.request.category = value
+}
+
+function setGroups(value: readonly SatelliteGroupType[]) {
+	state.request.groups = value
+}
+
+function setPage(value: number) {
+	state.request.page = value
+
+	void search(false)
 }
 
 async function search(reset: boolean | React.UIEvent) {
@@ -119,12 +131,12 @@ async function select(row: number, col: number = 0, force: boolean = true, rowMo
 
 function next() {
 	if (state.result.length === 0) return
-	update('page', state.request.page + 1)
+	setPage(state.request.page + 1)
 }
 
 function prev() {
 	if (state.request.page <= 1) return
-	update('page', state.request.page - 1)
+	setPage(state.request.page - 1)
 }
 
 async function updatePosition() {
@@ -185,7 +197,10 @@ function frame() {
 export const satelliteStore = {
 	state,
 	mount,
-	update,
+	setText,
+	setCategory,
+	setGroups,
+	setPage,
 	search,
 	resetFilter,
 	next,

@@ -43,8 +43,12 @@ export function focuserStore(focuser: Focuser) {
 		mounted = false
 	}
 
-	function update<K extends keyof FocuserState['request']>(key: K, value: FocuserState['request'][K]) {
-		state.request[key] = value
+	function setRelative(value: number) {
+		state.request.relative = value
+	}
+
+	function setAbsolute(value: number) {
+		state.request.absolute = value
 	}
 
 	function connect() {
@@ -79,7 +83,8 @@ export function focuserStore(focuser: Focuser) {
 		state,
 		mount,
 		unmount,
-		update,
+		setRelative,
+		setAbsolute,
 		connect,
 		moveTo,
 		moveIn,

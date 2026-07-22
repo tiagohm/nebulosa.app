@@ -86,8 +86,8 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		label = node ?? undefined
 	}
 
-	function update<K extends keyof ImageRoiState>(key: K, value: ImageRoiState[K]) {
-		state[key] = value
+	function setEnabled(value: boolean) {
+		state.enabled = value
 	}
 
 	function toggle() {
@@ -275,7 +275,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		unmount,
 		attachRoot,
 		attachLabel,
-		update,
+		setEnabled,
 		toggle,
 		sync,
 		startGesture,

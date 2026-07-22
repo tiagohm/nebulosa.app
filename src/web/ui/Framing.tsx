@@ -20,14 +20,14 @@ export const Framing = memo(({ params }: IDockviewPanelProps) => {
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
-			<TextInput className="col-span-6 min-w-0" disabled={loading} label="RA (J2000)" onValueChange={(value) => framingStore.update('rightAscension', value)} value={rightAscension} />
-			<TextInput className="col-span-6 min-w-0" disabled={loading} label="DEC (J2000)" onValueChange={(value) => framingStore.update('declination', value)} value={declination} />
-			<NumberInput className="col-span-4 min-w-0" disabled={loading} label="Width" maxValue={8192} minValue={100} onValueChange={(value) => framingStore.update('width', value)} value={width} />
-			<NumberInput className="col-span-4 min-w-0" disabled={loading} label="Height" maxValue={8192} minValue={100} onValueChange={(value) => framingStore.update('height', value)} value={height} />
-			<NumberInput className="col-span-4 min-w-0" disabled={loading} fractionDigits={2} label="Rotation (°)" maxValue={360} minValue={-360} onValueChange={(value) => framingStore.update('rotation', value)} step={0.1} value={rotation} />
-			<NumberInput className="col-span-6 min-w-0" disabled={loading} label="Focal Length (mm)" maxValue={100000} minValue={0} onValueChange={(value) => framingStore.update('focalLength', value)} value={focalLength} />
-			<NumberInput className="col-span-6 min-w-0" disabled={loading} fractionDigits={1} label="Pixel size (µm)" maxValue={1000} minValue={0} onValueChange={(value) => framingStore.update('pixelSize', value)} step={0.01} value={pixelSize} />
-			<HipsSurveySelect className="col-span-full" disabled={loading} onValueChange={(value) => framingStore.update('hipsSurvey', value)} value={hipsSurvey} />
+			<TextInput className="col-span-6 min-w-0" disabled={loading} label="RA (J2000)" onValueChange={framingStore.setRightAscension} value={rightAscension} />
+			<TextInput className="col-span-6 min-w-0" disabled={loading} label="DEC (J2000)" onValueChange={framingStore.setDeclination} value={declination} />
+			<NumberInput className="col-span-4 min-w-0" disabled={loading} label="Width" maxValue={8192} minValue={100} onValueChange={framingStore.setWidth} value={width} />
+			<NumberInput className="col-span-4 min-w-0" disabled={loading} label="Height" maxValue={8192} minValue={100} onValueChange={framingStore.setHeight} value={height} />
+			<NumberInput className="col-span-4 min-w-0" disabled={loading} fractionDigits={2} label="Rotation (°)" maxValue={360} minValue={-360} onValueChange={framingStore.setRotation} step={0.1} value={rotation} />
+			<NumberInput className="col-span-6 min-w-0" disabled={loading} label="Focal Length (mm)" maxValue={100000} minValue={0} onValueChange={framingStore.setFocalLength} value={focalLength} />
+			<NumberInput className="col-span-6 min-w-0" disabled={loading} fractionDigits={1} label="Pixel size (µm)" maxValue={1000} minValue={0} onValueChange={framingStore.setPixelSize} step={0.01} value={pixelSize} />
+			<HipsSurveySelect className="col-span-full" disabled={loading} onValueChange={framingStore.setHipsSurvey} value={hipsSurvey} />
 			<Checkbox className="col-span-full" disabled={loading} label="Open in new image" onValueChange={(value) => (framingStore.state.openNewImage = value)} value={openNewImage} />
 			<Footer />
 		</div>

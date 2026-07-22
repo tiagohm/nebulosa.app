@@ -16,7 +16,7 @@ export const ImageStarDetection = memo(() => {
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
-			<StarDetectionSelect className="col-span-full" disabled={loading} endContent={<StarDetectionEndContent />} onValueChange={(value) => starDetection.update('type', value)} value={request.type} />
+			<StarDetectionSelect className="col-span-full" disabled={loading} endContent={<StarDetectionEndContent />} onValueChange={starDetection.setType} value={request.type} />
 			<Computed />
 			<Selected />
 			<Footer />
@@ -26,9 +26,10 @@ export const ImageStarDetection = memo(() => {
 
 const StarDetectionEndContent = memo(() => {
 	const { starDetection } = useContext(ImageViewerStoreContext)
-	const { loading, request } = useSnapshot(starDetection.state)
+	const { loading } = useSnapshot(starDetection.state)
+	const { type, executable, minSNR, maxStars } = useSnapshot(starDetection.state.request)
 
-	return <StarDetectionPopover disabled={loading} onValueChange={starDetection.update} value={request} variant="ghost" />
+	return <StarDetectionPopover disabled={loading} onExecutableChange={starDetection.setExecutable} onMaxStarsChange={starDetection.setMaxStars} onMinSNRChange={starDetection.setMinSNR} type={type} executable={executable} minSNR={minSNR} maxStars={maxStars} variant="ghost" />
 })
 
 const Computed = memo(() => {

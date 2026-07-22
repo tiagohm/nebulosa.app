@@ -32,7 +32,7 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 
 		u[0] = initProxy(state, `image.${viewer.key}.settings`, ['p:pixelated'])
 
-		update('pixelated', state.pixelated)
+		setPixelated(state.pixelated)
 
 		return unmount
 	}
@@ -44,10 +44,9 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof ImageSettingsState>(key: K, value: ImageSettingsState[K]) {
-		state[key] = value
-
-		if (key === 'pixelated') viewer.toggleClass('pixelated', value as boolean)
+	function setPixelated(value: boolean) {
+		state.pixelated = value
+		viewer.toggleClass('pixelated', value)
 	}
 
 	function updateTransformation<K extends keyof ImageTransformation>(key: K, value: ImageTransformation[K]) {
@@ -79,7 +78,7 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
+		setPixelated,
 		updateTransformation,
 		updateFormatType,
 		updateFormat,

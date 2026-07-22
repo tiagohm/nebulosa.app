@@ -4,6 +4,7 @@ import { initProxy } from '@shared/proxy'
 import { DEFAULT_CONNECTION, type Connection } from '@shared/types'
 import { nanoid } from 'nanoid'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
+import type { ClientType } from 'nebulosa/src/devices/indi/device'
 import type { ConnectionStatus } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
@@ -111,26 +112,35 @@ function duplicate(connection: Connection) {
 	add({ id: nanoid(), host, port, name, type, secured })
 }
 
-function update<K extends keyof Connection>(name: K, value: Connection[K]) {
-	if (name === 'type') {
-		const previousType = state.edited.type
-		const previousPort = state.edited.port
-		const nextType = value as Connection['type']
+function setName(value: string) {
+	state.edited.name = value
+}
 
-		state.edited.type = nextType
+function setHost(value: string) {
+	state.edited.host = value
+}
 
-		if (previousPort === DEFAULT_CONNECTION_PORT[previousType]) {
-			state.edited.port = DEFAULT_CONNECTION_PORT[nextType]
-		}
+function setPort(value: number) {
+	state.edited.port = value
+}
 
-		if (nextType !== 'ALPACA') {
-			state.edited.secured = false
-		}
+function setType(value: ClientType) {
+	const previousType = state.edited.type
+	const previousPort = state.edited.port
 
-		return
+	state.edited.type = value
+
+	if (previousPort === DEFAULT_CONNECTION_PORT[previousType]) {
+		state.edited.port = DEFAULT_CONNECTION_PORT[value]
 	}
 
-	state.edited[name] = value
+	if (value !== 'ALPACA') {
+		state.edited.secured = false
+	}
+}
+
+function setSecured(value: boolean) {
+	state.edited.secured = value
 }
 
 function select(connection: Connection) {
@@ -227,7 +237,11 @@ export const connectionStore = {
 	unmount,
 	create,
 	edit,
-	update,
+	setName,
+	setHost,
+	setPort,
+	setType,
+	setSecured,
 	discovery,
 	select,
 	save,

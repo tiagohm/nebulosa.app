@@ -5,9 +5,10 @@ import { toast } from '@shared/toast'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { DockviewPanelApi } from 'dockview-react'
+import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { COARSE_DARV_EXPOSURE_PRESET, DARV_EXPOSURE_PRESETS, estimateDarvExposure, type DarvExposureInput, type DarvExposurePreset, type DarvExposurePresetMode } from 'nebulosa/src/observation/alignment/polaralignment'
-import { DEFAULT_DARV_EVENT, DEFAULT_DARV_START, type DarvEvent, type DarvStart } from 'src/shared/types'
+import { DEFAULT_DARV_EVENT, DEFAULT_DARV_START, type DarvEvent, type DarvStart, type Hemisphere } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
@@ -16,7 +17,7 @@ export type DarvStore = ReturnType<typeof darvStore>
 
 export interface DarvState {
 	running: boolean
-	readonly request: DarvStart
+	readonly request: Writable<DarvStart>
 	camera?: DeviceState<Camera>
 	mount?: DeviceState<Mount>
 	readonly event: DarvEvent
@@ -90,8 +91,16 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 		state.event.state = 'idle'
 	}
 
-	function update<K extends keyof DarvStart>(key: K, value: DarvStart[K]) {
-		state.request[key] = value
+	function setInitialPause(value: number) {
+		state.request.initialPause = value
+	}
+
+	function setDuration(value: number) {
+		state.request.duration = value
+	}
+
+	function setHemisphere(value: Hemisphere) {
+		state.request.hemisphere = value
 	}
 
 	function updateCapture<K extends keyof DarvStart['capture']>(key: K, value: DarvStart['capture'][K]) {
@@ -124,7 +133,7 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 
 		try {
 			const { recommendedExposure } = estimateDarvExposure(state.exposureEstimation)
-			update('duration', Math.ceil(recommendedExposure))
+			setDuration(Math.ceil(recommendedExposure))
 		} catch (e) {
 			if (Error.isError(e)) {
 				toast({ title: 'DARV EXPOSURE ESTIMATOR', description: e.message, color: 'danger' })
@@ -158,7 +167,9 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 		state,
 		mount: _mount,
 		unmount,
-		update,
+		setInitialPause,
+		setDuration,
+		setHemisphere,
 		updateCapture,
 		updateExposureEstimation,
 		updateExposureEstimationPreset,

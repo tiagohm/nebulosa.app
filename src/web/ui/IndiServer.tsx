@@ -31,9 +31,9 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<NumberInput className="col-span-4 min-w-0" disabled={blocked} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => indiServerStore.update('port', value)} value={port} />
-			<NumberInput className="col-span-4 min-w-0" disabled={blocked} label="Repeat" maxValue={10} minValue={1} onValueChange={(value) => indiServerStore.update('repeat', value)} value={repeat} />
-			<NumberInput className="col-span-4 min-w-0" disabled={blocked} label="Verbose" maxValue={3} minValue={0} onValueChange={(value) => indiServerStore.update('verbose', value)} value={verbose} />
+			<NumberInput className="col-span-4 min-w-0" disabled={blocked} label="Port" maxValue={65535} minValue={80} onValueChange={indiServerStore.setPort} value={port} />
+			<NumberInput className="col-span-4 min-w-0" disabled={blocked} label="Repeat" maxValue={10} minValue={1} onValueChange={indiServerStore.setRepeat} value={repeat} />
+			<NumberInput className="col-span-4 min-w-0" disabled={blocked} label="Verbose" maxValue={3} minValue={0} onValueChange={indiServerStore.setVerbose} value={verbose} />
 			<Checkbox className="col-span-full min-w-0" disabled={blocked} label="Show all drivers" onValueChange={(value) => (indiServerStore.state.showAll = value)} value={showAll} />
 		</>
 	)
@@ -46,7 +46,7 @@ const Drivers = memo(() => {
 
 	return (
 		<div className={blocked ? 'col-span-full min-w-0 opacity-50' : 'col-span-full min-w-0'}>
-			<IndiDriverListbox classNames={{ base: 'max-h-100' }} onSelectedChange={blocked ? undefined : (drivers) => indiServerStore.update('drivers', drivers)} selected={drivers} showAll={showAll} />
+			<IndiDriverListbox classNames={{ base: 'max-h-100' }} onSelectedChange={blocked ? undefined : indiServerStore.setDrivers} selected={drivers} showAll={showAll} />
 		</div>
 	)
 })

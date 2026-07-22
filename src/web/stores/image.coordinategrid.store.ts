@@ -66,8 +66,8 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof ImageCoordinateGridState>(key: K, value: ImageCoordinateGridState[K]) {
-		state[key] = value
+	function setEnabled(value: boolean) {
+		state.enabled = value
 	}
 
 	async function compute(solution: PlateSolution | undefined = viewer.solver.state.solution, force: boolean = false) {
@@ -110,7 +110,7 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
+		setEnabled,
 		compute,
 		reset,
 		toggle,

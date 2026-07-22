@@ -1,5 +1,6 @@
 import { initProxy } from '@shared/proxy'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { CfaPattern } from 'nebulosa/src/imaging/model/types'
 import type { ImageTransformation } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
@@ -41,12 +42,12 @@ export function imageDebayerStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof ImageDebayerState>(key: K, value: ImageDebayerState[K]) {
-		state[key] = value
+	function setEnabled(value: boolean) {
+		state.enabled = value
 	}
 
-	function updateTransformation<K extends keyof ImageTransformation>(key: K, value: ImageTransformation[K]) {
-		state.transformation[key] = value
+	function setCfaPattern(value: CfaPattern | 'AUTO') {
+		state.transformation.cfaPattern = value
 	}
 
 	return {
@@ -54,7 +55,7 @@ export function imageDebayerStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
-		updateTransformation,
+		setEnabled,
+		setCfaPattern,
 	} as const
 }

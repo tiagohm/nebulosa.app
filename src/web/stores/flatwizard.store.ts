@@ -77,8 +77,20 @@ export function flatWizardStore(id: string, api: DockviewPanelApi) {
 		state.event.state = 'idle'
 	}
 
-	function update<K extends keyof FlatWizardStart>(key: K, value: FlatWizardStart[K]) {
-		state.request[key] = value
+	function setMinExposure(value: number) {
+		state.request.minExposure = value
+	}
+
+	function setMaxExposure(value: number) {
+		state.request.maxExposure = value
+	}
+
+	function setMeanTarget(value: number) {
+		state.request.meanTarget = value
+	}
+
+	function setMeanTolerance(value: number) {
+		state.request.meanTolerance = value
 	}
 
 	function updateCapture<K extends keyof FlatWizardStart['capture']>(key: K, value: FlatWizardStart['capture'][K]) {
@@ -115,7 +127,10 @@ export function flatWizardStore(id: string, api: DockviewPanelApi) {
 		state,
 		mount,
 		unmount,
-		update,
+		setMinExposure,
+		setMaxExposure,
+		setMeanTarget,
+		setMeanTolerance,
 		updateCapture,
 		setPath,
 		start,

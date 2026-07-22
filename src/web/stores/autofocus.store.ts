@@ -5,6 +5,7 @@ import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.st
 import type { DeviceState } from '@stores/equipment.store'
 import type { DockviewPanelApi } from 'dockview-react'
 import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
+import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
 import { type AutoFocusStart, type AutoFocusEvent, DEFAULT_AUTO_FOCUS_START, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
@@ -78,8 +79,24 @@ export function autoFocusStore(id: string, api: DockviewPanelApi) {
 		state.event.state = 'idle'
 	}
 
-	function update<K extends keyof AutoFocusStart>(key: K, value: AutoFocusStart[K]) {
-		state.request[key] = value
+	function setInitialOffsetSteps(value: number) {
+		state.request.initialOffsetSteps = value
+	}
+
+	function setStepSize(value: number) {
+		state.request.stepSize = value
+	}
+
+	function setFittingMode(value: AutoFocusFittingMode) {
+		state.request.fittingMode = value
+	}
+
+	function setRmsdThreshold(value: number | undefined) {
+		state.request.rmsdThreshold = value
+	}
+
+	function setReversed(value: boolean) {
+		state.request.reversed = value
 	}
 
 	function updateCapture<K extends keyof AutoFocusStart['capture']>(key: K, value: AutoFocusStart['capture'][K]) {
@@ -88,6 +105,18 @@ export function autoFocusStore(id: string, api: DockviewPanelApi) {
 
 	function updateStarDetection<K extends keyof AutoFocusStart['starDetection']>(key: K, value: AutoFocusStart['starDetection'][K]) {
 		state.request.starDetection[key] = value
+	}
+
+	function setStarDetectionExecutable(value: string) {
+		state.request.starDetection.executable = value
+	}
+
+	function setStarDetectionMinSNR(value: number) {
+		state.request.starDetection.minSNR = value
+	}
+
+	function setStarDetectionMaxStars(value: number) {
+		state.request.starDetection.maxStars = value
 	}
 
 	async function start() {
@@ -116,9 +145,16 @@ export function autoFocusStore(id: string, api: DockviewPanelApi) {
 		state,
 		mount,
 		unmount,
-		update,
+		setInitialOffsetSteps,
+		setStepSize,
+		setFittingMode,
+		setRmsdThreshold,
+		setReversed,
 		updateCapture,
 		updateStarDetection,
+		setStarDetectionExecutable,
+		setStarDetectionMinSNR,
+		setStarDetectionMaxStars,
 		start,
 		stop,
 	} as const

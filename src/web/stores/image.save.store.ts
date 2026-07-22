@@ -48,8 +48,12 @@ export function imageSaveStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof ImageSaveState>(key: K, value: ImageSaveState[K]) {
-		state[key] = value
+	function setFormat(value: ImageFormat) {
+		state.format = value
+	}
+
+	function setTransformed(value: boolean) {
+		state.transformed = value
 	}
 
 	function setPath(path?: string) {
@@ -89,7 +93,8 @@ export function imageSaveStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
+		setFormat,
+		setTransformed,
 		setPath,
 		download,
 		save,

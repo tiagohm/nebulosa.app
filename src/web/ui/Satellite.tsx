@@ -34,14 +34,14 @@ const Filter = memo(() => {
 	return (
 		<div className="col-span-full grid grid-cols-subgrid items-center gap-2">
 			<div className="col-span-full flex flex-row items-center justify-center gap-2">
-				<TextInput className="flex-1" label="Search" onValueChange={(value) => satelliteStore.update('text', value)} value={text} />
+				<TextInput className="flex-1" label="Search" onValueChange={satelliteStore.setText} value={text} />
 				<IconButton color="danger" disabled={loading} icon={Icons.Restore} onClick={satelliteStore.resetFilter} tooltipContent="Reset" variant="flat" />
 				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={satelliteStore.search} tooltipContent="Filter" variant="flat" />
 			</div>
 			<p className="col-span-full text-sm font-bold">CATEGORY</p>
-			<SatelliteCategoryChipGroup className="col-span-full" onValueChange={(value) => satelliteStore.update('category', value)} value={category} />
+			<SatelliteCategoryChipGroup className="col-span-full" onValueChange={satelliteStore.setCategory} value={category} />
 			<p className="col-span-full text-sm font-bold">GROUP</p>
-			<SatelliteGroupTypeChipGroup category={category} className="col-span-full" onValueChange={(value) => satelliteStore.update('groups', value)} value={groups} />
+			<SatelliteGroupTypeChipGroup category={category} className="col-span-full" onValueChange={satelliteStore.setGroups} value={groups} />
 		</div>
 	)
 })

@@ -116,11 +116,11 @@ const ConnectionEdit = memo(() => {
 
 	return (
 		<div className="mt-4 grid w-full grid-cols-12 items-center gap-2">
-			<TextInput className="col-span-full" label="Name" maxLength={64} onValueChange={(value) => connectionStore.update('name', value)} placeholder="Local" value={name} />
-			<TextInput className="col-span-7" disabled={!networkConnection} label="Host" maxLength={128} onValueChange={(value) => connectionStore.update('host', value)} placeholder="localhost" value={host} />
-			<NumberInput className="col-span-5" disabled={!networkConnection} label="Port" maxValue={65535} minValue={1} onValueChange={(value) => connectionStore.update('port', value)} placeholder={CONNECTION_PORT_PLACEHOLDER[type]} value={port} />
-			<ClientTypeSelect className="col-span-5" onValueChange={(value) => connectionStore.update('type', value)} value={type} />
-			<Checkbox className="col-span-5" disabled={type !== 'ALPACA'} label="Secured" onValueChange={(value) => connectionStore.update('secured', value)} value={secured} />
+			<TextInput className="col-span-full" label="Name" maxLength={64} onValueChange={connectionStore.setName} placeholder="Local" value={name} />
+			<TextInput className="col-span-7" disabled={!networkConnection} label="Host" maxLength={128} onValueChange={connectionStore.setHost} placeholder="localhost" value={host} />
+			<NumberInput className="col-span-5" disabled={!networkConnection} label="Port" maxValue={65535} minValue={1} onValueChange={connectionStore.setPort} placeholder={CONNECTION_PORT_PLACEHOLDER[type]} value={port} />
+			<ClientTypeSelect className="col-span-5" onValueChange={connectionStore.setType} value={type} />
+			<Checkbox className="col-span-5" disabled={type !== 'ALPACA'} label="Secured" onValueChange={connectionStore.setSecured} value={secured} />
 			<div className="col-span-2 flex flex-row items-center justify-center">
 				<AlpacaDeviceServerDiscovery />
 			</div>
@@ -148,8 +148,8 @@ const AlpacaDeviceServerDiscovery = memo(() => {
 
 		if (!item) return
 
-		connectionStore.update('host', item.address)
-		connectionStore.update('port', item.port)
+		connectionStore.setHost(item.address)
+		connectionStore.setPort(item.port)
 		popoverRef.current?.hide()
 	}
 

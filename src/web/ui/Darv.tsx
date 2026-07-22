@@ -69,9 +69,9 @@ const Input = memo(() => {
 
 	return (
 		<>
-			<NumberInput className="col-span-6" disabled={running} label="Initial pause" endContent="s" maxValue={60} minValue={1} onValueChange={(value) => darv.update('initialPause', value)} value={initialPause} />
-			<NumberInput className="col-span-6" disabled={running} label="Exposure time" maxValue={1200} minValue={1} onValueChange={(value) => darv.update('duration', value)} value={duration} startContent={<ExposureEstimatorPopover />} endContent="s" />
-			<HemisphereSelect className="col-span-6" disabled={running} onValueChange={(value) => darv.update('hemisphere', value)} value={hemisphere} />
+			<NumberInput className="col-span-6" disabled={running} label="Initial pause" endContent="s" maxValue={60} minValue={1} onValueChange={darv.setInitialPause} value={initialPause} />
+			<NumberInput className="col-span-6" disabled={running} label="Exposure time" maxValue={1200} minValue={1} onValueChange={darv.setDuration} value={duration} startContent={<ExposureEstimatorPopover />} endContent="s" />
+			<HemisphereSelect className="col-span-6" disabled={running} onValueChange={darv.setHemisphere} value={hemisphere} />
 		</>
 	)
 })

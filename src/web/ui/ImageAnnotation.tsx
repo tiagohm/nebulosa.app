@@ -29,10 +29,10 @@ const StarsAndDsos = memo(() => {
 
 	return (
 		<>
-			<Checkbox className="col-span-6" disabled={loading} label="Stars" onValueChange={(value) => annotation.update('stars', value)} value={stars} />
-			<Checkbox className="col-span-6" disabled={loading} label="DSOs" onValueChange={(value) => annotation.update('dsos', value)} value={dsos} />
+			<Checkbox className="col-span-6" disabled={loading} label="Stars" onValueChange={annotation.setStars} value={stars} />
+			<Checkbox className="col-span-6" disabled={loading} label="DSOs" onValueChange={annotation.setDsos} value={dsos} />
 			<div className="col-span-full flex min-w-0 flex-row items-center gap-2">
-				<Checkbox disabled={!canUseSimbad} label="SIMBAD Astronomical Database" onValueChange={(value) => annotation.update('useSimbad', value)} value={canUseSimbad && useSimbad} />
+				<Checkbox disabled={!canUseSimbad} label="SIMBAD Astronomical Database" onValueChange={annotation.setUseSimbad} value={canUseSimbad && useSimbad} />
 				<SimbadLink />
 			</div>
 		</>
@@ -51,9 +51,9 @@ const MinorPlanets = memo(() => {
 
 	return (
 		<>
-			<Checkbox className="col-span-full" disabled={loading} label="Minor Planets" onValueChange={(value) => annotation.update('minorPlanets', value)} value={minorPlanets} />
-			<NumberInput className="col-span-5 min-w-0" disabled={loading || !minorPlanets} label="Magnitude Limit" maxValue={MAX_MINOR_PLANET_MAGNITUDE_LIMIT} minValue={1} onValueChange={(value) => annotation.update('minorPlanetsMagnitudeLimit', value)} value={minorPlanetsMagnitudeLimit} />
-			<Checkbox className="col-span-7 min-w-0" disabled={!canIncludeWithoutMagnitude} label="Include without magnitude" onValueChange={(value) => annotation.update('includeMinorPlanetsWithoutMagnitude', value)} value={canIncludeWithoutMagnitude && includeMinorPlanetsWithoutMagnitude} />
+			<Checkbox className="col-span-full" disabled={loading} label="Minor Planets" onValueChange={annotation.setMinorPlanets} value={minorPlanets} />
+			<NumberInput className="col-span-5 min-w-0" disabled={loading || !minorPlanets} label="Magnitude Limit" maxValue={MAX_MINOR_PLANET_MAGNITUDE_LIMIT} minValue={1} onValueChange={annotation.setMinorPlanetsMagnitudeLimit} value={minorPlanetsMagnitudeLimit} />
+			<Checkbox className="col-span-7 min-w-0" disabled={!canIncludeWithoutMagnitude} label="Include without magnitude" onValueChange={annotation.setIncludeMinorPlanetsWithoutMagnitude} value={canIncludeWithoutMagnitude && includeMinorPlanetsWithoutMagnitude} />
 		</>
 	)
 })

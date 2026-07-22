@@ -84,8 +84,8 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof ImageMouseCoordinateState>(key: K, value: ImageMouseCoordinateState[K]) {
-		state[key] = value
+	function setEnabled(value: boolean) {
+		state.enabled = value
 	}
 
 	async function compute(solution: PlateSolution | undefined = viewer.solver.state.solution, force: boolean = false) {
@@ -158,7 +158,7 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
+		setEnabled,
 		compute,
 		toggle,
 		handleInterpolatedCoordinate,

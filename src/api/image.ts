@@ -14,13 +14,14 @@ import { fft, FFTWorkspace } from 'nebulosa/src/imaging/processing/fft'
 import { stf } from 'nebulosa/src/imaging/processing/stf'
 import { declinationKeyword, numericKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { fileHandleSink } from 'nebulosa/src/io/io'
+import { sphericalDestination } from 'nebulosa/src/math/numerical/geometry'
 import { deg, normalizeAngle, parseAngle } from 'nebulosa/src/math/units/angle'
 import fovCameras from 'src/data/astrobin.cameras.json'
 import fovTelescopes from 'src/data/astrobin.telescopes.json'
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // oxfmt-ignore
-import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateGrid, ImageCoordinateGridAxis, ImageCoordinateGridLine, ImageCoordinateGridPoint, ImageCoordinateInterpolation, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
-import { DEG2RAD, PI, RAD2DEG, TAU } from 'nebulosa/src/core/constants'
+import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateGrid, ImageCoordinateGridAxis, ImageCoordinateGridLine, ImageCoordinateGridPoint, ImageCoordinateInterpolation, ImageCrosshairPolyline, ImageCrosshairProjection, ImageCrosshairProjectionRequest, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
+import { DEG2RAD, PI, PIOVERTWO, RAD2DEG, TAU } from 'nebulosa/src/core/constants'
 import { calibrate } from 'nebulosa/src/imaging/processing/calibration'
 import { blur, gaussianBlur, mean, sharpen } from 'nebulosa/src/imaging/processing/convolution'
 import { debayer } from 'nebulosa/src/imaging/processing/debayer'
@@ -62,6 +63,7 @@ const COORDINATE_GRID_TARGET_LINES = 7
 const COORDINATE_GRID_BORDER_SAMPLES = 24
 const COORDINATE_GRID_LINE_SAMPLES = 96
 const COORDINATE_GRID_LABEL_MARGIN = 48
+const CROSSHAIR_CURVE_SAMPLES = 96
 
 interface CoordinateGridBounds {
 	readonly rightAscension: readonly [number, number]
@@ -202,10 +204,7 @@ function coordinateGridBounds(wcs: Wcs, solution: PlateSolution): CoordinateGrid
 
 	if (!Number.isFinite(minRA) || !Number.isFinite(maxRA) || !Number.isFinite(minDEC) || !Number.isFinite(maxDEC)) return undefined
 
-	return {
-		rightAscension: [minRA, maxRA],
-		declination: [minDEC, maxDEC],
-	}
+	return { rightAscension: [minRA, maxRA], declination: [minDEC, maxDEC] }
 }
 
 function coordinateGridSegments(axis: ImageCoordinateGridAxis, value: number, width: number, height: number, project: (ratio: number) => readonly [number, number] | undefined) {
@@ -256,6 +255,55 @@ function coordinateGridSegments(axis: ImageCoordinateGridAxis, value: number, wi
 	flush()
 
 	return lines
+}
+
+function niceAngularStepAtMost(value: number) {
+	const exponent = Math.floor(Math.log10(value * RAD2DEG))
+	const scale = 10 ** exponent
+	const fraction = (value * RAD2DEG) / scale
+	const nice = fraction >= 5 ? 5 : fraction >= 2 ? 2 : 1
+	return nice * scale * DEG2RAD
+}
+
+export function effectiveCrosshairAngularSpacing(solution: PlateSolution, automatic: boolean, value: number) {
+	const span = Math.min(solution.width, solution.height)
+	const minimum = Math.max(solution.scale * 8, span / 128)
+	const requested = automatic ? niceAngularStepAtMost(span / 8) : value
+	return Math.min(Math.max(Number.isFinite(requested) ? requested : minimum, minimum), span)
+}
+
+function crosshairProjectedSegments(project: (ratio: number) => readonly [number, number] | undefined): ImageCrosshairPolyline[] {
+	const lines: ImageCoordinateGridPoint[][] = []
+	let points: ImageCoordinateGridPoint[] = []
+
+	function flush() {
+		if (points.length >= 2) lines.push(points)
+		points = []
+	}
+
+	for (let i = 0; i <= CROSSHAIR_CURVE_SAMPLES; i++) {
+		const point = project(i / CROSSHAIR_CURVE_SAMPLES)
+
+		if (!isFinitePoint(point)) {
+			flush()
+			continue
+		}
+
+		const projected = { x: point[0], y: point[1] }
+		if (!isSameCoordinateGridPoint(points.at(-1), projected)) points.push(projected)
+	}
+
+	flush()
+
+	return lines
+}
+
+function normalizedDirection(center: readonly [number, number], point: readonly [number, number] | undefined) {
+	if (!isFinitePoint(point)) return undefined
+	const x = point[0] - center[0]
+	const y = point[1] - center[1]
+	const length = Math.hypot(x, y)
+	return length > 0 && Number.isFinite(length) ? { x: x / length, y: y / length } : undefined
 }
 
 export class ImageProcessor {
@@ -784,6 +832,75 @@ export class ImageHandler {
 		return { lines }
 	}
 
+	crosshairProjection(request: ImageCrosshairProjectionRequest): ImageCrosshairProjection {
+		const { solution, anchor, preset, angularSpacing } = request
+		const { widthInPixels: width, heightInPixels: height } = solution
+		using wcs = new Wcs(solution)
+
+		const centerInImage = anchor.space === 'image' ? ([anchor.point.x, anchor.point.y] as const) : wcs.skyToPix(anchor.coordinate.rightAscension, anchor.coordinate.declination)
+		const centerInSky = anchor.space === 'sky' ? ([normalizeAngle(anchor.coordinate.rightAscension), anchor.coordinate.declination] as const) : wcs.pixToSky(anchor.point.x, anchor.point.y)
+
+		if (centerInImage === undefined || centerInSky === undefined) return { status: 'unprojectable' }
+
+		const [x, y] = centerInImage
+		const [rightAscension, declination] = centerInSky
+		const span = Math.min(solution.width, solution.height)
+		const directionDistance = Math.max(solution.scale * 16, span / 1000)
+		const northPoint = wcs.skyToPix(...sphericalDestination(rightAscension, declination, 0, directionDistance))
+		const eastPoint = wcs.skyToPix(...sphericalDestination(rightAscension, declination, PIOVERTWO, directionDistance))
+		const north = normalizedDirection(centerInImage, northPoint)
+		const east = normalizedDirection(centerInImage, eastPoint)
+
+		if (!north || !east) return { status: 'unprojectable' }
+
+		const axes: ImageCrosshairPolyline[] = []
+		const rings: ImageCrosshairPolyline[] = []
+		const ringIntersections: (ImageCoordinateGridPoint & { radius: number })[] = []
+		const cardinals: ImageCoordinateGridPoint[] = []
+		const spacing = angularSpacing && effectiveCrosshairAngularSpacing(solution, angularSpacing.automatic, angularSpacing.value)
+
+		if (spacing !== undefined) {
+			const ringRadius = spacing * 4
+			const axisLegs = [
+				{ positionAngle: 0, length: preset === 'bullseye' ? ringRadius : solution.height },
+				{ positionAngle: PIOVERTWO, length: preset === 'bullseye' ? ringRadius : solution.width },
+				{ positionAngle: PI, length: preset === 'bullseye' ? ringRadius : solution.height },
+				{ positionAngle: (PI * 3) / 2, length: preset === 'bullseye' ? ringRadius : solution.width },
+			]
+
+			for (const { positionAngle, length } of axisLegs) {
+				const axisLength = Math.min(PI * 0.49, length)
+				axes.push(...crosshairProjectedSegments((ratio) => wcs.skyToPix(...sphericalDestination(rightAscension, declination, positionAngle, axisLength * ratio))))
+			}
+
+			if (preset === 'bullseye') {
+				for (const radius of [spacing, spacing * 2, spacing * 4]) {
+					rings.push(...crosshairProjectedSegments((ratio) => wcs.skyToPix(...sphericalDestination(rightAscension, declination, ratio * TAU, radius))))
+					const intersection = wcs.skyToPix(...sphericalDestination(rightAscension, declination, PI, radius))
+					if (isFinitePoint(intersection)) ringIntersections.push({ x: intersection[0], y: intersection[1], radius })
+				}
+
+				for (const positionAngle of [0, PIOVERTWO, PI, (PI * 3) / 2]) {
+					const point = wcs.skyToPix(...sphericalDestination(rightAscension, declination, positionAngle, spacing * 4))
+					if (isFinitePoint(point)) cardinals.push({ x: point[0], y: point[1] })
+				}
+			}
+		}
+
+		return {
+			status: 'ready',
+			width,
+			height,
+			center: { x, y, rightAscension: normalizeAngle(rightAscension), declination, inside: x >= 0 && y >= 0 && x <= width && y <= height },
+			spacing,
+			directions: { north, east },
+			axes,
+			rings,
+			ringIntersections,
+			cardinals,
+		}
+	}
+
 	async statistics(req: StatisticImage) {
 		const transformation = { ...req.transformation, enabled: req.transformed }
 		const image = await this.imageProcessor.transform(req.path, transformation, req.camera)
@@ -834,6 +951,7 @@ export function image(imageHandler: ImageHandler) {
 		'/image/annotate': { POST: async (req) => response(await imageHandler.annotate(await req.json())) },
 		'/image/coordinateinterpolation': { POST: async (req) => response(imageHandler.coordinateInterpolation(await req.json())) },
 		'/image/coordinategrid': { POST: async (req) => response(imageHandler.coordinateGrid(await req.json())) },
+		'/image/crosshairprojection': { POST: async (req) => response<ImageCrosshairProjection>(imageHandler.crosshairProjection(await req.json())) },
 		'/image/statistics': { POST: async (req) => response(await imageHandler.statistics(await req.json())) },
 		'/image/fovcameras': { GET: response(fovCameras) },
 		'/image/fovtelescopes': { GET: response(fovTelescopes) },

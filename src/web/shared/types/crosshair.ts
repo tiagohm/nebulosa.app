@@ -1,23 +1,37 @@
 import { clamp, finiteNumber, isRecord } from '@shared/util'
+import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import { PIOVERTWO } from 'nebulosa/src/core/constants'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
+import { arcmin, arcsec, deg, normalizeAngle, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
+import { CROSSHAIR_PRESETS, type CrosshairPreset } from 'src/shared/types'
 
-export const CROSSHAIR_PRESETS = ['crosshair', 'bullseye', 'fine-grid', 'coarse-grid'] as const
-export const CROSSHAIR_SPACING_UNITS = ['pixel', 'normalized'] as const
+export { CROSSHAIR_PRESETS }
+export type { CrosshairPreset }
 
-export type CrosshairPreset = (typeof CROSSHAIR_PRESETS)[number]
+export const CROSSHAIR_SPACING_UNITS = ['pixel', 'normalized', 'angular'] as const
+export const CROSSHAIR_CENTER_SPACES = ['image', 'sky'] as const
+export const CROSSHAIR_ANGULAR_DISPLAY_UNITS = ['arcsecond', 'arcminute', 'degree'] as const
+
 export type CrosshairSpacingUnit = (typeof CROSSHAIR_SPACING_UNITS)[number]
+export type CrosshairCenterSpace = (typeof CROSSHAIR_CENTER_SPACES)[number]
+export type CrosshairAngularDisplayUnit = (typeof CROSSHAIR_ANGULAR_DISPLAY_UNITS)[number]
 export type CrosshairPoint = Point
 
-export interface CrosshairSpacing {
-	readonly unit: CrosshairSpacingUnit
-	readonly value: number
-}
+export type CrosshairCenter = { readonly space: 'image'; readonly point: CrosshairPoint } | { readonly space: 'sky'; readonly coordinate: EquatorialCoordinate }
+
+export type CrosshairSpacing =
+	| { readonly unit: 'pixel' | 'normalized'; readonly value: number }
+	| {
+			readonly unit: 'angular'
+			readonly automatic: boolean
+			readonly value: number
+			readonly displayUnit: CrosshairAngularDisplayUnit
+	  }
 
 export interface CrosshairConfig {
 	readonly preset: CrosshairPreset
-	readonly center: CrosshairPoint
+	readonly center: CrosshairCenter
 	readonly spacing: CrosshairSpacing
-	readonly aperture: number
 	readonly color: string
 	readonly opacity: number
 	readonly lineWidth: number
@@ -34,27 +48,30 @@ export interface CrosshairSegment {
 
 export interface CrosshairGeometry {
 	readonly center: CrosshairPoint
-	readonly apertureRadius: number
 	readonly dotRadius: number
 	readonly handleRadius: number
 	readonly spacing: number
-	readonly gridStep: number
 	readonly radii: readonly number[]
 	readonly axes: readonly CrosshairSegment[]
-	readonly grid: readonly CrosshairSegment[]
 	readonly ticks: readonly CrosshairSegment[]
 }
 
 export const DEFAULT_CROSSHAIR_CONFIG: Readonly<CrosshairConfig> = {
 	preset: 'bullseye',
-	center: { x: 0.5, y: 0.5 },
+	center: { space: 'image', point: { x: 0.5, y: 0.5 } },
 	spacing: { unit: 'normalized', value: 0.05 },
-	aperture: 16,
 	color: '#ef4444',
 	opacity: 0.75,
 	lineWidth: 1,
 	dashed: false,
 	halo: true,
+}
+
+export const DEFAULT_CROSSHAIR_ANGULAR_SPACING: Readonly<Extract<CrosshairSpacing, { unit: 'angular' }>> = {
+	unit: 'angular',
+	automatic: true,
+	value: arcmin(5),
+	displayUnit: 'arcminute',
 }
 
 const HEX_COLOR = /^#[\da-f]{6}$/i
@@ -65,6 +82,10 @@ function isPreset(value: unknown): value is CrosshairPreset {
 
 function isSpacingUnit(value: unknown): value is CrosshairSpacingUnit {
 	return typeof value === 'string' && CROSSHAIR_SPACING_UNITS.includes(value as CrosshairSpacingUnit)
+}
+
+function isAngularDisplayUnit(value: unknown): value is CrosshairAngularDisplayUnit {
+	return typeof value === 'string' && CROSSHAIR_ANGULAR_DISPLAY_UNITS.includes(value as CrosshairAngularDisplayUnit)
 }
 
 function safeDimension(value: number) {
@@ -78,27 +99,50 @@ export function imageMinimumDimension(width: number, height: number) {
 }
 
 export function normalizeCrosshairPoint(value: unknown): CrosshairPoint {
-	const point = isRecord(value) ? value : DEFAULT_CROSSHAIR_CONFIG.center
+	const point = isRecord(value) ? value : { x: 0.5, y: 0.5 }
 	return {
-		x: clamp(finiteNumber(point.x, DEFAULT_CROSSHAIR_CONFIG.center.x), 0, 1),
-		y: clamp(finiteNumber(point.y, DEFAULT_CROSSHAIR_CONFIG.center.y), 0, 1),
+		x: clamp(finiteNumber(point.x, 0.5), 0, 1),
+		y: clamp(finiteNumber(point.y, 0.5), 0, 1),
 	}
+}
+
+export function normalizeCrosshairCoordinate(value: unknown): EquatorialCoordinate {
+	const coordinate = isRecord(value) ? value : undefined
+	return {
+		rightAscension: normalizeAngle(finiteNumber(coordinate?.rightAscension, 0)),
+		declination: clamp(finiteNumber(coordinate?.declination, 0), -PIOVERTWO, PIOVERTWO),
+	}
+}
+
+export function normalizeCrosshairCenter(value: unknown): CrosshairCenter {
+	if (isRecord(value) && value.space === 'sky') return { space: 'sky', coordinate: normalizeCrosshairCoordinate(value.coordinate) }
+	if (isRecord(value) && value.space === 'image') return { space: 'image', point: normalizeCrosshairPoint(value.point) }
+	return { space: 'image', point: normalizeCrosshairPoint(value) }
 }
 
 export function normalizeCrosshairConfig(value: unknown, minDimension = 0): CrosshairConfig {
 	const config = isRecord(value) ? value : DEFAULT_CROSSHAIR_CONFIG
-	const spacing = isRecord(config.spacing) ? config.spacing : DEFAULT_CROSSHAIR_CONFIG.spacing
+	const spacing: Record<string, unknown> = isRecord(config.spacing) ? config.spacing : DEFAULT_CROSSHAIR_CONFIG.spacing
 	const unit = isSpacingUnit(spacing.unit) ? spacing.unit : DEFAULT_CROSSHAIR_CONFIG.spacing.unit
 	const pixelMaximum = Math.max(1, safeDimension(minDimension) || 100000)
 	const pixelMinimum = Math.min(8, pixelMaximum)
-	const spacingValue = unit === 'pixel' ? clamp(finiteNumber(spacing.value, 8), pixelMinimum, pixelMaximum) : clamp(finiteNumber(spacing.value, DEFAULT_CROSSHAIR_CONFIG.spacing.value), 0.005, 0.25)
+	const normalizedSpacing: CrosshairSpacing =
+		unit === 'pixel'
+			? { unit, value: clamp(finiteNumber(spacing.value, 8), pixelMinimum, pixelMaximum) }
+			: unit === 'normalized'
+				? { unit, value: clamp(finiteNumber(spacing.value, DEFAULT_CROSSHAIR_CONFIG.spacing.value), 0.005, 0.25) }
+				: {
+						unit,
+						automatic: typeof spacing.automatic === 'boolean' ? spacing.automatic : DEFAULT_CROSSHAIR_ANGULAR_SPACING.automatic,
+						value: clamp(finiteNumber(spacing.value, DEFAULT_CROSSHAIR_ANGULAR_SPACING.value), arcsec(0.1), deg(90)),
+						displayUnit: isAngularDisplayUnit(spacing.displayUnit) ? spacing.displayUnit : DEFAULT_CROSSHAIR_ANGULAR_SPACING.displayUnit,
+					}
 	const color = typeof config.color === 'string' && HEX_COLOR.test(config.color) ? config.color.toLowerCase() : DEFAULT_CROSSHAIR_CONFIG.color
 
 	return {
 		preset: isPreset(config.preset) ? config.preset : DEFAULT_CROSSHAIR_CONFIG.preset,
-		center: normalizeCrosshairPoint(config.center),
-		spacing: { unit, value: spacingValue },
-		aperture: clamp(finiteNumber(config.aperture, DEFAULT_CROSSHAIR_CONFIG.aperture), 0, 64),
+		center: normalizeCrosshairCenter(config.center),
+		spacing: normalizedSpacing,
 		color,
 		opacity: clamp(finiteNumber(config.opacity, DEFAULT_CROSSHAIR_CONFIG.opacity), 0.1, 1),
 		lineWidth: clamp(finiteNumber(config.lineWidth, DEFAULT_CROSSHAIR_CONFIG.lineWidth), 0.5, 4),
@@ -119,13 +163,25 @@ export function crosshairPointFromPixels(point: CrosshairPoint, width: number, h
 	height = safeDimension(height)
 
 	return normalizeCrosshairPoint({
-		x: width > 0 ? point.x / width : DEFAULT_CROSSHAIR_CONFIG.center.x,
-		y: height > 0 ? point.y / height : DEFAULT_CROSSHAIR_CONFIG.center.y,
+		x: width > 0 ? point.x / width : 0.5,
+		y: height > 0 ? point.y / height : 0.5,
 	})
 }
 
 export function crosshairSpacingInPixels(spacing: CrosshairSpacing, width: number, height: number) {
-	return spacing.unit === 'normalized' ? spacing.value * imageMinimumDimension(width, height) : spacing.value
+	return spacing.unit === 'normalized' ? spacing.value * imageMinimumDimension(width, height) : spacing.unit === 'pixel' ? spacing.value : 0
+}
+
+export function crosshairAngleFromDisplayValue(value: number, unit: CrosshairAngularDisplayUnit) {
+	return unit === 'arcsecond' ? arcsec(value) : unit === 'arcminute' ? arcmin(value) : deg(value)
+}
+
+export function crosshairAngleToDisplayValue(value: number, unit: CrosshairAngularDisplayUnit) {
+	return unit === 'arcsecond' ? toArcsec(value) : unit === 'arcminute' ? toArcmin(value) : toDeg(value)
+}
+
+export function crosshairAngleDisplayUnit(value: number): CrosshairAngularDisplayUnit {
+	return value < arcmin(1) ? 'arcsecond' : value < deg(1) ? 'arcminute' : 'degree'
 }
 
 export function crosshairRadii(spacing: number) {
@@ -155,27 +211,14 @@ function segment(x1: number, y1: number, x2: number, y2: number): CrosshairSegme
 	return x1 <= x2 && y1 <= y2 ? { x1, y1, x2, y2 } : undefined
 }
 
-function axes(center: CrosshairPoint, width: number, height: number, gap: number, reach?: number) {
+function axes(center: CrosshairPoint, width: number, height: number, reach?: number) {
 	const left = reach === undefined ? 0 : Math.max(0, center.x - reach)
 	const right = reach === undefined ? width : Math.min(width, center.x + reach)
 	const top = reach === undefined ? 0 : Math.max(0, center.y - reach)
 	const bottom = reach === undefined ? height : Math.min(height, center.y + reach)
-	const result = [segment(left, center.y, Math.max(left, center.x - gap), center.y), segment(Math.min(right, center.x + gap), center.y, right, center.y), segment(center.x, top, center.x, Math.max(top, center.y - gap)), segment(center.x, Math.min(bottom, center.y + gap), center.x, bottom)]
+	const result = [segment(left, center.y, Math.max(left, center.x), center.y), segment(Math.min(right, center.x), center.y, right, center.y), segment(center.x, top, center.x, Math.max(top, center.y)), segment(center.x, Math.min(bottom, center.y), center.x, bottom)]
 
 	return result.filter((value): value is CrosshairSegment => value !== undefined)
-}
-
-function grid(center: CrosshairPoint, width: number, height: number, step: number) {
-	const result: CrosshairSegment[] = []
-
-	if (!Number.isFinite(step) || step <= 0) return result
-
-	for (let x = center.x - step; x >= 0; x -= step) result.push({ x1: x, y1: 0, x2: x, y2: height })
-	for (let x = center.x + step; x <= width; x += step) result.push({ x1: x, y1: 0, x2: x, y2: height })
-	for (let y = center.y - step; y >= 0; y -= step) result.push({ x1: 0, y1: y, x2: width, y2: y })
-	for (let y = center.y + step; y <= height; y += step) result.push({ x1: 0, y1: y, x2: width, y2: y })
-
-	return result
 }
 
 function ticks(center: CrosshairPoint, radius: number, length: number) {
@@ -188,27 +231,21 @@ function ticks(center: CrosshairPoint, radius: number, length: number) {
 	]
 }
 
-export function crosshairGeometry(config: CrosshairConfig, width: number, height: number, scale: number, center = config.center): CrosshairGeometry {
+export function crosshairGeometry(config: CrosshairConfig, width: number, height: number, scale: number, center: CrosshairPoint): CrosshairGeometry {
 	width = safeDimension(width)
 	height = safeDimension(height)
 	const centerInPixels = crosshairPointInPixels(center, width, height)
 	const spacing = crosshairSpacingInPixels(config.spacing, width, height)
 	const radii = crosshairRadii(spacing)
-	const apertureRadius = viewportPixelsInImage(config.aperture / 2, scale)
-	const gridStep = config.preset === 'coarse-grid' ? spacing * 2 : spacing
-	const hasGrid = config.preset === 'fine-grid' || config.preset === 'coarse-grid'
 	const hasRings = config.preset === 'bullseye'
 
 	return {
 		center: centerInPixels,
-		apertureRadius,
 		dotRadius: viewportPixelsInImage(2, scale),
 		handleRadius: viewportPixelsInImage(10, scale),
 		spacing,
-		gridStep,
 		radii: hasRings ? radii : [],
-		axes: axes(centerInPixels, width, height, apertureRadius, hasRings ? radii[2] : undefined),
-		grid: hasGrid ? grid(centerInPixels, width, height, gridStep) : [],
+		axes: axes(centerInPixels, width, height, hasRings ? radii[2] : undefined),
 		ticks: hasRings ? ticks(centerInPixels, radii[2], viewportPixelsInImage(6, scale)) : [],
 	}
 }

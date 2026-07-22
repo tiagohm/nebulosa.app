@@ -36,7 +36,7 @@ function mount() {
 
 	mounted = true
 
-	u[0] = initProxy(state, 'framing', [])
+	u[0] = initProxy(state, 'framing', ['o:request'])
 
 	return unmount
 }

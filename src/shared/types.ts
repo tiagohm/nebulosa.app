@@ -565,6 +565,42 @@ export interface ImageCoordinateGrid {
 	readonly lines: readonly ImageCoordinateGridLine[]
 }
 
+export const CROSSHAIR_PRESETS = ['crosshair', 'bullseye'] as const
+
+export type CrosshairPreset = (typeof CROSSHAIR_PRESETS)[number]
+
+export type ImageCrosshairProjectionAnchor = { readonly space: 'image'; readonly point: Point } | { readonly space: 'sky'; readonly coordinate: EquatorialCoordinate }
+
+export interface ImageCrosshairProjectionRequest {
+	readonly solution: PlateSolution
+	readonly anchor: ImageCrosshairProjectionAnchor
+	readonly preset: CrosshairPreset
+	readonly angularSpacing?: {
+		readonly automatic: boolean
+		readonly value: Angle
+	}
+}
+
+export type ImageCrosshairPolyline = readonly Point[]
+
+export type ImageCrosshairProjection =
+	| { readonly status: 'unprojectable' }
+	| {
+			readonly status: 'ready'
+			readonly width: number
+			readonly height: number
+			readonly center: Point & EquatorialCoordinate & { readonly inside: boolean }
+			readonly spacing?: Angle
+			readonly directions: {
+				readonly north: Point
+				readonly east: Point
+			}
+			readonly axes: readonly ImageCrosshairPolyline[]
+			readonly rings: readonly ImageCrosshairPolyline[]
+			readonly ringIntersections: readonly (Point & { readonly radius: Angle })[]
+			readonly cardinals: readonly Point[]
+	  }
+
 export interface ImageInfo extends Partial<EquatorialCoordinate>, Size {
 	readonly path: string
 	readonly mono: boolean

@@ -1,13 +1,17 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_CROSSHAIR_CONFIG, crosshairGeometry, crosshairPointFromPixels, crosshairPointInPixels, crosshairRadii, crosshairSpacingInPixels, normalizeCrosshairConfig, normalizeCrosshairPoint, screenDeltaInImage, viewportPixelsInImage } from '@shared/types/crosshair'
+// oxfmt-ignore
+import { DEFAULT_CROSSHAIR_CONFIG, crosshairAngleFromDisplayValue, crosshairAngleToDisplayValue, crosshairGeometry, crosshairPointFromPixels, crosshairPointInPixels, crosshairRadii, crosshairSpacingInPixels, normalizeCrosshairConfig, normalizeCrosshairPoint, screenDeltaInImage, viewportPixelsInImage } from '@shared/types/crosshair'
+import { PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
+import { arcmin, arcsec } from 'nebulosa/src/math/units/angle'
+
+const IMAGE_CENTER = { x: 0.5, y: 0.5 }
 
 describe('crosshair configuration', () => {
 	test('normalizes invalid persisted values', () => {
 		expect(normalizeCrosshairConfig({ preset: 'unknown', center: { x: -1, y: 2 }, spacing: { unit: 'pixel', value: 2 }, aperture: 80, color: 'red', opacity: 2, lineWidth: 0, dashed: 'yes', halo: null }, 100)).toEqual({
 			...DEFAULT_CROSSHAIR_CONFIG,
-			center: { x: 0, y: 1 },
+			center: { space: 'image', point: { x: 0, y: 1 } },
 			spacing: { unit: 'pixel', value: 8 },
-			aperture: 64,
 			opacity: 1,
 			lineWidth: 0.5,
 		})
@@ -17,7 +21,7 @@ describe('crosshair configuration', () => {
 		const config = normalizeCrosshairConfig(
 			{
 				...DEFAULT_CROSSHAIR_CONFIG,
-				preset: 'fine-grid',
+				preset: 'crosshair',
 				center: { x: 0.25, y: 0.75 },
 				spacing: { unit: 'pixel', value: 200 },
 				color: '#AABBCC',
@@ -25,10 +29,32 @@ describe('crosshair configuration', () => {
 			120,
 		)
 
-		expect(config.preset).toBe('fine-grid')
-		expect(config.center).toEqual({ x: 0.25, y: 0.75 })
+		expect(config.preset).toBe('crosshair')
+		expect(config.center).toEqual({ space: 'image', point: { x: 0.25, y: 0.75 } })
 		expect(config.spacing).toEqual({ unit: 'pixel', value: 120 })
 		expect(config.color).toBe('#aabbcc')
+	})
+
+	test('migrates removed grid presets to the default preset', () => {
+		expect(normalizeCrosshairConfig({ ...DEFAULT_CROSSHAIR_CONFIG, preset: 'fine-grid' }).preset).toBe('bullseye')
+		expect(normalizeCrosshairConfig({ ...DEFAULT_CROSSHAIR_CONFIG, preset: 'coarse-grid' }).preset).toBe('bullseye')
+	})
+
+	test('normalizes celestial centers and angular spacing', () => {
+		const config = normalizeCrosshairConfig({
+			...DEFAULT_CROSSHAIR_CONFIG,
+			center: { space: 'sky', coordinate: { rightAscension: -0.5, declination: 2 } },
+			spacing: { unit: 'angular', automatic: false, value: 0, displayUnit: 'invalid' },
+		})
+
+		expect(config.center).toEqual({ space: 'sky', coordinate: { rightAscension: TAU - 0.5, declination: PIOVERTWO } })
+		expect(config.spacing).toEqual({ unit: 'angular', automatic: false, value: arcsec(0.1), displayUnit: 'arcminute' })
+	})
+
+	test('converts angular display units without changing the stored angle', () => {
+		const angle = crosshairAngleFromDisplayValue(5, 'arcminute')
+		expect(angle).toBeCloseTo(arcmin(5), 15)
+		expect(crosshairAngleToDisplayValue(angle, 'arcsecond')).toBeCloseTo(300, 12)
 	})
 })
 
@@ -45,23 +71,20 @@ describe('crosshair geometry', () => {
 		expect(crosshairRadii(30)).toEqual([30, 60, 120])
 	})
 
-	test('uses twice the fine-grid step for a coarse grid', () => {
-		const fine = crosshairGeometry({ ...DEFAULT_CROSSHAIR_CONFIG, preset: 'fine-grid' }, 800, 600, 1)
-		const coarse = crosshairGeometry({ ...DEFAULT_CROSSHAIR_CONFIG, preset: 'coarse-grid' }, 800, 600, 1)
+	test('adds rings only to the bullseye preset', () => {
+		const crosshair = crosshairGeometry({ ...DEFAULT_CROSSHAIR_CONFIG, preset: 'crosshair' }, 800, 600, 1, IMAGE_CENTER)
+		const bullseye = crosshairGeometry(DEFAULT_CROSSHAIR_CONFIG, 800, 600, 1, IMAGE_CENTER)
 
-		expect(fine.gridStep).toBe(30)
-		expect(coarse.gridStep).toBe(60)
-		expect(fine.grid.length).toBeGreaterThan(coarse.grid.length)
+		expect(crosshair.radii).toHaveLength(0)
+		expect(bullseye.radii).toEqual([30, 60, 120])
 	})
 
 	test('keeps viewport-sized geometry stable across zoom levels', () => {
-		const normal = crosshairGeometry(DEFAULT_CROSSHAIR_CONFIG, 800, 600, 1)
-		const zoomed = crosshairGeometry(DEFAULT_CROSSHAIR_CONFIG, 800, 600, 4)
+		const normal = crosshairGeometry(DEFAULT_CROSSHAIR_CONFIG, 800, 600, 1, IMAGE_CENTER)
+		const zoomed = crosshairGeometry(DEFAULT_CROSSHAIR_CONFIG, 800, 600, 4, IMAGE_CENTER)
 
 		expect(viewportPixelsInImage(16, 1)).toBe(16)
 		expect(viewportPixelsInImage(16, 4)).toBe(4)
-		expect(normal.apertureRadius).toBe(8)
-		expect(zoomed.apertureRadius).toBe(2)
 		expect(normal.dotRadius).toBe(2)
 		expect(zoomed.dotRadius).toBe(0.5)
 		expect(normal.radii).toEqual(zoomed.radii)

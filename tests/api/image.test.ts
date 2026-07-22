@@ -2,11 +2,15 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { Wcs } from 'nebulosa/src/bindings/astrometry/libwcs'
+import { PI } from 'nebulosa/src/core/constants'
 import { readImageFromPath, writeImageToFits, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import { bufferSink } from 'nebulosa/src/io/io'
-import { ImageHandler, ImageProcessor, image as imageEndpoints } from 'src/api/image'
-import { DEFAULT_IMAGE_TRANSFORMATION, X_IMAGE_INFO_HEADER, type AnnotateImage, type ImageCoordinateGrid, type ImageHistogram, type ImageInfo, type ImageTransformation } from 'src/shared/types'
+import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
+import { normalizeAngle } from 'nebulosa/src/math/units/angle'
+import { ImageHandler, ImageProcessor, effectiveCrosshairAngularSpacing, image as imageEndpoints } from 'src/api/image'
+import { DEFAULT_IMAGE_TRANSFORMATION, X_IMAGE_INFO_HEADER, type AnnotateImage, type ImageCoordinateGrid, type ImageCrosshairProjection, type ImageHistogram, type ImageInfo, type ImageTransformation } from 'src/shared/types'
 import { json, noContent } from './util'
 
 const EMPTY_ANNOTATE_IMAGE: Omit<AnnotateImage, 'solution'> = {
@@ -85,6 +89,12 @@ function request(body: unknown) {
 		params: {},
 		json: () => body,
 	} as unknown as Bun.BunRequest
+}
+
+function readyCrosshairProjection(projection: ImageCrosshairProjection) {
+	expect(projection.status).toBe('ready')
+	if (projection.status !== 'ready') throw new Error('expected ready crosshair projection')
+	return projection
 }
 
 function syntheticImage(): Image {
@@ -276,6 +286,104 @@ describe('image handler', () => {
 		const grid = await json<ImageCoordinateGrid>(await endpoints['/image/coordinategrid'].POST(request(SOLVED_IMAGE_SOLUTION)))
 
 		expectCoordinateGrid(grid)
+	})
+
+	test('crosshair projection converts the center and produces angular bullseye geometry', () => {
+		const handler = new ImageHandler(new ImageProcessor())
+		const projection = readyCrosshairProjection(
+			handler.crosshairProjection({
+				solution: SOLVED_IMAGE_SOLUTION,
+				anchor: { space: 'image', point: { x: 640, y: 512 } },
+				preset: 'bullseye',
+				angularSpacing: { automatic: true, value: 0 },
+			}),
+		)
+
+		expect(projection.center.x).toBeCloseTo(640, 6)
+		expect(projection.center.y).toBeCloseTo(512, 6)
+		expect(projection.center.rightAscension).toBeCloseTo(SOLVED_IMAGE_SOLUTION.rightAscension, 5)
+		expect(projection.center.declination).toBeCloseTo(SOLVED_IMAGE_SOLUTION.declination, 5)
+		expect(projection.center.inside).toBeTrue()
+		expect(projection.axes).toHaveLength(4)
+		expect(projection.rings).toHaveLength(3)
+		expect(projection.ringIntersections).toHaveLength(3)
+		expect(projection.cardinals).toHaveLength(4)
+		expect(Math.hypot(projection.directions.north.x, projection.directions.north.y)).toBeCloseTo(1, 12)
+		expect(Math.hypot(projection.directions.east.x, projection.directions.east.y)).toBeCloseTo(1, 12)
+
+		using wcs = new Wcs(SOLVED_IMAGE_SOLUTION)
+		for (let index = 0; index < projection.rings.length; index++) {
+			const point = projection.rings[index][0]
+			const sky = point && wcs.pixToSky(point.x, point.y)
+			expect(sky).toBeDefined()
+			if (sky) expect(sphericalSeparation(projection.center.rightAscension, projection.center.declination, sky[0], sky[1])).toBeCloseTo(projection.spacing! * 2 ** index, 5)
+
+			const intersection = projection.ringIntersections[index]
+			expect(intersection?.radius).toBeCloseTo(projection.spacing! * 2 ** index, 12)
+			if (intersection) {
+				const dx = intersection.x - projection.center.x
+				const dy = intersection.y - projection.center.y
+				expect(dx * projection.directions.north.x + dy * projection.directions.north.y).toBeLessThan(0)
+			}
+		}
+	})
+
+	test('crosshair projection uses a 1-2-5 automatic step and leaves axis clipping to the SVG', () => {
+		const handler = new ImageHandler(new ImageProcessor())
+		const request = {
+			solution: SOLVED_IMAGE_SOLUTION,
+			anchor: { space: 'sky' as const, coordinate: { rightAscension: SOLVED_IMAGE_SOLUTION.rightAscension, declination: SOLVED_IMAGE_SOLUTION.declination } },
+			angularSpacing: { automatic: true, value: 0 },
+		}
+		const projection = readyCrosshairProjection(handler.crosshairProjection({ ...request, preset: 'crosshair' }))
+		const spacing = effectiveCrosshairAngularSpacing(SOLVED_IMAGE_SOLUTION, true, 0)
+		const degrees = (spacing * 180) / PI
+		const scale = 10 ** Math.floor(Math.log10(degrees))
+
+		expect([1, 2, 5]).toContain(Math.round((degrees / scale) * 1e12) / 1e12)
+		expect(projection.spacing).toBe(spacing)
+		expect(projection.axes).toHaveLength(4)
+		expect(projection.ringIntersections).toHaveLength(0)
+		expect(projection.axes.every((axis) => axis[0] !== undefined && Math.abs(axis[0].x - projection.center.x) < 1e-6 && Math.abs(axis[0].y - projection.center.y) < 1e-6)).toBeTrue()
+		expect(projection.axes.some((axis) => axis.some((point) => point.x < 0 || point.y < 0 || point.x > projection.width || point.y > projection.height))).toBeTrue()
+	})
+
+	test('crosshair north/east directions follow WCS parity', () => {
+		const handler = new ImageHandler(new ImageProcessor())
+		const flipped = readyCrosshairProjection(handler.crosshairProjection({ solution: SOLVED_IMAGE_SOLUTION, anchor: { space: 'image', point: { x: 640, y: 512 } }, preset: 'crosshair' }))
+		const normalSolution = { ...SOLVED_IMAGE_SOLUTION, CDELT1: Math.abs(SOLVED_IMAGE_SOLUTION.CDELT1), parity: 'NORMAL' as const }
+		const normal = readyCrosshairProjection(handler.crosshairProjection({ solution: normalSolution, anchor: { space: 'image', point: { x: 640, y: 512 } }, preset: 'crosshair' }))
+		const flippedHandedness = flipped.directions.east.x * flipped.directions.north.y - flipped.directions.east.y * flipped.directions.north.x
+		const normalHandedness = normal.directions.east.x * normal.directions.north.y - normal.directions.east.y * normal.directions.north.x
+
+		expect(Math.sign(flippedHandedness)).toBe(-Math.sign(normalHandedness))
+	})
+
+	test('crosshair projection reports outside and unprojectable celestial centers', () => {
+		const handler = new ImageHandler(new ImageProcessor())
+		const outside = readyCrosshairProjection(
+			handler.crosshairProjection({
+				solution: SOLVED_IMAGE_SOLUTION,
+				anchor: { space: 'image', point: { x: -100, y: -100 } },
+				preset: 'crosshair',
+			}),
+		)
+		const unprojectable = handler.crosshairProjection({
+			solution: SOLVED_IMAGE_SOLUTION,
+			anchor: { space: 'sky', coordinate: { rightAscension: normalizeAngle(SOLVED_IMAGE_SOLUTION.rightAscension + PI), declination: -SOLVED_IMAGE_SOLUTION.declination } },
+			preset: 'crosshair',
+		})
+
+		expect(outside.center.inside).toBeFalse()
+		expect(unprojectable.status).toBe('unprojectable')
+	})
+
+	test('crosshair projection endpoint validates and serializes requests', async () => {
+		const endpoints = imageEndpoints(new ImageHandler(new ImageProcessor()))
+		expect(() => endpoints['/image/crosshairprojection'].POST(request({ preset: 'bullseye' }))).toThrow()
+		const valid = await endpoints['/image/crosshairprojection'].POST(request({ solution: SOLVED_IMAGE_SOLUTION, anchor: { space: 'image', point: { x: 640, y: 512 } }, preset: 'crosshair' }))
+
+		expect(readyCrosshairProjection(await json<ImageCrosshairProjection>(valid)).center.inside).toBeTrue()
 	})
 
 	test('save endpoint exports FITS and XISF files that can be read back', async () => {

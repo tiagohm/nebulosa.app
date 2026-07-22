@@ -1,10 +1,10 @@
-import type { CrosshairPreset } from '@shared/types/crosshair'
 import { Select, type SelectProps } from '@ui/components/Select'
+import type { CrosshairPreset } from 'src/shared/types'
 
-const ITEMS = ['crosshair', 'bullseye', 'fine-grid', 'coarse-grid'] as const
+const ITEMS = ['crosshair', 'bullseye'] as const
 
 function CrosshairPresetItem(item: CrosshairPreset) {
-	return <span>{item === 'bullseye' ? 'Bullseye' : item === 'crosshair' ? 'Crosshair' : item === 'fine-grid' ? 'Fine Grid' : 'Coarse Grid'}</span>
+	return <span>{item === 'bullseye' ? 'Bullseye' : 'Crosshair'}</span>
 }
 
 export type CrosshairPresetSelectProps = Omit<SelectProps<CrosshairPreset>, 'children' | 'items'>

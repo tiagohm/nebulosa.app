@@ -135,6 +135,12 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 				void load(event.path)
 			}
 		})
+
+		u[4] = imageBus.subscribe('update', (event) => {
+			if (event.image.id === image.id) {
+				void load(event.path)
+			}
+		})
 	}
 
 	function unmount() {

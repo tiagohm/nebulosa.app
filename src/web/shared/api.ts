@@ -15,7 +15,7 @@ import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
 import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, ComputeLunarEclipseLocalCircumstances, ComputeLunarEclipseLocalView, ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DirectoryEntry, FileSystem, FindCloseApproaches, FindLunarEclipse, FindSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarApsis, LunarEclipseMap, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, OpenImage, GuiderConnect, GuiderEvent, GuiderStatus, PlanetariumRequest, PlateSolveStart, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SkyObject, SolarEclipseMap, SolarSeasons, StarDetection, StatisticImage, TppaStart, Twilight } from 'src/shared/types'
-import { type ImageCoordinateInterpolation, type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
+import { type ImageCoordinateInterpolation, type ImageCrosshairProjection, type ImageCrosshairProjectionRequest, type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
@@ -105,6 +105,10 @@ export namespace Api {
 
 		export function coordinateGrid(req: PlateSolution) {
 			return json<ImageCoordinateGrid>('/image/coordinategrid', 'post', req)
+		}
+
+		export function crosshairProjection(req: ImageCrosshairProjectionRequest) {
+			return json<ImageCrosshairProjection>('/image/crosshairprojection', 'post', req)
 		}
 
 		export function statistics(req: StatisticImage) {

@@ -1,5 +1,5 @@
 import { useStore } from '@hooks/store.hook'
-import { AutoFocusStoreContext } from '@shared/context'
+import { AutoFocusStoreContext, CameraCaptureStoreContext } from '@shared/context'
 import { autoFocusStore } from '@stores/autofocus.store'
 import { AutoFocusFittingModeSelect } from '@ui/AutoFocusFittingModeSelect'
 import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
@@ -89,7 +89,7 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<StarDetectionSelect className="col-span-6" disabled={running} endContent={<StarDetectionSelectEndContent />} onValueChange={(value) => autoFocus.updateStarDetection('type', value)} value={starDetection.type} />
+			<StarDetectionSelect className="col-span-6" disabled={running} endContent={<StarDetectionSelectEndContent />} onValueChange={autoFocus.setStarDetectionType} value={starDetection.type} />
 			<AutoFocusFittingModeSelect className="col-span-6" disabled={running} onValueChange={autoFocus.setFittingMode} value={fittingMode} />
 			<NumberInput className="col-span-4" disabled={running} label="Offset steps" maxValue={1000} minValue={1} onValueChange={autoFocus.setInitialOffsetSteps} value={initialOffsetSteps} />
 			<NumberInput className="col-span-3" disabled={running || !focuser?.connected} label="Step size" maxValue={stepSizeMax} minValue={1} onValueChange={autoFocus.setStepSize} value={stepSize} />
@@ -147,9 +147,14 @@ const Footer = memo(() => {
 const CameraDropdownEndContent = memo(() => {
 	const autoFocus = useContext(AutoFocusStoreContext)
 	const { camera } = useSnapshot(autoFocus.state)
-	const { capture } = useSnapshot(autoFocus.state.request)
 
-	return camera && <CameraCaptureStartPopover camera={camera} mode="autoFocus" onValueChange={autoFocus.updateCapture} value={capture} />
+	return (
+		camera && (
+			<CameraCaptureStoreContext value={autoFocus.capture}>
+				<CameraCaptureStartPopover camera={camera} mode="autoFocus" />
+			</CameraCaptureStoreContext>
+		)
+	)
 })
 
 const StarDetectionSelectEndContent = memo(() => {

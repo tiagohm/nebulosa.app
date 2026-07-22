@@ -4,44 +4,44 @@ import { Checkbox } from '@ui/components/Checkbox'
 import { FilePickerInput } from '@ui/FilePickerInput'
 import { Icons } from '@ui/Icon'
 import { memo, useContext, useEffect } from 'react'
-import type { ImageCalibrationFile, ImageCalibrationFileType } from 'src/shared/types'
+import type { ImageCalibrationFile } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
 
 export const ImageCalibration = memo(() => {
 	const { calibration } = useContext(ImageViewerStoreContext)
-	const { enabled } = useSnapshot(calibration.state.calibration)
+	const { enabled, dark, flat, bias, darkFlat } = useSnapshot(calibration.state.calibration)
 
 	useEffect(calibration.mount, [])
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<Checkbox className="col-span-full" label="Enabled" onValueChange={(value) => (calibration.state.calibration.enabled = value)} value={enabled} />
-			<CalibrationFile calibrationEnabled={enabled} type="dark" />
-			<CalibrationFile calibrationEnabled={enabled} type="flat" />
-			<CalibrationFile calibrationEnabled={enabled} type="bias" />
-			<CalibrationFile calibrationEnabled={enabled} type="darkFlat" />
+			<CalibrationFile label="Dark" disabled={enabled} onEnabledChange={calibration.setDarkEnabled} onPathChange={calibration.setDarkPath} enabled={dark.enabled} path={dark.path} />
+			<CalibrationFile label="Flat" disabled={enabled} onEnabledChange={calibration.setFlatEnabled} onPathChange={calibration.setFlatPath} enabled={flat.enabled} path={flat.path} />
+			<CalibrationFile label="Bias" disabled={enabled} onEnabledChange={calibration.setBiasEnabled} onPathChange={calibration.setBiasPath} enabled={bias.enabled} path={bias.path} />
+			<CalibrationFile label="Dark Flat" disabled={enabled} onEnabledChange={calibration.setDarkFlatEnabled} onPathChange={calibration.setDarkFlatPath} enabled={darkFlat.enabled} path={darkFlat.path} />
 			<Footer />
 		</div>
 	)
 })
 
 interface CalibrationFileProps {
-	readonly calibrationEnabled: boolean
-	readonly type: ImageCalibrationFileType
+	readonly label: string
+	readonly disabled: boolean
+	readonly enabled: boolean
+	readonly path?: string
+	readonly onEnabledChange: (value: boolean) => void
+	readonly onPathChange: (path?: string) => void
 }
 
-const CalibrationFile = memo(({ calibrationEnabled, type }: CalibrationFileProps) => {
-	const { calibration } = useContext(ImageViewerStoreContext)
-	const { enabled, path } = useSnapshot(calibration.state.calibration[type])
-	const placeholder = type === 'dark' ? 'Dark' : type === 'flat' ? 'Flat' : type === 'bias' ? 'Bias' : 'Dark Flat'
-
+function CalibrationFile({ disabled, label, enabled, path, onEnabledChange, onPathChange }: CalibrationFileProps) {
 	return (
 		<div className="col-span-full flex min-w-0 flex-row gap-2">
-			<Checkbox disabled={!calibrationEnabled} onValueChange={(value) => calibration.update(type, 'enabled', value)} value={enabled} />
-			<FilePickerInput fullWidth disabled={!calibrationEnabled || !enabled} filter="*.{fits,fit,xisf}" id={`calibration-${calibration.viewer.image.id}-${type}`} onValueChange={(value) => calibration.update(type, 'path', value)} placeholder={placeholder} value={path} />
+			<Checkbox disabled={disabled} onValueChange={onEnabledChange} value={enabled} />
+			<FilePickerInput fullWidth disabled={disabled} filter="*.{fits,fit,xisf}" onValueChange={onPathChange} placeholder={label} value={path} />
 		</div>
 	)
-})
+}
 
 const Footer = memo(() => {
 	const { calibration } = useContext(ImageViewerStoreContext)

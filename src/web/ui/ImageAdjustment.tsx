@@ -1,7 +1,8 @@
 import { ImageViewerStoreContext } from '@shared/context'
+import { tw } from '@shared/util'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
-import { NumberInput } from '@ui/components/NumberInput'
+import { NumberInput, type NumberInputProps } from '@ui/components/NumberInput'
 import { Icons } from '@ui/Icon'
 import { ImageChannelOrGrayInput } from '@ui/ImageChannelOrGrayInput'
 import { memo, useContext, useEffect } from 'react'
@@ -36,21 +37,21 @@ const Brightness = memo(() => {
 	const { adjustment } = useContext(ImageViewerStoreContext)
 	const { enabled, brightness } = useSnapshot(adjustment.state.adjustment)
 
-	return <AdjustmentValueInput enabled={enabled} label="Brightness" type="brightness" value={brightness.value} />
+	return <AdjustmentValueInput disabled={!enabled} label="Brightness" onValueChange={adjustment.setBrightness} value={brightness.value} />
 })
 
 const Contrast = memo(() => {
 	const { adjustment } = useContext(ImageViewerStoreContext)
 	const { enabled, contrast } = useSnapshot(adjustment.state.adjustment)
 
-	return <AdjustmentValueInput enabled={enabled} label="Contrast" type="contrast" value={contrast.value} />
+	return <AdjustmentValueInput disabled={!enabled} label="Contrast" onValueChange={adjustment.setContrast} value={contrast.value} />
 })
 
 const Gamma = memo(() => {
 	const { adjustment } = useContext(ImageViewerStoreContext)
 	const { enabled, gamma } = useSnapshot(adjustment.state.adjustment)
 
-	return <AdjustmentValueInput enabled={enabled} label="Gamma" minValue={1} type="gamma" value={gamma.value} />
+	return <AdjustmentValueInput disabled={!enabled} label="Gamma" minValue={1} onValueChange={adjustment.setGamma} value={gamma.value} />
 })
 
 const Saturation = memo(() => {
@@ -62,8 +63,8 @@ const Saturation = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-col gap-2">
-			<AdjustmentValueInput enabled={enabled} label="Saturation" type="saturation" value={saturation.value} />
-			<ImageChannelOrGrayInput disabled={!enabled || saturation.value === 1} onValueChange={(value) => adjustment.update('saturation', 'channel', value)} value={saturation.channel} />
+			<AdjustmentValueInput disabled={!enabled} label="Saturation" onValueChange={adjustment.setSaturationLevel} value={saturation.value} />
+			<ImageChannelOrGrayInput disabled={!enabled || saturation.value === 1} onValueChange={adjustment.setSaturationChannel} value={saturation.channel} />
 		</div>
 	)
 })
@@ -82,21 +83,9 @@ const Footer = memo(() => {
 	)
 })
 
-type AdjustmentValueType = 'brightness' | 'contrast' | 'gamma' | 'saturation'
-
-interface AdjustmentValueInputProps {
-	readonly enabled: boolean
-	readonly label: string
-	readonly minValue?: number
-	readonly type: AdjustmentValueType
-	readonly value: number
+function AdjustmentValueInput({ minValue = 0, className, ...props }: NumberInputProps) {
+	return <NumberInput className={tw('col-span-full min-w-0', className)} fractionDigits={2} minValue={minValue} maxValue={10} step={0.01} {...props} />
 }
-
-const AdjustmentValueInput = memo(({ enabled, label, minValue = 0, type, value }: AdjustmentValueInputProps) => {
-	const { adjustment } = useContext(ImageViewerStoreContext)
-
-	return <NumberInput className="col-span-full min-w-0" disabled={!enabled} fractionDigits={2} label={label} maxValue={10} minValue={minValue} onValueChange={(value) => adjustment.update(type, 'value', value)} step={0.01} value={value} />
-})
 
 function isValidAdjustment(adjustment: ImageAdjustmentType) {
 	return isValidAdjustmentValue(adjustment.brightness.value) && isValidAdjustmentValue(adjustment.contrast.value) && isValidAdjustmentValue(adjustment.saturation.value) && isValidAdjustmentValue(adjustment.gamma.value, 1)

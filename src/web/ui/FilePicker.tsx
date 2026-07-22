@@ -143,7 +143,7 @@ const Footer = memo(({ onChoose }: Pick<FilePickerProps, 'onChoose'>) => {
 		<div className="flex flex-1 flex-row justify-end gap-2">
 			{mode === 'save' ? (
 				<>
-					<TextInput className="flex-1" color={save.exists ? 'warning' : 'default'} label="Name" onValueChange={picker.updateSaveName} value={save.name} />
+					<TextInput className="flex-1" color={save.exists ? 'warning' : 'default'} label="Name" onValueChange={picker.setSaveName} value={save.name} />
 					<Button color="success" disabled={save.name.trim().length <= 0} label="Choose" onClick={handleChoose} startContent={<Icons.Check />} />
 				</>
 			) : (

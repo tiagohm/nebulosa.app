@@ -66,7 +66,7 @@ const EphemerisPosition = memo(() => {
 				<div className="flex flex-1 items-center justify-center gap-1 overflow-hidden text-sm font-bold">{tags.map(TagChipItem)}</div>
 				{handleFavorite && <IconButton color={favorite ? 'danger' : 'warning'} disabled={favorite === undefined} icon={favorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onClick={() => handleFavorite(!favorite)} tooltipContent={favorite ? 'Remove bookmark' : 'Add bookmark'} />}
 			</div>
-			<BodyCoordinateInfo position={position} />
+			<BodyCoordinateInfo position={position} hide={['lst']} />
 			<EphemerisPositionCommand />
 		</div>
 	)

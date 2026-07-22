@@ -18,7 +18,7 @@ export const ImageSettings = memo(() => {
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
-			<ImageFormatSelect className="col-span-full min-w-0" fullWidth onValueChange={settings.updateFormatType} value={transformation.format.type} />
+			<ImageFormatSelect className="col-span-full min-w-0" fullWidth onValueChange={settings.setFormatType} value={transformation.format.type} />
 			{transformation.format.type === JPEG_FORMAT && <JpegFormat />}
 			<Checkbox className="col-span-full min-w-0" label="Pixelated" onValueChange={settings.setPixelated} value={pixelated} />
 			<Footer />
@@ -43,8 +43,8 @@ const JpegFormat = memo(() => {
 
 	return (
 		<div className="col-span-full grid grid-cols-subgrid gap-2">
-			<NumberInput className="col-span-5 min-w-0" label="Quality" maxValue={100} minValue={0} onValueChange={(value) => settings.updateFormat(JPEG_FORMAT, 'quality', value)} value={quality} />
-			<ChrominanceSubsamplingSelect className="col-span-7 min-w-0" fullWidth onValueChange={(value) => settings.updateFormat(JPEG_FORMAT, 'chrominanceSubsampling', value)} value={chrominanceSubsampling} />
+			<NumberInput className="col-span-5 min-w-0" label="Quality" maxValue={100} minValue={0} onValueChange={settings.setJpegQuality} value={quality} />
+			<ChrominanceSubsamplingSelect className="col-span-7 min-w-0" fullWidth onValueChange={settings.setJpegChrominanceSubsampling} value={chrominanceSubsampling} />
 		</div>
 	)
 })

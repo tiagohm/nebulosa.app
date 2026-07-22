@@ -2,6 +2,7 @@ import { Api } from '@shared/api'
 import { darvBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import { toast } from '@shared/toast'
+import { cameraCaptureStore } from '@stores/camera.capture.store'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { DockviewPanelApi } from 'dockview-react'
@@ -25,8 +26,13 @@ export interface DarvState {
 }
 
 export function darvStore(id: string, api: DockviewPanelApi) {
+	const capture = cameraCaptureStore()
+
 	const state = proxy<DarvState>({
-		request: structuredClone(DEFAULT_DARV_START),
+		request: {
+			...structuredClone(DEFAULT_DARV_START),
+			capture: capture.state,
+		},
 		running: false,
 		event: structuredClone(DEFAULT_DARV_EVENT),
 		exposureEstimation: {
@@ -165,6 +171,7 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 
 	return {
 		state,
+		capture,
 		mount: _mount,
 		unmount,
 		setInitialPause,

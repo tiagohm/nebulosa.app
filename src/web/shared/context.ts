@@ -1,5 +1,6 @@
 import type { Image } from '@shared/types'
 import type { AutoFocusStore } from '@stores/autofocus.store'
+import type { CameraCaptureStore } from '@stores/camera.capture.store'
 import type { CameraStore } from '@stores/camera.store'
 import type { CoverStore } from '@stores/cover.store'
 import type { DarvStore } from '@stores/darv.store'
@@ -24,6 +25,7 @@ export const AutoFocusStoreContext = createContext<AutoFocusStore>(null as never
 
 export const CameraDeviceContext = createContext<Camera>(null as never)
 export const CameraStoreContext = createContext<CameraStore>(null as never)
+export const CameraCaptureStoreContext = createContext<CameraCaptureStore>(null as never)
 
 export const DeviceContext = createContext<Device>(null as never)
 

@@ -891,7 +891,7 @@ export interface PlateSolveStart extends Omit<PlateSolveOptions, 'rightAscension
 export type StarDetectionType = 'astap' | 'nebulosa'
 
 export interface StarDetection {
-	readonly type: StarDetectionType
+	type: StarDetectionType
 	executable?: string
 	path: string
 	timeout: number

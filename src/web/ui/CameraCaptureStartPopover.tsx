@@ -1,3 +1,4 @@
+import { CameraCaptureStoreContext } from '@shared/context'
 import { CameraTransferFormatSelect } from '@ui/CameraTransferFormatSelect'
 import { Checkbox } from '@ui/components/Checkbox'
 import { IconButton, type IconButtonProps } from '@ui/components/IconButton'
@@ -8,24 +9,23 @@ import { FrameFormatSelect } from '@ui/FrameFormatSelect'
 import { Icons } from '@ui/Icon'
 import type { DeepReadonly } from 'nebulosa/src/core/types'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
-import type { CameraCaptureStart } from 'src/shared/types'
-
-export type CameraCaptureStartPopoverKey = 'exposureTime' | 'exposureTimeUnit' | 'binX' | 'binY' | 'gain' | 'offset' | 'frameFormat' | 'x' | 'y' | 'width' | 'height' | 'transferFormat' | 'compressed'
+import { useContext } from 'react'
+import { useSnapshot } from 'valtio'
 
 export type CameraCaptureStartPopoverMode = 'capture' | 'autoFocus' | 'flatWizard' | 'darv' | 'tppa' | 'guider'
 
 export interface CameraCaptureStartPopoverProps extends Omit<IconButtonProps, 'icon' | 'value' | 'onValueChange'> {
 	readonly mode: CameraCaptureStartPopoverMode
-	readonly value: Pick<CameraCaptureStart, CameraCaptureStartPopoverKey>
 	readonly camera: DeepReadonly<Camera>
-	readonly onValueChange: <K extends CameraCaptureStartPopoverKey>(key: K, value: CameraCaptureStart[K]) => void
 }
 
 function canExposureTime(mode: CameraCaptureStartPopoverMode) {
 	return mode === 'capture' || mode === 'autoFocus' || mode === 'tppa'
 }
 
-export function CameraCaptureStartPopover({ mode, camera, color, disabled, value: { exposureTime, exposureTimeUnit, binX, binY, gain, offset, x, y, width, height, frameFormat, transferFormat, compressed }, onValueChange, ...props }: CameraCaptureStartPopoverProps) {
+export function CameraCaptureStartPopover({ mode, camera, color, disabled, ...props }: CameraCaptureStartPopoverProps) {
+	const capture = useContext(CameraCaptureStoreContext)
+	const { exposureTimeUnit, exposureTime, frameFormat, x, y, width, height, binX, binY, gain, offset, transferFormat, compressed } = useSnapshot(capture.state)
 	const exposureTimeDisabled = !canExposureTime(mode)
 
 	return (
@@ -40,22 +40,22 @@ export function CameraCaptureStartPopover({ mode, camera, color, disabled, value
 					maxValueUnit="second"
 					minValue={exposureTimeDisabled ? 0 : camera.exposure.min}
 					minValueUnit="second"
-					onUnitChange={(value) => onValueChange('exposureTimeUnit', value)}
-					onValueChange={(value) => onValueChange('exposureTime', value)}
+					onUnitChange={capture.setExposureTimeUnit}
+					onValueChange={capture.setExposureTime}
 					unit={exposureTimeUnit}
 					value={exposureTimeDisabled ? 0 : exposureTime}
 				/>
-				<FrameFormatSelect className="col-span-6" disabled={camera.frameFormats.length === 0} items={camera.frameFormats} onValueChange={(value) => onValueChange('frameFormat', value)} value={frameFormat} />
-				<NumberInput className="col-span-3" label="X" maxValue={camera.frame.x.max} minValue={camera.frame.x.min} onValueChange={(value) => onValueChange('x', value)} value={x} />
-				<NumberInput className="col-span-3" label="Y" maxValue={camera.frame.y.max} minValue={camera.frame.y.min} onValueChange={(value) => onValueChange('y', value)} value={y} />
-				<NumberInput className="col-span-3" label="Width" maxValue={camera.frame.width.max} minValue={camera.frame.width.min} onValueChange={(value) => onValueChange('width', value)} value={width} />
-				<NumberInput className="col-span-3" label="Height" maxValue={camera.frame.height.max} minValue={camera.frame.height.min} onValueChange={(value) => onValueChange('height', value)} value={height} />
-				<NumberInput className="col-span-3" label="Bin X" maxValue={camera.bin.x.max} minValue={camera.bin.x.min} onValueChange={(value) => onValueChange('binX', value)} value={binX} />
-				<NumberInput className="col-span-3" label="Bin Y" maxValue={camera.bin.y.max} minValue={camera.bin.y.min} onValueChange={(value) => onValueChange('binY', value)} value={binY} />
-				<NumberInput className="col-span-3" label="Gain" maxValue={camera.gain.max} minValue={camera.gain.min} onValueChange={(value) => onValueChange('gain', value)} value={gain} />
-				<NumberInput className="col-span-3" label="Offset" maxValue={camera.offset.max} minValue={camera.offset.min} onValueChange={(value) => onValueChange('offset', value)} value={offset} />
-				<CameraTransferFormatSelect className="col-span-6" onValueChange={(value) => onValueChange('transferFormat', value)} value={transferFormat} />
-				<Checkbox className="col-span-6" label="Compressed" onValueChange={(value) => onValueChange('compressed', value)} value={compressed} />
+				<FrameFormatSelect className="col-span-6" disabled={camera.frameFormats.length === 0} items={camera.frameFormats} onValueChange={capture.setFrameFormat} value={frameFormat} />
+				<NumberInput className="col-span-3" label="X" maxValue={camera.frame.x.max} minValue={camera.frame.x.min} onValueChange={capture.setX} value={x} />
+				<NumberInput className="col-span-3" label="Y" maxValue={camera.frame.y.max} minValue={camera.frame.y.min} onValueChange={capture.setY} value={y} />
+				<NumberInput className="col-span-3" label="Width" maxValue={camera.frame.width.max} minValue={camera.frame.width.min} onValueChange={capture.setWidth} value={width} />
+				<NumberInput className="col-span-3" label="Height" maxValue={camera.frame.height.max} minValue={camera.frame.height.min} onValueChange={capture.setHeight} value={height} />
+				<NumberInput className="col-span-3" label="Bin X" maxValue={camera.bin.x.max} minValue={camera.bin.x.min} onValueChange={capture.setBinX} value={binX} />
+				<NumberInput className="col-span-3" label="Bin Y" maxValue={camera.bin.y.max} minValue={camera.bin.y.min} onValueChange={capture.setBinY} value={binY} />
+				<NumberInput className="col-span-3" label="Gain" maxValue={camera.gain.max} minValue={camera.gain.min} onValueChange={capture.setGain} value={gain} />
+				<NumberInput className="col-span-3" label="Offset" maxValue={camera.offset.max} minValue={camera.offset.min} onValueChange={capture.setOffset} value={offset} />
+				<CameraTransferFormatSelect className="col-span-6" onValueChange={capture.setTransferFormat} value={transferFormat} />
+				<Checkbox className="col-span-6" label="Compressed" onValueChange={capture.setCompressed} value={compressed} />
 			</div>
 		</Popover>
 	)

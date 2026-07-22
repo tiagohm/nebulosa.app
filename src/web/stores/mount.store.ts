@@ -114,8 +114,16 @@ export function mountStore(mount: Mount) {
 		return equipmentStore.connect(mount)
 	}
 
-	function updateRemoteControl<K extends keyof MountState['remoteControl']['request']>(key: K, value: MountState['remoteControl']['request'][K]) {
-		state.remoteControl.request[key] = value
+	function setRemoteControlProtocol(value: MountRemoteControlProtocol) {
+		state.remoteControl.request.protocol = value
+	}
+
+	function setRemoteControlHost(value: string) {
+		state.remoteControl.request.host = value
+	}
+
+	function setRemoteControlPort(value: number) {
+		state.remoteControl.request.port = value
 	}
 
 	async function updateRemoteControlStatus() {
@@ -258,7 +266,9 @@ export function mountStore(mount: Mount) {
 		mount: _mount,
 		unmount,
 		connect,
-		updateRemoteControl,
+		setRemoteControlProtocol,
+		setRemoteControlHost,
+		setRemoteControlPort,
 		startRemoteControl,
 		stopRemoteControl,
 		updateTargetCoordinateType,

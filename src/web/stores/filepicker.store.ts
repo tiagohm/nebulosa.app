@@ -163,7 +163,7 @@ export function filePicker(scope: FilePickerScope) {
 		state.selected.length = 0
 	}
 
-	function updateSaveName(name: string) {
+	function setSaveName(name: string) {
 		state.save.name = name
 	}
 
@@ -192,7 +192,7 @@ export function filePicker(scope: FilePickerScope) {
 		createDirectory,
 		select,
 		unselectAll,
-		updateSaveName,
+		setSaveName,
 		save,
 	} as const
 }

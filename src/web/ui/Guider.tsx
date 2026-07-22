@@ -1,3 +1,4 @@
+import { CameraCaptureStoreContext } from '@shared/context'
 import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
 import { Checkbox } from '@ui/components/Checkbox'
 import { Chip } from '@ui/components/Chip'
@@ -82,9 +83,14 @@ const DeviceChooser = memo(() => {
 
 const CameraDropdownEndContent = memo(() => {
 	const { camera } = useSnapshot(guiderStore.state)
-	const { capture } = useSnapshot(guiderStore.state.connection)
 
-	return camera && <CameraCaptureStartPopover camera={camera} mode="guider" onValueChange={guiderStore.updateCapture} value={capture} />
+	return (
+		camera && (
+			<CameraCaptureStoreContext value={guiderStore.capture}>
+				<CameraCaptureStartPopover camera={camera} mode="guider" />
+			</CameraCaptureStoreContext>
+		)
+	)
 })
 
 const Settle = memo(() => {

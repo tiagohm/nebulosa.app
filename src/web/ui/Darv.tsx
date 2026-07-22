@@ -1,5 +1,5 @@
 import { useStore } from '@hooks/store.hook'
-import { DarvStoreContext } from '@shared/context'
+import { CameraCaptureStoreContext, DarvStoreContext } from '@shared/context'
 import { darvStore } from '@stores/darv.store'
 import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
 import { Button } from '@ui/components/Button'
@@ -143,7 +143,12 @@ const ExposureEstimatorPopoverContent = memo(() => {
 const CameraDropdownEndContent = memo(() => {
 	const darv = useContext(DarvStoreContext)
 	const { camera } = useSnapshot(darv.state)
-	const { capture } = useSnapshot(darv.state.request)
 
-	return camera && <CameraCaptureStartPopover camera={camera} mode="tppa" onValueChange={darv.updateCapture} value={capture} />
+	return (
+		camera && (
+			<CameraCaptureStoreContext value={darv.capture}>
+				<CameraCaptureStartPopover camera={camera} mode="darv" />
+			</CameraCaptureStoreContext>
+		)
+	)
 })

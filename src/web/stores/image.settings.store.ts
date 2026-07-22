@@ -1,5 +1,6 @@
 import { initProxy } from '@shared/proxy'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { ChrominanceSubsampling } from 'nebulosa/src/bindings/imaging/libturbojpeg'
 import type { ImageFormat } from 'nebulosa/src/imaging/model/types'
 import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
@@ -49,16 +50,16 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 		viewer.toggleClass('pixelated', value)
 	}
 
-	function updateTransformation<K extends keyof ImageTransformation>(key: K, value: ImageTransformation[K]) {
-		state.transformation[key] = value
-	}
-
-	function updateFormatType(value: ImageFormat) {
+	function setFormatType(value: ImageFormat) {
 		state.transformation.format.type = value
 	}
 
-	function updateFormat<F extends 'jpeg', K extends keyof ImageTransformation['format'][F]>(format: F, key: K, value: ImageTransformation['format'][F][K]) {
-		state.transformation.format[format][key] = value
+	function setJpegQuality(value: number) {
+		state.transformation.format.jpeg.quality = value
+	}
+
+	function setJpegChrominanceSubsampling(value: ChrominanceSubsampling) {
+		state.transformation.format.jpeg.chrominanceSubsampling = value
 	}
 
 	function reset() {
@@ -79,9 +80,9 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 		mount,
 		unmount,
 		setPixelated,
-		updateTransformation,
-		updateFormatType,
-		updateFormat,
+		setFormatType,
+		setJpegQuality,
+		setJpegChrominanceSubsampling,
 		reset,
 		apply,
 	} as const

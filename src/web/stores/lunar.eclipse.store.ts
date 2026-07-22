@@ -4,7 +4,8 @@ import { settingsStore } from '@stores/settings.store'
 import type { WorldMapPosition } from '@ui/components/WorldMap'
 import type { InteractTransform } from '@ui/Interactable'
 import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
-import type { LocalLunarEclipseCircumstances, LocalLunarEclipseCircumstancesOptions, LocalLunarEclipseViewGeometry, LocalLunarEclipseViewOptions } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
+import type { LocalLunarEclipseCircumstances, LocalLunarEclipseCircumstancesOptions, LocalLunarEclipseViewGeometry, LocalLunarEclipseViewOptions, LocalLunarViewOrientationMode } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
+import type { LunarEclipseContactKind } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import type { Writable } from 'nebulosa/src/core/types'
@@ -105,10 +106,14 @@ async function load(next: LunarEclipse) {
 	}
 }
 
-async function updateLocalViewOptions<K extends 'orientationMode' | 'selectedEvent'>(key: K, value: LocalLunarEclipseViewOptions[K]) {
-	state.localViewOptions[key] = value
+function setOrientationMode(value: LocalLunarViewOrientationMode) {
+	state.localViewOptions.orientationMode = value
+	void loadView()
+}
 
-	await loadView()
+function setSelectedEvent(value: LunarEclipseContactKind) {
+	state.localViewOptions.selectedEvent = value
+	void loadView()
 }
 
 function handleTransformChange(transform: InteractTransform) {
@@ -148,5 +153,6 @@ export const lunarEclipseStore = {
 	next,
 	handleCoordinateChange,
 	handleTransformChange,
-	updateLocalViewOptions,
+	setOrientationMode,
+	setSelectedEvent,
 } as const

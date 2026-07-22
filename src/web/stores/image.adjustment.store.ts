@@ -1,4 +1,5 @@
 import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { ImageChannelOrGray } from 'nebulosa/src/imaging/model/types'
 import { DEFAULT_IMAGE_ADJUSTMENT, type ImageAdjustment } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
@@ -36,8 +37,24 @@ export function imageAdjustmentStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<T extends keyof Exclude<ImageAdjustment, 'enabled'>, K extends keyof ImageAdjustment[T]>(type: T, key: K, value: ImageAdjustment[T][K]) {
-		state.adjustment[type][key] = value
+	function setBrightness(value: number) {
+		state.adjustment.brightness.value = value
+	}
+
+	function setContrast(value: number) {
+		state.adjustment.contrast.value = value
+	}
+
+	function setGamma(value: number) {
+		state.adjustment.gamma.value = value
+	}
+
+	function setSaturationLevel(value: number) {
+		state.adjustment.saturation.value = value
+	}
+
+	function setSaturationChannel(value: ImageChannelOrGray) {
+		state.adjustment.saturation.channel = value
 	}
 
 	function reset() {
@@ -57,7 +74,11 @@ export function imageAdjustmentStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
+		setBrightness,
+		setContrast,
+		setGamma,
+		setSaturationLevel,
+		setSaturationChannel,
 		reset,
 		apply,
 	} as const

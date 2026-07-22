@@ -87,9 +87,9 @@ const FFT = memo(() => {
 	return (
 		<div className="grid grid-cols-12 gap-2">
 			<Checkbox className="col-span-full" label="Enabled" onValueChange={(value) => (filter.state.fft.enabled = value)} value={enabled} />
-			<ImageFFTFilterTypeRadioGroup className="col-span-full" disabled={!enabled} onValueChange={filter.updateFFTType} value={type} />
-			<NumberInput className="col-span-6 min-w-0" disabled={!enabled} fractionDigits={3} label="Cutoff" maxValue={1} minValue={0} onValueChange={(value) => filter.updateFFT('cutoff', value)} step={0.001} value={cutoff} />
-			<NumberInput className="col-span-6 min-w-0" disabled={!enabled} fractionDigits={3} label="Weight" maxValue={1} minValue={0} onValueChange={(value) => filter.updateFFT('weight', value)} step={0.001} value={weight} />
+			<ImageFFTFilterTypeRadioGroup className="col-span-full" disabled={!enabled} onValueChange={filter.setFFTType} value={type} />
+			<NumberInput className="col-span-6 min-w-0" disabled={!enabled} fractionDigits={3} label="Cutoff" maxValue={1} minValue={0} onValueChange={filter.setFFTCutoff} step={0.001} value={cutoff} />
+			<NumberInput className="col-span-6 min-w-0" disabled={!enabled} fractionDigits={3} label="Weight" maxValue={1} minValue={0} onValueChange={filter.setFFTWeight} step={0.001} value={weight} />
 		</div>
 	)
 })

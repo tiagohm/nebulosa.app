@@ -58,7 +58,7 @@ const AsteroidSearchTab = memo(() => {
 	return (
 		<div className="flex w-full flex-col gap-2">
 			<div className="flex w-full flex-row items-center justify-center gap-2">
-				<TextInput className="flex-1" disabled={loading} label="Search" onValueChange={asteroidStore.updateSearch} placeholder="Enter the IAU number, designation, name or SPK ID" value={text} />
+				<TextInput className="flex-1" disabled={loading} label="Search" onValueChange={asteroidStore.setSearch} placeholder="Enter the IAU number, designation, name or SPK ID" value={text} />
 				<IconButton color="primary" disabled={loading || !text} icon={Icons.Search} onClick={asteroidStore.search} variant="ghost" />
 			</div>
 			{list ? (
@@ -105,9 +105,9 @@ const AsteroidCloseApproachesTab = memo(() => {
 	return (
 		<div className="flex w-full flex-col gap-2">
 			<div className="flex w-full flex-row items-center justify-center gap-2">
-				<NumberInput className="flex-1" disabled={loading} label="Days" maxValue={30} minValue={1} onValueChange={(value) => asteroidStore.updateCloseApproaches('days', value)} value={days} />
-				<NumberInput className="flex-1" disabled={loading} fractionDigits={1} label="Distance (LD)" maxValue={100} minValue={0.1} onValueChange={(value) => asteroidStore.updateCloseApproaches('distance', value)} step={0.1} value={distance} />
-				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={asteroidStore.closeApproaches} variant="ghost" />
+				<NumberInput className="flex-1" disabled={loading} label="Days" maxValue={30} minValue={1} onValueChange={asteroidStore.setCloseApproachesDays} value={days} />
+				<NumberInput className="flex-1" disabled={loading} fractionDigits={1} label="Distance (LD)" maxValue={100} minValue={0.1} onValueChange={asteroidStore.setCloseApproachesDistance} step={0.1} value={distance} />
+				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={asteroidStore.findCloseApproaches} variant="ghost" />
 			</div>
 			<List itemCount={result.length} fullWidth onAction={handleAction}>
 				{(i) => {

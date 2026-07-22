@@ -1,5 +1,5 @@
 import { useStore } from '@hooks/store.hook'
-import { TppaStoreContext } from '@shared/context'
+import { CameraCaptureStoreContext, TppaStoreContext } from '@shared/context'
 import { tppaStore } from '@stores/tppa.store'
 import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
 import { Button } from '@ui/components/Button'
@@ -133,7 +133,12 @@ const Footer = memo(() => {
 const CameraDropdownEndContent = memo(() => {
 	const tppa = useContext(TppaStoreContext)
 	const { camera } = useSnapshot(tppa.state)
-	const { capture } = useSnapshot(tppa.state.request)
 
-	return camera && <CameraCaptureStartPopover camera={camera} mode="tppa" onValueChange={tppa.updateCapture} value={capture} />
+	return (
+		camera && (
+			<CameraCaptureStoreContext value={tppa.capture}>
+				<CameraCaptureStartPopover camera={camera} mode="tppa" />
+			</CameraCaptureStoreContext>
+		)
+	)
 })

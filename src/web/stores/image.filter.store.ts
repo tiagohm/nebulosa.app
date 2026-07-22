@@ -48,12 +48,16 @@ export function imageFilterStore(viewer: ImageViewerStore) {
 		state.kernel[type][key] = value
 	}
 
-	function updateFFTType(type: FFTFilterType) {
-		state.fft.type = type
+	function setFFTType(value: FFTFilterType) {
+		state.fft.type = value
 	}
 
-	function updateFFT<K extends keyof ImageFFT>(key: K, value: ImageFFT[K]) {
-		state.fft[key] = value
+	function setFFTCutoff(value: number) {
+		state.fft.cutoff = value
+	}
+
+	function setFFTWeight(value: number) {
+		state.fft.weight = value
 	}
 
 	function reset() {
@@ -74,9 +78,10 @@ export function imageFilterStore(viewer: ImageViewerStore) {
 		mount,
 		unmount,
 		updateKernelType,
-		updateFFTType,
 		updateKernel,
-		updateFFT,
+		setFFTType,
+		setFFTCutoff,
+		setFFTWeight,
 		reset,
 		apply,
 	} as const

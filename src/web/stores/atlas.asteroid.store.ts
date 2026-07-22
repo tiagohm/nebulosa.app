@@ -92,12 +92,16 @@ function unmount() {
 	mounted = false
 }
 
-function updateSearch(value: string) {
+function setSearch(value: string) {
 	state.search.text = value
 }
 
-function updateCloseApproaches<K extends keyof FindCloseApproaches>(key: K, value: FindCloseApproaches[K]) {
-	state.closeApproaches.request[key] = value
+function setCloseApproachesDays(value: number) {
+	state.closeApproaches.request.days = value
+}
+
+function setCloseApproachesDistance(value: number) {
+	state.closeApproaches.request.distance = value
 }
 
 async function search() {
@@ -122,7 +126,7 @@ async function search() {
 	}
 }
 
-async function closeApproaches() {
+async function findCloseApproaches() {
 	try {
 		state.loading = true
 
@@ -214,10 +218,11 @@ export const asteroidStore = {
 	state,
 	mount,
 	unmount,
-	updateSearch,
-	updateCloseApproaches,
+	setSearch,
+	setCloseApproachesDays,
+	setCloseApproachesDistance,
 	search,
-	closeApproaches,
+	findCloseApproaches,
 	select,
 	tick,
 	goTo,

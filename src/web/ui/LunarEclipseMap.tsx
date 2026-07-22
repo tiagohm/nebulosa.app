@@ -333,8 +333,8 @@ const LocalView = memo(() => {
 	return (
 		<div className="flex flex-col gap-2">
 			<div className="flex flex-row flex-wrap items-center justify-between gap-2">
-				<LunarEclipseContactKindButtonGroup value={selectedEvent} onValueChange={(value) => lunarEclipseStore.updateLocalViewOptions('selectedEvent', value)} />
-				<LocalViewOrientationModeButtonGroup value={orientationMode} onValueChange={(value) => lunarEclipseStore.updateLocalViewOptions('orientationMode', value)} />
+				<LunarEclipseContactKindButtonGroup value={selectedEvent} onValueChange={lunarEclipseStore.setSelectedEvent} />
+				<LocalViewOrientationModeButtonGroup value={orientationMode} onValueChange={lunarEclipseStore.setOrientationMode} />
 			</div>
 			<div className="overflow-hidden rounded-lg bg-neutral-950">
 				<svg width="100%" height="100%" className="aspect-2/ block bg-[#05054f]" viewBox={`0 0 ${localView.width} ${localView.height}`}>

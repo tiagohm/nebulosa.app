@@ -1,6 +1,7 @@
 import { Api } from '@shared/api'
 import { guiderBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
+import { cameraCaptureStore } from '@stores/camera.capture.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
@@ -21,6 +22,8 @@ export interface GuiderState extends GuiderStatus {
 	pendingCommand?: 'loop' | 'findStar' | 'start' | 'stop' | 'calibrate' | 'clear'
 }
 
+const capture = cameraCaptureStore()
+
 const state = proxy<GuiderState>({
 	connected: false,
 	looping: false,
@@ -29,6 +32,7 @@ const state = proxy<GuiderState>({
 		...DEFAULT_GUIDER_REMOTE_CONNECT,
 		...DEFAULT_GUIDER_INTERNAL_CONNECT,
 		mode: 'remote',
+		capture: capture.state,
 	},
 	event: structuredClone(DEFAULT_GUIDER_EVENT),
 	index: 0,
@@ -163,6 +167,7 @@ void load()
 
 export const guiderStore = {
 	state,
+	capture,
 	mount,
 	unmount,
 	updateConnection,

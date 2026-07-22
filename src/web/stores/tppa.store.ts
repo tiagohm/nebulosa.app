@@ -1,6 +1,7 @@
 import { Api } from '@shared/api'
 import { tppaBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
+import { cameraCaptureStore } from '@stores/camera.capture.store'
 import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { DockviewPanelApi } from 'dockview-react'
@@ -22,8 +23,13 @@ export interface TppaState {
 }
 
 export function tppaStore(id: string, api: DockviewPanelApi) {
+	const capture = cameraCaptureStore()
+
 	const state = proxy<TppaState>({
-		request: structuredClone(DEFAULT_TPPA_START),
+		request: {
+			...structuredClone(DEFAULT_TPPA_START),
+			capture: capture.state,
+		},
 		running: false,
 		event: structuredClone(DEFAULT_TPPA_EVENT),
 	})
@@ -149,6 +155,7 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 
 	return {
 		state,
+		capture,
 		mount: _mount,
 		unmount,
 		setMoveDuration,

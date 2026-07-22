@@ -1,5 +1,5 @@
 import { useStore } from '@hooks/store.hook'
-import { FlatWizardStoreContext } from '@shared/context'
+import { CameraCaptureStoreContext, FlatWizardStoreContext } from '@shared/context'
 import { flatWizardStore } from '@stores/flatwizard.store'
 import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
 import { Button } from '@ui/components/Button'
@@ -45,9 +45,14 @@ const Camera = memo(() => {
 const CameraDropdownEndContent = memo(() => {
 	const flatWizard = useContext(FlatWizardStoreContext)
 	const { camera } = useSnapshot(flatWizard.state)
-	const { capture } = useSnapshot(flatWizard.state.request)
 
-	return camera && <CameraCaptureStartPopover camera={camera} mode="flatWizard" onValueChange={flatWizard.updateCapture} value={capture} />
+	return (
+		camera && (
+			<CameraCaptureStoreContext value={flatWizard.capture}>
+				<CameraCaptureStartPopover camera={camera} mode="flatWizard" />
+			</CameraCaptureStoreContext>
+		)
+	)
 })
 
 const Status = memo(() => {

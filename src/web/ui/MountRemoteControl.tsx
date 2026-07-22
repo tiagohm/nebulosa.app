@@ -22,9 +22,9 @@ const Body = memo(() => {
 
 	return (
 		<div className="grid grid-cols-12 gap-2">
-			<MountRemoteControlProtocolSelect className="col-span-full" disabled={pendingAction !== undefined} onValueChange={(value) => mount.updateRemoteControl('protocol', value)} value={request.protocol} />
-			<TextInput className="col-span-7" disabled={disabled} label="Host" onValueChange={(value) => mount.updateRemoteControl('host', value)} value={currentStatus ? currentStatus.host : request.host} />
-			<NumberInput className="col-span-5" disabled={disabled} label="Port" maxValue={65535} minValue={80} onValueChange={(value) => mount.updateRemoteControl('port', value)} value={currentStatus ? currentStatus.port : request.port} />
+			<MountRemoteControlProtocolSelect className="col-span-full" disabled={pendingAction !== undefined} onValueChange={mount.setRemoteControlProtocol} value={request.protocol} />
+			<TextInput className="col-span-7" disabled={disabled} label="Host" onValueChange={mount.setRemoteControlHost} value={currentStatus ? currentStatus.host : request.host} />
+			<NumberInput className="col-span-5" disabled={disabled} label="Port" maxValue={65535} minValue={80} onValueChange={mount.setRemoteControlPort} value={currentStatus ? currentStatus.port : request.port} />
 		</div>
 	)
 })

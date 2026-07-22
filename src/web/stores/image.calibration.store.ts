@@ -1,5 +1,5 @@
 import type { ImageViewerStore } from '@stores/image.viewer.store'
-import type { ImageCalibration, ImageCalibrationFileType } from 'src/shared/types'
+import type { ImageCalibration } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 
@@ -36,8 +36,36 @@ export function imageCalibrationStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<T extends ImageCalibrationFileType, K extends keyof ImageCalibration[T]>(type: T, key: K, value: ImageCalibration[T][K]) {
-		state.calibration[type][key] = value
+	function setDarkEnabled(value: boolean) {
+		state.calibration.dark.enabled = value
+	}
+
+	function setDarkPath(value: string | undefined) {
+		state.calibration.dark.path = value
+	}
+
+	function setFlatEnabled(value: boolean) {
+		state.calibration.flat.enabled = value
+	}
+
+	function setFlatPath(value: string | undefined) {
+		state.calibration.flat.path = value
+	}
+
+	function setBiasEnabled(value: boolean) {
+		state.calibration.bias.enabled = value
+	}
+
+	function setBiasPath(value: string | undefined) {
+		state.calibration.bias.path = value
+	}
+
+	function setDarkFlatEnabled(value: boolean) {
+		state.calibration.darkFlat.enabled = value
+	}
+
+	function setDarkFlatPath(value: string | undefined) {
+		state.calibration.darkFlat.path = value
 	}
 
 	function apply() {
@@ -49,7 +77,14 @@ export function imageCalibrationStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
 		apply,
+		setDarkEnabled,
+		setDarkPath,
+		setFlatEnabled,
+		setFlatPath,
+		setBiasEnabled,
+		setBiasPath,
+		setDarkFlatEnabled,
+		setDarkFlatPath,
 	} as const
 }

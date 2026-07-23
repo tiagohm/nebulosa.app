@@ -36,7 +36,7 @@ export function indiPanelControlStore(device: Device) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('indi panel control mounted:', device.name)
 
@@ -72,6 +72,8 @@ export function indiPanelControlStore(device: Device) {
 		void retrieveMessages()
 
 		listen()
+
+		return unmount
 	}
 
 	function unmount() {

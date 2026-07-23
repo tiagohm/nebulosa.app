@@ -69,7 +69,7 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 	}
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image crosshair mounted:', viewer.state.path)
 

@@ -55,7 +55,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 	const camera = viewer.image.camera
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image roi mounted:', viewer.state.path)
 

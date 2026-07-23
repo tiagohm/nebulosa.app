@@ -1,4 +1,5 @@
 import { tw } from '@shared/util'
+import { Icons } from '@ui/Icon'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
 
@@ -10,6 +11,7 @@ const textInputStyles = tv({
 		input: 'peer h-full w-full border-none bg-transparent outline-none transition',
 		label: 'pointer-events-none absolute origin-left truncate transition-all duration-150 ease-out',
 		content: 'flex shrink-0 items-center whitespace-nowrap',
+		clearButton: 'h-full me-2 cursor-pointer',
 	},
 	variants: {
 		size: {
@@ -86,6 +88,7 @@ export interface TextInputClassNames {
 	readonly label?: ClassValue
 	readonly startContent?: ClassValue
 	readonly endContent?: ClassValue
+	readonly clearButton?: ClassValue
 }
 
 export interface TextInputProps extends Omit<React.ComponentPropsWithRef<'input'>, 'children' | 'defaultValue' | 'size' | 'color' | 'type' | 'value'>, Omit<TextInputVariants, 'hasLabel'> {
@@ -93,10 +96,12 @@ export interface TextInputProps extends Omit<React.ComponentPropsWithRef<'input'
 	readonly label?: React.ReactNode
 	readonly value?: string
 	readonly onValueChange?: (value: string) => void
-	readonly onEnter?: () => void
+	readonly onEnter?: VoidFunction
 	readonly fireOnEnter?: boolean
 	readonly startContent?: React.ReactNode
 	readonly endContent?: React.ReactNode
+	readonly clearable?: boolean
+	readonly onClear?: VoidFunction
 }
 
 // Render a shared text input surface with optional variant-aware coloring.
@@ -133,6 +138,8 @@ export function TextInput({
 	tabIndex,
 	fullWidth,
 	value = '',
+	clearable,
+	onClear,
 	...props
 }: TextInputProps) {
 	const [draft, setDraft] = useState(value)
@@ -144,6 +151,7 @@ export function TextInput({
 	const displayedPlaceholder = label ? (placeholder ?? ' ') : placeholder
 	const hasStartContent = startContent !== undefined && startContent !== null
 	const hasEndContent = endContent !== undefined && endContent !== null
+	const hasClearButton = clearable && draft.length > 0
 	const hasColorVariant = color !== undefined && color !== null && color !== 'default'
 	const surfaceClassName = disabled
 		? 'bg-neutral-900/35 text-neutral-500'
@@ -160,6 +168,7 @@ export function TextInput({
 				? tw('text-lighter-(--color-variant)/85', !label && 'placeholder:text-lighter-(--color-variant)/45')
 				: tw('text-neutral-100', !label && 'placeholder:text-neutral-500')
 	const contentClassName = disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : hasColorVariant ? 'text-lighter-(--color-variant)/60' : 'text-neutral-400'
+	const clearClassName = disabled ? 'text-neutral-500' : readOnly ? 'text-neutral-300' : 'text-red-500'
 	const labelClassName = disabled
 		? 'text-neutral-600 peer-placeholder-shown:text-neutral-600 peer-focus:text-neutral-600'
 		: readOnly
@@ -223,6 +232,14 @@ export function TextInput({
 		}
 	}
 
+	function handleClearClick(event: React.MouseEvent) {
+		if (disabled || readOnly) return
+		setDraft('')
+		lastCommittedValueRef.current = ''
+		onClear?.()
+		onValueChange?.('')
+	}
+
 	return (
 		<div className={tw(styles.base(), className, disabled && 'opacity-40 cursor-not-allowed', readOnly && !disabled && 'opacity-90', classNames?.base)}>
 			<div className={tw(styles.surface(), surfaceClassName, classNames?.surface)}>
@@ -257,6 +274,7 @@ export function TextInput({
 					{label && <label className={tw(styles.label(), hasStartContent && 'left-0', labelClassName, classNames?.label)}>{label}</label>}
 				</div>
 				{hasEndContent && <div className={tw(styles.content(), disabled && 'pointer-events-none', contentClassName, classNames?.endContent)}>{endContent}</div>}
+				{hasClearButton && <Icons.CloseCircle className={tw(styles.clearButton(), disabled && 'pointer-events-none', clearClassName, classNames?.clearButton)} onClick={handleClearClick} />}
 			</div>
 		</div>
 	)

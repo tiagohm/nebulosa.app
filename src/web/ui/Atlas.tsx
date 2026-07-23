@@ -1,5 +1,5 @@
 import { tw } from '@shared/util'
-import { atlasStore, type TagItem } from '@stores/atlas.store'
+import { atlasStore, type AtlasTab, type TagItem } from '@stores/atlas.store'
 import { BodyCoordinateInfo } from '@ui/BodyCoordinateInfo'
 import { Chip } from '@ui/components/Chip'
 import { IconButton } from '@ui/components/IconButton'
@@ -14,6 +14,7 @@ import { EMPTY_TWILIGHT, type BodyPosition, type Twilight } from 'src/shared/typ
 import { useSnapshot } from 'valtio'
 
 export interface EphemerisPositionContextParameters {
+	readonly type: AtlasTab
 	readonly state: {
 		readonly favorite?: boolean
 		readonly position: BodyPosition
@@ -58,7 +59,7 @@ export const EphemerisAndChart = memo(() => (
 const EphemerisPosition = memo(() => {
 	const context = useContext(EphemerisPositionContext)
 	const { position, favorite, tags } = useSnapshot(context.state)
-	const { handleFavorite } = context
+	const { type, handleFavorite } = context
 
 	return (
 		<div className="flex flex-1 flex-col gap-2 p-0">
@@ -66,7 +67,7 @@ const EphemerisPosition = memo(() => {
 				<div className="flex flex-1 items-center justify-center gap-1 overflow-hidden text-sm font-bold">{tags.map(TagChipItem)}</div>
 				{handleFavorite && <IconButton color={favorite ? 'danger' : 'warning'} disabled={favorite === undefined || tags.length === 0} icon={favorite ? Icons.BookmarkRemove : Icons.BookmarkPlus} onClick={() => handleFavorite(!favorite)} tooltipContent={favorite ? 'Remove bookmark' : 'Add bookmark'} />}
 			</div>
-			<BodyCoordinateInfo position={position} hideLst />
+			<BodyCoordinateInfo position={position} hideLst hideIlluminated={type === 'sun' || type === 'galaxy'} hideElongation={type === 'sun' || type === 'galaxy'} />
 			<EphemerisPositionCommand />
 		</div>
 	)

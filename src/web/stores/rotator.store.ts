@@ -24,13 +24,15 @@ export function rotatorStore(rotator: Rotator) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('rotator mounted:', rotator.name)
 
 		mounted = true
 
 		u[0] = initProxy(state, `rotator.${rotator.id}`, ['p:angle'])
+
+		return unmount
 	}
 
 	function unmount() {

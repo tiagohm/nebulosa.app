@@ -84,7 +84,7 @@ export function mountStore(mount: Mount) {
 	let mounted = false
 
 	function _mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('mount mounted:', mount.name)
 

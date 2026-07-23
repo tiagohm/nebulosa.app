@@ -52,7 +52,7 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 	let mounted = false
 
 	function _mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('darv mounted:', id)
 
@@ -79,6 +79,8 @@ export function darvStore(id: string, api: DockviewPanelApi) {
 		u[4] = subscribeKey(state, 'mount', updateTitle)
 
 		state.request.id = id
+
+		return unmount
 	}
 
 	function unmount() {

@@ -30,7 +30,7 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image coordinate grid mounted:', viewer.state.path)
 

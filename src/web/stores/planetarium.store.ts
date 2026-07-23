@@ -45,7 +45,7 @@ let mounted = false
 let movingBodyUpdateGeneration = 0
 
 function mount() {
-	if (mounted) return
+	if (mounted) return unmount
 
 	console.info('planetarium mounted')
 

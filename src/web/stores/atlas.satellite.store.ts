@@ -58,7 +58,7 @@ let mounted = false
 const u: VoidFunction[] = []
 
 function mount() {
-	if (mounted) return
+	if (mounted) return unmount
 
 	console.info('satellite mounted')
 
@@ -83,14 +83,17 @@ function unmount() {
 
 function setText(value: string) {
 	state.request.text = value
+	void search(true)
 }
 
 function setCategory(value: readonly SatelliteCategory[]) {
 	state.request.category = value
+	void search(true)
 }
 
 function setGroups(value: readonly SatelliteGroupType[]) {
 	state.request.groups = value
+	void search(true)
 }
 
 function setPage(value: number) {
@@ -112,8 +115,11 @@ async function search(reset: boolean | React.UIEvent) {
 	}
 }
 
-function resetFilter() {
+function resetCategory() {
 	state.request.category = [...DEFAULT_SEARCH_SATELLITE.category]
+}
+
+function resetGroup() {
 	state.request.groups = [...DEFAULT_SEARCH_SATELLITE.groups]
 }
 
@@ -195,6 +201,7 @@ function frame() {
 }
 
 export const satelliteStore = {
+	type: 'satellite',
 	state,
 	mount,
 	setText,
@@ -202,7 +209,8 @@ export const satelliteStore = {
 	setGroups,
 	setPage,
 	search,
-	resetFilter,
+	resetCategory,
+	resetGroup,
 	next,
 	prev,
 	select,

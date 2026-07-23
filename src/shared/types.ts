@@ -1381,7 +1381,7 @@ export const DEFAULT_SKY_OBJECT_SEARCH_ITEM: SkyObjectSearchItem = {
 
 export const DEFAULT_SEARCH_SATELLITE: SearchSatellite = {
 	text: '',
-	groups: ['AMATEUR', 'BEIDOU', 'GALILEO', 'GLONASS', 'GNSS', 'GPS', 'ONEWEB', 'SCIENCE', 'STARLINK', 'STATIONS', 'VISUAL'],
+	groups: ['SCIENCE', 'STATIONS', 'VISUAL'],
 	category: ['SPECIAL', 'WEATHER', 'COMMUNICATION', 'NAVIGATION', 'SCIENTIFIC'],
 	page: 1,
 	limit: 4,

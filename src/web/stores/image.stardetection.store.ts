@@ -46,7 +46,7 @@ export function imageStarDetectionStore(viewer: ImageViewerStore) {
 	let canvas: HTMLCanvasElement | undefined
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image star detection mounted:', viewer.state.path)
 

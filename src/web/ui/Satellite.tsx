@@ -33,14 +33,16 @@ const Filter = memo(() => {
 
 	return (
 		<div className="col-span-full grid grid-cols-subgrid items-center gap-2">
-			<div className="col-span-full flex flex-row items-center justify-center gap-2">
-				<TextInput className="flex-1" label="Search" onValueChange={satelliteStore.setText} value={text} />
-				<IconButton color="danger" disabled={loading} icon={Icons.Restore} onClick={satelliteStore.resetFilter} tooltipContent="Reset" variant="flat" />
-				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={satelliteStore.search} tooltipContent="Filter" variant="flat" />
-			</div>
-			<p className="col-span-full text-sm font-bold">CATEGORY</p>
+			<TextInput clearable className="col-span-full" label="Search" onValueChange={satelliteStore.setText} value={text} />
+			<p className="col-span-full flex items-center gap-2 text-sm font-bold">
+				CATEGORY
+				<IconButton color="danger" disabled={loading} icon={Icons.Restore} onClick={satelliteStore.resetCategory} tooltipContent="Reset" variant="flat" size="sm" />
+			</p>
 			<SatelliteCategoryChipGroup className="col-span-full" onValueChange={satelliteStore.setCategory} value={category} />
-			<p className="col-span-full text-sm font-bold">GROUP</p>
+			<p className="col-span-full flex items-center gap-2 text-sm font-bold">
+				GROUP
+				<IconButton color="danger" disabled={loading} icon={Icons.Restore} onClick={satelliteStore.resetGroup} tooltipContent="Reset" variant="flat" size="sm" />
+			</p>
 			<SatelliteGroupTypeChipGroup category={category} className="col-span-full" onValueChange={satelliteStore.setGroups} value={groups} />
 		</div>
 	)

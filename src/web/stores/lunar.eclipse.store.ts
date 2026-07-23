@@ -48,7 +48,7 @@ let mounted = false
 const u: VoidFunction[] = []
 
 function mount() {
-	if (mounted) return
+	if (mounted) return unmount
 
 	console.info('lunar eclipse mounted')
 
@@ -59,6 +59,14 @@ function mount() {
 	state.location.elevation = settingsStore.state.location.elevation
 
 	u[0] = initProxy(state, 'lunareclipse', ['p:scale', 'o:localViewOptions', 'o:localCircumstancesOptions'])
+
+	if (!state.eclipse) {
+		void Api.Atlas.lunarEclipses({ location: state.location, time: { utc: Date.now(), offset: settingsStore.state.time.offset }, next: true, count: 1 }).then((eclipses) => {
+			if (eclipses?.length) {
+				void load(eclipses[0])
+			}
+		})
+	}
 
 	return unmount
 }

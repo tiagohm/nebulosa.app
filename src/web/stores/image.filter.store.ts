@@ -24,7 +24,7 @@ export function imageFilterStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image filter mounted:', viewer.state.path)
 

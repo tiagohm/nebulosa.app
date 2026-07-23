@@ -38,7 +38,7 @@ export function autoFocusStore(id: string, api: DockviewPanelApi) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('autofocus mounted:', id)
 
@@ -67,6 +67,8 @@ export function autoFocusStore(id: string, api: DockviewPanelApi) {
 		updateTitle()
 
 		state.request.id = id
+
+		return unmount
 	}
 
 	function unmount() {

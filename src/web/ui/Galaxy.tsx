@@ -2,14 +2,12 @@ import { skyObjectName, skyObjectType } from '@shared/util'
 import { galaxyStore } from '@stores/atlas.galaxy.store'
 import { EphemerisAndChart, EphemerisPositionContext } from '@ui/Atlas'
 import { Checkbox } from '@ui/components/Checkbox'
-import { IconButton } from '@ui/components/IconButton'
 import { NumberInput } from '@ui/components/NumberInput'
 import { Paginator } from '@ui/components/Paginator'
 import { Slider } from '@ui/components/Slider'
 import { Table } from '@ui/components/Table'
 import { TextInput } from '@ui/components/TextInput'
 import { ConstellationSelect } from '@ui/ConstellationSelect'
-import { Icons } from '@ui/Icon'
 import { SkyObjectNameTypeDropdown } from '@ui/SkyObjectNameTypeDropdown'
 import { StellariumObjectTypeSelect } from '@ui/StellariumObjectTypeSelect'
 import type { IDockviewPanelProps } from 'dockview-react'
@@ -38,10 +36,7 @@ const Filter = memo(() => {
 
 	return (
 		<div className="col-span-full grid grid-cols-subgrid items-center gap-2">
-			<div className="col-span-full flex flex-row items-center justify-center gap-2">
-				<TextInput className="flex-1" onValueChange={galaxyStore.setName} placeholder="Search" startContent={<SkyObjectNameTypeDropdown color="secondary" onValueChange={galaxyStore.setNameType} value={nameType} size="sm" />} value={name} />
-				<IconButton color="primary" disabled={loading} icon={Icons.Search} onClick={galaxyStore.search} tooltipContent="Filter" variant="flat" />
-			</div>
+			<TextInput clearable className="col-span-full" onValueChange={galaxyStore.setName} placeholder="Search" startContent={<SkyObjectNameTypeDropdown color="secondary" onValueChange={galaxyStore.setNameType} value={nameType} size="sm" />} value={name} />
 			<ConstellationSelect className="col-span-6" onValueChange={galaxyStore.setConstellations} value={constellations} />
 			<StellariumObjectTypeSelect className="col-span-6" onValueChange={galaxyStore.setTypes} value={types} />
 			<TextInput className="col-span-4" disabled={radius <= 0 || loading} label="RA" onValueChange={galaxyStore.setRightAscension} value={rightAscension} />

@@ -37,7 +37,7 @@ export function imageAnnotationStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image annotation mounted:', viewer.state.path)
 

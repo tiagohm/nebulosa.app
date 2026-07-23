@@ -21,7 +21,7 @@ export function imageAdjustmentStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image adjustment mounted:', viewer.state.path)
 

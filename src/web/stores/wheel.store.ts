@@ -43,7 +43,7 @@ export function wheelStore(wheel: Wheel) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('wheel mounted:', wheel.name)
 

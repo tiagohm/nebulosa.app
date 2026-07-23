@@ -59,7 +59,7 @@ export function filePicker(scope: FilePickerScope) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		void list()
 
@@ -72,6 +72,8 @@ export function filePicker(scope: FilePickerScope) {
 		u[1] = subscribeKey(state, 'path', async (path) => {
 			state.save.exists = state.save.name.length > 0 && path.length > 0 && !!(await Api.FileSystem.exists({ path, name: state.save.name }))
 		})
+
+		return unmount
 	}
 
 	function unmount() {

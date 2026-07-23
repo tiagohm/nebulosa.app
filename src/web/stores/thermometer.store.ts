@@ -15,12 +15,19 @@ export function thermometerStore(thermometer: Thermometer) {
 
 	console.info('thermometer created:', thermometer.name)
 
+	let mounted = false
+
 	function mount() {
+		if (mounted) return unmount
 		console.info('thermometer mounted:', thermometer.name)
+		mounted = true
+		return unmount
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('thermometer unmounted:', thermometer.name)
+		mounted = false
 	}
 
 	function connect() {

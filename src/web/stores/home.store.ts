@@ -71,7 +71,7 @@ const LAYOUT_STORAGE_KEY = 'workspace.layout'
 const state = proxy<HomeState>({})
 
 let saveTimer: number | undefined
-let layoutDisposable: DockviewIDisposable | undefined
+let layoutChangeDisposable: DockviewIDisposable | undefined
 
 let api: DockviewApi | undefined
 let left: DockviewGroupPanelApi | undefined
@@ -92,7 +92,7 @@ let mounted = false
 console.info('home created')
 
 function mount() {
-	if (mounted) return
+	if (mounted) return unmount
 
 	console.info('home mounted')
 
@@ -106,8 +106,8 @@ function unmount() {
 
 	console.info('home unmounted')
 
-	layoutDisposable?.dispose()
-	layoutDisposable = undefined
+	layoutChangeDisposable?.dispose()
+	layoutChangeDisposable = undefined
 
 	window.clearTimeout(saveTimer)
 	saveTimer = undefined
@@ -130,6 +130,24 @@ function saveLayout() {
 	}
 }
 
+function hasDevicePanels() {
+	return (
+		!!panels.camera?.length ||
+		!!panels.mount?.length ||
+		!!panels.focuser?.length ||
+		!!panels.wheel?.length ||
+		!!panels.rotator?.length ||
+		!!panels.flatPanel?.length ||
+		!!panels.cover?.length ||
+		!!panels.dome?.length ||
+		!!panels.power?.length ||
+		!!panels.gps?.length ||
+		!!panels.guideOutput?.length ||
+		!!panels.thermometer?.length ||
+		!!panels.dewHeater?.length
+	)
+}
+
 function handleReady(event: DockviewReadyEvent) {
 	api = event.api
 
@@ -141,29 +159,31 @@ function handleReady(event: DockviewReadyEvent) {
 	left = addEdge('left', { initialSize: 380 })
 	right = addEdge('right', { initialSize: 420 })
 
+	if (!hasDevicePanels()) right.collapse()
+
 	// Left Panel
-	addUniquePanel('connections', { tabComponent: 'fixed', title: 'Connections' }, left)
-	addUniquePanel('devices', { tabComponent: 'fixed', title: 'Devices' }, left)
-	addUniquePanel('alpacaServer', { tabComponent: 'fixed', title: 'Alpaca Server' }, left)
-	addUniquePanel('indiServer', { tabComponent: 'fixed', title: 'INDI Server' }, left)
-	addUniquePanel('settings', { tabComponent: 'fixed', title: 'Settings' }, left)
-	addUniquePanel('about', { tabComponent: 'fixed', title: 'About' }, left)
+	addUniquePanel('connections', { tabComponent: 'fixed', title: 'Connections' }, left, false)
+	addUniquePanel('devices', { tabComponent: 'fixed', title: 'Devices' }, left, false)
+	addUniquePanel('alpacaServer', { tabComponent: 'fixed', title: 'Alpaca Server' }, left, false)
+	addUniquePanel('indiServer', { tabComponent: 'fixed', title: 'INDI Server' }, left, false)
+	addUniquePanel('settings', { tabComponent: 'fixed', title: 'Settings' }, left, false)
+	addUniquePanel('about', { tabComponent: 'fixed', title: 'About' }, left, false)
 
 	// Central Panel
 	main = addGroup({ id: 'group.main' })
 
 	// Atlas
 	addUniquePanel('sun', { title: 'Sun' }, main)
-	addUniquePanel('moon', { title: 'Moon' }, main)
-	addUniquePanel('planet', { title: 'Planet' }, main)
-	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
-	addUniquePanel('galaxy', { title: 'DSO' }, main)
-	addUniquePanel('satellite', { title: 'Satellite' }, main)
+	addUniquePanel('moon', { title: 'Moon' }, main, false)
+	addUniquePanel('planet', { title: 'Planet' }, main, false)
+	addUniquePanel('asteroid', { title: 'Asteroid' }, main, false)
+	addUniquePanel('galaxy', { title: 'DSO' }, main, false)
+	addUniquePanel('satellite', { title: 'Satellite' }, main, false)
 
-	// layoutDisposable = api.onDidLayoutChange(() => {
-	// 	window.clearTimeout(saveTimer)
-	// 	saveTimer = window.setTimeout(saveLayout, 1000)
-	// })
+	layoutChangeDisposable = api.onDidLayoutChange(() => {
+		window.clearTimeout(saveTimer)
+		saveTimer = window.setTimeout(saveLayout, 1000)
+	})
 }
 
 function addEdge(position: EdgeGroupPosition, options: Omit<Readonly<EdgeGroupOptions>, 'id'>) {
@@ -183,7 +203,7 @@ function load() {
 
 	if (storedLayout) {
 		try {
-			// api.fromJSON(storedLayout.layout)
+			api!.fromJSON(storedLayout.layout)
 		} catch (e) {
 			console.error('unable to restore layout:', e)
 			localStorage.removeItem(LAYOUT_STORAGE_KEY)
@@ -191,18 +211,25 @@ function load() {
 	}
 
 	for (const type of PANEL_TYPES) {
-		const ps: IDockviewPanel[] = []
+		const storedPanels: IDockviewPanel[] = []
 
 		for (let i = 0; i < MAX_PANELS; i++) {
 			const id = `${type}.${i}`
-			const p = api!.getPanel(id)
+			const panel = api!.getPanel(id)
 
-			if (p !== undefined) {
-				ps.push(p)
+			if (panel !== undefined) {
+				if (type === 'image') {
+					api!.removePanel(panel)
+					continue
+				}
+
+				console.info('loaded stored panel:', panel.id, panel.group.id, panel.params)
+				storedPanels.push(panel)
+				listenOnDidRemovePanel(type, panel)
 			}
 		}
 
-		panels[type] = ps
+		panels[type] = storedPanels
 	}
 }
 
@@ -216,76 +243,54 @@ function activatePanel(panel: IDockviewPanel) {
 	}
 }
 
-function addUniquePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>, activate: boolean = false) {
-	const ps = panels[type] ?? []
+function addUniquePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>, activate: boolean = true) {
+	const currentPanels = panels[type] ?? []
 
-	if (ps.length > 0) {
-		activatePanel(ps[0])
-		return ps[0]
+	if (currentPanels.length > 0) {
+		if (activate) activatePanel(currentPanels[0])
+		return currentPanels[0]
 	}
 
 	const id = `${type}.0`
-	const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, tabComponent: group === left ? 'fixed' : 'closeable', component: type, position: { referenceGroup: (group ?? main!).id, index: options.index } })
-	ps.push(p)
-	panels[type] = ps
+	const panel = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, tabComponent: group === left ? 'fixed' : 'closeable', component: type, position: { referenceGroup: (group ?? main!).id, index: options.index } })
+	currentPanels.push(panel)
+	panels[type] = currentPanels
 
-	if (activate) activatePanel(p)
+	if (activate) activatePanel(panel)
 
 	console.info('unique panel added:', id)
 
-	const listener = api!.onDidRemovePanel((e) => {
-		if (e === p) {
-			const index = panels[type]!.indexOf(p)
+	listenOnDidRemovePanel(type, panel)
 
-			if (index >= 0) {
-				panels[type]!.splice(index, 1)
-				console.info('unique panel removed:', id)
-			}
-
-			listener.dispose()
-		}
-	})
-
-	return p
+	return panel
 }
 
-function addMultiplePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>, activate: boolean = false) {
-	const ps = panels[type] ?? []
+function addMultiplePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>, activate: boolean = true) {
+	const currentPanels = panels[type] ?? []
 
-	if (ps.length >= MAX_PANELS) return
+	if (currentPanels.length >= MAX_PANELS) return
 
 	const referenceGroupId = (group ?? main!)?.id
 	let referencePanel: IDockviewPanel | undefined
 
 	for (let i = 0; i < MAX_PANELS; i++) {
 		const id = `${type}.${i}`
-		const p = ps.find((e) => e.id === id)
+		const panel = currentPanels.find((e) => e.id === id)
 
-		if (p === undefined) {
+		if (panel === undefined) {
 			const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, tabComponent: type === 'image' ? 'image' : 'closeable', component: type, position: referencePanel && !group?.id ? { referencePanel, direction: 'right' } : { referenceGroup: referenceGroupId } })
-			ps.push(p)
-			panels[type] = ps
+			currentPanels.push(p)
+			panels[type] = currentPanels
 
 			if (activate) activatePanel(p)
 
 			console.info('multiple panel added:', id)
 
-			const listener = api!.onDidRemovePanel((e) => {
-				if (e === p) {
-					const index = panels[type]!.indexOf(p)
-
-					if (index >= 0) {
-						panels[type]!.splice(index, 1)
-						console.info('multiple panel removed:', id)
-					}
-
-					listener.dispose()
-				}
-			})
+			listenOnDidRemovePanel(type, p)
 
 			return p
-		} else if (p.group.id === referenceGroupId) {
-			referencePanel = p
+		} else if (panel.group.id === referenceGroupId) {
+			referencePanel = panel
 		}
 	}
 }
@@ -300,7 +305,7 @@ function addDevice(device: Device) {
 	}
 
 	const params = { type: device.type, id: device.id, name: device.name } as const satisfies Pick<Device, 'id' | 'type' | 'name'>
-	return addMultiplePanel(device.type, { title: device.name, params }, right, true)
+	return addMultiplePanel(device.type, { title: device.name, params }, right)
 }
 
 function addImage(path: string, source: ImageSource | Camera, id?: string) {
@@ -320,7 +325,7 @@ function addImage(path: string, source: ImageSource | Camera, id?: string) {
 	} else {
 		const image = { path, id, source, camera }
 		const title = image.camera?.name ?? image.path
-		panel = addMultiplePanel('image', { title, params: image }, main, true)
+		panel = addMultiplePanel('image', { title, params: image }, main)
 
 		if (panel !== undefined) {
 			imageBus.emit('add', image)
@@ -407,6 +412,23 @@ function addDSO() {
 
 function addSatellite() {
 	addUniquePanel('satellite', { title: 'Satellite' }, main)
+}
+
+function listenOnDidRemovePanel(type: HomePanelType, panel: IDockviewPanel) {
+	const listener = api!.onDidRemovePanel((e) => {
+		if (e === panel) {
+			const index = panels[type]!.indexOf(panel)
+
+			if (index >= 0) {
+				panels[type]!.splice(index, 1)
+				console.info('panel removed:', panel.id)
+			}
+
+			listener.dispose()
+		}
+	})
+
+	return listener
 }
 
 window.addEventListener('beforeunload', () => {

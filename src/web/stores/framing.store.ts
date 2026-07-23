@@ -30,7 +30,7 @@ let mounted = false
 const u: VoidFunction[] = []
 
 function mount() {
-	if (mounted) return
+	if (mounted) return unmount
 
 	console.info('framing mounted')
 

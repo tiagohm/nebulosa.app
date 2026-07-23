@@ -47,7 +47,7 @@ export function cameraStore(camera: Camera) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('camera mounted:', camera.name)
 

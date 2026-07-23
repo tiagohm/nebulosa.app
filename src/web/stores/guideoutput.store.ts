@@ -38,13 +38,15 @@ export function guideOutputStore(guideOutput: GuideOutput) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('guide output mounted:', guideOutput.name)
 
 		mounted = true
 
 		u[0] = initProxy(state, `guideoutput.${guideOutput.id}`, ['o:request'])
+
+		return unmount
 	}
 
 	function unmount() {

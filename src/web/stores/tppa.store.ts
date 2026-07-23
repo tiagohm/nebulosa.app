@@ -43,7 +43,7 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 	let mounted = false
 
 	function _mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('tppa mounted:', id)
 
@@ -72,6 +72,8 @@ export function tppaStore(id: string, api: DockviewPanelApi) {
 		updateTitle()
 
 		state.request.id = id
+
+		return unmount
 	}
 
 	function unmount() {

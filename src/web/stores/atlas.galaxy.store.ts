@@ -67,7 +67,7 @@ let mounted = false
 const u: VoidFunction[] = []
 
 function mount() {
-	if (mounted) return
+	if (mounted) return unmount
 
 	console.info('galaxy mounted')
 
@@ -92,50 +92,62 @@ function unmount() {
 
 function setName(value: string) {
 	state.request.name = value
+	void search(true)
 }
 
 function setNameType(value: number) {
 	state.request.nameType = value
+	void search(true)
 }
 
 function setConstellations(value: readonly Constellation[]) {
 	state.request.constellations = value
+	void search(true)
 }
 
 function setTypes(value: readonly StellariumObjectType[]) {
 	state.request.types = value
+	void search(true)
 }
 
 function setRightAscension(value: string) {
 	state.request.rightAscension = value
+	void search(true)
 }
 
 function setDeclination(value: string) {
 	state.request.declination = value
+	void search(true)
 }
 
 function setRadius(value: number) {
 	state.request.radius = value
+	void search(true)
 }
 
 function setBookmarkedOnly(value: boolean) {
 	state.bookmarkedOnly = value
+	void search(true)
 }
 
 function setVisible(value: boolean) {
 	state.request.visible = value
+	void search(true)
 }
 
 function setVisibleAbove(value: number) {
 	state.request.visibleAbove = value
+	void search(true)
 }
 
 function setMagnitudeMin(value: number) {
 	state.request.magnitudeMin = value
+	void search(true)
 }
 
 function setMagnitudeMax(value: number) {
 	state.request.magnitudeMax = value
+	void search(true)
 }
 
 function setPage(value: number) {
@@ -286,6 +298,7 @@ function handleFavorite(favorite: boolean) {
 }
 
 export const galaxyStore = {
+	type: 'galaxy',
 	state,
 	mount,
 	unmount,

@@ -35,7 +35,7 @@ export function imageStatisticsStore(viewer: ImageViewerStore) {
 	let computeTimer: number | undefined
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image statistics mounted:', viewer.state.path)
 

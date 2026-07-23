@@ -27,13 +27,15 @@ export function focuserStore(focuser: Focuser) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('focuser mounted:', focuser.name)
 
 		mounted = true
 
 		u[0] = initProxy(state, `focuser.${focuser.id}`, ['o:request'])
+
+		return unmount
 	}
 
 	function unmount() {

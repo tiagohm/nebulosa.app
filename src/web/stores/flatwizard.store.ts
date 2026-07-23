@@ -38,7 +38,7 @@ export function flatWizardStore(id: string, api: DockviewPanelApi) {
 	console.info('flat wizard created', id)
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('flat wizard mounted:', id)
 
@@ -65,6 +65,8 @@ export function flatWizardStore(id: string, api: DockviewPanelApi) {
 		updateTitle()
 
 		state.request.id = id
+
+		return unmount
 	}
 
 	function unmount() {

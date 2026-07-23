@@ -69,7 +69,7 @@ let mounted = false
 const u: VoidFunction[] = []
 
 function mount() {
-	if (mounted) return
+	if (mounted) return unmount
 
 	console.info('asteroid mounted')
 
@@ -215,6 +215,7 @@ function handleFavorite(favorite: boolean) {
 }
 
 export const asteroidStore = {
+	type: 'asteroid',
 	state,
 	mount,
 	unmount,

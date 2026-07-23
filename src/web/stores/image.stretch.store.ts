@@ -23,7 +23,7 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image stretch mounted:', viewer.state.path)
 

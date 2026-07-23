@@ -37,7 +37,7 @@ export interface ImageViewerStore {
 	readonly image: Image
 	readonly key: string // The storage key
 	readonly target: HTMLImageElement | undefined
-	readonly mount: VoidFunction
+	readonly mount: () => VoidFunction
 	readonly unmount: VoidFunction
 	readonly attachImage: (node: HTMLImageElement | null) => void
 	readonly attachInteractable: (i: InteractableMethods) => void
@@ -113,7 +113,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	const key = camera?.id || 'default'
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image viewer mounted:', state.path)
 
@@ -141,6 +141,8 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 				void load(event.path)
 			}
 		})
+
+		return unmount
 	}
 
 	function unmount() {

@@ -16,13 +16,19 @@ export function coverStore(cover: Cover) {
 
 	console.info('cover created:', cover.name)
 
+	let mounted = false
+
 	function mount() {
+		if (mounted) return unmount
 		console.info('cover mounted:', cover.name)
+		mounted = true
 		return unmount
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('cover unmounted:', cover.name)
+		mounted = false
 	}
 
 	function connect() {

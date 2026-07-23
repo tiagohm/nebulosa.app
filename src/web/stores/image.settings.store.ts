@@ -25,7 +25,7 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image settings mounted:', viewer.state.path)
 

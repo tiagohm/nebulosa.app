@@ -27,7 +27,7 @@ export function SatelliteGroupTypeChipGroup({ value, category, onValueChange, si
 		<div className={tw('flex w-full flex-wrap gap-2', className)} {...props}>
 			{types.map(([key, item]) => {
 				const selected = value.includes(key as never)
-				return <Chip className="cursor-pointer" color={selected ? 'primary' : 'secondary'} key={key} label={item.description} onClick={() => handleClick(key as never, selected)} size={size} />
+				return <Chip className="cursor-pointer" color={selected ? 'success' : 'secondary'} key={key} label={item.description} onClick={() => handleClick(key as never, selected)} size={size} />
 			})}
 		</div>
 	)

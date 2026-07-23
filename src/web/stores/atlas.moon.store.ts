@@ -46,7 +46,7 @@ let mounted = false
 const u: VoidFunction[] = []
 
 function mount() {
-	if (mounted) return
+	if (mounted) return unmount
 
 	console.info('sun mounted')
 
@@ -168,6 +168,7 @@ function frame() {
 }
 
 export const moonStore = {
+	type: 'moon',
 	state,
 	mount,
 	unmount,

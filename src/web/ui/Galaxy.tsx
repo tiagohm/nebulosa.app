@@ -33,9 +33,8 @@ export const Galaxy = memo(({ api }: IDockviewPanelProps) => {
 })
 
 const Filter = memo(() => {
-	const { nameType, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, radius } = useSnapshot(galaxyStore.state.request)
-	const { name, rightAscension, declination } = useSnapshot(galaxyStore.state.request)
-	const { loading } = useSnapshot(galaxyStore.state)
+	const { nameType, name, rightAscension, declination, magnitudeMin, magnitudeMax, constellations, types, visible, visibleAbove, radius } = useSnapshot(galaxyStore.state.request)
+	const { loading, bookmarkedOnly } = useSnapshot(galaxyStore.state)
 
 	return (
 		<div className="col-span-full grid grid-cols-subgrid items-center gap-2">
@@ -60,7 +59,8 @@ const Filter = memo(() => {
 				classNames={{ endContent: 'w-[5ch]', startContent: 'w-[5ch]' }}
 				value={[magnitudeMin, magnitudeMax]}
 			/>
-			<Checkbox className="col-span-4 flex w-full max-w-none justify-center" label="Show visible" onValueChange={galaxyStore.setVisible} value={visible} />
+			<Checkbox className="col-span-2 flex w-full max-w-none justify-center" label="Bookmarked only" onValueChange={galaxyStore.setBookmarkedOnly} value={bookmarkedOnly} />
+			<Checkbox className="col-span-2 flex w-full max-w-none justify-center" label="Show visible" onValueChange={galaxyStore.setVisible} value={visible} />
 			<NumberInput className="col-span-3" disabled={!visible || loading} label="Above (°)" maxValue={89} minValue={0} onValueChange={galaxyStore.setVisibleAbove} value={visibleAbove} />
 		</div>
 	)

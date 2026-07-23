@@ -204,7 +204,7 @@ function handleFavorite(favorite: boolean) {
 	if (selected) {
 		const index = state.bookmark.findIndex((e) => e.code === selected.id)
 
-		if (favorite !== index >= 0) return
+		if (favorite !== index < 0) return
 
 		if (favorite) {
 			state.bookmark.push({ code: selected.id, name: selected.name, type: 'asteroid' })

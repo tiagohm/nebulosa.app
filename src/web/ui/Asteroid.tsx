@@ -35,18 +35,22 @@ function SearchAndCloseApproaches() {
 			<Tabs onValueChange={(value) => (asteroidStore.state.tab = value)} value={tab}>
 				<Tab id="search"> Search</Tab>
 				<Tab id="closeApproaches">Close Approaches</Tab>
+				<Tab id="bookmarked">Bookmark</Tab>
 				<TabPanel id="search">
-					<AsteroidSearchTab />
+					<Search />
 				</TabPanel>
 				<TabPanel id="closeApproaches">
-					<AsteroidCloseApproachesTab />
+					<CloseApproaches />
+				</TabPanel>
+				<TabPanel id="bookmarked">
+					<Bookmarked />
 				</TabPanel>
 			</Tabs>
 		</div>
 	)
 }
 
-const AsteroidSearchTab = memo(() => {
+const Search = memo(() => {
 	const { loading, selected, list } = useSnapshot(asteroidStore.state)
 	const { text } = useSnapshot(asteroidStore.state.search)
 
@@ -90,7 +94,7 @@ function AsteroidSearchParameterItem(parameter: MinorPlanetParameter) {
 	)
 }
 
-const AsteroidCloseApproachesTab = memo(() => {
+const CloseApproaches = memo(() => {
 	const { loading } = useSnapshot(asteroidStore.state)
 	const { days, distance } = useSnapshot(asteroidStore.state.closeApproaches.request)
 	const { result } = useSnapshot(asteroidStore.state.closeApproaches)
@@ -125,5 +129,23 @@ const AsteroidCloseApproachesTab = memo(() => {
 			</List>
 			<Link href="https://ssd-api.jpl.nasa.gov/doc/cad.html" label="NASA/JPL SBDB Close Approach Data API" />
 		</div>
+	)
+})
+
+const Bookmarked = memo(() => {
+	const { bookmark } = useSnapshot(asteroidStore.state)
+
+	function handleAction(index: number) {
+		return asteroidStore.select(bookmark[index].code)
+	}
+
+	return (
+		<List itemCount={bookmark.length} fullWidth onAction={handleAction} emptyContent="No items">
+			{(i) => {
+				const { name, code } = bookmark[i]
+
+				return <ListItem className="cursor-pointer" description={code} label={name} />
+			}}
+		</List>
 	)
 })

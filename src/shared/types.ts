@@ -249,7 +249,7 @@ export interface MinorPlanet {
 }
 
 export interface SearchSkyObject extends LocationAndTime {
-	readonly id?: number | string
+	readonly id?: number | string | readonly (number | string)[]
 	readonly name?: string
 	readonly nameType?: number
 	readonly constellations?: readonly Constellation[]

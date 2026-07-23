@@ -403,8 +403,13 @@ export class AtlasHandler {
 		}
 
 		if (req.id) {
-			where.push('d.id = ?')
-			whereParams.push(req.id)
+			if (typeof req.id === 'number' || typeof req.id === 'string') {
+				where.push('d.id = ?')
+				whereParams.push(req.id)
+			} else if (req.id.length > 0) {
+				where.push(`d.id IN (${placeholders(req.id.length)})`)
+				whereParams.push(...req.id)
+			}
 		}
 
 		const name = req.name?.trim()

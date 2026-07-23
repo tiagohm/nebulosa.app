@@ -24,6 +24,7 @@ export interface AtlasGalaxyState {
 	chart: readonly number[]
 	favorite: boolean
 	readonly bookmark: BookmarkItem[]
+	bookmarkedOnly: boolean
 	readonly tags: readonly TagItem[]
 }
 
@@ -34,10 +35,11 @@ const state = proxy<AtlasGalaxyState>({
 	position: structuredClone(DEFAULT_BODY_POSITION),
 	chart: [],
 	bookmark: [],
+	bookmarkedOnly: false,
 	get favorite() {
 		const { selected, bookmark } = this
 		const id = selected?.id.toFixed(0)
-		return id !== undefined && bookmark.some((e) => e.code === id)
+		return !!id && bookmark.some((e) => e.code === id)
 	},
 	get tags() {
 		const { selected } = this
@@ -47,7 +49,7 @@ const state = proxy<AtlasGalaxyState>({
 			const res = new Array<TagItem>(names.length)
 
 			for (let i = 0; i < names.length; i++) {
-				const label = skyObjectName(names[i], constellation)
+				const label = skyObjectName(names[i], constellation)!
 				res[i] = { label, color: 'primary' }
 			}
 
@@ -73,7 +75,7 @@ function mount() {
 
 	atlasStore.state.galaxy = ref(galaxyStore)
 
-	u[0] = initProxy(state, 'atlas.galaxy', ['o:bookmark'])
+	u[0] = initProxy(state, 'atlas.galaxy', ['o:request', 'o:bookmark', 'o:bookmarkedOnly'])
 
 	void atlasStore.tick('galaxy')
 	void search(true)
@@ -116,6 +118,10 @@ function setRadius(value: number) {
 	state.request.radius = value
 }
 
+function setBookmarkedOnly(value: boolean) {
+	state.bookmarkedOnly = value
+}
+
 function setVisible(value: boolean) {
 	state.request.visible = value
 }
@@ -154,7 +160,13 @@ async function search(reset: boolean | React.UIEvent) {
 
 		if (reset === true || typeof reset !== 'boolean') state.request.page = 1
 
-		const result = await Api.Atlas.searchSkyObject(state.request)
+		const request = { ...state.request }
+
+		if (state.bookmarkedOnly) {
+			request.id = state.bookmark.map((e) => e.code)
+		}
+
+		const result = await Api.Atlas.searchSkyObject(request)
 		state.result = result ?? []
 	} finally {
 		state.loading = false
@@ -263,10 +275,10 @@ function handleFavorite(favorite: boolean) {
 		const id = selected.id.toFixed(0)
 		const index = state.bookmark.findIndex((e) => e.code === id)
 
-		if (favorite !== index >= 0) return
+		if (favorite !== index < 0) return
 
 		if (favorite) {
-			state.bookmark.push({ code: id, name: selected.name, type: 'asteroid' })
+			state.bookmark.push({ code: id, name: selected.name, type: 'galaxy' })
 		} else {
 			state.bookmark.splice(index, 1)
 		}
@@ -284,6 +296,7 @@ export const galaxyStore = {
 	setRightAscension,
 	setDeclination,
 	setRadius,
+	setBookmarkedOnly,
 	setVisible,
 	setVisibleAbove,
 	setMagnitudeMin,

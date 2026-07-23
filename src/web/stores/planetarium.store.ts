@@ -53,8 +53,6 @@ function mount() {
 
 	u[0] = subscribe(settingsStore.state.location, updateLocationFromSettings)
 
-	u[1] = initProxy(state, 'planetarium', ['o:transform'])
-
 	return unmount
 }
 
@@ -100,7 +98,6 @@ const SKY_REGION_SELECTION: CelestialShape = { id: 'sky.region', data: '', coord
 function handleReady(celestial: Celestial) {
 	state.celestial = ref(celestial)
 
-	celestial.setViewTransform(state.transform)
 	updateLocationFromSettings()
 	celestial.loadConstellations(CONSTELLATIONS)
 	celestial.loadMilkyWay(mw as never)
@@ -193,6 +190,10 @@ function handleReady(celestial: Celestial) {
 			}
 		}
 	})
+
+	u[8] = initProxy(state, 'planetarium', ['o:transform'])
+
+	celestial.setViewTransform(state.transform)
 
 	for (const mount of equipmentStore.state.mount) {
 		addMount(mount)

@@ -6,6 +6,7 @@ import { equipmentStore } from '@stores/equipment.store'
 import { framingStore } from '@stores/framing.store'
 import { settingsStore } from '@stores/settings.store'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import { timeToUnixMillis, type Time } from 'nebulosa/src/astronomy/time/time'
 import { TAU } from 'nebulosa/src/core/constants'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA, toDeg } from 'nebulosa/src/math/units/angle'
@@ -293,7 +294,7 @@ const MOVING_BODIES: MovingBody[] = [
 	},
 ]
 
-async function updateMovingBodies(celestial: Celestial, time: number) {
+async function updateMovingBodies(celestial: Celestial, time: Time | number) {
 	const generation = ++movingBodyUpdateGeneration
 	let dirty = false
 
@@ -323,9 +324,9 @@ async function updateMovingBodies(celestial: Celestial, time: number) {
 	}
 }
 
-async function positionOfMovingBody(body: MovingBody, time: number): Promise<MovingBody | undefined> {
+async function positionOfMovingBody(body: MovingBody, time: Time | number): Promise<MovingBody | undefined> {
 	const req: PositionOfBody = {
-		time: { utc: time, offset: settingsStore.state.time.offset },
+		time: { utc: typeof time === 'number' ? time : timeToUnixMillis(time), offset: settingsStore.state.time.offset },
 		location: settingsStore.state.location,
 	}
 

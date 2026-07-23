@@ -1,12 +1,14 @@
 import { select } from 'd3-selection'
 import { type D3ZoomEvent, type ZoomBehavior, zoom, zoomIdentity } from 'd3-zoom'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
-import { DEG2RAD, PI, PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import { meanObliquity, timeNow, timeShift, timeUnix, toJulianDay, toJulianEpoch, type Time } from 'nebulosa/src/astronomy/time/time'
+import { DAYSEC, DEG2RAD, PI, PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
 import type { Point, Size } from 'nebulosa/src/math/numerical/geometry'
 import { clamp, type NumberArray } from 'nebulosa/src/math/numerical/math'
-import { deg, normalizeAngle, type Angle } from 'nebulosa/src/math/units/angle'
+import { normalizeAngle, type Angle } from 'nebulosa/src/math/units/angle'
 
 // Public coordinate/projection options.
 export type ProjectionType = 'azimuthalEquidistant' | 'azimuthalEqualArea' | 'orthographic' | 'stereographic' | 'gnomonic'
@@ -17,7 +19,7 @@ export type CoordinateSystem = 'horizontal' | 'equatorial'
 // Supported event names emitted by Celestial.
 export type CelestialEventName = 'hover' | 'click' | 'objectHover' | 'objectLeave' | 'selectionChange' | 'viewTransformChange' | 'renderStart' | 'renderEnd' | 'updateStart' | 'updateEnd' | 'resize' | 'error'
 
-export type CelestialTime = Date | number
+export type CelestialTime = Date | number | Time
 
 // Observer location in geodetic degrees/meters.
 export interface ObserverLocation {
@@ -213,7 +215,7 @@ export interface RenderState {
 	readonly width: number
 	readonly height: number
 	readonly dpr: number
-	readonly time: number // unix milliseconds
+	readonly time: Time
 	readonly observer: Readonly<ObserverLocation>
 	readonly projection: ProjectionType
 	readonly coordinateSystem: CoordinateSystem
@@ -294,10 +296,10 @@ export type CelestialEventMap = {
 	readonly objectLeave: Readonly<{ object: CelestialObject }>
 	readonly selectionChange: Readonly<{ object: CelestialObject }>
 	readonly viewTransformChange: Readonly<{ transform: ViewTransform }>
-	readonly renderStart: Readonly<{ time: number }>
-	readonly renderEnd: Readonly<{ time: number; duration: number; fps: number }>
-	readonly updateStart: Readonly<{ time: number }>
-	readonly updateEnd: Readonly<{ time: number; duration: number }>
+	readonly renderStart: Readonly<{ time: Time }>
+	readonly renderEnd: Readonly<{ time: Time; duration: number; fps: number }>
+	readonly updateStart: Readonly<{ time: Time }>
+	readonly updateEnd: Readonly<{ time: Time; duration: number }>
 	readonly resize: Readonly<{ width: number; height: number }>
 	readonly error: Error
 }
@@ -350,7 +352,7 @@ type ResolvedCelestialOptions = {
 	projection: ProjectionType
 	readonly coordinateSystem: CoordinateSystem
 	observer: ObserverLocation
-	time: number // unix milliseconds
+	time: Time
 	updateInterval: number
 	readonly stars: Required<StarLayerOptions>
 	readonly referenceLines: ResolvedReferenceLinesOptions
@@ -553,29 +555,6 @@ function normalizedWheelDeltaY(event: WheelEvent) {
 	return event.deltaY
 }
 
-// Converts a unix epoch in milliseconds into a Julian date.
-function julianDate(date: number) {
-	return date / DAY_MS + JULIAN_EPOCH
-}
-
-// Converts a unix epoch in milliseconds into a Julian epoch year.
-function julianEpochYear(date: number) {
-	return J2000_EPOCH + (date - J2000_UNIX_MS) / YEAR_MS
-}
-
-// Computes Greenwich mean sidereal time in radians.
-function greenwichMeanSiderealTime(date: number) {
-	const jd = julianDate(date)
-	const t = (jd - 2451545) / 36525
-	const degrees = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * t * t - (t * t * t) / 38710000
-	return normalizeAngle(deg(degrees))
-}
-
-// Computes local sidereal time in radians.
-function localSiderealTime(date: number, longitudeDegrees: number) {
-	return normalizeAngle(greenwichMeanSiderealTime(date) + deg(longitudeDegrees))
-}
-
 // Writes an RA/Dec unit vector.
 function writeRaDecUnitVector(ra: number, dec: number, out: NumberArray, offset = 0) {
 	if (Math.abs(Math.abs(dec) - PIOVERTWO) <= POLE_EPSILON) {
@@ -600,8 +579,8 @@ function writeHorizontalUnitVector(az: number, alt: number, out: NumberArray, of
 }
 
 // Computes a global equatorial-to-horizontal matrix.
-function writeEquatorialToHorizontalMatrix(time: number, observer: ObserverLocation, out: NumberArray) {
-	const lst = localSiderealTime(time, observer.longitude)
+function writeEquatorialToHorizontalMatrix(time: Time, observer: ObserverLocation, out: NumberArray) {
+	const lst = localSiderealTime(time, observer.longitude * DEG2RAD, true)
 	const lat = observer.latitude * DEG2RAD
 	const sinLst = Math.sin(lst)
 	const cosLst = Math.cos(lst)
@@ -982,7 +961,7 @@ function resolveOptions(options: CelestialOptions): ResolvedCelestialOptions {
 		projection: validateProjection(options.projection ?? 'stereographic'),
 		coordinateSystem: options.coordinateSystem ?? 'horizontal',
 		observer: DEFAULT_OBSERVER,
-		time: Date.now(),
+		time: timeNow(true),
 		updateInterval: Math.max(1, Math.floor(options.updateInterval ?? DEFAULT_UPDATE_INTERVAL)),
 		stars: { ...DEFAULT_STAR_OPTIONS, ...options.stars },
 		referenceLines: mergeReferenceLines(options.referenceLines),
@@ -1782,12 +1761,6 @@ function skyLabelFont(state: RenderState, baseSize: number) {
 	return `${skyLabelSize(state, baseSize).toFixed(1)}px system-ui, sans-serif`
 }
 
-function meanObliquity(date: number) {
-	const t = (julianDate(date) - 2451545) / 36525
-	const seconds = 21.448 - t * (46.815 + t * (0.00059 - t * 0.001813))
-	return deg(23 + 26 / 60 + seconds / 3600)
-}
-
 // Horizon layer draws the local horizon ring over the active sky projection.
 class HorizonLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
@@ -2276,7 +2249,7 @@ abstract class ConstellationSegmentLayer extends InternalLayer {
 		writeRaDecUnitVector(to[0], to[1], this.toVector)
 
 		const distance = angularDistance(this.fromVector[0], this.fromVector[1], this.fromVector[2], this.toVector[0], this.toVector[1], this.toVector[2])
-		const steps = Math.max(8, Math.min(180, Math.ceil(distance / deg(1))))
+		const steps = Math.max(8, Math.min(180, Math.ceil(distance / DEG2RAD)))
 
 		drawClippedPolyline(ctx, state, steps, this.point, this.previous, this.segmentSampler)
 	}
@@ -3433,9 +3406,9 @@ export class Celestial {
 
 	// Sets the current observation time.
 	setTime(date: CelestialTime) {
-		const time = typeof date === 'number' ? date : date.getTime()
+		const time = typeof date === 'number' ? timeUnix(date / 1000) : date instanceof Date ? timeUnix(date.getTime() / 1000) : date
 
-		if (time !== this.#options.time) {
+		if (toJulianDay(time) !== toJulianDay(this.#options.time)) {
 			this.#options.time = time
 			this.queueUpdate()
 		}
@@ -3517,12 +3490,11 @@ export class Celestial {
 		const timeStep = Math.floor(options?.timeStep ?? options?.interval ?? this.#options.updateInterval)
 
 		this.#autoUpdateOptions = { mode, interval, timeStep }
-		let simulatedTime = this.#options.time
+		const simulatedTime = this.#options.time
 
 		const tick = () => {
 			if (mode === 'simulation') {
-				simulatedTime += timeStep
-				this.setTime(simulatedTime)
+				this.setTime(timeShift(simulatedTime, timeStep / (1000 * DAYSEC)))
 			} else {
 				this.setTime(Date.now())
 			}
@@ -4035,7 +4007,7 @@ export class Celestial {
 		writeEquatorialToHorizontalMatrix(this.#options.time, this.#options.observer, this.#eqToHorizontal)
 
 		if (this.#starCatalog) {
-			this.#starCatalog.updateEquatorialVectors(julianEpochYear(this.#options.time))
+			this.#starCatalog.updateEquatorialVectors(toJulianEpoch(this.#options.time))
 		}
 
 		this.projectStars()

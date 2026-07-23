@@ -291,8 +291,8 @@ function addMultiplePanel(type: HomePanelType, options: HomePanelOptions, group?
 }
 
 function addDevice(device: Device) {
-	const ps = panels[device.type] ?? []
-	const panel = ps.find((e) => e.params!.id === device.id)
+	const devicePanels = panels[device.type] ?? []
+	const panel = devicePanels.find((e) => e.params!.id === device.id)
 
 	if (panel) {
 		activatePanel(panel)
@@ -310,19 +310,19 @@ function addImage(path: string, source: ImageSource | Camera, id?: string) {
 	source = typeof source === 'string' ? source : 'camera'
 	id = `${source}-${id || camera?.id || nanoid()}`
 
-	const ps = panels.image ?? []
-	let p = ps.find((e) => e.params!.id === id)
+	const imagePanels = panels.image ?? []
+	let panel = imagePanels.find((e) => e.params!.id === id)
 
-	if (p) {
-		const image = p.params as Image
+	if (panel) {
+		const image = panel.params as Image
 		imageBus.emit('update', { image, path })
 		return image
 	} else {
 		const image = { path, id, source, camera }
 		const title = image.camera?.name ?? image.path
-		p = addMultiplePanel('image', { title, params: image }, main, true)
+		panel = addMultiplePanel('image', { title, params: image }, main, true)
 
-		if (p !== undefined) {
+		if (panel !== undefined) {
 			imageBus.emit('add', image)
 			return image
 		}

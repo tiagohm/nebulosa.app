@@ -421,6 +421,24 @@ test('chart of sky object', () => {
 	expect(formatALT(chart[1440], true)).toBe('+65 54 26')
 })
 
+test('position of sky point', () => {
+	const position = atlas.positionOfSkyPoint(POSITION_OF_BODY, '06 44 58', '-16 45 03')
+
+	expect(formatRA(position.equatorial[0], true)).toBe('06 44 58')
+	expect(formatRA(position.equatorialJ2000[0], true)).toBe('06 43 49')
+	expect(formatALT(position.equatorial[1], true)).toBe('-16 45 03')
+	expect(formatALT(position.equatorialJ2000[1], true)).toBe('-16 43 33')
+	expect(formatALT(position.horizontal[1], true)).toBe('+66 49 01')
+	expect(formatALT(position.horizontal[0], true)).toBe('+278 50 36')
+	expect(position.distance).toBe(0)
+	expect(position.magnitude).toBe(99)
+	expect(position.constellation).toBe('CMA')
+	expect(position.names).toBeUndefined()
+	expect(position.illuminated).toBe(0)
+	expect(position.elongation).toBe(0)
+	expect(position.leading).toBe(false)
+})
+
 describe('compute start and end time', () => {
 	test('after noon', () => {
 		const [startTime, endTime] = atlas.computeStartAndEndTime({

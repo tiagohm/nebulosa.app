@@ -93,7 +93,7 @@ function renderSkyRegionShape(celestial: Celestial, ctx: CanvasRenderingContext2
 	// ctx.fillText(state.shape.data as string, state.x, state.y - 12)
 }
 
-const SKY_REGION_SELECTION: CelestialShape = { id: 'sky.region', data: '', coordinate: { rightAscension: 0, declination: 0 }, render: renderSkyRegionShape, visible: false }
+const SKY_REGION_SELECTION: CelestialShape = { id: 'sky.point', data: 'Sky Point', type: 'SKY POINT', coordinate: { rightAscension: 0, declination: 0 }, render: renderSkyRegionShape, visible: false }
 
 function handleReady(celestial: Celestial) {
 	state.celestial = ref(celestial)
@@ -111,7 +111,7 @@ function handleReady(celestial: Celestial) {
 
 	function addMount(mount: Mount) {
 		if (!connectedMounts.has(mount.id)) {
-			const shape: CelestialShape = { id: mount.id, data: mount.name, coordinate: { ...mount.equatorialCoordinate }, render: renderMountShape, visible: mount.connected }
+			const shape: CelestialShape = { id: mount.id, data: mount.name, type: 'MOUNT', coordinate: { ...mount.equatorialCoordinate }, render: renderMountShape, visible: mount.connected }
 			connectedMounts.set(celestial.addShape(shape), shape)
 		}
 	}
@@ -153,9 +153,12 @@ function handleReady(celestial: Celestial) {
 	})
 
 	u[6] = celestial.on('click', (event) => {
+		state.selected = ref(event)
+		void updateSelectedBodyPosition()
+
 		if (event.object) {
-			if (event.object.type !== 'shape' || event.object.shape !== SKY_REGION_SELECTION) {
-				SKY_REGION_SELECTION.visible = false
+			if (event.object.type === 'shape' && event.object.shape === SKY_REGION_SELECTION) {
+				SKY_REGION_SELECTION.visible = true
 			} else {
 				return
 			}
@@ -166,10 +169,7 @@ function handleReady(celestial: Celestial) {
 			return
 		}
 
-		state.selected = ref(event)
-		void updateSelectedBodyPosition()
-
-		celestial.markShapeChanged('sky.region')
+		celestial.markShapeChanged('sky.point')
 	})
 
 	u[7] = planetariumBus.subscribe('selectedObjectCoordinate', (): EquatorialCoordinate | undefined => {
@@ -360,8 +360,12 @@ async function updateSelectedBodyPosition() {
 				task = Api.Atlas.positionOfPlanet(req, object.object.id)
 				break
 			case 'constellationLabel':
+				task = Api.Atlas.positionOfSkyPoint(req, formatRA(object.label.rightAscension), formatDEC(object.label.declination))
+				break
 			case 'shape':
-				// TODO:
+				task = Api.Atlas.positionOfSkyPoint(req, formatRA(object.shape.coordinate.rightAscension), formatDEC(object.shape.coordinate.declination))
+				break
+			default:
 				return
 		}
 

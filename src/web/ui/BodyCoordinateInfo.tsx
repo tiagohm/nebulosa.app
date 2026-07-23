@@ -50,7 +50,7 @@ export function BodyCoordinateInfo({ position, hideEquatorialJ2000, hideEquatori
 				})}
 				<div className="flex items-center gap-2">
 					{!hideDistance && 'distance' in position && <Extra className="flex-1" label="DIST" value={position.distance ? formatDistance(position.distance) : '--'} />}
-					{!hideMagnitude && 'magnitude' in position && <Extra className="flex-1" label="MAG" value={position.magnitude ?? '--'} />}
+					{!hideMagnitude && 'magnitude' in position && <Extra className="flex-1" label="MAG" value={position.magnitude && position.magnitude <= 30 ? position.magnitude : '--'} />}
 				</div>
 			</div>
 			<div className="col-span-8 flex flex-col justify-start gap-0">

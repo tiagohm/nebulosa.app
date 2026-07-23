@@ -541,6 +541,10 @@ export namespace Api {
 			return json<readonly number[]>(`/atlas/skyobjects/${id}/chart`, 'post', req)
 		}
 
+		export function positionOfSkyPoint(req: PositionOfBody, ra: Angle | string, dec: Angle | string) {
+			return json<BodyPosition>(`/atlas/skypoint/position?ra=${ra}&dec=${dec}`, 'post', req)
+		}
+
 		export function searchSatellite(req: SearchSatellite) {
 			return json<readonly Satellite[]>('/atlas/satellites/search', 'post', req)
 		}

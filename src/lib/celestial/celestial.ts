@@ -275,6 +275,7 @@ export interface CelestialShape {
 	visible?: boolean
 	selectable?: boolean
 	readonly data?: unknown
+	readonly type?: string
 	readonly render: (celestial: Celestial, ctx: CanvasRenderingContext2D, state: ShapeRenderState) => void
 }
 

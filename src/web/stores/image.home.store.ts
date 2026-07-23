@@ -55,8 +55,7 @@ function unmount() {
 function handleReady(event: DockviewReadyEvent, image: Image) {
 	const { api } = event
 
-	// https://github.com/mathuo/dockview/issues/1495
-	api.addPanel({ id: 'image', tabComponent: 'fixed', component: 'viewer', params: image, title: 'Viewer', renderer: 'always' })
+	api.addPanel({ id: 'image', tabComponent: 'fixed', component: 'viewer', params: image, title: 'Viewer' })
 
 	const left = api.addEdgeGroup('left', { id: 'left', collapsed: true, collapsedSize: 36, minimumSize: 360, maximumSize: 360, initialSize: 360 })
 	const right = api.addEdgeGroup('right', { id: 'right', collapsed: true, collapsedSize: 36, minimumSize: 360, maximumSize: 360, initialSize: 360 })

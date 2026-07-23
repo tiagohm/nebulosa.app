@@ -17,7 +17,7 @@ export const DewHeater = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<DewHeaterStoreContext value={dewHeater.store}>
-			<Tabs className="p-3" startContent={<TabStartContent />}>
+			<Tabs className="h-full p-3" startContent={<TabStartContent />}>
 				<Tab id="main">Dew Heater</Tab>
 				<Tab id="indi">INDI</Tab>
 

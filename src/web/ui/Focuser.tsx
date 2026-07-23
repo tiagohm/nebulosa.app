@@ -21,7 +21,7 @@ export const Focuser = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<FocuserStoreContext value={focuser.store}>
-			<Tabs className="p-3" startContent={<TabStartContent />}>
+			<Tabs className="h-full p-3" startContent={<TabStartContent />}>
 				<Tab id="main">Filter Wheel</Tab>
 				<Tab id="indi">INDI</Tab>
 

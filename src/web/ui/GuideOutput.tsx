@@ -18,7 +18,7 @@ export const GuideOutput = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<GuideOutputStoreContext value={guideOutput.store}>
-			<Tabs className="p-3" startContent={<TabStartContent />}>
+			<Tabs className="h-full p-3" startContent={<TabStartContent />}>
 				<Tab id="main">Guide Output</Tab>
 				<Tab id="indi">INDI</Tab>
 

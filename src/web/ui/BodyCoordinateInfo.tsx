@@ -3,11 +3,21 @@ import { type Angle, formatALT, formatAZ, formatDEC, formatHMS, formatRA, toDeg 
 import type { ComponentProps } from 'react'
 import type { BodyPosition, CoordinateInfo, CoordinateType } from 'src/shared/types'
 
-export type BodyCoordinateInfoField = keyof CoordinateInfo | 'distance' | 'illuminated' | 'elongation' | 'magnitude'
-
 export interface BodyCoordinateInfoProps extends ComponentProps<'div'> {
 	readonly position: CoordinateInfo | BodyPosition
-	readonly hide?: readonly BodyCoordinateInfoField[]
+	readonly hideLst?: boolean
+	readonly hideMeridianTimeIn?: boolean
+	readonly hidePierSide?: boolean
+	readonly hideConstellation?: boolean
+	readonly hideDistance?: boolean
+	readonly hideMagnitude?: boolean
+	readonly hideIlluminated?: boolean
+	readonly hideElongation?: boolean
+	readonly hideEquatorialJ2000?: boolean
+	readonly hideEquatorial?: boolean
+	readonly hideHorizontal?: boolean
+	readonly hideEcliptic?: boolean
+	readonly hideGalactic?: boolean
 }
 
 const COORDINATE_TYPES = ['equatorialJ2000', 'equatorial', 'horizontal', 'ecliptic', 'galactic'] as const satisfies readonly CoordinateType[]
@@ -20,29 +30,36 @@ const COORDINATE_LABELS = {
 	galactic: 'GAL LON/LAT',
 } as const satisfies Record<CoordinateType, string>
 
-export function BodyCoordinateInfo({ position, hide, className, ...props }: BodyCoordinateInfoProps) {
-	const isVisible = (field: BodyCoordinateInfoField) => !hide?.includes(field)
+export function BodyCoordinateInfo({ position, hideEquatorialJ2000, hideEquatorial, hideEcliptic, hideHorizontal, hideGalactic, hideConstellation, hideLst, hideMeridianTimeIn, hidePierSide, hideDistance, hideMagnitude, hideIlluminated, hideElongation, className, ...props }: BodyCoordinateInfoProps) {
+	function isCoordinateTypeVisible(type: CoordinateType) {
+		if (type === 'equatorialJ2000') return !hideEquatorialJ2000
+		else if (type === 'equatorial') return !hideEquatorial
+		else if (type === 'ecliptic') return !hideEcliptic
+		else if (type === 'galactic') return !hideGalactic
+		else if (type === 'horizontal') return !hideHorizontal
+		return false
+	}
 
 	return (
 		<div {...props} className={tw('grid w-full grid-cols-20 gap-2', className)}>
 			<div className="col-span-12 flex flex-col justify-start gap-0">
 				{COORDINATE_TYPES.map((type) => {
-					if (!isVisible(type)) return null
+					if (!isCoordinateTypeVisible(type)) return null
 					const [x, y] = position[type]
 					return <Coordinate key={type} type={type} x={x} y={y} />
 				})}
 				<div className="flex items-center gap-2">
-					{'distance' in position && isVisible('distance') && <Extra className="flex-1" label="DIST" value={position.distance ? formatDistance(position.distance) : '--'} />}
-					{'magnitude' in position && isVisible('magnitude') && <Extra className="flex-1" label="MAG" value={position.magnitude ?? '--'} />}
+					{!hideDistance && 'distance' in position && <Extra className="flex-1" label="DIST" value={position.distance ? formatDistance(position.distance) : '--'} />}
+					{!hideMagnitude && 'magnitude' in position && <Extra className="flex-1" label="MAG" value={position.magnitude ?? '--'} />}
 				</div>
 			</div>
 			<div className="col-span-8 flex flex-col justify-start gap-0">
-				{isVisible('constellation') && <Extra label="CONST" value={position.constellation} />}
-				{isVisible('lst') && <Extra label="LST" value={formatHMS(position.lst, true)} />}
-				{isVisible('meridianTimeIn') && <Extra label="MERIDIAN IN" value={formatSeconds(position.meridianTimeIn)} />}
-				{isVisible('pierSide') && <Extra label="PIER SIDE" value={position.pierSide} />}
-				{'illuminated' in position && isVisible('illuminated') && <Extra label="ILLUM (%)" value={position.illuminated.toFixed(2)} />}
-				{'elongation' in position && isVisible('elongation') && <Extra label="ELON (°)" value={toDeg(position.elongation).toFixed(2)} />}
+				{!hideConstellation && <Extra label="CONST" value={position.constellation} />}
+				{!hideLst && <Extra label="LST" value={formatHMS(position.lst, true)} />}
+				{!hideMeridianTimeIn && <Extra label="MERIDIAN IN" value={formatSeconds(position.meridianTimeIn)} />}
+				{!hidePierSide && <Extra label="PIER SIDE" value={position.pierSide} />}
+				{!hideIlluminated && 'illuminated' in position && <Extra label="ILLUM (%)" value={position.illuminated.toFixed(2)} />}
+				{!hideElongation && 'elongation' in position && <Extra label="ELON (°)" value={toDeg(position.elongation).toFixed(2)} />}
 			</div>
 		</div>
 	)

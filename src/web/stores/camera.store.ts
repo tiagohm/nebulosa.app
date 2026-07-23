@@ -112,7 +112,7 @@ export function cameraStore(camera: Camera) {
 	}
 
 	function requestRoi() {
-		applySubframe(imageBus.emitWithResponse('roi', { camera }) as never)
+		applySubframe(imageBus.call('roi', { camera }) as never)
 	}
 
 	function applySubframe(subframe: Roi) {

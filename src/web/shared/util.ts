@@ -160,7 +160,9 @@ export function deleteUndefinedOrNull<T extends object>(o: T): T {
 }
 
 // Formats the name of a sky object based on its catalog ID and constellation
-export function skyObjectName(id: string, constellation: Constellation | number) {
+export function skyObjectName(id: string | undefined | null, constellation: Constellation | number) {
+	if (!id) return undefined
+
 	const index = id.indexOf(':')
 
 	if (index === -1) return id

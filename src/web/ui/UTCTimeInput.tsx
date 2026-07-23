@@ -24,9 +24,7 @@ export function UTCTimeInput({ onTimeChange, ...time }: UTCTimeInputProps) {
 	}
 
 	function handleNowClick() {
-		if (!onTimeChange) return
-		const utc = Temporal.Now.instant().epochMilliseconds
-		onTimeChange({ utc, offset })
+		setDate(Temporal.Now.plainDateTimeISO('UTC'))
 	}
 
 	useEffect(() => {

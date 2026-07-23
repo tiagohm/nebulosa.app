@@ -21,7 +21,7 @@ export const Rotator = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<RotatorStoreContext value={rotator.store}>
-			<Tabs className="p-3" startContent={<TabStartContent />}>
+			<Tabs className="h-full p-3" startContent={<TabStartContent />}>
 				<Tab id="main">rotator</Tab>
 				<Tab id="indi">INDI</Tab>
 

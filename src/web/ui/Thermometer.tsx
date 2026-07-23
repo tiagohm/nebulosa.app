@@ -17,7 +17,7 @@ export const Thermometer = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<ThermometerStoreContext value={thermometer.store}>
-			<Tabs className="p-3" startContent={<TabStartContent />}>
+			<Tabs className="h-full p-3" startContent={<TabStartContent />}>
 				<Tab id="main">Thermometer</Tab>
 				<Tab id="indi">INDI</Tab>
 

@@ -43,7 +43,7 @@ export const Mount = memo(({ params }: IDockviewPanelProps<Device>) => {
 
 	return (
 		<MountStoreContext value={mount.store}>
-			<Tabs className="p-3" startContent={<TabStartContent />}>
+			<Tabs className="h-full p-3" startContent={<TabStartContent />}>
 				<Tab id="main">Mount</Tab>
 				<Tab id="location">Location</Tab>
 				<Tab id="time">Time</Tab>
@@ -121,7 +121,7 @@ const TargetPosition = memo(() => {
 
 	return (
 		<div className="col-span-full">
-			<BodyCoordinateInfo hide={['lst', type === 'JNOW' ? 'equatorial' : type === 'J2000' ? 'equatorialJ2000' : type === 'ALTAZ' ? 'horizontal' : type === 'ECLIPTIC' ? 'ecliptic' : 'galactic']} position={position} />
+			<BodyCoordinateInfo hideLst hideEquatorial={type === 'JNOW'} hideEquatorialJ2000={type === 'J2000'} hideHorizontal={type === 'ALTAZ'} hideEcliptic={type === 'ECLIPTIC'} hideGalactic={type === 'GALACTIC'} position={position} />
 		</div>
 	)
 })
@@ -188,7 +188,7 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 			mount.updateTargetCoordinateX(formatRA(position.lst))
 			mount.updateTargetCoordinateY(formatDEC(latitude))
 		} else if (action === 'planetarium') {
-			const position = planetariumBus.emitWithResponse('selectedObjectCoordinate', null) as EquatorialCoordinate | undefined
+			const position = planetariumBus.call('selectedObjectCoordinate', null) as EquatorialCoordinate | undefined
 
 			if (position) {
 				mount.updateTargetCoordinateType('JNOW')

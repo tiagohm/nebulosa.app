@@ -11,7 +11,7 @@ import { TextInput } from '@ui/components/TextInput'
 import { Icons } from '@ui/Icon'
 import type { Device, DeviceProperty } from 'nebulosa/src/devices/indi/device'
 import type { DefElement, Message, NewVector, SwitchRule } from 'nebulosa/src/devices/indi/types'
-import { Activity, memo, useContext, useRef } from 'react'
+import { Activity, memo, useContext, useRef, useState } from 'react'
 import { useStore } from 'src/web/hooks/store.hook'
 import { indiPanelControlStore } from 'src/web/stores/indi.panelcontrol.store'
 import { useSnapshot } from 'valtio'
@@ -197,10 +197,17 @@ interface TextElementProps {
 }
 
 function TextElement({ label, value, isReadonly, onValueChange }: TextElementProps) {
+	const [editValue, setEditValue] = useState(value)
+
+	function handleValueChange(value: string) {
+		setEditValue(value)
+		onValueChange(value)
+	}
+
 	return (
 		<div className="grid grid-cols-12 gap-1">
 			<TextInput className={isReadonly ? 'col-span-full min-w-0' : 'col-span-6 min-w-0'} label={label} readOnly value={value} />
-			{!isReadonly && <TextInput className="col-span-6 min-w-0" label={label} onValueChange={onValueChange} value={value} />}
+			{!isReadonly && <TextInput className="col-span-6 min-w-0" label={label} onValueChange={handleValueChange} value={editValue} />}
 		</div>
 	)
 }
@@ -215,10 +222,17 @@ interface NumberElementProps {
 }
 
 function NumberElement({ label, value, isReadonly, min, max, onValueChange }: NumberElementProps) {
+	const [editValue, setEditValue] = useState(value)
+
+	function handleValueChange(value: number) {
+		setEditValue(value)
+		onValueChange(value)
+	}
+
 	return (
 		<div className="grid grid-cols-12 gap-1">
-			<NumberInput className={isReadonly ? 'col-span-full min-w-0' : 'col-span-6 min-w-0'} label={label} readOnly value={value} />
-			{!isReadonly && <NumberInput className="col-span-6 min-w-0" fractionDigits={8} label={label} maxValue={max} minValue={min} onValueChange={onValueChange} value={value} />}
+			<TextInput className={isReadonly ? 'col-span-full min-w-0' : 'col-span-6 min-w-0'} label={label} readOnly value={value.toString()} />
+			{!isReadonly && <NumberInput className="col-span-6 min-w-0" fractionDigits={8} label={label} maxValue={max} minValue={min} onValueChange={handleValueChange} value={editValue} />}
 		</div>
 	)
 }

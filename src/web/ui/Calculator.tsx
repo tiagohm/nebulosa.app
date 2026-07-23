@@ -51,7 +51,7 @@ export const Calculator = memo(({ api }: IDockviewPanelProps) => {
 	})
 
 	return (
-		<Tabs className="p-3" classNames={{ panelContainer: 'overflow-y-auto pr-1', tabList: 'max-h-full w-56', tab: 'min-h-9' }} placement="start">
+		<Tabs className="h-full p-3" classNames={{ panelContainer: 'overflow-y-auto pr-1', tabList: 'max-h-full w-56', tab: 'min-h-9' }} placement="start">
 			{tabs.map(({ id, label }) => (
 				<Tab id={id} key={id} endContent={<IconButton icon={Icons.Star} color={favorites.includes(id) ? 'warning' : 'default'} onClick={() => calculatorStore.toggleFavorite(id)} size="sm" />}>
 					{label}

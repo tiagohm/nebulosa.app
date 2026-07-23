@@ -14,7 +14,6 @@ import { NumberInput } from '@ui/components/NumberInput'
 import { Popover, type PopoverMethods } from '@ui/components/Popover'
 import { ProgressBar } from '@ui/components/ProgressBar'
 import { Radio } from '@ui/components/Radio'
-import { SearchTextInput } from '@ui/components/SearchTextInput'
 import { Select } from '@ui/components/Select'
 import { Slider } from '@ui/components/Slider'
 import { Switch } from '@ui/components/Switch'
@@ -326,8 +325,6 @@ const TextInputs = memo(() => {
 			elements.push(<TextInput color={color} disabled={disabled} endContent={endContent} key={key++} label={label} onValueChange={setValue} readOnly={readOnly} size={size} startContent={startContent} value={value} />)
 		}
 	}
-
-	elements.push(<SearchTextInput onClear={() => alert('clear')} value={value} onValueChange={setValue} />)
 
 	return elements
 })

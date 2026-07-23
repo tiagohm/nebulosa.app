@@ -16,12 +16,19 @@ export function flatPanelStore(flatPanel: FlatPanel) {
 
 	console.info('flat panel created:', flatPanel.name)
 
+	let mounted = false
+
 	function mount() {
+		if (mounted) return unmount
 		console.info('flat panel mounted:', flatPanel.name)
+		mounted = true
+		return unmount
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('flat panel unmounted:', flatPanel.name)
+		mounted = false
 	}
 
 	function connect() {

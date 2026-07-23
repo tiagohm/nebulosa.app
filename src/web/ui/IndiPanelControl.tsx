@@ -117,7 +117,7 @@ const Messages = memo(() => {
 
 	return (
 		<Activity mode={activityMode(tab === 'message')}>
-			<FilterableList className="col-span-full min-w-0" emptyContent="No messages" filter={FilterMessage} itemHeight={36} items={messages} minLengthToSearch={1}>
+			<FilterableList className="col-span-full min-w-0" emptyContent="No messages" filter={FilterMessage} itemHeight={36} items={messages}>
 				{MessageItem}
 			</FilterableList>
 			<div className="col-span-full flex flex-row items-center justify-center gap-2">

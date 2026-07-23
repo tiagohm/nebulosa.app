@@ -1,6 +1,5 @@
 import { atlasStore } from '@stores/atlas.store'
 import { homeStore, type HomePanelType } from '@stores/home.store'
-import { imageHomeStore } from '@stores/image.home.store'
 import { settingsStore } from '@stores/settings.store'
 import { About } from '@ui/About'
 import { AlpacaServer } from '@ui/AlpacaServer'
@@ -99,7 +98,6 @@ export const Home = memo(() => {
 	useEffect(settingsStore.mount, [])
 	useEffect(atlasStore.mount, [])
 	useEffect(homeStore.mount, [])
-	useEffect(imageHomeStore.mount, [])
 
 	return (
 		<div className="grid h-dvh grid-rows-[auto_minmax(0,1fr)] p-1 text-white">

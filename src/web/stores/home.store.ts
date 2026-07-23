@@ -66,7 +66,7 @@ export interface StoredHomeLayout {
 }
 
 const LAYOUT_SCHEMA_VERSION = 1
-const LAYOUT_STORAGE_KEY = 'workspace.layout'
+const LAYOUT_STORAGE_KEY = 'home.workspace.layout'
 
 const state = proxy<HomeState>({})
 
@@ -162,23 +162,23 @@ function handleReady(event: DockviewReadyEvent) {
 	if (!hasDevicePanels()) right.collapse()
 
 	// Left Panel
-	addUniquePanel('connections', { tabComponent: 'fixed', title: 'Connections' }, left, false)
-	addUniquePanel('devices', { tabComponent: 'fixed', title: 'Devices' }, left, false)
-	addUniquePanel('alpacaServer', { tabComponent: 'fixed', title: 'Alpaca Server' }, left, false)
-	addUniquePanel('indiServer', { tabComponent: 'fixed', title: 'INDI Server' }, left, false)
-	addUniquePanel('settings', { tabComponent: 'fixed', title: 'Settings' }, left, false)
-	addUniquePanel('about', { tabComponent: 'fixed', title: 'About' }, left, false)
+	addSinglePanel('connections', { tabComponent: 'fixed', title: 'Connections' }, left, false)
+	addSinglePanel('devices', { tabComponent: 'fixed', title: 'Devices' }, left, false)
+	addSinglePanel('alpacaServer', { tabComponent: 'fixed', title: 'Alpaca Server' }, left, false)
+	addSinglePanel('indiServer', { tabComponent: 'fixed', title: 'INDI Server' }, left, false)
+	addSinglePanel('settings', { tabComponent: 'fixed', title: 'Settings' }, left, false)
+	addSinglePanel('about', { tabComponent: 'fixed', title: 'About' }, left, false)
 
 	// Central Panel
 	main = addGroup({ id: 'group.main' })
 
 	// Atlas
-	addUniquePanel('sun', { title: 'Sun' }, main)
-	addUniquePanel('moon', { title: 'Moon' }, main, false)
-	addUniquePanel('planet', { title: 'Planet' }, main, false)
-	addUniquePanel('asteroid', { title: 'Asteroid' }, main, false)
-	addUniquePanel('galaxy', { title: 'DSO' }, main, false)
-	addUniquePanel('satellite', { title: 'Satellite' }, main, false)
+	addSinglePanel('sun', { title: 'Sun' }, main)
+	addSinglePanel('moon', { title: 'Moon' }, main, false)
+	addSinglePanel('planet', { title: 'Planet' }, main, false)
+	addSinglePanel('asteroid', { title: 'Asteroid' }, main, false)
+	addSinglePanel('galaxy', { title: 'DSO' }, main, false)
+	addSinglePanel('satellite', { title: 'Satellite' }, main, false)
 
 	layoutChangeDisposable = api.onDidLayoutChange(() => {
 		window.clearTimeout(saveTimer)
@@ -223,7 +223,7 @@ function load() {
 					continue
 				}
 
-				console.info('loaded stored panel:', panel.id, panel.group.id, panel.params)
+				console.info('loaded stored home panel:', panel.id, panel.group.id, panel.params)
 				storedPanels.push(panel)
 				listenOnDidRemovePanel(type, panel)
 			}
@@ -243,18 +243,18 @@ function activatePanel(panel: IDockviewPanel) {
 	}
 }
 
-function addUniquePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>, activate: boolean = true) {
-	const currentPanels = panels[type] ?? []
+function addSinglePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>, activate: boolean = true) {
+	const activePanels = panels[type] ?? []
 
-	if (currentPanels.length > 0) {
-		if (activate) activatePanel(currentPanels[0])
-		return currentPanels[0]
+	if (activePanels.length > 0) {
+		if (activate) activatePanel(activePanels[0])
+		return activePanels[0]
 	}
 
 	const id = `${type}.0`
 	const panel = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, tabComponent: group === left ? 'fixed' : 'closeable', component: type, position: { referenceGroup: (group ?? main!).id, index: options.index } })
-	currentPanels.push(panel)
-	panels[type] = currentPanels
+	activePanels.push(panel)
+	panels[type] = activePanels
 
 	if (activate) activatePanel(panel)
 
@@ -266,21 +266,21 @@ function addUniquePanel(type: HomePanelType, options: HomePanelOptions, group?: 
 }
 
 function addMultiplePanel(type: HomePanelType, options: HomePanelOptions, group?: Pick<DockviewGroupPanel, 'id'>, activate: boolean = true) {
-	const currentPanels = panels[type] ?? []
+	const activePanels = panels[type] ?? []
 
-	if (currentPanels.length >= MAX_PANELS) return
+	if (activePanels.length >= MAX_PANELS) return
 
 	const referenceGroupId = (group ?? main!)?.id
 	let referencePanel: IDockviewPanel | undefined
 
 	for (let i = 0; i < MAX_PANELS; i++) {
 		const id = `${type}.${i}`
-		const panel = currentPanels.find((e) => e.id === id)
+		const panel = activePanels.find((e) => e.id === id)
 
 		if (panel === undefined) {
 			const p = api!.addPanel({ renderer: 'onlyWhenVisible', ...options, id, tabComponent: type === 'image' ? 'image' : 'closeable', component: type, position: referencePanel && !group?.id ? { referencePanel, direction: 'right' } : { referenceGroup: referenceGroupId } })
-			currentPanels.push(p)
-			panels[type] = currentPanels
+			activePanels.push(p)
+			panels[type] = activePanels
 
 			if (activate) activatePanel(p)
 
@@ -352,7 +352,7 @@ function addAutoFocus() {
 }
 
 function addCalculator() {
-	return addUniquePanel('calculator', { title: 'Calculator' }, main)
+	return addSinglePanel('calculator', { title: 'Calculator' }, main)
 }
 
 function addDarv() {
@@ -366,19 +366,19 @@ function addFlatWizard() {
 }
 
 function addFraming() {
-	return addUniquePanel('framing', { title: 'Framing' }, main)
+	return addSinglePanel('framing', { title: 'Framing' }, main)
 }
 
 function addSolarEclipse() {
-	return addUniquePanel('solarEclipse', { title: 'Solar Eclipse' }, main)
+	return addSinglePanel('solarEclipse', { title: 'Solar Eclipse' }, main)
 }
 
 function addLunarEclipse() {
-	return addUniquePanel('lunarEclipse', { title: 'Lunar Eclipse' }, main)
+	return addSinglePanel('lunarEclipse', { title: 'Lunar Eclipse' }, main)
 }
 
 function addGuider() {
-	return addUniquePanel('guider', { title: 'Guider' }, main)
+	return addSinglePanel('guider', { title: 'Guider' }, main)
 }
 
 function addTppa() {
@@ -387,31 +387,31 @@ function addTppa() {
 }
 
 function addPlanetarium() {
-	return addUniquePanel('planetarium', { title: 'Planetarium' }, main)
+	return addSinglePanel('planetarium', { title: 'Planetarium' }, main)
 }
 
 function addSun() {
-	addUniquePanel('sun', { title: 'Sun' }, main)
+	addSinglePanel('sun', { title: 'Sun' }, main)
 }
 
 function addMoon() {
-	addUniquePanel('moon', { title: 'Moon' }, main)
+	addSinglePanel('moon', { title: 'Moon' }, main)
 }
 
 function addPlanet() {
-	addUniquePanel('planet', { title: 'Planet' }, main)
+	addSinglePanel('planet', { title: 'Planet' }, main)
 }
 
 function addAsteroid() {
-	addUniquePanel('asteroid', { title: 'Asteroid' }, main)
+	addSinglePanel('asteroid', { title: 'Asteroid' }, main)
 }
 
 function addDSO() {
-	addUniquePanel('galaxy', { title: 'DSO' }, main)
+	addSinglePanel('galaxy', { title: 'DSO' }, main)
 }
 
 function addSatellite() {
-	addUniquePanel('satellite', { title: 'Satellite' }, main)
+	addSinglePanel('satellite', { title: 'Satellite' }, main)
 }
 
 function listenOnDidRemovePanel(type: HomePanelType, panel: IDockviewPanel) {
@@ -431,9 +431,7 @@ function listenOnDidRemovePanel(type: HomePanelType, panel: IDockviewPanel) {
 	return listener
 }
 
-window.addEventListener('beforeunload', () => {
-	saveLayout()
-})
+window.addEventListener('beforeunload', saveLayout)
 
 export const homeStore = {
 	state,

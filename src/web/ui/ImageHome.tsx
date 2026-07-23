@@ -59,12 +59,13 @@ const components = {
 } as const satisfies Record<ImagePanelType, React.FunctionComponent<IDockviewPanelProps>>
 
 export const ImageHome = memo(({ params }: IDockviewPanelProps<Image>) => {
-	const viewer = useStore(() => imageViewerStore(params), [params])
+	const home = useStore(() => imageHomeStore(params), [params])
+	const viewer = useStore(() => imageViewerStore(params, home), [params])
 
 	return (
 		<div className="workspace relative h-full min-h-0 w-full flex-1 overflow-hidden">
 			<ImageViewerStoreContext value={viewer}>
-				<DockviewReact hideBorders theme={themeGithubDark} className="h-full w-full" defaultTabComponent={Tab} tabComponents={tabComponents} components={components} onReady={(event) => imageHomeStore.handleReady(event, params)} />
+				<DockviewReact hideBorders theme={themeGithubDark} className="h-full w-full" defaultTabComponent={Tab} tabComponents={tabComponents} components={components} onReady={home.handleReady} />
 			</ImageViewerStoreContext>
 		</div>
 	)

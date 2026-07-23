@@ -16,12 +16,19 @@ export function dewHeaterStore(dewHeater: DewHeater) {
 
 	console.info('dew heater created:', dewHeater.name)
 
+	let mounted = false
+
 	function mount() {
+		if (mounted) return unmount
 		console.info('dew heater mounted:', dewHeater.name)
+		mounted = true
+		return unmount
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('dew heater unmounted:', dewHeater.name)
+		mounted = false
 	}
 
 	function connect() {

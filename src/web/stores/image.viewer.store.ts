@@ -12,6 +12,7 @@ import { imageDebayerStore, type ImageDebayerStore } from '@stores/image.debayer
 import { imageFilterStore, type ImageFilterStore } from '@stores/image.filter.store'
 import { imageFovStore, type ImageFovStore } from '@stores/image.fov.store'
 import { imageHeaderStore, type ImageHeaderStore } from '@stores/image.header.store'
+import type { ImageHomeStore } from '@stores/image.home.store'
 import { imageMouseCoordinateStore, type ImageMouseCoordinateStore } from '@stores/image.mousecoordinate.store'
 import { imageRoiStore, type ImageRoiStore } from '@stores/image.roi.store'
 import { imageSaveStore, type ImageSaveStore } from '@stores/image.save.store'
@@ -34,6 +35,7 @@ import { proxy, ref, subscribe } from 'valtio'
 
 export interface ImageViewerStore {
 	readonly state: ImageViewerState
+	readonly home: ImageHomeStore
 	readonly image: Image
 	readonly key: string // The storage key
 	readonly target: HTMLImageElement | undefined
@@ -91,7 +93,7 @@ export interface ImageViewerState {
 	path: string
 }
 
-export function imageViewerStore(image: Image): ImageViewerStore {
+export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewerStore {
 	const state = proxy<ImageViewerState>({
 		transformation: structuredClone(DEFAULT_IMAGE_TRANSFORMATION),
 		angle: 0,
@@ -306,6 +308,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 
 	const store = {
 		state,
+		home,
 		image,
 		key,
 		get target() {

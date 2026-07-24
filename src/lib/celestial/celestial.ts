@@ -2255,7 +2255,6 @@ class GridLayer extends InternalLayer {
 	private renderGridLabels(ctx: CanvasRenderingContext2D, state: RenderState) {
 		let labelRectCount = 0
 
-		ctx.save()
 		ctx.globalAlpha = Math.min(0.95, Math.max(0.58, state.theme.grid.opacity + 0.28))
 		ctx.font = skyLabelFont(state, 9)
 		ctx.textAlign = 'center'
@@ -2266,7 +2265,6 @@ class GridLayer extends InternalLayer {
 			labelRectCount = drawGridBoundaryLabel(ctx, state, candidate.label, candidate, this.labelRects, labelRectCount)
 		}
 
-		ctx.restore()
 		this.labelRects.length = labelRectCount
 	}
 }
@@ -2307,7 +2305,6 @@ class ReferenceLineLayer extends InternalLayer {
 
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
 		this.ensurePaths(state)
-		ctx.save()
 		ctx.globalAlpha = 0.7
 		ctx.lineCap = 'round'
 		ctx.lineJoin = 'round'
@@ -2315,7 +2312,6 @@ class ReferenceLineLayer extends InternalLayer {
 		this.drawLocalMeridian(ctx, state)
 		this.drawCelestialEquator(ctx, state)
 		this.drawEcliptic(ctx, state)
-		ctx.restore()
 	}
 
 	private ensurePaths(state: RenderState) {
@@ -2416,13 +2412,11 @@ abstract class ConstellationSegmentLayer extends InternalLayer {
 			this.cachedRevision = state.projectedGeometryRevision
 		}
 
-		ctx.save()
 		ctx.strokeStyle = color
 		ctx.globalAlpha = alpha
 		applyBasePathTransform(ctx, state)
 		ctx.lineWidth = lineWidth / state.transform.k
 		ctx.stroke(this.path)
-		ctx.restore()
 	}
 
 	private drawSegment(path: Path2D, state: RenderState, from: ConstellationLine[number], to: ConstellationLine[number]) {
@@ -2466,13 +2460,11 @@ class ConstellationBoundaryLayer extends ConstellationSegmentLayer {
 		const inverseScale = 1 / state.transform.k
 		this.scaledLineDash[0] = CONSTELLATION_BOUNDARY_LINE_DASH[0] * inverseScale
 		this.scaledLineDash[1] = CONSTELLATION_BOUNDARY_LINE_DASH[1] * inverseScale
-		ctx.save()
 		ctx.setLineDash(this.scaledLineDash)
 		const theme = state.theme.constellations
 		const color = theme.boundaryColor || theme.color
 		const opacity = theme.boundaryOpacity ?? theme.opacity
 		this.drawSegments(ctx, state, state.constellations.boundaries ?? [], color, opacity, 0.6)
-		ctx.restore()
 	}
 }
 
@@ -2531,12 +2523,6 @@ class MilkyWayLayer extends InternalLayer {
 
 		this.samplerState = state
 		this.ensurePaths(state, steps)
-		ctx.save()
-
-		if (isFiniteDiskProjection(state.projection)) {
-			clipProjectionDisk(ctx, state)
-		}
-
 		applyBasePathTransform(ctx, state)
 		ctx.lineWidth = theme.lineWidth / state.transform.k
 		ctx.lineJoin = 'round'
@@ -2561,8 +2547,6 @@ class MilkyWayLayer extends InternalLayer {
 			ctx.globalAlpha = lineOpacity * lineOpacityPerLevel
 			ctx.stroke(this.paths[i])
 		}
-
-		ctx.restore()
 	}
 
 	private ensurePaths(state: RenderState, steps: readonly Readonly<MilkyWayStep>[]) {

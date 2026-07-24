@@ -1,9 +1,9 @@
 import { Api } from '@shared/api'
 import { indiBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
-import { DEFAULT_INDI_SERVER_START } from 'src/shared/types'
-import type { IndiServerStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { DEFAULT_INDI_SERVER_START } from 'src/types/indi'
+import type { IndiServerStart } from 'src/types/indi'
 import { proxy } from 'valtio'
 
 export type IndiServerStore = typeof indiServerStore

@@ -4,8 +4,8 @@ import { equipmentStore } from '@stores/equipment.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { NudgeDirection } from '@ui/Nudge'
 import type { GuideOutput } from 'nebulosa/src/devices/indi/device'
-import type { GuidePulse } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import type { GuidePulse } from 'src/types/guideoutput'
 import { proxy } from 'valtio'
 
 export type GuideOutputStore = ReturnType<typeof guideOutputStore>

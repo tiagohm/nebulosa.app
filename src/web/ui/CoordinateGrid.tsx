@@ -2,7 +2,7 @@ import { ImageViewerStoreContext } from '@shared/context'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { memo, useContext } from 'react'
 import type { CSSProperties } from 'react'
-import type { ImageCoordinateGridAxis, ImageCoordinateGridLine } from 'src/shared/types'
+import type { ImageCoordinateGridAxis, ImageCoordinateGridLine } from 'src/types/image.coordinategrid'
 import { useSnapshot } from 'valtio'
 
 const GRID_STROKE: Record<ImageCoordinateGridAxis, string> = {

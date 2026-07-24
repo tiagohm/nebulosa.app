@@ -2,16 +2,15 @@ import { Api } from '@shared/api'
 import { cameraBus, imageBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import { storageGet, storageSet } from '@shared/storage'
-import type { ImageRoiRequest } from '@shared/types'
 import { clampInteger } from '@shared/util'
 import { cameraCaptureStore } from '@stores/camera.capture.store'
 import { equipmentStore } from '@stores/equipment.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { Camera, Focuser, MinMaxValueProperty, Mount, NameAndLabel, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
-import type { Roi, CameraUpdated } from 'src/shared/types'
-import { exposureTimeIn, unsubscribe } from 'src/shared/util'
-import { DEFAULT_CAMERA_CAPTURE_EVENT } from 'src/types/camera'
-import type { CameraCaptureEvent, CameraCaptureStart } from 'src/types/camera'
+import { unsubscribe } from 'src/shared/util'
+import { DEFAULT_CAMERA_CAPTURE_EVENT, exposureTimeIn } from 'src/types/camera'
+import type { CameraCaptureEvent, CameraCaptureStart, CameraUpdated } from 'src/types/camera'
+import type { ComputeRoi, Roi } from 'src/types/image.roi'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 
@@ -72,7 +71,7 @@ export function cameraStore(camera: Camera) {
 		u[2] = subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(state.request, formats))
 		u[3] = subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(state.request, exposure))
 		u[4] = subscribeKey(camera, 'frame', (frame) => updateCameraFrame(state.request, frame))
-		u[5] = cameraBus.subscribe('roi', sendRoi)
+		u[5] = cameraBus.subscribe('roi', computeRoi)
 		u[6] = subscribeKey(equipmentStore.state.mount, 'length', refreshEquipment)
 		u[7] = subscribeKey(equipmentStore.state.wheel, 'length', refreshEquipment)
 		u[8] = subscribeKey(equipmentStore.state.focuser, 'length', refreshEquipment)
@@ -115,14 +114,14 @@ export function cameraStore(camera: Camera) {
 	}
 
 	function requestRoi() {
-		applySubframe(imageBus.call('roi', { camera }) as never)
+		applySubframe(imageBus.call('roi', { camera }))
 	}
 
 	function applySubframe(subframe: Roi) {
 		return updateCameraSubframe(state.request, camera, subframe)
 	}
 
-	function sendRoi(options: ImageRoiRequest) {
+	function computeRoi(options: ComputeRoi) {
 		if (options.camera !== camera) return undefined
 		return { x: state.request.x, y: state.request.y, width: state.request.width || camera.frame.width.max || 1, height: state.request.height || camera.frame.height.max || 1 }
 	}

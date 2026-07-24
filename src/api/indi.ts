@@ -5,9 +5,9 @@ import type { CameraManager, CoverManager, DevicePropertyHandler, DeviceProvider
 // oxfmt-ignore
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, Message, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
-import { DEVICE_TYPES } from 'src/shared/types'
-import type { IndiPropertyListenEvent, IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { DEVICE_TYPES } from 'src/types/device'
+import type { IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from 'src/types/indi'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
@@ -15,6 +15,11 @@ import type { Messager, WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
 
 const MAX_DEVICE_MESSAGES = 100
+
+export interface IndiPropertyListenEvent {
+	readonly id: string
+	readonly socket: Messager
+}
 
 export interface IndiBusEvents {
 	readonly close: Client

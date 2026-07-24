@@ -5,9 +5,9 @@ import { nanoid } from 'nanoid'
 import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import type { Writable } from 'nebulosa/src/core/types'
 import { toArcsec } from 'nebulosa/src/math/units/angle'
-import { DEFAULT_FOV_ITEM } from 'src/shared/types'
-import type { ComputedFov, FovItem } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { DEFAULT_IMAGE_FOV_ITEM } from 'src/types/image.fov'
+import type { ComputedImageFov, ImageFovItem } from 'src/types/image.fov'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 
@@ -15,8 +15,8 @@ export type ImageFovStore = ReturnType<typeof imageFovStore>
 
 export interface ImageFovState {
 	selected: number // item index
-	readonly items: Writable<FovItem>[]
-	readonly computed: ComputedFov[]
+	readonly items: Writable<ImageFovItem>[]
+	readonly computed: ComputedImageFov[]
 }
 
 export function imageFovStore(viewer: ImageViewerStore) {
@@ -122,12 +122,12 @@ export function imageFovStore(viewer: ImageViewerStore) {
 		setPixelHeight(item.ps ?? 0)
 	}
 
-	function select(item: FovItem | number) {
+	function select(item: ImageFovItem | number) {
 		state.selected = typeof item === 'number' ? item : state.items.indexOf(item)
 	}
 
 	function add() {
-		const item = structuredClone(DEFAULT_FOV_ITEM)
+		const item = structuredClone(DEFAULT_IMAGE_FOV_ITEM)
 		item.id = nanoid()
 		state.items.push(item)
 		state.selected = state.items.length - 1

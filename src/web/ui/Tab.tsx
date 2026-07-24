@@ -56,7 +56,7 @@ import { Tooltip } from '@ui/components/Tooltip'
 import { Icons } from '@ui/Icon'
 import type { DockviewIDisposable, IDockviewPanelHeaderProps } from 'dockview-react'
 import { useEffect, useState } from 'react'
-import { DEVICE_TYPES } from 'root/src/shared/types'
+import { isDeviceType } from 'src/types/device'
 
 export const homeIcons = {
 	about: aboutIcon,
@@ -168,9 +168,9 @@ function extractFilename(path: string) {
 }
 
 function isTitleAlwaysVisible(type: HomePanelType | ImagePanelType) {
-	return DEVICE_TYPES.has(type as never) || type === 'darv' || type === 'flatWizard' || type === 'autoFocus' || type === 'tppa'
+	return isDeviceType(type) || type === 'darv' || type === 'flatWizard' || type === 'autoFocus' || type === 'tppa'
 }
 
 function isCloseButtonAlwaysVisible(type: HomePanelType | ImagePanelType) {
-	return DEVICE_TYPES.has(type as never)
+	return isDeviceType(type)
 }

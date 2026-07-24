@@ -1,5 +1,4 @@
 import { ImageViewerStoreContext } from '@shared/context'
-import type { Image } from '@shared/types'
 import { AnnotatedStars } from '@ui/AnnotatedStars'
 import { CoordinateGrid } from '@ui/CoordinateGrid'
 import { CoordinateOnMouse } from '@ui/CoordinateOnMouse'
@@ -11,6 +10,7 @@ import { Interactable } from '@ui/Interactable'
 import { Roi } from '@ui/Roi'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useContext, useEffect, useLayoutEffect, useRef } from 'react'
+import type { Image } from 'src/types/image'
 
 export const ImageViewer = memo(({ params }: IDockviewPanelProps<Image>) => {
 	const imgRef = useRef<HTMLImageElement>(null)

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, stat, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { basename, join } from 'path'
 import { fileSystem as fileSystemEndpoints, FileSystemHandler } from 'src/api/filesystem'
-import type { FileSystem } from 'src/shared/types'
+import type { FileSystem } from 'src/types/filesystem'
 import { json } from './util'
 
 const fileSystemHandler = new FileSystemHandler()

@@ -14,11 +14,9 @@ import type { StellariumProtocolHandler } from 'nebulosa/src/devices/protocols/s
 import { matMulVec, matTranspose } from 'nebulosa/src/math/linear-algebra/mat3'
 import { normalizePI } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-// oxfmt-ignore
-import { DEFAULT_COORDINATE_INFO } from 'src/shared/types';
 import { EventBus } from 'src/shared/bus'
-import type { MountAdded, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountRemoved, MountUpdated } from 'src/shared/types'
-import { coordinateInfo } from 'src/shared/util'
+import { coordinateInfo, DEFAULT_COORDINATE_INFO } from 'src/types/mount'
+import type { MountAdded, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountRemoved, MountUpdated } from 'src/types/mount'
 import type { CacheManager } from './cache'
 import type { ConfirmationHandler } from './confirmation'
 import { query, response } from './http'

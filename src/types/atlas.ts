@@ -2,8 +2,8 @@ import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/locat
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Distance } from 'nebulosa/src/math/units/distance'
-import { DEFAULT_COORDINATE_INFO } from 'src/shared/types'
-import type { CoordinateInfo } from 'src/shared/types'
+import { DEFAULT_COORDINATE_INFO } from 'src/types/mount'
+import type { CoordinateInfo } from 'src/types/mount'
 
 export interface LocationAndTime {
 	readonly location: GeographicCoordinate

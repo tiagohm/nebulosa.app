@@ -10,10 +10,12 @@ import { bufferSink } from 'nebulosa/src/io/io'
 import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { ImageHandler, ImageProcessor, effectiveCrosshairAngularSpacing, image as imageEndpoints } from 'src/api/image'
-import { DEFAULT_IMAGE_TRANSFORMATION, X_IMAGE_INFO_HEADER } from 'src/shared/types'
-import type { ImageCoordinateGrid, ImageHistogram, ImageInfo, ImageTransformation } from 'src/shared/types'
+import { DEFAULT_IMAGE_TRANSFORMATION, X_IMAGE_INFO_HEADER } from 'src/types/image'
+import type { ImageInfo, ImageTransformation } from 'src/types/image'
 import type { AnnotateImage } from 'src/types/image.annotation'
-import type { CrosshairProjection } from 'src/types/image.crosshair'
+import type { ImageCoordinateGrid } from 'src/types/image.coordinategrid'
+import type { ImageCrosshairProjection } from 'src/types/image.crosshair'
+import type { ImageHistogram } from 'src/types/image.statistics'
 import { json, noContent } from './util'
 
 const EMPTY_ANNOTATE_IMAGE: Omit<AnnotateImage, 'solution'> = {
@@ -94,7 +96,7 @@ function request(body: unknown) {
 	} as unknown as Bun.BunRequest
 }
 
-function readyCrosshairProjection(projection: CrosshairProjection) {
+function readyCrosshairProjection(projection: ImageCrosshairProjection) {
 	expect(projection.status).toBe('ready')
 	if (projection.status !== 'ready') throw new Error('expected ready crosshair projection')
 	return projection
@@ -386,7 +388,7 @@ describe('image handler', () => {
 		expect(() => endpoints['/image/crosshairprojection'].POST(request({ preset: 'bullseye' }))).toThrow()
 		const valid = await endpoints['/image/crosshairprojection'].POST(request({ solution: SOLVED_IMAGE_SOLUTION, anchor: { space: 'image', point: { x: 640, y: 512 } }, preset: 'crosshair' }))
 
-		expect(readyCrosshairProjection(await json<CrosshairProjection>(valid)).center.inside).toBeTrue()
+		expect(readyCrosshairProjection(await json<ImageCrosshairProjection>(valid)).center.inside).toBeTrue()
 	})
 
 	test('save endpoint exports FITS and XISF files that can be read back', async () => {

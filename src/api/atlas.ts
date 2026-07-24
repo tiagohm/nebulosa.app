@@ -46,11 +46,11 @@ import type { MinorPlanet, MinorPlanetParameter, FindCloseApproaches, CloseAppro
 import type { BodyPosition, ChartOfBody, LocationAndTime, PositionOfBody } from 'src/types/atlas'
 import type { SearchSkyObject, SkyObject, SkyObjectSearchItem } from 'src/types/galaxy'
 import type { FindLunarEclipse, LunarEclipseMap, ComputeLunarEclipseLocalCircumstances, ComputeLunarEclipseLocalView, ApogeeAndPerigee, LunarPhaseTime } from 'src/types/moon'
+import type { PlanetariumSearch } from 'src/types/planetarium'
 import { SATELLITE_GROUP_TYPES } from 'src/types/satellite'
 import type { SatelliteGroupType, SearchSatellite, Satellite } from 'src/types/satellite'
 import { EMPTY_TWILIGHT, SOLAR_IMAGE_SOURCE_URLS } from 'src/types/sun'
 import type { ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, FindSolarEclipse, SolarEclipseMap, SolarImageSource, SolarSeasons } from 'src/types/sun'
-import type { PlanetariumRequest } from '../shared/types'
 import type { CacheManager } from './cache'
 import { query, response } from './http'
 import type { Endpoints } from './http'
@@ -566,7 +566,7 @@ export class AtlasHandler {
 		}
 	}
 
-	planetarium(req: PlanetariumRequest) {
+	planetarium(req: PlanetariumSearch) {
 		const q = `SELECT d.id, d.magnitude, d.rightAscension, d.declination, d.pmRA, d.pmDEC, d.type, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ORDER BY n.type LIMIT 1) as name FROM dsos d WHERE d.magnitude <= ${req.magnitudeLimit} AND d.type IN (${placeholders(req.types.length)})`
 
 		return nebulosa.query<SkyObject, SQLQueryBindings[]>(q).all(...req.types)

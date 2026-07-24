@@ -1,7 +1,7 @@
-import type { Image } from '@shared/types'
 import { dockviewStore } from '@stores/dockview.store'
 import type { DockviewApi, DockviewGroupPanel, DockviewGroupPanelApi, DockviewReadyEvent, IDockviewGroupPanel, IDockviewPanel } from 'dockview-react'
 import { unsubscribe } from 'src/shared/util'
+import type { Image } from 'src/types/image'
 
 export type ImageHomeStore = ReturnType<typeof imageHomeStore>
 

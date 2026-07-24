@@ -10,7 +10,7 @@ import { Icons } from '@ui/Icon'
 import { memo, useContext, useEffect } from 'react'
 import cameras from 'src/data/astrobin.cameras.json'
 import telescopes from 'src/data/astrobin.telescopes.json'
-import type { FovItem } from 'src/shared/types'
+import type { ImageFovItem } from 'src/types/image.fov'
 import { useSnapshot } from 'valtio'
 
 export const ImageFov = memo(() => {
@@ -130,7 +130,7 @@ const FovList = memo(() => {
 	)
 })
 
-const ComputedFovItem = memo((item: FovItem) => (
+const ComputedFovItem = memo((item: ImageFovItem) => (
 	<div className="flex min-w-0 flex-1 flex-row flex-wrap items-center justify-between gap-1 px-2 text-sm">
 		<span>
 			<strong>FL:</strong> {formatFovNumber(item.focalLength)}mm

@@ -1,10 +1,8 @@
-import type { Image, ImageLoaded, ImageRoiRequest } from '@shared/types'
 import type { DeviceState } from '@stores/equipment.store'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
 import type { Camera, Cover, Device, FlatPanel, Focuser, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { Message } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
-import type { IndiDevicePropertyEvent, IndiServerEvent } from 'src/shared/types'
 import type { AlpacaServerStatus } from 'src/types/alpaca'
 import type { AutoFocusEvent } from 'src/types/autofocus'
 import type { CameraFrameEvent, CameraCaptureEvent } from 'src/types/camera'
@@ -12,6 +10,9 @@ import type { ConnectionEvent } from 'src/types/connection'
 import type { DarvEvent } from 'src/types/darv'
 import type { FlatWizardEvent } from 'src/types/flatwizard'
 import type { GuiderEvent } from 'src/types/guider'
+import type { Image, ImageLoaded } from 'src/types/image'
+import type { ComputeRoi } from 'src/types/image.roi'
+import type { IndiDevicePropertyEvent, IndiServerEvent } from 'src/types/indi'
 import type { TppaEvent } from 'src/types/tppa'
 
 export interface WebSocketBusEvents {
@@ -29,7 +30,7 @@ export type DeviceBusEvents<D extends Device = Device> = {
 export interface CameraBusEvents extends DeviceBusEvents<Camera> {
 	readonly frame: CameraFrameEvent
 	readonly capture: CameraCaptureEvent
-	readonly roi: ImageRoiRequest
+	readonly roi: ComputeRoi
 }
 
 export interface ImageBusEvents {
@@ -37,7 +38,7 @@ export interface ImageBusEvents {
 	readonly update: Readonly<{ image: Image; path: string }>
 	readonly remove: Image
 	readonly load: ImageLoaded
-	readonly roi: ImageRoiRequest
+	readonly roi: ComputeRoi
 }
 
 export interface DarvBusEvents {

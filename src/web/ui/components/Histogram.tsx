@@ -1,6 +1,6 @@
 import { assignRef } from '@shared/util'
 import { memo, useEffect, useRef, useState } from 'react'
-import type { ImageHistogram } from 'src/shared/types'
+import type { ImageHistogram } from 'src/types/image.statistics'
 
 const CHANNEL_COLORS = ['rgba(255,82,82,0.72)', 'rgba(34,197,94,0.72)', 'rgba(96,165,250,0.72)'] as const
 const MONO_COLOR = 'rgba(209,213,219,0.82)'

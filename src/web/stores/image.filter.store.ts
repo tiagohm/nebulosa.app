@@ -1,9 +1,11 @@
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { FFTFilterType } from 'nebulosa/src/imaging/processing/fft'
-import { DEFAULT_IMAGE_FFT, DEFAULT_IMAGE_FILTER } from 'src/shared/types'
-import type { ImageFFT, ImageFilter, ImageKernelFilterType } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { DEFAULT_IMAGE_FFT } from 'src/types/image.fft'
+import type { ImageFFT } from 'src/types/image.fft'
+import { DEFAULT_IMAGE_FILTER } from 'src/types/image.filter'
+import type { ImageFilter, ImageKernelFilterType } from 'src/types/image.filter'
 import { proxy } from 'valtio'
 
 export type ImageFilterStore = ReturnType<typeof imageFilterStore>

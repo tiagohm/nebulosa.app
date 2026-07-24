@@ -1,9 +1,9 @@
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { ImageChannel } from 'nebulosa/src/imaging/model/types'
 import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
-import { DEFAULT_IMAGE_SCNR } from 'src/shared/types'
-import type { ImageScnr } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { DEFAULT_IMAGE_SCNR } from 'src/types/image.scnr'
+import type { ImageScnr } from 'src/types/image.scnr'
 import { proxy } from 'valtio'
 
 export type ImageScnrStore = ReturnType<typeof imageScnrStore>

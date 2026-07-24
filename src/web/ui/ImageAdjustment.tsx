@@ -7,7 +7,7 @@ import type { NumberInputProps } from '@ui/components/NumberInput'
 import { Icons } from '@ui/Icon'
 import { ImageChannelOrGrayInput } from '@ui/ImageChannelOrGrayInput'
 import { memo, useContext, useEffect } from 'react'
-import type { ImageAdjustment as ImageAdjustmentType } from 'src/shared/types'
+import type { ImageAdjustment as Adjustment } from 'src/types/image.adjustment'
 import { useSnapshot } from 'valtio'
 
 export const ImageAdjustment = memo(() => {
@@ -88,7 +88,7 @@ function AdjustmentValueInput({ minValue = 0, className, ...props }: NumberInput
 	return <NumberInput className={tw('col-span-full min-w-0', className)} fractionDigits={2} minValue={minValue} maxValue={10} step={0.01} {...props} />
 }
 
-function isValidAdjustment(adjustment: ImageAdjustmentType) {
+function isValidAdjustment(adjustment: Adjustment) {
 	return isValidAdjustmentValue(adjustment.brightness.value) && isValidAdjustmentValue(adjustment.contrast.value) && isValidAdjustmentValue(adjustment.saturation.value) && isValidAdjustmentValue(adjustment.gamma.value, 1)
 }
 

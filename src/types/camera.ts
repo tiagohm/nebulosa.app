@@ -1,7 +1,14 @@
 import { DEFAULT_PHD2_SETTLE } from 'nebulosa/src/devices/guiding/phd2'
-import type { FrameType, CameraTransferFormat } from 'nebulosa/src/devices/indi/device'
+import type { FrameType, CameraTransferFormat, Camera } from 'nebulosa/src/devices/indi/device'
 import type { Size } from 'recharts/types/util/types'
+import type { DeviceAdded, DeviceRemoved, DeviceUpdated } from 'src/types/device'
 import type { GuiderDither } from 'src/types/guider'
+
+export type CameraAdded = DeviceAdded<Camera>
+
+export type CameraUpdated = DeviceUpdated<Camera>
+
+export type CameraRemoved = DeviceRemoved<Camera>
 
 export type CameraExposureTimeUnit = 'minute' | 'second' | 'millisecond' | 'microsecond'
 
@@ -116,4 +123,44 @@ export const DEFAULT_CAMERA_CAPTURE_EVENT: CameraCaptureEvent = {
 		progress: 0,
 	},
 	stopped: false,
+}
+
+// Returns a factor to convert exposure time to minutes
+export function exposureTimeUnitFactor(unit: CameraExposureTimeUnit) {
+	switch (unit) {
+		case 'minute':
+		default:
+			return 1
+		case 'second':
+			return 60
+		case 'millisecond':
+			return 60000
+		case 'microsecond':
+			return 60000000
+	}
+}
+
+// Converts exposure time in given unit to minutes
+export function exposureTimeInMinutes(time: number, unit: CameraExposureTimeUnit) {
+	return unit === 'minute' ? time : time / exposureTimeUnitFactor(unit)
+}
+
+// Converts exposure time in given unit to seconds
+export function exposureTimeInSeconds(time: number, unit: CameraExposureTimeUnit) {
+	return unit === 'second' ? time : time * (60 / exposureTimeUnitFactor(unit))
+}
+
+// Converts exposure time in given unit to milliseconds
+export function exposureTimeInMilliseconds(time: number, unit: CameraExposureTimeUnit) {
+	return unit === 'millisecond' ? time : time * (60000 / exposureTimeUnitFactor(unit))
+}
+
+// Converts exposure time in given unit to microseconds
+export function exposureTimeInMicroseconds(time: number, unit: CameraExposureTimeUnit) {
+	return unit === 'microsecond' ? time : time * (60000000 / exposureTimeUnitFactor(unit))
+}
+
+// Converts exposure time from one unit to another
+export function exposureTimeIn(time: number, from: CameraExposureTimeUnit, to: CameraExposureTimeUnit) {
+	return from === to ? time : time * (exposureTimeUnitFactor(to) / exposureTimeUnitFactor(from))
 }

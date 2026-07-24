@@ -6,7 +6,7 @@ import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { CoverSimulator } from 'nebulosa/src/devices/indi/simulator/cover'
 import { CoverHandler, coverBus, cover as coverEndpoints } from 'src/api/cover'
 import { WebSocketMessageHandler } from 'src/api/message'
-import type { CoverAdded, CoverRemoved, CoverUpdated } from 'src/shared/types'
+import type { CoverAdded, CoverRemoved, CoverUpdated } from 'src/types/cover'
 import { json, SocketMessager, waitUntil } from './util'
 
 coverBus.forceSync = true

@@ -2,7 +2,7 @@ import { tw } from '@shared/util'
 import { CameraExposureTimeUnitDropdown } from '@ui/CameraExposureTimeUnitDropdown'
 import { NumberInput } from '@ui/components/NumberInput'
 import type { NumberInputProps } from '@ui/components/NumberInput'
-import { exposureTimeIn } from 'src/shared/util'
+import { exposureTimeIn } from 'src/types/camera'
 import type { CameraExposureTimeUnit } from 'src/types/camera'
 
 export interface CameraExposureTimeInputProps extends Omit<NumberInputProps, 'size' | 'minValue' | 'maxValue' | 'endContent' | 'value' | 'onValueChange'> {

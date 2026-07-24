@@ -1,14 +1,14 @@
 import { Select } from '@ui/components/Select'
 import type { SelectProps } from '@ui/components/Select'
-import type { CrosshairSpacingUnit } from 'src/types/image.crosshair'
+import type { ImageCrosshairSpacingUnit } from 'src/types/image.crosshair'
 
 const ITEMS = ['pixel', 'normalized', 'angular'] as const
 
-function CrosshairSpacingUnitItem(item: CrosshairSpacingUnit) {
+function CrosshairSpacingUnitItem(item: ImageCrosshairSpacingUnit) {
 	return <span>{item === 'pixel' ? 'Pixel' : item === 'normalized' ? 'Normalized' : 'Angular'}</span>
 }
 
-export type CrosshairSpacingUnitSelectProps = Omit<SelectProps<CrosshairSpacingUnit>, 'children' | 'items'>
+export type CrosshairSpacingUnitSelectProps = Omit<SelectProps<ImageCrosshairSpacingUnit>, 'children' | 'items'>
 
 export function CrosshairSpacingUnitSelect({ label = 'Spacing unit', ...props }: CrosshairSpacingUnitSelectProps) {
 	return (

@@ -1,12 +1,11 @@
 import { imageBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
-import type { ImageRoiRequest } from '@shared/types'
 import { clamp, clampInteger } from '@shared/util'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import type { Roi } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import type { ComputeRoi, Roi } from 'src/types/image.roi'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 
@@ -65,7 +64,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 
 		if (camera) u[0] = initProxy(state, `image.roi.${camera.id}`, ['o:roi', 'o:binning'])
 		u[1] = subscribeKey(viewer.state, 'info', syncImage)
-		u[2] = imageBus.subscribe('roi', sendRoi)
+		u[2] = imageBus.subscribe('roi', computeRoi)
 
 		return unmount
 	}
@@ -180,7 +179,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		}
 	}
 
-	function sendRoi(options: ImageRoiRequest) {
+	function computeRoi(options: ComputeRoi) {
 		if (options.camera.id === camera?.id && restoredRoi()) return options.unbinned ? state.roi : scaleRoi(state.roi, state.binning)
 		return undefined
 	}

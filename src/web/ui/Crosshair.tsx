@@ -4,11 +4,11 @@ import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import { memo, useContext } from 'react'
 import type { ReactNode } from 'react'
 import { crosshairAngleDisplayUnit, crosshairAngleToDisplayValue, crosshairGeometry, crosshairPointFromPixels, crosshairPointInPixels, crosshairSegmentsPath } from 'src/types/image.crosshair'
-import type { CrosshairGeometry, CrosshairPolyline, CrosshairPoint } from 'src/types/image.crosshair'
+import type { ImageCrosshairGeometry, ImageCrosshairPolyline, ImageCrosshairPoint } from 'src/types/image.crosshair'
 import { useSnapshot } from 'valtio'
 
 type GeometryStrokeProps = {
-	readonly geometry: CrosshairGeometry
+	readonly geometry: ImageCrosshairGeometry
 	readonly stroke: string
 	readonly strokeWidth: number
 	readonly strokeOpacity: number
@@ -39,14 +39,14 @@ function Positioned({ x, y, angle = 0, children }: PositionedProps) {
 	return <g transform={`translate(${x} ${y}) rotate(${angle})`}>{children}</g>
 }
 
-function polylinesPath(lines: readonly CrosshairPolyline[], delta: CrosshairPoint) {
+function polylinesPath(lines: readonly ImageCrosshairPolyline[], delta: ImageCrosshairPoint) {
 	return lines.map((line) => line.map(({ x, y }, index) => `${index === 0 ? 'M' : 'L'}${x + delta.x} ${y + delta.y}`).join('')).join('')
 }
 
 type ProjectedStrokeProps = {
-	readonly axes: readonly CrosshairPolyline[]
-	readonly rings: readonly CrosshairPolyline[]
-	readonly delta: CrosshairPoint
+	readonly axes: readonly ImageCrosshairPolyline[]
+	readonly rings: readonly ImageCrosshairPolyline[]
+	readonly delta: ImageCrosshairPoint
 	readonly stroke: string
 	readonly strokeWidth: number
 	readonly strokeOpacity: number

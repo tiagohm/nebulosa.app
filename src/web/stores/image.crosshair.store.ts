@@ -8,8 +8,8 @@ import type { DeepWritable } from 'nebulosa/src/core/types'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { unsubscribe } from 'src/shared/util'
 import { screenDeltaInImage } from 'src/types/image'
-import { DEFAULT_CROSSHAIR_ANGULAR_SPACING, DEFAULT_CROSSHAIR_CONFIG, crosshairPointFromPixels, crosshairPointInPixels, crosshairSpacingInPixels } from 'src/types/image.crosshair'
-import type { CrosshairPreset, CrosshairProjection, CrosshairProjectionAnchor, CrosshairAngularDisplayUnit, CrosshairCenter, CrosshairCenterSpace, CrosshairConfig, CrosshairPoint, CrosshairSpacingUnit } from 'src/types/image.crosshair'
+import { DEFAULT_IMAGE_CROSSHAIR_ANGULAR_SPACING, DEFAULT_IMAGE_CROSSHAIR_CONFIG, crosshairPointFromPixels, crosshairPointInPixels, crosshairSpacingInPixels } from 'src/types/image.crosshair'
+import type { ImageCrosshairPreset, ImageCrosshairProjection, ImageCrosshairProjectionAnchor, ImageCrosshairAngularDisplayUnit, ImageCrosshairCenter, ImageCrosshairCenterSpace, ImageCrosshairConfig, ImageCrosshairPoint, ImageCrosshairSpacingUnit } from 'src/types/image.crosshair'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 
@@ -18,9 +18,9 @@ export type ImageCrosshairWcsStatus = 'unavailable' | 'loading' | 'ready' | 'out
 
 export interface ImageCrosshairState {
 	enabled: boolean
-	config: DeepWritable<CrosshairConfig>
-	previewCenter?: CrosshairPoint
-	projection?: Extract<CrosshairProjection, { status: 'ready' }>
+	config: DeepWritable<ImageCrosshairConfig>
+	previewCenter?: ImageCrosshairPoint
+	projection?: Extract<ImageCrosshairProjection, { status: 'ready' }>
 	wcsStatus: ImageCrosshairWcsStatus
 }
 
@@ -30,14 +30,14 @@ interface CrosshairGesture {
 	readonly clientY: number
 	readonly scale: number
 	readonly angle: number
-	readonly center: CrosshairPoint
+	readonly center: ImageCrosshairPoint
 	readonly aborter: AbortController
 }
 
 export function imageCrosshairStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageCrosshairState>({
 		enabled: false,
-		config: structuredClone(DEFAULT_CROSSHAIR_CONFIG),
+		config: structuredClone(DEFAULT_IMAGE_CROSSHAIR_CONFIG),
 		wcsStatus: 'unavailable',
 	})
 
@@ -47,7 +47,7 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 	let mounted = false
 	let gesture: CrosshairGesture | undefined
 	let animationFrame: number | undefined
-	let pendingCenter: CrosshairPoint | undefined
+	let pendingCenter: ImageCrosshairPoint | undefined
 	let bodyUserSelect: string | undefined
 	let projectionRevision = 0
 
@@ -95,13 +95,13 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function projectionAnchor(center: CrosshairCenter = state.config.center): CrosshairProjectionAnchor {
+	function projectionAnchor(center: ImageCrosshairCenter = state.config.center): ImageCrosshairProjectionAnchor {
 		if (center.space === 'sky') return { space: 'sky', coordinate: { ...center.coordinate } }
 		const { width, height } = imageDimensions()
 		return { space: 'image', point: crosshairPointInPixels(center.point, width, height) }
 	}
 
-	async function requestProjection(anchor: CrosshairProjectionAnchor) {
+	async function requestProjection(anchor: ImageCrosshairProjectionAnchor) {
 		const solution = compatibleSolution()
 		const revision = ++projectionRevision
 		state.projection = undefined
@@ -141,12 +141,12 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 		void refreshProjection()
 	}
 
-	function setPreset(preset: CrosshairPreset) {
+	function setPreset(preset: ImageCrosshairPreset) {
 		state.config.preset = preset
 		void refreshProjection()
 	}
 
-	function setSpacingUnit(unit: CrosshairSpacingUnit) {
+	function setSpacingUnit(unit: ImageCrosshairSpacingUnit) {
 		if (unit === state.config.spacing.unit || (unit === 'angular' && !compatibleSolution())) return
 
 		const { width, height } = imageDimensions()
@@ -154,11 +154,11 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 		const projectionSpacing = state.projection?.spacing
 
 		if (unit === 'angular') {
-			Object.assign(state.config.spacing, DEFAULT_CROSSHAIR_ANGULAR_SPACING)
+			Object.assign(state.config.spacing, DEFAULT_IMAGE_CROSSHAIR_ANGULAR_SPACING)
 		} else {
 			const current = state.config.spacing
 			const spacingInPixels = current.unit === 'angular' ? (projectionSpacing ?? current.value) / (compatibleSolution()?.scale ?? 1) : crosshairSpacingInPixels(current, width, height)
-			const value = unit === 'pixel' ? spacingInPixels : minDimension > 0 ? spacingInPixels / minDimension : DEFAULT_CROSSHAIR_CONFIG.spacing.value
+			const value = unit === 'pixel' ? spacingInPixels : minDimension > 0 ? spacingInPixels / minDimension : DEFAULT_IMAGE_CROSSHAIR_CONFIG.spacing.value
 			Object.assign(state.config.spacing, { unit, value })
 		}
 
@@ -177,18 +177,18 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 		void refreshProjection()
 	}
 
-	function setAngularDisplayUnit(displayUnit: CrosshairAngularDisplayUnit) {
+	function setAngularDisplayUnit(displayUnit: ImageCrosshairAngularDisplayUnit) {
 		const spacing = state.config.spacing
 		if (spacing.unit !== 'angular') return
 		spacing.displayUnit = displayUnit
 	}
 
-	function setImageCenter(point: CrosshairPoint) {
+	function setImageCenter(point: ImageCrosshairPoint) {
 		Object.assign(state.config.center, { space: 'image', point })
 		void refreshProjection()
 	}
 
-	async function commitCenterFromPixels(center: CrosshairPoint) {
+	async function commitCenterFromPixels(center: ImageCrosshairPoint) {
 		const { width, height } = imageDimensions()
 		if (width <= 0 || height <= 0) return false
 
@@ -214,11 +214,11 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 		return false
 	}
 
-	function setCenterFromPixels(center: CrosshairPoint) {
+	function setCenterFromPixels(center: ImageCrosshairPoint) {
 		void commitCenterFromPixels(center)
 	}
 
-	async function setCenterSpace(space: CrosshairCenterSpace) {
+	async function setCenterSpace(space: ImageCrosshairCenterSpace) {
 		if (space === state.config.center.space) return
 
 		if (space === 'sky') {

@@ -1,5 +1,4 @@
 import { cameraBus, imageBus } from '@shared/bus'
-import type { Image, ImageSource } from '@shared/types'
 import { dockviewStore } from '@stores/dockview.store'
 import { equipmentStore } from '@stores/equipment.store'
 import type { AutoFocusParams } from '@ui/AutoFocus'
@@ -9,6 +8,7 @@ import type { TppaParams } from '@ui/Tppa'
 import type { DockviewApi, DockviewGroupPanel, DockviewGroupPanelApi, DockviewReadyEvent, IDockviewGroupPanel, IDockviewPanel } from 'dockview-react'
 import { nanoid } from 'nanoid'
 import type { Camera, Device } from 'nebulosa/src/devices/indi/device'
+import type { Image, ImageSource } from 'src/types/image'
 
 export type HomeStore = typeof homeStore
 

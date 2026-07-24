@@ -1,6 +1,6 @@
-import type { DeviceTypeMap } from '@shared/types'
 import { equipmentStore } from '@stores/equipment.store'
 import { useEffect, useRef } from 'react'
+import type { DeviceTypeMap } from 'src/types/device'
 import { useSnapshot } from 'valtio'
 
 export function useDevice<S extends { readonly mount: () => VoidFunction; readonly unmount: VoidFunction }, T extends keyof DeviceTypeMap>(type: T, id: string, storeFactory: (device: DeviceTypeMap[T]) => S) {

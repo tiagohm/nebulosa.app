@@ -8,6 +8,7 @@ import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/co
 import { timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import type { Time } from 'nebulosa/src/astronomy/time/time'
 import { TAU } from 'nebulosa/src/core/constants'
+import type { Writable } from 'nebulosa/src/core/types'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA, toDeg } from 'nebulosa/src/math/units/angle'
 import constellationBoundaries from 'src/data/constellation.boundaries.json'
@@ -19,6 +20,7 @@ import { unsubscribe } from 'src/shared/util'
 import { DEFAULT_BODY_POSITION } from 'src/types/atlas'
 import type { BodyPosition, PositionOfBody } from 'src/types/atlas'
 import { skyObjectName } from 'src/types/galaxy'
+import type { SkyObject } from 'src/types/galaxy'
 import { proxy, ref, subscribe } from 'valtio'
 
 export interface PlanetariumState {
@@ -207,7 +209,7 @@ function handleReady(celestial: Celestial) {
 	void Api.Atlas.planetarium({ types: [29], magnitudeLimit: 16 }).then((response) => {
 		if (response?.length) {
 			for (const star of response) {
-				star.name = skyObjectName(star.name, star.constellation)!
+				;(star as Writable<SkyObject>).name = skyObjectName(star.name, star.constellation)!
 			}
 
 			celestial.loadStars(response)
@@ -217,7 +219,7 @@ function handleReady(celestial: Celestial) {
 	void Api.Atlas.planetarium({ types: [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19], magnitudeLimit: 12 }).then((response) => {
 		if (response?.length) {
 			for (const star of response) {
-				star.name = skyObjectName(star.name, star.constellation)!
+				;(star as Writable<SkyObject>).name = skyObjectName(star.name, star.constellation)!
 			}
 
 			celestial.loadDeepSkyObjects(response)

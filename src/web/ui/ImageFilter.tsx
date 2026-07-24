@@ -8,7 +8,8 @@ import { Icons } from '@ui/Icon'
 import { ImageFFTFilterTypeRadioGroup } from '@ui/ImageFFTFilterTypeRadioGroup'
 import { ImageKernelFilterTypeRadioGroup } from '@ui/ImageKernelFilterTypeRadioGroup'
 import { memo, useContext, useEffect } from 'react'
-import type { ImageFFT, ImageFilter as ImageKernelFilter } from 'src/shared/types'
+import type { ImageFFT } from 'src/types/image.fft'
+import type { ImageFilter as KernelFilter } from 'src/types/image.filter'
 import { useSnapshot } from 'valtio'
 
 export const ImageFilter = memo(() => {
@@ -116,7 +117,7 @@ function KernelSizeInput(props: NumberInputProps) {
 	return <NumberInput className="col-span-full min-w-0" label="Size" maxValue={MAX_KERNEL_SIZE} minValue={MIN_KERNEL_SIZE} step={2} {...props} />
 }
 
-function isValidKernelFilter(filter: ImageKernelFilter) {
+function isValidKernelFilter(filter: KernelFilter) {
 	if (!filter.enabled) return true
 
 	switch (filter.type) {

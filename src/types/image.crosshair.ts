@@ -9,32 +9,32 @@ export const CROSSHAIR_SPACING_UNITS = ['pixel', 'normalized', 'angular'] as con
 export const CROSSHAIR_CENTER_SPACES = ['image', 'sky'] as const
 export const CROSSHAIR_ANGULAR_DISPLAY_UNITS = ['arcsecond', 'arcminute', 'degree'] as const
 
-export type CrosshairPreset = (typeof CROSSHAIR_PRESETS)[number]
+export type ImageCrosshairPreset = (typeof CROSSHAIR_PRESETS)[number]
 
-export type CrosshairProjectionAnchor = { readonly space: 'image'; readonly point: Point } | { readonly space: 'sky'; readonly coordinate: EquatorialCoordinate }
+export type ImageCrosshairProjectionAnchor = { readonly space: 'image'; readonly point: Point } | { readonly space: 'sky'; readonly coordinate: EquatorialCoordinate }
 
-export type CrosshairSpacingUnit = (typeof CROSSHAIR_SPACING_UNITS)[number]
+export type ImageCrosshairSpacingUnit = (typeof CROSSHAIR_SPACING_UNITS)[number]
 
-export type CrosshairCenterSpace = (typeof CROSSHAIR_CENTER_SPACES)[number]
+export type ImageCrosshairCenterSpace = (typeof CROSSHAIR_CENTER_SPACES)[number]
 
-export type CrosshairAngularDisplayUnit = (typeof CROSSHAIR_ANGULAR_DISPLAY_UNITS)[number]
+export type ImageCrosshairAngularDisplayUnit = (typeof CROSSHAIR_ANGULAR_DISPLAY_UNITS)[number]
 
-export type CrosshairPoint = Point
+export type ImageCrosshairPoint = Point
 
-export type CrosshairCenter = { readonly space: 'image'; readonly point: CrosshairPoint } | { readonly space: 'sky'; readonly coordinate: EquatorialCoordinate }
+export type ImageCrosshairCenter = { readonly space: 'image'; readonly point: ImageCrosshairPoint } | { readonly space: 'sky'; readonly coordinate: EquatorialCoordinate }
 
-export type CrosshairSpacing =
+export type ImageCrosshairSpacing =
 	| { readonly unit: 'pixel' | 'normalized'; readonly value: number }
 	| {
 			readonly unit: 'angular'
 			readonly automatic: boolean
 			readonly value: number
-			readonly displayUnit: CrosshairAngularDisplayUnit
+			readonly displayUnit: ImageCrosshairAngularDisplayUnit
 	  }
 
-export type CrosshairPolyline = readonly Point[]
+export type ImageCrosshairPolyline = readonly Point[]
 
-export type CrosshairProjection =
+export type ImageCrosshairProjection =
 	| { readonly status: 'unprojectable' }
 	| {
 			readonly status: 'ready'
@@ -46,26 +46,26 @@ export type CrosshairProjection =
 				readonly north: Point
 				readonly east: Point
 			}
-			readonly axes: readonly CrosshairPolyline[]
-			readonly rings: readonly CrosshairPolyline[]
+			readonly axes: readonly ImageCrosshairPolyline[]
+			readonly rings: readonly ImageCrosshairPolyline[]
 			readonly ringIntersections: readonly (Point & { readonly radius: Angle })[]
 			readonly cardinals: readonly Point[]
 	  }
 
-export interface ProjectCrosshair {
+export interface ProjectImageCrosshair {
 	readonly solution: PlateSolution
-	readonly anchor: CrosshairProjectionAnchor
-	readonly preset: CrosshairPreset
+	readonly anchor: ImageCrosshairProjectionAnchor
+	readonly preset: ImageCrosshairPreset
 	readonly angularSpacing?: {
 		readonly automatic: boolean
 		readonly value: Angle
 	}
 }
 
-export interface CrosshairConfig {
-	readonly preset: CrosshairPreset
-	readonly center: CrosshairCenter
-	readonly spacing: CrosshairSpacing
+export interface ImageCrosshairConfig {
+	readonly preset: ImageCrosshairPreset
+	readonly center: ImageCrosshairCenter
+	readonly spacing: ImageCrosshairSpacing
 	readonly color: string
 	readonly opacity: number
 	readonly lineWidth: number
@@ -73,24 +73,24 @@ export interface CrosshairConfig {
 	readonly halo: boolean
 }
 
-export interface CrosshairSegment {
+export interface ImageCrosshairSegment {
 	readonly x1: number
 	readonly y1: number
 	readonly x2: number
 	readonly y2: number
 }
 
-export interface CrosshairGeometry {
-	readonly center: CrosshairPoint
+export interface ImageCrosshairGeometry {
+	readonly center: ImageCrosshairPoint
 	readonly dotRadius: number
 	readonly handleRadius: number
 	readonly spacing: number
 	readonly radii: readonly number[]
-	readonly axes: readonly CrosshairSegment[]
-	readonly ticks: readonly CrosshairSegment[]
+	readonly axes: readonly ImageCrosshairSegment[]
+	readonly ticks: readonly ImageCrosshairSegment[]
 }
 
-export const DEFAULT_CROSSHAIR_CONFIG: Readonly<CrosshairConfig> = {
+export const DEFAULT_IMAGE_CROSSHAIR_CONFIG: Readonly<ImageCrosshairConfig> = {
 	preset: 'bullseye',
 	center: { space: 'image', point: { x: 0.5, y: 0.5 } },
 	spacing: { unit: 'normalized', value: 0.05 },
@@ -101,46 +101,34 @@ export const DEFAULT_CROSSHAIR_CONFIG: Readonly<CrosshairConfig> = {
 	halo: true,
 }
 
-export const DEFAULT_CROSSHAIR_ANGULAR_SPACING: Readonly<Extract<CrosshairSpacing, { unit: 'angular' }>> = {
+export const DEFAULT_IMAGE_CROSSHAIR_ANGULAR_SPACING: Readonly<Extract<ImageCrosshairSpacing, { unit: 'angular' }>> = {
 	unit: 'angular',
 	automatic: true,
 	value: arcmin(5),
 	displayUnit: 'arcminute',
 }
 
-export function isCrosshairPreset(value: unknown): value is CrosshairPreset {
-	return typeof value === 'string' && CROSSHAIR_PRESETS.includes(value as never)
-}
-
-export function isCrosshairSpacingUnit(value: unknown): value is CrosshairSpacingUnit {
-	return typeof value === 'string' && CROSSHAIR_SPACING_UNITS.includes(value as never)
-}
-
-export function isCrosshairAngularDisplayUnit(value: unknown): value is CrosshairAngularDisplayUnit {
-	return typeof value === 'string' && CROSSHAIR_ANGULAR_DISPLAY_UNITS.includes(value as never)
-}
-
-export function crosshairPointInPixels(point: CrosshairPoint, width: number, height: number): CrosshairPoint {
+export function crosshairPointInPixels(point: ImageCrosshairPoint, width: number, height: number): ImageCrosshairPoint {
 	return { x: point.x * width, y: point.y * height }
 }
 
-export function crosshairPointFromPixels(point: CrosshairPoint, width: number, height: number): CrosshairPoint {
+export function crosshairPointFromPixels(point: ImageCrosshairPoint, width: number, height: number): ImageCrosshairPoint {
 	return { x: width > 0 ? point.x / width : 0.5, y: height > 0 ? point.y / height : 0.5 }
 }
 
-export function crosshairSpacingInPixels(spacing: CrosshairSpacing, width: number, height: number) {
+export function crosshairSpacingInPixels(spacing: ImageCrosshairSpacing, width: number, height: number) {
 	return spacing.unit === 'normalized' ? spacing.value * Math.min(width, height) : spacing.unit === 'pixel' ? spacing.value : 0
 }
 
-export function crosshairAngleFromDisplayValue(value: number, unit: CrosshairAngularDisplayUnit) {
+export function crosshairAngleFromDisplayValue(value: number, unit: ImageCrosshairAngularDisplayUnit) {
 	return unit === 'arcsecond' ? arcsec(value) : unit === 'arcminute' ? arcmin(value) : deg(value)
 }
 
-export function crosshairAngleToDisplayValue(value: number, unit: CrosshairAngularDisplayUnit) {
+export function crosshairAngleToDisplayValue(value: number, unit: ImageCrosshairAngularDisplayUnit) {
 	return unit === 'arcsecond' ? toArcsec(value) : unit === 'arcminute' ? toArcmin(value) : toDeg(value)
 }
 
-export function crosshairAngleDisplayUnit(value: number): CrosshairAngularDisplayUnit {
+export function crosshairAngleDisplayUnit(value: number): ImageCrosshairAngularDisplayUnit {
 	return value < arcmin(1) ? 'arcsecond' : value < deg(1) ? 'arcminute' : 'degree'
 }
 
@@ -148,11 +136,11 @@ export function crosshairRadii(spacing: number) {
 	return [spacing, spacing * 2, spacing * 4] as const
 }
 
-function segment(x1: number, y1: number, x2: number, y2: number): CrosshairSegment | undefined {
+function segment(x1: number, y1: number, x2: number, y2: number): ImageCrosshairSegment | undefined {
 	return x1 <= x2 && y1 <= y2 ? { x1, y1, x2, y2 } : undefined
 }
 
-function axes(center: CrosshairPoint, width: number, height: number, reach?: number) {
+function axes(center: ImageCrosshairPoint, width: number, height: number, reach?: number) {
 	const left = reach === undefined ? 0 : Math.max(0, center.x - reach)
 	const right = reach === undefined ? width : Math.min(width, center.x + reach)
 	const top = reach === undefined ? 0 : Math.max(0, center.y - reach)
@@ -161,7 +149,7 @@ function axes(center: CrosshairPoint, width: number, height: number, reach?: num
 	return result.filter((value) => value !== undefined)
 }
 
-function ticks(center: CrosshairPoint, radius: number, length: number) {
+function ticks(center: ImageCrosshairPoint, radius: number, length: number) {
 	const half = length / 2
 	return [
 		{ x1: center.x - half, y1: center.y - radius, x2: center.x + half, y2: center.y - radius },
@@ -171,7 +159,7 @@ function ticks(center: CrosshairPoint, radius: number, length: number) {
 	]
 }
 
-export function crosshairGeometry(config: CrosshairConfig, width: number, height: number, scale: number, center: CrosshairPoint): CrosshairGeometry {
+export function crosshairGeometry(config: ImageCrosshairConfig, width: number, height: number, scale: number, center: ImageCrosshairPoint): ImageCrosshairGeometry {
 	const centerInPixels = crosshairPointInPixels(center, width, height)
 	const spacing = crosshairSpacingInPixels(config.spacing, width, height)
 	const radii = crosshairRadii(spacing)
@@ -188,6 +176,6 @@ export function crosshairGeometry(config: CrosshairConfig, width: number, height
 	}
 }
 
-export function crosshairSegmentsPath(segments: readonly CrosshairSegment[]) {
+export function crosshairSegmentsPath(segments: readonly ImageCrosshairSegment[]) {
 	return segments.map(({ x1, y1, x2, y2 }) => `M${x1} ${y1}L${x2} ${y2}`).join('')
 }

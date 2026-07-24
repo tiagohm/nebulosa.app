@@ -6,7 +6,7 @@ import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { FlatPanelSimulator } from 'nebulosa/src/devices/indi/simulator/flatpanel'
 import { FlatPanelHandler, flatPanelBus, flatPanel as flatPanelEndpoints } from 'src/api/flatpanel'
 import { WebSocketMessageHandler } from 'src/api/message'
-import type { FlatPanelAdded, FlatPanelRemoved, FlatPanelUpdated } from 'src/shared/types'
+import type { FlatPanelAdded, FlatPanelRemoved, FlatPanelUpdated } from 'src/types/flatpanel'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
 flatPanelBus.forceSync = true

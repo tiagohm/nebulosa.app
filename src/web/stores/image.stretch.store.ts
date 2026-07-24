@@ -2,9 +2,9 @@ import { imageBus } from '@shared/bus'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { SliderRangeValue } from '@ui/components/Slider'
 import type { SigmaClipCenterMethod, SigmaClipDispersionMethod } from 'nebulosa/src/imaging/processing/computation'
-import { DEFAULT_IMAGE_STRETCH } from 'src/shared/types'
-import type { ImageStretch } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { DEFAULT_IMAGE_STRETCH } from 'src/types/image.stretch'
+import type { ImageStretch } from 'src/types/image.stretch'
 import { proxy } from 'valtio'
 
 export type ImageStretchStore = ReturnType<typeof imageStretchStore>

@@ -3,6 +3,8 @@ import type { StellariumObjectType } from 'nebulosa/src/devices/protocols/stella
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { SkyObject } from 'src/types/galaxy'
 
+export type ImageAnnotation = readonly AnnotatedSkyObject[]
+
 export interface AnnotateImage {
 	readonly solution: PlateSolution
 	readonly stars: boolean

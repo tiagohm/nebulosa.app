@@ -4,7 +4,7 @@ import { initProxy } from '@shared/proxy'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { Writable } from 'nebulosa/src/core/types'
 import { unsubscribe } from 'src/shared/util'
-import type { AnnotatedSkyObject, AnnotateImage } from 'src/types/image.annotation'
+import type { AnnotateImage, ImageAnnotation } from 'src/types/image.annotation'
 import { proxy } from 'valtio'
 
 export type ImageAnnotationStore = ReturnType<typeof imageAnnotationStore>
@@ -13,7 +13,7 @@ export interface ImageAnnotationState {
 	visible: boolean
 	loading: boolean
 	readonly request: Writable<Omit<AnnotateImage, 'solution'>>
-	stars: readonly AnnotatedSkyObject[]
+	stars: ImageAnnotation
 }
 
 export function imageAnnotationStore(viewer: ImageViewerStore) {

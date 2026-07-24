@@ -123,8 +123,6 @@ export interface ThemeOptions {
 		fillBelowHorizon: string
 	}
 	milkyWay: {
-		color: string
-		opacity: number
 		lineColor: string
 		levelColors?: readonly string[]
 		levelOpacities?: readonly number[]
@@ -461,8 +459,6 @@ const DEFAULT_THEME: ThemeOptions = {
 		fillBelowHorizon: TRANSPARENT,
 	},
 	milkyWay: {
-		color: CYAN,
-		opacity: 0,
 		lineColor: CYAN,
 		levelColors: [CYAN, LIGHT_BLUE, BLUE, INDIGO, PURPLE],
 		levelOpacities: [0.7, 0, 0, 0, 0],
@@ -2516,10 +2512,9 @@ class MilkyWayLayer extends InternalLayer {
 		if (steps.length === 0) return
 
 		const theme = state.theme.milkyWay
-		const fillOpacity = clamp(theme.opacity, 0, 1)
 		const lineOpacity = clamp(theme.lineOpacity, 0, 1)
 
-		if (fillOpacity <= 0 && (lineOpacity <= 0 || theme.lineWidth <= 0)) return
+		if (lineOpacity <= 0 || theme.lineWidth <= 0) return
 
 		this.samplerState = state
 		this.ensurePaths(state, steps)
@@ -2535,15 +2530,7 @@ class MilkyWayLayer extends InternalLayer {
 
 			const color = milkyWayLevelColor(theme, i)
 
-			ctx.fillStyle = color
 			ctx.strokeStyle = color
-
-			// Filled clipped polygons need real polygon clipping; outlines avoid false closure segments at the projection boundary.
-			// if (fillOpacity > 0 && !isFiniteDiskProjection(state.projection)) {
-			// 	ctx.globalAlpha = fillOpacity
-			// 	ctx.fill('evenodd')
-			// }
-
 			ctx.globalAlpha = lineOpacity * lineOpacityPerLevel
 			ctx.stroke(this.paths[i])
 		}

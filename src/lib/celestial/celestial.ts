@@ -226,6 +226,7 @@ export interface RenderState {
 	readonly coordinateSystem: CoordinateSystem
 	readonly transform: Readonly<ViewTransform>
 	readonly projectionRadius: number
+	readonly projectedGeometryRevision: number
 	readonly referenceLines: ResolvedReferenceLinesOptions
 	readonly stars: Readonly<Required<StarLayerOptions>>
 	readonly theme: Readonly<ThemeOptions>
@@ -240,6 +241,8 @@ export interface RenderState {
 	readonly projectEquatorialToScreen: (ra: number, dec: number, out: NumberArray) => boolean
 	readonly projectEquatorialSample: (ra: number, dec: number, out: NumberArray) => number
 	readonly projectEquatorialVectorSample: (x: number, y: number, z: number, out: NumberArray) => number
+	readonly projectEquatorialBaseSample: (ra: number, dec: number, out: NumberArray) => number
+	readonly projectEquatorialVectorBaseSample: (x: number, y: number, z: number, out: NumberArray) => number
 	readonly projectHorizontalToScreen: (az: number, alt: number, out: NumberArray) => boolean
 	readonly projectHorizontalSample: (az: number, alt: number, out: NumberArray) => number
 }
@@ -1754,16 +1757,18 @@ function drawProjectionBoundary(ctx: CanvasRenderingContext2D, state: RenderStat
 	ctx.stroke()
 }
 
-function projectedSegmentLimit(state: RenderState) {
-	return Math.max(96, transformedProjectionRadius(state) * 0.75)
+function projectedSegmentLimit(state: RenderState, transformScale = state.transform.k) {
+	return Math.max(96, state.projectionRadius * transformScale * 0.75)
 }
 
-function appendProjectedPoint(ctx: CanvasRenderingContext2D, state: RenderState, point: NumberArray, previous: NumberArray, started: boolean): boolean {
+type ProjectedPathSink = Pick<CanvasRenderingContext2D, 'moveTo' | 'lineTo'>
+
+function appendProjectedPoint(ctx: ProjectedPathSink, state: RenderState, point: NumberArray, previous: NumberArray, started: boolean, transformScale = state.transform.k): boolean {
 	if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) return false
 
 	const dx = point[0] - previous[0]
 	const dy = point[1] - previous[1]
-	const maxDistance = projectedSegmentLimit(state)
+	const maxDistance = projectedSegmentLimit(state, transformScale)
 
 	if (!started || dx * dx + dy * dy > maxDistance * maxDistance) {
 		ctx.moveTo(point[0], point[1])
@@ -1796,7 +1801,7 @@ function isProjectedSample(out: NumberArray) {
 	return Number.isFinite(out[0]) && Number.isFinite(out[1])
 }
 
-function drawClippedPolyline(ctx: CanvasRenderingContext2D, state: RenderState, steps: number, point: NumberArray, previous: NumberArray, sampler: ProjectedSampler, observer?: ProjectedPolylineObserver) {
+function drawClippedPolyline(ctx: ProjectedPathSink, state: RenderState, steps: number, point: NumberArray, previous: NumberArray, sampler: ProjectedSampler, observer?: ProjectedPolylineObserver, transformScale = state.transform.k) {
 	let previousT = 0
 	let previousVisibility = Number.NaN
 	let previousProjected = false
@@ -1815,7 +1820,7 @@ function drawClippedPolyline(ctx: CanvasRenderingContext2D, state: RenderState, 
 
 			if (isProjectedSample(point)) {
 				const previousStarted = started
-				started = appendProjectedPoint(ctx, state, point, previous, started)
+				started = appendProjectedPoint(ctx, state, point, previous, started, transformScale)
 
 				if (previousStarted || visible) {
 					observer?.append(point[0], point[1], true)
@@ -1833,7 +1838,7 @@ function drawClippedPolyline(ctx: CanvasRenderingContext2D, state: RenderState, 
 		}
 
 		if (visible) {
-			started = appendProjectedPoint(ctx, state, point, previous, started)
+			started = appendProjectedPoint(ctx, state, point, previous, started, transformScale)
 			observer?.append(point[0], point[1], false)
 		} else if (!previousProjected || visibility < -HORIZON_EPSILON) {
 			started = false
@@ -1844,6 +1849,12 @@ function drawClippedPolyline(ctx: CanvasRenderingContext2D, state: RenderState, 
 		previousVisibility = visibility
 		previousProjected = projected
 	}
+}
+
+function applyBasePathTransform(ctx: CanvasRenderingContext2D, state: RenderState) {
+	ctx.translate(state.width / 2 + state.transform.x, state.height / 2 + state.transform.y)
+	ctx.scale(state.transform.k, state.transform.k)
+	ctx.translate(-state.width / 2, -state.height / 2)
 }
 
 function findHorizonIntersection(minT: number, minVisibility: number, maxT: number, maxVisibility: number, sampler: ProjectedSampler, point: NumberArray) {
@@ -2075,6 +2086,14 @@ function drawGridBoundaryLabel(ctx: CanvasRenderingContext2D, state: RenderState
 	return occupiedCount + 1
 }
 
+type CachedGridLine = {
+	readonly label: string
+	readonly x: Float32Array
+	readonly y: Float32Array
+	readonly boundary: Uint8Array
+	readonly breakBefore: Uint8Array
+}
+
 // Grid layer draws coarse equatorial or horizontal reference lines.
 class GridLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
@@ -2082,44 +2101,45 @@ class GridLayer extends InternalLayer {
 	private readonly labelPoints: GridBoundaryLabelPoint[] = []
 	private readonly labelCandidates: GridBoundaryLabelCandidate[] = []
 	private readonly labelRects: GridBoundaryLabelRect[] = []
+	private readonly cachedLines: CachedGridLine[] = []
+	private readonly buildX: number[] = []
+	private readonly buildY: number[] = []
+	private readonly buildBoundary: number[] = []
+	private readonly buildBreakBefore: number[] = []
+	private path = new Path2D()
 	private samplerState!: RenderState
 	private samplerAngle = 0
+	private cachedRevision = -1
 	private labelCandidateCount = 0
-	private useViewportBoundary = false
-	private previousLabelVisible = false
-	private previousLabelX = 0
-	private previousLabelY = 0
+	private buildStartsSubpath = true
 
 	private readonly raSampler: ProjectedSampler = (t, out) => {
 		const ra = t * TAU
-		return this.samplerState.projectEquatorialSample(ra, this.samplerAngle, out)
+		return this.samplerState.projectEquatorialBaseSample(ra, this.samplerAngle, out)
 	}
 
 	private readonly decSampler: ProjectedSampler = (t, out) => {
 		const dec = -PIOVERTWO + t * PI
-		return this.samplerState.projectEquatorialSample(this.samplerAngle, dec, out)
+		return this.samplerState.projectEquatorialBaseSample(this.samplerAngle, dec, out)
 	}
 
-	private readonly boundaryObserver: ProjectedPolylineObserver = {
+	private readonly cacheObserver: ProjectedPolylineObserver = {
 		reset: () => {
-			this.labelPoints.length = 0
-			this.previousLabelVisible = false
+			this.buildX.length = 0
+			this.buildY.length = 0
+			this.buildBoundary.length = 0
+			this.buildBreakBefore.length = 0
+			this.buildStartsSubpath = true
 		},
 		append: (x, y, boundaryPoint) => {
-			if (boundaryPoint) {
-				appendCircleGridBoundaryLabelPoint(this.labelPoints, this.samplerState, x, y)
-			}
-
-			if (this.useViewportBoundary && this.previousLabelVisible) {
-				appendViewportGridBoundaryIntersection(this.labelPoints, this.samplerState, this.previousLabelX, this.previousLabelY, x, y)
-			}
-
-			this.previousLabelVisible = true
-			this.previousLabelX = x
-			this.previousLabelY = y
+			this.buildX.push(x)
+			this.buildY.push(y)
+			this.buildBoundary.push(boundaryPoint ? 1 : 0)
+			this.buildBreakBefore.push(this.buildStartsSubpath ? 1 : 0)
+			this.buildStartsSubpath = false
 		},
 		break: () => {
-			this.previousLabelVisible = false
+			this.buildStartsSubpath = true
 		},
 	}
 
@@ -2127,41 +2147,89 @@ class GridLayer extends InternalLayer {
 		super('grid', 20)
 	}
 
-	// Draws reference grid lines.
+	// Draws cached reference grid paths and derives boundary labels from their base points.
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
+		this.ensureCache(state)
+		ctx.save()
 		ctx.strokeStyle = state.theme.grid.color
 		ctx.globalAlpha = state.theme.grid.opacity
-		ctx.lineWidth = 0.65
-
-		this.renderEquatorialGrid(ctx, state)
-
-		ctx.globalAlpha = 1
+		applyBasePathTransform(ctx, state)
+		ctx.lineWidth = 0.65 / state.transform.k
+		ctx.stroke(this.path)
+		ctx.restore()
+		this.collectLabelCandidates(state)
+		this.renderGridLabels(ctx, state)
 	}
 
-	// Draws RA/Dec grid lines.
-	private renderEquatorialGrid(ctx: CanvasRenderingContext2D, state: RenderState) {
+	private ensureCache(state: RenderState) {
+		if (this.cachedRevision === state.projectedGeometryRevision) return
+
 		this.samplerState = state
-		this.useViewportBoundary = !projectionBoundaryFullyVisibleInViewport(state)
-		this.labelCandidateCount = 0
+		this.path = new Path2D()
+		this.cachedLines.length = 0
 
 		for (let decDeg = -85; decDeg <= 85; decDeg += 10) {
 			this.samplerAngle = decDeg * DEG2RAD
-			this.drawGridLine(ctx, state, 360, this.raSampler, decDeg.toFixed(0))
+			this.cacheGridLine(state, 360, this.raSampler, decDeg.toFixed(0))
 		}
 
 		for (let raHour = 0; raHour < 24; raHour += 1) {
 			this.samplerAngle = (raHour / 24) * TAU
-			this.drawGridLine(ctx, state, 240, this.decSampler, `${raHour}h`)
+			this.cacheGridLine(state, 240, this.decSampler, `${raHour}h`)
 		}
 
-		this.renderGridLabels(ctx, state)
+		this.cachedRevision = state.projectedGeometryRevision
 	}
 
-	private drawGridLine(ctx: CanvasRenderingContext2D, state: RenderState, steps: number, sampler: ProjectedSampler, label: string) {
-		ctx.beginPath()
-		drawClippedPolyline(ctx, state, steps, this.point, this.previous, sampler, this.boundaryObserver)
-		ctx.stroke()
+	private cacheGridLine(state: RenderState, steps: number, sampler: ProjectedSampler, label: string) {
+		drawClippedPolyline(this.path, state, steps, this.point, this.previous, sampler, this.cacheObserver, 1)
+		this.cachedLines.push({
+			label,
+			x: Float32Array.from(this.buildX),
+			y: Float32Array.from(this.buildY),
+			boundary: Uint8Array.from(this.buildBoundary),
+			breakBefore: Uint8Array.from(this.buildBreakBefore),
+		})
+	}
 
+	private collectLabelCandidates(state: RenderState) {
+		const useViewportBoundary = !projectionBoundaryFullyVisibleInViewport(state)
+		this.labelCandidateCount = 0
+
+		for (let lineIndex = 0; lineIndex < this.cachedLines.length; lineIndex++) {
+			const line = this.cachedLines[lineIndex]
+			this.labelPoints.length = 0
+			let previousVisible = false
+			let previousX = 0
+			let previousY = 0
+
+			for (let i = 0; i < line.x.length; i++) {
+				if (line.breakBefore[i]) {
+					previousVisible = false
+				}
+
+				applyViewTransform(line.x[i], line.y[i], state.width, state.height, state.transform, this.point)
+				const x = this.point[0]
+				const y = this.point[1]
+
+				if (line.boundary[i]) {
+					appendCircleGridBoundaryLabelPoint(this.labelPoints, state, x, y)
+				}
+
+				if (useViewportBoundary && previousVisible) {
+					appendViewportGridBoundaryIntersection(this.labelPoints, state, previousX, previousY, x, y)
+				}
+
+				previousVisible = true
+				previousX = x
+				previousY = y
+			}
+
+			this.appendLabelCandidates(line.label)
+		}
+	}
+
+	private appendLabelCandidates(label: string) {
 		for (let i = 0; i < this.labelPoints.length; i++) {
 			const point = this.labelPoints[i]
 			let candidate = this.labelCandidates[this.labelCandidateCount]
@@ -2298,6 +2366,9 @@ abstract class ConstellationSegmentLayer extends InternalLayer {
 	private readonly sampleVector = new Float32Array(3)
 	private readonly point = new Float32Array(2)
 	private readonly previous = new Float32Array(2)
+	private path = new Path2D()
+	private cachedLines: readonly ConstellationLine[] | null = null
+	private cachedRevision = -1
 	private samplerState!: RenderState
 
 	private readonly segmentSampler: ProjectedSampler = (t, out) => {
@@ -2311,34 +2382,42 @@ abstract class ConstellationSegmentLayer extends InternalLayer {
 			return writeProjectedSample(out, Number.NaN, false)
 		}
 
-		return this.samplerState.projectEquatorialVectorSample(this.sampleVector[0], this.sampleVector[1], this.sampleVector[2], out)
+		return this.samplerState.projectEquatorialVectorBaseSample(this.sampleVector[0], this.sampleVector[1], this.sampleVector[2], out)
 	}
 
 	protected drawSegments(ctx: CanvasRenderingContext2D, state: RenderState, lines: readonly ConstellationLine[], color: string, alpha: number, lineWidth: number) {
 		this.samplerState = state
-		ctx.strokeStyle = color
-		ctx.globalAlpha = alpha
-		ctx.lineWidth = lineWidth
-		ctx.beginPath()
 
-		for (const line of lines) {
-			for (let j = 1, k = 0; j < line.length; j++, k++) {
-				this.drawSegment(ctx, state, line[k], line[j])
+		if (this.cachedRevision !== state.projectedGeometryRevision || this.cachedLines !== lines) {
+			this.path = new Path2D()
+
+			for (const line of lines) {
+				for (let j = 1, k = 0; j < line.length; j++, k++) {
+					this.drawSegment(this.path, state, line[k], line[j])
+				}
 			}
+
+			this.cachedLines = lines
+			this.cachedRevision = state.projectedGeometryRevision
 		}
 
-		ctx.stroke()
-		ctx.globalAlpha = 1
+		ctx.save()
+		ctx.strokeStyle = color
+		ctx.globalAlpha = alpha
+		applyBasePathTransform(ctx, state)
+		ctx.lineWidth = lineWidth / state.transform.k
+		ctx.stroke(this.path)
+		ctx.restore()
 	}
 
-	private drawSegment(ctx: CanvasRenderingContext2D, state: RenderState, from: ConstellationLine[number], to: ConstellationLine[number]) {
+	private drawSegment(path: Path2D, state: RenderState, from: ConstellationLine[number], to: ConstellationLine[number]) {
 		writeRaDecUnitVector(from[0], from[1], this.fromVector)
 		writeRaDecUnitVector(to[0], to[1], this.toVector)
 
 		const distance = angularDistance(this.fromVector[0], this.fromVector[1], this.fromVector[2], this.toVector[0], this.toVector[1], this.toVector[2])
 		const steps = Math.max(8, Math.min(180, Math.ceil(distance / DEG2RAD)))
 
-		drawClippedPolyline(ctx, state, steps, this.point, this.previous, this.segmentSampler)
+		drawClippedPolyline(path, state, steps, this.point, this.previous, this.segmentSampler, undefined, 1)
 	}
 }
 
@@ -2382,6 +2461,9 @@ class MilkyWayLayer extends InternalLayer {
 	private readonly sampleVector = new Float32Array(3)
 	private readonly point = new Float32Array(2)
 	private readonly previous = new Float32Array(2)
+	private readonly paths: Path2D[] = []
+	private cachedSteps: readonly Readonly<MilkyWayStep>[] | null = null
+	private cachedRevision = -1
 	private samplerState!: RenderState
 	private samplerRing!: MilkyWayRing
 
@@ -2409,7 +2491,7 @@ class MilkyWayLayer extends InternalLayer {
 			return writeProjectedSample(out, Number.NaN, false)
 		}
 
-		return this.samplerState.projectEquatorialVectorSample(this.sampleVector[0], this.sampleVector[1], this.sampleVector[2], out)
+		return this.samplerState.projectEquatorialVectorBaseSample(this.sampleVector[0], this.sampleVector[1], this.sampleVector[2], out)
 	}
 
 	constructor() {
@@ -2428,13 +2510,15 @@ class MilkyWayLayer extends InternalLayer {
 		if (fillOpacity <= 0 && (lineOpacity <= 0 || theme.lineWidth <= 0)) return
 
 		this.samplerState = state
+		this.ensurePaths(state, steps)
 		ctx.save()
 
 		if (isFiniteDiskProjection(state.projection)) {
 			clipProjectionDisk(ctx, state)
 		}
 
-		ctx.lineWidth = theme.lineWidth
+		applyBasePathTransform(ctx, state)
+		ctx.lineWidth = theme.lineWidth / state.transform.k
 		ctx.lineJoin = 'round'
 		ctx.lineCap = 'round'
 
@@ -2447,8 +2531,6 @@ class MilkyWayLayer extends InternalLayer {
 
 			ctx.fillStyle = color
 			ctx.strokeStyle = color
-			ctx.beginPath()
-			this.drawStep(ctx, state, steps[i])
 
 			// Filled clipped polygons need real polygon clipping; outlines avoid false closure segments at the projection boundary.
 			// if (fillOpacity > 0 && !isFiniteDiskProjection(state.projection)) {
@@ -2457,23 +2539,38 @@ class MilkyWayLayer extends InternalLayer {
 			// }
 
 			ctx.globalAlpha = lineOpacity * lineOpacityPerLevel
-			ctx.stroke()
+			ctx.stroke(this.paths[i])
 		}
 
 		ctx.restore()
 	}
 
-	private drawStep(ctx: CanvasRenderingContext2D, state: RenderState, step: MilkyWayStep) {
+	private ensurePaths(state: RenderState, steps: readonly Readonly<MilkyWayStep>[]) {
+		if (this.cachedRevision === state.projectedGeometryRevision && this.cachedSteps === steps) return
+
+		this.paths.length = steps.length
+
+		for (let i = 0; i < steps.length; i++) {
+			const path = new Path2D()
+			this.drawStep(path, state, steps[i])
+			this.paths[i] = path
+		}
+
+		this.cachedSteps = steps
+		this.cachedRevision = state.projectedGeometryRevision
+	}
+
+	private drawStep(path: Path2D, state: RenderState, step: Readonly<MilkyWayStep>) {
 		const rings = step.rings
 
 		for (let i = 0; i < rings.length; i++) {
-			this.drawRing(ctx, state, rings[i])
+			this.drawRing(path, state, rings[i])
 		}
 	}
 
-	private drawRing(ctx: CanvasRenderingContext2D, state: RenderState, ring: MilkyWayRing) {
+	private drawRing(path: Path2D, state: RenderState, ring: MilkyWayRing) {
 		this.samplerRing = ring
-		drawClippedPolyline(ctx, state, Math.max(16, milkyWayRingSegmentCount(ring)), this.point, this.previous, this.ringSampler)
+		drawClippedPolyline(path, state, Math.max(16, milkyWayRingSegmentCount(ring)), this.point, this.previous, this.ringSampler, undefined, 1)
 	}
 }
 
@@ -3474,6 +3571,7 @@ export class Celestial {
 	#autoUpdateOptions: Required<AutoUpdateOptions> | null = null
 	#frameId = 0
 	#updateQueued = false
+	#projectedGeometryRevision = 0
 	#pickingDirty = false
 	#destroyed = false
 	#pointerDown = false
@@ -3639,6 +3737,7 @@ export class Celestial {
 
 		this.#options.width = nextWidth
 		this.#options.height = nextHeight
+		this.invalidateProjectedGeometry()
 		this.#cachedRect = null
 		this.#renderer.resize(this.#options.width, this.#options.height)
 		this.syncD3ZoomTransform(this.#transform)
@@ -3708,6 +3807,7 @@ export class Celestial {
 			boundaries: data.boundaries ?? [],
 		}
 
+		this.invalidateProjectedGeometry()
 		this.#renderer.markDirty('constellations')
 		this.#renderer.markDirty('constellationBoundaries')
 		this.#renderer.markDirty('constellationLabels')
@@ -3717,6 +3817,7 @@ export class Celestial {
 
 	loadMilkyWay(coordinates: MilkyWayCoordinates) {
 		this.#milkyWay = normalizeMilkyWayCoordinates(coordinates)
+		this.invalidateProjectedGeometry()
 		this.#renderer.markDirty('milkyWay')
 		this.requestRender()
 	}
@@ -4107,6 +4208,10 @@ export class Celestial {
 		writeViewMatrix(this.#centerVector, this.#referenceUp, this.#viewMatrix)
 	}
 
+	private invalidateProjectedGeometry() {
+		this.#projectedGeometryRevision++
+	}
+
 	// Queues a full astronomical update.
 	private queueUpdate() {
 		if (this.#updateQueued || this.#destroyed) return
@@ -4118,6 +4223,7 @@ export class Celestial {
 	private queueProjectionOnly() {
 		if (this.#destroyed) return
 
+		this.invalidateProjectedGeometry()
 		this.projectStars()
 		this.projectDeepSkyObjects()
 		this.rebuildPickingIndex()
@@ -4146,6 +4252,7 @@ export class Celestial {
 		const start = emitUpdateEnd ? performance.now() : 0
 		emitUpdateStart && this.#emitter.emit('updateStart', { time: this.#options.time })
 		writeEquatorialToHorizontalMatrix(this.#options.time, this.#options.observer, this.#eqToHorizontal)
+		this.invalidateProjectedGeometry()
 
 		if (this.#starCatalog) {
 			this.#starCatalog.updateEquatorialVectors(toJulianEpoch(this.#options.time))
@@ -4376,12 +4483,34 @@ export class Celestial {
 
 	// Projects an equatorial coordinate and returns its horizon visibility.
 	private readonly projectEquatorialSample = (ra: number, dec: number, out: NumberArray): number => {
-		writeRaDecUnitVector(ra, dec, this.#tempVector)
-		return this.projectEquatorialVectorSample(this.#tempVector[0], this.#tempVector[1], this.#tempVector[2], out)
+		const visibility = this.projectEquatorialBaseSample(ra, dec, out)
+
+		if (isProjectedSample(out)) {
+			applyViewTransform(out[0], out[1], this.#options.width, this.#options.height, this.#transform, out)
+		}
+
+		return visibility
 	}
 
-	// Projects an equatorial unit vector without converting it back through RA/Dec.
+	// Projects an equatorial coordinate to reusable base screen coordinates.
+	private readonly projectEquatorialBaseSample = (ra: number, dec: number, out: NumberArray): number => {
+		writeRaDecUnitVector(ra, dec, this.#tempVector)
+		return this.projectEquatorialVectorBaseSample(this.#tempVector[0], this.#tempVector[1], this.#tempVector[2], out)
+	}
+
+	// Projects an equatorial unit vector to transformed screen coordinates.
 	private readonly projectEquatorialVectorSample = (equatorialX: number, equatorialY: number, equatorialZ: number, out: NumberArray): number => {
+		const visibility = this.projectEquatorialVectorBaseSample(equatorialX, equatorialY, equatorialZ, out)
+
+		if (isProjectedSample(out)) {
+			applyViewTransform(out[0], out[1], this.#options.width, this.#options.height, this.#transform, out)
+		}
+
+		return visibility
+	}
+
+	// Projects an equatorial unit vector to reusable base screen coordinates.
+	private readonly projectEquatorialVectorBaseSample = (equatorialX: number, equatorialY: number, equatorialZ: number, out: NumberArray): number => {
 		let visibility = 1
 		let x = equatorialX
 		let y = equatorialY
@@ -4399,13 +4528,7 @@ export class Celestial {
 			}
 		}
 
-		const projected = this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.#options.width, this.#options.height, this.#options.projection), out)
-
-		if (projected) {
-			applyViewTransform(out[0], out[1], this.#options.width, this.#options.height, this.#transform, out)
-		}
-
-		return writeProjectedSample(out, visibility, projected)
+		return writeProjectedSample(out, visibility, this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.#options.width, this.#options.height, this.#options.projection), out))
 	}
 
 	// Projects a coordinate-system vector to transformed screen coordinates.
@@ -4580,6 +4703,8 @@ export class Celestial {
 				projectEquatorialToScreen: this.projectEquatorialToScreen,
 				projectEquatorialSample: this.projectEquatorialSample,
 				projectEquatorialVectorSample: this.projectEquatorialVectorSample,
+				projectEquatorialBaseSample: this.projectEquatorialBaseSample,
+				projectEquatorialVectorBaseSample: this.projectEquatorialVectorBaseSample,
 				projectHorizontalToScreen: this.projectHorizontalToScreen,
 				projectHorizontalSample: this.projectHorizontalSample,
 			} as unknown as Writable<RenderState>
@@ -4596,6 +4721,7 @@ export class Celestial {
 		state.coordinateSystem = options.coordinateSystem
 		state.transform = this.#transform
 		state.projectionRadius = projectionScale(options.width, options.height, options.projection)
+		state.projectedGeometryRevision = this.#projectedGeometryRevision
 		state.referenceLines = options.referenceLines
 		state.stars = options.stars
 		state.theme = options.theme

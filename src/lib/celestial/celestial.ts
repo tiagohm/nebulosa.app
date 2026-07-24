@@ -230,10 +230,9 @@ export interface RenderState {
 	readonly stars: Readonly<Required<StarLayerOptions>>
 	readonly theme: Readonly<ThemeOptions>
 	readonly starCatalog: StarCatalog | null
+	readonly deepSkyCatalog: DeepSkyCatalog | null
 	readonly constellations: Readonly<ConstellationData>
 	readonly milkyWay: readonly Readonly<MilkyWayStep>[]
-	readonly dsos: readonly Readonly<DeepSkyObject>[]
-	readonly deepSkyLabelVisible: NumberArray
 	readonly movingBodies: readonly Readonly<MovingBody>[]
 	readonly shapes: readonly Readonly<CelestialShape>[]
 	readonly hoverObject: Readonly<CelestialObject> | null
@@ -1292,6 +1291,70 @@ export class StarCatalog {
 
 	getBucketEnd(bucket: number) {
 		return this.bucketStarts[bucket + 1]
+	}
+}
+
+class DeepSkyCatalog {
+	readonly count: number
+	readonly eqX: Float32Array
+	readonly eqY: Float32Array
+	readonly eqZ: Float32Array
+	readonly screenX: Float32Array
+	readonly screenY: Float32Array
+	readonly visible: Uint8Array
+	readonly visibleIndices: Int32Array
+	readonly labelVisible: Uint8Array
+	private readonly labelVisibleIndices: Int32Array
+	visibleCount = 0
+	private labelVisibleCount = 0
+
+	constructor(readonly objects: readonly DeepSkyObject[]) {
+		this.count = objects.length
+		this.eqX = new Float32Array(this.count)
+		this.eqY = new Float32Array(this.count)
+		this.eqZ = new Float32Array(this.count)
+		this.screenX = new Float32Array(this.count)
+		this.screenY = new Float32Array(this.count)
+		this.visible = new Uint8Array(this.count)
+		this.visibleIndices = new Int32Array(this.count)
+		this.labelVisible = new Uint8Array(this.count)
+		this.labelVisibleIndices = new Int32Array(this.count)
+		const vector = new Float32Array(3)
+
+		for (let i = 0; i < this.count; i++) {
+			const object = objects[i]
+			writeRaDecUnitVector(object.rightAscension, object.declination, vector)
+			this.eqX[i] = vector[0]
+			this.eqY[i] = vector[1]
+			this.eqZ[i] = vector[2]
+		}
+	}
+
+	beginProjection() {
+		this.visible.fill(0)
+		this.visibleCount = 0
+	}
+
+	recordVisible(index: number, x: number, y: number) {
+		this.visible[index] = 1
+		this.screenX[index] = x
+		this.screenY[index] = y
+		this.visibleIndices[this.visibleCount++] = index
+	}
+
+	beginLabelRender() {
+		for (let i = 0; i < this.labelVisibleCount; i++) {
+			this.labelVisible[this.labelVisibleIndices[i]] = 0
+		}
+
+		this.labelVisibleCount = 0
+	}
+
+	recordLabelVisible(index: number) {
+		if (this.labelVisible[index]) return
+
+		this.labelVisible[index] = 1
+		this.labelVisibleIndices[this.labelVisibleCount++] = index
 	}
 }
 
@@ -2391,8 +2454,6 @@ function milkyWayLevelOpacity(theme: ThemeOptions['milkyWay'], index: number) {
 class DeepSkyObjectLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly labelPoint = new Float32Array(2)
-	private labelVisibleIndices = new Int32Array(0)
-	private labelVisibleCount = 0
 
 	constructor() {
 		super('deepSky', 40)
@@ -2400,24 +2461,26 @@ class DeepSkyObjectLayer extends InternalLayer {
 
 	// Draws simple predictable DSO symbols.
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
+		const catalog = state.deepSkyCatalog
+		if (!catalog) return
+
 		ctx.strokeStyle = state.theme.deepSky.color
 		ctx.fillStyle = state.theme.deepSky.color
 		ctx.lineWidth = 1
 		ctx.font = skyLabelFont(state, 9)
 		ctx.textAlign = 'left'
 		ctx.textBaseline = 'middle'
-		this.beginLabelRender(state)
+		catalog.beginLabelRender()
 
-		for (let i = 0; i < state.dsos.length; i++) {
-			const object = state.dsos[i]
+		for (let i = 0; i < catalog.visibleCount; i++) {
+			const index = catalog.visibleIndices[i]
+			const object = catalog.objects[index]
 
 			if (!isDeepSkyObjectVisible(object, state)) {
 				continue
 			}
 
-			if (!state.projectEquatorialToScreen(object.rightAscension, object.declination, this.point)) {
-				continue
-			}
+			applyViewTransform(catalog.screenX[index], catalog.screenY[index], state.width, state.height, state.transform, this.point)
 
 			if (!isPointInsideViewportMargin(this.point[0], this.point[1], state.width, state.height, DSO_VIEWPORT_MARGIN)) {
 				continue
@@ -2431,33 +2494,12 @@ class DeepSkyObjectLayer extends InternalLayer {
 
 				if (positionSkyLabel(ctx, state, object.name, this.point[0], this.point[1], 10, -2, this.labelPoint)) {
 					ctx.fillText(object.name, this.labelPoint[0], this.labelPoint[1])
-					this.recordLabelVisible(state, i)
+					catalog.recordLabelVisible(index)
 				}
 
 				ctx.fillStyle = state.theme.deepSky.color
 			}
 		}
-	}
-
-	// Clears only the entries marked on the previous frame so clearing stays proportional to drawn labels, mirroring StarCatalog.beginLabelRender.
-	private beginLabelRender(state: RenderState) {
-		const labelVisible = state.deepSkyLabelVisible
-
-		for (let i = 0; i < this.labelVisibleCount; i++) {
-			labelVisible[this.labelVisibleIndices[i]] = 0
-		}
-
-		this.labelVisibleCount = 0
-
-		if (this.labelVisibleIndices.length < state.dsos.length) {
-			this.labelVisibleIndices = new Int32Array(state.dsos.length)
-		}
-	}
-
-	// Marks one DSO label as drawn and tracks its index for the next frame's clear.
-	private recordLabelVisible(state: RenderState, index: number) {
-		state.deepSkyLabelVisible[index] = 1
-		this.labelVisibleIndices[this.labelVisibleCount++] = index
 	}
 }
 
@@ -2910,10 +2952,11 @@ class InteractionOverlayLayer extends InternalLayer {
 	}
 
 	private drawHighlightedDeepSkyLabel(ctx: CanvasRenderingContext2D, state: RenderState, object: Extract<CelestialObject, { type: 'deepSky' }>) {
+		const catalog = state.deepSkyCatalog
 		const dso = object.object
 
-		if (!dso.name || state.deepSkyLabelVisible[object.index] !== 0) return
-		if (!state.projectEquatorialToScreen(dso.rightAscension, dso.declination, this.point)) return
+		if (!catalog || !catalog.visible[object.index] || !dso.name || catalog.labelVisible[object.index] !== 0) return
+		applyViewTransform(catalog.screenX[object.index], catalog.screenY[object.index], state.width, state.height, state.transform, this.point)
 		if (!isPointInsideViewportMargin(this.point[0], this.point[1], state.width, state.height, DSO_VIEWPORT_MARGIN)) return
 
 		ctx.fillStyle = state.theme.deepSky.labelColor
@@ -3137,9 +3180,13 @@ function projectObjectToScreen(object: CelestialObject, state: RenderState, out:
 			applyViewTransform(catalog.screenX[object.index], catalog.screenY[object.index], state.width, state.height, state.transform, out)
 			return true
 		}
-		case 'deepSky':
+		case 'deepSky': {
+			const catalog = state.deepSkyCatalog
+			if (!catalog || !catalog.visible[object.index]) return false
 			if (!isDeepSkyObjectVisible(object.object, state)) return false
-			return state.projectEquatorialToScreen(object.object.rightAscension, object.object.declination, out)
+			applyViewTransform(catalog.screenX[object.index], catalog.screenY[object.index], state.width, state.height, state.transform, out)
+			return true
+		}
 		case 'movingBody': {
 			const movingBody = currentMovingBodyForObject(object, state)
 			return movingBody ? state.projectEquatorialToScreen(movingBody.position.rightAscension, movingBody.position.declination, out) : false
@@ -3363,10 +3410,9 @@ export class Celestial {
 	#renderState: Writable<RenderState> | null = null
 	#cachedRect: DOMRect | null = null
 	#starCatalog: StarCatalog | null = null
+	#deepSkyCatalog: DeepSkyCatalog | null = null
 	#constellations: ConstellationData = {}
 	#milkyWay: MilkyWayStep[] = []
-	#dsos: DeepSkyObject[] = []
-	#deepSkyLabelVisible = new Uint8Array(0)
 	readonly #movingBodies = new Map<string, MovingBody>()
 	readonly #movingBodyList: MovingBody[] = []
 	readonly #shapes = new Map<string, CelestialShape>()
@@ -3548,6 +3594,7 @@ export class Celestial {
 		this.#renderer.resize(this.#options.width, this.#options.height)
 		this.syncD3ZoomTransform(this.#transform)
 		this.projectStars()
+		this.projectDeepSkyObjects()
 		this.rebuildPickingIndex()
 		this.#renderer.markAllDirty()
 		this.#emitter.has('resize') && this.#emitter.emit('resize', { width: this.#options.width, height: this.#options.height })
@@ -3583,7 +3630,7 @@ export class Celestial {
 		this.#emitter.clear()
 		this.#renderState = null
 		this.#starCatalog = null
-		this.#dsos.length = 0
+		this.#deepSkyCatalog = null
 		this.#constellations = {}
 		this.#milkyWay.length = 0
 		this.#movingBodies.clear()
@@ -3627,9 +3674,8 @@ export class Celestial {
 
 	// Loads deep-sky objects.
 	loadDeepSkyObjects(objects: readonly DeepSkyObject[]) {
-		this.#dsos = objects as never
-		this.#deepSkyLabelVisible = new Uint8Array(this.#dsos.length)
-		this.#renderer.markDirty('deepSky')
+		this.#deepSkyCatalog = new DeepSkyCatalog(objects)
+		this.projectDeepSkyObjects()
 		this.rebuildPickingIndex()
 		this.requestRender()
 	}
@@ -3995,6 +4041,7 @@ export class Celestial {
 		if (this.#destroyed) return
 
 		this.projectStars()
+		this.projectDeepSkyObjects()
 		this.rebuildPickingIndex()
 		this.#renderer.markAllDirty()
 		this.requestRender()
@@ -4027,6 +4074,7 @@ export class Celestial {
 		}
 
 		this.projectStars()
+		this.projectDeepSkyObjects()
 		this.rebuildPickingIndex()
 		emitUpdateEnd && this.#emitter.emit('updateEnd', { time: this.#options.time, duration: performance.now() - start })
 		this.markAstronomicalDirty()
@@ -4135,6 +4183,54 @@ export class Celestial {
 
 		catalog.finalizeProjectionBuckets()
 		this.#renderer.markDirty('stars')
+	}
+
+	// Projects deep-sky objects into base screen coordinates for reuse during pan and zoom.
+	private projectDeepSkyObjects() {
+		const catalog = this.#deepSkyCatalog
+
+		if (!catalog) return
+
+		const width = this.#options.width
+		const height = this.#options.height
+		const scale = projectionScale(width, height, this.#options.projection)
+		const margin = Math.max(width, height)
+		const isHorizontal = this.#options.coordinateSystem === 'horizontal'
+		const horizontalMatrix = this.#eqToHorizontal
+		const temp = this.#tempVector
+		catalog.beginProjection()
+
+		for (let i = 0; i < catalog.count; i++) {
+			let x = catalog.eqX[i]
+			let y = catalog.eqY[i]
+			let z = catalog.eqZ[i]
+
+			if (isHorizontal) {
+				multiplyMatrixVector(horizontalMatrix, x, y, z, temp)
+				x = temp[0]
+				y = temp[1]
+				z = temp[2]
+
+				if (z < -HORIZON_EPSILON) {
+					continue
+				}
+			}
+
+			if (!this.projectWorldVectorToBaseScreen(x, y, z, scale, this.#tempScreen)) {
+				continue
+			}
+
+			const screenX = this.#tempScreen[0]
+			const screenY = this.#tempScreen[1]
+
+			if (screenX < -margin || screenY < -margin || screenX > width + margin || screenY > height + margin) {
+				continue
+			}
+
+			catalog.recordVisible(i, screenX, screenY)
+		}
+
+		this.#renderer.markDirty('deepSky')
 	}
 
 	// Projects a world vector to base screen coordinates without pan/zoom transform.
@@ -4256,15 +4352,22 @@ export class Celestial {
 		}
 
 		if (this.isLayerVisible('deepSky')) {
-			for (let i = 0; i < this.#dsos.length; i++) {
-				const object = this.#dsos[i]
+			const deepSkyCatalog = this.#deepSkyCatalog
 
-				if (!isDeepSkyObjectVisibleAtZoom(object, this.#transform.k)) {
-					continue
-				}
+			if (deepSkyCatalog) {
+				for (let i = 0; i < deepSkyCatalog.visibleCount; i++) {
+					const index = deepSkyCatalog.visibleIndices[i]
+					const object = deepSkyCatalog.objects[index]
 
-				if (this.projectEquatorialToScreen(object.rightAscension, object.declination, this.#tempScreen) && isPointInsideViewportMargin(this.#tempScreen[0], this.#tempScreen[1], this.#options.width, this.#options.height, DSO_VIEWPORT_MARGIN)) {
-					this.#picking.add(PICK_TYPE_DSO, i, this.#tempScreen[0], this.#tempScreen[1], deepSkyMagnitude(object))
+					if (!isDeepSkyObjectVisibleAtZoom(object, this.#transform.k)) {
+						continue
+					}
+
+					applyViewTransform(deepSkyCatalog.screenX[index], deepSkyCatalog.screenY[index], this.#options.width, this.#options.height, this.#transform, this.#tempScreen)
+
+					if (isPointInsideViewportMargin(this.#tempScreen[0], this.#tempScreen[1], this.#options.width, this.#options.height, DSO_VIEWPORT_MARGIN)) {
+						this.#picking.add(PICK_TYPE_DSO, index, this.#tempScreen[0], this.#tempScreen[1], deepSkyMagnitude(object))
+					}
 				}
 			}
 		}
@@ -4377,10 +4480,9 @@ export class Celestial {
 		state.stars = options.stars
 		state.theme = options.theme
 		state.starCatalog = this.#starCatalog
+		state.deepSkyCatalog = this.#deepSkyCatalog
 		state.constellations = this.#constellations
 		state.milkyWay = this.#milkyWay
-		state.dsos = this.#dsos
-		state.deepSkyLabelVisible = this.#deepSkyLabelVisible
 		state.movingBodies = this.#movingBodyList
 		state.shapes = this.#shapeList
 		state.hoverObject = this.#hoverObject
@@ -4396,7 +4498,7 @@ export class Celestial {
 			case PICK_TYPE_STAR:
 				return this.#starCatalog?.getObject(index.index) ?? null
 			case PICK_TYPE_DSO:
-				return this.#dsos[index.index] ? { type: 'deepSky', index: index.index, object: this.#dsos[index.index] } : null
+				return this.#deepSkyCatalog?.objects[index.index] ? { type: 'deepSky', index: index.index, object: this.#deepSkyCatalog.objects[index.index] } : null
 			case PICK_TYPE_MOVING_BODY:
 				return this.#movingBodyList[index.index] ? { type: 'movingBody', index: index.index, object: this.#movingBodyList[index.index] } : null
 			case PICK_TYPE_CONSTELLATION_LABEL: {

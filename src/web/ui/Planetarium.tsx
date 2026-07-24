@@ -7,8 +7,8 @@ import { SkyMap } from '@ui/SkyMap'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useEffect } from 'react'
 import type { CelestialOptions } from 'src/lib/celestial/celestial'
-import { skyObjectName } from 'src/types/galaxy'
 import { useSnapshot } from 'valtio'
+import { skyObjectName } from '#/galaxy'
 
 const SKY_MAP_OPTIONS: CelestialOptions = {
 	layers: {

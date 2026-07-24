@@ -4,8 +4,8 @@ import { Link } from '@ui/components/Link'
 import { SolarImageSourceSelect } from '@ui/SolarImageSourceSelect'
 import { memo, useEffect, useRef } from 'react'
 import type { SyntheticEvent } from 'react'
-import { SOLAR_IMAGE_SOURCE_URLS } from 'src/types/sun'
-import type { SolarImageSource } from 'src/types/sun'
+import { SOLAR_IMAGE_SOURCE_URLS } from '#/sun'
+import type { SolarImageSource } from '#/sun'
 
 export interface SunProps {
 	readonly source: SolarImageSource

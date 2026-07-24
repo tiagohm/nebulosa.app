@@ -25,6 +25,7 @@
 			"@shared/*": ["./src/web/shared/*"],
 			"@ui/*": ["./src/web/ui/*"],
 			"@/*": ["./src/web/*"],
+			"#/*": ["./src/types/*"],
 			"src/*": ["./src/*"],
 			"root/*": ["./*"]
 		}

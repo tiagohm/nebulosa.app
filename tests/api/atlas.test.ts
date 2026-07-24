@@ -7,10 +7,10 @@ import { deg, formatALT, formatRA, parseAngle } from 'nebulosa/src/math/units/an
 import { lightYear, meter, toKilometer } from 'nebulosa/src/math/units/distance'
 import { AtlasHandler } from 'src/api/atlas'
 import cache from 'src/api/cache'
-import type { PositionOfBody } from 'src/types/atlas'
-import { DEFAULT_SKY_OBJECT_SEARCH } from 'src/types/galaxy'
-import type { SearchSkyObject } from 'src/types/galaxy'
-import type { FindSolarEclipse } from 'src/types/sun'
+import type { PositionOfBody } from '#/atlas'
+import { DEFAULT_SKY_OBJECT_SEARCH } from '#/galaxy'
+import type { SearchSkyObject } from '#/galaxy'
+import type { FindSolarEclipse } from '#/sun'
 import { spyFetch } from './util'
 
 const atlas = new AtlasHandler(cache)

@@ -10,8 +10,8 @@ import { PlateSolverTypeSelect } from '@ui/PlateSolverTypeSelect'
 import { PlateSolveStartPopover } from '@ui/PlateSolveStartPopover'
 import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { memo, useContext, useEffect } from 'react'
-import type { PlateSolveStart } from 'src/types/platesolver'
 import { useSnapshot } from 'valtio'
+import type { PlateSolveStart } from '#/platesolver'
 
 function hasPositiveFiniteValue(value: number) {
 	return Number.isFinite(value) && value > 0

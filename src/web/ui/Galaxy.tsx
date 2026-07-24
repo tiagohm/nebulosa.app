@@ -12,8 +12,8 @@ import { StellariumObjectTypeSelect } from '@ui/StellariumObjectTypeSelect'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { CONSTELLATION_LIST } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { memo, useEffect } from 'react'
-import { skyObjectName, skyObjectType } from 'src/types/galaxy'
 import { useSnapshot } from 'valtio'
+import { skyObjectName, skyObjectType } from '#/galaxy'
 
 export const Galaxy = memo(({ api }: IDockviewPanelProps) => {
 	useEffect(galaxyStore.mount, [])

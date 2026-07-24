@@ -12,9 +12,9 @@ import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { formatRA, formatDEC, toDeg, arcsec } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
-import type { Framing } from 'src/types/framing'
-import type { PlateSolveStart, PlateSolverType } from 'src/types/platesolver'
 import { proxy, ref } from 'valtio'
+import type { Framing } from '#/framing'
+import type { PlateSolveStart, PlateSolverType } from '#/platesolver'
 
 export type ImageSolverStore = ReturnType<typeof imageSolverStore>
 

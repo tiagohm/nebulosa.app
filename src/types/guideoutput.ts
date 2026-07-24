@@ -1,5 +1,5 @@
 import type { GuideDirection, GuideOutput } from 'nebulosa/src/devices/indi/device'
-import type { DeviceAdded, DeviceUpdated, DeviceRemoved } from 'src/types/device'
+import type { DeviceAdded, DeviceUpdated, DeviceRemoved } from '#/device'
 
 export type GuideOutputAdded = DeviceAdded<GuideOutput>
 

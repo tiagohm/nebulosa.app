@@ -9,7 +9,7 @@ import { ConfirmationHandler } from 'src/api/confirmation'
 import { guideOutputBus, guideOutput as guideOutputEndpoints, GuideOutputHandler } from 'src/api/guideoutput'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
-import type { GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from 'src/types/guideoutput'
+import type { GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from '#/guideoutput'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
 guideOutputBus.forceSync = true

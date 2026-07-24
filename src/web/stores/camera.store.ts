@@ -8,11 +8,11 @@ import { equipmentStore } from '@stores/equipment.store'
 import type { DeviceState } from '@stores/equipment.store'
 import type { Camera, Focuser, MinMaxValueProperty, Mount, NameAndLabel, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_CAMERA_CAPTURE_EVENT, exposureTimeIn } from 'src/types/camera'
-import type { CameraCaptureEvent, CameraCaptureStart, CameraUpdated } from 'src/types/camera'
-import type { ComputeRoi, Roi } from 'src/types/image.roi'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import { DEFAULT_CAMERA_CAPTURE_EVENT, exposureTimeIn } from '#/camera'
+import type { CameraCaptureEvent, CameraCaptureStart, CameraUpdated } from '#/camera'
+import type { ComputeRoi, Roi } from '#/image.roi'
 
 export type CameraStore = ReturnType<typeof cameraStore>
 

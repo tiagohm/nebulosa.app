@@ -7,11 +7,11 @@ import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/co
 import type { DeepWritable } from 'nebulosa/src/core/types'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { unsubscribe } from 'src/shared/util'
-import { screenDeltaInImage } from 'src/types/image'
-import { DEFAULT_IMAGE_CROSSHAIR_ANGULAR_SPACING, DEFAULT_IMAGE_CROSSHAIR_CONFIG, crosshairPointFromPixels, crosshairPointInPixels, crosshairSpacingInPixels } from 'src/types/image.crosshair'
-import type { ImageCrosshairPreset, ImageCrosshairProjection, ImageCrosshairProjectionAnchor, ImageCrosshairAngularDisplayUnit, ImageCrosshairCenter, ImageCrosshairCenterSpace, ImageCrosshairConfig, ImageCrosshairPoint, ImageCrosshairSpacingUnit } from 'src/types/image.crosshair'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import { screenDeltaInImage } from '#/image'
+import { DEFAULT_IMAGE_CROSSHAIR_ANGULAR_SPACING, DEFAULT_IMAGE_CROSSHAIR_CONFIG, crosshairPointFromPixels, crosshairPointInPixels, crosshairSpacingInPixels } from '#/image.crosshair'
+import type { ImageCrosshairPreset, ImageCrosshairProjection, ImageCrosshairProjectionAnchor, ImageCrosshairAngularDisplayUnit, ImageCrosshairCenter, ImageCrosshairCenterSpace, ImageCrosshairConfig, ImageCrosshairPoint, ImageCrosshairSpacingUnit } from '#/image.crosshair'
 
 export type ImageCrosshairStore = ReturnType<typeof imageCrosshairStore>
 export type ImageCrosshairWcsStatus = 'unavailable' | 'loading' | 'ready' | 'outside' | 'error'

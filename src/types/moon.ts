@@ -5,7 +5,7 @@ import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/locat
 import type { Time } from 'nebulosa/src/astronomy/time/time'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Distance } from 'nebulosa/src/math/units/distance'
-import type { LocationAndTime } from 'src/types/atlas'
+import type { LocationAndTime } from '#/atlas'
 
 export type ApogeeAndPerigee = readonly [LunarApsis, LunarApsis]
 

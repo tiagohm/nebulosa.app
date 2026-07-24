@@ -5,9 +5,9 @@ import { hasScaledSolution } from '@stores/image.solver.store'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { unsubscribe } from 'src/shared/util'
-import type { ImageCoordinateGrid } from 'src/types/image.coordinategrid'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import type { ImageCoordinateGrid } from '#/image.coordinategrid'
 
 export type ImageCoordinateGridStore = ReturnType<typeof imageCoordinateGridStore>
 

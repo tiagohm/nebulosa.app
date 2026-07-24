@@ -3,9 +3,9 @@ import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { ChrominanceSubsampling } from 'nebulosa/src/bindings/imaging/libturbojpeg'
 import type { ImageFormat } from 'nebulosa/src/imaging/model/types'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_IMAGE_TRANSFORMATION } from 'src/types/image'
-import type { ImageTransformation } from 'src/types/image'
 import { proxy } from 'valtio'
+import { DEFAULT_IMAGE_TRANSFORMATION } from '#/image'
+import type { ImageTransformation } from '#/image'
 
 export type ImageSettingsStore = ReturnType<typeof imageSettingsStore>
 

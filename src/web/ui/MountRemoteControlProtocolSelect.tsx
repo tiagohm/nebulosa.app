@@ -1,6 +1,6 @@
 import { Select } from '@ui/components/Select'
 import type { SelectProps } from '@ui/components/Select'
-import type { MountRemoteControlProtocol } from 'src/types/mount'
+import type { MountRemoteControlProtocol } from '#/mount'
 
 const ITEMS = ['lx200', 'stellarium'] as const
 const LABELS = ['LX200', 'Stellarium'] as const

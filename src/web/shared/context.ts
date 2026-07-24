@@ -20,7 +20,7 @@ import type { TppaStore } from '@stores/tppa.store'
 import type { WheelStore } from '@stores/wheel.store'
 import type { Camera, Cover, Device, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, Thermometer, Wheel } from 'nebulosa/src/devices/indi/device'
 import { createContext } from 'react'
-import type { Image } from 'src/types/image'
+import type { Image } from '#/image'
 
 export const AutoFocusStoreContext = createContext<AutoFocusStore>(null as never)
 

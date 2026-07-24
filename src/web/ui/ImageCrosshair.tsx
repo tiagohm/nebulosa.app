@@ -12,8 +12,8 @@ import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/co
 import { PIOVERTWO } from 'nebulosa/src/core/constants'
 import { formatDEC, formatRA, parseAngle } from 'nebulosa/src/math/units/angle'
 import { memo, useContext, useEffect, useState } from 'react'
-import { CROSSHAIR_ANGULAR_DISPLAY_UNITS, CROSSHAIR_CENTER_SPACES, CROSSHAIR_SPACING_UNITS, crosshairAngleFromDisplayValue, crosshairAngleToDisplayValue, crosshairPointInPixels } from 'src/types/image.crosshair'
 import { useSnapshot } from 'valtio'
+import { CROSSHAIR_ANGULAR_DISPLAY_UNITS, CROSSHAIR_CENTER_SPACES, CROSSHAIR_SPACING_UNITS, crosshairAngleFromDisplayValue, crosshairAngleToDisplayValue, crosshairPointInPixels } from '#/image.crosshair'
 
 const CENTER_SPACE_LABELS = { image: 'Image', sky: 'Sky' } as const
 const SPACING_UNIT_LABELS = { pixel: 'Pixel', normalized: 'Normalized', angular: 'Angular' } as const

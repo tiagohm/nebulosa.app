@@ -8,7 +8,7 @@ import type { TppaParams } from '@ui/Tppa'
 import type { DockviewApi, DockviewGroupPanel, DockviewGroupPanelApi, DockviewReadyEvent, IDockviewGroupPanel, IDockviewPanel } from 'dockview-react'
 import { nanoid } from 'nanoid'
 import type { Camera, Device } from 'nebulosa/src/devices/indi/device'
-import type { Image, ImageSource } from 'src/types/image'
+import type { Image, ImageSource } from '#/image'
 
 export type HomeStore = typeof homeStore
 

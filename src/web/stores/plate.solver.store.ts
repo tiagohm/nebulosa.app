@@ -1,7 +1,7 @@
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import { DEFAULT_PLATE_SOLVE_START } from 'src/types/platesolver'
-import type { PlateSolverType, PlateSolveStart } from 'src/types/platesolver'
 import { proxy } from 'valtio'
+import { DEFAULT_PLATE_SOLVE_START } from '#/platesolver'
+import type { PlateSolverType, PlateSolveStart } from '#/platesolver'
 
 export type PlateSolverStore = ReturnType<typeof plateSolverStore>
 

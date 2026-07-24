@@ -10,8 +10,8 @@ import { Icons } from '@ui/Icon'
 import { memo, useContext, useEffect } from 'react'
 import cameras from 'src/data/astrobin.cameras.json'
 import telescopes from 'src/data/astrobin.telescopes.json'
-import type { ImageFovItem } from 'src/types/image.fov'
 import { useSnapshot } from 'valtio'
+import type { ImageFovItem } from '#/image.fov'
 
 export const ImageFov = memo(() => {
 	const { fov, solver } = useContext(ImageViewerStoreContext)

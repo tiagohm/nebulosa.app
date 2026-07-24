@@ -5,9 +5,9 @@ import { nanoid } from 'nanoid'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
 import type { ClientType } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_CONNECTION_PORTS, connectionComparator, DEFAULT_CONNECTION } from 'src/types/connection'
-import type { Connection, ConnectionStatus } from 'src/types/connection'
 import { proxy } from 'valtio'
+import { DEFAULT_CONNECTION_PORTS, connectionComparator, DEFAULT_CONNECTION } from '#/connection'
+import type { Connection, ConnectionStatus } from '#/connection'
 
 export type ConnectionStore = typeof connectionStore
 

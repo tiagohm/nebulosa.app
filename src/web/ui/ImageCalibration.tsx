@@ -4,8 +4,8 @@ import { Checkbox } from '@ui/components/Checkbox'
 import { FilePickerInput } from '@ui/FilePickerInput'
 import { Icons } from '@ui/Icon'
 import { memo, useContext, useEffect } from 'react'
-import type { ImageCalibrationFile } from 'src/types/image.calibration'
 import { useSnapshot } from 'valtio'
+import type { ImageCalibrationFile } from '#/image.calibration'
 
 export const ImageCalibration = memo(() => {
 	const { calibration } = useContext(ImageViewerStoreContext)

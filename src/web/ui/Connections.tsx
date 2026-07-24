@@ -14,9 +14,9 @@ import { Icons } from '@ui/Icon'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
 import { memo, useEffect, useRef } from 'react'
-import { canConnect, DEFAULT_CONNECTION_PORTS, isNetworkConnection } from 'src/types/connection'
-import type { Connection, ConnectionStatus } from 'src/types/connection'
 import { useSnapshot } from 'valtio'
+import { canConnect, DEFAULT_CONNECTION_PORTS, isNetworkConnection } from '#/connection'
+import type { Connection, ConnectionStatus } from '#/connection'
 
 export const Connections = memo(() => {
 	useEffect(connectionStore.mount, [])

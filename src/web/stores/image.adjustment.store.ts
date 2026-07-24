@@ -1,9 +1,9 @@
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { ImageChannelOrGray } from 'nebulosa/src/imaging/model/types'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_IMAGE_ADJUSTMENT } from 'src/types/image.adjustment'
-import type { ImageAdjustment } from 'src/types/image.adjustment'
 import { proxy } from 'valtio'
+import { DEFAULT_IMAGE_ADJUSTMENT } from '#/image.adjustment'
+import type { ImageAdjustment } from '#/image.adjustment'
 
 export type ImageAdjustmentStore = ReturnType<typeof imageAdjustmentStore>
 

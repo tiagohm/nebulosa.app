@@ -11,10 +11,10 @@ import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { COARSE_DARV_EXPOSURE_PRESET, DARV_EXPOSURE_PRESETS, estimateDarvExposure } from 'nebulosa/src/observation/alignment/polaralignment'
 import type { DarvExposureInput, DarvExposurePreset, DarvExposurePresetMode } from 'nebulosa/src/observation/alignment/polaralignment'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_DARV_EVENT, DEFAULT_DARV_START } from 'src/types/darv'
-import type { DarvEvent, DarvHemisphere, DarvStart } from 'src/types/darv'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import { DEFAULT_DARV_EVENT, DEFAULT_DARV_START } from '#/darv'
+import type { DarvEvent, DarvHemisphere, DarvStart } from '#/darv'
 
 export type DarvStore = ReturnType<typeof darvStore>
 

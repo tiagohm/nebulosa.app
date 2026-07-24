@@ -6,10 +6,10 @@ import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import type { Writable } from 'nebulosa/src/core/types'
 import { toArcsec } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_IMAGE_FOV_ITEM } from 'src/types/image.fov'
-import type { ComputedImageFov, ImageFovItem } from 'src/types/image.fov'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import { DEFAULT_IMAGE_FOV_ITEM } from '#/image.fov'
+import type { ComputedImageFov, ImageFovItem } from '#/image.fov'
 
 export type ImageFovStore = ReturnType<typeof imageFovStore>
 

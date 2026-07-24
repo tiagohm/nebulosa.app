@@ -3,7 +3,7 @@ import { Chip } from '@ui/components/Chip'
 import type { ChipProps } from '@ui/components/Chip'
 import { Icons } from '@ui/Icon'
 import { useState } from 'react'
-import type { CameraCaptureEvent, CameraCaptureState, CameraCaptureTime } from 'src/types/camera'
+import type { CameraCaptureEvent, CameraCaptureState, CameraCaptureTime } from '#/camera'
 
 export interface CameraExposureTimeProgressProps extends React.ComponentProps<'div'> {
 	readonly progress: CameraCaptureEvent

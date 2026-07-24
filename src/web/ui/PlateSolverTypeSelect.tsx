@@ -1,6 +1,6 @@
 import { Select } from '@ui/components/Select'
 import type { SelectProps } from '@ui/components/Select'
-import type { PlateSolverType } from 'src/types/platesolver'
+import type { PlateSolverType } from '#/platesolver'
 
 const ITEMS = ['astap', 'astrometryNet', 'novaAstrometryNet'] as const
 const LABELS = ['Astap', 'Astrometry.net (offline)', 'Nova Astrometry.net'] as const

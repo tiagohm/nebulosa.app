@@ -8,11 +8,11 @@ import type { Writable } from 'nebulosa/src/core/types'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatRA, formatDEC } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/types/atlas'
-import type { BodyPosition, PositionOfBody } from 'src/types/atlas'
-import { DEFAULT_SEARCH_SATELLITE } from 'src/types/satellite'
-import type { SearchSatellite, Satellite, SatelliteCategory, SatelliteGroupType } from 'src/types/satellite'
 import { proxy, ref } from 'valtio'
+import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from '#/atlas'
+import type { BodyPosition, PositionOfBody } from '#/atlas'
+import { DEFAULT_SEARCH_SATELLITE } from '#/satellite'
+import type { SearchSatellite, Satellite, SatelliteCategory, SatelliteGroupType } from '#/satellite'
 
 export type AtlasSatelliteStore = typeof satelliteStore
 

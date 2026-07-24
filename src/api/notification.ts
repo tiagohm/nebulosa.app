@@ -1,4 +1,4 @@
-import type { Notification } from 'src/types/notification'
+import type { Notification } from '#/notification'
 import type { WebSocketMessageHandler } from './message'
 
 export class NotificationHandler {

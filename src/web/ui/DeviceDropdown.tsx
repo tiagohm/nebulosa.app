@@ -8,8 +8,8 @@ import { Icons } from '@ui/Icon'
 import type { Icon } from '@ui/Icon'
 import type { Device } from 'nebulosa/src/devices/indi/device'
 import { memo } from 'react'
-import type { DeviceTypeMap } from 'src/types/device'
 import { useSnapshot } from 'valtio'
+import type { DeviceTypeMap } from '#/device'
 
 export interface DeviceDropdownProps<T extends keyof DeviceTypeMap> extends Omit<DropdownProps, 'children' | 'onAction'> {
 	readonly type: T

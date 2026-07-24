@@ -11,10 +11,10 @@ import { temporalAdd, temporalGet } from 'nebulosa/src/astronomy/time/temporal'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/types/atlas'
-import type { BodyPosition, PositionOfBody } from 'src/types/atlas'
-import type { SolarImageSource, SolarSeasons } from 'src/types/sun'
 import { proxy, ref } from 'valtio'
+import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from '#/atlas'
+import type { BodyPosition, PositionOfBody } from '#/atlas'
+import type { SolarImageSource, SolarSeasons } from '#/sun'
 
 export type AtlasSunStore = typeof sunStore
 

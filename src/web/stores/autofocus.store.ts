@@ -8,11 +8,11 @@ import type { DockviewPanelApi } from 'dockview-react'
 import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
 import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_AUTO_FOCUS_START, DEFAULT_AUTO_FOCUS_EVENT } from 'src/types/autofocus'
-import type { AutoFocusStart, AutoFocusEvent } from 'src/types/autofocus'
-import type { StarDetectionType } from 'src/types/stardetection'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import { DEFAULT_AUTO_FOCUS_START, DEFAULT_AUTO_FOCUS_EVENT } from '#/autofocus'
+import type { AutoFocusStart, AutoFocusEvent } from '#/autofocus'
+import type { StarDetectionType } from '#/stardetection'
 
 export type AutoFocusStore = ReturnType<typeof autoFocusStore>
 

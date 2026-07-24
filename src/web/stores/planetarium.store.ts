@@ -17,11 +17,11 @@ import constellationLines from 'src/data/constellation.lines.json'
 import mw from 'src/data/mw.json'
 import type { Celestial, CelestialEventMap, CelestialShape, ConstellationData, MovingBody, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_BODY_POSITION } from 'src/types/atlas'
-import type { BodyPosition, PositionOfBody } from 'src/types/atlas'
-import { skyObjectName } from 'src/types/galaxy'
-import type { SkyObject } from 'src/types/galaxy'
 import { proxy, ref, subscribe } from 'valtio'
+import { DEFAULT_BODY_POSITION } from '#/atlas'
+import type { BodyPosition, PositionOfBody } from '#/atlas'
+import { skyObjectName } from '#/galaxy'
+import type { SkyObject } from '#/galaxy'
 
 export interface PlanetariumState {
 	celestial?: Celestial

@@ -8,10 +8,10 @@ import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/locat
 import type { Mount, MountTargetCoordinate, MountTargetCoordinateType, TrackMode } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_COORDINATE_INFO } from 'src/types/mount'
-import type { CoordinateInfo, MountRemoteControlProtocol, MountRemoteControlStatus } from 'src/types/mount'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import { DEFAULT_COORDINATE_INFO } from '#/mount'
+import type { CoordinateInfo, MountRemoteControlProtocol, MountRemoteControlStatus } from '#/mount'
 
 export type MountStore = ReturnType<typeof mountStore>
 

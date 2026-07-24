@@ -2,7 +2,7 @@ import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
 import type { LocalSolarEclipseCircumstances, LocalSolarEclipseViewOptions } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
 import type { PolynomialBesselianElements, SolarEclipseContactPoints, SolarEclipseMapSvgPaths } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
-import type { LocationAndTime } from 'src/types/atlas'
+import type { LocationAndTime } from '#/atlas'
 
 export type SolarImageSource = (typeof SOLAR_IMAGE_SOURCES)[number]
 

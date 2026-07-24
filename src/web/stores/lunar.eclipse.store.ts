@@ -11,9 +11,9 @@ import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import type { Writable } from 'nebulosa/src/core/types'
 import { deg } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_GEOGRAPHIC_COORDINATE } from 'src/types/atlas'
-import type { LunarEclipseMap } from 'src/types/moon'
 import { proxy, ref } from 'valtio'
+import { DEFAULT_GEOGRAPHIC_COORDINATE } from '#/atlas'
+import type { LunarEclipseMap } from '#/moon'
 
 export type LunarEclipseStore = typeof lunarEclipseStore
 

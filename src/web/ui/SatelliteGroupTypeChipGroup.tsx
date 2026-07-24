@@ -2,8 +2,8 @@ import { tw } from '@shared/util'
 import { Chip } from '@ui/components/Chip'
 import type { ChipProps } from '@ui/components/Chip'
 import { useMemo } from 'react'
-import { SATELLITE_GROUP_TYPES } from 'src/types/satellite'
-import type { SatelliteGroupType, SatelliteCategory } from 'src/types/satellite'
+import { SATELLITE_GROUP_TYPES } from '#/satellite'
+import type { SatelliteGroupType, SatelliteCategory } from '#/satellite'
 
 export interface SatelliteGroupTypeChipGroupProps extends React.ComponentProps<'div'> {
 	readonly value: readonly SatelliteGroupType[]

@@ -1,9 +1,8 @@
 import { DEFAULT_PHD2_SETTLE } from 'nebulosa/src/devices/guiding/phd2'
 import type { PHD2Settle } from 'nebulosa/src/devices/guiding/phd2'
-import type { GuideDirection } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_CAMERA_CAPTURE_START } from 'src/types/camera'
-import type { CameraCaptureStart } from 'src/types/camera'
-import type { HostAndPort } from 'src/types/connection'
+import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
+import type { CameraCaptureStart } from '#/camera'
+import type { HostAndPort } from '#/connection'
 
 export type GuiderClientMode = 'local' | 'remote'
 

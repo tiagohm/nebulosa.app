@@ -2,8 +2,8 @@ import { formatDistance, tw } from '@shared/util'
 import { formatALT, formatAZ, formatDEC, formatHMS, formatRA, toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { ComponentProps } from 'react'
-import type { BodyPosition } from 'src/types/atlas'
-import type { CoordinateInfo, CoordinateType } from 'src/types/mount'
+import type { BodyPosition } from '#/atlas'
+import type { CoordinateInfo, CoordinateType } from '#/mount'
 
 export interface BodyCoordinateInfoProps extends ComponentProps<'div'> {
 	readonly position: CoordinateInfo | BodyPosition

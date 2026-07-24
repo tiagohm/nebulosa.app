@@ -2,8 +2,8 @@ import { initProxy } from '@shared/proxy'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { CfaPattern } from 'nebulosa/src/imaging/model/types'
 import { unsubscribe } from 'src/shared/util'
-import type { ImageTransformation } from 'src/types/image'
 import { proxy } from 'valtio'
+import type { ImageTransformation } from '#/image'
 
 export type ImageDebayerStore = ReturnType<typeof imageDebayerStore>
 

@@ -10,10 +10,10 @@ import { temporalAdd, temporalGet } from 'nebulosa/src/astronomy/time/temporal'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatRA, formatDEC } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/types/atlas'
-import type { BodyPosition, PositionOfBody } from 'src/types/atlas'
-import type { ApogeeAndPerigee, LunarPhaseTime } from 'src/types/moon'
 import { proxy, ref } from 'valtio'
+import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from '#/atlas'
+import type { BodyPosition, PositionOfBody } from '#/atlas'
+import type { ApogeeAndPerigee, LunarPhaseTime } from '#/moon'
 
 export type AtlasMoonStore = typeof moonStore
 

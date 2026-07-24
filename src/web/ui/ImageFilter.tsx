@@ -8,9 +8,9 @@ import { Icons } from '@ui/Icon'
 import { ImageFFTFilterTypeRadioGroup } from '@ui/ImageFFTFilterTypeRadioGroup'
 import { ImageKernelFilterTypeRadioGroup } from '@ui/ImageKernelFilterTypeRadioGroup'
 import { memo, useContext, useEffect } from 'react'
-import type { ImageFFT } from 'src/types/image.fft'
-import type { ImageFilter as KernelFilter } from 'src/types/image.filter'
 import { useSnapshot } from 'valtio'
+import type { ImageFFT } from '#/image.fft'
+import type { ImageFilter as KernelFilter } from '#/image.filter'
 
 export const ImageFilter = memo(() => {
 	const { filter } = useContext(ImageViewerStoreContext)

@@ -6,10 +6,10 @@ import type { DeviceState } from '@stores/equipment.store'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_GUIDER_EVENT, DEFAULT_GUIDER_INTERNAL_CONNECT, DEFAULT_GUIDER_REMOTE_CONNECT } from 'src/types/guider'
-import type { GuiderClientMode, GuiderDither, GuiderEvent, GuiderLocalConnect, GuiderRemoteConnect, GuiderStatus } from 'src/types/guider'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import { DEFAULT_GUIDER_EVENT, DEFAULT_GUIDER_INTERNAL_CONNECT, DEFAULT_GUIDER_REMOTE_CONNECT } from '#/guider'
+import type { GuiderClientMode, GuiderDither, GuiderEvent, GuiderLocalConnect, GuiderRemoteConnect, GuiderStatus } from '#/guider'
 
 export type GuiderStore = typeof guiderStore
 

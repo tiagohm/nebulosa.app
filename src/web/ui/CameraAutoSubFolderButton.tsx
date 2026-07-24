@@ -1,7 +1,7 @@
 import type { ButtonProps } from '@ui/components/Button'
 import { IconButton } from '@ui/components/IconButton'
 import { Icons } from '@ui/Icon'
-import type { CameraAutoSubFolderMode } from 'src/types/camera'
+import type { CameraAutoSubFolderMode } from '#/camera'
 
 export interface CameraAutoSubFolderModeButtonProps extends Omit<ButtonProps, 'children'> {
 	readonly value: CameraAutoSubFolderMode

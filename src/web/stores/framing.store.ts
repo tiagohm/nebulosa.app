@@ -3,9 +3,9 @@ import { initProxy } from '@shared/proxy'
 import { homeStore } from '@stores/home.store'
 import { nanoid } from 'nanoid'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_FRAMING } from 'src/types/framing'
-import type { Framing } from 'src/types/framing'
 import { proxy } from 'valtio'
+import { DEFAULT_FRAMING } from '#/framing'
+import type { Framing } from '#/framing'
 
 export type FramingStore = typeof framingStore
 

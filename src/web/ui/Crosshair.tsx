@@ -3,9 +3,9 @@ import { stopPropagationAndPreventDefault } from '@shared/util'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import { memo, useContext } from 'react'
 import type { ReactNode } from 'react'
-import { crosshairAngleDisplayUnit, crosshairAngleToDisplayValue, crosshairGeometry, crosshairPointFromPixels, crosshairPointInPixels, crosshairSegmentsPath } from 'src/types/image.crosshair'
-import type { ImageCrosshairGeometry, ImageCrosshairPolyline, ImageCrosshairPoint } from 'src/types/image.crosshair'
 import { useSnapshot } from 'valtio'
+import { crosshairAngleDisplayUnit, crosshairAngleToDisplayValue, crosshairGeometry, crosshairPointFromPixels, crosshairPointInPixels, crosshairSegmentsPath } from '#/image.crosshair'
+import type { ImageCrosshairGeometry, ImageCrosshairPolyline, ImageCrosshairPoint } from '#/image.crosshair'
 
 type GeometryStrokeProps = {
 	readonly geometry: ImageCrosshairGeometry

@@ -13,10 +13,10 @@ import type { Mount } from 'nebulosa/src/devices/indi/device'
 import React, { createContext, memo, useContext, useDeferredValue, useMemo } from 'react'
 import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
 import type { AreaProps, TooltipContentProps } from 'recharts'
-import type { BodyPosition } from 'src/types/atlas'
-import { EMPTY_TWILIGHT } from 'src/types/sun'
-import type { Twilight } from 'src/types/sun'
 import { useSnapshot } from 'valtio'
+import type { BodyPosition } from '#/atlas'
+import { EMPTY_TWILIGHT } from '#/sun'
+import type { Twilight } from '#/sun'
 
 export interface EphemerisPositionContextParameters {
 	readonly type: AtlasTab

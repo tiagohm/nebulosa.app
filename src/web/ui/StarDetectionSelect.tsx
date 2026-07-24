@@ -1,6 +1,6 @@
 import { Select } from '@ui/components/Select'
 import type { SelectItemRenderer, SelectProps } from '@ui/components/Select'
-import type { StarDetectionType } from 'src/types/stardetection'
+import type { StarDetectionType } from '#/stardetection'
 
 const ITEMS = ['astap', 'nebulosa'] as const
 const LABELS = ['Astap', 'Nebulosa'] as const

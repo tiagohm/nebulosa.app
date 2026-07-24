@@ -5,9 +5,9 @@ import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { unsubscribe } from 'src/shared/util'
-import type { ComputeRoi, Roi } from 'src/types/image.roi'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import type { ComputeRoi, Roi } from '#/image.roi'
 
 export type ImageRoiStore = ReturnType<typeof imageRoiStore>
 

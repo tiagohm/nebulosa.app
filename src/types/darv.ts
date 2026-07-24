@@ -1,5 +1,5 @@
-import { DEFAULT_CAMERA_CAPTURE_START } from 'src/types/camera'
-import type { CameraCaptureStart } from 'src/types/camera'
+import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
+import type { CameraCaptureStart } from '#/camera'
 
 export type DarvHemisphere = 'northern' | 'southern'
 

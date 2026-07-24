@@ -23,10 +23,10 @@ import { Tab } from '@ui/Tab'
 import { DockviewReact, themeGithubDark } from 'dockview-react'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo } from 'react'
-import type { Image } from 'src/types/image'
 import { useStore } from 'src/web/hooks/store.hook'
 import { ImageViewerStoreContext } from 'src/web/shared/context'
 import { imageViewerStore } from 'src/web/stores/image.viewer.store'
+import type { Image } from '#/image'
 
 const Dummy = memo(() => <div></div>)
 

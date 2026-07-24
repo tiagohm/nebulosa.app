@@ -10,9 +10,9 @@ import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import type { Writable } from 'nebulosa/src/core/types'
 import { deg } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_GEOGRAPHIC_COORDINATE } from 'src/types/atlas'
-import type { SolarEclipseMap } from 'src/types/sun'
 import { proxy, ref } from 'valtio'
+import { DEFAULT_GEOGRAPHIC_COORDINATE } from '#/atlas'
+import type { SolarEclipseMap } from '#/sun'
 
 export type SolarEclipseStore = typeof solarEclipseStore
 

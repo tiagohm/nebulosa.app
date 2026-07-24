@@ -10,8 +10,8 @@ import { expectedPierSide, meridianTimeIn } from 'nebulosa/src/devices/indi/devi
 import type { Mount, MountTargetCoordinate, PierSide } from 'nebulosa/src/devices/indi/device'
 import { parseAngle } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-import type { HostAndPort } from 'src/types/connection'
-import type { DeviceAdded, DeviceUpdated, DeviceRemoved } from 'src/types/device'
+import type { HostAndPort } from '#/connection'
+import type { DeviceAdded, DeviceUpdated, DeviceRemoved } from '#/device'
 
 export type MountAdded = DeviceAdded<Mount>
 

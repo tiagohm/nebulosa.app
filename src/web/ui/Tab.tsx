@@ -56,7 +56,7 @@ import { Tooltip } from '@ui/components/Tooltip'
 import { Icons } from '@ui/Icon'
 import type { DockviewIDisposable, IDockviewPanelHeaderProps } from 'dockview-react'
 import { useEffect, useState } from 'react'
-import { isDeviceType } from 'src/types/device'
+import { isDeviceType } from '#/device'
 
 export const homeIcons = {
 	about: aboutIcon,

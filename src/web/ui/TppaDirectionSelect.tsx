@@ -1,6 +1,6 @@
 import { Select } from '@ui/components/Select'
 import type { SelectProps } from '@ui/components/Select'
-import type { TppaDirection } from 'src/types/tppa'
+import type { TppaDirection } from '#/tppa'
 
 const ITEMS = ['east', 'west'] as const
 const LABELS = ['East', 'West'] as const

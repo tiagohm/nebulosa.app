@@ -11,8 +11,8 @@ import { temporalAdd, temporalGet, temporalStartOfDay, temporalSubtract } from '
 import type { Temporal } from 'nebulosa/src/astronomy/time/temporal'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
-import type { Twilight } from 'src/types/sun'
 import { proxy } from 'valtio'
+import type { Twilight } from '#/sun'
 
 export type AtlasStore = typeof atlasStore
 

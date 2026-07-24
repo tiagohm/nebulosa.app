@@ -4,9 +4,9 @@ import { initProxy } from '@shared/proxy'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { Writable } from 'nebulosa/src/core/types'
 import { unsubscribe } from 'src/shared/util'
-import type { ImageHistogram, StatisticImage } from 'src/types/image.statistics'
 import { proxy, ref, subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import type { ImageHistogram, StatisticImage } from '#/image.statistics'
 
 export type ImageStatisticsStore = ReturnType<typeof imageStatisticsStore>
 

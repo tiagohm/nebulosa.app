@@ -1,5 +1,5 @@
 import { normalizeTimeout } from 'src/shared/normalizer'
-import type { Confirm, Confirmation } from 'src/types/confirmation'
+import type { Confirm, Confirmation } from '#/confirmation'
 import { response } from './http'
 import type { Endpoints } from './http'
 import type { WebSocketMessageHandler } from './message'

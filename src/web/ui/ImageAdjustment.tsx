@@ -7,8 +7,8 @@ import type { NumberInputProps } from '@ui/components/NumberInput'
 import { Icons } from '@ui/Icon'
 import { ImageChannelOrGrayInput } from '@ui/ImageChannelOrGrayInput'
 import { memo, useContext, useEffect } from 'react'
-import type { ImageAdjustment as Adjustment } from 'src/types/image.adjustment'
 import { useSnapshot } from 'valtio'
+import type { ImageAdjustment as Adjustment } from '#/image.adjustment'
 
 export const ImageAdjustment = memo(() => {
 	const { adjustment } = useContext(ImageViewerStoreContext)

@@ -1,6 +1,6 @@
 import { Select } from '@ui/components/Select'
 import type { SelectProps } from '@ui/components/Select'
-import type { ImageCrosshairSpacingUnit } from 'src/types/image.crosshair'
+import type { ImageCrosshairSpacingUnit } from '#/image.crosshair'
 
 const ITEMS = ['pixel', 'normalized', 'angular'] as const
 

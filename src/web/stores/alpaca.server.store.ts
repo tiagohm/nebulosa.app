@@ -3,8 +3,8 @@ import { alpacaBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
 import { unsubscribe } from 'src/shared/util'
-import type { AlpacaServerStatus } from 'src/types/alpaca'
 import { proxy } from 'valtio'
+import type { AlpacaServerStatus } from '#/alpaca'
 
 export type AlpacaServerStore = typeof alpacaServerStore
 

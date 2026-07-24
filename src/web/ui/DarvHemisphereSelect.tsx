@@ -1,6 +1,6 @@
 import { Select } from '@ui/components/Select'
 import type { SelectProps } from '@ui/components/Select'
-import type { DarvHemisphere } from 'src/types/darv'
+import type { DarvHemisphere } from '#/darv'
 
 const ITEMS = ['northern', 'southern'] as const
 const LABELS = ['Northern', 'Southern'] as const

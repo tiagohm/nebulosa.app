@@ -1,7 +1,7 @@
 import { equipmentStore } from '@stores/equipment.store'
 import { useEffect, useRef } from 'react'
-import type { DeviceTypeMap } from 'src/types/device'
 import { useSnapshot } from 'valtio'
+import type { DeviceTypeMap } from '#/device'
 
 export function useDevice<S extends { readonly mount: () => VoidFunction; readonly unmount: VoidFunction }, T extends keyof DeviceTypeMap>(type: T, id: string, storeFactory: (device: DeviceTypeMap[T]) => S) {
 	const storeRef = useRef<S | undefined>(undefined)

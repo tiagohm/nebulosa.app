@@ -13,8 +13,8 @@ import { GuideOutputHandler } from 'src/api/guideoutput'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
-import { DEFAULT_DARV_START } from 'src/types/darv'
-import type { DarvStart, DarvEvent } from 'src/types/darv'
+import { DEFAULT_DARV_START } from '#/darv'
+import type { DarvStart, DarvEvent } from '#/darv'
 import { noContent, SocketMessager, waitUntil } from './util'
 
 type DarvStartOverrides = Omit<Partial<DarvStart>, 'capture'> & {

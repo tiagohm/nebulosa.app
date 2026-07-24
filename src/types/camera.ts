@@ -1,8 +1,8 @@
 import { DEFAULT_PHD2_SETTLE } from 'nebulosa/src/devices/guiding/phd2'
 import type { FrameType, CameraTransferFormat, Camera } from 'nebulosa/src/devices/indi/device'
 import type { Size } from 'recharts/types/util/types'
-import type { DeviceAdded, DeviceRemoved, DeviceUpdated } from 'src/types/device'
-import type { GuiderDither } from 'src/types/guider'
+import type { DeviceAdded, DeviceRemoved, DeviceUpdated } from '#/device'
+import type { GuiderDither } from '#/guider'
 
 export type CameraAdded = DeviceAdded<Camera>
 

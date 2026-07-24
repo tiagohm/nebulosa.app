@@ -6,7 +6,7 @@ import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { FocuserHandler, focuserBus, focuser as focuserEndpoints } from 'src/api/focuser'
 import { WebSocketMessageHandler } from 'src/api/message'
-import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from 'src/types/focuser'
+import type { FocuserAdded, FocuserRemoved, FocuserUpdated } from '#/focuser'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
 focuserBus.forceSync = true

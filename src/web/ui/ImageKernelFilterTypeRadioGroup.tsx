@@ -1,6 +1,6 @@
 import { tw } from '@shared/util'
 import { Radio } from '@ui/components/Radio'
-import type { ImageKernelFilterType } from 'src/types/image.filter'
+import type { ImageKernelFilterType } from '#/image.filter'
 
 export interface ImageKernelFilterTypeRadioGroupProps extends React.ComponentProps<'div'> {
 	readonly value: ImageKernelFilterType

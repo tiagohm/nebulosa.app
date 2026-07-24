@@ -3,9 +3,9 @@ import { plateSolverStore } from '@stores/plate.solver.store'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_GEOGRAPHIC_COORDINATE } from 'src/types/atlas'
-import type { PlateSolverType, PlateSolveStart } from 'src/types/platesolver'
 import { proxy } from 'valtio'
+import { DEFAULT_GEOGRAPHIC_COORDINATE } from '#/atlas'
+import type { PlateSolverType, PlateSolveStart } from '#/platesolver'
 
 export type SettingsStore = typeof settingsStore
 

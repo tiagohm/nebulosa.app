@@ -10,11 +10,11 @@ import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import type { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_BODY_POSITION } from 'src/types/atlas'
-import type { BodyPosition } from 'src/types/atlas'
-import { DEFAULT_SKY_OBJECT_SEARCH, skyObjectName } from 'src/types/galaxy'
-import type { SearchSkyObject, SkyObjectSearchItem } from 'src/types/galaxy'
 import { proxy, ref } from 'valtio'
+import { DEFAULT_BODY_POSITION } from '#/atlas'
+import type { BodyPosition } from '#/atlas'
+import { DEFAULT_SKY_OBJECT_SEARCH, skyObjectName } from '#/galaxy'
+import type { SearchSkyObject, SkyObjectSearchItem } from '#/galaxy'
 
 export type AtlasGalaxyStore = typeof galaxyStore
 

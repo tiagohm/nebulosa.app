@@ -1,8 +1,8 @@
 import { Api } from '@shared/api'
 import { unsubscribe } from 'src/shared/util'
-import type { FileEntry, DirectoryEntry } from 'src/types/filesystem'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import type { FileEntry, DirectoryEntry } from '#/filesystem'
 
 export type FilePickerMode = 'file' | 'directory' | 'save'
 

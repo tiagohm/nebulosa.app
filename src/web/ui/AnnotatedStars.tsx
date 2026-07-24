@@ -1,9 +1,9 @@
 import { ImageViewerStoreContext } from '@shared/context'
 import { memo, useContext } from 'react'
 import type { CSSProperties } from 'react'
-import { skyObjectName } from 'src/types/galaxy'
-import type { AnnotatedSkyObject } from 'src/types/image.annotation'
 import { useSnapshot } from 'valtio'
+import { skyObjectName } from '#/galaxy'
+import type { AnnotatedSkyObject } from '#/image.annotation'
 
 const TEXT_STYLE: CSSProperties = { textAnchor: 'middle', alignmentBaseline: 'text-before-edge', transform: 'rotate(0deg)' }
 

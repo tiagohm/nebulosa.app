@@ -9,10 +9,10 @@ import type { DockviewPanelApi } from 'dockview-react'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_TPPA_START, DEFAULT_TPPA_EVENT } from 'src/types/tppa'
-import type { TppaStart, TppaEvent } from 'src/types/tppa'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import { DEFAULT_TPPA_START, DEFAULT_TPPA_EVENT } from '#/tppa'
+import type { TppaStart, TppaEvent } from '#/tppa'
 
 export type TppaStore = ReturnType<typeof tppaStore>
 

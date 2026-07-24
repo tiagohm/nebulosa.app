@@ -1,10 +1,10 @@
 import { DEFAULT_REFRACTION_PARAMETERS } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import type { RefractionParameters } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import type { EquatorialCoordinate, HorizontalCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
-import { DEFAULT_CAMERA_CAPTURE_START } from 'src/types/camera'
-import type { CameraCaptureStart } from 'src/types/camera'
-import { DEFAULT_PLATE_SOLVE_START } from 'src/types/platesolver'
-import type { PlateSolveStart } from 'src/types/platesolver'
+import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
+import type { CameraCaptureStart } from '#/camera'
+import { DEFAULT_PLATE_SOLVE_START } from '#/platesolver'
+import type { PlateSolveStart } from '#/platesolver'
 
 export type TppaState = 'idle' | 'waiting' | 'moving' | 'capturing' | 'solving' | 'aligning' | 'settling'
 

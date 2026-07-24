@@ -47,10 +47,10 @@ import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { pmod } from 'nebulosa/src/math/numerical/math'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
-import type { Framing } from 'src/types/framing'
-import type { Image, ImageLoaded, ImageTransformation, ImageInfo } from 'src/types/image'
-import { DEFAULT_IMAGE_TRANSFORMATION } from 'src/types/image'
 import { proxy, ref, subscribe } from 'valtio'
+import type { Framing } from '#/framing'
+import type { Image, ImageLoaded, ImageTransformation, ImageInfo } from '#/image'
+import { DEFAULT_IMAGE_TRANSFORMATION } from '#/image'
 
 export interface ImageViewerStore {
 	readonly state: ImageViewerState

@@ -8,10 +8,10 @@ import type { Writable } from 'nebulosa/src/core/types'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
-import type { FindCloseApproaches, CloseApproach, MinorPlanet } from 'src/types/asteroid'
-import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/types/atlas'
-import type { BodyPosition, PositionOfBody } from 'src/types/atlas'
 import { proxy, ref } from 'valtio'
+import type { FindCloseApproaches, CloseApproach, MinorPlanet } from '#/asteroid'
+import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from '#/atlas'
+import type { BodyPosition, PositionOfBody } from '#/atlas'
 
 export type AtlasAsteroidStore = typeof asteroidStore
 

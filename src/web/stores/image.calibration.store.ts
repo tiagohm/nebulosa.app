@@ -1,7 +1,7 @@
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import { unsubscribe } from 'src/shared/util'
-import type { ImageCalibration } from 'src/types/image.calibration'
 import { proxy } from 'valtio'
+import type { ImageCalibration } from '#/image.calibration'
 
 export type ImageCalibrationStore = ReturnType<typeof imageCalibrationStore>
 

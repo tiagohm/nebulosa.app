@@ -7,10 +7,10 @@ import type { DeviceState } from '@stores/equipment.store'
 import type { DockviewPanelApi } from 'dockview-react'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_FLAT_WIZARD_START, DEFAULT_FLAT_WIZARD_EVENT } from 'src/types/flatwizard'
-import type { FlatWizardStart, FlatWizardEvent } from 'src/types/flatwizard'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
+import { DEFAULT_FLAT_WIZARD_START, DEFAULT_FLAT_WIZARD_EVENT } from '#/flatwizard'
+import type { FlatWizardStart, FlatWizardEvent } from '#/flatwizard'
 
 export type FlatWizardStore = ReturnType<typeof flatWizardStore>
 

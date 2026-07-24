@@ -4,8 +4,8 @@ import { initProxy } from '@shared/proxy'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { Writable } from 'nebulosa/src/core/types'
 import { unsubscribe } from 'src/shared/util'
-import type { AnnotateImage, ImageAnnotation } from 'src/types/image.annotation'
 import { proxy } from 'valtio'
+import type { AnnotateImage, ImageAnnotation } from '#/image.annotation'
 
 export type ImageAnnotationStore = ReturnType<typeof imageAnnotationStore>
 

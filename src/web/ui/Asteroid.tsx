@@ -11,8 +11,8 @@ import type { IDockviewPanelProps } from 'dockview-react'
 import type { SmallBodySearchListItem } from 'nebulosa/src/adapters/orbits/sbd'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { memo, useEffect } from 'react'
-import type { MinorPlanetParameter } from 'src/types/asteroid'
 import { useSnapshot } from 'valtio'
+import type { MinorPlanetParameter } from '#/asteroid'
 
 export const Asteroid = memo(({ api }: IDockviewPanelProps) => {
 	useEffect(asteroidStore.mount, [])

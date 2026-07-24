@@ -1,6 +1,6 @@
 import type { Rect } from 'nebulosa/src/math/numerical/geometry'
-import type { OpenImage } from 'src/types/image'
-import type { Roi } from 'src/types/image.roi'
+import type { OpenImage } from '#/image'
+import type { Roi } from '#/image.roi'
 
 export interface StatisticImage extends Omit<OpenImage, 'statistics'> {
 	readonly area?: Rect | Roi

@@ -10,9 +10,9 @@ import { CameraDropdown, GuideOutputDropdown } from '@ui/DeviceDropdown'
 import { GuiderClientModeRadioGroup } from '@ui/GuiderClientModeRadioGroup'
 import { Icons } from '@ui/Icon'
 import { memo, useEffect } from 'react'
-import { canConnectRemote } from 'src/types/guider'
 import { guiderStore } from 'src/web/stores/guider.store'
 import { useSnapshot } from 'valtio'
+import { canConnectRemote } from '#/guider'
 
 export const Guider = memo(() => {
 	useEffect(guiderStore.mount, [])

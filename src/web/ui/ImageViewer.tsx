@@ -10,7 +10,7 @@ import { Interactable } from '@ui/Interactable'
 import { Roi } from '@ui/Roi'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useContext, useEffect, useLayoutEffect, useRef } from 'react'
-import type { Image } from 'src/types/image'
+import type { Image } from '#/image'
 
 export const ImageViewer = memo(({ params }: IDockviewPanelProps<Image>) => {
 	const imgRef = useRef<HTMLImageElement>(null)

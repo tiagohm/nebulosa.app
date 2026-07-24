@@ -10,7 +10,7 @@ import { CacheManager } from 'src/api/cache'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { mountBus, mount as mountEndpoints, MountHandler, MountRemoteControlHandler } from 'src/api/mount'
-import type { CoordinateInfo, MountAdded, MountRemoved, MountUpdated } from 'src/types/mount'
+import type { CoordinateInfo, MountAdded, MountRemoved, MountUpdated } from '#/mount'
 import { SocketMessager } from './util'
 
 mountBus.forceSync = true

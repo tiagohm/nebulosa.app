@@ -246,25 +246,6 @@ export interface RenderState {
 	readonly projectHorizontalBaseSample: (az: number, alt: number, out: NumberArray) => number
 }
 
-// Public update state passed to custom layers.
-export interface UpdateState {
-	readonly time: Date
-	readonly observer: ObserverLocation
-	readonly projection: ProjectionType
-	readonly coordinateSystem: CoordinateSystem
-	readonly starCatalog: StarCatalog | null
-}
-
-// Public layer contract for extension.
-export interface Layer {
-	readonly id: string
-	readonly visible: boolean
-	readonly zIndex: number
-	readonly render: (ctx: CanvasRenderingContext2D, state: RenderState) => void
-	readonly update?: (state: UpdateState) => void
-	readonly destroy: VoidFunction
-}
-
 export interface ShapeRenderState {
 	readonly id: string
 	readonly x: number
@@ -373,10 +354,6 @@ type ResolvedCelestialOptions = {
 }
 
 const J2000_EPOCH = 2000 // Julian epoch used as the baseline for proper-motion star positions.
-const J2000_UNIX_MS = 946728000000 // Unix timestamp, in milliseconds, for the J2000 reference epoch.
-const JULIAN_EPOCH = 2440587.5 // Julian-date offset for converting Unix milliseconds to Julian date.
-const DAY_MS = 86400000 // Milliseconds in one civil day.
-const YEAR_MS = 365.25 * DAY_MS // Mean year length used for lightweight Julian epoch interpolation.
 const DEFAULT_WIDTH = 800 // Fallback canvas width when callers do not provide one.
 const DEFAULT_HEIGHT = 800 // Fallback canvas height when callers do not provide one.
 const DEFAULT_MAX_DEVICE_PIXEL_RATIO = 2 // Caps quadratic canvas backing-store growth on high-density displays.
@@ -1691,8 +1668,8 @@ class EventEmitter {
 	}
 }
 
-// Internal layer adds dirty-flag behavior to the public interface.
-abstract class InternalLayer implements Layer {
+// Internal layer with dirty-flag behavior.
+abstract class InternalLayer {
 	visible = true
 	dirty = true
 
@@ -1700,8 +1677,6 @@ abstract class InternalLayer implements Layer {
 		readonly id: string,
 		readonly zIndex: number,
 	) {}
-
-	destroy() {}
 
 	// Marks the layer for redraw.
 	markDirty() {
@@ -1897,9 +1872,7 @@ class HorizonLayer extends InternalLayer {
 	private samplerState!: RenderState
 	private cachedRevision = -1
 
-	private readonly horizonSampler: ProjectedSampler = (t, out) => {
-		return this.samplerState.projectHorizontalBaseSample(t * TAU, 0, out)
-	}
+	private readonly horizonSampler: ProjectedSampler = (t, out) => this.samplerState.projectHorizontalBaseSample(t * TAU, 0, out)
 
 	constructor() {
 		super('horizon', 10)
@@ -2613,7 +2586,7 @@ class DeepSkyObjectLayer extends InternalLayer {
 				continue
 			}
 
-			const radius = 4 // deepSkySymbolRadius(object, state)
+			const radius = 4
 			drawDsoSymbol(ctx, object.type, this.point[0], this.point[1], radius)
 
 			if (object.name && isDeepSkyLabelVisible(object, state)) {
@@ -2951,13 +2924,11 @@ class MovingBodyLayer extends InternalLayer {
 			ctx.lineWidth = 1
 			drawMovingBodySymbol(ctx, object.type, this.point[0], this.point[1])
 
-			if (isMovingBodyLabelVisible(object, state)) {
-				const label = object.name ?? object.type
-				ctx.fillStyle = state.theme.movingBodies.labelColor
+			const label = object.name ?? object.type
+			ctx.fillStyle = state.theme.movingBodies.labelColor
 
-				if (positionSkyLabel(ctx, state, label, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) {
-					ctx.fillText(label, this.labelPoint[0], this.labelPoint[1])
-				}
+			if (positionSkyLabel(ctx, state, label, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) {
+				ctx.fillText(label, this.labelPoint[0], this.labelPoint[1])
 			}
 		}
 	}
@@ -3164,10 +3135,6 @@ function isMovingBodyVisibleAtZoom(object: MovingBody, zoom: number) {
 
 function isMovingBodyVisible(object: MovingBody, state: RenderState) {
 	return object.visible !== false && isMovingBodyVisibleAtZoom(object, state.transform.k)
-}
-
-function isMovingBodyLabelVisible(object: MovingBody, state: RenderState) {
-	return true // !isFiniteNumber(object.magnitude) || object.magnitude <= deepSkyLabelMagnitudeLimit(state.transform.k)
 }
 
 function movingBodyColor(object: MovingBody, state: RenderState) {
@@ -3496,10 +3463,6 @@ class CanvasRenderer {
 
 	// Removes all DOM nodes created by the renderer.
 	destroy() {
-		for (const layer of this.layersById.values()) {
-			layer.destroy()
-		}
-
 		this.root.remove()
 		this.groups.length = 0
 		this.groupsById.clear()
@@ -3543,7 +3506,6 @@ export class Celestial {
 	readonly #tempScreen = new Float32Array(2)
 	readonly #starProjectionBounds = new Float64Array(4)
 	readonly #starViewportBounds = new Float64Array(4)
-	readonly #layers: InternalLayer[] = []
 
 	readonly #options: ResolvedCelestialOptions
 	#renderState: Writable<RenderState> | null = null
@@ -4161,7 +4123,7 @@ export class Celestial {
 
 	// Creates and registers built-in layers.
 	private setupLayers() {
-		this.#layers.push(
+		const layers = [
 			new BackgroundLayer(),
 			new HorizonLayer(),
 			new MilkyWayLayer(),
@@ -4175,9 +4137,9 @@ export class Celestial {
 			new ConstellationLabelLayer(),
 			new ShapeLayer(),
 			new InteractionOverlayLayer(),
-		)
+		]
 
-		for (const layer of this.#layers) {
+		for (const layer of layers) {
 			layer.visible = this.#options.layers[layer.id] ?? true
 			this.#renderer.addLayer(layer, LAYER_CANVAS_GROUPS[layer.id] ?? layer.id)
 		}

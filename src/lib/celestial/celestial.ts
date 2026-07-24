@@ -325,10 +325,13 @@ type PartialThemeOptions = {
 
 type CanvasImage = HTMLCanvasElement | OffscreenCanvas
 
-type LayerRecord = {
-	readonly layer: InternalLayer
+type LayerGroupRecord = {
+	readonly id: string
+	readonly layers: InternalLayer[]
 	readonly canvas: HTMLCanvasElement
 	readonly ctx: CanvasRenderingContext2D
+	zIndex: number
+	visible: boolean
 }
 
 type MilkyWayRing = {
@@ -511,6 +514,22 @@ const DEFAULT_LAYER_VISIBILITY: Record<string, boolean> = {
 	movingBodies: true,
 	shapes: true,
 	overlay: true,
+}
+
+const LAYER_CANVAS_GROUPS: Record<string, string> = {
+	background: 'sky',
+	horizon: 'sky',
+	milkyWay: 'sky',
+	grid: 'sky',
+	referenceLines: 'sky',
+	constellations: 'sky',
+	constellationBoundaries: 'sky',
+	deepSky: 'sky',
+	stars: 'stars',
+	movingBodies: 'dynamic',
+	constellationLabels: 'dynamic',
+	shapes: 'dynamic',
+	overlay: 'overlay',
 }
 
 const ASTRONOMICAL_DIRTY_LAYER_IDS = ['grid', 'referenceLines', 'milkyWay', 'constellations', 'constellationBoundaries', 'constellationLabels', 'deepSky', 'stars', 'movingBodies', 'shapes'] as const
@@ -3210,8 +3229,9 @@ function isObjectLayerVisible(object: CelestialObject, state: RenderState) {
 // Canvas layer manager.
 class CanvasRenderer {
 	private readonly root: HTMLDivElement
-	private readonly records: LayerRecord[] = []
-	private readonly recordsById = new Map<string, LayerRecord>()
+	private readonly groups: LayerGroupRecord[] = []
+	private readonly groupsById = new Map<string, LayerGroupRecord>()
+	private readonly layersById = new Map<string, InternalLayer>()
 	private dpr = 1
 
 	constructor(
@@ -3228,25 +3248,34 @@ class CanvasRenderer {
 		this.resize(width, height)
 	}
 
-	// Adds a canvas-backed layer.
-	addLayer(layer: InternalLayer) {
-		const canvas = document.createElement('canvas')
-		const ctx = canvas.getContext('2d', { alpha: true })
+	// Adds a layer to a shared canvas group.
+	addLayer(layer: InternalLayer, groupId: string) {
+		let group = this.groupsById.get(groupId)
 
-		if (!ctx) {
-			throw new Error(`Unable to create 2D canvas context for layer ${layer.id}`)
+		if (!group) {
+			const canvas = document.createElement('canvas')
+			const ctx = canvas.getContext('2d', { alpha: true })
+
+			if (!ctx) {
+				throw new Error(`Unable to create 2D canvas context for layer group ${groupId}`)
+			}
+
+			canvas.style.position = 'absolute'
+			canvas.style.inset = '0'
+			canvas.style.pointerEvents = 'none'
+			this.root.append(canvas)
+			group = { id: groupId, layers: [], canvas, ctx, zIndex: layer.zIndex, visible: true }
+			this.groups.push(group)
+			this.groupsById.set(groupId, group)
+			this.resizeCanvas(canvas)
 		}
 
-		canvas.style.position = 'absolute'
-		canvas.style.inset = '0'
-		canvas.style.zIndex = String(layer.zIndex)
-		canvas.style.pointerEvents = 'none'
-		this.root.append(canvas)
-		const record = { layer, canvas, ctx }
-		this.records.push(record)
-		this.recordsById.set(layer.id, record)
-		this.records.sort((a, b) => a.layer.zIndex - b.layer.zIndex)
-		this.resizeCanvas(canvas)
+		group.layers.push(layer)
+		group.layers.sort((a, b) => a.zIndex - b.zIndex)
+		group.zIndex = group.layers[0].zIndex
+		group.canvas.style.zIndex = String(group.zIndex)
+		this.groups.sort((a, b) => a.zIndex - b.zIndex)
+		this.layersById.set(layer.id, layer)
 	}
 
 	// Resizes all canvases with device-pixel awareness.
@@ -3255,64 +3284,87 @@ class CanvasRenderer {
 		this.root.style.width = `${width}px`
 		this.root.style.height = `${height}px`
 
-		for (const record of this.records) {
-			this.resizeCanvas(record.canvas)
-			record.layer.markDirty()
+		for (const group of this.groups) {
+			this.resizeCanvas(group.canvas)
+
+			for (const layer of group.layers) {
+				layer.markDirty()
+			}
 		}
 	}
 
-	// Draws all dirty visible layers.
+	// Draws canvas groups containing dirty layers.
 	render(state: RenderState) {
-		for (const record of this.records) {
-			const { layer, canvas, ctx } = record
-			canvas.style.display = layer.visible ? 'block' : 'none'
+		for (const group of this.groups) {
+			let dirty = false
+			let visible = false
 
-			if (!layer.visible || !layer.dirty) {
+			for (const layer of group.layers) {
+				dirty ||= layer.dirty
+				visible ||= layer.visible
+			}
+
+			if (group.visible !== visible) {
+				group.visible = visible
+				group.canvas.style.display = visible ? 'block' : 'none'
+			}
+
+			if (!dirty) {
 				continue
 			}
 
-			ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
-			ctx.clearRect(0, 0, state.width, state.height)
+			if (visible) {
+				const ctx = group.ctx
+				ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
+				ctx.clearRect(0, 0, state.width, state.height)
 
-			if (layer.id !== 'background' && layer.id !== 'debug' && isFiniteDiskProjection(state.projection)) {
-				ctx.save()
-				clipProjectionDisk(ctx, state)
-				layer.render(ctx, state)
-				ctx.restore()
-			} else {
-				layer.render(ctx, state)
+				for (const layer of group.layers) {
+					if (!layer.visible) continue
+
+					ctx.save()
+
+					if (layer.id !== 'background' && layer.id !== 'debug' && isFiniteDiskProjection(state.projection)) {
+						clipProjectionDisk(ctx, state)
+					}
+
+					layer.render(ctx, state)
+					ctx.restore()
+				}
 			}
 
-			layer.markClean()
+			for (const layer of group.layers) {
+				layer.markClean()
+			}
 		}
 	}
 
 	// Marks every managed layer dirty.
 	markAllDirty() {
-		for (const record of this.records) {
-			record.layer.markDirty()
+		for (const layer of this.layersById.values()) {
+			layer.markDirty()
 		}
 	}
 
 	// Marks a single layer dirty.
 	markDirty(id: string) {
-		this.recordsById.get(id)?.layer.markDirty()
+		this.layersById.get(id)?.markDirty()
 	}
 
 	// Gets a layer by id.
 	getLayer(id: string) {
-		return this.recordsById.get(id)?.layer ?? null
+		return this.layersById.get(id) ?? null
 	}
 
 	// Removes all DOM nodes created by the renderer.
 	destroy() {
-		for (const record of this.records) {
-			record.layer.destroy()
+		for (const layer of this.layersById.values()) {
+			layer.destroy()
 		}
 
 		this.root.remove()
-		this.records.length = 0
-		this.recordsById.clear()
+		this.groups.length = 0
+		this.groupsById.clear()
+		this.layersById.clear()
 	}
 
 	// Exposes the root element for interaction binding.
@@ -3946,7 +3998,7 @@ export class Celestial {
 
 		for (const layer of this.#layers) {
 			layer.visible = this.#options.layers[layer.id] ?? true
-			this.#renderer.addLayer(layer)
+			this.#renderer.addLayer(layer, LAYER_CANVAS_GROUPS[layer.id] ?? layer.id)
 		}
 	}
 

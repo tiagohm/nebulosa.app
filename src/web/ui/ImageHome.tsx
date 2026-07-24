@@ -11,6 +11,7 @@ import { ImageFov } from '@ui/ImageFov'
 import { ImageHeader } from '@ui/ImageHeader'
 import { ImageMouseCoordinate } from '@ui/ImageMouseCoordinate'
 import { ImageRoi } from '@ui/ImageRoi'
+import { ImageRotation } from '@ui/ImageRotation'
 import { ImageSave } from '@ui/ImageSave'
 import { ImageScnr } from '@ui/ImageScnr'
 import { ImageSettings } from '@ui/ImageSettings'
@@ -49,7 +50,7 @@ const components = {
 	header: ImageHeader,
 	mouseCoordinate: ImageMouseCoordinate,
 	roi: ImageRoi,
-	rotation: Dummy,
+	rotation: ImageRotation,
 	save: ImageSave,
 	scnr: ImageScnr,
 	settings: ImageSettings,

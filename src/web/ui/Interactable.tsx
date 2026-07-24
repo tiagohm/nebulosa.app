@@ -108,17 +108,25 @@ export const Interactable = memo(({ ref, className, children, onGesture, onTap, 
 	const bodyUserSelect = useRef<string | undefined>(undefined)
 	const wheelZoomDelta = useRef(0)
 	const wheelZoomStep = useRef<number | undefined>(undefined)
+	const animationFrameRef = useRef<number | undefined>(undefined)
 
 	function resetWheelZoomState() {
 		wheelZoomDelta.current = 0
 		wheelZoomStep.current = undefined
 	}
 
+	function applyTransformation() {
+		const wrapper = wrapperRef.current
+		if (wrapper === null) return
+		const { x, y, scale, angle } = transformation.current
+		wrapper.style.transform = `translate(${x}px, ${y}px) scale(${scale}) rotate(${angle}deg)`
+		animationFrameRef.current = undefined
+	}
+
 	const transform = useEffectEvent((type: InteractType, event?: Event) => {
-		if (wrapperRef.current) {
-			const { x, y, scale, angle } = transformation.current
-			wrapperRef.current.style.transform = `translate(${x}px, ${y}px) scale(${scale}) rotate(${angle}deg)`
+		if (wrapperRef.current && animationFrameRef.current === undefined) {
 			onGesture?.(transformation.current, type, event)
+			animationFrameRef.current = window.requestAnimationFrame(applyTransformation)
 		}
 	})
 

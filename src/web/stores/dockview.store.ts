@@ -144,14 +144,14 @@ export function dockviewStore<K extends string>(panels: Record<K, IDockviewPanel
 
 		if (activePanels.length >= MAX_PANELS) return
 
-		let referencePanel: IDockviewPanel | undefined
+		let referenceGroupId: string | undefined
 
 		for (let i = 0; i < MAX_PANELS; i++) {
 			const id = `${type}.${i}`
 			const panel = activePanels.find((e) => e.id === id)
 
 			if (panel === undefined) {
-				const p = api.addPanel({ renderer: 'onlyWhenVisible', ...options, id, component: type, position: referencePanel ? { referencePanel, direction: 'right' } : { referenceGroup: group.id } })
+				const p = api.addPanel({ renderer: 'onlyWhenVisible', ...options, id, component: type, position: { referenceGroup: referenceGroupId ?? group.id } })
 				activePanels.push(p)
 				panels[type] = activePanels
 
@@ -163,7 +163,7 @@ export function dockviewStore<K extends string>(panels: Record<K, IDockviewPanel
 
 				return p
 			} else if (panel.group.id === group.id) {
-				referencePanel = panel
+				referenceGroupId = panel.group.id
 			}
 		}
 	}

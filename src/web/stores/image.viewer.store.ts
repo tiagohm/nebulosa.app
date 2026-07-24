@@ -25,6 +25,8 @@ import { imageMouseCoordinateStore } from '@stores/image.mousecoordinate.store'
 import type { ImageMouseCoordinateStore } from '@stores/image.mousecoordinate.store'
 import { imageRoiStore } from '@stores/image.roi.store'
 import type { ImageRoiStore } from '@stores/image.roi.store'
+import { imageRotationStore } from '@stores/image.rotation.store'
+import type { ImageRotationStore } from '@stores/image.rotation.store'
 import { imageSaveStore } from '@stores/image.save.store'
 import type { ImageSaveStore } from '@stores/image.save.store'
 import { imageScnrStore } from '@stores/image.scnr.store'
@@ -102,6 +104,7 @@ export interface ImageViewerStore {
 	readonly stretch: ImageStretchStore
 	readonly debayer: ImageDebayerStore
 	readonly crosshair: ImageCrosshairStore
+	readonly rotation: ImageRotationStore
 }
 
 export interface ImageViewerState {
@@ -377,6 +380,7 @@ export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewe
 	const stretch = (store.stretch = imageStretchStore(store))
 	const debayer = (store.debayer = imageDebayerStore(store))
 	const crosshair = (store.crosshair = imageCrosshairStore(store))
+	const rotation = (store.rotation = imageRotationStore(store))
 
 	return store
 }

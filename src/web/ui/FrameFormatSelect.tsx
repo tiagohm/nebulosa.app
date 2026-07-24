@@ -1,4 +1,5 @@
-import { Select, type SelectProps } from '@ui/components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import type { NameAndLabel } from 'nebulosa/src/devices/indi/device'
 
 export interface FrameFormatSelectProps extends Omit<SelectProps<NameAndLabel>, 'children' | 'items' | 'onValueChange' | 'value'> {

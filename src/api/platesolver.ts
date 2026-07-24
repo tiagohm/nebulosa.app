@@ -3,7 +3,8 @@ import { localAstrometryNetPlateSolve, novaAstrometryNetPlateSolve } from 'nebul
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { deg, parseAngle } from 'nebulosa/src/math/units/angle'
 import type { PlateSolveStart } from 'src/types/platesolver'
-import { type Endpoints, response } from './http'
+import { response } from './http'
+import type { Endpoints } from './http'
 import type { ImageProcessor } from './image'
 import type { NotificationHandler } from './notification'
 

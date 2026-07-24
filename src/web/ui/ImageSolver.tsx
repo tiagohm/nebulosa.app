@@ -99,7 +99,7 @@ const Solution = memo(() => {
 			<TextInput className="col-span-4 min-w-0" label="Radius (°)" readOnly value={formatSolutionField(solution?.radius, toDeg, 4)} />
 			<div className="col-span-full flex items-center justify-center gap-2">
 				<MountDropdown color="primary" disabled={loading || !hasSolution} disallowNoneSelection icon={Icons.Sync} onValueChange={solver.sync} tooltipContent="Sync" variant="flat" />
-				<MountDropdown color="success" disabled={loading || !hasSolution} disallowNoneSelection onValueChange={solver.goTo} tooltipContent="Go" variant="flat" />
+				<MountDropdown color="success" disabled={loading || !hasSolution} disallowNoneSelection onValueChange={solver.goTo} tooltipContent="Slew" variant="flat" />
 				<IconButton color="secondary" disabled={loading || !hasSolution} icon={Icons.Image} onClick={solver.frame} tooltipContent="Frame" variant="flat" />
 			</div>
 		</>

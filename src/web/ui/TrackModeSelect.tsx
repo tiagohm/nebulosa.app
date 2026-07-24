@@ -1,4 +1,5 @@
-import { Select, type SelectProps } from '@ui/components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import type { TrackMode } from 'nebulosa/src/devices/indi/device'
 
 export interface TrackModeSelectProps extends Omit<SelectProps<TrackMode>, 'children' | 'items'> {

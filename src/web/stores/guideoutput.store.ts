@@ -1,6 +1,7 @@
 import { Api } from '@shared/api'
 import { initProxy } from '@shared/proxy'
-import { equipmentStore, type DeviceState } from '@stores/equipment.store'
+import { equipmentStore } from '@stores/equipment.store'
+import type { DeviceState } from '@stores/equipment.store'
 import type { NudgeDirection } from '@ui/Nudge'
 import type { GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { GuidePulse } from 'src/shared/types'

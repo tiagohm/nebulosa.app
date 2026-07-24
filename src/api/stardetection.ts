@@ -3,8 +3,10 @@ import { join } from 'path'
 import { astapDetectStars } from 'nebulosa/src/astrometry/solvers/astap'
 import { detectStars } from 'nebulosa/src/imaging/stars/detector'
 import type { StarDetection } from 'src/types/stardetection'
-import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation } from '../shared/types'
-import { type Endpoints, response } from './http'
+import { DEFAULT_IMAGE_TRANSFORMATION } from '../shared/types'
+import type { ImageTransformation } from '../shared/types'
+import { response } from './http'
+import type { Endpoints } from './http'
 import type { ImageProcessor } from './image'
 
 const STAR_DETECTION_IMAGE_TRANSFORMATION: ImageTransformation = {

@@ -7,7 +7,8 @@ import { TextInput } from '@ui/components/TextInput'
 import { Icons } from '@ui/Icon'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { toHour } from 'nebulosa/src/math/units/angle'
-import { memo, useEffect, type ReactNode } from 'react'
+import { memo, useEffect } from 'react'
+import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 
 const MIN_APERTURE = 1

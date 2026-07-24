@@ -1,10 +1,12 @@
 import { join } from 'path'
-import { HIPS2FITS_ALTERNATIVE_URL, HIPS2FITS_BASE_URL, hips2Fits, type Hips2FitsOptions } from 'nebulosa/src/adapters/sky/hips2fits'
+import { HIPS2FITS_ALTERNATIVE_URL, HIPS2FITS_BASE_URL, hips2Fits } from 'nebulosa/src/adapters/sky/hips2fits'
+import type { Hips2FitsOptions } from 'nebulosa/src/adapters/sky/hips2fits'
 import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import { arcsec, deg, parseAngle } from 'nebulosa/src/math/units/angle'
 import { normalizeTimeout } from 'src/shared/normalizer'
 import type { Framing } from 'src/types/framing'
-import { type Endpoints, response } from './http'
+import { response } from './http'
+import type { Endpoints } from './http'
 import type { ImageProcessor } from './image'
 
 const URLS = [HIPS2FITS_ALTERNATIVE_URL, HIPS2FITS_BASE_URL]

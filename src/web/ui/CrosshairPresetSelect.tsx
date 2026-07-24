@@ -1,5 +1,6 @@
-import { Select, type SelectProps } from '@ui/components/Select'
-import type { CrosshairPreset } from 'src/shared/types'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
+import type { CrosshairPreset } from 'src/types/image.crosshair'
 
 const ITEMS = ['crosshair', 'bullseye'] as const
 

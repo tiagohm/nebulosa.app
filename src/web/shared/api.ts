@@ -14,8 +14,8 @@ import type { Message, NewVector } from 'nebulosa/src/devices/indi/types'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
-import type { AnnotateImage, CloseImage, CoordinateInfo, CreateDirectory, DirectoryEntry, FileSystem, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, OpenImage, GuiderConnect, GuiderEvent, GuiderStatus, PlanetariumRequest, SaveImage, StatisticImage } from 'src/shared/types'
-import { type ImageCoordinateInterpolation, type ImageCrosshairProjection, type ImageCrosshairProjectionRequest, X_IMAGE_INFO_HEADER } from 'src/shared/types'
+import type { ImageCoordinateInterpolation, CloseImage, CoordinateInfo, CreateDirectory, DirectoryEntry, FileSystem, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, OpenImage, PlanetariumRequest, SaveImage, StatisticImage } from 'src/shared/types'
+import { X_IMAGE_INFO_HEADER } from 'src/shared/types'
 import type { AlpacaServerStatus } from 'src/types/alpaca'
 import type { SearchMinorPlanet, MinorPlanet, FindCloseApproaches, CloseApproach } from 'src/types/asteroid'
 import type { BodyPosition, ChartOfBody, LocationAndTime, PositionOfBody } from 'src/types/atlas'
@@ -27,7 +27,9 @@ import type { DarvStart } from 'src/types/darv'
 import type { FlatWizardStart } from 'src/types/flatwizard'
 import type { Framing } from 'src/types/framing'
 import type { SearchSkyObject, SkyObjectSearchItem, SkyObject } from 'src/types/galaxy'
-import type { AnnotatedSkyObject } from 'src/types/image'
+import type { GuiderConnect, GuiderEvent, GuiderStatus } from 'src/types/guider'
+import type { AnnotatedSkyObject, AnnotateImage } from 'src/types/image.annotation'
+import type { ProjectCrosshair, CrosshairProjection } from 'src/types/image.crosshair'
 import type { ApogeeAndPerigee, ComputeLunarEclipseLocalCircumstances, ComputeLunarEclipseLocalView, FindLunarEclipse, LunarEclipseMap, LunarPhaseTime } from 'src/types/moon'
 import type { PlateSolveStart } from 'src/types/platesolver'
 import type { SearchSatellite, Satellite } from 'src/types/satellite'
@@ -125,8 +127,8 @@ export namespace Api {
 			return json<ImageCoordinateGrid>('/image/coordinategrid', 'post', req)
 		}
 
-		export function crosshairProjection(req: ImageCrosshairProjectionRequest) {
-			return json<ImageCrosshairProjection>('/image/crosshairprojection', 'post', req)
+		export function crosshairProjection(req: ProjectCrosshair) {
+			return json<CrosshairProjection>('/image/crosshairprojection', 'post', req)
 		}
 
 		export function statistics(req: StatisticImage) {

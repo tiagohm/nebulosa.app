@@ -1,4 +1,5 @@
-import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from '@ui/components/ButtonGroup'
+import { ButtonGroup, ButtonGroupItem } from '@ui/components/ButtonGroup'
+import type { ButtonGroupProps } from '@ui/components/ButtonGroup'
 import type { ImageChannel } from 'nebulosa/src/imaging/model/types'
 
 const NO_IMAGE_CHANNEL = 'NONE'

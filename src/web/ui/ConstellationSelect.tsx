@@ -1,5 +1,7 @@
-import { type MultiSelectProps, MultiSelect } from '@ui/components/MultiSelect'
-import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
+import { MultiSelect } from '@ui/components/MultiSelect'
+import type { MultiSelectProps } from '@ui/components/MultiSelect'
+import { CONSTELLATION_LIST, CONSTELLATIONS } from 'nebulosa/src/astronomy/coordinates/constellation'
+import type { Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
 
 export type ConstellationSelectProps = Omit<MultiSelectProps<Constellation>, 'children' | 'items'>
 

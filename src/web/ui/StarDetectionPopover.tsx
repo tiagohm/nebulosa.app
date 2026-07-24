@@ -1,4 +1,5 @@
-import { IconButton, type IconButtonProps } from '@ui/components/IconButton'
+import { IconButton } from '@ui/components/IconButton'
+import type { IconButtonProps } from '@ui/components/IconButton'
 import { NumberInput } from '@ui/components/NumberInput'
 import { Popover } from '@ui/components/Popover'
 import { TextInput } from '@ui/components/TextInput'

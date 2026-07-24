@@ -1,5 +1,6 @@
 import { tw } from '@shared/util'
-import { Chip, type ChipProps } from '@ui/components/Chip'
+import { Chip } from '@ui/components/Chip'
+import type { ChipProps } from '@ui/components/Chip'
 import { Icons } from '@ui/Icon'
 import { useState } from 'react'
 import type { CameraCaptureEvent, CameraCaptureState, CameraCaptureTime } from 'src/types/camera'

@@ -1,4 +1,5 @@
-import { Select, type SelectProps } from '@ui/components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import type { SigmaClipDispersionMethod } from 'nebulosa/src/imaging/processing/computation'
 
 const ITEMS = ['std', 'mad'] as const

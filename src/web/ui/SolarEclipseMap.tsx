@@ -12,7 +12,8 @@ import type { SolarEclipseGeoPoint } from 'nebulosa/src/astronomy/events/eclipse
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import { time, Timescale } from 'nebulosa/src/astronomy/time/time'
 import { formatAZ, toDeg } from 'nebulosa/src/math/units/angle'
-import { Fragment, memo, useEffect, type CSSProperties } from 'react'
+import { Fragment, memo, useEffect } from 'react'
+import type { CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const SolarEclipseMap = memo(() => {

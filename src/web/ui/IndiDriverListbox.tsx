@@ -1,6 +1,7 @@
 import { Api } from '@shared/api'
 import { stopPropagation } from '@shared/util'
-import { FilterableList, type FilterableListProps } from '@ui/components/FilterableList'
+import { FilterableList } from '@ui/components/FilterableList'
+import type { FilterableListProps } from '@ui/components/FilterableList'
 import { ListItem } from '@ui/components/List'
 import { Icons } from '@ui/Icon'
 import React, { memo, useEffect, useMemo, useState } from 'react'

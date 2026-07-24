@@ -1,4 +1,5 @@
-import { Select, type SelectProps } from '@ui/components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import type { SigmaClipCenterMethod } from 'nebulosa/src/imaging/processing/computation'
 
 const ITEMS = ['mean', 'median'] as const

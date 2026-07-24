@@ -1,7 +1,8 @@
 import fs from 'fs/promises'
 import { basename, join } from 'path'
 import { identify } from 'nebulosa/src/adapters/orbits/sbd'
-import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/astrometry/solvers/platesolver'
+import { plateSolutionFrom } from 'nebulosa/src/astrometry/solvers/platesolver'
+import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { spaceMotion, star } from 'nebulosa/src/astronomy/bodies/star'
 import { eraPvstar } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
@@ -9,7 +10,8 @@ import { Wcs } from 'nebulosa/src/bindings/astrometry/libwcs'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
 import type { Image } from 'nebulosa/src/imaging/model/types'
-import { adf, histogram, sigmaClip, type AdaptiveDisplayFunctionOptions } from 'nebulosa/src/imaging/processing/computation'
+import { adf, histogram, sigmaClip } from 'nebulosa/src/imaging/processing/computation'
+import type { AdaptiveDisplayFunctionOptions } from 'nebulosa/src/imaging/processing/computation'
 import { fft, FFTWorkspace } from 'nebulosa/src/imaging/processing/fft'
 import { stf } from 'nebulosa/src/imaging/processing/stf'
 import { declinationKeyword, numericKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/io/formats/fits/util'
@@ -20,7 +22,7 @@ import fovCameras from 'src/data/astrobin.cameras.json'
 import fovTelescopes from 'src/data/astrobin.telescopes.json'
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // oxfmt-ignore
-import type { AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateGrid, ImageCoordinateGridAxis, ImageCoordinateGridLine, ImageCoordinateGridPoint, ImageCoordinateInterpolation, ImageCrosshairPolyline, ImageCrosshairProjection, ImageCrosshairProjectionRequest, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
+import type { CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateGrid, ImageCoordinateGridAxis, ImageCoordinateGridLine, ImageCoordinateGridPoint, ImageCoordinateInterpolation, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { DEG2RAD, PI, PIOVERTWO, RAD2DEG, TAU } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
 import { calibrate } from 'nebulosa/src/imaging/processing/calibration'
@@ -29,9 +31,11 @@ import { debayer } from 'nebulosa/src/imaging/processing/debayer'
 import { horizontalFlip, invert, verticalFlip } from 'nebulosa/src/imaging/processing/geometry'
 import { scnr } from 'nebulosa/src/imaging/processing/scnr'
 import { brightness, contrast, gamma, saturation } from 'nebulosa/src/imaging/processing/tone'
-import type { AnnotatedSkyObject } from 'src/types/image'
+import type { AnnotateImage, AnnotatedSkyObject } from 'src/types/image.annotation'
+import type { CrosshairPolyline, ProjectCrosshair, CrosshairProjection } from 'src/types/image.crosshair'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
-import { DEFAULT_HEADERS, type Endpoints, INTERNAL_SERVER_ERROR_RESPONSE, response } from './http'
+import { DEFAULT_HEADERS, INTERNAL_SERVER_ERROR_RESPONSE, response } from './http'
+import type { Endpoints } from './http'
 import type { NotificationHandler } from './notification'
 
 export interface BufferedImageItem {
@@ -274,7 +278,7 @@ export function effectiveCrosshairAngularSpacing(solution: PlateSolution, automa
 	return Math.min(Math.max(Number.isFinite(requested) ? requested : minimum, minimum), span)
 }
 
-function crosshairProjectedSegments(project: (ratio: number) => readonly [number, number] | undefined): ImageCrosshairPolyline[] {
+function crosshairProjectedSegments(project: (ratio: number) => readonly [number, number] | undefined): CrosshairPolyline[] {
 	const lines: ImageCoordinateGridPoint[][] = []
 	let points: ImageCoordinateGridPoint[] = []
 
@@ -764,7 +768,7 @@ export class ImageHandler {
 					const [x, y] = point
 
 					if (x >= 0 && y >= 0 && x < width && y < height) {
-						res.push({ type: 'MINOR_PLANET', id: 3000000 + i++, name, x, y, rightAscension, declination, magnitude, pmRA: 0, pmDEC: 0, rv: 0, distance: 0, constellation: 0 })
+						res.push({ type: 'asteroid', id: 3000000 + i++, name, x, y, rightAscension, declination, magnitude, pmRA: 0, pmDEC: 0, rv: 0, distance: 0, constellation: 0 })
 					}
 				}
 			} else if ('message' in ident) {
@@ -833,7 +837,7 @@ export class ImageHandler {
 		return { lines }
 	}
 
-	crosshairProjection(request: ImageCrosshairProjectionRequest): ImageCrosshairProjection {
+	crosshairProjection(request: ProjectCrosshair): CrosshairProjection {
 		const { solution, anchor, preset, angularSpacing } = request
 		const { widthInPixels: width, heightInPixels: height } = solution
 		using wcs = new Wcs(solution)
@@ -854,8 +858,8 @@ export class ImageHandler {
 
 		if (!north || !east) return { status: 'unprojectable' }
 
-		const axes: ImageCrosshairPolyline[] = []
-		const rings: ImageCrosshairPolyline[] = []
+		const axes: CrosshairPolyline[] = []
+		const rings: CrosshairPolyline[] = []
 		const ringIntersections: (ImageCoordinateGridPoint & { radius: number })[] = []
 		const cardinals: ImageCoordinateGridPoint[] = []
 		const spacing = angularSpacing && effectiveCrosshairAngularSpacing(solution, angularSpacing.automatic, angularSpacing.value)
@@ -952,7 +956,7 @@ export function image(imageHandler: ImageHandler) {
 		'/image/annotate': { POST: async (req) => response(await imageHandler.annotate(await req.json())) },
 		'/image/coordinateinterpolation': { POST: async (req) => response(imageHandler.coordinateInterpolation(await req.json())) },
 		'/image/coordinategrid': { POST: async (req) => response(imageHandler.coordinateGrid(await req.json())) },
-		'/image/crosshairprojection': { POST: async (req) => response<ImageCrosshairProjection>(imageHandler.crosshairProjection(await req.json())) },
+		'/image/crosshairprojection': { POST: async (req) => response<CrosshairProjection>(imageHandler.crosshairProjection(await req.json())) },
 		'/image/statistics': { POST: async (req) => response(await imageHandler.statistics(await req.json())) },
 		'/image/fovcameras': { GET: response(fovCameras) },
 		'/image/fovtelescopes': { GET: response(fovTelescopes) },

@@ -4,8 +4,10 @@ import type { DeviceHandler, FlatPanelManager } from 'nebulosa/src/devices/indi/
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
 import type { FlatPanelAdded, FlatPanelRemoved, FlatPanelUpdated } from 'src/shared/types'
-import { type Endpoints, query, response } from './http'
-import { webSocketBus, type WebSocketMessageHandler } from './message'
+import { query, response } from './http'
+import type { Endpoints } from './http'
+import { webSocketBus } from './message'
+import type { WebSocketMessageHandler } from './message'
 
 export interface FlatPanelBusEvents {
 	readonly add: FlatPanelAdded

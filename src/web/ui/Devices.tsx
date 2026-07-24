@@ -1,4 +1,5 @@
-import { List, ListItem, type ListItemProps } from '@ui/components/List'
+import { List, ListItem } from '@ui/components/List'
+import type { ListItemProps } from '@ui/components/List'
 import { ConnectButton } from '@ui/ConnectButton'
 import { Icons } from '@ui/Icon'
 import type { DeviceType } from 'nebulosa/src/devices/indi/device'

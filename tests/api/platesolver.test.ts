@@ -4,7 +4,8 @@ import { WebSocketMessageHandler } from 'src/api/message'
 import { NotificationHandler } from 'src/api/notification'
 import { plateSolver as plateSolverEndpoints, PlateSolverHandler } from 'src/api/platesolver'
 import type { Notification } from 'src/types/notification'
-import { DEFAULT_PLATE_SOLVE_START, type PlateSolveStart } from 'src/types/platesolver'
+import { DEFAULT_PLATE_SOLVE_START } from 'src/types/platesolver'
+import type { PlateSolveStart } from 'src/types/platesolver'
 import { noContent, SocketMessager } from './util'
 
 const wsm = new WebSocketMessageHandler()

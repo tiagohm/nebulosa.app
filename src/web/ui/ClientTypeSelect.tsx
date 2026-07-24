@@ -1,4 +1,5 @@
-import { Select, type SelectProps } from '@ui/components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import type { ClientType } from 'nebulosa/src/devices/indi/device'
 
 const ITEMS = ['INDI', 'ALPACA', 'SIMULATOR'] as const

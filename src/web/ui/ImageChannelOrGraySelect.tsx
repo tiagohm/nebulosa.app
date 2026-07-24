@@ -1,4 +1,5 @@
-import { Select, type SelectProps } from '@ui/components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import type { Grayscale, ImageChannelOrGray } from 'nebulosa/src/imaging/model/types'
 
 type ImageChannelOrGrayOption = Exclude<ImageChannelOrGray, Grayscale>

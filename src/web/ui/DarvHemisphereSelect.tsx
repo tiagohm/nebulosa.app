@@ -1,4 +1,5 @@
-import { Select, type SelectProps } from '@ui/components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import type { DarvHemisphere } from 'src/types/darv'
 
 const ITEMS = ['northern', 'southern'] as const

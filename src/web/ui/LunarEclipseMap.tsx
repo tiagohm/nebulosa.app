@@ -11,7 +11,8 @@ import type { LunarEclipseContactKind } from 'nebulosa/src/astronomy/events/ecli
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import { formatAZ, toDeg } from 'nebulosa/src/math/units/angle'
-import { Fragment, memo, useEffect, type CSSProperties } from 'react'
+import { Fragment, memo, useEffect } from 'react'
+import type { CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
 
 export const LunarEclipseMap = memo(() => {

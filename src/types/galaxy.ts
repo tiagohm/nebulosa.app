@@ -1,9 +1,11 @@
-import { CONSTELLATION_LIST, CONSTELLATIONS, type Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
+import { CONSTELLATION_LIST, CONSTELLATIONS } from 'nebulosa/src/astronomy/coordinates/constellation'
+import type { Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
 import type { StarCatalogEntry } from 'nebulosa/src/catalogs/stars/catalog'
 import type { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
 import type { Distance } from 'nebulosa/src/math/units/distance'
 import type { Velocity } from 'nebulosa/src/math/units/velocity'
-import { DEFAULT_POSITION_OF_BODY, type LocationAndTime } from 'src/types/atlas'
+import { DEFAULT_POSITION_OF_BODY } from 'src/types/atlas'
+import type { LocationAndTime } from 'src/types/atlas'
 
 export interface SearchSkyObject extends LocationAndTime {
 	readonly id?: number | string | readonly (number | string)[]

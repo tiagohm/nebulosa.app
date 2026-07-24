@@ -1,4 +1,5 @@
-import { Dropdown, type DropdownProps } from '@ui/components/Dropdown'
+import { Dropdown } from '@ui/components/Dropdown'
+import type { DropdownProps } from '@ui/components/Dropdown'
 import { SKY_OBJECT_NAME_TYPES } from 'src/types/galaxy'
 
 export interface SkyObjectNameTypeDropdownProps extends Omit<DropdownProps, 'children'> {

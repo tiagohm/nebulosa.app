@@ -1,6 +1,7 @@
 import { tw } from '@shared/util'
 import { Children, Fragment, isValidElement } from 'react'
-import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
+import { tv } from 'tailwind-variants'
+import type { ClassValue, VariantProps } from 'tailwind-variants'
 
 const BUTTON_GROUP_ITEM_CHILD_TYPE = Symbol('ButtonGroupItem')
 

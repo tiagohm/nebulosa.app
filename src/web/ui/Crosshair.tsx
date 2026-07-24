@@ -1,10 +1,10 @@
 import { ImageViewerStoreContext } from '@shared/context'
-// oxfmt-ignore
-import { crosshairAngleDisplayUnit, crosshairAngleToDisplayValue, crosshairGeometry, crosshairPointFromPixels, crosshairPointInPixels, crosshairSegmentsPath, type CrosshairGeometry, type CrosshairPoint } from '@shared/types/crosshair'
 import { stopPropagationAndPreventDefault } from '@shared/util'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
-import { memo, useContext, type ReactNode } from 'react'
-import type { ImageCrosshairPolyline } from 'src/shared/types'
+import { memo, useContext } from 'react'
+import type { ReactNode } from 'react'
+import { crosshairAngleDisplayUnit, crosshairAngleToDisplayValue, crosshairGeometry, crosshairPointFromPixels, crosshairPointInPixels, crosshairSegmentsPath } from 'src/types/image.crosshair'
+import type { CrosshairGeometry, CrosshairPolyline, CrosshairPoint } from 'src/types/image.crosshair'
 import { useSnapshot } from 'valtio'
 
 type GeometryStrokeProps = {
@@ -39,13 +39,13 @@ function Positioned({ x, y, angle = 0, children }: PositionedProps) {
 	return <g transform={`translate(${x} ${y}) rotate(${angle})`}>{children}</g>
 }
 
-function polylinesPath(lines: readonly ImageCrosshairPolyline[], delta: CrosshairPoint) {
+function polylinesPath(lines: readonly CrosshairPolyline[], delta: CrosshairPoint) {
 	return lines.map((line) => line.map(({ x, y }, index) => `${index === 0 ? 'M' : 'L'}${x + delta.x} ${y + delta.y}`).join('')).join('')
 }
 
 type ProjectedStrokeProps = {
-	readonly axes: readonly ImageCrosshairPolyline[]
-	readonly rings: readonly ImageCrosshairPolyline[]
+	readonly axes: readonly CrosshairPolyline[]
+	readonly rings: readonly CrosshairPolyline[]
 	readonly delta: CrosshairPoint
 	readonly stroke: string
 	readonly strokeWidth: number

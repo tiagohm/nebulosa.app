@@ -1,6 +1,7 @@
 import { tw } from '@shared/util'
 import { CameraExposureTimeUnitDropdown } from '@ui/CameraExposureTimeUnitDropdown'
-import { NumberInput, type NumberInputProps } from '@ui/components/NumberInput'
+import { NumberInput } from '@ui/components/NumberInput'
+import type { NumberInputProps } from '@ui/components/NumberInput'
 import { exposureTimeIn } from 'src/shared/util'
 import type { CameraExposureTimeUnit } from 'src/types/camera'
 

@@ -1,6 +1,7 @@
 import { homeStore } from '@stores/home.store'
 import { IconButton } from '@ui/components/IconButton'
-import { Popover, type PopoverMethods } from '@ui/components/Popover'
+import { Popover } from '@ui/components/Popover'
+import type { PopoverMethods } from '@ui/components/Popover'
 import { FilePicker } from '@ui/FilePicker'
 import { Icons } from '@ui/Icon'
 import { memo, useRef } from 'react'

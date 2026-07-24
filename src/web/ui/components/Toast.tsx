@@ -1,4 +1,5 @@
-import { dismissToast, readToasts, subscribeToasts, TOAST_PLACEMENTS, type ToastPlacement, type ToastProviderDefaults, type ToastRecord, toast, updateToastDefaults } from '@shared/toast'
+import { dismissToast, readToasts, subscribeToasts, TOAST_PLACEMENTS, toast, updateToastDefaults } from '@shared/toast'
+import type { ToastPlacement, ToastProviderDefaults, ToastRecord } from '@shared/toast'
 import { hasRootInteraction, tw } from '@shared/util'
 import { Icons } from '@ui/Icon'
 import { useEffect, useSyncExternalStore } from 'react'

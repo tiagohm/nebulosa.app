@@ -11,7 +11,8 @@ import { Icons } from '@ui/Icon'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter, toMeter } from 'nebulosa/src/math/units/distance'
-import { memo, useContext, useEffect, type CSSProperties } from 'react'
+import { memo, useContext, useEffect } from 'react'
+import type { CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
 
 export interface LocationMapProps extends GeographicCoordinate {

@@ -1,4 +1,5 @@
-import { Dropdown, DropdownItem, type DropdownProps } from '@ui/components/Dropdown'
+import { Dropdown, DropdownItem } from '@ui/components/Dropdown'
+import type { DropdownProps } from '@ui/components/Dropdown'
 import type { CameraExposureTimeUnit } from 'src/types/camera'
 
 const EXPOSURE_TIME_UNITS = ['minute', 'second', 'millisecond', 'microsecond'] as const

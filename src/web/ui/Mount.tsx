@@ -144,7 +144,7 @@ const TargetCoordinateAndPosition = memo(() => {
 				<TextInput className="col-span-5" disabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={mount.updateTargetCoordinateY} value={y} />
 				<div className="col-span-10 flex flex-row items-center justify-center gap-1">
 					<TargetCoordinatePopupButton />
-					<IconButton color="success" disabled={disabled} icon={Icons.Telescope} onClick={mount.goTo} tooltipContent="Go" />
+					<IconButton color="success" disabled={disabled} icon={Icons.Telescope} onClick={mount.goTo} tooltipContent="Slew" />
 					<IconButton color="primary" disabled={disabled} icon={Icons.Sync} onClick={mount.sync} tooltipContent="Sync" />
 					<IconButton color="secondary" disabled={disabled} icon={Icons.Image} onClick={mount.frame} tooltipContent="Frame" />
 				</div>

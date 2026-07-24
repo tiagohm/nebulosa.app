@@ -1,6 +1,4 @@
 import { ImageViewerStoreContext } from '@shared/context'
-// oxfmt-ignore
-import { CROSSHAIR_ANGULAR_DISPLAY_UNITS, CROSSHAIR_CENTER_SPACES, CROSSHAIR_SPACING_UNITS, crosshairAngleFromDisplayValue, crosshairAngleToDisplayValue, crosshairPointInPixels, imageMinimumDimension, type CrosshairAngularDisplayUnit, type CrosshairCenterSpace, type CrosshairSpacingUnit } from '@shared/types/crosshair'
 import { Button } from '@ui/components/Button'
 import { Chip } from '@ui/components/Chip'
 import { NumberInput } from '@ui/components/NumberInput'
@@ -14,6 +12,7 @@ import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/co
 import { PIOVERTWO } from 'nebulosa/src/core/constants'
 import { formatDEC, formatRA, parseAngle } from 'nebulosa/src/math/units/angle'
 import { memo, useContext, useEffect, useState } from 'react'
+import { CROSSHAIR_ANGULAR_DISPLAY_UNITS, CROSSHAIR_CENTER_SPACES, CROSSHAIR_SPACING_UNITS, crosshairAngleFromDisplayValue, crosshairAngleToDisplayValue, crosshairPointInPixels } from 'src/types/image.crosshair'
 import { useSnapshot } from 'valtio'
 
 const CENTER_SPACE_LABELS = { image: 'Image', sky: 'Sky' } as const
@@ -28,7 +27,7 @@ export const ImageCrosshair = memo(() => {
 	const { solution } = useSnapshot(viewer.solver.state)
 	const width = info?.width ?? 0
 	const height = info?.height ?? 0
-	const minDimension = imageMinimumDimension(width, height)
+	const minDimension = Math.min(width, height)
 	const hasCompatibleSolution = !!info && !!solution && Number.isFinite(solution.scale) && solution.scale > 0 && solution.widthInPixels === width && solution.heightInPixels === height
 	const centerInPixels = config.center.space === 'image' ? crosshairPointInPixels(config.center.point, width, height) : projection?.center
 	const angular = config.spacing.unit === 'angular'
@@ -45,14 +44,14 @@ export const ImageCrosshair = memo(() => {
 
 	return (
 		<div className="grid grid-cols-12 items-center gap-2 p-3">
-			<Switch className="col-span-9 min-w-0" label="Enabled" onValueChange={(value) => crosshair.update('enabled', value)} value={enabled} />
+			<Switch className="col-span-9 min-w-0" label="Enabled" onValueChange={crosshair.setEnabled} value={enabled} />
 			<Chip className="col-span-3 justify-center" color={wcsStatus === 'ready' ? 'success' : wcsStatus === 'loading' ? 'primary' : wcsStatus === 'outside' ? 'warning' : hasCompatibleSolution ? 'default' : 'danger'} size="sm">
 				{wcsStatusLabel(wcsStatus, hasCompatibleSolution)}
 			</Chip>
 
 			<CrosshairPresetSelect className="col-span-6" disabled={blocked} onValueChange={crosshair.setPreset} value={config.preset} />
 			<Select className="col-span-6" disabled={blocked} items={centerSpaces} label="Center space" onValueChange={crosshair.setCenterSpace} value={config.center.space}>
-				{(item: CrosshairCenterSpace) => <span>{CENTER_SPACE_LABELS[item]}</span>}
+				{(item) => <span>{CENTER_SPACE_LABELS[item]}</span>}
 			</Select>
 
 			{config.center.space === 'image' ? (
@@ -68,7 +67,7 @@ export const ImageCrosshair = memo(() => {
 			)}
 
 			<Select className="col-span-6" disabled={spacingBlocked} items={spacingUnits} label="Spacing unit" onValueChange={crosshair.setSpacingUnit} value={config.spacing.unit}>
-				{(item: CrosshairSpacingUnit) => <span>{SPACING_UNIT_LABELS[item]}</span>}
+				{(item) => <span>{SPACING_UNIT_LABELS[item]}</span>}
 			</Select>
 			{angular ? (
 				<AngularSpacing disabled={spacingBlocked || !hasCompatibleSolution} />
@@ -164,7 +163,7 @@ const AngularSpacing = memo(({ disabled }: { readonly disabled: boolean }) => {
 				<NumberInput className="col-span-6 min-w-0" disabled={disabled} fractionDigits={2} label="Spacing" minValue={0.01} onValueChange={(value) => crosshair.setSpacingValue(crosshairAngleFromDisplayValue(value, spacing.displayUnit))} step={0.1} value={displayValue} />
 			)}
 			<Select className="col-span-6" disabled={disabled} items={CROSSHAIR_ANGULAR_DISPLAY_UNITS} label="Angular unit" onValueChange={crosshair.setAngularDisplayUnit} value={spacing.displayUnit}>
-				{(item: CrosshairAngularDisplayUnit) => <span>{ANGULAR_UNIT_LABELS[item]}</span>}
+				{(item) => <span>{ANGULAR_UNIT_LABELS[item]}</span>}
 			</Select>
 		</>
 	)

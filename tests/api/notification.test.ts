@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
-import { WebSocketMessageHandler, type Messager } from 'src/api/message'
+import { WebSocketMessageHandler } from 'src/api/message'
+import type { Messager } from 'src/api/message'
 import { NotificationHandler } from 'src/api/notification'
 import type { Notification } from 'src/types/notification'
 import { SocketMessager } from './util'

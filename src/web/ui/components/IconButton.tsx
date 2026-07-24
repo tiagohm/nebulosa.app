@@ -1,4 +1,5 @@
-import { Button, type ButtonProps } from '@ui/components/Button'
+import { Button } from '@ui/components/Button'
+import type { ButtonProps } from '@ui/components/Button'
 import type { Icon } from '@ui/Icon'
 
 export interface IconButtonProps extends Omit<ButtonProps, 'children' | 'label' | 'startContent'> {

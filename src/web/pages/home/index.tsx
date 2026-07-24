@@ -6,7 +6,8 @@ import { TIME_PROVIDERS, toJulianDay } from 'nebulosa/src/astronomy/time/time'
 import type { MutMat3 } from 'nebulosa/src/math/linear-algebra/mat3'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import React from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import { createRoot } from 'react-dom/client'
+import type { Root } from 'react-dom/client'
 
 // Speed up Time by caching some expensive ERFA calls.
 // The cache is keyed by the rounded Julian epoch, which is the same for all times in a given day.

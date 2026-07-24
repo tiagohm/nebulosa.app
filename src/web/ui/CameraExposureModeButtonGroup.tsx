@@ -1,4 +1,5 @@
-import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from '@ui/components/ButtonGroup'
+import { ButtonGroup, ButtonGroupItem } from '@ui/components/ButtonGroup'
+import type { ButtonGroupProps } from '@ui/components/ButtonGroup'
 import type { CameraExposureMode } from 'src/types/camera'
 
 export type CameraExposureModeButtonGroupProps = Omit<ButtonGroupProps<CameraExposureMode>, 'children'>

@@ -1,7 +1,8 @@
 import { zIndexStore } from '@stores/zindex.store'
 import { createUseGesture, dragAction } from '@use-gesture/react'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
-import { useCallback, useEffect, useRef, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
+import type { CSSProperties } from 'react'
 
 // Better tree shaking with createUseGesture
 const useGesture = createUseGesture([dragAction])

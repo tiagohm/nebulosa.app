@@ -1,4 +1,5 @@
-import { Select, type SelectProps } from '@ui/components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import { TextInput } from '@ui/components/TextInput'
 import { useDebounce } from '@uidotdev/usehooks'
 import { useMemo, useState } from 'react'

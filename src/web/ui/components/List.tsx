@@ -1,6 +1,7 @@
 import { assignRef, clamp, hasRootInteraction, stopPropagation, stopPropagationForAll, tw } from '@shared/util'
 import { Children, useEffect, useMemo, useRef, useState } from 'react'
-import { type ClassValue, tv } from 'tailwind-variants'
+import { tv } from 'tailwind-variants'
+import type { ClassValue } from 'tailwind-variants'
 
 const DEFAULT_ITEM_HEIGHT = 38
 const DEFAULT_OVERSCAN = 3

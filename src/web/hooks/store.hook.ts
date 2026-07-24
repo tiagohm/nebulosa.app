@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, type DependencyList, type RefObject } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import type { DependencyList, RefObject } from 'react'
 
 interface Store {
 	readonly mount?: VoidFunction

@@ -1,4 +1,5 @@
-import { DEFAULT_CAMERA_CAPTURE_START, type CameraCaptureStart } from 'src/types/camera'
+import { DEFAULT_CAMERA_CAPTURE_START } from 'src/types/camera'
+import type { CameraCaptureStart } from 'src/types/camera'
 
 export type FlatWizardState = 'idle' | 'capturing' | 'computing'
 

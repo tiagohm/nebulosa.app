@@ -8,8 +8,10 @@ import { cameraBus, CameraHandler } from 'src/api/camera'
 import { flatWizardBus, flatWizard as flatWizardEndpoints, FlatWizardHandler } from 'src/api/flatwizard'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
-import { DEFAULT_CAMERA_CAPTURE_EVENT, type CameraCaptureEvent } from 'src/types/camera'
-import { DEFAULT_FLAT_WIZARD_START, type FlatWizardEvent, type FlatWizardStart } from 'src/types/flatwizard'
+import { DEFAULT_CAMERA_CAPTURE_EVENT } from 'src/types/camera'
+import type { CameraCaptureEvent } from 'src/types/camera'
+import { DEFAULT_FLAT_WIZARD_START } from 'src/types/flatwizard'
+import type { FlatWizardEvent, FlatWizardStart } from 'src/types/flatwizard'
 import { noContent, SocketMessager, waitUntil } from './util'
 
 type FlatWizardStartOverrides = Omit<Partial<FlatWizardStart>, 'capture'> & {

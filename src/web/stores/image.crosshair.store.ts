@@ -1,14 +1,15 @@
 import { Api } from '@shared/api'
 import { initProxy } from '@shared/proxy'
-// oxfmt-ignore
-import { DEFAULT_CROSSHAIR_ANGULAR_SPACING, DEFAULT_CROSSHAIR_CONFIG, crosshairPointFromPixels, crosshairPointInPixels, crosshairSpacingInPixels, imageMinimumDimension, normalizeCrosshairConfig, normalizeCrosshairCoordinate, normalizeCrosshairPoint, screenDeltaInImage, type CrosshairAngularDisplayUnit, type CrosshairCenter, type CrosshairCenterSpace, type CrosshairConfig, type CrosshairPoint, type CrosshairSpacingUnit } from '@shared/types/crosshair'
 import { hasScaledSolution } from '@stores/image.solver.store'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import type { DeepWritable } from 'nebulosa/src/core/types'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import type { CrosshairPreset, ImageCrosshairProjection, ImageCrosshairProjectionAnchor } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { screenDeltaInImage } from 'src/types/image'
+import { DEFAULT_CROSSHAIR_ANGULAR_SPACING, DEFAULT_CROSSHAIR_CONFIG, crosshairPointFromPixels, crosshairPointInPixels, crosshairSpacingInPixels } from 'src/types/image.crosshair'
+import type { CrosshairPreset, CrosshairProjection, CrosshairProjectionAnchor, CrosshairAngularDisplayUnit, CrosshairCenter, CrosshairCenterSpace, CrosshairConfig, CrosshairPoint, CrosshairSpacingUnit } from 'src/types/image.crosshair'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 
@@ -17,9 +18,9 @@ export type ImageCrosshairWcsStatus = 'unavailable' | 'loading' | 'ready' | 'out
 
 export interface ImageCrosshairState {
 	enabled: boolean
-	config: CrosshairConfig
+	config: DeepWritable<CrosshairConfig>
 	previewCenter?: CrosshairPoint
-	projection?: Extract<ImageCrosshairProjection, { status: 'ready' }>
+	projection?: Extract<CrosshairProjection, { status: 'ready' }>
 	wcsStatus: ImageCrosshairWcsStatus
 }
 
@@ -54,18 +55,9 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 		return { width: viewer.state.info?.width ?? 0, height: viewer.state.info?.height ?? 0 } as const
 	}
 
-	function minimumDimension() {
-		const { width, height } = imageDimensions()
-		return imageMinimumDimension(width, height)
-	}
-
 	function compatibleSolution(solution: PlateSolution | undefined = viewer.solver.state.solution) {
-		const info = viewer.state.info
+		const { info } = viewer.state
 		return info && hasScaledSolution(solution) && Number.isFinite(solution.width) && solution.width > 0 && Number.isFinite(solution.height) && solution.height > 0 && solution.widthInPixels === info.width && solution.heightInPixels === info.height ? solution : undefined
-	}
-
-	function applyConfig(value: unknown) {
-		Object.assign(state.config, normalizeCrosshairConfig(value, minimumDimension()))
 	}
 
 	function mount() {
@@ -74,15 +66,22 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 		console.info('image crosshair mounted:', viewer.state.path)
 
 		mounted = true
+
 		u[0] = initProxy(state, `image.${viewer.key}.crosshair`, ['p:enabled', 'o:config'])
-		applyConfig(state.config)
+
 		u[1] = subscribeKey(viewer.state, 'info', () => {
-			applyConfig(state.config)
-			refreshProjection()
+			// applyConfig(state.config)
+			void refreshProjection()
 		})
+
 		u[2] = subscribeKey(viewer.solver.state, 'solution', refreshProjection)
-		u[3] = subscribeKey(state, 'enabled', refreshProjection)
-		refreshProjection()
+
+		u[3] = subscribeKey(state, 'enabled', async (enabled) => {
+			await refreshProjection()
+			if (enabled && state.wcsStatus === 'outside') resetCenter()
+		})
+
+		void refreshProjection()
 
 		return unmount
 	}
@@ -96,25 +95,13 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update(key: 'enabled', value: boolean) {
-		state[key] = value
-	}
-
-	function toggle() {
-		state.enabled = !state.enabled
-	}
-
-	function updateConfig<K extends keyof CrosshairConfig>(key: K, value: CrosshairConfig[K]) {
-		applyConfig({ ...state.config, [key]: value })
-	}
-
-	function projectionAnchor(center: CrosshairCenter = state.config.center): ImageCrosshairProjectionAnchor {
+	function projectionAnchor(center: CrosshairCenter = state.config.center): CrosshairProjectionAnchor {
 		if (center.space === 'sky') return { space: 'sky', coordinate: { ...center.coordinate } }
 		const { width, height } = imageDimensions()
 		return { space: 'image', point: crosshairPointInPixels(center.point, width, height) }
 	}
 
-	async function requestProjection(anchor: ImageCrosshairProjectionAnchor) {
+	async function requestProjection(anchor: CrosshairProjectionAnchor) {
 		const solution = compatibleSolution()
 		const revision = ++projectionRevision
 		state.projection = undefined
@@ -146,55 +133,59 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 	}
 
 	function refreshProjection() {
-		void requestProjection(projectionAnchor())
+		return requestProjection(projectionAnchor())
+	}
+
+	function setEnabled(value: boolean) {
+		state.enabled = value
+		void refreshProjection()
 	}
 
 	function setPreset(preset: CrosshairPreset) {
-		updateConfig('preset', preset)
-		refreshProjection()
+		state.config.preset = preset
+		void refreshProjection()
 	}
 
 	function setSpacingUnit(unit: CrosshairSpacingUnit) {
 		if (unit === state.config.spacing.unit || (unit === 'angular' && !compatibleSolution())) return
 
 		const { width, height } = imageDimensions()
-		const minDimension = imageMinimumDimension(width, height)
+		const minDimension = Math.min(width, height)
 		const projectionSpacing = state.projection?.spacing
 
 		if (unit === 'angular') {
-			updateConfig('spacing', structuredClone(DEFAULT_CROSSHAIR_ANGULAR_SPACING))
+			Object.assign(state.config.spacing, DEFAULT_CROSSHAIR_ANGULAR_SPACING)
 		} else {
 			const current = state.config.spacing
 			const spacingInPixels = current.unit === 'angular' ? (projectionSpacing ?? current.value) / (compatibleSolution()?.scale ?? 1) : crosshairSpacingInPixels(current, width, height)
 			const value = unit === 'pixel' ? spacingInPixels : minDimension > 0 ? spacingInPixels / minDimension : DEFAULT_CROSSHAIR_CONFIG.spacing.value
-			updateConfig('spacing', { unit, value })
+			Object.assign(state.config.spacing, { unit, value })
 		}
 
-		refreshProjection()
+		void refreshProjection()
 	}
 
 	function setSpacingValue(value: number) {
-		const spacing = state.config.spacing
-		updateConfig('spacing', { ...spacing, value })
-		refreshProjection()
+		state.config.spacing.value = value
+		void refreshProjection()
 	}
 
 	function setAngularAutomatic(automatic: boolean) {
 		const spacing = state.config.spacing
 		if (spacing.unit !== 'angular') return
-		updateConfig('spacing', { ...spacing, automatic })
-		refreshProjection()
+		spacing.automatic = automatic
+		void refreshProjection()
 	}
 
 	function setAngularDisplayUnit(displayUnit: CrosshairAngularDisplayUnit) {
 		const spacing = state.config.spacing
 		if (spacing.unit !== 'angular') return
-		updateConfig('spacing', { ...spacing, displayUnit })
+		spacing.displayUnit = displayUnit
 	}
 
-	function setImageCenter(center: CrosshairPoint) {
-		updateConfig('center', { space: 'image', point: normalizeCrosshairPoint(center) })
-		refreshProjection()
+	function setImageCenter(point: CrosshairPoint) {
+		Object.assign(state.config.center, { space: 'image', point })
+		void refreshProjection()
 	}
 
 	async function commitCenterFromPixels(center: CrosshairPoint) {
@@ -214,7 +205,7 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 		const result = await requestProjection({ space: 'image', point })
 
 		if (result) {
-			updateConfig('center', { space: 'sky', coordinate: { rightAscension: result.center.rightAscension, declination: result.center.declination } })
+			Object.assign(state.config.center, { space: 'sky', coordinate: { rightAscension: result.center.rightAscension, declination: result.center.declination } })
 			state.previewCenter = undefined
 			return true
 		}
@@ -233,20 +224,20 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 		if (space === 'sky') {
 			if (!compatibleSolution()) return
 			const result = await requestProjection(projectionAnchor())
-			if (result) updateConfig('center', { space, coordinate: { rightAscension: result.center.rightAscension, declination: result.center.declination } })
+			if (result) Object.assign(state.config.center, { space, coordinate: { rightAscension: result.center.rightAscension, declination: result.center.declination } })
 		} else {
 			const { width, height } = imageDimensions()
 			const projected = state.projection?.center
 			const point = projected ? crosshairPointFromPixels(projected, width, height) : { x: 0.5, y: 0.5 }
-			updateConfig('center', { space, point })
-			refreshProjection()
+			Object.assign(state.config.center, { space, point })
+			void refreshProjection()
 		}
 	}
 
 	function setSkyCenter(coordinate: EquatorialCoordinate) {
 		if (state.config.center.space !== 'sky') return
-		updateConfig('center', { space: 'sky', coordinate: normalizeCrosshairCoordinate(coordinate) })
-		refreshProjection()
+		Object.assign(state.config.center, { space: 'sky', coordinate })
+		void refreshProjection()
 	}
 
 	function resetCenter() {
@@ -269,23 +260,23 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 	}
 
 	function setColor(color: string) {
-		updateConfig('color', color)
+		state.config.color = color
 	}
 
 	function setOpacity(opacity: number) {
-		updateConfig('opacity', opacity)
+		state.config.opacity = opacity
 	}
 
 	function setLineWidth(lineWidth: number) {
-		updateConfig('lineWidth', lineWidth)
+		state.config.lineWidth = lineWidth
 	}
 
 	function setDashed(dashed: boolean) {
-		updateConfig('dashed', dashed)
+		state.config.dashed = dashed
 	}
 
 	function setHalo(halo: boolean) {
-		updateConfig('halo', halo)
+		state.config.halo = halo
 	}
 
 	function handleCenterKeyDown(event: React.KeyboardEvent<SVGCircleElement>) {
@@ -430,9 +421,8 @@ export function imageCrosshairStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
-		update,
-		toggle,
 		refreshProjection,
+		setEnabled,
 		setPreset,
 		setSpacingUnit,
 		setSpacingValue,

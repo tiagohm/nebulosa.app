@@ -1,6 +1,7 @@
 import { normalizeTimeout } from 'src/shared/normalizer'
 import type { Confirm, Confirmation } from 'src/types/confirmation'
-import { type Endpoints, response } from './http'
+import { response } from './http'
+import type { Endpoints } from './http'
 import type { WebSocketMessageHandler } from './message'
 
 export type ConfirmationResolver = (value?: boolean | PromiseLike<boolean>) => void

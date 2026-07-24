@@ -1,5 +1,6 @@
 import { tw } from '@shared/util'
-import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
+import { tv } from 'tailwind-variants'
+import type { ClassValue, VariantProps } from 'tailwind-variants'
 
 const badgeStyles = tv({
 	slots: {

@@ -1,6 +1,7 @@
 import { ImageViewerStoreContext } from '@shared/context'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
-import { type CSSProperties, memo, useContext } from 'react'
+import { memo, useContext } from 'react'
+import type { CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
 
 const STAR_RADIUS = 4

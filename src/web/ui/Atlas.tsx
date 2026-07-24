@@ -1,17 +1,21 @@
 import { tw } from '@shared/util'
-import { atlasStore, type AtlasTab, type TagItem } from '@stores/atlas.store'
+import { atlasStore } from '@stores/atlas.store'
+import type { AtlasTab, TagItem } from '@stores/atlas.store'
 import { BodyCoordinateInfo } from '@ui/BodyCoordinateInfo'
 import { Chip } from '@ui/components/Chip'
 import { IconButton } from '@ui/components/IconButton'
 import { MountDropdown } from '@ui/DeviceDropdown'
-import { type Icon, Icons } from '@ui/Icon'
+import { Icons } from '@ui/Icon'
+import type { Icon } from '@ui/Icon'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import React, { createContext, memo, useContext, useDeferredValue, useMemo } from 'react'
-import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
+import { Area, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, XAxis, YAxis } from 'recharts'
+import type { AreaProps, TooltipContentProps } from 'recharts'
 import type { BodyPosition } from 'src/types/atlas'
-import { EMPTY_TWILIGHT, type Twilight } from 'src/types/sun'
+import { EMPTY_TWILIGHT } from 'src/types/sun'
+import type { Twilight } from 'src/types/sun'
 import { useSnapshot } from 'valtio'
 
 export interface EphemerisPositionContextParameters {
@@ -84,7 +88,7 @@ const EphemerisPositionCommand = memo(() => {
 	return (
 		<div className="flex items-center justify-center gap-2">
 			<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} onValueChange={context.sync} tooltipContent="Sync" variant="flat" />
-			<MountDropdown color="success" disallowNoneSelection onValueChange={context.goTo} tooltipContent="Go" variant="flat" />
+			<MountDropdown color="success" disallowNoneSelection onValueChange={context.goTo} tooltipContent="Slew" variant="flat" />
 			<IconButton color="secondary" icon={Icons.Image} onClick={context.frame} tooltipContent="Frame" variant="flat" />
 		</div>
 	)

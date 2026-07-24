@@ -1,13 +1,17 @@
 import type { IndiClientHandler } from 'nebulosa/src/devices/indi/client'
-import { CLIENT, type Client, type Device, type DeviceProperty, type DevicePropertyType, type DeviceType } from 'nebulosa/src/devices/indi/device'
+import { CLIENT } from 'nebulosa/src/devices/indi/device'
+import type { Client, Device, DeviceProperty, DevicePropertyType, DeviceType } from 'nebulosa/src/devices/indi/device'
 import type { CameraManager, CoverManager, DevicePropertyHandler, DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
 // oxfmt-ignore
 import type { DefBlobVector, DefNumberVector, DefSwitchVector, DefTextVector, DefVector, DelProperty, Message, NewVector, SetBlobVector, SetNumberVector, SetSwitchVector, SetTextVector, SetVector } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
-import { type IndiPropertyListenEvent, type IndiDevicePropertyEvent, type IndiServerEvent, type IndiServerStart, type IndiServerStatus, DEVICE_TYPES } from 'src/shared/types'
+import { DEVICE_TYPES } from 'src/shared/types'
+import type { IndiPropertyListenEvent, IndiDevicePropertyEvent, IndiServerEvent, IndiServerStart, IndiServerStatus } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
-import { type Endpoints, query, response } from './http'
-import { webSocketBus, type Messager, type WebSocketMessageHandler } from './message'
+import { query, response } from './http'
+import type { Endpoints } from './http'
+import { webSocketBus } from './message'
+import type { Messager, WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
 
 const MAX_DEVICE_MESSAGES = 100

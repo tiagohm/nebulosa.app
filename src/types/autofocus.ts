@@ -1,7 +1,9 @@
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { AutoFocusOptions } from 'nebulosa/src/observation/focus/autofocus'
-import { DEFAULT_CAMERA_CAPTURE_START, type CameraCaptureStart } from 'src/types/camera'
-import { DEFAULT_STAR_DETECTION, type StarDetection } from 'src/types/stardetection'
+import { DEFAULT_CAMERA_CAPTURE_START } from 'src/types/camera'
+import type { CameraCaptureStart } from 'src/types/camera'
+import { DEFAULT_STAR_DETECTION } from 'src/types/stardetection'
+import type { StarDetection } from 'src/types/stardetection'
 
 export type AutoFocusState = 'idle' | 'moving' | 'capturing' | 'computing'
 

@@ -1,4 +1,5 @@
-import { List, ListItem, type ListProps } from '@ui/components/List'
+import { List, ListItem } from '@ui/components/List'
+import type { ListProps } from '@ui/components/List'
 import type { FitsHeader, FitsHeaderCard, FitsHeaderValue } from 'nebulosa/src/io/formats/fits/fits'
 import { memo, useMemo } from 'react'
 

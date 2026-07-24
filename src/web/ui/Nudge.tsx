@@ -1,5 +1,7 @@
-import { Button, type ButtonProps } from '@ui/components/Button'
-import { type Icon, Icons } from '@ui/Icon'
+import { Button } from '@ui/components/Button'
+import type { ButtonProps } from '@ui/components/Button'
+import { Icons } from '@ui/Icon'
+import type { Icon } from '@ui/Icon'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 
 export type NudgeDirection = 'upLeft' | 'up' | 'upRight' | 'left' | 'right' | 'downLeft' | 'down' | 'downRight'

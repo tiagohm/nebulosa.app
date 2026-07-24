@@ -1,4 +1,5 @@
-import { initProxy, type ProxyProperties } from '@shared/proxy'
+import { initProxy } from '@shared/proxy'
+import type { ProxyProperties } from '@shared/proxy'
 import * as formulas from 'nebulosa/src/astronomy/formulas'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'

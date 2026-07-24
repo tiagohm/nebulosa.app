@@ -1,5 +1,6 @@
 import { clamp, preventDefault, tw } from '@shared/util'
-import { createUseGesture, dragAction, type GestureHandlers, pinchAction, wheelAction } from '@use-gesture/react'
+import { createUseGesture, dragAction, pinchAction, wheelAction } from '@use-gesture/react'
+import type { GestureHandlers } from '@use-gesture/react'
 import { memo, useEffectEvent, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 
 export type InteractType = 'drag' | 'pinch' | 'wheel' | 'none'

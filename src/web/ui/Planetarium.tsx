@@ -49,7 +49,7 @@ const SelectedObject = memo(() => {
 				</div>
 				<div className="flex items-center justify-end gap-2">
 					<MountDropdown color="primary" disallowNoneSelection icon={Icons.Sync} onValueChange={planetariumStore.sync} tooltipContent="Sync" variant="flat" />
-					<MountDropdown color="success" disallowNoneSelection onValueChange={planetariumStore.goTo} tooltipContent="Go" variant="flat" />
+					<MountDropdown color="success" disallowNoneSelection onValueChange={planetariumStore.goTo} tooltipContent="Slew" variant="flat" />
 					<IconButton color="secondary" icon={Icons.Image} onClick={planetariumStore.frame} tooltipContent="Frame" variant="flat" />
 				</div>
 			</div>

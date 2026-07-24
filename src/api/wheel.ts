@@ -4,8 +4,10 @@ import type { DeviceHandler, WheelManager } from 'nebulosa/src/devices/indi/mana
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
 import type { WheelAdded, WheelRemoved, WheelUpdated } from 'src/shared/types'
-import { type Endpoints, query, response } from './http'
-import { webSocketBus, type WebSocketMessageHandler } from './message'
+import { query, response } from './http'
+import type { Endpoints } from './http'
+import { webSocketBus } from './message'
+import type { WebSocketMessageHandler } from './message'
 
 export interface WheelBusEvents {
 	readonly add: WheelAdded

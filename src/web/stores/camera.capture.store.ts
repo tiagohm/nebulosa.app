@@ -1,5 +1,6 @@
 import type { FrameType, CameraTransferFormat } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_CAMERA_CAPTURE_START, type CameraAutoSubFolderMode, type CameraCaptureStart, type CameraExposureMode, type CameraExposureTimeUnit } from 'src/types/camera'
+import { DEFAULT_CAMERA_CAPTURE_START } from 'src/types/camera'
+import type { CameraAutoSubFolderMode, CameraCaptureStart, CameraExposureMode, CameraExposureTimeUnit } from 'src/types/camera'
 import { proxy } from 'valtio'
 
 export type CameraCaptureStore = ReturnType<typeof cameraCaptureStore>

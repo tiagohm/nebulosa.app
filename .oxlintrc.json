@@ -426,7 +426,7 @@
 		"eslint/sort-keys": "off",
 		"eslint/vars-on-top": "off",
 		"eslint/yoda": "off",
-		"import/consistent-type-specifier-style": "off",
+		"import/consistent-type-specifier-style": "warn",
 		"import/exports-last": "off",
 		"import/first": "off",
 		"import/group-exports": "off",

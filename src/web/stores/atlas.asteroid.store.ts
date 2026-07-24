@@ -1,6 +1,7 @@
 import { Api } from '@shared/api'
 import { initProxy } from '@shared/proxy'
-import { atlasStore, isLocationChanged, isTimeChanged, type BookmarkItem, type TagItem } from '@stores/atlas.store'
+import { atlasStore, isLocationChanged, isTimeChanged } from '@stores/atlas.store'
+import type { BookmarkItem, TagItem } from '@stores/atlas.store'
 import { framingStore } from '@stores/framing.store'
 import { settingsStore } from '@stores/settings.store'
 import type { Writable } from 'nebulosa/src/core/types'
@@ -8,7 +9,8 @@ import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
 import type { FindCloseApproaches, CloseApproach, MinorPlanet } from 'src/types/asteroid'
-import { type BodyPosition, type PositionOfBody, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/types/atlas'
+import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/types/atlas'
+import type { BodyPosition, PositionOfBody } from 'src/types/atlas'
 import { proxy, ref } from 'valtio'
 
 export type AtlasAsteroidStore = typeof asteroidStore

@@ -1,5 +1,6 @@
 import { assignRef } from '@shared/util'
-import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingClassNames, type FloatingPlacement } from '@ui/components/Floating'
+import { DEFAULT_FLOATING_OFFSET, Floating } from '@ui/components/Floating'
+import type { FloatingClassNames, FloatingPlacement } from '@ui/components/Floating'
 import * as React from 'react'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 

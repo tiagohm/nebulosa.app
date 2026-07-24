@@ -15,8 +15,10 @@ import { MountHandler } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
 import { PlateSolverHandler } from 'src/api/platesolver'
 import { tppaBus, tppa as tppaEndpoints, TppaHandler } from 'src/api/tppa'
-import { type CameraCaptureEvent, DEFAULT_CAMERA_CAPTURE_EVENT } from 'src/types/camera'
-import { type TppaStart, DEFAULT_TPPA_START, type TppaEvent } from 'src/types/tppa'
+import { DEFAULT_CAMERA_CAPTURE_EVENT } from 'src/types/camera'
+import type { CameraCaptureEvent } from 'src/types/camera'
+import { DEFAULT_TPPA_START } from 'src/types/tppa'
+import type { TppaStart, TppaEvent } from 'src/types/tppa'
 import { noContent, SocketMessager, waitUntil } from './util'
 
 type TppaStartOverrides = Omit<Partial<TppaStart>, 'capture' | 'solver' | 'refraction'> & {

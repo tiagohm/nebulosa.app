@@ -1,4 +1,5 @@
-import { List, type ListProps } from '@ui/components/List'
+import { List } from '@ui/components/List'
+import type { ListProps } from '@ui/components/List'
 import { TextInput } from '@ui/components/TextInput'
 import { useDebounce } from '@uidotdev/usehooks'
 import { useMemo, useState } from 'react'

@@ -1,9 +1,11 @@
 import type { PositionAndVelocity } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { eraNut06a, eraPmat06, eraPnm06a, eraPom00, eraSp00 } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { earth } from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
-import { type GeographicCoordinate, type GeographicPosition, geodeticLocation } from 'nebulosa/src/astronomy/observer/location'
+import { geodeticLocation } from 'nebulosa/src/astronomy/observer/location'
+import type { GeographicCoordinate, GeographicPosition } from 'nebulosa/src/astronomy/observer/location'
 import * as iers from 'nebulosa/src/astronomy/time/iers'
-import { TIME_PROVIDERS, type Time, type TimeProviders, timeUnix } from 'nebulosa/src/astronomy/time/time'
+import { TIME_PROVIDERS, timeUnix } from 'nebulosa/src/astronomy/time/time'
+import type { Time, TimeProviders } from 'nebulosa/src/astronomy/time/time'
 
 const ONE_DAY = 24 * 3600 * 1000
 

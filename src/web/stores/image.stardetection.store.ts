@@ -6,7 +6,8 @@ import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import { unsubscribe } from 'src/shared/util'
-import { DEFAULT_STAR_DETECTION, type StarDetection, type StarDetectionType } from 'src/types/stardetection'
+import { DEFAULT_STAR_DETECTION } from 'src/types/stardetection'
+import type { StarDetection, StarDetectionType } from 'src/types/stardetection'
 import { proxy } from 'valtio'
 
 export type ImageStarDetectionStore = ReturnType<typeof imageStarDetectionStore>

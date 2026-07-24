@@ -12,8 +12,10 @@ import { FocuserHandler } from 'src/api/focuser'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { StarDetectionHandler } from 'src/api/stardetection'
-import { DEFAULT_AUTO_FOCUS_START, type AutoFocusEvent, type AutoFocusStart } from 'src/types/autofocus'
-import { DEFAULT_CAMERA_CAPTURE_EVENT, type CameraCaptureEvent } from 'src/types/camera'
+import { DEFAULT_AUTO_FOCUS_START } from 'src/types/autofocus'
+import type { AutoFocusEvent, AutoFocusStart } from 'src/types/autofocus'
+import { DEFAULT_CAMERA_CAPTURE_EVENT } from 'src/types/camera'
+import type { CameraCaptureEvent } from 'src/types/camera'
 import { noContent, SocketMessager, waitUntil } from './util'
 
 type AutoFocusStartOverrides = Omit<Partial<AutoFocusStart>, 'capture' | 'starDetection'> & {

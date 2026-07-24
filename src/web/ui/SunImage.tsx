@@ -2,8 +2,10 @@ import sunWebp from '@assets/sun.real.webp'
 import { API_URL } from '@shared/api'
 import { Link } from '@ui/components/Link'
 import { SolarImageSourceSelect } from '@ui/SolarImageSourceSelect'
-import { memo, type SyntheticEvent, useEffect, useRef } from 'react'
-import { SOLAR_IMAGE_SOURCE_URLS, type SolarImageSource } from 'src/types/sun'
+import { memo, useEffect, useRef } from 'react'
+import type { SyntheticEvent } from 'react'
+import { SOLAR_IMAGE_SOURCE_URLS } from 'src/types/sun'
+import type { SolarImageSource } from 'src/types/sun'
 
 export interface SunProps {
 	readonly source: SolarImageSource

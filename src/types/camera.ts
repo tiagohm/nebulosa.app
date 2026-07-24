@@ -1,7 +1,7 @@
 import { DEFAULT_PHD2_SETTLE } from 'nebulosa/src/devices/guiding/phd2'
 import type { FrameType, CameraTransferFormat } from 'nebulosa/src/devices/indi/device'
 import type { Size } from 'recharts/types/util/types'
-import type { GuiderDither } from 'src/shared/types'
+import type { GuiderDither } from 'src/types/guider'
 
 export type CameraExposureTimeUnit = 'minute' | 'second' | 'millisecond' | 'microsecond'
 

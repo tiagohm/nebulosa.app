@@ -1,7 +1,9 @@
 import { stopPropagationForAll, tw } from '@shared/util'
-import { Tooltip, type TooltipPlacement } from '@ui/components/Tooltip'
+import { Tooltip } from '@ui/components/Tooltip'
+import type { TooltipPlacement } from '@ui/components/Tooltip'
 import { Icons } from '@ui/Icon'
-import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
+import { tv } from 'tailwind-variants'
+import type { ClassValue, VariantProps } from 'tailwind-variants'
 
 const buttonStyles = tv({
 	slots: {

@@ -10,7 +10,7 @@ import { CameraDropdown, GuideOutputDropdown } from '@ui/DeviceDropdown'
 import { GuiderClientModeRadioGroup } from '@ui/GuiderClientModeRadioGroup'
 import { Icons } from '@ui/Icon'
 import { memo, useEffect } from 'react'
-import type { GuiderRemoteConnect } from 'src/shared/types'
+import { canConnectRemote } from 'src/types/guider'
 import { guiderStore } from 'src/web/stores/guider.store'
 import { useSnapshot } from 'valtio'
 
@@ -166,7 +166,3 @@ const Footer = memo(() => {
 		</div>
 	)
 })
-
-function canConnectRemote({ host, port }: Pick<GuiderRemoteConnect, 'host' | 'port'>) {
-	return host.trim().length > 0 && Number.isInteger(port) && port >= 80 && port <= 65535
-}

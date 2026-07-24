@@ -1,4 +1,5 @@
-import { Select, type SelectProps } from '@ui/components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import type { MountRemoteControlProtocol } from 'src/shared/types'
 
 const ITEMS = ['lx200', 'stellarium'] as const

@@ -1,6 +1,8 @@
-import { type ClassValue, clsx } from 'clsx'
+import { clsx } from 'clsx'
+import type { ClassValue } from 'clsx'
 import { ONE_GIGAPARSEC, ONE_KILOPARSEC, ONE_MEGAPARSEC } from 'nebulosa/src/core/constants'
-import { type Distance, toKilometer, toLightYear } from 'nebulosa/src/math/units/distance'
+import { toKilometer, toLightYear } from 'nebulosa/src/math/units/distance'
+import type { Distance } from 'nebulosa/src/math/units/distance'
 import { twMerge } from 'tailwind-merge'
 
 export function tw(...inputs: ClassValue[]) {

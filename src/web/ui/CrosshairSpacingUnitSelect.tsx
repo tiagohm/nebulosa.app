@@ -1,5 +1,6 @@
-import type { CrosshairSpacingUnit } from '@shared/types/crosshair'
-import { Select, type SelectProps } from '@ui/components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
+import type { CrosshairSpacingUnit } from 'src/types/image.crosshair'
 
 const ITEMS = ['pixel', 'normalized', 'angular'] as const
 

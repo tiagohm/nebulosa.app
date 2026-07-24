@@ -3,9 +3,8 @@ import { imageBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
 import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { Writable } from 'nebulosa/src/core/types'
-import type { AnnotateImage } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
-import type { AnnotatedSkyObject } from 'src/types/image'
+import type { AnnotatedSkyObject, AnnotateImage } from 'src/types/image.annotation'
 import { proxy } from 'valtio'
 
 export type ImageAnnotationStore = ReturnType<typeof imageAnnotationStore>

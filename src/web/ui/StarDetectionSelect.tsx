@@ -1,4 +1,5 @@
-import { Select, type SelectItemRenderer, type SelectProps } from '@ui/components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectItemRenderer, SelectProps } from '@ui/components/Select'
 import type { StarDetectionType } from 'src/types/stardetection'
 
 const ITEMS = ['astap', 'nebulosa'] as const

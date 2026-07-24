@@ -2,7 +2,8 @@ import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { DeepRequired, RequiredOnly } from 'nebulosa/src/core/types'
-import { DEFAULT_PHD2_SETTLE, type PHD2Settle } from 'nebulosa/src/devices/guiding/phd2'
+import { DEFAULT_PHD2_SETTLE } from 'nebulosa/src/devices/guiding/phd2'
+import type { PHD2Settle } from 'nebulosa/src/devices/guiding/phd2'
 import type { Camera, Cover, Device, DeviceProperty, DeviceType, DewHeater, FlatPanel, Focuser, GuideDirection, GuideOutput, Mount, PierSide, Power, Rotator, Thermometer, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
@@ -14,7 +15,8 @@ import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import type { Point, Rect, Size } from 'nebulosa/src/math/numerical/geometry'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Messager } from 'src/api/message'
-import { DEFAULT_CAMERA_CAPTURE_START, type CameraCaptureStart } from 'src/types/camera'
+import { DEFAULT_CAMERA_CAPTURE_START } from 'src/types/camera'
+import type { CameraCaptureStart } from 'src/types/camera'
 import type { HostAndPort } from 'src/types/connection'
 
 // Atlas
@@ -163,16 +165,6 @@ export interface SaveImage extends OpenImage {
 	readonly saveAt: string
 }
 
-export interface AnnotateImage {
-	readonly solution: PlateSolution
-	readonly stars: boolean
-	readonly dsos: boolean
-	readonly useSimbad: boolean
-	readonly minorPlanets: boolean
-	readonly minorPlanetsMagnitudeLimit: number
-	readonly includeMinorPlanetsWithoutMagnitude: boolean
-}
-
 export interface StatisticImage extends Omit<OpenImage, 'statistics'> {
 	readonly area?: Rect | Roi
 	readonly bits: number
@@ -214,42 +206,6 @@ export interface ImageCoordinateGridLine {
 export interface ImageCoordinateGrid {
 	readonly lines: readonly ImageCoordinateGridLine[]
 }
-
-export const CROSSHAIR_PRESETS = ['crosshair', 'bullseye'] as const
-
-export type CrosshairPreset = (typeof CROSSHAIR_PRESETS)[number]
-
-export type ImageCrosshairProjectionAnchor = { readonly space: 'image'; readonly point: Point } | { readonly space: 'sky'; readonly coordinate: EquatorialCoordinate }
-
-export interface ImageCrosshairProjectionRequest {
-	readonly solution: PlateSolution
-	readonly anchor: ImageCrosshairProjectionAnchor
-	readonly preset: CrosshairPreset
-	readonly angularSpacing?: {
-		readonly automatic: boolean
-		readonly value: Angle
-	}
-}
-
-export type ImageCrosshairPolyline = readonly Point[]
-
-export type ImageCrosshairProjection =
-	| { readonly status: 'unprojectable' }
-	| {
-			readonly status: 'ready'
-			readonly width: number
-			readonly height: number
-			readonly center: Point & EquatorialCoordinate & { readonly inside: boolean }
-			readonly spacing?: Angle
-			readonly directions: {
-				readonly north: Point
-				readonly east: Point
-			}
-			readonly axes: readonly ImageCrosshairPolyline[]
-			readonly rings: readonly ImageCrosshairPolyline[]
-			readonly ringIntersections: readonly (Point & { readonly radius: Angle })[]
-			readonly cardinals: readonly Point[]
-	  }
 
 export interface ImageInfo extends Partial<EquatorialCoordinate>, Size {
 	readonly path: string
@@ -460,67 +416,11 @@ export type MountRemoteControlStatus = Record<MountRemoteControlProtocol, Omit<M
 
 // Guider
 
-export type GuiderClientMode = 'local' | 'remote'
-
-export type GuiderState = 'idle' | 'calibrating' | 'settling' | 'guiding' | 'looping' | 'starLost' | 'paused'
-
-export interface GuiderRemoteConnect extends Readonly<HostAndPort> {
-	readonly dither: GuiderDither
-	readonly mode: 'remote'
-}
-
-export interface GuiderLocalConnect {
-	readonly dither: GuiderDither
-	readonly focalLength: number
-	readonly camera: string
-	readonly guideOutput: string
-	readonly capture: Omit<CameraCaptureStart, 'dither'>
-	readonly mode: 'local'
-}
-
-export type GuiderConnect = GuiderRemoteConnect | GuiderLocalConnect
-
-export interface GuiderEvent {
-	state: GuiderState
-	rmsRA: number
-	rmsDEC: number
-	starMass: number
-	snr: number
-	hfd: number
-	readonly step: {
-		ra: number | null
-		dec: number | null
-		raCorrection: number | null
-		decCorrection: number | null
-		dx: number | null
-		dy: number | null
-	}
-}
-
-export interface GuiderDither {
-	readonly amount: number
-	readonly raOnly: boolean
-	readonly settle: PHD2Settle
-}
-
-export interface GuiderStatus {
-	connected: boolean
-	looping: boolean
-	running: boolean
-	profile?: string
-}
-
 export const X_IMAGE_INFO_HEADER = 'X-Image-Info'
 
 export const DEFAULT_SIZE: Size = {
 	width: 0,
 	height: 0,
-}
-
-export const DEFAULT_GUIDER_DITHER: Required<GuiderDither> = {
-	amount: 5,
-	raOnly: false,
-	settle: DEFAULT_PHD2_SETTLE,
 }
 
 export const DEFAULT_COORDINATE_INFO: CoordinateInfo = {
@@ -662,37 +562,4 @@ export const DEFAULT_INDI_SERVER_START: Required<IndiServerStart> = {
 	repeat: 1,
 	verbose: 0,
 	drivers: [],
-}
-
-export const DEFAULT_GUIDER_EVENT: GuiderEvent = {
-	state: 'idle',
-	rmsRA: 0,
-	rmsDEC: 0,
-	starMass: 0,
-	snr: 0,
-	hfd: 0,
-	step: {
-		ra: null,
-		dec: null,
-		raCorrection: null,
-		decCorrection: null,
-		dx: null,
-		dy: null,
-	},
-}
-
-export const DEFAULT_GUIDER_REMOTE_CONNECT: GuiderRemoteConnect = {
-	mode: 'remote',
-	host: 'localhost',
-	port: 4400,
-	dither: DEFAULT_GUIDER_DITHER,
-}
-
-export const DEFAULT_GUIDER_INTERNAL_CONNECT: GuiderLocalConnect = {
-	mode: 'local',
-	focalLength: 0,
-	camera: '',
-	guideOutput: '',
-	capture: structuredClone(DEFAULT_CAMERA_CAPTURE_START),
-	dither: DEFAULT_GUIDER_DITHER,
 }

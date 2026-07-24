@@ -1935,6 +1935,11 @@ interface GridBoundaryLabelPoint extends Readonly<Point> {
 	readonly edge: GridBoundaryEdge
 }
 
+type GridBoundaryLabelCandidate = Point & {
+	edge: GridBoundaryEdge
+	label: string
+}
+
 type GridBoundaryLabelRect = Point & Size
 
 const GRID_BOUNDARY_LABEL_INSET = 8
@@ -2069,9 +2074,11 @@ class GridLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly previous = new Float32Array(2)
 	private readonly labelPoints: GridBoundaryLabelPoint[] = []
+	private readonly labelCandidates: GridBoundaryLabelCandidate[] = []
 	private readonly labelRects: GridBoundaryLabelRect[] = []
 	private samplerState!: RenderState
 	private samplerAngle = 0
+	private labelCandidateCount = 0
 	private useViewportBoundary = false
 	private previousLabelVisible = false
 	private previousLabelX = 0
@@ -2129,29 +2136,45 @@ class GridLayer extends InternalLayer {
 	private renderEquatorialGrid(ctx: CanvasRenderingContext2D, state: RenderState) {
 		this.samplerState = state
 		this.useViewportBoundary = !projectionBoundaryFullyVisibleInViewport(state)
-		let labelRectCount = 0
+		this.labelCandidateCount = 0
 
 		for (let decDeg = -85; decDeg <= 85; decDeg += 10) {
 			this.samplerAngle = decDeg * DEG2RAD
-			labelRectCount = this.drawGridLine(ctx, state, 360, this.raSampler, decDeg.toFixed(0), labelRectCount)
+			this.drawGridLine(ctx, state, 360, this.raSampler, decDeg.toFixed(0))
 		}
 
 		for (let raHour = 0; raHour < 24; raHour += 1) {
 			this.samplerAngle = (raHour / 24) * TAU
-			labelRectCount = this.drawGridLine(ctx, state, 240, this.decSampler, `${raHour}h`, labelRectCount)
+			this.drawGridLine(ctx, state, 240, this.decSampler, `${raHour}h`)
 		}
 
-		this.labelRects.length = labelRectCount
+		this.renderGridLabels(ctx, state)
 	}
 
-	private drawGridLine(ctx: CanvasRenderingContext2D, state: RenderState, steps: number, sampler: ProjectedSampler, label: string, labelRectCount: number) {
+	private drawGridLine(ctx: CanvasRenderingContext2D, state: RenderState, steps: number, sampler: ProjectedSampler, label: string) {
 		ctx.beginPath()
 		drawClippedPolyline(ctx, state, steps, this.point, this.previous, sampler, this.boundaryObserver)
 		ctx.stroke()
 
-		if (this.labelPoints.length === 0) {
-			return labelRectCount
+		for (let i = 0; i < this.labelPoints.length; i++) {
+			const point = this.labelPoints[i]
+			let candidate = this.labelCandidates[this.labelCandidateCount]
+
+			if (!candidate) {
+				candidate = { x: 0, y: 0, edge: point.edge, label }
+				this.labelCandidates[this.labelCandidateCount] = candidate
+			}
+
+			candidate.x = point.x
+			candidate.y = point.y
+			candidate.edge = point.edge
+			candidate.label = label
+			this.labelCandidateCount++
 		}
+	}
+
+	private renderGridLabels(ctx: CanvasRenderingContext2D, state: RenderState) {
+		let labelRectCount = 0
 
 		ctx.save()
 		ctx.globalAlpha = Math.min(0.95, Math.max(0.58, state.theme.grid.opacity + 0.28))
@@ -2159,12 +2182,13 @@ class GridLayer extends InternalLayer {
 		ctx.textAlign = 'center'
 		ctx.textBaseline = 'middle'
 
-		for (let i = 0; i < this.labelPoints.length; i++) {
-			labelRectCount = drawGridBoundaryLabel(ctx, state, label, this.labelPoints[i], this.labelRects, labelRectCount)
+		for (let i = 0; i < this.labelCandidateCount; i++) {
+			const candidate = this.labelCandidates[i]
+			labelRectCount = drawGridBoundaryLabel(ctx, state, candidate.label, candidate, this.labelRects, labelRectCount)
 		}
 
 		ctx.restore()
-		return labelRectCount
+		this.labelRects.length = labelRectCount
 	}
 }
 

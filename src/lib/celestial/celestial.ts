@@ -3648,7 +3648,14 @@ export class Celestial {
 	setMagnitudeLimit(limit: number) {
 		if (limit !== this.#options.stars.maxMagnitude) {
 			this.#options.stars.maxMagnitude = limit
-			this.queueProjectionOnly()
+			this.projectStars()
+			this.rebuildPickingIndex()
+
+			if (this.#hoverObject?.type === 'star' || this.#selectedObject?.type === 'star') {
+				this.#renderer.markDirty('overlay')
+			}
+
+			this.requestRender()
 		}
 	}
 

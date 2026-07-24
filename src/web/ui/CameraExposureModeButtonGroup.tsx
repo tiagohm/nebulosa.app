@@ -1,10 +1,10 @@
 import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from '@ui/components/ButtonGroup'
-import type { ExposureMode } from 'src/shared/types'
+import type { CameraExposureMode } from 'src/types/camera'
 
-export type ExposureModeButtonGroupProps = Omit<ButtonGroupProps<ExposureMode>, 'children'>
+export type CameraExposureModeButtonGroupProps = Omit<ButtonGroupProps<CameraExposureMode>, 'children'>
 
 // Render the exposure mode segmented selector.
-export function ExposureModeButtonGroup({ value, onValueChange, color = 'primary', ...props }: ExposureModeButtonGroupProps) {
+export function CameraExposureModeButtonGroup({ value, onValueChange, color = 'primary', ...props }: CameraExposureModeButtonGroupProps) {
 	return (
 		<ButtonGroup {...props} color={color} onValueChange={onValueChange} value={value}>
 			<ButtonGroupItem id="single" label="Single" />

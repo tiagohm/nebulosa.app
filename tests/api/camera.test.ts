@@ -21,11 +21,12 @@ import { camera as cameraEndpoints, CameraCaptureTask, CameraHandler, cameraBus 
 import { guiderBus, type GuiderHandler } from 'src/api/guider'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler, type Messager } from 'src/api/message'
-import { DEFAULT_CAMERA_CAPTURE_START, DEFAULT_GUIDER_EVENT, type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated } from 'src/shared/types'
+import { DEFAULT_GUIDER_EVENT, type CameraAdded, type CameraRemoved, type CameraUpdated, type GuiderDither } from 'src/shared/types'
+import { DEFAULT_CAMERA_CAPTURE_START, type CameraCaptureEvent, type CameraCaptureStart, type CameraDither, type CameraFrameEvent } from 'src/types/camera'
 import { json, noContent, SocketMessager, waitUntil, type SocketMessage } from './util'
 
 type CameraCaptureStartOverrides = Omit<Partial<CameraCaptureStart>, 'dither'> & {
-	dither?: Partial<CameraCaptureStart['dither']>
+	dither?: Partial<CameraDither>
 }
 
 type CameraCaptureEventRecord = {
@@ -641,12 +642,12 @@ describe('camera capture start request', () => {
 	}, 5000)
 
 	test('dithers before exposure when guiding is running', async () => {
-		let dithered: CameraCaptureStart['dither'] | undefined
+		let dithered: GuiderDither | undefined
 		let signal: AbortSignal | undefined
 
 		const guiderHandler = {
 			running: true,
-			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal) => {
+			dither: (request: GuiderDither, s?: AbortSignal) => {
 				dithered = request
 				signal = s
 				guiderBus.emit('dither', { phase: 'dithered', guider: structuredClone(DEFAULT_GUIDER_EVENT), dx: 1.5, dy: -2 })
@@ -683,7 +684,7 @@ describe('camera capture start request', () => {
 		const error = spyOn(console, 'error').mockImplementation(() => {})
 		const guiderHandler = {
 			running: true,
-			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal) => {
+			dither: (request: GuiderDither, s?: AbortSignal) => {
 				guiderBus.emit('dither', { phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
 				guiderBus.emit('dither', { phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' }, ok: false, reason: 'settle-timeout' })
 				return Promise.resolve({ ok: false, reason: 'settle-timeout' } as const)
@@ -714,7 +715,7 @@ describe('camera capture start request', () => {
 		let resolveDither: ((value: Awaited<ReturnType<GuiderHandler['dither']>>) => void) | undefined
 		const guiderHandler = {
 			running: true,
-			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal, id?: string) => {
+			dither: (request: GuiderDither, s?: AbortSignal, id?: string) => {
 				signal = s
 				return new Promise<Awaited<ReturnType<GuiderHandler['dither']>>>((resolve) => {
 					resolveDither = resolve

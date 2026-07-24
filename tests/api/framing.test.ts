@@ -5,7 +5,7 @@ import { basename, join } from 'path'
 import { HIPS2FITS_ALTERNATIVE_URL, HIPS2FITS_BASE_URL } from 'nebulosa/src/adapters/sky/hips2fits'
 import { framing as framingEndpoints, FramingHandler } from 'src/api/framing'
 import { ImageProcessor } from 'src/api/image'
-import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
+import { type Framing, DEFAULT_FRAMING } from 'src/types/framing'
 import { json, noContent, spyFetch } from './util'
 
 type FetchRequest = {

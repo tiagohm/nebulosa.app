@@ -1,12 +1,11 @@
 import { Api } from '@shared/api'
 import { connectionBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
-import { DEFAULT_CONNECTION, type Connection } from '@shared/types'
 import { nanoid } from 'nanoid'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
 import type { ClientType } from 'nebulosa/src/devices/indi/device'
-import type { ConnectionStatus } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { DEFAULT_CONNECTION_PORTS, connectionComparator, DEFAULT_CONNECTION, type Connection, type ConnectionStatus } from 'src/types/connection'
 import { proxy } from 'valtio'
 
 export type ConnectionStore = typeof connectionStore
@@ -23,14 +22,6 @@ export interface ConnectionState {
 	}
 }
 
-export function isNetworkConnection(type: Connection['type']) {
-	return type !== 'SIMULATOR'
-}
-
-export function ConnectionComparator(a: Connection, b: Connection) {
-	return (b.connectedAt ?? 0) - (a.connectedAt ?? 0)
-}
-
 const state = proxy<ConnectionState>({
 	activeConnections: [],
 	connections: [],
@@ -41,13 +32,6 @@ const state = proxy<ConnectionState>({
 		discovering: false,
 	},
 })
-
-const DEFAULT_CONNECTION_PORT = {
-	INDI: DEFAULT_CONNECTION.port,
-	ALPACA: 32323,
-	SIMULATOR: 0,
-	FIRMATA: 27016,
-} satisfies Record<Connection['type'], number>
 
 let mounted = false
 const u: VoidFunction[] = []
@@ -60,7 +44,7 @@ function mount() {
 	mounted = true
 
 	u[0] = initProxy(state, 'connection', ['o:edited', 'o:connections'])
-	state.connections.sort(ConnectionComparator)
+	state.connections.sort(connectionComparator)
 	state.edited.id = nanoid() // start as new connection
 
 	u[1] = connectionBus.subscribe('open', ({ reused }) => {
@@ -130,8 +114,8 @@ function setType(value: ClientType) {
 
 	state.edited.type = value
 
-	if (previousPort === DEFAULT_CONNECTION_PORT[previousType]) {
-		state.edited.port = DEFAULT_CONNECTION_PORT[value]
+	if (previousPort === DEFAULT_CONNECTION_PORTS[previousType]) {
+		state.edited.port = DEFAULT_CONNECTION_PORTS[value]
 	}
 
 	if (value !== 'ALPACA') {

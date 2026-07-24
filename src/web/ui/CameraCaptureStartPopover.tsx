@@ -1,10 +1,10 @@
 import { CameraCaptureStoreContext } from '@shared/context'
+import { CameraExposureTimeInput } from '@ui/CameraExposureTimeInput'
 import { CameraTransferFormatSelect } from '@ui/CameraTransferFormatSelect'
 import { Checkbox } from '@ui/components/Checkbox'
 import { IconButton, type IconButtonProps } from '@ui/components/IconButton'
 import { NumberInput } from '@ui/components/NumberInput'
 import { Popover } from '@ui/components/Popover'
-import { ExposureTimeInput } from '@ui/ExposureTimeInput'
 import { FrameFormatSelect } from '@ui/FrameFormatSelect'
 import { Icons } from '@ui/Icon'
 import type { DeepReadonly } from 'nebulosa/src/core/types'
@@ -32,7 +32,7 @@ export function CameraCaptureStartPopover({ mode, camera, color, disabled, ...pr
 		<Popover className="max-w-90vw w-120" trigger={<IconButton {...props} color={color ?? (camera.connected ? 'success' : 'danger')} disabled={disabled || !camera.connected} icon={Icons.Cog} size="sm" />}>
 			<div className="grid grid-cols-12 items-center gap-2 p-4">
 				<p className="col-span-full font-bold">CAMERA CAPTURE OPTIONS</p>
-				<ExposureTimeInput
+				<CameraExposureTimeInput
 					className="col-span-6"
 					disabled={exposureTimeDisabled}
 					fullWidth

@@ -10,7 +10,8 @@
 	"insertFinalNewline": true,
 	"bracketSameLine": true,
 	"sortImports": {
-		"newlinesBetween": false
+		"newlinesBetween": false,
+		"ignoreCase": true
 	},
 	"sortTailwindcss": true,
 	"overrides": [

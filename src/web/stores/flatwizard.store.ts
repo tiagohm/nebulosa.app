@@ -6,8 +6,8 @@ import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.st
 import type { DeviceState } from '@stores/equipment.store'
 import type { DockviewPanelApi } from 'dockview-react'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
-import { type FlatWizardStart, type FlatWizardEvent, DEFAULT_FLAT_WIZARD_START, DEFAULT_FLAT_WIZARD_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { type FlatWizardStart, type FlatWizardEvent, DEFAULT_FLAT_WIZARD_START, DEFAULT_FLAT_WIZARD_EVENT } from 'src/types/flatwizard'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
 

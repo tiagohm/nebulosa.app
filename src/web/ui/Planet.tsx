@@ -9,20 +9,20 @@ import planetarySatelliteEphemeris from 'src/data/planetary.satellites.json'
 import { useSnapshot } from 'valtio'
 
 const PLANETS = [
-	{ name: 'Mercury', code: '199', type: 'PLANET', solution: 'DE441' },
-	{ name: 'Venus', code: '299', type: 'PLANET', solution: 'DE441' },
-	{ name: 'Mars', code: '499', type: 'PLANET', solution: 'DE441' },
-	{ name: 'Jupiter', code: '599', type: 'PLANET', solution: 'DE441' },
-	{ name: 'Saturn', code: '699', type: 'PLANET', solution: 'DE441' },
-	{ name: 'Uranus', code: '799', type: 'PLANET', solution: 'DE441' },
-	{ name: 'Neptune', code: '899', type: 'PLANET', solution: 'DE441' },
-	{ name: 'Pluto', code: '999', type: 'DWARF_PLANET', solution: 'DE441' },
-	{ name: '1 Ceres (A801 AA)', code: '1;', type: 'DWARF_PLANET', solution: 'JPL#48' },
-	{ name: '90377 Sedna (2003 VB12)', code: '90377;', type: 'DWARF_PLANET', solution: 'JPL#44' },
-	{ name: '136199 Eris (2003 UB313)', code: '136199;', type: 'DWARF_PLANET', solution: 'JPL#96' },
-	{ name: '2 Pallas (A802 FA)', code: '2;', type: 'ASTEROID', solution: 'JPL#69' },
-	{ name: '3 Juno (A804 RA)', code: '3;', type: 'ASTEROID', solution: 'JPL#143' },
-	{ name: '4 Vesta (A807 FA)', code: '4;', type: 'ASTEROID', solution: 'JPL#36' },
+	{ name: 'Mercury', code: '199', type: 'planet', solution: 'DE441' },
+	{ name: 'Venus', code: '299', type: 'planet', solution: 'DE441' },
+	{ name: 'Mars', code: '499', type: 'planet', solution: 'DE441' },
+	{ name: 'Jupiter', code: '599', type: 'planet', solution: 'DE441' },
+	{ name: 'Saturn', code: '699', type: 'planet', solution: 'DE441' },
+	{ name: 'Uranus', code: '799', type: 'planet', solution: 'DE441' },
+	{ name: 'Neptune', code: '899', type: 'planet', solution: 'DE441' },
+	{ name: 'Pluto', code: '999', type: 'dwarfPlanet', solution: 'DE441' },
+	{ name: '1 Ceres (A801 AA)', code: '1;', type: 'dwarfPlanet', solution: 'JPL#48' },
+	{ name: '90377 Sedna (2003 VB12)', code: '90377;', type: 'dwarfPlanet', solution: 'JPL#44' },
+	{ name: '136199 Eris (2003 UB313)', code: '136199;', type: 'dwarfPlanet', solution: 'JPL#96' },
+	{ name: '2 Pallas (A802 FA)', code: '2;', type: 'asteroid', solution: 'JPL#69' },
+	{ name: '3 Juno (A804 RA)', code: '3;', type: 'asteroid', solution: 'JPL#143' },
+	{ name: '4 Vesta (A807 FA)', code: '4;', type: 'asteroid', solution: 'JPL#36' },
 	...planetarySatelliteEphemeris.mars,
 	...planetarySatelliteEphemeris.jupiter,
 	...planetarySatelliteEphemeris.saturn,
@@ -61,7 +61,7 @@ const FilteredList = memo(() => {
 
 	const items = useMemo(() => {
 		const noSearch = !search.name.trim()
-		const all = search.type === 'ALL'
+		const all = search.type === 'all'
 
 		if (noSearch && all) return PLANETS
 

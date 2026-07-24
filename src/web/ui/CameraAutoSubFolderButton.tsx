@@ -1,11 +1,11 @@
 import type { ButtonProps } from '@ui/components/Button'
 import { IconButton } from '@ui/components/IconButton'
 import { Icons } from '@ui/Icon'
-import type { AutoSubFolderMode } from 'src/shared/types'
+import type { CameraAutoSubFolderMode } from 'src/types/camera'
 
-export interface AutoSubFolderModeButtonProps extends Omit<ButtonProps, 'children'> {
-	readonly value: AutoSubFolderMode
-	readonly onValueChange: (value: AutoSubFolderMode) => void
+export interface CameraAutoSubFolderModeButtonProps extends Omit<ButtonProps, 'children'> {
+	readonly value: CameraAutoSubFolderMode
+	readonly onValueChange: (value: CameraAutoSubFolderMode) => void
 }
 
 const ICONS = {
@@ -14,7 +14,7 @@ const ICONS = {
 	midnight: [Icons.Moon, 'primary'],
 } as const
 
-export function AutoSubFolderModeButton({ value, onValueChange, ...props }: AutoSubFolderModeButtonProps) {
+export function CameraAutoSubFolderModeButton({ value, onValueChange, ...props }: CameraAutoSubFolderModeButtonProps) {
 	const [icon, color] = ICONS[value]
 	return <IconButton color={color} icon={icon} onClick={() => onValueChange(value === 'off' ? 'noon' : value === 'noon' ? 'midnight' : 'off')} tooltipContent={`Auto sub-folder mode: ${value}`} variant="ghost" {...props} />
 }

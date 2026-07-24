@@ -9,8 +9,8 @@ import { settingsStore } from '@stores/settings.store'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalAdd, temporalGet, temporalStartOfDay, temporalSubtract, type Temporal } from 'nebulosa/src/astronomy/time/temporal'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
-import type { Twilight } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import type { Twilight } from 'src/types/sun'
 import { proxy } from 'valtio'
 
 export type AtlasStore = typeof atlasStore

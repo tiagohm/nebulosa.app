@@ -1,14 +1,14 @@
 import { Dropdown, DropdownItem, type DropdownProps } from '@ui/components/Dropdown'
-import type { ExposureTimeUnit } from 'src/shared/types'
+import type { CameraExposureTimeUnit } from 'src/types/camera'
 
 const EXPOSURE_TIME_UNITS = ['minute', 'second', 'millisecond', 'microsecond'] as const
 
-export interface ExposureTimeUnitDropdownProps extends Omit<DropdownProps, 'label' | 'children'> {
-	readonly value: ExposureTimeUnit
-	readonly onValueChange: (unit: ExposureTimeUnit) => void
+export interface CameraExposureTimeUnitDropdownProps extends Omit<DropdownProps, 'label' | 'children'> {
+	readonly value: CameraExposureTimeUnit
+	readonly onValueChange: (unit: CameraExposureTimeUnit) => void
 }
 
-export function ExposureTimeUnitDropdown({ value, onValueChange, disabled, readOnly, ...props }: ExposureTimeUnitDropdownProps) {
+export function CameraExposureTimeUnitDropdown({ value, onValueChange, disabled, readOnly, ...props }: CameraExposureTimeUnitDropdownProps) {
 	function handleWheel(event: React.WheelEvent) {
 		if (event.defaultPrevented || disabled || readOnly) return
 

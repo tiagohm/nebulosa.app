@@ -1,6 +1,5 @@
 import { Api } from '@shared/api'
 import { initProxy } from '@shared/proxy'
-import { skyObjectName } from '@shared/util'
 import { atlasStore, isLocationChanged, isTimeChanged, type BookmarkItem, type TagItem } from '@stores/atlas.store'
 import { framingStore } from '@stores/framing.store'
 import { settingsStore } from '@stores/settings.store'
@@ -9,8 +8,9 @@ import type { Writable } from 'nebulosa/src/core/types'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import type { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
-import { type SearchSkyObject, type SkyObjectSearchItem, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_SKY_OBJECT_SEARCH } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { DEFAULT_BODY_POSITION, type BodyPosition } from 'src/types/atlas'
+import { type SearchSkyObject, type SkyObjectSearchItem, DEFAULT_SKY_OBJECT_SEARCH, skyObjectName } from 'src/types/galaxy'
 import { proxy, ref } from 'valtio'
 
 export type AtlasGalaxyStore = typeof galaxyStore

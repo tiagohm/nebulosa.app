@@ -6,11 +6,11 @@ import { NumberInput } from '@ui/components/NumberInput'
 import { TextInput } from '@ui/components/TextInput'
 import { MountDropdown } from '@ui/DeviceDropdown'
 import { Icons } from '@ui/Icon'
-import { PlateSolverSelect } from '@ui/PlateSolverSelect'
+import { PlateSolverTypeSelect } from '@ui/PlateSolverTypeSelect'
 import { PlateSolveStartPopover } from '@ui/PlateSolveStartPopover'
 import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { memo, useContext, useEffect } from 'react'
-import type { PlateSolveStart } from 'src/shared/types'
+import type { PlateSolveStart } from 'src/types/platesolver'
 import { useSnapshot } from 'valtio'
 
 function hasPositiveFiniteValue(value: number) {
@@ -61,7 +61,7 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<PlateSolverSelect className="col-span-8 min-w-0" disabled={loading} endContent={<PlateSolverSelectEndContent />} onValueChange={solver.setType} value={type} />
+			<PlateSolverTypeSelect className="col-span-8 min-w-0" disabled={loading} endContent={<PlateSolverSelectEndContent />} onValueChange={solver.setType} value={type} />
 			<Checkbox className="col-span-3 col-end-13 min-w-0" disabled={loading} label="Blind" onValueChange={solver.setBlind} value={blind} />
 			<TextInput className="col-span-4 min-w-0" disabled={coordinateDisabled} label="RA" onValueChange={solver.setRightAscension} value={String(rightAscension)} />
 			<TextInput className="col-span-4 min-w-0" disabled={coordinateDisabled} label="DEC" onValueChange={solver.setDeclination} value={String(declination)} />

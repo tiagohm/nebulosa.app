@@ -1,14 +1,14 @@
 import { Select, type SelectProps } from '@ui/components/Select'
-import type { TppaStart } from 'src/shared/types'
+import type { TppaDirection } from 'src/types/tppa'
 
 const ITEMS = ['east', 'west'] as const
 const LABELS = ['East', 'West'] as const
 
-function TppaDirectionItem(item: TppaStart['direction'], i: number) {
+function TppaDirectionItem(item: TppaDirection, i: number) {
 	return <span>{LABELS[i]}</span>
 }
 
-export type TppaDirectionSelectProps = Omit<SelectProps<TppaStart['direction']>, 'children' | 'items'>
+export type TppaDirectionSelectProps = Omit<SelectProps<TppaDirection>, 'children' | 'items'>
 
 export function TppaDirectionSelect({ label = 'Direction', ...props }: TppaDirectionSelectProps) {
 	return (

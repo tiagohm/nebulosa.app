@@ -1,5 +1,4 @@
-import type { Connection } from '@shared/types'
-import { connectionStore, isNetworkConnection } from '@stores/connection.store'
+import { connectionStore } from '@stores/connection.store'
 import { ClientTypeSelect } from '@ui/ClientTypeSelect'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
@@ -14,7 +13,7 @@ import { Icons } from '@ui/Icon'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
 import { memo, useEffect, useRef } from 'react'
-import type { ConnectionStatus } from 'src/shared/types'
+import { canConnect, DEFAULT_CONNECTION_PORTS, isNetworkConnection, type Connection, type ConnectionStatus } from 'src/types/connection'
 import { useSnapshot } from 'valtio'
 
 export const Connections = memo(() => {
@@ -27,13 +26,6 @@ export const Connections = memo(() => {
 		</div>
 	)
 })
-
-const CONNECTION_PORT_PLACEHOLDER = {
-	INDI: '7624',
-	ALPACA: '32323',
-	SIMULATOR: '0',
-	FIRMATA: '27016',
-} as const satisfies Record<Connection['type'], string>
 
 function ActiveConnectionItem(connection: ConnectionStatus) {
 	const EndContent = <IconButton icon={Icons.Close} color="danger" variant="flat" tooltipContent="Disconnect" onClick={() => connectionStore.disconnect(connection)} size="sm" />
@@ -118,7 +110,7 @@ const ConnectionEdit = memo(() => {
 		<div className="mt-4 grid w-full grid-cols-12 items-center gap-2">
 			<TextInput className="col-span-full" label="Name" maxLength={64} onValueChange={connectionStore.setName} placeholder="Local" value={name} />
 			<TextInput className="col-span-7" disabled={!networkConnection} label="Host" maxLength={128} onValueChange={connectionStore.setHost} placeholder="localhost" value={host} />
-			<NumberInput className="col-span-5" disabled={!networkConnection} label="Port" maxValue={65535} minValue={1} onValueChange={connectionStore.setPort} placeholder={CONNECTION_PORT_PLACEHOLDER[type]} value={port} />
+			<NumberInput className="col-span-5" disabled={!networkConnection} label="Port" maxValue={65535} minValue={1} onValueChange={connectionStore.setPort} placeholder={DEFAULT_CONNECTION_PORTS[type].toFixed(0)} value={port} />
 			<ClientTypeSelect className="col-span-5" onValueChange={connectionStore.setType} value={type} />
 			<Checkbox className="col-span-5" disabled={type !== 'ALPACA'} label="Secured" onValueChange={connectionStore.setSecured} value={secured} />
 			<div className="col-span-2 flex flex-row items-center justify-center">
@@ -178,12 +170,6 @@ const SavedConnection = memo(() => (
 
 function canSave({ host, name, port, type }: Pick<Connection, 'host' | 'name' | 'port' | 'type'>) {
 	if (name.trim().length === 0) return false
-	if (!isNetworkConnection(type)) return true
-	if (!Number.isInteger(port) || port < 1 || port > 65535) return false
-	return host.trim().length > 0
-}
-
-function canConnect({ host, port, type }: Pick<Connection, 'host' | 'port' | 'type'>) {
 	if (!isNetworkConnection(type)) return true
 	if (!Number.isInteger(port) || port < 1 || port > 65535) return false
 	return host.trim().length > 0

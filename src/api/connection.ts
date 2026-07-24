@@ -19,7 +19,7 @@ import type { AstronomicalImageStar } from 'nebulosa/src/imaging/synthetic/gener
 import { clamp } from 'nebulosa/src/math/numerical/math'
 import { type Angle, normalizeAngle, toDeg } from 'nebulosa/src/math/units/angle'
 import { EventBus } from 'src/shared/bus'
-import type { Connect, ConnectionEvent, ConnectionStatus } from '../shared/types'
+import type { ConnectionEvent, Connect, ConnectionStatus } from 'src/types/connection'
 import { type Endpoints, response } from './http'
 import { indiBus } from './indi'
 import type { WebSocketMessageHandler } from './message'

@@ -14,8 +14,26 @@ import type { Message, NewVector } from 'nebulosa/src/devices/indi/types'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 // oxfmt-ignore
-import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, ComputeLunarEclipseLocalCircumstances, ComputeLunarEclipseLocalView, ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DirectoryEntry, FileSystem, FindCloseApproaches, FindLunarEclipse, FindSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarApsis, LunarEclipseMap, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, OpenImage, GuiderConnect, GuiderEvent, GuiderStatus, PlanetariumRequest, PlateSolveStart, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SkyObject, SolarEclipseMap, SolarSeasons, StarDetection, StatisticImage, TppaStart, Twilight } from 'src/shared/types'
-import { type ImageCoordinateInterpolation, type ImageCrosshairProjection, type ImageCrosshairProjectionRequest, type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
+import type { AnnotateImage, CloseImage, CoordinateInfo, CreateDirectory, DirectoryEntry, FileSystem, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, OpenImage, GuiderConnect, GuiderEvent, GuiderStatus, PlanetariumRequest, SaveImage, StatisticImage } from 'src/shared/types'
+import { type ImageCoordinateInterpolation, type ImageCrosshairProjection, type ImageCrosshairProjectionRequest, X_IMAGE_INFO_HEADER } from 'src/shared/types'
+import type { AlpacaServerStatus } from 'src/types/alpaca'
+import type { SearchMinorPlanet, MinorPlanet, FindCloseApproaches, CloseApproach } from 'src/types/asteroid'
+import type { BodyPosition, ChartOfBody, LocationAndTime, PositionOfBody } from 'src/types/atlas'
+import type { AutoFocusStart } from 'src/types/autofocus'
+import type { CameraCaptureStart } from 'src/types/camera'
+import type { Confirm } from 'src/types/confirmation'
+import type { ConnectionStatus, Connect } from 'src/types/connection'
+import type { DarvStart } from 'src/types/darv'
+import type { FlatWizardStart } from 'src/types/flatwizard'
+import type { Framing } from 'src/types/framing'
+import type { SearchSkyObject, SkyObjectSearchItem, SkyObject } from 'src/types/galaxy'
+import type { AnnotatedSkyObject } from 'src/types/image'
+import type { ApogeeAndPerigee, ComputeLunarEclipseLocalCircumstances, ComputeLunarEclipseLocalView, FindLunarEclipse, LunarEclipseMap, LunarPhaseTime } from 'src/types/moon'
+import type { PlateSolveStart } from 'src/types/platesolver'
+import type { SearchSatellite, Satellite } from 'src/types/satellite'
+import type { StarDetection } from 'src/types/stardetection'
+import type { ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, FindSolarEclipse, SolarEclipseMap, SolarSeasons, Twilight } from 'src/types/sun'
+import type { TppaStart } from 'src/types/tppa'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
@@ -510,7 +528,7 @@ export namespace Api {
 		}
 
 		export function moonApsis(req: LocationAndTime) {
-			return json<readonly [LunarApsis, LunarApsis]>('/atlas/moon/apsis', 'post', req)
+			return json<ApogeeAndPerigee>('/atlas/moon/apsis', 'post', req)
 		}
 
 		export function positionOfPlanet(req: PositionOfBody, code: string) {

@@ -3,7 +3,7 @@ import { NumberInput } from '@ui/components/NumberInput'
 import { Popover } from '@ui/components/Popover'
 import { TextInput } from '@ui/components/TextInput'
 import { Icons } from '@ui/Icon'
-import type { StarDetection } from 'src/shared/types'
+import type { StarDetection } from 'src/types/stardetection'
 
 export interface StarDetectionPopoverProps extends Omit<IconButtonProps, 'icon' | 'value' | 'onValueChange'>, Pick<StarDetection, 'type' | 'executable' | 'minSNR' | 'maxStars'> {
 	readonly onExecutableChange: (value: string) => void

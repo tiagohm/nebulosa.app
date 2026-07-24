@@ -256,7 +256,7 @@ describe('mount handler', () => {
 			expect(message!.body).toEqual({ key: `mount.${device.id}.move`, message: `Are you sure you want to slew the mount '${device.name}'?` })
 			expect(moveTo).not.toHaveBeenCalled()
 
-			expect(confirmation.confirm({ key: `mount.${device.id}.move`, accepted: true })).toBeTrue()
+			confirmation.confirm({ key: `mount.${device.id}.move`, accepted: true })
 			expect(await waitUntil(() => moveTo.mock.calls.length > 0)).toBeTrue()
 			expect(moveTo).toHaveBeenCalledWith(device, 'goto', target)
 		} finally {

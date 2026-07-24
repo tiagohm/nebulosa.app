@@ -3,7 +3,7 @@ import { HIPS2FITS_ALTERNATIVE_URL, HIPS2FITS_BASE_URL, hips2Fits, type Hips2Fit
 import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import { arcsec, deg, parseAngle } from 'nebulosa/src/math/units/angle'
 import { normalizeTimeout } from 'src/shared/normalizer'
-import type { Framing } from '../shared/types'
+import type { Framing } from 'src/types/framing'
 import { type Endpoints, response } from './http'
 import type { ImageProcessor } from './image'
 

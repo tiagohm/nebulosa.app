@@ -9,8 +9,8 @@ import { NumberInput } from '@ui/components/NumberInput'
 import { Popover } from '@ui/components/Popover'
 import { DarvExposureModeButtonGroup } from '@ui/DarvExposureModeButtonGroup'
 import { DarvExposurePresetModeButtonGroup } from '@ui/DarvExposurePresetModeButtonGroup'
+import { DarvHemisphereSelect } from '@ui/DarvHemisphereSelect'
 import { CameraDropdown, MountDropdown } from '@ui/DeviceDropdown'
-import { HemisphereSelect } from '@ui/HemisphereSelect'
 import { Icons } from '@ui/Icon'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { formatALT } from 'nebulosa/src/math/units/angle'
@@ -71,7 +71,7 @@ const Input = memo(() => {
 		<>
 			<NumberInput className="col-span-6" disabled={running} label="Initial pause" endContent="s" maxValue={60} minValue={1} onValueChange={darv.setInitialPause} value={initialPause} />
 			<NumberInput className="col-span-6" disabled={running} label="Exposure time" maxValue={1200} minValue={1} onValueChange={darv.setDuration} value={duration} startContent={<ExposureEstimatorPopover />} endContent="s" />
-			<HemisphereSelect className="col-span-6" disabled={running} onValueChange={darv.setHemisphere} value={hemisphere} />
+			<DarvHemisphereSelect className="col-span-6" disabled={running} onValueChange={darv.setHemisphere} value={hemisphere} />
 		</>
 	)
 })

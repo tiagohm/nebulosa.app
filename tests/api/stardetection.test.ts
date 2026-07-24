@@ -3,7 +3,8 @@ import type { Image } from 'nebulosa/src/imaging/model/types'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import { ImageProcessor, type TransformedImageItem } from 'src/api/image'
 import { starDetection as starDetectionEndpoints, StarDetectionHandler } from 'src/api/stardetection'
-import { DEFAULT_STAR_DETECTION, type ImageTransformation, type StarDetection } from 'src/shared/types'
+import type { ImageTransformation } from 'src/shared/types'
+import { DEFAULT_STAR_DETECTION, type StarDetection } from 'src/types/stardetection'
 import { json } from './util'
 
 const imageProcessor = new ImageProcessor()

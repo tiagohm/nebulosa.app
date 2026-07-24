@@ -2,8 +2,9 @@ import { initProxy } from '@shared/proxy'
 import { plateSolverStore } from '@stores/plate.solver.store'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_GEOGRAPHIC_COORDINATE, type PlateSolverType, type PlateSolveStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { DEFAULT_GEOGRAPHIC_COORDINATE } from 'src/types/atlas'
+import type { PlateSolverType, PlateSolveStart } from 'src/types/platesolver'
 import { proxy } from 'valtio'
 
 export type SettingsStore = typeof settingsStore

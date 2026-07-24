@@ -1,7 +1,6 @@
 import { Api } from '@shared/api'
 import { mountBus, planetariumBus } from '@shared/bus'
 import { initProxy } from '@shared/proxy'
-import { skyObjectName } from '@shared/util'
 import { equipmentStore } from '@stores/equipment.store'
 import { framingStore } from '@stores/framing.store'
 import { settingsStore } from '@stores/settings.store'
@@ -15,8 +14,9 @@ import constellationLabels from 'src/data/constellation.labels.json'
 import constellationLines from 'src/data/constellation.lines.json'
 import mw from 'src/data/mw.json'
 import type { Celestial, CelestialEventMap, CelestialShape, ConstellationData, MovingBody, ShapeRenderState, ViewTransform } from 'src/lib/celestial/celestial'
-import { DEFAULT_BODY_POSITION, type BodyPosition, type PositionOfBody } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { DEFAULT_BODY_POSITION, type BodyPosition, type PositionOfBody } from 'src/types/atlas'
+import { skyObjectName } from 'src/types/galaxy'
 import { proxy, ref, subscribe } from 'valtio'
 
 export interface PlanetariumState {

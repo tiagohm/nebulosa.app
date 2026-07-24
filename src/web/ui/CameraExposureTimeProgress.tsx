@@ -2,9 +2,9 @@ import { tw } from '@shared/util'
 import { Chip, type ChipProps } from '@ui/components/Chip'
 import { Icons } from '@ui/Icon'
 import { useState } from 'react'
-import type { CameraCaptureEvent, CameraCaptureState, CameraCaptureTime } from 'src/shared/types'
+import type { CameraCaptureEvent, CameraCaptureState, CameraCaptureTime } from 'src/types/camera'
 
-export interface ExposureTimeProgressProps extends React.ComponentProps<'div'> {
+export interface CameraExposureTimeProgressProps extends React.ComponentProps<'div'> {
 	readonly progress: CameraCaptureEvent
 }
 
@@ -21,7 +21,7 @@ const CAPTURE_STATE_COLORS = {
 	error: 'danger',
 } satisfies Record<CameraCaptureState, NonNullable<ChipProps['color']>>
 
-export function ExposureTimeProgress({ progress, className = '', ...props }: ExposureTimeProgressProps) {
+export function CameraExposureTimeProgress({ progress, className = '', ...props }: CameraExposureTimeProgressProps) {
 	const [showRemainingTime, setShowRemainingTime] = useState(true)
 
 	function toggleShowRemaining() {

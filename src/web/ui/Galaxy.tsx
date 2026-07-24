@@ -1,4 +1,3 @@
-import { skyObjectName, skyObjectType } from '@shared/util'
 import { galaxyStore } from '@stores/atlas.galaxy.store'
 import { EphemerisAndChart, EphemerisPositionContext } from '@ui/Atlas'
 import { Checkbox } from '@ui/components/Checkbox'
@@ -13,6 +12,7 @@ import { StellariumObjectTypeSelect } from '@ui/StellariumObjectTypeSelect'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { CONSTELLATION_LIST } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { memo, useEffect } from 'react'
+import { skyObjectName, skyObjectType } from 'src/types/galaxy'
 import { useSnapshot } from 'valtio'
 
 export const Galaxy = memo(({ api }: IDockviewPanelProps) => {

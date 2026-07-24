@@ -8,8 +8,9 @@ import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
 import { temporalAdd, temporalGet } from 'nebulosa/src/astronomy/time/temporal'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatRA, formatDEC } from 'nebulosa/src/math/units/angle'
-import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, type BodyPosition, type LunarApsis, type LunarPhaseTime, type PositionOfBody } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, type BodyPosition, type PositionOfBody } from 'src/types/atlas'
+import type { ApogeeAndPerigee, LunarPhaseTime } from 'src/types/moon'
 import { proxy, ref } from 'valtio'
 
 export type AtlasMoonStore = typeof moonStore
@@ -20,7 +21,7 @@ export interface AtlasMoonState {
 	chart: readonly number[]
 	phases: readonly LunarPhaseTime[]
 	eclipses: readonly LunarEclipse[]
-	apsis: readonly [LunarApsis, LunarApsis]
+	apsis: ApogeeAndPerigee
 	readonly tags: readonly TagItem[]
 }
 

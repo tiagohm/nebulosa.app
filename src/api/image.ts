@@ -20,14 +20,16 @@ import fovCameras from 'src/data/astrobin.cameras.json'
 import fovTelescopes from 'src/data/astrobin.telescopes.json'
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
 // oxfmt-ignore
-import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateGrid, ImageCoordinateGridAxis, ImageCoordinateGridLine, ImageCoordinateGridPoint, ImageCoordinateInterpolation, ImageCrosshairPolyline, ImageCrosshairProjection, ImageCrosshairProjectionRequest, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
+import type { AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateGrid, ImageCoordinateGridAxis, ImageCoordinateGridLine, ImageCoordinateGridPoint, ImageCoordinateInterpolation, ImageCrosshairPolyline, ImageCrosshairProjection, ImageCrosshairProjectionRequest, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
 import { DEG2RAD, PI, PIOVERTWO, RAD2DEG, TAU } from 'nebulosa/src/core/constants'
+import type { Writable } from 'nebulosa/src/core/types'
 import { calibrate } from 'nebulosa/src/imaging/processing/calibration'
 import { blur, gaussianBlur, mean, sharpen } from 'nebulosa/src/imaging/processing/convolution'
 import { debayer } from 'nebulosa/src/imaging/processing/debayer'
 import { horizontalFlip, invert, verticalFlip } from 'nebulosa/src/imaging/processing/geometry'
 import { scnr } from 'nebulosa/src/imaging/processing/scnr'
 import { brightness, contrast, gamma, saturation } from 'nebulosa/src/imaging/processing/tone'
+import type { AnnotatedSkyObject } from 'src/types/image'
 import { X_IMAGE_INFO_HEADER } from '../shared/types'
 import { DEFAULT_HEADERS, type Endpoints, INTERNAL_SERVER_ERROR_RESPONSE, response } from './http'
 import type { NotificationHandler } from './notification'
@@ -718,7 +720,7 @@ export class ImageHandler {
 			const utc = timeUnix(date / 1000)
 			const q = `SELECT d.id, d.type, d.rightAscension, d.declination, d.magnitude, d.pmRa, d.pmDec, d.distance, d.rv, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ORDER BY n.type ASC LIMIT 1) as name FROM dsos d WHERE ${filterByType} AND (acos(sin(d.declination) * ${Math.sin(declination)} + cos(d.declination) * ${Math.cos(declination)} * cos(d.rightAscension - ${rightAscension})) <= ${radius}) ORDER BY d.magnitude DESC LIMIT 100`
 
-			for (const o of nebulosa.query<AnnotatedSkyObject, []>(q)) {
+			for (const o of nebulosa.query<Writable<AnnotatedSkyObject>, []>(q)) {
 				const sa = star(o.rightAscension, o.declination, o.pmRA, o.pmDEC, o.distance === 0 ? 0 : 1 / o.distance, o.rv)
 				const sb = eraPvstar(...spaceMotion(sa, utc))
 

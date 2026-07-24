@@ -5,7 +5,7 @@ import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
 import type { Device } from 'nebulosa/src/devices/indi/device'
 import { EventBus } from 'src/shared/bus'
 import { normalizePort } from 'src/shared/normalizer'
-import type { AlpacaServerStatus } from 'src/shared/types'
+import type { AlpacaServerStatus } from 'src/types/alpaca'
 import { type Endpoints, query, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 

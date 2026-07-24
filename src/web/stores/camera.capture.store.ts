@@ -1,5 +1,5 @@
 import type { FrameType, CameraTransferFormat } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_CAMERA_CAPTURE_START, type AutoSubFolderMode, type CameraCaptureStart, type ExposureMode, type ExposureTimeUnit } from 'src/shared/types'
+import { DEFAULT_CAMERA_CAPTURE_START, type CameraAutoSubFolderMode, type CameraCaptureStart, type CameraExposureMode, type CameraExposureTimeUnit } from 'src/types/camera'
 import { proxy } from 'valtio'
 
 export type CameraCaptureStore = ReturnType<typeof cameraCaptureStore>
@@ -11,7 +11,7 @@ export function cameraCaptureStore(capture?: CameraCaptureStart) {
 		state.exposureTime = value
 	}
 
-	function setExposureTimeUnit(value: ExposureTimeUnit) {
+	function setExposureTimeUnit(value: CameraExposureTimeUnit) {
 		state.exposureTimeUnit = value
 	}
 
@@ -19,7 +19,7 @@ export function cameraCaptureStore(capture?: CameraCaptureStart) {
 		state.frameType = value
 	}
 
-	function setExposureMode(value: ExposureMode) {
+	function setExposureMode(value: CameraExposureMode) {
 		state.exposureMode = value
 	}
 
@@ -79,7 +79,7 @@ export function cameraCaptureStore(capture?: CameraCaptureStart) {
 		state.savePath = value
 	}
 
-	function setAutoSubFolderMode(value: AutoSubFolderMode) {
+	function setAutoSubFolderMode(value: CameraAutoSubFolderMode) {
 		state.autoSubFolderMode = value
 	}
 

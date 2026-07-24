@@ -5,7 +5,7 @@ import { Popover } from '@ui/components/Popover'
 import { TextInput } from '@ui/components/TextInput'
 import { Icons } from '@ui/Icon'
 import { useContext } from 'react'
-import { DEFAULT_PLATE_SOLVE_START } from 'src/shared/types'
+import { DEFAULT_PLATE_SOLVE_START } from 'src/types/platesolver'
 import { useSnapshot } from 'valtio'
 
 export interface PlateSolveStartPopoverProps {

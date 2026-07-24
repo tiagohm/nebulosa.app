@@ -1,4 +1,3 @@
-import { skyObjectName } from '@shared/util'
 import { planetariumStore } from '@stores/planetarium.store'
 import { BodyCoordinateInfo } from '@ui/BodyCoordinateInfo'
 import { IconButton } from '@ui/components/IconButton'
@@ -8,6 +7,7 @@ import { SkyMap } from '@ui/SkyMap'
 import type { IDockviewPanelProps } from 'dockview-react'
 import { memo, useEffect } from 'react'
 import type { CelestialOptions } from 'src/lib/celestial/celestial'
+import { skyObjectName } from 'src/types/galaxy'
 import { useSnapshot } from 'valtio'
 
 const SKY_MAP_OPTIONS: CelestialOptions = {

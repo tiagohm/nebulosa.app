@@ -8,7 +8,7 @@ import { Chip } from '@ui/components/Chip'
 import { NumberInput } from '@ui/components/NumberInput'
 import { CameraDropdown, MountDropdown } from '@ui/DeviceDropdown'
 import { Icons } from '@ui/Icon'
-import { PlateSolverSelect } from '@ui/PlateSolverSelect'
+import { PlateSolverTypeSelect } from '@ui/PlateSolverTypeSelect'
 import { PlateSolveStartPopover } from '@ui/PlateSolveStartPopover'
 import { TppaDirectionSelect } from '@ui/TppaDirectionSelect'
 import type { IDockviewPanelProps } from 'dockview-react'
@@ -82,7 +82,7 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<PlateSolverSelect className="col-span-6" disabled={running} endContent={<PlateSolverSelectEndContent />} onValueChange={tppa.solver.setType} value={type} />
+			<PlateSolverTypeSelect className="col-span-6" disabled={running} endContent={<PlateSolverSelectEndContent />} onValueChange={tppa.solver.setType} value={type} />
 			<NumberInput className="col-span-3" disabled={running} label="Move for (s)" maxValue={60} minValue={1} onValueChange={tppa.setMoveDuration} value={moveDuration} />
 			<TppaDirectionSelect className="col-span-3" disabled={running} onValueChange={tppa.setDirection} value={direction} />
 			<NumberInput className="col-span-4" disabled={running} label="Max attempts" maxValue={30} minValue={3} onValueChange={tppa.setMaxAttempts} value={maxAttempts} />

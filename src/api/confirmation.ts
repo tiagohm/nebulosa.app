@@ -1,5 +1,5 @@
 import { normalizeTimeout } from 'src/shared/normalizer'
-import type { Confirmation } from '../shared/types'
+import type { Confirm, Confirmation } from 'src/types/confirmation'
 import { type Endpoints, response } from './http'
 import type { WebSocketMessageHandler } from './message'
 
@@ -15,13 +15,8 @@ export class ConfirmationHandler {
 
 	constructor(readonly wsm?: WebSocketMessageHandler) {}
 
-	confirm(req: unknown) {
-		const key = confirmationKey(req)
-
-		if (!key) return false
-
-		this.resolve(key, accepted(req))
-		return true
+	confirm(req: Confirm) {
+		this.resolve(req.key, req.accepted === true)
 	}
 
 	ask(message: Confirmation, timeout: number = 30000) {
@@ -63,14 +58,4 @@ export function confirmation(confirmationHandler: ConfirmationHandler) {
 	return {
 		'/confirmation': { POST: async (req) => response(confirmationHandler.confirm(await req.json())) },
 	} as const satisfies Endpoints
-}
-
-function confirmationKey(req: unknown) {
-	if (!req || typeof req !== 'object') return undefined
-	const key = (req as { readonly key?: unknown }).key
-	return typeof key === 'string' && key ? key : undefined
-}
-
-function accepted(req: unknown) {
-	return !!req && typeof req === 'object' && (req as { readonly accepted?: unknown }).accepted === true
 }

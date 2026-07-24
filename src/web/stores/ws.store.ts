@@ -3,7 +3,8 @@ import { toast } from '@shared/toast'
 import { confirmationStore } from '@stores/confirmation.store'
 import { equipmentStore } from '@stores/equipment.store'
 import type { DeviceType } from 'nebulosa/src/devices/indi/device'
-import type { DeviceAdded, DeviceRemoved, Notification } from 'src/shared/types'
+import type { DeviceAdded, DeviceRemoved } from 'src/shared/types'
+import type { Notification } from 'src/types/notification'
 import { proxy } from 'valtio'
 
 export type WebSocketStore = typeof wsStore

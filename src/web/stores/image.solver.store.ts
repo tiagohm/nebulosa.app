@@ -10,8 +10,9 @@ import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { formatRA, formatDEC, toDeg, arcsec, type Angle } from 'nebulosa/src/math/units/angle'
-import type { Framing, PlateSolveStart, PlateSolverType } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import type { Framing } from 'src/types/framing'
+import type { PlateSolveStart, PlateSolverType } from 'src/types/platesolver'
 import { proxy, ref } from 'valtio'
 
 export type ImageSolverStore = ReturnType<typeof imageSolverStore>

@@ -1,16 +1,10 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { Camera, Cover, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, Thermometer, Wheel } from 'nebulosa/src/devices/indi/device'
-import type { Connect, ImageInfo } from 'src/shared/types'
+import type { ImageInfo } from 'src/shared/types'
 
 export type FilePickerMode = 'file' | 'directory' | 'save'
 
 export type ImageSource = 'file' | 'framing' | 'camera'
-
-export interface Connection extends Connect {
-	id: string
-	name: string
-	connectedAt?: number
-}
 
 export interface Image {
 	readonly id: string
@@ -48,108 +42,3 @@ export interface DeviceTypeMap {
 	readonly guideOutput: GuideOutput
 	readonly dewHeater: DewHeater
 }
-
-export const DEFAULT_CONNECTION: Connection = {
-	id: '0',
-	name: 'Local',
-	host: 'localhost',
-	port: 7624,
-	type: 'INDI',
-	secured: false,
-}
-
-export const SKY_OBJECT_NAME_TYPES = [
-	'ALL',
-	'NAME',
-	'NGC',
-	'IC',
-	'BAYER', // greek letters
-	'FLAMSTEED', // ordered numbers
-	'HD',
-	'HR',
-	'HIP',
-	'MESSIER',
-	'CALDWELL',
-	'BARNARD',
-	'SHARPLESS',
-	'LBN',
-	'LDN',
-	'MELOTTE',
-	'COLLINDER',
-	'ARP',
-	'ABELL',
-	'PGC',
-	'TRUMPLER',
-	'STOCK',
-	'RUPRECHT',
-	'UGC',
-	'CED',
-	'RCW',
-	'VDB',
-	'VV',
-	'PK',
-	'PNG',
-	'ACO',
-	'ESO',
-	'SNRG',
-	'DWB',
-	'BENNETT',
-	'DUNLOP',
-	'HERSHEL',
-	'GUM',
-	'BOCHUM',
-	'ALESSI',
-	'ALICANTE',
-	'ALTER',
-	'ANTALOVA',
-	'APRIAMASWILI',
-	'ARP (CL)',
-	'BARHATOVA',
-	'BASEL',
-	'BERKELEY',
-	'BICA',
-	'BIURAKAN',
-	'BLANCO',
-	'CHUPINA',
-	'CZERNIK',
-	'DANKS',
-	'DIAS',
-	'DJORG',
-	'DOLIDZE-DZIM',
-	'DOLIDZE',
-	'DUFAY',
-	'FEINSTEIN',
-	'FERRERO',
-	'GRAFF',
-	'GULLIVER',
-	'HAFFNER',
-	'HARVARD',
-	'HAUTE-PROVENCE',
-	'HOGG',
-	'ISKURZDAJAN',
-	'JOHANSSON',
-	'KHARCHENKO',
-	'KING',
-	'KRON',
-	'LINDSAY',
-	'LODEN',
-	'LYNGA',
-	'MAMAJEK',
-	'MOFFAT',
-	'MRK',
-	'PAL',
-	'PISMIS',
-	'PLATAIS',
-	'ROSLUND',
-	'SAURER',
-	'SHER',
-	'SKIFF',
-	'STEPHENSON',
-	'TERZAN',
-	'TOMBAUGH',
-	'TURNER',
-	'UPGREN',
-	'WATERLOO',
-	'WESTERLUND',
-	'ZWICKY',
-] as const

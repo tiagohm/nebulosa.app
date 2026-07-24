@@ -1,8 +1,11 @@
 import { useDevice } from '@hooks/device.hook'
 import { CameraStoreContext } from '@shared/context'
 import { cameraStore } from '@stores/camera.store'
-import { AutoSaveButton } from '@ui/AutoSaveButton'
-import { AutoSubFolderModeButton } from '@ui/AutoSubFolderButton'
+import { CameraAutoSaveButton } from '@ui/CameraAutoSaveButton'
+import { CameraAutoSubFolderModeButton } from '@ui/CameraAutoSubFolderButton'
+import { CameraExposureModeButtonGroup } from '@ui/CameraExposureModeButtonGroup'
+import { CameraExposureTimeInput } from '@ui/CameraExposureTimeInput'
+import { CameraExposureTimeProgress } from '@ui/CameraExposureTimeProgress'
 import { CameraTransferFormatSelect } from '@ui/CameraTransferFormatSelect'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
@@ -12,9 +15,6 @@ import { Switch } from '@ui/components/Switch'
 import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
 import { ConnectButton } from '@ui/ConnectButton'
 import { FocuserDropdown, MountDropdown, RotatorDropdown, WheelDropdown } from '@ui/DeviceDropdown'
-import { ExposureModeButtonGroup } from '@ui/ExposureModeButtonGroup'
-import { ExposureTimeInput } from '@ui/ExposureTimeInput'
-import { ExposureTimeProgress } from '@ui/ExposureTimeProgress'
 import { FilePickerInput } from '@ui/FilePickerInput'
 import { FrameFormatSelect } from '@ui/FrameFormatSelect'
 import { FrameTypeSelect } from '@ui/FrameTypeSelect'
@@ -80,7 +80,7 @@ const Header = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-between gap-2">
-			<ExposureTimeProgress className="min-w-0 flex-1 overflow-x-auto" progress={progress} />
+			<CameraExposureTimeProgress className="min-w-0 flex-1 overflow-x-auto" progress={progress} />
 		</div>
 	)
 })
@@ -92,8 +92,8 @@ const Path = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center gap-1">
-			<AutoSaveButton disabled={capturing} onValueChange={camera.capture.setAutoSave} value={autoSave} />
-			<AutoSubFolderModeButton disabled={!autoSave || capturing} onValueChange={camera.capture.setAutoSubFolderMode} value={autoSubFolderMode} />
+			<CameraAutoSaveButton disabled={capturing} onValueChange={camera.capture.setAutoSave} value={autoSave} />
+			<CameraAutoSubFolderModeButton disabled={!autoSave || capturing} onValueChange={camera.capture.setAutoSubFolderMode} value={autoSubFolderMode} />
 			<FilePickerInput disabled={!autoSave || capturing} fullWidth id={`camera-${camera.state.camera.id}`} mode="directory" onValueChange={camera.capture.setSavePath} value={savePath} />
 		</div>
 	)
@@ -172,7 +172,7 @@ const Exposure = memo(() => {
 
 	return (
 		<>
-			<ExposureTimeInput
+			<CameraExposureTimeInput
 				className="col-span-6"
 				disabled={!connected || frameType === 'BIAS' || capturing}
 				maxValue={exposure.max}
@@ -197,7 +197,7 @@ const ExposureMode = memo(() => {
 
 	return (
 		<>
-			<ExposureModeButtonGroup className="col-span-6" fullWidth color="secondary" disabled={!connected || capturing} onValueChange={camera.capture.setExposureMode} value={exposureMode} />
+			<CameraExposureModeButtonGroup className="col-span-6" fullWidth color="secondary" disabled={!connected || capturing} onValueChange={camera.capture.setExposureMode} value={exposureMode} />
 			<NumberInput className="col-span-3" disabled={!connected || exposureMode === 'single' || capturing} label="Delay (s)" minValue={0} onValueChange={camera.capture.setDelay} value={delay} />
 			<NumberInput className="col-span-3" disabled={!connected || exposureMode !== 'fixed' || capturing} label="Count" minValue={1} onValueChange={camera.capture.setCount} value={count} />
 		</>

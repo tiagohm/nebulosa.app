@@ -10,7 +10,8 @@ import { RAD2DEG } from 'nebulosa/src/core/constants'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import React, { createContext, memo, useContext, useDeferredValue, useMemo } from 'react'
 import { Area, type AreaProps, CartesianGrid, Tooltip as ChartTooltip, ComposedChart, Line, type TooltipContentProps, XAxis, YAxis } from 'recharts'
-import { EMPTY_TWILIGHT, type BodyPosition, type Twilight } from 'src/shared/types'
+import type { BodyPosition } from 'src/types/atlas'
+import { EMPTY_TWILIGHT, type Twilight } from 'src/types/sun'
 import { useSnapshot } from 'valtio'
 
 export interface EphemerisPositionContextParameters {

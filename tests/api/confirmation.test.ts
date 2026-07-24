@@ -1,8 +1,7 @@
 import { expect, spyOn, test } from 'bun:test'
 import { confirmation as confirmationEndpoints, ConfirmationHandler } from 'src/api/confirmation'
 import { WebSocketMessageHandler } from 'src/api/message'
-import type { Confirmation } from 'src/shared/types'
-import { json, SocketMessager } from './util'
+import { noContent, SocketMessager } from './util'
 
 function request(body?: unknown) {
 	return { json: () => body } as unknown as Bun.BunRequest
@@ -30,21 +29,8 @@ test('rejects duplicate pending confirmations with the same key', async () => {
 	const second = await confirmation.ask({ key: 'duplicate', message: 'Second confirmation' }, 1000)
 
 	expect(second).toBe(false)
-	expect(confirmation.confirm({ key: 'duplicate', accepted: true })).toBe(true)
+	confirmation.confirm({ key: 'duplicate', accepted: true })
 	expect(await first).toBe(true)
-})
-
-test('ignores invalid confirmation requests without resolving a pending confirmation', async () => {
-	const confirmation = new ConfirmationHandler()
-	const pending = confirmation.ask({ key: 'invalid', message: 'Invalid request confirmation' }, 1000)
-
-	expect(confirmation.confirm(undefined)).toBe(false)
-	expect(confirmation.confirm(null)).toBe(false)
-	expect(confirmation.confirm({ key: '', accepted: true })).toBe(false)
-	expect(confirmation.confirm({ key: 1, accepted: true })).toBe(false)
-
-	expect(confirmation.confirm({ key: 'invalid', accepted: true })).toBe(true)
-	expect(await pending).toBe(true)
 })
 
 test('treats non-true accepted values as rejected', async () => {
@@ -55,7 +41,7 @@ test('treats non-true accepted values as rejected', async () => {
 		const key = `accepted-${index}`
 		const pending = confirmation.ask({ key, message: 'Accepted value confirmation' }, 1000)
 
-		expect(confirmation.confirm({ key, accepted })).toBe(true)
+		confirmation.confirm({ key, accepted: accepted as boolean })
 		expect(await pending).toBe(false)
 	}
 })
@@ -64,13 +50,13 @@ test('sends confirmation request through websocket message handler', async () =>
 	const wsm = new WebSocketMessageHandler()
 	const confirmation = new ConfirmationHandler(wsm)
 	const socket = new SocketMessager()
-	const message = { key: 'socket', message: 'Socket confirmation' } satisfies Confirmation
+	const message = { key: 'socket', message: 'Socket confirmation' } as const
 
 	wsm.open(socket)
 	const pending = confirmation.ask(message, 1000)
 
 	expect(socket.messages).toEqual([{ type: 'confirmation', body: message }])
-	expect(confirmation.confirm({ key: message.key, accepted: true })).toBe(true)
+	confirmation.confirm({ key: message.key, accepted: true })
 	expect(await pending).toBe(true)
 
 	wsm.close(socket, 1000, 'done')
@@ -98,17 +84,7 @@ test('confirms through endpoint', async () => {
 	const confirmation = new ConfirmationHandler()
 	const endpoints = confirmationEndpoints(confirmation)
 	const pending = confirmation.ask({ key: 'endpoint', message: 'Endpoint confirmation' }, 1000)
-	const response = await json<boolean>(await endpoints['/confirmation'].POST(request({ key: 'endpoint', accepted: true })))
+	await noContent(await endpoints['/confirmation'].POST(request({ key: 'endpoint', accepted: true })))
 
-	expect(response).toBe(true)
 	expect(await pending).toBe(true)
-})
-
-test('endpoint returns false for malformed confirmation payloads', async () => {
-	const confirmation = new ConfirmationHandler()
-	const endpoints = confirmationEndpoints(confirmation)
-
-	expect(await json<boolean>(await endpoints['/confirmation'].POST(request(undefined)))).toBe(false)
-	expect(await json<boolean>(await endpoints['/confirmation'].POST(request({ key: '', accepted: true })))).toBe(false)
-	expect(await json<boolean>(await endpoints['/confirmation'].POST(request({ accepted: true })))).toBe(false)
 })

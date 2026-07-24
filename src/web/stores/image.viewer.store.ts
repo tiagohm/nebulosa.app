@@ -29,8 +29,9 @@ import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { pmod } from 'nebulosa/src/math/numerical/math'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
-import { type ImageTransformation, type ImageInfo, DEFAULT_IMAGE_TRANSFORMATION, type Framing } from 'src/shared/types'
+import { type ImageTransformation, type ImageInfo, DEFAULT_IMAGE_TRANSFORMATION } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import type { Framing } from 'src/types/framing'
 import { proxy, ref, subscribe } from 'valtio'
 
 export interface ImageViewerStore {

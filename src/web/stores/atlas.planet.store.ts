@@ -5,8 +5,9 @@ import { framingStore } from '@stores/framing.store'
 import { settingsStore } from '@stores/settings.store'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatRA, formatDEC } from 'nebulosa/src/math/units/angle'
-import { type PlanetType, type PositionOfBody, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { type BodyPosition, type PositionOfBody, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/types/atlas'
+import type { PlanetType } from 'src/types/planet'
 import { proxy, ref } from 'valtio'
 
 export type AtlasPlanetStore = typeof planetStore
@@ -14,7 +15,7 @@ export type AtlasPlanetStore = typeof planetStore
 export interface AtlasPlanetState {
 	readonly search: {
 		name: string
-		type: PlanetType | 'ALL'
+		type: PlanetType | 'all'
 	}
 	readonly request: PositionOfBody
 	selected?: { readonly name: string; readonly code: string }
@@ -26,7 +27,7 @@ export interface AtlasPlanetState {
 const state = proxy<AtlasPlanetState>({
 	search: {
 		name: '',
-		type: 'ALL',
+		type: 'all',
 	},
 	request: structuredClone(DEFAULT_POSITION_OF_BODY),
 	position: structuredClone(DEFAULT_BODY_POSITION),
@@ -90,7 +91,7 @@ function setName(value: string) {
 	state.search.name = value
 }
 
-function setType(value: PlanetType | 'ALL') {
+function setType(value: PlanetType | 'all') {
 	state.search.type = value
 }
 

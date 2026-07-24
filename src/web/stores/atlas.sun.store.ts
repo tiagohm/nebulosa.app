@@ -9,8 +9,9 @@ import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
 import { temporalAdd, temporalGet } from 'nebulosa/src/astronomy/time/temporal'
 import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
-import { type PositionOfBody, type SolarImageSource, type BodyPosition, type SolarSeasons, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
+import { type BodyPosition, type PositionOfBody, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from 'src/types/atlas'
+import type { SolarImageSource, SolarSeasons } from 'src/types/sun'
 import { proxy, ref } from 'valtio'
 
 export type AtlasSunStore = typeof sunStore

@@ -3577,6 +3577,7 @@ export class Celestial {
 	#pointerDown = false
 	#pointerMoved = false
 	#d3ZoomBound = false
+	#d3ZoomActive = false
 	#d3ZoomBehavior: ZoomBehavior<HTMLElement, unknown> | null = null
 	#pointerStartX = 0
 	#pointerStartY = 0
@@ -4804,6 +4805,9 @@ export class Celestial {
 		const behavior = zoom<HTMLElement, unknown>()
 			.scaleExtent([this.#options.interactions.minZoom, this.#options.interactions.maxZoom])
 			.wheelDelta((event: WheelEvent) => -(normalizedWheelDeltaY(event) * this.#options.interactions.wheelZoomSpeed) / Math.LN2)
+			.on('start', () => {
+				this.#d3ZoomActive = true
+			})
 			.on('zoom', (event: D3ZoomEvent<HTMLElement, unknown>) => {
 				const k = event.transform.k
 				const transform = this.normalizeViewTransform({ x: event.transform.x - (this.#options.width / 2) * (1 - k), y: event.transform.y - (this.#options.height / 2) * (1 - k), k })
@@ -4811,6 +4815,10 @@ export class Celestial {
 				if (this.writeViewTransform(transform)) {
 					this.afterTransformChanged()
 				}
+			})
+			.on('end', () => {
+				this.#d3ZoomActive = false
+				this.ensurePickingIndex()
 			})
 
 		const element = this.#renderer.element
@@ -4828,6 +4836,7 @@ export class Celestial {
 		select(this.#renderer.element).on('.zoom', null)
 		this.#d3ZoomBehavior = null
 		this.#d3ZoomBound = false
+		this.#d3ZoomActive = false
 	}
 
 	// Handles pointer down for local panning.
@@ -4845,6 +4854,8 @@ export class Celestial {
 
 	// Handles pointer movement for panning and hover picking.
 	private readonly handlePointerMove = (event: PointerEvent): void => {
+		if (this.#d3ZoomActive) return
+
 		const now = performance.now()
 
 		if (this.#pointerDown) {

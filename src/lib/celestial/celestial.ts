@@ -245,6 +245,7 @@ export interface RenderState {
 	readonly projectEquatorialVectorBaseSample: (x: number, y: number, z: number, out: NumberArray) => number
 	readonly projectHorizontalToScreen: (az: number, alt: number, out: NumberArray) => boolean
 	readonly projectHorizontalSample: (az: number, alt: number, out: NumberArray) => number
+	readonly projectHorizontalBaseSample: (az: number, alt: number, out: NumberArray) => number
 }
 
 // Public update state passed to custom layers.
@@ -1896,6 +1897,13 @@ function skyLabelFont(state: RenderState, baseSize: number) {
 class HorizonLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly previous = new Float32Array(2)
+	private path = new Path2D()
+	private samplerState!: RenderState
+	private cachedRevision = -1
+
+	private readonly horizonSampler: ProjectedSampler = (t, out) => {
+		return this.samplerState.projectHorizontalBaseSample(t * TAU, 0, out)
+	}
 
 	constructor() {
 		super('horizon', 10)
@@ -1917,32 +1925,29 @@ class HorizonLayer extends InternalLayer {
 			return
 		}
 
-		ctx.beginPath()
-		let started = false
+		this.ensurePath(state)
+		ctx.save()
+		applyBasePathTransform(ctx, state)
+		ctx.lineWidth = 0.9 / state.transform.k
 
-		for (let i = 0; i <= 288; i++) {
-			const az = (i / 288) * TAU
-			const ok = state.projectHorizontalToScreen(az, 0, this.point)
-
-			if (!ok) {
-				started = false
-				continue
-			}
-
-			started = appendProjectedPoint(ctx, state, this.point, this.previous, started)
+		if (state.theme.horizon.fillBelowHorizon !== TRANSPARENT) {
+			ctx.fill(this.path)
 		}
 
-		if (started) {
-			if (state.theme.horizon.fillBelowHorizon !== TRANSPARENT) {
-				ctx.closePath()
-				ctx.fill()
-			}
-
-			ctx.stroke()
-		}
-
+		ctx.stroke(this.path)
+		ctx.restore()
 		drawCardinalPoints(ctx, state)
 		drawZenithLabel(ctx, state)
+	}
+
+	private ensurePath(state: RenderState) {
+		if (this.cachedRevision === state.projectedGeometryRevision) return
+
+		this.samplerState = state
+		this.path = new Path2D()
+		drawClippedPolyline(this.path, state, 288, this.point, this.previous, this.horizonSampler, undefined, 1)
+		this.path.closePath()
+		this.cachedRevision = state.projectedGeometryRevision
 	}
 }
 
@@ -2270,26 +2275,30 @@ class GridLayer extends InternalLayer {
 class ReferenceLineLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly previous = new Float32Array(2)
+	private localMeridianPath = new Path2D()
+	private celestialEquatorPath = new Path2D()
+	private eclipticPath = new Path2D()
 	private samplerState!: RenderState
 	private localMeridianAz = 0
 	private localMeridianReverse = false
 	private eclipticCosObliquity = 1
 	private eclipticSinObliquity = 0
+	private cachedRevision = -1
 
 	private readonly localMeridianSampler: ProjectedSampler = (t, out) => {
 		const alt = (this.localMeridianReverse ? 1 - t : t) * PIOVERTWO
-		return this.samplerState.projectHorizontalSample(this.localMeridianAz, alt, out)
+		return this.samplerState.projectHorizontalBaseSample(this.localMeridianAz, alt, out)
 	}
 
 	private readonly celestialEquatorSampler: ProjectedSampler = (t, out) => {
 		const ra = t * TAU
-		return this.samplerState.projectEquatorialSample(ra, 0, out)
+		return this.samplerState.projectEquatorialBaseSample(ra, 0, out)
 	}
 
 	private readonly eclipticSampler: ProjectedSampler = (t, out) => {
 		const lambda = t * TAU
 		const sinLambda = Math.sin(lambda)
-		return this.samplerState.projectEquatorialVectorSample(Math.cos(lambda), sinLambda * this.eclipticCosObliquity, sinLambda * this.eclipticSinObliquity, out)
+		return this.samplerState.projectEquatorialVectorBaseSample(Math.cos(lambda), sinLambda * this.eclipticCosObliquity, sinLambda * this.eclipticSinObliquity, out)
 	}
 
 	constructor() {
@@ -2297,15 +2306,39 @@ class ReferenceLineLayer extends InternalLayer {
 	}
 
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
-		this.samplerState = state
+		this.ensurePaths(state)
 		ctx.save()
 		ctx.globalAlpha = 0.7
 		ctx.lineCap = 'round'
 		ctx.lineJoin = 'round'
+		applyBasePathTransform(ctx, state)
 		this.drawLocalMeridian(ctx, state)
 		this.drawCelestialEquator(ctx, state)
 		this.drawEcliptic(ctx, state)
 		ctx.restore()
+	}
+
+	private ensurePaths(state: RenderState) {
+		if (this.cachedRevision === state.projectedGeometryRevision) return
+
+		this.samplerState = state
+		this.localMeridianPath = new Path2D()
+		this.localMeridianAz = 0
+		this.localMeridianReverse = false
+		drawClippedPolyline(this.localMeridianPath, state, 120, this.point, this.previous, this.localMeridianSampler, undefined, 1)
+		this.localMeridianAz = PI
+		this.localMeridianReverse = true
+		drawClippedPolyline(this.localMeridianPath, state, 120, this.point, this.previous, this.localMeridianSampler, undefined, 1)
+
+		this.celestialEquatorPath = new Path2D()
+		drawClippedPolyline(this.celestialEquatorPath, state, 360, this.point, this.previous, this.celestialEquatorSampler, undefined, 1)
+
+		const obliquity = meanObliquity(state.time)
+		this.eclipticCosObliquity = Math.cos(obliquity)
+		this.eclipticSinObliquity = Math.sin(obliquity)
+		this.eclipticPath = new Path2D()
+		drawClippedPolyline(this.eclipticPath, state, 360, this.point, this.previous, this.eclipticSampler, undefined, 1)
+		this.cachedRevision = state.projectedGeometryRevision
 	}
 
 	private drawLocalMeridian(ctx: CanvasRenderingContext2D, state: RenderState) {
@@ -2313,17 +2346,8 @@ class ReferenceLineLayer extends InternalLayer {
 
 		if (!style.enabled) return
 
-		this.applyStyle(ctx, style)
-
-		ctx.beginPath()
-		this.localMeridianAz = 0
-		this.localMeridianReverse = false
-		drawClippedPolyline(ctx, state, 120, this.point, this.previous, this.localMeridianSampler)
-		this.localMeridianAz = PI
-		this.localMeridianReverse = true
-		drawClippedPolyline(ctx, state, 120, this.point, this.previous, this.localMeridianSampler)
-
-		ctx.stroke()
+		this.applyStyle(ctx, style, state.transform.k)
+		ctx.stroke(this.localMeridianPath)
 	}
 
 	private drawCelestialEquator(ctx: CanvasRenderingContext2D, state: RenderState) {
@@ -2331,11 +2355,8 @@ class ReferenceLineLayer extends InternalLayer {
 
 		if (!style.enabled) return
 
-		this.applyStyle(ctx, style)
-
-		ctx.beginPath()
-		drawClippedPolyline(ctx, state, 360, this.point, this.previous, this.celestialEquatorSampler)
-		ctx.stroke()
+		this.applyStyle(ctx, style, state.transform.k)
+		ctx.stroke(this.celestialEquatorPath)
 	}
 
 	private drawEcliptic(ctx: CanvasRenderingContext2D, state: RenderState) {
@@ -2343,19 +2364,13 @@ class ReferenceLineLayer extends InternalLayer {
 
 		if (!style.enabled) return
 
-		const obliquity = meanObliquity(state.time)
-		this.eclipticCosObliquity = Math.cos(obliquity)
-		this.eclipticSinObliquity = Math.sin(obliquity)
-		this.applyStyle(ctx, style)
-
-		ctx.beginPath()
-		drawClippedPolyline(ctx, state, 360, this.point, this.previous, this.eclipticSampler)
-		ctx.stroke()
+		this.applyStyle(ctx, style, state.transform.k)
+		ctx.stroke(this.eclipticPath)
 	}
 
-	private applyStyle(ctx: CanvasRenderingContext2D, style: ResolvedReferenceLineOptions) {
+	private applyStyle(ctx: CanvasRenderingContext2D, style: ResolvedReferenceLineOptions, scale: number) {
 		ctx.strokeStyle = style.color
-		ctx.lineWidth = style.lineWidth
+		ctx.lineWidth = style.lineWidth / scale
 	}
 }
 
@@ -4565,17 +4580,6 @@ export class Celestial {
 		return writeProjectedSample(out, visibility, this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.#options.width, this.#options.height, this.#options.projection), out))
 	}
 
-	// Projects a coordinate-system vector to transformed screen coordinates.
-	private readonly projectWorldVectorToScreen = (x: number, y: number, z: number, out: NumberArray): boolean => {
-		if (!this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.#options.width, this.#options.height, this.#options.projection), out)) {
-			return false
-		}
-
-		applyViewTransform(out[0], out[1], this.#options.width, this.#options.height, this.#transform, out)
-
-		return true
-	}
-
 	// Projects a local horizontal coordinate onto either horizontal or equatorial views.
 	private readonly projectHorizontalToScreen = (az: number, alt: number, out: NumberArray): boolean => {
 		this.projectHorizontalSample(az, alt, out)
@@ -4584,6 +4588,17 @@ export class Celestial {
 
 	// Projects a horizontal coordinate and returns its horizon visibility.
 	private readonly projectHorizontalSample = (az: number, alt: number, out: NumberArray): number => {
+		const visibility = this.projectHorizontalBaseSample(az, alt, out)
+
+		if (isProjectedSample(out)) {
+			applyViewTransform(out[0], out[1], this.#options.width, this.#options.height, this.#transform, out)
+		}
+
+		return visibility
+	}
+
+	// Projects a horizontal coordinate to reusable base screen coordinates.
+	private readonly projectHorizontalBaseSample = (az: number, alt: number, out: NumberArray): number => {
 		writeHorizontalUnitVector(az, alt, this.#tempVector)
 
 		let x = this.#tempVector[0]
@@ -4601,7 +4616,7 @@ export class Celestial {
 			z = matrix[2] * hx + matrix[5] * hy + matrix[8] * hz
 		}
 
-		return writeProjectedSample(out, visibility, this.projectWorldVectorToScreen(x, y, z, out))
+		return writeProjectedSample(out, visibility, this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.#options.width, this.#options.height, this.#options.projection), out))
 	}
 
 	// Rebuilds the picking index from projected visible objects.
@@ -4741,6 +4756,7 @@ export class Celestial {
 				projectEquatorialVectorBaseSample: this.projectEquatorialVectorBaseSample,
 				projectHorizontalToScreen: this.projectHorizontalToScreen,
 				projectHorizontalSample: this.projectHorizontalSample,
+				projectHorizontalBaseSample: this.projectHorizontalBaseSample,
 			} as unknown as Writable<RenderState>
 
 			this.#renderState = state

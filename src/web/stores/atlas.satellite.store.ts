@@ -1,26 +1,35 @@
-import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
-import type { UTCTime } from 'nebulosa/src/devices/indi/device'
-import { type SearchSatellite, type PositionOfBody, type Satellite, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY, DEFAULT_SEARCH_SATELLITE } from 'src/shared/types'
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { atlasStore, isLocationChanged, isTimeChanged } from '@stores/atlas.store'
+import type { BookmarkItem, TagItem } from '@stores/atlas.store'
+import { framingStore } from '@stores/framing.store'
+import { settingsStore } from '@stores/settings.store'
+import type { Writable } from 'nebulosa/src/core/types'
+import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
+import { formatRA, formatDEC } from 'nebulosa/src/math/units/angle'
+import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import { atlasStore, isLocationChanged, isTimeChanged } from './atlas.store'
+import { DEFAULT_BODY_POSITION, DEFAULT_POSITION_OF_BODY } from '#/atlas'
+import type { BodyPosition, PositionOfBody } from '#/atlas'
+import { DEFAULT_SEARCH_SATELLITE } from '#/satellite'
+import type { SearchSatellite, Satellite, SatelliteCategory, SatelliteGroupType } from '#/satellite'
 
 export type AtlasSatelliteStore = typeof satelliteStore
 
 export interface AtasSatelliteState {
-	mode: 'info' | 'chart'
 	loading: boolean
-	readonly request: SearchSatellite & PositionOfBody
+	readonly request: Writable<SearchSatellite> & PositionOfBody
 	selected?: Satellite
 	page: number
 	result: readonly Satellite[]
 	readonly position: BodyPosition
 	chart: readonly number[]
+	readonly tags: readonly TagItem[]
+	readonly bookmark: readonly BookmarkItem[]
+	readonly favorite: boolean
 }
 
 const state = proxy<AtasSatelliteState>({
-	mode: 'info',
 	loading: false,
 	request: {
 		...structuredClone(DEFAULT_SEARCH_SATELLITE),
@@ -30,23 +39,71 @@ const state = proxy<AtasSatelliteState>({
 	position: structuredClone(DEFAULT_BODY_POSITION),
 	chart: [],
 	page: 1,
-})
+	bookmark: [],
+	get tags() {
+		const { selected } = this
 
-initProxy(state, 'atlas.satellite', ['o:request'])
-state.request.time.utc = 0
+		if (selected) {
+			const res: TagItem[] = [{ label: selected.name, color: 'primary' }]
+			for (const group of selected.groups) res.push({ label: group, color: 'warning' })
+			return res
+		}
+
+		return []
+	},
+	get favorite() {
+		const id = this.selected?.id?.toFixed(0)
+		return id !== undefined && this.bookmark.some((e) => e.code === id)
+	},
+} satisfies AtasSatelliteState)
 
 let chartUpdate = true
+let mounted = false
+const u: VoidFunction[] = []
 
 function mount() {
-	console.info('atlas satellite mounted')
+	if (mounted) return unmount
+
+	console.info('satellite mounted')
+
+	mounted = true
+
+	atlasStore.state.satellite = ref(satelliteStore)
+
+	u[0] = initProxy(state, 'atlas.satellite', ['o:bookmark'])
+
+	void atlasStore.tick('satellite')
+	void search(true)
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('satellite unmounted')
+	unsubscribe(u)
+	mounted = false
+}
+
+function setText(value: string) {
+	state.request.text = value
 	void search(true)
 }
 
-function update<K extends keyof AtasSatelliteState['request']>(key: K, value: AtasSatelliteState['request'][K]) {
-	state.request[key] = value
+function setCategory(value: readonly SatelliteCategory[]) {
+	state.request.category = value
+	void search(true)
+}
 
-	// Search again if page or sort has been changed
-	if (key === 'page') void search(false)
+function setGroups(value: readonly SatelliteGroupType[]) {
+	state.request.groups = value
+	void search(true)
+}
+
+function setPage(value: number) {
+	state.request.page = value
+
+	void search(false)
 }
 
 async function search(reset: boolean | React.UIEvent) {
@@ -62,8 +119,11 @@ async function search(reset: boolean | React.UIEvent) {
 	}
 }
 
-function resetFilter() {
+function resetCategory() {
 	state.request.category = [...DEFAULT_SEARCH_SATELLITE.category]
+}
+
+function resetGroup() {
 	state.request.groups = [...DEFAULT_SEARCH_SATELLITE.groups]
 }
 
@@ -81,12 +141,12 @@ async function select(row: number, col: number = 0, force: boolean = true, rowMo
 
 function next() {
 	if (state.result.length === 0) return
-	update('page', state.request.page + 1)
+	setPage(state.request.page + 1)
 }
 
 function prev() {
 	if (state.request.page <= 1) return
-	update('page', state.request.page - 1)
+	setPage(state.request.page - 1)
 }
 
 async function updatePosition() {
@@ -104,12 +164,12 @@ async function updateChart(force: boolean = false) {
 	else chartUpdate = true
 }
 
-async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
+async function tick(time: UTCTime, dateHasChanged: boolean) {
 	let changed = false
 
-	if (isLocationChanged(location, state.request.location)) {
+	if (isLocationChanged(settingsStore.state.location, state.request.location)) {
 		chartUpdate = true
-		Object.assign(state.request.location, location)
+		Object.assign(state.request.location, settingsStore.state.location)
 		changed = true
 	}
 
@@ -127,16 +187,39 @@ async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChange
 	}
 }
 
+function sync(mount?: Mount) {
+	if (mount === undefined) return undefined
+	const [rightAscension, declination] = state.position.equatorial
+	return Api.Mounts.sync(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+}
+
+function goTo(mount?: Mount) {
+	if (mount === undefined) return undefined
+	const [rightAscension, declination] = state.position.equatorial
+	return Api.Mounts.goTo(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+}
+
+function frame() {
+	const [rightAscension, declination] = state.position.equatorialJ2000
+	return framingStore.load({ rightAscension: formatRA(rightAscension), declination: formatDEC(declination) })
+}
+
 export const satelliteStore = {
+	type: 'satellite',
 	state,
 	mount,
-	update,
+	setText,
+	setCategory,
+	setGroups,
+	setPage,
 	search,
-	resetFilter,
+	resetCategory,
+	resetGroup,
 	next,
 	prev,
 	select,
 	tick,
+	sync,
+	goTo,
+	frame,
 } as const
-
-atlasStore.state.satellite = ref(satelliteStore)

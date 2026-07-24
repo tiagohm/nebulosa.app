@@ -1,15 +1,17 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { equipmentStore } from '@stores/equipment.store'
+import type { DeviceState } from '@stores/equipment.store'
+import { framingStore } from '@stores/framing.store'
+import type { NudgeDirection } from '@ui/Nudge'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import type { Mount, MountTargetCoordinate, MountTargetCoordinateType, TrackMode } from 'nebulosa/src/devices/indi/device'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
-import { DEFAULT_COORDINATE_INFO, type CoordinateInfo, type MountRemoteControlProtocol, type MountRemoteControlStatus } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import type { NudgeDirection } from '../ui/Nudge'
-import { equipmentStore, type DeviceState } from './equipment.store'
-import { framingStore } from './framing.store'
+import { DEFAULT_COORDINATE_INFO } from '#/mount'
+import type { CoordinateInfo, MountRemoteControlProtocol, MountRemoteControlStatus } from '#/mount'
 
 export type MountStore = ReturnType<typeof mountStore>
 
@@ -23,15 +25,12 @@ export interface MountState {
 		readonly position: CoordinateInfo
 	}
 	readonly location: {
-		show: boolean
 		coordinate: Mount['geographicCoordinate']
 	}
 	readonly time: {
-		show: boolean
 		time: Mount['time']
 	}
 	readonly remoteControl: {
-		show: boolean
 		pendingAction?: 'start' | 'stop'
 		readonly status: MountRemoteControlStatus
 		readonly request: {
@@ -62,15 +61,12 @@ export function mountStore(mount: Mount) {
 			position: structuredClone(DEFAULT_COORDINATE_INFO),
 		},
 		location: {
-			show: false,
 			coordinate: mount.geographicCoordinate,
 		},
 		time: {
-			show: false,
 			time: mount.time,
 		},
 		remoteControl: {
-			show: false,
 			status: {
 				lx200: false,
 				stellarium: false,
@@ -90,7 +86,7 @@ export function mountStore(mount: Mount) {
 	let mounted = false
 
 	function _mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('mount mounted:', mount.name)
 
@@ -103,6 +99,8 @@ export function mountStore(mount: Mount) {
 		timer = window.setInterval(updateCoordinatePosition, 5000)
 
 		updateCoordinatePosition()
+
+		return unmount
 	}
 
 	function unmount() {
@@ -118,8 +116,16 @@ export function mountStore(mount: Mount) {
 		return equipmentStore.connect(mount)
 	}
 
-	function updateRemoteControl<K extends keyof MountState['remoteControl']['request']>(key: K, value: MountState['remoteControl']['request'][K]) {
-		state.remoteControl.request[key] = value
+	function setRemoteControlProtocol(value: MountRemoteControlProtocol) {
+		state.remoteControl.request.protocol = value
+	}
+
+	function setRemoteControlHost(value: string) {
+		state.remoteControl.request.host = value
+	}
+
+	function setRemoteControlPort(value: number) {
+		state.remoteControl.request.port = value
 	}
 
 	async function updateRemoteControlStatus() {
@@ -128,13 +134,23 @@ export function mountStore(mount: Mount) {
 	}
 
 	async function startRemoteControl() {
-		await Api.Mounts.RemoteControl.start(mount, state.remoteControl.request)
-		return updateRemoteControlStatus()
+		try {
+			state.remoteControl.pendingAction = 'start'
+			await Api.Mounts.RemoteControl.start(mount, state.remoteControl.request)
+			return updateRemoteControlStatus()
+		} finally {
+			state.remoteControl.pendingAction = undefined
+		}
 	}
 
 	async function stopRemoteControl() {
-		await Api.Mounts.RemoteControl.stop(mount, state.remoteControl.request.protocol)
-		return updateRemoteControlStatus()
+		try {
+			state.remoteControl.pendingAction = 'stop'
+			await Api.Mounts.RemoteControl.stop(mount, state.remoteControl.request.protocol)
+			return updateRemoteControlStatus()
+		} finally {
+			state.remoteControl.pendingAction = undefined
+		}
 	}
 
 	function updateTargetCoordinateType(value: MountTargetCoordinateType) {
@@ -247,44 +263,14 @@ export function mountStore(mount: Mount) {
 		return Api.Mounts.stop(mount)
 	}
 
-	function showLocation() {
-		state.location.show = true
-	}
-
-	function hideLocation() {
-		state.location.show = false
-	}
-
-	function showTime() {
-		state.time.show = true
-	}
-
-	function hideTime() {
-		state.time.show = false
-	}
-
-	function showRemoteControl() {
-		state.remoteControl.show = true
-	}
-
-	function hideRemoteControl() {
-		state.remoteControl.show = false
-	}
-
-	function show() {
-		equipmentStore.show(mount)
-	}
-
-	function hide() {
-		equipmentStore.hide(mount)
-	}
-
 	return {
 		state,
 		mount: _mount,
 		unmount,
 		connect,
-		updateRemoteControl,
+		setRemoteControlProtocol,
+		setRemoteControlHost,
+		setRemoteControlPort,
 		startRemoteControl,
 		stopRemoteControl,
 		updateTargetCoordinateType,
@@ -295,12 +281,6 @@ export function mountStore(mount: Mount) {
 		goTo,
 		sync,
 		frame,
-		showLocation,
-		hideLocation,
-		showTime,
-		hideTime,
-		showRemoteControl,
-		hideRemoteControl,
 		park,
 		unpark,
 		togglePark,
@@ -313,7 +293,5 @@ export function mountStore(mount: Mount) {
 		location,
 		time,
 		stop,
-		show,
-		hide,
 	} as const
 }

@@ -2,8 +2,9 @@ import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from '
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { CameraManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
-import { CameraSimulator, ClientSimulator, MountSimulator } from 'nebulosa/src/devices/indi/simulator'
-import { CacheManager } from 'src/api/cache'
+import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
+import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { cameraBus, CameraHandler } from 'src/api/camera'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { darvBus, darv as darvEndpoints, DarvHandler } from 'src/api/darv'
@@ -11,7 +12,8 @@ import { GuideOutputHandler } from 'src/api/guideoutput'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
-import { DEFAULT_DARV_START, type DarvEvent, type DarvStart } from 'src/shared/types'
+import { DEFAULT_DARV_START } from '#/darv'
+import type { DarvStart, DarvEvent } from '#/darv'
 import { noContent, SocketMessager, waitUntil } from './util'
 
 type DarvStartOverrides = Omit<Partial<DarvStart>, 'capture'> & {
@@ -32,7 +34,7 @@ const guideOutputManager = new GuideOutputManager({
 	get: (client, name) => mountManager.get(client, name) ?? cameraManager.get(client, name),
 })
 const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
-const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new CacheManager())
+const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
 const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler)
 const endpoints = darvEndpoints(darvHandler)

@@ -1,25 +1,9 @@
-import type { PlanetType } from 'src/shared/types'
-import { Select, type SelectProps } from './components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
+import { PLANET_TYPES } from '#/planet'
+import type { PlanetType } from '#/planet'
 
-const ITEMS = [
-	'ALL',
-	'PLANET',
-	'DWARF_PLANET',
-	'ASTEROID',
-	'COMET',
-	'MARTIAN_SATELLITE',
-	'JOVIAN_REGULAR_SATELLITE',
-	'JOVIAN_IRREGULAR_SATELLITE',
-	'SATURNIAN_REGULAR_SATELLITE',
-	'SATURNIAN_INNER_SATELLITE',
-	'SATURNIAN_IRREGULAR_SATELLITE',
-	'URANIAN_REGULAR_SATELLITE',
-	'URANIAN_INNER_SATELLITE',
-	'URANIAN_IRREGULAR_SATELLITE',
-	'NEPTUNIAN_SATELLITE',
-	'NEPTUNIAN_IRREGULAR_SATELLITE',
-	'PLUTO_SATELLITE',
-] as const
+const ITEMS = ['all', ...PLANET_TYPES] as const
 
 const LABELS = [
 	'All',
@@ -41,11 +25,11 @@ const LABELS = [
 	'Pluto Satellite',
 ] as const
 
-function PlanetTypeItem(item: PlanetType | 'ALL', i: number) {
+function PlanetTypeItem(item: PlanetType | 'all', i: number) {
 	return <span>{LABELS[i]}</span>
 }
 
-export type PlanetTypeSelectProps = Omit<SelectProps<PlanetType | 'ALL'>, 'children' | 'items'>
+export type PlanetTypeSelectProps = Omit<SelectProps<PlanetType | 'all'>, 'children' | 'items'>
 
 export function PlanetTypeSelect({ label = 'Type', ...props }: PlanetTypeSelectProps) {
 	return (

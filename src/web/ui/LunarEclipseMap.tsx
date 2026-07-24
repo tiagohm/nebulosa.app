@@ -1,29 +1,31 @@
+import { tw } from '@shared/util'
+import { lunarEclipseStore } from '@stores/lunar.eclipse.store'
+import { IconButton } from '@ui/components/IconButton'
+import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
+import { WorldMap, worldMapCoordinateToPoint } from '@ui/components/WorldMap'
+import { Icons } from '@ui/Icon'
+import { LocalViewOrientationModeButtonGroup } from '@ui/LocalViewOrientationModeButtonGroup'
+import { LunarEclipseContactKindButtonGroup } from '@ui/LunarEclipseContactKindButtonGroup'
 import type { LocalLunarEclipseEvent, LocalLunarEclipseSvgShape } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
 import type { LunarEclipseContactKind } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import { formatAZ, toDeg } from 'nebulosa/src/math/units/angle'
-import { Fragment, memo, type CSSProperties } from 'react'
+import { Fragment, memo, useEffect } from 'react'
+import type { CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
-import { tw } from '../shared/util'
-import { lunarEclipseStore } from '../stores/lunar.eclipse.store'
-import { IconButton } from './components/IconButton'
-import { Tab, TabPanel, Tabs } from './components/Tabs'
-import { WorldMap, worldMapCoordinateToPoint } from './components/WorldMap'
-import { Icons } from './Icon'
-import { LocalViewOrientationModeButtonGroup } from './LocalViewOrientationModeButtonGroup'
-import { LunarEclipseContactKindButtonGroup } from './LunarEclipseContactKindButtonGroup'
-import { Modal } from './Modal'
 
 export const LunarEclipseMap = memo(() => {
-	const { show } = useSnapshot(lunarEclipseStore.state)
-
-	if (!show) return null
+	useEffect(lunarEclipseStore.mount, [])
 
 	return (
-		<Modal header={<Header />} id="lunar-eclipse-map" initialWidth="560px" onHide={lunarEclipseStore.hide}>
-			<Body />
-		</Modal>
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<Header />
+			<div className="col-span-full flex flex-row items-center gap-2">
+				<Map />
+				<Info />
+			</div>
+		</div>
 	)
 })
 
@@ -31,29 +33,16 @@ const Header = memo(() => {
 	const { eclipse } = useSnapshot(lunarEclipseStore.state)
 
 	return (
-		<div className="grid w-full grid-cols-[2.5rem_1fr_2.5rem] items-center gap-2">
+		<div className="col-span-full flex items-center justify-center gap-2">
 			<IconButton icon={Icons.ArrowLeft} onClick={lunarEclipseStore.prev} tooltipContent="Prev" />
-			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">
-				<Icons.Moon className="text-warning" />
-				<div className="flex flex-col items-center justify-center gap-0">
-					<span className="truncate">Lunar Eclipse</span>
-					{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD')}</span>}
-				</div>
-			</span>
+			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD')}</span>}</span>
 			<IconButton icon={Icons.ArrowRight} onClick={lunarEclipseStore.next} tooltipContent="Next" />
 		</div>
 	)
 })
 
-const Body = memo(() => (
-	<div className="flex w-full flex-col gap-3">
-		<Info />
-		<Map />
-	</div>
-))
-
 const Info = memo(() => (
-	<div className="flex w-full flex-col gap-2">
+	<div className="flex flex-1 flex-col justify-start gap-2 self-start">
 		<Tabs fullWidth>
 			<Tab id="details">Details</Tab>
 			<Tab id="contacts">Contacts</Tab>
@@ -345,8 +334,8 @@ const LocalView = memo(() => {
 	return (
 		<div className="flex flex-col gap-2">
 			<div className="flex flex-row flex-wrap items-center justify-between gap-2">
-				<LunarEclipseContactKindButtonGroup value={selectedEvent} onValueChange={(value) => lunarEclipseStore.updateLocalViewOptions('selectedEvent', value)} />
-				<LocalViewOrientationModeButtonGroup value={orientationMode} onValueChange={(value) => lunarEclipseStore.updateLocalViewOptions('orientationMode', value)} />
+				<LunarEclipseContactKindButtonGroup value={selectedEvent} onValueChange={lunarEclipseStore.setSelectedEvent} />
+				<LocalViewOrientationModeButtonGroup value={orientationMode} onValueChange={lunarEclipseStore.setOrientationMode} />
 			</div>
 			<div className="overflow-hidden rounded-lg bg-neutral-950">
 				<svg width="100%" height="100%" className="aspect-2/ block bg-[#05054f]" viewBox={`0 0 ${localView.width} ${localView.height}`}>
@@ -360,7 +349,7 @@ const LocalView = memo(() => {
 })
 
 const Map = memo(() => (
-	<WorldMap defaultScale={1} onCoordinateClick={lunarEclipseStore.handleCoordinateChange} onTransformChange={lunarEclipseStore.handleTransformChange}>
+	<WorldMap className="h-full flex-1" defaultScale={1} onCoordinateClick={lunarEclipseStore.handleCoordinateChange} onTransformChange={lunarEclipseStore.handleTransformChange}>
 		<MapMarker />
 		<MapGeometry />
 	</WorldMap>

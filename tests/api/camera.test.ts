@@ -5,7 +5,12 @@ import { dirname, join, sep } from 'path'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { CameraManager, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
-import { CameraSimulator, ClientSimulator, FocuserSimulator, MountSimulator, RotatorSimulator, WheelSimulator } from 'nebulosa/src/devices/indi/simulator'
+import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
+import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
+import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
+import { RotatorSimulator } from 'nebulosa/src/devices/indi/simulator/rotator'
+import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
 import { readImageFromBuffer, readImageFromPath } from 'nebulosa/src/imaging/model/image'
 import { isFits } from 'nebulosa/src/io/formats/fits/fits'
 import { isXisf, readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
@@ -13,14 +18,20 @@ import { bufferSource } from 'nebulosa/src/io/io'
 import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { camera as cameraEndpoints, CameraCaptureTask, CameraHandler, cameraBus } from 'src/api/camera'
-import { guiderBus, type GuiderHandler } from 'src/api/guider'
+import { guiderBus } from 'src/api/guider'
+import type { GuiderHandler } from 'src/api/guider'
 import { ImageProcessor } from 'src/api/image'
-import { WebSocketMessageHandler, type Messager } from 'src/api/message'
-import { DEFAULT_CAMERA_CAPTURE_START, DEFAULT_GUIDER_EVENT, type CameraAdded, type CameraCaptureEvent, type CameraCaptureStart, type CameraFrameEvent, type CameraRemoved, type CameraUpdated } from 'src/shared/types'
-import { json, noContent, SocketMessager, waitUntil, type SocketMessage } from './util'
+import { WebSocketMessageHandler } from 'src/api/message'
+import type { Messager } from 'src/api/message'
+import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
+import type { CameraAdded, CameraRemoved, CameraUpdated, CameraCaptureEvent, CameraCaptureStart, CameraDither, CameraFrameEvent } from '#/camera'
+import { DEFAULT_GUIDER_EVENT } from '#/guider'
+import type { GuiderDither } from '#/guider'
+import { json, noContent, SocketMessager, waitUntil } from './util'
+import type { SocketMessage } from './util'
 
 type CameraCaptureStartOverrides = Omit<Partial<CameraCaptureStart>, 'dither'> & {
-	dither?: Partial<CameraCaptureStart['dither']>
+	dither?: Partial<CameraDither>
 }
 
 type CameraCaptureEventRecord = {
@@ -636,12 +647,12 @@ describe('camera capture start request', () => {
 	}, 5000)
 
 	test('dithers before exposure when guiding is running', async () => {
-		let dithered: CameraCaptureStart['dither'] | undefined
+		let dithered: GuiderDither | undefined
 		let signal: AbortSignal | undefined
 
 		const guiderHandler = {
 			running: true,
-			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal) => {
+			dither: (request: GuiderDither, s?: AbortSignal) => {
 				dithered = request
 				signal = s
 				guiderBus.emit('dither', { phase: 'dithered', guider: structuredClone(DEFAULT_GUIDER_EVENT), dx: 1.5, dy: -2 })
@@ -678,7 +689,7 @@ describe('camera capture start request', () => {
 		const error = spyOn(console, 'error').mockImplementation(() => {})
 		const guiderHandler = {
 			running: true,
-			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal) => {
+			dither: (request: GuiderDither, s?: AbortSignal) => {
 				guiderBus.emit('dither', { phase: 'settling', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' } })
 				guiderBus.emit('dither', { phase: 'settled', guider: { ...structuredClone(DEFAULT_GUIDER_EVENT), state: 'settling' }, ok: false, reason: 'settle-timeout' })
 				return Promise.resolve({ ok: false, reason: 'settle-timeout' } as const)
@@ -709,7 +720,7 @@ describe('camera capture start request', () => {
 		let resolveDither: ((value: Awaited<ReturnType<GuiderHandler['dither']>>) => void) | undefined
 		const guiderHandler = {
 			running: true,
-			dither: (request: CameraCaptureStart['dither'], s?: AbortSignal, id?: string) => {
+			dither: (request: GuiderDither, s?: AbortSignal, id?: string) => {
 				signal = s
 				return new Promise<Awaited<ReturnType<GuiderHandler['dither']>>>((resolve) => {
 					resolveDither = resolve

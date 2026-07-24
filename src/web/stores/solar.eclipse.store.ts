@@ -1,21 +1,22 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { settingsStore } from '@stores/settings.store'
+import type { WorldMapPosition } from '@ui/components/WorldMap'
+import type { InteractTransform } from '@ui/Interactable'
 import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
-import type { LocalSolarEclipseCircumstances, LocalSolarEclipseViewGeometry, LocalSolarEclipseViewOptions } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
+import type { LocalEclipseContactKind, LocalSolarEclipseCircumstances, LocalSolarEclipseViewGeometry, LocalSolarEclipseViewOptions, LocalViewOrientationMode } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import type { Writable } from 'nebulosa/src/core/types'
 import { deg } from 'nebulosa/src/math/units/angle'
-import type { SolarEclipseMap } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import type { WorldMapPosition } from '../ui/components/WorldMap'
-import type { InteractTransform } from '../ui/Interactable'
-import { atlasStore } from './atlas.store'
+import { DEFAULT_GEOGRAPHIC_COORDINATE } from '#/atlas'
+import type { SolarEclipseMap } from '#/sun'
 
 export type SolarEclipseStore = typeof solarEclipseStore
 
 export interface SolarEclipseState {
-	show: boolean
 	eclipse?: SolarEclipse
 	map?: SolarEclipseMap
 	circumstances?: LocalSolarEclipseCircumstances
@@ -26,12 +27,7 @@ export interface SolarEclipseState {
 }
 
 const state = proxy<SolarEclipseState>({
-	show: false,
-	location: {
-		latitude: atlasStore.state.request.location.latitude,
-		longitude: atlasStore.state.request.location.longitude,
-		elevation: atlasStore.state.request.location.elevation,
-	},
+	location: structuredClone(DEFAULT_GEOGRAPHIC_COORDINATE),
 	scale: 5,
 	localViewOptions: {
 		width: 400,
@@ -44,7 +40,39 @@ const state = proxy<SolarEclipseState>({
 	},
 })
 
-initProxy(state, 'solareclipse', ['p:scale', 'o:localViewOptions'])
+let mounted = false
+const u: VoidFunction[] = []
+
+function mount() {
+	if (mounted) return unmount
+
+	console.info('solar eclipse mounted')
+
+	mounted = true
+
+	state.location.latitude = settingsStore.state.location.latitude
+	state.location.longitude = settingsStore.state.location.longitude
+	state.location.elevation = settingsStore.state.location.elevation
+
+	u[0] = initProxy(state, 'solareclipse', ['p:scale', 'o:localViewOptions'])
+
+	if (!state.eclipse) {
+		void Api.Atlas.solarEclipses({ location: state.location, time: { utc: Date.now(), offset: settingsStore.state.time.offset }, next: true, count: 1 }).then((eclipses) => {
+			if (eclipses?.length) {
+				void load(eclipses[0])
+			}
+		})
+	}
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('solar eclipse unmounted')
+	unsubscribe(u)
+	mounted = false
+}
 
 async function loadMap() {
 	if (state.eclipse === undefined) return false
@@ -73,8 +101,6 @@ async function loadView() {
 }
 
 async function load(next: SolarEclipse) {
-	show()
-
 	if (next.maximalTime !== state.eclipse?.maximalTime) {
 		state.eclipse = ref(next)
 
@@ -84,10 +110,14 @@ async function load(next: SolarEclipse) {
 	}
 }
 
-async function updateLocalViewOptions<K extends 'orientationMode' | 'selectedEvent'>(key: K, value: LocalSolarEclipseViewOptions[K]) {
-	state.localViewOptions[key] = value
+function setOrientationMode(value: LocalViewOrientationMode) {
+	state.localViewOptions.orientationMode = value
+	void loadView()
+}
 
-	await loadView()
+function setSelectedEvent(value: LocalEclipseContactKind) {
+	state.localViewOptions.selectedEvent = value
+	void loadView()
 }
 
 function handleTransformChange(transform: InteractTransform) {
@@ -105,7 +135,7 @@ async function handleCoordinateChange(position: WorldMapPosition) {
 async function find(next: boolean) {
 	if (!state.eclipse) return
 	const utc = temporalFromTime(state.eclipse.maximalTime) + (next ? 86400000 : -86400000)
-	const eclipse = await Api.Atlas.solarEclipses({ time: { utc, offset: 0 }, location: atlasStore.state.request.location, count: 1, next })
+	const eclipse = await Api.Atlas.solarEclipses({ time: { utc, offset: 0 }, location: settingsStore.state.location, count: 1, next })
 	if (!eclipse || eclipse.length === 0) return
 	await load(eclipse[0])
 }
@@ -118,22 +148,15 @@ function next() {
 	return find(true)
 }
 
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
-
 export const solarEclipseStore = {
 	state,
+	mount,
+	unmount,
 	load,
 	prev,
 	next,
 	handleCoordinateChange,
 	handleTransformChange,
-	updateLocalViewOptions,
-	show,
-	hide,
+	setOrientationMode,
+	setSelectedEvent,
 } as const

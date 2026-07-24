@@ -1,10 +1,11 @@
+import { cameraBus, autoFocusBus, darvBus, flatWizardBus, tppaBus, alpacaBus, connectionBus, guiderBus, indiBus, webSocketBus } from '@shared/bus'
+import { toast } from '@shared/toast'
+import { confirmationStore } from '@stores/confirmation.store'
+import { equipmentStore } from '@stores/equipment.store'
 import type { DeviceType } from 'nebulosa/src/devices/indi/device'
-import type { DeviceAdded, DeviceRemoved, Notification } from 'src/shared/types'
 import { proxy } from 'valtio'
-import { toast } from '@/shared/toast'
-import { cameraBus, autoFocusBus, darvBus, flatWizardBus, tppaBus, alpacaBus, connectionBus, guiderBus, indiBus, webSocketBus } from '../shared/bus'
-import { confirmationStore } from './confirmation.store'
-import { equipmentStore } from './equipment.store'
+import type { DeviceAdded, DeviceRemoved } from '#/device'
+import type { Notification } from '#/notification'
 
 export type WebSocketStore = typeof wsStore
 
@@ -110,8 +111,14 @@ function create() {
 	})
 }
 
+let mounted = false
+
 function mount() {
+	if (mounted) return unmount
+
 	console.info('web socket mounted')
+
+	mounted = true
 
 	timer = window.setInterval(() => {
 		if (webSocket && webSocket.readyState === WebSocket.CLOSED) {
@@ -123,12 +130,16 @@ function mount() {
 	}, 5000)
 
 	create()
+
+	return unmount
 }
 
 function unmount() {
+	if (!mounted) return
 	console.info('web socket unmounted')
 	window.clearInterval(timer)
 	timer = undefined
+	mounted = false
 }
 
 function send(data: string | Blob | BufferSource) {

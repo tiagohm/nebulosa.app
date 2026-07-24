@@ -7,15 +7,42 @@ import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/co
 import type { LocalLunarEclipseCircumstances, LocalLunarEclipseViewGeometry } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
 import type { LocalSolarEclipseCircumstances, LocalSolarEclipseViewGeometry } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
-import type { Writable } from 'nebulosa/src/core/types'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
 import type { Camera, ClientInfo, Cover, Device, DeviceProperties, DeviceProperty, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, MountTargetCoordinate, NameAndLabel, Rotator, Thermometer, TrackMode, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { Message, NewVector } from 'nebulosa/src/devices/indi/types'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import type { Angle } from 'nebulosa/src/math/units/angle'
-// oxfmt-ignore
-import type { AlpacaServerStatus, AnnotatedSkyObject, AnnotateImage, AutoFocusStart, BodyPosition, CameraCaptureStart, ChartOfBody, CloseApproach, CloseImage, ComputeLunarEclipseLocalCircumstances, ComputeLunarEclipseLocalView, ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, Confirm, Connect, ConnectionStatus, CoordinateInfo, CreateDirectory, DarvStart, DirectoryEntry, FileSystem, FindCloseApproaches, FindLunarEclipse, FindSolarEclipse, FlatWizardStart, Framing, GuidePulse, ImageCoordinateGrid, ImageHistogram, ImageInfo, IndiServerStart, IndiServerStatus, ListDirectory, LocationAndTime, LunarApsis, LunarEclipseMap, LunarPhaseTime, MinorPlanet, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, OpenImage, GuiderConnect, GuiderEvent, GuiderStatus, PlanetariumRequest, PlateSolveStart, PositionOfBody, Satellite, SaveImage, SearchMinorPlanet, SearchSatellite, SearchSkyObject, SkyObject, SolarEclipseMap, SolarSeasons, StarDetection, StatisticImage, TppaStart, Twilight } from 'src/shared/types'
-import { type ImageCoordinateInterpolation, type SkyObjectSearchItem, X_IMAGE_INFO_HEADER } from 'src/shared/types'
+import type { AlpacaServerStatus } from '#/alpaca'
+import type { SearchMinorPlanet, MinorPlanet, FindCloseApproaches, CloseApproach } from '#/asteroid'
+import type { BodyPosition, ChartOfBody, LocationAndTime, PositionOfBody } from '#/atlas'
+import type { AutoFocusStart } from '#/autofocus'
+import type { CameraCaptureStart } from '#/camera'
+import type { Confirm } from '#/confirmation'
+import type { ConnectionStatus, Connect } from '#/connection'
+import type { DarvStart } from '#/darv'
+import type { ListDirectory, CreateDirectory, DirectoryEntry, FileSystem } from '#/filesystem'
+import type { FlatWizardStart } from '#/flatwizard'
+import type { Framing } from '#/framing'
+import type { SearchSkyObject, SkyObjectSearchItem, SkyObject } from '#/galaxy'
+import type { GuidePulse } from '#/guideoutput'
+import type { GuiderConnect, GuiderEvent, GuiderStatus } from '#/guider'
+import { X_IMAGE_INFO_HEADER } from '#/image'
+import type { CloseImage, ImageInfo, OpenImage } from '#/image'
+import type { AnnotateImage, ImageAnnotation } from '#/image.annotation'
+import type { ImageCoordinateGrid } from '#/image.coordinategrid'
+import type { ProjectImageCrosshair, ImageCrosshairProjection } from '#/image.crosshair'
+import type { ImageCoordinateInterpolation } from '#/image.mousecoordinate'
+import type { SaveImage } from '#/image.save'
+import type { ImageHistogram, StatisticImage } from '#/image.statistics'
+import type { IndiServerStart, IndiServerStatus } from '#/indi'
+import type { ApogeeAndPerigee, ComputeLunarEclipseLocalCircumstances, ComputeLunarEclipseLocalView, FindLunarEclipse, LunarEclipseMap, LunarPhaseTime } from '#/moon'
+import type { CoordinateInfo, MountRemoteControlStart, MountRemoteControlProtocol, MountRemoteControlStatus } from '#/mount'
+import type { PlanetariumSearch } from '#/planetarium'
+import type { PlateSolveStart } from '#/platesolver'
+import type { SearchSatellite, Satellite } from '#/satellite'
+import type { StarDetection } from '#/stardetection'
+import type { ComputeSolarEclipseLocalCircumstances, ComputeSolarEclipseLocalView, FindSolarEclipse, SolarEclipseMap, SolarSeasons, Twilight } from '#/sun'
+import type { TppaStart } from '#/tppa'
 
 export const API_URL = localStorage.getItem('api.uri') || `${location.protocol}//${location.host}`
 
@@ -96,7 +123,7 @@ export namespace Api {
 		}
 
 		export function annotate(req: AnnotateImage) {
-			return json<readonly AnnotatedSkyObject[]>('/image/annotate', 'post', req)
+			return json<ImageAnnotation>('/image/annotate', 'post', req)
 		}
 
 		export function coordinateInterpolation(req: PlateSolution) {
@@ -105,6 +132,10 @@ export namespace Api {
 
 		export function coordinateGrid(req: PlateSolution) {
 			return json<ImageCoordinateGrid>('/image/coordinategrid', 'post', req)
+		}
+
+		export function crosshairProjection(req: ProjectImageCrosshair) {
+			return json<ImageCrosshairProjection>('/image/crosshairprojection', 'post', req)
 		}
 
 		export function statistics(req: StatisticImage) {
@@ -506,7 +537,7 @@ export namespace Api {
 		}
 
 		export function moonApsis(req: LocationAndTime) {
-			return json<readonly [LunarApsis, LunarApsis]>('/atlas/moon/apsis', 'post', req)
+			return json<ApogeeAndPerigee>('/atlas/moon/apsis', 'post', req)
 		}
 
 		export function positionOfPlanet(req: PositionOfBody, code: string) {
@@ -537,6 +568,10 @@ export namespace Api {
 			return json<readonly number[]>(`/atlas/skyobjects/${id}/chart`, 'post', req)
 		}
 
+		export function positionOfSkyPoint(req: PositionOfBody, ra: Angle | string, dec: Angle | string) {
+			return json<BodyPosition>(`/atlas/skypoint/position?ra=${ra}&dec=${dec}`, 'post', req)
+		}
+
 		export function searchSatellite(req: SearchSatellite) {
 			return json<readonly Satellite[]>('/atlas/satellites/search', 'post', req)
 		}
@@ -549,8 +584,12 @@ export namespace Api {
 			return json<readonly number[]>(`/atlas/satellites/${id}/chart`, 'post', req)
 		}
 
-		export function planetarium(req: PlanetariumRequest) {
-			return json<readonly Writable<SkyObject>[]>(`/atlas/planetarium`, 'post', req)
+		export function planetarium(req: PlanetariumSearch) {
+			return json<readonly SkyObject[]>(`/atlas/planetarium`, 'post', req)
+		}
+
+		export function iers() {
+			return json<readonly string[]>(`/atlas/iers`, 'get')
 		}
 	}
 

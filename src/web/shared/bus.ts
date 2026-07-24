@@ -1,10 +1,19 @@
+import type { DeviceState } from '@stores/equipment.store'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
 import type { Camera, Cover, Device, FlatPanel, Focuser, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { Message } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
-import type { AlpacaServerStatus, AutoFocusEvent, CameraCaptureEvent, CameraFrameEvent, ConnectionEvent, DarvEvent, FlatWizardEvent, GuiderEvent, IndiDevicePropertyEvent, IndiServerEvent, TppaEvent } from 'src/shared/types'
-import type { DeviceState } from '../stores/equipment.store'
-import type { Image, ImageLoaded, ImageRoiRequest } from './types'
+import type { AlpacaServerStatus } from '#/alpaca'
+import type { AutoFocusEvent } from '#/autofocus'
+import type { CameraFrameEvent, CameraCaptureEvent } from '#/camera'
+import type { ConnectionEvent } from '#/connection'
+import type { DarvEvent } from '#/darv'
+import type { FlatWizardEvent } from '#/flatwizard'
+import type { GuiderEvent } from '#/guider'
+import type { Image, ImageLoaded } from '#/image'
+import type { ComputeRoi } from '#/image.roi'
+import type { IndiDevicePropertyEvent, IndiServerEvent } from '#/indi'
+import type { TppaEvent } from '#/tppa'
 
 export interface WebSocketBusEvents {
 	readonly open: unknown
@@ -21,15 +30,15 @@ export type DeviceBusEvents<D extends Device = Device> = {
 export interface CameraBusEvents extends DeviceBusEvents<Camera> {
 	readonly frame: CameraFrameEvent
 	readonly capture: CameraCaptureEvent
-	readonly roi: ImageRoiRequest
+	readonly roi: ComputeRoi
 }
 
 export interface ImageBusEvents {
 	readonly add: Image
-	readonly update: Image
+	readonly update: Readonly<{ image: Image; path: string }>
 	readonly remove: Image
 	readonly load: ImageLoaded
-	readonly roi: ImageRoiRequest
+	readonly roi: ComputeRoi
 }
 
 export interface DarvBusEvents {
@@ -72,7 +81,10 @@ export interface IndiBusEvents {
 	readonly message: Message
 	readonly serverStart: IndiServerEvent
 	readonly serverStop: IndiServerEvent
-	readonly togglePanelControl: Device
+}
+
+export interface PlanetariumBusEvents {
+	readonly selectedObjectCoordinate: unknown
 }
 
 export const webSocketBus = new EventBus<WebSocketBusEvents>()
@@ -110,3 +122,5 @@ export const connectionBus = new EventBus<ConnectionBusEvents>()
 export const guiderBus = new EventBus<GuiderBusEvents>()
 
 export const indiBus = new EventBus<IndiBusEvents>()
+
+export const planetariumBus = new EventBus<PlanetariumBusEvents>()

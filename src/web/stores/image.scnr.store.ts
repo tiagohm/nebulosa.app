@@ -1,19 +1,19 @@
-import { DEFAULT_IMAGE_SCNR, type ImageScnr } from 'src/shared/types'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { ImageChannel } from 'nebulosa/src/imaging/model/types'
+import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { initProxy } from '../shared/proxy'
-import type { ImageViewerStore } from './image.viewer.store'
+import { DEFAULT_IMAGE_SCNR } from '#/image.scnr'
+import type { ImageScnr } from '#/image.scnr'
 
 export type ImageScnrStore = ReturnType<typeof imageScnrStore>
 
 export interface ImageScnrState {
-	show: boolean
 	readonly scnr: ImageScnr
 }
 
 export function imageScnrStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageScnrState>({
-		show: false,
 		scnr: viewer.state.transformation.scnr,
 	})
 
@@ -23,13 +23,13 @@ export function imageScnrStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image scnr mounted:', viewer.state.path)
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.scnr`, ['p:show'])
+		return unmount
 	}
 
 	function unmount() {
@@ -39,8 +39,16 @@ export function imageScnrStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof ImageScnr>(key: K, value: ImageScnr[K]) {
-		state.scnr[key] = value
+	function setChannel(value: ImageChannel | undefined) {
+		state.scnr.channel = value
+	}
+
+	function setMethod(value: SCNRProtectionMethod) {
+		state.scnr.method = value
+	}
+
+	function setAmount(value: number) {
+		state.scnr.amount = value
 	}
 
 	function reset() {
@@ -52,23 +60,15 @@ export function imageScnrStore(viewer: ImageViewerStore) {
 		return viewer.reload()
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
 		mount,
 		unmount,
-		update,
+		setChannel,
+		setMethod,
+		setAmount,
 		reset,
 		apply,
-		show,
-		hide,
 	} as const
 }

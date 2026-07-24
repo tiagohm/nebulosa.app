@@ -1,18 +1,18 @@
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
+import { TextInput } from '@ui/components/TextInput'
 import { useDebounce } from '@uidotdev/usehooks'
 import { useMemo, useState } from 'react'
-import { SearchTextInput } from './SearchTextInput'
-import { Select, type SelectProps } from './Select'
 
 export interface FilterableSelectProps<T> extends Omit<SelectProps<T>, 'headerContent' | 'items'> {
 	readonly items: readonly T[]
 	readonly filter: (item: T, search: string) => boolean
 	readonly filterPlaceholder?: string
 	readonly headerContent?: React.ReactNode
-	readonly minLengthToSearch?: number
 }
 
 // Renders a searchable Select while preserving the shared Select behavior.
-export function FilterableSelect<T>({ items, filter, filterPlaceholder = 'Search', headerContent, minLengthToSearch = 3, ...props }: FilterableSelectProps<T>) {
+export function FilterableSelect<T>({ items, filter, filterPlaceholder = 'Search', headerContent, ...props }: FilterableSelectProps<T>) {
 	const [search, setSearch] = useState('')
 	const debouncedSearch = useDebounce(search, 500)
 
@@ -28,7 +28,7 @@ export function FilterableSelect<T>({ items, filter, filterPlaceholder = 'Search
 
 	const HeaderContent = (
 		<>
-			<SearchTextInput fullWidth minLengthToSearch={minLengthToSearch} onClear={clearSearch} onValueChange={setSearch} placeholder={filterPlaceholder} value={search} />
+			<TextInput fullWidth clearable onClear={clearSearch} onValueChange={setSearch} placeholder={filterPlaceholder} value={search} />
 			{headerContent}
 		</>
 	)

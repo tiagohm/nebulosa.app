@@ -1,6 +1,7 @@
+import { equipmentStore } from '@stores/equipment.store'
+import type { DeviceState } from '@stores/equipment.store'
 import type { Thermometer } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
-import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type ThermometerStore = ReturnType<typeof thermometerStore>
 
@@ -15,24 +16,23 @@ export function thermometerStore(thermometer: Thermometer) {
 
 	console.info('thermometer created:', thermometer.name)
 
+	let mounted = false
+
 	function mount() {
+		if (mounted) return unmount
 		console.info('thermometer mounted:', thermometer.name)
+		mounted = true
+		return unmount
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('thermometer unmounted:', thermometer.name)
+		mounted = false
 	}
 
 	function connect() {
 		return equipmentStore.connect(thermometer)
-	}
-
-	function show() {
-		return equipmentStore.show(thermometer, 'thermometer')
-	}
-
-	function hide() {
-		return equipmentStore.hide(thermometer, 'thermometer')
 	}
 
 	return {
@@ -40,7 +40,5 @@ export function thermometerStore(thermometer: Thermometer) {
 		mount,
 		unmount,
 		connect,
-		show,
-		hide,
 	} as const
 }

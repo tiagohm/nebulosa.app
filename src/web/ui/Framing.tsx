@@ -1,46 +1,35 @@
+import { framingStore } from '@stores/framing.store'
+import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
+import { Chip } from '@ui/components/Chip'
+import { NumberInput } from '@ui/components/NumberInput'
+import { TextInput } from '@ui/components/TextInput'
+import { HipsSurveySelect } from '@ui/HipsSurveySelect'
+import { Icons } from '@ui/Icon'
+import type { IDockviewPanelProps } from 'dockview-react'
 import { pixelScale } from 'nebulosa/src/astronomy/formulas'
-import { memo } from 'react'
+import { memo, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { framingStore } from '@/stores/framing.store'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { Chip } from './components/Chip'
-import { Link } from './components/Link'
-import { NumberInput } from './components/NumberInput'
-import { TextInput } from './components/TextInput'
-import { HipsSurveySelect } from './HipsSurveySelect'
-import { Icons } from './Icon'
-import { Modal } from './Modal'
 
-export const Framing = memo(() => {
-	const { show } = useSnapshot(framingStore.state)
+export const Framing = memo(({ params }: IDockviewPanelProps) => {
+	useEffect(framingStore.mount, [])
 
-	if (!show) return null
-
-	return (
-		<Modal footer={<Footer />} header="Framing" id="framing" initialWidth="296px" onHide={framingStore.hide}>
-			<Body />
-			<Link className="col-span-full mt-2" href="https://alasky.cds.unistra.fr/hips-image-services/hips2fits" label="Powered by hips2fits, a service provided by CDS" />
-		</Modal>
-	)
-})
-
-const Body = memo(() => {
 	const { loading, openNewImage } = useSnapshot(framingStore.state)
 	const { width, height, rotation, focalLength, pixelSize, hipsSurvey } = useSnapshot(framingStore.state.request)
 	const { rightAscension, declination } = useSnapshot(framingStore.state.request)
 
 	return (
-		<div className="mt-0 grid grid-cols-12 items-center gap-2">
-			<TextInput className="col-span-6 min-w-0" disabled={loading} label="RA (J2000)" onValueChange={(value) => framingStore.update('rightAscension', value)} value={rightAscension} />
-			<TextInput className="col-span-6 min-w-0" disabled={loading} label="DEC (J2000)" onValueChange={(value) => framingStore.update('declination', value)} value={declination} />
-			<NumberInput className="col-span-4 min-w-0" disabled={loading} label="Width" maxValue={8192} minValue={100} onValueChange={(value) => framingStore.update('width', value)} value={width} />
-			<NumberInput className="col-span-4 min-w-0" disabled={loading} label="Height" maxValue={8192} minValue={100} onValueChange={(value) => framingStore.update('height', value)} value={height} />
-			<NumberInput className="col-span-4 min-w-0" disabled={loading} fractionDigits={2} label="Rotation (°)" maxValue={360} minValue={-360} onValueChange={(value) => framingStore.update('rotation', value)} step={0.1} value={rotation} />
-			<NumberInput className="col-span-6 min-w-0" disabled={loading} label="Focal Length (mm)" maxValue={100000} minValue={0} onValueChange={(value) => framingStore.update('focalLength', value)} value={focalLength} />
-			<NumberInput className="col-span-6 min-w-0" disabled={loading} fractionDigits={1} label="Pixel size (µm)" maxValue={1000} minValue={0} onValueChange={(value) => framingStore.update('pixelSize', value)} step={0.01} value={pixelSize} />
-			<HipsSurveySelect className="col-span-full" disabled={loading} onValueChange={(value) => framingStore.update('hipsSurvey', value)} value={hipsSurvey} />
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<TextInput className="col-span-6 min-w-0" disabled={loading} label="RA (J2000)" onValueChange={framingStore.setRightAscension} value={rightAscension} />
+			<TextInput className="col-span-6 min-w-0" disabled={loading} label="DEC (J2000)" onValueChange={framingStore.setDeclination} value={declination} />
+			<NumberInput className="col-span-4 min-w-0" disabled={loading} label="Width" maxValue={8192} minValue={100} onValueChange={framingStore.setWidth} value={width} />
+			<NumberInput className="col-span-4 min-w-0" disabled={loading} label="Height" maxValue={8192} minValue={100} onValueChange={framingStore.setHeight} value={height} />
+			<NumberInput className="col-span-4 min-w-0" disabled={loading} fractionDigits={2} label="Rotation (°)" maxValue={360} minValue={-360} onValueChange={framingStore.setRotation} step={0.1} value={rotation} />
+			<NumberInput className="col-span-6 min-w-0" disabled={loading} label="Focal Length (mm)" maxValue={100000} minValue={0} onValueChange={framingStore.setFocalLength} value={focalLength} />
+			<NumberInput className="col-span-6 min-w-0" disabled={loading} fractionDigits={1} label="Pixel size (µm)" maxValue={1000} minValue={0} onValueChange={framingStore.setPixelSize} step={0.01} value={pixelSize} />
+			<HipsSurveySelect className="col-span-full" disabled={loading} onValueChange={framingStore.setHipsSurvey} value={hipsSurvey} />
 			<Checkbox className="col-span-full" disabled={loading} label="Open in new image" onValueChange={(value) => (framingStore.state.openNewImage = value)} value={openNewImage} />
+			<Footer />
 		</div>
 	)
 })
@@ -52,12 +41,12 @@ const Footer = memo(() => {
 	const canLoad = isPositiveFinite(width) && isPositiveFinite(height) && field !== undefined
 
 	return (
-		<>
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
 			<div className="flex min-w-0 flex-1 items-center">
 				<Chip className="max-w-full" color={canLoad ? 'primary' : 'default'} label={field ?? 'Invalid FOV'} />
 			</div>
 			<Button color="success" disabled={!canLoad} label="Load" loading={loading} onClick={() => framingStore.load()} startContent={<Icons.Download />} />
-		</>
+		</div>
 	)
 })
 

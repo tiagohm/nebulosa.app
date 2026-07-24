@@ -1,123 +1,55 @@
+import { useStore } from '@hooks/store.hook'
+import { AutoFocusStoreContext, CameraCaptureStoreContext } from '@shared/context'
+import { autoFocusStore } from '@stores/autofocus.store'
+import { AutoFocusFittingModeSelect } from '@ui/AutoFocusFittingModeSelect'
+import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
+import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
+import { Chip } from '@ui/components/Chip'
+import { NumberInput } from '@ui/components/NumberInput'
+import { CameraDropdown, FocuserDropdown } from '@ui/DeviceDropdown'
+import { Icons } from '@ui/Icon'
+import { StarDetectionPopover } from '@ui/StarDetectionPopover'
+import { StarDetectionSelect } from '@ui/StarDetectionSelect'
+import type { IDockviewPanelProps } from 'dockview-react'
+import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import { memo, useContext } from 'react'
 import { CartesianGrid, ComposedChart, Line, ReferenceDot, Scatter, XAxis, YAxis } from 'recharts'
-import type { AutoFocusState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { autoFocusStore } from '@/stores/autofocus.store'
-import { equipmentStore } from '@/stores/equipment.store'
-import { useStore } from '../hooks/store.hook'
-import { AutoFocusStoreContext, CameraDeviceContext, FocuserDeviceContext } from '../shared/context'
-import { AutoFocusFittingModeSelect } from './AutoFocusFittingModeSelect'
-import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { Chip, type ChipProps } from './components/Chip'
-import { NumberInput } from './components/NumberInput'
-import { TextInput } from './components/TextInput'
-import { ConnectButton } from './ConnectButton'
-import { Icons } from './Icon'
-import { Modal } from './Modal'
-import { StarDetectionPopover } from './StarDetectionPopover'
-import { StarDetectionSelect } from './StarDetectionSelect'
 
-const AUTO_FOCUS_STATE_COLORS = {
-	idle: 'default',
-	moving: 'secondary',
-	capturing: 'warning',
-	computing: 'primary',
-} satisfies Record<AutoFocusState, ChipProps['color']>
+export interface AutoFocusParams {
+	readonly id: string
+}
 
 interface FocusChartPoint {
 	readonly position: number
 	readonly hfd: number
 }
 
-interface FocusPoint {
-	readonly x: number
-	readonly y: number
-}
-
-function isFiniteFocusPoint(point: FocusPoint | undefined | null): point is FocusPoint {
-	return point !== undefined && point !== null && Number.isFinite(point.x) && Number.isFinite(point.y) && point.y > 0
-}
-
-function formatMetric(value: number, fractionDigits = 2) {
-	return Number.isFinite(value) && value > 0 ? value.toFixed(fractionDigits) : '--'
-}
-
-function formatPosition(point: FocusPoint | undefined | null) {
-	return isFiniteFocusPoint(point) ? point.x.toFixed(0) : '--'
-}
-
-function focusChartSamples(x: readonly number[], y: readonly number[]) {
-	const length = Math.min(x.length, y.length)
-	const samples: FocusChartPoint[] = []
-
-	for (let i = 0; i < length; i++) {
-		if (Number.isFinite(x[i]) && Number.isFinite(y[i]) && y[i] > 0) {
-			samples.push({ position: x[i], hfd: y[i] })
-		}
-	}
-
-	return samples
-}
-
-function focusCurve(points: readonly FocusPoint[] | undefined) {
-	return points?.filter(isFiniteFocusPoint).map(({ x, y }) => ({ position: x, hfd: y })) ?? []
-}
-
-function focusChartDomain(points: readonly FocusChartPoint[], key: keyof FocusChartPoint): [number, number] {
-	let min = Number.POSITIVE_INFINITY
-	let max = Number.NEGATIVE_INFINITY
-
-	for (const point of points) {
-		const value = point[key]
-		if (value < min) min = value
-		if (value > max) max = value
-	}
-
-	if (!Number.isFinite(min) || !Number.isFinite(max)) return [0, 1]
-
-	const padding = Math.max((max - min) * 0.08, key === 'hfd' ? 0.25 : 1)
-	return [Math.max(0, min - padding), max + padding]
-}
-
-export const AutoFocus = memo(() => {
-	const camera = useContext(CameraDeviceContext)
-	const focuser = useContext(FocuserDeviceContext)
-	const autoFocus = useStore(() => autoFocusStore(camera, focuser), [camera, focuser])
+export const AutoFocus = memo(({ api, params }: IDockviewPanelProps<AutoFocusParams>) => {
+	const autoFocus = useStore(() => autoFocusStore(params.id, api), [params.id])
 
 	return (
 		<AutoFocusStoreContext value={autoFocus}>
-			<Modal footer={<Footer />} header="Auto Focus" id={`autofocus-${camera.id}-${focuser.id}`} initialWidth="440px" onHide={autoFocus.hide}>
-				<Body />
-			</Modal>
+			<div className="grid grid-cols-12 items-center gap-2 p-3">
+				<CameraAndFocuser />
+				<Status />
+				<Inputs />
+				<FocusChart />
+				<Footer />
+			</div>
 		</AutoFocusStoreContext>
 	)
 })
 
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
-		<CameraAndFocuser />
-		<Status />
-		<Inputs />
-		<FocusChart />
-	</div>
-))
-
 const CameraAndFocuser = memo(() => {
 	const autoFocus = useContext(AutoFocusStoreContext)
-	const { capture } = useSnapshot(autoFocus.state.request)
-	const { connected: cameraConnected } = useSnapshot(autoFocus.state.camera)
-	const { connected: focuserConnected } = useSnapshot(autoFocus.state.focuser)
-
-	const CameraStartContent = <ConnectButton connected={cameraConnected} onClick={() => equipmentStore.connect(autoFocus.state.camera)} size="sm" />
-	const FocuserStartContent = <ConnectButton connected={focuserConnected} onClick={() => equipmentStore.connect(autoFocus.state.focuser)} size="sm" />
-	const CameraEndContent = <CameraCaptureStartPopover camera={autoFocus.state.camera} mode="autoFocus" onValueChange={autoFocus.updateCapture} value={capture} />
+	const { camera, focuser, running } = useSnapshot(autoFocus.state)
 
 	return (
-		<div className="col-span-full mt-2 flex flex-row items-center justify-between gap-2">
-			<TextInput className="flex-1" readOnly label="Camera" value={autoFocus.state.camera.name} startContent={CameraStartContent} endContent={CameraEndContent} />
-			<TextInput className="flex-1" readOnly label="Focuser" value={autoFocus.state.focuser.name} startContent={FocuserStartContent} />
+		<div className="col-span-full mt-2 flex flex-row items-center justify-center gap-2">
+			<CameraDropdown showLabel disabled={running} value={camera} onValueChange={(value) => (autoFocus.state.camera = value)} endContent={<CameraDropdownEndContent />} />
+			<FocuserDropdown showLabel disabled={running} value={focuser} onValueChange={(value) => (autoFocus.state.focuser = value)} />
 		</div>
 	)
 })
@@ -126,11 +58,12 @@ const Status = memo(() => {
 	const autoFocus = useContext(AutoFocusStoreContext)
 	const { event } = useSnapshot(autoFocus.state)
 	const { state, starCount, hfd, message, focusPoint } = event
+	const color = state === 'idle' ? 'default' : state === 'moving' ? 'secondary' : state === 'capturing' ? 'warning' : 'primary'
 
 	return (
 		<div className="col-span-full mt-2 flex min-w-0 flex-col gap-2">
 			<div className="flex min-w-0 flex-row flex-wrap items-center gap-1.5">
-				<Chip color={AUTO_FOCUS_STATE_COLORS[state]} size="sm">
+				<Chip color={color} size="sm">
 					{state}
 				</Chip>
 				<Chip color="warning" size="sm">
@@ -156,12 +89,12 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<StarDetectionSelect className="col-span-6" disabled={running} endContent={<StarDetectionSelectEndContent />} onValueChange={(value) => autoFocus.updateStarDetection('type', value)} value={starDetection.type} />
-			<AutoFocusFittingModeSelect className="col-span-6" disabled={running} onValueChange={(value) => autoFocus.update('fittingMode', value)} value={fittingMode} />
-			<NumberInput className="col-span-4" disabled={running} label="Offset steps" maxValue={1000} minValue={1} onValueChange={(value) => autoFocus.update('initialOffsetSteps', value)} value={initialOffsetSteps} />
-			<NumberInput className="col-span-3" disabled={running || !focuser?.connected} label="Step size" maxValue={stepSizeMax} minValue={1} onValueChange={(value) => autoFocus.update('stepSize', value)} value={stepSize} />
-			<NumberInput className="col-span-5" disabled={running} fractionDigits={2} label="RMSD threshold" maxValue={1} minValue={0} onValueChange={(value) => autoFocus.update('rmsdThreshold', value)} step={0.01} value={rmsdThreshold} />
-			<Checkbox className="col-span-full" disabled={running} label="Reversed" onValueChange={(value) => autoFocus.update('reversed', value)} value={reversed} />
+			<StarDetectionSelect className="col-span-6" disabled={running} endContent={<StarDetectionSelectEndContent />} onValueChange={autoFocus.setStarDetectionType} value={starDetection.type} />
+			<AutoFocusFittingModeSelect className="col-span-6" disabled={running} onValueChange={autoFocus.setFittingMode} value={fittingMode} />
+			<NumberInput className="col-span-4" disabled={running} label="Offset steps" maxValue={1000} minValue={1} onValueChange={autoFocus.setInitialOffsetSteps} value={initialOffsetSteps} />
+			<NumberInput className="col-span-3" disabled={running || !focuser?.connected} label="Step size" maxValue={stepSizeMax} minValue={1} onValueChange={autoFocus.setStepSize} value={stepSize} />
+			<NumberInput className="col-span-5" disabled={running} fractionDigits={2} label="RMSD threshold" maxValue={1} minValue={0} onValueChange={autoFocus.setRmsdThreshold} step={0.01} value={rmsdThreshold} />
+			<Checkbox className="col-span-full" disabled={running} label="Reversed" onValueChange={autoFocus.setReversed} value={reversed} />
 		</>
 	)
 })
@@ -204,24 +137,74 @@ const Footer = memo(() => {
 	const { running, camera, focuser } = useSnapshot(autoFocus.state)
 
 	return (
-		<>
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
 			<Button color="danger" disabled={!running} label="Stop" onClick={autoFocus.stop} startContent={<Icons.Stop />} />
 			<Button color="success" disabled={!camera?.connected || !focuser?.connected} label="Start" loading={running} onClick={autoFocus.start} startContent={<Icons.Play />} />
-		</>
+		</div>
 	)
 })
 
 const CameraDropdownEndContent = memo(() => {
 	const autoFocus = useContext(AutoFocusStoreContext)
 	const { camera } = useSnapshot(autoFocus.state)
-	const { capture } = useSnapshot(autoFocus.state.request)
 
-	return camera && <CameraCaptureStartPopover camera={camera} mode="autoFocus" onValueChange={autoFocus.updateCapture} value={capture} />
+	return (
+		camera && (
+			<CameraCaptureStoreContext value={autoFocus.capture}>
+				<CameraCaptureStartPopover camera={camera} mode="autoFocus" />
+			</CameraCaptureStoreContext>
+		)
+	)
 })
 
 const StarDetectionSelectEndContent = memo(() => {
 	const autoFocus = useContext(AutoFocusStoreContext)
-	const { starDetection } = useSnapshot(autoFocus.state.request)
+	const { type, executable, minSNR, maxStars } = useSnapshot(autoFocus.state.request.starDetection)
 
-	return <StarDetectionPopover onValueChange={autoFocus.updateStarDetection} value={starDetection} variant="ghost" />
+	return <StarDetectionPopover onExecutableChange={autoFocus.setStarDetectionExecutable} onMaxStarsChange={autoFocus.setStarDetectionMaxStars} onMinSNRChange={autoFocus.setStarDetectionMinSNR} type={type} executable={executable} minSNR={minSNR} maxStars={maxStars} variant="ghost" />
 })
+
+function isFiniteFocusPoint(point: Point | undefined | null): point is Point {
+	return point !== undefined && point !== null && Number.isFinite(point.x) && Number.isFinite(point.y) && point.y > 0
+}
+
+function formatMetric(value: number, fractionDigits = 2) {
+	return Number.isFinite(value) && value > 0 ? value.toFixed(fractionDigits) : '--'
+}
+
+function formatPosition(point: Point | undefined | null) {
+	return isFiniteFocusPoint(point) ? point.x.toFixed(0) : '--'
+}
+
+function focusChartSamples(x: readonly number[], y: readonly number[]) {
+	const length = Math.min(x.length, y.length)
+	const samples: FocusChartPoint[] = []
+
+	for (let i = 0; i < length; i++) {
+		if (Number.isFinite(x[i]) && Number.isFinite(y[i]) && y[i] > 0) {
+			samples.push({ position: x[i], hfd: y[i] })
+		}
+	}
+
+	return samples
+}
+
+function focusCurve(points: readonly Point[] | undefined) {
+	return points?.filter(isFiniteFocusPoint).map(({ x, y }) => ({ position: x, hfd: y })) ?? []
+}
+
+function focusChartDomain(points: readonly FocusChartPoint[], key: keyof FocusChartPoint): [number, number] {
+	let min = Number.POSITIVE_INFINITY
+	let max = Number.NEGATIVE_INFINITY
+
+	for (const point of points) {
+		const value = point[key]
+		if (value < min) min = value
+		if (value > max) max = value
+	}
+
+	if (!Number.isFinite(min) || !Number.isFinite(max)) return [0, 1]
+
+	const padding = Math.max((max - min) * 0.08, key === 'hfd' ? 0.25 : 1)
+	return [Math.max(0, min - padding), max + padding]
+}

@@ -1,12 +1,18 @@
 import { select } from 'd3-selection'
-import { type D3ZoomEvent, type ZoomBehavior, zoom, zoomIdentity } from 'd3-zoom'
+import { zoom, zoomIdentity } from 'd3-zoom'
+import type { D3ZoomEvent, ZoomBehavior } from 'd3-zoom'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
-import { DEG2RAD, PI, PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import { meanObliquity, timeNow, timeShift, timeUnix, toJulianDay, toJulianEpoch } from 'nebulosa/src/astronomy/time/time'
+import type { Time } from 'nebulosa/src/astronomy/time/time'
+import { DAYSEC, DEG2RAD, PI, PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
 import type { Point, Size } from 'nebulosa/src/math/numerical/geometry'
-import { clamp, type NumberArray } from 'nebulosa/src/math/numerical/math'
-import { deg, normalizeAngle, type Angle } from 'nebulosa/src/math/units/angle'
+import { clamp } from 'nebulosa/src/math/numerical/math'
+import type { NumberArray } from 'nebulosa/src/math/numerical/math'
+import { normalizeAngle } from 'nebulosa/src/math/units/angle'
+import type { Angle } from 'nebulosa/src/math/units/angle'
 
 // Public coordinate/projection options.
 export type ProjectionType = 'azimuthalEquidistant' | 'azimuthalEqualArea' | 'orthographic' | 'stereographic' | 'gnomonic'
@@ -17,7 +23,7 @@ export type CoordinateSystem = 'horizontal' | 'equatorial'
 // Supported event names emitted by Celestial.
 export type CelestialEventName = 'hover' | 'click' | 'objectHover' | 'objectLeave' | 'selectionChange' | 'viewTransformChange' | 'renderStart' | 'renderEnd' | 'updateStart' | 'updateEnd' | 'resize' | 'error'
 
-export type CelestialTime = Date | number
+export type CelestialTime = Date | number | Time
 
 // Observer location in geodetic degrees/meters.
 export interface ObserverLocation {
@@ -213,7 +219,7 @@ export interface RenderState {
 	readonly width: number
 	readonly height: number
 	readonly dpr: number
-	readonly time: number // unix milliseconds
+	readonly time: Time
 	readonly observer: Readonly<ObserverLocation>
 	readonly projection: ProjectionType
 	readonly coordinateSystem: CoordinateSystem
@@ -275,12 +281,13 @@ export interface CelestialShape {
 	visible?: boolean
 	selectable?: boolean
 	readonly data?: unknown
+	readonly type?: string
 	readonly render: (celestial: Celestial, ctx: CanvasRenderingContext2D, state: ShapeRenderState) => void
 }
 
 // Public object shape used by picking/events.
 export type CelestialObject =
-	| { type: 'star'; index: number; id: StarId; name?: string; mag?: number; ra: number; dec: number }
+	| ({ type: 'star'; index: number; id: StarId; name?: string; mag?: number } & EquatorialCoordinate)
 	| { type: 'deepSky'; index: number; object: DeepSkyObject }
 	| { type: 'movingBody'; index: number; object: MovingBody }
 	| { type: 'constellationLabel'; index: number; label: ConstellationLabel }
@@ -288,15 +295,15 @@ export type CelestialObject =
 
 export type CelestialEventMap = {
 	readonly hover: Readonly<{ x: number; y: number; coordinate: EquatorialCoordinate; object: CelestialObject | null }>
-	readonly click: Readonly<{ x: number; y: number; coordinate: EquatorialCoordinate; object: CelestialObject | null }>
+	readonly click: Readonly<{ x: number; y: number; coordinate: EquatorialCoordinate; object: CelestialObject | null; event: MouseEvent }>
 	readonly objectHover: Readonly<{ object: CelestialObject }>
 	readonly objectLeave: Readonly<{ object: CelestialObject }>
 	readonly selectionChange: Readonly<{ object: CelestialObject }>
 	readonly viewTransformChange: Readonly<{ transform: ViewTransform }>
-	readonly renderStart: Readonly<{ time: number }>
-	readonly renderEnd: Readonly<{ time: number; duration: number; fps: number }>
-	readonly updateStart: Readonly<{ time: number }>
-	readonly updateEnd: Readonly<{ time: number; duration: number }>
+	readonly renderStart: Readonly<{ time: Time }>
+	readonly renderEnd: Readonly<{ time: Time; duration: number; fps: number }>
+	readonly updateStart: Readonly<{ time: Time }>
+	readonly updateEnd: Readonly<{ time: Time; duration: number }>
 	readonly resize: Readonly<{ width: number; height: number }>
 	readonly error: Error
 }
@@ -349,7 +356,7 @@ type ResolvedCelestialOptions = {
 	projection: ProjectionType
 	readonly coordinateSystem: CoordinateSystem
 	observer: ObserverLocation
-	time: number // unix milliseconds
+	time: Time
 	updateInterval: number
 	readonly stars: Required<StarLayerOptions>
 	readonly referenceLines: ResolvedReferenceLinesOptions
@@ -402,8 +409,31 @@ const PICK_TYPE_MOVING_BODY = 3 // Picking index type id for planets, asteroids,
 const PICK_TYPE_CONSTELLATION_LABEL = 4 // Picking index type id for constellation labels.
 const PICK_TYPE_SHAPE = 5 // Picking index type id for custom shapes.
 
+const BLACK = '#000000'
+const WHITE = '#FFFFFF'
+const TRANSPARENT = 'transparent'
+const RED = '#F44336'
+const PINK = '#E91E63'
+const PURPLE = '#9C27B0'
+const DEEP_PURPLE = '#673AB7'
+const INDIGO = '#3F51B5'
+const BLUE = '#2196F3'
+const LIGHT_BLUE = '#03A9F4'
+const CYAN = '#00BCD4'
+const TEAL = '#009688'
+const GREEN = '#4CAF50'
+const LIGHT_GREEN = '#8BC34A'
+const LIME = '#CDDC39'
+const YELLOW = '#FFEB3B'
+const AMBER = '#FFC107'
+const ORANGE = '#FF9800'
+const DEEP_ORANGE = '#FF5722'
+const BROWN = '#795548'
+const GREY = '#9E9E9E'
+const BLUE_GREY = '#607D8B'
+
 const DEFAULT_THEME: ThemeOptions = {
-	background: '#000000',
+	background: TRANSPARENT,
 	stars: {
 		baseColor: '#f8fbff',
 		labelColor: '#d8deca',
@@ -413,48 +443,48 @@ const DEFAULT_THEME: ThemeOptions = {
 		maxRadius: 1.8,
 	},
 	grid: {
-		color: '#6c7178',
+		color: GREY,
 		opacity: 0.38,
 	},
 	horizon: {
-		color: '#1f9a41',
-		fillBelowHorizon: 'rgba(0, 0, 0, 0)',
+		color: GREEN,
+		fillBelowHorizon: TRANSPARENT,
 	},
 	milkyWay: {
-		color: '#f2f4ff',
+		color: CYAN,
 		opacity: 0,
-		lineColor: '#f8f9ff',
-		levelColors: ['#29B6F6', '#03A9F4', '#039BE5', '#0288D1', '#0277BD'],
-		levelOpacities: [0.7, 0.6, 0.5, 0.4, 0.3],
+		lineColor: CYAN,
+		levelColors: [CYAN, LIGHT_BLUE, BLUE, INDIGO, PURPLE],
+		levelOpacities: [0.7, 0, 0, 0, 0],
 		lineOpacity: 0.6,
 		lineWidth: 0.65,
 	},
 	constellations: {
-		color: '#b8bcc4',
+		color: GREY,
 		opacity: 0.7,
-		labelColor: '#b9c1b6',
+		labelColor: WHITE,
 		labelFont: '10px system-ui, sans-serif',
 		labelOpacity: 0.7,
-		lineColor: '#FFEE58',
+		lineColor: BLUE_GREY,
 		lineOpacity: 0.3,
-		boundaryColor: '#880E4F',
+		boundaryColor: PURPLE,
 		boundaryOpacity: 0.6,
 	},
 	deepSky: {
-		color: '#ff9d00',
-		labelColor: '#ffb000',
+		color: ORANGE,
+		labelColor: ORANGE,
 	},
 	movingBodies: {
-		planetColor: '#ffb000',
-		asteroidColor: '#d8d2c0',
-		cometColor: '#9ee7ff',
-		labelColor: '#ffcc58',
+		planetColor: RED,
+		asteroidColor: BROWN,
+		cometColor: LIME,
+		labelColor: LIGHT_GREEN,
 	},
 	selectedObject: {
-		color: '#ffdf6e',
+		color: YELLOW,
 	},
 	hoverHighlight: {
-		color: '#8ae6ff',
+		color: LIGHT_BLUE,
 	},
 }
 
@@ -529,29 +559,6 @@ function normalizedWheelDeltaY(event: WheelEvent) {
 	return event.deltaY
 }
 
-// Converts a unix epoch in milliseconds into a Julian date.
-function julianDate(date: number) {
-	return date / DAY_MS + JULIAN_EPOCH
-}
-
-// Converts a unix epoch in milliseconds into a Julian epoch year.
-function julianEpochYear(date: number) {
-	return J2000_EPOCH + (date - J2000_UNIX_MS) / YEAR_MS
-}
-
-// Computes Greenwich mean sidereal time in radians.
-function greenwichMeanSiderealTime(date: number) {
-	const jd = julianDate(date)
-	const t = (jd - 2451545) / 36525
-	const degrees = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * t * t - (t * t * t) / 38710000
-	return normalizeAngle(deg(degrees))
-}
-
-// Computes local sidereal time in radians.
-function localSiderealTime(date: number, longitudeDegrees: number) {
-	return normalizeAngle(greenwichMeanSiderealTime(date) + deg(longitudeDegrees))
-}
-
 // Writes an RA/Dec unit vector.
 function writeRaDecUnitVector(ra: number, dec: number, out: NumberArray, offset = 0) {
 	if (Math.abs(Math.abs(dec) - PIOVERTWO) <= POLE_EPSILON) {
@@ -576,8 +583,8 @@ function writeHorizontalUnitVector(az: number, alt: number, out: NumberArray, of
 }
 
 // Computes a global equatorial-to-horizontal matrix.
-function writeEquatorialToHorizontalMatrix(time: number, observer: ObserverLocation, out: NumberArray) {
-	const lst = localSiderealTime(time, observer.longitude)
+function writeEquatorialToHorizontalMatrix(time: Time, observer: ObserverLocation, out: NumberArray) {
+	const lst = localSiderealTime(time, observer.longitude * DEG2RAD, true)
 	const lat = observer.latitude * DEG2RAD
 	const sinLst = Math.sin(lst)
 	const cosLst = Math.cos(lst)
@@ -958,7 +965,7 @@ function resolveOptions(options: CelestialOptions): ResolvedCelestialOptions {
 		projection: validateProjection(options.projection ?? 'stereographic'),
 		coordinateSystem: options.coordinateSystem ?? 'horizontal',
 		observer: DEFAULT_OBSERVER,
-		time: Date.now(),
+		time: timeNow(true),
 		updateInterval: Math.max(1, Math.floor(options.updateInterval ?? DEFAULT_UPDATE_INTERVAL)),
 		stars: { ...DEFAULT_STAR_OPTIONS, ...options.stars },
 		referenceLines: mergeReferenceLines(options.referenceLines),
@@ -1240,8 +1247,8 @@ export class StarCatalog {
 			id: this.ids[index],
 			name: this.names[index],
 			mag: this.mag[index],
-			ra: this.ra[index],
-			dec: this.dec[index],
+			rightAscension: this.ra[index],
+			declination: this.dec[index],
 		}
 	}
 
@@ -1758,12 +1765,6 @@ function skyLabelFont(state: RenderState, baseSize: number) {
 	return `${skyLabelSize(state, baseSize).toFixed(1)}px system-ui, sans-serif`
 }
 
-function meanObliquity(date: number) {
-	const t = (julianDate(date) - 2451545) / 36525
-	const seconds = 21.448 - t * (46.815 + t * (0.00059 - t * 0.001813))
-	return deg(23 + 26 / 60 + seconds / 3600)
-}
-
 // Horizon layer draws the local horizon ring over the active sky projection.
 class HorizonLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
@@ -1805,7 +1806,7 @@ class HorizonLayer extends InternalLayer {
 		}
 
 		if (started) {
-			if (state.theme.horizon.fillBelowHorizon !== 'rgba(0, 0, 0, 0)') {
+			if (state.theme.horizon.fillBelowHorizon !== TRANSPARENT) {
 				ctx.closePath()
 				ctx.fill()
 			}
@@ -2252,7 +2253,7 @@ abstract class ConstellationSegmentLayer extends InternalLayer {
 		writeRaDecUnitVector(to[0], to[1], this.toVector)
 
 		const distance = angularDistance(this.fromVector[0], this.fromVector[1], this.fromVector[2], this.toVector[0], this.toVector[1], this.toVector[2])
-		const steps = Math.max(8, Math.min(180, Math.ceil(distance / deg(1))))
+		const steps = Math.max(8, Math.min(180, Math.ceil(distance / DEG2RAD)))
 
 		drawClippedPolyline(ctx, state, steps, this.point, this.previous, this.segmentSampler)
 	}
@@ -3008,7 +3009,7 @@ function isMovingBodyVisible(object: MovingBody, state: RenderState) {
 }
 
 function isMovingBodyLabelVisible(object: MovingBody, state: RenderState) {
-	return !isFiniteNumber(object.magnitude) || object.magnitude <= deepSkyLabelMagnitudeLimit(state.transform.k)
+	return true // !isFiniteNumber(object.magnitude) || object.magnitude <= deepSkyLabelMagnitudeLimit(state.transform.k)
 }
 
 function movingBodyColor(object: MovingBody, state: RenderState) {
@@ -3332,61 +3333,61 @@ class CanvasRenderer {
 
 // Main Celestial star-map library.
 export class Celestial {
-	private readonly host: HTMLElement
-	private readonly renderer: CanvasRenderer
+	readonly #host: HTMLElement
+	readonly #renderer: CanvasRenderer
 	// oxlint-disable-next-line unicorn/prefer-event-target
-	private readonly emitter = new EventEmitter()
-	private readonly picking = new FixedGridSpatialIndex()
-	private readonly eqToHorizontal = new Float64Array(9)
-	private readonly viewMatrix = new Float32Array(9)
-	private readonly centerVector = new Float32Array(3)
-	private readonly referenceUp = new Float32Array(3)
-	private readonly tempProjection = new Float32Array(2)
-	private readonly tempVector = new Float32Array(3)
-	private readonly tempScreen = new Float32Array(2)
-	private readonly layers: InternalLayer[] = []
+	readonly #emitter = new EventEmitter()
+	readonly #picking = new FixedGridSpatialIndex()
+	readonly #eqToHorizontal = new Float64Array(9)
+	readonly #viewMatrix = new Float32Array(9)
+	readonly #centerVector = new Float32Array(3)
+	readonly #referenceUp = new Float32Array(3)
+	readonly #tempProjection = new Float32Array(2)
+	readonly #tempVector = new Float32Array(3)
+	readonly #tempScreen = new Float32Array(2)
+	readonly #layers: InternalLayer[] = []
 
-	private readonly options: ResolvedCelestialOptions
-	private renderState: Writable<RenderState> | null = null
-	private cachedRect: DOMRect | null = null
-	private starCatalog: StarCatalog | null = null
-	private constellations: ConstellationData = {}
-	private milkyWay: MilkyWayStep[] = []
-	private dsos: DeepSkyObject[] = []
-	private deepSkyLabelVisible = new Uint8Array(0)
-	private readonly movingBodies = new Map<string, MovingBody>()
-	private readonly movingBodyList: MovingBody[] = []
-	private readonly shapes = new Map<string, CelestialShape>()
-	private readonly shapeList: CelestialShape[] = []
-	private readonly pickedShapes: CelestialShape[] = []
-	private transform: ViewTransform = { x: 0, y: 0, k: 1 }
-	private hoverObject: CelestialObject | null = null
-	private selectedObject: CelestialObject | null = null
-	private autoUpdateTimer: ReturnType<typeof setInterval> | null = null
-	private autoUpdateOptions: Required<AutoUpdateOptions> | null = null
-	private frameId = 0
-	private updateQueued = false
-	private pickingDirty = false
-	private destroyed = false
-	private pointerDown = false
-	private pointerMoved = false
-	private d3ZoomBound = false
-	private d3ZoomBehavior: ZoomBehavior<HTMLElement, unknown> | null = null
-	private pointerStartX = 0
-	private pointerStartY = 0
-	private transformStartX = 0
-	private transformStartY = 0
-	private lastPointerMove = 0
+	readonly #options: ResolvedCelestialOptions
+	#renderState: Writable<RenderState> | null = null
+	#cachedRect: DOMRect | null = null
+	#starCatalog: StarCatalog | null = null
+	#constellations: ConstellationData = {}
+	#milkyWay: MilkyWayStep[] = []
+	#dsos: DeepSkyObject[] = []
+	#deepSkyLabelVisible = new Uint8Array(0)
+	readonly #movingBodies = new Map<string, MovingBody>()
+	readonly #movingBodyList: MovingBody[] = []
+	readonly #shapes = new Map<string, CelestialShape>()
+	readonly #shapeList: CelestialShape[] = []
+	readonly #pickedShapes: CelestialShape[] = []
+	#transform: ViewTransform = { x: 0, y: 0, k: 1 }
+	#hoverObject: CelestialObject | null = null
+	#selectedObject: CelestialObject | null = null
+	#autoUpdateTimer: ReturnType<typeof setInterval> | null = null
+	#autoUpdateOptions: Required<AutoUpdateOptions> | null = null
+	#frameId = 0
+	#updateQueued = false
+	#pickingDirty = false
+	#destroyed = false
+	#pointerDown = false
+	#pointerMoved = false
+	#d3ZoomBound = false
+	#d3ZoomBehavior: ZoomBehavior<HTMLElement, unknown> | null = null
+	#pointerStartX = 0
+	#pointerStartY = 0
+	#transformStartX = 0
+	#transformStartY = 0
+	#lastPointerMove = 0
 
 	// Creates a new interactive Canvas celestial map.
 	constructor(container: HTMLElement | string, options: CelestialOptions = {}) {
-		this.host = resolveContainer(container)
-		this.options = resolveOptions(options)
-		this.renderer = new CanvasRenderer(this.host, this.options.width, this.options.height)
+		this.#host = resolveContainer(container)
+		this.#options = resolveOptions(options)
+		this.#renderer = new CanvasRenderer(this.#host, this.#options.width, this.#options.height)
 
 		this.setupLayers()
 
-		if (this.options.interactions.preferD3Zoom) {
+		if (this.#options.interactions.preferD3Zoom) {
 			this.bindD3Zoom()
 		} else {
 			this.bindLocalInteractions()
@@ -3397,18 +3398,22 @@ export class Celestial {
 		window.addEventListener('resize', this.invalidateRect, { passive: true })
 
 		this.resetViewCenter()
-		writeEquatorialToHorizontalMatrix(this.options.time, this.options.observer, this.eqToHorizontal)
+		writeEquatorialToHorizontalMatrix(this.#options.time, this.#options.observer, this.#eqToHorizontal)
 
 		// Should run after onReady callback to allow initial configuration before first render.
 		// this.run()
 	}
 
+	get selectedObject() {
+		return this.#selectedObject
+	}
+
 	// Sets the current observation time.
 	setTime(date: CelestialTime) {
-		const time = typeof date === 'number' ? date : date.getTime()
+		const time = typeof date === 'number' ? timeUnix(date / 1000) : date instanceof Date ? timeUnix(date.getTime() / 1000) : date
 
-		if (time !== this.options.time) {
-			this.options.time = time
+		if (toJulianDay(time) !== toJulianDay(this.#options.time)) {
+			this.#options.time = time
 			this.queueUpdate()
 		}
 	}
@@ -3417,8 +3422,8 @@ export class Celestial {
 	setObserver(observer: ObserverLocation) {
 		observer = validateObserver(observer)
 
-		if (observer.latitude !== this.options.observer.latitude || observer.longitude !== this.options.observer.longitude || observer.elevation !== this.options.observer.elevation) {
-			this.options.observer = observer
+		if (observer.latitude !== this.#options.observer.latitude || observer.longitude !== this.#options.observer.longitude || observer.elevation !== this.#options.observer.elevation) {
+			this.#options.observer = observer
 			this.queueUpdate()
 		}
 	}
@@ -3427,25 +3432,25 @@ export class Celestial {
 	setProjection(projection: ProjectionType) {
 		projection = validateProjection(projection)
 
-		if (projection !== this.options.projection) {
-			this.options.projection = projection
+		if (projection !== this.#options.projection) {
+			this.#options.projection = projection
 			this.queueProjectionOnly()
 		}
 	}
 
 	// Sets the star magnitude limit.
 	setMagnitudeLimit(limit: number) {
-		if (limit !== this.options.stars.maxMagnitude) {
-			this.options.stars.maxMagnitude = limit
+		if (limit !== this.#options.stars.maxMagnitude) {
+			this.#options.stars.maxMagnitude = limit
 			this.queueProjectionOnly()
 		}
 	}
 
 	// Toggles star labels without recomputing star projection.
 	setStarLabelsVisible(visible: boolean) {
-		if (this.options.stars.labels !== visible) {
-			this.options.stars.labels = visible
-			this.renderer.markDirty('stars')
+		if (this.#options.stars.labels !== visible) {
+			this.#options.stars.labels = visible
+			this.#renderer.markDirty('stars')
 			this.requestRender()
 		}
 	}
@@ -3453,7 +3458,7 @@ export class Celestial {
 	setViewTransform(transform: ViewTransform) {
 		const nextTransform = this.normalizeViewTransform(transform)
 
-		if (this.d3ZoomBehavior) {
+		if (this.#d3ZoomBehavior) {
 			this.syncD3ZoomTransform(nextTransform)
 		}
 
@@ -3471,11 +3476,11 @@ export class Celestial {
 
 		const interval = Math.floor(ms)
 
-		if (interval !== this.options.updateInterval) {
-			this.options.updateInterval = Math.floor(ms)
+		if (interval !== this.#options.updateInterval) {
+			this.#options.updateInterval = Math.floor(ms)
 
-			if (this.autoUpdateOptions) {
-				this.startAutoUpdate({ ...this.autoUpdateOptions, interval })
+			if (this.#autoUpdateOptions) {
+				this.startAutoUpdate({ ...this.#autoUpdateOptions, interval })
 			}
 		}
 	}
@@ -3485,16 +3490,15 @@ export class Celestial {
 		this.stopAutoUpdate()
 
 		const mode = options?.mode ?? 'realtime'
-		const interval = Math.max(1, Math.floor(options?.interval ?? this.options.updateInterval))
-		const timeStep = Math.floor(options?.timeStep ?? options?.interval ?? this.options.updateInterval)
+		const interval = Math.max(1, Math.floor(options?.interval ?? this.#options.updateInterval))
+		const timeStep = Math.floor(options?.timeStep ?? options?.interval ?? this.#options.updateInterval)
 
-		this.autoUpdateOptions = { mode, interval, timeStep }
-		let simulatedTime = this.options.time
+		this.#autoUpdateOptions = { mode, interval, timeStep }
+		const simulatedTime = this.#options.time
 
 		const tick = () => {
 			if (mode === 'simulation') {
-				simulatedTime += timeStep
-				this.setTime(simulatedTime)
+				this.setTime(timeShift(simulatedTime, timeStep / (1000 * DAYSEC)))
 			} else {
 				this.setTime(Date.now())
 			}
@@ -3504,17 +3508,17 @@ export class Celestial {
 			tick()
 		}
 
-		this.autoUpdateTimer = setInterval(tick, interval)
+		this.#autoUpdateTimer = setInterval(tick, interval)
 	}
 
 	// Stops any running auto-update timer.
 	stopAutoUpdate() {
-		if (this.autoUpdateTimer) {
-			clearInterval(this.autoUpdateTimer)
-			this.autoUpdateTimer = null
+		if (this.#autoUpdateTimer) {
+			clearInterval(this.#autoUpdateTimer)
+			this.#autoUpdateTimer = null
 		}
 
-		this.autoUpdateOptions = null
+		this.#autoUpdateOptions = null
 	}
 
 	// Resizes the map without recreating the instance.
@@ -3522,18 +3526,19 @@ export class Celestial {
 		const nextWidth = Math.max(1, Math.floor(width))
 		const nextHeight = Math.max(1, Math.floor(height))
 
-		if (nextWidth === this.options.width && nextHeight === this.options.height) {
+		if (nextWidth === this.#options.width && nextHeight === this.#options.height) {
 			return
 		}
 
-		this.options.width = nextWidth
-		this.options.height = nextHeight
-		this.cachedRect = null
-		this.renderer.resize(this.options.width, this.options.height)
+		this.#options.width = nextWidth
+		this.#options.height = nextHeight
+		this.#cachedRect = null
+		this.#renderer.resize(this.#options.width, this.#options.height)
+		this.syncD3ZoomTransform(this.#transform)
 		this.projectStars()
 		this.rebuildPickingIndex()
-		this.renderer.markAllDirty()
-		this.emitter.has('resize') && this.emitter.emit('resize', { width: this.options.width, height: this.options.height })
+		this.#renderer.markAllDirty()
+		this.#emitter.has('resize') && this.#emitter.emit('resize', { width: this.#options.width, height: this.#options.height })
 		this.requestRender()
 	}
 
@@ -3543,43 +3548,43 @@ export class Celestial {
 	}
 
 	isLayerVisible(layerId: string) {
-		return this.options.layers[layerId] !== false
+		return this.#options.layers[layerId] !== false
 	}
 
 	// Destroys timers, listeners, canvases, and large references.
 	destroy() {
-		if (this.destroyed) return
+		if (this.#destroyed) return
 
-		this.destroyed = true
+		this.#destroyed = true
 		this.stopAutoUpdate()
 		this.unbindD3Zoom()
 		this.unbindLocalInteractions()
 		window.removeEventListener('scroll', this.invalidateRect, { capture: true })
 		window.removeEventListener('resize', this.invalidateRect)
 
-		if (this.frameId) {
-			cancelAnimationFrame(this.frameId)
-			this.frameId = 0
+		if (this.#frameId) {
+			cancelAnimationFrame(this.#frameId)
+			this.#frameId = 0
 		}
 
-		this.renderer.destroy()
-		this.emitter.clear()
-		this.renderState = null
-		this.starCatalog = null
-		this.dsos.length = 0
-		this.constellations = {}
-		this.milkyWay.length = 0
-		this.movingBodies.clear()
-		this.movingBodyList.length = 0
-		this.shapes.clear()
-		this.shapeList.length = 0
+		this.#renderer.destroy()
+		this.#emitter.clear()
+		this.#renderState = null
+		this.#starCatalog = null
+		this.#dsos.length = 0
+		this.#constellations = {}
+		this.#milkyWay.length = 0
+		this.#movingBodies.clear()
+		this.#movingBodyList.length = 0
+		this.#shapes.clear()
+		this.#shapeList.length = 0
 	}
 
 	// Loads stars from object arrays or typed arrays.
 	loadStars(stars: readonly Star[] | StarCatalogInput) {
 		try {
-			this.starCatalog = new StarCatalog(stars)
-			this.starCatalog.cacheStyleBuckets(this.options.stars, this.options.theme)
+			this.#starCatalog = new StarCatalog(stars)
+			this.#starCatalog.cacheStyleBuckets(this.#options.stars, this.#options.theme)
 			this.queueUpdate()
 		} catch (error) {
 			console.error(error)
@@ -3589,30 +3594,30 @@ export class Celestial {
 
 	// Loads constellation lines and labels.
 	loadConstellations(data: ConstellationData) {
-		this.constellations = {
+		this.#constellations = {
 			lines: data.lines ?? [],
 			labels: data.labels ?? [],
 			boundaries: data.boundaries ?? [],
 		}
 
-		this.renderer.markDirty('constellations')
-		this.renderer.markDirty('constellationBoundaries')
-		this.renderer.markDirty('constellationLabels')
+		this.#renderer.markDirty('constellations')
+		this.#renderer.markDirty('constellationBoundaries')
+		this.#renderer.markDirty('constellationLabels')
 		this.rebuildPickingIndex()
 		this.requestRender()
 	}
 
 	loadMilkyWay(coordinates: MilkyWayCoordinates) {
-		this.milkyWay = normalizeMilkyWayCoordinates(coordinates)
-		this.renderer.markDirty('milkyWay')
+		this.#milkyWay = normalizeMilkyWayCoordinates(coordinates)
+		this.#renderer.markDirty('milkyWay')
 		this.requestRender()
 	}
 
 	// Loads deep-sky objects.
 	loadDeepSkyObjects(objects: readonly DeepSkyObject[]) {
-		this.dsos = objects as never
-		this.deepSkyLabelVisible = new Uint8Array(this.dsos.length)
-		this.renderer.markDirty('deepSky')
+		this.#dsos = objects as never
+		this.#deepSkyLabelVisible = new Uint8Array(this.#dsos.length)
+		this.#renderer.markDirty('deepSky')
 		this.rebuildPickingIndex()
 		this.requestRender()
 	}
@@ -3620,19 +3625,19 @@ export class Celestial {
 	// Adds or replaces a dynamic moving body and returns its id.
 	addMovingBody(object: MovingBody) {
 		const id = object.id
-		const previous = this.movingBodies.get(id)
-		this.movingBodies.set(id, object)
+		const previous = this.#movingBodies.get(id)
+		this.#movingBodies.set(id, object)
 
 		if (previous) {
-			const index = this.movingBodyList.indexOf(previous)
+			const index = this.#movingBodyList.indexOf(previous)
 
 			if (index >= 0) {
-				this.movingBodyList[index] = object
+				this.#movingBodyList[index] = object
 			} else {
-				this.movingBodyList.push(object)
+				this.#movingBodyList.push(object)
 			}
 		} else {
-			this.movingBodyList.push(object)
+			this.#movingBodyList.push(object)
 		}
 
 		return id
@@ -3640,27 +3645,27 @@ export class Celestial {
 
 	// Removes one dynamic moving body.
 	removeMovingBody(id: string) {
-		const object = this.movingBodies.get(id)
+		const object = this.#movingBodies.get(id)
 		const removed = object !== undefined
 
 		if (removed) {
-			this.movingBodies.delete(id)
-			const index = this.movingBodyList.indexOf(object)
+			this.#movingBodies.delete(id)
+			const index = this.#movingBodyList.indexOf(object)
 
 			if (index >= 0) {
-				this.movingBodyList.splice(index, 1)
+				this.#movingBodyList.splice(index, 1)
 			}
 		}
 
 		if (removed) {
-			if (this.selectedObject?.type === 'movingBody' && this.selectedObject.object.id === id) {
-				this.selectedObject = null
-				this.renderer.markDirty('overlay')
+			if (this.#selectedObject?.type === 'movingBody' && this.#selectedObject.object.id === id) {
+				this.#selectedObject = null
+				this.#renderer.markDirty('overlay')
 			}
 
-			if (this.hoverObject?.type === 'movingBody' && this.hoverObject.object.id === id) {
-				this.hoverObject = null
-				this.renderer.markDirty('overlay')
+			if (this.#hoverObject?.type === 'movingBody' && this.#hoverObject.object.id === id) {
+				this.#hoverObject = null
+				this.#renderer.markDirty('overlay')
 			}
 		}
 
@@ -3669,35 +3674,35 @@ export class Celestial {
 
 	// Removes all dynamic moving bodies.
 	clearMovingBodies() {
-		if (this.movingBodies.size === 0) return
+		if (this.#movingBodies.size === 0) return
 
-		this.movingBodies.clear()
-		this.movingBodyList.length = 0
+		this.#movingBodies.clear()
+		this.#movingBodyList.length = 0
 
-		if (this.selectedObject?.type === 'movingBody') {
-			this.selectedObject = null
-			this.renderer.markDirty('overlay')
+		if (this.#selectedObject?.type === 'movingBody') {
+			this.#selectedObject = null
+			this.#renderer.markDirty('overlay')
 		}
 
-		if (this.hoverObject?.type === 'movingBody') {
-			this.hoverObject = null
-			this.renderer.markDirty('overlay')
+		if (this.#hoverObject?.type === 'movingBody') {
+			this.#hoverObject = null
+			this.#renderer.markDirty('overlay')
 		}
 	}
 
 	// Marks dynamic moving bodies as changed after external mutation or batched updates.
 	markMovingBodyDirty(id?: string) {
-		if (id !== undefined && !this.movingBodies.has(id)) {
+		if (id !== undefined && !this.#movingBodies.has(id)) {
 			return false
 		}
 
 		this.syncSelectedMovingBodyObject()
 		this.syncHoverMovingBodyObject()
 		this.rebuildPickingIndex()
-		this.renderer.markDirty('movingBodies')
+		this.#renderer.markDirty('movingBodies')
 
-		if (id === undefined || (this.selectedObject?.type === 'movingBody' && this.selectedObject.object.id === id) || (this.hoverObject?.type === 'movingBody' && this.hoverObject.object.id === id)) {
-			this.renderer.markDirty('overlay')
+		if (id === undefined || (this.#selectedObject?.type === 'movingBody' && this.#selectedObject.object.id === id) || (this.#hoverObject?.type === 'movingBody' && this.#hoverObject.object.id === id)) {
+			this.#renderer.markDirty('overlay')
 		}
 
 		this.requestRender()
@@ -3707,19 +3712,19 @@ export class Celestial {
 	// Adds or replaces a custom equatorial shape and returns its id.
 	addShape(shape: CelestialShape) {
 		const id = shape.id
-		const previous = this.shapes.get(id)
-		this.shapes.set(id, shape)
+		const previous = this.#shapes.get(id)
+		this.#shapes.set(id, shape)
 
 		if (previous) {
-			const index = this.shapeList.indexOf(previous)
+			const index = this.#shapeList.indexOf(previous)
 
 			if (index >= 0) {
-				this.shapeList[index] = shape
+				this.#shapeList[index] = shape
 			} else {
-				this.shapeList.push(shape)
+				this.#shapeList.push(shape)
 			}
 		} else {
-			this.shapeList.push(shape)
+			this.#shapeList.push(shape)
 		}
 
 		this.markShapeChanged(id)
@@ -3728,27 +3733,27 @@ export class Celestial {
 
 	// Removes one custom shape.
 	removeShape(id: string) {
-		const shape = this.shapes.get(id)
+		const shape = this.#shapes.get(id)
 		const removed = shape !== undefined
 
 		if (removed) {
-			this.shapes.delete(id)
-			const index = this.shapeList.indexOf(shape)
+			this.#shapes.delete(id)
+			const index = this.#shapeList.indexOf(shape)
 
 			if (index >= 0) {
-				this.shapeList.splice(index, 1)
+				this.#shapeList.splice(index, 1)
 			}
 		}
 
 		if (removed) {
-			if (this.selectedObject?.type === 'shape' && this.selectedObject.id === id) {
-				this.selectedObject = null
-				this.renderer.markDirty('overlay')
+			if (this.#selectedObject?.type === 'shape' && this.#selectedObject.id === id) {
+				this.#selectedObject = null
+				this.#renderer.markDirty('overlay')
 			}
 
-			if (this.hoverObject?.type === 'shape' && this.hoverObject.id === id) {
-				this.hoverObject = null
-				this.renderer.markDirty('overlay')
+			if (this.#hoverObject?.type === 'shape' && this.#hoverObject.id === id) {
+				this.#hoverObject = null
+				this.#renderer.markDirty('overlay')
 			}
 
 			this.markShapeChanged()
@@ -3759,19 +3764,19 @@ export class Celestial {
 
 	// Removes all custom shapes.
 	clearShapes() {
-		if (this.shapes.size === 0) return
+		if (this.#shapes.size === 0) return
 
-		this.shapes.clear()
-		this.shapeList.length = 0
+		this.#shapes.clear()
+		this.#shapeList.length = 0
 
-		if (this.selectedObject?.type === 'shape') {
-			this.selectedObject = null
-			this.renderer.markDirty('overlay')
+		if (this.#selectedObject?.type === 'shape') {
+			this.#selectedObject = null
+			this.#renderer.markDirty('overlay')
 		}
 
-		if (this.hoverObject?.type === 'shape') {
-			this.hoverObject = null
-			this.renderer.markDirty('overlay')
+		if (this.#hoverObject?.type === 'shape') {
+			this.#hoverObject = null
+			this.#renderer.markDirty('overlay')
 		}
 
 		this.markShapeChanged()
@@ -3779,15 +3784,15 @@ export class Celestial {
 
 	// Marks custom shapes as changed after external mutation.
 	markShapeChanged(id?: string) {
-		if (id !== undefined && !this.shapes.has(id)) {
+		if (id !== undefined && !this.#shapes.has(id)) {
 			return false
 		}
 
 		this.rebuildPickingIndex()
-		this.renderer.markDirty('shapes')
+		this.#renderer.markDirty('shapes')
 
-		if (id === undefined || (this.selectedObject?.type === 'shape' && this.selectedObject.id === id) || (this.hoverObject?.type === 'shape' && this.hoverObject.id === id)) {
-			this.renderer.markDirty('overlay')
+		if (id === undefined || (this.#selectedObject?.type === 'shape' && this.#selectedObject.id === id) || (this.#hoverObject?.type === 'shape' && this.#hoverObject.id === id)) {
+			this.#renderer.markDirty('overlay')
 		}
 
 		this.requestRender()
@@ -3796,7 +3801,7 @@ export class Celestial {
 
 	// Toggles layer visibility by id.
 	setLayerVisible(layerId: string, visible: boolean) {
-		const layer = this.renderer.getLayer(layerId)
+		const layer = this.#renderer.getLayer(layerId)
 
 		if (!layer) {
 			this.emitError(new Error(`Unknown layer: ${layerId}`))
@@ -3805,7 +3810,7 @@ export class Celestial {
 
 		layer.visible = visible
 		layer.markDirty()
-		this.options.layers[layerId] = visible
+		this.#options.layers[layerId] = visible
 
 		if (isPickableLayerId(layerId)) {
 			if (!visible) {
@@ -3819,66 +3824,66 @@ export class Celestial {
 	}
 
 	private clearHiddenLayerObjects(layerId: string) {
-		if (this.selectedObject && objectLayerId(this.selectedObject) === layerId) {
-			this.selectedObject = null
-			this.renderer.markDirty('overlay')
+		if (this.#selectedObject && objectLayerId(this.#selectedObject) === layerId) {
+			this.#selectedObject = null
+			this.#renderer.markDirty('overlay')
 		}
 
-		if (this.hoverObject && objectLayerId(this.hoverObject) === layerId) {
-			const object = this.hoverObject
-			this.hoverObject = null
-			this.renderer.markDirty('overlay')
-			this.emitter.has('objectLeave') && this.emitter.emit('objectLeave', { object })
+		if (this.#hoverObject && objectLayerId(this.#hoverObject) === layerId) {
+			const object = this.#hoverObject
+			this.#hoverObject = null
+			this.#renderer.markDirty('overlay')
+			this.#emitter.has('objectLeave') && this.#emitter.emit('objectLeave', { object })
 		}
 	}
 
 	// Centers the view on an equatorial coordinate.
 	centerOnEquatorial(ra: number, dec: number) {
-		writeRaDecUnitVector(normalizeAngle(ra), clamp(dec, -PIOVERTWO, PIOVERTWO), this.centerVector)
-		this.referenceUp[0] = 0
-		this.referenceUp[1] = 0
-		this.referenceUp[2] = 1
+		writeRaDecUnitVector(normalizeAngle(ra), clamp(dec, -PIOVERTWO, PIOVERTWO), this.#centerVector)
+		this.#referenceUp[0] = 0
+		this.#referenceUp[1] = 0
+		this.#referenceUp[2] = 1
 		this.writeCurrentViewMatrix()
 		this.queueProjectionOnly()
 	}
 
 	// Centers the view on a horizontal coordinate.
 	centerOnHorizontal(az: number, alt: number) {
-		writeHorizontalUnitVector(normalizeAngle(az), clamp(alt, -PIOVERTWO, PIOVERTWO), this.centerVector)
-		this.referenceUp[0] = 0
-		this.referenceUp[1] = 1
-		this.referenceUp[2] = 0
+		writeHorizontalUnitVector(normalizeAngle(az), clamp(alt, -PIOVERTWO, PIOVERTWO), this.#centerVector)
+		this.#referenceUp[0] = 0
+		this.#referenceUp[1] = 1
+		this.#referenceUp[2] = 0
 		this.writeCurrentViewMatrix()
 		this.queueProjectionOnly()
 	}
 
 	// Converts renderer-local screen coordinates into an equatorial coordinate.
 	screenToEquatorial(x: number, y: number): EquatorialCoordinate | null {
-		if (!Number.isFinite(x) || !Number.isFinite(y) || this.transform.k <= 0) {
+		if (!Number.isFinite(x) || !Number.isFinite(y) || this.#transform.k <= 0) {
 			return null
 		}
 
-		const width = this.options.width
-		const height = this.options.height
-		const scale = projectionScale(width, height, this.options.projection)
-		const baseX = width / 2 + (x - width / 2 - this.transform.x) / this.transform.k
-		const baseY = height / 2 + (y - height / 2 - this.transform.y) / this.transform.k
+		const width = this.#options.width
+		const height = this.#options.height
+		const scale = projectionScale(width, height, this.#options.projection)
+		const baseX = width / 2 + (x - width / 2 - this.#transform.x) / this.#transform.k
+		const baseY = height / 2 + (y - height / 2 - this.#transform.y) / this.#transform.k
 		const projectionX = (width / 2 - baseX) / scale
 		const projectionY = (height / 2 - baseY) / scale
 
-		if (!unprojectViewVector(this.options.projection, projectionX, projectionY, this.tempVector)) {
+		if (!unprojectViewVector(this.#options.projection, projectionX, projectionY, this.#tempVector)) {
 			return null
 		}
 
-		const viewX = this.tempVector[0]
-		const viewY = this.tempVector[1]
-		const viewZ = this.tempVector[2]
-		const matrix = this.viewMatrix
+		const viewX = this.#tempVector[0]
+		const viewY = this.#tempVector[1]
+		const viewZ = this.#tempVector[2]
+		const matrix = this.#viewMatrix
 		let worldX = matrix[0] * viewX + matrix[3] * viewY + matrix[6] * viewZ
 		let worldY = matrix[1] * viewX + matrix[4] * viewY + matrix[7] * viewZ
 		let worldZ = matrix[2] * viewX + matrix[5] * viewY + matrix[8] * viewZ
 
-		if (this.options.coordinateSystem === 'horizontal') {
+		if (this.#options.coordinateSystem === 'horizontal') {
 			if (worldZ < -HORIZON_EPSILON) {
 				return null
 			}
@@ -3886,39 +3891,39 @@ export class Celestial {
 			const horizontalX = worldX
 			const horizontalY = worldY
 			const horizontalZ = worldZ
-			const eqMatrix = this.eqToHorizontal
+			const eqMatrix = this.#eqToHorizontal
 			worldX = eqMatrix[0] * horizontalX + eqMatrix[3] * horizontalY + eqMatrix[6] * horizontalZ
 			worldY = eqMatrix[1] * horizontalX + eqMatrix[4] * horizontalY + eqMatrix[7] * horizontalZ
 			worldZ = eqMatrix[2] * horizontalX + eqMatrix[5] * horizontalY + eqMatrix[8] * horizontalZ
 		}
 
-		this.tempVector[0] = worldX
-		this.tempVector[1] = worldY
-		this.tempVector[2] = worldZ
+		this.#tempVector[0] = worldX
+		this.#tempVector[1] = worldY
+		this.#tempVector[2] = worldZ
 
-		if (!normalizeVector(this.tempVector)) {
+		if (!normalizeVector(this.#tempVector)) {
 			return null
 		}
 
 		return {
-			rightAscension: normalizeAngle(Math.atan2(this.tempVector[1], this.tempVector[0])),
-			declination: Math.asin(clamp(this.tempVector[2], -1, 1)),
+			rightAscension: normalizeAngle(Math.atan2(this.#tempVector[1], this.#tempVector[0])),
+			declination: Math.asin(clamp(this.#tempVector[2], -1, 1)),
 		}
 	}
 
 	// Registers an event callback and returns an unsubscribe function.
 	on<K extends CelestialEventName>(eventName: K, callback: CelestialEventCallback<K>): () => void {
-		return this.emitter.on(eventName, callback)
+		return this.#emitter.on(eventName, callback)
 	}
 
 	// Removes an event callback.
 	off<K extends CelestialEventName>(eventName: K, callback: CelestialEventCallback<K>): void {
-		this.emitter.off(eventName, callback)
+		this.#emitter.off(eventName, callback)
 	}
 
 	// Creates and registers built-in layers.
 	private setupLayers() {
-		this.layers.push(
+		this.#layers.push(
 			new BackgroundLayer(),
 			new HorizonLayer(),
 			new MilkyWayLayer(),
@@ -3934,28 +3939,28 @@ export class Celestial {
 			new InteractionOverlayLayer(),
 		)
 
-		for (const layer of this.layers) {
-			layer.visible = this.options.layers[layer.id] ?? true
-			this.renderer.addLayer(layer)
+		for (const layer of this.#layers) {
+			layer.visible = this.#options.layers[layer.id] ?? true
+			this.#renderer.addLayer(layer)
 		}
 	}
 
 	// Resets view center to a sensible coordinate-system default.
 	private resetViewCenter() {
-		if (this.options.coordinateSystem === 'horizontal') {
-			this.centerVector[0] = 0
-			this.centerVector[1] = 0
-			this.centerVector[2] = 1
-			this.referenceUp[0] = 0
-			this.referenceUp[1] = 1
-			this.referenceUp[2] = 0
+		if (this.#options.coordinateSystem === 'horizontal') {
+			this.#centerVector[0] = 0
+			this.#centerVector[1] = 0
+			this.#centerVector[2] = 1
+			this.#referenceUp[0] = 0
+			this.#referenceUp[1] = 1
+			this.#referenceUp[2] = 0
 		} else {
-			this.centerVector[0] = 1
-			this.centerVector[1] = 0
-			this.centerVector[2] = 0
-			this.referenceUp[0] = 0
-			this.referenceUp[1] = 0
-			this.referenceUp[2] = 1
+			this.#centerVector[0] = 1
+			this.#centerVector[1] = 0
+			this.#centerVector[2] = 0
+			this.#referenceUp[0] = 0
+			this.#referenceUp[1] = 0
+			this.#referenceUp[2] = 1
 		}
 
 		this.writeCurrentViewMatrix()
@@ -3963,80 +3968,80 @@ export class Celestial {
 
 	// Refreshes the current view matrix.
 	private writeCurrentViewMatrix() {
-		writeViewMatrix(this.centerVector, this.referenceUp, this.viewMatrix)
+		writeViewMatrix(this.#centerVector, this.#referenceUp, this.#viewMatrix)
 	}
 
 	// Queues a full astronomical update.
 	private queueUpdate() {
-		if (this.updateQueued || this.destroyed) return
+		if (this.#updateQueued || this.#destroyed) return
 
 		this.queueRun()
 	}
 
 	// Queues projection-only work after view/projection changes.
 	private queueProjectionOnly() {
-		if (this.destroyed) return
+		if (this.#destroyed) return
 
 		this.projectStars()
 		this.rebuildPickingIndex()
-		this.renderer.markAllDirty()
+		this.#renderer.markAllDirty()
 		this.requestRender()
 	}
 
 	// Coalesces multiple synchronous update requests into a single frame.
 	queueRun() {
-		if (this.updateQueued) return
+		if (this.#updateQueued) return
 
-		this.updateQueued = true
+		this.#updateQueued = true
 
 		queueMicrotask(() => {
-			this.updateQueued = false
+			this.#updateQueued = false
 			this.run()
 		})
 	}
 
 	// Performs astronomical and projection updates.
 	run() {
-		if (this.destroyed) return
+		if (this.#destroyed) return
 
-		const emitUpdateStart = this.emitter.has('updateStart')
-		const emitUpdateEnd = this.emitter.has('updateEnd')
+		const emitUpdateStart = this.#emitter.has('updateStart')
+		const emitUpdateEnd = this.#emitter.has('updateEnd')
 		const start = emitUpdateEnd ? performance.now() : 0
-		emitUpdateStart && this.emitter.emit('updateStart', { time: this.options.time })
-		writeEquatorialToHorizontalMatrix(this.options.time, this.options.observer, this.eqToHorizontal)
+		emitUpdateStart && this.#emitter.emit('updateStart', { time: this.#options.time })
+		writeEquatorialToHorizontalMatrix(this.#options.time, this.#options.observer, this.#eqToHorizontal)
 
-		if (this.starCatalog) {
-			this.starCatalog.updateEquatorialVectors(julianEpochYear(this.options.time))
+		if (this.#starCatalog) {
+			this.#starCatalog.updateEquatorialVectors(toJulianEpoch(this.#options.time))
 		}
 
 		this.projectStars()
 		this.rebuildPickingIndex()
-		emitUpdateEnd && this.emitter.emit('updateEnd', { time: this.options.time, duration: performance.now() - start })
+		emitUpdateEnd && this.#emitter.emit('updateEnd', { time: this.#options.time, duration: performance.now() - start })
 		this.markAstronomicalDirty()
 		this.requestRender()
 	}
 
 	private syncSelectedMovingBodyObject() {
-		if (this.selectedObject?.type !== 'movingBody') return
+		if (this.#selectedObject?.type !== 'movingBody') return
 
-		this.selectedObject = this.currentMovingBodyObject(this.selectedObject)
+		this.#selectedObject = this.currentMovingBodyObject(this.#selectedObject)
 	}
 
 	private syncHoverMovingBodyObject() {
-		if (this.hoverObject?.type !== 'movingBody') return
+		if (this.#hoverObject?.type !== 'movingBody') return
 
-		this.hoverObject = this.currentMovingBodyObject(this.hoverObject)
+		this.#hoverObject = this.currentMovingBodyObject(this.#hoverObject)
 	}
 
 	private currentMovingBodyObject(object: Extract<CelestialObject, { type: 'movingBody' }>): CelestialObject | null {
-		const indexed = this.movingBodyList[object.index]
+		const indexed = this.#movingBodyList[object.index]
 
 		if (indexed?.id === object.object.id) {
 			return { type: 'movingBody', index: object.index, object: indexed }
 		}
 
-		for (let i = 0; i < this.movingBodyList.length; i++) {
-			const movingBody = this.movingBodyList[i]
+		for (let i = 0; i < this.#movingBodyList.length; i++) {
+			const movingBody = this.#movingBodyList[i]
 			if (movingBody.id === object.object.id) return { type: 'movingBody', index: i, object: movingBody }
 		}
 
@@ -4045,33 +4050,33 @@ export class Celestial {
 
 	private markAstronomicalDirty() {
 		for (let i = 0; i < ASTRONOMICAL_DIRTY_LAYER_IDS.length; i++) {
-			this.renderer.markDirty(ASTRONOMICAL_DIRTY_LAYER_IDS[i])
+			this.#renderer.markDirty(ASTRONOMICAL_DIRTY_LAYER_IDS[i])
 		}
 
-		if (this.options.coordinateSystem === 'equatorial') {
-			this.renderer.markDirty('horizon')
+		if (this.#options.coordinateSystem === 'equatorial') {
+			this.#renderer.markDirty('horizon')
 		}
 
-		if (this.hoverObject || this.selectedObject) {
-			this.renderer.markDirty('overlay')
+		if (this.#hoverObject || this.#selectedObject) {
+			this.#renderer.markDirty('overlay')
 		}
 	}
 
 	// Projects visible stars into base screen coordinates.
 	private projectStars() {
-		const catalog = this.starCatalog
+		const catalog = this.#starCatalog
 
 		if (!catalog) return
 
-		const width = this.options.width
-		const height = this.options.height
-		const scale = projectionScale(width, height, this.options.projection)
+		const width = this.#options.width
+		const height = this.#options.height
+		const scale = projectionScale(width, height, this.#options.projection)
 		const margin = Math.max(width, height)
-		const maxMagnitude = this.options.stars.maxMagnitude
-		const maxRenderStars = this.options.stars.maxRenderStars
-		const isHorizontal = this.options.coordinateSystem === 'horizontal'
-		const horizontalMatrix = this.eqToHorizontal
-		const temp = this.tempVector
+		const maxMagnitude = this.#options.stars.maxMagnitude
+		const maxRenderStars = this.#options.stars.maxRenderStars
+		const isHorizontal = this.#options.coordinateSystem === 'horizontal'
+		const horizontalMatrix = this.#eqToHorizontal
+		const temp = this.#tempVector
 		const mag = catalog.mag
 		const eqX = catalog.eqX
 		const eqY = catalog.eqY
@@ -4102,12 +4107,12 @@ export class Celestial {
 				}
 			}
 
-			if (!this.projectWorldVectorToBaseScreen(x, y, z, scale, this.tempScreen)) {
+			if (!this.projectWorldVectorToBaseScreen(x, y, z, scale, this.#tempScreen)) {
 				continue
 			}
 
-			const sx = this.tempScreen[0]
-			const sy = this.tempScreen[1]
+			const sx = this.#tempScreen[0]
+			const sy = this.#tempScreen[1]
 
 			if (sx < -margin || sy < -margin || sx > width + margin || sy > height + margin) {
 				continue
@@ -4117,73 +4122,73 @@ export class Celestial {
 		}
 
 		catalog.finalizeProjectionBuckets()
-		this.renderer.markDirty('stars')
+		this.#renderer.markDirty('stars')
 	}
 
 	// Projects a world vector to base screen coordinates without pan/zoom transform.
 	private projectWorldVectorToBaseScreen(x: number, y: number, z: number, scale: number, out: NumberArray): boolean {
-		const vx = this.viewMatrix[0] * x + this.viewMatrix[1] * y + this.viewMatrix[2] * z
-		const vy = this.viewMatrix[3] * x + this.viewMatrix[4] * y + this.viewMatrix[5] * z
-		const vz = this.viewMatrix[6] * x + this.viewMatrix[7] * y + this.viewMatrix[8] * z
+		const vx = this.#viewMatrix[0] * x + this.#viewMatrix[1] * y + this.#viewMatrix[2] * z
+		const vy = this.#viewMatrix[3] * x + this.#viewMatrix[4] * y + this.#viewMatrix[5] * z
+		const vz = this.#viewMatrix[6] * x + this.#viewMatrix[7] * y + this.#viewMatrix[8] * z
 
-		if (!projectViewVector(this.options.projection, vx, vy, vz, this.tempProjection)) {
+		if (!projectViewVector(this.#options.projection, vx, vy, vz, this.#tempProjection)) {
 			return false
 		}
 
-		out[0] = this.options.width / 2 - this.tempProjection[0] * scale
-		out[1] = this.options.height / 2 - this.tempProjection[1] * scale
+		out[0] = this.#options.width / 2 - this.#tempProjection[0] * scale
+		out[1] = this.#options.height / 2 - this.#tempProjection[1] * scale
 		return true
 	}
 
 	// Projects an equatorial coordinate to transformed screen coordinates.
 	private readonly projectEquatorialToScreen = (ra: number, dec: number, out: NumberArray): boolean => {
-		writeRaDecUnitVector(ra, dec, this.tempVector)
+		writeRaDecUnitVector(ra, dec, this.#tempVector)
 
-		let x = this.tempVector[0]
-		let y = this.tempVector[1]
-		let z = this.tempVector[2]
+		let x = this.#tempVector[0]
+		let y = this.#tempVector[1]
+		let z = this.#tempVector[2]
 
-		if (this.options.coordinateSystem === 'horizontal') {
-			multiplyMatrixVector(this.eqToHorizontal, x, y, z, this.tempVector)
-			x = this.tempVector[0]
-			y = this.tempVector[1]
-			z = this.tempVector[2]
+		if (this.#options.coordinateSystem === 'horizontal') {
+			multiplyMatrixVector(this.#eqToHorizontal, x, y, z, this.#tempVector)
+			x = this.#tempVector[0]
+			y = this.#tempVector[1]
+			z = this.#tempVector[2]
 
 			if (z < -HORIZON_EPSILON) {
 				return false
 			}
 		}
 
-		if (!this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.options.width, this.options.height, this.options.projection), out)) {
+		if (!this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.#options.width, this.#options.height, this.#options.projection), out)) {
 			return false
 		}
 
-		applyViewTransform(out[0], out[1], this.options.width, this.options.height, this.transform, out)
+		applyViewTransform(out[0], out[1], this.#options.width, this.#options.height, this.#transform, out)
 
 		return true
 	}
 
 	// Projects a coordinate-system vector to transformed screen coordinates.
 	private readonly projectWorldVectorToScreen = (x: number, y: number, z: number, out: NumberArray): boolean => {
-		if (!this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.options.width, this.options.height, this.options.projection), out)) {
+		if (!this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.#options.width, this.#options.height, this.#options.projection), out)) {
 			return false
 		}
 
-		applyViewTransform(out[0], out[1], this.options.width, this.options.height, this.transform, out)
+		applyViewTransform(out[0], out[1], this.#options.width, this.#options.height, this.#transform, out)
 
 		return true
 	}
 
 	// Projects a local horizontal coordinate onto either horizontal or equatorial views.
 	private readonly projectHorizontalToScreen = (az: number, alt: number, out: NumberArray): boolean => {
-		writeHorizontalUnitVector(az, alt, this.tempVector)
+		writeHorizontalUnitVector(az, alt, this.#tempVector)
 
-		let x = this.tempVector[0]
-		let y = this.tempVector[1]
-		let z = this.tempVector[2]
+		let x = this.#tempVector[0]
+		let y = this.#tempVector[1]
+		let z = this.#tempVector[2]
 
-		if (this.options.coordinateSystem === 'equatorial') {
-			const matrix = this.eqToHorizontal
+		if (this.#options.coordinateSystem === 'equatorial') {
+			const matrix = this.#eqToHorizontal
 			const hx = x
 			const hy = y
 			const hz = z
@@ -4196,28 +4201,28 @@ export class Celestial {
 	}
 
 	private readonly equatorialVisibility = (ra: number, dec: number): number => {
-		if (this.options.coordinateSystem !== 'horizontal') {
+		if (this.#options.coordinateSystem !== 'horizontal') {
 			return 1
 		}
 
-		writeRaDecUnitVector(ra, dec, this.tempVector)
-		multiplyMatrixVector(this.eqToHorizontal, this.tempVector[0], this.tempVector[1], this.tempVector[2], this.tempVector)
-		return this.tempVector[2]
+		writeRaDecUnitVector(ra, dec, this.#tempVector)
+		multiplyMatrixVector(this.#eqToHorizontal, this.#tempVector[0], this.#tempVector[1], this.#tempVector[2], this.#tempVector)
+		return this.#tempVector[2]
 	}
 
-	private readonly horizontalVisibility = (az: number, alt: number): number => (this.options.coordinateSystem === 'horizontal' ? Math.sin(alt) : 1)
+	private readonly horizontalVisibility = (az: number, alt: number): number => (this.#options.coordinateSystem === 'horizontal' ? Math.sin(alt) : 1)
 
 	// Rebuilds the picking index from projected visible objects.
 	private rebuildPickingIndex() {
-		this.pickingDirty = false
-		const radius = this.options.interactions.pickRadius
-		this.picking.reset(this.options.width, this.options.height, Math.max(16, radius * 3))
-		this.pickedShapes.length = 0
-		const catalog = this.starCatalog
+		this.#pickingDirty = false
+		const radius = this.#options.interactions.pickRadius
+		this.#picking.reset(this.#options.width, this.#options.height, Math.max(16, radius * 3))
+		this.#pickedShapes.length = 0
+		const catalog = this.#starCatalog
 
 		if (catalog && this.isLayerVisible('stars')) {
 			const indices = catalog.getBucketedVisibleIndices()
-			const maxMagnitude = starSymbolMagnitudeLimitAtZoom(this.transform.k, this.options.stars.maxMagnitude)
+			const maxMagnitude = starSymbolMagnitudeLimitAtZoom(this.#transform.k, this.#options.stars.maxMagnitude)
 
 			for (let i = 0; i < catalog.visibleCount; i++) {
 				const index = indices[i]
@@ -4226,104 +4231,104 @@ export class Celestial {
 					continue
 				}
 
-				applyViewTransform(catalog.screenX[index], catalog.screenY[index], this.options.width, this.options.height, this.transform, this.tempScreen)
-				this.picking.add(PICK_TYPE_STAR, index, this.tempScreen[0], this.tempScreen[1], catalog.mag[index])
+				applyViewTransform(catalog.screenX[index], catalog.screenY[index], this.#options.width, this.#options.height, this.#transform, this.#tempScreen)
+				this.#picking.add(PICK_TYPE_STAR, index, this.#tempScreen[0], this.#tempScreen[1], catalog.mag[index])
 			}
 		}
 
 		if (this.isLayerVisible('deepSky')) {
-			for (let i = 0; i < this.dsos.length; i++) {
-				const object = this.dsos[i]
+			for (let i = 0; i < this.#dsos.length; i++) {
+				const object = this.#dsos[i]
 
-				if (!isDeepSkyObjectVisibleAtZoom(object, this.transform.k)) {
+				if (!isDeepSkyObjectVisibleAtZoom(object, this.#transform.k)) {
 					continue
 				}
 
-				if (this.projectEquatorialToScreen(object.rightAscension, object.declination, this.tempScreen) && isPointInsideViewportMargin(this.tempScreen[0], this.tempScreen[1], this.options.width, this.options.height, DSO_VIEWPORT_MARGIN)) {
-					this.picking.add(PICK_TYPE_DSO, i, this.tempScreen[0], this.tempScreen[1], deepSkyMagnitude(object))
+				if (this.projectEquatorialToScreen(object.rightAscension, object.declination, this.#tempScreen) && isPointInsideViewportMargin(this.#tempScreen[0], this.#tempScreen[1], this.#options.width, this.#options.height, DSO_VIEWPORT_MARGIN)) {
+					this.#picking.add(PICK_TYPE_DSO, i, this.#tempScreen[0], this.#tempScreen[1], deepSkyMagnitude(object))
 				}
 			}
 		}
 
 		if (this.isLayerVisible('movingBodies')) {
-			for (let i = 0; i < this.movingBodyList.length; i++) {
-				const object = this.movingBodyList[i]
+			for (let i = 0; i < this.#movingBodyList.length; i++) {
+				const object = this.#movingBodyList[i]
 
-				if (object.visible === false || object.selectable === false || !isMovingBodyVisibleAtZoom(object, this.transform.k)) {
+				if (object.visible === false || object.selectable === false || !isMovingBodyVisibleAtZoom(object, this.#transform.k)) {
 					continue
 				}
 
-				if (this.projectEquatorialToScreen(object.position.rightAscension, object.position.declination, this.tempScreen)) {
-					this.picking.add(PICK_TYPE_MOVING_BODY, i, this.tempScreen[0], this.tempScreen[1], movingBodyMagnitude(object))
+				if (this.projectEquatorialToScreen(object.position.rightAscension, object.position.declination, this.#tempScreen)) {
+					this.#picking.add(PICK_TYPE_MOVING_BODY, i, this.#tempScreen[0], this.#tempScreen[1], movingBodyMagnitude(object))
 				}
 			}
 		}
 
-		const labels = this.constellations.labels ?? []
+		const labels = this.#constellations.labels ?? []
 
-		if (this.isLayerVisible('constellationLabels') && this.transform.k >= 0.75) {
+		if (this.isLayerVisible('constellationLabels') && this.#transform.k >= 0.75) {
 			for (let i = 0; i < labels.length; i++) {
 				const label = labels[i]
 
-				if (this.projectEquatorialToScreen(label.rightAscension, label.declination, this.tempScreen)) {
-					this.picking.add(PICK_TYPE_CONSTELLATION_LABEL, i, this.tempScreen[0], this.tempScreen[1], 3)
+				if (this.projectEquatorialToScreen(label.rightAscension, label.declination, this.#tempScreen)) {
+					this.#picking.add(PICK_TYPE_CONSTELLATION_LABEL, i, this.#tempScreen[0], this.#tempScreen[1], 3)
 				}
 			}
 		}
 
 		if (this.isLayerVisible('shapes')) {
-			for (let i = 0; i < this.shapeList.length; i++) {
-				const shape = this.shapeList[i]
+			for (let i = 0; i < this.#shapeList.length; i++) {
+				const shape = this.#shapeList[i]
 
 				if (shape.visible === false || shape.selectable === false) {
 					continue
 				}
 
-				if (this.projectEquatorialToScreen(shape.coordinate.rightAscension, shape.coordinate.declination, this.tempScreen)) {
-					const index = this.pickedShapes.length
-					this.pickedShapes.push(shape)
-					this.picking.add(PICK_TYPE_SHAPE, index, this.tempScreen[0], this.tempScreen[1], -8)
+				if (this.projectEquatorialToScreen(shape.coordinate.rightAscension, shape.coordinate.declination, this.#tempScreen)) {
+					const index = this.#pickedShapes.length
+					this.#pickedShapes.push(shape)
+					this.#picking.add(PICK_TYPE_SHAPE, index, this.#tempScreen[0], this.#tempScreen[1], -8)
 				}
 			}
 		}
 	}
 
 	private ensurePickingIndex() {
-		if (!this.pickingDirty) return
+		if (!this.#pickingDirty) return
 
 		this.rebuildPickingIndex()
 	}
 
 	// Schedules one animation-frame render.
 	private requestRender() {
-		if (this.frameId || this.destroyed) return
+		if (this.#frameId || this.#destroyed) return
 
-		this.frameId = requestAnimationFrame(() => {
-			this.frameId = 0
+		this.#frameId = requestAnimationFrame(() => {
+			this.#frameId = 0
 			this.flushRender()
 		})
 	}
 
 	// Flushes dirty layers.
 	private flushRender() {
-		const emitRenderStart = this.emitter.has('renderStart')
-		const emitRenderEnd = this.emitter.has('renderEnd')
+		const emitRenderStart = this.#emitter.has('renderStart')
+		const emitRenderEnd = this.#emitter.has('renderEnd')
 		const start = emitRenderEnd ? performance.now() : 0
-		emitRenderStart && this.emitter.emit('renderStart', { time: this.options.time })
-		this.renderer.render(this.createRenderState())
+		emitRenderStart && this.#emitter.emit('renderStart', { time: this.#options.time })
+		this.#renderer.render(this.createRenderState())
 
 		if (emitRenderEnd) {
 			const duration = performance.now() - start
 			const fps = duration > 0 ? 1000 / duration : 0
-			this.emitter.emit('renderEnd', { time: this.options.time, duration, fps })
+			this.#emitter.emit('renderEnd', { time: this.#options.time, duration, fps })
 		}
 	}
 
 	// Creates the render state passed to layers. The object is reused across frames and only its
 	// volatile fields are refreshed, so per-frame work during pan/zoom avoids object allocation.
 	private createRenderState(): RenderState {
-		const options = this.options
-		let state = this.renderState
+		const options = this.#options
+		let state = this.#renderState
 
 		if (!state) {
 			// Bound method references and `this` are stable for the instance lifetime, so they are set once.
@@ -4336,30 +4341,30 @@ export class Celestial {
 				horizontalVisibility: this.horizontalVisibility,
 			} as unknown as Writable<RenderState>
 
-			this.renderState = state
+			this.#renderState = state
 		}
 
 		state.width = options.width
 		state.height = options.height
-		state.dpr = this.renderer.devicePixelRatio
+		state.dpr = this.#renderer.devicePixelRatio
 		state.time = options.time
 		state.observer = options.observer
 		state.projection = options.projection
 		state.coordinateSystem = options.coordinateSystem
-		state.transform = this.transform
+		state.transform = this.#transform
 		state.projectionRadius = projectionScale(options.width, options.height, options.projection)
 		state.referenceLines = options.referenceLines
 		state.stars = options.stars
 		state.theme = options.theme
-		state.starCatalog = this.starCatalog
-		state.constellations = this.constellations
-		state.milkyWay = this.milkyWay
-		state.dsos = this.dsos
-		state.deepSkyLabelVisible = this.deepSkyLabelVisible
-		state.movingBodies = this.movingBodyList
-		state.shapes = this.shapeList
-		state.hoverObject = this.hoverObject
-		state.selectedObject = this.selectedObject
+		state.starCatalog = this.#starCatalog
+		state.constellations = this.#constellations
+		state.milkyWay = this.#milkyWay
+		state.dsos = this.#dsos
+		state.deepSkyLabelVisible = this.#deepSkyLabelVisible
+		state.movingBodies = this.#movingBodyList
+		state.shapes = this.#shapeList
+		state.hoverObject = this.#hoverObject
+		state.selectedObject = this.#selectedObject
 		return state
 	}
 
@@ -4369,17 +4374,17 @@ export class Celestial {
 
 		switch (index.type) {
 			case PICK_TYPE_STAR:
-				return this.starCatalog?.getObject(index.index) ?? null
+				return this.#starCatalog?.getObject(index.index) ?? null
 			case PICK_TYPE_DSO:
-				return this.dsos[index.index] ? { type: 'deepSky', index: index.index, object: this.dsos[index.index] } : null
+				return this.#dsos[index.index] ? { type: 'deepSky', index: index.index, object: this.#dsos[index.index] } : null
 			case PICK_TYPE_MOVING_BODY:
-				return this.movingBodyList[index.index] ? { type: 'movingBody', index: index.index, object: this.movingBodyList[index.index] } : null
+				return this.#movingBodyList[index.index] ? { type: 'movingBody', index: index.index, object: this.#movingBodyList[index.index] } : null
 			case PICK_TYPE_CONSTELLATION_LABEL: {
-				const label = this.constellations.labels?.[index.index]
+				const label = this.#constellations.labels?.[index.index]
 				return label ? { type: 'constellationLabel', index: index.index, label } : null
 			}
 			case PICK_TYPE_SHAPE: {
-				const shape = this.pickedShapes[index.index]
+				const shape = this.#pickedShapes[index.index]
 				return shape ? { type: 'shape', id: shape.id, shape } : null
 			}
 			default:
@@ -4388,8 +4393,8 @@ export class Celestial {
 	}
 
 	private resolvePointerPick(index: PickIndex | null): CelestialObject | null {
-		if (pickMatchesObject(index, this.hoverObject)) {
-			return this.hoverObject
+		if (pickMatchesObject(index, this.#hoverObject)) {
+			return this.#hoverObject
 		}
 
 		return this.resolvePick(index)
@@ -4397,14 +4402,14 @@ export class Celestial {
 
 	// Emits an error event without throwing inside render/update loops.
 	private emitError(error: Error) {
-		this.emitter.emit('error', error)
+		this.#emitter.emit('error', error)
 	}
 
 	// Binds local pointer interactions used as fallback and baseline.
 	private bindLocalInteractions() {
-		if (!this.options.interactions.enabled) return
+		if (!this.#options.interactions.enabled) return
 
-		const element = this.renderer.element
+		const element = this.#renderer.element
 		element.addEventListener('pointerdown', this.handlePointerDown)
 		element.addEventListener('pointermove', this.handlePointerMove)
 		element.addEventListener('click', this.handleClick)
@@ -4415,7 +4420,7 @@ export class Celestial {
 
 	// Removes local pointer interactions.
 	private unbindLocalInteractions() {
-		const element = this.renderer.element
+		const element = this.#renderer.element
 		element.removeEventListener('pointerdown', this.handlePointerDown)
 		element.removeEventListener('pointermove', this.handlePointerMove)
 		element.removeEventListener('click', this.handleClick)
@@ -4426,79 +4431,79 @@ export class Celestial {
 
 	// Binds D3 zoom for pan/zoom and local listeners for picking.
 	private bindD3Zoom() {
-		if (!this.options.interactions.enabled || this.d3ZoomBound) return
+		if (!this.#options.interactions.enabled || this.#d3ZoomBound) return
 
 		const behavior = zoom<HTMLElement, unknown>()
-			.scaleExtent([this.options.interactions.minZoom, this.options.interactions.maxZoom])
-			.wheelDelta((event: WheelEvent) => -(normalizedWheelDeltaY(event) * this.options.interactions.wheelZoomSpeed) / Math.LN2)
+			.scaleExtent([this.#options.interactions.minZoom, this.#options.interactions.maxZoom])
+			.wheelDelta((event: WheelEvent) => -(normalizedWheelDeltaY(event) * this.#options.interactions.wheelZoomSpeed) / Math.LN2)
 			.on('zoom', (event: D3ZoomEvent<HTMLElement, unknown>) => {
 				const k = event.transform.k
-				const transform = this.normalizeViewTransform({ x: event.transform.x - (this.options.width / 2) * (1 - k), y: event.transform.y - (this.options.height / 2) * (1 - k), k })
+				const transform = this.normalizeViewTransform({ x: event.transform.x - (this.#options.width / 2) * (1 - k), y: event.transform.y - (this.#options.height / 2) * (1 - k), k })
 
 				if (this.writeViewTransform(transform)) {
 					this.afterTransformChanged()
 				}
 			})
 
-		const element = this.renderer.element
+		const element = this.#renderer.element
 		element.addEventListener('pointermove', this.handlePointerMove)
 		element.addEventListener('click', this.handleClick)
 		select(element).call(behavior)
-		this.d3ZoomBehavior = behavior
-		this.d3ZoomBound = true
+		this.#d3ZoomBehavior = behavior
+		this.#d3ZoomBound = true
 	}
 
 	// Unbinds D3 zoom listeners.
 	private unbindD3Zoom() {
-		if (!this.d3ZoomBound) return
+		if (!this.#d3ZoomBound) return
 
-		select(this.renderer.element).on('.zoom', null)
-		this.d3ZoomBehavior = null
-		this.d3ZoomBound = false
+		select(this.#renderer.element).on('.zoom', null)
+		this.#d3ZoomBehavior = null
+		this.#d3ZoomBound = false
 	}
 
 	// Handles pointer down for local panning.
 	private readonly handlePointerDown = (event: PointerEvent): void => {
 		if (event.button !== 0) return
 
-		this.pointerDown = true
-		this.pointerMoved = false
-		this.pointerStartX = event.clientX
-		this.pointerStartY = event.clientY
-		this.transformStartX = this.transform.x
-		this.transformStartY = this.transform.y
-		this.renderer.element.setPointerCapture?.(event.pointerId)
+		this.#pointerDown = true
+		this.#pointerMoved = false
+		this.#pointerStartX = event.clientX
+		this.#pointerStartY = event.clientY
+		this.#transformStartX = this.#transform.x
+		this.#transformStartY = this.#transform.y
+		this.#renderer.element.setPointerCapture?.(event.pointerId)
 	}
 
 	// Handles pointer movement for panning and hover picking.
 	private readonly handlePointerMove = (event: PointerEvent): void => {
 		const now = performance.now()
 
-		if (this.pointerDown) {
-			const dx = event.clientX - this.pointerStartX
-			const dy = event.clientY - this.pointerStartY
-			this.pointerMoved ||= Math.abs(dx) + Math.abs(dy) > 3
-			this.transform.x = this.transformStartX + dx
-			this.transform.y = this.transformStartY + dy
+		if (this.#pointerDown) {
+			const dx = event.clientX - this.#pointerStartX
+			const dy = event.clientY - this.#pointerStartY
+			this.#pointerMoved ||= Math.abs(dx) + Math.abs(dy) > 3
+			this.#transform.x = this.#transformStartX + dx
+			this.#transform.y = this.#transformStartY + dy
 			this.afterTransformChanged()
 			return
 		}
 
-		if (now - this.lastPointerMove < this.options.interactions.pointerMoveThrottleMs) return
+		if (now - this.#lastPointerMove < this.#options.interactions.pointerMoveThrottleMs) return
 
-		this.lastPointerMove = now
+		this.#lastPointerMove = now
 		const point = this.eventPoint(event)
 		const x = point[0]
 		const y = point[1]
 
 		this.ensurePickingIndex()
-		const object = this.resolvePointerPick(this.picking.findNearest(x, y, this.options.interactions.pickRadius))
+		const object = this.resolvePointerPick(this.#picking.findNearest(x, y, this.#options.interactions.pickRadius))
 
-		if (this.emitter.has('hover')) {
+		if (this.#emitter.has('hover')) {
 			const coordinate = this.screenToEquatorial(x, y)
 
 			if (coordinate) {
-				this.emitter.emit('hover', { x, y, coordinate, object })
+				this.#emitter.emit('hover', { x, y, coordinate, object })
 			}
 		}
 
@@ -4507,36 +4512,36 @@ export class Celestial {
 
 	// Handles pointer up.
 	private readonly handlePointerUp = (event: PointerEvent): void => {
-		if (!this.pointerDown) return
+		if (!this.#pointerDown) return
 
-		this.pointerDown = false
-		this.renderer.element.releasePointerCapture?.(event.pointerId)
+		this.#pointerDown = false
+		this.#renderer.element.releasePointerCapture?.(event.pointerId)
 	}
 
 	// Handles click selection.
 	private readonly handleClick = (event: MouseEvent): void => {
-		if (this.pointerMoved) return
+		if (this.#pointerMoved) return
 
 		const point = this.eventPoint(event)
 		const x = point[0]
 		const y = point[1]
 
 		this.ensurePickingIndex()
-		const object = this.resolvePick(this.picking.findNearest(x, y, this.options.interactions.pickRadius))
+		const object = this.resolvePick(this.#picking.findNearest(x, y, this.#options.interactions.pickRadius))
 
-		if (this.emitter.has('click')) {
+		if (this.#emitter.has('click')) {
 			const coordinate = this.screenToEquatorial(x, y)
 
 			if (coordinate) {
-				this.emitter.emit('click', { x, y, coordinate, object })
+				this.#emitter.emit('click', { x, y, coordinate, object, event })
 			}
 		}
 
 		if (!object) return
 
-		this.selectedObject = object
-		this.renderer.markDirty('overlay')
-		this.emitter.has('selectionChange') && this.emitter.emit('selectionChange', { object })
+		this.#selectedObject = object
+		this.#renderer.markDirty('overlay')
+		this.#emitter.has('selectionChange') && this.#emitter.emit('selectionChange', { object })
 		this.requestRender()
 	}
 
@@ -4545,18 +4550,18 @@ export class Celestial {
 		event.preventDefault()
 
 		const point = this.eventPoint(event)
-		const previousK = this.transform.k
-		const nextK = clamp(previousK * Math.exp(-normalizedWheelDeltaY(event) * this.options.interactions.wheelZoomSpeed), this.options.interactions.minZoom, this.options.interactions.maxZoom)
+		const previousK = this.#transform.k
+		const nextK = clamp(previousK * Math.exp(-normalizedWheelDeltaY(event) * this.#options.interactions.wheelZoomSpeed), this.#options.interactions.minZoom, this.#options.interactions.maxZoom)
 
 		if (nextK === previousK) return
 
-		const cx = this.options.width / 2
-		const cy = this.options.height / 2
-		const worldX = (point[0] - cx - this.transform.x) / previousK
-		const worldY = (point[1] - cy - this.transform.y) / previousK
-		this.transform.k = nextK
-		this.transform.x = point[0] - cx - worldX * nextK
-		this.transform.y = point[1] - cy - worldY * nextK
+		const cx = this.#options.width / 2
+		const cy = this.#options.height / 2
+		const worldX = (point[0] - cx - this.#transform.x) / previousK
+		const worldY = (point[1] - cy - this.#transform.y) / previousK
+		this.#transform.k = nextK
+		this.#transform.x = point[0] - cx - worldX * nextK
+		this.#transform.y = point[1] - cy - worldY * nextK
 		this.afterTransformChanged()
 	}
 
@@ -4564,67 +4569,67 @@ export class Celestial {
 		return {
 			x: isFiniteNumber(transform.x) ? transform.x : 0,
 			y: isFiniteNumber(transform.y) ? transform.y : 0,
-			k: clamp(isFiniteNumber(transform.k) ? transform.k : 1, this.options.interactions.minZoom, this.options.interactions.maxZoom),
+			k: clamp(isFiniteNumber(transform.k) ? transform.k : 1, this.#options.interactions.minZoom, this.#options.interactions.maxZoom),
 		}
 	}
 
 	private writeViewTransform(transform: ViewTransform) {
-		if (transform.x === this.transform.x && transform.y === this.transform.y && transform.k === this.transform.k) return false
-		this.transform = transform
+		if (transform.x === this.#transform.x && transform.y === this.#transform.y && transform.k === this.#transform.k) return false
+		this.#transform = transform
 		return true
 	}
 
 	private syncD3ZoomTransform(transform: ViewTransform) {
-		if (!this.d3ZoomBehavior) return
+		if (!this.#d3ZoomBehavior) return
 
-		const d3Transform = zoomIdentity.translate(transform.x + (this.options.width / 2) * (1 - transform.k), transform.y + (this.options.height / 2) * (1 - transform.k)).scale(transform.k)
+		const d3Transform = zoomIdentity.translate(transform.x + (this.#options.width / 2) * (1 - transform.k), transform.y + (this.#options.height / 2) * (1 - transform.k)).scale(transform.k)
 
-		select(this.renderer.element).property('__zoom', d3Transform)
+		select(this.#renderer.element).property('__zoom', d3Transform)
 	}
 
 	// Updates rendering and picking after pan/zoom transform changes.
 	private afterTransformChanged() {
-		this.pickingDirty = true
-		this.renderer.markAllDirty()
-		this.emitter.has('viewTransformChange') && this.emitter.emit('viewTransformChange', { transform: this.transform })
+		this.#pickingDirty = true
+		this.#renderer.markAllDirty()
+		this.#emitter.has('viewTransformChange') && this.#emitter.emit('viewTransformChange', { transform: this.#transform })
 		this.requestRender()
 	}
 
 	// Updates hover state and events.
 	private updateHover(object: CelestialObject | null) {
-		if (sameObject(this.hoverObject, object)) return
+		if (sameObject(this.#hoverObject, object)) return
 
-		if (this.hoverObject && this.emitter.has('objectLeave')) {
-			this.emitter.emit('objectLeave', { object: this.hoverObject })
+		if (this.#hoverObject && this.#emitter.has('objectLeave')) {
+			this.#emitter.emit('objectLeave', { object: this.#hoverObject })
 		}
 
-		this.hoverObject = object
+		this.#hoverObject = object
 
-		if (object && this.emitter.has('objectHover')) {
-			this.emitter.emit('objectHover', { object })
+		if (object && this.#emitter.has('objectHover')) {
+			this.#emitter.emit('objectHover', { object })
 		}
 
-		this.renderer.markDirty('overlay')
+		this.#renderer.markDirty('overlay')
 		this.requestRender()
 	}
 
 	// Invalidates the cached element rect after scroll/resize moves the canvas.
 	private readonly invalidateRect = (): void => {
-		this.cachedRect = null
+		this.#cachedRect = null
 	}
 
 	// Converts pointer event coordinates into renderer-local coordinates.
 	private eventPoint(event: MouseEvent | PointerEvent | WheelEvent) {
-		let rect = this.cachedRect
+		let rect = this.#cachedRect
 
 		if (!rect) {
-			rect = this.renderer.element.getBoundingClientRect()
-			this.cachedRect = rect
+			rect = this.#renderer.element.getBoundingClientRect()
+			this.#cachedRect = rect
 		}
 
-		this.tempScreen[0] = event.clientX - rect.left
-		this.tempScreen[1] = event.clientY - rect.top
-		return this.tempScreen
+		this.#tempScreen[0] = event.clientX - rect.left
+		this.#tempScreen[1] = event.clientY - rect.top
+		return this.#tempScreen
 	}
 }
 

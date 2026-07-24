@@ -1,3 +1,9 @@
+import { Api } from '@shared/api'
+import { imageBus } from '@shared/bus'
+import { isMouseDeviceSupported } from '@shared/util'
+import { hasScaledSolution } from '@stores/image.solver.store'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { InteractableProps, InteractTransform } from '@ui/Interactable'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { AstrometricInterpolator } from 'nebulosa/src/astronomy/ephemeris/interpolation/astrometric'
@@ -6,17 +12,11 @@ import type { Angle } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
-import { isMousePresent } from '../shared/util'
-import type { InteractableProps, InteractTransform } from '../ui/Interactable'
-import { hasScaledSolution } from './image.solver.store'
-import type { ImageViewerStore } from './image.viewer.store'
 
 export type ImageMouseCoordinateStore = ReturnType<typeof imageMouseCoordinateStore>
 
 export interface ImageMouseCoordinateState {
-	visible: boolean
+	enabled: boolean
 	interpolator?: AstrometricInterpolator
 	readonly coordinate: {
 		hover: EquatorialCoordinate & Point
@@ -26,7 +26,7 @@ export interface ImageMouseCoordinateState {
 
 export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageMouseCoordinateState>({
-		visible: false,
+		enabled: false,
 		coordinate: {
 			hover: {
 				rightAscension: 0,
@@ -47,11 +47,12 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 
 	console.info('image mouse coordinate created:', viewer.state.path)
 
+	const isMousePresent = isMouseDeviceSupported()
 	const u: VoidFunction[] = []
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image mouse coordinate mounted:', viewer.state.path)
 
@@ -59,19 +60,21 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 
 		u[0] = imageBus.subscribe('load', ({ image, info, refreshed }) => {
 			if (refreshed && image === viewer.image) {
-				if (info.solution && state.visible) void compute(info.solution, true)
+				if (info.solution && state.enabled) void compute(info.solution, true)
 				else state.interpolator = undefined
 			}
 		})
 
 		u[1] = subscribeKey(viewer.solver.state, 'solution', (solution) => {
-			if (state.visible) void compute(solution, true)
+			if (state.enabled) void compute(solution, true)
 			else state.interpolator = undefined
 		})
 
-		u[2] = subscribeKey(state, 'visible', (visible) => {
-			if (visible) void compute()
+		u[2] = subscribeKey(state, 'enabled', (enabled) => {
+			if (enabled) void compute()
 		})
+
+		return unmount
 	}
 
 	function unmount() {
@@ -79,6 +82,10 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 		console.info('image mouse coordinate unmounted:', viewer.state.path)
 		unsubscribe(u)
 		mounted = false
+	}
+
+	function setEnabled(value: boolean) {
+		state.enabled = value
 	}
 
 	async function compute(solution: PlateSolution | undefined = viewer.solver.state.solution, force: boolean = false) {
@@ -125,25 +132,25 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 	}
 
 	function handleClick({ event, dragging, pinching }: Parameters<NonNullable<InteractableProps['onClick']>>[0]) {
-		if (!state.visible || dragging || pinching) return
+		if (!state.enabled || dragging || pinching) return
 		handleInterpolatedCoordinate(event.offsetX, event.offsetY, true)
 	}
 
 	function handleMouseMove({ event, dragging, pinching }: Parameters<NonNullable<InteractableProps['onMouseMove']>>[0]) {
-		if (!state.visible || dragging || pinching) return
+		if (!state.enabled || dragging || pinching) return
 		handleInterpolatedCoordinate(event.offsetX, event.offsetY, false)
 	}
 
 	function toggle() {
-		state.visible = !state.visible
+		state.enabled = !state.enabled
 	}
 
 	function show() {
-		state.visible = true
+		state.enabled = true
 	}
 
 	function hide() {
-		state.visible = false
+		state.enabled = false
 	}
 
 	return {
@@ -151,6 +158,7 @@ export function imageMouseCoordinateStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
+		setEnabled,
 		compute,
 		toggle,
 		handleInterpolatedCoordinate,

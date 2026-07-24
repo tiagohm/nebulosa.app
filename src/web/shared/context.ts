@@ -1,29 +1,32 @@
+import type { AutoFocusStore } from '@stores/autofocus.store'
+import type { CameraCaptureStore } from '@stores/camera.capture.store'
+import type { CameraStore } from '@stores/camera.store'
+import type { CoverStore } from '@stores/cover.store'
+import type { DarvStore } from '@stores/darv.store'
+import type { DewHeaterStore } from '@stores/dewheater.store'
+import type { FilePickerStore } from '@stores/filepicker.store'
+import type { FlatPanelStore } from '@stores/flatpanel.store'
+import type { FlatWizardStore } from '@stores/flatwizard.store'
+import type { FocuserStore } from '@stores/focuser.store'
+import type { GuideOutputStore } from '@stores/guideoutput.store'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { IndiPanelControlStore } from '@stores/indi.panelcontrol.store'
+import type { LocationStore } from '@stores/location.store'
+import type { MountStore } from '@stores/mount.store'
+import type { PlateSolverStore } from '@stores/plate.solver.store'
+import type { RotatorStore } from '@stores/rotator.store'
+import type { ThermometerStore } from '@stores/thermometer.store'
+import type { TppaStore } from '@stores/tppa.store'
+import type { WheelStore } from '@stores/wheel.store'
 import type { Camera, Cover, Device, DewHeater, FlatPanel, Focuser, GuideOutput, Mount, Rotator, Thermometer, Wheel } from 'nebulosa/src/devices/indi/device'
 import { createContext } from 'react'
-import type { AutoFocusStore } from '@/stores/autofocus.store'
-import type { CameraStore } from '@/stores/camera.store'
-import type { CoverStore } from '@/stores/cover.store'
-import type { DarvStore } from '@/stores/darv.store'
-import type { DewHeaterStore } from '@/stores/dewheater.store'
-import type { FilePickerStore } from '@/stores/filepicker.store'
-import type { FlatPanelStore } from '@/stores/flatpanel.store'
-import type { FlatWizardStore } from '@/stores/flatwizard.store'
-import type { FocuserStore } from '@/stores/focuser.store'
-import type { GuideOutputStore } from '@/stores/guideoutput.store'
-import type { ImageViewerStore } from '@/stores/image.viewer.store'
-import type { IndiPanelControlStore } from '@/stores/indi.panelcontrol.store'
-import type { MountStore } from '@/stores/mount.store'
-import type { RotatorStore } from '@/stores/rotator.store'
-import type { ThermometerStore } from '@/stores/thermometer.store'
-import type { TppaStore } from '@/stores/tppa.store'
-import type { WheelStore } from '@/stores/wheel.store'
-import type { LocationStore } from '../stores/location.store'
-import type { Image } from './types'
+import type { Image } from '#/image'
 
 export const AutoFocusStoreContext = createContext<AutoFocusStore>(null as never)
 
 export const CameraDeviceContext = createContext<Camera>(null as never)
 export const CameraStoreContext = createContext<CameraStore>(null as never)
+export const CameraCaptureStoreContext = createContext<CameraCaptureStore>(null as never)
 
 export const DeviceContext = createContext<Device>(null as never)
 
@@ -68,3 +71,5 @@ export const TppaStoreContext = createContext<TppaStore>(null as never)
 
 export const WheelDeviceContext = createContext<Wheel>(null as never)
 export const WheelStoreContext = createContext<WheelStore>(null as never)
+
+export const PlateSolverStoreContext = createContext<PlateSolverStore>(null as never)

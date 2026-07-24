@@ -1,25 +1,25 @@
+import { Api } from '@shared/api'
+import { imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { hasScaledSolution } from '@stores/image.solver.store'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
-import type { ImageCoordinateGrid } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { hasScaledSolution } from './image.solver.store'
-import type { ImageViewerStore } from './image.viewer.store'
+import type { ImageCoordinateGrid } from '#/image.coordinategrid'
 
 export type ImageCoordinateGridStore = ReturnType<typeof imageCoordinateGridStore>
 
 export interface ImageCoordinateGridState {
-	visible: boolean
+	enabled: boolean
 	loading: boolean
 	grid?: ImageCoordinateGrid
 }
 
 export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageCoordinateGridState>({
-		visible: false,
+		enabled: false,
 		loading: false,
 		grid: undefined,
 	})
@@ -30,31 +30,33 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image coordinate grid mounted:', viewer.state.path)
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.coordinategrid`, ['p:visible'])
+		u[0] = initProxy(state, `image.${viewer.key}.coordinategrid`, ['p:enabled'])
 
 		u[1] = imageBus.subscribe('load', ({ image, info, refreshed }) => {
 			if (refreshed && image === viewer.image) {
-				if (state.visible && hasScaledSolution(info.solution)) void compute(info.solution, true)
+				if (state.enabled && hasScaledSolution(info.solution)) void compute(info.solution, true)
 				else reset()
 			}
 		})
 
 		u[2] = subscribeKey(viewer.solver.state, 'solution', (solution) => {
-			if (state.visible) void compute(solution, true)
+			if (state.enabled) void compute(solution, true)
 			else reset()
 		})
 
-		u[3] = subscribeKey(state, 'visible', (visible) => {
-			if (visible) void compute()
+		u[3] = subscribeKey(state, 'enabled', (enabled) => {
+			if (enabled) void compute()
 		})
 
-		if (state.visible) void compute()
+		if (state.enabled) void compute()
+
+		return unmount
 	}
 
 	function unmount() {
@@ -62,6 +64,10 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 		console.info('image coordinate grid unmounted:', viewer.state.path)
 		unsubscribe(u)
 		mounted = false
+	}
+
+	function setEnabled(value: boolean) {
+		state.enabled = value
 	}
 
 	async function compute(solution: PlateSolution | undefined = viewer.solver.state.solution, force: boolean = false) {
@@ -88,15 +94,15 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 	}
 
 	function toggle() {
-		state.visible = !state.visible
+		state.enabled = !state.enabled
 	}
 
 	function show() {
-		state.visible = true
+		state.enabled = true
 	}
 
 	function hide() {
-		state.visible = false
+		state.enabled = false
 	}
 
 	return {
@@ -104,6 +110,7 @@ export function imageCoordinateGridStore(viewer: ImageViewerStore) {
 		viewer,
 		mount,
 		unmount,
+		setEnabled,
 		compute,
 		reset,
 		toggle,

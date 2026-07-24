@@ -1,56 +1,171 @@
-import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
-import type { UTCTime } from 'nebulosa/src/devices/indi/device'
-import { type SearchSkyObject, type SkyObjectSearchItem, type BodyPosition, DEFAULT_BODY_POSITION, DEFAULT_SKY_OBJECT_SEARCH } from 'src/shared/types'
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { atlasStore, isLocationChanged, isTimeChanged } from '@stores/atlas.store'
+import type { BookmarkItem, TagItem } from '@stores/atlas.store'
+import { framingStore } from '@stores/framing.store'
+import { settingsStore } from '@stores/settings.store'
+import type { Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
+import type { Writable } from 'nebulosa/src/core/types'
+import type { Mount, UTCTime } from 'nebulosa/src/devices/indi/device'
+import type { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
+import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
+import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import { atlasStore, isLocationChanged, isTimeChanged } from './atlas.store'
+import { DEFAULT_BODY_POSITION } from '#/atlas'
+import type { BodyPosition } from '#/atlas'
+import { DEFAULT_SKY_OBJECT_SEARCH, skyObjectName } from '#/galaxy'
+import type { SearchSkyObject, SkyObjectSearchItem } from '#/galaxy'
 
 export type AtlasGalaxyStore = typeof galaxyStore
 
 export interface AtlasGalaxyState {
-	mode: 'info' | 'chart'
 	loading: boolean
-	readonly request: Required<SearchSkyObject>
+	readonly request: Writable<Required<SearchSkyObject>>
 	result: readonly SkyObjectSearchItem[]
 	selected?: SkyObjectSearchItem
 	readonly position: BodyPosition
 	chart: readonly number[]
+	favorite: boolean
+	readonly bookmark: BookmarkItem[]
+	bookmarkedOnly: boolean
+	readonly tags: readonly TagItem[]
 }
 
 const state = proxy<AtlasGalaxyState>({
-	mode: 'info',
 	loading: false,
 	request: structuredClone(DEFAULT_SKY_OBJECT_SEARCH),
 	result: [],
 	position: structuredClone(DEFAULT_BODY_POSITION),
 	chart: [],
-})
+	bookmark: [],
+	bookmarkedOnly: false,
+	get favorite() {
+		const { selected, bookmark } = this
+		const id = selected?.id.toFixed(0)
+		return !!id && bookmark.some((e) => e.code === id)
+	},
+	get tags() {
+		const { selected } = this
+		const { names, constellation } = this.position
 
-initProxy(state, 'atlas.galaxy', ['o:request'])
-state.request.time.utc = 0
+		if (names?.length) {
+			const res = new Array<TagItem>(names.length)
+
+			for (let i = 0; i < names.length; i++) {
+				const label = skyObjectName(names[i], constellation)!
+				res[i] = { label, color: 'primary' }
+			}
+
+			return res
+		} else if (selected) {
+			return [{ label: selected.name, color: 'primary' }] as const
+		} else {
+			return []
+		}
+	},
+} satisfies AtlasGalaxyState)
 
 let chartUpdate = true
+let mounted = false
+const u: VoidFunction[] = []
 
 function mount() {
-	console.info('atlas galaxy mounted')
+	if (mounted) return unmount
+
+	console.info('galaxy mounted')
+
+	mounted = true
+
+	atlasStore.state.galaxy = ref(galaxyStore)
+
+	u[0] = initProxy(state, 'atlas.galaxy', ['o:request', 'o:bookmark', 'o:bookmarkedOnly'])
+
+	void atlasStore.tick('galaxy')
+	void search(true)
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('galaxy unmounted')
+	unsubscribe(u)
+	mounted = false
+}
+
+function setName(value: string) {
+	state.request.name = value
 	void search(true)
 }
 
-function update<K extends keyof SearchSkyObject>(key: K, value: Required<SearchSkyObject>[K]) {
-	state.request[key] = value
-
-	// Search again if page or sort has been changed
-	if (key === 'page') void search(false)
+function setNameType(value: number) {
+	state.request.nameType = value
+	void search(true)
 }
 
-function updateMagnitude(value: number | readonly number[]) {
+function setConstellations(value: readonly Constellation[]) {
+	state.request.constellations = value
+	void search(true)
+}
+
+function setTypes(value: readonly StellariumObjectType[]) {
+	state.request.types = value
+	void search(true)
+}
+
+function setRightAscension(value: string) {
+	state.request.rightAscension = value
+	void search(true)
+}
+
+function setDeclination(value: string) {
+	state.request.declination = value
+	void search(true)
+}
+
+function setRadius(value: number) {
+	state.request.radius = value
+	void search(true)
+}
+
+function setBookmarkedOnly(value: boolean) {
+	state.bookmarkedOnly = value
+	void search(true)
+}
+
+function setVisible(value: boolean) {
+	state.request.visible = value
+	void search(true)
+}
+
+function setVisibleAbove(value: number) {
+	state.request.visibleAbove = value
+	void search(true)
+}
+
+function setMagnitudeMin(value: number) {
+	state.request.magnitudeMin = value
+	void search(true)
+}
+
+function setMagnitudeMax(value: number) {
+	state.request.magnitudeMax = value
+	void search(true)
+}
+
+function setPage(value: number) {
+	state.request.page = value
+
+	void search(false)
+}
+
+function setMagnitude(value: number | readonly number[]) {
 	if (typeof value === 'number') {
-		update('magnitudeMin', value)
-		update('magnitudeMax', 30)
+		setMagnitudeMin(value)
+		setMagnitudeMax(30)
 	} else {
-		update('magnitudeMin', value[0])
-		update('magnitudeMax', value[1])
+		setMagnitudeMin(value[0])
+		setMagnitudeMax(value[1])
 	}
 }
 
@@ -60,7 +175,13 @@ async function search(reset: boolean | React.UIEvent) {
 
 		if (reset === true || typeof reset !== 'boolean') state.request.page = 1
 
-		const result = await Api.Atlas.searchSkyObject(state.request)
+		const request = { ...state.request }
+
+		if (state.bookmarkedOnly) {
+			request.id = state.bookmark.map((e) => e.code)
+		}
+
+		const result = await Api.Atlas.searchSkyObject(request)
 		state.result = result ?? []
 	} finally {
 		state.loading = false
@@ -69,12 +190,12 @@ async function search(reset: boolean | React.UIEvent) {
 
 function next() {
 	if (state.result.length === 0) return
-	update('page', state.request.page + 1)
+	setPage(state.request.page + 1)
 }
 
 function prev() {
 	if (state.request.page <= 1) return
-	update('page', state.request.page - 1)
+	setPage(state.request.page - 1)
 }
 
 async function select(row: number, col: number, force: boolean = true, rowMode: boolean = true) {
@@ -115,12 +236,12 @@ async function updateChart(force: boolean = false) {
 	else chartUpdate = true
 }
 
-async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChanged: boolean) {
+async function tick(time: UTCTime, dateHasChanged: boolean) {
 	let changed = false
 
-	if (isLocationChanged(location, state.request.location)) {
+	if (isLocationChanged(settingsStore.state.location, state.request.location)) {
 		chartUpdate = true
-		Object.assign(state.request.location, location)
+		Object.assign(state.request.location, settingsStore.state.location)
 		changed = true
 	}
 
@@ -145,17 +266,67 @@ async function tick(time: UTCTime, location: GeographicCoordinate, dateHasChange
 	}
 }
 
+function sync(mount?: Mount) {
+	if (mount === undefined) return undefined
+	const [rightAscension, declination] = state.position.equatorial
+	return Api.Mounts.sync(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+}
+
+function goTo(mount?: Mount) {
+	if (mount === undefined) return undefined
+	const [rightAscension, declination] = state.position.equatorial
+	return Api.Mounts.goTo(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
+}
+
+function frame() {
+	const [rightAscension, declination] = state.position.equatorialJ2000
+	return framingStore.load({ rightAscension: formatRA(rightAscension), declination: formatDEC(declination) })
+}
+
+function handleFavorite(favorite: boolean) {
+	const { selected } = state
+
+	if (selected) {
+		const id = selected.id.toFixed(0)
+		const index = state.bookmark.findIndex((e) => e.code === id)
+
+		if (favorite !== index < 0) return
+
+		if (favorite) {
+			state.bookmark.push({ code: id, name: selected.name, type: 'galaxy' })
+		} else {
+			state.bookmark.splice(index, 1)
+		}
+	}
+}
+
 export const galaxyStore = {
+	type: 'galaxy',
 	state,
 	mount,
-	update,
-	updateMagnitude,
+	unmount,
+	setName,
+	setNameType,
+	setConstellations,
+	setTypes,
+	setRightAscension,
+	setDeclination,
+	setRadius,
+	setBookmarkedOnly,
+	setVisible,
+	setVisibleAbove,
+	setMagnitudeMin,
+	setMagnitudeMax,
+	setPage,
+	setMagnitude,
 	search,
 	next,
 	prev,
 	select,
 	selectWithId,
 	tick,
+	sync,
+	goTo,
+	frame,
+	handleFavorite,
 } as const
-
-atlasStore.state.galaxy = ref(galaxyStore)

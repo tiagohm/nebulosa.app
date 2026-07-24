@@ -2,10 +2,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from '
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Wheel } from 'nebulosa/src/devices/indi/device'
 import { WheelManager } from 'nebulosa/src/devices/indi/manager'
-import { ClientSimulator, WheelSimulator } from 'nebulosa/src/devices/indi/simulator'
+import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { WheelHandler, wheelBus, wheel as wheelEndpoints } from 'src/api/wheel'
-import type { WheelAdded, WheelRemoved, WheelUpdated } from 'src/shared/types'
+import type { WheelAdded, WheelRemoved, WheelUpdated } from '#/wheel'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
 wheelBus.forceSync = true

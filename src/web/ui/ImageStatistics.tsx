@@ -1,11 +1,10 @@
-import { memo, useContext } from 'react'
+import { ImageViewerStoreContext } from '@shared/context'
+import { Checkbox } from '@ui/components/Checkbox'
+import { Histogram } from '@ui/components/Histogram'
+import { TextInput } from '@ui/components/TextInput'
+import { ImageChannelButtonGroup } from '@ui/ImageChannelButtonGroup'
+import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { Checkbox } from './components/Checkbox'
-import { Histogram } from './components/Histogram'
-import { TextInput } from './components/TextInput'
-import { ImageChannelButtonGroup } from './ImageChannelButtonGroup'
-import { Modal } from './Modal'
 
 const CHANNEL_VALUES = ['RED', 'GREEN', 'BLUE'] as const
 
@@ -22,29 +21,17 @@ function formatStat(value: number, fractionDigits: number) {
 }
 
 export const ImageStatistics = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { statistics } = viewer
-	const { show } = useSnapshot(statistics.state)
-
-	if (!show) return null
-
-	return (
-		<Modal header="Statistics" id={`settings-${viewer.image.id}`} initialWidth="296px" onHide={statistics.hide}>
-			<Body />
-		</Modal>
-	)
-})
-
-const Body = memo(() => {
 	const { statistics } = useContext(ImageViewerStoreContext)
 	const { histogram } = useSnapshot(statistics.state)
 
+	useEffect(statistics.mount, [])
+
 	return (
-		<div className="mt-0 grid grid-cols-12 gap-2">
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
 			<Options />
 			<Stats />
 			<div className="col-span-full">
-				<Histogram className="h-30 w-full rounded-lg bg-neutral-950/40" histogram={histogram} />
+				<Histogram className="h-30 w-full rounded-lg bg-transparent" histogram={histogram} />
 			</div>
 		</div>
 	)
@@ -57,8 +44,8 @@ const Options = memo(() => {
 
 	return (
 		<>
-			<Checkbox className="col-span-6 min-w-0" label="Transformed" onValueChange={(value) => statistics.update('transformed', value)} value={transformed} />
-			<Checkbox className="col-span-6 min-w-0" label="ROI" onValueChange={(value) => (statistics.state.roi = value)} value={roi} />
+			<Checkbox className="col-span-6 min-w-0" label="Transformed" onValueChange={statistics.setTransformed} value={transformed} />
+			<Checkbox className="col-span-6 min-w-0" label="ROI" onValueChange={statistics.setRoi} value={roi} />
 			{histogram.length === 3 && <ImageChannelButtonGroup className="col-span-full min-w-0" onValueChange={(value) => (statistics.state.selected = selectedChannelIndex(value ?? 'RED'))} value={channelValueOf(selected)} />}
 		</>
 	)

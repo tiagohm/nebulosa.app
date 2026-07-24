@@ -7,18 +7,22 @@ import type { IndiClient } from 'nebulosa/src/devices/indi/client'
 import type { Mount, MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, MountManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
-import { type Lx200ProtocolHandler, Lx200ProtocolServer, type MoveDirection } from 'nebulosa/src/devices/protocols/lx200'
-import { type StellariumProtocolHandler, StellariumProtocolServer } from 'nebulosa/src/devices/protocols/stellarium'
+import { Lx200ProtocolServer } from 'nebulosa/src/devices/protocols/lx200'
+import type { Lx200ProtocolHandler, MoveDirection } from 'nebulosa/src/devices/protocols/lx200'
+import { StellariumProtocolServer } from 'nebulosa/src/devices/protocols/stellarium'
+import type { StellariumProtocolHandler } from 'nebulosa/src/devices/protocols/stellarium'
 import { matMulVec, matTranspose } from 'nebulosa/src/math/linear-algebra/mat3'
-import { type Angle, normalizePI } from 'nebulosa/src/math/units/angle'
-// oxfmt-ignore
-import { DEFAULT_COORDINATE_INFO, type MountAdded, type MountRemoteControlProtocol, type MountRemoteControlStart, type MountRemoteControlStatus, type MountRemoved, type MountUpdated } from 'src/shared/types'
+import { normalizePI } from 'nebulosa/src/math/units/angle'
+import type { Angle } from 'nebulosa/src/math/units/angle'
+import { makeTime } from 'src/api/util'
 import { EventBus } from 'src/shared/bus'
-import { coordinateInfo } from 'src/shared/util'
-import type { CacheManager } from './cache'
+import { coordinateInfo, DEFAULT_COORDINATE_INFO } from '#/mount'
+import type { MountAdded, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountRemoved, MountUpdated } from '#/mount'
 import type { ConfirmationHandler } from './confirmation'
-import { type Endpoints, query, response } from './http'
-import { webSocketBus, type WebSocketMessageHandler } from './message'
+import { query, response } from './http'
+import type { Endpoints } from './http'
+import { webSocketBus } from './message'
+import type { WebSocketMessageHandler } from './message'
 
 export interface MountBusEvents {
 	readonly add: MountAdded
@@ -46,7 +50,6 @@ export class MountHandler implements DeviceHandler<Mount> {
 		readonly wsm: WebSocketMessageHandler,
 		readonly mountManager: MountManager,
 		readonly confirmation: ConfirmationHandler,
-		readonly cache: CacheManager,
 	) {
 		mountManager.addHandler(this)
 
@@ -81,12 +84,12 @@ export class MountHandler implements DeviceHandler<Mount> {
 
 	currentPosition(mount: Mount) {
 		if (!mount) return DEFAULT_COORDINATE_INFO
-		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate)), mount.geographicCoordinate.longitude, mount.equatorialCoordinate)
+		return coordinateInfo(makeTime('now', mount.geographicCoordinate), mount.geographicCoordinate.longitude, mount.equatorialCoordinate)
 	}
 
 	targetPosition(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
 		if (!mount) return DEFAULT_COORDINATE_INFO
-		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate)), mount.geographicCoordinate.longitude, coordinate)
+		return coordinateInfo(makeTime('now', mount.geographicCoordinate), mount.geographicCoordinate.longitude, coordinate)
 	}
 
 	goTo(mount: Mount, req: MountTargetCoordinate) {

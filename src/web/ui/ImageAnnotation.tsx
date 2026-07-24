@@ -1,33 +1,29 @@
-import { memo, useContext } from 'react'
+import { ImageViewerStoreContext } from '@shared/context'
+import { hasScaledSolution } from '@stores/image.solver.store'
+import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
+import { IconButton } from '@ui/components/IconButton'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Icons } from '@ui/Icon'
+import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { IconButton } from './components/IconButton'
-import { NumberInput } from './components/NumberInput'
-import { Icons } from './Icon'
-import { Modal } from './Modal'
 
 export const ImageAnnotation = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { annotation } = viewer
-	const { show } = useSnapshot(annotation.state)
+	const { annotation, solver } = useContext(ImageViewerStoreContext)
+	const { solution } = useSnapshot(solver.state)
 
-	if (!show) return null
+	useEffect(annotation.mount, [])
+
+	if (!hasScaledSolution(solution)) return <div className="flex h-full w-full flex-row items-center justify-center">Not available</div>
 
 	return (
-		<Modal footer={<Footer />} header="Annotation" id={`annotation-${viewer.image.id}`} initialWidth="376px" onHide={annotation.hide}>
-			<Body />
-		</Modal>
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<StarsAndDsos />
+			<MinorPlanets />
+			<Footer />
+		</div>
 	)
 })
-
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
-		<StarsAndDsos />
-		<MinorPlanets />
-	</div>
-))
 
 const StarsAndDsos = memo(() => {
 	const { annotation } = useContext(ImageViewerStoreContext)
@@ -37,10 +33,10 @@ const StarsAndDsos = memo(() => {
 
 	return (
 		<>
-			<Checkbox className="col-span-6" disabled={loading} label="Stars" onValueChange={(value) => annotation.update('stars', value)} value={stars} />
-			<Checkbox className="col-span-6" disabled={loading} label="DSOs" onValueChange={(value) => annotation.update('dsos', value)} value={dsos} />
+			<Checkbox className="col-span-6" disabled={loading} label="Stars" onValueChange={annotation.setStars} value={stars} />
+			<Checkbox className="col-span-6" disabled={loading} label="DSOs" onValueChange={annotation.setDsos} value={dsos} />
 			<div className="col-span-full flex min-w-0 flex-row items-center gap-2">
-				<Checkbox disabled={!canUseSimbad} label="SIMBAD Astronomical Database" onValueChange={(value) => annotation.update('useSimbad', value)} value={canUseSimbad && useSimbad} />
+				<Checkbox disabled={!canUseSimbad} label="SIMBAD Astronomical Database" onValueChange={annotation.setUseSimbad} value={canUseSimbad && useSimbad} />
 				<SimbadLink />
 			</div>
 		</>
@@ -59,9 +55,9 @@ const MinorPlanets = memo(() => {
 
 	return (
 		<>
-			<Checkbox className="col-span-full" disabled={loading} label="Minor Planets" onValueChange={(value) => annotation.update('minorPlanets', value)} value={minorPlanets} />
-			<NumberInput className="col-span-5 min-w-0" disabled={loading || !minorPlanets} label="Magnitude Limit" maxValue={MAX_MINOR_PLANET_MAGNITUDE_LIMIT} minValue={1} onValueChange={(value) => annotation.update('minorPlanetsMagnitudeLimit', value)} value={minorPlanetsMagnitudeLimit} />
-			<Checkbox className="col-span-7 min-w-0" disabled={!canIncludeWithoutMagnitude} label="Include without magnitude" onValueChange={(value) => annotation.update('includeMinorPlanetsWithoutMagnitude', value)} value={canIncludeWithoutMagnitude && includeMinorPlanetsWithoutMagnitude} />
+			<Checkbox className="col-span-full" disabled={loading} label="Minor Planets" onValueChange={annotation.setMinorPlanets} value={minorPlanets} />
+			<NumberInput className="col-span-5 min-w-0" disabled={loading || !minorPlanets} label="Magnitude Limit" maxValue={MAX_MINOR_PLANET_MAGNITUDE_LIMIT} minValue={1} onValueChange={annotation.setMinorPlanetsMagnitudeLimit} value={minorPlanetsMagnitudeLimit} />
+			<Checkbox className="col-span-7 min-w-0" disabled={!canIncludeWithoutMagnitude} label="Include without magnitude" onValueChange={annotation.setIncludeMinorPlanetsWithoutMagnitude} value={canIncludeWithoutMagnitude && includeMinorPlanetsWithoutMagnitude} />
 		</>
 	)
 })
@@ -72,7 +68,11 @@ const Footer = memo(() => {
 	const { stars, dsos, minorPlanets, minorPlanetsMagnitudeLimit } = useSnapshot(annotation.state.request)
 	const canAnnotate = stars || dsos || (minorPlanets && isValidMagnitudeLimit(minorPlanetsMagnitudeLimit))
 
-	return <Button color="success" disabled={!canAnnotate} label="Annotate" loading={loading} onClick={annotation.annotate} startContent={<Icons.Check />} />
+	return (
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
+			<Button color="success" disabled={!canAnnotate} label="Annotate" loading={loading} onClick={annotation.annotate} startContent={<Icons.Check />} />
+		</div>
+	)
 })
 
 const MAX_MINOR_PLANET_MAGNITUDE_LIMIT = 30

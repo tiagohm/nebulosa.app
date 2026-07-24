@@ -1,0 +1,82 @@
+import { tw } from '@shared/util'
+import { Chip } from '@ui/components/Chip'
+import type { ChipProps } from '@ui/components/Chip'
+import { Icons } from '@ui/Icon'
+import { useState } from 'react'
+import type { CameraCaptureEvent, CameraCaptureState, CameraCaptureTime } from '#/camera'
+
+export interface CameraExposureTimeProgressProps extends React.ComponentProps<'div'> {
+	readonly progress: CameraCaptureEvent
+}
+
+const CAPTURE_STATE_COLORS = {
+	idle: 'default',
+	exposureStarted: 'success',
+	exposing: 'success',
+	waiting: 'warning',
+	settling: 'warning',
+	dithering: 'secondary',
+	pausing: 'warning',
+	paused: 'warning',
+	exposureFinished: 'primary',
+	error: 'danger',
+} satisfies Record<CameraCaptureState, NonNullable<ChipProps['color']>>
+
+export function CameraExposureTimeProgress({ progress, className = '', ...props }: CameraExposureTimeProgressProps) {
+	const [showRemainingTime, setShowRemainingTime] = useState(true)
+
+	function toggleShowRemaining() {
+		setShowRemainingTime((show) => !show)
+	}
+
+	const countLabel = progress.loop ? progress.elapsedCount.toFixed(0) : `${progress.elapsedCount} / ${progress.count}`
+
+	return (
+		<div {...props} className={tw('flex flex-row items-center gap-2 overflow-hidden', className)}>
+			<Chip size="sm" className="lowercase" color={CAPTURE_STATE_COLORS[progress.state]} label={progress.state} />
+			<Chip size="sm" color="warning" label={countLabel} startContent={<Icons.Counter />} />
+			<Chip size="sm" color="secondary" label={progress.loop ? formatTime(progress.totalProgress.elapsedTime) : formatProgressTime(progress.totalProgress, showRemainingTime)} onClick={toggleShowRemaining} startContent={<Icons.TimerSand />} />
+			<Chip size="sm" color="primary" label={formatProgressTime(progress.frameProgress, showRemainingTime)} onClick={toggleShowRemaining} startContent={<Icons.TimerSand />} />
+		</div>
+	)
+}
+
+function finiteTime(value: number) {
+	return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0
+}
+
+function formattedProgress(value: number) {
+	if (!Number.isFinite(value)) return 0
+	return Math.min(100, Math.max(0, value)).toFixed(0)
+}
+
+function formatProgressTime(time: CameraCaptureTime, showRemainingTime: boolean) {
+	return `${formatTime(showRemainingTime ? time.remainingTime : time.elapsedTime)} (${formattedProgress(time.progress)}%)`
+}
+
+function formatTime(us: number) {
+	const time = finiteTime(us)
+	const ms = Math.floor((time / 1000) % 1000)
+	const seconds = Math.floor(time / 1000000)
+	const s = Math.floor(seconds % 60)
+	const m = Math.floor((seconds % 3600) / 60)
+	const h = Math.floor(seconds / 3600)
+
+	if (h > 0) {
+		return `${padNumber(h, 2)}h ${padNumber(m, 2)}m ${padNumber(s, 2)}s`
+	} else if (m > 0) {
+		return `${padNumber(m, 2)}m ${padNumber(s, 2)}s`
+	} else if (s > 0) {
+		return `${padNumber(s, 2)}s`
+	} else if (ms > 0) {
+		return `${padNumber(ms, 3)}ms`
+	} else if (time > 0) {
+		return `${padNumber(time, 3)}μs`
+	} else {
+		return '0'
+	}
+}
+
+function padNumber(n: number, size: number) {
+	return n.toFixed(0).padStart(size, '0')
+}

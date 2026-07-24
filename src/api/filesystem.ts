@@ -1,8 +1,9 @@
 import { mkdir, readdir, stat } from 'fs/promises'
 import { basename, dirname, isAbsolute, join, normalize } from 'path'
 import { Glob } from 'bun'
-import type { CreateDirectory, DirectoryEntry, FileEntry, FileSystem, ListDirectory } from '../shared/types'
-import { type Endpoints, response } from './http'
+import type { CreateDirectory, DirectoryEntry, FileEntry, FileSystem, ListDirectory } from '#/filesystem'
+import { response } from './http'
+import type { Endpoints } from './http'
 import { directoryExists } from './util'
 
 const FileEntryComparator = (a: FileEntry, b: FileEntry) => {

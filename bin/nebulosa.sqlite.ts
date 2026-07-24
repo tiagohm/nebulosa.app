@@ -1,13 +1,16 @@
 import { Database } from 'bun:sqlite'
 import fs from 'fs/promises'
 import { simbadQuery } from 'nebulosa/src/adapters/catalogs/simbad'
-import { CONSTELLATION_LIST, type Constellation, constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
+import { CONSTELLATION_LIST, constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
+import type { Constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { readHygCatalog } from 'nebulosa/src/catalogs/stars/hyg'
 import { readCatalogDat, readNamesDat, StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
 import { fileHandleSource } from 'nebulosa/src/io/io'
-import { type Angle, deg, mas } from 'nebulosa/src/math/units/angle'
+import { deg, mas } from 'nebulosa/src/math/units/angle'
+import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { Distance } from 'nebulosa/src/math/units/distance'
-import { kilometerPerSecond, type Velocity } from 'nebulosa/src/math/units/velocity'
+import { kilometerPerSecond } from 'nebulosa/src/math/units/velocity'
+import type { Velocity } from 'nebulosa/src/math/units/velocity'
 
 const NAME = 0
 const NGC = 1

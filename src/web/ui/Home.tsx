@@ -1,290 +1,156 @@
-import type { Device } from 'nebulosa/src/devices/indi/device'
-import { Activity, memo, useMemo } from 'react'
-import { useSnapshot } from 'valtio'
-import { equipmentStore } from '@/stores/equipment.store'
-import { wsStore } from '@/stores/ws.store'
-import { useStore } from '../hooks/store.hook'
-import { CameraDeviceContext, MountDeviceContext, FocuserDeviceContext, WheelDeviceContext, GuideOutputDeviceContext, ThermometerDeviceContext, CoverDeviceContext, FlatPanelDeviceContext, DewHeaterDeviceContext, RotatorDeviceContext, IndiPanelControlStoreContext } from '../shared/context'
-import { activityMode } from '../shared/util'
-import { indiPanelControlStore } from '../stores/indi.panelcontrol.store'
-import { Camera } from './Camera'
-import { Confirmation } from './Confirmation'
-import { Cover } from './Cover'
-import { DewHeater } from './DewHeater'
-import { FlatPanel } from './FlatPanel'
-import { Focuser } from './Focuser'
-import { GuideOutput } from './GuideOutput'
-import { HomeNavBar } from './HomeNavBar'
-import { ImageWorkspace } from './ImageWorkspace'
-import { IndiPanelControl } from './IndiPanelControl'
-import { Mount } from './Mount'
-import { Rotator } from './Rotator'
-import { Thermometer } from './Thermometer'
-import { Wheel } from './Wheel'
+import { atlasStore } from '@stores/atlas.store'
+import { homeStore } from '@stores/home.store'
+import type { HomePanelType } from '@stores/home.store'
+import { settingsStore } from '@stores/settings.store'
+import { About } from '@ui/About'
+import { AlpacaServer } from '@ui/AlpacaServer'
+import { Asteroid } from '@ui/Asteroid'
+import { AutoFocus } from '@ui/AutoFocus'
+import { Calculator } from '@ui/Calculator'
+import { Camera } from '@ui/Camera'
+import { IconButton } from '@ui/components/IconButton'
+import { List, ListItem } from '@ui/components/List'
+import { Popover } from '@ui/components/Popover'
+import { Confirmation } from '@ui/Confirmation'
+import { Connections } from '@ui/Connections'
+import { Cover } from '@ui/Cover'
+import { Darv } from '@ui/Darv'
+import { Devices } from '@ui/Devices'
+import { DewHeater } from '@ui/DewHeater'
+import { FlatPanel } from '@ui/FlatPanel'
+import { FlatWizard } from '@ui/FlatWizard'
+import { Focuser } from '@ui/Focuser'
+import { Framing } from '@ui/Framing'
+import { Galaxy } from '@ui/Galaxy'
+import { GuideOutput } from '@ui/GuideOutput'
+import { Guider } from '@ui/Guider'
+import { Icons } from '@ui/Icon'
+import { ImageHome } from '@ui/ImageHome'
+import { ImagePickerButton } from '@ui/ImagePickerButton'
+import { IndiServer } from '@ui/IndiServer'
+import { LunarEclipseMap } from '@ui/LunarEclipseMap'
+import { Moon } from '@ui/Moon'
+import { Mount } from '@ui/Mount'
+import { Planet } from '@ui/Planet'
+import { Planetarium } from '@ui/Planetarium'
+import { Rotator } from '@ui/Rotator'
+import { Satellite } from '@ui/Satellite'
+import { Settings } from '@ui/Settings'
+import { SolarEclipseMap } from '@ui/SolarEclipseMap'
+import { Sun } from '@ui/Sun'
+import { homeIcons, Tab } from '@ui/Tab'
+import { Thermometer } from '@ui/Thermometer'
+import { Tppa } from '@ui/Tppa'
+import { Wheel } from '@ui/Wheel'
+import { DockviewReact, themeGithubDark } from 'dockview-react'
+import type { IDockviewHeaderActionsProps, IDockviewPanelProps } from 'dockview-react'
+import { memo, useEffect } from 'react'
+import { wsStore } from 'src/web/stores/ws.store'
+
+const tabComponents = {
+	fixed: Tab,
+	closeable: Tab,
+	image: Tab,
+} as const
+
+const Dummy = () => <div></div>
+
+const components = {
+	about: About,
+	alpacaServer: AlpacaServer,
+	asteroid: Asteroid,
+	autoFocus: AutoFocus,
+	calculator: Calculator,
+	camera: Camera,
+	connections: Connections,
+	cover: Cover,
+	darv: Darv,
+	devices: Devices,
+	dewHeater: DewHeater,
+	dome: Dummy,
+	flatPanel: FlatPanel,
+	flatWizard: FlatWizard,
+	focuser: Focuser,
+	framing: Framing,
+	galaxy: Galaxy,
+	gps: Dummy,
+	guideOutput: GuideOutput,
+	guider: Guider,
+	image: ImageHome,
+	indiServer: IndiServer,
+	lunarEclipse: LunarEclipseMap,
+	moon: Moon,
+	mount: Mount,
+	planet: Planet,
+	planetarium: Planetarium,
+	power: Dummy,
+	rotator: Rotator,
+	satellite: Satellite,
+	settings: Settings,
+	solarEclipse: SolarEclipseMap,
+	sun: Sun,
+	thermometer: Thermometer,
+	tppa: Tppa,
+	wheel: Wheel,
+} as const satisfies Record<HomePanelType, React.FunctionComponent<IDockviewPanelProps>>
 
 export const Home = memo(() => {
-	// Mounts the websocket lifecycle once the home screen is active.
-	useStore(wsStore, [])
+	// Mounts the store lifecycle once the home screen is active.
+	useEffect(wsStore.mount, [])
+	useEffect(settingsStore.mount, [])
+	useEffect(atlasStore.mount, [])
+	useEffect(homeStore.mount, [])
 
 	return (
-		<div className="flex h-full min-h-0 w-full min-w-0 flex-col">
-			<HomeNavBar />
-			<ImageWorkspace />
-			<CameraList />
-			<MountList />
-			<FocuserList />
-			<WheelList />
-			<ThermometerList />
-			<GuideOutputList />
-			<CoverList />
-			<FlatPanelList />
-			<DewHeaterList />
-			<RotatorList />
-			<Confirmation />
+		<div className="grid h-dvh grid-rows-[auto_minmax(0,1fr)] p-1 text-white">
+			<header className="flex flex-row justify-center p-0"></header>
+			<div className="min-h-0">
+				<DockviewReact hideBorders rightHeaderActionsComponent={RightHeaderAction} defaultTabComponent={Tab} theme={themeGithubDark} className="h-full w-full" tabComponents={tabComponents} components={components} onReady={homeStore.handleReady} />
+				<Confirmation />
+			</div>
 		</div>
 	)
 })
 
-function makeDevices(length: number, callback: (index: number) => React.ReactNode) {
-	const devices = new Array(length)
-	for (let i = 0; i < length; i++) devices[i] = callback(i)
-	return devices
-}
-
-interface IndiProps {
-	readonly device: Device
-}
-
-const Indi = memo(({ device }: IndiProps) => {
-	const panel = useStore(() => indiPanelControlStore(device), [device])
-
-	return (
-		<IndiPanelControlStoreContext value={panel}>
-			<IndiPanelControl />
-		</IndiPanelControlStoreContext>
-	)
+const RightHeaderAction = memo((props: IDockviewHeaderActionsProps) => {
+	const group = props.activePanel?.group.id
+	return group === 'group.main' ? <MainGroupAction /> : null
 })
 
-interface DeviceItemProps {
-	readonly index: number
-}
+const MAIN_GROUP_ACTIONS = [
+	{ label: 'Guider', icon: homeIcons.guider, action: () => homeStore.addGuider() },
+	{ label: 'Auto Focus', icon: homeIcons.autoFocus, action: () => homeStore.addAutoFocus() },
+	{ label: 'DARV', icon: homeIcons.darv, action: () => homeStore.addDarv() },
+	{ label: 'TPPA', icon: homeIcons.tppa, action: () => homeStore.addTppa() },
+	{ label: 'Flat Wizard', icon: homeIcons.flatPanel, action: () => homeStore.addFlatWizard() },
+	{ label: 'Framing', icon: homeIcons.framing, action: () => homeStore.addFraming() },
+	{ label: 'Calculator', icon: homeIcons.calculator, action: () => homeStore.addCalculator() },
+	{ label: 'Planetarium', icon: homeIcons.planetarium, action: () => homeStore.addPlanetarium() },
+	{ label: 'Sun', icon: homeIcons.sun, action: () => homeStore.addSun() },
+	{ label: 'Moon', icon: homeIcons.moon, action: () => homeStore.addMoon() },
+	{ label: 'Planet', icon: homeIcons.planet, action: () => homeStore.addPlanet() },
+	{ label: 'Asteroid', icon: homeIcons.asteroid, action: () => homeStore.addAsteroid() },
+	{ label: 'DSO', icon: homeIcons.galaxy, action: () => homeStore.addDSO() },
+	{ label: 'Satellite', icon: homeIcons.satellite, action: () => homeStore.addSatellite() },
+	{ label: 'Solar Eclipse', icon: homeIcons.solarEclipse, action: () => homeStore.addSolarEclipse() },
+	{ label: 'Lunar Eclipse', icon: homeIcons.lunarEclipse, action: () => homeStore.addLunarEclipse() },
+] as const
 
-function CameraItem({ index }: DeviceItemProps) {
-	const camera = equipmentStore.state.camera[index]
-	const { show } = useSnapshot(camera)
-
-	return (
-		<>
-			<Indi device={camera} />
-			<Activity mode={activityMode(show)}>
-				<CameraDeviceContext value={camera}>
-					<Camera key={camera.id} />
-				</CameraDeviceContext>
-			</Activity>
-		</>
-	)
-}
-
-function MountItem({ index }: DeviceItemProps) {
-	const mount = equipmentStore.state.mount[index]
-	const { show } = useSnapshot(mount)
-
-	return (
-		<>
-			<Indi device={mount} />
-			<Activity mode={activityMode(show)}>
-				<MountDeviceContext value={mount}>
-					<Mount key={mount.id} />
-				</MountDeviceContext>
-			</Activity>
-		</>
-	)
-}
-
-function FocuserItem({ index }: DeviceItemProps) {
-	const focuser = equipmentStore.state.focuser[index]
-	const { show } = useSnapshot(focuser)
+const MainGroupAction = memo(() => {
+	function handleAction(index: number) {
+		MAIN_GROUP_ACTIONS[index].action()
+	}
 
 	return (
-		<>
-			<Indi device={focuser} />
-			<Activity mode={activityMode(show)}>
-				<FocuserDeviceContext value={focuser}>
-					<Focuser key={focuser.id} />
-				</FocuserDeviceContext>
-			</Activity>
-		</>
+		<div className="flex flex-row items-center gap-2">
+			<ImagePickerButton />
+			<Popover classNames={{ content: 'p-0' }} trigger={<IconButton icon={Icons.VerticalMenu} />}>
+				<List fullWidth className="min-w-80" onAction={handleAction}>
+					{MAIN_GROUP_ACTIONS.map(({ label, icon }) => (
+						<ListItem key={label} className="cursor-pointer" label={label} startContent={<img src={icon} width={16} height={16} />} />
+					))}
+				</List>
+			</Popover>
+		</div>
 	)
-}
-
-function WheelItem({ index }: DeviceItemProps) {
-	const wheel = equipmentStore.state.wheel[index]
-	const { show } = useSnapshot(wheel)
-
-	return (
-		<>
-			<Indi device={wheel} />
-			<Activity mode={activityMode(show)}>
-				<WheelDeviceContext value={wheel}>
-					<Wheel key={wheel.id} />
-				</WheelDeviceContext>
-			</Activity>
-		</>
-	)
-}
-
-function GuideOutputItem({ index }: DeviceItemProps) {
-	const guideOutput = equipmentStore.state.guideOutput[index]
-	const { show } = useSnapshot(guideOutput)
-
-	return (
-		<>
-			<Indi device={guideOutput} />
-			<Activity mode={activityMode(show)}>
-				<GuideOutputDeviceContext value={guideOutput}>
-					<GuideOutput key={guideOutput.id} />
-				</GuideOutputDeviceContext>
-			</Activity>
-		</>
-	)
-}
-
-function ThermometerItem({ index }: DeviceItemProps) {
-	const thermometer = equipmentStore.state.thermometer[index]
-	const { show } = useSnapshot(thermometer)
-
-	return (
-		<>
-			<Indi device={thermometer} />
-			<Activity mode={activityMode(show)}>
-				<ThermometerDeviceContext value={thermometer}>
-					<Thermometer key={thermometer.id} />
-				</ThermometerDeviceContext>
-			</Activity>
-		</>
-	)
-}
-
-function CoverItem({ index }: DeviceItemProps) {
-	const cover = equipmentStore.state.cover[index]
-	const { show } = useSnapshot(cover)
-
-	return (
-		<>
-			<Indi device={cover} />
-			<Activity mode={activityMode(show)}>
-				<CoverDeviceContext value={cover}>
-					<Cover key={cover.id} />
-				</CoverDeviceContext>
-			</Activity>
-		</>
-	)
-}
-
-function FlatPanelItem({ index }: DeviceItemProps) {
-	const flatPanel = equipmentStore.state.flatPanel[index]
-	const { show } = useSnapshot(flatPanel)
-
-	return (
-		<>
-			<Indi device={flatPanel} />
-			<Activity mode={activityMode(show)}>
-				<FlatPanelDeviceContext value={flatPanel}>
-					<FlatPanel key={flatPanel.id} />
-				</FlatPanelDeviceContext>
-			</Activity>
-		</>
-	)
-}
-
-function DewHeaterItem({ index }: DeviceItemProps) {
-	const dewHeater = equipmentStore.state.dewHeater[index]
-	const { show } = useSnapshot(dewHeater)
-
-	return (
-		<>
-			<Indi device={dewHeater} />
-			<Activity mode={activityMode(show)}>
-				<DewHeaterDeviceContext value={dewHeater}>
-					<DewHeater key={dewHeater.id} />
-				</DewHeaterDeviceContext>
-			</Activity>
-		</>
-	)
-}
-
-function RotatorItem({ index }: DeviceItemProps) {
-	const rotator = equipmentStore.state.rotator[index]
-	const { show } = useSnapshot(rotator)
-
-	return (
-		<>
-			<Indi device={rotator} />
-			<Activity mode={activityMode(show)}>
-				<RotatorDeviceContext value={rotator}>
-					<Rotator key={rotator.id} />
-				</RotatorDeviceContext>
-			</Activity>
-		</>
-	)
-}
-
-export const CameraList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.camera)
-	const devices = useMemo(() => makeDevices(length, (i) => <CameraItem key={equipmentStore.state.camera[i].id} index={i} />), [length])
-	return devices
-})
-
-export const MountList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.mount)
-	const devices = useMemo(() => makeDevices(length, (i) => <MountItem key={equipmentStore.state.mount[i].id} index={i} />), [length])
-	return devices
-})
-
-export const FocuserList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.focuser)
-	const devices = useMemo(() => makeDevices(length, (i) => <FocuserItem key={equipmentStore.state.focuser[i].id} index={i} />), [length])
-	return devices
-})
-
-export const WheelList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.wheel)
-	const devices = useMemo(() => makeDevices(length, (i) => <WheelItem key={equipmentStore.state.wheel[i].id} index={i} />), [length])
-	return devices
-})
-
-export const GuideOutputList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.guideOutput)
-	const devices = useMemo(() => makeDevices(length, (i) => <GuideOutputItem key={equipmentStore.state.guideOutput[i].id} index={i} />), [length])
-	return devices
-})
-
-export const ThermometerList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.thermometer)
-	const devices = useMemo(() => makeDevices(length, (i) => <ThermometerItem key={equipmentStore.state.thermometer[i].id} index={i} />), [length])
-	return devices
-})
-
-export const CoverList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.cover)
-	const devices = useMemo(() => makeDevices(length, (i) => <CoverItem key={equipmentStore.state.cover[i].id} index={i} />), [length])
-	return devices
-})
-
-export const FlatPanelList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.flatPanel)
-	const devices = useMemo(() => makeDevices(length, (i) => <FlatPanelItem key={equipmentStore.state.flatPanel[i].id} index={i} />), [length])
-	return devices
-})
-
-export const DewHeaterList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.dewHeater)
-	const devices = useMemo(() => makeDevices(length, (i) => <DewHeaterItem key={equipmentStore.state.dewHeater[i].id} index={i} />), [length])
-	return devices
-})
-
-export const RotatorList = memo(() => {
-	const { length } = useSnapshot(equipmentStore.state.rotator)
-	const devices = useMemo(() => makeDevices(length, (i) => <RotatorItem key={equipmentStore.state.rotator[i].id} index={i} />), [length])
-	return devices
 })

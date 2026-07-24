@@ -1,5 +1,6 @@
+import { ButtonGroup, ButtonGroupItem } from '@ui/components/ButtonGroup'
+import type { ButtonGroupProps } from '@ui/components/ButtonGroup'
 import type { LocalEclipseContactKind } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
-import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from './components/ButtonGroup'
 
 export function LocalEclipseContactKindButtonGroup(props: Omit<ButtonGroupProps<LocalEclipseContactKind>, 'children'>) {
 	return (

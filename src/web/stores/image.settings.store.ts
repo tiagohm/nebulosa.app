@@ -1,21 +1,21 @@
+import { initProxy } from '@shared/proxy'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { ChrominanceSubsampling } from 'nebulosa/src/bindings/imaging/libturbojpeg'
 import type { ImageFormat } from 'nebulosa/src/imaging/model/types'
-import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { initProxy } from '../shared/proxy'
-import type { ImageViewerStore } from './image.viewer.store'
+import { DEFAULT_IMAGE_TRANSFORMATION } from '#/image'
+import type { ImageTransformation } from '#/image'
 
 export type ImageSettingsStore = ReturnType<typeof imageSettingsStore>
 
 export interface ImageSettingsState {
-	show: boolean
 	pixelated: boolean
 	transformation: ImageTransformation
 }
 
 export function imageSettingsStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageSettingsState>({
-		show: false,
 		pixelated: false,
 		transformation: viewer.state.transformation,
 	})
@@ -26,15 +26,17 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image settings mounted:', viewer.state.path)
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.settings`, ['p:show', 'p:pixelated'])
+		u[0] = initProxy(state, `image.${viewer.key}.settings`, ['p:pixelated'])
 
-		update('pixelated', state.pixelated)
+		setPixelated(state.pixelated)
+
+		return unmount
 	}
 
 	function unmount() {
@@ -44,27 +46,25 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof ImageSettingsState>(key: K, value: ImageSettingsState[K]) {
-		state[key] = value
-
-		if (key === 'pixelated') viewer.toggleClass('pixelated', value as boolean)
+	function setPixelated(value: boolean) {
+		state.pixelated = value
+		viewer.toggleClass('pixelated', value)
 	}
 
-	function updateTransformation<K extends keyof ImageTransformation>(key: K, value: ImageTransformation[K]) {
-		state.transformation[key] = value
-	}
-
-	function updateFormatType(value: ImageFormat) {
+	function setFormatType(value: ImageFormat) {
 		state.transformation.format.type = value
 	}
 
-	function updateFormat<F extends 'jpeg', K extends keyof ImageTransformation['format'][F]>(format: F, key: K, value: ImageTransformation['format'][F][K]) {
-		state.transformation.format[format][key] = value
+	function setJpegQuality(value: number) {
+		state.transformation.format.jpeg.quality = value
+	}
+
+	function setJpegChrominanceSubsampling(value: ChrominanceSubsampling) {
+		state.transformation.format.jpeg.chrominanceSubsampling = value
 	}
 
 	function reset() {
 		state.pixelated = true
-		state.transformation.cfaPattern = 'AUTO'
 		state.transformation.format.type = DEFAULT_IMAGE_TRANSFORMATION.format.type
 		Object.assign(state.transformation.format.jpeg, DEFAULT_IMAGE_TRANSFORMATION.format.jpeg)
 		return apply()
@@ -75,26 +75,16 @@ export function imageSettingsStore(viewer: ImageViewerStore) {
 		return viewer.reload()
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
 		mount,
 		unmount,
-		update,
-		updateTransformation,
-		updateFormatType,
-		updateFormat,
+		setPixelated,
+		setFormatType,
+		setJpegQuality,
+		setJpegChrominanceSubsampling,
 		reset,
 		apply,
-		show,
-		hide,
 	} as const
 }

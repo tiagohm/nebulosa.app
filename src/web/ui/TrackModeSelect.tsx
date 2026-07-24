@@ -1,5 +1,6 @@
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import type { TrackMode } from 'nebulosa/src/devices/indi/device'
-import { Select, type SelectProps } from './components/Select'
 
 export interface TrackModeSelectProps extends Omit<SelectProps<TrackMode>, 'children' | 'items'> {
 	readonly modes: readonly TrackMode[]

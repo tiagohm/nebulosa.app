@@ -1,65 +1,91 @@
-import { nanoid } from 'nanoid'
+import { Api } from '@shared/api'
+import { tppaBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { cameraCaptureStore } from '@stores/camera.capture.store'
+import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
+import type { DeviceState } from '@stores/equipment.store'
+import { plateSolverStore } from '@stores/plate.solver.store'
+import type { DockviewPanelApi } from 'dockview-react'
+import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_TPPA_EVENT, DEFAULT_TPPA_START, type TppaEvent, type TppaStart } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { tppaBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
-import type { DeviceState } from './equipment.store'
-import { tppaListStore } from './tppa.list.store'
+import { subscribeKey } from 'valtio/utils'
+import { DEFAULT_TPPA_START, DEFAULT_TPPA_EVENT } from '#/tppa'
+import type { TppaStart, TppaEvent } from '#/tppa'
 
 export type TppaStore = ReturnType<typeof tppaStore>
 
 export interface TppaState {
 	running: boolean
-	readonly request: TppaStart
-	readonly camera: DeviceState<Camera>
-	readonly mount: DeviceState<Mount>
+	readonly request: Writable<TppaStart>
+	camera?: DeviceState<Camera>
+	mount?: DeviceState<Mount>
 	readonly event: TppaEvent
 }
 
-export function tppaStore(camera: Camera, mount: Mount) {
+export function tppaStore(id: string, api: DockviewPanelApi) {
+	const capture = cameraCaptureStore()
+	const solver = plateSolverStore()
+
 	const state = proxy<TppaState>({
-		request: structuredClone(DEFAULT_TPPA_START),
+		request: {
+			...structuredClone(DEFAULT_TPPA_START),
+			capture: capture.state,
+			solver: solver.state,
+		},
 		running: false,
 		event: structuredClone(DEFAULT_TPPA_EVENT),
-		camera,
-		mount,
 	})
 
-	console.info('tppa created:', camera.name, mount.name)
+	console.info('tppa created:', id)
 
 	const u: VoidFunction[] = []
 	let mounted = false
 
 	function _mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
-		console.info('tppa mounted:', camera.name, mount.name)
+		console.info('tppa mounted:', id)
 
 		mounted = true
 
-		u[0] = initProxy(state, `tppa.${camera.id}.${mount.id}`, ['o:request'])
+		u[0] = initProxy(state, `tppa.${id}`, ['o:request'])
 
 		u[1] = tppaBus.subscribe('update', (event) => {
-			if (state.camera.id === event.camera && state.mount.id === event.mount) {
+			if (state.camera?.id === event.camera && state.mount?.id === event.mount) {
 				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)
 			}
 		})
 
-		subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
+		u[2] = subscribeKey(state, 'camera', (camera) => {
+			updateTitle()
 
-		state.request.id ||= nanoid()
+			if (camera !== undefined) {
+				u[3]?.()
+				u[3] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.capture)
+			}
+		})
+
+		u[4] = subscribeKey(state, 'mount', updateTitle)
+
+		updateTitle()
+
+		state.request.id = id
+
+		return unmount
 	}
 
 	function unmount() {
 		if (!mounted) return
-		console.info('tppa unmounted:', camera.name, mount.name)
+		console.info('tppa unmounted:', id)
 		unsubscribe(u)
 		mounted = false
+	}
+
+	function updateTitle() {
+		api.setTitle(state.camera || state.mount ? `TPPA - ${state.camera?.name || 'None'} · ${state.mount?.name || 'None'}` : 'TPPA')
 	}
 
 	function reset() {
@@ -67,16 +93,24 @@ export function tppaStore(camera: Camera, mount: Mount) {
 		Object.assign(state.event, DEFAULT_TPPA_EVENT)
 	}
 
-	function update<K extends keyof TppaStart>(key: K, value: TppaStart[K]) {
-		state.request[key] = value
+	function setMoveDuration(value: number) {
+		state.request.moveDuration = value
 	}
 
-	function updateSolver<K extends keyof TppaStart['solver']>(key: K, value: TppaStart['solver'][K]) {
-		state.request.solver[key] = value
+	function setDirection(value: 'east' | 'west') {
+		state.request.direction = value
 	}
 
-	function updateCapture<K extends keyof TppaStart['capture']>(key: K, value: TppaStart['capture'][K]) {
-		state.request.capture[key] = value
+	function setMaxAttempts(value: number) {
+		state.request.maxAttempts = value
+	}
+
+	function setDelayBeforeCapture(value: number) {
+		state.request.delayBeforeCapture = value
+	}
+
+	function setCompensateRefraction(value: boolean) {
+		state.request.compensateRefraction = value
 	}
 
 	function updateRefraction<K extends keyof TppaStart['refraction']>(key: K, value: TppaStart['refraction'][K]) {
@@ -84,11 +118,11 @@ export function tppaStore(camera: Camera, mount: Mount) {
 	}
 
 	async function start() {
-		if (state.running || !camera.connected || !mount.connected) return
+		if (state.running || !state.camera?.connected || !state.mount?.connected) return
 
 		state.running = true
 
-		const response = await Api.TPPA.start(camera, mount, state.request)
+		const response = await Api.TPPA.start(state.camera, state.mount, state.request)
 
 		if (!response?.ok) {
 			reset()
@@ -105,20 +139,19 @@ export function tppaStore(camera: Camera, mount: Mount) {
 		}
 	}
 
-	function hide() {
-		tppaListStore.hide(camera, mount)
-	}
-
 	return {
 		state,
+		capture,
+		solver,
 		mount: _mount,
 		unmount,
-		update,
-		updateSolver,
-		updateCapture,
+		setMoveDuration,
+		setDirection,
+		setMaxAttempts,
+		setDelayBeforeCapture,
+		setCompensateRefraction,
 		updateRefraction,
 		start,
 		stop,
-		hide,
 	} as const
 }

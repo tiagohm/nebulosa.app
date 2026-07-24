@@ -3,8 +3,9 @@ import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { CameraManager, FocuserManager, MountManager, RotatorManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
-import { CameraSimulator, ClientSimulator, MountSimulator } from 'nebulosa/src/devices/indi/simulator'
-import { CacheManager } from 'src/api/cache'
+import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
+import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { cameraBus, CameraHandler } from 'src/api/camera'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { ImageProcessor } from 'src/api/image'
@@ -13,7 +14,10 @@ import { MountHandler } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
 import { PlateSolverHandler } from 'src/api/platesolver'
 import { tppaBus, tppa as tppaEndpoints, TppaHandler } from 'src/api/tppa'
-import { DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_TPPA_START, type CameraCaptureEvent, type TppaEvent, type TppaStart } from 'src/shared/types'
+import { DEFAULT_CAMERA_CAPTURE_EVENT } from '#/camera'
+import type { CameraCaptureEvent } from '#/camera'
+import { DEFAULT_TPPA_START } from '#/tppa'
+import type { TppaStart, TppaEvent } from '#/tppa'
 import { noContent, SocketMessager, waitUntil } from './util'
 
 type TppaStartOverrides = Omit<Partial<TppaStart>, 'capture' | 'solver' | 'refraction'> & {
@@ -33,7 +37,7 @@ const wheelManager = new WheelManager()
 const focuserManager = new FocuserManager()
 const rotatorManager = new RotatorManager()
 const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
-const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new CacheManager())
+const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
 const solver = new PlateSolverHandler(new NotificationHandler(wsm), imageProcessor)
 const tppaHandler = new TppaHandler(wsm, cameraHandler, mountHandler, solver)
 const endpoints = tppaEndpoints(tppaHandler)

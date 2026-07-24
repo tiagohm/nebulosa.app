@@ -3,9 +3,11 @@ import type { Cover } from 'nebulosa/src/devices/indi/device'
 import type { CoverManager, DeviceHandler } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
-import type { CoverAdded, CoverRemoved, CoverUpdated } from 'src/shared/types'
-import { type Endpoints, query, response } from './http'
-import { webSocketBus, type WebSocketMessageHandler } from './message'
+import type { CoverAdded, CoverRemoved, CoverUpdated } from '#/cover'
+import { query, response } from './http'
+import type { Endpoints } from './http'
+import { webSocketBus } from './message'
+import type { WebSocketMessageHandler } from './message'
 
 export interface CoverBusEvents {
 	readonly add: CoverAdded

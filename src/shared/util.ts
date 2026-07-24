@@ -1,137 +1,23 @@
-import { cirsToObserved, observedToCirs } from 'nebulosa/src/astronomy/coordinates/astrometry'
-import { constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
-import { type EquatorialCoordinate, eclipticToEquatorial, equatorialFromJ2000, equatorialToEcliptic, equatorialToGalatic, equatorialToJ2000, galacticToEquatorial } from 'nebulosa/src/astronomy/coordinates/coordinate'
-import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
-import type { Time } from 'nebulosa/src/astronomy/time/time'
-import type { Writable } from 'nebulosa/src/core/types'
-import { expectedPierSide, type MountTargetCoordinate, meridianTimeIn } from 'nebulosa/src/devices/indi/device'
-import { type Angle, parseAngle } from 'nebulosa/src/math/units/angle'
-import type { CoordinateInfo, ExposureTimeUnit } from './types'
+import { eraPnm06a, eraPmat06, eraNut06a, eraGst06a } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
+import { TIME_PROVIDERS, toJulianDay } from 'nebulosa/src/astronomy/time/time'
+import type { TimeProviders } from 'nebulosa/src/astronomy/time/time'
+import type { MutMat3 } from 'nebulosa/src/math/linear-algebra/mat3'
+import type { Angle } from 'nebulosa/src/math/units/angle'
 
 // Unsubscribes all provided unsubscribers
 export function unsubscribe(unsubscribers?: readonly (VoidFunction | undefined)[]) {
 	if (unsubscribers) for (const e of unsubscribers) e?.()
 }
 
-// Returns a factor to convert exposure time to minutes
-export function exposureTimeUnitFactor(unit: ExposureTimeUnit) {
-	switch (unit) {
-		case 'minute':
-		default:
-			return 1
-		case 'second':
-			return 60
-		case 'millisecond':
-			return 60000
-		case 'microsecond':
-			return 60000000
-	}
-}
+// Speed up Time by caching some expensive ERFA calls.
+// The cache is keyed by the rounded Julian epoch, which is the same for all times in a given day.
+export function speedUpTime(providers: Required<TimeProviders> = TIME_PROVIDERS) {
+	const PNM_CACHE = new Map<number, MutMat3>()
+	const PMAT_CACHE = new Map<number, MutMat3>()
+	const NUT_CACHE = new Map<number, [Angle, Angle]>()
 
-// Converts exposure time in given unit to minutes
-export function exposureTimeInMinutes(time: number, unit: ExposureTimeUnit) {
-	return unit === 'minute' ? time : time / exposureTimeUnitFactor(unit)
-}
-
-// Converts exposure time in given unit to seconds
-export function exposureTimeInSeconds(time: number, unit: ExposureTimeUnit) {
-	return unit === 'second' ? time : time * (60 / exposureTimeUnitFactor(unit))
-}
-
-// Converts exposure time in given unit to milliseconds
-export function exposureTimeInMilliseconds(time: number, unit: ExposureTimeUnit) {
-	return unit === 'millisecond' ? time : time * (60000 / exposureTimeUnitFactor(unit))
-}
-
-// Converts exposure time in given unit to microseconds
-export function exposureTimeInMicroseconds(time: number, unit: ExposureTimeUnit) {
-	return unit === 'microsecond' ? time : time * (60000000 / exposureTimeUnitFactor(unit))
-}
-
-// Converts exposure time from one unit to another
-export function exposureTimeIn(time: number, from: ExposureTimeUnit, to: ExposureTimeUnit) {
-	return from === to ? time : time * (exposureTimeUnitFactor(to) / exposureTimeUnitFactor(from))
-}
-
-export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialCoordinate | MountTargetCoordinate<string | Angle>) {
-	const equatorial: Writable<CoordinateInfo['equatorial']> = [0, 0]
-	const equatorialJ2000: Writable<CoordinateInfo['equatorialJ2000']> = [0, 0]
-	const horizontal: Writable<CoordinateInfo['horizontal']> = [0, 0]
-	const ecliptic: Writable<CoordinateInfo['ecliptic']> = [0, 0]
-	const galactic: Writable<CoordinateInfo['galactic']> = [0, 0]
-	let observed: ReturnType<typeof cirsToObserved> | undefined
-
-	const type = 'type' in target ? target.type : 'JNOW'
-	const x = 'type' in target ? parseAngle(target[type]!.x, type === 'JNOW' || type === 'J2000' ? true : undefined)! : target.rightAscension
-	const y = 'type' in target ? parseAngle(target[type]!.y)! : target.declination
-
-	// JNOW equatorial coordinate
-	if (type === 'JNOW') {
-		equatorial[0] = x
-		equatorial[1] = y
-
-		observed = cirsToObserved(equatorial, time)
-		Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
-		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
-		Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
-	}
-	// J2000 equatorial coordinate
-	else if (type === 'J2000') {
-		equatorialJ2000[0] = x
-		equatorialJ2000[1] = y
-
-		Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
-		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
-		Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
-		observed = cirsToObserved(equatorial, time)
-	}
-	// Local horizontal coordinate
-	else if (type === 'ALTAZ') {
-		horizontal[0] = x
-		horizontal[1] = y
-
-		Object.assign(equatorial, observedToCirs(...horizontal, time))
-		Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
-		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
-		Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
-	}
-	// Ecliptic (at date) coordinate
-	else if (type === 'ECLIPTIC') {
-		ecliptic[0] = x
-		ecliptic[1] = y
-
-		Object.assign(equatorial, eclipticToEquatorial(...ecliptic, time))
-		Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
-		Object.assign(galactic, equatorialToGalatic(...equatorialJ2000))
-		observed = cirsToObserved(equatorial, time)
-	}
-	// Galactic coordinate
-	else if (type === 'GALACTIC') {
-		galactic[0] = x
-		galactic[1] = y
-
-		Object.assign(equatorialJ2000, galacticToEquatorial(...galactic))
-		Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
-		Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
-		observed = cirsToObserved(equatorial, time)
-	}
-
-	if (observed) {
-		horizontal[0] = observed.azimuth
-		horizontal[1] = observed.altitude
-	}
-
-	const lst = localSiderealTime(time, longitude, true)
-
-	return {
-		equatorial,
-		equatorialJ2000,
-		horizontal,
-		ecliptic,
-		galactic,
-		constellation: constellation(...equatorial, time),
-		lst,
-		meridianTimeIn: meridianTimeIn(equatorial[0], lst),
-		pierSide: expectedPierSide(...equatorial, lst),
-	} as CoordinateInfo
+	providers.pnm = (time) => PNM_CACHE.getOrInsertComputed(Math.round(toJulianDay(time)), () => eraPnm06a(time.day, time.fraction))
+	providers.pmat = (time) => PMAT_CACHE.getOrInsertComputed(Math.round(toJulianDay(time)), () => eraPmat06(time.day, time.fraction))
+	providers.nut = (time) => NUT_CACHE.getOrInsertComputed(Math.round(toJulianDay(time)), () => eraNut06a(time.day, time.fraction))
+	providers.gast = (ut1, tt) => eraGst06a(ut1.day, ut1.fraction, tt.day, tt.fraction, providers.pnm(tt))
 }

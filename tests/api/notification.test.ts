@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
-import { WebSocketMessageHandler, type Messager } from 'src/api/message'
+import { WebSocketMessageHandler } from 'src/api/message'
+import type { Messager } from 'src/api/message'
 import { NotificationHandler } from 'src/api/notification'
-import type { Notification } from 'src/shared/types'
+import type { Notification } from '#/notification'
 import { SocketMessager } from './util'
 
 const wsm = new WebSocketMessageHandler()

@@ -1,17 +1,21 @@
+import { tw } from '@shared/util'
+import { Icons } from '@ui/Icon'
 import { Children, Fragment, isValidElement, useEffect, useState } from 'react'
-import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { tw } from '@/shared/util'
-import { Icons } from '../Icon'
+import { tv } from 'tailwind-variants'
+import type { ClassValue, VariantProps } from 'tailwind-variants'
 
 const TAB_CHILD_TYPE = Symbol('Tab')
 const TAB_PANEL_CHILD_TYPE = Symbol('TabPanel')
 
 const tabsStyles = tv({
 	slots: {
-		base: 'flex min-w-0 gap-2 align-top',
-		tabList: 'flex min-w-0 shrink-0 gap-1 overflow-auto rounded-lg bg-neutral-900/70 p-1',
-		panelContainer: 'min-w-0 flex-1',
-		panel: 'min-w-0 text-neutral-100',
+		base: 'flex flex-1 min-h-0 min-w-0 gap-2 align-top',
+		tabList: 'flex min-h-0 min-w-0 shrink-0 gap-1 overflow-auto rounded-lg bg-neutral-900/70 p-1',
+		tabListContainer: 'flex flex-row items-center gap-2',
+		panelContainer: 'flex flex-col min-h-0 min-w-0 flex-1',
+		panel: 'flex flex-1 flex-col min-h-0 min-w-0 text-neutral-100',
+		startContent: 'flex shrink-0 items-center justify-center',
+		endContent: 'flex shrink-0 items-center justify-center',
 	},
 	variants: {
 		placement: {
@@ -141,6 +145,7 @@ export type TabPlacement = NonNullable<TabsVariants['placement']>
 export interface TabsClassNames {
 	readonly base?: ClassValue
 	readonly tabList?: ClassValue
+	readonly tabListContainer?: ClassValue
 	readonly panelContainer?: ClassValue
 	readonly tab?: ClassValue
 	readonly tabStartContent?: ClassValue
@@ -148,6 +153,8 @@ export interface TabsClassNames {
 	readonly tabEndContent?: ClassValue
 	readonly closeButton?: ClassValue
 	readonly panel?: ClassValue
+	readonly startContent?: ClassValue
+	readonly endContent?: ClassValue
 }
 
 export interface TabClassNames {
@@ -165,6 +172,8 @@ export interface TabsProps<T extends TabId = string> extends Omit<React.Componen
 	readonly disabled?: boolean
 	readonly onValueChange?: (value: T) => void
 	readonly value?: T
+	readonly endContent?: React.ReactNode
+	readonly startContent?: React.ReactNode
 }
 
 export interface TabProps<T extends TabId = string> extends Omit<React.ComponentPropsWithRef<'div'>, 'children' | 'color' | 'id' | 'onClose'>, Omit<TabVariants, 'disabled' | 'selected'> {
@@ -257,7 +266,7 @@ function fallbackTabId<T extends TabId>(tabs: readonly React.ReactElement<TabPro
 }
 
 // Renders a controlled or uncontrolled tab set with linked tab panels.
-export function Tabs<T extends TabId = string>({ children, className, classNames, color, defaultValue, disabled = false, fullWidth, onValueChange, placement, ref, size, value, ...props }: TabsProps<T>) {
+export function Tabs<T extends TabId = string>({ children, className, classNames, color, defaultValue, disabled = false, fullWidth, onValueChange, placement, ref, size, value, startContent, endContent, ...props }: TabsProps<T>) {
 	const { panels, tabs } = collectTabsChildren<T>(children)
 	const [uncontrolledValue, setUncontrolledValue] = useState<T | undefined>(() => defaultValue ?? fallbackTabId(tabs))
 	const isControlled = value !== undefined
@@ -347,7 +356,11 @@ export function Tabs<T extends TabId = string>({ children, className, classNames
 
 	return (
 		<div {...props} className={tw(styles.base(), disabled && 'opacity-40 pointer-events-none', className, classNames?.base)} ref={ref}>
-			<div className={tw(styles.tabList(), classNames?.tabList)}>{tabs.map(renderTab)}</div>
+			<div className={tw(styles.tabListContainer(), classNames?.tabListContainer)}>
+				{startContent !== undefined && startContent !== null && <span className={tw(styles.startContent(), classNames?.startContent)}>{startContent}</span>}
+				<div className={tw(styles.tabList(), classNames?.tabList)}>{tabs.map(renderTab)}</div>
+				{endContent !== undefined && endContent !== null && <span className={tw(styles.endContent(), classNames?.endContent)}>{endContent}</span>}
+			</div>
 			<div className={tw(styles.panelContainer(), classNames?.panelContainer)}>{renderSelectedPanel()}</div>
 		</div>
 	)

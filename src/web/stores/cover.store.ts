@@ -1,7 +1,8 @@
+import { Api } from '@shared/api'
+import { equipmentStore } from '@stores/equipment.store'
+import type { DeviceState } from '@stores/equipment.store'
 import type { Cover } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type CoverStore = ReturnType<typeof coverStore>
 
@@ -16,12 +17,19 @@ export function coverStore(cover: Cover) {
 
 	console.info('cover created:', cover.name)
 
+	let mounted = false
+
 	function mount() {
+		if (mounted) return unmount
 		console.info('cover mounted:', cover.name)
+		mounted = true
+		return unmount
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('cover unmounted:', cover.name)
+		mounted = false
 	}
 
 	function connect() {
@@ -40,14 +48,6 @@ export function coverStore(cover: Cover) {
 		return Api.Covers.stop(cover)
 	}
 
-	function show() {
-		return equipmentStore.show(cover)
-	}
-
-	function hide() {
-		return equipmentStore.hide(cover)
-	}
-
 	return {
 		state,
 		mount,
@@ -56,7 +56,5 @@ export function coverStore(cover: Cover) {
 		park,
 		unpark,
 		stop,
-		show,
-		hide,
 	} as const
 }

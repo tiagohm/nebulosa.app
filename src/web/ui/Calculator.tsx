@@ -1,14 +1,15 @@
+import { calculatorStore } from '@stores/calculator.store'
+import { Chip } from '@ui/components/Chip'
+import { IconButton } from '@ui/components/IconButton'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
+import { TextInput } from '@ui/components/TextInput'
+import { Icons } from '@ui/Icon'
+import type { IDockviewPanelProps } from 'dockview-react'
 import { toHour } from 'nebulosa/src/math/units/angle'
-import { memo, type ReactNode } from 'react'
+import { memo, useEffect } from 'react'
+import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { calculatorStore } from '@/stores/calculator.store'
-import { Chip } from './components/Chip'
-import { IconButton } from './components/IconButton'
-import { NumberInput } from './components/NumberInput'
-import { Tab, TabPanel, Tabs } from './components/Tabs'
-import { TextInput } from './components/TextInput'
-import { Icons } from './Icon'
-import { Modal } from './Modal'
 
 const MIN_APERTURE = 1
 const MIN_FOCAL_LENGTH = 1
@@ -35,20 +36,11 @@ const MIN_AIRMASS = 1
 const MAX_ZENITH_DISTANCE = 89.9
 const MAX_OVERLAP = 99
 
-export const Calculator = memo(() => {
-	const { show } = useSnapshot(calculatorStore.state)
+export const Calculator = memo(({ api }: IDockviewPanelProps) => {
+	useEffect(calculatorStore.mount, [])
 
-	if (!show) return null
-
-	return (
-		<Modal header="Calculator" id="calculator" initialWidth="460px" onHide={calculatorStore.hide}>
-			<Body />
-		</Modal>
-	)
-})
-
-const Body = memo(() => {
 	const { favorites } = useSnapshot(calculatorStore.state)
+
 	const tabs = FORMULA_TABS.toSorted((a, b) => {
 		const ai = favorites.indexOf(a.id)
 		const bi = favorites.indexOf(b.id)
@@ -60,20 +52,18 @@ const Body = memo(() => {
 	})
 
 	return (
-		<div className="mt-0 px-1 py-2">
-			<Tabs className="max-h-100" classNames={{ panelContainer: 'overflow-y-auto pr-1', tabList: 'max-h-100 w-56', tab: 'min-h-9' }} placement="start">
-				{tabs.map(({ id, label }) => (
-					<Tab id={id} key={id} endContent={<IconButton icon={Icons.Star} color={favorites.includes(id) ? 'warning' : 'default'} onClick={() => calculatorStore.toggleFavorite(id)} size="sm" />}>
-						{label}
-					</Tab>
-				))}
-				{tabs.map(({ Component, id }) => (
-					<TabPanel id={id} key={id}>
-						<Component />
-					</TabPanel>
-				))}
-			</Tabs>
-		</div>
+		<Tabs className="h-full p-3" classNames={{ panelContainer: 'overflow-y-auto pr-1', tabList: 'max-h-full w-56', tab: 'min-h-9' }} placement="start">
+			{tabs.map(({ id, label }) => (
+				<Tab id={id} key={id} endContent={<IconButton icon={Icons.Star} color={favorites.includes(id) ? 'warning' : 'default'} onClick={() => calculatorStore.toggleFavorite(id)} size="sm" />}>
+					{label}
+				</Tab>
+			))}
+			{tabs.map(({ Component, id }) => (
+				<TabPanel id={id} key={id}>
+					<Component />
+				</TabPanel>
+			))}
+		</Tabs>
 	)
 })
 
@@ -85,7 +75,7 @@ interface FormulaProps {
 
 function Formula({ description, expression, children }: FormulaProps) {
 	return (
-		<div className="flex h-full w-full flex-col justify-between gap-2">
+		<div className="flex w-full flex-col justify-between gap-2">
 			<div className="flex flex-1 flex-col items-center justify-center gap-1">
 				<p className="text-center text-sm">{description}</p>
 				<Chip className="text-medium" color="primary" label={expression} size="sm" />

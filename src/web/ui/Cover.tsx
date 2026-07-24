@@ -1,48 +1,48 @@
+import { useDevice } from '@hooks/device.hook'
+import { coverStore } from '@stores/cover.store'
+import { Chip } from '@ui/components/Chip'
+import { IconButton } from '@ui/components/IconButton'
+import { Tab, Tabs, TabPanel } from '@ui/components/Tabs'
+import { ConnectButton } from '@ui/ConnectButton'
+import { Icons } from '@ui/Icon'
+import { IndiPanelControl } from '@ui/IndiPanelControl'
+import type { IDockviewPanelProps } from 'dockview-react'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import { memo, useContext } from 'react'
+import { CoverStoreContext } from 'src/web/shared/context'
 import { useSnapshot } from 'valtio'
-import { coverStore } from '@/stores/cover.store'
-import { useStore } from '../hooks/store.hook'
-import { CoverDeviceContext, CoverStoreContext } from '../shared/context'
-import { Chip } from './components/Chip'
-import { IconButton } from './components/IconButton'
-import { ConnectButton } from './ConnectButton'
-import { Icons } from './Icon'
-import { IndiPanelControlButton } from './IndiPanelControlButton'
-import { Modal } from './Modal'
 
-export const Cover = memo(() => {
-	const device = useContext(CoverDeviceContext)
-	const cover = useStore(() => coverStore(device), [device])
+export const Cover = memo(({ params }: IDockviewPanelProps<Device>) => {
+	const cover = useDevice('cover', params.id, coverStore)
+
+	if (!cover) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<CoverStoreContext value={cover}>
-			<Modal header={<Header />} id={`cover-${device.id}`} initialWidth="256px" onHide={cover.hide}>
-				<Body />
-			</Modal>
+		<CoverStoreContext value={cover.store}>
+			<Tabs className="h-full p-3" startContent={<TabStartContent />}>
+				<Tab id="main">Cover</Tab>
+				<Tab id="indi">INDI</Tab>
+
+				<TabPanel id="main">
+					<Main />
+				</TabPanel>
+				<TabPanel id="indi">
+					<IndiPanelControl device={cover.device} />
+				</TabPanel>
+			</Tabs>
 		</CoverStoreContext>
 	)
 })
 
-const Header = memo(() => {
+const TabStartContent = memo(() => {
 	const cover = useContext(CoverStoreContext)
-	const { connecting, connected, name } = useSnapshot(cover.state.cover)
+	const { connected, connecting, parking } = useSnapshot(cover.state.cover)
 
-	return (
-		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
-			<div className="flex shrink-0 flex-row items-center gap-1">
-				<ConnectButton connected={connected} loading={connecting} onClick={cover.connect} />
-				<IndiPanelControlButton device={cover.state.cover} />
-			</div>
-			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
-				<span className="leading-5 font-semibold">Cover</span>
-				<span className="max-w-full truncate text-xs font-normal text-neutral-400">{name}</span>
-			</div>
-		</div>
-	)
+	return <ConnectButton disabled={parking} connected={connected} loading={connecting} onClick={cover.connect} />
 })
 
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
+const Main = memo(() => (
+	<div className="grid grid-cols-12 gap-2">
 		<Status />
 		<OpenAndClose />
 	</div>
@@ -62,7 +62,7 @@ const Status = memo(() => {
 	const { color, label } = coverStatus(connected, canPark, parking, parked)
 
 	return (
-		<div className="col-span-full flex flex-row items-center justify-between">
+		<div className="col-span-full flex flex-row items-center gap-2">
 			<Chip color={color} label={label} size="sm" />
 		</div>
 	)

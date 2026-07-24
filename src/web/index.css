@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'dockview-react/dist/styles/dockview.css';
 
 @theme {
 	/* https://observablehq.com/@shan/oklab-color-wheel */
@@ -8,6 +9,26 @@
 	--warning: oklab(0.9 0 0.5);
 	--danger: oklab(0.9 0.171 0.47);
 	--color-neutral-950: oklab(0.165 0 0);
+}
+
+.dockview-theme-github-dark {
+	--dv-color-gh-canvas-default: color-mix(in oklab, var(--color-neutral-900), black 15%);
+	--dv-color-gh-canvas-subtle: color-mix(in oklab, var(--color-neutral-900), black 15%);
+	--dv-color-gh-border: color-mix(in oklab, var(--color-neutral-900), black 8%);
+	--dv-color-gh-border-muted: color-mix(in oklab, var(--color-neutral-900), black 8%);
+}
+
+.dv-react-part {
+	position: relative;
+}
+
+.dv-split-view-container .dv-view-container .dv-view {
+	overflow: hidden;
+}
+
+.dv-tab-group-underline svg path {
+	stroke: color-mix(in oklab, var(--color-neutral-900), white 1%) !important;
+	stroke-width: 1;
 }
 
 @utility text-lighter-* {
@@ -27,7 +48,7 @@
 }
 
 html {
-	@apply m-0 h-dvh w-dvw touch-none overflow-hidden scroll-smooth bg-neutral-900 p-0 tabular-nums;
+	@apply bg-darker-neutral-900/15 m-0 h-dvh w-dvw touch-none overflow-hidden scroll-smooth p-0 tabular-nums;
 	-webkit-tap-highlight-color: transparent;
 }
 
@@ -44,7 +65,8 @@ svg {
 
 /* Remove white border around SVG */
 
-svg:focus {
+svg:focus,
+g:focus {
 	outline: none;
 }
 

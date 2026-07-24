@@ -1,14 +1,15 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { homeStore } from '@stores/home.store'
 import { nanoid } from 'nanoid'
-import { DEFAULT_FRAMING, type Framing } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import { imageWorkspaceStore } from './image.workspace.store'
+import { DEFAULT_FRAMING } from '#/framing'
+import type { Framing } from '#/framing'
 
 export type FramingStore = typeof framingStore
 
 export interface FramingState {
-	show: boolean
 	readonly request: Framing
 	loading: boolean
 	openNewImage: boolean
@@ -17,7 +18,6 @@ export interface FramingState {
 }
 
 const state = proxy<FramingState>({
-	show: false,
 	request: structuredClone(DEFAULT_FRAMING),
 	loading: false,
 	openNewImage: false,
@@ -27,10 +27,58 @@ const state = proxy<FramingState>({
 
 const ID = nanoid()
 
-initProxy(state, 'framing', ['p:show', 'o:request', 'p:openNewImage'])
+let mounted = false
+const u: VoidFunction[] = []
 
-function update<K extends keyof FramingState['request']>(key: K, value: FramingState['request'][K]) {
-	state.request[key] = value
+function mount() {
+	if (mounted) return unmount
+
+	console.info('framing mounted')
+
+	mounted = true
+
+	u[0] = initProxy(state, 'framing', ['o:request'])
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('framing unmounted')
+	unsubscribe(u)
+	mounted = false
+}
+
+function setRightAscension(value: string) {
+	state.request.rightAscension = value
+}
+
+function setDeclination(value: string) {
+	state.request.declination = value
+}
+
+function setFocalLength(value: number) {
+	state.request.focalLength = value
+}
+
+function setPixelSize(value: number) {
+	state.request.pixelSize = value
+}
+
+function setWidth(value: number) {
+	state.request.width = value
+}
+
+function setHeight(value: number) {
+	state.request.height = value
+}
+
+function setRotation(value: number) {
+	state.request.rotation = value
+}
+
+function setHipsSurvey(value: string) {
+	state.request.hipsSurvey = value
 }
 
 async function load(request: Partial<Framing> = state.request) {
@@ -38,13 +86,12 @@ async function load(request: Partial<Framing> = state.request) {
 
 	try {
 		state.loading = true
-		state.show = true
 
 		request.id = `${ID}.${state.openNewImage ? state.count++ : DEFAULT_FRAMING.id}`
 		const frame = await Api.Framing.frame(state.request)
 
 		if (frame) {
-			const image = imageWorkspaceStore.add(frame.path, 'framing', request.id)
+			const image = homeStore.addImage(frame.path, 'framing', request.id)
 			// const index = state.images.findIndex((e) => e.id === image.id)
 			// index >= 0 ? (state.images[index] = image) : state.images.push(image)
 		}
@@ -53,18 +100,17 @@ async function load(request: Partial<Framing> = state.request) {
 	}
 }
 
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
-
 export const framingStore = {
 	state,
-	update,
+	setRightAscension,
+	setDeclination,
+	setFocalLength,
+	setPixelSize,
+	setWidth,
+	setHeight,
+	setRotation,
+	setHipsSurvey,
 	load,
-	show,
-	hide,
+	mount,
+	unmount,
 } as const

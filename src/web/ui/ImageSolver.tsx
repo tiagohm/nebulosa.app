@@ -1,18 +1,17 @@
+import { ImageViewerStoreContext, PlateSolverStoreContext } from '@shared/context'
+import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
+import { IconButton } from '@ui/components/IconButton'
+import { NumberInput } from '@ui/components/NumberInput'
+import { TextInput } from '@ui/components/TextInput'
+import { MountDropdown } from '@ui/DeviceDropdown'
+import { Icons } from '@ui/Icon'
+import { PlateSolverTypeSelect } from '@ui/PlateSolverTypeSelect'
+import { PlateSolveStartPopover } from '@ui/PlateSolveStartPopover'
 import { formatDEC, formatRA, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
-import { memo, useContext } from 'react'
-import type { PlateSolveStart } from 'src/shared/types'
+import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { IconButton } from './components/IconButton'
-import { NumberInput } from './components/NumberInput'
-import { TextInput } from './components/TextInput'
-import { MountDropdown } from './DeviceDropdown'
-import { Icons } from './Icon'
-import { Modal } from './Modal'
-import { PlateSolverSelect } from './PlateSolverSelect'
-import { PlateSolveStartPopover } from './PlateSolveStartPopover'
+import type { PlateSolveStart } from '#/platesolver'
 
 function hasPositiveFiniteValue(value: number) {
 	return Number.isFinite(value) && value > 0
@@ -43,24 +42,11 @@ function formatSolutionSize(width: number | undefined, height: number | undefine
 	return `${toArcmin(width).toFixed(2)} x ${toArcmin(height).toFixed(2)}`
 }
 
-export const ImageSolver = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { solver } = viewer
-	const { show } = useSnapshot(solver.state)
-
-	if (!show) return null
-
-	return (
-		<Modal footer={<Footer />} header="Plate Solver" id={`platesolver-${viewer.image.id}`} initialWidth="360px" onHide={solver.hide}>
-			<Body />
-		</Modal>
-	)
-})
-
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
+export const ImageSolver = memo(() => (
+	<div className="grid grid-cols-12 items-center gap-2 p-3">
 		<Inputs />
 		<Solution />
+		<Footer />
 	</div>
 ))
 
@@ -71,15 +57,17 @@ const Inputs = memo(() => {
 	const { rightAscension, declination } = useSnapshot(solver.state.request)
 	const coordinateDisabled = loading || blind
 
+	useEffect(solver.mount, [])
+
 	return (
 		<>
-			<PlateSolverSelect className="col-span-8 min-w-0" disabled={loading} endContent={<PlateSolverSelectEndContent />} onValueChange={(value) => solver.update('type', value)} value={type} />
-			<Checkbox className="col-span-3 col-end-13 min-w-0" disabled={loading} label="Blind" onValueChange={(value) => solver.update('blind', value)} value={blind} />
-			<TextInput className="col-span-4 min-w-0" disabled={coordinateDisabled} label="RA" onValueChange={(value) => solver.update('rightAscension', value)} value={String(rightAscension)} />
-			<TextInput className="col-span-4 min-w-0" disabled={coordinateDisabled} label="DEC" onValueChange={(value) => solver.update('declination', value)} value={String(declination)} />
-			<NumberInput className="col-span-4 min-w-0" disabled={coordinateDisabled} fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={(value) => solver.update('radius', value)} step={0.1} value={radius ?? 4} />
-			<NumberInput className="col-span-6 min-w-0" disabled={loading} label="Focal Length (mm)" maxValue={100000} minValue={0} onValueChange={(value) => solver.update('focalLength', value)} value={focalLength} />
-			<NumberInput className="col-span-6 min-w-0" disabled={loading} fractionDigits={2} label="Pixel size (µm)" maxValue={1000} minValue={0} onValueChange={(value) => solver.update('pixelSize', value)} step={0.01} value={pixelSize} />
+			<PlateSolverTypeSelect className="col-span-8 min-w-0" disabled={loading} endContent={<PlateSolverSelectEndContent />} onValueChange={solver.setType} value={type} />
+			<Checkbox className="col-span-3 col-end-13 min-w-0" disabled={loading} label="Blind" onValueChange={solver.setBlind} value={blind} />
+			<TextInput className="col-span-4 min-w-0" disabled={coordinateDisabled} label="RA" onValueChange={solver.setRightAscension} value={String(rightAscension)} />
+			<TextInput className="col-span-4 min-w-0" disabled={coordinateDisabled} label="DEC" onValueChange={solver.setDeclination} value={String(declination)} />
+			<NumberInput className="col-span-4 min-w-0" disabled={coordinateDisabled} fractionDigits={1} label="Radius (°)" maxValue={360} minValue={0} onValueChange={solver.setRadius} step={0.1} value={radius ?? 4} />
+			<NumberInput className="col-span-6 min-w-0" disabled={loading} label="Focal Length (mm)" maxValue={100000} minValue={0} onValueChange={solver.setFocalLength} value={focalLength} />
+			<NumberInput className="col-span-6 min-w-0" disabled={loading} fractionDigits={2} label="Pixel size (µm)" maxValue={1000} minValue={0} onValueChange={solver.setPixelSize} step={0.01} value={pixelSize} />
 		</>
 	)
 })
@@ -87,9 +75,12 @@ const Inputs = memo(() => {
 const PlateSolverSelectEndContent = memo(() => {
 	const { solver } = useContext(ImageViewerStoreContext)
 	const { loading } = useSnapshot(solver.state)
-	const { type, radius, focalLength, pixelSize } = useSnapshot(solver.state.request)
 
-	return <PlateSolveStartPopover disabled={loading} focalLength={focalLength} onValueChange={solver.update} pixelSize={pixelSize} radius={radius} type={type} />
+	return (
+		<PlateSolverStoreContext value={solver.solver}>
+			<PlateSolveStartPopover disabled={loading} />
+		</PlateSolverStoreContext>
+	)
 })
 
 const Solution = memo(() => {
@@ -108,7 +99,7 @@ const Solution = memo(() => {
 			<TextInput className="col-span-4 min-w-0" label="Radius (°)" readOnly value={formatSolutionField(solution?.radius, toDeg, 4)} />
 			<div className="col-span-full flex items-center justify-center gap-2">
 				<MountDropdown color="primary" disabled={loading || !hasSolution} disallowNoneSelection icon={Icons.Sync} onValueChange={solver.sync} tooltipContent="Sync" variant="flat" />
-				<MountDropdown color="success" disabled={loading || !hasSolution} disallowNoneSelection onValueChange={solver.goTo} tooltipContent="Go" variant="flat" />
+				<MountDropdown color="success" disabled={loading || !hasSolution} disallowNoneSelection onValueChange={solver.goTo} tooltipContent="Slew" variant="flat" />
 				<IconButton color="secondary" disabled={loading || !hasSolution} icon={Icons.Image} onClick={solver.frame} tooltipContent="Frame" variant="flat" />
 			</div>
 		</>
@@ -123,9 +114,9 @@ const Footer = memo(() => {
 	const canSolve = canStartSolve(request, info !== undefined)
 
 	return (
-		<>
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
 			<Button color="danger" disabled={!loading} label="Stop" onClick={solver.stop} startContent={<Icons.Stop />} />
 			<Button color="success" disabled={!canSolve} label="Solve" loading={loading} onClick={solver.start} startContent={<Icons.Sigma />} />
-		</>
+		</div>
 	)
 })

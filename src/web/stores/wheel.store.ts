@@ -1,9 +1,10 @@
+import { Api } from '@shared/api'
+import { equipmentStore } from '@stores/equipment.store'
+import type { DeviceState } from '@stores/equipment.store'
 import type { Wheel } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type WheelStore = ReturnType<typeof wheelStore>
 
@@ -43,7 +44,7 @@ export function wheelStore(wheel: Wheel) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('wheel mounted:', wheel.name)
 
@@ -55,6 +56,8 @@ export function wheelStore(wheel: Wheel) {
 
 		u[0] = subscribeKey(wheel, 'position', refresh)
 		u[1] = subscribeKey(wheel, 'names', refresh)
+
+		return unmount
 	}
 
 	function unmount() {
@@ -64,12 +67,13 @@ export function wheelStore(wheel: Wheel) {
 		mounted = false
 	}
 
-	function update<K extends keyof WheelState['selected']>(key: K, value: WheelState['selected'][K]) {
-		if (key === 'position') {
-			if (!isValidSlotPosition(wheel, value as number)) return
-		}
+	function setPosition(value: number) {
+		if (!isValidSlotPosition(wheel, value)) return
+		state.selected.position = value
+	}
 
-		state.selected[key] = value
+	function setName(value: string) {
+		state.selected.name = value
 	}
 
 	function connect() {
@@ -90,23 +94,14 @@ export function wheelStore(wheel: Wheel) {
 		return Api.Wheels.names(wheel, names)
 	}
 
-	function show() {
-		equipmentStore.show(wheel)
-	}
-
-	function hide() {
-		equipmentStore.hide(wheel)
-	}
-
 	return {
 		state,
 		mount,
 		unmount,
-		update,
+		setPosition,
+		setName,
 		connect,
 		move,
 		apply,
-		show,
-		hide,
 	} as const
 }

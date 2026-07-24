@@ -1,24 +1,23 @@
-import type { AnnotatedSkyObject, AnnotateImage } from 'src/shared/types'
+import { Api } from '@shared/api'
+import { imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { Writable } from 'nebulosa/src/core/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import type { ImageViewerStore } from './image.viewer.store'
+import type { AnnotateImage, ImageAnnotation } from '#/image.annotation'
 
 export type ImageAnnotationStore = ReturnType<typeof imageAnnotationStore>
 
 export interface ImageAnnotationState {
-	show: boolean
 	visible: boolean
 	loading: boolean
-	readonly request: Omit<AnnotateImage, 'solution'>
-	stars: readonly AnnotatedSkyObject[]
+	readonly request: Writable<Omit<AnnotateImage, 'solution'>>
+	stars: ImageAnnotation
 }
 
 export function imageAnnotationStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageAnnotationState>({
-		show: false,
 		visible: false,
 		loading: false,
 		stars: [],
@@ -38,19 +37,21 @@ export function imageAnnotationStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image annotation mounted:', viewer.state.path)
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.annotation`, ['p:show', 'o:request'])
+		u[0] = initProxy(state, `image.${viewer.key}.annotation`, ['o:request'])
 
 		u[1] = imageBus.subscribe('load', ({ image, refreshed }) => {
 			if (refreshed && image === viewer.image) {
 				reset()
 			}
 		})
+
+		return unmount
 	}
 
 	function unmount() {
@@ -60,8 +61,28 @@ export function imageAnnotationStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof ImageAnnotationState['request']>(key: K, value: ImageAnnotationState['request'][K]) {
-		state.request[key] = value
+	function setStars(value: boolean) {
+		state.request.stars = value
+	}
+
+	function setDsos(value: boolean) {
+		state.request.dsos = value
+	}
+
+	function setUseSimbad(value: boolean) {
+		state.request.useSimbad = value
+	}
+
+	function setMinorPlanets(value: boolean) {
+		state.request.minorPlanets = value
+	}
+
+	function setMinorPlanetsMagnitudeLimit(value: number) {
+		state.request.minorPlanetsMagnitudeLimit = value
+	}
+
+	function setIncludeMinorPlanetsWithoutMagnitude(value: boolean) {
+		state.request.includeMinorPlanetsWithoutMagnitude = value
 	}
 
 	function toggle(enabled?: boolean) {
@@ -91,24 +112,19 @@ export function imageAnnotationStore(viewer: ImageViewerStore) {
 		state.visible = false
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
 		mount,
 		unmount,
-		update,
+		setStars,
+		setDsos,
+		setUseSimbad,
+		setMinorPlanets,
+		setMinorPlanetsMagnitudeLimit,
+		setIncludeMinorPlanetsWithoutMagnitude,
 		toggle,
 		annotate,
 		reset,
-		show,
-		hide,
 	} as const
 }

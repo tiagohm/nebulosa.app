@@ -1,5 +1,6 @@
-import type { MountRemoteControlProtocol } from 'src/shared/types'
-import { Select, type SelectProps } from './components/Select'
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
+import type { MountRemoteControlProtocol } from '#/mount'
 
 const ITEMS = ['lx200', 'stellarium'] as const
 const LABELS = ['LX200', 'Stellarium'] as const

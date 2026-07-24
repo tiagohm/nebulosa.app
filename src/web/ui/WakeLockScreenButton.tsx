@@ -1,8 +1,9 @@
+import { useWakeLock } from '@hooks/wakelock.hook'
+import { isWakeLockSupported } from '@shared/util'
+import { IconButton } from '@ui/components/IconButton'
+import type { IconButtonProps } from '@ui/components/IconButton'
+import { Icons } from '@ui/Icon'
 import { memo } from 'react'
-import { useWakeLock } from '@/hooks/wakelock.hook'
-import { isWakeLockSupported } from '@/shared/util'
-import { IconButton, type IconButtonProps } from './components/IconButton'
-import { Icons } from './Icon'
 
 export interface WakeLockScreenButtonProps extends Omit<IconButtonProps, 'icon' | 'color' | 'onPointerUp'> {}
 

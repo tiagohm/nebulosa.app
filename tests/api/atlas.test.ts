@@ -1,15 +1,21 @@
-import { afterAll, beforeAll, describe, expect, test, type Mock } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import type { Mock } from 'bun:test'
 import { join } from 'path'
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
 import { deg, formatALT, formatRA, parseAngle } from 'nebulosa/src/math/units/angle'
 import { lightYear, meter, toKilometer } from 'nebulosa/src/math/units/distance'
 import { AtlasHandler } from 'src/api/atlas'
-import cache from 'src/api/cache'
-import { DEFAULT_SKY_OBJECT_SEARCH, type FindSolarEclipse, type PositionOfBody, type SearchSkyObject } from 'src/shared/types'
+import { speedUpTime } from 'src/shared/util'
+import type { PositionOfBody } from '#/atlas'
+import { DEFAULT_SKY_OBJECT_SEARCH } from '#/galaxy'
+import type { SearchSkyObject } from '#/galaxy'
+import type { FindSolarEclipse } from '#/sun'
 import { spyFetch } from './util'
 
-const atlas = new AtlasHandler(cache)
+speedUpTime()
+
+const atlas = new AtlasHandler()
 
 const POSITION_OF_BODY: PositionOfBody = {
 	time: {
@@ -417,8 +423,26 @@ test('chart of sky object', () => {
 
 	expect(chart).toHaveLength(1441)
 	expect(formatALT(chart[0], true)).toBe('+66 48 39')
-	expect(formatALT(chart[720], true)).toBe('-44 21 24')
+	expect(formatALT(chart[720], true)).toBe('-44 21 25')
 	expect(formatALT(chart[1440], true)).toBe('+65 54 26')
+})
+
+test('position of sky point', () => {
+	const position = atlas.positionOfSkyPoint(POSITION_OF_BODY, '06 44 58', '-16 45 03')
+
+	expect(formatRA(position.equatorial[0], true)).toBe('06 44 58')
+	expect(formatRA(position.equatorialJ2000[0], true)).toBe('06 43 49')
+	expect(formatALT(position.equatorial[1], true)).toBe('-16 45 03')
+	expect(formatALT(position.equatorialJ2000[1], true)).toBe('-16 43 33')
+	expect(formatALT(position.horizontal[1], true)).toBe('+66 49 01')
+	expect(formatALT(position.horizontal[0], true)).toBe('+278 50 36')
+	expect(position.distance).toBe(0)
+	expect(position.magnitude).toBe(99)
+	expect(position.constellation).toBe('CMA')
+	expect(position.names).toBeUndefined()
+	expect(position.illuminated).toBe(0)
+	expect(position.elongation).toBe(0)
+	expect(position.leading).toBe(false)
 })
 
 describe('compute start and end time', () => {

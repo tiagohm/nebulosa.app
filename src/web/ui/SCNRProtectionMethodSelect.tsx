@@ -1,5 +1,6 @@
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
-import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['MAXIMUM_MASK', 'ADDITIVE_MASK', 'AVERAGE_NEUTRAL', 'MAXIMUM_NEUTRAL', 'MINIMUM_NEUTRAL'] as const
 const LABELS = ['Maximum Mask', 'Additive Mask', 'Average Neutral', 'Maximum Neutral', 'Minimum Neutral'] as const

@@ -1,35 +1,42 @@
-import { nanoid } from 'nanoid'
+import { Api } from '@shared/api'
+import { darvBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { toast } from '@shared/toast'
+import { cameraCaptureStore } from '@stores/camera.capture.store'
+import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
+import type { DeviceState } from '@stores/equipment.store'
+import type { DockviewPanelApi } from 'dockview-react'
+import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
-import { COARSE_DARV_EXPOSURE_PRESET, DARV_EXPOSURE_PRESETS, estimateDarvExposure, type DarvExposureInput, type DarvExposurePreset, type DarvExposurePresetMode } from 'nebulosa/src/observation/alignment/polaralignment'
-import { DEFAULT_DARV_EVENT, DEFAULT_DARV_START, type DarvEvent, type DarvStart } from 'src/shared/types'
+import { COARSE_DARV_EXPOSURE_PRESET, DARV_EXPOSURE_PRESETS, estimateDarvExposure } from 'nebulosa/src/observation/alignment/polaralignment'
+import type { DarvExposureInput, DarvExposurePreset, DarvExposurePresetMode } from 'nebulosa/src/observation/alignment/polaralignment'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { darvBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { toast } from '../shared/toast'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
-import { darvListStore } from './darv.list.store'
-import type { DeviceState } from './equipment.store'
+import { subscribeKey } from 'valtio/utils'
+import { DEFAULT_DARV_EVENT, DEFAULT_DARV_START } from '#/darv'
+import type { DarvEvent, DarvHemisphere, DarvStart } from '#/darv'
 
 export type DarvStore = ReturnType<typeof darvStore>
 
 export interface DarvState {
 	running: boolean
-	readonly request: DarvStart
-	readonly camera: DeviceState<Camera>
-	readonly mount: DeviceState<Mount>
+	readonly request: Writable<DarvStart>
+	camera?: DeviceState<Camera>
+	mount?: DeviceState<Mount>
 	readonly event: DarvEvent
 	readonly exposureEstimation: DarvExposureInput & { presetMode: DarvExposurePresetMode | 'custom' }
 }
 
-export function darvStore(camera: Camera, mount: Mount) {
+export function darvStore(id: string, api: DockviewPanelApi) {
+	const capture = cameraCaptureStore()
+
 	const state = proxy<DarvState>({
-		request: structuredClone(DEFAULT_DARV_START),
+		request: {
+			...structuredClone(DEFAULT_DARV_START),
+			capture: capture.state,
+		},
 		running: false,
 		event: structuredClone(DEFAULT_DARV_EVENT),
-		camera,
-		mount,
 		exposureEstimation: {
 			focalLength: 400,
 			pixelSize: 2.8,
@@ -41,37 +48,52 @@ export function darvStore(camera: Camera, mount: Mount) {
 		},
 	})
 
-	console.info('darv created:', camera.name, mount.name)
+	console.info('darv created:', id)
 
 	const u: VoidFunction[] = []
 	let mounted = false
 
 	function _mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
-		console.info('darv mounted:', camera.name, mount.name)
+		console.info('darv mounted:', id)
 
 		mounted = true
 
-		u[0] = initProxy(state, `darv.${camera.id}.${mount.id}`, ['o:request', 'o:exposureEstimation'])
+		u[0] = initProxy(state, `darv.${id}`, ['o:request', 'o:exposureEstimation'])
 
 		u[1] = darvBus.subscribe('update', (event) => {
-			if (state.camera.id === event.camera && state.mount.id === event.mount) {
+			if (state.camera?.id === event.camera && state.mount?.id === event.mount) {
 				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)
 			}
 		})
 
-		subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
+		u[2] = subscribeKey(state, 'camera', (camera) => {
+			updateTitle()
 
-		state.request.id ||= nanoid()
+			if (camera !== undefined) {
+				u[3]?.()
+				u[3] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.capture)
+			}
+		})
+
+		u[4] = subscribeKey(state, 'mount', updateTitle)
+
+		state.request.id = id
+
+		return unmount
 	}
 
 	function unmount() {
 		if (!mounted) return
-		console.info('darv unmounted:', camera.name, mount.name)
+		console.info('darv unmounted:', id)
 		unsubscribe(u)
 		mounted = false
+	}
+
+	function updateTitle() {
+		api.setTitle(state.camera || state.mount ? `DARV - ${state.camera?.name || 'None'} · ${state.mount?.name || 'None'}` : 'DARV')
 	}
 
 	function reset() {
@@ -79,12 +101,16 @@ export function darvStore(camera: Camera, mount: Mount) {
 		state.event.state = 'idle'
 	}
 
-	function update<K extends keyof DarvStart>(key: K, value: DarvStart[K]) {
-		state.request[key] = value
+	function setInitialPause(value: number) {
+		state.request.initialPause = value
 	}
 
-	function updateCapture<K extends keyof DarvStart['capture']>(key: K, value: DarvStart['capture'][K]) {
-		state.request.capture[key] = value
+	function setDuration(value: number) {
+		state.request.duration = value
+	}
+
+	function setHemisphere(value: DarvHemisphere) {
+		state.request.hemisphere = value
 	}
 
 	function updateExposureEstimation<K extends keyof DarvState['exposureEstimation']>(key: K, value: DarvState['exposureEstimation'][K]) {
@@ -104,6 +130,8 @@ export function darvStore(camera: Camera, mount: Mount) {
 	}
 
 	function estimateExposure() {
+		const { mount } = state
+		if (!mount) return
 		state.exposureEstimation.latitude = mount.geographicCoordinate.latitude
 		state.exposureEstimation.declination = mount.equatorialCoordinate.declination
 		if (mount.hasGuideRate) state.exposureEstimation.preset.guideRateSidereal = mount.guideRate.rightAscension
@@ -111,7 +139,7 @@ export function darvStore(camera: Camera, mount: Mount) {
 
 		try {
 			const { recommendedExposure } = estimateDarvExposure(state.exposureEstimation)
-			update('duration', Math.ceil(recommendedExposure))
+			setDuration(Math.ceil(recommendedExposure))
 		} catch (e) {
 			if (Error.isError(e)) {
 				toast({ title: 'DARV EXPOSURE ESTIMATOR', description: e.message, color: 'danger' })
@@ -120,11 +148,11 @@ export function darvStore(camera: Camera, mount: Mount) {
 	}
 
 	async function start() {
-		if (state.running || !camera.connected || !mount.connected) return
+		if (state.running || !state.camera?.connected || !state.mount?.connected) return
 
 		state.running = true
 
-		const response = await Api.DARV.start(camera, mount, state.request)
+		const response = await Api.DARV.start(state.camera, state.mount, state.request)
 
 		if (!response?.ok) {
 			reset()
@@ -141,21 +169,18 @@ export function darvStore(camera: Camera, mount: Mount) {
 		}
 	}
 
-	function hide() {
-		darvListStore.hide(camera, mount)
-	}
-
 	return {
 		state,
+		capture,
 		mount: _mount,
 		unmount,
-		update,
-		updateCapture,
+		setInitialPause,
+		setDuration,
+		setHemisphere,
 		updateExposureEstimation,
 		updateExposureEstimationPreset,
 		estimateExposure,
 		start,
 		stop,
-		hide,
 	} as const
 }

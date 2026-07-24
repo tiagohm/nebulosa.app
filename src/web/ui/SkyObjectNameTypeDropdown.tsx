@@ -1,10 +1,13 @@
-import { SKY_OBJECT_NAME_TYPES } from '@/shared/types'
-import { Dropdown, type DropdownProps } from './components/Dropdown'
+import { Dropdown } from '@ui/components/Dropdown'
+import type { DropdownProps } from '@ui/components/Dropdown'
+import { SKY_OBJECT_NAME_TYPES } from '#/galaxy'
 
 export interface SkyObjectNameTypeDropdownProps extends Omit<DropdownProps, 'children'> {
 	readonly value: number
 	readonly onValueChange: (value: number) => void
 }
+
+const ITEMS = ['ALL', ...SKY_OBJECT_NAME_TYPES.map((e) => e[0])]
 
 export function SkyObjectNameTypeDropdown({ value, onValueChange, variant = 'ghost', ...props }: SkyObjectNameTypeDropdownProps) {
 	function handleAction(index: number) {
@@ -12,8 +15,8 @@ export function SkyObjectNameTypeDropdown({ value, onValueChange, variant = 'gho
 	}
 
 	return (
-		<Dropdown label={SKY_OBJECT_NAME_TYPES[value + 1]} variant={variant} onAction={handleAction} {...props}>
-			{SKY_OBJECT_NAME_TYPES}
+		<Dropdown label={ITEMS[value + 1]} variant={variant} onAction={handleAction} {...props}>
+			{ITEMS}
 		</Dropdown>
 	)
 }

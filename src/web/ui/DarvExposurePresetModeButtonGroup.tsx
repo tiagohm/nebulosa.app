@@ -1,5 +1,6 @@
+import { ButtonGroup, ButtonGroupItem } from '@ui/components/ButtonGroup'
+import type { ButtonGroupProps } from '@ui/components/ButtonGroup'
 import type { DarvExposurePresetMode } from 'nebulosa/src/observation/alignment/polaralignment'
-import { ButtonGroup, ButtonGroupItem, type ButtonGroupProps } from './components/ButtonGroup'
 
 export function DarvExposurePresetModeButtonGroup(props: Omit<ButtonGroupProps<'custom' | DarvExposurePresetMode>, 'children'>) {
 	return (

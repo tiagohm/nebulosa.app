@@ -1,34 +1,50 @@
 import fs from 'fs/promises'
 import { basename, join } from 'path'
 import { identify } from 'nebulosa/src/adapters/orbits/sbd'
-import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/astrometry/solvers/platesolver'
+import { plateSolutionFrom } from 'nebulosa/src/astrometry/solvers/platesolver'
+import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { spaceMotion, star } from 'nebulosa/src/astronomy/bodies/star'
 import { eraPvstar } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { Wcs } from 'nebulosa/src/bindings/astrometry/libwcs'
+import { DEG2RAD, PI, PIOVERTWO, RAD2DEG, TAU } from 'nebulosa/src/core/constants'
+import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { readImageFromBuffer, readImageFromPath, writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
 import type { Image } from 'nebulosa/src/imaging/model/types'
-import { adf, histogram, sigmaClip, type AdaptiveDisplayFunctionOptions } from 'nebulosa/src/imaging/processing/computation'
+import { calibrate } from 'nebulosa/src/imaging/processing/calibration'
+import { adf, histogram, sigmaClip } from 'nebulosa/src/imaging/processing/computation'
+import type { AdaptiveDisplayFunctionOptions } from 'nebulosa/src/imaging/processing/computation'
+import { blur, gaussianBlur, mean, sharpen } from 'nebulosa/src/imaging/processing/convolution'
+import { debayer } from 'nebulosa/src/imaging/processing/debayer'
 import { fft, FFTWorkspace } from 'nebulosa/src/imaging/processing/fft'
+import { horizontalFlip, invert, verticalFlip } from 'nebulosa/src/imaging/processing/geometry'
+import { scnr } from 'nebulosa/src/imaging/processing/scnr'
 import { stf } from 'nebulosa/src/imaging/processing/stf'
+import { brightness, contrast, gamma, saturation } from 'nebulosa/src/imaging/processing/tone'
 import { declinationKeyword, numericKeyword, observationDateKeyword, rightAscensionKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { fileHandleSink } from 'nebulosa/src/io/io'
+import { sphericalDestination } from 'nebulosa/src/math/numerical/geometry'
 import { deg, normalizeAngle, parseAngle } from 'nebulosa/src/math/units/angle'
 import fovCameras from 'src/data/astrobin.cameras.json'
 import fovTelescopes from 'src/data/astrobin.telescopes.json'
 import nebulosa from 'src/data/nebulosa.sqlite' with { embed: 'true', type: 'sqlite' }
-// oxfmt-ignore
-import type { AnnotatedSkyObject, AnnotateImage, CloseImage, ImageAdjustment, ImageCalibration, ImageCoordinateGrid, ImageCoordinateGridAxis, ImageCoordinateGridLine, ImageCoordinateGridPoint, ImageCoordinateInterpolation, ImageFFT, ImageFilter, ImageHistogram, ImageInfo, ImageScnr, ImageStretch, ImageTransformation, OpenImage, SaveImage, StatisticImage } from '../shared/types'
-import { DEG2RAD, PI, RAD2DEG, TAU } from 'nebulosa/src/core/constants'
-import { calibrate } from 'nebulosa/src/imaging/processing/calibration'
-import { blur, gaussianBlur, mean, sharpen } from 'nebulosa/src/imaging/processing/convolution'
-import { debayer } from 'nebulosa/src/imaging/processing/debayer'
-import { horizontalFlip, invert, verticalFlip } from 'nebulosa/src/imaging/processing/geometry'
-import { scnr } from 'nebulosa/src/imaging/processing/scnr'
-import { brightness, contrast, gamma, saturation } from 'nebulosa/src/imaging/processing/tone'
-import { X_IMAGE_INFO_HEADER } from '../shared/types'
-import { DEFAULT_HEADERS, type Endpoints, INTERNAL_SERVER_ERROR_RESPONSE, response } from './http'
+import { X_IMAGE_INFO_HEADER } from '#/image'
+import type { CloseImage, ImageInfo, ImageTransformation, OpenImage } from '#/image'
+import type { ImageAdjustment } from '#/image.adjustment'
+import type { AnnotateImage, AnnotatedSkyObject, ImageAnnotation } from '#/image.annotation'
+import type { ImageCalibration } from '#/image.calibration'
+import type { ImageCoordinateGridPoint, ImageCoordinateGridAxis, ImageCoordinateGridLine, ImageCoordinateGrid } from '#/image.coordinategrid'
+import type { ImageCrosshairPolyline, ProjectImageCrosshair, ImageCrosshairProjection } from '#/image.crosshair'
+import type { ImageFFT } from '#/image.fft'
+import type { ImageFilter } from '#/image.filter'
+import type { ImageCoordinateInterpolation } from '#/image.mousecoordinate'
+import type { SaveImage } from '#/image.save'
+import type { ImageScnr } from '#/image.scnr'
+import type { ImageHistogram, StatisticImage } from '#/image.statistics'
+import type { ImageStretch } from '#/image.stretch'
+import { DEFAULT_HEADERS, INTERNAL_SERVER_ERROR_RESPONSE, response } from './http'
+import type { Endpoints } from './http'
 import type { NotificationHandler } from './notification'
 
 export interface BufferedImageItem {
@@ -62,6 +78,7 @@ const COORDINATE_GRID_TARGET_LINES = 7
 const COORDINATE_GRID_BORDER_SAMPLES = 24
 const COORDINATE_GRID_LINE_SAMPLES = 96
 const COORDINATE_GRID_LABEL_MARGIN = 48
+const CROSSHAIR_CURVE_SAMPLES = 96
 
 interface CoordinateGridBounds {
 	readonly rightAscension: readonly [number, number]
@@ -202,10 +219,7 @@ function coordinateGridBounds(wcs: Wcs, solution: PlateSolution): CoordinateGrid
 
 	if (!Number.isFinite(minRA) || !Number.isFinite(maxRA) || !Number.isFinite(minDEC) || !Number.isFinite(maxDEC)) return undefined
 
-	return {
-		rightAscension: [minRA, maxRA],
-		declination: [minDEC, maxDEC],
-	}
+	return { rightAscension: [minRA, maxRA], declination: [minDEC, maxDEC] }
 }
 
 function coordinateGridSegments(axis: ImageCoordinateGridAxis, value: number, width: number, height: number, project: (ratio: number) => readonly [number, number] | undefined) {
@@ -256,6 +270,55 @@ function coordinateGridSegments(axis: ImageCoordinateGridAxis, value: number, wi
 	flush()
 
 	return lines
+}
+
+function niceAngularStepAtMost(value: number) {
+	const exponent = Math.floor(Math.log10(value * RAD2DEG))
+	const scale = 10 ** exponent
+	const fraction = (value * RAD2DEG) / scale
+	const nice = fraction >= 5 ? 5 : fraction >= 2 ? 2 : 1
+	return nice * scale * DEG2RAD
+}
+
+export function effectiveCrosshairAngularSpacing(solution: PlateSolution, automatic: boolean, value: number) {
+	const span = Math.min(solution.width, solution.height)
+	const minimum = Math.max(solution.scale * 8, span / 128)
+	const requested = automatic ? niceAngularStepAtMost(span / 8) : value
+	return Math.min(Math.max(Number.isFinite(requested) ? requested : minimum, minimum), span)
+}
+
+function crosshairProjectedSegments(project: (ratio: number) => readonly [number, number] | undefined): ImageCrosshairPolyline[] {
+	const lines: ImageCoordinateGridPoint[][] = []
+	let points: ImageCoordinateGridPoint[] = []
+
+	function flush() {
+		if (points.length >= 2) lines.push(points)
+		points = []
+	}
+
+	for (let i = 0; i <= CROSSHAIR_CURVE_SAMPLES; i++) {
+		const point = project(i / CROSSHAIR_CURVE_SAMPLES)
+
+		if (!isFinitePoint(point)) {
+			flush()
+			continue
+		}
+
+		const projected = { x: point[0], y: point[1] }
+		if (!isSameCoordinateGridPoint(points.at(-1), projected)) points.push(projected)
+	}
+
+	flush()
+
+	return lines
+}
+
+function normalizedDirection(center: readonly [number, number], point: readonly [number, number] | undefined) {
+	if (!isFinitePoint(point)) return undefined
+	const x = point[0] - center[0]
+	const y = point[1] - center[1]
+	const length = Math.hypot(x, y)
+	return length > 0 && Number.isFinite(length) ? { x: x / length, y: y / length } : undefined
 }
 
 export class ImageProcessor {
@@ -352,14 +415,14 @@ export class ImageProcessor {
 			}
 
 			const [midtone, shadow, highlight] = adf(image, options)
-			image = stf(image, midtone, shadow, highlight, { bits: stretch.bits })
+			image = stf(image, midtone, shadow, highlight)
 
 			stretch.midtone = Math.trunc(midtone * 65536)
 			stretch.shadow = Math.trunc(shadow * 65536)
 			stretch.highlight = Math.trunc(highlight * 65536)
 		} else {
 			const { midtone, shadow, highlight } = stretch
-			image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536, { bits: stretch.bits })
+			image = stf(image, midtone / 65536, shadow / 65536, highlight / 65536)
 		}
 
 		if (adjustment.enabled) {
@@ -392,7 +455,7 @@ export class ImageProcessor {
 				calibration.darkFlat.enabled && calibration.darkFlat.path ? readImageFromPath(calibration.darkFlat.path, 32) : undefined,
 			])
 
-			return calibrate(image, dark, flat, bias, darkFlat)
+			return calibrate(image, { dark, flat, bias, darkFlat })
 		} catch (e) {
 			console.error('failed to calibrate', e)
 			return image
@@ -655,7 +718,7 @@ export class ImageHandler {
 		await this.imageProcessor.export(req.path, req.transformation, req.camera, req.saveAt)
 	}
 
-	async annotate(req: AnnotateImage) {
+	async annotate(req: AnnotateImage): Promise<ImageAnnotation> {
 		const res: AnnotatedSkyObject[] = []
 
 		if (!req.stars && !req.dsos && !req.minorPlanets) return res
@@ -670,7 +733,7 @@ export class ImageHandler {
 			const utc = timeUnix(date / 1000)
 			const q = `SELECT d.id, d.type, d.rightAscension, d.declination, d.magnitude, d.pmRa, d.pmDec, d.distance, d.rv, d.constellation, (SELECT n.type || ':' || n.name FROM names n WHERE n.dsoId = d.id ORDER BY n.type ASC LIMIT 1) as name FROM dsos d WHERE ${filterByType} AND (acos(sin(d.declination) * ${Math.sin(declination)} + cos(d.declination) * ${Math.cos(declination)} * cos(d.rightAscension - ${rightAscension})) <= ${radius}) ORDER BY d.magnitude DESC LIMIT 100`
 
-			for (const o of nebulosa.query<AnnotatedSkyObject, []>(q)) {
+			for (const o of nebulosa.query<Writable<AnnotatedSkyObject>, []>(q)) {
 				const sa = star(o.rightAscension, o.declination, o.pmRA, o.pmDEC, o.distance === 0 ? 0 : 1 / o.distance, o.rv)
 				const sb = eraPvstar(...spaceMotion(sa, utc))
 
@@ -714,7 +777,7 @@ export class ImageHandler {
 					const [x, y] = point
 
 					if (x >= 0 && y >= 0 && x < width && y < height) {
-						res.push({ type: 'MINOR_PLANET', id: 3000000 + i++, name, x, y, rightAscension, declination, magnitude, pmRA: 0, pmDEC: 0, rv: 0, distance: 0, constellation: 0 })
+						res.push({ type: 'asteroid', id: 3000000 + i++, name, x, y, rightAscension, declination, magnitude, pmRA: 0, pmDEC: 0, rv: 0, distance: 0, constellation: 0 })
 					}
 				}
 			} else if ('message' in ident) {
@@ -735,15 +798,14 @@ export class ImageHandler {
 		const md = new Array<number>(width * height)
 		const ma = new Array<number>(md.length)
 
-		for (let y = 0, i = 0; y <= heightInPixels; y += delta) {
-			for (let x = 0; x <= widthInPixels; x += delta, i++) {
-				const point = wcs.pixToSky(x, y)
+		for (let y = 0, i = 0; y < height; y++) {
+			for (let x = 0; x < width; x++, i++) {
+				const point = wcs.pixToSky(x * delta, y * delta)
 
-				if (!point) throw new Error(`failed to interpolate image coordinate at ${x},${y}`)
+				if (!point) throw new Error(`failed to interpolate image coordinate at ${x * delta},${y * delta}`)
 
-				const [rightAscension, declination] = point
-				ma[i] = rightAscension
-				md[i] = declination
+				ma[i] = point[0]
+				md[i] = point[1]
 			}
 		}
 
@@ -782,6 +844,75 @@ export class ImageHandler {
 		}
 
 		return { lines }
+	}
+
+	crosshairProjection(request: ProjectImageCrosshair): ImageCrosshairProjection {
+		const { solution, anchor, preset, angularSpacing } = request
+		const { widthInPixels: width, heightInPixels: height } = solution
+		using wcs = new Wcs(solution)
+
+		const centerInImage = anchor.space === 'image' ? ([anchor.point.x, anchor.point.y] as const) : wcs.skyToPix(anchor.coordinate.rightAscension, anchor.coordinate.declination)
+		const centerInSky = anchor.space === 'sky' ? ([normalizeAngle(anchor.coordinate.rightAscension), anchor.coordinate.declination] as const) : wcs.pixToSky(anchor.point.x, anchor.point.y)
+
+		if (centerInImage === undefined || centerInSky === undefined) return { status: 'unprojectable' }
+
+		const [x, y] = centerInImage
+		const [rightAscension, declination] = centerInSky
+		const span = Math.min(solution.width, solution.height)
+		const directionDistance = Math.max(solution.scale * 16, span / 1000)
+		const northPoint = wcs.skyToPix(...sphericalDestination(rightAscension, declination, 0, directionDistance))
+		const eastPoint = wcs.skyToPix(...sphericalDestination(rightAscension, declination, PIOVERTWO, directionDistance))
+		const north = normalizedDirection(centerInImage, northPoint)
+		const east = normalizedDirection(centerInImage, eastPoint)
+
+		if (!north || !east) return { status: 'unprojectable' }
+
+		const axes: ImageCrosshairPolyline[] = []
+		const rings: ImageCrosshairPolyline[] = []
+		const ringIntersections: (ImageCoordinateGridPoint & { radius: number })[] = []
+		const cardinals: ImageCoordinateGridPoint[] = []
+		const spacing = angularSpacing && effectiveCrosshairAngularSpacing(solution, angularSpacing.automatic, angularSpacing.value)
+
+		if (spacing !== undefined) {
+			const ringRadius = spacing * 4
+			const axisLegs = [
+				{ positionAngle: 0, length: preset === 'bullseye' ? ringRadius : solution.height },
+				{ positionAngle: PIOVERTWO, length: preset === 'bullseye' ? ringRadius : solution.width },
+				{ positionAngle: PI, length: preset === 'bullseye' ? ringRadius : solution.height },
+				{ positionAngle: (PI * 3) / 2, length: preset === 'bullseye' ? ringRadius : solution.width },
+			]
+
+			for (const { positionAngle, length } of axisLegs) {
+				const axisLength = Math.min(PI * 0.49, length)
+				axes.push(...crosshairProjectedSegments((ratio) => wcs.skyToPix(...sphericalDestination(rightAscension, declination, positionAngle, axisLength * ratio))))
+			}
+
+			if (preset === 'bullseye') {
+				for (const radius of [spacing, spacing * 2, spacing * 4]) {
+					rings.push(...crosshairProjectedSegments((ratio) => wcs.skyToPix(...sphericalDestination(rightAscension, declination, ratio * TAU, radius))))
+					const intersection = wcs.skyToPix(...sphericalDestination(rightAscension, declination, PI, radius))
+					if (isFinitePoint(intersection)) ringIntersections.push({ x: intersection[0], y: intersection[1], radius })
+				}
+
+				for (const positionAngle of [0, PIOVERTWO, PI, (PI * 3) / 2]) {
+					const point = wcs.skyToPix(...sphericalDestination(rightAscension, declination, positionAngle, spacing * 4))
+					if (isFinitePoint(point)) cardinals.push({ x: point[0], y: point[1] })
+				}
+			}
+		}
+
+		return {
+			status: 'ready',
+			width,
+			height,
+			center: { x, y, rightAscension: normalizeAngle(rightAscension), declination, inside: x >= 0 && y >= 0 && x <= width && y <= height },
+			spacing,
+			directions: { north, east },
+			axes,
+			rings,
+			ringIntersections,
+			cardinals,
+		}
 	}
 
 	async statistics(req: StatisticImage) {
@@ -834,6 +965,7 @@ export function image(imageHandler: ImageHandler) {
 		'/image/annotate': { POST: async (req) => response(await imageHandler.annotate(await req.json())) },
 		'/image/coordinateinterpolation': { POST: async (req) => response(imageHandler.coordinateInterpolation(await req.json())) },
 		'/image/coordinategrid': { POST: async (req) => response(imageHandler.coordinateGrid(await req.json())) },
+		'/image/crosshairprojection': { POST: async (req) => response<ImageCrosshairProjection>(imageHandler.crosshairProjection(await req.json())) },
 		'/image/statistics': { POST: async (req) => response(await imageHandler.statistics(await req.json())) },
 		'/image/fovcameras': { GET: response(fovCameras) },
 		'/image/fovtelescopes': { GET: response(fovTelescopes) },

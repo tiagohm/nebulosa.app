@@ -1,7 +1,8 @@
+import { Api } from '@shared/api'
+import { equipmentStore } from '@stores/equipment.store'
+import type { DeviceState } from '@stores/equipment.store'
 import type { DewHeater } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type DewHeaterStore = ReturnType<typeof dewHeaterStore>
 
@@ -16,12 +17,19 @@ export function dewHeaterStore(dewHeater: DewHeater) {
 
 	console.info('dew heater created:', dewHeater.name)
 
+	let mounted = false
+
 	function mount() {
+		if (mounted) return unmount
 		console.info('dew heater mounted:', dewHeater.name)
+		mounted = true
+		return unmount
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('dew heater unmounted:', dewHeater.name)
+		mounted = false
 	}
 
 	function connect() {
@@ -36,14 +44,6 @@ export function dewHeaterStore(dewHeater: DewHeater) {
 		return Api.DewHeaters.dutyCycle(dewHeater, value)
 	}
 
-	function show() {
-		return equipmentStore.show(dewHeater, 'dewHeater')
-	}
-
-	function hide() {
-		return equipmentStore.hide(dewHeater, 'dewHeater')
-	}
-
 	return {
 		state,
 		mount,
@@ -51,7 +51,5 @@ export function dewHeaterStore(dewHeater: DewHeater) {
 		connect,
 		update,
 		dutyCycle,
-		show,
-		hide,
 	} as const
 }

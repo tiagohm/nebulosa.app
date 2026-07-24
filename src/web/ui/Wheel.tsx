@@ -1,64 +1,52 @@
+import { useDevice } from '@hooks/device.hook'
+import { WheelStoreContext } from '@shared/context'
+import { wheelStore } from '@stores/wheel.store'
+import { Button } from '@ui/components/Button'
+import { Chip } from '@ui/components/Chip'
+import { IconButton } from '@ui/components/IconButton'
+import { Popover } from '@ui/components/Popover'
+import { Select } from '@ui/components/Select'
+import { Tabs, Tab, TabPanel } from '@ui/components/Tabs'
+import { TextInput } from '@ui/components/TextInput'
+import { ConnectButton } from '@ui/ConnectButton'
+import { Icons } from '@ui/Icon'
+import { IndiPanelControl } from '@ui/IndiPanelControl'
+import type { IDockviewPanelProps } from 'dockview-react'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { wheelStore } from '@/stores/wheel.store'
-import { useStore } from '../hooks/store.hook'
-import { WheelDeviceContext, WheelStoreContext } from '../shared/context'
-import { Button } from './components/Button'
-import { Chip } from './components/Chip'
-import { IconButton } from './components/IconButton'
-import { Popover } from './components/Popover'
-import { Select } from './components/Select'
-import { TextInput } from './components/TextInput'
-import { ConnectButton } from './ConnectButton'
-import { Icons } from './Icon'
-import { IndiPanelControlButton } from './IndiPanelControlButton'
-import { Modal } from './Modal'
 
-export const Wheel = memo(() => {
-	const device = useContext(WheelDeviceContext)
-	const wheel = useStore(() => wheelStore(device), [device])
+export const Wheel = memo(({ params }: IDockviewPanelProps<Device>) => {
+	const wheel = useDevice('wheel', params.id, wheelStore)
+
+	if (!wheel) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<WheelStoreContext value={wheel}>
-			<Modal header={<Header />} id={`wheel-${device.id}`} initialWidth="256px" onHide={wheel.hide}>
-				<Body />
-			</Modal>
+		<WheelStoreContext value={wheel.store}>
+			<Tabs className="h-full p-3" startContent={<TabStartContent />}>
+				<Tab id="main">Filter Wheel</Tab>
+				<Tab id="indi">INDI</Tab>
+
+				<TabPanel id="main">
+					<Main />
+				</TabPanel>
+				<TabPanel id="indi">
+					<IndiPanelControl device={wheel.device} />
+				</TabPanel>
+			</Tabs>
 		</WheelStoreContext>
 	)
 })
 
-const Header = memo(() => {
+const TabStartContent = memo(() => {
 	const wheel = useContext(WheelStoreContext)
-	const { connecting, connected, name } = useSnapshot(wheel.state.wheel)
+	const { connected, connecting } = useSnapshot(wheel.state.wheel)
 
-	return (
-		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
-			<div className="flex shrink-0 flex-row items-center gap-1">
-				<ConnectButton connected={connected} loading={connecting} onClick={wheel.connect} />
-				<IndiPanelControlButton device={wheel.state.wheel} />
-			</div>
-			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
-				<span className="leading-5 font-semibold">Filter Wheel</span>
-				<span className="max-w-full truncate text-xs font-normal text-neutral-400">{name}</span>
-			</div>
-		</div>
-	)
+	return <ConnectButton connected={connected} loading={connecting} onClick={wheel.connect} />
 })
 
-function slotCount(count: number, names: readonly string[]) {
-	return Math.max(Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0, names.length)
-}
-
-function slotName(names: readonly string[], position: number) {
-	return names[position] || `Slot ${position + 1}`
-}
-
-function slotPosition(position: number, count: number, names: readonly string[]) {
-	return Number.isInteger(position) && position >= 0 && position < slotCount(count, names) ? position + 1 : '--'
-}
-
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
+const Main = memo(() => (
+	<div className="grid grid-cols-12 gap-2">
 		<Status />
 		<Slot />
 	</div>
@@ -97,7 +85,7 @@ const Slot = memo(() => {
 
 	return (
 		<div className="col-span-full flex flex-row items-center justify-end gap-2">
-			<Select className="flex-1" disabled={!connected || moving || positions.length === 0} endContent={<SlotPopover />} items={positions} label="Slot" onValueChange={(value) => wheel.update('position', value)} value={selectedPosition}>
+			<Select className="flex-1" disabled={!connected || moving || positions.length === 0} endContent={<SlotPopover />} items={positions} label="Slot" onValueChange={wheel.setPosition} value={selectedPosition}>
 				{renderSlot}
 			</Select>
 			<Button color="success" disabled={!canMove} label="Move" loading={moving} onClick={wheel.move} startContent={<Icons.Check />} variant="ghost" />
@@ -127,10 +115,22 @@ const SlotPopoverContent = memo(() => {
 	return (
 		<div className="grid grid-cols-12 gap-2 p-4">
 			<p className="col-span-full font-bold">SLOT OPTIONS</p>
-			<TextInput className="col-span-10" disabled={disabled} label="Name" onValueChange={(value) => wheel.update('name', value)} value={name} />
+			<TextInput className="col-span-10" disabled={disabled} label="Name" onValueChange={wheel.setName} value={name} />
 			<div className="col-span-2 flex flex-row items-center justify-center">
 				<IconButton color="success" disabled={!canApply} icon={Icons.Check} onClick={wheel.apply} tooltipContent="Apply" />
 			</div>
 		</div>
 	)
 })
+
+function slotCount(count: number, names: readonly string[]) {
+	return Math.max(Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0, names.length)
+}
+
+function slotName(names: readonly string[], position: number) {
+	return names[position] || `Slot ${position + 1}`
+}
+
+function slotPosition(position: number, count: number, names: readonly string[]) {
+	return Number.isInteger(position) && position >= 0 && position < slotCount(count, names) ? position + 1 : '--'
+}

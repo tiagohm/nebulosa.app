@@ -1,21 +1,23 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { settingsStore } from '@stores/settings.store'
+import type { WorldMapPosition } from '@ui/components/WorldMap'
+import type { InteractTransform } from '@ui/Interactable'
 import type { LunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
-import type { LocalLunarEclipseCircumstances, LocalLunarEclipseCircumstancesOptions, LocalLunarEclipseViewGeometry, LocalLunarEclipseViewOptions } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
+import type { LocalLunarEclipseCircumstances, LocalLunarEclipseCircumstancesOptions, LocalLunarEclipseViewGeometry, LocalLunarEclipseViewOptions, LocalLunarViewOrientationMode } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
+import type { LunarEclipseContactKind } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import type { Writable } from 'nebulosa/src/core/types'
 import { deg } from 'nebulosa/src/math/units/angle'
-import type { LunarEclipseMap } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import type { WorldMapPosition } from '../ui/components/WorldMap'
-import type { InteractTransform } from '../ui/Interactable'
-import { atlasStore } from './atlas.store'
+import { DEFAULT_GEOGRAPHIC_COORDINATE } from '#/atlas'
+import type { LunarEclipseMap } from '#/moon'
 
 export type LunarEclipseStore = typeof lunarEclipseStore
 
 export interface LunarEclipseState {
-	show: boolean
 	eclipse?: LunarEclipse
 	map?: LunarEclipseMap
 	circumstances?: LocalLunarEclipseCircumstances
@@ -27,12 +29,7 @@ export interface LunarEclipseState {
 }
 
 const state = proxy<LunarEclipseState>({
-	show: false,
-	location: {
-		latitude: atlasStore.state.request.location.latitude,
-		longitude: atlasStore.state.request.location.longitude,
-		elevation: atlasStore.state.request.location.elevation,
-	},
+	location: structuredClone(DEFAULT_GEOGRAPHIC_COORDINATE),
 	scale: 5,
 	localViewOptions: {
 		width: 400,
@@ -48,7 +45,39 @@ const state = proxy<LunarEclipseState>({
 	},
 })
 
-initProxy(state, 'lunareclipse', ['p:scale', 'o:localViewOptions', 'o:localCircumstancesOptions'])
+let mounted = false
+const u: VoidFunction[] = []
+
+function mount() {
+	if (mounted) return unmount
+
+	console.info('lunar eclipse mounted')
+
+	mounted = true
+
+	state.location.latitude = settingsStore.state.location.latitude
+	state.location.longitude = settingsStore.state.location.longitude
+	state.location.elevation = settingsStore.state.location.elevation
+
+	u[0] = initProxy(state, 'lunareclipse', ['p:scale', 'o:localViewOptions', 'o:localCircumstancesOptions'])
+
+	if (!state.eclipse) {
+		void Api.Atlas.lunarEclipses({ location: state.location, time: { utc: Date.now(), offset: settingsStore.state.time.offset }, next: true, count: 1 }).then((eclipses) => {
+			if (eclipses?.length) {
+				void load(eclipses[0])
+			}
+		})
+	}
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('lunar eclipse unmounted')
+	unsubscribe(u)
+	mounted = false
+}
 
 async function loadMap() {
 	if (state.eclipse === undefined) return false
@@ -77,8 +106,6 @@ async function loadView() {
 }
 
 async function load(next: LunarEclipse) {
-	show()
-
 	if (next.maximalTime !== state.eclipse?.maximalTime) {
 		state.eclipse = ref(next)
 
@@ -88,10 +115,14 @@ async function load(next: LunarEclipse) {
 	}
 }
 
-async function updateLocalViewOptions<K extends 'orientationMode' | 'selectedEvent'>(key: K, value: LocalLunarEclipseViewOptions[K]) {
-	state.localViewOptions[key] = value
+function setOrientationMode(value: LocalLunarViewOrientationMode) {
+	state.localViewOptions.orientationMode = value
+	void loadView()
+}
 
-	await loadView()
+function setSelectedEvent(value: LunarEclipseContactKind) {
+	state.localViewOptions.selectedEvent = value
+	void loadView()
 }
 
 function handleTransformChange(transform: InteractTransform) {
@@ -109,7 +140,7 @@ async function handleCoordinateChange(position: WorldMapPosition) {
 async function find(next: boolean) {
 	if (!state.eclipse) return
 	const utc = temporalFromTime(state.eclipse.maximalTime) + (next ? 86400000 : -86400000)
-	const eclipse = await Api.Atlas.lunarEclipses({ time: { utc, offset: 0 }, location: atlasStore.state.request.location, count: 1, next })
+	const eclipse = await Api.Atlas.lunarEclipses({ time: { utc, offset: 0 }, location: settingsStore.state.location, count: 1, next })
 	if (!eclipse || eclipse.length === 0) return
 	await load(eclipse[0])
 }
@@ -122,22 +153,15 @@ function next() {
 	return find(true)
 }
 
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
-
 export const lunarEclipseStore = {
 	state,
+	mount,
+	unmount,
 	load,
 	prev,
 	next,
 	handleCoordinateChange,
 	handleTransformChange,
-	updateLocalViewOptions,
-	show,
-	hide,
+	setOrientationMode,
+	setSelectedEvent,
 } as const

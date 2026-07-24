@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
-import { indiBus, type IndiBusEvents } from 'src/api/indi'
-import { webSocketBus, WebSocketMessageHandler, type Messager, type WebSocketBusEvents } from 'src/api/message'
+import { indiBus } from 'src/api/indi'
+import type { IndiBusEvents } from 'src/api/indi'
+import { webSocketBus, WebSocketMessageHandler } from 'src/api/message'
+import type { Messager, WebSocketBusEvents } from 'src/api/message'
 import { SocketMessager, waitUntil } from './util'
 
 const wsm = new WebSocketMessageHandler()

@@ -1,33 +1,35 @@
-import { nanoid } from 'nanoid'
+import { Api } from '@shared/api'
+import { imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { framingStore } from '@stores/framing.store'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
+import { plateSolverStore } from '@stores/plate.solver.store'
+import { settingsStore } from '@stores/settings.store'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { formatRA, formatDEC, toDeg, arcsec } from 'nebulosa/src/math/units/angle'
-import { DEFAULT_PLATE_SOLVE_START, type Framing, type PlateSolveStart } from 'src/shared/types'
+import type { Angle } from 'nebulosa/src/math/units/angle'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref } from 'valtio'
-import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { framingStore } from './framing.store'
-import type { ImageViewerStore } from './image.viewer.store'
-import { settingsStore } from './settings.store'
+import type { Framing } from '#/framing'
+import type { PlateSolveStart, PlateSolverType } from '#/platesolver'
 
 export type ImageSolverStore = ReturnType<typeof imageSolverStore>
 
 export interface ImageSolverState {
-	show: boolean
 	loading: boolean
 	readonly request: PlateSolveStart
 	solution?: PlateSolution
 }
 
 export function imageSolverStore(viewer: ImageViewerStore) {
+	const solver = plateSolverStore()
+
 	const state = proxy<ImageSolverState>({
-		show: false,
 		loading: false,
-		request: structuredClone(DEFAULT_PLATE_SOLVE_START),
+		request: solver.state,
 	})
 
 	console.info('image solver created:', viewer.state.path)
@@ -36,13 +38,13 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image solver mounted:', viewer.state.path)
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.solver`, ['p:show', 'o:request'])
+		u[0] = initProxy(state, `image.${viewer.key}.solver`, ['o:request'])
 
 		u[1] = imageBus.subscribe('load', ({ image, info, refreshed }) => {
 			if (refreshed && image === viewer.image) {
@@ -64,7 +66,9 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 		})
 
 		state.solution = viewer.state.info?.solution && ref(viewer.state.info.solution)
-		state.request.id ||= nanoid()
+		state.request.id = viewer.image.id
+
+		return unmount
 	}
 
 	function unmount() {
@@ -74,8 +78,32 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof PlateSolveStart>(key: K, value: PlateSolveStart[K]) {
-		state.request[key] = value
+	function setType(value: PlateSolverType) {
+		state.request.type = value
+	}
+
+	function setBlind(value: boolean) {
+		state.request.blind = value
+	}
+
+	function setRightAscension(value: string | Angle) {
+		state.request.rightAscension = value
+	}
+
+	function setDeclination(value: string | Angle) {
+		state.request.declination = value
+	}
+
+	function setRadius(value: number) {
+		state.request.radius = value
+	}
+
+	function setFocalLength(value: number) {
+		state.request.focalLength = value
+	}
+
+	function setPixelSize(value: number) {
+		state.request.pixelSize = value
 	}
 
 	async function start() {
@@ -122,27 +150,24 @@ export function imageSolverStore(viewer: ImageViewerStore) {
 		await framingStore.load(request)
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
+		solver,
 		mount,
 		unmount,
-		update,
+		setType,
+		setBlind,
+		setRightAscension,
+		setDeclination,
+		setRadius,
+		setFocalLength,
+		setPixelSize,
 		start,
 		stop,
 		goTo,
 		sync,
 		frame,
-		show,
-		hide,
 	} as const
 }
 

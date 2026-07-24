@@ -1,63 +1,87 @@
-import { nanoid } from 'nanoid'
+import { Api } from '@shared/api'
+import { autoFocusBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { cameraCaptureStore } from '@stores/camera.capture.store'
+import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
+import type { DeviceState } from '@stores/equipment.store'
+import type { DockviewPanelApi } from 'dockview-react'
 import type { Camera, Focuser } from 'nebulosa/src/devices/indi/device'
-import { type AutoFocusStart, type AutoFocusEvent, DEFAULT_AUTO_FOCUS_START, DEFAULT_AUTO_FOCUS_EVENT } from 'src/shared/types'
+import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { autoFocusBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { autoFocusListStore } from './autofocus.list.store'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
-import type { DeviceState } from './equipment.store'
+import { subscribeKey } from 'valtio/utils'
+import { DEFAULT_AUTO_FOCUS_START, DEFAULT_AUTO_FOCUS_EVENT } from '#/autofocus'
+import type { AutoFocusStart, AutoFocusEvent } from '#/autofocus'
+import type { StarDetectionType } from '#/stardetection'
 
 export type AutoFocusStore = ReturnType<typeof autoFocusStore>
 
 export interface AutoFocusState {
 	running: boolean
 	readonly request: AutoFocusStart
-	readonly camera: DeviceState<Camera>
-	readonly focuser: DeviceState<Focuser>
+	camera?: DeviceState<Camera>
+	focuser?: DeviceState<Focuser>
 	readonly event: AutoFocusEvent
 }
 
-export function autoFocusStore(camera: Camera, focuser: Focuser) {
+export function autoFocusStore(id: string, api: DockviewPanelApi) {
+	const capture = cameraCaptureStore()
+
 	const state = proxy<AutoFocusState>({
-		request: structuredClone(DEFAULT_AUTO_FOCUS_START),
+		request: {
+			...structuredClone(DEFAULT_AUTO_FOCUS_START),
+			capture: capture.state,
+		},
 		running: false,
 		event: structuredClone(DEFAULT_AUTO_FOCUS_EVENT),
-		camera,
-		focuser,
 	})
 
 	const u: VoidFunction[] = []
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
-		console.info('autofocus mounted:', camera.name, focuser.name)
+		console.info('autofocus mounted:', id)
 
 		mounted = true
 
-		u[0] = initProxy(state, `autofocus.${camera.id}.${focuser.id}`, ['o:request'])
+		u[0] = initProxy(state, `autofocus.${id}`, ['o:request'])
 
 		u[1] = autoFocusBus.subscribe('update', (event) => {
-			if (state.camera.id === event.camera && state.focuser.id === event.focuser) {
+			if (state.camera?.id === event.camera && state.focuser?.id === event.focuser) {
 				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)
 			}
 		})
 
-		subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
+		u[2] = subscribeKey(state, 'camera', (camera) => {
+			updateTitle()
 
-		state.request.id ||= nanoid()
+			if (camera !== undefined) {
+				u[3]?.()
+				u[3] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.capture)
+			}
+		})
+
+		u[4] = subscribeKey(state, 'focuser', updateTitle)
+
+		updateTitle()
+
+		state.request.id = id
+
+		return unmount
 	}
 
 	function unmount() {
 		if (!mounted) return
-		console.info('autofocus unmounted:', camera.name, focuser.name)
+		console.info('autofocus unmounted:', id)
 		unsubscribe(u)
 		mounted = false
+	}
+
+	function updateTitle() {
+		api.setTitle(state.camera || state.focuser ? `Auto Focus - ${state.camera?.name || 'None'} · ${state.focuser?.name || 'None'}` : 'Auto Focus')
 	}
 
 	function reset() {
@@ -65,24 +89,48 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 		state.event.state = 'idle'
 	}
 
-	function update<K extends keyof AutoFocusStart>(key: K, value: AutoFocusStart[K]) {
-		state.request[key] = value
+	function setInitialOffsetSteps(value: number) {
+		state.request.initialOffsetSteps = value
 	}
 
-	function updateCapture<K extends keyof AutoFocusStart['capture']>(key: K, value: AutoFocusStart['capture'][K]) {
-		state.request.capture[key] = value
+	function setStepSize(value: number) {
+		state.request.stepSize = value
 	}
 
-	function updateStarDetection<K extends keyof AutoFocusStart['starDetection']>(key: K, value: AutoFocusStart['starDetection'][K]) {
-		state.request.starDetection[key] = value
+	function setFittingMode(value: AutoFocusFittingMode) {
+		state.request.fittingMode = value
+	}
+
+	function setRmsdThreshold(value: number | undefined) {
+		state.request.rmsdThreshold = value
+	}
+
+	function setReversed(value: boolean) {
+		state.request.reversed = value
+	}
+
+	function setStarDetectionType(value: StarDetectionType) {
+		state.request.starDetection.type = value
+	}
+
+	function setStarDetectionExecutable(value: string) {
+		state.request.starDetection.executable = value
+	}
+
+	function setStarDetectionMinSNR(value: number) {
+		state.request.starDetection.minSNR = value
+	}
+
+	function setStarDetectionMaxStars(value: number) {
+		state.request.starDetection.maxStars = value
 	}
 
 	async function start() {
-		if (state.running || !camera.connected || !focuser.connected) return
+		if (state.running || !state.camera?.connected || !state.focuser?.connected) return
 
 		state.running = true
 
-		const response = await Api.AutoFocus.start(camera, focuser, state.request)
+		const response = await Api.AutoFocus.start(state.camera, state.focuser, state.request)
 
 		if (!response?.ok) {
 			reset()
@@ -99,19 +147,21 @@ export function autoFocusStore(camera: Camera, focuser: Focuser) {
 		}
 	}
 
-	function hide() {
-		autoFocusListStore.hide(camera, focuser)
-	}
-
 	return {
 		state,
+		capture,
 		mount,
 		unmount,
-		update,
-		updateCapture,
-		updateStarDetection,
+		setInitialOffsetSteps,
+		setStepSize,
+		setFittingMode,
+		setRmsdThreshold,
+		setReversed,
+		setStarDetectionType,
+		setStarDetectionExecutable,
+		setStarDetectionMinSNR,
+		setStarDetectionMaxStars,
 		start,
 		stop,
-		hide,
 	} as const
 }

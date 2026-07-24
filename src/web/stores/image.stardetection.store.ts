@@ -1,22 +1,23 @@
+import { Api } from '@shared/api'
+import { imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { toast } from '@shared/toast'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { Writable } from 'nebulosa/src/core/types'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
-import { DEFAULT_STAR_DETECTION, type StarDetection } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { toast } from '../shared/toast'
-import type { ImageViewerStore } from './image.viewer.store'
+import { DEFAULT_STAR_DETECTION } from '#/stardetection'
+import type { StarDetection, StarDetectionType } from '#/stardetection'
 
 export type ImageStarDetectionStore = ReturnType<typeof imageStarDetectionStore>
 
 export interface ImageStarDetectionState {
-	show: boolean
 	visible: boolean
 	loading: boolean
 	stars: readonly DetectedStar[]
 	selected?: DetectedStar
-	request: StarDetection
+	request: Writable<StarDetection>
 	readonly computed: {
 		hfd: number
 		snr: number
@@ -27,7 +28,6 @@ export interface ImageStarDetectionState {
 
 export function imageStarDetectionStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageStarDetectionState>({
-		show: false,
 		visible: false,
 		loading: false,
 		stars: [],
@@ -47,19 +47,21 @@ export function imageStarDetectionStore(viewer: ImageViewerStore) {
 	let canvas: HTMLCanvasElement | undefined
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image star detection mounted:', viewer.state.path)
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.star detection`, ['p:show', 'o:request'])
+		u[0] = initProxy(state, `image.${viewer.key}.star detection`, ['o:request'])
 
 		u[1] = imageBus.subscribe('load', ({ image, refreshed }) => {
 			if (refreshed && image === viewer.image) {
 				reset()
 			}
 		})
+
+		return unmount
 	}
 
 	function unmount() {
@@ -69,8 +71,20 @@ export function imageStarDetectionStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof StarDetection>(key: K, value: StarDetection[K]) {
-		state.request[key] = value
+	function setType(value: StarDetectionType) {
+		state.request.type = value
+	}
+
+	function setExecutable(value: string) {
+		state.request.executable = value
+	}
+
+	function setMinSNR(value: number) {
+		state.request.minSNR = value
+	}
+
+	function setMaxStars(value: number) {
+		state.request.maxStars = value
 	}
 
 	function toggle(enabled?: boolean) {
@@ -177,26 +191,19 @@ export function imageStarDetectionStore(viewer: ImageViewerStore) {
 		state.computed.fluxMax = 0
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
 		mount,
 		unmount,
-		update,
+		setType,
+		setExecutable,
+		setMinSNR,
+		setMaxStars,
 		toggle,
 		detect,
 		select,
 		attach,
 		reset,
-		show,
-		hide,
 	} as const
 }

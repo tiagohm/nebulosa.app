@@ -1,17 +1,19 @@
+import { Api } from '@shared/api'
+import { guiderBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { cameraCaptureStore } from '@stores/camera.capture.store'
+import type { DeviceState } from '@stores/equipment.store'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_GUIDER_EVENT, DEFAULT_GUIDER_INTERNAL_CONNECT, DEFAULT_GUIDER_REMOTE_CONNECT, type GuiderClientMode, type GuiderDither, type GuiderEvent, type GuiderLocalConnect, type GuiderRemoteConnect, type GuiderStatus } from 'src/shared/types'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import { guiderBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import type { DeviceState } from './equipment.store'
+import { DEFAULT_GUIDER_EVENT, DEFAULT_GUIDER_INTERNAL_CONNECT, DEFAULT_GUIDER_REMOTE_CONNECT } from '#/guider'
+import type { GuiderClientMode, GuiderDither, GuiderEvent, GuiderLocalConnect, GuiderRemoteConnect, GuiderStatus } from '#/guider'
 
 export type GuiderStore = typeof guiderStore
 
 export interface GuiderState extends GuiderStatus {
-	show: boolean
 	readonly connection: Writable<Omit<GuiderRemoteConnect, 'mode'> & Omit<GuiderLocalConnect, 'mode'> & { mode: GuiderClientMode }>
 	camera?: DeviceState<Camera>
 	guideOutput?: DeviceState<GuideOutput>
@@ -21,8 +23,9 @@ export interface GuiderState extends GuiderStatus {
 	pendingCommand?: 'loop' | 'findStar' | 'start' | 'stop' | 'calibrate' | 'clear'
 }
 
+const capture = cameraCaptureStore()
+
 const state = proxy<GuiderState>({
-	show: false,
 	connected: false,
 	looping: false,
 	running: false,
@@ -30,6 +33,7 @@ const state = proxy<GuiderState>({
 		...DEFAULT_GUIDER_REMOTE_CONNECT,
 		...DEFAULT_GUIDER_INTERNAL_CONNECT,
 		mode: 'remote',
+		capture: capture.state,
 	},
 	event: structuredClone(DEFAULT_GUIDER_EVENT),
 	index: 0,
@@ -37,40 +41,50 @@ const state = proxy<GuiderState>({
 	pendingCommand: undefined,
 })
 
-initProxy(state, 'guider', ['p:show', 'o:connection'])
+let mounted = false
+const u: VoidFunction[] = []
 
-guiderBus.subscribe('update', (event) => {
-	if (!state.connected) return
+function mount() {
+	if (mounted) return unmount
 
-	Object.assign(state.event, event)
+	console.info('guider mounted')
 
-	state.looping = state.event.state === 'looping'
-	state.running = state.event.state === 'guiding'
-})
+	mounted = true
 
-guiderBus.subscribe('close', () => {
-	state.connected = false
-	state.looping = false
-	state.running = false
-	state.profile = undefined
-})
+	u[0] = initProxy(state, 'guider', ['o:connection'])
 
-subscribeKey(state, 'show', (show) => {
-	if (show) {
-		void load()
-	}
-})
+	u[1] = guiderBus.subscribe('update', (event) => {
+		if (!state.connected) return
 
-subscribeKey(state, 'camera', (camera) => {
-	state.connection.camera = camera?.id ?? ''
-})
+		Object.assign(state.event, event)
 
-subscribeKey(state, 'guideOutput', (guideOutput) => {
-	state.connection.guideOutput = guideOutput?.id ?? ''
-})
+		state.looping = state.event.state === 'looping'
+		state.running = state.event.state === 'guiding'
+	})
 
-if (state.show) {
-	void load()
+	u[2] = guiderBus.subscribe('close', () => {
+		state.connected = false
+		state.looping = false
+		state.running = false
+		state.profile = undefined
+	})
+
+	u[3] = subscribeKey(state, 'camera', (camera) => {
+		state.connection.camera = camera?.id ?? ''
+	})
+
+	u[4] = subscribeKey(state, 'guideOutput', (guideOutput) => {
+		state.connection.guideOutput = guideOutput?.id ?? ''
+	})
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('guider unmounted')
+	unsubscribe(u)
+	mounted = false
 }
 
 async function load() {
@@ -91,10 +105,6 @@ function updateDither<K extends keyof GuiderDither>(key: K, value: GuiderDither[
 
 function updateSettle<K extends keyof GuiderState['connection']['dither']['settle']>(key: K, value: GuiderState['connection']['dither']['settle'][K]) {
 	state.connection.dither.settle[key] = value
-}
-
-function updateCapture<K extends keyof GuiderState['connection']['capture']>(key: K, value: GuiderState['connection']['capture'][K]) {
-	state.connection.capture[key] = value
 }
 
 async function connect() {
@@ -150,20 +160,16 @@ function calibrate() {
 	return runCommand('calibrate')
 }
 
-function show() {
-	state.show = true
-}
-
-function hide() {
-	state.show = false
-}
+void load()
 
 export const guiderStore = {
 	state,
+	capture,
+	mount,
+	unmount,
 	updateConnection,
 	updateDither,
 	updateSettle,
-	updateCapture,
 	connect,
 	clear,
 	loop,
@@ -171,6 +177,4 @@ export const guiderStore = {
 	start,
 	stop,
 	calibrate,
-	show,
-	hide,
 }

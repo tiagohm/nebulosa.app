@@ -1,26 +1,13 @@
-import { memo, useContext } from 'react'
+import { ImageViewerStoreContext } from '@shared/context'
+import { FITSHeader } from '@ui/FITSHeader'
+import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { FITSHeader } from './FITSHeader'
-import { Modal } from './Modal'
 
 export const ImageHeader = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { header } = viewer
-	const { show } = useSnapshot(header.state)
+	const { state, header } = useContext(ImageViewerStoreContext)
+	const { info } = useSnapshot(state)
 
-	if (!show) return null
+	useEffect(header.mount, [])
 
-	return (
-		<Modal header="FITS Header" id={`fitsheader-${viewer.image.id}`} initialWidth="296px" onHide={header.hide}>
-			<Body />
-		</Modal>
-	)
-})
-
-const Body = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { info } = useSnapshot(viewer.state)
-
-	return <FITSHeader header={info?.headers ?? {}} />
+	return <FITSHeader header={info?.headers ?? {}} className="flex h-full overflow-y-auto" />
 })

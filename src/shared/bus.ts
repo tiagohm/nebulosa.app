@@ -63,7 +63,7 @@ export class EventBus<T extends object = Record<string, unknown>> {
 		}
 	}
 
-	emitWithResponse<K extends keyof T>(topic: K, data: T[K]): unknown {
+	call<K extends keyof T>(topic: K, data: T[K]): any {
 		const callbacks = this.bus.get(topic)
 
 		if (callbacks !== undefined) {

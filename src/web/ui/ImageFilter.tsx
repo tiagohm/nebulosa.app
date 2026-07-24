@@ -1,43 +1,39 @@
-import { memo, useContext } from 'react'
-import type { ImageFFT, ImageFilter as ImageKernelFilter } from 'src/shared/types'
+import { ImageViewerStoreContext } from '@shared/context'
+import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
+import { NumberInput } from '@ui/components/NumberInput'
+import type { NumberInputProps } from '@ui/components/NumberInput'
+import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
+import { Icons } from '@ui/Icon'
+import { ImageFFTFilterTypeRadioGroup } from '@ui/ImageFFTFilterTypeRadioGroup'
+import { ImageKernelFilterTypeRadioGroup } from '@ui/ImageKernelFilterTypeRadioGroup'
+import { memo, useContext, useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { ImageViewerStoreContext } from '../shared/context'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { NumberInput, type NumberInputProps } from './components/NumberInput'
-import { Tab, TabPanel, Tabs } from './components/Tabs'
-import { Icons } from './Icon'
-import { ImageFFTFilterTypeRadioGroup } from './ImageFFTFilterTypeRadioGroup'
-import { ImageKernelFilterTypeRadioGroup } from './ImageKernelFilterTypeRadioGroup'
-import { Modal } from './Modal'
+import type { ImageFFT } from '#/image.fft'
+import type { ImageFilter as KernelFilter } from '#/image.filter'
 
 export const ImageFilter = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { filter } = viewer
-	const { show } = useSnapshot(filter.state)
+	const { filter } = useContext(ImageViewerStoreContext)
 
-	if (!show) return null
+	useEffect(filter.mount, [])
 
 	return (
-		<Modal footer={<Footer />} header="Filter" id={`filter-${viewer.image.id}`} initialWidth="216px" onHide={filter.hide}>
-			<Body />
-		</Modal>
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<Tabs className="col-span-full">
+				<Tab id="kernel">Kernel</Tab>
+				<Tab id="fft">FFT</Tab>
+
+				<TabPanel id="kernel">
+					<Kernel />
+				</TabPanel>
+				<TabPanel id="fft">
+					<FFT />
+				</TabPanel>
+			</Tabs>
+			<Footer />
+		</div>
 	)
 })
-
-const Body = memo(() => (
-	<Tabs className="w-full">
-		<Tab id="kernel">Kernel</Tab>
-		<Tab id="fft">FFT</Tab>
-
-		<TabPanel id="kernel">
-			<Kernel />
-		</TabPanel>
-		<TabPanel id="fft">
-			<FFT />
-		</TabPanel>
-	</Tabs>
-))
 
 const Kernel = memo(() => {
 	const { filter } = useContext(ImageViewerStoreContext)
@@ -93,9 +89,9 @@ const FFT = memo(() => {
 	return (
 		<div className="grid grid-cols-12 gap-2">
 			<Checkbox className="col-span-full" label="Enabled" onValueChange={(value) => (filter.state.fft.enabled = value)} value={enabled} />
-			<ImageFFTFilterTypeRadioGroup className="col-span-full" disabled={!enabled} onValueChange={filter.updateFFTType} value={type} />
-			<NumberInput className="col-span-6 min-w-0" disabled={!enabled} fractionDigits={3} label="Cutoff" maxValue={1} minValue={0} onValueChange={(value) => filter.updateFFT('cutoff', value)} step={0.001} value={cutoff} />
-			<NumberInput className="col-span-6 min-w-0" disabled={!enabled} fractionDigits={3} label="Weight" maxValue={1} minValue={0} onValueChange={(value) => filter.updateFFT('weight', value)} step={0.001} value={weight} />
+			<ImageFFTFilterTypeRadioGroup className="col-span-full" disabled={!enabled} onValueChange={filter.setFFTType} value={type} />
+			<NumberInput className="col-span-6 min-w-0" disabled={!enabled} fractionDigits={3} label="Cutoff" maxValue={1} minValue={0} onValueChange={filter.setFFTCutoff} step={0.001} value={cutoff} />
+			<NumberInput className="col-span-6 min-w-0" disabled={!enabled} fractionDigits={3} label="Weight" maxValue={1} minValue={0} onValueChange={filter.setFFTWeight} step={0.001} value={weight} />
 		</div>
 	)
 })
@@ -107,10 +103,10 @@ const Footer = memo(() => {
 	const canApply = isValidKernelFilter(kernel) && isValidFFTFilter(fft)
 
 	return (
-		<>
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
 			<Button color="danger" label="Reset" onClick={filter.reset} startContent={<Icons.Restore />} />
 			<Button color="success" disabled={!canApply} label="Apply" onClick={filter.apply} startContent={<Icons.Check />} />
-		</>
+		</div>
 	)
 })
 
@@ -121,7 +117,7 @@ function KernelSizeInput(props: NumberInputProps) {
 	return <NumberInput className="col-span-full min-w-0" label="Size" maxValue={MAX_KERNEL_SIZE} minValue={MIN_KERNEL_SIZE} step={2} {...props} />
 }
 
-function isValidKernelFilter(filter: ImageKernelFilter) {
+function isValidKernelFilter(filter: KernelFilter) {
 	if (!filter.enabled) return true
 
 	switch (filter.type) {

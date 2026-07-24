@@ -1,6 +1,6 @@
-import type { Confirmation } from 'src/shared/types'
+import { Api } from '@shared/api'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
+import type { Confirmation } from '#/confirmation'
 
 export type ConfirmationStore = typeof confirmationStore
 

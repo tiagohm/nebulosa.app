@@ -2,11 +2,12 @@ import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:tes
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Thermometer } from 'nebulosa/src/devices/indi/device'
 import { FocuserManager, ThermometerManager } from 'nebulosa/src/devices/indi/manager'
-import { ClientSimulator, FocuserSimulator } from 'nebulosa/src/devices/indi/simulator'
+import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { FocuserHandler } from 'src/api/focuser'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { thermometerBus, thermometer as thermometerEndpoints, ThermometerHandler } from 'src/api/thermometer'
-import type { ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from 'src/shared/types'
+import type { ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from '#/thermometer'
 import { json, SocketMessager, waitUntil } from './util'
 
 thermometerBus.forceSync = true

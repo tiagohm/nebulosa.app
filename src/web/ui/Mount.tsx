@@ -1,29 +1,32 @@
-import type { MountTargetCoordinateType } from 'nebulosa/src/devices/indi/device'
+import { useDevice } from '@hooks/device.hook'
+import { planetariumBus } from '@shared/bus'
+import { MountStoreContext } from '@shared/context'
+import { mountStore } from '@stores/mount.store'
+import { BodyCoordinateInfo } from '@ui/BodyCoordinateInfo'
+import { Chip } from '@ui/components/Chip'
+import { IconButton } from '@ui/components/IconButton'
+import { List, ListItem } from '@ui/components/List'
+import { Popover } from '@ui/components/Popover'
+import { Switch } from '@ui/components/Switch'
+import { Tabs, Tab, TabPanel } from '@ui/components/Tabs'
+import { TextInput } from '@ui/components/TextInput'
+import { ConnectButton } from '@ui/ConnectButton'
+import { Icons } from '@ui/Icon'
+import { IndiPanelControl } from '@ui/IndiPanelControl'
+import { LocationMap } from '@ui/LocationMap'
+import { MountRemoteControl } from '@ui/MountRemoteControl'
+import { MountTargetCoordinateTypeRadioGroup } from '@ui/MountTargetCoordinateTypeRadioGroup'
+import { Nudge } from '@ui/Nudge'
+import { SlewRateSelect } from '@ui/SlewRateSelect'
+import { TrackModeSelect } from '@ui/TrackModeSelect'
+import { UTCTimeInput } from '@ui/UTCTimeInput'
+import type { IDockviewPanelProps } from 'dockview-react'
+import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import type { Device, MountTargetCoordinateType } from 'nebulosa/src/devices/indi/device'
 import { formatALT, formatAZ, formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { memo, useContext } from 'react'
-import type { CoordinateInfo, CoordinateType } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { mountStore } from '@/stores/mount.store'
-import { useStore } from '../hooks/store.hook'
-import { MountDeviceContext, MountStoreContext } from '../shared/context'
-import { BodyCoordinateInfo } from './BodyCoordinateInfo'
-import { Chip } from './components/Chip'
-import { IconButton } from './components/IconButton'
-import { List, ListItem } from './components/List'
-import { Popover } from './components/Popover'
-import { Switch } from './components/Switch'
-import { TextInput } from './components/TextInput'
-import { ConnectButton } from './ConnectButton'
-import { Icons } from './Icon'
-import { IndiPanelControlButton } from './IndiPanelControlButton'
-import { Location } from './Location'
-import { Modal } from './Modal'
-import { MountRemoteControl } from './MountRemoteControl'
-import { MountTargetCoordinateTypeRadioGroup } from './MountTargetCoordinateTypeRadioGroup'
-import { Nudge } from './Nudge'
-import { SlewRateSelect } from './SlewRateSelect'
-import { Time } from './Time'
-import { TrackModeSelect } from './TrackModeSelect'
+import type { CoordinateInfo, CoordinateType } from '#/mount'
 
 const TARGET_TYPE_BY_COORDINATE_TYPE = {
 	equatorial: 'JNOW',
@@ -33,60 +36,43 @@ const TARGET_TYPE_BY_COORDINATE_TYPE = {
 	galactic: 'GALACTIC',
 } as const satisfies Record<CoordinateType, MountTargetCoordinateType>
 
-function isCopyCoordinateAction(action: string) {
-	return action.startsWith('copy-')
-}
+export const Mount = memo(({ params }: IDockviewPanelProps<Device>) => {
+	const mount = useDevice('mount', params.id, mountStore)
 
-function formatTargetCoordinateX(type: CoordinateType, position: CoordinateInfo) {
-	return type === 'equatorial' || type === 'equatorialJ2000' ? formatRA(position[type][0]) : formatAZ(position[type][0])
-}
-
-function formatTargetCoordinateY(type: CoordinateType, position: CoordinateInfo) {
-	return type === 'horizontal' ? formatALT(position[type][1]) : formatDEC(position[type][1])
-}
-
-export const Mount = memo(() => {
-	const device = useContext(MountDeviceContext)
-	const mount = useStore(() => mountStore(device), [device])
+	if (!mount) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<MountStoreContext value={mount}>
-			<Modal header={<Header />} id={`mount-${device.id}`} initialWidth="392px" onHide={mount.hide}>
-				<Body />
-			</Modal>
+		<MountStoreContext value={mount.store}>
+			<Tabs className="h-full p-3" startContent={<TabStartContent />}>
+				<Tab id="main">Mount</Tab>
+				<Tab id="location">Location</Tab>
+				<Tab id="time">Time</Tab>
+				<Tab id="remoteControl">Remote Control</Tab>
+				<Tab id="indi">INDI</Tab>
+
+				<TabPanel id="main">
+					<Main />
+				</TabPanel>
+				<TabPanel id="location">
+					<Location />
+				</TabPanel>
+				<TabPanel id="time">
+					<Time />
+				</TabPanel>
+				<TabPanel id="remoteControl">
+					<MountRemoteControl />
+				</TabPanel>
+				<TabPanel id="indi">
+					<IndiPanelControl device={mount.device} />
+				</TabPanel>
+			</Tabs>
 		</MountStoreContext>
 	)
 })
 
-const Header = memo(() => {
-	const mount = useContext(MountStoreContext)
-	const { connecting, connected, parking, slewing, homing, name } = useSnapshot(mount.state.mount)
-	const moving = slewing || parking || homing
-
-	return (
-		<div className="flex w-full flex-row items-center justify-between">
-			<div className="flex flex-row items-center gap-1">
-				<ConnectButton disabled={moving} connected={connected} loading={connecting} onClick={mount.connect} />
-				<IndiPanelControlButton device={mount.state.mount} />
-			</div>
-			<div className="flex flex-1 flex-col items-center justify-center gap-0">
-				<span className="leading-5 font-semibold">Mount</span>
-				<span className="max-w-full text-xs font-normal text-gray-400">{name}</span>
-			</div>
-		</div>
-	)
-})
-
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
-		<div className="col-span-full flex flex-row items-center justify-between">
-			<Status />
-			<div className="flex flex-row items-center gap-2">
-				<LocationButton />
-				<TimeButton />
-				<RemoteControlButton />
-			</div>
-		</div>
+const Main = memo(() => (
+	<div className="grid grid-cols-12 gap-2">
+		<Status />
 		<CurrentPosition />
 		<hr className="col-span-full border-dotted text-neutral-800" />
 		<TargetCoordinateAndPosition />
@@ -97,53 +83,23 @@ const Body = memo(() => (
 	</div>
 ))
 
+const TabStartContent = memo(() => {
+	const mount = useContext(MountStoreContext)
+	const { connected, connecting } = useSnapshot(mount.state.mount)
+
+	return <ConnectButton connected={connected} loading={connecting} onClick={mount.connect} />
+})
+
 const Status = memo(() => {
 	const mount = useContext(MountStoreContext)
 	const { parking, parked, slewing, tracking, homing } = useSnapshot(mount.state.mount)
 
 	return (
-		<Chip color="primary" size="sm">
-			{parking ? 'parking' : parked ? 'parked' : homing ? 'homing' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
-		</Chip>
-	)
-})
-
-const LocationButton = memo(() => {
-	const mount = useContext(MountStoreContext)
-	const { show } = useSnapshot(mount.state.location)
-	const { connected, geographicCoordinate } = useSnapshot(mount.state.mount)
-
-	return (
-		<>
-			<IconButton color="danger" disabled={!connected} icon={Icons.MapMarker} onClick={mount.showLocation} tooltipContent="Location" />
-			{show && <Location {...geographicCoordinate} id={`location-mount-${mount.state.mount.id}`} onClose={mount.hideLocation} onCoordinateChange={mount.location} />}
-		</>
-	)
-})
-
-const TimeButton = memo(() => {
-	const mount = useContext(MountStoreContext)
-	const { show } = useSnapshot(mount.state.time)
-	const { connected, time } = useSnapshot(mount.state.mount)
-
-	return (
-		<>
-			<IconButton color="primary" disabled={!connected || time.utc === 0} icon={Icons.Clock} onClick={mount.showTime} tooltipContent="Time" />
-			{show && <Time id={`time-mount-${mount.state.mount.id}`} onClose={mount.hideTime} onTimeChange={mount.time} {...time} />}
-		</>
-	)
-})
-
-const RemoteControlButton = memo(() => {
-	const mount = useContext(MountStoreContext)
-	const { show } = useSnapshot(mount.state.remoteControl)
-	const { connected } = useSnapshot(mount.state.mount)
-
-	return (
-		<>
-			<IconButton color="secondary" disabled={!connected} icon={Icons.RemoteControl} onClick={mount.showRemoteControl} tooltipContent="Remote Control" />
-			{show && <MountRemoteControl />}
-		</>
+		<div className="col-span-full flex flex-row items-center justify-between gap-2">
+			<Chip color="primary" size="sm">
+				{parking ? 'parking' : parked ? 'parked' : homing ? 'homing' : slewing ? 'slewing' : tracking ? 'tracking' : 'idle'}
+			</Chip>
+		</div>
 	)
 })
 
@@ -165,7 +121,7 @@ const TargetPosition = memo(() => {
 
 	return (
 		<div className="col-span-full">
-			<BodyCoordinateInfo hide={['lst', type === 'JNOW' ? 'equatorial' : type === 'J2000' ? 'equatorialJ2000' : type === 'ALTAZ' ? 'horizontal' : type === 'ECLIPTIC' ? 'ecliptic' : 'galactic']} position={position} />
+			<BodyCoordinateInfo hideLst hideEquatorial={type === 'JNOW'} hideEquatorialJ2000={type === 'J2000'} hideHorizontal={type === 'ALTAZ'} hideEcliptic={type === 'ECLIPTIC'} hideGalactic={type === 'GALACTIC'} position={position} />
 		</div>
 	)
 })
@@ -188,7 +144,7 @@ const TargetCoordinateAndPosition = memo(() => {
 				<TextInput className="col-span-5" disabled={disabled} label={type === 'JNOW' || type === 'J2000' ? 'DEC' : type === 'ALTAZ' ? 'ALT' : 'LAT'} onValueChange={mount.updateTargetCoordinateY} value={y} />
 				<div className="col-span-10 flex flex-row items-center justify-center gap-1">
 					<TargetCoordinatePopupButton />
-					<IconButton color="success" disabled={disabled} icon={Icons.Telescope} onClick={mount.goTo} tooltipContent="Go" />
+					<IconButton color="success" disabled={disabled} icon={Icons.Telescope} onClick={mount.goTo} tooltipContent="Slew" />
 					<IconButton color="primary" disabled={disabled} icon={Icons.Sync} onClick={mount.sync} tooltipContent="Sync" />
 					<IconButton color="secondary" disabled={disabled} icon={Icons.Image} onClick={mount.frame} tooltipContent="Frame" />
 				</div>
@@ -231,6 +187,14 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 			mount.updateTargetCoordinateType('JNOW')
 			mount.updateTargetCoordinateX(formatRA(position.lst))
 			mount.updateTargetCoordinateY(formatDEC(latitude))
+		} else if (action === 'planetarium') {
+			const position = planetariumBus.call('selectedObjectCoordinate', null) as EquatorialCoordinate | undefined
+
+			if (position) {
+				mount.updateTargetCoordinateType('JNOW')
+				mount.updateTargetCoordinateX(formatRA(position.rightAscension))
+				mount.updateTargetCoordinateY(formatDEC(position.declination))
+			}
 		}
 
 		void mount.updateTargetCoordinatePosition()
@@ -239,11 +203,12 @@ const TargetCoordinatePopupButtonContent = memo(() => {
 	return (
 		<List fullWidth className="min-w-80">
 			<ListItem label="Bookmark" data-action="bookmark" startContent={<Icons.Bookmark />} onClick={handleClick} />
-			<ListItem label="Paste current J2000 position" data-action="copy-equatorialJ2000" startContent={<Icons.Paste />} onClick={handleClick} />
-			<ListItem label="Paste current JNOW position" data-action="copy-equatorial" startContent={<Icons.Paste />} onClick={handleClick} />
-			<ListItem label="Paste current Horizontal position" data-action="copy-horizontal" startContent={<Icons.Paste />} onClick={handleClick} />
-			<ListItem label="Paste current Ecliptic position" data-action="copy-ecliptic" startContent={<Icons.Paste />} onClick={handleClick} />
-			<ListItem label="Paste current Galactic position" data-action="copy-galactic" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Current J2000 position" data-action="copy-equatorialJ2000" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Current JNOW position" data-action="copy-equatorial" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Current horizontal position" data-action="copy-horizontal" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Current ecliptic position" data-action="copy-ecliptic" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Current galactic position" data-action="copy-galactic" startContent={<Icons.Paste />} onClick={handleClick} />
+			<ListItem label="Planetarium selected object" data-action="planetarium" startContent={<Icons.Paste />} onClick={handleClick} />
 			<ListItem label="Zenith" data-action="zenith" startContent={<Icons.Telescope />} onClick={handleClick} />
 			<ListItem disabled={latitude > 0} label="South Pole" data-action="south-pole" startContent={<Icons.Telescope />} onClick={handleClick} />
 			<ListItem disabled={latitude < 0} label="North Pole" data-action="north-pole" startContent={<Icons.Telescope />} onClick={handleClick} />
@@ -294,3 +259,29 @@ const TrackModeAndRate = memo(() => {
 		</div>
 	)
 })
+
+export const Location = memo(() => {
+	const mount = useContext(MountStoreContext)
+	const { geographicCoordinate } = useSnapshot(mount.state.mount)
+
+	return <LocationMap mode="mount" {...geographicCoordinate} onCoordinateChange={mount.location} />
+})
+
+export const Time = memo(() => {
+	const mount = useContext(MountStoreContext)
+	const { time } = useSnapshot(mount.state.mount)
+
+	return <UTCTimeInput {...time} onTimeChange={mount.time} />
+})
+
+function isCopyCoordinateAction(action: string) {
+	return action.startsWith('copy-')
+}
+
+function formatTargetCoordinateX(type: CoordinateType, position: CoordinateInfo) {
+	return type === 'equatorial' || type === 'equatorialJ2000' ? formatRA(position[type][0]) : formatAZ(position[type][0])
+}
+
+function formatTargetCoordinateY(type: CoordinateType, position: CoordinateInfo) {
+	return type === 'horizontal' ? formatALT(position[type][1]) : formatDEC(position[type][1])
+}

@@ -1,5 +1,6 @@
-import { type ClassValue, tv, type VariantProps } from 'tailwind-variants'
-import { tw } from '@/shared/util'
+import { tw } from '@shared/util'
+import { tv } from 'tailwind-variants'
+import type { ClassValue, VariantProps } from 'tailwind-variants'
 
 const switchStyles = tv({
 	slots: {

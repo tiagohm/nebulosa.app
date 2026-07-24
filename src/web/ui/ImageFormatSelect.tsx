@@ -1,5 +1,6 @@
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import type { ImageFormat } from 'nebulosa/src/imaging/model/types'
-import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['jpeg'] as const
 const LABELS = ['JPEG'] as const

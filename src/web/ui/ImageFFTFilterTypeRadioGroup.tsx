@@ -1,6 +1,6 @@
+import { tw } from '@shared/util'
+import { Radio } from '@ui/components/Radio'
 import type { FFTFilterType } from 'nebulosa/src/imaging/processing/fft'
-import { tw } from '../shared/util'
-import { Radio } from './components/Radio'
 
 export interface ImageFFTFilterTypeRadioGroupProps extends React.ComponentProps<'div'> {
 	readonly value: FFTFilterType

@@ -1,7 +1,8 @@
+import { assignRef } from '@shared/util'
+import { DEFAULT_FLOATING_OFFSET, Floating } from '@ui/components/Floating'
+import type { FloatingClassNames, FloatingPlacement } from '@ui/components/Floating'
 import * as React from 'react'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { assignRef } from '@/shared/util'
-import { DEFAULT_FLOATING_OFFSET, Floating, type FloatingClassNames, type FloatingPlacement } from './Floating'
 
 const DEFAULT_CLOSE_DELAY = 0
 

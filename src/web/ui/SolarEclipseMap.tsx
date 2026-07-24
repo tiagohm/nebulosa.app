@@ -1,31 +1,32 @@
+import { astronomicEventTemporal } from '@shared/time'
+import { tw } from '@shared/util'
+import { solarEclipseStore } from '@stores/solar.eclipse.store'
+import { IconButton } from '@ui/components/IconButton'
+import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
+import { WorldMap, worldMapCoordinateToPoint } from '@ui/components/WorldMap'
+import { Icons } from '@ui/Icon'
+import { LocalEclipseContactKindButtonGroup } from '@ui/LocalEclipseContactKindButtonGroup'
+import { LocalViewOrientationModeButtonGroup } from '@ui/LocalViewOrientationModeButtonGroup'
 import type { LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipseEvent, LocalSolarEclipseSvgShape } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
 import type { SolarEclipseGeoPoint } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { formatTemporal, temporalFromTime } from 'nebulosa/src/astronomy/time/temporal'
 import { time, Timescale } from 'nebulosa/src/astronomy/time/time'
 import { formatAZ, toDeg } from 'nebulosa/src/math/units/angle'
-import { Fragment, memo, type CSSProperties } from 'react'
+import { Fragment, memo, useEffect } from 'react'
+import type { CSSProperties } from 'react'
 import { useSnapshot } from 'valtio'
-import { astronomicEventTemporal } from '../shared/time'
-import { tw } from '../shared/util'
-import { atlasStore } from '../stores/atlas.store'
-import { solarEclipseStore } from '../stores/solar.eclipse.store'
-import { IconButton } from './components/IconButton'
-import { Tab, TabPanel, Tabs } from './components/Tabs'
-import { WorldMap, worldMapCoordinateToPoint } from './components/WorldMap'
-import { Icons } from './Icon'
-import { LocalEclipseContactKindButtonGroup } from './LocalEclipseContactKindButtonGroup'
-import { LocalViewOrientationModeButtonGroup } from './LocalViewOrientationModeButtonGroup'
-import { Modal } from './Modal'
 
 export const SolarEclipseMap = memo(() => {
-	const { show } = useSnapshot(solarEclipseStore.state)
-
-	if (!show) return null
+	useEffect(solarEclipseStore.mount, [])
 
 	return (
-		<Modal header={<Header />} id="solar-eclipse-map" initialWidth="560px" onHide={solarEclipseStore.hide}>
-			<Body />
-		</Modal>
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<Header />
+			<div className="col-span-full flex flex-row items-center gap-2">
+				<Map />
+				<Info />
+			</div>
+		</div>
 	)
 })
 
@@ -33,29 +34,16 @@ const Header = memo(() => {
 	const { eclipse } = useSnapshot(solarEclipseStore.state)
 
 	return (
-		<div className="grid w-full grid-cols-[2.5rem_1fr_2.5rem] items-center gap-2">
+		<div className="col-span-full flex items-center justify-center gap-2">
 			<IconButton icon={Icons.ArrowLeft} onClick={solarEclipseStore.prev} tooltipContent="Prev" />
-			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">
-				<Icons.Sun className="text-warning" />
-				<div className="flex flex-col items-center justify-center gap-0">
-					<span className="truncate">Solar Eclipse</span>
-					{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD')}</span>}
-				</div>
-			</span>
+			<span className="flex min-w-0 items-center justify-center gap-2 text-sm font-semibold text-neutral-100">{eclipse && <span className="truncate">{formatTemporal(temporalFromTime(eclipse.maximalTime), 'YYYY-MM-DD')}</span>}</span>
 			<IconButton icon={Icons.ArrowRight} onClick={solarEclipseStore.next} tooltipContent="Next" />
 		</div>
 	)
 })
 
-const Body = memo(() => (
-	<div className="flex w-full flex-col gap-3">
-		<Info />
-		<Map />
-	</div>
-))
-
 const Info = memo(() => (
-	<div className="flex w-full flex-col gap-2">
+	<div className="flex flex-1 flex-col justify-start gap-2 self-start">
 		<Tabs fullWidth>
 			<Tab id="details">Details</Tab>
 			<Tab id="contacts">Contacts</Tab>
@@ -111,18 +99,17 @@ const EclipseDetails = memo(() => {
 interface ContactPointProps {
 	readonly name: string
 	readonly point: SolarEclipseGeoPoint
-	readonly offset: number
 	readonly color: string
 }
 
-function ContactPoint({ point, name, offset, color }: ContactPointProps) {
+function ContactPoint({ point, name, color }: ContactPointProps) {
 	return (
 		<div className="flex min-w-0 flex-col gap-0 rounded-lg border border-neutral-800 bg-neutral-900/70 px-3 py-2 text-xs" style={{ borderLeftColor: color, borderLeftWidth: 3 }}>
 			<div className="flex min-w-0 flex-row items-center justify-between gap-2">
 				<span className="font-mono text-sm font-bold" style={{ color }}>
 					{name}
 				</span>
-				<span className="truncate font-mono text-neutral-300">{formatTemporal(temporalFromTime(time(point.jd!, 0, 3)), 'YYYY-MM-DD HH:mm', offset)}</span>
+				<span className="truncate font-mono text-neutral-300">{formatTemporal(temporalFromTime(time(point.jd!, 0, 3)), 'YYYY-MM-DD HH:mm')}</span>
 			</div>
 			<div className="flex min-w-0 flex-row flex-wrap gap-x-3 gap-y-1 font-mono text-neutral-400">
 				<span>
@@ -152,7 +139,6 @@ const CONTACT_POINT_ITEMS = [
 
 const Contacts = memo(() => {
 	const { eclipse, map } = useSnapshot(solarEclipseStore.state)
-	const { offset } = useSnapshot(atlasStore.state.request.time)
 
 	if (map === undefined || eclipse === undefined) return null
 
@@ -160,7 +146,7 @@ const Contacts = memo(() => {
 		<div className="grid w-full grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
 			{CONTACT_POINT_ITEMS.map(([name, color]) => {
 				const point = map.points[name]
-				return point && <ContactPoint color={color} key={name} point={point} name={name} offset={offset} />
+				return point && <ContactPoint color={color} key={name} point={point} name={name} />
 			})}
 		</div>
 	)
@@ -413,11 +399,11 @@ const LocalView = memo(() => {
 	return (
 		<div className="flex flex-col gap-2">
 			<div className="flex flex-row flex-wrap items-center justify-between gap-2">
-				<LocalEclipseContactKindButtonGroup value={selectedEvent} onValueChange={(value) => solarEclipseStore.updateLocalViewOptions('selectedEvent', value)} />
-				<LocalViewOrientationModeButtonGroup value={orientationMode} onValueChange={(value) => solarEclipseStore.updateLocalViewOptions('orientationMode', value)} />
+				<LocalEclipseContactKindButtonGroup value={selectedEvent} onValueChange={solarEclipseStore.setSelectedEvent} />
+				<LocalViewOrientationModeButtonGroup value={orientationMode} onValueChange={solarEclipseStore.setOrientationMode} />
 			</div>
 			<div className="overflow-hidden rounded-lg bg-neutral-950">
-				<svg width="100%" height="100%" className="aspect-2/ block bg-(--primary)" viewBox={`0 0 ${localView.width} ${localView.height}`}>
+				<svg width="100%" height="100%" className="aspect-2/ block max-h-100 bg-(--primary)" viewBox={`0 0 ${localView.width} ${localView.height}`}>
 					{localView.shapes.map((shape, index) => (
 						<LocalViewShape key={localViewShapeKey(shape, index)} shape={shape} />
 					))}
@@ -428,7 +414,7 @@ const LocalView = memo(() => {
 })
 
 const Map = memo(() => (
-	<WorldMap defaultScale={1} onCoordinateClick={solarEclipseStore.handleCoordinateChange} onTransformChange={solarEclipseStore.handleTransformChange}>
+	<WorldMap className="h-full flex-1" defaultScale={1} onCoordinateClick={solarEclipseStore.handleCoordinateChange} onTransformChange={solarEclipseStore.handleTransformChange}>
 		<MapMarker />
 		<MapGeometry />
 	</WorldMap>
@@ -439,7 +425,7 @@ const MAP_MARKER_STYLE: CSSProperties = { fill: 'var(--danger)' }
 const MapMarker = memo(() => {
 	const { location, scale } = useSnapshot(solarEclipseStore.state)
 	const point = worldMapCoordinateToPoint({ latitude: toDeg(location.latitude), longitude: toDeg(location.longitude) })
-	const size = 132 / scale
+	const size = 32 / scale
 
 	return <Icons.MapMarker width={size} height={size} style={{ ...MAP_MARKER_STYLE, transform: `translate(${point.x - size * 0.5}px, ${point.y - size}px)` }} />
 })

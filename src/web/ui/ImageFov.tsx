@@ -1,50 +1,36 @@
-import { memo, useContext } from 'react'
+import { ImageViewerStoreContext } from '@shared/context'
+import { tw } from '@shared/util'
+import { hasScaledSolution } from '@stores/image.solver.store'
+import { AstroBinEquipmentPopover } from '@ui/AstroBinEquipmentPopover'
+import { Checkbox } from '@ui/components/Checkbox'
+import { IconButton } from '@ui/components/IconButton'
+import { List } from '@ui/components/List'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Icons } from '@ui/Icon'
+import { memo, useContext, useEffect } from 'react'
 import cameras from 'src/data/astrobin.cameras.json'
 import telescopes from 'src/data/astrobin.telescopes.json'
-import type { FovItem } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { tw } from '@/shared/util'
-import { hasScaledSolution } from '@/stores/image.solver.store'
-import { ImageViewerStoreContext } from '../shared/context'
-import { AstroBinEquipmentPopover } from './AstroBinEquipmentPopover'
-import { Checkbox } from './components/Checkbox'
-import { IconButton } from './components/IconButton'
-import { List } from './components/List'
-import { NumberInput } from './components/NumberInput'
-import { Icons } from './Icon'
-import { Modal } from './Modal'
+import type { ImageFovItem } from '#/image.fov'
 
 export const ImageFov = memo(() => {
-	const viewer = useContext(ImageViewerStoreContext)
-	const { fov, solver } = viewer
-	const { show } = useSnapshot(fov.state)
+	const { fov, solver } = useContext(ImageViewerStoreContext)
 	const { solution } = useSnapshot(solver.state)
-	const hasSolutionScale = hasScaledSolution(solution)
 
-	if (!show || !hasSolutionScale) return null
+	useEffect(fov.mount, [])
+
+	if (!hasScaledSolution(solution)) return <div className="flex h-full w-full flex-row items-center justify-center">Not available</div>
 
 	return (
-		<Modal header="FOV" id={`fov-${viewer.image.id}`} initialWidth="336px" onHide={fov.hide}>
-			<Body />
-		</Modal>
+		<div className="grid grid-cols-12 items-center gap-2 p-3">
+			<FovList />
+			<Telescope />
+			<Camera />
+			<OrientationAndOptics />
+			<Actions />
+		</div>
 	)
 })
-
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 items-center gap-2">
-		<FovList />
-		<Edit />
-	</div>
-))
-
-const Edit = memo(() => (
-	<>
-		<Telescope />
-		<Camera />
-		<OrientationAndOptics />
-		<Actions />
-	</>
-))
 
 const Telescope = memo(() => {
 	const { fov } = useContext(ImageViewerStoreContext)
@@ -60,8 +46,8 @@ const Telescope = memo(() => {
 			<div className="col-span-2 items-center">
 				<AstroBinEquipmentPopover items={telescopes} onValueChange={fov.selectTelescope} type="telescope" />
 			</div>
-			<NumberInput className="col-span-5 min-w-0" label="Focal Length (mm)" maxValue={100000} minValue={100} onValueChange={(value) => fov.update('focalLength', value)} value={focalLength} />
-			<NumberInput className="col-span-5 min-w-0" label="Aperture (mm)" maxValue={10000} minValue={10} onValueChange={(value) => fov.update('aperture', value)} value={aperture} />
+			<NumberInput className="col-span-5 min-w-0" label="Focal Length (mm)" maxValue={100000} minValue={100} onValueChange={fov.setFocalLength} value={focalLength} />
+			<NumberInput className="col-span-5 min-w-0" label="Aperture (mm)" maxValue={10000} minValue={10} onValueChange={fov.setAperture} value={aperture} />
 		</>
 	)
 })
@@ -80,10 +66,10 @@ const Camera = memo(() => {
 			<div className="col-span-2 items-center">
 				<AstroBinEquipmentPopover items={cameras} onValueChange={fov.selectCamera} type="camera" />
 			</div>
-			<NumberInput className="col-span-5 min-w-0" label="Width (px)" maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraWidth', value)} value={cameraWidth} />
-			<NumberInput className="col-span-5 min-w-0" label="Height (px)" maxValue={100000} minValue={100} onValueChange={(value) => fov.update('cameraHeight', value)} value={cameraHeight} />
-			<NumberInput className="col-span-4 min-w-0" fractionDigits={2} label="Width (µm)" maxValue={100} minValue={1} onValueChange={(value) => fov.update('pixelWidth', value)} step={0.01} value={pixelWidth} />
-			<NumberInput className="col-span-4 min-w-0" fractionDigits={2} label="Height (µm)" maxValue={100} minValue={1} onValueChange={(value) => fov.update('pixelHeight', value)} step={0.01} value={pixelHeight} />
+			<NumberInput className="col-span-5 min-w-0" label="Width (px)" maxValue={100000} minValue={100} onValueChange={fov.setCameraWidth} value={cameraWidth} />
+			<NumberInput className="col-span-5 min-w-0" label="Height (px)" maxValue={100000} minValue={100} onValueChange={fov.setCameraHeight} value={cameraHeight} />
+			<NumberInput className="col-span-4 min-w-0" fractionDigits={2} label="Width (µm)" maxValue={100} minValue={1} onValueChange={fov.setPixelWidth} step={0.01} value={pixelWidth} />
+			<NumberInput className="col-span-4 min-w-0" fractionDigits={2} label="Height (µm)" maxValue={100} minValue={1} onValueChange={fov.setPixelHeight} step={0.01} value={pixelHeight} />
 		</>
 	)
 })
@@ -99,9 +85,9 @@ const OrientationAndOptics = memo(() => {
 
 	return (
 		<>
-			<NumberInput className="col-span-4 min-w-0" fractionDigits={1} label="Rotation (°)" maxValue={360} minValue={-360} onValueChange={(value) => fov.update('rotation', value)} step={0.1} value={rotation} />
-			<NumberInput className="col-span-5 min-w-0" fractionDigits={2} label="Barlow/Reducer" maxValue={10} minValue={0.1} onValueChange={(value) => fov.update('barlowReducer', value)} step={0.01} value={barlowReducer} />
-			<NumberInput className="col-span-3 min-w-0" label="Bin" maxValue={8} minValue={1} onValueChange={(value) => fov.update('bin', value)} value={bin} />
+			<NumberInput className="col-span-4 min-w-0" fractionDigits={1} label="Rotation (°)" maxValue={360} minValue={-360} onValueChange={fov.setRotation} step={0.1} value={rotation} />
+			<NumberInput className="col-span-5 min-w-0" fractionDigits={2} label="Barlow/Reducer" maxValue={10} minValue={0.1} onValueChange={fov.setBarlowReducer} step={0.01} value={barlowReducer} />
+			<NumberInput className="col-span-3 min-w-0" label="Bin" maxValue={8} minValue={1} onValueChange={fov.setBin} value={bin} />
 		</>
 	)
 })
@@ -135,7 +121,7 @@ const FovList = memo(() => {
 
 				return (
 					<div data-index={i} onClick={handleClick} className={tw('flex h-full min-w-0 flex-row items-center justify-between gap-0 border-e-2 ps-3 transition hover:bg-neutral-800/80', isSelected && 'bg-neutral-800/70')} style={{ borderColor: item.color }}>
-						<Checkbox onValueChange={(selected) => fov.update('visible', selected, item.id)} value={item.visible} />
+						<Checkbox onValueChange={(value) => fov.setVisible(item.id, value)} value={item.visible} />
 						<ComputedFovItem {...item} />
 					</div>
 				)
@@ -144,7 +130,7 @@ const FovList = memo(() => {
 	)
 })
 
-const ComputedFovItem = memo((item: FovItem) => (
+const ComputedFovItem = memo((item: ImageFovItem) => (
 	<div className="flex min-w-0 flex-1 flex-row flex-wrap items-center justify-between gap-1 px-2 text-sm">
 		<span>
 			<strong>FL:</strong> {formatFovNumber(item.focalLength)}mm

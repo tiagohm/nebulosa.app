@@ -1,18 +1,17 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { equipmentStore } from '@stores/equipment.store'
+import type { DeviceState } from '@stores/equipment.store'
 import type { Rotator } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type RotatorStore = ReturnType<typeof rotatorStore>
 
 export interface RotatorState {
 	rotator: DeviceState<Rotator>
-	readonly angle: number
+	angle: number
 }
-
-const PROXY_PROPERTIES = ['p:angle'] as const
 
 export function rotatorStore(rotator: Rotator) {
 	const state = proxy<RotatorState>({
@@ -26,13 +25,15 @@ export function rotatorStore(rotator: Rotator) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('rotator mounted:', rotator.name)
 
 		mounted = true
 
-		u[0] = initProxy(state, `rotator.${rotator.id}`, PROXY_PROPERTIES)
+		u[0] = initProxy(state, `rotator.${rotator.id}`, ['p:angle'])
+
+		return unmount
 	}
 
 	function unmount() {
@@ -42,8 +43,8 @@ export function rotatorStore(rotator: Rotator) {
 		mounted = false
 	}
 
-	function update<K extends keyof RotatorState>(key: K, value: RotatorState[K]) {
-		state[key] = value
+	function setAngle(value: number) {
+		state.angle = value
 	}
 
 	function connect() {
@@ -70,26 +71,16 @@ export function rotatorStore(rotator: Rotator) {
 		return Api.Rotators.reverse(rotator, enabled)
 	}
 
-	function show() {
-		equipmentStore.show(rotator)
-	}
-
-	function hide() {
-		equipmentStore.hide(rotator)
-	}
-
 	return {
 		state,
 		mount,
 		unmount,
-		update,
+		setAngle,
 		connect,
 		moveTo,
 		sync,
 		reverse,
 		home,
 		stop,
-		show,
-		hide,
 	} as const
 }

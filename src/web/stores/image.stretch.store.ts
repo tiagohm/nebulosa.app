@@ -1,21 +1,20 @@
-import { DEFAULT_IMAGE_STRETCH, type ImageStretch } from 'src/shared/types'
+import { imageBus } from '@shared/bus'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
+import type { SliderRangeValue } from '@ui/components/Slider'
+import type { SigmaClipCenterMethod, SigmaClipDispersionMethod } from 'nebulosa/src/imaging/processing/computation'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import type { SliderRangeValue } from '../ui/components/Slider'
-import type { ImageViewerStore } from './image.viewer.store'
+import { DEFAULT_IMAGE_STRETCH } from '#/image.stretch'
+import type { ImageStretch } from '#/image.stretch'
 
 export type ImageStretchStore = ReturnType<typeof imageStretchStore>
 
 export interface ImageStretchState {
-	show: boolean
 	readonly stretch: ImageStretch
 }
 
 export function imageStretchStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageStretchState>({
-		show: false,
 		stretch: viewer.state.transformation.stretch,
 	})
 
@@ -25,15 +24,13 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image stretch mounted:', viewer.state.path)
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.stretch`, ['p:show'])
-
-		u[1] = imageBus.subscribe('load', ({ image, info }) => {
+		u[0] = imageBus.subscribe('load', ({ image, info }) => {
 			if (image === viewer.image) {
 				state.stretch.auto = info.transformation.stretch.auto
 				state.stretch.shadow = info.transformation.stretch.shadow
@@ -41,6 +38,8 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 				state.stretch.midtone = info.transformation.stretch.midtone
 			}
 		})
+
+		return unmount
 	}
 
 	function unmount() {
@@ -50,23 +49,63 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 		mounted = false
 	}
 
-	function update<K extends keyof ImageStretch>(key: K, value: ImageStretch[K]) {
-		state.stretch[key] = value
+	function setMidtone(value: number) {
+		state.stretch.midtone = value
+	}
+
+	function setBits(value: number) {
+		state.stretch.bits = value
+	}
+
+	function setMeanBackground(value: number) {
+		state.stretch.meanBackground = value
+	}
+
+	function setClippingPoint(value: number) {
+		state.stretch.clippingPoint = value
+	}
+
+	function setSigmaClip(value: boolean) {
+		state.stretch.sigmaClip = value
+	}
+
+	function setSigmaLower(value: number) {
+		state.stretch.sigmaLower = value
+	}
+
+	function setSigmaUpper(value: number) {
+		state.stretch.sigmaUpper = value
+	}
+
+	function setCenterMethod(value: SigmaClipCenterMethod) {
+		state.stretch.centerMethod = value
+	}
+
+	function setDispersionMethod(value: SigmaClipDispersionMethod) {
+		state.stretch.dispersionMethod = value
+	}
+
+	function setShadow(value: number) {
+		state.stretch.shadow = value
+	}
+
+	function setHighlight(value: number) {
+		state.stretch.highlight = value
 	}
 
 	function handleShadowChange(value: number) {
-		update('shadow', value)
-		if (value > state.stretch.highlight) update('highlight', value)
+		setShadow(value)
+		if (value > state.stretch.highlight) setHighlight(value)
 	}
 
 	function handleHighlightChange(value: number) {
-		update('highlight', value)
-		if (value < state.stretch.shadow) update('shadow', value)
+		setHighlight(value)
+		if (value < state.stretch.shadow) setShadow(value)
 	}
 
 	function handleShadowHighlightChange(value: SliderRangeValue) {
-		update('shadow', value[0])
-		update('highlight', value[1])
+		setShadow(value[0])
+		setHighlight(value[1])
 	}
 
 	function auto() {
@@ -96,20 +135,22 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 		return viewer.reload()
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
 		mount,
 		unmount,
-		update,
+		setMidtone,
+		setBits,
+		setMeanBackground,
+		setClippingPoint,
+		setSigmaClip,
+		setSigmaLower,
+		setSigmaUpper,
+		setCenterMethod,
+		setDispersionMethod,
+		setShadow,
+		setHighlight,
 		handleShadowChange,
 		handleHighlightChange,
 		handleShadowHighlightChange,
@@ -117,7 +158,5 @@ export function imageStretchStore(viewer: ImageViewerStore) {
 		reset,
 		toggle,
 		apply,
-		show,
-		hide,
 	} as const
 }

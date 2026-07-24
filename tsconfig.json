@@ -19,8 +19,15 @@
 		"forceConsistentCasingInFileNames": true,
 		"allowSyntheticDefaultImports": true,
 		"paths": {
+			"@assets/*": ["./src/web/assets/*"],
+			"@hooks/*": ["./src/web/hooks/*"],
+			"@stores/*": ["./src/web/stores/*"],
+			"@shared/*": ["./src/web/shared/*"],
+			"@ui/*": ["./src/web/ui/*"],
+			"@/*": ["./src/web/*"],
+			"#/*": ["./src/types/*"],
 			"src/*": ["./src/*"],
-			"@/*": ["./src/web/*"]
+			"root/*": ["./*"]
 		}
 	}
 }

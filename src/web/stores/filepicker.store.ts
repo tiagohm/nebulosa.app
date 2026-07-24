@@ -1,9 +1,10 @@
-import type { FileEntry, DirectoryEntry } from 'src/shared/types'
+import { Api } from '@shared/api'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import type { FilePickerMode } from '../shared/types'
+import type { FileEntry, DirectoryEntry } from '#/filesystem'
+
+export type FilePickerMode = 'file' | 'directory' | 'save'
 
 export type FilePickerStore = ReturnType<typeof filePicker>
 
@@ -59,7 +60,7 @@ export function filePicker(scope: FilePickerScope) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		void list()
 
@@ -72,6 +73,8 @@ export function filePicker(scope: FilePickerScope) {
 		u[1] = subscribeKey(state, 'path', async (path) => {
 			state.save.exists = state.save.name.length > 0 && path.length > 0 && !!(await Api.FileSystem.exists({ path, name: state.save.name }))
 		})
+
+		return unmount
 	}
 
 	function unmount() {
@@ -163,7 +166,7 @@ export function filePicker(scope: FilePickerScope) {
 		state.selected.length = 0
 	}
 
-	function updateSaveName(name: string) {
+	function setSaveName(name: string) {
 		state.save.name = name
 	}
 
@@ -192,7 +195,7 @@ export function filePicker(scope: FilePickerScope) {
 		createDirectory,
 		select,
 		unselectAll,
-		updateSaveName,
+		setSaveName,
 		save,
 	} as const
 }

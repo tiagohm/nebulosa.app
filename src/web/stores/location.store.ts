@@ -1,10 +1,11 @@
+import { settingsStore } from '@stores/settings.store'
+import type { WorldMapPosition } from '@ui/components/WorldMap'
+import type { InteractTransform } from '@ui/Interactable'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import { toMeter } from 'nebulosa/src/math/units/distance'
 import { proxy } from 'valtio'
-import type { WorldMapPosition } from '../ui/components/WorldMap'
-import type { InteractTransform } from '../ui/Interactable'
 
 export type LocationStore = ReturnType<typeof locationStore>
 
@@ -44,6 +45,17 @@ export function locationStore(coordinate: GeographicCoordinate) {
 		)
 	}
 
+	function loadFromGeographicCoordinate(coordinate: GeographicCoordinate) {
+		const { latitude, longitude, elevation } = coordinate
+		state.latitude = toDeg(latitude)
+		state.longitude = toDeg(longitude)
+		state.elevation = toMeter(elevation)
+	}
+
+	function loadFromSettings() {
+		loadFromGeographicCoordinate(settingsStore.state.location)
+	}
+
 	function handleTransformChange(transform: InteractTransform) {
 		state.scale = transform.scale
 	}
@@ -55,10 +67,7 @@ export function locationStore(coordinate: GeographicCoordinate) {
 
 	function handleMountChange(mount?: Mount) {
 		if (!mount) return
-		const { latitude, longitude, elevation } = mount.geographicCoordinate
-		state.latitude = toDeg(latitude)
-		state.longitude = toDeg(longitude)
-		state.elevation = toMeter(elevation)
+		loadFromGeographicCoordinate(mount.geographicCoordinate)
 	}
 
 	return {
@@ -67,6 +76,7 @@ export function locationStore(coordinate: GeographicCoordinate) {
 		unmount,
 		update,
 		findCurrentPosition,
+		loadFromSettings,
 		handleTransformChange,
 		handleCoordinateChange,
 		handleMountChange,

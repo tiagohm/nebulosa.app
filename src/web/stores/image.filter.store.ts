@@ -1,22 +1,22 @@
+import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { FFTFilterType } from 'nebulosa/src/imaging/processing/fft'
-import { DEFAULT_IMAGE_FFT, DEFAULT_IMAGE_FILTER, type ImageFFT, type ImageFilter, type ImageKernelFilterType } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { initProxy } from '../shared/proxy'
-import type { ImageViewerStore } from './image.viewer.store'
+import { DEFAULT_IMAGE_FFT } from '#/image.fft'
+import type { ImageFFT } from '#/image.fft'
+import { DEFAULT_IMAGE_FILTER } from '#/image.filter'
+import type { ImageFilter, ImageKernelFilterType } from '#/image.filter'
 
 export type ImageFilterStore = ReturnType<typeof imageFilterStore>
 
 export interface ImageFilterState {
-	show: boolean
 	kernel: ImageFilter
 	fft: Writable<ImageFFT>
 }
 
 export function imageFilterStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageFilterState>({
-		show: false,
 		kernel: viewer.state.transformation.filter,
 		fft: viewer.state.transformation.fft,
 	})
@@ -27,13 +27,13 @@ export function imageFilterStore(viewer: ImageViewerStore) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image filter mounted:', viewer.state.path)
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${viewer.key}.filter`, ['p:show'])
+		return unmount
 	}
 
 	function unmount() {
@@ -51,12 +51,16 @@ export function imageFilterStore(viewer: ImageViewerStore) {
 		state.kernel[type][key] = value
 	}
 
-	function updateFFTType(type: FFTFilterType) {
-		state.fft.type = type
+	function setFFTType(value: FFTFilterType) {
+		state.fft.type = value
 	}
 
-	function updateFFT<K extends keyof ImageFFT>(key: K, value: ImageFFT[K]) {
-		state.fft[key] = value
+	function setFFTCutoff(value: number) {
+		state.fft.cutoff = value
+	}
+
+	function setFFTWeight(value: number) {
+		state.fft.weight = value
 	}
 
 	function reset() {
@@ -71,26 +75,17 @@ export function imageFilterStore(viewer: ImageViewerStore) {
 		return viewer.reload()
 	}
 
-	function show() {
-		state.show = true
-	}
-
-	function hide() {
-		state.show = false
-	}
-
 	return {
 		state,
 		viewer,
 		mount,
 		unmount,
 		updateKernelType,
-		updateFFTType,
 		updateKernel,
-		updateFFT,
+		setFFTType,
+		setFFTCutoff,
+		setFFTWeight,
 		reset,
 		apply,
-		show,
-		hide,
 	} as const
 }

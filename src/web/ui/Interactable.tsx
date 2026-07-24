@@ -1,6 +1,7 @@
-import { createUseGesture, dragAction, type GestureHandlers, pinchAction, wheelAction } from '@use-gesture/react'
+import { clamp, preventDefault, tw } from '@shared/util'
+import { createUseGesture, dragAction, pinchAction, wheelAction } from '@use-gesture/react'
+import type { GestureHandlers } from '@use-gesture/react'
 import { memo, useEffectEvent, useImperativeHandle, useLayoutEffect, useRef } from 'react'
-import { clamp, preventDefault } from '@/shared/util'
 
 export type InteractType = 'drag' | 'pinch' | 'wheel' | 'none'
 
@@ -24,6 +25,9 @@ export interface InteractableMethods {
 	readonly angle: number
 	readonly scale: number
 	readonly zoomTo: (scale: number) => void
+	readonly isCoordinateVisible: (x: number, y: number) => boolean
+	readonly moveCoordinateTo: (x: number, y: number, parentX: number, parentY: number) => void
+	readonly centerCoordinate: (x: number, y: number) => void
 	readonly center: () => void
 	readonly rotateTo: (angle: number) => void
 	readonly enableRotation: () => void
@@ -31,7 +35,7 @@ export interface InteractableMethods {
 }
 
 export interface InteractableProps extends Omit<GestureHandlers, 'onDragStart' | 'onDrag' | 'onDragEnd' | 'onPinch' | 'onWheel'> {
-	readonly zIndex: number
+	readonly className?: string
 	readonly onGesture?: (transform: Readonly<InteractTransform>, type: InteractType, event?: Event) => void
 	readonly onTap?: (tx: number, ty: number, x: number, y: number, event: React.PointerEvent<HTMLDivElement>) => void
 	readonly ref?: React.Ref<InteractableMethods>
@@ -92,11 +96,11 @@ function removeDocumentGestureListeners() {
 	}
 }
 
-function isRoiInteraction(event: Event) {
-	return event.target instanceof Element && event.target.closest('.roi') !== null
+function isOverlayInteraction(event: Event) {
+	return event.target instanceof Element && event.target.closest('[data-interactable-control]') !== null
 }
 
-export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...handlers }: InteractableProps) => {
+export const Interactable = memo(({ ref, className, children, onGesture, onTap, ...handlers }: InteractableProps) => {
 	const wrapperRef = useRef<HTMLDivElement>(null)
 	const transformation = useRef<InteractTransform>({ x: 0, y: 0, scale: 1, angle: 0 })
 	const wrapperSize = useRef({ width: 0, height: 0 })
@@ -104,17 +108,25 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 	const bodyUserSelect = useRef<string | undefined>(undefined)
 	const wheelZoomDelta = useRef(0)
 	const wheelZoomStep = useRef<number | undefined>(undefined)
+	const animationFrameRef = useRef<number | undefined>(undefined)
 
 	function resetWheelZoomState() {
 		wheelZoomDelta.current = 0
 		wheelZoomStep.current = undefined
 	}
 
+	function applyTransformation() {
+		const wrapper = wrapperRef.current
+		if (wrapper === null) return
+		const { x, y, scale, angle } = transformation.current
+		wrapper.style.transform = `translate(${x}px, ${y}px) scale(${scale}) rotate(${angle}deg)`
+		animationFrameRef.current = undefined
+	}
+
 	const transform = useEffectEvent((type: InteractType, event?: Event) => {
-		if (wrapperRef.current) {
-			const { x, y, scale, angle } = transformation.current
-			wrapperRef.current.style.transform = `translate(${x}px, ${y}px) scale(${scale}) rotate(${angle}deg)`
+		if (wrapperRef.current && animationFrameRef.current === undefined) {
 			onGesture?.(transformation.current, type, event)
+			animationFrameRef.current = window.requestAnimationFrame(applyTransformation)
 		}
 	})
 
@@ -127,6 +139,45 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 		// Preserve the wrapper center when a newly loaded image changes its intrinsic size.
 		transformation.current.x += (previous.width - width) / 2
 		transformation.current.y += (previous.height - height) / 2
+		transform('none')
+	}
+
+	function coordinateInClientSpace(x: number, y: number) {
+		const wrapper = wrapperRef.current
+
+		if (!wrapper || !Number.isFinite(x) || !Number.isFinite(y)) return
+
+		const { clientWidth: width, clientHeight: height } = wrapper
+
+		if (width <= 0 || height <= 0) return
+
+		const rect = wrapper.getBoundingClientRect()
+		const { scale, angle } = transformation.current
+		const rad = angle * (Math.PI / 180)
+		const c = Math.cos(rad)
+		const s = Math.sin(rad)
+		const dx = (x - width / 2) * scale
+		const dy = (y - height / 2) * scale
+
+		return {
+			x: rect.left + rect.width / 2 + dx * c - dy * s,
+			y: rect.top + rect.height / 2 + dx * s + dy * c,
+		} as const
+	}
+
+	function moveCoordinateTo(x: number, y: number, parentX: number, parentY: number) {
+		const wrapper = wrapperRef.current
+		const parent = wrapper?.parentElement
+		const coordinate = coordinateInClientSpace(x, y)
+
+		if (!parent || !coordinate || !Number.isFinite(parentX) || !Number.isFinite(parentY)) return
+
+		const parentRect = parent.getBoundingClientRect()
+		const targetX = parentRect.left + parent.clientLeft + parentX
+		const targetY = parentRect.top + parent.clientTop + parentY
+
+		transformation.current.x += targetX - coordinate.x
+		transformation.current.y += targetY - coordinate.y
 		transform('none')
 	}
 
@@ -164,19 +215,36 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 			disableRotation: () => {
 				rotation.current = false
 			},
+			isCoordinateVisible: (x, y) => {
+				const wrapper = wrapperRef.current
+				const parent = wrapper?.parentElement
+				const coordinate = coordinateInClientSpace(x, y)
+
+				if (!parent || !coordinate) return false
+
+				const parentRect = parent.getBoundingClientRect()
+				const left = parentRect.left + parent.clientLeft
+				const top = parentRect.top + parent.clientTop
+
+				return coordinate.x >= left && coordinate.x <= left + parent.clientWidth && coordinate.y >= top && coordinate.y <= top + parent.clientHeight
+			},
+			moveCoordinateTo,
+			centerCoordinate: (x: number, y: number) => {
+				const wrapper = wrapperRef.current
+				const parent = wrapper?.parentElement
+
+				if (wrapper && parent) {
+					moveCoordinateTo(x, y, parent.clientWidth / 2, parent.clientHeight / 2)
+				}
+			},
 			center: () => {
-				const parent = wrapperRef.current?.parentElement
+				const wrapper = wrapperRef.current
+				const parent = wrapper?.parentElement
 
-				if (parent) {
-					const { clientWidth: ix, clientHeight: iy } = wrapperRef.current!
+				if (wrapper && parent) {
+					const { clientWidth: width, clientHeight: height } = wrapper
 
-					if (ix > 0 && iy > 0) {
-						const { clientWidth: px, clientHeight: py } = parent
-
-						transformation.current.x = (px - ix) / 2
-						transformation.current.y = (py - iy) / 2
-						transform('none')
-					}
+					moveCoordinateTo(width / 2, height / 2, parent.clientWidth / 2, parent.clientHeight / 2)
 				}
 			},
 		}),
@@ -250,13 +318,13 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 		{
 			...handlers,
 			onDragStart: ({ event, cancel }) => {
-				if (isRoiInteraction(event)) return cancel()
+				if (isOverlayInteraction(event)) return cancel()
 
 				// Disable text selection during drag event
 				disableBodyUserSelect()
 			},
 			onDrag: ({ event, pinching, cancel, delta, movement, offset, tap, memo }) => {
-				if (isRoiInteraction(event)) return cancel()
+				if (isOverlayInteraction(event)) return cancel()
 				if (pinching || tap) return cancel()
 
 				const { scale } = transformation.current
@@ -400,7 +468,7 @@ export const Interactable = memo(({ ref, zIndex, children, onGesture, onTap, ...
 	)
 
 	return (
-		<div className="wrapper absolute inline-block cursor-crosshair active:cursor-grabbing" onPointerUp={handleTap} ref={wrapperRef} style={{ zIndex }}>
+		<div className={tw('wrapper absolute inline-block cursor-crosshair active:cursor-grabbing', className)} onPointerUp={handleTap} ref={wrapperRef}>
 			{children}
 		</div>
 	)

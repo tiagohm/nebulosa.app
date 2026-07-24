@@ -1,11 +1,12 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { equipmentStore } from '@stores/equipment.store'
+import type { DeviceState } from '@stores/equipment.store'
+import type { NudgeDirection } from '@ui/Nudge'
 import type { GuideOutput } from 'nebulosa/src/devices/indi/device'
-import type { GuidePulse } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import type { NudgeDirection } from '../ui/Nudge'
-import { equipmentStore, type DeviceState } from './equipment.store'
+import type { GuidePulse } from '#/guideoutput'
 
 export type GuideOutputStore = ReturnType<typeof guideOutputStore>
 
@@ -38,13 +39,15 @@ export function guideOutputStore(guideOutput: GuideOutput) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('guide output mounted:', guideOutput.name)
 
 		mounted = true
 
 		u[0] = initProxy(state, `guideoutput.${guideOutput.id}`, ['o:request'])
+
+		return unmount
 	}
 
 	function unmount() {
@@ -101,14 +104,6 @@ export function guideOutputStore(guideOutput: GuideOutput) {
 		// Api.GuideOutputs.stop(guideOutput)
 	}
 
-	function show() {
-		return equipmentStore.show(guideOutput, 'guideOutput')
-	}
-
-	function hide() {
-		return equipmentStore.hide(guideOutput, 'guideOutput')
-	}
-
 	return {
 		state,
 		mount,
@@ -119,7 +114,5 @@ export function guideOutputStore(guideOutput: GuideOutput) {
 		guideRateDEC,
 		pulse,
 		stop,
-		show,
-		hide,
 	} as const
 }

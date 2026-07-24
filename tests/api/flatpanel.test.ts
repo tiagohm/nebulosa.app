@@ -2,10 +2,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from '
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { FlatPanel } from 'nebulosa/src/devices/indi/device'
 import { FlatPanelManager } from 'nebulosa/src/devices/indi/manager'
-import { ClientSimulator, FlatPanelSimulator } from 'nebulosa/src/devices/indi/simulator'
+import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import { FlatPanelSimulator } from 'nebulosa/src/devices/indi/simulator/flatpanel'
 import { FlatPanelHandler, flatPanelBus, flatPanel as flatPanelEndpoints } from 'src/api/flatpanel'
 import { WebSocketMessageHandler } from 'src/api/message'
-import type { FlatPanelAdded, FlatPanelRemoved, FlatPanelUpdated } from 'src/shared/types'
+import type { FlatPanelAdded, FlatPanelRemoved, FlatPanelUpdated } from '#/flatpanel'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
 flatPanelBus.forceSync = true

@@ -2,10 +2,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from '
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Rotator } from 'nebulosa/src/devices/indi/device'
 import { RotatorManager } from 'nebulosa/src/devices/indi/manager'
-import { ClientSimulator, RotatorSimulator } from 'nebulosa/src/devices/indi/simulator'
+import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import { RotatorSimulator } from 'nebulosa/src/devices/indi/simulator/rotator'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { RotatorHandler, rotatorBus, rotator as rotatorEndpoints } from 'src/api/rotator'
-import type { RotatorAdded, RotatorRemoved, RotatorUpdated } from 'src/shared/types'
+import type { RotatorAdded, RotatorRemoved, RotatorUpdated } from '#/rotator'
 import { json, noContent, SocketMessager, waitUntil } from './util'
 
 rotatorBus.forceSync = true

@@ -1,62 +1,84 @@
-import { nanoid } from 'nanoid'
+import { Api } from '@shared/api'
+import { flatWizardBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { cameraCaptureStore } from '@stores/camera.capture.store'
+import { subscribeToUpdateCameraCaptureStartFromCamera } from '@stores/camera.store'
+import type { DeviceState } from '@stores/equipment.store'
+import type { DockviewPanelApi } from 'dockview-react'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
-import { type FlatWizardStart, type FlatWizardEvent, DEFAULT_FLAT_WIZARD_START, DEFAULT_FLAT_WIZARD_EVENT } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { flatWizardBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { subscribeToUpdateCameraCaptureStartFromCamera } from './camera.store'
-import type { DeviceState } from './equipment.store'
+import { subscribeKey } from 'valtio/utils'
+import { DEFAULT_FLAT_WIZARD_START, DEFAULT_FLAT_WIZARD_EVENT } from '#/flatwizard'
+import type { FlatWizardStart, FlatWizardEvent } from '#/flatwizard'
 
 export type FlatWizardStore = ReturnType<typeof flatWizardStore>
 
 export interface FlatWizardState {
 	running: boolean
 	readonly request: FlatWizardStart
-	readonly camera: DeviceState<Camera>
+	camera?: DeviceState<Camera>
 	readonly event: FlatWizardEvent
 }
 
-export function flatWizardStore(camera: Camera) {
+export function flatWizardStore(id: string, api: DockviewPanelApi) {
+	const capture = cameraCaptureStore()
+
 	const state = proxy<FlatWizardState>({
 		running: false,
-		request: structuredClone(DEFAULT_FLAT_WIZARD_START),
+		request: {
+			...structuredClone(DEFAULT_FLAT_WIZARD_START),
+			capture: capture.state,
+		},
 		event: structuredClone(DEFAULT_FLAT_WIZARD_EVENT),
-		camera,
 	})
 
 	const u: VoidFunction[] = []
 	let mounted = false
 
-	console.info('flat wizard created', camera.name)
+	console.info('flat wizard created', id)
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
-		console.info('flat wizard mounted:', camera.name)
+		console.info('flat wizard mounted:', id)
 
 		mounted = true
 
-		u[0] = initProxy(state, `flatwizard.${camera.id}`, ['o:request'])
+		u[0] = initProxy(state, `flatwizard.${id}`, ['o:request'])
 
 		u[1] = flatWizardBus.subscribe('update', (event) => {
-			if (state.camera.id === event.camera) {
+			if (state.camera?.id === event.camera) {
 				state.running = event.state !== 'idle'
 				Object.assign(state.event, event)
 			}
 		})
 
-		subscribeToUpdateCameraCaptureStartFromCamera(u, camera, state.request.capture)
+		u[2] = subscribeKey(state, 'camera', (camera) => {
+			updateTitle()
 
-		state.request.id ||= nanoid()
+			if (camera !== undefined) {
+				u[3]?.()
+				u[3] = subscribeToUpdateCameraCaptureStartFromCamera(camera, state.request.capture)
+			}
+		})
+
+		updateTitle()
+
+		state.request.id = id
+
+		return unmount
 	}
 
 	function unmount() {
 		if (!mounted) return
-		console.info('flat wizard unmounted:', camera.name)
+		console.info('flat wizard unmounted:', id)
 		unsubscribe(u)
 		mounted = false
+	}
+
+	function updateTitle() {
+		api.setTitle(state.camera ? `FlatWizard - ${state.camera?.name || 'None'}` : 'Flat Wizard')
 	}
 
 	function reset() {
@@ -64,12 +86,20 @@ export function flatWizardStore(camera: Camera) {
 		state.event.state = 'idle'
 	}
 
-	function update<K extends keyof FlatWizardStart>(key: K, value: FlatWizardStart[K]) {
-		state.request[key] = value
+	function setMinExposure(value: number) {
+		state.request.minExposure = value
 	}
 
-	function updateCapture<K extends keyof FlatWizardStart['capture']>(key: K, value: FlatWizardStart['capture'][K]) {
-		state.request.capture[key] = value
+	function setMaxExposure(value: number) {
+		state.request.maxExposure = value
+	}
+
+	function setMeanTarget(value: number) {
+		state.request.meanTarget = value
+	}
+
+	function setMeanTolerance(value: number) {
+		state.request.meanTolerance = value
 	}
 
 	function setPath(path?: string) {
@@ -77,11 +107,11 @@ export function flatWizardStore(camera: Camera) {
 	}
 
 	async function start() {
-		if (state.running || !camera.connected) return
+		if (state.running || !state.camera?.connected) return
 
 		state.running = true
 
-		const response = await Api.FlatWizard.start(camera, state.request)
+		const response = await Api.FlatWizard.start(state.camera, state.request)
 
 		if (!response?.ok) {
 			reset()
@@ -98,17 +128,17 @@ export function flatWizardStore(camera: Camera) {
 		}
 	}
 
-	function hide() {}
-
 	return {
 		state,
+		capture,
 		mount,
 		unmount,
-		update,
-		updateCapture,
+		setMinExposure,
+		setMaxExposure,
+		setMeanTarget,
+		setMeanTolerance,
 		setPath,
 		start,
 		stop,
-		hide,
 	} as const
 }

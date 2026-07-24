@@ -1,10 +1,11 @@
+import { FilterableList } from '@ui/components/FilterableList'
+import { IconButton } from '@ui/components/IconButton'
+import { Link } from '@ui/components/Link'
+import { ListItem } from '@ui/components/List'
+import { Popover } from '@ui/components/Popover'
+import type { PopoverMethods } from '@ui/components/Popover'
+import { Icons } from '@ui/Icon'
 import { memo, useRef } from 'react'
-import { FilterableList } from './components/FilterableList'
-import { IconButton } from './components/IconButton'
-import { Link } from './components/Link'
-import { ListItem } from './components/List'
-import { Popover, type PopoverMethods } from './components/Popover'
-import { Icons } from './Icon'
 
 const EQUIPMENT_ITEM_HEIGHT = 44
 

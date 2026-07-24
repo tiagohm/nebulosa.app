@@ -2,8 +2,11 @@ import { mkdtemp, rm } from 'fs/promises'
 import { join } from 'path'
 import { astapDetectStars } from 'nebulosa/src/astrometry/solvers/astap'
 import { detectStars } from 'nebulosa/src/imaging/stars/detector'
-import { DEFAULT_IMAGE_TRANSFORMATION, type ImageTransformation, type StarDetection } from '../shared/types'
-import { type Endpoints, response } from './http'
+import { DEFAULT_IMAGE_TRANSFORMATION } from '#/image'
+import type { ImageTransformation } from '#/image'
+import type { StarDetection } from '#/stardetection'
+import { response } from './http'
+import type { Endpoints } from './http'
 import type { ImageProcessor } from './image'
 
 const STAR_DETECTION_IMAGE_TRANSFORMATION: ImageTransformation = {

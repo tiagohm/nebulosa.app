@@ -1,9 +1,10 @@
+import { Api } from '@shared/api'
+import { initProxy } from '@shared/proxy'
+import { equipmentStore } from '@stores/equipment.store'
+import type { DeviceState } from '@stores/equipment.store'
 import type { Focuser } from 'nebulosa/src/devices/indi/device'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { initProxy } from '../shared/proxy'
-import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type FocuserStore = ReturnType<typeof focuserStore>
 
@@ -14,8 +15,6 @@ export interface FocuserState {
 		absolute: number
 	}
 }
-
-const PROXY_PROPERTIES = ['o:request'] as const
 
 export function focuserStore(focuser: Focuser) {
 	const state = proxy<FocuserState>({
@@ -29,13 +28,15 @@ export function focuserStore(focuser: Focuser) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('focuser mounted:', focuser.name)
 
 		mounted = true
 
-		u[0] = initProxy(state, `focuser.${focuser.id}`, PROXY_PROPERTIES)
+		u[0] = initProxy(state, `focuser.${focuser.id}`, ['o:request'])
+
+		return unmount
 	}
 
 	function unmount() {
@@ -45,8 +46,12 @@ export function focuserStore(focuser: Focuser) {
 		mounted = false
 	}
 
-	function update<K extends keyof FocuserState['request']>(key: K, value: FocuserState['request'][K]) {
-		state.request[key] = value
+	function setRelative(value: number) {
+		state.request.relative = value
+	}
+
+	function setAbsolute(value: number) {
+		state.request.absolute = value
 	}
 
 	function connect() {
@@ -77,19 +82,12 @@ export function focuserStore(focuser: Focuser) {
 		return Api.Focusers.reverse(focuser, enabled)
 	}
 
-	function show() {
-		equipmentStore.show(focuser)
-	}
-
-	function hide() {
-		equipmentStore.hide(focuser)
-	}
-
 	return {
 		state,
 		mount,
 		unmount,
-		update,
+		setRelative,
+		setAbsolute,
 		connect,
 		moveTo,
 		moveIn,
@@ -97,7 +95,5 @@ export function focuserStore(focuser: Focuser) {
 		sync,
 		reverse,
 		stop,
-		show,
-		hide,
 	} as const
 }

@@ -1,71 +1,49 @@
+import { useStore } from '@hooks/store.hook'
+import { CameraCaptureStoreContext, PlateSolverStoreContext, TppaStoreContext } from '@shared/context'
+import { tppaStore } from '@stores/tppa.store'
+import { CameraCaptureStartPopover } from '@ui/CameraCaptureStartPopover'
+import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
+import { Chip } from '@ui/components/Chip'
+import { NumberInput } from '@ui/components/NumberInput'
+import { CameraDropdown, MountDropdown } from '@ui/DeviceDropdown'
+import { Icons } from '@ui/Icon'
+import { PlateSolverTypeSelect } from '@ui/PlateSolverTypeSelect'
+import { PlateSolveStartPopover } from '@ui/PlateSolveStartPopover'
+import { TppaDirectionSelect } from '@ui/TppaDirectionSelect'
+import type { IDockviewPanelProps } from 'dockview-react'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { memo, useContext } from 'react'
-import type { TppaState } from 'src/shared/types'
 import { useSnapshot } from 'valtio'
-import { equipmentStore } from '@/stores/equipment.store'
-import { tppaStore } from '@/stores/tppa.store'
-import { useStore } from '../hooks/store.hook'
-import { CameraDeviceContext, TppaStoreContext, MountDeviceContext } from '../shared/context'
-import { CameraCaptureStartPopover } from './CameraCaptureStartPopover'
-import { Button } from './components/Button'
-import { Checkbox } from './components/Checkbox'
-import { Chip, type ChipProps } from './components/Chip'
-import { NumberInput } from './components/NumberInput'
-import { TextInput } from './components/TextInput'
-import { ConnectButton } from './ConnectButton'
-import { Icons } from './Icon'
-import { Modal } from './Modal'
-import { PlateSolverSelect } from './PlateSolverSelect'
-import { PlateSolveStartPopover } from './PlateSolveStartPopover'
-import { TppaDirectionSelect } from './TppaDirectionSelect'
 
-const TPPA_STATE_COLORS = {
-	idle: 'default',
-	waiting: 'warning',
-	moving: 'secondary',
-	capturing: 'primary',
-	solving: 'primary',
-	aligning: 'success',
-	settling: 'warning',
-} satisfies Record<TppaState, NonNullable<ChipProps['color']>>
+export interface TppaParams {
+	readonly id: string
+}
 
-export const Tppa = memo(() => {
-	const camera = useContext(CameraDeviceContext)
-	const mount = useContext(MountDeviceContext)
-	const tppa = useStore(() => tppaStore(camera, mount), [camera, mount])
+export const Tppa = memo(({ api, params }: IDockviewPanelProps<TppaParams>) => {
+	const tppa = useStore(() => tppaStore(params.id, api), [params.id])
 
 	return (
 		<TppaStoreContext value={tppa}>
-			<Modal footer={<Footer />} header="Three-Point Polar Alignment" id={`tppa-${camera.id}-${mount.id}`} initialWidth="416px" onHide={tppa.hide}>
-				<Body />
-			</Modal>
+			<div className="grid grid-cols-12 gap-2 p-3">
+				<CameraAndMount />
+				<Status />
+				<Inputs />
+				<Result />
+				<Footer />
+			</div>
 		</TppaStoreContext>
 	)
 })
 
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-2">
-		<CameraAndMount />
-		<Status />
-		<Inputs />
-		<Result />
-	</div>
-))
-
 const CameraAndMount = memo(() => {
 	const tppa = useContext(TppaStoreContext)
-	const { capture } = useSnapshot(tppa.state.request)
-	const { connected: cameraConnected } = useSnapshot(tppa.state.camera)
-	const { connected: mountConnected } = useSnapshot(tppa.state.mount)
-
-	const CameraStartContent = <ConnectButton connected={cameraConnected} onClick={() => equipmentStore.connect(tppa.state.camera)} size="sm" />
-	const MountStartContent = <ConnectButton connected={mountConnected} onClick={() => equipmentStore.connect(tppa.state.mount)} size="sm" />
-	const CameraEndContent = <CameraCaptureStartPopover camera={tppa.state.camera} mode="tppa" onValueChange={tppa.updateCapture} value={capture} />
+	const { camera, mount, running } = useSnapshot(tppa.state)
 
 	return (
-		<div className="col-span-full mt-2 flex flex-row items-center justify-between gap-2">
-			<TextInput className="flex-1" readOnly label="Camera" value={tppa.state.camera.name} startContent={CameraStartContent} endContent={CameraEndContent} />
-			<TextInput className="flex-1" readOnly label="Mount" value={tppa.state.mount.name} startContent={MountStartContent} />
+		<div className="col-span-full mt-2 flex flex-row items-center justify-center gap-2">
+			<CameraDropdown showLabel disabled={running} value={camera} onValueChange={(value) => (tppa.state.camera = value)} startContent={<CameraDropdownEndContent />} />
+			<MountDropdown showLabel disabled={running} value={mount} onValueChange={(value) => (tppa.state.mount = value)} />
 		</div>
 	)
 })
@@ -74,10 +52,11 @@ const Status = memo(() => {
 	const tppa = useContext(TppaStoreContext)
 	const { event } = useSnapshot(tppa.state)
 	const { state, solved, solver } = event
+	const color = state === 'idle' ? 'default' : state === 'capturing' || state === 'solving' ? 'primary' : state === 'waiting' || state === 'settling' ? 'warning' : state === 'aligning' ? 'success' : 'secondary'
 
 	return (
 		<div className="col-span-full mt-2 flex flex-row items-center justify-between">
-			<Chip color={TPPA_STATE_COLORS[state]} size="sm">
+			<Chip color={color} size="sm">
 				{state}
 			</Chip>
 			<div className="flex flex-row items-center gap-1">
@@ -103,12 +82,12 @@ const Inputs = memo(() => {
 
 	return (
 		<>
-			<PlateSolverSelect className="col-span-6" disabled={running} endContent={<PlateSolverSelectEndContent />} onValueChange={(value) => tppa.updateSolver('type', value)} value={type} />
-			<NumberInput className="col-span-3" disabled={running} label="Move for (s)" maxValue={60} minValue={1} onValueChange={(value) => tppa.update('moveDuration', value)} value={moveDuration} />
-			<TppaDirectionSelect className="col-span-3" disabled={running} onValueChange={(value) => tppa.update('direction', value)} value={direction} />
-			<NumberInput className="col-span-4" disabled={running} label="Max attempts" maxValue={30} minValue={3} onValueChange={(value) => tppa.update('maxAttempts', value)} value={maxAttempts} />
-			<NumberInput className="col-span-5" disabled={running} label="Delay before capture (s)" maxValue={120} minValue={0} onValueChange={(value) => tppa.update('delayBeforeCapture', value)} value={delayBeforeCapture} />
-			<Checkbox className="col-span-full" disabled={running} label="Compensate refraction" onValueChange={(value) => tppa.update('compensateRefraction', value)} value={compensateRefraction} />
+			<PlateSolverTypeSelect className="col-span-6" disabled={running} endContent={<PlateSolverSelectEndContent />} onValueChange={tppa.solver.setType} value={type} />
+			<NumberInput className="col-span-3" disabled={running} label="Move for (s)" maxValue={60} minValue={1} onValueChange={tppa.setMoveDuration} value={moveDuration} />
+			<TppaDirectionSelect className="col-span-3" disabled={running} onValueChange={tppa.setDirection} value={direction} />
+			<NumberInput className="col-span-4" disabled={running} label="Max attempts" maxValue={30} minValue={3} onValueChange={tppa.setMaxAttempts} value={maxAttempts} />
+			<NumberInput className="col-span-5" disabled={running} label="Delay before capture (s)" maxValue={120} minValue={0} onValueChange={tppa.setDelayBeforeCapture} value={delayBeforeCapture} />
+			<Checkbox className="col-span-full" disabled={running} label="Compensate refraction" onValueChange={tppa.setCompensateRefraction} value={compensateRefraction} />
 		</>
 	)
 })
@@ -116,9 +95,12 @@ const Inputs = memo(() => {
 const PlateSolverSelectEndContent = memo(() => {
 	const tppa = useContext(TppaStoreContext)
 	const { running } = useSnapshot(tppa.state)
-	const { type, radius, focalLength, pixelSize } = useSnapshot(tppa.state.request.solver)
 
-	return <PlateSolveStartPopover disabled={running} focalLength={focalLength} onValueChange={tppa.updateSolver} pixelSize={pixelSize} radius={radius} type={type} />
+	return (
+		<PlateSolverStoreContext value={tppa.solver}>
+			<PlateSolveStartPopover disabled={running} />
+		</PlateSolverStoreContext>
+	)
 })
 
 const Result = memo(() => {
@@ -144,9 +126,22 @@ const Footer = memo(() => {
 	const { running, camera, mount } = useSnapshot(tppa.state)
 
 	return (
-		<>
+		<div className="col-span-full flex flex-row items-center justify-end gap-2">
 			<Button color="danger" disabled={!running} label="Stop" onClick={tppa.stop} startContent={<Icons.Stop />} />
 			<Button color="success" disabled={running || !camera?.connected || !mount?.connected} label="Start" loading={running} onClick={tppa.start} startContent={<Icons.Play />} />
-		</>
+		</div>
+	)
+})
+
+const CameraDropdownEndContent = memo(() => {
+	const tppa = useContext(TppaStoreContext)
+	const { camera } = useSnapshot(tppa.state)
+
+	return (
+		camera && (
+			<CameraCaptureStoreContext value={tppa.capture}>
+				<CameraCaptureStartPopover camera={camera} mode="tppa" />
+			</CameraCaptureStoreContext>
+		)
 	)
 })

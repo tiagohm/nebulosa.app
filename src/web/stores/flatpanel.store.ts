@@ -1,7 +1,8 @@
+import { Api } from '@shared/api'
+import { equipmentStore } from '@stores/equipment.store'
+import type { DeviceState } from '@stores/equipment.store'
 import type { FlatPanel } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { equipmentStore, type DeviceState } from './equipment.store'
 
 export type FlatPanelStore = ReturnType<typeof flatPanelStore>
 
@@ -16,12 +17,19 @@ export function flatPanelStore(flatPanel: FlatPanel) {
 
 	console.info('flat panel created:', flatPanel.name)
 
+	let mounted = false
+
 	function mount() {
+		if (mounted) return unmount
 		console.info('flat panel mounted:', flatPanel.name)
+		mounted = true
+		return unmount
 	}
 
 	function unmount() {
+		if (!mounted) return
 		console.info('flat panel unmounted:', flatPanel.name)
+		mounted = false
 	}
 
 	function connect() {
@@ -48,14 +56,6 @@ export function flatPanelStore(flatPanel: FlatPanel) {
 		return Api.FlatPanels.intensity(flatPanel, value)
 	}
 
-	function show() {
-		return equipmentStore.show(flatPanel)
-	}
-
-	function hide() {
-		return equipmentStore.hide(flatPanel)
-	}
-
 	return {
 		state,
 		mount,
@@ -66,7 +66,5 @@ export function flatPanelStore(flatPanel: FlatPanel) {
 		disable,
 		toggle,
 		intensity,
-		show,
-		hide,
 	} as const
 }

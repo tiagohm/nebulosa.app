@@ -1,42 +1,66 @@
+import { Api } from '@shared/api'
+import { cameraBus, imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { framingStore } from '@stores/framing.store'
+import { imageAdjustmentStore } from '@stores/image.adjustment.store'
+import type { ImageAdjustmentStore } from '@stores/image.adjustment.store'
+import { imageAnnotationStore } from '@stores/image.annotation.store'
+import type { ImageAnnotationStore } from '@stores/image.annotation.store'
+import { imageCalibrationStore } from '@stores/image.calibration.store'
+import type { ImageCalibrationStore } from '@stores/image.calibration.store'
+import { imageCoordinateGridStore } from '@stores/image.coordinategrid.store'
+import type { ImageCoordinateGridStore } from '@stores/image.coordinategrid.store'
+import { imageCrosshairStore } from '@stores/image.crosshair.store'
+import type { ImageCrosshairStore } from '@stores/image.crosshair.store'
+import { imageDebayerStore } from '@stores/image.debayer.store'
+import type { ImageDebayerStore } from '@stores/image.debayer.store'
+import { imageFilterStore } from '@stores/image.filter.store'
+import type { ImageFilterStore } from '@stores/image.filter.store'
+import { imageFovStore } from '@stores/image.fov.store'
+import type { ImageFovStore } from '@stores/image.fov.store'
+import { imageHeaderStore } from '@stores/image.header.store'
+import type { ImageHeaderStore } from '@stores/image.header.store'
+import type { ImageHomeStore } from '@stores/image.home.store'
+import { imageMouseCoordinateStore } from '@stores/image.mousecoordinate.store'
+import type { ImageMouseCoordinateStore } from '@stores/image.mousecoordinate.store'
+import { imageRoiStore } from '@stores/image.roi.store'
+import type { ImageRoiStore } from '@stores/image.roi.store'
+import { imageRotationStore } from '@stores/image.rotation.store'
+import type { ImageRotationStore } from '@stores/image.rotation.store'
+import { imageSaveStore } from '@stores/image.save.store'
+import type { ImageSaveStore } from '@stores/image.save.store'
+import { imageScnrStore } from '@stores/image.scnr.store'
+import type { ImageScnrStore } from '@stores/image.scnr.store'
+import { imageSettingsStore } from '@stores/image.settings.store'
+import type { ImageSettingsStore } from '@stores/image.settings.store'
+import { imageSolverStore } from '@stores/image.solver.store'
+import type { ImageSolverStore } from '@stores/image.solver.store'
+import { imageStarDetectionStore } from '@stores/image.stardetection.store'
+import type { ImageStarDetectionStore } from '@stores/image.stardetection.store'
+import { imageStatisticsStore } from '@stores/image.statistics.store'
+import type { ImageStatisticsStore } from '@stores/image.statistics.store'
+import { imageStretchStore } from '@stores/image.stretch.store'
+import type { ImageStretchStore } from '@stores/image.stretch.store'
+import type { InteractableMethods } from '@ui/Interactable'
 import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { Writable } from 'nebulosa/src/core/types'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { pmod } from 'nebulosa/src/math/numerical/math'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
-import { type ImageTransformation, type ImageInfo, DEFAULT_IMAGE_TRANSFORMATION, type Framing } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy, ref, subscribe } from 'valtio'
-import type { Image, ImageLoaded } from '@/shared/types'
-import { Api } from '../shared/api'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import type { InteractableMethods } from '../ui/Interactable'
-import { framingStore } from './framing.store'
-import { imageAdjustmentStore, type ImageAdjustmentStore } from './image.adjustment.store'
-import { imageAnnotationStore, type ImageAnnotationStore } from './image.annotation.store'
-import { imageCalibrationStore, type ImageCalibrationStore } from './image.calibration.store'
-import { imageCoordinateGridStore, type ImageCoordinateGridStore } from './image.coordinategrid.store'
-import { imageFilterStore, type ImageFilterStore } from './image.filter.store'
-import { imageFovStore, type ImageFovStore } from './image.fov.store'
-import { imageHeaderStore, type ImageHeaderStore } from './image.header.store'
-import { imageMouseCoordinateStore, type ImageMouseCoordinateStore } from './image.mousecoordinate.store'
-import { imageRoiStore, type ImageRoiStore } from './image.roi.store'
-import { imageSaveStore, type ImageSaveStore } from './image.save.store'
-import { imageScnrStore, type ImageScnrStore } from './image.scnr.store'
-import { imageSettingsStore, type ImageSettingsStore } from './image.settings.store'
-import { imageSolverStore, type ImageSolverStore } from './image.solver.store'
-import { imageStarDetectionStore, type ImageStarDetectionStore } from './image.stardetection.store'
-import { imageStatisticsStore, type ImageStatisticsStore } from './image.statistics.store'
-import { imageStretchStore, type ImageStretchStore } from './image.stretch.store'
-import { imageWorkspaceStore } from './image.workspace.store'
+import type { Framing } from '#/framing'
+import type { Image, ImageLoaded, ImageTransformation, ImageInfo } from '#/image'
+import { DEFAULT_IMAGE_TRANSFORMATION } from '#/image'
 
 export interface ImageViewerStore {
 	readonly state: ImageViewerState
+	readonly home: ImageHomeStore
 	readonly image: Image
 	readonly key: string // The storage key
 	readonly target: HTMLImageElement | undefined
-	readonly mount: VoidFunction
+	readonly mount: () => VoidFunction
 	readonly unmount: VoidFunction
 	readonly attachImage: (node: HTMLImageElement | null) => void
 	readonly attachInteractable: (i: InteractableMethods) => void
@@ -78,21 +102,22 @@ export interface ImageViewerStore {
 	readonly starDetection: ImageStarDetectionStore
 	readonly statistics: ImageStatisticsStore
 	readonly stretch: ImageStretchStore
+	readonly debayer: ImageDebayerStore
+	readonly crosshair: ImageCrosshairStore
+	readonly rotation: ImageRotationStore
 }
 
 export interface ImageViewerState {
 	readonly transformation: ImageTransformation
-	crosshair: boolean
 	angle: number // deg
 	scale: number
 	info?: ImageInfo
 	path: string
 }
 
-export function imageViewerStore(image: Image): ImageViewerStore {
+export function imageViewerStore(image: Image, home: ImageHomeStore): ImageViewerStore {
 	const state = proxy<ImageViewerState>({
 		transformation: structuredClone(DEFAULT_IMAGE_TRANSFORMATION),
-		crosshair: false,
 		angle: 0,
 		scale: 1,
 		info: undefined,
@@ -109,17 +134,16 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	let interactable: InteractableMethods | undefined
 	let target: HTMLImageElement | undefined
 	let centered = false
-	const stores: Pick<ImageViewerStore, 'mount' | 'unmount'>[] = []
 	const key = camera?.id || 'default'
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image viewer mounted:', state.path)
 
 		mounted = true
 
-		u[0] = initProxy(state, `image.${key}`, ['o:transformation', 'p:crosshair', 'p:angle'])
+		u[0] = initProxy(state, `image.${key}`, ['o:transformation', 'p:angle'])
 
 		u[1] = subscribe(state.transformation.format, () => {
 			void reload()
@@ -130,7 +154,19 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		const timer = window.setInterval(ping, 30000)
 		u[2] = window.clearInterval.bind(window, timer)
 
-		for (const s of stores) s.mount()
+		u[3] = cameraBus.subscribe('frame', (event) => {
+			if (event.camera === camera?.id) {
+				void load(event.path)
+			}
+		})
+
+		u[4] = imageBus.subscribe('update', (event) => {
+			if (event.image.id === image.id) {
+				void load(event.path)
+			}
+		})
+
+		return unmount
 	}
 
 	function unmount() {
@@ -138,14 +174,12 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		console.info('image viewer unmounted:', state.path)
 		unsubscribe(u)
 		window.removeEventListener('beforeunload', close)
-		for (const s of stores) s.unmount()
 		mounted = false
 	}
 
 	function attachImage(node: HTMLImageElement | null) {
-		if (node) {
+		if (node !== null) {
 			target = node
-			select()
 		}
 	}
 
@@ -175,10 +209,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	function toggleInvert() {
 		state.transformation.invert = !state.transformation.invert
 		return reload()
-	}
-
-	function toggleCrosshair() {
-		state.crosshair = !state.crosshair
 	}
 
 	async function load(path: string | true = '') {
@@ -279,33 +309,20 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		}
 	}
 
-	function select() {
-		if (!target) return
-		imageWorkspaceStore.select(image)
-		bringToFront(target)
-	}
-
 	function detach() {
 		if (loading) return
 
 		console.info('image detached:', state.path)
 
-		adjustZIndexAfterBeRemoved()
-
-		imageWorkspaceStore.unlink(image)
-		imageWorkspaceStore.selectFirst()
 		target = undefined
 		interactable = undefined
-		stores.length = 0
 	}
 
 	function toggleClass(token: string, force?: boolean) {
 		target?.classList.toggle(token, force)
 	}
 
-	function remove() {
-		imageWorkspaceStore.remove(image)
-	}
+	function remove() {}
 
 	function close() {
 		return Api.Image.close({ path: state.path, hash: state.info?.hash, camera: camera?.name })
@@ -313,6 +330,7 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 
 	const store = {
 		state,
+		home,
 		image,
 		key,
 		get target() {
@@ -326,7 +344,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		toggleHorizontalMirror,
 		toggleVerticalMirror,
 		toggleInvert,
-		toggleCrosshair,
 		load,
 		reload,
 		rotateTo,
@@ -339,7 +356,6 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 		syncMountHere,
 		frameAt,
 		handleLoad,
-		select,
 		detach,
 		toggleClass,
 		remove,
@@ -362,59 +378,9 @@ export function imageViewerStore(image: Image): ImageViewerStore {
 	const starDetection = (store.starDetection = imageStarDetectionStore(store))
 	const statistics = (store.statistics = imageStatisticsStore(store))
 	const stretch = (store.stretch = imageStretchStore(store))
-
-	stores.push(adjustment, annotation, calibration, coordinateGrid, filter, fov, header, mouseCoordinate, roi, save, scnr, settings, solver, starDetection, statistics, stretch)
+	const debayer = (store.debayer = imageDebayerStore(store))
+	const crosshair = (store.crosshair = imageCrosshairStore(store))
+	const rotation = (store.rotation = imageRotationStore(store))
 
 	return store
-}
-
-function adjustZIndexAfterBeRemoved() {
-	const wrappers = document.querySelectorAll('.workspace .wrapper') ?? []
-
-	// There is nothing to do
-	if (wrappers.length === 0) return
-
-	// Get the z-index for each element that is not the target
-	const elements = new Array<HTMLElement>(wrappers.length)
-
-	for (const div of wrappers) {
-		const zIndex = +(div as HTMLElement).style.zIndex
-		elements[zIndex] = div as HTMLElement
-	}
-
-	// Update the z-index
-	for (let i = 0, z = 0; i < elements.length; i++) {
-		if (elements[i]) elements[i].style.zIndex = (z++).toFixed(0)
-	}
-}
-
-function bringToFront(e: HTMLElement) {
-	const selected = e.closest<HTMLElement>('.wrapper')!
-	const wrappers = selected.closest('.workspace')?.querySelectorAll('.wrapper') ?? []
-
-	// Only exist one element and it is already at the top
-	if (wrappers.length === 1) return
-
-	// Selected element z-index
-	const zIndex = +selected.style.zIndex
-	const max = wrappers.length - 1
-
-	// It is already at the top
-	if (zIndex === max) return
-
-	// Get the z-index for each element
-	const elements = new Array<HTMLElement>(wrappers.length)
-
-	for (const div of wrappers) {
-		const zIndex = +(div as HTMLElement).style.zIndex
-		elements[zIndex] = div as HTMLElement
-	}
-
-	// Shift the element z-index until selected element
-	for (let i = elements.length - 1; i > zIndex; i--) {
-		elements[i].style.zIndex = (i - 1).toFixed(0)
-	}
-
-	// Update the selected element z-index
-	elements[zIndex].style.zIndex = max.toFixed(0)
 }

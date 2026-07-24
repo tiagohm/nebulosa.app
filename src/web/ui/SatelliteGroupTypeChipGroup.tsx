@@ -1,6 +1,9 @@
+import { tw } from '@shared/util'
+import { Chip } from '@ui/components/Chip'
+import type { ChipProps } from '@ui/components/Chip'
 import { useMemo } from 'react'
-import { SATELLITE_GROUP_TYPES, type SatelliteCategory, type SatelliteGroupType } from 'src/shared/types'
-import { Chip, type ChipProps } from './components/Chip'
+import { SATELLITE_GROUP_TYPES } from '#/satellite'
+import type { SatelliteGroupType, SatelliteCategory } from '#/satellite'
 
 export interface SatelliteGroupTypeChipGroupProps extends React.ComponentProps<'div'> {
 	readonly value: readonly SatelliteGroupType[]
@@ -11,7 +14,7 @@ export interface SatelliteGroupTypeChipGroupProps extends React.ComponentProps<'
 
 const ENTRIES = Object.entries(SATELLITE_GROUP_TYPES).sort((a, b) => a[1].description.localeCompare(b[1].description))
 
-export function SatelliteGroupTypeChipGroup({ value, category, onValueChange, size = 'sm', ...props }: SatelliteGroupTypeChipGroupProps) {
+export function SatelliteGroupTypeChipGroup({ value, category, onValueChange, size = 'sm', className, ...props }: SatelliteGroupTypeChipGroupProps) {
 	const types = useMemo(() => ENTRIES.filter((e) => category.includes(e[1].category)), [category])
 
 	function handleClick(type: SatelliteGroupType, remove: boolean) {
@@ -23,10 +26,10 @@ export function SatelliteGroupTypeChipGroup({ value, category, onValueChange, si
 	}
 
 	return (
-		<div className="flex w-full flex-wrap gap-2" {...props}>
+		<div className={tw('flex w-full flex-wrap gap-2', className)} {...props}>
 			{types.map(([key, item]) => {
 				const selected = value.includes(key as never)
-				return <Chip className="cursor-pointer" color={selected ? 'primary' : 'secondary'} key={key} label={item.description} onClick={() => handleClick(key as never, selected)} size={size} />
+				return <Chip className="cursor-pointer" color={selected ? 'success' : 'secondary'} key={key} label={item.description} onClick={() => handleClick(key as never, selected)} size={size} />
 			})}
 		</div>
 	)

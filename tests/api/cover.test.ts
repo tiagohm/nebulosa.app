@@ -2,10 +2,11 @@ import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Cover } from 'nebulosa/src/devices/indi/device'
 import { CoverManager } from 'nebulosa/src/devices/indi/manager'
-import { ClientSimulator, CoverSimulator } from 'nebulosa/src/devices/indi/simulator'
+import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import { CoverSimulator } from 'nebulosa/src/devices/indi/simulator/cover'
 import { CoverHandler, coverBus, cover as coverEndpoints } from 'src/api/cover'
 import { WebSocketMessageHandler } from 'src/api/message'
-import type { CoverAdded, CoverRemoved, CoverUpdated } from 'src/shared/types'
+import type { CoverAdded, CoverRemoved, CoverUpdated } from '#/cover'
 import { json, SocketMessager, waitUntil } from './util'
 
 coverBus.forceSync = true

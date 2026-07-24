@@ -1,5 +1,5 @@
+import { tw } from '@shared/util'
 import { memo } from 'react'
-import { tw } from '../shared/util'
 
 // https://pictogrammers.com/library/mdi/icon
 

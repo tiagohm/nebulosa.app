@@ -1,21 +1,20 @@
+import { imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { clamp, clampInteger } from '@shared/util'
+import type { ImageViewerStore } from '@stores/image.viewer.store'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import type { Roi } from 'src/shared/types'
 import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import type { ImageRoiRequest } from '../shared/types'
-import { clamp, clampInteger } from '../shared/util'
-import type { ImageViewerStore } from './image.viewer.store'
+import type { ComputeRoi, Roi } from '#/image.roi'
 
 export type ImageRoiStore = ReturnType<typeof imageRoiStore>
 
 export type ImageRoiHandle = 'move' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw'
 
 export interface ImageRoiState {
-	visible: boolean
+	enabled: boolean
 	readonly roi: Roi
 	readonly binning: Point
 }
@@ -37,7 +36,7 @@ export const IMAGE_ROI_HANDLES = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'] as
 
 export function imageRoiStore(viewer: ImageViewerStore) {
 	const state = proxy<ImageRoiState>({
-		visible: false,
+		enabled: false,
 		roi: { x: 0, y: 0, width: 0, height: 0 },
 		binning: { x: 1, y: 1 },
 	})
@@ -55,7 +54,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 	const camera = viewer.image.camera
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('image roi mounted:', viewer.state.path)
 
@@ -65,7 +64,9 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 
 		if (camera) u[0] = initProxy(state, `image.roi.${camera.id}`, ['o:roi', 'o:binning'])
 		u[1] = subscribeKey(viewer.state, 'info', syncImage)
-		u[2] = imageBus.subscribe('roi', sendRoi)
+		u[2] = imageBus.subscribe('roi', computeRoi)
+
+		return unmount
 	}
 
 	function unmount() {
@@ -84,12 +85,16 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		label = node ?? undefined
 	}
 
+	function setEnabled(value: boolean) {
+		state.enabled = value
+	}
+
 	function toggle() {
-		state.visible = !state.visible
+		state.enabled = !state.enabled
 	}
 
 	function sync() {
-		if (!state.visible) {
+		if (!state.enabled) {
 			stopGesture()
 			return
 		}
@@ -174,7 +179,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		}
 	}
 
-	function sendRoi(options: ImageRoiRequest) {
+	function computeRoi(options: ComputeRoi) {
 		if (options.camera.id === camera?.id && restoredRoi()) return options.unbinned ? state.roi : scaleRoi(state.roi, state.binning)
 		return undefined
 	}
@@ -201,7 +206,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 
 		if (roi) {
 			applyRoi(normalizeRoi(rebinRoi(roi, state.binning, binning), info), binning)
-		} else if (state.visible) {
+		} else if (state.enabled) {
 			applyRoi(normalizeRoi(initialRoi(info), info), binning)
 		} else {
 			Object.assign(state.binning, binning)
@@ -269,6 +274,7 @@ export function imageRoiStore(viewer: ImageViewerStore) {
 		unmount,
 		attachRoot,
 		attachLabel,
+		setEnabled,
 		toggle,
 		sync,
 		startGesture,

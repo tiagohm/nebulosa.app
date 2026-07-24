@@ -1,11 +1,13 @@
+import { Api } from '@shared/api'
+import { connectionBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
 import { nanoid } from 'nanoid'
 import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
-import type { ConnectionStatus } from 'src/shared/types'
+import type { ClientType } from 'nebulosa/src/devices/indi/device'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
-import { Api } from '../shared/api'
-import { connectionBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { DEFAULT_CONNECTION, type Connection } from '../shared/types'
+import { DEFAULT_CONNECTION_PORTS, connectionComparator, DEFAULT_CONNECTION } from '#/connection'
+import type { Connection, ConnectionStatus } from '#/connection'
 
 export type ConnectionStore = typeof connectionStore
 
@@ -21,14 +23,6 @@ export interface ConnectionState {
 	}
 }
 
-export function isNetworkConnection(type: Connection['type']) {
-	return type !== 'SIMULATOR'
-}
-
-export function ConnectionComparator(a: Connection, b: Connection) {
-	return (b.connectedAt ?? 0) - (a.connectedAt ?? 0)
-}
-
 const state = proxy<ConnectionState>({
 	activeConnections: [],
 	connections: [],
@@ -40,24 +34,39 @@ const state = proxy<ConnectionState>({
 	},
 })
 
-initProxy(state, 'connection', ['o:edited', 'o:connections'])
-state.connections.sort(ConnectionComparator)
-state.edited.id = nanoid() // start as new connection
+let mounted = false
+const u: VoidFunction[] = []
 
-const DEFAULT_CONNECTION_PORT = {
-	INDI: DEFAULT_CONNECTION.port,
-	ALPACA: 32323,
-	SIMULATOR: 0,
-	FIRMATA: 27016,
-} satisfies Record<Connection['type'], number>
+function mount() {
+	if (mounted) return unmount
 
-connectionBus.subscribe('open', ({ reused }) => {
-	!reused && void list()
-})
+	console.info('connection mounted')
 
-connectionBus.subscribe('close', () => {
+	mounted = true
+
+	u[0] = initProxy(state, 'connection', ['o:edited', 'o:connections'])
+	state.connections.sort(connectionComparator)
+	state.edited.id = nanoid() // start as new connection
+
+	u[1] = connectionBus.subscribe('open', ({ reused }) => {
+		!reused && void list()
+	})
+
+	u[2] = connectionBus.subscribe('close', () => {
+		void list()
+	})
+
 	void list()
-})
+
+	return unmount
+}
+
+function unmount() {
+	if (!mounted) return
+	console.info('connection unmounted')
+	unsubscribe(u)
+	mounted = false
+}
 
 async function list() {
 	const connections = await Api.Connection.list()
@@ -69,6 +78,7 @@ async function list() {
 }
 
 function create() {
+	state.selected = undefined
 	const connection = { ...DEFAULT_CONNECTION, id: nanoid() }
 	Object.assign(state.edited, connection)
 }
@@ -87,26 +97,35 @@ function duplicate(connection: Connection) {
 	add({ id: nanoid(), host, port, name, type, secured })
 }
 
-function update<K extends keyof Connection>(name: K, value: Connection[K]) {
-	if (name === 'type') {
-		const previousType = state.edited.type
-		const previousPort = state.edited.port
-		const nextType = value as Connection['type']
+function setName(value: string) {
+	state.edited.name = value
+}
 
-		state.edited.type = nextType
+function setHost(value: string) {
+	state.edited.host = value
+}
 
-		if (previousPort === DEFAULT_CONNECTION_PORT[previousType]) {
-			state.edited.port = DEFAULT_CONNECTION_PORT[nextType]
-		}
+function setPort(value: number) {
+	state.edited.port = value
+}
 
-		if (nextType !== 'ALPACA') {
-			state.edited.secured = false
-		}
+function setType(value: ClientType) {
+	const previousType = state.edited.type
+	const previousPort = state.edited.port
 
-		return
+	state.edited.type = value
+
+	if (previousPort === DEFAULT_CONNECTION_PORTS[previousType]) {
+		state.edited.port = DEFAULT_CONNECTION_PORTS[value]
 	}
 
-	state.edited[name] = value
+	if (value !== 'ALPACA') {
+		state.edited.secured = false
+	}
+}
+
+function setSecured(value: boolean) {
+	state.edited.secured = value
 }
 
 function select(connection: Connection) {
@@ -197,13 +216,17 @@ function removeEdited() {
 	return remove(state.edited)
 }
 
-void list()
-
 export const connectionStore = {
 	state,
+	mount,
+	unmount,
 	create,
 	edit,
-	update,
+	setName,
+	setHost,
+	setPort,
+	setType,
+	setSecured,
 	discovery,
 	select,
 	save,

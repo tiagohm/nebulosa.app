@@ -1,11 +1,13 @@
-import { GRAYSCALES, type Grayscale, type ImageChannelOrGray } from 'nebulosa/src/imaging/model/types'
+import { tw } from '@shared/util'
+import { IconButton } from '@ui/components/IconButton'
+import { NumberInput } from '@ui/components/NumberInput'
+import { Select } from '@ui/components/Select'
+import type { SelectItemRenderer } from '@ui/components/Select'
+import { Icons } from '@ui/Icon'
+import { ImageChannelOrGraySelect } from '@ui/ImageChannelOrGraySelect'
+import { GRAYSCALES } from 'nebulosa/src/imaging/model/types'
+import type { Grayscale, ImageChannelOrGray } from 'nebulosa/src/imaging/model/types'
 import { useEffect, useRef, useState } from 'react'
-import { tw } from '@/shared/util'
-import { IconButton } from './components/IconButton'
-import { NumberInput } from './components/NumberInput'
-import { Select, type SelectItemRenderer } from './components/Select'
-import { Icons } from './Icon'
-import { ImageChannelOrGraySelect } from './ImageChannelOrGraySelect'
 
 export type ImageChannelOrGrayInputMode = 'select' | 'input'
 
@@ -23,7 +25,7 @@ export interface ImageChannelOrGrayInputProps extends React.ComponentProps<'div'
 export function ImageChannelOrGrayInput({ value, onValueChange, className, disabled, ...props }: ImageChannelOrGrayInputProps) {
 	const [mode, setMode] = useState<ImageChannelOrGrayInputMode>(typeof value === 'string' ? 'select' : 'input')
 	const selectValue = useRef(typeof value === 'string' ? value : 'BT709')
-	const inputValue = useRef(typeof value === 'object' ? value : structuredClone(GRAYSCALES[value]))
+	const inputValue = useRef(typeof value === 'object' ? value : { ...GRAYSCALES[value] })
 	const selectedChannel = typeof value === 'string' ? value : selectValue.current
 	const inputChannel = typeof value === 'object' ? value : inputValue.current
 
@@ -32,7 +34,7 @@ export function ImageChannelOrGrayInput({ value, onValueChange, className, disab
 			selectValue.current = value
 			setMode('select')
 		} else {
-			inputValue.current = structuredClone(value)
+			inputValue.current = { ...value }
 			setMode('input')
 		}
 	}, [value])
@@ -55,23 +57,24 @@ export function ImageChannelOrGrayInput({ value, onValueChange, className, disab
 	}
 
 	function handleRestoreClick() {
-		inputValue.current = structuredClone(GRAYSCALES[selectValue.current])
+		inputValue.current = { ...GRAYSCALES[selectValue.current] }
 		onValueChange(inputValue.current)
 	}
 
 	return (
-		<div {...props} className={tw('flex min-w-0 flex-col gap-2', className)}>
-			<Select className="w-full min-w-0" disabled={disabled} endContent={mode === 'input' ? <IconButton color="danger" disabled={disabled} icon={Icons.Restore} onClick={handleRestoreClick} /> : null} items={MODE_ITEMS} label="Channel mode" onValueChange={handleModeChange} value={mode}>
+		<div {...props} className={tw('flex min-w-0 gap-2', mode === 'input' ? 'flex-col' : 'flex-row', className)}>
+			<Select className="min-w-0" disabled={disabled} items={MODE_ITEMS} label="Mode" onValueChange={handleModeChange} value={mode}>
 				{ModeItem}
 			</Select>
 
 			{mode === 'select' ? (
-				<ImageChannelOrGraySelect className="min-w-0" disabled={disabled} onValueChange={handleSelectValueChange} value={selectedChannel} />
+				<ImageChannelOrGraySelect className="min-w-0 flex-1" disabled={disabled} onValueChange={handleSelectValueChange} value={selectedChannel} />
 			) : (
-				<div className="grid min-w-0 grid-cols-3 items-center gap-2">
-					<NumberInput className="col-span-1 min-w-0" disabled={disabled} fractionDigits={3} label="Red" maxValue={1} minValue={0} onValueChange={(red) => handleInputValueChange('red', red)} step={0.001} value={inputChannel.red} />
-					<NumberInput className="col-span-1 min-w-0" disabled={disabled} fractionDigits={3} label="Green" maxValue={1} minValue={0} onValueChange={(green) => handleInputValueChange('green', green)} step={0.001} value={inputChannel.green} />
-					<NumberInput className="col-span-1 min-w-0" disabled={disabled} fractionDigits={3} label="Blue" maxValue={1} minValue={0} onValueChange={(blue) => handleInputValueChange('blue', blue)} step={0.001} value={inputChannel.blue} />
+				<div className="flex min-w-0 flex-1 items-center gap-2">
+					<NumberInput className="min-w-0 flex-1" disabled={disabled} fractionDigits={3} label="Red" maxValue={1} minValue={0} onValueChange={(red) => handleInputValueChange('red', red)} step={0.001} value={inputChannel.red} />
+					<NumberInput className="min-w-0 flex-1" disabled={disabled} fractionDigits={3} label="Green" maxValue={1} minValue={0} onValueChange={(green) => handleInputValueChange('green', green)} step={0.001} value={inputChannel.green} />
+					<NumberInput className="min-w-0 flex-1" disabled={disabled} fractionDigits={3} label="Blue" maxValue={1} minValue={0} onValueChange={(blue) => handleInputValueChange('blue', blue)} step={0.001} value={inputChannel.blue} />
+					<IconButton color="danger" disabled={disabled} icon={Icons.Restore} onClick={handleRestoreClick} />
 				</div>
 			)}
 		</div>

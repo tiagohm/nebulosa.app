@@ -2,14 +2,14 @@ import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from '
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Mount, MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import { MountManager } from 'nebulosa/src/devices/indi/manager'
-import { ClientSimulator, MountSimulator } from 'nebulosa/src/devices/indi/simulator'
+import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import { CacheManager } from 'src/api/cache'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { mountBus, mount as mountEndpoints, MountHandler, MountRemoteControlHandler } from 'src/api/mount'
-import type { CoordinateInfo, MountAdded, MountRemoved, MountUpdated } from 'src/shared/types'
+import type { CoordinateInfo, MountAdded, MountRemoved, MountUpdated } from '#/mount'
 import { SocketMessager } from './util'
 
 mountBus.forceSync = true
@@ -17,8 +17,7 @@ mountBus.forceSync = true
 const wsm = new WebSocketMessageHandler()
 const mountManager = new MountManager()
 const confirmation = new ConfirmationHandler(wsm)
-const cache = new CacheManager()
-const mountHandler = new MountHandler(wsm, mountManager, confirmation, cache)
+const mountHandler = new MountHandler(wsm, mountManager, confirmation)
 const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager)
 const endpoints = mountEndpoints(mountHandler, mountRemoteControlHandler)
 const handler = new IndiClientHandlerSet([mountManager])
@@ -255,7 +254,7 @@ describe('mount handler', () => {
 			expect(message!.body).toEqual({ key: `mount.${device.id}.move`, message: `Are you sure you want to slew the mount '${device.name}'?` })
 			expect(moveTo).not.toHaveBeenCalled()
 
-			expect(confirmation.confirm({ key: `mount.${device.id}.move`, accepted: true })).toBeTrue()
+			confirmation.confirm({ key: `mount.${device.id}.move`, accepted: true })
 			expect(await waitUntil(() => moveTo.mock.calls.length > 0)).toBeTrue()
 			expect(moveTo).toHaveBeenCalledWith(device, 'goto', target)
 		} finally {
@@ -337,7 +336,7 @@ describe('mount handler', () => {
 	test('emits remove event when the simulator is disposed', () => {
 		const wsm = new WebSocketMessageHandler()
 		const mountManager = new MountManager()
-		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new CacheManager())
+		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
 		const handler = new IndiClientHandlerSet([mountManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const mountSimulator = new MountSimulator('Mount Simulator', client)

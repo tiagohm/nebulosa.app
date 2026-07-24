@@ -1,9 +1,9 @@
+import { confirmationStore } from '@stores/confirmation.store'
+import { Button } from '@ui/components/Button'
+import { Icons } from '@ui/Icon'
+import { Modal } from '@ui/Modal'
 import { memo } from 'react'
 import { useSnapshot } from 'valtio'
-import { confirmationStore } from '@/stores/confirmation.store'
-import { Button } from './components/Button'
-import { Icons } from './Icon'
-import { Modal } from './Modal'
 
 export const Confirmation = memo(() => {
 	const { show } = useSnapshot(confirmationStore.state)

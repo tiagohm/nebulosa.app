@@ -3,9 +3,11 @@ import type { Thermometer } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, ThermometerManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
-import type { ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from 'src/shared/types'
-import { type Endpoints, query, response } from './http'
-import { webSocketBus, type WebSocketMessageHandler } from './message'
+import type { ThermometerAdded, ThermometerRemoved, ThermometerUpdated } from '#/thermometer'
+import { query, response } from './http'
+import type { Endpoints } from './http'
+import { webSocketBus } from './message'
+import type { WebSocketMessageHandler } from './message'
 
 export interface ThermometerBusEvents {
 	readonly add: ThermometerAdded

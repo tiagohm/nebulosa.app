@@ -1,7 +1,8 @@
+import { assignRef } from '@shared/util'
+import { Floating } from '@ui/components/Floating'
+import type { FloatingClassNames, FloatingPlacement } from '@ui/components/Floating'
 import * as React from 'react'
 import { useEffect, useEffectEvent, useImperativeHandle, useState } from 'react'
-import { assignRef } from '@/shared/util'
-import { Floating, type FloatingClassNames, type FloatingPlacement } from './Floating'
 
 export type PopoverPlacement = FloatingPlacement
 export type PopoverClassNames = FloatingClassNames

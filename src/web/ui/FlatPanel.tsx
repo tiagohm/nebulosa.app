@@ -1,51 +1,47 @@
+import { useDevice } from '@hooks/device.hook'
+import { FlatPanelStoreContext } from '@shared/context'
+import { flatPanelStore } from '@stores/flatpanel.store'
+import { Slider } from '@ui/components/Slider'
+import { Switch } from '@ui/components/Switch'
+import { Tab, TabPanel, Tabs } from '@ui/components/Tabs'
+import { ConnectButton } from '@ui/ConnectButton'
+import { IndiPanelControl } from '@ui/IndiPanelControl'
+import type { IDockviewPanelProps } from 'dockview-react'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import { memo, useContext } from 'react'
 import { useSnapshot } from 'valtio'
-import { flatPanelStore } from '@/stores/flatpanel.store'
-import { useStore } from '../hooks/store.hook'
-import { FlatPanelDeviceContext, FlatPanelStoreContext } from '../shared/context'
-import { Slider } from './components/Slider'
-import { Switch } from './components/Switch'
-import { ConnectButton } from './ConnectButton'
-import { IndiPanelControlButton } from './IndiPanelControlButton'
-import { Modal } from './Modal'
 
-function formatIntensity(value: number) {
-	return Number.isFinite(value) ? value : 0
-}
+export const FlatPanel = memo(({ params }: IDockviewPanelProps<Device>) => {
+	const flatPanel = useDevice('flatPanel', params.id, flatPanelStore)
 
-export const FlatPanel = memo(() => {
-	const device = useContext(FlatPanelDeviceContext)
-	const flatPanel = useStore(() => flatPanelStore(device), [device])
+	if (!flatPanel) return <div className="flex h-full w-full items-center justify-center">Not available</div>
 
 	return (
-		<FlatPanelStoreContext value={flatPanel}>
-			<Modal header={<Header />} id={`flat-panel-${device.id}`} initialWidth="256px" onHide={flatPanel.hide}>
-				<Body />
-			</Modal>
+		<FlatPanelStoreContext value={flatPanel.store}>
+			<Tabs className="h-full p-3" startContent={<TabStartContent />}>
+				<Tab id="main">Filter Wheel</Tab>
+				<Tab id="indi">INDI</Tab>
+
+				<TabPanel id="main">
+					<Main />
+				</TabPanel>
+				<TabPanel id="indi">
+					<IndiPanelControl device={flatPanel.device} />
+				</TabPanel>
+			</Tabs>
 		</FlatPanelStoreContext>
 	)
 })
 
-const Header = memo(() => {
+const TabStartContent = memo(() => {
 	const flatPanel = useContext(FlatPanelStoreContext)
-	const { connecting, connected, name } = useSnapshot(flatPanel.state.flatPanel)
+	const { connected, connecting } = useSnapshot(flatPanel.state.flatPanel)
 
-	return (
-		<div className="flex w-full min-w-0 flex-row items-center justify-between gap-2">
-			<div className="flex shrink-0 flex-row items-center gap-1">
-				<ConnectButton connected={connected} loading={connecting} onClick={flatPanel.connect} />
-				<IndiPanelControlButton device={flatPanel.state.flatPanel} />
-			</div>
-			<div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0">
-				<span className="leading-5 font-semibold">Flat Panel</span>
-				<span className="max-w-full truncate text-xs font-normal text-neutral-400">{name}</span>
-			</div>
-		</div>
-	)
+	return <ConnectButton connected={connected} loading={connecting} onClick={flatPanel.connect} />
 })
 
-const Body = memo(() => (
-	<div className="mt-0 grid grid-cols-12 gap-3">
+const Main = memo(() => (
+	<div className="grid grid-cols-12 gap-2">
 		<Toggle />
 		<Intensity />
 	</div>
@@ -73,3 +69,7 @@ const Intensity = memo(() => {
 		</div>
 	)
 })
+
+function formatIntensity(value: number) {
+	return Number.isFinite(value) ? value : 0
+}

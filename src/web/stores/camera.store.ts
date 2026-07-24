@@ -1,21 +1,23 @@
+import { Api } from '@shared/api'
+import { cameraBus, imageBus } from '@shared/bus'
+import { initProxy } from '@shared/proxy'
+import { storageGet, storageSet } from '@shared/storage'
+import { clampInteger } from '@shared/util'
+import { cameraCaptureStore } from '@stores/camera.capture.store'
+import { equipmentStore } from '@stores/equipment.store'
+import type { DeviceState } from '@stores/equipment.store'
 import type { Camera, Focuser, MinMaxValueProperty, Mount, NameAndLabel, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
-import { type CameraCaptureStart, type CameraCaptureEvent, type Roi, DEFAULT_CAMERA_CAPTURE_START, DEFAULT_CAMERA_CAPTURE_EVENT, type CameraUpdated } from 'src/shared/types'
-import { exposureTimeIn, unsubscribe } from 'src/shared/util'
+import { unsubscribe } from 'src/shared/util'
 import { proxy } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { Api } from '../shared/api'
-import { cameraBus, imageBus } from '../shared/bus'
-import { initProxy } from '../shared/proxy'
-import { storageGet, storageSet } from '../shared/storage'
-import type { ImageRoiRequest } from '../shared/types'
-import { clampInteger } from '../shared/util'
-import { type DeviceState, equipmentStore } from './equipment.store'
+import { DEFAULT_CAMERA_CAPTURE_EVENT, exposureTimeIn } from '#/camera'
+import type { CameraCaptureEvent, CameraCaptureStart, CameraUpdated } from '#/camera'
+import type { ComputeRoi, Roi } from '#/image.roi'
 
 export type CameraStore = ReturnType<typeof cameraStore>
 
 export interface CameraState {
 	camera: DeviceState<Camera>
-	minimized: boolean
 	readonly request: CameraCaptureStart
 	readonly progress: CameraCaptureEvent
 	capturing: boolean
@@ -30,10 +32,11 @@ export interface CameraState {
 }
 
 export function cameraStore(camera: Camera) {
+	const capture = cameraCaptureStore()
+
 	const state = proxy<CameraState>({
 		camera,
-		minimized: false,
-		request: structuredClone(DEFAULT_CAMERA_CAPTURE_START),
+		request: capture.state,
 		progress: structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT),
 		capturing: false,
 		targetTemperature: camera.temperature,
@@ -46,7 +49,7 @@ export function cameraStore(camera: Camera) {
 	let mounted = false
 
 	function mount() {
-		if (mounted) return
+		if (mounted) return unmount
 
 		console.info('camera mounted:', camera.name)
 
@@ -64,11 +67,11 @@ export function cameraStore(camera: Camera) {
 			}
 		})
 
-		u[1] = initProxy(state, `camera.${camera.name}`, ['o:request', 'p:minimized', 'p:targetTemperature'])
+		u[1] = initProxy(state, `camera.${camera.name}`, ['o:request', 'p:targetTemperature'])
 		u[2] = subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(state.request, formats))
 		u[3] = subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(state.request, exposure))
 		u[4] = subscribeKey(camera, 'frame', (frame) => updateCameraFrame(state.request, frame))
-		u[5] = cameraBus.subscribe('roi', sendRoi)
+		u[5] = cameraBus.subscribe('roi', computeRoi)
 		u[6] = subscribeKey(equipmentStore.state.mount, 'length', refreshEquipment)
 		u[7] = subscribeKey(equipmentStore.state.wheel, 'length', refreshEquipment)
 		u[8] = subscribeKey(equipmentStore.state.focuser, 'length', refreshEquipment)
@@ -76,6 +79,8 @@ export function cameraStore(camera: Camera) {
 
 		refreshEquipment()
 		updateCameraCaptureStartFromCamera(state.request, camera)
+
+		return unmount
 	}
 
 	function unmount() {
@@ -83,14 +88,6 @@ export function cameraStore(camera: Camera) {
 		console.info('camera unmounted:', camera.name)
 		unsubscribe(u)
 		mounted = false
-	}
-
-	function update<K extends keyof CameraState['request']>(key: K, value: CameraState['request'][K]) {
-		state.request[key] = value
-	}
-
-	function updateSavePath(path?: string) {
-		return update('savePath', path)
 	}
 
 	function updateDither<K extends keyof CameraState['request']['dither']>(key: K, value: CameraState['request']['dither'][K]) {
@@ -117,14 +114,14 @@ export function cameraStore(camera: Camera) {
 	}
 
 	function requestRoi() {
-		applySubframe(imageBus.emitWithResponse('roi', { camera }) as never)
+		applySubframe(imageBus.call('roi', { camera }))
 	}
 
 	function applySubframe(subframe: Roi) {
 		return updateCameraSubframe(state.request, camera, subframe)
 	}
 
-	function sendRoi(options: ImageRoiRequest) {
+	function computeRoi(options: ComputeRoi) {
 		if (options.camera !== camera) return undefined
 		return { x: state.request.x, y: state.request.y, width: state.request.width || camera.frame.width.max || 1, height: state.request.height || camera.frame.height.max || 1 }
 	}
@@ -141,22 +138,22 @@ export function cameraStore(camera: Camera) {
 		state.equipment.rotator = equipmentStore.state.rotator.find((e) => e.id === rotatorId)
 	}
 
-	function updateMount(mount?: DeviceState<Mount>) {
+	function updateMount(mount?: Mount) {
 		state.equipment.mount = mount
 		storageSet(`camera.${camera.id}.equipment.mount`, mount?.id)
 	}
 
-	function updateWheel(wheel?: DeviceState<Wheel>) {
+	function updateWheel(wheel?: Wheel) {
 		state.equipment.wheel = wheel
 		storageSet(`camera.${camera.id}.equipment.wheel`, wheel?.id)
 	}
 
-	function updateFocuser(focuser?: DeviceState<Focuser>) {
+	function updateFocuser(focuser?: Focuser) {
 		state.equipment.focuser = focuser
 		storageSet(`camera.${camera.id}.equipment.focuser`, focuser?.id)
 	}
 
-	function updateRotator(rotator?: DeviceState<Rotator>) {
+	function updateRotator(rotator?: Rotator) {
 		state.equipment.rotator = rotator
 		storageSet(`camera.${camera.id}.equipment.rotator`, rotator?.id)
 	}
@@ -179,25 +176,12 @@ export function cameraStore(camera: Camera) {
 		return Api.Cameras.stop(camera)
 	}
 
-	function show() {
-		equipmentStore.show(camera)
-	}
-
-	function hide() {
-		equipmentStore.hide(camera)
-	}
-
-	function minimize() {
-		state.minimized = !state.minimized
-	}
-
 	return {
 		state,
+		capture,
 		mount,
 		unmount,
 		connect,
-		update,
-		updateSavePath,
 		updateDither,
 		cooler,
 		temperature,
@@ -209,9 +193,6 @@ export function cameraStore(camera: Camera) {
 		updateRotator,
 		start,
 		stop,
-		show,
-		hide,
-		minimize,
 	} as const
 }
 
@@ -292,8 +273,10 @@ export function updateCameraCaptureStartFromCameraUpdated(capture: CameraCapture
 	}
 }
 
-export function subscribeToUpdateCameraCaptureStartFromCamera(u: VoidFunction[], camera: Camera, request: CameraCaptureStart) {
-	u.push(subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(request, formats)))
-	u.push(subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(request, exposure)))
-	u.push(subscribeKey(camera, 'frame', (frame) => updateCameraFrame(request, frame)))
+export function subscribeToUpdateCameraCaptureStartFromCamera(camera: Camera, request: CameraCaptureStart) {
+	const u = new Array<VoidFunction>(3)
+	u[0] = subscribeKey(camera, 'frameFormats', (formats) => updateCameraFrameFormat(request, formats))
+	u[1] = subscribeKey(camera, 'exposure', (exposure) => updateCameraExposureTime(request, exposure))
+	u[2] = subscribeKey(camera, 'frame', (frame) => updateCameraFrame(request, frame))
+	return () => unsubscribe(u)
 }

@@ -3,9 +3,11 @@ import type { Client, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler, GuideOutputManager } from 'nebulosa/src/devices/indi/manager'
 import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
-import type { GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from '../shared/types'
-import { type Endpoints, query, response } from './http'
-import { webSocketBus, type WebSocketMessageHandler } from './message'
+import type { GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from '#/guideoutput'
+import { query, response } from './http'
+import type { Endpoints } from './http'
+import { webSocketBus } from './message'
+import type { WebSocketMessageHandler } from './message'
 
 export interface GuideOutputBusEvents {
 	readonly add: GuideOutputAdded

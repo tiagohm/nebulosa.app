@@ -1,6 +1,6 @@
+import { tw } from '@shared/util'
 import { nanoid } from 'nanoid'
 import type { ClassValue } from 'tailwind-variants'
-import { tw } from './util'
 
 export const TOAST_PLACEMENTS = ['top-start', 'top', 'top-end', 'bottom-start', 'bottom', 'bottom-end'] as const
 

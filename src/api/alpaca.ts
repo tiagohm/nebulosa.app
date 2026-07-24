@@ -1,12 +1,14 @@
-import { type AlpacaDeviceServer, AlpacaDiscoveryClient, AlpacaDiscoveryServer } from 'nebulosa/src/devices/alpaca/discovery'
+import { AlpacaDiscoveryClient, AlpacaDiscoveryServer } from 'nebulosa/src/devices/alpaca/discovery'
+import type { AlpacaDeviceServer } from 'nebulosa/src/devices/alpaca/discovery'
 import { AlpacaServer } from 'nebulosa/src/devices/alpaca/server'
 import type { AlpacaServerHandler, AlpacaServerOptions } from 'nebulosa/src/devices/alpaca/server'
 import type { AlpacaConfiguredDevice } from 'nebulosa/src/devices/alpaca/types'
 import type { Device } from 'nebulosa/src/devices/indi/device'
 import { EventBus } from 'src/shared/bus'
 import { normalizePort } from 'src/shared/normalizer'
-import type { AlpacaServerStatus } from 'src/shared/types'
-import { type Endpoints, query, response } from './http'
+import type { AlpacaServerStatus } from '#/alpaca'
+import { query, response } from './http'
+import type { Endpoints } from './http'
 import type { WebSocketMessageHandler } from './message'
 
 export interface AlpacaBusEvents {

@@ -1,8 +1,8 @@
+import { storageGet, storageSet } from '@shared/storage'
+import { deepAssign } from '@shared/util'
 import { unsubscribe } from 'src/shared/util'
 import { subscribe } from 'valtio'
 import { subscribeKey } from 'valtio/utils'
-import { storageGet, storageSet } from './storage'
-import { deepAssign } from './util'
 
 export type ProxyProperties<T extends {}> = `${'p' | 'o'}:${keyof T & string}`
 

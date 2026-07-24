@@ -1,15 +1,16 @@
-import { existsSync, type MakeDirectoryOptions, rmSync } from 'fs'
+import { existsSync, rmSync } from 'fs'
+import type { MakeDirectoryOptions } from 'fs'
 import fs from 'fs/promises'
 import os from 'os'
 import { join } from 'path'
 import { parseArgs } from 'util'
 import type { Client, DewHeater, GuideOutput, Thermometer } from 'nebulosa/src/devices/indi/device'
-import { CameraManager, CoverManager, type DeviceProvider, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
+import { CameraManager, CoverManager, DewHeaterManager, FlatPanelManager, FocuserManager, GuideOutputManager, MountManager, RotatorManager, ThermometerManager, WheelManager } from 'nebulosa/src/devices/indi/manager'
+import type { DeviceProvider } from 'nebulosa/src/devices/indi/manager'
 import { default as openDefaultApp } from 'open'
 import { AlpacaHandler, alpaca } from 'src/api/alpaca'
 import { AtlasHandler, atlas } from 'src/api/atlas'
 import { AutoFocusHandler, autoFocus } from 'src/api/autofocus'
-import { CacheManager } from 'src/api/cache'
 import { CameraHandler, camera } from 'src/api/camera'
 import { ConnectionHandler, connection } from 'src/api/connection'
 import { CoverHandler, cover } from 'src/api/cover'
@@ -29,6 +30,7 @@ import { storage, StorageHandler } from 'src/api/storage'
 import { ThermometerHandler, thermometer } from 'src/api/thermometer'
 import { TppaHandler, tppa } from 'src/api/tppa'
 import { WheelHandler, wheel } from 'src/api/wheel'
+import { speedUpTime } from 'src/shared/util'
 import { ConfirmationHandler, confirmation } from './src/api/confirmation'
 import { FileSystemHandler, fileSystem } from './src/api/filesystem'
 import { FramingHandler, framing } from './src/api/framing'
@@ -36,6 +38,8 @@ import { ImageHandler, ImageProcessor, image } from './src/api/image'
 import { PlateSolverHandler, plateSolver } from './src/api/platesolver'
 import { StarDetectionHandler, starDetection } from './src/api/stardetection'
 import homeHtml from './src/web/pages/home/index.html'
+
+speedUpTime()
 
 const CREATE_RECURSIVE_DIRECTORY: MakeDirectoryOptions = { recursive: true }
 
@@ -149,7 +153,6 @@ const wsm = new WebSocketMessageHandler()
 const notificationHandler = new NotificationHandler(wsm)
 const connectionHandler = new ConnectionHandler(wsm, notificationHandler)
 const imageProcessor = new ImageProcessor()
-const cacheManager = new CacheManager()
 
 const cameraManager = new CameraManager()
 const focuserManager = new FocuserManager()
@@ -178,7 +181,7 @@ const dewHeaterManager = new DewHeaterManager(dewHeaterProvider)
 const confirmationHandler = new ConfirmationHandler(wsm)
 const guiderHandler = new GuiderHandler(wsm, notificationHandler)
 const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, guiderHandler)
-const mountHandler = new MountHandler(wsm, mountManager, confirmationHandler, cacheManager)
+const mountHandler = new MountHandler(wsm, mountManager, confirmationHandler)
 const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager)
 const focuserHandler = new FocuserHandler(wsm, focuserManager)
 const wheelHandler = new WheelHandler(wsm, wheelManager)
@@ -195,7 +198,7 @@ const framingHandler = new FramingHandler(imageProcessor)
 const fileSystemHandler = new FileSystemHandler()
 const starDetectionHandler = new StarDetectionHandler(imageProcessor)
 const plateSolverHandler = new PlateSolverHandler(notificationHandler, imageProcessor)
-const atlasHandler = new AtlasHandler(cacheManager, notificationHandler)
+const atlasHandler = new AtlasHandler(notificationHandler)
 const imageHandler = new ImageHandler(imageProcessor, notificationHandler)
 const tppaHandler = new TppaHandler(wsm, cameraHandler, mountHandler, plateSolverHandler)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler)

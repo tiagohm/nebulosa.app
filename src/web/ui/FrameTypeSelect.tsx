@@ -1,5 +1,6 @@
+import { Select } from '@ui/components/Select'
+import type { SelectProps } from '@ui/components/Select'
 import type { FrameType } from 'nebulosa/src/devices/indi/device'
-import { Select, type SelectProps } from './components/Select'
 
 const ITEMS = ['LIGHT', 'DARK', 'FLAT', 'BIAS'] as const
 const LABELS = ['Light', 'Dark', 'Flat', 'Bias'] as const

@@ -4,7 +4,6 @@ import type { GuideOutput } from 'nebulosa/src/devices/indi/device'
 import { GuideOutputManager, MountManager } from 'nebulosa/src/devices/indi/manager'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
-import { CacheManager } from 'src/api/cache'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { guideOutputBus, guideOutput as guideOutputEndpoints, GuideOutputHandler } from 'src/api/guideoutput'
 import { WebSocketMessageHandler } from 'src/api/message'
@@ -157,7 +156,7 @@ describe('guide output handler', () => {
 		const mountManager = new MountManager()
 		const guideOutputManager = new GuideOutputManager(mountManager)
 		const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)
-		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(), new CacheManager())
+		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler())
 		const handler = new IndiClientHandlerSet([mountManager, guideOutputManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const mountSimulator = new MountSimulator('Mount Simulator', client)

@@ -6,14 +6,16 @@ import { StellariumObjectType } from 'nebulosa/src/devices/protocols/stellarium'
 import { deg, formatALT, formatRA, parseAngle } from 'nebulosa/src/math/units/angle'
 import { lightYear, meter, toKilometer } from 'nebulosa/src/math/units/distance'
 import { AtlasHandler } from 'src/api/atlas'
-import cache from 'src/api/cache'
+import { speedUpTime } from 'src/shared/util'
 import type { PositionOfBody } from '#/atlas'
 import { DEFAULT_SKY_OBJECT_SEARCH } from '#/galaxy'
 import type { SearchSkyObject } from '#/galaxy'
 import type { FindSolarEclipse } from '#/sun'
 import { spyFetch } from './util'
 
-const atlas = new AtlasHandler(cache)
+speedUpTime()
+
+const atlas = new AtlasHandler()
 
 const POSITION_OF_BODY: PositionOfBody = {
 	time: {
@@ -421,7 +423,7 @@ test('chart of sky object', () => {
 
 	expect(chart).toHaveLength(1441)
 	expect(formatALT(chart[0], true)).toBe('+66 48 39')
-	expect(formatALT(chart[720], true)).toBe('-44 21 24')
+	expect(formatALT(chart[720], true)).toBe('-44 21 25')
 	expect(formatALT(chart[1440], true)).toBe('+65 54 26')
 })
 

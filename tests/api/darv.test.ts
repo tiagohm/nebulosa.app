@@ -5,7 +5,6 @@ import { CameraManager, FocuserManager, GuideOutputManager, MountManager, Rotato
 import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
-import { CacheManager } from 'src/api/cache'
 import { cameraBus, CameraHandler } from 'src/api/camera'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { darvBus, darv as darvEndpoints, DarvHandler } from 'src/api/darv'
@@ -35,7 +34,7 @@ const guideOutputManager = new GuideOutputManager({
 	get: (client, name) => mountManager.get(client, name) ?? cameraManager.get(client, name),
 })
 const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
-const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new CacheManager())
+const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
 const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler)
 const endpoints = darvEndpoints(darvHandler)

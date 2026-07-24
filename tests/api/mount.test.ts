@@ -6,7 +6,6 @@ import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import { CacheManager } from 'src/api/cache'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { mountBus, mount as mountEndpoints, MountHandler, MountRemoteControlHandler } from 'src/api/mount'
@@ -18,8 +17,7 @@ mountBus.forceSync = true
 const wsm = new WebSocketMessageHandler()
 const mountManager = new MountManager()
 const confirmation = new ConfirmationHandler(wsm)
-const cache = new CacheManager()
-const mountHandler = new MountHandler(wsm, mountManager, confirmation, cache)
+const mountHandler = new MountHandler(wsm, mountManager, confirmation)
 const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager)
 const endpoints = mountEndpoints(mountHandler, mountRemoteControlHandler)
 const handler = new IndiClientHandlerSet([mountManager])
@@ -338,7 +336,7 @@ describe('mount handler', () => {
 	test('emits remove event when the simulator is disposed', () => {
 		const wsm = new WebSocketMessageHandler()
 		const mountManager = new MountManager()
-		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new CacheManager())
+		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
 		const handler = new IndiClientHandlerSet([mountManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const mountSimulator = new MountSimulator('Mount Simulator', client)

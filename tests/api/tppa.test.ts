@@ -6,7 +6,6 @@ import { CameraManager, FocuserManager, MountManager, RotatorManager, WheelManag
 import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
-import { CacheManager } from 'src/api/cache'
 import { cameraBus, CameraHandler } from 'src/api/camera'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { ImageProcessor } from 'src/api/image'
@@ -38,7 +37,7 @@ const wheelManager = new WheelManager()
 const focuserManager = new FocuserManager()
 const rotatorManager = new RotatorManager()
 const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
-const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new CacheManager())
+const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
 const solver = new PlateSolverHandler(new NotificationHandler(wsm), imageProcessor)
 const tppaHandler = new TppaHandler(wsm, cameraHandler, mountHandler, solver)
 const endpoints = tppaEndpoints(tppaHandler)

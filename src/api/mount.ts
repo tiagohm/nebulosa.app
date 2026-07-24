@@ -14,10 +14,10 @@ import type { StellariumProtocolHandler } from 'nebulosa/src/devices/protocols/s
 import { matMulVec, matTranspose } from 'nebulosa/src/math/linear-algebra/mat3'
 import { normalizePI } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
+import { makeTime } from 'src/api/util'
 import { EventBus } from 'src/shared/bus'
 import { coordinateInfo, DEFAULT_COORDINATE_INFO } from '#/mount'
 import type { MountAdded, MountRemoteControlProtocol, MountRemoteControlStart, MountRemoteControlStatus, MountRemoved, MountUpdated } from '#/mount'
-import type { CacheManager } from './cache'
 import type { ConfirmationHandler } from './confirmation'
 import { query, response } from './http'
 import type { Endpoints } from './http'
@@ -50,7 +50,6 @@ export class MountHandler implements DeviceHandler<Mount> {
 		readonly wsm: WebSocketMessageHandler,
 		readonly mountManager: MountManager,
 		readonly confirmation: ConfirmationHandler,
-		readonly cache: CacheManager,
 	) {
 		mountManager.addHandler(this)
 
@@ -85,12 +84,12 @@ export class MountHandler implements DeviceHandler<Mount> {
 
 	currentPosition(mount: Mount) {
 		if (!mount) return DEFAULT_COORDINATE_INFO
-		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate)), mount.geographicCoordinate.longitude, mount.equatorialCoordinate)
+		return coordinateInfo(makeTime('now', mount.geographicCoordinate), mount.geographicCoordinate.longitude, mount.equatorialCoordinate)
 	}
 
 	targetPosition(mount: Mount, coordinate: MountTargetCoordinate<string | Angle>) {
 		if (!mount) return DEFAULT_COORDINATE_INFO
-		return coordinateInfo(this.cache.time('now', this.cache.geographicCoordinate(mount.geographicCoordinate)), mount.geographicCoordinate.longitude, coordinate)
+		return coordinateInfo(makeTime('now', mount.geographicCoordinate), mount.geographicCoordinate.longitude, coordinate)
 	}
 
 	goTo(mount: Mount, req: MountTargetCoordinate) {

@@ -501,10 +501,10 @@ const LAYER_CANVAS_GROUPS: Record<string, string> = {
 	referenceLines: 'sky',
 	constellations: 'sky',
 	constellationBoundaries: 'sky',
+	constellationLabels: 'sky',
 	deepSky: 'sky',
 	stars: 'stars',
 	movingBodies: 'dynamic',
-	constellationLabels: 'dynamic',
 	shapes: 'dynamic',
 	overlay: 'overlay',
 }

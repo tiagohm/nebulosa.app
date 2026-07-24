@@ -3555,6 +3555,8 @@ export class Celestial {
 	readonly #tempProjection = new Float32Array(2)
 	readonly #tempVector = new Float32Array(3)
 	readonly #tempScreen = new Float32Array(2)
+	readonly #starProjectionBounds = new Float64Array(4)
+	readonly #starViewportBounds = new Float64Array(4)
 	readonly #layers: InternalLayer[] = []
 
 	readonly #options: ResolvedCelestialOptions
@@ -4372,6 +4374,17 @@ export class Celestial {
 		const height = this.#options.height
 		const scale = projectionScale(width, height, this.#options.projection)
 		const margin = Math.max(width, height)
+		const projectionBounds = this.#starProjectionBounds
+
+		if (this.#options.projection === 'gnomonic') {
+			writeBaseViewportBounds(width, height, this.#transform, margin, projectionBounds)
+		} else {
+			projectionBounds[0] = -margin
+			projectionBounds[1] = width + margin
+			projectionBounds[2] = -margin
+			projectionBounds[3] = height + margin
+		}
+
 		const maxMagnitude = this.#options.stars.maxMagnitude
 		const maxRenderStars = this.#options.stars.maxRenderStars
 		const isHorizontal = this.#options.coordinateSystem === 'horizontal'
@@ -4414,7 +4427,7 @@ export class Celestial {
 			const sx = this.#tempScreen[0]
 			const sy = this.#tempScreen[1]
 
-			if (sx < -margin || sy < -margin || sx > width + margin || sy > height + margin) {
+			if (sx < projectionBounds[0] || sx > projectionBounds[1] || sy < projectionBounds[2] || sy > projectionBounds[3]) {
 				continue
 			}
 
@@ -4423,6 +4436,13 @@ export class Celestial {
 
 		catalog.finalizeProjectionBuckets()
 		this.#renderer.markDirty('stars')
+	}
+
+	private starProjectionCoversViewport() {
+		if (!this.#starCatalog || this.#options.projection !== 'gnomonic') return true
+
+		writeBaseViewportBounds(this.#options.width, this.#options.height, this.#transform, 0, this.#starViewportBounds)
+		return this.#starViewportBounds[0] >= this.#starProjectionBounds[0] && this.#starViewportBounds[1] <= this.#starProjectionBounds[1] && this.#starViewportBounds[2] >= this.#starProjectionBounds[2] && this.#starViewportBounds[3] <= this.#starProjectionBounds[3]
 	}
 
 	// Projects deep-sky objects into base screen coordinates for reuse during pan and zoom.
@@ -4982,6 +5002,11 @@ export class Celestial {
 	// Updates rendering and picking after pan/zoom transform changes.
 	private afterTransformChanged() {
 		this.#pickingDirty = true
+
+		if (!this.starProjectionCoversViewport()) {
+			this.projectStars()
+		}
+
 		this.#renderer.markAllDirty()
 		this.#emitter.has('viewTransformChange') && this.#emitter.emit('viewTransformChange', { transform: this.#transform })
 		this.requestRender()

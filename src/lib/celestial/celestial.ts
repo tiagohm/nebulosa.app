@@ -1365,11 +1365,11 @@ function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 		const ra = copyFloat32(input.ra, count, 0, normalizeAngle)
 		const dec = copyFloat32(input.dec, count, 0, (value) => clamp(value, -PIOVERTWO, PIOVERTWO))
 		const mag = input.mag ? copyFloat32(input.mag, count, 99) : fillFloat32(count, 99)
-		const bv = input.bv ? copyFloat32(input.bv, count, 0.65) : undefined
-		const pmRA = input.pmRA ? copyFloat32(input.pmRA, count, 0) : undefined
-		const pmDEC = input.pmDEC ? copyFloat32(input.pmDEC, count, 0) : undefined
-		const flags = input.flags ? copyUint8(input.flags, count) : undefined
-		const epochs = fillFloat32(count, input.epoch ?? J2000_EPOCH)
+		const bv = input.bv?.length ? copyFloat32(input.bv, count, 0.65) : undefined
+		const pmRA = input.pmRA?.length ? copyFloat32(input.pmRA, count, 0) : undefined
+		const pmDEC = input.pmDEC?.length ? copyFloat32(input.pmDEC, count, 0) : undefined
+		const flags = input.flags?.length ? copyUint8(input.flags, count) : undefined
+		const epochs = pmRA || pmDEC ? fillFloat32(count, input.epoch ?? J2000_EPOCH) : undefined
 
 		return { count, ra, dec, mag, bv, pmRA, pmDEC, flags, epochs, names: input.names, ids: input.ids } as const
 	} else {
@@ -1377,16 +1377,13 @@ function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 		const ra = new Float32Array(count)
 		const dec = new Float32Array(count)
 		const mag = new Float32Array(count)
-		const bv = new Float32Array(count)
-		const pmRA = new Float32Array(count)
-		const pmDEC = new Float32Array(count)
-		const flags = new Uint8ClampedArray(count)
-		const epochs = new Float32Array(count)
+		let bv: Float32Array | undefined
+		let pmRA: Float32Array | undefined
+		let pmDEC: Float32Array | undefined
+		let flags: Uint8ClampedArray | undefined
+		let epochs: Float32Array | undefined
 		const names: string[] = []
 		const ids: StarId[] = []
-		let hasBv = false
-		let hasPm = false
-		let hasFlags = false
 		let hasNames = false
 		let hasIds = false
 
@@ -1398,22 +1395,23 @@ function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 			mag[i] = isFiniteNumber(star.magnitude) ? star.magnitude : 99
 
 			if (isFiniteNumber(star.bv)) {
+				bv ??= new Float32Array(count)
 				bv[i] = star.bv
-				hasBv = true
 			}
 
 			if (isFiniteNumber(star.pmRA) || isFiniteNumber(star.pmDEC)) {
-				pmRA[i] = star.pmRA ?? 0
-				pmDEC[i] = star.pmDEC ?? 0
-				hasPm = true
+				pmRA ??= new Float32Array(count)
+				pmDEC ??= new Float32Array(count)
+				epochs ??= fillFloat32(count, J2000_EPOCH)
+				pmRA[i] = isFiniteNumber(star.pmRA) ? star.pmRA : 0
+				pmDEC[i] = isFiniteNumber(star.pmDEC) ? star.pmDEC : 0
+				epochs[i] = isFiniteNumber(star.epoch) ? star.epoch : J2000_EPOCH
 			}
 
 			if (isFiniteNumber(star.flags)) {
+				flags ??= new Uint8ClampedArray(count)
 				flags[i] = star.flags
-				hasFlags = true
 			}
-
-			epochs[i] = isFiniteNumber(star.epoch) ? star.epoch : J2000_EPOCH
 
 			if (star.name) {
 				names[i] = star.name
@@ -1431,10 +1429,10 @@ function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 			ra,
 			dec,
 			mag,
-			bv: hasBv ? bv : [],
-			pmRA: hasPm ? pmRA : [],
-			pmDEC: hasPm ? pmDEC : [],
-			flags: hasFlags ? flags : [],
+			bv,
+			pmRA,
+			pmDEC,
+			flags,
 			epochs,
 			names: hasNames ? names : [],
 			ids: hasIds ? ids : [],

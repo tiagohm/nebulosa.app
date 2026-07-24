@@ -203,6 +203,7 @@ export interface InteractionOptions {
 export interface CelestialOptions {
 	width?: number
 	height?: number
+	maxDevicePixelRatio?: number
 	projection?: ProjectionType
 	coordinateSystem?: CoordinateSystem
 	updateInterval?: number
@@ -353,6 +354,7 @@ type ResolvedReferenceLinesOptions = {
 type ResolvedCelestialOptions = {
 	width: number
 	height: number
+	readonly maxDevicePixelRatio: number
 	projection: ProjectionType
 	readonly coordinateSystem: CoordinateSystem
 	observer: ObserverLocation
@@ -372,6 +374,7 @@ const DAY_MS = 86400000 // Milliseconds in one civil day.
 const YEAR_MS = 365.25 * DAY_MS // Mean year length used for lightweight Julian epoch interpolation.
 const DEFAULT_WIDTH = 800 // Fallback canvas width when callers do not provide one.
 const DEFAULT_HEIGHT = 800 // Fallback canvas height when callers do not provide one.
+const DEFAULT_MAX_DEVICE_PIXEL_RATIO = 2 // Caps quadratic canvas backing-store growth on high-density displays.
 const DEFAULT_UPDATE_INTERVAL = 10000 // Default realtime update interval; lower updates sky positions more often, higher reduces background work.
 const WHEEL_DELTA_LINE_PIXELS = 16 // Pixel equivalent for wheel events reported in text-line units; higher makes those wheels zoom faster.
 const WHEEL_DELTA_PAGE_PIXELS = 800 // Pixel equivalent for wheel events reported in page units; higher makes page-mode wheels zoom faster.
@@ -962,6 +965,7 @@ function resolveOptions(options: CelestialOptions): ResolvedCelestialOptions {
 	return {
 		width: Math.max(1, Math.floor(options.width ?? DEFAULT_WIDTH)),
 		height: Math.max(1, Math.floor(options.height ?? DEFAULT_HEIGHT)),
+		maxDevicePixelRatio: Math.max(1, isFiniteNumber(options.maxDevicePixelRatio) ? options.maxDevicePixelRatio : DEFAULT_MAX_DEVICE_PIXEL_RATIO),
 		projection: validateProjection(options.projection ?? 'stereographic'),
 		coordinateSystem: options.coordinateSystem ?? 'horizontal',
 		observer: DEFAULT_OBSERVER,
@@ -3214,6 +3218,7 @@ class CanvasRenderer {
 		private readonly host: HTMLElement,
 		width: number,
 		height: number,
+		private readonly maxDevicePixelRatio: number,
 	) {
 		this.root = document.createElement('div')
 		this.root.style.position = 'relative'
@@ -3246,7 +3251,7 @@ class CanvasRenderer {
 
 	// Resizes all canvases with device-pixel awareness.
 	resize(width: number, height: number) {
-		this.dpr = Math.max(1, window.devicePixelRatio || 1)
+		this.dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, this.maxDevicePixelRatio))
 		this.root.style.width = `${width}px`
 		this.root.style.height = `${height}px`
 
@@ -3383,7 +3388,7 @@ export class Celestial {
 	constructor(container: HTMLElement | string, options: CelestialOptions = {}) {
 		this.#host = resolveContainer(container)
 		this.#options = resolveOptions(options)
-		this.#renderer = new CanvasRenderer(this.#host, this.#options.width, this.#options.height)
+		this.#renderer = new CanvasRenderer(this.#host, this.#options.width, this.#options.height, this.#options.maxDevicePixelRatio)
 
 		this.setupLayers()
 

@@ -587,6 +587,10 @@ export namespace Api {
 		export function planetarium(req: PlanetariumSearch) {
 			return json<readonly SkyObject[]>(`/atlas/planetarium`, 'post', req)
 		}
+
+		export function iers() {
+			return json<readonly string[]>(`/atlas/iers`, 'get')
+		}
 	}
 
 	export namespace PlateSolver {

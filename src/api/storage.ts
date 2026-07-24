@@ -15,7 +15,7 @@ export class StorageHandler {
 	constructor(memory: boolean) {
 		this.db = new Database(memory ? ':memory:' : join(Bun.env.appDir, 'storage.sqlite'))
 
-		this.db.run('PRAGMA journal_mode = OFF')
+		this.db.run('PRAGMA journal_mode = WAL')
 		this.db.run('PRAGMA synchronous = OFF')
 		this.db.run('PRAGMA temp_store = MEMORY')
 		this.db.run('PRAGMA locking_mode = EXCLUSIVE')

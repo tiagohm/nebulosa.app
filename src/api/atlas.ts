@@ -37,7 +37,7 @@ import type { Writable } from 'nebulosa/src/core/types'
 import { expectedPierSide, meridianTimeIn } from 'nebulosa/src/devices/indi/device'
 import type { UTCTime } from 'nebulosa/src/devices/indi/device'
 import type { CsvRow } from 'nebulosa/src/io/csv'
-import { readableStreamSource } from 'nebulosa/src/io/io'
+import { bufferSource, readableStreamSource, readLines } from 'nebulosa/src/io/io'
 import { deg, parseAngle, toDeg } from 'nebulosa/src/math/units/angle'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { toMeter } from 'nebulosa/src/math/units/distance'
@@ -80,20 +80,20 @@ const SOLAR_ECLIPSE_MAP_GEOMETRY_OPTIONS: SolarEclipseMapGeometryOptions = { lon
 const LUNAR_ECLIPSE_MAP_GEOMETRY_OPTIONS: LunarEclipseMapGeometryOptions = { maxAngularStep: 0.5 * DEG2RAD, refraction: true }
 
 const satellitesDatabase = new Database(':memory:')
-satellitesDatabase.run('PRAGMA journal_mode = OFF;')
-satellitesDatabase.run('PRAGMA synchronous = OFF;')
-satellitesDatabase.run('PRAGMA temp_store = MEMORY;')
-satellitesDatabase.run('PRAGMA locking_mode = EXCLUSIVE;')
-satellitesDatabase.run('PRAGMA cache_size = -262144;')
-satellitesDatabase.run('PRAGMA mmap_size = 0;')
-satellitesDatabase.run('PRAGMA automatic_index = ON;')
-satellitesDatabase.run('PRAGMA optimize;')
-satellitesDatabase.run('PRAGMA foreign_keys = OFF;')
-satellitesDatabase.run('CREATE TABLE satellites (id INTEGER PRIMARY KEY, name TEXT, line1 TEXT, line2 TEXT);')
-satellitesDatabase.run('CREATE TABLE satelliteGroups (satelliteId INTEGER, name TEXT);')
-satellitesDatabase.run('CREATE INDEX satellitesNameIdx ON satellites (name);')
-satellitesDatabase.run('CREATE INDEX satelliteGroupsSatelliteIdIdx ON satelliteGroups (satelliteId);')
-satellitesDatabase.run('CREATE INDEX satelliteGroupsNameIdx ON satelliteGroups (name);')
+satellitesDatabase.run('PRAGMA journal_mode = OFF')
+satellitesDatabase.run('PRAGMA synchronous = OFF')
+satellitesDatabase.run('PRAGMA temp_store = MEMORY')
+satellitesDatabase.run('PRAGMA locking_mode = EXCLUSIVE')
+satellitesDatabase.run('PRAGMA cache_size = -262144')
+satellitesDatabase.run('PRAGMA mmap_size = 0')
+satellitesDatabase.run('PRAGMA automatic_index = ON')
+satellitesDatabase.run('PRAGMA optimize')
+satellitesDatabase.run('PRAGMA foreign_keys = OFF')
+satellitesDatabase.run('CREATE TABLE satellites (id INTEGER PRIMARY KEY, name TEXT, line1 TEXT, line2 TEXT)')
+satellitesDatabase.run('CREATE TABLE satelliteGroups (satelliteId INTEGER, name TEXT)')
+satellitesDatabase.run('CREATE INDEX satellitesNameIdx ON satellites (name)')
+satellitesDatabase.run('CREATE INDEX satelliteGroupsSatelliteIdIdx ON satelliteGroups (satelliteId)')
+satellitesDatabase.run('CREATE INDEX satelliteGroupsNameIdx ON satelliteGroups (name)')
 
 // Faster Moon position provider from the ERFA ephemeris.
 function moon(time: Time) {
@@ -770,10 +770,9 @@ export class AtlasHandler {
 
 		const ephemeris = this.ephemeris[id]
 		let position: Writable<BodyPosition> | undefined = ephemeris?.get(key)
+		const { longitude, latitude, elevation } = req.location
 
-		if (!ephemeris || !position || req.location !== this.ephemeris.location || !ephemeris.has(Math.trunc(startTime / 1000)) || !ephemeris.has(Math.trunc(endTime / 1000))) {
-			const { longitude, latitude, elevation } = req.location
-
+		if (!ephemeris || !position || latitude !== this.ephemeris.location?.latitude || longitude !== this.ephemeris.location?.longitude || elevation !== this.ephemeris.location?.elevation || !ephemeris.has(Math.trunc(startTime / 1000)) || !ephemeris.has(Math.trunc(endTime / 1000))) {
 			const taskId = `${id}${startTime}${endTime}${longitude}${latitude}${elevation}`
 			let horizonsObserverTask = this.horizonsObserverTasks.get(taskId)
 
@@ -868,6 +867,27 @@ export class AtlasHandler {
 			console.info('IERS B loaded from cache')
 		}
 	}
+
+	async iers() {
+		const path = join(Bun.env.appDir, 'eopc04.txt')
+		const file = Bun.file(path)
+
+		const lines: string[] = []
+
+		if (await file.exists()) {
+			const now = new Date()
+			const buffer = Buffer.from(await file.arrayBuffer())
+			const index = buffer.lastIndexOf(`${now.getUTCFullYear()}   1   1`)
+
+			if (index >= 0) {
+				for await (const line of readLines(bufferSource(buffer.subarray(index)), 219)) {
+					line.length > 0 && lines.push(line)
+				}
+			}
+		}
+
+		return lines
+	}
 }
 
 export function atlas(atlas: AtlasHandler) {
@@ -901,6 +921,7 @@ export function atlas(atlas: AtlasHandler) {
 		'/atlas/satellites/:id/position': { POST: async (req) => response(await atlas.positionOfSatellite(req.params.id, await req.json())) },
 		'/atlas/satellites/:id/chart': { POST: async (req) => response(await atlas.chartOfSatellite(req.params.id, await req.json())) },
 		'/atlas/planetarium': { POST: async (req) => response(atlas.planetarium(await req.json())) },
+		'/atlas/iers': { GET: async () => response(await atlas.iers()) },
 	} as const satisfies Endpoints
 }
 

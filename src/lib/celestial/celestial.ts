@@ -839,6 +839,17 @@ function applyViewTransform(x: number, y: number, width: number, height: number,
 	out[1] = height / 2 + transform.y + (y - height / 2) * transform.k
 }
 
+// Writes viewport bounds in base screen coordinates for cheap point culling.
+function writeBaseViewportBounds(width: number, height: number, transform: Readonly<ViewTransform>, margin: number, out: NumberArray) {
+	const inverseScale = 1 / transform.k
+	const centerX = width / 2
+	const centerY = height / 2
+	out[0] = centerX + (-margin - centerX - transform.x) * inverseScale
+	out[1] = centerX + (width + margin - centerX - transform.x) * inverseScale
+	out[2] = centerY + (-margin - centerY - transform.y) * inverseScale
+	out[3] = centerY + (height + margin - centerY - transform.y) * inverseScale
+}
+
 function isPointInsideViewportMargin(x: number, y: number, width: number, height: number, margin: number) {
 	return x >= -margin && x <= width + margin && y >= -margin && y <= height + margin
 }
@@ -2507,6 +2518,7 @@ class StarLayer extends InternalLayer {
 	private styleSignature = ''
 	private readonly point = new Float32Array(2)
 	private readonly labelPoint = new Float32Array(2)
+	private readonly baseViewportBounds = new Float64Array(4)
 	private labelIndices = new Int32Array(0)
 	private labelX = new Float32Array(0)
 	private labelY = new Float32Array(0)
@@ -2553,6 +2565,7 @@ class StarLayer extends InternalLayer {
 
 			const style = this.styles[bucket]
 			const margin = Math.max(2, style.halfSize * transform.k + 2)
+			writeBaseViewportBounds(width, height, transform, margin, this.baseViewportBounds)
 
 			if (style.radius <= 0.8) {
 				ctx.fillStyle = style.color
@@ -2564,13 +2577,14 @@ class StarLayer extends InternalLayer {
 						continue
 					}
 
-					applyViewTransform(catalog.screenX[index], catalog.screenY[index], width, height, transform, this.point)
+					const x = catalog.screenX[index]
+					const y = catalog.screenY[index]
 
-					if (this.point[0] < -margin || this.point[0] > width + margin || this.point[1] < -margin || this.point[1] > height + margin) {
+					if (x < this.baseViewportBounds[0] || x > this.baseViewportBounds[1] || y < this.baseViewportBounds[2] || y > this.baseViewportBounds[3]) {
 						continue
 					}
 
-					ctx.fillRect(catalog.screenX[index], catalog.screenY[index], 1, 1)
+					ctx.fillRect(x, y, 1, 1)
 				}
 			} else {
 				const sprite = style.sprite
@@ -2583,13 +2597,14 @@ class StarLayer extends InternalLayer {
 						continue
 					}
 
-					applyViewTransform(catalog.screenX[index], catalog.screenY[index], width, height, transform, this.point)
+					const x = catalog.screenX[index]
+					const y = catalog.screenY[index]
 
-					if (this.point[0] < -margin || this.point[0] > width + margin || this.point[1] < -margin || this.point[1] > height + margin) {
+					if (x < this.baseViewportBounds[0] || x > this.baseViewportBounds[1] || y < this.baseViewportBounds[2] || y > this.baseViewportBounds[3]) {
 						continue
 					}
 
-					ctx.drawImage(sprite, catalog.screenX[index] - halfSize, catalog.screenY[index] - halfSize)
+					ctx.drawImage(sprite, x - halfSize, y - halfSize)
 				}
 			}
 		}
@@ -2604,6 +2619,7 @@ class StarLayer extends InternalLayer {
 		const maxMagnitude = starSymbolMagnitudeLimit(state)
 		const radiusScale = Math.min(Math.sqrt(transform.k), VECTOR_STAR_MAX_RADIUS_SCALE)
 		const margin = state.theme.stars.maxRadius * VECTOR_STAR_MAX_RADIUS_SCALE + 2
+		writeBaseViewportBounds(width, height, transform, margin, this.baseViewportBounds)
 
 		const indices = catalog.getBucketedVisibleIndices()
 
@@ -2627,12 +2643,14 @@ class StarLayer extends InternalLayer {
 					continue
 				}
 
-				applyViewTransform(catalog.screenX[index], catalog.screenY[index], width, height, transform, this.point)
+				const x = catalog.screenX[index]
+				const y = catalog.screenY[index]
 
-				if (this.point[0] < -margin || this.point[0] > width + margin || this.point[1] < -margin || this.point[1] > height + margin) {
+				if (x < this.baseViewportBounds[0] || x > this.baseViewportBounds[1] || y < this.baseViewportBounds[2] || y > this.baseViewportBounds[3]) {
 					continue
 				}
 
+				applyViewTransform(x, y, width, height, transform, this.point)
 				ctx.moveTo(this.point[0] + radius, this.point[1])
 				ctx.arc(this.point[0], this.point[1], radius, 0, TAU)
 			}
@@ -2649,6 +2667,7 @@ class StarLayer extends InternalLayer {
 		const maxMagnitude = starLabelMagnitudeLimit(state)
 		let labelCount = 0
 		this.ensureLabelCapacity(catalog.namedIndices.length)
+		writeBaseViewportBounds(state.width, state.height, state.transform, 0, this.baseViewportBounds)
 
 		for (let i = 0; i < catalog.namedIndices.length; i++) {
 			const index = catalog.namedIndices[i]
@@ -2658,12 +2677,14 @@ class StarLayer extends InternalLayer {
 				continue
 			}
 
-			applyViewTransform(catalog.screenX[index], catalog.screenY[index], state.width, state.height, state.transform, this.point)
+			const x = catalog.screenX[index]
+			const y = catalog.screenY[index]
 
-			if (this.point[0] < 0 || this.point[0] > state.width || this.point[1] < 0 || this.point[1] > state.height) {
+			if (x < this.baseViewportBounds[0] || x > this.baseViewportBounds[1] || y < this.baseViewportBounds[2] || y > this.baseViewportBounds[3]) {
 				continue
 			}
 
+			applyViewTransform(x, y, state.width, state.height, state.transform, this.point)
 			this.labelIndices[labelCount] = index
 			this.labelX[labelCount] = this.point[0]
 			this.labelY[labelCount] = this.point[1]

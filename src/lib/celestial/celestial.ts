@@ -1330,10 +1330,16 @@ class DeepSkyCatalog {
 		this.visibleIndices = new Int32Array(this.count)
 		this.labelVisible = new Uint8Array(this.count)
 		this.labelVisibleIndices = new Int32Array(this.count)
+		this.refreshEquatorialVectors()
+	}
+
+	refreshEquatorialVectors(index?: number) {
+		const start = index ?? 0
+		const end = index === undefined ? this.count : index + 1
 		const vector = new Float32Array(3)
 
-		for (let i = 0; i < this.count; i++) {
-			const object = objects[i]
+		for (let i = start; i < end; i++) {
+			const object = this.objects[i]
 			writeRaDecUnitVector(object.rightAscension, object.declination, vector)
 			this.eqX[i] = vector[0]
 			this.eqY[i] = vector[1]
@@ -3718,9 +3724,38 @@ export class Celestial {
 	// Loads deep-sky objects.
 	loadDeepSkyObjects(objects: readonly DeepSkyObject[]) {
 		this.#deepSkyCatalog = new DeepSkyCatalog(objects)
+		this.syncSelectedDeepSkyObject()
+		this.syncHoverDeepSkyObject()
 		this.projectDeepSkyObjects()
 		this.rebuildPickingIndex()
+		this.#renderer.markDirty('overlay')
 		this.requestRender()
+	}
+
+	// Refreshes cached deep-sky coordinates after external object mutation.
+	markDeepSkyObjectsChanged(id?: DeepSkyObject['id']) {
+		const catalog = this.#deepSkyCatalog
+		if (!catalog) return false
+
+		let index: number | undefined
+
+		if (id !== undefined) {
+			index = this.findDeepSkyObjectIndex(id)
+			if (index < 0) return false
+		}
+
+		catalog.refreshEquatorialVectors(index)
+		this.syncSelectedDeepSkyObject()
+		this.syncHoverDeepSkyObject()
+		this.projectDeepSkyObjects()
+		this.rebuildPickingIndex()
+
+		if (id === undefined || (this.#selectedObject?.type === 'deepSky' && this.#selectedObject.object.id === id) || (this.#hoverObject?.type === 'deepSky' && this.#hoverObject.object.id === id)) {
+			this.#renderer.markDirty('overlay')
+		}
+
+		this.requestRender()
+		return true
 	}
 
 	// Adds or replaces a dynamic moving body and returns its id.
@@ -4128,6 +4163,48 @@ export class Celestial {
 		if (this.#selectedObject?.type !== 'movingBody') return
 
 		this.#selectedObject = this.currentMovingBodyObject(this.#selectedObject)
+	}
+
+	private syncSelectedDeepSkyObject() {
+		if (this.#selectedObject?.type !== 'deepSky') return
+
+		this.#selectedObject = this.currentDeepSkyObject(this.#selectedObject)
+	}
+
+	private syncHoverDeepSkyObject() {
+		if (this.#hoverObject?.type !== 'deepSky') return
+
+		const previous = this.#hoverObject
+		this.#hoverObject = this.currentDeepSkyObject(previous)
+
+		if (!this.#hoverObject) {
+			this.#emitter.has('objectLeave') && this.#emitter.emit('objectLeave', { object: previous })
+		}
+	}
+
+	private currentDeepSkyObject(object: Extract<CelestialObject, { type: 'deepSky' }>): CelestialObject | null {
+		const catalog = this.#deepSkyCatalog
+		if (!catalog) return null
+
+		const indexed = catalog.objects[object.index]
+
+		if (indexed?.id === object.object.id) {
+			return { type: 'deepSky', index: object.index, object: indexed }
+		}
+
+		const index = this.findDeepSkyObjectIndex(object.object.id)
+		return index >= 0 ? { type: 'deepSky', index, object: catalog.objects[index] } : null
+	}
+
+	private findDeepSkyObjectIndex(id: DeepSkyObject['id']) {
+		const objects = this.#deepSkyCatalog?.objects
+		if (!objects) return -1
+
+		for (let i = 0; i < objects.length; i++) {
+			if (objects[i].id === id) return i
+		}
+
+		return -1
 	}
 
 	private syncHoverMovingBodyObject() {

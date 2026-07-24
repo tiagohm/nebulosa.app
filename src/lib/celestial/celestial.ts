@@ -4435,6 +4435,7 @@ export class Celestial {
 		const height = this.#options.height
 		const scale = projectionScale(width, height, this.#options.projection)
 		const margin = Math.max(width, height)
+		const cullOutsideProjectionMargin = isFiniteDiskProjection(this.#options.projection)
 		const isHorizontal = this.#options.coordinateSystem === 'horizontal'
 		const horizontalMatrix = this.#eqToHorizontal
 		const temp = this.#tempVector
@@ -4463,7 +4464,7 @@ export class Celestial {
 			const screenX = this.#tempScreen[0]
 			const screenY = this.#tempScreen[1]
 
-			if (screenX < -margin || screenY < -margin || screenX > width + margin || screenY > height + margin) {
+			if (cullOutsideProjectionMargin && (screenX < -margin || screenY < -margin || screenX > width + margin || screenY > height + margin)) {
 				continue
 			}
 

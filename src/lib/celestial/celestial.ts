@@ -2440,14 +2440,19 @@ const CONSTELLATION_BOUNDARY_LINE_DASH = [4, 4] as const
 
 // Constellation boundary renderer.
 class ConstellationBoundaryLayer extends ConstellationSegmentLayer {
+	private readonly scaledLineDash = [0, 0]
+
 	constructor() {
 		super('constellationBoundaries', 32)
 	}
 
 	// Draws supplied constellation boundaries as dashed lines.
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
+		const inverseScale = 1 / state.transform.k
+		this.scaledLineDash[0] = CONSTELLATION_BOUNDARY_LINE_DASH[0] * inverseScale
+		this.scaledLineDash[1] = CONSTELLATION_BOUNDARY_LINE_DASH[1] * inverseScale
 		ctx.save()
-		ctx.setLineDash(CONSTELLATION_BOUNDARY_LINE_DASH)
+		ctx.setLineDash(this.scaledLineDash)
 		const theme = state.theme.constellations
 		const color = theme.boundaryColor || theme.color
 		const opacity = theme.boundaryOpacity ?? theme.opacity

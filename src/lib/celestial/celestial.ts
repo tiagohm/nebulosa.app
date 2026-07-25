@@ -3541,6 +3541,8 @@ export class Celestial {
 	#transformStartX = 0
 	#transformStartY = 0
 	#lastPointerMove = 0
+	#lastPointerX = Number.NaN
+	#lastPointerY = Number.NaN
 
 	// Creates a new interactive Canvas celestial map.
 	constructor(container: HTMLElement | string, options: CelestialOptions = {}) {
@@ -4802,7 +4804,7 @@ export class Celestial {
 			})
 			.on('end', () => {
 				this.#d3ZoomActive = false
-				this.ensurePickingIndex()
+				this.refreshPointerHover()
 			})
 
 		const element = this.#renderer.element
@@ -4838,6 +4840,12 @@ export class Celestial {
 
 	// Handles pointer movement for panning and hover picking.
 	private readonly handlePointerMove = (event: PointerEvent): void => {
+		const point = this.eventPoint(event)
+		const x = point[0]
+		const y = point[1]
+		this.#lastPointerX = x
+		this.#lastPointerY = y
+
 		if (this.#d3ZoomActive) return
 
 		const now = performance.now()
@@ -4855,22 +4863,7 @@ export class Celestial {
 		if (now - this.#lastPointerMove < this.#options.interactions.pointerMoveThrottleMs) return
 
 		this.#lastPointerMove = now
-		const point = this.eventPoint(event)
-		const x = point[0]
-		const y = point[1]
-
-		this.ensurePickingIndex()
-		const object = this.resolvePointerPick(this.#picking.findNearest(x, y, this.#options.interactions.pickRadius))
-
-		if (this.#emitter.has('hover')) {
-			const coordinate = this.screenToEquatorial(x, y)
-
-			if (coordinate) {
-				this.#emitter.emit('hover', { x, y, coordinate, object })
-			}
-		}
-
-		this.updateHover(object)
+		this.updatePointerHover(x, y)
 	}
 
 	// Handles pointer up.
@@ -4961,6 +4954,29 @@ export class Celestial {
 		this.#renderer.markAllDirty()
 		this.#emitter.has('viewTransformChange') && this.#emitter.emit('viewTransformChange', { transform: this.#transform })
 		this.requestRender()
+	}
+
+	private refreshPointerHover() {
+		if (Number.isFinite(this.#lastPointerX) && Number.isFinite(this.#lastPointerY)) {
+			this.updatePointerHover(this.#lastPointerX, this.#lastPointerY)
+		} else {
+			this.updateHover(null)
+		}
+	}
+
+	private updatePointerHover(x: number, y: number) {
+		this.ensurePickingIndex()
+		const object = this.resolvePointerPick(this.#picking.findNearest(x, y, this.#options.interactions.pickRadius))
+
+		if (this.#emitter.has('hover')) {
+			const coordinate = this.screenToEquatorial(x, y)
+
+			if (coordinate) {
+				this.#emitter.emit('hover', { x, y, coordinate, object })
+			}
+		}
+
+		this.updateHover(object)
 	}
 
 	// Updates hover state and events.

@@ -1,4 +1,4 @@
-import type { Camera, Device, Focuser, GuideOutput, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Cover, Device, Focuser, GuideOutput, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager'
 import type { OperationFailureReason } from './operation'
 import { OperationCoordinator } from './operation'
@@ -169,6 +169,8 @@ export function isDeviceQuiescent(device: Device) {
 			return !(device as Rotator).moving
 		case 'guideOutput':
 			return !(device as GuideOutput).pulsing
+		case 'cover':
+			return !(device as Cover).parking
 		default:
 			return true
 	}

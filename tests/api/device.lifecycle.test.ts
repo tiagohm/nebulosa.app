@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import type { Camera, Device, GuideOutput } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_CAMERA, DEFAULT_GUIDE_OUTPUT } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Cover, Device, GuideOutput } from 'nebulosa/src/devices/indi/device'
+import { DEFAULT_CAMERA, DEFAULT_COVER, DEFAULT_GUIDE_OUTPUT } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager'
-import { DeviceLifecycle } from 'src/api/device.lifecycle'
+import { DeviceLifecycle, isDeviceQuiescent } from 'src/api/device.lifecycle'
 import { OperationCoordinator } from 'src/api/operation'
 import type { OperationContext, OperationResult } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
@@ -53,6 +53,16 @@ function guideOutput(): GuideOutput {
 		...structuredClone(DEFAULT_GUIDE_OUTPUT),
 		id: 'guide-output-1',
 		name: 'guide-output-1',
+		connected: true,
+		client: { type: 'SIMULATOR', id: 'client-1' },
+	}
+}
+
+function cover(): Cover {
+	return {
+		...structuredClone(DEFAULT_COVER),
+		id: 'cover-1',
+		name: 'cover-1',
 		connected: true,
 		client: { type: 'SIMULATOR', id: 'client-1' },
 	}
@@ -212,5 +222,15 @@ describe('device lifecycle', () => {
 		expect(arbiter.availability(key)).toBe('unavailable')
 
 		lifecycle.dispose()
+	})
+
+	test('treats a parking cover as busy', () => {
+		const device = cover()
+
+		device.parking = true
+		expect(isDeviceQuiescent(device)).toBeFalse()
+
+		device.parking = false
+		expect(isDeviceQuiescent(device)).toBeTrue()
 	})
 })

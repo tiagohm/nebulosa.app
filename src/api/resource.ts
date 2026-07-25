@@ -172,7 +172,7 @@ export class ResourceArbiter {
 
 	// Lists the canonically sorted resources currently held by a context across reentrant leases.
 	resourcesOf(owner: ResourceOwner): readonly ResourceKey[] {
-		return [...(this.#ownerResources.get(owner)?.keys() ?? [])].sort()
+		return this.#ownerResources.get(owner)?.keys().toArray().sort() ?? []
 	}
 
 	// Finds or creates the persistent record, seeding availability only on its first physical association.

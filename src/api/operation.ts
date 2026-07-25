@@ -50,15 +50,18 @@ export class OperationError extends Error {
 
 // Work invoked only after all requested resources have been acquired; expected failures throw OperationError.
 type OperationExecutor<T> = (context: OperationContext) => T | Promise<T>
+
 // Cleanup step that may quiesce a device asynchronously.
 type Cleanup = () => void | Promise<void>
+
+// Internal terminal value preserving unexpected exceptions outside OperationResult.
+type Terminal<T> = { readonly result: OperationResult<T> } | { readonly error: unknown }
+
 // Distinct stack entry retained so each unregister function removes its own cleanup registration.
 interface CleanupRegistration {
 	// Cleanup callback invoked when this registration remains active at finalization.
 	readonly cleanup: Cleanup
 }
-// Internal terminal value preserving unexpected exceptions outside OperationResult.
-type Terminal<T> = { readonly result: OperationResult<T> } | { readonly error: unknown }
 
 // Mutable state retained until cleanup and lease release complete.
 interface ActiveOperation<T> {
@@ -97,12 +100,12 @@ export class OperationCoordinator {
 		const result = Promise.withResolvers<OperationResult<T>>()
 		const completion = Promise.withResolvers<void>()
 
-		const context: OperationContext = Object.freeze({
+		const context = Object.freeze({
 			id,
 			kind,
 			signal: controller.signal,
-			owns: (resource: ResourceKey) => this.arbiter.owns(context, resource),
-			onCleanup: (cleanup: Cleanup) => {
+			owns: (resource) => this.arbiter.owns(context, resource),
+			onCleanup: (cleanup) => {
 				if (operation.cleanupStarted) return () => {}
 
 				const registration = { cleanup }
@@ -116,15 +119,15 @@ export class OperationCoordinator {
 					if (index >= 0) operation.cleanups.splice(index, 1)
 				}
 			},
-		})
+		} as OperationContext)
 
-		const handle: OperationHandle<T> = Object.freeze({
+		const handle = Object.freeze({
 			id,
 			kind,
 			signal: controller.signal,
 			result: result.promise,
-			cancel: (reason: OperationFailureReason = 'aborted') => this.#cancel(operation, reason),
-		})
+			cancel: (reason = 'aborted') => this.#cancel(operation, reason),
+		} as OperationHandle<T>)
 
 		const operation: ActiveOperation<T> = {
 			context,

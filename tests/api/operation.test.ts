@@ -111,6 +111,25 @@ describe('operation coordinator', () => {
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
+	test('unregisters the exact cleanup registration when callbacks repeat', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const events: string[] = []
+		const sharedCleanup = () => {
+			events.push('shared')
+		}
+		const handle = coordinator.start('cleanup-registration', [], (context) => {
+			const unregisterFirst = context.onCleanup(sharedCleanup)
+			context.onCleanup(() => {
+				events.push('middle')
+			})
+			context.onCleanup(sharedCleanup)
+			unregisterFirst()
+		})
+
+		expect(await handle.result).toEqual({ ok: true, value: undefined })
+		expect(events).toEqual(['shared', 'middle'])
+	})
+
 	test('preserves an operational failure while appending cleanup errors', async () => {
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const handle = coordinator.start('failing', [{ key: CAMERA }], (context) => {

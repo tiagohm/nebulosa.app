@@ -52,6 +52,11 @@ export class OperationError extends Error {
 type OperationExecutor<T> = (context: OperationContext) => T | Promise<T>
 // Cleanup step that may quiesce a device asynchronously.
 type Cleanup = () => void | Promise<void>
+// Distinct stack entry retained so each unregister function removes its own cleanup registration.
+interface CleanupRegistration {
+	// Cleanup callback invoked when this registration remains active at finalization.
+	readonly cleanup: Cleanup
+}
 // Internal terminal value preserving unexpected exceptions outside OperationResult.
 type Terminal<T> = { readonly result: OperationResult<T> } | { readonly error: unknown }
 
@@ -66,7 +71,7 @@ interface ActiveOperation<T> {
 	// Resolver for the public terminal result.
 	readonly result: PromiseWithResolvers<OperationResult<T>>
 	// Cleanup stack in registration order.
-	readonly cleanups: Cleanup[]
+	readonly cleanups: CleanupRegistration[]
 	// Completion resolver used by idempotent cancellation calls.
 	readonly completion: PromiseWithResolvers<void>
 	// Atomic resource lease, absent only for busy operations.
@@ -100,13 +105,14 @@ export class OperationCoordinator {
 			onCleanup: (cleanup: Cleanup) => {
 				if (operation.cleanupStarted) return () => {}
 
-				operation.cleanups.push(cleanup)
+				const registration = { cleanup }
+				operation.cleanups.push(registration)
 				let registered = true
 
 				return () => {
 					if (!registered || operation.cleanupStarted) return
 					registered = false
-					const index = operation.cleanups.lastIndexOf(cleanup)
+					const index = operation.cleanups.indexOf(registration)
 					if (index >= 0) operation.cleanups.splice(index, 1)
 				}
 			},
@@ -225,7 +231,7 @@ export class OperationCoordinator {
 		try {
 			for (let i = operation.cleanups.length - 1; i >= 0; i--) {
 				try {
-					await operation.cleanups[i]()
+					await operation.cleanups[i].cleanup()
 				} catch (error) {
 					cleanupErrors.push(error)
 				}

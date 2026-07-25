@@ -121,4 +121,21 @@ describe('resource arbiter', () => {
 		arbiter.markAvailable(CAMERA)
 		expect(arbiter.acquire(owner('owner-3'), [{ key: CAMERA, device: disconnected }]).ok).toBeTrue()
 	})
+
+	test('disassociates only the matching physical device', () => {
+		const arbiter = new ResourceArbiter()
+		const device = camera(true)
+		const replacement = camera(true)
+		const context = owner('owner-1')
+		const acquired = arbiter.acquire(context, [{ key: CAMERA, device }])
+
+		expect(acquired.ok).toBeTrue()
+		arbiter.markUnavailable({ key: CAMERA, device })
+		expect(arbiter.disassociate(CAMERA, replacement)).toBeFalse()
+		expect(arbiter.ownersOfClient('client')).toEqual([context])
+
+		expect(arbiter.disassociate(CAMERA, device)).toBeTrue()
+		expect(arbiter.ownersOfClient('client')).toEqual([])
+		expect(arbiter.availability(CAMERA)).toBe('unavailable')
+	})
 })

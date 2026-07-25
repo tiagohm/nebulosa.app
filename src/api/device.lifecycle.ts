@@ -88,7 +88,7 @@ export class DeviceLifecycle {
 		}
 	}
 
-	// Makes the resource unavailable and synchronously starts owner cancellation before forgetting it.
+	// Makes the resource unavailable, starts owner cancellation, and releases the removed physical association.
 	#removed(device: Device) {
 		const key = resourceKey(device)
 
@@ -96,6 +96,7 @@ export class DeviceLifecycle {
 
 		this.#invalidate(key, device, 'removed')
 		this.#devices.delete(key)
+		this.arbiter.disassociate(key, device)
 	}
 
 	// Invalidates pending verification and starts cancellation without waiting inside manager callbacks.

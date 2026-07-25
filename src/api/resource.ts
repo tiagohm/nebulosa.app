@@ -98,6 +98,17 @@ export class ResourceArbiter {
 		resource.available = false
 	}
 
+	// Clears an exact physical device/client association while retaining availability and ownership; returns whether it matched.
+	disassociate(key: ResourceKey, device: Device): boolean {
+		const resource = this.#resources.get(key)
+
+		if (resource?.device !== device) return false
+
+		resource.device = undefined
+		resource.clientId = undefined
+		return true
+	}
+
 	// Acquires every sorted unique request or returns conflicts without retaining a partial lease.
 	acquire(owner: ResourceOwner, requests: readonly ResourceRequest[]): AcquireResult {
 		const normalized = normalizeRequests(requests)

@@ -125,15 +125,23 @@ describe('device lifecycle', () => {
 		const lifecycle = new DeviceLifecycle(arbiter, coordinator)
 		const device = camera()
 		const key = resourceKey(device)
+		const executorStopped = Promise.withResolvers<void>()
 
 		lifecycle.observe(manager)
 		manager.add(device)
 
-		const handle = coordinator.start('capture', [{ key, device }], waitForAbort)
+		const handle = coordinator.start('capture', [{ key, device }], async (context) => {
+			const result = await waitForAbort(context)
+			await executorStopped.promise
+			return result
+		})
 		manager.remove(device)
 
 		expect(handle.signal.aborted).toBeTrue()
 		expect(arbiter.availability(key)).toBe('unavailable')
+		expect(arbiter.ownersOfClient('client-1')).toEqual([])
+
+		executorStopped.resolve()
 		expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
 
 		lifecycle.dispose()

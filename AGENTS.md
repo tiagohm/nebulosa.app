@@ -103,6 +103,17 @@ Do not introduce npm, Yarn, pnpm, Vite, PostCSS, Prettier, ESLint, another test 
 - Await promises or mark intentional fire-and-forget work with `void` and error handling. Throw only `Error` instances and normalize unknown failures at logging/API boundaries.
 - Use `performance.now()` for durations and `Date` for wall-clock timestamps.
 
+## Documentation Comment Style
+
+Use concise, Claude-style documentation comments: explain intent, units, constraints, side effects, and edge cases. Do not restate obvious code.
+
+- Always add a documentation comment above every function, method, class, interface, type alias, enum, and module-level constant.
+- Prefer the repository's existing `//` comment style. Use multi-line `//` comment blocks instead of `/* ... */` unless the file already uses TSDoc/JSDoc or tooling requires it.
+- A function or method comment should describe what it computes or performs, document each parameter, state relevant units and valid ranges, and mention return semantics.
+- An interface comment should describe the object as a whole, and every property must have an adjacent comment explaining meaning, units, and constraints when relevant.
+- Do not add comments for obvious assignments, loop mechanics, or control flow unless they explain a non-obvious domain decision.
+- Do not add comments in test files.
+
 ## React and UI
 
 ### Components

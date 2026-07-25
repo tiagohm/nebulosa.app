@@ -191,6 +191,7 @@ deviceLifecycle.observe(mountManager)
 deviceLifecycle.observe(focuserManager)
 deviceLifecycle.observe(wheelManager)
 deviceLifecycle.observe(rotatorManager)
+deviceLifecycle.observe(guideOutputManager)
 
 const notificationHandler = new NotificationHandler(wsm)
 const connectionHandler = new ConnectionHandler(wsm, notificationHandler)

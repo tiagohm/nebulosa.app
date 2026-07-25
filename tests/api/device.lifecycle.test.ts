@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import type { Camera } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_CAMERA } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Device, GuideOutput } from 'nebulosa/src/devices/indi/device'
+import { DEFAULT_CAMERA, DEFAULT_GUIDE_OUTPUT } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { OperationCoordinator } from 'src/api/operation'
 import type { OperationContext, OperationResult } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 
-class TestDeviceManager<D extends Camera> {
+class TestDeviceManager<D extends Device> {
 	readonly #devices = new Set<D>()
 	readonly #handlers = new Set<DeviceHandler<D>>()
 
@@ -46,6 +46,16 @@ function camera(): Camera {
 		connected: true,
 		client: { type: 'SIMULATOR', id: 'client-1' },
 	} satisfies Camera
+}
+
+function guideOutput(): GuideOutput {
+	return {
+		...structuredClone(DEFAULT_GUIDE_OUTPUT),
+		id: 'guide-output-1',
+		name: 'guide-output-1',
+		connected: true,
+		client: { type: 'SIMULATOR', id: 'client-1' },
+	}
 }
 
 function waitForAbort(context: OperationContext): Promise<OperationResult<void>> {
@@ -120,6 +130,27 @@ describe('device lifecycle', () => {
 		manager.add(device)
 
 		const handle = coordinator.start('capture', [{ key, device }], waitForAbort)
+		manager.remove(device)
+
+		expect(handle.signal.aborted).toBeTrue()
+		expect(arbiter.availability(key)).toBe('unavailable')
+		expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
+
+		lifecycle.dispose()
+	})
+
+	test('cancels an owner of a distinct guide-output resource', async () => {
+		const manager = new TestDeviceManager<GuideOutput>()
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const lifecycle = new DeviceLifecycle(arbiter, coordinator)
+		const device = guideOutput()
+		const key = resourceKey(device)
+
+		lifecycle.observe(manager)
+		manager.add(device)
+
+		const handle = coordinator.start('guide-output', [{ key, device }], waitForAbort)
 		manager.remove(device)
 
 		expect(handle.signal.aborted).toBeTrue()

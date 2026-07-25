@@ -97,6 +97,40 @@ describe('operation waits', () => {
 		expect(await result).toEqual({ ok: false, reason: 'commandFailed', error: 'Unknown error' })
 	})
 
+	test('cancels and awaits an asynchronous command before physical abort', async () => {
+		const commandGate = Promise.withResolvers<void>()
+		const commandStarted = Promise.withResolvers<AbortSignal>()
+		const events: string[] = []
+		const result = waitForDeviceState({
+			device: {},
+			signal: new AbortController().signal,
+			timeout: 0,
+			subscribe: () => () => {},
+			current: () => 'idle',
+			evaluate: () => 'pending',
+			command: async (signal) => {
+				commandStarted.resolve(signal)
+				await commandGate.promise
+				if (!signal.aborted) events.push('dispatched')
+				events.push('command:stopped')
+			},
+			abort: () => {
+				events.push('abort')
+			},
+		})
+
+		const commandSignal = await commandStarted.promise
+		await Bun.sleep(1)
+
+		expect(commandSignal.aborted).toBeTrue()
+		expect(events).toEqual([])
+
+		commandGate.resolve()
+
+		expect(await result).toEqual({ ok: false, reason: 'timeout' })
+		expect(events).toEqual(['command:stopped', 'abort'])
+	})
+
 	test('runs abort cleanup on timeout and removes every listener', async () => {
 		const controller = new AbortController()
 		const listeners = new Set<(state: string) => void>()

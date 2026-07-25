@@ -14,8 +14,8 @@ export interface WaitForDeviceOptions<D, U> {
 	readonly current: () => U
 	// Classifies each state as pending, successful, or an expected failure.
 	readonly evaluate: (update: U) => 'pending' | 'success' | OperationFailureReason
-	// Sends the state-changing command after subscription and timeout setup.
-	readonly command: () => void | Promise<void>
+	// Sends the state-changing command after setup; the signal aborts before timeout or abort cleanup can settle.
+	readonly command: (signal: AbortSignal) => void | Promise<void>
 	// Stops or quiesces physical work on abort or timeout before the result settles.
 	readonly abort?: () => void | Promise<void>
 }
@@ -43,14 +43,17 @@ export function abortableDelay(ms: number, signal: AbortSignal): Promise<Operati
 	return delayed.promise
 }
 
-// Subscribes before commanding a device and resolves once from observed state, timeout, or abort.
+// Subscribes before commanding a device and settles only after any canceled command has stopped.
 export function waitForDeviceState<D, U>(options: WaitForDeviceOptions<D, U>): Promise<OperationResult<U>> {
 	const { signal } = options
 
 	if (signal.aborted) return Promise.resolve(aborted(signal))
 
 	return new Promise((resolve) => {
+		const commandController = new AbortController()
+		const commandCompletion = Promise.withResolvers<void>()
 		let settled = false
+		let commandStarted = false
 		let commandCompleted = false
 		let pendingResult: OperationResult<U> | undefined
 		let unsubscribe: VoidFunction = () => {}
@@ -72,6 +75,9 @@ export function waitForDeviceState<D, U>(options: WaitForDeviceOptions<D, U>): P
 			if (settled) return
 			settled = true
 			cleanup()
+			commandController.abort(reason)
+
+			if (commandStarted) await commandCompletion.promise
 
 			try {
 				await options.abort?.()
@@ -125,12 +131,16 @@ export function waitForDeviceState<D, U>(options: WaitForDeviceOptions<D, U>): P
 			return
 		}
 
+		commandStarted = true
+
 		void (async () => {
 			try {
-				await options.command()
+				await options.command(commandController.signal)
 			} catch (error) {
 				finish({ ok: false, reason: 'commandFailed', error: errorMessage(error) })
 				return
+			} finally {
+				commandCompletion.resolve()
 			}
 
 			if (settled) return

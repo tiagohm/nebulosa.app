@@ -1735,12 +1735,11 @@ function projectedSegmentLimit(state: RenderState, transformScale = state.transf
 
 type ProjectedPathSink = Pick<CanvasRenderingContext2D, 'moveTo' | 'lineTo'>
 
-function appendProjectedPoint(ctx: ProjectedPathSink, state: RenderState, point: NumberArray, previous: NumberArray, started: boolean, transformScale = state.transform.k): boolean {
+function appendProjectedPoint(ctx: ProjectedPathSink, point: NumberArray, previous: NumberArray, started: boolean, maxDistance: number): boolean {
 	if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) return false
 
 	const dx = point[0] - previous[0]
 	const dy = point[1] - previous[1]
-	const maxDistance = projectedSegmentLimit(state, transformScale)
 
 	if (!started || dx * dx + dy * dy > maxDistance * maxDistance) {
 		ctx.moveTo(point[0], point[1])
@@ -1773,7 +1772,7 @@ function isProjectedSample(out: NumberArray) {
 	return Number.isFinite(out[0]) && Number.isFinite(out[1])
 }
 
-function drawClippedPolyline(ctx: ProjectedPathSink, state: RenderState, steps: number, point: NumberArray, previous: NumberArray, sampler: ProjectedSampler, observer?: ProjectedPolylineObserver, transformScale = state.transform.k) {
+function drawClippedPolyline(ctx: ProjectedPathSink, state: RenderState, steps: number, point: NumberArray, previous: NumberArray, sampler: ProjectedSampler, observer?: ProjectedPolylineObserver, maxDistance = projectedSegmentLimit(state, 1)) {
 	let previousT = 0
 	let previousVisibility = Number.NaN
 	let previousProjected = false
@@ -1792,7 +1791,7 @@ function drawClippedPolyline(ctx: ProjectedPathSink, state: RenderState, steps: 
 
 			if (isProjectedSample(point)) {
 				const previousStarted = started
-				started = appendProjectedPoint(ctx, state, point, previous, started, transformScale)
+				started = appendProjectedPoint(ctx, point, previous, started, maxDistance)
 
 				if (previousStarted || visible) {
 					observer?.append(point[0], point[1], true)
@@ -1810,7 +1809,7 @@ function drawClippedPolyline(ctx: ProjectedPathSink, state: RenderState, steps: 
 		}
 
 		if (visible) {
-			started = appendProjectedPoint(ctx, state, point, previous, started, transformScale)
+			started = appendProjectedPoint(ctx, point, previous, started, maxDistance)
 			observer?.append(point[0], point[1], false)
 		} else if (!previousProjected || visibility < -HORIZON_EPSILON) {
 			started = false
@@ -1914,7 +1913,7 @@ class HorizonLayer extends InternalLayer {
 
 		this.samplerState = state
 		this.path = new Path2D()
-		drawClippedPolyline(this.path, state, 288, this.point, this.previous, this.horizonSampler, undefined, 1)
+		drawClippedPolyline(this.path, state, 288, this.point, this.previous, this.horizonSampler)
 		this.cachedRevision = state.projectedGeometryRevision
 	}
 }
@@ -2155,7 +2154,7 @@ class GridLayer extends InternalLayer {
 	}
 
 	private cacheGridLine(state: RenderState, steps: number, sampler: ProjectedSampler, label: string) {
-		drawClippedPolyline(this.path, state, steps, this.point, this.previous, sampler, this.cacheObserver, 1)
+		drawClippedPolyline(this.path, state, steps, this.point, this.previous, sampler, this.cacheObserver)
 		this.cachedLines.push({
 			label,
 			x: Float32Array.from(this.buildX),
@@ -2250,6 +2249,7 @@ class ReferenceLineLayer extends InternalLayer {
 	private eclipticCosObliquity = 1
 	private eclipticSinObliquity = 0
 	private cachedRevision = -1
+	private cachedSegmentLimit = Number.NaN
 
 	private readonly localMeridianSampler: ProjectedSampler = (t, out) => {
 		const alt = (this.localMeridianReverse ? 1 - t : t) * PIOVERTWO
@@ -2283,26 +2283,29 @@ class ReferenceLineLayer extends InternalLayer {
 	}
 
 	private ensurePaths(state: RenderState) {
-		if (this.cachedRevision === state.projectedGeometryRevision) return
+		const segmentLimit = projectedSegmentLimit(state) / state.transform.k
+
+		if (this.cachedRevision === state.projectedGeometryRevision && this.cachedSegmentLimit === segmentLimit) return
 
 		this.samplerState = state
 		this.localMeridianPath = new Path2D()
 		this.localMeridianAz = 0
 		this.localMeridianReverse = false
-		drawClippedPolyline(this.localMeridianPath, state, 120, this.point, this.previous, this.localMeridianSampler, undefined, 1)
+		drawClippedPolyline(this.localMeridianPath, state, 120, this.point, this.previous, this.localMeridianSampler, undefined, segmentLimit)
 		this.localMeridianAz = PI
 		this.localMeridianReverse = true
-		drawClippedPolyline(this.localMeridianPath, state, 120, this.point, this.previous, this.localMeridianSampler, undefined, 1)
+		drawClippedPolyline(this.localMeridianPath, state, 120, this.point, this.previous, this.localMeridianSampler, undefined, segmentLimit)
 
 		this.celestialEquatorPath = new Path2D()
-		drawClippedPolyline(this.celestialEquatorPath, state, 360, this.point, this.previous, this.celestialEquatorSampler, undefined, 1)
+		drawClippedPolyline(this.celestialEquatorPath, state, 360, this.point, this.previous, this.celestialEquatorSampler, undefined, segmentLimit)
 
 		const obliquity = meanObliquity(state.time)
 		this.eclipticCosObliquity = Math.cos(obliquity)
 		this.eclipticSinObliquity = Math.sin(obliquity)
 		this.eclipticPath = new Path2D()
-		drawClippedPolyline(this.eclipticPath, state, 360, this.point, this.previous, this.eclipticSampler, undefined, 1)
+		drawClippedPolyline(this.eclipticPath, state, 360, this.point, this.previous, this.eclipticSampler, undefined, segmentLimit)
 		this.cachedRevision = state.projectedGeometryRevision
+		this.cachedSegmentLimit = segmentLimit
 	}
 
 	private drawLocalMeridian(ctx: CanvasRenderingContext2D, state: RenderState) {
@@ -2394,7 +2397,7 @@ abstract class ConstellationSegmentLayer extends InternalLayer {
 		const distance = angularDistance(this.fromVector[0], this.fromVector[1], this.fromVector[2], this.toVector[0], this.toVector[1], this.toVector[2])
 		const steps = Math.max(8, Math.min(180, Math.ceil(distance / DEG2RAD)))
 
-		drawClippedPolyline(path, state, steps, this.point, this.previous, this.segmentSampler, undefined, 1)
+		drawClippedPolyline(path, state, steps, this.point, this.previous, this.segmentSampler)
 	}
 }
 
@@ -2533,7 +2536,7 @@ class MilkyWayLayer extends InternalLayer {
 
 	private drawRing(path: Path2D, state: RenderState, ring: MilkyWayRing) {
 		this.samplerRing = ring
-		drawClippedPolyline(path, state, Math.max(16, milkyWayRingSegmentCount(ring)), this.point, this.previous, this.ringSampler, undefined, 1)
+		drawClippedPolyline(path, state, Math.max(16, milkyWayRingSegmentCount(ring)), this.point, this.previous, this.ringSampler)
 	}
 }
 

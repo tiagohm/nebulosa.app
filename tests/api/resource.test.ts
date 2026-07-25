@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import type { Camera } from 'nebulosa/src/devices/indi/device'
+import { DEFAULT_CAMERA } from 'nebulosa/src/devices/indi/device'
 import { ResourceArbiter } from 'src/api/resource'
 import type { ResourceKey, ResourceOwner } from 'src/api/resource'
 
@@ -7,6 +9,16 @@ const MOUNT: ResourceKey = 'client:mount:mount-1'
 
 function owner(id: string): ResourceOwner {
 	return { id, kind: 'test' }
+}
+
+function camera(connected: boolean): Camera {
+	return {
+		...structuredClone(DEFAULT_CAMERA),
+		id: 'camera-1',
+		name: 'camera-1',
+		connected,
+		client: { type: 'SIMULATOR', id: 'client' },
+	}
 }
 
 describe('resource arbiter', () => {
@@ -88,5 +100,25 @@ describe('resource arbiter', () => {
 
 		arbiter.markAvailable(CAMERA)
 		expect(arbiter.availability(CAMERA)).toBe('available')
+	})
+
+	test('seeds availability when a device is associated after logical use', () => {
+		const arbiter = new ResourceArbiter()
+		const logical = arbiter.acquire(owner('owner-1'), [{ key: CAMERA }])
+
+		expect(logical.ok).toBeTrue()
+
+		if (!logical.ok) return
+
+		logical.lease.release()
+		const disconnected = camera(false)
+
+		expect(arbiter.acquire(owner('owner-2'), [{ key: CAMERA, device: disconnected }])).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, ownerId: 'resource-arbiter', ownerKind: 'unavailable' }],
+		})
+
+		arbiter.markAvailable(CAMERA)
+		expect(arbiter.acquire(owner('owner-3'), [{ key: CAMERA, device: disconnected }]).ok).toBeTrue()
 	})
 })

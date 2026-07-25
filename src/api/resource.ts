@@ -175,7 +175,7 @@ export class ResourceArbiter {
 		return [...(this.#ownerResources.get(owner)?.keys() ?? [])].sort()
 	}
 
-	// Finds or creates the persistent record and refreshes its device/client association.
+	// Finds or creates the persistent record, seeding availability only on its first physical association.
 	#resource(request: ResourceRequest | ResourceKey) {
 		const key = typeof request === 'string' ? request : request.key
 		let resource = this.#resources.get(key)
@@ -190,6 +190,7 @@ export class ResourceArbiter {
 			}
 			this.#resources.set(key, resource)
 		} else if (typeof request !== 'string' && request.device !== undefined) {
+			if (resource.device === undefined) resource.available = request.device.connected
 			resource.device = request.device
 			resource.clientId = request.device[CLIENT]?.id ?? request.device.client.id
 		}

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_CAMERA, DEFAULT_MOUNT } from 'nebulosa/src/devices/indi/device'
-import { OperationCoordinator, OperationError } from 'src/api/operation'
+import { OperationCoordinator } from 'src/api/operation'
 import type { OperationContext, OperationResult } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import type { ResourceKey } from 'src/api/resource'
@@ -47,6 +47,7 @@ describe('operation coordinator', () => {
 		let invoked = false
 		const busy = coordinator.start('busy', [{ key: CAMERA }, { key: MOUNT }], () => {
 			invoked = true
+			return { ok: true, value: undefined }
 		})
 
 		expect(await busy.result).toMatchObject({ ok: false, reason: 'busy' })
@@ -97,7 +98,7 @@ describe('operation coordinator', () => {
 				cleanupStarted.resolve()
 				await waitForSignal(context.signal)
 			})
-			return 'captured'
+			return { ok: true, value: 'captured' }
 		})
 
 		await cleanupStarted.promise
@@ -124,6 +125,7 @@ describe('operation coordinator', () => {
 			})
 			context.onCleanup(sharedCleanup)
 			unregisterFirst()
+			return { ok: true, value: undefined }
 		})
 
 		expect(await handle.result).toEqual({ ok: true, value: undefined })
@@ -134,7 +136,7 @@ describe('operation coordinator', () => {
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const handle = coordinator.start('failing', [{ key: CAMERA }], (context) => {
 			context.onCleanup(() => rejectUnknown(Symbol('cleanup detail')))
-			throw new OperationError('timeout', 'primary failure')
+			return { ok: false, reason: 'timeout', error: 'primary failure' }
 		})
 
 		expect(await handle.result).toEqual({
@@ -144,12 +146,19 @@ describe('operation coordinator', () => {
 		})
 	})
 
-	test('wraps raw payloads containing an ok field as successful values', async () => {
+	test('preserves successful payloads containing an ok field', async () => {
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const payload = { ok: true, settled: false }
-		const handle = coordinator.start('raw-payload', [], () => payload)
+		const handle = coordinator.start('raw-payload', [], () => ({ ok: true, value: payload }))
 
 		expect(await handle.result).toEqual({ ok: true, value: payload })
+	})
+
+	test('preserves an expected failure returned by the executor', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const handle = coordinator.start('timeout', [], () => ({ ok: false, reason: 'timeout', error: 'device did not settle' }))
+
+		expect(await handle.result).toEqual({ ok: false, reason: 'timeout', error: 'device did not settle' })
 	})
 
 	test('aborts the operation scope after an unexpected executor failure', async () => {

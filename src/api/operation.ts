@@ -36,20 +36,8 @@ export interface OperationHandle<T> {
 	readonly cancel: (reason?: OperationFailureReason) => Promise<void>
 }
 
-// Exception wrapper for expected operational failures thrown by an executor.
-export class OperationError extends Error {
-	// Creates an expected failure with its discriminant and optional diagnostic message.
-	constructor(
-		readonly reason: OperationFailureReason,
-		message?: string,
-	) {
-		super(message)
-		this.name = 'OperationError'
-	}
-}
-
-// Work invoked only after all requested resources have been acquired; expected failures throw OperationError.
-type OperationExecutor<T> = (context: OperationContext) => T | Promise<T>
+// Work invoked after acquisition that reports expected success or failure without routine exceptions.
+type OperationExecutor<T> = (context: OperationContext) => OperationResult<T> | Promise<OperationResult<T>>
 
 // Cleanup step that may quiesce a device asynchronously.
 type Cleanup = () => void | Promise<void>
@@ -85,7 +73,7 @@ interface ActiveOperation<T> {
 	terminalStarted: boolean
 }
 
-// Owns operation lifetimes, converts expected failures, and releases resources after LIFO cleanup.
+// Owns operation lifetimes and releases resources after LIFO cleanup.
 export class OperationCoordinator {
 	readonly #operations = new Map<string, ActiveOperation<unknown>>()
 	readonly #operationsByOwner = new Map<ResourceOwner, ActiveOperation<unknown>>()
@@ -156,11 +144,10 @@ export class OperationCoordinator {
 
 		void (async () => {
 			try {
-				const value = await executor(context)
-				await this.#finalize(operation, { result: { ok: true, value } })
+				const operationResult = await executor(context)
+				await this.#finalize(operation, { result: operationResult })
 			} catch (error) {
-				const terminal: Terminal<T> = error instanceof OperationError ? { result: { ok: false, reason: error.reason, error: error.message || undefined } } : { error }
-				await this.#finalize(operation, terminal)
+				await this.#finalize(operation, { error })
 			}
 		})()
 

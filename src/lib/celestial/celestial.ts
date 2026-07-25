@@ -2640,6 +2640,7 @@ class StarLayer extends InternalLayer {
 	private renderSpriteStars(ctx: CanvasRenderingContext2D, state: RenderState, catalog: StarCatalog) {
 		const { transform, width, height } = state
 		const maxMagnitude = starSymbolMagnitudeLimit(state)
+		const inverseScale = 1 / transform.k
 
 		ctx.save()
 		ctx.translate(width / 2 + transform.x, height / 2 + transform.y)
@@ -2657,7 +2658,7 @@ class StarLayer extends InternalLayer {
 			}
 
 			const style = this.styles[bucket]
-			const margin = Math.max(2, style.halfSize * transform.k + 2)
+			const margin = Math.max(2, style.halfSize + 2)
 			writeBaseViewportBounds(width, height, transform, margin, this.baseViewportBounds)
 
 			if (style.radius <= 0.8) {
@@ -2677,11 +2678,13 @@ class StarLayer extends InternalLayer {
 						continue
 					}
 
-					ctx.fillRect(x, y, 1, 1)
+					ctx.fillRect(x, y, inverseScale, inverseScale)
 				}
 			} else {
 				const sprite = style.sprite
-				const halfSize = style.halfSize
+				const halfSize = style.halfSize * inverseScale
+				const spriteWidth = sprite.width * inverseScale
+				const spriteHeight = sprite.height * inverseScale
 
 				for (let i = start; i < end; i++) {
 					const index = indices[i]
@@ -2697,7 +2700,7 @@ class StarLayer extends InternalLayer {
 						continue
 					}
 
-					ctx.drawImage(sprite, x - halfSize, y - halfSize)
+					ctx.drawImage(sprite, x - halfSize, y - halfSize, spriteWidth, spriteHeight)
 				}
 			}
 		}

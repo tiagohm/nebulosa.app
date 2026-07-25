@@ -158,10 +158,10 @@ function handleReady(celestial: Celestial) {
 	})
 
 	u[6] = celestial.on('click', (event) => {
-		state.selected = ref(event)
-		void updateSelectedBodyPosition()
-
 		if (event.object) {
+			state.selected = ref(event)
+			void updateSelectedBodyPosition()
+
 			if (event.object.type === 'shape' && event.object.shape === SKY_REGION_SELECTION) {
 				SKY_REGION_SELECTION.visible = true
 			} else {

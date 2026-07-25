@@ -126,20 +126,15 @@ console.info('temp directory is located at', Bun.env.tmpDir)
 
 // Running from package.json script has a bug on interrupt signals: https://github.com/oven-sh/bun/issues/11400
 
-function clear(exit: boolean) {
+// Removes transient files created by the current or a previous process.
+function clearTemporaryDirectories() {
 	if (existsSync(Bun.env.tmpDir)) {
 		console.info('clearing temp directory...')
 		rmSync(Bun.env.tmpDir, { recursive: true })
 	}
-
-	exit && process.exit(0)
 }
 
-process.once('beforeExit', clear.bind(undefined, true))
-process.once('SIGINT', clear.bind(undefined, true))
-process.once('SIGTERM', clear.bind(undefined, true))
-
-clear(false)
+clearTemporaryDirectories()
 
 // DNS caching
 
@@ -186,6 +181,23 @@ const operationCoordinator = new OperationCoordinator(resourceArbiter)
 // Internal manager observer that blocks and cancels resources across device lifecycle transitions.
 const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
 
+// Shared terminal path that cancels operations before lifecycle disposal and process exit.
+let shutdownTask: Promise<void> | undefined
+
+// Cancels active operations while transports are live, then releases observers and transient files.
+function shutdown() {
+	return (shutdownTask ??= (async () => {
+		await operationCoordinator.cancelAll('aborted')
+		deviceLifecycle.dispose()
+		clearTemporaryDirectories()
+		process.exit(0)
+	})())
+}
+
+process.once('beforeExit', () => void shutdown())
+process.once('SIGINT', () => void shutdown())
+process.once('SIGTERM', () => void shutdown())
+
 deviceLifecycle.observe(cameraManager)
 deviceLifecycle.observe(mountManager)
 deviceLifecycle.observe(focuserManager)
@@ -198,7 +210,7 @@ deviceLifecycle.observe(thermometerManager)
 deviceLifecycle.observe(dewHeaterManager)
 
 const notificationHandler = new NotificationHandler(wsm)
-const connectionHandler = new ConnectionHandler(wsm, notificationHandler)
+const connectionHandler = new ConnectionHandler(wsm, notificationHandler, operationCoordinator)
 const confirmationHandler = new ConfirmationHandler(wsm)
 const guiderHandler = new GuiderHandler(wsm, notificationHandler)
 const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, guiderHandler)

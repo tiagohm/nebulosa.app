@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_CAMERA } from 'nebulosa/src/devices/indi/device'
-import { ResourceArbiter } from 'src/api/resource'
+import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import type { ResourceKey, ResourceOwner } from 'src/api/resource'
 
 const CAMERA: ResourceKey = 'client:camera:camera-1'
@@ -137,5 +137,29 @@ describe('resource arbiter', () => {
 		expect(arbiter.disassociate(CAMERA, device)).toBeTrue()
 		expect(arbiter.ownersOfClient('client')).toEqual([])
 		expect(arbiter.availability(CAMERA)).toBe('unavailable')
+	})
+
+	test('blocks existing and future resources until a client reconnects', () => {
+		const arbiter = new ResourceArbiter()
+		const first = camera(true)
+
+		arbiter.markAvailable({ key: CAMERA, device: first })
+		arbiter.markClientUnavailable(first.client.id)
+
+		expect(arbiter.availability(CAMERA)).toBe('unavailable')
+
+		const second = camera(true)
+		second.id = 'camera-2'
+		const secondKey = resourceKey(second)
+		arbiter.markAvailable({ key: secondKey, device: second })
+
+		expect(arbiter.availability(secondKey)).toBe('unavailable')
+
+		arbiter.markClientAvailable(first.client.id)
+		arbiter.markAvailable({ key: CAMERA, device: first })
+		arbiter.markAvailable({ key: secondKey, device: second })
+
+		expect(arbiter.availability(CAMERA)).toBe('available')
+		expect(arbiter.availability(secondKey)).toBe('available')
 	})
 })

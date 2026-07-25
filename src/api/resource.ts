@@ -76,6 +76,7 @@ export function resourceKey(device: Device): ResourceKey {
 export class ResourceArbiter {
 	readonly #resources = new Map<ResourceKey, ResourceRecord>()
 	readonly #ownerResources = new Map<ResourceOwner, Map<ResourceKey, number>>()
+	readonly #unavailableClients = new Set<string>()
 
 	// Returns the effective state for a key; unknown logical resources start available.
 	availability(key: ResourceKey): ResourceAvailability {
@@ -89,13 +90,27 @@ export class ResourceArbiter {
 	// Allows new acquisitions while retaining any existing owner until its lease is released.
 	markAvailable(request: ResourceRequest | ResourceKey) {
 		const resource = this.#resource(request)
-		resource.available = true
+		resource.available = resource.clientId === undefined || !this.#unavailableClients.has(resource.clientId)
 	}
 
 	// Blocks new acquisitions without releasing or replacing an existing owner.
 	markUnavailable(request: ResourceRequest | ResourceKey) {
 		const resource = this.#resource(request)
 		resource.available = false
+	}
+
+	// Blocks existing and future physical resources for a client without disturbing retained owners.
+	markClientUnavailable(clientId: string) {
+		this.#unavailableClients.add(clientId)
+
+		for (const resource of this.#resources.values()) {
+			if (resource.clientId === clientId) resource.available = false
+		}
+	}
+
+	// Allows lifecycle validation to make resources from a newly connected client available.
+	markClientAvailable(clientId: string) {
+		this.#unavailableClients.delete(clientId)
 	}
 
 	// Clears an exact physical device/client association while retaining availability and ownership; returns whether it matched.
@@ -193,15 +208,19 @@ export class ResourceArbiter {
 
 		if (resource === undefined) {
 			const device = typeof request === 'string' ? undefined : request.device
+			const clientId = device?.[CLIENT]?.id ?? device?.client.id
 			resource = {
-				available: device?.connected ?? true,
-				clientId: device?.[CLIENT]?.id ?? device?.client.id,
+				available: (device?.connected ?? true) && (clientId === undefined || !this.#unavailableClients.has(clientId)),
+				clientId,
 				device,
 				depth: 0,
 			}
 			this.#resources.set(key, resource)
 		} else if (typeof request !== 'string' && request.device !== undefined) {
-			if (resource.device === undefined) resource.available = request.device.connected
+			if (resource.device === undefined) {
+				const clientId = request.device[CLIENT]?.id ?? request.device.client.id
+				resource.available = request.device.connected && !this.#unavailableClients.has(clientId)
+			}
 			resource.device = request.device
 			resource.clientId = request.device[CLIENT]?.id ?? request.device.client.id
 		}

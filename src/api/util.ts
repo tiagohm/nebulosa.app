@@ -6,9 +6,9 @@ import type { Writable } from 'nebulosa/src/core/types'
 
 const ONE_SECOND = 1000
 
-// Normalizes unknown exception values for wait diagnostics.
+// Normalizes unknown exception values for boundary diagnostics, including symbols.
 export function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : `${error}`
+	return error instanceof Error ? error.message : String(error)
 }
 
 export function makeTime(utc: number | 'now', location?: GeographicCoordinate) {

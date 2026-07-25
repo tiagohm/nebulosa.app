@@ -15,6 +15,12 @@ function waitForAbort(context: OperationContext): Promise<OperationResult<void>>
 	})
 }
 
+function rejectUnknown(value: unknown): Promise<never> {
+	const rejected = Promise.withResolvers<never>()
+	rejected.reject(value)
+	return rejected.promise
+}
+
 function device<D extends Camera | Mount>(template: D, id: string): D {
 	return {
 		...structuredClone(template),
@@ -77,16 +83,14 @@ describe('operation coordinator', () => {
 	test('preserves an operational failure while appending cleanup errors', async () => {
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const handle = coordinator.start('failing', [{ key: CAMERA }], (context) => {
-			context.onCleanup(() => {
-				throw new Error('cleanup detail')
-			})
+			context.onCleanup(() => rejectUnknown(Symbol('cleanup detail')))
 			throw new OperationError('timeout', 'primary failure')
 		})
 
 		expect(await handle.result).toEqual({
 			ok: false,
 			reason: 'timeout',
-			error: 'primary failure; cleanup failed: cleanup detail',
+			error: 'primary failure; cleanup failed: Symbol(cleanup detail)',
 		})
 	})
 

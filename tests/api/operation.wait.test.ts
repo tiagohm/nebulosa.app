@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { abortableDelay, waitForDeviceState } from 'src/api/operation.wait'
 
+function rejectUnknown(value: unknown): Promise<never> {
+	const rejected = Promise.withResolvers<never>()
+	rejected.reject(value)
+	return rejected.promise
+}
+
 describe('operation waits', () => {
 	test('aborts a delay with the signal reason', async () => {
 		const controller = new AbortController()
@@ -56,6 +62,20 @@ describe('operation waits', () => {
 
 		expect(await result).toEqual({ ok: false, reason: 'commandFailed', error: 'send failed' })
 		expect(listeners.size).toBe(0)
+	})
+
+	test('normalizes a symbol rejected by the command', async () => {
+		const result = waitForDeviceState({
+			device: {},
+			signal: new AbortController().signal,
+			timeout: 1000,
+			subscribe: () => () => {},
+			current: () => 'idle',
+			evaluate: () => 'pending',
+			command: () => rejectUnknown(Symbol('send failed')),
+		})
+
+		expect(await result).toEqual({ ok: false, reason: 'commandFailed', error: 'Symbol(send failed)' })
 	})
 
 	test('runs abort cleanup on timeout and removes every listener', async () => {

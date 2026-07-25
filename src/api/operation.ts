@@ -48,8 +48,8 @@ export class OperationError extends Error {
 	}
 }
 
-// Work invoked only after all requested resources have been acquired.
-type OperationExecutor<T> = (context: OperationContext) => T | OperationResult<T> | Promise<T | OperationResult<T>>
+// Work invoked only after all requested resources have been acquired; expected failures throw OperationError.
+type OperationExecutor<T> = (context: OperationContext) => T | Promise<T>
 // Cleanup step that may quiesce a device asynchronously.
 type Cleanup = () => void | Promise<void>
 // Internal terminal value preserving unexpected exceptions outside OperationResult.
@@ -148,8 +148,7 @@ export class OperationCoordinator {
 		void (async () => {
 			try {
 				const value = await executor(context)
-				const terminal = isOperationResult<T>(value) ? { result: value } : { result: { ok: true, value } satisfies OperationResult<T> }
-				await this.#finalize(operation, terminal)
+				await this.#finalize(operation, { result: { ok: true, value } })
 			} catch (error) {
 				const terminal: Terminal<T> = error instanceof OperationError ? { result: { ok: false, reason: error.reason, error: error.message || undefined } } : { error }
 				await this.#finalize(operation, terminal)
@@ -261,11 +260,6 @@ export class OperationCoordinator {
 			operation.completion.resolve()
 		}
 	}
-}
-
-// Recognizes an executor-provided operation result so composed services can propagate failure directly.
-function isOperationResult<T>(value: T | OperationResult<T>): value is OperationResult<T> {
-	return typeof value === 'object' && value !== null && 'ok' in value && typeof value.ok === 'boolean'
 }
 
 // Produces a compact diagnostic for an atomic busy result.

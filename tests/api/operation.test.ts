@@ -90,6 +90,14 @@ describe('operation coordinator', () => {
 		})
 	})
 
+	test('wraps raw payloads containing an ok field as successful values', async () => {
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const payload = { ok: true, settled: false }
+		const handle = coordinator.start('raw-payload', [], () => payload)
+
+		expect(await handle.result).toEqual({ ok: true, value: payload })
+	})
+
 	test('rejects unexpected executor failures after releasing resources', () => {
 		const arbiter = new ResourceArbiter()
 		const coordinator = new OperationCoordinator(arbiter)

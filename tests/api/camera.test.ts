@@ -743,18 +743,25 @@ describe('camera capture start request', () => {
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 		const request = captureStartRequest({ exposureMode: 'loop', exposureTime: 200, exposureTimeUnit: 'millisecond' })
-		cameraManager.connect(camera)
+		const snoop = spyOn(cameraManager, 'snoop')
 
-		const active = cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event)))
-		expect((await active.started).ok).toBeTrue()
+		try {
+			cameraManager.connect(camera)
 
-		const conflicting = cameraHandler.capture(camera, request)
-		expect(await conflicting.started).toMatchObject({ ok: false, reason: 'busy' })
-		expect(await conflicting.result).toMatchObject({ ok: false, reason: 'busy' })
+			const active = cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event)))
+			expect((await active.started).ok).toBeTrue()
 
-		await active.cancel()
-		expect(await active.result).toEqual({ ok: false, reason: 'aborted' })
-		expect(events.some((event) => event.state === 'idle' && event.stopped)).toBeTrue()
+			const conflicting = cameraHandler.capture(camera, { ...request, mount: 'Other Mount' })
+			expect(await conflicting.started).toMatchObject({ ok: false, reason: 'busy' })
+			expect(await conflicting.result).toMatchObject({ ok: false, reason: 'busy' })
+			expect(snoop).toHaveBeenCalledTimes(1)
+
+			await active.cancel()
+			expect(await active.result).toEqual({ ok: false, reason: 'aborted' })
+			expect(events.some((event) => event.state === 'idle' && event.stopped)).toBeTrue()
+		} finally {
+			snoop.mockRestore()
+		}
 	}, 5000)
 
 	test('retains the lease through cleanup and discards a late BLOB', async () => {

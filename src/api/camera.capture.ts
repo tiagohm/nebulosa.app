@@ -129,8 +129,8 @@ export class CameraCapturer {
 		readonly io: CameraCaptureIO = DEFAULT_CAMERA_CAPTURE_IO,
 	) {}
 
-	// Starts one top-level capture without replacing an existing owner of the physical camera.
-	start(camera: Camera, request: CameraCaptureStart, listener: CameraCaptureListener = () => {}): CameraCaptureHandle {
+	// Starts one capture and runs optional device preparation only after acquiring the camera.
+	start(camera: Camera, request: CameraCaptureStart, listener: CameraCaptureListener = () => {}, prepare?: VoidFunction): CameraCaptureHandle {
 		const key = resourceKey(camera)
 		const started = Promise.withResolvers<OperationResult<void>>()
 		let sessionCreated = false
@@ -144,7 +144,7 @@ export class CameraCapturer {
 
 		const operation = this.coordinator.start<CameraCaptureResult>('cameraCapture', [{ key, device: camera }], (context) => {
 			sessionCreated = true
-			const session = new CameraCaptureSession(context, camera, structuredClone(request), this.cameraManager, this.imageProcessor, this.ditherer, this.options, this.io, listener, settleStarted, () => this.coordinator.arbiter.markUnavailable({ key, device: camera }))
+			const session = new CameraCaptureSession(context, camera, structuredClone(request), this.cameraManager, this.imageProcessor, this.ditherer, this.options, this.io, listener, prepare, settleStarted, () => this.coordinator.arbiter.markUnavailable({ key, device: camera }))
 
 			this.#sessions.set(key, session)
 
@@ -226,6 +226,7 @@ class CameraCaptureSession {
 		readonly options: CameraCaptureOptions,
 		readonly io: CameraCaptureIO,
 		readonly listener: CameraCaptureListener,
+		readonly prepare: VoidFunction | undefined,
 		readonly settleStarted: (result: OperationResult<void>) => void,
 		readonly markUnavailable: VoidFunction,
 	) {
@@ -243,10 +244,15 @@ class CameraCaptureSession {
 		this.#event.totalProgress.remainingTime = this.#event.totalExposureTime
 	}
 
-	// Executes frames sequentially and returns only after each exposure+BLOB pair is processed.
+	// Prepares acquired devices, then executes frames through exposure+BLOB processing.
 	async run(): Promise<OperationResult<CameraCaptureResult>> {
 		if (!this.camera.connected) return this.#finishFailure('disconnected')
 		if (this.#request.exposureTime <= 0 || this.#event.remainingCount <= 0) return this.#finishFailure('commandFailed', 'exposure time and frame count must be positive')
+		try {
+			this.prepare?.()
+		} catch (error) {
+			return this.#finishFailure('commandFailed', errorMessage(error))
+		}
 
 		while (this.#event.remainingCount > 0 && !this.context.signal.aborted) {
 			if (this.#failureResult !== undefined) return this.#finish(this.#failureResult)

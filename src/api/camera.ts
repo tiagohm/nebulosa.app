@@ -102,12 +102,16 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		const wheel = request.wheel ? this.wheelManager.get(client, request.wheel) : undefined
 		const focuser = request.focuser ? this.focuserManager.get(client, request.focuser) : undefined
 		const rotator = request.rotator ? this.rotatorManager.get(client, request.rotator) : undefined
-		this.cameraManager.snoop(camera, mount, focuser, wheel, rotator)
 
-		const handle = this.capturer.start(camera, request, (event, path) => {
-			this.sendEvent(event, path)
-			onCameraCaptureEvent?.(event, path)
-		})
+		const handle = this.capturer.start(
+			camera,
+			request,
+			(event, path) => {
+				this.sendEvent(event, path)
+				onCameraCaptureEvent?.(event, path)
+			},
+			() => this.cameraManager.snoop(camera, mount, focuser, wheel, rotator),
+		)
 
 		this.captures.set(handle.id, handle)
 		if (!this.capturesByCamera.has(camera.id)) this.capturesByCamera.set(camera.id, handle)
@@ -154,11 +158,6 @@ export function camera(cameraHandler: CameraHandler) {
 				return response({ id: handle.id, started: await handle.started })
 			},
 		},
-		'/cameras/:id/stop': {
-			POST: async (req) => {
-				const operation = query(req).operation
-				return response(await cameraHandler.stop(operation || cameraFromParams(req)))
-			},
-		},
+		'/cameras/:id/stop': { POST: async (req) => response(await cameraHandler.stop(query(req).operation || cameraFromParams(req))) },
 	} as const satisfies Endpoints
 }

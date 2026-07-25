@@ -1915,7 +1915,6 @@ class HorizonLayer extends InternalLayer {
 		this.samplerState = state
 		this.path = new Path2D()
 		drawClippedPolyline(this.path, state, 288, this.point, this.previous, this.horizonSampler, undefined, 1)
-		this.path.closePath()
 		this.cachedRevision = state.projectedGeometryRevision
 	}
 }

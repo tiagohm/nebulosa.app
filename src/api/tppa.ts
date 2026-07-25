@@ -233,7 +233,7 @@ export class TppaTask {
 		this.move(false)
 		this.tppa.mountHandler.mountManager.stop(this.mount)
 		this.tppa.solver.stop(this.request.id)
-		this.tppa.cameraHandler.stop(this.camera)
+		void this.tppa.cameraHandler.stop(this.camera)
 	}
 
 	private get moveDuration() {

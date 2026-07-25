@@ -7,12 +7,15 @@ import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { cameraBus, CameraHandler } from 'src/api/camera'
+import { CameraCapturer } from 'src/api/camera.capture'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
+import { OperationCoordinator } from 'src/api/operation'
 import { PlateSolverHandler } from 'src/api/platesolver'
+import { ResourceArbiter } from 'src/api/resource'
 import { tppaBus, tppa as tppaEndpoints, TppaHandler } from 'src/api/tppa'
 import { DEFAULT_CAMERA_CAPTURE_EVENT } from '#/camera'
 import type { CameraCaptureEvent } from '#/camera'
@@ -36,7 +39,8 @@ const mountManager = new MountManager()
 const wheelManager = new WheelManager()
 const focuserManager = new FocuserManager()
 const rotatorManager = new RotatorManager()
-const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
+const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, new OperationCoordinator(new ResourceArbiter()))
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer)
 const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
 const solver = new PlateSolverHandler(new NotificationHandler(wsm), imageProcessor)
 const tppaHandler = new TppaHandler(wsm, cameraHandler, mountHandler, solver)

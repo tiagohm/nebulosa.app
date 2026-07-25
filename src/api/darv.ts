@@ -170,7 +170,7 @@ export class DarvTask {
 
 		this.stopped = true
 		this.move(false, false, 0)
-		this.darv.cameraHandler.stop(this.camera)
+		void this.darv.cameraHandler.stop(this.camera)
 	}
 
 	private get initialPause() {

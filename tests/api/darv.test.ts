@@ -6,12 +6,15 @@ import { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { cameraBus, CameraHandler } from 'src/api/camera'
+import { CameraCapturer } from 'src/api/camera.capture'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { darvBus, darv as darvEndpoints, DarvHandler } from 'src/api/darv'
 import { GuideOutputHandler } from 'src/api/guideoutput'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
+import { OperationCoordinator } from 'src/api/operation'
+import { ResourceArbiter } from 'src/api/resource'
 import { DEFAULT_DARV_START } from '#/darv'
 import type { DarvStart, DarvEvent } from '#/darv'
 import { noContent, SocketMessager, waitUntil } from './util'
@@ -33,7 +36,8 @@ const rotatorManager = new RotatorManager()
 const guideOutputManager = new GuideOutputManager({
 	get: (client, name) => mountManager.get(client, name) ?? cameraManager.get(client, name),
 })
-const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
+const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, new OperationCoordinator(new ResourceArbiter()))
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer)
 const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
 const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler)

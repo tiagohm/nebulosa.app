@@ -85,7 +85,7 @@ export class OperationCoordinator {
 
 	// Acquires all resources and starts the executor, returning an immediate busy handle on conflict.
 	start<T>(kind: string, resources: readonly ResourceRequest[], executor: OperationExecutor<T>): OperationHandle<T> {
-		const id = crypto.randomUUID()
+		const id = Bun.randomUUIDv7()
 		const controller = new AbortController()
 		const result = Promise.withResolvers<OperationResult<T>>()
 		const completion = Promise.withResolvers<void>()

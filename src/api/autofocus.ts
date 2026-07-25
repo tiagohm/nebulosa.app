@@ -260,7 +260,7 @@ export class AutoFocusTask {
 		this.stopped = true
 		unsubscribe(this.unsubscribers)
 		this.autoFocusHandler.focuserHandler.stop(this.focuser)
-		this.autoFocusHandler.cameraHandler.stop(this.camera)
+		void this.autoFocusHandler.cameraHandler.stop(this.camera)
 	}
 
 	private waitForFocuser(position: number, onCompleted: (event: WaitForFocuserAction) => void) {

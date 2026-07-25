@@ -8,9 +8,12 @@ import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import { autoFocusBus, autoFocus as autoFocusEndpoints, AutoFocusHandler } from 'src/api/autofocus'
 import { cameraBus, CameraHandler } from 'src/api/camera'
+import { CameraCapturer } from 'src/api/camera.capture'
 import { FocuserHandler } from 'src/api/focuser'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
+import { OperationCoordinator } from 'src/api/operation'
+import { ResourceArbiter } from 'src/api/resource'
 import { StarDetectionHandler } from 'src/api/stardetection'
 import { DEFAULT_AUTO_FOCUS_START } from '#/autofocus'
 import type { AutoFocusEvent, AutoFocusStart } from '#/autofocus'
@@ -33,7 +36,8 @@ const mountManager = new MountManager()
 const wheelManager = new WheelManager()
 const focuserManager = new FocuserManager()
 const rotatorManager = new RotatorManager()
-const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager)
+const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, new OperationCoordinator(new ResourceArbiter()))
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer)
 const focuserHandler = new FocuserHandler(wsm, focuserManager)
 const starDetectionHandler = new StarDetectionHandler(imageProcessor)
 const autoFocusHandler = new AutoFocusHandler(wsm, cameraHandler, focuserHandler, starDetectionHandler)

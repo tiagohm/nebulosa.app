@@ -204,7 +204,7 @@ export class FlatWizardTask {
 		if (this.stopped) return
 
 		this.stopped = true
-		this.flatWizardHandler.cameraHandler.stop(this.camera)
+		void this.flatWizardHandler.cameraHandler.stop(this.camera)
 	}
 }
 

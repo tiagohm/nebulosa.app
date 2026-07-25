@@ -67,6 +67,22 @@ export interface CameraCaptureOptions {
 	readonly lateBlobDrainTime?: number
 }
 
+// Asynchronous payload boundary whose completion controls camera lease retention.
+export interface CameraCaptureIO {
+	// Decodes a base64 transport payload into its binary camera frame.
+	readonly decode: (data: Buffer) => Promise<Buffer>
+	// Persists an auto-save frame and resolves only after the write has completed.
+	readonly write: (path: string, data: Buffer) => Promise<void>
+}
+
+// Production payload I/O backed by the streaming decoder and Bun filesystem writer.
+const DEFAULT_CAMERA_CAPTURE_IO: CameraCaptureIO = {
+	decode: decodeCameraBlobFromBase64,
+	async write(path, data) {
+		await Bun.write(path, data)
+	},
+}
+
 // Callback receiving presentation-state updates and processed frame paths.
 export type CameraCaptureListener = (event: CameraCaptureEvent, path?: string) => void
 
@@ -110,6 +126,7 @@ export class CameraCapturer {
 		readonly coordinator: OperationCoordinator,
 		readonly ditherer?: CameraDitherer,
 		readonly options: CameraCaptureOptions = {},
+		readonly io: CameraCaptureIO = DEFAULT_CAMERA_CAPTURE_IO,
 	) {}
 
 	// Starts one top-level capture without replacing an existing owner of the physical camera.
@@ -125,7 +142,7 @@ export class CameraCapturer {
 		}
 
 		const operation = this.coordinator.start<CameraCaptureResult>('cameraCapture', [{ key, device: camera }], (context) => {
-			const session = new CameraCaptureSession(context, camera, structuredClone(request), this.cameraManager, this.imageProcessor, this.ditherer, this.options, listener, settleStarted, () => this.coordinator.arbiter.markUnavailable({ key, device: camera }))
+			const session = new CameraCaptureSession(context, camera, structuredClone(request), this.cameraManager, this.imageProcessor, this.ditherer, this.options, this.io, listener, settleStarted, () => this.coordinator.arbiter.markUnavailable({ key, device: camera }))
 
 			this.#sessions.set(key, session)
 
@@ -194,6 +211,7 @@ class CameraCaptureSession {
 		readonly imageProcessor: ImageProcessor,
 		readonly ditherer: CameraDitherer | undefined,
 		readonly options: CameraCaptureOptions,
+		readonly io: CameraCaptureIO,
 		readonly listener: CameraCaptureListener,
 		readonly settleStarted: (result: OperationResult<void>) => void,
 		readonly markUnavailable: VoidFunction,
@@ -429,7 +447,7 @@ class CameraCaptureSession {
 	// Decodes, buffers, and optionally writes one BLOB while retaining the camera lease.
 	async #processBlob(blob: CameraBlob): Promise<OperationResult<string>> {
 		try {
-			const buffer = blob.encoding === 'raw' ? blob.data : await decodeBase64(blob.data)
+			const buffer = blob.encoding === 'raw' ? blob.data : await this.io.decode(blob.data)
 			if (this.context.signal.aborted) return { ok: false, reason: abortReason(this.context.signal) }
 
 			const name = this.#request.autoSave ? formatTemporal(Date.now(), 'YYYYMMDD.HHmmssSSS') : this.camera.name
@@ -438,7 +456,7 @@ class CameraCaptureSession {
 			if (this.context.signal.aborted) return { ok: false, reason: abortReason(this.context.signal) }
 
 			this.imageProcessor.save(buffer, path, this.camera)
-			if (this.#request.autoSave) await Bun.write(path, buffer)
+			if (this.#request.autoSave) await this.io.write(path, buffer)
 			if (this.context.signal.aborted) return { ok: false, reason: abortReason(this.context.signal) }
 			return { ok: true, value: path }
 		} catch (error) {
@@ -599,7 +617,7 @@ function trimBuffer<T extends Uint8Array>(data: T) {
 }
 
 // Decodes a base64 camera BLOB into an exact-length buffer.
-async function decodeBase64(buffer: Buffer) {
+async function decodeCameraBlobFromBase64(buffer: Buffer) {
 	const data = trimBuffer(buffer)
 	const decodedLength = computeDecodedBase64Length(data)
 	const output = Buffer.allocUnsafe(decodedLength)

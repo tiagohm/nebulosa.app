@@ -306,6 +306,10 @@ class CameraCaptureSession {
 			attempt.exposureState = state
 			attempt.exposureCompleted.resolve(state)
 			this.#fail('alert')
+		} else if (state === 'Idle') {
+			attempt.exposureState = state
+			attempt.exposureCompleted.resolve(state)
+			this.#fail('unexpectedState', 'exposure became idle before completion')
 		}
 	}
 

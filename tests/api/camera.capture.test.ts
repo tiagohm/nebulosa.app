@@ -150,6 +150,27 @@ describe('camera capture session failures', () => {
 		}
 	})
 
+	test('fails immediately when an active exposure becomes idle', async () => {
+		const harness = createHarness()
+
+		try {
+			const handle = harness.capturer.start(harness.camera, request())
+			expect((await handle.started).ok).toBeTrue()
+			harness.camera.exposuring = false
+			harness.camera.exposure.state = 'Idle'
+			harness.capturer.updated(harness.camera, 'exposure', 'Idle')
+
+			expect(await handle.result).toEqual({
+				ok: false,
+				reason: 'unexpectedState',
+				error: 'exposure became idle before completion',
+			})
+			expect(harness.stopExposure).not.toHaveBeenCalled()
+		} finally {
+			harness.restore()
+		}
+	})
+
 	test('fails the active session when the camera disconnects', async () => {
 		const harness = createHarness()
 

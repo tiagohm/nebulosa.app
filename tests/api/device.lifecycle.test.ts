@@ -118,6 +118,31 @@ describe('device lifecycle', () => {
 		lifecycle.dispose()
 	})
 
+	test('tracks external busy and quiescent state updates', () => {
+		const manager = new TestDeviceManager<Camera>()
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const lifecycle = new DeviceLifecycle(arbiter, coordinator)
+		const device = camera()
+		const key = resourceKey(device)
+
+		lifecycle.observe(manager)
+		manager.add(device)
+		expect(arbiter.availability(key)).toBe('available')
+
+		device.exposuring = true
+		device.exposure.state = 'Busy'
+		manager.update(device, 'exposuring')
+		expect(arbiter.availability(key)).toBe('unavailable')
+
+		device.exposuring = false
+		device.exposure.state = 'Idle'
+		manager.update(device, 'exposuring')
+		expect(arbiter.availability(key)).toBe('available')
+
+		lifecycle.dispose()
+	})
+
 	test('cancels the owner with removed before forgetting the device', async () => {
 		const manager = new TestDeviceManager<Camera>()
 		const arbiter = new ResourceArbiter()

@@ -75,7 +75,7 @@ export class DeviceLifecycle {
 		this.#validate(device, verify)
 	}
 
-	// Cancels on disconnect and retries validation when a reconnecting device becomes quiescent.
+	// Cancels on disconnect and revalidates every connected update so external activity gates acquisition.
 	#updated<D extends Device>(device: D, property: keyof D & string, verify: DeviceAvailabilityVerifier<D>) {
 		const key = resourceKey(device)
 
@@ -83,7 +83,7 @@ export class DeviceLifecycle {
 
 		if (property === 'connected' && !device.connected) {
 			this.#invalidate(key, device, 'disconnected')
-		} else if (this.arbiter.availability(key) === 'unavailable' && device.connected) {
+		} else if (device.connected) {
 			this.#validate(device, verify)
 		}
 	}
@@ -106,11 +106,13 @@ export class DeviceLifecycle {
 		void this.coordinator.cancelByResource(key, reason)
 	}
 
-	// Runs a synchronous or asynchronous readiness check guarded by device identity and generation.
+	// Blocks acquisition while running a readiness check guarded by device identity and generation.
 	#validate<D extends Device>(device: D, verify: DeviceAvailabilityVerifier<D>) {
 		const key = resourceKey(device)
 		const generation = this.#nextValidation(key)
 		let available: boolean | Promise<boolean>
+
+		this.arbiter.markUnavailable({ key, device })
 
 		try {
 			available = device.connected && verify(device)
@@ -127,10 +129,15 @@ export class DeviceLifecycle {
 		}
 	}
 
-	// Marks only the latest connected instance available after successful verification.
+	// Applies the latest readiness result only to the same connected device instance.
 	#validated(key: ResourceKey, device: Device, generation: number, available: boolean) {
-		if (!available || !device.connected || this.#devices.get(key) !== device || this.#validationGeneration.get(key) !== generation) return
-		this.arbiter.markAvailable({ key, device })
+		if (!device.connected || this.#devices.get(key) !== device || this.#validationGeneration.get(key) !== generation) return
+
+		if (available) {
+			this.arbiter.markAvailable({ key, device })
+		} else {
+			this.arbiter.markUnavailable({ key, device })
+		}
 	}
 
 	// Advances the per-resource token used to discard stale asynchronous readiness results.

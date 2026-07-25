@@ -15,6 +15,7 @@ import { CameraHandler, camera } from 'src/api/camera'
 import { ConnectionHandler, connection } from 'src/api/connection'
 import { CoverHandler, cover } from 'src/api/cover'
 import { DarvHandler, darv } from 'src/api/darv'
+import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { DewHeaterHandler, dewHeater } from 'src/api/dewheater'
 import { FlatPanelHandler, flatPanel } from 'src/api/flatpanel'
 import { FlatWizardHandler, flatWizard } from 'src/api/flatwizard'
@@ -25,6 +26,8 @@ import { IndiDevicePropertyHandler, IndiHandler, IndiServerHandler, indi } from 
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler, MountRemoteControlHandler, mount } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
+import { OperationCoordinator } from 'src/api/operation'
+import { ResourceArbiter } from 'src/api/resource'
 import { RotatorHandler, rotator } from 'src/api/rotator'
 import { storage, StorageHandler } from 'src/api/storage'
 import { ThermometerHandler, thermometer } from 'src/api/thermometer'
@@ -150,8 +153,6 @@ Bun.dns.prefetch('hpiers.obspm.fr')
 // Handlers & INDI Devices
 
 const wsm = new WebSocketMessageHandler()
-const notificationHandler = new NotificationHandler(wsm)
-const connectionHandler = new ConnectionHandler(wsm, notificationHandler)
 const imageProcessor = new ImageProcessor()
 
 const cameraManager = new CameraManager()
@@ -178,6 +179,21 @@ const guideOutputManager = new GuideOutputManager(guideOutputProvider)
 const thermometerManager = new ThermometerManager(thermometerProvider)
 const dewHeaterManager = new DewHeaterManager(dewHeaterProvider)
 
+// Process-wide authority for exclusive physical and logical resource ownership.
+const resourceArbiter = new ResourceArbiter()
+// Process-wide owner and cancellation registry for top-level operations.
+const operationCoordinator = new OperationCoordinator(resourceArbiter)
+// Internal manager observer that blocks and cancels resources across device lifecycle transitions.
+const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
+
+deviceLifecycle.observe(cameraManager)
+deviceLifecycle.observe(mountManager)
+deviceLifecycle.observe(focuserManager)
+deviceLifecycle.observe(wheelManager)
+deviceLifecycle.observe(rotatorManager)
+
+const notificationHandler = new NotificationHandler(wsm)
+const connectionHandler = new ConnectionHandler(wsm, notificationHandler)
 const confirmationHandler = new ConfirmationHandler(wsm)
 const guiderHandler = new GuiderHandler(wsm, notificationHandler)
 const cameraHandler = new CameraHandler(wsm, imageProcessor, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, guiderHandler)

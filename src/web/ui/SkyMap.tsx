@@ -5,7 +5,7 @@ import { Celestial } from 'src/lib/celestial/celestial'
 import type { CelestialOptions } from 'src/lib/celestial/celestial'
 
 // oxfmt-ignore
-export type SkyMapMethods = Pick<Celestial, 'loadStars' | 'loadConstellations' | 'loadMilkyWay' | 'loadDeepSkyObjects' | 'setObserver' | 'setTime' | 'setProjection' | 'setMagnitudeLimit' | 'setStarLabelsVisible' | 'setViewTransform' | 'setUpdateInterval' | 'setLayerVisible' | 'startAutoUpdate' | 'stopAutoUpdate' | 'render' | 'screenToEquatorial' | 'addMovingBody' | 'removeMovingBody' | 'clearMovingBodies' | 'markMovingBodyDirty' | 'addShape' | 'removeShape' | 'clearShapes' | 'markShapeChanged' | 'on' | 'off'>
+export type SkyMapMethods = Pick<Celestial, 'loadStars' | 'loadConstellations' | 'loadMilkyWay' | 'loadDeepSkyObjects' | 'markDeepSkyObjectsChanged' | 'setObserver' | 'setTime' | 'setProjection' | 'setMagnitudeLimit' | 'setStarLabelsVisible' | 'setViewTransform' | 'setUpdateInterval' | 'setLayerVisible' | 'startAutoUpdate' | 'stopAutoUpdate' | 'render' | 'screenToEquatorial' | 'addMovingBody' | 'removeMovingBody' | 'clearMovingBodies' | 'markMovingBodyDirty' | 'addShape' | 'removeShape' | 'clearShapes' | 'markShapeChanged' | 'on' | 'off'>
 
 export interface SkyMapProps extends Omit<ComponentPropsWithoutRef<'div'>, 'children'> {
 	readonly height?: CSSProperties['height']
@@ -31,6 +31,7 @@ export function SkyMap({ ref, className, height = DEFAULT_SKY_MAP_SIZE, onReady,
 			loadConstellations: (data) => celestialRef.current!.loadConstellations(data),
 			loadMilkyWay: (coordinates) => celestialRef.current!.loadMilkyWay(coordinates),
 			loadDeepSkyObjects: (objects) => celestialRef.current!.loadDeepSkyObjects(objects),
+			markDeepSkyObjectsChanged: (id) => celestialRef.current!.markDeepSkyObjectsChanged(id),
 			setObserver: (nextObserver) => celestialRef.current!.setObserver(nextObserver),
 			setTime: (date) => celestialRef.current!.setTime(date),
 			setProjection: (projection) => celestialRef.current!.setProjection(projection),

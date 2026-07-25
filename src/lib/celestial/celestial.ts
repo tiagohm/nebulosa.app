@@ -123,8 +123,6 @@ export interface ThemeOptions {
 		fillBelowHorizon: string
 	}
 	milkyWay: {
-		color: string
-		opacity: number
 		lineColor: string
 		levelColors?: readonly string[]
 		levelOpacities?: readonly number[]
@@ -203,6 +201,7 @@ export interface InteractionOptions {
 export interface CelestialOptions {
 	width?: number
 	height?: number
+	maxDevicePixelRatio?: number
 	projection?: ProjectionType
 	coordinateSystem?: CoordinateSystem
 	updateInterval?: number
@@ -225,41 +224,26 @@ export interface RenderState {
 	readonly coordinateSystem: CoordinateSystem
 	readonly transform: Readonly<ViewTransform>
 	readonly projectionRadius: number
+	readonly projectedGeometryRevision: number
 	readonly referenceLines: ResolvedReferenceLinesOptions
 	readonly stars: Readonly<Required<StarLayerOptions>>
 	readonly theme: Readonly<ThemeOptions>
 	readonly starCatalog: StarCatalog | null
+	readonly deepSkyCatalog: DeepSkyCatalog | null
 	readonly constellations: Readonly<ConstellationData>
 	readonly milkyWay: readonly Readonly<MilkyWayStep>[]
-	readonly dsos: readonly Readonly<DeepSkyObject>[]
-	readonly deepSkyLabelVisible: NumberArray
 	readonly movingBodies: readonly Readonly<MovingBody>[]
 	readonly shapes: readonly Readonly<CelestialShape>[]
 	readonly hoverObject: Readonly<CelestialObject> | null
 	readonly selectedObject: Readonly<CelestialObject> | null
 	readonly projectEquatorialToScreen: (ra: number, dec: number, out: NumberArray) => boolean
+	readonly projectEquatorialSample: (ra: number, dec: number, out: NumberArray) => number
+	readonly projectEquatorialVectorSample: (x: number, y: number, z: number, out: NumberArray) => number
+	readonly projectEquatorialBaseSample: (ra: number, dec: number, out: NumberArray) => number
+	readonly projectEquatorialVectorBaseSample: (x: number, y: number, z: number, out: NumberArray) => number
 	readonly projectHorizontalToScreen: (az: number, alt: number, out: NumberArray) => boolean
-	readonly equatorialVisibility: (ra: number, dec: number) => number
-	readonly horizontalVisibility: (az: number, alt: number) => number
-}
-
-// Public update state passed to custom layers.
-export interface UpdateState {
-	readonly time: Date
-	readonly observer: ObserverLocation
-	readonly projection: ProjectionType
-	readonly coordinateSystem: CoordinateSystem
-	readonly starCatalog: StarCatalog | null
-}
-
-// Public layer contract for extension.
-export interface Layer {
-	readonly id: string
-	readonly visible: boolean
-	readonly zIndex: number
-	readonly render: (ctx: CanvasRenderingContext2D, state: RenderState) => void
-	readonly update?: (state: UpdateState) => void
-	readonly destroy: VoidFunction
+	readonly projectHorizontalSample: (az: number, alt: number, out: NumberArray) => number
+	readonly projectHorizontalBaseSample: (az: number, alt: number, out: NumberArray) => number
 }
 
 export interface ShapeRenderState {
@@ -324,10 +308,13 @@ type PartialThemeOptions = {
 
 type CanvasImage = HTMLCanvasElement | OffscreenCanvas
 
-type LayerRecord = {
-	readonly layer: InternalLayer
+type LayerGroupRecord = {
+	readonly id: string
+	readonly layers: InternalLayer[]
 	readonly canvas: HTMLCanvasElement
 	readonly ctx: CanvasRenderingContext2D
+	zIndex: number
+	visible: boolean
 }
 
 type MilkyWayRing = {
@@ -353,6 +340,7 @@ type ResolvedReferenceLinesOptions = {
 type ResolvedCelestialOptions = {
 	width: number
 	height: number
+	readonly maxDevicePixelRatio: number
 	projection: ProjectionType
 	readonly coordinateSystem: CoordinateSystem
 	observer: ObserverLocation
@@ -366,12 +354,9 @@ type ResolvedCelestialOptions = {
 }
 
 const J2000_EPOCH = 2000 // Julian epoch used as the baseline for proper-motion star positions.
-const J2000_UNIX_MS = 946728000000 // Unix timestamp, in milliseconds, for the J2000 reference epoch.
-const JULIAN_EPOCH = 2440587.5 // Julian-date offset for converting Unix milliseconds to Julian date.
-const DAY_MS = 86400000 // Milliseconds in one civil day.
-const YEAR_MS = 365.25 * DAY_MS // Mean year length used for lightweight Julian epoch interpolation.
 const DEFAULT_WIDTH = 800 // Fallback canvas width when callers do not provide one.
 const DEFAULT_HEIGHT = 800 // Fallback canvas height when callers do not provide one.
+const DEFAULT_MAX_DEVICE_PIXEL_RATIO = 2 // Caps quadratic canvas backing-store growth on high-density displays.
 const DEFAULT_UPDATE_INTERVAL = 10000 // Default realtime update interval; lower updates sky positions more often, higher reduces background work.
 const WHEEL_DELTA_LINE_PIXELS = 16 // Pixel equivalent for wheel events reported in text-line units; higher makes those wheels zoom faster.
 const WHEEL_DELTA_PAGE_PIXELS = 800 // Pixel equivalent for wheel events reported in page units; higher makes page-mode wheels zoom faster.
@@ -451,8 +436,6 @@ const DEFAULT_THEME: ThemeOptions = {
 		fillBelowHorizon: TRANSPARENT,
 	},
 	milkyWay: {
-		color: CYAN,
-		opacity: 0,
 		lineColor: CYAN,
 		levelColors: [CYAN, LIGHT_BLUE, BLUE, INDIGO, PURPLE],
 		levelOpacities: [0.7, 0, 0, 0, 0],
@@ -508,6 +491,22 @@ const DEFAULT_LAYER_VISIBILITY: Record<string, boolean> = {
 	movingBodies: true,
 	shapes: true,
 	overlay: true,
+}
+
+const LAYER_CANVAS_GROUPS: Record<string, string> = {
+	background: 'sky',
+	horizon: 'sky',
+	milkyWay: 'sky',
+	grid: 'sky',
+	referenceLines: 'sky',
+	constellations: 'sky',
+	constellationBoundaries: 'sky',
+	deepSky: 'sky',
+	stars: 'stars',
+	movingBodies: 'dynamic',
+	constellationLabels: 'dynamic',
+	shapes: 'dynamic',
+	overlay: 'overlay',
 }
 
 const ASTRONOMICAL_DIRTY_LAYER_IDS = ['grid', 'referenceLines', 'milkyWay', 'constellations', 'constellationBoundaries', 'constellationLabels', 'deepSky', 'stars', 'movingBodies', 'shapes'] as const
@@ -817,6 +816,17 @@ function applyViewTransform(x: number, y: number, width: number, height: number,
 	out[1] = height / 2 + transform.y + (y - height / 2) * transform.k
 }
 
+// Writes viewport bounds in base screen coordinates for cheap point culling.
+function writeBaseViewportBounds(width: number, height: number, transform: Readonly<ViewTransform>, margin: number, out: NumberArray) {
+	const inverseScale = 1 / transform.k
+	const centerX = width / 2
+	const centerY = height / 2
+	out[0] = centerX + (-margin - centerX - transform.x) * inverseScale
+	out[1] = centerX + (width + margin - centerX - transform.x) * inverseScale
+	out[2] = centerY + (-margin - centerY - transform.y) * inverseScale
+	out[3] = centerY + (height + margin - centerY - transform.y) * inverseScale
+}
+
 function isPointInsideViewportMargin(x: number, y: number, width: number, height: number, margin: number) {
 	return x >= -margin && x <= width + margin && y >= -margin && y <= height + margin
 }
@@ -962,6 +972,7 @@ function resolveOptions(options: CelestialOptions): ResolvedCelestialOptions {
 	return {
 		width: Math.max(1, Math.floor(options.width ?? DEFAULT_WIDTH)),
 		height: Math.max(1, Math.floor(options.height ?? DEFAULT_HEIGHT)),
+		maxDevicePixelRatio: Math.max(1, isFiniteNumber(options.maxDevicePixelRatio) ? options.maxDevicePixelRatio : DEFAULT_MAX_DEVICE_PIXEL_RATIO),
 		projection: validateProjection(options.projection ?? 'stereographic'),
 		coordinateSystem: options.coordinateSystem ?? 'horizontal',
 		observer: DEFAULT_OBSERVER,
@@ -1271,6 +1282,76 @@ export class StarCatalog {
 	}
 }
 
+class DeepSkyCatalog {
+	readonly count: number
+	readonly eqX: Float32Array
+	readonly eqY: Float32Array
+	readonly eqZ: Float32Array
+	readonly screenX: Float32Array
+	readonly screenY: Float32Array
+	readonly visible: Uint8Array
+	readonly visibleIndices: Int32Array
+	readonly labelVisible: Uint8Array
+	private readonly labelVisibleIndices: Int32Array
+	visibleCount = 0
+	private labelVisibleCount = 0
+
+	constructor(readonly objects: readonly DeepSkyObject[]) {
+		this.count = objects.length
+		this.eqX = new Float32Array(this.count)
+		this.eqY = new Float32Array(this.count)
+		this.eqZ = new Float32Array(this.count)
+		this.screenX = new Float32Array(this.count)
+		this.screenY = new Float32Array(this.count)
+		this.visible = new Uint8Array(this.count)
+		this.visibleIndices = new Int32Array(this.count)
+		this.labelVisible = new Uint8Array(this.count)
+		this.labelVisibleIndices = new Int32Array(this.count)
+		this.refreshEquatorialVectors()
+	}
+
+	refreshEquatorialVectors(index?: number) {
+		const start = index ?? 0
+		const end = index === undefined ? this.count : index + 1
+		const vector = new Float32Array(3)
+
+		for (let i = start; i < end; i++) {
+			const object = this.objects[i]
+			writeRaDecUnitVector(object.rightAscension, object.declination, vector)
+			this.eqX[i] = vector[0]
+			this.eqY[i] = vector[1]
+			this.eqZ[i] = vector[2]
+		}
+	}
+
+	beginProjection() {
+		this.visible.fill(0)
+		this.visibleCount = 0
+	}
+
+	recordVisible(index: number, x: number, y: number) {
+		this.visible[index] = 1
+		this.screenX[index] = x
+		this.screenY[index] = y
+		this.visibleIndices[this.visibleCount++] = index
+	}
+
+	beginLabelRender() {
+		for (let i = 0; i < this.labelVisibleCount; i++) {
+			this.labelVisible[this.labelVisibleIndices[i]] = 0
+		}
+
+		this.labelVisibleCount = 0
+	}
+
+	recordLabelVisible(index: number) {
+		if (this.labelVisible[index]) return
+
+		this.labelVisible[index] = 1
+		this.labelVisibleIndices[this.labelVisibleCount++] = index
+	}
+}
+
 // Normalizes object-array and typed-array star inputs into typed arrays.
 function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 	if ('ra' in input) {
@@ -1278,11 +1359,11 @@ function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 		const ra = copyFloat32(input.ra, count, 0, normalizeAngle)
 		const dec = copyFloat32(input.dec, count, 0, (value) => clamp(value, -PIOVERTWO, PIOVERTWO))
 		const mag = input.mag ? copyFloat32(input.mag, count, 99) : fillFloat32(count, 99)
-		const bv = input.bv ? copyFloat32(input.bv, count, 0.65) : undefined
-		const pmRA = input.pmRA ? copyFloat32(input.pmRA, count, 0) : undefined
-		const pmDEC = input.pmDEC ? copyFloat32(input.pmDEC, count, 0) : undefined
-		const flags = input.flags ? copyUint8(input.flags, count) : undefined
-		const epochs = fillFloat32(count, input.epoch ?? J2000_EPOCH)
+		const bv = input.bv?.length ? copyFloat32(input.bv, count, 0.65) : undefined
+		const pmRA = input.pmRA?.length ? copyFloat32(input.pmRA, count, 0) : undefined
+		const pmDEC = input.pmDEC?.length ? copyFloat32(input.pmDEC, count, 0) : undefined
+		const flags = input.flags?.length ? copyUint8(input.flags, count) : undefined
+		const epochs = pmRA || pmDEC ? fillFloat32(count, input.epoch ?? J2000_EPOCH) : undefined
 
 		return { count, ra, dec, mag, bv, pmRA, pmDEC, flags, epochs, names: input.names, ids: input.ids } as const
 	} else {
@@ -1290,16 +1371,13 @@ function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 		const ra = new Float32Array(count)
 		const dec = new Float32Array(count)
 		const mag = new Float32Array(count)
-		const bv = new Float32Array(count)
-		const pmRA = new Float32Array(count)
-		const pmDEC = new Float32Array(count)
-		const flags = new Uint8ClampedArray(count)
-		const epochs = new Float32Array(count)
+		let bv: Float32Array | undefined
+		let pmRA: Float32Array | undefined
+		let pmDEC: Float32Array | undefined
+		let flags: Uint8ClampedArray | undefined
+		let epochs: Float32Array | undefined
 		const names: string[] = []
 		const ids: StarId[] = []
-		let hasBv = false
-		let hasPm = false
-		let hasFlags = false
 		let hasNames = false
 		let hasIds = false
 
@@ -1311,22 +1389,23 @@ function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 			mag[i] = isFiniteNumber(star.magnitude) ? star.magnitude : 99
 
 			if (isFiniteNumber(star.bv)) {
+				bv ??= new Float32Array(count)
 				bv[i] = star.bv
-				hasBv = true
 			}
 
 			if (isFiniteNumber(star.pmRA) || isFiniteNumber(star.pmDEC)) {
-				pmRA[i] = star.pmRA ?? 0
-				pmDEC[i] = star.pmDEC ?? 0
-				hasPm = true
+				pmRA ??= new Float32Array(count)
+				pmDEC ??= new Float32Array(count)
+				epochs ??= fillFloat32(count, J2000_EPOCH)
+				pmRA[i] = isFiniteNumber(star.pmRA) ? star.pmRA : 0
+				pmDEC[i] = isFiniteNumber(star.pmDEC) ? star.pmDEC : 0
+				epochs[i] = isFiniteNumber(star.epoch) ? star.epoch : J2000_EPOCH
 			}
 
 			if (isFiniteNumber(star.flags)) {
+				flags ??= new Uint8ClampedArray(count)
 				flags[i] = star.flags
-				hasFlags = true
 			}
-
-			epochs[i] = isFiniteNumber(star.epoch) ? star.epoch : J2000_EPOCH
 
 			if (star.name) {
 				names[i] = star.name
@@ -1344,10 +1423,10 @@ function normalizeStarInput(input: readonly Star[] | StarCatalogInput) {
 			ra,
 			dec,
 			mag,
-			bv: hasBv ? bv : [],
-			pmRA: hasPm ? pmRA : [],
-			pmDEC: hasPm ? pmDEC : [],
-			flags: hasFlags ? flags : [],
+			bv,
+			pmRA,
+			pmDEC,
+			flags,
 			epochs,
 			names: hasNames ? names : [],
 			ids: hasIds ? ids : [],
@@ -1589,8 +1668,8 @@ class EventEmitter {
 	}
 }
 
-// Internal layer adds dirty-flag behavior to the public interface.
-abstract class InternalLayer implements Layer {
+// Internal layer with dirty-flag behavior.
+abstract class InternalLayer {
 	visible = true
 	dirty = true
 
@@ -1598,8 +1677,6 @@ abstract class InternalLayer implements Layer {
 		readonly id: string,
 		readonly zIndex: number,
 	) {}
-
-	destroy() {}
 
 	// Marks the layer for redraw.
 	markDirty() {
@@ -1652,16 +1729,17 @@ function drawProjectionBoundary(ctx: CanvasRenderingContext2D, state: RenderStat
 	ctx.stroke()
 }
 
-function projectedSegmentLimit(state: RenderState) {
-	return Math.max(96, transformedProjectionRadius(state) * 0.75)
+function projectedSegmentLimit(state: RenderState, transformScale = state.transform.k) {
+	return Math.max(96, state.projectionRadius * transformScale * 0.75)
 }
 
-function appendProjectedPoint(ctx: CanvasRenderingContext2D, state: RenderState, point: NumberArray, previous: NumberArray, started: boolean): boolean {
+type ProjectedPathSink = Pick<CanvasRenderingContext2D, 'moveTo' | 'lineTo'>
+
+function appendProjectedPoint(ctx: ProjectedPathSink, point: NumberArray, previous: NumberArray, started: boolean, maxDistance: number): boolean {
 	if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) return false
 
 	const dx = point[0] - previous[0]
 	const dy = point[1] - previous[1]
-	const maxDistance = projectedSegmentLimit(state)
 
 	if (!started || dx * dx + dy * dy > maxDistance * maxDistance) {
 		ctx.moveTo(point[0], point[1])
@@ -1675,6 +1753,11 @@ function appendProjectedPoint(ctx: CanvasRenderingContext2D, state: RenderState,
 }
 
 type ProjectedSampler = (t: number, out: NumberArray) => number
+type ProjectedPolylineObserver = {
+	readonly reset: VoidFunction
+	readonly append: (x: number, y: number, boundaryPoint: boolean) => void
+	readonly break: VoidFunction
+}
 
 function writeProjectedSample(out: NumberArray, visibility: number, projected: boolean) {
 	if (!projected) {
@@ -1689,11 +1772,12 @@ function isProjectedSample(out: NumberArray) {
 	return Number.isFinite(out[0]) && Number.isFinite(out[1])
 }
 
-function drawClippedPolyline(ctx: CanvasRenderingContext2D, state: RenderState, steps: number, point: NumberArray, previous: NumberArray, sampler: ProjectedSampler) {
+function drawClippedPolyline(ctx: ProjectedPathSink, state: RenderState, steps: number, point: NumberArray, previous: NumberArray, sampler: ProjectedSampler, observer?: ProjectedPolylineObserver, maxDistance = projectedSegmentLimit(state, 1)) {
 	let previousT = 0
 	let previousVisibility = Number.NaN
 	let previousProjected = false
 	let started = false
+	observer?.reset()
 
 	for (let i = 0; i <= steps; i++) {
 		const t = i / steps
@@ -1706,10 +1790,16 @@ function drawClippedPolyline(ctx: CanvasRenderingContext2D, state: RenderState, 
 			sampler(intersectionT, point)
 
 			if (isProjectedSample(point)) {
-				started = appendProjectedPoint(ctx, state, point, previous, started)
+				const previousStarted = started
+				started = appendProjectedPoint(ctx, point, previous, started, maxDistance)
+
+				if (previousStarted || visible) {
+					observer?.append(point[0], point[1], true)
+				}
 
 				if (!visible) {
 					started = false
+					observer?.break()
 				}
 			}
 
@@ -1719,15 +1809,23 @@ function drawClippedPolyline(ctx: CanvasRenderingContext2D, state: RenderState, 
 		}
 
 		if (visible) {
-			started = appendProjectedPoint(ctx, state, point, previous, started)
+			started = appendProjectedPoint(ctx, point, previous, started, maxDistance)
+			observer?.append(point[0], point[1], false)
 		} else if (!previousProjected || visibility < -HORIZON_EPSILON) {
 			started = false
+			observer?.break()
 		}
 
 		previousT = t
 		previousVisibility = visibility
 		previousProjected = projected
 	}
+}
+
+function applyBasePathTransform(ctx: CanvasRenderingContext2D, state: RenderState) {
+	ctx.translate(state.width / 2 + state.transform.x, state.height / 2 + state.transform.y)
+	ctx.scale(state.transform.k, state.transform.k)
+	ctx.translate(-state.width / 2, -state.height / 2)
 }
 
 function findHorizonIntersection(minT: number, minVisibility: number, maxT: number, maxVisibility: number, sampler: ProjectedSampler, point: NumberArray) {
@@ -1769,6 +1867,11 @@ function skyLabelFont(state: RenderState, baseSize: number) {
 class HorizonLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly previous = new Float32Array(2)
+	private path = new Path2D()
+	private samplerState!: RenderState
+	private cachedRevision = -1
+
+	private readonly horizonSampler: ProjectedSampler = (t, out) => this.samplerState.projectHorizontalBaseSample(t * TAU, 0, out)
 
 	constructor() {
 		super('horizon', 10)
@@ -1790,32 +1893,28 @@ class HorizonLayer extends InternalLayer {
 			return
 		}
 
-		ctx.beginPath()
-		let started = false
+		this.ensurePath(state)
+		ctx.save()
+		applyBasePathTransform(ctx, state)
+		ctx.lineWidth = 0.9 / state.transform.k
 
-		for (let i = 0; i <= 288; i++) {
-			const az = (i / 288) * TAU
-			const ok = state.projectHorizontalToScreen(az, 0, this.point)
-
-			if (!ok) {
-				started = false
-				continue
-			}
-
-			started = appendProjectedPoint(ctx, state, this.point, this.previous, started)
+		if (state.theme.horizon.fillBelowHorizon !== TRANSPARENT) {
+			ctx.fill(this.path)
 		}
 
-		if (started) {
-			if (state.theme.horizon.fillBelowHorizon !== TRANSPARENT) {
-				ctx.closePath()
-				ctx.fill()
-			}
-
-			ctx.stroke()
-		}
-
+		ctx.stroke(this.path)
+		ctx.restore()
 		drawCardinalPoints(ctx, state)
 		drawZenithLabel(ctx, state)
+	}
+
+	private ensurePath(state: RenderState) {
+		if (this.cachedRevision === state.projectedGeometryRevision) return
+
+		this.samplerState = state
+		this.path = new Path2D()
+		drawClippedPolyline(this.path, state, 288, this.point, this.previous, this.horizonSampler)
+		this.cachedRevision = state.projectedGeometryRevision
 	}
 }
 
@@ -1823,6 +1922,11 @@ type GridBoundaryEdge = 'circle' | 'left' | 'right' | 'top' | 'bottom'
 
 interface GridBoundaryLabelPoint extends Readonly<Point> {
 	readonly edge: GridBoundaryEdge
+}
+
+type GridBoundaryLabelCandidate = Point & {
+	edge: GridBoundaryEdge
+	label: string
 }
 
 type GridBoundaryLabelRect = Point & Size
@@ -1899,67 +2003,6 @@ function appendViewportGridBoundaryIntersection(points: GridBoundaryLabelPoint[]
 	}
 }
 
-function findGridBoundaryLabelPoints(state: RenderState, steps: number, point: NumberArray, sampler: ProjectedSampler, useViewportBoundary: boolean, out: GridBoundaryLabelPoint[]) {
-	out.length = 0
-
-	let previousT = 0
-	let previousVisibility = Number.NaN
-	let previousProjected = false
-	let previousVisible = false
-	let previousX = 0
-	let previousY = 0
-
-	function appendVisiblePoint(x: number, y: number, boundaryPoint: boolean) {
-		if (boundaryPoint) {
-			appendCircleGridBoundaryLabelPoint(out, state, x, y)
-		}
-
-		if (useViewportBoundary) {
-			if (previousVisible) {
-				appendViewportGridBoundaryIntersection(out, state, previousX, previousY, x, y)
-			}
-		}
-
-		previousVisible = true
-		previousX = x
-		previousY = y
-	}
-
-	for (let i = 0; i <= steps; i++) {
-		const t = i / steps
-		const visibility = sampler(t, point)
-		const projected = isProjectedSample(point)
-		const visible = visibility >= -HORIZON_EPSILON && projected
-		const sampleX = point[0]
-		const sampleY = point[1]
-
-		if (i > 0 && Number.isFinite(previousVisibility) && previousVisibility * visibility < 0) {
-			const intersectionT = findHorizonIntersection(previousT, previousVisibility, t, visibility, sampler, point)
-			sampler(intersectionT, point)
-
-			if (isProjectedSample(point)) {
-				if (previousVisible || visible) {
-					appendVisiblePoint(point[0], point[1], true)
-				}
-
-				if (!visible) {
-					previousVisible = false
-				}
-			}
-		}
-
-		if (visible) {
-			appendVisiblePoint(sampleX, sampleY, false)
-		} else if (!previousProjected || visibility < -HORIZON_EPSILON) {
-			previousVisible = false
-		}
-
-		previousT = t
-		previousVisibility = visibility
-		previousProjected = projected
-	}
-}
-
 function gridBoundaryLabelRectIntersects(a: GridBoundaryLabelRect, b: GridBoundaryLabelRect) {
 	return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 }
@@ -2015,95 +2058,181 @@ function drawGridBoundaryLabel(ctx: CanvasRenderingContext2D, state: RenderState
 	return occupiedCount + 1
 }
 
+type CachedGridLine = {
+	readonly label: string
+	readonly x: Float32Array
+	readonly y: Float32Array
+	readonly boundary: Uint8Array
+	readonly breakBefore: Uint8Array
+}
+
 // Grid layer draws coarse equatorial or horizontal reference lines.
 class GridLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly previous = new Float32Array(2)
 	private readonly labelPoints: GridBoundaryLabelPoint[] = []
+	private readonly labelCandidates: GridBoundaryLabelCandidate[] = []
 	private readonly labelRects: GridBoundaryLabelRect[] = []
+	private readonly cachedLines: CachedGridLine[] = []
+	private readonly buildX: number[] = []
+	private readonly buildY: number[] = []
+	private readonly buildBoundary: number[] = []
+	private readonly buildBreakBefore: number[] = []
+	private path = new Path2D()
 	private samplerState!: RenderState
 	private samplerAngle = 0
+	private cachedRevision = -1
+	private labelCandidateCount = 0
+	private buildStartsSubpath = true
 
 	private readonly raSampler: ProjectedSampler = (t, out) => {
 		const ra = t * TAU
-		const state = this.samplerState
-		return writeProjectedSample(out, state.equatorialVisibility(ra, this.samplerAngle), state.projectEquatorialToScreen(ra, this.samplerAngle, out))
+		return this.samplerState.projectEquatorialBaseSample(ra, this.samplerAngle, out)
 	}
 
 	private readonly decSampler: ProjectedSampler = (t, out) => {
 		const dec = -PIOVERTWO + t * PI
-		const state = this.samplerState
-		return writeProjectedSample(out, state.equatorialVisibility(this.samplerAngle, dec), state.projectEquatorialToScreen(this.samplerAngle, dec, out))
+		return this.samplerState.projectEquatorialBaseSample(this.samplerAngle, dec, out)
+	}
+
+	private readonly cacheObserver: ProjectedPolylineObserver = {
+		reset: () => {
+			this.buildX.length = 0
+			this.buildY.length = 0
+			this.buildBoundary.length = 0
+			this.buildBreakBefore.length = 0
+			this.buildStartsSubpath = true
+		},
+		append: (x, y, boundaryPoint) => {
+			this.buildX.push(x)
+			this.buildY.push(y)
+			this.buildBoundary.push(boundaryPoint ? 1 : 0)
+			this.buildBreakBefore.push(this.buildStartsSubpath ? 1 : 0)
+			this.buildStartsSubpath = false
+		},
+		break: () => {
+			this.buildStartsSubpath = true
+		},
 	}
 
 	constructor() {
 		super('grid', 20)
 	}
 
-	// Draws reference grid lines.
+	// Draws cached reference grid paths and derives boundary labels from their base points.
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
+		this.ensureCache(state)
+		ctx.save()
 		ctx.strokeStyle = state.theme.grid.color
 		ctx.globalAlpha = state.theme.grid.opacity
-		ctx.lineWidth = 0.65
-
-		this.renderEquatorialGrid(ctx, state)
-
-		ctx.globalAlpha = 1
+		applyBasePathTransform(ctx, state)
+		ctx.lineWidth = 0.65 / state.transform.k
+		ctx.stroke(this.path)
+		ctx.restore()
+		this.collectLabelCandidates(state)
+		this.renderGridLabels(ctx, state)
 	}
 
-	// Draws RA/Dec grid lines.
-	private renderEquatorialGrid(ctx: CanvasRenderingContext2D, state: RenderState) {
+	private ensureCache(state: RenderState) {
+		if (this.cachedRevision === state.projectedGeometryRevision) return
+
 		this.samplerState = state
+		this.path = new Path2D()
+		this.cachedLines.length = 0
 
 		for (let decDeg = -85; decDeg <= 85; decDeg += 10) {
 			this.samplerAngle = decDeg * DEG2RAD
-			ctx.beginPath()
-			drawClippedPolyline(ctx, state, 360, this.point, this.previous, this.raSampler)
-			ctx.stroke()
+			this.cacheGridLine(state, 360, this.raSampler, decDeg.toFixed(0))
 		}
 
 		for (let raHour = 0; raHour < 24; raHour += 1) {
 			this.samplerAngle = (raHour / 24) * TAU
-			ctx.beginPath()
-			drawClippedPolyline(ctx, state, 240, this.point, this.previous, this.decSampler)
-			ctx.stroke()
+			this.cacheGridLine(state, 240, this.decSampler, `${raHour}h`)
 		}
 
-		this.renderEquatorialGridLabels(ctx, state)
+		this.cachedRevision = state.projectedGeometryRevision
 	}
 
-	private renderEquatorialGridLabels(ctx: CanvasRenderingContext2D, state: RenderState) {
-		const useViewportBoundary = !projectionBoundaryFullyVisibleInViewport(state)
-		let labelRectCount = 0
-		this.samplerState = state
+	private cacheGridLine(state: RenderState, steps: number, sampler: ProjectedSampler, label: string) {
+		drawClippedPolyline(this.path, state, steps, this.point, this.previous, sampler, this.cacheObserver)
+		this.cachedLines.push({
+			label,
+			x: Float32Array.from(this.buildX),
+			y: Float32Array.from(this.buildY),
+			boundary: Uint8Array.from(this.buildBoundary),
+			breakBefore: Uint8Array.from(this.buildBreakBefore),
+		})
+	}
 
-		ctx.save()
+	private collectLabelCandidates(state: RenderState) {
+		const useViewportBoundary = !projectionBoundaryFullyVisibleInViewport(state)
+		this.labelCandidateCount = 0
+
+		for (let lineIndex = 0; lineIndex < this.cachedLines.length; lineIndex++) {
+			const line = this.cachedLines[lineIndex]
+			this.labelPoints.length = 0
+			let previousVisible = false
+			let previousX = 0
+			let previousY = 0
+
+			for (let i = 0; i < line.x.length; i++) {
+				if (line.breakBefore[i]) {
+					previousVisible = false
+				}
+
+				applyViewTransform(line.x[i], line.y[i], state.width, state.height, state.transform, this.point)
+				const x = this.point[0]
+				const y = this.point[1]
+
+				if (line.boundary[i]) {
+					appendCircleGridBoundaryLabelPoint(this.labelPoints, state, x, y)
+				}
+
+				if (useViewportBoundary && previousVisible) {
+					appendViewportGridBoundaryIntersection(this.labelPoints, state, previousX, previousY, x, y)
+				}
+
+				previousVisible = true
+				previousX = x
+				previousY = y
+			}
+
+			this.appendLabelCandidates(line.label)
+		}
+	}
+
+	private appendLabelCandidates(label: string) {
+		for (let i = 0; i < this.labelPoints.length; i++) {
+			const point = this.labelPoints[i]
+			let candidate = this.labelCandidates[this.labelCandidateCount]
+
+			if (!candidate) {
+				candidate = { x: 0, y: 0, edge: point.edge, label }
+				this.labelCandidates[this.labelCandidateCount] = candidate
+			}
+
+			candidate.x = point.x
+			candidate.y = point.y
+			candidate.edge = point.edge
+			candidate.label = label
+			this.labelCandidateCount++
+		}
+	}
+
+	private renderGridLabels(ctx: CanvasRenderingContext2D, state: RenderState) {
+		let labelRectCount = 0
+
 		ctx.globalAlpha = Math.min(0.95, Math.max(0.58, state.theme.grid.opacity + 0.28))
 		ctx.font = skyLabelFont(state, 9)
 		ctx.textAlign = 'center'
 		ctx.textBaseline = 'middle'
 
-		for (let decDeg = -85; decDeg <= 85; decDeg += 10) {
-			this.samplerAngle = decDeg * DEG2RAD
-			findGridBoundaryLabelPoints(state, 360, this.point, this.raSampler, useViewportBoundary, this.labelPoints)
-
-			for (let i = 0; i < this.labelPoints.length; i++) {
-				labelRectCount = drawGridBoundaryLabel(ctx, state, decDeg.toFixed(0), this.labelPoints[i], this.labelRects, labelRectCount)
-			}
-		}
-
-		for (let raHour = 0; raHour < 24; raHour += 1) {
-			this.samplerAngle = (raHour / 24) * TAU
-			findGridBoundaryLabelPoints(state, 240, this.point, this.decSampler, useViewportBoundary, this.labelPoints)
-
-			for (let i = 0; i < this.labelPoints.length; i++) {
-				labelRectCount = drawGridBoundaryLabel(ctx, state, `${raHour}h`, this.labelPoints[i], this.labelRects, labelRectCount)
-			}
+		for (let i = 0; i < this.labelCandidateCount; i++) {
+			const candidate = this.labelCandidates[i]
+			labelRectCount = drawGridBoundaryLabel(ctx, state, candidate.label, candidate, this.labelRects, labelRectCount)
 		}
 
 		this.labelRects.length = labelRectCount
-
-		ctx.restore()
 	}
 }
 
@@ -2111,31 +2240,31 @@ class GridLayer extends InternalLayer {
 class ReferenceLineLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly previous = new Float32Array(2)
+	private localMeridianPath = new Path2D()
+	private celestialEquatorPath = new Path2D()
+	private eclipticPath = new Path2D()
 	private samplerState!: RenderState
 	private localMeridianAz = 0
 	private localMeridianReverse = false
 	private eclipticCosObliquity = 1
 	private eclipticSinObliquity = 0
+	private cachedRevision = -1
+	private cachedSegmentLimit = Number.NaN
 
 	private readonly localMeridianSampler: ProjectedSampler = (t, out) => {
-		const state = this.samplerState
 		const alt = (this.localMeridianReverse ? 1 - t : t) * PIOVERTWO
-		return writeProjectedSample(out, state.horizontalVisibility(this.localMeridianAz, alt), state.projectHorizontalToScreen(this.localMeridianAz, alt, out))
+		return this.samplerState.projectHorizontalBaseSample(this.localMeridianAz, alt, out)
 	}
 
 	private readonly celestialEquatorSampler: ProjectedSampler = (t, out) => {
-		const state = this.samplerState
 		const ra = t * TAU
-		return writeProjectedSample(out, state.equatorialVisibility(ra, 0), state.projectEquatorialToScreen(ra, 0, out))
+		return this.samplerState.projectEquatorialBaseSample(ra, 0, out)
 	}
 
 	private readonly eclipticSampler: ProjectedSampler = (t, out) => {
-		const state = this.samplerState
 		const lambda = t * TAU
 		const sinLambda = Math.sin(lambda)
-		const ra = normalizeAngle(Math.atan2(sinLambda * this.eclipticCosObliquity, Math.cos(lambda)))
-		const dec = Math.asin(clamp(sinLambda * this.eclipticSinObliquity, -1, 1))
-		return writeProjectedSample(out, state.equatorialVisibility(ra, dec), state.projectEquatorialToScreen(ra, dec, out))
+		return this.samplerState.projectEquatorialVectorBaseSample(Math.cos(lambda), sinLambda * this.eclipticCosObliquity, sinLambda * this.eclipticSinObliquity, out)
 	}
 
 	constructor() {
@@ -2143,15 +2272,40 @@ class ReferenceLineLayer extends InternalLayer {
 	}
 
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
-		this.samplerState = state
-		ctx.save()
+		this.ensurePaths(state)
 		ctx.globalAlpha = 0.7
 		ctx.lineCap = 'round'
 		ctx.lineJoin = 'round'
+		applyBasePathTransform(ctx, state)
 		this.drawLocalMeridian(ctx, state)
 		this.drawCelestialEquator(ctx, state)
 		this.drawEcliptic(ctx, state)
-		ctx.restore()
+	}
+
+	private ensurePaths(state: RenderState) {
+		const segmentLimit = projectedSegmentLimit(state) / state.transform.k
+
+		if (this.cachedRevision === state.projectedGeometryRevision && this.cachedSegmentLimit === segmentLimit) return
+
+		this.samplerState = state
+		this.localMeridianPath = new Path2D()
+		this.localMeridianAz = 0
+		this.localMeridianReverse = false
+		drawClippedPolyline(this.localMeridianPath, state, 120, this.point, this.previous, this.localMeridianSampler, undefined, segmentLimit)
+		this.localMeridianAz = PI
+		this.localMeridianReverse = true
+		drawClippedPolyline(this.localMeridianPath, state, 120, this.point, this.previous, this.localMeridianSampler, undefined, segmentLimit)
+
+		this.celestialEquatorPath = new Path2D()
+		drawClippedPolyline(this.celestialEquatorPath, state, 360, this.point, this.previous, this.celestialEquatorSampler, undefined, segmentLimit)
+
+		const obliquity = meanObliquity(state.time)
+		this.eclipticCosObliquity = Math.cos(obliquity)
+		this.eclipticSinObliquity = Math.sin(obliquity)
+		this.eclipticPath = new Path2D()
+		drawClippedPolyline(this.eclipticPath, state, 360, this.point, this.previous, this.eclipticSampler, undefined, segmentLimit)
+		this.cachedRevision = state.projectedGeometryRevision
+		this.cachedSegmentLimit = segmentLimit
 	}
 
 	private drawLocalMeridian(ctx: CanvasRenderingContext2D, state: RenderState) {
@@ -2159,17 +2313,8 @@ class ReferenceLineLayer extends InternalLayer {
 
 		if (!style.enabled) return
 
-		this.applyStyle(ctx, style)
-
-		ctx.beginPath()
-		this.localMeridianAz = 0
-		this.localMeridianReverse = false
-		drawClippedPolyline(ctx, state, 120, this.point, this.previous, this.localMeridianSampler)
-		this.localMeridianAz = PI
-		this.localMeridianReverse = true
-		drawClippedPolyline(ctx, state, 120, this.point, this.previous, this.localMeridianSampler)
-
-		ctx.stroke()
+		this.applyStyle(ctx, style, state.transform.k)
+		ctx.stroke(this.localMeridianPath)
 	}
 
 	private drawCelestialEquator(ctx: CanvasRenderingContext2D, state: RenderState) {
@@ -2177,11 +2322,8 @@ class ReferenceLineLayer extends InternalLayer {
 
 		if (!style.enabled) return
 
-		this.applyStyle(ctx, style)
-
-		ctx.beginPath()
-		drawClippedPolyline(ctx, state, 360, this.point, this.previous, this.celestialEquatorSampler)
-		ctx.stroke()
+		this.applyStyle(ctx, style, state.transform.k)
+		ctx.stroke(this.celestialEquatorPath)
 	}
 
 	private drawEcliptic(ctx: CanvasRenderingContext2D, state: RenderState) {
@@ -2189,19 +2331,13 @@ class ReferenceLineLayer extends InternalLayer {
 
 		if (!style.enabled) return
 
-		const obliquity = meanObliquity(state.time)
-		this.eclipticCosObliquity = Math.cos(obliquity)
-		this.eclipticSinObliquity = Math.sin(obliquity)
-		this.applyStyle(ctx, style)
-
-		ctx.beginPath()
-		drawClippedPolyline(ctx, state, 360, this.point, this.previous, this.eclipticSampler)
-		ctx.stroke()
+		this.applyStyle(ctx, style, state.transform.k)
+		ctx.stroke(this.eclipticPath)
 	}
 
-	private applyStyle(ctx: CanvasRenderingContext2D, style: ResolvedReferenceLineOptions) {
+	private applyStyle(ctx: CanvasRenderingContext2D, style: ResolvedReferenceLineOptions, scale: number) {
 		ctx.strokeStyle = style.color
-		ctx.lineWidth = style.lineWidth
+		ctx.lineWidth = style.lineWidth / scale
 	}
 }
 
@@ -2212,6 +2348,9 @@ abstract class ConstellationSegmentLayer extends InternalLayer {
 	private readonly sampleVector = new Float32Array(3)
 	private readonly point = new Float32Array(2)
 	private readonly previous = new Float32Array(2)
+	private path = new Path2D()
+	private cachedLines: readonly ConstellationLine[] | null = null
+	private cachedRevision = -1
 	private samplerState!: RenderState
 
 	private readonly segmentSampler: ProjectedSampler = (t, out) => {
@@ -2225,37 +2364,40 @@ abstract class ConstellationSegmentLayer extends InternalLayer {
 			return writeProjectedSample(out, Number.NaN, false)
 		}
 
-		const state = this.samplerState
-		const ra = normalizeAngle(Math.atan2(this.sampleVector[1], this.sampleVector[0]))
-		const dec = Math.asin(clamp(this.sampleVector[2], -1, 1))
-		return writeProjectedSample(out, state.equatorialVisibility(ra, dec), state.projectEquatorialToScreen(ra, dec, out))
+		return this.samplerState.projectEquatorialVectorBaseSample(this.sampleVector[0], this.sampleVector[1], this.sampleVector[2], out)
 	}
 
 	protected drawSegments(ctx: CanvasRenderingContext2D, state: RenderState, lines: readonly ConstellationLine[], color: string, alpha: number, lineWidth: number) {
 		this.samplerState = state
-		ctx.strokeStyle = color
-		ctx.globalAlpha = alpha
-		ctx.lineWidth = lineWidth
-		ctx.beginPath()
 
-		for (const line of lines) {
-			for (let j = 1, k = 0; j < line.length; j++, k++) {
-				this.drawSegment(ctx, state, line[k], line[j])
+		if (this.cachedRevision !== state.projectedGeometryRevision || this.cachedLines !== lines) {
+			this.path = new Path2D()
+
+			for (const line of lines) {
+				for (let j = 1, k = 0; j < line.length; j++, k++) {
+					this.drawSegment(this.path, state, line[k], line[j])
+				}
 			}
+
+			this.cachedLines = lines
+			this.cachedRevision = state.projectedGeometryRevision
 		}
 
-		ctx.stroke()
-		ctx.globalAlpha = 1
+		ctx.strokeStyle = color
+		ctx.globalAlpha = alpha
+		applyBasePathTransform(ctx, state)
+		ctx.lineWidth = lineWidth / state.transform.k
+		ctx.stroke(this.path)
 	}
 
-	private drawSegment(ctx: CanvasRenderingContext2D, state: RenderState, from: ConstellationLine[number], to: ConstellationLine[number]) {
+	private drawSegment(path: Path2D, state: RenderState, from: ConstellationLine[number], to: ConstellationLine[number]) {
 		writeRaDecUnitVector(from[0], from[1], this.fromVector)
 		writeRaDecUnitVector(to[0], to[1], this.toVector)
 
 		const distance = angularDistance(this.fromVector[0], this.fromVector[1], this.fromVector[2], this.toVector[0], this.toVector[1], this.toVector[2])
 		const steps = Math.max(8, Math.min(180, Math.ceil(distance / DEG2RAD)))
 
-		drawClippedPolyline(ctx, state, steps, this.point, this.previous, this.segmentSampler)
+		drawClippedPolyline(path, state, steps, this.point, this.previous, this.segmentSampler)
 	}
 }
 
@@ -2278,19 +2420,22 @@ const CONSTELLATION_BOUNDARY_LINE_DASH = [4, 4] as const
 
 // Constellation boundary renderer.
 class ConstellationBoundaryLayer extends ConstellationSegmentLayer {
+	private readonly scaledLineDash = [0, 0]
+
 	constructor() {
 		super('constellationBoundaries', 32)
 	}
 
 	// Draws supplied constellation boundaries as dashed lines.
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
-		ctx.save()
-		ctx.setLineDash(CONSTELLATION_BOUNDARY_LINE_DASH)
+		const inverseScale = 1 / state.transform.k
+		this.scaledLineDash[0] = CONSTELLATION_BOUNDARY_LINE_DASH[0] * inverseScale
+		this.scaledLineDash[1] = CONSTELLATION_BOUNDARY_LINE_DASH[1] * inverseScale
+		ctx.setLineDash(this.scaledLineDash)
 		const theme = state.theme.constellations
 		const color = theme.boundaryColor || theme.color
 		const opacity = theme.boundaryOpacity ?? theme.opacity
 		this.drawSegments(ctx, state, state.constellations.boundaries ?? [], color, opacity, 0.6)
-		ctx.restore()
 	}
 }
 
@@ -2299,6 +2444,9 @@ class MilkyWayLayer extends InternalLayer {
 	private readonly sampleVector = new Float32Array(3)
 	private readonly point = new Float32Array(2)
 	private readonly previous = new Float32Array(2)
+	private readonly paths: Path2D[] = []
+	private cachedSteps: readonly Readonly<MilkyWayStep>[] | null = null
+	private cachedRevision = -1
 	private samplerState!: RenderState
 	private samplerRing!: MilkyWayRing
 
@@ -2326,10 +2474,7 @@ class MilkyWayLayer extends InternalLayer {
 			return writeProjectedSample(out, Number.NaN, false)
 		}
 
-		const state = this.samplerState
-		const ra = normalizeAngle(Math.atan2(this.sampleVector[1], this.sampleVector[0]))
-		const dec = Math.asin(clamp(this.sampleVector[2], -1, 1))
-		return writeProjectedSample(out, state.equatorialVisibility(ra, dec), state.projectEquatorialToScreen(ra, dec, out))
+		return this.samplerState.projectEquatorialVectorBaseSample(this.sampleVector[0], this.sampleVector[1], this.sampleVector[2], out)
 	}
 
 	constructor() {
@@ -2342,19 +2487,14 @@ class MilkyWayLayer extends InternalLayer {
 		if (steps.length === 0) return
 
 		const theme = state.theme.milkyWay
-		const fillOpacity = clamp(theme.opacity, 0, 1)
 		const lineOpacity = clamp(theme.lineOpacity, 0, 1)
 
-		if (fillOpacity <= 0 && (lineOpacity <= 0 || theme.lineWidth <= 0)) return
+		if (lineOpacity <= 0 || theme.lineWidth <= 0) return
 
 		this.samplerState = state
-		ctx.save()
-
-		if (isFiniteDiskProjection(state.projection)) {
-			clipProjectionDisk(ctx, state)
-		}
-
-		ctx.lineWidth = theme.lineWidth
+		this.ensurePaths(state, steps)
+		applyBasePathTransform(ctx, state)
+		ctx.lineWidth = theme.lineWidth / state.transform.k
 		ctx.lineJoin = 'round'
 		ctx.lineCap = 'round'
 
@@ -2365,35 +2505,38 @@ class MilkyWayLayer extends InternalLayer {
 
 			const color = milkyWayLevelColor(theme, i)
 
-			ctx.fillStyle = color
 			ctx.strokeStyle = color
-			ctx.beginPath()
-			this.drawStep(ctx, state, steps[i])
-
-			// Filled clipped polygons need real polygon clipping; outlines avoid false closure segments at the projection boundary.
-			// if (fillOpacity > 0 && !isFiniteDiskProjection(state.projection)) {
-			// 	ctx.globalAlpha = fillOpacity
-			// 	ctx.fill('evenodd')
-			// }
-
 			ctx.globalAlpha = lineOpacity * lineOpacityPerLevel
-			ctx.stroke()
+			ctx.stroke(this.paths[i])
 		}
-
-		ctx.restore()
 	}
 
-	private drawStep(ctx: CanvasRenderingContext2D, state: RenderState, step: MilkyWayStep) {
+	private ensurePaths(state: RenderState, steps: readonly Readonly<MilkyWayStep>[]) {
+		if (this.cachedRevision === state.projectedGeometryRevision && this.cachedSteps === steps) return
+
+		this.paths.length = steps.length
+
+		for (let i = 0; i < steps.length; i++) {
+			const path = new Path2D()
+			this.drawStep(path, state, steps[i])
+			this.paths[i] = path
+		}
+
+		this.cachedSteps = steps
+		this.cachedRevision = state.projectedGeometryRevision
+	}
+
+	private drawStep(path: Path2D, state: RenderState, step: Readonly<MilkyWayStep>) {
 		const rings = step.rings
 
 		for (let i = 0; i < rings.length; i++) {
-			this.drawRing(ctx, state, rings[i])
+			this.drawRing(path, state, rings[i])
 		}
 	}
 
-	private drawRing(ctx: CanvasRenderingContext2D, state: RenderState, ring: MilkyWayRing) {
+	private drawRing(path: Path2D, state: RenderState, ring: MilkyWayRing) {
 		this.samplerRing = ring
-		drawClippedPolyline(ctx, state, Math.max(16, milkyWayRingSegmentCount(ring)), this.point, this.previous, this.ringSampler)
+		drawClippedPolyline(path, state, Math.max(16, milkyWayRingSegmentCount(ring)), this.point, this.previous, this.ringSampler)
 	}
 }
 
@@ -2413,8 +2556,6 @@ function milkyWayLevelOpacity(theme: ThemeOptions['milkyWay'], index: number) {
 class DeepSkyObjectLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly labelPoint = new Float32Array(2)
-	private labelVisibleIndices = new Int32Array(0)
-	private labelVisibleCount = 0
 
 	constructor() {
 		super('deepSky', 40)
@@ -2422,30 +2563,32 @@ class DeepSkyObjectLayer extends InternalLayer {
 
 	// Draws simple predictable DSO symbols.
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
+		const catalog = state.deepSkyCatalog
+		if (!catalog) return
+
 		ctx.strokeStyle = state.theme.deepSky.color
 		ctx.fillStyle = state.theme.deepSky.color
 		ctx.lineWidth = 1
 		ctx.font = skyLabelFont(state, 9)
 		ctx.textAlign = 'left'
 		ctx.textBaseline = 'middle'
-		this.beginLabelRender(state)
+		catalog.beginLabelRender()
 
-		for (let i = 0; i < state.dsos.length; i++) {
-			const object = state.dsos[i]
+		for (let i = 0; i < catalog.visibleCount; i++) {
+			const index = catalog.visibleIndices[i]
+			const object = catalog.objects[index]
 
 			if (!isDeepSkyObjectVisible(object, state)) {
 				continue
 			}
 
-			if (!state.projectEquatorialToScreen(object.rightAscension, object.declination, this.point)) {
-				continue
-			}
+			applyViewTransform(catalog.screenX[index], catalog.screenY[index], state.width, state.height, state.transform, this.point)
 
 			if (!isPointInsideViewportMargin(this.point[0], this.point[1], state.width, state.height, DSO_VIEWPORT_MARGIN)) {
 				continue
 			}
 
-			const radius = 4 // deepSkySymbolRadius(object, state)
+			const radius = 4
 			drawDsoSymbol(ctx, object.type, this.point[0], this.point[1], radius)
 
 			if (object.name && isDeepSkyLabelVisible(object, state)) {
@@ -2453,33 +2596,12 @@ class DeepSkyObjectLayer extends InternalLayer {
 
 				if (positionSkyLabel(ctx, state, object.name, this.point[0], this.point[1], 10, -2, this.labelPoint)) {
 					ctx.fillText(object.name, this.labelPoint[0], this.labelPoint[1])
-					this.recordLabelVisible(state, i)
+					catalog.recordLabelVisible(index)
 				}
 
 				ctx.fillStyle = state.theme.deepSky.color
 			}
 		}
-	}
-
-	// Clears only the entries marked on the previous frame so clearing stays proportional to drawn labels, mirroring StarCatalog.beginLabelRender.
-	private beginLabelRender(state: RenderState) {
-		const labelVisible = state.deepSkyLabelVisible
-
-		for (let i = 0; i < this.labelVisibleCount; i++) {
-			labelVisible[this.labelVisibleIndices[i]] = 0
-		}
-
-		this.labelVisibleCount = 0
-
-		if (this.labelVisibleIndices.length < state.dsos.length) {
-			this.labelVisibleIndices = new Int32Array(state.dsos.length)
-		}
-	}
-
-	// Marks one DSO label as drawn and tracks its index for the next frame's clear.
-	private recordLabelVisible(state: RenderState, index: number) {
-		state.deepSkyLabelVisible[index] = 1
-		this.labelVisibleIndices[this.labelVisibleCount++] = index
 	}
 }
 
@@ -2489,6 +2611,7 @@ class StarLayer extends InternalLayer {
 	private styleSignature = ''
 	private readonly point = new Float32Array(2)
 	private readonly labelPoint = new Float32Array(2)
+	private readonly baseViewportBounds = new Float64Array(4)
 	private labelIndices = new Int32Array(0)
 	private labelX = new Float32Array(0)
 	private labelY = new Float32Array(0)
@@ -2517,6 +2640,7 @@ class StarLayer extends InternalLayer {
 	private renderSpriteStars(ctx: CanvasRenderingContext2D, state: RenderState, catalog: StarCatalog) {
 		const { transform, width, height } = state
 		const maxMagnitude = starSymbolMagnitudeLimit(state)
+		const inverseScale = 1 / transform.k
 
 		ctx.save()
 		ctx.translate(width / 2 + transform.x, height / 2 + transform.y)
@@ -2534,7 +2658,8 @@ class StarLayer extends InternalLayer {
 			}
 
 			const style = this.styles[bucket]
-			const margin = Math.max(2, style.halfSize * transform.k + 2)
+			const margin = Math.max(2, style.halfSize + 2)
+			writeBaseViewportBounds(width, height, transform, margin, this.baseViewportBounds)
 
 			if (style.radius <= 0.8) {
 				ctx.fillStyle = style.color
@@ -2546,17 +2671,20 @@ class StarLayer extends InternalLayer {
 						continue
 					}
 
-					applyViewTransform(catalog.screenX[index], catalog.screenY[index], width, height, transform, this.point)
+					const x = catalog.screenX[index]
+					const y = catalog.screenY[index]
 
-					if (this.point[0] < -margin || this.point[0] > width + margin || this.point[1] < -margin || this.point[1] > height + margin) {
+					if (x < this.baseViewportBounds[0] || x > this.baseViewportBounds[1] || y < this.baseViewportBounds[2] || y > this.baseViewportBounds[3]) {
 						continue
 					}
 
-					ctx.fillRect(catalog.screenX[index], catalog.screenY[index], 1, 1)
+					ctx.fillRect(x, y, inverseScale, inverseScale)
 				}
 			} else {
 				const sprite = style.sprite
-				const halfSize = style.halfSize
+				const halfSize = style.halfSize * inverseScale
+				const spriteWidth = sprite.width * inverseScale
+				const spriteHeight = sprite.height * inverseScale
 
 				for (let i = start; i < end; i++) {
 					const index = indices[i]
@@ -2565,13 +2693,14 @@ class StarLayer extends InternalLayer {
 						continue
 					}
 
-					applyViewTransform(catalog.screenX[index], catalog.screenY[index], width, height, transform, this.point)
+					const x = catalog.screenX[index]
+					const y = catalog.screenY[index]
 
-					if (this.point[0] < -margin || this.point[0] > width + margin || this.point[1] < -margin || this.point[1] > height + margin) {
+					if (x < this.baseViewportBounds[0] || x > this.baseViewportBounds[1] || y < this.baseViewportBounds[2] || y > this.baseViewportBounds[3]) {
 						continue
 					}
 
-					ctx.drawImage(sprite, catalog.screenX[index] - halfSize, catalog.screenY[index] - halfSize)
+					ctx.drawImage(sprite, x - halfSize, y - halfSize, spriteWidth, spriteHeight)
 				}
 			}
 		}
@@ -2586,6 +2715,7 @@ class StarLayer extends InternalLayer {
 		const maxMagnitude = starSymbolMagnitudeLimit(state)
 		const radiusScale = Math.min(Math.sqrt(transform.k), VECTOR_STAR_MAX_RADIUS_SCALE)
 		const margin = state.theme.stars.maxRadius * VECTOR_STAR_MAX_RADIUS_SCALE + 2
+		writeBaseViewportBounds(width, height, transform, margin, this.baseViewportBounds)
 
 		const indices = catalog.getBucketedVisibleIndices()
 
@@ -2609,12 +2739,14 @@ class StarLayer extends InternalLayer {
 					continue
 				}
 
-				applyViewTransform(catalog.screenX[index], catalog.screenY[index], width, height, transform, this.point)
+				const x = catalog.screenX[index]
+				const y = catalog.screenY[index]
 
-				if (this.point[0] < -margin || this.point[0] > width + margin || this.point[1] < -margin || this.point[1] > height + margin) {
+				if (x < this.baseViewportBounds[0] || x > this.baseViewportBounds[1] || y < this.baseViewportBounds[2] || y > this.baseViewportBounds[3]) {
 					continue
 				}
 
+				applyViewTransform(x, y, width, height, transform, this.point)
 				ctx.moveTo(this.point[0] + radius, this.point[1])
 				ctx.arc(this.point[0], this.point[1], radius, 0, TAU)
 			}
@@ -2631,6 +2763,7 @@ class StarLayer extends InternalLayer {
 		const maxMagnitude = starLabelMagnitudeLimit(state)
 		let labelCount = 0
 		this.ensureLabelCapacity(catalog.namedIndices.length)
+		writeBaseViewportBounds(state.width, state.height, state.transform, 0, this.baseViewportBounds)
 
 		for (let i = 0; i < catalog.namedIndices.length; i++) {
 			const index = catalog.namedIndices[i]
@@ -2640,12 +2773,14 @@ class StarLayer extends InternalLayer {
 				continue
 			}
 
-			applyViewTransform(catalog.screenX[index], catalog.screenY[index], state.width, state.height, state.transform, this.point)
+			const x = catalog.screenX[index]
+			const y = catalog.screenY[index]
 
-			if (this.point[0] < 0 || this.point[0] > state.width || this.point[1] < 0 || this.point[1] > state.height) {
+			if (x < this.baseViewportBounds[0] || x > this.baseViewportBounds[1] || y < this.baseViewportBounds[2] || y > this.baseViewportBounds[3]) {
 				continue
 			}
 
+			applyViewTransform(x, y, state.width, state.height, state.transform, this.point)
 			this.labelIndices[labelCount] = index
 			this.labelX[labelCount] = this.point[0]
 			this.labelY[labelCount] = this.point[1]
@@ -2794,13 +2929,11 @@ class MovingBodyLayer extends InternalLayer {
 			ctx.lineWidth = 1
 			drawMovingBodySymbol(ctx, object.type, this.point[0], this.point[1])
 
-			if (isMovingBodyLabelVisible(object, state)) {
-				const label = object.name ?? object.type
-				ctx.fillStyle = state.theme.movingBodies.labelColor
+			const label = object.name ?? object.type
+			ctx.fillStyle = state.theme.movingBodies.labelColor
 
-				if (positionSkyLabel(ctx, state, label, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) {
-					ctx.fillText(label, this.labelPoint[0], this.labelPoint[1])
-				}
+			if (positionSkyLabel(ctx, state, label, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) {
+				ctx.fillText(label, this.labelPoint[0], this.labelPoint[1])
 			}
 		}
 	}
@@ -2932,10 +3065,11 @@ class InteractionOverlayLayer extends InternalLayer {
 	}
 
 	private drawHighlightedDeepSkyLabel(ctx: CanvasRenderingContext2D, state: RenderState, object: Extract<CelestialObject, { type: 'deepSky' }>) {
+		const catalog = state.deepSkyCatalog
 		const dso = object.object
 
-		if (!dso.name || state.deepSkyLabelVisible[object.index] !== 0) return
-		if (!state.projectEquatorialToScreen(dso.rightAscension, dso.declination, this.point)) return
+		if (!catalog || !catalog.visible[object.index] || !dso.name || catalog.labelVisible[object.index] !== 0) return
+		applyViewTransform(catalog.screenX[object.index], catalog.screenY[object.index], state.width, state.height, state.transform, this.point)
 		if (!isPointInsideViewportMargin(this.point[0], this.point[1], state.width, state.height, DSO_VIEWPORT_MARGIN)) return
 
 		ctx.fillStyle = state.theme.deepSky.labelColor
@@ -3006,10 +3140,6 @@ function isMovingBodyVisibleAtZoom(object: MovingBody, zoom: number) {
 
 function isMovingBodyVisible(object: MovingBody, state: RenderState) {
 	return object.visible !== false && isMovingBodyVisibleAtZoom(object, state.transform.k)
-}
-
-function isMovingBodyLabelVisible(object: MovingBody, state: RenderState) {
-	return true // !isFiniteNumber(object.magnitude) || object.magnitude <= deepSkyLabelMagnitudeLimit(state.transform.k)
 }
 
 function movingBodyColor(object: MovingBody, state: RenderState) {
@@ -3159,9 +3289,13 @@ function projectObjectToScreen(object: CelestialObject, state: RenderState, out:
 			applyViewTransform(catalog.screenX[object.index], catalog.screenY[object.index], state.width, state.height, state.transform, out)
 			return true
 		}
-		case 'deepSky':
+		case 'deepSky': {
+			const catalog = state.deepSkyCatalog
+			if (!catalog || !catalog.visible[object.index]) return false
 			if (!isDeepSkyObjectVisible(object.object, state)) return false
-			return state.projectEquatorialToScreen(object.object.rightAscension, object.object.declination, out)
+			applyViewTransform(catalog.screenX[object.index], catalog.screenY[object.index], state.width, state.height, state.transform, out)
+			return true
+		}
 		case 'movingBody': {
 			const movingBody = currentMovingBodyForObject(object, state)
 			return movingBody ? state.projectEquatorialToScreen(movingBody.position.rightAscension, movingBody.position.declination, out) : false
@@ -3206,14 +3340,16 @@ function isObjectLayerVisible(object: CelestialObject, state: RenderState) {
 // Canvas layer manager.
 class CanvasRenderer {
 	private readonly root: HTMLDivElement
-	private readonly records: LayerRecord[] = []
-	private readonly recordsById = new Map<string, LayerRecord>()
+	private readonly groups: LayerGroupRecord[] = []
+	private readonly groupsById = new Map<string, LayerGroupRecord>()
+	private readonly layersById = new Map<string, InternalLayer>()
 	private dpr = 1
 
 	constructor(
 		private readonly host: HTMLElement,
 		width: number,
 		height: number,
+		private readonly maxDevicePixelRatio: number,
 	) {
 		this.root = document.createElement('div')
 		this.root.style.position = 'relative'
@@ -3223,91 +3359,119 @@ class CanvasRenderer {
 		this.resize(width, height)
 	}
 
-	// Adds a canvas-backed layer.
-	addLayer(layer: InternalLayer) {
-		const canvas = document.createElement('canvas')
-		const ctx = canvas.getContext('2d', { alpha: true })
+	// Adds a layer to a shared canvas group.
+	addLayer(layer: InternalLayer, groupId: string) {
+		let group = this.groupsById.get(groupId)
 
-		if (!ctx) {
-			throw new Error(`Unable to create 2D canvas context for layer ${layer.id}`)
+		if (!group) {
+			const canvas = document.createElement('canvas')
+			const ctx = canvas.getContext('2d', { alpha: true })
+
+			if (!ctx) {
+				throw new Error(`Unable to create 2D canvas context for layer group ${groupId}`)
+			}
+
+			canvas.style.position = 'absolute'
+			canvas.style.inset = '0'
+			canvas.style.pointerEvents = 'none'
+			this.root.append(canvas)
+			group = { id: groupId, layers: [], canvas, ctx, zIndex: layer.zIndex, visible: true }
+			this.groups.push(group)
+			this.groupsById.set(groupId, group)
+			this.resizeCanvas(canvas)
 		}
 
-		canvas.style.position = 'absolute'
-		canvas.style.inset = '0'
-		canvas.style.zIndex = String(layer.zIndex)
-		canvas.style.pointerEvents = 'none'
-		this.root.append(canvas)
-		const record = { layer, canvas, ctx }
-		this.records.push(record)
-		this.recordsById.set(layer.id, record)
-		this.records.sort((a, b) => a.layer.zIndex - b.layer.zIndex)
-		this.resizeCanvas(canvas)
+		group.layers.push(layer)
+		group.layers.sort((a, b) => a.zIndex - b.zIndex)
+		group.zIndex = group.layers[0].zIndex
+		group.canvas.style.zIndex = String(group.zIndex)
+		this.groups.sort((a, b) => a.zIndex - b.zIndex)
+		this.layersById.set(layer.id, layer)
 	}
 
 	// Resizes all canvases with device-pixel awareness.
 	resize(width: number, height: number) {
-		this.dpr = Math.max(1, window.devicePixelRatio || 1)
+		this.dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, this.maxDevicePixelRatio))
 		this.root.style.width = `${width}px`
 		this.root.style.height = `${height}px`
 
-		for (const record of this.records) {
-			this.resizeCanvas(record.canvas)
-			record.layer.markDirty()
+		for (const group of this.groups) {
+			this.resizeCanvas(group.canvas)
+
+			for (const layer of group.layers) {
+				layer.markDirty()
+			}
 		}
 	}
 
-	// Draws all dirty visible layers.
+	// Draws canvas groups containing dirty layers.
 	render(state: RenderState) {
-		for (const record of this.records) {
-			const { layer, canvas, ctx } = record
-			canvas.style.display = layer.visible ? 'block' : 'none'
+		for (const group of this.groups) {
+			let dirty = false
+			let visible = false
 
-			if (!layer.visible || !layer.dirty) {
+			for (const layer of group.layers) {
+				dirty ||= layer.dirty
+				visible ||= layer.visible
+			}
+
+			if (group.visible !== visible) {
+				group.visible = visible
+				group.canvas.style.display = visible ? 'block' : 'none'
+			}
+
+			if (!dirty) {
 				continue
 			}
 
-			ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
-			ctx.clearRect(0, 0, state.width, state.height)
+			if (visible) {
+				const ctx = group.ctx
+				ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
+				ctx.clearRect(0, 0, state.width, state.height)
 
-			if (layer.id !== 'background' && layer.id !== 'debug' && isFiniteDiskProjection(state.projection)) {
-				ctx.save()
-				clipProjectionDisk(ctx, state)
-				layer.render(ctx, state)
-				ctx.restore()
-			} else {
-				layer.render(ctx, state)
+				for (const layer of group.layers) {
+					if (!layer.visible) continue
+
+					ctx.save()
+
+					if (layer.id !== 'background' && layer.id !== 'debug' && isFiniteDiskProjection(state.projection)) {
+						clipProjectionDisk(ctx, state)
+					}
+
+					layer.render(ctx, state)
+					ctx.restore()
+				}
 			}
 
-			layer.markClean()
+			for (const layer of group.layers) {
+				layer.markClean()
+			}
 		}
 	}
 
 	// Marks every managed layer dirty.
 	markAllDirty() {
-		for (const record of this.records) {
-			record.layer.markDirty()
+		for (const layer of this.layersById.values()) {
+			layer.markDirty()
 		}
 	}
 
 	// Marks a single layer dirty.
 	markDirty(id: string) {
-		this.recordsById.get(id)?.layer.markDirty()
+		this.layersById.get(id)?.markDirty()
 	}
 
 	// Gets a layer by id.
 	getLayer(id: string) {
-		return this.recordsById.get(id)?.layer ?? null
+		return this.layersById.get(id) ?? null
 	}
 
 	// Removes all DOM nodes created by the renderer.
 	destroy() {
-		for (const record of this.records) {
-			record.layer.destroy()
-		}
-
 		this.root.remove()
-		this.records.length = 0
-		this.recordsById.clear()
+		this.groups.length = 0
+		this.groupsById.clear()
+		this.layersById.clear()
 	}
 
 	// Exposes the root element for interaction binding.
@@ -3345,16 +3509,16 @@ export class Celestial {
 	readonly #tempProjection = new Float32Array(2)
 	readonly #tempVector = new Float32Array(3)
 	readonly #tempScreen = new Float32Array(2)
-	readonly #layers: InternalLayer[] = []
+	readonly #starProjectionBounds = new Float64Array(4)
+	readonly #starViewportBounds = new Float64Array(4)
 
 	readonly #options: ResolvedCelestialOptions
 	#renderState: Writable<RenderState> | null = null
 	#cachedRect: DOMRect | null = null
 	#starCatalog: StarCatalog | null = null
+	#deepSkyCatalog: DeepSkyCatalog | null = null
 	#constellations: ConstellationData = {}
 	#milkyWay: MilkyWayStep[] = []
-	#dsos: DeepSkyObject[] = []
-	#deepSkyLabelVisible = new Uint8Array(0)
 	readonly #movingBodies = new Map<string, MovingBody>()
 	readonly #movingBodyList: MovingBody[] = []
 	readonly #shapes = new Map<string, CelestialShape>()
@@ -3367,23 +3531,27 @@ export class Celestial {
 	#autoUpdateOptions: Required<AutoUpdateOptions> | null = null
 	#frameId = 0
 	#updateQueued = false
+	#projectedGeometryRevision = 0
 	#pickingDirty = false
 	#destroyed = false
 	#pointerDown = false
 	#pointerMoved = false
 	#d3ZoomBound = false
+	#d3ZoomActive = false
 	#d3ZoomBehavior: ZoomBehavior<HTMLElement, unknown> | null = null
 	#pointerStartX = 0
 	#pointerStartY = 0
 	#transformStartX = 0
 	#transformStartY = 0
 	#lastPointerMove = 0
+	#lastPointerX = Number.NaN
+	#lastPointerY = Number.NaN
 
 	// Creates a new interactive Canvas celestial map.
 	constructor(container: HTMLElement | string, options: CelestialOptions = {}) {
 		this.#host = resolveContainer(container)
 		this.#options = resolveOptions(options)
-		this.#renderer = new CanvasRenderer(this.#host, this.#options.width, this.#options.height)
+		this.#renderer = new CanvasRenderer(this.#host, this.#options.width, this.#options.height, this.#options.maxDevicePixelRatio)
 
 		this.setupLayers()
 
@@ -3442,7 +3610,14 @@ export class Celestial {
 	setMagnitudeLimit(limit: number) {
 		if (limit !== this.#options.stars.maxMagnitude) {
 			this.#options.stars.maxMagnitude = limit
-			this.queueProjectionOnly()
+			this.projectStars()
+			this.rebuildPickingIndex()
+
+			if (this.#hoverObject?.type === 'star' || this.#selectedObject?.type === 'star') {
+				this.#renderer.markDirty('overlay')
+			}
+
+			this.requestRender()
 		}
 	}
 
@@ -3532,10 +3707,12 @@ export class Celestial {
 
 		this.#options.width = nextWidth
 		this.#options.height = nextHeight
+		this.invalidateProjectedGeometry()
 		this.#cachedRect = null
 		this.#renderer.resize(this.#options.width, this.#options.height)
 		this.syncD3ZoomTransform(this.#transform)
 		this.projectStars()
+		this.projectDeepSkyObjects()
 		this.rebuildPickingIndex()
 		this.#renderer.markAllDirty()
 		this.#emitter.has('resize') && this.#emitter.emit('resize', { width: this.#options.width, height: this.#options.height })
@@ -3571,7 +3748,7 @@ export class Celestial {
 		this.#emitter.clear()
 		this.#renderState = null
 		this.#starCatalog = null
-		this.#dsos.length = 0
+		this.#deepSkyCatalog = null
 		this.#constellations = {}
 		this.#milkyWay.length = 0
 		this.#movingBodies.clear()
@@ -3600,6 +3777,7 @@ export class Celestial {
 			boundaries: data.boundaries ?? [],
 		}
 
+		this.invalidateProjectedGeometry()
 		this.#renderer.markDirty('constellations')
 		this.#renderer.markDirty('constellationBoundaries')
 		this.#renderer.markDirty('constellationLabels')
@@ -3609,17 +3787,46 @@ export class Celestial {
 
 	loadMilkyWay(coordinates: MilkyWayCoordinates) {
 		this.#milkyWay = normalizeMilkyWayCoordinates(coordinates)
+		this.invalidateProjectedGeometry()
 		this.#renderer.markDirty('milkyWay')
 		this.requestRender()
 	}
 
 	// Loads deep-sky objects.
 	loadDeepSkyObjects(objects: readonly DeepSkyObject[]) {
-		this.#dsos = objects as never
-		this.#deepSkyLabelVisible = new Uint8Array(this.#dsos.length)
-		this.#renderer.markDirty('deepSky')
+		this.#deepSkyCatalog = new DeepSkyCatalog(objects)
+		this.syncSelectedDeepSkyObject()
+		this.syncHoverDeepSkyObject()
+		this.projectDeepSkyObjects()
 		this.rebuildPickingIndex()
+		this.#renderer.markDirty('overlay')
 		this.requestRender()
+	}
+
+	// Refreshes cached deep-sky coordinates after external object mutation.
+	markDeepSkyObjectsChanged(id?: DeepSkyObject['id']) {
+		const catalog = this.#deepSkyCatalog
+		if (!catalog) return false
+
+		let index: number | undefined
+
+		if (id !== undefined) {
+			index = this.findDeepSkyObjectIndex(id)
+			if (index < 0) return false
+		}
+
+		catalog.refreshEquatorialVectors(index)
+		this.syncSelectedDeepSkyObject()
+		this.syncHoverDeepSkyObject()
+		this.projectDeepSkyObjects()
+		this.rebuildPickingIndex()
+
+		if (id === undefined || (this.#selectedObject?.type === 'deepSky' && this.#selectedObject.object.id === id) || (this.#hoverObject?.type === 'deepSky' && this.#hoverObject.object.id === id)) {
+			this.#renderer.markDirty('overlay')
+		}
+
+		this.requestRender()
+		return true
 	}
 
 	// Adds or replaces a dynamic moving body and returns its id.
@@ -3923,7 +4130,7 @@ export class Celestial {
 
 	// Creates and registers built-in layers.
 	private setupLayers() {
-		this.#layers.push(
+		const layers = [
 			new BackgroundLayer(),
 			new HorizonLayer(),
 			new MilkyWayLayer(),
@@ -3937,11 +4144,11 @@ export class Celestial {
 			new ConstellationLabelLayer(),
 			new ShapeLayer(),
 			new InteractionOverlayLayer(),
-		)
+		]
 
-		for (const layer of this.#layers) {
+		for (const layer of layers) {
 			layer.visible = this.#options.layers[layer.id] ?? true
-			this.#renderer.addLayer(layer)
+			this.#renderer.addLayer(layer, LAYER_CANVAS_GROUPS[layer.id] ?? layer.id)
 		}
 	}
 
@@ -3971,6 +4178,10 @@ export class Celestial {
 		writeViewMatrix(this.#centerVector, this.#referenceUp, this.#viewMatrix)
 	}
 
+	private invalidateProjectedGeometry() {
+		this.#projectedGeometryRevision++
+	}
+
 	// Queues a full astronomical update.
 	private queueUpdate() {
 		if (this.#updateQueued || this.#destroyed) return
@@ -3982,7 +4193,9 @@ export class Celestial {
 	private queueProjectionOnly() {
 		if (this.#destroyed) return
 
+		this.invalidateProjectedGeometry()
 		this.projectStars()
+		this.projectDeepSkyObjects()
 		this.rebuildPickingIndex()
 		this.#renderer.markAllDirty()
 		this.requestRender()
@@ -4009,12 +4222,14 @@ export class Celestial {
 		const start = emitUpdateEnd ? performance.now() : 0
 		emitUpdateStart && this.#emitter.emit('updateStart', { time: this.#options.time })
 		writeEquatorialToHorizontalMatrix(this.#options.time, this.#options.observer, this.#eqToHorizontal)
+		this.invalidateProjectedGeometry()
 
 		if (this.#starCatalog) {
 			this.#starCatalog.updateEquatorialVectors(toJulianEpoch(this.#options.time))
 		}
 
 		this.projectStars()
+		this.projectDeepSkyObjects()
 		this.rebuildPickingIndex()
 		emitUpdateEnd && this.#emitter.emit('updateEnd', { time: this.#options.time, duration: performance.now() - start })
 		this.markAstronomicalDirty()
@@ -4025,6 +4240,48 @@ export class Celestial {
 		if (this.#selectedObject?.type !== 'movingBody') return
 
 		this.#selectedObject = this.currentMovingBodyObject(this.#selectedObject)
+	}
+
+	private syncSelectedDeepSkyObject() {
+		if (this.#selectedObject?.type !== 'deepSky') return
+
+		this.#selectedObject = this.currentDeepSkyObject(this.#selectedObject)
+	}
+
+	private syncHoverDeepSkyObject() {
+		if (this.#hoverObject?.type !== 'deepSky') return
+
+		const previous = this.#hoverObject
+		this.#hoverObject = this.currentDeepSkyObject(previous)
+
+		if (!this.#hoverObject) {
+			this.#emitter.has('objectLeave') && this.#emitter.emit('objectLeave', { object: previous })
+		}
+	}
+
+	private currentDeepSkyObject(object: Extract<CelestialObject, { type: 'deepSky' }>): CelestialObject | null {
+		const catalog = this.#deepSkyCatalog
+		if (!catalog) return null
+
+		const indexed = catalog.objects[object.index]
+
+		if (indexed?.id === object.object.id) {
+			return { type: 'deepSky', index: object.index, object: indexed }
+		}
+
+		const index = this.findDeepSkyObjectIndex(object.object.id)
+		return index >= 0 ? { type: 'deepSky', index, object: catalog.objects[index] } : null
+	}
+
+	private findDeepSkyObjectIndex(id: DeepSkyObject['id']) {
+		const objects = this.#deepSkyCatalog?.objects
+		if (!objects) return -1
+
+		for (let i = 0; i < objects.length; i++) {
+			if (objects[i].id === id) return i
+		}
+
+		return -1
 	}
 
 	private syncHoverMovingBodyObject() {
@@ -4072,6 +4329,17 @@ export class Celestial {
 		const height = this.#options.height
 		const scale = projectionScale(width, height, this.#options.projection)
 		const margin = Math.max(width, height)
+		const projectionBounds = this.#starProjectionBounds
+
+		if (this.#options.projection === 'gnomonic') {
+			writeBaseViewportBounds(width, height, this.#transform, margin, projectionBounds)
+		} else {
+			projectionBounds[0] = -margin
+			projectionBounds[1] = width + margin
+			projectionBounds[2] = -margin
+			projectionBounds[3] = height + margin
+		}
+
 		const maxMagnitude = this.#options.stars.maxMagnitude
 		const maxRenderStars = this.#options.stars.maxRenderStars
 		const isHorizontal = this.#options.coordinateSystem === 'horizontal'
@@ -4114,7 +4382,7 @@ export class Celestial {
 			const sx = this.#tempScreen[0]
 			const sy = this.#tempScreen[1]
 
-			if (sx < -margin || sy < -margin || sx > width + margin || sy > height + margin) {
+			if (sx < projectionBounds[0] || sx > projectionBounds[1] || sy < projectionBounds[2] || sy > projectionBounds[3]) {
 				continue
 			}
 
@@ -4123,6 +4391,62 @@ export class Celestial {
 
 		catalog.finalizeProjectionBuckets()
 		this.#renderer.markDirty('stars')
+	}
+
+	private starProjectionCoversViewport() {
+		if (!this.#starCatalog || this.#options.projection !== 'gnomonic') return true
+
+		writeBaseViewportBounds(this.#options.width, this.#options.height, this.#transform, 0, this.#starViewportBounds)
+		return this.#starViewportBounds[0] >= this.#starProjectionBounds[0] && this.#starViewportBounds[1] <= this.#starProjectionBounds[1] && this.#starViewportBounds[2] >= this.#starProjectionBounds[2] && this.#starViewportBounds[3] <= this.#starProjectionBounds[3]
+	}
+
+	// Projects deep-sky objects into base screen coordinates for reuse during pan and zoom.
+	private projectDeepSkyObjects() {
+		const catalog = this.#deepSkyCatalog
+
+		if (!catalog) return
+
+		const width = this.#options.width
+		const height = this.#options.height
+		const scale = projectionScale(width, height, this.#options.projection)
+		const margin = Math.max(width, height)
+		const cullOutsideProjectionMargin = isFiniteDiskProjection(this.#options.projection)
+		const isHorizontal = this.#options.coordinateSystem === 'horizontal'
+		const horizontalMatrix = this.#eqToHorizontal
+		const temp = this.#tempVector
+		catalog.beginProjection()
+
+		for (let i = 0; i < catalog.count; i++) {
+			let x = catalog.eqX[i]
+			let y = catalog.eqY[i]
+			let z = catalog.eqZ[i]
+
+			if (isHorizontal) {
+				multiplyMatrixVector(horizontalMatrix, x, y, z, temp)
+				x = temp[0]
+				y = temp[1]
+				z = temp[2]
+
+				if (z < -HORIZON_EPSILON) {
+					continue
+				}
+			}
+
+			if (!this.projectWorldVectorToBaseScreen(x, y, z, scale, this.#tempScreen)) {
+				continue
+			}
+
+			const screenX = this.#tempScreen[0]
+			const screenY = this.#tempScreen[1]
+
+			if (cullOutsideProjectionMargin && (screenX < -margin || screenY < -margin || screenX > width + margin || screenY > height + margin)) {
+				continue
+			}
+
+			catalog.recordVisible(i, screenX, screenY)
+		}
+
+		this.#renderer.markDirty('deepSky')
 	}
 
 	// Projects a world vector to base screen coordinates without pan/zoom transform.
@@ -4142,50 +4466,85 @@ export class Celestial {
 
 	// Projects an equatorial coordinate to transformed screen coordinates.
 	private readonly projectEquatorialToScreen = (ra: number, dec: number, out: NumberArray): boolean => {
-		writeRaDecUnitVector(ra, dec, this.#tempVector)
+		this.projectEquatorialSample(ra, dec, out)
+		return isProjectedSample(out)
+	}
 
-		let x = this.#tempVector[0]
-		let y = this.#tempVector[1]
-		let z = this.#tempVector[2]
+	// Projects an equatorial coordinate and returns its horizon visibility.
+	private readonly projectEquatorialSample = (ra: number, dec: number, out: NumberArray): number => {
+		const visibility = this.projectEquatorialBaseSample(ra, dec, out)
+
+		if (isProjectedSample(out)) {
+			applyViewTransform(out[0], out[1], this.#options.width, this.#options.height, this.#transform, out)
+		}
+
+		return visibility
+	}
+
+	// Projects an equatorial coordinate to reusable base screen coordinates.
+	private readonly projectEquatorialBaseSample = (ra: number, dec: number, out: NumberArray): number => {
+		writeRaDecUnitVector(ra, dec, this.#tempVector)
+		return this.projectEquatorialVectorBaseSample(this.#tempVector[0], this.#tempVector[1], this.#tempVector[2], out)
+	}
+
+	// Projects an equatorial unit vector to transformed screen coordinates.
+	private readonly projectEquatorialVectorSample = (equatorialX: number, equatorialY: number, equatorialZ: number, out: NumberArray): number => {
+		const visibility = this.projectEquatorialVectorBaseSample(equatorialX, equatorialY, equatorialZ, out)
+
+		if (isProjectedSample(out)) {
+			applyViewTransform(out[0], out[1], this.#options.width, this.#options.height, this.#transform, out)
+		}
+
+		return visibility
+	}
+
+	// Projects an equatorial unit vector to reusable base screen coordinates.
+	private readonly projectEquatorialVectorBaseSample = (equatorialX: number, equatorialY: number, equatorialZ: number, out: NumberArray): number => {
+		let visibility = 1
+		let x = equatorialX
+		let y = equatorialY
+		let z = equatorialZ
 
 		if (this.#options.coordinateSystem === 'horizontal') {
 			multiplyMatrixVector(this.#eqToHorizontal, x, y, z, this.#tempVector)
 			x = this.#tempVector[0]
 			y = this.#tempVector[1]
 			z = this.#tempVector[2]
+			visibility = z
 
-			if (z < -HORIZON_EPSILON) {
-				return false
+			if (visibility < -HORIZON_EPSILON) {
+				return writeProjectedSample(out, visibility, false)
 			}
 		}
 
-		if (!this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.#options.width, this.#options.height, this.#options.projection), out)) {
-			return false
-		}
-
-		applyViewTransform(out[0], out[1], this.#options.width, this.#options.height, this.#transform, out)
-
-		return true
-	}
-
-	// Projects a coordinate-system vector to transformed screen coordinates.
-	private readonly projectWorldVectorToScreen = (x: number, y: number, z: number, out: NumberArray): boolean => {
-		if (!this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.#options.width, this.#options.height, this.#options.projection), out)) {
-			return false
-		}
-
-		applyViewTransform(out[0], out[1], this.#options.width, this.#options.height, this.#transform, out)
-
-		return true
+		return writeProjectedSample(out, visibility, this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.#options.width, this.#options.height, this.#options.projection), out))
 	}
 
 	// Projects a local horizontal coordinate onto either horizontal or equatorial views.
 	private readonly projectHorizontalToScreen = (az: number, alt: number, out: NumberArray): boolean => {
+		this.projectHorizontalSample(az, alt, out)
+		return isProjectedSample(out)
+	}
+
+	// Projects a horizontal coordinate and returns its horizon visibility.
+	private readonly projectHorizontalSample = (az: number, alt: number, out: NumberArray): number => {
+		const visibility = this.projectHorizontalBaseSample(az, alt, out)
+
+		if (isProjectedSample(out)) {
+			applyViewTransform(out[0], out[1], this.#options.width, this.#options.height, this.#transform, out)
+		}
+
+		return visibility
+	}
+
+	// Projects a horizontal coordinate to reusable base screen coordinates.
+	private readonly projectHorizontalBaseSample = (az: number, alt: number, out: NumberArray): number => {
 		writeHorizontalUnitVector(az, alt, this.#tempVector)
 
 		let x = this.#tempVector[0]
 		let y = this.#tempVector[1]
 		let z = this.#tempVector[2]
+		const visibility = this.#options.coordinateSystem === 'horizontal' ? z : 1
 
 		if (this.#options.coordinateSystem === 'equatorial') {
 			const matrix = this.#eqToHorizontal
@@ -4197,20 +4556,8 @@ export class Celestial {
 			z = matrix[2] * hx + matrix[5] * hy + matrix[8] * hz
 		}
 
-		return this.projectWorldVectorToScreen(x, y, z, out)
+		return writeProjectedSample(out, visibility, this.projectWorldVectorToBaseScreen(x, y, z, projectionScale(this.#options.width, this.#options.height, this.#options.projection), out))
 	}
-
-	private readonly equatorialVisibility = (ra: number, dec: number): number => {
-		if (this.#options.coordinateSystem !== 'horizontal') {
-			return 1
-		}
-
-		writeRaDecUnitVector(ra, dec, this.#tempVector)
-		multiplyMatrixVector(this.#eqToHorizontal, this.#tempVector[0], this.#tempVector[1], this.#tempVector[2], this.#tempVector)
-		return this.#tempVector[2]
-	}
-
-	private readonly horizontalVisibility = (az: number, alt: number): number => (this.#options.coordinateSystem === 'horizontal' ? Math.sin(alt) : 1)
 
 	// Rebuilds the picking index from projected visible objects.
 	private rebuildPickingIndex() {
@@ -4237,15 +4584,22 @@ export class Celestial {
 		}
 
 		if (this.isLayerVisible('deepSky')) {
-			for (let i = 0; i < this.#dsos.length; i++) {
-				const object = this.#dsos[i]
+			const deepSkyCatalog = this.#deepSkyCatalog
 
-				if (!isDeepSkyObjectVisibleAtZoom(object, this.#transform.k)) {
-					continue
-				}
+			if (deepSkyCatalog) {
+				for (let i = 0; i < deepSkyCatalog.visibleCount; i++) {
+					const index = deepSkyCatalog.visibleIndices[i]
+					const object = deepSkyCatalog.objects[index]
 
-				if (this.projectEquatorialToScreen(object.rightAscension, object.declination, this.#tempScreen) && isPointInsideViewportMargin(this.#tempScreen[0], this.#tempScreen[1], this.#options.width, this.#options.height, DSO_VIEWPORT_MARGIN)) {
-					this.#picking.add(PICK_TYPE_DSO, i, this.#tempScreen[0], this.#tempScreen[1], deepSkyMagnitude(object))
+					if (!isDeepSkyObjectVisibleAtZoom(object, this.#transform.k)) {
+						continue
+					}
+
+					applyViewTransform(deepSkyCatalog.screenX[index], deepSkyCatalog.screenY[index], this.#options.width, this.#options.height, this.#transform, this.#tempScreen)
+
+					if (isPointInsideViewportMargin(this.#tempScreen[0], this.#tempScreen[1], this.#options.width, this.#options.height, DSO_VIEWPORT_MARGIN)) {
+						this.#picking.add(PICK_TYPE_DSO, index, this.#tempScreen[0], this.#tempScreen[1], deepSkyMagnitude(object))
+					}
 				}
 			}
 		}
@@ -4336,9 +4690,13 @@ export class Celestial {
 			state = {
 				celestial: this,
 				projectEquatorialToScreen: this.projectEquatorialToScreen,
+				projectEquatorialSample: this.projectEquatorialSample,
+				projectEquatorialVectorSample: this.projectEquatorialVectorSample,
+				projectEquatorialBaseSample: this.projectEquatorialBaseSample,
+				projectEquatorialVectorBaseSample: this.projectEquatorialVectorBaseSample,
 				projectHorizontalToScreen: this.projectHorizontalToScreen,
-				equatorialVisibility: this.equatorialVisibility,
-				horizontalVisibility: this.horizontalVisibility,
+				projectHorizontalSample: this.projectHorizontalSample,
+				projectHorizontalBaseSample: this.projectHorizontalBaseSample,
 			} as unknown as Writable<RenderState>
 
 			this.#renderState = state
@@ -4353,14 +4711,14 @@ export class Celestial {
 		state.coordinateSystem = options.coordinateSystem
 		state.transform = this.#transform
 		state.projectionRadius = projectionScale(options.width, options.height, options.projection)
+		state.projectedGeometryRevision = this.#projectedGeometryRevision
 		state.referenceLines = options.referenceLines
 		state.stars = options.stars
 		state.theme = options.theme
 		state.starCatalog = this.#starCatalog
+		state.deepSkyCatalog = this.#deepSkyCatalog
 		state.constellations = this.#constellations
 		state.milkyWay = this.#milkyWay
-		state.dsos = this.#dsos
-		state.deepSkyLabelVisible = this.#deepSkyLabelVisible
 		state.movingBodies = this.#movingBodyList
 		state.shapes = this.#shapeList
 		state.hoverObject = this.#hoverObject
@@ -4376,7 +4734,7 @@ export class Celestial {
 			case PICK_TYPE_STAR:
 				return this.#starCatalog?.getObject(index.index) ?? null
 			case PICK_TYPE_DSO:
-				return this.#dsos[index.index] ? { type: 'deepSky', index: index.index, object: this.#dsos[index.index] } : null
+				return this.#deepSkyCatalog?.objects[index.index] ? { type: 'deepSky', index: index.index, object: this.#deepSkyCatalog.objects[index.index] } : null
 			case PICK_TYPE_MOVING_BODY:
 				return this.#movingBodyList[index.index] ? { type: 'movingBody', index: index.index, object: this.#movingBodyList[index.index] } : null
 			case PICK_TYPE_CONSTELLATION_LABEL: {
@@ -4436,6 +4794,9 @@ export class Celestial {
 		const behavior = zoom<HTMLElement, unknown>()
 			.scaleExtent([this.#options.interactions.minZoom, this.#options.interactions.maxZoom])
 			.wheelDelta((event: WheelEvent) => -(normalizedWheelDeltaY(event) * this.#options.interactions.wheelZoomSpeed) / Math.LN2)
+			.on('start', () => {
+				this.#d3ZoomActive = true
+			})
 			.on('zoom', (event: D3ZoomEvent<HTMLElement, unknown>) => {
 				const k = event.transform.k
 				const transform = this.normalizeViewTransform({ x: event.transform.x - (this.#options.width / 2) * (1 - k), y: event.transform.y - (this.#options.height / 2) * (1 - k), k })
@@ -4443,6 +4804,10 @@ export class Celestial {
 				if (this.writeViewTransform(transform)) {
 					this.afterTransformChanged()
 				}
+			})
+			.on('end', () => {
+				this.#d3ZoomActive = false
+				this.refreshPointerHover()
 			})
 
 		const element = this.#renderer.element
@@ -4460,6 +4825,7 @@ export class Celestial {
 		select(this.#renderer.element).on('.zoom', null)
 		this.#d3ZoomBehavior = null
 		this.#d3ZoomBound = false
+		this.#d3ZoomActive = false
 	}
 
 	// Handles pointer down for local panning.
@@ -4477,6 +4843,14 @@ export class Celestial {
 
 	// Handles pointer movement for panning and hover picking.
 	private readonly handlePointerMove = (event: PointerEvent): void => {
+		const point = this.eventPoint(event)
+		const x = point[0]
+		const y = point[1]
+		this.#lastPointerX = x
+		this.#lastPointerY = y
+
+		if (this.#d3ZoomActive) return
+
 		const now = performance.now()
 
 		if (this.#pointerDown) {
@@ -4492,22 +4866,7 @@ export class Celestial {
 		if (now - this.#lastPointerMove < this.#options.interactions.pointerMoveThrottleMs) return
 
 		this.#lastPointerMove = now
-		const point = this.eventPoint(event)
-		const x = point[0]
-		const y = point[1]
-
-		this.ensurePickingIndex()
-		const object = this.resolvePointerPick(this.#picking.findNearest(x, y, this.#options.interactions.pickRadius))
-
-		if (this.#emitter.has('hover')) {
-			const coordinate = this.screenToEquatorial(x, y)
-
-			if (coordinate) {
-				this.#emitter.emit('hover', { x, y, coordinate, object })
-			}
-		}
-
-		this.updateHover(object)
+		this.updatePointerHover(x, y)
 	}
 
 	// Handles pointer up.
@@ -4590,9 +4949,37 @@ export class Celestial {
 	// Updates rendering and picking after pan/zoom transform changes.
 	private afterTransformChanged() {
 		this.#pickingDirty = true
+
+		if (!this.starProjectionCoversViewport()) {
+			this.projectStars()
+		}
+
 		this.#renderer.markAllDirty()
 		this.#emitter.has('viewTransformChange') && this.#emitter.emit('viewTransformChange', { transform: this.#transform })
 		this.requestRender()
+	}
+
+	private refreshPointerHover() {
+		if (Number.isFinite(this.#lastPointerX) && Number.isFinite(this.#lastPointerY)) {
+			this.updatePointerHover(this.#lastPointerX, this.#lastPointerY)
+		} else {
+			this.updateHover(null)
+		}
+	}
+
+	private updatePointerHover(x: number, y: number) {
+		this.ensurePickingIndex()
+		const object = this.resolvePointerPick(this.#picking.findNearest(x, y, this.#options.interactions.pickRadius))
+
+		if (this.#emitter.has('hover')) {
+			const coordinate = this.screenToEquatorial(x, y)
+
+			if (coordinate) {
+				this.#emitter.emit('hover', { x, y, coordinate, object })
+			}
+		}
+
+		this.updateHover(object)
 	}
 
 	// Updates hover state and events.

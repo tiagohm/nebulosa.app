@@ -34,7 +34,8 @@ const SelectedObject = memo(() => {
 	if (!selectedBodyPosition || !selected?.object) return null
 
 	const { type } = selected.object
-	const isDeepSkyObject = type === 'deepSky' || type === 'star' || type === 'constellationLabel' || type === 'shape'
+	const isLabelOrShape = type === 'constellationLabel' || type === 'shape'
+	const isDeepSkyObject = type === 'deepSky' || type === 'star'
 	const name =
 		skyObjectName(selectedBodyPosition.names?.[0], selectedBodyPosition.constellation) ??
 		(type === 'star' ? selected.object.name : type === 'deepSky' ? selected.object.object.name : type === 'movingBody' ? selected.object.object.name : type === 'shape' ? (selected.object.shape.data as string) : selected.object.label.name)
@@ -53,7 +54,7 @@ const SelectedObject = memo(() => {
 					<IconButton color="secondary" icon={Icons.Image} onClick={planetariumStore.frame} tooltipContent="Frame" variant="flat" />
 				</div>
 			</div>
-			<BodyCoordinateInfo position={selectedBodyPosition} hideIlluminated={isDeepSkyObject} hideElongation={isDeepSkyObject} />
+			<BodyCoordinateInfo position={selectedBodyPosition} hideIlluminated={isDeepSkyObject || isLabelOrShape} hideElongation={isDeepSkyObject || isLabelOrShape} hideDistance={isLabelOrShape} hideMagnitude={isLabelOrShape} />
 		</div>
 	)
 })

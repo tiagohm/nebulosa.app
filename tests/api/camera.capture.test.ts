@@ -203,6 +203,27 @@ describe('camera capture session failures', () => {
 			harness.restore()
 		}
 	})
+
+	test('emits terminal callbacks when a conflicting capture is rejected', async () => {
+		const harness = createHarness()
+		const events: CameraCaptureEvent[] = []
+
+		try {
+			const active = harness.capturer.start(harness.camera, request())
+			expect((await active.started).ok).toBeTrue()
+
+			const conflicting = harness.capturer.start(harness.camera, request(), (event) => events.push(event))
+			expect(await conflicting.result).toMatchObject({ ok: false, reason: 'busy' })
+			expect(events.map((event) => event.state)).toEqual(['error', 'idle'])
+			expect(events.every((event) => event.operation === conflicting.id)).toBeTrue()
+			expect(events[0].session).not.toBeEmpty()
+			expect(events[0].generation).toBe(0)
+
+			await active.cancel()
+		} finally {
+			harness.restore()
+		}
+	})
 })
 
 describe('camera capture session cancellation', () => {

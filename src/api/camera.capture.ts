@@ -133,6 +133,7 @@ export class CameraCapturer {
 	start(camera: Camera, request: CameraCaptureStart, listener: CameraCaptureListener = () => {}): CameraCaptureHandle {
 		const key = resourceKey(camera)
 		const started = Promise.withResolvers<OperationResult<void>>()
+		let sessionCreated = false
 
 		let startedSettled = false
 		const settleStarted = (result: OperationResult<void>) => {
@@ -142,6 +143,7 @@ export class CameraCapturer {
 		}
 
 		const operation = this.coordinator.start<CameraCaptureResult>('cameraCapture', [{ key, device: camera }], (context) => {
+			sessionCreated = true
 			const session = new CameraCaptureSession(context, camera, structuredClone(request), this.cameraManager, this.imageProcessor, this.ditherer, this.options, this.io, listener, settleStarted, () => this.coordinator.arbiter.markUnavailable({ key, device: camera }))
 
 			this.#sessions.set(key, session)
@@ -157,6 +159,17 @@ export class CameraCapturer {
 		void operation.result.then(
 			(result) => {
 				if (!startedSettled) settleStarted(result.ok ? { ok: false, reason: 'unexpectedState', error: 'capture completed before exposure became busy' } : result)
+				if (!sessionCreated && !result.ok) {
+					const event = structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT)
+					event.operation = operation.id
+					event.session = Bun.randomUUIDv7()
+					event.camera = camera.id
+					event.state = 'error'
+					listener(structuredClone(event))
+					event.state = 'idle'
+					event.stopped = true
+					listener(event)
+				}
 			},
 			(error) => settleStarted({ ok: false, reason: 'commandFailed', error: errorMessage(error) }),
 		)

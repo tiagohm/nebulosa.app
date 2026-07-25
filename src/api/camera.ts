@@ -154,6 +154,11 @@ export function camera(cameraHandler: CameraHandler) {
 				return response({ id: handle.id, started: await handle.started })
 			},
 		},
-		'/cameras/:id/stop': { POST: async (req) => response(await cameraHandler.stop(cameraFromParams(req))) },
+		'/cameras/:id/stop': {
+			POST: async (req) => {
+				const operation = query(req).operation
+				return response(await cameraHandler.stop(operation || cameraFromParams(req)))
+			},
+		},
 	} as const satisfies Endpoints
 }

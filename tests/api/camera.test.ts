@@ -204,19 +204,25 @@ describe('camera capture start request', () => {
 	test('starts and stops captures through endpoints', async () => {
 		const camera = getCamera()
 		const request = captureStartRequest({ exposureMode: 'loop', exposureTime: 200, exposureTimeUnit: 'millisecond', width: 16, height: 16, frameFormat: 'MONO', autoSave: false })
+		const stop = spyOn(cameraHandler, 'stop')
 
-		wsm.open(socket)
-		cameraManager.connect(camera)
+		try {
+			wsm.open(socket)
+			cameraManager.connect(camera)
 
-		const startResponse = endpoints['/cameras/:id/start'].POST(endpointRequest(camera.id, request))
+			const startResponse = endpoints['/cameras/:id/start'].POST(endpointRequest(camera.id, request))
 
-		expect(await waitUntil(() => socketMessagesOf<CameraCaptureEvent>('camera:capture').some((message) => message.body.state === 'exposureStarted'))).toBeTrue()
-		const started = await json<{ id: string; started: { readonly ok: boolean } }>(await startResponse)
+			expect(await waitUntil(() => socketMessagesOf<CameraCaptureEvent>('camera:capture').some((message) => message.body.state === 'exposureStarted'))).toBeTrue()
+			const started = await json<{ id: string; started: { readonly ok: boolean } }>(await startResponse)
 
-		await noContent(await endpoints['/cameras/:id/stop'].POST(endpointRequest(camera.id, undefined, `?operation=${started.id}`)))
+			await noContent(await endpoints['/cameras/:id/stop'].POST(endpointRequest(camera.id, undefined, `?operation=${started.id}`)))
 
-		expect(started.started.ok).toBeTrue()
-		expect(socketMessagesOf<CameraCaptureEvent>('camera:capture').some((message) => message.body.state === 'idle' && message.body.stopped)).toBeTrue()
+			expect(stop).toHaveBeenCalledWith(started.id)
+			expect(started.started.ok).toBeTrue()
+			expect(socketMessagesOf<CameraCaptureEvent>('camera:capture').some((message) => message.body.state === 'idle' && message.body.stopped)).toBeTrue()
+		} finally {
+			stop.mockRestore()
+		}
 	}, 5000)
 
 	test('sends add event to a socket opened after discovery', async () => {

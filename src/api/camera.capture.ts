@@ -486,9 +486,11 @@ class CameraCaptureSession {
 		let remaining = this.#waitingTime
 
 		while (remaining > 0) {
+			const elapsed = this.#waitingTime - remaining
+			this.#updateTotalProgress(elapsed)
 			this.#event.frameProgress.remainingTime = remaining
-			this.#event.frameProgress.elapsedTime = this.#waitingTime - remaining
-			this.#event.frameProgress.progress = Math.max(0, (1 - remaining / this.#waitingTime) * 100)
+			this.#event.frameProgress.elapsedTime = elapsed
+			this.#event.frameProgress.progress = Math.max(0, (elapsed / this.#waitingTime) * 100)
 			this.#emit()
 
 			const step = Math.min(250_000, remaining)
@@ -529,14 +531,19 @@ class CameraCaptureSession {
 
 	// Updates frame and total progress using microseconds.
 	#updateProgress(remainingTime: number, elapsedTime: number) {
+		this.#updateTotalProgress(elapsedTime)
+		this.#event.frameProgress.remainingTime = remainingTime
+		this.#event.frameProgress.elapsedTime = elapsedTime
+		this.#event.frameProgress.progress = this.#event.frameExposureTime <= 0 ? 0 : Math.max(0, (1 - remainingTime / this.#event.frameExposureTime) * 100)
+	}
+
+	// Advances aggregate capture progress within the current exposure or delay.
+	#updateTotalProgress(elapsedTime: number) {
 		if (!this.#event.loop) {
 			this.#event.totalProgress.remainingTime = Math.max(0, this.#totalExposureProgress[0] - elapsedTime)
 			this.#event.totalProgress.progress = this.#event.totalExposureTime <= 0 ? 0 : Math.max(0, (1 - this.#event.totalProgress.remainingTime / this.#event.totalExposureTime) * 100)
 		}
 		this.#event.totalProgress.elapsedTime = this.#totalExposureProgress[1] + elapsedTime
-		this.#event.frameProgress.remainingTime = remainingTime
-		this.#event.frameProgress.elapsedTime = elapsedTime
-		this.#event.frameProgress.progress = this.#event.frameExposureTime <= 0 ? 0 : Math.max(0, (1 - remainingTime / this.#event.frameExposureTime) * 100)
 	}
 
 	// Mirrors guider progress only while this session is actively awaiting its own dither call.

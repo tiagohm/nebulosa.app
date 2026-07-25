@@ -702,12 +702,16 @@ describe('camera capture start request', () => {
 	test('emits waiting progress between delayed fixed captures', async () => {
 		const result = await capture(captureStartRequest({ exposureMode: 'fixed', exposureTime: 1, exposureTimeUnit: 'millisecond', delay: 1, count: 2, width: 8, height: 8, frameFormat: 'MONO', autoSave: false }))
 		const waitingEvents = result.records.filter(({ event }) => event.state === 'waiting')
+		const totalProgress = waitingEvents.map(({ event }) => event.totalProgress.progress)
 
 		expect(result.success).toBeTrue()
 		expect(result.paths).toHaveLength(2)
 		expect(result.records.filter(({ event }) => event.state === 'exposureStarted')).toHaveLength(2)
 		expect(waitingEvents.length).toBeGreaterThan(0)
 		expect(waitingEvents[0].event.frameProgress.remainingTime).toBe(1000000)
+		expect(waitingEvents.map(({ event }) => event.totalProgress.elapsedTime)).toEqual([1000, 251000, 501000, 751000])
+		expect(waitingEvents.map(({ event }) => event.totalProgress.remainingTime)).toEqual([1001000, 751000, 501000, 251000])
+		expect(totalProgress).toEqual(totalProgress.toSorted((a, b) => a - b))
 		expectSuccessfulEventFlow(result.records, 2)
 	}, 7000)
 

@@ -16,9 +16,14 @@ export interface WaitForDeviceOptions<D, U> {
 	readonly evaluate: (update: U) => 'pending' | 'success' | OperationFailureReason
 	// Sends the state-changing command after setup; the signal aborts before timeout or abort cleanup can settle.
 	readonly command: (signal: AbortSignal) => void | Promise<void>
+	// Maximum milliseconds to wait for a canceled command before forcing physical abort cleanup.
+	readonly commandAbortTimeout?: number
 	// Stops or quiesces physical work on abort or timeout before the result settles.
 	readonly abort?: () => void | Promise<void>
 }
+
+// Default grace period in milliseconds for a canceled command to stop before physical abort runs.
+const DEFAULT_COMMAND_ABORT_TIMEOUT = 1000
 
 // Waits for a temporal delay in milliseconds and removes its timer/listener on abort.
 export function abortableDelay(ms: number, signal: AbortSignal): Promise<OperationResult<void>> {
@@ -77,7 +82,14 @@ export function waitForDeviceState<D, U>(options: WaitForDeviceOptions<D, U>): P
 			cleanup()
 			commandController.abort(reason)
 
-			if (commandStarted) await commandCompletion.promise
+			if (commandStarted && !commandCompleted) {
+				const stopped = await settlesWithin(commandCompletion.promise, options.commandAbortTimeout ?? DEFAULT_COMMAND_ABORT_TIMEOUT)
+
+				if (!stopped) {
+					const detail = 'command did not stop before abort cleanup'
+					error = error ? `${error}; ${detail}` : detail
+				}
+			}
 
 			try {
 				await options.abort?.()
@@ -159,6 +171,23 @@ export function waitForDeviceState<D, U>(options: WaitForDeviceOptions<D, U>): P
 			}
 		})()
 	})
+}
+
+// Reports whether a promise settles within the non-negative timeout in milliseconds.
+async function settlesWithin(promise: Promise<unknown>, timeout: number): Promise<boolean> {
+	const elapsed = Promise.withResolvers<boolean>()
+	const timer = setTimeout(() => elapsed.resolve(false), Math.max(0, timeout))
+
+	void promise.then(
+		() => elapsed.resolve(true),
+		() => elapsed.resolve(true),
+	)
+
+	try {
+		return await elapsed.promise
+	} finally {
+		clearTimeout(timer)
+	}
 }
 
 // Maps AbortSignal reasons into the finite operational failure contract.

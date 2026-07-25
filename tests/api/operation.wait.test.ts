@@ -131,6 +131,33 @@ describe('operation waits', () => {
 		expect(events).toEqual(['command:stopped', 'abort'])
 	})
 
+	test('forces physical abort when a canceled command does not stop', async () => {
+		const commandStarted = Promise.withResolvers<AbortSignal>()
+		let aborts = 0
+		const result = waitForDeviceState({
+			device: {},
+			signal: new AbortController().signal,
+			timeout: 0,
+			commandAbortTimeout: 5,
+			subscribe: () => () => {},
+			current: () => 'busy',
+			evaluate: () => 'pending',
+			command: (signal) => {
+				commandStarted.resolve(signal)
+				return new Promise(() => {})
+			},
+			abort: () => {
+				aborts++
+			},
+		})
+
+		const commandSignal = await commandStarted.promise
+
+		expect(await result).toEqual({ ok: false, reason: 'timeout', error: 'command did not stop before abort cleanup' })
+		expect(commandSignal.aborted).toBeTrue()
+		expect(aborts).toBe(1)
+	})
+
 	test('runs abort cleanup on timeout and removes every listener', async () => {
 		const controller = new AbortController()
 		const listeners = new Set<(state: string) => void>()

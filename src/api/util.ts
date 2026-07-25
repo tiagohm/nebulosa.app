@@ -6,9 +6,15 @@ import type { Writable } from 'nebulosa/src/core/types'
 
 const ONE_SECOND = 1000
 
-// Normalizes unknown exception values for boundary diagnostics, including symbols.
+// Converts an unknown exception to diagnostic text; failed coercion returns a stable fallback instead of throwing.
 export function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : String(error)
+	if (error instanceof Error) return error.message
+
+	try {
+		return String(error)
+	} catch {
+		return 'Unknown error'
+	}
 }
 
 export function makeTime(utc: number | 'now', location?: GeographicCoordinate) {

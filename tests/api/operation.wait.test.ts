@@ -78,6 +78,25 @@ describe('operation waits', () => {
 		expect(await result).toEqual({ ok: false, reason: 'commandFailed', error: 'Symbol(send failed)' })
 	})
 
+	test('falls back when a rejected value cannot be converted to text', async () => {
+		const failure = {
+			[Symbol.toPrimitive]: () => {
+				throw new Error('conversion failed')
+			},
+		}
+		const result = waitForDeviceState({
+			device: {},
+			signal: new AbortController().signal,
+			timeout: 1000,
+			subscribe: () => () => {},
+			current: () => 'idle',
+			evaluate: () => 'pending',
+			command: () => rejectUnknown(failure),
+		})
+
+		expect(await result).toEqual({ ok: false, reason: 'commandFailed', error: 'Unknown error' })
+	})
+
 	test('runs abort cleanup on timeout and removes every listener', async () => {
 		const controller = new AbortController()
 		const listeners = new Set<(state: string) => void>()

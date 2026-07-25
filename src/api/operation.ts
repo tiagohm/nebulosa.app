@@ -67,6 +67,8 @@ interface ActiveOperation<T> {
 	readonly completion: PromiseWithResolvers<void>
 	// Atomic resource lease, absent only for busy operations.
 	lease?: ResourceLease
+	// First cancellation cause reported after the executor has stopped.
+	cancelReason?: OperationFailureReason
 	// Prevents cleanup registration after terminalization starts.
 	cleanupStarted: boolean
 	// Exactly-once guard for all terminal paths.
@@ -145,9 +147,11 @@ export class OperationCoordinator {
 		void (async () => {
 			try {
 				const operationResult = await executor(context)
-				await this.#finalize(operation, { result: operationResult })
+				const terminal: Terminal<T> = operation.cancelReason === undefined ? { result: operationResult } : { result: { ok: false, reason: operation.cancelReason } }
+				await this.#finalize(operation, terminal)
 			} catch (error) {
-				await this.#finalize(operation, { error })
+				const terminal: Terminal<T> = operation.cancelReason === undefined ? { error } : { result: { ok: false, reason: operation.cancelReason } }
+				await this.#finalize(operation, terminal)
 			}
 		})()
 
@@ -193,10 +197,10 @@ export class OperationCoordinator {
 		await Promise.all(cancellations)
 	}
 
-	// Aborts the operation scope immediately, starts cancellation finalization once, and returns shared completion.
+	// Aborts the scope immediately and returns completion after the executor stops and cleanup releases its lease.
 	#cancel<T>(operation: ActiveOperation<T>, reason: OperationFailureReason) {
-		if (!operation.controller.signal.aborted) operation.controller.abort(reason)
-		if (!operation.terminalStarted) void this.#finalize(operation, { result: { ok: false, reason } })
+		if (!operation.terminalStarted) operation.cancelReason ??= reason
+		if (!operation.controller.signal.aborted) operation.controller.abort(operation.cancelReason ?? reason)
 
 		return operation.completion.promise
 	}

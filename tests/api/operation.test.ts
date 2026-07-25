@@ -61,6 +61,7 @@ describe('operation coordinator', () => {
 		const arbiter = new ResourceArbiter()
 		const coordinator = new OperationCoordinator(arbiter)
 		const cleanupGate = Promise.withResolvers<void>()
+		const cleanupStarted = Promise.withResolvers<void>()
 		const events: string[] = []
 		const handle = coordinator.start('capture', [{ key: CAMERA }], (context) => {
 			context.onCleanup(() => {
@@ -68,6 +69,7 @@ describe('operation coordinator', () => {
 			})
 			context.onCleanup(async () => {
 				events.push('second:start')
+				cleanupStarted.resolve()
 				await cleanupGate.promise
 				events.push('second:end')
 			})
@@ -78,6 +80,7 @@ describe('operation coordinator', () => {
 		const secondCancel = handle.cancel()
 
 		expect(handle.signal.aborted).toBeTrue()
+		await cleanupStarted.promise
 		expect(arbiter.availability(CAMERA)).toBe('leased')
 		expect(events).toEqual(['second:start'])
 
@@ -87,6 +90,32 @@ describe('operation coordinator', () => {
 		expect(events).toEqual(['second:start', 'second:end', 'first'])
 		expect(arbiter.availability(CAMERA)).toBe('available')
 		expect(await handle.result).toEqual({ ok: false, reason: 'aborted' })
+	})
+
+	test('keeps the lease until a canceled executor settles', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const abortObserved = Promise.withResolvers<void>()
+		const executorGate = Promise.withResolvers<void>()
+		const handle = coordinator.start('capture', [{ key: CAMERA }], async (context) => {
+			await waitForSignal(context.signal)
+			abortObserved.resolve()
+			await executorGate.promise
+			return { ok: false, reason: 'aborted' }
+		})
+
+		const cancellation = handle.cancel()
+
+		await abortObserved.promise
+		expect(arbiter.availability(CAMERA)).toBe('leased')
+
+		const contender = coordinator.start('contender', [{ key: CAMERA }], () => ({ ok: true, value: undefined }))
+		expect(await contender.result).toMatchObject({ ok: false, reason: 'busy' })
+
+		executorGate.resolve()
+		await cancellation
+		expect(await handle.result).toEqual({ ok: false, reason: 'aborted' })
+		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
 	test('aborts a completed executor while its cleanup is still running', async () => {

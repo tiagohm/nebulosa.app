@@ -197,12 +197,10 @@ export class OperationCoordinator {
 		await Promise.all(cancellations)
 	}
 
-	// Records the first cancellation cause, aborts immediately, and returns shared completion.
+	// Aborts the operation scope immediately, starts cancellation finalization once, and returns shared completion.
 	#cancel<T>(operation: ActiveOperation<T>, reason: OperationFailureReason) {
-		if (!operation.terminalStarted) {
-			operation.controller.abort(reason)
-			void this.#finalize(operation, { result: { ok: false, reason } })
-		}
+		if (!operation.controller.signal.aborted) operation.controller.abort(reason)
+		if (!operation.terminalStarted) void this.#finalize(operation, { result: { ok: false, reason } })
 
 		return operation.completion.promise
 	}
@@ -213,8 +211,12 @@ export class OperationCoordinator {
 
 		operation.terminalStarted = true
 
-		if ('result' in terminal && !terminal.result.ok && !operation.controller.signal.aborted) {
-			operation.controller.abort(terminal.result.reason)
+		if (!operation.controller.signal.aborted) {
+			if ('error' in terminal) {
+				operation.controller.abort(terminal.error)
+			} else if (!terminal.result.ok) {
+				operation.controller.abort(terminal.result.reason)
+			}
 		}
 
 		operation.cleanupStarted = true

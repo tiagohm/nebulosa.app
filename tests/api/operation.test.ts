@@ -15,6 +15,14 @@ function waitForAbort(context: OperationContext): Promise<OperationResult<void>>
 	})
 }
 
+function waitForSignal(signal: AbortSignal): Promise<void> {
+	if (signal.aborted) return Promise.resolve()
+
+	return new Promise((resolve) => {
+		signal.addEventListener('abort', () => resolve(), { once: true })
+	})
+}
+
 function rejectUnknown(value: unknown): Promise<never> {
 	const rejected = Promise.withResolvers<never>()
 	rejected.reject(value)
@@ -80,6 +88,29 @@ describe('operation coordinator', () => {
 		expect(await handle.result).toEqual({ ok: false, reason: 'aborted' })
 	})
 
+	test('aborts a completed executor while its cleanup is still running', async () => {
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const cleanupStarted = Promise.withResolvers<void>()
+		const handle = coordinator.start('capture', [{ key: CAMERA }], (context) => {
+			context.onCleanup(async () => {
+				cleanupStarted.resolve()
+				await waitForSignal(context.signal)
+			})
+			return 'captured'
+		})
+
+		await cleanupStarted.promise
+		expect(arbiter.availability(CAMERA)).toBe('leased')
+
+		const cancellation = handle.cancel()
+
+		expect(handle.signal.aborted).toBeTrue()
+		await cancellation
+		expect(await handle.result).toEqual({ ok: true, value: 'captured' })
+		expect(arbiter.availability(CAMERA)).toBe('available')
+	})
+
 	test('preserves an operational failure while appending cleanup errors', async () => {
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
 		const handle = coordinator.start('failing', [{ key: CAMERA }], (context) => {
@@ -102,13 +133,20 @@ describe('operation coordinator', () => {
 		expect(await handle.result).toEqual({ ok: true, value: payload })
 	})
 
-	test('rejects unexpected executor failures after releasing resources', () => {
+	test('aborts the operation scope after an unexpected executor failure', async () => {
 		const arbiter = new ResourceArbiter()
 		const coordinator = new OperationCoordinator(arbiter)
-		const handle = coordinator.start('unexpected', [{ key: CAMERA }], () => {
+		const cleanupStarted = Promise.withResolvers<AbortSignal>()
+		const handle = coordinator.start('unexpected', [{ key: CAMERA }], (context) => {
+			context.onCleanup(async () => {
+				cleanupStarted.resolve(context.signal)
+				await waitForSignal(context.signal)
+			})
 			throw new Error('unexpected failure')
 		})
 
+		const signal = await cleanupStarted.promise
+		expect(signal.aborted).toBeTrue()
 		expect(handle.result).rejects.toThrow('unexpected failure')
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})

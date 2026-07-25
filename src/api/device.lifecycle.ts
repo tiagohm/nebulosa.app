@@ -2,7 +2,7 @@ import type { Camera, Cover, Device, Focuser, GuideOutput, Mount, Rotator, Wheel
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager'
 import type { OperationFailureReason } from './operation'
 import { OperationCoordinator } from './operation'
-import { resourceKey, ResourceArbiter } from './resource'
+import { resourceDevice, resourceKey, ResourceArbiter } from './resource'
 import type { ResourceKey } from './resource'
 
 // Minimal manager surface required to observe device lifecycle without depending on transport handlers.
@@ -24,9 +24,17 @@ interface Registration {
 	readonly dispose: VoidFunction
 }
 
+// One manager-specific view contributing readiness to a shared physical resource.
+interface DeviceView {
+	// Exact device or subdevice instance emitted by its manager.
+	readonly device: Device
+	// Evaluates type-specific quiescence for this view.
+	readonly verify: () => boolean | Promise<boolean>
+}
+
 // Bridges manager add/update/remove events into availability and operation cancellation.
 export class DeviceLifecycle {
-	readonly #devices = new Map<ResourceKey, Device>()
+	readonly #devices = new Map<ResourceKey, Map<Device, DeviceView>>()
 	readonly #validationGeneration = new Map<ResourceKey, number>()
 	readonly #registrations = new Set<Registration>()
 
@@ -70,33 +78,50 @@ export class DeviceLifecycle {
 	// Registers a new instance as unavailable until its quiescence check succeeds.
 	#added<D extends Device>(device: D, verify: DeviceAvailabilityVerifier<D>) {
 		const key = resourceKey(device)
-		this.#devices.set(key, device)
-		this.arbiter.markUnavailable({ key, device })
-		this.#validate(device, verify)
+		let devices = this.#devices.get(key)
+
+		if (devices === undefined) {
+			devices = new Map()
+			this.#devices.set(key, devices)
+		}
+
+		devices.set(device, { device, verify: () => verify(device) })
+		this.arbiter.markUnavailable({ key, device: resourceDevice(device) })
+		this.#validate(key)
 	}
 
 	// Cancels on disconnect and revalidates every connected update so external activity gates acquisition.
 	#updated<D extends Device>(device: D, property: keyof D & string, verify: DeviceAvailabilityVerifier<D>) {
 		const key = resourceKey(device)
+		const devices = this.#devices.get(key)
 
-		if (this.#devices.get(key) !== device) return
+		if (!devices?.has(device)) return
+
+		devices.set(device, { device, verify: () => verify(device) })
 
 		if (property === 'connected' && !device.connected) {
-			this.#invalidate(key, device, 'disconnected')
+			this.#invalidate(key, resourceDevice(device), 'disconnected')
 		} else if (device.connected) {
-			this.#validate(device, verify)
+			this.#validate(key)
 		}
 	}
 
-	// Makes the resource unavailable, starts owner cancellation, and releases the removed physical association.
+	// Cancels on any removed view and releases the physical association only after the last view disappears.
 	#removed(device: Device) {
 		const key = resourceKey(device)
+		const devices = this.#devices.get(key)
 
-		if (this.#devices.get(key) !== device) return
+		if (!devices?.delete(device)) return
 
-		this.#invalidate(key, device, 'removed')
-		this.#devices.delete(key)
-		this.arbiter.disassociate(key, device)
+		const physicalDevice = resourceDevice(device)
+		this.#invalidate(key, physicalDevice, 'removed')
+
+		if (devices.size === 0) {
+			this.#devices.delete(key)
+			this.arbiter.disassociate(key, physicalDevice)
+		} else {
+			this.#validate(key)
+		}
 	}
 
 	// Invalidates pending verification and starts cancellation without waiting inside manager callbacks.
@@ -106,37 +131,69 @@ export class DeviceLifecycle {
 		void this.coordinator.cancelByResource(key, reason)
 	}
 
-	// Blocks acquisition while running a readiness check guarded by device identity and generation.
-	#validate<D extends Device>(device: D, verify: DeviceAvailabilityVerifier<D>) {
-		const key = resourceKey(device)
+	// Blocks acquisition while aggregating every live view under one generation guard.
+	#validate(key: ResourceKey) {
+		const devices = this.#devices.get(key)
+
+		if (devices === undefined || devices.size === 0) return
+
 		const generation = this.#nextValidation(key)
-		let available: boolean | Promise<boolean>
+		const first = devices.values().next().value
 
-		this.arbiter.markUnavailable({ key, device })
+		if (first === undefined) return
 
-		try {
-			available = device.connected && verify(device)
-		} catch {
-			return
+		const physicalDevice = resourceDevice(first.device)
+		const pending: Promise<boolean>[] = []
+
+		this.arbiter.markUnavailable({ key, device: physicalDevice })
+
+		for (const view of devices.values()) {
+			if (!view.device.connected) {
+				this.#validated(key, generation, false)
+				return
+			}
+
+			try {
+				const available = view.verify()
+
+				if (typeof available === 'boolean') {
+					if (!available) {
+						this.#validated(key, generation, false)
+						return
+					}
+				} else {
+					pending.push(Promise.resolve(available))
+				}
+			} catch {
+				return
+			}
 		}
 
-		if (typeof available === 'boolean') {
-			this.#validated(key, device, generation, available)
+		if (pending.length === 0) {
+			this.#validated(key, generation, true)
 		} else {
-			void Promise.resolve(available)
-				.then((result) => this.#validated(key, device, generation, result))
+			void Promise.all(pending)
+				.then((results) => this.#validated(key, generation, results.every(Boolean)))
 				.catch((e) => console.error(e))
 		}
 	}
 
-	// Applies the latest readiness result only to the same connected device instance.
-	#validated(key: ResourceKey, device: Device, generation: number, available: boolean) {
-		if (!device.connected || this.#devices.get(key) !== device || this.#validationGeneration.get(key) !== generation) return
+	// Applies the latest aggregate result only while the same resource generation remains registered.
+	#validated(key: ResourceKey, generation: number, available: boolean) {
+		const devices = this.#devices.get(key)
+
+		if (devices === undefined || devices.size === 0 || this.#validationGeneration.get(key) !== generation) return
+
+		const first = devices.values().next().value
+
+		if (first === undefined) return
+
+		const physicalDevice = resourceDevice(first.device)
 
 		if (available) {
-			this.arbiter.markAvailable({ key, device })
+			this.arbiter.markAvailable({ key, device: physicalDevice })
 		} else {
-			this.arbiter.markUnavailable({ key, device })
+			this.arbiter.markUnavailable({ key, device: physicalDevice })
 		}
 	}
 

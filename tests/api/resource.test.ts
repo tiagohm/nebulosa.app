@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import type { Camera } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_CAMERA } from 'nebulosa/src/devices/indi/device'
-import { ResourceArbiter, resourceKey } from 'src/api/resource'
+import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
+import type { Camera, GuideOutput, SubDevice } from 'nebulosa/src/devices/indi/device'
+import { DEFAULT_CAMERA, DEFAULT_GUIDE_OUTPUT } from 'nebulosa/src/devices/indi/device'
+import { GuideOutputManager, MountManager } from 'nebulosa/src/devices/indi/manager'
+import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
+import { ResourceArbiter, resourceDevice, resourceKey } from 'src/api/resource'
 import type { ResourceKey, ResourceOwner } from 'src/api/resource'
 
-const CAMERA: ResourceKey = 'client:camera:camera-1'
-const MOUNT: ResourceKey = 'client:mount:mount-1'
+const CAMERA: ResourceKey = 'camera-1'
+const MOUNT: ResourceKey = 'mount-1'
 
 function owner(id: string): ResourceOwner {
 	return { id, kind: 'test' }
@@ -18,6 +22,18 @@ function camera(connected: boolean): Camera {
 		name: 'camera-1',
 		connected,
 		client: { type: 'SIMULATOR', id: 'client' },
+	}
+}
+
+function guideOutputProxy(parent: Camera): SubDevice<GuideOutput, Camera> {
+	return {
+		...structuredClone(DEFAULT_GUIDE_OUTPUT),
+		id: 'guide-output-1',
+		parentId: parent.id,
+		parent,
+		name: parent.name,
+		connected: parent.connected,
+		client: parent.client,
 	}
 }
 
@@ -161,5 +177,37 @@ describe('resource arbiter', () => {
 
 		expect(arbiter.availability(CAMERA)).toBe('available')
 		expect(arbiter.availability(secondKey)).toBe('available')
+	})
+
+	test('associates a subdevice lease with its physical parent identity', () => {
+		const arbiter = new ResourceArbiter()
+		const parent = camera(true)
+		const proxy = guideOutputProxy(parent)
+		const key = resourceKey(proxy)
+		const context = owner('owner-1')
+
+		expect(key).toBe(parent.id)
+		expect(resourceDevice(proxy)).toBe(parent)
+		expect(arbiter.acquire(context, [{ key, device: proxy }]).ok).toBeTrue()
+		expect(arbiter.ownersOfClient(parent.client.id)).toEqual([context])
+		expect(arbiter.disassociate(key, parent)).toBeTrue()
+		expect(arbiter.ownersOfClient(parent.client.id)).toEqual([])
+	})
+
+	test('resolves the physical parent from a real manager proxy', () => {
+		const mountManager = new MountManager()
+		const guideOutputManager = new GuideOutputManager(mountManager)
+		const handler = new IndiClientHandlerSet([mountManager, guideOutputManager])
+		using client = new ClientSimulator('client', handler)
+		using simulator = new MountSimulator('Mount Simulator', client)
+		const parent = mountManager.get(client, simulator.name)!
+
+		mountManager.connect(parent)
+
+		const proxy = guideOutputManager.get(client, simulator.name)!
+
+		expect(proxy.parentId).toBe(parent.id)
+		expect(resourceKey(proxy)).toBe(resourceKey(parent))
+		expect(resourceDevice(proxy)).toBe(parent)
 	})
 })

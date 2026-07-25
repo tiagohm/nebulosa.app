@@ -1,8 +1,8 @@
 import { CLIENT } from 'nebulosa/src/devices/indi/device'
-import type { Device } from 'nebulosa/src/devices/indi/device'
+import type { Device, SubDevice } from 'nebulosa/src/devices/indi/device'
 
-// Stable identity of one physical or logical resource, scoped by client, device type, and device id.
-export type ResourceKey = `${string}:${string}:${string}`
+// Opaque stable identity of one physical or logical resource.
+export type ResourceKey = string
 
 // Observable arbitration state; unavailable takes precedence over an existing lease.
 export type ResourceAvailability = 'available' | 'leased' | 'unavailable'
@@ -66,10 +66,14 @@ const UNAVAILABLE_OWNER: ResourceOwner = {
 	kind: 'unavailable',
 }
 
-// Builds the canonical resource key for a device; the hidden live client id wins over serialized info.
+// Builds the canonical resource key from the physical parent id or the device's globally unique id.
 export function resourceKey(device: Device): ResourceKey {
-	const clientId = device[CLIENT]?.id ?? device.client.id
-	return `${clientId}:${device.type}:${device.id}`
+	return device.parentId ?? device.id
+}
+
+// Returns the live physical parent behind a subdevice proxy, or the original device otherwise.
+export function resourceDevice(device: Device): Device {
+	return device.parentId === undefined ? device : ((device as Partial<SubDevice<Device, Device>>).parent ?? device)
 }
 
 // Arbitrates physical and logical resources atomically without waiting or preemption.
@@ -207,7 +211,8 @@ export class ResourceArbiter {
 		let resource = this.#resources.get(key)
 
 		if (resource === undefined) {
-			const device = typeof request === 'string' ? undefined : request.device
+			const requestedDevice = typeof request === 'string' ? undefined : request.device
+			const device = requestedDevice === undefined ? undefined : resourceDevice(requestedDevice)
 			const clientId = device?.[CLIENT]?.id ?? device?.client.id
 			resource = {
 				available: (device?.connected ?? true) && (clientId === undefined || !this.#unavailableClients.has(clientId)),
@@ -217,12 +222,14 @@ export class ResourceArbiter {
 			}
 			this.#resources.set(key, resource)
 		} else if (typeof request !== 'string' && request.device !== undefined) {
+			const device = resourceDevice(request.device)
+
 			if (resource.device === undefined) {
-				const clientId = request.device[CLIENT]?.id ?? request.device.client.id
-				resource.available = request.device.connected && !this.#unavailableClients.has(clientId)
+				const clientId = device[CLIENT]?.id ?? device.client.id
+				resource.available = device.connected && !this.#unavailableClients.has(clientId)
 			}
-			resource.device = request.device
-			resource.clientId = request.device[CLIENT]?.id ?? request.device.client.id
+			resource.device = device
+			resource.clientId = device[CLIENT]?.id ?? device.client.id
 		}
 
 		return resource

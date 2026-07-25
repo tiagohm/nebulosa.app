@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type { Camera, Cover, Device, GuideOutput } from 'nebulosa/src/devices/indi/device'
-import { DEFAULT_CAMERA, DEFAULT_COVER, DEFAULT_GUIDE_OUTPUT } from 'nebulosa/src/devices/indi/device'
+import type { Camera, Cover, Device, GuideOutput, Mount, SubDevice } from 'nebulosa/src/devices/indi/device'
+import { DEFAULT_CAMERA, DEFAULT_COVER, DEFAULT_GUIDE_OUTPUT, DEFAULT_MOUNT } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager'
 import { DeviceLifecycle, isDeviceQuiescent } from 'src/api/device.lifecycle'
 import { OperationCoordinator } from 'src/api/operation'
@@ -55,6 +55,28 @@ function guideOutput(): GuideOutput {
 		name: 'guide-output-1',
 		connected: true,
 		client: { type: 'SIMULATOR', id: 'client-1' },
+	}
+}
+
+function mount(): Mount {
+	return {
+		...structuredClone(DEFAULT_MOUNT),
+		id: 'mount-1',
+		name: 'mount-1',
+		connected: true,
+		client: { type: 'SIMULATOR', id: 'client-1' },
+	}
+}
+
+function guideOutputProxy(parent: Mount): SubDevice<GuideOutput, Mount> {
+	return {
+		...structuredClone(DEFAULT_GUIDE_OUTPUT),
+		id: 'guide-output-1',
+		parentId: parent.id,
+		parent,
+		name: parent.name,
+		connected: true,
+		client: parent.client,
 	}
 }
 
@@ -182,7 +204,7 @@ describe('device lifecycle', () => {
 		lifecycle.dispose()
 	})
 
-	test('cancels an owner of a distinct guide-output resource', async () => {
+	test('cancels an owner of a standalone guide-output resource', async () => {
 		const manager = new TestDeviceManager<GuideOutput>()
 		const arbiter = new ResourceArbiter()
 		const coordinator = new OperationCoordinator(arbiter)
@@ -199,6 +221,104 @@ describe('device lifecycle', () => {
 		expect(handle.signal.aborted).toBeTrue()
 		expect(arbiter.availability(key)).toBe('unavailable')
 		expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
+
+		lifecycle.dispose()
+	})
+
+	test('aggregates parent and subdevice busy states under one physical resource', () => {
+		const mountManager = new TestDeviceManager<Mount>()
+		const guideOutputManager = new TestDeviceManager<GuideOutput>()
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const lifecycle = new DeviceLifecycle(arbiter, coordinator)
+		const parent = mount()
+		const proxy = guideOutputProxy(parent)
+		const key = resourceKey(parent)
+
+		lifecycle.observe(mountManager)
+		lifecycle.observe(guideOutputManager)
+		mountManager.add(parent)
+		guideOutputManager.add(proxy)
+
+		expect(resourceKey(proxy)).toBe(key)
+		expect(arbiter.availability(key)).toBe('available')
+
+		parent.slewing = true
+		mountManager.update(parent, 'slewing')
+		expect(arbiter.availability(key)).toBe('unavailable')
+
+		parent.slewing = false
+		mountManager.update(parent, 'slewing')
+		expect(arbiter.availability(key)).toBe('available')
+
+		proxy.pulsing = true
+		guideOutputManager.update(proxy, 'pulsing')
+		expect(arbiter.availability(key)).toBe('unavailable')
+
+		proxy.pulsing = false
+		guideOutputManager.update(proxy, 'pulsing')
+		expect(arbiter.availability(key)).toBe('available')
+
+		lifecycle.dispose()
+	})
+
+	test('cancels on proxy removal while retaining the parent lifecycle view', async () => {
+		const mountManager = new TestDeviceManager<Mount>()
+		const guideOutputManager = new TestDeviceManager<GuideOutput>()
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const lifecycle = new DeviceLifecycle(arbiter, coordinator)
+		const parent = mount()
+		const proxy = guideOutputProxy(parent)
+		const key = resourceKey(parent)
+
+		lifecycle.observe(mountManager)
+		lifecycle.observe(guideOutputManager)
+		mountManager.add(parent)
+		guideOutputManager.add(proxy)
+
+		const handle = coordinator.start('guide-output', [{ key, device: proxy }], waitForAbort)
+		guideOutputManager.remove(proxy)
+
+		expect(handle.signal.aborted).toBeTrue()
+		expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
+		expect(arbiter.availability(key)).toBe('available')
+
+		parent.slewing = true
+		mountManager.update(parent, 'slewing')
+		expect(arbiter.availability(key)).toBe('unavailable')
+
+		mountManager.remove(parent)
+		expect(arbiter.ownersOfClient(parent.client.id)).toEqual([])
+
+		lifecycle.dispose()
+	})
+
+	test('ignores stale subdevice verification after retaining its parent', async () => {
+		const mountManager = new TestDeviceManager<Mount>()
+		const guideOutputManager = new TestDeviceManager<GuideOutput>()
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const lifecycle = new DeviceLifecycle(arbiter, coordinator)
+		const verified = Promise.withResolvers<boolean>()
+		const parent = mount()
+		const proxy = guideOutputProxy(parent)
+		const key = resourceKey(parent)
+
+		lifecycle.observe(mountManager)
+		lifecycle.observe(guideOutputManager, () => verified.promise)
+		mountManager.add(parent)
+		guideOutputManager.add(proxy)
+		expect(arbiter.availability(key)).toBe('unavailable')
+
+		guideOutputManager.remove(proxy)
+		expect(arbiter.availability(key)).toBe('available')
+
+		verified.resolve(false)
+		await verified.promise
+		await Promise.resolve()
+
+		expect(arbiter.availability(key)).toBe('available')
 
 		lifecycle.dispose()
 	})

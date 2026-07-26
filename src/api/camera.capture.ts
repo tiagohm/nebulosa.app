@@ -247,6 +247,8 @@ class CameraCaptureSession {
 	#failureSettled = false
 	#failureResult?: OperationResult<never>
 	#cleaned = false
+	// Transport loss that makes the session's camera instance unsafe to command or quarantine.
+	#deviceUnavailableReason?: Extract<OperationFailureReason, 'disconnected' | 'removed'>
 	readonly #quiescenceWaiters = new Set<VoidFunction>()
 	// Resolves when the canceled generation's outstanding BLOB is observed and discarded.
 	readonly #lateBlob = Promise.withResolvers<void>()
@@ -380,6 +382,7 @@ class CameraCaptureSession {
 
 	// Fails pending milestones when the physical device disconnects or is removed.
 	deviceUnavailable(reason: Extract<OperationFailureReason, 'disconnected' | 'removed'>) {
+		this.#deviceUnavailableReason = reason
 		this.markUnavailable()
 		this.#fail(reason)
 	}
@@ -393,7 +396,7 @@ class CameraCaptureSession {
 		this.#state = 'stopping'
 		if (this.#attempt !== undefined) this.#attempt.terminal = true
 
-		const canCommand = this.camera.connected
+		const canCommand = this.#deviceUnavailableReason === undefined && this.camera.connected
 		const exposureMayBeActive = this.#attempt?.dispatched === true && this.#attempt.exposureState === undefined
 		let quiescent = true
 		if (canCommand && (exposureMayBeActive || this.camera.exposuring || this.camera.exposure.state === 'Busy')) {

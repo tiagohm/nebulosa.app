@@ -60,18 +60,18 @@ function createHarness(options: HarnessOptions = {}) {
 		spyOn(cameraManager, 'transferFormat').mockImplementation(() => {}),
 		spyOn(cameraManager, 'compression').mockImplementation(() => {}),
 	]
-	const startExposure = spyOn(cameraManager, 'startExposure').mockImplementation(() => {
+	const startExposure = spyOn(cameraManager, 'startExposure').mockImplementation((target) => {
 		const state = options.startState ?? 'Busy'
-		camera.exposuring = state === 'Busy'
-		camera.exposure.state = state
-		if (options.notifyStartState !== false) queueMicrotask(() => capturer.updated(camera, 'exposure', state))
+		target.exposuring = state === 'Busy'
+		target.exposure.state = state
+		if (options.notifyStartState !== false) queueMicrotask(() => capturer.updated(target, 'exposure', state))
 	})
-	const stopExposure = spyOn(cameraManager, 'stopExposure').mockImplementation(() => {
+	const stopExposure = spyOn(cameraManager, 'stopExposure').mockImplementation((target) => {
 		if (options.stopQuiesces === false) return
 		const state = options.stopState ?? 'Ok'
-		camera.exposuring = false
-		camera.exposure.state = state
-		queueMicrotask(() => capturer.updated(camera, 'exposure', state))
+		target.exposuring = false
+		target.exposure.state = state
+		queueMicrotask(() => capturer.updated(target, 'exposure', state))
 	})
 	mocks.push(startExposure, stopExposure)
 	const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator, undefined, { frameGraceTime: 10, quiesceTimeout: 10, lateBlobDrainTime: 0, ...options.capture }, options.io)
@@ -226,12 +226,26 @@ describe('camera capture session failures', () => {
 		const harness = createHarness()
 
 		try {
+			const key = resourceKey(harness.camera)
 			const handle = harness.capturer.start(harness.camera, request())
 			expect((await handle.started).ok).toBeTrue()
 			harness.capturer.removed(harness.camera)
 
 			expect(await handle.result).toEqual({ ok: false, reason: 'removed' })
-			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('unavailable')
+			expect(harness.arbiter.availability(key)).toBe('unavailable')
+			expect(harness.stopExposure).not.toHaveBeenCalled()
+			expect(harness.disableBlob).not.toHaveBeenCalled()
+
+			const rediscovered = {
+				...harness.camera,
+				exposure: { ...harness.camera.exposure, state: 'Idle' },
+				exposuring: false,
+			} as Camera
+			harness.arbiter.markAvailable({ key, device: rediscovered })
+
+			const next = harness.capturer.start(rediscovered, request())
+			expect((await next.started).ok).toBeTrue()
+			await next.cancel()
 		} finally {
 			harness.restore()
 		}

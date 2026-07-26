@@ -15,11 +15,13 @@ import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { mountBus, mount as mountEndpoints, MountHandler, MountRemoteControlHandler } from 'src/api/mount'
 import { MountCommander } from 'src/api/mount.commander'
+import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
 import type { OperationResult } from 'src/api/operation'
 import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { coordinateInfo } from '#/mount'
 import type { CoordinateInfo, MountAdded, MountRemoteControlStatus, MountRemoved, MountUpdated } from '#/mount'
+import type { Notification } from '#/notification'
 import { SocketMessager } from './util'
 
 mountBus.forceSync = true
@@ -27,10 +29,11 @@ mountBus.forceSync = true
 const wsm = new WebSocketMessageHandler()
 const mountManager = new MountManager()
 const confirmation = new ConfirmationHandler(wsm)
+const notification = new NotificationHandler(wsm)
 const resourceArbiter = new ResourceArbiter()
 const operationCoordinator = new OperationCoordinator(resourceArbiter)
 const mountCommander = new MountCommander(mountManager)
-const mountHandler = new MountHandler(wsm, mountManager, confirmation, mountCommander, operationCoordinator)
+const mountHandler = new MountHandler(wsm, mountManager, confirmation, notification, mountCommander, operationCoordinator)
 const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, mountCommander, operationCoordinator)
 const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
 deviceLifecycle.observe(mountManager)
@@ -312,6 +315,23 @@ describe('mount handler', () => {
 		}
 	})
 
+	test('notifies a detached command that was rejected', async () => {
+		const device = getMount()
+
+		wsm.open(socket)
+		socket.clear()
+
+		await noContent(endpoints['/mounts/:id/park'].POST(request(device.id)))
+
+		expect(await waitUntil(() => socket.some<Notification>((message) => message.type === 'notification'))).toBeTrue()
+
+		const message = socket.find<Notification>((message) => message.type === 'notification')
+
+		expect(message!.body.title).toBe('MOUNT')
+		expect(message!.body.color).toBe('danger')
+		expect(message!.body.description).toContain('failed to park')
+	})
+
 	test('reports remote control status through endpoints', async () => {
 		const device = getMount()
 		const status = await json<MountRemoteControlStatus>(endpoints['/mounts/:id/remotecontrol'].GET(request(device.id)))
@@ -357,7 +377,7 @@ describe('mount handler', () => {
 		const wsm = new WebSocketMessageHandler()
 		const mountManager = new MountManager()
 		const coordinator = new OperationCoordinator(new ResourceArbiter())
-		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new MountCommander(mountManager), coordinator)
+		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm), new NotificationHandler(wsm), new MountCommander(mountManager), coordinator)
 		const handler = new IndiClientHandlerSet([mountManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const mountSimulator = new MountSimulator('Mount Simulator', client)

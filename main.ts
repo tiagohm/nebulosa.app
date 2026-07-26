@@ -221,7 +221,7 @@ const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelM
 // Coordinated mount service owns every mutation, so HTTP, protocol adapters, and composite features
 // compete for the mount under the same ownership rules.
 const mountCommander = new MountCommander(mountManager)
-const mountHandler = new MountHandler(wsm, mountManager, confirmationHandler, mountCommander, operationCoordinator)
+const mountHandler = new MountHandler(wsm, mountManager, confirmationHandler, notificationHandler, mountCommander, operationCoordinator)
 const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager, mountCommander, operationCoordinator)
 const focuserHandler = new FocuserHandler(wsm, focuserManager)
 const wheelHandler = new WheelHandler(wsm, wheelManager)

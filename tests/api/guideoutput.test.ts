@@ -9,6 +9,7 @@ import { guideOutputBus, guideOutput as guideOutputEndpoints, GuideOutputHandler
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
 import { MountCommander } from 'src/api/mount.commander'
+import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
 import type { GuideOutputAdded, GuideOutputRemoved, GuideOutputUpdated, GuidePulse } from '#/guideoutput'
@@ -159,7 +160,7 @@ describe('guide output handler', () => {
 		const mountManager = new MountManager()
 		const guideOutputManager = new GuideOutputManager(mountManager)
 		const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)
-		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(), new MountCommander(mountManager), new OperationCoordinator(new ResourceArbiter()))
+		const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(), new NotificationHandler(wsm), new MountCommander(mountManager), new OperationCoordinator(new ResourceArbiter()))
 		const handler = new IndiClientHandlerSet([mountManager, guideOutputManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const mountSimulator = new MountSimulator('Mount Simulator', client)

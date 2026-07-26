@@ -21,6 +21,7 @@ import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
 import type { MountCommander, MountMoveDirection } from './mount.commander'
+import type { NotificationHandler } from './notification'
 import type { OperationCoordinator, OperationResult } from './operation'
 import { resourceKey } from './resource'
 
@@ -50,6 +51,7 @@ export class MountHandler implements DeviceHandler<Mount> {
 		readonly wsm: WebSocketMessageHandler,
 		readonly mountManager: MountManager,
 		readonly confirmation: ConfirmationHandler,
+		readonly notification: NotificationHandler,
 		readonly commander: MountCommander,
 		readonly coordinator: OperationCoordinator,
 	) {
@@ -183,11 +185,18 @@ export class MountHandler implements DeviceHandler<Mount> {
 		})
 	}
 
-	// Runs a command whose physical completion outlasts the request that asked for it, reporting failure
-	// to the log because there is no response left to carry it.
+	// Runs a command whose physical completion outlasts the request that asked for it.
+	//
+	// The HTTP response is gone by the time the command settles, and a rejected command moves nothing, so
+	// it emits no device update either: without a notification the user would see the action silently
+	// discarded. Failures are therefore pushed over the WebSocket, which is the same path every other
+	// asynchronous failure in the API already uses.
 	#detach(mount: Mount, action: string, command: () => Promise<OperationResult<unknown>>) {
 		void command().then((result) => {
-			if (!result.ok) console.error('mount failed to %s:', action, mount.name, result.reason, result.error ?? '')
+			if (result.ok) return
+
+			console.error('mount failed to %s:', action, mount.name, result.reason, result.error ?? '')
+			this.notification.send({ title: 'MOUNT', description: `${mount.name} failed to ${action}: ${result.error ?? result.reason}`, color: 'danger' })
 		})
 	}
 }

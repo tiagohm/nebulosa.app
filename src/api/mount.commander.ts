@@ -7,6 +7,7 @@ import type { PropertyState } from 'nebulosa/src/devices/indi/types'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { makeTime } from 'src/api/util'
 import { coordinateInfo } from '#/mount'
+import { isDeviceQuiescent } from './device.lifecycle'
 import type { OperationContext, OperationResult, OperationScope } from './operation'
 import { abortReason, waitForDeviceState } from './operation.wait'
 import { resourceKey } from './resource'
@@ -599,9 +600,11 @@ export class MountCommander implements DeviceHandler<Mount> {
 			timeout: options.settleTimeout ?? DEFAULT_SETTLE_TIMEOUT,
 			subscribe: (listener) => this.#subscribe(mount, listener),
 			current: () => ({ mount }),
-			// A disconnected mount is not moving under our command any more, and there is nothing left to
-			// wait for on a device that no longer reports anything.
-			evaluate: () => (!mount.connected || !mount.slewing ? 'success' : 'pending'),
+			// Quiescence is the same condition the arbiter uses to decide the mount is acquirable again, so
+			// it covers homing, parking, and pulse guiding, which drivers report independently of slewing.
+			// A disconnected mount is not moving under our command any more, and nothing further will ever
+			// be reported by a device that stopped talking.
+			evaluate: () => (!mount.connected || isDeviceQuiescent(mount) ? 'success' : 'pending'),
 			command,
 		})
 

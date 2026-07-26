@@ -37,6 +37,8 @@ export interface ResourceConflict {
 	readonly ownerId: string
 	// Category of the current owner, or unavailable for resources blocked by lifecycle.
 	readonly ownerKind: string
+	// Active causes when the resource is unavailable; empty when another owner holds it.
+	readonly causes: readonly ResourceUnavailableCause[]
 }
 
 // Atomic acquisition outcome containing either the complete lease or every detected conflict.
@@ -137,7 +139,7 @@ export class ResourceArbiter {
 			const resource = this.#resource(request)
 
 			if (!this.#available(resource)) {
-				conflicts.push(conflict(request.key, UNAVAILABLE_OWNER))
+				conflicts.push(conflict(request.key, UNAVAILABLE_OWNER, this.#causesOf(resource)))
 			} else if (resource.owner !== undefined && resource.owner !== owner) {
 				conflicts.push(conflict(request.key, resource.owner))
 			}
@@ -208,6 +210,13 @@ export class ResourceArbiter {
 	// Reports whether every cause has been cleared and the owning client still accepts acquisitions.
 	#available(resource: ResourceRecord) {
 		return resource.causes.size === 0 && (resource.clientId === undefined || !this.#unavailableClients.has(resource.clientId))
+	}
+
+	// Lists why a resource is blocked, reporting a disconnected client as a lifecycle cause of its own.
+	#causesOf(resource: ResourceRecord): readonly ResourceUnavailableCause[] {
+		const causes = [...resource.causes]
+		if (resource.clientId !== undefined && this.#unavailableClients.has(resource.clientId) && !resource.causes.has('lifecycle')) causes.push('lifecycle')
+		return causes.sort()
 	}
 
 	// Finds or creates the persistent record, seeding availability only on its first physical association.
@@ -283,6 +292,6 @@ function normalizeRequests(requests: readonly ResourceRequest[]) {
 }
 
 // Projects an owner into the transport-safe conflict contract.
-function conflict(key: ResourceKey, owner: ResourceOwner): ResourceConflict {
-	return { key, ownerId: owner.id, ownerKind: owner.kind }
+function conflict(key: ResourceKey, owner: ResourceOwner, causes: readonly ResourceUnavailableCause[] = []): ResourceConflict {
+	return { key, ownerId: owner.id, ownerKind: owner.kind, causes }
 }

@@ -1,5 +1,5 @@
 import { errorMessage } from 'src/api/util'
-import type { ResourceKey, ResourceLease, ResourceOwner, ResourceRequest } from './resource'
+import type { ResourceConflict, ResourceKey, ResourceLease, ResourceOwner, ResourceRequest } from './resource'
 import { ResourceArbiter } from './resource'
 
 // Expected operational terminal causes that callers can handle without exceptions.
@@ -276,7 +276,7 @@ function detailOf<T>(result: OperationResult<T>) {
 	return result.ok ? undefined : result.error
 }
 
-// Produces a compact diagnostic for an atomic busy result.
-function formatConflicts(conflicts: readonly { readonly key: ResourceKey; readonly ownerId: string; readonly ownerKind: string }[]) {
-	return conflicts.map((conflict) => `${conflict.key} is owned by ${conflict.ownerKind} ${conflict.ownerId}`).join(', ')
+// Produces a compact diagnostic for an atomic busy result, naming why each resource was refused.
+function formatConflicts(conflicts: readonly ResourceConflict[]) {
+	return conflicts.map((conflict) => (conflict.causes.length > 0 ? `${conflict.key} is unavailable (${conflict.causes.join(', ')})` : `${conflict.key} is owned by ${conflict.ownerKind} ${conflict.ownerId}`)).join(', ')
 }

@@ -67,7 +67,7 @@ describe('resource arbiter', () => {
 		expect(first.ok).toBeTrue()
 		expect(conflicted).toEqual({
 			ok: false,
-			conflicts: [{ key: CAMERA, ownerId: 'owner-1', ownerKind: 'test' }],
+			conflicts: [{ key: CAMERA, ownerId: 'owner-1', ownerKind: 'test', causes: [] }],
 		})
 		expect(arbiter.owns(secondOwner, MOUNT)).toBeFalse()
 
@@ -111,7 +111,7 @@ describe('resource arbiter', () => {
 		expect(arbiter.availability(CAMERA)).toBe('unavailable')
 		expect(arbiter.acquire(owner('owner-2'), [{ key: CAMERA }])).toEqual({
 			ok: false,
-			conflicts: [{ key: CAMERA, ownerId: 'resource-arbiter', ownerKind: 'unavailable' }],
+			conflicts: [{ key: CAMERA, ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle'] }],
 		})
 
 		arbiter.markAvailable(CAMERA)
@@ -132,6 +132,21 @@ describe('resource arbiter', () => {
 		expect(arbiter.availability(CAMERA)).toBe('available')
 	})
 
+	test('reports every active cause on a conflict', () => {
+		const arbiter = new ResourceArbiter()
+		const device = camera(true)
+
+		arbiter.markUnavailable({ key: CAMERA, device }, 'quarantine')
+		arbiter.markClientUnavailable(device.client.id)
+
+		const conflicted = arbiter.acquire(owner('owner-1'), [{ key: CAMERA, device }])
+
+		expect(conflicted).toEqual({
+			ok: false,
+			conflicts: [{ key: CAMERA, ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle', 'quarantine'] }],
+		})
+	})
+
 	test('seeds availability when a device is associated after logical use', () => {
 		const arbiter = new ResourceArbiter()
 		const logical = arbiter.acquire(owner('owner-1'), [{ key: CAMERA }])
@@ -145,7 +160,7 @@ describe('resource arbiter', () => {
 
 		expect(arbiter.acquire(owner('owner-2'), [{ key: CAMERA, device: disconnected }])).toEqual({
 			ok: false,
-			conflicts: [{ key: CAMERA, ownerId: 'resource-arbiter', ownerKind: 'unavailable' }],
+			conflicts: [{ key: CAMERA, ownerId: 'resource-arbiter', ownerKind: 'unavailable', causes: ['lifecycle'] }],
 		})
 
 		arbiter.markAvailable(CAMERA)

@@ -620,7 +620,7 @@ export class MountCommander implements DeviceHandler<Mount> {
 // Converts a target expressed in any supported frame into the equinox-of-date coordinate the mount
 // commands take, using the site and clock the mount itself reports.
 function resolveTarget(mount: Mount, target: MountTargetCoordinate<string | Angle>) {
-	return coordinateInfo(makeTime('now', mount.geographicCoordinate), mount.geographicCoordinate.longitude, target, { equatorial: true }).equatorial
+	return coordinateInfo(makeTime('now', mount.geographicCoordinate), mount.geographicCoordinate.longitude, target, { equatorial: true, equatorialJ2000: true }).equatorial
 }
 
 // Angular distance in radians between where the mount points and the requested target.

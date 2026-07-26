@@ -131,7 +131,13 @@ export class CameraHandler implements DeviceHandler<Camera> {
 	start(camera: Camera, req: CameraCaptureStart, onCameraCaptureEvent?: CameraCaptureListener, onCaptureCreated?: (operation: string) => void) {
 		const handle = this.capture(camera, req, onCameraCaptureEvent)
 		onCaptureCreated?.(handle.id)
-		return handle.result.then((result) => result.ok)
+		return handle.result.then(
+			(result) => result.ok,
+			(error) => {
+				console.error('camera capture failed:', error)
+				return false
+			},
+		)
 	}
 
 	// Waits until one capture has completed cleanup and released its physical camera lease.

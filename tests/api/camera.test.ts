@@ -19,6 +19,7 @@ import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { camera as cameraEndpoints, CameraHandler, cameraBus } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
+import type { CameraCaptureHandle } from 'src/api/camera.capture'
 import { DeviceLifecycle } from 'src/api/device.lifecycle'
 import { guiderBus } from 'src/api/guider'
 import type { GuiderHandler } from 'src/api/guider'
@@ -372,6 +373,26 @@ describe('camera capture start request', () => {
 		expect(result).toMatchObject({ ok: false, reason: 'busy' })
 		expect(zeroExposureEvents.map((event) => event.state)).toEqual(['error', 'idle'])
 		expect(disconnectedEvents.map((event) => event.state)).toEqual(['error', 'idle'])
+	})
+
+	test('normalizes unexpected legacy capture rejections to false', async () => {
+		const camera = getCamera()
+		const failure = new Error('capture result rejected')
+		const error = spyOn(console, 'error').mockImplementation(() => {})
+		const capture = spyOn(cameraHandler, 'capture').mockReturnValue({
+			id: 'rejected-capture',
+			started: Promise.resolve({ ok: true, value: undefined }),
+			result: Promise.reject(failure),
+			cancel: () => Promise.resolve(),
+		} satisfies CameraCaptureHandle)
+
+		try {
+			expect(await cameraHandler.start(camera, captureStartRequest({}))).toBeFalse()
+			expect(error).toHaveBeenCalledWith('camera capture failed:', failure)
+		} finally {
+			capture.mockRestore()
+			error.mockRestore()
+		}
 	})
 
 	test('does not publish rejected capture state over an active camera session', async () => {

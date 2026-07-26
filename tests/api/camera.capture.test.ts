@@ -17,6 +17,7 @@ interface HarnessOptions {
 	readonly io?: CameraCaptureIO
 	readonly notifyStartState?: boolean
 	readonly startState?: 'Busy' | 'Alert'
+	readonly stopState?: 'Idle' | 'Ok'
 	readonly stopQuiesces?: boolean
 }
 
@@ -67,9 +68,10 @@ function createHarness(options: HarnessOptions = {}) {
 	})
 	const stopExposure = spyOn(cameraManager, 'stopExposure').mockImplementation(() => {
 		if (options.stopQuiesces === false) return
+		const state = options.stopState ?? 'Ok'
 		camera.exposuring = false
-		camera.exposure.state = 'Ok'
-		queueMicrotask(() => capturer.updated(camera, 'exposure', 'Ok'))
+		camera.exposure.state = state
+		queueMicrotask(() => capturer.updated(camera, 'exposure', state))
 	})
 	mocks.push(startExposure, stopExposure)
 	const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator, undefined, { frameGraceTime: 10, quiesceTimeout: 10, lateBlobDrainTime: 0, ...options.capture }, options.io)
@@ -301,6 +303,26 @@ describe('camera capture session failures', () => {
 })
 
 describe('camera capture session cancellation', () => {
+	test('allows another capture after an explicit abort-to-Idle boundary', async () => {
+		const harness = createHarness({ stopState: 'Idle' })
+
+		try {
+			const key = resourceKey(harness.camera)
+			const active = harness.capturer.start(harness.camera, request())
+			expect((await active.started).ok).toBeTrue()
+			await active.cancel()
+
+			expect(await active.result).toEqual({ ok: false, reason: 'aborted' })
+			expect(harness.arbiter.availability(key)).toBe('available')
+
+			const next = harness.capturer.start(harness.camera, request())
+			expect((await next.started).ok).toBeTrue()
+			await next.cancel()
+		} finally {
+			harness.restore()
+		}
+	})
+
 	test('quarantines a camera until its outstanding BLOB is discarded', async () => {
 		const harness = createHarness()
 

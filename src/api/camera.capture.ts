@@ -252,6 +252,8 @@ class CameraCaptureSession {
 	readonly #lateBlob = Promise.withResolvers<void>()
 	// Whether cleanup has observed the BLOB expected from a physically started exposure.
 	#lateBlobObserved = false
+	// Whether cancellation observed the driver's explicit abort-to-Idle boundary.
+	#abortIdleObserved = false
 
 	// Creates an immutable request session bound to one operation context and physical camera.
 	constructor(
@@ -318,6 +320,7 @@ class CameraCaptureSession {
 		if (camera !== this.camera) return
 
 		if (property === 'exposure' && state !== 'Busy') {
+			if (state === 'Idle' && this.context.signal.aborted) this.#abortIdleObserved = true
 			for (const waiter of this.#quiescenceWaiters) waiter()
 		}
 
@@ -400,7 +403,7 @@ class CameraCaptureSession {
 		const drainTime = Math.max(0, this.options.lateBlobDrainTime ?? DEFAULT_LATE_BLOB_DRAIN_TIME)
 		if (pendingBlob && !this.#lateBlobObserved && drainTime > 0) await Promise.race([this.#lateBlob.promise, Bun.sleep(drainTime)])
 		if (canCommand) this.cameraManager.disableBlob(this.camera)
-		if (canCommand && pendingBlob && !this.#lateBlobObserved) this.quarantine()
+		if (canCommand && pendingBlob && !this.#lateBlobObserved && !this.#abortIdleObserved) this.quarantine()
 		if (!quiescent) {
 			this.markUnavailable()
 			throw new Error('camera exposure did not quiesce before cleanup timeout')

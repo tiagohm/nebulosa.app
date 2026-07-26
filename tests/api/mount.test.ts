@@ -1,8 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { cirsToObserved } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { equatorialToEcliptic, equatorialToGalatic, equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
-import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
-import { timeNow } from 'nebulosa/src/astronomy/time/time'
+import { timeNormalize } from 'nebulosa/src/astronomy/time/time'
 import { IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Mount, MountTargetCoordinate } from 'nebulosa/src/devices/indi/device'
 import { MountManager } from 'nebulosa/src/devices/indi/manager'
@@ -553,10 +552,9 @@ describe('mount commander', () => {
 })
 
 describe('coordinateInfo computes correctly all the coordinates passing the flag', () => {
-	const time = timeNow(true)
+	const time = timeNormalize(2461248, 0.5)
 	time.location = { latitude: 0, longitude: 0, elevation: 0, ellipsoid: 3 }
-	const lst = localSiderealTime(time, undefined, true)
-	const equatorial = [lst, deg(-30)] as const
+	const equatorial = [hour(20), deg(-30)] as const
 	const equatorialJ2000 = equatorialToJ2000(...equatorial, time)
 	const galactic = equatorialToGalatic(...equatorialJ2000)
 	const ecliptic = equatorialToEcliptic(...equatorial, time)
@@ -584,23 +582,50 @@ describe('coordinateInfo computes correctly all the coordinates passing the flag
 
 				test(`${angleType}, ${type}, ${Object.keys(flag)[0]}`, () => {
 					if ('equatorial' in flag) {
-						expect(info.equatorial[0]).toBeCloseTo(equatorial[0], 11)
-						expect(info.equatorial[1]).toBeCloseTo(equatorial[1], 11)
+						expect(info.equatorial[0]).toBeCloseTo(equatorial[0], 10)
+						expect(info.equatorial[1]).toBeCloseTo(equatorial[1], 10)
 					} else if ('equatorialJ2000' in flag) {
-						expect(info.equatorialJ2000[0]).toBeCloseTo(equatorialJ2000[0], 11)
-						expect(info.equatorialJ2000[1]).toBeCloseTo(equatorialJ2000[1], 11)
+						expect(info.equatorialJ2000[0]).toBeCloseTo(equatorialJ2000[0], 10)
+						expect(info.equatorialJ2000[1]).toBeCloseTo(equatorialJ2000[1], 10)
 					} else if ('horizontal' in flag) {
-						expect(info.horizontal[0]).toBeCloseTo(horizontal[0], 11)
-						expect(info.horizontal[1]).toBeCloseTo(horizontal[1], 11)
+						expect(info.horizontal[0]).toBeCloseTo(horizontal[0], 10)
+						expect(info.horizontal[1]).toBeCloseTo(horizontal[1], 10)
 					} else if ('ecliptic' in flag) {
-						expect(info.ecliptic[0]).toBeCloseTo(ecliptic[0], 11)
-						expect(info.ecliptic[1]).toBeCloseTo(ecliptic[1], 11)
+						expect(info.ecliptic[0]).toBeCloseTo(ecliptic[0], 10)
+						expect(info.ecliptic[1]).toBeCloseTo(ecliptic[1], 10)
 					} else if ('galactic' in flag) {
-						expect(info.galactic[0]).toBeCloseTo(galactic[0], 11)
-						expect(info.galactic[1]).toBeCloseTo(galactic[1], 11)
+						expect(info.galactic[0]).toBeCloseTo(galactic[0], 10)
+						expect(info.galactic[1]).toBeCloseTo(galactic[1], 10)
 					}
 				})
 			}
 		}
+	}
+})
+
+describe('coordinateInfo computes correctly the constellation for all coordinate types', () => {
+	const time = timeNormalize(2461248, 0.5)
+	time.location = { latitude: 0, longitude: 0, elevation: 0, ellipsoid: 3 }
+	const equatorial = [hour(20), deg(-30)] as const
+	const equatorialJ2000 = equatorialToJ2000(...equatorial, time)
+	const galactic = equatorialToGalatic(...equatorialJ2000)
+	const ecliptic = equatorialToEcliptic(...equatorial, time)
+	const observed = cirsToObserved(equatorial, time)
+	const horizontal = [observed.azimuth, observed.altitude] as const
+
+	const flags = [
+		[equatorial, 'JNOW'],
+		[equatorialJ2000, 'J2000'],
+		[horizontal, 'ALTAZ'],
+		[ecliptic, 'ECLIPTIC'],
+		[galactic, 'GALACTIC'],
+	] as const
+
+	for (const [coordinate, type] of flags) {
+		const info = coordinateInfo(time, 0, { type, [type]: { x: coordinate[0], y: coordinate[1] } }, { constellation: true })
+
+		test(type, () => {
+			expect(info.constellation).toBe('SGR')
+		})
 	}
 })

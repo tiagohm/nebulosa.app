@@ -131,7 +131,7 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 	else if (type === 'J2000') {
 		Object.assign(equatorialJ2000, coordinate)
 
-		hasEquatorial ||= flags.ecliptic === true || flags.horizontal === true
+		hasEquatorial ||= flags.ecliptic === true || flags.horizontal === true || flags.constellation === true
 
 		if (hasEquatorial) Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))
 		if (flags.ecliptic) Object.assign(ecliptic, equatorialToEcliptic(...equatorial, time))
@@ -142,7 +142,7 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 	else if (type === 'ALTAZ') {
 		Object.assign(horizontal, coordinate)
 
-		hasEquatorial ||= flags.equatorialJ2000 === true || flags.ecliptic === true || flags.galactic === true
+		hasEquatorial ||= flags.equatorialJ2000 === true || flags.ecliptic === true || flags.galactic === true || flags.constellation === true
 
 		if (hasEquatorial) Object.assign(equatorial, observedToCirs(...horizontal, time))
 		if (flags.equatorialJ2000 || flags.galactic) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
@@ -153,7 +153,7 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 	else if (type === 'ECLIPTIC') {
 		Object.assign(ecliptic, coordinate)
 
-		hasEquatorial ||= flags.equatorialJ2000 === true || flags.horizontal === true || flags.galactic === true
+		hasEquatorial ||= flags.equatorialJ2000 === true || flags.horizontal === true || flags.galactic === true || flags.constellation === true
 
 		if (hasEquatorial) Object.assign(equatorial, eclipticToEquatorial(...ecliptic, time))
 		if (flags.equatorialJ2000 || flags.galactic) Object.assign(equatorialJ2000, equatorialToJ2000(...equatorial, time))
@@ -164,7 +164,7 @@ export function coordinateInfo(time: Time, longitude: Angle, target: EquatorialC
 	else if (type === 'GALACTIC') {
 		Object.assign(galactic, coordinate)
 
-		hasEquatorial ||= flags.ecliptic === true || flags.horizontal === true
+		hasEquatorial ||= flags.ecliptic === true || flags.horizontal === true || flags.constellation === true
 
 		if (flags.equatorialJ2000 || hasEquatorial) Object.assign(equatorialJ2000, galacticToEquatorial(...galactic))
 		if (hasEquatorial) Object.assign(equatorial, equatorialFromJ2000(...equatorialJ2000, time))

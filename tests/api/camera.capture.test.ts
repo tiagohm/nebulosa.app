@@ -4,9 +4,10 @@ import { CLIENT } from 'nebulosa/src/devices/indi/device'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { CameraManager } from 'nebulosa/src/devices/indi/manager'
 import { CameraCapturer } from 'src/api/camera.capture'
-import type { CameraCaptureDecodeAndWrite, CameraCaptureOptions } from 'src/api/camera.capture'
+import type { CameraCaptureDecodeAndWrite, CameraCaptureOptions, CameraCaptureResult } from 'src/api/camera.capture'
 import type { ImageProcessor } from 'src/api/image'
 import { OperationCoordinator } from 'src/api/operation'
+import type { OperationResult } from 'src/api/operation'
 import { ResourceArbiter, resourceKey } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureEvent, CameraCaptureStart } from '#/camera'
@@ -74,11 +75,12 @@ function createHarness(options: HarnessOptions = {}) {
 		queueMicrotask(() => capturer.updated(target, 'exposure', state))
 	})
 	mocks.push(startExposure, stopExposure)
-	const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator, undefined, { frameGraceTime: 10, quiesceTimeout: 10, lateBlobDrainTime: 0, ...options.capture }, options.io)
+	const capturer = new CameraCapturer(cameraManager, imageProcessor, arbiter, undefined, { frameGraceTime: 10, quiesceTimeout: 10, lateBlobDrainTime: 0, ...options.capture }, options.io)
 
 	return {
 		arbiter,
 		camera,
+		coordinator,
 		cameraManager,
 		capturer,
 		disableBlob,
@@ -97,6 +99,10 @@ function request(overrides: Partial<CameraCaptureStart> = {}): CameraCaptureStar
 	return value
 }
 
+function savingRequest() {
+	return request({ autoSave: true, savePath: tmpdir(), autoSubFolderMode: 'off' })
+}
+
 function finishExposure(harness: ReturnType<typeof createHarness>, blob = true) {
 	const { camera, capturer } = harness
 	camera.exposuring = false
@@ -112,7 +118,7 @@ describe('camera capture session failures', () => {
 		const events: CameraCaptureEvent[] = []
 
 		try {
-			const handle = harness.capturer.start(harness.camera, request(), { listener: (event) => events.push(event) })
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request(), { listener: (event) => events.push(event) })
 			expect(await handle.started).toEqual({ ok: true, value: undefined })
 			expect(await handle.result).toEqual({ ok: false, reason: 'timeout' })
 			expect(events.map((event) => event.state).slice(-2)).toEqual(['error', 'idle'])
@@ -130,14 +136,14 @@ describe('camera capture session failures', () => {
 
 		try {
 			const key = resourceKey(harness.camera)
-			const handle = harness.capturer.start(harness.camera, request())
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request())
 
 			expect(await handle.started).toEqual({ ok: false, reason: 'timeout' })
 			expect(await handle.result).toEqual({ ok: false, reason: 'timeout' })
 			expect(harness.arbiter.availability(key)).toBe('unavailable')
 
 			harness.arbiter.markAvailable({ key, device: harness.camera })
-			const blocked = harness.capturer.start(harness.camera, request())
+			const blocked = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect(await blocked.result).toMatchObject({ ok: false, reason: 'busy' })
 
 			harness.capturer.blobReceived(harness.camera, Buffer.from('stale frame'), 'raw')
@@ -151,7 +157,7 @@ describe('camera capture session failures', () => {
 		const harness = createHarness({ startState: 'Alert' })
 
 		try {
-			const handle = harness.capturer.start(harness.camera, request())
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect(await handle.started).toEqual({ ok: false, reason: 'alert' })
 			expect(await handle.result).toEqual({ ok: false, reason: 'alert' })
 			expect(harness.saved).toHaveLength(0)
@@ -165,7 +171,7 @@ describe('camera capture session failures', () => {
 		const harness = createHarness()
 
 		try {
-			const handle = harness.capturer.start(harness.camera, request())
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await handle.started).ok).toBeTrue()
 			finishExposure(harness, false)
 
@@ -180,7 +186,7 @@ describe('camera capture session failures', () => {
 		const harness = createHarness()
 
 		try {
-			const handle = harness.capturer.start(harness.camera, request())
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await handle.started).ok).toBeTrue()
 			harness.camera.exposuring = false
 			harness.camera.exposure.state = 'Idle'
@@ -202,7 +208,7 @@ describe('camera capture session failures', () => {
 		const harness = createHarness()
 
 		try {
-			const handle = harness.capturer.start(harness.camera, request())
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await handle.started).ok).toBeTrue()
 			harness.camera.connected = false
 			harness.capturer.updated(harness.camera, 'connected')
@@ -216,7 +222,7 @@ describe('camera capture session failures', () => {
 			harness.camera.exposuring = false
 			harness.arbiter.markAvailable({ key: resourceKey(harness.camera), device: harness.camera })
 
-			const next = harness.capturer.start(harness.camera, request())
+			const next = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await next.started).ok).toBeTrue()
 			await next.cancel()
 		} finally {
@@ -229,7 +235,7 @@ describe('camera capture session failures', () => {
 
 		try {
 			const key = resourceKey(harness.camera)
-			const handle = harness.capturer.start(harness.camera, request())
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await handle.started).ok).toBeTrue()
 			harness.capturer.removed(harness.camera)
 
@@ -245,7 +251,7 @@ describe('camera capture session failures', () => {
 			} as Camera
 			harness.arbiter.markAvailable({ key, device: rediscovered })
 
-			const next = harness.capturer.start(rediscovered, request())
+			const next = harness.capturer.start(harness.coordinator, rediscovered, request())
 			expect((await next.started).ok).toBeTrue()
 			await next.cancel()
 		} finally {
@@ -274,7 +280,7 @@ describe('camera capture session failures', () => {
 		const harness = createHarness({ stopQuiesces: false, capture: { quiesceTimeout: 5 } })
 
 		try {
-			const handle = harness.capturer.start(harness.camera, request())
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await handle.started).ok).toBeTrue()
 			await handle.cancel()
 
@@ -285,7 +291,7 @@ describe('camera capture session failures', () => {
 			})
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('unavailable')
 
-			const next = harness.capturer.start(harness.camera, request())
+			const next = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect(await next.result).toMatchObject({ ok: false, reason: 'busy' })
 
 			// Discarding the stale payload clears only the quarantine; the camera is still not quiescent.
@@ -301,7 +307,7 @@ describe('camera capture session failures', () => {
 		const harness = createHarness({ stopQuiesces: false, capture: { quiesceTimeout: 5 }, io })
 
 		try {
-			const handle = harness.capturer.start(harness.camera, request({ autoSave: true, savePath: tmpdir(), autoSubFolderMode: 'off' }))
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request({ autoSave: true, savePath: tmpdir(), autoSubFolderMode: 'off' }))
 			expect((await handle.started).ok).toBeTrue()
 
 			harness.capturer.updated(harness.camera, 'exposure', 'Ok')
@@ -323,10 +329,10 @@ describe('camera capture session failures', () => {
 		const events: CameraCaptureEvent[] = []
 
 		try {
-			const active = harness.capturer.start(harness.camera, request())
+			const active = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await active.started).ok).toBeTrue()
 
-			const conflicting = harness.capturer.start(harness.camera, request(), { listener: (event) => events.push(event) })
+			const conflicting = harness.capturer.start(harness.coordinator, harness.camera, request(), { listener: (event) => events.push(event) })
 			expect(await conflicting.result).toMatchObject({ ok: false, reason: 'busy' })
 			expect(events.map((event) => event.state)).toEqual(['error', 'idle'])
 			expect(events.every((event) => event.operation === conflicting.id)).toBeTrue()
@@ -338,6 +344,57 @@ describe('camera capture session failures', () => {
 			harness.restore()
 		}
 	})
+
+	test('captures inside a composite operation that already owns the camera', async () => {
+		const harness = createHarness()
+		const key = resourceKey(harness.camera)
+
+		try {
+			const captured = Promise.withResolvers<OperationResult<CameraCaptureResult>>()
+			const feature = harness.coordinator.start('autofocus', [{ key, device: harness.camera }], async (context) => {
+				const capture = harness.capturer.start(context, harness.camera, savingRequest())
+				expect((await capture.started).ok).toBeTrue()
+				finishExposure(harness)
+				const result = await capture.result
+				captured.resolve(result)
+
+				// The nested capture released its own lease, but the feature still owns the camera.
+				expect(harness.arbiter.availability(key)).toBe('leased')
+				expect(context.owns(key)).toBeTrue()
+				return result.ok ? { ok: true, value: result.value.frameCount } : result
+			})
+
+			expect((await captured.promise).ok).toBeTrue()
+			expect(await feature.result).toEqual({ ok: true, value: 1 })
+			expect(harness.arbiter.availability(key)).toBe('available')
+		} finally {
+			harness.restore()
+		}
+	})
+
+	test('refuses a second capture nested in the same composite operation', async () => {
+		const harness = createHarness()
+		const key = resourceKey(harness.camera)
+
+		try {
+			const feature = harness.coordinator.start('autofocus', [{ key, device: harness.camera }], async (context) => {
+				const first = harness.capturer.start(context, harness.camera, savingRequest())
+				expect((await first.started).ok).toBeTrue()
+
+				// A sibling scope must not take a camera the tree is already exposing with.
+				const second = harness.capturer.start(context, harness.camera, savingRequest())
+				expect(await second.result).toMatchObject({ ok: false, reason: 'busy' })
+
+				finishExposure(harness)
+				return await first.result
+			})
+
+			expect((await feature.result).ok).toBeTrue()
+			expect(harness.arbiter.availability(key)).toBe('available')
+		} finally {
+			harness.restore()
+		}
+	})
 })
 
 describe('camera capture session cancellation', () => {
@@ -345,7 +402,7 @@ describe('camera capture session cancellation', () => {
 		const harness = createHarness({ notifyStartState: false, startState: 'Idle' })
 
 		try {
-			const active = harness.capturer.start(harness.camera, request())
+			const active = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect(await waitUntil(() => harness.startExposure.mock.calls.length === 1)).toBeTrue()
 			await active.cancel()
 
@@ -361,14 +418,14 @@ describe('camera capture session cancellation', () => {
 
 		try {
 			const key = resourceKey(harness.camera)
-			const active = harness.capturer.start(harness.camera, request())
+			const active = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await active.started).ok).toBeTrue()
 			await active.cancel()
 
 			expect(await active.result).toEqual({ ok: false, reason: 'aborted' })
 			expect(harness.arbiter.availability(key)).toBe('available')
 
-			const next = harness.capturer.start(harness.camera, request())
+			const next = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await next.started).ok).toBeTrue()
 			await next.cancel()
 		} finally {
@@ -380,20 +437,20 @@ describe('camera capture session cancellation', () => {
 		const harness = createHarness()
 
 		try {
-			const active = harness.capturer.start(harness.camera, request())
+			const active = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await active.started).ok).toBeTrue()
 			await active.cancel()
 
 			expect(await active.result).toEqual({ ok: false, reason: 'aborted' })
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('unavailable')
 
-			const blocked = harness.capturer.start(harness.camera, request())
+			const blocked = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect(await blocked.result).toMatchObject({ ok: false, reason: 'busy' })
 
 			harness.capturer.blobReceived(harness.camera, Buffer.from('stale frame'), 'raw')
 			expect(harness.arbiter.availability(resourceKey(harness.camera))).toBe('available')
 
-			const next = harness.capturer.start(harness.camera, request())
+			const next = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await next.started).ok).toBeTrue()
 			await next.cancel()
 			expect(await next.result).toEqual({ ok: false, reason: 'aborted' })
@@ -407,7 +464,7 @@ describe('camera capture session cancellation', () => {
 
 		try {
 			const key = resourceKey(harness.camera)
-			const handle = harness.capturer.start(harness.camera, request())
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await handle.started).ok).toBeTrue()
 			expect(await handle.result).toEqual({ ok: false, reason: 'timeout' })
 			expect(harness.arbiter.availability(key)).toBe('unavailable')
@@ -419,7 +476,7 @@ describe('camera capture session cancellation', () => {
 
 			expect(harness.arbiter.availability(key)).toBe('available')
 
-			const next = harness.capturer.start(harness.camera, request())
+			const next = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await next.started).ok).toBeTrue()
 			await next.cancel()
 		} finally {
@@ -432,7 +489,7 @@ describe('camera capture session cancellation', () => {
 
 		try {
 			const key = resourceKey(harness.camera)
-			const active = harness.capturer.start(harness.camera, request())
+			const active = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await active.started).ok).toBeTrue()
 			await active.cancel()
 
@@ -443,7 +500,7 @@ describe('camera capture session cancellation', () => {
 			harness.capturer.blobReceived(harness.camera, Buffer.from('stale frame'), 'raw')
 
 			expect(harness.arbiter.availability(key)).toBe('unavailable')
-			const blocked = harness.capturer.start(harness.camera, request())
+			const blocked = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect(await blocked.result).toMatchObject({ ok: false, reason: 'busy' })
 		} finally {
 			harness.restore()
@@ -458,7 +515,7 @@ describe('camera capture session cancellation', () => {
 
 		try {
 			const key = resourceKey(harness.camera)
-			const active = harness.capturer.start(harness.camera, request())
+			const active = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect((await active.started).ok).toBeTrue()
 			await active.cancel()
 
@@ -470,7 +527,7 @@ describe('camera capture session cancellation', () => {
 			expect(harness.arbiter.availability(key)).toBe('unavailable')
 
 			harness.arbiter.markAvailable({ key, device: harness.camera })
-			const blocked = harness.capturer.start(harness.camera, request())
+			const blocked = harness.capturer.start(harness.coordinator, harness.camera, request())
 			expect(await blocked.result).toMatchObject({ ok: false, reason: 'busy' })
 		} finally {
 			harness.restore()
@@ -491,7 +548,7 @@ describe('camera capture session cancellation', () => {
 		const paths: string[] = []
 
 		try {
-			const handle = harness.capturer.start(harness.camera, request(), { listener: (_, path) => path && paths.push(path) })
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request(), { listener: (_, path) => path && paths.push(path) })
 			expect((await handle.started).ok).toBeTrue()
 			harness.camera.exposuring = false
 			harness.camera.exposure.state = 'Ok'
@@ -530,7 +587,7 @@ describe('camera capture session cancellation', () => {
 		const harness = createHarness({ io })
 		const paths: string[] = []
 		try {
-			const handle = harness.capturer.start(harness.camera, request({ autoSave: true, savePath: tmpdir() }), { listener: (_, path) => path && paths.push(path) })
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request({ autoSave: true, savePath: tmpdir() }), { listener: (_, path) => path && paths.push(path) })
 			expect((await handle.started).ok).toBeTrue()
 			finishExposure(harness)
 			expect(await waitUntil(() => writeStarted)).toBeTrue()
@@ -563,7 +620,7 @@ describe('camera capture session cancellation', () => {
 		const waiting = Promise.withResolvers<void>()
 
 		try {
-			const handle = harness.capturer.start(harness.camera, request({ exposureMode: 'fixed', count: 2, delay: 1, autoSave: true, autoSubFolderMode: 'off', savePath: tmpdir() }), {
+			const handle = harness.capturer.start(harness.coordinator, harness.camera, request({ exposureMode: 'fixed', count: 2, delay: 1, autoSave: true, autoSubFolderMode: 'off', savePath: tmpdir() }), {
 				listener: (event) => {
 					events.push(event)
 					if (event.state === 'waiting') waiting.resolve()

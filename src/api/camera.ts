@@ -11,6 +11,7 @@ import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
+import type { OperationCoordinator } from './operation'
 
 export interface CameraBusEvents {
 	readonly add: CameraAdded
@@ -36,6 +37,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		readonly focuserManager: FocuserManager,
 		readonly rotatorManager: RotatorManager,
 		readonly capturer: CameraCapturer,
+		readonly coordinator: OperationCoordinator,
 	) {
 		cameraManager.addHandler(this)
 
@@ -96,7 +98,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		}
 	}
 
-	// Starts a coordinated capture and returns its operation-backed milestones.
+	// Starts a capture as a new top-level operation and returns its operation-backed milestones.
 	capture(camera: Camera, request: CameraCaptureStart, onCameraCaptureEvent?: CameraCaptureListener, rejectedListener: CameraCaptureListener | undefined = onCameraCaptureEvent) {
 		const client = camera[CLIENT]!
 		const mount = request.mount ? this.mountManager.get(client, request.mount) : undefined
@@ -104,7 +106,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		const focuser = request.focuser ? this.focuserManager.get(client, request.focuser) : undefined
 		const rotator = request.rotator ? this.rotatorManager.get(client, request.rotator) : undefined
 
-		const handle = this.capturer.start(camera, request, {
+		const handle = this.capturer.start(this.coordinator, camera, request, {
 			listener: (event, path) => {
 				this.sendEvent(event, path)
 				onCameraCaptureEvent?.(event, path)

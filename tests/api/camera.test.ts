@@ -56,8 +56,8 @@ const focuserManager = new FocuserManager()
 const rotatorManager = new RotatorManager()
 const resourceArbiter = new ResourceArbiter()
 const operationCoordinator = new OperationCoordinator(resourceArbiter)
-const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, operationCoordinator)
-const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer)
+const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter)
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
 const deviceLifecycle = new DeviceLifecycle(resourceArbiter, operationCoordinator)
 deviceLifecycle.observe(cameraManager)
 const endpoints = cameraEndpoints(cameraHandler)
@@ -277,8 +277,9 @@ describe('camera capture start request', () => {
 		const focuserManager = new FocuserManager()
 		const rotatorManager = new RotatorManager()
 		const imageProcessor = new ImageProcessor()
-		const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, new OperationCoordinator(new ResourceArbiter()))
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer)
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, coordinator)
 		const handler = new IndiClientHandlerSet([cameraManager, mountManager, wheelManager, focuserManager, rotatorManager])
 		const client = new ClientSimulator('Client Simulator', handler)
 		const cameraSimulator = new CameraSimulator('Camera Simulator', client)
@@ -833,8 +834,9 @@ describe('camera capture start request', () => {
 			},
 		} as unknown as GuiderHandler
 
-		const capturer = new CameraCapturer(cameraManager, imageProcessor, new OperationCoordinator(new ResourceArbiter()), guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer)
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 
@@ -868,8 +870,9 @@ describe('camera capture start request', () => {
 			},
 		} as unknown as GuiderHandler
 
-		const capturer = new CameraCapturer(cameraManager, imageProcessor, new OperationCoordinator(new ResourceArbiter()), guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer)
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 		const request = captureStartRequest({ exposureTime: 10, exposureTimeUnit: 'millisecond', dither: { enabled: true } })
@@ -902,8 +905,9 @@ describe('camera capture start request', () => {
 			},
 		} as unknown as GuiderHandler
 
-		const capturer = new CameraCapturer(cameraManager, imageProcessor, new OperationCoordinator(new ResourceArbiter()), guiderHandler)
-		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer)
+		const coordinator = new OperationCoordinator(new ResourceArbiter())
+		const capturer = new CameraCapturer(cameraManager, imageProcessor, coordinator.arbiter, guiderHandler)
+		const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, capturer, coordinator)
 		const camera = getCamera()
 		const events: CameraCaptureEvent[] = []
 		const request = captureStartRequest({ exposureTime: 100, exposureTimeUnit: 'millisecond', dither: { enabled: true } })

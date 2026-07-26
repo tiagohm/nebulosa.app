@@ -37,8 +37,9 @@ const rotatorManager = new RotatorManager()
 const guideOutputManager = new GuideOutputManager({
 	get: (client, name) => mountManager.get(client, name) ?? cameraManager.get(client, name),
 })
-const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, new OperationCoordinator(new ResourceArbiter()))
-const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer)
+const operationCoordinator = new OperationCoordinator(new ResourceArbiter())
+const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, operationCoordinator.arbiter)
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
 const mountHandler = new MountHandler(wsm, mountManager, new ConfirmationHandler(wsm))
 const guideOutputHandler = new GuideOutputHandler(wsm, guideOutputManager)
 const darvHandler = new DarvHandler(wsm, cameraHandler, mountHandler, guideOutputHandler)

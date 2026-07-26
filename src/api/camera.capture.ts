@@ -11,10 +11,9 @@ import type { GuiderDither } from '#/guider'
 import { guiderBus } from './guider'
 import type { GuiderDitherEvent, GuiderDitherResult } from './guider'
 import type { ImageProcessor } from './image'
-import type { OperationContext, OperationFailureReason, OperationResult } from './operation'
-import { OperationCoordinator } from './operation'
+import type { OperationContext, OperationFailureReason, OperationResult, OperationScope } from './operation'
 import { abortableDelay, abortReason } from './operation.wait'
-import { resourceKey } from './resource'
+import { ResourceArbiter, resourceKey } from './resource'
 import { directoryExists, errorMessage } from './util'
 
 // Minimum inter-frame delay that produces progress updates, in microseconds.
@@ -161,18 +160,20 @@ export class CameraCapturer {
 	// Camera keys blocked until a stale BLOB is discarded or the transport resets.
 	readonly #quarantined = new Set<string>()
 
-	// Creates a capturer over camera commands, image processing, and shared operation ownership.
+	// Creates a capturer over camera commands, image processing, and resource availability.
 	constructor(
 		readonly cameraManager: CameraManager,
 		readonly imageProcessor: ImageProcessor,
-		readonly coordinator: OperationCoordinator,
+		readonly arbiter: ResourceArbiter,
 		readonly ditherer?: CameraDitherer,
 		readonly options: CameraCaptureOptions = {},
 		readonly io: CameraCaptureDecodeAndWrite = DEFAULT_CAMERA_CAPTURE_DECODE_AND_WRITE,
 	) {}
 
-	// Starts one capture, routes accepted-session events to its listener, and reports pre-session rejection separately.
-	start(camera: Camera, request: CameraCaptureStart, { listener = () => {}, rejectedListener = listener, prepare }: CameraCaptureListeners = {}): CameraCaptureHandle {
+	// Starts one capture in the given scope, routing accepted-session events to its listener and reporting
+	// pre-session rejection separately. A composite feature passes its own context so the capture nests
+	// inside the operation that already owns the camera.
+	start(scope: OperationScope, camera: Camera, request: CameraCaptureStart, { listener = () => {}, rejectedListener = listener, prepare }: CameraCaptureListeners = {}): CameraCaptureHandle {
 		const key = resourceKey(camera)
 		const started = Promise.withResolvers<OperationResult<void>>()
 		let session: CameraCaptureSession | undefined
@@ -184,7 +185,7 @@ export class CameraCapturer {
 			started.resolve(result)
 		}
 
-		const operation = this.coordinator.start<CameraCaptureResult>('cameraCapture', [{ key, device: camera }], (context) => {
+		const operation = scope.start<CameraCaptureResult>('cameraCapture', [{ key, device: camera }], (context) => {
 			const current = new CameraCaptureSession(context, camera, structuredClone(request), {
 				cameraManager: this.cameraManager,
 				imageProcessor: this.imageProcessor,
@@ -195,7 +196,7 @@ export class CameraCapturer {
 				prepare,
 				settleStarted,
 				availability: {
-					markUnavailable: () => this.coordinator.arbiter.markUnavailable({ key, device: camera }),
+					markUnavailable: () => this.arbiter.markUnavailable({ key, device: camera }),
 					quarantine: () => this.#quarantine(camera, key),
 				},
 			})
@@ -268,13 +269,13 @@ export class CameraCapturer {
 	// Blocks the camera until the payload left behind by a terminated exposure has been observed.
 	#quarantine(camera: Camera, key: string) {
 		this.#quarantined.add(key)
-		this.coordinator.arbiter.markUnavailable({ key, device: camera }, 'quarantine')
+		this.arbiter.markUnavailable({ key, device: camera }, 'quarantine')
 	}
 
 	// Releases the quarantine cause; any lifecycle cause keeps the camera blocked on its own.
 	#endQuarantine(camera: Camera, key: string) {
 		if (!this.#quarantined.delete(key)) return
-		this.coordinator.arbiter.markAvailable({ key, device: camera }, 'quarantine')
+		this.arbiter.markAvailable({ key, device: camera }, 'quarantine')
 	}
 }
 

@@ -215,8 +215,8 @@ const connectionHandler = new ConnectionHandler(wsm, notificationHandler, operat
 const confirmationHandler = new ConfirmationHandler(wsm)
 const guiderHandler = new GuiderHandler(wsm, notificationHandler)
 // Coordinated camera service owns physical sessions independently from HTTP and WebSocket transport.
-const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, operationCoordinator, guiderHandler)
-const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer)
+const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, resourceArbiter, guiderHandler)
+const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer, operationCoordinator)
 const mountHandler = new MountHandler(wsm, mountManager, confirmationHandler)
 const mountRemoteControlHandler = new MountRemoteControlHandler(mountManager)
 const focuserHandler = new FocuserHandler(wsm, focuserManager)

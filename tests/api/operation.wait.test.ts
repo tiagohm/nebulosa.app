@@ -22,7 +22,6 @@ describe('operation waits', () => {
 		const listeners = new Set<(state: string) => void>()
 		let state = 'idle'
 		const result = waitForDeviceState({
-			device: {},
 			signal: controller.signal,
 			timeout: 1000,
 			subscribe: (listener) => {
@@ -45,7 +44,6 @@ describe('operation waits', () => {
 	test('lets command failure win over a synchronous terminal event', async () => {
 		const listeners = new Set<(state: string) => void>()
 		const result = waitForDeviceState({
-			device: {},
 			signal: new AbortController().signal,
 			timeout: 1000,
 			subscribe: (listener) => {
@@ -66,7 +64,6 @@ describe('operation waits', () => {
 
 	test('normalizes a symbol rejected by the command', async () => {
 		const result = waitForDeviceState({
-			device: {},
 			signal: new AbortController().signal,
 			timeout: 1000,
 			subscribe: () => () => {},
@@ -85,7 +82,6 @@ describe('operation waits', () => {
 			},
 		}
 		const result = waitForDeviceState({
-			device: {},
 			signal: new AbortController().signal,
 			timeout: 1000,
 			subscribe: () => () => {},
@@ -102,7 +98,6 @@ describe('operation waits', () => {
 		const commandStarted = Promise.withResolvers<AbortSignal>()
 		const events: string[] = []
 		const result = waitForDeviceState({
-			device: {},
 			signal: new AbortController().signal,
 			timeout: 0,
 			subscribe: () => () => {},
@@ -135,7 +130,6 @@ describe('operation waits', () => {
 		const commandStarted = Promise.withResolvers<AbortSignal>()
 		let aborts = 0
 		const result = waitForDeviceState({
-			device: {},
 			signal: new AbortController().signal,
 			timeout: 0,
 			commandAbortTimeout: 5,
@@ -163,7 +157,6 @@ describe('operation waits', () => {
 		const listeners = new Set<(state: string) => void>()
 		let aborts = 0
 		const result = waitForDeviceState({
-			device: {},
 			signal: controller.signal,
 			timeout: 5,
 			subscribe: (listener) => {

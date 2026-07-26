@@ -38,6 +38,23 @@ export async function directoryExists(path: PathLike): Promise<boolean> {
 	}
 }
 
+// Reports whether a promise settles, either way, within the non-negative timeout in milliseconds.
+export async function settlesWithin(promise: Promise<unknown>, timeout: number): Promise<boolean> {
+	const elapsed = Promise.withResolvers<boolean>()
+	const timer = setTimeout(() => elapsed.resolve(false), Math.max(0, timeout))
+
+	void promise.then(
+		() => elapsed.resolve(true),
+		() => elapsed.resolve(true),
+	)
+
+	try {
+		return await elapsed.promise
+	} finally {
+		clearTimeout(timer)
+	}
+}
+
 export async function waitFor(ms: number, callback: (remainingTime: number) => boolean) {
 	let remainingTime = Math.trunc(ms)
 

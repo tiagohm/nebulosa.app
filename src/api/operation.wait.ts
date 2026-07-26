@@ -1,9 +1,7 @@
-import { errorMessage } from 'src/api/util'
+import { errorMessage, settlesWithin } from 'src/api/util'
 import type { OperationFailureReason, OperationResult } from './operation'
 
-export interface WaitForDeviceOptions<D, U> {
-	// Device associated with the wait; retained in the contract for device-specific callers.
-	readonly device: D
+export interface WaitForDeviceOptions<U> {
 	// Operation signal that cancels the wait and its optional physical abort.
 	readonly signal: AbortSignal
 	// Maximum wait duration in milliseconds.
@@ -49,7 +47,7 @@ export function abortableDelay(ms: number, signal: AbortSignal): Promise<Operati
 }
 
 // Subscribes before commanding a device and settles only after any canceled command has stopped.
-export function waitForDeviceState<D, U>(options: WaitForDeviceOptions<D, U>): Promise<OperationResult<U>> {
+export function waitForDeviceState<U>(options: WaitForDeviceOptions<U>): Promise<OperationResult<U>> {
 	const { signal } = options
 
 	if (signal.aborted) return Promise.resolve(aborted(signal))
@@ -171,23 +169,6 @@ export function waitForDeviceState<D, U>(options: WaitForDeviceOptions<D, U>): P
 			}
 		})()
 	})
-}
-
-// Reports whether a promise settles within the non-negative timeout in milliseconds.
-async function settlesWithin(promise: Promise<unknown>, timeout: number): Promise<boolean> {
-	const elapsed = Promise.withResolvers<boolean>()
-	const timer = setTimeout(() => elapsed.resolve(false), Math.max(0, timeout))
-
-	void promise.then(
-		() => elapsed.resolve(true),
-		() => elapsed.resolve(true),
-	)
-
-	try {
-		return await elapsed.promise
-	} finally {
-		clearTimeout(timer)
-	}
 }
 
 // Maps AbortSignal reasons into the finite operational failure contract.

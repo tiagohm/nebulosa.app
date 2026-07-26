@@ -29,6 +29,7 @@ import { indiBus } from './indi'
 import type { WebSocketMessageHandler } from './message'
 import type { NotificationHandler } from './notification'
 import type { OperationCoordinator } from './operation'
+import { settlesWithin } from './util'
 
 export interface ConnectionBusEvents {
 	readonly open: ConnectionEvent
@@ -308,21 +309,4 @@ export function connection(connectionHandler: ConnectionHandler, indi: IndiClien
 		'/connections': { GET: () => response(connectionHandler.list()), POST: async (req) => response(await connectionHandler.connect(await req.json(), indi, mountManager, focuserManager, rotatorManager, guideOutputManager)) },
 		'/connections/:id': { GET: (req) => response(connectionHandler.status(req.params.id)), DELETE: async (req) => response(await connectionHandler.disconnect(req.params.id)) },
 	} as const satisfies Endpoints
-}
-
-// Reports whether operational cleanup settles within the non-negative timeout in milliseconds.
-async function settlesWithin(promise: Promise<unknown>, timeout: number): Promise<boolean> {
-	const elapsed = Promise.withResolvers<boolean>()
-	const timer = setTimeout(() => elapsed.resolve(false), Math.max(0, timeout))
-
-	void promise.then(
-		() => elapsed.resolve(true),
-		() => elapsed.resolve(true),
-	)
-
-	try {
-		return await elapsed.promise
-	} finally {
-		clearTimeout(timer)
-	}
 }

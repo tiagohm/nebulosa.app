@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import type { Camera, Cover, Device, GuideOutput, Mount, SubDevice } from 'nebulosa/src/devices/indi/device'
 import { DEFAULT_CAMERA, DEFAULT_COVER, DEFAULT_GUIDE_OUTPUT, DEFAULT_MOUNT } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager'
@@ -342,6 +342,37 @@ describe('device lifecycle', () => {
 		expect(arbiter.availability(key)).toBe('unavailable')
 
 		lifecycle.dispose()
+	})
+
+	test('reports a verifier that cannot decide and keeps the device blocked', async () => {
+		const manager = new TestDeviceManager<Camera>()
+		const arbiter = new ResourceArbiter()
+		const coordinator = new OperationCoordinator(arbiter)
+		const lifecycle = new DeviceLifecycle(arbiter, coordinator)
+		const error = spyOn(console, 'error').mockImplementation(() => {})
+		const device = camera()
+		const key = resourceKey(device)
+
+		try {
+			lifecycle.observe(manager, () => {
+				throw new Error('cannot read device state')
+			})
+			manager.add(device)
+
+			expect(arbiter.availability(key)).toBe('unavailable')
+			expect(error).toHaveBeenCalled()
+
+			error.mockClear()
+			lifecycle.observe(manager, () => Promise.reject(new Error('transport lost')))
+			manager.add(device)
+			await Bun.sleep(1)
+
+			expect(arbiter.availability(key)).toBe('unavailable')
+			expect(error).toHaveBeenCalled()
+		} finally {
+			error.mockRestore()
+			lifecycle.dispose()
+		}
 	})
 
 	test('treats a parking cover as busy', () => {

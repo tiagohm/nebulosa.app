@@ -164,7 +164,10 @@ export class DeviceLifecycle {
 				} else {
 					pending.push(Promise.resolve(available))
 				}
-			} catch {
+			} catch (error) {
+				// A verifier that cannot decide leaves the device blocked, never acquirable by mistake.
+				console.error('device availability check failed:', key, error)
+				this.#validated(key, generation, false)
 				return
 			}
 		}
@@ -172,9 +175,13 @@ export class DeviceLifecycle {
 		if (pending.length === 0) {
 			this.#validated(key, generation, true)
 		} else {
-			void Promise.all(pending)
-				.then((results) => this.#validated(key, generation, results.every(Boolean)))
-				.catch((e) => console.error(e))
+			void Promise.all(pending).then(
+				(results) => this.#validated(key, generation, results.every(Boolean)),
+				(error) => {
+					console.error('device availability check failed:', key, error)
+					this.#validated(key, generation, false)
+				},
+			)
 		}
 	}
 

@@ -79,6 +79,8 @@ export class FlatWizardTask {
 	private readonly exposure: MinMaxValueProperty = { min: 0, max: 0, value: 0, step: 1 }
 	private readonly mean: MinMaxValueProperty = { min: 0, max: 0, value: 0, step: 1 }
 	private stopped = false
+	// Operation ID of the capture started by this flat-wizard task.
+	private captureOperation?: string
 
 	constructor(
 		readonly flatWizardHandler: FlatWizardHandler,
@@ -107,6 +109,7 @@ export class FlatWizardTask {
 	}
 
 	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
+		this.captureOperation = event.operation
 		if (path && !this.stopped) {
 			if (this.stopped) {
 				return this.handleFlatWizardEvent('idle', 'stopped')
@@ -204,7 +207,7 @@ export class FlatWizardTask {
 		if (this.stopped) return
 
 		this.stopped = true
-		void this.flatWizardHandler.cameraHandler.stop(this.camera)
+		if (this.captureOperation) void this.flatWizardHandler.cameraHandler.stop(this.captureOperation)
 	}
 }
 

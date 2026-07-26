@@ -192,7 +192,10 @@ describe('auto focus handler', () => {
 
 	test('stops active task through endpoint and emits idle event', async () => {
 		const { camera, focuser } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => Promise.resolve(true))
+		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'autofocus-stop-capture', camera: camera.id, state: 'exposureStarted' }))
+			return Promise.resolve(true)
+		})
 		const cameraStop = spyOn(cameraHandler, 'stop')
 		const focuserStop = spyOn(focuserHandler, 'stop')
 		const request = autoFocusStartRequest({ id: 'autofocus-stop' })
@@ -209,7 +212,7 @@ describe('auto focus handler', () => {
 			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
 			expect(autoFocusEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
 			expect(autoFocusEvents().at(-1)?.message).toBe('stopped')
-			expect(cameraStop).toHaveBeenCalledWith(camera)
+			expect(cameraStop).toHaveBeenCalledWith('autofocus-stop-capture')
 			expect(focuserStop).toHaveBeenCalledWith(focuser)
 		} finally {
 			focuserStop.mockRestore()
@@ -254,7 +257,7 @@ describe('auto focus handler', () => {
 		const cameraStop = spyOn(cameraHandler, 'stop')
 		const focuserStop = spyOn(focuserHandler, 'stop')
 		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
-			handleCameraCaptureEvent?.(cameraCaptureEvent({ camera: camera.id, state: 'idle', stopped: true }))
+			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'autofocus-stopped-capture', camera: camera.id, state: 'idle', stopped: true }))
 			return Promise.resolve(true)
 		})
 		const request = autoFocusStartRequest({ id: 'autofocus-stopped' })
@@ -267,7 +270,7 @@ describe('auto focus handler', () => {
 			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
 			expect(autoFocusEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
 			expect(autoFocusEvents().at(-1)?.message).toBe('stopped')
-			expect(cameraStop).toHaveBeenCalledWith(camera)
+			expect(cameraStop).toHaveBeenCalledWith('autofocus-stopped-capture')
 			expect(focuserStop).toHaveBeenCalledWith(focuser)
 		} finally {
 			start.mockRestore()

@@ -78,6 +78,8 @@ export class TppaTask {
 	private readonly polarAlignment: ThreePointPolarAlignment
 	private readonly handleTppaEvent: (state: TppaState, message?: string) => void
 	private stopped = false
+	// Operation ID of the capture started by this TPPA task.
+	private captureOperation?: string
 
 	constructor(
 		readonly tppa: TppaHandler,
@@ -113,6 +115,7 @@ export class TppaTask {
 	}
 
 	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
+		this.captureOperation = event.operation
 		if (path && !this.stopped) {
 			this.handleTppaEvent('solving')
 
@@ -233,7 +236,7 @@ export class TppaTask {
 		this.move(false)
 		this.tppa.mountHandler.mountManager.stop(this.mount)
 		this.tppa.solver.stop(this.request.id)
-		void this.tppa.cameraHandler.stop(this.camera)
+		if (this.captureOperation) void this.tppa.cameraHandler.stop(this.captureOperation)
 	}
 
 	private get moveDuration() {

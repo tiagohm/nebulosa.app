@@ -15,6 +15,7 @@ import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
 import { OperationCoordinator } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
+import { DEFAULT_CAMERA_CAPTURE_EVENT } from '#/camera'
 import { DEFAULT_DARV_START } from '#/darv'
 import type { DarvStart, DarvEvent } from '#/darv'
 import { noContent, SocketMessager, waitUntil } from './util'
@@ -128,7 +129,10 @@ function waitForDarvState(state: DarvEvent['state'], id: string) {
 describe('darv handler', () => {
 	test('starts through endpoint and emits lifecycle events through wsm', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => Promise.resolve(true))
+		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+			handleCameraCaptureEvent?.({ ...structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT), operation: 'darv-capture', camera: camera.id, state: 'exposureStarted' })
+			return Promise.resolve(true)
+		})
 		const stop = spyOn(cameraHandler, 'stop')
 		const pulseEast = spyOn(guideOutputManager, 'pulseEast')
 		const pulseWest = spyOn(guideOutputManager, 'pulseWest')
@@ -182,7 +186,7 @@ describe('darv handler', () => {
 			expect(pulseEast).toHaveBeenCalledWith(mount, 0)
 			expect(pulseWest).toHaveBeenCalledWith(mount, 0)
 			expect(mountStop).toHaveBeenCalledWith(mount)
-			expect(stop).toHaveBeenCalledWith(camera)
+			expect(stop).toHaveBeenCalledWith('darv-capture')
 		} finally {
 			mountStop.mockRestore()
 			pulseWest.mockRestore()
@@ -244,7 +248,10 @@ describe('darv handler', () => {
 
 	test('stops active task through endpoint and emits idle event', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => Promise.resolve(true))
+		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+			handleCameraCaptureEvent?.({ ...structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT), operation: 'darv-stop-capture', camera: camera.id, state: 'exposureStarted' })
+			return Promise.resolve(true)
+		})
 		const stop = spyOn(cameraHandler, 'stop')
 		const mountStop = spyOn(mountManager, 'stop')
 		const request = darvStartRequest({ id: 'darv-stop', initialPause: 1, duration: 1 })
@@ -260,7 +267,7 @@ describe('darv handler', () => {
 
 			expect(await waitForDarvState('idle', request.id)).toBeTrue()
 			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'idle'])
-			expect(stop).toHaveBeenCalledWith(camera)
+			expect(stop).toHaveBeenCalledWith('darv-stop-capture')
 			expect(mountStop).toHaveBeenCalledWith(mount)
 		} finally {
 			mountStop.mockRestore()

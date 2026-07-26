@@ -218,7 +218,10 @@ describe('tppa handler', () => {
 
 	test('stops active task through endpoint and emits idle event', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => Promise.resolve(true))
+		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'tppa-stop-capture', camera: camera.id, state: 'exposureStarted' }))
+			return Promise.resolve(true)
+		})
 		const cameraStop = spyOn(cameraHandler, 'stop')
 		const mountStop = spyOn(mountManager, 'stop')
 		const solverStop = spyOn(solver, 'stop')
@@ -235,7 +238,7 @@ describe('tppa handler', () => {
 
 			expect(await waitForTppaState('idle', request.id)).toBeTrue()
 			expect(tppaEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
-			expect(cameraStop).toHaveBeenCalledWith(camera)
+			expect(cameraStop).toHaveBeenCalledWith('tppa-stop-capture')
 			expect(mountStop).toHaveBeenCalledWith(mount)
 			expect(solverStop).toHaveBeenCalledWith(request.id)
 		} finally {

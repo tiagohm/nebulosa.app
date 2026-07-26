@@ -74,6 +74,8 @@ export class DarvTask {
 
 	private readonly handleDarvEvent: (state: DarvState, message?: string) => void
 	private stopped = false
+	// Operation ID of the capture started by this DARV task.
+	private captureOperation?: string
 
 	constructor(
 		readonly darv: DarvHandler,
@@ -113,6 +115,7 @@ export class DarvTask {
 
 		// Start capture
 		void this.darv.cameraHandler.start(this.camera, this.request.capture, (event) => {
+			this.captureOperation = event.operation
 			if (event.state === 'idle' || event.state === 'error' || event.stopped) this.stop()
 		})
 
@@ -170,7 +173,7 @@ export class DarvTask {
 
 		this.stopped = true
 		this.move(false, false, 0)
-		void this.darv.cameraHandler.stop(this.camera)
+		if (this.captureOperation) void this.darv.cameraHandler.stop(this.captureOperation)
 	}
 
 	private get initialPause() {

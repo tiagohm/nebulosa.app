@@ -10,8 +10,8 @@ import { flatWizardBus, flatWizard as flatWizardEndpoints, FlatWizardHandler } f
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { OperationCoordinator } from 'src/api/operation'
-import { ResourceArbiter } from 'src/api/resource'
-import { DEFAULT_CAMERA_CAPTURE_EVENT } from '#/camera'
+import { resourceKey, ResourceArbiter } from 'src/api/resource'
+import { DEFAULT_CAMERA_CAPTURE_EVENT, DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraCaptureEvent } from '#/camera'
 import { DEFAULT_FLAT_WIZARD_START } from '#/flatwizard'
 import type { FlatWizardEvent, FlatWizardStart } from '#/flatwizard'
@@ -31,7 +31,8 @@ const mountManager = new MountManager()
 const wheelManager = new WheelManager()
 const focuserManager = new FocuserManager()
 const rotatorManager = new RotatorManager()
-const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, new OperationCoordinator(new ResourceArbiter()))
+const resourceArbiter = new ResourceArbiter()
+const cameraCapturer = new CameraCapturer(cameraManager, imageProcessor, new OperationCoordinator(resourceArbiter))
 const cameraHandler = new CameraHandler(wsm, cameraManager, mountManager, wheelManager, focuserManager, rotatorManager, cameraCapturer)
 const flatWizardHandler = new FlatWizardHandler(wsm, cameraHandler)
 const endpoints = flatWizardEndpoints(flatWizardHandler)
@@ -58,6 +59,7 @@ afterEach(() => {
 	flatWizardHandler.stop('flatwizard-stopped')
 	flatWizardHandler.stop('flatwizard-error')
 	flatWizardHandler.stop('flatwizard-frame')
+	flatWizardHandler.stop('flatwizard-busy')
 	cameraManager.disconnect(getCamera())
 })
 
@@ -164,7 +166,10 @@ describe('flat wizard handler', () => {
 
 	test('stops active task through endpoint and emits idle event', async () => {
 		const camera = connectCamera()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => Promise.resolve(true))
+		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'flatwizard-stop-capture', camera: camera.id, state: 'exposureStarted' }))
+			return Promise.resolve(true)
+		})
 		const stop = spyOn(cameraHandler, 'stop')
 		const request = flatWizardStartRequest({ id: 'flatwizard-stop', minExposure: 100, maxExposure: 300 })
 
@@ -180,7 +185,7 @@ describe('flat wizard handler', () => {
 			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
 			expect(flatWizardEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
 			expect(flatWizardEvents().at(-1)?.message).toBe('stopped')
-			expect(stop).toHaveBeenCalledWith(camera)
+			expect(stop).toHaveBeenCalledWith('flatwizard-stop-capture')
 		} finally {
 			stop.mockRestore()
 			start.mockRestore()
@@ -222,7 +227,7 @@ describe('flat wizard handler', () => {
 		const camera = connectCamera()
 		const stop = spyOn(cameraHandler, 'stop')
 		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
-			handleCameraCaptureEvent?.(cameraCaptureEvent({ camera: camera.id, state: 'idle', stopped: true }))
+			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'flatwizard-stopped-capture', camera: camera.id, state: 'idle', stopped: true }))
 			return Promise.resolve(true)
 		})
 		const request = flatWizardStartRequest({ id: 'flatwizard-stopped', minExposure: 100, maxExposure: 300 })
@@ -235,7 +240,7 @@ describe('flat wizard handler', () => {
 			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
 			expect(flatWizardEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
 			expect(flatWizardEvents().at(-1)?.message).toBe('stopped')
-			expect(stop).toHaveBeenCalledWith(camera)
+			expect(stop).toHaveBeenCalledWith('flatwizard-stopped-capture')
 		} finally {
 			start.mockRestore()
 			stop.mockRestore()
@@ -247,7 +252,7 @@ describe('flat wizard handler', () => {
 		const stop = spyOn(cameraHandler, 'stop')
 		const error = spyOn(console, 'error').mockImplementation(() => {})
 		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
-			handleCameraCaptureEvent?.(cameraCaptureEvent({ camera: camera.id, state: 'error' }))
+			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'flatwizard-error-capture', camera: camera.id, state: 'error' }))
 			return Promise.resolve(true)
 		})
 		const request = flatWizardStartRequest({ id: 'flatwizard-error', minExposure: 100, maxExposure: 300 })
@@ -263,12 +268,42 @@ describe('flat wizard handler', () => {
 
 			expect(event).toBeDefined()
 			expect(event!.message).toBe('flat wizard failed')
-			expect(stop).toHaveBeenCalledWith(camera)
+			expect(stop).toHaveBeenCalledWith('flatwizard-error-capture')
 			expect(error).toHaveBeenCalled()
 		} finally {
 			start.mockRestore()
 			error.mockRestore()
 			stop.mockRestore()
+		}
+	})
+
+	test('does not stop the active camera owner when its capture is rejected', async () => {
+		const camera = connectCamera()
+		const manualRequest = { ...structuredClone(DEFAULT_CAMERA_CAPTURE_START), exposureMode: 'loop' as const, exposureTime: 200, exposureTimeUnit: 'millisecond' as const }
+		const request = flatWizardStartRequest({ id: 'flatwizard-busy', minExposure: 100, maxExposure: 300 })
+
+		try {
+			wsm.open(socket)
+			expect(await waitUntil(() => camera.connected)).toBeTrue()
+			resourceArbiter.markAvailable({ key: resourceKey(camera), device: camera })
+
+			const manual = cameraHandler.capture(camera, manualRequest)
+			const started = await manual.started
+			expect(started.ok).toBeTrue()
+
+			await noContent(await endpoints['/flatwizard/:camera/start'].POST(startRequest(camera, request)))
+			expect(await waitForFlatWizardState('idle', request.id)).toBeTrue()
+
+			let manualSettled = false
+			void manual.result.then(() => {
+				manualSettled = true
+			})
+			await Bun.sleep(10)
+			expect(manualSettled).toBeFalse()
+
+			await manual.cancel()
+		} finally {
+			flatWizardHandler.stop(request.id)
 		}
 	})
 

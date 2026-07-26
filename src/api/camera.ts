@@ -5,13 +5,14 @@ import type { CameraManager, DeviceHandler, FocuserManager, MountManager, Rotato
 import type { BlobEncoding, PropertyState } from 'nebulosa/src/devices/indi/types'
 import { EventBus } from 'src/shared/bus'
 import type { CameraFrameEvent, CameraCaptureEvent, CameraCaptureStart, CameraAdded, CameraRemoved, CameraUpdated } from '#/camera'
-import type { CameraCaptureHandle, CameraCaptureListener } from './camera.capture'
+import type { CameraCaptureListener } from './camera.capture'
 import { CameraCapturer } from './camera.capture'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import { webSocketBus } from './message'
 import type { WebSocketMessageHandler } from './message'
 import type { OperationCoordinator } from './operation'
+import { resourceKey } from './resource'
 
 export interface CameraBusEvents {
 	readonly add: CameraAdded
@@ -25,9 +26,6 @@ export const cameraBus = new EventBus<CameraBusEvents>()
 
 // Publishes camera transport events and delegates capture ownership to CameraCapturer.
 export class CameraHandler implements DeviceHandler<Camera> {
-	private readonly captures = new Map<string, CameraCaptureHandle>()
-	private readonly capturesByCamera = new Map<string, CameraCaptureHandle>()
-
 	// Registers the camera transport adapter and its presentation-event fanout.
 	constructor(
 		readonly wsm: WebSocketMessageHandler,
@@ -106,7 +104,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		const focuser = request.focuser ? this.focuserManager.get(client, request.focuser) : undefined
 		const rotator = request.rotator ? this.rotatorManager.get(client, request.rotator) : undefined
 
-		const handle = this.capturer.start(this.coordinator, camera, request, {
+		return this.capturer.start(this.coordinator, camera, request, {
 			listener: (event, path) => {
 				this.sendEvent(event, path)
 				onCameraCaptureEvent?.(event, path)
@@ -114,25 +112,18 @@ export class CameraHandler implements DeviceHandler<Camera> {
 			prepare: () => this.cameraManager.snoop(camera, mount, focuser, wheel, rotator),
 			rejectedListener,
 		})
-
-		this.captures.set(handle.id, handle)
-		// A conflicting capture still produces a handle, so the camera index keeps the owner that actually holds the lease.
-		if (!this.capturesByCamera.has(camera.id)) this.capturesByCamera.set(camera.id, handle)
-
-		const releaseHandle = () => {
-			if (this.captures.get(handle.id) === handle) this.captures.delete(handle.id)
-			if (this.capturesByCamera.get(camera.id) === handle) this.capturesByCamera.delete(camera.id)
-		}
-
-		void handle.result.then(releaseHandle, releaseHandle)
-
-		return handle
 	}
 
-	// Cancels one operation id, or the current camera capture for transports that cannot name an owner yet.
+	// Cancels one capture scope by operation id, or whatever operation currently owns the camera.
+	//
+	// The arbiter already knows the owner, so no local index is kept here: one would miss every capture a
+	// composite feature starts from its own context, since those never pass through this handler. Stopping
+	// by device cancels the whole owning tree, which is what stopping a camera means to the caller holding
+	// only a device id; stopping by operation id cancels exactly that scope and leaves its parent running.
 	async stop(target: string | Camera) {
-		const handle = typeof target === 'string' ? this.captures.get(target) : this.capturesByCamera.get(target.id)
-		await handle?.cancel()
+		if (typeof target !== 'string') return await this.coordinator.cancelByResource(resourceKey(target))
+		// A camera route must not cancel an unrelated operation that happens to be named in its query.
+		if (this.coordinator.get(target)?.kind === 'cameraCapture') await this.coordinator.cancel(target)
 	}
 }
 

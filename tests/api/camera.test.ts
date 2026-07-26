@@ -27,7 +27,7 @@ import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import type { Messager } from 'src/api/message'
 import { OperationCoordinator } from 'src/api/operation'
-import { ResourceArbiter } from 'src/api/resource'
+import { resourceKey, ResourceArbiter } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_START } from '#/camera'
 import type { CameraAdded, CameraRemoved, CameraUpdated, CameraCaptureEvent, CameraCaptureStart, CameraDither, CameraFrameEvent } from '#/camera'
 import { DEFAULT_GUIDER_EVENT } from '#/guider'
@@ -769,6 +769,25 @@ describe('camera capture start request', () => {
 
 		expect(events[0].loop).toBeTrue()
 		expect(events[0].count).toBe(Number.MAX_SAFE_INTEGER)
+		expect(events.some((event) => event.state === 'idle' && event.stopped)).toBeTrue()
+	}, 5000)
+
+	test('stopping by device cancels the tree owning a capture the handler never started', async () => {
+		const camera = getCamera()
+		const events: CameraCaptureEvent[] = []
+		const request = captureStartRequest({ exposureMode: 'loop', exposureTime: 200, exposureTimeUnit: 'millisecond' })
+
+		cameraManager.connect(camera)
+
+		const composite = operationCoordinator.start('autofocus', [{ key: resourceKey(camera), device: camera }], (context) => cameraCapturer.start(context, camera, request, { listener: (event) => events.push(structuredClone(event)) }).result)
+
+		while (!events.some((event) => event.state === 'exposureStarted')) {
+			await Bun.sleep(10)
+		}
+
+		await cameraHandler.stop(camera)
+
+		expect(await composite.result).toMatchObject({ ok: false, reason: 'aborted' })
 		expect(events.some((event) => event.state === 'idle' && event.stopped)).toBeTrue()
 	}, 5000)
 

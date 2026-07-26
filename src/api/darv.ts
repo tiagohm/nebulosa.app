@@ -3,6 +3,7 @@ import { EventBus } from 'src/shared/bus'
 import { DEFAULT_DARV_EVENT } from '#/darv'
 import type { DarvEvent, DarvStart, DarvState } from '#/darv'
 import type { CameraHandler } from './camera'
+import type { CameraCaptureHandle } from './camera.capture'
 import type { GuideOutputHandler } from './guideoutput'
 import { query, response } from './http'
 import type { Endpoints } from './http'
@@ -74,7 +75,7 @@ export class DarvTask {
 
 	private readonly handleDarvEvent: (state: DarvState, message?: string) => void
 	private stopped = false
-	private captureOperation?: string
+	private capture?: CameraCaptureHandle
 
 	constructor(
 		readonly darv: DarvHandler,
@@ -113,17 +114,9 @@ export class DarvTask {
 		if (this.stopped) return
 
 		// Start capture
-		void this.darv.cameraHandler.start(
-			this.camera,
-			this.request.capture,
-			(event) => {
-				this.captureOperation = event.operation
-				if (event.state === 'idle' || event.state === 'error' || event.stopped) this.stop()
-			},
-			(operation) => {
-				this.captureOperation = operation
-			},
-		)
+		this.capture = this.darv.cameraHandler.capture(this.camera, this.request.capture, (event) => {
+			if (event.state === 'idle' || event.state === 'error' || event.stopped) this.stop()
+		})
 
 		if (this.stopped) return
 
@@ -179,7 +172,7 @@ export class DarvTask {
 
 		this.stopped = true
 		this.move(false, false, 0)
-		if (this.captureOperation) void this.darv.cameraHandler.stop(this.captureOperation)
+		void this.capture?.cancel()
 	}
 
 	private get initialPause() {

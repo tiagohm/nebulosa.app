@@ -6,6 +6,7 @@ import type { CameraCaptureEvent } from '#/camera'
 import { DEFAULT_TPPA_EVENT } from '#/tppa'
 import type { TppaEvent, TppaStart, TppaState } from '#/tppa'
 import type { CameraHandler } from './camera'
+import type { CameraCaptureHandle } from './camera.capture'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import type { WebSocketMessageHandler } from './message'
@@ -78,7 +79,7 @@ export class TppaTask {
 	private readonly polarAlignment: ThreePointPolarAlignment
 	private readonly handleTppaEvent: (state: TppaState, message?: string) => void
 	private stopped = false
-	private captureOperation?: string
+	private capture?: CameraCaptureHandle
 
 	constructor(
 		readonly tppa: TppaHandler,
@@ -113,16 +114,19 @@ export class TppaTask {
 		}
 	}
 
-	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
-		this.captureOperation = event.operation
-		const captureReleased = this.tppa.cameraHandler.waitForCapture(event.operation).then(
-			() => true,
-			(error) => {
-				this.fail(error)
-				return false
-			},
-		)
+	// Waits until the current capture released the camera, reporting a terminal capture failure as a task failure.
+	private async captureReleased() {
+		const result = await this.capture?.result
 
+		if (result !== undefined && !result.ok) {
+			this.fail(result.error ?? result.reason)
+			return false
+		}
+
+		return !this.stopped
+	}
+
+	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
 		if (path && !this.stopped) {
 			this.handleTppaEvent('solving')
 
@@ -191,9 +195,7 @@ export class TppaTask {
 			}
 
 			// Capture next image
-			if (!this.stopped) {
-				if ((await captureReleased) && !this.stopped) this.start()
-			}
+			if (!this.stopped && (await this.captureReleased())) this.start()
 		} else if (event.state === 'error') {
 			this.fail('camera capture failed')
 		} else if (event.stopped) {
@@ -213,16 +215,9 @@ export class TppaTask {
 		this.event.count++
 		this.handleTppaEvent('capturing')
 
-		void this.tppa.cameraHandler.start(
-			this.camera,
-			this.request.capture,
-			(event, path) => {
-				void this.cameraCaptured(event, path).catch((error) => this.fail(error))
-			},
-			(operation) => {
-				this.captureOperation = operation
-			},
-		)
+		this.capture = this.tppa.cameraHandler.capture(this.camera, this.request.capture, (event, path) => {
+			void this.cameraCaptured(event, path).catch((error) => this.fail(error))
+		})
 	}
 
 	stop() {
@@ -250,7 +245,7 @@ export class TppaTask {
 		this.move(false)
 		this.tppa.mountHandler.mountManager.stop(this.mount)
 		this.tppa.solver.stop(this.request.id)
-		if (this.captureOperation) void this.tppa.cameraHandler.stop(this.captureOperation)
+		void this.capture?.cancel()
 	}
 
 	private get moveDuration() {

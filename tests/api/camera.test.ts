@@ -116,12 +116,14 @@ async function capture(request: CameraCaptureStart) {
 
 	cameraManager.connect(camera)
 
-	const success = await cameraHandler.start(camera, request, (event, path) => {
+	const handle = cameraHandler.capture(camera, request, (event, path) => {
 		event = structuredClone(event)
 		events.push(event)
 		records.push({ event, path })
 		path && paths.push(path)
 	})
+
+	const success = (await handle.result).ok
 
 	return { camera, events, records, paths, success } as const
 }
@@ -375,26 +377,6 @@ describe('camera capture start request', () => {
 		expect(disconnectedEvents.map((event) => event.state)).toEqual(['error', 'idle'])
 	})
 
-	test('normalizes unexpected legacy capture rejections to false', async () => {
-		const camera = getCamera()
-		const failure = new Error('capture result rejected')
-		const error = spyOn(console, 'error').mockImplementation(() => {})
-		const capture = spyOn(cameraHandler, 'capture').mockReturnValue({
-			id: 'rejected-capture',
-			started: Promise.resolve({ ok: true, value: undefined }),
-			result: Promise.reject(failure),
-			cancel: () => Promise.resolve(),
-		} satisfies CameraCaptureHandle)
-
-		try {
-			expect(await cameraHandler.start(camera, captureStartRequest({}))).toBeFalse()
-			expect(error).toHaveBeenCalledWith('camera capture failed:', failure)
-		} finally {
-			capture.mockRestore()
-			error.mockRestore()
-		}
-	})
-
 	test('does not publish rejected capture state over an active camera session', async () => {
 		const camera = getCamera()
 		const rejectedEvents: CameraCaptureEvent[] = []
@@ -430,12 +412,12 @@ describe('camera capture start request', () => {
 
 		try {
 			cameraManager.connect(camera)
-			await cameraHandler.start(camera, request)
+			await cameraHandler.capture(camera, request).result
 
 			expect(frame).toHaveBeenCalledWith(camera, 0, 0, 1280, 1024)
 
 			request.subframe = true
-			await cameraHandler.start(camera, request)
+			await cameraHandler.capture(camera, request).result
 
 			expect(frame).toHaveBeenCalledWith(camera, request.x, request.y, request.width, request.height)
 		} finally {
@@ -770,9 +752,11 @@ describe('camera capture start request', () => {
 
 		cameraManager.connect(camera)
 
-		const promise = cameraHandler.start(camera, request, (event) => {
-			events.push(structuredClone(event))
-		})
+		const promise = cameraHandler
+			.capture(camera, request, (event) => {
+				events.push(structuredClone(event))
+			})
+			.result.then((result) => result.ok)
 
 		while (!events.some((event) => event.state === 'exposureStarted')) {
 			await Bun.sleep(10)
@@ -862,7 +846,7 @@ describe('camera capture start request', () => {
 
 		cameraManager.connect(camera)
 
-		const success = await cameraHandler.start(camera, request, (event) => events.push(structuredClone(event)))
+		const success = (await cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event))).result).ok
 
 		expect(success).toBeTrue()
 
@@ -893,7 +877,7 @@ describe('camera capture start request', () => {
 		try {
 			cameraManager.connect(camera)
 
-			const success = await cameraHandler.start(camera, request, (event) => events.push(structuredClone(event)))
+			const success = (await cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event))).result).ok
 
 			expect(success).toBeFalse()
 			expect(events.map((event) => event.state)).toContain('settling')
@@ -926,7 +910,7 @@ describe('camera capture start request', () => {
 
 		cameraManager.connect(camera)
 
-		const promise = cameraHandler.start(camera, request, (event) => events.push(structuredClone(event)))
+		const promise = cameraHandler.capture(camera, request, (event) => events.push(structuredClone(event))).result.then((result) => result.ok)
 
 		expect(await waitUntil(() => events.some((event) => event.state === 'dithering'))).toBeTrue()
 

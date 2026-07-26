@@ -9,17 +9,19 @@ import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import { autoFocusBus, autoFocus as autoFocusEndpoints, AutoFocusHandler } from 'src/api/autofocus'
 import { cameraBus, CameraHandler } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
+import type { CameraCaptureResult } from 'src/api/camera.capture'
 import { FocuserHandler } from 'src/api/focuser'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { OperationCoordinator } from 'src/api/operation'
+import type { OperationResult } from 'src/api/operation'
 import { ResourceArbiter } from 'src/api/resource'
 import { StarDetectionHandler } from 'src/api/stardetection'
 import { DEFAULT_AUTO_FOCUS_START } from '#/autofocus'
 import type { AutoFocusEvent, AutoFocusStart } from '#/autofocus'
 import { DEFAULT_CAMERA_CAPTURE_EVENT } from '#/camera'
 import type { CameraCaptureEvent } from '#/camera'
-import { noContent, SocketMessager, waitUntil } from './util'
+import { captureHandle, noContent, SocketMessager, waitUntil } from './util'
 
 type AutoFocusStartOverrides = Omit<Partial<AutoFocusStart>, 'capture' | 'starDetection'> & {
 	readonly capture?: Partial<AutoFocusStart['capture']>
@@ -141,7 +143,7 @@ function star(hfd: number): DetectedStar {
 describe('auto focus handler', () => {
 	test('starts through endpoint and emits capturing event through wsm', async () => {
 		const { camera, focuser } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => Promise.resolve(true))
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
 		const request = autoFocusStartRequest({
 			id: 'autofocus-start',
 			maxPosition: 0,
@@ -162,9 +164,9 @@ describe('auto focus handler', () => {
 			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
 
 			expect(await waitForAutoFocusState('capturing', request.id)).toBeTrue()
-			expect(start).toHaveBeenCalledTimes(1)
-			expect(start.mock.calls[0][0]).toBe(camera)
-			expect(start.mock.calls[0][1]).toBe(request.capture)
+			expect(capture).toHaveBeenCalledTimes(1)
+			expect(capture.mock.calls[0][0]).toBe(camera)
+			expect(capture.mock.calls[0][1]).toBe(request.capture)
 			expect(request.maxPosition).toBe(focuser.position.max)
 			expect(request.capture.delay).toBe(0)
 			expect(request.capture.count).toBe(1)
@@ -187,17 +189,14 @@ describe('auto focus handler', () => {
 				},
 			])
 		} finally {
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
 	test('stops active task through endpoint and emits idle event', async () => {
 		const { camera, focuser } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, ___, handleCaptureCreated) => {
-			handleCaptureCreated?.('autofocus-stop-capture')
-			return Promise.resolve(true)
-		})
-		const cameraStop = spyOn(cameraHandler, 'stop')
+		let canceled = false
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ cancel: () => ((canceled = true), Promise.resolve()) }))
 		const focuserStop = spyOn(focuserHandler, 'stop')
 		const request = autoFocusStartRequest({ id: 'autofocus-stop' })
 
@@ -213,18 +212,16 @@ describe('auto focus handler', () => {
 			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
 			expect(autoFocusEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
 			expect(autoFocusEvents().at(-1)?.message).toBe('stopped')
-			expect(cameraStop).toHaveBeenCalledWith('autofocus-stop-capture')
 			expect(focuserStop).toHaveBeenCalledWith(focuser)
 		} finally {
 			focuserStop.mockRestore()
-			cameraStop.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
 	test('ignores duplicate active task for same id, camera, or focuser', async () => {
 		const { camera, focuser } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => Promise.resolve(true))
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
 		const request = autoFocusStartRequest({ id: 'autofocus-duplicate' })
 		const duplicate = autoFocusStartRequest({ id: 'autofocus-other' })
 
@@ -234,14 +231,14 @@ describe('auto focus handler', () => {
 			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, request)))
 			await noContent(await endpoints['/autofocus/:camera/:focuser/start'].POST(startRequest(camera, focuser, duplicate)))
 
-			expect(start).toHaveBeenCalledTimes(1)
+			expect(capture).toHaveBeenCalledTimes(1)
 
 			await noContent(endpoints['/autofocus/:id/stop'].POST(stopRequest(request.id)))
 
 			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
 			expect(autoFocusEvents().filter((event) => event.id === duplicate.id)).toHaveLength(0)
 		} finally {
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
@@ -255,11 +252,10 @@ describe('auto focus handler', () => {
 
 	test('emits idle stopped event when camera capture stops', async () => {
 		const { camera, focuser } = connectDevices()
-		const cameraStop = spyOn(cameraHandler, 'stop')
 		const focuserStop = spyOn(focuserHandler, 'stop')
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
 			handleCameraCaptureEvent?.(cameraCaptureEvent({ operation: 'autofocus-stopped-capture', camera: camera.id, state: 'idle', stopped: true }))
-			return Promise.resolve(true)
+			return captureHandle()
 		})
 		const request = autoFocusStartRequest({ id: 'autofocus-stopped' })
 
@@ -271,20 +267,18 @@ describe('auto focus handler', () => {
 			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
 			expect(autoFocusEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
 			expect(autoFocusEvents().at(-1)?.message).toBe('stopped')
-			expect(cameraStop).toHaveBeenCalledWith('autofocus-stopped-capture')
 			expect(focuserStop).toHaveBeenCalledWith(focuser)
 		} finally {
-			start.mockRestore()
+			capture.mockRestore()
 			focuserStop.mockRestore()
-			cameraStop.mockRestore()
 		}
 	})
 
 	test('emits idle stopped event when camera capture fails', async () => {
 		const { camera, focuser } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
 			handleCameraCaptureEvent?.(cameraCaptureEvent({ camera: camera.id, state: 'error' }))
-			return Promise.resolve(true)
+			return captureHandle()
 		})
 		const request = autoFocusStartRequest({ id: 'autofocus-error' })
 
@@ -297,16 +291,16 @@ describe('auto focus handler', () => {
 			expect(autoFocusEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
 			expect(autoFocusEvents().at(-1)?.message).toBe('stopped')
 		} finally {
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
 	test('detects no stars from captured frame and emits idle message', async () => {
 		const { camera, focuser } = connectDevices()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
-			return Promise.resolve(true)
+			return captureHandle()
 		})
 		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(() => Promise.resolve([]))
 		const request = autoFocusStartRequest({ id: 'autofocus-nostars' })
@@ -325,16 +319,16 @@ describe('auto focus handler', () => {
 			expect(autoFocusEvents().at(-1)?.message).toBe('no stars detected')
 		} finally {
 			detect.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
 	test('detects stars, updates HFD, and moves focuser', async () => {
 		const { camera, focuser } = connectDevices()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
-			return Promise.resolve(true)
+			return captureHandle()
 		})
 		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(() => Promise.resolve([star(4), star(2), star(6)]))
 		const moveTo = spyOn(focuserHandler, 'moveTo')
@@ -357,21 +351,17 @@ describe('auto focus handler', () => {
 		} finally {
 			moveTo.mockRestore()
 			detect.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
-	test('fails when capture cleanup rejects after focuser movement', async () => {
+	test('fails when the capture result reports a cleanup failure after focuser movement', async () => {
 		const { camera, focuser } = connectDevices()
-		const releaseFailure = Promise.withResolvers<void>()
+		const releaseFailure = Promise.withResolvers<OperationResult<CameraCaptureResult>>()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
-			return Promise.resolve(true)
-		})
-		const waitForCapture = spyOn(cameraHandler, 'waitForCapture').mockImplementation(async () => {
-			await releaseFailure.promise
-			throw new Error('capture cleanup failed')
+			return captureHandle({ result: releaseFailure.promise })
 		})
 		const detect = spyOn(starDetectionHandler, 'detect').mockImplementation(() => Promise.resolve([star(4), star(2), star(6)]))
 		const moveTo = spyOn(focuserHandler, 'moveTo').mockImplementation(() => {})
@@ -389,7 +379,7 @@ describe('auto focus handler', () => {
 			focuser.moving = false
 			focuserHandler.updated(focuser, 'position')
 			await Bun.sleep(10)
-			releaseFailure.resolve()
+			releaseFailure.resolve({ ok: false, reason: 'timeout', error: 'capture cleanup failed' })
 
 			expect(await waitForAutoFocusState('idle', request.id)).toBeTrue()
 			expect(autoFocusEvents().at(-1)?.message).toBe('autofocus failed')
@@ -398,8 +388,7 @@ describe('auto focus handler', () => {
 			error.mockRestore()
 			moveTo.mockRestore()
 			detect.mockRestore()
-			waitForCapture.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 })

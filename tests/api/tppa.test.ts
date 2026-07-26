@@ -8,12 +8,14 @@ import { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { cameraBus, CameraHandler } from 'src/api/camera'
 import { CameraCapturer } from 'src/api/camera.capture'
+import type { CameraCaptureResult } from 'src/api/camera.capture'
 import { ConfirmationHandler } from 'src/api/confirmation'
 import { ImageProcessor } from 'src/api/image'
 import { WebSocketMessageHandler } from 'src/api/message'
 import { MountHandler } from 'src/api/mount'
 import { NotificationHandler } from 'src/api/notification'
 import { OperationCoordinator } from 'src/api/operation'
+import type { OperationResult } from 'src/api/operation'
 import { PlateSolverHandler } from 'src/api/platesolver'
 import { ResourceArbiter } from 'src/api/resource'
 import { tppaBus, tppa as tppaEndpoints, TppaHandler } from 'src/api/tppa'
@@ -21,7 +23,7 @@ import { DEFAULT_CAMERA_CAPTURE_EVENT } from '#/camera'
 import type { CameraCaptureEvent } from '#/camera'
 import { DEFAULT_TPPA_START } from '#/tppa'
 import type { TppaStart, TppaEvent } from '#/tppa'
-import { noContent, SocketMessager, waitUntil } from './util'
+import { captureHandle, noContent, SocketMessager, waitUntil } from './util'
 
 type TppaStartOverrides = Omit<Partial<TppaStart>, 'capture' | 'solver' | 'refraction'> & {
 	readonly capture?: Partial<TppaStart['capture']>
@@ -158,7 +160,7 @@ function plateSolution(overrides: Partial<PlateSolution> = {}): PlateSolution {
 describe('tppa handler', () => {
 	test('starts through endpoint and emits capturing event through wsm', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => Promise.resolve(true))
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
 		const tracking = spyOn(mountManager, 'tracking')
 		const request = tppaStartRequest({
 			id: 'tppa-start',
@@ -182,9 +184,9 @@ describe('tppa handler', () => {
 			await noContent(await endpoints['/tppa/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
 
 			expect(await waitForTppaState('capturing', request.id)).toBeTrue()
-			expect(start).toHaveBeenCalledTimes(1)
-			expect(start.mock.calls[0][0]).toBe(camera)
-			expect(start.mock.calls[0][1]).toBe(request.capture)
+			expect(capture).toHaveBeenCalledTimes(1)
+			expect(capture.mock.calls[0][0]).toBe(camera)
+			expect(capture.mock.calls[0][1]).toBe(request.capture)
 			expect(tracking).toHaveBeenCalledWith(mount, true)
 			expect(request.capture.autoSave).toBeFalse()
 			expect(request.capture.count).toBe(1)
@@ -213,17 +215,14 @@ describe('tppa handler', () => {
 			])
 		} finally {
 			tracking.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
 	test('stops active task through endpoint and emits idle event', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, ___, handleCaptureCreated) => {
-			handleCaptureCreated?.('tppa-stop-capture')
-			return Promise.resolve(true)
-		})
-		const cameraStop = spyOn(cameraHandler, 'stop')
+		let canceled = false
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ cancel: () => ((canceled = true), Promise.resolve()) }))
 		const mountStop = spyOn(mountManager, 'stop')
 		const solverStop = spyOn(solver, 'stop')
 		const request = tppaStartRequest({ id: 'tppa-stop' })
@@ -239,20 +238,19 @@ describe('tppa handler', () => {
 
 			expect(await waitForTppaState('idle', request.id)).toBeTrue()
 			expect(tppaEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
-			expect(cameraStop).toHaveBeenCalledWith('tppa-stop-capture')
+			expect(canceled).toBeTrue()
 			expect(mountStop).toHaveBeenCalledWith(mount)
 			expect(solverStop).toHaveBeenCalledWith(request.id)
 		} finally {
 			solverStop.mockRestore()
 			mountStop.mockRestore()
-			cameraStop.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
 	test('ignores duplicate active task for same id, camera, or mount', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => Promise.resolve(true))
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
 		const request = tppaStartRequest({ id: 'tppa-duplicate' })
 		const duplicate = tppaStartRequest({ id: 'tppa-other' })
 
@@ -262,14 +260,14 @@ describe('tppa handler', () => {
 			await noContent(await endpoints['/tppa/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
 			await noContent(await endpoints['/tppa/:camera/:mount/start'].POST(startRequest(camera, mount, duplicate)))
 
-			expect(start).toHaveBeenCalledTimes(1)
+			expect(capture).toHaveBeenCalledTimes(1)
 
 			await noContent(endpoints['/tppa/:id/stop'].POST(stopRequest(request.id)))
 
 			expect(await waitForTppaState('idle', request.id)).toBeTrue()
 			expect(tppaEvents().filter((event) => event.id === duplicate.id)).toHaveLength(0)
 		} finally {
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
@@ -283,9 +281,9 @@ describe('tppa handler', () => {
 
 	test('emits idle event when camera capture stops', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
 			handleCameraCaptureEvent?.(cameraCaptureEvent({ camera: camera.id, state: 'idle', stopped: true }))
-			return Promise.resolve(true)
+			return captureHandle()
 		})
 		const request = tppaStartRequest({ id: 'tppa-stopped' })
 
@@ -297,16 +295,16 @@ describe('tppa handler', () => {
 			expect(await waitForTppaState('idle', request.id)).toBeTrue()
 			expect(tppaEvents().map((event) => event.state)).toEqual(['capturing', 'idle'])
 		} finally {
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
 	test('emits idle error event when camera capture fails', async () => {
 		const { camera, mount } = connectDevices()
 		const error = spyOn(console, 'error').mockImplementation(() => {})
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
 			handleCameraCaptureEvent?.(cameraCaptureEvent({ camera: camera.id, state: 'error' }))
-			return Promise.resolve(true)
+			return captureHandle()
 		})
 		const request = tppaStartRequest({ id: 'tppa-error' })
 
@@ -320,7 +318,7 @@ describe('tppa handler', () => {
 			expect(tppaEvents().at(-1)?.message).toBe('tppa failed')
 			expect(error).toHaveBeenCalled()
 		} finally {
-			start.mockRestore()
+			capture.mockRestore()
 			error.mockRestore()
 		}
 	})
@@ -328,9 +326,9 @@ describe('tppa handler', () => {
 	test('emits solving failure after max attempts', async () => {
 		const { camera, mount } = connectDevices()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
-			return Promise.resolve(true)
+			return captureHandle()
 		})
 		const solve = spyOn(solver, 'start').mockImplementation(() => Promise.resolve(undefined))
 		const request = tppaStartRequest({ id: 'tppa-solving', maxAttempts: 1 })
@@ -351,19 +349,19 @@ describe('tppa handler', () => {
 			expect(tppaEvents().at(-1)?.message).toBe('solving failed')
 		} finally {
 			solve.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
 	test('waits for camera lease release before retrying a capture', async () => {
 		const { camera, mount } = connectDevices()
-		const released = Promise.withResolvers<void>()
+		const released = Promise.withResolvers<OperationResult<CameraCaptureResult>>()
+		let captures = 0
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
-			return Promise.resolve(true)
+			return captureHandle(++captures === 1 ? { result: released.promise } : {})
 		})
-		const waitForCapture = spyOn(cameraHandler, 'waitForCapture').mockImplementation(() => released.promise)
 		const solve = spyOn(solver, 'start').mockImplementation(() => Promise.resolve(undefined))
 		const request = tppaStartRequest({ id: 'tppa-retry', maxAttempts: 2 })
 
@@ -373,53 +371,50 @@ describe('tppa handler', () => {
 
 			captureEvent!(cameraCaptureEvent({ operation: 'tppa-retry-capture', camera: camera.id, state: 'idle' }), 'plate.fit')
 			expect(await waitUntil(() => solve.mock.calls.length === 1)).toBeTrue()
-			expect(start).toHaveBeenCalledTimes(1)
-			expect(waitForCapture).toHaveBeenCalledWith('tppa-retry-capture')
+			expect(capture).toHaveBeenCalledTimes(1)
 
-			released.resolve()
-			expect(await waitUntil(() => start.mock.calls.length === 2)).toBeTrue()
+			released.resolve({ ok: true, value: { paths: [], frameCount: 1 } })
+			expect(await waitUntil(() => capture.mock.calls.length === 2)).toBeTrue()
 		} finally {
 			tppaHandler.stop(request.id)
 			solve.mockRestore()
-			waitForCapture.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
-	test('handles capture release rejection from a progress callback', async () => {
+	test('fails when the capture result reports a cleanup failure', async () => {
 		const { camera, mount } = connectDevices()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
-			return Promise.resolve(true)
+			return captureHandle({ result: Promise.resolve({ ok: false, reason: 'timeout', error: 'capture cleanup failed' }) })
 		})
-		const waitForCapture = spyOn(cameraHandler, 'waitForCapture').mockImplementation(() => Promise.reject(new Error('capture cleanup failed')))
+		const solve = spyOn(solver, 'start').mockImplementation(() => Promise.resolve(undefined))
 		const error = spyOn(console, 'error').mockImplementation(() => {})
-		const request = tppaStartRequest({ id: 'tppa-release-error' })
+		const request = tppaStartRequest({ id: 'tppa-release-error', maxAttempts: 2 })
 
 		try {
 			wsm.open(socket)
 			await noContent(await endpoints['/tppa/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
 
-			captureEvent!(cameraCaptureEvent({ operation: 'tppa-release-capture', camera: camera.id, state: 'exposing' }))
+			captureEvent!(cameraCaptureEvent({ operation: 'tppa-release-capture', camera: camera.id, state: 'idle' }), 'plate.fit')
 
 			expect(await waitForTppaState('idle', request.id)).toBeTrue()
-			expect(waitForCapture).toHaveBeenCalledWith('tppa-release-capture')
 			expect(tppaEvents().at(-1)?.message).toBe('tppa failed')
 			expect(error).toHaveBeenCalled()
 		} finally {
 			error.mockRestore()
-			waitForCapture.mockRestore()
-			start.mockRestore()
+			solve.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
 	test('solves first frame and starts mount movement', async () => {
 		const { camera, mount } = connectDevices()
 		let captureEvent: ((event: CameraCaptureEvent, path?: string) => void) | undefined
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
 			captureEvent = handleCameraCaptureEvent
-			return Promise.resolve(true)
+			return captureHandle()
 		})
 		const solve = spyOn(solver, 'start').mockImplementation(() => Promise.resolve(plateSolution({ rightAscension: 0.3, declination: 0.4 })))
 		const moveWest = spyOn(mountManager, 'moveWest')
@@ -445,7 +440,7 @@ describe('tppa handler', () => {
 		} finally {
 			moveWest.mockRestore()
 			solve.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 })

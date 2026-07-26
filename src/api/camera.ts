@@ -115,6 +115,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		)
 
 		this.captures.set(handle.id, handle)
+		// A conflicting capture still produces a handle, so the camera index keeps the owner that actually holds the lease.
 		if (!this.capturesByCamera.has(camera.id)) this.capturesByCamera.set(camera.id, handle)
 
 		const releaseHandle = () => {
@@ -127,25 +128,7 @@ export class CameraHandler implements DeviceHandler<Camera> {
 		return handle
 	}
 
-	// Starts a legacy feature capture, exposing its operation synchronously before mapping the terminal result to boolean.
-	start(camera: Camera, req: CameraCaptureStart, onCameraCaptureEvent?: CameraCaptureListener, onCaptureCreated?: (operation: string) => void) {
-		const handle = this.capture(camera, req, onCameraCaptureEvent)
-		onCaptureCreated?.(handle.id)
-		return handle.result.then(
-			(result) => result.ok,
-			(error) => {
-				console.error('camera capture failed:', error)
-				return false
-			},
-		)
-	}
-
-	// Waits until one capture has completed cleanup and released its physical camera lease.
-	async waitForCapture(operation: string) {
-		await this.captures.get(operation)?.result
-	}
-
-	// Cancels one operation id, or the current camera capture for feature adapters pending Phase 5.
+	// Cancels one operation id, or the current camera capture for transports that cannot name an owner yet.
 	async stop(target: string | Camera) {
 		const handle = typeof target === 'string' ? this.captures.get(target) : this.capturesByCamera.get(target.id)
 		await handle?.cancel()

@@ -9,6 +9,7 @@ import { DEFAULT_AUTO_FOCUS_EVENT } from '#/autofocus'
 import type { AutoFocusEvent, AutoFocusStart, AutoFocusState } from '#/autofocus'
 import type { CameraCaptureEvent } from '#/camera'
 import type { CameraHandler } from './camera'
+import type { CameraCaptureHandle } from './camera.capture'
 import { waitForFocuser } from './focuser'
 import type { FocuserHandler, WaitForFocuserAction } from './focuser'
 import { query, response } from './http'
@@ -82,7 +83,7 @@ export class AutoFocusTask {
 	private readonly handleAutoFocusEvent: (state: AutoFocusState, message?: string) => void
 	private readonly unsubscribers: VoidFunction[] = []
 	private stopped = false
-	private captureOperation?: string
+	private capture?: CameraCaptureHandle
 
 	constructor(
 		readonly autoFocusHandler: AutoFocusHandler,
@@ -108,23 +109,26 @@ export class AutoFocusTask {
 	}
 
 	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
-		this.captureOperation = event.operation
-		const captureReleased = this.autoFocusHandler.cameraHandler.waitForCapture(event.operation).then(
-			() => true,
-			(error) => {
-				this.fail(error)
-				return false
-			},
-		)
-
 		try {
-			await this.processCameraCapture(event, path, captureReleased)
+			await this.processCameraCapture(event, path)
 		} catch (error) {
 			this.fail(error)
 		}
 	}
 
-	private async processCameraCapture(event: CameraCaptureEvent, path: string | undefined, captureReleased: Promise<boolean>) {
+	// Waits until the current capture released the camera, reporting a terminal capture failure as a task failure.
+	private async captureReleased() {
+		const result = await this.capture?.result
+
+		if (result !== undefined && !result.ok) {
+			this.fail(result.error ?? result.reason)
+			return false
+		}
+
+		return !this.stopped
+	}
+
+	private async processCameraCapture(event: CameraCaptureEvent, path?: string) {
 		if (path && !this.stopped) {
 			if (this.stopped) {
 				return this.handleAutoFocusEvent('idle', 'stopped')
@@ -160,7 +164,7 @@ export class AutoFocusTask {
 				// Wait for focuser reach position
 				this.waitForFocuser(position, async (event) => {
 					if (event === 'reach') {
-						if ((await captureReleased) && !this.stopped) this.start()
+						if (await this.captureReleased()) this.start()
 					} else if (event === 'cancel') {
 						this.handleAutoFocusEvent('idle', 'stopped')
 					} else {
@@ -246,9 +250,7 @@ export class AutoFocusTask {
 
 		this.handleAutoFocusEvent('capturing', '')
 
-		void this.autoFocusHandler.cameraHandler.start(this.camera, this.request.capture, this.cameraCaptured.bind(this), (operation) => {
-			this.captureOperation = operation
-		})
+		this.capture = this.autoFocusHandler.cameraHandler.capture(this.camera, this.request.capture, this.cameraCaptured.bind(this))
 	}
 
 	stop() {
@@ -272,7 +274,7 @@ export class AutoFocusTask {
 		this.stopped = true
 		unsubscribe(this.unsubscribers)
 		this.autoFocusHandler.focuserHandler.stop(this.focuser)
-		if (this.captureOperation) void this.autoFocusHandler.cameraHandler.stop(this.captureOperation)
+		void this.capture?.cancel()
 	}
 
 	private waitForFocuser(position: number, onCompleted: (event: WaitForFocuserAction) => void) {

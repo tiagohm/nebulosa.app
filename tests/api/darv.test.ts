@@ -18,7 +18,7 @@ import { ResourceArbiter } from 'src/api/resource'
 import { DEFAULT_CAMERA_CAPTURE_EVENT } from '#/camera'
 import { DEFAULT_DARV_START } from '#/darv'
 import type { DarvStart, DarvEvent } from '#/darv'
-import { noContent, SocketMessager, waitUntil } from './util'
+import { captureHandle, noContent, SocketMessager, waitUntil } from './util'
 
 type DarvStartOverrides = Omit<Partial<DarvStart>, 'capture'> & {
 	readonly capture?: Partial<DarvStart['capture']>
@@ -129,11 +129,11 @@ function waitForDarvState(state: DarvEvent['state'], id: string) {
 describe('darv handler', () => {
 	test('starts through endpoint and emits lifecycle events through wsm', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, handleCameraCaptureEvent) => {
+		let canceled = false
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation((_, __, handleCameraCaptureEvent) => {
 			handleCameraCaptureEvent?.({ ...structuredClone(DEFAULT_CAMERA_CAPTURE_EVENT), operation: 'darv-capture', camera: camera.id, state: 'exposureStarted' })
-			return Promise.resolve(true)
+			return captureHandle({ cancel: () => ((canceled = true), Promise.resolve()) })
 		})
-		const stop = spyOn(cameraHandler, 'stop')
 		const pulseEast = spyOn(guideOutputManager, 'pulseEast')
 		const pulseWest = spyOn(guideOutputManager, 'pulseWest')
 		const mountStop = spyOn(mountManager, 'stop')
@@ -164,9 +164,9 @@ describe('darv handler', () => {
 			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
 
 			expect(await waitForDarvState('idle', request.id)).toBeTrue()
-			expect(start).toHaveBeenCalledTimes(1)
-			expect(start.mock.calls[0][0]).toBe(camera)
-			expect(start.mock.calls[0][1]).toBe(request.capture)
+			expect(capture).toHaveBeenCalledTimes(1)
+			expect(capture.mock.calls[0][0]).toBe(camera)
+			expect(capture.mock.calls[0][1]).toBe(request.capture)
 			expect(request.capture.autoSave).toBeFalse()
 			expect(request.capture.count).toBe(1)
 			expect(request.capture.delay).toBe(0)
@@ -186,19 +186,18 @@ describe('darv handler', () => {
 			expect(pulseEast).toHaveBeenCalledWith(mount, 0)
 			expect(pulseWest).toHaveBeenCalledWith(mount, 0)
 			expect(mountStop).toHaveBeenCalledWith(mount)
-			expect(stop).toHaveBeenCalledWith('darv-capture')
+			expect(canceled).toBeTrue()
 		} finally {
 			mountStop.mockRestore()
 			pulseWest.mockRestore()
 			pulseEast.mockRestore()
-			stop.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
 	test('uses southern hemisphere pulse direction order', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => Promise.resolve(true))
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
 		const pulseEast = spyOn(guideOutputManager, 'pulseEast')
 		const pulseWest = spyOn(guideOutputManager, 'pulseWest')
 		const request = darvStartRequest({
@@ -219,13 +218,13 @@ describe('darv handler', () => {
 		} finally {
 			pulseWest.mockRestore()
 			pulseEast.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
 	test('ignores duplicate active task for same id, camera, or mount', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => Promise.resolve(true))
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle())
 		const request = darvStartRequest({ id: 'darv-duplicate', initialPause: 1, duration: 1 })
 		const duplicate = darvStartRequest({ id: 'darv-other', initialPause: 0, duration: 0 })
 
@@ -235,24 +234,21 @@ describe('darv handler', () => {
 			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, request)))
 			await noContent(await endpoints['/darv/:camera/:mount/start'].POST(startRequest(camera, mount, duplicate)))
 
-			expect(start).toHaveBeenCalledTimes(1)
+			expect(capture).toHaveBeenCalledTimes(1)
 
 			await noContent(endpoints['/darv/:id/stop'].POST(stopRequest(request.id)))
 
 			expect(await waitForDarvState('idle', request.id)).toBeTrue()
 			expect(darvEvents().filter((event) => event.id === duplicate.id)).toHaveLength(0)
 		} finally {
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
 	test('stops active task through endpoint and emits idle event', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation((_, __, ___, handleCaptureCreated) => {
-			handleCaptureCreated?.('darv-stop-capture')
-			return Promise.resolve(true)
-		})
-		const stop = spyOn(cameraHandler, 'stop')
+		let canceled = false
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => captureHandle({ cancel: () => ((canceled = true), Promise.resolve()) }))
 		const mountStop = spyOn(mountManager, 'stop')
 		const request = darvStartRequest({ id: 'darv-stop', initialPause: 1, duration: 1 })
 
@@ -267,12 +263,11 @@ describe('darv handler', () => {
 
 			expect(await waitForDarvState('idle', request.id)).toBeTrue()
 			expect(darvEvents().map((event) => event.state)).toEqual(['waiting', 'idle'])
-			expect(stop).toHaveBeenCalledWith('darv-stop-capture')
+			expect(canceled).toBeTrue()
 			expect(mountStop).toHaveBeenCalledWith(mount)
 		} finally {
 			mountStop.mockRestore()
-			stop.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 
@@ -286,7 +281,7 @@ describe('darv handler', () => {
 
 	test('emits idle error event when task start fails', async () => {
 		const { camera, mount } = connectDevices()
-		const start = spyOn(cameraHandler, 'start').mockImplementation(() => {
+		const capture = spyOn(cameraHandler, 'capture').mockImplementation(() => {
 			throw new Error('camera start failed')
 		})
 		const error = spyOn(console, 'error').mockImplementation(() => {})
@@ -306,7 +301,7 @@ describe('darv handler', () => {
 			expect(error).toHaveBeenCalled()
 		} finally {
 			error.mockRestore()
-			start.mockRestore()
+			capture.mockRestore()
 		}
 	})
 })

@@ -9,6 +9,7 @@ import type { FlatWizardEvent, FlatWizardStart, FlatWizardState } from '#/flatwi
 import { DEFAULT_IMAGE_TRANSFORMATION } from '#/image'
 import type { ImageTransformation } from '#/image'
 import type { CameraHandler } from './camera'
+import type { CameraCaptureHandle } from './camera.capture'
 import { query, response } from './http'
 import type { Endpoints } from './http'
 import type { WebSocketMessageHandler } from './message'
@@ -47,7 +48,7 @@ export class FlatWizardHandler {
 		if (this.tasks.some((e) => e.request.id === request.id || e.camera.id === camera.id)) return
 		const task = new FlatWizardTask(this, request, camera, this.handleFlatWizardEvent.bind(this))
 		this.tasks.push(task)
-		void task.start().catch((error) => task.fail(error))
+		task.start()
 	}
 
 	stop(id: string) {
@@ -79,7 +80,7 @@ export class FlatWizardTask {
 	private readonly exposure: MinMaxValueProperty = { min: 0, max: 0, value: 0, step: 1 }
 	private readonly mean: MinMaxValueProperty = { min: 0, max: 0, value: 0, step: 1 }
 	private stopped = false
-	private captureOperation?: string
+	private capture?: CameraCaptureHandle
 
 	constructor(
 		readonly flatWizardHandler: FlatWizardHandler,
@@ -107,16 +108,19 @@ export class FlatWizardTask {
 		}
 	}
 
-	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
-		this.captureOperation = event.operation
-		const captureReleased = this.flatWizardHandler.cameraHandler.waitForCapture(event.operation).then(
-			() => true,
-			(error) => {
-				this.fail(error)
-				return false
-			},
-		)
+	// Waits until the current capture released the camera, reporting a terminal capture failure as a task failure.
+	private async captureReleased() {
+		const result = await this.capture?.result
 
+		if (result !== undefined && !result.ok) {
+			this.fail(result.error ?? result.reason)
+			return false
+		}
+
+		return !this.stopped
+	}
+
+	private async cameraCaptured(event: CameraCaptureEvent, path?: string) {
 		if (path && !this.stopped) {
 			if (this.stopped) {
 				return this.handleFlatWizardEvent('idle', 'stopped')
@@ -168,7 +172,7 @@ export class FlatWizardTask {
 				return this.handleFlatWizardEvent('idle', 'unable to find an optimal exposure time')
 			}
 
-			if (await captureReleased) await this.start()
+			if (await this.captureReleased()) this.start()
 		} else if (event.state === 'error') {
 			this.fail('camera capture failed')
 		} else if (event.stopped) {
@@ -176,7 +180,7 @@ export class FlatWizardTask {
 		}
 	}
 
-	async start() {
+	start() {
 		if (this.stopped) return
 
 		this.request.capture.delay = 0
@@ -190,16 +194,9 @@ export class FlatWizardTask {
 
 		this.handleFlatWizardEvent('capturing', `exposure of ${this.request.capture.exposureTime.toFixed(0)} ms`)
 
-		await this.flatWizardHandler.cameraHandler.start(
-			this.camera,
-			this.request.capture,
-			(event, path) => {
-				void this.cameraCaptured(event, path).catch((error) => this.fail(error))
-			},
-			(operation) => {
-				this.captureOperation = operation
-			},
-		)
+		this.capture = this.flatWizardHandler.cameraHandler.capture(this.camera, this.request.capture, (event, path) => {
+			void this.cameraCaptured(event, path).catch((error) => this.fail(error))
+		})
 	}
 
 	stop() {
@@ -221,7 +218,7 @@ export class FlatWizardTask {
 		if (this.stopped) return
 
 		this.stopped = true
-		if (this.captureOperation) void this.flatWizardHandler.cameraHandler.stop(this.captureOperation)
+		void this.capture?.cancel()
 	}
 }
 

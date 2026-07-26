@@ -1,5 +1,7 @@
 import { expect, spyOn } from 'bun:test'
+import type { CameraCaptureHandle, CameraCaptureResult } from 'src/api/camera.capture'
 import type { Messager } from 'src/api/message'
+import type { OperationResult } from 'src/api/operation'
 
 export type SocketMessage<T = unknown> = {
 	readonly type: string
@@ -52,6 +54,20 @@ export async function waitUntil(condition: () => boolean, timeout = 1500) {
 	}
 
 	return true
+}
+
+export interface CaptureHandleOptions {
+	readonly result?: Promise<OperationResult<CameraCaptureResult>>
+	readonly cancel?: () => Promise<void>
+}
+
+export function captureHandle(options: CaptureHandleOptions = {}): CameraCaptureHandle {
+	return {
+		id: 'capture-handle',
+		started: Promise.resolve({ ok: true, value: undefined }),
+		result: options.result ?? Promise.resolve({ ok: true, value: { paths: [], frameCount: 0 } }),
+		cancel: options.cancel ?? (() => Promise.resolve()),
+	}
 }
 
 export function spyFetch<I extends URL | RequestInfo>(fetch: (input: I, init?: RequestInit) => Promise<Response>) {
